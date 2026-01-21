@@ -22,7 +22,16 @@ ui <- page_navbar(
   nav_panel("Site & Env", 
     mod_site_env_ui("env")
   ),
+  nav_panel("Export",
+    mod_export_ui("export")
+  ),
+  nav_panel("Images & Maps",
+    mod_images_ui("imgs")
+  ),
+  nav_panel("Reports",
+    mod_reporting_ui("report")
+  ),
   nav_panel("Administration", 
-    mod_project_meta_ui("meta")
+    mod_admin_ui("admin")
   )
 )

@@ -71,7 +71,7 @@ server <- function(input, output, session) {
   })
   
   # 7. Initialize Sub-Modules
-  mod_project_meta_server("meta", reactive(state$CurrProject), con)
+  mod_admin_server("admin", con)
   
   # For Veg, we pass the state directly as it needs plot context
   # Also passing con to avoid multiple connections
@@ -80,4 +80,13 @@ server <- function(input, output, session) {
   # Site & Env Module
   # Refactored to accept shared connection 'con' to avoid DB locking issues
   mod_site_env_server("env", state, con)
+  
+  # Export Module
+  mod_export_server("export", state, con)
+  
+  # Images & Maps Module
+  mod_images_server("imgs", state, con)
+  
+  # Reporting Module
+  mod_reporting_server("report", state)
 }

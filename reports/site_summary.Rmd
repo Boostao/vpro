@@ -1,0 +1,127 @@
+---
+title: "Site Unit Summary"
+output: pdf_document
+params:
+  plot_number: "00000"
+  db_path: "../data/vpro.duckdb"
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+library(tidyr)
+library(knitr)
+
+# Connect to DB (Read Only to avoid locks from main app)
+# If knitting from RStudio, getwd() is the Rmd dir.
+# If running via shiny, it depends.
+# We passed db_path param to help.
+con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+```
+
+```{r load-data, include=FALSE}
+
+# 1. Header Data
+# using vw_USysEnv or just Sample_Env
+query_env <- "SELECT * FROM Sample_Env WHERE plotnumber = ?"
+env_data <- dbGetQuery(con, query_env, list(params$plot_number))
+
+# 2. Vegetation Data
+# We use the View vw_USysAllVeg
+query_veg <- "SELECT * FROM vw_USysAllVeg WHERE PlotNumber = ? ORDER BY MyLayer, Species"
+veg_data <- dbGetQuery(con, query_veg, list(params$plot_number))
+
+# 3. Soil Data
+humus_data <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(params$plot_number))
+mineral_data <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(params$plot_number))
+
+dbDisconnect(con)
+```
+
+# Plot: `r params$plot_number`
+
+**Project:** `r env_data$projectid[1]`  
+**Date:** `r env_data$date[1]`  
+**Surveyor:** `r env_data$sitesurveyor[1]`  
+
+## Location
+| Attribute | Value | Attribute | Value |
+|-----------|-------|-----------|-------|
+| **Location** | `r env_data[["_location"]][1]` | **UTM Zone** | `r env_data$utmzone[1]` |
+| **Lat** | `r env_data$latitude[1]` | **Easting** | `r env_data$utmeasting[1]` |
+| **Long** | `r env_data$longitude[1]` | **Northing** | `r env_data$utmnorthing[1]` |
+| **Elev (m)** | `r env_data$elevation[1]` | **Slope (%)** | `r env_data$slopegradient[1]` |
+| **Aspect** | `r env_data$aspect[1]` | **Map Sheet** | `r env_data$ntsmapsheet[1]` |
+
+## Site Description
+**Meso Slope:** `r env_data$mesoslopeposition[1]`  
+**Surface Shape:** `r env_data$surfaceshape[1]`  
+**Moisture Regime:** `r env_data$moistureregime[1]`  
+**Nutrient Regime:** `r env_data$nutrientregime[1]`  
+
+**Notes:**  
+`r env_data$sitenotes[1]`
+
+## Vegetation
+
+```{r veg-table, echo=FALSE, warning=FALSE}
+
+if (nrow(veg_data) > 0) {
+  # Pivot nice table: Layers as Columns? Or just list?
+  # Standard VPro report lists them by Layer.
+  
+  # Map Layer Codes to Names
+  layer_names <- c(
+    "1" = "Layer A1 (Dominant Trees)",
+    "2" = "Layer A2 (Codominant Trees)",
+    "3" = "Layer A3 (Intermediate Trees)", 
+    "4" = "Layer B1 (Tall Shrubs)",
+    "5" = "Layer B2 (Low Shrubs)",
+    "6" = "Layer C (Herbs)",
+    "7" = "Layer D (Moss/Lichen)"
+  )
+  
+  veg_data$LayerName <- layer_names[veg_data$MyLayer]
+  veg_data$LayerName[is.na(veg_data$LayerName)] <- paste("Layer", veg_data$MyLayer)
+  
+  veg_display <- veg_data %>%
+    select(LayerName, Species, Cover)
+    
+  # knitr::kable(veg_display)
+  
+  veg_split <- split(veg_display, veg_display$LayerName)
+  
+  for (layer in names(veg_split)) {
+    cat(paste0("\n**", layer, "**\n"))
+    print(kable(veg_split[[layer]] %>% select(-LayerName), col.names = c("Species", "Cover")))
+    cat("\n")
+  }
+    
+} else {
+  cat("No vegetation data recorded.")
+}
+```
+
+## Soil Profile
+
+### Humus Horizons
+```{r humus, echo=FALSE}
+if (nrow(humus_data) > 0) {
+  humus_data %>%
+    select(horizon, upperdepth, lowerdepth, humusstructuredegree, humusstructurekind, humusformph) %>%
+    kable(col.names = c("Horizon", "Upper", "Lower", "Struct Deg", "Struct Kind", "pH"))
+} else {
+  cat("No humus data.")
+}
+```
+
+### Mineral Horizons
+```{r mineral, echo=FALSE}
+if (nrow(mineral_data) > 0) {
+  mineral_data %>%
+    select(horizon, upperdepth, lowerdepth, texture, percentcoarsefragstotal, colour) %>%
+    kable(col.names = c("Horizon", "Upper", "Lower", "Texture", "% Coarse", "Colour"))
+} else {
+  cat("No mineral data.")
+}
+```

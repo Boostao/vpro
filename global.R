@@ -19,9 +19,13 @@ log_msg <- function(...) {
 
 # Module Imports
 source("R/logic_state.R") # Global State Logic
-source("R/mod_project_meta.R")
+source("R/logic_lumping.R") # Lumping Logic
+source("R/mod_admin.R")
+source("R/mod_images.R")
 source("R/mod_veg_sample.R")
 source("R/mod_site_env.R")
+source("R/mod_export.R")
+source("R/mod_reporting.R")
 
 # Note: The actual 'SysState' object is initialized in server.R 
 # because it must be reactive and unique to the session.

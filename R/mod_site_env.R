@@ -19,8 +19,30 @@ mod_site_env_ui <- function(id) {
                textInput(ns("env_utmn"), "UTM Northing"),
                col_widths = c(3, 3, 3, 3)
             ),
+            layout_columns(
+               numericInput(ns("env_elev"), "Elevation (m)", value=0),
+               numericInput(ns("env_slope"), "Slope (%)", value=0),
+               numericInput(ns("env_aspect"), "Aspect (deg)", value=0),
+               col_widths = c(4, 4, 4)
+            ),
+            layout_columns(
+               selectInput(ns("env_meso"), "Meso Slope", choices=NULL),
+               selectInput(ns("env_shape"), "Surface Shape", choices=NULL),
+               selectInput(ns("env_moisture"), "Moisture Regime", choices=NULL),
+               selectInput(ns("env_nutrient"), "Nutrient Regime", choices=NULL),
+               col_widths = c(3, 3, 3, 3)
+            ),
             textAreaInput(ns("env_notes"), "Site Notes", width = "100%", height = "100px"),
             div(class="mt-3", actionButton(ns("save_header"), "Save General Info", class="btn-primary"))
+        ),
+        nav_panel("Mensuration",
+            layout_columns(
+                numericInput(ns("men_age"), "Stand Age (yrs)", value=0),
+                numericInput(ns("men_hgt"), "Stand Height (m)", value=0),
+                selectInput(ns("men_struct"), "Structural Stage", choices=NULL),
+                col_widths = c(4, 4, 4)
+            ),
+            div(class="mt-3", actionButton(ns("save_mensuration"), "Save Mensuration", class="btn-primary"))
         ),
         nav_panel("Soil: Humus", 
             layout_columns(
@@ -67,6 +89,19 @@ mod_site_env_server <- function(id, sys_state, con) {
         
         # Populate Inputs
         if(nrow(rv$env) > 0) {
+            # Update Dropdown Choices first
+            choices_meso <- get_list_choices("MesoSlopePosition")
+            choices_shape <- get_list_choices("SurfaceShape")
+            choices_mois <- get_list_choices("MoistureRegime")
+            choices_nut <- get_list_choices("NutrientRegime")
+            choices_struct <- get_list_choices("StructuralStage")
+            
+            updateSelectInput(session, "env_meso", choices=c("", choices_meso), selected=rv$env$mesoslopeposition[1])
+            updateSelectInput(session, "env_shape", choices=c("", choices_shape), selected=rv$env$surfaceshape[1])
+            updateSelectInput(session, "env_moisture", choices=c("", choices_mois), selected=rv$env$moistureregime[1])
+            updateSelectInput(session, "env_nutrient", choices=c("", choices_nut), selected=rv$env$nutrientregime[1])
+            updateSelectInput(session, "men_struct", choices=c("", choices_struct), selected=rv$env$structuralstage[1])
+
             updateTextInput(session, "env_location", value = rv$env[["_location"]][1])
             
             # Safe Date Handling
@@ -85,7 +120,21 @@ mod_site_env_server <- function(id, sys_state, con) {
             updateNumericInput(session, "env_long", value = as.numeric(rv$env$longitude[1]))
             updateTextInput(session, "env_utme", value = as.character(rv$env$utmeasting[1]))
             updateTextInput(session, "env_utmn", value = as.character(rv$env$utmnorthing[1]))
+            
+            updateNumericInput(session, "env_elev", value = as.numeric(rv$env$elevation[1]))
+            updateNumericInput(session, "env_slope", value = as.numeric(rv$env$slopegradient[1]))
+            updateNumericInput(session, "env_aspect", value = as.numeric(rv$env$aspect[1]))
+            
             updateTextAreaInput(session, "env_notes", value = rv$env$sitenotes[1])
+            
+            # Mensuration
+            updateNumericInput(session, "men_age", value = as.numeric(rv$env$standage[1]))
+            # sv_standheight is likely the column, or sv_standheightestmeas
+            # Checking recent dbListFields: sv_standheightestmeas and sv_standheight are there.
+            # Usually strict numbers go in standheight if available.
+            val_hgt <- rv$env$sv_standheight[1]
+            if(is.na(val_hgt)) val_hgt <- 0
+            updateNumericInput(session, "men_hgt", value = as.numeric(val_hgt))
         }
     })
     
@@ -101,7 +150,7 @@ mod_site_env_server <- function(id, sys_state, con) {
         if(is.null(d_save)) d_save <- NA
         if(!is.na(d_save)) d_save <- as.character(d_save)
         
-        sql <- "UPDATE Sample_Env SET _location=?, date=?, sitesurveyor=?, latitude=?, longitude=?, utmeasting=?, utmnorthing=?, sitenotes=? WHERE plotnumber=?"
+        sql <- "UPDATE Sample_Env SET _location=?, date=?, sitesurveyor=?, latitude=?, longitude=?, utmeasting=?, utmnorthing=?, elevation=?, slopegradient=?, aspect=?, mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=? WHERE plotnumber=?"
         
         tryCatch({
             res <- dbExecute(con, sql, list(
@@ -112,13 +161,20 @@ mod_site_env_server <- function(id, sys_state, con) {
                 input$env_long,
                 input$env_utme,
                 input$env_utmn,
+                input$env_elev,
+                input$env_slope,
+                input$env_aspect,
+                input$env_meso,
+                input$env_shape,
+                input$env_moisture,
+                input$env_nutrient,
                 input$env_notes,
                 plot_id
             ))
             
             if (res == 0) {
                 # Update failed (row doesn't exist), try INSERT
-                sql_ins <- "INSERT INTO Sample_Env (plotnumber, _location, date, sitesurveyor, latitude, longitude, utmeasting, utmnorthing, sitenotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                sql_ins <- "INSERT INTO Sample_Env (plotnumber, _location, date, sitesurveyor, latitude, longitude, utmeasting, utmnorthing, elevation, slopegradient, aspect, mesoslopeposition, surfaceshape, moistureregime, nutrientregime, sitenotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 dbExecute(con, sql_ins, list(
                     plot_id,
                     input$env_location, 
@@ -128,6 +184,13 @@ mod_site_env_server <- function(id, sys_state, con) {
                     input$env_long,
                     input$env_utme,
                     input$env_utmn,
+                    input$env_elev,
+                    input$env_slope,
+                    input$env_aspect,
+                    input$env_meso,
+                    input$env_shape,
+                    input$env_moisture,
+                    input$env_nutrient,
                     input$env_notes
                 ))
                 showNotification("Header created successfully.", type="message")
@@ -139,6 +202,31 @@ mod_site_env_server <- function(id, sys_state, con) {
             }
         }, error = function(e) {
             showNotification(paste("Error saving header:", e$message), type="error")
+        })
+    })
+
+    # -- Save Mensuration --
+    observeEvent(input$save_mensuration, {
+        req(sys_state$CurrSU)
+        plot_id <- as.character(sys_state$CurrSU)
+        
+        sql <- "UPDATE Sample_Env SET standage=?, sv_standheight=?, structuralstage=? WHERE plotnumber=?"
+        
+        tryCatch({
+            res <- dbExecute(con, sql, list(
+                input$men_age,
+                input$men_hgt,
+                input$men_struct,
+                plot_id
+            ))
+            
+            if (res == 0) {
+                showNotification("Record does not exist to update mensuration.", type="error")
+            } else {
+                showNotification("Mensuration updated.", type="message")
+            }
+        }, error = function(e) {
+            showNotification(paste("Error saving mensuration:", e$message), type="error")
         })
     })
 
