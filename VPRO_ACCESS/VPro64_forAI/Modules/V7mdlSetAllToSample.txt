@@ -1,0 +1,53 @@
+Option Compare Database
+Option Explicit
+
+Public Function SetAllToSample()
+
+    Dim strApp As String, strName As String
+
+    strApp = "VPro64"
+    strName = "Current"
+'Debug.Print "here"
+        SaveSetting strApp, strName, "CurrProject", "Sample"
+        SaveSetting strApp, strName, "CurrPlotList", "None"
+        SaveSetting strApp, strName, "CurrHierarchy", "Sample"
+        SaveSetting strApp, strName, "DataFormName", "FS882-6x4"
+        SaveSetting strApp, "Current", "CurrLump", "None"
+        SaveSetting strApp, "Current", "CurrVegProfile", "Sample"
+        SaveSetting strApp, "Current", "CurrConstancy", "Sample"
+        SaveSetting strApp, "frmMainMenuFloat", "Bottom", 139
+        SaveSetting strApp, "frmMainMenuFloat", "Left", 58
+        SaveSetting strApp, "frmMainMenuFloat", "Right", 364
+        SaveSetting strApp, "frmMainMenuFloat", "Top", 79
+        SaveSetting strApp, "USysAssignSU", "Bottom", 656
+        SaveSetting strApp, "USysAssignSU", "Left", 113
+        SaveSetting strApp, "USysAssignSU", "Right", 787
+        SaveSetting strApp, "USysAssignSU", "Top", 152
+        SaveSetting strApp, "USysAssignSU", "Top", 152
+        SaveSetting strApp, "System", "Build", Format(BuildDate, "Long Date")
+        SaveSetting strApp, "System", "Location", CurrentDb.Name
+        SaveSetting strApp, "ReportOptions", "cmbColourGreater", 5
+        SaveSetting strApp, "ReportOptions", "cmbGrayGreater", 65
+        SaveSetting strApp, "ReportOptions", "cmbApplyTheme", 1
+        clsVProReg.AuditStrength = 1
+        clsRepOpt.cmbThemeTable = "Sample"
+        'clsFormColour.PrimaryColour = 14876412
+    
+End Function
+
+Public Function SetAllToSample2()
+
+Dim strApp As String, strName As String
+strApp = "VPro64"
+strName = "Current"
+
+On Error Resume Next
+    SaveSetting strApp, strName, "CurrProject", "Sample"
+    SaveSetting strApp, strName, "CurrPlotList", "Sample"
+    SaveSetting strApp, strName, "CurrHierarchy", "Sample"
+    SaveSetting strApp, "Current", "CurrLump", "Sample"
+    SaveSetting strApp, "Current", "CurrVegProfile", "Sample"
+    DoCmd.Close acForm, "frmMainMenuFloat"
+    DoCmd.OpenForm "frmMainMenuFloat"
+    On Error GoTo 0
+End Function

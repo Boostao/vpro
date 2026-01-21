@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://earth.google.com/kml/2.1"><Document>   <name>VPro Plot Locations</name>
+<Style id="a"><IconStyle><Icon><href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href></Icon></IconStyle></Style>
+   <Placemark>       <name>brms022</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>--114.852233886719, 49.7449264526367,0</coordinates>      </Point>      <description><![CDATA[.]]></description>   </Placemark>
+</Document></kml>

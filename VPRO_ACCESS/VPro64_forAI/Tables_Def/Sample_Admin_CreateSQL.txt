@@ -1,0 +1,25 @@
+CREATE TABLE [Sample_Admin] (
+  [Plot] TEXT(255) NOT NULL DEFAULT ,
+  [StartDate] INTEGER DEFAULT ,
+  [PlotType] TEXT(10) DEFAULT ,
+  [PlotSize] SINGLE DEFAULT ,
+  [ProvinceStateTerritory] TEXT(255) DEFAULT ,
+  [SitePlotQuality] TEXT(15) DEFAULT ,
+  [VegPlotQuality] TEXT(15) DEFAULT ,
+  [SoilPlotQuality] TEXT(15) DEFAULT ,
+  [UpdatedFromCards] BIT DEFAULT ,
+  [EnteredBy] TEXT(50) DEFAULT ,
+  [UserSiteUnit] TEXT(100) DEFAULT ,
+  [BECSiteUnit] TEXT(100) DEFAULT ,
+  [SiteUnitShortName] TEXT(50) DEFAULT ,
+  [SiteUnitLongName] TEXT(100) DEFAULT ,
+  [OfficeNotes] MEMO DEFAULT ,
+  [HumusThickness] SINGLE DEFAULT ,
+  [GIS_BGC] TEXT(255) DEFAULT ,
+  [GIS_BGC_VER] INTEGER DEFAULT ,
+  [BEC_Use] TEXT(255) DEFAULT ,
+  [StrataCoverTotal] SINGLE DEFAULT 
+);
+
+CREATE UNIQUE INDEX [PlotNumber] ON [Sample_Admin] ([Plot]);
+

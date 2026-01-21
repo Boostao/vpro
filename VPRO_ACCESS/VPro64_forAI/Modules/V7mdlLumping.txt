@@ -1,0 +1,96 @@
+Option Compare Database
+Option Explicit
+
+Private Sub test()
+
+'CombineSpp "Sample"
+CombineSpp clsVProReg.CurrLump
+Debug.Print clsVProReg.CurrLump
+
+End Sub
+
+Public Sub CombineSpp(LumpTable As String)
+
+'2020
+    Dim MyDB As Database, MyQD As QueryDef
+    Dim SqlText As String
+    Set MyDB = CurrentDb()
+    
+    On Error Resume Next
+        DoCmd.DeleteObject acQuery, "CombinedSpp_Lump"
+        DoCmd.DeleteObject acQuery, "ExcludedVariants"
+    On Error GoTo errCombineSpp
+
+If LumpTable <> "None" Then 'combine spp and var
+    SqlText = "SELECT *"
+    SqlText = SqlText & " FROM [" & LumpTable & "]"
+    SqlText = SqlText & " WHERE (((Use)=-1));"
+    Set MyQD = MyDB.CreateQueryDef("ExcludedVariants", SqlText)
+    
+    SqlText = "SELECT DISTINCT Left([code],Len([code])-1) AS LumpCode, USysAllSpecs.Code AS SppCode, -1 AS Use"
+    SqlText = SqlText & " FROM USysAllSpecs LEFT JOIN ExcludedVariants ON USysAllSpecs.Code = ExcludedVariants.SppCode"
+    SqlText = SqlText & " WHERE (((ExcludedVariants.SppCode) Is Null) AND ((Right([Code],1))<'9'))"
+    SqlText = SqlText & " UNION Select DISTINCT LumpCode, SppCode, Use From [" & LumpTable & "]"
+    SqlText = SqlText & " Where Use = -1"
+    SqlText = SqlText & " ORDER BY LumpCode;"
+Else
+    SqlText = "SELECT DISTINCT Left([code],Len([code])-1) AS LumpCode, USysAllSpecs.Code AS SppCode, -1 AS Use"
+    SqlText = SqlText & " FROM USysAllSpecs"
+    SqlText = SqlText & " WHERE (((Right([Code], 1)) < '9'))"
+    SqlText = SqlText & " ORDER BY Left([code],Len([code])-1);"
+End If
+
+Set MyQD = MyDB.CreateQueryDef("CombinedSpp_Lump", SqlText)
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Sub
+errCombineSpp:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Public Function LumpVegData(VegTableIn As String, VegTableOut As String, LumpTable As String)
+
+'Dec. 11, 2008
+    Dim SqlText As String, MyDB As Database, MyTable As TableDef
+    Set MyDB = CurrentDb()
+    
+    On Error Resume Next
+        DoCmd.DeleteObject acQuery, "qryLumpFilter"
+    On Error GoTo errLumpVegData
+    
+    DoCmd.SetWarnings False
+    SqlText = "SELECT LumpCode, SppCode, Use"
+    SqlText = SqlText & " From [" & LumpTable & "]"
+    SqlText = SqlText & " WHERE (((Use)=Yes));"
+    MyDB.CreateQueryDef "qryLumpFilter", SqlText
+    
+    SqlText = "SELECT Plotnumber, Layer, IIf(IsNull([Lumpcode]),[Species],[LumpCode]) AS SPP, IIf(Sum(([cover]))>99,99,Sum(([Cover]))) AS MyCover INTO [" & VegTableOut & "]"
+    SqlText = SqlText & " FROM [" & VegTableIn & "] LEFT JOIN qryLumpFilter ON [" & VegTableIn & "].Species = qryLumpFilter.SppCode"
+    SqlText = SqlText & " GROUP BY Plotnumber, Layer, IIf(IsNull([Lumpcode]),[Species],[LumpCode]);"
+    'MyDB.CreateQueryDef "fred1", SqlText
+    DoCmd.RunSQL SqlText
+
+    If Right(VegTableOut, 1) = "x" Then
+        DoCmd.DeleteObject acTable, VegTableIn
+        DoCmd.Rename VegTableIn, acTable, VegTableOut
+    End If
+    
+    Set MyTable = MyDB.TableDefs(VegTableIn)
+    MyTable.Fields("Spp").Name = "Species"
+    MyTable.Fields("MyCover").Name = "Cover"
+
+MyExit:
+    On Error Resume Next
+    DoCmd.DeleteObject acQuery, "qryLumpFilter"
+    Set MyDB = Nothing
+    Set MyTable = Nothing
+    DoCmd.SetWarnings True
+    Exit Function
+errLumpVegData:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function

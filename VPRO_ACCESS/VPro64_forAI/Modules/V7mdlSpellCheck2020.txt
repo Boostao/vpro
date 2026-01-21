@@ -1,0 +1,389 @@
+Option Compare Database
+
+Public Sub CheckForOldCodes()
+
+'Apr. 27, 2020
+Dim Answer As Variant, Msg As String
+    
+'delete old queries and tables
+    CleanUp
+    
+'check 4 duplicates should go here
+'if there are duplicates, the user will be offered a hands-off method or just print a report and exit
+    If Check4DuplicatedSpecies Then
+        Answer = MsgBox("You have instances of the same species code in a plot.  Click No if you want to review and fix these errors or click Yes if you want VPro to consolidate the species.", vbYesNo, "VPro")
+        If Answer = vbYes Then
+            'continue
+        End If
+        If Answer = vbNo Then
+            'build a list of errors
+            DuplicateErrorReport
+            CleanUp
+            Exit Sub
+        Else
+            Exit Sub
+        End If
+    End If
+    
+'check for old codes and if there are then offer to fix them
+    If LookForOldCodes Then
+        Answer = MsgBox("There are old codes in your veg table.  You can continue to use the data in its current condition or VPro can update your codes.  Only continue if you have a current backup.  Continue?", vbYesNo, "VPro")
+    Else
+        MsgBox "All your codes are up to date.", vbInformation, "VPro"
+        CleanUp
+        Exit Sub
+    End If
+    
+'if the user want to fix them then get on with it else offer to build a report
+    If Answer = vbYes Then
+        Msg = "VPro will create a report using Excel that lists the codes it has replaced and a report of the data that was updated."
+        MsgBox Msg, vbInformation, "VPro"
+        UpdateOldCodes
+    Else
+        Answer = MsgBox("VPro can still create a report using Excel that lists the codes needing to be replaced and a report of the data that would be updated.  Generate the report?", vbYesNo, "VPro")
+        If Answer = vbYes Then
+            'generate a report
+            JustTheReport
+            CleanUp
+        End If
+        Exit Sub
+    End If
+
+'offer to check the data again
+    MsgBox "It is sometimes the case that when the codes are updated that there are duplicate codes in a plot.  VPro can test for this and offer to consolidate them if that is the case.  To do this run this function again.", vbInformation, "VPro"
+
+MyExit:
+    'delete old queries and tables
+    CleanUp
+    
+End Sub
+
+Private Sub DuplicateErrorReport()
+
+'Apr. 27, 2020
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, Msg As String, Response As Integer, Title As String, dgdef As Variant, Answer As Variant
+Set MyDB = CurrentDb()
+
+    SqlText = "SELECT USysAllVeg.PlotNumber, USysAllVeg.Species, USysAllVeg.MyLayer AS Layer, Count(USysAllVeg.Cover) AS [n of Spp]"
+    SqlText = SqlText & " FROM USysAllVeg"
+    SqlText = SqlText & " GROUP BY USysAllVeg.PlotNumber, USysAllVeg.Species, USysAllVeg.MyLayer"
+    SqlText = SqlText & " HAVING (((Count(USysAllVeg.Cover))>1));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+
+'create xl object
+    Dim xl As Object, i As Integer
+    Set xl = CreateObject("Excel.Application")
+    xl.Visible = True
+    xl.Cursor = xlWait
+    xl.Workbooks.Add
+    xl.Caption = "VPro Vegetation Error Report"
+    
+'create a report header and add report data
+    xl.Cells(1, 1) = "Below are the problems VPro has identified"
+    xl.Cells(4, 1) = "Plot Number"
+    xl.Cells(4, 2) = "Species"
+    xl.Cells(4, 3) = "Layer"
+    xl.Cells(4, 4) = "n of Spp"
+    For i = 1 To MyRS.RecordCount
+        xl.Cells(i + 4, 1) = "'" & MyRS!PlotNumber
+        xl.Cells(i + 4, 2) = "'" & MyRS!Species
+        xl.Cells(i + 4, 3) = "'" & MyRS!Layer
+        xl.Cells(i + 4, 4) = "'" & MyRS![n of spp]
+        MyRS.MoveNext
+    Next i
+    
+'format report
+    xl.Range("A1").ColumnWidth = 14
+    xl.Range("B1").ColumnWidth = 10
+    xl.Range("C1").ColumnWidth = 5
+    xl.Range("d1").ColumnWidth = 8
+    xl.Range("A4:D4").Font.Bold = True
+    
+MyExit:
+    On Error Resume Next
+    xl.Cursor = xlDefault
+    Set xl = Nothing
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub
+
+Private Function Check4DuplicatedSpecies() As Boolean
+
+'Apr. 27, 2020
+'checks for veg duplication errors
+On Error GoTo errCheck4DuplicatedSpecies
+
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, Msg As String, Response As Integer, Title As String, dgdef As Variant, Answer As Variant
+Set MyDB = CurrentDb()
+
+'do initial setting
+    Check4DuplicatedSpecies = True
+
+'build recordset to identify duplicates
+    SqlText = "SELECT USysAllVeg.PlotNumber, USysAllVeg.Species, USysAllVeg.MyLayer AS Layer, Count(USysAllVeg.Cover) AS [n of Spp]"
+    SqlText = SqlText & " FROM USysAllVeg"
+    SqlText = SqlText & " GROUP BY USysAllVeg.PlotNumber, USysAllVeg.Species, USysAllVeg.MyLayer"
+    SqlText = SqlText & " HAVING (((Count(USysAllVeg.Cover))>1));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount = 0 Then
+        'no duplicates
+        Check4DuplicatedSpecies = False
+        GoTo MyExit
+    End If
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    
+    'there must be duplicates
+    If MyRS.RecordCount > 0 Then
+        Check4DuplicatedSpecies = False
+        Msg = "There are some problems in your vegetation data.  Would you like VPro to generate an error report?"
+        dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+        Title = "VPro"
+        Response = MsgBox(Msg, vbYesNo, Title)    ' Get user response.
+        
+        If Response = 6 Then 'generate a report
+            Dim xl As Object, i As Integer
+            Set xl = CreateObject("Excel.Application")
+            xl.Visible = True
+            xl.Cursor = xlWait
+            xl.Workbooks.Add
+            xl.Caption = "VPro Vegetation Error Report"
+            
+            xl.Cells(1, 1) = "Below are the problems VPro has identified"
+            xl.Cells(4, 1) = "Plot Number"
+            xl.Cells(4, 2) = "Species"
+            xl.Cells(4, 3) = "Layer"
+            xl.Cells(4, 4) = "n of Spp"
+            For i = 1 To MyRS.RecordCount
+                xl.Cells(i + 4, 1) = "'" & MyRS!PlotNumber
+                xl.Cells(i + 4, 2) = "'" & MyRS!Species
+                xl.Cells(i + 4, 3) = "'" & MyRS!Layer
+                xl.Cells(i + 4, 4) = "'" & MyRS![n of spp]
+                MyRS.MoveNext
+            Next i
+            xl.Range("A1").ColumnWidth = 14
+            xl.Range("B1").ColumnWidth = 10
+            xl.Range("C1").ColumnWidth = 5
+            xl.Range("d1").ColumnWidth = 8
+            xl.Range("A4:D4").Font.Bold = True
+            xl.Cursor = xlDefault
+            Set xl = Nothing
+        End If
+        
+        Answer = MsgBox("VPro can fix these errors by combining cover values.  Continue?", vbYesNo, "VPro")
+        If Answer = vbYes Then
+            CombineSppCovers
+        End If
+    Else
+        Check4DuplicatedSpecies = True
+    End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Set xl = Nothing
+    Exit Function
+errCheck4DuplicatedSpecies:
+    MsgBox Err.Description
+    Check4DuplicatedSpecies = False
+    Resume MyExit
+    
+End Function
+
+Private Sub CombineSppCovers()
+
+'Apr. 27, 2020
+Dim SqlText As String
+
+'clean up from previous run
+    On Error Resume Next
+    DoCmd.DeleteObject acQuery, "xxxqryTempVeg"
+    DoCmd.DeleteObject acTable, "xxxtblTempVeg"
+    On Error GoTo 0
+
+'create an temp empty veg table
+    DoCmd.CopyObject , "xxxtblTempVeg", acTable, "USysVegTable"
+
+'insert the combined covers into the temp veg table
+    SqlText = "INSERT INTO xxxtblTempVeg ( PlotNumber, Species, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, HeightA, Cover4, Height4, Cover5, Height5, Cover5a, Height5a, Cover5b, Height5b, Cover5c, Height5c, TotalB, HeightB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, Flag, LL, AF, DC, UT, VI, PV, PG, FFA, Cultural1, Cultural2, Other1, Other2 )"
+    SqlText = SqlText & " SELECT UsysVeg.PlotNumber, UsysVeg.Species, Sum(UsysVeg.Cover1) AS SumOfCover1, Max(UsysVeg.Height1) AS MaxOfHeight1, Sum(UsysVeg.Cover2) AS SumOfCover2, Max(UsysVeg.Height2) AS MaxOfHeight2, Sum(UsysVeg.Cover3) AS SumOfCover3, Max(UsysVeg.Height3) AS MaxOfHeight3, Sum(UsysVeg.TotalA) AS SumOfTotalA, Max(UsysVeg.HeightA) AS MaxOfHeightA, Sum(UsysVeg.Cover4) AS SumOfCover4, Max(UsysVeg.Height4) AS MaxOfHeight4, Sum(UsysVeg.Cover5) AS SumOfCover5, Max(UsysVeg.Height5) AS MaxOfHeight5, Sum(UsysVeg.Cover5a) AS SumOfCover5a, Max(UsysVeg.Height5a) AS MaxOfHeight5a, Sum(UsysVeg.Cover5b) AS SumOfCover5b, Max(UsysVeg.Height5b) AS MaxOfHeight5b, Sum(UsysVeg.Cover5c) AS SumOfCover5c, Max(UsysVeg.Height5c) AS MaxOfHeight5c, Sum(UsysVeg.TotalB) AS SumOfTotalB, Max(UsysVeg.HeightB) AS MaxOfHeightB, Sum(UsysVeg.Cover6) AS SumOfCover6, Sum(UsysVeg.Height6) AS SumOfHeight6, Sum(UsysVeg.Cover7) AS SumOfCover7, Sum(UsysVeg.Cover8) AS SumOfCover8, Sum(UsysVeg.Cover9) AS SumOfCover9,"
+    SqlText = SqlText & " Sum(UsysVeg.Cover10) AS SumOfCover10, First(UsysVeg.Collected) AS FirstOfCollected, First(UsysVeg.Flag) AS FirstOfFlag, First(UsysVeg.LL) AS FirstOfLL, First(UsysVeg.AF) AS FirstOfAF, First(UsysVeg.DC) AS FirstOfDC, First(UsysVeg.UT) AS FirstOfUT, First(UsysVeg.VI) AS FirstOfVI, First(UsysVeg.PV) AS FirstOfPV, First(UsysVeg.PG) AS FirstOfPG, First(UsysVeg.FFA) AS FirstOfFFA, First(UsysVeg.Cultural1) AS FirstOfCultural1, First(UsysVeg.Cultural2) AS FirstOfCultural2, First(UsysVeg.Other1) AS FirstOfOther1, First(UsysVeg.Other2) AS FirstOfOther2"
+    SqlText = SqlText & " From UsysVeg"
+    SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, UsysVeg.Species;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+
+'delete the current veg records
+    SqlText = "DELETE UsysVeg.* FROM UsysVeg;"
+    DoCmd.RunSQL SqlText
+    
+'copy records from temp table into project table
+    SqlText = "INSERT INTO USysVeg SELECT xxxtblTempVeg.* FROM xxxtblTempVeg;"
+    DoCmd.RunSQL SqlText
+
+    DoCmd.SetWarnings True
+
+'clean up
+    On Error Resume Next
+    DoCmd.DeleteObject acQuery, "xxxqryTempVeg"
+    DoCmd.DeleteObject acTable, "xxxtblTempVeg"
+    DoCmd.DeleteObject acQuery, "qryCodeCheckBadCodeList"
+    On Error GoTo 0
+
+MyExit:
+    CleanUp
+    
+End Sub
+
+Private Sub JustTheReport()
+
+'Apr. 28, 2020
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String
+Dim xl As Excel.Application
+
+'make xl object
+    CreateExcel xl
+    xl.Visible = True
+
+'create db object
+    Set MyDB = CurrentDb
+
+'create recordset of missmatched codes
+    SqlText = "SELECT UsysVeg.Species AS [Current Code], USysAllSpecs.Code AS [New Code]"
+    SqlText = SqlText & " FROM UsysVeg INNER JOIN USysAllSpecs ON UsysVeg.Species = USysAllSpecs.OldCode"
+    SqlText = SqlText & " WHERE ((([Species] <> [Code]) = -1))"
+    SqlText = SqlText & " GROUP BY UsysVeg.Species, USysAllSpecs.Code;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    
+'create report
+    xl.Workbooks.Add
+    xl.Sheets.Add
+    xl.ActiveSheet.Name = "Codes replaced"
+    xl.Cells(1, 1) = "Current code"
+    xl.Cells(1, 2) = "New code"
+    xl.Cells(2, 1).CopyFromRecordset MyRS
+    
+'recordset of codes in veg table that need updating
+    SqlText = "SELECT qryCodeCheckBadCodeList.[New Code], UsysVeg.*"
+    SqlText = SqlText & " FROM qryCodeCheckBadCodeList INNER JOIN UsysVeg ON qryCodeCheckBadCodeList.[Current Code] = UsysVeg.Species;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    
+'add data to excel
+    xl.Sheets.Add
+    xl.ActiveSheet.Name = "Data updated"
+    
+'add report fields
+    For i = 0 To MyRS.Fields.count - 1
+        xl.Cells(1, i + 1) = MyRS.Fields(i).Name
+    Next i
+    xl.Cells(2, 1).CopyFromRecordset MyRS
+        
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Set xl = Nothing
+    On Error GoTo 0
+
+End Sub
+Private Function LookForOldCodes() As Boolean
+
+'Apr. 28, 2020
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String
+Set MyDB = CurrentDb
+
+'inital results setting
+    LookForOldCodes = False
+
+'create qryCodeCheckBadCodeList
+    SqlText = "SELECT UsysVeg.Species AS [Current Code], USysAllSpecs.Code AS [New Code]"
+    SqlText = SqlText & " FROM UsysVeg INNER JOIN USysAllSpecs ON UsysVeg.Species = USysAllSpecs.OldCode"
+    SqlText = SqlText & " WHERE ((([Species] <> [Code]) = -1))"
+    SqlText = SqlText & " GROUP BY UsysVeg.Species, USysAllSpecs.Code;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    MyDB.CreateQueryDef "qryCodeCheckBadCodeList", SqlText
+
+'if there are bad codes then report true
+    If MyRS.RecordCount > 0 Then
+        LookForOldCodes = True
+    End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+End Function
+
+Private Sub UpdateOldCodes()
+
+'Apr. 28, 2020
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String
+Dim xl As Excel.Application
+
+'create xl object
+    CreateExcel xl
+    xl.Visible = True
+
+'create db object
+    Set MyDB = CurrentDb
+
+'recordset of missmatched codes
+    SqlText = "SELECT UsysVeg.Species AS [Current Code], USysAllSpecs.Code AS [New Code]"
+    SqlText = SqlText & " FROM UsysVeg INNER JOIN USysAllSpecs ON UsysVeg.Species = USysAllSpecs.OldCode"
+    SqlText = SqlText & " WHERE ((([Species] <> [Code]) = -1))"
+    SqlText = SqlText & " GROUP BY UsysVeg.Species, USysAllSpecs.Code;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    
+'report of codes replaced
+    xl.Workbooks.Add
+    xl.Sheets.Add
+    xl.ActiveSheet.Name = "Codes replaced"
+    xl.Cells(1, 1) = "Current code"
+    xl.Cells(1, 2) = "New code"
+    xl.Cells(2, 1).CopyFromRecordset MyRS
+    
+'recordset of changes to the veg table
+    SqlText = "SELECT qryCodeCheckBadCodeList.[New Code], UsysVeg.*"
+    SqlText = SqlText & " FROM qryCodeCheckBadCodeList INNER JOIN UsysVeg ON qryCodeCheckBadCodeList.[Current Code] = UsysVeg.Species;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    xl.Sheets.Add
+    xl.ActiveSheet.Name = "Data updated"
+    
+'report changes
+    For i = 0 To MyRS.Fields.count - 1
+        xl.Cells(1, i + 1) = MyRS.Fields(i).Name
+    Next i
+    xl.Cells(2, 1).CopyFromRecordset MyRS
+        
+'update veg table
+    SqlText = "UPDATE UsysVeg INNER JOIN USysAllSpecs ON UsysVeg.Species = USysAllSpecs.OldCode SET UsysVeg.Species = [Code]"
+    SqlText = SqlText & "WHERE ((([Species]<>[Code])=-1));"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Set xl = Nothing
+    On Error GoTo 0
+End Sub
+
+Private Sub CleanUp()
+
+'Apr. 28, 2020
+    On Error Resume Next
+        DoCmd.DeleteObject acQuery, "qryCodeCheckBadCodeList"
+    On Error GoTo 0
+
+End Sub

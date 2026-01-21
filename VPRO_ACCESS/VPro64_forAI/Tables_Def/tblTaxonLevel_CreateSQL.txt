@@ -1,0 +1,6 @@
+CREATE TABLE [tblTaxonLevel] (
+  [TaxonLevel] TEXT(255) DEFAULT ,
+  [Choice] INTEGER DEFAULT 
+);
+
+

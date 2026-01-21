@@ -1,0 +1,16 @@
+CREATE TABLE [USysPictureBlob] (
+  [ID] LONG DEFAULT ,
+  [FileName] TEXT(100) NOT NULL DEFAULT ,
+  [PlotOrUnit] TEXT(100) DEFAULT ,
+  [Owner] TEXT(50) DEFAULT ,
+  [DateTaken] DATETIME DEFAULT ,
+  [Caption] TEXT(50) DEFAULT ,
+  [Blob] LONGBINARY DEFAULT ,
+  [Comment] TEXT(255) DEFAULT ,
+  [Other] TEXT(50) DEFAULT 
+);
+
+CREATE INDEX [ID] ON [USysPictureBlob] ([ID]);
+CREATE INDEX [PlotOrUnit] ON [USysPictureBlob] ([PlotOrUnit]);
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [USysPictureBlob] ([ID]);
+

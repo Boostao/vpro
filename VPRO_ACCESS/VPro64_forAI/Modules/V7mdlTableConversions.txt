@@ -1,0 +1,356 @@
+Option Compare Database
+Option Explicit
+Private Function ExportUserSiteUnitNames(Optional SiteUnitList)
+
+'Sep 22, 2008
+'export long site unit names
+On Error Resume Next
+    DoCmd.DeleteObject acTable, "TempLongNames"
+On Error GoTo errExportUserSiteUnitNames
+Dim MyTitle As String, MyFile As String
+
+If IsMissing(SiteUnitList) Then
+        SiteUnitList = CurrPlotlist() & "_SU"
+End If
+
+    MyTitle = ProgramName()
+    MyFile = GetFileName(MyTitle, True, "VPro User Files (*.accda)", "*.accda")
+    If MyFile = "" Then Exit Function
+    DoCmd.TransferDatabase acLink, "Microsoft Access", MyFile, acTable, "USysUserSpp", "UserSpecies"
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errExportUserSiteUnitNames:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function ConvertProVeg2V2(VegTableIn, VegTableOut)
+'Sep 10, 2008
+'converts VPro veg table to a one species per row table
+On Error GoTo errConvertProVeg2V2
+Dim VegTable As String, Project As String, SqlText As String
+Dim i As Integer, LumpTable As String
+Dim MyDB As Database, MyRS As Recordset
+Set MyDB = CurrentDb
+
+SqlText = "SELECT LayerCode.LayerText"
+SqlText = SqlText & " From LayerCode"
+SqlText = SqlText & " WHERE (((LayerCode.LayerText) Is Not Null));"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+DoCmd.SetWarnings False
+
+VegTable = VegTableIn
+If CurrPlotlist() <> "None" Then VegTable = "TempReportVeg"
+Project = CurrProject()
+DoCmd.CopyObject , VegTableOut, A_TABLE, "USysV2Veg"
+
+Do Until MyRS.EOF
+    SqlText = "INSERT INTO [" & VegTableOut & "] ( Plotnumber, Species, Cover )"
+    SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, [" & VegTable & "].Species, [" & VegTable & "].Cover" & MyRS!layertext
+    SqlText = SqlText & " FROM [" & VegTable & "]"
+    SqlText = SqlText & " WHERE (([" & VegTable & "].Cover" & MyRS!layertext & " Is Not Null));"
+    If MyRS!layertext = "5A" Then
+        'CurrentDb.CreateQueryDef "fred1", SqlText
+        'Stop
+    End If
+    'CurrentDb.CreateQueryDef "fred1", SqlText
+    DoCmd.RunSQL SqlText
+
+    SqlText = "UPDATE DISTINCTROW [" & VegTableOut & "] SET [" & VegTableOut & "].ProjectID = '" & Project & "', [" & VegTableOut & "].Layer = '" & MyRS!layertext & "'"
+    SqlText = SqlText & " WHERE (([" & VegTableOut & "].Layer Is Null));"
+    If MyRS!layertext = "5A" Then
+        'Debug.Print SqlText
+        'CurrentDb.CreateQueryDef "fred2", SqlText
+    End If
+    DoCmd.RunSQL SqlText
+    MyRS.MoveNext
+Loop
+
+
+GoTo MyExit
+For i = 1 To 7
+
+    SqlText = "INSERT INTO [" & VegTableOut & "] ( Plotnumber, Species, Cover )"
+    SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, [" & VegTable & "].Species, [" & VegTable & "].Cover" & i
+    SqlText = SqlText & " FROM [" & VegTable & "]"
+    SqlText = SqlText & " WHERE (([" & VegTable & "].Cover" & i & " Is Not Null));"
+    'CurrentDb.CreateQueryDef "fred1", SqlText
+    DoCmd.RunSQL SqlText
+
+    SqlText = "UPDATE DISTINCTROW [" & VegTableOut & "] SET [" & VegTableOut & "].ProjectID = '" & Project & "', [" & VegTableOut & "].Layer = " & i
+    SqlText = SqlText & " WHERE (([" & VegTableOut & "].Layer Is Null));"
+    'CurrentDb.CreateQueryDef "fred2", SqlText
+    DoCmd.RunSQL SqlText
+Next i
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Exit Function
+errConvertProVeg2V2:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function ConvertProVeg2V2Null(VegTableIn, VegTableOut)
+'Mar. 14, 2014
+'converts VPro veg table to a one species per row table
+On Error GoTo errConvertProVeg2V2
+Dim VegTable As String, Project As String, SqlText As String
+Dim i As Integer, LumpTable As String
+
+DoCmd.SetWarnings False
+
+VegTable = VegTableIn
+If CurrPlotlist() <> "None" Then VegTable = "TempReportVeg"
+Project = CurrProject()
+DoCmd.CopyObject , VegTableOut, A_TABLE, "USysV2Veg"
+
+'For i = 1 To 7
+    SqlText = "INSERT INTO [" & VegTableOut & "] ( Plotnumber, Species, Cover )"
+    SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, [" & VegTable & "].Species, [" & VegTable & "].Cover" & i
+    SqlText = SqlText & " FROM [" & VegTable & "]"
+    SqlText = SqlText & " WHERE (([" & VegTable & "].Cover" & i & " Is Not Null));"
+    
+    SqlText = "INSERT INTO [" & VegTableOut & "] ( Plotnumber, Species, Cover )"
+    SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, [" & VegTable & "].Species, IIf((Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover6])+Nz([Cover7]))>100,100,Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover6])+Nz([Cover7])) AS Expr1"
+    SqlText = SqlText & " From [" & VegTable & "]"
+    SqlText = SqlText & " WHERE (((IIf((Nz([Cover1]) + Nz([Cover2]) + Nz([Cover3]) + Nz([Cover4]) + Nz([Cover5]) + Nz([Cover6]) + Nz([Cover7])) > 100, 100, Nz([Cover1]) + Nz([Cover2]) + Nz([Cover3]) + Nz([Cover4]) + Nz([Cover5]) + Nz([Cover6]) + Nz([Cover7]))) Is Not Null And (IIf((Nz([Cover1]) + Nz([Cover2]) + Nz([Cover3]) + Nz([Cover4]) + Nz([Cover5]) + Nz([Cover6]) + Nz([Cover7])) > 100, 100, Nz([Cover1]) + Nz([Cover2]) + Nz([Cover3]) + Nz([Cover4]) + Nz([Cover5]) + Nz([Cover6]) + Nz([Cover7]))) > 0));"
+    'CurrentDb.CreateQueryDef "fred1", SqlText
+    DoCmd.RunSQL SqlText
+
+    SqlText = "UPDATE DISTINCTROW [" & VegTableOut & "] SET [" & VegTableOut & "].ProjectID = '" & Project & "', [" & VegTableOut & "].Layer = Null" ' & i
+    SqlText = SqlText & " WHERE (([" & VegTableOut & "].Layer Is Null));"
+    
+    'SqlText = "UPDATE DISTINCTROW [" & VegTableOut & "] SET [" & VegTableOut & "].ProjectID = 'Sample', EntryDat_Veg.Layer = Null"
+    'SqlText = SqlText & " WHERE (((EntryDat_Veg.Layer) Is Null));"
+    'CurrentDb.CreateQueryDef "fred3", SqlText
+    DoCmd.RunSQL SqlText
+'Next i
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Exit Function
+errConvertProVeg2V2:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function BuildLifeFormTable()
+'Oct. 4, 2002
+'this function is used by report functions
+'converts a veg table by layer into a veg table by life form
+On Error GoTo errBuildLifeFormTable
+Dim SqlText As String, Project As String, VegTable As String
+    Project = CurrProject()
+    VegTable = Project & "_Veg"
+    If CurrPlotlist() <> "None" Then VegTable = "TempReportVeg"
+On Error Resume Next
+    DoCmd.DeleteObject A_TABLE, "EntryDat_Veg"
+On Error GoTo errBuildLifeFormTable
+    DoCmd.CopyObject , "EntryDat_Veg", A_TABLE, "USysV2Veg"
+    DoCmd.SetWarnings False
+
+SqlText = "INSERT INTO EntryDat_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT [" & VegTable & "].PlotNumber, Null2Question(Format([Lifeform],'00')) AS Layer, [" & VegTable & "].Species, Sum(setto99(Nz([cover1])+Nz([cover2])+Nz([cover3])+Nz([cover4])+Nz([cover5])+Nz([cover5a])+Nz([cover5b])+Nz([cover5c])+Nz([cover6])+Nz([cover7])+Nz([cover8])+Nz([cover9]))) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (((USysAllSpecs.Report) = 1 Or (USysAllSpecs.Report) Is Null))"
+'SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType) = 'U' Or (USysAllSpecs.CodeType) Is Null))"
+'SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType) <> 'S' Or (USysAllSpecs.CodeType) Is Null))"
+SqlText = SqlText & " WHERE (((USysAllSpecies.CodeType) <> 'S' Or (USysAllSpecies.CodeType) Is Null))"
+SqlText = SqlText & " GROUP BY [" & VegTable & "].PlotNumber, Null2Question(Format([Lifeform],'00')), [" & VegTable & "].Species"
+SqlText = SqlText & " ORDER BY [" & VegTable & "].PlotNumber, Null2Question(Format([Lifeform],'00')), [" & VegTable & "].Species;"
+DoCmd.RunSQL SqlText
+'CurrentDb.CreateQueryDef "freddy", SqlText
+'Stop
+GoTo MyExit
+
+
+'Species not in species list
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '?' AS LifeForm, [" & VegTable & "].Species, Val(IIf(Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover6])+Nz([Cover7])>99,99,Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover6])+Nz([Cover7]))) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+SqlText = SqlText & " WHERE (((Val(IIf(Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover6])+Nz([Cover7])>99,99,Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover6])+Nz([Cover7]))))>0) AND ((USysAllSpecs.Code) Is Null));"
+DoCmd.RunSQL SqlText
+
+'LF-A-1
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '01' AS LifeForm, [" & VegTable & "].Species, Val(IIf(IsNull([TotalA]),IIf((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))>99,99,(Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),[TotalA])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalA]),IIf((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))>99,99,(Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),[TotalA])))>0) AND (USysAllSpecs.LifeForm=1));"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalA]),IIf((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))>99,99,(Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),[TotalA])))>0) AND (USysAllSpecies.LifeForm=1));"
+DoCmd.RunSQL SqlText
+
+'LF-A-2
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '02' AS LifeForm, [" & VegTable & "].Species, Val(IIf(IsNull([TotalA]),IIf((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))>99,99,(Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),[TotalA])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalA]),IIf((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))>99,99,(Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),[TotalA])))>0) AND (USysAllSpecs.LifeForm=2));"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalA]),IIf((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))>99,99,(Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),[TotalA])))>0) AND (USysAllSpecies.LifeForm=2));"
+DoCmd.RunSQL SqlText
+
+'LF-B-0
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '00' AS LifeForm, [" & VegTable & "].Species, Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecs.LifeForm=0));"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecies.LifeForm=0));"
+DoCmd.RunSQL SqlText
+
+'LF-B-1
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '01' AS LifeForm, [" & VegTable & "].Species, Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecs.LifeForm=1));"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecies.LifeForm=1));"
+DoCmd.RunSQL SqlText
+
+'LF-B-2
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '02' AS LifeForm, [" & VegTable & "].Species, Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecs.LifeForm=2));"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecies.LifeForm=2));"
+DoCmd.RunSQL SqlText
+
+'LF-B-3
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '03' AS LifeForm, [" & VegTable & "].Species, Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecs.LifeForm=3));"
+DoCmd.RunSQL SqlText
+
+'LF-B-4
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '04' AS LifeForm, [" & VegTable & "].Species, Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecs.LifeForm=4));"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TotalB]),IIf((Nz([Cover4])+Nz([Cover5]))>99,99,(Nz([Cover4])+Nz([Cover5]))),[TotalB])))>0) AND (USysAllSpecies.LifeForm=4));"
+DoCmd.RunSQL SqlText
+
+'LF-C-5
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '05' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover6"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecs.LifeForm=5));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecies.LifeForm=5));"
+DoCmd.RunSQL SqlText
+
+'LF-C-6
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '06' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover6"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecs.LifeForm=6));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecies.LifeForm=6));"
+DoCmd.RunSQL SqlText
+
+'LF-C-7
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '07' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover6"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecs.LifeForm=7));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecies.LifeForm=7));"
+DoCmd.RunSQL SqlText
+
+'LF-C-8
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '08' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover6"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecs.LifeForm=8));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecies.LifeForm=8));"
+DoCmd.RunSQL SqlText
+
+'LF-C-12
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '12' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover6"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecs.LifeForm=12));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover6 Is Not Null) AND (USysAllSpecies.LifeForm=12));"
+DoCmd.RunSQL SqlText
+
+'LF-D-1
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '01' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover7"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecs.LifeForm=1));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecies.LifeForm=1));"
+DoCmd.RunSQL SqlText
+
+'LF-D-2
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '02' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover7"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecs.LifeForm=2));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecies.LifeForm=2));"
+DoCmd.RunSQL SqlText
+
+'LF-D-9
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '09' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover7"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecs.LifeForm=9));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecies.LifeForm=9));"
+DoCmd.RunSQL SqlText
+
+'LF-D-10
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '10' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover7"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecs.LifeForm=10));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecies.LifeForm=10));"
+DoCmd.RunSQL SqlText
+
+'LF-D-11
+SqlText = "INSERT INTO EntryDatLF_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, '11' AS LifeForm, [" & VegTable & "].Species, [" & VegTable & "].Cover7"
+'SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecies ON [" & VegTable & "].Species = USysAllSpecies.Code"
+'SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecs.LifeForm=11));"
+SqlText = SqlText & " WHERE (([" & VegTable & "].Cover7 Is Not Null) AND (USysAllSpecies.LifeForm=11));"
+DoCmd.RunSQL SqlText
+
+'Group query
+SqlText = "INSERT INTO EntryDat_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW EntryDatLF_Veg.Plotnumber, EntryDatLF_Veg.Layer, EntryDatLF_Veg.Species, Sum(EntryDatLF_Veg.Cover) AS SumOfCover"
+SqlText = SqlText & " FROM EntryDatLF_Veg"
+SqlText = SqlText & " GROUP BY EntryDatLF_Veg.Plotnumber, EntryDatLF_Veg.Layer, EntryDatLF_Veg.Species;"
+DoCmd.RunSQL SqlText
+
+'Update query
+SqlText = "UPDATE DISTINCTROW EntryDat_Veg SET EntryDat_Veg.Cover = 99"
+SqlText = SqlText & " WHERE ((EntryDat_Veg.Cover>99));"
+DoCmd.RunSQL SqlText
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Exit Function
+errBuildLifeFormTable:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function

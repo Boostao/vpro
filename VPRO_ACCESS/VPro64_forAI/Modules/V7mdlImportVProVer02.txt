@@ -1,0 +1,634 @@
+Option Compare Database
+Option Explicit
+Private Type DataErrors
+    TableName       As String
+    PlotNumber      As String
+    FieldName       As String
+    Value           As Variant
+End Type
+Private Type Fields2Chk
+    TableName   As String
+    FieldName   As String
+End Type
+Dim MyFields() As Fields2Chk
+
+Dim Errors() As DataErrors
+Dim xl As Excel.Application
+
+Private Function ImportVProVer2()
+'Apr. 23, 2002
+Dim MyDB As Database, RemoteDB As Database
+Dim SqlText As String, Filter As String, Title As String, DataLocationName As String
+Dim RemoteDbName As String, ProjectList As String, MyProject As String, MyTest As Variant
+ReDim sysSelectedItems(0)
+Set MyDB = CurrentDb
+CleanUp
+
+MyTest = MsgBox("This tool imports VPro 97 projects into the current project (" & clsVProReg.CurrProject & ").  Click OK to continue?", vbOKCancel)
+If MyTest = 2 Then GoTo MyExit
+
+
+    RemoteDbName = GetRemoteDb()
+    If RemoteDbName = "" Then GoTo MyExit
+    Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(RemoteDbName)
+    If RemoteDB.Name = MyDB.Name Then
+        MsgBox "You can't select from that database."
+        GoTo MyExit
+    End If
+
+    ProjectList = BuildProjectPickList(RemoteDB, MyDB)
+
+If ProjectList = "" Then
+    MsgBox "No projects found.", vbInformation
+    GoTo MyExit
+End If
+
+Call PickProjects(ProjectList)
+
+Do
+    DoEvents
+Loop Until UBound(sysSelectedItems) = 1
+If UBound(sysSelectedItems) = 999 Then GoTo MyExit
+
+
+    MyProject = sysSelectedItems(1)
+    AttachProjectTables MyProject, RemoteDB
+    ReDim sysSelectedItems(0)
+    
+    If GetTableVersion("USysVP2Env") = "VP04" Then
+        MsgBox "Sorry, a conversion has not been written for this version."
+        GoTo MyExit
+    End If
+    
+    If GetTableVersion("USysVP2Env") <> "VP04" Then
+        MsgBox "You attempted to import the wrong version of VPro."
+        GoTo MyExit
+    End If
+    
+    If TestForMatchingPlots(MyDB) Then
+        MsgBox "Some of the plots you attempted to import already exist in the current project.  Either create a new project to import into or make a different project current and then try again."
+        GoTo MyExit
+    End If
+    
+    ReportVP2ConvertErrors
+    ImportEnv
+    ImportVeg
+    OptimizeVeg clsVProReg.CurrProject & "_Veg"
+    ImportHumus
+    ImportMineral
+    
+    MsgBox "Your plots have been imported"
+
+MyExit:
+    On Error Resume Next
+    CleanUp
+    Set MyDB = Nothing
+    Exit Function
+errImportVProVer2:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Sub ImportEnv()
+'May 08, 2002
+Dim SqlText As String, MyProject As String
+
+    MyProject = clsVProReg.CurrProject
+    
+    SqlText = "INSERT INTO " & MyProject & "_Env ( PlotNumber, LongitudeDegrees, LongitudeMinutes, LongitudeSeconds, LatitudeDegrees, LatitudeMinutes, LatitudeSeconds, [Date], SiteSurveyor, FieldNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, VegNotes, SiteNotes, RootRestrictingType, Zone, SubZone, NtsMapSheet, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure1, SurfaceTopographyType, MoistureRegime, NutrientRegime, TerrainVTAB, BedrockGeology, CoarseFragLith, SoilClassSubGroup, SoilClassGroup, RootZoneParticleSize, RootingDepth, RootRestrictingDepth, SeepageDepth, SoilDrainage, MineralpH, HumusForm, HumusThickness, HumuspH, SoilNotes, SuccessionalStatus, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, PhotoFrameNum, SiteSeries, VegSurveyor, SoilSurveyor, SiteDisturbance1, SiteDisturbance2,"
+    SqlText = SqlText & " StructuralStage , UTMZone, UTMEasting, UTMNorthing, HydroGeoSystem, HydroGeoSubSystem, FloodingRegimeFreq, MoistureRegimeSub, RealmClass, Conductivity, WaterSource, Region, Agency, PlotQuality, Complete, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName, FloodingRegimeDur, GeoMorProSubSurf, GeoMorProSurf, pHMethodCodeMineral, pHMethodCodeOrganic, ProjectName, StructuralStageMod, SurfaceExpSubSurf, SurfaceExpSurf, SurfaceTopographySize, SurficialMaterialSubSurf, SurficialMaterialSurf, TerrainTextureSubSurf, TerrainTextureSurf, TransDistrib, HumusFormPhase, SurfaceShape, StandAge, Location )"
+    SqlText = SqlText & " SELECT PlotNumber, Left([Longitude],3) AS LongitudeDegrees, Mid([Longitude],5,2) AS LongitudeMinutes, Mid([Longitude],8,2) AS LongitudeSeconds, Left([Latitude],2) AS LatitudeDegrees, Mid([Latitude],4,2) AS LatitudeMinutes, Mid([Latitude],7,2) AS LatitudeSeconds, Date, SiteSurveyor, SiteNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, VegNotes, SiteNotes, RootRestrictingType, Zone, SubZone, NtsMapSheet, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure, SurfaceTopographyType, MoistureRegime, NutrientRegime, TerrainVTAB, BedrockGeology, CoarseFragLith, SoilClassSubGroup, SoilClassGroup,"
+    SqlText = SqlText & " RootZoneParticleSize , RootingDepth , RootRestrictingDepth, SeepageDepth, SoilDrainage, MineralpH, HumusForm, HumusThickness, HumusPh, SoilNotes, SuccessionalStatus, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, PhotoFrameNum, SiteSeries, VegSurveyor, SoilSurveyor, SiteDisturbance1, SiteDisturbance2, StructuralStage, UTMZone, UTMEasting, UTMNorthing , HydroGeoSystem, HydroGeoSubSystem, FloodingRegimeFreq, "
+    SqlText = SqlText & " MoistureRegimeSub , RealmClass, Conductivity, WaterSource, Region, Agency, PlotQuality, Complete, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName, FloodingRegimeDur, GeoMorProSubSurf, GeoMorProSurf, pHMethodCodeMineral, pHMethodCodeOrganic, ProjectName, StructuralStageMod, SurfaceExpSubSurf, SurfaceExpSurf, SurfaceTopographySize, SurficialMaterialSubSurf, SurficialMaterialSurf, TerrainTextureSubSurf, TerrainTextureSurf, TransDistrib, HumusFormPhase, SurfaceTopography, StandAge, Location"
+    SqlText = SqlText & " FROM USysVP2Env;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+End Sub
+Private Sub ImportVeg()
+'May 08, 2002
+Dim SqlText As String, MyProject As String
+
+    MyProject = clsVProReg.CurrProject
+    
+    SqlText = "INSERT INTO " & MyProject & "_Veg ( PlotNumber, Species, Cover1, Dist1, Vig1, Height1, Extra1, Cover2, Dist2, Vig2, Height2, Extra2, Cover3, Dist3, Vig3, Height3, Extra3, Cover4, Dist4, Vig4, Height4, Extra4, Cover5, Dist5, Vig5, Height5, Extra5, Cover6, Dist6, Vig6, Height6, Extra6, Cover7, Dist7, Vig7, Height7, Extra7, Cover8, Dist8, Vig8, Height8, Extra8, Cover9, Dist9, Vig9, Height9, Extra9, TotalA, HeightA, ExtraA, TotalB, HeightB, ExtraB )"
+    SqlText = SqlText & " SELECT PlotNumber, Species, Cover1, Dist1, Vig1, Height1, Extra1, Cover2, Dist2, Vig2, Height2, Extra2, Cover3, Dist3, Vig3, Height3, Extra3, Cover4, Dist4, Vig4, Height4, Extra4, Cover5, Dist5, Vig5, Height5, Extra5, Cover6, Dist6, Vig6, Height6, Extra6, Cover7, Dist7, Vig7, Height7, Extra7, Cover8, Dist8, Vig8, Height8, Extra8, Cover9, Dist9, Vig9, Height9, Extra9, TotalA, HeightA, ExtraA, TotalB, HeightB, ExtraB"
+    SqlText = SqlText & " FROM USysVP2Veg;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+End Sub
+Private Sub ImportMineral()
+'May 10, 2002
+Dim SqlText As String, MyProject As String
+
+    MyProject = clsVProReg.CurrProject
+    SqlText = "INSERT INTO " & MyProject & "_Mineral ( PlotNumber, Horizon, UpperDepth, LowerDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, Comments, PercentCoarseFragsShape )"
+    SqlText = SqlText & " SELECT PlotNumber, Horizon, SplitHorizDepth([Depth],'Up') AS Upper, SplitHorizDepth([Depth],'Low') AS Lower, SplitHorizDepth([Depth],'Pit') AS Pit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, Comments, PercentCoarseFragsShape"
+    SqlText = SqlText & " FROM USysVP2Mineral;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+End Sub
+
+Private Sub ImportHumus()
+'May 10, 2002
+Dim SqlText As String, MyProject As String
+
+    MyProject = clsVProReg.CurrProject
+    SqlText = "INSERT INTO " & MyProject & "_Humus ( PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Comment )"
+    SqlText = SqlText & " SELECT PlotNumber, Horizon, SplitHorizDepth([Depth],'Up') AS Upper, SplitHorizDepth([Depth],'Low') AS Lower, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Comment"
+    SqlText = SqlText & " FROM USysVP2Humus;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+End Sub
+
+Private Function TestForMatchingPlots(db As Database) As Boolean
+'Apr. 23, 2002
+Dim MyRS As Recordset
+Dim MyProject As String, SqlText As String
+MyProject = clsVProReg.CurrProject
+
+SqlText = "SELECT " & MyProject & "_ENV.PlotNumber"
+SqlText = SqlText & " FROM USysVP2Env INNER JOIN " & MyProject & "_ENV ON USysVP2Env.PlotNumber = " & MyProject & "_ENV.PlotNumber;"
+Set MyRS = db.OpenRecordset(SqlText)
+If MyRS.RecordCount > 0 Then
+    TestForMatchingPlots = True
+End If
+
+MyRS.Close
+
+End Function
+
+Private Sub CleanUp()
+'Apr. 23, 2002
+On Error Resume Next
+DoCmd.DeleteObject acTable, "USysVP2Veg"
+DoCmd.DeleteObject acTable, "USysVP2Humus"
+DoCmd.DeleteObject acTable, "USysVP2Mineral"
+DoCmd.DeleteObject acTable, "USysVP2Env"
+
+End Sub
+
+Private Function GetRemoteDb() As String
+
+'Sep 22, 2008
+Dim MyFile As String, MyTitle As String
+
+    MyFile = ""
+    MyTitle = ProgramName()
+    MyFile = GetFileName(MyTitle, True)
+    GetRemoteDb = MyFile
+
+End Function
+
+Private Sub AttachProjectTables(ProjectName As String, RemoteDB As Database)
+Dim TestTable As String, i As Integer
+
+TestTable = ProjectName & "_ENV"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, "USysVP2Env"
+            
+TestTable = ProjectName & "_Humus"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, "USysVP2Humus"
+            
+TestTable = ProjectName & "_Mineral"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, "USysVP2Mineral"
+            
+TestTable = ProjectName & "_Veg"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, "USysVP2Veg"
+
+End Sub
+
+Private Function BuildProjectPickList(RemoteDB As Database, LocalDB As Database) As String
+Dim i As Integer, strTestTable As String, strList As String, ListLen As Integer
+
+        For i = 0 To RemoteDB.TableDefs.count - 1
+            strTestTable = RemoteDB.TableDefs(i).Name
+            If InStr(1, strTestTable, "_Env") > 0 Then
+                If Not TestForTableInVPro(LocalDB, strTestTable) Then
+                    strList = strList & Left(strTestTable, Len(strTestTable) - Len("_Env")) & ";"
+                End If
+            End If
+        Next i
+
+        ListLen = Len(strList)
+        If ListLen > 0 Then
+            BuildProjectPickList = Left(strList, ListLen - 1)
+        Else
+            BuildProjectPickList = ""
+        End If
+
+End Function
+
+Private Function TestForTableInVPro(MyDB As Database, TableName As String) As Boolean
+'tests the current DB for a table
+TestForTableInVPro = False
+Dim i As Integer, strTestTable As String
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        strTestTable = MyDB.TableDefs(i).Name
+        If strTestTable = TableName Then
+            TestForTableInVPro = True
+        End If
+    Next i
+    
+End Function
+
+Private Sub PickProjects(ProjectList As String)
+
+On Error GoTo myerr
+
+DoCmd.OpenForm "USysPickTable", A_NORMAL, , , , A_NORMAL
+Forms![USysPickTable]![PickList].RowSource = ProjectList
+
+MyExit:
+    On Error Resume Next
+    Exit Sub
+myerr:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+
+Public Function xSplitHorizon(Value2Parse As String, ReturnWhat As String) As Variant
+'Apr. 23, 2002
+On Error GoTo errSplitHorizon
+Dim X As Integer
+Dim Val1 As Single, Val2 As Single
+
+Select Case ReturnWhat
+    Case "Low"
+        X = InStr(1, Value2Parse, "-")
+        If X = 0 Then
+            xSplitHorizon = 0
+        Else
+            Val1 = Left(Value2Parse, X - 1)
+            Val2 = Right(Value2Parse, Len(Value2Parse) - X)
+            If Val1 > Val2 Then
+                xSplitHorizon = Val2
+            Else
+                xSplitHorizon = Val1
+            End If
+        End If
+    Case "Up"
+        X = InStr(1, Value2Parse, "-")
+        If X = 0 Then
+            xSplitHorizon = Value2Parse
+        Else
+            Val1 = Left(Value2Parse, X - 1)
+            Val2 = Right(Value2Parse, Len(Value2Parse) - X)
+            If Val1 > Val2 Then
+                xSplitHorizon = Val1
+            Else
+                xSplitHorizon = Val2
+            End If
+        End If
+    Case "Pit"
+        If IsNumeric(Left(Value2Parse, 1)) And IsNumeric(Right(Value2Parse, 1)) Then
+            xSplitHorizon = ""
+        Else
+            If IsNumeric(Left(Value2Parse, 1)) Then
+                xSplitHorizon = Right(Value2Parse, 1)
+            Else
+                xSplitHorizon = Left(Value2Parse, 1)
+            End If
+        End If
+    Case Else
+    
+End Select
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSplitHorizon:
+    xSplitHorizon = 0
+    Resume MyExit
+End Function
+
+Private Function ReportVP2ConvertErrors() As Boolean
+Dim Quit As Variant, i As Integer, Msg As String
+Dim VP As Access.Application
+Set VP = GetObject(CurrentDb.Name)
+
+LoadErrorArray
+CheckSoilPitDepth
+Msg = "Some of the values in the project to be imported can't be converted.  VPro can create a report in Excel listing the data that needs to be edited.  Click Yes to create the report and then import records or click No to just import the records."
+If UBound(Errors) > 0 Then
+    ReportVP2ConvertErrors = True
+    Quit = MsgBox(Msg, vbYesNo, "VPro")
+    If Quit = vbNo Then GoTo MyExit
+Else
+    GoTo MyExit
+End If
+
+MakeExcel
+
+xl.Visible = True
+xl.Workbooks.Add
+xl.Cells(1, 1) = "Plot Number"
+xl.Cells(1, 2) = "Table"
+xl.Cells(1, 3) = "Field"
+xl.Cells(1, 4) = "Value"
+
+For i = 1 To UBound(Errors)
+    xl.Cells(i + 1, 1) = Errors(i).PlotNumber
+    xl.Cells(i + 1, 2) = Errors(i).TableName
+    xl.Cells(i + 1, 3) = Errors(i).FieldName
+    xl.Cells(i + 1, 4) = Errors(i).Value
+Next i
+
+xl.Cells.EntireColumn.AutoFit
+
+MyExit:
+    On Error Resume Next
+    Set VP = Nothing
+    Set xl = Nothing
+End Function
+
+Private Sub LoadErrorArray()
+'May 10, 2002
+'Checks for errors and records them in an array
+Dim MyDB As Database, MyRS As Recordset
+Dim ValToTest As Variant, X As Integer, TestField As String, TestTable As String
+Dim SqlText As String, i As Integer
+ReDim Errors(0)
+Set MyDB = CurrentDb
+LoadFieldArray
+
+For X = 1 To UBound(MyFields)
+    TestField = MyFields(X).FieldName
+    TestTable = MyFields(X).TableName
+    SqlText = "SELECT PlotNumber, " & TestField & " FROM USysVP2" & TestTable & " WHERE (((" & TestField & ") Is Not Null));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount = 0 Then GoTo Jump
+    MyRS.MoveLast
+    MyRS.MoveFirst
+
+    For i = 1 To MyRS.RecordCount
+        ValToTest = MyRS(TestField)
+        If IsNumeric(ValToTest) Then
+            'do nothing
+        Else
+            ReDim Preserve Errors(UBound(Errors) + 1)
+            Errors(UBound(Errors)).TableName = TestTable
+            Errors(UBound(Errors)).PlotNumber = MyRS("PlotNumber")
+            Errors(UBound(Errors)).FieldName = TestField
+            Errors(UBound(Errors)).Value = MyRS(TestField)
+        End If
+        MyRS.MoveNext
+    Next i
+Jump:
+Next X
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+End Sub
+
+
+Private Sub CheckSoilPitDepth()
+'May 10, 2002
+'Checks for depth values in the soil pit that can't be converted to a numerical value
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, ValToTest As Variant, i As Long, MyTest As Boolean
+Set MyDB = CurrentDb
+
+'Check the humus table
+SqlText = "SELECT PlotNumber, Depth"
+SqlText = SqlText & " FROM USysVP2Humus"
+SqlText = SqlText & " WHERE (((Depth) Is Not Null));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount = 0 Then GoTo Jump1
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    For i = 1 To MyRS.RecordCount
+        MyTest = False
+        ValToTest = Left(MyRS!Depth, 1)
+        If IsNumeric(ValToTest) Or ValToTest = "+" Or ValToTest = "." Then
+            ValToTest = Right(MyRS!Depth, 1)
+            If IsNumeric(ValToTest) Or ValToTest = "+" Then
+                'do nothing
+            Else
+                MyTest = True
+            End If
+        Else
+            MyTest = True
+        End If
+        
+        If MyTest Then
+            ReDim Preserve Errors(UBound(Errors) + 1)
+            Errors(UBound(Errors)).TableName = "Humus"
+            Errors(UBound(Errors)).PlotNumber = MyRS("PlotNumber")
+            Errors(UBound(Errors)).FieldName = "Depth"
+            Errors(UBound(Errors)).Value = MyRS!Depth
+        End If
+        MyRS.MoveNext
+    Next i
+Jump1:
+
+'Check the mineral table
+SqlText = "SELECT PlotNumber, Depth"
+SqlText = SqlText & " FROM USysVP2Mineral"
+SqlText = SqlText & " WHERE (((Depth) Is Not Null));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount = 0 Then GoTo Jump2
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    For i = 1 To MyRS.RecordCount
+        MyTest = False
+        ValToTest = Left(MyRS!Depth, 1)
+        If IsNumeric(ValToTest) Or ValToTest = "+" Or ValToTest = "." Then
+            ValToTest = Right(MyRS!Depth, 1)
+            If IsNumeric(ValToTest) Or ValToTest = "+" Then
+                'do nothing
+            Else
+                MyTest = True
+            End If
+        Else
+            MyTest = True
+        End If
+        
+        If MyTest Then
+            ReDim Preserve Errors(UBound(Errors) + 1)
+            Errors(UBound(Errors)).TableName = "Mineral"
+            Errors(UBound(Errors)).PlotNumber = MyRS("PlotNumber")
+            Errors(UBound(Errors)).FieldName = "Depth"
+            Errors(UBound(Errors)).Value = MyRS!Depth
+        End If
+        MyRS.MoveNext
+    Next i
+Jump2:
+
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+End Sub
+
+Private Function MakeExcel()
+'May 10, 2002
+On Error Resume Next
+Set xl = GetObject(, "Excel.Application")
+If Err.Number <> 0 Then
+    Set xl = CreateObject("Excel.Application")
+    Err.Clear
+End If
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+End Function
+
+Public Function SplitHorizDepth(ValIn As Variant, SplitType As Variant) As Variant
+'May 10, 2002
+Dim i As Integer, X As Integer, NewVal As String, testval As Variant
+Dim LeftVal As Variant, RightVal As Variant
+
+If IsNull(ValIn) Then
+    GoTo MyExit
+End If
+
+SplitHorizDepth = 0
+X = InStr(1, ValIn, "-")
+
+If X = 0 Then 'must only be one value
+    If SplitType = "Up" Then
+        SplitHorizDepth = ExtractNumber(ValIn)
+    End If
+    If SplitType = "Low" Then
+        SplitHorizDepth = Null
+    End If
+    If SplitType = "Pit" Then
+        If Not IsNumeric(Left(ValIn, 1)) And Left(ValIn, 1) <> "." Then
+            SplitHorizDepth = Left(ValIn, 1)
+        Else
+            If Not IsNumeric(Right(ValIn, 1)) And Right(ValIn, 1) <> "." Then
+                SplitHorizDepth = Right(ValIn, 1)
+            Else
+                SplitHorizDepth = Null
+            End If
+        End If
+    End If
+    GoTo MyExit
+Else
+    LeftVal = ExtractNumber(Left(ValIn, X))
+    RightVal = ExtractNumber(Mid(ValIn, X))
+End If
+
+Select Case SplitType
+    Case "Up"
+        If SplitHorizDepth = 0 Then
+            If LeftVal > RightVal Then
+                SplitHorizDepth = LeftVal
+            Else
+                SplitHorizDepth = RightVal
+            End If
+        Else
+            SplitHorizDepth = Null
+        End If
+        
+    Case "Low"
+        If SplitHorizDepth = 0 Then
+            If LeftVal < RightVal Then
+                SplitHorizDepth = LeftVal
+            Else
+                SplitHorizDepth = RightVal
+            End If
+        End If
+    Case "Pit"
+        If Not IsNumeric(Left(ValIn, 1)) And Left(ValIn, 1) <> "." Then
+            SplitHorizDepth = Left(ValIn, 1)
+        Else
+            If Not IsNumeric(Right(ValIn, 1)) And Right(ValIn, 1) <> "." Then
+                SplitHorizDepth = Right(ValIn, 1)
+            Else
+                SplitHorizDepth = Null
+            End If
+        End If
+    Case Else
+End Select
+
+MyExit:
+
+End Function
+
+Private Function ExtractNumber(ValIn As Variant) As Variant
+Dim i As Integer, NewVal As String, testval As Variant
+
+    For i = 1 To Len(ValIn)
+        testval = Mid(ValIn, i, 1)
+        If IsNumeric(testval) Or testval = "." Then
+            NewVal = NewVal & testval
+        End If
+    Next i
+
+If IsNumeric(NewVal) Then
+    ExtractNumber = NewVal
+Else
+    ExtractNumber = Null
+End If
+
+End Function
+
+Private Sub LoadFieldArray()
+'May 10, 2002
+'Loads a list of fields to be checked
+Dim FieldList1 As String, FieldList2 As String, FieldList3 As String, MyEnd As Boolean, X As Integer, OldX As Integer
+ReDim MyFields(0)
+FieldList1 = "Aspect, Conductivity, Elevation, HumuspH, HumusThickness, MineralpH, RootingDepth, RootRestrictingDepth, SeepageDepth, SlopeGradient, StandAge, StrataCoverHerb, StrataCoverMoss, StrataCoverShrub, StrataCoverTree, UTMEasting, UTMNorthing,"
+FieldList2 = "vonPost, HumusFormpH" 'USysVP2Humus
+FieldList3 = "ASP, MineralFormpH" 'USysVP2Mineral
+
+'environment
+OldX = 1: X = 1
+Do
+    X = InStr(OldX, FieldList1, ",")
+    If X > 0 Then
+        ReDim Preserve MyFields(UBound(MyFields) + 1)
+        MyFields(UBound(MyFields)).TableName = "Env"
+        MyFields(UBound(MyFields)).FieldName = Mid(FieldList1, OldX, X - OldX)
+        OldX = X + 2
+    Else
+        MyEnd = True
+    End If
+Loop Until MyEnd
+
+'humus
+MyEnd = False
+OldX = 1: X = 1
+Do
+    X = InStr(OldX, FieldList2, ",")
+    If X > 0 Then
+        ReDim Preserve MyFields(UBound(MyFields) + 1)
+        MyFields(UBound(MyFields)).TableName = "Humus"
+        MyFields(UBound(MyFields)).FieldName = Mid(FieldList2, OldX, X - OldX)
+        OldX = X + 2
+    Else
+        MyEnd = True
+    End If
+Loop Until MyEnd
+
+'mineral
+MyEnd = False
+OldX = 1: X = 1
+Do
+    X = InStr(OldX, FieldList3, ",")
+    If X > 0 Then
+        ReDim Preserve MyFields(UBound(MyFields) + 1)
+        MyFields(UBound(MyFields)).TableName = "Mineral"
+        MyFields(UBound(MyFields)).FieldName = Mid(FieldList3, OldX, X - OldX)
+        OldX = X + 2
+    Else
+        MyEnd = True
+    End If
+Loop Until MyEnd
+
+
+End Sub

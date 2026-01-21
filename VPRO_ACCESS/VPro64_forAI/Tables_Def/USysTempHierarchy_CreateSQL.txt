@@ -1,0 +1,18 @@
+CREATE TABLE [USysTempHierarchy] (
+  [ID] LONG DEFAULT GenUniqueID(),
+  [Name] TEXT(100) NOT NULL DEFAULT ,
+  [Parent] LONG DEFAULT ,
+  [Level] INTEGER DEFAULT ,
+  [Tag] TEXT(255) DEFAULT ,
+  [MyOrder] TEXT(255) DEFAULT ,
+  [ChildID] INTEGER DEFAULT ,
+  [StartChild] INTEGER DEFAULT ,
+  [LastChild] INTEGER DEFAULT 
+);
+
+CREATE INDEX [ChildID] ON [USysTempHierarchy] ([ChildID]);
+CREATE UNIQUE INDEX [LastName] ON [USysTempHierarchy] ([Name]);
+CREATE INDEX [Level] ON [USysTempHierarchy] ([Level]);
+CREATE INDEX [Parent] ON [USysTempHierarchy] ([Parent]);
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [USysTempHierarchy] ([ID]);
+

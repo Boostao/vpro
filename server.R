@@ -1,0 +1,83 @@
+# Server Logic Code
+# Manages Global State and Module Initializations
+
+server <- function(input, output, session) {
+  
+  # 1. Database Connection
+  # Using a persistent connection for simplicity (DuckDB single user mode)
+  con <- dbConnect(duckdb(), "data/vpro.duckdb")
+  
+  # Attach Reference Database
+  # This makes USysTableOfLists available as 'lists.USysTableOfLists' or just 'USysTableOfLists' if unambiguous
+  dbExecute(con, "ATTACH 'data/vpro_lists.duckdb' AS lists")
+  
+  # Ensure clean disconnect when session ends
+  onSessionEnded(function() {
+    dbDisconnect(con, shutdown = TRUE)
+  })
+  
+  # 2. Global State
+  state <- init_sys_state()
+  
+  # 3. Populate Project Dropdown
+  observe({
+    # We use TryCatch in case DB is locked or empty
+    tryCatch({
+      projects <- dbGetQuery(con, "SELECT projectid, projecttitle FROM Sample_Metadata ORDER BY projectid")
+      if (nrow(projects) > 0) {
+        choices <- setNames(projects$projectid, paste(projects$projectid, "-", projects$projecttitle))
+        updateSelectInput(session, "sel_project", choices = choices)
+      }
+    }, error = function(e) {
+      log_msg("Error loading projects: ", conditionMessage(e))
+    })
+  })
+  
+  # 4. Handle Project Change
+  observeEvent(input$sel_project, {
+    req(input$sel_project)
+    
+    # Update State Logic
+    set_project(state, input$sel_project, con)
+    
+    # Update Dependent Dropdown (Cascade)
+    # Filter Sample_Env by this ProjectID to get valid plots
+    plots <- dbGetQuery(con, sprintf("
+      SELECT DISTINCT PlotNumber 
+      FROM Sample_Env 
+      WHERE ProjectID = '%s' 
+      ORDER BY PlotNumber", input$sel_project))
+      
+    updateSelectInput(session, "sel_su", choices = plots$plotnumber)
+  })
+  
+  # 5. Handle SU Change
+  observeEvent(input$sel_su, {
+    req(input$sel_su)
+    set_su(state, input$sel_su)
+  })
+  
+  # 6. Context Summary
+  output$ctx_summary <- renderText({
+    req(state$CurrProject)
+    p_title <- state$ProjectMetadata$projecttitle
+    if (is.null(p_title)) p_title <- ""
+    
+    paste0(
+      "Project: ", state$CurrProject, "\n", 
+      "Title:   ", substr(p_title, 1, 20), "...\n",
+      "Plot:    ", state$CurrSU
+    )
+  })
+  
+  # 7. Initialize Sub-Modules
+  mod_project_meta_server("meta", reactive(state$CurrProject), con)
+  
+  # For Veg, we pass the state directly as it needs plot context
+  # Also passing con to avoid multiple connections
+  mod_veg_sample_server("veg", state, con)
+  
+  # Site & Env Module
+  # Refactored to accept shared connection 'con' to avoid DB locking issues
+  mod_site_env_server("env", state, con)
+}

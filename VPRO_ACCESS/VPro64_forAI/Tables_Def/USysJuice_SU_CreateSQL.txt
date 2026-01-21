@@ -1,0 +1,9 @@
+CREATE TABLE [USysJuice_SU] (
+  [PlotNumber] TEXT(7) DEFAULT ,
+  [SiteUnit] TEXT(255) DEFAULT ,
+  [ID] LONG DEFAULT 
+);
+
+CREATE UNIQUE INDEX [PlotNumber] ON [USysJuice_SU] ([PlotNumber]);
+CREATE INDEX [SiteUnit] ON [USysJuice_SU] ([SiteUnit]);
+

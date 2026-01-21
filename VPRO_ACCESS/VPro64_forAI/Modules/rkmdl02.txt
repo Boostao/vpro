@@ -1,0 +1,163 @@
+Option Compare Database
+Option Explicit
+Option Private Module
+Dim MyRow As Integer, MyCol As Integer
+Dim NewRecords As Recordset, SearchRS As Recordset
+Private MyID As Integer
+
+Private Sub Add2Hierarchy(Unit As String, Optional Parent As String)
+
+NewRecords.AddNew
+
+If Parent = "" Then 'must be a root item
+    NewRecords!Name = Unit
+Else
+    NewRecords!Name = Unit
+    NewRecords!Parent = FindParentID(Parent)
+End If
+
+NewRecords.Update
+'MyID = NewRecords!ID
+
+End Sub
+Private Function FindParentID(Parent) As Integer
+Dim Criteria As String
+Criteria = "Name = '" & Parent & "'"
+SearchRS.Requery
+
+MsgBox SearchRS.RecordCount
+    SearchRS.MoveLast
+    SearchRS.MoveFirst
+'End If
+
+SearchRS.FindFirst Criteria
+If Not SearchRS.NoMatch Then
+    FindParentID = SearchRS!ID
+End If
+
+End Function
+
+Private Sub test2()
+
+'MsgBox "Do you want the changes you've made to the metadata for this plot to cascade through all plots within this project that have a Project ID '53Bridgland'?", vbYesNo, "VPro"
+BuildListInXl CurrentDb, -1316663489, 1
+'-1316663489
+End Sub
+
+
+Private Function BuildListInXl(db As Database, Unit As Long, Optional MyCount As Integer)
+'Nov 1, 1999
+'this function is not currently in use but is a good example of recursive calls
+Dim MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String, Roz As String
+
+If IsMissing(MyCount) Then MyCount = 1
+
+Set MyRecords = db.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+MyRecords.MoveFirst
+MyCriteria = "ID = " & Unit
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+    Roz = MyRecords!Name
+            
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+    MyCount = MyCount + 1
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+    'MsgBox MyRecords!Name & " Parent: " & Roz
+    Debug.Print MyRecords!Name & " Parent: " & Roz
+    'Add2Hierarchy MyRecords!Name, Roz
+    MyRow = MyRow + 1
+    MyCol = MyCol + 1
+    BuildListInXl db, NextUnit, MyCount
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+    MyCol = MyCol - 1
+End Function
+
+
+Private Function BuildList(Unit As String)
+'June 16, 1998
+'this function is not currently in use but is a good example of recursive calls
+Dim MyDB As Database, MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As String, Shifty As Long, BK As String, SqlText As String
+Set MyDB = CurrentDb()
+Set MyRecords = MyDB.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+MyRecords.MoveFirst
+MyCriteria = "Name = '" & Unit & "'"
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+    
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!Name
+    'FindMatchingPlots (NextUnit) 'call procedure
+    
+    BuildList (NextUnit)
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+Debug.Print Unit
+'MsgBox Unit
+
+MyExit:
+    MyRecords.Close
+    Set MyDB = Nothing
+    Exit Function
+End Function
+
+Private Sub test()
+
+    BuildList2 "Conifer forests"
+
+End Sub
+
+Private Function BuildList2(Unit As String)
+'June 12, 2014
+'this function is not currently in use but is a good example of recursive calls
+Dim MyDB As Database, MyRS As Recordset, MyCriteria As String
+Dim NextUnit As String, MyID As Long, BK As String
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+MyRS.MoveFirst
+MyCriteria = "Name = '" & Unit & "'"
+
+Debug.Print Unit 'this is the return value
+
+    MyRS.FindFirst MyCriteria
+    If MyRS.NoMatch Then GoTo MyExit
+    MyID = MyRS!ID
+    
+    MyRS.MoveFirst
+    MyCriteria = "Parent = " & MyID
+    MyRS.FindFirst MyCriteria
+    
+Do Until MyRS.NoMatch
+    BK = MyRS.Bookmark
+    NextUnit = MyRS!Name
+    'FindMatchingPlots (NextUnit) 'call procedure
+    BuildList2 (NextUnit)
+    MyRS.Bookmark = BK
+    MyRS.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+End Function

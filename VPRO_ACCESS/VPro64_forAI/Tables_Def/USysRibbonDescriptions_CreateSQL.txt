@@ -1,0 +1,10 @@
+CREATE TABLE [USysRibbonDescriptions] (
+  [ID] LONG DEFAULT ,
+  [ControlName] TEXT(50) NOT NULL DEFAULT ,
+  [Description] MEMO DEFAULT 
+);
+
+CREATE UNIQUE INDEX [ControlName] ON [USysRibbonDescriptions] ([ControlName]);
+CREATE INDEX [ID] ON [USysRibbonDescriptions] ([ID]);
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [USysRibbonDescriptions] ([ControlName]);
+

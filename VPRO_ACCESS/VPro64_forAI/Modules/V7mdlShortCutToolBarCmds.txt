@@ -1,0 +1,2230 @@
+Option Compare Database
+Option Explicit
+    Const MB_OK = 0, MB_OKCANCEL = 1    ' Define buttons.
+    Const MB_YESNOCANCEL = 3, MB_YESNO = 4
+    Const MB_ICONSTOP = 16, MB_ICONQUESTION = 32   ' Define icons.
+    Const MB_ICONEXCLAMATION = 48, MB_ICONINFORMATION = 64
+    Const MB_DEFBUTTON2 = 256, IDYES = 6, IDNO = 7   ' Define other
+
+Dim MyCounter As Integer
+Private sysParent As String
+Function LoadRollUp(RollUpName As String)
+    DoCmd.OpenForm RollUpName
+End Function
+    
+Function UnattachSelectedProfile(Optional ProfileTable As String)
+'Oct 12, 1998
+On Error GoTo errUnattachSelectedProfile
+Dim MyForm As Form
+Set MyForm = Screen.ActiveForm
+If ProfileTable = "" Then ProfileTable = MyForm.ActiveControl
+
+If ProfileTable = "Sample" Then
+    MsgBox "You can't remove the sample data"
+    GoTo MyExit
+End If
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, ProfileTable & "_Profile"
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errUnattachSelectedProfile:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function UnattachSelectedTheme(Optional ThemeTable As String)
+'Apr. 22, 1999
+On Error GoTo errUnattachSelectedTheme
+Dim MyForm As Form
+Set MyForm = Screen.ActiveForm
+If ThemeTable = "" Then ThemeTable = MyForm.ActiveControl
+
+If ThemeTable = "Sample" Then
+    MsgBox "You can't remove the sample data"
+    GoTo MyExit
+End If
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, ThemeTable & "_Theme"
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errUnattachSelectedTheme:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function UnattachSelectedLumping(Optional LumpingTable As String)
+'Oct 12, 1998
+On Error GoTo errUnattachSelectedLumping
+Dim MyForm As Form
+Set MyForm = Screen.ActiveForm
+If LumpingTable = "" Then LumpingTable = MyForm.ActiveControl
+
+If LumpingTable = "Sample" Then
+    MsgBox "You can't remove the sample data"
+    GoTo MyExit
+End If
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, LumpingTable & "_Lump"
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errUnattachSelectedLumping:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function UnattachSelectedHierarchy(Optional HierarchyTable As String)
+'Oct 9, 1998
+On Error GoTo errUnattachSelectedSuTable
+Dim MyForm As Form
+Set MyForm = Screen.ActiveForm
+If HierarchyTable = "" Then HierarchyTable = MyForm.ActiveControl
+
+If HierarchyTable = "Sample" Then
+    MsgBox "You can't remove the sample data"
+    GoTo MyExit
+End If
+
+'don't change this - 10
+If HierarchyTable = Left(CurrHierarchy(), Len(CurrHierarchy()) - 10) Then
+    MsgBox "You can't remove an active hierarchy table"
+    GoTo MyExit
+End If
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, HierarchyTable & "_Hierarchy"
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errUnattachSelectedSuTable:
+    MsgBox Err.Description
+    Resume MyExit
+
+End Function
+Function UnattachSelectedSuTable(Optional SuTable As String)
+On Error GoTo errUnattachSelectedSuTable
+Dim MyDB As Database, MyRS As Recordset, Criteria As String, MyForm As Form
+Set MyDB = CurrentDb()
+'Set MyRS = MyDB.OpenRecordset("ManagePlotLists", dbOpenDynaset)
+Set MyForm = Screen.ActiveForm
+If SuTable = "" Then SuTable = MyForm.ActiveControl
+
+If SuTable = "Sample" Then
+    MsgBox "You can't remove the sample data"
+    GoTo MyExit
+End If
+
+If SuTable = CurrPlotlist() Then
+    MsgBox "You can't remove an active site unit table"
+    GoTo MyExit
+End If
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, SuTable & "_SU"
+
+On Error GoTo errUnattachSelectedSuTable
+Criteria = "PlotListName = '" & SuTable & "'"
+'MyRS.MoveFirst
+'MyRS.FindFirst Criteria
+'MyRS.Delete
+Forms!MainMenu.Recalc
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errUnattachSelectedSuTable:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function UnattachSelectedProject(Optional Project As String)
+On Error GoTo errUnattachSelectedProject
+Dim MyDB As Database ', MyRS As Recordset
+Dim Criteria As String, MyForm As Form
+Set MyDB = CurrentDb()
+'Set MyRS = MyDB.OpenRecordset("ProjectManager", dbOpenDynaset)
+Set MyForm = Screen.ActiveForm
+If Project = "" Then Project = MyForm.ActiveControl
+
+MsgBox Project
+
+If Project = "Sample" Then
+    MsgBox "You can't remove the sample data"
+    GoTo MyExit
+End If
+
+If Project = CurrProject() Then
+    MsgBox "You can't remove an active project"
+    GoTo MyExit
+End If
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, Project & "_Env"
+DoCmd.DeleteObject acTable, Project & "_Veg"
+DoCmd.DeleteObject acTable, Project & "_Mineral"
+DoCmd.DeleteObject acTable, Project & "_Humus"
+DoCmd.DeleteObject acTable, Project & "_Other"
+DoCmd.DeleteObject acTable, Project & "_Audit"
+
+On Error GoTo errUnattachSelectedProject
+'Criteria = "ProjectName = '" & Project & "'"
+'MyRS.MoveFirst
+'MyRS.FindFirst Criteria
+'MyRS.Delete
+Forms!MainMenu.Recalc
+
+MyExit:
+    On Error Resume Next
+    'MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errUnattachSelectedProject:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Private Sub xxx()
+Dim ProjectDbLocation As String
+ProjectDbLocation = CurrentDb.TableDefs(10).Connect
+Debug.Print Right(ProjectDbLocation, Len(ProjectDbLocation) - 10)
+
+End Sub
+Function DeleteAttachedProject(Optional ProjectName As String)
+
+'Oct. 5, 2016
+On Error GoTo errDeleteAttachedProject
+Dim Title As String, Msg As String, Response As Integer, dgdef As String
+Dim MyDB As Database, TestProject As String, i As Integer, MyForm As Form
+Dim TestTable As String, ProjectDB As Database, ProjectDbLocation As String
+Dim ProjectRecords As Recordset
+Dim Criteria As String
+Set MyDB = CurrentDb()
+
+'close any open FS882 forms
+    If clsFormInfo.IsDataFormLoaded Then
+        MsgBox "VPro must close some items in order for you to be able to perform this task.  Please close this message box and try again.", vbInformation, "VPro"
+        On Error Resume Next
+        DoCmd.Close acForm, "FS882-6x4XL"
+        DoCmd.Close acForm, "FS882-8x6XL"
+        DoCmd.Close acForm, "FS882-1x1"
+        On Error GoTo errDeleteAttachedProject
+        GoTo MyExit
+    End If
+
+'create form object
+    Set MyForm = Screen.ActiveForm
+    
+'set TestProject variable
+    If ProjectName > "" Then
+        TestProject = ProjectName
+    Else
+        TestProject = MyForm.ActiveControl
+    End If
+    
+'warn the user
+    Title = "VPro"
+    Msg = "WARNING!  This function will permanently delete project: '" & TestProject & "'.  There is no recovery from this action!"
+    Msg = Msg & Chr(13) & "Proceed?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response <> 6 Then GoTo MyExit
+        
+'get the link info
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = TestProject & "_Env" Then
+            ProjectDbLocation = MyDB.TableDefs(i).Connect
+            If Not ProjectDbLocation = "" Then ProjectDbLocation = Right(ProjectDbLocation, Len(ProjectDbLocation) - 10) 'this - 10 okay
+            If ProjectDbLocation = "" Then
+                MsgBox "You can't delete this project!", vbInformation, "VPro"
+                GoTo MyExit
+            End If
+        End If
+    Next i
+    Set ProjectDB = DBEngine.Workspaces(0).OpenDatabase(ProjectDbLocation)
+    
+'delete local links
+    DoCmd.DeleteObject acTable, TestProject & "_Env"
+    DoCmd.DeleteObject acTable, TestProject & "_Admin"
+    DoCmd.DeleteObject acTable, TestProject & "_Humus"
+    DoCmd.DeleteObject acTable, TestProject & "_Other"
+    DoCmd.DeleteObject acTable, TestProject & "_Mineral"
+    DoCmd.DeleteObject acTable, TestProject & "_Audit"
+    DoCmd.DeleteObject acTable, TestProject & "_Veg"
+    DoCmd.DeleteObject acTable, TestProject & "_Metadata"
+
+'delete old relationships
+    DeleteRelationship ProjectDB.Name, TestProject
+
+'delete remote tables
+    ProjectDB.TableDefs.Delete TestProject & "_Humus"
+    ProjectDB.TableDefs.Delete TestProject & "_Other"
+    ProjectDB.TableDefs.Delete TestProject & "_Mineral"
+    ProjectDB.TableDefs.Delete TestProject & "_Audit"
+    ProjectDB.TableDefs.Delete TestProject & "_Veg"
+    ProjectDB.TableDefs.Delete TestProject & "_Metadata"
+    ProjectDB.TableDefs.Delete TestProject & "_Admin"
+    ProjectDB.TableDefs.Delete TestProject & "_Env"
+    
+    SetCurrentProject "Sample"
+
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+    ProjectRecords.Close
+    Set MyForm = Nothing
+    Set MyDB = Nothing
+    Set ProjectDB = Nothing
+    Exit Function
+errDeleteAttachedProject:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function DeleteAttachedProfile(Optional ProfileName As String)
+'Oct 12, 1998
+On Error GoTo errDeleteAttachedProfile
+Dim Title As String, Msg As String, Response As Integer, dgdef As String
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+'Dim ListRecords As Recordset
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+CurrTable = MyForm.ActiveControl & "_Profile"
+    
+    If ProfileName > "" Then
+        TestList = ProfileName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+    Title = ProgramName()
+    Msg = "WARNING!  This function will permanently delete profile table: '" & TestList & "'.  There is no recovery from this action!"
+    Msg = Msg & Chr(13) & "Proceed?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response <> 6 Then GoTo MyExit
+    
+    'get the link info
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList & "_Profile" Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't delete this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+    
+    clsVProReg.CurrVegProfile = "Sample"
+    Forms("USysVegProfiling").RecordSource = "Sample_Lump"
+    Forms("USysVegProfiling").Requery
+    DoCmd.Close acForm, "USysVegProfiling"
+    DoCmd.OpenForm "USysVegProfiling", acNormal
+    
+    Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+    
+    'delete local links
+    DoCmd.DeleteObject acTable, TestList & "_Profile"
+  
+    'delete remote tables
+    ListDB.TableDefs.Delete TestList & "_Profile"
+    
+    clsVProReg.CurrVegProfile = "Sample"
+    Screen.ActiveForm.Refresh
+    'Forms("USysVegProfiling").Recalc
+    
+MyExit:
+    On Error Resume Next
+    Set MyForm = Nothing
+    Set MyDB = Nothing
+    Set ListDB = Nothing
+    Exit Function
+errDeleteAttachedProfile:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function DeleteAttachedTheme(Optional ThemeName As String)
+'Apr. 22, 1999
+On Error GoTo errDeleteAttachedTheme
+Dim Title As String, Msg As String, Response As Integer, dgdef As String
+    Title = ProgramName()
+    Msg = "WARNING!  This function permanently deletes this theme table!  There is no recovery from this action!"
+    Msg = Msg & Chr(13) & "Proceed?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response <> 6 Then GoTo MyExit
+    
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+'Dim ListRecords As Recordset
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+CurrTable = MyForm.ActiveControl & "_Theme"
+    
+    If ThemeName > "" Then
+        TestList = ThemeName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+    'get the link info
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList & "_Theme" Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't delete this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+    
+    Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+    
+    'delete local links
+    DoCmd.DeleteObject acTable, TestList & "_Theme"
+  
+    'delete remote tables
+    ListDB.TableDefs.Delete TestList & "_Theme"
+        
+MyExit:
+    On Error Resume Next
+    Set MyForm = Nothing
+    Set MyDB = Nothing
+    Set ListDB = Nothing
+    Exit Function
+errDeleteAttachedTheme:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function DeleteAttachedLumping(Optional LumpingName As String)
+'Oct 12, 1998
+On Error GoTo errDeleteAttachedLumping
+Dim Title As String, Msg As String, Response As Integer, dgdef As String
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+'Dim ListRecords As Recordset
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+CurrTable = MyForm.ActiveControl & "_Lump"
+    
+    If LumpingName > "" Then
+        TestList = LumpingName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+    Title = ProgramName()
+    Msg = "WARNING!  This function will permanently delete combined spp list '" & TestList & "'.  There is no recovery from this action!"
+    Msg = Msg & Chr(13) & "Proceed?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response <> 6 Then GoTo MyExit
+
+    'get the link info
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList & "_Lump" Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't delete this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+    
+    Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+    
+    'delete local links
+    DoCmd.DeleteObject acTable, TestList & "_Lump"
+  
+    'delete remote tables
+    ListDB.TableDefs.Delete TestList & "_Lump"
+    
+    clsVProReg.CurrLump = "Sample"
+        
+MyExit:
+    On Error Resume Next
+    Set MyForm = Nothing
+    Set MyDB = Nothing
+    Set ListDB = Nothing
+    Exit Function
+errDeleteAttachedLumping:
+    MsgBox Err.Description
+    Resume MyExit
+
+
+End Function
+Function DeleteAttachedHierarchy(Optional HierarchyName As String)
+'Apr. 23, 2002
+On Error GoTo errDeleteAttachedSuList
+Dim Title As String, Msg As String, Response As Integer, dgdef As String
+    
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+CurrTable = MyForm.ActiveControl & "_Hierarchy"
+
+    If HierarchyName > "" Then
+        TestList = HierarchyName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+    
+    Title = ProgramName()
+    Msg = "WARNING!  This function will permanently delete hierarchy: '" & TestList & "'.  There is no recovery from this action!"
+    Msg = Msg & Chr(13) & "Proceed?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response <> 6 Then GoTo MyExit
+
+    'get the link info
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList & "_Hierarchy" Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't delete this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+    
+    Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+    
+    'delete local links
+    DoCmd.DeleteObject acTable, TestList & "_Hierarchy"
+  
+    'delete remote tables
+    ListDB.TableDefs.Delete TestList & "_Hierarchy"
+    
+    If IsLoaded("frmMainMenuFloat") Then
+        Forms![frmMainMenuFloat]![cmbCurrProject].SetFocus
+        Forms![frmMainMenuFloat]![cmbCurrHierarchy] = "Sample"
+        Forms![frmMainMenuFloat]![cmbCurrHierarchy].SetFocus
+    End If
+    clsVProReg.CurrHierarchy = "Sample"
+        
+MyExit:
+    On Error Resume Next
+    Set MyForm = Nothing
+    Set MyDB = Nothing
+    Set ListDB = Nothing
+    Exit Function
+errDeleteAttachedSuList:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function DeleteAttachedSuList(Optional ListName As String)
+'Apr. 21, 2002
+On Error GoTo errDeleteAttachedSuList
+Dim Title As String, Msg As String, Response As Integer, dgdef As String
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+'Dim ListRecords As Recordset
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+'Set ListRecords = MyDB.OpenRecordset("ManagePlotLists", dbOpenDynaset)
+CurrTable = MyForm.ActiveControl & "_Su"
+    
+    If ListName > "" Then
+        TestList = ListName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+    Title = ProgramName()
+    Msg = "WARNING!  This function will permanently delete site unit table: '" & TestList & "'.  There is no recovery from this action!"
+    Msg = Msg & Chr(13) & "Proceed?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response <> 6 Then GoTo MyExit
+    
+    'get the link info
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList & "_SU" Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't delete this list!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+    
+    Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+    
+    'delete local links
+    DoCmd.DeleteObject acTable, TestList & "_SU"
+
+    'delete remote tables
+    ListDB.TableDefs.Delete TestList & "_SU"
+        
+    If IsLoaded("frmMainMenuFloat") Then
+        Forms![frmMainMenuFloat]![cmbCurrProject].SetFocus
+        Forms![frmMainMenuFloat]![cmbCurrSU] = "None"
+        Forms![frmMainMenuFloat]![cmbCurrSU].SetFocus
+    End If
+    clsVProReg.CurrPlotlist = "None"
+    
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+'    ListRecords.Close
+    Set MyForm = Nothing
+    Set MyDB = Nothing
+    Set ListDB = Nothing
+    Exit Function
+errDeleteAttachedSuList:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function SetLumpsTo(SetTo As String, Optional IsCombo)
+'Oct. 12, 2002
+On Error GoTo errSetLumpsToYes
+Dim LumpTable As String, Species As String, SqlText As String, xTree As TreeView
+Dim MyForm As Form
+If IsMissing(IsCombo) Then
+    Set MyForm = Forms![USysLumpMaster]
+    Set xTree = Forms![USysLumpMaster]!LumpTree.Object
+    LumpTable = clsVProReg.CurrLump & "_Lump"
+    If LumpTable = "None_Lump" Then GoTo MyExit
+    Species = xTree.SelectedItem
+    SqlText = "UPDATE [" & LumpTable & "] SET [" & LumpTable & "].Use = " & SetTo
+    SqlText = SqlText & " WHERE ((([" & LumpTable & "].LumpCode)='" & Species & "'));"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+Else
+    Set MyForm = Forms![USysComboLumpMaster]
+    Set xTree = Forms![USysComboLumpMaster]!LumpTree.Object
+    LumpTable = Forms![USysComboLumpMaster]![cmbLumpTable] & "_Theme"
+    Species = xTree.SelectedItem
+    SqlText = "UPDATE [" & LumpTable & "] SET [" & LumpTable & "].Use = " & SetTo
+    SqlText = SqlText & " WHERE ((([" & LumpTable & "].LumpCode)='" & Species & "'));"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+End If
+    MyForm.Refresh
+    DoCmd.SetWarnings True
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSetLumpsToYes:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function ProfileInfo(Optional ProfileName As String)
+'Oct. 12, 1998
+On Error GoTo errProfileInfo
+Dim MyDB As Database, TestTable As String, MyInfo As String
+Dim MyForm As Form, TestProject As String, i As Integer
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+    If ProfileName > "" Then
+        TestProject = ProfileName
+    Else
+        TestProject = MyForm.ActiveControl
+    End If
+        
+    TestProject = TestProject & "_Profile"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = TestProject Then
+            MyInfo = MyDB.TableDefs(i).Connect
+            If Not MyInfo = "" Then MyInfo = Right(MyInfo, Len(MyInfo) - 1)
+            If MyInfo = "" Then MyInfo = "Local Table"
+            MsgBox MyInfo, 64, clsVProReg.ProgramName & " - table link info"
+            GoTo MyExit
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errProfileInfo:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function ThemeInfo(Optional ThemeName As String)
+'Apr 22, 1999
+On Error GoTo errThemeInfo
+Dim MyDB As Database, TestTable As String, MyInfo As String
+Dim MyForm As Form, TestProject As String, i As Integer
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+    If ThemeName > "" Then
+        TestProject = ThemeName
+    Else
+        TestProject = MyForm.ActiveControl
+    End If
+        
+    TestProject = TestProject & "_Theme"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = TestProject Then
+            MyInfo = MyDB.TableDefs(i).Connect
+            If Not MyInfo = "" Then MyInfo = Right(MyInfo, Len(MyInfo) - 1)
+            If MyInfo = "" Then MyInfo = "Local Table"
+            MsgBox MyInfo, 64, clsVProReg.ProgramName & " - table link info"
+            GoTo MyExit
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errThemeInfo:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+
+Function LumpingInfo(Optional LumpingName As String)
+'Oct. 12, 1998
+On Error GoTo errLumpingInfo
+Dim MyDB As Database, TestTable As String, MyInfo As String
+Dim MyForm As Form, TestProject As String, i As Integer
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+    If LumpingName > "" Then
+        TestProject = LumpingName
+    Else
+        TestProject = MyForm.ActiveControl
+    End If
+        
+    TestProject = TestProject & "_Lump"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = TestProject Then
+            MyInfo = MyDB.TableDefs(i).Connect
+            If Not MyInfo = "" Then MyInfo = Right(MyInfo, Len(MyInfo) - 1)
+            If MyInfo = "" Then MyInfo = "Local Table"
+            MsgBox MyInfo, 64, clsVProReg.ProgramName & " - table link info"
+            GoTo MyExit
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errLumpingInfo:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function HierarchyInfo(Optional HierarchyName As String)
+On Error GoTo errHierarchyInfo
+Dim MyDB As Database, TestTable As String, MyInfo As String
+Dim MyForm As Form, TestProject As String, i As Integer
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+    If HierarchyName > "" Then
+        TestProject = HierarchyName
+    Else
+        TestProject = MyForm.ActiveControl
+    End If
+        
+    TestProject = TestProject & "_Hierarchy"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = TestProject Then
+            MyInfo = MyDB.TableDefs(i).Connect
+            If Not MyInfo = "" Then MyInfo = Right(MyInfo, Len(MyInfo) - 1)
+            If MyInfo = "" Then MyInfo = "Local Table"
+            MsgBox MyInfo, 64, clsVProReg.ProgramName & " - table link info"
+            GoTo MyExit
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errHierarchyInfo:
+    MsgBox Err.Description
+    Resume MyExit
+
+End Function
+
+Private Sub TestIt()
+
+CheckThisProject "Sample"
+
+End Sub
+Public Function CompareToTemplate()
+
+'Jan. 10, 2008
+Dim MyForm As Form
+Set MyForm = Screen.ActiveForm
+
+CheckThisProject MyForm.ActiveControl
+
+    Set MyForm = Nothing
+    
+End Function
+
+Function ProjectInfo(Optional ProjectName As String)
+On Error GoTo errProjectInfo
+Dim MyDB As Database, TestTable As String, MyInfo As String
+Dim MyForm As Form, TestProject As String, i As Integer
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+    If ProjectName > "" Then
+        TestProject = ProjectName
+    Else
+        TestProject = MyForm.ActiveControl
+    End If
+        
+    TestProject = TestProject & "_Env"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = TestProject Then
+            MyInfo = MyDB.TableDefs(i).Connect
+            If Not MyInfo = "" Then MyInfo = Right(MyInfo, Len(MyInfo) - 1)
+            If MyInfo = "" Then MyInfo = "Local Table"
+            'MyInfo = MyInfo & Chr(13) & "Double clicking a project will make it the current project"
+            MsgBox MyInfo, 64, clsVProReg.ProgramName & " - table link info"
+            GoTo MyExit
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errProjectInfo:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function SuListInfo(Optional ListName As String)
+On Error GoTo errSuListInfo
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form, TestList As String
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+CurrTable = MyForm.ActiveControl & "_Su"
+
+    If ListName > "" Then
+        TestList = ListName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = Trim(MyDB.TableDefs(i).Name)
+        If TestTable = CurrTable Then
+            MyInfo = MyDB.TableDefs(i).Connect
+            If Not MyInfo = "" Then MyInfo = Right(MyInfo, Len(MyInfo) - 1)
+            If MyInfo = "" Then MyInfo = "Local Table"
+            'MyInfo = MyInfo & Chr(13) & "Double clicking a site unit table will make it the current site unit table"
+            MsgBox MyInfo, 64, clsVProReg.ProgramName & " - table link info"
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Set MyForm = Nothing
+    Exit Function
+errSuListInfo:
+    MsgBox Err.Description
+    Resume MyExit
+
+End Function
+Function RenameAttachedProfile(Optional ProfileName As String)
+'Oct. 12, 1998
+On Error GoTo errRenameAttachedProfile
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+Dim NewName As String, OldName As String
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+CurrTable = MyForm.ActiveControl & "_Profile"
+    If ProfileName > "" Then
+        TestList = ProfileName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+NewName = InputBox("Please enter a new table name.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length.", ProgramName())
+If NewName = "" Then GoTo MyExit
+OldName = TestList
+
+TestList = TestList & "_Profile"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't rename this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+            
+            Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+            
+            'rename remote DB tables
+            ListDB.TableDefs(OldName & "_Profile").Name = NewName & "_Profile"
+                        
+            'rename table attachments
+            DoCmd.DeleteObject acTable, OldName & "_Profile"
+                        
+            DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ListDB.Name, A_TABLE, NewName & "_Profile", NewName & "_Profile"
+            
+            clsVProReg.CurrVegProfile = NewName
+            
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+    Set MyForm = Nothing
+    Set ListDB = Nothing
+    Set MyDB = Nothing
+    Exit Function
+errRenameAttachedProfile:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function RenameAttachedTheme(Optional ThemeName As String)
+'Apr. 22, 1999
+On Error GoTo errRenameAttachedTheme
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+Dim NewName As String, OldName As String
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+    If ThemeName > "" Then
+        TestList = ThemeName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+NewName = InputBox("Please enter a new table name.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length.", ProgramName())
+If NewName = "" Then GoTo MyExit
+OldName = TestList
+
+TestList = TestList & "_Theme"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't rename this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+            
+            Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+            
+            'rename remote DB tables
+            ListDB.TableDefs(OldName & "_Theme").Name = NewName & "_Theme"
+                        
+            'rename table attachments
+            DoCmd.DeleteObject acTable, OldName & "_Theme"
+                        
+            DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ListDB.Name, A_TABLE, NewName & "_Theme", NewName & "_Theme"
+            
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+    Set MyForm = Nothing
+    Set ListDB = Nothing
+    Set MyDB = Nothing
+    Exit Function
+errRenameAttachedTheme:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function RenameAttachedLumping(Optional LumpingName As String)
+'Oct. 12, 1998
+On Error GoTo errRenameAttachedLumping
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+Dim NewName As String, OldName As String
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+CurrTable = MyForm.ActiveControl & "_Lump"
+    If LumpingName > "" Then
+        TestList = LumpingName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+NewName = InputBox("Please enter a new table name.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length.", ProgramName())
+If NewName = "" Then GoTo MyExit
+OldName = TestList
+
+TestList = TestList & "_Lump"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't rename this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+            
+            Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+            
+            'rename remote DB tables
+            ListDB.TableDefs(OldName & "_Lump").Name = NewName & "_Lump"
+                        
+            'rename table attachments
+            DoCmd.DeleteObject acTable, OldName & "_Lump"
+                        
+            DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ListDB.Name, A_TABLE, NewName & "_Lump", NewName & "_Lump"
+            
+            clsVProReg.CurrLump = NewName
+            
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+    Set MyForm = Nothing
+    Set ListDB = Nothing
+    Set MyDB = Nothing
+    Exit Function
+errRenameAttachedLumping:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function RenameAttachedHierarchy(Optional HierarchyName As String)
+'Apr. 23, 2002
+On Error GoTo errRenameAttachedSuList
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+Dim NewName As String, OldName As String ', ListRecords As Recordset
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+'Set ListRecords = MyDB.OpenRecordset("ManagePlotLists", dbOpenDynaset)
+CurrTable = MyForm.ActiveControl & "_Hierarchy"
+    
+    If HierarchyName > "" Then
+        TestList = HierarchyName
+    Else
+        TestList = MyForm.ActiveControl
+    End If
+
+NewName = InputBox("Please enter a new table name.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length.", ProgramName())
+If NewName = "" Then GoTo MyExit
+OldName = TestList
+
+    TestList = TestList & "_Hierarchy"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't rename this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+            
+    Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+    
+    'rename remote DB tables
+    ListDB.TableDefs(OldName & "_Hierarchy").Name = NewName & "_Hierarchy"
+                
+    'rename table attachments
+    DoCmd.DeleteObject acTable, OldName & "_Hierarchy"
+                
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ListDB.Name, A_TABLE, NewName & "_Hierarchy", NewName & "_Hierarchy"
+    
+    MyForm.ActiveControl = NewName
+    clsVProReg.CurrHierarchy = NewName
+    MyForm.Repaint
+    
+    If IsLoaded("USysAssignSU") Then
+        MsgBox "You must close and then re-open any forms that are dependent on the current hierarchy table."
+    End If
+    
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+'    ListRecords.Close
+    Set MyForm = Nothing
+    Set ListDB = Nothing
+    Set MyDB = Nothing
+    Exit Function
+errRenameAttachedSuList:
+    MsgBox Err.Description
+    Resume MyExit
+
+End Function
+Function RenameAttachedSuList(Optional ListName As String)
+'On Error GoTo errRenameAttachedSuList
+Dim MyDB As Database, MyTable As TableDef, MyForm As Form
+Dim CurrTable As String, i As Integer, TestTable As String, MyInfo
+Dim ListDB As Database, ListDbLocation As String
+Dim NewName As String, OldName As String ', ListRecords As Recordset
+Dim Criteria As String, TestList As String
+Set MyDB = CurrentDb()
+'Set MyForm = Screen.ActiveForm
+'Set ListRecords = MyDB.OpenRecordset("ManagePlotLists", dbOpenDynaset)
+'CurrTable = MyForm.ActiveControl & "_Su"
+
+If clsFormInfo.IsDataFormLoaded Or IsLoaded("USysAssignSU") Then
+    MsgBox "VPro must close some items in order for you to be able to perform this task.  Please close this message box and try again.", vbInformation, "VPro"
+    On Error Resume Next
+    DoCmd.Close acForm, "FS882-6x4"
+    DoCmd.Close acForm, "FS882-8x6"
+    DoCmd.Close acForm, "USysAssignSU"
+    On Error GoTo errRenameAttachedSuList
+    GoTo MyExit
+End If
+    
+   
+If IsLoaded("frmMainMenuFloat") Then
+    NewName = Forms![frmMainMenuFloat]![cmbCurrSU]
+End If
+
+NewName = InputBox("Please enter a new site unit list name.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length.", "VPro", NewName)
+If NewName = "" Then GoTo MyExit
+
+
+TestList = clsVProReg.CurrPlotlist & "_SU"
+OldName = TestList
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+            If TestTable = TestList Then
+            ListDbLocation = MyDB.TableDefs(i).Connect
+            If Not ListDbLocation = "" Then ListDbLocation = Right(ListDbLocation, Len(ListDbLocation) - 10)
+            If ListDbLocation = "" Then
+                MsgBox "You can't rename this table!", vbInformation, ProgramName()
+                GoTo MyExit
+            End If
+        End If
+    Next i
+            
+    Set ListDB = DBEngine.Workspaces(0).OpenDatabase(ListDbLocation)
+    
+    'rename remote DB tables
+    ListDB.TableDefs(OldName).Name = NewName & "_SU"
+                
+    'rename table attachments
+    DoCmd.DeleteObject acTable, OldName
+                
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ListDB.Name, A_TABLE, NewName & "_SU", NewName & "_SU"
+    
+    clsVProReg.CurrPlotlist = NewName
+    SetCurrentSu NewName
+    If IsLoaded("frmMainMenuFloat") Then
+        Forms![frmMainMenuFloat]![cmbCurrSU] = NewName
+ '       Forms![frmMainMenuFloat]![btnMore].SetFocus
+        Forms![frmMainMenuFloat]![cmbCurrSU].SetFocus
+    End If
+    
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+    Set MyForm = Nothing
+    Set ListDB = Nothing
+    Set MyDB = Nothing
+    DoCmd.SetWarnings True
+    Exit Function
+errRenameAttachedSuList:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function RenameAttachedProject(Optional ProjectName As String)
+
+'Jan. 14, 2020
+On Error GoTo errRenameProject
+Dim MyDB As Database, TestProject As String, i As Integer, MyForm As Form
+Dim TestTable As String, ProjectDB As Database, ProjectDbLocation As String
+Dim NewName As String, OldName As String, ProjectRecords As Recordset
+Dim Criteria As String, NeedToChangeProject As Boolean, SqlText As String
+
+If clsFormInfo.IsDataFormLoaded Then
+    MsgBox "VPro must close some items in order for you to be able to perform this task.  Please close this message box and try again.", vbInformation, "VPro"
+    On Error Resume Next
+    DoCmd.Close acForm, "FS882-6x4"
+    DoCmd.Close acForm, "FS882-8x6"
+    DoCmd.Close acForm, "FS882-1x1"
+    DoCmd.Close acForm, "FS882-6x4XL"
+    On Error GoTo errRenameProject
+    GoTo MyExit
+End If
+On Error GoTo 0
+Set MyDB = CurrentDb()
+Set MyForm = Screen.ActiveForm
+
+    If ProjectName > "" Then
+        TestProject = ProjectName
+    Else
+        TestProject = MyForm.ActiveControl
+    End If
+
+    NewName = InputBox("Please enter a new project name.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length.", "VPro", TestProject)
+    If NewName = "" Then GoTo MyExit
+    OldName = TestProject
+   
+    TestProject = TestProject & "_Env"
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = TestProject Then
+            ProjectDbLocation = MyDB.TableDefs(i).Connect
+            If Not ProjectDbLocation = "" Then ProjectDbLocation = Right(ProjectDbLocation, Len(ProjectDbLocation) - 10)
+            If ProjectDbLocation = "" Then
+                MsgBox "You can't rename this table!", vbInformation, "VPro"
+                GoTo MyExit
+            End If
+        End If
+    Next i
+    
+    DeleteRelationship ProjectDbLocation, Left(TestProject, Len(TestProject) - 4)
+        
+    Set ProjectDB = DBEngine.Workspaces(0).OpenDatabase(ProjectDbLocation)
+
+    DoCmd.DeleteObject acTable, OldName & "_Env"
+    DoCmd.DeleteObject acTable, OldName & "_Admin"
+    DoCmd.DeleteObject acTable, OldName & "_Humus"
+    DoCmd.DeleteObject acTable, OldName & "_Audit"
+    DoCmd.DeleteObject acTable, OldName & "_Mineral"
+    DoCmd.DeleteObject acTable, OldName & "_Veg"
+    DoCmd.DeleteObject acTable, OldName & "_Other"
+    DoCmd.DeleteObject acTable, OldName & "_Metadata"
+
+    ProjectDB.TableDefs(OldName & "_Env").Name = NewName & "_Env"
+    ProjectDB.TableDefs(OldName & "_Admin").Name = NewName & "_Admin"
+    ProjectDB.TableDefs(OldName & "_Humus").Name = NewName & "_Humus"
+    ProjectDB.TableDefs(OldName & "_Audit").Name = NewName & "_Audit"
+    ProjectDB.TableDefs(OldName & "_Mineral").Name = NewName & "_Mineral"
+    ProjectDB.TableDefs(OldName & "_Veg").Name = NewName & "_Veg"
+    ProjectDB.TableDefs(OldName & "_Other").Name = NewName & "_Other"
+    ProjectDB.TableDefs(OldName & "_Metadata").Name = NewName & "_Metadata"
+    
+    CreateRelationship ProjectDB.Name, NewName, True
+
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Env", NewName & "_Env"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Admin", NewName & "_Admin"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Humus", NewName & "_Humus"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Other", NewName & "_Other"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Mineral", NewName & "_Mineral"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Veg", NewName & "_Veg"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Audit", NewName & "_Audit"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", ProjectDB.Name, A_TABLE, NewName & "_Metadata", NewName & "_Metadata"
+            
+    MyForm.ActiveControl.Value = NewName
+    SetCurrentProject NewName
+    
+    clsVProReg.CurrProject = NewName
+    SqlText = "UPDATE [" & NewName & "_Audit] SET [" & NewName & "_Audit].Project = '" & NewName & "';"
+    DoCmd.RunSQL SqlText
+       
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+    ProjectRecords.Close
+    Set MyDB = Nothing
+    Set ProjectDB = Nothing
+    Set MyForm = Nothing
+    DoCmd.SetWarnings True
+    Exit Function
+errRenameProject:
+    MsgBox Err.Description & Chr(13) & "Number: " & Err.Number
+    Resume MyExit
+
+End Function
+Function ReNameLumpNode()
+'June 2, 2006
+On Error GoTo errReNameLumpNode
+
+Dim SqlText As String
+Dim MyTree As TreeView, MyNode As Node, NodeParent As String, NodeTxt As String, NewName As String
+Set MyTree = Screen.ActiveControl.Object
+Set MyNode = MyTree.SelectedItem
+NodeTxt = MyNode.Text
+
+NewName = InputBox("Please enter a new name.  No punctuation and <= 8 characters.", "VPro", NodeTxt)
+
+If NewName <> "" Then
+    'MsgBox "good"
+Else
+    GoTo MyExit
+End If
+
+SqlText = "UPDATE " & clsVProReg.CurrLump & "_Lump SET " & clsVProReg.CurrLump & "_Lump.LumpCode = '" & NewName & "'"
+SqlText = SqlText & " WHERE (((" & clsVProReg.CurrLump & "_Lump.LumpCode)='" & NodeTxt & "'));"
+DoCmd.RunSQL SqlText
+
+MyNode.Text = NewName
+
+MyExit:
+    On Error Resume Next
+    Screen.ActiveForm.Recalc
+    Exit Function
+errReNameLumpNode:
+    If Err.Number <> 0 Then
+        MsgBox Err.Description
+    End If
+    Resume MyExit
+
+End Function
+
+Function DeleteLumpNode()
+'May 4, 2006
+On Error GoTo errDeleteLumpNode
+
+Dim SqlText As String
+Dim MyTree As TreeView, MyNode As Node, NodeParent As String, NodeTxt As String
+Set MyTree = Screen.ActiveControl.Object
+Set MyNode = MyTree.SelectedItem
+NodeTxt = MyNode.Text
+
+SqlText = "DELETE * FROM " & clsVProReg.CurrLump & "_Lump WHERE (((LumpCode)='" & NodeTxt & "'));"
+DoCmd.RunSQL SqlText
+MyTree.Nodes.Remove MyTree.SelectedItem.index
+
+MyExit:
+    On Error Resume Next
+    Screen.ActiveForm.Recalc
+    Exit Function
+errDeleteLumpNode:
+    If Err.Number <> 0 Then
+        MsgBox Err.Description
+    End If
+    Resume MyExit
+End Function
+
+Function DeleteSppNode()
+'May 4, 2006
+On Error GoTo errDeleteLumpNode
+
+Dim SqlText As String
+Dim MyTree As TreeView, MyNode As Node, NodeParent As String, NodeTxt As String
+Set MyTree = Screen.ActiveControl.Object
+Set MyNode = MyTree.SelectedItem
+NodeTxt = MyNode.Text
+
+SqlText = "DELETE * FROM " & clsVProReg.CurrLump & "_Lump WHERE (((SppCode)='" & NodeTxt & "'));"
+DoCmd.RunSQL SqlText
+MyTree.Nodes.Remove MyTree.SelectedItem.index
+
+MyExit:
+    On Error Resume Next
+    Screen.ActiveForm.Recalc
+    Exit Function
+errDeleteLumpNode:
+    If Err.Number <> 0 Then
+        MsgBox Err.Description
+    End If
+    Resume MyExit
+End Function
+
+
+Function RemoveAllBreakPoints()
+On Error GoTo errRemoveAllBreakPoints
+Dim MyDB As Database, MyRS As Recordset, Criteria As String, i As Integer
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset(CurrHierarchy(), dbOpenDynaset)
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    If Left(MyRS!Name, 1) = "~" Then
+        MyRS.Edit
+        MyRS!Name = Right(MyRS!Name, Len(MyRS!Name) - 1)
+        MyRS.Update
+    End If
+    MyRS.MoveNext
+Next i
+LoadHierarchy
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errRemoveAllBreakPoints:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function SetBreakPointChildren()
+'August 24, 1998
+'sets break points on all children of the selected unit
+On Error GoTo errSetBreakPointChildren
+
+Dim MyTree As TreeView
+Set MyTree = Screen.ActiveControl.Object
+
+SetBreakPointChildren = TildeChildren(MyTree.SelectedItem.Text)
+Forms!usysassignsu.btnLoadHierarchy_Click
+Forms!usysassignsu.btnExpandAllNodes_Click
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSetBreakPointChildren:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function SetBreakPoint()
+On Error GoTo errSetBreakPoint
+Dim MyDB As Database, MyRS As Recordset, Criteria As String
+Dim MyTree As TreeView, MyNode As Node, OldName As String, NewName As String
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset(CurrHierarchy(), dbOpenDynaset)
+Set MyTree = Screen.ActiveControl.Object
+OldName = MyTree.SelectedItem.Text
+
+If clsVProReg.HierarchyBreaksOnRoots Then
+    'allow breaks
+Else
+    If MyTree.SelectedItem.Children = 0 Then GoTo MyExit
+End If
+
+If Left(MyTree.SelectedItem.Text, 1) = "~" Then
+    MyTree.SelectedItem.Text = Right(MyTree.SelectedItem.Text, Len(MyTree.SelectedItem.Text) - 1)
+Else
+    MyTree.SelectedItem.Text = "~" & MyTree.SelectedItem.Text
+End If
+NewName = MyTree.SelectedItem.Text
+Criteria = "Name = '" & OldName & "'"
+MyRS.MoveFirst
+MyRS.FindFirst Criteria
+MyRS.Edit
+MyRS!Name = NewName
+MyRS.Update
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Set MyTree = Nothing
+    Exit Function
+errSetBreakPoint:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function EditSiteUnit()
+Dim MyList As Object, Criteria As String, MyTable As String
+Dim Response As Integer, MyItem As String
+Set MyList = Screen.ActiveControl
+
+If MyList.SelectedItem > "" Then
+    MyItem = MyList.SelectedItem
+    If Left(MyItem, 1) = "~" Then MyItem = Mid(MyItem, 2)
+    Criteria = MyItem
+Else
+    GoTo MyExit
+End If
+
+    DoCmd.OpenForm "USysUserSiteUnits"
+    MyTable = LocateTable(MyItem)
+
+    Select Case MyTable
+        Case "None"
+            Forms![USysUserSiteUnits].RecordSource = "USysUserSiteUnitList"
+            Response = MsgBox("The unit " & MyItem & " is not in the master or user lists.  Would you like to add it to your user list?", MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2, "VPro")
+            If Response = 6 Then
+                DoCmd.GoToRecord acDataForm, "USysUserSiteUnits", acNewRec
+                DoCmd.GoToControl "Name"
+                Forms![USysUserSiteUnits]![Name] = MyItem
+            End If
+        Case "USysMasterSiteUnitList"
+            Forms![USysUserSiteUnits].Caption = "VPro master site units" '  non-editable"
+            Forms![USysUserSiteUnits].RecordSource = MyTable
+        Case "USysUserSiteUnitList"
+            Forms![USysUserSiteUnits].RecordSource = MyTable
+        Case Else
+            GoTo MyExit
+    End Select
+
+    DoCmd.GoToControl "Name"
+    On Error Resume Next
+    DoCmd.FindRecord Criteria
+MyExit:
+    On Error Resume Next
+    Set MyList = Nothing
+    Exit Function
+errEditSiteUnit:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function DeleteSiteUnit(Optional SiteUnit As String)
+On Error GoTo errDeleteSiteUnit
+Dim MyDB As Database, MyRS As Recordset, MyList As Object, Criteria As String
+Dim i As Integer, ItemX As ListItem
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset("USysUserSiteUnitList", dbOpenDynaset)
+Set MyList = Screen.ActiveControl
+If MyList.SelectedItem > "" Then
+    Criteria = "Name = '" & MyList.SelectedItem & "'"
+Else
+    GoTo MyExit
+End If
+MyRS.MoveFirst
+For i = 1 To MyRS.RecordCount
+    MyRS.FindFirst Criteria
+    MyRS.Delete
+Next i
+    With MyList
+        .ListItems.Clear
+        .HideColumnHeaders = False
+    End With
+    MyRS.MoveFirst
+    If MyRS.RecordCount > 0 Then
+        While Not MyRS.EOF
+            Set ItemX = MyList.ListItems.Add()
+            If Not IsNull(MyRS!Name) Then ItemX.Text = MyRS!Name
+            If Not IsNull(MyRS!UnitLongName) Then ItemX.SubItems(1) = MyRS!UnitLongName
+            If Not IsNull(MyRS!Zone) Then ItemX.SubItems(2) = MyRS!Zone
+            If Not IsNull(MyRS!SubZone) Then ItemX.SubItems(3) = MyRS!SubZone
+            If Not IsNull(MyRS!PlotVariant) Then ItemX.SubItems(4) = MyRS!PlotVariant
+            If Not IsNull(MyRS!RegionCode) Then ItemX.SubItems(5) = MyRS!RegionCode
+            MyRS.MoveNext
+        Wend
+    End If
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errDeleteSiteUnit:
+    If Err.Number = 91 Then
+        MsgBox "Nothing to delete"
+    Else
+        MsgBox Err.Description
+    End If
+    Resume MyExit
+End Function
+Function DeleteNode(RecordTable As String, SearchField As String, FieldType As String)
+'Oct. 12, 2002
+'On Error GoTo errDeleteNode
+Dim MyDB As Database, MyRecords As Recordset, SuRecords As Recordset, SqlText As String
+Dim MyTree As TreeView, MyNode As Node, NodeParent As String  ', HierarchyTable As String
+Dim NodeName As String, NodeKey As String, ChildCount, Criteria As String, NodeTxt As String
+Set MyDB = CurrentDb()
+Set MyRecords = MyDB.OpenRecordset(RecordTable, dbOpenDynaset)
+Set MyTree = Screen.ActiveControl.Object
+Set MyNode = MyTree.SelectedItem
+NodeTxt = MyNode.Text
+
+If Not MyNode.Child Is Nothing Then ChildCount = MyNode.Child.index
+     
+If sysHierarchyType = "Hierarchy" Then
+    DeleteNodeAndAllChildren Mid(MyNode.Key, 2)
+    MyTree.Nodes.Remove MyTree.SelectedItem.index
+    RemoveNodeFromUserList NodeTxt, MyDB
+    GoTo MyExit
+End If
+
+If ChildCount <> "" Then MsgBox "You can't delete a node with children"
+If ChildCount = "" Then
+
+If sysHierarchyType = "SuTable" Then
+    SqlText = "SELECT SiteUnit FROM [" & CurrPlotlist & "_SU]" & " WHERE (((PlotNumber) Is Null));"
+    Set SuRecords = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+    SuRecords.MoveLast
+    If SuRecords.RecordCount > 0 Then
+        SuRecords.MoveFirst
+        SuRecords.FindFirst "SiteUnit = '" & NodeTxt & "'"
+        SuRecords.Delete
+        If MyTree.SelectedItem.Text = NodeTxt Then MyTree.Nodes.Remove MyTree.SelectedItem.index
+    End If
+End If
+                
+End If
+
+GoTo Jump
+MyExit:
+If Right(RecordTable, 5) = "_Lump" Then
+    MyTree.Nodes.Remove MyNode.Key
+    Criteria = "LumpCode = '" & Mid(MyNode.Key, 2) & "'"
+    MyRecords.MoveLast
+    MyRecords.FindFirst Criteria
+    If MyRecords.NoMatch Then GoTo Jump
+    MyRecords.Delete
+End If
+    
+Jump:
+    On Error Resume Next
+    Set MyDB = Nothing
+    MyRecords.Close
+errDeleteNode:
+    If Err.Number <> 0 Then
+        MsgBox Err.Description
+    End If
+    Resume Jump
+End Function
+Private Sub RemoveNodeFromUserList(NodeName As String, MyDB As Database)
+
+Dim MyTest As Variant
+MyTest = MsgBox("Do you want to permanently remove unit: " & NodeName & " from your user unit list?", vbYesNo, "VPro")
+If MyTest = vbNo Then GoTo MyExit
+Dim MyRS As Recordset, Criteria As String
+Set MyRS = MyDB.OpenRecordset("USysUserSiteUnitList")
+
+    Criteria = "SiteSeries = '" & NodeName & "'"
+    MyRS.FindFirst Criteria
+    If MyRS.NoMatch Then
+        MsgBox "Unit: " & NodeName & " was not found in your unit list but was removed from your hierarchy.", vbInformation, "VPro"
+        GoTo MyExit
+    End If
+    MyRS.Delete
+    MyRS.Close
+    'MsgBox "record deleted"
+MyExit:
+
+End Sub
+
+Function AddLump(Optional NewLump As String)
+On Error GoTo errAddLump
+Dim MyDB As Database, MyRecords As Recordset
+Dim MyTree As TreeView, MyNode As Node, NodeParent As String
+Dim LumpName As String, NodeKey As String, HierarchyTable As String
+Dim LumpTable As String
+LumpTable = clsVProReg.CurrLump & "_Lump"
+If LumpTable = "None_Lump" Then GoTo MyExit
+If NewLump = "" Then
+    LumpName = InputBox("New lump code", ProgramName())
+    If LumpName = "" Then GoTo MyExit
+Else
+    LumpName = NewLump
+End If
+Set MyDB = CurrentDb()
+Set MyRecords = MyDB.OpenRecordset(LumpTable)
+Set MyTree = Screen.ActiveForm!LumpTree.Object
+Set MyNode = MyTree.SelectedItem
+    MyRecords.AddNew
+    MyRecords!LumpCode = LumpName
+    MyRecords.Update
+    Set MyNode = MyTree.Nodes.Add(, , "a" & LumpName, LumpName, 3, 3)
+    Screen.ActiveForm.Recalc
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    MyRecords.Close
+    Exit Function
+errAddLump:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function AddLumpSpp(Optional NewLump As String)
+'May 4, 2006
+On Error GoTo errAddLump
+Dim MyDB As Database, MyRecords As Recordset
+Dim MyTree As TreeView, MyNode As Node, NodeParent As String
+Dim SppName As String, NodeKey As String, HierarchyTable As String
+Dim LumpTable As String
+LumpTable = clsVProReg.CurrLump & "_Lump"
+If LumpTable = "None_Lump" Then GoTo MyExit
+If NewLump = "" Then
+    SppName = InputBox("Enter user species code", ProgramName())
+    If SppName = "" Then GoTo MyExit
+Else
+    SppName = NewLump
+End If
+Set MyDB = CurrentDb()
+Set MyRecords = MyDB.OpenRecordset(LumpTable)
+Set MyTree = Screen.ActiveForm!LumpTree.Object
+Set MyNode = MyTree.SelectedItem
+
+    MyRecords.AddNew
+    MyRecords!LumpCode = MyNode.Text
+    MyRecords!SppCode = SppName
+    MyRecords!Use = True
+    MyRecords.Update
+    Set MyNode = MyTree.Nodes.Add(MyNode.index, tvwChild, "c" & SppName, SppName, 1, 1)
+    Screen.ActiveForm.Recalc
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    MyRecords.Close
+    Exit Function
+errAddLump:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+
+Function AddNode(Optional NewNode As String, Optional CallEditForm As Integer)
+'Dec. 30, 2019
+
+On Error GoTo errAddNode
+Dim MyDB As Database, MyRecords As Recordset, SuRecords As Recordset
+Dim MyTree As TreeView, MyNode As Node, NodeParent As Long, MyCriteria As String
+Dim NodeName As String, HierarchyTable As String, Msg As String, SqlText As String
+Dim NodeKey As Long 'Variant ' String
+Dim NoNode As Boolean, ErrVisitCount As Integer, WasInList As Boolean
+Dim X, dgdef, Response, Title As String
+Set MyDB = CurrentDb()
+Set MyTree = Forms!usysassignsu.xTree.Object
+ErrVisitCount = 0
+sysParent = ""
+Set MyNode = MyTree.SelectedItem
+
+If IsEmpty(MyNode) Then
+    sysParent = ""
+Else
+    sysParent = MyNode.Text
+End If
+
+Jump2:
+HierarchyTable = CurrHierarchy()
+Set MyRecords = MyDB.OpenRecordset(HierarchyTable)
+Set SuRecords = MyDB.OpenRecordset(CurrPlotlist() & "_SU", dbOpenDynaset)
+'If CallEditForm < 1 Then CallEditForm = 1
+
+If NewNode = "" Then
+    If sysHierarchyType = "SuTable" Then
+        sysPickItem = ""
+        DoCmd.OpenForm "USysPickItem", acNormal
+        'SqlText = "SELECT DISTINCTROW MasterSiteUnitList.Name, MasterSiteUnitList.UnitLongName"
+        SqlText = "SELECT DISTINCTROW MasterSiteUnitList.SiteSeries, MasterSiteUnitList.SiteSeriesLongName"
+        SqlText = SqlText & " FROM MasterSiteUnitList"
+        SqlText = SqlText & " WHERE (((MasterSiteUnitList.Level) = 11))"
+        'SqlText = SqlText & " ORDER BY MasterSiteUnitList.Name;"
+        SqlText = SqlText & " ORDER BY MasterSiteUnitList.SiteSeries;"
+        Forms![USysPickItem]![MyList].RowSource = SqlText
+        Do Until sysPickItem <> "" Or Screen.ActiveForm.Name <> "USysPickItem"
+            DoEvents
+        Loop
+        If sysPickItem = "" Then Exit Function
+        'WasInList = InList("SELECT Name FROM MasterSiteUnitList WHERE (((Name)='" & sysPickItem & "'));")
+        WasInList = InList("SELECT SiteSeries FROM MasterSiteUnitList WHERE (((SiteSeries)='" & sysPickItem & "'));")
+        NodeName = sysPickItem
+        DoCmd.Close acForm, "USysPickItem"
+    Else
+        NodeName = InputBox("New node name", ProgramName())
+    End If
+Else
+    NodeName = NewNode
+End If
+WasNoNode:
+    If NodeName = "" Then Exit Function
+
+If sysHierarchyType = "Hierarchy" Or sysHierarchyType = "Both" Then
+    If Not NoNode Then 'NoNode = False
+        If Left(MyNode.Key, 1) = "a" Then
+            NodeParent = Mid(MyNode.Key, 2)
+            MyRecords.Edit
+            MyRecords.AddNew
+            MyRecords!Name = NodeName
+            MyRecords![Level] = 10
+            MyRecords!Parent = NodeParent
+            NodeKey = MyRecords![ID]
+            MyRecords.Update
+            Set MyNode = MyTree.Nodes.Add("a" & NodeParent, 4, "a" & NodeKey, NodeName, 1, 1)
+            MyNode.EnsureVisible
+            WriteMasterAudit "New", NodeName, NodeKey, "New", "Null", NodeName, sysParent
+        End If
+    Else
+            MyRecords.Edit
+            MyRecords.AddNew
+            MyRecords!Name = NodeName
+            MyRecords![Level] = 10
+            NodeKey = MyRecords![ID]
+            MyRecords.Update
+            Set MyNode = MyTree.Nodes.Add(, 4, "a" & NodeKey, NodeName, 1, 1)
+            WriteMasterAudit "New", NodeName, NodeKey, "New", "Null", NodeName, sysParent
+    End If
+
+    If Left(MyNode.Key, 1) = "p" Then
+        NodeParent = Mid(MyNode.Key, 2)
+        MyRecords.Edit
+        MyRecords.AddNew
+        MyRecords!Name = NodeName
+        NodeKey = MyRecords![ID]
+        MyRecords.Update
+        Set MyNode = MyTree.Nodes.Add(, , "a" & NodeKey, NodeName, 1, 1)
+    End If
+End If
+
+If sysHierarchyType = "SuTable" Then
+    SuRecords.Edit
+    SuRecords.AddNew
+    SuRecords!SiteUnit = NodeName
+    SuRecords.Update
+    SuRecords.MoveLast
+    NodeKey = SuRecords.RecordCount + 1
+    Set MyNode = MyTree.Nodes.Add(, , "a" & NodeKey, NodeName, 1, 1)
+End If
+
+MyExit:
+    If CallEditForm = 1 Then GoTo Jump
+    If Not WasInList Then
+        Title = ProgramName()
+        Msg = "Do you want to add a long name and other unit information?"
+        dgdef = MB_YESNO + 64 + MB_DEFBUTTON2   ' Describe dialog box.
+        Response = MsgBox(Msg, dgdef, "VPro")    ' Get user response.
+        If Response = 6 Then
+        X = EditUserSiteUnit(NodeName)
+        End If
+    End If
+Jump:
+    On Error Resume Next
+    sysPickItem = ""
+    MyRecords.Close
+    SuRecords.Close
+    Set MyDB = Nothing
+    Exit Function
+errAddNode:
+'MsgBox Err.Number
+'MsgBox Err.Description
+    If Err.Number = 91 Or Err.Number = 3021 Then
+        NoNode = True
+        ErrVisitCount = ErrVisitCount + 1
+        GoTo Jump2
+    '    MyRecords.Edit
+    '    MyRecords.AddNew
+    '    MyRecords!Name = NodeName
+    '    NodeKey = MyRecords![ID]
+    '    MyRecords.Update
+    '    SuRecords.Edit
+    '    SuRecords.AddNew
+    '    SuRecords!SiteUnit = NodeName
+    '    SuRecords.Update
+    '    Set MyNode = MyTree.Nodes.Add(, , "a" & NodeKey, NodeName, 1, 3)
+'On Error GoTo 0
+
+If ErrVisitCount = 1 Then
+    Resume WasNoNode
+Else
+    Resume Next
+End If
+    End If
+    If Err.Number = 3022 Then
+        Resume MyExit
+    End If
+        MsgBox Err.Description
+        Resume MyExit
+End Function
+
+Private Function InList(SqlText As String) As Boolean
+'Jan. 02, 2008
+On Error GoTo errInList
+Dim MyDB As Database, MyRS As Recordset
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+    If MyRS.RecordCount > 0 Then
+        InList = True
+    Else
+        InList = False
+    End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errInList:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function EditUserSiteUnit(Unit As String)
+On Error GoTo errEditUserSiteUnit
+Dim MyDB As Database, MyRS As Recordset, Criteria As String
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset("USysUserSiteUnitList", dbOpenDynaset)
+'Criteria = "Name = '" & Unit & "'"
+Criteria = "SiteSeries = '" & Unit & "'"
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    MyRS.FindFirst Criteria
+    If MyRS.NoMatch Then
+        MyRS.AddNew
+        'MyRS!Name = Unit
+        MyRS!SiteSeries = Unit
+        MyRS.Update
+        MyRS.Close
+        DoCmd.OpenForm "USysUserSiteUnits"
+        DoCmd.GoToControl "Name"
+        DoCmd.FindRecord Unit
+    Else
+        DoCmd.OpenForm "USysUserSiteUnits"
+        DoCmd.GoToControl "Name"
+        DoCmd.FindRecord Unit
+    End If
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errEditUserSiteUnit:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function ShowNodeInfo()
+On Error GoTo MyExit
+Dim MyNode As Node, TestString As String
+Dim MyTree As TreeView
+Set MyTree = Forms!usysassignsu.xTree.Object
+Set MyNode = MyTree.SelectedItem
+    If Not MyNode Is Nothing Then
+        TestString = MyNode.FullPath
+        'MsgBox "FullPath = " & MyNode.FullPath & Chr(13) & "Node.Key = " & MyNode.Key & Chr(13) & "Parent.Node.Key = " & MyNode.Parent.Key
+        MsgBox "FullPath = " & MyNode.FullPath & Chr(13) & "Node.Key = " & MyNode.Key & Chr(13)
+    End If
+MyExit:
+End Function
+Function ListViewSppDetails()
+'Mar. 20, 2003
+On Error GoTo errListViewSppDetails
+Dim MySPP As String, MyListView As ListView, MyDB As Database, MyRecords As Recordset, Criteria As String
+Dim Msg As String, CommonSpp As String, ScientificName As String
+Set MyDB = CurrentDb()
+Set MyListView = Forms!usysassignsu.ListView.Object
+    MySPP = MyListView.SelectedItem.Text
+    Criteria = "Code = '" & MySPP & "'"
+Set MyRecords = MyDB.OpenRecordset("USysAllSpecs")
+    MyRecords.MoveFirst
+    MyRecords.FindFirst Criteria
+    If MyRecords.NoMatch Then GoTo errListViewSppDetails
+    If IsNull(MyRecords!ScientificName) Then ScientificName = "" Else ScientificName = MyRecords!ScientificName
+    If IsNull(MyRecords!EnglishName) Then CommonSpp = "" Else CommonSpp = MyRecords!EnglishName
+    Msg = "Scientific: " & ScientificName & Chr(13)
+    Msg = Msg & "Common: " & CommonSpp
+    MsgBox Msg, vbInformation, "VPro"
+
+MyExit:
+    On Error Resume Next
+    MyRecords.Close
+    Set MyDB = Nothing
+    Exit Function
+errListViewSppDetails:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function SetLumpToNoYes()
+Dim TestValue As String, MyDB As Database, MyRecords As Recordset, LumpTable As String, MyCriteria As String
+On Error GoTo errSetLumpToNoYes
+If IsNull(Forms![USysAddLump]![cmbLumpTable]) Then MsgBox "You must select a lumping table"
+If IsNull(Forms![USysAddLump]![cmbLumpTable]) Then Exit Function
+Set MyDB = CurrentDb()
+TestValue = Forms![USysAddLump]![MyBoundList]
+LumpTable = Forms![USysAddLump]![cmbLumpTable]
+Set MyRecords = MyDB.OpenRecordset(LumpTable, dbOpenDynaset)
+MyCriteria = "SppCode = '" & TestValue & "'"
+MyRecords.MoveFirst
+MyRecords.FindFirst MyCriteria
+MyRecords.Edit
+If MyRecords!Use = True Then MyRecords!Use = False Else MyRecords!Use = True
+MyRecords.Update
+Forms![USysAddLump].Refresh
+
+
+exitSetLumpToNoYes:
+    On Error Resume Next
+    MyRecords.Close
+    Set MyDB = Nothing
+    Exit Function
+errSetLumpToNoYes:
+    MsgBox Err.Description
+    Resume exitSetLumpToNoYes
+End Function
+Function ChangeSetLevel()
+'Aug 3, 2000
+'create groups of plots based on the hierarchy and su table
+'On Error GoTo errChangeSetLevel
+Dim MyDB As Database, ReadRS As Recordset, WriteRS As Recordset, HierarchyRS As Recordset
+Dim SqlText As String, Criteria As String, i As Integer, X As Long, MyTest As Long, Cascade As Variant
+Dim MyTree As TreeView, NewLevel As Integer, OldLevel As Long
+Set MyTree = Screen.ActiveControl.Object
+Set MyDB = CurrentDb
+Set HierarchyRS = MyDB.OpenRecordset(CurrHierarchy(), dbOpenDynaset)
+Set ReadRS = MyDB.OpenRecordset(CurrHierarchy(), dbOpenDynaset)
+Set WriteRS = MyDB.OpenRecordset("USysBreakFilter", dbOpenDynaset)
+
+ReadRS.MoveLast
+ReadRS.MoveFirst
+HierarchyRS.MoveLast
+HierarchyRS.MoveFirst
+
+Criteria = "Name = '" & MyTree.SelectedItem.Text & "'"
+ReadRS.FindFirst Criteria
+X = ReadRS!ID
+NewLevel = Val(InputBox("What level do you want the selected item to be placed at?" & Chr(13) & "(1 to 10 for hierarchy members and 11 for units)", "VPro"))
+If NewLevel < 1 Then GoTo MyExit
+DoCmd.Hourglass True
+
+For i = 1 To HierarchyRS.RecordCount
+    If HierarchyRS!ID = X Then
+        If IsNull(ReadRS!Level) Then
+            ReadRS.Edit
+            ReadRS!Level = NewLevel
+            ReadRS.Update
+        End If
+        OldLevel = ReadRS!Level
+        ReadRS.Edit
+        ReadRS!Level = NewLevel
+        ReadRS.Update
+        ChangeScreenLevel ReadRS!Name, NewLevel, MyTree
+        If Not IsNull(ReadRS!Parent) Then
+            WriteMasterAudit "Change", MyTree.SelectedItem.Text, X, "Level", OldLevel, NewLevel, GetParentName(ReadRS, ReadRS!Parent)
+        Else
+            WriteMasterAudit "Change", MyTree.SelectedItem.Text, X, "Level", OldLevel, NewLevel
+        End If
+
+        Cascade = MsgBox("Do you want this change to cascade through the children?", vbYesNo, "VPro")
+        If Cascade = vbYes Then
+            ChangeChildren HierarchyRS!ID, ReadRS, WriteRS, NewLevel + 1, HierarchyRS!ID, MyTree
+        End If
+    End If
+    HierarchyRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    DoCmd.Hourglass False
+    DoCmd.SetWarnings True
+    ReadRS.Close
+    WriteRS.Close
+    HierarchyRS.Close
+    Set MyDB = Nothing
+    Set MyTree = Nothing
+    Exit Function
+errChangeSetLevel:
+    Resume MyExit
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function ChangeChildren(Unit As Long, ReadRS As Recordset, WriteRS As Recordset, Level As Integer, Parent As Long, MyTree As TreeView)
+'May 01, 2000
+'finds the last member in a hierarchy branch
+Dim i As Integer, Criteria As String, MyID As Long, MyTest As String, BK As String
+Dim TempRS As Recordset
+Set TempRS = ReadRS.Clone
+
+ReadRS.MoveFirst
+Criteria = "Parent = " & Unit
+ReadRS.FindFirst Criteria
+
+Do Until ReadRS.NoMatch
+
+    BK = ReadRS.Bookmark
+    
+    If HasBrats(ReadRS!ID, TempRS) Then
+        ReadRS.Edit
+        ReadRS!Level = Level
+        ReadRS.Update
+        WriteMasterAudit "Change", ReadRS!Name, ReadRS!ID, "Level", Level - 1, Level, GetParentName(ReadRS, ReadRS!Parent)
+        ChangeScreenLevel ReadRS!Name, Level, MyTree
+        ReadRS.Bookmark = BK
+        ChangeChildren ReadRS!ID, ReadRS, WriteRS, Level + 1, ReadRS!ID, MyTree
+    Else
+        If ReadRS!Level <> 11 Or IsNull(ReadRS!Level) Then
+            WriteMasterAudit "Change", ReadRS!Name, ReadRS!ID, "Level", ReadRS!Level, 11, GetParentName(ReadRS, ReadRS!Parent)
+            ReadRS.Edit
+            ReadRS!Level = 11
+            ReadRS.Update
+            ChangeScreenLevel ReadRS!Name, 11, MyTree
+        End If
+    End If
+    
+    ReadRS.Bookmark = BK
+    ReadRS.FindNext Criteria
+Loop
+TempRS.Close
+End Function
+Function ChangeScreenLevel(UnitText As String, Level As Integer, MyTree As TreeView)
+Dim i As Integer
+
+For i = 1 To MyTree.Nodes.count
+    If MyTree.Nodes(i).Text = UnitText And Level < 13 Then
+        MyTree.Nodes(i).ExpandedImage = Level
+        MyTree.Nodes(i).SelectedImage = Level
+        MyTree.Nodes(i).image = Level
+    End If
+Next i
+
+End Function
+
+Function HasBrats(ID As Long, rs As Recordset) As Boolean
+'May 01, 2000
+'returns true if hierarchy member has children
+On Error GoTo errHasChildren
+HasBrats = False
+Dim Criteria As String
+    rs.MoveLast
+    rs.MoveFirst
+    Criteria = "Parent = " & ID
+    rs.FindFirst Criteria
+    If rs.NoMatch Then
+        HasBrats = False
+    Else
+        HasBrats = True
+    End If
+    
+MyExit:
+    On Error Resume Next
+    Exit Function
+errHasChildren:
+    MsgBox Err.Description
+    HasBrats = False
+    Resume MyExit
+End Function
+
+Function SetCurrentSu(SuTable As String)
+
+'02 Oct 2019
+'sets the current su table
+Dim MyDB As Database, MyQuery As QueryDef, SourceQuery As QueryDef
+Dim PlotList As String, MyEnvTable As String, SqlText As String, AdminTable As String
+On Error Resume Next
+DoCmd.DeleteObject A_QUERY, "Filtered_Env"
+DoCmd.DeleteObject A_QUERY, "UsysEnv"
+On Error GoTo errSetCurrentSu
+Set MyDB = CurrentDb()
+PlotList = SuTable & "_SU"
+
+MyEnvTable = CurrProject() & "_Env"
+AdminTable = CurrProject() & "_Admin"
+
+    'SqlText = "SELECT DISTINCTROW [" & MyEnvTable & "].* FROM [" & MyEnvTable & "] RIGHT JOIN [" & PlotList & "] ON [" & MyEnvTable & "].PlotNumber = [" & PlotList & "].PlotNumber WHERE ((([" & PlotList & "].PlotNumber) Is Not Null));"
+    SqlText = "SELECT DISTINCTROW [" & MyEnvTable & "].*, [" & AdminTable & "].*"
+    SqlText = SqlText & " FROM ([" & MyEnvTable & "] INNER JOIN [" & PlotList & "] ON [" & MyEnvTable & "].PlotNumber = [" & PlotList & "].PlotNumber) INNER JOIN [" & AdminTable & "] ON [" & MyEnvTable & "].PlotNumber = [" & AdminTable & "].Plot"
+    SqlText = SqlText & " WHERE ((([" & PlotList & "].PlotNumber) Is Not Null));"
+    
+    Set MyQuery = MyDB.CreateQueryDef("Filtered_Env", SqlText)
+    SqlText = "SELECT DISTINCTROW Filtered_Env.* FROM Filtered_Env;"
+    Set SourceQuery = MyDB.CreateQueryDef("USysEnv", SqlText)   ' Create query.
+
+    clsVProReg.CurrPlotlist = SuTable
+    CheckForUnitsWOPlots PlotList
+    
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errSetCurrentSu:
+    If Err.Number = 3075 Then
+        'do nothing
+    Else
+        MsgBox Err.Number & " - " & Err.Description
+    End If
+    Resume MyExit
+End Function
+
+Private Sub CheckForUnitsWOPlots(SuTable As String)
+
+On Error GoTo errCheckForUnitsWOPlots
+'On Error GoTo 0
+Dim SqlText As String, MyAnswer As Variant, MyProj As String
+Dim MyRS As Recordset
+DoCmd.SetWarnings True
+
+MyProj = clsVProReg.CurrProject & "_Env"
+
+SqlText = "SELECT PlotNumber, SiteUnit"
+SqlText = SqlText & " FROM [" & SuTable & "]"
+SqlText = SqlText & " WHERE (((PlotNumber) Is Null Or (PlotNumber)=''));"
+Set MyRS = CurrentDb.OpenRecordset(SqlText)
+
+If MyRS.RecordCount > 0 Then
+    MyAnswer = MsgBox("This SU table contains units w/o plots.  Unless you intend on assigning plots to these units, this condition can lead to problems while working with the data.  Do you wish for VPro to remove these units?" & Chr(13) & "(Note that no plot data will be removed)", vbYesNo, "VPro")
+    If MyAnswer = vbYes Then
+        RemoveUnits SuTable
+    End If
+End If
+
+SqlText = "SELECT [" & SuTable & "].PlotNumber, [" & MyProj & "].PlotNumber"
+SqlText = SqlText & " FROM [" & MyProj & "] RIGHT JOIN [" & SuTable & "] ON [" & MyProj & "].PlotNumber = [" & SuTable & "].PlotNumber"
+SqlText = SqlText & " WHERE ((([" & MyProj & "].PlotNumber) Is Null));"
+Set MyRS = CurrentDb.OpenRecordset(SqlText)
+
+If MyRS.RecordCount > 0 Then
+    MyAnswer = MsgBox("This SU table contains plots that don't exist in the current project.  Unless you intend on fixing this, this condition can lead to problems while working with the data.  Do you wish for VPro to remove these plots from the SU table?" & Chr(13) & "(Note that no plot data will be deleted)", vbYesNo, "VPro")
+    If MyAnswer = vbYes Then
+        RemoveUnits2 SuTable
+    End If
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Exit Sub
+errCheckForUnitsWOPlots:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub RemoveUnits(SuTable As String)
+
+Dim SqlText As String
+SqlText = "DELETE *, PlotNumber"
+SqlText = SqlText & " FROM [" & SuTable & "]"
+SqlText = SqlText & " WHERE (((PlotNumber) Is Null Or (PlotNumber)=''));"
+DoCmd.RunSQL SqlText
+
+End Sub
+
+Private Sub RemoveUnits2(SuTable As String)
+
+Dim SqlText As String, Project As String
+Project = clsVProReg.CurrProject & "_Env"
+SqlText = "DELETE *, PlotNumber"
+SqlText = SqlText & " FROM [" & SuTable & "]"
+SqlText = SqlText & " WHERE (((PlotNumber) Is Null Or (PlotNumber)=''));"
+
+SqlText = "DELETE [" & SuTable & "].*, [" & Project & "].PlotNumber"
+SqlText = SqlText & " FROM [" & Project & "] RIGHT JOIN [" & SuTable & "] ON [" & Project & "].PlotNumber = [" & SuTable & "].PlotNumber"
+SqlText = SqlText & " WHERE ((([" & Project & "].PlotNumber) Is Null));"
+
+DoCmd.RunSQL SqlText
+
+End Sub

@@ -1,0 +1,38 @@
+Option Compare Database
+Option Explicit
+
+Public Function ViewUserList()
+'July 6, 1998
+    Forms![usysassignsu]!xList.Visible = False
+    Forms![usysassignsu]!btnShowMasterSu = -1
+    Forms!usysassignsu.btnShowMasterSu_Click
+End Function
+
+Public Function ViewPlotData()
+'July 6, 1998
+    DoCmd.GoToControl "PlotNumber"
+    Forms![usysassignsu]!btnShowMasterSu = 0
+    Forms![usysassignsu].btnShowMasterSu_Click
+    Forms![usysassignsu]!btnCurrentSuList = 0
+    Forms![usysassignsu].btnCurrentSuList_Click
+    Forms![usysassignsu]!btnShowVeg = 0
+    Forms![usysassignsu].btnShowVeg_Click
+    Forms![usysassignsu]!xList.Visible = False
+End Function
+Public Function ViewSiteUnitTable()
+'July 6, 1998
+Dim SuTable As String
+On Error Resume Next
+SuTable = CurrPlotlist() & "_SU"
+    DoCmd.OpenTable SuTable
+End Function
+
+Public Function LoadHierarchySiteSeriesAndPlots()
+'July 6, 1998
+    Forms![usysassignsu].btnAddPlots_Click
+End Function
+
+Public Function LoadSiteSeriesAndPlots()
+'July 6, 1998
+    Forms![usysassignsu].AddSUsAndPlotsOnly_Click
+End Function

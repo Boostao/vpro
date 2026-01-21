@@ -1,0 +1,266 @@
+Option Compare Database
+Option Explicit
+Private Type ListOCrap
+    Plot As String
+    Item As Variant
+End Type
+Dim ListOfFields() As String
+Dim MyArray() As ListOCrap
+Dim NoErrors As Boolean
+
+Public Sub ReportVP04ImportIssues()
+Dim i As Integer, ColLoop As Integer, Lasti As Integer
+Dim xl As Excel.Application
+ReDim ListOfFields(19)
+ListOfFields(1) = "UTMEasting"
+ListOfFields(2) = "UTMNorthing"
+ListOfFields(3) = "XCoord"
+ListOfFields(4) = "YCoord"
+ListOfFields(5) = "StandAge"
+ListOfFields(6) = "Elevation"
+ListOfFields(7) = "SlopeGradient"
+ListOfFields(8) = "Aspect"
+ListOfFields(9) = "SeepageDepth"
+ListOfFields(10) = "RootRestrictingDepth"
+ListOfFields(11) = "RootingDepth"
+ListOfFields(12) = "HumusThickness"
+ListOfFields(13) = "MineralpH"
+ListOfFields(14) = "HumuspH"
+ListOfFields(15) = "Conductivity"
+ListOfFields(16) = "StrataCoverTree"
+ListOfFields(17) = "StrataCoverShrub"
+ListOfFields(18) = "StrataCoverHerb"
+ListOfFields(19) = "StrataCoverMoss"
+
+NoErrors = True
+
+CreateExcel xl
+xl.Visible = True
+xl.Workbooks.Add
+
+ColLoop = 1
+
+For i = 1 To UBound(ListOfFields)
+    BuildReport xl, 1, ColLoop, ListOfFields(i), "USysConvE"
+    ColLoop = ColLoop + 2
+    Lasti = i
+Next i
+
+ReDim ListOfFields(2)
+ListOfFields(1) = "vonPost"
+ListOfFields(2) = "HumusFormpH"
+
+For i = 20 To UBound(ListOfFields) + 19
+    BuildReport xl, 1, ColLoop, ListOfFields(i - 19), "USysConvH"
+    ColLoop = ColLoop + 2
+    Lasti = i
+Next i
+
+ReDim ListOfFields(2)
+ListOfFields(1) = "ASP"
+ListOfFields(2) = "MineralFormpH"
+
+For i = 22 To UBound(ListOfFields) + 21
+    BuildReport xl, 1, ColLoop, ListOfFields(i - 21), "USysConvM"
+    ColLoop = ColLoop + 2
+    Lasti = i
+Next i
+
+xl.Columns.AutoFit
+xl.Visible = True
+Set xl = Nothing
+
+If NoErrors Then
+    MsgBox "VPro XP found no unconvertable text in numerical fields", vbInformation, "VPro"
+End If
+
+End Sub
+
+Private Sub BuildReport(xl As Object, MyRow As Integer, MyCol As Integer, FieldName As String, TableName As String)
+Dim i As Integer
+
+CheckCodes TableName, FieldName
+
+xl.Cells(MyRow, MyCol) = TableName
+xl.Cells(MyRow + 1, MyCol) = FieldName
+MyRow = MyRow + 2
+xl.Cells(MyRow, MyCol) = "Plot Number"
+xl.Cells(MyRow, MyCol + 1) = "Item"
+
+For i = 1 To UBound(MyArray)
+    xl.Cells(MyRow + i, MyCol) = MyArray(i).Plot
+    xl.Cells(MyRow + i, MyCol + 1) = MyArray(i).Item
+Next i
+
+xl.Range(xl.Cells(1, MyCol), xl.Cells(1, MyCol + 1)).Merge
+xl.Range(xl.Cells(2, MyCol), xl.Cells(2, MyCol + 1)).Merge
+xl.Range(xl.Cells(1, MyCol), xl.Cells(2, MyCol + 1)).HorizontalAlignment = xlCenter
+
+End Sub
+
+Private Sub CheckCodes(Project As String, FieldName As String)
+
+'Oct. 30, 2002
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String
+Set MyDB = CurrentDb
+ReDim MyArray(0)
+
+SqlText = "SELECT PlotNumber, " & FieldName
+SqlText = SqlText & " FROM " & Project
+SqlText = SqlText & " WHERE (((" & FieldName & ") Is Not Null) AND ((IsNumeric([" & FieldName & "]))=0));"
+Set MyRS = MyDB.OpenRecordset(SqlText, dbOpenForwardOnly)
+
+If MyRS.RecordCount > 0 Then
+    Do Until MyRS.EOF
+        ReDim Preserve MyArray(UBound(MyArray) + 1)
+        MyArray(UBound(MyArray)).Plot = MyRS!PlotNumber
+        MyArray(UBound(MyArray)).Item = MyRS(FieldName)
+        MyRS.MoveNext
+    Loop
+    NoErrors = False
+End If
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Sub
+errCheckCodes:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub TestLongitude()
+Dim Criteria As String, i As Integer
+Dim MyDB As Database, MyRS As Recordset
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("USysConvE")
+'Criteria = "PlotNumber = '$796944'"
+'MyRS.FindFirst Criteria
+
+MyRS.MoveFirst
+Do Until MyRS.EOF
+i = i + 1
+    'If Mid(MyRS!Longitude, 4, 1) < 10 Then
+        Debug.Print MyRS!PlotNumber & " - " & MyRS!Latitude & " - " & Len(MyRS!Latitude) & " - " & GetLatSec(MyRS!Latitude)
+    'End If
+    MyRS.MoveNext
+    If i > 100 Then Exit Do
+Loop
+
+End Sub
+
+Private Function GetLongMin(LongIn As Variant)
+
+If IsNull(LongIn) Or LongIn = "" Then
+    GetLongMin = Null
+    GoTo MyExit
+End If
+
+If IsNumeric(Mid(LongIn, 4, 1)) Then
+    GetLongMin = Mid(LongIn, 4, 2)
+Else
+    GetLongMin = Mid(LongIn, 5, 2)
+End If
+
+MyExit:
+
+End Function
+
+Private Function GetLongSec(LongIn As Variant)
+
+If IsNull(LongIn) Or LongIn = "" Then
+    GetLongSec = Null
+    GoTo MyExit
+End If
+
+If IsNumeric(Right(LongIn, 1)) Then
+    GetLongSec = Right(LongIn, 2)
+Else
+    GetLongSec = Mid(LongIn, Len(LongIn) - 2, 2)
+End If
+
+MyExit:
+
+End Function
+
+Private Function GetLatMin(LatIn As Variant)
+
+If IsNull(LatIn) Or LatIn = "" Then
+    GetLatMin = Null
+    GoTo MyExit
+End If
+
+If IsNumeric(Mid(LatIn, 3, 1)) Then
+    GetLatMin = Mid(LatIn, 3, 2)
+Else
+    GetLatMin = Mid(LatIn, 4, 2)
+End If
+
+MyExit:
+
+End Function
+
+Private Function GetLatSec(LatIn As Variant)
+
+If IsNull(LatIn) Or LatIn = "" Then
+    GetLatSec = Null
+    GoTo MyExit
+End If
+
+If IsNumeric(Right(LatIn, 1)) Then
+    GetLatSec = Right(LatIn, 2)
+Else
+    GetLatSec = Mid(LatIn, Len(LatIn) - 2, 2)
+End If
+
+MyExit:
+
+End Function
+
+Public Sub ImportVPro97Data(ProjectName As String)
+'Feb 03, 2003
+On Error GoTo errImportVPro97Data
+Dim SqlText As String
+
+If ProjectName = "" Then GoTo MyExit
+
+If Forms("frmConvertVP04toVP05").optDisplayAllMessages Then
+    DoCmd.SetWarnings True
+    DoCmd.Echo True
+Else
+    DoCmd.SetWarnings False
+    DoCmd.Echo False
+End If
+
+SqlText = "INSERT INTO " & ProjectName & "_Env ( PlotNumber, [Date], SiteSurveyor, FieldNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, VegNotes, SiteNotes, RootRestrictingType, [Zone], SubZone, Location, NtsMapSheet, LongitudeDegrees, LongitudeMinutes, LongitudeSeconds, LatitudeDegrees, LatitudeMinutes, LatitudeSeconds, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure1, SurfaceTopographyType, MoistureRegime, NutrientRegime, TerrainVTAB, BedrockGeology, CoarseFragLith, SoilClassSubGroup, SoilClassGroup, RootZoneParticleSize, RootingDepth, RootRestrictingDepth, SeepageDepth, SoilDrainage, MineralpH, HumusForm, HumusThickness, HumuspH, SoilNotes, SuccessionalStatus, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, PhotoFrameNum, SiteSeries, VegSurveyor, SoilSurveyor, SiteDisturbance1, SiteDisturbance2,"
+SqlText = SqlText & " StructuralStage , UTMZone, UTMEasting, UTMNorthing, HydroGeoSystem, HydroGeoSubSystem, FloodingRegimeFreq, MoistureRegimeSub, RealmClass, Conductivity, WaterSource, Region, Agency, PlotQuality, Complete, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName, FloodingRegimeDur, GeoMorProSubSurf, GeoMorProSurf, pHMethodCodeMineral, pHMethodCodeOrganic, ProjectName, StructuralStageMod, SurfaceExpSubSurf, SurfaceExpSurf, SurfaceTopographySize, SurficialMaterialSubSurf, SurficialMaterialSurf, TerrainTextureSubSurf, TerrainTextureSurf, TransDistrib, HumusFormPhase, SurfaceShape, StandAge )"
+SqlText = SqlText & " SELECT PlotNumber, Date, SiteSurveyor, SiteNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, VegNotes, SiteNotes, RootRestrictingType, Zone, SubZone, Location, NtsMapSheet, Left([Longitude],3) AS LongD, getlongmin([Longitude]) AS LongM, getlongsec([Longitude]) AS LongS, Left([Latitude],2) AS LatD, getlatmin([Latitude]) AS LatM, getlatsec([Latitude]) AS LatS, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure, SurfaceTopographyType, MoistureRegime, NutrientRegime, TerrainVTAB, BedrockGeology, CoarseFragLith, SoilClassSubGroup, SoilClassGroup, RootZoneParticleSize, RootingDepth, RootRestrictingDepth, SeepageDepth, SoilDrainage, MineralpH, HumusForm, HumusThickness, HumuspH, SoilNotes, SuccessionalStatus, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, PhotoFrameNum, SiteSeries, VegSurveyor,"
+SqlText = SqlText & " SoilSurveyor , SiteDisturbance1, SiteDisturbance2 , StructuralStage, UTMZone, UTMEasting, UTMNorthing, HydroGeoSystem, HydroGeoSubSystem, FloodingRegimeFreq, MoistureRegimeSub, RealmClass, Conductivity, WaterSource, Region, Agency, PlotQuality, Complete, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName, FloodingRegimeDur, GeoMorProSubSurf, GeoMorProSurf, pHMethodCodeMineral, pHMethodCodeOrganic, ProjectName, StructuralStageMod, SurfaceExpSubSurf, SurfaceExpSurf, SurfaceTopographySize, SurficialMaterialSubSurf, SurficialMaterialSurf, TerrainTextureSubSurf, TerrainTextureSurf, TransDistrib, HumusFormPhase, SurfaceTopography, StandAge"
+SqlText = SqlText & " FROM USysConvE;"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO " & ProjectName & "_Humus ( PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Comment )"
+SqlText = SqlText & " SELECT PlotNumber, Horizon, SplitHorizDepth([Depth],'Up') AS HDU, SplitHorizDepth([Depth],'Low') AS HDL, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Comment"
+SqlText = SqlText & " FROM USysConvH;"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO " & ProjectName & "_Mineral ( PlotNumber, Horizon, LowerDepth, UpperDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, Comments, PercentCoarseFragsShape )"
+SqlText = SqlText & " SELECT PlotNumber, Horizon, SplitHorizDepth([Depth],'Up') AS HDU, SplitHorizDepth([Depth],'Low') AS HDL, SplitHorizDepth([Depth],'Pit') AS HDP, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, Comments, PercentCoarseFragsShape"
+SqlText = SqlText & " FROM USysConvM;"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO " & ProjectName & "_Veg ( PlotNumber, Layer, Species, Cover1, Dist1, Vig1, Height1, Extra1, Cover2, Dist2, Vig2, Height2, Extra2, Cover3, Dist3, Vig3, Height3, Extra3, Cover4, Dist4, Vig4, Height4, Extra4, Cover5, Dist5, Vig5, Height5, Extra5, Cover6, Dist6, Vig6, Height6, Extra6, Cover7, Dist7, Vig7, Height7, Extra7, Cover8, Dist8, Vig8, Height8, Extra8, Cover9, Dist9, Vig9, Height9, Extra9, TotalA, HeightA, ExtraA, TotalB, HeightB, ExtraB )"
+SqlText = SqlText & " SELECT PlotNumber, Layer, Species, Cover1, Dist1, Vig1, Height1, Extra1, Cover2, Dist2, Vig2, Height2, Extra2, Cover3, Dist3, Vig3, Height3, Extra3, Cover4, Dist4, Vig4, Height4, Extra4, Cover5, Dist5, Vig5, Height5, Extra5, Cover6, Dist6, Vig6, Height6, Extra6, Cover7, Dist7, Vig7, Height7, Extra7, Cover8, Dist8, Vig8, Height8, Extra8, Cover9, Dist9, Vig9, Height9, Extra9, TotalA, HeightA, ExtraA, TotalB, HeightB, ExtraB"
+SqlText = SqlText & " FROM USysConvV;"
+DoCmd.RunSQL SqlText
+
+MyExit:
+    On Error Resume Next
+    DoCmd.Echo True
+    DoCmd.SetWarnings True
+    Exit Sub
+errImportVPro97Data:
+    MsgBox Err.Description & Err.Number
+    Resume MyExit
+End Sub

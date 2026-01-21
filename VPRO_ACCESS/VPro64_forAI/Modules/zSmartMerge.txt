@@ -1,0 +1,97 @@
+Option Compare Database
+
+Private Sub test()
+
+'in this example we are going to merge data from DeleteMe_Env into MissingFields_Env
+BuildQuery "MissingFields_Env", "DeleteMe_Env"
+BuildQuery "MissingFields_Audit", "DeleteMe_Audit"
+BuildQuery "MissingFields_Humus", "DeleteMe_Humus"
+BuildQuery "MissingFields_Metadata", "DeleteMe_Metadata"
+BuildQuery "MissingFields_Mineral", "DeleteMe_Mineral"
+BuildQuery "MissingFields_Other", "DeleteMe_Other"
+BuildQuery "MissingFields_Veg", "DeleteMe_Veg"
+
+End Sub
+
+Private Sub BuildQuery(Table1 As String, Table2 As String)
+
+'2018
+'Table1 is the table to get the data
+'Table2 is the table to supply the data
+
+Dim MyDB As Database, TableDef1 As TableDef, TableDef2 As TableDef, MyQD As QueryDef
+Dim i As Integer, fldName As String, SqlText As String
+Dim strInsert As String, strSelect As String, strFrom As String
+
+'remove old query (enable this for error checking)
+    'CleanUp "fred"
+    
+'create objects
+    Set MyDB = CurrentDb
+    Set TableDef1 = MyDB.TableDefs(Table1)
+    Set TableDef2 = MyDB.TableDefs(Table2)
+
+'initial string components for the sql
+    strInsert = "INSERT INTO " & Table1 & " ( "
+    strSelect = "Select "
+    strFrom = "From " & Table2 & ";"
+
+'compares Table1 to Table2 field-by-field and generates the strings
+    For i = 0 To TableDef1.Fields.count - 1
+        fldName = TableDef1.Fields(i).Name
+        If fldName = "Date" Then fldName = "[" & fldName & "]"
+        If fldName = "Table" Then fldName = "[" & fldName & "]"
+        If FindField(fldName, TableDef2) Then
+            strInsert = strInsert & fldName & ", "
+            strSelect = strSelect & fldName & ", "
+        End If
+    Next i
+
+'concatenate strings and build query
+    strInsert = Left(strInsert, Len(strInsert) - 2) & " ) "
+    strSelect = Left(strSelect, Len(strSelect) - 2) & " "
+    SqlText = strInsert & strSelect & strFrom
+    'Debug.Print SqlText
+    'MyDB.CreateQueryDef "fred", SqlText
+    DoCmd.RunSQL SqlText
+    
+
+MyExit:
+    On Error Resume Next
+    Set TableDef1 = Nothing
+    Set TableDef2 = Nothing
+    Set MyDB = Nothing
+    Exit Sub
+    
+End Sub
+
+Private Function FindField(FieldName1 As String, TD2 As TableDef) As Boolean
+'Jan. 7, 2008
+'Sets the size and type values in the array MyData.
+'Returns false if there was a problem such as a missing field
+On Error GoTo errFindField
+Dim TestName As Variant
+    
+    TestName = TD2.Fields(FieldName1).Name
+
+    FindField = True
+    MyData.Name = FieldName1
+    MyData.Size = TD2.Fields(FieldName1).Size
+    MyData.type = TD2.Fields(FieldName1).type
+
+Exit Function
+errFindField:
+If Err.Number = 3265 Then
+    FindField = False
+End If
+
+End Function
+
+Private Sub CleanUp(QueryName As String)
+
+'removes the old query
+    On Error Resume Next
+        DoCmd.DeleteObject acQuery, QueryName
+    On Error GoTo 0
+
+End Sub

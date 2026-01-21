@@ -1,0 +1,11 @@
+CREATE TABLE [USysSppAttributeDescription] (
+  [IsAttribute] BIT DEFAULT 0,
+  [Field] TEXT(255) DEFAULT ,
+  [ShortName] TEXT(255) DEFAULT ,
+  [Code] TEXT(255) DEFAULT ,
+  [Definition] TEXT(255) DEFAULT ,
+  [FieldDescription] TEXT(255) DEFAULT 
+);
+
+CREATE INDEX [Code] ON [USysSppAttributeDescription] ([Code]);
+

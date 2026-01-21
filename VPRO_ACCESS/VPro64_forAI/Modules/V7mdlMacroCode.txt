@@ -1,0 +1,74 @@
+Option Compare Database
+Option Explicit
+
+Public Function TestKeys() As Boolean
+    
+    sysStopCode = True
+    TestKeys = True
+    
+End Function
+
+Public Function GetSpecies(Optional Species As String)
+'July 20, 2000
+'used in main data form to enter plot representing data
+If Screen.ActiveControl.Name <> "PlotRepresenting" Then GoTo MyExit
+If Not Forms![FS882-6x4]![btnCodeWatch].Visible Then GoTo MyExit
+Dim MyDB As Database, MyRS As Recordset
+Dim Spp2Convert As String, BeforeData As String, AfterData As String
+Dim LookUpData As String, Criteria As String, SqlText As String
+Dim MyForm As Form
+Set MyForm = Forms![FS882-6x4]
+Set MyDB = CurrentDb
+
+MyStart:
+SqlText = "SELECT USysAllSpecs.Code, USysAllSpecs.ScientificName, USysAllSpecs.Report"
+SqlText = SqlText & " FROM USysAllSpecs"
+'SqlText = SqlText & " WHERE (((USysAllSpecs.Report)=1));"
+'SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U'));"
+SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)<>'S'));"
+MyForm.Recalc
+
+If Species = "" Then
+    Spp2Convert = InputBox("Enter Code (Press ESC to end)", "Plot representing builder")
+Else
+    Spp2Convert = Species
+End If
+
+If Spp2Convert = "" Then
+    If Right(Screen.ActiveControl, 3) = " - " Then
+        AfterData = Left(Screen.ActiveControl, Len(Screen.ActiveControl) - 3)
+        Screen.ActiveControl = AfterData
+    End If
+    Screen.ActiveForm.Recalc
+    GoTo MyExit
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+MyRS.MoveLast
+MyRS.MoveFirst
+Criteria = "Code = '" & Spp2Convert & "'"
+MyRS.FindFirst Criteria
+
+If Not MyRS.NoMatch Then
+    LookUpData = MyRS!ScientificName
+    If Screen.ActiveControl <> "" Then
+        BeforeData = Screen.ActiveControl
+    Else
+        BeforeData = ""
+    End If
+    If Right(BeforeData, 1) = "-" Then BeforeData = BeforeData & " "
+    AfterData = BeforeData & LookUpData & " - "
+    Screen.ActiveControl = AfterData
+    GoTo MyStart
+Else
+    MsgBox "No match"
+    GoTo MyStart
+End If
+
+MyExit:
+    On Error Resume Next
+    MyForm.Recalc
+    'Screen.ActiveForm.Recalc
+    MyRS.Close
+    Set MyDB = Nothing
+End Function

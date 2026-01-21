@@ -1,0 +1,237 @@
+Option Compare Database
+'TableOfListsVersion
+
+Public Sub AttachUSysAllSpecs()
+
+'July 8, 2015
+    Dim RemoteDB As Database
+    Dim Msg As String, Answer1 As Variant, Location As Variant, NewVersion As String, Answer2 As Variant
+    
+    Msg = "This function will replace your existing version of USysAllSpecs (" & clsVProReg.USysAllSpecsVer & ") with a version you select.  Clicking OK will begin the process by asking you for the location of the species table."
+    Answer1 = MsgBox(Msg, vbOKCancel, "Attach USysAllSpecs")
+    
+    If Answer1 = vbOK Then
+        Location = GetRemoteDb()
+        If Location = "" Then GoTo MyExit
+        Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(Location)
+        NewVersion = RemoteAllSpecsVersion(RemoteDB)
+        If NewVersion <> "Unknown" Then
+            Msg = "A USysAllSpecs table with the description """ & NewVersion & """ was found.  To replace your current version (" & clsVProReg.USysAllSpecsVer & ") click OK."
+            Answer2 = MsgBox(Msg, vbOKCancel, "Attach USysAllSpecs")
+            If Answer2 = vbOK Then
+                AttachSppList RemoteDB
+                'attach table using temp name
+                'remove current table
+                'rename the attached table
+                'log the table into the registry
+                clsVProReg.USysAllSpecsVer = NewVersion
+                'each time a plot record is created, log the table into metadata table
+                MsgBox "USysAllSpecs version """ & NewVersion & """ was successfully attached.  Please close any open data forms that use the species list.", vbInformation, "VPro"
+            Else
+                GoTo MyExit
+            End If
+            
+            'Debug.Print Answer2
+        Else
+            MsgBox "Sorry, VPro didn't find a USysAllSpecs table or the USysAllSpecs table was missing a description.", vbInformation, "VPro"
+            Debug.Print NewVersion
+        End If
+        
+    Else
+        GoTo MyExit
+    End If
+    
+MyExit:
+    On Error Resume Next
+    Set RemoteDB = Nothing
+
+End Sub
+
+Private Sub AttachSppList(RemoteDB As Database)
+
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, "USysAllSpecs", "tmpUSysAllSpecs"
+    DoCmd.DeleteObject A_TABLE, "USysAllSpecs"
+    CurrentDb.TableDefs("tmpUSysAllSpecs").Name = "USysAllSpecs"
+
+End Sub
+
+Private Sub AttachTableOfLists(RemoteDB As Database)
+
+'July 8, 2015
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, "USysTableOfLists", "tmpUSysTableOfLists"
+    DoCmd.DeleteObject A_TABLE, "USysTableOfLists"
+    CurrentDb.TableDefs("tmpUSysTableOfLists").Name = "USysTableOfLists"
+
+End Sub
+
+Public Sub AttachUSysTableOfLists()
+
+'July 8, 2015
+    Dim RemoteDB As Database
+    Dim Msg As String, Answer As Variant, Location As Variant
+    
+    Msg = "This function will replace your existing version of USysTableOfLists (" & TableOfListsVersion & ") with a version you select.  Clicking OK will begin the process by asking you for the location of the list table."
+    Answer = MsgBox(Msg, vbOKCancel, "Attach USysTableOfLists")
+    
+    If Answer = vbOK Then
+        Location = GetRemoteDb()
+        If Location = "" Then GoTo MyExit
+        Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(Location)
+        NewVersion = RemoteTableOfListsVersion(RemoteDB)
+        If NewVersion <> "Unknown" Then
+            Msg = "A USysTableOfLists table with the description """ & NewVersion & """ was found.  To replace your current version (" & TableOfListsVersion & ") click OK."
+            Answer2 = MsgBox(Msg, vbOKCancel, "Attach USysTableOfLists")
+            If Answer2 = vbOK Then
+                AttachTableOfLists RemoteDB
+                'attach table using temp name
+                'remove current table
+                'rename the attached table
+                'log the table into the registry
+                clsVProReg.USysTableOfListsVer = NewVersion
+                'each time a plot record is created, log the table into metadata table
+                MsgBox "USysTableOfLists version """ & NewVersion & """ was successfully attached.  Please close any open data forms that use this list.", vbInformation, "VPro"
+            Else
+                GoTo MyExit
+            End If
+            
+            'Debug.Print Answer2
+        Else
+            MsgBox "Sorry, VPro didn't find a USysTableOfLists table or the USysTableOfLists table was missing a description.", vbInformation, "VPro"
+            'Debug.Print NewVersion
+        End If
+        
+    Else
+        GoTo MyExit
+    End If
+    
+MyExit:
+    On Error Resume Next
+    Set RemoteDB = Nothing
+    
+End Sub
+
+Private Function GetRemoteDb() As String
+
+'Sep 22, 2008
+Dim MyDB As Database, RemoteDB As Database, strList As String, i As Integer
+Dim MyFile As String, MyTitle As String, MyProject As String, strTestTable As String, X As Variant
+sysPickTable = "None"
+
+
+    Set MyDB = CurrentDb()
+    MyFile = ""
+    MyTitle = ProgramName()
+    MyFile = GetFileName(MyTitle, True)
+    If MyFile = "" Then Exit Function
+    GetRemoteDb = MyFile
+
+End Function
+
+Private Function FindAllSpecsTableVersion(RemoteDB As Database) As String
+Dim i As Integer, strTestTable As String, strList As String, ListLen As Integer
+
+    For i = 0 To RemoteDB.TableDefs.count - 1
+        strTestTable = RemoteDB.TableDefs(i).Name
+        If strTestTable = "USysAllSpecs" Then
+            FindAllSpecsTable = True
+            Exit For
+        End If
+    Next i
+
+End Function
+
+Private Function RemoteTableOfListsVersion(RemoteDB As Database) As String
+
+'Oct. 24, 2014
+On Error GoTo errTableOfListsVersion
+Dim MyDB As Database, MyTable As TableDef
+Dim TestTable As String
+
+TestTable = "USysTableOfLists"
+Set MyTable = RemoteDB.TableDefs(TestTable)
+
+RemoteTableOfListsVersion = MyTable.Properties("Description").Value
+
+MyExit:
+    On Error Resume Next
+    Set MyTable = Nothing
+    Exit Function
+errTableOfListsVersion:
+    RemoteTableOfListsVersion = "Unknown"
+    Resume MyExit
+End Function
+
+Private Function TableOfListsCurrentVersion(RemoteDB As Database) As String
+
+'July 8, 2015
+On Error GoTo errTableOfListsVersion
+Dim MyDB As Database, MyTable As TableDef
+Dim TestTable As String
+
+TestTable = "USysTableOfLists"
+Set MyTable = remotedbDB.TableDefs(TestTable)
+
+TableOfListsCurrentVersion = MyTable.Properties("Description").Value
+
+MyExit:
+    On Error Resume Next
+    Set MyTable = Nothing
+    Exit Function
+errTableOfListsVersion:
+    TableOfListsCurrentVersion = "Unknown"
+    Resume MyExit
+End Function
+
+Private Function RemoteAllSpecsVersion(RemoteDB As Database) As String
+
+'Oct. 24, 2014
+On Error GoTo errTableOfListsVersion
+Dim MyDB As Database, MyTable As TableDef
+Dim TestTable As String
+
+TestTable = "USysAllSpecs"
+Set MyTable = RemoteDB.TableDefs(TestTable)
+
+RemoteAllSpecsVersion = MyTable.Properties("Description").Value
+
+MyExit:
+    On Error Resume Next
+    Set MyTable = Nothing
+    Exit Function
+errTableOfListsVersion:
+    RemoteAllSpecsVersion = "Unknown"
+    Resume MyExit
+End Function
+
+Public Function UpdateMetadataSppList(PlotNumber As String)
+
+GoTo MyExit
+Dim MyDB As Database, MyRS As Recordset, Criteria As String
+Set MyDB = CurrentDb
+
+Set MyRS = MyDB.OpenRecordset(clsVProReg.CurrProject & "_Metadata", dbOpenDynaset)
+Criteria = "Plotnumber = '" & PlotNumber & "'"
+TryAgain:
+MyRS.FindFirst Criteria
+
+If MyRS.NoMatch Then
+    MyRS.AddNew
+    MyRS!PlotNumber = PlotNumber
+    On Error Resume Next
+    MyRS.Update
+    On Error GoTo 0
+    MyRS.Requery
+    GoTo TryAgain
+Else
+    MyRS.Edit
+    MyRS!AllSpecs = clsVProReg.USysAllSpecsVer
+    MyRS.Update
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+    
+End Function

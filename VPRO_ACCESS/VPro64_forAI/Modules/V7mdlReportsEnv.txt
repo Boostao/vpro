@@ -1,0 +1,754 @@
+Option Compare Database
+Global MyQuartXl As Excel.Application
+
+Public Function EnvReport()
+
+'Dec. 30, 2019
+'creates the long Env report
+'On Error GoTo errEnvReport
+On Error GoTo 0
+Dim xl As Excel.Application, SuRecords As Recordset, SnRecords As Recordset
+Dim MyDB As Database, MyRecords As QueryDef, MyLongName As String, nCols As Integer
+Dim i As Integer, X As Integer, Y As Integer, z  As Integer, Project As String, SuTable As String, ReportTitle As String
+Dim MySubChar As Variant, SqlText As String, SnTable As String, ExcelVer As Single, MyUnit As String, MyShortName As String
+Dim MyRS As Recordset, nRows As Integer
+
+Set MyDB = CurrentDb()
+Project = CurrProject() & "_ENV"
+SuTable = CurrPlotlist() & "_Su"
+If SuTable = "None_Su" Then MsgBox "No current site unit table", 64, ProgramName()
+If SuTable = "None_Su" Then Exit Function
+
+ReportTitle = clsRepOpt.LEReportTitle
+MySubChar = "-"
+
+DoCmd.SetWarnings False
+'SqlText = "SELECT DISTINCT " & SUtable & ".SiteUnit, " & SUtable & ".SiteUnit AS Name, First(MasterSiteUnitList.UnitLongName) AS FirstOfUnitLongName"
+SqlText = "SELECT DISTINCT " & SuTable & ".SiteUnit, " & SuTable & ".SiteUnit AS Name, First(MasterSiteUnitList.SiteSeriesLongName) AS FirstOfUnitLongName"
+'SqlText = SqlText & " FROM " & SUtable & " LEFT JOIN MasterSiteUnitList ON " & SUtable & ".SiteUnit = MasterSiteUnitList.Name"
+SqlText = SqlText & " FROM " & SuTable & " LEFT JOIN MasterSiteUnitList ON " & SuTable & ".SiteUnit = MasterSiteUnitList.SiteSeries"
+SqlText = SqlText & " WHERE (((" & SuTable & ".PlotNumber) Is Not Null))"
+SqlText = SqlText & " GROUP BY " & SuTable & ".SiteUnit, " & SuTable & ".SiteUnit"
+SqlText = SqlText & " HAVING (((" & SuTable & ".SiteUnit) Is Not Null));"
+Set SnRecords = MyDB.OpenRecordset(SqlText)
+
+CreateExcel xl
+xl.Visible = True
+DoCmd.Hourglass True
+xl.Workbooks.Add
+
+SnRecords.MoveLast
+z = SnRecords.RecordCount - 1
+SnRecords.MoveFirst
+
+For i = 0 To z
+    xl.ScreenUpdating = False
+    MyUnit = SnRecords("SiteUnit")
+    MyShortName = SnRecords("Name")
+    If Not IsNull(SnRecords("FirstOfUnitLongName")) Then
+        MyLongName = SnRecords("FirstOfUnitLongName")
+    Else
+        MyLongName = ""
+    End If
+    If IsNull(MyShortName) Or MyShortName = "" Then MyShortName = "NoName" & i
+
+    'Build the sql
+    'SqlText = "SELECT DISTINCTROW " & Project & ".PlotNumber AS Plot, FieldNumber AS [Site Number], FSRegionDistrict, SitePlotQuality AS [Plot Quality], Null AS [GENERAL LOCATION], Zone AS [Biogeoclimatic Zone], SubZone, SiteSeries AS [Site Series], UserSiteUnit AS [Assigned Site Unit], Location, NtsMapSheet AS [NTS Map Sheet], Longitude, Latitude, Null AS SITE, Elevation AS [Elevation(m)], SlopeGradient AS [Slope Gradient(%)], Aspect AS [Aspect (degrees)], MesoSlopePosition AS [Meso Slope Position], SurfaceShape AS [Surface Shape], SurfaceTopographyType AS [Surface Topography Type], MoistureRegime AS [Moisture Regime], NutrientRegime AS [Nutrient Regime], Exposure1, Exposure2, SiteDisturbance1 AS [Site Disturbance 1], SiteDisturbance2 AS [Site Disturbance 2],"
+    'SqlText = SqlText & " SiteDisturbance3 AS [Site Disturbance 3], SubstrateDecWood AS [Substrate Decaying Wood(%)], SubstrateBedRock AS [Substrate Bedrock(%)], SubstrateRocks AS [Substrate Rocks(%)], SubstrateMineralSoil AS [Substrate Mineral Soil(%)], SubstrateOrganicMatter AS [Substrate Organic Matter(%)], SubstrateWater AS [Substrate Water(%)], Null AS SOIL, SoilClassGroup AS [Soil Great Group], SoilClassSubGroup AS [Soil Subgroup], BedrockGeology1 AS [Bedrock Geology 1], BedrockGeology2 AS [Bedrock Geology 2], BedrockGeology3 AS [Bedrock Geology3], CoarseFragLith1 AS [Coarse Frag Lith 1], CoarseFragLith2 AS [Coarse Frag Lith2], CoarseFragLith3 AS [Coarse Frag Lith3], RootZoneParticleSize AS [Root Zone Particle Size], RootingDepth AS [Rooting Depth(cm)], RootRestrictingType, RootRestrictingDepth AS [Root Restricting Depth(cm)],"
+    'SqlText = SqlText & " SeepageDepth AS [Seepage Depth(cm)], SoilDrainage AS [Soil Drainage], HumusForm AS [Humus Form (MOF 81)], HumusFormPhase AS [Humus Form Phase], HumusThickness AS [Humus Thickness], Null AS VEGETATION, StandAge AS [Stand Age], SuccessionalStatus AS [Successional Status], StructuralStage AS [Structural Stage], StrataCoverTree AS [Strata Cover Tree(%)], StrataCoverShrub AS [Strata Cover Shrub(%)], StrataCoverHerb AS [Strata Cover Herb(%)], StrataCoverMoss AS [Strata Cover Moss(%)], Null AS OTHER, HydroGeoSystem AS System, HydroGeoSubSystem AS Subsystem, WaterSource AS [Water Source], FloodingRegimeFreq AS [Flood Frequency]"
+    'SqlText = SqlText & " FROM " & Project & " RIGHT JOIN " & SUTable & " ON " & Project & ".PlotNumber = " & SUTable & ".PlotNumber"
+    'SqlText = SqlText & " WHERE (((" & SUTable & ".SiteUnit)='" & MyUnit & "'));"
+    SqlText = "SELECT DISTINCTROW " & Project & ".PlotNumber AS Plot, FieldNumber AS [Site Number], FSRegionDistrict, SitePlotQuality AS [Plot Quality], Null AS [GENERAL LOCATION], Zone AS [Biogeoclimatic Zone], SubZone, SiteSeries AS [Site Series], UserSiteUnit AS [Assigned Site Unit], Location, NtsMapSheet AS [NTS Map Sheet], Longitude, Latitude, Null AS SITE, Elevation AS [Elevation(m)], SlopeGradient AS [Slope Gradient(%)], Aspect AS [Aspect (degrees)], MesoSlopePosition AS [Meso Slope Position], SurfaceShape AS [Surface Shape], SurfaceTopographyType AS [Surface Topography Type], MoistureRegime AS [Moisture Regime], NutrientRegime AS [Nutrient Regime], Exposure1, Exposure2, SiteDisturbance1 AS [Site Disturbance 1], SiteDisturbance2 AS [Site Disturbance 2], SiteDisturbance3 AS [Site Disturbance 3], SubstrateDecWood AS [Substrate Decaying Wood(%)],"
+    SqlText = SqlText & " SubstrateBedRock AS [Substrate Bedrock(%)], SubstrateRocks AS [Substrate Rocks(%)], SubstrateMineralSoil AS [Substrate Mineral Soil(%)], SubstrateOrganicMatter AS [Substrate Organic Matter(%)], SubstrateWater AS [Substrate Water(%)], Null AS SOIL, SoilClassGroup AS [Soil Great Group], SoilClassSubGroup AS [Soil Subgroup], BedrockGeology1 AS [Bedrock Geology 1], BedrockGeology2 AS [Bedrock Geology 2], BedrockGeology3 AS [Bedrock Geology3], CoarseFragLith1 AS [Coarse Frag Lith 1], CoarseFragLith2 AS [Coarse Frag Lith2], CoarseFragLith3 AS [Coarse Frag Lith3], TerrainTextureSurf AS [Terrain Texture Surface], TerrainTextureSubSurf AS [Terrain Texture Sub Surface], SurficialMaterialSurf AS [Surficial Material Surface],"
+    SqlText = SqlText & " SurficialMaterialSubSurf AS [Surficial Material Sub Surface], SurfaceExpSurf AS [Surface Expression Surface], SurfaceExpSubSurf AS [Surface Expression Sub Surface], GeoMorProSurf AS [Geomorphological Process Surface], GeoMorProSubSurf AS [Geomorphological Process Sub Surface], RootZoneParticleSize AS [Root Zone Particle Size], RootingDepth AS [Rooting Depth(cm)], RootRestrictingType, RootRestrictingDepth AS [Root Restricting Depth(cm)], SeepageDepth AS [Seepage Depth(cm)], SoilDrainage AS [Soil Drainage], HumusForm AS [Humus Form (MOF 81)], HumusFormPhase AS [Humus Form Phase], HumusThickness AS [Humus Thickness], Null AS VEGETATION, StandAge AS [Stand Age], SuccessionalStatus AS [Successional Status], StructuralStage AS [Structural Stage], StrataCoverTree AS [Strata Cover Tree(%)], StrataCoverShrub AS [Strata Cover Shrub(%)],"
+    SqlText = SqlText & " StrataCoverHerb AS [Strata Cover Herb(%)], StrataCoverMoss AS [Strata Cover Moss(%)], Null AS OTHER, HydroGeoSystem AS System, HydroGeoSubSystem AS Subsystem, WaterSource AS [Water Source], FloodingRegimeFreq AS [Flood Frequency]"
+    'SqlText = SqlText & " FROM " & Project & " RIGHT JOIN " & SUtable & " ON " & Project & ".PlotNumber = " & SUtable & ".PlotNumber"
+    SqlText = SqlText & " FROM USysEnv RIGHT JOIN " & SuTable & " ON USysEnv.PlotNumber = " & SuTable & ".PlotNumber"
+    SqlText = SqlText & " WHERE (((" & SuTable & ".SiteUnit)='" & MyUnit & "'));"
+
+    'MyDB.CreateQueryDef "fred", SqlText
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    xl.Worksheets.Add
+    xl.Cells(6, 1).CopyFromRecordset MyRS
+    
+    For X = 0 To MyRS.Fields.count - 1
+        xl.Cells(5, X + 1) = MyRS.Fields(X).Name
+    Next X
+    
+    nCols = xl.Application.CountA(xl.Rows(5))
+    nRows = xl.Application.CountA(xl.Columns(1))
+    xl.Range(xl.Cells(5, 1), xl.Cells(nRows + 4, nCols)).Select
+
+    xl.Selection.Copy
+    xl.Cells(nRows + 5, 1).Select
+    xl.Selection.PasteSpecial Paste:=xlPasteAll, Operation:=xlNone, SkipBlanks:=False, Transpose:=True
+    xl.Selection.ColumnWidth = 10
+    xl.Selection.Font.Size = 8
+    xl.Selection.HorizontalAlignment = -4108
+    Dim RowSelect As String
+    RowSelect = "5:" & nRows + 4
+    xl.Rows(RowSelect).Delete Shift:=xlUp
+
+    'Start adding data to Excel
+    xl.Caption = "VPro Environmental Data Report"
+    xl.ActiveWorkbook.Windows(1).Caption = CurrProject()
+    xl.Range(xl.Cells(5, 1), xl.Cells(nCols + 4, nRows)).Select
+    xl.Selection.Font.Name = "Arial"
+    xl.Selection.Font.FontStyle = "Regular"
+    xl.Selection.Font.Size = 8
+    xl.Selection.ColumnWidth = 10
+    xl.Selection.HorizontalAlignment = -4108
+    xl.Selection.Borders(1).Weight = 2 'xlHairline
+    xl.Selection.Borders(2).Weight = 2 'xlHairline
+    xl.Selection.Borders(3).Weight = 2 'xlHairline
+    xl.Selection.Borders(4).Weight = 2 'xlHairline
+    xl.Range(xl.Cells(9, 1), xl.Cells(9, nRows)).Interior.ColorIndex = 15
+    xl.Range(xl.Cells(9, 1), xl.Cells(9, nRows)).Borders(xlInsideVertical).LineStyle = xlNone
+    xl.Cells(9, 1).Font.ColorIndex = 3
+    xl.Cells(9, 1).Font.Bold = True
+    xl.Range(xl.Cells(18, 1), xl.Cells(18, nRows)).Interior.ColorIndex = 15
+    xl.Range(xl.Cells(18, 1), xl.Cells(18, nRows)).Borders(xlInsideVertical).LineStyle = xlNone
+    xl.Cells(18, 1).Font.ColorIndex = 3
+    xl.Cells(18, 1).Font.Bold = True
+    xl.Range(xl.Cells(38, 1), xl.Cells(38, nRows)).Interior.ColorIndex = 15
+    xl.Range(xl.Cells(38, 1), xl.Cells(38, nRows)).Borders(xlInsideVertical).LineStyle = xlNone
+    xl.Cells(38, 1).Font.ColorIndex = 3
+    xl.Cells(38, 1).Font.Bold = True
+    xl.Range(xl.Cells(64, 1), xl.Cells(64, nRows)).Interior.ColorIndex = 15
+    xl.Range(xl.Cells(64, 1), xl.Cells(64, nRows)).Borders(xlInsideVertical).LineStyle = xlNone
+    xl.Cells(64, 1).Font.ColorIndex = 3
+    xl.Cells(64, 1).Font.Bold = True
+    xl.Range(xl.Cells(72, 1), xl.Cells(72, nRows)).Interior.ColorIndex = 15
+    xl.Range(xl.Cells(72, 1), xl.Cells(72, nRows)).Borders(xlInsideVertical).LineStyle = xlNone
+    xl.Cells(72, 1).Font.ColorIndex = 3
+    xl.Cells(72, 1).Font.Bold = True
+    
+    xl.Range(xl.Cells(5, 1), xl.Cells(nCols + 4, 1)).Interior.ColorIndex = 15
+    xl.Range(xl.Cells(5, 1), xl.Cells(nCols + 4, 1)).Borders(xlInsideVertical).LineStyle = xlNone
+    
+    xl.ActiveSheet.Columns("A:A").Select
+    xl.Selection.Columns.AutoFit
+        
+    xl.Selection.HorizontalAlignment = 1
+    xl.Cells(1, 1).Select
+    xl.Cells(1, 1).Value = ReportTitle
+    xl.Selection.Font.Bold = True
+    xl.Cells(2, 1).Value = "Environment Table"
+    xl.Cells(3, 1).Value = "Site Unit - " & MyShortName
+    xl.Cells(4, 1).Value = MyLongName
+    xl.ActiveSheet.Rows("14:14").Select
+    xl.Selection.RowHeight = 25.5
+    xl.Selection.VerticalAlignment = -4160
+    xl.Selection.WrapText = "True"
+    xl.Selection.Font.Size = 6
+    xl.Cells(11, 1).Select
+    xl.Selection.Font.Size = 8
+    xl.Cells(14, 1).Select
+    xl.Selection.Font.Size = 8
+    xl.Cells(1, 1).Select
+    xl.Range(xl.Cells(5, 2), xl.Cells(5, 250)).Font.Bold = True
+    With xl.ActiveSheet.PageSetup
+        .Orientation = 1 '2
+        .PrintGridlines = False
+        .CenterHeader = ""
+        .RightHeader = "Page &P of &N"
+        .RightFooter = "&D"
+        .CenterFooter = ""
+        .LeftMargin = xl.Application.InchesToPoints(0.55)
+        .RightMargin = xl.Application.InchesToPoints(0.55)
+        .TopMargin = xl.Application.InchesToPoints(0.5)
+        .BottomMargin = xl.Application.InchesToPoints(0.5)
+        .HeaderMargin = xl.Application.InchesToPoints(0.5)
+        .FooterMargin = xl.Application.InchesToPoints(0.5)
+        .Zoom = False
+        .FitToPagesWide = False
+        .FitToPagesTall = 1
+    End With
+    xl.ActiveSheet.Name = SheetNameCheck(MyShortName, "-")
+    SnRecords.MoveNext
+    xl.ScreenUpdating = True
+Next i
+
+SortSheets xl
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    SnRecords.Close
+    DoCmd.Hourglass False
+    AppActivate "VPro Environmental Data Report - " & CurrProject()
+    Set MyDB = Nothing
+    Set xl = Nothing
+    Set MyRecords = Nothing
+    Exit Function
+errEnvReport:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Private Sub SortSheets(xl As Excel.Application)
+
+Dim lCount As Long, lCounted As Long
+Dim lShtLast As Long
+lShtLast = xl.Sheets.count
+
+    For lCount = 1 To lShtLast
+
+        For lCount2 = lCount To lShtLast
+
+            If UCase(xl.Sheets(lCount2).Name) < UCase(xl.Sheets(lCount).Name) Then
+
+                xl.Sheets(lCount2).Move Before:=xl.Sheets(lCount)
+
+            End If
+
+        Next lCount2
+
+    Next lCount
+
+End Sub
+
+Private Sub BuildDynamicList()
+
+Dim SqlText As String, SuTable As String
+DoCmd.SetWarnings False
+SuTable = CurrPlotlist & "_SU"
+
+SqlText = "DELETE USysSuTableDynamic_SU.* FROM USysSuTableDynamic_SU;"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO USysSuTableDynamic_SU ( PlotNumber, SiteUnit )"
+SqlText = SqlText & " SELECT PlotNumber, SiteUnit"
+SqlText = SqlText & " FROM " & SuTable & ";"
+DoCmd.RunSQL SqlText
+
+DoCmd.SetWarnings True
+
+End Sub
+
+Public Function SiteUnitDetailReport()
+
+'Dec. 30, 2019
+'creates a detailed site unit report
+'note that species not in the USysAllSpecies will not be used
+On Error Resume Next
+DoCmd.DeleteObject acQuery, "SuDetailStep1"
+DoCmd.DeleteObject acQuery, "SuDetailStep2"
+DoCmd.DeleteObject acQuery, "seTestListA"
+DoCmd.DeleteObject acTable, "QuickVeg"
+On Error GoTo errSiteUnitDetailReport
+On Error GoTo 0
+
+Dim xl As Object, MyProject As String, MySuTable As String, MySU As String, nPlots As Integer, i As Integer, X As Integer
+Dim MyDB As Database, MyQD As QueryDef, MyVegRS As Recordset, MyPlotRS As Recordset, SqlText As String, MyStrata As String * 1
+Dim XLPosition As Integer, Y As Integer, UnitLongName As String, QuickVeg As Variant, z As Variant, TestName As String
+Dim XLSiteSummaryPosition As Integer
+
+If CurrPlotlist() = "None" Then 'check to make sure there is an active SU table
+    MsgBox "You must have an active site unit table for this report."
+    GoTo MyExit
+End If
+Set MyDB = CurrentDb()
+'MyProject = CurrProject & "_Env"
+MyProject = "USysEnv"
+
+'Select Case Forms![USysSuDetailReport]![optSiteUnitType]
+
+Select Case clsRepOpt.SESuType
+    Case 1
+        BuildDynamicList
+        MySuTable = "USysSuTableDynamic_SU"
+    Case 2
+        z = CreateBreakPointUnits()
+        MySuTable = "USysSuTableDynamic_SU"
+    Case 3
+        MySuTable = "USysSuTableDynamic_SU"
+    Case Else
+End Select
+
+'collect form options
+Dim AvgType As Integer, AndOr As Integer, SppOrderBy As Integer, CoverGreaterThan As Integer, PresenceGreaterThan As Integer
+Dim LableCol As Integer, ValueCol As Integer, IncludeSppSummary As Integer, ValueMethod As Integer
+
+AvgType = clsRepOpt.SECoverCalc
+AndOr = clsRepOpt.SEOptAndOr
+SppOrderBy = clsRepOpt.SEOrderBy
+PresenceGreaterThan = clsRepOpt.SESelectSppPresent
+CoverGreaterThan = clsRepOpt.SESelectSppCover
+IncludeSppSummary = clsRepOpt.SEIncludeSppSummary
+ValueMethod = clsRepOpt.SEOptValueMethod
+
+If IncludeSppSummary <> 0 Then
+    QuickVeg = QuickVegRecords(CurrProject & "_Veg", MySuTable)
+End If
+
+'group data by plot and species
+If SppOrderBy = 3 Then 'ordered by strata
+    SqlText = "SELECT PlotNumber, Species, Strata, IIf(Sum([Cover])>99,99,Sum([cover])) AS MyCover"
+    SqlText = SqlText & " FROM QuickVeg INNER JOIN LayerCode ON QuickVeg.Layer = LayerCode.Layer1234567"
+    SqlText = SqlText & " GROUP BY PlotNumber, Species, Strata;"
+Else
+    SqlText = "SELECT PlotNumber, Species, IIf(Sum([Cover])>99,99,Sum([cover])) AS MyCover"
+    SqlText = SqlText & " FROM QuickVeg"
+    SqlText = SqlText & " GROUP BY PlotNumber, Species;"
+End If
+Set MyQD = MyDB.CreateQueryDef("SuDetailStep1", SqlText)
+
+'create a query of unique site units
+SqlText = "SELECT SiteSeries, First(SiteSeriesLongName) AS FirstOfSiteSeriesLongName"
+SqlText = SqlText & " From MasterSiteUnitList"
+SqlText = SqlText & " GROUP BY SiteSeries;"
+Set MyQD = MyDB.CreateQueryDef("seTestListA", SqlText)
+
+'create a list of site units and the number of plots in each
+'SqlText = "SELECT " & MySuTable & ".SiteUnit, Count(" & MyProject & ".PlotNumber) AS nPlots, MasterSiteUnitList.SiteSeriesLongName"
+'SqlText = SqlText & " FROM (" & MyProject & " INNER JOIN " & MySuTable & " ON " & MyProject & ".PlotNumber = " & MySuTable & ".PlotNumber) LEFT JOIN MasterSiteUnitList ON " & MySuTable & ".SiteUnit = MasterSiteUnitList.SiteSeries"
+'SqlText = SqlText & " GROUP BY " & MySuTable & ".SiteUnit, MasterSiteUnitList.SiteSeriesLongName"
+'SqlText = SqlText & " HAVING (((" & MySuTable & ".SiteUnit) Is Not Null))"
+'SqlText = SqlText & " ORDER BY " & MySuTable & ".SiteUnit DESC;"
+SqlText = "SELECT USysSuTableDynamic_SU.SiteUnit, Count(USysEnv.PlotNumber) AS nPlots, seTestListA.FirstOfSiteSeriesLongName AS SiteSeriesLongName"
+SqlText = SqlText & " FROM (USysEnv INNER JOIN USysSuTableDynamic_SU ON USysEnv.PlotNumber = USysSuTableDynamic_SU.PlotNumber) LEFT JOIN seTestListA ON USysSuTableDynamic_SU.SiteUnit = seTestListA.SiteSeries"
+SqlText = SqlText & " GROUP BY USysSuTableDynamic_SU.SiteUnit, seTestListA.FirstOfSiteSeriesLongName"
+SqlText = SqlText & " HAVING (((USysSuTableDynamic_SU.SiteUnit) Is Not Null))"
+SqlText = SqlText & " ORDER BY USysSuTableDynamic_SU.SiteUnit DESC;"
+'Set MyQD = MyDB.CreateQueryDef("seTestList", SqlText)
+Set MyPlotRS = MyDB.OpenRecordset(SqlText)
+
+If MyPlotRS.RecordCount = 0 Then MsgBox "No plots!"
+If MyPlotRS.RecordCount = 0 Then GoTo MyExit
+MyPlotRS.MoveLast
+MyPlotRS.MoveFirst
+
+'create excel object
+CreateExcel xl
+Set MyQuartXl = CreateObject("Excel.Application")
+xl.Visible = True
+xl.Cursor = xlWait
+xl.Workbooks.Add
+xl.DisplayAlerts = False
+For i = 1 To xl.Sheets.count - 1
+    xl.ActiveWindow.SelectedSheets.Delete
+Next i
+xl.ActiveSheet.Name = "Summary"
+
+For Y = 1 To MyPlotRS.RecordCount
+MySU = MyPlotRS!SiteUnit
+'If Not IsNull(MyPlotRS!UnitLongName) Then
+If Not IsNull(MyPlotRS!SiteSeriesLongName) Then
+    'UnitLongName = MyPlotRS!UnitLongName
+    UnitLongName = MyPlotRS!SiteSeriesLongName
+Else
+    UnitLongName = ""
+End If
+
+nPlots = MyPlotRS!nPlots
+XLPosition = 5
+XLSiteSummaryPosition = 4
+'test for dup name
+TestName = MySU
+
+If SheetDuplicateName(xl, SheetNameCheck(TestName, "-")) = True Then
+    GoTo NextY
+End If
+
+xl.Sheets.Add
+'change name here
+If Len(TestName) > 31 Then
+    xl.ActiveSheet.Name = ConvertLongName(xl, TestName)
+Else
+    xl.ActiveSheet.Name = SheetNameCheck(TestName, "-")
+End If
+
+If IncludeSppSummary = 0 Then GoTo Jump
+
+xl.Cells(3, 1) = "Vegetation"
+xl.Cells(4, 1) = "Scientific Name"
+xl.Cells(4, 2) = "Common Name"
+xl.Cells(4, 3) = "%Cover"
+xl.Cells(4, 4) = "%Presence"
+xl.Cells(3, 1).Font.Bold = True
+xl.Cells(4, 1).Font.Bold = True
+xl.Cells(4, 2).Font.Bold = True
+xl.Cells(4, 3).Font.Bold = True
+xl.Cells(4, 4).Font.Bold = True
+
+'start loop here - getting site unit and nPlots
+'select species to include
+If AvgType = 1 Then  'check this average type
+    SqlText = "SELECT Species, Count(MyCover) AS nSpp, Sum([MyCover])/" & nPlots & " AS AvgCover"
+Else
+    SqlText = "SELECT Species, Count(MyCover) AS nSpp, Avg(MyCover) AS AvgCover"
+End If
+SqlText = SqlText & " FROM SuDetailStep1 INNER JOIN " & MySuTable & " ON SuDetailStep1.PlotNumber = " & MySuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((SiteUnit)='" & MySU & "'))"
+SqlText = SqlText & " GROUP BY SuDetailStep1.Species;"
+On Error Resume Next
+DoCmd.DeleteObject acQuery, "SuDetailStep2"
+On Error GoTo errSiteUnitDetailReport
+
+Set MyQD = MyDB.CreateQueryDef("SuDetailStep2", SqlText)
+
+'summarize the veg data by layer
+If SppOrderBy = 1 Then
+For i = 1 To 7
+    If AvgType = 1 Then
+        SqlText = "SELECT QuickVeg.Species, ScientificName, EnglishName, Format(Sum([cover])/" & nPlots & ",'0.00') AS MyCover, Format((Count([cover])/" & nPlots & ")*100,'0.0') AS Presence"
+    Else
+        SqlText = "SELECT QuickVeg.Species, ScientificName, EnglishName, Format(Avg(QuickVeg.Cover),'0.00') AS MyCover, Format((Count([cover])/" & nPlots & ")*100,'0.0') AS Presence"
+    End If
+    SqlText = SqlText & " FROM ((QuickVeg INNER JOIN SuDetailStep2 ON QuickVeg.Species = SuDetailStep2.Species) INNER JOIN " & MySuTable & " ON QuickVeg.PlotNumber = " & MySuTable & ".PlotNumber) INNER JOIN USysAllSpecies ON QuickVeg.Species = USysAllSpecies.Code"
+    'SqlText = SqlText & " WHERE (((SiteUnit)='" & MySU & "') AND ((Report)=1))"
+    'SqlText = SqlText & " WHERE (((SiteUnit)='" & MySU & "') AND ((CodeType)='U'))"
+    SqlText = SqlText & " WHERE (((SiteUnit)='" & MySU & "') AND ((CodeType)<>'S'))"
+    SqlText = SqlText & " GROUP BY QuickVeg.Species, ScientificName,EnglishName, Layer"
+    SqlText = SqlText & " HAVING (((Layer)='" & i & "'));"
+    'add data to excel
+    Set MyVegRS = MyDB.OpenRecordset(SqlText)
+    If MyVegRS.RecordCount > 0 Then
+        MyVegRS.MoveLast
+        MyVegRS.MoveFirst
+        xl.Cells(XLPosition, 1) = "Layer " & i
+        XLPosition = XLPosition + 1
+        For X = 1 To MyVegRS.RecordCount
+            If AndOr = 1 Then
+                If MyVegRS!Presence > PresenceGreaterThan And MyVegRS!MyCover > CoverGreaterThan Then
+                    xl.Cells(XLPosition, 1) = MyVegRS!ScientificName
+                    xl.Cells(XLPosition, 2) = MyVegRS!EnglishName
+                    xl.Cells(XLPosition, 3) = MyVegRS!MyCover
+                    xl.Cells(XLPosition, 4) = MyVegRS!Presence
+                    XLPosition = XLPosition + 1
+                End If
+            Else
+                If MyVegRS!Presence > PresenceGreaterThan Or MyVegRS!MyCover > CoverGreaterThan Then
+                    xl.Cells(XLPosition, 1) = MyVegRS!ScientificName
+                    xl.Cells(XLPosition, 2) = MyVegRS!EnglishName
+                    xl.Cells(XLPosition, 3) = MyVegRS!MyCover
+                    xl.Cells(XLPosition, 4) = MyVegRS!Presence
+                    XLPosition = XLPosition + 1
+                End If
+            End If
+            MyVegRS.MoveNext
+        Next X
+        XLPosition = XLPosition + 1
+    End If
+Next i
+End If
+
+'summarize the veg data by lifeform 0 - 13
+If SppOrderBy = 2 Then
+For i = 0 To 13
+    If AvgType = 1 Then
+        SqlText = "SELECT SuDetailStep1.Species, ScientificName, EnglishName, Format(Sum([MyCover])/" & nPlots & ",'0.00') AS Cover, Format(Count([MyCover])/" & nPlots & "*100,'0.0') AS Presence"
+    Else
+        SqlText = "SELECT SuDetailStep1.Species, ScientificName, EnglishName, Format(Avg(MyCover),'0.00') AS Cover, Format(Count([MyCover])/" & nPlots & "*100,'0.0') AS Presence"
+    End If
+    SqlText = SqlText & " FROM SuDetailStep2 INNER JOIN ((SuDetailStep1 INNER JOIN " & MySuTable & " ON SuDetailStep1.PlotNumber = " & MySuTable & ".PlotNumber) INNER JOIN USysAllSpecies ON SuDetailStep1.Species = USysAllSpecies.Code) ON SuDetailStep2.Species = USysAllSpecies.Code"
+    'SqlText = SqlText & " GROUP BY SuDetailStep1.Species, ScientificName, EnglishName, SiteUnit, Report, LifeForm"
+    SqlText = SqlText & " GROUP BY SuDetailStep1.Species, ScientificName, EnglishName, SiteUnit, CodeType, LifeForm"
+    'SqlText = SqlText & " HAVING (((SiteUnit)='" & MySU & "') AND ((Report)=1) AND ((LifeForm)=" & i & "));"
+    'SqlText = SqlText & " HAVING (((SiteUnit)='" & MySU & "') AND ((CodeType)='U') AND ((LifeForm)=" & i & "));"
+    SqlText = SqlText & " HAVING (((SiteUnit)='" & MySU & "') AND ((CodeType)<>'S') AND ((LifeForm)=" & i & "));"
+    Set MyVegRS = MyDB.OpenRecordset(SqlText)
+    If MyVegRS.RecordCount > 0 Then
+        MyVegRS.MoveLast
+        MyVegRS.MoveFirst
+        xl.Cells(XLPosition, 1) = LifeformCode2Description(i)
+        xl.Cells(XLPosition, 1).Font.Bold = True
+        XLPosition = XLPosition + 1
+        For X = 1 To MyVegRS.RecordCount
+            If AndOr = 1 Then
+                If MyVegRS!Presence > PresenceGreaterThan And MyVegRS!Cover > CoverGreaterThan Then
+                    xl.Cells(XLPosition, 1) = MyVegRS!ScientificName
+                    xl.Cells(XLPosition, 2) = MyVegRS!EnglishName
+                    xl.Cells(XLPosition, 3) = MyVegRS!Cover
+                    xl.Cells(XLPosition, 4) = MyVegRS!Presence
+                    XLPosition = XLPosition + 1
+                End If
+            Else
+                If MyVegRS!Presence > PresenceGreaterThan Or MyVegRS!Cover > CoverGreaterThan Then
+                    xl.Cells(XLPosition, 1) = MyVegRS!ScientificName
+                    xl.Cells(XLPosition, 2) = MyVegRS!EnglishName
+                    xl.Cells(XLPosition, 3) = MyVegRS!Cover
+                    xl.Cells(XLPosition, 4) = MyVegRS!Presence
+                    XLPosition = XLPosition + 1
+                End If
+            End If
+            MyVegRS.MoveNext
+        Next X
+        XLPosition = XLPosition + 1
+    End If
+Next i
+End If
+
+'summarize data by strata a - d
+If SppOrderBy = 3 Then
+For i = 1 To 4
+    MyStrata = Integer2Strata(i)
+    If AvgType = 1 Then
+        SqlText = "SELECT SuDetailStep1.Species, ScientificName, EnglishName, Format(Sum([MyCover])/" & nPlots & ",'0.00') AS Cover, Format(Count([MyCover])/" & nPlots & "*100,'0.0') AS Presence"
+    Else
+        SqlText = "SELECT SuDetailStep1.Species, ScientificName, EnglishName, Format(Avg(MyCover),'0.00') AS Cover, Format(Count([MyCover])/" & nPlots & "*100,'0.0') AS Presence"
+    End If
+    SqlText = SqlText & " FROM SuDetailStep2 INNER JOIN ((SuDetailStep1 INNER JOIN " & MySuTable & " ON SuDetailStep1.PlotNumber = " & MySuTable & ".PlotNumber) INNER JOIN USysAllSpecies ON SuDetailStep1.Species = USysAllSpecies.Code) ON SuDetailStep2.Species = USysAllSpecies.Code"
+    'SqlText = SqlText & " GROUP BY SuDetailStep1.Species, ScientificName, EnglishName, SiteUnit, Report, Strata"
+    SqlText = SqlText & " GROUP BY SuDetailStep1.Species, ScientificName, EnglishName, SiteUnit, CodeType, Strata"
+    'SqlText = SqlText & " HAVING (((SiteUnit)='" & MySU & "') AND ((Report)=1) AND ((Strata)='" & MyStrata & "'));"
+    'SqlText = SqlText & " HAVING (((SiteUnit)='" & MySU & "') AND ((CodeType)='U') AND ((Strata)='" & MyStrata & "'));"
+    SqlText = SqlText & " HAVING (((SiteUnit)='" & MySU & "') AND ((CodeType)<>'S') AND ((Strata)='" & MyStrata & "'));"
+    Set MyVegRS = MyDB.OpenRecordset(SqlText)
+    If MyVegRS.RecordCount > 0 Then
+        MyVegRS.MoveLast
+        MyVegRS.MoveFirst
+        xl.Cells(XLPosition, 1) = "Strata " & Integer2Strata(i)
+        xl.Cells(XLPosition, 1).Font.Bold = True
+        XLPosition = XLPosition + 1
+        For X = 1 To MyVegRS.RecordCount
+            If AndOr = 1 Then
+                If MyVegRS!Presence > PresenceGreaterThan And MyVegRS!Cover > CoverGreaterThan Then
+                    xl.Cells(XLPosition, 1) = MyVegRS!ScientificName
+                    xl.Cells(XLPosition, 2) = MyVegRS!EnglishName
+                    xl.Cells(XLPosition, 3) = MyVegRS!Cover
+                    xl.Cells(XLPosition, 4) = MyVegRS!Presence
+                    XLPosition = XLPosition + 1
+                End If
+            Else
+                If MyVegRS!Presence > PresenceGreaterThan Or MyVegRS!Cover > CoverGreaterThan Then
+                    xl.Cells(XLPosition, 1) = MyVegRS!ScientificName
+                    xl.Cells(XLPosition, 2) = MyVegRS!EnglishName
+                    xl.Cells(XLPosition, 3) = MyVegRS!Cover
+                    xl.Cells(XLPosition, 4) = MyVegRS!Presence
+                    XLPosition = XLPosition + 1
+                End If
+            End If
+            MyVegRS.MoveNext
+        Next X
+        XLPosition = XLPosition + 1
+    End If
+Next i
+End If
+
+Jump:
+If IncludeSppSummary = 0 Then
+    LableCol = 1
+    ValueCol = 2
+Else
+    LableCol = 6
+    ValueCol = 7
+End If
+
+'site summary
+'XLSiteSummaryPosition = 5
+XLSiteSummaryPosition = 7
+xl.Cells(6, LableCol) = "SITE"
+xl.Cells(6, LableCol).Font.Bold = True
+xl.Cells(XLSiteSummaryPosition, LableCol) = "Biogeoclimatic zone"
+xl.Cells(XLSiteSummaryPosition, ValueCol) = BioGeoClimaticSummary(MyProject, MySuTable, MySU)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+xl.Cells(XLSiteSummaryPosition, LableCol) = "Biogeoclimatic unit"
+xl.Cells(XLSiteSummaryPosition, ValueCol) = BioGeoClimaticUnitSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 1, LableCol) = "Elevation"
+xl.Cells(XLSiteSummaryPosition + 1, ValueCol) = ElevationSummary(MyProject, MySuTable, MySU, ValueMethod)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+xl.Cells(XLSiteSummaryPosition + 1, LableCol) = "Aspect"
+xl.Cells(XLSiteSummaryPosition + 1, ValueCol) = AspectSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 2, LableCol) = "Slope Gradient(%)"
+xl.Cells(XLSiteSummaryPosition + 2, ValueCol) = SlopeSummary(MyProject, MySuTable, MySU, ValueMethod)
+xl.Cells(XLSiteSummaryPosition + 3, LableCol) = "Meso Slope Position"
+xl.Cells(XLSiteSummaryPosition + 3, ValueCol) = MesoSlopePositionSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 4, LableCol) = "Moisture Regime"
+xl.Cells(XLSiteSummaryPosition + 4, ValueCol) = SmrSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 5, LableCol) = "Nutrient Regime"
+xl.Cells(XLSiteSummaryPosition + 5, ValueCol) = SnrSummary(MyProject, MySuTable, MySU)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+xl.Cells(XLSiteSummaryPosition + 5, LableCol) = "Site Disturbance 1"
+xl.Cells(XLSiteSummaryPosition + 5, ValueCol) = SiteDisturbanceSummary(MyProject, MySuTable, MySU, 2)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+xl.Cells(XLSiteSummaryPosition + 5, LableCol) = "Site Disturbance 2"
+xl.Cells(XLSiteSummaryPosition + 5, ValueCol) = SiteDisturbanceSummary(MyProject, MySuTable, MySU, 2)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+xl.Cells(XLSiteSummaryPosition + 5, LableCol) = "Exposure"
+xl.Cells(XLSiteSummaryPosition + 5, ValueCol) = ExposureSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 6, LableCol) = "Micro Topography Type"
+xl.Cells(XLSiteSummaryPosition + 6, ValueCol) = SurfaceTopographyTypeSummary(MyProject, MySuTable, MySU)
+
+xl.Cells(XLSiteSummaryPosition + 7, LableCol) = "%Substrate Org. Matter"
+xl.Cells(XLSiteSummaryPosition + 7, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "SubstrateOrganicMatter", ValueMethod)
+xl.Cells(XLSiteSummaryPosition + 8, LableCol) = "%Substrate Rocks"
+xl.Cells(XLSiteSummaryPosition + 8, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "SubstrateRocks", ValueMethod)
+xl.Cells(XLSiteSummaryPosition + 9, LableCol) = "%Substrate Dec. Wood"
+xl.Cells(XLSiteSummaryPosition + 9, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "SubstrateDecWood", ValueMethod)
+xl.Cells(XLSiteSummaryPosition + 10, LableCol) = "%Substrate Mineral Soil"
+xl.Cells(XLSiteSummaryPosition + 10, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "SubstrateMineralSoil", ValueMethod)
+xl.Cells(XLSiteSummaryPosition + 11, LableCol) = "%Substrate Bedrock"
+xl.Cells(XLSiteSummaryPosition + 11, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "SubstrateBedRock", ValueMethod)
+xl.Cells(XLSiteSummaryPosition + 12, LableCol) = "%Substrate Water"
+xl.Cells(XLSiteSummaryPosition + 12, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "SubstrateWater", ValueMethod)
+
+
+xl.Cells(XLSiteSummaryPosition + 13, LableCol) = "Hydr Geo System"
+xl.Cells(XLSiteSummaryPosition + 13, ValueCol) = HydroGeoSystemSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 14, LableCol) = "Hydro Geo Sub System"
+xl.Cells(XLSiteSummaryPosition + 14, ValueCol) = HydroGeoSubSystemSummary(MyProject, MySuTable, MySU)
+
+xl.Cells(XLSiteSummaryPosition + 15, LableCol) = "Stand Age"
+xl.Cells(XLSiteSummaryPosition + 15, ValueCol) = StandAgeSummary(MyProject, MySuTable, MySU, ValueMethod)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+
+'vegetation summary
+xl.Cells(XLSiteSummaryPosition + 16, LableCol) = "VEGETATION"
+xl.Cells(XLSiteSummaryPosition + 16, LableCol).Font.Bold = True
+xl.Cells(XLSiteSummaryPosition + 17, LableCol) = "Successional Status"
+xl.Cells(XLSiteSummaryPosition + 17, ValueCol) = SuccessionalSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 18, LableCol) = "Structure Stage"
+xl.Cells(XLSiteSummaryPosition + 18, ValueCol) = StructureStageSummary(MyProject, MySuTable, MySU)
+
+'vegetation summary by strata or lifeform
+XLSiteSummaryPosition = XLSiteSummaryPosition + 19
+
+If SppOrderBy = 1 Or SppOrderBy = 3 Then
+    xl.Cells(XLSiteSummaryPosition, LableCol) = "Tree Layer Cover"
+    xl.Cells(XLSiteSummaryPosition, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "StrataCoverTree", ValueMethod)
+    'xl.Cells(XLSiteSummaryPosition, ValueCol) = "'" & StrataCoverSummary(MyProject, MySuTable, MySU, "StrataCoverTree", nPlots)
+    xl.Cells(XLSiteSummaryPosition + 1, LableCol) = "Shrub Layer Cover"
+    xl.Cells(XLSiteSummaryPosition + 1, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "StrataCoverShrub", ValueMethod)
+    'xl.Cells(XLSiteSummaryPosition + 1, ValueCol) = "'" & StrataCoverSummary(MyProject, MySuTable, MySU, "StrataCoverShrub", nPlots)
+    xl.Cells(XLSiteSummaryPosition + 2, LableCol) = "Herb Layer Cover"
+    xl.Cells(XLSiteSummaryPosition + 2, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "StrataCoverHerb", ValueMethod)
+    'xl.Cells(XLSiteSummaryPosition + 2, ValueCol) = "'" & StrataCoverSummary(MyProject, MySuTable, MySU, "StrataCoverHerb", nPlots)
+    xl.Cells(XLSiteSummaryPosition + 3, LableCol) = "Moss LayerCover"
+    xl.Cells(XLSiteSummaryPosition + 3, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "StrataCoverMoss", ValueMethod)
+    'xl.Cells(XLSiteSummaryPosition + 3, ValueCol) = "'" & StrataCoverSummary(MyProject, MySuTable, MySU, "StrataCoverMoss", nPlots)
+    XLSiteSummaryPosition = XLSiteSummaryPosition + 3
+Else
+    For X = 0 To 13 'by lifeform
+        DoEvents
+        xl.Cells(XLSiteSummaryPosition, LableCol) = LifeformCode2Description(X)
+        xl.Cells(XLSiteSummaryPosition, ValueCol) = "'" & LifeformCoverSummary(MyProject, MySuTable, MySU, X, nPlots)
+        If X < 13 Then XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+    Next X
+End If
+
+'soil
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+xl.Cells(XLSiteSummaryPosition + 1, LableCol) = "SOILS"
+1 xl.Cells(XLSiteSummaryPosition + 1, LableCol).Font.Bold = True
+xl.Cells(XLSiteSummaryPosition + 2, LableCol) = "Soil Great Group"
+xl.Cells(XLSiteSummaryPosition + 2, ValueCol) = SoilClassSummary(MyProject, MySuTable, MySU)
+xl.Cells(XLSiteSummaryPosition + 3, LableCol) = "Humus Form"
+xl.Cells(XLSiteSummaryPosition + 3, ValueCol) = HumusFormSummary(MyProject, MySuTable, MySU)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+
+xl.Cells(XLSiteSummaryPosition + 3, LableCol) = "Humus Depth"
+xl.Cells(XLSiteSummaryPosition + 3, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "HumusThickness", ValueMethod)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+
+xl.Cells(XLSiteSummaryPosition + 3, LableCol) = "Soil Drainage" 'added Feb. 23, 2000
+xl.Cells(XLSiteSummaryPosition + 3, ValueCol) = SoilDrainageSummary(MyProject, MySuTable, MySU)
+
+xl.Cells(XLSiteSummaryPosition + 4, LableCol) = "Seepage(cm)"
+xl.Cells(XLSiteSummaryPosition + 4, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "SeepageDepth", ValueMethod)
+XLSiteSummaryPosition = XLSiteSummaryPosition + 1
+
+xl.Cells(XLSiteSummaryPosition + 4, LableCol) = "Surficial Material"
+xl.Cells(XLSiteSummaryPosition + 4, ValueCol) = SurficialMaterialSurfSummary(MyProject, MySuTable, MySU)
+
+xl.Cells(XLSiteSummaryPosition + 5, LableCol) = "Root Zone Particle Size"
+xl.Cells(XLSiteSummaryPosition + 5, ValueCol) = RootZonePartSizeSummary(MyProject, MySuTable, MySU)
+
+xl.Cells(XLSiteSummaryPosition + 6, LableCol) = "Rooting Depth"
+xl.Cells(XLSiteSummaryPosition + 6, ValueCol) = GroundCoverSummary(MyProject, MySuTable, MySU, "RootingDepth", ValueMethod)
+
+xl.Cells(XLSiteSummaryPosition + 7, LableCol) = "Rooting Restricting Type"
+xl.Cells(XLSiteSummaryPosition + 7, ValueCol) = RootRestrictingTypeSummary(MyProject, MySuTable, MySU)
+
+xl.Cells(XLSiteSummaryPosition + 8, LableCol) = "Bedrock Type 1"
+xl.Cells(XLSiteSummaryPosition + 8, ValueCol) = BedrockTypeSummary(MyProject, MySuTable, MySU, 1)
+
+xl.Cells(XLSiteSummaryPosition + 9, LableCol) = "Bedrock Type 2"
+xl.Cells(XLSiteSummaryPosition + 9, ValueCol) = BedrockTypeSummary(MyProject, MySuTable, MySU, 2)
+
+xl.Cells(XLSiteSummaryPosition + 10, LableCol) = "Bedrock Type 3"
+xl.Cells(XLSiteSummaryPosition + 10, ValueCol) = BedrockTypeSummary(MyProject, MySuTable, MySU, 3)
+
+'RootRestrictingTypeSummary
+xl.ActiveSheet.Columns("A:H").AutoFit
+
+If ValueMethod = 1 Then
+    xl.Cells(4, LableCol) = "Quantitative values summarized as: Min---Mean---Max"
+Else
+    xl.Cells(4, LableCol) = "Quantitative values summarized as: Interquartile 25% - 50% - 75%"
+End If
+
+xl.Cells(1, 1) = MySU
+xl.Cells(2, 1) = UnitLongName
+xl.Cells(3, 1) = "Plots in unit: " & nPlots
+xl.Cells(1, 1).Font.Bold = True
+xl.Cells(2, 1).Font.Bold = True
+xl.Cells(3, 1).Font.Bold = True
+
+NextY:
+MyPlotRS.MoveNext
+Next Y
+
+xl.Sheets("Summary").Delete
+
+MyExit:
+    On Error Resume Next
+    xl.Cursor = xlDefault
+    xl.DisplayAlerts = True
+    DoCmd.Close acForm, "USysSuDetailReport"
+    MyVegRS.Close
+    MyPlotRS.Close
+    Set MyDB = Nothing
+    Set xl = Nothing
+    MyQuartXl.Quit
+    Set MyQuartXl = Nothing
+    DoCmd.DeleteObject acQuery, "SuDetailStep1"
+    DoCmd.DeleteObject acQuery, "SuDetailStep2"
+    DoCmd.DeleteObject acQuery, "seTestListA"
+    DoCmd.DeleteObject acTable, "QuickVeg"
+    Exit Function
+errSiteUnitDetailReport:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Function Integer2Strata(StrataNumber As Integer)
+'June 23, 1998
+    Select Case StrataNumber
+    Case 1
+        Integer2Strata = "A"
+    Case 2
+        Integer2Strata = "B"
+    Case 3
+        Integer2Strata = "C"
+    Case 4
+        Integer2Strata = "D"
+    Case Else
+        Integer2Strata = "N/A"
+    End Select
+End Function
+
+Private Function CreateBreakPointUnits()
+
+'Apr. 6, 2018
+'creates site units from break points
+Dim SqlText As String, X
+On Error GoTo errCreateBreakPointUnits
+
+    X = CreateBreakTable("Hierarchy")
+    SqlText = "DELETE * FROM USysSuTableDynamic_SU;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL (SqlText)
+    SqlText = "INSERT INTO USysSuTableDynamic_SU ( SiteUnit, PlotNumber )"
+    SqlText = SqlText & " SELECT Mid([Reference],2) AS SiteUnit, USysBreakTable.PlotNumber"
+    SqlText = SqlText & " FROM USysBreakTable;"
+    DoCmd.RunSQL (SqlText)
+    DoCmd.SetWarnings True
+    
+MyExit:
+    On Error Resume Next
+    Exit Function
+errCreateBreakPointUnits:
+    MsgBox Err.Description
+    Resume MyExit
+End Function

@@ -1,0 +1,419 @@
+Option Compare Database
+Option Explicit
+Public Sub LogVProOff()
+'Oct. 29, 2002
+Dim MyRS As Recordset
+Set MyRS = CurrentDb.OpenRecordset(clsVProReg.CurrProject & "_Audit")
+
+    MyRS.AddNew
+    MyRS!Project = clsVProReg.CurrProject
+    MyRS!User = clsVProReg.UserName
+    MyRS!Table = "Off"
+    MyRS!EditWhen = Now()
+    MyRS.Update
+    MyRS.Close
+
+End Sub
+
+Public Sub LogVProOn()
+'Oct. 29, 2002
+Dim MyRS As Recordset
+On Error Resume Next
+Set MyRS = CurrentDb.OpenRecordset(clsVProReg.CurrProject & "_Audit")
+
+    MyRS.AddNew
+    MyRS!Project = clsVProReg.CurrProject
+    MyRS!User = clsVProReg.UserName
+    MyRS!Table = "On"
+    MyRS!EditWhen = Now()
+    MyRS.Update
+    MyRS.Close
+
+End Sub
+
+Public Sub LogProjectIn()
+
+'Jan. 21, 2022
+
+On Error GoTo errLogProjectIn
+
+Dim MyRS As Recordset, PVersion As String, ASVersion As String
+Set MyRS = CurrentDb.OpenRecordset(clsVProReg.CurrProject & "_Audit")
+
+    MyRS.AddNew
+    MyRS!Project = clsVProReg.CurrProject
+    MyRS!User = clsVProReg.UserName
+    MyRS!Table = "Open"
+    MyRS!EditWhen = Now()
+    MyRS.Update
+    
+'For all specs table
+    PVersion = ProjectVersion
+    ASVersion = AllSpecsVersion
+    If PVersion <> ASVersion Then
+        MyRS.AddNew
+        MyRS!Project = clsVProReg.CurrProject
+        MyRS!User = clsVProReg.UserName
+        MyRS!Table = "USysAllSpecs"
+        MyRS!EditWhen = Now()
+        MyRS!AfterEdit = AllSpecsVersion
+        MyRS!BeforeEdit = ProjectVersion
+        MyRS.Update
+        MsgBox "FYI: the previous version of USysAllSpecs for project '" & clsVProReg.CurrProject & "' was '" & PVersion & "' and is now '" & ASVersion & "'.", vbInformation, "VPro"
+    End If
+    
+'For table of lists
+    PVersion = ProjectVersionTableOfLists
+    ASVersion = TableOfListsVersion
+    If PVersion <> ASVersion Then
+        MyRS.AddNew
+        MyRS!Project = clsVProReg.CurrProject
+        MyRS!User = clsVProReg.UserName
+        MyRS!Table = "USysTableOfLists"
+        MyRS!EditWhen = Now()
+        MyRS!AfterEdit = TableOfListsVersion
+        MyRS!BeforeEdit = ProjectVersionTableOfLists
+        MyRS.Update
+        MsgBox "FYI: the previous version of USysTableOfLists for project '" & clsVProReg.CurrProject & "' was '" & PVersion & "' and is now '" & ASVersion & "'.", vbInformation, "VPro"
+    End If
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    On Error GoTo 0
+    Exit Sub
+    
+errLogProjectIn:
+    GoTo MyExit
+    
+End Sub
+
+Public Sub LogNewProject(ProjectName As String)
+
+'Nov. 11, 2008
+Dim MyRS As Recordset
+Set MyRS = CurrentDb.OpenRecordset(ProjectName & "_Audit")
+
+    MyRS.AddNew
+    MyRS!Project = ProjectName
+    MyRS!User = clsVProReg.UserName
+    MyRS!Table = "NewProject"
+    MyRS!EditWhen = Now()
+    MyRS.Update
+
+'For AllSpecs table
+    MyRS.AddNew
+    MyRS!Project = ProjectName
+    MyRS!User = clsVProReg.UserName
+    MyRS!Table = "USysAllSpecs"
+    MyRS!EditWhen = Now()
+    MyRS!AfterEdit = AllSpecsVersion
+    MyRS.Update
+    
+'For TableOfLists
+    MyRS.AddNew
+    MyRS!Project = ProjectName
+    MyRS!User = clsVProReg.UserName
+    MyRS!Table = "USysTableOfLists"
+    MyRS!EditWhen = Now()
+    MyRS!AfterEdit = TableOfListsVersion
+    MyRS.Update
+
+    MyRS.Close
+
+End Sub
+
+Public Sub LogProjectOut()
+
+'Jan. 21, 2022
+
+On Error GoTo errLogProjectOut
+
+Dim MyRS As Recordset
+Set MyRS = CurrentDb.OpenRecordset(clsVProReg.CurrProject & "_Audit")
+
+    MyRS.AddNew
+    MyRS!Project = clsVProReg.CurrProject
+    MyRS!User = clsVProReg.UserName
+    MyRS!Table = "Close"
+    MyRS!EditWhen = Now()
+    MyRS.Update
+    MyRS.Close
+
+MyExit:
+    Exit Sub
+    
+errLogProjectOut:
+    GoTo MyExit
+
+End Sub
+
+Private Function RestoreTo(db As Database, PlotNumber As String, TableName As String, OldValue As Variant, Optional ID As Long, Optional FieldName As String) As Recordset
+'Oct. 9, 2002
+'Creates recordset to restore to
+
+Dim TempRS As Recordset
+Dim SqlText As String, MyQD As QueryDef
+
+If Right(TableName, 4) = "_Env" Then
+    SqlText = "SELECT * FROM [" & TableName & "] WHERE (((PlotNumber)='" & PlotNumber & "'));"
+End If
+
+If Right(TableName, 4) = "_Veg" Then
+    SqlText = "SELECT " & FieldName & " FROM [" & TableName & "] WHERE (((ID)=" & ID & ") AND ((PlotNumber)='" & PlotNumber & "'));"
+End If
+
+If Right(TableName, 6) = "_Humus" Then
+    SqlText = "SELECT " & FieldName & " FROM [" & TableName & "] WHERE (((PlotNumber)='" & PlotNumber & "') AND ((ID)=" & ID & "));"
+End If
+
+If Right(TableName, 8) = "_Mineral" Then
+    SqlText = "SELECT " & FieldName & " FROM [" & TableName & "] WHERE (((PlotNumber)='" & PlotNumber & "') AND ((ID)=" & ID & "));"
+End If
+
+If Right(TableName, 6) = "_Other" Then
+    SqlText = "SELECT " & FieldName & " FROM [" & TableName & "] WHERE (((PlotNumber)='" & PlotNumber & "') AND ((ID)=" & ID & "));"
+End If
+
+Set RestoreTo = db.OpenRecordset(SqlText, dbOpenDynaset)
+
+End Function
+Sub RestoreAuditRecords(PlotNumber As String)
+'Jan 29, 2003
+On Error GoTo errRestoreAuditRecords
+Dim MyDB As Database, MyRS As Recordset, RestoreRS As Recordset, MyQD As QueryDef
+Dim SqlText As String, i As Integer, TableType As String, optRemoveAuditRecord, NeedToCleanVeg As Boolean
+Set MyDB = CurrentDb()
+SqlText = "SELECT * FROM UsysAuditTrail WHERE (((PlotNumber)='" & PlotNumber & "') AND ((Restore)=Yes))ORDER BY Table, EditWhen DESC;"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+optRemoveAuditRecord = MsgBox("Remove selected audit record(s) after restore?", vbYesNoCancel, "VPro")
+If optRemoveAuditRecord = vbCancel Then GoTo MyExit
+If IsNull(MyRS!Table) Then GoTo MyExit
+
+For i = 1 To MyRS.RecordCount
+Start:
+    Select Case MyRS!Table
+        Case "_Veg"
+            If Left(MyRS!EditField, 5) = "Cover" Then
+                GoTo Jump
+            Else
+                Set RestoreRS = RestoreTo(MyDB, MyRS!PlotNumber, CurrProject & MyRS!Table, MyRS!AfterEdit, MyRS!ID, MyRS!EditField)
+                NeedToCleanVeg = True
+            End If
+        Case "_Mineral"
+            Set RestoreRS = RestoreTo(MyDB, MyRS!PlotNumber, CurrProject & MyRS!Table, MyRS!AfterEdit, MyRS!ID, MyRS!EditField)
+        Case "_Humus"
+            Set RestoreRS = RestoreTo(MyDB, MyRS!PlotNumber, CurrProject & MyRS!Table, MyRS!AfterEdit, MyRS!ID, MyRS!EditField)
+        Case "_Other"
+            Set RestoreRS = RestoreTo(MyDB, MyRS!PlotNumber, CurrProject & MyRS!Table, MyRS!AfterEdit, MyRS!ID, MyRS!EditField)
+        Case "_Env"
+            Set RestoreRS = RestoreTo(MyDB, MyRS!PlotNumber, CurrProject & MyRS!Table, MyRS!AfterEdit, , MyRS!EditField)
+        Case Else
+            Set RestoreRS = RestoreTo(MyDB, MyRS!PlotNumber, CurrProject & MyRS!Table, MyRS!AfterEdit, , MyRS!EditField)
+    End Select
+    
+    If RestoreRS.RecordCount = 0 Then
+        GoTo Jump
+    End If
+    If MyRS!EditField = "ID" Or MyRS!EditField = "PlotNumber" Then GoTo Jump
+    If MyRS!EditField = "Species" Then
+        NeedToCleanVeg = True
+        'GoTo Jump
+    End If
+    RestoreRS.Edit
+    RestoreRS(MyRS!EditField) = MyRS!BeforeEdit
+    RestoreRS.Update
+Jump:
+    If optRemoveAuditRecord = vbYes Then
+        MyRS.Delete
+    End If
+    MyRS.MoveNext
+Next i
+
+If NeedToCleanVeg Then
+    CleanVegPlot PlotNumber
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+errRestoreAuditRecords:
+    If Err.Number = 3314 Then
+        Resume Jump
+    Else
+        MsgBox Err.Description & " - " & Err.Number
+        Resume MyExit
+    End If
+End Sub
+Private Sub CleanVegPlot(PlotNumber As String)
+'May 07, 2002
+Dim SqlText As String
+    DoCmd.SetWarnings False
+    
+    SqlText = "Delete PlotNumber, Species, Cover1, Cover2, Cover3, Cover4, Cover5, Cover6, Cover7, Cover8, Cover9, Cover10, TotalA, TotalB"
+    SqlText = SqlText & " FROM UsysVeg"
+    SqlText = SqlText & " WHERE (((PlotNumber)='" & PlotNumber & "') AND ((Cover1) Is Null) AND ((Cover2) Is Null) AND ((Cover3) Is Null) AND ((Cover4) Is Null) AND ((Cover5) Is Null) AND ((Cover6) Is Null) AND ((Cover7) Is Null) AND ((Cover8) Is Null) AND ((Cover9) Is Null) AND ((Cover10) Is Null) AND ((TotalA) Is Null) AND ((TotalB) Is Null));"
+    DoCmd.RunSQL SqlText
+    
+    DoCmd.SetWarnings True
+End Sub
+
+Function AuditTrail(FormName As Form, Optional AuditTable As Variant, Optional ID As String)
+'May 07, 2002
+'adds records to an audit table
+On Error GoTo errAuditTrail
+Dim MyDB As Database, MyRS As Recordset
+Dim MyForm As Form, c As control
+Dim User As String, NewVal, OldVal
+Dim AuditStrength As Integer
+
+'MOVE THE FOLLOWING ITEMS SO THAT THEY AREN'T CALLED SO OFTEN
+'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+'User = GetSetting("VProXX", "User", "Name")
+User = clsVProReg.UserName
+'sysAuditComprehensive = GetSetting("VProXX", "Audit", "Comprehensive")
+AuditStrength = clsVProReg.AuditStrength
+'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset("USysAuditTrail")
+      For Each c In FormName.Controls
+         ' Only check data entry type controls.
+         If c.Name = "PlotNumber" Or c.Name = "ID" Then GoTo Jump
+         Select Case c.ControlType
+            Case acTextBox, acComboBox, acListBox, acCheckBox   ', acOptionGroup
+                NewVal = c.Value
+                OldVal = c.OldValue
+                'just add edited existing values
+                If c.OldValue <> c.Value And Not IsNull(c.OldValue) And AuditStrength >= 1 Then
+                    MyRS.AddNew
+                    MyRS!Project = CurrProject()
+                    MyRS!User = User
+                    MyRS!PlotNumber = FormName!PlotNumber
+                    MyRS!Table = TableName(FormName.Name)
+                    MyRS!EditField = c.Name
+                    MyRS!EditWhen = Now()
+                    If Not IsNull(c.OldValue) Then MyRS!BeforeEdit = c.OldValue
+                    MyRS!AfterEdit = c.Value
+                    If ID <> "" Then MyRS!ID = ID
+                    MyRS.Update
+                End If
+                'the following logs all new data being added
+                If IsNull(OldVal) And Not IsNull(NewVal) And AuditStrength >= 2 Then
+                    MyRS.AddNew
+                    MyRS!Project = CurrProject()
+                    MyRS!User = User
+                    MyRS!PlotNumber = FormName!PlotNumber
+                    MyRS!Table = TableName(FormName.Name)
+                    MyRS!EditField = c.Name
+                    MyRS!EditWhen = Now()
+                    If Not IsNull(c.OldValue) Then MyRS!BeforeEdit = c.OldValue
+                    If Not IsNull(c.Value) Then MyRS!AfterEdit = c.Value
+                    If ID <> "" Then MyRS!ID = ID
+                    MyRS.Update
+                End If
+                'the following logs data being deleted
+                If IsNull(NewVal) And Not IsNull(OldVal) And AuditStrength = 3 Then
+                    MyRS.AddNew
+                    MyRS!Project = CurrProject()
+                    MyRS!User = User
+                    MyRS!PlotNumber = FormName!PlotNumber
+                    MyRS!Table = TableName(FormName.Name)
+                    MyRS!EditField = c.Name
+                    MyRS!EditWhen = Now()
+                    If Not IsNull(c.OldValue) Then MyRS!BeforeEdit = c.OldValue
+                    If Not IsNull(c.Value) Then MyRS!AfterEdit = c.Value
+                    If ID <> "" Then MyRS!ID = ID
+                    MyRS.Update
+                End If
+         End Select
+Jump:
+         Next c
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errAuditTrail:
+    If Err.Number = 3315 Then
+        Resume MyExit
+    Else
+        If Err.Number = 2424 Or Err.Number = 2427 Or Err.Number = 3201 Then
+            Resume Next
+        Else
+            MsgBox Err.Number & " - " & Err.Description
+            Resume MyExit
+        End If
+    End If
+End Function
+
+Private Function TableName(SystemName As String)
+'May 07, 2002
+'Accepts the system name of form
+'Returns a friendly table name
+On Error GoTo errTableName
+Select Case SystemName
+    Case "FS882-1x1"
+        TableName = "_Env"
+    Case "FS882-1x1-CHARS"
+        TableName = "_Env"
+    Case "FS882-6x4XL"
+        TableName = "_Env"
+    Case "FS882-6x4XL-Chars"
+        TableName = "_Env"
+    Case "FS882-8x6XL"
+        TableName = "_Env"
+    Case "FS882-8x6XL-Chars"
+        TableName = "_Env"
+        
+    Case "SubVegA"
+        TableName = "_Veg"
+    Case "SubVegAhtXL"
+        TableName = "_Veg"
+    Case "SubVegA-SIVI"
+        TableName = "_Veg"
+    Case "SubVegA-SIVI_BC"
+        TableName = "_Veg"
+    Case "SubVegAXL"
+        TableName = "_Veg"
+    Case "SubVegAXL_BC"
+        TableName = "_Veg"
+    
+    
+    
+    
+    Case "SubVegChtXL"
+        TableName = "_Veg"
+    Case "SubVegC-SIVI"
+        TableName = "_Veg"
+    Case "SubVegCXL"
+        TableName = "_Veg"
+        
+    Case "SubVegD-SIVI"
+        TableName = "_Veg"
+    Case "SubVegDXL"
+        TableName = "_Veg"
+    
+    Case "SoilHumusXL"
+        TableName = "_Humus"
+    Case "SoilMineralXL"
+        TableName = "_Mineral"
+    Case "SubOtherXL"
+        TableName = "_Other"
+    Case Else
+        TableName = "Unknown"
+End Select
+    
+MyExit:
+    On Error Resume Next
+    Exit Function
+errTableName:
+    MsgBox Err.Description
+    Resume MyExit
+End Function

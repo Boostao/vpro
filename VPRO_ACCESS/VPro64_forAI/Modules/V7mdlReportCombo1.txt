@@ -1,0 +1,432 @@
+Option Compare Database
+Option Explicit
+Private Type ShadeInfo
+    ColourCode  As Long
+    PatternCode As Long
+    FontColour  As Long
+End Type
+Dim Shade As ShadeInfo
+
+Private Sub MakePretty()
+
+On Error GoTo errMakePretty
+Dim xl As Excel.Application, MyDB As Database, MyRS As Recordset
+Dim FirstRow As Integer, FirstCol As Integer, LastRow As Integer, LastCol As Integer, SppName As String
+Dim HellFreezesOver As Boolean
+Set MyDB = CurrentDb
+CreateExcel2 xl
+
+FirstRow = 8
+LastRow = 366
+FirstCol = 2
+LastCol = 51
+HellFreezesOver = False
+SppName = "populus tremuloides"
+
+'need some code here to select data
+    xl.Range(xl.Cells(FirstRow, FirstCol), xl.Cells(LastRow, FirstCol)).Select
+
+'Stop
+Do Until HellFreezesOver
+
+    If FindSpp(xl, SppName, xl.ActiveCell.Row + 1, FirstCol, LastRow) = False Then Exit Do
+    
+    xl.Range(xl.Cells(xl.ActiveCell.Row - 1, FirstCol), xl.Cells(LastRow, FirstCol)).Select
+    xl.Selection.Find(What:="" & SppName & "", After:=xl.ActiveCell, LookIn:=xlFormulas, LookAt:=xlPart, SearchOrder:=xlByRows, SearchDirection:=xlNext, MatchCase:=False, SearchFormat:=False).Activate
+
+    xl.Range(xl.Cells(xl.ActiveCell.Row, FirstCol), xl.Cells(xl.ActiveCell.Row, LastCol)).Select
+    'shade spp
+    'Shade Values > x
+    'Shade Values > y
+    
+    With xl.Selection.Interior
+        .Pattern = xlSolid
+        .PatternColorIndex = xlAutomatic
+        .Color = 65535
+        .TintAndShade = 0
+        .PatternTintAndShade = 0
+    End With
+
+    xl.Range(xl.Cells(xl.ActiveCell.Row, FirstCol), xl.Cells(LastRow, FirstCol)).Select
+    
+Loop
+
+MyExit:
+    On Error Resume Next
+    Set xl = Nothing
+    MyRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+    Exit Sub
+errMakePretty:
+    If Err.Number = 91 Then
+        Debug.Print "spp not found"
+        Resume Next
+    Else
+        MsgBox Err.Number
+        Resume MyExit
+    End If
+    
+End Sub
+
+Private Function FindSpp(xl As Excel.Application, SppName As String, FirstRow As Integer, FirstCol As Integer, LastRow As Integer) As Boolean
+
+On Error GoTo errFindSpp
+    xl.Range(xl.Cells(FirstRow, FirstCol), xl.Cells(LastRow, FirstCol)).Select
+
+   xl.Selection.Find(What:="" & SppName & "", After:=xl.ActiveCell, LookIn:= _
+        xlFormulas, LookAt:=xlPart, SearchOrder:=xlByRows, SearchDirection:= _
+        xlNext, MatchCase:=False, SearchFormat:=False).Activate
+        
+        Debug.Print xl.ActiveCell.Row
+    If xl.ActiveCell.Row <= LastRow Then
+        FindSpp = True
+    Else
+        FindSpp = False
+    End If
+Exit Function
+
+errFindSpp:
+    FindSpp = False
+    
+End Function
+Private Function BuildSql(MyDB As Database) As String
+
+Dim SqlText As String, i As Integer, CurrProj As String, CurrSU As String, MyStr As String
+Dim MyRS As Recordset
+CurrProj = clsVProReg.CurrProject
+CurrSU = clsVProReg.CurrPlotlist
+
+SqlText = "SELECT USysComboFields.FieldName, USysComboFields.UseField, USysComboFields.Order"
+SqlText = SqlText & " FROM USysComboFields"
+SqlText = SqlText & " WHERE (((USysComboFields.UseField) = True) And ((USysComboFields.Order) > 7))"
+SqlText = SqlText & " ORDER BY USysComboFields.Order;"
+'MyDB.CreateQueryDef "fred", SqlText
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+'MyStr = "SELECT IIf(IsNull([UserSiteUnit]),'Unassigned',[UserSiteUnit]) & ' - ' & [" & CurrProj & "_Env]![Plotnumber] AS Unit, [" & CurrSU & "_SU].PlotNumber, [" & CurrSU & "_SU].SiteUnit, Zone, SubZone, SiteSeries, Location"
+'MyStr = "SELECT IIf(IsNull([UserSiteUnit]),'Unassigned',[UserSiteUnit]) & ' - ' & [" & CurrProj & "_Env]![Plotnumber] AS Unit, [" & CurrSU & "_SU].PlotNumber, [" & CurrSU & "_SU].SiteUnit, Zone, SubZone, SiteSeries, BECSiteUnit, Location"
+MyStr = "SELECT IIf(IsNull([UserSiteUnit]),'Unassigned',[UserSiteUnit]) & ' - ' & [Filtered_Env]![Plotnumber] AS Unit, [" & CurrSU & "_SU].PlotNumber, [" & CurrSU & "_SU].SiteUnit, Zone, SubZone, SiteSeries, BECSiteUnit, Location"
+'MyDB.CreateQueryDef "fred1", MyStr & ";"
+'MyStr = "SELECT IIf(IsNull([SiteUnit]),'Unassigned',[SiteUnit]) & ' - ' & [" & CurrProj & "_Env]![Plotnumber] AS Unit, [" & CurrSU & "_SU].PlotNumber, [" & CurrSU & "_SU].SiteUnit, Zone, SubZone, SiteSeries"
+Do Until MyRS.EOF
+    MyStr = MyStr & ", " & MyRS!FieldName
+    MyRS.MoveNext
+Loop
+
+'MyDB.CreateQueryDef "fred2", MyStr
+BuildSql = MyStr
+
+End Function
+Public Sub ComboReport()
+
+'2019
+On Error GoTo errComboReport
+Dim MyDB As Database, MyQD As QueryDef, MyRS As Recordset, EnvRS As Recordset ', TempRS As Recordset
+Dim MyTime As New clsStopWatch
+Dim SqlText As String, i As Integer, CurrProj As String, CurrSU As String, MyStr As String
+Dim xl As Excel.Application, ReturnSheet As String, LastRow As Integer
+
+    If PlotRecordsWoVegRecords("Other") Then
+    
+        MsgBox "You have plots without vegetation!  This report type requires all plots to have associated vegetation data.  To create a report of the plots without vegetation, look under 'Validate/Other Tests/Project Plots Without Vegetation'.", vbOKOnly, "VPro"
+        GoTo MyExit
+        
+    End If
+
+    Set MyDB = CurrentDb
+    CurrProj = clsVProReg.CurrProject
+    CurrSU = clsVProReg.CurrPlotlist
+    If CurrSU = "None" Then
+        MsgBox "You need a current site unit table for this report to run."
+        GoTo MyExit
+    End If
+
+    MyTime.StartTimer
+    CreateExcel2 xl
+
+    On Error Resume Next
+        DoCmd.DeleteObject acTable, "EntryDat_Veg"
+        DoCmd.DeleteObject acQuery, "qryCmbVegData"
+        DoCmd.DeleteObject acQuery, "qryCmbEnvData"
+    On Error GoTo errComboReport
+
+    On Error GoTo 0
+
+    DoCmd.CopyObject , "EntryDat_Veg", acTable, "USysV2Veg"
+    
+    If clsVProReg.CurrPlotlist <> "None" Then
+        CreateTempVeg clsVProReg.CurrProject & "_Veg", clsVProReg.CurrPlotlist & "_SU" 'creates the table TempReportVeg
+    End If
+    
+    BuildStrataTable
+    
+    SqlText = BuildSql(MyDB)
+    'SqlText = SqlText & " FROM [" & CurrSU & "_SU] LEFT JOIN [" & CurrProj & "_ENV] ON [" & CurrSU & "_SU].PlotNumber = [" & CurrProj & "_ENV].PlotNumber"
+    'SqlText = SqlText & " WHERE ((([" & CurrProj & "_ENV].PlotNumber) Is Not Null))"
+    'SqlText = SqlText & " ORDER BY IIf(IsNull([UserSiteUnit]),'Unassigned',[UserSiteUnit]) & ' - ' & [" & CurrProj & "_Env]![Plotnumber];"
+    'SqlText = SqlText & " ORDER BY [" & CurrProj & "_Env]![Plotnumber];"
+    'SqlText = "SELECT IIf(IsNull([UserSiteUnit]),'Unassigned',[UserSiteUnit]) & ' - ' & [Filtered_Env]![Plotnumber] AS Unit, Filtered_Env.PlotNumber, Filtered_Env.UserSiteUnit, Filtered_Env.Zone, Filtered_Env.SubZone, Filtered_Env.SiteSeries, Filtered_Env.BECSiteUnit, Filtered_Env.Location, Filtered_Env.SlopeGradient, Filtered_Env.Aspect, Filtered_Env.Elevation, Filtered_Env.MesoSlopePosition, Filtered_Env.Exposure1, Filtered_Env.Exposure2, Filtered_Env.SiteDisturbance1, Filtered_Env.SiteDisturbance2, Filtered_Env.SurficialMaterialSurf, Filtered_Env.SurficialMaterialSubSurf, Filtered_Env.SoilDrainage, Filtered_Env.SeepageDepth, Filtered_Env.SoilClassSubGroup, Filtered_Env.SoilClassGroup, Filtered_Env.HumusForm, Filtered_Env.StrataCoverTree, Filtered_Env.StrataCoverShrub, Filtered_Env.StrataCoverHerb, Filtered_Env.StrataCoverMoss, Filtered_Env.MoistureRegime, Filtered_Env.NutrientRegime, Filtered_Env.SuccessionalStatus"
+    'SqlText = SqlText & " From Filtered_Env"
+    SqlText = SqlText & " FROM Filtered_Env INNER JOIN " & clsVProReg.CurrPlotlist & "_SU ON Filtered_Env.PlotNumber = " & clsVProReg.CurrPlotlist & "_SU.PlotNumber"
+    SqlText = SqlText & " WHERE (((Filtered_Env.PlotNumber) Is Not Null))"
+    SqlText = SqlText & " ORDER BY [Filtered_Env]![Plotnumber];"
+    Set MyQD = MyDB.CreateQueryDef("qryCmbEnvData", SqlText)
+    'MyDB.CreateQueryDef "fred3b", SqlText
+    Set EnvRS = MyDB.OpenRecordset(SqlText)
+    
+'build veg data
+    'SqlText = "TRANSFORM Sum(USysAllVeg.Cover) AS SumOfCover"
+    'SqlText = SqlText & " SELECT LayerCode.Strata, IIf(IsNull([ScientificName]),[Species],[ScientificName]) AS Spp"
+    'SqlText = SqlText & " FROM [" & CurrSU & "_SU] LEFT JOIN ((USysAllVeg LEFT JOIN USysAllSpecs ON USysAllVeg.Species = USysAllSpecs.Code) LEFT JOIN LayerCode ON USysAllVeg.MyLayer = LayerCode.Layer1234567) ON [" & CurrSU & "_SU].PlotNumber = USysAllVeg.PlotNumber"
+    'SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)<>'S' Or (USysAllSpecs.Codetype) Is Null) AND ((USysAllVeg.MyLayer)<>'a' And (USysAllVeg.MyLayer)<>'b'))"
+    'SqlText = SqlText & " GROUP BY LayerCode.Strata, IIf(IsNull([ScientificName]),[Species],[ScientificName])"
+    'SqlText = SqlText & " ORDER BY LayerCode.Strata, IIf(IsNull([SiteUnit]),'Unassigned',[SiteUnit]) & ' - ' & [" & CurrSU & "_SU]![Plotnumber]"
+    'SqlText = SqlText & " PIVOT IIf(IsNull([SiteUnit]),'Unassigned',[SiteUnit]) & ' - ' & [" & CurrSU & "_SU]![Plotnumber];"
+    SqlText = "TRANSFORM Sum(USysAllVeg.Cover) AS SumOfCover"
+    SqlText = SqlText & " SELECT LayerCode.Strata, IIf(IsNull([ScientificName]),[Species],[ScientificName]) AS Spp"
+    SqlText = SqlText & " FROM [" & CurrSU & "_SU] LEFT JOIN ((USysAllVeg LEFT JOIN USysAllSpecs ON USysAllVeg.Species = USysAllSpecs.Code) LEFT JOIN LayerCode ON USysAllVeg.MyLayer = LayerCode.Layer1234567) ON [" & CurrSU & "_SU].PlotNumber = USysAllVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)<>'S' Or (USysAllSpecs.Codetype) Is Null) AND ((USysAllVeg.MyLayer)<>'a' And (USysAllVeg.MyLayer)<>'b'))"
+    SqlText = SqlText & " GROUP BY LayerCode.Strata, IIf(IsNull([ScientificName]),[Species],[ScientificName])"
+    SqlText = SqlText & " ORDER BY LayerCode.Strata, [" & CurrSU & "_SU].[Plotnumber]"
+    SqlText = SqlText & " PIVOT [" & CurrSU & "_SU].[Plotnumber];"
+    Set MyQD = MyDB.CreateQueryDef("qryCmbVegData", SqlText)
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    xl.Workbooks.Add
+    xl.Visible = True
+    xl.StatusBar = "Adding environment data"
+
+    xl.ActiveCell.CopyFromRecordset EnvRS
+    'xl.Cells(1, 2).CopyFromRecordset EnvRS
+    xl.Range(xl.Cells(1, 1), xl.Cells(EnvRS.RecordCount, EnvRS.Fields.count)).Select
+    ReturnSheet = xl.ActiveSheet.Name
+    xl.Selection.Copy
+    xl.Sheets.Add
+    xl.Selection.PasteSpecial Paste:=xlPasteAll, Operation:=xlNone, SkipBlanks:=False, Transpose:=True
+    xl.DisplayAlerts = False
+'Stop
+    xl.Sheets(ReturnSheet).Delete
+    xl.DisplayAlerts = True
+
+    LastRow = xl.CountA(xl.Range("A:A"))
+    
+    xl.Columns("A:A").Insert Shift:=xlToRight
+    xl.Columns("A:A").Insert Shift:=xlToRight
+    For i = 0 To EnvRS.Fields.count - 1
+        xl.Cells(i + 1, 2) = EnvRS.Fields(i).Name
+    Next i
+    
+    xl.Cells(LastRow + 2, 1).Select
+
+    Dim MyNames() As String
+    Dim MyRange As Excel.Range
+    Dim MyVar As Variant
+    ReDim MyNames(MyRS.Fields.count)
+
+    LastRow = xl.CountA(xl.Range("B:B"))
+    Debug.Print "Lastrow: " & LastRow
+'Stop
+
+'add veg data
+    xl.StatusBar = "Adding vegetation data"
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    xl.Cells(LastRow + 4, 1).Select
+    xl.ActiveCell.CopyFromRecordset MyRS
+    i = 2
+    MyRS.MoveFirst
+
+'add field names
+    For i = 0 To MyRS.Fields.count - 1
+        xl.Cells(LastRow + 3, i + 1) = "'" & MyRS.Fields(i).Name
+    Next i
+    
+    xl.Columns("B:B").EntireColumn.AutoFit
+    xl.Columns("B:B").HorizontalAlignment = xlLeft
+    
+    For i = 3 To xl.CountA(xl.Range(LastRow + 2 & ":" & LastRow + 2))
+        If xl.Cells(1, i) = xl.Cells(LastRow + 2, i) Then
+            'do nothing
+        Else
+            'MsgBox "Unexpected error in writing the data"
+            'GoTo MyExit
+        End If
+    Next i
+
+    Set MyRange = xl.Range(xl.ActiveSheet.Cells(LastRow + 3, 3), xl.ActiveSheet.Cells(LastRow + xl.CountA(xl.Range("A:A")) + 2, xl.CountA(xl.Range("1:1")) + 2))
+    MyRange.Select
+
+    MyStr = InstalledDir & "ExcelTools"
+    'Stop
+    'Debug.Print "start."
+    DoEvents
+    NewShadeCells LastRow + 4, 3, LastRow + xl.CountA(xl.Range("A:A")) + 3, xl.CountA(xl.Range("1:1")) + 1
+    'Debug.Print LastRow + 4
+    'Debug.Print LastRow + xl.CountA(xl.Range("A:A")) + 3
+    'Debug.Print xl.CountA(xl.Range("1:1")) + 1
+    'Stop
+    'xl.Cells(1, 1).Select
+    'xl.ScreenUpdating = False
+    'NewShadeCells 9, 3, 333, 51
+    'NewShadeCells 11, 3, 335, 51
+    'xl.ScreenUpdating = True
+    'Debug.Print "done."
+    'Stop
+    With xl
+        .Range("B1", .Cells(LastRow, 2)).Interior.ColorIndex = xlNone
+        .Range("B1", .Cells(LastRow, 2)).Borders.LineStyle = xlNone
+        .Columns("A:A").ColumnWidth = 1.43
+        .Rows("1:1").Delete Shift:=xlUp
+        .Rows("7:7").Orientation = 90
+        .Rows("7:7").WrapText = True
+        .Rows("7:7").Font.Name = "Arial"
+        .Rows("7:7").Font.Size = 8
+        .Rows("7:7").RowHeight = 100
+        .Cells(1, 1).Select
+        .StatusBar = "Elapsed time: " & MyTime.EndTimer / 1000 & " seconds"
+        .Rows(LastRow + 1).Delete Shift:=xlUp
+    End With
+
+Set xl = Nothing
+DoEvents
+'NewShadeCells 11, 3, 335, 51
+Debug.Print MyTime.EndTimer / 1000 & " seconds"
+
+MyExit:
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "EntryDat_Veg"
+    DoCmd.DeleteObject acQuery, "qryCmbVegData"
+    DoCmd.DeleteObject acQuery, "qryCmbEnvData"
+    MyRS.Close
+    Set MyDB = Nothing
+    Set xl = Nothing
+    Exit Sub
+errComboReport:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+
+Private Function CreateExcel2(objName As Object) As Excel.Application
+'Oct. 11, 2002
+Dim MyExcelApp As String
+
+MyExcelApp = "Excel.Application"
+    
+On Error Resume Next
+Set objName = GetObject(, MyExcelApp)
+If Err.Number <> 0 Then
+    Set objName = CreateObject(MyExcelApp)
+    Err.Clear
+End If
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+    
+End Function
+
+Private Sub testNow()
+Debug.Print "start"
+NewShadeCells 9, 3, 333, 51
+Debug.Print "done"
+
+End Sub
+
+Private Sub NewShadeCells(FR As Integer, FC As Integer, LR As Integer, LC As Integer)
+'Apr. 1, 2015
+
+Dim xl As Excel.Application
+Dim ColourGreater As Single, GrayGreater As Single
+Dim MyDB As DAO.Database, MyRS As Recordset
+Dim SqlText As String, ThemeTable As String, Criteria As String, CurrRow As Integer, CurrSpp As String
+Dim c As Variant, MyTest As Variant, ThemeTest As Boolean
+clsStopWatch.StartTimer
+
+CreateExcel xl
+xl.Range(xl.Cells(FR, FC), xl.Cells(LR, LC)).Select
+
+Set MyDB = CurrentDb
+ThemeTable = GetSetting("VPro64", "ReportOptions", "cmbThemeTable")
+If ThemeTable = "None" Then GoTo MyExit
+SqlText = "SELECT ScientificName, ColourCode, PatternCode, FontColour FROM " & ThemeTable & "_Theme WHERE (((Use)=Yes));"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+ColourGreater = GetSetting("VPro64", "ReportOptions", "cmbColourGreater")
+
+NoColour:
+GrayGreater = GetSetting("VPro64", "ReportOptions", "cmbgrayGreater")
+CurrRow = xl.ActiveCell.Row
+CurrSpp = xl.Cells(CurrRow, 2)
+
+If ThemeTable = "None" Then GoTo Jump1
+ThemeTest = LoadSppInfo(CurrSpp, MyRS)
+Jump1:
+
+On Error Resume Next
+For Each c In xl.Selection
+    If c.Row <> CurrRow Then
+        CurrRow = c.Row
+        CurrSpp = xl.Cells(CurrRow, 2)
+        If ThemeTable = "None" Then GoTo Jump2
+        ThemeTest = LoadSppInfo(CurrSpp, MyRS)
+Jump2:
+    End If
+    'MyTest = c.Value
+    'If c.Value > 0 Then
+        MyTest = c.Value
+    'Else
+    '    GoTo Jump
+    'End If
+    'MyTest = GetCover(c.Value)
+    If ThemeTable = "None" Then GoTo Jump
+    If ThemeTest And MyTest > ColourGreater Then
+        With xl.Range(c.Address)
+            .Interior.ColorIndex = Shade.ColourCode
+            .Interior.Pattern = Shade.PatternCode
+            .Font.ColorIndex = Shade.FontColour
+            .Font.Bold = True
+        End With
+        With xl.Cells(c.Row, 2)
+            .Interior.ColorIndex = Shade.ColourCode
+            .Interior.Pattern = Shade.PatternCode
+            .Font.ColorIndex = Shade.FontColour
+            .Font.Bold = True
+        End With
+    End If
+Jump:
+    If Not ThemeTest And MyTest > GrayGreater Then
+        With xl.Range(c.Address)
+            .Interior.ColorIndex = 15
+            .Interior.Pattern = xlSolid
+            .Font.Bold = True
+        End With
+        With xl.Cells(c.Row, 2)
+            .Interior.ColorIndex = 15
+            .Interior.Pattern = xlSolid
+            .Font.Bold = True
+        End With
+    End If
+
+Next c
+
+MyExit:
+On Error GoTo 0
+Debug.Print clsStopWatch.EndTimer / 1000
+
+End Sub
+
+Private Function LoadSppInfo(CurrSpp As String, rs As Recordset) As Boolean
+Dim Criteria As String
+Criteria = "ScientificName = '" & CurrSpp & "'"
+rs.FindFirst Criteria
+
+If rs.NoMatch Then
+    LoadSppInfo = False
+Else
+    Shade.ColourCode = rs!ColourCode
+    Shade.FontColour = rs!FontColour
+    Shade.PatternCode = rs!PatternCode
+    LoadSppInfo = True
+End If
+
+End Function

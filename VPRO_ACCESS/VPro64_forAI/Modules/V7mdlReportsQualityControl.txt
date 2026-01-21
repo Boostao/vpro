@@ -1,0 +1,385 @@
+Option Compare Database
+Option Explicit
+Dim lvSite, lvVeg, lvSoil, lvBEC
+
+Private Sub test()
+
+Debug.Print "----------------------"
+Debug.Print clsVProReg.CurrPlotlist
+Debug.Print QCLV
+Debug.Print clsVProReg.CurrPlotlist
+
+End Sub
+Public Function QCLV() As Boolean
+
+'Apr. 4, 2018
+Dim Null1 As Boolean, Null2 As Boolean, Null3 As Boolean, Null4 As Boolean, Null1Sql As String, Null2Sql As String, Null3Sql As String, Null4Sql As String
+Dim iQualitySite As Integer, iQualityVeg As Integer, iQualitySoil As Integer, SqlText As String, SuTable As String
+Dim OriginalSuTable As String
+Dim MyDB As Database, MyRS As Recordset
+
+Set MyDB = CurrentDb
+OriginalSuTable = clsVProReg.CurrPlotlist
+
+'remove any mess from previous run
+    CleanUp
+
+'create a fresh su table
+    DoCmd.CopyObject , "USysDeleteMe_SU", acTable, "USysSuTable"
+
+'quiet things down
+    DoCmd.SetWarnings False
+
+'ignor quality control feature
+    If clsRepOpt.DataQualityFilterEnforceLV = False Then
+        SqlText = "DELETE USysDeleteMe_SU.* FROM USysDeleteMe_SU;"
+        DoCmd.RunSQL SqlText
+    
+        SqlText = "INSERT INTO USysDeleteMe_SU ( PlotNumber, SiteUnit )"
+        SqlText = SqlText & " SELECT PlotNumber, SiteUnit"
+        SqlText = SqlText & " FROM " & OriginalSuTable & "_SU;"
+        DoCmd.RunSQL SqlText
+        QCLV = True
+        GoTo MyExit
+    End If
+    
+'quiet things down
+    DoCmd.SetWarnings False
+
+'check and build value and null option for site quality
+    SqlText = "SELECT USysTableOfLists.ItemOrder"
+    SqlText = SqlText & " From USysTableOfLists"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ListName)='dataquality') AND ((USysTableOfLists.Item)='" & clsRepOpt.DataQualityFilterSiteLV & "'));"
+    'MyDB.CreateQueryDef "fred1", SqlText
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    iQualitySite = MyRS!ItemOrder
+    Null1 = clsRepOpt.DataQualityFilterSiteNullLV 'site
+    If Null1 Then
+        Null1Sql = " Or"
+    Else
+        Null1Sql = " And Not"
+    End If
+    
+'check and build value and null option for veg quality
+    SqlText = "SELECT USysTableOfLists.ItemOrder"
+    SqlText = SqlText & " From USysTableOfLists"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ListName)='dataquality') AND ((USysTableOfLists.Item)='" & clsRepOpt.DataQualityFilterVegLV & "'));"
+    'MyDB.CreateQueryDef "fred2", SqlText
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    iQualityVeg = MyRS!ItemOrder
+    Null2 = clsRepOpt.DataQualityFilterVegNullLV 'veg
+    If Null2 Then
+        Null2Sql = " Or"
+    Else
+        Null2Sql = " And Not"
+    End If
+
+'check and build value and null option for soil quality
+    SqlText = "SELECT USysTableOfLists.ItemOrder"
+    SqlText = SqlText & " From USysTableOfLists"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ListName)='dataquality') AND ((USysTableOfLists.Item)='" & clsRepOpt.DataQualityFilterSoilLV & "'));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    'MyDB.CreateQueryDef "dqSoil", SqlText
+    'MyDB.CreateQueryDef "fred3", SqlText
+    iQualitySoil = MyRS!ItemOrder
+    Null3 = clsRepOpt.DataQualityFilterSoilNullLV 'soil
+    If Null3 Then
+        Null3Sql = " Or"
+    Else
+        Null3Sql = " And Not"
+    End If
+
+'copy data that matches quality criteria into a temporary su table
+    SqlText = "INSERT INTO USysDeleteMe_SU ( PlotNumber, SiteUnit )"
+    SqlText = SqlText & " SELECT " & OriginalSuTable & "_SU.PlotNumber, " & OriginalSuTable & "_SU.SiteUnit"
+    SqlText = SqlText & " FROM (((" & OriginalSuTable & "_SU INNER JOIN USysEnv ON " & OriginalSuTable & "_SU.PlotNumber = USysEnv.PlotNumber) LEFT JOIN USysTableOfLists ON USysEnv.SitePlotQuality = USysTableOfLists.Item) LEFT JOIN USysTableOfLists AS USysTableOfLists_1 ON USysEnv.VegPlotQuality = USysTableOfLists_1.Item) LEFT JOIN USysTableOfLists AS USysTableOfLists_2 ON USysEnv.SoilPlotQuality = USysTableOfLists_2.Item"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ItemOrder)>=" & iQualitySite & Null1Sql & " (USysTableOfLists.ItemOrder) Is Null) AND ((USysTableOfLists_1.ItemOrder)>=" & iQualityVeg & Null2Sql & " (USysTableOfLists_1.ItemOrder) Is Null) AND ((USysTableOfLists_2.ItemOrder)>=" & iQualitySoil & Null3Sql & " (USysTableOfLists_2.ItemOrder) Is Null) AND ((USysTableOfLists.ListName)='DataQuality' Or (USysTableOfLists.ListName) Is Null) AND ((USysTableOfLists_1.ListName)='DataQuality' Or (USysTableOfLists_1.ListName) Is Null) AND ((USysTableOfLists_2.ListName)='DataQuality' Or (USysTableOfLists_2.ListName) Is Null));"
+    'MyDB.CreateQueryDef "dq", SqlText
+    DoCmd.RunSQL SqlText
+
+'check for 0 plots
+    DoCmd.SetWarnings True
+    Set MyRS = MyDB.OpenRecordset("USysDeleteMe_SU")
+    If MyRS.RecordCount > 0 Then
+        QCLV = True
+    Else
+        MsgBox "Sorry, no plots.  Please adjust your plot quality standards, use a different site unit and/or hierarchy table, or find better data.", vbInformation, "VPro"
+        QCLV = False
+        GoTo MyExit
+    End If
+
+    clsVProReg.CurrPlotlist = "USysDeleteMe"
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+    Exit Function
+
+End Function
+
+
+Public Function QC() As Boolean
+
+'Apr. 1, 2022
+Dim Null1 As Boolean, Null2 As Boolean, Null3 As Boolean, Null1Sql As String, Null2Sql As String, Null3Sql As String, BECUseSql As String, NullBecUse As Boolean, BecUseVal As String
+Dim iQualitySite As Integer, iQualityVeg As Integer, iQualitySoil As Integer, SqlText As String, SuTable As String
+Dim OriginalSuTable As String
+Dim MyDB As Database, MyRS As Recordset
+
+Set MyDB = CurrentDb
+OriginalSuTable = clsVProReg.CurrPlotlist
+
+'remove any mess from previous run
+    CleanUp
+
+'create a fresh su table
+    DoCmd.CopyObject , "USysDeleteMe_SU", acTable, "USysSuTable"
+
+'quiet things down
+    DoCmd.SetWarnings False
+
+'ignor quality control feature
+    If clsRepOpt.DataQualityFilterEnforce = False Then
+        SqlText = "DELETE USysDeleteMe_SU.* FROM USysDeleteMe_SU;"
+        DoCmd.RunSQL SqlText
+    
+        SqlText = "INSERT INTO USysDeleteMe_SU ( PlotNumber, SiteUnit )"
+        SqlText = SqlText & " SELECT PlotNumber, SiteUnit"
+        SqlText = SqlText & " FROM " & OriginalSuTable & "_SU;"
+        DoCmd.RunSQL SqlText
+        QC = True
+        GoTo MyExit
+    End If
+    
+'quiet things down
+    DoCmd.SetWarnings False
+
+'check and build value and null option for site quality
+    SqlText = "SELECT USysTableOfLists.ItemOrder"
+    SqlText = SqlText & " From USysTableOfLists"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ListName)='dataquality') AND ((USysTableOfLists.Item)='" & clsRepOpt.DataQualityFilterSite & "'));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    'MyDB.CreateQueryDef "dqPlot", SqlText
+    iQualitySite = MyRS!ItemOrder
+    Null1 = clsRepOpt.DataQualityFilterSiteNull 'site
+    If Null1 Then
+        Null1Sql = " Or"
+    Else
+        Null1Sql = " And Not"
+    End If
+    
+'check and build value and null option for veg quality
+    SqlText = "SELECT USysTableOfLists.ItemOrder"
+    SqlText = SqlText & " From USysTableOfLists"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ListName)='dataquality') AND ((USysTableOfLists.Item)='" & clsRepOpt.DataQualityFilterVeg & "'));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    'MyDB.CreateQueryDef "dqVeg", SqlText
+    iQualityVeg = MyRS!ItemOrder
+    Null2 = clsRepOpt.DataQualityFilterVegNull 'veg
+    If Null2 Then
+        Null2Sql = " Or"
+    Else
+        Null2Sql = " And Not"
+    End If
+
+'check and build value and null option for soil quality
+    SqlText = "SELECT USysTableOfLists.ItemOrder"
+    SqlText = SqlText & " From USysTableOfLists"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ListName)='dataquality') AND ((USysTableOfLists.Item)='" & clsRepOpt.DataQualityFilterSoil & "'));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    'MyDB.CreateQueryDef "dqSoil", SqlText
+    iQualitySoil = MyRS!ItemOrder
+    Null3 = clsRepOpt.DataQualityFilterSoilNull 'soil
+    If Null3 Then
+        Null3Sql = " Or"
+    Else
+        Null3Sql = " And Not"
+    End If
+
+'BEC use - limit plots to user settings
+    NullBecUse = clsRepOpt.DataQualityFilterBECUse
+    BecUseVal = clsRepOpt.DataQualityFilterBECUseLV
+    If NullBecUse Then
+        BECUseSql = " AND ((USysEnv.BEC_Use)>='" & BecUseVal & "' Or (USysEnv.BEC_Use) Is Null));"
+    Else
+        BECUseSql = " AND ((USysEnv.BEC_Use)>='" & BecUseVal & "' and (USysEnv.BEC_Use) Is not Null));"
+    End If
+    'Debug.Print BECUseSql
+
+'copy data that matches quality criteria into a temporary su table
+    SqlText = "INSERT INTO USysDeleteMe_SU ( PlotNumber, SiteUnit )"
+    SqlText = SqlText & " SELECT " & OriginalSuTable & "_SU.PlotNumber, " & OriginalSuTable & "_SU.SiteUnit"
+    SqlText = SqlText & " FROM (((" & OriginalSuTable & "_SU INNER JOIN USysEnv ON " & OriginalSuTable & "_SU.PlotNumber = USysEnv.PlotNumber) LEFT JOIN USysTableOfLists ON USysEnv.SitePlotQuality = USysTableOfLists.Item) LEFT JOIN USysTableOfLists AS USysTableOfLists_1 ON USysEnv.VegPlotQuality = USysTableOfLists_1.Item) LEFT JOIN USysTableOfLists AS USysTableOfLists_2 ON USysEnv.SoilPlotQuality = USysTableOfLists_2.Item"
+    SqlText = SqlText & " WHERE (((USysTableOfLists.ItemOrder)>=" & iQualitySite & Null1Sql & " (USysTableOfLists.ItemOrder) Is Null) AND ((USysTableOfLists_1.ItemOrder)>=" & iQualityVeg & Null2Sql & " (USysTableOfLists_1.ItemOrder) Is Null) AND ((USysTableOfLists_2.ItemOrder)>=" & iQualitySoil & Null3Sql & " (USysTableOfLists_2.ItemOrder) Is Null) AND ((USysTableOfLists.ListName)='DataQuality' Or (USysTableOfLists.ListName) Is Null) AND ((USysTableOfLists_1.ListName)='DataQuality' Or (USysTableOfLists_1.ListName) Is Null) AND ((USysTableOfLists_2.ListName)='DataQuality' Or (USysTableOfLists_2.ListName) Is Null)" & BECUseSql '& ";"
+    DoCmd.RunSQL SqlText
+
+'check for 0 plots
+    DoCmd.SetWarnings True
+    Set MyRS = MyDB.OpenRecordset("USysDeleteMe_SU")
+    If MyRS.RecordCount > 0 Then
+        QC = True
+    Else
+        MsgBox "Sorry, no plots.  Please adjust your plot quality standards, use a different site unit and/or hierarchy table, or find better data.", vbInformation, "VPro"
+        QC = False
+        GoTo MyExit
+    End If
+
+    clsVProReg.CurrPlotlist = "USysDeleteMe"
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+    Exit Function
+
+
+End Function
+
+Private Sub CleanUp()
+
+On Error Resume Next
+
+    DoCmd.DeleteObject acTable, "USysDeleteMe_SU"
+
+On Error GoTo 0
+End Sub
+
+Public Sub FillRemovedBy()
+
+'Apr. 12, 2022
+Dim MyDB As Database, MyTbl As TableDef, MyFld As Field, MyRS As Recordset
+Dim SqlText As String, AdminTbl As String, SuTbl As String
+Dim bSite As Boolean, bVeg As Boolean, bSoil As Boolean, bBEC As Boolean, MySum As Integer
+
+'set the admin and su table variables
+    AdminTbl = clsVProReg.CurrProject
+    SuTbl = clsVProReg.CurrPlotlistBak ' clsVProReg.CurrPlotlist
+    
+'make db object
+    Set MyDB = CurrentDb
+
+'clear last run
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "tblRemovedBy"
+    On Error GoTo 0
+
+'set level variables
+    SetLevels
+
+'create table
+    Set MyTbl = MyDB.CreateTableDef("tblRemovedBy")
+    
+    With MyTbl
+        .Fields.Append .CreateField("PlotNumber", dbText)
+        .Fields.Append .CreateField("RemovedBy", dbText)
+        .Fields.Append .CreateField("Site", dbText)
+        .Fields.Append .CreateField("Veg", dbText)
+        .Fields.Append .CreateField("Soil", dbText)
+        .Fields.Append .CreateField("BEC", dbText)
+    End With
+    
+    MyDB.TableDefs.Append MyTbl
+
+'fill table
+    SqlText = "INSERT INTO tblRemovedBy ( PlotNumber, Site, Veg, Soil, BEC )"
+    SqlText = SqlText & " SELECT " & SuTbl & "_SU.PlotNumber, " & AdminTbl & "_Admin.SitePlotQuality, " & AdminTbl & "_Admin.VegPlotQuality, " & AdminTbl & "_Admin.SoilPlotQuality, " & AdminTbl & "_Admin.BEC_Use"
+    SqlText = SqlText & " FROM (" & SuTbl & "_SU LEFT JOIN USysSuTableDynamic_SU ON " & SuTbl & "_SU.PlotNumber = USysSuTableDynamic_SU.PlotNumber) INNER JOIN " & AdminTbl & "_Admin ON " & SuTbl & "_SU.PlotNumber = " & AdminTbl & "_Admin.Plot"
+    SqlText = SqlText & " WHERE (((USysSuTableDynamic_SU.PlotNumber) Is Null));"
+    'MyDB.CreateQueryDef "fred", SqlText
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+'Stop
+'create table recordset
+    Set MyRS = MyDB.OpenRecordset("tblRemovedBy")
+
+'loop through table and find which criteria removed the plot
+    Do Until MyRS.EOF
+        MySum = 0
+        bSite = False
+        bVeg = False
+        bSoil = False
+        bBEC = False
+        If Not IsNull(MyRS!Site) Then
+            If LevelAsNumber(MyRS!Site) < lvSite Then
+                MySum = MySum + 1
+                MyRS.Edit
+                MyRS!RemovedBy = "Site"
+                MyRS.Update
+            End If
+        End If
+        
+        If Not IsNull(MyRS!Veg) Then
+            If LevelAsNumber(MyRS!Veg) < lvVeg Then
+                MySum = MySum + 1
+                MyRS.Edit
+                MyRS!RemovedBy = "Veg"
+                MyRS.Update
+            End If
+        End If
+        
+        If Not IsNull(MyRS!Soil) Then
+            If LevelAsNumber(MyRS!Soil) < lvSoil Then
+                MySum = MySum + 1
+                MyRS.Edit
+                MyRS!RemovedBy = "Soil"
+                MyRS.Update
+            End If
+        End If
+        
+        If Not IsNull(MyRS!BEC) Then 'first get the trhreshold and see if it is higher
+            If MyRS!BEC < lvBEC Then
+                MySum = MySum + 1
+                MyRS.Edit
+                MyRS!RemovedBy = "BEC"
+                MyRS.Update
+            End If
+        End If
+        
+        If MySum > 1 Then
+            MyRS.Edit
+            MyRS!RemovedBy = "Mixed"
+            MyRS.Update
+        End If
+    
+        MyRS.MoveNext
+    Loop
+
+MyExit:
+    MyRS.Close
+    Set MyDB = Nothing
+
+End Sub
+
+Private Sub SetLevels()
+
+'Apr. 12, 2022
+Dim Site As String, Veg As String, Soil As String
+
+'look up the quality settings in the registry
+    Site = clsRepOpt.DataQualityFilterSite
+    lvSite = LevelAsNumber(Site)
+    
+    Veg = clsRepOpt.DataQualityFilterVeg
+    lvVeg = LevelAsNumber(Veg)
+
+    Soil = clsRepOpt.DataQualityFilterSoil
+    lvSoil = LevelAsNumber(Soil)
+
+    lvBEC = clsRepOpt.DataQualityFilterBECUseLV
+
+End Sub
+
+Private Function LevelAsNumber(LevelAsText As String) As Integer
+
+'Apr. 12, 2022
+'convert the quality text to a number
+    If LevelAsText = "Poor" Then LevelAsNumber = 1
+    If LevelAsText = "Fair" Then LevelAsNumber = 2
+    If LevelAsText = "Good" Then LevelAsNumber = 3
+    If LevelAsText = "Excellent" Then LevelAsNumber = 4
+
+End Function

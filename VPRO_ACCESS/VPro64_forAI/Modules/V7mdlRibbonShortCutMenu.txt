@@ -1,0 +1,59 @@
+Option Compare Database
+Option Explicit
+'This module contains the code to create a shortcut popup menu bar
+
+Private Sub MakeBar()
+
+'Nov. 28, 2008
+    ShortBar "Herman"
+
+End Sub
+
+Private Sub ShortBar(strName As String)
+
+'Nov. 28, 2008
+    Dim CB As Office.CommandBar
+    Dim Cbc As Office.CommandBarControl
+
+'delete old bar
+    On Error Resume Next
+    Application.CommandBars(strName).Delete
+    On Error GoTo errShortBar
+
+'create menu
+    Set CB = Application.CommandBars.Add(strName, msoBarPopup)
+
+'create control
+    Set Cbc = CB.Controls.Add(msoControlButton)
+    Cbc.Caption = "Button1a"
+    Cbc.OnAction = "=cmdFred()"
+
+'create another control
+    Set Cbc = CB.Controls.Add(msoControlButton)
+    Cbc.Caption = "Button1b"
+    Cbc.OnAction = "=cmdWillma()"
+    
+MyExit:
+    On Error Resume Next
+    Set CB = Nothing
+    Set Cbc = Nothing
+    Exit Sub
+errShortBar:
+    MsgBox Err.Description, vbInformation, clsVProReg.ProgramName
+    Resume MyExit
+
+End Sub
+
+Public Function cmdFred()
+
+'Nov. 28, 2008
+    MsgBox "This is a CB test"
+
+End Function
+
+Public Function cmdWillma()
+
+'Nov. 28, 2008
+    MsgBox "Willma"
+    
+End Function

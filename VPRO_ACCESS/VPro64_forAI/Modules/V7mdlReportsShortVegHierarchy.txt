@@ -1,0 +1,598 @@
+Option Compare Database
+Option Explicit
+
+Private UnitOrder As Integer, MyMin As Integer, MyMax As Integer
+Private MasterCount As Integer
+Private WriteRS As Recordset
+
+Public Sub ControlHierarchyOrder()
+
+On Error GoTo errControlHierarchyOrder
+Dim MyDB As Database, MyHierarchy As String
+Set MyDB = CurrentDb
+MyHierarchy = clsVProReg.CurrHierarchy & "_Hierarchy"
+
+UnitOrder = 0
+DeleteFields MyDB, MyHierarchy
+WalkTheTree
+OrderHierarchyStep1 MyDB, MyHierarchy
+SetMinMax MyDB, MyHierarchy 'adds order data to hierarchy table
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Sub
+errControlHierarchyOrder:
+    MsgBox "error here"
+    Resume MyExit
+End Sub
+
+Private Sub DeleteFields(db As Database, TableName As String)
+Dim MyRS As Recordset
+Dim i As Integer
+Set MyRS = db.OpenRecordset(TableName)
+MyRS.MoveLast
+MyRS.MoveFirst
+
+Do Until MyRS.EOF
+    MyRS.Edit
+    MyRS!Tag = Null
+    MyRS!MyOrder = Null
+    MyRS!ChildID = Null
+    MyRS!StartChild = Null
+    MyRS!LastChild = Null
+    MyRS.Update
+    MyRS.MoveNext
+Loop
+
+MyExit:
+    MyRS.Close
+End Sub
+
+Private Sub OrderHierarchyStep1(db As Database, TableName As String)
+On Error GoTo errOrderHierarchyStep1
+Dim MyRS As Recordset, OutRS As Recordset
+Dim SqlText As String, i As Integer
+Dim BK As String
+Set OutRS = db.OpenRecordset(TableName, dbOpenDynaset)
+
+SqlText = "SELECT ID"
+SqlText = SqlText & " FROM " & TableName
+'SqlText = SqlText & " WHERE (((Parent) Is Null));"
+SqlText = SqlText & " WHERE (((Parent) Is Null) AND (Tag = '1'));"
+Set MyRS = db.OpenRecordset(SqlText)
+MyRS.MoveLast
+MyRS.MoveFirst
+MasterCount = 1
+
+For i = 1 To MyRS.RecordCount
+    OrderHierarchyStep2 db, MyRS!ID, TableName, MasterCount
+    MyRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Exit Sub
+errOrderHierarchyStep1:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub OrderHierarchyStep2(MyDB As Database, Unit As Long, TableName As String, Optional MyCount As Integer)
+Dim MyRecords As Recordset, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String
+
+If IsMissing(MyCount) Then MyCount = 1
+If UnitOrder = 0 Then
+    UnitOrder = 1
+End If
+
+Set MyRecords = MyDB.OpenRecordset(TableName, dbOpenDynaset)
+MyRecords.MoveLast
+MyRecords.MoveFirst
+MyCriteria = "ID = " & Unit
+    MyRecords.FindFirst MyCriteria
+    If IsNull(MyRecords!Parent) Then
+        MyRecords.Edit
+        MyRecords!MyOrder = Format(MasterCount, "00000")
+        MyRecords.Update
+    End If
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+        
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+MyCount = MyCount + 1
+MasterCount = MyCount
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+        MyRecords.Edit
+        'If MyRecords!Level = 11 Then
+        If MyRecords!Level = 11 And MyRecords!Tag = "1" Then
+            MyRecords!ChildID = UnitOrder
+            UnitOrder = UnitOrder + 1
+        End If
+        MyRecords!MyOrder = Format(MyCount, "00000")
+        MyRecords.Update
+    OrderHierarchyStep2 MyDB, NextUnit, TableName, MyCount
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+End Sub
+
+Private Sub SetMinMax(db As Database, TableName As String) ', Unit As String)
+On Error GoTo errSetMinMax
+Dim rs As Recordset, LoopRS As Recordset
+Dim Criteria As String, SqlText As String, i As Integer
+
+Set rs = db.OpenRecordset(TableName, dbOpenDynaset)
+SqlText = "SELECT Name, ID, ChildID"
+SqlText = SqlText & " FROM [" & TableName & "]"
+'SqlText = SqlText & " WHERE ((Left([Name],1)='~'));"
+SqlText = SqlText & " WHERE ((Level < 11));"
+'SqlText = SqlText & " WHERE ((Level < 11) AND (Tag = '1'));"
+'SqlText = SqlText & " WHERE ((Left([Name],1)='~') AND (Tag = '1'));"
+'db.CreateQueryDef "fred2", SqlText
+
+Set LoopRS = db.OpenRecordset(SqlText)
+LoopRS.MoveLast
+LoopRS.MoveFirst
+
+For i = 1 To LoopRS.RecordCount
+    MyMin = 30000
+    MyMax = 0
+    FindChild LoopRS!ID, db, TableName
+    Criteria = "ID = " & LoopRS!ID
+    If MyMax > 0 Then
+        rs.MoveFirst
+        rs.FindFirst Criteria
+        If Not rs.NoMatch Then
+            rs.Edit
+            rs!StartChild = MyMin
+            rs!LastChild = MyMax
+            rs.Update
+        End If
+    End If
+'XXXXXXXXXXXXXXXXXXXXXXXXXX NEW CODE START XXXXXXXXXXXXXXXXXXXXXXXXXX
+    If Not IsNull(LoopRS!ChildID) Then
+        rs.MoveFirst
+        rs.FindFirst Criteria
+        rs.Edit
+        rs!StartChild = LoopRS!ChildID
+        rs!LastChild = LoopRS!ChildID
+        rs.Update
+    End If
+'XXXXXXXXXXXXXXXXXXXXXXXXXX NEW CODE END XXXXXXXXXXXXXXXXXXXXXXXXXX
+    LoopRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    LoopRS.Close
+    Exit Sub
+errSetMinMax:
+    MsgBox "SetMinMax" & Chr(13) & Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub FindChild(Unit As String, db As Database, TableName As String)
+'find the first and last level 11 units under a break
+On Error GoTo errFindChild
+Dim MyRS As Recordset
+Dim MyUnit As String
+
+Set MyRS = db.OpenRecordset(TableName, dbOpenDynaset)
+
+Dim i As Integer, Criteria As String, MyID As Long, MyTest As String, BK As String
+Dim TempRS As Recordset
+Set TempRS = MyRS.Clone
+
+MyRS.MoveFirst
+Criteria = "Parent = " & Unit
+MyRS.FindFirst Criteria
+
+Do Until MyRS.NoMatch
+    BK = MyRS.Bookmark
+    If HasBrats(MyRS!ID, TempRS) Then
+        MyRS.Bookmark = BK
+        FindChild MyRS!ID, db, TableName
+    End If
+    If MyRS!Level = 11 And MyRS!Tag = "1" Then
+        MyTest = MyRS!ChildID
+        If MyTest > MyMax Then
+            MyMax = MyTest
+        End If
+        If MyTest < MyMin Then
+            MyMin = MyTest
+        End If
+    End If
+    MyRS.Bookmark = BK
+    MyRS.FindNext Criteria
+Loop
+
+MyExit:
+    TempRS.Close
+    MyRS.Close
+    Exit Sub
+errFindChild:
+    MsgBox "FindChild" & Chr(13) & Err.Description
+    Resume MyExit
+End Sub
+
+Private Function HasBrats(ID As Long, rs As Recordset) As Boolean
+On Error GoTo errHasChildren
+HasBrats = False
+Dim Criteria As String
+    rs.MoveLast
+    rs.MoveFirst
+    Criteria = "Parent = " & ID
+    rs.FindFirst Criteria
+    If rs.NoMatch Then
+        HasBrats = False
+    Else
+        HasBrats = True
+    End If
+    
+MyExit:
+    On Error Resume Next
+    Exit Function
+errHasChildren:
+    MsgBox Err.Description
+    HasBrats = False
+    Resume MyExit
+End Function
+
+Public Sub AddBreakHeaderToReport(xl As Excel.Application, FirstRow As Integer, FirstCol As Integer)
+
+'Sep 9, 2008
+'This function used in short veg reports
+On Error GoTo errAddBreakHeaderToReport
+'On Error GoTo 0
+Dim MyDB As Database, MyRS As Recordset
+Dim Criteria As String, ExcelUnit As String, SqlText As String, MyHierarchy As String, LastCol As Integer
+Dim i As Integer
+Set MyDB = CurrentDb
+MyHierarchy = "[" & clsVProReg.CurrHierarchy & "_Hierarchy]"
+
+i = 0
+SqlText = "SELECT Name, ChildID"
+SqlText = SqlText & " FROM " & MyHierarchy
+SqlText = SqlText & " WHERE ((Tag = '1'));"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+ExcelUnit = xl.Cells(FirstRow, FirstCol)
+
+Do Until ExcelUnit = ""
+    Criteria = "Name = '" & ExcelUnit & "'"
+    MyRS.FindFirst Criteria
+    xl.Cells(FirstRow - 1, FirstCol + i) = MyRS!ChildID
+    i = i + 1
+    ExcelUnit = xl.Cells(FirstRow, FirstCol + i)
+    MyRS.MoveFirst
+Loop
+
+ExitLoop:
+LastCol = i + FirstCol
+SortUnits xl, LastCol
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+errAddBreakHeaderToReport:
+    If Err.Number = 1004 Then
+        Resume ExitLoop
+    Else
+        MsgBox Err.Description ' "error here"
+        Resume MyExit
+    End If
+
+End Sub
+
+Private Sub SortUnits(xl As Excel.Application, LastCol As Integer)
+
+'Sep 9, 2008
+On Error GoTo errSortUnits
+Dim FirstCell As String, LastCell As String
+Dim FirstRow As Integer, FirstCol As Integer
+LastCell = xl.ActiveCell.SpecialCells(xlLastCell).Address
+
+If xl.Cells(5, 4).Value = "Order" Then
+    FirstCell = "E4"
+    FirstCol = 4
+Else
+    FirstCell = "D4"
+    FirstCol = 3
+End If
+FirstRow = 4
+
+    xl.Range(FirstCell, LastCell).Sort Key1:=xl.Range(FirstCell), Order1:=xlAscending, Header:=xlNo, _
+        OrderCustom:=1, MatchCase:=False, Orientation:=xlLeftToRight
+    
+    xl.Rows(FirstRow).ClearContents
+    AddHeaderLabels FirstRow, FirstCol, xl, LastCol
+
+MyExit:
+    On Error Resume Next
+    Exit Sub
+errSortUnits:
+    MsgBox Err.Description & Chr(13) & "Sorry, VPro couldn't sort your units.", vbInformation, "VPro"
+    Resume MyExit
+End Sub
+
+Private Sub AddHeaderLabels(FirstRow As Integer, FirstCol As Integer, xl As Excel.Application, LastCol As Integer)
+
+'Sep 9,2008
+'On Error GoTo errAddHeaderLabels
+On Error GoTo 0
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, MyHierarchy As String, ColWidth As Integer, i As Integer, X As Integer, MyAddress As String
+Set MyDB = CurrentDb
+MyHierarchy = clsVProReg.CurrHierarchy & "_Hierarchy"
+LastCol = LastCol - 1
+
+For i = 1 To 10
+    
+    SqlText = "SELECT Name, StartChild, LastChild"
+    SqlText = SqlText & " FROM [" & MyHierarchy & "]"
+    SqlText = SqlText & " WHERE ((Level = " & i & ") AND (Tag = '1'))"
+    SqlText = SqlText & " ORDER BY StartChild;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount = 0 Then GoTo Jump
+    
+    FirstRow = FirstRow + 1
+    xl.Rows(FirstRow).Insert Shift:=xlDown
+    
+    Do Until MyRS.EOF
+        xl.Cells(FirstRow, FirstCol + MyRS!StartChild) = MyRS!Name
+        xl.Cells(FirstRow, FirstCol + MyRS!StartChild).HorizontalAlignment = xlCenter
+        ColWidth = xl.Columns(FirstCol + MyRS!StartChild).ColumnWidth
+        xl.Range(xl.Cells(FirstRow, FirstCol + MyRS!StartChild), xl.Cells(FirstRow, FirstCol + MyRS!LastChild)).Merge
+        xl.Range(xl.Cells(FirstRow, FirstCol + MyRS!StartChild), xl.Cells(FirstRow, FirstCol + MyRS!LastChild)).WrapText = True
+        MyRS.MoveNext
+    Loop
+    X = X + 1
+Jump:
+Next i
+    
+    MyAddress = xl.Range(xl.Cells(5, FirstCol + 1), xl.Cells(FirstRow, LastCol)).Address
+    
+    For i = 5 To FirstRow Step 2
+        xl.Range(xl.Cells(i, FirstCol + 1), xl.Cells(i, LastCol)).Interior.ColorIndex = 10
+    
+    Next i
+    
+    xl.Range(MyAddress).Borders(xlEdgeLeft).LineStyle = xlContinuous
+    xl.Range(MyAddress).Borders(xlEdgeTop).LineStyle = xlContinuous
+    xl.Range(MyAddress).Borders(xlEdgeBottom).LineStyle = xlContinuous
+    xl.Range(MyAddress).Borders(xlEdgeRight).LineStyle = xlContinuous
+    xl.Range(MyAddress).Borders(xlInsideVertical).LineStyle = xlContinuous
+    If xl.Range(MyAddress).Rows.count > 1 Then
+        xl.Range(MyAddress).Borders(xlInsideHorizontal).LineStyle = xlContinuous
+    End If
+
+    xl.Range(MyAddress).Font.Size = 8
+    xl.Range(MyAddress).Rows.AutoFit
+    xl.Range(MyAddress).Columns.AutoFit
+    xl.ActiveWindow.DisplayGridlines = False
+    If FirstRow - 5 > 2 Then
+        xl.Cells(5, 1) = xl.Cells(1, 1)
+        xl.Cells(6, 1) = xl.Cells(2, 1)
+        xl.Rows("1:4").Delete Shift:=xlUp
+    End If
+    
+'freeze top of report
+    xl.Cells(FirstRow - 2, 1).Select
+    xl.ActiveWindow.FreezePanes = True
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+errAddHeaderLabels:
+    MsgBox Err.Description
+    Resume MyExit
+    
+End Sub
+
+Private Sub WalkTheTree()
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String
+Set MyDB = CurrentDb
+
+DoCmd.SetWarnings False
+SqlText = "UPDATE " & CurrHierarchy & " SET Tag = Null;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+SqlText = "SELECT ID, Name"
+SqlText = SqlText & " FROM " & CurrHierarchy
+SqlText = SqlText & " WHERE (((Left([Name],1))='~'));"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+Do Until MyRS.EOF
+    WalkTheTreeDown MyDB, MyRS!ID, 11
+    WalkTheTreeUp MyDB, MyRS!ID, 1
+    MyRS.MoveNext
+Loop
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub
+Private Sub test()
+
+WalkTheTreeDown CurrentDb, -2028734430, 11
+
+End Sub
+
+Private Function WalkTheTreeDown(db As Database, Unit As Long, CutOffLevel As Integer, Optional ParentName As Variant)
+
+Dim MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String, ParentShapeName As String
+Dim SqlText As String, CutLevel As Integer
+
+CutLevel = CutOffLevel
+SqlText = "SELECT * FROM [" & CurrHierarchy() & "] WHERE (((Level)<=" & CutLevel & "));"
+
+Set MyRecords = db.OpenRecordset(SqlText, DB_OPEN_DYNASET)
+MyRecords.MoveFirst
+
+'Debug.Print MyRecords!Name
+MyCriteria = "ID = " & Unit
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+        
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+'    Debug.Print MyRecords!Name
+    'If MyRecords!Level = 11 Then Debug.Print MyRecords!Name
+    MyRecords.Edit
+    MyRecords!Tag = 1
+    MyRecords.Update
+
+    WalkTheTreeDown db, NextUnit, CutLevel
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+End Function
+
+Private Function WalkTheTreeUp(db As Database, Unit As Long, CutOffLevel As Integer, Optional ParentName As Variant)
+
+Dim MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String, ParentShapeName As String
+Dim SqlText As String, CutLevel As Integer
+
+CutLevel = CutOffLevel
+SqlText = "SELECT * FROM [" & CurrHierarchy() & "] WHERE (((Level)>=" & CutLevel & "));"
+
+Set MyRecords = db.OpenRecordset(SqlText, DB_OPEN_DYNASET)
+MyRecords.MoveFirst
+MyCriteria = "Parent = " & Unit
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+
+    Shifty = MyRecords!Parent
+    MyRecords.MoveFirst
+    MyCriteria = "ID = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    
+    MyRecords.Edit
+    MyRecords!Tag = 1
+    MyRecords.Update
+    
+    If IsNull(MyRecords!Parent) Then Exit Do
+    NextUnit = MyRecords!Parent
+    
+    WalkTheTreeUp db, NextUnit, CutLevel
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+End Function
+
+Private Sub TestIt()
+'Nov. 9, 2006
+'Temp function used to walk a hierarchy for Karen Yearsely
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, SqlText As String
+Set MyDB = CurrentDb
+
+Set WriteRS = MyDB.OpenRecordset("xAssocsReformatted")
+SqlText = " SELECT xAssocsToRun.ID, xAssocsToRun.Assoc"
+SqlText = SqlText & " FROM xAssocsToRun"
+SqlText = SqlText & " GROUP BY xAssocsToRun.ID, xAssocsToRun.Assoc;"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+i = 1
+
+Do Until MyRS.EOF
+
+    'Debug.Print MyRS!Assoc
+    
+    WalkTheTreeDownRK CurrentDb, MyRS!ID, 11, MyRS!Assoc
+    Application.SysCmd acSysCmdSetStatus, i
+    i = i + 1
+    MyRS.MoveNext
+Loop
+
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    'Debug.Print "done"
+    Exit Sub
+End Sub
+
+Private Function WalkTheTreeDownRK(db As Database, Unit As Long, CutOffLevel As Integer, Optional ParentName As Variant)
+'Nov. 9, 2006
+'Temp function used to walk a hierarchy for Karen Yearsely
+
+Dim MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String, ParentShapeName As String
+Dim SqlText As String, CutLevel As Integer
+
+CutLevel = CutOffLevel
+SqlText = "SELECT * FROM [" & CurrHierarchy() & "] WHERE (((Level)<=" & CutLevel & "));"
+Set MyRecords = db.OpenRecordset(SqlText, DB_OPEN_DYNASET)
+MyRecords.MoveFirst
+
+MyCriteria = "ID = " & Unit
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+        
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+    'Debug.Print MyRecords!Name
+    If MyRecords!Level = 11 Then
+        WriteRS.AddNew
+        WriteRS!Assoc = ParentName
+        WriteRS!SiteUnit = MyRecords!Name
+        WriteRS.Update
+    End If
+    'If MyRecords!Level = 11 Then Debug.Print MyRecords!Name & " - " & ParentName
+    MyRecords.Edit
+    MyRecords!Tag = 1
+    MyRecords.Update
+
+    WalkTheTreeDownRK db, NextUnit, CutLevel, ParentName
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+End Function

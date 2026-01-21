@@ -1,0 +1,11 @@
+CREATE TABLE [UserSiteUnitList] (
+  [ID] LONG DEFAULT GenUniqueID(),
+  [SiteSeries] TEXT(50) DEFAULT ,
+  [SiteSeriesLongName] TEXT(120) DEFAULT ,
+  [SiteSeriesScientificName] TEXT(255) DEFAULT ,
+  [Level] INTEGER DEFAULT 11
+);
+
+CREATE INDEX [ID] ON [UserSiteUnitList] ([ID]);
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [UserSiteUnitList] ([ID]);
+

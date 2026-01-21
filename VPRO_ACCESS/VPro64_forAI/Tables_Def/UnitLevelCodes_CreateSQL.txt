@@ -1,0 +1,9 @@
+CREATE TABLE [UnitLevelCodes] (
+  [ID] LONG DEFAULT GenUniqueID(),
+  [Level] INTEGER DEFAULT ,
+  [Description] TEXT(50) DEFAULT 
+);
+
+CREATE INDEX [ID] ON [UnitLevelCodes] ([ID]);
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [UnitLevelCodes] ([Level]);
+

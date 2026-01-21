@@ -1,0 +1,408 @@
+Option Compare Database
+Option Explicit
+'some of these functions have been flow charted
+
+Private Function GroupDiagnostic()
+'Jan 11, 1999
+'used when using hierarchy break points
+'loops once for each group of diagnostic data
+On Error GoTo errGroupDiagnostic
+Dim MyDB As Database, MyRS As Recordset, MyRS2 As Recordset
+Dim SqlText As String, i As Integer, X As Integer, Y
+Set MyDB = CurrentDb()
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM DiagnosticGroup;"
+DoCmd.RunSQL SqlText
+SqlText = "DELETE * FROM USysBreakTable;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+MakeHierarchyXtable
+
+Set MyRS = MyDB.OpenRecordset("HierarchyAll")
+
+For X = 0 To MyRS.Fields.count - 1
+    SqlText = "SELECT DISTINCT HierarchyAll.Hierarchy" & X + 1 & ".Name"
+    SqlText = SqlText & " FROM hierarchyall"
+    SqlText = SqlText & " WHERE ((Left([hierarchyall]![Hierarchy" & X + 1 & "].[Name],1)='~'));"
+    Set MyRS2 = MyDB.OpenRecordset(SqlText)
+    If MyRS2.RecordCount > 1 Then
+        For i = 1 To MyRS2.RecordCount
+            BreakUnit = MyRS2!Name
+            BuildPlotList MyRS2!Name
+            MyRS2.MoveNext
+        Next i
+    DoCmd.SetWarnings False
+    SqlText = "DELETE * FROM USysSuTableDynamic_SU;"
+    DoCmd.RunSQL SqlText
+    SqlText = "INSERT INTO USysSuTableDynamic_SU ( PlotNumber, SiteUnit ) SELECT USysBreakTable.PlotNumber, USysBreakTable.BreakCode FROM USysBreakTable;"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+    Diagnostic
+    sysCurrSU = "USysSuTableDynamic_SU"
+    DoCmd.SetWarnings False
+    SqlText = "INSERT INTO DiagnosticGroup ( [Level] )"
+    SqlText = SqlText & " SELECT Diagnostic.*, " & X + 1 & " AS [Level]"
+    SqlText = SqlText & " FROM Diagnostic;"
+    DoCmd.RunSQL SqlText
+    SqlText = "DELETE * FROM USysBreakTable;"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+    End If
+Next X
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errGroupDiagnostic:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function Diagnostic()
+'Oct. 8, 2002
+'calculates and write diagnostic info
+'used in report functions
+Dim MyTime As Single
+MyTime = Timer
+
+Dim TableOrQuery As String, X As Variant
+TableOrQuery = "MyRS5"
+On Error GoTo errDiagnostic
+Dim MyDB As Database, MyRS As Recordset, MyRsOutput As Recordset, MyAnswer As String, SqlText As String
+Dim i As Integer, InnerLoop As Integer
+Dim MaxPresence As Integer, MaxSignificance As Integer, CountPresence As Integer, MyField As String, RecNum As Integer
+Dim CountPresenceV As Integer
+Dim CountSignificance As Integer, AverageSignificance As Single, TotalSignificance As Single
+Dim Differential As Boolean, DominantDifferential As Boolean, ConstantDominant As Boolean, Constant As Boolean, ImportantCompanion As Boolean
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset(TableOrQuery)
+Set MyRsOutput = MyDB.OpenRecordset("diagnostic", dbOpenDynaset)
+
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM Diagnostic;"
+DoCmd.RunSQL SqlText
+
+For i = 1 To MyRS.RecordCount
+    MyAnswer = ""
+    MaxPresence = 0
+    MaxSignificance = 0
+    CountPresence = 0
+    CountPresenceV = 0
+    CountSignificance = 0
+    TotalSignificance = 0
+    AverageSignificance = 0
+    
+    Differential = False
+    DominantDifferential = False
+    ConstantDominant = False
+    Constant = False
+    ImportantCompanion = False
+    
+    For InnerLoop = 1 To MyRS.Fields.count - 1  'find maximum presence and significance
+        If Not IsNull(MyRS.Fields(InnerLoop).Value) Then
+            If Val(Left(MyRS.Fields(InnerLoop).Value, 1)) > MaxPresence Then
+                MaxPresence = Val(Left(MyRS.Fields(InnerLoop).Value, 1))
+                MaxSignificance = Val(Right(MyRS.Fields(InnerLoop).Value, 1))
+                AverageSignificance = Val(Right(MyRS.Fields(InnerLoop).Value, 1))
+                MyField = MyRS.Fields(InnerLoop).Name 'maybe use this later
+            End If
+        End If
+    Next InnerLoop
+    
+    For InnerLoop = 1 To MyRS.Fields.count - 1
+        If Not IsNull(MyRS.Fields(InnerLoop).Value) Then
+            If Val(Left(MyRS.Fields(InnerLoop).Value, 1)) > MaxPresence - 2 Then
+                CountPresence = CountPresence + 1
+            End If
+            If Val(Left(MyRS.Fields(InnerLoop).Value, 1)) = 5 Then
+                CountPresenceV = CountPresenceV + 1
+            End If
+            If Val(Right(MyRS.Fields(InnerLoop).Value, 1)) > MaxSignificance - 2 Then
+                CountSignificance = CountSignificance + 1
+            End If
+        End If
+    Next InnerLoop
+        
+    If CountPresence = 1 And MaxPresence >= 3 Then Differential = True
+    If CountSignificance = 1 And Differential = False And AverageSignificance >= 5 Then DominantDifferential = True Else DominantDifferential = False
+    If MaxPresence = 5 And CountPresence = 1 And MaxSignificance >= 5 Then ConstantDominant = True
+    If MaxPresence = 5 And CountPresenceV = 1 And MaxSignificance < 5 Then Constant = True
+    If Differential = False And DominantDifferential = False And ConstantDominant = False And Constant = False And MaxPresence >= 2 And CountPresence = 1 Then ImportantCompanion = True
+    
+    If Differential = True Then MyAnswer = "d"
+    If DominantDifferential = True Then
+        If MyAnswer <> "" Then
+            MyAnswer = MyAnswer & ", dd"
+        Else
+            MyAnswer = "dd"
+        End If
+    End If
+        
+    If ConstantDominant = True Then
+        If MyAnswer <> "" Then
+            MyAnswer = MyAnswer & ", cd"
+        Else
+            MyAnswer = "cd"
+        End If
+    End If
+    
+    If Constant = True Then
+        If MyAnswer <> "" Then
+            MyAnswer = MyAnswer & ", c"
+        Else
+            MyAnswer = "c"
+        End If
+    End If
+    
+    If ImportantCompanion = True Then
+        If MyAnswer <> "" Then
+            MyAnswer = MyAnswer & ", ic"
+        Else
+            MyAnswer = "ic"
+        End If
+    End If
+    
+    If MyAnswer > "" Then
+        MyRsOutput.AddNew
+        MyRsOutput!Species = MyRS!Species
+        MyRsOutput!Unit = MyField
+        MyRsOutput!Diagnosis = MyAnswer
+        MyRsOutput.Update
+    End If
+    MyRS.MoveNext
+Next i
+'MsgBox MyTime - Timer
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    MyRsOutput.Close
+    Set MyDB = Nothing
+    Exit Function
+errDiagnostic:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function MakeDiagnosticData(GroupType As String)
+'Oct. 8, 2002
+'called from Diagnostic function
+'create 5 diagnostic queries
+Dim MyTime
+MyTime = Timer
+On Error GoTo errMakeDiagnosticData
+If GroupType <> "SuTable" Then GoTo MyExit
+Dim MyDB As Database, MyRS1 As QueryDef, MyRS2 As QueryDef, MyRS3 As QueryDef, MyRS4 As QueryDef, MyRS5 As QueryDef
+Dim SqlText As String, SuTable As String
+Set MyDB = CurrentDb()
+SuTable = sysCurrSU
+
+On Error Resume Next
+DoCmd.DeleteObject acQuery, "MyRS1"
+DoCmd.DeleteObject acQuery, "MyRS2"
+DoCmd.DeleteObject acQuery, "MyRS3"
+DoCmd.DeleteObject acQuery, "MyRS4"
+DoCmd.DeleteObject acTable, "MyRS4"
+DoCmd.DeleteObject acQuery, "MyRS5"
+DoCmd.DeleteObject acTable, "MyRS1Lump"
+On Error GoTo errMakeDiagnosticData
+
+SqlText = "SELECT USysVeg.PlotNumber, 1 AS MyLayer, Species, Cover1 AS Cover"
+SqlText = SqlText & " FROM UsysVeg INNER JOIN " & SuTable & " ON UsysVeg.PlotNumber = " & SuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((UsysVeg.Cover1) Is Not Null));"
+SqlText = SqlText & " UNION SELECT USysVeg.PlotNumber, 2 AS MyLayer, Species, Cover2"
+SqlText = SqlText & " FROM UsysVeg INNER JOIN " & SuTable & " ON UsysVeg.PlotNumber = " & SuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((UsysVeg.Cover2) Is Not Null));"
+SqlText = SqlText & " UNION SELECT USysVeg.PlotNumber, 3 AS MyLayer, Species, Cover3"
+SqlText = SqlText & " FROM UsysVeg INNER JOIN " & SuTable & " ON UsysVeg.PlotNumber = " & SuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((UsysVeg.Cover3) Is Not Null));"
+SqlText = SqlText & " UNION SELECT USysVeg.PlotNumber, 4 AS MyLayer, Species, Cover4"
+SqlText = SqlText & " FROM UsysVeg INNER JOIN " & SuTable & " ON UsysVeg.PlotNumber = " & SuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((UsysVeg.Cover4) Is Not Null));"
+SqlText = SqlText & " UNION SELECT USysVeg.PlotNumber, 5 AS MyLayer, Species, Cover5"
+SqlText = SqlText & " FROM UsysVeg INNER JOIN " & SuTable & " ON UsysVeg.PlotNumber = " & SuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((UsysVeg.Cover5) Is Not Null));"
+SqlText = SqlText & " UNION SELECT USysVeg.PlotNumber, 6 AS MyLayer, Species, Cover6"
+SqlText = SqlText & " FROM UsysVeg INNER JOIN " & SuTable & " ON UsysVeg.PlotNumber = " & SuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((UsysVeg.Cover6) Is Not Null));"
+SqlText = SqlText & " UNION SELECT USysVeg.PlotNumber, 7 AS MyLayer, Species, Cover7"
+SqlText = SqlText & " FROM UsysVeg INNER JOIN " & SuTable & " ON UsysVeg.PlotNumber = " & SuTable & ".PlotNumber"
+SqlText = SqlText & " WHERE (((UsysVeg.Cover7) Is Not Null))"
+SqlText = SqlText & " ORDER BY mylayer;"
+Set MyRS1 = MyDB.CreateQueryDef("MyRS1", SqlText)
+
+If sysLumpingTable <> "" Then
+    DoCmd.CopyObject , "MyRS1Lump", acTable, "USysV2Veg"
+    SqlText = "INSERT INTO MyRS1Lump ( Plotnumber, Layer, Species, Cover ) SELECT PlotNumber, MyLayer, Species, Cover FROM MyRS1;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+    LumpVegData "MyRS1Lump", "MyRS1Lumpx", sysLumpingTable
+    SqlText = "SELECT PlotNumber, Species, Sum(Val([Cover])) AS MyCover FROM MyRS1Lump GROUP BY PlotNumber, Species;"
+Else
+    SqlText = "SELECT PlotNumber, Species, Sum(Val([Cover])) AS MyCover"
+    SqlText = SqlText & " FROM MyRS1"
+    SqlText = SqlText & " GROUP BY PlotNumber, Species;"
+End If
+Set MyRS2 = MyDB.CreateQueryDef("MyRS2", SqlText)
+
+SqlText = "SELECT SiteUnit, Count(PlotNumber) AS nPlots"
+SqlText = SqlText & " FROM " & SuTable
+SqlText = SqlText & " GROUP BY SiteUnit;"
+Set MyRS3 = MyDB.CreateQueryDef("MyRS3", SqlText)
+
+DoCmd.SetWarnings False
+SqlText = "SELECT USysBreakTable.Reference, USysBreakTable.BreakCode AS SiteUnit, MyRS2.Species, Count(MyRS2.MyCover) AS nCover, First(MyRS3.nPlots) AS FirstOfnPlots, Sum(MyRS2.MyCover) AS TotalCover INTO MyRS4"
+SqlText = SqlText & " FROM (MyRS2 INNER JOIN USysBreakTable ON MyRS2.PlotNumber = USysBreakTable.PlotNumber) INNER JOIN MyRS3 ON USysBreakTable.BreakCode = MyRS3.SiteUnit"
+SqlText = SqlText & " GROUP BY USysBreakTable.Reference, USysBreakTable.BreakCode, MyRS2.Species;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errMakeDiagnosticData:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Private Function DiagnosticPresenceClass(Presence As Double)
+'Oct. 8, 2002
+'calculates presence classes from presence valuues
+On Error GoTo errDiagnosticPresenceClass
+    If Presence >= 0 And Presence <= 0.2 Then
+        DiagnosticPresenceClass = "1" '"I"
+    End If
+    If Presence > 0.2 And Presence <= 0.4 Then
+        DiagnosticPresenceClass = "2" '"II"
+    End If
+    If Presence > 0.4 And Presence <= 0.6 Then
+        DiagnosticPresenceClass = "3" '"III"
+    End If
+    If Presence > 0.6 And Presence <= 0.8 Then
+        DiagnosticPresenceClass = "4" '"IV"
+    End If
+    If Presence > 0.8 And Presence <= 1 Then
+        DiagnosticPresenceClass = "5" '"V"
+    End If
+    
+MyExit:
+    On Error Resume Next
+    Exit Function
+errDiagnosticPresenceClass:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Private Function DeleteOldHierarchyQueries()
+Dim i
+On Error Resume Next
+    For i = 1 To 15
+        DoCmd.DeleteObject acQuery, "Hierarchy" & i
+    Next i
+    DoCmd.DeleteObject acQuery, "HierarchyAll"
+    DoCmd.DeleteObject acQuery, "HierarchyTitles"
+    DoCmd.DeleteObject acQuery, "HierarchyAndPlots"
+On Error GoTo 0
+End Function
+Private Function MakeHierarchyXtable()
+'Oct. 8, 2002
+'creates a live, square hierarchy table
+'calls DeleteOldQueries, BuildPlotList
+On Error GoTo errMakeHierarchyXtable
+Dim MyDB As Database, MyRS As Recordset, MyQD As QueryDef
+Dim SqlText As String, MyHierarchy As String, i As Integer, MySU As String
+Dim MySelect As String, MyFrom As String, MyOrder As String, MyWhere As String
+Dim LastQuery As String, MyPlotList As String
+
+Set MyDB = CurrentDb()
+DeleteOldHierarchyQueries
+MyHierarchy = CurrHierarchy()
+
+'create base query
+SqlText = "SELECT ID, Name, Parent"
+SqlText = SqlText & " FROM " & MyHierarchy
+SqlText = SqlText & " WHERE (((Parent) Is Null));"
+Set MyQD = MyDB.CreateQueryDef("Hierarchy1", SqlText)
+
+For i = 1 To 9
+SqlText = "SELECT " & MyHierarchy & ".Name, " & MyHierarchy & ".ID, " & MyHierarchy & ".Parent"
+SqlText = SqlText & " FROM Hierarchy" & i & " INNER JOIN " & MyHierarchy & " ON Hierarchy" & i & ".ID = " & MyHierarchy & ".Parent;"
+Set MyQD = MyDB.CreateQueryDef("Hierarchy" & i + 1, SqlText)
+Next i
+
+For i = 1 To 10
+Set MyRS = MyDB.OpenRecordset("Hierarchy" & i)
+    If MyRS.RecordCount = 0 Then
+        LastQuery = i - 1
+        GoTo Jump
+    End If
+    MyRS.Close
+Next i
+
+Jump:
+MyRS.Close
+
+'make HierarchyAll
+MyFrom = "Hierarchy1"
+For i = 1 To LastQuery
+    MySelect = MySelect & " Hierarchy" & i & ".Name,"
+    If Not i = LastQuery Then
+        MyFrom = "(" & MyFrom & " LEFT JOIN Hierarchy" & i + 1 & " ON Hierarchy" & i & ".ID = Hierarchy" & i + 1 & ".Parent)"
+    End If
+    MyOrder = MyOrder & " Hierarchy" & i & ".Name,"
+Next i
+    MySelect = "Select" & Left(MySelect, Len(MySelect) - 1)
+    MyFrom = " FROM " & MyFrom
+    MyOrder = " ORDER BY " & Left(MyOrder, Len(MyOrder) - 1) & ";"
+    SqlText = MySelect & MyFrom & MyOrder
+    Set MyQD = MyDB.CreateQueryDef("HierarchyAll", SqlText)
+
+'make HierarchyAndPlots
+MyPlotList = CurrPlotlist() & "_SU"
+MySelect = MySelect & ", PlotNumber"
+MyFrom = MyFrom & "LEFT JOIN " & MyPlotList & " ON Hierarchy" & LastQuery & ".Name = " & MyPlotList & ".SiteUnit"
+SqlText = MySelect & MyFrom & MyOrder
+Set MyQD = MyDB.CreateQueryDef("HierarchyAndPlots", SqlText)
+
+'make HierarchyTitles
+MyFrom = "Hierarchy1"
+MySelect = ""
+MyWhere = " WHERE (((Hierarchy1.Name) Like '~*'))"
+MyOrder = ""
+For i = 1 To LastQuery - 1
+    MySelect = MySelect & " Hierarchy" & i & ".Name,"
+    MyFrom = "(" & MyFrom & " LEFT JOIN Hierarchy" & i + 1 & " ON Hierarchy" & i & ".ID = Hierarchy" & i + 1 & ".Parent)"
+    If i = LastQuery - 1 Then
+        MyOrder = MyOrder & " Hierarchy" & i & ".Name,"
+    End If
+    If i > 1 Then
+        MyWhere = MyWhere & " OR (((Hierarchy" & i & ".Name) Like '~*'))"
+    End If
+Next i
+    MySelect = "Select DISTINCTROW" & Left(MySelect, Len(MySelect) - 1)
+    MyFrom = " FROM " & MyFrom
+    MyOrder = " ORDER BY " & Left(MyOrder, Len(MyOrder) - 1) & ";"
+    'SqlText = MySelect & MyFrom & MyOrder
+    SqlText = MySelect & MyFrom & MyWhere & MyOrder
+    Set MyQD = MyDB.CreateQueryDef("HierarchyTitles", SqlText)
+
+'delete old records from USysBreakTable
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM USysBreakTable;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errMakeHierarchyXtable:
+    MsgBox Err.Description
+    Resume MyExit
+End Function

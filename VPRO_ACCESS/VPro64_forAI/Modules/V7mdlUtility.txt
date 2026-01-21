@@ -1,0 +1,495 @@
+Option Compare Database
+Option Explicit
+Declare PtrSafe Function GetSystemDirectory Lib "kernel32" Alias "GetSystemDirectoryA" (ByVal lpBuffer As String, ByVal nSize As Long) As Long
+Declare PtrSafe Function GetWindowsDirectory Lib "kernel32" Alias "GetWindowsDirectoryA" (ByVal lpBuffer As String, ByVal nSize As Long) As Long
+    Const MB_OK = 0, MB_OKCANCEL = 1    ' Define buttons.
+    Const MB_YESNOCANCEL = 3, MB_YESNO = 4
+    Const MB_ICONSTOP = 16, MB_ICONQUESTION = 32   ' Define icons.
+    Const MB_ICONEXCLAMATION = 48, MB_ICONINFORMATION = 64
+    Const MB_DEFBUTTON2 = 256, IDYES = 6, IDNO = 7   ' Define other
+    Private Declare PtrSafe Function GlobalUnlock Lib "kernel32" (ByVal hMem As Long) As Long
+    Private Declare PtrSafe Function GlobalLock Lib "kernel32" (ByVal hMem As Long) As Long
+    Private Declare PtrSafe Function GlobalAlloc Lib "kernel32" (ByVal wFlags As Long, ByVal dwBytes As Long) As Long
+    Private Declare PtrSafe Function CloseClipboard Lib "User32" () As Long
+    Private Declare PtrSafe Function OpenClipboard Lib "User32" (ByVal hwnd As Long) As Long
+    Private Declare PtrSafe Function EmptyClipboard Lib "User32" () As Long
+    Private Declare PtrSafe Function lstrcpy Lib "kernel32" (ByVal lpString1 As Any, ByVal lpString2 As Any) As Long
+    Private Declare PtrSafe Function SetClipboardData Lib "User32" (ByVal wFormat As Long, ByVal hMem As Long) As Long
+'following were public
+    Private Const GHND = &H42
+    Private Const CF_TEXT = 1
+    Private Const MAXSIZE = 4096
+
+Public Function LocateTable(Unit As String) As String
+'Dec 09, 1999
+'returns which table a site unit is in
+On Error GoTo errLocateTable
+Dim MyDB As Database, MyRS As Recordset
+Dim Criteria As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("USysUserSiteUnitList")
+If MyRS.RecordCount = 0 Then GoTo Jump
+MyRS.MoveLast
+MyRS.MoveFirst
+'Criteria = "Name = '" & Unit & "'"
+Criteria = "SiteSeries = '" & Unit & "'"
+MyRS.FindFirst Criteria
+If MyRS.NoMatch Then
+    MyRS.Close
+    GoTo Jump
+Else
+    LocateTable = "USysUserSiteUnitList"
+    GoTo MyExit
+End If
+Jump:
+Set MyRS = MyDB.OpenRecordset("USysMasterSiteUnitList")
+MyRS.MoveLast
+MyRS.MoveFirst
+MyRS.FindFirst Criteria
+If MyRS.NoMatch Then
+    LocateTable = "None"
+    GoTo MyExit
+Else
+    LocateTable = "USysMasterSiteUnitList"
+    GoTo MyExit
+End If
+
+MyExit:
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errLocateTable:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Public Function ClipBoard_SetData(MyString As String)
+
+         Dim hGlobalMemory As Long, lpGlobalMemory As Long
+         Dim hClipMemory As Long, X As Long
+         ' Allocate moveable global memory.
+         hGlobalMemory = GlobalAlloc(GHND, Len(MyString) + 1)
+         ' Lock the block to get a far pointer         ' to this memory.
+         lpGlobalMemory = GlobalLock(hGlobalMemory)
+         ' Copy the string to this global memory.
+         lpGlobalMemory = lstrcpy(lpGlobalMemory, MyString)
+         ' Unlock the memory.
+         If GlobalUnlock(hGlobalMemory) <> 0 Then
+            'MsgBox "Could not unlock memory location. Copy aborted."
+            Exit Function
+            'GoTo OutOfHere2
+         End If
+         ' Open the Clipboard to copy data to.
+         If OpenClipboard(0&) = 0 Then
+            'MsgBox "Could not open the Clipboard. Copy aborted."
+            Exit Function
+            End If         ' Clear the Clipboard.
+         X = EmptyClipboard()         ' Copy the data to the Clipboard.
+         hClipMemory = SetClipboardData(CF_TEXT, hGlobalMemory)
+OutOfHere2:
+         If CloseClipboard() = 0 Then
+            MsgBox "Could not close Clipboard."
+        End If
+         End Function
+Public Function DeletePrimaryKey(SuTable As String)
+'Nov. 24, 1998
+'removes a primarykey from an attached table
+On Error GoTo errDeletePrimaryKey
+Dim MyDB As Database, MyTD As TableDef
+Dim MyWS As Workspace, RemoteDB As Database, dbName As String
+
+Set MyWS = DBEngine.Workspaces(0)
+Set MyDB = CurrentDb()
+Set MyTD = MyDB.TableDefs(SuTable)
+dbName = Right(MyTD.Connect, Len(MyTD.Connect) - 10)
+Set RemoteDB = MyWS.OpenDatabase(dbName)
+Set MyTD = RemoteDB.TableDefs(SuTable)
+
+MyTD.Indexes.Delete ("PrimaryKey")
+
+MyExit:
+    On Error Resume Next
+    Set RemoteDB = Nothing
+    Set MyDB = Nothing
+    Exit Function
+errDeletePrimaryKey:
+    If Err.Number = 3265 Then 'there wasn't a key to begin with
+        Resume MyExit
+    Else
+        MsgBox Err.Description
+        Resume MyExit
+    End If
+End Function
+
+Public Function GetSystemDir() As String
+'June 16, 1998
+'returns the operating system directory
+Dim Temp As String
+Dim ret As Long
+    Const MAX_LENGTH = 145
+    Temp = String$(MAX_LENGTH, 0)
+    ret = GetSystemDirectory(Temp, MAX_LENGTH)
+    Temp = Left$(Temp, ret)
+    If Temp <> "" And Right$(Temp, 1) <> "\" Then
+        GetSystemDir = Temp & "\"
+    Else
+        GetSystemDir = Temp
+    End If
+End Function
+
+Public Function Check4Table(db As Database, tbl As String) As Boolean
+'June 16, 1998
+'used when creating tables
+Dim TestTable As String, i As Integer
+
+Check4Table = False
+For i = 0 To db.TableDefs.count - 1
+    TestTable = db.TableDefs(i).Name
+    If TestTable = tbl Then Check4Table = True
+Next i
+
+End Function
+Public Function WarnUser(Msg As String, Title As String)
+'June 16, 1998
+'used in a number of places
+'returns the users response
+Dim DlgDef As Integer, Response As Integer
+    DlgDef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, DlgDef, Title)    ' Get user response.
+    If Response = 6 Then
+        WarnUser = 0
+    Else
+        WarnUser = 1
+    End If
+End Function
+Public Function CurrProject()
+'Aug. 13, 2002
+'returns the current project
+
+    CurrProject = clsVProReg.CurrProject
+
+End Function
+Public Function CurrHierarchy()
+'Aug. 13, 2002
+    CurrHierarchy = clsVProReg.CurrHierarchy & "_Hierarchy"
+
+End Function
+
+Public Function FormSet()
+'Aug. 13, 2002
+'returns the current formset
+
+FormSet = clsVProReg.DataFormName
+
+End Function
+Private Function ReAssignPlot()
+'June 16, 1998
+'used in the vpSorting module
+On Error GoTo errReAssignPlot
+Dim MyDB As Database, MyRecords As Recordset, MyControl As control
+Dim SiteUnit As String, Shifty As String, i As Integer, NumRecords As Integer
+Dim Unit As String
+    SiteUnit = CurrPlotlist() & "_SU"
+Set MyDB = CurrentDb()
+Set MyRecords = MyDB.OpenRecordset(SiteUnit, dbOpenDynaset)
+Set MyControl = Screen.ActiveControl
+    Shifty = MyControl.Value
+    MyRecords.MoveLast
+    NumRecords = MyRecords.RecordCount
+    MyRecords.MoveFirst
+For i = 0 To NumRecords - 1
+    Unit = MyRecords("PlotNumber")
+    If Unit = Shifty Then
+    MyRecords.Edit
+    MyRecords("SiteUnit") = Null
+    MyRecords.Update
+    End If
+    MyRecords.MoveNext
+Next i
+    MyControl.Requery
+    Forms![PlotListEdit]![PlotListSub].Requery
+
+MyExit:
+    On Error Resume Next
+    MyRecords.Close
+    Set MyDB = Nothing
+    Set MyControl = Nothing
+    Exit Function
+errReAssignPlot:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function IsLoaded(MyFormName)
+'June 16, 1998
+'used in a number of places
+' Accepts: a form name
+' Purpose: determines if a form is loaded
+' Returns: True if specified the form is loaded;
+'          False if the specified form is not loaded.
+On Error GoTo errIsLoaded
+Dim i As Integer
+
+    IsLoaded = False
+    For i = 0 To Forms.count - 1
+        If Forms(i).FormName = MyFormName Then
+            IsLoaded = True
+            Exit Function       ' Quit function once form has been found.
+        End If
+    Next
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errIsLoaded:
+    MsgBox Err.Description
+    Resume MyExit
+
+End Function
+Function ConvertLongName(xl As Object, SheetName As String) As String
+Dim i As Integer
+Dim Sheet As Variant, MySheet As String
+MySheet = SheetName
+i = 1
+MySheet = Left(MySheet, 29) & "~" & i
+
+Start:
+i = i + 1
+For Each Sheet In xl.Sheets
+    If Sheet.Name = MySheet Then
+        MySheet = Left(MySheet, 29) & "~" & i
+        GoTo Start
+    End If
+Next Sheet
+
+ConvertLongName = MySheet
+
+End Function
+Public Function SheetDuplicateName(xl As Object, SheetName As String) As Boolean
+Dim Sheet As Variant
+SheetDuplicateName = False
+
+For Each Sheet In xl.Sheets
+    If Sheet.Name = SheetName Then
+        SheetDuplicateName = True
+    End If
+Next Sheet
+
+End Function
+
+Public Function SheetNameCheck(SheetName, SubChar)
+'June 16, 1998
+'used in excel reports
+Dim MyPosition As Integer
+On Error GoTo errSheetNameCheck
+If SheetName = "" Then Exit Function
+If IsNull(SheetName) Then Exit Function
+
+If Len(SheetName) > 31 Then
+    SheetName = Left(SheetName, 31)
+End If
+
+Start:
+
+MyPosition = InStr(1, SheetName, ":")
+If MyPosition > 0 Then
+    Mid(SheetName, MyPosition, 1) = SubChar
+    MyPosition = InStr(1, SheetName, ":")
+    If MyPosition > 0 Then GoTo Start
+End If
+
+MyPosition = InStr(1, SheetName, "/")
+If MyPosition > 0 Then
+    Mid(SheetName, MyPosition, 1) = SubChar
+    MyPosition = InStr(1, SheetName, "/")
+    If MyPosition > 0 Then GoTo Start
+End If
+
+MyPosition = InStr(1, SheetName, "\")
+If MyPosition > 0 Then
+    Mid(SheetName, MyPosition, 1) = SubChar
+    MyPosition = InStr(1, SheetName, "\")
+    If MyPosition > 0 Then GoTo Start
+End If
+
+MyPosition = InStr(1, SheetName, "[")
+If MyPosition > 0 Then
+    Mid(SheetName, MyPosition, 1) = SubChar
+    MyPosition = InStr(1, SheetName, "[")
+    If MyPosition > 0 Then GoTo Start
+End If
+
+MyPosition = InStr(1, SheetName, "]")
+If MyPosition > 0 Then
+    Mid(SheetName, MyPosition, 1) = SubChar
+    MyPosition = InStr(1, SheetName, "]")
+    If MyPosition > 0 Then GoTo Start
+End If
+
+MyPosition = InStr(1, SheetName, "*")
+If MyPosition > 0 Then
+    Mid(SheetName, MyPosition, 1) = SubChar
+    MyPosition = InStr(1, SheetName, "*")
+    If MyPosition > 0 Then GoTo Start
+End If
+
+MyPosition = InStr(1, SheetName, "?")
+If MyPosition > 0 Then
+    Mid(SheetName, MyPosition, 1) = SubChar
+    MyPosition = InStr(1, SheetName, "?")
+    If MyPosition > 0 Then GoTo Start
+End If
+
+SheetNameCheck = SheetName
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSheetNameCheck:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Public Function Hide()
+'June 16, 1998
+'Hides the active form
+On Error GoTo errHide
+Dim MyForm As Form
+On Error Resume Next
+Set MyForm = Screen.ActiveForm
+   MyForm.Visible = 0
+MyExit:
+   On Error Resume Next
+   Exit Function
+errHide:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function RunEnterKeyActionNF()
+'June 16, 1998
+'This procedure sets the property of Move After Enter to Next Field
+    Application.SetOption "Move After Enter", 1
+End Function
+Public Function RunEnterKeyActionNR()
+'June 16, 1998
+'This procedure sets the property of Move After Enter to Next Record
+    Application.SetOption "Move After Enter", 2
+End Function
+Public Function ProgramName()
+'Apr. 08, 2002
+'returns the programs name
+    ProgramName = clsVProReg.ProgramName
+End Function
+Public Function CurrPlotlist()
+'Aug. 13, 2002
+'returns the current site unit list
+
+    CurrPlotlist = clsVProReg.CurrPlotlist
+
+End Function
+
+Public Function nPlotsInSuVrsProject()
+'Jan. 2, 2020
+
+'returns the number of plots in the site unit list
+'this function could be re-written using DAO
+'used in the form USysQuerySuList
+
+Dim nEnvPlots As Integer, nSuPlots As Integer
+On Error GoTo errSuQueryStats
+    nEnvPlots = DCount("PlotNumber", CurrProject() & "_ENV")
+    nSuPlots = DCount("PlotNumber", CurrPlotlist() & "_SU")
+    If Not IsNumeric(nEnvPlots) Or Not IsNumeric(nSuPlots) Then GoTo errSuQueryStats
+    If nSuPlots <= 0 Then GoTo errSuQueryStats
+    If nEnvPlots <= 0 Then GoTo errSuQueryStats
+    nPlotsInSuVrsProject = clsVProReg.CurrPlotlist & ": " & nSuPlots & " of " & nEnvPlots
+    
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSuQueryStats:
+    nPlotsInSuVrsProject = "Stats not available"
+    Resume MyExit
+End Function
+
+Public Function SuQueryStats()
+'Dec 29, 2019
+'returns the number of plots in the site unit list
+'this function could be re-written using DAO
+'used in the form USysQuerySuList
+Dim nEnvPlots As Integer, nSuPlots As Integer
+On Error GoTo errSuQueryStats
+    nEnvPlots = DCount("PlotNumber", CurrProject() & "_ENV")
+    nSuPlots = DCount("PlotNumber", CurrPlotlist() & "_SU")
+    If Not IsNumeric(nEnvPlots) Or Not IsNumeric(nSuPlots) Then GoTo errSuQueryStats
+    If nSuPlots <= 0 Then GoTo errSuQueryStats
+    If nEnvPlots <= 0 Then GoTo errSuQueryStats
+    SuQueryStats = nSuPlots & " of " & nEnvPlots & " records selected"
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSuQueryStats:
+    SuQueryStats = "Stats not available"
+    Resume MyExit
+End Function
+Public Function SetTo99(anyValue As Single)
+'Mar. 16, 1999
+If anyValue > 99.9 Then
+    SetTo99 = 99.9
+Else
+    SetTo99 = anyValue
+End If
+End Function
+Public Function NullToNothing(anyValue As Variant)
+DoEvents
+If IsNull(anyValue) Then
+        'NullToNothing = ""
+        NullToNothing = Null
+    Else
+        NullToNothing = anyValue
+    End If
+End Function
+
+Public Function Null2Question(anyValue As Variant)
+'Mar. 16, 1999
+If anyValue = "" Then 'IsNull(anyValue) Then
+    Null2Question = "?"
+Else
+    Null2Question = anyValue
+End If
+End Function
+
+Public Function JustR(MyData As Variant, MyFieldSize As Integer)
+'June 16, 1998
+'----------------------------------------------------
+'Use: Right justify output data
+'Gets string length and stores value in variable
+'Subtracts field length from string length
+'Returns the Tab position for that data
+'Example: Tab(50 - JustR(VariableName, 8))
+'----------------------------------------------------
+Dim DataLength As Integer
+    If Not IsNull(MyData) Then
+        DataLength = Len(MyData)
+        JustR = DataLength - MyFieldSize
+    Else
+        JustR = ""
+    End If
+End Function
+
+Public Function PadSpaces(InputString, NumberOfSpaces)
+'June 16, 1998
+'used in report and export functions
+Dim Pad
+On Error GoTo errPadSpaces
+    If Len(InputString) >= NumberOfSpaces Then
+        PadSpaces = InputString
+    Else
+        Pad = Space$(NumberOfSpaces - Len(InputString))
+        PadSpaces = InputString & (Pad)
+    End If
+MyExit:
+    On Error Resume Next
+    Exit Function
+errPadSpaces:
+    MsgBox Err.Description
+    Resume MyExit
+End Function

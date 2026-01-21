@@ -1,0 +1,8 @@
+CREATE TABLE [tblHelpSubjects] (
+  [Order] INTEGER DEFAULT ,
+  [Topic] TEXT(255) DEFAULT ,
+  [File] TEXT(255) DEFAULT 
+);
+
+CREATE INDEX [Order] ON [tblHelpSubjects] ([Order]);
+

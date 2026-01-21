@@ -1,0 +1,269 @@
+Option Compare Database
+Private Sub test()
+
+    Debug.Print PicDir
+
+End Sub
+Private Function PicDir() As String
+
+    PicDir = clsVProReg.Location & "ribbon\icons\"
+
+End Function
+
+Public Sub Sb01CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb01btn01"
+            Set image = LoadPictureGDIP(PicDir & "MainMenuFloat.png")
+        Case "sb01btn02"
+            Set image = LoadPictureGDIP(PicDir & "Form6x4.png")
+        Case "sb01cbtn02"
+            Set image = LoadPictureGDIP(PicDir & "Form6x4.png")
+        Case "sb01btn03"
+            Set image = LoadPictureGDIP(PicDir & "Form8x6.png")
+        Case "sb01cbtn03"
+            Set image = LoadPictureGDIP(PicDir & "Form8x6.png")
+        Case "sb01btn04"
+            Set image = LoadPictureGDIP(PicDir & "Form1x1.png")
+        Case "sb01cbtn04"
+            Set image = LoadPictureGDIP(PicDir & "Form1x1.png")
+        Case "sb01btn05"
+            Set image = LoadPictureGDIP(PicDir & "Form6x4.png")
+        Case "sb01cbtn05"
+            Set image = LoadPictureGDIP(PicDir & "Form6x4.png")
+        Case "sb01btn06"
+            Set image = LoadPictureGDIP(PicDir & "frmSIVIsite.png")
+        Case "sb01cbtn06"
+            Set image = LoadPictureGDIP(PicDir & "frmSIVIsite.png")
+        Case "sb01btn08"
+            Set image = LoadPictureGDIP(PicDir & "CHARS.png")
+        Case "sb01btn09"
+            Set image = LoadPictureGDIP(PicDir & "Form6x4.png")
+        Case "sb01btn01b"
+            Set image = LoadPictureGDIP(PicDir & "LumpMaster.png")
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb02CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb02btn01"
+            Set image = LoadPictureGDIP(PicDir & "MessageBoard.png")
+        Case "sb02btn02"
+            'set in xml
+        Case "sb02btn03"
+            'set in xml
+        Case "sb02btn04"
+            Set image = LoadPictureGDIP(PicDir & "UserSetup.png")
+        Case "sb02btn05"
+            Set image = LoadPictureGDIP(PicDir & "UserLog.png")
+        Case "sb02btn06"
+            Set image = LoadPictureGDIP(PicDir & "Herbarium.png")
+        Case "sb02btn08"
+            Set image = LoadPictureGDIP(PicDir & "frmSIVIsite.png")
+        Case "sb02btn09"
+            Set image = LoadPictureGDIP(PicDir & "GIF.png")
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb02bCallGetImage(control As IRibbonControl, ByRef image)
+
+'Mar. 10, 2009
+    Select Case control.ID
+        Case "sb02bbtn01"
+            Set image = LoadPictureGDIP(PicDir & "EditSiteUnits.png")
+        Case "sb02bbtn02"
+            Set image = LoadPictureGDIP(PicDir & "EditHierarchy.png")
+        Case "sb02bbtn03"
+            Set image = LoadPictureGDIP(PicDir & "AddRemoveUnits.png")
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb03CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb03btn"
+            Set image = LoadPictureGDIP(PicDir & "Dog.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb04CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb04btn"
+            Set image = LoadPictureGDIP(PicDir & "S.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb05CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb05btn"
+            Set image = LoadPictureGDIP(PicDir & "h.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb06CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb06btn"
+            Set image = LoadPictureGDIP(PicDir & "e.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb07CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb07btn"
+            Set image = LoadPictureGDIP(PicDir & "i.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb08CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb08btn01"
+            Set image = LoadPictureGDIP(PicDir & "v.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb10CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb10btn"
+            Set image = LoadPictureGDIP(PicDir & "vr.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb11CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb11btn"
+            Set image = LoadPictureGDIP(PicDir & "er.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb12CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb12btn"
+            Set image = LoadPictureGDIP(PicDir & "or.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb20CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb20btn01"
+            Set image = LoadPictureGDIP(PicDir & "TableOfLists.png")
+        Case "sb20btn02"
+            Set image = LoadPictureGDIP(PicDir & "USysAllSpecs.png")
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub Sb30CallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb30btn"
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub
+
+Public Sub SbReportsCallGetImage(control As IRibbonControl, ByRef image)
+
+    Select Case control.ID
+        Case "sb12btn07"
+            Set image = LoadPictureGDIP(PicDir & "GE.png")
+        Case ""
+            'set in xml
+        Case ""
+            'set in xml
+        Case Else
+            Set image = LoadPictureGDIP(PicDir & "help.png")
+    End Select
+    
+End Sub

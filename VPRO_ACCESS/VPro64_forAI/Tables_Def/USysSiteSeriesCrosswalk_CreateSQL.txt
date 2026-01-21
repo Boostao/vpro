@@ -1,0 +1,8 @@
+CREATE TABLE [USysSiteSeriesCrosswalk] (
+  [OLD_SS1] TEXT(255) DEFAULT ,
+  [MergedBGC_SS] TEXT(255) DEFAULT ,
+  [Region1] TEXT(255) DEFAULT ,
+  [Region 2] TEXT(255) DEFAULT 
+);
+
+

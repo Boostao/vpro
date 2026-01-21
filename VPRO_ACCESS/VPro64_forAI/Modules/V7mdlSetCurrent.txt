@@ -1,0 +1,165 @@
+Option Compare Database
+Option Explicit
+
+Private Sub FullPath(Project As String)
+
+'Feb. 20, 2020
+'set registry entry to location of project
+Dim MyProject As String, MyPath As String
+
+    If Project = "Sample" Then
+        MyPath = clsVProReg.ProgramName
+    Else
+        MyProject = Project & "_Env"
+        MyPath = Right(CurrentDb.TableDefs(MyProject).Connect, Len(CurrentDb.TableDefs(MyProject).Connect) - 10)
+    End If
+    
+    clsVProReg.ProjectPath = MyPath
+
+End Sub
+
+Function SetCurrentProject(Project As String)
+
+'Jan. 21, 2022
+
+On Error GoTo errSetCurrentProject
+
+'set registry entry to location of project
+    FullPath Project
+
+DoCmd.Hourglass True      ' turn on hourglass
+Dim MyDB As Database, SourceQuery As QueryDef, VerField As TableDef, SqlString As String
+Dim MyShifty As String, EnvSource As String, VegSource As String, OtherSource As String, MetadataSource As String, AdminSource As String
+Dim HumusSource As String, MineralSource As String, SortingSource As String, AuditSource As String
+Dim LimitTreeLayer As String, LimitShrubLayer As String, LimitHerbLayer As String, LimitMossLayer As String
+Dim TreeLayerQuery As QueryDef, ShrubLayerQuery As QueryDef, MySnapshot As Recordset, GroupQuery As QueryDef 'declare variables
+Dim HerbLayerQuery As QueryDef, MossLayerQuery As QueryDef
+Dim GroupQueryText As String
+
+Set MyDB = CurrentDb()    'create database object
+
+    DoCmd.SetWarnings False  'suspend system warnings
+    MyShifty = Project
+    If MyShifty = "" Then GoTo MyExit
+    EnvSource = MyShifty & "_Env"
+    VegSource = MyShifty & "_Veg"
+    OtherSource = MyShifty & "_Other"
+    HumusSource = MyShifty & "_Humus"
+    MineralSource = MyShifty & "_Mineral"
+    AuditSource = MyShifty & "_Audit"
+    MetadataSource = MyShifty & "_Metadata"
+    AdminSource = MyShifty & "_Admin"
+    
+'create USysEnv
+    DoCmd.DeleteObject A_QUERY, "UsysEnv"  'delete old query
+    SqlString = "SELECT DISTINCTROW [" & EnvSource & "].*, [" & AdminSource & "].*"
+    SqlString = SqlString & "FROM [" & EnvSource & "] INNER JOIN [" & AdminSource & "] ON [" & EnvSource & "].PlotNumber = [" & AdminSource & "].Plot;"
+    Set SourceQuery = MyDB.CreateQueryDef("UsysEnv")   ' Create query
+    SourceQuery.SQL = SqlString  'define query
+'create USysVeg
+    DoCmd.DeleteObject A_QUERY, "UsysVeg"  'delete old query
+    SqlString = "SELECT DISTINCTROW [" & VegSource & "].* FROM [" & VegSource & "];" 'create an SQL string
+    Set SourceQuery = MyDB.CreateQueryDef("UsysVeg")   ' Create query
+    SourceQuery.SQL = SqlString  'define query
+'create USysHumus
+    DoCmd.DeleteObject A_QUERY, "UsysHumus" 'delete old query
+    SqlString = "SELECT DISTINCTROW [" & HumusSource & "].* FROM [" & HumusSource & "];"  'create an SQL string
+    Set SourceQuery = MyDB.CreateQueryDef("UsysHumus")   ' Create query
+    SourceQuery.SQL = SqlString  'define query
+'create USysMineral
+    DoCmd.DeleteObject A_QUERY, "UsysMineral"  'delete old query
+    SqlString = "SELECT DISTINCTROW [" & MineralSource & "].* FROM [" & MineralSource & "];"  'create an SQL string
+    Set SourceQuery = MyDB.CreateQueryDef("UsysMineral")   ' Create query
+    SourceQuery.SQL = SqlString  'define query
+'create USysAuditTrail
+    DoCmd.DeleteObject A_QUERY, "UsysAuditTrail"  'delete old query
+    SqlString = "SELECT DISTINCTROW [" & AuditSource & "].* FROM [" & AuditSource & "] ORDER BY EditWhen;"  'create an SQL string
+    Set SourceQuery = MyDB.CreateQueryDef("UsysAuditTrail")   ' Create query
+    SourceQuery.SQL = SqlString  'define query
+'create USysOther
+    DoCmd.DeleteObject A_QUERY, "UsysOther"  'delete old query
+    SqlString = "SELECT DISTINCTROW [" & OtherSource & "].* FROM [" & OtherSource & "];"  'create an SQL string
+    Set SourceQuery = MyDB.CreateQueryDef("UsysOther")   ' Create query
+    SourceQuery.SQL = SqlString  'define query
+'create USysMetadata
+    DoCmd.DeleteObject A_QUERY, "UsysMetadata"  'delete old query
+    SqlString = "SELECT DISTINCTROW [" & MetadataSource & "].* FROM [" & MetadataSource & "];"  'create an SQL string
+    Set SourceQuery = MyDB.CreateQueryDef("UsysMetadata")   ' Create query
+    SourceQuery.SQL = SqlString  'define query
+    
+'set registry to current project
+    clsVProReg.CurrProject = Project
+    clsVProReg.CurrPlotlist = "None"
+
+'the next four lines create SQL strings that are used by the vegtables
+    If Not SuccessionProject(clsVProReg.CurrProject) Then
+        LimitTreeLayer = "SELECT DISTINCTROW ID, PlotNumber, Species, Cover1, Cover2, Cover3, TotalA, HeightA, Cover4, Cover5, Cover5a, Cover5b, Cover5c, TotalB, HeightB, Collected From [" & VegSource & "] WHERE ((([Cover1]) Is Not Null)) OR ((([Cover2]) Is Not Null)) OR ((([Cover3]) Is Not Null)) OR ((([TotalA]) Is Not Null)) OR ((([Cover4]) Is Not Null)) OR ((([Cover5]) Is Not Null)) OR ((([TotalB]) Is Not Null)) OR (((Cover5a) Is Not Null)) OR (((Cover5b) Is Not Null)) OR (((Cover5c) Is Not Null));"
+        LimitShrubLayer = "SELECT DISTINCTROW ID, PlotNumber, Species, Cover4, Cover5, Cover5a, Cover5b, Cover5c, TotalB, Collected From [" & VegSource & "] WHERE ((([Cover4]) Is Not Null)) OR ((([Cover5]) Is Not Null)) OR ((([TotalB]) Is Not Null)) OR (((Cover5a) Is Not Null)) OR (((Cover5b) Is Not Null)) OR (((Cover5c) Is Not Null));"
+        LimitHerbLayer = "SELECT DISTINCTROW ID, PlotNumber, Species, Cover6, Height6, Collected FROM [" & VegSource & "] WHERE ((Cover6 Is Not Null));"
+        LimitMossLayer = "SELECT DISTINCTROW ID, PlotNumber, Species, Cover7, Cover8, Cover9, Collected FROM [" & VegSource & "] WHERE (((Cover7) Is Not Null)) OR (((Cover8) Is Not Null)) OR (((Cover9) Is Not Null));"
+    Else
+        LimitTreeLayer = "SELECT DISTINCTROW ID, PlotNumber, SuccessionYear, Species, Cover1, Cover2, Cover3, TotalA, HeightA, Cover4, Cover5, TotalB, HeightB, Collected FROM [" & VegSource & "] WHERE (((Cover1) Is Not Null)) OR (((Cover2) Is Not Null)) OR (((Cover3) Is Not Null)) OR (((TotalA) Is Not Null)) OR (((Cover4) Is Not Null)) OR (((Cover5) Is Not Null)) OR (((TotalB) Is Not Null));"
+        LimitShrubLayer = "SELECT DISTINCTROW ID, PlotNumber, SuccessionYear, Species, Cover4, Cover5, TotalB, Collected FROM [" & VegSource & "] WHERE ((Cover4 Is Not Null)) OR ((Cover5 Is Not Null)) OR ((TotalB Is Not Null));"
+        LimitHerbLayer = "SELECT DISTINCTROW ID, PlotNumber, SuccessionYear, Species, Cover6, Collected FROM [" & VegSource & "] WHERE ((Cover6 Is Not Null));"
+        LimitMossLayer = "SELECT DISTINCTROW ID, PlotNumber, SuccessionYear, Species, Cover7, Collected FROM [" & VegSource & "] WHERE ((Cover7 Is Not Null));"
+    End If
+
+    DoCmd.DeleteObject A_QUERY, "UsysVegA"  'delete old query
+    DoCmd.DeleteObject A_QUERY, "UsysVegB"  'delete old query
+    DoCmd.DeleteObject A_QUERY, "UsysVegC"  'delete old query
+    DoCmd.DeleteObject A_QUERY, "UsysVegD"  'delete old query
+
+    Set TreeLayerQuery = MyDB.CreateQueryDef("USysVegA")   'create query
+    TreeLayerQuery.SQL = LimitTreeLayer                    'define query
+    
+    Set ShrubLayerQuery = MyDB.CreateQueryDef("USysVegB")  'create query
+    ShrubLayerQuery.SQL = LimitShrubLayer                  'define query
+    
+    Set HerbLayerQuery = MyDB.CreateQueryDef("USysVegC")   'create query
+    HerbLayerQuery.SQL = LimitHerbLayer                    'define query
+    
+    Set MossLayerQuery = MyDB.CreateQueryDef("USysVegD")   'create query
+    MossLayerQuery.SQL = LimitMossLayer                    'define query
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    DoCmd.Hourglass False
+    Set MyDB = Nothing
+    Exit Function
+errSetCurrentProject:
+    DoCmd.Hourglass False
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function SetCurrentHerbarium(Herbarium As String)
+
+'June 11, 2009
+On Error GoTo errSetCurrentHerbarium
+Dim MyDB As Database, SqlString As String
+Set MyDB = CurrentDb()    'create database object
+
+    DoCmd.SetWarnings False  'suspend system warnings
+    
+    DoCmd.DeleteObject A_QUERY, "qryHerbarium"  'delete old query
+StartAgain:
+    SqlString = "SELECT * FROM [" & Herbarium & "];"  'create an SQL string
+    MyDB.CreateQueryDef "qryHerbarium", SqlString
+    
+    clsVProReg.CurrHerbarium = Left(Herbarium, Len(Herbarium) - 10)
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    DoCmd.Hourglass False
+    Set MyDB = Nothing
+    Exit Function
+errSetCurrentHerbarium:
+    If Err.Number = 7874 Then
+        GoTo StartAgain
+    Else
+        MsgBox Err.Number & Chr(13) & Err.Description
+    End If
+    Resume MyExit
+End Function

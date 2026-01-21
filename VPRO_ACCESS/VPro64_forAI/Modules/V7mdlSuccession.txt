@@ -1,0 +1,193 @@
+Option Compare Database
+Option Explicit
+Dim CheckRS As Recordset
+Private Function PrintFieldDataForm()
+If SuccessionProject(CurrProject) Then
+    DoCmd.OpenReport "DataForm1PlotPerPage", acViewPreview
+Else
+    MsgBox "The current project isn't a successional project.", vbInformation, "VPro"
+End If
+
+End Function
+
+Private Function Convert2Succession(Optional Project As Variant) As Boolean
+'Oct. 25, 2002
+On Error GoTo errConvert2Succession
+Dim MyWS As Workspace, MyDB As Database, RemoteDB As Database
+Dim MyTD As TableDef, MyFld As Field
+Dim SqlText As String, NewYear As Integer, FirstProject As String
+Set MyDB = CurrentDb
+
+If IsMissing(Project) Then
+    Project = CurrProject
+End If
+FirstProject = Project
+Project = Project & "_Veg"
+
+If SuccessionProject(FirstProject) Then
+    MsgBox "This project is already a successional project"
+    GoTo MyExit
+End If
+
+If CurrProject = "Sample" Then
+    MsgBox "You can't perform this operation on the sample project"
+    GoTo MyExit
+End If
+
+NewYear = InputBox("What year do you wish to set the current data to?", "VPro - convert to succession", Year(Now()))
+If NewYear = Null Then GoTo MyExit
+
+If IsLoaded(FormSet) Then
+    DoCmd.Close acForm, FormSet()
+End If
+
+DoCmd.OpenForm "MainMenu"
+
+Do Until Screen.ActiveForm.Name = "MainMenu"
+    DoEvents
+Loop
+
+    SetCurrentProject "Sample"
+    Screen.ActiveForm.Recalc
+
+Set MyTD = MyDB.TableDefs(Project)
+Set MyWS = DBEngine.Workspaces(0)
+Set RemoteDB = MyWS.OpenDatabase(Mid(MyTD.Connect, 11))
+Set MyTD = RemoteDB.TableDefs(Project)
+MyTD.Fields.Append MyTD.CreateField("SuccessionYear", dbInteger)
+Set MyFld = MyTD.Fields("SuccessionYear")
+MyFld.DefaultValue = ""
+
+SqlText = "UPDATE [" & Project & "] SET SuccessionYear = " & NewYear & ";"
+DoCmd.RunSQL SqlText
+
+Project = Left(Project, Len(Project) - 4) & "_Env"
+Set MyTD = MyDB.TableDefs(Project)
+Set MyWS = DBEngine.Workspaces(0)
+Set RemoteDB = MyWS.OpenDatabase(Mid(MyTD.Connect, 11))
+Set MyTD = RemoteDB.TableDefs(Project)
+MyTD.Fields.Append MyTD.CreateField("SuccessionPlot", dbBoolean)
+    
+    SetCurrentProject FirstProject
+    If Screen.ActiveForm.Name = "MainMenu" Then
+        Screen.ActiveForm.Recalc
+    End If
+
+MsgBox "Your project has been converted", vbInformation, "VPro"
+
+MyExit:
+    On Error Resume Next
+    Set RemoteDB = Nothing
+    Set MyDB = Nothing
+    Set MyWS = Nothing
+    Exit Function
+errConvert2Succession:
+    If Err.Number = 3191 Then
+        MsgBox "This project is already a successional project"
+    Else
+        MsgBox Err.Number
+    End If
+    Resume MyExit
+End Function
+Public Function SuccessionProject(Project As String) As Boolean
+'Oct. 25, 2002
+Dim MyDB As Database, MyTable As TableDef
+Dim i As Integer
+Set MyDB = CurrentDb
+
+    Set MyTable = MyDB.TableDefs(Project & "_Veg")
+    For i = 0 To MyTable.Fields.count - 1
+        If MyTable.Fields(i).Name = "SuccessionYear" Then
+            SuccessionProject = True
+            GoTo MyExit
+        End If
+    Next i
+
+MyExit:
+    Set MyDB = Nothing
+
+End Function
+Private Function CopySuccessionData(PlotNumber As String, NewYear As Integer) As Boolean
+'Oct. 25, 2002
+On Error GoTo errCopySuccessionData
+Dim MyDB As Database, MyRS As Recordset, PasteRS As Recordset
+Dim SqlText As String, Yr2Copy As Integer, Project As String, MyField As String
+Dim i As Integer, X As Integer, Pasted As Boolean
+Set MyDB = CurrentDb
+Set CheckRS = MyDB.OpenRecordset(CurrProject & "_Veg", dbOpenDynaset)
+If CheckRS.RecordCount > 0 Then CheckRS.MoveLast
+
+Yr2Copy = InputBox("Enter as 4 digit integer for the year you wish to copy.", "Copy Succession Species")
+
+SqlText = "SELECT *"
+SqlText = SqlText & " FROM [" & CurrProject & "_Veg]"
+SqlText = SqlText & " WHERE (((PlotNumber)='" & PlotNumber & "') AND ((SuccessionYear)=" & Yr2Copy & "));"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+If MyRS.RecordCount = 0 Then
+    MsgBox "There were no records to copy from the year you specified.", vbInformation, "VPro"
+    CopySuccessionData = False
+    GoTo MyExit
+Else
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    CopySuccessionData = True
+    Set PasteRS = MyDB.OpenRecordset(CurrProject & "_Veg", dbOpenDynaset)
+End If
+
+
+For i = 1 To MyRS.RecordCount
+    Pasted = False
+    If Not Check4DuplicateData(MyRS!Species, NewYear, MyRS!PlotNumber) Then
+        PasteRS.AddNew
+        PasteRS!PlotNumber = MyRS!PlotNumber
+        PasteRS!SuccessionYear = NewYear
+        PasteRS!Species = MyRS!Species
+        For X = 1 To 7
+            MyField = "Cover" & X
+            If Not IsNull(MyRS(MyField)) Then
+                PasteRS(MyField) = 0 'MyRS(MyField)
+                Pasted = True
+                GoTo Jump
+            End If
+        Next X
+Jump:
+        PasteRS.Update
+        MyRS.MoveNext
+    End If
+Next i
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    PasteRS.Close
+    CheckRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errCopySuccessionData:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Function Check4DuplicateData(Species As String, Yr2Check As Integer, PlotNumber) As Boolean
+'Oct. 25, 2002
+On Error GoTo errCheck4DuplicateData
+Dim Criteria As String
+CheckRS.MoveFirst
+Criteria = "PlotNumber = '" & PlotNumber & "' And Species = '" & Species & "' And SuccessionYear = " & Yr2Check
+
+CheckRS.FindFirst Criteria
+
+If CheckRS.NoMatch Then
+    'do nothing
+Else
+    Check4DuplicateData = True
+End If
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errCheck4DuplicateData:
+    MsgBox Err.Description
+    Resume MyExit
+End Function

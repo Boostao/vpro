@@ -1,0 +1,12 @@
+CREATE TABLE [USysAuditTrail] (
+  [Project] TEXT(255) DEFAULT ,
+  [User] TEXT(255) DEFAULT ,
+  [PlotNumber] TEXT(7) DEFAULT ,
+  [Table] TEXT(50) DEFAULT ,
+  [EditField] TEXT(100) DEFAULT ,
+  [EditWhen] DATETIME DEFAULT ,
+  [BeforeEdit] MEMO DEFAULT ,
+  [AfterEdit] MEMO DEFAULT 
+);
+
+

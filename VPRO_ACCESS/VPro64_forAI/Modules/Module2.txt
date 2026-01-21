@@ -1,0 +1,190 @@
+Option Compare Database
+Option Explicit
+
+Public Sub ExportAllObjects()
+    On Error GoTo ErrHandler
+    
+    Dim basePath As String
+    basePath = "C:\Users\BrunoTremblay\Work\VPRO_ACCESS\VPro64_forAI\"
+    
+    ' Ensure base path exists (create if missing)
+    If Dir(basePath, vbDirectory) = "" Then MkDir basePath
+    
+    Dim folder As String
+    Dim db As DAO.Database
+    Set db = CurrentDb
+    
+    ' Helper sub to create folder
+    Dim CreateFolder As String
+    CreateFolder = basePath & "{FOLDER}"
+    
+    ' Forms
+    folder = "Forms"
+    If Dir(basePath & folder, vbDirectory) = "" Then MkDir basePath & folder
+    Dim obj As AccessObject
+    For Each obj In CurrentProject.AllForms
+        If Not obj.Name Like "~*" And Not obj.Name Like "_*" Then
+            On Error Resume Next
+            Application.SaveAsText acForm, obj.Name, basePath & folder & "\" & SanitizeFileName(obj.Name) & ".txt"
+            On Error GoTo ErrHandler
+        End If
+    Next obj
+    
+    ' Reports
+    folder = "Reports"
+    If Dir(basePath & folder, vbDirectory) = "" Then MkDir basePath & folder
+    For Each obj In CurrentProject.AllReports
+        If Not obj.Name Like "~*" And Not obj.Name Like "_*" Then
+            On Error Resume Next
+            Application.SaveAsText acReport, obj.Name, basePath & folder & "\" & SanitizeFileName(obj.Name) & ".txt"
+            On Error GoTo ErrHandler
+        End If
+    Next obj
+    
+    ' Modules
+    folder = "Modules"
+    If Dir(basePath & folder, vbDirectory) = "" Then MkDir basePath & folder
+    For Each obj In CurrentProject.AllModules
+        If Not obj.Name Like "~*" And Not obj.Name Like "_*" Then
+            On Error Resume Next
+            Application.SaveAsText acModule, obj.Name, basePath & folder & "\" & SanitizeFileName(obj.Name) & ".txt"
+            On Error GoTo ErrHandler
+        End If
+    Next obj
+    
+    ' Macros
+    folder = "Macros"
+    If Dir(basePath & folder, vbDirectory) = "" Then MkDir basePath & folder
+    For Each obj In CurrentProject.AllMacros
+        If Not obj.Name Like "~*" And Not obj.Name Like "_*" Then
+            On Error Resume Next
+            Application.SaveAsText acMacro, obj.Name, basePath & folder & "\" & SanitizeFileName(obj.Name) & ".txt"
+            On Error GoTo ErrHandler
+        End If
+    Next obj
+    
+    ' Queries (using DAO.QueryDefs)
+    folder = "Queries"
+    If Dir(basePath & folder, vbDirectory) = "" Then MkDir basePath & folder
+    Dim qdf As DAO.QueryDef
+    For Each qdf In db.QueryDefs
+        If Not qdf.Name Like "MSys*" And Not qdf.Name Like "~*" And Not qdf.Name Like "_*" Then
+            On Error Resume Next
+            Application.SaveAsText acQuery, qdf.Name, basePath & folder & "\" & SanitizeFileName(qdf.Name) & ".txt"
+            On Error GoTo ErrHandler
+        End If
+    Next qdf
+    
+    ' Tables (definitions + data as CSV)
+    folder = "Tables_Def"
+    If Dir(basePath & folder, vbDirectory) = "" Then MkDir basePath & folder
+    Dim dataFolder As String
+    dataFolder = "Tables_Data"
+    If Dir(basePath & dataFolder, vbDirectory) = "" Then MkDir basePath & dataFolder
+    
+    Dim tdf As DAO.TableDef
+    For Each tdf In db.TableDefs
+        If Left(tdf.Name, 4) <> "MSys" And tdf.Connect = "" Then  ' Local tables only (no linked)
+            If Not tdf.Name Like "~*" And Not tdf.Name Like "_*" Then
+                On Error Resume Next
+                ' Definition (schema + properties)
+                ' Application.SaveAsText acTable, tdf.Name, basePath & folder & "\" & SanitizeFileName(tdf.Name) & "_def.txt"
+                
+                                ' Inside the For Each tdf In db.TableDefs loop, after the If conditions...
+                
+                Dim strSQL As String
+                Dim idx As DAO.index
+                Dim fld As DAO.Field
+                Dim strFile As String
+                strFile = basePath & folder & "\" & SanitizeFileName(tdf.Name) & "_CreateSQL.txt"
+                
+                strSQL = "CREATE TABLE [" & tdf.Name & "] (" & vbCrLf
+                
+                For Each fld In tdf.Fields
+                    strSQL = strSQL & "  [" & fld.Name & "] " & FieldTypeToSQL(fld.type)
+                    If fld.Size > 0 And fld.type = dbText Or fld.type = dbVarBinary Then
+                        strSQL = strSQL & "(" & fld.Size & ")"
+                    End If
+                    If fld.Required Then strSQL = strSQL & " NOT NULL"
+                    If Not IsNull(fld.DefaultValue) Then strSQL = strSQL & " DEFAULT " & fld.DefaultValue
+                    strSQL = strSQL & "," & vbCrLf
+                Next fld
+                
+                ' Remove trailing comma
+                If Right(strSQL, 3) = "," & vbCrLf Then strSQL = Left(strSQL, Len(strSQL) - 3) & vbCrLf
+                
+                strSQL = strSQL & ");" & vbCrLf & vbCrLf
+                
+                ' Add indexes
+                For Each idx In tdf.Indexes
+                    If Not idx.Foreign Then  ' Skip relationship indexes for now
+                        strSQL = strSQL & "CREATE "
+                        If idx.Primary Then strSQL = strSQL & "PRIMARY "
+                        If idx.Unique Then strSQL = strSQL & "UNIQUE "
+                        strSQL = strSQL & "INDEX [" & idx.Name & "] ON [" & tdf.Name & "] ("
+                        
+                        Dim i As Integer
+                        For i = 0 To idx.Fields.count - 1
+                            strSQL = strSQL & "[" & idx.Fields(i).Name & "]"
+                            If i < idx.Fields.count - 1 Then strSQL = strSQL & ", "
+                        Next i
+                        strSQL = strSQL & ");" & vbCrLf
+                    End If
+                Next idx
+                
+                ' Write to file
+                Dim fileNum As Integer
+                fileNum = FreeFile
+                Open strFile For Output As #fileNum
+                Print #fileNum, strSQL
+                Close #fileNum
+                
+                ' Data as CSV (includes headers)
+                DoCmd.TransferText acExportDelim, , tdf.Name, basePath & dataFolder & "\" & SanitizeFileName(tdf.Name) & ".csv", True
+                On Error GoTo ErrHandler
+            End If
+        End If
+    Next tdf
+    
+    MsgBox "Export completed successfully! Check folders under: " & basePath, vbInformation
+    
+ExitSub:
+    Set db = Nothing
+    Exit Sub
+    
+ErrHandler:
+    MsgBox "Error " & Err.Number & ": " & Err.Description & vbCrLf & _
+           "Continuing with remaining objects...", vbExclamation
+    Resume Next
+End Sub
+
+' Helper: Remove invalid filename chars
+Private Function SanitizeFileName(strName As String) As String
+    Dim invalidChars As String
+    invalidChars = "\/:*?""<>|"
+    Dim i As Integer
+    SanitizeFileName = strName
+    For i = 1 To Len(invalidChars)
+        SanitizeFileName = Replace(SanitizeFileName, Mid(invalidChars, i, 1), "_")
+    Next i
+End Function
+
+Private Function FieldTypeToSQL(dbType As Long) As String
+    Select Case dbType
+        Case dbBoolean: FieldTypeToSQL = "BIT"
+        Case dbByte: FieldTypeToSQL = "BYTE"
+        Case dbInteger: FieldTypeToSQL = "INTEGER"
+        Case dbLong: FieldTypeToSQL = "LONG"
+        Case dbSingle: FieldTypeToSQL = "SINGLE"
+        Case dbDouble: FieldTypeToSQL = "DOUBLE"
+        Case dbCurrency: FieldTypeToSQL = "CURRENCY"
+        Case dbDate: FieldTypeToSQL = "DATETIME"
+        Case dbText: FieldTypeToSQL = "TEXT"
+        Case dbLongBinary: FieldTypeToSQL = "LONGBINARY"
+        Case dbMemo: FieldTypeToSQL = "MEMO"
+        Case dbGUID: FieldTypeToSQL = "GUID"
+        Case dbBigInt: FieldTypeToSQL = "BIGINT"
+        Case dbVarBinary: FieldTypeToSQL = "VARBINARY"
+        Case Else: FieldTypeToSQL = "UNKNOWN(" & dbType & ")"
+    End Select
+End Function

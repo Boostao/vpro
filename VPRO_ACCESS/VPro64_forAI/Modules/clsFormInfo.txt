@@ -1,0 +1,108 @@
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Compare Database
+Option Explicit
+'This Class saves form information and contains functions for restoring form properties such as laocation
+
+Private Declare PtrSafe Function GetWindowRect _
+ Lib "User32" _
+ (ByVal hwnd As Long, _
+ lpRect As RECT) As Long
+ 
+ Private Declare PtrSafe Function MoveWindow _
+ Lib "User32" _
+ (ByVal hwnd As Long, _
+ ByVal X As Long, ByVal Y As Long, ByVal nWidth As Long, _
+ ByVal nHeight As Long, ByVal bRepaint As Long) As Long
+
+Private Type RECT
+    Left As Long
+    Top As Long
+    Right As Long
+    Bottom As Long
+End Type
+
+Private Const strApp = "VPro64"
+Public Function SetFormloc(FormName As String, hwnd As Long)
+    Dim rct As RECT
+    Call GetWindowRect(hwnd, rct)
+    CurrFormLoc.Left = rct.Left
+    CurrFormLoc.Bottom = rct.Bottom
+    CurrFormLoc.Right = rct.Right
+    CurrFormLoc.Top = rct.Top
+End Function
+
+Public Function SaveFormloc(FormName As String, hwnd As Long)
+    Dim rct As RECT
+    Call GetWindowRect(hwnd, rct)
+    SetFormloc FormName, hwnd
+    SaveSetting strApp, FormName, "Left", rct.Left
+    SaveSetting strApp, FormName, "Top", rct.Top
+    SaveSetting strApp, FormName, "Bottom", rct.Bottom
+    SaveSetting strApp, FormName, "Right", rct.Right
+End Function
+
+Public Function RestoreFormloc(FormName As String, hwnd As Long)
+    Dim rct As RECT
+    rct.Left = GetSetting(strApp, FormName, "Left", 100)
+    rct.Top = GetSetting(strApp, FormName, "Top", 100)
+    rct.Bottom = GetSetting(strApp, FormName, "Bottom", 200)
+    rct.Right = GetSetting(strApp, FormName, "Right", 200)
+    Select Case FormName
+        Case "USysAssignSU"
+            MoveWindow hwnd, rct.Left, rct.Top - 100, rct.Right - rct.Left, rct.Bottom - rct.Top, 1
+        Case "frmMainMenuFloat"
+            MoveWindow hwnd, rct.Left, rct.Top, 291, rct.Bottom - rct.Top, 1
+        Case Else
+            MoveWindow hwnd, rct.Left, rct.Top, rct.Right - rct.Left, rct.Bottom - rct.Top, 1
+    End Select
+    
+End Function
+
+Public Function IsDataFormLoaded() As Boolean
+Dim i
+
+For i = 0 To Application.Forms.count - 1
+    Select Case Application.Forms(i).Name
+        Case "FS882-6x4"
+            IsDataFormLoaded = True
+        Case "FS882-8x6"
+            IsDataFormLoaded = True
+        Case Else
+            'do nothing
+    End Select
+Next i
+
+End Function
+
+Public Function IsFormLoaded(FormName As String) As Boolean
+Dim i
+
+For i = 0 To Application.Forms.count - 1
+    Select Case Application.Forms(i).Name
+        Case FormName
+            IsFormLoaded = True
+        Case Else
+            'do nothing
+    End Select
+Next i
+
+End Function
+
+Public Property Get AssignedSuSource() As String
+    AssignedSuSource = GetSetting(strApp, "Current", "AssignedSuSource", 1)
+End Property
+
+Public Property Let AssignedSuSource(AssignedSuSource As String)
+    SaveSetting strApp, "Current", "AssignedSuSource", AssignedSuSource
+End Property
+
+Public Property Get ProjectIdSource() As String
+    ProjectIdSource = GetSetting(strApp, "Current", "ProjectIdSource", 2)
+End Property
+
+Public Property Let ProjectIdSource(ProjectIdSource As String)
+    SaveSetting strApp, "Current", "ProjectIdSource", ProjectIdSource
+End Property

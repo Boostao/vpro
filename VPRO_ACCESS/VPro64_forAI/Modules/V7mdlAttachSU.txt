@@ -1,0 +1,244 @@
+Option Compare Database
+Option Explicit
+
+Sub AttachSUTables()
+'On Error GoTo errAttachEnv
+
+    Dim MyDB As Database, RemoteDB As Database ', MyRS As Recordset
+    Dim RemoteDbName As String, ProjectList As String
+    Dim MyList As Variant, i As Integer, Msg As String, MyTest As Variant
+    Dim MyProject As String, MasterAttacher As Boolean
+    
+    Set MyDB = CurrentDb()
+    ReDim sysSelectedItems(0)
+    RemoteDbName = GetRemoteDb()
+    If RemoteDbName = "" Then GoTo MyExit
+    Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(RemoteDbName)
+    ProjectList = BuildProjectPickList(RemoteDB, MyDB)
+    MasterAttacher = False
+
+If ProjectList = "" Then
+    MsgBox "No site unit tables found.", vbInformation
+    GoTo MyExit
+End If
+
+Call PickProjects(ProjectList)
+
+Do
+    DoEvents
+Loop Until UBound(sysSelectedItems) > 0
+
+If UBound(sysSelectedItems) = 999 Then GoTo MyExit
+
+For i = 1 To UBound(sysSelectedItems)
+    MyProject = sysSelectedItems(i)
+    'test to see if the user is allowed to perform a master attachment
+    If Not IsMasterAttacher Then
+        If InStr(1, MyProject, "master") > 0 Then
+            Msg = "The SU table """ & MyProject & """ is a master table.  You can't attach this table but you can create a working copy.  Would you like VPro to create a working copy?"
+            MyTest = MsgBox(Msg, vbYesNo, "VPro")
+            If MyTest = vbYes Then
+                'make copy of the master
+                If MakeMasterCopy(RemoteDB, MyProject) Then
+                    GoTo MyExit
+                Else
+                    MsgBox "Unable to make copy.", vbInformation, "VPro"
+                    GoTo MyExit
+                End If
+            Else
+                GoTo MyExit
+            End If
+        End If
+    End If
+    AttachSUTables2 MyProject, RemoteDB
+Next i
+MyDB.TableDefs.Refresh
+
+ReDim sysSelectedItems(0)
+        
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Set RemoteDB = Nothing
+    Exit Sub
+errAttachEnv:
+    If Err.Number = 3343 Then
+        MsgBox "This isn't >= Access 97 database format"
+        Resume MyExit
+    Else
+        MsgBox Err.Description
+        Resume MyExit
+    End If
+End Sub
+Private Sub AttachSUTables2(ProjectName As String, RemoteDB As Database)
+Dim TestTable As String
+
+TestTable = ProjectName & "_SU"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+
+MyExit:
+
+End Sub
+
+Private Function GetRemoteDb() As String
+
+'Sep 22, 2008
+Dim MyDB As Database, RemoteDB As Database
+Dim MyFile As String, MyTitle As String
+sysPickTable = "None"
+
+    Set MyDB = CurrentDb()
+    MyFile = ""
+    MyTitle = ProgramName()
+    MyFile = GetFileName(MyTitle, True)
+    If MyFile = "" Then Exit Function
+    GetRemoteDb = MyFile
+
+End Function
+
+Private Function BuildProjectPickList(RemoteDB As Database, LocalDB As Database) As String
+Dim i As Integer, strTestTable As String, strList As String, ListLen As Integer
+
+        For i = 0 To RemoteDB.TableDefs.count - 1
+            strTestTable = RemoteDB.TableDefs(i).Name
+            If InStr(1, strTestTable, "_SU") > 0 Then
+                If Not TestForTableInVPro(LocalDB, strTestTable) Then
+                    strList = strList & Left(strTestTable, Len(strTestTable) - Len("_SU")) & ";"
+                End If
+            End If
+        Next i
+
+        ListLen = Len(strList)
+        If ListLen > 0 Then
+            BuildProjectPickList = Left(strList, ListLen - 1)
+        Else
+            BuildProjectPickList = ""
+        End If
+
+End Function
+
+Private Sub PickProjects(ProjectList As String)
+
+On Error GoTo myerr
+
+DoCmd.OpenForm "USysPickTable", A_NORMAL, , , , A_NORMAL
+Forms![USysPickTable]![PickList].RowSource = ProjectList
+
+MyExit:
+    On Error Resume Next
+    Exit Sub
+myerr:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Function TestForTableInVPro(MyDB As Database, TableName As String) As Boolean
+'tests the current DB for a table
+TestForTableInVPro = False
+Dim i As Integer, strTestTable As String
+   
+    For i = 0 To MyDB.TableDefs.count - 1
+        strTestTable = MyDB.TableDefs(i).Name
+        If strTestTable = TableName Then
+            TestForTableInVPro = True
+        End If
+    Next i
+    
+End Function
+
+Private Function IsMasterAttacher() As Boolean
+
+Dim MyDB As Database, MyRS As Recordset
+Dim CurrUser As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("USysUserRestrictions", dbOpenDynaset)
+CurrUser = clsVProReg.UserName
+'MsgBox CurrUser
+
+MyRS.MoveFirst
+MyRS.FindFirst "UserName = '" & CurrUser & "'"
+
+If MyRS.NoMatch Then
+    IsMasterAttacher = False
+Else
+    IsMasterAttacher = True
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+
+End Function
+
+Private Function MakeMasterCopy(MyDB As Database, MasterName As String) As Boolean
+
+Dim NewName As String, Msg As String, MyTest As String
+Dim RemoteDB As Database
+Set RemoteDB = MyDB
+Msg = "Enter a name for your new SU table.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length."
+NewName = InputBox(Msg, "VPro")
+
+    If CheckForExistingTable(MyDB, NewName & "_SU") Then 'check for tables of this name
+        MakeMasterCopy = False
+        GoTo MyExit
+    End If
+
+    If InStr(1, NewName, "master") > 0 Then
+        Msg = "The word ""master"" is a reserved word.  Please enter correct password or press cancel."
+        MyTest = InputBox(Msg, "VPro")
+        If MyTest = "Del" Then
+        
+        Else
+            MakeMasterCopy = False
+            GoTo MyExit
+        End If
+    End If
+    
+    If NewName = "" Then
+        MakeMasterCopy = False
+        GoTo MyExit
+    End If
+    NewName = NewName & "_SU"
+    DoCmd.TransferDatabase acImport, "Microsoft Access", MyDB.Name, acTable, MasterName & "_SU", NewName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", MyDB.Name, acTable, NewName, NewName
+    DoCmd.DeleteObject acTable, NewName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", MyDB.Name, acTable, NewName, NewName
+    MakeMasterCopy = True
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+
+End Function
+
+Private Function CheckForExistingTable(RemoteDB As Database, TableName As String) As Boolean
+
+Dim TestTable As String, i As Integer
+CheckForExistingTable = False
+
+    For i = 0 To RemoteDB.TableDefs.count - 1
+        TestTable = RemoteDB.TableDefs(i).Name
+        If TestTable = TableName Then
+            MsgBox "There is already a SU table of that name.  Try a different name.", vbInformation, "VPro"
+            CheckForExistingTable = True
+            GoTo MyExit
+        Else
+        
+        End If
+    Next i
+    
+    For i = 0 To CurrentDb.TableDefs.count - 1
+        TestTable = CurrentDb.TableDefs(i).Name
+        If TestTable = TableName Then
+            MsgBox "There is already a SU table of that name.  Try a different name.", vbInformation, "VPro"
+            CheckForExistingTable = True
+            GoTo MyExit
+        Else
+        
+        End If
+    Next i
+
+MyExit:
+End Function

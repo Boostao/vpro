@@ -1,0 +1,34 @@
+CREATE TABLE [USysSoilMineralTable] (
+  [PlotNumber] TEXT(7) NOT NULL DEFAULT ,
+  [Horizon] TEXT(8) DEFAULT ,
+  [UpperDepth] SINGLE DEFAULT ,
+  [LowerDepth] SINGLE DEFAULT ,
+  [PitDepthLimit] TEXT(1) DEFAULT ,
+  [Colour] TEXT(14) DEFAULT ,
+  [ASP] INTEGER DEFAULT ,
+  [Texture] TEXT(4) DEFAULT ,
+  [PercentCoarseFragsGravel] INTEGER DEFAULT ,
+  [PercentCoarseFragsCobbles] INTEGER DEFAULT ,
+  [PercentCoarseFragsStones] INTEGER DEFAULT ,
+  [PercentCoarseFragsTotal] INTEGER DEFAULT ,
+  [PercentCoarseFragsShape] TEXT(1) DEFAULT ,
+  [RootsAbundance] TEXT(6) DEFAULT ,
+  [RootsSize] TEXT(6) DEFAULT ,
+  [MineralStructureClass] TEXT(3) DEFAULT ,
+  [MineralStructureKind] TEXT(7) DEFAULT ,
+  [MineralFormpH] SINGLE DEFAULT ,
+  [MottlesAbundance] TEXT(1) DEFAULT ,
+  [MottlesSize] TEXT(1) DEFAULT ,
+  [MottlesContrast] TEXT(1) DEFAULT ,
+  [ClayFilmsFreq] TEXT(2) DEFAULT ,
+  [ClayFilmThickness] TEXT(3) DEFAULT ,
+  [Effervescence] TEXT(2) DEFAULT ,
+  [Porosity] TEXT(1) DEFAULT ,
+  [Comments] MEMO DEFAULT ,
+  [Flag] BIT DEFAULT ,
+  [ID] LONG DEFAULT GenUniqueID()
+);
+
+CREATE UNIQUE INDEX [ID] ON [USysSoilMineralTable] ([ID]);
+CREATE INDEX [PlotNumber] ON [USysSoilMineralTable] ([PlotNumber]);
+

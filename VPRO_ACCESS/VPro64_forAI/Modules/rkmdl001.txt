@@ -1,0 +1,52 @@
+Option Compare Database
+
+Private Type OSVERSIONINFO
+    dwOSVersionInfoSize As Long
+    dwMajorVersion As Long
+    dwMinorVersion As Long
+    dwBuildNumber As Long
+    dwPlatformId As Long
+    szCSDVersion As String * 128
+End Type
+
+Private Declare PtrSafe Function GetVersionEx Lib "kernel32" Alias "GetVersionExA" (lpVersionInformation As OSVERSIONINFO) As Long
+'Read more at http://vbadud.blogspot.com/2010/05/how-to-get-os-version-using-vba.html#ZWfuuF8mu1CpvkyI.99
+
+
+Sub Get_OS_Version_VBA() ' ------------------------------------------------------------- ' Code to Get Version of Operating System through VBA ' -------------------------------------------------------------
+Dim oOSInfo As OSVERSIONINFO
+oOSInfo.dwOSVersionInfoSize = Len(oOSInfo)
+GetVersionEx oOSInfo
+
+MsgBox "Version of Current OS is " & oOSInfo.dwMajorVersion & "." & oOSInfo.dwMinorVersion
+
+
+End Sub
+'Read more at http://vbadud.blogspot.com/2010/05/how-to-get-os-version-using-vba.html#ZWfuuF8mu1CpvkyI.99
+
+Private Sub test()
+
+MsgBox (xlEdgeBottom)
+
+End Sub
+
+Private Sub ComputerName()
+
+Debug.Print Environ$("computername")
+'Debug.Print clsVProReg.CurrVegProfile
+
+End Sub
+
+Private Sub nRecs()
+
+Dim MyRS As Recordset
+
+Set MyRS = CurrentDb.OpenRecordset("Becmaster13_Env")
+
+MyRS.MoveLast
+Debug.Print MyRS.RecordCount
+
+MyRS.Close
+
+
+End Sub

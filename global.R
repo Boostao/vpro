@@ -1,0 +1,27 @@
+library(shiny)
+library(duckdb)
+library(dplyr)
+library(dbplyr)
+library(bslib)
+library(DT)
+
+# Database Connection
+# Using a function to get a fresh connection or manage a pool object
+# For Shiny, usually we want a persistent connection or a pool.
+# Since duckdb allows concurrent reads, we can open one read-only connection for the app lifetime if needed,
+# or open/close per request. We'll use a simple approach: open in server.
+db_path <- file.path(getwd(), "data/vpro.duckdb")
+
+# Simple logging
+log_msg <- function(...) {
+  cat(file=stderr(), paste0(..., "\n"))
+}
+
+# Module Imports
+source("R/logic_state.R") # Global State Logic
+source("R/mod_project_meta.R")
+source("R/mod_veg_sample.R")
+source("R/mod_site_env.R")
+
+# Note: The actual 'SysState' object is initialized in server.R 
+# because it must be reactive and unique to the session.

@@ -1,0 +1,27 @@
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Compare Database
+Option Explicit
+
+Public Function TableTest(TableName As String) As Boolean
+'Jan 6, 2005
+Dim MyInfo As Variant
+On Error GoTo errTableTest
+MyInfo = CurrentDb.TableDefs(TableName).Connect
+If MyInfo <> "" Then
+    If Dir(Mid(MyInfo, 11)) = "" Then
+        TableTest = False
+        Exit Function
+    End If
+End If
+
+MyExit:
+    TableTest = True
+    Exit Function
+errTableTest:
+    Err.Clear
+    TableTest = False
+
+End Function

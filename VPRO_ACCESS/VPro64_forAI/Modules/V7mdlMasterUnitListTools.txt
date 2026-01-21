@@ -1,0 +1,94 @@
+Option Compare Database
+Option Explicit
+
+Private Function LoadAsHierarchy()
+'Dec. 27, 2019 - no longer in use
+'June 1, 2004
+On Error GoTo errLoadAsHierarchy
+
+If Not CheckForUser Then
+    MsgBox "Sorry, you're not registered to edit the master hierarchy", vbInformation, "VPro"
+    GoTo MyExit
+End If
+
+Dim i As Integer
+If IsLoaded("USysAssignSU") Then
+    DoCmd.Close acForm, "USysAssignSU"
+End If
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, "MasterSiteUnitList_Hierarchy"
+On Error GoTo errLoadAsHierarchy
+
+DoCmd.CopyObject , "MasterSiteUnitList_Hierarchy", acTable, "USysMasterSiteUnitList"
+clsVProReg.CurrHierarchy = "MasterSiteUnitList"
+
+DoCmd.OpenForm "USysAssignSU"
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errLoadAsHierarchy:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Function CheckForUser() As Boolean
+'Dec. 27, 2019 - no longer in use
+'June 1, 2004
+'check for mof user
+Dim strUserName As String, IsPrefered As Boolean
+strUserName = clsVProReg.UserName
+
+Select Case strUserName
+    Case "Will MacKenzie"
+        CheckForUser = True
+    Case "Del Meidinger"
+        CheckForUser = True
+    Case "Russell Klassen"
+        CheckForUser = True
+    Case Else
+        CheckForUser = False
+End Select
+    
+End Function
+
+Public Function WriteMasterAudit(Action As String, NodeName As String, NodeID As Long, EditField _
+As String, BeforeEdit As Variant, AfterEdit As Variant, Optional Parent As String)
+'June 1, 2004
+'If clsVProReg.CurrHierarchy <> "MasterSiteUnitList" Then GoTo MyExit
+Screen.ActiveForm.Caption = Now()
+Dim MyRS As Recordset
+Set MyRS = CurrentDb.OpenRecordset("USysMasterAudit")
+
+MyRS.AddNew
+MyRS!User = clsVProReg.UserName
+MyRS!Action = Action
+MyRS!NodeName = NodeName
+MyRS!NodeID = NodeID
+If Parent <> "" Then
+    MyRS!Parent = Parent
+Else
+    MyRS!Parent = Null
+End If
+MyRS!EditField = EditField
+MyRS!EditWhen = Now()
+If BeforeEdit <> "" Then
+    MyRS!BeforeEdit = BeforeEdit
+Else
+    MyRS!BeforeEdit = Null
+End If
+
+If Not AfterEdit <> "" Or AfterEdit >= 0 Then
+    MyRS!AfterEdit = AfterEdit
+Else
+    MyRS!AfterEdit = Null
+End If
+
+MyRS.Update
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Exit Function
+End Function

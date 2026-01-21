@@ -1,0 +1,52 @@
+Option Compare Database
+'These are global references that are in use throughout VPro
+'Some of these variables, once set, persit for the life of VPro
+Global sysFileTitle         As String
+Global sysCancelEvent       As Integer
+Global sysUnattachObject    As String
+Global sysSaveTo            As Integer
+Global sysplotnumber        As String
+Global sysPicturePlotNumber As String
+Global sysLumpingTable      As String
+Global sysSystem
+Global sysOptShowClassValue As Integer
+Global sysNewSpp            As String
+Global sysRemoteProject
+Global sysRemoteDB
+Global sysCurrProject
+Global sysCurrPicture       As String
+Global sysCurrSU
+Global sysBreakSU  'used when creating a site unit table from break points in a hierarchy table
+Global sysCurrHierarchy     As String
+Global sysOldUnit
+Global sysLumpMsg           As String 'used in more than on place
+Global sysShowVegValue      As Single     'used in exporting to compact format
+Global sysCreateReportSummary As Boolean  'used by report modules
+Global sysHierarchyType  'used to determine the type of data in a hierarchy tree
+Global sysIncludeDiagnostic As Boolean  'used in reports
+Global sysVENUSProject      As String
+Global sysSaveFilter2       As Integer
+Global sysIncludeExisting   As Integer
+Global sysPickTable         As String
+Global sysCurrForm          As String
+Global sysComboTable        As String
+Global sysPickItem          As Variant 'used with form USysPickItem
+Global sysStopCode          As Boolean
+Global sysSelectedItems()   As Variant 'holds arrays of project names etc.
+Global sysExportProject     As String 'holds project name to be created
+Global sysDoEvent           As Boolean 'used in more than one place, set to default value before use, never use where scope/persistance may be a problem
+Global Const MB_OK = 0, MB_OKCANCEL = 1    ' Define buttons.
+Global Const MB_YESNOCANCEL = 3, MB_YESNO = 4
+Global Const MB_ICONSTOP = 16, MB_ICONQUESTION = 32   ' Define icons.
+Global Const MB_ICONEXCLAMATION = 48, MB_ICONINFORMATION = 64
+Global Const MB_DEFBUTTON2 = 256, IDYES = 6, IDNO = 7   ' Define other.
+Global sysHierarchyLongName As String
+Private Type RECT
+    Left    As Long
+    Top     As Long
+    Right   As Long
+    Bottom  As Long
+End Type
+Global CurrFormLoc As RECT
+
+Public Const SW_SHOW = 1

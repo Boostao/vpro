@@ -1,0 +1,265 @@
+Option Compare Database
+Option Explicit
+
+Public Function CombineTerrain(Field1, Field2, Field3)
+
+'Apr. 23, 2018
+On Error GoTo errCombineTerrain
+Dim NullSwitch As Boolean
+If IsNull(Field1) Then
+    CombineTerrain = Null
+    NullSwitch = True
+Else
+    CombineTerrain = Field1
+End If
+
+If IsNull(Field2) Then
+    CombineTerrain = CombineTerrain
+    NullSwitch = True
+Else
+    CombineTerrain = CombineTerrain & Field2
+End If
+
+If IsNull(Field3) Then
+    CombineTerrain = CombineTerrain
+    NullSwitch = True
+Else
+    CombineTerrain = CombineTerrain & Field3
+End If
+
+If CombineTerrain = "" Then CombineTerrain = Null
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errCombineTerrain:
+    CombineTerrain = Null
+    GoTo MyExit
+End Function
+Public Function SplitTerrain(ValueIn As Variant, FieldIn As String, FieldNumOut As Integer) As String
+
+'Apr. 23, 2018
+On Error GoTo errSplitTerrain
+Dim i As Integer
+If IsNull(ValueIn) Then
+    SplitTerrain = ""
+    GoTo MyExit
+End If
+Select Case FieldIn
+    Case "TerrainTextureSurf"
+        SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+    Case "TerrainTextureSubSurf"
+        SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+    
+    Case "SurficialMaterialSurf"
+        i = InStr(1, ValueIn, "FG")
+        If i > 0 Then
+            If FieldNumOut = i Then
+                SplitTerrain = Mid(ValueIn, i, 2)
+            Else
+                If FieldNumOut > i Then
+                    SplitTerrain = Mid(ValueIn, FieldNumOut + 1, 1)
+                Else
+                    SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+                End If
+            End If
+        Else
+            SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+        End If
+    Case "SurficialMaterialSubSurf"
+        i = InStr(1, ValueIn, "FG")
+        If i > 0 Then
+            If FieldNumOut = i Then
+                SplitTerrain = Mid(ValueIn, i, 2)
+            Else
+                If FieldNumOut > i Then
+                    SplitTerrain = Mid(ValueIn, FieldNumOut + 1, 1)
+                Else
+                    SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+                End If
+            End If
+        Else
+            SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+        End If
+    Case "SurfaceExpSurf"
+        SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+    Case "SurfaceExpSubSurf"
+        SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+    Case "GeoMorProSurf"
+        SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+    Case "GeoMorProSubSurf"
+        SplitTerrain = Mid(ValueIn, FieldNumOut, 1)
+    Case Else
+        SplitTerrain = Null
+End Select
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSplitTerrain:
+    SplitTerrain = ""
+    GoTo MyExit
+End Function
+
+Public Function TestTerrainFieldSize(Optional Project) As Boolean 'returns false if old terrain (under 3)
+'Nov 03, 2000
+On Error GoTo errTestTerrainFieldSize
+Dim MyDB As Database, MyTD As TableDef, MyFld As Field
+Set MyDB = CurrentDb
+If IsMissing(Project) Then Project = CurrProject
+Project = Project & "_Env"
+If Project = "Sample_Env" Then GoTo MyExit
+Set MyTD = MyDB.TableDefs(Project)
+Set MyFld = MyTD.Fields("SurfaceExpSurf")
+If MyFld.Size = 3 Then
+    TestTerrainFieldSize = True
+End If
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errTestTerrainFieldSize:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Private Sub DoIt()
+
+SetTerrainFieldSize '"Sample"
+End Sub
+
+Private Function SetTerrainFieldSize(Optional Project)
+'Nov. 4, 2000
+'On Error GoTo errSetTerrainFieldSize
+Dim MyDB As Database
+Dim RemoteDB As Database, MyTD As TableDef, MyFld As Field
+Dim RemoteStr As String, SqlText As String, OrdPos As Integer, fldName As String, FldSize As String, Msg As String, Response As Integer
+Msg = "This function increases the size of the terrain fields to accommodate more than one code per field.  To do this, VPro must make changes to the structure of your project database.  It is always a good practice to backup data before performing such a function.  Click Yes to continue or No to cancel"
+Response = WarnUser(Msg, "Modify terrain fields")
+If Response > 0 Then GoTo MyExit
+
+DoCmd.SetWarnings False
+Set MyDB = CurrentDb
+    If IsMissing(Project) Then Project = CurrProject
+    Project = Project & "_Env"
+    'If Project = "Sample_Env" Then GoTo MyExit
+
+    RemoteStr = MyDB.TableDefs(Project).Connect
+    Debug.Print RemoteStr
+    
+    RemoteStr = Right(RemoteStr, Len(RemoteStr) - 10)
+    Debug.Print RemoteStr
+    Stop
+    
+    Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(RemoteStr)
+    Set MyTD = RemoteDB.TableDefs(Project)
+    On Error Resume Next
+    MyTD.Fields.Delete "NewGeoMorProSubSurf"
+    MyTD.Fields.Delete "NewGeoMorProSurf"
+    MyTD.Fields.Delete "NewSurfaceExpSubSurf"
+    MyTD.Fields.Delete "NewSurfaceExpSurf"
+    MyTD.Fields.Delete "NewSurficialMaterialSubSurf"
+    MyTD.Fields.Delete "NewSurficialMaterialSurf"
+    MyTD.Fields.Delete "NewTerrainTextureSubSurf"
+    MyTD.Fields.Delete "NewTerrainTextureSurf"
+    On Error GoTo errSetTerrainFieldSize
+
+    fldName = "GeoMorProSubSurf"
+    FldSize = 3
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+    fldName = "GeoMorProSurf"
+    FldSize = 3
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+    fldName = "SurfaceExpSubSurf"
+    FldSize = 3
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+    fldName = "SurfaceExpSurf"
+    FldSize = 3
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+    fldName = "SurficialMaterialSubSurf"
+    FldSize = 6
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+    fldName = "SurficialMaterialSurf"
+    FldSize = 6
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+    fldName = "TerrainTextureSubSurf"
+    FldSize = 3
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+    fldName = "TerrainTextureSurf"
+    FldSize = 3
+    Set MyFld = MyTD.Fields(fldName)
+    OrdPos = MyFld.OrdinalPosition
+    MyTD.Fields.Append MyTD.CreateField("New" & fldName, dbText, FldSize)
+    SqlText = "UPDATE [" & Project & "] SET New" & fldName & " = [" & fldName & "];"
+    DoCmd.RunSQL SqlText
+    MyTD.Fields.Delete fldName
+    MyTD.Fields("New" & fldName).Name = fldName
+    MyTD.Fields(fldName).OrdinalPosition = OrdPos
+    
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Set MyDB = Nothing
+    Set RemoteDB = Nothing
+    Exit Function
+errSetTerrainFieldSize:
+    MsgBox Err.Description
+    Resume MyExit
+
+End Function

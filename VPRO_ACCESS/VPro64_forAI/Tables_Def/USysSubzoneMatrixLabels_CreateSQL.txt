@@ -1,0 +1,7 @@
+CREATE TABLE [USysSubzoneMatrixLabels] (
+  [BGC unit] TEXT(255) DEFAULT ,
+  [Len] DOUBLE DEFAULT ,
+  [MyUnit] TEXT(255) DEFAULT 
+);
+
+

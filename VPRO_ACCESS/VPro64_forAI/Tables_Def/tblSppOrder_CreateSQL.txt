@@ -1,0 +1,9 @@
+CREATE TABLE [tblSppOrder] (
+  [SppID] LONG DEFAULT ,
+  [SppOrder] INTEGER DEFAULT ,
+  [Layer] TEXT(1) DEFAULT 
+);
+
+CREATE UNIQUE INDEX [PrimaryKey2] ON [tblSppOrder] ([SppID], [SppOrder], [Layer]);
+CREATE INDEX [SppID] ON [tblSppOrder] ([SppID]);
+

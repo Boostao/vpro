@@ -1,0 +1,128 @@
+Option Compare Database
+Option Explicit
+
+Sub AttachVegProfileTables()
+On Error GoTo errAttachVegProfileTables
+
+    Dim MyDB As Database, RemoteDB As Database ', MyRS As Recordset
+    Dim RemoteDbName As String, ProjectList As String
+    Dim MyList As Variant, i As Integer
+    Dim MyProject As String
+    
+    Set MyDB = CurrentDb()
+    ReDim sysSelectedItems(0)
+    RemoteDbName = GetRemoteDb()
+    If RemoteDbName = "" Then GoTo MyExit
+    Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(RemoteDbName)
+    ProjectList = BuildProjectPickList(RemoteDB, MyDB)
+
+If ProjectList = "" Then
+    MsgBox "No veg profile tables found.", vbInformation
+    GoTo MyExit
+End If
+
+Call PickProjects(ProjectList)
+
+Do
+    DoEvents
+Loop Until UBound(sysSelectedItems) > 0
+If UBound(sysSelectedItems) = 999 Then GoTo MyExit
+
+For i = 1 To UBound(sysSelectedItems)
+    MyProject = sysSelectedItems(i)
+    AttachHierarchyTables2 MyProject, RemoteDB
+Next i
+MyDB.TableDefs.Refresh
+
+ReDim sysSelectedItems(0)
+        
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Set RemoteDB = Nothing
+    Exit Sub
+errAttachVegProfileTables:
+    If Err.Number = 3343 Then
+        MsgBox "This isn't >= Access 97 database format"
+        Resume MyExit
+    Else
+        MsgBox Err.Description
+        Resume MyExit
+    End If
+End Sub
+Private Sub AttachHierarchyTables2(LumpTableName As String, RemoteDB As Database)
+Dim TestTable As String
+
+TestTable = LumpTableName & "_Profile"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+
+MyExit:
+
+End Sub
+
+Private Function GetRemoteDb() As String
+
+'Sep 22, 2008
+Dim MyDB As Database, RemoteDB As Database
+Dim MyFile As String, MyTitle As String
+sysPickTable = "None"
+
+    Set MyDB = CurrentDb()
+    MyFile = ""
+    MyTitle = ProgramName()
+    MyFile = GetFileName(MyTitle, True)
+    If MyFile = "" Then Exit Function
+    GetRemoteDb = MyFile
+
+End Function
+
+Private Function BuildProjectPickList(RemoteDB As Database, LocalDB As Database) As String
+Dim i As Integer, strTestTable As String, strList As String, ListLen As Integer
+
+        For i = 0 To RemoteDB.TableDefs.count - 1
+            strTestTable = RemoteDB.TableDefs(i).Name
+            If Right(strTestTable, 8) = "_Profile" Then
+            'If InStr(1, strTestTable, "_Profile") > 0 Then
+                If Not TestForTableInVPro(LocalDB, strTestTable) Then
+                    strList = strList & Left(strTestTable, Len(strTestTable) - Len("_Profile")) & ";"
+                End If
+            End If
+        Next i
+
+        ListLen = Len(strList)
+        If ListLen > 0 Then
+            BuildProjectPickList = Left(strList, ListLen - 1)
+        Else
+            BuildProjectPickList = ""
+        End If
+
+End Function
+
+Private Sub PickProjects(ProjectList As String)
+
+On Error GoTo myerr
+
+DoCmd.OpenForm "USysPickTable", A_NORMAL, , , , A_NORMAL
+Forms![USysPickTable]![PickList].RowSource = ProjectList
+
+MyExit:
+    On Error Resume Next
+    Exit Sub
+myerr:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Function TestForTableInVPro(MyDB As Database, TableName As String) As Boolean
+'tests the current DB for a table
+TestForTableInVPro = False
+Dim i As Integer, strTestTable As String
+   
+    For i = 0 To MyDB.TableDefs.count - 1
+        strTestTable = MyDB.TableDefs(i).Name
+        If strTestTable = TableName Then
+            TestForTableInVPro = True
+        End If
+    Next i
+    
+End Function

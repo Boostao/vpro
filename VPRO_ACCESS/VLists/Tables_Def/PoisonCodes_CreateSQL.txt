@@ -1,0 +1,8 @@
+CREATE TABLE [PoisonCodes] (
+  [P_Organism] TEXT(255) DEFAULT ,
+  [Human] TEXT(255) DEFAULT ,
+  [Livestock] TEXT(255) DEFAULT ,
+  [Wildlife] TEXT(255) DEFAULT 
+);
+
+

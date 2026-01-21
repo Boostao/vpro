@@ -1,0 +1,119 @@
+Option Compare Database
+Option Explicit
+Option Private Module
+
+Type MyVeg
+    Plot As String
+    Layer As Integer
+    Species As String
+    Cover As Single
+End Type
+
+Private Function TestArray() As MyVeg
+
+Dim MyDB As Database, MyRS As Recordset, MyArray() As MyVeg, SqlText As String, X As Long
+Dim nRecords As Integer, i As Long, MyVal As Double, nArray As Integer
+Dim MyVegT As String, MyTime As Date
+Dim MyT As New clsStopWatch, T As Double, TotalVeg As Double, Y As Long
+MyT.StartTimer
+
+MyVegT = CurrProject & "_Veg"
+Set MyDB = CurrentDb()
+
+ReDim MyArray(0)
+
+MyTime = Time
+
+For X = 1 To 7
+    SqlText = "SELECT Cover" & X & " AS Cover, Species, PlotNumber FROM " & MyVegT & " WHERE (((Cover" & X & ") Is Not Null));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    MyRS.MoveLast
+    nRecords = MyRS.RecordCount
+    MyRS.MoveFirst
+
+    For i = 1 To nRecords
+        ReDim Preserve MyArray(UBound(MyArray) + 1)
+        MyArray(UBound(MyArray)).Plot = MyRS!PlotNumber
+        MyArray(UBound(MyArray)).Layer = X
+        MyArray(UBound(MyArray)).Cover = MyRS!Cover
+        MyArray(UBound(MyArray)).Species = MyRS!Species
+        MyRS.MoveNext
+    Next i
+
+Next X
+
+MyVal = 0
+
+X = UBound(MyArray)
+T = MyT.EndTimer
+
+MsgBox "Read " & X & " veg records into an array in " & MyT.EndTimer / 1000 & " seconds."
+Y = 0
+MyT.StartTimer
+    
+    For X = 1 To 10000
+        For i = 0 To UBound(MyArray) - 1
+            TotalVeg = TotalVeg + MyArray(i).Cover
+            Y = Y + 1
+        Next i
+    Next X
+
+MsgBox "Summed all the cover values in an array with " & Format(Y, "#,###") & " records in " & MyT.EndTimer / 1000 & " seconds."
+
+MyExit:
+    MyRS.Close
+    Set MyDB = Nothing
+
+End Function
+
+Private Sub TestArrayToExcel()
+
+Dim xl As Excel.Application
+Dim i As Integer
+Dim MyDB As Database, MyRS As Recordset
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("Sample_Veg")
+Dim MyData As Variant, NewData As Variant
+i = 1
+
+CreateExcel xl
+xl.Visible = True
+xl.Workbooks.Add
+
+MyRS.MoveLast
+MyRS.MoveFirst
+MyData = MyRS.GetRows(1561)
+NewData = TransposeDim(MyData)
+Debug.Print UBound(MyData, 1)
+Debug.Print UBound(MyData, 2)
+
+xl.Sheets("Sheet1").Range(xl.Cells(1, 1), xl.Cells(1561, 36)).Value = NewData
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Set xl = Nothing
+    Exit Sub
+    
+End Sub
+
+Private Function TransposeDim(v As Variant) As Variant
+' Custom Function to Transpose a 0-based array (v)
+
+    Dim X As Long, Y As Long, Xupper As Long, Yupper As Long
+    Dim tempArray As Variant
+
+    Xupper = UBound(v, 2)
+    Yupper = UBound(v, 1)
+
+    ReDim tempArray(Xupper, Yupper)
+    For X = 0 To Xupper
+        For Y = 0 To Yupper
+            tempArray(X, Y) = v(Y, X)
+        Next Y
+    Next X
+
+    TransposeDim = tempArray
+
+End Function

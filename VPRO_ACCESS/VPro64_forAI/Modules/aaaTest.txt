@@ -1,0 +1,121 @@
+Option Compare Database
+Option Explicit
+
+Private Sub Temp()
+
+Dim Not1 As Variant, i As Integer
+Dim VarName As String
+Dim MyNot(5) As Variant
+
+MyNot(1) = "fred"
+
+i = 1
+Debug.Print MyNot(i)
+
+i = 2
+If MyNot(i) = "" Then Debug.Print "sally" Else Debug.Print i
+
+Debug.Print MyNot(i)
+
+
+End Sub
+
+
+Private Sub ListRefs()
+
+Dim i As Integer
+
+For i = 1 To Application.References.count
+
+    Debug.Print Application.References(i).Name & " - " & Application.References(i).FullPath
+
+Next i
+
+End Sub
+
+Private Sub test()
+
+Dim TestCompilation As Boolean, Ref As Reference, IveBeenMoved As Boolean
+Dim OfficeDir As String, SystemDir As String, ctlName As String, ExtDir As String, NewLoc As String
+Dim CommonDir As String
+OfficeDir = Application.SysCmd(acSysCmdAccessDir)
+CommonDir = "C:\Program Files (x86)\Common Files\microsoft shared\"
+SystemDir = GetSystemDir()
+
+Debug.Print SystemDir
+Debug.Print OfficeDir
+Debug.Print CommonDir
+Debug.Print "Access version: " & Application.SysCmd(acSysCmdAccessVer)
+
+
+End Sub
+Private Sub LstTables()
+
+Dim AccessObject As Variant
+
+'For Each tbl In CurrentDb.TableDefs
+'    Debug.Print tbl.Name
+'Next tbl
+
+For Each AccessObject In CurrentProject.AllModules
+    Debug.Print AccessObject.Name
+Next AccessObject
+
+End Sub
+
+Private Sub ChangeDescriptions()
+
+Dim db As Database, td As TableDef
+Dim mdl As ModuleView
+Dim AccessObject As Variant
+
+    'Dim RemoteDB As Database
+    'Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(clsVProReg.Location & "VLists.accda")
+    '    MsgBox RemoteDB.Name
+    '    MsgBox RemoteDB.Containers("Tables").Documents("USysAllSpecs").Name
+    '    MsgBox RemoteDB.Containers("Tables").Documents("USysAllSpecs").Properties("Description")
+        
+    'MsgBox RemoteDB.TableDefs("USysAllSpecs").Properties("Description")
+    'Set RemoteDB = Nothing
+
+
+For Each AccessObject In CurrentProject.AllModules
+    'Debug.Print AccessObject.Name
+    If AccessObject.Name = "V7mdlAttachConstancy" Then
+        CurrentDb.Containers("Modules").Documents("V7mdlAttachConstancy").Properties("Description") = "8 May 2012"
+    End If
+    
+    If AccessObject.Name = "V7mdlAllSpecsTools" Then
+        'Set mdl = Modules![V7mdlAllSpecsTools]
+        'mdl.Properties("Description").Value = "8May2012"
+        Debug.Print CurrentDb.Containers("Modules").Documents("V7mdlAllSpecsTools").Properties("Description")
+    End If
+    'debug.Print mdl.
+Next
+
+End Sub
+
+Private Sub RenameModules()
+
+Dim i As Integer, tmpName As String, MyC As Container
+
+On Error Resume Next
+For Each MyC In CurrentDb.Containers
+
+    If MyC.Name = "Modules" Then
+        For i = 1 To MyC.Documents.count
+            tmpName = MyC.Documents(i).Name
+            If Left(tmpName, 7) = "V7xpmdl" Then
+                DoCmd.CopyObject , "V7" & Right(tmpName, Len(tmpName) - 4), acModule, tmpName
+                DoCmd.DeleteObject acModule, tmpName
+            End If
+        Next i
+    End If
+    
+Next MyC
+      
+MsgBox "done"
+
+MyExit:
+
+End Sub

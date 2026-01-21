@@ -1,0 +1,14 @@
+CREATE TABLE [USysComboColourTheme] (
+  [LumpCode] TEXT(8) DEFAULT ,
+  [SppCode] TEXT(8) DEFAULT ,
+  [ScientificName] TEXT(255) DEFAULT ,
+  [ColourCode] INTEGER DEFAULT ,
+  [PatternCode] INTEGER DEFAULT ,
+  [FontColour] INTEGER DEFAULT ,
+  [Use] BIT DEFAULT 
+);
+
+CREATE INDEX [LumpCode] ON [USysComboColourTheme] ([LumpCode]);
+CREATE UNIQUE INDEX [ScientificName] ON [USysComboColourTheme] ([ScientificName]);
+CREATE UNIQUE INDEX [SppCode] ON [USysComboColourTheme] ([SppCode]);
+

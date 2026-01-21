@@ -1,0 +1,204 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui">
+  <ribbon startFromScratch="false">
+    <tabs>
+      <tab id="tabMain" label="VPro">
+        <group id="grpProjects2" label="Forms">
+          <splitButton id="sb01" size="large">
+            <button id="sb01btn" label="Data Entry" imageMso="ViewNormalViewPowerPoint" onAction="Sb01OnAction" />
+            <menu id="sb01Menu" itemSize="large">
+              <button id="sb01btn02" label="Data Entry FS882" description="This is the data form that most closely resembles the FS882 field forms." getImage="Sb01CallGetImage" onAction="Sb01OnAction" />
+              <button id="sb01btn03" label="Data Entry Two Page" description="With this form FS882 data is divided into two pages." getImage="Sb01CallGetImage" onAction="Sb01OnAction"></button>
+              <button id="sb01btn04" label="Data Entry One Page" description="All the FS882 data on one page.  Suitable for full-sized monitors." getImage="Sb01CallGetImage" onAction="Sb01OnAction" />
+              <button id="sb01btn05" label="Data Entry For Seniors" description="I'll be the first to admit it: I'm getting older and have a problem with small print.  Give this large print FS882 a try." getImage="Sb01CallGetImage" onAction="Sb01OnAction"></button>
+              <menuSeparator id="sep51x" />
+              <button id="sb01btn06" label="Enter/Edit SIVI data" description="SIVI and FS882 share a common data structure, but this form most closely resembles FS1333" getImage="Sb01CallGetImage" onAction="Sb01OnAction"></button>
+            </menu>
+          </splitButton>
+          <splitButton id="sb02" size="large">
+            <button id="sb02btn" label="Other" imageMso="CreateForm" />
+            <menu id="sbo2Menu" itemSize="large">
+              <button id="sb01btn01" label="Data Centre" getDescription="Sb01CallGetDescription" getImage="Sb01CallGetImage" onAction="Sb01OnAction"></button>
+              <button id="sb01btn07" label="Metadata" getDescription="Sb01CallGetDescription" onAction="Sb01OnAction" imageMso="NewNotepadTool"></button>
+              <button id="sb01btn01b" label="Combine Species" description="Here you can manage your combined (lumped) species tables." getImage="Sb01CallGetImage" onAction="Sb01OnAction"></button>
+              <button id="sb02btn08" label="SIVI" description="SIVI data is now native to a VPro project.  Use this form to add and edit SIVI data." getImage="Sb02CallGetImage" onAction="Sb02OnAction"></button>
+              <button id="sb02btn01" label="Message Board" description="The message board provides a inter-group messaging system.  Use this to post terminal server news." getImage="Sb02CallGetImage" onAction="Sb02OnAction"></button>
+              <button id="sb02btn06" label="Herbarium" description="Have some herbarium data you want to manage?  Click here." getImage="Sb02CallGetImage" onAction="Sb02OnAction"></button>
+              <button id="sb02btn02" label="Colour-theme" description="In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species." imageMso="ViewBackToColorView" onAction="Sb02OnAction" />
+              <button id="sb02btn03" label="Form colours" description="Staring at VPro all day?  Getting tired of the same old colours day in and day out?  Personalize your copy of VPro and get a new lease on life." imageMso="AppointmentColorDialog" onAction="Sb02OnAction"></button>
+              <button id="sb02btn04" label="User setup" description="Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)" getImage="Sb02CallGetImage" onAction="Sb02OnAction"></button>
+              <button id="sb02btn05" label="User Log" description="A record of when you (or someone else) opens and closes VPro.  Nothing spectacular, but useful just the same." getImage="Sb02CallGetImage" onAction="Sb02OnAction"></button>
+            </menu>
+          </splitButton>
+        </group>
+        <group id="grpClassification" label="Classification">
+          <splitButton id="sb02b" size="large">
+            <button id="sb02bbtn" label="Classification" imageMso="NameManager" />
+            <menu id="sb02bMenu" itemSize="large">
+              <button id="sb02bbtn01" label="Site Unit" description="Open the site unit form with the current site unit data." getImage="Sb02bCallGetImage" onAction="Sb02bOnAction" />
+              <button id="sb02bbtn02" label="Hierarchy" description="Open the hierarchy form with the current hierarchy data." getImage="Sb02bCallGetImage" onAction="Sb02bOnAction" />
+              <button id="sb02bbtn03" label="Add/Remove Units" description="This is where you manage your hierarchy table using the master unit list.  For advanced users." getImage="Sb02bCallGetImage" onAction="Sb02bOnAction" />
+            </menu>
+          </splitButton>
+        </group>
+        <group id="idData" label="Data">
+          <splitButton id="sb03" size="large">
+            <button id="sb03btn" label="Project" imageMso="AdpDiagramRelationships" />
+            <menu id="sbo3Menu" itemSize="large">
+              <button id="sb03btn01" label="New Project" description="Create a new project.  A project stores your environment, vegetation and soil data." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <button id="sb03btn02" label="Save As…" description="Save the current project to a new or existing database using a different name." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <button id="sb03btn05" label="Backup Current Project" description="This tool creates a copy of the current project adding the prefix &quot;BAK&quot; to the project name." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <menuSeparator id="sep50" />
+              <button id="sb03btn03" label="Export Splinter Project" description="A splinter project is the portion of the current project that has matching plots in the current SU table." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <button id="sb03btn04" label="Merge Projects" description="Combine the plots of two projects.  Remember to backup your data before performing these types of functions." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <button id="sb03btn09" label="Compare Two Projects" description="This tool compares site, soil, and vegetation data plot-by-plot and field-by-field, then produces an Excel report." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <menuSeparator id="sep51" />
+              <button id="sb03btn06" label="Project Metadata" description="Add/edit project metadata here.  It is suggested that you maintain project metadata for each of your projects." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <button id="sb03btn07" label="Export Project Metadata" description="Use this tool to export your metadata to a database for distribution." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+              <button id="sb03btn08" label="Import Project Metadata" description="Import project metadata into your current metadata table.  Remember that the Project ID field must be unique." imageMso="MacroPlay" onAction="Sb03OnAction"></button>
+            </menu>
+          </splitButton>
+          <splitButton id="sb04" size="large">
+            <button id="sb04btn" label="Site  Unit" imageMso="MacroShowAllActions" />
+            <menu id="sbo4Menu" itemSize="large">
+              <button id="sb04btn01" label="New Site Unit Table" description="A site unit table is used to assign plots to groups.  It also functions as a filter limiting the number of active project plots." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <button id="sb04btn02" label="Save As…" description="Save the current site unit table to a new or existing database using a different name." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <button id="sb04btn07" label="Backup The Current Site Unit Table" description="Adds the prefix &quot;BAK&quot; to the site unit table name and saves it to a new database." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <menuSeparator id="sep52" />
+              <button id="sb04btn03" label="SU Table From Breaks" description="Create an SU table from site units found below breakpoints in the current hierarchy." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <button id="sb04btn04" label="SU Table From Filter Query" description="Uses a filter query to select plots from the current project and save them as a site unit table.  Unit assignments from current SU table are optional." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <button id="sb04btn05" label="SU Table From Form Filter" description="Using a Microsoft Access form filter, you can generate a SU table based on the selected plots." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <menuSeparator id="sep53" />
+              <button id="sb04btn06" label="Create Site Units From Environment Fields" description="Uses concatenation to build unit names from environment field data.  The result is a new SU table." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <menuSeparator id="sep54" />
+              <button id="sb04btn08" label="Compare Plot Assignments" description="Compare plot assignments between two site unit tables and generate an Excel report of the comparison." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+              <button id="sb12btn01" label="List Site Units With Plots" description="Generates a list of current site units, their long names, number of plots, and a list of plot numbers." imageMso="MacroPlay" onAction="Sb12OnAction"></button>
+              <button id="sb04btn09" label="Write BEC Master into SU Table" description="Copies the currently assigned BEC Master unit into the current Site Unit table replacing current unit assignments except where there does not exist a BEC Master unit assignment." imageMso="MacroPlay" onAction="Sb04OnAction"></button>
+            </menu>
+          </splitButton>
+          <splitButton id="sb05" size="large">
+            <button id="sb05btn" label="Hierarchy" imageMso="SmartArtOrganizationChartRightHanging" />
+            <menu id="sbo5Menu" itemSize="large">
+              <button id="sb05btn01" label="New Hierarchy Table" description="A hierarchy table is a hierarchical construct of classification levels.  Use this function to create a new hierarchy table in a new or existing database." imageMso="MacroPlay" onAction="Sb05OnAction"></button>
+              <button id="sb05btn02" label="Save As…" description="Save the current hierarchy table to a new or existing database using a different name." imageMso="MacroPlay" onAction="Sb05OnAction"></button>
+              <button id="sb05btn05" label="Backup Current Hierarchy Table" description="Adds the prefix &quot;BAK&quot; to the current hierarchy table name and saves it to a new database." imageMso="MacroPlay" onAction="Sb05OnAction"></button>
+              <menuSeparator id="sep55" />
+              <button id="sb05btn03" label="Save Hierarchy Under Breaks" description="Save the portion(s) of the current hierarchy that fall under breakpoints." imageMso="MacroPlay" onAction="Sb05OnAction"></button>
+              <button id="sb05btn04" label="Merge Hierarchies" description="Please backup first.  Hierarchies can be complex tables so there's a lot than can go wrong.  That said, use this tool to combine two hierarchies." imageMso="MacroPlay" onAction="Sb05OnAction"></button>
+              <menuSeparator id="sep56" />
+              <button id="sb12btn04b" label="Hierarchy Diagram" description="Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members." imageMso="MacroPlay" onAction="Sb12OnAction"></button>
+            </menu>
+          </splitButton>
+          <menu id="mnuImport_Export" size="large" itemSize="normal" label="Import/Export" imageMso="DiagramReverseClassic">
+            <menu id="mnuImport" itemSize="normal" label="Import" imageMso="ImportTextFile">
+              <button id="btnVPro13Project" label="VPro 13 Project" onAction="RibbonImportExport"></button>
+              <button id="btnVProXPProject" label="VPro XP/03 Project" onAction="RibbonImportExport"></button>
+              <button id="btnImportVProXMLProject" label="VPro XML Project" onAction="RibbonImportExport"></button>
+              <button id="btnImportVProXMLFillableForm" label="VPro FS882 Fillable PDF XML" onAction="RibbonImportExport"></button>
+              <button id="btnImportFileMakerGo" label="FileMaker Go" onAction="RibbonImportExport" />
+              <button id="btnVProUserSiteUnits" label="VPro User Site Units" onAction="RibbonImportExport"></button>
+              <button id="btnVProUserSpeciesList" label="VPro User Species List" onAction="RibbonImportExport"></button>
+              <button id="btnVProAllSpecsList" label="VPro Master Species List" onAction="RibbonImportExport"></button>
+              <button id="btnVProTableOfLists" label="VPro Master List Table" onAction="RibbonImportExport" />
+              <menuSeparator id="sep28" />
+              <button id="btnVProCEProject" label="VPro CE Project" onAction="RibbonImportExport" />
+              <menuSeparator id="sep31" />
+              <button id="btnVENUS4_2" label="VENUS 4.2" onAction="RibbonImportExport" />
+              <button id="btnVENUS5_0" label="VENUS 5.0" onAction="RibbonImportExport" />
+              <menuSeparator id="sep32" />
+              <button id="btnImportMetaData" label="Import Project Metadata" onAction="RibbonImportExport" />
+            </menu>
+            <!--End menu (mnuImport) NOT delete this remark-->
+            <menu id="mnuExport" itemSize="normal" label="Export" imageMso="ExportTextFile">
+              <button id="btnExportVPro13Project" label="VPro 13 Project" onAction="RibbonImportExport"></button>
+              <button id="btnExportVPro03Project" label="VPro 03 Project" onAction="RibbonImportExport"></button>
+              <button id="btnExportVProXMLProject" label="VPro XML Project" onAction="RibbonImportExport" />
+              <menuSeparator id="sep100" />
+              <button id="btnPC_ORDCompactVegForm" label="PC-ORD Compact Veg Form" onAction="RibbonImportExport" />
+              <button id="btnPC_ORDEnvironmentMatrix" label="PC-ORD Environment Matrix" onAction="RibbonImportExport" />
+              <menuSeparator id="sep26" />
+              <button id="btnExportR3Col" label="Export to R" onAction="RibbonImportExport" />
+              <menuSeparator id="sep27" />
+              <button id="btnUserSpeciesList" label="User Species List" onAction="RibbonImportExport" />
+              <button id="btnUserSiteUnits" label="User Site Units" onAction="RibbonImportExport" />
+            </menu>
+            <!--End menu (mnuExport) NOT delete this remark-->
+          </menu>
+          <splitButton id="sb08" size="large">
+            <button id="sb08btn" label="Validate" imageMso="MailMergeResultsPreview" />
+            <menu id="sbo8Menu" itemSize="large">
+              <button id="sb08btn01" label="Validate Data" description="Here's an assortment of tools to validate and fix some common problems" imageMso="ReviewAcceptChange" onAction="Sb08OnAction"></button>
+            </menu>
+          </splitButton>
+        </group>
+        <group id="grpReports" label="Reports">
+          <splitButton id="sb10" size="large">
+            <button id="sb10btn" label="Vegetation" imageMso="CreateReport"></button>
+            <menu id="sbo10Menu" itemSize="large">
+              <button id="sb10btn01" label="Long Vegetation" description="Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets." imageMso="MacroPlay" onAction="Sb10OnAction"></button>
+              <button id="sb10btn02" label="Summary Vegetation" description="Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets." imageMso="MacroPlay" onAction="Sb10OnAction"></button>
+              <button id="sb10btn03" label="Species Attributes Report" description="Summarizes species attributes by site unit or hierarchy breakpoint." imageMso="MacroPlay" onAction="Sb10OnAction"></button>
+            </menu>
+          </splitButton>
+          <splitButton id="sb11" size="large">
+            <button id="sb11btn" label="Environment" imageMso="CreateLabels" />
+            <menu id="sbo11Menu" itemSize="large">
+              <button id="sb11btn01" label="Long Environment" description="Creates an Excel report where site unit groups of plots are placed on individual sheets." imageMso="MacroPlay" onAction="Sb11OnAction"></button>
+              <button id="sb11btn02" label="Summary Environment" description="A summary of plots in each site unit is generated for the project.  Frequency for the qualitative values and mean or median values of the quantitative values are displayed." imageMso="MacroPlay" onAction="Sb11OnAction"></button>
+              <button id="sb11btn03" label="Combination Vegtation/Environment" description="A user configurable combination of environment and vegetation data is reported for each plot." imageMso="MacroPlay" onAction="Sb11OnAction"></button>
+            </menu>
+          </splitButton>
+          <splitButton id="sb12" size="large">
+            <button id="sb12btn" label="Other" imageMso="CreateReportBlankReport" />
+            <menu id="sbo12Menu" itemSize="large">
+              <button id="sb12btn02" label="PC-ORD Break Report" description="A list of break codes generated by the last export of PC-ORD data." imageMso="MacroPlay" onAction="Sb12OnAction"></button>
+              <button id="sb12btn03" label="Subzone Matrix of Units" description="A matrix is generated based on the current site unit table and the master site unit list." imageMso="MacroPlay" onAction="Sb12OnAction"></button>
+              <button id="sb12btn04" label="Hierarchy Diagram" description="Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members." imageMso="MacroPlay" onAction="Sb12OnAction"></button>
+              <button id="sb12btn05" label="Print a Plot Label" description="Print a physical label to affix to your plot card." imageMso="MacroPlay" onAction="Sb12OnAction"></button>
+              <button id="sb12btn06" label="Create Plot Locations File" description="Prints a plot list that includes zone, subzone, site series, longitude, latitude and elevation." imageMso="MacroPlay" onAction="Sb12OnAction"></button>
+              <button id="sb12btn07" label="Show Plot Locations in Google Earth" description="Locate your plots using Google Earth (requires Google Earth installation)" getImage="SbReportsCallGetImage" onAction="Sb12OnAction"></button>
+            </menu>
+          </splitButton>
+        </group>
+        <group id="grpReferences" label="References">
+          <splitButton id="sb20" size="large">
+            <button id="sb20btn" label="Library Tables" imageMso="FormPublish" />
+            <menu id="sbo20Menu" itemSize="large">
+              <button id="sb20btn01" label="Site and Environment Codes" description="This tool allows the user to modify the drop-down lists in the data forms.  Please do not make any changes to these lists if you are working with BEC data!" getImage="Sb20CallGetImage" onAction="Sb20OnAction"></button>
+              <button id="sb20btn02" label="Species Name and Codes Table" description="Forms, reports, and import/export tools use this table to standardize data input and translate codes into scientific and common names." getImage="Sb20CallGetImage" onAction="Sb20OnAction"></button>
+            </menu>
+          </splitButton>
+          <splitButton id="sb21" size="large">
+            <button id="sb21btn" label="User Setup" imageMso="ContactPictureMenu" />
+            <menu id="sbo21Menu" itemSize="large">
+              <button id="sb21btn05" label="Attach species table" description="You can attach a different USysAllSpecs table if you wish.  We will assume you understand the implications involved.  When in doubt ask Will MacKenzie!" imageMso="MacroPlay" onAction="Sb21OnAction" />
+              <button id="sb21btn06" label="Attach code list table" description="VPro uses codes to store many of the data items.  These codes and their descriptions are stored in an attached table named USysTableOfLists.  Click to start the procedure to attach a different table." imageMso="MacroPlay" onAction="Sb21OnAction" />
+              <button id="sb21btn01" label="Colour-theme" description="In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species." imageMso="MacroPlay" onAction="Sb21OnAction" />
+              <button id="sb21btn02" label="Form colours" description="Staring at VPro all day?  Getting tired of the same old colours day in and day out?  Personalize your copy of VPro and get a new lease on life." imageMso="MacroPlay" onAction="Sb21OnAction"></button>
+              <button id="sb21btn03" label="User setup" description="Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)" imageMso="MacroPlay" onAction="Sb21OnAction"></button>
+              <button id="sb21btn04" label="Directories" description="Setup directory locations for files related to Google Earth, R, and plot photos." imageMso="MacroPlay" onAction="Sb21OnAction"></button>
+            </menu>
+          </splitButton>
+        </group>
+        <group id="grpHelp" label="Help">
+          <splitButton id="sb30" size="large">
+            <button id="sb30btn" label="Help" imageMso="FunctionsLogicalInsertGallery" />
+            <menu id="sbo30Menu" itemSize="large">
+              <button id="sb30btn01" label="VPro Help" description="Web sites/documents to help you on your way." imageMso="TentativeAcceptInvitation" onAction="Sb30OnAction"></button>
+              <button id="sb30btn03" label="VPro Service Packs" description="Information on the VPro service packs installed on this machine." imageMso="ConvertToSmartArt" onAction="Sb30OnAction"></button>
+              <button id="sb30btn04" label="Set all to Sample" description="Problems with the menu?  Can't change projects?  Getting an error message?  Try this." imageMso="PostcardWizard" onAction="Sb30OnAction"></button>
+              <menuSeparator id="sep60" />
+              <button id="sb30btn02" label="About VPro" description="Some basic information about your copy of VPro." imageMso="BevelTextGallery" onAction="Sb30OnAction"></button>
+            </menu>
+          </splitButton>
+        </group>
+      </tab>
+    </tabs>
+    <officeMenu>
+      <button idMso="FileCompactAndRepairDatabase" insertBeforeMso="FileCloseDatabase" />
+      <button idMso="FileOpenDatabase" visible="false" />
+      <button idMso="FileNewDatabase" visible="false" />
+      <splitButton idMso="FileSaveAsMenuAccess" visible="false" />
+    </officeMenu>
+  </ribbon>
+</customUI>

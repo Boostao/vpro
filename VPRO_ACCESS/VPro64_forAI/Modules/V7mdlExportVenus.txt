@@ -1,0 +1,414 @@
+Option Compare Database
+Option Explicit
+Dim TheDB As Database
+
+Private Function SplitHorizon(Value2Parse As String, ReturnWhat As String) As Single
+'Nov. 2, 2000
+On Error GoTo errSplitHorizon
+On Error GoTo 0
+Dim X As Integer
+Dim Val1 As Single, Val2 As Single
+
+Select Case ReturnWhat
+    Case "Low"
+        X = InStr(1, Value2Parse, "-")
+        If X = 0 Then
+            SplitHorizon = 0
+        Else
+            Val1 = Left(Value2Parse, X - 1)
+            Val2 = Right(Value2Parse, Len(Value2Parse) - X)
+            If Val1 > Val2 Then
+                SplitHorizon = Val2
+            Else
+                SplitHorizon = Val1
+            End If
+        End If
+    Case "Up"
+        X = InStr(1, Value2Parse, "-")
+        If X = 0 Then
+            SplitHorizon = Value2Parse
+        Else
+            Val1 = Left(Value2Parse, X - 1)
+            Val2 = Right(Value2Parse, Len(Value2Parse) - X)
+            If Val1 > Val2 Then
+                SplitHorizon = Val1
+            Else
+                SplitHorizon = Val2
+            End If
+        End If
+    Case Else
+    
+End Select
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errSplitHorizon:
+    SplitHorizon = 0
+    Resume MyExit
+End Function
+
+Private Function AddV42Project(db As Database) As Integer
+'Nov. 4, 2000
+On Error GoTo errAddV42Project
+Dim MyRS As Recordset
+Set MyRS = db.OpenRecordset("tblProjectManager", dbOpenDynaset)
+    
+    MyRS.AddNew
+    MyRS!ProjectName = CurrProject
+    MyRS.Update
+    MyRS.MoveFirst
+    AddV42Project = MyRS!ProjectID
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Exit Function
+errAddV42Project:
+    MsgBox "Sorry, couldn't add project"
+    AddV42Project = 0
+    Err.Clear
+    Resume MyExit
+End Function
+
+Private Function ExportV50Database()
+    MsgBox "Function will be developed once VENUS 5.0 data structure is stable."
+End Function
+Private Function ExportV42Database()
+
+'Sep 22, 2008
+'exports data to Gregg's program
+'On Error GoTo errExportV42Database
+Dim MyWS As Workspace, MyDB As Database, VenusDB As Database, MyQD As QueryDef
+Dim NewDBName As String, Prompt As String, MyDir As String, SqlText As String
+Dim ProjectID As Integer, IsSuccession As Boolean ', SuccessionYr As Integer
+Set MyDB = CurrentDb
+
+'get installation directory
+    MyDir = InstalledDir & "Templates\"
+    If Dir(MyDir & "Venus42Templates.mdb") = "" Then
+        MsgBox "You don't have the VENUS templates installed.  Contact Will MacKenzie for information on obtaining this file."
+        GoTo MyExit
+    End If
+    'Prompt = "Create New VENUS 4.2 Database"
+    Prompt = "Create New VENUS Database"
+    NewDBName = GetFileName(Prompt, False)
+    If NewDBName = "" Then GoTo MyExit
+    If NewDBName = MyDB.Name Then MsgBox "You can't use that name"
+    If NewDBName = MyDB.Name Then GoTo MyExit
+    If Dir(NewDBName) > "" Then MsgBox "That name is already in use."
+    If Dir(NewDBName) > "" Then GoTo MyExit
+    
+    'On Error Resume Next
+    'Screen.ActiveForm.Repaint
+    'On Error GoTo errExportV42Database
+    'DoCmd.OpenForm "USysLoading"
+    'Forms![USysLoading]![Text0].Caption = "Working..."
+    'Screen.ActiveForm.Repaint
+    
+    'FileCopy MyDir & "Venus42Templates.mdv", NewDBName
+    FileCopy MyDir & "Venus42Templates.mdb", NewDBName
+   
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "tblProjectManager"
+    DoCmd.DeleteObject acTable, "tblEnv"
+    DoCmd.DeleteObject acTable, "tblTreeAttributesWildlife"
+    DoCmd.DeleteObject acTable, "tblMensuration"
+    DoCmd.DeleteObject acTable, "tblMineralHorizons"
+    DoCmd.DeleteObject acTable, "tblOrganicHorizons"
+    DoCmd.DeleteObject acTable, "tblSoil"
+    DoCmd.DeleteObject acTable, "tblVegLayer"
+    DoCmd.DeleteObject acTable, "tblVegMain"
+    DoCmd.DeleteObject acTable, "tblVegSpecies"
+    On Error GoTo errExportV42Database
+    
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblProjectManager", "tblProjectManager"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblEnv", "tblEnv"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblTreeAttributesWildlife", "tblTreeAttributesWildlife"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblMensuration", "tblMensuration"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblMineralHorizons", "tblMineralHorizons"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblOrganicHorizons", "tblOrganicHorizons"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblSoil", "tblSoil"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblVegLayer", "tblVegLayer"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblVegMain", "tblVegMain"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblVegSpecies", "tblVegSpecies"
+    
+    ProjectID = AddV42Project(MyDB)
+    
+    DoCmd.SetWarnings False
+'add env
+    SqlText = "INSERT INTO tblEnv ( ProjectID, PlotNumber, [Date], SiteSurveyor, FieldNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, SiteNotes, Zone, SubZone, Location, NtsMapSheet, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure, SurfaceType, MoistureRegime, NutrientRegime, SuccessionalStatus, SubstrateDecWood, SubstrateBedrock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, PhotoFrameNum, SiteSeries, SiteDisturbance1, SiteDisturbance2, StructuralStage, UTMZone, UTMEasting, UTMNorthing, MoistureRegimeSub, RealmClass, Region, TransDistrib, SurfaceTopography, LatitudeDegree, LatitudeMinute, LatitudeSecond, LongitudeDegree, LongitudeMinute, LongitudeSecond, SurfaceSize )"
+    SqlText = SqlText & " SELECT 1 AS Projectid, PlotNumber, Date, SiteSurveyor, FieldNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, SiteNotes, Zone, SubZone, Location, NtsMapSheet, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure1, SurfaceTopographyType, MoistureRegime, NutrientRegime, SuccessionalStatus, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, PhotoFrameNum, SiteSeries, SiteDisturbance1, SiteDisturbance2, StructuralStage, UTMZone, UTMEasting, UTMNorthing, MoistureRegimeSub, RealmClass , Region, TransDistrib, SurfaceShape, LatitudeDegrees, LatitudeMinutes, LatitudeSeconds, LongitudeDegrees, LongitudeMinutes, LongitudeSeconds, SurfaceTopographySize"
+    SqlText = SqlText & " FROM " & CurrProject() & "_Env;"
+    DoCmd.RunSQL SqlText
+
+'add main veg
+    SqlText = "INSERT INTO tblVegMain ( PlotID, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegSurveyor, VegNotes )"
+    SqlText = SqlText & " SELECT tblEnv.PlotID, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegSurveyor, VegNotes"
+    SqlText = SqlText & " FROM tblEnv INNER JOIN " & CurrProject() & "_Env ON tblEnv.PlotNumber = " & CurrProject() & "_Env.PlotNumber;"
+    DoCmd.RunSQL SqlText
+    
+'add veg layer
+    SqlText = "INSERT INTO tblVegLayer ( PlotID, Layer )"
+    SqlText = SqlText & " SELECT DISTINCT tblEnv.PlotID, USysAllVeg.MyLayer"
+    SqlText = SqlText & " FROM tblEnv INNER JOIN USysAllVeg ON tblEnv.PlotNumber = USysAllVeg.PlotNumber;"
+    DoCmd.RunSQL SqlText
+    
+'add veg cover
+    SqlText = "INSERT INTO tblVegSpecies ( VegLayerID, Species, Cover )"
+    SqlText = SqlText & " SELECT tblVegLayer.VegLayerID, USysAllVeg.Species, USysAllVeg.Cover"
+    SqlText = SqlText & " FROM tblVegMain INNER JOIN (tblVegLayer INNER JOIN (tblEnv INNER JOIN USysAllVeg ON tblEnv.PlotNumber = USysAllVeg.PlotNumber) ON tblVegLayer.Layer = USysAllVeg.MyLayer) ON (tblEnv.PlotID = tblVegMain.PlotID) AND (tblVegMain.PlotID = tblVegLayer.PlotID);"
+    DoCmd.RunSQL SqlText
+
+'add soil
+    SqlText = "INSERT INTO tblSoil ( PlotID, BedrockGeology, CoarseFragLith, SoilSurveyor, TerrainSurficial, TerrainUnderlying, SoilClassGroup, SoilClassSubGroup, HumusForm, HydroGeo, HydroGeoSub, RootingDepth, RootZoneParticleSize, RootRestrictingDepth, RootRestrictingType, WaterSource, SeepageDepth, SoilDrainage, FloodingRegime, pHMethodCodeOrganic, pHMethodCodeMineral, SoilNotes, MineralpH, HumuspH, HumusThickness, TerrainVTAB, TerrainSTexture1, TerrainSTexture2, TerrainSTexture3, TerrainUTexture1, TerrainUTexture2, TerrainUTexture3, TerrainSMaterial1, TerrainSMaterial2, TerrainSMaterial3, TerrainUMaterial1, TerrainUMaterial2, TerrainUMaterial3, TerrainSExpression1, TerrainSExpression2, TerrainSExpression3, TerrainUExpression1, TerrainUExpression2, TerrainUExpression3, TerrainSGeo1, TerrainSGeo2, TerrainSGeo3, TerrainUGeo1, TerrainUGeo2, TerrainUGeo3 )"
+    SqlText = SqlText & " SELECT tblEnv.PlotID, BedrockGeology, CoarseFragLith, SoilSurveyor, SurficialMaterialSurf, SurficialMaterialSubSurf, SoilClassGroup, SoilClassSubGroup, HumusForm, HydroGeoSystem, HydroGeoSubSystem, RootingDepth, RootZoneParticleSize, RootRestrictingDepth, RootRestrictingType, WaterSource, SeepageDepth, SoilDrainage, FloodingRegimeFreq, pHMethodCodeOrganic, pHMethodCodeMineral, SoilNotes, MineralpH, HumuspH, HumusThickness, TerrainVTAB,"
+    SqlText = SqlText & " SplitTerrain([TerrainTextureSurf],'TerrainTextureSurf',1) AS TerrainSTexture1, SplitTerrain([TerrainTextureSurf],'TerrainTextureSurf',2) AS TerrainSTexture2, SplitTerrain([TerrainTextureSurf],'TerrainTextureSurf',3) AS TerrainSTexture3, SplitTerrain([TerrainTextureSubSurf],'TerrainTextureSubSurf',1) AS TerrainUTexture1, SplitTerrain([TerrainTextureSubSurf],'TerrainTextureSubSurf',2) AS TerrainUTexture2, SplitTerrain([TerrainTextureSubSurf],'TerrainTextureSubSurf',3) AS TerrainUTexture3, SplitTerrain([SurficialMaterialSurf],'SurficialMaterialSurf',1) AS TerrainSMaterial1, SplitTerrain([SurficialMaterialSurf],'SurficialMaterialSurf',2) AS TerrainSMaterial2, SplitTerrain([SurficialMaterialSurf],'SurficialMaterialSurf',3) AS TerrainSMaterial3, SplitTerrain([SurficialMaterialSubSurf],'SurficialMaterialSubSurf',1) AS TerrainUMaterial1,"
+    SqlText = SqlText & " SplitTerrain([SurficialMaterialSubSurf],'SurficialMaterialSubSurf',2) AS TerrainUMaterial2, SplitTerrain([SurficialMaterialSubSurf],'SurficialMaterialSubSurf',3) AS TerrainUMaterial3,"
+    SqlText = SqlText & " SplitTerrain([SurfaceExpSurf],'SurfaceExpSurf',1) AS TerrainSExpression1, SplitTerrain([SurfaceExpSurf],'SurfaceExpSurf',2) AS TerrainSExpression2, SplitTerrain([SurfaceExpSurf],'SurfaceExpSurf',3) AS TerrainSExpression3, SplitTerrain([SurfaceExpSubSurf],'SurfaceExpSubSurf',1) AS TerrainUExpression1, SplitTerrain([SurfaceExpSubSurf],'SurfaceExpSubSurf',2) AS TerrainUExpression2, SplitTerrain([SurfaceExpSubSurf],'SurfaceExpSubSurf',3) AS TerrainUExpression3, SplitTerrain([GeoMorProSurf],'GeoMorProSurf',1) AS TerrainSGeo1, SplitTerrain([GeoMorProSurf],'GeoMorProSurf',2) AS TerrainSGeo2, SplitTerrain([GeoMorProSurf],'GeoMorProSurf',3) AS TerrainSGeo3, SplitTerrain([GeoMorProSubSurf],'GeoMorProSubSurf',1) AS TerrainUGeo1, SplitTerrain([GeoMorProSubSurf],'GeoMorProSubSurf',2) AS TerrainUGeo2, SplitTerrain([GeoMorProSubSurf],'GeoMorProSubSurf',3) AS TerrainUGeo3"
+    SqlText = SqlText & " FROM " & CurrProject() & "_Env INNER JOIN tblEnv ON " & CurrProject() & "_Env.PlotNumber = tblEnv.PlotNumber;"
+    DoCmd.RunSQL SqlText
+    
+'add organic layers
+    SqlText = "INSERT INTO tblOrganicHorizons ( PlotID, Horizon, DepthUpper, DepthLower, StructureDegree, StructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, pHOrganic, Comment )"
+    SqlText = SqlText & " SELECT tblEnv.PlotID, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Comment"
+    SqlText = SqlText & " FROM tblEnv INNER JOIN " & CurrProject() & "_Humus ON tblEnv.PlotNumber = " & CurrProject() & "_Humus.PlotNumber;"
+    DoCmd.RunSQL SqlText
+    
+'add mineral layers
+    SqlText = " INSERT INTO tblMineralHorizons ( PlotID, Horizon, DepthUpper, DepthLower, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, StructureClass, StructureKind, pHMineral, Comments, PercentCoarseFragsShape )"
+    SqlText = SqlText & " SELECT tblEnv.PlotID, Horizon, UpperDepth, LowerDepth, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, Comments, PercentCoarseFragsShape"
+    SqlText = SqlText & " FROM tblEnv INNER JOIN " & CurrProject() & "_Mineral ON tblEnv.PlotNumber = " & CurrProject() & "_Mineral.PlotNumber;"
+    DoCmd.RunSQL SqlText
+    
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "tblProjectManager"
+    DoCmd.DeleteObject acTable, "tblEnv"
+    DoCmd.DeleteObject acTable, "tblTreeAttributesWildlife"
+    DoCmd.DeleteObject acTable, "tblMensuration"
+    DoCmd.DeleteObject acTable, "tblMineralHorizons"
+    DoCmd.DeleteObject acTable, "tblOrganicHorizons"
+    DoCmd.DeleteObject acTable, "tblSoil"
+    DoCmd.DeleteObject acTable, "tblVegLayer"
+    DoCmd.DeleteObject acTable, "tblVegMain"
+    DoCmd.DeleteObject acTable, "tblVegSpecies"
+    On Error GoTo errExportV42Database
+    
+    DoCmd.Close acForm, "USysLoading"
+    MsgBox "The current project '" & CurrProject & "' has been exported to VENUS 4.2 project '" & NewDBName & "'."
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    DoCmd.Close acForm, "USysLoading"
+    Set MyDB = Nothing
+    Set VenusDB = Nothing
+    Exit Function
+errExportV42Database:
+    If Err.Number = 3204 Then
+        MsgBox "Database already exists.  Try again."
+    Else
+        MsgBox Err.Description
+        Resume MyExit
+    End If
+End Function
+Private Function ExportV30Database()
+
+'Sep 22, 2008
+'exports data to Gregg's program
+On Error GoTo errExportV30Database
+Dim MyWS As Workspace, MyDB As Database, VenusDB As Database, MyQD As QueryDef
+Dim NewDBName As String, Prompt As String, MyDir As String, SqlText As String
+Set MyDB = CurrentDb()
+
+'get installation directory
+    MyDir = InstalledDir & "Templates\"
+    If Dir(MyDir & "Venus30Templates.mdv") = "" Then
+        MsgBox "You don't have the VENUS templates installed.  The needed file is Venus30Templates.mdv and it should be located in your VPro directory.  Contact Will MacKenzie for information on obtaining this file."
+        GoTo MyExit
+    End If
+   
+    Prompt = "Create New VENUS Database"
+    NewDBName = GetFileName(Prompt, False)
+    If NewDBName = "" Then GoTo MyExit
+    If NewDBName = MyDB.Name Then MsgBox "You can't use that name"
+    If NewDBName = MyDB.Name Then GoTo MyExit
+    If Dir(NewDBName) > "" Then MsgBox "That name is already in use."
+    If Dir(NewDBName) > "" Then GoTo MyExit
+    
+    RepaintForms
+    DoCmd.OpenForm "USysLoading"
+    Forms![USysLoading]![Text0].Caption = "Working..."
+    RepaintForms
+    
+    FileCopy MyDir & "Venus30Templates.mdv", NewDBName
+   
+On Error Resume Next
+DoCmd.DeleteObject acTable, "tblEnv"
+DoCmd.DeleteObject acTable, "tblMineralHorizons"
+DoCmd.DeleteObject acTable, "tblOrganicHorizons"
+DoCmd.DeleteObject acTable, "tblSoil"
+DoCmd.DeleteObject acTable, "tblVegLayer"
+DoCmd.DeleteObject acTable, "tblVegMain"
+DoCmd.DeleteObject acTable, "tblVegSpecies"
+On Error GoTo errExportV30Database
+
+DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblEnv", "tblEnv"
+DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblMineralHorizons", "tblMineralHorizons"
+DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblOrganicHorizons", "tblOrganicHorizons"
+DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblSoil", "tblSoil"
+DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblVegLayer", "tblVegLayer"
+DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblVegMain", "tblVegMain"
+DoCmd.TransferDatabase acLink, "Microsoft Access", NewDBName, acTable, "tblVegSpecies", "tblVegSpecies"
+
+On Error GoTo 0
+DoCmd.SetWarnings False
+SqlText = "INSERT INTO tblEnv ( ProjectID, PlotNumber, [Date], SiteSurveyor, FieldNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, SiteNotes, Zone, SubZone, Location, NtsMapSheet, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure, SurfaceType, MoistureRegime, NutrientRegime, SuccessionalStatus, SubstrateDecWood, SubstrateBedrock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, PhotoFrameNum, SiteSeries, SiteDisturbance1, SiteDisturbance2, StructuralStage, UTMZone, UTMEasting, UTMNorthing, MoistureRegimeSub, RealmClass, Region, TransDistrib, SurfaceTopography, LongitudeDegree, LongitudeMinute, LongitudeSecond, LatitudeDegree, LatitudeMinute, LatitudeSecond )"
+SqlText = SqlText & " SELECT 3 AS Expr1, PlotNumber, Date, SiteSurveyor, FieldNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, SiteNotes, Zone, SubZone, Location, NtsMapSheet, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure1, SurfaceTopographyType, MoistureRegime, NutrientRegime, SuccessionalStatus, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, PhotoFrameNum, SiteSeries, SiteDisturbance1, SiteDisturbance2, StructuralStage, UTMZone, UTMEasting, UTMNorthing, MoistureRegimeSub, RealmClass , Region, TransDistrib, SurfaceShape, LongitudeDegrees, LongitudeMinutes, LongitudeSeconds, LatitudeDegrees, LatitudeMinutes, LatitudeSeconds"
+SqlText = SqlText & " FROM [" & CurrProject() & "_Env];"
+'Set MyQD = MyDB.CreateQueryDef("Q01", SqlText)
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO tblVegMain ( PlotID, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegSurveyor, VegNotes )"
+SqlText = SqlText & " SELECT tblEnv.PlotID, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegSurveyor, VegNotes"
+SqlText = SqlText & " FROM tblEnv INNER JOIN [" & CurrProject() & "_Env] ON tblEnv.PlotNumber = [" & CurrProject() & "_Env].PlotNumber;"
+'Set MyQD = MyDB.CreateQueryDef("Q02", SqlText)
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO tblVegLayer ( PlotID, Layer )"
+SqlText = SqlText & " SELECT DISTINCT tblEnv.PlotID, USysAllVeg.MyLayer"
+SqlText = SqlText & " FROM tblEnv INNER JOIN USysAllVeg ON tblEnv.PlotNumber = USysAllVeg.PlotNumber;"
+'Set MyQD = MyDB.CreateQueryDef("Q03", SqlText)
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO tblVegSpecies ( VegLayerID, Species, Cover )"
+SqlText = SqlText & " SELECT tblVegLayer.VegLayerID, USysAllVeg.Species, USysAllVeg.Cover"
+SqlText = SqlText & " FROM tblVegMain INNER JOIN (tblVegLayer INNER JOIN (tblEnv INNER JOIN USysAllVeg ON tblEnv.PlotNumber = USysAllVeg.PlotNumber) ON tblVegLayer.Layer = USysAllVeg.MyLayer) ON (tblEnv.PlotID = tblVegMain.PlotID) AND (tblVegMain.PlotID = tblVegLayer.PlotID);"
+'Set MyQD = MyDB.CreateQueryDef("Q04", SqlText)
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO tblSoil ( PlotID, BedrockGeology, CoarseFragLith, SoilSurveyor, TerrainSurficial, TerrainUnderlying, SoilClassGroup, SoilClassSubGroup, HumusForm, HydroGeo, HydroGeoSub, RootingDepth, RootZoneParticleSize, RootRestrictingDepth, RootRestrictingType, WaterSource, SeepageDepth, SoilDrainage, FloodingRegime, pHMethodCodeOrganic, pHMethodCodeMineral, SoilNotes, MineralpH, HumuspH, HumusThickness, TerrainVTAB, TerrainSTexture1, TerrainUTexture1, TerrainSMaterial1, TerrainUMaterial1, TerrainSExpression1, TerrainUExpression1, TerrainSGeo1, TerrainUGeo1 )"
+SqlText = SqlText & " SELECT tblEnv.PlotID, BedrockGeology, CoarseFragLith, SoilSurveyor, SurficialMaterialSurf, SurficialMaterialSubSurf, SoilClassGroup, SoilClassSubGroup, HumusForm, HydroGeoSystem, HydroGeoSubSystem, RootingDepth, RootZoneParticleSize, RootRestrictingDepth, RootRestrictingType, WaterSource, SeepageDepth, SoilDrainage, FloodingRegimeFreq, pHMethodCodeOrganic, pHMethodCodeMineral, SoilNotes, MineralpH, HumuspH, HumusThickness, TerrainVTAB, TerrainTextureSurf, TerrainTextureSubSurf, SurficialMaterialSurf, SurficialMaterialSubSurf, SurfaceExpSurf, SurfaceExpSubSurf, GeoMorProSurf, GeoMorProSubSurf"
+SqlText = SqlText & " FROM [" & CurrProject() & "_Env] INNER JOIN tblEnv ON [" & CurrProject() & "_Env].PlotNumber = tblEnv.PlotNumber;"
+'Set MyQD = MyDB.CreateQueryDef("Q05", SqlText)
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO tblOrganicHorizons ( PlotID, Horizon, Depth, StructureDegree, StructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, pHOrganic, Comment, DepthUpper, DepthLower )"
+SqlText = SqlText & " SELECT tblEnv.PlotID, Horizon, [UpperDepth] & '-' & [LowerDepth] AS Depth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Comment, UpperDepth, LowerDepth"
+SqlText = SqlText & " FROM tblEnv INNER JOIN [" & CurrProject() & "_Humus] ON tblEnv.PlotNumber = [" & CurrProject() & "_Humus].PlotNumber;"
+'Set MyQD = MyDB.CreateQueryDef("Q06", SqlText)
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO tblMineralHorizons ( PlotID, Horizon, Depth, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, StructureClass, StructureKind, pHMineral, Comments, PercentCoarseFragsShape, DepthUpper, DepthLower )"
+SqlText = SqlText & " SELECT tblEnv.PlotID, Horizon, [UpperDepth] & '-' & [LowerDepth] AS Depth, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, Comments, PercentCoarseFragsShape, UpperDepth, LowerDepth"
+SqlText = SqlText & " FROM tblEnv INNER JOIN [" & CurrProject() & "_Mineral] ON tblEnv.PlotNumber = [" & CurrProject() & "_Mineral].PlotNumber;"
+'Set MyQD = MyDB.CreateQueryDef("Q07", SqlText)
+DoCmd.RunSQL SqlText
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, "tblEnv"
+DoCmd.DeleteObject acTable, "tblMineralHorizons"
+DoCmd.DeleteObject acTable, "tblOrganicHorizons"
+DoCmd.DeleteObject acTable, "tblSoil"
+DoCmd.DeleteObject acTable, "tblVegLayer"
+DoCmd.DeleteObject acTable, "tblVegMain"
+DoCmd.DeleteObject acTable, "tblVegSpecies"
+On Error GoTo errExportV30Database
+DoCmd.Close acForm, "USysLoading"
+MsgBox "Done"
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    DoCmd.Close acForm, "USysLoading"
+    On Error Resume Next
+    Set MyDB = Nothing
+    Set VenusDB = Nothing
+    Exit Function
+errExportV30Database:
+    If Err.Number = 3204 Then
+        MsgBox "Database already exists.  Try again."
+    Else
+        MsgBox Err.Description
+        Resume MyExit
+    End If
+End Function
+
+Private Function VENUS22Version() As Integer
+'Apr. 01, 2000
+On Error GoTo errVENUS22Version
+Dim MyDB As Database, MyTdf As TableDef
+Dim i As Integer
+Set MyDB = CurrentDb
+Set MyTdf = MyDB.TableDefs("entryDat_Env")
+
+i = MyTdf.Fields.count
+
+Select Case i
+    Case 102 'rod 97
+        VENUS22Version = 1
+    Case 144 'chetwyn
+        VENUS22Version = 2
+    Case Else
+        VENUS22Version = 0
+End Select
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errVENUS22Version:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Function Check4Duplicates() As Boolean
+'Apr. 01, 2000
+Dim MyDB As Database, MyRS As Recordset, MyRP As Report
+Dim i As Integer, SqlText As String, MyCTL As control
+Dim ReportName As String, Response As Integer, Msg As String, dgdef As Integer
+Set MyDB = CurrentDb
+
+On Error Resume Next
+DoCmd.DeleteObject acReport, "Duplicate Plots"
+On Error GoTo errCheck4Duplicates
+
+SqlText = "SELECT DISTINCTROW Plotnumber, ProjectName"
+SqlText = SqlText & " FROM entryDat_Env"
+SqlText = SqlText & " WHERE (((Plotnumber) In (SELECT [Plotnumber] FROM [entryDat_Env] As Tmp GROUP BY [Plotnumber] HAVING Count(*)>1 )))"
+SqlText = SqlText & " ORDER BY Plotnumber;"
+Set MyRS = MyDB.OpenRecordset(SqlText, dbOpenSnapshot)
+
+i = MyRS.RecordCount
+If i > 0 Then
+    Msg = "VPro has found duplicate plot numbers in this VENUS database.  Do you wish to see a list of these plots?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef)    ' Get user response.
+    If Response = IDYES Then
+        Set MyRP = CreateReport
+        ReportName = MyRP.Name
+        MyRP.RecordSource = SqlText
+        MyRP.Section("Detail").Height = 240
+        Set MyCTL = CreateReportControl(ReportName, acTextBox)
+        MyCTL.Properties("ControlSource") = "PlotNumber"
+        Set MyCTL = CreateReportControl(ReportName, acTextBox, acDetail, , , 1700)
+        MyCTL.Properties("ControlSource") = "ProjectName"
+        DoCmd.Save acReport, MyRP.Name
+        DoCmd.Close acReport, MyRP.Name
+        DoCmd.Rename "Duplicate Plots", acReport, ReportName
+        DoCmd.OpenReport "Duplicate Plots", acViewPreview
+    End If
+    Check4Duplicates = True
+Else
+    Check4Duplicates = False
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errCheck4Duplicates:
+    MsgBox Err.Description
+    Resume MyExit
+End Function

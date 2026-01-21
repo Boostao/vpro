@@ -1,0 +1,127 @@
+Option Compare Database
+Option Explicit
+
+Function SubZoneMatrix()
+'Oct. 25, 2002
+On Error GoTo errSubZoneMatrix
+Dim MyDB As Database, MyRS As Recordset, MyQD As QueryDef
+Dim SqlText As String, MyHierarchy As String
+Dim i As Integer
+MyHierarchy = clsVProReg.CurrHierarchy & "_Hierarchy"
+Set MyDB = CurrentDb
+
+On Error Resume Next
+DoCmd.DeleteObject acQuery, "qrySubzoneMatrix1"
+DoCmd.DeleteObject acQuery, "qrySubzoneMatrix2"
+DoCmd.DeleteObject acQuery, "qrySubzoneMatrix3"
+On Error GoTo errSubZoneMatrix
+
+SqlText = "SELECT Left([Name],10) AS Unit, mid([Name],11) AS SS, [" & MyHierarchy & "].Level, Parent"
+SqlText = SqlText & " FROM [" & MyHierarchy & "]"
+SqlText = SqlText & " WHERE (((Level)=11));"
+Set MyQD = MyDB.CreateQueryDef("qrySubzoneMatrix1", SqlText)
+
+SqlText = "SELECT Left([MyUnit],9) AS Unit, qrySubzoneMatrix1.Parent, IIf(IsNull([Parent]),Null,[SS]) AS [Value]"
+SqlText = SqlText & " FROM USysSubzoneMatrixLabels LEFT JOIN qrySubzoneMatrix1 ON USysSubzoneMatrixLabels.MyUnit = qrySubzoneMatrix1.Unit;"
+Set MyQD = MyDB.CreateQueryDef("qrySubzoneMatrix2", SqlText)
+
+SqlText = "TRANSFORM First(Value) AS FirstOfValue"
+SqlText = SqlText & " SELECT Name"
+SqlText = SqlText & " FROM qrySubzoneMatrix2 LEFT JOIN [" & MyHierarchy & "] ON qrySubzoneMatrix2.Parent = [" & MyHierarchy & "].ID"
+SqlText = SqlText & " GROUP BY Name"
+SqlText = SqlText & " PIVOT qrySubzoneMatrix2.Unit;"
+Set MyQD = MyDB.CreateQueryDef("qrySubzoneMatrix3", SqlText)
+Set MyRS = MyDB.OpenRecordset("qrySubzoneMatrix3")
+If MyRS.RecordCount < 1 Then
+    MsgBox "Nothing to report.  Ensure that your units are contained in the table USysSubzoneMatrixLabels.", vbInformation, "VPro"
+    MyRS.Close
+    GoTo Jump
+End If
+MyRS.Close
+
+ReportSubzoneMatrix
+
+Jump:
+On Error Resume Next
+DoCmd.DeleteObject acQuery, "qrySubzoneMatrix1"
+DoCmd.DeleteObject acQuery, "qrySubzoneMatrix2"
+DoCmd.DeleteObject acQuery, "qrySubzoneMatrix3"
+On Error GoTo errSubZoneMatrix
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errSubZoneMatrix:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Private Sub ReportSubzoneMatrix()
+
+'Sep 22, 2008
+On Error GoTo errReportSubzoneMatrix
+Dim xl As Object
+Dim i As Integer, X As Integer
+Dim MyFile As String, MyTitle As String, Filter As String
+CreateExcel xl
+xl.Workbooks.Add
+
+    MyFile = ""
+    Filter = "All Files (*.*)|*.*|Excel Files" & "(*.xls)|*.xls"
+    MyTitle = "VPro97 - Subzone/Association Matrix"
+    MyFile = GetFileName(MyTitle, False, "Excel Files (*.xls)", "*.xls")
+    'MyFile = Application.Run("GetFileName", MyTitle, Filter, 2, "save")
+    If MyFile = "" Then Exit Sub
+
+
+    DoCmd.TransferSpreadsheet acExport, acSpreadsheetTypeExcel97, "qrySubzoneMatrix3", MyFile, True
+    xl.Workbooks.Open FileName:=MyFile
+    
+'format it
+With xl
+    .Rows("1:1").Select
+    With .Selection
+        .HorizontalAlignment = 1
+        .VerticalAlignment = -4107
+        .WrapText = False
+        .Orientation = 90
+        .AddIndent = False
+        .IndentLevel = 0
+        .ShrinkToFit = False
+        .ReadingOrder = -5002
+        .MergeCells = False
+    End With
+    .Cells.Select
+    .Selection.Columns.AutoFit
+    .Range("B2").Select
+    .Range(.Selection, .ActiveCell.SpecialCells(11)).Select
+    With .Selection
+        .HorizontalAlignment = -4108
+        .VerticalAlignment = -4107
+        .WrapText = False
+        .Orientation = 0
+        .AddIndent = False
+        .IndentLevel = 0
+        .ShrinkToFit = False
+        .ReadingOrder = -5002
+        .MergeCells = False
+    End With
+    .Selection.Font.Bold = True
+    .Range("B2").Select
+    .ActiveWindow.FreezePanes = True
+    .Range("A1").Select
+    .Selection.ClearContents
+End With
+xl.Visible = True
+xl.ActiveWorkbook.Save
+
+MyExit:
+    Set xl = Nothing
+    Exit Sub
+errReportSubzoneMatrix:
+    On Error Resume Next
+    MsgBox Err.Description
+    xl.Quit
+    Resume MyExit
+End Sub

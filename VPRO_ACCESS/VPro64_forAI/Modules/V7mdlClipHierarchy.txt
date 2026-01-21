@@ -1,0 +1,137 @@
+Option Compare Database
+Option Explicit
+Private WasLowestTilde As Boolean
+
+Sub ClipHierarchy()
+'Mar. 14, 2000
+Dim MyDB As Database, MyRS As Recordset, TestRS As Recordset
+Dim SqlText As String, i As Integer
+Set MyDB = CurrentDb
+
+CopyHierarchy 'create temp hierarchy table
+
+    SqlText = "SELECT * FROM USysLowestBreakpoints_Hierarchy WHERE ((Left([Name],1)='~'));"
+    Set MyRS = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+    Set TestRS = MyDB.OpenRecordset("USysLowestBreakpoints_Hierarchy", dbOpenDynaset)
+    MyRS.MoveLast
+    MyRS.MoveFirst
+
+    For i = 1 To MyRS.RecordCount
+        If Left(MyRS!Name, 1) = "~" Then
+            WasLowestTilde = True
+            IsLowestTildeMember MyRS!ID, TestRS
+            If WasLowestTilde Then
+                MyRS.Edit
+                MyRS!Level = 11
+                MyRS.Update
+                DeleteNodeChildren MyDB, MyRS!ID, 1
+            End If
+        End If
+        MyRS.MoveNext
+    Next i
+    
+    DeleteMarkedChildren
+
+MyExit:
+    On Error Resume Next
+    TestRS.Close
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+End Sub
+Private Sub DeleteMarkedChildren()
+'Mar. 14, 2000
+Dim SqlText As String
+
+DoCmd.SetWarnings False
+SqlText = "DELETE *, Name"
+SqlText = SqlText & " FROM USysLowestBreakpoints_Hierarchy"
+SqlText = SqlText & " WHERE ((Left([Name],2)='!*'));"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+End Sub
+Private Sub CopyHierarchy()
+'Oct. 9, 2002
+Dim SqlText As String
+On Error Resume Next
+    DoCmd.DeleteObject acTable, "USysLowestBreakpoints_Hierarchy"
+On Error GoTo errCopyHierarchy
+    DoCmd.SetWarnings False
+    DoCmd.CopyObject , "USysLowestBreakpoints_Hierarchy", acTable, "USysHierarchyTable"
+    SqlText = "DELETE * FROM USysLowestBreakpoints_Hierarchy;"
+    DoCmd.RunSQL SqlText
+    SqlText = "INSERT INTO USysLowestBreakpoints_Hierarchy ( ID, Name, Parent, [Level], Tag)"
+    SqlText = SqlText & " SELECT ID, Name, Parent, [Level], Tag"
+    SqlText = SqlText & " FROM [" & CurrHierarchy() & "];"
+    DoCmd.RunSQL SqlText
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Exit Sub
+errCopyHierarchy:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+Private Function DeleteNodeChildren(db As Database, Unit As Long, Optional CallUnit As Variant)
+'Mar. 14, 2000
+Dim MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String
+Set MyRecords = db.OpenRecordset("USysLowestBreakpoints_Hierarchy", dbOpenDynaset)
+MyRecords.MoveFirst
+MyCriteria = "ID = " & Unit
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+    
+    MyRecords.Edit
+    If IsMissing(CallUnit) Then
+        MyRecords!Name = "!*" & MyRecords!Name
+        MyRecords.Update
+        MyRecords.MoveFirst
+    End If
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+    DeleteNodeChildren db, NextUnit
+    MyRecords.MoveNext
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+
+End Function
+
+Private Sub IsLowestTildeMember(UnitID As Long, MyRecords As Recordset)
+'Mar. 14, 2000
+Dim MyList As String, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String, ParentShapeName As String
+
+MyRecords.MoveFirst
+
+    MyCriteria = "ID = " & UnitID
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+Do Until MyRecords.NoMatch
+    If Left(MyRecords!Name, 1) = "~" Then
+        WasLowestTilde = False
+    End If
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+    IsLowestTildeMember NextUnit, MyRecords
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    Exit Sub
+End Sub

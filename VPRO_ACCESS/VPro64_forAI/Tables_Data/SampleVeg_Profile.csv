@@ -1,0 +1,3 @@
+"Order","Table","Field","Operator","Layer","Species","Criteria","Operation","PlotCount"
+2,"Veg","Species","<","SumB","ABIESPP","5","Subtract plots",2
+1,"Veg","Species",">","2","PINUSPP","0","Add plots",3

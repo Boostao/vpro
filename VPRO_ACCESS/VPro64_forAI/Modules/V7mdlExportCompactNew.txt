@@ -1,0 +1,1188 @@
+Option Compare Database
+Option Explicit
+Private CompactVegTable As String, FileName As String
+
+Public Sub MakeCompactByStrata()
+
+'Jun 2, 2020
+Dim SqlText As String, SuTable As String
+Dim Title As String, FileToExportTo As String
+
+'get filename to export to
+    Title = "VPro - enter/select a file to save the PC-ORD data in"
+    FileToExportTo = GetFileName(Title, False, "PC-ORD (*.txt)", "*.txt")
+    If FileToExportTo = "" Then GoTo MyExit
+    FileName = Left(FileToExportTo, Len(FileToExportTo) - 4)
+    FileToExportTo = FileName
+
+'option for lumping table
+    If clsVProReg.CurrLump = "None" Then
+        sysLumpingTable = ""
+    Else
+        sysLumpingTable = clsVProReg.CurrLump & "_Lump"
+    End If
+
+'reference the current su table
+    SuTable = clsVProReg.CurrPlotlist
+
+'cleanup
+    On Error Resume Next
+    DoCmd.DeleteObject acQuery, "tmpUsysAllVeg"
+    DoCmd.DeleteObject acQuery, "tmpUSysAllVegSum"
+    DoCmd.DeleteObject acQuery, "tmpUSysAllVegSpp"
+    DoCmd.DeleteObject acTable, "SppList"
+    DoCmd.DeleteObject acTable, "SppListUnique"
+    DoCmd.DeleteObject acTable, "tblSppCodesAndCover"
+    On Error GoTo 0
+
+'make fresh tables
+    DoCmd.CopyObject , "SppList", acTable, "USysExportSppList"
+    DoCmd.CopyObject , "SppListUnique", acTable, "USysExportSppList"
+
+'make tblSppCodesAndCover
+    CreateTableSppAndCover
+    
+'copy A strata data into tblSppCodesAndCover
+    DoCmd.SetWarnings False
+    SqlText = "INSERT INTO tblSppCodesAndCover ( PlotNumber, Species, Cover, MyLayer )"
+    SqlText = SqlText & " SELECT UsysVeg.PlotNumber, UsysVeg.Species, IIf(IsNull([TotalA]),Nz([Cover1])+Nz([Cover2])+Nz([Cover3]), [TotalA]) AS Cover, 'A' AS MyLayer"
+    SqlText = SqlText & " FROM UsysVeg INNER JOIN USysEnv ON UsysVeg.PlotNumber = USysEnv.PlotNumber"
+    SqlText = SqlText & " WHERE (((IIf(IsNull([TotalA]),Nz([Cover1])+Nz([Cover2])+Nz([Cover3]), [TotalA]))>0));"
+    'CurrentDb.CreateQueryDef "fred", SqlText
+    DoCmd.RunSQL SqlText
+    
+'copy B strata data into tblSppCodesAndCover
+    SqlText = "INSERT INTO tblSppCodesAndCover ( PlotNumber, Species, Cover, MyLayer )"
+    SqlText = SqlText & " SELECT UsysVeg.PlotNumber, UsysVeg.Species, IIf(IsNull([TotalB]),Nz([Cover4])+Nz([Cover5]), [TotalB]) AS Cover, 'B' AS MyLayer"
+    SqlText = SqlText & " FROM UsysVeg INNER JOIN USysEnv ON UsysVeg.PlotNumber = USysEnv.PlotNumber"
+    SqlText = SqlText & " WHERE (((IIf(IsNull([TotalB]),Nz([Cover4])+Nz([Cover5]), [TotalB]))>0));"
+    DoCmd.RunSQL SqlText
+
+'copy C strata data into tblSppCodesAndCover
+    SqlText = "INSERT INTO tblSppCodesAndCover ( PlotNumber, Species, Cover, MyLayer )"
+    SqlText = SqlText & " SELECT UsysVeg.PlotNumber, UsysVeg.Species, UsysVeg.Cover6 AS Cover, 'C' AS MyLayer"
+    SqlText = SqlText & " FROM UsysVeg INNER JOIN USysEnv ON UsysVeg.PlotNumber = USysEnv.PlotNumber"
+    SqlText = SqlText & " WHERE (((UsysVeg.Cover6)>0));"
+    DoCmd.RunSQL SqlText
+
+'copy D strata data into tblSppCodesAndCover
+    SqlText = "INSERT INTO tblSppCodesAndCover ( PlotNumber, Species, Cover, MyLayer )"
+    SqlText = SqlText & " SELECT UsysVeg.PlotNumber, UsysVeg.Species, UsysVeg.Cover7 AS Cover, 'D' AS MyLayer"
+    SqlText = SqlText & " FROM UsysVeg INNER JOIN USysEnv ON UsysVeg.PlotNumber = USysEnv.PlotNumber"
+    SqlText = SqlText & " WHERE (((UsysVeg.Cover7)>0));"
+    'CurrentDb.CreateQueryDef "fred", SqlText
+    DoCmd.RunSQL SqlText
+    
+    DoCmd.SetWarnings True
+
+'make tmpUSysAllVeg
+    If SuTable <> "None" Then 'no lump/yes su
+        If sysLumpingTable = "" Or sysLumpingTable = "_Lump" Then 'no lump with su table
+            'SqlText = "SELECT tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, Sum(tblSppCodesAndCover.Cover) AS SumOfCover, LayerCode.Strata, Left([Species],7) & [Strata] AS SppAndStrata, USysAllSpecs.ScientificName"
+            SqlText = "SELECT tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, IIf(Sum([Cover])<0.1,0.1,Sum([Cover])) AS SumOfCover, LayerCode.Strata, Left([Species],7) & [Strata] AS SppAndStrata, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM ((tblSppCodesAndCover LEFT JOIN USysAllSpecs ON tblSppCodesAndCover.Species = USysAllSpecs.Code) INNER JOIN LayerCode ON tblSppCodesAndCover.MyLayer = LayerCode.Strata) INNER JOIN [" & SuTable & "_SU] ON tblSppCodesAndCover.PlotNumber = [" & SuTable & "_SU].PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)='u' Or (USysAllSpecs.Codetype) Is Null))"
+            SqlText = SqlText & " GROUP BY tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, LayerCode.Strata, Left([Species],7) & [Strata], USysAllSpecs.ScientificName;"
+        Else 'yes lumping/yes su table
+            'SqlText = "SELECT tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, Sum(tblSppCodesAndCover.Cover) AS SumOfCover, LayerCode.Strata, USysAllSpecs.ScientificName, Left(IIf(IsNull([LumpCode]),[Species],[LumpCode]),7) & [Strata] AS SppAndStrata"
+            SqlText = "SELECT tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, IIf(Sum([Cover])<0.1,0.1,Sum([Cover])) AS SumOfCover, LayerCode.Strata, USysAllSpecs.ScientificName, Left(IIf(IsNull([LumpCode]),[Species],[LumpCode]),7) & [Strata] AS SppAndStrata"
+            SqlText = SqlText & " FROM (((tblSppCodesAndCover LEFT JOIN USysAllSpecs ON tblSppCodesAndCover.Species = USysAllSpecs.Code) INNER JOIN LayerCode ON tblSppCodesAndCover.MyLayer = LayerCode.Strata) INNER JOIN [" & SuTable & "_SU] ON tblSppCodesAndCover.PlotNumber = [" & SuTable & "_SU].PlotNumber) LEFT JOIN [" & sysLumpingTable & "] ON USysAllSpecs.Code = [" & sysLumpingTable & "].SppCode"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)='u' Or (USysAllSpecs.Codetype) Is Null))"
+            SqlText = SqlText & " GROUP BY tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, LayerCode.Strata, USysAllSpecs.ScientificName, Left(IIf(IsNull([LumpCode]),[Species],[LumpCode]),7) & [Strata];"
+        End If
+    Else 'no su table and no lump - tested by AB and is OK
+        If sysLumpingTable = "" Or sysLumpingTable = "_Lump" Then 'no lump no su table
+            SqlText = "SELECT tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, IIf(Sum([Cover])<0.1,0.1,Sum([Cover])) AS SumOfCover, Left([Species],7) & [MyLayer] AS SppAndStrata, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM tblSppCodesAndCover LEFT JOIN USysAllSpecs ON tblSppCodesAndCover.Species = USysAllSpecs.Code"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)='u' Or (USysAllSpecs.Codetype) Is Null))"
+            SqlText = SqlText & " GROUP BY tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, Left([Species],7) & [MyLayer], USysAllSpecs.ScientificName;"
+        Else 'yes lumping no su table
+            SqlText = "SELECT tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, IIf(Sum([Cover])<0.1,0.1,Sum([Cover])) AS SumOfCover, LayerCode.Strata, USysAllSpecs.ScientificName, Left(IIf(IsNull([LumpCode]),[Species],[LumpCode]),7) & [Strata] AS SppAndStrata"
+            SqlText = SqlText & " FROM ((tblSppCodesAndCover LEFT JOIN USysAllSpecs ON tblSppCodesAndCover.Species = USysAllSpecs.Code) INNER JOIN LayerCode ON tblSppCodesAndCover.MyLayer = LayerCode.Strata) LEFT JOIN [" & sysLumpingTable & "] ON USysAllSpecs.Code = [" & sysLumpingTable & "].SppCode"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)='u' Or (USysAllSpecs.Codetype) Is Null))"
+            SqlText = SqlText & " GROUP BY tblSppCodesAndCover.PlotNumber, tblSppCodesAndCover.MyLayer, tblSppCodesAndCover.Species, LayerCode.Strata, USysAllSpecs.ScientificName, Left(IIf(IsNull([LumpCode]),[Species],[LumpCode]),7) & [Strata];"
+        End If
+    End If
+    CurrentDb.CreateQueryDef "tmpUSysAllVeg", SqlText
+
+'query appends unique spp list to table SppListUnique
+    SqlText = "INSERT INTO SppListUnique ( CodePlusStrata, ScientificName )"
+    SqlText = SqlText & " SELECT tmpUSysAllVeg.SppAndStrata, First(IIf(IsNull([ScientificName]),[SppAndStrata],[ScientificName] & ' ' & [MyLayer])) AS Expr1"
+    SqlText = SqlText & " From tmpUSysAllVeg"
+    SqlText = SqlText & " GROUP BY tmpUSysAllVeg.SppAndStrata;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+'make query tmpUSysAllVegSum - this is the dat data
+    SqlText = "SELECT SppListUnique.SpeciesNumber, tmpUSysAllVeg.PlotNumber, First(SppListUnique.ScientificName) AS FirstOfScientificName, tmpUSysAllVeg.SppAndStrata, IIf(Sum([SumOfCover])>100,100,Sum([SumOfCover])) AS SumOfSumOfCover"
+    SqlText = SqlText & " FROM tmpUSysAllVeg INNER JOIN SppListUnique ON tmpUSysAllVeg.SppAndStrata = SppListUnique.CodePlusStrata"
+    SqlText = SqlText & " GROUP BY SppListUnique.SpeciesNumber, tmpUSysAllVeg.PlotNumber, tmpUSysAllVeg.SppAndStrata;"
+    CurrentDb.CreateQueryDef "tmpUSysAllVegSum", SqlText
+
+'make query tmpUSysAllVegSpp - this is the spp data
+    SqlText = "SELECT tmpUSysAllVegSum.SpeciesNumber, tmpUSysAllVegSum.SppAndStrata, tmpUSysAllVegSum.FirstOfScientificName"
+    SqlText = SqlText & " From tmpUSysAllVegSum"
+    SqlText = SqlText & " GROUP BY tmpUSysAllVegSum.SpeciesNumber, tmpUSysAllVegSum.SppAndStrata, tmpUSysAllVegSum.FirstOfScientificName;"
+    CurrentDb.CreateQueryDef "tmpUSysAllVegSpp", SqlText
+
+'write text files
+    If clsRepOpt.PcOrdGroup = 3 Then
+        WriteSpp2020 FileToExportTo & "Spp.txt"
+        WriteDat2020 FileToExportTo & "Dat.txt"
+        MakeUNT FileToExportTo
+    Else
+        If clsVProReg.CurrPlotlist = "None" Then
+            MsgBox "This function requires an active SU table.", vbInformation, "VPro"
+            CleanUp
+            Exit Sub
+        End If
+        CreateBreakTable ("SuTable")
+        WriteSpp2020 FileToExportTo & "Spp.txt"
+        WriteDatBreak2020 FileToExportTo & "Dat.txt"
+        MakeUNT FileToExportTo
+    End If
+
+MyExit:
+    'CleanUp
+    MsgBox "Done", vbInformation, "VPro"
+
+End Sub
+
+Private Sub WriteSpp2020(File2ExportTo As String)
+
+'Jun 2, 2020
+On Error GoTo errWriteSppFile
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, Text2Write As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("tmpUSysAllVegSpp", dbOpenDynaset)
+MyRS.MoveLast
+MyRS.MoveFirst
+Close #1
+Open File2ExportTo For Output As #1
+
+For i = 1 To MyRS.RecordCount
+    Text2Write = Format(MyRS!SpeciesNumber, "!@@@@@") & Format(MyRS!SppAndStrata, "!@@@@@@@@@@@") & MyRS!FirstOfScientificName
+    Print #1, Text2Write
+    MyRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    Close #1
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+errWriteSppFile:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub WriteDatBreak2020(File2ExportTo As String)
+
+'Jun 2, 2020
+Dim MyDB As Database, Loop1RS As Recordset, Loop2RS As Recordset, Loop3RS As Recordset
+Dim SqlText As String, Criteria As String, MyData As String
+Dim MyUnit As String
+
+Set MyDB = CurrentDb
+Close #1
+Open File2ExportTo For Output As #1
+
+    SqlText = "SELECT BreakCode From USysBreakTable GROUP BY BreakCode;"
+    Set Loop1RS = MyDB.OpenRecordset(SqlText)
+    
+    Do Until Loop1RS.EOF
+        MyUnit = Loop1RS!BreakCode
+        Print #1, "BREAK"
+        Print #1, MyUnit
+        SqlText = "SELECT PlotNumber From USysBreakTable WHERE (((BreakCode)='" & MyUnit & "'));"
+        Set Loop2RS = MyDB.OpenRecordset(SqlText)
+        
+        Do Until Loop2RS.EOF 'list of units
+
+            'get veg data
+            SqlText = "SELECT [SpeciesNumber] & ',' & Format([SumOfSumOfCover],'0.0') AS Data"
+            SqlText = SqlText & " From tmpUSysAllVegSum"
+            SqlText = SqlText & " WHERE (((tmpUSysAllVegSum.PlotNumber)='" & Loop2RS!PlotNumber & "'));"
+            Set Loop3RS = MyDB.OpenRecordset(SqlText)
+            Print #1, Loop2RS!PlotNumber
+            MyData = ""
+            
+            Do Until Loop3RS.EOF 'veg data
+                MyData = MyData & Loop3RS!Data & " "
+                Loop3RS.MoveNext
+            Loop
+            MyData = Trim(MyData) & "/"
+            Print #1, MyData
+        
+        Loop2RS.MoveNext
+        Loop
+        
+        
+        Loop1RS.MoveNext
+    Loop
+    
+MyExit:
+    On Error Resume Next
+    Close #1
+    Loop1RS.Close
+    Loop2RS.Close
+    Loop3RS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub
+
+Private Sub WriteDat2020(File2ExportTo As String)
+
+'Jun 2, 2020
+Dim MyDB As Database, LoopRS As Recordset, MyRS As Recordset
+Dim SqlText As String, Criteria As String, MyData As String
+
+Set MyDB = CurrentDb
+
+SqlText = "SELECT tmpUSysAllVegSum.PlotNumber From tmpUSysAllVegSum GROUP BY tmpUSysAllVegSum.PlotNumber;"
+Set LoopRS = MyDB.OpenRecordset(SqlText)
+Close #1
+Open File2ExportTo For Output As #1
+
+Do Until LoopRS.EOF
+    SqlText = "SELECT [SpeciesNumber] & ',' & Format([SumOfSumOfCover],'0.0') AS Data"
+    SqlText = SqlText & " From tmpUSysAllVegSum"
+    SqlText = SqlText & " WHERE (((tmpUSysAllVegSum.PlotNumber)='" & LoopRS!PlotNumber & "'));"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    MyData = ""
+    Do Until MyRS.EOF
+        MyData = MyData & MyRS!Data & " "
+        
+        MyRS.MoveNext
+    Loop
+    MyData = Trim(MyData) & "/"
+    
+    Print #1, LoopRS!PlotNumber
+    Print #1, MyData
+        
+    LoopRS.MoveNext
+Loop
+
+MyExit:
+    On Error Resume Next
+    Close #1
+    MyRS.Close
+    LoopRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub
+
+Public Function LumpCompactData()
+
+'Apr. 28, 2020
+'This is the main function for generating and exporting PC-ORD compact data
+    Dim SuTable As String, SqlText As String, VegTable As String
+    Dim MyDB As Database, MyTable As TableDef, MyQueryDef  As QueryDef
+
+'get rid of old crap
+    CleanUp
+
+'reference the current su table
+    SuTable = clsVProReg.CurrPlotlist
+
+'use only plots in su to make it run faster
+    MakeSmallProject SuTable
+    
+'if there is no lumping table then use all species else build sql for lump
+    If sysLumpingTable = "" Or sysLumpingTable = "_Lump" Or sysLumpingTable = "CombinedSpp_Lump" Or sysLumpingTable = "None_Lump" Then
+        CompactVegTable = clsVProReg.CurrProject & "_Veg"
+        VegTable = clsVProReg.CurrProject & "_Veg"
+        If SuTable <> "None" Then
+            SqlText = "SELECT [" & VegTable & "].PlotNumber, Layer, Species, Cover1, Cover2, Cover3, Cover4, Cover5, Cover5a, Cover5b, Cover5c, Cover6, Cover7, TotalA, TotalB INTO TmpLumpDat"
+            SqlText = SqlText & " FROM [" & SuTable & "_SU] LEFT JOIN [" & VegTable & "] ON [" & SuTable & "_SU].PlotNumber = [" & VegTable & "].PlotNumber;"
+            DoCmd.RunSQL SqlText
+        Else 'there is lumping
+            SqlText = "SELECT PlotNumber, Layer, Species, Cover1, Cover2, Cover3, Cover4, Cover5, Cover5a, Cover5b, Cover5c, Cover6, Cover7, TotalA, TotalB INTO TmpLumpDat"
+            SqlText = SqlText & " FROM [" & VegTable & "];"
+            DoCmd.RunSQL SqlText
+        End If
+        CreateSppList
+        Exit Function
+    Else 'there is a lump table
+        Set MyDB = CurrentDb()
+        VegTable = clsVProReg.CurrProject & "_Veg"
+        If SuTable <> "None" Then
+            SuTable = SuTable & "_SU"
+            SqlText = "SELECT [" & VegTable & "].PlotNumber, [" & VegTable & "].Layer, IIf(IsNull([Lumpcode]),[Species],[LumpCode]) AS Spp, [" & VegTable & "].Cover1, [" & VegTable & "].Cover2, [" & VegTable & "].Cover3, [" & VegTable & "].Cover4, [" & VegTable & "].Cover5, [" & VegTable & "].Cover5a, [" & VegTable & "].Cover5b, [" & VegTable & "].Cover5c, [" & VegTable & "].Cover6, [" & VegTable & "].Cover7, [" & VegTable & "].TotalA , [" & VegTable & "].TotalB INTO TmpLumpDat"
+            SqlText = SqlText & " FROM [" & SuTable & "] LEFT JOIN ([" & VegTable & "] LEFT JOIN [" & sysLumpingTable & "] ON [" & VegTable & "].Species = [" & sysLumpingTable & "].SppCode) ON [" & SuTable & "].PlotNumber = [" & VegTable & "].PlotNumber;"
+        Else
+            SqlText = "SELECT PlotNumber, Layer, IIf(IsNull([Lumpcode]),[Species],[LumpCode]) AS Spp, Cover1, Cover2, Cover3, Cover4, Cover5, Cover5a, Cover5b, Cover5c, Cover6, Cover7, TotalA, TotalB INTO TmpLumpDat"
+            SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN [" & sysLumpingTable & "] ON [" & VegTable & "].Species = [" & sysLumpingTable & "].SppCode;"
+        End If
+    'MyDB.CreateQueryDef "herman", SqlText
+
+'make table TmpLumpDat
+        DoCmd.RunSQL SqlText
+        Set MyTable = MyDB.TableDefs("TmpLumpDat")
+        MyTable.Fields("Spp").Name = "Species"
+        CompactVegTable = "TmpLumpDat"
+        Set MyDB = Nothing
+        GoTo MyExit
+    End If
+
+MyExit:
+'Stop
+    CreateSppList
+    Exit Function
+'should now have a query named "tmpUSysAllVeg"
+'a table named "TmpLumpDat"
+
+End Function
+
+Private Sub MakeSmallProject(SuTable As String)
+
+'May 5, 2020
+    Dim MyDB As Database, MyQD As QueryDef
+    Dim SqlText As String, PlotList As String
+    Set MyDB = CurrentDb()
+    On Error GoTo errMakeSmallProject
+
+    If SuTable <> "None" Then
+        PlotList = SuTable & "_SU"
+        'SqlText = "SELECT USysAllVeg.*, LayerCode.Strata"
+        'SqlText = SqlText & " FROM (USysAllVeg INNER JOIN [" & PlotList & "] ON USysAllVeg.PlotNumber = [" & PlotList & "].PlotNumber) INNER JOIN LayerCode ON USysAllVeg.MyLayer = LayerCode.LayerCompact;"
+        SqlText = "SELECT USysAllVeg.*, LayerCode.Strata, Left([Species],7) & [Strata] AS SppAndStrata"
+        SqlText = SqlText & " FROM (USysAllVeg INNER JOIN [" & PlotList & "] ON USysAllVeg.PlotNumber = [" & PlotList & "].PlotNumber) INNER JOIN LayerCode ON USysAllVeg.MyLayer = LayerCode.LayerCompact;"
+    Else
+        'SqlText = "SELECT USysAllVeg.*, LayerCode.Strata"
+        'SqlText = SqlText & " FROM USysAllVeg INNER JOIN LayerCode ON USysAllVeg.MyLayer = LayerCode.LayerCompact;"
+        SqlText = "SELECT USysAllVeg.*, LayerCode.Strata, Left([Species],7) & [Strata] AS SppAndStrata"
+        SqlText = SqlText & " FROM USysAllVeg INNER JOIN LayerCode ON USysAllVeg.MyLayer = LayerCode.LayerCompact;"
+    End If
+    Set MyQD = MyDB.CreateQueryDef("tmpUSysAllVeg", SqlText)
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Sub
+errMakeSmallProject:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub CreateSppList()
+
+'Apr. 28, 2020
+    'On Error GoTo errCreateSppList
+    Dim SqlText As String, VegTable As String, MySU As String
+    
+    'CompactVegTable = "tmpUSysAllVeg"
+    
+    VegTable = CompactVegTable
+    DoCmd.SetWarnings False
+    DoCmd.CopyObject , "SpeciesList", acTable, "USysExportSppList"
+
+    MySU = clsVProReg.CurrPlotlist
+    DoCmd.Hourglass True
+
+'add new species records
+    If MySU = "None" Then
+        If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+            'MsgBox "here1"
+        Else
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT [" & VegTable & "].Species, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U')) OR (((USysAllSpecs.CodeType) Is Null));"
+            DoCmd.RunSQL SqlText
+        End If
+    Else 'has SU table
+        If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+            'A strata
+            SqlText = "INSERT INTO SpeciesList ( Code, CodePlusStrata, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, [Species] & 'A' AS StrataCode, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM [" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover1)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover2)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover3)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.TotalA)>0));"
+            
+            SqlText = "INSERT INTO SpeciesList ( Code, CodePlusStrata, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT First(TmpLumpDat.Species) AS FirstOfSpecies, [Species] & 'A' AS StrataCode, First(USysAllSpecs.ScientificName) AS FirstOfScientificName"
+            SqlText = SqlText & " FROM [" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null))"
+            SqlText = SqlText & " GROUP BY [Species] & 'A'"
+            SqlText = SqlText & " HAVING (((Sum(TmpLumpDat.Cover1))>0)) OR (((Sum(TmpLumpDat.Cover2))>0)) OR (((Sum(TmpLumpDat.Cover3))>0)) OR (((Sum(TmpLumpDat.TotalA))>0));"
+            
+
+            SqlText = "INSERT INTO SpeciesList ( Code, CodePlusStrata, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, Left([Species],7) & 'A' AS StrataCode, First(USysAllSpecs.ScientificName) AS FirstOfScientificName"
+            SqlText = SqlText & " FROM [" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='u' Or (USysAllSpecs.CodeType) Is Null))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, Left([Species],7) & 'A'"
+            SqlText = SqlText & " HAVING (((Sum(TmpLumpDat.Cover1))>0)) OR (((Sum(TmpLumpDat.Cover2))>0)) OR (((Sum(TmpLumpDat.Cover3))>0)) OR (((Sum(TmpLumpDat.TotalA))>0));"
+
+
+'CurrentDb.CreateQueryDef "Herman4b", SqlText
+            DoCmd.RunSQL SqlText
+            'B strata
+            SqlText = "INSERT INTO SpeciesList ( Code, CodePlusStrata, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, [Species] & 'B' AS StrataCode, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM [" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover4)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover5)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover5a)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover5a)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover5a)>0)) OR (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.TotalB)>0));"
+            DoCmd.RunSQL SqlText
+            'C strata
+            SqlText = "INSERT INTO SpeciesList ( Code, CodePlusStrata, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, [Species] & 'C' AS StrataCode, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM [" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover6)>0));"
+            DoCmd.RunSQL SqlText
+            'D strata
+            SqlText = "INSERT INTO SpeciesList ( Code, CodePlusStrata, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, [Species] & 'D' AS StrataCode, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM [" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null) AND ((TmpLumpDat.Cover7)>0));"
+            DoCmd.RunSQL SqlText
+        Else
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT [" & VegTable & "].Species, USysAllSpecs.ScientificName"
+            SqlText = SqlText & " FROM [" & MySU & "_SU] INNER JOIN ([" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = [" & VegTable & "].PlotNumber"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.CodeType)='U' Or (USysAllSpecs.CodeType) Is Null));"
+            DoCmd.RunSQL SqlText
+        'CurrentDb.CreateQueryDef "fred", SqlText
+        End If
+    End If
+    'CurrentDb.CreateQueryDef "fred1", SqlText
+    'DoCmd.RunSQL SqlText
+    
+'add missing codes
+    If MySU <> "None" Then
+        If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+            'A strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'A' AS StrataCode"
+            SqlText = SqlText & " FROM ([" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover1) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover2) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover3) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.TotalA) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'A';"
+            
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT First(TmpLumpDat.Species) AS FirstOfSpecies, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'A' AS StrataCode"
+            SqlText = SqlText & " FROM ([" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover1) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover2) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover3) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.TotalA) > 0))"
+            SqlText = SqlText & " GROUP BY [Species] & 'A';"
+            
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT First(TmpLumpDat.Species) AS FirstOfSpecies, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'A' AS StrataCode"
+            SqlText = SqlText & " FROM ([" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((TmpLumpDat.Cover1) > 0)) Or (((TmpLumpDat.Cover2) > 0)) Or (((TmpLumpDat.Cover3) > 0)) Or (((TmpLumpDat.TotalA) > 0))"
+            SqlText = SqlText & " GROUP BY [Species] & 'A'"
+            SqlText = SqlText & " HAVING ((([Species] & 'A') Is Null)) OR ((([Species] & 'A') Is Null)) OR ((([Species] & 'A') Is Null)) OR ((([Species] & 'A') Is Null));"
+
+
+            'CurrentDb.CreateQueryDef "S1b", SqlText
+            DoCmd.RunSQL SqlText
+            'B strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'B' AS StrataCode"
+            SqlText = SqlText & " FROM ([" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover4) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5a) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5b) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5c) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.TotalB) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'B';"
+            'CurrentDb.CreateQueryDef "S2", SqlText
+            DoCmd.RunSQL SqlText
+            'C strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'C' AS StrataCode"
+            SqlText = SqlText & " FROM ([" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover6) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'C';"
+            'CurrentDb.CreateQueryDef "S3", SqlText
+            DoCmd.RunSQL SqlText
+            'D strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'D' AS StrataCode"
+            SqlText = SqlText & " FROM ([" & MySU & "_SU] INNER JOIN (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = TmpLumpDat.PlotNumber) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover7) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'D';"
+            'CurrentDb.CreateQueryDef "S4", SqlText
+            DoCmd.RunSQL SqlText
+        Else
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT [" & VegTable & "].Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName"
+            SqlText = SqlText & " FROM ([" & MySU & "_SU] INNER JOIN ([" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code) ON [" & MySU & "_SU].PlotNumber = [" & VegTable & "].PlotNumber) LEFT JOIN SpeciesList ON [" & VegTable & "].Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null))"
+            SqlText = SqlText & " GROUP BY [" & VegTable & "].Species;"
+            DoCmd.RunSQL SqlText
+        End If
+    Else
+        If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+            'A strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'A' AS StrataCode"
+            SqlText = SqlText & " FROM (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover1) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover2) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover3) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.TotalA) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'A';"
+            DoCmd.RunSQL SqlText
+            'B strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'B' AS StrataCode"
+            SqlText = SqlText & " FROM (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover4) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5a) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5b) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover5c) > 0)) Or (((SpeciesList.Code) Is Null) And ((TmpLumpDat.TotalB) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'B';"
+            DoCmd.RunSQL SqlText
+            'C strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'C' AS StrataCode"
+            SqlText = SqlText & " FROM (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover6) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'C';"
+            DoCmd.RunSQL SqlText
+            'D strata
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName, CodePlusStrata )"
+            SqlText = SqlText & " SELECT DISTINCT TmpLumpDat.Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName, [Species] & 'D' AS StrataCode"
+            SqlText = SqlText & " FROM (TmpLumpDat LEFT JOIN USysAllSpecs ON TmpLumpDat.Species = USysAllSpecs.Code) LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null) And ((TmpLumpDat.Cover7) > 0))"
+            SqlText = SqlText & " GROUP BY TmpLumpDat.Species, [Species] & 'D';"
+            DoCmd.RunSQL SqlText
+            
+            'MsgBox "here2"
+        Else
+            SqlText = "INSERT INTO SpeciesList ( Code, ScientificName )"
+            SqlText = SqlText & " SELECT DISTINCT [" & VegTable & "].Species, First(USysAllSpecs.ScientificName) AS FirstOfScientificName"
+            SqlText = SqlText & " FROM ([" & VegTable & "] LEFT JOIN USysAllSpecs ON [" & VegTable & "].Species = USysAllSpecs.Code) LEFT JOIN SpeciesList ON [" & VegTable & "].Species = SpeciesList.Code"
+            SqlText = SqlText & " WHERE (((SpeciesList.Code) Is Null))"
+            SqlText = SqlText & " GROUP BY [" & VegTable & "].Species;"
+            DoCmd.RunSQL SqlText
+        End If
+    End If
+    'CurrentDb.CreateQueryDef "fred2", SqlText
+    'DoCmd.RunSQL SqlText
+
+'find codes longer than 8 characters and shrink them down to 8
+    Dim MyRS As Recordset, NewCode As String
+    Set MyRS = CurrentDb.OpenRecordset("SpeciesList")
+    Do Until MyRS.EOF
+        If Len(MyRS!CodePlusStrata) > 8 Then
+            'NewCode = Left(MyRS!CodePlusStrata, 6) & Mid(MyRS!CodePlusStrata, 8, 1) & Right(MyRS!CodePlusStrata, 1)
+            NewCode = Left(MyRS!CodePlusStrata, 7) & Right(MyRS!CodePlusStrata, 1)
+            MyRS.Edit
+            MyRS!CodePlusStrata = NewCode
+            MyRS.Update
+        End If
+    
+        MyRS.MoveNext
+    Loop
+    MyRS.Close
+
+MyExit:
+    DoCmd.Hourglass False
+    DoCmd.SetWarnings True
+    If Forms![USysCompactDataOptions]![optBreakType] = 3 Then
+        
+        RemoveDuplicateSpp
+        'renumber spp
+        'remove duplicates
+        'Stop
+        ExportCompact
+    Else
+        DoCmd.SetWarnings False
+        ExportCompactWithBreaks
+        DoCmd.SetWarnings True
+    End If
+    CleanUp
+    Exit Sub
+
+errCreateSppList:
+    DoCmd.Hourglass False
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Function RemoveDuplicateSpp()
+
+'Jun 2, 2020
+Dim SqlText As String
+
+'delete previous run
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "SppListUnique"
+    On Error GoTo 0
+
+'create a table for the numbering
+    DoCmd.CopyObject , "SppListUnique", acTable, "USysExportSppList"
+
+'populate table with just the unique strata codes and numbers
+    SqlText = "INSERT INTO SppListUnique ( CodePlusStrata, SpeciesNumber, ScientificName )"
+    SqlText = SqlText & " SELECT SpeciesList.CodePlusStrata, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, First(SpeciesList.ScientificName) AS FirstOfScientificName"
+    SqlText = SqlText & " From SpeciesList"
+    SqlText = SqlText & " GROUP BY SpeciesList.CodePlusStrata;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+End Function
+
+Private Function ExportCompact()
+
+'Apr. 2, 2015
+Dim MyDB As Database, VegTable As String, MyQuery As QueryDef, PlotList As Recordset, nPlots As Integer
+Dim Title As String, FileToExportTo As String, SqlText As String, i As Integer, PlotNumber As String
+Dim InnerLoop As Integer, nSpecies As Integer, nRecords As Integer, X As Integer, MyData As String
+Dim MyRecords As Recordset, MyCover, EnvTable As String, SuTable As String ', ProgBar As Object
+Set MyDB = CurrentDb()
+'On Error GoTo errExportCompact
+
+    Title = ProgramName() & " - enter/select a file to save the PC-ORD data in"
+    FileToExportTo = GetFileName(Title, False, "PC-ORD (*.txt)", "*.txt")
+    If FileToExportTo = "" Then GoTo MyExit
+    FileName = Left(FileToExportTo, Len(FileToExportTo) - 4)
+    FileToExportTo = FileName & "dat.txt"
+    Forms![USysCompactDataOptions].Repaint
+    VegTable = CompactVegTable
+    Open FileToExportTo For Output As #1
+
+EnvTable = CurrProject() & "_Env"
+
+If CurrPlotlist() = "None" Then
+    Set PlotList = MyDB.OpenRecordset(EnvTable)
+    PlotList.MoveLast
+    nPlots = PlotList.RecordCount
+Else
+    SuTable = CurrPlotlist & "_SU"
+    SqlText = "SELECT SiteUnit, PlotNumber"
+    SqlText = SqlText & " FROM [" & SuTable & "]"
+    SqlText = SqlText & " WHERE ((([" & SuTable & "].PlotNumber) Is Not Null));"
+    Set PlotList = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+    PlotList.MoveLast
+    nPlots = PlotList.RecordCount
+End If
+PlotList.MoveFirst
+
+DoCmd.SetWarnings False
+
+'make tblStrataDataTable
+    If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+        SqlText = "SELECT TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Format(Sum(IIf(Nz([TotalA])>0,[TotalA],Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),'0.0') AS Cover INTO tblStrataDataTable"
+        SqlText = SqlText & " FROM TmpLumpDat LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+        SqlText = SqlText & " WHERE (((Right([CodePlusStrata],1))='X'))"
+        SqlText = SqlText & " GROUP BY TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata;"
+        DoCmd.RunSQL SqlText
+    End If
+
+For i = 1 To nPlots    'start the plot loop
+    'ProgBar.Value = i
+    On Error Resume Next
+    SqlText = "DELETE *FROM tblStrataDataTable;"
+    DoCmd.RunSQL SqlText
+    On Error GoTo 0
+
+    PlotNumber = PlotList!PlotNumber
+    Print #1, PlotNumber
+    'On Error Resume Next
+        'SqlText = "DELETE *FROM TmpLumpDat;"
+        'DoCmd.RunSQL SqlText
+    'On Error GoTo 0
+    If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+        'A strata
+        'MsgBox "a"
+        'SqlText = "DELETE *FROM TmpLumpDat;"
+        'DoCmd.RunSQL SqlText
+
+        SqlText = "INSERT INTO tblStrataDataTable ( PlotNumber, CodePlusStrata, FirstOfSpeciesNumber, Cover )"
+        SqlText = SqlText & " SELECT TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Format(Sum(IIf(Nz([TotalA])>0,[TotalA],Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))),'0.0') AS Cover"
+        SqlText = SqlText & " FROM TmpLumpDat LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+        SqlText = SqlText & " WHERE (((Right([CodePlusStrata],1))='A'))"
+        SqlText = SqlText & " GROUP BY TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata"
+        SqlText = SqlText & " HAVING (((TmpLumpDat.PlotNumber)='" & PlotNumber & "'));"
+        'CurrentDb.CreateQueryDef "fredA", SqlText
+        DoCmd.RunSQL SqlText
+        'B strata
+        SqlText = "INSERT INTO tblStrataDataTable ( PlotNumber, CodePlusStrata, FirstOfSpeciesNumber, Cover )"
+        SqlText = SqlText & " SELECT TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Format(Sum(IIf(Nz([TotalB])>0,[TotalB],Nz([Cover4])+Nz([Cover5])+Nz([Cover5a])+Nz([Cover5b])+Nz([Cover5c]))),'0.0') AS Cover"
+        SqlText = SqlText & " FROM TmpLumpDat LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+        SqlText = SqlText & " WHERE (((Right([CodePlusStrata],1))='B'))"
+        SqlText = SqlText & " GROUP BY TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata"
+        SqlText = SqlText & " HAVING (((TmpLumpDat.PlotNumber)='" & PlotNumber & "'));"
+        DoCmd.RunSQL SqlText
+        'C strata
+        SqlText = "INSERT INTO tblStrataDataTable ( PlotNumber, CodePlusStrata, FirstOfSpeciesNumber, Cover )"
+        SqlText = SqlText & " SELECT TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Format(Sum(Nz([Cover6])),'0.0') AS Cover"
+        SqlText = SqlText & " FROM TmpLumpDat LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+        SqlText = SqlText & " WHERE (((Right([CodePlusStrata],1))='C'))"
+        SqlText = SqlText & " GROUP BY TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata"
+        SqlText = SqlText & " HAVING (((TmpLumpDat.PlotNumber)='" & PlotNumber & "'));"
+        DoCmd.RunSQL SqlText
+        'D strata
+        SqlText = "INSERT INTO tblStrataDataTable ( PlotNumber, CodePlusStrata, FirstOfSpeciesNumber, Cover )"
+        SqlText = SqlText & " SELECT TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Format(Sum(Nz([Cover7])),'0.0') AS Cover"
+        SqlText = SqlText & " FROM TmpLumpDat LEFT JOIN SpeciesList ON TmpLumpDat.Species = SpeciesList.Code"
+        SqlText = SqlText & " WHERE (((Right([CodePlusStrata],1))='D'))"
+        SqlText = SqlText & " GROUP BY TmpLumpDat.PlotNumber, SpeciesList.CodePlusStrata"
+        SqlText = SqlText & " HAVING (((TmpLumpDat.PlotNumber)='" & PlotNumber & "'));"
+        DoCmd.RunSQL SqlText
+        Set MyRecords = MyDB.OpenRecordset("tblStrataDataTable")
+        'Stop
+    Else
+        SqlText = "SELECT [" & VegTable & "].PlotNumber, [" & VegTable & "].Species, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Sum(Nz(Val(Format([Cover1],'0.0')))+Nz(Val(Format([Cover2],'0.0')))+Nz(Val(Format([Cover3],'0.0')))+Nz(Val(Format([Cover4],'0.0')))+Nz(Val(Format([Cover5],'0.0')))+Nz(Val(Format([Cover5a],'0.0')))+Nz(Val(Format([Cover5b],'0.0')))+Nz(Val(Format([Cover5c],'0.0')))+Nz(Val(Format([Cover6],'0.0')))+Nz(Val(Format([Cover7],'0.0')))) AS Cover"
+        SqlText = SqlText & " FROM [" & VegTable & "] LEFT JOIN SpeciesList ON [" & VegTable & "].Species = SpeciesList.Code"
+        SqlText = SqlText & " GROUP BY [" & VegTable & "].PlotNumber, [" & VegTable & "].Species"
+        SqlText = SqlText & " HAVING ((([" & VegTable & "].PlotNumber)='" & PlotNumber & "'));"
+        'CurrentDb.CreateQueryDef "herman", SqlText
+        Set MyRecords = MyDB.OpenRecordset(SqlText)
+    End If
+
+    'Debug.Print SqlText
+    'CurrentDb.CreateQueryDef "fred4", SqlText
+    'Set MyRecords = MyDB.OpenRecordset(SqlText)
+On Error Resume Next
+    MyRecords.MoveLast
+    MyRecords.MoveFirst
+    nSpecies = MyRecords.RecordCount
+    MyData = ""
+    For InnerLoop = 1 To nSpecies   'start species loop
+        If MyRecords!Cover > sysShowVegValue Then
+            If MyData > "" Then
+                MyData = MyData & " "
+            End If
+            MyData = MyData & MyRecords!FirstOfSpeciesNumber
+            MyData = MyData & "," & MyRecords!Cover
+        End If
+        If InnerLoop = nSpecies Then
+            MyData = MyData & "/"
+        End If
+        MyRecords.MoveNext
+        
+Next InnerLoop
+    Print #1, MyData
+PlotList.MoveNext
+Next i
+Close #1
+'DoCmd.Close acForm, "USysProgress"
+DoCmd.SetWarnings True
+
+MyExit:
+    On Error Resume Next
+    Close #1
+    MyRecords.Close
+    Set MyDB = Nothing
+    'DoCmd.Close acForm, "USysProgress"
+    ExportSpeciesList
+    Exit Function
+errExportCompact:
+    MsgBox Err.Description
+    DoCmd.SetWarnings True
+    GoTo MyExit
+
+End Function
+
+Private Function ExportCompactWithBreaks()
+
+'April 16, 2020
+On Error Resume Next
+Close #1
+On Error GoTo errExportCompactWithBreaks
+
+Dim MyDB As Database, Loop1RS As Recordset, Loop2RS As Recordset, Loop3RS As Recordset
+Dim SqlText1 As String, SqlText2 As String, SqlText3 As String, MyData As String, MyCover As String
+Dim SuTable As String, HierarchyTable As String, Loop1 As Integer, Loop2 As Integer, Loop3 As Integer, Loop4 As Integer
+Dim Title As String, Filter As String, FileToExportTo As String, VegTable As String ', ProgBar As Object
+
+    Title = ProgramName() & " - enter/select a file to save the PC-ORD data in"
+    Filter = "All Files (*.*)|*.*|PC-ORD" & "(*.txt)|*.txt"
+    FileToExportTo = GetFileName(Title, False, "PC-ORD (*.txt)", "*.txt")
+    If FileToExportTo = "" Then GoTo MyExit
+    FileName = Left(FileToExportTo, Len(FileToExportTo) - 4)
+    FileToExportTo = FileName & "dat.txt"
+    Forms![USysCompactDataOptions].Repaint
+    VegTable = CompactVegTable
+    Open FileToExportTo For Output As #1
+
+    Set MyDB = CurrentDb()
+    SuTable = CurrPlotlist() & "_SU"
+    HierarchyTable = CurrHierarchy()
+    SqlText1 = "SELECT DISTINCT BreakCode FROM USysBreakTable;"
+    Set Loop1RS = MyDB.OpenRecordset(SqlText1, dbOpenDynaset)
+    Loop1RS.MoveLast
+    Loop1RS.MoveFirst
+    
+    For Loop1 = 1 To Loop1RS.RecordCount
+        Print #1, "BREAK"
+        Print #1, Loop1RS!BreakCode
+    
+        SqlText2 = "SELECT BreakCode, PlotNumber FROM USysBreakTable WHERE (((BreakCode)='" & Loop1RS!BreakCode & "'));"
+        Set Loop2RS = MyDB.OpenRecordset(SqlText2, dbOpenDynaset)
+        Loop2RS.MoveLast
+        Loop2RS.MoveFirst
+            
+        'DoCmd.OpenForm "USysProgress"
+        'Set ProgBar = Forms!USysProgress!actxProgressBar
+        'With ProgBar
+        '    .Min = 0
+        '    .Max = Loop2RS.RecordCount
+        '    .Value = 0
+        'End With
+            
+        For Loop2 = 1 To Loop2RS.RecordCount
+            Print #1, Loop2RS!PlotNumber
+            'ProgBar.Value = Loop2
+                    
+            'SqlText3 = "SELECT [" & VegTable & "].PlotNumber, [" & VegTable & "].Species, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Sum(Val(Format([Cover1],'0.0'))+Val(Format([Cover2],'0.0'))+Val(Format([Cover3],'0.0'))+Val(Format([Cover4],'0.0'))+Val(Format([Cover5],'0.0'))+Val(Format([Cover6],'0.0'))+Val(Format([Cover7],'0.0'))) AS Cover"
+            SqlText3 = "SELECT [" & VegTable & "].PlotNumber, [" & VegTable & "].Species, First(SpeciesList.SpeciesNumber) AS FirstOfSpeciesNumber, Sum(Val(Format([Cover1],'0.0'))+Val(Format([Cover2],'0.0'))+Val(Format([Cover3],'0.0'))+Val(Format([Cover4],'0.0'))+Val(Format([Cover5],'0.0')) +Val(Format([Cover5a],'0.0')) +Val(Format([Cover5b],'0.0')) +Val(Format([Cover5c],'0.0'))+Val(Format([Cover6],'0.0'))+Val(Format([Cover7],'0.0'))) AS Cover"
+            SqlText3 = SqlText3 & " FROM [" & VegTable & "] LEFT JOIN SpeciesList ON [" & VegTable & "].Species = SpeciesList.Code"
+            SqlText3 = SqlText3 & " GROUP BY [" & VegTable & "].PlotNumber, [" & VegTable & "].Species"
+            SqlText3 = SqlText3 & " HAVING ((([" & VegTable & "].PlotNumber)='" & Loop2RS!PlotNumber & "'));"
+            Set Loop3RS = MyDB.OpenRecordset(SqlText3, dbOpenDynaset)
+            MyData = ""
+            For Loop3 = 1 To Loop3RS.RecordCount   'start species loop
+            
+                If Loop3RS!Cover > sysShowVegValue Then
+                    If MyData > "" Then MyData = MyData & " "
+                    MyData = MyData & Loop3RS!FirstOfSpeciesNumber
+                    If Loop3RS!Cover < 100 Then MyCover = Loop3RS!Cover Else MyCover = 99
+                    MyData = MyData & "," & MyCover
+                End If
+                If Loop3 = Loop3RS.RecordCount Then
+                    MyData = MyData & "/"
+                End If
+                Loop3RS.MoveNext
+            Next Loop3
+            
+            Print #1, MyData
+            Loop2RS.MoveNext
+        
+        Next Loop2
+        'DoCmd.Close acForm, "USysProgress"
+        Loop1RS.MoveNext
+    
+    Next Loop1
+
+    Close #1
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Loop1RS.Close
+    Loop2RS.Close
+    Loop3RS.Close
+    Close #1
+    Set MyDB = Nothing
+    'DoCmd.Close acForm, "USysProgress"
+    ExportSpeciesList
+    Exit Function
+errExportCompactWithBreaks:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Sub ExportSpeciesList()
+
+'Sep 22, 2008
+On Error GoTo errExportSpeciesList
+
+Dim Title As String, FileToExportTo As String, SqlText As String
+Dim i As Integer
+    Title = ProgramName() & " - enter/select a file to save the PC-ORD data in"
+    FileToExportTo = FileName & "spp.txt"
+    Forms![USysCompactDataOptions].Repaint
+
+    If FileToExportTo = "" Then GoTo MyExit
+
+Screen.ActiveForm.Repaint
+'replace spaces with '!'
+DoCmd.SetWarnings False
+For i = 1 To 7
+    If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+        SqlText = "UPDATE SpeciesList SET SpeciesList.CodePlusStrata = IIf(InStr(1,[CodePlusStrata],' ')>0,Left([CodePlusStrata],InStr(1,[CodePlusStrata],' ')-1) & '!' & Mid([CodePlusStrata],InStr(1,[code],' ')+1),[CodePlusStrata]);"
+    Else
+        SqlText = "UPDATE SpeciesList SET SpeciesList.Code = IIf(InStr(1,[code],' ')>0,Left([Code],InStr(1,[code],' ')-1) & '!' & Mid([Code],InStr(1,[code],' ')+1),[code]);"
+    End If
+    'CurrentDb.CreateQueryDef "fred", SqlText
+    DoCmd.RunSQL SqlText
+Next i
+DoCmd.SetWarnings True
+
+'export table to file
+
+WriteSppFile FileToExportTo
+MakeUNT FileName
+
+'If Forms![USysCompactDataOptions]![optBreakType] < 3 Then DoCmd.Close acForm, "USysCompactDataOptions"
+
+MsgBox "Done", vbInformation, "VPro"
+
+MyExit:
+    DoCmd.SetWarnings True
+    'CleanUp
+    'DoCmd.Close acForm, "USysProgress"
+    'DoCmd.Close acForm, "USysCompactDataOptions"
+    Exit Sub
+
+errExportSpeciesList:
+    If Err.Number = 3170 Then
+        MsgBox "Couldn't find installable ISAM"
+    Else
+        MsgBox Err.Description
+    End If
+'    Resume MyExit
+End Sub
+
+Private Function WriteSppFile(File2ExportTo As String)
+
+'Dec. 13, 2000
+On Error GoTo errWriteSppFile
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, Text2Write As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("SpeciesList", dbOpenDynaset)
+MyRS.MoveLast
+MyRS.MoveFirst
+Close #1
+Open File2ExportTo For Output As #1
+
+For i = 1 To MyRS.RecordCount
+    If clsRepOpt.PcOrdStrataAsSpp <> 0 Then
+        Text2Write = Format(MyRS!SpeciesNumber, "!@@@@@") & Format(MyRS!CodePlusStrata, "!@@@@@@@@@@@") & MyRS!ScientificName
+    Else
+        Text2Write = Format(MyRS!SpeciesNumber, "!@@@@@") & Format(MyRS!Code, "!@@@@@@@@@") & MyRS!ScientificName
+    End If
+    Print #1, Text2Write
+    MyRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    Close #1
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errWriteSppFile:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Sub MakeUNT(DefName As String) 'File2ExportTo As String)
+
+'Jun 2, 2020
+On Error GoTo errMakeUNT
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, Text2Write As String, SqlText As String
+Dim FileToExportTo As String
+
+    If DefName = "" Then GoTo MyExit
+    FileToExportTo = DefName & "Unit.txt"
+
+Set MyDB = CurrentDb
+Close #1
+Open FileToExportTo For Output As #1
+
+    Print #1, "Date: " & Now()
+    Print #1, "Project: " & clsVProReg.CurrProject
+    Print #1, "SU Table: " & clsVProReg.CurrPlotlist
+    Print #1, "Hierarchy Table: " & clsVProReg.CurrHierarchy
+    Print #1, "Lump Table: " & sysLumpingTable
+    Print #1, Chr(13)
+    
+SqlText = "SELECT DISTINCT Compact2.PlotNumber, UnitCodes.NewUnit"
+SqlText = SqlText & " FROM Compact2 INNER JOIN UnitCodes ON Compact2.PlotNumber = UnitCodes.NewCode;"
+
+SqlText = "SELECT DISTINCT Reference, BreakCode FROM USysBreakTable;"
+Set MyRS = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+    
+For i = 1 To MyRS.RecordCount
+    Text2Write = MyRS!BreakCode & "  =  " & MyRS!Reference
+    Print #1, Text2Write
+    MyRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    Close #1
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+errMakeUNT:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub CleanUp()
+
+'Dec 10, 2008
+    On Error Resume Next
+    DoCmd.Echo True
+    DoCmd.SetWarnings False
+    DoCmd.DeleteObject acTable, "TmpLumpDat"
+    DoCmd.DeleteObject acTable, "SpeciesList"
+    DoCmd.DeleteObject acQuery, "Compact1"
+    DoCmd.DeleteObject acQuery, "USysAllVegLump"
+    DoCmd.DeleteObject acQuery, "tmpUSysAllVeg"
+    DoCmd.DeleteObject acTable, "Compact2"
+    DoCmd.DeleteObject acTable, "tblStrataDataTable"
+    DoCmd.DeleteObject acTable, "SppListUnique"
+    DoCmd.DeleteObject acTable, "tblSppCodesAndCover"
+    DoCmd.DeleteObject acTable, "tblSppCodes"
+    On Error GoTo 0
+
+End Sub
+
+Private Sub CreateTableTaxonLevel()
+
+'Apr. 30, 2020
+'create and populate a table named tblTaxonLevel
+Dim MyTbl As TableDef, MyDB As Database, MyRS As Recordset
+Dim TableName As String
+Set MyDB = CurrentDb
+
+'set table name
+    TableName = "tblTaxonLevel"
+
+'remove old table
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "tblTaxonLevel"
+    On Error GoTo 0
+
+'create a table named tblTaxonLevel
+    Set MyTbl = MyDB.CreateTableDef(TableName)
+    MyTbl.Fields.Append MyTbl.CreateField("TaxonLevel", dbText, 255)
+    MyDB.TableDefs.Append MyTbl
+    MyTbl.Fields.Append MyTbl.CreateField("Choice", dbInteger)
+
+'create recordset of new table
+    Set MyRS = MyDB.OpenRecordset("tblTaxonLevel")
+    
+'add data
+    MyRS.AddNew
+    MyRS!Choice = 1
+    MyRS!TaxonLevel = "gen"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 2
+    MyRS!TaxonLevel = "spe"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 3
+    MyRS!TaxonLevel = "fam"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 4
+    MyRS!TaxonLevel = "sub"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 5
+    MyRS!TaxonLevel = "var"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 6
+    MyRS!TaxonLevel = "for"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 7
+    MyRS!TaxonLevel = "hyb"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 8
+    MyRS!TaxonLevel = "juv"
+    MyRS.Update
+    
+    MyRS.AddNew
+    MyRS!Choice = 9
+    MyRS!TaxonLevel = "lif"
+    MyRS.Update
+
+MyExit:
+    MyRS.Close
+    Set MyDB = Nothing
+'DoCmd.DeleteObject acTable, "tblTaxonLevel"
+End Sub
+
+
+Private Sub CreateTableSppCodes()
+
+'Apr. 30, 2020
+'create and populate a table named tblTaxonLevel
+Dim MyTbl As TableDef, MyDB As Database
+Dim TableName As String
+Set MyDB = CurrentDb
+
+'set table name
+    TableName = "tblSppCodes"
+
+'remove old table
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "tblSppCodes"
+    On Error GoTo 0
+
+'create a table named tblTaxonLevel
+    Set MyTbl = MyDB.CreateTableDef(TableName)
+    MyTbl.Fields.Append MyTbl.CreateField("Code", dbText, 255)
+    'MyDB.TableDefs.Append MyTbl
+    MyTbl.Fields.Append MyTbl.CreateField("Lump", dbText, 255)
+    'MyDB.TableDefs.Append MyTbl
+    MyTbl.Fields.Append MyTbl.CreateField("ScientificName", dbText, 255)
+MyDB.TableDefs.Append MyTbl
+
+MyExit:
+    
+End Sub
+
+Private Sub CreateTableSppAndCover()
+
+'May 5, 2020
+'create and populate a table named tblTaxonLevel
+Dim MyTbl As TableDef, MyDB As Database
+Dim TableName As String
+Set MyDB = CurrentDb
+
+'set table name
+    TableName = "tblSppCodesAndCover"
+
+'remove old table
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "tblSppCodesAndCover"
+    On Error GoTo 0
+
+'create a table named tblTaxonLevel
+    Set MyTbl = MyDB.CreateTableDef(TableName)
+    MyTbl.Fields.Append MyTbl.CreateField("PlotNumber", dbText, 255)
+    MyTbl.Fields.Append MyTbl.CreateField("MyLayer", dbText, 255)
+    MyTbl.Fields.Append MyTbl.CreateField("Species", dbText, 255)
+    MyTbl.Fields.Append MyTbl.CreateField("Cover", dbSingle, 255)
+MyDB.TableDefs.Append MyTbl
+
+MyExit:
+    
+End Sub
+
+Private Sub test()
+
+Debug.Print JustTheFirstTwoWords("Acer glabrum bla")
+
+End Sub
+
+Public Function JustTheFirstTwoWords(WordIn As Variant) As String
+
+Dim Loc As Integer
+
+If IsNull(WordIn) Then
+    JustTheFirstTwoWords = ""
+    Exit Function
+End If
+
+Loc = InStr(1, WordIn, " ")
+
+Loc = InStr(Loc + 1, WordIn, " ")
+
+If Loc = 0 Then
+    JustTheFirstTwoWords = WordIn
+Else
+    JustTheFirstTwoWords = Left(WordIn, Loc - 1)
+End If
+
+End Function

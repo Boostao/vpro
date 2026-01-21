@@ -1,0 +1,144 @@
+Option Compare Database
+Private CurrentLevelMemberName As String
+Private SaveName As String
+
+Public Sub BuildLevelUnits()
+    
+'May 7, 2018
+Dim MyRS As Recordset
+Dim SqlText As String, MyHierarchy As String, LevelToReport As Integer
+Dim i As Integer
+MyHierarchy = clsVProReg.CurrHierarchy
+LevelToReport = 1
+
+    SqlText = "Delete * from USysLevelUnits_SU;"
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+'for each level call function to find children
+    For i = 1 To 11
+        LevelToReport = i
+        SqlText = "SELECT " & MyHierarchy & "_Hierarchy.Level, " & MyHierarchy & "_Hierarchy.Name"
+        SqlText = SqlText & " From " & MyHierarchy & "_Hierarchy"
+        SqlText = SqlText & " WHERE (((" & MyHierarchy & "_Hierarchy.Level)=" & LevelToReport & "));"
+        Set MyRS = CurrentDb.OpenRecordset(SqlText)
+        
+        Do Until MyRS.EOF
+        
+            CurrentLevelMemberName = MyRS!Name
+            BuildList CurrentLevelMemberName, LevelToReport
+            MyRS.MoveNext
+        
+        Loop
+    Next i
+
+'close the recordset
+    MyRS.Close
+ 
+ 'export results
+    ExportCSV
+    If SaveName = "" Then
+        GoTo MyExit
+    Else
+        MsgBox "Your file has been saved as " & SaveName, vbInformation, "VPro"
+    End If
+    
+MyExit:
+
+End Sub
+
+Private Sub ExportCSV()
+
+'May 7, 2018
+Dim MyFile As String, MyFilter As String
+Dim FD As FileDialog
+
+'get file name
+    'MyFilter = ahtAddFilterItem(MyFilter, "CSV Files (*.csv)", "*.csv")
+    'MyFilter = ahtAddFilterItem(MyFilter, "All Files (*.*)", "*.*")
+    'MyFile = ahtCommonFileOpenSave(, , MyFilter, , , , "VPro - Export Level Units")
+    Set FD = Application.FileDialog(msoFileDialogSaveAs)
+    FD.AllowMultiSelect = False
+    'FD.Filters.Clear
+    'Call FD.Filters.Add("CSV files", "*.csv")
+    FD.Show
+    
+    If FD.SelectedItems.count > 0 Then
+        MyFile = FD.SelectedItems(1)
+        If Right(MyFile, 4) <> ".csv" Then
+            MyFile = MyFile & ".csv"
+        End If
+    Else
+        MyFile = ""
+        SaveName = ""
+        Exit Sub
+    End If
+    
+'export csv format
+    DoCmd.TransferText acExportDelim, , "USysLevelUnits_SU", MyFile, True
+    SaveName = MyFile
+
+MyExit:
+
+End Sub
+
+Private Function BuildList(Unit As String, Level As Integer)
+
+'May 7, 2018
+Dim MyDB As Database, MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As String, Shifty As Long, BK As String, SqlText As String, MyLevel As Integer
+
+    Set MyDB = CurrentDb()
+    Set MyRecords = MyDB.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+    MyRecords.MoveFirst
+    MyCriteria = "Name = '" & Unit & "'"
+    MyRecords.FindFirst MyCriteria
+    MyLevel = MyRecords!Level
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+    
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+'recursively call the function to find all the children
+    Do Until MyRecords.NoMatch
+        BK = MyRecords.Bookmark
+        NextUnit = MyRecords!Name
+        
+        BuildList NextUnit, Level
+        MyRecords.Bookmark = BK
+        MyRecords.FindNext MyCriteria
+    Loop
+
+'write the unit into table USysLevelUnits
+    WriteToSuTable Unit, Level
+
+MyExit:
+    MyRecords.Close
+    Set MyDB = Nothing
+    Exit Function
+End Function
+
+Private Sub WriteToSuTable(Unit As String, Level As Integer)
+
+'May 7, 2018
+Dim SqlText As String, CurrSU As String
+CurrSU = clsVProReg.CurrPlotlist
+
+'write the data into the correct field
+    SqlText = "INSERT INTO USysLevelUnits_SU ( PlotNumber, SiteUnit" & Level & " )"
+    SqlText = SqlText & " SELECT PlotNumber, '" & CurrentLevelMemberName & "' AS MyUnit"
+    SqlText = SqlText & " From " & clsVProReg.CurrPlotlist & "_SU"
+    SqlText = SqlText & " WHERE (((SiteUnit)='" & Unit & "'));"
+    If Level > 1 Then
+        SqlText = "UPDATE " & clsVProReg.CurrPlotlist & "_SU INNER JOIN USysLevelUnits_SU ON " & clsVProReg.CurrPlotlist & "_SU.PlotNumber = USysLevelUnits_SU.PlotNumber SET USysLevelUnits_SU.SiteUnit" & Level & " = '" & CurrentLevelMemberName & "'"
+        SqlText = SqlText & " WHERE (((" & clsVProReg.CurrPlotlist & "_SU.[SiteUnit])='" & Unit & "'));"
+    End If
+
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+End Sub

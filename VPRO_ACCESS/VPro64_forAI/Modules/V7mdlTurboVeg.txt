@@ -1,0 +1,206 @@
+Option Compare Database
+Private FileToExportTo As String
+Private nPlots As Long, nPoints As Long
+
+Private Sub MakeJuiceFile()
+
+nPoints = 0
+
+    FileToExportTo = GetFileName("VPro", False, "TurboVeg (*.csv)", "*.csv")
+    If FileToExportTo = "" Then GoTo MyExit
+
+    clsStopWatch.StartTimer
+    DoCmd.SetWarnings False
+    CleanUp
+    MakeData
+    MakeIDtables
+    TestArray
+    MakePnFile
+    DoCmd.SetWarnings True
+
+    MsgBox "A csv file containing " & Format(nPoints, "##,##0") & " points was created in " & clsStopWatch.EndTimer / 1000 & " seconds.", vbInformation, "VPro"
+    
+MyExit:
+    CleanUp
+End Sub
+Private Sub MakeIDtables()
+
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Long, SqlText As String
+Set MyDB = CurrentDb
+i = 1
+
+DoCmd.SetWarnings False
+'SppID
+SqlText = "SELECT JuiceStep1.Species, 1 AS ID INTO TurboVegSppID"
+SqlText = SqlText & " From JuiceStep1"
+SqlText = SqlText & " GROUP BY JuiceStep1.Species, 1;"
+DoCmd.RunSQL SqlText
+Set MyRS = MyDB.OpenRecordset("TurboVegSppID")
+Do Until MyRS.EOF
+    MyRS.Edit
+    MyRS!ID = i
+    MyRS.Update
+    MyRS.MoveNext
+    i = i + 1
+Loop
+
+i = 1
+'PlotID
+SqlText = "SELECT JuiceStep1.PlotNumber, 1 AS ID INTO TurboVegPlotID"
+SqlText = SqlText & " From JuiceStep1"
+SqlText = SqlText & " GROUP BY JuiceStep1.PlotNumber, 1;"
+DoCmd.RunSQL SqlText
+Set MyRS = MyDB.OpenRecordset("TurboVegPlotID")
+Do Until MyRS.EOF
+    MyRS.Edit
+    MyRS!ID = i
+    MyRS.Update
+    MyRS.MoveNext
+    i = i + 1
+Loop
+
+SqlText = "UPDATE (JuiceStep1 INNER JOIN TurboVegPlotID ON JuiceStep1.PlotNumber = TurboVegPlotID.PlotNumber) INNER JOIN TurboVegSppID ON JuiceStep1.Species = TurboVegSppID.Species SET JuiceStep1.PlotID = [TurboVegPlotID]![ID], JuiceStep1.SpeciesID = [TurboVegSppID]![ID];"
+DoCmd.RunSQL SqlText
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub
+
+Private Sub TestArray()
+
+Dim MyDB As Database, MyRS As Recordset, nPlotsRS As Recordset, nSppRS As Recordset
+Dim X As Integer, Y As Integer, nPlots As Long, nSpp As Long
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("JuiceStep1")
+Set nPlotsRS = MyDB.OpenRecordset("TurboVegPlotID")
+Set nSppRS = MyDB.OpenRecordset("TurboVegSppID")
+
+nSpp = nSppRS.RecordCount
+nPlots = nPlotsRS.RecordCount
+
+nPoints = nSpp * nPlots
+
+On Error Resume Next
+Close #1
+On Error GoTo 0
+
+
+ReDim TestAr(nSpp, nPlots)
+
+For Y = 0 To nSppRS.RecordCount
+    For X = 0 To nPlotsRS.RecordCount
+        TestAr(Y, X) = ","
+    Next X
+Next Y
+
+    Open FileToExportTo For Output As #1
+    MyStr = Null
+    MyStr = "Title"
+    Print #1, MyStr
+    MyStr = Null
+
+Do Until MyRS.EOF
+    TestAr(MyRS!SpeciesID, MyRS!PlotID) = MyRS!Cover & ","
+    TestAr(MyRS!SpeciesID, 0) = MyRS!Species & ","
+    TestAr(0, MyRS!PlotID) = MyRS!PlotID & ","
+    MyRS.MoveNext
+Loop
+
+For Y = 0 To nSppRS.RecordCount
+    For X = 0 To nPlotsRS.RecordCount
+        MyStr = MyStr & TestAr(Y, X)
+    Next X
+    
+    Print #1, MyStr
+    MyStr = Null
+    
+Next Y
+    
+Close #1
+
+End Sub
+
+Private Sub MakeData()
+
+Dim SqlText As String, SuTbl As String
+
+SuTbl = clsVProReg.CurrPlotlist & "_SU"
+
+On Error Resume Next
+DoCmd.DeleteObject acQuery, "FredSU"
+On Error GoTo 0
+
+DoCmd.SetWarnings False
+    If SuTbl = "None_SU" Then
+        SqlText = "SELECT PlotNumber, Species, IIf(Sum(Nz([cover1])+Nz([cover2])+Nz([cover3])+Nz([cover4])+Nz([cover5])+Nz([cover6])+Nz([cover7]))>99,99,Sum(Nz([cover1])+Nz([cover2])+Nz([cover3])+Nz([cover4])+Nz([cover5])+Nz([cover6])+Nz([cover7]))) AS Cover, 1 AS PlotID, 1 AS SpeciesID INTO JuiceStep1"
+        SqlText = SqlText & " From " & clsVProReg.CurrProject & "_Veg"
+        SqlText = SqlText & " GROUP BY PlotNumber, Species, 1, 1;"
+    Else
+        SqlText = "SELECT " & clsVProReg.CurrProject & "_Veg.PlotNumber, Species, IIf(Sum(Nz([cover1])+Nz([cover2])+Nz([cover3])+Nz([cover4])+Nz([cover5])+Nz([cover6])+Nz([cover7]))>99,99,Sum(Nz([cover1])+Nz([cover2])+Nz([cover3])+Nz([cover4])+Nz([cover5])+Nz([cover6])+Nz([cover7]))) AS Cover, 1 AS PlotID, 1 AS SpeciesID INTO JuiceStep1"
+        SqlText = SqlText & " FROM " & clsVProReg.CurrProject & "_Veg INNER JOIN " & clsVProReg.CurrPlotlist & "_SU ON " & clsVProReg.CurrProject & "_Veg.PlotNumber = " & clsVProReg.CurrPlotlist & "_SU.PlotNumber"
+        SqlText = SqlText & " GROUP BY " & clsVProReg.CurrProject & "_Veg.PlotNumber, Species, 1, 1;"
+        CurrentDb.CreateQueryDef "fredSU", SqlText
+    End If
+    DoCmd.RunSQL SqlText
+
+    SqlText = "UPDATE JuiceStep1 SET JuiceStep1.Cover = Round([cover],0)"
+    SqlText = SqlText & " WHERE (((JuiceStep1.Cover)>1));"
+    DoCmd.RunSQL SqlText
+    
+    SqlText = "UPDATE JuiceStep1 SET JuiceStep1.Cover = 0.1"
+    SqlText = SqlText & " WHERE (((JuiceStep1.Cover)<0.4));"
+    DoCmd.RunSQL SqlText
+
+    SqlText = "UPDATE JuiceStep1 SET JuiceStep1.Cover = 0.5"
+    SqlText = SqlText & " WHERE (((JuiceStep1.Cover)>0.1 And (JuiceStep1.Cover)<0.7));"
+    DoCmd.RunSQL SqlText
+
+    SqlText = "UPDATE JuiceStep1 SET JuiceStep1.Cover = 1"
+    SqlText = SqlText & " WHERE (((JuiceStep1.Cover)>0.5 And (JuiceStep1.Cover)<1));"
+    DoCmd.RunSQL SqlText
+    
+    DoCmd.SetWarnings True
+Exit Sub
+
+End Sub
+
+Private Sub MakePnFile()
+
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, MyStr As String
+Set MyDB = CurrentDb
+FileToUse = Left(FileToExportTo, Len(FileToExportTo) - 4) & ".PlotNumbers"
+Open FileToUse For Output As #1
+
+SqlText = "SELECT PlotNumber, ID From TurboVegPlotID ORDER BY PlotNumber;"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+
+Do Until MyRS.EOF
+    MyStr = MyRS!ID & ", " & MyRS!PlotNumber
+    Print #1, MyStr
+    MyRS.MoveNext
+Loop
+
+MyExit:
+    On Error Resume Next
+    Close #1
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub
+Private Sub CleanUp()
+
+On Error Resume Next
+DoCmd.DeleteObject acTable, "JuiceStep1"
+DoCmd.DeleteObject acTable, "JuicePNs"
+DoCmd.DeleteObject acTable, "TurboVegPlotID"
+DoCmd.DeleteObject acTable, "TurboVegSppID"
+On Error GoTo 0
+
+End Sub

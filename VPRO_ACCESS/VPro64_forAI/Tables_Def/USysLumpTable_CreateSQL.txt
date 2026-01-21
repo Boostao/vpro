@@ -1,0 +1,9 @@
+CREATE TABLE [USysLumpTable] (
+  [LumpCode] TEXT(8) DEFAULT ,
+  [SppCode] TEXT(8) DEFAULT ,
+  [Use] BIT DEFAULT 
+);
+
+CREATE INDEX [LumpCode] ON [USysLumpTable] ([LumpCode]);
+CREATE INDEX [SppCode] ON [USysLumpTable] ([SppCode]);
+

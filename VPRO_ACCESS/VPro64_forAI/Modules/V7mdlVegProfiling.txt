@@ -1,0 +1,562 @@
+Option Compare Database
+Option Explicit
+'Oct. 29, 2008
+
+Public Function NTZ(anyValue As Variant) As Single
+'June 16, 1998
+' Accepts: a variant value
+' Purpose: converts Null values To Zeros NTZ
+' Returns: a zero or non-null value
+
+    DoEvents
+    
+    If IsNull(anyValue) Then
+        NTZ = 0
+    Else
+        NTZ = Val(anyValue)
+    End If
+    
+End Function
+
+Public Function Profile4Presence()
+
+'May 14, 1999
+On Error Resume Next
+    DoCmd.DeleteObject acQuery, "USysAllProfileSpp"
+On Error GoTo errProfile4Presence
+On Error GoTo 0
+Dim MyDB As Database, MyRS As Recordset, MyProfileRS As Recordset, MyQD As QueryDef, MyRsOut As Recordset, LumpRS As Recordset
+Dim nProfileRecords As Integer, SqlText As String, i As Integer, X As Integer
+Dim MyForm As Form, SuList As String, VegTable As String, LumpTable As String
+Set MyDB = CurrentDb()
+If IsLoaded("FS882-6x4") Then
+    Set MyForm = Forms("FS882-6x4")
+End If
+If IsLoaded("FS882-6x4XL") Then
+    Set MyForm = Forms("FS882-6x4XL")
+End If
+If IsLoaded("FS882-8x6") Then
+    Set MyForm = Forms("FS882-8x6")
+End If
+If IsLoaded("FS882-1x1") Then
+    Set MyForm = Forms("FS882-1x1")
+End If
+
+SuList = CurrPlotlist() & "_SU"
+VegTable = CurrProject() & "_Veg"
+LumpTable = clsVProReg.CurrLump & "_Lump" 'Forms![USysVegProfiling]![cmbLumpTable] & "_Lump"
+
+'empty plotnumber table
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM USysPlotProfilePlots;"
+DoCmd.RunSQL SqlText
+'On Error GoTo errProfile4Presence
+
+'open profile recordset
+SqlText = "SELECT * FROM " & clsVProReg.CurrVegProfile & "_Profile;"
+Set MyProfileRS = MyDB.OpenRecordset(SqlText)
+
+If MyProfileRS.RecordCount < 1 Then
+    MsgBox "No profile records.  Filter canceled"
+    MyForm.FilterOn = False
+    GoTo MyExit
+End If
+
+MyProfileRS.MoveLast
+MyProfileRS.MoveFirst
+nProfileRecords = MyProfileRS.RecordCount
+
+If SuList = "None_SU" Then
+    For i = 1 To nProfileRecords
+        If MyProfileRS!Layer = "Lump" Then
+            If LumpTable = "_Lump" Then
+                MsgBox "Select a lump table and try again."
+                GoTo MyExit
+            End If
+            SqlText = "SELECT SppCode FROM [" & LumpTable & "] WHERE (((LumpCode)='" & MyProfileRS!Species & "') AND ((Use)=Yes));"
+            Set LumpRS = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+            If LumpRS.RecordCount > 0 Then
+                LumpRS.MoveLast
+                LumpRS.MoveFirst
+                For X = 1 To LumpRS.RecordCount
+                    SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+                    SqlText = SqlText & " SELECT DISTINCT PlotNumber"
+                    SqlText = SqlText & " FROM " & VegTable
+                    SqlText = SqlText & " WHERE (((Species)='" & LumpRS!SppCode & "'));"
+                    DoCmd.RunSQL SqlText
+                    LumpRS.MoveNext
+                Next X
+            End If
+            LumpRS.Close
+        Else
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT DISTINCT PlotNumber"
+            SqlText = SqlText & " FROM " & VegTable
+            SqlText = SqlText & " WHERE (((Species)='" & MyProfileRS!Species & "'));"
+            DoCmd.RunSQL SqlText
+        End If
+        MyProfileRS.MoveNext
+    Next i
+Else
+    For i = 1 To nProfileRecords
+        If MyProfileRS!Layer = "Lump" Then
+            If LumpTable = "_Lump" Then
+                MsgBox "Select a lump table and try again."
+                GoTo MyExit
+            End If
+            SqlText = "SELECT SppCode FROM [" & LumpTable & "] WHERE (((LumpCode)='" & MyProfileRS!Species & "') AND ((Use)=Yes));"
+            Set LumpRS = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+            If LumpRS.RecordCount > 0 Then
+                LumpRS.MoveLast
+                LumpRS.MoveFirst
+                For X = 1 To LumpRS.RecordCount
+                    SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+                    SqlText = SqlText & " SELECT DISTINCT [" & VegTable & "].PlotNumber"
+                    SqlText = SqlText & " FROM [" & VegTable & "] INNER JOIN [" & SuList & "] ON [" & VegTable & "].PlotNumber = [" & SuList & "].PlotNumber"
+                    SqlText = SqlText & " WHERE (((Species)='" & LumpRS!SppCode & "'));"
+                    DoCmd.RunSQL SqlText
+                    LumpRS.MoveNext
+                Next X
+            End If
+            LumpRS.Close
+        Else
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT DISTINCT [" & VegTable & "].PlotNumber"
+            SqlText = SqlText & " FROM [" & VegTable & "] INNER JOIN [" & SuList & "] ON [" & VegTable & "].PlotNumber = [" & SuList & "].PlotNumber"
+            SqlText = SqlText & " WHERE (((Species)='" & MyProfileRS!Species & "'));"
+            DoCmd.RunSQL SqlText
+        End If
+        MyProfileRS.MoveNext
+    Next i
+End If
+
+DoCmd.SetWarnings True
+
+SqlText = "SELECT PlotNumber, Count(PlotNumber) AS nPlots"
+SqlText = SqlText & " FROM USysVegProfilePlots"
+SqlText = SqlText & " GROUP BY PlotNumber"
+SqlText = SqlText & " HAVING (((Count(PlotNumber))=" & nProfileRecords & "));"
+Set MyRsOut = MyDB.OpenRecordset(SqlText)
+
+If MyRsOut.RecordCount > 0 Then
+    MyRsOut.MoveLast
+    WriteVegProfile2Filter MyRsOut, MyProfileRS.RecordCount 'call function
+Else
+    MsgBox "No matching plots.  Filter not applied."
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRsOut.Close
+    MyProfileRS.Close
+    Set MyDB = Nothing
+    DoCmd.SetWarnings True
+    Exit Function
+errProfile4Presence:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+
+Private Function MakeProfileQuery(db As Database)
+'Oct. 8, 2002
+On Error Resume Next
+    DoCmd.DeleteObject acQuery, "ProfileVeg"
+On Error GoTo errMakeProfileQuery
+Dim MyQD As QueryDef, i As Integer
+Dim SqlText As String, VegTable As String
+VegTable = CurrProject() & "_Veg"
+
+    SqlText = "SELECT [" & VegTable & "].PlotNumber, Species, '1' AS MyLayer, Cover1 AS Cover"
+    SqlText = SqlText & " FROM [" & VegTable & "] INNER JOIN Filtered_Env ON [" & VegTable & "].PlotNumber = Filtered_Env.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover1) Is Not Null));"
+
+For i = 2 To 10
+    SqlText = SqlText & " UNION SELECT [" & VegTable & "].PlotNumber, Species, '" & i & "' AS MyLayer, Cover" & i & " AS Cover"
+    SqlText = SqlText & " FROM [" & VegTable & "] INNER JOIN Filtered_Env ON [" & VegTable & "].PlotNumber = Filtered_Env.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover" & i & ") Is Not Null));"
+Next i
+    
+    SqlText = Left(SqlText, Len(SqlText) - 1) & " Order By MyLayer;"
+    Set MyQD = db.CreateQueryDef("ProfileVeg", SqlText)
+        
+MyExit:
+    On Error Resume Next
+    Exit Function
+errMakeProfileQuery:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function NewFindProfilePlots()
+
+'Oct. 15, 2012
+'On Error GoTo errFindProfilePlots
+Dim MyDB As Database, MyQD As QueryDef, MyProfileRS As Recordset, MyRsOut As Recordset
+Dim SqlText As String, i As Integer, MyForm As Form, nProfileRecords As Integer
+Dim LumpTable As String, nProfileRecs As Integer
+
+Set MyDB = CurrentDb
+LumpTable = clsVProReg.CurrLump & "_Lump"
+CleanUp
+Set MyForm = Forms(clsVProReg.DataFormName)
+DoCmd.SetWarnings False
+
+'empty plotnumber table
+SqlText = "DELETE * FROM USysVegProfilePlots;"
+DoCmd.RunSQL SqlText
+
+'open profile table
+If clsVProReg.CurrVegProfile = "None" Then
+    MsgBox "Pick a profile table and try again."
+    GoTo MyExit
+End If
+
+SqlText = "SELECT * FROM [" & clsVProReg.CurrVegProfile & "_Profile];"
+Set MyProfileRS = MyDB.OpenRecordset(SqlText)
+If MyProfileRS.RecordCount < 1 Then
+    MsgBox "No profile records.  Filter canceled"
+    MyForm.FilterOn = False
+    GoTo MyExit
+End If
+
+'Build 4 main queries
+SqlText = "SELECT UsysVeg.PlotNumber, UsysVeg.Species, ntz([Cover1]) AS C1, ntz([Cover2]) AS C2, ntz([Cover3]) AS C3, ntz([Cover4]) AS C4, ntz([Cover5]) AS C5, ntz([Cover6]) AS C6, ntz([Cover7]) AS C7, ntz([Cover8]) AS C8, ntz([Cover9]) AS C9, ntz([Cover10]) AS C10"
+SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber;"
+Set MyQD = MyDB.CreateQueryDef("USysVpLayerVeg", SqlText)
+
+SqlText = "SELECT UsysVeg.PlotNumber, " & LumpTable & ".LumpCode, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover6) AS C6, Sum(UsysVeg.Cover7) AS C7, Sum(UsysVeg.Cover8) AS C8, Sum(UsysVeg.Cover9) AS C9, Sum(UsysVeg.Cover10) AS C10"
+SqlText = SqlText & " FROM (USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, " & LumpTable & ".LumpCode;"
+Set MyQD = MyDB.CreateQueryDef("USysVpLayerVegLump", SqlText)
+
+SqlText = "SELECT UsysVeg.PlotNumber, UsysVeg.Species, ntz([Cover1])+ntz([cover2])+ntz([cover3])+ntz([cover4])+ntz([cover5])+ntz([cover6])+ntz([cover7])+ntz([cover8])+ntz([cover9])+ntz([cover10]) AS Cover"
+SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber;"
+Set MyQD = MyDB.CreateQueryDef("USysVpSumVeg", SqlText)
+
+SqlText = "SELECT UsysVeg.PlotNumber, " & LumpTable & ".LumpCode, Sum(ntz([Cover1])+ntz([cover2])+ntz([cover3])+ntz([cover4])+ntz([cover5])+ntz([cover6])+ntz([cover7])+ntz([cover8])+ntz([cover9])+ntz([cover10])) AS Cover"
+SqlText = SqlText & " FROM (USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, " & LumpTable & ".LumpCode;"
+Set MyQD = MyDB.CreateQueryDef("USysVpSumVegLump", SqlText)
+
+Do Until MyProfileRS.EOF
+    If MyProfileRS!Layer = "All" Then
+        If MyProfileRS!Source = "Lumping" Then
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT DISTINCT USysVpSumVegLump.PlotNumber"
+            SqlText = SqlText & " FROM USysVpSumVegLump"
+            SqlText = SqlText & " WHERE (((USysVpSumVegLump.LumpCode)='" & MyProfileRS!Species & "') AND ((USysVpSumVegLump.Cover)" & MyProfileRS!Cover & " And (USysVpSumVegLump.Cover)>0));"
+            DoCmd.RunSQL SqlText
+        Else
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT DISTINCT USysVpSumVeg.PlotNumber"
+            SqlText = SqlText & " FROM USysVpSumVeg"
+            SqlText = SqlText & " WHERE (((USysVpSumVeg.Species)='" & MyProfileRS!Species & "') AND ((USysVpSumVeg.Cover)" & MyProfileRS!Cover & " And (USysVpSumVeg.Cover)>0));"
+            DoCmd.RunSQL SqlText
+        End If
+    End If
+    
+    If MyProfileRS!Layer = "Any" Then
+        If MyProfileRS!Source = "Lumping" Then
+            For i = 1 To 10
+                SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+                SqlText = SqlText & " SELECT DISTINCT USysVpLayerVegLump.PlotNumber"
+                SqlText = SqlText & " FROM USysVpLayerVegLump"
+                SqlText = SqlText & " WHERE (((USysVpLayerVegLump.LumpCode)='" & MyProfileRS!Species & "') AND ((USysVpLayerVegLump.C" & i & ")" & MyProfileRS!Cover & " And (USysVpLayerVegLump.C" & i & ")>0));"
+                DoCmd.RunSQL SqlText
+            Next i
+        Else
+            For i = 1 To 10
+                SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+                SqlText = SqlText & " SELECT USysVpLayerVeg.PlotNumber"
+                SqlText = SqlText & " FROM USysVpLayerVeg"
+                SqlText = SqlText & " WHERE (((USysVpLayerVeg.Species)='" & MyProfileRS!Species & "') AND ((C" & i & ")>0 And (C" & i & ")" & MyProfileRS!Cover & "));"
+                DoCmd.RunSQL SqlText
+            Next i
+        End If
+    End If
+    If IsNumeric(MyProfileRS!Layer) Then
+        If MyProfileRS!Source = "Lumping" Then
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT DISTINCT USysVpLayerVegLump.PlotNumber"
+            SqlText = SqlText & " FROM USysVpLayerVegLump"
+            SqlText = SqlText & " WHERE (((USysVpLayerVegLump.LumpCode)='" & MyProfileRS!Species & "') AND ((USysVpLayerVegLump.C" & MyProfileRS!Layer & ")" & MyProfileRS!Cover & " And (USysVpLayerVegLump.C" & MyProfileRS!Layer & ")>0));"
+            DoCmd.RunSQL SqlText
+        Else
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT USysVpLayerVeg.PlotNumber"
+            SqlText = SqlText & " FROM USysVpLayerVeg"
+            SqlText = SqlText & " WHERE (((USysVpLayerVeg.Species)='" & MyProfileRS!Species & "') AND ((C" & MyProfileRS!Layer & ")" & MyProfileRS!Cover & ") AND ((C" & MyProfileRS!Layer & ")>0));"
+            DoCmd.RunSQL SqlText
+        End If
+    End If
+    MyProfileRS.MoveNext
+Loop
+
+nProfileRecs = MyProfileRS.RecordCount
+SqlText = "SELECT PlotNumber, Count(PlotNumber) AS CountOfPlotNumber"
+SqlText = SqlText & " FROM USysVegProfilePlots"
+SqlText = SqlText & " GROUP BY PlotNumber"
+SqlText = SqlText & " HAVING (((Count(PlotNumber))>=" & nProfileRecs & "));"
+Set MyRsOut = MyDB.OpenRecordset(SqlText)
+
+If MyRsOut.RecordCount > 0 Then
+    WriteVegProfile2Filter MyRsOut, MyProfileRS.RecordCount 'call function
+Else
+    MsgBox "No matching plots.  Filter not applied."
+End If
+
+MyExit:
+'    CleanUp
+    DoCmd.SetWarnings True
+    On Error Resume Next
+    MyProfileRS.Close
+    MyRsOut.Close
+    Set MyDB = Nothing
+    Exit Function
+errFindProfilePlots:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Sub CleanUp()
+
+On Error Resume Next
+DoCmd.DeleteObject acQuery, "USysVpLayerVeg"
+DoCmd.DeleteObject acQuery, "USysVpLayerVegLump"
+DoCmd.DeleteObject acQuery, "USysVpSumVeg"
+DoCmd.DeleteObject acQuery, "USysVpSumVegLump"
+On Error GoTo 0
+
+End Sub
+
+Private Function FindProfilePlots()
+'Mar. 15, 1999
+On Error Resume Next
+    DoCmd.DeleteObject acQuery, "ProfileVeg"
+    DoCmd.DeleteObject acQuery, "xxxPlotsWithSpecies"
+On Error GoTo errFindProfilePlots
+Dim MyDB As Database, MyQD As QueryDef, MyProfileRS As Recordset, MyRsOut As Recordset, MyRS As Recordset
+Dim SqlText As String, i As Integer, nProfileRecords As Integer, X, Y As Integer, SuList As String
+Dim LumpTable As String, MyForm As Form
+Set MyDB = CurrentDb()
+Set MyForm = Forms(FormSet())
+SuList = CurrPlotlist() & "_SU"
+
+If SuList <> "None_SU" Then
+    MakeProfileQuery MyDB 'call function
+Else
+    SqlText = "SELECT USysAllVeg.* FROM USysAllVeg;"
+    Set MyQD = MyDB.CreateQueryDef("ProfileVeg", SqlText)
+End If
+
+LumpTable = Forms![USysVegProfiling]![cmbLumpTable] & "_Lump"
+DoCmd.SetWarnings False
+
+'empty plotnumber table
+SqlText = "DELETE * FROM USysVegProfilePlots;"
+DoCmd.RunSQL SqlText
+
+'open profile table
+If IsNull(Forms![USysVegProfiling]![cmbProfileList]) Then
+    MsgBox "Pick a profile table and try again."
+    Resume MyExit
+End If
+SqlText = "SELECT * FROM [" & Forms![USysVegProfiling]![cmbProfileList] & "_Profile];"
+Set MyProfileRS = MyDB.OpenRecordset(SqlText)
+
+If MyProfileRS.RecordCount < 1 Then
+    MsgBox "No profile records.  Filter canceled"
+    MyForm.FilterOn = False
+    GoTo MyExit
+End If
+
+MyProfileRS.MoveLast
+MyProfileRS.MoveFirst
+nProfileRecords = MyProfileRS.RecordCount
+
+For i = 1 To MyProfileRS.RecordCount
+    If MyProfileRS!Layer = "All" Then
+        SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+        SqlText = SqlText & " SELECT DISTINCT profileveg.PlotNumber"
+        SqlText = SqlText & " FROM profileveg INNER JOIN UsysEnv ON profileveg.PlotNumber = UsysEnv.PlotNumber"
+        SqlText = SqlText & " GROUP BY profileveg.PlotNumber, profileveg.Species"
+        SqlText = SqlText & " HAVING (((profileveg.Species)='" & MyProfileRS!Species & "') AND ((Sum(profileveg.Cover))" & MyProfileRS!Cover & "));"
+'        Set MyQD = MyDB.CreateQueryDef("vp1", SqlText)
+        DoCmd.RunSQL SqlText
+    End If
+
+    If MyProfileRS!Layer = "Any" Then
+        SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+        SqlText = SqlText & " SELECT DISTINCT profileveg.PlotNumber"
+        SqlText = SqlText & " FROM profileveg INNER JOIN UsysEnv ON profileveg.PlotNumber = UsysEnv.PlotNumber"
+        SqlText = SqlText & " WHERE (((profileveg.Species)='" & MyProfileRS!Species & "') AND ((profileveg.Cover)" & MyProfileRS!Cover & "));"
+        DoCmd.RunSQL SqlText
+    End If
+
+    If IsNumeric(MyProfileRS!Layer) Then
+        SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+        SqlText = SqlText & " SELECT DISTINCT profileveg.PlotNumber"
+        SqlText = SqlText & " FROM profileveg INNER JOIN UsysEnv ON profileveg.PlotNumber = UsysEnv.PlotNumber"
+        SqlText = SqlText & " WHERE (((profileveg.Species)='" & MyProfileRS!Species & "') AND ((profileveg.MyLayer)='" & MyProfileRS!Layer & "') AND ((profileveg.Cover)" & MyProfileRS!Cover & "));"
+        DoCmd.RunSQL SqlText
+    End If
+    
+    If MyProfileRS!Layer = "Lump" Then
+        If LumpTable = "_Lump" Then
+            MsgBox "Select a lumping table and try again"
+            GoTo MyExit
+        End If
+        SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+        SqlText = SqlText & " SELECT profileveg.PlotNumber"
+        SqlText = SqlText & " FROM ([" & LumpTable & "] INNER JOIN profileveg ON [" & LumpTable & "].SppCode = profileveg.Species) INNER JOIN UsysEnv ON profileveg.PlotNumber = UsysEnv.PlotNumber"
+        SqlText = SqlText & " WHERE ((([" & LumpTable & "].Use) = Yes))"
+        SqlText = SqlText & " GROUP BY profileveg.PlotNumber, [" & LumpTable & "].LumpCode"
+        SqlText = SqlText & " HAVING ((([" & LumpTable & "].LumpCode) = '" & MyProfileRS!Species & "') And ((Sum(profileveg.Cover)) " & MyProfileRS!Cover & "))"
+        SqlText = SqlText & " ORDER BY profileveg.PlotNumber, [" & LumpTable & "].LumpCode;"
+        DoCmd.RunSQL SqlText
+    End If
+    
+    If Left(MyProfileRS!Cover, 1) = "<" Then
+        If MyProfileRS!Layer <> "Lump" Then
+            On Error Resume Next
+            DoCmd.DeleteObject acQuery, "xxxPlotsWithSpecies"
+            On Error GoTo errFindProfilePlots
+            SqlText = "SELECT DISTINCT PlotNumber"
+            SqlText = SqlText & " FROM profileveg"
+            SqlText = SqlText & " WHERE (((Species)='" & MyProfileRS!Species & "'));"
+            Set MyQD = MyDB.CreateQueryDef("xxxPlotsWithSpecies", SqlText)
+            
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT DISTINCT profileveg.PlotNumber"
+            SqlText = SqlText & " FROM profileveg LEFT JOIN xxxPlotsWithSpecies ON profileveg.PlotNumber = xxxPlotsWithSpecies.PlotNumber"
+            SqlText = SqlText & " WHERE (((xxxPlotsWithSpecies.PlotNumber) Is Null));"
+            DoCmd.RunSQL SqlText
+        Else
+            On Error Resume Next
+            DoCmd.DeleteObject acQuery, "xxxPlotsWithSpecies"
+            On Error GoTo errFindProfilePlots
+            SqlText = "SELECT profileveg.PlotNumber"
+            SqlText = SqlText & " FROM ([" & LumpTable & "] INNER JOIN profileveg ON [" & LumpTable & "].SppCode = profileveg.Species) INNER JOIN UsysEnv ON profileveg.PlotNumber = UsysEnv.PlotNumber"
+            SqlText = SqlText & " WHERE ((([" & LumpTable & "].Use) = Yes))"
+            SqlText = SqlText & " GROUP BY profileveg.PlotNumber, [" & LumpTable & "].LumpCode"
+            SqlText = SqlText & " HAVING ((([" & LumpTable & "].LumpCode) = '" & MyProfileRS!Species & "'))"
+            SqlText = SqlText & " ORDER BY profileveg.PlotNumber, [" & LumpTable & "].LumpCode;"
+            Set MyQD = MyDB.CreateQueryDef("xxxPlotsWithSpecies", SqlText)
+            
+            SqlText = "INSERT INTO USysVegProfilePlots ( PlotNumber )"
+            SqlText = SqlText & " SELECT DISTINCT profileveg.PlotNumber"
+            SqlText = SqlText & " FROM profileveg LEFT JOIN xxxPlotsWithSpecies ON profileveg.PlotNumber = xxxPlotsWithSpecies.PlotNumber"
+            SqlText = SqlText & " WHERE (((xxxPlotsWithSpecies.PlotNumber) Is Null));"
+            DoCmd.RunSQL SqlText
+        End If
+    End If
+    MyProfileRS.MoveNext
+Next i
+
+'SqlText = "SELECT DISTINCT PlotNumber FROM USysVegProfilePlots;"
+'Set MyRsOut = MyDB.OpenRecordset(SqlText)
+
+'If MyRsOut.RecordCount > 0 Then
+'    MyRsOut.MoveLast
+'    WriteVegProfile2Filter MyRsOut 'call function
+'Else
+'    MsgBox "No matching plots.  Filter not applied."
+'End If
+
+SqlText = "SELECT PlotNumber, Count(PlotNumber) AS nPlots"
+SqlText = SqlText & " FROM USysVegProfilePlots"
+SqlText = SqlText & " GROUP BY PlotNumber"
+SqlText = SqlText & " HAVING (((Count(PlotNumber))=" & nProfileRecords & "));"
+Set MyRsOut = MyDB.OpenRecordset(SqlText)
+
+If MyRsOut.RecordCount > 0 Then
+    MyRsOut.MoveLast
+    FindProfilePlots = MyRsOut.RecordCount
+Else
+    FindProfilePlots = 0
+End If
+
+If FindProfilePlots > 0 Then
+    WriteVegProfile2Filter MyRsOut, MyProfileRS.RecordCount 'call function
+Else
+    MsgBox "No matching plots.  Filter not applied."
+End If
+
+MyExit:
+    On Error Resume Next
+    'DoCmd.DeleteObject acQuery, "xxxPlotsWithSpecies"
+    'DoCmd.DeleteObject acQuery, "ProfileVeg"
+    DoCmd.SetWarnings True
+    MyProfileRS.Close
+    MyRsOut.Close
+    Set MyDB = Nothing
+    Exit Function
+errFindProfilePlots:
+    MsgBox Err.Description
+    FindProfilePlots = ""
+    Resume MyExit
+End Function
+
+Private Function WriteVegProfile2Filter(rs As Recordset, nProfileRecs As Integer)
+On Error GoTo errWriteVegProfile2Filter
+Dim i As Long, FilterText As String, MyForm As Form
+Dim MyDB As Database, SuRecords As Recordset
+Dim Msg As String, dgdef As Integer, Response As Integer, Title As String, X
+Set MyForm = Forms(FormSet())
+MyForm.FilterOn = False
+
+rs.MoveLast
+rs.MoveFirst
+FilterText = "(("
+For i = 1 To rs.RecordCount
+    If Len(FilterText) = 2 Then
+        FilterText = FilterText & "PlotNumber='" & rs!PlotNumber & "'"
+    Else
+        FilterText = FilterText & " OR PlotNumber='" & rs!PlotNumber & "'"
+    End If
+    rs.MoveNext
+Next i
+FilterText = FilterText & "))"
+
+MyForm.Filter = FilterText
+MyForm.FilterOn = True
+GoTo MyExit
+
+TooComplex:
+Set MyDB = CurrentDb()
+    Title = ProgramName()
+    Msg = "This filter exceeded Access's abilities.  Do you wish VPro to save the selected plots as a site unit table?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response = 6 Then
+        sysSaveFilter2 = 2
+        sysBreakSU = "bla"
+        X = CreateSuTable()
+        If sysBreakSU = "bla2" Then GoTo MyExit
+        rs.MoveFirst
+        Set SuRecords = MyDB.OpenRecordset(sysBreakSU)
+        For i = 1 To rs.RecordCount
+            SuRecords.AddNew
+            SuRecords!PlotNumber = rs!PlotNumber
+            SuRecords.Update
+            rs.MoveNext
+        Next i
+        MsgBox "Plots matching your vegetation profile have been inserted into " & Left(SuRecords.Name, Len(SuRecords.Name) - 3)
+        SuRecords.Close
+    End If
+
+MyExit:
+    On Error Resume Next
+    rs.Close
+    Set MyDB = Nothing
+    Exit Function
+errWriteVegProfile2Filter:
+    If Err.Number = 2176 Then
+        GoTo TooComplex
+    Else
+        MsgBox Err.Description
+        GoTo MyExit
+    End If
+End Function

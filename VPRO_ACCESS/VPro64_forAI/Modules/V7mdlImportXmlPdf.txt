@@ -1,0 +1,627 @@
+Option Compare Database
+Option Explicit
+Private XMLFileToUse As String, ProjectName As String, NameToUse As String, PathToUse As String, MyPlotNumber As String
+Private DoStop As Boolean
+
+Private Sub test()
+
+ImportPdfXML 1, False, False, False '1=complete overwrite, 2 = selective overwrite
+
+End Sub
+
+Public Sub ImportPdfXML(OverwriteOption As Integer, ImportVeg As Boolean, ImportHumus As Boolean, ImportMineral As Boolean)
+
+Dim FileName As String
+
+    FileName = GetFileName
+    If XMLFileToUse = "" Then GoTo MyExit
+    GetName XMLFileToUse
+    MakePages
+    Application.ImportXML PathToUse & NameToUse & ".xml", acAppendData
+    ImportPg1All OverwriteOption
+    ImportPg2All OverwriteOption
+    ImportPg3All OverwriteOption
+    If ImportVeg Then ImportVegData
+    If ImportHumus Then ImportHumusData
+    If ImportMineral Then ImportMineralData
+    'DeletePages
+    
+MyExit:
+
+End Sub
+Private Sub ImportMineralData()
+
+Dim MyDB As Database, VProRS As Recordset, XmlRS As Recordset
+Dim SqlText As String, PltNumber As String, i As Integer, fldName As String
+Set MyDB = CurrentDb
+Set XmlRS = MyDB.OpenRecordset("Pg3")
+Set VProRS = MyDB.OpenRecordset("UsysMineral")
+
+'get plot number
+    If XmlRS.RecordCount = 0 Then GoTo MyExit
+    XmlRS.MoveFirst
+    PltNumber = XmlRS!PlotNumber
+
+'empty humus for the indicated plot
+    DoCmd.SetWarnings False
+    SqlText = "DELETE * From USysMineral WHERE (((PlotNumber)='" & PltNumber & "'));"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+'import mineral (1-6)
+    For i = 1 To 6
+        fldName = "MineralHorizon0" & i
+        If Not IsNull(XmlRS(fldName)) Then
+            VProRS.AddNew
+            VProRS!PlotNumber = PltNumber
+            VProRS!Horizon = XmlRS("MineralHorizon0" & i)
+            VProRS!UpperDepth = XmlRS("MineralLayerDepthUp0" & i)
+            VProRS!LowerDepth = XmlRS("MineralLayerDepthLow0" & i)
+            VProRS!Colour = XmlRS("MineralColour0" & i)
+            VProRS!ASP = XmlRS("MineralAspect0" & i)
+            VProRS!Texture = XmlRS("MineralTexture0" & i)
+            VProRS!PercentCoarseFragsGravel = XmlRS("PercentCoarseFragsGravel0" & i)
+            VProRS!PercentCoarseFragsCobbles = XmlRS("PercentCoarseFragsCobbles0" & i)
+            VProRS!PercentCoarseFragsStones = XmlRS("PercentCoarseFragsStones0" & i)
+            VProRS!PercentCoarseFragsTotal = XmlRS("PercentCoarseFragsTotal0" & i)
+            VProRS!PercentCoarseFragsShape = XmlRS("PercentCoarseFragsShape0" & i)
+            VProRS!RootsAbundance = XmlRS("MineralRootsAbundance0" & i)
+            VProRS!RootsSize = XmlRS("MineralRootsSize0" & i)
+            VProRS!MineralStructureClass = XmlRS("MineralStructureClass0" & i)
+            VProRS!MineralStructureKind = XmlRS("MineralStructureKind0" & i)
+            VProRS!MineralFormpH = XmlRS("MineralFormpH0" & i)
+            VProRS!Comments = XmlRS("MineralComment0" & i)
+            VProRS.Update
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    VProRS.Close
+    XmlRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+
+End Sub
+
+Private Sub ImportHumusData()
+
+Dim MyDB As Database, VProRS As Recordset, XmlRS As Recordset
+Dim SqlText As String, PltNumber As String, i As Integer, fldName As String
+Set MyDB = CurrentDb
+Set XmlRS = MyDB.OpenRecordset("Pg3")
+Set VProRS = MyDB.OpenRecordset("UsysHumus")
+
+'get plot number
+    If XmlRS.RecordCount = 0 Then GoTo MyExit
+    XmlRS.MoveFirst
+    If XmlRS.RecordCount = 0 Then GoTo MyExit
+    PltNumber = XmlRS!PlotNumber
+
+'empty humus for the indicated plot
+    DoCmd.SetWarnings False
+    SqlText = "DELETE * From USysHumus WHERE (((PlotNumber)='" & PltNumber & "'));"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+'import humus (1-5)
+    For i = 1 To 5
+        fldName = "HumusHorizon0" & i
+        If Not IsNull(XmlRS(fldName)) Then
+            VProRS.AddNew
+            VProRS!PlotNumber = PltNumber
+            VProRS!Horizon = XmlRS("HumusHorizon0" & i)
+            VProRS!UpperDepth = XmlRS("HumusLayerDepthUp0" & i)
+            VProRS!LowerDepth = XmlRS("HumusLayerDepthLow0" & i)
+            VProRS!HumusStructureDegree = XmlRS("HumusStructureDegree0" & i)
+            VProRS!HumusStructureKind = XmlRS("HumusStructureKind0" & i)
+            VProRS!MycelAbundance = XmlRS("MycelAbundance0" & i)
+            VProRS!FecalAbundance = XmlRS("FecalAbundance0" & i)
+            VProRS!RootsAbundance = XmlRS("HumusRootsAbundance0" & i)
+            VProRS!RootsSize = XmlRS("HumusRootsSize0" & i)
+            VProRS!vonPost = XmlRS("vonPost0" & i)
+            VProRS!HumusFormpH = XmlRS("HumusFormpH0" & i)
+            VProRS!Comment = XmlRS("HumusComment0" & i)
+            VProRS.Update
+        End If
+    Next i
+
+
+
+MyExit:
+    On Error Resume Next
+    VProRS.Close
+    XmlRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+
+End Sub
+
+Private Sub ImportVegData()
+
+Dim MyDB As Database, VProRS As Recordset, XmlRS As Recordset
+Dim SqlText As String, PltNumber As String, i As Integer, fldName As String
+Set MyDB = CurrentDb
+Set XmlRS = MyDB.OpenRecordset("Pg2")
+XmlRS.Edit
+XmlRS!PlotNumber = MyPlotNumber
+XmlRS.Update
+Set VProRS = MyDB.OpenRecordset("UsysVeg")
+
+'get plot number
+    XmlRS.MoveFirst
+    'On Error GoTo MyExit
+    PltNumber = XmlRS!PlotNumber
+
+'empty veg for the indicated plot
+    DoCmd.SetWarnings False
+    SqlText = "DELETE * From UsysVeg WHERE (((PlotNumber)='" & PltNumber & "'));"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+'import trees
+    For i = 1 To 7
+        fldName = "TR0" & i
+        If Not IsNull(XmlRS(fldName)) Then
+            VProRS.AddNew
+            VProRS!PlotNumber = PltNumber
+            VProRS!Species = XmlRS("TR0" & i)
+            VProRS!Collected = XmlRS("TR0" & i & "Col")
+            'VProRS!Cover1 = XmlRS("TRC0" & i & "-1")
+            'VProRS!Cover2 = XmlRS("TRC0" & i & "-2")
+            'VProRS!Cover3 = XmlRS("TRC0" & i & "-3")
+            'VProRS!Cover4 = XmlRS("TRC0" & i & "-4")
+            'VProRS!Cover5 = XmlRS("TRC0" & i & "-5")
+            'VProRS!TotalA = XmlRS("TRC0" & i & "-A")
+            'VProRS!TotalB = XmlRS("TRC0" & i & "-B")
+            
+            VProRS!Cover1 = XmlRS("TR0" & i & "-1")
+            VProRS!Cover2 = XmlRS("TR0" & i & "-2")
+            VProRS!Cover3 = XmlRS("TR0" & i & "-3")
+            VProRS!Cover4 = XmlRS("TR0" & i & "-4")
+            VProRS!Cover5 = XmlRS("TR0" & i & "-5")
+            VProRS!TotalA = XmlRS("TR0" & i & "-A")
+            VProRS!TotalB = XmlRS("TR0" & i & "-B")
+            
+            VProRS.Update
+        End If
+    Next i
+
+'import shrubs (1-10)
+    For i = 1 To 10
+        fldName = "SH" & Format(i, "00")
+        If Not IsNull(XmlRS(fldName)) Then
+            VProRS.AddNew
+            VProRS!PlotNumber = PltNumber
+            VProRS!Species = XmlRS("SH" & Format(i, "00"))
+            VProRS!Collected = XmlRS("SH" & Format(i, "00") & "Col")
+            VProRS!Cover4 = XmlRS("SHC" & Format(i, "00") & "-1")
+            VProRS!Cover5 = XmlRS("SHC" & Format(i, "00") & "-2")
+            VProRS!TotalB = XmlRS("SHC" & Format(i, "00") & "-B")
+            VProRS.Update
+        End If
+    Next i
+
+'import herbs (1-18)
+    For i = 1 To 18
+        fldName = "HE" & Format(i, "00")
+        If Not IsNull(XmlRS(fldName)) Then
+            VProRS.AddNew
+            VProRS!PlotNumber = PltNumber
+            VProRS!Species = XmlRS("HE" & Format(i, "00"))
+            VProRS!Collected = XmlRS("HE" & Format(i, "00") & "Col")
+            VProRS!Cover6 = XmlRS("HEC" & Format(i, "00"))
+            VProRS.Update
+        End If
+    Next i
+'import moss (1-9)
+    For i = 1 To 9
+        fldName = "MO0" & i
+        If Not IsNull(XmlRS(fldName)) Then
+            VProRS.AddNew
+            VProRS!PlotNumber = PltNumber
+            VProRS!Species = XmlRS("MO0" & i)
+            VProRS!Collected = XmlRS("MO0" & i & "Col")
+            VProRS!Cover7 = XmlRS("MOC0" & i)
+            VProRS.Update
+        End If
+    Next i
+
+'import other (1-8)
+    For i = 1 To 8
+        fldName = "OT0" & i
+        If IsNull(XmlRS("OT0" & i & "L")) And Not IsNull(XmlRS(fldName)) Then
+            MsgBox "You are missing some layer information for " & XmlRS("OT0" & i) & ".  Please fix and try again.", vbInformation, "VPro"
+        End If
+
+        If Not IsNull(XmlRS(fldName)) And Not IsNull(XmlRS("OT0" & i & "L")) Then
+            VProRS.AddNew
+            VProRS!PlotNumber = PltNumber
+            VProRS!Species = XmlRS("OT0" & i)
+            VProRS!Collected = XmlRS("OT0" & i & "Col")
+            VProRS("Cover" & XmlRS("OT0" & i & "L")) = XmlRS("OT0" & i & "C")
+            VProRS.Update
+        End If
+    Next i
+
+MyExit:
+    On Error Resume Next
+    VProRS.Close
+    XmlRS.Close
+    Set MyDB = Nothing
+    On Error GoTo 0
+
+End Sub
+
+Private Sub ImportPg1All(OverwriteOption As Integer)
+
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, PltNumber As String, Proj As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("Pg1")
+PltNumber = MyRS!PlotNumber
+MyPlotNumber = PltNumber
+Proj = clsVProReg.CurrProject
+
+'get rid of zero length strings
+    ZLSBeGoneXML "Pg1"
+
+'if overwrite = delete existing data
+    If OverwriteOption = 1 Then
+        DoCmd.SetWarnings False
+        SqlText = "DELETE From " & Proj & "_Env"
+        SqlText = SqlText & " WHERE (((PlotNumber)='" & PltNumber & "'));"
+        DoCmd.RunSQL SqlText
+        MyRS.Close
+        MyDB.TableDefs.Refresh
+        SqlText = "INSERT INTO USysEnv ( ProjectID, PlotNumber, FieldNumber, SiteSurveyor, Location, [Zone], SubstrateDecWood, SubstrateBedRock, Longitude, FSRegionDistrict, NtsMapSheet, UTMZone, [Date], Ecosection, Latitude, UTMNorthing, LocationAccuracy, YCoord, XCoord, AirPhotoNum, SiteSeries, RealmClass, TransDistrib, MapUnit, SubZone, MoistureRegime, NutrientRegime, SuccessionalStatus, StructuralStage, StandAge, PlotRepresenting, SiteDisturbance1, SiteDisturbance3, SiteDisturbance2, Exposure1, Exposure2, SiteNotes, SubstrateOrganicMatter, SubstrateWater, SubstrateMineralSoil, SubstrateRocks, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceShape, UTMEasting, SurfaceTopographySize, Photo, SurfaceTopographyType )"
+        SqlText = SqlText & " SELECT Pg1.ProjectID, Pg1.PlotNumber, Pg1.FieldNumber, Pg1.SiteSurveyor, Pg1.Location, Pg1.Zone, Pg1.SubstrateDecWood, Pg1.SubstrateBedRock, Pg1.Longitude, Pg1.FSRegionDistrict, Pg1.NtsMapSheet, Pg1.UTMZone, Pg1.Date, Pg1.Ecosection, Pg1.Latitude, Pg1.UTMNorthing, Pg1.LocationAccuracy, Pg1.YCoord, Pg1.XCoord, Pg1.AirPhotoNum, Pg1.SiteSeries, Pg1.RealmClass, Pg1.TransDistrib, Pg1.MapUnit, Pg1.SubZone, Pg1.MoistureRegime, Pg1.NutrientRegime, Pg1.SuccessionalStatus, Pg1.StructuralStage, Pg1.StandAge, Pg1.PlotRepresenting, Pg1.SiteDisturbance1, Pg1.SiteDisturbance3, Pg1.SiteDisturbance2, Pg1.Exposure1, Pg1.Exposure2, Pg1.SiteNotes, Pg1.SubstrateOrganicMatter, Pg1.SubstrateWater, Pg1.SubstrateMineralSoil, Pg1.SubstrateRocks, Pg1.Elevation, Pg1.SlopeGradient, Pg1.Aspect, Pg1.MesoSlopePosition, Pg1.SurfaceShape, Pg1.UTMEasting, Pg1.SurfaceTopographySize, Photo, SurfaceTopographyType"
+        SqlText = SqlText & " FROM Pg1;"
+        DoCmd.RunSQL SqlText
+        DoCmd.SetWarnings True
+        GoTo MyExit
+    End If
+
+'if plot exists and user selected selective overwrite
+    If OverwriteOption = 2 Then
+        ImportPg1Selective MyDB, PltNumber
+    End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+
+End Sub
+
+Private Sub ImportPg2All(OverwriteOption As Integer)
+
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, PltNumber As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("Pg2")
+'On Error GoTo MyExit
+MyRS.Edit
+MyRS!PlotNumber = MyPlotNumber
+MyRS.Update
+PltNumber = MyRS!PlotNumber
+
+'get rid of zero length strings
+    ZLSBeGoneXML "Pg2"
+
+'if overwrite = delete existing data
+    If OverwriteOption = 1 Then
+        DoCmd.SetWarnings False
+        SqlText = "UPDATE Pg2 INNER JOIN UsysEnv ON Pg2.PlotNumber = UsysEnv.PlotNumber SET UsysEnv.VegSurveyor = [pg2]![VegSurveyor], UsysEnv.StrataCoverShrub = [Pg2]![StrataCoverShrub], UsysEnv.StrataCoverHerb = [pg2]![StrataCoverHerb], UsysEnv.StrataCoverMoss = [pg2]![StrataCoverMoss], UsysEnv.VegNotes = [pg2]![VegNotes], UsysEnv.SpeciesListComplete = [pg2]![SpeciesListComplete], UsysEnv.StrataCoverTree = [pg2]![StrataCoverTree];"
+        DoCmd.RunSQL SqlText
+        DoCmd.SetWarnings True
+        GoTo MyExit
+    End If
+
+'if plot exists and user selected selective overwrite
+    If OverwriteOption = 2 Then
+        ImportPg2Selective MyDB, PltNumber
+    End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+
+End Sub
+
+Private Sub ImportPg3All(OverwriteOption As Integer)
+
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String, PltNumber As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("Pg3")
+If MyRS.RecordCount < 1 Then GoTo MyExit
+'On Error GoTo MyExit
+MyRS.Edit
+MyRS!PlotNumber = MyPlotNumber
+MyRS.Update
+PltNumber = MyRS!PlotNumber
+
+'get rid of zero length strings
+    ZLSBeGoneXML "Pg3"
+
+'if overwrite = delete existing data
+    If OverwriteOption = 1 Then
+        DoCmd.SetWarnings False
+        SqlText = "UPDATE Pg3 INNER JOIN UsysEnv ON Pg3.PlotNumber = UsysEnv.PlotNumber SET UsysEnv.BedrockGeology1 = [Pg3]![BedrockGeology1], UsysEnv.BedrockGeology2 = [pg3]![BedrockGeology2], UsysEnv.BedrockGeology3 = [pg3]![BedrockGeology3], UsysEnv.CoarseFragLith1 = [pg3]![CoarseFragLith1], UsysEnv.CoarseFragLith2 = [pg3]![CoarseFragLith2], UsysEnv.CoarseFragLith3 = [pg3]![CoarseFragLith3], UsysEnv.SoilSurveyor = [pg3]![SoilSurveyor], UsysEnv.TerrainTextureSurf = [pg3]![TerrainTextureSurf], UsysEnv.TerrainTextureSubSurf = [pg3]![TerrainTextureSubSurf], UsysEnv.SoilClassSubGroup = [pg3]![SoilClassSubGroup], UsysEnv.SurficialMaterialSurf = [pg3]![SurficialMaterialSurf], UsysEnv.SurficialMaterialSubSurf = [pg3]![SurficialMaterialSubSurf], UsysEnv.SurfaceExpSurf = [pg3]![SurfaceExpSurf], UsysEnv.SurfaceExpSubSurf = [pg3]![SurfaceExpSubSurf], UsysEnv.GeoMorProSurf = [pg3]![GeoMorProSurf], UsysEnv.GeoMorProSubSurf = [pg3]![GeoMorProSubSurf],"
+        SqlText = SqlText & " UsysEnv.SoilClassGroup = [pg3]![SoilClassGroup], UsysEnv.HumusForm = [pg3]![HumusForm], UsysEnv.HumusFormPhase = [pg3]![HumusFormPhase], UsysEnv.HydroGeoSystem = [pg3]![HydroGeoSystem], UsysEnv.HydroGeoSubSystem = [pg3]![HydroGeoSubSystem], UsysEnv.RootZoneParticleSize = [pg3]![RootZoneParticleSize], UsysEnv.RootRestrictingType = [pg3]![RootRestrictingType], UsysEnv.WaterSource = [pg3]![WaterSource], UsysEnv.SoilDrainage = [pg3]![SoilDrainage], UsysEnv.FloodingRegimeFreq = [pg3]![FloodingRegimeFreq], UsysEnv.FloodingRegimeDur = [pg3]![FloodingRegimeDur], UsysEnv.RootingDepth = [pg3]![RootingDepth], UsysEnv.RootRestrictingDepth = [pg3]![RootRestrictingDepth], UsysEnv.SeepageDepth = [pg3]![SeepageDepth], UsysEnv.SoilNotes = [pg3]![SoilNotes];"
+        DoCmd.RunSQL SqlText
+        DoCmd.SetWarnings True
+        GoTo MyExit
+    End If
+
+'if plot exists and user selected selective overwrite
+    If OverwriteOption = 2 Then
+        ImportPg3Selective MyDB, PltNumber
+    End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+
+End Sub
+
+Private Sub ImportPg3Selective(MyDB As Database, PlotNumber As String)
+
+Dim i As Integer, fldName As String, tblDef As TableDef, VProRS As Recordset, XmlRS As Recordset
+Dim SqlText As String, Criteria As String
+
+Set VProRS = MyDB.OpenRecordset("USysEnv")
+
+SqlText = "SELECT Pg3.PlotNumber, Pg3.BedrockGeology1, Pg3.BedrockGeology2, Pg3.BedrockGeology3, Pg3.CoarseFragLith1, Pg3.CoarseFragLith2, Pg3.CoarseFragLith3, Pg3.SoilSurveyor, Pg3.TerrainTextureSurf, Pg3.TerrainTextureSubSurf, Pg3.SoilClassSubGroup, Pg3.SurficialMaterialSurf, Pg3.SurficialMaterialSubSurf, Pg3.SurfaceExpSurf, Pg3.SurfaceExpSubSurf, Pg3.GeoMorProSurf, Pg3.GeoMorProSubSurf, Pg3.SoilClassGroup, Pg3.HumusForm, Pg3.HumusFormPhase, Pg3.HydroGeoSystem, Pg3.HydroGeoSubSystem, Pg3.RootZoneParticleSize, Pg3.RootRestrictingType, Pg3.WaterSource, Pg3.SoilDrainage, Pg3.FloodingRegimeFreq, Pg3.FloodingRegimeDur, Pg3.RootingDepth, Pg3.RootRestrictingDepth, Pg3.SeepageDepth, Pg3.SoilNotes"
+SqlText = SqlText & " FROM Pg3;"
+Set XmlRS = MyDB.OpenRecordset(SqlText)
+Criteria = "Plotnumber = '" & PlotNumber & "'"
+XmlRS.FindFirst Criteria
+
+VProRS.FindFirst Criteria
+If VProRS.NoMatch Then
+    VProRS.AddNew
+    VProRS!PlotNumber = PlotNumber
+    VProRS.Update
+End If
+VProRS.FindFirst Criteria
+
+For i = 0 To XmlRS.Fields.count - 1
+    fldName = XmlRS.Fields(i).Name
+    If IsNull(VProRS(fldName).Value) Or VProRS(fldName).Value = "" Then
+        VProRS.Edit
+        VProRS(fldName).Value = XmlRS(fldName).Value
+        VProRS.Update
+    End If
+Next i
+
+MyExit:
+    On Error Resume Next
+    VProRS.Close
+    XmlRS.Close
+    On Error GoTo 0
+
+End Sub
+
+
+Private Sub ImportPg2Selective(MyDB As Database, PlotNumber As String)
+
+Dim i As Integer, fldName As String, tblDef As TableDef, VProRS As Recordset, XmlRS As Recordset
+Dim SqlText As String, Criteria As String
+
+Set VProRS = MyDB.OpenRecordset("USysEnv")
+
+SqlText = "SELECT PlotNumber, Pg2.VegSurveyor, Pg2.StrataCoverShrub, Pg2.StrataCoverHerb, Pg2.StrataCoverMoss, Pg2.VegNotes, Pg2.SpeciesListComplete, Pg2.StrataCoverTree"
+SqlText = SqlText & " FROM Pg2;"
+Set XmlRS = MyDB.OpenRecordset(SqlText)
+Criteria = "Plotnumber = '" & PlotNumber & "'"
+XmlRS.FindFirst Criteria
+
+VProRS.FindFirst Criteria
+If VProRS.NoMatch Then
+    VProRS.AddNew
+    VProRS!PlotNumber = PlotNumber
+    VProRS.Update
+End If
+VProRS.FindFirst Criteria
+
+For i = 0 To XmlRS.Fields.count - 1
+    fldName = XmlRS.Fields(i).Name
+    If IsNull(VProRS(fldName).Value) Or VProRS(fldName).Value = "" Then
+        VProRS.Edit
+        VProRS(fldName).Value = XmlRS(fldName).Value
+        VProRS.Update
+    End If
+Next i
+
+MyExit:
+    On Error Resume Next
+    VProRS.Close
+    XmlRS.Close
+    On Error GoTo 0
+
+End Sub
+
+
+Private Sub ImportPg1Selective(MyDB As Database, PlotNumber As String)
+
+Dim i As Integer, fldName As String, tblDef As TableDef, VProRS As Recordset, XmlRS As Recordset
+Dim SqlText As String, Criteria As String
+
+Set VProRS = MyDB.OpenRecordset("USysEnv")
+
+SqlText = "SELECT PlotNumber, ProjectID, FieldNumber, SiteSurveyor, Location, Zone, SubstrateDecWood, SubstrateBedRock, Longitude, FSRegionDistrict, NtsMapSheet, UTMZone, Date, Ecosection, Latitude, UTMNorthing, LocationAccuracy, YCoord, XCoord, AirPhotoNum, SiteSeries, RealmClass, TransDistrib, MapUnit, SubZone, MoistureRegime, NutrientRegime, SuccessionalStatus, StructuralStage, StandAge, PlotRepresenting, SiteDisturbance1, SiteDisturbance3, SiteDisturbance2, Exposure1, Exposure2, SiteNotes, SubstrateOrganicMatter, SubstrateWater, SubstrateMineralSoil, SubstrateRocks, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceShape, UTMEasting, SurfaceTopographySize, Photo, SurfaceTopographyType"
+SqlText = SqlText & " FROM Pg1;"
+Set XmlRS = MyDB.OpenRecordset(SqlText)
+Criteria = "Plotnumber = '" & PlotNumber & "'"
+XmlRS.FindFirst Criteria
+
+VProRS.FindFirst Criteria
+If VProRS.NoMatch Then
+    VProRS.AddNew
+    VProRS!PlotNumber = PlotNumber
+    VProRS.Update
+End If
+VProRS.FindFirst Criteria
+
+For i = 0 To XmlRS.Fields.count - 1
+    fldName = XmlRS.Fields(i).Name
+    If IsNull(VProRS(fldName).Value) Or VProRS(fldName).Value = "" Then
+        VProRS.Edit
+        VProRS(fldName).Value = XmlRS(fldName).Value
+        VProRS.Update
+    End If
+Next i
+
+'VProRS.Update
+
+MyExit:
+    On Error Resume Next
+    VProRS.Close
+    XmlRS.Close
+    On Error GoTo 0
+
+End Sub
+
+Public Function ZLtoNull(ValIn As Variant)
+
+    If ValIn = "" Then ValIn = Null
+    ZLtoNull = ValIn
+    
+End Function
+
+Private Function CheckForExistingPlot(MyDB As Database, PlotNumber As String) As Boolean
+
+Dim MyRS As Recordset
+Dim Criteria As String
+
+    Set MyRS = MyDB.OpenRecordset("USysEnv")
+    If MyRS.RecordCount > 0 Then
+        MyRS.MoveLast
+        MyRS.MoveFirst
+    Else
+        CheckForExistingPlot = False
+        GoTo MyExit
+    End If
+    Criteria = "Plotnumber = '" & PlotNumber & "'"
+    MyRS.FindFirst Criteria
+    If MyRS.NoMatch Then
+        CheckForExistingPlot = False
+    Else
+        CheckForExistingPlot = True
+    End If
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    On Error GoTo 0
+    
+End Function
+
+Private Sub DeletePages()
+
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "Pg1"
+    DoCmd.DeleteObject acTable, "Pg2"
+    DoCmd.DeleteObject acTable, "Pg3"
+    On Error GoTo 0
+    
+End Sub
+
+Private Sub MakePages()
+
+    DeletePages
+    DoCmd.CopyObject , "Pg1", acTable, "USysPg1"
+    DoCmd.CopyObject , "Pg2", acTable, "USysPg2"
+    DoCmd.CopyObject , "Pg3", acTable, "USysPg3"
+
+End Sub
+
+
+Private Sub ZLSBeGoneXML(TblName As String)
+
+'removes zero-length strings
+Dim MyDB As Database
+Dim SqlText As String, i As Integer, X As Integer, fldName As String
+Dim fldCount As Integer, tblCount As String
+Set MyDB = CurrentDb
+'TblName = "Sample_env"
+tblCount = 0
+fldCount = 0
+DoCmd.SetWarnings False
+    For i = 0 To MyDB.TableDefs("" & TblName & "").Fields.count - 1
+        fldName = MyDB.TableDefs("" & TblName & "").Fields(i).Name
+        If MyDB.TableDefs("" & TblName & "").Fields(i).type = 10 Then
+            SqlText = "UPDATE [" & TblName & "] SET [" & TblName & "].[" & fldName & "] = Null WHERE ((([" & TblName & "].[" & fldName & "])=''));"
+            DoCmd.RunSQL SqlText
+        End If
+        If MyDB.TableDefs("" & TblName & "").Fields(i).type = dbMemo Then
+            SqlText = "UPDATE [" & TblName & "] SET [" & TblName & "].[" & fldName & "] = Null WHERE ((([" & TblName & "].[" & fldName & "])=''));"
+            DoCmd.RunSQL SqlText
+        End If
+    Next i
+
+Set MyDB = Nothing
+DoCmd.SetWarnings True
+End Sub
+
+Private Function GetFileName()
+
+    Dim FD As FileDialog
+    Set FD = Application.FileDialog(msoFileDialogFilePicker)
+    FD.AllowMultiSelect = False
+    FD.filters.Add "XML File", "*.xml", 1
+    FD.FilterIndex = 1
+    XMLFileToUse = ""
+
+    With FD
+        If .Show = -1 Then
+            XMLFileToUse = FD.SelectedItems.Item(1)
+        End If
+    End With
+    
+    If XMLFileToUse = "" Then DoStop = True
+    Set FD = Nothing
+
+End Function
+
+Private Sub GetName(FileName As String)
+
+On Error GoTo errGetName
+Dim MyStr As String, MyPos As Integer, ExitLoop As Boolean, X As Integer, MaxNum As Integer
+MyStr = FileName
+MaxNum = 0
+
+MyPos = InStr(1, MyStr, "\", vbTextCompare)
+
+Do While Not ExitLoop
+    X = InStr(MyPos + 1, MyStr, "\", vbTextCompare)
+    If X = 0 Then
+        MaxNum = MyPos
+        Exit Do
+    End If
+    If X > MaxNum Then MaxNum = X
+    MyPos = X
+    If MyPos = 0 Then
+        Exit Do
+    End If
+Loop
+
+NameToUse = Mid(MyStr, MaxNum + 1, Len(MyStr) - MaxNum - 4)
+PathToUse = Left(MyStr, Len(MyStr) - (Len(NameToUse) + 4))
+
+MyExit:
+    Exit Sub
+    
+errGetName:
+    If Err.Number = 5 Then
+        'do nothing
+    Else
+        MsgBox Err.Number & " - " & Err.Description
+    End If
+    DoStop = True
+    Resume MyExit
+End Sub

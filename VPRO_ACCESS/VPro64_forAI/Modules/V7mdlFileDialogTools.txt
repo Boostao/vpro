@@ -1,0 +1,339 @@
+Option Compare Database
+Option Explicit
+'this module is used for getting filenames
+
+Type tagOPENFILENAME
+    lStructSize As Long
+    hwndOwner As LongPtr
+    hInstance As LongPtr
+    strFilter As String
+    strCustomFilter As String
+    nMaxCustFilter As Long
+    nFilterIndex As Long
+    strFile As String
+    nMaxFile As Long
+    strFileTitle As String
+    nMaxFileTitle As Long
+    strInitialDir As String
+    strTitle As String
+    Flags As Long
+    nFileOffset As Integer
+    nFileExtension As Integer
+    strDefExt As String
+    lCustData As Long
+    lpfnHook As LongPtr
+    lpTemplateName As String
+End Type
+Declare PtrSafe Function aht_apiGetOpenFileName Lib "comdlg32.dll" _
+    Alias "GetOpenFileNameA" (OFN As tagOPENFILENAME) As Boolean
+Declare PtrSafe Function aht_apiGetSaveFileName Lib "comdlg32.dll" _
+    Alias "GetSaveFileNameA" (OFN As tagOPENFILENAME) As Boolean
+Declare PtrSafe Function CommDlgExtendedError Lib "comdlg32.dll" () As Long
+Global Const ahtOFN_READONLY = &H1
+Global Const ahtOFN_OVERWRITEPROMPT = &H2
+Global Const ahtOFN_HIDEREADONLY = &H4
+Global Const ahtOFN_NOCHANGEDIR = &H8
+Global Const ahtOFN_SHOWHELP = &H10
+Global Const ahtOFN_NOVALIDATE = &H100
+Global Const ahtOFN_ALLOWMULTISELECT = &H200
+Global Const ahtOFN_EXTENSIONDIFFERENT = &H400
+Global Const ahtOFN_PATHMUSTEXIST = &H800
+Global Const ahtOFN_FILEMUSTEXIST = &H1000
+Global Const ahtOFN_CREATEPROMPT = &H2000
+Global Const ahtOFN_SHAREAWARE = &H4000
+Global Const ahtOFN_NOREADONLYRETURN = &H8000
+Global Const ahtOFN_NOTESTFILECREATE = &H10000
+Global Const ahtOFN_NONETWORKBUTTON = &H20000
+Global Const ahtOFN_NOLONGNAMES = &H40000
+Global Const ahtOFN_EXPLORER = &H80000
+Global Const ahtOFN_NODEREFERENCELINKS = &H100000
+Global Const ahtOFN_LONGNAMES = &H200000
+
+Private Declare PtrSafe Function GetUserName Lib "advapi32.dll" Alias "GetUserNameA" (ByVal lpBuffer As String, nSize As Long) As Long
+Private Declare PtrSafe Function GetCompanyName Lib "advapi32.dll" Alias "GetCompanyNameA" (ByVal lpBuffer As String, nSize As Long) As Long
+Private Declare PtrSafe Function GetComputerName Lib "kernel32" Alias "GetComputerNameA" (ByVal lpBuffer As String, nSize As Long) As Long
+
+
+Private Sub test()
+    
+    On Error GoTo myerr
+    Dim fDialog As FileDialog
+'Set fDialog = Application.FileDialog(msoFileDialogFilePicker)
+ Set fDialog = Application.FileDialog(msoFileDialogSaveAs)
+fDialog.Show
+MsgBox fDialog.SelectedItems(1)
+
+'Show the dialog. -1 means success!
+'If fDialog.Show = -1 Then
+   'Debug.Print fDialog.SelectedItems(1) 'The full path to the file selected by the user
+'End If
+    
+    
+    'Debug.Print GetFileName("herman", False, "Shitty Files (*.shit)", "*.shit")
+    'FileExists = False
+    'If PathAndName <> "" And Dir(PathAndName) <> "" Then
+    '    FileExists = True
+    'End If
+
+'Debug.Print Dir("e:\work")
+
+    'Debug.Print GetSaveAccessFileName("herman", True)
+    
+'Dim MyO As New file
+Exit Sub
+myerr:
+    
+ MsgBox Err.Number
+End Sub
+
+Public Function GetFileName(Prompt As String, OpenDialog As Boolean, Optional FilterPartA As Variant, Optional FilterPartB As Variant) As String
+'Oct. 4, 2016
+
+'Gets filename using an API call
+On Error GoTo errGetFileName
+Dim DefaultWorkspace As Workspace
+Dim MyDB As Database, DataDB As Database
+Dim Filter As String, DataDBName As String, MyTest As Boolean
+Dim lngFlags As Long, ConStr As String, MyPwd As String, ButtonText As String
+
+If Not IsMissing(FilterPartA) Then
+    Filter = ahtAddFilterItem(Filter, CStr(FilterPartA), CStr(FilterPartB))
+End If
+    Filter = ahtAddFilterItem(Filter, "Access Files (*.accdb)", "*.accdb")
+    Filter = ahtAddFilterItem(Filter, "Access List Files (*.accda)", "*.accda")
+    Filter = ahtAddFilterItem(Filter, "Old MDB Files (*.mdb)", "*.mdb")
+    Filter = ahtAddFilterItem(Filter, "All Files (*.*)", "*.*")
+
+    DataDBName = ahtCommonFileOpenSave(InitialDir:="", Filter:=Filter, FilterIndex:=1, Flags:=lngFlags, DialogTitle:="VPro", OpenFile:=OpenDialog)
+    'MsgBox DataDBName
+    'DataDBName = Access.Application.FileDialog(msoFileDialogFilePicker)
+
+ReDim filters(0 To 1, 0 To 1)
+filters(0, 0) = "All Files"
+filters(0, 1) = "*.*"
+filters(1, 0) = "Access Files"
+filters(1, 1) = "*.accdb"
+
+    'GetFileName = MyFileDialog(3, False, "Pick/Enter a db Name", filters)
+    GetFileName = DataDBName
+
+    Exit Function
+errGetFileName:
+    MsgBox Err.Description, vbInformation, "VPro"
+    Stop
+End Function
+
+Function MyFileDialog(Dialog As Integer, _
+                    Optional Multi As Boolean = False, _
+                    Optional Title As String = "File Dialog", _
+                    Optional filters As Variant) As Variant
+    Dim Dlg As Object
+    Set Dlg = Access.Application.FileDialog(Dialog)
+    Dim i As Integer
+    With Dlg
+        .Title = Title
+
+        If Dialog = 3 Then
+
+            If Not IsMissing(filters) Then
+                '.filters.Clear
+                For i = LBound(filters, 1) To UBound(filters, 1)
+                    .filters.Add filters(i, 0), filters(i, 1)
+                Next
+            Else
+                .filters.Clear ' filters will be saved from last open
+                .filters.Add "All Files", "*.*"
+            End If
+        End If
+
+        .AllowMultiSelect = Multi
+        Dim varMulti As Variant
+        i = 0
+        
+On Err GoTo errFileNotFound
+        
+        Dim selectedFiles() As String
+        ' if true user picked a file, if false user clicked cancel
+
+        If .Show Then
+           If .AllowMultiSelect And .SelectedItems.count > 1 Then
+                ReDim selectedFiles(0 To .SelectedItems.count - 1)
+                For Each varMulti In .SelectedItems
+                   selectedFiles(i) = .SelectedItems(i + 1)
+                   i = i + 1
+                Next
+                MyFileDialog = selectedFiles
+            Else
+                MyFileDialog = .SelectedItems(1)
+            End If
+        Else
+            Exit Function
+        End If
+    End With
+Exit Function
+
+errFileNotFound:
+    MsgBox Err.Number
+    'FileDialog = Dlg.selecteditems(1)
+End Function
+
+Public Function ProjectPath(ProjectName As String) As String
+'Jan. 3, 2008
+'finds a project's database file and path
+On Error GoTo errProjectPath
+Dim MyDB        As Database
+Dim i           As Integer
+Dim TestName    As String
+Set MyDB = CurrentDb()
+TestName = ProjectName & "_Env"
+
+For i = 0 To MyDB.TableDefs.count - 1
+    If MyDB.TableDefs(i).Name = TestName Then
+        ProjectPath = Trim(Mid(MyDB.TableDefs(i).Connect, 11))
+    End If
+Next i
+
+MyExit:
+    Set MyDB = Nothing
+    Exit Function
+errProjectPath:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function FileExists(PathAndName) As Boolean
+'Sep 18, 2008
+'used to determine if a file already exists
+
+FileExists = False
+If PathAndName <> "" And Dir(PathAndName) <> "" Then
+    FileExists = True
+End If
+
+End Function
+
+Public Function InstalledDir() As String
+
+    InstalledDir = Left(CurrentDb.Name, Len(CurrentDb.Name) - Len(Dir(CurrentDb.Name)))
+
+End Function
+
+Private Function GetOpenFile(Optional varDirectory As Variant, _
+    Optional varTitleForDialog As Variant) As Variant
+'Jan. 11, 2008
+'not in use but a good example
+Dim strFilter As String
+Dim lngFlags As Long
+Dim varFileName As Variant
+    lngFlags = ahtOFN_FILEMUSTEXIST Or _
+                ahtOFN_HIDEREADONLY Or ahtOFN_NOCHANGEDIR
+    If IsMissing(varDirectory) Then
+        varDirectory = ""
+    End If
+    If IsMissing(varTitleForDialog) Then
+        varTitleForDialog = ""
+    End If
+
+    strFilter = ahtAddFilterItem(strFilter, _
+                "Access (*.mdb)", "*.MDB;*.MDA")
+    varFileName = ahtCommonFileOpenSave( _
+                    OpenFile:=True, _
+                    InitialDir:=varDirectory, _
+                    Filter:=strFilter, _
+                    Flags:=lngFlags, _
+                    DialogTitle:=varTitleForDialog)
+    If Not IsNull(varFileName) Then
+        varFileName = TrimNull(varFileName)
+    End If
+    GetOpenFile = varFileName
+End Function
+Public Function ahtCommonFileOpenSave( _
+            Optional ByRef Flags As Variant, _
+            Optional ByVal InitialDir As Variant, _
+            Optional ByVal Filter As Variant, _
+            Optional ByVal FilterIndex As Variant, _
+            Optional ByVal DefaultExt As Variant, _
+            Optional ByVal FileName As Variant, _
+            Optional ByVal DialogTitle As Variant, _
+            Optional ByVal hwnd As Variant, _
+            Optional ByVal OpenFile As Variant) As Variant
+
+'Sep 18, 2008
+'This is the function to call for opening the dialog
+
+Dim OFN As tagOPENFILENAME
+Dim strFilename As String
+Dim strFileTitle As String
+Dim fResult As Boolean
+    ' Give the dialog a caption title.
+    If IsMissing(InitialDir) Then InitialDir = CurDir
+    If IsMissing(Filter) Then Filter = ""
+    If IsMissing(FilterIndex) Then FilterIndex = 1
+    If IsMissing(Flags) Then Flags = 0&
+    If IsMissing(DefaultExt) Then DefaultExt = ""
+    If IsMissing(FileName) Then FileName = ""
+    If IsMissing(DialogTitle) Then DialogTitle = ""
+    If IsMissing(hwnd) Then hwnd = Application.hWndAccessApp
+    If IsMissing(OpenFile) Then OpenFile = True
+    ' Allocate string space for the returned strings.
+    strFilename = Left(FileName & String(256, 0), 256)
+    strFileTitle = String(256, 0)
+    ' Set up the data structure before you call the function
+
+    With OFN
+        .lStructSize = LenB(OFN)
+        .hwndOwner = hwnd
+        .strFilter = Filter
+        .nFilterIndex = FilterIndex
+        .strFile = strFilename
+        .nMaxFile = Len(strFilename)
+        .strFileTitle = strFileTitle
+        .nMaxFileTitle = Len(strFileTitle)
+        .strTitle = DialogTitle
+        .Flags = Flags
+        .strDefExt = DefaultExt
+        .strInitialDir = InitialDir
+        .hInstance = 0
+        .strCustomFilter = ""
+        .nMaxCustFilter = 0
+        .lpfnHook = 0
+        'New for NT 4.0
+        .strCustomFilter = String(255, 0)
+        .nMaxCustFilter = 255
+    End With
+    
+    If OpenFile Then
+        fResult = aht_apiGetOpenFileName(OFN)
+    Else
+        fResult = aht_apiGetSaveFileName(OFN)
+    End If
+    
+    If fResult Then
+        If Not IsMissing(Flags) Then Flags = OFN.Flags
+        ahtCommonFileOpenSave = TrimNull(OFN.strFile)
+    Else
+        ahtCommonFileOpenSave = vbNullString
+    End If
+End Function
+
+Private Function TrimNull(ByVal strItem As String) As String
+'Jan. 11, 2008
+'trims null characters
+Dim intPos As Integer
+    intPos = InStr(strItem, vbNullChar)
+    If intPos > 0 Then
+        TrimNull = Left(strItem, intPos - 1)
+    Else
+        TrimNull = strItem
+    End If
+End Function
+
+Public Function ahtAddFilterItem(strFilter As String, _
+    strDescription As String, Optional varItem As Variant) As String
+'Jan. 11, 2008
+'used to add file filters
+    If IsMissing(varItem) Then varItem = "*.*"
+    ahtAddFilterItem = strFilter & _
+                strDescription & vbNullChar & _
+                varItem & vbNullChar
+End Function

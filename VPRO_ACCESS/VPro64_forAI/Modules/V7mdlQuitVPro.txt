@@ -1,0 +1,55 @@
+Option Explicit
+Option Compare Database
+'This module contains code used in quiting VPro
+'It calls the LogVProOff function and manages compaction
+
+Public Function QuitAccess()
+'Jan. 3, 2008
+'Closes Access
+On Error GoTo errQuitAccess
+Dim MyDB As Database, MyFile As String, MySize As Long
+LogVProOff
+Set MyDB = CurrentDb()
+MyFile = MyDB.Name
+Set MyDB = Nothing
+MySize = FileLen(MyFile)
+If MySize > 40000000 Then 'compacts when too large
+    Application.SetOption "Auto Compact", 1
+Else
+    Application.SetOption "Auto Compact", 0
+End If
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Application.Quit
+    Exit Function
+errQuitAccess:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function QuitVPro()
+'Jan. 3, 2008
+'Closes VPro but leaves Access running
+On Error GoTo errQuitAccess
+Dim MyDB As Database, MyFile As String, MySize As Long
+LogVProOff
+Set MyDB = CurrentDb()
+MyFile = MyDB.Name
+Set MyDB = Nothing
+MySize = FileLen(MyFile)
+If MySize > 40000000 Then 'compacts when too large
+    Application.SetOption "Auto Compact", 1
+Else
+    Application.SetOption "Auto Compact", 0
+End If
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Application.CloseCurrentDatabase
+    Exit Function
+errQuitAccess:
+    MsgBox Err.Description
+    Resume MyExit
+End Function

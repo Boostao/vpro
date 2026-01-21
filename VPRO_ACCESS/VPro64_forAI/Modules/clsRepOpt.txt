@@ -1,0 +1,607 @@
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Compare Database
+Option Explicit
+Private Const strApp = "VPro64"
+Public Property Get SppAttributeClimate()
+    SppAttributeClimate = GetSetting(strApp, "ReportOptions", "SppAttributeClimate", 0)
+End Property
+
+Public Property Let SppAttributeClimate(SppAttributeClimate)
+    SaveSetting strApp, "ReportOptions", "SppAttributeClimate", SppAttributeClimate
+End Property
+
+Public Property Get SppAttributeASMR()
+    SppAttributeASMR = GetSetting(strApp, "ReportOptions", "SppAttributeASMR", 0)
+End Property
+
+Public Property Let SppAttributeASMR(SppAttributeASMR)
+    SaveSetting strApp, "ReportOptions", "SppAttributeASMR", SppAttributeASMR
+End Property
+
+Public Property Get SppAttributeRedBlue()
+    SppAttributeRedBlue = GetSetting(strApp, "ReportOptions", "SppAttributeRedBlue", 0)
+End Property
+
+Public Property Let SppAttributeRedBlue(SppAttributeRedBlue)
+    SaveSetting strApp, "ReportOptions", "SppAttributeRedBlue", SppAttributeRedBlue
+End Property
+
+Public Property Get SppAttributeWeedStatus()
+    SppAttributeWeedStatus = GetSetting(strApp, "ReportOptions", "SppAttributeWeedStatus", 0)
+End Property
+
+Public Property Let SppAttributeWeedStatus(SppAttributeWeedStatus)
+    SaveSetting strApp, "ReportOptions", "SppAttributeWeedStatus", SppAttributeWeedStatus
+End Property
+
+Public Property Get SppAttributeWetland()
+    SppAttributeWetland = GetSetting(strApp, "ReportOptions", "SppAttributeWetland", 0)
+End Property
+
+Public Property Let SppAttributeWetland(SppAttributeWetland)
+    SaveSetting strApp, "ReportOptions", "SppAttributeWetland", SppAttributeWetland
+End Property
+
+Public Property Get SppAttributeSRank()
+    SppAttributeSRank = GetSetting(strApp, "ReportOptions", "SppAttributeSRank", 0)
+End Property
+
+Public Property Let SppAttributeSRank(SppAttributeSRank)
+    SaveSetting strApp, "ReportOptions", "SppAttributeSRank", SppAttributeSRank
+End Property
+
+Public Property Get SppAttributeReport()
+    SppAttributeReport = GetSetting(strApp, "ReportOptions", "SppAttributeReport", 1)
+End Property
+
+Public Property Let SppAttributeReport(SppAttributeReport)
+    SaveSetting strApp, "ReportOptions", "SppAttributeReport", SppAttributeReport
+End Property
+
+
+Public Property Get HDReportTitle()
+    HDReportTitle = GetSetting(strApp, "ReportOptions", "HDReportTitle", "Report Title")
+End Property
+
+Public Property Let HDReportTitle(HDReportTitle)
+    SaveSetting strApp, "ReportOptions", "HDReportTitle", HDReportTitle
+End Property
+
+Public Property Get HDShowQuestionableUnits()
+    HDShowQuestionableUnits = GetSetting(strApp, "ReportOptions", "HDShowQuestionableUnits", 0)
+End Property
+
+Public Property Let HDShowQuestionableUnits(HDShowQuestionableUnits)
+    SaveSetting strApp, "ReportOptions", "HDShowQuestionableUnits", HDShowQuestionableUnits
+End Property
+
+Public Property Get HDShowTentativeUnits()
+    HDShowTentativeUnits = GetSetting(strApp, "ReportOptions", "HDShowTentativeUnits", 0)
+End Property
+
+Public Property Let HDShowTentativeUnits(HDShowTentativeUnits)
+    SaveSetting strApp, "ReportOptions", "HDShowTentativeUnits", HDShowTentativeUnits
+End Property
+
+Public Property Get SVShowHierarchyHeader()
+    SVShowHierarchyHeader = GetSetting(strApp, "ReportOptions", "SVShowHierarchyHeader", 0)
+End Property
+
+Public Property Let SVShowHierarchyHeader(SVShowHierarchyHeader)
+    SaveSetting strApp, "ReportOptions", "SVShowHierarchyHeader", SVShowHierarchyHeader
+End Property
+
+Public Property Get SVReportUnits()
+    SVReportUnits = GetSetting(strApp, "ReportOptions", "SVReportUnits", 1)
+End Property
+
+Public Property Let SVReportUnits(SVReportUnits)
+    SaveSetting strApp, "ReportOptions", "SVReportUnits", SVReportUnits
+End Property
+
+Public Property Get SVGroupBy()
+    SVGroupBy = GetSetting(strApp, "ReportOptions", "SVGroupBy", 1)
+End Property
+
+Public Property Let SVGroupBy(SVGroupBy)
+    SaveSetting strApp, "ReportOptions", "SVGroupBy", SVGroupBy
+End Property
+
+Public Property Get SVAvgType()
+    SVAvgType = GetSetting(strApp, "ReportOptions", "SVAvgType", 1)
+End Property
+
+Public Property Let SVAvgType(SVAvgType)
+    SaveSetting strApp, "ReportOptions", "SVAvgType", SVAvgType
+End Property
+
+Public Property Get SVValue()
+    SVValue = GetSetting(strApp, "ReportOptions", "SVValue", 1)
+End Property
+
+Public Property Let SVValue(SVValue)
+    SaveSetting strApp, "ReportOptions", "SVValue", SVValue
+End Property
+
+Public Property Get SVShowClass()
+    SVShowClass = GetSetting(strApp, "ReportOptions", "SVShowClass", 1)
+End Property
+
+Public Property Let SVShowClass(SVShowClass)
+    SaveSetting strApp, "ReportOptions", "SVShowClass", SVShowClass
+End Property
+
+Public Property Get SVShowValOpt()
+    SVShowValOpt = GetSetting(strApp, "ReportOptions", "SVShowValOpt", 0)
+End Property
+
+Public Property Let SVShowValOpt(SVShowValOpt)
+    SaveSetting strApp, "ReportOptions", "SVShowValOpt", SVShowValOpt
+End Property
+
+Public Property Get SVReportTitle()
+    SVReportTitle = GetSetting(strApp, "ReportOptions", "SVReportTitle", "Short veg report title")
+End Property
+
+Public Property Let SVReportTitle(SVReportTitle)
+    SaveSetting strApp, "ReportOptions", "SVReportTitle", SVReportTitle
+End Property
+
+Public Property Get SVSubSppAsSpp()
+    SVSubSppAsSpp = GetSetting(strApp, "ReportOptions", "SVSubSppAsSpp", 0)
+End Property
+
+Public Property Let SVSubSppAsSpp(SVSubSppAsSpp)
+    SaveSetting strApp, "ReportOptions", "SVSubSppAsSpp", SVSubSppAsSpp
+End Property
+
+Public Property Get SVShowEnglishName()
+    SVShowEnglishName = GetSetting(strApp, "ReportOptions", "SVShowEnglishName", 0)
+End Property
+
+Public Property Let SVShowEnglishName(SVShowEnglishName)
+    SaveSetting strApp, "ReportOptions", "SVShowEnglishName", SVShowEnglishName
+End Property
+
+Public Property Get SVShowGuideName()
+    SVShowGuideName = GetSetting(strApp, "ReportOptions", "SVShowGuideName", 0)
+End Property
+
+Public Property Let SVShowGuideName(SVShowGuideName)
+    SaveSetting strApp, "ReportOptions", "SVShowGuideName", SVShowGuideName
+End Property
+
+Public Property Get SVConstancyFormat()
+    SVConstancyFormat = GetSetting(strApp, "ReportOptions", "SVConstancyFormat", 0)
+End Property
+
+Public Property Let SVConstancyFormat(SVConstancyFormat)
+    SaveSetting strApp, "ReportOptions", "SVConstancyFormat", SVConstancyFormat
+End Property
+
+Public Property Get SVReportSummary()
+    SVReportSummary = GetSetting(strApp, "ReportOptions", "SVReportSummary", -1)
+End Property
+
+Public Property Let SVReportSummary(SVReportSummary)
+    SaveSetting strApp, "ReportOptions", "SVReportSummary", SVReportSummary
+End Property
+
+Public Property Get SVIncludeEnvFields()
+    SVIncludeEnvFields = GetSetting(strApp, "ReportOptions", "SVIncludeEnvFields", 0)
+End Property
+
+Public Property Let SVIncludeEnvFields(SVIncludeEnvFields)
+    SaveSetting strApp, "ReportOptions", "SVIncludeEnvFields", SVIncludeEnvFields
+End Property
+
+Public Property Get LVGroupBy()
+    LVGroupBy = GetSetting(strApp, "ReportOptions", "LVGroupBy", 1)
+End Property
+
+Public Property Let LVGroupBy(LVGroupBy)
+    SaveSetting strApp, "ReportOptions", "LVGroupBy", LVGroupBy
+End Property
+
+Public Property Get LVShowEnglishName()
+    LVShowEnglishName = GetSetting(strApp, "ReportOptions", "LVShowEnglishName", 1)
+End Property
+
+Public Property Let LVShowEnglishName(LVShowEnglishName)
+    SaveSetting strApp, "ReportOptions", "LVShowEnglishName", LVShowEnglishName
+End Property
+
+Public Property Get LVShowField()
+    LVShowField = GetSetting(strApp, "ReportOptions", "LVShowField", "")
+End Property
+
+Public Property Let LVShowField(LVShowField)
+    SaveSetting strApp, "ReportOptions", "LVShowField", LVShowField
+End Property
+
+Public Property Get LVAvgType()
+    LVAvgType = GetSetting(strApp, "ReportOptions", "LVAvgType", 10)
+End Property
+
+Public Property Let LVAvgType(LVAvgType)
+    SaveSetting strApp, "ReportOptions", "LVAvgType", LVAvgType
+End Property
+
+Public Property Get LVOrderBy()
+    LVOrderBy = GetSetting(strApp, "ReportOptions", "LVOrderBy", 20)
+End Property
+
+Public Property Let LVOrderBy(LVOrderBy)
+    SaveSetting strApp, "ReportOptions", "LVOrderBy", LVOrderBy
+End Property
+
+Public Property Get LVUnitGroups()
+    LVUnitGroups = GetSetting(strApp, "ReportOptions", "LVUnitGroups", 1)
+End Property
+
+Public Property Let LVUnitGroups(LVUnitGroups)
+    SaveSetting strApp, "ReportOptions", "LVUnitGroups", LVUnitGroups
+End Property
+
+Public Property Get LVReportTitle()
+    LVReportTitle = GetSetting(strApp, "ReportOptions", "LVReportTitle", "Long Vegetation Report")
+End Property
+
+Public Property Let LVReportTitle(LVReportTitle)
+    SaveSetting strApp, "ReportOptions", "LVReportTitle", LVReportTitle
+End Property
+
+Public Property Get LVPresenceGreaterThan()
+    LVPresenceGreaterThan = GetSetting(strApp, "ReportOptions", "LVPresenceGreaterThan", 0)
+End Property
+
+Public Property Let LVPresenceGreaterThan(LVPresenceGreaterThan)
+    SaveSetting strApp, "ReportOptions", "LVPresenceGreaterThan", LVPresenceGreaterThan
+End Property
+
+Public Property Get LVQuickReport()
+    LVQuickReport = GetSetting(strApp, "ReportOptions", "LVQuickReport", -1)
+End Property
+
+Public Property Let LVQuickReport(LVQuickReport)
+    SaveSetting strApp, "ReportOptions", "LVQuickReport", LVQuickReport
+End Property
+
+Public Property Get LVCoverGreaterThan()
+    LVCoverGreaterThan = GetSetting(strApp, "ReportOptions", "LVCoverGreaterThan", 0)
+End Property
+
+Public Property Let LVCoverGreaterThan(LVCoverGreaterThan)
+    SaveSetting strApp, "ReportOptions", "LVCoverGreaterThan", LVCoverGreaterThan
+End Property
+
+Public Property Get LVSpaceBetweenGroups()
+    LVSpaceBetweenGroups = GetSetting(strApp, "ReportOptions", "LVSpaceBetweenGroups", 0)
+End Property
+
+Public Property Let LVSpaceBetweenGroups(LVSpaceBetweenGroups)
+    SaveSetting strApp, "ReportOptions", "LVSpaceBetweenGroups", LVSpaceBetweenGroups
+End Property
+
+Public Property Get LVReportSummary()
+    LVReportSummary = GetSetting(strApp, "ReportOptions", "LVReportSummary", -1)
+End Property
+
+Public Property Let LVReportSummary(LVReportSummary)
+    SaveSetting strApp, "ReportOptions", "LVReportSummary", LVReportSummary
+End Property
+
+Public Property Get LVConstantSppList()
+    LVConstantSppList = GetSetting(strApp, "ReportOptions", "LVConstantSppList", -1)
+End Property
+
+Public Property Let LVConstantSppList(LVConstantSppList)
+    SaveSetting strApp, "ReportOptions", "LVConstantSppList", LVConstantSppList
+End Property
+
+Public Property Get LVUseSppCodesOnly()
+    LVUseSppCodesOnly = GetSetting(strApp, "ReportOptions", "LVUseSppCodesOnly", 0)
+End Property
+
+Public Property Let LVUseSppCodesOnly(LVUseSppCodesOnly)
+    SaveSetting strApp, "ReportOptions", "LVUseSppCodesOnly", LVUseSppCodesOnly
+End Property
+
+Public Property Get LEReportTitle()
+    LEReportTitle = GetSetting(strApp, "ReportOptions", "LEReportTitle", "Long Evironment Report")
+End Property
+
+Public Property Let LEReportTitle(LEReportTitle)
+    SaveSetting strApp, "ReportOptions", "LEReportTitle", LEReportTitle
+End Property
+
+Public Property Get SEIncludeSppSummary()
+    SEIncludeSppSummary = GetSetting(strApp, "ReportOptions", "SEIncludeSppSummary", 0)
+End Property
+
+Public Property Let SEIncludeSppSummary(SEIncludeSppSummary)
+    SaveSetting strApp, "ReportOptions", "SEIncludeSppSummary", SEIncludeSppSummary
+End Property
+
+Public Property Get SEOrderBy()
+    SEOrderBy = GetSetting(strApp, "ReportOptions", "SEOrderBy", 1)
+End Property
+
+Public Property Let SEOrderBy(SEOrderBy)
+    SaveSetting strApp, "ReportOptions", "SEOrderBy", SEOrderBy
+End Property
+
+Public Property Get SECoverCalc()
+    SECoverCalc = GetSetting(strApp, "ReportOptions", "SECoverCalc", 1)
+End Property
+
+Public Property Let SECoverCalc(SECoverCalc)
+    SaveSetting strApp, "ReportOptions", "SECoverCalc", SECoverCalc
+End Property
+
+Public Property Get SESelectSppPresent()
+    SESelectSppPresent = GetSetting(strApp, "ReportOptions", "SESelectSppPresent", 0)
+End Property
+
+Public Property Let SESelectSppPresent(SESelectSppPresent)
+    SaveSetting strApp, "ReportOptions", "SESelectSppPresent", SESelectSppPresent
+End Property
+
+Public Property Get SEOptAndOr()
+    SEOptAndOr = GetSetting(strApp, "ReportOptions", "SEOptAndOr", 1)
+End Property
+
+Public Property Let SEOptAndOr(SEOptAndOr)
+    SaveSetting strApp, "ReportOptions", "SEOptAndOr", SEOptAndOr
+End Property
+
+Public Property Get SESelectSppCover()
+    SESelectSppCover = GetSetting(strApp, "ReportOptions", "SESelectSppCover", 0)
+End Property
+
+Public Property Let SESelectSppCover(SESelectSppCover)
+    SaveSetting strApp, "ReportOptions", "SESelectSppCover", SESelectSppCover
+End Property
+
+Public Property Get SEOptValueMethod()
+    SEOptValueMethod = GetSetting(strApp, "ReportOptions", "SEOptValueMethod", 1)
+End Property
+
+Public Property Let SEOptValueMethod(SEOptValueMethod)
+    SaveSetting strApp, "ReportOptions", "SEOptValueMethod", SEOptValueMethod
+End Property
+
+Public Property Get SESuType()
+    SESuType = GetSetting(strApp, "ReportOptions", "SESuType", 1)
+End Property
+
+Public Property Let SESuType(SESuType)
+    SaveSetting strApp, "ReportOptions", "SESuType", SESuType
+End Property
+
+Public Property Get cmbThemeTable()
+    cmbThemeTable = GetSetting(strApp, "ReportOptions", "CmbThemeTable", "Sample")
+End Property
+
+Public Property Let cmbThemeTable(cmbThemeTable)
+    SaveSetting strApp, "ReportOptions", "CmbThemeTable", cmbThemeTable
+End Property
+
+Public Property Get cmbColourGreater()
+    cmbColourGreater = GetSetting(strApp, "ReportOptions", "cmbColourGreater", 5)
+End Property
+
+Public Property Let cmbColourGreater(cmbColourGreater)
+    SaveSetting strApp, "ReportOptions", "cmbColourGreater", cmbColourGreater
+End Property
+
+Public Property Get cmbGrayGreater()
+    cmbGrayGreater = GetSetting(strApp, "ReportOptions", "cmbGrayGreater", 65)
+End Property
+
+Public Property Let cmbGrayGreater(cmbGrayGreater)
+    SaveSetting strApp, "ReportOptions", "cmbGrayGreater", cmbGrayGreater
+End Property
+
+Public Property Get cmbApplyTheme()
+    cmbApplyTheme = GetSetting(strApp, "ReportOptions", "cmbApplyTheme", 1)
+End Property
+
+Public Property Let cmbApplyTheme(cmbApplyTheme)
+    SaveSetting strApp, "ReportOptions", "cmbApplyTheme", cmbApplyTheme
+End Property
+
+Public Property Get PcOrdSppGreater()
+    PcOrdSppGreater = GetSetting(strApp, "ReportOptions", "PcOrdSppGreater", 0)
+End Property
+
+Public Property Let PcOrdSppGreater(PcOrdSppGreater)
+    SaveSetting strApp, "ReportOptions", "PcOrdSppGreater", PcOrdSppGreater
+End Property
+
+Public Property Get PcOrdGroup()
+    PcOrdGroup = GetSetting(strApp, "ReportOptions", "PcOrdGroup", 1)
+End Property
+
+Public Property Let PcOrdGroup(PcOrdGroup)
+    SaveSetting strApp, "ReportOptions", "PcOrdGroup", PcOrdGroup
+End Property
+
+Public Property Get PcOrdStrataAsSpp()
+    PcOrdStrataAsSpp = GetSetting(strApp, "ReportOptions", "PcOrdStrataAsSpp", 0)
+End Property
+
+Public Property Let PcOrdStrataAsSpp(PcOrdStrataAsSpp)
+    SaveSetting strApp, "ReportOptions", "PcOrdStrataAsSpp", PcOrdStrataAsSpp
+End Property
+
+Public Property Get PcOrdLayerAsSpp()
+    PcOrdLayerAsSpp = GetSetting(strApp, "ReportOptions", "PcOrdLayerAsSpp", 0)
+End Property
+
+Public Property Let PcOrdLayerAsSpp(PcOrdLayerAsSpp)
+    SaveSetting strApp, "ReportOptions", "PcOrdLayerAsSpp", PcOrdLayerAsSpp
+End Property
+
+Public Property Get PcOrdSppCodesOnly()
+    PcOrdSppCodesOnly = GetSetting(strApp, "ReportOptions", "PcOrdSppCodesOnly", 0)
+End Property
+
+Public Property Let PcOrdSppCodesOnly(PcOrdSppCodesOnly)
+    SaveSetting strApp, "ReportOptions", "PcOrdSppCodesOnly", PcOrdSppCodesOnly
+End Property
+
+Public Property Get GoogleEarthPlaceName()
+    GoogleEarthPlaceName = GetSetting(strApp, "ReportOptions", "GoogleEarthPlaceName", "VPro Plot Locations")
+End Property
+
+Public Property Let GoogleEarthPlaceName(GoogleEarthPlaceName)
+    SaveSetting strApp, "ReportOptions", "GoogleEarthPlaceName", GoogleEarthPlaceName
+End Property
+
+Public Property Get GoogleEarthDescField()
+    GoogleEarthDescField = GetSetting(strApp, "ReportOptions", "GoogleEarthDescField", "PlotRepresenting")
+End Property
+
+Public Property Let GoogleEarthDescField(GoogleEarthDescField)
+    SaveSetting strApp, "ReportOptions", "GoogleEarthDescField", GoogleEarthDescField
+End Property
+
+Public Property Get SVoptLifeformSummary()
+    SVoptLifeformSummary = GetSetting(strApp, "SumVeg", "optLifeformSummary", 0)
+End Property
+
+Public Property Let SVoptLifeformSummary(optLifeformSummary)
+    SaveSetting strApp, "SumVeg", "optLifeformSummary", optLifeformSummary
+End Property
+
+Public Property Get DataQualityFilterEnforce()
+    DataQualityFilterEnforce = GetSetting(strApp, "ReportOptions", "DataQualityFilterEnforce", False)
+End Property
+
+Public Property Let DataQualityFilterEnforce(DataQualityFilterEnforce)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterEnforce", DataQualityFilterEnforce
+End Property
+
+Public Property Get DataQualityFilterSite()
+    DataQualityFilterSite = GetSetting(strApp, "ReportOptions", "DataQualityFilterSite", "Poor")
+End Property
+
+Public Property Let DataQualityFilterSite(DataQualityFilterSite)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSite", DataQualityFilterSite
+End Property
+
+Public Property Get DataQualityFilterSoil()
+    DataQualityFilterSoil = GetSetting(strApp, "ReportOptions", "DataQualityFilterSoil", "Poor")
+End Property
+
+Public Property Let DataQualityFilterSoil(DataQualityFilterSoil)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSoil", DataQualityFilterSoil
+End Property
+
+Public Property Get DataQualityFilterVeg()
+    DataQualityFilterVeg = GetSetting(strApp, "ReportOptions", "DataQualityFilterVeg", "Poor")
+End Property
+
+Public Property Let DataQualityFilterVeg(DataQualityFilterVeg)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterVeg", DataQualityFilterVeg
+End Property
+
+Public Property Get DataQualityFilterSiteNull()
+    DataQualityFilterSiteNull = GetSetting(strApp, "ReportOptions", "DataQualityFilterSiteNull", True)
+End Property
+
+Public Property Let DataQualityFilterSiteNull(DataQualityFilterSiteNull)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSiteNull", DataQualityFilterSiteNull
+End Property
+
+Public Property Get DataQualityFilterSoilNull()
+    DataQualityFilterSoilNull = GetSetting(strApp, "ReportOptions", "DataQualityFilterSoilNull", "True")
+End Property
+
+Public Property Let DataQualityFilterSoilNull(DataQualityFilterSoilNull)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSoilNull", DataQualityFilterSoilNull
+End Property
+
+Public Property Get DataQualityFilterVegNull()
+    DataQualityFilterVegNull = GetSetting(strApp, "ReportOptions", "DataQualityFilterVegNull", "True")
+End Property
+
+Public Property Let DataQualityFilterVegNull(DataQualityFilterVegNull)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterVegNull", DataQualityFilterVegNull
+End Property
+
+Public Property Get DataQualityFilterEnforceLV()
+    DataQualityFilterEnforceLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterEnforceLV", False)
+End Property
+
+Public Property Let DataQualityFilterEnforceLV(DataQualityFilterEnforceLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterEnforceLV", DataQualityFilterEnforceLV
+End Property
+
+Public Property Get DataQualityFilterSiteLV()
+    DataQualityFilterSiteLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterSiteLV", "Poor")
+End Property
+
+Public Property Let DataQualityFilterSiteLV(DataQualityFilterSiteLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSiteLV", DataQualityFilterSiteLV
+End Property
+
+Public Property Get DataQualityFilterSoilLV()
+    DataQualityFilterSoilLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterSoilLV", "Poor")
+End Property
+
+Public Property Let DataQualityFilterSoilLV(DataQualityFilterSoilLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSoilLV", DataQualityFilterSoilLV
+End Property
+
+Public Property Get DataQualityFilterVegLV()
+    DataQualityFilterVegLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterVegLV", "Poor")
+End Property
+
+Public Property Let DataQualityFilterVegLV(DataQualityFilterVegLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterVegLV", DataQualityFilterVegLV
+End Property
+
+Public Property Get DataQualityFilterSiteNullLV()
+    DataQualityFilterSiteNullLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterSiteNullLV", True)
+End Property
+
+Public Property Let DataQualityFilterSiteNullLV(DataQualityFilterSiteNullLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSiteNullLV", DataQualityFilterSiteNullLV
+End Property
+
+Public Property Get DataQualityFilterSoilNullLV()
+    DataQualityFilterSoilNullLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterSoilNullLV", "True")
+End Property
+
+Public Property Let DataQualityFilterSoilNullLV(DataQualityFilterSoilNullLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterSoilNullLV", DataQualityFilterSoilNullLV
+End Property
+
+Public Property Get DataQualityFilterVegNullLV()
+    DataQualityFilterVegNullLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterVegNullLV", "True")
+End Property
+
+Public Property Let DataQualityFilterVegNullLV(DataQualityFilterVegNullLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterVegNullLV", DataQualityFilterVegNullLV
+End Property
+
+Public Property Get DataQualityFilterBECUseLV()
+    DataQualityFilterBECUseLV = GetSetting(strApp, "ReportOptions", "DataQualityFilterBECUseLV", "True")
+End Property
+
+Public Property Let DataQualityFilterBECUseLV(DataQualityFilterBECUseLV)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterBECUseLV", DataQualityFilterBECUseLV
+End Property
+
+Public Property Get DataQualityFilterBECUse()
+    DataQualityFilterBECUse = GetSetting(strApp, "ReportOptions", "DataQualityFilterBECUse", 1)
+End Property
+
+Public Property Let DataQualityFilterBECUse(DataQualityFilterBECUse)
+    SaveSetting strApp, "ReportOptions", "DataQualityFilterBECUse", DataQualityFilterBECUse
+End Property

@@ -1,0 +1,14 @@
+CREATE TABLE [USysComparePlotAssignments] (
+  [PlotNumber] TEXT(7) DEFAULT ,
+  [SiteUnit1] TEXT(255) DEFAULT ,
+  [SiteUnit2] TEXT(255) DEFAULT ,
+  [Change] TEXT(50) DEFAULT ,
+  [PlantAssoc1] TEXT(100) DEFAULT ,
+  [PlantAssoc2] TEXT(100) DEFAULT ,
+  [AssocChange] TEXT(50) DEFAULT 
+);
+
+CREATE UNIQUE INDEX [PlotNumber] ON [USysComparePlotAssignments] ([PlotNumber]);
+CREATE INDEX [SiteUnit] ON [USysComparePlotAssignments] ([SiteUnit1]);
+CREATE INDEX [SiteUnit1] ON [USysComparePlotAssignments] ([SiteUnit2]);
+

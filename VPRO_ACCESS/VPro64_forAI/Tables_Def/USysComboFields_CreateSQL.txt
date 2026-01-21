@@ -1,0 +1,8 @@
+CREATE TABLE [USysComboFields] (
+  [FieldName] TEXT(255) DEFAULT ,
+  [FieldLabel] TEXT(255) DEFAULT ,
+  [UseField] BIT DEFAULT ,
+  [Order] INTEGER DEFAULT 
+);
+
+

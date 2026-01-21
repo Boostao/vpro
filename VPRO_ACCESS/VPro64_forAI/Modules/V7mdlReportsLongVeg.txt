@@ -1,0 +1,714 @@
+Option Compare Database   'Use database order for string comparisons
+'Option Explicit
+
+Function LongVegReport()
+
+'Apr. 6, 2018
+'creates the long vegetation report
+'On Error GoTo errLongVegReport
+Dim MyDB As Database, MyRS As Recordset
+Dim xl As Excel.Application, SuRecords As Recordset, SnRecords As Recordset
+Dim MyRecords As QueryDef, Project As String
+Dim i As Integer, X As Integer, Y As Integer, z  As Integer, VegTableIn As String, VegTableOut As String
+Dim Lumping As String, LumpTitle As String, MyLongName As String, AvgType As String, SuTable As String
+Dim ReportTitle As String, ShowCommon As Integer, PgreaterThan As Double, MCgreaterThan As Double
+Dim AddSpace As Integer, ReportGroup As Integer, ReportOrder As Integer, GroupAndOrder As Integer
+Dim ShowCommonGroup As Variant, ShowCommonSelect As Variant, OrderBy As String, MyGroup As String, MySelect As String
+Dim NewData As Variant, SqlString As String, MyUnit As String, MyShortName As String, NumPlots As Integer, SqlText As String
+Dim SqlReport As String, ExcelVer As Variant, MyOrient As Integer, ThisVal As Variant, AboveVal As Variant
+Dim MyCase As Integer, SqlConstant As String, ConstantSppOnce As Boolean, FirstRow As Integer, LastCol As Integer
+Dim iFld As Integer, QuickReport As Boolean, MySheet As Excel.Worksheet, FirstSheet As String
+Dim OriginalSuTable As String
+'On Error GoTo 0
+ConstantSppOnce = False
+Project = clsVProReg.CurrProject & "_ENV"
+
+'clean up just in case interupted last time
+    CleanUp
+
+'warn user is on
+    DoCmd.SetWarnings True
+
+'let's backup some original settings
+    OriginalSuTable = clsVProReg.CurrPlotlist
+    clsVProReg.CurrPlotlistBak = OriginalSuTable
+
+'do some quality control work
+    If clsRepOpt.DataQualityFilterEnforceLV Then
+        If QCLV = False Then
+            'OriginalSuTable = clsVProReg.CurrPlotlist
+            GoTo MyExit
+        End If
+        'clsVProReg.CurrPlotlist = "USysDeleteMe"
+    End If
+
+'find out what kind of plot groups the user wants
+    MyCase = clsRepOpt.LVUnitGroups
+
+'MsgBox clsVProReg.CurrPlotlist
+'run different code depending on the plot grouping
+    Select Case MyCase
+        Case 1
+            SuTable = clsVProReg.CurrPlotlist & "_Su"
+            DoCmd.SetWarnings False
+            SqlText = "DELETE * FROM USysSuTableDynamic_SU;"
+            DoCmd.RunSQL SqlText
+            SqlText = "INSERT INTO USysSuTableDynamic_SU ( PlotNumber, SiteUnit )"
+            SqlText = SqlText & " SELECT PlotNumber, SiteUnit"
+            SqlText = SqlText & " FROM " & clsVProReg.CurrPlotlist & "_SU;"
+            DoCmd.RunSQL SqlText
+            DoCmd.SetWarnings True
+        Case 2
+            If clsRepOpt.DataQualityFilterEnforceLV Then
+                SqlText = "DELETE USysDeleteMe_SU.PlotNumber, USysSuTableDynamic_SU.*"
+                SqlText = SqlText & " FROM USysSuTableDynamic_SU LEFT JOIN USysDeleteMe_SU ON USysSuTableDynamic_SU.PlotNumber = USysDeleteMe_SU.PlotNumber"
+                SqlText = SqlText & " WHERE (((USysDeleteMe_SU.PlotNumber) Is Null));"
+                DoCmd.SetWarnings False
+                DoCmd.RunSQL SqlText
+                DoCmd.SetWarnings True
+            End If
+            SuTable = "USysSuTableDynamic_SU"
+        Case 3
+            WriteBlankSiteUnits 'call function
+            SuTable = "USysSuTableDynamic_SU"
+    End Select
+
+'Stop
+VegTableIn = clsVProReg.CurrProject & "_Veg"
+VegTableOut = "EntryDat_Veg"
+If SuTable = "None_Su" Then
+    MsgBox "No current site unit table", 64, ProgramName()
+    Exit Function
+End If
+Set MyDB = CurrentDb()
+
+On Error Resume Next
+DoCmd.DeleteObject A_QUERY, "ExcelReport"
+DoCmd.DeleteObject A_QUERY, "ExcelFinalReport"
+DoCmd.DeleteObject A_QUERY, "ExcelSppList"
+DoCmd.DeleteObject A_TABLE, "TempReportVeg"
+DoCmd.DeleteObject A_TABLE, "EntryDat_Veg"
+'rkOn Error GoTo errLongVegReport
+'On Error GoTo 0
+
+DoCmd.CopyObject , "EntryDat_Veg", acTable, "USysV2Veg"
+
+'make TempReportVeg table
+    CreateTempVeg VegTableIn, SuTable 'creates the table TempReportVeg
+    VegTableIn = "TempReportVeg"
+
+'Get options
+ReportTitle = clsRepOpt.LVReportTitle
+ShowCommon = clsRepOpt.LVShowEnglishName
+PgreaterThan = clsRepOpt.LVPresenceGreaterThan / 100
+MCgreaterThan = clsRepOpt.LVCoverGreaterThan
+AddSpace = clsRepOpt.LVSpaceBetweenGroups
+ReportGroup = clsRepOpt.LVGroupBy
+ReportOrder = clsRepOpt.LVOrderBy
+GroupAndOrder = ReportGroup + ReportOrder
+AvgType = clsRepOpt.LVAvgType
+QuickReport = clsRepOpt.LVQuickReport
+
+'OptionTable.Close
+If ShowCommon = 0 Then ShowCommonGroup = ""
+If ShowCommon = 0 Then ShowCommonSelect = ""
+If ShowCommon = 1 Then ShowCommonGroup = ", USysAllSpecs.EnglishName"
+If ShowCommon = 1 Then ShowCommonSelect = ", USysAllSpecs.EnglishName AS [EnglishName]"
+If ShowCommon = 2 Then ShowCommonGroup = ", USysAllSpecs.Code"
+If ShowCommon = 2 Then ShowCommonSelect = ", USysAllSpecs.Code AS [Code]"
+If ShowCommon = 4 Then ShowCommonGroup = ", USysAllSpecs." & clsRepOpt.LVShowField
+If ShowCommon = 4 Then ShowCommonSelect = ", USysAllSpecs." & clsRepOpt.LVShowField & " AS [" & clsRepOpt.LVShowField & "]"
+
+'assign query variable
+If GroupAndOrder = 11 Then
+    OrderBy = " ORDER BY ExcelReport.Layer, ExcelReport.Spp;"
+    MyGroup = "LayerCode.Layer, "
+    MySelect = "LayerCode.Layer"
+End If
+
+If GroupAndOrder = 12 Then
+    OrderBy = " ORDER BY ExcelReport.Layer, ExcelReport.Spp;"
+    MyGroup = "LayerCode.Strata, "
+    MySelect = "LayerCode.Strata AS Layer"
+End If
+
+If GroupAndOrder = 13 Then
+    OrderBy = " ORDER BY ExcelReport.LifeForm, ExcelReport.Spp;"
+    MyGroup = "USysAllSpecs.LifeForm, "
+    MySelect = "USysAllSpecs.LifeForm"
+End If
+
+If GroupAndOrder = 14 Then
+    OrderBy = " ORDER BY ExcelReport.Spp;"
+    MyGroup = "LayerCode.Layer, "
+    MySelect = "LayerCode.Layer"
+End If
+
+If GroupAndOrder = 21 Then
+    OrderBy = " ORDER BY ExcelReport.Layer, ExcelReport.P DESC, ExcelReport.Spp;"
+    MyGroup = "LayerCode.Layer, "
+    MySelect = "LayerCode.Layer"
+End If
+
+If GroupAndOrder = 22 Then
+    OrderBy = " ORDER BY ExcelReport.Layer, ExcelReport.P DESC , ExcelReport.Spp;"
+    MyGroup = "LayerCode.Strata, "
+    MySelect = "LayerCode.Strata AS Layer"
+End If
+
+If GroupAndOrder = 23 Then
+    OrderBy = " ORDER BY ExcelReport.LifeForm, ExcelReport.P DESC , ExcelReport.Spp;"
+    MyGroup = "USysAllSpecs.LifeForm, "
+    MySelect = "USysAllSpecs.LifeForm"
+End If
+
+If GroupAndOrder = 24 Then
+    OrderBy = " ORDER BY  ExcelReport.P DESC , ExcelReport.Spp;"
+    MyGroup = "LayerCode.Layer, "
+    MySelect = "LayerCode.Layer"
+End If
+
+'build tables
+    If GroupAndOrder = 11 Or GroupAndOrder = 21 Then NewData = ConvertProVeg2V2(VegTableIn, VegTableOut)
+    If GroupAndOrder = 12 Or GroupAndOrder = 22 Then NewData = BuildStrataTable()
+    If GroupAndOrder = 13 Or GroupAndOrder = 23 Then NewData = BuildLifeFormTable()
+    If GroupAndOrder = 14 Or GroupAndOrder = 24 Then NewData = ConvertProVeg2V2(VegTableIn, VegTableOut)
+
+'Lump data
+    If sysLumpingTable <> "None_Lump" Then
+        NewData = LumpVegData(VegTableOut, VegTableOut & "x", sysLumpingTable)
+        'NewData = LumpVegData(VegTableOut, VegTableOut, sysLumpingTable)
+        LumpTitle = "Vegetation was lumped using " & sysLumpingTable & " table"
+    Else
+        LumpTitle = " "
+    End If
+
+'Create the SnRecords recordset
+    'SqlString = "SELECT DISTINCT " & SUtable & ".SiteUnit, First(MasterSiteUnitList.UnitLongName) AS FirstOfUnitLongName"
+    SqlString = "SELECT DISTINCT " & SuTable & ".SiteUnit, First(MasterSiteUnitList.SiteSeriesLongName) AS FirstOfUnitLongName"
+    'SqlString = SqlString & " FROM (" & SUtable & " LEFT JOIN MasterSiteUnitList ON " & SUtable & ".SiteUnit = MasterSiteUnitList.Name) INNER JOIN UsysVeg ON " & SUtable & ".PlotNumber = UsysVeg.PlotNumber"
+    SqlString = SqlString & " FROM (" & SuTable & " LEFT JOIN MasterSiteUnitList ON " & SuTable & ".SiteUnit = MasterSiteUnitList.SiteSeries) INNER JOIN UsysVeg ON " & SuTable & ".PlotNumber = UsysVeg.PlotNumber"
+    SqlString = SqlString & " GROUP BY " & SuTable & ".SiteUnit"
+    SqlString = SqlString & " HAVING (((" & SuTable & ".SiteUnit) Is Not Null));"
+    'MyDB.CreateQueryDef "adq", SqlString
+    'Stop
+    Set SnRecords = MyDB.OpenRecordset(SqlString, DB_OPEN_DYNASET)
+    If SnRecords.RecordCount = 0 Then
+        MsgBox "There isn't any data to form a report."
+        GoTo MyExit
+    End If
+    SnRecords.MoveLast
+    z = SnRecords.RecordCount - 1
+    SnRecords.MoveFirst
+    
+    Set SuRecords = MyDB.OpenRecordset(SuTable, DB_OPEN_DYNASET)
+
+'Create xl and add a workbook
+    CreateExcel xl
+    Set xl = GetObject(, "Excel.Application")
+    xl.Visible = True
+    xl.Application.Workbooks.Add
+    xl.Application.Caption = "VPro Long Vegetation Report"
+    xl.ActiveWorkbook.Windows(1).Caption = CurrProject()
+    xl.Worksheets.Add
+    xl.ActiveSheet.Name = CurrProject()
+    xl.DisplayAlerts = False
+    For Each MySheet In xl.Worksheets
+        If MySheet.Name <> CurrProject() Then MySheet.Delete
+    Next MySheet
+    xl.DisplayAlerts = True
+
+'main report loop
+    For i = 0 To z + 1
+        'Application.Echo False
+        'xl.ScreenUpdating = False
+        If i <= z Then
+            MyUnit = SnRecords("SiteUnit")
+            MyShortName = SnRecords("SiteUnit")
+            If Not IsNull(SnRecords("FirstOfUnitLongName")) Then
+                MyLongName = SnRecords("FirstOfUnitLongName")
+            Else
+                MyLongName = ""
+            End If
+            If IsNull(MyShortName) Or MyShortName = "" Then MyShortName = "NoName" & i
+            NumPlots = PlotCount(SuTable, MyUnit)
+        Else
+            MyUnit = "Null"
+            MyShortName = "Unassigned"
+            MyLongName = ""
+            NumPlots = DCount("PlotNumber", SuTable, "[SiteUnit] is null")
+        End If
+        
+        If NumPlots < 1 Then GoTo SkipUnit  'skip unit if no plots
+        If NumPlots > 250 Then
+            xl.Visible = False
+            xl.Quit
+            MsgBox "Too many plots (>250 in one unit) to fit in Excel.  Split your data."
+            GoTo MyExit
+        End If
+
+'Build the querys
+        SqlText = "TRANSFORM vpRoundUP(Sum(EntryDat_Veg.Cover)) AS MyCover"
+        If AvgType = 10 Then
+            SqlText = SqlText & " SELECT " & MySelect & ", IIf(IsNull([ScientificName]),[Species],[ScientificName]) AS Spp" & ShowCommonSelect & ", Count([MyCover])/ " & NumPlots & " AS P, Val(vpRoundUP(Sum(EntryDat_Veg.Cover)/ " & NumPlots & ")) AS MC"
+        Else
+            SqlText = SqlText & " SELECT " & MySelect & ", IIf(IsNull([ScientificName]),[Species],[ScientificName]) AS Spp" & ShowCommonSelect & ", Count([MyCover])/ " & NumPlots & " AS P, Val(vpRoundUp(Avg(EntryDat_Veg.Cover))) AS MC"
+        End If
+            SqlText = SqlText & " FROM ((EntryDat_Veg INNER JOIN " & SuTable & " ON EntryDat_Veg.Plotnumber = " & SuTable & ".PlotNumber) LEFT JOIN USysAllSpecs ON EntryDat_Veg.Species = USysAllSpecs.Code) LEFT JOIN LayerCode ON EntryDat_Veg.Layer = LayerCode.Layer1234567"
+        If i > z Then
+            SqlText = SqlText & " WHERE (((" & SuTable & ".SiteUnit) Is Null) And ((USysAllSpecs.CodeType) <> 'S' Or (USysAllSpecs.CodeType) Is Null))"
+        Else
+            SqlText = SqlText & " WHERE (((" & SuTable & ".SiteUnit)='" & MyUnit & "') AND ((USysAllSpecs.CodeType)<>'S'  Or (USysAllSpecs.CodeType) Is Null))"
+        End If
+        SqlText = SqlText & " GROUP BY " & MyGroup & "IIf(IsNull([ScientificName]),[Species],[ScientificName])" & ShowCommonGroup
+        SqlText = SqlText & " PIVOT EntryDat_Veg.Plotnumber;"
+    
+        If clsRepOpt.LVConstantSppList Then
+            If clsRepOpt.LVGroupBy = 3 Then
+                SqlReport = "SELECT DISTINCTROW ExcelSppList.*, ExcelReport.*"
+                SqlReport = SqlReport & " FROM ExcelSppList LEFT JOIN ExcelReport ON (ExcelSppList.LifeForm = ExcelReport.Lifeform) AND (ExcelSppList.Spp = ExcelReport.Spp)"
+                SqlReport = SqlReport & " ORDER BY ExcelSppList.LifeForm, ExcelSppList.Spp;"
+            Else
+                SqlReport = "SELECT DISTINCTROW ExcelSppList.*, ExcelReport.*"
+                SqlReport = SqlReport & " FROM ExcelSppList LEFT JOIN ExcelReport ON (ExcelSppList.Layer = ExcelReport.Layer) AND (ExcelSppList.Spp = ExcelReport.Spp)"
+                SqlReport = SqlReport & " ORDER BY ExcelSppList.Layer, ExcelSppList.Spp;"
+            End If
+        Else
+            SqlReport = "SELECT DISTINCTROW ExcelReport.*"
+            SqlReport = SqlReport & " FROM ExcelReport"
+            SqlReport = SqlReport & " WHERE ((ExcelReport.MC>" & MCgreaterThan & ") AND (ExcelReport.P>" & PgreaterThan & "))"
+            SqlReport = SqlReport & OrderBy
+        End If
+        If clsRepOpt.LVConstantSppList And Not ConstantSppOnce Then
+            SqlConstant = "SELECT " & MySelect & ", IIf(IsNull([ScientificName]),[Species],[ScientificName]) AS Spp" & ShowCommonSelect
+            SqlConstant = SqlConstant & " FROM ((EntryDat_Veg INNER JOIN " & SuTable & " ON EntryDat_Veg.Plotnumber = " & SuTable & ".PlotNumber) LEFT JOIN USysAllSpecs ON EntryDat_Veg.Species = USysAllSpecs.Code) LEFT JOIN LayerCode ON EntryDat_Veg.Layer = LayerCode.Layer1234567"
+            'SqlConstant = SqlConstant & " WHERE (((USysAllSpecs.Codetype)='U' Or (USysAllSpecs.Codetype) Is Null))"
+            SqlConstant = SqlConstant & " WHERE (((USysAllSpecs.Codetype)<>'S' Or (USysAllSpecs.Codetype) Is Null))"
+            SqlConstant = SqlConstant & " GROUP BY " & MyGroup & "IIf(IsNull([ScientificName]),[Species],[ScientificName])" & ShowCommonGroup & ";"
+            MyDB.CreateQueryDef "ExcelSppList", SqlConstant
+            ConstantSppOnce = True
+        End If
+        
+        On Error Resume Next
+        DoCmd.SetWarnings True
+        DoCmd.DeleteObject A_QUERY, "ExcelReport"
+        DoCmd.DeleteObject A_QUERY, "ExcelFinalReport"
+        'On Error GoTo errLongVegReport
+        On Error GoTo 0
+        
+        Set MyRecords = MyDB.CreateQueryDef("ExcelReport", SqlText)
+        Set MyRecords = MyDB.CreateQueryDef("ExcelFinalReport", SqlReport)
+'Stop
+If MyUnit = "SBS mk   /Fh1" Then
+    'Stop
+End If
+'xl.Application.w
+'Start adding data to Excel
+        xl.Worksheets.Add
+        xl.ActiveSheet.Move After:=xl.Worksheets(xl.Worksheets.count)
+
+'optional page setup
+        If Not QuickReport Then
+            With xl.ActiveSheet.PageSetup
+                .Orientation = 2
+                .PrintGridlines = False
+                .CenterHeader = ""
+                .LeftFooter = "Page &P of &n"
+                .RightFooter = "&D"
+                .CenterFooter = ""
+                .LeftMargin = xl.Application.InchesToPoints(0.75)
+                .RightMargin = xl.Application.InchesToPoints(0.75)
+                .TopMargin = xl.Application.InchesToPoints(0.5)
+                .BottomMargin = xl.Application.InchesToPoints(0.75)
+            End With
+        End If
+        
+        xl.Cells(1, 1).Value = ReportTitle
+        xl.Selection.Font.Bold = True
+
+        xl.Cells(2, 1).Value = MyShortName
+        If MyLongName <> "" Then
+            xl.Cells(2, 1).Value = MyShortName & " - [" & MyLongName & "]"
+        End If
+    
+        xl.Cells(3, 1).Value = LumpTitle
+        xl.ActiveSheet.Name = SheetNameCheck(MyShortName, "-")
+        If i = 0 Then FirstSheet = xl.ActiveSheet.Name
+
+'new method of adding main report data
+        'On Error Resume Next
+        'MyRS.Close
+        On Error GoTo errLongVegReport
+        On Error GoTo 0
+        'Set MyRS = MyDB.OpenRecordset("ExcelFinalreport", dbOpenForwardOnly)
+        'Set MyRS = MyDB.OpenRecordset("ExcelFinalreport", , dbReadOnly)
+        Set MyRS = MyDB.OpenRecordset("ExcelFinalreport")
+        'MyRS.MoveLast
+        'MyRS.MoveFirst
+        xl.Cells(5, 1).CopyFromRecordset MyRS
+        'xl.Range("A5").CopyFromRecordset MyRS
+        'xl.Cells(5, 1).CopyFromRecordset MyRS
+        'On Error GoTo errLongVegReport
+
+'Add data header
+        For iFld = 1 To MyRS.Fields.count
+            xl.Cells(4, iFld) = "'" & MyRS.Fields(iFld - 1).Name
+        Next iFld
+        With xl.Range(xl.Cells(4, 1), xl.Cells(4, iFld - 1)).Interior
+            .Pattern = xlSolid
+            .TintAndShade = -0.249977111117893
+        End With
+    
+'Change text to values
+        xl.Cells(1, 2) = 1
+        xl.Cells(1, 2).Copy
+        xl.Range("D5").Select
+        xl.Range(xl.Selection, xl.ActiveCell.SpecialCells(xlLastCell)).Select
+        xl.Selection.SpecialCells(xlCellTypeConstants, 23).Select
+        xl.Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlMultiply, SkipBlanks:=True, Transpose:=False
+        xl.CutCopyMode = False
+        xl.Cells(1, 2) = Null
+        xl.Cells(1, 1).Select
+    
+        FirstRow = 4
+    
+'If using a constant species list, you need to delete extra columns and trim some field names
+        If clsRepOpt.LVConstantSppList Then
+            If ShowCommon <> 0 Then
+                xl.Columns("D:F").Delete Shift:=xlToLeft
+                xl.Cells(FirstRow, 1) = Mid(xl.Cells(FirstRow, 1), 14)
+                xl.Cells(FirstRow, 2) = Mid(xl.Cells(FirstRow, 2), 14)
+                xl.Cells(FirstRow, 3) = Mid(xl.Cells(FirstRow, 3), 14)
+            Else
+                xl.Columns("C:D").Delete Shift:=xlToLeft
+                xl.Cells(FirstRow, 1) = Mid(xl.Cells(FirstRow, 1), 14)
+                xl.Cells(FirstRow, 2) = Mid(xl.Cells(FirstRow, 2), 14)
+            End If
+        End If
+        xl.Range("A4").Select
+        If clsRepOpt.LVConstantSppList Then
+            If ShowCommon <> 0 Then
+                xl.Range(xl.Selection, xl.ActiveCell.SpecialCells(xlLastCell).Offset(0, -3)).Select
+            Else
+                xl.Range(xl.Selection, xl.ActiveCell.SpecialCells(xlLastCell).Offset(0, -2)).Select
+            End If
+        Else
+            xl.ActiveCell.Offset(0, 0).Select
+            xl.Range(xl.Selection, xl.Cells(xl.Application.CountA(xl.Columns(2)) + 3, xl.Application.CountA(xl.Rows(4)))).Select
+        End If
+        If ShowCommon = 1 Then
+            xl.Cells(4, 3) = "English Name"
+        End If
+        If ShowCommon = 2 Then
+            xl.Cells(4, 3) = "Code"
+        End If
+        If ShowCommon = 4 Then
+            xl.Cells(4, 3) = clsRepOpt.LVShowField
+        End If
+    
+        If GroupAndOrder = 13 Or GroupAndOrder = 23 Then xl.Cells(FirstRow, 1).Value = "Lifeform"
+        If GroupAndOrder = 12 Or GroupAndOrder = 22 Then xl.Cells(FirstRow, 1).Value = "Strata"
+        If ExcelVer = "5" Then MyOrient = 2 Else MyOrient = 90
+        If ShowCommon <> 0 Then xl.Range("F4:IV4").Orientation = MyOrient Else xl.Range("E4:IV4").Orientation = MyOrient
+    
+'format cells
+        With xl.Selection
+            .Font.Name = "Arial"
+            .Font.FontStyle = "Regular"
+            .Font.Size = 8
+            .WrapText = False
+            .NumberFormat = "0.0"
+            .Columns.AutoFit
+            .Borders(1).Weight = 2 'xlHairline
+            .Borders(2).Weight = 2 'xlHairline
+            .Borders(3).Weight = 2 'xlHairline
+            .Borders(4).Weight = 2 'xlHairline
+        End With
+        xl.ActiveSheet.Columns("A:A").Select
+        xl.Selection.NumberFormat = "0"
+        If ShowCommon <> 0 Then
+            xl.ActiveSheet.Columns("D:D").Select
+            xl.Selection.NumberFormat = "0.0%"
+            xl.Selection.Columns.AutoFit
+            xl.Range(xl.Cells(5, 5), xl.Cells(MyRS.RecordCount + 4, 5)).Select
+            xl.Selection.Borders(-4152).LineStyle = -4119  'xlDouble
+            xl.Rows(4).NumberFormat = "0"
+        Else
+            xl.ActiveSheet.Columns("C:C").Select
+            xl.Selection.NumberFormat = "0.0%"
+            xl.Selection.Columns.AutoFit
+            xl.ActiveSheet.Columns("D:D").Select
+            xl.Selection.SpecialCells(4, 23).Select
+            xl.Selection.Borders(-4152).LineStyle = -4119  'xlDouble
+        End If
+        
+        xl.ActiveSheet.Rows("4:4").Select
+        xl.Selection.SpecialCells(2, 23).Select
+        LastCol = xl.Selection.Columns.count
+        xl.Columns("B:B").Font.Italic = True
+        xl.Rows("4:4").Font.Bold = True
+        
+        If clsRepOpt.LVConstantSppList Then
+            'xl.Range(xl.Cells(1, 1), xl.Cells(3, LastCol - 3)).Interior.ColorIndex = 36
+            xl.Range(xl.Cells(1, 1), xl.Cells(3, LastCol)).Interior.ColorIndex = 36
+        Else
+            xl.Range(xl.Cells(1, 1), xl.Cells(3, LastCol)).Interior.ColorIndex = 36
+        End If
+        With xl.Range("A2")
+            .Font.Bold = True
+            .Font.ColorIndex = 3
+        End With
+    
+'add spaces between rows
+        If AddSpace = -1 Then
+            xl.Cells(7, 1).Select
+            'On Error Resume Next
+            For X = 1 To 1000
+            ThisVal = xl.Selection.Value
+            If IsNull(ThisVal) Then ThisVal = ""
+            AboveVal = xl.Selection.Offset(-1).Value
+            If IsNull(AboveVal) Then AboveVal = ""
+            If ThisVal <> AboveVal Then
+                xl.Selection.EntireRow.Insert
+                xl.Selection.Offset(1).Select
+            End If
+                xl.Selection.Offset(1).Select
+                If xl.Selection.Value = "" Then X = 1000
+            Next X
+        End If
+    
+        xl.Cells(1, 1).Select
+        Application.Echo True
+        xl.ScreenUpdating = True
+'Stop
+SkipUnit:
+        If i > z Then
+            'Debug.Print "i= " & i & " / z= " & z
+        Else
+            SnRecords.MoveNext
+        End If
+    Next i
+
+'create a report summary
+    If sysCreateReportSummary = -1 Then  'create report summary
+        xl.Worksheets.Add
+        xl.ActiveSheet.Move After:=xl.Worksheets(xl.Worksheets.count)
+        xl.ActiveSheet.Name = "ReportSummary"
+        xl.Cells(1, 1).Value = ReportTitle
+        xl.Cells(2, 1).Value = "Date created: " & Date
+        xl.Cells(4, 2).Value = Project
+        xl.Cells(5, 2).Value = SuTable
+        xl.Cells(6, 2).Value = sysLumpingTable
+        xl.Cells(7, 2).Value = LongVegOptionText(ReportGroup)
+        xl.Cells(8, 2).Value = LongVegOptionText(ReportOrder)
+        xl.Cells(9, 2).Value = PgreaterThan
+        xl.Cells(10, 2).Value = MCgreaterThan
+        MyRecords.Close
+        Dim SummaryRecords As Recordset
+        Set SummaryRecords = MyDB.OpenRecordset(Project, dbOpenDynaset)
+        SummaryRecords.MoveLast
+        xl.Cells(11, 2).Value = SummaryRecords.RecordCount
+        SummaryRecords.Close
+        
+        SqlText = "SELECT PlotNumber FROM " & SuTable & " WHERE (((PlotNumber) Is Not Null));"
+        Set SummaryRecords = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+        SummaryRecords.MoveLast
+        xl.Cells(12, 2).Value = SummaryRecords.RecordCount
+        SummaryRecords.Close
+        xl.Cells(13, 1).Value = "AllSpecs version:"
+        xl.Cells(13, 2).Value = AllSpecsVersion
+        xl.Cells(4, 1).Value = "Vegetation table:"
+        xl.Cells(5, 1).Value = "Site unit table:"
+        xl.Cells(6, 1).Value = "Lumping table:"
+        xl.Cells(7, 1).Value = "Data grouped by:"
+        xl.Cells(8, 1).Value = "Data ordered by:"
+        xl.Cells(9, 1).Value = "Presence > than:"
+        xl.Cells(10, 1).Value = "Mean cover > than:"
+        xl.Cells(11, 1).Value = "Number of plots in database"
+        xl.Cells(12, 1).Value = "Number of plots in site unit table"
+        xl.Columns("A:A").ColumnWidth = 29
+        xl.Columns("B:B").EntireColumn.AutoFit
+        If sysLumpingTable <> "None_Lump" Then
+            Set MyRS = MyDB.OpenRecordset(sysLumpingTable)
+            xl.Cells(15, 1).CopyFromRecordset MyRS
+        End If
+        If clsRepOpt.LVGroupBy = 3 Then
+            AddLifeformCodes xl
+        End If
+        
+        Set MyRS = MyDB.OpenRecordset(clsVProReg.CurrPlotlist & "_SU")
+        xl.Cells(5, 4).CopyFromRecordset MyRS
+        xl.Cells(4, 4) = "Plot Number"
+        xl.Cells(4, 5) = "Site Unit"
+        xl.ActiveSheet.Columns("D:E").AutoFit
+        
+        xl.ScreenUpdating = True
+    End If
+
+'delete extra sheet and select first sheet in summary
+    xl.Worksheets(CurrProject()).Delete
+    xl.Worksheets(FirstSheet).Select
+
+MyExit:
+    'rkOn Error Resume Next
+    CleanUp
+    OriginalSuTable = clsVProReg.CurrPlotlistBak
+    clsVProReg.CurrPlotlist = OriginalSuTable
+    
+    If clsVProReg.CurrPlotlist = "USysDeleteMe" Then
+        MsgBox "Sorry, something went wrong.  Using the floating menu, please reselect your site unit table and try again.", vbInformation, "VPro"
+    End If
+    
+    xl.ScreenUpdating = True
+    Application.Echo True
+    ClipBoard_SetData ("")
+    xl.Cursor = xlDefault
+    Set xl = Nothing
+    MyRS.Close
+    SuRecords.Close
+    SnRecords.Close
+    MyRecords.Close
+    Set MyDB = Nothing
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "TempReportVeg"
+    DoCmd.Close acQuery, "ExcelFinalReport", acSaveNo
+    DoCmd.DeleteObject A_QUERY, "ExcelFinalReport" 'rk
+    DoCmd.DeleteObject A_QUERY, "ExcelReport" 'rk
+    DoCmd.DeleteObject A_QUERY, "ExcelSppList"
+    DoCmd.DeleteObject A_TABLE, "TempReportVeg"
+    DoCmd.DeleteObject A_QUERY, "CombinedSpp_Lump"
+    DoCmd.DeleteObject acTable, "EntryDat_Veg"
+    DoCmd.Hourglass False
+    DoCmd.SetWarnings True
+    On Error GoTo 0
+    'MsgBox clsVProReg.CurrPlotlist
+    Exit Function
+    
+errLongVegReport:
+    clsVProReg.CurrPlotlist = clsVProReg.CurrPlotlistBak
+    Application.Echo True
+    If Err.Number = 2046 Then
+        Resume SkipUnit
+    End If
+    If Err.Number = 1004 Then
+        MsgBox "Sorry, Excel can't handle this many units.  Please split your unit list and try again.", vbOKOnly, "VPro"
+        Resume MyExit
+    End If
+    MsgBox Err.Description & Chr(13) & Err.Number
+    Resume MyExit
+    
+End Function
+Private Sub AddLifeformCodes(xl As Excel.Application)
+
+'Apr. 6, 2018
+
+    xl.Cells(4, 5) = "Code"
+    xl.Cells(4, 6) = "Description"
+    xl.Cells(5, 5) = 0
+    xl.Cells(5, 6) = "genus-level and mixed"
+    xl.Cells(6, 5) = 1
+    xl.Cells(6, 6) = "coniferous tree"
+    xl.Cells(7, 5) = 2
+    xl.Cells(7, 6) = "broad-leaved tree"
+    xl.Cells(8, 5) = 3
+    xl.Cells(8, 6) = "evergreen shrub"
+    xl.Cells(9, 5) = 4
+    xl.Cells(9, 6) = "deciduous shrub"
+    xl.Cells(10, 5) = 5
+    xl.Cells(10, 6) = "fern or fern-ally"
+    xl.Cells(11, 5) = 6
+    xl.Cells(11, 6) = "graminoid"
+    xl.Cells(12, 5) = 7
+    xl.Cells(12, 6) = "forb"
+    xl.Cells(13, 5) = 8
+    xl.Cells(13, 6) = "parasite or saprophyte"
+    xl.Cells(14, 5) = 9
+    xl.Cells(14, 6) = "moss"
+    xl.Cells(15, 5) = 10
+    xl.Cells(15, 6) = "hepatic"
+    xl.Cells(16, 5) = 11
+    xl.Cells(16, 6) = "lichen"
+    xl.Cells(17, 5) = 12
+    xl.Cells(17, 6) = "dwarf woody plant"
+    xl.Cells(18, 5) = 13
+    xl.Cells(18, 6) = "macro alga"
+    xl.Columns("E:F").EntireColumn.AutoFit
+
+End Sub
+
+Private Function LongVegOptionText(OptionVal)
+
+'Apr. 6, 2018
+    Select Case OptionVal
+    Case 1
+        LongVegOptionText = "Layer"
+    Case 2
+        LongVegOptionText = "Strata"
+    Case 3
+        LongVegOptionText = "Lifeform"
+    Case 4
+        LongVegOptionText = "None"
+    Case 10
+        LongVegOptionText = "Species"
+    Case 20
+        LongVegOptionText = "Presence"
+    Case Else
+        LongVegOptionText = "Unknown"
+    End Select
+End Function
+
+Private Sub CleanUp()
+
+'Apr. 6, 2018
+    On Error Resume Next
+        DoCmd.DeleteObject acTable, "USysDeleteMe_SU"
+    On Error GoTo 0
+
+End Sub
+
+Private Function WriteBlankSiteUnits()
+
+'Apr. 6, 2018
+'creates a unit list for the "None" option in the long veg report
+Dim SqlText As String, SuTable As String, Project As String
+Project = CurrProject() & "_Env"
+SuTable = CurrPlotlist() & "_SU"
+DoCmd.SetWarnings False
+
+SqlText = "Delete * From USysSuTableDynamic_SU"
+DoCmd.RunSQL SqlText
+
+If SuTable <> "None_SU" Then
+    SqlText = "INSERT INTO USysSuTableDynamic_SU ( PlotNumber, SiteUnit )"
+    SqlText = SqlText & " SELECT " & Project & ".PlotNumber, 'All plots' AS SiteUnit"
+    SqlText = SqlText & " FROM " & Project & " INNER JOIN " & SuTable & " ON " & Project & ".PlotNumber = " & SuTable & ".PlotNumber;"
+Else
+    SqlText = "INSERT INTO USysSuTableDynamic_SU ( PlotNumber, SiteUnit ) SELECT PlotNumber, 'All plots' AS SiteUnit FROM " & Project & ";"
+End If
+    DoCmd.RunSQL SqlText
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Exit Function
+
+End Function
+
+Private Function PlotCount(SuTable As String, Unit As String) As Long
+
+'Apr. 6, 2018
+Dim MyRS As Recordset
+Dim SqlText As String
+
+    SqlText = "SELECT Count(SiteUnit) AS nUnits From " & SuTable & " GROUP BY SiteUnit HAVING (((SiteUnit)='" & Unit & "'));"
+    Set MyRS = CurrentDb.OpenRecordset(SqlText)
+
+    If MyRS.RecordCount > 0 Then
+        PlotCount = MyRS!nUnits
+    Else
+        PlotCount = 0
+    End If
+
+MyRS.Close
+
+End Function

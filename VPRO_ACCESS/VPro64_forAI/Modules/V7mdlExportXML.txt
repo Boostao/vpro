@@ -1,0 +1,208 @@
+Option Compare Database
+Option Explicit
+Private NameToUse As String, DoStop As Boolean, PathToUse As String
+
+Public Sub ExportXMLProject()
+
+Dim MyFile As String
+On Error GoTo 0
+DoStop = False
+DoCmd.SetWarnings True
+
+MyFile = GetSaveAsFileName
+If MyFile = "" Then
+    DoStop = True
+    GoTo MyExit
+Else
+    CopyProject NameToUse
+    If DoStop Then GoTo MyExit
+    MergeData
+    ExportXMLFile
+    CleanUp
+End If
+
+MsgBox "The VPro project " & CurrProject() & " has been exported to " & PathToUse & NameToUse & ".xml & .xsd", vbInformation, "VPro"
+
+MyExit:
+
+End Sub
+
+Private Sub ExportXMLFile()
+
+On Error GoTo errExportXMLFile
+Dim MoreData As AdditionalData
+Set MoreData = Application.CreateAdditionalData
+MoreData.Add NameToUse & "_Veg"
+MoreData.Add NameToUse & "_Humus"
+MoreData.Add NameToUse & "_Mineral"
+MoreData.Add NameToUse & "_Other"
+MoreData.Add NameToUse & "_Audit"
+
+Application.ExportXML acExportTable, NameToUse & "_Env", PathToUse & NameToUse & ".xml", NameToUse & ".xsd", , , , , , MoreData
+
+Exit Sub
+
+errExportXMLFile:
+MsgBox Err.Number & " - " & Err.Description
+End Sub
+
+Private Sub CleanUp()
+
+'On Error Resume Next
+'DoCmd.SetWarnings False
+DeleteRelationship CurrentDb.Name, NameToUse
+DoCmd.DeleteObject acTable, NameToUse & "_Env"
+DoCmd.DeleteObject acTable, NameToUse & "_Veg"
+DoCmd.DeleteObject acTable, NameToUse & "_Humus"
+DoCmd.DeleteObject acTable, NameToUse & "_Mineral"
+DoCmd.DeleteObject acTable, NameToUse & "_Other"
+DoCmd.DeleteObject acTable, NameToUse & "_Audit"
+'DoCmd.SetWarnings True
+'On Error GoTo 0
+
+End Sub
+
+Private Function GetSaveAsFileName() As String
+
+    Dim FD As FileDialog, FileName As String
+    Set FD = Application.FileDialog(msoFileDialogSaveAs)
+    With FD
+        If .Show = -1 Then
+            FileName = FD.SelectedItems(1)
+        End If
+    End With
+    
+    Set FD = Nothing
+    If FileName = "" Then
+        'do nothing
+    Else
+        If Right(FileName, 4) = ".xml" Then
+            'do nothing
+        Else
+            FileName = FileName & ".xml"
+        End If
+    End If
+    GetSaveAsFileName = FileName
+    GetName FileName
+    
+End Function
+
+Private Sub GetName(FileName As String)
+
+On Error GoTo errGetName
+Dim MyStr As String, MyPos As Integer, ExitLoop As Boolean, X As Integer, MaxNum As Integer
+MyStr = FileName
+MaxNum = 0
+
+MyPos = InStr(1, MyStr, "\", vbTextCompare)
+
+Do While Not ExitLoop
+    X = InStr(MyPos + 1, MyStr, "\", vbTextCompare)
+    If X = 0 Then
+        MaxNum = MyPos
+        Exit Do
+    End If
+    If X > MaxNum Then MaxNum = X
+    MyPos = X
+    If MyPos = 0 Then
+        Exit Do
+    End If
+Loop
+
+NameToUse = Mid(MyStr, MaxNum + 1, Len(MyStr) - MaxNum - 4)
+PathToUse = Left(MyStr, Len(MyStr) - (Len(NameToUse) + 4))
+
+MyExit:
+    Exit Sub
+    
+errGetName:
+    If Err.Number = 5 Then
+        'do nothing
+    Else
+        MsgBox Err.Number & " - " & Err.Description
+    End If
+    DoStop = True
+    Resume MyExit
+End Sub
+
+Private Sub CopyProject(ProjectName As String)
+    
+    If ProjectExists(ProjectName & "_Env") Then
+        MsgBox "Sorry, the name " & ProjectName & " exists in this database.  You must use a name not currently used by your attached projects.  Please try again using a different name.", vbInformation, "VPro"
+        DoStop = True
+        GoTo MyExit
+    End If
+    Dim EnvTableName As String, VegTableName As String, OtherTableName As String, SoilHumusTableName As String, SoilMineralTableName As String, AuditTableName As String
+    
+    EnvTableName = ProjectName & "_Env"
+    VegTableName = ProjectName & "_Veg"
+    OtherTableName = ProjectName & "_Other"
+    SoilHumusTableName = ProjectName & "_Humus"
+    SoilMineralTableName = ProjectName & "_Mineral"
+    AuditTableName = ProjectName & "_Audit"
+    
+    DoCmd.CopyObject , EnvTableName, acTable, "USysEnvTable"
+    DoCmd.CopyObject , VegTableName, acTable, "USysVegTable"
+    DoCmd.CopyObject , OtherTableName, acTable, "USysOtherTable"
+    DoCmd.CopyObject , SoilHumusTableName, acTable, "USysSoilHumusTable"
+    DoCmd.CopyObject , SoilMineralTableName, acTable, "USysSoilMineralTable"
+    DoCmd.CopyObject , AuditTableName, acTable, "USysAudit"
+
+MyExit:
+End Sub
+
+Private Function ProjectExists(ProjectName As String) As Boolean
+
+Dim MyDB As Database, i As Integer
+Set MyDB = CurrentDb
+ProjectExists = False
+
+For i = 0 To MyDB.TableDefs.count - 1
+    If ProjectName = MyDB.TableDefs(i).Name Then
+        ProjectExists = True
+        Exit For
+    End If
+Next i
+
+Set MyDB = Nothing
+End Function
+
+Private Sub MergeData()
+
+Dim SqlText As String
+
+'time to merge
+    DoCmd.SetWarnings False
+    SqlText = "INSERT INTO [" & NameToUse & "_Env]"
+    SqlText = SqlText & " SELECT [" & CurrProject() & "_Env].*"
+    SqlText = SqlText & " FROM [" & CurrProject() & "_Env];"
+    DoCmd.RunSQL SqlText
+    
+    SqlText = "INSERT INTO [" & NameToUse & "_Veg]"
+    SqlText = SqlText & " SELECT [" & CurrProject() & "_Veg].*"
+    SqlText = SqlText & " FROM [" & CurrProject() & "_Veg];"
+    DoCmd.RunSQL SqlText
+    
+    SqlText = "INSERT INTO [" & NameToUse & "_Other]"
+    SqlText = SqlText & " SELECT [" & CurrProject() & "_Other].*"
+    SqlText = SqlText & " FROM [" & CurrProject() & "_Other];"
+    DoCmd.RunSQL SqlText
+    
+    SqlText = "INSERT INTO [" & NameToUse & "_Humus]"
+    SqlText = SqlText & " SELECT [" & CurrProject() & "_Humus].*"
+    SqlText = SqlText & " FROM [" & CurrProject() & "_Humus];"
+    DoCmd.RunSQL SqlText
+    
+    SqlText = "INSERT INTO [" & NameToUse & "_Mineral]"
+    SqlText = SqlText & " SELECT [" & CurrProject() & "_Mineral].*"
+    SqlText = SqlText & " FROM [" & CurrProject() & "_Mineral];"
+    DoCmd.RunSQL SqlText
+    
+    SqlText = "INSERT INTO [" & NameToUse & "_Audit]"
+    SqlText = SqlText & " SELECT [" & CurrProject() & "_Audit].*"
+    SqlText = SqlText & " FROM [" & CurrProject() & "_Audit];"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+
+    CreateRelationship CurrentDb.Name, NameToUse, False
+End Sub

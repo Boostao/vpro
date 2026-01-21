@@ -1,0 +1,68 @@
+Option Compare Database
+Option Explicit
+
+Public Sub RepaintForms()
+'Oct. 9, 2002
+    On Error Resume Next
+    Application.Screen.ActiveForm.Repaint
+    On Error GoTo 0
+
+End Sub
+
+Private Sub CheckForms()
+
+Dim MyFrm As Form, i As Integer, fName As String
+
+
+For i = 0 To CurrentProject.AllForms.count - 1
+    fName = CurrentProject.AllForms(i).Name
+    DoCmd.OpenForm fName, acDesign
+    Set MyFrm = Forms(fName)
+     If MyFrm.Modal = True Then
+        Debug.Print MyFrm.Name
+        MyFrm.Modal = False
+        DoCmd.Save acForm, fName
+     End If
+     DoCmd.Close acForm, fName
+     
+Next i
+
+End Sub
+
+Public Sub CloseAllForms()
+
+Dim frm As Variant, i As Integer
+
+Do While Forms.count > 0
+    DoCmd.Close acForm, Forms(0).Name
+Loop
+
+DoCmd.OpenForm "frmMainMenuFloat"
+
+End Sub
+Public Function SubZoneList(Zone As String)
+'Oct. 28, 2002
+Dim SqlText As String, MyList As String
+Dim MyRS As Recordset
+
+If Zone <> "All" Then
+    SqlText = "SELECT SubZone, SubZoneVarDescription"
+    SqlText = SqlText & " FROM USysZoneList"
+    SqlText = SqlText & " WHERE (((Zone)='" & Zone & "'))"
+    SqlText = SqlText & " ORDER BY SubZone;"
+Else
+    SqlText = "SELECT DISTINCT SubZone, SubZoneVarDescription"
+    SqlText = SqlText & " FROM USysZoneList"
+    SqlText = SqlText & " ORDER BY SubZone;"
+End If
+Set MyRS = CurrentDb.OpenRecordset(SqlText, dbOpenForwardOnly)
+
+Do Until MyRS.EOF
+    MyList = MyList & MyRS!SubZone & "; " & MyRS!SubZoneVarDescription & "; "
+    MyRS.MoveNext
+Loop
+
+MyRS.Close
+SubZoneList = MyList
+MyExit:
+End Function

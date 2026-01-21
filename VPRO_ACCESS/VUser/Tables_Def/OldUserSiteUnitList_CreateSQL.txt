@@ -1,0 +1,22 @@
+CREATE TABLE [OldUserSiteUnitList] (
+  [ID] LONG DEFAULT GenUniqueID(),
+  [ShortName] TEXT(50) DEFAULT ,
+  [Name] TEXT(255) DEFAULT ,
+  [UnitLongName] TEXT(255) DEFAULT ,
+  [PlantAssoc] TEXT(255) DEFAULT ,
+  [Parent] LONG DEFAULT ,
+  [Level] INTEGER DEFAULT ,
+  [Date] DATETIME DEFAULT ,
+  [Source] TEXT(50) DEFAULT ,
+  [Locked] BIT DEFAULT ,
+  [nPlots] INTEGER DEFAULT ,
+  [SeralCode] TEXT(50) DEFAULT 
+);
+
+CREATE UNIQUE INDEX [ID] ON [OldUserSiteUnitList] ([ID]);
+CREATE INDEX [Level] ON [OldUserSiteUnitList] ([Level]);
+CREATE INDEX [Parent] ON [OldUserSiteUnitList] ([Parent]);
+CREATE INDEX [SeralCode] ON [OldUserSiteUnitList] ([SeralCode]);
+CREATE INDEX [ShortName] ON [OldUserSiteUnitList] ([ShortName]);
+CREATE UNIQUE INDEX [Unit Name] ON [OldUserSiteUnitList] ([Name]);
+

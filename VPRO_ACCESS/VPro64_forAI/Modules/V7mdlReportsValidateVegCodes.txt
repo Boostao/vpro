@@ -1,0 +1,56 @@
+Option Compare Database
+
+Function CheckVegData()
+
+'Nov. 6, 2008
+'creates the veg code error report
+Dim MyDB As Database, MyRS As Recordset, xl As Excel.Application
+Dim ProjectName As String, EnvTableToUse As String, CurrentVegTable As String, VegTableToUse As String, SuTable As String
+Dim SqlText As String
+'On Error GoTo errCheckVegData
+
+    Set MyDB = CurrentDb
+        
+    ProjectName = clsVProReg.CurrProject
+    CurrentVegTable = "[" & ProjectName & "_Veg]"
+    EnvTableToUse = "[" & ProjectName & "_Env]"
+    VegTableToUse = CurrentVegTable
+    SuTable = clsVProReg.CurrPlotlist
+    SuTable = "[" & SuTable & "_SU]"
+
+    If clsVProReg.CurrPlotlist = "None" Then
+        SqlText = "SELECT DISTINCTROW " & VegTableToUse & ".PlotNumber, " & VegTableToUse & ".Species"
+        SqlText = SqlText & " FROM " & VegTableToUse & " LEFT JOIN USysAllSpecs ON " & VegTableToUse & ".Species = USysAllSpecs.Code"
+        SqlText = SqlText & " WHERE ((USysAllSpecs.Code Is Null));"
+    Else
+        SqlText = "SELECT DISTINCTROW " & VegTableToUse & ".PlotNumber, " & VegTableToUse & ".Species"
+        SqlText = SqlText & " FROM " & SuTable & " LEFT JOIN (" & VegTableToUse & " LEFT JOIN USysAllSpecs ON " & VegTableToUse & ".Species = USysAllSpecs.Code) ON " & SuTable & ".PlotNumber = " & VegTableToUse & ".PlotNumber"
+        SqlText = SqlText & " WHERE ((USysAllSpecs.Code Is Null) AND ((" & SuTable & ".PlotNumber) Is Not Null));"
+    End If
+    
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount = 0 Then GoTo MyExit
+
+    CreateExcel xl
+    xl.Visible = True
+    xl.Workbooks.Add
+    xl.Caption = "Veg Code Error Report"
+    xl.Worksheets.Add
+    xl.ActiveSheet.Name = "VegCodeErrors"
+
+    xl.Cells(1, 1) = "Species Code Error Report"
+    xl.Cells(3, 1) = "Plot"
+    xl.Cells(3, 2) = "Species"
+    xl.Cells(4, 1).CopyFromRecordset MyRS
+        
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errCheckVegData:
+    MsgBox Err.Description
+    Resume MyExit
+Exit Function
+
+End Function

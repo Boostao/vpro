@@ -1,0 +1,14 @@
+CREATE TABLE [USysExportSppList] (
+  [SpeciesNumber] LONG DEFAULT ,
+  [Code] TEXT(8) DEFAULT ,
+  [ScientificName] TEXT(50) DEFAULT ,
+  [CodePlusStrata] TEXT(255) DEFAULT ,
+  [CodePlusLayer] TEXT(255) DEFAULT ,
+  [Temp] TEXT(255) DEFAULT 
+);
+
+CREATE INDEX [Code] ON [USysExportSppList] ([Code]);
+CREATE INDEX [CodePlusLayer] ON [USysExportSppList] ([CodePlusLayer]);
+CREATE INDEX [CodePlusStrata] ON [USysExportSppList] ([CodePlusStrata]);
+CREATE UNIQUE INDEX [SpeciesNumber] ON [USysExportSppList] ([SpeciesNumber]);
+

@@ -1,0 +1,9 @@
+CREATE TABLE [USysRegInfo] (
+  [Subkey] TEXT(255) DEFAULT ,
+  [Type] LONG DEFAULT ,
+  [ValName] TEXT(255) DEFAULT ,
+  [Value] TEXT(255) DEFAULT 
+);
+
+CREATE INDEX [Subkey] ON [USysRegInfo] ([Subkey]);
+

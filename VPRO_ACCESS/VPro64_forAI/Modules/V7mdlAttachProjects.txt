@@ -1,0 +1,259 @@
+Option Compare Database
+Option Explicit
+
+Public Sub AttachProject()
+
+'July 8, 2015
+On Error GoTo errAttachEnv
+
+    Dim MyDB As Database, RemoteDB As Database ', MyRS As Recordset
+    Dim RemoteDbName As String, ProjectList As String
+    Dim MyList As Variant, i As Integer
+    Dim MyProject As String
+   
+    Set MyDB = CurrentDb()
+    ReDim sysSelectedItems(0)
+    
+    RemoteDbName = GetRemoteDb()
+    
+    If RemoteDbName = "" Then GoTo MyExit
+    
+    Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(RemoteDbName)
+    
+    ProjectList = BuildProjectPickList(RemoteDB, MyDB)
+
+'test for items in list
+    If ProjectList = "" Then
+        MsgBox "No projects found or one with the same name may already be attached.", vbInformation, clsVProReg.ProgramName
+        GoTo MyExit
+    End If
+
+'call the pick projects function (old method)
+    Call PickProjects(ProjectList)
+
+'do events until something to do
+    Do
+        DoEvents
+    Loop Until UBound(sysSelectedItems) > 0
+    
+'now work, may as well quit
+    If UBound(sysSelectedItems) = 999 Then GoTo MyExit
+    
+'go through list and attach projects
+    For i = 1 To UBound(sysSelectedItems)
+        MyProject = sysSelectedItems(i)
+        AttachProjectTables MyProject, RemoteDB
+    Next i
+
+'reset array
+    ReDim sysSelectedItems(0)
+        
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Set RemoteDB = Nothing
+    Exit Sub
+errAttachEnv:
+    If Err.Number = 3343 Then
+        MsgBox "This isn't Access 2007 database format"
+        MsgBox Err.Description
+        Resume Next
+        Resume MyExit
+    Else
+        MsgBox Err.Description
+        Resume MyExit
+    End If
+End Sub
+Private Sub AttachProjectTables(ProjectName As String, RemoteDB As Database)
+
+'30 Sep 2019
+Dim RelationTable As String, TestTable As String, Msg As String, dgdef As Integer, TableVersion As String
+Dim Response As Integer, Answer As Variant
+
+TableVersion = GetVProTableVersion(ProjectName & "_ENV", RemoteDB)
+
+'test for VP05
+    If TableVersion = "VP05" Then
+        Answer = MsgBox("This is a VPro XP or 03 project.  VPro 19 can import this data into a new project that is compatible with this version of VPro.  Proceed?", vbYesNo, "VPro")
+        If Answer = vbYes Then
+            ImportVPro05 ProjectName, RemoteDB
+        End If
+        GoTo MyExit
+    End If
+
+'test for VP06
+    If TableVersion = "VP06" Then
+        Answer = MsgBox("This is a VPro 07 or 13 project.  VPro 19 can import this data into a new project that is compatible with this version of VPro.  Proceed?", vbYesNo, "VPro")
+        If Answer = vbYes Then
+            ImportVPro06 ProjectName, RemoteDB
+        End If
+        GoTo MyExit
+    End If
+
+'test for VP07
+    If TableVersion = "VP07" Then
+        Answer = MsgBox("This is a VPro 15 project.  VPro 19 can import this data into a new project that is compatible with this version of VPro.  Proceed?", vbYesNo, "VPro")
+        If Answer = vbYes Then
+            ImportVPro07 ProjectName, RemoteDB
+        End If
+        GoTo MyExit
+    End If
+
+'don't know what it is
+    If TableVersion <> "VP08" Then
+        MsgBox "This isn't a VPro 19 project.  Please convert to the current version.", vbInformation, "VPro"
+        GoTo MyExit
+    End If
+
+'must be VP08
+    TestTable = ProjectName & "_ENV"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+                
+    TestTable = ProjectName & "_Humus"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+                
+    TestTable = ProjectName & "_Audit"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+                
+    TestTable = ProjectName & "_Mineral"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+                
+    TestTable = ProjectName & "_Veg"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+                            
+    TestTable = ProjectName & "_Other"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+    
+    TestTable = ProjectName & "_Metadata"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+
+    TestTable = ProjectName & "_Admin"
+    DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, TestTable, TestTable
+
+On Error GoTo 0
+
+'check and establish project relationships
+    RelationTable = ProjectName
+    CreateRelationship RemoteDB.Name, RelationTable, False
+    
+MyExit:
+    On Error Resume Next
+    Exit Sub
+End Sub
+
+Private Sub PickProjects(ProjectList As String)
+
+'Apr. 14, 2015
+On Error GoTo myerr
+
+'open pick form
+    DoCmd.OpenForm "USysPickTable", A_NORMAL, , , , A_NORMAL
+    Forms![USysPickTable]![PickList].RowSource = ProjectList
+
+MyExit:
+    On Error Resume Next
+    Exit Sub
+myerr:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Function GetRemoteDb() As String
+
+'Apr. 14, 2015
+Dim RemoteDB As Database
+Dim MyFile As String, MyTitle As String
+sysPickTable = "None"
+
+'get file name
+    MyTitle = clsVProReg.ProgramName
+    MyFile = GetFileName(MyTitle, True)
+
+'no file, quit
+    If MyFile = "" Then Exit Function
+
+'we now have a file name
+    GetRemoteDb = MyFile
+
+End Function
+
+Private Function BuildProjectPickList(RemoteDB As Database, LocalDB As Database) As String
+
+'Apr. 14, 2015
+Dim i As Integer, strTestTable As String, strList As String, ListLen As Integer
+
+'loop through the tables and make a list of projects
+    For i = 0 To RemoteDB.TableDefs.count - 1
+        strTestTable = RemoteDB.TableDefs(i).Name
+        If InStr(1, strTestTable, "_Env") > 0 Then
+            If Not TestForTableInVPro(LocalDB, strTestTable) Then
+                strList = strList & Left(strTestTable, Len(strTestTable) - Len("_Env")) & ";"
+            End If
+        End If
+    Next i
+
+'return the list
+    ListLen = Len(strList)
+    If ListLen > 0 Then
+        BuildProjectPickList = Left(strList, ListLen - 1)
+    Else
+        BuildProjectPickList = ""
+    End If
+
+End Function
+
+Private Function TestForTableInVPro(MyDB As Database, TableName As String) As Boolean
+
+'Apr. 14, 2015
+'tests the current DB for a table
+TestForTableInVPro = False
+Dim i As Integer, strTestTable As String
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        strTestTable = MyDB.TableDefs(i).Name
+        If strTestTable = TableName Then
+            TestForTableInVPro = True
+        End If
+    Next i
+    
+End Function
+
+Private Sub ConvertProject(TableVersion As String, ProjectName As String, RemoteDB As Database)
+    
+'this is old code and can be removed
+    Select Case TableVersion
+        Case "VP06"
+        
+        Case "VP04"
+            MsgBox "Sorry, conversion code isn't complete for this version"
+        Case "VP03"
+            ConvertVP03ToVP04 RemoteDB.Name, Left(ProjectName, Len(ProjectName) - 9)
+        Case "VP02"
+            ConvertVENUSPro2VPro RemoteDB.Name, Left(ProjectName, Len(ProjectName) - 9)
+        Case Else 'must be blank
+            ConvertVENUSPro2VPro RemoteDB.Name, Left(ProjectName, Len(ProjectName) - 9)
+    End Select
+    
+End Sub
+Private Function GetVProTableVersion(TestTable As String, MyDB As Database) As String
+
+'Apr. 14, 2015
+On Error GoTo errGetVersion
+Dim MyTable As TableDef
+
+Set MyTable = MyDB.TableDefs(TestTable)
+
+'reade the description property
+    GetVProTableVersion = MyTable.Properties("Description").Value
+
+MyExit:
+    On Error Resume Next
+    Exit Function
+errGetVersion:
+    If Err.Number = 3265 Then
+        GetVProTableVersion = "Unknown"
+        Resume MyExit
+    End If
+    MsgBox Err.Description
+    Resume MyExit
+End Function

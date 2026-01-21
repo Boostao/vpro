@@ -1,0 +1,50 @@
+CREATE TABLE [ProjectMetadata] (
+  [ProjectID] TEXT(20) DEFAULT ,
+  [ProjectTitle] TEXT(255) DEFAULT ,
+  [CoordinatingAgency] TEXT(255) DEFAULT ,
+  [ProponentFunder] TEXT(255) DEFAULT ,
+  [FieldCompanyAgency] TEXT(255) DEFAULT ,
+  [FieldLeader] TEXT(255) DEFAULT ,
+  [FieldDataCollectionTeam] TEXT(255) DEFAULT ,
+  [ProjectPurpose] TEXT(255) DEFAULT ,
+  [GeographicStudyArea] TEXT(255) DEFAULT ,
+  [GeographicStudyRegion] TEXT(255) DEFAULT ,
+  [GeographicStudyDistrict] TEXT(255) DEFAULT ,
+  [StartDate] DATETIME DEFAULT ,
+  [EndDate] DATETIME DEFAULT ,
+  [NumberOfFS882Plots] LONG DEFAULT ,
+  [NumberOfSiteVisits] INTEGER DEFAULT ,
+  [CollectedSite] INTEGER DEFAULT ,
+  [CollectedVeg] INTEGER DEFAULT ,
+  [CollectedSoil] INTEGER DEFAULT ,
+  [CollectedTerrain] INTEGER DEFAULT ,
+  [CollectedMens] INTEGER DEFAULT ,
+  [CollectedCWD] INTEGER DEFAULT ,
+  [CollectedWildTree] INTEGER DEFAULT ,
+  [CollectedSoilChem] INTEGER DEFAULT ,
+  [CollectedOther] INTEGER DEFAULT ,
+  [CollectedCompleteOtherName] TEXT(50) DEFAULT ,
+  [CollectedPartialOtherName] TEXT(50) DEFAULT ,
+  [CollectedNoneOtherName] TEXT(50) DEFAULT ,
+  [GeoRefMethod] INTEGER DEFAULT ,
+  [Map] INTEGER DEFAULT ,
+  [Datum] INTEGER DEFAULT ,
+  [CoordinateSystem] INTEGER DEFAULT ,
+  [EcosysCollectionStandard] INTEGER DEFAULT ,
+  [EcosysCollectionStandardOtherName] TEXT(50) DEFAULT ,
+  [VegCoverMethod] INTEGER DEFAULT ,
+  [VegCoverMethodOtherName] TEXT(50) DEFAULT ,
+  [MensurationMethod] INTEGER DEFAULT ,
+  [MensurationMethodOtherName] TEXT(50) DEFAULT ,
+  [ExtraVegFieldDescription] TEXT(100) DEFAULT ,
+  [PlotMethod] INTEGER DEFAULT ,
+  [DataCustodian] TEXT(100) DEFAULT ,
+  [StorageLocation] TEXT(100) DEFAULT ,
+  [Notes] MEMO DEFAULT 
+);
+
+CREATE INDEX [NumberOfFS882Plots] ON [ProjectMetadata] ([NumberOfFS882Plots]);
+CREATE INDEX [NumberOfSiteVisits] ON [ProjectMetadata] ([NumberOfSiteVisits]);
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [ProjectMetadata] ([ProjectID]);
+CREATE UNIQUE INDEX [ProjectID] ON [ProjectMetadata] ([ProjectID]);
+

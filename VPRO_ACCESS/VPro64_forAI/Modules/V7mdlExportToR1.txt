@@ -1,0 +1,389 @@
+Option Compare Database
+
+Public Sub BuildRAll(Layer As Integer)
+
+Dim MyRS As Recordset, txtFileName As String, txtVegFileName As String, txtEnvFileName As String, txtSuhFileName As String
+Dim EnvValue As String
+
+'remove queries etc. from previous runs
+    CleanUp
+
+'create veg queries to base recordsets on
+    VegSql Layer
+
+'open the veg recordset
+    Set MyRS = CurrentDb.OpenRecordset("qryRVeg3")
+    MyRS.MoveLast
+    MyRS.MoveFirst
+
+'get a filename to save the data to
+    txtFileName = OpenFileForInput
+    If txtFileName = "" Then GoTo MyExit
+
+'veg - filename for veg file
+    txtVegFileName = txtFileName & ".veg"
+
+'veg - open file for input
+    Open txtVegFileName For Output As #1
+    
+'veg - define header
+    MyStr = "PlotNumber,Species,Layer,Cover"
+
+'veg - print the file header
+    Print #1, MyStr
+
+'veg - write the data from the recordset into the file
+    Do Until MyRS.EOF
+        MyStr = MyRS!PlotNumber & "," & MyRS!Code & "," & MyRS!AssignedLayer & "," & MyRS!PercentCover
+        Print #1, MyStr
+        MyRS.MoveNext
+    Loop
+
+'------- start env export -----------------------------------------------------------------------------------------
+'env - filename for veg file
+    txtEnvFileName = txtFileName & ".env"
+
+'env - open file for input
+    Open txtEnvFileName For Output As #2
+    
+'env - define header
+    MyStr = BuildEnvHeader
+
+'env - print the file header
+    Print #2, MyStr
+
+'env - write the data from the recordset into the file
+    Set MyRS = CurrentDb.OpenRecordset(BuildEnvSql)
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    Dim i As Integer
+    Do Until MyRS.EOF
+        MyStr = ""
+        For i = 0 To MyRS.Fields.count - 1
+            If IsNull(MyRS.Fields(i).Value) Or MyRS.Fields(i).Value = "" Then
+                EnvValue = "."
+            Else
+                EnvValue = MyRS.Fields(i).Value
+                Debug.Print EnvValue
+            End If
+            'MyStr = MyStr & MyRS.Fields(i).Value & ","
+            MyStr = MyStr & EnvValue & ","
+        Next i
+        MyStr = Trim(MyStr)
+        MyStr = Left(MyStr, Len(MyStr) - 1)
+        Print #2, MyStr
+        MyRS.MoveNext
+    Loop
+    
+'----- export su and hierarchy table ----------------------------------------------------------------
+'env - filename for veg file
+    txtSuhFileName = txtFileName & ".suh"
+    
+'build and write Suh file
+    ExportFlatHierarchy txtSuhFileName
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Close #1
+    Close #2
+    CleanUp
+    MsgBox "Done", vbInformation, "VPro"
+    On Error GoTo 0
+    
+End Sub
+Private Function BuildEnvSql()
+
+'builds a sql string to return env data
+Dim MyRS As Recordset, SqlText As String, MyStr As String
+
+'create a recordset of the fields to use
+    SqlText = "SELECT FieldName From USysExportToR WHERE (((Report)=True));"
+    Set MyRS = CurrentDb.OpenRecordset(SqlText)
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    
+    MyStr = "SELECT PlotNumber, "
+    
+'loop through the recordset and collect data into a string
+    Do Until MyRS.EOF
+        MyStr = MyStr & MyRS!FieldName & ", "
+        MyRS.MoveNext
+    Loop
+    
+'trim the string and add a
+    MyStr = Left(MyStr, Len(MyStr) - 2)
+    MyStr = MyStr & " FROM USysEnv;"
+    
+'close the recordset
+    MyRS.Close
+    
+'return the string
+    BuildEnvSql = MyStr
+
+End Function
+
+Private Function BuildEnvHeader() As String
+
+'build the header for the environment file
+Dim MyRS As Recordset, SqlText As String, MyStr As String
+
+'build a recordset of selected fields
+    SqlText = "SELECT FieldName From USysExportToR WHERE (((Report)=True));"
+    Set MyRS = CurrentDb.OpenRecordset(SqlText)
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    
+    MyStr = "PlotNumber"
+    
+'loop through the recordset and add field names
+    Do Until MyRS.EOF
+        MyStr = MyStr & "," & MyRS!FieldName
+        MyRS.MoveNext
+    Loop
+    
+'close the recordset
+    MyRS.Close
+
+'return the header
+    BuildEnvHeader = MyStr
+
+End Function
+
+Private Sub VegSql(GroupBy As Integer)
+
+'create veg queries to use in generating text files
+Dim UseSuTable As Boolean, SuTable As String, LumpTable As String, Lump As Boolean
+
+'get the lump setting and determine whether to lump or not
+    LumpTable = clsVProReg.CurrLump
+    If clsVProReg.CurrLump <> "None" Then
+        Lump = True
+    Else
+        Lump = False
+    End If
+
+'create union version of the data
+    BuildVegStep1
+
+'group the veg data
+    Select Case GroupBy
+        Case 1 'by layer
+            SqlText = "SELECT qryRVeg1.PlotNumber, qryRVeg1.Species AS SpeciesCode, qryRVeg1.MyLayer AS AssignedLayer, qryRVeg1.Cover"
+            SqlText = SqlText & " FROM USysAllSpecs INNER JOIN qryRVeg1 ON USysAllSpecs.Code = qryRVeg1.Species"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)='u'));"
+            CurrentDb.CreateQueryDef "qryRVeg2", SqlText
+        
+        Case 2 'by stratum
+            SqlText = "SELECT qryRVeg1.PlotNumber, qryRVeg1.Species AS SpeciesCode, LayerCode.Strata AS AssignedLayer, qryRVeg1.Cover"
+            SqlText = SqlText & " FROM (USysAllSpecs INNER JOIN qryRVeg1 ON USysAllSpecs.Code = qryRVeg1.Species) INNER JOIN LayerCode ON qryRVeg1.MyLayer = LayerCode.Layer1234567"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)='u'));"
+            CurrentDb.CreateQueryDef "qryRVeg2", SqlText
+        
+        Case 3 'by lifeform
+            SqlText = "SELECT qryRVeg1.PlotNumber, qryRVeg1.Species AS SpeciesCode, USysAllSpecs.Lifeform AS AssignedLayer, qryRVeg1.Cover"
+            SqlText = SqlText & " FROM (USysAllSpecs INNER JOIN qryRVeg1 ON USysAllSpecs.Code = qryRVeg1.Species) INNER JOIN LayerCode ON qryRVeg1.MyLayer = LayerCode.Layer1234567"
+            SqlText = SqlText & " WHERE (((USysAllSpecs.Codetype)='u'));"
+            CurrentDb.CreateQueryDef "qryRVeg2", SqlText
+        Case Else
+            MsgBox "Option value not accounted for.", vbInformation, "VPro"
+            GoTo MyExit
+    End Select
+
+'lump the data
+    If Lump Then 'create the final query that will be used to generate file
+        SqlText = "SELECT qryRVeg2.PlotNumber, IIf(IsNull([LumpCode]),[SpeciesCode],[LumpCode]) AS Code, qryRVeg2.AssignedLayer, IIf(Sum([Cover])>99,99,Sum([Cover])) AS PercentCover"
+        SqlText = SqlText & " FROM qryRVeg2 LEFT JOIN " & LumpTable & "_Lump ON qryRVeg2.SpeciesCode = " & LumpTable & "_Lump.SppCode"
+        SqlText = SqlText & " WHERE (((" & LumpTable & "_Lump.Use) = True Or (" & LumpTable & "_Lump.Use) Is Null))"
+        SqlText = SqlText & " GROUP BY qryRVeg2.PlotNumber, IIf(IsNull([LumpCode]),[SpeciesCode],[LumpCode]), qryRVeg2.AssignedLayer;"
+        CurrentDb.CreateQueryDef "qryRVeg3", SqlText
+    Else
+        SqlText = "SELECT qryRVeg2.PlotNumber, qryRVeg2.SpeciesCode AS Code, qryRVeg2.AssignedLayer, qryRVeg2.Cover AS PercentCover FROM qryRVeg2;"
+        CurrentDb.CreateQueryDef "qryRVeg3", SqlText
+    End If
+
+MyExit:
+
+
+End Sub
+
+Private Sub BuildVegStep1()
+
+'build a T veg version of the veg data named qryRVeg1
+    SqlText = "SELECT UsysVeg.PlotNumber, Species, '1' AS MyLayer, Cover1 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover1) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '2' AS MyLayer, Cover2 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover2) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '3' AS MyLayer, Cover3 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover3) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '4' AS MyLayer, Cover4 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover4) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '5' AS MyLayer, Cover5 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover5) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '5a' AS MyLayer, Cover5a AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover5a) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '5b' AS MyLayer, Cover5b AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover5b) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '5c' AS MyLayer, Cover5c AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover5c) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '6' AS MyLayer, Cover6 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover6) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '7' AS MyLayer, Cover7 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover7) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '8' AS MyLayer, Cover8 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover8) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '9' AS MyLayer, Cover9 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover9) Is Not Null));"
+    SqlText = SqlText & " UNION SELECT UsysVeg.PlotNumber, Species, '10' AS MyLayer, Cover10 AS Cover"
+    SqlText = SqlText & " FROM USysEnv INNER JOIN UsysVeg ON USysEnv.PlotNumber = UsysVeg.PlotNumber"
+    SqlText = SqlText & " WHERE (((Cover10) Is Not Null));"
+    CurrentDb.CreateQueryDef "qryRVeg1", SqlText
+
+End Sub
+
+Private Sub ExportFlatHierarchy(txtSuhFileName As String)
+
+'creates a flat version of the su/hierarchy tables
+Dim SuRS As Recordset, HuRS As Recordset, MyRS As Recordset
+Dim SqlText As String, MyStr As String, Criteria As String, Name As String, strHeader As String
+Dim tblSu As String, tblHierarchy As String, i As Integer, nLevels As Integer, n As Integer
+
+'get the current SU and hierarchy table names
+    tblSu = clsVProReg.CurrPlotlist
+    tblHierarchy = clsVProReg.CurrHierarchy
+
+'creates a recordset of all the plots and the su and hierarchy nodes
+    SqlText = "SELECT " & tblSu & "_SU.PlotNumber, " & tblSu & "_SU.SiteUnit FROM " & tblHierarchy & "_Hierarchy INNER JOIN " & tblSu & "_SU ON " & tblHierarchy & "_Hierarchy.Name = " & tblSu & "_SU.SiteUnit GROUP BY " & tblSu & "_SU.PlotNumber, " & tblSu & "_SU.SiteUnit;"
+    Set SuRS = CurrentDb.OpenRecordset(SqlText)
+
+'creates a recordset of just the hierarchy table
+    Set HuRS = CurrentDb.OpenRecordset(tblHierarchy & "_Hierarchy", dbOpenDynaset)
+
+'initial variable settings
+    MyStr = ""
+    nLevels = 0
+    
+'opens a text file to write the data into
+    Open txtSuhFileName For Output As #3
+
+'build a header string
+    If clsExport.ExportUnits = 3 Then 'just plot number
+        strHeader = "Plotnumber"
+        Print #3, strHeader
+    End If
+    If clsExport.ExportUnits = 1 Then 'just plot number and su
+        strHeader = "Plotnumber,SiteUnit"
+        Print #3, strHeader
+    End If
+    If clsExport.ExportUnits = 2 Then 'plot number, su and hierarchy
+        strHeader = "Plotnumber,SiteUnit"
+        SqlText = "SELECT [Level] From " & tblHierarchy & "_Hierarchy GROUP BY [Level];"
+        Set MyRS = CurrentDb.OpenRecordset(SqlText)
+        nLevels = MyRS.RecordCount
+        For i = 1 To MyRS.RecordCount - 1
+            strHeader = strHeader & ",Parent" & i
+        Next i
+        Print #3, strHeader
+    End If
+
+'loops through the units in the su table and finds matches in the hierarchy table
+    Do Until SuRS.EOF
+        n = 0
+        Criteria = "Name = '" & SuRS!SiteUnit & "'"
+        Name = SuRS!SiteUnit
+        HuRS.FindFirst Criteria
+        MyStr = SuRS!PlotNumber & ","
+        If clsExport.ExportUnits = 3 Then
+            GoTo Jump
+        End If
+        Do Until HuRS.NoMatch 'an inner loop for each member of a site unit's lineage
+            Criteria = "Name = '" & Name & "'"
+            HuRS.FindFirst Criteria
+            MyStr = MyStr & HuRS!Name & ","
+            n = n + 1
+            If clsExport.ExportUnits = 1 Then 'bail out if user just wants the su table
+                Exit Do
+            End If
+            If IsNull(HuRS!Parent) Then Exit Do 'exit do if no parent
+            Name = ParentsName(HuRS, HuRS!Parent)
+        Loop
+Jump:
+        MyStr = Left(MyStr, Len(MyStr) - 1) 'trim the string
+        
+        If n < nLevels Then 'place periods in blank cells
+            For i = 1 To nLevels - n
+                MyStr = MyStr & ",."
+            Next i
+        End If
+        
+        'print the string to the text file
+        Print #3, MyStr
+        SuRS.MoveNext
+    Loop
+
+'closes the text file
+    Close #3
+
+MyExit:
+    On Error Resume Next
+    SuRS.Close
+    HuRS.Close
+    On Error GoTo 0
+    
+End Sub
+
+Private Function ParentsName(HuRS As Recordset, ParentID As Long) As String
+
+Dim Criteria As String
+
+'finds and returns a hierarchy nodes name
+    Criteria = "ID = " & ParentID
+    HuRS.FindFirst Criteria
+    ParentsName = HuRS!Name
+
+End Function
+
+Private Function OpenFileForInput() As String
+
+'get a file name to save the data into
+Dim Title As String, FileToExportTo As String, FileName As String
+
+    Title = "VPro - enter or select a file name to save the data in"
+    FileToExportTo = GetFileName(Title, False, "R Input (*.*)", "*.*")
+    If FileToExportTo = "" Then GoTo MyExit
+    If Right(FileToExportTo, 4) = ".env" Then FileToExportTo = Left(FileToExportTo, Len(FileToExportTo) - 4)
+    If Right(FileToExportTo, 4) = ".veg" Then FileToExportTo = Left(FileToExportTo, Len(FileToExportTo) - 4)
+    If Right(FileToExportTo, 4) = ".suh" Then FileToExportTo = Left(FileToExportTo, Len(FileToExportTo) - 4)
+    FileName = FileToExportTo
+    
+    OpenFileForInput = FileName
+
+MyExit:
+    On Error Resume Next
+
+End Function
+
+Private Sub CleanUp()
+
+'removes temporary queries
+    On Error Resume Next
+    DoCmd.SetWarnings False
+    DoCmd.DeleteObject acQuery, "qryRVeg1"
+    DoCmd.DeleteObject acQuery, "qryRVeg2"
+    DoCmd.DeleteObject acQuery, "qryRVeg3"
+    DoCmd.SetWarnings True
+    On Error GoTo 0
+    
+End Sub

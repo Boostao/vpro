@@ -1,0 +1,9 @@
+CREATE TABLE [USysServicePacks] (
+  [ID] LONG DEFAULT GenUniqueID(),
+  [ServicePackName] TEXT(50) DEFAULT ,
+  [DateInstalled] DATETIME DEFAULT ,
+  [Description] MEMO DEFAULT 
+);
+
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [USysServicePacks] ([ID]);
+

@@ -1,0 +1,2103 @@
+Option Compare Database
+Private PlotCount As Long, LumpTable As String
+'29 Dec. 2015
+
+
+Private Sub textmax()
+
+Debug.Print MadMax(1, 3, 4, 5, 9, 10, 11, Null, 7, 2)
+
+End Sub
+Public Function MadMax(C1 As Variant, C2 As Variant, C3 As Variant, C4 As Variant, C5 As Variant, C5a As Variant, C5b As Variant, C5c As Variant, C6 As Variant, C7 As Variant) As Single
+
+'Apr. 17, 2018
+Dim MyMax As Single, i As Integer
+MyMax = 0
+
+If C1 > MyMax Then MyMax = C1
+If C2 > MyMax Then MyMax = C2
+If C3 > MyMax Then MyMax = C3
+If C4 > MyMax Then MyMax = C4
+If C5 > MyMax Then MyMax = C5
+If C5a > MyMax Then MyMax = C5a
+If C5b > MyMax Then MyMax = C5b
+If C5c > MyMax Then MyMax = C5c
+If C6 > MyMax Then MyMax = C6
+If C7 > MyMax Then MyMax = C7
+
+MadMax = MyMax
+
+End Function
+
+Public Function MadEquals(Target As Single, C1 As Variant, C2 As Variant, C3 As Variant, C4 As Variant, C5 As Variant, C5a As Variant, C5b As Variant, C5c As Variant, C6 As Variant, C7 As Variant) As Boolean
+
+'Apr. 8, 2020
+Dim MyEquals As Boolean
+MyEquals = False
+
+If C1 = Target Then MyEquals = True
+If C2 = MyMax Then MyEquals = True
+If C3 = MyMax Then MyEquals = True
+If C4 = MyMax Then MyEquals = True
+If C5 = MyMax Then MyEquals = True
+If C5a = MyMax Then MyEquals = True
+If C5b = MyMax Then MyEquals = True
+If C5c = MyMax Then MyEquals = True
+If C6 = MyMax Then MyEquals = True
+If C7 = MyMax Then MyEquals = True
+
+MadEquals = MyEquals
+
+End Function
+
+Public Sub ProfilePlots(SubVarSppAsSpp As Boolean)
+
+Dim MyDB As Database, MyRS As Recordset
+Dim SqlText As String
+Set MyDB = CurrentDb
+
+    'clear previous run
+    DoCmd.SetWarnings False
+    SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+    DoCmd.RunSQL SqlText
+    SqlText = "DELETE * FROM USysPlotProfilePlots;"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+    
+    'create profile table recordset
+    SqlText = "SELECT Order, Table, Field, Operator, Layer, Species, Criteria, Operation, PlotCount"
+    SqlText = SqlText & " From " & clsVProReg.CurrVegProfile & "_Profile"
+    SqlText = SqlText & " ORDER BY " & clsVProReg.CurrVegProfile & "_Profile.Order;"
+    Set MyRS = MyDB.OpenRecordset(SqlText) ' change this later to the current profile
+    'MyDB.CreateQueryDef "herman", SqlText
+    'clean up
+    CleanUp
+
+    'clear plot counts in prfile table
+    ClearPlotCounts clsVProReg.CurrVegProfile & "_Profile"
+
+    'set current lump table
+    SetLump SubVarSppAsSpp
+
+    'update form labels
+    UpDateFormLabels "lblFilteredPlots", "Filtered plots: 0"
+    UpDateFormLabels "lblTotalPlots", "Project plots: " & nTotalPlots(MyDB)
+
+    'loop through profile records
+    Do Until MyRS.EOF
+        Select Case MyRS!Table
+            Case "Env"
+                ProfileEnv MyDB, MyRS!Order
+            Case "Veg"
+                ProfileVeg MyDB, MyRS!Order
+            Case "Lump"
+                ProfileVeg MyDB, MyRS!Order
+            Case Else
+                MsgBox "Error finding " & MyRS!Table, vbInformation, "VPro"
+        End Select
+        UpdateFilterCount MyDB
+        Forms("USysPlotProfiling").Recalc
+        Forms("USysPlotProfiling").Repaint
+        MyRS.MoveNext
+    Loop
+
+    'update forms
+    UpdateForms
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    CleanUp
+    Exit Sub
+
+End Sub
+
+Private Function CurrCount(MyDB As Database) As Long
+
+Dim MyRS As Recordset
+    Set MyRS = MyDB.OpenRecordset("USysPlotProfilePlots")
+    CurrCount = MyRS.RecordCount
+    MyRS.Close
+
+End Function
+
+Private Sub ProfileVeg(MyDB As Database, OrderNumber As Integer)
+
+Dim MyRS As Recordset, FilterRS As Recordset, MyCriteria As Variant, Layer As String, Operator As String, Species As String, CountBefore As Long, CountAfter As Long
+    
+    'create a recordset of the steps
+    Set MyRS = MyDB.OpenRecordset(clsVProReg.CurrVegProfile & "_Profile", dbOpenDynaset)
+    MyRS.FindFirst ("Order = " & OrderNumber)
+
+    If IsNull(MyRS!Criteria) Then
+        MsgBox "Looks like you forgot to enter a criteria item.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+    MyCriteria = MyRS!Criteria
+    
+    If IsNull(MyRS!Layer) Then
+        MsgBox "Looks like you forgot to enter layer criteria.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+    Layer = MyRS!Layer
+    
+    If IsNull(MyRS!Operator) Then
+        MsgBox "Looks like you forgot to enter a operator criteria item.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+    Operator = MyRS!Operator
+    
+    If IsNull(MyRS!Species) Then
+        MsgBox "Looks like you forgot to enter a species criteria item.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+    Species = MyRS!Species
+    
+    If IsNull(MyRS!Operation) Then
+        MsgBox "Looks like you forgot to enter a operation criteria item.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+    
+    'clear current plot counts
+    
+
+    Select Case MyRS!Operation
+        Case "Add Plots"
+
+            'If LumpTable = "None_Lump" And MyRS!Field = "Species" Then
+            If MyRS!Table = "Veg" And MyRS!Field = "Species" Then
+            
+                Select Case Layer
+                    Case "Any"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((MadMax([Cover1],[Cover2],[Cover3],[Cover4],[Cover5],[Cover5a],[Cover5b],[Cover5c],[Cover6],[Cover7]))" & Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+                        DoCmd.SetWarnings False
+                        'MyDB.CreateQueryDef "fred1", SqlText
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species in any layer and in any plot
+                        If Operator = "<" Then
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber"
+                            SqlText = SqlText & " HAVING (((Sum(IIf([Species]='" & Species & "',1,0)))=0));"
+                            'MyDB.CreateQueryDef "fred2", SqlText
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                    Case "SumAll"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover5a])+Nz([Cover5b])+Nz([Cover5c])+Nz([Cover6])+Nz([Cover7]))" & Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species in any layer and in any plot
+                        If Operator = "<" Then
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber"
+                            SqlText = SqlText & " HAVING (((Sum(IIf([Species]='" & Species & "',1,0)))=0));"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        
+                    Case "SumA"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))" & Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species in the Sum of A fields and in any plot
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 2 - find plots with spp in layers 1, 2, or 3.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " From UsysVeg"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, UsysVeg.Species"
+                            SqlText = SqlText & " HAVING (((UsysVeg.Species)='" & Species & "') AND ((Sum(Nz([Cover1])+Nz([Cover2])+Nz([Cover3])))>0));"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 3 - add plots to list that don't have plots from step 2
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysVeg LEFT JOIN USysPlotProfilePlotsTemp ON UsysVeg.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null) And ((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                    
+                    Case "SumB"
+                        'update table - summing layers 4 and 5
+                        CountBefore = CurrCount(MyDB)
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover4])+Nz([Cover5])+Nz([Cover5a])+Nz([Cover5b])+Nz([Cover5c]))" & Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species in the Sum of B fields and in any plot
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 2 - find plots with spp in layers 4 or 5.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " From UsysVeg"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, UsysVeg.Species"
+                            SqlText = SqlText & " HAVING (((UsysVeg.Species)='" & Species & "') AND ((Sum(Nz([Cover4])+Nz([Cover5])))>0));"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 3 - add plots to list that don't have plots from step 2
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysVeg LEFT JOIN USysPlotProfilePlotsTemp ON UsysVeg.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null) And ((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                        End If
+
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                    
+                    Case Else
+                        'update table using specific layer
+                        CountBefore = CurrCount(MyDB)
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((UsysVeg.[Cover" & Layer & "])" & Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species in the field and in any plot
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 2 - find plots with spp in layer.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " From UsysVeg"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, UsysVeg.Species"
+                            SqlText = SqlText & " HAVING (((UsysVeg.Species)='" & Species & "') AND ((Sum(Nz([Cover" & Layer & "])))>0));"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 3 - add plots to list that don't have plots from step 2
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysVeg LEFT JOIN USysPlotProfilePlotsTemp ON UsysVeg.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null) And ((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        
+                End Select
+            
+            Else
+
+'lump selected
+                Select Case Layer
+                    Case "Any"
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        DoCmd.DeleteObject acQuery, "qryPP2"
+                        On Error GoTo 0
+
+                        'build list of plots containing spp lump
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c, Sum(UsysVeg.Cover6) AS C6, Sum(UsysVeg.Cover7) AS C7"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+
+                        'append plots to USysPlotProfilePlots
+                        If Operator = "=" Then
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                            SqlText = SqlText & " FROM qryPP LEFT JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((MadEquals(" & MyCriteria & ",[C1],[c2],[c3],[c4],[c5],[c5a],[c5b],[c5c],[c6],[c7]))=True) AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+                            DoCmd.SetWarnings False
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "herman", SqlText
+                        End If
+                        
+                        'if operator >
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP LEFT JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((MadMax([C1],[c2],[c3],[c4],[c5],[c5a],[c5b],[c5c],[c6],[c7]))" & Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+                        MyDB.CreateQueryDef "qryPP2", SqlText
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'find plots where code doesn't exist
+                        If Operator = "<" Then
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                            SqlText = SqlText & " FROM ((UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber"
+                            SqlText = SqlText & " HAVING (((Sum(IIf([lumpcode]='" & Species & "',1,0)))=0));"
+                            DoCmd.RunSQL SqlText
+                        End If
+'Stop
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+'Stop
+                    Case "SumAll"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        DoCmd.DeleteObject acQuery, "qryPP2"
+                        On Error GoTo 0
+
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c, Sum(UsysVeg.Cover6) AS C6, Sum(UsysVeg.Cover7) AS C7"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP LEFT JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null) AND ((Nz([c1])+Nz([c2])+Nz([c3])+Nz([c4])+Nz([c5])+Nz([c5a])+Nz([c5b])+Nz([c5c])+Nz([c6])+Nz([c7]))" & Operator & MyCriteria & "));"
+                        MyDB.CreateQueryDef "qryPP2", SqlText
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'find plots with no cover for that spp lump code
+                        If Operator = "<" Then
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                            SqlText = SqlText & " FROM ((UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber"
+                            SqlText = SqlText & " HAVING (((Sum(IIf([lumpcode]='" & Species & "',1,0)))=0));"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        
+                    Case "SumA"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP LEFT JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null) AND ((Nz([c1])+Nz([c2])+Nz([c3]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species lump in the Sum of A fields and in any plot
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "Step1", SqlText
+                            
+                            'step 2 - find plots with spp in layers 1, 2, or 3.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " From UsysVeg"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, UsysVeg.Species"
+                            SqlText = SqlText & " HAVING (((UsysVeg.Species)='" & Species & "') AND ((Sum(Nz([Cover1])+Nz([Cover2])+Nz([Cover3])))>0));"
+                            
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM UsysVeg INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, " & LumpTable & ".LumpCode"
+                            SqlText = SqlText & " HAVING (((" & LumpTable & ".LumpCode)='" & Species & "') AND ((Sum(Nz([Cover1])+Nz([Cover2])+Nz([Cover3])))>0));"
+                            'MyDB.CreateQueryDef "Step2", SqlText
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 3 - add plots to list that don't have plots from step 2
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysVeg LEFT JOIN USysPlotProfilePlotsTemp ON UsysVeg.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null) And ((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "Step3", SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "Step4", SqlText
+                        End If
+
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                    
+                    Case "SumB"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP LEFT JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null) AND ((Nz([c4])+Nz([c5])+Nz([c5a])+Nz([c5b])+Nz([c5c]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species lump in the Sum of B fields and in any plot
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "Step1", SqlText
+                            
+                            'step 2 - find plots with spp in layers 1, 2, or 3.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " From UsysVeg"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, UsysVeg.Species"
+                            SqlText = SqlText & " HAVING (((UsysVeg.Species)='" & Species & "') AND ((Sum(Nz([Cover4])+Nz([Cover5])))>0));"
+                            
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM UsysVeg INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, " & LumpTable & ".LumpCode"
+                            SqlText = SqlText & " HAVING (((" & LumpTable & ".LumpCode)='" & Species & "') AND ((Sum(Nz([Cover4])+Nz([Cover5])))>0));"
+                            'MyDB.CreateQueryDef "Step2", SqlText
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 3 - add plots to list that don't have plots from step 2
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysVeg LEFT JOIN USysPlotProfilePlotsTemp ON UsysVeg.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null) And ((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "Step3", SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "Step4", SqlText
+                        End If
+
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        
+                    'a specific layer
+                    Case Else
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover" & Layer & ") AS CL"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP LEFT JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlots.PlotNumber) Is Null) AND ((CL)" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'add plots that don't have the species lump code in the field and in any plot
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 2 - find plots with spp in layer.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " From UsysVeg"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, UsysVeg.Species"
+                            SqlText = SqlText & " HAVING (((UsysVeg.Species)='" & Species & "') AND ((Sum(Nz([Cover" & Layer & "])))>0));"
+                            
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM UsysVeg INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber, " & LumpTable & ".LumpCode"
+                            SqlText = SqlText & " HAVING (((" & LumpTable & ".LumpCode)='" & Species & "') AND ((Sum(Nz([Cover" & Layer & "])))>0));"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "StepA", SqlText
+                            
+                            'step 3 - add plots to list that don't have plots from step 2
+                            SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM (UsysVeg LEFT JOIN USysPlotProfilePlotsTemp ON UsysVeg.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber) LEFT JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null) And ((USysPlotProfilePlots.PlotNumber) Is Null))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            DoCmd.RunSQL SqlText
+                            'MyDB.CreateQueryDef "StepB", SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        'finish up
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        
+                End Select
+            End If
+
+'------START COMMON PLOTS CODE------------------------------------------------------------------------------------------------------------------------------------------------------
+        Case "Common plots"
+            If MyRS!Table = "Veg" And MyRS!Field = "Species" Then
+                Select Case Layer
+                    Case "Any"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((MadMax([Cover1],[Cover2],[Cover3],[Cover4],[Cover5],[Cover5a],[Cover5b],[Cover5c],[Cover6],[Cover7]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        'MyDB.CreateQueryDef "StepA", SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        'MyDB.CreateQueryDef "StepB", SqlText
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        'MyDB.CreateQueryDef "StepC", SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    
+                    Case "SumAll"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover5a])+Nz([Cover5b])+Nz([Cover5c])+Nz([Cover6])+Nz([Cover7]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    
+                    Case "SumA"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    
+                    Case "SumB"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover4])+Nz([Cover5])+Nz([Cover5a])+Nz([Cover5b])+Nz([Cover5c]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    
+                    Case Else
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((UsysVeg.[Cover" & Layer & "])" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                End Select
+            Else
+            'common plots using a lump table
+                Select Case Layer
+                    Case "Any"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'make qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c, Sum(UsysVeg.Cover6) AS C6, Sum(UsysVeg.Cover7) AS C7"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((MadMax([C1],[c2],[c3],[c4],[c5],[c5a],[c5b],[c5c],[c6],[c7]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    
+                    Case "SumAll"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'make qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c, Sum(UsysVeg.Cover6) AS C6, Sum(UsysVeg.Cover7) AS C7"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((Nz([c1])+Nz([c2])+Nz([c3])+Nz([c4])+Nz([c5])+Nz([c5a])+Nz([c5b])+Nz([c5c])+Nz([c6])+Nz([c7]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    Case "SumA"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'make qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((Nz([c1])+Nz([c2])+Nz([c3]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    Case "SumB"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'make qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((Nz([c4])+Nz([c5])+Nz([c5a])+Nz([c5b])+Nz([c5c]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                    Case Else
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'make qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover" & Layer & ") AS CL"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((CL)" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the filter table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+                        
+                        'append temp into filter table
+                        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+                        SqlText = SqlText & " From USysPlotProfilePlotsTemp"
+                        SqlText = SqlText & " GROUP BY USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = CountAfter
+                        MyRS.Update
+                End Select
+            End If
+
+'------START SUBTRACT PLOTS CODE------------------------------------------------------------------------------------------------------------------------------------------------------
+        Case "Subtract plots"
+            If MyRS!Table = "Veg" And MyRS!Field = "Species" Then
+                Select Case Layer
+                    Case "Any"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                    
+                    'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                    
+                    'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((MadMax([Cover1],[Cover2],[Cover3],[Cover4],[Cover5],[Cover5a],[Cover5b],[Cover5c],[Cover6],[Cover7]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        'MyDB.CreateQueryDef "fred1", SqlText
+                        DoCmd.RunSQL SqlText
+    
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                        
+                    'make a list of plots w/ spp
+                        SqlText = "SELECT UsysEnv.PlotNumber INTO usysPlotProfilePlotsWithSpp"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        'MyDB.CreateQueryDef "fred2", SqlText
+                        DoCmd.RunSQL SqlText
+                        
+                    'append plots without spp
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsWithSpp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsWithSpp.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlotsWithSpp.PlotNumber) Is Null));"
+                        'MyDB.CreateQueryDef "fred3", SqlText
+                        DoCmd.RunSQL SqlText
+                        
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+
+                    'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        'MyDB.CreateQueryDef "fred4", SqlText
+                        DoCmd.RunSQL SqlText
+                    
+                    'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                    'remove plots in USysPlotProfilePlots table that have no cover if operator is <
+                        If Operator = "<" Then
+                            'append plots to temp table if species in table USysPlotProfilePlots
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN UsysVeg ON USysPlotProfilePlots.PlotNumber = UsysVeg.PlotNumber"
+                            SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "'));"
+                            DoCmd.RunSQL SqlText
+                            
+                            'delete plots from table USysPlotProfilePlots that are in the temp table above
+                            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*, USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null));"
+                            'MyDB.CreateQueryDef "fred1", SqlText
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        DoCmd.SetWarnings True
+'sum all
+                    Case "SumAll"
+                    'update table
+                        CountBefore = CurrCount(MyDB)
+                    'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                    'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover1])+Nz([Cover2])+Nz([Cover3])+Nz([Cover4])+Nz([Cover5])+Nz([Cover5a])+Nz([Cover5b])+Nz([Cover5c])+Nz([Cover6])+Nz([Cover7]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                    'make a list of plots w/ spp
+                        SqlText = "SELECT UsysEnv.PlotNumber INTO usysPlotProfilePlotsWithSpp"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                    'append plots without spp
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsWithSpp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsWithSpp.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlotsWithSpp.PlotNumber) Is Null));"
+                        DoCmd.RunSQL SqlText
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                        
+                        
+                    'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                    'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                    'remove plots in USysPlotProfilePlots table that have no cover if operator is <
+                        If Operator = "<" Then
+                            'append plots to temp table if species in table USysPlotProfilePlots
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN UsysVeg ON USysPlotProfilePlots.PlotNumber = UsysVeg.PlotNumber"
+                            SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "'));"
+                            DoCmd.RunSQL SqlText
+                            
+                            'delete plots from table USysPlotProfilePlots that are in the temp table above
+                            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*, USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null));"
+                            'MyDB.CreateQueryDef "fred1", SqlText
+                            DoCmd.RunSQL SqlText
+                        End If
+
+                    'finish up
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        DoCmd.SetWarnings True
+'sum A
+                    Case "SumA"
+                    'update table
+                        CountBefore = CurrCount(MyDB)
+                    
+                    'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                    
+                    'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover1])+Nz([Cover2])+Nz([Cover3]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                    
+                    'make a list of plots w/ spp
+                        SqlText = "SELECT UsysEnv.PlotNumber INTO usysPlotProfilePlotsWithSpp"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                    
+                    'append plots without spp
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsWithSpp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsWithSpp.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlotsWithSpp.PlotNumber) Is Null));"
+                        DoCmd.RunSQL SqlText
+                    
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                    
+                    'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                    
+                    'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        DoCmd.SetWarnings True
+'sum B
+                    Case "SumB"
+                    'update table
+                        CountBefore = CurrCount(MyDB)
+                    'empty the temp table
+                    
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                    
+                    'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((Nz([Cover4])+Nz([Cover5])+Nz([Cover5a])+Nz([Cover5b])+Nz([Cover5c]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                    
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                    
+                    'make a list of plots w/ spp
+                        SqlText = "SELECT UsysEnv.PlotNumber INTO usysPlotProfilePlotsWithSpp"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                    
+                    'append plots without spp
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsWithSpp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsWithSpp.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlotsWithSpp.PlotNumber) Is Null));"
+                        DoCmd.RunSQL SqlText
+                    
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                    
+                    'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                    
+                    'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        DoCmd.SetWarnings True
+'one layer
+                    Case Else
+
+                    'update table
+                        CountBefore = CurrCount(MyDB)
+                    'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                    'fill the temp table
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+                        'SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " FROM UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber"
+                        If Operator = "<" Then
+                            SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ((UsysVeg.Cover" & Layer & ")" & Operator & MyCriteria & " Or (UsysVeg.Cover" & Layer & ") Is Null));"
+                        Else
+                            SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "') AND ([Cover" & Layer & "])" & Operator & MyCriteria & ");"
+                        End If
+                'MyDB.CreateQueryDef "fred1b", SqlText
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                    
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                        
+                    'make a list of plots w/ spp
+                        SqlText = "SELECT UsysEnv.PlotNumber INTO usysPlotProfilePlotsWithSpp"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN USysPlotProfilePlots ON UsysVeg.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((UsysVeg.Species)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                'MyDB.CreateQueryDef "fred2", SqlText
+                    'append plots without spp
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsWithSpp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsWithSpp.PlotNumber"
+                        SqlText = SqlText & " WHERE (((USysPlotProfilePlotsWithSpp.PlotNumber) Is Null));"
+                'MyDB.CreateQueryDef "fred3", SqlText
+                        DoCmd.RunSQL SqlText
+                    'cleanup
+                        On Error Resume Next
+                        DoCmd.DeleteObject acTable, "USysPlotProfilePlotsWithSpp"
+                        On Error GoTo 0
+                    
+                    'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                    'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        Debug.Print CountBefore & " - " & CountAfter
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        DoCmd.SetWarnings True
+                End Select
+                
+'using lump table
+            Else
+                Select Case Layer
+                    Case "Any"
+                        'update table
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'create qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c, Sum(UsysVeg.Cover6) AS C6, Sum(UsysVeg.Cover7) AS C7"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((MadMax([C1], [C2], [C3], [C4], [C5], [C5a], [C5b], [C5c], [C6], [C7])) " & Operator & MyCriteria & "))"
+                        SqlText = SqlText & " GROUP BY qryPP.PlotNumber;"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                
+                        'remove plots in USysPlotProfilePlots table that have no cover if operator is <
+                        If Operator = "<" Then
+                            'append plots to temp table if species in table USysPlotProfilePlots
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " FROM (USysPlotProfilePlots INNER JOIN UsysVeg ON USysPlotProfilePlots.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'));"
+                            DoCmd.RunSQL SqlText
+                            
+                            'delete plots from table USysPlotProfilePlots that are in the temp table above
+                            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*, USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null));"
+                            DoCmd.RunSQL SqlText
+                        End If
+                
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        
+                    Case "SumAll"
+                        'update table
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+
+                        'create qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c, Sum(UsysVeg.Cover6) AS C6, Sum(UsysVeg.Cover7) AS C7"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'insert records into USysPlotProfilePlotsTemp
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((Nz([c1])+Nz([c2])+Nz([c3])+Nz([c4])+Nz([c5])+Nz([c5a])+Nz([c5b])+Nz([c5c])+Nz([c6])+Nz([c7]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'remove plots in USysPlotProfilePlots table that have no cover if operator is <
+                        If Operator = "<" Then
+                            'append plots to temp table if species in table USysPlotProfilePlots
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+                            SqlText = SqlText & " FROM (USysPlotProfilePlots INNER JOIN UsysVeg ON USysPlotProfilePlots.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'));"
+                            DoCmd.RunSQL SqlText
+                            
+                            'delete plots from table USysPlotProfilePlots that are in the temp table above
+                            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*, USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber"
+                            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null));"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                    
+                    Case "SumA"
+                        'update table
+                        'empty the temp table
+Debug.Print "SumA"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'make qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover1) AS C1, Sum(UsysVeg.Cover2) AS C2, Sum(UsysVeg.Cover3) AS C3"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'append plots where they match the criteria
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((Nz([c1])+Nz([c2])+Nz([c3]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'subtract plots that don't have the species lump code in layers 1 + 2 + 3
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 2 - find plots with spp in layer.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM UsysVeg INNER JOIN Sample_Lump ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "') AND ((Nz([cover1])+Nz([cover2])+Nz([cover3]))>0))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            'MyDB.CreateQueryDef "StepA", SqlText
+                            DoCmd.RunSQL SqlText
+
+                            'step 3 - subtract plots not in temp table (step 2)
+                            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                            'MyDB.CreateQueryDef "StepC", SqlText
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                        End If
+
+                        'finish up
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                    
+                    Case "SumB"
+                        'update table
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'create qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover4) AS C4, Sum(UsysVeg.Cover5) AS C5, Sum(UsysVeg.Cover5a) AS C5a, Sum(UsysVeg.Cover5b) AS C5b, Sum(UsysVeg.Cover5c) AS C5c"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'append plots where they match the criteria
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((Nz([c4])+Nz([c5])+Nz([c5a])+Nz([c5b])+Nz([c5c]))" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'subtract plots that don't have the species lump code in the layers 4 + 5
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 2 - find plots with spp in layer.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM UsysVeg INNER JOIN Sample_Lump ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "') AND ((Nz([cover4])+Nz([cover5]))>0))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            'MyDB.CreateQueryDef "StepA", SqlText
+                            DoCmd.RunSQL SqlText
+
+                            'step 3 - subtract plots not in temp table (step 2)
+                            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                            'MyDB.CreateQueryDef "StepC", SqlText
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        'finish up
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                        
+                    Case Else
+                        'update table
+                        'empty the temp table
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        CountBefore = CurrCount(MyDB)
+                        On Error Resume Next
+                        DoCmd.DeleteObject acQuery, "qryPP"
+                        On Error GoTo 0
+                        
+                        'create qryPP
+                        SqlText = "SELECT UsysEnv.PlotNumber, Sum(UsysVeg.Cover" & Layer & ") AS CL"
+                        SqlText = SqlText & " FROM (UsysEnv INNER JOIN UsysVeg ON UsysEnv.PlotNumber = UsysVeg.PlotNumber) INNER JOIN " & LumpTable & " ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                        SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "'))"
+                        SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+                        MyDB.CreateQueryDef "qryPP", SqlText
+                        
+                        'append plots where they match the criteria
+                        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                        SqlText = SqlText & " SELECT qryPP.PlotNumber"
+                        SqlText = SqlText & " FROM qryPP INNER JOIN USysPlotProfilePlots ON qryPP.PlotNumber = USysPlotProfilePlots.PlotNumber"
+                        SqlText = SqlText & " WHERE (((CL)" & Operator & MyCriteria & "));"
+                        DoCmd.SetWarnings False
+                        DoCmd.RunSQL SqlText
+                        
+                        'delete records
+                        SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                        SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                        DoCmd.RunSQL SqlText
+                        
+                        'empty the temp table
+                        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+                        
+                        'subtract plots that don't have the species lump code in the field and in the plot
+                        If Operator = "<" Then
+                            'step 1 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 2 - find plots with spp in layer.  place into temp table
+                            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+                            SqlText = SqlText & " SELECT UsysVeg.PlotNumber"
+                            SqlText = SqlText & " FROM UsysVeg INNER JOIN Sample_Lump ON UsysVeg.Species = " & LumpTable & ".SppCode"
+                            SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & Species & "') AND ((Nz([cover" & Layer & "]))>0))"
+                            SqlText = SqlText & " GROUP BY UsysVeg.PlotNumber;"
+                            'MyDB.CreateQueryDef "StepA", SqlText
+                            DoCmd.RunSQL SqlText
+
+                            'step 3 - subtract plots not in temp table (step 2)
+                            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*"
+                            SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber;"
+                            'MyDB.CreateQueryDef "StepC", SqlText
+                            DoCmd.RunSQL SqlText
+                            
+                            'step 4 - empty temp table
+                            SqlText = "DELETE USysPlotProfilePlotsTemp.* FROM USysPlotProfilePlotsTemp;"
+                            DoCmd.RunSQL SqlText
+                        End If
+                        
+                        'finish up
+                        DoCmd.SetWarnings True
+                        CountAfter = CurrCount(MyDB)
+                        MyRS.Edit
+                        MyRS!PlotCount = Abs(CountAfter - CountBefore)
+                        MyRS.Update
+                End Select
+            End If
+                
+                
+'------START ELSE CODE------------------------------------------------------------------------------------------------------------------------------------------------------
+        Case Else
+        'error trap
+    End Select
+    On Error Resume Next
+    MyRS.Close
+    DoCmd.DeleteObject acQuery, "qryPP"
+    On Error GoTo 0
+End Sub
+Private Sub ProfileEnv(MyDB As Database, OrderNumber As Integer)
+
+Dim MyRS As Recordset, FilterRS As Recordset, MyCriteria As Variant
+    Set MyRS = MyDB.OpenRecordset(clsVProReg.CurrVegProfile & "_Profile", dbOpenDynaset)
+    MyRS.FindFirst ("Order = " & OrderNumber)
+    MyCriteria = ChangeType(MyRS!Criteria)
+    
+    If IsNull(MyRS!Operator) Then
+        MsgBox "Looks like you forgot to enter a criteria operator item.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+    
+    If IsNull(MyRS!Criteria) Then
+        MsgBox "Looks like you forgot to enter a criteria item.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+
+    If IsNull(MyRS!Operation) Then
+        MsgBox "Looks like you forgot to enter a operation item.  VPro will ignor this row of instructions, but please fix and try again.", vbInformation, "VPro"
+        Exit Sub
+    End If
+
+    
+Select Case MyRS!Operation
+
+    Case "Add Plots"
+       'change the plot count number
+        SqlText = "SELECT USysEnv.PlotNumber"
+        SqlText = SqlText & " FROM USysEnv LEFT JOIN USysPlotProfilePlots ON USysEnv.PlotNumber = USysPlotProfilePlots.PlotNumber"
+        If MyCriteria = "'Null'" Then
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ") Is Null) AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+        Else
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ")" & MyRS!Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+        End If
+        'MyDB.CreateQueryDef "fred", SqlText
+        Set FilterRS = MyDB.OpenRecordset(SqlText)
+        If FilterRS.RecordCount > 0 Then FilterRS.MoveLast
+        MyRS.Edit
+        MyRS!PlotCount = FilterRS.RecordCount
+        MyRS.Update
+        'add plots to the list
+        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+        SqlText = SqlText & " SELECT USysEnv.PlotNumber "
+        SqlText = SqlText & " FROM USysEnv LEFT JOIN USysPlotProfilePlots ON USysEnv.PlotNumber = USysPlotProfilePlots.PlotNumber"
+        If MyCriteria = "'Null'" Then
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ") Is Null) AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+        Else
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ")" & MyRS!Operator & MyCriteria & ") AND ((USysPlotProfilePlots.PlotNumber) Is Null));"
+        End If
+        DoCmd.SetWarnings False
+        DoCmd.RunSQL SqlText
+        DoCmd.SetWarnings True
+    Case "Common plots"
+        'change the plot count number
+        SqlText = "SELECT USysEnv.PlotNumber"
+        SqlText = SqlText & " FROM USysEnv INNER JOIN USysPlotProfilePlots ON USysEnv.PlotNumber = USysPlotProfilePlots.PlotNumber"
+        If MyCriteria = "'Null'" Then
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ") Is Null));"
+        Else
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ")" & MyRS!Operator & MyCriteria & "));"
+        End If
+        Set FilterRS = MyDB.OpenRecordset(SqlText)
+        If FilterRS.RecordCount > 0 Then FilterRS.MoveLast
+        MyRS.Edit
+        MyRS!PlotCount = FilterRS.RecordCount
+        MyRS.Update
+        DoCmd.SetWarnings False
+        'empty the temp table
+        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+        'fill the temp table
+        SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+        SqlText = SqlText & " SELECT USysEnv.PlotNumber"
+        SqlText = SqlText & " FROM USysEnv INNER JOIN USysPlotProfilePlots ON USysEnv.PlotNumber = USysPlotProfilePlots.PlotNumber"
+        If MyCriteria = "'Null'" Then
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ") Is Null));"
+        Else
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ")" & MyRS!Operator & MyCriteria & "));"
+        End If
+        DoCmd.RunSQL SqlText
+        'empty the filter table
+        DoCmd.RunSQL "Delete * from USysPlotProfilePlots;"
+        'append temp into filter table
+        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber )"
+        SqlText = SqlText & " SELECT USysPlotProfilePlotsTemp.PlotNumber"
+        SqlText = SqlText & " FROM USysPlotProfilePlotsTemp;"
+        DoCmd.RunSQL SqlText
+        'empty the temp table
+        DoCmd.RunSQL "Delete * from USysPlotProfilePlotsTemp;"
+        DoCmd.SetWarnings True
+    Case "Subtract plots"
+        'change the plot count number
+            SqlText = "SELECT USysEnv.PlotNumber"
+            SqlText = SqlText & " FROM USysEnv INNER JOIN USysPlotProfilePlots ON USysEnv.PlotNumber = USysPlotProfilePlots.PlotNumber"
+            If MyCriteria = "'Null'" Then
+                SqlText = SqlText & " WHERE (((" & MyRS!Field & ") Is Null));"
+            Else
+                SqlText = SqlText & " WHERE (((" & MyRS!Field & ")" & MyRS!Operator & MyCriteria & "));"
+            End If
+            
+        Set FilterRS = MyDB.OpenRecordset(SqlText)
+        If FilterRS.RecordCount > 0 Then FilterRS.MoveLast
+        MyRS.Edit
+        MyRS!PlotCount = FilterRS.RecordCount
+        MyRS.Update
+        'delete plots
+        DoCmd.SetWarnings False
+        SqlText = "DELETE USysPlotProfilePlots.*"
+        SqlText = SqlText & " FROM USysEnv INNER JOIN USysPlotProfilePlots ON USysEnv.PlotNumber = USysPlotProfilePlots.PlotNumber"
+        If MyCriteria = "'Null'" Then
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ") Is Null));"
+        Else
+            SqlText = SqlText & " WHERE (((" & MyRS!Field & ")" & MyRS!Operator & MyCriteria & "));"
+        End If
+        DoCmd.RunSQL SqlText
+        DoCmd.SetWarnings True
+    Case Else
+    
+End Select
+    Forms("USysPlotProfiling").Recalc
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Exit Sub
+End Sub
+
+Private Sub UpDateFormLabels(lblName As String, NewCaption As String)
+
+    Forms("USysPlotProfiling").Controls(lblName).Caption = NewCaption
+
+End Sub
+
+Private Sub UpdateFilterCount(MyDB As Database)
+
+    Dim FilterRS As Recordset
+    Set FilterRS = MyDB.OpenRecordset("USysPlotProfilePlots")
+    UpDateFormLabels "lblFilteredPlots", "Filtered plots: " & FilterRS.RecordCount
+    FilterRS.Close
+    
+End Sub
+Private Sub ClearPlotTable()
+
+Dim SqlText As String
+
+    DoCmd.SetWarnings False
+    SqlText = "Delete * from USysPlotProfilePlots;"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+    PlotCount = 0
+
+End Sub
+
+Private Sub ClearTempPlotTable()
+
+Dim SqlText As String
+
+    DoCmd.SetWarnings False
+    SqlText = "Delete * from USysPlotProfilePlotsTemp;"
+    DoCmd.RunSQL SqlText
+    DoCmd.SetWarnings True
+    PlotCount = 0
+
+End Sub
+
+
+Private Sub ClearPlotCounts(TableName As String)
+
+Dim SqlText As String
+DoCmd.SetWarnings False
+SqlText = "UPDATE " & TableName & " SET PlotCount = Null;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+End Sub
+Private Function nTotalPlots(MyDB As Database) As Long
+
+Dim MyRS As Recordset
+    Set MyRS = MyDB.OpenRecordset("USysEnv")
+    MyRS.MoveLast
+    nTotalPlots = MyRS.RecordCount
+    MyRS.Close
+
+End Function
+
+Private Sub SetLump(SubVarSppAsSpp As Boolean)
+
+If SubVarSppAsSpp Then
+    If clsVProReg.CurrLump <> "None" Then
+        CombineSpp clsVProReg.CurrLump & "_Lump"
+        LumpTable = "CombinedSpp_Lump"
+    Else
+        CombineSpp "None"
+    End If
+Else
+    LumpTable = clsVProReg.CurrLump & "_Lump"
+End If
+
+End Sub
+
+Private Sub CleanUp()
+
+On Error Resume Next
+    DoCmd.DeleteObject acQuery, "CombinedSpp_Lump"
+    DoCmd.DeleteObject acQuery, "ExcludedVariants"
+On Error GoTo 0
+
+End Sub
+
+Private Function ChangeType(ValIn As Variant) As Variant
+
+On Error GoTo errChangeType
+    ChangeType = CDbl(ValIn)
+
+Exit Function
+errChangeType:
+    ChangeType = "'" & ValIn & "'"
+
+End Function
+
+Private Sub UpdateForms()
+
+If IsLoaded("FS882-6x4") Then
+    WriteVegProfile2Filter "FS882-6x4"
+End If
+
+If IsLoaded("FS882-6x4XL") Then
+    WriteVegProfile2Filter "FS882-6x4XL"
+End If
+
+If IsLoaded("FS882-6x4XL-CHARS") Then
+    WriteVegProfile2Filter "FS882-6x4XL-CHARS"
+End If
+
+If IsLoaded("FS882-8x6XL") Then
+    WriteVegProfile2Filter "FS882-8x6XL"
+End If
+
+If IsLoaded("FS882-8x6XL-CHARS") Then
+    WriteVegProfile2Filter "FS882-8x6XL-CHARS"
+End If
+
+If IsLoaded("FS882-1x1") Then
+    WriteVegProfile2Filter "FS882-1x1"
+End If
+
+If IsLoaded("FS882-1x1-CHARS") Then
+    WriteVegProfile2Filter "FS882-1x1-CHARS"
+End If
+
+End Sub
+
+Private Sub WriteVegProfile2Filter(FormName As String) 'rs As Recordset, nProfileRecs As Integer)
+On Error GoTo errWriteVegProfile2Filter
+Dim i As Long, FilterText As String, MyForm As Form
+Dim MyDB As Database, SuRecords As Recordset, MyRS As Recordset
+Dim Msg As String, dgdef As Integer, Response As Integer, Title As String, X
+
+Set MyDB = CurrentDb()
+Set MyForm = Forms(FormName)
+Set MyRS = MyDB.OpenRecordset("USysPlotProfilePlots")
+MyForm.FilterOn = False
+
+If MyRS.RecordCount > 200 Then GoTo TooComplex
+    
+    FilterText = "(("
+    Do Until MyRS.EOF
+        If Len(FilterText) = 2 Then
+            FilterText = FilterText & "PlotNumber='" & MyRS!PlotNumber & "'"
+        Else
+            FilterText = FilterText & " OR PlotNumber='" & MyRS!PlotNumber & "'"
+        End If
+        MyRS.MoveNext
+    Loop
+    FilterText = FilterText & "))"
+
+    If FilterText <> "(())" Then
+        MyForm.Filter = FilterText
+        MyForm.FilterOn = True
+    Else
+        'MsgBox "Zero plots matched.  Filter not applied.", vbInformation, "VPro"
+        MsgBox "Profile resulted in zero plots.  Filter not applied to data form.", vbInformation, "VPro"
+    End If
+
+GoTo MyExit
+
+TooComplex:
+Set MyDB = CurrentDb()
+    Title = ProgramName()
+    Msg = "This filter exceeded Access's abilities.  Do you wish VPro to save the selected plots as a site unit table?"
+    dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+    Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    If Response = 6 Then
+        sysSaveFilter2 = 2
+        sysBreakSU = "bla"
+        X = CreateSuTable()
+        If sysBreakSU = "bla2" Then GoTo MyExit
+        MyRS.MoveFirst
+        Set SuRecords = MyDB.OpenRecordset(sysBreakSU)
+        For i = 1 To MyRS.RecordCount
+            SuRecords.AddNew
+            SuRecords!PlotNumber = MyRS!PlotNumber
+            SuRecords.Update
+            MyRS.MoveNext
+        Next i
+        MsgBox "Plots matching your vegetation profile have been inserted into " & Left(SuRecords.Name, Len(SuRecords.Name) - 3)
+        SuRecords.Close
+    End If
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+errWriteVegProfile2Filter:
+    If Err.Number = 2176 Then
+        GoTo TooComplex
+    Else
+        MsgBox Err.Description
+        GoTo MyExit
+    End If
+End Sub
+
+Public Sub SpeciesCodeFilter(SubVarSppAsSpp As Boolean)
+
+Dim MyDB As Database, MyRS As Recordset, SqlText As String
+Set MyDB = CurrentDb
+
+    'do some house keeping before we start
+    CleanUp
+    ClearPlotTable
+    ClearPlotCounts clsVProReg.CurrVegProfile & "_Profile"
+    SetLump SubVarSppAsSpp
+    UpDateFormLabels "lblFilteredPlots", "Filtered plots: 0"
+    'UpDateFormLabels "lblTotalPlots", "Total Plots: " & nTotalPlots(MyDB)
+    UpDateFormLabels "lblTotalPlots", "Project lots: " & nTotalPlots(MyDB)
+
+SqlText = "SELECT Table, Species From " & clsVProReg.CurrVegProfile & "_Profile WHERE (((Table)<>'Env'));"
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+
+    DoCmd.SetWarnings False
+        SqlText = "INSERT INTO USysPlotProfilePlots ( PlotNumber ) SELECT UsysEnv.PlotNumber From UsysEnv GROUP BY UsysEnv.PlotNumber;"
+        DoCmd.RunSQL SqlText 'start with all the plots
+    Do Until MyRS.EOF
+        If MyRS!Table = "Lump" And LumpTable <> "None_Lump" Then
+            'add plots to temp where species exists
+            ClearTempPlotTable
+            DoCmd.SetWarnings False
+            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+            SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+            SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN ((UsysEnv INNER JOIN USysTVeg ON UsysEnv.PlotNumber = USysTVeg.PlotNumber) INNER JOIN " & LumpTable & " ON USysTVeg.Species = " & LumpTable & ".SppCode) ON USysPlotProfilePlots.PlotNumber = UsysEnv.PlotNumber"
+            SqlText = SqlText & " WHERE (((" & LumpTable & ".LumpCode)='" & MyRS!Species & "') AND ((" & LumpTable & ".Use)=True))"
+            SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+            DoCmd.RunSQL SqlText
+            
+            'delete plots without species
+            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*, USysPlotProfilePlotsTemp.PlotNumber"
+            SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null));"
+            DoCmd.RunSQL SqlText
+        End If
+        If MyRS!Table = "Veg" Then
+            ClearTempPlotTable
+            DoCmd.SetWarnings False
+            SqlText = "INSERT INTO USysPlotProfilePlotsTemp ( PlotNumber )"
+            SqlText = SqlText & " SELECT UsysEnv.PlotNumber"
+            SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN (UsysEnv INNER JOIN USysTVeg ON UsysEnv.PlotNumber = USysTVeg.PlotNumber) ON USysPlotProfilePlots.PlotNumber = UsysEnv.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysTVeg.Species)='" & MyRS!Species & "'))"
+            SqlText = SqlText & " GROUP BY UsysEnv.PlotNumber;"
+            DoCmd.RunSQL SqlText
+            
+            'delete plots without species
+            SqlText = "DELETE DISTINCTROW USysPlotProfilePlots.*, USysPlotProfilePlotsTemp.PlotNumber"
+            SqlText = SqlText & " FROM USysPlotProfilePlots LEFT JOIN USysPlotProfilePlotsTemp ON USysPlotProfilePlots.PlotNumber = USysPlotProfilePlotsTemp.PlotNumber"
+            SqlText = SqlText & " WHERE (((USysPlotProfilePlotsTemp.PlotNumber) Is Null));"
+            DoCmd.RunSQL SqlText
+        End If
+    
+        MyRS.MoveNext
+    Loop
+    DoCmd.SetWarnings True
+
+
+UpdateForms
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub
+
+Public Sub SaveFilterAsSU()
+
+Dim SqlText As String, MyCurrSU As String
+    
+    sysBreakSU = "bla"
+    CreateSuTable
+    If sysBreakSU = "bla2" Then GoTo MyExit
+    MyCurrSU = clsVProReg.CurrPlotlist & "_SU"
+    
+If MyCurrSU <> "None_SU" Then 'if has su table
+    
+    SqlText = "INSERT INTO " & sysBreakSU & " ( PlotNumber, SiteUnit )"
+    SqlText = SqlText & " SELECT " & MyCurrSU & ".PlotNumber, " & MyCurrSU & ".SiteUnit"
+    SqlText = SqlText & " FROM USysPlotProfilePlots INNER JOIN " & MyCurrSU & " ON USysPlotProfilePlots.PlotNumber = " & MyCurrSU & ".PlotNumber;"
+    DoCmd.RunSQL SqlText
+    
+Else
+
+    SqlText = "INSERT INTO " & sysBreakSU & " ( PlotNumber )"
+    SqlText = SqlText & " SELECT USysPlotProfilePlots.PlotNumber"
+    SqlText = SqlText & " FROM USysPlotProfilePlots;"
+    DoCmd.RunSQL SqlText
+
+End If
+
+
+MyExit:
+
+
+End Sub

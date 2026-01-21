@@ -1,0 +1,198 @@
+Option Compare Database
+Dim KmlBody As String, PlotLocs As String, GEFileName As String
+
+Public Sub PlotPlotsInGE(OpenGE As Boolean)
+
+'2012
+On Error GoTo errPlotPlotsInGE
+Dim ProgramLocation As String
+GetPlotLocations
+BuildKmlFile
+WriteKML
+ProgramLocation = clsVProReg.GEProgram
+If OpenGE Then
+    'Shell (CStr(["C:\Program Files\Google\Google Earth\client\googleearth.exe"]) & " " & GEFileName)
+    shell (CStr([ProgramLocation]) & " " & GEFileName)
+End If
+
+MyExit:
+    On Error Resume Next
+    Exit Sub
+errPlotPlotsInGE:
+    If Err.Number = 462 Then
+        MsgBox "This tool requires Google Earth to be installed first.", vbInformation, "VPro"
+    Else
+        MsgBox Err.Number & Chr(13) & Err.Description
+    End If
+    Resume MyExit
+End Sub
+
+Public Sub SinglePlotPlotInGE(PlotNumber As String)
+
+'Jan 21, 2019
+On Error GoTo errSinglePlotPlotInGE
+GetSinglePlot PlotNumber
+BuildKmlFile
+WriteKML
+ProgramLocation = clsVProReg.GEProgram
+    'Shell (CStr(["C:\Program Files\Google\Google Earth\client\googleearth.exe"]) & " " & GEFileName)
+    'MsgBox GEFileName
+    'Shell (CStr(["C:\Program Files (x86)\Google\Google Earth\client\googleearth.exe"]) & " " & GEFileName)
+    shell (CStr([ProgramLocation]) & " " & GEFileName)
+MyExit:
+    On Error Resume Next
+    
+    
+    Exit Sub
+errSinglePlotPlotInGE:
+    If Err.Number = 462 Then
+        MsgBox "This tool requires Google Earth to be installed first.", vbInformation, "VPro"
+    Else
+        MsgBox "VPro can't find googleeaerth.exe.  Please use User Setup/Directories to locate the file.", vbInformation, "VPro"
+        'MsgBox Err.Number & Chr(13) & Err.Description
+    End If
+    Resume MyExit
+End Sub
+
+Private Sub BuildKmlFile()
+
+'Dec 19, 2008
+KmlBody = "<?xml version=""1.0"" encoding=""UTF-8""?><kml xmlns=""http://earth.google.com/kml/2.1""><Document>   <name>" & clsRepOpt.GoogleEarthPlaceName & "</name>"
+
+KmlBody = KmlBody & Chr(10) & "<Style id=""a""><IconStyle><Icon><href>http://maps.google.com/mapfiles/ms/icons/red-dot.png</href></Icon></IconStyle></Style>"
+
+KmlBody = KmlBody & Chr(10) & PlotLocs
+
+KmlBody = KmlBody & Chr(10) & "</Document></kml>"
+
+End Sub
+
+Public Function GEOutFileName() As String
+
+'2012
+    'GEOutFileName = clsVProReg.Location & "VProPlotLocations.kml"
+    GEOutFileName = clsVProReg.GELocation & "VProPlotLocations.kml"
+
+End Function
+Private Sub WriteKML()
+
+'2012
+Dim FilePath As String, DocName As String
+'FilePath = clsVProReg.Location
+FilePath = clsVProReg.GELocation
+DocName = FilePath & "VProPlotLocations.kml"
+GEFileName = DocName
+
+Open DocName For Output As #1
+
+Print #1, KmlBody
+
+Close #1
+
+End Sub
+
+Private Sub GetSinglePlot(PlotNumber As String)
+
+'Dec 20, 2008
+On Error GoTo errGetSinglePlot
+Dim SqlText As String
+Dim MyRS As Recordset
+PlotLocs = ""
+
+    SqlText = "SELECT PlotNumber, Longitude, Latitude, " & clsRepOpt.GoogleEarthDescField
+    SqlText = SqlText & " From [" & clsVProReg.CurrProject & "_Env]"
+    SqlText = SqlText & " WHERE (((PlotNumber)='" & PlotNumber & "') AND (([Longitude]) Is Not Null) AND (([Latitude]) Is Not Null));"
+    Set MyRS = CurrentDb.OpenRecordset(SqlText)
+'CurrentDb.CreateQueryDef "fred", SqlText
+    'PlotLocs = PlotLocs & "   <Placemark>       <name>" & MyRS!PlotNumber & "</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-" & MyRS!Longitude & ", " & MyRS!Latitude & ",0</coordinates>      </Point>      <description><![CDATA[" & MyRS!PlotRepresenting & ".]]></description>   </Placemark>"
+    PlotLocs = PlotLocs & "   <Placemark>       <name>" & MyRS!PlotNumber & "</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-" & MyRS!Longitude & ", " & MyRS!Latitude & ",0</coordinates>      </Point>      <description><![CDATA[" & MyRS(clsRepOpt.GoogleEarthDescField) & ".]]></description>   </Placemark>"
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Exit Sub
+errGetSinglePlot:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub GetPlotLocations()
+
+'Dec 19, 2008
+Dim SqlText As String, i As Long
+Dim MyRS As Recordset, RunBefore As Boolean
+PlotLocs = ""
+RunBefore = False
+i = 0
+
+If clsVProReg.CurrPlotlist = "None" Then
+    SqlText = "SELECT PlotNumber, Longitude, Latitude, " & clsRepOpt.GoogleEarthDescField
+    SqlText = SqlText & " From [" & clsVProReg.CurrProject & "_Env]"
+    SqlText = SqlText & " WHERE (((Longitude) Is Not Null) AND ((Latitude) Is Not Null));"
+Else
+    SqlText = "SELECT " & clsVProReg.CurrProject & "_Env.PlotNumber, Longitude, Latitude, " & clsRepOpt.GoogleEarthDescField
+    SqlText = SqlText & " FROM [" & clsVProReg.CurrProject & "_Env] INNER JOIN [" & clsVProReg.CurrPlotlist & "_SU] ON [" & clsVProReg.CurrProject & "_Env].PlotNumber = [" & clsVProReg.CurrPlotlist & "_SU].PlotNumber"
+    SqlText = SqlText & " WHERE (((Longitude) Is Not Null) AND ((Latitude) Is Not Null));"
+End If
+'CurrentDb.CreateQueryDef "fred", SqlText
+Set MyRS = CurrentDb.OpenRecordset(SqlText)
+
+Do Until MyRS.EOF
+    If Not RunBefore Then
+        PlotLocs = PlotLocs & "   <Placemark>       <name>" & MyRS!PlotNumber & "</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-" & MyRS!Longitude & ", " & MyRS!Latitude & ",0</coordinates>      </Point>      <description><![CDATA[" & MyRS(clsRepOpt.GoogleEarthDescField) & ".]]></description>   </Placemark>"
+    Else
+        'PlotLocs = PlotLocs & Chr(10) & "   <Placemark>       <name>" & MyRS!PlotNumber & "</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-" & MyRS!Longitude & ", " & MyRS!Latitude & ",0</coordinates>      </Point>      <description><![CDATA[" & MyRS(clsRepOpt.GoogleEarthDescField) & ".]]></description>   </Placemark>"
+        PlotLocs = PlotLocs & Chr(10) & "   <Placemark>       <name>" & MyRS!PlotNumber & "</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-" & MyRS!Longitude & ", " & MyRS!Latitude & ",0</coordinates>      </Point>      <description><![CDATA[" & MyRS(3) & ".]]></description>   </Placemark>"
+    End If
+    RunBefore = True
+    MyRS.MoveNext
+    'i = i + 1
+    'Debug.Print i
+Loop
+'Debug.Print "done"
+
+MyRS.Close
+
+End Sub
+
+Private Sub GetPlotLocationsNew()
+
+'Nov 5, 2009
+Dim SqlText As String, i As Long
+Dim MyRS As Recordset, RunBefore As Boolean, MyRS2 As Recordset
+PlotLocs = ""
+RunBefore = False
+i = 0
+
+If clsVProReg.CurrPlotlist = "None" Then
+    SqlText = "SELECT PlotNumber, Longitude, Latitude, " & clsRepOpt.GoogleEarthDescField
+    SqlText = SqlText & " From [" & clsVProReg.CurrProject & "_Env]"
+    SqlText = SqlText & " WHERE (((Longitude) Is Not Null) AND ((Latitude) Is Not Null));"
+Else
+    SqlText = "SELECT " & clsVProReg.CurrProject & "_Env.PlotNumber, Longitude, Latitude, " & clsRepOpt.GoogleEarthDescField
+    SqlText = SqlText & " FROM [" & clsVProReg.CurrProject & "_Env] INNER JOIN [" & clsVProReg.CurrPlotlist & "_SU] ON [" & clsVProReg.CurrProject & "_Env].PlotNumber = [" & clsVProReg.CurrPlotlist & "_SU].PlotNumber"
+    SqlText = SqlText & " WHERE (((Longitude) Is Not Null) AND ((Latitude) Is Not Null));"
+End If
+'CurrentDb.CreateQueryDef "fred", SqlText
+Set MyRS = CurrentDb.OpenRecordset(SqlText)
+PlotLocs = PlotLocs & "   <Placemark>       <name>" & MyRS!PlotNumber & "</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-" & MyRS!Longitude & ", " & MyRS!Latitude & ",0</coordinates>      </Point>      <description><![CDATA[" & MyRS(clsRepOpt.GoogleEarthDescField) & ".]]></description>   </Placemark>"
+
+
+
+'<Placemark>       <name>A000003</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-148.7173, 69.67419,0</coordinates>      </Point>      <description><![CDATA[BarredaDalton - A000003.]]></description>   </Placemark>
+    SqlText = "SELECT '<Placemark>       <name>' & [PlotNumber] & '</name><styleUrl>#a</styleUrl>      <Point>         <coordinates>-' & [Longitude] & ', ' & [Latitude] & ',0</coordinates>      </Point>      <description><![CDATA[' & [location] & '.]]></description>   </Placemark>' AS Loc"
+    SqlText = SqlText & " FROM ArcticPlotLocations_Env;"
+    Set MyRS2 = CurrentDb.OpenRecordset(SqlText)
+
+    Do Until MyRS2.EOF
+        PlotLocs = PlotLocs & Chr(10) & MyRS2!Loc
+        If i > 1175 And i < 1180 Then Debug.Print MyRS2!Loc
+        MyRS2.MoveNext
+        i = i + 1
+        'Debug.Print i
+    Loop
+'Debug.Print "done"
+
+MyRS.Close
+
+End Sub

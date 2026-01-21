@@ -1,0 +1,395 @@
+Option Compare Database
+Option Explicit
+Global BreakUnit As String
+Private WasLowestTilde As Boolean
+
+Function HasChildren(Mom As String) As Boolean
+'Jan. 19, 1999
+'returns true if hierarchy member has children
+On Error GoTo errHasChildren
+HasChildren = False
+Dim MyDB As Database, MyRS As Recordset, Criteria As String, UnitNumber As Long
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    Criteria = "Name = '" & Mom & "'"
+    MyRS.FindFirst Criteria
+    UnitNumber = MyRS!ID
+    MyRS.MoveFirst
+    Criteria = "Parent = " & UnitNumber
+    MyRS.FindFirst Criteria
+    If MyRS.NoMatch Then
+        HasChildren = False
+    Else
+        HasChildren = True
+    End If
+    
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errHasChildren:
+    MsgBox Err.Description
+    HasChildren = False
+    Resume MyExit
+End Function
+
+Function TildeChildren(Optional Unit As Variant)
+'Jan. 19, 1999
+'Places a tilde on all children of a unit
+On Error GoTo errTildeChildren
+Dim MyDB As Database, MyRS As Recordset, Criteria As String, i As Long, BK As String
+Dim MyMom As String
+Dim NextUnit As String, MyTree As TreeView
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+Set MyTree = Screen.ActiveControl.Object
+If IsMissing(Unit) Then GoTo MyExit
+
+MyRS.MoveFirst
+
+    Criteria = "Name = '" & Unit & "'"
+    MyRS.FindFirst Criteria
+    If MyRS.NoMatch Then GoTo MyExit
+    i = MyRS!ID
+    
+    MyRS.MoveFirst
+    Criteria = "Parent = " & i
+    MyRS.FindFirst Criteria
+    
+Do Until MyRS.NoMatch
+    BK = MyRS.Bookmark
+    TildeChildren = MyRS!Name
+    NextUnit = TildeChildren
+        
+        If Left(NextUnit, 1) <> "~" And HasChildren(NextUnit) Then
+            MyRS.Edit
+            MyRS!Name = "~" & MyRS!Name
+            MyRS.Update
+            NextUnit = "~" & NextUnit
+        End If
+        
+    TildeChildren (NextUnit)
+    MyRS.Bookmark = BK
+    MyRS.FindNext Criteria
+Loop
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+errTildeChildren:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+'the following functions in this module have been flow charted
+
+Function BuildPlotList(Unit As String)
+'June 16, 1998
+On Error GoTo errBuildPlotList
+Dim MyDB As Database, MyRecords As Recordset, MyList As String, MyCriteria As String
+Dim NextUnit As String, Shifty As Long, BK As String, SqlText As String, MyID As Long
+Set MyDB = CurrentDb()
+Set MyRecords = MyDB.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+'Debug.Print Unit
+MyRecords.MoveFirst
+MyCriteria = "Name = '" & Unit & "'"
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+    
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    BuildPlotList = MyRecords!Name
+    MyID = MyRecords!ID
+    NextUnit = BuildPlotList
+    
+    FindMatchingPlots (NextUnit) 'call procedure
+
+    BuildPlotList NextUnit
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+    Set MyDB = Nothing
+    Exit Function
+errBuildPlotList:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Sub FindMatchingPlots(Unit As String)
+'Oct. 9, 2002
+'called from function BuildPlotList
+'finds plots that belong to a site unit
+On Error GoTo errFindMatchingPlots
+Dim MyDB As Database, MyRS As Recordset, Criteria As String, SqlText As String
+Dim MyBreaks As Recordset, i As Integer, SuTable As String
+SuTable = CurrPlotlist() & "_SU"
+Set MyDB = CurrentDb()
+    SqlText = "SELECT PlotNumber, SiteUnit"
+    SqlText = SqlText & " FROM [" & SuTable & "]"
+    SqlText = SqlText & " WHERE (((PlotNumber) Is Not Null) AND ((SiteUnit)='" & Unit & "'));"
+'MyDB.CreateQueryDef "fred", SqlText
+Set MyRS = MyDB.OpenRecordset(SqlText, dbOpenDynaset)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+Set MyBreaks = MyDB.OpenRecordset("USysBreakTable")
+    
+    For i = 1 To MyRS.RecordCount
+        MyBreaks.AddNew
+        MyBreaks!BreakCode = BreakUnit
+        MyBreaks!PlotNumber = MyRS!PlotNumber
+        MyBreaks.Update
+        MyRS.MoveNext
+    Next i
+
+'Debug.Print Unit & " - " & i
+MyExit:
+    On Error Resume Next
+    MyBreaks.Close
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+errFindMatchingPlots:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+Function CreateSuFromBreak()
+'Oct. 9, 2002
+On Error GoTo myerr
+Dim X
+Dim MyDB As Database, MyRS As Recordset, MySU As Recordset, MyBT As Recordset
+Dim i As Integer, Criteria As String, MyTest As Boolean, SqlText As String
+
+If clsVProReg.CurrPlotlist = "None" Then
+    MsgBox "You must select a site unit table."
+    GoTo MyExit
+End If
+
+Set MyDB = CurrentDb()
+Set MyRS = MyDB.OpenRecordset(clsVProReg.CurrPlotlist & "_SU", dbOpenDynaset)
+
+DoCmd.OpenForm "USysFilter2SuList"
+sysSaveFilter2 = 0
+'Forms![USysFilter2SuList]![optIncludeExisting].Enabled = False
+Do Until sysSaveFilter2 > 0
+    DoEvents
+Loop
+
+Select Case sysSaveFilter2
+    Case 1
+        DoCmd.SetWarnings False
+        SqlText = "DELETE * FROM USysSuTableDynamic_SU;"
+        DoCmd.RunSQL SqlText
+        sysBreakSU = "USysSuTableDynamic_SU"
+    Case 2
+        CreateSuTable 1
+        If sysBreakSU = "Bla2" Then GoTo MyExit
+    Case 3
+        GoTo MyExit
+        'user cancelled
+    Case Else
+        MsgBox "Unknown option"
+End Select
+Set MySU = MyDB.OpenRecordset(sysBreakSU, dbOpenDynaset)
+DoCmd.SetWarnings True
+CreateBreakTable "Hierarchy"
+Set MyBT = MyDB.OpenRecordset("USysBreakTable", dbOpenDynaset)
+If MyBT.RecordCount = 0 Then
+    MsgBox "There are either no break points in the hierarchy or no matching units in the site unit table.  VPro can't proceed."
+    GoTo MyExit
+End If
+MyBT.MoveLast
+MyBT.MoveFirst
+For i = 1 To MyBT.RecordCount
+    MyTest = True
+    Criteria = "PlotNumber = '" & MyBT!PlotNumber & "'"
+    If MySU.RecordCount > 0 Then
+        MySU.MoveFirst
+        MySU.FindFirst Criteria
+    End If
+    If MySU.NoMatch Or MySU.RecordCount = 0 Then
+        MySU.AddNew
+        MySU!PlotNumber = MyBT!PlotNumber
+        MyRS.MoveFirst
+        MyRS.FindFirst Criteria
+        MySU!SiteUnit = MyRS!SiteUnit
+        MySU.Update
+    End If
+    MyBT.MoveNext
+Next i
+
+    If sysIncludeExisting <> 1 Then
+        DoCmd.SetWarnings False
+        SqlText = "UPDATE [" & sysBreakSU & "] SET SiteUnit = Null;"
+        DoCmd.RunSQL SqlText
+    End If
+    
+    If sysSaveFilter2 = 1 Then
+        DoCmd.SetWarnings False
+        SqlText = "DELETE * FROM [" & clsVProReg.CurrPlotlist & "_SU];"
+        DoCmd.RunSQL SqlText
+        SqlText = "INSERT INTO [" & clsVProReg.CurrPlotlist & "_SU] ( PlotNumber, SiteUnit )"
+        SqlText = SqlText & " SELECT PlotNumber, SiteUnit"
+        SqlText = SqlText & " FROM USysSuTableDynamic_SU;"
+        DoCmd.RunSQL SqlText
+        SqlText = "DELETE * FROM USysSuTableDynamic_SU;"
+        DoCmd.RunSQL SqlText
+    End If
+   
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    MyBT.Close
+    MyRS.Close
+    MySU.Close
+    Set MyDB = Nothing
+    Exit Function
+myerr:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Private Sub IsLowestTildeMember(UnitID As Long, MyRecords As Recordset)
+Dim MyList As String, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String, ParentShapeName As String
+
+MyRecords.MoveFirst
+
+    MyCriteria = "ID = " & UnitID
+    MyRecords.FindFirst MyCriteria
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+Do Until MyRecords.NoMatch
+    If Left(MyRecords!Name, 1) = "~" Then
+        WasLowestTilde = False
+    End If
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+    IsLowestTildeMember NextUnit, MyRecords
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    Exit Sub
+End Sub
+
+Function CreateBreakTable(RsType As String, Optional LowestMember As Variant) As Boolean
+
+'Dec 11, 2008
+'called from USysCompactDataOptions class module and other places
+    If CurrPlotlist() = "None" Then
+        MsgBox "This function requires an active hierarchy and site unit table"
+        Exit Function
+    End If
+    Dim MyDB As Database, MyRS As Recordset, i As Integer, X
+    Dim HierarchyTable As String, MySuTable As String, SqlText As String
+    Dim BK As String, TestRS As Recordset
+    Set MyDB = CurrentDb()
+    
+    On Error Resume Next
+    DoCmd.SetWarnings False
+    DoCmd.RunSQL "DELETE * FROM USysBreakTable;"
+    On Error GoTo errCreateBreakTable
+    
+    If RsType = "Hierarchy" Then
+        HierarchyTable = CurrHierarchy()
+        SqlText = "SELECT * FROM [" & HierarchyTable & "] WHERE ((Left([Name],1)='~'));"
+        Set MyRS = MyDB.OpenRecordset(SqlText, dbOpenSnapshot)
+        Set TestRS = MyDB.OpenRecordset(CurrHierarchy(), DB_OPEN_DYNASET)
+        MyRS.MoveLast
+        MyRS.MoveFirst
+        
+        For i = 1 To MyRS.RecordCount
+            If Left(MyRS!Name, 1) = "~" Then
+                If Not IsMissing(LowestMember) Then
+                WasLowestTilde = True
+                IsLowestTildeMember MyRS!ID, TestRS
+                    If WasLowestTilde Then
+                        BreakUnit = "~" & MyRS!Name  'set variable at module level
+                        X = BuildPlotList(MyRS!Name)
+                    End If
+                Else
+                    BreakUnit = MyRS!Name  'set variable at module level
+                    X = BuildPlotList(MyRS!Name)
+                End If
+            End If
+        MyRS.MoveNext
+        Next i
+        
+        MyRS.Close
+    End If
+    
+    If RsType = "SuTable" Then
+        MySuTable = CurrPlotlist() & "_SU"
+        SqlText = "INSERT INTO USysBreakTable ( BreakCode, PlotNumber )"
+        SqlText = SqlText & " SELECT [" & MySuTable & "].SiteUnit, [" & MySuTable & "].PlotNumber"
+        SqlText = SqlText & " FROM [" & MySuTable & "]"
+        SqlText = SqlText & " WHERE ((([" & MySuTable & "].SiteUnit) Is Not Null) AND (([" & MySuTable & "].PlotNumber) Is Not Null));"
+        DoCmd.RunSQL SqlText
+    End If
+    CreateBreakTable = True
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    MyRS.Close
+    Set MyDB = Nothing
+    WriteBreakCodes
+    Exit Function
+errCreateBreakTable:
+    If Err.Number = 3021 Then
+        MsgBox "An error happened while trying to generate your report.  This may have been caused by no break points or no plots below a break point.", vbCritical, "VPro"
+        CreateBreakTable = False
+        Exit Function
+    End If
+    If Err.Number <> 0 Then
+        MsgBox Err.Description
+    End If
+    Resume MyExit
+End Function
+
+Private Sub WriteBreakCodes()
+'June 16, 1998
+'called from function CreateBreakTable
+On Error GoTo errWriteBreakCodes
+Dim MyDB As Database, MyRS As Recordset, SqlText As String, nRecords As Integer
+Dim i As Integer
+Set MyDB = CurrentDb()
+    SqlText = "SELECT DISTINCT BreakCode FROM USysBreakTable;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount = 0 Then GoTo MyExit
+    MyRS.MoveLast
+    MyRS.MoveFirst
+    nRecords = MyRS.RecordCount
+    DoCmd.SetWarnings False
+    
+    For i = 1 To nRecords
+        SqlText = "UPDATE USysBreakTable SET Reference = '" & MyRS!BreakCode & "', BreakCode = 'Unit" & i & "' WHERE (((BreakCode)='" & MyRS!BreakCode & "'));"
+        DoCmd.RunSQL SqlText
+        MyRS.MoveNext
+    Next i
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    DoCmd.SetWarnings True
+    Exit Sub
+errWriteBreakCodes:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Sub

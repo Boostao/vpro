@@ -1,0 +1,6 @@
+CREATE TABLE [tblUnattach] (
+  [ProjectName] TEXT(255) DEFAULT ,
+  [Unattach] BIT DEFAULT 
+);
+
+

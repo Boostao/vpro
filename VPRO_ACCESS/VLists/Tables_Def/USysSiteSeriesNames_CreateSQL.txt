@@ -1,0 +1,35 @@
+CREATE TABLE [USysSiteSeriesNames] (
+  [SiteSeries_ID] DOUBLE DEFAULT ,
+  [SSCode] TEXT(255) DEFAULT ,
+  [BGCName] TEXT(255) DEFAULT ,
+  [BEC_Region] TEXT(255) DEFAULT ,
+  [BGC_Zone] TEXT(255) DEFAULT ,
+  [SubzVarPh] TEXT(255) DEFAULT ,
+  [BGC_Subzone] TEXT(255) DEFAULT ,
+  [BGC_Variant] TEXT(255) DEFAULT ,
+  [BGC_Phase] TEXT(255) DEFAULT ,
+  [SiteSeries] TEXT(255) DEFAULT ,
+  [SSPhase] TEXT(255) DEFAULT ,
+  [SSVariation] TEXT(255) DEFAULT ,
+  [Seral] TEXT(255) DEFAULT ,
+  [SiteSeriesDescription] TEXT(255) DEFAULT ,
+  [PlantAssociation] TEXT(255) DEFAULT ,
+  [Comments] TEXT(255) DEFAULT ,
+  [Ref_ID] DOUBLE DEFAULT ,
+  [AddedDate] DATETIME DEFAULT ,
+  [ExpiredDate] TEXT(255) DEFAULT ,
+  [O_SS_ID] DOUBLE DEFAULT ,
+  [MergedBGC_SS] TEXT(255) DEFAULT ,
+  [BECSuballiance] TEXT(255) DEFAULT ,
+  [BECAlliance] TEXT(255) DEFAULT ,
+  [MissingNpeNa] TEXT(255) DEFAULT ,
+  [TransferID] TEXT(255) DEFAULT ,
+  [Flag] BIT DEFAULT 
+);
+
+CREATE INDEX [O_SS_ID] ON [USysSiteSeriesNames] ([O_SS_ID]);
+CREATE INDEX [Ref_ID] ON [USysSiteSeriesNames] ([Ref_ID]);
+CREATE INDEX [SiteSeries_ID] ON [USysSiteSeriesNames] ([SiteSeries_ID]);
+CREATE INDEX [SSCode] ON [USysSiteSeriesNames] ([SSCode]);
+CREATE INDEX [TransferID] ON [USysSiteSeriesNames] ([TransferID]);
+

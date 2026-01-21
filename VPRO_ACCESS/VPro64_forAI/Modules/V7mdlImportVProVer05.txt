@@ -1,0 +1,102 @@
+Option Compare Database
+
+Public Sub ImportVPro05(ProjectName As String, RemoteDB As Database)
+
+'Dec 4, 2008
+On Error GoTo errImportVProXP03
+Dim SqlText As String
+
+'remove old tables
+    CleanUp
+
+'attch the project to be converted
+    AttachTables RemoteDB, ProjectName
+
+'creates the table set to import the data into
+    CreateTableSet
+
+    DoCmd.SetWarnings False
+
+'import env data
+    SqlText = "INSERT INTO [" & sysRemoteProject & "_Env] ( PlotNumber, FieldNumber, ProjectID, FSRegionDistrict, SitePlotQuality, [Date], SiteSurveyor, PlotRepresenting, Location, Ecosection, NtsMapSheet, Longitude, Latitude, UTMZone, UTMEasting, UTMNorthing, LocationAccuracy, AirPhotoNum, XCoord, YCoord, [Zone], SubZone, SiteSeries, TransDistrib, RealmClass, MapUnit, MoistureRegime, NutrientRegime, UserSiteUnit, SiteUnitShortName, SiteUnitLongName, SuccessionalStatus, StructuralStage, StructuralStageMod, StandAge, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceShape, WaterSource, Exposure1, Exposure2, SiteDisturbance1, SiteDisturbance2, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, SurfaceTopographyType, SiteNotes, SoilSurveyor, BedrockGeology1, CoarseFragLith1, TerrainTextureSurf, SurficialMaterialSurf, SurfaceExpSurf, GeoMorProSurf, TerrainTextureSubSurf, SurficialMaterialSubSurf, SurfaceExpSubSurf, GeoMorProSubSurf,"
+    SqlText = SqlText & " FloodingRegimeFreq, MoistureRegimeSub, FloodingRegimeDur, SurfaceTopographySize, SoilDrainage, SeepageDepth, RootRestrictingType, RootRestrictingDepth, RootZoneParticleSize, RootingDepth, SoilClassSubGroup, SoilClassGroup, HumusForm, HumusFormPhase, HumusThickness, pHMethodCodeMineral, pHMethodCodeOrganic, SoilNotes, VegSurveyor, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegNotes, Photo, HydroGeoSystem, HydroGeoSubSystem, Flag )"
+    SqlText = SqlText & " SELECT PlotNumber, SiteNumber, ProjectName, Region, PlotQuality, Date, SiteSurveyor, PlotRepresenting, Location, Ecosection, NtsMapSheet, ConvertLongLatToDeg([LongitudeDegrees],[LongitudeMinutes],[LongitudeSeconds]) AS Longitude, ConvertLongLatToDeg([LatitudeDegrees],[LatitudeMinutes],[LatitudeSeconds]) AS Latitude, UTMZone, UTMEasting, UTMNorthing, LocationAccuracy, AirPhotoNum, XCoord, YCoord, Zone, SubZone, SiteSeries, TransDistrib, RealmClass, MapUnit, MoistureRegime, NutrientRegime, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName, SuccessionalStatus, StructuralStage, StructuralStageMod, StandAge, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceTopography, WaterSource, Exposure1, Exposure2, SiteDisturbance1, SiteDisturbance2, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, SurfaceTopographyType, SiteNotes, SoilSurveyor, BedrockGeology, CoarseFragLith, TerrainTextureSurf, SurficialMaterialSurf,"
+    SqlText = SqlText & " SurfaceExpSurf , GeoMorProSurf , TerrainTextureSubSurf, SurficialMaterialSubSurf, SurfaceExpSubSurf, GeoMorProSubSurf, FloodingRegimeFreq, MoistureRegimeSub, FloodingRegimeDur, SurfaceTopographySize, SoilDrainage, SeepageDepth, RootRestrictingType, RootRestrictingDepth, RootZoneParticleSize, RootingDepth, SoilClassSubGroup, SoilClassGroup, HumusForm, HumusFormPhase, HumusThickness, pHMethodCodeMineral, pHMethodCodeOrganic, SoilNotes, VegSurveyor, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegNotes, PhotoRollNum, HydroGeoSystem, HydroGeoSubSystem, Flag"
+    SqlText = SqlText & " FROM USysConvE;"
+    'CurrentDb.CreateQueryDef "fredEnv", SqlText
+    DoCmd.RunSQL SqlText
+
+'import audit data
+    SqlText = "INSERT INTO [" & sysRemoteProject & "_Audit] ( Project, [User], PlotNumber, [Table], EditField, EditWhen, BeforeEdit, AfterEdit, Restore, Flag, ID )"
+    SqlText = SqlText & " SELECT Project, User, PlotNumber, Table, EditField, EditWhen, BeforeEdit, AfterEdit, Restore, Flag, ID"
+    SqlText = SqlText & " FROM USysConvA;"
+    DoCmd.RunSQL SqlText
+
+'import humus data
+    SqlText = "INSERT INTO [" & sysRemoteProject & "_Humus] ( PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Consistence, [Character], Fauna, Comment, Flag, ID )"
+    SqlText = SqlText & " SELECT PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Consistence, Character, Fauna, Comment, Flag, ID"
+    SqlText = SqlText & " FROM USysConvH;"
+    DoCmd.RunSQL SqlText
+
+'import mineral data
+    SqlText = "INSERT INTO [" & sysRemoteProject & "_Mineral] ( PlotNumber, Horizon, UpperDepth, LowerDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, PercentCoarseFragsShape, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, MottlesAbundance, MottlesSize, MottlesContrast, ClayFilmsFreq, ClayFilmThickness, Effervescence, Porosity, Comments, Flag, ID )"
+    SqlText = SqlText & " SELECT PlotNumber, Horizon, UpperDepth, LowerDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, PercentCoarseFragsShape, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, MottlesAbundance, MottlesSize, MottlesContrast, ClayFilmsFreq, ClayFilmThickness, Effervescence, Porosity, Comments, Flag, ID"
+    SqlText = SqlText & " FROM USysConvM;"
+    DoCmd.RunSQL SqlText
+
+'import other data
+    SqlText = "INSERT INTO [" & sysRemoteProject & "_Other] ( PlotNumber, DataName, DataItem, UserItem1, UserItem2, UserItem3, UserFlag1, UserFlag2, UserFlag3, Flag, ID )"
+    SqlText = SqlText & " SELECT PlotNumber, DataName, DataItem, UserItem1, UserItem2, UserItem3, UserFlag1, UserFlag2, UserFlag3, Flag, ID"
+    SqlText = SqlText & " FROM USysConvO;"
+    DoCmd.RunSQL SqlText
+
+'import veg data
+    SqlText = "INSERT INTO [" & sysRemoteProject & "_Veg] ( PlotNumber, Species, Cover1, Height1, Cover2, Height2, Cover3, Height3, Cover4, Height4, Cover5, Height5, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, TotalA, TotalB, Collected, Flag, ID )"
+    SqlText = SqlText & " SELECT PlotNumber, Species, Cover1, Height1, Cover2, Height2, Cover3, Height3, Cover4, Height4, Cover5, Height5, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, TotalA, TotalB, Collected, Flag, ID"
+    SqlText = SqlText & " FROM USysConvV;"
+    DoCmd.RunSQL SqlText
+
+CleanUp
+
+MsgBox "Project " & ProjectName & " has succesfully been imported into " & sysRemoteProject, vbInformation, clsVProReg.ProgramName
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Exit Sub
+errImportVProXP03:
+    MsgBox Err.Description & Err.Number
+    Resume MyExit
+End Sub
+
+Private Sub CleanUp()
+
+'Dec 4, 2008
+On Error Resume Next
+    DoCmd.DeleteObject acTable, "USysConvE"
+    DoCmd.DeleteObject acTable, "USysConvH"
+    DoCmd.DeleteObject acTable, "USysConvM"
+    DoCmd.DeleteObject acTable, "USysConvV"
+    DoCmd.DeleteObject acTable, "USysConvA"
+    DoCmd.DeleteObject acTable, "USysConvO"
+    DoCmd.DeleteObject acTable, "USysConvE1"
+    DoCmd.DeleteObject acTable, "USysConvH1"
+    DoCmd.DeleteObject acTable, "USysConvM1"
+    DoCmd.DeleteObject acTable, "USysConvV1"
+    DoCmd.DeleteObject acTable, "USysConvA1"
+    DoCmd.DeleteObject acTable, "USysConvO1"
+
+On Error GoTo 0
+End Sub
+
+Private Sub AttachTables(RemoteDB As Database, ProjectName As String)
+
+'Dec 4, 2008
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Env", "USysConvE"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Humus", "USysConvH"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Mineral", "USysConvM"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Veg", "USysConvV"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Audit", "USysConvA"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Other", "USysConvO"
+
+End Sub

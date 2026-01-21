@@ -1,0 +1,7 @@
+CREATE TABLE [tblWhatsNew] (
+  [Date] DATETIME DEFAULT ,
+  [Change] MEMO DEFAULT ,
+  [Viewed] BIT DEFAULT 
+);
+
+

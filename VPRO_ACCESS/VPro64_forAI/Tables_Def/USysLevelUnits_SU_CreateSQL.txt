@@ -1,0 +1,28 @@
+CREATE TABLE [USysLevelUnits_SU] (
+  [PlotNumber] TEXT(7) DEFAULT ,
+  [SiteUnit1] TEXT(255) DEFAULT ,
+  [SiteUnit2] TEXT(255) DEFAULT ,
+  [SiteUnit3] TEXT(255) DEFAULT ,
+  [SiteUnit4] TEXT(255) DEFAULT ,
+  [SiteUnit5] TEXT(255) DEFAULT ,
+  [SiteUnit6] TEXT(255) DEFAULT ,
+  [SiteUnit7] TEXT(255) DEFAULT ,
+  [SiteUnit8] TEXT(255) DEFAULT ,
+  [SiteUnit9] TEXT(255) DEFAULT ,
+  [SiteUnit10] TEXT(255) DEFAULT ,
+  [SiteUnit11] TEXT(255) DEFAULT 
+);
+
+CREATE UNIQUE INDEX [PlotNumber] ON [USysLevelUnits_SU] ([PlotNumber]);
+CREATE INDEX [SiteUnit] ON [USysLevelUnits_SU] ([SiteUnit1]);
+CREATE INDEX [SiteUnit1] ON [USysLevelUnits_SU] ([SiteUnit2]);
+CREATE INDEX [SiteUnit10] ON [USysLevelUnits_SU] ([SiteUnit11]);
+CREATE INDEX [SiteUnit2] ON [USysLevelUnits_SU] ([SiteUnit3]);
+CREATE INDEX [SiteUnit3] ON [USysLevelUnits_SU] ([SiteUnit4]);
+CREATE INDEX [SiteUnit4] ON [USysLevelUnits_SU] ([SiteUnit5]);
+CREATE INDEX [SiteUnit5] ON [USysLevelUnits_SU] ([SiteUnit6]);
+CREATE INDEX [SiteUnit6] ON [USysLevelUnits_SU] ([SiteUnit7]);
+CREATE INDEX [SiteUnit7] ON [USysLevelUnits_SU] ([SiteUnit8]);
+CREATE INDEX [SiteUnit8] ON [USysLevelUnits_SU] ([SiteUnit9]);
+CREATE INDEX [SiteUnit9] ON [USysLevelUnits_SU] ([SiteUnit10]);
+

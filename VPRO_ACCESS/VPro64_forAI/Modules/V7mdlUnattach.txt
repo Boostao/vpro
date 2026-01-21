@@ -1,0 +1,416 @@
+Option Compare Database
+Option Explicit
+
+Public Sub UnattachProfileTables(Optional ProfileName As String)
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, TableToDelete As String, SqlText As String
+Set MyDB = CurrentDb
+
+If ProfileName = "" Then
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((Unattach)=True));"
+Else
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((ProjectName)='" & ProfileName & "'));"
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    TableToDelete = MyRS!ProjectName
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Profile"
+    MyRS.MoveNext
+Next i
+
+UnattachDupTables
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+End Sub
+
+Public Sub ListUnattachProfileTables()
+Dim MyDB As Database
+Dim TestConnect As String, i As Integer, TblName As String, SqlText As String
+Dim MyRS As Recordset
+Set MyDB = CurrentDb
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM tblUnattach;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+Set MyRS = MyDB.OpenRecordset("tblUnattach", dbOpenDynaset)
+
+For i = 0 To MyDB.TableDefs.count - 1
+    TblName = MyDB.TableDefs(i).Name
+    If Right(TblName, 8) = "_Profile" And MyDB.TableDefs(i).Connect > "" And TblName <> clsVProReg.CurrVegProfile & "_Profile" Then
+        MyRS.AddNew
+        MyRS!ProjectName = Left(TblName, Len(TblName) - 8)
+        MyRS.Update
+    End If
+Next i
+
+MyRS.Close
+Set MyDB = Nothing
+
+End Sub
+
+Public Sub ListUnattachHerbariumTables()
+Dim MyDB As Database
+Dim TestConnect As String, i As Integer, TblName As String, SqlText As String
+Dim MyRS As Recordset
+Set MyDB = CurrentDb
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM tblUnattach;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+Set MyRS = MyDB.OpenRecordset("tblUnattach", dbOpenDynaset)
+
+For i = 0 To MyDB.TableDefs.count - 1
+    TblName = MyDB.TableDefs(i).Name
+    If Right(TblName, 10) = "_Herbarium" And MyDB.TableDefs(i).Connect > "" And TblName <> clsVProReg.CurrHerbarium & "_Herbarium" Then
+        MyRS.AddNew
+        MyRS!ProjectName = Left(TblName, Len(TblName) - 10)
+        MyRS.Update
+    End If
+Next i
+
+MyRS.Close
+Set MyDB = Nothing
+
+End Sub
+
+Public Sub UnattachHerbariumTables(Optional HerbariumName As String)
+
+'June 10, 2009
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, TableToDelete As String, SqlText As String
+Set MyDB = CurrentDb
+
+If HerbariumName = "" Then
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((Unattach)=True));"
+Else
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((ProjectName)='" & HerbariumName & "'));"
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    TableToDelete = MyRS!ProjectName
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Herbarium"
+    MyRS.MoveNext
+Next i
+
+UnattachDupTables
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+End Sub
+
+Public Sub UnattachLumpTables(Optional LumpName As String)
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, TableToDelete As String, SqlText As String
+Set MyDB = CurrentDb
+
+If LumpName = "" Then
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((Unattach)=True));"
+Else
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((ProjectName)='" & LumpName & "'));"
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    TableToDelete = MyRS!ProjectName
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Lump"
+    MyRS.MoveNext
+Next i
+
+UnattachDupTables
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+End Sub
+
+Public Sub ListUnattachLumpTables()
+Dim MyDB As Database
+Dim TestConnect As String, i As Integer, TblName As String, SqlText As String
+Dim MyRS As Recordset
+Set MyDB = CurrentDb
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM tblUnattach;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+Set MyRS = MyDB.OpenRecordset("tblUnattach", dbOpenDynaset)
+
+For i = 0 To MyDB.TableDefs.count - 1
+    TblName = MyDB.TableDefs(i).Name
+    If Right(TblName, 5) = "_Lump" And MyDB.TableDefs(i).Connect > "" And TblName <> clsVProReg.CurrLump & "_Lump" Then
+        MyRS.AddNew
+        MyRS!ProjectName = Left(TblName, Len(TblName) - 5)
+        MyRS.Update
+    End If
+Next i
+
+MyRS.Close
+Set MyDB = Nothing
+
+End Sub
+
+Public Sub ListUnattachProjectTables()
+Dim MyDB As Database
+Dim TestConnect As String, i As Integer, TblName As String, SqlText As String
+Dim MyRS As Recordset
+Set MyDB = CurrentDb
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM tblUnattach;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+Set MyRS = MyDB.OpenRecordset("tblUnattach", dbOpenDynaset)
+
+For i = 0 To MyDB.TableDefs.count - 1
+    TblName = MyDB.TableDefs(i).Name
+    If Right(TblName, 4) = "_Env" And MyDB.TableDefs(i).Connect > "" And TblName <> clsVProReg.CurrProject & "_Env" Then
+        MyRS.AddNew
+        MyRS!ProjectName = Left(TblName, Len(TblName) - 4)
+        MyRS.Update
+    End If
+Next i
+
+MyRS.Close
+Set MyDB = Nothing
+
+End Sub
+
+Public Sub UnattachProjects(Optional ProjectName As String)
+'30 Sep 2019
+
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, TableToDelete As String, SqlText As String
+Set MyDB = CurrentDb
+
+If ProjectName = "" Then
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((Unattach)=True));"
+Else
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((ProjectName)='" & ProjectName & "'));"
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+On Error Resume Next
+For i = 1 To MyRS.RecordCount
+    TableToDelete = MyRS!ProjectName
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Env"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Veg"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Audit"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Other"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Mineral"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Humus"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Metadata"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Admin"
+    MyRS.MoveNext
+Next i
+
+UnattachDupTables
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+End Sub
+
+Public Sub ListUnattachSUTables()
+Dim MyDB As Database
+Dim TestConnect As String, i As Integer, TblName As String, SqlText As String
+Dim MyRS As Recordset
+Set MyDB = CurrentDb
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM tblUnattach;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+Set MyRS = MyDB.OpenRecordset("tblUnattach", dbOpenDynaset)
+
+For i = 0 To MyDB.TableDefs.count - 1
+    TblName = MyDB.TableDefs(i).Name
+    If Right(TblName, 3) = "_SU" And MyDB.TableDefs(i).Connect > "" And TblName <> clsVProReg.CurrPlotlist & "_SU" Then
+        MyRS.AddNew
+        MyRS!ProjectName = Left(TblName, Len(TblName) - 3)
+        MyRS.Update
+    End If
+Next i
+
+MyRS.Close
+Set MyDB = Nothing
+
+End Sub
+
+Public Sub ListUnattachHierarchyTables()
+Dim MyDB As Database
+Dim TestConnect As String, i As Integer, TblName As String, SqlText As String
+Dim MyRS As Recordset
+Set MyDB = CurrentDb
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM tblUnattach;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+Set MyRS = MyDB.OpenRecordset("tblUnattach", dbOpenDynaset)
+
+For i = 0 To MyDB.TableDefs.count - 1
+    TblName = MyDB.TableDefs(i).Name
+    If Right(TblName, 10) = "_Hierarchy" And MyDB.TableDefs(i).Connect > "" And TblName <> clsVProReg.CurrHierarchy & "_Hierarchy" Then
+        MyRS.AddNew
+        MyRS!ProjectName = Left(TblName, Len(TblName) - 10)
+        MyRS.Update
+    End If
+Next i
+
+MyRS.Close
+Set MyDB = Nothing
+
+End Sub
+
+Public Sub ListUnattachConstancyTables()
+Dim MyDB As Database
+Dim TestConnect As String, i As Integer, TblName As String, SqlText As String
+Dim MyRS As Recordset
+Set MyDB = CurrentDb
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM tblUnattach;"
+DoCmd.RunSQL SqlText
+DoCmd.SetWarnings True
+
+Set MyRS = MyDB.OpenRecordset("tblUnattach", dbOpenDynaset)
+
+For i = 0 To MyDB.TableDefs.count - 1
+    TblName = MyDB.TableDefs(i).Name
+    If Right(TblName, 10) = "_Constancy" And MyDB.TableDefs(i).Connect > "" And TblName <> clsConstancy.CurrConstancy & "_Constancy" Then
+        MyRS.AddNew
+        MyRS!ProjectName = Left(TblName, Len(TblName) - 10)
+        MyRS.Update
+    End If
+Next i
+
+MyRS.Close
+Set MyDB = Nothing
+
+End Sub
+
+Public Sub UnattachSUs(Optional SUName As String)
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, TableToDelete As String, SqlText As String
+Set MyDB = CurrentDb
+
+If SUName = "" Then
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((Unattach)=True));"
+Else
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((ProjectName)='" & SUName & "'));"
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    TableToDelete = MyRS!ProjectName
+    On Error Resume Next
+    DoCmd.Close acTable, TableToDelete & "_SU"
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_SU"
+    On Error GoTo 0
+    MyRS.MoveNext
+Next i
+
+UnattachDupTables
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+End Sub
+
+Public Sub UnattachSelectedHierarcies(Optional HierarchyName As String)
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, TableToDelete As String, SqlText As String
+Set MyDB = CurrentDb
+
+If HierarchyName = "" Then
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((Unattach)=True));"
+Else
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((ProjectName)='" & HierarchyName & "'));"
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    TableToDelete = MyRS!ProjectName
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Hierarchy"
+    MyRS.MoveNext
+Next i
+
+UnattachDupTables
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+End Sub
+
+Public Sub UnattachConstancyTables(Optional ConstancyName As String)
+Dim MyDB As Database, MyRS As Recordset
+Dim i As Integer, TableToDelete As String, SqlText As String
+Set MyDB = CurrentDb
+
+If ConstancyName = "" Then
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((Unattach)=True));"
+Else
+    SqlText = "SELECT ProjectName FROM tblUnattach WHERE (((ProjectName)='" & ConstancyName & "'));"
+End If
+
+Set MyRS = MyDB.OpenRecordset(SqlText)
+If MyRS.RecordCount = 0 Then GoTo MyExit
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    TableToDelete = MyRS!ProjectName
+    DoCmd.DeleteObject A_TABLE, TableToDelete & "_Constancy"
+    MyRS.MoveNext
+Next i
+
+UnattachDupTables
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Sub
+
+End Sub

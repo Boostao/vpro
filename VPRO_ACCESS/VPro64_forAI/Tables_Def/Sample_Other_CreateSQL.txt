@@ -1,0 +1,17 @@
+CREATE TABLE [Sample_Other] (
+  [PlotNumber] TEXT(7) NOT NULL DEFAULT ,
+  [DataName] TEXT(50) DEFAULT ,
+  [DataItem] TEXT(255) DEFAULT ,
+  [UserItem1] TEXT(255) DEFAULT ,
+  [UserItem2] TEXT(255) DEFAULT ,
+  [UserItem3] TEXT(255) DEFAULT ,
+  [UserFlag1] BIT DEFAULT ,
+  [UserFlag2] BIT DEFAULT ,
+  [UserFlag3] BIT DEFAULT ,
+  [Flag] BIT DEFAULT ,
+  [ID] LONG DEFAULT GenUniqueID()
+);
+
+CREATE UNIQUE INDEX [ID] ON [Sample_Other] ([ID]);
+CREATE INDEX [PlotNumber] ON [Sample_Other] ([PlotNumber]);
+

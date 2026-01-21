@@ -1,0 +1,150 @@
+Option Compare Database
+Private MasterCount As Integer
+
+Private Sub test()
+
+'OrderHierarchyStep1 CurrentDb, "TestSplit_Hierarchy"
+'OrderHierarchyStep1 CurrentDb, "BEC_CorrelationII_Nov2013_Hierarchy"
+OrderHierarchyStep1 CurrentDb, "Sample_Hierarchy"
+'OrderHierarchyStep1 CurrentDb, "MySplinter_Hierarchy"
+MsgBox "done"
+
+End Sub
+
+Public Sub OrderHierarchyStep1(db As Database, TableName As String)
+
+On Error GoTo errOrderHierarchyStep1
+
+Dim MyRS As Recordset, OutRS As Recordset
+Dim SqlText As String, i As Integer
+Dim BK As String
+Set OutRS = db.OpenRecordset(TableName, dbOpenDynaset)
+
+If Check4AllLevel11(db, TableName) Then
+    AddRoot db, TableName
+End If
+
+SqlText = "SELECT ID"
+SqlText = SqlText & " FROM " & TableName
+SqlText = SqlText & " WHERE (((Parent) Is Null));"
+
+Set MyRS = db.OpenRecordset(SqlText)
+'db.CreateQueryDef "fred2", SqlText
+MyRS.MoveLast
+MyRS.MoveFirst
+MasterCount = 1
+
+For i = 1 To MyRS.RecordCount
+'    UnitOrder = i
+    OrderHierarchyStep2 db, MyRS!ID, TableName, MasterCount
+    MyRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Exit Sub
+errOrderHierarchyStep1:
+    MsgBox Err.Description
+    Resume MyExit
+End Sub
+
+Private Sub OrderHierarchyStep2(MyDB As Database, Unit As Long, TableName As String, Optional MyCount As Integer)
+Dim MyRecords As Recordset, MyCriteria As String
+Dim NextUnit As Long, Shifty As Long, BK As String
+
+If IsMissing(MyCount) Then MyCount = 1
+If UnitOrder = 0 Then
+    UnitOrder = 1
+Else
+    'UnitOrder = UnitOrder + 1
+End If
+
+Set MyRecords = MyDB.OpenRecordset(TableName, dbOpenDynaset)
+'MyRecords.MoveLast
+'MyRecords.MoveFirst
+MyCriteria = "ID = " & Unit
+    MyRecords.FindFirst MyCriteria
+    If IsNull(MyRecords!Parent) Then
+        MyRecords.Edit
+        MyRecords!MyOrder = Format(MasterCount, "00000")
+        MyRecords.Update
+    End If
+    If MyRecords.NoMatch Then GoTo MyExit
+    Shifty = MyRecords!ID
+        
+    MyRecords.MoveFirst
+    MyCriteria = "Parent = " & Shifty
+    MyRecords.FindFirst MyCriteria
+
+MyCount = MyCount + 1
+MasterCount = MyCount
+
+Do Until MyRecords.NoMatch
+    BK = MyRecords.Bookmark
+    NextUnit = MyRecords!ID
+        MyRecords.Edit
+        If MyRecords!Level = 11 Then
+            MyRecords!ChildID = UnitOrder
+            UnitOrder = UnitOrder + 1
+        End If
+        MyRecords!MyOrder = Format(MyCount, "00000")
+        MyRecords.Update
+    OrderHierarchyStep2 MyDB, NextUnit, TableName, MyCount
+    MyRecords.Bookmark = BK
+    MyRecords.FindNext MyCriteria
+Loop
+
+MyExit:
+    MyRecords.Close
+End Sub
+
+Private Function Check4AllLevel11(db As Database, TableName As String) As Boolean
+Dim MyRS As Recordset
+Dim SqlText As String
+SqlText = "SELECT [Level]"
+SqlText = SqlText & " From " & TableName
+SqlText = SqlText & " WHERE ((([Level])<>11));"
+Set MyRS = db.OpenRecordset(SqlText)
+
+If MyRS.RecordCount > 0 Then
+    Check4AllLevel11 = False
+Else
+    Check4AllLevel11 = True
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    
+End Function
+
+Private Function AddRoot(db As Database, TableName As String)
+Dim MyRS As Recordset, RootID As Long, i As Integer, MyFld As Field
+
+Set MyRS = db.OpenRecordset(TableName, dbOpenDynaset)
+MyRS.AddNew
+MyRS!Name = "Root"
+RootID = MyRS!ID
+MyRS.Update
+
+Set MyFld = MyRS.Fields("Parent")
+MyFld.Properties("RowSource") = TableName
+
+MyRS.MoveLast
+MyRS.MoveFirst
+
+For i = 1 To MyRS.RecordCount
+    If MyRS!ID <> RootID Then
+        MyRS.Edit
+        MyRS!Parent = RootID
+        MyRS.Update
+    End If
+    MyRS.MoveNext
+Next i
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    
+End Function

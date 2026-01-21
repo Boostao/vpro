@@ -1,0 +1,993 @@
+Option Explicit
+Option Compare Text   'Use database order for string comparisons
+    Const MB_OK = 0, MB_OKCANCEL = 1    ' Define buttons.
+    Const MB_YESNOCANCEL = 3, MB_YESNO = 4
+    Const MB_ICONSTOP = 16, MB_ICONQUESTION = 32   ' Define icons.
+    Const MB_ICONEXCLAMATION = 48, MB_ICONINFORMATION = 64
+    Const MB_DEFBUTTON2 = 256, IDYES = 6, IDNO = 7   ' Define other
+Global sysApply2AllPlots As Boolean, SuErr As String
+
+Private Function AddIndex() 'TblDef as TableDef, FieldName as String)
+Dim MyDB As Database, MyTbl As TableDef, MyFld As Field, MyPrp As Property, MyIdx As index
+Set MyDB = CurrentDb
+Set MyTbl = MyDB.TableDefs("SampleSuBak")
+Set MyFld = MyTbl.Fields("PlotNumber")
+
+Set MyIdx = MyTbl.CreateIndex("xHerman")
+    MyIdx.Fields.Append MyIdx.CreateField("SiteUnit")
+
+    MyTbl.Indexes.Append MyIdx
+    MsgBox MyTbl.Indexes(MyIdx).Properties("Type")
+GoTo MyExit
+For Each MyIdx In MyTbl.Indexes
+    MsgBox MyIdx.Name
+        For Each MyPrp In MyIdx.Properties
+            MsgBox MyPrp.Name & " - " & MyPrp.Value
+        Next MyPrp
+Next MyIdx
+
+MyTbl.Indexes("PlotNumber").Unique = False
+
+GoTo MyExit
+
+For Each MyPrp In MyFld.Properties 'MyTbl.Properties
+    MsgBox MyPrp.Name
+Next MyPrp
+
+
+MyExit:
+Set MyDB = Nothing
+End Function
+
+Function AddField(tblDef As TableDef, FieldName As String, FieldType As String)
+'Sept. 26, 2003
+If FieldType = "Text" Then
+    tblDef.Fields.Append tblDef.CreateField(FieldName, dbText, 255)
+End If
+If FieldType = "Integer" Then
+    tblDef.Fields.Append tblDef.CreateField(FieldName, dbInteger)
+End If
+If FieldType = "Long" Then
+    tblDef.Fields.Append tblDef.CreateField(FieldName, dbLong)
+End If
+If FieldType = "Memo" Then
+    tblDef.Fields.Append tblDef.CreateField(FieldName, dbMemo)
+    tblDef.Fields(FieldName).AllowZeroLength = True
+End If
+
+End Function
+
+Public Function CreateTable(db As Database, TableName As String)
+'Oct. 9, 2002
+Dim MyTbl As TableDef
+On Error Resume Next
+DoCmd.DeleteObject acTable, TableName
+On Error GoTo 0
+
+    Set MyTbl = db.CreateTableDef(TableName)
+    MyTbl.Fields.Append MyTbl.CreateField("rkTemp", dbText, 255)
+    db.TableDefs.Append MyTbl
+End Function
+
+Private Function CreateAuditTable()
+
+'not in use
+Dim MyDB As Database, MyTbl As TableDef, MyFld As Field, MyPrp As Property
+Set MyDB = CurrentDb()
+Set MyTbl = MyDB.CreateTableDef("TempAudit")
+Set MyFld = MyTbl.CreateField("Project", dbText, 255)
+MyTbl.Fields.Append MyFld
+Set MyFld = MyTbl.CreateField("User", dbText, 255)
+MyTbl.Fields.Append MyFld
+Set MyFld = MyTbl.CreateField("PlotNumber", dbText, 7)
+MyTbl.Fields.Append MyFld
+Set MyFld = MyTbl.CreateField("Table", dbText, 50)
+MyTbl.Fields.Append MyFld
+Set MyFld = MyTbl.CreateField("EditField", dbText, 100)
+MyTbl.Fields.Append MyFld
+Set MyFld = MyTbl.CreateField("EditWhen", dbDate)
+MyTbl.Fields.Append MyFld
+Set MyPrp = MyFld.CreateProperty("Format", dbText, "mmm. d, yyyy,  hh:nnam/pm")
+MyDB.TableDefs.Append MyTbl
+MyFld.Properties.Append MyPrp
+Set MyFld = MyTbl.CreateField("BeforeEdit", dbMemo)
+MyTbl.Fields.Append MyFld
+Set MyFld = MyTbl.CreateField("AfterEdit", dbMemo)
+MyTbl.Fields.Append MyFld
+MyDB.TableDefs.Refresh
+
+Set MyDB = Nothing
+
+End Function
+
+Function CreateProfileTable(Optional ProfileRecords)
+    
+'Sep 22, 2008
+    On Error GoTo errCreateProfileTable
+    Dim MyDB As Database, TestName As Integer, ProfileTableName As String, Msg As String
+    Dim Title As String, DefValue As String, ProfileTable As String, i As Integer, TestTable As String, MyTitle As String, DataLocationName As String
+    
+    Set MyDB = CurrentDb()
+        
+    Msg = "Enter a name for your new vegetation profile table.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length."
+    Title = "New Vegetation Profile Table"
+    DefValue = ""
+    ProfileTableName = InputBox(Msg, Title, DefValue)
+    If ProfileTableName = "" Then Exit Function
+    If IsNull(ProfileTableName) Then Exit Function
+    TestName = InStr(ProfileTableName, "_")
+    If TestName > 0 Then Exit Function
+    If ProfileTableName = "" Then Exit Function
+    If ProfileTableName = "Sample" Then Exit Function
+    ProfileTable = ProfileTableName & "_Profile"
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = ProfileTable Then
+            MsgBox "Name already exists"
+            Exit Function
+        End If
+    Next i
+
+    MyTitle$ = ProgramName() & " - pick a database to save your table in"
+    DataLocationName = GetFileName(MyTitle$, False)
+    If Trim(DataLocationName) = "" Then Exit Function
+    If Trim(DataLocationName) = MyDB.Name Then MsgBox "You can't create tables in this database.", 64, ProgramName()
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+
+DoCmd.CopyObject DataLocationName, ProfileTable, acTable, "USysProfileTable"
+DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", DataLocationName, A_TABLE, ProfileTable, ProfileTable
+
+If IsMissing(ProfileRecords) Then
+
+Else
+    If ProfileRecords.RecordCount > 0 Then
+    Dim TableRecords As Recordset
+    Set TableRecords = MyDB.OpenRecordset(ProfileTable)
+    ProfileRecords.MoveFirst
+    
+        For i = 1 To ProfileRecords.RecordCount
+            TableRecords.AddNew
+            TableRecords!Source = ProfileRecords!Source
+            TableRecords!Species = ProfileRecords!Species
+            TableRecords!Layer = ProfileRecords!Layer
+            TableRecords!Cover = ProfileRecords!Cover
+            TableRecords!LumpTable = ProfileRecords!LumpTable
+            TableRecords.Update
+            ProfileRecords.MoveNext
+        Next i
+    End If
+End If
+
+exitCreateProfileTable:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Screen.ActiveForm.Recalc
+    Exit Function
+errCreateProfileTable:
+    If Err.Number = 2501 Then
+        Resume exitCreateProfileTable
+    End If
+    MsgBox Err.Description
+    Resume exitCreateProfileTable
+
+End Function
+Function CreateThemeTable()
+    
+'Sep 22, 2008
+    On Error GoTo errCreateThemeTable
+    Dim MyDB As Database, TestName As Integer, ThemeTableName As String
+    Dim ThemeTable As String, Msg As String, Title As String, DefValue As String, i As Integer, TestTable As String, ProfileTable As String, MyTitle As String
+    Dim DataLocationName As String
+    Set MyDB = CurrentDb()
+    sysComboTable = ""
+    
+    Msg = "Enter a name for your new report theme table.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length."
+    Title = "New Report Theme Table"
+    DefValue = ""
+    ThemeTableName = InputBox(Msg, Title, DefValue)
+    If ThemeTableName = "" Then Exit Function
+    If IsNull(ThemeTableName) Then Exit Function
+    TestName = InStr(ThemeTableName, " ")
+    If TestName > 0 Then Exit Function
+    TestName = InStr(ThemeTableName, "_")
+    If TestName > 0 Then Exit Function
+    If ThemeTableName = "" Then Exit Function
+    If ThemeTableName = "Sample" Then Exit Function
+    ThemeTable = ThemeTableName & "_Theme"
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = ProfileTable Then
+            MsgBox "Name already exists"
+            Exit Function
+        End If
+    Next i
+
+    MyTitle$ = ProgramName() & " - pick a database to save your table in"
+    DataLocationName = GetFileName(MyTitle$, True)
+    If Trim(DataLocationName) = "" Then Exit Function
+    If Trim(DataLocationName) = MyDB.Name Then MsgBox "You can't create tables in this database.", 64, ProgramName()
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+
+DoCmd.CopyObject DataLocationName, ThemeTable, acTable, "USysThemeTable"
+DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", DataLocationName, A_TABLE, ThemeTable, ThemeTable
+sysComboTable = ThemeTable
+
+exitCreateThemeTable:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Screen.ActiveForm.Recalc
+    Exit Function
+errCreateThemeTable:
+    If Err.Number = 2501 Then
+        Resume exitCreateThemeTable
+    End If
+    MsgBox Err.Description
+    Resume exitCreateThemeTable
+
+End Function
+Function CreateLumpTable()
+
+'Sep 22, 2008
+    On Error GoTo errCreateLumpTable
+    Dim MyDB As Database, TestName As Integer
+    Dim Msg As String, Title As String, DefValue As String, LumpTableName As String, LumpTable As String, i As Integer, TestTable As String
+    Dim MyTitle As String, DataLocationName As String
+    Set MyDB = CurrentDb()
+    
+    sysLumpingTable = ""
+    Msg = "Enter a name for your new lumping table.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length"
+    Title = "New Vegetation Lump Table"
+    DefValue = ""
+    LumpTableName = InputBox(Msg, Title, DefValue)
+    If LumpTableName = "" Then Exit Function
+    If IsNull(LumpTableName) Then Exit Function
+    TestName = InStr(LumpTableName, "_")
+    If TestName > 0 Then Exit Function
+    If LumpTableName = "" Then Exit Function
+    If LumpTableName = "Sample" Then Exit Function
+    LumpTable = LumpTableName & "_Lump"
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = LumpTable Then
+            MsgBox "Name already exists"
+            Exit Function
+        End If
+    Next i
+
+    MyTitle$ = ProgramName() & " - pick a database to save your table in"
+    DataLocationName = GetFileName(MyTitle$, True)
+    If Trim(DataLocationName) = "" Then Exit Function
+    If Trim(DataLocationName) = MyDB.Name Then MsgBox "You can't create tables in this database.", 64, ProgramName()
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+Jump:
+DoCmd.CopyObject DataLocationName, LumpTable, acTable, "USysLumpTable"
+DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", DataLocationName, A_TABLE, LumpTable, LumpTable
+sysLumpingTable = LumpTable
+
+exitCreateLumpTable:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errCreateLumpTable:
+    If Err.Number = 2501 Then
+        Resume exitCreateLumpTable
+    End If
+    If Err.Number = 3024 Then
+        DBEngine.Workspaces(0).CreateDatabase DataLocationName, dbLangGeneral
+        Resume Jump
+    End If
+    MsgBox Err.Description & " - " & Err.Number
+    Resume exitCreateLumpTable
+End Function
+
+Private Sub X()
+
+Debug.Print clsRepOpt.LVConstantSppList
+
+End Sub
+Function BuildStrataTable()
+'Feb. 15, 2006
+' converts veg data by layer into veg data by strata - used in veg reports
+Dim MyDB As Database, MyQuery As QueryDef, SqlText As String
+Dim Project As String, VegTable As String, LumpTable As String
+Set MyDB = CurrentDb()
+Project = CurrProject()
+VegTable = Project & "_Veg"
+If CurrPlotlist() <> "None" Then VegTable = "TempReportVeg"
+
+On Error Resume Next
+DoCmd.DeleteObject A_TABLE, "EntryDat_Veg"
+DoCmd.DeleteObject acQuery, "TempVegConsolidate"
+On Error GoTo errBuildStrataTable
+DoCmd.CopyObject , "EntryDat_Veg", A_TABLE, "USysV2Veg"
+DoCmd.SetWarnings False
+
+'SqlText = "SELECT PlotNumber, Species, First(Cover1) AS C1, First(Cover2) AS C2, First(Cover3) AS C3, First(Cover4) AS C4, First(Cover5) AS C5, First(Cover6) AS C6, First(Cover7) AS C7, First(TotalA) AS TA, First(TotalB) AS TB"
+'SqlText = SqlText & " FROM [" & VegTable & "]"
+'SqlText = SqlText & " GROUP BY PlotNumber, Species;"
+SqlText = "SELECT TempReportVeg.PlotNumber, TempReportVeg.Species, First(TempReportVeg.Cover1) AS C1, First(TempReportVeg.Cover2) AS C2, First(TempReportVeg.Cover3) AS C3, First(TempReportVeg.Cover4) AS C4, First(TempReportVeg.Cover5) AS C5, First(TempReportVeg.Cover5a) AS C5a, First(TempReportVeg.Cover5b) AS C5b, First(TempReportVeg.Cover5c) AS C5c, First(TempReportVeg.Cover6) AS C6, First(TempReportVeg.Cover7) AS C7, First(TempReportVeg.TotalA) AS TA, First(TempReportVeg.TotalB) AS TB"
+SqlText = SqlText & " From TempReportVeg"
+SqlText = SqlText & " GROUP BY TempReportVeg.PlotNumber, TempReportVeg.Species;"
+'MyDB.CreateQueryDef "errTempConsolid", SqlText
+Set MyQuery = MyDB.CreateQueryDef("TempVegConsolidate", SqlText)
+
+VegTable = "TempVegConsolidate"
+
+'Strata A
+SqlText = "INSERT INTO EntryDat_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW PlotNumber, '1' AS Strata, Species, Val(IIf(IsNull([TA]),IIf((Nz([C1])+Nz([C2])+Nz([C3]))>99,99,(Nz([C1])+Nz([C2])+Nz([C3]))),[TA])) AS Cover"
+SqlText = SqlText & " FROM [" & VegTable & "]"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TA]),IIf((Nz([C1])+Nz([C2])+Nz([C3]))>99,99,(Nz([C1])+Nz([C2])+Nz([C3]))),[TA])))>0));"
+'MyDB.CreateQueryDef "err1", SqlText
+DoCmd.RunSQL SqlText
+    
+'Strata B
+'SqlText = "INSERT INTO EntryDat_Veg ( Plotnumber, Layer, Species, Cover )"
+'SqlText = SqlText & " SELECT DISTINCTROW PlotNumber, '4' AS Strata, Species, Val(IIf(IsNull([TB]),IIf((Nz([C4])+Nz([C5]))>99,99,(Nz([C4])+Nz([C5]))),[TB])) AS Cover"
+'SqlText = SqlText & " FROM [" & VegTable & "]"
+'SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TB]),IIf((Nz([C4])+Nz([C5]))>99,99,(Nz([C4])+Nz([C5]))),[TB])))>0));"
+SqlText = "INSERT INTO EntryDat_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW TempVegConsolidate.PlotNumber, '4' AS Strata, TempVegConsolidate.Species, Val(IIf(IsNull([TB]),IIf((Nz([C4])+Nz([C5])+Nz([C5a])+Nz([C5b])+Nz([C5c]))>99,99,(Nz([C4])+Nz([C5])+Nz([C5a])+Nz([C5b])+Nz([C5c]))),[TB])) AS Cover"
+SqlText = SqlText & " From TempVegConsolidate"
+SqlText = SqlText & " WHERE (((Val(IIf(IsNull([TB]),IIf((Nz([C4])+Nz([C5])+Nz([C5a])+Nz([C5b])+Nz([C5c]))>99,99,(Nz([C4])+Nz([C5])+Nz([C5a])+Nz([C5b])+Nz([C5c]))),[TB])))>0));"
+'MyDB.CreateQueryDef "err2", SqlText
+DoCmd.RunSQL SqlText
+'Stop
+'Strata C
+SqlText = "INSERT INTO EntryDat_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW PlotNumber, '6' AS Strata, Species, C6"
+SqlText = SqlText & " FROM [" & VegTable & "]"
+SqlText = SqlText & " WHERE ((C6 Is Not Null));"
+'MyDB.CreateQueryDef "err3", SqlText
+DoCmd.RunSQL SqlText
+
+'Strata D
+SqlText = "INSERT INTO EntryDat_Veg ( Plotnumber, Layer, Species, Cover )"
+SqlText = SqlText & " SELECT DISTINCTROW PlotNumber, '7' AS Strata, Species, C7"
+SqlText = SqlText & " FROM [" & VegTable & "]"
+SqlText = SqlText & " WHERE ((C7 Is Not Null));"
+'MyDB.CreateQueryDef "err4", SqlText
+DoCmd.RunSQL SqlText
+
+If clsVProReg.CurrLump <> "None" Then
+    LumpTable = clsVProReg.CurrLump & "_Lump"
+End If
+
+MyExit:
+    On Error Resume Next
+    DoCmd.DeleteObject acQuery, "TempVegConsolidate"
+    DoCmd.SetWarnings True
+    Set MyDB = Nothing
+    Exit Function
+errBuildStrataTable:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function CreateTempVeg(VegTable, SuTable)
+'May 15, 2016
+' creates a small vegetation table based on the site unit table
+Dim SqlText As String
+    DoCmd.SetWarnings False
+    On Error Resume Next
+    DoCmd.DeleteObject A_TABLE, "TempReportVeg"
+    On Error GoTo errCreateTempVeg
+    
+    'optimizes veg data
+    DoCmd.CopyObject , "TempReportVeg", acTable, "USysVegTable"
+    SqlText = "INSERT INTO TempReportVeg ( PlotNumber, Species, Cover1, Cover2, Cover3, Cover4, Cover5, Cover5a, Cover5b, Cover5c, Cover6, Cover7, Cover8, Cover9, Cover10, TotalA, TotalB )"
+    SqlText = SqlText & " SELECT DISTINCTROW [" & VegTable & "].PlotNumber, Species, Max(Cover1) AS MaxOfCover1, Max(Cover2) AS MaxOfCover2, Max(Cover3) AS MaxOfCover3, Max(Cover4) AS MaxOfCover4, Max(Cover5) AS MaxOfCover5, Max(Cover5a) AS MaxOfCover5a, Max(Cover5b) AS MaxOfCover5b, Max(Cover5c) AS MaxOfCover5c, Max(Cover6) AS MaxOfCover6, Max(Cover7) AS MaxOfCover7, Max(Cover8) AS MaxOfCover8, Max(Cover9) AS MaxOfCover9, Max(Cover10) AS MaxOfCover10, Max(TotalA) AS MaxOfTotalA, Max(TotalB) AS MaxOfTotalB"
+    SqlText = SqlText & " FROM [" & VegTable & "] INNER JOIN USysSuTableDynamic_SU ON [" & VegTable & "].PlotNumber = USysSuTableDynamic_SU.PlotNumber"
+    SqlText = SqlText & " GROUP BY [" & VegTable & "].PlotNumber, [" & VegTable & "].Species;"
+    'CurrentDb.CreateQueryDef "fred2", SqlText
+    DoCmd.RunSQL SqlText
+'Stop
+MyExit:
+    DoCmd.SetWarnings True
+    Exit Function
+errCreateTempVeg:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function CreateLimitingSuList()
+    DoCmd.OpenForm "USysQuerySuList"
+End Function
+Public Function CreateNewDatabase() As String
+
+'Sep 22, 2008
+Dim DefaultWorkspace As Workspace
+Dim MyDB As Database, NewDB As Database, Prompt As String
+Dim NewDBName As String
+Set DefaultWorkspace = DBEngine.Workspaces(0)
+Set MyDB = CurrentDb()
+    
+    Prompt = "Create Database"
+    NewDBName$ = GetFileName(Prompt, False)
+    If NewDBName$ = "" Then Exit Function
+    If NewDBName$ = MyDB.Name Then Exit Function
+
+    On Error GoTo errCreateNewDatabase
+        
+    Set NewDB = DBEngine.Workspaces(0).CreateDatabase(Trim(NewDBName$), DB_LANG_GENERAL)
+
+    CreateNewDatabase = NewDB.Name
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Set NewDB = Nothing
+    Exit Function
+errCreateNewDatabase:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Sub rkTest()
+    CreateHierarchyTable
+End Sub
+Function CreateHierarchyTable() As Boolean
+
+'Sep 22, 2008
+CreateHierarchyTable = False
+On Error GoTo errCreateHierarchyTable
+Dim MyDB As Database, Msg As String, HierarchyTable As String, MyField As Field
+Dim DefValue As String, Title As String, MyTable As TableDef, X
+Dim MyWS As Workspace, RemoteDB As Database, TestTable As String
+Dim LumpTableName As String, LumpTable As String, i As Integer
+Dim MyTitle As String, DataLocationName As String, TestName As String
+
+Set MyDB = CurrentDb()
+Set MyTable = MyDB.TableDefs("USysHierarchyTable")
+Set MyField = MyTable.Fields("Parent")
+Msg = "Enter a name for your new hierarchy table.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length"
+Title = "Create a new hierarchy table"
+DefValue = ""
+HierarchyTable = InputBox(Msg, Title, DefValue)
+    If TestForTableInVPro(HierarchyTable & "_Hierarchy") Then
+        MsgBox "A table of that name already exists.  Try a different name."
+        GoTo MyExit
+    End If
+    If HierarchyTable = "" Then Exit Function
+    If IsNull(HierarchyTable) Then Exit Function
+    TestName = InStr(HierarchyTable, "_")
+    If TestName > 0 Then Exit Function
+    If HierarchyTable = "" Then Exit Function
+    If HierarchyTable = "Sample" Then Exit Function
+    HierarchyTable = HierarchyTable & "_Hierarchy"
+    
+    MyTitle$ = ProgramName() & " - pick a database to save your table in"
+    DataLocationName = GetFileName(MyTitle$, True)
+    If Trim(DataLocationName) = "" Then Exit Function
+    If Trim(DataLocationName) = MyDB.Name Then MsgBox "You can't create tables in this database.", 64, ProgramName()
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+    If Not FileExists(Trim(DataLocationName)) Then GoTo CantFindDatabase
+AfterCreation:
+    
+    Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(DataLocationName)
+    For i = 0 To RemoteDB.TableDefs.count - 1
+        TestTable = RemoteDB.TableDefs(i).Name
+        If TestTable = HierarchyTable Then
+            MsgBox "There is already a hierarchy table of that name.  Try a different name."
+            sysCurrHierarchy = ""
+            GoTo MyExit
+        End If
+    Next i
+
+'create the table
+    MyField.Properties!RowSource = HierarchyTable
+    DoCmd.CopyObject DataLocationName, HierarchyTable, acTable, "USysHierarchyTable"
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", DataLocationName, A_TABLE, HierarchyTable, HierarchyTable
+    sysCurrHierarchy = HierarchyTable
+    CreateHierarchyTable = True
+    
+'refresh main menu float
+    If IsLoaded("frmMainMenuFloat") Then
+        Forms![frmMainMenuFloat].btnRefresh_Click
+    End If
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Set RemoteDB = Nothing
+    Forms!usysassignsu.Recalc
+    Forms!MainMenu.Recalc
+    Exit Function
+CantFindDatabase:
+Dim DefaultWorkspace As Workspace ', NewDB As Database
+Set DefaultWorkspace = DBEngine.Workspaces(0)
+
+    Msg = "Couldn't find specified database" & Chr(13)
+    Msg = Msg & ProgramName() & " will now create " & Trim(DataLocationName)
+    MsgBox Msg, 64, ProgramName()
+    
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+
+    DBEngine.Workspaces(0).CreateDatabase Trim(DataLocationName), DB_LANG_GENERAL
+    DataLocationName = Trim(DataLocationName)
+    'Set TempDB = Nothing
+    GoTo AfterCreation
+errCreateHierarchyTable:
+    If Err.Number = 2046 Then
+        MsgBox "This database was created with an earlier version of Access.  Please convert your database or try another database."
+    End If
+    If Err.Number <> 2046 Then
+        MsgBox Err.Number & Chr(13) & Err.Description
+    End If
+    Resume MyExit
+End Function
+
+Function CreateSuTable(Optional UseCurrentPlots) As String
+    
+'Dec 20, 2019
+    On Error GoTo errCreateSuTable
+    On Error Resume Next
+    Dim ProjectName As String, TestName As Integer, SuTableName As String, MySuList As String
+    Dim MyTable As Recordset, MyDB As Database, TableY As Recordset
+    Dim DefValue As String, Title As String, MyTest As Variant, Msg As String, dgdef As Variant, Response As Variant, SuTable As String
+    Dim RemoteDB As Database, TestTable As String, MyTitle As String, DataLocationName As String, i As Integer, MyProject As String, SqlText As String
+    Set MyDB = CurrentDb()
+        
+    Msg = "Enter a name for your new SU table.  Preferably, the name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length"
+    Title = "New Site Unit Table"
+    DefValue = ""
+    SuTableName = InputBox(Msg, Title, DefValue)
+    If InStr(1, SuTableName, "master") > 0 Then
+        If Not IsMasterAttacher Then
+            Msg = "The word ""master"" is a reserved word.  Please enter correct password to use this word or press cancel to end."
+            MyTest = InputBox(Msg, "VPro")
+            If MyTest = "MasterMaker" Then
+        
+            Else
+                GoTo MyExit
+            End If
+        End If
+    End If
+    
+    If SuTableName = "" Then GoTo SuWasNull
+    If IsNull(SuTableName) Then GoTo SuWasNull
+    If SuTableName = "" Then Exit Function
+    If SuTableName = "Sample" Then Exit Function
+    If TestForTableInVPro(SuTableName & "_SU") Then
+        MsgBox "A table of that name already exists.  Try a different name."
+        GoTo MyExit
+    End If
+    
+    Title = "VPro"
+    
+    If sysBreakSU <> "bla" And IsMissing(UseCurrentPlots) Then
+        Msg = "Include all plot numbers from current project?"
+        dgdef = MB_YESNO + MB_ICONSTOP + MB_DEFBUTTON2   ' Describe dialog box.
+        Response = MsgBox(Msg, dgdef, Title)    ' Get user response.
+    Else
+        Response = 5
+    End If
+    
+    SuTable = SuTableName & "_SU"
+    
+    MyTitle$ = ProgramName() & " - pick a database to save your tables in"
+    DataLocationName = GetFileName(MyTitle$, True)
+    On Error GoTo 0
+    If Trim(DataLocationName) = "" Then Exit Function
+    If Trim(DataLocationName) = MyDB.Name Then MsgBox "You can't create tables in this database.", 64, ProgramName()
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+    If Not FileExists(Trim(DataLocationName)) Then GoTo CantFindDatabase
+AfterCreation:
+
+    
+    Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(DataLocationName)
+SuErr = "None"
+    For i = 0 To RemoteDB.TableDefs.count - 1
+        TestTable = RemoteDB.TableDefs(i).Name
+        If TestTable = SuTable Then
+            MsgBox "There is already a site unit table of that name.  Try a different name."
+            SuErr = "Dup"
+            GoTo MyExit
+        End If
+    Next i
+    
+    DoCmd.CopyObject , SuTable, acTable, "USysSuTable"
+    DoCmd.TransferDatabase A_EXPORT, "Microsoft Access", DataLocationName, A_TABLE, SuTable, SuTable
+    DoCmd.DeleteObject A_TABLE, SuTable
+    DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", DataLocationName, A_TABLE, SuTable, SuTable
+    
+    'MyProject = CurrProject() & "_ENV"
+    MyProject = "USysEnv"
+    
+    If Response = 6 Then
+        sysApply2AllPlots = True
+        DoCmd.SetWarnings False
+        SqlText = "INSERT INTO [" & SuTable & "] ( PlotNumber ) SELECT DISTINCTROW [" & MyProject & "].PlotNumber FROM [" & MyProject & "];"
+        DoCmd.RunSQL SqlText
+        DoCmd.SetWarnings True
+    Else
+        sysApply2AllPlots = False
+        SqlText = "INSERT INTO [" & SuTable & "] ( PlotNumber )"
+        SqlText = SqlText & " SELECT DISTINCTROW [" & MyProject & "].PlotNumber"
+        SqlText = SqlText & " FROM [" & SuTable & "] LEFT JOIN [" & MyProject & "] ON [" & SuTable & "].PlotNumber = [" & MyProject & "].PlotNumber;"
+    End If
+
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If Right(TestTable, 3) = "_SU" Then
+            MySuList = MySuList & Left(TestTable, Len(TestTable) - 3) & ";"
+        End If
+    Next i
+
+On Error Resume Next
+Dim MyForm As Form
+Set MyForm = Screen.ActiveForm
+MyForm.Refresh
+If IsLoaded("frmMainMenuFloat") Then
+    'Forms![frmMainMenuFloat]![btnMore].SetFocus
+    Forms![frmMainMenuFloat].btnRefresh_Click
+End If
+
+CreateSuTable = SuTableName
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Set RemoteDB = Nothing
+    Set MyDB = Nothing
+    sysBreakSU = SuTable
+    Exit Function
+
+CantFindDatabase:
+Dim DefaultWorkspace As Workspace ', NewDB As Database
+Set DefaultWorkspace = DBEngine.Workspaces(0)
+
+    Msg = ""
+    Msg = "Couldn't find specified database" & Chr(13)
+    Msg = Msg & ProgramName() & " will now create " & Trim(DataLocationName)
+    MsgBox Msg, 64, ProgramName()
+    
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+
+    DBEngine.Workspaces(0).CreateDatabase Trim(DataLocationName), DB_LANG_GENERAL
+    DataLocationName = Trim(DataLocationName)
+    'Set TempDB = Nothing
+    GoTo AfterCreation
+    
+SuWasNull:
+    DoCmd.Echo True
+    DoCmd.SetWarnings True
+    sysBreakSU = "Bla2"
+    Set MyDB = Nothing
+Exit Function
+
+errCreateSuTable:
+    On Error Resume Next
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+Function CreateSuTableFromFilter()
+'Apr. 3, 2002
+
+On Error GoTo errNewCreateSuTableFromFilter
+Dim SuTable As String, SqlText As String, MyTest As Boolean
+MyTest = False
+sysSaveFilter2 = 0
+sysCurrForm = "Dog"
+DoCmd.OpenForm "USysFilter2SuList"
+Forms![USysFilter2SuList]![optIncludeExisting] = 0
+Forms![USysFilter2SuList]![optIncludeExisting].Enabled = False
+
+    Do Until sysSaveFilter2 > 0
+        DoEvents
+    Loop
+
+If sysSaveFilter2 = 3 Then GoTo MyExit
+
+If sysSaveFilter2 = 1 Then
+    SuTable = CurrPlotlist() & "_SU"
+Else
+    CreateSuTable
+    If sysBreakSU = "Bla2" Then GoTo MyExit
+    SuTable = sysBreakSU
+End If
+
+sysCancelEvent = 0
+DoCmd.OpenForm "USysSelectUnitFields"
+
+Debug.Print sysCurrForm
+
+Do Until sysCurrForm = ""
+    DoEvents
+Loop
+
+Debug.Print "here"
+
+If sysCancelEvent = 1 Then
+    GoTo MyExit
+End If
+
+
+
+DoCmd.SetWarnings False
+SqlText = "DELETE * FROM " & SuTable & ";"
+DoCmd.RunSQL SqlText
+
+    SqlText = "INSERT INTO [" & SuTable & "] ( PlotNumber, SiteUnit ) SELECT PlotNumber, SiteUnit FROM USysSuTableDynamic_SU;"
+    DoCmd.RunSQL SqlText
+
+'refresh main menu float
+    If IsLoaded("frmMainMenuFloat") Then
+        Forms![frmMainMenuFloat].btnRefresh_Click
+    End If
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Exit Function
+errNewCreateSuTableFromFilter:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Function CreateTableSet(Optional Extended As Boolean, Optional ProjectName As String, Optional RemoteDB As String)
+
+'30 Sep 2019
+'this code will create a VP08 version of VPro's data tables
+Dim Msg As String, Title As String, DefValue As String, LumpTableName As String, LumpTable As String, i As Integer, TestTable As String
+Dim MyTitle As String, DataLocationName As String
+Dim MyTable As Recordset, MyDB As Database, TempDB As Database
+Dim EnvTableName As String, VegTableName As String, OtherTableName As String, SoilHumusTableName As String, SoilMineralTableName As String, AuditTableName As String, MetaDataTableName As String, AdminTableName As String
+Dim Answer As Variant
+Set MyDB = CurrentDb()
+    
+'get a project name
+    If ProjectName = "" Then
+        Msg = "Enter a name for your new project.  Preferably, the name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 31 characters in length"
+        Title = "New Project Name"
+        DefValue = ""
+        ProjectName = InputBox(Msg, Title, DefValue)
+        If ProjectName = "" Then GoTo CreateTableSetWasCanceled
+        If ProjectName = "" Then Exit Function
+        If ProjectName = "Sample" Then Exit Function
+    End If
+    If TestForTableInVPro(ProjectName & "_Env") Then
+        sysExportProject = "None999"
+        MsgBox "A project of that name already exists.  Try a different name.", vbInformation, "VPro"
+        GoTo MyExit
+    End If
+
+'test for too many characters in name
+    If Len(ProjectName) > 31 Then
+        Answer = MsgBox("Your project name is longer than Excel can use in reports, maximum 31 characters.  Do you wish to cancel?", vbYesNo, "VPro")
+        If Answer = vbYes Then GoTo CreateTableSetWasCanceled
+    End If
+
+'get a db name
+    sysRemoteProject = ProjectName
+    If RemoteDB = "" Then
+        MyTitle$ = "Pick a database to save your project in"
+        DataLocationName = GetFileName(MyTitle$, False)
+        If DataLocationName = "" Then GoTo CreateTableSetWasCanceled  'DeleteTables
+        If Trim(DataLocationName) = MyDB.Name Then MsgBox "You can't create tables in this database.", 64, "VPro"
+        If Trim(DataLocationName) = MyDB.Name Then Exit Function
+        If Not FileExists(Trim(DataLocationName)) Then GoTo CantFindDatabase
+AfterCreation:
+        Set TempDB = DBEngine.Workspaces(0).OpenDatabase(DataLocationName)
+        If Check4Table(TempDB, ProjectName & "_Env") Then
+            sysExportProject = "None999"
+            MsgBox "There is already a project of that name.  Try a different database or rename project.", vbInformation, "VPro"
+            GoTo MyExit
+        End If
+        Set TempDB = Nothing
+    Else
+        DataLocationName = RemoteDB
+    End If
+    DoCmd.Hourglass True
+    On Error GoTo 0
+    
+'set name variables
+    EnvTableName = ProjectName & "_Env"
+    VegTableName = ProjectName & "_Veg"
+    OtherTableName = ProjectName & "_Other"
+    SoilHumusTableName = ProjectName & "_Humus"
+    SoilMineralTableName = ProjectName & "_Mineral"
+    AuditTableName = ProjectName & "_Audit"
+    MetaDataTableName = ProjectName & "_Metadata"
+    AdminTableName = ProjectName & "_Admin"
+    
+'create tables
+    DoCmd.CopyObject , EnvTableName, acTable, "USysEnvTable"
+    DoCmd.CopyObject , VegTableName, acTable, "USysVegTable"
+    DoCmd.CopyObject , OtherTableName, acTable, "USysOtherTable"
+    DoCmd.CopyObject , SoilHumusTableName, acTable, "USysSoilHumusTable"
+    DoCmd.CopyObject , SoilMineralTableName, acTable, "USysSoilMineralTable"
+    DoCmd.CopyObject , AuditTableName, acTable, "USysAudit"
+    DoCmd.CopyObject , MetaDataTableName, acTable, "USysMetadataTable"
+    DoCmd.CopyObject , AdminTableName, acTable, "USysAdminTable"
+
+    RefreshDatabaseWindow
+'transfer tables to user's db
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, EnvTableName, EnvTableName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, VegTableName, VegTableName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, OtherTableName, OtherTableName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, SoilHumusTableName, SoilHumusTableName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, SoilMineralTableName, SoilMineralTableName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, AuditTableName, AuditTableName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, MetaDataTableName, MetaDataTableName
+    DoCmd.TransferDatabase acExport, "Microsoft Access", DataLocationName, acTable, AdminTableName, AdminTableName
+
+'delete temporary tables
+    DoCmd.DeleteObject acTable, EnvTableName
+    DoCmd.DeleteObject acTable, VegTableName
+    DoCmd.DeleteObject acTable, OtherTableName
+    DoCmd.DeleteObject acTable, SoilHumusTableName
+    DoCmd.DeleteObject acTable, SoilMineralTableName
+    DoCmd.DeleteObject acTable, AuditTableName
+    DoCmd.DeleteObject acTable, MetaDataTableName
+    DoCmd.DeleteObject acTable, AdminTableName
+
+'link to new tables
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, EnvTableName, EnvTableName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, VegTableName, VegTableName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, OtherTableName, OtherTableName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, SoilHumusTableName, SoilHumusTableName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, SoilMineralTableName, SoilMineralTableName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, AuditTableName, AuditTableName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, MetaDataTableName, MetaDataTableName
+    DoCmd.TransferDatabase acLink, "Microsoft Access", DataLocationName, acTable, AdminTableName, AdminTableName
+
+'log the project
+    LogNewProject ProjectName
+
+'create relationships
+    CreateRelationship DataLocationName, ProjectName, False
+
+'refresh main menu float
+    If IsLoaded("frmMainMenuFloat") Then
+        Forms![frmMainMenuFloat].btnRefresh_Click
+    End If
+
+MyExit:
+    On Error Resume Next
+    DoCmd.Hourglass False
+    DoCmd.Echo True
+    Set MyDB = Nothing
+    Set TempDB = Nothing
+    Exit Function
+
+CantFindDatabase:
+Dim DefaultWorkspace As Workspace, NewDB As Database
+Set DefaultWorkspace = DBEngine.Workspaces(0)
+
+    Msg = ""
+    Msg = "Couldn't find specified database" & Chr(13)
+    Msg = Msg & "VPro will now create " & Trim(DataLocationName)
+    MsgBox Msg, 64, "VPro"
+    
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+    DBEngine.Workspaces(0).CreateDatabase Trim(DataLocationName), DB_LANG_GENERAL
+    
+DataLocationName = Trim(DataLocationName)
+Set TempDB = Nothing
+GoTo AfterCreation
+
+Set MyDB = Nothing
+Exit Function
+
+DeleteTables:
+DoCmd.DeleteObject acTable, EnvTableName
+DoCmd.DeleteObject acTable, VegTableName
+DoCmd.DeleteObject acTable, OtherTableName
+DoCmd.DeleteObject acTable, SoilHumusTableName
+DoCmd.DeleteObject acTable, SoilMineralTableName
+DoCmd.DeleteObject acTable, AuditTableName
+DoCmd.DeleteObject acTable, MetaDataTableName
+DoCmd.Echo True
+
+Set MyDB = Nothing
+Set TempDB = Nothing
+Exit Function
+
+CreateTableSetWasCanceled:
+DoCmd.Echo True
+Set MyDB = Nothing
+Set TempDB = Nothing
+Exit Function
+
+End Function
+
+Function TestForTableInVPro(TableName As String) As Boolean
+'Oct. 6, 1998
+'tests the current DB for a table
+TestForTableInVPro = False
+Dim MyDB As Database, i As Integer, strTestTable As String
+Set MyDB = CurrentDb()
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        strTestTable = MyDB.TableDefs(i).Name
+        If strTestTable = TableName Then
+            TestForTableInVPro = True
+        End If
+    Next i
+    
+Set MyDB = Nothing
+End Function
+
+Private Function IsMasterAttacher() As Boolean
+
+Dim MyDB As Database, MyRS As Recordset
+Dim CurrUser As String
+Set MyDB = CurrentDb
+Set MyRS = MyDB.OpenRecordset("USysUserRestrictions", dbOpenDynaset)
+CurrUser = clsVProReg.UserName
+
+MyRS.MoveFirst
+MyRS.FindFirst "UserName = '" & CurrUser & "'"
+
+If MyRS.NoMatch Then
+    IsMasterAttacher = False
+Else
+    IsMasterAttacher = True
+End If
+
+MyExit:
+    On Error Resume Next
+    MyRS.Close
+    Set MyDB = Nothing
+    Exit Function
+
+End Function
+
+Function CreateHerbariumTable()
+
+'June 11, 2009
+    On Error GoTo errCreateHerbariumTable
+    Dim MyDB As Database, TestName As Integer
+    Dim Msg As String, Title As String, DefValue As String, HerbariumTableName As String, HerbariumTable As String, i As Integer, TestTable As String
+    Dim MyTitle As String, DataLocationName As String
+    Set MyDB = CurrentDb()
+    
+    sysLumpingTable = ""
+    Msg = "Enter a name for your new herbarium table.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length"
+    Title = "New Herbarium Table"
+    DefValue = ""
+    HerbariumTableName = InputBox(Msg, Title, DefValue)
+    If HerbariumTableName = "" Then Exit Function
+    If IsNull(HerbariumTableName) Then Exit Function
+    TestName = InStr(HerbariumTableName, "_")
+    If TestName > 0 Then Exit Function
+    'If HerbariumTableName = "Sample" Then Exit Function
+    HerbariumTable = HerbariumTableName & "_Herbarium"
+    
+    For i = 0 To MyDB.TableDefs.count - 1
+        TestTable = MyDB.TableDefs(i).Name
+        If TestTable = HerbariumTable Then
+            MsgBox "Name already exists"
+            Exit Function
+        End If
+    Next i
+
+    MyTitle$ = ProgramName() & " - pick a database to save your table in"
+    DataLocationName = GetFileName(MyTitle$, True)
+    If Trim(DataLocationName) = "" Then Exit Function
+    If Trim(DataLocationName) = MyDB.Name Then MsgBox "You can't create tables in this database.", 64, ProgramName()
+    If Trim(DataLocationName) = MyDB.Name Then Exit Function
+Jump:
+DoCmd.CopyObject DataLocationName, HerbariumTable, acTable, "USysHerbarium"
+DoCmd.TransferDatabase A_ATTACH, "Microsoft Access", DataLocationName, A_TABLE, HerbariumTable, HerbariumTable
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errCreateHerbariumTable:
+    If Err.Number = 2501 Then
+        Resume MyExit
+    End If
+    If Err.Number = 3024 Or Err.Number = 2766 Then
+        DBEngine.Workspaces(0).CreateDatabase DataLocationName, dbLangGeneral
+        Resume Jump
+    End If
+    MsgBox Err.Description & " - " & Err.Number
+    Resume MyExit
+End Function

@@ -1,0 +1,95 @@
+Option Compare Database
+Option Explicit
+Private Sub TestIt()
+
+ConvertHierarchy2Random "testfrom", "testto"
+
+
+End Sub
+
+
+Public Sub ConvertHierarchy2Random(FromHierarchy As String, ToHierarchy As String)
+'June 10, 2004
+Dim MyDB As Database, MyInRS As Recordset, MyOutRS As Recordset
+Dim SqlText As String, i As Integer, NewID As Long, Criteria As String
+DoCmd.SetWarnings True
+Set MyDB = CurrentDb
+SqlText = "DELETE * FROM USysTempHierarchy;"
+DoCmd.RunSQL SqlText
+
+'This function requires 3 tables
+'USysTempHierarchy a temporary storage hierarchy
+'ToHierarchy the output hierarchy table
+'????_Hierarchy the name of an attached import table
+
+Set MyInRS = MyDB.OpenRecordset(FromHierarchy & "_Hierarchy", dbOpenDynaset) ' change table name to table to be merged from
+MyInRS.MoveLast
+MyInRS.MoveFirst
+Set MyOutRS = MyDB.OpenRecordset("USysTempHierarchy", dbOpenDynaset)
+
+For i = 1 To MyInRS.RecordCount
+    MyOutRS.AddNew
+    MyOutRS!Name = MyInRS!Name
+    MyOutRS!Level = MyInRS!Level
+    MyOutRS!Parent = MyInRS!Parent
+    NewID = MyOutRS!ID
+    MyOutRS.Update
+    MyInRS.Edit
+    MyInRS!Tag = NewID
+    MyInRS.Update
+    MyInRS.MoveNext
+Next i
+
+MyInRS.MoveFirst
+MyOutRS.MoveFirst
+
+For i = 1 To MyOutRS.RecordCount
+MyInRS.MoveFirst 'bec hierarchy
+If IsNull(MyOutRS!Parent) Then GoTo Jump
+Criteria = "ID = " & MyOutRS!Parent
+
+MyInRS.FindFirst Criteria
+MyOutRS.Edit
+MyOutRS!Parent = MyInRS!Tag
+MyOutRS.Update
+
+Jump:
+MyOutRS.MoveNext
+Next i
+
+MergeHierarchies "USysTempHierarchy", ToHierarchy & "_Hierarchy"
+
+
+MyExit:
+    On Error Resume Next
+    MyInRS.Close
+    MyOutRS.Close
+    Set MyDB = Nothing
+End Sub
+
+Private Function GetParentNumber(rs As Recordset, ID As Long) As Long
+Dim Criteria As String, TempParent As Long
+
+rs.MoveFirst
+Criteria = "Tag = '" & ID & "'"
+rs.FindFirst Criteria
+    
+TempParent = rs!ID
+
+rs.MoveFirst
+Criteria = "ID = '" & TempParent & "'"
+rs.FindFirst Criteria
+
+GetParentNumber = rs!Tag
+
+End Function
+
+Private Function MergeHierarchies(FromTable As String, ToTable As String)
+Dim SqlText As String
+
+SqlText = "INSERT INTO " & ToTable
+SqlText = SqlText & " SELECT*"
+SqlText = SqlText & " FROM " & FromTable & ";"
+DoCmd.RunSQL SqlText
+
+End Function

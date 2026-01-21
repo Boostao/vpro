@@ -1,0 +1,401 @@
+Option Compare Database
+Option Explicit
+
+Public Sub ExportVPro03()
+
+'Feb 18, 2009
+Dim RemoteDB As Database, MyDB As Database
+Dim ProjectName As String, MyFile As String, Msg As String, Title As String
+Set MyDB = CurrentDb
+
+Msg = "Enter a name for your exported project.  The name must start with a letter, contain no punctuation characters, preferably no spaces, and be less than 40 characters in length"
+Title = "Export your project"
+ProjectName = InputBox(Msg, Title)
+If ProjectName = "" Then GoTo MyExit
+If CheckForExistingProject(MyDB, ProjectName & "_Env") Then 'project exists in the local db
+    MsgBox "A project of that name is currently attached to VPro.  Please detach or try a different name.", vbInformation, "VPro"
+    GoTo MyExit
+End If
+
+MyFile = GetDbName
+If MyFile = "" Then GoTo MyExit
+Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(MyFile)
+
+If CheckForExistingProject(RemoteDB, ProjectName & "_Env") Then 'project exists in the remote db
+    MsgBox "A project of that name already exists in that db.  Please try a different name or db.", vbInformation, "VPro"
+    GoTo MyExit
+End If
+
+DeleteXXXRK 'clean up any failed attempt
+
+AttachVPro03Tables RemoteDB
+
+AppendVPro03Data clsVProReg.CurrProject 'transfer the data
+
+RenameProject ProjectName, RemoteDB 'rename the project
+
+RemoveLinks ProjectName 'unlink the tables
+
+DeleteXXXRK 'cleanup
+
+MyExit:
+    On Error Resume Next
+    DoCmd.SetWarnings True
+    Set RemoteDB = Nothing
+    Set MyDB = Nothing
+
+End Sub
+
+Private Sub AppendVPro03Data(FromData As String)
+
+Dim SqlText As String
+DoCmd.SetWarnings False
+
+SqlText = "INSERT INTO [xxxrk_Env] ( PlotNumber, SiteNumber, ProjectName, Region, PlotQuality, [Date], SiteSurveyor, PlotRepresenting, Location, Ecosection, NtsMapSheet, LongitudeDegrees, LongitudeMinutes, LongitudeSeconds, LatitudeDegrees, LatitudeMinutes, LatitudeSeconds, UTMZone, UTMEasting, UTMNorthing, LocationAccuracy, AirPhotoNum, XCoord, YCoord, [Zone], SubZone, SiteSeries, TransDistrib, RealmClass, MapUnit, MoistureRegime, NutrientRegime, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName, SuccessionalStatus, StructuralStage, StructuralStageMod, StandAge, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceTopography, SurfaceTopographyType, SurfaceTopographySize, WaterSource, PhotoRollNum, Exposure1, Exposure2, SiteDisturbance1, SiteDisturbance2, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, SiteNotes, SoilSurveyor, BedrockGeology, CoarseFragLith, TerrainTextureSurf, SurficialMaterialSurf,"
+SqlText = SqlText & " SurfaceExpSurf , GeoMorProSurf, TerrainTextureSubSurf, SurficialMaterialSubSurf, SurfaceExpSubSurf, GeoMorProSubSurf, FloodingRegimeFreq, MoistureRegimeSub, FloodingRegimeDur, SoilDrainage, SeepageDepth, RootRestrictingType, RootRestrictingDepth, RootZoneParticleSize, RootingDepth, SoilClassSubGroup, SoilClassGroup, HumusForm, HumusFormPhase, HumusThickness, pHMethodCodeMineral, pHMethodCodeOrganic, SoilNotes, VegSurveyor, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegNotes, HydroGeoSystem, HydroGeoSubSystem, Flag )"
+SqlText = SqlText & " SELECT PlotNumber, FieldNumber, ProjectID, FSRegionDistrict, SitePlotQuality, Date, SiteSurveyor, PlotRepresenting, Location, Ecosection, NtsMapSheet, GetLatLongDeg([Longitude]) AS LongDeg, GetLatLongMin([Longitude]) AS LongMin, GetLatLongSec([Longitude]) AS LongSec, GetLatLongDeg([Latitude]) AS LatDeg, GetLatLongMin([Latitude]) AS LatMin, GetLatLongSec([Latitude]) AS LatSec, UTMZone, UTMEasting, UTMNorthing, LocationAccuracy, AirPhotoNum, XCoord, YCoord, Zone, SubZone, SiteSeries, TransDistrib, RealmClass, MapUnit, MoistureRegime, NutrientRegime, UserSiteUnit, SiteUnitShortName, SiteUnitLongName, SuccessionalStatus, StructuralStage, StructuralStageMod, StandAge, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceShape, SurfaceTopographyType, SurfaceTopographySize, WaterSource, Photo, Exposure1,"
+SqlText = SqlText & " Exposure2, SiteDisturbance1, SiteDisturbance2, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, SiteNotes, SoilSurveyor, BedrockGeology1, CoarseFragLith1, TerrainTextureSurf, SurficialMaterialSurf, SurfaceExpSurf, GeoMorProSurf, TerrainTextureSubSurf ,SurficialMaterialSubSurf, SurfaceExpSubSurf, GeoMorProSubSurf, FloodingRegimeFreq, MoistureRegimeSub, FloodingRegimeDur, SoilDrainage, SeepageDepth, RootRestrictingType, RootRestrictingDepth, RootZoneParticleSize, RootingDepth, SoilClassSubGroup, SoilClassGroup, HumusForm, HumusFormPhase, HumusThickness, pHMethodCodeMineral, pHMethodCodeOrganic, SoilNotes, VegSurveyor, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegNotes, HydroGeoSystem, HydroGeoSubSystem, Flag"
+SqlText = SqlText & " FROM [" & FromData & "_Env];"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO [xxxrk_Humus] ( PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Consistence, [Character], Fauna, Comment, Flag, ID )"
+SqlText = SqlText & " SELECT PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Consistence, Character, Fauna, Comment, Flag, ID"
+SqlText = SqlText & " FROM [" & FromData & "_Humus];"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO [xxxrk_Mineral] ( PlotNumber, Horizon, UpperDepth, LowerDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, PercentCoarseFragsShape, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, MottlesAbundance, MottlesSize, MottlesContrast, ClayFilmsFreq, ClayFilmThickness, Effervescence, Porosity, Comments, Flag, ID )"
+SqlText = SqlText & " SELECT PlotNumber, Horizon, UpperDepth, LowerDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, PercentCoarseFragsShape, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, MottlesAbundance, MottlesSize, MottlesContrast, ClayFilmsFreq, ClayFilmThickness, Effervescence, Porosity, Comments, Flag, ID"
+SqlText = SqlText & " FROM [" & FromData & "_Mineral];"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO [xxxrk_Audit] ( Project, [User], PlotNumber, [Table], EditField, EditWhen, BeforeEdit, AfterEdit, Restore, Flag, ID )"
+SqlText = SqlText & " SELECT Project, User, PlotNumber, Table, EditField, EditWhen, BeforeEdit, AfterEdit, Restore, Flag, ID"
+SqlText = SqlText & " FROM [" & FromData & "_Audit];"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO [xxxrk_Other] ( PlotNumber, DataName, DataItem, UserItem1, UserItem2, UserItem3, UserFlag1, UserFlag2, UserFlag3, Flag, ID )"
+SqlText = SqlText & " SELECT PlotNumber, DataName, DataItem, UserItem1, UserItem2, UserItem3, UserFlag1, UserFlag2, UserFlag3, Flag, ID"
+SqlText = SqlText & " FROM [" & FromData & "_Other];"
+DoCmd.RunSQL SqlText
+
+SqlText = "INSERT INTO [xxxrk_Veg] ( PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, Flag, ID )"
+SqlText = SqlText & " SELECT PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, Flag, ID"
+SqlText = SqlText & " FROM [" & FromData & "_Veg];"
+DoCmd.RunSQL SqlText
+
+DoCmd.SetWarnings True
+
+End Sub
+
+Private Sub RenameProject(ProjectName As String, RemoteDB As Database)
+
+    RemoteDB.TableDefs.Refresh
+    RemoteDB.TableDefs("xxxrk_Env").Name = ProjectName & "_Env"
+    RemoteDB.TableDefs("xxxrk_Audit").Name = ProjectName & "_Audit"
+    RemoteDB.TableDefs("xxxrk_CWD").Name = ProjectName & "_CWD"
+    RemoteDB.TableDefs("xxxrk_CWDPiling").Name = ProjectName & "_CWDPiling"
+    RemoteDB.TableDefs("xxxrk_Humus").Name = ProjectName & "_Humus"
+    RemoteDB.TableDefs("xxxrk_Mineral").Name = ProjectName & "_Mineral"
+    RemoteDB.TableDefs("xxxrk_Other").Name = ProjectName & "_Other"
+    RemoteDB.TableDefs("xxxrk_TreePlot").Name = ProjectName & "_TreePlot"
+    RemoteDB.TableDefs("xxxrk_Trees").Name = ProjectName & "_Trees"
+    RemoteDB.TableDefs("xxxrk_Veg").Name = ProjectName & "_Veg"
+
+End Sub
+
+Private Sub RemoveLinks(ProjectName As String)
+
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, ProjectName & "_Env"
+    DoCmd.DeleteObject acTable, ProjectName & "_Audit"
+    DoCmd.DeleteObject acTable, ProjectName & "_CWD"
+    DoCmd.DeleteObject acTable, ProjectName & "_CWDPiling"
+    DoCmd.DeleteObject acTable, ProjectName & "_Humus"
+    DoCmd.DeleteObject acTable, ProjectName & "_Mineral"
+    DoCmd.DeleteObject acTable, ProjectName & "_Other"
+    DoCmd.DeleteObject acTable, ProjectName & "_TreePlot"
+    DoCmd.DeleteObject acTable, ProjectName & "_Trees"
+    DoCmd.DeleteObject acTable, ProjectName & "_Veg"
+    On Error GoTo 0
+
+End Sub
+
+Private Sub DeleteXXXRK()
+
+    On Error Resume Next
+    DoCmd.DeleteObject acTable, "xxxrk_Env"
+    DoCmd.DeleteObject acTable, "xxxrk_Audit"
+    DoCmd.DeleteObject acTable, "xxxrk_CWD"
+    DoCmd.DeleteObject acTable, "xxxrk_CWDPiling"
+    DoCmd.DeleteObject acTable, "xxxrk_Humus"
+    DoCmd.DeleteObject acTable, "xxxrk_Mineral"
+    DoCmd.DeleteObject acTable, "xxxrk_Other"
+    DoCmd.DeleteObject acTable, "xxxrk_TreePlot"
+    DoCmd.DeleteObject acTable, "xxxrk_Trees"
+    DoCmd.DeleteObject acTable, "xxxrk_Veg"
+    On Error GoTo 0
+
+End Sub
+Private Function GetDbName() As String
+
+'Jan 20, 2009
+Dim MyFile As String, NewFile As Boolean
+MyFile = GetFileName("VPro", True, "VPro 03 (*.mdb)", "*.mdb")
+GetDbName = MyFile
+If Dir(MyFile) = "" Then
+    DBEngine.Workspaces(0).CreateDatabase Trim(MyFile), DB_LANG_GENERAL, dbVersion40
+End If
+
+End Function
+
+Private Function CheckForExistingProject(db As Database, ProjectName As String) As Boolean
+
+'Jan 20, 2009
+On Error GoTo errCheckForExistingProject
+Dim MyName As String
+MyName = db.TableDefs(ProjectName).Name
+CheckForExistingProject = True
+
+MyExit:
+    On Error Resume Next
+    
+    Exit Function
+errCheckForExistingProject:
+    If Err.Number = 3265 Then
+        CheckForExistingProject = False
+    End If
+    Resume MyExit
+End Function
+
+Private Sub AttachVPro03Tables(RemoteDB As Database)
+
+'Jan 20, 2009
+Dim MyPath As String, ProjectName As String
+
+ProjectName = "xxxrk"
+MyPath = clsVProReg.Location & "Templates\TemplateVPro03.mdb"
+
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_Env", ProjectName & "_Env"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_Veg", ProjectName & "_Veg"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_Audit", ProjectName & "_Audit"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_Other", ProjectName & "_Other"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_Mineral", ProjectName & "_Mineral"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_Humus", ProjectName & "_Humus"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_CWD", ProjectName & "_CWD"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_CWDPiling", ProjectName & "_CWDPiling"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_TreePlot", ProjectName & "_TreePlot"
+DoCmd.TransferDatabase acImport, "Microsoft Access", MyPath, acTable, "VPro03_Trees", ProjectName & "_Trees"
+
+Delete03Relationship RemoteDB.Name, ProjectName
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Env", ProjectName & "_Env"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Veg", ProjectName & "_Veg"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Audit", ProjectName & "_Audit"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Other", ProjectName & "_Other"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Mineral", ProjectName & "_Mineral"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Humus", ProjectName & "_Humus"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_CWD", ProjectName & "_CWD"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_CWDPiling", ProjectName & "_CWDPiling"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_TreePlot", ProjectName & "_TreePlot"
+DoCmd.TransferDatabase acExport, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Trees", ProjectName & "_Trees"
+
+DeleteXXXRK
+'Stop
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Env", ProjectName & "_Env"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Veg", ProjectName & "_Veg"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Audit", ProjectName & "_Audit"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Other", ProjectName & "_Other"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Mineral", ProjectName & "_Mineral"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Humus", ProjectName & "_Humus"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_CWD", ProjectName & "_CWD"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_CWDPiling", ProjectName & "_CWDPiling"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_TreePlot", ProjectName & "_TreePlot"
+DoCmd.TransferDatabase acLink, "Microsoft Access", RemoteDB.Name, acTable, ProjectName & "_Trees", ProjectName & "_Trees"
+
+Create03Relationship RemoteDB.Name, ProjectName
+
+
+End Sub
+
+Private Function Delete03Relationship(RemoteDB As String, Project As String)
+
+'Feb 17, 2009
+On Error GoTo errDeleteRelationship
+Dim MyDB As Database, MyRel As Relation, MyFld As Field, RelationName As String
+Dim VegTable As String, HumusTable As String, MineralTable As String
+Dim TreePlotTable As String, TreesTable As String, CwdTable As String, CwdPileTable As String
+Dim AuditTable As String, OtherTable As String, i As Integer
+Dim MyRelName As String, X As Integer
+Set MyDB = CurrentDb()
+Dim EnvTable As String, db As Database ', MyWS As Workspace
+EnvTable = Project
+    
+Set db = DBEngine.Workspaces(0).OpenDatabase(RemoteDB)
+
+RelationName = EnvTable
+EnvTable = RelationName & "_Env"
+VegTable = RelationName & "_Veg"
+HumusTable = RelationName & "_Humus"
+MineralTable = RelationName & "_Mineral"
+OtherTable = RelationName & "_Other"
+AuditTable = RelationName & "_Audit"
+TreePlotTable = RelationName & "_TreePlot"
+TreesTable = RelationName & "_Trees"
+CwdTable = RelationName & "_CWD"
+CwdPileTable = RelationName & "_CWDPiling"
+If Find03Relation(RelationName) = True Then GoTo MyExit
+
+'delete old relationships
+If db.Relations.count > 0 Then
+    On Error Resume Next
+    For i = 1 To 9
+        db.Relations.Delete (Project & i)
+    Next i
+End If
+
+MyExit:
+    On Error Resume Next
+    Set db = Nothing
+    Set MyDB = Nothing
+    Exit Function
+errDeleteRelationship:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Function Create03Relationship(RemoteDB As String, Project As String)
+'Feb 17, 2009
+
+On Error GoTo errCreateRelationship
+Dim MyDB As Database, MyRel As Relation, MyFld As Field, RelationName As String
+Dim VegTable As String, HumusTable As String, MineralTable As String
+Dim AuditTable As String, OtherTable As String, i As Integer
+Dim TreePlotTable As String, TreesTable As String, CwdTable As String, CwdPileTable As String
+Dim EnvTable As String, db As Database
+Set MyDB = CurrentDb()
+
+EnvTable = Project
+Set db = DBEngine.Workspaces(0).OpenDatabase(RemoteDB)
+
+RelationName = EnvTable
+EnvTable = RelationName & "_Env"
+VegTable = RelationName & "_Veg"
+HumusTable = RelationName & "_Humus"
+MineralTable = RelationName & "_Mineral"
+OtherTable = RelationName & "_Other"
+AuditTable = RelationName & "_Audit"
+TreePlotTable = RelationName & "_TreePlot"
+TreesTable = RelationName & "_Trees"
+CwdTable = RelationName & "_CWD"
+CwdPileTable = RelationName & "_CWDPiling"
+
+If Find03Relation(RelationName) = True Then GoTo MyExit
+
+'delete old relationships
+If db.Relations.count > 0 Then
+    On Error Resume Next
+    For i = 1 To db.Relations.count
+        MsgBox db.Relations(RelationName & i)
+        db.Relations.Delete (RelationName & i)
+    Next i
+End If
+
+'set veg relationship
+Set MyRel = db.CreateRelation(RelationName & "1", EnvTable, VegTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set humus relations
+Set MyRel = db.CreateRelation(RelationName & "2", EnvTable, HumusTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set mineral relations
+Set MyRel = db.CreateRelation(RelationName & "3", EnvTable, MineralTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set other relations
+Set MyRel = db.CreateRelation(RelationName & "4", EnvTable, OtherTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set audit relations
+Set MyRel = db.CreateRelation(RelationName & "5", EnvTable, AuditTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set Tree plot relations
+Set MyRel = db.CreateRelation(RelationName & "6", EnvTable, TreePlotTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set Trees relations
+Set MyRel = db.CreateRelation(RelationName & "7", EnvTable, TreesTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set CWD relations
+Set MyRel = db.CreateRelation(RelationName & "8", EnvTable, CwdTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+'set CWD Piling relations
+Set MyRel = db.CreateRelation(RelationName & "9", EnvTable, CwdPileTable)
+Set MyFld = MyRel.CreateField("PlotNumber")
+MyFld.ForeignName = "PlotNumber"
+MyRel.Attributes = dbRelationUpdateCascade + dbRelationDeleteCascade
+MyRel.Fields.Append MyFld
+db.Relations.Append MyRel
+
+On Error GoTo 0
+
+MyExit:
+    On Error Resume Next
+    Set db = Nothing
+    Set MyDB = Nothing
+    Exit Function
+errCreateRelationship:
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Private Function Find03Relation(RelationName As String) As Boolean
+
+'Feb 17, 2009
+Dim MyDB As Database, MyRel As Relation
+Set MyDB = CurrentDb()
+Find03Relation = False
+
+For Each MyRel In MyDB.Relations
+    If MyRel.Table = RelationName Then
+        Find03Relation = True
+    End If
+Next
+
+Set MyDB = Nothing
+
+End Function

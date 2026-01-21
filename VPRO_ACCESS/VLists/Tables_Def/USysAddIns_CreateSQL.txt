@@ -1,0 +1,14 @@
+CREATE TABLE [USysAddIns] (
+  [PropertyName] TEXT(50) DEFAULT ,
+  [Val1] MEMO DEFAULT ,
+  [Val2] MEMO DEFAULT ,
+  [Val3] MEMO DEFAULT ,
+  [Val4] MEMO DEFAULT ,
+  [Val5] MEMO DEFAULT ,
+  [Val6] MEMO DEFAULT ,
+  [Val7] MEMO DEFAULT ,
+  [Val8] MEMO DEFAULT ,
+  [Val9] LONGBINARY DEFAULT 
+);
+
+

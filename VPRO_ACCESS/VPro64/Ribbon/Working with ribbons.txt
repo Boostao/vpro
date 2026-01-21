@@ -1,0 +1,5 @@
+1. Copy/paste ribbon xml from VPro to XML Notepad
+2. Make changes and save XML file
+3. Open the file in the standard version of Notepad
+4. Copy/paste xml into VPro
+5. Restart VPro

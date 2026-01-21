@@ -1,0 +1,11 @@
+CREATE TABLE [LifeformCodes] (
+  [Lifeform] INTEGER DEFAULT ,
+  [LifeformTXT] TEXT(255) DEFAULT ,
+  [Definition] TEXT(255) DEFAULT ,
+  [Comments] TEXT(255) DEFAULT ,
+  [ShortName] TEXT(255) DEFAULT ,
+  [Vascular] BIT DEFAULT 0
+);
+
+CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [LifeformCodes] ([Lifeform]);
+

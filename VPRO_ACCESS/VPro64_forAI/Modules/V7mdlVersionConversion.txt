@@ -1,0 +1,243 @@
+Option Compare Database
+Option Explicit
+
+Public Function GetTableVersion(TestTable As String) As String
+On Error GoTo errGetVersion
+Dim MyDB As Database, MyTable As TableDef
+Set MyDB = CurrentDb()
+Set MyTable = MyDB.TableDefs(TestTable)
+
+    GetTableVersion = MyTable.Properties(12).Value
+
+MyExit:
+    On Error Resume Next
+    Set MyDB = Nothing
+    Exit Function
+errGetVersion:
+    If Err.Number = 3265 Then
+        GetTableVersion = "Unknown"
+        Resume MyExit
+    End If
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function ConvertVP03ToVP04(ProjectDB, ProjectIn As String)
+
+Dim SqlText As String, OldTable As String, NewTable As String
+
+Dim RemoteDB As Database, X
+
+Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(ProjectDB)
+On Error Resume Next
+    DoCmd.DeleteObject acTable, "rkTemp"
+On Error GoTo errConvertVENUSPro2VPro
+DeleteRelationship RemoteDB.Name, ProjectIn
+DoCmd.SetWarnings False
+
+'convert env data
+DoCmd.CopyObject , "rkTemp", acTable, "USysEnvTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Env"
+SqlText = "INSERT INTO " & NewTable
+SqlText = SqlText & " SELECT *"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_ENV", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Env", ProjectIn & "_Env"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert humus data
+DoCmd.CopyObject , "rkTemp", acTable, "USysSoilHumusTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Humus"
+SqlText = "INSERT INTO " & NewTable
+SqlText = SqlText & " SELECT *"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Humus", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Humus", ProjectIn & "_Humus"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert mensuration data
+DoCmd.CopyObject , "rkTemp", acTable, "USysMensurationTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Mensuration"
+SqlText = "INSERT INTO " & NewTable
+SqlText = SqlText & " SELECT *"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Mensuration", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Mensuration", ProjectIn & "_Mensuration"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert mineral data
+DoCmd.CopyObject , "rkTemp", acTable, "USysSoilMineralTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Mineral"
+SqlText = "INSERT INTO " & NewTable
+SqlText = SqlText & " SELECT *"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Mineral", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Mineral", ProjectIn & "_Mineral"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert veg data
+DoCmd.CopyObject , "rkTemp", acTable, "USysVegTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Veg"
+SqlText = "INSERT INTO " & NewTable
+SqlText = SqlText & " SELECT *"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Veg", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Veg", ProjectIn & "_Veg"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert wildlife data
+DoCmd.CopyObject , "rkTemp", acTable, "USysWildlifeTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Wildlife"
+SqlText = "INSERT INTO " & NewTable
+SqlText = SqlText & " SELECT *"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Wildlife", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Wildlife", ProjectIn & "_Wildlife"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+DoCmd.SetWarnings True
+MsgBox "Your tables have been converted."
+
+MyExit:
+    On Error Resume Next
+    Set RemoteDB = Nothing
+    Exit Function
+errConvertVENUSPro2VPro:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function
+
+Public Function ConvertVENUSPro2VPro(ProjectDB, ProjectIn As String)
+
+Dim SqlText As String, OldTable As String, NewTable As String
+Dim RemoteDB As Database, X
+
+Set RemoteDB = DBEngine.Workspaces(0).OpenDatabase(ProjectDB)
+On Error Resume Next
+    DoCmd.DeleteObject acTable, "rkTemp"
+On Error GoTo errConvertVENUSPro2VPro
+DoCmd.SetWarnings False
+
+'convert env data
+DoCmd.CopyObject , "rkTemp", acTable, "USysEnvTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Env"
+SqlText = "INSERT INTO " & NewTable & " ( PlotNumber, [Date], SiteSurveyor, FieldNumber, PlotRepresenting, MapUnit, Ecosection, AirPhotoNum, PhotoRollNum, XCoord, YCoord, VegNotes, SiteNotes, SiteDiag, RootRestrictingType, Zone, SubZone, Location, NtsMapSheet, Longitude, Latitude, Elevation, SlopeGradient, Aspect, MesoSlopePosition, Exposure, SurfaceShape, MoistureRegime, NutrientRegime, TerrainVTAB, BedrockGeology, CoarseFragLith, SoilClassSubGroup, SoilClassGroup, RootZoneParticleSize, RootingDepth, RootRestrictingDepth, SeepageDepth, SoilDrainage, MineralPH, HumusForm, HumusThickness, HumusPh, SoilNotes, SuccessionalStatus, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, PhotoFrameNum, SiteSeries, MensurationSurveyor, TreeAttributesWildlifeSurveyor, VegSurveyor, SoilSurveyor, SiteDisturbance1, SiteDisturbance2, StructuralStage, UTMZone, UTMEasting,"
+SqlText = SqlText & " UTMNorthing , HydroGeoSystem, HydroGeoSubSystem, HydroGeoElement, HydroGeoFeature, FloodingRegimeFreq, MoistureRegimeSub, [RealmClass], Conductivity, WaterSource, Region, Agency, PlotQuality, Complete, SiteUnitTable, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName )"
+SqlText = SqlText & " SELECT PlotNumber, Date, Surveyor, SiteNumber, SiteType, MapUnit, Ecosection, AirPhotoNum, PhotoNum, XCoord, YCoord, VegNote, Notes, SiteDiag, RootRestrictingType, BioGeoClimatic, SubZone, Location, NtsMapSheet, Longitude, Latitude, Elevation, SlopeGradient, Aspect, Meso, Exposure, SurfaceShape, MoistureRegime, NutrientRegime, Terrain, BedrockGeology, CoarseFragLith, SoilSubGroup, SoilGroup, FamilyParticalSize, RootingDepth, RootRestrictingDepth, SeepageDepth, SoilDrainage, MineralSoilPH, HumusForm, HumusThickness, HumusPh, SoilNote, SuccessionalStatus, GroundCoverDeadwood, GroundCoverBedrock, GroundCoverRocks, GroundCoverMineral, GroundCoverHumus, GroundCoverWater, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, PhotoFrameNum, SiteSeries, MensurationSurveyor, WildlifeSurveyor, VegSurveyor, SoilSurveyor, SiteDisturbance1, SiteDisturbance2, StructuralStage, UTMZone, UTMEasting, UTMNorthing, System, SubSystem, Element, Feature, FloodDuration,"
+SqlText = SqlText & " SaturationDuration , Realm, Conductivity, WaterSource , Region, Agency, PlotQuality, Complete, SiteUnitTable, AssignedSiteUnit, SiteUnitShortName, SiteUnitLongName"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_ENV", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Env", ProjectIn & "_Env"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert humus data
+DoCmd.CopyObject , "rkTemp", acTable, "USysSoilHumusTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Humus"
+SqlText = "INSERT INTO " & NewTable & " ( PlotNumber, Horizon, Depth, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, Comment )"
+SqlText = SqlText & " SELECT PlotNumber, Horizon, Depth, Structure, MycelAB, FecalAB, RootsAB, RootsSize, Comment"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Humus", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Humus", ProjectIn & "_Humus"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert mensuration data
+DoCmd.CopyObject , "rkTemp", acTable, "USysMensurationTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Mensuration"
+SqlText = "INSERT INTO " & NewTable & " ( PlotNumber, TreeNum, TreeSpp, DBH, Distance, Bearing, SlopeTop, SlopeBottom, SlopeDistance, HorizontalDistance, Height, Height2DBH, TotalHtCalc, AgeBH, TreeSiteIndex, Conks, BlindConks, Scars, ForkOrCrook, FrostCrack, Mistletoe, RottenBranch, DeadOrBrokenTop, DamageType, DamageSeverity, TreeSiteSeries )"
+SqlText = SqlText & " SELECT PlotNumber, TreeNum, Species, DBH, Distance, Bearing, Top, Bot, SD, HD, Height, HtToDBH, TotalHtCalc, BHage, SiteIndex, Conk, BlConk, Scar, ForC, FCrack, Mistle, RBran, DorBTop, PestCode, PestSever, SiteSeries"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Mensuration", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Mensuration", ProjectIn & "_Mensuration"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert mineral data
+DoCmd.CopyObject , "rkTemp", acTable, "USysSoilMineralTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Mineral"
+SqlText = "INSERT INTO " & NewTable & " ( PlotNumber, Horizon, Depth, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, Comments )"
+SqlText = SqlText & " SELECT PlotNumber, Horizon, Depth, Colour, ASP, Texture, PercentCoarseFragsG, PercentCoarseFragsC, PercentCoarseFragsS, PercentCoarseFragsTot, RootsAB, RootsSize, StructureClass, StructureKind, Comments"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Mineral", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Mineral", ProjectIn & "_Mineral"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert veg data
+DoCmd.CopyObject , "rkTemp", acTable, "USysVegTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Veg"
+SqlText = "INSERT INTO " & NewTable & " ( PlotNumber, Layer, Species, Cover1, Dist1, Vig1, Cover2, Dist2, Vig2, Cover3, Dist3, Vig3, Cover4, Dist4, Vig4, Cover5, Dist5, Vig5, Cover6, Dist6, Vig6, Cover7, Dist7, Vig7, Cover8, Dist8, Vig8, Cover9, Dist9, Vig9, TotalA, TotalB )"
+SqlText = SqlText & " SELECT PlotNumber, Layer, Species,Cover1, Dist1, Vig1, Cover2, Dist2, Vig2, Cover3, Dist3, Vig3, Cover4, Dist4, Vig4, Cover5, Dist5, Vig5, Cover6, Dist6, Vig6, Cover7, Dist7, Vig7, Cover8, Dist8, Vig8, Cover9, Dist9, Vig9, TotalA, TotalB"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Veg", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Veg", ProjectIn & "_Veg"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+'convert wildlife data
+DoCmd.CopyObject , "rkTemp", acTable, "USysWildlifeTable"
+NewTable = "rkTemp"
+OldTable = ProjectIn & "_Wildlife"
+SqlText = "INSERT INTO " & NewTable & " ( PlotNumber, TreeNum, BasalAreaFactor, TreeSpp, LiveDead, MeasuredOrEstimatedDBH, RemainingBark, TreeLength, MeasuredOrEstimatedLength, CrownClass, Ht2LiveCrown, Appearance, CrownCondition, BarkRetention, WoodCondition, LichenLoading, WildlifeUse )"
+SqlText = SqlText & " SELECT PlotNumber, TreeNum, BAF, Species, LiveDead, MorE1, RemBark, TreeLength, MorE2, CrClDCIS, HtToLiveCrn, Appear, Crown, Bark, Wood, Lichen, WildlifeUse"
+SqlText = SqlText & " FROM " & OldTable & ";"
+DoCmd.RunSQL SqlText
+DoCmd.DeleteObject acTable, OldTable
+RemoteDB.TableDefs.Delete OldTable
+DoCmd.CopyObject RemoteDB.Name, ProjectIn & "_Wildlife", acTable, "rkTemp"
+DoCmd.TransferDatabase acLink, "Microsoft Access", ProjectDB, acTable, ProjectIn & "_Wildlife", ProjectIn & "_Wildlife"
+DoCmd.DeleteObject acTable, "rkTemp"
+
+DoCmd.SetWarnings True
+MsgBox "Your tables have been converted."
+
+MyExit:
+    On Error Resume Next
+    Set RemoteDB = Nothing
+    Exit Function
+errConvertVENUSPro2VPro:
+    DoCmd.SetWarnings True
+    MsgBox Err.Description
+    Resume MyExit
+End Function

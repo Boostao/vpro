@@ -1,0 +1,17 @@
+CREATE TABLE [USysV2Veg] (
+  [ProjectID] TEXT(20) DEFAULT ,
+  [Plotnumber] TEXT(8) NOT NULL DEFAULT ,
+  [Layer] TEXT(3) DEFAULT ,
+  [Species] TEXT(8) DEFAULT ,
+  [Cover] SINGLE DEFAULT ,
+  [Surveyor] TEXT(30) DEFAULT ,
+  [Flag] BIT DEFAULT 
+);
+
+CREATE INDEX [Layer] ON [USysV2Veg] ([Layer]);
+CREATE INDEX [Plotnumber] ON [USysV2Veg] ([Plotnumber]);
+CREATE INDEX [ProjectName] ON [USysV2Veg] ([ProjectID]);
+CREATE INDEX [SeekCover] ON [USysV2Veg] ([ProjectID], [Plotnumber], [Layer], [Species]);
+CREATE INDEX [seekplot] ON [USysV2Veg] ([ProjectID], [Plotnumber]);
+CREATE INDEX [Species] ON [USysV2Veg] ([Species]);
+

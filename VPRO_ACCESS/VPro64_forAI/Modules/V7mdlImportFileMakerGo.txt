@@ -1,0 +1,214 @@
+Option Compare Database
+
+Public Sub ImportFileMakerGo()
+
+Dim MyTitle As String, FileToImport As String
+
+'get the file
+    MyTitle = "Select a Go file"
+    FileToImport = GetFileName(MyTitle, True, "FileMaker Go (FMEcoPlots_env*.xlsx)", "FMEcoPlots_env*.xlsx")
+    If FileToImport = "" Then GoTo MyExit
+    CleanUp
+    
+'check for a complete table set
+    If Not CheckForMissingFile(GetPath(FileToImport), GetFile(FileToImport)) Then
+        MsgBox "You do not have a full set of Go tables.  Function cannot proceed.", vbInformation, "VPro"
+        GoTo MyExit
+    End If
+
+'link the excel tables
+    LinkTables GetPath(FileToImport), GetFile(FileToImport)
+
+'check for existing plots
+    If Not CheckForExistingData Then GoTo MyExit
+    
+'append data
+    AppendData
+    MsgBox "Completed import", vbInformation, "VPro"
+    
+MyExit:
+    CleanUp
+
+End Sub
+
+Private Function CheckForExistingData() As Boolean
+
+Dim MyDB As Database, MyRS As Recordset, Answer As Variant
+Dim SqlText As String
+Set MyDB = CurrentDb
+
+    SqlText = "SELECT UsysEnv.* FROM UsysEnv INNER JOIN xMyEnv ON UsysEnv.PlotNumber = xMyEnv.PlotNumber;"
+    Set MyRS = MyDB.OpenRecordset(SqlText)
+    If MyRS.RecordCount > 0 Then MyRS.MoveLast
+    
+    If MyRS.RecordCount > 0 Then
+        Answer = MsgBox(MyRS.RecordCount & " of the plots you are attemting to import already exist in the current project.  Click Yes to delete those plots from your current project and proceed with the import or click No to cancel this operation.", vbYesNo, "VPro")
+        If Answer = vbYes Then
+            DoCmd.SetWarnings False
+            SqlText = "DELETE DISTINCTROW UsysEnv.* FROM UsysEnv INNER JOIN xMyEnv ON UsysEnv.PlotNumber = xMyEnv.PlotNumber;"
+            DoCmd.RunSQL SqlText
+            DoCmd.SetWarnings True
+            CheckForExistingData = True
+        Else
+            CheckForExistingData = False
+            GoTo MyExit
+        End If
+    Else
+        CheckForExistingData = True
+        GoTo MyExit
+    End If
+    
+MyExit:
+    MyRS.Close
+    Set MyDB = Nothing
+
+End Function
+
+Private Function GetFile(PathAndFile As String) As String
+
+    GetFile = Dir(PathAndFile)
+   
+End Function
+
+Private Function GetPath(PathAndFile As String) As String
+
+    GetPath = Left(PathAndFile, Len(PathAndFile) - Len(Dir(PathAndFile)))
+    
+End Function
+
+Private Sub LinkTables(sPath As String, sFile As String)
+    
+    Dim FileBit As String, MyFile As String
+    
+    If Len(sFile) > 19 Then
+        FileBit = Mid(sFile, 15, Len(sFile) - 19)
+    Else
+        FileBit = ""
+    End If
+    
+    MyFile = sPath & "FMEcoPlots_env" & FileBit & ".xlsx"
+    DoCmd.TransferSpreadsheet acLink, acSpreadsheetTypeExcel12, "xMyEnv", MyFile, True
+    
+    MyFile = sPath & "FMEcoPlots_Humus" & FileBit & ".xlsx"
+    DoCmd.TransferSpreadsheet acLink, acSpreadsheetTypeExcel12, "xMyHumus", MyFile, True
+    
+    MyFile = sPath & "FMEcoPlots_Mineral" & FileBit & ".xlsx"
+    DoCmd.TransferSpreadsheet acLink, acSpreadsheetTypeExcel12, "xMyMineral", MyFile, True
+    
+    MyFile = sPath & "FMEcoPlots_VEG_herb" & FileBit & ".xlsx"
+    DoCmd.TransferSpreadsheet acLink, acSpreadsheetTypeExcel12, "xMyHerb", MyFile, True
+    
+    MyFile = sPath & "FMEcoPlots_VEG_moss" & FileBit & ".xlsx"
+    DoCmd.TransferSpreadsheet acLink, acSpreadsheetTypeExcel12, "xMyMoss", MyFile, True
+    
+    MyFile = sPath & "FMEcoPlots_VEG_tree" & FileBit & ".xlsx"
+    DoCmd.TransferSpreadsheet acLink, acSpreadsheetTypeExcel12, "xMyTree", MyFile, True
+
+MyExit:
+
+End Sub
+
+Private Function CleanUp()
+
+On Error Resume Next
+    DoCmd.DeleteObject acTable, "xMyEnv"
+    DoCmd.DeleteObject acTable, "xMyHumus"
+    DoCmd.DeleteObject acTable, "xMyMineral"
+    DoCmd.DeleteObject acTable, "xMyHerb"
+    DoCmd.DeleteObject acTable, "xMyMoss"
+    DoCmd.DeleteObject acTable, "xMyTree"
+On Error GoTo 0
+
+End Function
+
+Private Function CheckForMissingFile(sPath As String, sFile As String) As Boolean
+    
+    Dim FileBit As String
+    CheckForMissingFile = True
+    If Len(sFile) > 19 Then
+        FileBit = Mid(sFile, 15, Len(sFile) - 19)
+    Else
+        FileBit = ""
+    End If
+    
+    If Dir(sPath & "FMEcoPlots_env" & FileBit & ".xlsx", vbDirectory) = vbNullString Then
+        CheckForMissingFile = False
+        GoTo MyExit
+    End If
+    
+    If Dir(sPath & "FMEcoPlots_Humus" & FileBit & ".xlsx", vbDirectory) = vbNullString Then
+        CheckForMissingFile = False
+        GoTo MyExit
+    End If
+    
+    If Dir(sPath & "FMEcoPlots_Mineral" & FileBit & ".xlsx", vbDirectory) = vbNullString Then
+        CheckForMissingFile = False
+        GoTo MyExit
+    End If
+    
+    If Dir(sPath & "FMEcoPlots_VEG_herb" & FileBit & ".xlsx", vbDirectory) = vbNullString Then
+        CheckForMissingFile = False
+        GoTo MyExit
+    End If
+    
+    If Dir(sPath & "FMEcoPlots_VEG_moss" & FileBit & ".xlsx", vbDirectory) = vbNullString Then
+        CheckForMissingFile = False
+        GoTo MyExit
+    End If
+    
+    If Dir(sPath & "FMEcoPlots_VEG_tree" & FileBit & ".xlsx", vbDirectory) = vbNullString Then
+        CheckForMissingFile = False
+        GoTo MyExit
+    End If
+
+MyExit:
+
+End Function
+
+Private Sub AppendData()
+
+Dim SqlText As String
+
+    DoCmd.SetWarnings False
+    
+'env
+    SqlText = "INSERT INTO UsysEnv ( PlotNumber, FieldNumber, ProjectID, FSRegionDistrict, SitePlotQuality, VegPlotQuality, SoilPlotQuality, EnteredBy, [Date], SiteSurveyor, PlotRepresenting, Location, Ecosection, NtsMapSheet, Longitude, Latitude, UTMZone, UTMEasting, UTMNorthing, LocationAccuracy, AirPhotoNum, XCoord, YCoord, [Zone], SubZone, SiteSeries, TransDistrib, RealmClass, MapUnit, MoistureRegime, NutrientRegime, UserSiteUnit, BECSiteUnit, SiteUnitShortName, SiteUnitLongName, SuccessionalStatus, StructuralStage, StructuralStageMod, StandAge, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceShape, SurfaceTopographyType, SurfaceTopographySize, WaterSource, Exposure1, Exposure2, SiteDisturbance1, SiteDisturbance2, SiteDisturbance3, SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, SiteNotes, OfficeNotes, SoilSurveyor, BedrockGeology1, BedrockGeology2, BedrockGeology3,"
+    SqlText = SqlText & " CoarseFragLith1 , CoarseFragLith2, CoarseFragLith3, TerrainTextureSurf, surficialMaterialSurf, SurfaceExpSurf, GeoMorProSurf, TerrainTextureSubSurf, SurficialMaterialSubSurf, SurfaceExpSubSurf, GeoMorProSubSurf, FloodingRegimeFreq, MoistureRegimeSub, FloodingRegimeDur, SoilDrainage, SeepageDepth, RootRestrictingType, RootRestrictingDepth, RootZoneParticleSize, RootingDepth, SoilClassSubGroup, SoilClassGroup, HumusForm, HumusFormPhase, HumusThickness, pHMethodCodeMineral, pHMethodCodeOrganic, SoilNotes, VegSurveyor, StrataCoverTree, StrataCoverShrub, StrataCoverHerb, StrataCoverMoss, VegNotes, HydroGeoSystem, HydroGeoSubSystem, [Temporary] )"
+    SqlText = SqlText & " SELECT PlotNumber, FieldNumber, ProjectID, FSRegionDistrict, SitePlotQuality, VegPlotQuality, SoilPlotQuality, EnteredBy, Date, SiteSurveyor, PlotRepresenting, Location, Ecosection, NtsMapSheet, Longitude, Latitude, UTMZone, UTMEasting, UTMNorthing, LocationAccuracy, AirPhotoNum, XCoord, YCoord, Zone, SubZone, SiteSeries, TransDistrib, RealmClass, MapUnit, MoistureRegime, NutrientRegime, UserSiteUnit, BECSiteUnit, SiteUnitShortName, SiteUnitLongName, SuccessionalStatus, StructuralStage, StructuralStageMod, StandAge, Elevation, SlopeGradient, Aspect, MesoSlopePosition, SurfaceShape, SurfaceTopographyType, SurfaceTopographySize, WaterSource, Exposure1, Exposure2,"
+    SqlText = SqlText & " SiteDisturbance1 , SiteDisturbance2, SiteDisturbance3 , SubstrateDecWood, SubstrateBedRock, SubstrateRocks, SubstrateMineralSoil, SubstrateOrganicMatter, SubstrateWater, SiteNotes, OfficeNotes, SoilSurveyor, BedrockGeology1, BedrockGeology2, BedrockGeology3, CoarseFragLith1, CoarseFragLith2, CoarseFragLith3, TerrainTextureSurf, SurficialMaterialSurf, SurfaceExpSurf, GeoMorProSurf, TerrainTextureSubSurf, SurficialMaterialSubSurf, SurfaceExpSubSurf, GeoMorProSubSurf, FloodingRegimeFreq, MoistureRegimeSub, FloodingRegimeDur, SoilDrainage, SeepageDepth, RootRestrictingType, RootRestrictingDepth, RootZoneParticleSize, RootingDepth, SoilClassSubGroup, SoilClassGroup, HumusForm, HumusFormPhase, HumusThickness, pHMethodCodeMineral, pHMethodCodeOrganic, SoilNotes, VegSurveyor, StrataCoverTree, StrataCoverShrub , StrataCoverHerb, StrataCoverMoss, VegNotes, HydroGeoSystem, HydroGeoSubSystem, Temporary"
+    SqlText = SqlText & " FROM xMyEnv;"
+    DoCmd.RunSQL SqlText
+
+'veg herb
+    SqlText = "INSERT INTO UsysVeg ( PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, LL, AF, DC, UT, VI, PV, PG, FFA, Cultural1, Cultural2, Other1, Other2 )"
+    SqlText = SqlText & " SELECT PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, LL, AF, DC, UT, VI, PV, PG, FFA, Cultural1, Cultural2, Other1, Other2"
+    SqlText = SqlText & " FROM xMyHerb;"
+    DoCmd.RunSQL SqlText
+
+'humus
+    SqlText = "INSERT INTO UsysHumus ( PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Consistence, [Character], Fauna, Comment )"
+    SqlText = SqlText & " SELECT PlotNumber, Horizon, UpperDepth, LowerDepth, HumusStructureDegree, HumusStructureKind, MycelAbundance, FecalAbundance, RootsAbundance, RootsSize, vonPost, HumusFormpH, Consistence, Character, Fauna, Comment"
+    SqlText = SqlText & " FROM xMyHumus;"
+    DoCmd.RunSQL SqlText
+    
+'mineral
+    SqlText = "INSERT INTO UsysMineral ( PlotNumber, Horizon, UpperDepth, LowerDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, PercentCoarseFragsShape, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, MottlesAbundance, MottlesSize, MottlesContrast, ClayFilmsFreq, ClayFilmThickness, Effervescence, Porosity, Comments )"
+    SqlText = SqlText & " SELECT PlotNumber, Horizon, UpperDepth, LowerDepth, PitDepthLimit, Colour, ASP, Texture, PercentCoarseFragsGravel, PercentCoarseFragsCobbles, PercentCoarseFragsStones, PercentCoarseFragsTotal, PercentCoarseFragsShape, RootsAbundance, RootsSize, MineralStructureClass, MineralStructureKind, MineralFormpH, MottlesAbundance, MottlesSize, MottlesContrast, ClayFilmsFreq, ClayFilmThickness, Effervescence, Porosity, Comments"
+    SqlText = SqlText & " FROM xMyMineral;"
+    DoCmd.RunSQL SqlText
+    
+'moss
+    SqlText = "INSERT INTO UsysVeg ( PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, LL, AF, DC, UT, VI, PV, PG, FFA, Cultural1, Cultural2, Other1, Other2 )"
+    SqlText = SqlText & " SELECT PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, LL, AF, DC, UT, VI, PV, PG, FFA, Cultural1, Cultural2, Other1, Other2"
+    SqlText = SqlText & " FROM xMyMoss;"
+    DoCmd.RunSQL SqlText
+    
+'tree
+    SqlText = "INSERT INTO UsysVeg ( PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, LL, AF, DC, UT, VI, PV, PG, FFA, Cultural1, Cultural2, Other1, Other2 )"
+    SqlText = SqlText & " SELECT PlotNumber, Species, Layer, Cover1, Height1, Cover2, Height2, Cover3, Height3, TotalA, Cover4, Height4, Cover5, Height5, TotalB, Cover6, Height6, Cover7, Cover8, Cover9, Cover10, Collected, LL, AF, DC, UT, VI, PV, PG, FFA, Cultural1, Cultural2, Other1, Other2"
+    SqlText = SqlText & " FROM xMyTree;"
+    DoCmd.RunSQL SqlText
+
+    DoCmd.SetWarnings True
+    
+End Sub

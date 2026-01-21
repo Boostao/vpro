@@ -1,0 +1,27 @@
+Option Compare Database
+
+'This module is used to store API function declarations
+'API function declarations are also sometimes stored in the modules in which they are used
+
+Declare PtrSafe Function GetSystemMetrics Lib "User32" (ByVal nIndex As Long) As Long
+Declare PtrSafe Function SetDefaultPrinter Lib "winspool.drv" Alias "SetDefaultPrinterA" (ByVal pszPrinter As String) As Long
+Public Declare PtrSafe Function GetDefaultPrinter Lib "winspool.drv" Alias "GetDefaultPrinterA" (ByVal sPrinterName As String, lPrinterNameBufferSize As Long) As Long
+Public Declare PtrSafe Function ShellExecute Lib "shell32.dll" Alias "ShellExecuteA" (ByVal hwnd As Long, ByVal lpOperation As String, ByVal lpFile As String, ByVal lpParameters As String, ByVal lpDirectory As String, ByVal nShowCmd As Long) As Long
+
+Public Function GetDefPrinter() As String
+
+'Sep 18, 2008
+'used in report options
+Dim sLen As Long, hResult As Long, GetDP As String
+
+GetDP = Space$(255)
+sLen = 255
+hResult = GetDefaultPrinter(ByVal GetDP, sLen)
+
+If hResult <> 0 Then
+    GetDefPrinter = Left(GetDP, sLen - 1)
+Else
+    GetDefPrinter = ""
+End If
+End Function
+ 

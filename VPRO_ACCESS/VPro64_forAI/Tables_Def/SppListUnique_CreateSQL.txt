@@ -1,0 +1,14 @@
+CREATE TABLE [SppListUnique] (
+  [SpeciesNumber] LONG DEFAULT ,
+  [Code] TEXT(8) DEFAULT ,
+  [ScientificName] TEXT(50) DEFAULT ,
+  [CodePlusStrata] TEXT(255) DEFAULT ,
+  [CodePlusLayer] TEXT(255) DEFAULT ,
+  [Temp] TEXT(255) DEFAULT 
+);
+
+CREATE INDEX [Code] ON [SppListUnique] ([Code]);
+CREATE INDEX [CodePlusLayer] ON [SppListUnique] ([CodePlusLayer]);
+CREATE INDEX [CodePlusStrata] ON [SppListUnique] ([CodePlusStrata]);
+CREATE UNIQUE INDEX [SpeciesNumber] ON [SppListUnique] ([SpeciesNumber]);
+
