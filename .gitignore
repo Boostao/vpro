@@ -2,3 +2,6 @@
 *.duckdb.wal
 .Rhistory
 .RData
+renv.lock
+renv/*
+.Rprofile
