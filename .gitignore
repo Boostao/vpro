@@ -7,3 +7,5 @@ renv/*
 reports/*
 !reports/*.qmd
 !reports/*.Rmd
+.vscode/*
+.DS_Store
