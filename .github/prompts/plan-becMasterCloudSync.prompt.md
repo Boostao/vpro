@@ -1,72 +1,169 @@
 # Plan: VPro → BECMaster Cloud Sync & Data Management Platform
 
-Migrate the current single-user, file-based VPro Shiny app to a hybrid local/cloud architecture where local DuckDB instances sync with a central **BECMaster PostgreSQL** database on the server, with role-based access control, data compliance validation, change-tracked merging, and public RDS data publishing.
+Migrate the current single-user, file-based VPro Shiny app to a hybrid local/cloud architecture where local DuckDB instances connect to a central **BECMaster PostgreSQL** database via DuckDB's native `postgres` extension (`ATTACH`), with role-based access control, data compliance validation, change-tracked merging, and public RDS data publishing. **A single connection engine (DuckDB)** handles both local and remote data — no `RPostgres`/`pool` needed.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Local Machine (field / analyst)                        │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ DuckDB (in-process)                              │   │
+│  │  ├── local data:  vpro.duckdb (read/write)       │   │
+│  │  ├── local lists: vpro_lists.duckdb (ATTACH)     │   │
+│  │  └── cloud:       ATTACH 'postgres://...'        │   │
+│  │                   AS master (TYPE postgres,       │   │
+│  │                   READ_ONLY | READ_WRITE)         │   │
+│  └──────────────────────────────────────────────────┘   │
+│  R Shiny App (all queries via single DuckDB connection) │
+└─────────────────────┬───────────────────────────────────┘
+                      │ postgres wire protocol
+                      ▼
+┌─────────────────────────────────────────────────────────┐
+│  Cloud PostgreSQL (Supabase / Neon / AWS RDS)           │
+│  ├── core.*          (approved plot data)               │
+│  ├── lists.*         (reference codes, species)         │
+│  ├── staging.*       (pending uploads / merge requests) │
+│  ├── admin.*         (users, roles, audit, logs)        │
+│  └── public_export.* (RDS snapshots, download log)      │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Steps
 
 ### 1. Design and deploy the BECMaster PostgreSQL schema
 
-Translate all table schemas from `VPRO_ACCESS/VPro64_forAI/Tables_Def/` (plus VLists, VMetaData, VUser) into a PostgreSQL migration script. Add cloud-only tables: `users`, `roles`, `user_roles`, `merge_requests`, `merge_history`, `change_log`, `download_log`, `data_compliance_results`, and `rds_publish_snapshots`. Use a schema-per-concern layout (e.g., `core`, `lists`, `admin`, `public_export`).
+Translate all table schemas from `VPRO_ACCESS/VPro64_forAI/Tables_Def/` (plus VLists, VMetaData, VUser) into a PostgreSQL migration script. Use a **schema-per-concern** layout:
 
-### 2. Build a dual-connection data layer
+| Schema | Tables | Purpose |
+|--------|--------|---------|
+| `core` | `sample_veg`, `sample_env`, `sample_su`, `sample_admin`, `sample_humus`, `sample_mineral`, `sample_hierarchy`, `sample_metadata`, `sample_herbarium`, `sample_other`, `sample_lump` | Approved plot data |
+| `lists` | `usystableoflists`, `spplist`, `layercode`, `usyszonelist`, `mastersiteunitlist`, `usyssppattributes`, `usyssiteseriesnames` | Reference/lookup codes |
+| `staging` | Mirror of `core` tables + `merge_requests`, `compliance_results` | Pending uploads awaiting review |
+| `admin` | `users`, `roles`, `user_roles`, `change_log`, `merge_history`, `user_restrictions` | Auth, audit, change tracking |
+| `public_export` | `rds_snapshots`, `download_log` | Published datasets & access logging |
 
-Create a new `R/db_connections.R` module exposing `pg_connect()` (via `RPostgres`/`pool`) and the existing `duckdb_connect()`, with a config file (`config.yml` via the `config` package) for connection strings, environments (local/staging/prod). Refactor `global.R` and `server.R` to use this shared layer instead of hardcoded paths.
+Add versioning columns to all `core` and `staging` tables: `row_version INTEGER DEFAULT 1`, `last_modified_utc TIMESTAMPTZ DEFAULT now()`, `modified_by TEXT`.
+
+### 2. Build unified DuckDB connection layer with cloud ATTACH
+
+Replace the hardcoded `db_path` in `global.R` with a connection module `R/db_connections.R`:
+
+- Load connection settings from `config.yml` (local DB paths, remote postgres connection string, environment flag)
+- Open local DuckDB connection and `ATTACH` auxiliary local databases (`vpro_lists.duckdb AS lists`)
+- **Conditionally `ATTACH` the remote PostgreSQL** when online:
+  ```sql
+  INSTALL postgres;
+  LOAD postgres;
+  CREATE SECRET (TYPE postgres, HOST '...', PORT 5432, DATABASE 'becmaster',
+                 USER '...', PASSWORD '...');
+  ATTACH '' AS master (TYPE postgres, READ_ONLY);
+  ```
+- Expose a helper `is_cloud_connected()` reactive for UI gating
+- All existing `dbplyr`/`DBI` queries work unchanged — just prefix table references with `master.core.` or `master.lists.` when querying cloud
+- For write operations (upload, sync-push), use a separate `ATTACH ... READ_WRITE` or `postgres_execute()` passthrough
+
+**No new R package dependencies** — DuckDB's built-in `postgres` extension handles everything.
 
 ### 3. Implement data compliance validation engine
 
-Create `R/logic_compliance.R` with rule functions checking mandatory field standards before any upload/merge:
+Create `R/logic_compliance.R` with rule functions checking mandatory field standards before any upload, update, or merge:
 
-- Required columns present and non-null (`PlotNumber`, `Species`, `ProjectID`, `Zone`, `SubZone`, etc.)
-- Valid foreign-key references against `lists.USysTableOfLists` and `SppList`
-- Numeric range checks on cover/coordinate/elevation values
-- Species code format validation
-- `PlotNumber` uniqueness
+- **Mandatory fields**: `PlotNumber`, `Species`, `ProjectID`, `Zone`, `SubZone` non-null
+- **Foreign-key validation**: species codes exist in `lists.spplist`, zone/subzone in `lists.usyszonelist`, dropdown values in `lists.usystableoflists` — validated via cross-database DuckDB queries (local or cloud lists)
+- **Range checks**: latitude (48–60), longitude (−140 to −114), elevation (0–4000), cover values (0–100 or valid text codes `+`, `r`, `P`)
+- **Format validation**: `PlotNumber` matches expected pattern, species codes ≤ 8 chars
+- **Uniqueness**: no duplicate `PlotNumber` within a project, no duplicate `PlotNumber + Species` rows in `sample_veg`
+- **Structural checks**: uploaded CSV/ZIP contains expected table names with correct column sets
 
-Return a structured report (pass/fail per rule with row-level detail). Wire a "Validate" button into a new upload UI.
+Return a structured list: `list(passed = TRUE/FALSE, summary = tibble(rule, status, n_violations), details = tibble(rule, table, row, column, value, message))`. Wire a "Validate" button into the upload UI showing pass/fail badges and a drilldown DT table.
 
 ### 4. Build the dataset upload & merge-request workflow
 
-Create `R/mod_upload.R` with UI to upload CSV/ZIP packages of plot data. On upload: run the compliance engine (step 3), show results, and if passing, write data to a PostgreSQL `staging` schema with status `pending_review`.
+Create `R/mod_upload.R`:
 
-Create `R/mod_merge.R` for database managers to review staged submissions: side-by-side diff of incoming vs. existing records (keyed on `PlotNumber`), accept/reject per-record, and on accept execute a transactional merge into the `core` schema writing full before/after change history to `change_log` (extending the existing `USysAudit` pattern from `VPRO_ACCESS/VUser/Tables_Data/`).
+- UI: file input (CSV/ZIP), project selector, "Validate" and "Submit" buttons, compliance report display
+- On upload: parse files into data frames, run compliance engine (step 3)
+- If validation passes: write to PostgreSQL staging via DuckDB (`INSERT INTO master.staging.sample_veg SELECT * FROM uploaded_df`) and create a `merge_request` record (`submitter`, `project_id`, `timestamp`, `status = 'pending_review'`, `compliance_report_id`)
+
+Create `R/mod_merge.R` for database managers:
+
+- List pending merge requests with project, submitter, date, record counts
+- Side-by-side diff view: incoming vs. existing records keyed on `PlotNumber`, highlighting changed fields
+- Accept/reject per-record or bulk actions
+- On accept: transactional merge into `core` schema with full before/after change history written to `admin.change_log` (extending the `USysAudit` pattern)
+- On reject: update `merge_request.status = 'rejected'` with reviewer notes
 
 ### 5. Build local ↔ cloud sync with change tracking
 
-Create `R/logic_sync.R` implementing bi-directional sync: each record gets a `row_version` (integer) and `last_modified_utc` timestamp in both DuckDB and PostgreSQL. On sync-pull, fetch remote records newer than local `row_version`; on sync-push, upload local changes as a merge request (step 4). Conflict detection flags records modified in both since last sync. All sync operations log to `change_log` with `sync_id`, `direction`, `user_id`, `timestamp`, `table`, `pk`, `field`, `old_value`, `new_value`. Add a Shiny sync panel in `R/mod_admin.R` showing sync status, conflicts, and resolution UI.
+Create `R/logic_sync.R`:
+
+- **Sync-pull** (cloud → local): Compare `row_version` between `master.core.*` and local tables. Fetch and upsert records where remote `row_version > local row_version`:
+  ```sql
+  CREATE OR REPLACE TABLE local_sample_env AS
+    FROM master.core.sample_env WHERE last_modified_utc > $last_sync;
+  ```
+- **Sync-push** (local → cloud): Detect locally modified records (local `row_version > synced_version`), package as a merge request (step 4) — changes go through the review workflow, not directly into `core`
+- **Conflict detection**: Flag records modified in both local and cloud since last sync. Store conflicts in a local `sync_conflicts` table for manual resolution
+- **Change log**: All sync operations log to `master.admin.change_log` with `sync_id`, `direction` (pull/push), `user_id`, `timestamp`, `table_name`, `pk`, `field`, `old_value`, `new_value`
+- **Offline snapshot**: On sync-pull, cache a full local copy for offline work. On reconnect, diff and push changes
+
+Add a sync panel in `R/mod_admin.R`: last sync timestamp, sync status indicator, conflict count badge, "Sync Now" button, conflict resolution UI.
 
 ### 6. Implement user accreditation & role-based access
 
-Create `R/mod_auth.R` using `shinyauthr` (or custom token-based auth against the PostgreSQL `users`/`roles` tables). Define roles:
+Create `R/mod_auth.R` authenticating against `master.admin.users` / `master.admin.roles` via DuckDB postgres queries:
 
 | Role | Permissions |
 |------|-------------|
-| `viewer` | Read-only public data |
-| `field_user` | Enter/edit own plots |
-| `project_lead` | Manage own project's plots |
-| `db_manager` | Review merges, edit all data, manage codes |
-| `admin` | Manage users/roles |
+| `viewer` | Read-only access to public/exported data |
+| `field_user` | Enter/edit own plots, upload datasets |
+| `project_lead` | Manage own project's plots, approve field_user uploads within project |
+| `db_manager` | Review all merge requests, edit all data, manage reference codes |
+| `admin` | Manage users/roles, system configuration |
 
-Gate every write operation in `R/mod_veg_sample.R`, `R/mod_site_env.R`, `R/mod_admin.R`, and the new upload/merge modules behind `req(user_has_role(...))` checks. Port the existing `USysUserRestrictions` concept from Access.
+- Login UI with username/password (hashed with `bcrypt` in PostgreSQL)
+- Session token stored in Shiny session, checked on every server call
+- Gate write operations: `req(user_has_role(session, "field_user"))` in `R/mod_veg_sample.R`, `R/mod_site_env.R`, etc.
+- Gate admin operations: `req(user_has_role(session, "db_manager"))` in merge/admin modules
+- Port `USysUserRestrictions` concept: per-user project/tag restrictions stored in `admin.user_restrictions`
+- `ATTACH` uses role-specific PostgreSQL credentials (read-only for viewers, read-write for field_user+)
 
 ### 7. Build RDS public data publishing pipeline
 
-Create `R/logic_publish.R` with a function `publish_becmaster_rds()` that:
+Create `R/logic_publish.R` with `publish_becmaster_rds()`:
 
-1. Queries approved (`qa_status = 'approved'`) plot data from PostgreSQL
-2. Applies lumping via `R/logic_lumping.R`
-3. Pivots to the wide species matrix (reusing `R/mod_export.R` logic)
-4. Joins environmental data
-5. Writes compact `.rds` files (versioned with date stamp) to a configured output directory or cloud storage (S3/Azure Blob)
+1. Query approved plot data from `master.core.*` (or local synced copy) where `qa_status = 'approved'`
+2. Apply lumping via `R/logic_lumping.R` (species synonym consolidation)
+3. Pivot to wide species matrix reusing `R/mod_export.R` logic (Sites × Species_Layer)
+4. Join environmental data from `core.sample_env` + `core.sample_su`
+5. Write versioned `.rds` files (`becmaster_veg_YYYYMMDD.rds`, `becmaster_env_YYYYMMDD.rds`) to configured output directory or cloud storage
+6. Record snapshot metadata in `public_export.rds_snapshots` (version, date, row counts, md5 hash)
 
-A `db_manager` triggers this from the admin panel; the resulting RDS files are served by a separate lightweight public Shiny app or API.
+Trigger from admin panel (db_manager role). Resulting RDS files served by a separate lightweight public Shiny app or Plumber API.
 
 ### 8. Record and store data download activity
 
-Create a `download_log` table in PostgreSQL (`id`, `user_id`, `timestamp`, `dataset_name`, `format`, `filters_applied`, `row_count`, `ip_address`). Wrap every `downloadHandler` in `R/mod_export.R` and the public RDS endpoint with a logging call that inserts into this table before serving the file. Build a read-only log viewer in `R/mod_admin.R` for `db_manager`/`admin` roles with date-range filtering and summary statistics.
+Create `public_export.download_log` table in PostgreSQL:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL PK | |
+| `user_id` | TEXT | Authenticated user or 'anonymous' |
+| `timestamp` | TIMESTAMPTZ | Download time |
+| `dataset_name` | TEXT | e.g., 'becmaster_veg_20260207' |
+| `format` | TEXT | 'rds', 'csv' |
+| `filters_applied` | JSONB | Project, layer, region filters |
+| `row_count` | INTEGER | Rows in downloaded dataset |
+| `ip_address` | TEXT | Client IP |
+
+- Wrap every `downloadHandler` in `R/mod_export.R` with a logging call: `INSERT INTO master.public_export.download_log ...` via DuckDB postgres write
+- Build a read-only log viewer tab in `R/mod_admin.R` (db_manager/admin only): date-range filter, user filter, summary stats (downloads per dataset, per user, per month)
 
 ## Further Considerations
 
-1. **PostgreSQL hosting**: Self-hosted VM vs. managed service (AWS RDS / Azure Database for PostgreSQL / Supabase)? Managed reduces ops burden; recommend **Supabase** or **AWS RDS** for built-in auth extensions and backups.
-2. **Local open-source DB**: Should the local equivalent be DuckDB (current) or SQLite for broader tool compatibility? Recommend **keeping DuckDB** — it already works and handles the analytical query patterns well.
-3. **Public BECMaster app**: Should public data access be a separate Shiny app, a Plumber API, or static RDS files on a download page? A **Plumber API + lightweight Shiny viewer** offers the most flexibility for programmatic and interactive access.
-4. **Offline-first vs. online-required**: Should field users be able to work fully offline and sync later, or require connectivity? Recommend **offline-first with DuckDB** and sync-on-connect, matching current field workflow.
+1. **PostgreSQL hosting**: Recommend **Supabase** (generous free tier, built-in auth extensions, Postgres 15+) or **Neon** (serverless, branching, free tier 0.5 GB) for initial deployment. AWS RDS for production scale.
+2. **DuckDB postgres extension maturity**: Filter pushdown is experimental but enabled by default. For large tables, create local snapshots (`CREATE TABLE AS`) rather than querying remote on every interaction. Monitor `pg_connection_cache` and call `pg_clear_cache()` after schema changes.
+3. **Offline-first workflow**: Confirmed — field users work on local DuckDB, `ATTACH` cloud on reconnect, sync-push goes through merge-request review. No connectivity required for day-to-day data entry.
+4. **Public BECMaster access**: Recommend a **Plumber API** serving RDS/CSV files with download logging, plus a lightweight **Shiny viewer** for interactive exploration. Both read from `public_export.rds_snapshots`.
+5. **Secrets management**: Use DuckDB `CREATE SECRET` with `SCOPE` for per-environment postgres credentials. Store secrets in environment variables (`PGHOST`, `PGUSER`, `PGPASSWORD`) — never in `config.yml` committed to git.
