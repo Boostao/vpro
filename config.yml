@@ -1,0 +1,91 @@
+# VPro Application Configuration
+# Environment-specific settings for local development, testing, and production
+
+default:
+  # Logging
+  log_level: INFO
+  
+  # Local DuckDB settings
+  duckdb:
+    main_db: "data/vpro.duckdb"
+    lists_db: "data/vpro_lists.duckdb"
+    metadata_db: "data/vpro_metadata.duckdb"
+    user_db: "data/vpro_user.duckdb"
+    messages_db: "data/vpro_messages.duckdb"
+    
+  # Session defaults
+  session:
+    timeout_minutes: 480
+    auto_sync: true
+
+development:
+  # Development environment with local Postgres
+  postgres:
+    host: localhost
+    port: 5433
+    database: becmaster
+    user: testuser
+    password: testpass
+    # Credentials via environment variables (preferred)
+    # PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
+    use_env_vars: false
+    
+  # Cloud attachment settings
+  cloud:
+    enabled: true
+    attach_on_startup: false  # Manual ATTACH for dev
+    read_only: false  # Allow writes in dev
+    attach_timeout_seconds: 30
+    
+  # Logging
+  log_level: DEBUG
+
+test:
+  # Test environment - ephemeral Postgres from docker-compose or testcontainers
+  postgres:
+    host: localhost
+    port: 5433
+    database: becmaster
+    user: testuser
+    password: testpass
+    use_env_vars: false
+    
+  cloud:
+    enabled: true
+    attach_on_startup: true  # Auto-attach for tests
+    read_only: false
+    attach_timeout_seconds: 30
+    
+  log_level: DEBUG
+  
+  # Test data settings
+  test_data:
+    seed_minimal: true
+    cleanup_after_test: true
+
+production:
+  # Production environment - cloud Postgres (Supabase/Neon/AWS RDS)
+  postgres:
+    # Use environment variables for all credentials
+    # PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
+    # Example placeholders:
+    host: "prod-db.supabase.co"  # Override via env var PGHOST
+    port: 5432
+    database: "becmaster"
+    user: "postgres"
+    password: "change_me"  # MUST override via PGPASSWORD env var
+    use_env_vars: true  # Always use env vars in production
+    ssl_mode: "require"
+    
+  cloud:
+    enabled: true
+    attach_on_startup: true  # Auto-attach in production
+    read_only: false
+    attach_timeout_seconds: 60
+    
+  log_level: WARN
+  
+  # Production safety features
+  backup:
+    enabled: true
+    frequency_hours: 6
