@@ -68,6 +68,43 @@ get_descendants <- function(df, node_id) {
   unique(c(direct, children))
 }
 
+get_node_path <- function(df, node_id, max_steps = 50L) {
+  if (nrow(df) == 0) return(character(0))
+  path <- character(0)
+  current_id <- node_id
+  steps <- 0L
+
+  while (!is.na(current_id) && steps < max_steps) {
+    row <- df[df$ID == current_id, , drop = FALSE]
+    if (nrow(row) == 0) break
+    path <- c(row$Name[1], path)
+    current_id <- row$Parent[1]
+    steps <- steps + 1L
+  }
+
+  path
+}
+
+find_orphan_nodes <- function(df) {
+  if (nrow(df) == 0) return(integer(0))
+  parents <- unique(df$Parent[!is.na(df$Parent)])
+  missing_parents <- setdiff(parents, df$ID)
+  if (length(missing_parents) == 0) return(integer(0))
+  unique(df$ID[df$Parent %in% missing_parents])
+}
+
+fix_orphan_nodes <- function(con) {
+  if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) return(0L)
+  df <- DBI::dbGetQuery(con, "SELECT ID, Parent FROM Sample_Hierarchy")
+  orphan_ids <- find_orphan_nodes(df)
+  if (length(orphan_ids) == 0) return(0L)
+
+  placeholders <- paste(rep("?", length(orphan_ids)), collapse = ", ")
+  sql <- sprintf("UPDATE Sample_Hierarchy SET Parent = NULL WHERE ID IN (%s)", placeholders)
+  DBI::dbExecute(con, sql, as.list(orphan_ids))
+  length(orphan_ids)
+}
+
 get_subtree <- function(df, node_id) {
   ids <- c(node_id, get_descendants(df, node_id))
   df[df$ID %in% ids, , drop = FALSE]
@@ -200,7 +237,8 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_delete"), "Delete", class = "btn-danger"),
             actionButton(ns("hier_delete_subtree"), "Delete Subtree", class = "btn-danger"),
             actionButton(ns("hier_refresh"), "Refresh", class = "btn-secondary"),
-            col_widths = c(3, 2, 2, 2, 2, 1)
+            actionButton(ns("hier_fix_orphans"), "Reattach Orphans", class = "btn-outline-secondary"),
+            col_widths = c(3, 2, 2, 2, 2, 1, 2)
           ),
           layout_columns(
             selectInput(ns("move_parent"), "Move Node To", choices = NULL),
@@ -236,7 +274,7 @@ mod_hierarchy_ui <- function(id) {
 
 mod_hierarchy_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
-    rv <- reactiveValues(data = NULL, clipboard = NULL, su = NULL, su_status = "")
+    rv <- reactiveValues(data = NULL, clipboard = NULL, su = NULL, su_status = "", selected_path = NULL, orphan_count = 0L)
 
     load_hierarchy <- function() {
       if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) return(data.frame())
@@ -261,6 +299,11 @@ mod_hierarchy_server <- function(id, state, con) {
 
     refresh_tree <- function() {
       rv$data <- load_hierarchy()
+      if (!is.null(rv$data) && nrow(rv$data) > 0) {
+        rv$orphan_count <- length(find_orphan_nodes(rv$data))
+      } else {
+        rv$orphan_count <- 0L
+      }
     }
 
     update_move_choices <- function() {
@@ -301,7 +344,19 @@ mod_hierarchy_server <- function(id, state, con) {
       } else if (is.null(rv$data)) {
         "No hierarchy loaded."
       } else {
-        paste("Nodes:", nrow(rv$data))
+        path_text <- if (!is.null(rv$selected_path) && length(rv$selected_path) > 0) {
+          paste(rv$selected_path, collapse = " > ")
+        } else {
+          ""
+        }
+        status_parts <- c(paste("Nodes:", nrow(rv$data)))
+        if (rv$orphan_count > 0) {
+          status_parts <- c(status_parts, paste("Orphans:", rv$orphan_count))
+        }
+        if (nzchar(path_text)) {
+          status_parts <- c(status_parts, paste("Selected:", path_text))
+        }
+        paste(status_parts, collapse = " | ")
       }
     })
 
@@ -460,6 +515,21 @@ mod_hierarchy_server <- function(id, state, con) {
         update_move_choices()
       }, error = function(e) {
         showNotification(paste("Delete failed:", e$message), type = "error")
+      })
+    })
+
+    observeEvent(input$hier_fix_orphans, {
+      tryCatch({
+        count <- fix_orphan_nodes(con)
+        if (count > 0) {
+          showNotification(paste("Reattached", count, "orphans."), type = "message")
+        } else {
+          showNotification("No orphans found.", type = "message")
+        }
+        refresh_tree()
+        update_move_choices()
+      }, error = function(e) {
+        showNotification(paste("Fix failed:", e$message), type = "error")
       })
     })
 
@@ -655,6 +725,7 @@ mod_hierarchy_server <- function(id, state, con) {
       row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
       if (nrow(row) == 0) return()
 
+      rv$selected_path <- get_node_path(rv$data, node_id)
       updateTextInput(session, "hier_name", value = row$Name[1])
       parent_id <- row$Parent[1]
       updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))

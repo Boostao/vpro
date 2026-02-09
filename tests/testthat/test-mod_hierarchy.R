@@ -100,3 +100,40 @@ test_that("get_sibling_order respects MyOrder", {
   ordered <- get_sibling_order(df, NA_integer_)
   expect_equal(ordered$ID, c(2, 1, 3))
 })
+
+test_that("get_node_path returns breadcrumb", {
+  df <- data.frame(
+    ID = c(1, 2, 3, 4),
+    Name = c("Root", "ChildA", "ChildB", "Grand"),
+    Parent = c(NA, 1, 1, 2)
+  )
+
+  path <- get_node_path(df, 4)
+  expect_equal(path, c("Root", "ChildA", "Grand"))
+})
+
+test_that("find_orphan_nodes identifies missing parents", {
+  df <- data.frame(
+    ID = c(1, 2, 3),
+    Name = c("Root", "Orphan", "Child"),
+    Parent = c(NA, 99, 1)
+  )
+
+  orphans <- find_orphan_nodes(df)
+  expect_equal(orphans, 2)
+})
+
+test_that("fix_orphan_nodes resets missing parents", {
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Parent INTEGER)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (1, NULL)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (2, 99)")
+
+  count <- fix_orphan_nodes(con)
+  expect_equal(count, 1)
+
+  parents <- DBI::dbGetQuery(con, "SELECT Parent FROM Sample_Hierarchy WHERE ID = 2")$Parent
+  expect_true(is.na(parents[1]))
+})
