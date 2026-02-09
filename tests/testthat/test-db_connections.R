@@ -248,7 +248,7 @@ test_that("PostgreSQL extension can be installed and loaded", {
     DBI::dbExecute(con, "LOAD postgres")
     expect_true(TRUE)
   }, error = function(e) {
-    skip("postgres extension not available: ", e$message)
+    skip(paste0("postgres extension not available: ", e$message))
   })
   
   DBI::dbDisconnect(con)
@@ -277,7 +277,7 @@ test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL"
     expect_true(is_attached)
     
   }, error = function(e) {
-    skip("Could not attach PostgreSQL: ", e$message)
+    skip(paste0("Could not attach PostgreSQL: ", e$message))
   })
   
   DBI::dbDisconnect(con)
@@ -304,7 +304,7 @@ test_that("Queries can reference attached PostgreSQL tables", {
     expect_true("spp_code" %in% names(result))
     
   }, error = function(e) {
-    skip("PostgreSQL not fully accessible: ", e$message)
+    skip(paste0("PostgreSQL not fully accessible: ", e$message))
   })
   
   DBI::dbDisconnect(con)
@@ -336,7 +336,7 @@ test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
     expect_equal(local_count$n[1], 1L)
     
   }, error = function(e) {
-    skip("PostgreSQL write not available: ", e$message)
+    skip(paste0("PostgreSQL write not available: ", e$message))
   })
   
   DBI::dbDisconnect(con)

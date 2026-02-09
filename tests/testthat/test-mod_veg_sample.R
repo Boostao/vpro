@@ -46,3 +46,20 @@ test_that("mod_veg_sample preserves cover codes as text", {
   saved <- DBI::dbGetQuery(con, "SELECT cover1 FROM Sample_Veg WHERE id = 1")
   expect_equal(saved$cover1[1], "+")
 })
+
+test_that("sum_numeric_or_na handles mixed cover inputs", {
+  expect_true(is.na(sum_numeric_or_na(c(NA, NA))))
+  expect_equal(sum_numeric_or_na(c("10", "", NA)), 10)
+  expect_equal(sum_numeric_or_na(data.frame(a = c("5", "5"))), 10)
+})
+
+test_that("detect_hot_changes returns changed cells", {
+  old_df <- data.frame(species = c("AB", "FD"), cover1 = c("10", "20"))
+  new_df <- data.frame(species = c("AB", "FD"), cover1 = c("10", "25"))
+
+  changes <- detect_hot_changes(old_df, new_df)
+  expect_equal(length(changes), 1)
+  expect_equal(changes[[1]]$row, 2)
+  expect_equal(changes[[1]]$col, "cover1")
+  expect_equal(changes[[1]]$value, "25")
+})

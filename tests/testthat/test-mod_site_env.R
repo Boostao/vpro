@@ -105,3 +105,14 @@ test_that("mod_site_env loads inputs and saves header", {
   expect_equal(saved$latitude[1], 50.0)
   expect_equal(saved$longitude[1], -120.5)
 })
+
+test_that("mod_site_env DMS apply and fill update inputs", {
+  lat <- parse_dms_value("49 12 00 N", TRUE)
+  lon <- parse_dms_value("123 30 00 W", FALSE)
+
+  expect_equal(lat, 49.2)
+  expect_equal(lon, -123.5)
+
+  expect_match(format_dms_value(49.2, TRUE), "^49 12")
+  expect_match(format_dms_value(-123.5, FALSE), "^123 30")
+})

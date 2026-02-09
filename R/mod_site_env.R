@@ -84,6 +84,69 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
     "updated"
 }
 
+format_dms_value <- function(value, is_lat) {
+    if (is.null(value) || length(value) == 0 || is.na(value)) {
+        return("")
+    }
+    value_num <- suppressWarnings(as.numeric(value))
+    if (is.na(value_num)) return("")
+    hemi <- if (is_lat) {
+        if (value_num < 0) "S" else "N"
+    } else {
+        if (value_num < 0) "W" else "E"
+    }
+    abs_val <- abs(value_num)
+    d <- floor(abs_val)
+    m_full <- (abs_val - d) * 60
+    m <- floor(m_full)
+    s <- (m_full - m) * 60
+    if (is.na(s)) return("")
+    if (s >= 59.995) {
+        s <- 0
+        m <- m + 1
+    }
+    if (m >= 60) {
+        m <- 0
+        d <- d + 1
+    }
+    sprintf("%d %02d %05.2f %s", d, m, s, hemi)
+}
+
+parse_dms_value <- function(text, is_lat) {
+    if (is.null(text) || length(text) == 0) return(NA_real_)
+    raw <- toupper(trimws(text))
+    if (!nzchar(raw)) return(NA_real_)
+
+    dir_sign <- if (grepl("[SW]", raw)) {
+        -1
+    } else if (grepl("[NE]", raw)) {
+        1
+    } else {
+        NA_real_
+    }
+
+    cleaned <- gsub("[^0-9.+-]", " ", raw)
+    parts <- strsplit(cleaned, "\\s+")[[1]]
+    parts <- parts[nzchar(parts)]
+    if (length(parts) == 0) return(NA_real_)
+
+    nums <- suppressWarnings(as.numeric(parts))
+    nums <- nums[!is.na(nums)]
+    if (length(nums) == 0) return(NA_real_)
+
+    deg <- abs(nums[1])
+    min <- if (length(nums) >= 2) abs(nums[2]) else 0
+    sec <- if (length(nums) >= 3) abs(nums[3]) else 0
+    val <- deg + (min + sec / 60) / 60
+    if (is.na(val)) return(NA_real_)
+
+    sign <- if (!is.na(dir_sign)) dir_sign else if (nums[1] < 0) -1 else 1
+    val <- sign * val
+    max_abs <- if (is_lat) 90 else 180
+    if (abs(val) > max_abs) return(NA_real_)
+    val
+}
+
 soil_numeric_cols <- list(
     Sample_Humus = c("upperdepth", "lowerdepth", "humusformph"),
     Sample_Mineral = c("upperdepth", "lowerdepth", "percentcoarsefragstotal")
@@ -131,28 +194,35 @@ mod_site_env_ui <- function(id) {
                             tab_input(textInput(ns("env_surveyor"), "Surveyor"), 3),
               col_widths = c(6, 3, 3)
             ),
-            layout_columns(
-                             tab_input(numericInput(ns("env_lat"), "Latitude", value=0), 4),
-                             tab_input(numericInput(ns("env_long"), "Longitude", value=0), 5),
-                             tab_input(textInput(ns("env_utme"), "UTM Easting"), 6),
-                             tab_input(textInput(ns("env_utmn"), "UTM Northing"), 7),
-               col_widths = c(3, 3, 3, 3)
-            ),
-            layout_columns(
-                             tab_input(numericInput(ns("env_elev"), "Elevation (m)", value=0), 8),
-                             tab_input(numericInput(ns("env_slope"), "Slope (%)", value=0), 9),
-                             tab_input(numericInput(ns("env_aspect"), "Aspect (deg)", value=0), 10),
-               col_widths = c(4, 4, 4)
-            ),
-            layout_columns(
-                             tab_input(selectInput(ns("env_meso"), "Meso Slope", choices=NULL), 11),
-                             tab_input(selectInput(ns("env_shape"), "Surface Shape", choices=NULL), 12),
-                             tab_input(selectInput(ns("env_moisture"), "Moisture Regime", choices=NULL), 13),
-                             tab_input(selectInput(ns("env_nutrient"), "Nutrient Regime", choices=NULL), 14),
-               col_widths = c(3, 3, 3, 3)
-            ),
-                        tab_input(textAreaInput(ns("env_notes"), "Site Notes", width = "100%", height = "100px"), 15),
-                        div(class="mt-3", tab_input(actionButton(ns("save_header"), "Save General Info", class="btn-primary"), 16)),
+                layout_columns(
+                                      tab_input(numericInput(ns("env_lat"), "Latitude", value=0), 4),
+                                      tab_input(numericInput(ns("env_long"), "Longitude", value=0), 5),
+                                      tab_input(textInput(ns("env_utme"), "UTM Easting"), 6),
+                                      tab_input(textInput(ns("env_utmn"), "UTM Northing"), 7),
+                    col_widths = c(3, 3, 3, 3)
+                ),
+                layout_columns(
+                                      tab_input(textInput(ns("env_lat_dms"), "Latitude DMS", placeholder = "49 12 30 N"), 8),
+                                      tab_input(textInput(ns("env_long_dms"), "Longitude DMS", placeholder = "123 45 15 W"), 9),
+                                     tab_input(actionButton(ns("apply_dms"), "Apply DMS -> Decimal", class = "btn-outline-secondary"), 10),
+                                     tab_input(actionButton(ns("fill_dms"), "Fill DMS <- Decimal", class = "btn-outline-secondary"), 11),
+                    col_widths = c(3, 3, 3, 3)
+                ),
+                layout_columns(
+                                      tab_input(numericInput(ns("env_elev"), "Elevation (m)", value=0), 12),
+                                      tab_input(numericInput(ns("env_slope"), "Slope (%)", value=0), 13),
+                                      tab_input(numericInput(ns("env_aspect"), "Aspect (deg)", value=0), 14),
+                    col_widths = c(4, 4, 4)
+                ),
+                layout_columns(
+                                      tab_input(selectInput(ns("env_meso"), "Meso Slope", choices=NULL), 15),
+                                      tab_input(selectInput(ns("env_shape"), "Surface Shape", choices=NULL), 16),
+                                      tab_input(selectInput(ns("env_moisture"), "Moisture Regime", choices=NULL), 17),
+                                      tab_input(selectInput(ns("env_nutrient"), "Nutrient Regime", choices=NULL), 18),
+                    col_widths = c(3, 3, 3, 3)
+                ),
+                                tab_input(textAreaInput(ns("env_notes"), "Site Notes", width = "100%", height = "100px"), 19),
+                                div(class="mt-3", tab_input(actionButton(ns("save_header"), "Save General Info", class="btn-primary"), 20)),
                         hr(),
                         div(class = "d-flex align-items-center gap-2",
                             actionButton(ns("run_compliance"), "Run Compliance", class = "btn-secondary"),
@@ -163,12 +233,12 @@ mod_site_env_ui <- function(id) {
         ),
         nav_panel("Mensuration",
             layout_columns(
-                                tab_input(numericInput(ns("men_age"), "Stand Age (yrs)", value=0), 17),
-                                tab_input(numericInput(ns("men_hgt"), "Stand Height (m)", value=0), 18),
-                                tab_input(selectInput(ns("men_struct"), "Structural Stage", choices=NULL), 19),
+                                tab_input(numericInput(ns("men_age"), "Stand Age (yrs)", value=0), 21),
+                                tab_input(numericInput(ns("men_hgt"), "Stand Height (m)", value=0), 22),
+                                tab_input(selectInput(ns("men_struct"), "Structural Stage", choices=NULL), 23),
                 col_widths = c(4, 4, 4)
             ),
-                        div(class="mt-3", tab_input(actionButton(ns("save_mensuration"), "Save Mensuration", class="btn-primary"), 20))
+                        div(class="mt-3", tab_input(actionButton(ns("save_mensuration"), "Save Mensuration", class="btn-primary"), 24))
         ),
         nav_panel("Soil: Humus", 
             layout_columns(
@@ -218,6 +288,7 @@ mod_site_env_server <- function(id, sys_state, con) {
         }
         as.character(value)
     }
+
     
     # -- Load Data --
     observeEvent(sys_state$CurrSU, {
@@ -263,6 +334,8 @@ mod_site_env_server <- function(id, sys_state, con) {
             updateNumericInput(session, "env_long", value = safe_num(rv$env$longitude[1]))
             updateTextInput(session, "env_utme", value = safe_chr(rv$env$utmeasting[1]))
             updateTextInput(session, "env_utmn", value = safe_chr(rv$env$utmnorthing[1]))
+            updateTextInput(session, "env_lat_dms", value = format_dms_value(rv$env$latitude[1], TRUE))
+            updateTextInput(session, "env_long_dms", value = format_dms_value(rv$env$longitude[1], FALSE))
             
             updateNumericInput(session, "env_elev", value = safe_num(rv$env$elevation[1]))
             updateNumericInput(session, "env_slope", value = safe_num(rv$env$slopegradient[1]))
@@ -320,6 +393,28 @@ mod_site_env_server <- function(id, sys_state, con) {
         }, error = function(e) {
             showNotification(paste("Error saving header:", e$message), type="error")
         })
+    })
+
+    observeEvent(input$apply_dms, {
+        lat <- parse_dms_value(input$env_lat_dms, TRUE)
+        lon <- parse_dms_value(input$env_long_dms, FALSE)
+
+        if (!is.na(lat)) {
+            updateNumericInput(session, "env_lat", value = lat)
+        } else if (nzchar(trimws(safe_chr(input$env_lat_dms)))) {
+            showNotification("Invalid latitude DMS.", type = "error")
+        }
+
+        if (!is.na(lon)) {
+            updateNumericInput(session, "env_long", value = lon)
+        } else if (nzchar(trimws(safe_chr(input$env_long_dms)))) {
+            showNotification("Invalid longitude DMS.", type = "error")
+        }
+    })
+
+    observeEvent(input$fill_dms, {
+        updateTextInput(session, "env_lat_dms", value = format_dms_value(input$env_lat, TRUE))
+        updateTextInput(session, "env_long_dms", value = format_dms_value(input$env_long, FALSE))
     })
 
     # -- Save Mensuration --

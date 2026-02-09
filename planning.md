@@ -44,16 +44,15 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **App shell**: `global.R`, `ui.R` (6 nav_panels + sidebar), `server.R` (connection, state, module wiring)
 
 ### ⚠️ Partial
-- **Global state**: remaining VBA globals to verify against `V7mdlGlobalDeclarations`
-- **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — needs `Nz()` safety audit
-- **VENUS XML export**: Button exists in UI, logic not ported
+- **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — null-safety audit complete
+- **VENUS XML export**: XML export implemented with schema-ordered columns, DMS derivations, prefixing, project filtering, and expanded tests; remaining Access field transforms TBD
 - **Reporting**: 15/15 Access reports recreated as Quarto templates
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
 - **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
+- **Import engine**: CSV preview/append plus ZIP multi-table import with column checks
+- **Hierarchy tools**: tree CRUD + move node + delete/copy/paste subtree + merge + SU table editor
 
 ### 🔲 Not Started
-- **Hierarchy tools**: 5 VBA modules → `R/mod_hierarchy.R` (basic tree CRUD)
-- **Import engine**: 12+ VBA modules → `R/mod_import.R` (UI shell + file preview + column checks + CSV append + compliance)
 - **Diagnostics/QC**: `V7mdlDiagnostic`, validation reports → `R/logic_compliance.R`
 - **Audit trail**: `V7mdlAudit` → `R/logic_audit.R`
 - **Cloud sync**: `R/logic_sync.R` (architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`, stub added)
@@ -71,8 +70,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 
 ### 1.1 Global State Completeness
 - **Source**: `VPRO_ACCESS/VPro64_forAI/Modules/V7mdlGlobalDeclarations.txt`
-- **Action**: Port remaining ~23 global variables to `R/logic_state.R`
-- **Key additions**: `sysCurrHierarchy`, `sysCurrSuTable`, `sysConstancyTable`, `sysVegProfilePercent`, `sysCoordMethod`, diagnostic flags
+- **Status**: Complete (globals aligned with Access declarations)
 - **Test**: `tests/testthat/test-logic_state.R`
 
 ### 1.2 Null Safety Audit
@@ -98,10 +96,11 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 ## Phase 2: Data Integrity & Validation
 
 ### 2.1 Compliance Engine — `R/logic_compliance.R`
-- **Source**: `V7mdlDiagnostic`, `V7mdlReportsValidateEnvData`, `V7mdlReportsValidateVegCodes`, `V7mdlReportsQualityControl`
-- **Rules**:
   - Mandatory fields: PlotNumber, ProjectID, Zone, SubZone non-null
-  - FK validation: species codes → `lists.SppList`, zones → `lists.USysZoneList`, dropdown values → `lists.USysTableOfLists`
+  - FK validation: species codes → `lists.SppList`, zones/subzones → `lists.USysZoneList`, list-driven fields → `lists.USysTableOfLists`
+  - Range checks: latitude (48–60), longitude (−140 to −114), elevation (0–4000), slope (0–100), aspect (0–360), cover (0–100)
+  - Cover code validation: allow numeric or text codes (`+`, `r`, `P`)
+  - Non-negative checks: rooting depth, seepage depth, SV depth fields, active layer depth
   - Range checks: latitude (48–60), longitude (−140 to −114), elevation (0–4000), cover (0–100 or text codes)
   - Uniqueness: no duplicate PlotNumber per project, no duplicate PlotNumber+Species+Layer in veg
 - **Output**: `list(passed, summary_tibble, detail_tibble)` — wire to UI badges
@@ -211,7 +210,7 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 ### Core Data Entry & Navigation
 | VBA Module | R Target | Status |
 |-----------|----------|--------|
-| `V7mdlGlobalDeclarations` | `R/logic_state.R` | ⚠️ 7/30 |
+| `V7mdlGlobalDeclarations` | `R/logic_state.R` | ✅ |
 | `V7mdlSetCurrent` | `R/logic_state.R` (`set_project`, `set_su`) | ✅ |
 | `V7mdlFormTools` | Inline in `server.R` / modules | ⚠️ Partial |
 | `V7mdlMenuCommands` | `ui.R` navbar + module routing | ✅ |
@@ -235,9 +234,9 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 | `V7mdlExportVenus` | `R/mod_export.R` (extend) | 🔲 |
 | `V7mdlExportXML` | `R/mod_export.R` (extend) | 🔲 |
 | `V7mdlExportVPro03/13/15` | Low priority (legacy formats) | 🔲 |
-| `V7mdlVtabImportExport` | `R/mod_import.R` | 🔲 |
-| `V7mdlAttach*` (9 modules) | `R/mod_import.R` | 🔲 |
-| `V7mdlImport*` (6+ modules) | `R/mod_import.R` | 🔲 |
+| `V7mdlVtabImportExport` | `R/mod_import.R` | ⚠️ |
+| `V7mdlAttach*` (9 modules) | `R/mod_import.R` | ⚠️ |
+| `V7mdlImport*` (6+ modules) | `R/mod_import.R` | ⚠️ |
 
 ### Reporting
 | VBA Module | R Target | Status |
@@ -261,11 +260,11 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 ### Hierarchy & Classification
 | VBA Module | R Target | Status |
 |-----------|----------|--------|
-| `V7mdlHierarchyTools` | `R/mod_hierarchy.R` | 🔲 |
-| `V7mdlHierarchyShortcutFunctions` | `R/mod_hierarchy.R` | 🔲 |
-| `V7mdlClipHierarchy` | `R/mod_hierarchy.R` | 🔲 |
-| `V7mdlMergeHierarchies` | `R/mod_hierarchy.R` | 🔲 |
-| `V7mdlSUTableTools1/2` | `R/mod_hierarchy.R` or `mod_admin.R` | 🔲 |
+| `V7mdlHierarchyTools` | `R/mod_hierarchy.R` | ⚠️ |
+| `V7mdlHierarchyShortcutFunctions` | `R/mod_hierarchy.R` | ⚠️ |
+| `V7mdlClipHierarchy` | `R/mod_hierarchy.R` | ⚠️ |
+| `V7mdlMergeHierarchies` | `R/mod_hierarchy.R` | ⚠️ |
+| `V7mdlSUTableTools1/2` | `R/mod_hierarchy.R` or `mod_admin.R` | ⚠️ |
 | `V7mdlMasterUnitListTools` | `R/mod_admin.R` (extend) | 🔲 |
 
 ### Utilities & System
@@ -323,10 +322,10 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 ### Hierarchy Forms
 | Access Form | R Module | Notes |
 |------------|----------|-------|
-| `frmHierarchyTree` | `R/mod_hierarchy.R` | 🔲 Tree view |
-| `frmHierarchyEdit` | `R/mod_hierarchy.R` | 🔲 Node editor |
-| `frmSUTable` | `R/mod_hierarchy.R` | 🔲 SU table editor |
-| `frmMoveNodeCopy` | Modal in `mod_hierarchy.R` | 🔲 |
+| `frmHierarchyTree` | `R/mod_hierarchy.R` | ⚠️ Tree view |
+| `frmHierarchyEdit` | `R/mod_hierarchy.R` | ⚠️ Node editor |
+| `frmSUTable` | `R/mod_hierarchy.R` | ⚠️ SU table editor |
+| `frmMoveNodeCopy` | Modal in `mod_hierarchy.R` | ⚠️ |
 
 ### Dialog / Popup Forms → Shiny Modals
 | Access Form | R Implementation | Notes |

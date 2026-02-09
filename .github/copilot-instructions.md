@@ -332,3 +332,7 @@ DuckDB (in-process)
 6. **Null safety**: Always handle `NA`/`NULL` explicitly. Port Access `Nz(x, default)` as `replace(x, is.na(x), default)` or `dplyr::coalesce(x, default)`.
 7. **Commit discipline**: Atomic commits per module/feature. Never commit `.duckdb` files (they're generated). The `renv.lock` is committed.
 8. **User-facing language**: Labels, tooltips, and error messages use forestry domain terminology matching the original Access forms. When in doubt, check the form `.txt` export for `Caption` and `StatusBarText` properties.
+
+## Progress
+Use git add -A and commit/push often with clear messages. When a block of work/task is completed.
+Keep planning.md updated

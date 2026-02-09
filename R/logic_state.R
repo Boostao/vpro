@@ -13,6 +13,7 @@ MB_ICONINFORMATION <- 64
 MB_DEFBUTTON2 <- 256
 IDYES <- 6
 IDNO <- 7
+SW_SHOW <- 1
 
 # We use a list-based approach or R6, but for Shiny, passing a reactiveValues object 
 # named `state` is the standard pattern. This file defines helper functions to mutators.

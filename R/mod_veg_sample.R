@@ -43,6 +43,13 @@ detect_hot_changes <- function(old_df, new_df) {
   changes
 }
 
+sum_numeric_or_na <- function(values) {
+  flat <- unlist(values, use.names = FALSE)
+  nums <- suppressWarnings(as.numeric(flat))
+  if (all(is.na(nums))) return(NA_real_)
+  sum(nums, na.rm = TRUE)
+}
+
 get_hot_selected_row <- function(selection) {
   if (is.null(selection)) return(NULL)
   if (is.list(selection) && !is.null(selection$r)) return(selection$r)
@@ -154,6 +161,32 @@ mod_veg_sample_server <- function(id, sys_state, con) {
       changes <- detect_hot_changes(old_df, new_df)
       if (length(changes) == 0) return()
 
+      update_totals_for_row <- function(row_idx) {
+        covers_a <- rv$data[row_idx, c("cover1", "cover2", "cover3"), drop = FALSE]
+        covers_b <- rv$data[row_idx, c("cover4", "cover5"), drop = FALSE]
+
+        total_a <- sum_numeric_or_na(covers_a)
+        total_b <- sum_numeric_or_na(covers_b)
+
+        if (!identical(rv$data$totala[row_idx], total_a)) {
+          rv$data$totala[row_idx] <- total_a
+          tryCatch({
+            save_veg_cell(con, rv$data$id[row_idx], "totala", total_a)
+          }, error = function(e) {
+            showNotification(paste("Error updating totala:", e$message), type = "error")
+          })
+        }
+
+        if (!identical(rv$data$totalb[row_idx], total_b)) {
+          rv$data$totalb[row_idx] <- total_b
+          tryCatch({
+            save_veg_cell(con, rv$data$id[row_idx], "totalb", total_b)
+          }, error = function(e) {
+            showNotification(paste("Error updating totalb:", e$message), type = "error")
+          })
+        }
+      }
+
       for (change in changes) {
         record_id <- rv$data$id[change$row]
         col_name <- change$col
@@ -175,6 +208,10 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         }, error = function(e) {
           showNotification(paste("Error updating DB:", e$message), type = "error")
         })
+
+        if (col_name %in% c("cover1", "cover2", "cover3", "cover4", "cover5")) {
+          update_totals_for_row(change$row)
+        }
       }
     }
 

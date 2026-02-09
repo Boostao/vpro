@@ -80,8 +80,10 @@ mod_images_server <- function(id, sys_state, con) {
       req(sys_state$CurrSU)
       loc <- dbGetQuery(con, "SELECT latitude, longitude, utmzone, utmeasting, utmnorthing FROM Sample_Env WHERE plotnumber = ?", list(sys_state$CurrSU))
       if (nrow(loc) > 0) {
+        lat <- suppressWarnings(as.numeric(loc$latitude[1]))
+        lon <- suppressWarnings(as.numeric(loc$longitude[1]))
         paste("Current Plot Location:\n",
-              "Lat:", loc$latitude, "Long:", loc$longitude, "\n",
+              "Lat:", lat, "Long:", lon, "\n",
               "UTM:", loc$utmzone, loc$utmeasting, "E", loc$utmnorthing, "N")
       } else {
         "No location data."
@@ -99,6 +101,9 @@ mod_images_server <- function(id, sys_state, con) {
         # 1. Fetch Data
         sql <- "SELECT plotnumber, latitude, longitude, _location FROM Sample_Env WHERE projectid = ? AND latitude IS NOT NULL AND longitude IS NOT NULL"
         pts <- dbGetQuery(con, sql, list(sys_state$CurrProject))
+        pts$latitude_num <- suppressWarnings(as.numeric(pts$latitude))
+        pts$longitude_num <- suppressWarnings(as.numeric(pts$longitude))
+        pts <- pts[!is.na(pts$latitude_num) & !is.na(pts$longitude_num), , drop = FALSE]
         
         if (nrow(pts) == 0) {
           showNotification("No valid coordinates found in this project.", type = "error")
@@ -118,8 +123,8 @@ mod_images_server <- function(id, sys_state, con) {
         for (i in 1:nrow(pts)) {
           pname <- pts$plotnumber[i]
           pdesc <- pts[["_location"]][i]
-          lat   <- pts$latitude[i]
-          lon   <- pts$longitude[i]
+          lat   <- pts$latitude_num[i]
+          lon   <- pts$longitude_num[i]
           
           pm <- c(
             '<Placemark>',
