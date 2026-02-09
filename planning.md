@@ -167,7 +167,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 | 7 | Lifeform summary | ✅ `reports/lifeform.qmd` | `V7mdlReportsLifeform` |
 | 8 | Hierarchy diagram | ✅ `reports/hierarchy.qmd` | `V7mdlReportsHierarchyDiagram` |
 | 9 | Flat hierarchy | ✅ `reports/flat_hierarchy.qmd` | `V7mdlReportFlatHierarchy` |
-| 10 | BEC labels | `reports/bec_labels.qmd` | (simple label formatting) |
+| 10 | BEC labels | ✅ `reports/bec_labels.qmd` | (simple label formatting) |
 | 11–15 | Remaining | As needed | Various |
 
 ### 5.2 Report UI Enhancement — `R/mod_reporting.R`
