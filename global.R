@@ -24,6 +24,8 @@ source("R/logic_state.R") # Global State Logic
 source("R/logic_lumping.R") # Lumping Logic
 source("R/logic_compliance.R") # Compliance checks
 source("R/logic_audit.R") # Audit trail
+source("R/logic_sync.R") # Sync engine (stub)
+source("R/logic_publish.R") # Publish pipeline (stub)
 source("R/mod_admin.R")
 source("R/mod_images.R")
 source("R/mod_veg_sample.R")
