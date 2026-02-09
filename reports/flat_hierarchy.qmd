@@ -1,0 +1,34 @@
+---
+title: "Flat Hierarchy"
+format:
+  html:
+    theme: journal
+params:
+  db_path: "../data/vpro.duckdb"
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+options(knitr.table.format = "html")
+con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+```
+
+```{r load-data, include=FALSE}
+hier <- dbGetQuery(con, "SELECT ID, Name, Parent, Level, Tag FROM Sample_Hierarchy ORDER BY Parent, Name")
+dbDisconnect(con)
+```
+
+# Hierarchy (Flat)
+
+```{r hierarchy-table, echo=FALSE, results='asis'}
+if (nrow(hier) > 0) {
+  kbl(hier, align = "l") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No hierarchy records found.")
+}
+```

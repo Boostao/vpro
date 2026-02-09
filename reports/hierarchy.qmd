@@ -1,0 +1,44 @@
+---
+title: "Hierarchy Diagram"
+format:
+  html:
+    theme: journal
+params:
+  db_path: "../data/vpro.duckdb"
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+
+con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+```
+
+```{r load-data, include=FALSE}
+hier <- dbGetQuery(con, "SELECT ID, Name, Parent FROM Sample_Hierarchy")
+dbDisconnect(con)
+
+build_tree <- function(df, parent_id = NA_integer_, level = 0) {
+  roots <- df[is.na(df$Parent) & is.na(parent_id) | df$Parent == parent_id, , drop = FALSE]
+  if (nrow(roots) == 0) return(character())
+
+  lines <- character()
+  for (i in seq_len(nrow(roots))) {
+    row <- roots[i, ]
+    lines <- c(lines, paste0(strrep("  ", level), "- ", row$Name, " (", row$ID, ")"))
+    lines <- c(lines, build_tree(df, row$ID, level + 1))
+  }
+
+  lines
+}
+```
+
+# Hierarchy Diagram
+
+```{r hierarchy-tree, echo=FALSE}
+if (nrow(hier) > 0) {
+  cat(paste(build_tree(hier), collapse = "\n"))
+} else {
+  cat("No hierarchy records found.")
+}
+```
