@@ -110,6 +110,12 @@ get_subtree <- function(df, node_id) {
   df[df$ID %in% ids, , drop = FALSE]
 }
 
+get_subtree_names <- function(df, node_id) {
+  subtree <- get_subtree(df, node_id)
+  if (nrow(subtree) == 0) return(character(0))
+  unique(subtree$Name)
+}
+
 compute_subtree_levels <- function(df, parent_level = -1L) {
   if (nrow(df) == 0) return(integer(0))
 
@@ -309,7 +315,7 @@ mod_hierarchy_server <- function(id, state, con) {
       DBI::dbGetQuery(con, sql)
     }
 
-    load_su <- function(mode = rv$su_mode) {
+    load_su <- function(mode = rv$su_mode, site_units = NULL) {
       if (!DBI::dbExistsTable(con, "Sample_SU")) {
         return(data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE))
       }
@@ -317,7 +323,13 @@ mod_hierarchy_server <- function(id, state, con) {
         units <- DBI::dbGetQuery(con, "SELECT DISTINCT SiteUnit FROM Sample_SU ORDER BY SiteUnit")
         data.frame(PlotNumber = "", SiteUnit = units$SiteUnit, stringsAsFactors = FALSE)
       } else {
-        DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU ORDER BY PlotNumber")
+        if (!is.null(site_units) && length(site_units) > 0) {
+          placeholders <- paste(rep("?", length(site_units)), collapse = ", ")
+          sql <- sprintf("SELECT PlotNumber, SiteUnit FROM Sample_SU WHERE SiteUnit IN (%s) ORDER BY PlotNumber", placeholders)
+          DBI::dbGetQuery(con, sql, as.list(site_units))
+        } else {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU ORDER BY PlotNumber")
+        }
       }
     }
 
@@ -637,11 +649,45 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_load_hierarchy_plots, {
-      showNotification("Load hierarchy + plots is not yet implemented.", type = "message")
+      req(rv$data)
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      if (is.na(node_id)) {
+        showNotification("Select a hierarchy node first.", type = "warning")
+        return()
+      }
+
+      site_units <- get_subtree_names(rv$data, node_id)
+      if (length(site_units) == 0) {
+        showNotification("No site units found under this node.", type = "message")
+        return()
+      }
+
+      rv$su_mode <- "plots"
+      rv$su <- load_su("plots", site_units)
+      rv$su_status <- paste("Loaded plots for", length(site_units), "site units.")
+      bslib::nav_select("hier_tabs", "SU Table", session = session)
     })
 
     observeEvent(input$hier_load_su_plots, {
-      showNotification("Load SUs + plots is not yet implemented.", type = "message")
+      req(rv$data)
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      if (is.na(node_id)) {
+        showNotification("Select a hierarchy node first.", type = "warning")
+        return()
+      }
+
+      node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
+      if (nrow(node_row) == 0) {
+        showNotification("Selected node not found.", type = "warning")
+        return()
+      }
+
+      rv$su_mode <- "plots"
+      rv$su <- load_su("plots", node_row$Name[1])
+      rv$su_status <- paste("Loaded plots for", node_row$Name[1])
+      bslib::nav_select("hier_tabs", "SU Table", session = session)
     })
 
     observeEvent(input$hier_copy, {

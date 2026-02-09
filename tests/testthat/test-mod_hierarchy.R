@@ -112,6 +112,17 @@ test_that("get_node_path returns breadcrumb", {
   expect_equal(path, c("Root", "ChildA", "Grand"))
 })
 
+test_that("get_subtree_names returns unique names", {
+  df <- data.frame(
+    ID = c(1, 2, 3, 4),
+    Name = c("Root", "ChildA", "ChildB", "Grand"),
+    Parent = c(NA, 1, 1, 2)
+  )
+
+  names <- get_subtree_names(df, 1)
+  expect_true(all(c("Root", "ChildA", "ChildB", "Grand") %in% names))
+})
+
 test_that("find_orphan_nodes identifies missing parents", {
   df <- data.frame(
     ID = c(1, 2, 3),
