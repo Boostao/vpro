@@ -62,7 +62,8 @@ mod_admin_ui <- function(id) {
                textInput(ns("audit_project"), "Project", value = ""),
                textInput(ns("audit_plot"), "Plot", value = ""),
                selectInput(ns("audit_table"), "Table", choices = c("All" = "")),
-               actionButton(ns("audit_refresh"), "Refresh", class = "btn-secondary w-100 mt-2")
+              actionButton(ns("audit_refresh"), "Refresh", class = "btn-secondary w-100 mt-2"),
+              downloadButton(ns("audit_export"), "Export CSV", class = "btn-outline-primary w-100 mt-2")
              ),
              card(
                card_header("Audit Trail"),
@@ -382,6 +383,24 @@ mod_admin_server <- function(id, con) {
       audit <- fetch_audit_entries(con, plot_number = plot_value, project_id = project_value, table_name = table_value)
       DT::datatable(audit, rownames = FALSE, options = list(pageLength = 12, ordering = FALSE))
     })
+
+    output$audit_export <- downloadHandler(
+      filename = function() {
+        paste0("audit_log_", format(Sys.Date(), "%Y%m%d"), ".csv")
+      },
+      content = function(file) {
+        project_filter <- trimws(input$audit_project)
+        plot_filter <- trimws(input$audit_plot)
+        table_filter <- input$audit_table
+
+        project_value <- if (nzchar(project_filter)) project_filter else NULL
+        plot_value <- if (nzchar(plot_filter)) plot_filter else NULL
+        table_value <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else NULL
+
+        audit <- fetch_audit_entries(con, plot_number = plot_value, project_id = project_value, table_name = table_value)
+        utils::write.csv(audit, file, row.names = FALSE)
+      }
+    )
     
   })
 }
