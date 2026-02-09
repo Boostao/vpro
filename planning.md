@@ -49,7 +49,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Reporting**: 15/15 Access reports recreated as Quarto templates
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
 - **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
-- **Import engine**: CSV preview/append plus ZIP multi-table import with column checks
+- **Import engine**: CSV/ZIP analysis with validation summary, guarded import button, compliance-gated rollback, and expanded test coverage
 - **Hierarchy tools**: tree CRUD + move node + delete/copy/paste subtree + merge + SU table editor
 
 ### 🔲 Not Started
@@ -84,6 +84,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - `test-logic_veg_data.R`: wide→long, layer filtering, NA covers
 - `test-mod_veg_sample.R`: Shiny module test with `testServer()`
 - `test-mod_site_env.R`: form load, save, coord conversion
+- `test-mod_import.R`: CSV/ZIP analysis, validation gating, compliance rollback
 - `test-views.R`: `vw_USysAllVeg` row counts, `vw_USysEnv` schema
 
 ### 1.4 Keyboard Navigation & Accessibility
@@ -101,7 +102,6 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
   - Range checks: latitude (48–60), longitude (−140 to −114), elevation (0–4000), slope (0–100), aspect (0–360), cover (0–100)
   - Cover code validation: allow numeric or text codes (`+`, `r`, `P`)
   - Non-negative checks: rooting depth, seepage depth, SV depth fields, active layer depth
-  - Range checks: latitude (48–60), longitude (−140 to −114), elevation (0–4000), cover (0–100 or text codes)
   - Uniqueness: no duplicate PlotNumber per project, no duplicate PlotNumber+Species+Layer in veg
 - **Output**: `list(passed, summary_tibble, detail_tibble)` — wire to UI badges
 - **Test**: `test-logic_compliance.R`
