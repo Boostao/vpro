@@ -1,0 +1,15 @@
+---
+title: "Field Checklist"
+format:
+  html:
+    theme: journal
+---
+
+# Field Checklist
+
+- GPS synced and coordinates recorded
+- Plot number verified
+- Photos captured and labeled
+- Soil horizons documented
+- Vegetation layers completed
+- Notes reviewed for clarity

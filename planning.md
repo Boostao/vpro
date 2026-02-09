@@ -47,7 +47,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Global state**: remaining VBA globals to verify against `V7mdlGlobalDeclarations`
 - **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — needs `Nz()` safety audit
 - **VENUS XML export**: Button exists in UI, logic not ported
-- **Reporting**: 12/15 Access reports recreated as Quarto templates
+- **Reporting**: 15/15 Access reports recreated as Quarto templates
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
 - **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
 
@@ -60,7 +60,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Auth/RBAC**: `R/mod_auth.R` (UI shell)
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)
 - **RDS publishing**: `R/logic_publish.R` (stub added)
-- **Remaining report types**: Remaining formats as needed
+- **Remaining report types**: None (15/15 templates in place)
 - **Tests**: remaining module and report tests (view tests + compliance tests done)
 
 ---
@@ -170,7 +170,9 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 | 10 | BEC labels | ✅ `reports/bec_labels.qmd` | (simple label formatting) |
 | 11 | Short veg + hierarchy | ✅ `reports/short_veg_hierarchy.qmd` | `V7mdlReportsShortVegHierarchy` |
 | 12 | Short veg ordered by hierarchy | ✅ `reports/short_veg_order_hierarchy.qmd` | `V7mdlReportsShortVegOrderHierarchy` |
-| 13–15 | Remaining | As needed | Various |
+| 13 | Veg Layer A | ✅ `reports/veg_layer_a.qmd` | `USysVegA` |
+| 14 | Veg Layer C | ✅ `reports/veg_layer_c.qmd` | `USysVegC` |
+| 15 | Veg Layer D | ✅ `reports/veg_layer_d.qmd` | `USysVegD` |
 
 ### 5.2 Report UI Enhancement — `R/mod_reporting.R`
 - Report type selector (dropdown of available .qmd templates) ✅
