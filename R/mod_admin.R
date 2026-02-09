@@ -64,6 +64,7 @@ mod_admin_ui <- function(id) {
                selectInput(ns("audit_table"), "Table", choices = c("All" = "")),
               dateInput(ns("audit_from"), "From", value = NULL),
               dateInput(ns("audit_to"), "To", value = NULL),
+              selectInput(ns("audit_page_size"), "Page size", choices = c(25, 50, 100), selected = 25),
               actionButton(ns("audit_refresh"), "Refresh", class = "btn-secondary w-100 mt-2"),
               downloadButton(ns("audit_export"), "Export CSV", class = "btn-outline-primary w-100 mt-2")
              ),
@@ -394,7 +395,9 @@ mod_admin_server <- function(id, state, con) {
         date_from = from_value,
         date_to = to_value
       )
-      DT::datatable(audit, rownames = FALSE, options = list(pageLength = 12, ordering = FALSE))
+      page_size <- as.integer(input$audit_page_size)
+      if (is.na(page_size) || page_size <= 0) page_size <- 25
+      DT::datatable(audit, rownames = FALSE, options = list(pageLength = page_size, ordering = FALSE))
     })
 
     output$audit_export <- downloadHandler(
