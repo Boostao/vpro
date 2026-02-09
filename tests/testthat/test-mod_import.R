@@ -78,6 +78,8 @@ test_that("mod_import imports CSV into target table", {
     session$setInputs(import_apply = 1)
 
     expect_true(grepl("Imported 2 rows", rv$status))
+    expect_true(is.data.frame(rv$import_results))
+    expect_equal(nrow(rv$import_results), 1)
   })
 
   rows <- DBI::dbGetQuery(con, "SELECT * FROM Test_Table")
@@ -113,6 +115,8 @@ test_that("mod_import handles ZIP files and imports selected tables", {
     session$setInputs(import_apply = 1)
 
     expect_true(grepl("Imported 1 tables", rv$status))
+    expect_true(is.data.frame(rv$import_results))
+    expect_equal(rv$import_results$status[1], "Imported")
   })
 
   rows <- DBI::dbGetQuery(con, "SELECT * FROM Test_Table")

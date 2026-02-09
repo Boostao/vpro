@@ -17,6 +17,7 @@ mod_import_ui <- function(id) {
       verbatimTextOutput(ns("import_status")),
       DT::DTOutput(ns("import_validation")),
       DT::DTOutput(ns("import_preview")),
+      DT::DTOutput(ns("import_results_summary")),
       DT::DTOutput(ns("import_compliance"))
     )
   )
@@ -444,6 +445,12 @@ mod_import_server <- function(id, state, con) {
           commit_ok <- TRUE
         }
 
+        rv$import_results <- data.frame(
+          table = input$target_table,
+          rows = nrow(rv$preview),
+          status = "Imported",
+          stringsAsFactors = FALSE
+        )
         rv$status <- paste("Imported", nrow(rv$preview), "rows into", input$target_table)
       }, error = function(e) {
         rv$status <- paste("Import error:", e$message)
@@ -494,6 +501,17 @@ mod_import_server <- function(id, state, con) {
     output$import_preview <- DT::renderDT({
       req(rv$preview)
       DT::datatable(rv$preview, rownames = FALSE, options = list(pageLength = 10, ordering = FALSE))
+    })
+
+    output$import_results_summary <- DT::renderDT({
+      req(rv$import_results)
+      if (nrow(rv$import_results) == 0) return(NULL)
+      summary <- aggregate(
+        list(count = rv$import_results$status),
+        by = list(status = rv$import_results$status),
+        FUN = length
+      )
+      DT::datatable(summary, rownames = FALSE, options = list(pageLength = 6, ordering = FALSE))
     })
 
     output$import_compliance <- DT::renderDT({
