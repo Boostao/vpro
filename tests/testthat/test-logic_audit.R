@@ -49,3 +49,23 @@ test_that("log_audit_diff logs multiple field changes", {
   expect_equal(nrow(rows), 1)
   expect_equal(rows$EditField[1], "latitude")
 })
+
+test_that("log_audit_rows logs insert values", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_audit_env(con)
+
+  rows <- data.frame(
+    plotnumber = c("P1", "P2"),
+    projectid = c("PRJ", "PRJ"),
+    latitude = c(50, 51),
+    stringsAsFactors = FALSE
+  )
+
+  logged <- log_audit_rows(con, "PRJ", "tester", "Sample_Env", rows)
+  expect_true(logged >= 2)
+
+  audit <- DBI::dbGetQuery(con, "SELECT * FROM user.USysAuditTrail")
+  expect_true(nrow(audit) >= 2)
+  expect_true(all(audit$Project == "PRJ"))
+})

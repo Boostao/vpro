@@ -111,3 +111,39 @@ fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, tabl
 
   DBI::dbGetQuery(con, sql, params)
 }
+
+log_audit_rows <- function(con, project_id, user, table_name, rows, fields = NULL, plot_col = "plotnumber", project_col = "projectid") {
+  if (is.null(rows)) return(0L)
+  rows_df <- as.data.frame(rows)
+  if (nrow(rows_df) == 0) return(0L)
+
+  if (is.null(fields)) {
+    fields <- names(rows_df)
+  }
+  if (length(fields) == 0) return(0L)
+
+  logged <- 0L
+  for (row_idx in seq_len(nrow(rows_df))) {
+    plot_number <- if (plot_col %in% names(rows_df)) rows_df[[plot_col]][row_idx] else NA
+    if (is.na(plot_number) || !nzchar(as.character(plot_number))) next
+
+    project_value <- project_id
+    if (!is.null(project_col) && project_col %in% names(rows_df)) {
+      row_project <- rows_df[[project_col]][row_idx]
+      if (!is.na(row_project) && nzchar(as.character(row_project))) {
+        project_value <- row_project
+      }
+    }
+
+    for (field_name in fields) {
+      if (!(field_name %in% names(rows_df))) next
+      value <- rows_df[[field_name]][row_idx]
+      if (length(value) > 1) value <- value[1]
+      if (isTRUE(log_audit_change(con, project_value, user, plot_number, table_name, field_name, NA, value))) {
+        logged <- logged + 1L
+      }
+    }
+  }
+
+  logged
+}

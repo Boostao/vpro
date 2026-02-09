@@ -389,6 +389,12 @@ mod_import_server <- function(id, state, con) {
           commit_ok <- TRUE
         }
 
+        for (entry in pending_imports) {
+          if (entry$table %in% compliance_tables) {
+            log_audit_rows(con, state$CurrProject, "Import", entry$table, entry$data)
+          }
+        }
+
         rv$preview <- rv$import_results
         rv$status <- paste("Imported", sum(rv$import_results$status == "Imported"), "tables")
         return()
@@ -443,6 +449,10 @@ mod_import_server <- function(id, state, con) {
 
           DBI::dbCommit(con)
           commit_ok <- TRUE
+        }
+
+        if (input$target_table %in% compliance_tables) {
+          log_audit_rows(con, state$CurrProject, "Import", input$target_table, rv$preview)
         }
 
         rv$import_results <- data.frame(
