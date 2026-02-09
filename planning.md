@@ -174,7 +174,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - Report type selector (dropdown of available .qmd templates) ✅
 - Parameter inputs per report type (project, plot range, layer filters)
 - Download as PDF or HTML ✅
-- Preview pane (rendered HTML inline)
+- Preview pane (rendered HTML inline) ✅
 
 ---
 
