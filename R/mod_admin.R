@@ -125,17 +125,43 @@ mod_admin_server <- function(id, con) {
       is_new <- FALSE
       # Check existence
       exists <- dbGetQuery(con, "SELECT 1 FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
+      existing <- dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
       
       tryCatch({
           if (nrow(exists) > 0) {
             # Update
             dbExecute(con, "UPDATE USysProjectMetadata SET projecttitle=?, coordinatingagency=?, startdate=?, enddate=?, notes=? WHERE projectid=?",
                       list(input$proj_title, input$proj_coord, input$proj_start, input$proj_end, input$proj_notes, input$proj_id))
+            if (nrow(existing) > 0) {
+              new_row <- data.frame(
+                projecttitle = input$proj_title,
+                coordinatingagency = input$proj_coord,
+                startdate = input$proj_start,
+                enddate = input$proj_end,
+                notes = input$proj_notes,
+                stringsAsFactors = FALSE
+              )
+              log_audit_diff(
+                con,
+                input$proj_id,
+                "Admin",
+                input$proj_id,
+                "USysProjectMetadata",
+                existing[1, , drop = FALSE],
+                new_row,
+                fields = c("projecttitle", "coordinatingagency", "startdate", "enddate", "notes")
+              )
+            }
             showNotification("Project Updated", type = "message")
           } else {
             # Insert
             dbExecute(con, "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes) VALUES (?, ?, ?, ?, ?, ?)",
                       list(input$proj_id, input$proj_title, input$proj_coord, input$proj_start, input$proj_end, input$proj_notes))
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "projecttitle", NA, input$proj_title)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "coordinatingagency", NA, input$proj_coord)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "startdate", NA, input$proj_start)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate", NA, input$proj_end)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes", NA, input$proj_notes)
             showNotification("Project Created", type = "message")
           }
           update_proj_list(selected_id = input$proj_id)
@@ -147,9 +173,17 @@ mod_admin_server <- function(id, con) {
     # Delete Project
     observeEvent(input$proj_del, {
       req(input$proj_id)
+      existing <- dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
       # In a real app, use a modalDialog confirm here
       tryCatch({
         dbExecute(con, "DELETE FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
+        if (nrow(existing) > 0) {
+          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "projecttitle", existing$projecttitle[1], NA)
+          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "coordinatingagency", existing$coordinatingagency[1], NA)
+          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "startdate", existing$startdate[1], NA)
+          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate", existing$enddate[1], NA)
+          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes", existing$notes[1], NA)
+        }
         showNotification("Project Deleted", type = "warning")
         updateTextInput(session, "proj_id", value = "") # Clear form
         update_proj_list()
