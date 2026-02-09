@@ -67,6 +67,7 @@ mod_admin_ui <- function(id) {
               selectInput(ns("audit_page_size"), "Page size", choices = c(25, 50, 100), selected = 25),
               checkboxInput(ns("audit_latest_only"), "Latest only", value = FALSE),
               actionButton(ns("audit_refresh"), "Refresh", class = "btn-secondary w-100 mt-2"),
+              actionButton(ns("audit_latest"), "Jump to newest", class = "btn-outline-secondary w-100 mt-2"),
               downloadButton(ns("audit_export"), "Export CSV", class = "btn-outline-primary w-100 mt-2")
              ),
              card(
@@ -457,6 +458,11 @@ mod_admin_server <- function(id, state, con) {
     })
 
     observeEvent(input$audit_page_size, {
+      rv_audit$page <- 1L
+    })
+
+    observeEvent(input$audit_latest, {
+      updateCheckboxInput(session, "audit_latest_only", value = TRUE)
       rv_audit$page <- 1L
     })
 
