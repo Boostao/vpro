@@ -140,6 +140,23 @@ get_subtree_names <- function(df, node_id) {
   unique(subtree$Name)
 }
 
+clip_hierarchy_ids <- function(df) {
+  if (nrow(df) == 0) return(integer(0))
+  tilde_ids <- df$ID[grepl("^~", df$Name)]
+  if (length(tilde_ids) == 0) return(integer(0))
+
+  to_delete <- integer(0)
+  for (node_id in tilde_ids) {
+    descendants <- get_descendants(df, node_id)
+    if (length(descendants) == 0) next
+    desc_names <- df$Name[df$ID %in% descendants]
+    if (any(grepl("^~", desc_names))) next
+    to_delete <- unique(c(to_delete, descendants))
+  }
+
+  to_delete
+}
+
 get_plots_for_site_unit <- function(con, site_unit) {
   if (!DBI::dbExistsTable(con, "Sample_SU")) return(character(0))
   plots <- DBI::dbGetQuery(
@@ -302,7 +319,9 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_delete_subtree"), "Delete Subtree", class = "btn-danger"),
             actionButton(ns("hier_refresh"), "Refresh", class = "btn-secondary"),
             actionButton(ns("hier_fix_orphans"), "Reattach Orphans", class = "btn-outline-secondary"),
-            col_widths = c(3, 2, 2, 2, 2, 1, 2)
+            actionButton(ns("hier_clip"), "Clip Hierarchy", class = "btn-outline-secondary"),
+            actionButton(ns("hier_show_original"), "Show Original", class = "btn-outline-secondary"),
+            col_widths = c(3, 2, 2, 2, 2, 1, 2, 2, 2)
           ),
           layout_columns(
             selectInput(ns("move_parent"), "Move Node To", choices = NULL),
@@ -358,14 +377,21 @@ mod_hierarchy_server <- function(id, state, con) {
       selected_id = NA_integer_,
       orphan_count = 0L,
       su_mode = "plots",
+      use_clipped = FALSE,
       find_matches = integer(0),
       find_index = 0L,
       find_query = ""
     )
 
     load_hierarchy <- function() {
-      if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) return(data.frame())
-      fields <- DBI::dbListFields(con, "Sample_Hierarchy")
+      table_name <- if (isTRUE(rv$use_clipped) && DBI::dbExistsTable(con, "USysLowestBreakpoints_Hierarchy")) {
+        "USysLowestBreakpoints_Hierarchy"
+      } else {
+        "Sample_Hierarchy"
+      }
+
+      if (!DBI::dbExistsTable(con, table_name)) return(data.frame())
+      fields <- DBI::dbListFields(con, table_name)
       select_cols <- intersect(c("ID", "Name", "Parent", "Level", "MyOrder"), fields)
       if (length(select_cols) == 0) return(data.frame())
       order_clause <- if ("MyOrder" %in% select_cols) {
@@ -373,7 +399,7 @@ mod_hierarchy_server <- function(id, state, con) {
       } else {
         "ORDER BY Name"
       }
-      sql <- sprintf("SELECT %s FROM Sample_Hierarchy %s", paste(select_cols, collapse = ", "), order_clause)
+      sql <- sprintf("SELECT %s FROM %s %s", paste(select_cols, collapse = ", "), table_name, order_clause)
       DBI::dbGetQuery(con, sql)
     }
 
@@ -655,6 +681,40 @@ mod_hierarchy_server <- function(id, state, con) {
       }, error = function(e) {
         showNotification(paste("Fix failed:", e$message), type = "error")
       })
+    })
+
+    observeEvent(input$hier_clip, {
+      req(rv$data)
+      if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) {
+        showNotification("Sample_Hierarchy table not available.", type = "warning")
+        return()
+      }
+
+      tryCatch({
+        DBI::dbExecute(con, "DROP TABLE IF EXISTS USysLowestBreakpoints_Hierarchy")
+        DBI::dbExecute(con, "CREATE TABLE USysLowestBreakpoints_Hierarchy AS SELECT * FROM Sample_Hierarchy")
+
+        delete_ids <- clip_hierarchy_ids(rv$data)
+        if (length(delete_ids) > 0) {
+          placeholders <- paste(rep("?", length(delete_ids)), collapse = ", ")
+          sql <- sprintf("DELETE FROM USysLowestBreakpoints_Hierarchy WHERE ID IN (%s)", placeholders)
+          DBI::dbExecute(con, sql, as.list(delete_ids))
+        }
+
+        rv$use_clipped <- TRUE
+        refresh_tree()
+        update_move_choices()
+        showNotification("Clipped hierarchy view created.", type = "message")
+      }, error = function(e) {
+        showNotification(paste("Clip failed:", e$message), type = "error")
+      })
+    })
+
+    observeEvent(input$hier_show_original, {
+      rv$use_clipped <- FALSE
+      refresh_tree()
+      update_move_choices()
+      showNotification("Showing original hierarchy.", type = "message")
     })
 
     observeEvent(input$hier_view_user_list, {

@@ -158,6 +158,20 @@ test_that("filter_duplicate_names drops existing names", {
   expect_equal(filtered$data$Name, c("A", "C"))
 })
 
+test_that("clip_hierarchy_ids removes non-tilde branches", {
+  df <- data.frame(
+    ID = c(1, 2, 3, 4, 5, 6),
+    Name = c("Root", "~Clip", "ChildA", "ChildB", "~Keep", "~KeepChild"),
+    Parent = c(NA, 1, 2, 2, 1, 5)
+  )
+
+  delete_ids <- clip_hierarchy_ids(df)
+  expect_false(2 %in% delete_ids)
+  expect_true(3 %in% delete_ids)
+  expect_true(4 %in% delete_ids)
+  expect_false(6 %in% delete_ids)
+})
+
 test_that("find_orphan_nodes identifies missing parents", {
   df <- data.frame(
     ID = c(1, 2, 3),
