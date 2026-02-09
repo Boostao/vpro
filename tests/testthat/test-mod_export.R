@@ -8,7 +8,7 @@ setup_export_tables <- function(con) {
   DBI::dbExecute(con, "CREATE TABLE Sample_Humus (plotnumber TEXT, horizon TEXT, upperdepth DOUBLE, lowerdepth DOUBLE, humusstructuredegree TEXT)")
   DBI::dbExecute(con, "CREATE TABLE Sample_Mineral (plotnumber TEXT, horizon TEXT, upperdepth DOUBLE, lowerdepth DOUBLE, pitdepthlimit TEXT)")
   DBI::dbExecute(con, "CREATE TABLE Sample_Other (plotnumber TEXT, dataname TEXT, dataitem TEXT, useritem1 TEXT, useritem2 TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Audit (project TEXT, user TEXT, plotnumber TEXT, table TEXT, editfield TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Sample_Audit (Project TEXT, \"User\" TEXT, PlotNumber TEXT, \"Table\" TEXT, EditField TEXT)")
 
   DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ1', 49.0, -123.5, 'X')")
   DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ2', 50.0, -120.0, 'Y')")
@@ -17,8 +17,8 @@ setup_export_tables <- function(con) {
   DBI::dbExecute(con, "INSERT INTO Sample_Humus VALUES ('P1', 'H1', 0, 5, 'D')")
   DBI::dbExecute(con, "INSERT INTO Sample_Mineral VALUES ('P1', 'M1', 5, 10, 'Y')")
   DBI::dbExecute(con, "INSERT INTO Sample_Other VALUES ('P1', 'Note', 'Item', 'U1', 'U2')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Audit VALUES ('PRJ1', 'tester', 'P1', 'Sample_Env', 'FieldNumber')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Audit VALUES ('PRJ2', 'tester', 'P2', 'Sample_Env', 'FieldNumber')")
+  DBI::dbExecute(con, "INSERT INTO Sample_Audit (Project, \"User\", PlotNumber, \"Table\", EditField) VALUES ('PRJ1', 'tester', 'P1', 'Sample_Env', 'FieldNumber')")
+  DBI::dbExecute(con, "INSERT INTO Sample_Audit (Project, \"User\", PlotNumber, \"Table\", EditField) VALUES ('PRJ2', 'tester', 'P2', 'Sample_Env', 'FieldNumber')")
 }
 
 test_that("build_venus_xml_doc filters by project", {

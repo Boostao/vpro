@@ -42,8 +42,9 @@ setup_compliance_tables <- function(con) {
     FROM Sample_Veg
   ")
 
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS lists.USysZoneList")
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS lists.USysZoneList (
+    CREATE TABLE lists.USysZoneList (
       zone_code TEXT,
       subzone TEXT
     )

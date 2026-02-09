@@ -31,9 +31,9 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
   access_column_order <- list(
     Sample_Env = c(
       "PlotNumber", "FieldNumber", "ProjectID", "FSRegionDistrict", "Date", "SiteSurveyor",
-      "PlotRepresenting", "Location", "Ecosection", "NtsMapSheet", "Longitude", "Latitude",
+      "PlotRepresenting", "Location", "Ecosection", "NtsMapSheet", "Latitude",
       "LatitudeDegrees", "LatitudeMinutes", "LatitudeSeconds",
-      "LongitudeDegrees", "LongitudeMinutes", "LongitudeSeconds",
+      "Longitude", "LongitudeDegrees", "LongitudeMinutes", "LongitudeSeconds",
       "UTMZone", "UTMEasting", "UTMNorthing", "LocationAccuracy", "AirPhotoNum", "XCoord",
       "YCoord", "Zone", "SubZone", "SiteSeries", "SiteModifier1", "SiteModifier2",
       "TransDistrib", "RealmClass", "MapUnit", "SnowCoverregime", "MoistureRegime",

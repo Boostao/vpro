@@ -50,7 +50,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
 - **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
 - **Import engine**: CSV/ZIP analysis with validation summary, guarded import button, compliance-gated rollback, and expanded test coverage
-- **Hierarchy tools**: tree CRUD + move node + delete/copy/paste subtree + merge + SU table editor
+- **Hierarchy tools**: tree CRUD + move node + delete/copy/paste subtree + merge + SU table editor + sibling ordering
 
 ### 🔲 Not Started
 - **Diagnostics/QC**: `V7mdlDiagnostic`, validation reports → `R/logic_compliance.R`
@@ -60,7 +60,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)
 - **RDS publishing**: `R/logic_publish.R` (stub added)
 - **Remaining report types**: None (15/15 templates in place)
-- **Tests**: remaining module and report tests (view tests + compliance tests done)
+- **Tests**: remaining module and report tests (view tests + compliance tests + hierarchy tests done)
 
 ---
 

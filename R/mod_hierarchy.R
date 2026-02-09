@@ -9,10 +9,25 @@ parse_hierarchy_id <- function(label) {
   as.integer(m[[1]][2])
 }
 
+order_hierarchy_rows <- function(df) {
+  if (nrow(df) == 0) return(df)
+  if ("MyOrder" %in% names(df)) {
+    order_vals <- suppressWarnings(as.numeric(df$MyOrder))
+    return(df[order(order_vals, df$Name, na.last = TRUE), , drop = FALSE])
+  }
+  df[order(df$Name), , drop = FALSE]
+}
+
 build_hierarchy_tree <- function(df, parent_id = NA_integer_) {
   if (nrow(df) == 0) return(list())
-  roots <- df[is.na(df$Parent) & is.na(parent_id) | df$Parent == parent_id, , drop = FALSE]
+  if (is.na(parent_id)) {
+    roots <- df[is.na(df$Parent), , drop = FALSE]
+  } else {
+    roots <- df[!is.na(df$Parent) & df$Parent == parent_id, , drop = FALSE]
+  }
   if (nrow(roots) == 0) return(list())
+
+  roots <- order_hierarchy_rows(roots)
 
   tree <- list()
   for (i in seq_len(nrow(roots))) {
@@ -22,6 +37,152 @@ build_hierarchy_tree <- function(df, parent_id = NA_integer_) {
   }
 
   tree
+}
+
+hierarchy_has_column <- function(con, column_name) {
+  if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) return(FALSE)
+  column_name %in% DBI::dbListFields(con, "Sample_Hierarchy")
+}
+
+get_sibling_order <- function(df, parent_id) {
+  if (nrow(df) == 0) return(data.frame())
+  siblings <- df[df$Parent == parent_id | (is.na(df$Parent) & is.na(parent_id)), , drop = FALSE]
+  if (nrow(siblings) == 0) return(data.frame())
+
+  if ("MyOrder" %in% names(siblings)) {
+    order_vals <- suppressWarnings(as.numeric(siblings$MyOrder))
+    siblings$order_val <- order_vals
+    siblings <- siblings[order(siblings$order_val, siblings$Name, na.last = TRUE), , drop = FALSE]
+  } else {
+    siblings <- siblings[order(siblings$Name), , drop = FALSE]
+  }
+
+  siblings
+}
+
+get_descendants <- function(df, node_id) {
+  if (nrow(df) == 0) return(integer(0))
+  direct <- df$ID[!is.na(df$Parent) & df$Parent == node_id]
+  if (length(direct) == 0) return(integer(0))
+  children <- unlist(lapply(direct, function(id) get_descendants(df, id)))
+  unique(c(direct, children))
+}
+
+get_subtree <- function(df, node_id) {
+  ids <- c(node_id, get_descendants(df, node_id))
+  df[df$ID %in% ids, , drop = FALSE]
+}
+
+compute_subtree_levels <- function(df, parent_level = -1L) {
+  if (nrow(df) == 0) return(integer(0))
+
+  level_map <- setNames(rep(NA_integer_, nrow(df)), df$ID)
+  roots <- df$ID[is.na(df$Parent)]
+
+  assign_levels <- function(node_id, level_val) {
+    level_map[[as.character(node_id)]] <<- level_val
+    children <- df$ID[!is.na(df$Parent) & df$Parent == node_id]
+    if (length(children) == 0) return()
+    for (child in children) {
+      assign_levels(child, level_val + 1L)
+    }
+  }
+
+  for (root_id in roots) {
+    assign_levels(root_id, parent_level + 1L)
+  }
+
+  level_map
+}
+
+insert_subtree <- function(con, subtree, new_parent, parent_level = -1L) {
+  if (nrow(subtree) == 0) return(0)
+
+  use_level <- hierarchy_has_column(con, "Level")
+  use_order <- hierarchy_has_column(con, "MyOrder")
+  level_map <- if (use_level) compute_subtree_levels(subtree, parent_level) else NULL
+
+  max_id <- DBI::dbGetQuery(con, "SELECT MAX(ID) AS max_id FROM Sample_Hierarchy")
+  next_id <- if (is.na(max_id$max_id[1])) 1L else as.integer(max_id$max_id[1]) + 1L
+
+  old_ids <- subtree$ID
+  new_ids <- seq.int(next_id, length.out = length(old_ids))
+  id_map <- setNames(new_ids, old_ids)
+
+  order_ids <- unique(c(subtree$ID[is.na(subtree$Parent)], subtree$ID[!is.na(subtree$Parent)]))
+  count <- 0
+
+  root_counter <- 0L
+  child_counters <- new.env(parent = emptyenv())
+  root_base <- 0
+  if (use_order) {
+    root_sql <- "SELECT MAX(MyOrder) AS max_order FROM Sample_Hierarchy WHERE Parent IS NULL"
+    root_params <- list()
+    if (!is.na(new_parent)) {
+      root_sql <- "SELECT MAX(MyOrder) AS max_order FROM Sample_Hierarchy WHERE Parent = ?"
+      root_params <- list(new_parent)
+    }
+    root_max <- DBI::dbGetQuery(con, root_sql, root_params)
+    root_base <- suppressWarnings(as.numeric(root_max$max_order[1]))
+    if (is.na(root_base) || !is.finite(root_base)) root_base <- 0
+  }
+
+  for (old_id in order_ids) {
+    row <- subtree[subtree$ID == old_id, , drop = FALSE][1, ]
+    parent_old <- row$Parent
+
+    if (is.na(parent_old)) {
+      parent_new <- new_parent
+    } else {
+      parent_new <- id_map[[as.character(parent_old)]]
+    }
+
+    order_val <- NULL
+    if (use_order) {
+      if ("MyOrder" %in% names(subtree) && !is.na(row$MyOrder)) {
+        order_val <- suppressWarnings(as.numeric(row$MyOrder))
+      } else if (is.na(parent_old)) {
+        root_counter <- root_counter + 1L
+        order_val <- root_base + root_counter
+      } else {
+        parent_key <- as.character(parent_new)
+        if (is.null(child_counters[[parent_key]])) child_counters[[parent_key]] <- 0L
+        child_counters[[parent_key]] <- child_counters[[parent_key]] + 1L
+        order_val <- child_counters[[parent_key]]
+      }
+    }
+
+    if (use_level && use_order) {
+      level_val <- level_map[[as.character(old_id)]]
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level, MyOrder) VALUES (?, ?, ?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val, order_val)
+      )
+    } else if (use_level) {
+      level_val <- level_map[[as.character(old_id)]]
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level) VALUES (?, ?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val)
+      )
+    } else if (use_order) {
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, MyOrder) VALUES (?, ?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new, order_val)
+      )
+    } else {
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new)
+      )
+    }
+    count <- count + 1
+  }
+
+  count
 }
 
 mod_hierarchy_ui <- function(id) {
@@ -44,7 +205,9 @@ mod_hierarchy_ui <- function(id) {
           layout_columns(
             selectInput(ns("move_parent"), "Move Node To", choices = NULL),
             actionButton(ns("hier_move"), "Move Node", class = "btn-outline-secondary"),
-            col_widths = c(8, 4)
+            actionButton(ns("hier_move_up"), "Move Up", class = "btn-outline-secondary"),
+            actionButton(ns("hier_move_down"), "Move Down", class = "btn-outline-secondary"),
+            col_widths = c(6, 2, 2, 2)
           ),
           layout_columns(
             actionButton(ns("hier_copy"), "Copy Subtree", class = "btn-outline-secondary"),
@@ -77,7 +240,16 @@ mod_hierarchy_server <- function(id, state, con) {
 
     load_hierarchy <- function() {
       if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) return(data.frame())
-      DBI::dbGetQuery(con, "SELECT ID, Name, Parent FROM Sample_Hierarchy ORDER BY Name")
+      fields <- DBI::dbListFields(con, "Sample_Hierarchy")
+      select_cols <- intersect(c("ID", "Name", "Parent", "Level", "MyOrder"), fields)
+      if (length(select_cols) == 0) return(data.frame())
+      order_clause <- if ("MyOrder" %in% select_cols) {
+        "ORDER BY Parent NULLS FIRST, MyOrder NULLS LAST, Name"
+      } else {
+        "ORDER BY Name"
+      }
+      sql <- sprintf("SELECT %s FROM Sample_Hierarchy %s", paste(select_cols, collapse = ", "), order_clause)
+      DBI::dbGetQuery(con, sql)
     }
 
     load_su <- function() {
@@ -151,8 +323,14 @@ mod_hierarchy_server <- function(id, state, con) {
     }
 
     observeEvent(input$hier_add, {
-      req(input$hier_name)
+      name_val <- trimws(input$hier_name)
+      req(nzchar(name_val))
       refresh_tree()
+
+      if (!is.null(rv$data) && name_val %in% rv$data$Name) {
+        showNotification("Name already exists.", type = "warning")
+        return()
+      }
 
       selected <- shinyTree::get_selected(input$hier_tree)
       parent_id <- parse_hierarchy_id(selected)
@@ -162,11 +340,51 @@ mod_hierarchy_server <- function(id, state, con) {
       new_id <- if (is.na(max_id$max_id[1])) 1L else as.integer(max_id$max_id[1]) + 1L
 
       tryCatch({
-        DBI::dbExecute(
-          con,
-          "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
-          list(new_id, input$hier_name, parent_id)
-        )
+        has_level <- hierarchy_has_column(con, "Level")
+        has_order <- hierarchy_has_column(con, "MyOrder")
+        if (has_level || has_order) {
+          level_val <- 0L
+          if (!is.null(rv$data) && "Level" %in% names(rv$data) && !is.na(parent_id)) {
+            parent_level <- rv$data$Level[rv$data$ID == parent_id][1]
+            if (!is.na(parent_level)) level_val <- as.integer(parent_level) + 1L
+          }
+          order_val <- NULL
+          if (has_order && !is.null(rv$data)) {
+            siblings <- get_sibling_order(rv$data, parent_id)
+            if (nrow(siblings) == 0 || all(is.na(suppressWarnings(as.numeric(siblings$MyOrder))))) {
+              order_val <- 1
+            } else {
+              max_order <- suppressWarnings(max(as.numeric(siblings$MyOrder), na.rm = TRUE))
+              order_val <- if (is.finite(max_order)) max_order + 1 else 1
+            }
+          }
+
+          if (has_level && has_order) {
+            DBI::dbExecute(
+              con,
+              "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level, MyOrder) VALUES (?, ?, ?, ?, ?)",
+              list(new_id, name_val, parent_id, level_val, order_val)
+            )
+          } else if (has_level) {
+            DBI::dbExecute(
+              con,
+              "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level) VALUES (?, ?, ?, ?)",
+              list(new_id, name_val, parent_id, level_val)
+            )
+          } else if (has_order) {
+            DBI::dbExecute(
+              con,
+              "INSERT INTO Sample_Hierarchy (ID, Name, Parent, MyOrder) VALUES (?, ?, ?, ?)",
+              list(new_id, name_val, parent_id, order_val)
+            )
+          }
+        } else {
+          DBI::dbExecute(
+            con,
+            "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
+            list(new_id, name_val, parent_id)
+          )
+        }
         showNotification("Node added.", type = "message")
         refresh_tree()
         update_move_choices()
@@ -176,16 +394,25 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_rename, {
-      req(input$hier_name)
+      name_val <- trimws(input$hier_name)
+      req(nzchar(name_val))
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       req(node_id)
+
+      if (!is.null(rv$data)) {
+        existing <- rv$data$Name[rv$data$ID != node_id]
+        if (name_val %in% existing) {
+          showNotification("Name already exists.", type = "warning")
+          return()
+        }
+      }
 
       tryCatch({
         DBI::dbExecute(
           con,
           "UPDATE Sample_Hierarchy SET Name = ? WHERE ID = ?",
-          list(input$hier_name, node_id)
+          list(name_val, node_id)
         )
         showNotification("Node renamed.", type = "message")
         refresh_tree()
@@ -215,53 +442,6 @@ mod_hierarchy_server <- function(id, state, con) {
         showNotification(paste("Delete failed:", e$message), type = "error")
       })
     })
-
-    get_descendants <- function(df, node_id) {
-      if (nrow(df) == 0) return(integer(0))
-      direct <- df$ID[df$Parent == node_id]
-      if (length(direct) == 0) return(integer(0))
-      children <- unlist(lapply(direct, function(id) get_descendants(df, id)))
-      unique(c(direct, children))
-    }
-
-    get_subtree <- function(df, node_id) {
-      ids <- c(node_id, get_descendants(df, node_id))
-      df[df$ID %in% ids, , drop = FALSE]
-    }
-
-    insert_subtree <- function(subtree, new_parent) {
-      if (nrow(subtree) == 0) return(0)
-
-      max_id <- DBI::dbGetQuery(con, "SELECT MAX(ID) AS max_id FROM Sample_Hierarchy")
-      next_id <- if (is.na(max_id$max_id[1])) 1L else as.integer(max_id$max_id[1]) + 1L
-
-      old_ids <- subtree$ID
-      new_ids <- seq.int(next_id, length.out = length(old_ids))
-      id_map <- setNames(new_ids, old_ids)
-
-      order_ids <- unique(c(subtree$ID[is.na(subtree$Parent)], subtree$ID[!is.na(subtree$Parent)]))
-      count <- 0
-
-      for (old_id in order_ids) {
-        row <- subtree[subtree$ID == old_id, , drop = FALSE][1, ]
-        parent_old <- row$Parent
-
-        if (is.na(parent_old)) {
-          parent_new <- new_parent
-        } else {
-          parent_new <- id_map[[as.character(parent_old)]]
-        }
-
-        DBI::dbExecute(
-          con,
-          "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
-          list(id_map[[as.character(old_id)]], row$Name, parent_new)
-        )
-        count <- count + 1
-      }
-
-      count
-    }
 
     observeEvent(input$hier_delete_subtree, {
       selected <- shinyTree::get_selected(input$hier_tree)
@@ -299,8 +479,14 @@ mod_hierarchy_server <- function(id, state, con) {
       parent_id <- parse_hierarchy_id(selected)
       if (is.na(parent_id)) parent_id <- NA_integer_
 
+      parent_level <- -1L
+      if (!is.na(parent_id) && !is.null(rv$data) && "Level" %in% names(rv$data)) {
+        parent_level <- rv$data$Level[rv$data$ID == parent_id][1]
+        if (is.na(parent_level)) parent_level <- -1L
+      }
+
       tryCatch({
-        count <- insert_subtree(rv$clipboard, parent_id)
+        count <- insert_subtree(con, rv$clipboard, parent_id, parent_level)
         showNotification(paste("Pasted", count, "nodes."), type = "message")
         refresh_tree()
         update_move_choices()
@@ -319,14 +505,20 @@ mod_hierarchy_server <- function(id, state, con) {
         return()
       }
 
-      source <- DBI::dbGetQuery(con, sprintf("SELECT ID, Name, Parent FROM %s", table))
+      merge_fields <- DBI::dbListFields(con, table)
+      merge_cols <- intersect(c("ID", "Name", "Parent", "MyOrder"), merge_fields)
+      if (length(merge_cols) == 0) {
+        showNotification("Merge table is missing required fields.", type = "error")
+        return()
+      }
+      source <- DBI::dbGetQuery(con, sprintf("SELECT %s FROM %s", paste(merge_cols, collapse = ", "), table))
       if (nrow(source) == 0) {
         showNotification("Merge table has no rows.", type = "warning")
         return()
       }
 
       tryCatch({
-        count <- insert_subtree(source, NA_integer_)
+        count <- insert_subtree(con, source, NA_integer_, -1L)
         showNotification(paste("Merged", count, "nodes."), type = "message")
         refresh_tree()
         update_move_choices()
@@ -353,17 +545,119 @@ mod_hierarchy_server <- function(id, state, con) {
       }
 
       tryCatch({
-        DBI::dbExecute(
-          con,
-          "UPDATE Sample_Hierarchy SET Parent = ? WHERE ID = ?",
-          list(parent_id, node_id)
-        )
+        update_sql <- "UPDATE Sample_Hierarchy SET Parent = ?"
+        update_params <- list(parent_id)
+
+        if (!is.null(rv$data) && "MyOrder" %in% names(rv$data)) {
+          siblings <- get_sibling_order(rv$data, parent_id)
+          if (nrow(siblings) == 0 || all(is.na(suppressWarnings(as.numeric(siblings$MyOrder))))) {
+            order_val <- 1
+          } else {
+            max_order <- suppressWarnings(max(as.numeric(siblings$MyOrder), na.rm = TRUE))
+            order_val <- if (is.finite(max_order)) max_order + 1 else 1
+          }
+          update_sql <- paste0(update_sql, ", MyOrder = ?")
+          update_params <- c(update_params, list(order_val))
+        }
+
+        update_sql <- paste0(update_sql, " WHERE ID = ?")
+        update_params <- c(update_params, list(node_id))
+
+        DBI::dbExecute(con, update_sql, update_params)
+
+        if (!is.null(rv$data) && "Level" %in% names(rv$data)) {
+          current_level <- rv$data$Level[rv$data$ID == node_id][1]
+          parent_level <- if (is.na(parent_id)) -1L else rv$data$Level[rv$data$ID == parent_id][1]
+          if (!is.na(current_level) && !is.na(parent_level)) {
+            delta <- as.integer(parent_level + 1L) - as.integer(current_level)
+            if (delta != 0) {
+              ids <- c(node_id, get_descendants(rv$data, node_id))
+              for (target_id in ids) {
+                old_level <- rv$data$Level[rv$data$ID == target_id][1]
+                new_level <- as.integer(old_level) + delta
+                DBI::dbExecute(
+                  con,
+                  "UPDATE Sample_Hierarchy SET Level = ? WHERE ID = ?",
+                  list(new_level, target_id)
+                )
+              }
+            }
+          }
+        }
         showNotification("Node moved.", type = "message")
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
         showNotification(paste("Move failed:", e$message), type = "error")
       })
+    })
+
+    reorder_sibling <- function(direction = c("up", "down")) {
+      direction <- match.arg(direction)
+      if (is.null(rv$data) || !("MyOrder" %in% names(rv$data))) {
+        showNotification("Ordering not available for this hierarchy.", type = "warning")
+        return()
+      }
+
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      req(node_id)
+
+      refresh_tree()
+      row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
+      if (nrow(row) == 0) return()
+
+      parent_id <- row$Parent[1]
+      siblings <- get_sibling_order(rv$data, parent_id)
+      if (nrow(siblings) < 2) return()
+
+      idx <- which(siblings$ID == node_id)
+      if (length(idx) == 0) return()
+
+      swap_idx <- if (direction == "up") idx - 1 else idx + 1
+      if (swap_idx < 1 || swap_idx > nrow(siblings)) return()
+
+      current_id <- siblings$ID[idx]
+      swap_id <- siblings$ID[swap_idx]
+      current_order <- suppressWarnings(as.numeric(siblings$MyOrder[idx]))
+      swap_order <- suppressWarnings(as.numeric(siblings$MyOrder[swap_idx]))
+
+      if (is.na(current_order) || is.na(swap_order)) {
+        showNotification("Ordering values missing. Refresh or re-add nodes.", type = "warning")
+        return()
+      }
+
+      tryCatch({
+        DBI::dbExecute(con, "UPDATE Sample_Hierarchy SET MyOrder = ? WHERE ID = ?", list(swap_order, current_id))
+        DBI::dbExecute(con, "UPDATE Sample_Hierarchy SET MyOrder = ? WHERE ID = ?", list(current_order, swap_id))
+        showNotification("Order updated.", type = "message")
+        refresh_tree()
+        update_move_choices()
+      }, error = function(e) {
+        showNotification(paste("Order change failed:", e$message), type = "error")
+      })
+    }
+
+    observeEvent(input$hier_move_up, {
+      reorder_sibling("up")
+    })
+
+    observeEvent(input$hier_move_down, {
+      reorder_sibling("down")
+    })
+
+    observeEvent(input$hier_tree, {
+      req(rv$data)
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      if (is.na(node_id)) return()
+
+      row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
+      if (nrow(row) == 0) return()
+
+      updateTextInput(session, "hier_name", value = row$Name[1])
+      parent_id <- row$Parent[1]
+      updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
     })
 
     observeEvent(input$su_add, {
