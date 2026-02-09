@@ -129,6 +129,50 @@ fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, tabl
   DBI::dbGetQuery(con, sql, params)
 }
 
+fetch_master_audit_entries <- function(con, user = NULL, action = NULL, node_name = NULL, date_from = NULL, date_to = NULL, limit = NULL, offset = NULL) {
+  if (!master_audit_table_exists(con)) return(data.frame())
+
+  sql <- "SELECT \"User\", Action, NodeName, NodeID, Parent, EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysMasterAudit"
+  filters <- c()
+  params <- list()
+
+  if (!is.null(user)) {
+    filters <- c(filters, "\"User\" = ?")
+    params <- c(params, list(user))
+  }
+  if (!is.null(action)) {
+    filters <- c(filters, "Action = ?")
+    params <- c(params, list(action))
+  }
+  if (!is.null(node_name)) {
+    filters <- c(filters, "NodeName = ?")
+    params <- c(params, list(node_name))
+  }
+  if (!is.null(date_from)) {
+    filters <- c(filters, "EditWhen >= ?")
+    params <- c(params, list(date_from))
+  }
+  if (!is.null(date_to)) {
+    filters <- c(filters, "EditWhen <= ?")
+    params <- c(params, list(date_to))
+  }
+
+  if (length(filters) > 0) {
+    sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
+  }
+
+  if (!is.null(limit)) {
+    sql <- paste(sql, "ORDER BY EditWhen DESC LIMIT ?")
+    params <- c(params, list(as.integer(limit)))
+    if (!is.null(offset)) {
+      sql <- paste(sql, "OFFSET ?")
+      params <- c(params, list(as.integer(offset)))
+    }
+  }
+
+  DBI::dbGetQuery(con, sql, params)
+}
+
 log_audit_rows <- function(con, project_id, user, table_name, rows, fields = NULL, plot_col = "plotnumber", project_col = "projectid") {
   if (is.null(rows)) return(0L)
   rows_df <- as.data.frame(rows)
@@ -163,4 +207,58 @@ log_audit_rows <- function(con, project_id, user, table_name, rows, fields = NUL
   }
 
   logged
+}
+
+master_audit_table_name <- "user.USysMasterAudit"
+
+master_audit_table_exists <- function(con) {
+  DBI::dbExistsTable(con, DBI::Id(schema = "user", table = "USysMasterAudit")) ||
+    DBI::dbExistsTable(con, master_audit_table_name)
+}
+
+ensure_master_audit_table <- function(con) {
+  if (master_audit_table_exists(con)) return(TRUE)
+
+  tryCatch({
+    DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS user")
+    DBI::dbExecute(con, "
+      CREATE TABLE IF NOT EXISTS user.USysMasterAudit (
+        \"User\" TEXT,
+        Action TEXT,
+        NodeName TEXT,
+        NodeID INTEGER,
+        Parent TEXT,
+        EditField TEXT,
+        EditWhen TIMESTAMP,
+        BeforeEdit TEXT,
+        AfterEdit TEXT
+      )
+    ")
+    TRUE
+  }, error = function(e) {
+    FALSE
+  })
+}
+
+log_master_audit <- function(con, user, action, node_name, node_id, edit_field, before_edit, after_edit, parent = NULL) {
+  if (is.null(node_name) || is.null(node_id) || is.null(action)) return(invisible(FALSE))
+  if (!ensure_master_audit_table(con)) return(invisible(FALSE))
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO user.USysMasterAudit (\"User\", Action, NodeName, NodeID, Parent, EditField, EditWhen, BeforeEdit, AfterEdit)
+     VALUES (?, ?, ?, ?, ?, ?, now(), ?, ?)",
+    list(
+      if (is.null(user) || length(user) == 0) "Unknown" else user,
+      action,
+      node_name,
+      as.integer(node_id),
+      if (is.null(parent) || !nzchar(as.character(parent))) NA else as.character(parent),
+      if (is.null(edit_field)) NA else edit_field,
+      ifelse(is.na(before_edit), NA, as.character(before_edit)),
+      ifelse(is.na(after_edit), NA, as.character(after_edit))
+    )
+  )
+
+  invisible(TRUE)
 }

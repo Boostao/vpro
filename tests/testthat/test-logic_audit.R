@@ -69,3 +69,29 @@ test_that("log_audit_rows logs insert values", {
   expect_true(nrow(audit) >= 2)
   expect_true(all(audit$Project == "PRJ"))
 })
+
+test_that("log_master_audit writes master audit entries", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  log_master_audit(con, "tester", "Delete", "UnitA", 10, "Name", "UnitA", "UnitB", parent = "Root")
+
+  rows <- DBI::dbGetQuery(con, "SELECT * FROM user.USysMasterAudit")
+  expect_equal(nrow(rows), 1)
+  expect_equal(rows$Action[1], "Delete")
+  expect_equal(rows$NodeName[1], "UnitA")
+  expect_equal(rows$Parent[1], "Root")
+})
+
+test_that("fetch_master_audit_entries filters entries", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  ensure_master_audit_table(con)
+  log_master_audit(con, "tester", "Add", "UnitA", 10, "Name", NA, "UnitA")
+  log_master_audit(con, "tester", "Edit", "UnitB", 11, "Name", "Old", "New")
+
+  rows <- fetch_master_audit_entries(con, action = "Edit")
+  expect_equal(nrow(rows), 1)
+  expect_equal(rows$NodeName[1], "UnitB")
+})

@@ -51,6 +51,17 @@ hierarchy_has_column <- function(con, column_name) {
   column_name %in% DBI::dbListFields(con, "Sample_Hierarchy")
 }
 
+hierarchy_table_has_column <- function(con, table_name, column_name) {
+  if (!DBI::dbExistsTable(con, table_name)) return(FALSE)
+  column_name %in% DBI::dbListFields(con, table_name)
+}
+
+table_has_columns <- function(con, table_name, columns) {
+  if (!DBI::dbExistsTable(con, table_name)) return(FALSE)
+  fields <- DBI::dbListFields(con, table_name)
+  all(columns %in% fields)
+}
+
 get_sibling_order <- function(df, parent_id) {
   if (nrow(df) == 0) return(data.frame())
   siblings <- df[df$Parent == parent_id | (is.na(df$Parent) & is.na(parent_id)), , drop = FALSE]
@@ -140,21 +151,273 @@ get_subtree_names <- function(df, node_id) {
   unique(subtree$Name)
 }
 
-clip_hierarchy_ids <- function(df) {
+get_lowest_tilde_ids <- function(df) {
   if (nrow(df) == 0) return(integer(0))
   tilde_ids <- df$ID[grepl("^~", df$Name)]
+  if (length(tilde_ids) == 0) return(integer(0))
+
+  lowest <- integer(0)
+  for (node_id in tilde_ids) {
+    descendants <- get_descendants(df, node_id)
+    if (length(descendants) == 0) {
+      lowest <- c(lowest, node_id)
+      next
+    }
+    desc_names <- df$Name[df$ID %in% descendants]
+    if (!any(grepl("^~", desc_names))) {
+      lowest <- c(lowest, node_id)
+    }
+  }
+
+  unique(lowest)
+}
+
+clip_hierarchy_ids <- function(df) {
+  if (nrow(df) == 0) return(integer(0))
+  tilde_ids <- get_lowest_tilde_ids(df)
   if (length(tilde_ids) == 0) return(integer(0))
 
   to_delete <- integer(0)
   for (node_id in tilde_ids) {
     descendants <- get_descendants(df, node_id)
     if (length(descendants) == 0) next
-    desc_names <- df$Name[df$ID %in% descendants]
-    if (any(grepl("^~", desc_names))) next
     to_delete <- unique(c(to_delete, descendants))
   }
 
   to_delete
+}
+
+set_lowest_tilde_levels <- function(con, table_name, tilde_ids) {
+  if (length(tilde_ids) == 0) return(0L)
+  if (!DBI::dbExistsTable(con, table_name)) return(0L)
+  if (!hierarchy_table_has_column(con, table_name, "Level")) return(0L)
+
+  placeholders <- paste(rep("?", length(tilde_ids)), collapse = ", ")
+  sql <- sprintf("UPDATE %s SET Level = 11 WHERE ID IN (%s)", table_name, placeholders)
+  DBI::dbExecute(con, sql, as.list(tilde_ids))
+  length(tilde_ids)
+}
+
+create_lowest_breakpoints_table <- function(con, source_table = "Sample_Hierarchy", target_table = "USysLowestBreakpoints_Hierarchy") {
+  if (!DBI::dbExistsTable(con, source_table)) return(list(count = 0L, roots = 0L))
+
+  fields <- DBI::dbListFields(con, source_table)
+  select_cols <- intersect(c("ID", "Name", "Parent", "Level", "MyOrder"), fields)
+  if (!all(c("ID", "Name", "Parent") %in% select_cols)) return(list(count = 0L, roots = 0L))
+
+  sql <- sprintf("SELECT %s FROM %s", paste(select_cols, collapse = ", "), source_table)
+  df <- DBI::dbGetQuery(con, sql)
+  if (nrow(df) == 0) return(list(count = 0L, roots = 0L))
+
+  lowest_ids <- get_lowest_tilde_ids(df)
+  if (length(lowest_ids) == 0) {
+    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", target_table))
+    DBI::dbExecute(con, sprintf("CREATE TABLE %s AS SELECT %s FROM %s WHERE 1=0", target_table, paste(select_cols, collapse = ", "), source_table))
+    return(list(count = 0L, roots = 0L))
+  }
+
+  subtree_ids <- unique(unlist(lapply(lowest_ids, function(node_id) {
+    c(node_id, get_descendants(df, node_id))
+  })))
+  subset <- df[df$ID %in% subtree_ids, , drop = FALSE]
+  subset$Parent[subset$ID %in% lowest_ids] <- NA
+
+  if ("Level" %in% select_cols) {
+    level_map <- compute_subtree_levels(subset, parent_level = 0L)
+    subset$Level <- as.integer(level_map[as.character(subset$ID)])
+  }
+
+  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", target_table))
+  DBI::dbExecute(con, sprintf("CREATE TABLE %s AS SELECT %s FROM %s WHERE 1=0", target_table, paste(select_cols, collapse = ", "), source_table))
+  DBI::dbWriteTable(con, target_table, subset, append = TRUE, row.names = FALSE)
+  list(count = nrow(subset), roots = length(lowest_ids))
+}
+
+sync_env_to_su <- function(con) {
+  if (!table_has_columns(con, "Sample_Env", c("PlotNumber", "UserSiteUnit"))) return(0L)
+  if (!table_has_columns(con, "Sample_SU", c("PlotNumber", "SiteUnit"))) return(0L)
+
+  sql <- paste(
+    "UPDATE Sample_SU SET SiteUnit = e.UserSiteUnit",
+    "FROM Sample_Env e",
+    "WHERE Sample_SU.PlotNumber = e.PlotNumber"
+  )
+  DBI::dbExecute(con, sql)
+}
+
+sync_su_to_env <- function(con) {
+  if (!table_has_columns(con, "Sample_Env", c("PlotNumber", "UserSiteUnit"))) return(0L)
+  if (!table_has_columns(con, "Sample_SU", c("PlotNumber", "SiteUnit"))) return(0L)
+
+  sql <- paste(
+    "UPDATE Sample_Env SET UserSiteUnit = s.SiteUnit",
+    "FROM Sample_SU s",
+    "WHERE Sample_Env.PlotNumber = s.PlotNumber"
+  )
+  DBI::dbExecute(con, sql)
+}
+
+copy_bec_to_su <- function(con) {
+  if (!table_has_columns(con, "Sample_Env", c("PlotNumber", "BECSiteUnit"))) return(0L)
+  if (!table_has_columns(con, "Sample_SU", c("PlotNumber", "SiteUnit"))) return(0L)
+
+  sql <- paste(
+    "UPDATE Sample_SU SET SiteUnit = e.BECSiteUnit",
+    "FROM Sample_Env e",
+    "WHERE Sample_SU.PlotNumber = e.PlotNumber",
+    "AND e.BECSiteUnit IS NOT NULL",
+    "AND e.BECSiteUnit <> ''"
+  )
+  DBI::dbExecute(con, sql)
+}
+
+get_env_su_column <- function(con) {
+  if (!DBI::dbExistsTable(con, "Sample_Env")) return(NULL)
+  fields <- DBI::dbListFields(con, "Sample_Env")
+  candidates <- c("UserSiteUnit", "AssignedSiteUnit", "SiteUnit", "BECSiteUnit")
+  pick <- candidates[candidates %in% fields]
+  if (length(pick) == 0) return(NULL)
+  pick[1]
+}
+
+get_env_distinct_values <- function(con, column, zone = NULL) {
+  if (!DBI::dbExistsTable(con, "Sample_Env")) return(character(0))
+  if (!(column %in% DBI::dbListFields(con, "Sample_Env"))) return(character(0))
+
+  where_clause <- ""
+  params <- list()
+  if (!is.null(zone) && nzchar(zone) && ("Zone" %in% DBI::dbListFields(con, "Sample_Env"))) {
+    where_clause <- "WHERE Zone = ?"
+    params <- list(zone)
+  }
+
+  sql <- sprintf("SELECT DISTINCT %s AS value FROM Sample_Env %s ORDER BY %s", column, where_clause, column)
+  values <- DBI::dbGetQuery(con, sql, params)$value
+  values[!is.na(values) & nzchar(trimws(values))]
+}
+
+get_env_filter_columns <- function(con) {
+  if (!DBI::dbExistsTable(con, "Sample_Env")) return(character(0))
+  fields <- DBI::dbListFields(con, "Sample_Env")
+  candidates <- c("Zone", "SubZone", "SiteSeries", "UserSiteUnit", "BECSiteUnit", "PlotNumber")
+  candidates[candidates %in% fields]
+}
+
+get_lists_master_table <- function(con) {
+  candidates <- list(
+    list(schema = "lists", table = "MasterSiteUnitList"),
+    list(schema = "lists", table = "USysMasterSiteUnitList"),
+    list(schema = "main", table = "MasterSiteUnitList"),
+    list(schema = "main", table = "USysMasterSiteUnitList")
+  )
+
+  for (candidate in candidates) {
+    if (DBI::dbExistsTable(con, DBI::Id(schema = candidate$schema, table = candidate$table))) {
+      return(paste(candidate$schema, candidate$table, sep = "."))
+    }
+  }
+
+  NULL
+}
+
+get_master_site_units <- function(con, level = NULL) {
+  table_name <- get_lists_master_table(con)
+  if (is.null(table_name)) return(data.frame())
+
+  cols <- tryCatch({
+    DBI::dbGetQuery(con, sprintf("PRAGMA table_info('%s')", table_name))$name
+  }, error = function(e) {
+    character(0)
+  })
+  select_cols <- intersect(c("SiteSeries", "SiteSeriesLongName", "Level"), cols)
+  if (length(select_cols) == 0) return(data.frame())
+
+  where_clause <- ""
+  params <- list()
+  if (!is.null(level) && nzchar(level) && ("Level" %in% select_cols)) {
+    where_clause <- "WHERE Level = ?"
+    params <- list(as.integer(level))
+  }
+
+  sql <- sprintf("SELECT %s FROM %s %s ORDER BY SiteSeries", paste(select_cols, collapse = ", "), table_name, where_clause)
+  DBI::dbGetQuery(con, sql, params)
+}
+
+build_su_from_env <- function(con, zone = NULL, subzone = NULL, replace = TRUE) {
+  if (!table_has_columns(con, "Sample_Env", c("PlotNumber"))) return(0L)
+  if (!table_has_columns(con, "Sample_SU", c("PlotNumber", "SiteUnit"))) return(0L)
+
+  su_col <- get_env_su_column(con)
+  if (is.null(su_col)) return(0L)
+
+  filters <- character(0)
+  params <- list()
+  if (!is.null(zone) && nzchar(zone) && ("Zone" %in% DBI::dbListFields(con, "Sample_Env"))) {
+    filters <- c(filters, "e.Zone = ?")
+    params <- c(params, list(zone))
+  }
+  if (!is.null(subzone) && nzchar(subzone) && ("SubZone" %in% DBI::dbListFields(con, "Sample_Env"))) {
+    filters <- c(filters, "e.SubZone = ?")
+    params <- c(params, list(subzone))
+  }
+  filters <- c(filters, "e.PlotNumber IS NOT NULL")
+  where_clause <- if (length(filters) > 0) paste("WHERE", paste(filters, collapse = " AND ")) else ""
+
+  if (replace) {
+    DBI::dbExecute(con, "DELETE FROM Sample_SU")
+    sql <- sprintf(
+      "INSERT INTO Sample_SU (PlotNumber, SiteUnit) SELECT e.PlotNumber, e.%s FROM Sample_Env e %s",
+      su_col,
+      where_clause
+    )
+    return(DBI::dbExecute(con, sql, params))
+  }
+
+  sql <- sprintf(
+    "INSERT INTO Sample_SU (PlotNumber, SiteUnit) SELECT e.PlotNumber, e.%s FROM Sample_Env e LEFT JOIN Sample_SU s ON e.PlotNumber = s.PlotNumber %s AND s.PlotNumber IS NULL",
+    su_col,
+    where_clause
+  )
+  DBI::dbExecute(con, sql, params)
+}
+
+build_su_from_env_filter <- function(con, column, value, replace = TRUE, carry_siteunit = FALSE) {
+  if (!table_has_columns(con, "Sample_Env", c("PlotNumber"))) return(0L)
+  if (!table_has_columns(con, "Sample_SU", c("PlotNumber", "SiteUnit"))) return(0L)
+  if (is.null(column) || !nzchar(column)) return(0L)
+  if (!(column %in% DBI::dbListFields(con, "Sample_Env"))) return(0L)
+
+  su_col <- get_env_su_column(con)
+  if (is.null(su_col)) return(0L)
+
+  where_clause <- "WHERE e.PlotNumber IS NOT NULL"
+  params <- list()
+  if (!is.null(value) && nzchar(value)) {
+    where_clause <- paste(where_clause, "AND", sprintf("e.%s = ?", column))
+    params <- c(params, list(value))
+  }
+
+  if (replace) {
+    DBI::dbExecute(con, "DELETE FROM Sample_SU")
+  }
+
+  sql <- sprintf(
+    "INSERT INTO Sample_SU (PlotNumber, SiteUnit) SELECT e.PlotNumber, e.%s FROM Sample_Env e LEFT JOIN Sample_SU s ON e.PlotNumber = s.PlotNumber %s AND s.PlotNumber IS NULL",
+    su_col,
+    where_clause
+  )
+  count <- DBI::dbExecute(con, sql, params)
+
+  if (!replace && isTRUE(carry_siteunit)) {
+    sql_update <- paste(
+      "UPDATE Sample_SU SET SiteUnit = s.SiteUnit",
+      "FROM Sample_SU s",
+      "WHERE Sample_SU.PlotNumber = s.PlotNumber"
+    )
+    DBI::dbExecute(con, sql_update)
+  }
+
+  count
 }
 
 get_plots_for_site_unit <- function(con, site_unit) {
@@ -175,6 +438,48 @@ filter_duplicate_names <- function(source_df, existing_names) {
   dupes <- source_df$Name %in% existing_names
   if (!any(dupes)) return(list(data = source_df, dropped = 0L))
   list(data = source_df[!dupes, , drop = FALSE], dropped = sum(dupes))
+}
+
+filter_duplicate_subtrees <- function(source_df, existing_names) {
+  if (nrow(source_df) == 0) return(list(data = source_df, dropped = 0L))
+  if (length(existing_names) == 0) return(list(data = source_df, dropped = 0L))
+
+  dup_ids <- source_df$ID[source_df$Name %in% existing_names]
+  if (length(dup_ids) == 0) return(list(data = source_df, dropped = 0L))
+
+  to_drop <- unique(unlist(lapply(dup_ids, function(id) c(id, get_descendants(source_df, id)))))
+  list(data = source_df[!source_df$ID %in% to_drop, , drop = FALSE], dropped = length(to_drop))
+}
+
+resolve_duplicate_names <- function(source_df, existing_names, mode = c("skip", "prefix", "suffix"), prefix = "", suffix = "") {
+  if (nrow(source_df) == 0) return(list(data = source_df, dropped = 0L, renamed = 0L))
+  if (length(existing_names) == 0) return(list(data = source_df, dropped = 0L, renamed = 0L))
+
+  mode <- match.arg(mode)
+  if (mode == "skip") {
+    filtered <- filter_duplicate_names(source_df, existing_names)
+    return(list(data = filtered$data, dropped = filtered$dropped, renamed = 0L))
+  }
+
+  updated <- source_df
+  dupes <- updated$Name %in% existing_names
+  if (!any(dupes)) return(list(data = updated, dropped = 0L, renamed = 0L))
+
+  renamed_count <- 0L
+  for (idx in which(dupes)) {
+    base_name <- updated$Name[idx]
+    proposed <- if (mode == "prefix") paste0(prefix, base_name) else paste0(base_name, suffix)
+    candidate <- proposed
+    counter <- 1L
+    while (candidate %in% c(existing_names, updated$Name[-idx])) {
+      candidate <- paste0(proposed, " ", counter)
+      counter <- counter + 1L
+    }
+    updated$Name[idx] <- candidate
+    renamed_count <- renamed_count + 1L
+  }
+
+  list(data = updated, dropped = 0L, renamed = renamed_count)
 }
 
 compute_subtree_levels <- function(df, parent_level = -1L) {
@@ -289,6 +594,101 @@ insert_subtree <- function(con, subtree, new_parent, parent_level = -1L) {
   count
 }
 
+insert_rekeyed_hierarchy <- function(con, source_df, parent_level = -1L) {
+  if (nrow(source_df) == 0) return(list(count = 0L, missing_parents = 0L))
+
+  use_level <- hierarchy_has_column(con, "Level")
+  use_order <- hierarchy_has_column(con, "MyOrder")
+
+  temp_df <- source_df
+  if (!is.null(temp_df$Parent)) {
+    missing <- !is.na(temp_df$Parent) & !(temp_df$Parent %in% temp_df$ID)
+    temp_df$Parent[missing] <- NA
+  }
+  level_map <- if (use_level) compute_subtree_levels(temp_df, parent_level) else NULL
+
+  max_id <- DBI::dbGetQuery(con, "SELECT MAX(ID) AS max_id FROM Sample_Hierarchy")
+  next_id <- if (is.na(max_id$max_id[1])) 1L else as.integer(max_id$max_id[1]) + 1L
+
+  old_ids <- temp_df$ID
+  new_ids <- seq.int(next_id, length.out = length(old_ids))
+  id_map <- setNames(new_ids, old_ids)
+
+  order_ids <- unique(c(temp_df$ID[is.na(temp_df$Parent)], temp_df$ID[!is.na(temp_df$Parent)]))
+  count <- 0L
+  missing_parents <- 0L
+
+  root_counter <- 0L
+  child_counters <- new.env(parent = emptyenv())
+  root_base <- 0
+  if (use_order) {
+    root_max <- DBI::dbGetQuery(con, "SELECT MAX(MyOrder) AS max_order FROM Sample_Hierarchy WHERE Parent IS NULL")
+    root_base <- suppressWarnings(as.numeric(root_max$max_order[1]))
+    if (is.na(root_base) || !is.finite(root_base)) root_base <- 0
+  }
+
+  for (old_id in order_ids) {
+    row <- temp_df[temp_df$ID == old_id, , drop = FALSE][1, ]
+    parent_old <- row$Parent
+    parent_new <- NA_integer_
+
+    if (!is.na(parent_old)) {
+      mapped <- id_map[[as.character(parent_old)]]
+      if (!is.null(mapped)) {
+        parent_new <- mapped
+      } else {
+        missing_parents <- missing_parents + 1L
+      }
+    }
+
+    order_val <- NULL
+    if (use_order) {
+      if ("MyOrder" %in% names(temp_df) && !is.na(row$MyOrder)) {
+        order_val <- suppressWarnings(as.numeric(row$MyOrder))
+      } else if (is.na(parent_old)) {
+        root_counter <- root_counter + 1L
+        order_val <- root_base + root_counter
+      } else {
+        parent_key <- as.character(parent_new)
+        if (is.null(child_counters[[parent_key]])) child_counters[[parent_key]] <- 0L
+        child_counters[[parent_key]] <- child_counters[[parent_key]] + 1L
+        order_val <- child_counters[[parent_key]]
+      }
+    }
+
+    if (use_level && use_order) {
+      level_val <- level_map[[as.character(old_id)]]
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level, MyOrder) VALUES (?, ?, ?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val, order_val)
+      )
+    } else if (use_level) {
+      level_val <- level_map[[as.character(old_id)]]
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level) VALUES (?, ?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val)
+      )
+    } else if (use_order) {
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, MyOrder) VALUES (?, ?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new, order_val)
+      )
+    } else {
+      DBI::dbExecute(
+        con,
+        "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
+        list(id_map[[as.character(old_id)]], row$Name, parent_new)
+      )
+    }
+    count <- count + 1L
+  }
+
+  list(count = count, missing_parents = missing_parents)
+}
+
 mod_hierarchy_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -320,9 +720,11 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_refresh"), "Refresh", class = "btn-secondary"),
             actionButton(ns("hier_fix_orphans"), "Reattach Orphans", class = "btn-outline-secondary"),
             actionButton(ns("hier_clip"), "Clip Hierarchy", class = "btn-outline-secondary"),
+            actionButton(ns("hier_below_breaks"), "Below Breaks", class = "btn-outline-secondary"),
             actionButton(ns("hier_show_original"), "Show Original", class = "btn-outline-secondary"),
-            col_widths = c(3, 2, 2, 2, 2, 1, 2, 2, 2)
+            col_widths = c(3, 2, 2, 2, 2, 1, 2, 2, 2, 2)
           ),
+          tags$small(textOutput(ns("hier_clip_status"))),
           layout_columns(
             selectInput(ns("move_parent"), "Move Node To", choices = NULL),
             actionButton(ns("hier_move"), "Move Node", class = "btn-outline-secondary"),
@@ -334,8 +736,14 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_copy"), "Copy Subtree", class = "btn-outline-secondary"),
             actionButton(ns("hier_paste"), "Paste Subtree", class = "btn-outline-secondary"),
             textInput(ns("merge_table"), "Merge Table", placeholder = "OtherProject_Hierarchy"),
+            checkboxInput(ns("merge_allow_dupes"), "Allow duplicate names", value = FALSE),
             actionButton(ns("hier_merge"), "Merge", class = "btn-outline-secondary"),
-            col_widths = c(2, 2, 5, 3)
+            col_widths = c(2, 2, 4, 2, 2)
+          ),
+          layout_columns(
+            selectInput(ns("merge_conflict_mode"), "Conflict handling", choices = c("skip", "prefix", "suffix"), selected = "skip"),
+            textInput(ns("merge_conflict_text"), "Prefix/Suffix", placeholder = "Merged - "),
+            col_widths = c(3, 7)
           ),
           layout_columns(
             textInput(ns("hier_find"), "Find Node", placeholder = "Enter name"),
@@ -356,7 +764,32 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("su_refresh"), "Refresh", class = "btn-secondary"),
             actionButton(ns("su_show_units"), "Show Units", class = "btn-outline-secondary"),
             actionButton(ns("su_show_plots"), "Show Plots", class = "btn-outline-secondary"),
-            col_widths = c(2, 2, 2, 2, 2)
+            actionButton(ns("su_show_master"), "Show Master List", class = "btn-outline-secondary"),
+            col_widths = c(2, 2, 2, 2, 2, 2)
+          ),
+          layout_columns(
+            actionButton(ns("su_env_to_su"), "Env -> SU", class = "btn-outline-secondary"),
+            actionButton(ns("su_su_to_env"), "SU -> Env", class = "btn-outline-secondary"),
+            actionButton(ns("su_bec_to_su"), "BEC -> SU", class = "btn-outline-secondary"),
+            col_widths = c(2, 2, 2)
+          ),
+          layout_columns(
+            selectInput(ns("su_filter_zone"), "Zone", choices = c("All" = "")),
+            selectInput(ns("su_filter_subzone"), "SubZone", choices = c("All" = "")),
+            checkboxInput(ns("su_replace"), "Replace existing", value = TRUE),
+            actionButton(ns("su_build_from_env"), "Build SU from Env", class = "btn-outline-secondary"),
+            col_widths = c(3, 3, 2, 4)
+          ),
+          layout_columns(
+            selectInput(ns("su_filter_column"), "Filter column", choices = c("Select" = "")),
+            selectInput(ns("su_filter_value"), "Filter value", choices = c("All" = "")),
+            checkboxInput(ns("su_carry_siteunit"), "Carry existing SiteUnit", value = FALSE),
+            actionButton(ns("su_build_from_filter"), "Build SU from Filter", class = "btn-outline-secondary"),
+            col_widths = c(3, 3, 3, 3)
+          ),
+          layout_columns(
+            selectInput(ns("su_master_level"), "Master level", choices = c("All" = "")),
+            col_widths = c(3)
           ),
           rhandsontable::rhandsontableOutput(ns("su_hot")),
           verbatimTextOutput(ns("su_status"))
@@ -378,6 +811,10 @@ mod_hierarchy_server <- function(id, state, con) {
       orphan_count = 0L,
       su_mode = "plots",
       use_clipped = FALSE,
+      clip_deleted = 0L,
+      clip_lowest = 0L,
+      clip_total = 0L,
+      clip_mode = "original",
       find_matches = integer(0),
       find_index = 0L,
       find_query = ""
@@ -403,13 +840,21 @@ mod_hierarchy_server <- function(id, state, con) {
       DBI::dbGetQuery(con, sql)
     }
 
-    load_su <- function(mode = rv$su_mode, site_units = NULL) {
+    load_su <- function(mode = rv$su_mode, site_units = NULL, master_level = NULL) {
       if (!DBI::dbExistsTable(con, "Sample_SU")) {
         return(data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE))
       }
       if (identical(mode, "units")) {
         units <- DBI::dbGetQuery(con, "SELECT DISTINCT SiteUnit FROM Sample_SU ORDER BY SiteUnit")
         data.frame(PlotNumber = "", SiteUnit = units$SiteUnit, stringsAsFactors = FALSE)
+      } else if (identical(mode, "master")) {
+        level_val <- master_level
+        if (is.null(level_val) && !is.null(input$su_master_level)) {
+          level_val <- input$su_master_level
+        }
+        master <- get_master_site_units(con, level = level_val)
+        if (nrow(master) == 0) return(data.frame())
+        master
       } else {
         if (!is.null(site_units) && length(site_units) > 0) {
           placeholders <- paste(rep("?", length(site_units)), collapse = ", ")
@@ -448,6 +893,45 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$su <- load_su()
     }, ignoreInit = TRUE)
 
+    update_su_filters <- function(zone = NULL) {
+      zones <- get_env_distinct_values(con, "Zone")
+      zone_choices <- c("All" = "", stats::setNames(zones, zones))
+      updateSelectInput(session, "su_filter_zone", choices = zone_choices)
+
+      subzones <- get_env_distinct_values(con, "SubZone", zone = zone)
+      subzone_choices <- c("All" = "", stats::setNames(subzones, subzones))
+      updateSelectInput(session, "su_filter_subzone", choices = subzone_choices)
+
+      columns <- get_env_filter_columns(con)
+      column_choices <- c("Select" = "", stats::setNames(columns, columns))
+      updateSelectInput(session, "su_filter_column", choices = column_choices)
+
+      updateSelectInput(session, "su_filter_value", choices = c("All" = ""))
+
+      master_levels <- get_master_site_units(con)
+      if (nrow(master_levels) > 0 && "Level" %in% names(master_levels)) {
+        levels <- sort(unique(master_levels$Level))
+        level_choices <- c("All" = "", stats::setNames(as.character(levels), as.character(levels)))
+        updateSelectInput(session, "su_master_level", choices = level_choices)
+      }
+    }
+
+    observeEvent(state$CurrProject, {
+      update_su_filters()
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$su_filter_zone, {
+      zone_val <- trimws(input$su_filter_zone)
+      update_su_filters(zone = zone_val)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$su_filter_column, {
+      column_val <- trimws(input$su_filter_column)
+      values <- if (nzchar(column_val)) get_env_distinct_values(con, column_val) else character(0)
+      value_choices <- c("All" = "", stats::setNames(values, values))
+      updateSelectInput(session, "su_filter_value", choices = value_choices)
+    }, ignoreInit = TRUE)
+
     observeEvent(input$hier_refresh, {
       refresh_tree()
       update_move_choices()
@@ -478,10 +962,41 @@ mod_hierarchy_server <- function(id, state, con) {
         if (rv$orphan_count > 0) {
           status_parts <- c(status_parts, paste("Orphans:", rv$orphan_count))
         }
+        if (isTRUE(rv$use_clipped)) {
+          if (identical(rv$clip_mode, "clipped")) {
+            status_parts <- c(status_parts, paste("Clipped removed:", rv$clip_deleted))
+            if (rv$clip_lowest > 0) {
+              status_parts <- c(status_parts, paste("Lowest tildes:", rv$clip_lowest))
+            }
+          } else if (identical(rv$clip_mode, "below_breaks")) {
+            status_parts <- c(status_parts, paste("Below breaks:", rv$clip_total))
+            if (rv$clip_lowest > 0) {
+              status_parts <- c(status_parts, paste("Lowest tildes:", rv$clip_lowest))
+            }
+          }
+        }
         if (nzchar(path_text)) {
           status_parts <- c(status_parts, paste("Selected:", path_text))
         }
         paste(status_parts, collapse = " | ")
+      }
+    })
+
+    output$hier_clip_status <- renderText({
+      if (!isTRUE(rv$use_clipped)) {
+        "Hierarchy view: original"
+      } else if (identical(rv$clip_mode, "below_breaks")) {
+        status <- paste("Hierarchy view: below breaks", "| nodes", rv$clip_total)
+        if (rv$clip_lowest > 0) {
+          status <- paste(status, "| lowest tildes", rv$clip_lowest)
+        }
+        status
+      } else {
+        status <- paste("Hierarchy view: clipped", "| removed", rv$clip_deleted)
+        if (rv$clip_lowest > 0) {
+          status <- paste(status, "| lowest tildes", rv$clip_lowest)
+        }
+        status
       }
     })
 
@@ -501,17 +1016,33 @@ mod_hierarchy_server <- function(id, state, con) {
 
       dupes <- sum(source$Name %in% existing_names)
       total <- nrow(source)
-      paste("Merge preview:", total, "rows;", dupes, "duplicates;", total - dupes, "new")
+      dup_names <- unique(source$Name[source$Name %in% existing_names])
+      dup_preview <- if (length(dup_names) > 0) paste(utils::head(dup_names, 5), collapse = ", ") else ""
+      message <- paste("Merge preview:", total, "rows;", dupes, "duplicates;", total - dupes, "new")
+      if (nzchar(dup_preview)) message <- paste(message, "| dupes:", dup_preview)
+      if (isTRUE(input$merge_allow_dupes) && dupes > 0) {
+        message <- paste(message, "| allowing duplicates")
+      } else if (dupes > 0) {
+        mode_label <- if (identical(input$merge_conflict_mode, "skip")) "skip subtrees" else input$merge_conflict_mode
+        message <- paste(message, "| handling:", mode_label)
+      }
+      message
     })
 
     output$su_hot <- rhandsontable::renderRHandsontable({
       req(rv$su)
-      read_only <- identical(rv$su_mode, "units")
+      read_only <- identical(rv$su_mode, "units") || identical(rv$su_mode, "master")
       rhandsontable::rhandsontable(rv$su, rowHeaders = FALSE, stretchH = "all", readOnly = read_only)
     })
 
     output$su_status <- renderText({
-      mode_label <- if (identical(rv$su_mode, "units")) "Site units" else "Plots"
+      mode_label <- if (identical(rv$su_mode, "units")) {
+        "Site units"
+      } else if (identical(rv$su_mode, "master")) {
+        "Master site units"
+      } else {
+        "Plots"
+      }
       if (nzchar(rv$su_status)) {
         paste(mode_label, "|", rv$su_status)
       } else {
@@ -701,7 +1232,16 @@ mod_hierarchy_server <- function(id, state, con) {
           DBI::dbExecute(con, sql, as.list(delete_ids))
         }
 
+        lowest_tilde_ids <- get_lowest_tilde_ids(rv$data)
+        if (length(lowest_tilde_ids) > 0) {
+          set_lowest_tilde_levels(con, "USysLowestBreakpoints_Hierarchy", lowest_tilde_ids)
+        }
+
         rv$use_clipped <- TRUE
+        rv$clip_deleted <- length(delete_ids)
+        rv$clip_lowest <- length(lowest_tilde_ids)
+        rv$clip_total <- nrow(rv$data) - length(delete_ids)
+        rv$clip_mode <- "clipped"
         refresh_tree()
         update_move_choices()
         showNotification("Clipped hierarchy view created.", type = "message")
@@ -710,8 +1250,29 @@ mod_hierarchy_server <- function(id, state, con) {
       })
     })
 
+    observeEvent(input$hier_below_breaks, {
+      req(rv$data)
+      tryCatch({
+        result <- create_lowest_breakpoints_table(con)
+        rv$use_clipped <- TRUE
+        rv$clip_deleted <- 0L
+        rv$clip_lowest <- result$roots
+        rv$clip_total <- result$count
+        rv$clip_mode <- "below_breaks"
+        refresh_tree()
+        update_move_choices()
+        showNotification("Lowest breakpoints view created.", type = "message")
+      }, error = function(e) {
+        showNotification(paste("Below breaks failed:", e$message), type = "error")
+      })
+    })
+
     observeEvent(input$hier_show_original, {
       rv$use_clipped <- FALSE
+      rv$clip_deleted <- 0L
+      rv$clip_lowest <- 0L
+      rv$clip_total <- 0L
+      rv$clip_mode <- "original"
       refresh_tree()
       update_move_choices()
       showNotification("Showing original hierarchy.", type = "message")
@@ -738,6 +1299,10 @@ mod_hierarchy_server <- function(id, state, con) {
         showNotification("Selected node not found.", type = "warning")
         return()
       }
+
+      rv$su_mode <- "plots"
+      rv$su <- load_su("plots", node_row$Name[1])
+      rv$su_status <- paste("Loaded plots for", node_row$Name[1])
 
       plots <- get_plots_for_site_unit(con, node_row$Name[1])
       if (length(plots) == 0) {
@@ -914,6 +1479,10 @@ mod_hierarchy_server <- function(id, state, con) {
       }
 
       merge_fields <- DBI::dbListFields(con, table)
+      if (!("Name" %in% merge_fields)) {
+        showNotification("Merge table is missing Name column.", type = "error")
+        return()
+      }
       merge_cols <- intersect(c("ID", "Name", "Parent", "MyOrder"), merge_fields)
       if (length(merge_cols) == 0) {
         showNotification("Merge table is missing required fields.", type = "error")
@@ -925,19 +1494,37 @@ mod_hierarchy_server <- function(id, state, con) {
         return()
       }
 
-      existing <- DBI::dbGetQuery(con, "SELECT Name FROM Sample_Hierarchy")
-      filtered <- filter_duplicate_names(source, unique(existing$Name))
-      if (filtered$dropped > 0) {
-        showNotification(paste("Skipped", filtered$dropped, "duplicate names."), type = "warning")
-      }
-      if (nrow(filtered$data) == 0) {
-        showNotification("No new nodes to merge.", type = "message")
-        return()
+      allow_dupes <- isTRUE(input$merge_allow_dupes)
+      filtered <- list(data = source, dropped = 0L, renamed = 0L)
+      if (!allow_dupes) {
+        existing <- DBI::dbGetQuery(con, "SELECT Name FROM Sample_Hierarchy")
+        conflict_mode <- input$merge_conflict_mode
+        conflict_text <- trimws(input$merge_conflict_text)
+        prefix <- if (identical(conflict_mode, "prefix")) conflict_text else ""
+        suffix <- if (identical(conflict_mode, "suffix")) conflict_text else ""
+        if (identical(conflict_mode, "skip")) {
+          filtered <- filter_duplicate_subtrees(source, unique(existing$Name))
+          if (filtered$dropped > 0) {
+            showNotification(paste("Skipped", filtered$dropped, "nodes in duplicate subtrees."), type = "warning")
+          }
+        } else {
+          filtered <- resolve_duplicate_names(source, unique(existing$Name), conflict_mode, prefix, suffix)
+          if (filtered$renamed > 0) {
+            showNotification(paste("Renamed", filtered$renamed, "duplicate names."), type = "message")
+          }
+        }
+        if (nrow(filtered$data) == 0) {
+          showNotification("No new nodes to merge.", type = "message")
+          return()
+        }
       }
 
       tryCatch({
-        count <- insert_subtree(con, filtered$data, NA_integer_, -1L)
-        showNotification(paste("Merged", count, "nodes."), type = "message")
+        result <- insert_rekeyed_hierarchy(con, filtered$data, -1L)
+        showNotification(paste("Merged", result$count, "nodes."), type = "message")
+        if (result$missing_parents > 0) {
+          showNotification(paste("Reattached", result$missing_parents, "orphaned nodes to root."), type = "warning")
+        }
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
@@ -1156,7 +1743,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_add, {
-      if (identical(rv$su_mode, "units")) {
+      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master")) {
         showNotification("Switch to plot view to edit.", type = "warning")
         return()
       }
@@ -1165,7 +1752,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_delete, {
-      if (identical(rv$su_mode, "units")) {
+      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master")) {
         showNotification("Switch to plot view to edit.", type = "warning")
         return()
       }
@@ -1188,7 +1775,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_hot, {
-      if (identical(rv$su_mode, "units")) return()
+      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master")) return()
       req(rv$su)
       new_df <- rhandsontable::hot_to_r(input$su_hot)
       if (!all(c("PlotNumber", "SiteUnit") %in% names(new_df))) return()
@@ -1276,6 +1863,79 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$su_mode <- "plots"
       rv$su <- load_su("plots")
       rv$su_status <- ""
+    })
+
+    observeEvent(input$su_show_master, {
+      rv$su_mode <- "master"
+      rv$su <- load_su("master", master_level = input$su_master_level)
+      rv$su_status <- ""
+    })
+
+    observeEvent(input$su_env_to_su, {
+      tryCatch({
+        count <- sync_env_to_su(con)
+        rv$su <- load_su("plots")
+        rv$su_status <- paste("Env -> SU updated", count, "rows")
+      }, error = function(e) {
+        rv$su_status <- paste("Env -> SU failed:", e$message)
+      })
+    })
+
+    observeEvent(input$su_su_to_env, {
+      tryCatch({
+        count <- sync_su_to_env(con)
+        rv$su_status <- paste("SU -> Env updated", count, "rows")
+      }, error = function(e) {
+        rv$su_status <- paste("SU -> Env failed:", e$message)
+      })
+    })
+
+    observeEvent(input$su_bec_to_su, {
+      tryCatch({
+        count <- copy_bec_to_su(con)
+        rv$su <- load_su("plots")
+        rv$su_status <- paste("BEC -> SU updated", count, "rows")
+      }, error = function(e) {
+        rv$su_status <- paste("BEC -> SU failed:", e$message)
+      })
+    })
+
+    observeEvent(input$su_build_from_env, {
+      zone_val <- trimws(input$su_filter_zone)
+      subzone_val <- trimws(input$su_filter_subzone)
+      replace_flag <- isTRUE(input$su_replace)
+      tryCatch({
+        count <- build_su_from_env(con, zone = zone_val, subzone = subzone_val, replace = replace_flag)
+        rv$su <- load_su("plots")
+        rv$su_status <- paste("Built SU from Env:", count, "rows")
+      }, error = function(e) {
+        rv$su_status <- paste("Build SU failed:", e$message)
+      })
+    })
+
+    observeEvent(input$su_build_from_filter, {
+      column_val <- trimws(input$su_filter_column)
+      value_val <- trimws(input$su_filter_value)
+      replace_flag <- isTRUE(input$su_replace)
+      carry_flag <- isTRUE(input$su_carry_siteunit)
+      tryCatch({
+        count <- build_su_from_env_filter(
+          con,
+          column = column_val,
+          value = value_val,
+          replace = replace_flag,
+          carry_siteunit = carry_flag
+        )
+        rv$su <- load_su("plots")
+        rv$su_status <- paste("Built SU from filter:", count, "rows")
+      }, error = function(e) {
+        rv$su_status <- paste("Build filter failed:", e$message)
+      })
+    })
+
+    observeEvent(input$su_master_level, {
+      if (!identical(rv$su_mode, "master")) return()
+      rv$su <- load_su("master", master_level = input$su_master_level)
     })
   })
 }

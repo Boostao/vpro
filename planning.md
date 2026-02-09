@@ -46,20 +46,21 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 ### ⚠️ Partial
 - **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — null-safety audit complete
 - **VENUS XML export**: XML export implemented with schema-ordered columns, DMS derivations, prefixing, project filtering, and expanded tests; remaining Access field transforms TBD
-- **Reporting**: 15/15 Access reports recreated as Quarto templates
+- **Reporting**: 15/15 Access reports recreated as Quarto templates; parameter parity and VBA logic ports still in progress
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
-- **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
+- **Audit trail**: base helpers + logging for veg/soil/header edits + master audit helper + master audit viewer + basic Audit tabs
+- **Master site unit list tools**: admin editor + master audit logging (lists schema)
 - **Import engine**: CSV/ZIP analysis with validation summary, guarded import button, compliance-gated rollback, and expanded test coverage
-- **Hierarchy tools**: tree CRUD + move node + delete/copy/paste subtree + merge + SU table editor + sibling ordering
+- **Hierarchy tools**: tree CRUD, move/delete, copy/paste subtree, merge preview + duplicate handling + rekeyed merge, sibling ordering, find shortcuts, orphan repair, clip + below-breaks views, SU table modes + env sync + filter builders + master list
+- **Diagnostics/QC**: diagnostic helper functions (presence class + diagnosis + matrix runner) in `R/logic_diagnostic.R`; live matrix builder + UI/report wiring pending
 
 ### 🔲 Not Started
-- **Diagnostics/QC**: `V7mdlDiagnostic`, validation reports → `R/logic_compliance.R`
 - **Audit trail**: `V7mdlAudit` → `R/logic_audit.R`
 - **Cloud sync**: `R/logic_sync.R` (architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`, stub added)
 - **Auth/RBAC**: `R/mod_auth.R` (UI shell)
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)
 - **RDS publishing**: `R/logic_publish.R` (stub added)
-- **Remaining report types**: None (15/15 templates in place)
+- **Report logic parity**: VBA transforms + parameters + tests beyond template scaffolding
 - **Tests**: remaining module and report tests (view tests + compliance tests + hierarchy tests done)
 
 ---
@@ -141,9 +142,13 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Core features**:
   - Tree view of `Sample_Hierarchy` (parent→child recursive)
   - Add/move/delete nodes with cascade updates
-  - Merge two hierarchies
+  - Merge two hierarchies (preview + duplicate handling + rekeyed merge)
   - Copy subtree to clipboard, paste into another hierarchy
-  - Site unit table editor linked to hierarchy nodes
+  - Sibling ordering + MyOrder updates
+  - Find/search shortcuts + breadcrumb path helpers
+  - Orphan detection + repair tools
+  - Clip hierarchy view + below-breaks view (lowest breakpoints)
+  - Site unit table editor linked to hierarchy nodes + env sync + filter-based SU builders + master list
 - **UI**: `shinyTree` or `jsTreeR` for interactive tree; `rhandsontable` for SU table editing
 - **Test**: `test-mod_hierarchy.R` — tree CRUD, merge logic, orphan detection
 
@@ -265,7 +270,7 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 | `V7mdlClipHierarchy` | `R/mod_hierarchy.R` | ⚠️ |
 | `V7mdlMergeHierarchies` | `R/mod_hierarchy.R` | ⚠️ |
 | `V7mdlSUTableTools1/2` | `R/mod_hierarchy.R` or `mod_admin.R` | ⚠️ |
-| `V7mdlMasterUnitListTools` | `R/mod_admin.R` (extend) | 🔲 |
+| `V7mdlMasterUnitListTools` | `R/mod_admin.R` (extend) | ⚠️ |
 
 ### Utilities & System
 | VBA Module | R Target | Status |
