@@ -54,6 +54,48 @@ mod_import_server <- function(id, state, con) {
       max(lines - 1, 0)
     }
 
+    build_csv_validation <- function(file_path, file_name, preview, target_table) {
+      total_rows <- csv_row_count(file_path)
+      validation <- data.frame(
+        file = file_name,
+        table = if (!is.null(target_table) && nzchar(target_table)) target_table else "",
+        rows = total_rows,
+        missing = "",
+        extra = "",
+        status = "No target selected",
+        stringsAsFactors = FALSE
+      )
+
+      status <- paste("Loaded", nrow(preview), "rows from", file_name)
+
+      if (!is.null(target_table) && nzchar(target_table)) {
+        target_fields <- DBI::dbListFields(con, target_table)
+        rv$target_fields <- target_fields
+        missing_cols <- setdiff(target_fields, names(preview))
+        extra_cols <- setdiff(names(preview), target_fields)
+
+        validation$missing <- if (length(missing_cols) > 0) paste(missing_cols, collapse = ", ") else ""
+        validation$extra <- if (length(extra_cols) > 0) paste(extra_cols, collapse = ", ") else ""
+        validation$status <- if (length(missing_cols) == 0 && length(extra_cols) == 0) {
+          "Columns match target"
+        } else {
+          "Column mismatch"
+        }
+
+        if (length(missing_cols) > 0) {
+          status <- paste0(status, " | Missing: ", paste(missing_cols, collapse = ", "))
+        }
+        if (length(extra_cols) > 0) {
+          status <- paste0(status, " | Extra: ", paste(extra_cols, collapse = ", "))
+        }
+        if (length(missing_cols) == 0 && length(extra_cols) == 0) {
+          status <- paste0(status, " | Columns match target")
+        }
+      }
+
+      list(status = status, validation = validation)
+    }
+
     observeEvent(input$import_analyze, {
       req(input$import_file)
 
@@ -70,46 +112,9 @@ mod_import_server <- function(id, state, con) {
       if (ext == "csv") {
         tryCatch({
           rv$preview <- utils::read.csv(file_path, nrows = 100, stringsAsFactors = FALSE)
-          status <- paste("Loaded", nrow(rv$preview), "rows from", file_name)
-          total_rows <- csv_row_count(file_path)
-
-          validation <- data.frame(
-            file = file_name,
-            table = if (!is.null(input$target_table) && nzchar(input$target_table)) input$target_table else "",
-            rows = total_rows,
-            missing = "",
-            extra = "",
-            status = "No target selected",
-            stringsAsFactors = FALSE
-          )
-
-          if (!is.null(input$target_table) && nzchar(input$target_table)) {
-            target_fields <- DBI::dbListFields(con, input$target_table)
-            rv$target_fields <- target_fields
-            missing_cols <- setdiff(target_fields, names(rv$preview))
-            extra_cols <- setdiff(names(rv$preview), target_fields)
-
-            validation$missing <- if (length(missing_cols) > 0) paste(missing_cols, collapse = ", ") else ""
-            validation$extra <- if (length(extra_cols) > 0) paste(extra_cols, collapse = ", ") else ""
-            validation$status <- if (length(missing_cols) == 0 && length(extra_cols) == 0) {
-              "Columns match target"
-            } else {
-              "Column mismatch"
-            }
-
-            if (length(missing_cols) > 0) {
-              status <- paste0(status, " | Missing: ", paste(missing_cols, collapse = ", "))
-            }
-            if (length(extra_cols) > 0) {
-              status <- paste0(status, " | Extra: ", paste(extra_cols, collapse = ", "))
-            }
-            if (length(missing_cols) == 0 && length(extra_cols) == 0) {
-              status <- paste0(status, " | Columns match target")
-            }
-          }
-
-          rv$status <- status
-          rv$import_validation <- validation
+          result <- build_csv_validation(file_path, file_name, rv$preview, input$target_table)
+          rv$status <- result$status
+          rv$import_validation <- result$validation
         }, error = function(e) {
           rv$status <- paste("CSV read error:", e$message)
           rv$preview <- NULL
@@ -206,6 +211,19 @@ mod_import_server <- function(id, state, con) {
       rv$status <- "Unsupported file type"
       rv$preview <- NULL
       rv$import_validation <- NULL
+    })
+
+    observeEvent(input$target_table, {
+      req(input$import_file)
+      req(rv$preview)
+
+      file_name <- input$import_file$name
+      ext <- tolower(tools::file_ext(file_name))
+      if (ext != "csv") return()
+
+      result <- build_csv_validation(input$import_file$datapath, file_name, rv$preview, input$target_table)
+      rv$status <- result$status
+      rv$import_validation <- result$validation
     })
 
     import_ready <- reactive({

@@ -186,6 +186,33 @@ test_that("mod_import blocks CSV import when validation fails", {
   expect_equal(nrow(rows), 0)
 })
 
+test_that("mod_import updates validation when target table changes", {
+  testthat::skip_if_not_installed("shiny")
+
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_import_tables(con)
+
+  DBI::dbExecute(con, "CREATE TABLE Other_Table (a TEXT)")
+
+  temp_dir <- tempfile("vpro_import_target_update_")
+  dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+  csv_path <- write_csv_named(temp_dir, "Test_Table.csv", data.frame(a = "x", b = 1))
+
+  state <- shiny::reactiveValues(CurrProject = NULL)
+
+  shiny::testServer(mod_import_server, args = list(state = state, con = con), {
+    session$setInputs(import_file = list(datapath = csv_path, name = "Test_Table.csv"))
+    session$setInputs(target_table = "Other_Table")
+    session$setInputs(import_analyze = 1)
+
+    expect_equal(rv$import_validation$status[1], "Column mismatch")
+
+    session$setInputs(target_table = "Test_Table")
+    expect_equal(rv$import_validation$status[1], "Columns match target")
+  })
+})
+
 test_that("mod_import rolls back ZIP imports on compliance failure", {
   testthat::skip_if_not_installed("shiny")
 
