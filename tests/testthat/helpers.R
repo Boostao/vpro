@@ -267,3 +267,29 @@ expect_query_result <- function(con, sql, expected_rows = NULL, label = "query")
   
   return(result)
 }
+
+#' Clear Core Tables
+#'
+#' Helper to clean up core.* tables for testing
+#'
+#' @param con DBI connection object (PostgreSQL)
+#'
+clear_core_tables <- function(con) {
+  DBI::dbExecute(con, "DELETE FROM core.sample_veg")
+  DBI::dbExecute(con, "DELETE FROM core.sample_env")
+  DBI::dbExecute(con, "DELETE FROM core.sample_su")
+}
+
+#' Clear Staging Tables
+#'
+#' Helper to clean up staging.* tables for testing
+#'
+#' @param con DBI connection object (PostgreSQL)
+#'
+clear_staging_tables <- function(con) {
+  DBI::dbExecute(con, "DELETE FROM staging.sample_veg")
+  DBI::dbExecute(con, "DELETE FROM staging.sample_env")
+  DBI::dbExecute(con, "DELETE FROM staging.sample_su")
+  DBI::dbExecute(con, "DELETE FROM staging.merge_conflicts")
+  DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
+}
