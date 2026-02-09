@@ -80,7 +80,7 @@ mod_admin_ui <- function(id) {
   )
 }
 
-mod_admin_server <- function(id, con) {
+mod_admin_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     
     # ==========================================================================
@@ -425,6 +425,20 @@ mod_admin_server <- function(id, con) {
         utils::write.csv(audit, file, row.names = FALSE)
       }
     )
+
+    observeEvent(state$CurrProject, {
+      if (is.null(state$CurrProject)) return()
+      if (!nzchar(trimws(input$audit_project))) {
+        updateTextInput(session, "audit_project", value = state$CurrProject)
+      }
+    })
+
+    observeEvent(state$CurrSU, {
+      if (is.null(state$CurrSU)) return()
+      if (!nzchar(trimws(input$audit_plot))) {
+        updateTextInput(session, "audit_plot", value = state$CurrSU)
+      }
+    })
     
   })
 }
