@@ -140,6 +140,17 @@ get_subtree_names <- function(df, node_id) {
   unique(subtree$Name)
 }
 
+get_plots_for_site_unit <- function(con, site_unit) {
+  if (!DBI::dbExistsTable(con, "Sample_SU")) return(character(0))
+  plots <- DBI::dbGetQuery(
+    con,
+    "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+    list(site_unit)
+  )
+  if (nrow(plots) == 0) return(character(0))
+  plots$PlotNumber
+}
+
 filter_duplicate_names <- function(source_df, existing_names) {
   if (nrow(source_df) == 0) return(list(data = source_df, dropped = 0L))
   if (length(existing_names) == 0) return(list(data = source_df, dropped = 0L))
@@ -277,6 +288,11 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_load_hierarchy_plots"), "Load Hierarchy + Plots", class = "btn-outline-secondary"),
             actionButton(ns("hier_load_su_plots"), "Load SUs + Plots", class = "btn-outline-secondary"),
             col_widths = c(2, 2, 2, 3, 3)
+          ),
+          layout_columns(
+            actionButton(ns("hier_view_veg"), "View Vegetation", class = "btn-outline-secondary"),
+            actionButton(ns("hier_view_current_su"), "View Current SU", class = "btn-outline-secondary"),
+            col_widths = c(2, 2)
           ),
           layout_columns(
             textInput(ns("hier_name"), "Name"),
@@ -657,24 +673,14 @@ mod_hierarchy_server <- function(id, state, con) {
         return()
       }
 
-      if (!DBI::dbExistsTable(con, "Sample_SU")) {
-        showNotification("Sample_SU table not available.", type = "warning")
-        return()
-      }
-
-      plots <- DBI::dbGetQuery(
-        con,
-        "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
-        list(node_row$Name[1])
-      )
-
-      if (nrow(plots) == 0) {
+      plots <- get_plots_for_site_unit(con, node_row$Name[1])
+      if (length(plots) == 0) {
         showNotification("No plots linked to this site unit.", type = "message")
         bslib::nav_select("hier_tabs", "SU Table", session = session)
         return()
       }
 
-      plot_number <- plots$PlotNumber[1]
+      plot_number <- plots[1]
       project_id <- NULL
       if (DBI::dbExistsTable(con, "Sample_Env")) {
         env_fields <- DBI::dbListFields(con, "Sample_Env")
@@ -699,6 +705,55 @@ mod_hierarchy_server <- function(id, state, con) {
         bslib::nav_select("main_tabs", "Site & Env", session = session$parent)
       }
       showNotification(paste("Jumped to plot", plot_number), type = "message")
+    })
+
+    observeEvent(input$hier_view_veg, {
+      req(rv$data)
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      if (is.na(node_id)) {
+        showNotification("Select a hierarchy node first.", type = "warning")
+        return()
+      }
+
+      node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
+      if (nrow(node_row) == 0) {
+        showNotification("Selected node not found.", type = "warning")
+        return()
+      }
+
+      plots <- get_plots_for_site_unit(con, node_row$Name[1])
+      if (length(plots) == 0) {
+        showNotification("No plots linked to this site unit.", type = "message")
+        return()
+      }
+
+      if (!is.null(session$parent)) {
+        updateSelectInput(session$parent, "sel_su", selected = as.character(plots[1]))
+        bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+      }
+      showNotification("Opened vegetation for selected plot.", type = "message")
+    })
+
+    observeEvent(input$hier_view_current_su, {
+      req(rv$data)
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      if (is.na(node_id)) {
+        showNotification("Select a hierarchy node first.", type = "warning")
+        return()
+      }
+
+      node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
+      if (nrow(node_row) == 0) {
+        showNotification("Selected node not found.", type = "warning")
+        return()
+      }
+
+      rv$su_mode <- "plots"
+      rv$su <- load_su("plots", node_row$Name[1])
+      rv$su_status <- paste("Loaded plots for", node_row$Name[1])
+      bslib::nav_select("hier_tabs", "SU Table", session = session)
     })
 
     observeEvent(input$hier_view_su_table, {
