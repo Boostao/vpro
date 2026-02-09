@@ -1,0 +1,69 @@
+---
+title: "Short Vegetation + Environment"
+format:
+  html:
+    theme: journal
+params:
+  plot_number: "00000"
+  db_path: "../data/vpro.duckdb"
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+options(knitr.table.format = "html")
+con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+```
+
+```{r load-data, include=FALSE}
+veg <- dbGetQuery(
+  con,
+  "SELECT PlotNumber, MyLayer, Species, CoverValue
+   FROM vw_USysAllVeg
+   WHERE PlotNumber = ?
+   ORDER BY MyLayer, Species",
+  list(params$plot_number)
+)
+
+env <- dbGetQuery(
+  con,
+  "SELECT * FROM Sample_Env WHERE PlotNumber = ?",
+  list(params$plot_number)
+)
+
+dbDisconnect(con)
+```
+
+# Plot: `r params$plot_number`
+
+## Environment
+
+```{r env-table, echo=FALSE, results='asis'}
+if (nrow(env) > 0) {
+  desired <- c("plotnumber", "projectid", "date", "sitesurveyor", "latitude", "longitude", "elevation",
+               "aspect", "slopegradient", "mesoslopeposition", "surfaceshape", "moistureregime",
+               "nutrientregime")
+  cols <- intersect(desired, names(env))
+  env <- env[, cols, drop = FALSE]
+
+  kbl(env, align = "l") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No environment data found.")
+}
+```
+
+## Vegetation
+
+```{r veg-table, echo=FALSE, results='asis'}
+if (nrow(veg) > 0) {
+  names(veg) <- c("Plot", "Layer", "Species", "Cover")
+  kbl(veg, align = "l") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No vegetation data found.")
+}
+```
