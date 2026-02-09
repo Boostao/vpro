@@ -65,6 +65,7 @@ mod_admin_ui <- function(id) {
               dateInput(ns("audit_from"), "From", value = NULL),
               dateInput(ns("audit_to"), "To", value = NULL),
               selectInput(ns("audit_page_size"), "Page size", choices = c(25, 50, 100), selected = 25),
+              checkboxInput(ns("audit_latest_only"), "Latest only", value = FALSE),
               actionButton(ns("audit_refresh"), "Refresh", class = "btn-secondary w-100 mt-2"),
               downloadButton(ns("audit_export"), "Export CSV", class = "btn-outline-primary w-100 mt-2")
              ),
@@ -394,7 +395,8 @@ mod_admin_server <- function(id, state, con) {
 
       page_size <- as.integer(input$audit_page_size)
       if (is.na(page_size) || page_size <= 0) page_size <- 25
-      offset <- (rv_audit$page - 1L) * page_size
+      latest_only <- isTRUE(input$audit_latest_only)
+      offset <- if (latest_only) 0L else (rv_audit$page - 1L) * page_size
 
       audit <- fetch_audit_entries(
         con,
@@ -445,10 +447,12 @@ mod_admin_server <- function(id, state, con) {
     })
 
     observeEvent(input$audit_next, {
+      if (isTRUE(input$audit_latest_only)) return()
       rv_audit$page <- rv_audit$page + 1L
     })
 
     observeEvent(input$audit_prev, {
+      if (isTRUE(input$audit_latest_only)) return()
       rv_audit$page <- max(1L, rv_audit$page - 1L)
     })
 
@@ -459,6 +463,9 @@ mod_admin_server <- function(id, state, con) {
     output$audit_page_info <- renderText({
       page_size <- as.integer(input$audit_page_size)
       if (is.na(page_size) || page_size <= 0) page_size <- 25
+      if (isTRUE(input$audit_latest_only)) {
+        return(paste0("Latest ", page_size, " rows"))
+      }
       start_row <- (rv_audit$page - 1L) * page_size + 1L
       end_row <- rv_audit$page * page_size
       paste0("Rows ", start_row, "-", end_row)
