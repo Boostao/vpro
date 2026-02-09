@@ -134,6 +134,18 @@ test_that("get_subtree_names returns unique names", {
   expect_true(all(c("Root", "ChildA", "ChildB", "Grand") %in% names))
 })
 
+test_that("get_plots_for_site_unit returns plots", {
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P1', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P2', 'SU1')")
+
+  plots <- get_plots_for_site_unit(con, "SU1")
+  expect_true(all(c("P1", "P2") %in% plots))
+})
+
 test_that("filter_duplicate_names drops existing names", {
   source <- data.frame(
     ID = c(1, 2, 3),
