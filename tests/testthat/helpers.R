@@ -120,6 +120,48 @@ seed_test_reference_data <- function(con) {
                     zones_df, overwrite = TRUE)
 }
 
+#' Check if PostgreSQL is Available
+#'
+#' Tests connection to Docker PostgreSQL instance
+#'
+#' @return Logical. TRUE if PostgreSQL is available
+#'
+pg_available <- function() {
+  tryCatch({
+    con <- DBI::dbConnect(
+      RPostgres::Postgres(),
+      host = "localhost",
+      port = 5433,
+      user = "testuser",
+      password = "testpass",
+      dbname = "becmaster"
+    )
+    DBI::dbDisconnect(con)
+    return(TRUE)
+  }, error = function(e) {
+    return(FALSE)
+  })
+}
+
+#' Get Test PostgreSQL Connection
+#'
+#' Creates connection to docker-compose postgres instance as superuser.
+#' Used for setting up test fixtures and roles.
+#'
+#' @return DBI connection object
+#'
+get_test_pg_connection <- function() {
+  con <- DBI::dbConnect(
+    RPostgres::Postgres(),
+    host = "localhost",
+    port = 5433,
+    user = "testuser",
+    password = "testpass",
+    dbname = "becmaster"
+  )
+  return(con)
+}
+
 #' Create Test Postgres Connection
 #'
 #' Attempts to connect to docker-compose postgres instance.
@@ -131,31 +173,13 @@ seed_test_reference_data <- function(con) {
 #'
 test_connect_postgres <- function(skip_if_unavailable = TRUE) {
   
-  if (skip_if_unavailable && !pg_available) {
+  if (skip_if_unavailable && !pg_available()) {
     testthat::skip("PostgreSQL not available. Start with: docker-compose up -d")
   }
   
   message("[test-helpers] Creating PostgreSQL test connection")
   
-  # This requires RPostgres - would need to add to renv
-  # For now, this is a placeholder
-  tryCatch({
-    con <- DBI::dbConnect(
-      RPostgres::Postgres(),
-      host = "localhost",
-      port = 5433,
-      user = "testuser",
-      password = "testpass",
-      dbname = "becmaster"
-    )
-    return(con)
-  }, error = function(e) {
-    if (skip_if_unavailable) {
-      testthat::skip("Could not connect to PostgreSQL: ", e$message)
-    } else {
-      stop(e)
-    }
-  })
+  return(get_test_pg_connection())
 }
 
 #' Reset Database to Clean State
