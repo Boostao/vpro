@@ -325,6 +325,7 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_find_next"), "Next", class = "btn-outline-secondary"),
             col_widths = c(6, 2, 2, 2)
           ),
+          tags$script(HTML(sprintf("(function(){\n  var inputId = '%s';\n  var enterId = '%s';\n  var nextId = '%s';\n  var prevId = '%s';\n  function bind(){\n    var el = document.getElementById(inputId);\n    if (!el) return;\n    el.addEventListener('keydown', function(e){\n      if (e.key === 'Enter' && e.shiftKey){\n        e.preventDefault();\n        Shiny.setInputValue(prevId, Date.now());\n        return;\n      }\n      if (e.key === 'Enter'){\n        e.preventDefault();\n        Shiny.setInputValue(enterId, Date.now());\n      }\n    });\n  }\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', bind);\n  } else {\n    bind();\n  }\n})();", ns("hier_find"), ns("hier_find_enter"), ns("hier_find_next_key"), ns("hier_find_prev_key")))),
           verbatimTextOutput(ns("merge_preview")),
           shinyTree::shinyTreeOutput(ns("hier_tree"), height = "600px"),
           verbatimTextOutput(ns("hier_status"))
@@ -1031,7 +1032,7 @@ mod_hierarchy_server <- function(id, state, con) {
       TRUE
     }
 
-    observeEvent(input$hier_find_btn, {
+    perform_find <- function() {
       req(rv$data)
       query <- trimws(input$hier_find)
       if (!nzchar(query)) return()
@@ -1055,24 +1056,43 @@ mod_hierarchy_server <- function(id, state, con) {
       if (select_node_by_id(rv$find_matches[rv$find_index])) {
         showNotification("Node selected.", type = "message")
       }
+    }
+
+    move_find <- function(step) {
+      if (length(rv$find_matches) == 0) {
+        showNotification("Use Find first.", type = "message")
+        return()
+      }
+      total <- length(rv$find_matches)
+      next_idx <- rv$find_index + step
+      if (next_idx < 1L) next_idx <- total
+      if (next_idx > total) next_idx <- 1L
+      rv$find_index <- next_idx
+      select_node_by_id(rv$find_matches[rv$find_index])
+    }
+
+    observeEvent(input$hier_find_btn, {
+      perform_find()
+    })
+
+    observeEvent(input$hier_find_enter, {
+      perform_find()
     })
 
     observeEvent(input$hier_find_next, {
-      if (length(rv$find_matches) == 0) {
-        showNotification("Use Find first.", type = "message")
-        return()
-      }
-      rv$find_index <- if (rv$find_index >= length(rv$find_matches)) 1L else rv$find_index + 1L
-      select_node_by_id(rv$find_matches[rv$find_index])
+      move_find(1L)
+    })
+
+    observeEvent(input$hier_find_next_key, {
+      move_find(1L)
     })
 
     observeEvent(input$hier_find_prev, {
-      if (length(rv$find_matches) == 0) {
-        showNotification("Use Find first.", type = "message")
-        return()
-      }
-      rv$find_index <- if (rv$find_index <= 1L) length(rv$find_matches) else rv$find_index - 1L
-      select_node_by_id(rv$find_matches[rv$find_index])
+      move_find(-1L)
+    })
+
+    observeEvent(input$hier_find_prev_key, {
+      move_find(-1L)
     })
 
     observeEvent(input$su_add, {
