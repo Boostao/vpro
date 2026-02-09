@@ -183,9 +183,12 @@ mod_site_env_ui <- function(id) {
     }
 
   tagList(
-    card(
-      full_screen = TRUE,
-      card_header("Site & Environment"),
+        card(
+            full_screen = TRUE,
+            card_header(
+                "Site & Environment",
+                uiOutput(ns("env_context_hint"))
+            ),
       navset_card_tab(
         nav_panel("General", 
             layout_columns(
@@ -273,6 +276,11 @@ mod_site_env_server <- function(id, sys_state, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
+    output$env_context_hint <- renderUI({
+        req(sys_state$CurrSU)
+        tags$span(class = "text-muted ms-2", paste("Plot:", sys_state$CurrSU))
+    })
+
     # Reactive Data Store
     rv <- reactiveValues(env = NULL, humus = NULL, mineral = NULL)
 
