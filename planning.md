@@ -48,7 +48,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — needs `Nz()` safety audit
 - **VENUS XML export**: Button exists in UI, logic not ported
 - **Reporting**: 10/15 Access reports recreated as Quarto templates
-- **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env UI summary
+- **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
 - **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
 
 ### 🔲 Not Started

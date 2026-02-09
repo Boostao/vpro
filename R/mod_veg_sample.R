@@ -73,7 +73,13 @@ mod_veg_sample_ui <- function(id) {
         nav_panel("Layer B (Shrubs)", rhandsontable::rhandsontableOutput(ns("hot_veg_b"))),
         nav_panel("Layer C (Herbs)", rhandsontable::rhandsontableOutput(ns("hot_veg_c"))),
         nav_panel("Layer D (Moss)", rhandsontable::rhandsontableOutput(ns("hot_veg_d"))),
-        nav_panel("Audit", DT::DTOutput(ns("dt_audit_veg")))
+        nav_panel("Audit", DT::DTOutput(ns("dt_audit_veg"))),
+        nav_panel("Compliance",
+          actionButton(ns("veg_compliance"), "Run Compliance", class = "btn-secondary"),
+          textOutput(ns("veg_compliance_status")),
+          DT::DTOutput(ns("veg_compliance_summary")),
+          DT::DTOutput(ns("veg_compliance_details"))
+        )
       )
     )
   )
@@ -277,6 +283,30 @@ mod_veg_sample_server <- function(id, sys_state, con) {
       req(sys_state$CurrSU)
       audit <- fetch_audit_entries(con, plot_number = sys_state$CurrSU, project_id = sys_state$CurrProject, table_name = "Sample_Veg")
       DT::datatable(audit, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
+    })
+
+    veg_compliance <- reactiveVal(NULL)
+
+    observeEvent(input$veg_compliance, {
+      veg_compliance(run_compliance_checks(con, sys_state$CurrProject))
+    })
+
+    output$veg_compliance_status <- renderText({
+      result <- veg_compliance()
+      if (is.null(result)) return("")
+      if (isTRUE(result$passed)) "All checks passed" else "Issues found"
+    })
+
+    output$veg_compliance_summary <- DT::renderDT({
+      result <- veg_compliance()
+      req(result)
+      DT::datatable(result$summary_tibble, rownames = FALSE, options = list(dom = "t", ordering = FALSE))
+    })
+
+    output$veg_compliance_details <- DT::renderDT({
+      result <- veg_compliance()
+      req(result)
+      DT::datatable(result$detail_tibble, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
 
   })
