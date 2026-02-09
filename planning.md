@@ -159,7 +159,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 | # | Access Report | Quarto Template | VBA Module |
 |---|--------------|-----------------|------------|
 | 1 | `USysSiteUnitReport` | ✅ `site_summary.qmd` | `V7mdlReportsSiteUnitDetail` |
-| 2 | Short veg table | `reports/short_veg.qmd` | `V7mdlReportsShortVeg` |
+| 2 | Short veg table | ✅ `reports/short_veg.qmd` | `V7mdlReportsShortVeg` |
 | 3 | Long veg table | `reports/long_veg.qmd` | `V7mdlReportsLongVeg` |
 | 4 | Environment summary | `reports/env_summary.qmd` | `V7mdlReportsEnv` |
 | 5 | Short veg + env | `reports/short_veg_env.qmd` | `V7mdlReportsShortVegEnv` |
