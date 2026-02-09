@@ -85,7 +85,7 @@ log_audit_diff <- function(con, project_id, user, plot_number, table_name, old_r
   logged
 }
 
-fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL) {
+fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL, date_from = NULL, date_to = NULL) {
   if (!audit_table_exists(con)) return(data.frame())
 
   sql <- "SELECT Project, \"User\", PlotNumber, \"Table\", EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysAuditTrail"
@@ -103,6 +103,14 @@ fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, tabl
   if (!is.null(table_name)) {
     filters <- c(filters, "\"Table\" = ?")
     params <- c(params, list(table_name))
+  }
+  if (!is.null(date_from)) {
+    filters <- c(filters, "EditWhen >= ?")
+    params <- c(params, list(date_from))
+  }
+  if (!is.null(date_to)) {
+    filters <- c(filters, "EditWhen <= ?")
+    params <- c(params, list(date_to))
   }
 
   if (length(filters) > 0) {

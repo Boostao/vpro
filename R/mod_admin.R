@@ -62,6 +62,8 @@ mod_admin_ui <- function(id) {
                textInput(ns("audit_project"), "Project", value = ""),
                textInput(ns("audit_plot"), "Plot", value = ""),
                selectInput(ns("audit_table"), "Table", choices = c("All" = "")),
+              dateInput(ns("audit_from"), "From", value = NULL),
+              dateInput(ns("audit_to"), "To", value = NULL),
               actionButton(ns("audit_refresh"), "Refresh", class = "btn-secondary w-100 mt-2"),
               downloadButton(ns("audit_export"), "Export CSV", class = "btn-outline-primary w-100 mt-2")
              ),
@@ -375,12 +377,23 @@ mod_admin_server <- function(id, con) {
       project_filter <- trimws(input$audit_project)
       plot_filter <- trimws(input$audit_plot)
       table_filter <- input$audit_table
+      date_from <- input$audit_from
+      date_to <- input$audit_to
 
       project_value <- if (nzchar(project_filter)) project_filter else NULL
       plot_value <- if (nzchar(plot_filter)) plot_filter else NULL
       table_value <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else NULL
+      from_value <- if (!is.null(date_from) && !is.na(date_from)) as.POSIXct(date_from) else NULL
+      to_value <- if (!is.null(date_to) && !is.na(date_to)) as.POSIXct(date_to) else NULL
 
-      audit <- fetch_audit_entries(con, plot_number = plot_value, project_id = project_value, table_name = table_value)
+      audit <- fetch_audit_entries(
+        con,
+        plot_number = plot_value,
+        project_id = project_value,
+        table_name = table_value,
+        date_from = from_value,
+        date_to = to_value
+      )
       DT::datatable(audit, rownames = FALSE, options = list(pageLength = 12, ordering = FALSE))
     })
 
@@ -392,12 +405,23 @@ mod_admin_server <- function(id, con) {
         project_filter <- trimws(input$audit_project)
         plot_filter <- trimws(input$audit_plot)
         table_filter <- input$audit_table
+        date_from <- input$audit_from
+        date_to <- input$audit_to
 
         project_value <- if (nzchar(project_filter)) project_filter else NULL
         plot_value <- if (nzchar(plot_filter)) plot_filter else NULL
         table_value <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else NULL
+        from_value <- if (!is.null(date_from) && !is.na(date_from)) as.POSIXct(date_from) else NULL
+        to_value <- if (!is.null(date_to) && !is.na(date_to)) as.POSIXct(date_to) else NULL
 
-        audit <- fetch_audit_entries(con, plot_number = plot_value, project_id = project_value, table_name = table_value)
+        audit <- fetch_audit_entries(
+          con,
+          plot_number = plot_value,
+          project_id = project_value,
+          table_name = table_value,
+          date_from = from_value,
+          date_to = to_value
+        )
         utils::write.csv(audit, file, row.names = FALSE)
       }
     )
