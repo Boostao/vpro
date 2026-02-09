@@ -1,4 +1,4 @@
-save_site_env_header <- function(con, plot_id, fields) {
+save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user = NULL) {
     fields <- lapply(fields, function(value) {
         if (is.null(value) || length(value) == 0) {
             NA
@@ -18,6 +18,8 @@ save_site_env_header <- function(con, plot_id, fields) {
         "mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=?",
         "WHERE plotnumber=?"
     )
+
+    existing <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
 
     res <- DBI::dbExecute(con, sql, list(
         fields$`_location`,
@@ -63,7 +65,20 @@ save_site_env_header <- function(con, plot_id, fields) {
             fields$nutrientregime,
             fields$sitenotes
         ))
+        if (nrow(existing) == 0) {
+            for (field_name in names(fields)) {
+                log_audit_change(con, project_id, user, plot_id, "Sample_Env", field_name, NA, fields[[field_name]])
+            }
+        }
         return("inserted")
+    }
+
+    if (nrow(existing) > 0) {
+        old_row <- existing[1, , drop = FALSE]
+        for (field_name in names(fields)) {
+            if (!(field_name %in% names(old_row))) next
+            log_audit_change(con, project_id, user, plot_id, "Sample_Env", field_name, old_row[[field_name]][1], fields[[field_name]])
+        }
     }
 
     "updated"
@@ -100,6 +115,10 @@ get_hot_selected_row <- function(selection) {
 
 mod_site_env_ui <- function(id) {
   ns <- NS(id)
+    tab_input <- function(tag, index) {
+        tagAppendAttributes(tag, tabindex = index)
+    }
+
   tagList(
     card(
       full_screen = TRUE,
@@ -107,42 +126,49 @@ mod_site_env_ui <- function(id) {
       navset_card_tab(
         nav_panel("General", 
             layout_columns(
-              textInput(ns("env_location"), "Location"),
-              dateInput(ns("env_date"), "Date", value = NULL),
-              textInput(ns("env_surveyor"), "Surveyor"),
+                            tab_input(textInput(ns("env_location"), "Location"), 1),
+                            tab_input(dateInput(ns("env_date"), "Date", value = NULL), 2),
+                            tab_input(textInput(ns("env_surveyor"), "Surveyor"), 3),
               col_widths = c(6, 3, 3)
             ),
             layout_columns(
-               numericInput(ns("env_lat"), "Latitude", value=0),
-               numericInput(ns("env_long"), "Longitude", value=0),
-               textInput(ns("env_utme"), "UTM Easting"),
-               textInput(ns("env_utmn"), "UTM Northing"),
+                             tab_input(numericInput(ns("env_lat"), "Latitude", value=0), 4),
+                             tab_input(numericInput(ns("env_long"), "Longitude", value=0), 5),
+                             tab_input(textInput(ns("env_utme"), "UTM Easting"), 6),
+                             tab_input(textInput(ns("env_utmn"), "UTM Northing"), 7),
                col_widths = c(3, 3, 3, 3)
             ),
             layout_columns(
-               numericInput(ns("env_elev"), "Elevation (m)", value=0),
-               numericInput(ns("env_slope"), "Slope (%)", value=0),
-               numericInput(ns("env_aspect"), "Aspect (deg)", value=0),
+                             tab_input(numericInput(ns("env_elev"), "Elevation (m)", value=0), 8),
+                             tab_input(numericInput(ns("env_slope"), "Slope (%)", value=0), 9),
+                             tab_input(numericInput(ns("env_aspect"), "Aspect (deg)", value=0), 10),
                col_widths = c(4, 4, 4)
             ),
             layout_columns(
-               selectInput(ns("env_meso"), "Meso Slope", choices=NULL),
-               selectInput(ns("env_shape"), "Surface Shape", choices=NULL),
-               selectInput(ns("env_moisture"), "Moisture Regime", choices=NULL),
-               selectInput(ns("env_nutrient"), "Nutrient Regime", choices=NULL),
+                             tab_input(selectInput(ns("env_meso"), "Meso Slope", choices=NULL), 11),
+                             tab_input(selectInput(ns("env_shape"), "Surface Shape", choices=NULL), 12),
+                             tab_input(selectInput(ns("env_moisture"), "Moisture Regime", choices=NULL), 13),
+                             tab_input(selectInput(ns("env_nutrient"), "Nutrient Regime", choices=NULL), 14),
                col_widths = c(3, 3, 3, 3)
             ),
-            textAreaInput(ns("env_notes"), "Site Notes", width = "100%", height = "100px"),
-            div(class="mt-3", actionButton(ns("save_header"), "Save General Info", class="btn-primary"))
+                        tab_input(textAreaInput(ns("env_notes"), "Site Notes", width = "100%", height = "100px"), 15),
+                        div(class="mt-3", tab_input(actionButton(ns("save_header"), "Save General Info", class="btn-primary"), 16)),
+                        hr(),
+                        div(class = "d-flex align-items-center gap-2",
+                            actionButton(ns("run_compliance"), "Run Compliance", class = "btn-secondary"),
+                            textOutput(ns("compliance_status"))
+                        ),
+                        DT::DTOutput(ns("compliance_summary")),
+                        DT::DTOutput(ns("compliance_details"))
         ),
         nav_panel("Mensuration",
             layout_columns(
-                numericInput(ns("men_age"), "Stand Age (yrs)", value=0),
-                numericInput(ns("men_hgt"), "Stand Height (m)", value=0),
-                selectInput(ns("men_struct"), "Structural Stage", choices=NULL),
+                                tab_input(numericInput(ns("men_age"), "Stand Age (yrs)", value=0), 17),
+                                tab_input(numericInput(ns("men_hgt"), "Stand Height (m)", value=0), 18),
+                                tab_input(selectInput(ns("men_struct"), "Structural Stage", choices=NULL), 19),
                 col_widths = c(4, 4, 4)
             ),
-            div(class="mt-3", actionButton(ns("save_mensuration"), "Save Mensuration", class="btn-primary"))
+                        div(class="mt-3", tab_input(actionButton(ns("save_mensuration"), "Save Mensuration", class="btn-primary"), 20))
         ),
         nav_panel("Soil: Humus", 
             layout_columns(
@@ -276,7 +302,9 @@ mod_site_env_server <- function(id, sys_state, con) {
                     moistureregime = input$env_moisture,
                     nutrientregime = input$env_nutrient,
                     sitenotes = input$env_notes
-                )
+                ),
+                sys_state$CurrProject,
+                sys_state$User
             )
 
             if (result == "inserted") {
@@ -314,6 +342,32 @@ mod_site_env_server <- function(id, sys_state, con) {
         }, error = function(e) {
             showNotification(paste("Error saving mensuration:", e$message), type="error")
         })
+    })
+
+    # -- Compliance --
+    compliance_result <- reactiveVal(NULL)
+
+    observeEvent(input$run_compliance, {
+        project_id <- sys_state$CurrProject
+        compliance_result(run_compliance_checks(con, project_id))
+    })
+
+    output$compliance_status <- renderText({
+        result <- compliance_result()
+        if (is.null(result)) return("")
+        if (isTRUE(result$passed)) "All checks passed" else "Issues found"
+    })
+
+    output$compliance_summary <- DT::renderDT({
+        result <- compliance_result()
+        req(result)
+        DT::datatable(result$summary_tibble, rownames = FALSE, options = list(dom = "t", ordering = FALSE))
+    })
+
+    output$compliance_details <- DT::renderDT({
+        result <- compliance_result()
+        req(result)
+        DT::datatable(result$detail_tibble, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
 
     # -- Editable Grids --
@@ -364,6 +418,16 @@ mod_site_env_server <- function(id, sys_state, con) {
 
                 tryCatch({
                     save_soil_cell(con, table, record_id, col_name, typed_val)
+                    log_audit_change(
+                        con,
+                        sys_state$CurrProject,
+                        sys_state$User,
+                        current$plotnumber[row_idx],
+                        table,
+                        col_name,
+                        old_val,
+                        typed_val
+                    )
                 }, error = function(e) {
                     showNotification(paste("Update Error:", e$message), type = "error")
                 })

@@ -43,16 +43,28 @@ detect_hot_changes <- function(old_df, new_df) {
   changes
 }
 
+get_hot_selected_row <- function(selection) {
+  if (is.null(selection)) return(NULL)
+  if (is.list(selection) && !is.null(selection$r)) return(selection$r)
+  if (is.list(selection) && !is.null(selection$select) && !is.null(selection$select$r)) return(selection$select$r)
+  if (is.matrix(selection) && ncol(selection) >= 1) return(selection[1, 1])
+  NULL
+}
+
 mod_veg_sample_ui <- function(id) {
   ns <- NS(id)
+  tab_input <- function(tag, index) {
+    tagAppendAttributes(tag, tabindex = index)
+  }
+
   tagList(
     card(
       full_screen = TRUE,
       card_header(
         "Vegetation Data",
         div(class="float-end",
-            actionButton(ns("btn_add_spp"), "Add Species", icon=icon("plus"), class="btn-sm btn-primary"),
-            actionButton(ns("btn_del_spp"), "Delete Selected", icon=icon("trash"), class="btn-sm btn-danger")
+            tab_input(actionButton(ns("btn_add_spp"), "Add Species", icon=icon("plus"), class="btn-sm btn-primary"), 1),
+            tab_input(actionButton(ns("btn_del_spp"), "Delete Selected", icon=icon("trash"), class="btn-sm btn-danger"), 2)
         )
       ),
       navset_card_tab(
@@ -143,6 +155,16 @@ mod_veg_sample_server <- function(id, sys_state, con) {
 
         tryCatch({
           save_veg_cell(con, record_id, col_name, typed_val)
+          log_audit_change(
+            con,
+            sys_state$CurrProject,
+            sys_state$User,
+            rv$data$plotnumber[change$row],
+            "Sample_Veg",
+            col_name,
+            old_df[[col_name]][change$row],
+            typed_val
+          )
         }, error = function(e) {
           showNotification(paste("Error updating DB:", e$message), type = "error")
         })
@@ -208,59 +230,20 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     })
 
     # --- Delete Species Logic ---
-    observeEvent(input$btn_del_spp, {
-        req(rv$data)
-        
-        # Determine selected row based on active tab
-        idx <- NULL
-        tab <- input$layers_tab
-        if (is.null(tab)) return()
-        
-        if (tab == "Layer A (Trees)") idx <- input$dt_veg_a_rows_selected
-        else if (tab == "Layer B (Shrubs)") idx <- input$dt_veg_b_rows_selected
-        else if (tab == "Layer C (Herbs)") idx <- input$dt_veg_c_rows_selected
-        else if (tab == "Layer D (Moss)") idx <- input$dt_veg_d_rows_selected
-        
-        if (is.null(idx)) {
-            showNotification("Please select a species row to delete.", type="warning")
-            return()
-        }
-        
-        record_id <- rv$data$id[idx]
-        spp_name <- rv$data$species[idx]
-        
-        # Confirm Dialog? For now direct delete with notification
-        # Or better: Modal confirmation
-        showModal(modalDialog(
-            title = "Confirm Delete",
-            paste("Are you sure you want to delete", spp_name, "?"),
-            footer = tagList(
-                modalButton("Cancel"),
-                actionButton(ns("confirm_del_spp"), "Delete", class="btn-danger", onclick = sprintf("Shiny.setInputValue('%s', %d)", ns("del_id_conf"), record_id))
-            )
-        ))
-    })
-    
-    observeEvent(input$confirm_del_spp, {
-        # We need the ID. I used a trick in onclick, but pure Shiny way:
-        # Store pending delete ID in reactive
-        # Let's use a reactiveVal for pending delete
-    })
-    
     # Better approach for delete state
     rv_del <- reactiveValues(id = NULL)
     
     observeEvent(input$btn_del_spp, {
-        req(rv$data, input$layers_tab)
-        idx <- NULL
-        if (input$layers_tab == "Layer A (Trees)") idx <- input$dt_veg_a_rows_selected
-        else if (input$layers_tab == "Layer B (Shrubs)") idx <- input$dt_veg_b_rows_selected
-        else if (input$layers_tab == "Layer C (Herbs)") idx <- input$dt_veg_c_rows_selected
-        else if (input$layers_tab == "Layer D (Moss)") idx <- input$dt_veg_d_rows_selected
+      req(rv$data, input$layers_tab)
+      idx <- NULL
+      if (input$layers_tab == "Layer A (Trees)") idx <- get_hot_selected_row(input$hot_veg_a_select)
+      else if (input$layers_tab == "Layer B (Shrubs)") idx <- get_hot_selected_row(input$hot_veg_b_select)
+      else if (input$layers_tab == "Layer C (Herbs)") idx <- get_hot_selected_row(input$hot_veg_c_select)
+      else if (input$layers_tab == "Layer D (Moss)") idx <- get_hot_selected_row(input$hot_veg_d_select)
         
-        req(idx)
-        rv_del$id <- rv$data$id[idx]
-        rec_spp <- rv$data$species[idx]
+      req(idx)
+      rv_del$id <- rv$data$id[idx]
+      rec_spp <- rv$data$species[idx]
         
         showModal(modalDialog(
             title = "Delete Species",

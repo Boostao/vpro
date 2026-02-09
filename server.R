@@ -10,6 +10,7 @@ server <- function(input, output, session) {
   # Attach Reference Database
   # This makes USysTableOfLists available as 'lists.USysTableOfLists' or just 'USysTableOfLists' if unambiguous
   dbExecute(con, "ATTACH 'data/vpro_lists.duckdb' AS lists")
+  dbExecute(con, "ATTACH 'data/vpro_user.duckdb' AS user")
   
   # Ensure clean disconnect when session ends
   onSessionEnded(function() {

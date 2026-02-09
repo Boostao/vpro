@@ -28,24 +28,28 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Views**: `vw_USysAllVeg` (unpivot), `vw_USysEnv` (joined env) via `scripts/02_create_views.R`
 - **Schema fixes**: `scripts/04_fix_metadata_schema.R`, `scripts/05_fix_spplist_schema.R`
 - **Connection layer**: `R/db_connections.R` — factory, cloud ATTACH, helpers (323 lines)
-- **Global state**: `R/logic_state.R` — `init_sys_state()`, `set_project()`, `set_su()`
-- **Vegetation entry**: `R/mod_veg_sample.R` — 4-layer tabs, CRUD, species modal (259 lines)
-- **Site/Env entry**: `R/mod_site_env.R` — General/Mensuration/Soil tabs, full CRUD (456 lines)
+- **Global state**: `R/logic_state.R` — `init_sys_state()`, `set_project()`, `set_su()` + VBA globals
+- **Vegetation entry**: `R/mod_veg_sample.R` — 4-layer tabs, CRUD, species modal (rhandsontable)
+- **Site/Env entry**: `R/mod_site_env.R` — General/Mensuration/Soil tabs, full CRUD (rhandsontable)
 - **Administration**: `R/mod_admin.R` — Project Metadata CRUD + Code Maintenance (240 lines)
 - **Export**: `R/mod_export.R` — CSV/RDS with lumping and vegan pivot (130 lines)
 - **Images/Maps**: `R/mod_images.R` — Blob gallery + KML export (125 lines)
 - **Reporting**: `R/mod_reporting.R` — Single Quarto template (65 lines)
 - **Lumping**: `R/logic_lumping.R` — `apply_lumping()` species synonym resolution (53 lines)
 - **Veg data**: `R/logic_veg_data.R` — `get_vegetation_data()` with joins (50 lines)
-- **Test infra**: `tests/testthat/` — setup, helpers (in-memory DuckDB), ~15 db_connections tests
+- **Test infra**: `tests/testthat/` — setup, helpers (in-memory DuckDB), db_connections + core logic/module tests
+- **Keyboard shortcuts**: Ctrl+S / Ctrl+N via `shinyjs` (global save/new wiring)
+- **Tab order**: Site/Env General + Mensuration explicit `tabindex`, Vegetation action buttons
 - **Cloud infra**: docker-compose, PostgreSQL test schema, config.yml, DuckDB postgres ATTACH
 - **App shell**: `global.R`, `ui.R` (6 nav_panels + sidebar), `server.R` (connection, state, module wiring)
 
 ### ⚠️ Partial
-- **Global state**: 7/30 VBA globals ported (missing hierarchy, constancy, diagnostic flags)
+- **Global state**: remaining VBA globals to verify against `V7mdlGlobalDeclarations`
 - **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — needs `Nz()` safety audit
 - **VENUS XML export**: Button exists in UI, logic not ported
 - **Reporting**: 1/15 Access reports recreated as Quarto template
+- **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env UI summary
+- **Audit trail**: base helpers + logging for veg/soil/header edits
 
 ### 🔲 Not Started
 - **Hierarchy tools**: 5 VBA modules → `R/mod_hierarchy.R`
@@ -57,7 +61,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R`
 - **RDS publishing**: `R/logic_publish.R`
 - **14 remaining report types**: Short/Long veg, Env, Hierarchy diagram, QC, Lifeform, etc.
-- **Tests**: No tests for logic_state, logic_lumping, logic_veg_data, or any Shiny modules
+- **Tests**: view tests (`vw_USysAllVeg`, `vw_USysEnv`) and compliance engine tests
 
 ---
 
