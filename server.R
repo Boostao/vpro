@@ -121,6 +121,9 @@ server <- function(input, output, session) {
 
   # Merge Module
   mod_merge_server("merge", state, con)
+
+  # Auth Module
+  mod_auth_server("auth", state, con)
   
   # Images & Maps Module
   mod_images_server("imgs", state, con)

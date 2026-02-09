@@ -34,6 +34,7 @@ source("R/mod_import.R")
 source("R/mod_hierarchy.R")
 source("R/mod_upload.R")
 source("R/mod_merge.R")
+source("R/mod_auth.R")
 
 # Note: The actual 'SysState' object is initialized in server.R 
 # because it must be reactive and unique to the session.

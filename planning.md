@@ -57,7 +57,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Diagnostics/QC**: `V7mdlDiagnostic`, validation reports → `R/logic_compliance.R`
 - **Audit trail**: `V7mdlAudit` → `R/logic_audit.R`
 - **Cloud sync**: `R/logic_sync.R` (architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`)
-- **Auth/RBAC**: `R/mod_auth.R`
+- **Auth/RBAC**: `R/mod_auth.R` (UI shell)
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)
 - **RDS publishing**: `R/logic_publish.R`
 - **14 remaining report types**: Short/Long veg, Env, Hierarchy diagram, QC, Lifeform, etc.

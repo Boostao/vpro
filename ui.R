@@ -37,6 +37,9 @@ ui <- page_navbar(
   nav_panel("Merge",
     mod_merge_ui("merge")
   ),
+  nav_panel("Auth",
+    mod_auth_ui("auth")
+  ),
   nav_panel("Images & Maps",
     mod_images_ui("imgs")
   ),
