@@ -321,7 +321,9 @@ mod_hierarchy_ui <- function(id) {
           layout_columns(
             textInput(ns("hier_find"), "Find Node", placeholder = "Enter name"),
             actionButton(ns("hier_find_btn"), "Find", class = "btn-outline-secondary"),
-            col_widths = c(8, 2)
+            actionButton(ns("hier_find_prev"), "Prev", class = "btn-outline-secondary"),
+            actionButton(ns("hier_find_next"), "Next", class = "btn-outline-secondary"),
+            col_widths = c(6, 2, 2, 2)
           ),
           verbatimTextOutput(ns("merge_preview")),
           shinyTree::shinyTreeOutput(ns("hier_tree"), height = "600px"),
@@ -354,7 +356,10 @@ mod_hierarchy_server <- function(id, state, con) {
       selected_path = NULL,
       selected_id = NA_integer_,
       orphan_count = 0L,
-      su_mode = "plots"
+      su_mode = "plots",
+      find_matches = integer(0),
+      find_index = 0L,
+      find_query = ""
     )
 
     load_hierarchy <- function() {
@@ -1014,6 +1019,18 @@ mod_hierarchy_server <- function(id, state, con) {
       updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
     })
 
+    select_node_by_id <- function(node_id) {
+      if (is.na(node_id)) return(FALSE)
+      idx <- which(rv$data$ID == node_id)
+      if (length(idx) == 0) return(FALSE)
+      rv$selected_id <- node_id
+      rv$selected_path <- get_node_path(rv$data, node_id)
+      updateTextInput(session, "hier_name", value = rv$data$Name[idx[1]])
+      parent_id <- rv$data$Parent[idx[1]]
+      updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
+      TRUE
+    }
+
     observeEvent(input$hier_find_btn, {
       req(rv$data)
       query <- trimws(input$hier_find)
@@ -1024,17 +1041,38 @@ mod_hierarchy_server <- function(id, state, con) {
         match_idx <- which(grepl(query, rv$data$Name, ignore.case = TRUE))
       }
       if (length(match_idx) == 0) {
+        rv$find_matches <- integer(0)
+        rv$find_index <- 0L
+        rv$find_query <- query
         showNotification("No matching node found.", type = "warning")
         return()
       }
 
-      node_id <- rv$data$ID[match_idx[1]]
-      rv$selected_id <- node_id
-      rv$selected_path <- get_node_path(rv$data, node_id)
-      updateTextInput(session, "hier_name", value = rv$data$Name[match_idx[1]])
-      parent_id <- rv$data$Parent[match_idx[1]]
-      updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
-      showNotification("Node selected.", type = "message")
+      rv$find_matches <- rv$data$ID[match_idx]
+      rv$find_index <- 1L
+      rv$find_query <- query
+
+      if (select_node_by_id(rv$find_matches[rv$find_index])) {
+        showNotification("Node selected.", type = "message")
+      }
+    })
+
+    observeEvent(input$hier_find_next, {
+      if (length(rv$find_matches) == 0) {
+        showNotification("Use Find first.", type = "message")
+        return()
+      }
+      rv$find_index <- if (rv$find_index >= length(rv$find_matches)) 1L else rv$find_index + 1L
+      select_node_by_id(rv$find_matches[rv$find_index])
+    })
+
+    observeEvent(input$hier_find_prev, {
+      if (length(rv$find_matches) == 0) {
+        showNotification("Use Find first.", type = "message")
+        return()
+      }
+      rv$find_index <- if (rv$find_index <= 1L) length(rv$find_matches) else rv$find_index - 1L
+      select_node_by_id(rv$find_matches[rv$find_index])
     })
 
     observeEvent(input$su_add, {
