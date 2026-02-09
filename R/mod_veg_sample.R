@@ -80,7 +80,10 @@ mod_veg_sample_ui <- function(id) {
         nav_panel("Layer B (Shrubs)", rhandsontable::rhandsontableOutput(ns("hot_veg_b"))),
         nav_panel("Layer C (Herbs)", rhandsontable::rhandsontableOutput(ns("hot_veg_c"))),
         nav_panel("Layer D (Moss)", rhandsontable::rhandsontableOutput(ns("hot_veg_d"))),
-        nav_panel("Audit", DT::DTOutput(ns("dt_audit_veg"))),
+        nav_panel("Audit",
+          selectInput(ns("veg_audit_table"), "Table", choices = c("Sample_Veg")),
+          DT::DTOutput(ns("dt_audit_veg"))
+        ),
         nav_panel("Compliance",
           actionButton(ns("veg_compliance"), "Run Compliance", class = "btn-secondary"),
           textOutput(ns("veg_compliance_status")),
@@ -341,7 +344,9 @@ mod_veg_sample_server <- function(id, sys_state, con) {
 
     output$dt_audit_veg <- DT::renderDT({
       req(sys_state$CurrSU)
-      audit <- fetch_audit_entries(con, plot_number = sys_state$CurrSU, project_id = sys_state$CurrProject, table_name = "Sample_Veg")
+      table_filter <- input$veg_audit_table
+      table_name <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else "Sample_Veg"
+      audit <- fetch_audit_entries(con, plot_number = sys_state$CurrSU, project_id = sys_state$CurrProject, table_name = table_name)
       DT::datatable(audit, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
 

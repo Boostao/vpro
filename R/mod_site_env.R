@@ -261,8 +261,9 @@ mod_site_env_ui <- function(id) {
             rhandsontable::rhandsontableOutput(ns("hot_mineral"))
                 ),
                 nav_panel("Audit",
-                        DT::DTOutput(ns("dt_audit_env"))
-        )
+                    selectInput(ns("env_audit_table"), "Table", choices = c("All" = "", "Sample_Env", "Sample_Humus", "Sample_Mineral")),
+                    DT::DTOutput(ns("dt_audit_env"))
+                ),
       )
     )
   )
@@ -489,7 +490,14 @@ mod_site_env_server <- function(id, sys_state, con) {
 
     output$dt_audit_env <- DT::renderDT({
         req(sys_state$CurrSU)
-        audit <- fetch_audit_entries(con, plot_number = sys_state$CurrSU, project_id = sys_state$CurrProject)
+                table_filter <- input$env_audit_table
+                table_name <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else NULL
+                audit <- fetch_audit_entries(
+                    con,
+                    plot_number = sys_state$CurrSU,
+                    project_id = sys_state$CurrProject,
+                    table_name = table_name
+                )
         DT::datatable(audit, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
 

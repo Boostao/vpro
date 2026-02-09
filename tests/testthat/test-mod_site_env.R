@@ -1,6 +1,7 @@
 # Tests for Site & Environment module
 
 source(here::here("R", "logic_state.R"))
+source(here::here("R", "logic_audit.R"))
 source(here::here("R", "mod_site_env.R"))
 
 setup_site_env_tables <- function(con) {
