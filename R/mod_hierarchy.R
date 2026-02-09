@@ -271,7 +271,9 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("su_add"), "Add Row", class = "btn-primary"),
             actionButton(ns("su_delete"), "Delete Selected", class = "btn-danger"),
             actionButton(ns("su_refresh"), "Refresh", class = "btn-secondary"),
-            col_widths = c(2, 2, 2)
+            actionButton(ns("su_show_units"), "Show Units", class = "btn-outline-secondary"),
+            actionButton(ns("su_show_plots"), "Show Plots", class = "btn-outline-secondary"),
+            col_widths = c(2, 2, 2, 2, 2)
           ),
           rhandsontable::rhandsontableOutput(ns("su_hot")),
           verbatimTextOutput(ns("su_status"))
@@ -283,7 +285,15 @@ mod_hierarchy_ui <- function(id) {
 
 mod_hierarchy_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
-    rv <- reactiveValues(data = NULL, clipboard = NULL, su = NULL, su_status = "", selected_path = NULL, orphan_count = 0L)
+    rv <- reactiveValues(
+      data = NULL,
+      clipboard = NULL,
+      su = NULL,
+      su_status = "",
+      selected_path = NULL,
+      orphan_count = 0L,
+      su_mode = "plots"
+    )
 
     load_hierarchy <- function() {
       if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) return(data.frame())
@@ -299,11 +309,16 @@ mod_hierarchy_server <- function(id, state, con) {
       DBI::dbGetQuery(con, sql)
     }
 
-    load_su <- function() {
+    load_su <- function(mode = rv$su_mode) {
       if (!DBI::dbExistsTable(con, "Sample_SU")) {
         return(data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE))
       }
-      DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU ORDER BY PlotNumber")
+      if (identical(mode, "units")) {
+        units <- DBI::dbGetQuery(con, "SELECT DISTINCT SiteUnit FROM Sample_SU ORDER BY SiteUnit")
+        data.frame(PlotNumber = "", SiteUnit = units$SiteUnit, stringsAsFactors = FALSE)
+      } else {
+        DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU ORDER BY PlotNumber")
+      }
     }
 
     refresh_tree <- function() {
@@ -371,11 +386,17 @@ mod_hierarchy_server <- function(id, state, con) {
 
     output$su_hot <- rhandsontable::renderRHandsontable({
       req(rv$su)
-      rhandsontable::rhandsontable(rv$su, rowHeaders = FALSE, stretchH = "all")
+      read_only <- identical(rv$su_mode, "units")
+      rhandsontable::rhandsontable(rv$su, rowHeaders = FALSE, stretchH = "all", readOnly = read_only)
     })
 
     output$su_status <- renderText({
-      rv$su_status
+      mode_label <- if (identical(rv$su_mode, "units")) "Site units" else "Plots"
+      if (nzchar(rv$su_status)) {
+        paste(mode_label, "|", rv$su_status)
+      } else {
+        mode_label
+      }
     })
 
     get_hot_selected_row <- function(selection) {
@@ -543,8 +564,10 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_view_user_list, {
+      rv$su_mode <- "units"
+      rv$su <- load_su("units")
+      rv$su_status <- "Showing distinct site units."
       bslib::nav_select("hier_tabs", "SU Table", session = session)
-      showNotification("Master SU list view is not yet implemented.", type = "message")
     })
 
     observeEvent(input$hier_view_plot_data, {
@@ -607,6 +630,9 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_view_su_table, {
+      rv$su_mode <- "plots"
+      rv$su <- load_su("plots")
+      rv$su_status <- ""
       bslib::nav_select("hier_tabs", "SU Table", session = session)
     })
 
@@ -817,11 +843,19 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_add, {
+      if (identical(rv$su_mode, "units")) {
+        showNotification("Switch to plot view to edit.", type = "warning")
+        return()
+      }
       if (is.null(rv$su)) rv$su <- load_su()
       rv$su <- rbind(rv$su, data.frame(PlotNumber = "", SiteUnit = "", stringsAsFactors = FALSE))
     })
 
     observeEvent(input$su_delete, {
+      if (identical(rv$su_mode, "units")) {
+        showNotification("Switch to plot view to edit.", type = "warning")
+        return()
+      }
       req(rv$su)
       row_idx <- get_hot_selected_row(input$su_hot_select)
       req(row_idx)
@@ -841,6 +875,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_hot, {
+      if (identical(rv$su_mode, "units")) return()
       req(rv$su)
       new_df <- rhandsontable::hot_to_r(input$su_hot)
       if (!all(c("PlotNumber", "SiteUnit") %in% names(new_df))) return()
@@ -916,6 +951,18 @@ mod_hierarchy_server <- function(id, state, con) {
         rv$su <- load_su()
         rv$su_status <- "SU table updated."
       }
+    })
+
+    observeEvent(input$su_show_units, {
+      rv$su_mode <- "units"
+      rv$su <- load_su("units")
+      rv$su_status <- "Showing distinct site units."
+    })
+
+    observeEvent(input$su_show_plots, {
+      rv$su_mode <- "plots"
+      rv$su <- load_su("plots")
+      rv$su_status <- ""
     })
   })
 }
