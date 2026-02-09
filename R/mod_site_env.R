@@ -728,6 +728,18 @@ mod_site_env_server <- function(id, sys_state, con) {
             tryCatch({
                 dbExecute(con, sql, values)
                 showNotification("Record added.", type="message")
+                for (field_name in setdiff(names(fields), "id")) {
+                    log_audit_change(
+                        con,
+                        sys_state$CurrProject,
+                        sys_state$User,
+                        fields$plotnumber,
+                        table,
+                        field_name,
+                        NA,
+                        fields[[field_name]]
+                    )
+                }
                 # Refresh Data
                 if(table == "Sample_Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
                 if(table == "Sample_Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
@@ -746,8 +758,25 @@ mod_site_env_server <- function(id, sys_state, con) {
             values <- c(unname(update_fields), id)
             
             tryCatch({
+                before_row <- dbGetQuery(con, sprintf("SELECT * FROM %s WHERE id = ?", table), list(id))
                 dbExecute(con, sql, values)
                 showNotification("Record updated.", type="message")
+                if (nrow(before_row) > 0) {
+                    after_row <- before_row
+                    for (field_name in names(update_fields)) {
+                        after_row[[field_name]] <- update_fields[[field_name]]
+                    }
+                    log_audit_diff(
+                        con,
+                        sys_state$CurrProject,
+                        sys_state$User,
+                        fields$plotnumber,
+                        table,
+                        before_row,
+                        after_row,
+                        fields = names(update_fields)
+                    )
+                }
                 # Refresh Data
                 if(table == "Sample_Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
                 if(table == "Sample_Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
