@@ -48,14 +48,13 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **VENUS XML export**: XML export implemented with schema-ordered columns, DMS derivations, prefixing, project filtering, and expanded tests; remaining Access field transforms TBD
 - **Reporting**: 15/15 Access reports recreated as Quarto templates; parameter parity and VBA logic ports still in progress
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
-- **Audit trail**: base helpers + logging for veg/soil/header edits + master audit helper + master audit viewer + basic Audit tabs
+- **Audit trail**: core helpers + logging for veg/soil/header edits + master audit helper + master audit viewer + basic Audit tabs
 - **Master site unit list tools**: admin editor + master audit logging (lists schema)
 - **Import engine**: CSV/ZIP analysis with validation summary, guarded import button, compliance-gated rollback, and expanded test coverage
 - **Hierarchy tools**: tree CRUD, move/delete, copy/paste subtree, merge preview + duplicate handling + rekeyed merge, sibling ordering, find shortcuts, orphan repair, clip + below-breaks views, SU table modes + env sync + filter builders + master list
 - **Diagnostics/QC**: diagnostic helper functions (presence class + diagnosis + matrix runner) in `R/logic_diagnostic.R`; live matrix builder + UI/report wiring pending
 
 ### 🔲 Not Started
-- **Audit trail**: `V7mdlAudit` → `R/logic_audit.R`
 - **Cloud sync**: `R/logic_sync.R` (architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`, stub added)
 - **Auth/RBAC**: `R/mod_auth.R` (UI shell)
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)

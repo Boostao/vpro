@@ -3,7 +3,8 @@
 audit_table_name <- "user.USysAuditTrail"
 
 audit_table_exists <- function(con) {
-  DBI::dbExistsTable(con, audit_table_name)
+  DBI::dbExistsTable(con, DBI::Id(schema = "user", table = "USysAuditTrail")) ||
+    DBI::dbExistsTable(con, audit_table_name)
 }
 
 ensure_audit_table <- function(con) {
