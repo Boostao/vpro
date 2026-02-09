@@ -58,3 +58,30 @@ log_audit_change <- function(con, project_id, user, plot_number, table_name, fie
 
   invisible(TRUE)
 }
+
+fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL) {
+  if (!audit_table_exists(con)) return(data.frame())
+
+  sql <- "SELECT Project, \"User\", PlotNumber, \"Table\", EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysAuditTrail"
+  filters <- c()
+  params <- list()
+
+  if (!is.null(plot_number)) {
+    filters <- c(filters, "PlotNumber = ?")
+    params <- c(params, list(plot_number))
+  }
+  if (!is.null(project_id)) {
+    filters <- c(filters, "Project = ?")
+    params <- c(params, list(project_id))
+  }
+  if (!is.null(table_name)) {
+    filters <- c(filters, "\"Table\" = ?")
+    params <- c(params, list(table_name))
+  }
+
+  if (length(filters) > 0) {
+    sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
+  }
+
+  DBI::dbGetQuery(con, sql, params)
+}

@@ -189,6 +189,9 @@ mod_site_env_ui <- function(id) {
                )
             ),
             rhandsontable::rhandsontableOutput(ns("hot_mineral"))
+                ),
+                nav_panel("Audit",
+                        DT::DTOutput(ns("dt_audit_env"))
         )
       )
     )
@@ -368,6 +371,12 @@ mod_site_env_server <- function(id, sys_state, con) {
         result <- compliance_result()
         req(result)
         DT::datatable(result$detail_tibble, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
+    })
+
+    output$dt_audit_env <- DT::renderDT({
+        req(sys_state$CurrSU)
+        audit <- fetch_audit_entries(con, plot_number = sys_state$CurrSU, project_id = sys_state$CurrProject)
+        DT::datatable(audit, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
 
     # -- Editable Grids --

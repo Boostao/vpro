@@ -30,6 +30,8 @@ source("R/mod_veg_sample.R")
 source("R/mod_site_env.R")
 source("R/mod_export.R")
 source("R/mod_reporting.R")
+source("R/mod_import.R")
+source("R/mod_hierarchy.R")
 
 # Note: The actual 'SysState' object is initialized in server.R 
 # because it must be reactive and unique to the session.

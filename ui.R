@@ -28,11 +28,17 @@ ui <- page_navbar(
   nav_panel("Export",
     mod_export_ui("export")
   ),
+  nav_panel("Import",
+    mod_import_ui("import")
+  ),
   nav_panel("Images & Maps",
     mod_images_ui("imgs")
   ),
   nav_panel("Reports",
     mod_reporting_ui("report")
+  ),
+  nav_panel("Hierarchy",
+    mod_hierarchy_ui("hier")
   ),
   nav_panel("Administration", 
     mod_admin_ui("admin")

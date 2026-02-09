@@ -72,7 +72,8 @@ mod_veg_sample_ui <- function(id) {
         nav_panel("Layer A (Trees)", rhandsontable::rhandsontableOutput(ns("hot_veg_a"))),
         nav_panel("Layer B (Shrubs)", rhandsontable::rhandsontableOutput(ns("hot_veg_b"))),
         nav_panel("Layer C (Herbs)", rhandsontable::rhandsontableOutput(ns("hot_veg_c"))),
-        nav_panel("Layer D (Moss)", rhandsontable::rhandsontableOutput(ns("hot_veg_d")))
+        nav_panel("Layer D (Moss)", rhandsontable::rhandsontableOutput(ns("hot_veg_d"))),
+        nav_panel("Audit", DT::DTOutput(ns("dt_audit_veg")))
       )
     )
   )
@@ -270,6 +271,12 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         }, error = function(e) {
             showNotification(paste("Delete Error:", e$message), type="error")
         })
+    })
+
+    output$dt_audit_veg <- DT::renderDT({
+      req(sys_state$CurrSU)
+      audit <- fetch_audit_entries(con, plot_number = sys_state$CurrSU, project_id = sys_state$CurrProject, table_name = "Sample_Veg")
+      DT::datatable(audit, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
 
   })

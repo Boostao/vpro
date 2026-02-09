@@ -49,11 +49,11 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **VENUS XML export**: Button exists in UI, logic not ported
 - **Reporting**: 1/15 Access reports recreated as Quarto template
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env UI summary
-- **Audit trail**: base helpers + logging for veg/soil/header edits
+- **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
 
 ### 🔲 Not Started
-- **Hierarchy tools**: 5 VBA modules → `R/mod_hierarchy.R`
-- **Import engine**: 12+ VBA modules → `R/mod_import.R`
+- **Hierarchy tools**: 5 VBA modules → `R/mod_hierarchy.R` (UI shell only)
+- **Import engine**: 12+ VBA modules → `R/mod_import.R` (UI shell + file preview)
 - **Diagnostics/QC**: `V7mdlDiagnostic`, validation reports → `R/logic_compliance.R`
 - **Audit trail**: `V7mdlAudit` → `R/logic_audit.R`
 - **Cloud sync**: `R/logic_sync.R` (architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`)

@@ -112,10 +112,16 @@ server <- function(input, output, session) {
   
   # Export Module
   mod_export_server("export", state, con)
+
+  # Import Module
+  mod_import_server("import", state, con)
   
   # Images & Maps Module
   mod_images_server("imgs", state, con)
   
   # Reporting Module
   mod_reporting_server("report", state)
+
+  # Hierarchy Module
+  mod_hierarchy_server("hier", state, con)
 }
