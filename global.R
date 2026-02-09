@@ -4,6 +4,8 @@ library(dplyr)
 library(dbplyr)
 library(bslib)
 library(DT)
+library(rhandsontable)
+library(shinyjs)
 
 # Database Connection
 # Using a function to get a fresh connection or manage a pool object

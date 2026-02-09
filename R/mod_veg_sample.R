@@ -1,3 +1,48 @@
+veg_numeric_cols <- c(
+  "height1", "height2", "height3", "height4", "height5", "height6",
+  "heighta", "heightb", "totala", "totalb"
+)
+
+coerce_veg_value <- function(col_name, value) {
+  if (col_name %in% veg_numeric_cols) {
+    return(suppressWarnings(as.numeric(value)))
+  }
+  if (is.null(value) || length(value) == 0 || is.na(value)) {
+    return(NA)
+  }
+  as.character(value)
+}
+
+save_veg_cell <- function(con, record_id, col_name, value) {
+  sql <- sprintf("UPDATE Sample_Veg SET %s = ? WHERE id = ?", col_name)
+  DBI::dbExecute(con, sql, list(value, record_id))
+}
+
+detect_hot_changes <- function(old_df, new_df) {
+  if (nrow(old_df) == 0 || nrow(new_df) == 0) return(list())
+  changes <- list()
+  cols <- intersect(names(old_df), names(new_df))
+
+  for (row_idx in seq_len(nrow(new_df))) {
+    for (col_name in cols) {
+      old_val <- old_df[[col_name]][row_idx]
+      new_val <- new_df[[col_name]][row_idx]
+
+      if (is.na(old_val) && is.na(new_val)) next
+      if (!is.na(old_val) && !is.na(new_val) && as.character(old_val) == as.character(new_val)) next
+      if (is.na(old_val) && nzchar(as.character(new_val)) == FALSE) next
+
+      changes[[length(changes) + 1]] <- list(
+        row = row_idx,
+        col = col_name,
+        value = new_val
+      )
+    }
+  }
+
+  changes
+}
+
 mod_veg_sample_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -12,10 +57,10 @@ mod_veg_sample_ui <- function(id) {
       ),
       navset_card_tab(
         id = ns("layers_tab"),
-        nav_panel("Layer A (Trees)", DTOutput(ns("dt_veg_a"))),
-        nav_panel("Layer B (Shrubs)", DTOutput(ns("dt_veg_b"))),
-        nav_panel("Layer C (Herbs)", DTOutput(ns("dt_veg_c"))),
-        nav_panel("Layer D (Moss)", DTOutput(ns("dt_veg_d")))
+        nav_panel("Layer A (Trees)", rhandsontable::rhandsontableOutput(ns("hot_veg_a"))),
+        nav_panel("Layer B (Shrubs)", rhandsontable::rhandsontableOutput(ns("hot_veg_b"))),
+        nav_panel("Layer C (Herbs)", rhandsontable::rhandsontableOutput(ns("hot_veg_c"))),
+        nav_panel("Layer D (Moss)", rhandsontable::rhandsontableOutput(ns("hot_veg_d")))
       )
     )
   )
@@ -48,76 +93,66 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     display_cols_c <- c("species", "cover6", "height6")
     display_cols_d <- c("species", "cover7")
     
-    # --- Helper: Render DT ---
-    render_layer_dt <- function(cols) {
-      renderDT({
+    # --- Helper: Editable Grid ---
+
+    render_layer_hot <- function(cols) {
+      rhandsontable::renderRHandsontable({
         req(rv$data)
         valid_cols <- intersect(cols, names(rv$data))
-        d <- rv$data[, valid_cols, drop=FALSE]
-        
-        datatable(d, 
-                  selection = 'single', 
-                  editable = TRUE,
-                  rownames = FALSE,
-                  options = list(
-                    pageLength = 50, 
-                    dom = 't',
-                    ordering = FALSE
-                  )) %>% 
-          formatStyle(columns = valid_cols, fontSize = '90%')
-      })
-    }
-    
-    output$dt_veg_a <- render_layer_dt(display_cols_a)
-    output$dt_veg_b <- render_layer_dt(display_cols_b)
-    output$dt_veg_c <- render_layer_dt(display_cols_c)
-    output$dt_veg_d <- render_layer_dt(display_cols_d)
-    
-    # --- Helper: Update DB ---
-    update_data <- function(info, display_cols) {
-      req(sys_state$CurrSU, rv$data)
-      
-      i <- info$row 
-      j <- info$col 
-      v <- info$value
-      
-      col_idx_r <- j + 1
-      valid_cols <- intersect(display_cols, names(rv$data))
-      col_name <- valid_cols[col_idx_r]
-      
-      record_id <- rv$data$id[i]
-      
-      # Update Local State
-      # Simple type handling assuming numeric or text
-      current_val <- rv$data[i, col_name]
-      if (is.numeric(current_val) && !is.na(current_val)) {
-        v_typed <- suppressWarnings(as.numeric(v)) 
-        if(is.na(v_typed)) v_typed <- v # Fallback if cast fails? Or allow NA?
-      } else {
-        v_typed <- v
-      }
-      # Force numeric if column is known numeric (simplification)
-      if (col_name %in% c("cover1","cover2","cover3","cover4","cover5","cover6","cover7")) {
-          v_typed <- as.numeric(v)
-      }
+        d <- rv$data[, valid_cols, drop = FALSE]
 
-      rv$data[i, col_name] <- v_typed
-      
-      # Update DB (using shared con)
-      
-      sql <- sprintf("UPDATE Sample_Veg SET %s = ? WHERE id = ?", col_name)
-      
-      tryCatch({
-        dbExecute(con, sql, list(v_typed, record_id))
-      }, error = function(e) {
-        showNotification(paste("Error updating DB:", e$message), type = "error")
+        ht <- rhandsontable::rhandsontable(
+          d,
+          rowHeaders = FALSE,
+          useTypes = TRUE,
+          stretchH = "all"
+        )
+
+        for (col_name in veg_numeric_cols) {
+          if (col_name %in% valid_cols) {
+            ht <- rhandsontable::hot_col(ht, col = col_name, type = "numeric")
+          }
+        }
+
+        ht
       })
     }
-    
-    observeEvent(input$dt_veg_a_cell_edit, { update_data(input$dt_veg_a_cell_edit, display_cols_a) })
-    observeEvent(input$dt_veg_b_cell_edit, { update_data(input$dt_veg_b_cell_edit, display_cols_b) })
-    observeEvent(input$dt_veg_c_cell_edit, { update_data(input$dt_veg_c_cell_edit, display_cols_c) })
-    observeEvent(input$dt_veg_d_cell_edit, { update_data(input$dt_veg_d_cell_edit, display_cols_d) })
+
+    output$hot_veg_a <- render_layer_hot(display_cols_a)
+    output$hot_veg_b <- render_layer_hot(display_cols_b)
+    output$hot_veg_c <- render_layer_hot(display_cols_c)
+    output$hot_veg_d <- render_layer_hot(display_cols_d)
+
+    update_from_hot <- function(hot_input, display_cols) {
+      req(sys_state$CurrSU, rv$data, hot_input)
+
+      new_df <- rhandsontable::hot_to_r(hot_input)
+      valid_cols <- intersect(display_cols, names(rv$data))
+      old_df <- rv$data[, valid_cols, drop = FALSE]
+
+      if (nrow(new_df) != nrow(old_df)) return()
+
+      changes <- detect_hot_changes(old_df, new_df)
+      if (length(changes) == 0) return()
+
+      for (change in changes) {
+        record_id <- rv$data$id[change$row]
+        col_name <- change$col
+        typed_val <- coerce_veg_value(col_name, change$value)
+        rv$data[change$row, col_name] <- typed_val
+
+        tryCatch({
+          save_veg_cell(con, record_id, col_name, typed_val)
+        }, error = function(e) {
+          showNotification(paste("Error updating DB:", e$message), type = "error")
+        })
+      }
+    }
+
+    observeEvent(input$hot_veg_a, { update_from_hot(input$hot_veg_a, display_cols_a) })
+    observeEvent(input$hot_veg_b, { update_from_hot(input$hot_veg_b, display_cols_b) })
+    observeEvent(input$hot_veg_c, { update_from_hot(input$hot_veg_c, display_cols_c) })
+    observeEvent(input$hot_veg_d, { update_from_hot(input$hot_veg_d, display_cols_d) })
     
     # --- Add Species Logic ---
     observeEvent(input$btn_add_spp, {

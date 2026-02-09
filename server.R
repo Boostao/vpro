@@ -69,6 +69,34 @@ server <- function(input, output, session) {
       "Plot:    ", state$CurrSU
     )
   })
+
+  # 6.1 Keyboard Shortcuts
+  observeEvent(input$global_save, {
+    req(input$main_tabs)
+
+    if (input$main_tabs == "Site & Env") {
+      shinyjs::click("env-save_header")
+      shinyjs::click("env-save_mensuration")
+      showNotification("Saved site/env fields.", type = "message")
+      return()
+    }
+
+    if (input$main_tabs == "Vegetation") {
+      showNotification("Vegetation edits save automatically.", type = "message")
+      return()
+    }
+  })
+
+  observeEvent(input$global_new, {
+    req(input$main_tabs)
+
+    if (input$main_tabs == "Vegetation") {
+      shinyjs::click("veg-btn_add_spp")
+      return()
+    }
+
+    showNotification("No default New action for this tab.", type = "message")
+  })
   
   # 7. Initialize Sub-Modules
   mod_admin_server("admin", con)

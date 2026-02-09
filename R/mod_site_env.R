@@ -1,3 +1,103 @@
+save_site_env_header <- function(con, plot_id, fields) {
+    fields <- lapply(fields, function(value) {
+        if (is.null(value) || length(value) == 0) {
+            NA
+        } else {
+            value
+        }
+    })
+
+    d_save <- fields$date
+    if (is.null(d_save)) d_save <- NA
+    if (!is.na(d_save)) d_save <- as.character(d_save)
+
+    sql <- paste(
+        "UPDATE Sample_Env SET",
+        "_location=?, date=?, sitesurveyor=?, latitude=?, longitude=?,",
+        "utmeasting=?, utmnorthing=?, elevation=?, slopegradient=?, aspect=?,",
+        "mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=?",
+        "WHERE plotnumber=?"
+    )
+
+    res <- DBI::dbExecute(con, sql, list(
+        fields$`_location`,
+        d_save,
+        fields$sitesurveyor,
+        fields$latitude,
+        fields$longitude,
+        fields$utmeasting,
+        fields$utmnorthing,
+        fields$elevation,
+        fields$slopegradient,
+        fields$aspect,
+        fields$mesoslopeposition,
+        fields$surfaceshape,
+        fields$moistureregime,
+        fields$nutrientregime,
+        fields$sitenotes,
+        plot_id
+    ))
+
+    if (res == 0) {
+        sql_ins <- paste(
+            "INSERT INTO Sample_Env (plotnumber, _location, date, sitesurveyor, latitude,",
+            "longitude, utmeasting, utmnorthing, elevation, slopegradient, aspect,",
+            "mesoslopeposition, surfaceshape, moistureregime, nutrientregime, sitenotes)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        DBI::dbExecute(con, sql_ins, list(
+            plot_id,
+            fields$`_location`,
+            d_save,
+            fields$sitesurveyor,
+            fields$latitude,
+            fields$longitude,
+            fields$utmeasting,
+            fields$utmnorthing,
+            fields$elevation,
+            fields$slopegradient,
+            fields$aspect,
+            fields$mesoslopeposition,
+            fields$surfaceshape,
+            fields$moistureregime,
+            fields$nutrientregime,
+            fields$sitenotes
+        ))
+        return("inserted")
+    }
+
+    "updated"
+}
+
+soil_numeric_cols <- list(
+    Sample_Humus = c("upperdepth", "lowerdepth", "humusformph"),
+    Sample_Mineral = c("upperdepth", "lowerdepth", "percentcoarsefragstotal")
+)
+
+coerce_soil_value <- function(table, col_name, value) {
+    numeric_cols <- soil_numeric_cols[[table]]
+    if (!is.null(numeric_cols) && col_name %in% numeric_cols) {
+        return(suppressWarnings(as.numeric(value)))
+    }
+    if (is.null(value) || length(value) == 0 || is.na(value)) {
+        return(NA)
+    }
+    as.character(value)
+}
+
+save_soil_cell <- function(con, table, record_id, col_name, value) {
+    sql <- sprintf("UPDATE %s SET %s = ? WHERE id = ?", table, col_name)
+    DBI::dbExecute(con, sql, list(value, record_id))
+}
+
+get_hot_selected_row <- function(selection) {
+    if (is.null(selection)) return(NULL)
+    if (is.list(selection) && !is.null(selection$r)) return(selection$r)
+    if (is.list(selection) && !is.null(selection$select) && !is.null(selection$select$r)) return(selection$select$r)
+    if (is.matrix(selection) && ncol(selection) >= 1) return(selection[1, 1])
+    NULL
+}
+
 mod_site_env_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -52,7 +152,7 @@ mod_site_env_ui <- function(id) {
                    actionButton(ns("edit_humus"), "Edit Selected", icon=icon("pen"), class="btn-warning")
                )
             ),
-            DTOutput(ns("dt_humus"))
+            rhandsontable::rhandsontableOutput(ns("hot_humus"))
         ),
         nav_panel("Soil: Mineral", 
             layout_columns(
@@ -62,7 +162,7 @@ mod_site_env_ui <- function(id) {
                    actionButton(ns("edit_mineral"), "Edit Selected", icon=icon("pen"), class="btn-warning")
                )
             ),
-            DTOutput(ns("dt_mineral"))
+            rhandsontable::rhandsontableOutput(ns("hot_mineral"))
         )
       )
     )
@@ -75,6 +175,20 @@ mod_site_env_server <- function(id, sys_state, con) {
     
     # Reactive Data Store
     rv <- reactiveValues(env = NULL, humus = NULL, mineral = NULL)
+
+    safe_num <- function(value, default = NA_real_) {
+        if (is.null(value) || length(value) == 0 || is.na(value)) {
+            return(default)
+        }
+        as.numeric(value)
+    }
+
+    safe_chr <- function(value, default = "") {
+        if (is.null(value) || length(value) == 0 || is.na(value)) {
+            return(default)
+        }
+        as.character(value)
+    }
     
     # -- Load Data --
     observeEvent(sys_state$CurrSU, {
@@ -102,7 +216,7 @@ mod_site_env_server <- function(id, sys_state, con) {
             updateSelectInput(session, "env_nutrient", choices=c("", choices_nut), selected=rv$env$nutrientregime[1])
             updateSelectInput(session, "men_struct", choices=c("", choices_struct), selected=rv$env$structuralstage[1])
 
-            updateTextInput(session, "env_location", value = rv$env[["_location"]][1])
+            updateTextInput(session, "env_location", value = safe_chr(rv$env[["_location"]][1]))
             
             # Safe Date Handling
             d_val <- rv$env$date[1]
@@ -115,26 +229,25 @@ mod_site_env_server <- function(id, sys_state, con) {
                 updateDateInput(session, "env_date", value = NULL)
             }
             
-            updateTextInput(session, "env_surveyor", value = rv$env$sitesurveyor[1])
-            updateNumericInput(session, "env_lat", value = as.numeric(rv$env$latitude[1]))
-            updateNumericInput(session, "env_long", value = as.numeric(rv$env$longitude[1]))
-            updateTextInput(session, "env_utme", value = as.character(rv$env$utmeasting[1]))
-            updateTextInput(session, "env_utmn", value = as.character(rv$env$utmnorthing[1]))
+            updateTextInput(session, "env_surveyor", value = safe_chr(rv$env$sitesurveyor[1]))
+            updateNumericInput(session, "env_lat", value = safe_num(rv$env$latitude[1]))
+            updateNumericInput(session, "env_long", value = safe_num(rv$env$longitude[1]))
+            updateTextInput(session, "env_utme", value = safe_chr(rv$env$utmeasting[1]))
+            updateTextInput(session, "env_utmn", value = safe_chr(rv$env$utmnorthing[1]))
             
-            updateNumericInput(session, "env_elev", value = as.numeric(rv$env$elevation[1]))
-            updateNumericInput(session, "env_slope", value = as.numeric(rv$env$slopegradient[1]))
-            updateNumericInput(session, "env_aspect", value = as.numeric(rv$env$aspect[1]))
+            updateNumericInput(session, "env_elev", value = safe_num(rv$env$elevation[1]))
+            updateNumericInput(session, "env_slope", value = safe_num(rv$env$slopegradient[1]))
+            updateNumericInput(session, "env_aspect", value = safe_num(rv$env$aspect[1]))
             
-            updateTextAreaInput(session, "env_notes", value = rv$env$sitenotes[1])
+            updateTextAreaInput(session, "env_notes", value = safe_chr(rv$env$sitenotes[1]))
             
             # Mensuration
-            updateNumericInput(session, "men_age", value = as.numeric(rv$env$standage[1]))
+            updateNumericInput(session, "men_age", value = safe_num(rv$env$standage[1]))
             # sv_standheight is likely the column, or sv_standheightestmeas
             # Checking recent dbListFields: sv_standheightestmeas and sv_standheight are there.
             # Usually strict numbers go in standheight if available.
-            val_hgt <- rv$env$sv_standheight[1]
-            if(is.na(val_hgt)) val_hgt <- 0
-            updateNumericInput(session, "men_hgt", value = as.numeric(val_hgt))
+            val_hgt <- safe_num(rv$env$sv_standheight[1])
+            updateNumericInput(session, "men_hgt", value = val_hgt)
         }
     })
     
@@ -143,63 +256,36 @@ mod_site_env_server <- function(id, sys_state, con) {
         req(sys_state$CurrSU)
         plot_id <- as.character(sys_state$CurrSU)
         
-        # con provided by moduleServer arguments
-        
-        # Handle Date Logic for DB
-        d_save <- input$env_date
-        if(is.null(d_save)) d_save <- NA
-        if(!is.na(d_save)) d_save <- as.character(d_save)
-        
-        sql <- "UPDATE Sample_Env SET _location=?, date=?, sitesurveyor=?, latitude=?, longitude=?, utmeasting=?, utmnorthing=?, elevation=?, slopegradient=?, aspect=?, mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=? WHERE plotnumber=?"
-        
         tryCatch({
-            res <- dbExecute(con, sql, list(
-                input$env_location, 
-                d_save,
-                input$env_surveyor,
-                input$env_lat,
-                input$env_long,
-                input$env_utme,
-                input$env_utmn,
-                input$env_elev,
-                input$env_slope,
-                input$env_aspect,
-                input$env_meso,
-                input$env_shape,
-                input$env_moisture,
-                input$env_nutrient,
-                input$env_notes,
-                plot_id
-            ))
-            
-            if (res == 0) {
-                # Update failed (row doesn't exist), try INSERT
-                sql_ins <- "INSERT INTO Sample_Env (plotnumber, _location, date, sitesurveyor, latitude, longitude, utmeasting, utmnorthing, elevation, slopegradient, aspect, mesoslopeposition, surfaceshape, moistureregime, nutrientregime, sitenotes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                dbExecute(con, sql_ins, list(
-                    plot_id,
-                    input$env_location, 
-                    d_save,
-                    input$env_surveyor,
-                    input$env_lat,
-                    input$env_long,
-                    input$env_utme,
-                    input$env_utmn,
-                    input$env_elev,
-                    input$env_slope,
-                    input$env_aspect,
-                    input$env_meso,
-                    input$env_shape,
-                    input$env_moisture,
-                    input$env_nutrient,
-                    input$env_notes
-                ))
-                showNotification("Header created successfully.", type="message")
-                
-                # Update reactive value to ensure subsequent loads work
-                rv$env <- dbGetQuery(con, "SELECT * FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
+            result <- save_site_env_header(
+                con,
+                plot_id,
+                list(
+                    `_location` = input$env_location,
+                    date = input$env_date,
+                    sitesurveyor = input$env_surveyor,
+                    latitude = input$env_lat,
+                    longitude = input$env_long,
+                    utmeasting = input$env_utme,
+                    utmnorthing = input$env_utmn,
+                    elevation = input$env_elev,
+                    slopegradient = input$env_slope,
+                    aspect = input$env_aspect,
+                    mesoslopeposition = input$env_meso,
+                    surfaceshape = input$env_shape,
+                    moistureregime = input$env_moisture,
+                    nutrientregime = input$env_nutrient,
+                    sitenotes = input$env_notes
+                )
+            )
+
+            if (result == "inserted") {
+                showNotification("Header created successfully.", type = "message")
             } else {
-                showNotification("Header updated successfully.", type="message")
+                showNotification("Header updated successfully.", type = "message")
             }
+
+            rv$env <- dbGetQuery(con, "SELECT * FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
         }, error = function(e) {
             showNotification(paste("Error saving header:", e$message), type="error")
         })
@@ -230,25 +316,75 @@ mod_site_env_server <- function(id, sys_state, con) {
         })
     })
 
-    # -- Grid Rendering (Non-Editable) --
-    render_grid <- function(data_source, display_cols) {
-        renderDT({
+    # -- Editable Grids --
+    render_soil_hot <- function(data_source, display_cols) {
+        rhandsontable::renderRHandsontable({
             req(data_source())
             d <- data_source()
             valid_cols <- intersect(display_cols, names(d))
-            datatable(d[, valid_cols, drop=FALSE],
-                      selection = 'single', # Enable Row Selection
-                      editable = FALSE,     # Disable Grid Edit
-                      rownames = FALSE,
-                      options = list(dom='t', pageLength=50, ordering=FALSE))
+            view <- d[, valid_cols, drop = FALSE]
+
+            rhandsontable::rhandsontable(
+                view,
+                rowHeaders = FALSE,
+                useTypes = TRUE,
+                stretchH = "all"
+            )
         })
     }
 
     cols_humus <- c("horizon", "upperdepth", "lowerdepth", "humusstructuredegree", "humusstructurekind", "humusformph", "_comment")
-    output$dt_humus <- render_grid(reactive(rv$humus), cols_humus)
+    output$hot_humus <- render_soil_hot(reactive(rv$humus), cols_humus)
     
     cols_mineral <- c("horizon", "upperdepth", "lowerdepth", "texture", "percentcoarsefragstotal", "mineralstructureclass", "colour", "_comments")
-    output$dt_mineral <- render_grid(reactive(rv$mineral), cols_mineral)
+    output$hot_mineral <- render_soil_hot(reactive(rv$mineral), cols_mineral)
+
+    update_soil_from_hot <- function(hot_input, table, display_cols) {
+        req(hot_input)
+        new_df <- rhandsontable::hot_to_r(hot_input)
+
+        current <- if (table == "Sample_Humus") rv$humus else rv$mineral
+        req(current)
+        valid_cols <- intersect(display_cols, names(current))
+        old_df <- current[, valid_cols, drop = FALSE]
+
+        if (nrow(new_df) != nrow(old_df)) return()
+
+        for (row_idx in seq_len(nrow(new_df))) {
+            for (col_name in valid_cols) {
+                old_val <- old_df[[col_name]][row_idx]
+                new_val <- new_df[[col_name]][row_idx]
+
+                if (is.na(old_val) && is.na(new_val)) next
+                if (!is.na(old_val) && !is.na(new_val) && as.character(old_val) == as.character(new_val)) next
+                if (is.na(old_val) && nzchar(as.character(new_val)) == FALSE) next
+
+                record_id <- current$id[row_idx]
+                typed_val <- coerce_soil_value(table, col_name, new_val)
+
+                tryCatch({
+                    save_soil_cell(con, table, record_id, col_name, typed_val)
+                }, error = function(e) {
+                    showNotification(paste("Update Error:", e$message), type = "error")
+                })
+            }
+        }
+
+        if (table == "Sample_Humus") {
+            rv$humus <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
+        }
+        if (table == "Sample_Mineral") {
+            rv$mineral <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
+        }
+    }
+
+    observeEvent(input$hot_humus, {
+        update_soil_from_hot(input$hot_humus, "Sample_Humus", cols_humus)
+    })
+
+    observeEvent(input$hot_mineral, {
+        update_soil_from_hot(input$hot_mineral, "Sample_Mineral", cols_mineral)
+    })
 
     # -- Better Modal State Management --
     rv_modal <- reactiveValues(mode = "new", id = NULL, type = NULL)
@@ -260,8 +396,8 @@ mod_site_env_server <- function(id, sys_state, con) {
     })
     
     observeEvent(input$edit_humus, {
-        req(input$dt_humus_rows_selected)
-        row_idx <- input$dt_humus_rows_selected
+        row_idx <- get_hot_selected_row(input$hot_humus_select)
+        req(row_idx)
         record <- rv$humus[row_idx, ]
         rv_modal$mode <- "edit"
         rv_modal$id <- record$id
@@ -279,8 +415,8 @@ mod_site_env_server <- function(id, sys_state, con) {
     })
     
     observeEvent(input$edit_mineral, {
-        req(input$dt_mineral_rows_selected)
-        row_idx <- input$dt_mineral_rows_selected
+        row_idx <- get_hot_selected_row(input$hot_mineral_select)
+        req(row_idx)
         record <- rv$mineral[row_idx, ]
         rv_modal$mode <- "edit"
         rv_modal$id <- record$id
