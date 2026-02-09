@@ -163,7 +163,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 | 3 | Long veg table | ✅ `reports/long_veg.qmd` | `V7mdlReportsLongVeg` |
 | 4 | Environment summary | ✅ `reports/env_summary.qmd` | `V7mdlReportsEnv` |
 | 5 | Short veg + env | ✅ `reports/short_veg_env.qmd` | `V7mdlReportsShortVegEnv` |
-| 6 | QC report | `reports/quality_control.qmd` | `V7mdlReportsQualityControl` |
+| 6 | QC report | ✅ `reports/quality_control.qmd` | `V7mdlReportsQualityControl` |
 | 7 | Lifeform summary | `reports/lifeform.qmd` | `V7mdlReportsLifeform` |
 | 8 | Hierarchy diagram | `reports/hierarchy.qmd` | `V7mdlReportsHierarchyDiagram` |
 | 9 | Flat hierarchy | `reports/flat_hierarchy.qmd` | `V7mdlReportFlatHierarchy` |

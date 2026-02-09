@@ -1,0 +1,85 @@
+---
+title: "Quality Control"
+format:
+  html:
+    theme: journal
+params:
+  db_path: "../data/vpro.duckdb"
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+options(knitr.table.format = "html")
+con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+dbExecute(con, "ATTACH '../data/vpro_lists.duckdb' AS lists")
+```
+
+```{r queries, include=FALSE}
+missing_required <- dbGetQuery(
+  con,
+  "SELECT plotnumber, projectid, zone, subzone
+   FROM Sample_Env
+   WHERE plotnumber IS NULL
+      OR projectid IS NULL
+      OR zone IS NULL
+      OR subzone IS NULL"
+)
+
+range_issues <- dbGetQuery(
+  con,
+  "SELECT plotnumber, latitude, longitude, elevation
+   FROM Sample_Env
+   WHERE (latitude < 48 OR latitude > 60)
+      OR (longitude < -140 OR longitude > -114)
+      OR (elevation < 0 OR elevation > 4000)"
+)
+
+species_issues <- dbGetQuery(
+  con,
+  "SELECT v.plotnumber, v.species
+   FROM Sample_Veg v
+   LEFT JOIN lists.SppList s ON v.species = s.code
+   WHERE s.code IS NULL"
+)
+
+dbDisconnect(con)
+```
+
+# Quality Control Summary
+
+## Missing Required Fields
+
+```{r missing-required, echo=FALSE, results='asis'}
+if (nrow(missing_required) > 0) {
+  kbl(missing_required, align = "l") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No missing required fields detected.")
+}
+```
+
+## Coordinate Range Issues
+
+```{r range-issues, echo=FALSE, results='asis'}
+if (nrow(range_issues) > 0) {
+  kbl(range_issues, align = "l") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No coordinate range issues detected.")
+}
+```
+
+## Species Code Issues
+
+```{r species-issues, echo=FALSE, results='asis'}
+if (nrow(species_issues) > 0) {
+  kbl(species_issues, align = "l") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No species code issues detected.")
+}
+```
