@@ -112,6 +112,17 @@ test_that("get_node_path returns breadcrumb", {
   expect_equal(path, c("Root", "ChildA", "Grand"))
 })
 
+test_that("get_node_path_ids returns id breadcrumb", {
+  df <- data.frame(
+    ID = c(1, 2, 3, 4),
+    Name = c("Root", "ChildA", "ChildB", "Grand"),
+    Parent = c(NA, 1, 1, 2)
+  )
+
+  ids <- get_node_path_ids(df, 4)
+  expect_equal(ids, c(1, 2, 4))
+})
+
 test_that("get_subtree_names returns unique names", {
   df <- data.frame(
     ID = c(1, 2, 3, 4),

@@ -18,7 +18,7 @@ order_hierarchy_rows <- function(df) {
   df[order(df$Name), , drop = FALSE]
 }
 
-build_hierarchy_tree <- function(df, parent_id = NA_integer_) {
+build_hierarchy_tree <- function(df, parent_id = NA_integer_, selected_id = NA_integer_, open_ids = integer(0)) {
   if (nrow(df) == 0) return(list())
   if (is.na(parent_id)) {
     roots <- df[is.na(df$Parent), , drop = FALSE]
@@ -33,7 +33,14 @@ build_hierarchy_tree <- function(df, parent_id = NA_integer_) {
   for (i in seq_len(nrow(roots))) {
     row <- roots[i, ]
     label <- hierarchy_label(row$Name, row$ID)
-    tree[[label]] <- build_hierarchy_tree(df, row$ID)
+    child_tree <- build_hierarchy_tree(df, row$ID, selected_id, open_ids)
+    if (!is.na(selected_id) && row$ID == selected_id) {
+      tree[[label]] <- structure(child_tree, stselected = TRUE, stopened = TRUE)
+    } else if (row$ID %in% open_ids) {
+      tree[[label]] <- structure(child_tree, stopened = TRUE)
+    } else {
+      tree[[label]] <- child_tree
+    }
   }
 
   tree
@@ -83,6 +90,23 @@ get_node_path <- function(df, node_id, max_steps = 50L) {
   }
 
   path
+}
+
+get_node_path_ids <- function(df, node_id, max_steps = 50L) {
+  if (nrow(df) == 0) return(integer(0))
+  ids <- integer(0)
+  current_id <- node_id
+  steps <- 0L
+
+  while (!is.na(current_id) && steps < max_steps) {
+    row <- df[df$ID == current_id, , drop = FALSE]
+    if (nrow(row) == 0) break
+    ids <- c(row$ID[1], ids)
+    current_id <- row$Parent[1]
+    steps <- steps + 1L
+  }
+
+  ids
 }
 
 find_orphan_nodes <- function(df) {
@@ -278,6 +302,11 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_merge"), "Merge", class = "btn-outline-secondary"),
             col_widths = c(2, 2, 5, 3)
           ),
+          layout_columns(
+            textInput(ns("hier_find"), "Find Node", placeholder = "Enter name"),
+            actionButton(ns("hier_find_btn"), "Find", class = "btn-outline-secondary"),
+            col_widths = c(8, 2)
+          ),
           verbatimTextOutput(ns("merge_preview")),
           shinyTree::shinyTreeOutput(ns("hier_tree"), height = "600px"),
           verbatimTextOutput(ns("hier_status"))
@@ -307,6 +336,7 @@ mod_hierarchy_server <- function(id, state, con) {
       su = NULL,
       su_status = "",
       selected_path = NULL,
+      selected_id = NA_integer_,
       orphan_count = 0L,
       su_mode = "plots"
     )
@@ -381,7 +411,8 @@ mod_hierarchy_server <- function(id, state, con) {
 
     output$hier_tree <- shinyTree::renderShinyTree({
       req(rv$data)
-      build_hierarchy_tree(rv$data)
+      open_ids <- if (!is.na(rv$selected_id)) get_node_path_ids(rv$data, rv$selected_id) else integer(0)
+      build_hierarchy_tree(rv$data, selected_id = rv$selected_id, open_ids = open_ids)
     })
 
     output$hier_status <- renderText({
@@ -921,10 +952,34 @@ mod_hierarchy_server <- function(id, state, con) {
       row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
       if (nrow(row) == 0) return()
 
+      rv$selected_id <- node_id
       rv$selected_path <- get_node_path(rv$data, node_id)
       updateTextInput(session, "hier_name", value = row$Name[1])
       parent_id <- row$Parent[1]
       updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
+    })
+
+    observeEvent(input$hier_find_btn, {
+      req(rv$data)
+      query <- trimws(input$hier_find)
+      if (!nzchar(query)) return()
+
+      match_idx <- which(tolower(rv$data$Name) == tolower(query))
+      if (length(match_idx) == 0) {
+        match_idx <- which(grepl(query, rv$data$Name, ignore.case = TRUE))
+      }
+      if (length(match_idx) == 0) {
+        showNotification("No matching node found.", type = "warning")
+        return()
+      }
+
+      node_id <- rv$data$ID[match_idx[1]]
+      rv$selected_id <- node_id
+      rv$selected_path <- get_node_path(rv$data, node_id)
+      updateTextInput(session, "hier_name", value = rv$data$Name[match_idx[1]])
+      parent_id <- rv$data$Parent[match_idx[1]]
+      updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
+      showNotification("Node selected.", type = "message")
     })
 
     observeEvent(input$su_add, {
