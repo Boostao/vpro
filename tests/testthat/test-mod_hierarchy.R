@@ -352,6 +352,26 @@ test_that("get_master_site_units filters by level", {
   expect_equal(filtered$SiteSeries, "SS1")
 })
 
+test_that("get_user_site_units returns user list rows", {
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE SCHEMA user")
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE user.UserSiteUnitList (ID INTEGER, SiteSeries TEXT, SiteSeriesLongName TEXT, Level INTEGER)"
+  )
+  DBI::dbExecute(con, "INSERT INTO user.UserSiteUnitList VALUES (1, 'U1', 'User 1', 11)")
+  DBI::dbExecute(con, "INSERT INTO user.UserSiteUnitList VALUES (2, 'U2', 'User 2', 12)")
+
+  rows <- get_user_site_units(con)
+  expect_equal(nrow(rows), 2)
+  expect_true(all(c("U1", "U2") %in% rows$SiteSeries))
+
+  filtered <- get_user_site_units(con, level = "11")
+  expect_equal(filtered$SiteSeries, "U1")
+})
+
 test_that("find_orphan_nodes identifies missing parents", {
   df <- data.frame(
     ID = c(1, 2, 3),

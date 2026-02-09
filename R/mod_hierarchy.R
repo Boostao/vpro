@@ -343,6 +343,48 @@ get_master_site_units <- function(con, level = NULL) {
   DBI::dbGetQuery(con, sql, params)
 }
 
+get_user_site_unit_table <- function(con) {
+  candidates <- list(
+    list(schema = "user", table = "UserSiteUnitList"),
+    list(schema = "user", table = "USysUserSiteUnitList"),
+    list(schema = "main", table = "UserSiteUnitList"),
+    list(schema = "main", table = "USysUserSiteUnitList")
+  )
+
+  for (candidate in candidates) {
+    if (DBI::dbExistsTable(con, DBI::Id(schema = candidate$schema, table = candidate$table))) {
+      return(list(
+        id = DBI::Id(schema = candidate$schema, table = candidate$table),
+        name = paste(candidate$schema, candidate$table, sep = ".")
+      ))
+    }
+  }
+
+  NULL
+}
+
+get_user_site_units <- function(con, level = NULL) {
+  table_info <- get_user_site_unit_table(con)
+  if (is.null(table_info)) return(data.frame())
+
+  fields <- DBI::dbListFields(con, table_info$id)
+  select_cols <- intersect(
+    c("ID", "SiteSeries", "SiteSeriesLongName", "SiteSeriesScientificName", "Level"),
+    fields
+  )
+  if (length(select_cols) == 0 || !("SiteSeries" %in% select_cols)) return(data.frame())
+
+  where_clause <- ""
+  params <- list()
+  if (!is.null(level) && nzchar(level) && ("Level" %in% select_cols)) {
+    where_clause <- "WHERE Level = ?"
+    params <- list(as.integer(level))
+  }
+
+  sql <- sprintf("SELECT %s FROM %s %s ORDER BY SiteSeries", paste(select_cols, collapse = ", "), table_info$name, where_clause)
+  DBI::dbGetQuery(con, sql, params)
+}
+
 build_su_from_env <- function(con, zone = NULL, subzone = NULL, replace = TRUE) {
   if (!table_has_columns(con, "Sample_Env", c("PlotNumber"))) return(0L)
   if (!table_has_columns(con, "Sample_SU", c("PlotNumber", "SiteUnit"))) return(0L)
@@ -765,7 +807,8 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("su_show_units"), "Show Units", class = "btn-outline-secondary"),
             actionButton(ns("su_show_plots"), "Show Plots", class = "btn-outline-secondary"),
             actionButton(ns("su_show_master"), "Show Master List", class = "btn-outline-secondary"),
-            col_widths = c(2, 2, 2, 2, 2, 2)
+            actionButton(ns("su_show_user"), "Show User List", class = "btn-outline-secondary"),
+            col_widths = c(2, 2, 2, 2, 2, 2, 2)
           ),
           layout_columns(
             actionButton(ns("su_env_to_su"), "Env -> SU", class = "btn-outline-secondary"),
@@ -847,6 +890,14 @@ mod_hierarchy_server <- function(id, state, con) {
       if (identical(mode, "units")) {
         units <- DBI::dbGetQuery(con, "SELECT DISTINCT SiteUnit FROM Sample_SU ORDER BY SiteUnit")
         data.frame(PlotNumber = "", SiteUnit = units$SiteUnit, stringsAsFactors = FALSE)
+      } else if (identical(mode, "user")) {
+        level_val <- master_level
+        if (is.null(level_val) && !is.null(input$su_master_level)) {
+          level_val <- input$su_master_level
+        }
+        user_units <- get_user_site_units(con, level = level_val)
+        if (nrow(user_units) == 0) return(data.frame())
+        user_units
       } else if (identical(mode, "master")) {
         level_val <- master_level
         if (is.null(level_val) && !is.null(input$su_master_level)) {
@@ -1031,13 +1082,15 @@ mod_hierarchy_server <- function(id, state, con) {
 
     output$su_hot <- rhandsontable::renderRHandsontable({
       req(rv$su)
-      read_only <- identical(rv$su_mode, "units") || identical(rv$su_mode, "master")
+      read_only <- identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")
       rhandsontable::rhandsontable(rv$su, rowHeaders = FALSE, stretchH = "all", readOnly = read_only)
     })
 
     output$su_status <- renderText({
       mode_label <- if (identical(rv$su_mode, "units")) {
         "Site units"
+      } else if (identical(rv$su_mode, "user")) {
+        "User site units"
       } else if (identical(rv$su_mode, "master")) {
         "Master site units"
       } else {
@@ -1279,9 +1332,13 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_view_user_list, {
-      rv$su_mode <- "units"
-      rv$su <- load_su("units")
-      rv$su_status <- "Showing distinct site units."
+      rv$su_mode <- "user"
+      rv$su <- load_su("user", master_level = input$su_master_level)
+      if (nrow(rv$su) == 0) {
+        rv$su_status <- "User site unit list not available."
+      } else {
+        rv$su_status <- "Showing user site units."
+      }
       bslib::nav_select("hier_tabs", "SU Table", session = session)
     })
 
@@ -1743,7 +1800,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_add, {
-      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master")) {
+      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) {
         showNotification("Switch to plot view to edit.", type = "warning")
         return()
       }
@@ -1752,7 +1809,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_delete, {
-      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master")) {
+      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) {
         showNotification("Switch to plot view to edit.", type = "warning")
         return()
       }
@@ -1775,7 +1832,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_hot, {
-      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master")) return()
+      if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) return()
       req(rv$su)
       new_df <- rhandsontable::hot_to_r(input$su_hot)
       if (!all(c("PlotNumber", "SiteUnit") %in% names(new_df))) return()
@@ -1869,6 +1926,16 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$su_mode <- "master"
       rv$su <- load_su("master", master_level = input$su_master_level)
       rv$su_status <- ""
+    })
+
+    observeEvent(input$su_show_user, {
+      rv$su_mode <- "user"
+      rv$su <- load_su("user", master_level = input$su_master_level)
+      if (nrow(rv$su) == 0) {
+        rv$su_status <- "User site unit list not available."
+      } else {
+        rv$su_status <- ""
+      }
     })
 
     observeEvent(input$su_env_to_su, {

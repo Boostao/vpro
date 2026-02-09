@@ -51,7 +51,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Audit trail**: core helpers + logging for veg/soil/header edits + master audit helper + master audit viewer + basic Audit tabs
 - **Master site unit list tools**: admin editor + master audit logging (lists schema)
 - **Import engine**: CSV/ZIP analysis with validation summary, guarded import button, compliance-gated rollback, and expanded test coverage
-- **Hierarchy tools**: tree CRUD, move/delete, copy/paste subtree, merge preview + duplicate handling + rekeyed merge, sibling ordering, find shortcuts, orphan repair, clip + below-breaks views, SU table modes + env sync + filter builders + master list
+- **Hierarchy tools**: tree CRUD, move/delete, copy/paste subtree, merge preview + duplicate handling + rekeyed merge, sibling ordering, find shortcuts, orphan repair, clip + below-breaks views, SU table modes + env sync + filter builders + master + user list views
 - **Diagnostics/QC**: diagnostic helper functions (presence class + diagnosis + matrix runner) in `R/logic_diagnostic.R`; live matrix builder + UI/report wiring pending
 
 ### 🔲 Not Started
