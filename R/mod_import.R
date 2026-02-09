@@ -8,7 +8,8 @@ mod_import_ui <- function(id) {
         fileInput(ns("import_file"), "CSV or ZIP", accept = c(".csv", ".zip")),
         selectInput(ns("target_table"), "Target Table", choices = NULL),
         actionButton(ns("import_analyze"), "Analyze", class = "btn-secondary"),
-        col_widths = c(6, 4, 2)
+        actionButton(ns("import_apply"), "Import", class = "btn-primary"),
+        col_widths = c(5, 3, 2, 2)
       ),
       verbatimTextOutput(ns("import_status")),
       DT::DTOutput(ns("import_preview"))
@@ -18,7 +19,7 @@ mod_import_ui <- function(id) {
 
 mod_import_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
-    rv <- reactiveValues(status = "", preview = NULL)
+    rv <- reactiveValues(status = "", preview = NULL, target_fields = NULL)
 
     observe({
       tables <- DBI::dbListTables(con)
@@ -40,6 +41,7 @@ mod_import_server <- function(id, state, con) {
 
           if (!is.null(input$target_table) && nzchar(input$target_table)) {
             target_fields <- DBI::dbListFields(con, input$target_table)
+            rv$target_fields <- target_fields
             missing_cols <- setdiff(target_fields, names(rv$preview))
             extra_cols <- setdiff(names(rv$preview), target_fields)
 
@@ -76,6 +78,35 @@ mod_import_server <- function(id, state, con) {
 
       rv$status <- "Unsupported file type"
       rv$preview <- NULL
+    })
+
+    observeEvent(input$import_apply, {
+      req(rv$preview)
+      req(input$target_table)
+
+      if (is.null(rv$target_fields)) {
+        rv$target_fields <- DBI::dbListFields(con, input$target_table)
+      }
+
+      missing_cols <- setdiff(rv$target_fields, names(rv$preview))
+      extra_cols <- setdiff(names(rv$preview), rv$target_fields)
+
+      if (length(missing_cols) > 0) {
+        rv$status <- paste("Import blocked: missing columns", paste(missing_cols, collapse = ", "))
+        return()
+      }
+
+      if (length(extra_cols) > 0) {
+        rv$status <- paste("Import blocked: extra columns", paste(extra_cols, collapse = ", "))
+        return()
+      }
+
+      tryCatch({
+        DBI::dbAppendTable(con, input$target_table, rv$preview)
+        rv$status <- paste("Imported", nrow(rv$preview), "rows into", input$target_table)
+      }, error = function(e) {
+        rv$status <- paste("Import error:", e$message)
+      })
     })
 
     output$import_status <- renderText({
