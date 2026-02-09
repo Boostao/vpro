@@ -12,14 +12,15 @@ mod_import_ui <- function(id) {
         col_widths = c(5, 3, 2, 2)
       ),
       verbatimTextOutput(ns("import_status")),
-      DT::DTOutput(ns("import_preview"))
+      DT::DTOutput(ns("import_preview")),
+      DT::DTOutput(ns("import_compliance"))
     )
   )
 }
 
 mod_import_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
-    rv <- reactiveValues(status = "", preview = NULL, target_fields = NULL)
+    rv <- reactiveValues(status = "", preview = NULL, target_fields = NULL, compliance = NULL)
 
     observe({
       tables <- DBI::dbListTables(con)
@@ -104,6 +105,7 @@ mod_import_server <- function(id, state, con) {
       tryCatch({
         DBI::dbAppendTable(con, input$target_table, rv$preview)
         rv$status <- paste("Imported", nrow(rv$preview), "rows into", input$target_table)
+        rv$compliance <- run_compliance_checks(con, state$CurrProject)
       }, error = function(e) {
         rv$status <- paste("Import error:", e$message)
       })
@@ -116,6 +118,11 @@ mod_import_server <- function(id, state, con) {
     output$import_preview <- DT::renderDT({
       req(rv$preview)
       DT::datatable(rv$preview, rownames = FALSE, options = list(pageLength = 10, ordering = FALSE))
+    })
+
+    output$import_compliance <- DT::renderDT({
+      req(rv$compliance)
+      DT::datatable(rv$compliance$detail_tibble, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
   })
 }
