@@ -425,6 +425,7 @@ mod_site_env_server <- function(id, sys_state, con) {
         sql <- "UPDATE Sample_Env SET standage=?, sv_standheight=?, structuralstage=? WHERE plotnumber=?"
         
         tryCatch({
+            before_row <- dbGetQuery(con, "SELECT standage, sv_standheight, structuralstage FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
             res <- dbExecute(con, sql, list(
                 input$men_age,
                 input$men_hgt,
@@ -435,6 +436,24 @@ mod_site_env_server <- function(id, sys_state, con) {
             if (res == 0) {
                 showNotification("Record does not exist to update mensuration.", type="error")
             } else {
+                if (nrow(before_row) > 0) {
+                    after_row <- data.frame(
+                        standage = input$men_age,
+                        sv_standheight = input$men_hgt,
+                        structuralstage = input$men_struct,
+                        stringsAsFactors = FALSE
+                    )
+                    log_audit_diff(
+                        con,
+                        sys_state$CurrProject,
+                        sys_state$User,
+                        plot_id,
+                        "Sample_Env",
+                        before_row,
+                        after_row,
+                        fields = c("standage", "sv_standheight", "structuralstage")
+                    )
+                }
                 showNotification("Mensuration updated.", type="message")
             }
         }, error = function(e) {
