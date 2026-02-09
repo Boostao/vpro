@@ -1,0 +1,53 @@
+---
+title: "Short Vegetation + Hierarchy"
+format:
+  html:
+    theme: journal
+params:
+  plot_number: "00000"
+  db_path: "../data/vpro.duckdb"
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+options(knitr.table.format = "html")
+con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+```
+
+```{r load-data, include=FALSE}
+veg <- dbGetQuery(
+  con,
+  "SELECT * FROM vw_USysAllVeg WHERE PlotNumber = ?",
+  list(params$plot_number)
+)
+
+dbDisconnect(con)
+
+hier_col <- NULL
+for (candidate in c("Hierarchy", "HierarchyName", "hierarchy")) {
+  if (candidate %in% names(veg)) {
+    hier_col <- candidate
+    break
+  }
+}
+```
+
+# Plot: `r params$plot_number`
+
+```{r veg-table, echo=FALSE, results='asis'}
+if (nrow(veg) > 0) {
+  desired <- c("PlotNumber", "MyLayer", "Species", "CoverValue")
+  cols <- intersect(desired, names(veg))
+  if (!is.null(hier_col)) cols <- c(cols, hier_col)
+  view <- veg[, cols, drop = FALSE]
+
+  kbl(view, align = "l") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No vegetation data found.")
+}
+```

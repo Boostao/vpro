@@ -168,7 +168,9 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 | 8 | Hierarchy diagram | ✅ `reports/hierarchy.qmd` | `V7mdlReportsHierarchyDiagram` |
 | 9 | Flat hierarchy | ✅ `reports/flat_hierarchy.qmd` | `V7mdlReportFlatHierarchy` |
 | 10 | BEC labels | ✅ `reports/bec_labels.qmd` | (simple label formatting) |
-| 11–15 | Remaining | As needed | Various |
+| 11 | Short veg + hierarchy | ✅ `reports/short_veg_hierarchy.qmd` | `V7mdlReportsShortVegHierarchy` |
+| 12 | Short veg ordered by hierarchy | ✅ `reports/short_veg_order_hierarchy.qmd` | `V7mdlReportsShortVegOrderHierarchy` |
+| 13–15 | Remaining | As needed | Various |
 
 ### 5.2 Report UI Enhancement — `R/mod_reporting.R`
 - Report type selector (dropdown of available .qmd templates) ✅
