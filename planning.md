@@ -171,9 +171,9 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 | 11–15 | Remaining | As needed | Various |
 
 ### 5.2 Report UI Enhancement — `R/mod_reporting.R`
-- Report type selector (dropdown of available .qmd templates)
+- Report type selector (dropdown of available .qmd templates) ✅
 - Parameter inputs per report type (project, plot range, layer filters)
-- Download as PDF or HTML
+- Download as PDF or HTML ✅
 - Preview pane (rendered HTML inline)
 
 ---
