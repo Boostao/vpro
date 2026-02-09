@@ -85,7 +85,7 @@ log_audit_diff <- function(con, project_id, user, plot_number, table_name, old_r
   logged
 }
 
-fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL, date_from = NULL, date_to = NULL) {
+fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL, date_from = NULL, date_to = NULL, limit = NULL, offset = NULL) {
   if (!audit_table_exists(con)) return(data.frame())
 
   sql <- "SELECT Project, \"User\", PlotNumber, \"Table\", EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysAuditTrail"
@@ -115,6 +115,15 @@ fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, tabl
 
   if (length(filters) > 0) {
     sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
+  }
+
+  if (!is.null(limit)) {
+    sql <- paste(sql, "ORDER BY EditWhen DESC LIMIT ?")
+    params <- c(params, list(as.integer(limit)))
+    if (!is.null(offset)) {
+      sql <- paste(sql, "OFFSET ?")
+      params <- c(params, list(as.integer(offset)))
+    }
   }
 
   DBI::dbGetQuery(con, sql, params)

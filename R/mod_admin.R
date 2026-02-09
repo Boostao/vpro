@@ -71,7 +71,12 @@ mod_admin_ui <- function(id) {
              card(
                card_header("Audit Trail"),
                card_body(
-                 DTOutput(ns("audit_dt"))
+                 DTOutput(ns("audit_dt")),
+                 div(class = "mt-2 d-flex gap-2",
+                     actionButton(ns("audit_prev"), "Prev", class = "btn-outline-secondary"),
+                     actionButton(ns("audit_next"), "Next", class = "btn-outline-secondary"),
+                     textOutput(ns("audit_page_info"))
+                 )
                )
              )
            )
@@ -387,16 +392,20 @@ mod_admin_server <- function(id, state, con) {
       from_value <- if (!is.null(date_from) && !is.na(date_from)) as.POSIXct(date_from) else NULL
       to_value <- if (!is.null(date_to) && !is.na(date_to)) as.POSIXct(date_to) else NULL
 
+      page_size <- as.integer(input$audit_page_size)
+      if (is.na(page_size) || page_size <= 0) page_size <- 25
+      offset <- (rv_audit$page - 1L) * page_size
+
       audit <- fetch_audit_entries(
         con,
         plot_number = plot_value,
         project_id = project_value,
         table_name = table_value,
         date_from = from_value,
-        date_to = to_value
+        date_to = to_value,
+        limit = page_size,
+        offset = offset
       )
-      page_size <- as.integer(input$audit_page_size)
-      if (is.na(page_size) || page_size <= 0) page_size <- 25
       DT::datatable(audit, rownames = FALSE, options = list(pageLength = page_size, ordering = FALSE))
     })
 
@@ -428,6 +437,32 @@ mod_admin_server <- function(id, state, con) {
         utils::write.csv(audit, file, row.names = FALSE)
       }
     )
+
+    rv_audit <- reactiveValues(page = 1L)
+
+    observeEvent(input$audit_refresh, {
+      rv_audit$page <- 1L
+    })
+
+    observeEvent(input$audit_next, {
+      rv_audit$page <- rv_audit$page + 1L
+    })
+
+    observeEvent(input$audit_prev, {
+      rv_audit$page <- max(1L, rv_audit$page - 1L)
+    })
+
+    observeEvent(input$audit_page_size, {
+      rv_audit$page <- 1L
+    })
+
+    output$audit_page_info <- renderText({
+      page_size <- as.integer(input$audit_page_size)
+      if (is.na(page_size) || page_size <= 0) page_size <- 25
+      start_row <- (rv_audit$page - 1L) * page_size + 1L
+      end_row <- rv_audit$page * page_size
+      paste0("Rows ", start_row, "-", end_row)
+    })
 
     observeEvent(state$CurrProject, {
       if (is.null(state$CurrProject)) return()
