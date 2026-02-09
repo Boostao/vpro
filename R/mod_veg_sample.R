@@ -263,6 +263,16 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             
             dbExecute(con, "INSERT INTO Sample_Veg (id, plotnumber, species) VALUES (?, ?, ?)", 
                       list(new_id, plot_id, new_species))
+          log_audit_change(
+            con,
+            sys_state$CurrProject,
+            sys_state$User,
+            plot_id,
+            "Sample_Veg",
+            "species",
+            NA,
+            new_species
+          )
             
             # Refresh
             rv$data <- dbGetQuery(con, "SELECT * FROM Sample_Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
@@ -304,6 +314,19 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         removeModal()
         
         tryCatch({
+        row <- rv$data[rv$data$id == rv_del$id, , drop = FALSE]
+        if (nrow(row) > 0) {
+          log_audit_change(
+            con,
+            sys_state$CurrProject,
+            sys_state$User,
+            row$plotnumber[1],
+            "Sample_Veg",
+            "species",
+            row$species[1],
+            NA
+          )
+        }
             dbExecute(con, "DELETE FROM Sample_Veg WHERE id = ?", list(rv_del$id))
             
             # Refresh
