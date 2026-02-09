@@ -796,7 +796,9 @@ mod_hierarchy_ui <- function(id) {
           ),
           tags$script(HTML(sprintf("(function(){\n  var inputId = '%s';\n  var enterId = '%s';\n  var nextId = '%s';\n  var prevId = '%s';\n  function bind(){\n    var el = document.getElementById(inputId);\n    if (!el) return;\n    el.addEventListener('keydown', function(e){\n      if (e.key === 'Enter' && e.shiftKey){\n        e.preventDefault();\n        Shiny.setInputValue(prevId, Date.now());\n        return;\n      }\n      if (e.key === 'Enter'){\n        e.preventDefault();\n        Shiny.setInputValue(enterId, Date.now());\n      }\n    });\n  }\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', bind);\n  } else {\n    bind();\n  }\n})();", ns("hier_find"), ns("hier_find_enter"), ns("hier_find_next_key"), ns("hier_find_prev_key")))),
           verbatimTextOutput(ns("merge_preview")),
-          shinyTree::shinyTreeOutput(ns("hier_tree"), height = "600px"),
+            div(style = "height:600px; overflow:auto;",
+              shinyTree::shinyTree(ns("hier_tree"))
+            ),
           verbatimTextOutput(ns("hier_status"))
         ),
         nav_panel("SU Table",
@@ -834,7 +836,7 @@ mod_hierarchy_ui <- function(id) {
             selectInput(ns("su_master_level"), "Master level", choices = c("All" = "")),
             col_widths = c(3)
           ),
-          rhandsontable::rhandsontableOutput(ns("su_hot")),
+          rhandsontable::rHandsontableOutput(ns("su_hot")),
           verbatimTextOutput(ns("su_status"))
         )
       )
@@ -992,7 +994,7 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$su <- load_su()
     })
 
-    output$hier_tree <- shinyTree::renderShinyTree({
+    output$hier_tree <- shinyTree::renderTree({
       req(rv$data)
       open_ids <- if (!is.na(rv$selected_id)) get_node_path_ids(rv$data, rv$selected_id) else integer(0)
       build_hierarchy_tree(rv$data, selected_id = rv$selected_id, open_ids = open_ids)

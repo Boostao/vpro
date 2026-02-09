@@ -419,18 +419,18 @@ mod_admin_server <- function(id, state, con) {
     rv_master <- reactiveValues(data = NULL, columns = NULL, table_name = NULL)
 
     get_master_table <- function() {
-      candidates <- list(
-        DBI::Id(schema = "lists", table = "MasterSiteUnitList"),
-        DBI::Id(schema = "lists", table = "USysMasterSiteUnitList"),
-        DBI::Id(schema = "main", table = "MasterSiteUnitList"),
-        DBI::Id(schema = "main", table = "USysMasterSiteUnitList")
+      candidates <- c(
+        "lists.MasterSiteUnitList",
+        "lists.USysMasterSiteUnitList",
+        "MasterSiteUnitList",
+        "USysMasterSiteUnitList"
       )
 
       for (candidate in candidates) {
         if (DBI::dbExistsTable(con, candidate)) {
           return(list(
             id = candidate,
-            name = paste(candidate@schema, candidate@table, sep = ".")
+            name = candidate
           ))
         }
       }
@@ -728,7 +728,18 @@ mod_admin_server <- function(id, state, con) {
         return()
       }
 
-      tables <- dbGetQuery(con, "SELECT DISTINCT \"Table\" AS table_name FROM user.USysAuditTrail ORDER BY \"Table\"")
+      table_col <- audit_table_name_col(con)
+      if (is.null(table_col)) {
+        updateSelectInput(session, "audit_table", choices = c("All" = ""))
+        return()
+      }
+      table_col_sql <- quote_ident(table_col)
+      sql <- sprintf(
+        "SELECT DISTINCT %s AS table_name FROM user.USysAuditTrail ORDER BY %s",
+        table_col_sql,
+        table_col_sql
+      )
+      tables <- dbGetQuery(con, sql)
       choices <- c("All" = "", setNames(tables$table_name, tables$table_name))
       updateSelectInput(session, "audit_table", choices = choices)
     })

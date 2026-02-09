@@ -10,6 +10,21 @@ diagnostic_presence_class <- function(presence) {
   NA_character_
 }
 
+signif_class <- function(signif) {
+  if (is.na(signif)) return(NA_character_)
+  if (signif > -1 && signif <= 0.3) return("+")
+  if (signif > 0.3 && signif <= 1) return("1")
+  if (signif > 1 && signif <= 2.2) return("2")
+  if (signif > 2.2 && signif <= 5) return("3")
+  if (signif > 5 && signif <= 10) return("4")
+  if (signif > 10 && signif <= 20) return("5")
+  if (signif > 20 && signif <= 33) return("6")
+  if (signif > 33 && signif <= 50) return("7")
+  if (signif > 50 && signif <= 75) return("8")
+  if (signif > 75) return("9")
+  NA_character_
+}
+
 parse_presence_significance <- function(code) {
   if (is.null(code)) return(list(presence = NA_integer_, significance = NA_integer_))
   code_chr <- trimws(as.character(code))
@@ -96,4 +111,88 @@ diagnostic_from_matrix <- function(df, species_col = "Species") {
     Diagnosis = vapply(results, function(x) x$diagnosis, character(1)),
     stringsAsFactors = FALSE
   )
+}
+
+build_diagnostic_matrix <- function(con, su_table = "Sample_SU", project_id = NULL, average_type = c("plots", "covers")) {
+  average_type <- match.arg(average_type)
+  if (!DBI::dbExistsTable(con, su_table) || !DBI::dbExistsTable(con, "vw_USysAllVeg")) {
+    return(list(matrix = data.frame(), diagnostics = data.frame()))
+  }
+
+  su_fields <- DBI::dbListFields(con, su_table)
+  plot_col <- if ("PlotNumber" %in% su_fields) "PlotNumber" else if ("plotnumber" %in% su_fields) "plotnumber" else NULL
+  unit_col <- if ("SiteUnit" %in% su_fields) "SiteUnit" else if ("siteunit" %in% su_fields) "siteunit" else NULL
+  if (is.null(plot_col) || is.null(unit_col)) {
+    return(list(matrix = data.frame(), diagnostics = data.frame()))
+  }
+
+  veg_fields <- DBI::dbListFields(con, "vw_USysAllVeg")
+  veg_plot_col <- if ("plotnumber" %in% veg_fields) "plotnumber" else if ("PlotNumber" %in% veg_fields) "PlotNumber" else NULL
+  veg_species_col <- if ("species_code" %in% veg_fields) "species_code" else if ("species" %in% veg_fields) "species" else NULL
+  veg_cover_col <- if ("cover_value" %in% veg_fields) "cover_value" else if ("cover" %in% veg_fields) "cover" else if ("Cover" %in% veg_fields) "Cover" else NULL
+  veg_project_col <- if ("projectid" %in% veg_fields) "projectid" else if ("ProjectID" %in% veg_fields) "ProjectID" else NULL
+  if (is.null(veg_plot_col) || is.null(veg_species_col) || is.null(veg_cover_col)) {
+    return(list(matrix = data.frame(), diagnostics = data.frame()))
+  }
+
+  su_sql <- sprintf("SELECT %s AS plotnumber, %s AS siteunit FROM %s", plot_col, unit_col, su_table)
+  su_df <- DBI::dbGetQuery(con, su_sql)
+  if (nrow(su_df) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
+
+  veg_sql <- sprintf("SELECT %s AS plotnumber, %s AS species, %s AS cover_value%s FROM vw_USysAllVeg",
+                     veg_plot_col,
+                     veg_species_col,
+                     veg_cover_col,
+                     if (!is.null(veg_project_col)) paste0(", ", veg_project_col, " AS projectid") else "")
+  veg_df <- DBI::dbGetQuery(con, veg_sql)
+  if (nrow(veg_df) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
+
+  if (!is.null(project_id) && !is.null(veg_project_col) && "projectid" %in% names(veg_df)) {
+    veg_df <- veg_df[veg_df$projectid == project_id, , drop = FALSE]
+  }
+  if (nrow(veg_df) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
+
+  merged <- merge(su_df, veg_df, by = "plotnumber", all = FALSE)
+  if (nrow(merged) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
+
+  merged$cover_value <- trimws(as.character(merged$cover_value))
+  merged$cover_num <- suppressWarnings(as.numeric(merged$cover_value))
+  merged$cover_num[is.na(merged$cover_num)] <- 0
+
+  plot_counts <- aggregate(plotnumber ~ siteunit, data = merged, FUN = function(x) length(unique(x)))
+  names(plot_counts)[2] <- "n_plots"
+
+  ncover_df <- aggregate(merged$cover_value ~ siteunit + species, data = merged, FUN = length)
+  names(ncover_df)[names(ncover_df) == "merged$cover_value"] <- "ncover"
+  total_df <- aggregate(merged$cover_num ~ siteunit + species, data = merged, FUN = sum)
+  names(total_df)[names(total_df) == "merged$cover_num"] <- "totalcover"
+  grouped <- merge(ncover_df, total_df, by = c("siteunit", "species"))
+
+  grouped <- merge(grouped, plot_counts, by = "siteunit", all.x = TRUE)
+  grouped$presence <- grouped$ncover / grouped$n_plots
+  grouped$presence_class <- vapply(grouped$presence, diagnostic_presence_class, character(1))
+
+  signif_val <- if (average_type == "plots") {
+    grouped$totalcover / grouped$n_plots
+  } else {
+    grouped$totalcover / grouped$ncover
+  }
+  grouped$signif_class <- vapply(signif_val, signif_class, character(1))
+  grouped$code <- ifelse(
+    is.na(grouped$presence_class) | is.na(grouped$signif_class),
+    NA_character_,
+    paste(grouped$presence_class, grouped$signif_class, sep = " - ")
+  )
+
+  species_vals <- unique(grouped$species)
+  unit_vals <- unique(grouped$siteunit)
+  matrix_df <- data.frame(Species = species_vals, stringsAsFactors = FALSE)
+  for (unit in unit_vals) {
+    unit_rows <- grouped[grouped$siteunit == unit, , drop = FALSE]
+    code_map <- setNames(unit_rows$code, unit_rows$species)
+    matrix_df[[unit]] <- unname(code_map[species_vals])
+  }
+
+  diagnostics <- diagnostic_from_matrix(matrix_df, species_col = "Species")
+  list(matrix = matrix_df, diagnostics = diagnostics)
 }

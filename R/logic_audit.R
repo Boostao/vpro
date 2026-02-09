@@ -2,6 +2,39 @@
 
 audit_table_name <- "user.USysAuditTrail"
 
+quote_ident <- function(name) {
+  if (is.null(name) || !nzchar(name)) return(NA_character_)
+  paste0("\"", gsub("\"", "\"\"", name), "\"")
+}
+
+get_audit_table_fields <- function(con) {
+  if (!audit_table_exists(con)) return(character(0))
+  fields <- character(0)
+  try({
+    fields <- DBI::dbListFields(con, DBI::Id(schema = "user", table = "USysAuditTrail"))
+  }, silent = TRUE)
+  if (length(fields) == 0) {
+    try({
+      fields <- DBI::dbListFields(con, audit_table_name)
+    }, silent = TRUE)
+  }
+  fields
+}
+
+resolve_audit_column <- function(con, candidates) {
+  fields <- get_audit_table_fields(con)
+  if (length(fields) == 0) return(NULL)
+  for (candidate in candidates) {
+    idx <- which(tolower(fields) == tolower(candidate))
+    if (length(idx) > 0) return(fields[[idx[1]]])
+  }
+  NULL
+}
+
+audit_table_name_col <- function(con) {
+  resolve_audit_column(con, c("Table", "table", "_table"))
+}
+
 audit_table_exists <- function(con) {
   DBI::dbExistsTable(con, DBI::Id(schema = "user", table = "USysAuditTrail")) ||
     DBI::dbExistsTable(con, audit_table_name)
@@ -89,7 +122,13 @@ log_audit_diff <- function(con, project_id, user, plot_number, table_name, old_r
 fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL, date_from = NULL, date_to = NULL, limit = NULL, offset = NULL) {
   if (!audit_table_exists(con)) return(data.frame())
 
-  sql <- "SELECT Project, \"User\", PlotNumber, \"Table\", EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysAuditTrail"
+  table_col <- audit_table_name_col(con)
+  if (is.null(table_col)) return(data.frame())
+  table_col_sql <- quote_ident(table_col)
+  sql <- sprintf(
+    "SELECT Project, \"User\", PlotNumber, %s AS TableName, EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysAuditTrail",
+    table_col_sql
+  )
   filters <- c()
   params <- list()
 
@@ -102,7 +141,7 @@ fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, tabl
     params <- c(params, list(project_id))
   }
   if (!is.null(table_name)) {
-    filters <- c(filters, "\"Table\" = ?")
+    filters <- c(filters, paste(table_col_sql, "= ?"))
     params <- c(params, list(table_name))
   }
   if (!is.null(date_from)) {

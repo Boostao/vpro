@@ -230,6 +230,11 @@ Rscript -e "shiny::runApp('.', port = 3838)"
 # Run tests
 Rscript -e "testthat::test_dir('tests/testthat')"
 
+# UI regression tests (shinytest2)
+Rscript -e "shinytest2::use_shinytest2()"
+Rscript -e "shinytest2::record_test()"
+Rscript -e "testthat::test_dir('tests/testthat')"
+
 # Run tests with PostgreSQL (requires docker-compose up -d first)
 docker compose up -d
 Rscript -e "testthat::test_dir('tests/testthat')"
@@ -238,6 +243,11 @@ docker compose down
 # Verify data logic headless
 Rscript scripts/verify_logic.R
 ```
+
+### Tester persona guidance
+- Prefer shinytest2 for UI smoke tests (project selection, plot load, data entry, save).
+- Keep UI tests short, deterministic, and scoped to critical workflows.
+- Use `testthat` unit tests for pure logic; use shinytest2 for UI regressions.
 
 ## 🧰 Tooling Preferences
 

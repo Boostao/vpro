@@ -251,7 +251,7 @@ mod_site_env_ui <- function(id) {
                    actionButton(ns("edit_humus"), "Edit Selected", icon=icon("pen"), class="btn-warning")
                )
             ),
-            rhandsontable::rhandsontableOutput(ns("hot_humus"))
+            rhandsontable::rHandsontableOutput(ns("hot_humus"))
         ),
         nav_panel("Soil: Mineral", 
             layout_columns(
@@ -261,7 +261,7 @@ mod_site_env_ui <- function(id) {
                    actionButton(ns("edit_mineral"), "Edit Selected", icon=icon("pen"), class="btn-warning")
                )
             ),
-            rhandsontable::rhandsontableOutput(ns("hot_mineral"))
+            rhandsontable::rHandsontableOutput(ns("hot_mineral"))
                 ),
                 nav_panel("Audit",
                     selectInput(ns("env_audit_table"), "Table", choices = c("All" = "", "Sample_Env", "Sample_Humus", "Sample_Mineral")),

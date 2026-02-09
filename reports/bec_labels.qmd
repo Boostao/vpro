@@ -5,6 +5,7 @@ format:
     theme: journal
 params:
   db_path: "../data/vpro.duckdb"
+  parquet_dir: ""
 ---
 
 ```{r setup, include=FALSE}
@@ -14,7 +15,23 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
-con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+parquet_dir <- params$parquet_dir
+if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
+  con <- dbConnect(duckdb(), dbdir = ":memory:")
+  tbls <- c("Sample_Env")
+  for (tbl in tbls) {
+    file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
+    file_path <- file.path(parquet_dir, file_name)
+    if (file.exists(file_path)) {
+      dbExecute(
+        con,
+        sprintf("CREATE TABLE %s AS SELECT * FROM read_parquet('%s')", tbl, gsub("'", "''", file_path))
+      )
+    }
+  }
+} else {
+  con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+}
 ```
 
 ```{r load-data, include=FALSE}
@@ -25,7 +42,7 @@ labels <- dbGetQuery(
    ORDER BY plotnumber"
 )
 
-dbDisconnect(con)
+dbDisconnect(con, shutdown = TRUE)
 ```
 
 # BEC Labels

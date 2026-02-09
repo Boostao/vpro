@@ -7,6 +7,7 @@ format:
 params:
   plot_number: "00000"
   db_path: "../data/vpro.duckdb"
+  parquet_dir: ""
 ---
 
 ```{r setup, include=FALSE}
@@ -18,8 +19,24 @@ library(kableExtra)
 
 options(knitr.table.format = "html")
 
-# Connect to DB (Read Only to avoid locks from main app)
-con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+# Connect to DB (use parquet snapshot when provided)
+parquet_dir <- params$parquet_dir
+if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
+  con <- dbConnect(duckdb(), dbdir = ":memory:")
+  tbls <- c("Sample_Env", "vw_USysAllVeg", "Sample_Humus", "Sample_Mineral")
+  for (tbl in tbls) {
+    file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
+    file_path <- file.path(parquet_dir, file_name)
+    if (file.exists(file_path)) {
+      dbExecute(
+        con,
+        sprintf("CREATE TABLE %s AS SELECT * FROM read_parquet('%s')", tbl, gsub("'", "''", file_path))
+      )
+    }
+  }
+} else {
+  con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+}
 ```
 
 ```{r load-data, include=FALSE}
@@ -31,11 +48,29 @@ env_data <- dbGetQuery(con, query_env, list(params$plot_number))
 query_veg <- "SELECT * FROM vw_USysAllVeg WHERE PlotNumber = ? ORDER BY MyLayer, Species"
 veg_data <- dbGetQuery(con, query_veg, list(params$plot_number))
 
+normalize_veg_cols <- function(df) {
+  if (nrow(df) == 0) return(df)
+  cols <- names(df)
+  pick_col <- function(candidates) {
+    idx <- which(tolower(cols) %in% tolower(candidates))
+    if (length(idx) > 0) cols[[idx[1]]] else NA_character_
+  }
+  species_col <- pick_col(c("species", "species_code", "Species"))
+  cover_col <- pick_col(c("cover", "cover_value", "Cover"))
+  layer_col <- pick_col(c("mylayer", "layer", "MyLayer"))
+  if (!is.na(species_col)) df$Species <- df[[species_col]]
+  if (!is.na(cover_col)) df$Cover <- df[[cover_col]]
+  if (!is.na(layer_col)) df$MyLayer <- df[[layer_col]]
+  df
+}
+
+veg_data <- normalize_veg_cols(veg_data)
+
 # 3. Soil Data
 humus_data <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(params$plot_number))
 mineral_data <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(params$plot_number))
 
-dbDisconnect(con)
+dbDisconnect(con, shutdown = TRUE)
 ```
 
 # Plot: `r params$plot_number`

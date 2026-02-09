@@ -129,7 +129,7 @@ server <- function(input, output, session) {
   mod_images_server("imgs", state, con)
   
   # Reporting Module
-  mod_reporting_server("report", state)
+  mod_reporting_server("report", state, con)
 
   # Hierarchy Module
   mod_hierarchy_server("hier", state, con)

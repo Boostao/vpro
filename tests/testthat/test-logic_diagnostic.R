@@ -47,3 +47,22 @@ test_that("diagnostic_from_matrix returns table", {
   expect_equal(result$Species, c("SP1", "SP2"))
   expect_true(all(nzchar(result$Diagnosis)))
 })
+
+test_that("build_diagnostic_matrix returns matrix", {
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (plotnumber TEXT, species_code TEXT, cover_value TEXT, projectid TEXT)")
+
+  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P1', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P2', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P1', 'SP1', '20', 'PRJ')")
+  DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P2', 'SP1', '30', 'PRJ')")
+
+  result <- build_diagnostic_matrix(con, project_id = "PRJ")
+  expect_true(nrow(result$matrix) >= 1)
+  expect_true("SU1" %in% names(result$matrix))
+  expect_true(any(result$matrix$Species == "SP1"))
+  expect_true(any(nzchar(result$matrix$SU1)))
+})

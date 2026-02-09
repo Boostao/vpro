@@ -36,6 +36,24 @@ setwd("/Users/nicolas/Documents/GitHub/vpro")
 testthat::test_dir("tests/testthat")
 ```
 
+### 2a. UI Regression Tests (shinytest2)
+
+System dependency (Fedora):
+```bash
+sudo dnf install -y chromium
+```
+
+Scaffold and record:
+```bash
+Rscript -e "shinytest2::use_shinytest2()"
+Rscript -e "shinytest2::record_test()"
+```
+
+Run all tests (unit + UI):
+```bash
+Rscript -e "testthat::test_dir('tests/testthat')"
+```
+
 ### 3. Stop the Database
 
 ```bash

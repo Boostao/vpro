@@ -6,6 +6,7 @@ format:
 params:
   plot_number: "00000"
   db_path: "../data/vpro.duckdb"
+  parquet_dir: ""
 ---
 
 ```{r setup, include=FALSE}
@@ -15,7 +16,23 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
-con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+parquet_dir <- params$parquet_dir
+if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
+  con <- dbConnect(duckdb(), dbdir = ":memory:")
+  tbls <- c("vw_USysAllVeg")
+  for (tbl in tbls) {
+    file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
+    file_path <- file.path(parquet_dir, file_name)
+    if (file.exists(file_path)) {
+      dbExecute(
+        con,
+        sprintf("CREATE TABLE %s AS SELECT * FROM read_parquet('%s')", tbl, gsub("'", "''", file_path))
+      )
+    }
+  }
+} else {
+  con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+}
 ```
 
 ```{r load-data, include=FALSE}
@@ -28,18 +45,35 @@ veg <- dbGetQuery(
   list(params$plot_number)
 )
 
-if (nrow(veg) > 0) {
-  names(veg) <- c("Plot", "Layer", "Species", "Cover")
+normalize_veg_cols <- function(df) {
+  if (nrow(df) == 0) return(df)
+  cols <- names(df)
+  pick_col <- function(candidates) {
+    idx <- which(tolower(cols) %in% tolower(candidates))
+    if (length(idx) > 0) cols[[idx[1]]] else NA_character_
+  }
+  plot_col <- pick_col(c("plotnumber", "PlotNumber"))
+  layer_col <- pick_col(c("mylayer", "layer", "MyLayer"))
+  species_col <- pick_col(c("species", "species_code", "Species"))
+  cover_col <- pick_col(c("covervalue", "cover_value", "cover", "CoverValue"))
+  if (!is.na(plot_col)) df$Plot <- df[[plot_col]]
+  if (!is.na(layer_col)) df$Layer <- df[[layer_col]]
+  if (!is.na(species_col)) df$Species <- df[[species_col]]
+  if (!is.na(cover_col)) df$Cover <- df[[cover_col]]
+  df
 }
 
-dbDisconnect(con)
+veg <- normalize_veg_cols(veg)
+
+dbDisconnect(con, shutdown = TRUE)
 ```
 
 # Plot: `r params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
 if (nrow(veg) > 0) {
-  kbl(veg, align = "l") %>%
+  view <- veg[, c("Plot", "Layer", "Species", "Cover"), drop = FALSE]
+  kbl(view, align = "l") %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No vegetation data found.")

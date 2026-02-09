@@ -77,10 +77,10 @@ mod_veg_sample_ui <- function(id) {
       ),
       navset_card_tab(
         id = ns("layers_tab"),
-        nav_panel("Layer A (Trees)", rhandsontable::rhandsontableOutput(ns("hot_veg_a"))),
-        nav_panel("Layer B (Shrubs)", rhandsontable::rhandsontableOutput(ns("hot_veg_b"))),
-        nav_panel("Layer C (Herbs)", rhandsontable::rhandsontableOutput(ns("hot_veg_c"))),
-        nav_panel("Layer D (Moss)", rhandsontable::rhandsontableOutput(ns("hot_veg_d"))),
+        nav_panel("Layer A (Trees)", rhandsontable::rHandsontableOutput(ns("hot_veg_a"))),
+        nav_panel("Layer B (Shrubs)", rhandsontable::rHandsontableOutput(ns("hot_veg_b"))),
+        nav_panel("Layer C (Herbs)", rhandsontable::rHandsontableOutput(ns("hot_veg_c"))),
+        nav_panel("Layer D (Moss)", rhandsontable::rHandsontableOutput(ns("hot_veg_d"))),
         nav_panel("Audit",
           selectInput(ns("veg_audit_table"), "Table", choices = c("Sample_Veg")),
           DT::DTOutput(ns("dt_audit_veg"))
