@@ -229,7 +229,16 @@ mod_hierarchy_ui <- function(id) {
       full_screen = TRUE,
       card_header("Hierarchy"),
       navset_card_tab(
+        id = ns("hier_tabs"),
         nav_panel("Hierarchy",
+          layout_columns(
+            actionButton(ns("hier_view_user_list"), "View User List", class = "btn-outline-secondary"),
+            actionButton(ns("hier_view_plot_data"), "View Plot Data", class = "btn-outline-secondary"),
+            actionButton(ns("hier_view_su_table"), "View SU Table", class = "btn-outline-secondary"),
+            actionButton(ns("hier_load_hierarchy_plots"), "Load Hierarchy + Plots", class = "btn-outline-secondary"),
+            actionButton(ns("hier_load_su_plots"), "Load SUs + Plots", class = "btn-outline-secondary"),
+            col_widths = c(2, 2, 2, 3, 3)
+          ),
           layout_columns(
             textInput(ns("hier_name"), "Name"),
             actionButton(ns("hier_add"), "Add Node", class = "btn-primary"),
@@ -531,6 +540,82 @@ mod_hierarchy_server <- function(id, state, con) {
       }, error = function(e) {
         showNotification(paste("Fix failed:", e$message), type = "error")
       })
+    })
+
+    observeEvent(input$hier_view_user_list, {
+      bslib::nav_select("hier_tabs", "SU Table", session = session)
+      showNotification("Master SU list view is not yet implemented.", type = "message")
+    })
+
+    observeEvent(input$hier_view_plot_data, {
+      req(rv$data)
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      if (is.na(node_id)) {
+        showNotification("Select a hierarchy node first.", type = "warning")
+        return()
+      }
+
+      node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
+      if (nrow(node_row) == 0) {
+        showNotification("Selected node not found.", type = "warning")
+        return()
+      }
+
+      if (!DBI::dbExistsTable(con, "Sample_SU")) {
+        showNotification("Sample_SU table not available.", type = "warning")
+        return()
+      }
+
+      plots <- DBI::dbGetQuery(
+        con,
+        "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+        list(node_row$Name[1])
+      )
+
+      if (nrow(plots) == 0) {
+        showNotification("No plots linked to this site unit.", type = "message")
+        bslib::nav_select("hier_tabs", "SU Table", session = session)
+        return()
+      }
+
+      plot_number <- plots$PlotNumber[1]
+      project_id <- NULL
+      if (DBI::dbExistsTable(con, "Sample_Env")) {
+        env_fields <- DBI::dbListFields(con, "Sample_Env")
+        project_col <- if ("projectid" %in% env_fields) "projectid" else if ("ProjectID" %in% env_fields) "ProjectID" else NULL
+        plot_col <- if ("plotnumber" %in% env_fields) "plotnumber" else if ("PlotNumber" %in% env_fields) "PlotNumber" else NULL
+        if (!is.null(project_col) && !is.null(plot_col)) {
+          sql <- sprintf("SELECT %s AS project_id FROM Sample_Env WHERE %s = ?", project_col, plot_col)
+          proj <- DBI::dbGetQuery(con, sql, list(plot_number))
+          if (nrow(proj) > 0) project_id <- proj$project_id[1]
+        }
+      }
+
+      if (!is.null(project_id) && !is.null(session$parent)) {
+        updateSelectInput(session$parent, "sel_project", selected = as.character(project_id))
+      }
+
+      if (!is.null(session$parent)) {
+        updateSelectInput(session$parent, "sel_su", selected = as.character(plot_number))
+      }
+
+      if (!is.null(session$parent)) {
+        bslib::nav_select("main_tabs", "Site & Env", session = session$parent)
+      }
+      showNotification(paste("Jumped to plot", plot_number), type = "message")
+    })
+
+    observeEvent(input$hier_view_su_table, {
+      bslib::nav_select("hier_tabs", "SU Table", session = session)
+    })
+
+    observeEvent(input$hier_load_hierarchy_plots, {
+      showNotification("Load hierarchy + plots is not yet implemented.", type = "message")
+    })
+
+    observeEvent(input$hier_load_su_plots, {
+      showNotification("Load SUs + plots is not yet implemented.", type = "message")
     })
 
     observeEvent(input$hier_copy, {
