@@ -59,6 +59,32 @@ log_audit_change <- function(con, project_id, user, plot_number, table_name, fie
   invisible(TRUE)
 }
 
+log_audit_diff <- function(con, project_id, user, plot_number, table_name, old_row, new_row, fields = NULL) {
+  if (is.null(old_row) || is.null(new_row)) return(0L)
+
+  old_row <- as.list(old_row)
+  new_row <- as.list(new_row)
+
+  if (is.null(fields)) {
+    fields <- intersect(names(old_row), names(new_row))
+  }
+
+  if (length(fields) == 0) return(0L)
+
+  logged <- 0L
+  for (field_name in fields) {
+    before_value <- old_row[[field_name]]
+    after_value <- new_row[[field_name]]
+    if (length(before_value) > 1) before_value <- before_value[1]
+    if (length(after_value) > 1) after_value <- after_value[1]
+    if (isTRUE(log_audit_change(con, project_id, user, plot_number, table_name, field_name, before_value, after_value))) {
+      logged <- logged + 1L
+    }
+  }
+
+  logged
+}
+
 fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL) {
   if (!audit_table_exists(con)) return(data.frame())
 

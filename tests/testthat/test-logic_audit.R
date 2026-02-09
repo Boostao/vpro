@@ -33,3 +33,19 @@ test_that("log_audit_change writes entries", {
   expect_equal(rows$BeforeEdit[1], "50")
   expect_equal(rows$AfterEdit[1], "51")
 })
+
+test_that("log_audit_diff logs multiple field changes", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_audit_env(con)
+
+  old_row <- data.frame(latitude = 50, longitude = -120, stringsAsFactors = FALSE)
+  new_row <- data.frame(latitude = 51, longitude = -120, stringsAsFactors = FALSE)
+
+  logged <- log_audit_diff(con, "PRJ", "tester", "P1", "Sample_Env", old_row, new_row)
+  expect_equal(logged, 1L)
+
+  rows <- DBI::dbGetQuery(con, "SELECT * FROM user.USysAuditTrail")
+  expect_equal(nrow(rows), 1)
+  expect_equal(rows$EditField[1], "latitude")
+})
