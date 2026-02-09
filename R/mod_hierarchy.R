@@ -278,6 +278,7 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_merge"), "Merge", class = "btn-outline-secondary"),
             col_widths = c(2, 2, 5, 3)
           ),
+          verbatimTextOutput(ns("merge_preview")),
           shinyTree::shinyTreeOutput(ns("hier_tree"), height = "600px"),
           verbatimTextOutput(ns("hier_status"))
         ),
@@ -403,6 +404,25 @@ mod_hierarchy_server <- function(id, state, con) {
         }
         paste(status_parts, collapse = " | ")
       }
+    })
+
+    output$merge_preview <- renderText({
+      table <- trimws(input$merge_table)
+      if (!nzchar(table)) return("")
+      if (!DBI::dbExistsTable(con, table)) return("Merge preview: table not found.")
+
+      merge_fields <- DBI::dbListFields(con, table)
+      if (!("Name" %in% merge_fields)) return("Merge preview: missing Name column.")
+
+      source <- DBI::dbGetQuery(con, sprintf("SELECT Name FROM %s", table))
+      if (nrow(source) == 0) return("Merge preview: no rows.")
+
+      existing <- DBI::dbGetQuery(con, "SELECT Name FROM Sample_Hierarchy")
+      existing_names <- unique(existing$Name)
+
+      dupes <- sum(source$Name %in% existing_names)
+      total <- nrow(source)
+      paste("Merge preview:", total, "rows;", dupes, "duplicates;", total - dupes, "new")
     })
 
     output$su_hot <- rhandsontable::renderRHandsontable({
