@@ -69,6 +69,7 @@ mod_veg_sample_ui <- function(id) {
       full_screen = TRUE,
       card_header(
         "Vegetation Data",
+        uiOutput(ns("veg_context_hint")),
         div(class="float-end",
             tab_input(actionButton(ns("btn_add_spp"), "Add Species", icon=icon("plus"), class="btn-sm btn-primary"), 1),
             tab_input(actionButton(ns("btn_del_spp"), "Delete Selected", icon=icon("trash"), class="btn-sm btn-danger"), 2)
@@ -101,6 +102,11 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     
     # --- Data State ---
     rv <- reactiveValues(data = NULL)
+
+    output$veg_context_hint <- renderUI({
+      req(sys_state$CurrSU)
+      tags$span(class = "text-muted ms-2", paste("Plot:", sys_state$CurrSU))
+    })
     
     # --- Loading ---
     observeEvent(sys_state$CurrSU, {
