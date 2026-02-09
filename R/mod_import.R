@@ -6,8 +6,9 @@ mod_import_ui <- function(id) {
       card_header("Import"),
       layout_columns(
         fileInput(ns("import_file"), "CSV or ZIP", accept = c(".csv", ".zip")),
+        selectInput(ns("target_table"), "Target Table", choices = NULL),
         actionButton(ns("import_analyze"), "Analyze", class = "btn-secondary"),
-        col_widths = c(8, 4)
+        col_widths = c(6, 4, 2)
       ),
       verbatimTextOutput(ns("import_status")),
       DT::DTOutput(ns("import_preview"))
@@ -19,6 +20,12 @@ mod_import_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     rv <- reactiveValues(status = "", preview = NULL)
 
+    observe({
+      tables <- DBI::dbListTables(con)
+      tables <- tables[!grepl("^duckdb_|^sqlite_", tables)]
+      updateSelectInput(session, "target_table", choices = c("" = "", tables))
+    })
+
     observeEvent(input$import_analyze, {
       req(input$import_file)
 
@@ -29,7 +36,25 @@ mod_import_server <- function(id, state, con) {
       if (ext == "csv") {
         tryCatch({
           rv$preview <- utils::read.csv(file_path, nrows = 100, stringsAsFactors = FALSE)
-          rv$status <- paste("Loaded", nrow(rv$preview), "rows from", file_name)
+          status <- paste("Loaded", nrow(rv$preview), "rows from", file_name)
+
+          if (!is.null(input$target_table) && nzchar(input$target_table)) {
+            target_fields <- DBI::dbListFields(con, input$target_table)
+            missing_cols <- setdiff(target_fields, names(rv$preview))
+            extra_cols <- setdiff(names(rv$preview), target_fields)
+
+            if (length(missing_cols) > 0) {
+              status <- paste0(status, " | Missing: ", paste(missing_cols, collapse = ", "))
+            }
+            if (length(extra_cols) > 0) {
+              status <- paste0(status, " | Extra: ", paste(extra_cols, collapse = ", "))
+            }
+            if (length(missing_cols) == 0 && length(extra_cols) == 0) {
+              status <- paste0(status, " | Columns match target")
+            }
+          }
+
+          rv$status <- status
         }, error = function(e) {
           rv$status <- paste("CSV read error:", e$message)
           rv$preview <- NULL
