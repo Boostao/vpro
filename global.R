@@ -6,6 +6,7 @@ library(bslib)
 library(DT)
 library(rhandsontable)
 library(shinyjs)
+library(shinyTree)
 
 # Database Connection
 # Using a function to get a fresh connection or manage a pool object

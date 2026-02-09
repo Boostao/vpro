@@ -52,7 +52,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
 
 ### 🔲 Not Started
-- **Hierarchy tools**: 5 VBA modules → `R/mod_hierarchy.R` (UI shell only)
+- **Hierarchy tools**: 5 VBA modules → `R/mod_hierarchy.R` (basic tree CRUD)
 - **Import engine**: 12+ VBA modules → `R/mod_import.R` (UI shell + file preview + column checks)
 - **Diagnostics/QC**: `V7mdlDiagnostic`, validation reports → `R/logic_compliance.R`
 - **Audit trail**: `V7mdlAudit` → `R/logic_audit.R`
