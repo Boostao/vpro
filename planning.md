@@ -47,7 +47,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Global state**: remaining VBA globals to verify against `V7mdlGlobalDeclarations`
 - **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — needs `Nz()` safety audit
 - **VENUS XML export**: Button exists in UI, logic not ported
-- **Reporting**: 1/15 Access reports recreated as Quarto template
+- **Reporting**: 10/15 Access reports recreated as Quarto templates
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env UI summary
 - **Audit trail**: base helpers + logging for veg/soil/header edits + basic Audit tabs
 
@@ -60,7 +60,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Auth/RBAC**: `R/mod_auth.R` (UI shell)
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)
 - **RDS publishing**: `R/logic_publish.R` (stub added)
-- **14 remaining report types**: Short/Long veg, Env, Hierarchy diagram, QC, Lifeform, etc.
+- **Remaining report types**: Short veg + hierarchy, Short veg order hierarchy, remaining formats as needed
 - **Tests**: remaining module and report tests (view tests + compliance tests done)
 
 ---
