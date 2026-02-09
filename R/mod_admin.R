@@ -224,6 +224,8 @@ mod_admin_server <- function(id, con) {
       req(input$code_list_select)
       req(rv_codes$data)
       lname <- input$code_list_select
+
+      old_rows <- dbGetQuery(con, "SELECT item, itemdescription, itemorder FROM lists.USysTableOfLists WHERE listname = ?", list(lname))
       
       # Transactional Replacement
       dbBegin(con)
@@ -266,6 +268,36 @@ mod_admin_server <- function(id, con) {
         
         dbCommit(con)
         showNotification("List saved successfully.", type = "message")
+
+        if (nrow(to_save) > 0 || nrow(old_rows) > 0) {
+          old_map <- if (nrow(old_rows) > 0) split(old_rows, old_rows$item) else list()
+          new_map <- if (nrow(to_save) > 0) split(to_save, to_save$item) else list()
+
+          removed_items <- setdiff(names(old_map), names(new_map))
+          added_items <- setdiff(names(new_map), names(old_map))
+          common_items <- intersect(names(old_map), names(new_map))
+
+          for (item_key in removed_items) {
+            row <- old_map[[item_key]][1, , drop = FALSE]
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "item", row$item, NA)
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemdescription", row$itemdescription, NA)
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemorder", row$itemorder, NA)
+          }
+
+          for (item_key in added_items) {
+            row <- new_map[[item_key]][1, , drop = FALSE]
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "item", NA, row$item)
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemdescription", NA, row$itemdescription)
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemorder", NA, row$itemorder)
+          }
+
+          for (item_key in common_items) {
+            old_row <- old_map[[item_key]][1, , drop = FALSE]
+            new_row <- new_map[[item_key]][1, , drop = FALSE]
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemdescription", old_row$itemdescription, new_row$itemdescription)
+            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemorder", old_row$itemorder, new_row$itemorder)
+          }
+        }
         
       }, error = function(e) {
         dbRollback(con)
