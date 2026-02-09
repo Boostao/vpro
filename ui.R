@@ -31,6 +31,12 @@ ui <- page_navbar(
   nav_panel("Import",
     mod_import_ui("import")
   ),
+  nav_panel("Upload",
+    mod_upload_ui("upload")
+  ),
+  nav_panel("Merge",
+    mod_merge_ui("merge")
+  ),
   nav_panel("Images & Maps",
     mod_images_ui("imgs")
   ),

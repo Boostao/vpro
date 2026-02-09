@@ -115,6 +115,12 @@ server <- function(input, output, session) {
 
   # Import Module
   mod_import_server("import", state, con)
+
+  # Upload Module
+  mod_upload_server("upload", state, con)
+
+  # Merge Module
+  mod_merge_server("merge", state, con)
   
   # Images & Maps Module
   mod_images_server("imgs", state, con)
