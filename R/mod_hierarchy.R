@@ -116,6 +116,15 @@ get_subtree_names <- function(df, node_id) {
   unique(subtree$Name)
 }
 
+filter_duplicate_names <- function(source_df, existing_names) {
+  if (nrow(source_df) == 0) return(list(data = source_df, dropped = 0L))
+  if (length(existing_names) == 0) return(list(data = source_df, dropped = 0L))
+
+  dupes <- source_df$Name %in% existing_names
+  if (!any(dupes)) return(list(data = source_df, dropped = 0L))
+  list(data = source_df[!dupes, , drop = FALSE], dropped = sum(dupes))
+}
+
 compute_subtree_levels <- function(df, parent_level = -1L) {
   if (nrow(df) == 0) return(integer(0))
 
@@ -744,8 +753,18 @@ mod_hierarchy_server <- function(id, state, con) {
         return()
       }
 
+      existing <- DBI::dbGetQuery(con, "SELECT Name FROM Sample_Hierarchy")
+      filtered <- filter_duplicate_names(source, unique(existing$Name))
+      if (filtered$dropped > 0) {
+        showNotification(paste("Skipped", filtered$dropped, "duplicate names."), type = "warning")
+      }
+      if (nrow(filtered$data) == 0) {
+        showNotification("No new nodes to merge.", type = "message")
+        return()
+      }
+
       tryCatch({
-        count <- insert_subtree(con, source, NA_integer_, -1L)
+        count <- insert_subtree(con, filtered$data, NA_integer_, -1L)
         showNotification(paste("Merged", count, "nodes."), type = "message")
         refresh_tree()
         update_move_choices()

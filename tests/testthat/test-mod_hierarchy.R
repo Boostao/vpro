@@ -123,6 +123,18 @@ test_that("get_subtree_names returns unique names", {
   expect_true(all(c("Root", "ChildA", "ChildB", "Grand") %in% names))
 })
 
+test_that("filter_duplicate_names drops existing names", {
+  source <- data.frame(
+    ID = c(1, 2, 3),
+    Name = c("A", "B", "C"),
+    Parent = c(NA, NA, NA)
+  )
+
+  filtered <- filter_duplicate_names(source, c("B", "Z"))
+  expect_equal(filtered$dropped, 1)
+  expect_equal(filtered$data$Name, c("A", "C"))
+})
+
 test_that("find_orphan_nodes identifies missing parents", {
   df <- data.frame(
     ID = c(1, 2, 3),
