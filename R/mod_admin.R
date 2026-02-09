@@ -55,6 +55,22 @@ mod_admin_ui <- function(id) {
                )
              )
            )
+        ),
+        nav_panel("Audit Log",
+           layout_sidebar(
+             sidebar = sidebar(
+               textInput(ns("audit_project"), "Project", value = ""),
+               textInput(ns("audit_plot"), "Plot", value = ""),
+               selectInput(ns("audit_table"), "Table", choices = c("All" = "")),
+               actionButton(ns("audit_refresh"), "Refresh", class = "btn-secondary w-100 mt-2")
+             ),
+             card(
+               card_header("Audit Trail"),
+               card_body(
+                 DTOutput(ns("audit_dt"))
+               )
+             )
+           )
         )
       )
     )
@@ -337,6 +353,34 @@ mod_admin_server <- function(id, con) {
         dbRollback(con)
         showNotification(paste("Save failed:", e$message), type = "error")
       })
+    })
+
+    # ==========================================================================
+    # 3. Audit Log
+    # ==========================================================================
+
+    observe({
+      if (!audit_table_exists(con)) {
+        updateSelectInput(session, "audit_table", choices = c("All" = ""))
+        return()
+      }
+
+      tables <- dbGetQuery(con, "SELECT DISTINCT \"Table\" AS table_name FROM user.USysAuditTrail ORDER BY \"Table\"")
+      choices <- c("All" = "", setNames(tables$table_name, tables$table_name))
+      updateSelectInput(session, "audit_table", choices = choices)
+    })
+
+    output$audit_dt <- renderDT({
+      project_filter <- trimws(input$audit_project)
+      plot_filter <- trimws(input$audit_plot)
+      table_filter <- input$audit_table
+
+      project_value <- if (nzchar(project_filter)) project_filter else NULL
+      plot_value <- if (nzchar(plot_filter)) plot_filter else NULL
+      table_value <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else NULL
+
+      audit <- fetch_audit_entries(con, plot_number = plot_value, project_id = project_value, table_name = table_value)
+      DT::datatable(audit, rownames = FALSE, options = list(pageLength = 12, ordering = FALSE))
     })
     
   })
