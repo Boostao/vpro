@@ -177,6 +177,67 @@ test_that("mod_import handles ZIP files and imports selected tables", {
   expect_equal(nrow(rows), 1)
 })
 
+test_that("mod_import supports ZIP imports with multiple project IDs", {
+  testthat::skip_if_not_installed("shiny")
+
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_import_env_table(con)
+
+  temp_dir <- tempfile("vpro_import_zip_projects_")
+  dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+  csv_prj <- write_csv_named(
+    temp_dir,
+    "PRJ_Env.csv",
+    data.frame(
+      plotnumber = "P1",
+      zone = "ICH",
+      subzone = "wk",
+      latitude = 55,
+      longitude = -120,
+      elevation = 100,
+      slopegradient = 10,
+      aspect = 180
+    )
+  )
+  csv_pr2 <- write_csv_named(
+    temp_dir,
+    "PR2_Env.csv",
+    data.frame(
+      plotnumber = "P2",
+      zone = "ICH",
+      subzone = "wk",
+      latitude = 55,
+      longitude = -120,
+      elevation = 100,
+      slopegradient = 10,
+      aspect = 180
+    )
+  )
+
+  zip_path <- tempfile(fileext = ".zip")
+  utils::zip(zipfile = zip_path, files = c(csv_prj, csv_pr2))
+
+  state <- shiny::reactiveValues(CurrProject = "PRJ")
+  setup_import_auth(state)
+
+  shiny::testServer(mod_import_server, args = list(state = state, con = con), {
+    session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
+    session$setInputs(import_analyze = 1)
+
+    expect_true(all(rv$zip_meta$status == "Columns match target"))
+
+    session$setInputs(zip_tables = as.character(rv$zip_map$id))
+    session$setInputs(import_apply = 1)
+
+    expect_true(grepl("Imported 2 tables", rv$status))
+    expect_true(all(rv$import_results$status == "Imported"))
+  })
+
+  rows <- DBI::dbGetQuery(con, "SELECT plotnumber, projectid FROM Sample_Env ORDER BY plotnumber")
+  expect_equal(rows$projectid, c("PRJ", "PR2"))
+})
+
 test_that("mod_import blocks CSV import when compliance fails", {
   testthat::skip_if_not_installed("shiny")
 

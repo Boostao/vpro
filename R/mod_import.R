@@ -158,6 +158,7 @@ mod_import_server <- function(id, state, con) {
       validation <- data.frame(
         file = file_name,
         table = if (!is.null(target_table) && nzchar(target_table)) target_table else "",
+        project_id = if (!is.null(project_override) && nzchar(project_override)) project_override else "",
         rows = total_rows,
         missing = "",
         extra = "",
@@ -383,6 +384,36 @@ mod_import_server <- function(id, state, con) {
       }
     })
 
+    combine_compliance <- function(results) {
+      details <- do.call(rbind, lapply(results, function(x) x$detail_tibble))
+      if (is.null(details)) details <- data.frame()
+      summary <- if (nrow(details) == 0) {
+        data.frame(rule = character(), count = integer())
+      } else {
+        aggregate(list(count = details$rule), by = list(rule = details$rule), FUN = length)
+      }
+      list(
+        passed = all(vapply(results, function(x) isTRUE(x$passed), logical(1))),
+        summary_tibble = summary,
+        detail_tibble = details
+      )
+    }
+
+    run_compliance_for_projects <- function(project_ids) {
+      project_ids <- unique(project_ids[!is.na(project_ids) & nzchar(project_ids)])
+      if (length(project_ids) == 0) project_ids <- state$CurrProject
+
+      results <- lapply(project_ids, function(pid) {
+        result <- run_compliance_checks(con, pid)
+        if (!is.null(result$detail_tibble) && nrow(result$detail_tibble) > 0) {
+          result$detail_tibble$project_id <- pid
+        }
+        result
+      })
+      names(results) <- project_ids
+      combine_compliance(results)
+    }
+
     observeEvent(input$import_apply, {
       if (!require_import_permission()) return()
       req(rv$preview)
@@ -423,6 +454,7 @@ mod_import_server <- function(id, state, con) {
               table = table,
               rows = 0,
               status = "Unknown table",
+              project_id = row$project_id[1],
               stringsAsFactors = FALSE
             )
             next
@@ -435,6 +467,7 @@ mod_import_server <- function(id, state, con) {
               table = table,
               rows = 0,
               status = "CSV read error",
+              project_id = row$project_id[1],
               stringsAsFactors = FALSE
             )
             next
@@ -450,6 +483,7 @@ mod_import_server <- function(id, state, con) {
               table = table,
               rows = nrow(data),
               status = "Column mismatch",
+              project_id = row$project_id[1],
               stringsAsFactors = FALSE
             )
             next
@@ -484,6 +518,7 @@ mod_import_server <- function(id, state, con) {
               table = table,
               rows = 0,
               status = "CSV read error",
+              project_id = entry$project_id,
               stringsAsFactors = FALSE
             )
             next
@@ -495,6 +530,7 @@ mod_import_server <- function(id, state, con) {
               table = table,
               rows = nrow(data),
               status = "Imported",
+              project_id = entry$project_id,
               stringsAsFactors = FALSE
             )
           }, error = function(e) {
@@ -502,6 +538,7 @@ mod_import_server <- function(id, state, con) {
               table = table,
               rows = nrow(data),
               status = paste("Import error:", e$message),
+              project_id = entry$project_id,
               stringsAsFactors = FALSE
             )
           })
@@ -510,9 +547,8 @@ mod_import_server <- function(id, state, con) {
         rv$import_results <- if (length(results_status) > 0) do.call(rbind, results_status) else data.frame()
 
         if (use_compliance) {
-          project_scope <- unique(na.omit(vapply(pending_imports, function(x) x$project_id, character(1))))
-          project_scope <- if (length(project_scope) == 1) project_scope else state$CurrProject
-          rv$compliance <- run_compliance_checks(con, project_scope)
+          project_scope <- vapply(pending_imports, function(x) x$project_id, character(1))
+          rv$compliance <- run_compliance_for_projects(project_scope)
           if (!isTRUE(rv$compliance$passed)) {
             rv$import_results$status <- "Rolled back (compliance failed)"
             rv$preview <- rv$import_results
@@ -582,7 +618,7 @@ mod_import_server <- function(id, state, con) {
         DBI::dbAppendTable(con, input$target_table, import_data)
         if (use_compliance) {
           project_scope <- rv$import_project_override %||% state$CurrProject
-          rv$compliance <- run_compliance_checks(con, project_scope)
+          rv$compliance <- run_compliance_for_projects(project_scope)
           if (!isTRUE(rv$compliance$passed)) {
             rv$status <- "Import blocked: compliance checks failed"
             return()
@@ -601,6 +637,7 @@ mod_import_server <- function(id, state, con) {
           table = input$target_table,
           rows = nrow(import_data),
           status = "Imported",
+          project_id = rv$import_project_override %||% "",
           stringsAsFactors = FALSE
         )
         rv$status <- paste("Imported", nrow(import_data), "rows into", input$target_table)
