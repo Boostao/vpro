@@ -191,10 +191,23 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         total_a <- sum_numeric_or_na(covers_a)
         total_b <- sum_numeric_or_na(covers_b)
 
+        old_total_a <- rv$data$totala[row_idx]
+        old_total_b <- rv$data$totalb[row_idx]
+
         if (!identical(rv$data$totala[row_idx], total_a)) {
           rv$data$totala[row_idx] <- total_a
           tryCatch({
             save_veg_cell(con, rv$data$id[row_idx], "totala", total_a)
+            log_audit_change(
+              con,
+              sys_state$CurrProject,
+              sys_state$User,
+              rv$data$plotnumber[row_idx],
+              "Sample_Veg",
+              "totala",
+              old_total_a,
+              total_a
+            )
           }, error = function(e) {
             showNotification(paste("Error updating totala:", e$message), type = "error")
           })
@@ -204,6 +217,16 @@ mod_veg_sample_server <- function(id, sys_state, con) {
           rv$data$totalb[row_idx] <- total_b
           tryCatch({
             save_veg_cell(con, rv$data$id[row_idx], "totalb", total_b)
+            log_audit_change(
+              con,
+              sys_state$CurrProject,
+              sys_state$User,
+              rv$data$plotnumber[row_idx],
+              "Sample_Veg",
+              "totalb",
+              old_total_b,
+              total_b
+            )
           }, error = function(e) {
             showNotification(paste("Error updating totalb:", e$message), type = "error")
           })

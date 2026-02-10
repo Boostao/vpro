@@ -3,9 +3,12 @@ title: "Field Checklist"
 format:
   html:
     theme: journal
+params:
+  project_root: ""
+  report_title: "Field Checklist"
 ---
 
-# Field Checklist
+# `r params$report_title`
 
 - GPS synced and coordinates recorded
 - Plot number verified

@@ -19,6 +19,7 @@ mod_reporting_ui <- function(id) {
               col_widths = c(4, 4, 4)
             ),
             uiOutput(ns("plot_params_ui")),
+            uiOutput(ns("report_title_ui")),
             uiOutput(ns("veg_params_ui")),
             uiOutput(ns("hier_params_ui")),
             uiOutput(ns("qc_params_ui")),
@@ -59,6 +60,9 @@ mod_reporting_server <- function(id, sys_state, con) {
     js_quote <- function(value) {
       paste0("'", gsub("'", "\\'", value), "'")
     }
+
+    excel_available <- requireNamespace("writexl", quietly = TRUE)
+    excel_warned <- reactiveVal(FALSE)
 
     report_prefs_loaded <- reactiveVal(FALSE)
     report_pref_defaults <- list(
@@ -138,6 +142,24 @@ mod_reporting_server <- function(id, sys_state, con) {
       }
     })
 
+    report_requires_plot <- function(template_name) {
+      template_name %in% c(
+        "site_summary.qmd",
+        "env_summary.qmd",
+        "long_env.qmd",
+        "veg_layer_a.qmd",
+        "veg_layer_c.qmd",
+        "veg_layer_d.qmd",
+        "bec_labels.qmd",
+        "short_veg.qmd",
+        "long_veg.qmd",
+        "lifeform.qmd",
+        "short_veg_env.qmd",
+        "short_veg_hierarchy.qmd",
+        "short_veg_order_hierarchy.qmd"
+      )
+    }
+
     observeEvent(input$report_template, {
       if (identical(input$report_template, "long_env.qmd")) {
         updateRadioButtons(
@@ -155,10 +177,31 @@ mod_reporting_server <- function(id, sys_state, con) {
         )
       }
     }, ignoreInit = TRUE)
+
+    observeEvent(list(input$report_format, input$report_template), {
+      if (is.null(input$report_format)) return()
+      if (identical(input$report_format, "xlsx") && !excel_available) {
+        shinyjs::disable("dl_report")
+        if (!isTRUE(excel_warned())) {
+          showNotification("Excel export requires the writexl package. Install it to enable downloads.", type = "warning")
+          excel_warned(TRUE)
+        }
+      } else {
+        shinyjs::enable("dl_report")
+        excel_warned(FALSE)
+      }
+    })
     
     output$report_ctx <- renderText({
-      req(sys_state$CurrSU)
-      paste("Ready to generate report for Plot:", sys_state$CurrSU)
+      req(input$report_template)
+      if (isTRUE(report_requires_plot(input$report_template))) {
+        req(sys_state$CurrSU)
+        return(paste("Ready to generate report for Plot:", sys_state$CurrSU))
+      }
+      if (identical(input$report_template, "quality_control.qmd") && !is.null(sys_state$CurrProject)) {
+        return(paste("Ready to generate report for Project:", sys_state$CurrProject))
+      }
+      "Ready to generate report."
     })
 
     output$report_action_buttons <- renderUI({
@@ -203,7 +246,43 @@ mod_reporting_server <- function(id, sys_state, con) {
             textInput(ns("env_report_title"), "Report title", value = "Environment Summary"),
             col_widths = c(6)
           )
+        } else if (identical(input$report_template, "bec_labels.qmd")) {
+          layout_columns(
+            textInput(ns("bec_labels_report_title"), "Report title", value = "BEC Labels"),
+            col_widths = c(6)
+          )
+        } else if (identical(input$report_template, "site_summary.qmd")) {
+          layout_columns(
+            textInput(ns("site_report_title"), "Report title", value = "Site Unit Report"),
+            col_widths = c(6)
+          )
+        } else if (input$report_template %in% c("veg_layer_a.qmd", "veg_layer_c.qmd", "veg_layer_d.qmd")) {
+          default_title <- if (identical(input$report_template, "veg_layer_a.qmd")) {
+            "Vegetation Layer A (Trees)"
+          } else if (identical(input$report_template, "veg_layer_c.qmd")) {
+            "Vegetation Layer C (Herbs)"
+          } else {
+            "Vegetation Layer D (Moss/Lichen)"
+          }
+          layout_columns(
+            textInput(ns("veg_layer_report_title"), "Report title", value = default_title),
+            col_widths = c(6)
+          )
         }
+      )
+    })
+
+    output$report_title_ui <- renderUI({
+      req(input$report_template)
+      if (!identical(input$report_template, "field_checklist.qmd")) return(NULL)
+
+      tagList(
+        tags$hr(),
+        tags$h5("Report Title"),
+        layout_columns(
+          textInput(ns("field_report_title"), "Report title", value = "Field Checklist"),
+          col_widths = c(6)
+        )
       )
     })
 
@@ -240,6 +319,8 @@ mod_reporting_server <- function(id, sys_state, con) {
               "Long Vegetation Table"
             } else if (identical(input$report_template, "lifeform.qmd")) {
               "Lifeform Summary"
+            } else if (identical(input$report_template, "short_veg_env.qmd")) {
+              "Short Vegetation + Environment"
             } else if (identical(input$report_template, "short_veg_hierarchy.qmd")) {
               "Short Vegetation + Hierarchy"
             } else if (identical(input$report_template, "short_veg_order_hierarchy.qmd")) {
@@ -316,12 +397,22 @@ mod_reporting_server <- function(id, sys_state, con) {
       req(input$report_template)
       if (!(input$report_template %in% c("hierarchy.qmd", "flat_hierarchy.qmd"))) return(NULL)
 
+      default_title <- if (identical(input$report_template, "flat_hierarchy.qmd")) {
+        "Flat Hierarchy"
+      } else {
+        "Hierarchy Diagram"
+      }
+
       tagList(
         tags$hr(),
         tags$h5("Hierarchy Filters"),
         layout_columns(
           numericInput(ns("hier_cutoff_level"), "Lowest level", value = 11, min = 1, step = 1),
           col_widths = c(3)
+        ),
+        layout_columns(
+          textInput(ns("hier_report_title"), "Report title", value = default_title),
+          col_widths = c(6)
         )
       )
     })
@@ -346,6 +437,10 @@ mod_reporting_server <- function(id, sys_state, con) {
       tagList(
         tags$hr(),
         tags$h5("Quality Control Filters"),
+        layout_columns(
+          textInput(ns("qc_report_title"), "Report title", value = "Quality Control"),
+          col_widths = c(6)
+        ),
         layout_columns(
           textInput(ns("qc_project_id"), "Project ID", value = value_or(sys_state$CurrProject, "")),
           checkboxInput(ns("qc_enforce_filter"), "Enforce data quality filter", value = TRUE),
@@ -403,6 +498,10 @@ mod_reporting_server <- function(id, sys_state, con) {
           project_root = project_root,
           db_path = db_path,
           parquet_dir = parquet_dir,
+          report_title = value_or(input$qc_report_title, "Quality Control"),
+          colour_greater = as.numeric(value_or(input$opt_colour_greater, 5)),
+          gray_greater = as.numeric(value_or(input$opt_gray_greater, 65)),
+          apply_theme = isTRUE(input$opt_apply_theme),
           project_id = trimws(value_or(input$qc_project_id, "")),
           enforce_filter = isTRUE(input$qc_enforce_filter),
           site_quality_min = value_or(input$qc_site_min, ""),
@@ -439,6 +538,9 @@ mod_reporting_server <- function(id, sys_state, con) {
           report_title = value_or(input$veg_report_title, "Short Vegetation Table"),
           apply_lumping = isTRUE(input$veg_apply_lumping),
           constancy_format = isTRUE(input$veg_constancy_format),
+          colour_greater = as.numeric(value_or(input$opt_colour_greater, 5)),
+          gray_greater = as.numeric(value_or(input$opt_gray_greater, 65)),
+          apply_theme = isTRUE(input$opt_apply_theme),
           db_path = db_path,
           parquet_dir = parquet_dir
         )
@@ -447,11 +549,16 @@ mod_reporting_server <- function(id, sys_state, con) {
           project_root = project_root,
           db_path = db_path,
           parquet_dir = parquet_dir,
-          cutoff_level = as.integer(value_or(input$hier_cutoff_level, 11))
+          report_title = value_or(input$hier_report_title, if (identical(template_name, "flat_hierarchy.qmd")) "Flat Hierarchy" else "Hierarchy Diagram"),
+          cutoff_level = as.integer(value_or(input$hier_cutoff_level, 11)),
+          colour_greater = as.numeric(value_or(input$opt_colour_greater, 5)),
+          gray_greater = as.numeric(value_or(input$opt_gray_greater, 65)),
+          apply_theme = isTRUE(input$opt_apply_theme)
         )
       } else if (template_name %in% c(
         "site_summary.qmd",
         "env_summary.qmd",
+        "long_env.qmd",
         "veg_layer_a.qmd",
         "veg_layer_c.qmd",
         "veg_layer_d.qmd",
@@ -463,14 +570,35 @@ mod_reporting_server <- function(id, sys_state, con) {
           plot_numbers = trimws(value_or(input$plot_plot_numbers, "")),
           site_unit = trimws(value_or(input$plot_site_unit, "")),
           project_id = trimws(value_or(input$plot_project_id, "")),
+          colour_greater = as.numeric(value_or(input$opt_colour_greater, 5)),
+          gray_greater = as.numeric(value_or(input$opt_gray_greater, 65)),
+          apply_theme = isTRUE(input$opt_apply_theme),
           db_path = db_path,
           parquet_dir = parquet_dir
         )
         if (template_name %in% c("env_summary.qmd", "long_env.qmd")) {
           default_title <- if (identical(template_name, "long_env.qmd")) "Long Environment" else "Environment Summary"
           params$report_title <- value_or(input$env_report_title, default_title)
+        } else if (identical(template_name, "bec_labels.qmd")) {
+          params$report_title <- value_or(input$bec_labels_report_title, "BEC Labels")
+        } else if (identical(template_name, "site_summary.qmd")) {
+          params$report_title <- value_or(input$site_report_title, "Site Unit Report")
+        } else if (template_name %in% c("veg_layer_a.qmd", "veg_layer_c.qmd", "veg_layer_d.qmd")) {
+          default_title <- if (identical(template_name, "veg_layer_a.qmd")) {
+            "Vegetation Layer A (Trees)"
+          } else if (identical(template_name, "veg_layer_c.qmd")) {
+            "Vegetation Layer C (Herbs)"
+          } else {
+            "Vegetation Layer D (Moss/Lichen)"
+          }
+          params$report_title <- value_or(input$veg_layer_report_title, default_title)
         }
         params
+      } else if (identical(template_name, "field_checklist.qmd")) {
+        list(
+          project_root = project_root,
+          report_title = value_or(input$field_report_title, "Field Checklist")
+        )
       } else {
         list(
           project_root = project_root,
@@ -493,8 +621,11 @@ mod_reporting_server <- function(id, sys_state, con) {
     }
 
     observeEvent(input$preview_report, {
-      req(sys_state$CurrSU)
       req(input$report_template)
+
+      if (isTRUE(report_requires_plot(input$report_template))) {
+        req(sys_state$CurrSU)
+      }
 
       if (identical(input$report_template, "long_env.qmd")) {
         showNotification("HTML preview is disabled for Long Environment; use Excel export.", type = "warning")
@@ -552,7 +683,7 @@ mod_reporting_server <- function(id, sys_state, con) {
       }, error = function(e) {
         showNotification(paste("Preview error:", e$message), type = "error")
       })
-    })
+    }, ignoreInit = TRUE)
 
     output$report_preview <- renderUI({
       if (identical(input$report_template, "long_env.qmd")) return(NULL)
@@ -577,7 +708,7 @@ mod_reporting_server <- function(id, sys_state, con) {
         return()
       }
       shinyjs::runjs(paste0("window.open(", js_quote(target_url), ", '_blank');"))
-    })
+    }, ignoreInit = TRUE)
 
     output$report_open_link <- renderUI({
       if (identical(input$report_template, "long_env.qmd")) return(NULL)
@@ -596,7 +727,7 @@ mod_reporting_server <- function(id, sys_state, con) {
     })
 
     write_excel_report <- function(template_name, params, file_path) {
-      if (!requireNamespace("writexl", quietly = TRUE)) {
+      if (!excel_available) {
         stop("writexl package is required for Excel export.")
       }
       data_list <- build_excel_report_data(con, template_name, params)
@@ -610,12 +741,22 @@ mod_reporting_server <- function(id, sys_state, con) {
     output$dl_report <- downloadHandler(
       filename = function() {
         template_name <- tools::file_path_sans_ext(basename(input$report_template))
+        plot_token <- if (isTRUE(report_requires_plot(input$report_template)) && !is.null(sys_state$CurrSU) && nzchar(sys_state$CurrSU)) {
+          sys_state$CurrSU
+        } else if (!is.null(sys_state$CurrProject) && nzchar(sys_state$CurrProject)) {
+          sys_state$CurrProject
+        } else {
+          "all"
+        }
         ext <- if (is.null(input$report_format) || input$report_format == "") "html" else input$report_format
-        paste0(template_name, "_", sys_state$CurrSU, "_", Sys.Date(), ".", ext)
+        paste0(template_name, "_", plot_token, "_", Sys.Date(), ".", ext)
       },
       content = function(file) {
-        req(sys_state$CurrSU)
         req(input$report_template)
+
+        if (isTRUE(report_requires_plot(input$report_template))) {
+          req(sys_state$CurrSU)
+        }
 
         old_quarto_root <- Sys.getenv("QUARTO_PROJECT_DIR", unset = NA)
         Sys.setenv(QUARTO_PROJECT_DIR = getwd())
@@ -649,6 +790,10 @@ mod_reporting_server <- function(id, sys_state, con) {
         out_format <- if (is.null(input$report_format) || input$report_format == "") "html" else input$report_format
 
         if (out_format == "xlsx") {
+          if (!excel_available) {
+            showNotification("Excel export requires the writexl package.", type = "error")
+            return()
+          }
           params <- build_report_params(input$report_template)
           tryCatch({
             write_excel_report(input$report_template, params, file)

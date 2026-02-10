@@ -4,7 +4,12 @@ format:
   html:
     theme: journal
 params:
+  project_root: ""
   db_path: "../data/vpro.duckdb"
+  report_title: "Quality Control"
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
   project_id: ""
   enforce_filter: true
   site_quality_min: "Good"
@@ -25,6 +30,38 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+apply_theme <- isTRUE(params$apply_theme)
+colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
+gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
+
+style_qc_table <- function(df, columns = NULL) {
+  if (!apply_theme || nrow(df) == 0) return(df)
+  style_numeric <- function(vec) {
+    labels <- as.character(vec)
+    vapply(seq_along(labels), function(i) {
+      label <- labels[[i]]
+      if (!nzchar(label)) return("")
+      num <- suppressWarnings(as.numeric(label))
+      if (is.na(num)) return(label)
+      bg <- ""
+      if (!is.na(gray_greater) && num >= gray_greater) {
+        bg <- "#e6e6e6"
+      } else if (!is.na(colour_greater) && num >= colour_greater) {
+        bg <- "#f9e27d"
+      }
+      if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+    }, character(1))
+  }
+  target_cols <- columns
+  if (is.null(target_cols) || length(target_cols) == 0) {
+    target_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+  }
+  target_cols <- intersect(target_cols, names(df))
+  for (col_name in target_cols) {
+    df[[col_name]] <- style_numeric(df[[col_name]])
+  }
+  df
+}
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
@@ -176,6 +213,8 @@ if (DBI::dbExistsTable(con, "Sample_Veg")) {
 }
 ```
 
+# `r params$report_title`
+
 # Quality Control Summary
 
 ## Filter Results
@@ -186,7 +225,8 @@ summary_df <- data.frame(
   Removed = nrow(qc_removed),
   Total = nrow(qc_df)
 )
-kbl(summary_df, align = "l") %>%
+summary_df <- style_qc_table(summary_df)
+kbl(summary_df, align = "l", escape = !apply_theme) %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 ```
 
@@ -196,7 +236,9 @@ kbl(summary_df, align = "l") %>%
 if (nrow(qc_removed) > 0) {
   removed_cols <- c("PlotNumber", "SiteUnit", "SitePlotQuality", "VegPlotQuality", "SoilPlotQuality", "BEC_Use", "RemovedBy")
   removed_cols <- removed_cols[removed_cols %in% names(qc_removed)]
-  kbl(qc_removed[, removed_cols, drop = FALSE], align = "l") %>%
+  removed_view <- qc_removed[, removed_cols, drop = FALSE]
+  removed_view <- style_qc_table(removed_view)
+  kbl(removed_view, align = "l", escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No plots removed by the quality filter.")
@@ -207,7 +249,8 @@ if (nrow(qc_removed) > 0) {
 
 ```{r missing-required, echo=FALSE, results='asis'}
 if (nrow(missing_required) > 0) {
-  kbl(missing_required, align = "l") %>%
+  missing_view <- style_qc_table(missing_required)
+  kbl(missing_view, align = "l", escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No missing required fields detected.")
@@ -218,7 +261,8 @@ if (nrow(missing_required) > 0) {
 
 ```{r range-issues, echo=FALSE, results='asis'}
 if (nrow(range_issues) > 0) {
-  kbl(range_issues, align = "l") %>%
+  range_view <- style_qc_table(range_issues, columns = c("Latitude", "Longitude", "Elevation"))
+  kbl(range_view, align = "l", escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No coordinate range issues detected.")
@@ -229,7 +273,8 @@ if (nrow(range_issues) > 0) {
 
 ```{r species-issues, echo=FALSE, results='asis'}
 if (nrow(species_issues) > 0) {
-  kbl(species_issues, align = "l") %>%
+  species_view <- style_qc_table(species_issues)
+  kbl(species_view, align = "l", escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No species code issues detected.")
