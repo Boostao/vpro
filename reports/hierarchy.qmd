@@ -6,6 +6,7 @@ format:
 params:
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
+  cutoff_level: 11
 ---
 
 ```{r setup, include=FALSE}
@@ -32,7 +33,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```
 
 ```{r load-data, include=FALSE}
-hier <- dbGetQuery(con, "SELECT ID, Name, Parent FROM Sample_Hierarchy")
+hier <- dbGetQuery(con, "SELECT * FROM Sample_Hierarchy")
 normalize_hier_cols <- function(df) {
   if (nrow(df) == 0) return(df)
   cols <- names(df)
@@ -41,26 +42,44 @@ normalize_hier_cols <- function(df) {
     if (length(idx) > 0) cols[[idx[1]]] else NA_character_
   }
   id_col <- pick_col(c("id", "ID"))
-  name_col <- pick_col(c("name", "Name"))
+  name_col <- pick_col(c("name", "Name", "_name"))
   parent_col <- pick_col(c("parent", "Parent"))
+  level_col <- pick_col(c("level", "Level"))
   if (!is.na(id_col)) df$ID <- df[[id_col]]
   if (!is.na(name_col)) df$Name <- df[[name_col]]
   if (!is.na(parent_col)) df$Parent <- df[[parent_col]]
+  if (!is.na(level_col)) df$Level <- df[[level_col]]
   df
 }
 
 hier <- normalize_hier_cols(hier)
+cutoff_level <- params$cutoff_level
+if (!is.null(cutoff_level) && !is.na(cutoff_level) && ("Level" %in% names(hier))) {
+  hier <- hier[hier$Level <= cutoff_level, , drop = FALSE]
+}
 dbDisconnect(con, shutdown = TRUE)
 
-build_tree <- function(df, parent_id = NA_integer_, level = 0) {
-  roots <- df[is.na(df$Parent) & is.na(parent_id) | df$Parent == parent_id, , drop = FALSE]
+build_tree <- function(df, parent_id = NA_integer_, level = 0, visited = character(), max_depth = 50) {
+  if (level > max_depth) return(character())
+  if (nrow(df) == 0 || !("ID" %in% names(df))) return(character())
+
+  parent_vals <- df$Parent
+  match_parent <- if (is.na(parent_id)) {
+    is.na(parent_vals)
+  } else {
+    parent_vals == parent_id
+  }
+
+  roots <- df[match_parent, , drop = FALSE]
   if (nrow(roots) == 0) return(character())
 
   lines <- character()
   for (i in seq_len(nrow(roots))) {
     row <- roots[i, ]
+    row_id <- as.character(row$ID)
+    if (row_id %in% visited) next
     lines <- c(lines, paste0(strrep("  ", level), "- ", row$Name, " (", row$ID, ")"))
-    lines <- c(lines, build_tree(df, row$ID, level + 1))
+    lines <- c(lines, build_tree(df, row$ID, level + 1, c(visited, row_id), max_depth))
   }
 
   lines

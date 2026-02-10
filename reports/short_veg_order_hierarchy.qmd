@@ -5,6 +5,10 @@ format:
     theme: journal
 params:
   plot_number: "00000"
+  plot_numbers: ""
+  site_unit: ""
+  project_id: ""
+  apply_lumping: false
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -16,6 +20,23 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+root_candidates <- c(
+  Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
+  getwd(),
+  file.path(getwd(), ".."),
+  file.path(getwd(), "../..")
+)
+root_candidates <- unique(root_candidates[nzchar(root_candidates)])
+root_dir <- NA_character_
+for (candidate in root_candidates) {
+  candidate <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+  if (file.exists(file.path(candidate, "R", "logic_reports_veg.R"))) {
+    root_dir <- candidate
+    break
+  }
+}
+if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
+source(file.path(root_dir, "R", "logic_reports_veg.R"))
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
@@ -36,11 +57,23 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```
 
 ```{r load-data, include=FALSE}
-veg <- dbGetQuery(
-  con,
-  "SELECT * FROM vw_USysAllVeg WHERE PlotNumber = ?",
-  list(params$plot_number)
-)
+plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
+if (length(plots) == 0 && (nzchar(trimws(params$site_unit)) || nzchar(trimws(params$project_id)))) {
+  seed <- load_veg_report_data(
+    con,
+    plot_numbers = plots,
+    site_unit = trimws(params$site_unit),
+    project_id = trimws(params$project_id),
+    apply_lumping = FALSE
+  )
+  plots <- unique(seed$plotnumber)
+}
+if (length(plots) > 0) {
+  plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
+  veg <- DBI::dbGetQuery(con, sprintf("SELECT * FROM vw_USysAllVeg WHERE PlotNumber IN (%s)", plot_sql))
+} else {
+  veg <- data.frame()
+}
 
 normalize_veg_cols <- function(df) {
   if (nrow(df) == 0) return(df)

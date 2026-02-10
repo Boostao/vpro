@@ -5,6 +5,17 @@ format:
     theme: journal
 params:
   plot_number: "00000"
+  plot_numbers: ""
+  site_unit: ""
+  project_id: ""
+  group_by: "layer"
+  order_by: "presence"
+  presence_min: 0
+  cover_min: 0
+  avg_type: "mean"
+  show_common: "none"
+  apply_lumping: false
+  constancy_format: false
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -16,10 +27,29 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+root_candidates <- c(
+  Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
+  getwd(),
+  file.path(getwd(), ".."),
+  file.path(getwd(), "../..")
+)
+root_candidates <- unique(root_candidates[nzchar(root_candidates)])
+root_dir <- NA_character_
+for (candidate in root_candidates) {
+  candidate <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+  if (file.exists(file.path(candidate, "R", "logic_lumping.R"))) {
+    root_dir <- candidate
+    break
+  }
+}
+if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
+source(file.path(root_dir, "R", "logic_lumping.R"))
+source(file.path(root_dir, "R", "logic_reports_veg.R"))
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
-  tbls <- c("vw_USysAllVeg")
+  dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
+  tbls <- c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode")
   for (tbl in tbls) {
     file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
     file_path <- file.path(parquet_dir, file_name)
@@ -30,45 +60,38 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
       )
     }
   }
+  list_file <- file.path(parquet_dir, "lists_USysAllSpecs.parquet")
+  if (file.exists(list_file)) {
+    dbExecute(
+      con,
+      sprintf("CREATE TABLE lists.USysAllSpecs AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
+    )
+  }
 } else {
   con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+  dbExecute(con, "ATTACH '../data/vpro_lists.duckdb' AS lists")
 }
 ```
 
 ```{r load-data, include=FALSE}
-veg <- dbGetQuery(
+plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
+veg <- load_veg_report_data(
   con,
-  "SELECT * FROM vw_USysAllVeg WHERE PlotNumber = ?",
-  list(params$plot_number)
+  plot_numbers = plots,
+  site_unit = trimws(params$site_unit),
+  project_id = trimws(params$project_id),
+  apply_lumping = isTRUE(params$apply_lumping)
 )
-normalize_veg_cols <- function(df) {
-  if (nrow(df) == 0) return(df)
-  cols <- names(df)
-  pick_col <- function(candidates) {
-    idx <- which(tolower(cols) %in% tolower(candidates))
-    if (length(idx) > 0) cols[[idx[1]]] else NA_character_
-  }
-  plot_col <- pick_col(c("plotnumber", "PlotNumber"))
-  layer_col <- pick_col(c("mylayer", "layer", "MyLayer"))
-  species_col <- pick_col(c("species", "species_code", "Species"))
-  cover_col <- pick_col(c("covervalue", "cover_value", "cover", "CoverValue"))
-  height_col <- pick_col(c("heightvalue", "height_value", "height", "HeightValue"))
-  const_col <- pick_col(c("constancy", "Constancy"))
-  if (!is.na(plot_col)) df$PlotNumber <- df[[plot_col]]
-  if (!is.na(layer_col)) df$MyLayer <- df[[layer_col]]
-  if (!is.na(species_col)) df$Species <- df[[species_col]]
-  if (!is.na(cover_col)) df$CoverValue <- df[[cover_col]]
-  if (!is.na(height_col)) df$HeightValue <- df[[height_col]]
-  if (!is.na(const_col)) df$Constancy <- df[[const_col]]
-  df
-}
 
-veg <- normalize_veg_cols(veg)
-if (nrow(veg) > 0) {
-  desired <- c("PlotNumber", "MyLayer", "Species", "CoverValue", "HeightValue", "Constancy")
-  cols <- intersect(desired, names(veg))
-  veg <- veg[, cols, drop = FALSE]
-}
+summary <- summarize_veg_report(
+  veg,
+  group_by = params$group_by,
+  order_by = params$order_by,
+  presence_min = params$presence_min,
+  cover_min = params$cover_min,
+  avg_type = params$avg_type,
+  show_common = params$show_common
+)
 
 dbDisconnect(con, shutdown = TRUE)
 ```
@@ -76,8 +99,33 @@ dbDisconnect(con, shutdown = TRUE)
 # Plot: `r params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
-if (nrow(veg) > 0) {
-  kbl(veg, align = "l") %>%
+if (nrow(summary) > 0) {
+  constancy_format <- isTRUE(params$constancy_format)
+  if (constancy_format) {
+    view <- data.frame(
+      Group = summary$group_label,
+      Species = summary$species_label,
+      Constancy = round(summary$presence_pct, 1),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    view <- data.frame(
+      Group = summary$group_label,
+      Species = summary$species_label,
+      Presence = round(summary$presence_pct, 1),
+      MeanCover = round(summary$mean_cover, 1),
+      stringsAsFactors = FALSE
+    )
+  }
+  if (params$show_common != "none") {
+    if (constancy_format) {
+      view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, "Constancy", drop = FALSE])
+    } else {
+      view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, c("Presence", "MeanCover")])
+    }
+  }
+
+  kbl(view, align = "l") %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No vegetation data found.")

@@ -891,7 +891,11 @@ mod_hierarchy_server <- function(id, state, con) {
       }
       if (identical(mode, "units")) {
         units <- DBI::dbGetQuery(con, "SELECT DISTINCT SiteUnit FROM Sample_SU ORDER BY SiteUnit")
-        data.frame(PlotNumber = "", SiteUnit = units$SiteUnit, stringsAsFactors = FALSE)
+        data.frame(
+          PlotNumber = rep("", nrow(units)),
+          SiteUnit = units$SiteUnit,
+          stringsAsFactors = FALSE
+        )
       } else if (identical(mode, "user")) {
         level_val <- master_level
         if (is.null(level_val) && !is.null(input$su_master_level)) {

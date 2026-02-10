@@ -10,6 +10,8 @@ mod_reporting_ui <- function(id) {
             p("Generate Quarto reports for the current context."),
             selectInput(ns("report_template"), "Report Template", choices = NULL),
             radioButtons(ns("report_format"), "Format", choices = c("HTML" = "html", "PDF" = "pdf"), inline = TRUE),
+            uiOutput(ns("veg_params_ui")),
+            uiOutput(ns("hier_params_ui")),
             uiOutput(ns("qc_params_ui")),
             verbatimTextOutput(ns("report_ctx")),
             div(class="mt-3",
@@ -74,15 +76,15 @@ mod_reporting_server <- function(id, sys_state, con) {
     get_report_exports <- function(template_name) {
       exports <- list(
         "site_summary.qmd" = c("Sample_Env", "vw_USysAllVeg", "Sample_Humus", "Sample_Mineral"),
-        "short_veg.qmd" = c("vw_USysAllVeg"),
-        "long_veg.qmd" = c("vw_USysAllVeg"),
+        "short_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
+        "long_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "env_summary.qmd" = c("Sample_Env"),
-        "short_veg_env.qmd" = c("vw_USysAllVeg", "Sample_Env"),
-        "lifeform.qmd" = c("vw_USysAllVeg"),
+        "short_veg_env.qmd" = c("vw_USysAllVeg", "Sample_Env", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
+        "lifeform.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "flat_hierarchy.qmd" = c("Sample_Hierarchy"),
         "hierarchy.qmd" = c("Sample_Hierarchy"),
-        "short_veg_hierarchy.qmd" = c("vw_USysAllVeg"),
-        "short_veg_order_hierarchy.qmd" = c("vw_USysAllVeg"),
+        "short_veg_hierarchy.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
+        "short_veg_order_hierarchy.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "veg_layer_a.qmd" = c("vw_USysAllVeg"),
         "veg_layer_c.qmd" = c("vw_USysAllVeg"),
         "veg_layer_d.qmd" = c("vw_USysAllVeg"),
@@ -103,6 +105,86 @@ mod_reporting_server <- function(id, sys_state, con) {
     output$report_ctx <- renderText({
       req(sys_state$CurrSU)
       paste("Ready to generate report for Plot:", sys_state$CurrSU)
+    })
+
+    output$veg_params_ui <- renderUI({
+      req(input$report_template)
+      if (!(input$report_template %in% c(
+        "short_veg.qmd",
+        "long_veg.qmd",
+        "lifeform.qmd",
+        "short_veg_env.qmd",
+        "short_veg_hierarchy.qmd",
+        "short_veg_order_hierarchy.qmd"
+      ))) return(NULL)
+
+      tagList(
+        tags$hr(),
+        tags$h5("Vegetation Filters"),
+        layout_columns(
+          textInput(ns("veg_plot_numbers"), "Plot list (comma-separated)", value = value_or(sys_state$CurrSU, "")),
+          textInput(ns("veg_site_unit"), "Site unit (optional)", value = ""),
+          textInput(ns("veg_project_id"), "Project ID (optional)", value = value_or(sys_state$CurrProject, "")),
+          col_widths = c(4, 4, 4)
+        ),
+        layout_columns(
+          checkboxInput(ns("veg_apply_lumping"), "Apply lumping", value = FALSE),
+          checkboxInput(ns("veg_constancy_format"), "Constancy format", value = FALSE),
+          col_widths = c(4, 4)
+        ),
+        layout_columns(
+          selectInput(
+            ns("veg_group_by"),
+            "Group by",
+            choices = c("Layer" = "layer", "Strata" = "strata", "Lifeform" = "lifeform", "None" = "none"),
+            selected = "layer"
+          ),
+          selectInput(
+            ns("veg_order_by"),
+            "Order by",
+            choices = c("Species" = "species", "Presence" = "presence", "Cover" = "value"),
+            selected = "species"
+          ),
+          selectInput(
+            ns("veg_avg_type"),
+            "Average type",
+            choices = c("Mean cover" = "mean", "Sum per plot" = "sum_per_plot"),
+            selected = "mean"
+          ),
+          col_widths = c(4, 4, 4)
+        ),
+        layout_columns(
+          numericInput(ns("veg_presence_min"), "Presence min (%)", value = 0, min = 0, max = 100, step = 1),
+          numericInput(ns("veg_cover_min"), "Cover min", value = 0, min = 0, step = 1),
+          selectInput(
+            ns("veg_show_common"),
+            "Extra label",
+            choices = c(
+              "None" = "none",
+              "English name" = "english",
+              "Short guide name" = "short",
+              "Combined English" = "combined",
+              "Species code" = "code"
+            ),
+            selected = "none"
+          ),
+          col_widths = c(3, 3, 6)
+        )
+      )
+    })
+
+    output$hier_params_ui <- renderUI({
+      req(input$report_template)
+      if (!(input$report_template %in% c("hierarchy.qmd", "flat_hierarchy.qmd"))) return(NULL)
+
+      tagList(
+        tags$hr(),
+        tags$h5("Hierarchy Filters"),
+        layout_columns(
+          numericInput(ns("hier_cutoff_level"), "Lowest level", value = 11, min = 1, step = 1),
+          col_widths = c(3)
+        )
+      )
     })
 
     output$qc_params_ui <- renderUI({
@@ -157,6 +239,15 @@ mod_reporting_server <- function(id, sys_state, con) {
       if (!is.null(input$qc_project_id)) {
         updateTextInput(session, "qc_project_id", value = sys_state$CurrProject)
       }
+      if (!is.null(input$veg_project_id)) {
+        updateTextInput(session, "veg_project_id", value = sys_state$CurrProject)
+      }
+    }, ignoreInit = TRUE)
+
+    observeEvent(sys_state$CurrSU, {
+      if (!is.null(input$veg_plot_numbers)) {
+        updateTextInput(session, "veg_plot_numbers", value = as.character(sys_state$CurrSU))
+      }
     }, ignoreInit = TRUE)
 
     build_report_params <- function(template_name, parquet_dir = "") {
@@ -175,6 +266,36 @@ mod_reporting_server <- function(id, sys_state, con) {
           soil_allow_null = isTRUE(input$qc_soil_allow_null),
           bec_use_min = value_or(input$qc_bec_use_min, ""),
           bec_allow_null = isTRUE(input$qc_bec_allow_null)
+        )
+      } else if (template_name %in% c(
+        "short_veg.qmd",
+        "long_veg.qmd",
+        "lifeform.qmd",
+        "short_veg_env.qmd",
+        "short_veg_hierarchy.qmd",
+        "short_veg_order_hierarchy.qmd"
+      )) {
+        list(
+          plot_number = as.character(sys_state$CurrSU),
+          plot_numbers = trimws(value_or(input$veg_plot_numbers, "")),
+          site_unit = trimws(value_or(input$veg_site_unit, "")),
+          project_id = trimws(value_or(input$veg_project_id, "")),
+          group_by = value_or(input$veg_group_by, "layer"),
+          order_by = value_or(input$veg_order_by, "species"),
+          avg_type = value_or(input$veg_avg_type, "mean"),
+          presence_min = as.numeric(value_or(input$veg_presence_min, 0)),
+          cover_min = as.numeric(value_or(input$veg_cover_min, 0)),
+          show_common = value_or(input$veg_show_common, "none"),
+          apply_lumping = isTRUE(input$veg_apply_lumping),
+          constancy_format = isTRUE(input$veg_constancy_format),
+          db_path = db_path,
+          parquet_dir = parquet_dir
+        )
+      } else if (template_name %in% c("hierarchy.qmd", "flat_hierarchy.qmd")) {
+        list(
+          db_path = db_path,
+          parquet_dir = parquet_dir,
+          cutoff_level = as.integer(value_or(input$hier_cutoff_level, 11))
         )
       } else {
         list(

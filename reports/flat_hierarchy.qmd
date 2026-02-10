@@ -6,6 +6,7 @@ format:
 params:
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
+  cutoff_level: 11
 ---
 
 ```{r setup, include=FALSE}
@@ -35,7 +36,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```
 
 ```{r load-data, include=FALSE}
-hier <- dbGetQuery(con, "SELECT ID, Name, Parent, Level, Tag FROM Sample_Hierarchy ORDER BY Parent, Name")
+hier <- dbGetQuery(con, "SELECT * FROM Sample_Hierarchy")
 normalize_hier_cols <- function(df) {
   if (nrow(df) == 0) return(df)
   cols <- names(df)
@@ -44,7 +45,7 @@ normalize_hier_cols <- function(df) {
     if (length(idx) > 0) cols[[idx[1]]] else NA_character_
   }
   id_col <- pick_col(c("id", "ID"))
-  name_col <- pick_col(c("name", "Name"))
+  name_col <- pick_col(c("name", "Name", "_name"))
   parent_col <- pick_col(c("parent", "Parent"))
   level_col <- pick_col(c("level", "Level"))
   tag_col <- pick_col(c("tag", "Tag"))
@@ -57,6 +58,17 @@ normalize_hier_cols <- function(df) {
 }
 
 hier <- normalize_hier_cols(hier)
+if (nrow(hier) > 0) {
+  if ("Parent" %in% names(hier) && "Name" %in% names(hier)) {
+    hier <- hier[order(hier$Parent, hier$Name), , drop = FALSE]
+  } else if ("Name" %in% names(hier)) {
+    hier <- hier[order(hier$Name), , drop = FALSE]
+  }
+}
+cutoff_level <- params$cutoff_level
+if (!is.null(cutoff_level) && !is.na(cutoff_level) && ("Level" %in% names(hier))) {
+  hier <- hier[hier$Level <= cutoff_level, , drop = FALSE]
+}
 dbDisconnect(con, shutdown = TRUE)
 ```
 
