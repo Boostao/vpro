@@ -191,14 +191,27 @@ mod_admin_ui <- function(id) {
               actionButton(ns("sync_refresh"), "Refresh Status", class = "btn-secondary w-100 mt-2"),
               tags$hr(),
               textInput(ns("sync_snapshot_dir"), "Parquet snapshot dir", value = ""),
-              actionButton(ns("sync_snapshot"), "Export Parquet Snapshot", class = "btn-outline-secondary w-100 mt-2")
+              actionButton(ns("sync_snapshot"), "Export Parquet Snapshot", class = "btn-outline-secondary w-100 mt-2"),
+              tags$hr(),
+              actionButton(ns("sync_conflict_refresh"), "Refresh Conflicts", class = "btn-secondary w-100 mt-2"),
+              actionButton(ns("sync_conflict_local"), "Keep Local", class = "btn-outline-primary w-100 mt-2"),
+              actionButton(ns("sync_conflict_cloud"), "Keep Cloud", class = "btn-outline-warning w-100 mt-2"),
+              actionButton(ns("sync_conflict_clear"), "Dismiss Conflict", class = "btn-outline-secondary w-100 mt-2")
             ),
             card(
-              card_header("Cloud Sync"),
+              card_header(
+                "Cloud Sync",
+                span(
+                  class = "badge bg-warning text-dark ms-2",
+                  textOutput(ns("sync_conflict_badge"))
+                )
+              ),
               card_body(
                 textOutput(ns("sync_status")),
                 tableOutput(ns("sync_status_table")),
-                textOutput(ns("sync_snapshot_status"))
+                textOutput(ns("sync_snapshot_status")),
+                tags$hr(),
+                DTOutput(ns("sync_conflicts_dt"))
               )
             )
           )
@@ -516,6 +529,7 @@ mod_admin_server <- function(id, state, con) {
 
     sync_status_table <- reactiveVal(data.frame())
     sync_snapshot_status <- reactiveVal("")
+    sync_conflicts <- reactiveVal(data.frame())
 
     observeEvent(state$CurrProject, {
       if (!is.null(input$sync_project)) {
@@ -543,10 +557,17 @@ mod_admin_server <- function(id, state, con) {
         push_scope <- paste("last_push", table_key, if (nzchar(project_id)) project_id else "all", sep = ":")
         last_pull <- sync_get_state(con, pull_scope) %||% NA_character_
         last_push <- sync_get_state(con, push_scope) %||% NA_character_
+        mapping <- sync_table_mappings()[[table_key]]
+        conflict_count <- if (!is.null(mapping)) {
+          sync_count_conflicts(con, project_id = project_id, table_name = mapping$local_table)
+        } else {
+          0L
+        }
         data.frame(
           table = table_key,
           last_pull = last_pull,
           last_push = last_push,
+          conflicts = conflict_count,
           stringsAsFactors = FALSE
         )
       })
@@ -556,12 +577,19 @@ mod_admin_server <- function(id, state, con) {
       output$sync_status <- renderText(paste("Cloud:", cloud_state))
     }
 
+    refresh_sync_conflicts <- function() {
+      project_id <- trimws(input$sync_project)
+      conflicts <- sync_get_conflicts(con, project_id = if (nzchar(project_id)) project_id else NULL)
+      sync_conflicts(conflicts)
+    }
+
     observeEvent(input$sync_tables, {
       refresh_sync_status()
     }, ignoreInit = FALSE)
 
     observeEvent(input$sync_refresh, {
       refresh_sync_status()
+      refresh_sync_conflicts()
     })
 
     observeEvent(input$sync_pull, {
@@ -580,6 +608,7 @@ mod_admin_server <- function(id, state, con) {
       })
 
       refresh_sync_status()
+      refresh_sync_conflicts()
     })
 
     observeEvent(input$sync_push, {
@@ -593,7 +622,11 @@ mod_admin_server <- function(id, state, con) {
       tryCatch({
         result <- sync_push(con, project_id = if (nzchar(project_id)) project_id else NULL, tables = tables)
         merge_id <- result$merge_request_id %||% NA
-        showNotification(paste("Sync push complete. Merge request:", merge_id), type = "message")
+        if (isTRUE(result$compliance_failed)) {
+          showNotification(paste("Sync push rejected by compliance. Merge request:", merge_id), type = "warning")
+        } else {
+          showNotification(paste("Sync push complete. Merge request:", merge_id), type = "message")
+        }
       }, error = function(e) {
         showNotification(paste("Sync push failed:", e$message), type = "error")
       })
@@ -618,12 +651,87 @@ mod_admin_server <- function(id, state, con) {
       })
     })
 
+    observeEvent(input$sync_conflict_refresh, {
+      refresh_sync_conflicts()
+    })
+
+    observeEvent(input$sync_conflict_local, {
+      selected <- input$sync_conflicts_dt_rows_selected
+      if (is.null(selected) || length(selected) == 0) {
+        showNotification("Select a conflict row first.", type = "warning")
+        return()
+      }
+      conflict_id <- sync_conflicts()[selected[1], "id", drop = TRUE]
+      tryCatch({
+        ok <- sync_resolve_conflict(con, conflict_id, "keep_local")
+        if (isTRUE(ok)) {
+          showNotification("Resolved conflict using local values.", type = "message")
+          refresh_sync_conflicts()
+        } else {
+          showNotification("Unable to resolve conflict.", type = "error")
+        }
+      }, error = function(e) {
+        showNotification(paste("Resolve failed:", e$message), type = "error")
+      })
+    })
+
+    observeEvent(input$sync_conflict_cloud, {
+      selected <- input$sync_conflicts_dt_rows_selected
+      if (is.null(selected) || length(selected) == 0) {
+        showNotification("Select a conflict row first.", type = "warning")
+        return()
+      }
+      conflict_id <- sync_conflicts()[selected[1], "id", drop = TRUE]
+      tryCatch({
+        ok <- sync_resolve_conflict(con, conflict_id, "keep_cloud")
+        if (isTRUE(ok)) {
+          showNotification("Resolved conflict using cloud values.", type = "message")
+          refresh_sync_conflicts()
+        } else {
+          showNotification("Unable to resolve conflict.", type = "error")
+        }
+      }, error = function(e) {
+        showNotification(paste("Resolve failed:", e$message), type = "error")
+      })
+    })
+
+    observeEvent(input$sync_conflict_clear, {
+      selected <- input$sync_conflicts_dt_rows_selected
+      if (is.null(selected) || length(selected) == 0) {
+        showNotification("Select a conflict row first.", type = "warning")
+        return()
+      }
+      conflict_id <- sync_conflicts()[selected[1], "id", drop = TRUE]
+      tryCatch({
+        ok <- sync_resolve_conflict(con, conflict_id, "dismiss")
+        if (isTRUE(ok)) {
+          showNotification("Conflict dismissed.", type = "message")
+          refresh_sync_conflicts()
+        } else {
+          showNotification("Unable to dismiss conflict.", type = "error")
+        }
+      }, error = function(e) {
+        showNotification(paste("Dismiss failed:", e$message), type = "error")
+      })
+    })
+
     output$sync_status_table <- renderTable({
       sync_status_table()
     }, striped = TRUE, spacing = "s")
 
     output$sync_snapshot_status <- renderText({
       sync_snapshot_status()
+    })
+
+    output$sync_conflict_badge <- renderText({
+      total_conflicts <- sync_count_conflicts(con, project_id = trimws(input$sync_project))
+      if (total_conflicts > 0) paste(total_conflicts, "conflicts") else "0 conflicts"
+    })
+
+    output$sync_conflicts_dt <- DT::renderDT({
+      conflicts <- sync_conflicts()
+      if (is.null(conflicts) || nrow(conflicts) == 0) return(NULL)
+      DT::datatable(conflicts, rownames = FALSE, selection = "single", options = list(pageLength = 6, scrollX = TRUE))
     })
 
     # ==========================================================================

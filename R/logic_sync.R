@@ -29,6 +29,17 @@ sync_table_mappings <- function() {
   )
 }
 
+sync_mapping_by_local_table <- function(local_table) {
+  if (is.null(local_table) || !nzchar(local_table)) return(NULL)
+  mappings <- sync_table_mappings()
+  for (mapping in mappings) {
+    if (!is.null(mapping$local_table) && tolower(mapping$local_table) == tolower(local_table)) {
+      return(mapping)
+    }
+  }
+  NULL
+}
+
 sync_resolve_schema <- function(con) {
   attached <- tryCatch({
     DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
@@ -48,6 +59,125 @@ sync_ensure_state_tables <- function(con) {
     "CREATE TABLE IF NOT EXISTS %ssync_conflicts (\n      id INTEGER PRIMARY KEY,\n      table_name TEXT NOT NULL,\n      plot_number TEXT,\n      project_id TEXT,\n      local_seen_utc TIMESTAMPTZ,\n      cloud_seen_utc TIMESTAMPTZ,\n      details TEXT,\n      detected_utc TIMESTAMPTZ DEFAULT now()\n    )",
     prefix
   ))
+}
+
+sync_conflict_prefix <- function(con) {
+  schema <- sync_resolve_schema(con)
+  if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
+}
+
+sync_clear_conflicts <- function(con, table_name, project_id = NULL) {
+  prefix <- sync_conflict_prefix(con)
+  if (!nzchar(prefix)) return(invisible(FALSE))
+  if (!is.null(project_id) && nzchar(project_id)) {
+    DBI::dbExecute(
+      con,
+      sprintf("DELETE FROM %ssync_conflicts WHERE table_name = ? AND project_id = ?", prefix),
+      list(table_name, project_id)
+    )
+  } else {
+    DBI::dbExecute(
+      con,
+      sprintf("DELETE FROM %ssync_conflicts WHERE table_name = ?", prefix),
+      list(table_name)
+    )
+  }
+  invisible(TRUE)
+}
+
+sync_log_conflict <- function(con, table_name, plot_number, project_id, local_seen_utc, cloud_seen_utc, details) {
+  prefix <- sync_conflict_prefix(con)
+  if (!nzchar(prefix)) return(invisible(FALSE))
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "INSERT INTO %ssync_conflicts (table_name, plot_number, project_id, local_seen_utc, cloud_seen_utc, details)\n       VALUES (?, ?, ?, ?, ?, ?)",
+      prefix
+    ),
+    list(table_name, plot_number, project_id, local_seen_utc, cloud_seen_utc, details)
+  )
+  invisible(TRUE)
+}
+
+sync_count_conflicts <- function(con, project_id = NULL, table_name = NULL) {
+  prefix <- sync_conflict_prefix(con)
+  if (!nzchar(prefix)) return(0L)
+  sql <- sprintf("SELECT COUNT(*) AS n FROM %ssync_conflicts", prefix)
+  filters <- character(0)
+  params <- list()
+  if (!is.null(project_id) && nzchar(project_id)) {
+    filters <- c(filters, "project_id = ?")
+    params <- c(params, list(project_id))
+  }
+  if (!is.null(table_name) && nzchar(table_name)) {
+    filters <- c(filters, "table_name = ?")
+    params <- c(params, list(table_name))
+  }
+  if (length(filters) > 0) {
+    sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
+  }
+  res <- DBI::dbGetQuery(con, sql, params)
+  if (nrow(res) == 0) return(0L)
+  as.integer(res$n[1])
+}
+
+sync_detect_conflicts <- function(con, mapping, temp_table, project_id = NULL, cloud_seen_utc = NULL) {
+  if (is.null(mapping) || is.null(mapping$local_table) || is.null(mapping$key_cols)) return(0L)
+  if (!DBI::dbExistsTable(con, mapping$local_table)) return(0L)
+
+  sync_clear_conflicts(con, mapping$local_table, project_id)
+
+  key_cols <- mapping$key_cols
+  compare_cols <- setdiff(mapping$local_cols, key_cols)
+  if (length(compare_cols) == 0) return(0L)
+  join_clause <- paste(sprintf("l.%s = t.%s", key_cols, key_cols), collapse = " AND ")
+  diff_clause <- paste(sprintf("l.%s IS DISTINCT FROM t.%s", compare_cols, compare_cols), collapse = " OR ")
+
+  select_cols <- c(
+    key_cols,
+    sprintf("l.%s AS local_%s", compare_cols, compare_cols),
+    sprintf("t.%s AS cloud_%s", compare_cols, compare_cols)
+  )
+  sql <- sprintf(
+    "SELECT %s FROM %s l JOIN %s t ON %s WHERE %s",
+    paste(select_cols, collapse = ", "),
+    mapping$local_table,
+    temp_table,
+    join_clause,
+    diff_clause
+  )
+
+  diffs <- DBI::dbGetQuery(con, sql)
+  if (nrow(diffs) == 0) return(0L)
+
+  conflict_count <- 0L
+  for (row_idx in seq_len(nrow(diffs))) {
+    row <- diffs[row_idx, , drop = FALSE]
+    plot_number <- if ("PlotNumber" %in% names(row)) row$PlotNumber[1] else NA
+    project_val <- project_id
+    if (is.null(project_val) || !nzchar(as.character(project_val))) {
+      if ("ProjectID" %in% names(row)) project_val <- row$ProjectID[1]
+    }
+    changes <- list()
+    for (col_name in compare_cols) {
+      local_val <- row[[paste0("local_", col_name)]][1]
+      cloud_val <- row[[paste0("cloud_", col_name)]][1]
+      if (is.na(local_val) && is.na(cloud_val)) next
+      if (!is.na(local_val) && !is.na(cloud_val) && as.character(local_val) == as.character(cloud_val)) next
+      changes[[col_name]] <- list(local = local_val, cloud = cloud_val)
+    }
+    if (length(changes) == 0) next
+    details <- NULL
+    if (requireNamespace("jsonlite", quietly = TRUE)) {
+      details <- jsonlite::toJSON(changes, auto_unbox = TRUE, na = "null")
+    } else {
+      details <- paste(names(changes), collapse = ", ")
+    }
+    sync_log_conflict(con, mapping$local_table, plot_number, project_val, NA, cloud_seen_utc, details)
+    conflict_count <- conflict_count + 1L
+  }
+
+  conflict_count
 }
 
 sync_get_state <- function(con, scope) {
@@ -82,6 +212,200 @@ sync_cloud_connected <- function(con) {
     DBI::dbGetQuery(con, "SELECT 1 FROM master.information_schema.tables LIMIT 1")
     TRUE
   }, error = function(e) FALSE)
+}
+
+sync_conflicts_table_name <- function(con) {
+  schema <- sync_resolve_schema(con)
+  if (is.null(schema)) return("sync_conflicts")
+  sprintf("\"%s\".\"%s\".sync_conflicts", schema$catalog, schema$schema)
+}
+
+sync_get_conflicts <- function(con, project_id = NULL, table_name = NULL, limit = 200L) {
+  table_id <- sync_conflicts_table_name(con)
+  if (!DBI::dbExistsTable(con, table_id)) return(data.frame())
+  sql <- sprintf("SELECT id, table_name, plot_number, project_id, detected_utc, details FROM %s", table_id)
+  filters <- character(0)
+  params <- list()
+  if (!is.null(project_id) && nzchar(project_id)) {
+    filters <- c(filters, "project_id = ?")
+    params <- c(params, list(project_id))
+  }
+  if (!is.null(table_name) && nzchar(table_name)) {
+    filters <- c(filters, "table_name = ?")
+    params <- c(params, list(table_name))
+  }
+  if (length(filters) > 0) {
+    sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
+  }
+  sql <- paste(sql, "ORDER BY detected_utc DESC LIMIT ?")
+  params <- c(params, list(as.integer(limit)))
+  DBI::dbGetQuery(con, sql, params)
+}
+
+sync_fetch_conflict <- function(con, conflict_id) {
+  table_id <- sync_conflicts_table_name(con)
+  if (!DBI::dbExistsTable(con, table_id)) return(NULL)
+  rows <- DBI::dbGetQuery(con, sprintf("SELECT * FROM %s WHERE id = ?", table_id), list(as.integer(conflict_id)))
+  if (nrow(rows) == 0) return(NULL)
+  rows[1, , drop = FALSE]
+}
+
+sync_delete_conflict <- function(con, conflict_id) {
+  table_id <- sync_conflicts_table_name(con)
+  if (!DBI::dbExistsTable(con, table_id)) return(invisible(FALSE))
+  DBI::dbExecute(con, sprintf("DELETE FROM %s WHERE id = ?", table_id), list(as.integer(conflict_id)))
+  invisible(TRUE)
+}
+
+sync_cloud_key_filters <- function(mapping, plot_number, project_id) {
+  key_cols <- mapping$key_cols
+  local_to_cloud <- setNames(mapping$cloud_cols, mapping$local_cols)
+  cloud_keys <- local_to_cloud[key_cols]
+  cloud_keys <- cloud_keys[!is.na(cloud_keys)]
+  filters <- character(0)
+  params <- list()
+  for (idx in seq_along(key_cols)) {
+    local_key <- key_cols[[idx]]
+    cloud_key <- cloud_keys[[idx]]
+    if (is.null(cloud_key) || !nzchar(cloud_key)) next
+    value <- if (tolower(local_key) == "plotnumber") plot_number else project_id
+    if (is.null(value) || !nzchar(as.character(value))) next
+    filters <- c(filters, paste0(cloud_key, " = ?"))
+    params <- c(params, list(value))
+  }
+  list(filters = filters, params = params)
+}
+
+sync_upsert_local_to_cloud <- function(con, mapping, plot_number, project_id, submitter) {
+  cloud_table <- mapping$cloud_table
+  local_table <- mapping$local_table
+  local_cols <- mapping$local_cols
+  cloud_cols <- mapping$cloud_cols
+
+  if (!DBI::dbExistsTable(con, local_table)) return(FALSE)
+
+  local_to_cloud <- setNames(cloud_cols, local_cols)
+  key_filters <- sync_cloud_key_filters(mapping, plot_number, project_id)
+  if (length(key_filters$filters) == 0) return(FALSE)
+
+  temp_name <- "tmp_sync_conflict_local"
+  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
+
+  select_cols <- paste(sprintf("%s AS %s", local_cols, cloud_cols), collapse = ", ")
+  where_clause <- paste(key_filters$filters, collapse = " AND ")
+  sql <- sprintf("CREATE TEMP TABLE %s AS SELECT %s FROM %s WHERE %s", temp_name, select_cols, local_table, where_clause)
+  DBI::dbExecute(con, sql, key_filters$params)
+
+  row_count <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", temp_name))$n[1]
+  if (row_count == 0) {
+    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
+    return(FALSE)
+  }
+
+  cloud_fields <- tryCatch(DBI::dbListFields(con, cloud_table), error = function(e) character(0))
+  insert_cols <- intersect(cloud_cols, cloud_fields)
+  insert_cols <- unique(c(insert_cols, if ("modified_by" %in% cloud_fields) "modified_by" else character(0)))
+
+  insert_select <- paste(intersect(cloud_cols, insert_cols), collapse = ", ")
+  if ("modified_by" %in% insert_cols) {
+    insert_select <- paste(insert_select, "?", sep = ", ")
+  }
+
+  update_cols <- setdiff(intersect(cloud_cols, cloud_fields), mapping$key_cols)
+  update_sql <- paste(sprintf("%s = EXCLUDED.%s", update_cols, update_cols), collapse = ", ")
+  extra_updates <- character(0)
+  if ("modified_by" %in% cloud_fields) extra_updates <- c(extra_updates, "modified_by = EXCLUDED.modified_by")
+  if ("last_modified_utc" %in% cloud_fields) extra_updates <- c(extra_updates, "last_modified_utc = now()")
+  if ("row_version" %in% cloud_fields) extra_updates <- c(extra_updates, "row_version = coalesce(row_version, 0) + 1")
+  if (length(extra_updates) > 0) {
+    update_sql <- paste(c(update_sql, extra_updates), collapse = ", ")
+  }
+
+  conflict_keys <- intersect(mapping$cloud_cols, mapping$key_cols)
+  if (length(conflict_keys) == 0) conflict_keys <- mapping$cloud_cols[1]
+  conflict_clause <- paste(conflict_keys, collapse = ", ")
+
+  insert_sql <- sprintf(
+    "INSERT INTO %s (%s) SELECT %s FROM %s ON CONFLICT (%s) DO UPDATE SET %s",
+    cloud_table,
+    paste(insert_cols, collapse = ", "),
+    insert_select,
+    temp_name,
+    conflict_clause,
+    update_sql
+  )
+  params <- if ("modified_by" %in% insert_cols) list(submitter) else list()
+  DBI::dbExecute(con, insert_sql, params)
+  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
+  TRUE
+}
+
+sync_replace_local_from_cloud <- function(con, mapping, plot_number, project_id) {
+  cloud_table <- mapping$cloud_table
+  local_table <- mapping$local_table
+  local_cols <- mapping$local_cols
+  cloud_cols <- mapping$cloud_cols
+
+  if (!DBI::dbExistsTable(con, local_table)) return(FALSE)
+
+  key_filters <- sync_cloud_key_filters(mapping, plot_number, project_id)
+  if (length(key_filters$filters) == 0) return(FALSE)
+
+  temp_name <- "tmp_sync_conflict_cloud"
+  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
+
+  select_cols <- paste(sprintf("%s AS %s", cloud_cols, local_cols), collapse = ", ")
+  where_clause <- paste(key_filters$filters, collapse = " AND ")
+  sql <- sprintf("CREATE TEMP TABLE %s AS SELECT %s FROM %s WHERE %s", temp_name, select_cols, cloud_table, where_clause)
+  DBI::dbExecute(con, sql, key_filters$params)
+
+  row_count <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", temp_name))$n[1]
+  if (row_count == 0) {
+    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
+    return(FALSE)
+  }
+
+  key_clause <- paste(sprintf("%s = ?", mapping$key_cols), collapse = " AND ")
+  key_params <- list(plot_number)
+  if (length(mapping$key_cols) > 1 && !is.null(project_id)) {
+    key_params <- c(key_params, list(project_id))
+  }
+  DBI::dbExecute(con, sprintf("DELETE FROM %s WHERE %s", local_table, key_clause), key_params)
+  DBI::dbExecute(con, sprintf("INSERT INTO %s (%s) SELECT %s FROM %s",
+    local_table,
+    paste(local_cols, collapse = ", "),
+    paste(local_cols, collapse = ", "),
+    temp_name
+  ))
+  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
+  TRUE
+}
+
+sync_resolve_conflict <- function(con, conflict_id, resolution, submitter = Sys.getenv("USER", "unknown")) {
+  conflict <- sync_fetch_conflict(con, conflict_id)
+  if (is.null(conflict) || nrow(conflict) == 0) return(FALSE)
+
+  mapping <- sync_mapping_by_local_table(conflict$table_name[1])
+  if (is.null(mapping)) return(FALSE)
+
+  plot_number <- conflict$plot_number[1]
+  project_id <- conflict$project_id[1]
+
+  sync_require_cloud(con, allow_attach = TRUE)
+
+  ok <- FALSE
+  if (identical(resolution, "keep_local")) {
+    ok <- sync_upsert_local_to_cloud(con, mapping, plot_number, project_id, submitter)
+  } else if (identical(resolution, "keep_cloud")) {
+    ok <- sync_replace_local_from_cloud(con, mapping, plot_number, project_id)
+  } else if (identical(resolution, "dismiss")) {
+    ok <- TRUE
+  }
+
+  if (isTRUE(ok)) {
+    sync_delete_conflict(con, conflict_id)
+  }
+  ok
 }
 
 sync_require_cloud <- function(con, environment = NULL, allow_attach = TRUE) {
@@ -148,6 +472,7 @@ sync_pull <- function(con,
     DBI::dbExecute(con, sprintf("CREATE TEMP TABLE %s AS %s", temp_name, sql), params)
 
     pulled <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", temp_name))$n[1]
+    conflict_count <- sync_detect_conflicts(con, mapping, temp_name, project_id = project_id, cloud_seen_utc = last_pull)
     if (pulled > 0) {
       key_col <- mapping$key_cols[1]
       DBI::dbExecute(
@@ -167,7 +492,7 @@ sync_pull <- function(con,
 
     DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
     sync_set_state(con, scope, format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
-    results[[table_key]] <- list(pulled = pulled, skipped = FALSE)
+    results[[table_key]] <- list(pulled = pulled, skipped = FALSE, conflicts = conflict_count)
   }
 
   results
@@ -307,6 +632,40 @@ sync_push <- function(con,
     "UPDATE master.admin.merge_requests SET env_record_count = ?, veg_record_count = ? WHERE id = ?",
     list(env_total, veg_total, merge_request_id)
   )
+
+  compliance <- staging_compliance_checks(con, merge_request_id, project_id)
+  report_json <- NULL
+  if (!is.null(compliance) && requireNamespace("jsonlite", quietly = TRUE)) {
+    report_json <- jsonlite::toJSON(
+      list(summary = compliance$summary_tibble, details = compliance$detail_tibble),
+      auto_unbox = TRUE,
+      na = "null"
+    )
+  }
+
+  compliance_ok <- isTRUE(compliance$passed)
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.merge_requests
+     SET compliance_passed = ?, compliance_report = ?
+     WHERE id = ?",
+    list(compliance_ok, report_json, merge_request_id)
+  )
+
+  if (!compliance_ok) {
+    DBI::dbExecute(
+      con,
+      "UPDATE master.admin.merge_requests
+       SET status = 'rejected'
+       WHERE id = ?",
+      list(merge_request_id)
+    )
+    DBI::dbExecute(con, "DELETE FROM master.staging.sample_env WHERE merge_request_id = ?", list(merge_request_id))
+    DBI::dbExecute(con, "DELETE FROM master.staging.sample_su WHERE merge_request_id = ?", list(merge_request_id))
+    DBI::dbExecute(con, "DELETE FROM master.staging.sample_veg WHERE merge_request_id = ?", list(merge_request_id))
+    results$compliance_failed <- TRUE
+    return(results)
+  }
 
   for (table_key in tables) {
     scope <- paste("last_push", table_key, project_id, sep = ":")
