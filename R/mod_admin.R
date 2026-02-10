@@ -129,6 +129,37 @@ mod_admin_ui <- function(id) {
                )
              )
            )
+        ),
+        nav_panel("Sync",
+          layout_sidebar(
+            sidebar = sidebar(
+              textInput(ns("sync_project"), "Project ID", value = ""),
+              checkboxGroupInput(
+                ns("sync_tables"),
+                "Tables",
+                choices = c(
+                  "Environment" = "sample_env",
+                  "Site Unit" = "sample_su",
+                  "Vegetation" = "sample_veg"
+                ),
+                selected = c("sample_env", "sample_su", "sample_veg")
+              ),
+              actionButton(ns("sync_pull"), "Sync Pull", class = "btn-outline-primary w-100 mt-2"),
+              actionButton(ns("sync_push"), "Sync Push", class = "btn-outline-danger w-100 mt-2"),
+              actionButton(ns("sync_refresh"), "Refresh Status", class = "btn-secondary w-100 mt-2"),
+              tags$hr(),
+              textInput(ns("sync_snapshot_dir"), "Parquet snapshot dir", value = ""),
+              actionButton(ns("sync_snapshot"), "Export Parquet Snapshot", class = "btn-outline-secondary w-100 mt-2")
+            ),
+            card(
+              card_header("Cloud Sync"),
+              card_body(
+                textOutput(ns("sync_status")),
+                tableOutput(ns("sync_status_table")),
+                textOutput(ns("sync_snapshot_status"))
+              )
+            )
+          )
         )
       )
       )
@@ -412,6 +443,109 @@ mod_admin_server <- function(id, state, con) {
         dbRollback(con)
         showNotification(paste("Save failed:", e$message), type = "error")
       })
+    })
+
+    # ==========================================================================
+    # 2.1 Sync Panel
+    # ==========================================================================
+
+    sync_status_table <- reactiveVal(data.frame())
+    sync_snapshot_status <- reactiveVal("")
+
+    observeEvent(state$CurrProject, {
+      if (!is.null(input$sync_project)) {
+        updateTextInput(session, "sync_project", value = state$CurrProject %||% "")
+      }
+    }, ignoreInit = TRUE)
+
+    refresh_sync_status <- function() {
+      sync_ensure_state_tables(con)
+      tables <- input$sync_tables %||% character(0)
+      project_id <- trimws(input$sync_project)
+      table_rows <- lapply(tables, function(table_key) {
+        pull_scope <- paste("last_pull", table_key, if (nzchar(project_id)) project_id else "all", sep = ":")
+        push_scope <- paste("last_push", table_key, if (nzchar(project_id)) project_id else "all", sep = ":")
+        data.frame(
+          table = table_key,
+          last_pull = sync_get_state(con, pull_scope),
+          last_push = sync_get_state(con, push_scope),
+          stringsAsFactors = FALSE
+        )
+      })
+      sync_status_table(do.call(rbind, table_rows))
+
+      cloud_state <- if (sync_cloud_connected(con)) "connected" else "not attached"
+      output$sync_status <- renderText(paste("Cloud:", cloud_state))
+    }
+
+    observeEvent(input$sync_tables, {
+      refresh_sync_status()
+    }, ignoreInit = FALSE)
+
+    observeEvent(input$sync_refresh, {
+      refresh_sync_status()
+    })
+
+    observeEvent(input$sync_pull, {
+      tables <- input$sync_tables %||% character(0)
+      project_id <- trimws(input$sync_project)
+      if (!length(tables)) {
+        showNotification("Select at least one table.", type = "warning")
+        return()
+      }
+
+      tryCatch({
+        result <- sync_pull(con, project_id = if (nzchar(project_id)) project_id else NULL, tables = tables)
+        showNotification(paste("Sync pull complete.", paste(names(result), collapse = ", ")), type = "message")
+      }, error = function(e) {
+        showNotification(paste("Sync pull failed:", e$message), type = "error")
+      })
+
+      refresh_sync_status()
+    })
+
+    observeEvent(input$sync_push, {
+      tables <- input$sync_tables %||% character(0)
+      project_id <- trimws(input$sync_project)
+      if (!length(tables)) {
+        showNotification("Select at least one table.", type = "warning")
+        return()
+      }
+
+      tryCatch({
+        result <- sync_push(con, project_id = if (nzchar(project_id)) project_id else NULL, tables = tables)
+        merge_id <- result$merge_request_id %||% NA
+        showNotification(paste("Sync push complete. Merge request:", merge_id), type = "message")
+      }, error = function(e) {
+        showNotification(paste("Sync push failed:", e$message), type = "error")
+      })
+
+      refresh_sync_status()
+    })
+
+    observeEvent(input$sync_snapshot, {
+      out_dir <- trimws(input$sync_snapshot_dir)
+      if (!nzchar(out_dir)) {
+        showNotification("Provide a snapshot directory.", type = "warning")
+        return()
+      }
+
+      tryCatch({
+        result <- export_parquet_snapshot(con, out_dir)
+        sync_snapshot_status(paste("Snapshot files:", length(result$files), "Errors:", length(result$errors)))
+        showNotification("Snapshot export complete.", type = "message")
+      }, error = function(e) {
+        sync_snapshot_status("")
+        showNotification(paste("Snapshot export failed:", e$message), type = "error")
+      })
+    })
+
+    output$sync_status_table <- renderTable({
+      sync_status_table()
+    }, striped = TRUE, spacing = "s")
+
+    output$sync_snapshot_status <- renderText({
+      sync_snapshot_status()
     })
 
     # ==========================================================================

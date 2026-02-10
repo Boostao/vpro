@@ -19,16 +19,85 @@ CREATE TABLE IF NOT EXISTS core.sample_veg (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL,
     species_code TEXT NOT NULL,
-    layer_code TEXT NOT NULL,
-    cover_percent INTEGER CHECK (cover_percent >= 0 AND cover_percent <= 100),
-    height_cm INTEGER CHECK (height_cm >= 0),
-    cover_code TEXT,
+    layer_code TEXT,
+    cover1 REAL,
+    height1 REAL,
+    cover2 REAL,
+    height2 REAL,
+    cover3 REAL,
+    height3 REAL,
+    totala REAL,
+    heighta REAL,
+    cover4 REAL,
+    height4 REAL,
+    cover5 REAL,
+    height5 REAL,
+    cover5a REAL,
+    height5a REAL,
+    cover5b REAL,
+    height5b REAL,
+    cover5c REAL,
+    height5c REAL,
+    totalb REAL,
+    heightb TEXT,
+    cover6 REAL,
+    height6 REAL,
+    cover7 REAL,
+    cover8 REAL,
+    cover9 REAL,
+    cover10 REAL,
+    collected TEXT,
+    flag BOOLEAN,
+    veg_id INTEGER,
+    ll INTEGER,
+    af INTEGER,
+    dc INTEGER,
+    ut INTEGER,
+    vi INTEGER,
+    pv INTEGER,
+    pg INTEGER,
+    ffa INTEGER,
+    cultural1 INTEGER,
+    cultural2 INTEGER,
+    other1 INTEGER,
+    other2 INTEGER,
     project_id INTEGER NOT NULL,
     row_version INTEGER DEFAULT 1,
     last_modified_utc TIMESTAMPTZ DEFAULT now(),
     modified_by TEXT NOT NULL,
     UNIQUE(plot_number, species_code, layer_code, project_id)
 );
+
+CREATE OR REPLACE VIEW core.vw_usysallveg AS
+SELECT plot_number AS plotnumber, '1' AS mylayer, species_code AS species, cover1 AS cover FROM core.sample_veg WHERE cover1 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '2' AS mylayer, species_code AS species, cover2 AS cover FROM core.sample_veg WHERE cover2 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '3' AS mylayer, species_code AS species, cover3 AS cover FROM core.sample_veg WHERE cover3 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '4' AS mylayer, species_code AS species, cover4 AS cover FROM core.sample_veg WHERE cover4 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '5' AS mylayer, species_code AS species, cover5 AS cover FROM core.sample_veg WHERE cover5 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '5a' AS mylayer, species_code AS species, cover5a AS cover FROM core.sample_veg WHERE cover5a IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '5b' AS mylayer, species_code AS species, cover5b AS cover FROM core.sample_veg WHERE cover5b IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '5c' AS mylayer, species_code AS species, cover5c AS cover FROM core.sample_veg WHERE cover5c IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '6' AS mylayer, species_code AS species, cover6 AS cover FROM core.sample_veg WHERE cover6 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '7' AS mylayer, species_code AS species, cover7 AS cover FROM core.sample_veg WHERE cover7 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '8' AS mylayer, species_code AS species, cover8 AS cover FROM core.sample_veg WHERE cover8 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '9' AS mylayer, species_code AS species, cover9 AS cover FROM core.sample_veg WHERE cover9 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, '10' AS mylayer, species_code AS species, cover10 AS cover FROM core.sample_veg WHERE cover10 IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, 'A' AS mylayer, species_code AS species, totala AS cover FROM core.sample_veg WHERE totala IS NOT NULL
+UNION ALL
+SELECT plot_number AS plotnumber, 'B' AS mylayer, species_code AS species, totalb AS cover FROM core.sample_veg WHERE totalb IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS core.sample_env (
     id SERIAL PRIMARY KEY,
@@ -145,10 +214,48 @@ CREATE TABLE IF NOT EXISTS staging.sample_veg (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL,
     species_code TEXT NOT NULL,
-    layer_code TEXT NOT NULL,
-    cover_percent INTEGER CHECK (cover_percent >= 0 AND cover_percent <= 100),
-    height_cm INTEGER CHECK (height_cm >= 0),
-    cover_code TEXT,
+    layer_code TEXT,
+    cover1 REAL,
+    height1 REAL,
+    cover2 REAL,
+    height2 REAL,
+    cover3 REAL,
+    height3 REAL,
+    totala REAL,
+    heighta REAL,
+    cover4 REAL,
+    height4 REAL,
+    cover5 REAL,
+    height5 REAL,
+    cover5a REAL,
+    height5a REAL,
+    cover5b REAL,
+    height5b REAL,
+    cover5c REAL,
+    height5c REAL,
+    totalb REAL,
+    heightb TEXT,
+    cover6 REAL,
+    height6 REAL,
+    cover7 REAL,
+    cover8 REAL,
+    cover9 REAL,
+    cover10 REAL,
+    collected TEXT,
+    flag BOOLEAN,
+    veg_id INTEGER,
+    ll INTEGER,
+    af INTEGER,
+    dc INTEGER,
+    ut INTEGER,
+    vi INTEGER,
+    pv INTEGER,
+    pg INTEGER,
+    ffa INTEGER,
+    cultural1 INTEGER,
+    cultural2 INTEGER,
+    other1 INTEGER,
+    other2 INTEGER,
     project_id INTEGER NOT NULL,
     merge_request_id INTEGER NOT NULL,
     row_version INTEGER DEFAULT 1,

@@ -60,7 +60,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Report logic parity**: lifeform + hierarchy reports updated with filters
 
 ### 🔲 Not Started
-- **Cloud sync**: `R/logic_sync.R` (architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`, stub added)
+- **Cloud sync**: `R/logic_sync.R` pull/push for Sample_Env/Sample_SU + wide Sample_Veg staging + admin sync panel + parquet snapshot helper
 - **Auth/RBAC**: `R/mod_auth.R` (UI shell)
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)
 - **RDS publishing**: `R/logic_publish.R` (stub added)
