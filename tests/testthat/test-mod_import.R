@@ -1,6 +1,8 @@
 # Tests for Import module
 
 source(here::here("R", "logic_compliance.R"))
+source(here::here("R", "db_connections.R"))
+source(here::here("R", "logic_auth.R"))
 source(here::here("R", "mod_import.R"))
 
 setup_import_tables <- function(con) {
@@ -53,6 +55,12 @@ write_csv_named <- function(dir_path, file_name, data) {
   path
 }
 
+setup_import_auth <- function(state) {
+  auth_init_state(state)
+  state$AuthAuthenticated <- TRUE
+  state$AuthPermissions <- c("manage:imports")
+}
+
 test_that("mod_import imports CSV into target table", {
   testthat::skip_if_not_installed("shiny")
 
@@ -65,6 +73,8 @@ test_that("mod_import imports CSV into target table", {
   csv_path <- write_csv_named(temp_dir, "Test_Table.csv", data.frame(a = c("x", "y"), b = c(1, 2)))
 
   state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = csv_path, name = "Test_Table.csv"))
@@ -102,6 +112,7 @@ test_that("mod_import handles ZIP files and imports selected tables", {
   utils::zip(zipfile = zip_path, files = c(csv_ok, csv_bad))
 
   state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
@@ -149,6 +160,9 @@ test_that("mod_import blocks CSV import when compliance fails", {
   )
 
   state <- shiny::reactiveValues(CurrProject = "PRJ")
+  setup_import_auth(state)
+  setup_import_auth(state)
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = csv_path, name = "Sample_Env.csv"))
@@ -176,6 +190,8 @@ test_that("mod_import blocks CSV import when validation fails", {
   csv_path <- write_csv_named(temp_dir, "Test_Table.csv", data.frame(a = "x"))
 
   state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = csv_path, name = "Test_Table.csv"))
@@ -204,6 +220,7 @@ test_that("mod_import updates validation when target table changes", {
   csv_path <- write_csv_named(temp_dir, "Test_Table.csv", data.frame(a = "x", b = 1))
 
   state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = csv_path, name = "Test_Table.csv"))
@@ -248,6 +265,7 @@ test_that("mod_import rolls back ZIP imports on compliance failure", {
   utils::zip(zipfile = zip_path, files = c(csv_env, csv_ok))
 
   state <- shiny::reactiveValues(CurrProject = "PRJ")
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
@@ -280,6 +298,7 @@ test_that("mod_import blocks ZIP import when validation fails", {
   utils::zip(zipfile = zip_path, files = c(csv_ok, csv_bad))
 
   state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
@@ -322,6 +341,7 @@ test_that("mod_import rolls back ZIP imports on veg compliance failure", {
   utils::zip(zipfile = zip_path, files = c(csv_veg, csv_ok))
 
   state <- shiny::reactiveValues(CurrProject = "PRJ")
+  setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
