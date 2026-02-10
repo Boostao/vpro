@@ -55,6 +55,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Diagnostics/QC**: diagnostic helper functions (presence class + diagnosis + matrix runner + live matrix builder) in `R/logic_diagnostic.R`; UI/report wiring in Reports module complete
 - **UI regression tests**: shinytest2 scaffold complete; smoke tests for core flows pending
 - **Report logic parity**: QC report wiring complete
+- **Report logic parity**: env/hierarchy report normalization in progress
 
 ### 🔲 Not Started
 - **Cloud sync**: `R/logic_sync.R` (architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`, stub added)

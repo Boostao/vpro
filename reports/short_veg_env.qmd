@@ -71,6 +71,37 @@ normalize_veg_cols <- function(df) {
 
 veg <- normalize_veg_cols(veg)
 
+normalize_env_cols <- function(df) {
+  if (nrow(df) == 0) return(df)
+  cols <- names(df)
+  pick_col <- function(candidates) {
+    idx <- which(tolower(cols) %in% tolower(candidates))
+    if (length(idx) > 0) cols[[idx[1]]] else NA_character_
+  }
+  map <- list(
+    plotnumber = c("plotnumber", "PlotNumber"),
+    projectid = c("projectid", "ProjectID"),
+    date = c("date", "Date"),
+    sitesurveyor = c("sitesurveyor", "SiteSurveyor"),
+    latitude = c("latitude", "Latitude"),
+    longitude = c("longitude", "Longitude"),
+    elevation = c("elevation", "Elevation"),
+    aspect = c("aspect", "Aspect"),
+    slopegradient = c("slopegradient", "SlopeGradient"),
+    mesoslopeposition = c("mesoslopeposition", "MesoSlopePosition"),
+    surfaceshape = c("surfaceshape", "SurfaceShape"),
+    moistureregime = c("moistureregime", "MoistureRegime"),
+    nutrientregime = c("nutrientregime", "NutrientRegime")
+  )
+  for (target in names(map)) {
+    source <- pick_col(map[[target]])
+    if (!is.na(source)) df[[target]] <- df[[source]]
+  }
+  df
+}
+
+env <- normalize_env_cols(env)
+
 dbDisconnect(con, shutdown = TRUE)
 ```
 

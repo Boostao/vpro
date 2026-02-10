@@ -42,6 +42,26 @@ labels <- dbGetQuery(
    ORDER BY plotnumber"
 )
 
+normalize_env_cols <- function(df) {
+  if (nrow(df) == 0) return(df)
+  cols <- names(df)
+  pick_col <- function(candidates) {
+    idx <- which(tolower(cols) %in% tolower(candidates))
+    if (length(idx) > 0) cols[[idx[1]]] else NA_character_
+  }
+  plot_col <- pick_col(c("plotnumber", "PlotNumber"))
+  proj_col <- pick_col(c("projectid", "ProjectID"))
+  zone_col <- pick_col(c("zone", "Zone"))
+  subzone_col <- pick_col(c("subzone", "SubZone"))
+  if (!is.na(plot_col)) df$plotnumber <- df[[plot_col]]
+  if (!is.na(proj_col)) df$projectid <- df[[proj_col]]
+  if (!is.na(zone_col)) df$zone <- df[[zone_col]]
+  if (!is.na(subzone_col)) df$subzone <- df[[subzone_col]]
+  df
+}
+
+labels <- normalize_env_cols(labels)
+
 dbDisconnect(con, shutdown = TRUE)
 ```
 

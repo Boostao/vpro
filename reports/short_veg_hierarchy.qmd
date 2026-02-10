@@ -65,7 +65,7 @@ veg <- normalize_veg_cols(veg)
 dbDisconnect(con, shutdown = TRUE)
 
 hier_col <- NULL
-for (candidate in c("Hierarchy", "HierarchyName", "hierarchy")) {
+for (candidate in c("Hierarchy", "HierarchyName", "hierarchy", "Hierarchy_Path", "HierarchyPath")) {
   if (candidate %in% names(veg)) {
     hier_col <- candidate
     break

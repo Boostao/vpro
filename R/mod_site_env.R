@@ -266,7 +266,7 @@ mod_site_env_ui <- function(id) {
                 nav_panel("Audit",
                     selectInput(ns("env_audit_table"), "Table", choices = c("All" = "", "Sample_Env", "Sample_Humus", "Sample_Mineral")),
                     DT::DTOutput(ns("dt_audit_env"))
-                ),
+                )
       )
     )
   )

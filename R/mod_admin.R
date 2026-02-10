@@ -3,8 +3,9 @@ mod_admin_ui <- function(id) {
   ns <- NS(id)
   tagList(
     page_fillable(
-      navset_card_tab(
+      card(
         full_screen = TRUE,
+        navset_card_tab(
         
         # --- TAB 1: Project Metadata ---
         nav_panel("Project Metadata",
@@ -129,6 +130,7 @@ mod_admin_ui <- function(id) {
              )
            )
         )
+      )
       )
     )
   )
