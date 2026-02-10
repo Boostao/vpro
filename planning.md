@@ -34,7 +34,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Administration**: `R/mod_admin.R` — Project Metadata CRUD + Code Maintenance (240 lines)
 - **Export**: `R/mod_export.R` — CSV/RDS with lumping and vegan pivot (130 lines)
 - **Images/Maps**: `R/mod_images.R` — Blob gallery + KML export (125 lines)
-- **Reporting**: `R/mod_reporting.R` — Single Quarto template (65 lines)
+- **Reporting templates**: 15/15 Quarto templates created
 - **Lumping**: `R/logic_lumping.R` — `apply_lumping()` species synonym resolution (53 lines)
 - **Veg data**: `R/logic_veg_data.R` — `get_vegetation_data()` with joins (50 lines)
 - **Test infra**: `tests/testthat/` — setup, helpers (in-memory DuckDB), db_connections + core logic/module tests
@@ -46,7 +46,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 ### ⚠️ Partial
 - **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — null-safety audit complete
 - **VENUS XML export**: XML export implemented with schema-ordered columns, DMS derivations, prefixing, project filtering, and expanded tests; remaining Access field transforms TBD
-- **Reporting**: 15/15 Access reports recreated as Quarto templates; parameter parity and VBA logic ports still in progress
+- **Reporting parity**: 15/15 Quarto templates created; parameter parity and VBA logic ports still in progress
 - **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
 - **Audit trail**: core helpers + logging for veg/soil/header edits + master audit helper + master audit viewer + basic Audit tabs
 - **Master site unit list tools**: admin editor + master audit logging (lists schema)
@@ -65,6 +65,12 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 
 ### 🔲 Not Started
 - **Tests**: remaining module and report tests (view tests + compliance tests + hierarchy tests done)
+
+### Known mismatches
+- Report templates are all present, but VBA parity and parameter logic are still partial.
+- Audit and diagnostic logic exist, but UI parity and field coverage are not complete.
+- VENUS/XML export is implemented but missing remaining Access field transforms.
+- UI tests cover smoke navigation only; full flow coverage is pending.
 
 ---
 
@@ -240,8 +246,8 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 | `V7mdlExportToR1` | `R/mod_export.R` | ✅ |
 | `V7mdlExportToR2` | `R/mod_export.R` | ✅ |
 | `V7mdlExportCompactNew` | `R/mod_export.R` | ✅ |
-| `V7mdlExportVenus` | `R/mod_export.R` (extend) | 🔲 |
-| `V7mdlExportXML` | `R/mod_export.R` (extend) | 🔲 |
+| `V7mdlExportVenus` | `R/mod_export.R` (extend) | ⚠️ Partial |
+| `V7mdlExportXML` | `R/mod_export.R` (extend) | ⚠️ Partial |
 | `V7mdlExportVPro03/13/15` | Low priority (legacy formats) | 🔲 |
 | `V7mdlVtabImportExport` | `R/mod_import.R` | ⚠️ |
 | `V7mdlAttach*` (9 modules) | `R/mod_import.R` | ⚠️ |
@@ -250,21 +256,21 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 ### Reporting
 | VBA Module | R Target | Status |
 |-----------|----------|--------|
-| `V7mdlReportCombo1/2` | `R/mod_reporting.R` (parameter UI) | ⚠️ |
-| `V7mdlReportsCommonCode` | Shared Quarto helpers | 🔲 |
-| `V7mdlReportsShortVeg` | `reports/short_veg.qmd` | 🔲 |
-| `V7mdlReportsLongVeg` | `reports/long_veg.qmd` | 🔲 |
-| `V7mdlReportsEnv` | `reports/env_summary.qmd` | 🔲 |
-| `V7mdlReportsShortVegEnv` | `reports/short_veg_env.qmd` | 🔲 |
-| `V7mdlReportsShortVegHierarchy` | `reports/short_veg_hierarchy.qmd` | 🔲 |
-| `V7mdlReportsShortVegOrderHierarchy` | Combine with above | 🔲 |
-| `V7mdlReportsSiteUnitDetail` | ✅ `reports/site_summary.qmd` | ✅ |
-| `V7mdlReportsValidateEnvData` | `R/logic_compliance.R` | 🔲 |
-| `V7mdlReportsValidateVegCodes` | `R/logic_compliance.R` | 🔲 |
-| `V7mdlReportsQualityControl` | `reports/quality_control.qmd` | 🔲 |
-| `V7mdlReportsLifeform` | `reports/lifeform.qmd` | 🔲 |
-| `V7mdlReportsHierarchyDiagram` | `reports/hierarchy.qmd` | 🔲 |
-| `V7mdlReportFlatHierarchy` | `reports/flat_hierarchy.qmd` | 🔲 |
+| `V7mdlReportCombo1/2` | `R/mod_reporting.R` (parameter UI) | ✅ |
+| `V7mdlReportsCommonCode` | Shared Quarto helpers | ⚠️ Partial |
+| `V7mdlReportsShortVeg` | `reports/short_veg.qmd` | ⚠️ Partial |
+| `V7mdlReportsLongVeg` | `reports/long_veg.qmd` | ⚠️ Partial |
+| `V7mdlReportsEnv` | `reports/env_summary.qmd` | ⚠️ Partial |
+| `V7mdlReportsShortVegEnv` | `reports/short_veg_env.qmd` | ⚠️ Partial |
+| `V7mdlReportsShortVegHierarchy` | `reports/short_veg_hierarchy.qmd` | ⚠️ Partial |
+| `V7mdlReportsShortVegOrderHierarchy` | Combine with above | ⚠️ Partial |
+| `V7mdlReportsSiteUnitDetail` | `reports/site_summary.qmd` | ⚠️ Partial |
+| `V7mdlReportsValidateEnvData` | `R/logic_compliance.R` | ⚠️ Partial |
+| `V7mdlReportsValidateVegCodes` | `R/logic_compliance.R` | ⚠️ Partial |
+| `V7mdlReportsQualityControl` | `reports/quality_control.qmd` | ⚠️ Partial |
+| `V7mdlReportsLifeform` | `reports/lifeform.qmd` | ⚠️ Partial |
+| `V7mdlReportsHierarchyDiagram` | `reports/hierarchy.qmd` | ⚠️ Partial |
+| `V7mdlReportFlatHierarchy` | `reports/flat_hierarchy.qmd` | ⚠️ Partial |
 
 ### Hierarchy & Classification
 | VBA Module | R Target | Status |
@@ -279,11 +285,11 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 ### Utilities & System
 | VBA Module | R Target | Status |
 |-----------|----------|--------|
-| `V7mdlUtility` | Various helpers inline | ⚠️ |
+| `V7mdlUtility` | Various helpers inline | ⚠️ Partial |
 | `V7mdlAPICalls` | Not applicable (no Win32 API) | N/A |
 | `V7mdlBackup` | `R/logic_backup.R` (DuckDB file copy) | 🔲 |
-| `V7mdlAudit` | `R/logic_audit.R` | 🔲 |
-| `V7mdlDiagnostic` | `R/logic_compliance.R` | 🔲 |
+| `V7mdlAudit` | `R/logic_audit.R` | ⚠️ Partial |
+| `V7mdlDiagnostic` | `R/logic_compliance.R` | ⚠️ Partial |
 | `V7mdlCoordTools` | Inline in `mod_site_env.R` | ⚠️ |
 | `V7mdlGoogleEarth` | `R/mod_images.R` (KML section) | ✅ |
 | `V7mdlSpellCheck*` | Not ported (browser handles spellcheck) | N/A |
