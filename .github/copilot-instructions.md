@@ -340,9 +340,12 @@ DuckDB (in-process)
 4. **Test everything portworthy**: Every VBA function ported to R gets a corresponding `test-logic_*.R` test. Use in-memory DuckDB via `helpers.R` for fast isolated tests.
 5. **Access reference is read-only**: Never modify files under `VPRO_ACCESS/`. It is the canonical source of truth for the original application. Always cross-reference `Tables_Def/`, `Modules/`, `Queries/`, and `Forms/` when porting.
 6. **Null safety**: Always handle `NA`/`NULL` explicitly. Port Access `Nz(x, default)` as `replace(x, is.na(x), default)` or `dplyr::coalesce(x, default)`.
-7. **Commit discipline**: Atomic commits per module/feature. Never commit `.duckdb` files (they're generated). The `renv.lock` is committed.
+7. **Commit discipline**: Atomic commits per module/feature; split unrelated changes into separate commits. Aim for 1-3 commits per meaningful task (logic + tests + docs as appropriate). Stage only relevant files (avoid `git add -A` if unrelated changes are present). Never commit `.duckdb` files (they're generated). The `renv.lock` is committed.
 8. **User-facing language**: Labels, tooltips, and error messages use forestry domain terminology matching the original Access forms. When in doubt, check the form `.txt` export for `Caption` and `StatusBarText` properties.
 
 ## Progress
-Use git add -A and commit/push often with clear messages. When a block of work/task is completed.
-Keep planning.md updated
+- Use clear, scoped commit messages (prefix with area if helpful, e.g., "Import:", "Reports:").
+- Commit when a coherent unit is done (feature + tests or doc updates), not every micro-change.
+- Push after completing a block or when requested; avoid pushing partial/unstable work.
+- If a git cycle is requested, review `git status` and split commits if unrelated changes are present.
+- Keep planning.md updated.
