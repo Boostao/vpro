@@ -3,9 +3,15 @@
 source(here::here("R", "logic_audit.R"))
 
 setup_audit_env <- function(con) {
-  DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS user")
+  attached <- tryCatch({
+    DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
+  }, error = function(e) character(0))
+  if (!("user_db" %in% attached)) {
+    audit_db <- tempfile("audit_db_", fileext = ".duckdb")
+    DBI::dbExecute(con, sprintf("ATTACH '%s' AS user_db", gsub("'", "''", audit_db)))
+  }
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS user.USysAuditTrail (
+    CREATE TABLE IF NOT EXISTS user_db.main.USysAuditTrail (
       Project TEXT,
       \"User\" TEXT,
       PlotNumber TEXT,
@@ -25,7 +31,7 @@ test_that("log_audit_change writes entries", {
 
   log_audit_change(con, "PRJ", "tester", "P1", "Sample_Env", "latitude", 50, 51)
 
-  rows <- DBI::dbGetQuery(con, "SELECT * FROM user.USysAuditTrail")
+  rows <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
   expect_equal(nrow(rows), 1)
   expect_equal(rows$Project[1], "PRJ")
   expect_equal(rows$PlotNumber[1], "P1")
@@ -45,7 +51,7 @@ test_that("log_audit_diff logs multiple field changes", {
   logged <- log_audit_diff(con, "PRJ", "tester", "P1", "Sample_Env", old_row, new_row)
   expect_equal(logged, 1L)
 
-  rows <- DBI::dbGetQuery(con, "SELECT * FROM user.USysAuditTrail")
+  rows <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
   expect_equal(nrow(rows), 1)
   expect_equal(rows$EditField[1], "latitude")
 })
@@ -65,18 +71,34 @@ test_that("log_audit_rows logs insert values", {
   logged <- log_audit_rows(con, "PRJ", "tester", "Sample_Env", rows)
   expect_true(logged >= 2)
 
-  audit <- DBI::dbGetQuery(con, "SELECT * FROM user.USysAuditTrail")
+  audit <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
   expect_true(nrow(audit) >= 2)
   expect_true(all(audit$Project == "PRJ"))
+})
+
+test_that("log_audit_change resolves project from plot", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_audit_env(con)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES (?, ?)", list("P1", "PRJ1"))
+
+  log_audit_change(con, NULL, "tester", "P1", "Sample_Env", "latitude", 50, 51)
+
+  rows <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
+  expect_equal(nrow(rows), 1)
+  expect_equal(rows$Project[1], "PRJ1")
 })
 
 test_that("log_master_audit writes master audit entries", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_audit_env(con)
 
   log_master_audit(con, "tester", "Delete", "UnitA", 10, "Name", "UnitA", "UnitB", parent = "Root")
 
-  rows <- DBI::dbGetQuery(con, "SELECT * FROM user.USysMasterAudit")
+  rows <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysMasterAudit")
   expect_equal(nrow(rows), 1)
   expect_equal(rows$Action[1], "Delete")
   expect_equal(rows$NodeName[1], "UnitA")
@@ -86,6 +108,7 @@ test_that("log_master_audit writes master audit entries", {
 test_that("fetch_master_audit_entries filters entries", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_audit_env(con)
 
   ensure_master_audit_table(con)
   log_master_audit(con, "tester", "Add", "UnitA", 10, "Name", NA, "UnitA")

@@ -2,6 +2,28 @@
 
 audit_table_name <- "user_db.main.USysAuditTrail"
 
+parse_qualified_table <- function(name) {
+  if (is.null(name) || !nzchar(name)) return(NULL)
+  parts <- strsplit(name, "\\.")[[1]]
+  if (length(parts) != 3) return(NULL)
+  list(catalog = parts[[1]], schema = parts[[2]], table = parts[[3]])
+}
+
+table_exists_qualified <- function(con, name) {
+  parsed <- parse_qualified_table(name)
+  if (is.null(parsed)) return(DBI::dbExistsTable(con, name))
+  info <- tryCatch(
+    DBI::dbGetQuery(con, "SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE internal = FALSE"),
+    error = function(e) data.frame()
+  )
+  if (nrow(info) == 0) return(FALSE)
+  any(
+    tolower(info$database_name) == tolower(parsed$catalog) &
+      tolower(info$schema_name) == tolower(parsed$schema) &
+      tolower(info$table_name) == tolower(parsed$table)
+  )
+}
+
 quote_ident <- function(name) {
   if (is.null(name) || !nzchar(name)) return(NA_character_)
   paste0("\"", gsub("\"", "\"\"", name), "\"")
@@ -36,7 +58,7 @@ audit_table_name_col <- function(con) {
 }
 
 audit_table_exists <- function(con) {
-  DBI::dbExistsTable(con, audit_table_name)
+  table_exists_qualified(con, audit_table_name)
 }
 
 ensure_audit_table <- function(con) {
@@ -62,7 +84,15 @@ ensure_audit_table <- function(con) {
 }
 
 log_audit_change <- function(con, project_id, user, plot_number, table_name, field_name, before_value, after_value) {
-  if (is.null(project_id) || is.null(plot_number) || is.null(table_name) || is.null(field_name)) {
+  if (is.null(plot_number) || is.null(table_name) || is.null(field_name)) {
+    return(invisible(FALSE))
+  }
+
+  resolved_project <- project_id
+  if (is.null(resolved_project) || !nzchar(as.character(resolved_project))) {
+    resolved_project <- resolve_project_id_for_plot(con, plot_number, fallback_project = project_id)
+  }
+  if (is.null(resolved_project) || !nzchar(as.character(resolved_project))) {
     return(invisible(FALSE))
   }
 
@@ -78,7 +108,7 @@ log_audit_change <- function(con, project_id, user, plot_number, table_name, fie
     "INSERT INTO user_db.main.USysAuditTrail (Project, \"User\", PlotNumber, \"Table\", EditField, EditWhen, BeforeEdit, AfterEdit)
      VALUES (?, ?, ?, ?, ?, now(), ?, ?)",
     list(
-      project_id,
+      resolved_project,
       if (is.null(user) || length(user) == 0) "Unknown" else user,
       plot_number,
       table_name,
@@ -252,6 +282,10 @@ log_audit_rows <- function(con, project_id, user, table_name, rows, fields = NUL
       }
     }
 
+    if (is.null(project_value) || !nzchar(as.character(project_value))) {
+      project_value <- resolve_project_id_for_plot(con, plot_number, fallback_project = project_value)
+    }
+
     for (field_name in fields) {
       if (!(field_name %in% names(rows_df))) next
       value <- rows_df[[field_name]][row_idx]
@@ -268,7 +302,7 @@ log_audit_rows <- function(con, project_id, user, table_name, rows, fields = NUL
 master_audit_table_name <- "user_db.main.USysMasterAudit"
 
 master_audit_table_exists <- function(con) {
-  DBI::dbExistsTable(con, master_audit_table_name)
+  table_exists_qualified(con, master_audit_table_name)
 }
 
 ensure_master_audit_table <- function(con) {
