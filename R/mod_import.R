@@ -18,6 +18,7 @@ mod_import_ui <- function(id) {
       DT::DTOutput(ns("import_validation")),
       DT::DTOutput(ns("import_preview")),
       DT::DTOutput(ns("import_results_summary")),
+      DT::DTOutput(ns("import_compliance_by_project")),
       DT::DTOutput(ns("import_compliance"))
     )
   )
@@ -307,8 +308,16 @@ mod_import_server <- function(id, state, con) {
 
           choice_labels <- ifelse(
             rv$zip_meta$status == "Columns match target",
-            paste0(rv$zip_meta$table, " <- ", rv$zip_meta$file),
-            paste0(rv$zip_meta$table, " <- ", rv$zip_meta$file, " (", rv$zip_meta$status, ")")
+            paste0(
+              rv$zip_meta$table,
+              ifelse(nzchar(rv$zip_meta$project_id), paste0(" [", rv$zip_meta$project_id, "]"), ""),
+              " <- ", rv$zip_meta$file
+            ),
+            paste0(
+              rv$zip_meta$table,
+              ifelse(nzchar(rv$zip_meta$project_id), paste0(" [", rv$zip_meta$project_id, "]"), ""),
+              " <- ", rv$zip_meta$file, " (", rv$zip_meta$status, ")"
+            )
           )
           choices <- setNames(rv$zip_map$id, choice_labels)
           selectable <- rv$zip_meta$table %in% tables
@@ -669,10 +678,19 @@ mod_import_server <- function(id, state, con) {
 
       passed <- isTRUE(rv$compliance$passed)
       issue_count <- if (!is.null(rv$compliance$detail_tibble)) nrow(rv$compliance$detail_tibble) else 0
+      project_count <- if (!is.null(rv$compliance$detail_tibble) && "project_id" %in% names(rv$compliance$detail_tibble)) {
+        length(unique(rv$compliance$detail_tibble$project_id))
+      } else {
+        0
+      }
       label <- if (passed) {
         "Compliance passed"
       } else {
-        paste("Compliance issues:", issue_count)
+        if (project_count > 1) {
+          paste("Compliance issues:", issue_count, "(projects:", project_count, ")")
+        } else {
+          paste("Compliance issues:", issue_count)
+        }
       }
       badge_class <- if (passed) "bg-success" else "bg-warning"
 
@@ -680,6 +698,21 @@ mod_import_server <- function(id, state, con) {
         label,
         class = paste("badge", badge_class)
       )
+    })
+
+    output$import_compliance_by_project <- DT::renderDT({
+      req(rv$compliance)
+      details <- rv$compliance$detail_tibble
+      if (is.null(details) || nrow(details) == 0) return(NULL)
+      if (!"project_id" %in% names(details)) return(NULL)
+
+      summary <- aggregate(
+        list(count = details$rule),
+        by = list(project_id = details$project_id, rule = details$rule),
+        FUN = length
+      )
+
+      DT::datatable(summary, rownames = FALSE, options = list(pageLength = 6, ordering = FALSE))
     })
 
     output$import_validation <- DT::renderDT({
