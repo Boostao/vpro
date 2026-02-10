@@ -865,6 +865,32 @@ mod_hierarchy_server <- function(id, state, con) {
       find_query = ""
     )
 
+    require_hierarchy_write <- function() {
+      if (!auth_is_authenticated(state)) {
+        showNotification("Sign in required.", type = "error")
+        return(FALSE)
+      }
+      allowed <- c("write:project_plots", "write:all", "manage:codes")
+      if (!any(vapply(allowed, function(p) auth_user_has_permission(state, p), logical(1)))) {
+        showNotification("Permission required: edit hierarchy", type = "error")
+        return(FALSE)
+      }
+      TRUE
+    }
+
+    require_su_write <- function() {
+      if (!auth_is_authenticated(state)) {
+        showNotification("Sign in required.", type = "error")
+        return(FALSE)
+      }
+      allowed <- c("write:project_plots", "write:all", "manage:codes")
+      if (!any(vapply(allowed, function(p) auth_user_has_permission(state, p), logical(1)))) {
+        showNotification("Permission required: edit site units", type = "error")
+        return(FALSE)
+      }
+      TRUE
+    }
+
     load_hierarchy <- function() {
       table_name <- if (isTRUE(rv$use_clipped) && DBI::dbExistsTable(con, "USysLowestBreakpoints_Hierarchy")) {
         "USysLowestBreakpoints_Hierarchy"
@@ -1118,6 +1144,7 @@ mod_hierarchy_server <- function(id, state, con) {
     }
 
     observeEvent(input$hier_add, {
+      if (!require_hierarchy_write()) return()
       name_val <- trimws(input$hier_name)
       req(nzchar(name_val))
       refresh_tree()
@@ -1189,6 +1216,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_rename, {
+      if (!require_hierarchy_write()) return()
       name_val <- trimws(input$hier_name)
       req(nzchar(name_val))
       selected <- shinyTree::get_selected(input$hier_tree)
@@ -1218,6 +1246,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_delete, {
+      if (!require_hierarchy_write()) return()
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       req(node_id)
@@ -1239,6 +1268,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_delete_subtree, {
+      if (!require_hierarchy_write()) return()
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       req(node_id)
@@ -1259,6 +1289,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_fix_orphans, {
+      if (!require_hierarchy_write()) return()
       tryCatch({
         count <- fix_orphan_nodes(con)
         if (count > 0) {
@@ -1274,6 +1305,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_clip, {
+      if (!require_hierarchy_write()) return()
       req(rv$data)
       if (!DBI::dbExistsTable(con, "Sample_Hierarchy")) {
         showNotification("Sample_Hierarchy table not available.", type = "warning")
@@ -1310,6 +1342,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_below_breaks, {
+      if (!require_hierarchy_write()) return()
       req(rv$data)
       tryCatch({
         result <- create_lowest_breakpoints_table(con)
@@ -1510,6 +1543,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_paste, {
+      if (!require_hierarchy_write()) return()
       req(rv$clipboard)
       selected <- shinyTree::get_selected(input$hier_tree)
       parent_id <- parse_hierarchy_id(selected)
@@ -1532,6 +1566,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_merge, {
+      if (!require_hierarchy_write()) return()
       req(input$merge_table)
       table <- trimws(input$merge_table)
       if (!nzchar(table)) return()
@@ -1596,6 +1631,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$hier_move, {
+      if (!require_hierarchy_write()) return()
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       req(node_id)
@@ -1661,6 +1697,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     reorder_sibling <- function(direction = c("up", "down")) {
+      if (!require_hierarchy_write()) return()
       direction <- match.arg(direction)
       if (is.null(rv$data) || !("MyOrder" %in% names(rv$data))) {
         showNotification("Ordering not available for this hierarchy.", type = "warning")
@@ -1806,6 +1843,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_add, {
+      if (!require_su_write()) return()
       if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) {
         showNotification("Switch to plot view to edit.", type = "warning")
         return()
@@ -1815,6 +1853,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_delete, {
+      if (!require_su_write()) return()
       if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) {
         showNotification("Switch to plot view to edit.", type = "warning")
         return()
@@ -1839,6 +1878,7 @@ mod_hierarchy_server <- function(id, state, con) {
 
     observeEvent(input$su_hot, {
       if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) return()
+      if (!require_su_write()) return()
       req(rv$su)
       new_df <- rhandsontable::hot_to_r(input$su_hot)
       if (!all(c("PlotNumber", "SiteUnit") %in% names(new_df))) return()
@@ -1945,6 +1985,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_env_to_su, {
+      if (!require_su_write()) return()
       tryCatch({
         count <- sync_env_to_su(con)
         rv$su <- load_su("plots")
@@ -1955,6 +1996,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_su_to_env, {
+      if (!require_su_write()) return()
       tryCatch({
         count <- sync_su_to_env(con)
         rv$su_status <- paste("SU -> Env updated", count, "rows")
@@ -1964,6 +2006,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_bec_to_su, {
+      if (!require_su_write()) return()
       tryCatch({
         count <- copy_bec_to_su(con)
         rv$su <- load_su("plots")
@@ -1974,6 +2017,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_build_from_env, {
+      if (!require_su_write()) return()
       zone_val <- trimws(input$su_filter_zone)
       subzone_val <- trimws(input$su_filter_subzone)
       replace_flag <- isTRUE(input$su_replace)
@@ -1987,6 +2031,7 @@ mod_hierarchy_server <- function(id, state, con) {
     })
 
     observeEvent(input$su_build_from_filter, {
+      if (!require_su_write()) return()
       column_val <- trimws(input$su_filter_column)
       value_val <- trimws(input$su_filter_value)
       replace_flag <- isTRUE(input$su_replace)
