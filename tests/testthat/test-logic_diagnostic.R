@@ -66,3 +66,23 @@ test_that("build_diagnostic_matrix returns matrix", {
   expect_true(any(result$matrix$Species == "SP1"))
   expect_true(any(nzchar(result$matrix$SU1)))
 })
+
+test_that("build_diagnostic_matrix filters by project via Sample_Env", {
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (plotnumber TEXT, species_code TEXT, cover_value TEXT)")
+
+  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P1', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P2', 'SU2')")
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ1')")
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ2')")
+  DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P1', 'SP1', '20')")
+  DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P2', 'SP1', '30')")
+
+  result <- build_diagnostic_matrix(con, project_id = "PRJ1")
+  expect_true("SU1" %in% names(result$matrix))
+  expect_false("SU2" %in% names(result$matrix))
+})

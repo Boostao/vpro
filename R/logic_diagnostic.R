@@ -139,6 +139,19 @@ build_diagnostic_matrix <- function(con, su_table = "Sample_SU", project_id = NU
   su_df <- DBI::dbGetQuery(con, su_sql)
   if (nrow(su_df) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
 
+  if (!is.null(project_id) && DBI::dbExistsTable(con, "Sample_Env")) {
+    env_fields <- DBI::dbListFields(con, "Sample_Env")
+    env_plot_col <- if ("PlotNumber" %in% env_fields) "PlotNumber" else if ("plotnumber" %in% env_fields) "plotnumber" else NULL
+    env_project_col <- if ("ProjectID" %in% env_fields) "ProjectID" else if ("projectid" %in% env_fields) "projectid" else NULL
+    if (!is.null(env_plot_col) && !is.null(env_project_col)) {
+      env_sql <- sprintf("SELECT %s AS plotnumber FROM Sample_Env WHERE %s = ?", env_plot_col, env_project_col)
+      env_plots <- DBI::dbGetQuery(con, env_sql, list(as.character(project_id)))
+      if (nrow(env_plots) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
+      su_df <- su_df[su_df$plotnumber %in% env_plots$plotnumber, , drop = FALSE]
+      if (nrow(su_df) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
+    }
+  }
+
   veg_sql <- sprintf("SELECT %s AS plotnumber, %s AS species, %s AS cover_value%s FROM vw_USysAllVeg",
                      veg_plot_col,
                      veg_species_col,
