@@ -361,10 +361,24 @@ mod_site_env_server <- function(id, sys_state, con) {
             updateNumericInput(session, "men_hgt", value = val_hgt)
         }
     })
+
+    require_plot_write <- function() {
+        if (!auth_is_authenticated(sys_state)) {
+            showNotification("Sign in required.", type = "error")
+            return(FALSE)
+        }
+        allowed <- c("write:own_plots", "write:project_plots", "write:all")
+        if (!any(vapply(allowed, function(p) auth_user_has_permission(sys_state, p), logical(1)))) {
+            showNotification("Permission required: write plots", type = "error")
+            return(FALSE)
+        }
+        TRUE
+    }
     
     # -- Save Header --
     observeEvent(input$save_header, {
         req(sys_state$CurrSU)
+        if (!require_plot_write()) return()
         plot_id <- as.character(sys_state$CurrSU)
         
         tryCatch({
@@ -429,6 +443,7 @@ mod_site_env_server <- function(id, sys_state, con) {
     # -- Save Mensuration --
     observeEvent(input$save_mensuration, {
         req(sys_state$CurrSU)
+        if (!require_plot_write()) return()
         plot_id <- as.character(sys_state$CurrSU)
         
         sql <- "UPDATE Sample_Env SET standage=?, sv_standheight=?, structuralstage=? WHERE plotnumber=?"
@@ -533,6 +548,7 @@ mod_site_env_server <- function(id, sys_state, con) {
     output$hot_mineral <- render_soil_hot(reactive(rv$mineral), cols_mineral)
 
     update_soil_from_hot <- function(hot_input, table, display_cols) {
+        if (!require_plot_write()) return()
         req(hot_input)
         new_df <- rhandsontable::hot_to_r(hot_input)
 
@@ -593,12 +609,14 @@ mod_site_env_server <- function(id, sys_state, con) {
     rv_modal <- reactiveValues(mode = "new", id = NULL, type = NULL)
     
     observeEvent(input$add_humus, {
+        if (!require_plot_write()) return()
         rv_modal$mode <- "new"
         rv_modal$type <- "humus"
         showModal(modal_humus(TRUE))
     })
     
     observeEvent(input$edit_humus, {
+        if (!require_plot_write()) return()
         row_idx <- get_hot_selected_row(input$hot_humus_select)
         req(row_idx)
         record <- rv$humus[row_idx, ]
@@ -612,12 +630,14 @@ mod_site_env_server <- function(id, sys_state, con) {
     
     # -- Mineral Modal Logic --
     observeEvent(input$add_mineral, {
+        if (!require_plot_write()) return()
         rv_modal$mode <- "new"
         rv_modal$type <- "mineral"
         showModal(modal_mineral(TRUE))
     })
     
     observeEvent(input$edit_mineral, {
+        if (!require_plot_write()) return()
         row_idx <- get_hot_selected_row(input$hot_mineral_select)
         req(row_idx)
         record <- rv$mineral[row_idx, ]
@@ -683,6 +703,7 @@ mod_site_env_server <- function(id, sys_state, con) {
     
     observeEvent(input$save_humus, {
         req(rv_modal$type == "humus")
+        if (!require_plot_write()) return()
         save_soil_record("Sample_Humus", rv_modal$mode, rv_modal$id, 
                          list(
                              horizon = input$h_horizon,
@@ -727,6 +748,7 @@ mod_site_env_server <- function(id, sys_state, con) {
 
     observeEvent(input$save_mineral, {
         req(rv_modal$type == "mineral")
+        if (!require_plot_write()) return()
         save_soil_record("Sample_Mineral", rv_modal$mode, rv_modal$id, 
                          list(
                              horizon = input$m_horizon,

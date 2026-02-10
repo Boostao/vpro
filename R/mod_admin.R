@@ -222,6 +222,18 @@ mod_admin_server <- function(id, state, con) {
     # ==========================================================================
     # 1. Project Metadata Logic
     # ==========================================================================
+
+    require_admin_any_permission <- function(permissions, message) {
+      if (!auth_is_authenticated(state)) {
+        showNotification("Sign in required.", type = "error")
+        return(FALSE)
+      }
+      if (!any(vapply(permissions, function(p) auth_user_has_permission(state, p), logical(1)))) {
+        showNotification(message, type = "error")
+        return(FALSE)
+      }
+      TRUE
+    }
     
     # Reactive list of projects
     update_proj_list <- function(selected_id = NULL) {
@@ -276,6 +288,7 @@ mod_admin_server <- function(id, state, con) {
     # Save Project
     observeEvent(input$proj_save, {
       req(input$proj_id) # ID is mandatory
+      if (!require_admin_any_permission(c("write:all", "manage:projects"), "Permission required: manage projects")) return()
       
       is_new <- FALSE
       # Check existence
@@ -328,6 +341,7 @@ mod_admin_server <- function(id, state, con) {
     # Delete Project
     observeEvent(input$proj_del, {
       req(input$proj_id)
+      if (!require_admin_any_permission(c("write:all", "manage:projects"), "Permission required: manage projects")) return()
       existing <- dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
       # In a real app, use a modalDialog confirm here
       tryCatch({
@@ -399,6 +413,7 @@ mod_admin_server <- function(id, state, con) {
     # Handle Add Row
     observeEvent(input$code_add_row, {
       req(rv_codes$data)
+      if (!require_admin_any_permission(c("manage:codes", "write:all"), "Permission required: manage codes")) return()
       new_row <- data.frame(
         item = "NEW_CODE",
         itemdescription = "New Description",
@@ -412,6 +427,7 @@ mod_admin_server <- function(id, state, con) {
     observeEvent(input$code_save, {
       req(input$code_list_select)
       req(rv_codes$data)
+      if (!require_admin_any_permission(c("manage:codes", "write:all"), "Permission required: manage codes")) return()
       lname <- input$code_list_select
 
       old_rows <- dbGetQuery(con, "SELECT item, itemdescription, itemorder FROM lists.USysTableOfLists WHERE listname = ?", list(lname))
@@ -889,6 +905,7 @@ mod_admin_server <- function(id, state, con) {
 
     observeEvent(input$master_add_row, {
       req(rv_master$columns)
+      if (!require_admin_any_permission(c("manage:codes", "write:all"), "Permission required: manage codes")) return()
       new_row <- as.list(rep(NA, length(rv_master$columns)))
       names(new_row) <- rv_master$columns
       if ("SiteSeries" %in% rv_master$columns) new_row$SiteSeries <- "NEW_UNIT"
@@ -902,6 +919,7 @@ mod_admin_server <- function(id, state, con) {
     observeEvent(input$master_save, {
       req(rv_master$table_name)
       req(rv_master$data)
+      if (!require_admin_any_permission(c("manage:codes", "write:all"), "Permission required: manage codes")) return()
 
       table_name <- rv_master$table_name
       old_rows <- dbGetQuery(con, sprintf("SELECT %s FROM %s", paste(rv_master$columns, collapse = ", "), table_name))

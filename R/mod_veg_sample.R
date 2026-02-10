@@ -130,6 +130,19 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     
     # --- Helper: Editable Grid ---
 
+    require_plot_write <- function() {
+      if (!auth_is_authenticated(sys_state)) {
+        showNotification("Sign in required.", type = "error")
+        return(FALSE)
+      }
+      allowed <- c("write:own_plots", "write:project_plots", "write:all")
+      if (!any(vapply(allowed, function(p) auth_user_has_permission(sys_state, p), logical(1)))) {
+        showNotification("Permission required: write plots", type = "error")
+        return(FALSE)
+      }
+      TRUE
+    }
+
     render_layer_hot <- function(cols) {
       rhandsontable::renderRHandsontable({
         req(rv$data)
@@ -160,6 +173,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
 
     update_from_hot <- function(hot_input, display_cols) {
       req(sys_state$CurrSU, rv$data, hot_input)
+      if (!require_plot_write()) return()
 
       new_df <- rhandsontable::hot_to_r(hot_input)
       valid_cols <- intersect(display_cols, names(rv$data))
@@ -232,6 +246,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     # --- Add Species Logic ---
     observeEvent(input$btn_add_spp, {
         req(sys_state$CurrSU)
+      if (!require_plot_write()) return()
         
         # Load species list efficiently
         # We query code and clean name
@@ -250,6 +265,10 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     
     observeEvent(input$save_new_spp, {
         req(input$sel_add_species, sys_state$CurrSU)
+      if (!require_plot_write()) {
+        removeModal()
+        return()
+      }
         removeModal()
         
         plot_id <- as.character(sys_state$CurrSU)
@@ -298,6 +317,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     
     observeEvent(input$btn_del_spp, {
       req(rv$data, input$layers_tab)
+      if (!require_plot_write()) return()
       idx <- NULL
       if (input$layers_tab == "Layer A (Trees)") idx <- get_hot_selected_row(input$hot_veg_a_select)
       else if (input$layers_tab == "Layer B (Shrubs)") idx <- get_hot_selected_row(input$hot_veg_b_select)
@@ -320,6 +340,10 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     
     observeEvent(input$do_delete, {
         req(rv_del$id)
+      if (!require_plot_write()) {
+        removeModal()
+        return()
+      }
         removeModal()
         
         tryCatch({
