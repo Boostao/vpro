@@ -53,7 +53,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Import engine**: CSV/ZIP analysis with validation summary, guarded import button, compliance-gated rollback, and expanded test coverage
 - **Hierarchy tools**: tree CRUD, move/delete, copy/paste subtree, merge preview + duplicate handling + rekeyed merge, sibling ordering, find shortcuts, orphan repair, clip + below-breaks views, SU table modes + env sync + filter builders + master + user list views
 - **Diagnostics/QC**: diagnostic helper functions (presence class + diagnosis + matrix runner + live matrix builder) in `R/logic_diagnostic.R`; UI/report wiring in Reports module complete
-- **UI regression tests**: shinytest2 scaffold complete; initial smoke test added; core flow coverage pending
+- **UI regression tests**: shinytest2 smoke coverage expanded to core tabs; full flow coverage pending
 - **Report logic parity**: QC report wiring complete
 - **Report logic parity**: env/site/bec/layer filters added; hierarchy normalization complete
 - **Report logic parity**: short/long veg filters, grouping, and common-name support added
