@@ -40,32 +40,32 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Lumping**: `R/logic_lumping.R` — `apply_lumping()` species synonym resolution (53 lines)
 - **Veg data**: `R/logic_veg_data.R` — `get_vegetation_data()` with joins (50 lines)
 - **Test infra**: `tests/testthat/` — setup, helpers (in-memory DuckDB), db_connections + core logic/module tests
+- **Compliance engine**: rule set + tests in `R/logic_compliance.R`, wired to Import + Reports diagnostics
 - **Keyboard shortcuts**: Ctrl+S / Ctrl+N via `shinyjs` (global save/new wiring)
 - **Tab order**: Site/Env General + Mensuration explicit `tabindex`, Vegetation action buttons
 - **Cloud infra**: docker-compose, PostgreSQL test schema, config.yml, DuckDB postgres ATTACH
 - **App shell**: `global.R`, `ui.R` (6 nav_panels + sidebar), `server.R` (connection, state, module wiring)
 
 ### ⚠️ Partial
-- **Coord tools**: DMS↔DD conversion inline in `mod_site_env.R` — null-safety audit complete
-- **VENUS XML export**: XML export implemented with schema-ordered columns, DMS derivations, prefixing, project filtering, and expanded tests; remaining Access field transforms TBD
-- **Reporting parity**: 15/15 Quarto templates created; parameter parity and VBA logic ports still in progress
-- **Compliance engine**: initial rules + tests in `R/logic_compliance.R` + Site/Env + Veg UI summary
-- **Audit trail**: core helpers + logging for veg/soil/header edits + master audit helper + master audit viewer + basic Audit tabs
-- **Master site unit list tools**: admin editor + master audit logging (lists schema)
-- **Import engine**: CSV/ZIP analysis with validation summary, guarded import button, compliance-gated rollback, and expanded test coverage
-- **Hierarchy tools**: tree CRUD, move/delete, copy/paste subtree, merge preview + duplicate handling + rekeyed merge, sibling ordering, find shortcuts, orphan repair, clip + below-breaks views, SU table modes + env sync + filter builders + master + user list views
-- **Diagnostics/QC**: diagnostic helper functions (presence class + diagnosis + matrix runner + live matrix builder) in `R/logic_diagnostic.R`; UI/report wiring in Reports module complete
-- **UI regression tests**: shinytest2 smoke coverage expanded to core tabs; full flow coverage pending
+- **Coord tools**: DMS parse/format helpers + DMS↔decimal buttons in `mod_site_env.R`; still need full Nz/NA guard parity and edge-case tests
+- **VENUS XML export**: schema-ordered columns + DMS derivations + prefixing + project filtering + alias mapping for Location/Comment/Comments; remaining Access field transforms and legacy exports still pending
+- **Reporting parity**: 15/15 Quarto templates + Excel export + long environment (Excel-only); still missing full VBA logic parity and some report parameter defaults
+- **Audit trail**: audit tabs + logging in `mod_site_env.R`/`mod_veg_sample.R` + hierarchy SU logging + master audit helper; still missing middleware coverage for all writes + broader UI parity
+- **Master site unit list tools**: admin master list editor present; still missing full validation, diff/merge tooling, and audit parity
+- **Import engine**: CSV/ZIP + Access ODBC analyze/import, validation, compliance gating, rollback; still missing specialized AttachHierarchy/UserList flows and non-CSV formats (XML/legacy)
+- **Hierarchy tools**: tree CRUD, merge, clip, SU tools, tag support, and audit logging implemented; still missing full Access shortcut parity and UI polish
+- **Diagnostics/QC**: diagnostic matrix + flags + Reports→Diagnostics tab wired; QC parity rules and tuning still incomplete
+- **UI regression tests**: shinytest2 smoke coverage for core tabs exists; full workflow and data-entry tests pending
 - **Report logic parity**: QC report wiring complete
 - **Report logic parity**: env/site/bec/layer filters added; hierarchy normalization complete
 - **Report logic parity**: short/long veg filters, grouping, common-name support, long-veg plot pivots, and value-limit thresholds added
 - **Report logic parity**: lifeform report now includes per-site-unit summaries + attribute counts; hierarchy + flat hierarchy reports include tag highlighting and cutoff filtering; veg layer reports now match Access Sample_Veg columns
 - **Report logic parity**: site unit report now includes site unit list, env summaries, and lifeform/strata cover summaries
 - **Report logic parity**: BEC labels now render 12-label pages with zone/subzone/site series formatting
-- **Cloud sync**: `R/logic_sync.R` pull/push for Sample_Env/Sample_SU + wide Sample_Veg staging, admin sync panel, parquet snapshot helper
-- **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` staging UI, validation, and basic merge actions
-- **Auth/RBAC**: `R/mod_auth.R` login + roles/permissions, write gating in upload/merge
-- **RDS publishing**: `R/logic_publish.R` pipeline, admin publish UI, download logging, and tests
+- **Cloud sync**: `R/logic_sync.R` pull/push helpers + state tables; still missing conflict resolution UI and full veg push parity
+- **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` staging UI, validation, and basic merge actions; still missing comprehensive diffing and review controls
+- **Auth/RBAC**: `R/mod_auth.R` login + permission checks wired into upload/merge/publish; still missing user provisioning and persistence
+- **RDS publishing**: `R/logic_publish.R` pipeline + admin publishing panel in `mod_admin.R`; still missing test coverage and offline fallbacks
 
 ### 🔲 Not Started
 - **Tests**: remaining module and report tests (view tests + compliance tests + hierarchy tests done)
