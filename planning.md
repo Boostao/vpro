@@ -8,6 +8,36 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 
 ---
 
+## Next Session Bootstrap: Deployment Stack (Client Evaluation)
+
+**Goal**: Stand up a simple, repeatable deployment stack so the client can evaluate progress.
+
+**Scope (recommended MVP)**
+- Shiny app running in container
+- DuckDB data mounted read-only for evaluation
+- Optional PostgreSQL service for cloud features (staging/admin schemas)
+- Basic health check + restart policy
+
+**Checklist**
+1. Decide deployment target: Docker Compose (local), VPS, or managed Shiny Server.
+2. Add `Dockerfile` for the Shiny app (renv restore, system deps, app run command).
+3. Add `docker-compose.yml` (app + optional postgres + volumes).
+4. Wire config: environment variables for paths and cloud toggles.
+5. Add `healthcheck` and minimal logging config.
+6. Provide client run instructions and update README.
+
+**Artifacts to create**
+- `Dockerfile`
+- `docker-compose.deploy.yml` (or extend existing compose)
+- `.env.example` with required settings
+- README deployment section
+
+**Validation**
+- Start stack, open app in browser, load reports, confirm read-only data access.
+- (Optional) Attach postgres and confirm sync panels show "connected".
+
+---
+
 ## Source Inventory (VPRO_ACCESS/)
 
 | Database | Forms | Modules | Queries | Reports | Tables | DuckDB Target |
@@ -50,31 +80,31 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Coord tools**: DMS parse/format helpers + DMS↔decimal buttons in `mod_site_env.R`; still need full Nz/NA guard parity and edge-case tests
 - **VENUS XML export**: schema-ordered columns + DMS derivations + prefixing + project filtering + alias mapping for Location/Comment/Comments; remaining Access field transforms and legacy exports still pending
 - **Reporting parity**: 15/15 Quarto templates + Excel export + long environment (Excel-only); still missing full VBA logic parity and some report parameter defaults
-- **Audit trail**: audit tabs + logging in `mod_site_env.R`/`mod_veg_sample.R` + hierarchy SU logging + master audit helper; still missing middleware coverage for all writes + broader UI parity
+- **Audit trail**: audit tabs + logging in `mod_site_env.R`/`mod_veg_sample.R` + hierarchy SU logging + master audit helper (user DB tables + project ID resolution); still missing middleware coverage for all writes + broader UI parity
 - **Master site unit list tools**: admin master list editor present; still missing full validation, diff/merge tooling, and audit parity
-- **Import engine**: CSV/ZIP + Access ODBC analyze/import, validation, compliance gating, rollback; still missing specialized AttachHierarchy/UserList flows and non-CSV formats (XML/legacy)
-- **Hierarchy tools**: tree CRUD, merge, clip, SU tools, tag support, and audit logging implemented; still missing full Access shortcut parity and UI polish
+- **Import engine**: CSV/ZIP + Access ODBC analyze/import, validation, compliance gating, replace mode, and schema-qualified lists; still missing specialized AttachHierarchy/UserList flows and non-CSV formats (XML/legacy)
+- **Hierarchy tools**: tree CRUD, merge, clip, SU tools, tag support, orphan repair, and audit logging implemented; still missing full Access shortcut parity and UI polish
 - **Diagnostics/QC**: diagnostic matrix + flags + Reports→Diagnostics tab wired; QC parity rules and tuning still incomplete
-- **UI regression tests**: shinytest2 smoke coverage for core tabs exists; full workflow and data-entry tests pending
+- **UI regression tests**: shinytest2 smoke + tab navigation + basic flow coverage; full workflow and data-entry tests pending
 - **Report logic parity**: QC report wiring complete
 - **Report logic parity**: env/site/bec/layer filters added; hierarchy normalization complete
 - **Report logic parity**: short/long veg filters, grouping, common-name support, long-veg plot pivots, and value-limit thresholds added
 - **Report logic parity**: lifeform report now includes per-site-unit summaries + attribute counts; hierarchy + flat hierarchy reports include tag highlighting and cutoff filtering; veg layer reports now match Access Sample_Veg columns
 - **Report logic parity**: site unit report now includes site unit list, env summaries, and lifeform/strata cover summaries
 - **Report logic parity**: BEC labels now render 12-label pages with zone/subzone/site series formatting
-- **Cloud sync**: `R/logic_sync.R` pull/push helpers + state tables; still missing conflict resolution UI and full veg push parity
-- **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` staging UI, validation, and basic merge actions; still missing comprehensive diffing and review controls
+- **Cloud sync**: `R/logic_sync.R` pull/push helpers + state tables + conflict tracking + admin resolution UI + compliance enforcement on push; still missing full veg push parity and reviewer workflow depth
+- **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` staging UI, validation, compliance status, and basic merge actions (approval blocked on compliance failure); still missing comprehensive diffing and review controls
 - **Auth/RBAC**: `R/mod_auth.R` login + permission checks wired into upload/merge/publish; still missing user provisioning and persistence
-- **RDS publishing**: `R/logic_publish.R` pipeline + admin publishing panel in `mod_admin.R`; still missing test coverage and offline fallbacks
+- **RDS publishing**: `R/logic_publish.R` pipeline + admin publishing panel in `mod_admin.R` with unit tests; still missing offline fallbacks and end-to-end coverage
 
-### 🔲 Not Started
-- **Tests**: remaining module and report tests (view tests + compliance tests + hierarchy tests done)
+### 🔲 Not Started / Remaining
+- **Tests**: full end-to-end workflow coverage (data entry, import, merge approval), conflict resolution UI tests, and deeper report parity tests
 
 ### Known mismatches
 - Report templates are all present, but VBA parity and parameter logic are still partial.
 - Audit and diagnostic logic exist, but UI parity and field coverage are not complete.
 - VENUS/XML export is implemented but missing remaining Access field transforms.
-- UI tests cover smoke navigation only; full flow coverage is pending.
+- UI tests cover smoke + tab navigation + basic flow; full flow coverage is pending.
 
 ---
 
@@ -93,14 +123,15 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Priority**: Coordinate math in `mod_site_env.R` (DMS→DD), cover aggregation in `mod_veg_sample.R`
 
 ### 1.3 Test Suite Expansion
-- `test-logic_state.R`: init, set_project, set_su with edge cases
-- `test-logic_lumping.R`: synonym resolution, missing codes, empty tables
-- `test-logic_veg_data.R`: wide→long, layer filtering, NA covers
-- `tests/shinytest2/`: UI smoke tests (project selection, plot load, save flows)
-- `test-mod_veg_sample.R`: Shiny module test with `testServer()`
-- `test-mod_site_env.R`: form load, save, coord conversion
-- `test-mod_import.R`: CSV/ZIP analysis, validation gating, compliance rollback
-- `test-views.R`: `vw_USysAllVeg` row counts, `vw_USysEnv` schema
+- `test-logic_state.R`: init, set_project, set_su with edge cases (done)
+- `test-logic_lumping.R`: synonym resolution, missing codes, empty tables (done)
+- `test-logic_veg_data.R`: wide→long, layer filtering, NA covers (done)
+- `tests/shinytest2/`: UI smoke, tab navigation, and basic flow coverage (done)
+- `test-mod_veg_sample.R`: Shiny module test with `testServer()` (done)
+- `test-mod_site_env.R`: form load, save, coord conversion (done)
+- `test-mod_import.R`: CSV/ZIP analysis, validation gating, compliance rollback (done)
+- `test-views.R`: `vw_USysAllVeg` row counts, `vw_USysEnv` schema (done)
+- **Remaining**: end-to-end workflow tests (data entry -> save -> sync), merge approval, conflict resolution UI, and full report parity assertions
 
 ### 1.4 Keyboard Navigation & Accessibility
 - Add `shinyjs::useShinyjs()` for Tab/Enter key handling
@@ -203,9 +234,37 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 
 ---
 
-## Phase 6: Access → Shiny Parity Review (Planned)
+## Phase 6b: Access → Shiny Parity Review (Planned)
 
 **Goal**: Produce a clear, client-friendly parity report that shows what is done, partial, and missing, and why certain design choices were made.
+
+### 6.0 Parity Matrix + Acceptance Criteria (In Progress)
+
+**Acceptance Criteria (Definition of Done)**
+- **Workflow parity**: Access and Shiny complete the same task with equivalent steps and outcomes (save, edit, delete, export) using representative data.
+- **Data integrity parity**: DB writes match Access rules (required fields, ranges, FK checks, null handling) and audit trail captures before/after values.
+- **Report parity**: Output tables match Access for filters, ordering, grouping, and totals; document defaults align with VBA.
+- **Error parity**: User-facing validation messages and blocking behaviors mirror Access intent.
+- **Test parity**: Each parity item has at least one automated check (testthat or shinytest2) or a documented manual verification.
+
+**Parity Matrix (High-Impact Workflows)**
+
+| Area | Access Artifact | Shiny Target | Status | Remaining Gap |
+|------|----------------|--------------|--------|----------------|
+| Project + Plot selection | `frmMainMenuFloat` | `ui.R` selectors | ✅ | Edge-case validation for empty projects |
+| Site/Env save | `frmSIVIsite` + VBA | `mod_site_env.R` | ⚠️ | DMS/Nz guard parity + audit middleware coverage |
+| Vegetation data entry | `frmVegSample` + subforms | `mod_veg_sample.R` | ⚠️ | Edge-case cover codes + audit middleware coverage |
+| Audit trail | `V7mdlAudit` | `logic_audit.R` + tabs | ⚠️ | Wrap all write paths + UI parity details |
+| Compliance/QC | `V7mdlDiagnostic` | `logic_compliance.R` + Reports tab | ⚠️ | QC rule tuning + parity of messages |
+| Import CSV/ZIP | `V7mdlAttach*` | `mod_import.R` | ⚠️ | AttachHierarchy/UserList + XML/legacy |
+| Hierarchy tools | `frmHierarchyTree` + modules | `mod_hierarchy.R` | ⚠️ | Shortcut parity + UI polish + audit coverage |
+| Reporting (short/long veg) | `V7mdlReportsShortVeg/LongVeg` | `short_veg.qmd`/`long_veg.qmd` | ⚠️ | Defaults + final VBA logic parity |
+| Reporting (env + QC) | `V7mdlReportsEnv/QC` | `env_summary.qmd`/`quality_control.qmd` | ⚠️ | Defaults + QC parity checks |
+| VENUS/XML export | `V7mdlExportVenus/XML` | `mod_export.R` | ⚠️ | Remaining field transforms + legacy formats |
+| Cloud sync push/pull | `V7mdl*` sync workflows | `logic_sync.R` + admin UI | ⚠️ | Veg push parity + reviewer depth |
+| Upload/Merge review | merge request workflow | `mod_upload.R`/`mod_merge.R` | ⚠️ | Diff tooling depth + reviewer UX |
+| Auth/RBAC | `frmLogin` | `mod_auth.R` | ⚠️ | User provisioning + persistence |
+| RDS publishing | export workflow | `logic_publish.R` + admin UI | ⚠️ | Offline fallback + end-to-end test |
 
 ### 6.1 Parity Inventory (Full)
 - Forms: map Access forms to Shiny modules; status: done / partial / missing
@@ -223,25 +282,25 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - Single-table model keyed by ProjectID (why no per-project schemas)
 - Data safety and audit trail approach
 
-## Phase 6: Cloud Integration
+## Phase 7: Cloud Integration
 
 Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Summary:
 
-### 6.1 Sync Engine — `R/logic_sync.R`
+### 7.1 Sync Engine — `R/logic_sync.R`
 - Pull: cloud `core.*` → local DuckDB (row_version comparison)
 - Push: local changes → `staging.*` via merge-request workflow
-- Conflict detection and resolution UI
+- Conflict detection + admin resolution UI (still needs full veg push parity)
 
-### 6.2 Upload & Merge — `R/mod_upload.R`, `R/mod_merge.R`
+### 7.2 Upload & Merge — `R/mod_upload.R`, `R/mod_merge.R`
 - Upload: file → validate → stage
-- Merge: reviewer diff view → accept/reject → promote to `core`
+- Merge: reviewer diff view → accept/reject → promote to `core` (compliance status visible; full diff tooling pending)
 
-### 6.3 Auth — `R/mod_auth.R`
+### 7.3 Auth — `R/mod_auth.R`
 - Roles: viewer, field_user, project_lead, db_manager, admin
 - Session-based auth against PostgreSQL `admin.users`
 - Gate write operations per role
 
-### 6.4 RDS Publishing — `R/logic_publish.R`
+### 7.4 RDS Publishing — `R/logic_publish.R`
 - Snapshot approved data → versioned `.rds` files
 - Download logging to `public_export.download_log`
 
@@ -384,7 +443,7 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 | `frmProgress` | `shiny::withProgress()` |
 | `frmDirectories` | `config.yml` |
 | `frmAbout` | Modal or footer text |
-| `frmLogin` | `R/mod_auth.R` (Phase 6) |
+| `frmLogin` | `R/mod_auth.R` (Phase 7) |
 | `frmServicePack` | Git releases |
 | `frmDiagnostic` | `R/logic_compliance.R` outputs |
 
@@ -406,9 +465,10 @@ Detailed architecture in `.github/prompts/plan-becMasterCloudSync.prompt.md`. Su
 | **3** | Import engine (CSV/ZIP) | 2 weeks | Phase 2 |
 | **4** | Hierarchy & classification tools | 3 weeks | Phase 1 |
 | **5** | Reporting (14 remaining Quarto templates) | 3 weeks | Phase 1 |
-| **6** | Cloud sync, auth, upload/merge, publishing | 4 weeks | Phase 2–3 |
+| **6b** | Access → Shiny parity review | TBD | Phases 4–5 |
+| **7** | Cloud sync, auth, upload/merge, publishing | 4 weeks | Phase 2–3 |
 
-Phases 4 and 5 can run in parallel. Phase 6 builds on 2–3.
+Phases 4 and 5 can run in parallel. Phase 7 builds on 2–3.
 
 ---
 
