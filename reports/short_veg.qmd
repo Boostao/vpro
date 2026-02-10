@@ -129,10 +129,7 @@ if (nrow(summary) > 0) {
   } else {
     "standard"
   }
-  if (constancy_format && display_mode == "standard") {
-    display_mode <- "presence_mean"
-  }
-  if (constancy_format && display_mode == "standard") {
+  if (constancy_format) {
     view <- data.frame(
       Group = summary$group_label,
       Species = summary$species_label,

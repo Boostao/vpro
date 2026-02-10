@@ -77,10 +77,21 @@ normalize_veg_cols <- function(df) {
   layer_col <- pick_col(c("mylayer", "layer", "MyLayer"))
   species_col <- pick_col(c("species", "species_code", "Species"))
   cover_col <- pick_col(c("cover", "covervalue", "cover_value", "Cover", "CoverValue"))
+  hierarchy_col <- pick_col(c(
+    "hierarchy",
+    "hierarchypath",
+    "hierarchy_path",
+    "hierarchyname",
+    "Hierarchy",
+    "HierarchyPath",
+    "Hierarchy_Path",
+    "HierarchyName"
+  ))
   if (!is.na(plot_col)) df$plotnumber <- as.character(df[[plot_col]])
   if (!is.na(layer_col)) df$mylayer <- as.character(df[[layer_col]])
   if (!is.na(species_col)) df$species <- as.character(df[[species_col]])
   if (!is.na(cover_col)) df$cover <- as.character(df[[cover_col]])
+  if (!is.na(hierarchy_col)) df$hierarchy <- as.character(df[[hierarchy_col]])
   df
 }
 
@@ -89,6 +100,7 @@ label_veg_records <- function(df, group_by = "layer", show_common = "none") {
 
   group_label <- switch(
     tolower(group_by),
+    "hierarchy" = if (!is.null(df$hierarchy)) df$hierarchy else rep("All", nrow(df)),
     "strata" = if (!is.null(df$strata)) df$strata else df$mylayer,
     "lifeform" = if (!is.null(df$species_lifeform)) df$species_lifeform else if (!is.null(df$layer_lifeform)) df$layer_lifeform else df$mylayer,
     "none" = rep("All", nrow(df)),

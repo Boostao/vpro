@@ -180,6 +180,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 | 2 | Short veg table | ✅ `reports/short_veg.qmd` | `V7mdlReportsShortVeg` |
 | 3 | Long veg table | ✅ `reports/long_veg.qmd` | `V7mdlReportsLongVeg` |
 | 4 | Environment summary | ✅ `reports/env_summary.qmd` | `V7mdlReportsEnv` |
+| 4a | Long environment | ✅ `reports/long_env.qmd` | `V7mdlReportsEnv` |
 | 5 | Short veg + env | ✅ `reports/short_veg_env.qmd` | `V7mdlReportsShortVegEnv` |
 | 6 | QC report | ✅ `reports/quality_control.qmd` | `V7mdlReportsQualityControl` |
 | 7 | Lifeform summary | ✅ `reports/lifeform.qmd` | `V7mdlReportsLifeform` |
@@ -196,6 +197,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - Report type selector (dropdown of available .qmd templates) ✅
 - Parameter inputs per report type (project, plot range, layer filters)
 - Download as PDF or HTML ✅
+- Download as Excel (xlsx) with report tables (parity with Access export workflow)
 - Preview pane (rendered HTML inline) ✅
 - Report options persistence (colour/gray thresholds, apply theme) ✅
 

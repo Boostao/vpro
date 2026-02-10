@@ -24,3 +24,19 @@ This project is a migration of the VPro64 Microsoft Access application to R Shin
 	- Scaffold: `Rscript -e "shinytest2::use_shinytest2()"`
 	- Record: `Rscript -e "shinytest2::record_test()"`
 	- Run: `Rscript -e "testthat::test_dir('tests/testthat')"`
+
+## Report Testing
+
+When rendering Quarto reports from the terminal, use an absolute path for `db_path` because Quarto runs from the reports folder. Example:
+
+```bash
+Rscript -e "db_path <- normalizePath('data/vpro.duckdb', winslash='/', mustWork=TRUE); quarto::quarto_render('reports/short_veg_hierarchy.qmd', output_format='html', execute_params=list(plot_number='00000', plot_numbers='', site_unit='', project_id='', display_value='presence_mean', constancy_format=FALSE, db_path=db_path, project_root=getwd()))"
+```
+
+Or use the helper script:
+
+```bash
+scripts/render_report.sh short_veg_hierarchy.qmd --display presence_mean
+```
+
+If the Shiny app is running and holding the DuckDB write lock, use the in-app report preview (which renders from Parquet exports) or stop the app before rendering from the terminal.

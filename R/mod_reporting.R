@@ -9,7 +9,7 @@ mod_reporting_ui <- function(id) {
           nav_panel("Reports",
             p("Generate Quarto reports for the current context."),
             selectInput(ns("report_template"), "Report Template", choices = NULL),
-            radioButtons(ns("report_format"), "Format", choices = c("HTML" = "html", "PDF" = "pdf"), inline = TRUE),
+            radioButtons(ns("report_format"), "Format", choices = c("HTML" = "html", "PDF" = "pdf", "Excel" = "xlsx"), inline = TRUE),
             tags$hr(),
             tags$h5("Report Options"),
             layout_columns(
@@ -23,11 +23,7 @@ mod_reporting_ui <- function(id) {
             uiOutput(ns("hier_params_ui")),
             uiOutput(ns("qc_params_ui")),
             verbatimTextOutput(ns("report_ctx")),
-            div(class="mt-3",
-                actionButton(ns("preview_report"), "Preview HTML", class = "btn-secondary"),
-              downloadButton(ns("dl_report"), "Generate Report", class="btn-lg btn-danger"),
-              actionButton(ns("open_report"), "Open last report", class = "btn-outline-secondary")
-            ),
+            uiOutput(ns("report_action_buttons")),
             uiOutput(ns("report_preview")),
             uiOutput(ns("report_open_link"))
           ),
@@ -118,6 +114,7 @@ mod_reporting_server <- function(id, sys_state, con) {
         "short_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "long_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "env_summary.qmd" = c("Sample_Env", "Sample_SU"),
+        "long_env.qmd" = c("Sample_Env", "Sample_SU", "lists.MasterSiteUnitList"),
         "short_veg_env.qmd" = c("vw_USysAllVeg", "Sample_Env", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "lifeform.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "flat_hierarchy.qmd" = c("Sample_Hierarchy"),
@@ -140,10 +137,44 @@ mod_reporting_server <- function(id, sys_state, con) {
         updateSelectInput(session, "report_template", choices = templates, selected = "site_summary.qmd")
       }
     })
+
+    observeEvent(input$report_template, {
+      if (identical(input$report_template, "long_env.qmd")) {
+        updateRadioButtons(
+          session,
+          "report_format",
+          choices = c("Excel" = "xlsx"),
+          selected = "xlsx"
+        )
+      } else {
+        updateRadioButtons(
+          session,
+          "report_format",
+          choices = c("HTML" = "html", "PDF" = "pdf", "Excel" = "xlsx"),
+          selected = if (!is.null(input$report_format) && nzchar(input$report_format)) input$report_format else "html"
+        )
+      }
+    }, ignoreInit = TRUE)
     
     output$report_ctx <- renderText({
       req(sys_state$CurrSU)
       paste("Ready to generate report for Plot:", sys_state$CurrSU)
+    })
+
+    output$report_action_buttons <- renderUI({
+      if (identical(input$report_template, "long_env.qmd")) {
+        return(tags$div(
+          class = "mt-3",
+          downloadButton(ns("dl_report"), "Generate Report", class = "btn-lg btn-danger")
+        ))
+      }
+
+      tags$div(
+        class = "mt-3",
+        actionButton(ns("preview_report"), "Preview HTML", class = "btn-secondary"),
+        downloadButton(ns("dl_report"), "Generate Report", class = "btn-lg btn-danger"),
+        actionButton(ns("open_report"), "Open last report", class = "btn-outline-secondary")
+      )
     })
 
     output$plot_params_ui <- renderUI({
@@ -151,6 +182,7 @@ mod_reporting_server <- function(id, sys_state, con) {
       if (!(input$report_template %in% c(
         "site_summary.qmd",
         "env_summary.qmd",
+        "long_env.qmd",
         "veg_layer_a.qmd",
         "veg_layer_c.qmd",
         "veg_layer_d.qmd",
@@ -166,7 +198,7 @@ mod_reporting_server <- function(id, sys_state, con) {
           textInput(ns("plot_project_id"), "Project ID (optional)", value = value_or(sys_state$CurrProject, "")),
           col_widths = c(4, 4, 4)
         ),
-        if (identical(input$report_template, "env_summary.qmd")) {
+        if (input$report_template %in% c("env_summary.qmd", "long_env.qmd")) {
           layout_columns(
             textInput(ns("env_report_title"), "Report title", value = "Environment Summary"),
             col_widths = c(6)
@@ -434,8 +466,9 @@ mod_reporting_server <- function(id, sys_state, con) {
           db_path = db_path,
           parquet_dir = parquet_dir
         )
-        if (identical(template_name, "env_summary.qmd")) {
-          params$report_title <- value_or(input$env_report_title, "Environment Summary")
+        if (template_name %in% c("env_summary.qmd", "long_env.qmd")) {
+          default_title <- if (identical(template_name, "long_env.qmd")) "Long Environment" else "Environment Summary"
+          params$report_title <- value_or(input$env_report_title, default_title)
         }
         params
       } else {
@@ -462,6 +495,11 @@ mod_reporting_server <- function(id, sys_state, con) {
     observeEvent(input$preview_report, {
       req(sys_state$CurrSU)
       req(input$report_template)
+
+      if (identical(input$report_template, "long_env.qmd")) {
+        showNotification("HTML preview is disabled for Long Environment; use Excel export.", type = "warning")
+        return()
+      }
 
       old_quarto_root <- Sys.getenv("QUARTO_PROJECT_DIR", unset = NA)
       Sys.setenv(QUARTO_PROJECT_DIR = getwd())
@@ -517,6 +555,7 @@ mod_reporting_server <- function(id, sys_state, con) {
     })
 
     output$report_preview <- renderUI({
+      if (identical(input$report_template, "long_env.qmd")) return(NULL)
       preview_file <- preview_path()
       if (is.null(preview_file) || !file.exists(preview_file)) return(NULL)
 
@@ -541,6 +580,7 @@ mod_reporting_server <- function(id, sys_state, con) {
     })
 
     output$report_open_link <- renderUI({
+      if (identical(input$report_template, "long_env.qmd")) return(NULL)
       report_path <- report_file()
       target_url <- report_url()
       if (is.null(report_path) || !file.exists(report_path) || is.null(target_url)) return(NULL)
@@ -554,6 +594,18 @@ mod_reporting_server <- function(id, sys_state, con) {
         )
       )
     })
+
+    write_excel_report <- function(template_name, params, file_path) {
+      if (!requireNamespace("writexl", quietly = TRUE)) {
+        stop("writexl package is required for Excel export.")
+      }
+      data_list <- build_excel_report_data(con, template_name, params)
+      if (is.null(data_list) || length(data_list) == 0) {
+        data_list <- list("NoData" = data.frame(Message = "No data found.", stringsAsFactors = FALSE))
+      }
+      names(data_list) <- sanitize_sheet_names(names(data_list))
+      writexl::write_xlsx(data_list, path = file_path)
+    }
 
     output$dl_report <- downloadHandler(
       filename = function() {
@@ -595,6 +647,18 @@ mod_reporting_server <- function(id, sys_state, con) {
         file.copy(qmd_path, tmp_qmd, overwrite = TRUE)
         
         out_format <- if (is.null(input$report_format) || input$report_format == "") "html" else input$report_format
+
+        if (out_format == "xlsx") {
+          params <- build_report_params(input$report_template)
+          tryCatch({
+            write_excel_report(input$report_template, params, file)
+            report_file(NULL)
+            report_url(NULL)
+          }, error = function(e) {
+            showNotification(paste("Excel export failed:", e$message), type = "error")
+          })
+          return()
+        }
 
         # Render
         # Note: Quarto generates output in the same dir as input by default

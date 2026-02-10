@@ -30,6 +30,8 @@ source("R/logic_auth.R") # Auth + RBAC helpers
 source("R/db_connections.R") # Connection helpers + %||%
 source("R/logic_sync.R") # Sync engine (stub)
 source("R/logic_publish.R") # Publish pipeline (stub)
+source("R/logic_reports_veg.R") # Veg report helpers
+source("R/logic_report_export.R") # Excel report export helpers
 source("R/mod_admin.R")
 source("R/mod_images.R")
 source("R/mod_veg_sample.R")

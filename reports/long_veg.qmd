@@ -12,6 +12,7 @@ params:
   order_by: "presence"
   presence_min: 0
   cover_min: 0
+  value_limit: 0
   avg_type: "mean"
   show_common: "none"
   apply_lumping: false
@@ -99,19 +100,30 @@ veg <- load_veg_report_data(
 
 summary <- summarize_veg_report(
   veg,
-  group_by = params$group_by,
+  group_by = if (isTRUE(params$constancy_format)) "lifeform" else params$group_by,
   order_by = params$order_by,
   presence_min = params$presence_min,
   cover_min = params$cover_min,
+  value_limit = params$value_limit,
   avg_type = params$avg_type,
-  show_common = params$show_common
+  show_common = params$show_common,
+  display_value = params$display_value
 )
 
 veg_labeled <- label_veg_records(veg, params$group_by, params$show_common)
 if (nrow(veg_labeled) > 0) {
   summary$common_key <- ifelse(is.na(summary$common_label), "", summary$common_label)
   veg_labeled$common_key <- ifelse(is.na(veg_labeled$common_label), "", veg_labeled$common_label)
-  summary_keep <- summary[, c("group_label", "species_label", "common_key", "presence_ratio", "mean_cover", "common_label")]
+  summary_keep <- summary[, c(
+    "group_label",
+    "species_label",
+    "common_key",
+    "presence_ratio",
+    "presence_pct",
+    "mean_cover",
+    "display_value",
+    "common_label"
+  )]
   veg_labeled <- dplyr::inner_join(
     veg_labeled,
     summary_keep[, c("group_label", "species_label", "common_key")],
@@ -144,7 +156,16 @@ if (nrow(veg_pivot) > 0) {
 report_table <- data.frame()
 if (nrow(summary) > 0) {
   summary$common_key <- ifelse(is.na(summary$common_label), "", summary$common_label)
-  summary_keep <- summary[, c("group_label", "species_label", "common_key", "presence_ratio", "mean_cover", "common_label")]
+  summary_keep <- summary[, c(
+    "group_label",
+    "species_label",
+    "common_key",
+    "presence_ratio",
+    "presence_pct",
+    "mean_cover",
+    "display_value",
+    "common_label"
+  )]
   if (nrow(veg_wide) > 0) {
     report_table <- dplyr::left_join(
       summary_keep,
@@ -173,6 +194,13 @@ if (nrow(report_table) > 0) {
   )
   plot_cols <- plot_cols[order(plot_cols)]
 
+  constancy_format <- isTRUE(params$constancy_format)
+  display_mode <- if (!is.null(params$display_value) && nzchar(params$display_value)) {
+    tolower(params$display_value)
+  } else {
+    "standard"
+  }
+
   view <- data.frame(
     Group = report_table$group_label,
     Species = report_table$species_label,
@@ -181,8 +209,14 @@ if (nrow(report_table) > 0) {
   if (params$show_common != "none") {
     view$Common <- report_table$common_label
   }
-  view$Presence <- round(report_table$presence_ratio * 100, 1)
-  view$MeanCover <- round(report_table$mean_cover, 1)
+  if (constancy_format) {
+    view$Constancy <- round(report_table$presence_pct, 1)
+  } else if (display_mode != "standard") {
+    view$Display <- report_table$display_value
+  } else {
+    view$Presence <- round(report_table$presence_ratio * 100, 1)
+    view$MeanCover <- round(report_table$mean_cover, 1)
+  }
 
   if (length(plot_cols) > 0) {
     plot_data <- report_table[, plot_cols, drop = FALSE]
