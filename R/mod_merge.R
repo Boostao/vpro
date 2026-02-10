@@ -9,11 +9,13 @@ mod_merge_ui <- function(id) {
         actionButton(ns("merge_refresh"), "Refresh", class = "btn-secondary"),
         selectInput(ns("merge_request"), "Merge request", choices = NULL),
         textAreaInput(ns("merge_notes"), "Review notes", value = "", rows = 2),
-        actionButton(ns("merge_approve"), "Approve + Merge", class = "btn-primary"),
-        actionButton(ns("merge_reject"), "Reject", class = "btn-outline-danger"),
-        col_widths = c(1, 3, 4, 2, 2)
+        uiOutput(ns("merge_actions")),
+        col_widths = c(1, 3, 4, 4)
       ),
       textOutput(ns("merge_status")),
+      textOutput(ns("merge_compliance_status")),
+      textOutput(ns("merge_summary_row")),
+      DT::DTOutput(ns("merge_compliance")),
       DT::DTOutput(ns("merge_summary")),
       DT::DTOutput(ns("merge_counts")),
       tags$hr(),
@@ -35,7 +37,10 @@ mod_merge_server <- function(id, state, con) {
       counts = NULL,
       diff_env = NULL,
       diff_su = NULL,
-      diff_veg = NULL
+      diff_veg = NULL,
+      compliance = NULL,
+      compliance_status = "",
+      compliance_passed = NA
     )
 
     refresh_requests <- function() {
@@ -85,6 +90,31 @@ mod_merge_server <- function(id, state, con) {
       if (!nzchar(input$merge_request)) return()
 
       mr_id <- as.integer(input$merge_request)
+      mr_row <- rv$merge_requests[rv$merge_requests$id == mr_id, , drop = FALSE]
+      compliance_report <- NULL
+      if (nrow(mr_row) > 0) {
+        if (isTRUE(mr_row$compliance_passed[1])) {
+          rv$compliance_status <- "Compliance passed"
+          rv$compliance_passed <- TRUE
+        } else if (!is.na(mr_row$compliance_passed[1]) && !isTRUE(mr_row$compliance_passed[1])) {
+          rv$compliance_status <- "Compliance failed"
+          rv$compliance_passed <- FALSE
+        } else {
+          rv$compliance_status <- "Compliance not evaluated"
+          rv$compliance_passed <- NA
+        }
+        compliance_report <- mr_row$compliance_report[1]
+      }
+      if (!is.null(compliance_report) && nzchar(as.character(compliance_report)) && requireNamespace("jsonlite", quietly = TRUE)) {
+        parsed <- tryCatch(jsonlite::fromJSON(compliance_report), error = function(e) NULL)
+        if (!is.null(parsed) && !is.null(parsed$details)) {
+          rv$compliance <- parsed$details
+        } else {
+          rv$compliance <- NULL
+        }
+      } else {
+        rv$compliance <- NULL
+      }
       rv$counts <- data.frame(
         table = c("sample_env", "sample_su", "sample_veg"),
         rows = c(
@@ -170,6 +200,10 @@ mod_merge_server <- function(id, state, con) {
     observeEvent(input$merge_approve, {
       req(input$merge_request)
       if (!nzchar(input$merge_request)) return()
+      if (isFALSE(rv$compliance_passed)) {
+        rv$status <- "Merge blocked: compliance failed."
+        return()
+      }
       sync_require_cloud(con, allow_attach = TRUE)
       auth_init_state(state)
       tryCatch({
@@ -222,6 +256,45 @@ mod_merge_server <- function(id, state, con) {
 
     output$merge_status <- renderText({
       if (nzchar(rv$status)) rv$status else "No pending merge requests."
+    })
+
+    output$merge_compliance_status <- renderText({
+      rv$compliance_status
+    })
+
+    output$merge_compliance <- DT::renderDT({
+      if (is.null(rv$compliance) || nrow(rv$compliance) == 0) return(NULL)
+      DT::datatable(rv$compliance, rownames = FALSE, options = list(pageLength = 6, scrollX = TRUE))
+    })
+
+    output$merge_summary_row <- renderText({
+      req(rv$merge_requests, input$merge_request)
+      if (!nzchar(input$merge_request)) return("")
+      mr_id <- as.integer(input$merge_request)
+      mr_row <- rv$merge_requests[rv$merge_requests$id == mr_id, , drop = FALSE]
+      if (nrow(mr_row) == 0) return("")
+      submitted <- mr_row$submitted_utc[1]
+      submitted_text <- if (!is.null(submitted) && nzchar(as.character(submitted))) as.character(submitted) else ""
+      paste(
+        "Project:", mr_row$project_id[1],
+        "| Submitter:", mr_row$submitter_user_id[1],
+        "| Submitted:", submitted_text,
+        "| Env:", mr_row$env_record_count[1],
+        "| Veg:", mr_row$veg_record_count[1]
+      )
+    })
+
+    output$merge_actions <- renderUI({
+      disabled <- isFALSE(rv$compliance_passed)
+      tagList(
+        actionButton(
+          ns("merge_approve"),
+          "Approve + Merge",
+          class = if (disabled) "btn-secondary" else "btn-primary",
+          disabled = disabled
+        ),
+        actionButton(ns("merge_reject"), "Reject", class = "btn-outline-danger")
+      )
     })
 
     output$merge_summary <- DT::renderDT({
