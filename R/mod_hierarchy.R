@@ -551,6 +551,7 @@ insert_subtree <- function(con, subtree, new_parent, parent_level = -1L) {
 
   use_level <- hierarchy_has_column(con, "Level")
   use_order <- hierarchy_has_column(con, "MyOrder")
+  use_tag <- hierarchy_has_column(con, "Tag")
   level_map <- if (use_level) compute_subtree_levels(subtree, parent_level) else NULL
 
   max_id <- DBI::dbGetQuery(con, "SELECT MAX(ID) AS max_id FROM Sample_Hierarchy")
@@ -603,33 +604,24 @@ insert_subtree <- function(con, subtree, new_parent, parent_level = -1L) {
       }
     }
 
-    if (use_level && use_order) {
-      level_val <- level_map[[as.character(old_id)]]
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level, MyOrder) VALUES (?, ?, ?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val, order_val)
-      )
-    } else if (use_level) {
-      level_val <- level_map[[as.character(old_id)]]
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level) VALUES (?, ?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val)
-      )
-    } else if (use_order) {
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, MyOrder) VALUES (?, ?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new, order_val)
-      )
-    } else {
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new)
-      )
+    columns <- c("ID", "Name", "Parent")
+    values <- list(id_map[[as.character(old_id)]], row$Name, parent_new)
+    if (use_level) {
+      columns <- c(columns, "Level")
+      values <- c(values, list(level_map[[as.character(old_id)]]))
     }
+    if (use_order) {
+      columns <- c(columns, "MyOrder")
+      values <- c(values, list(order_val))
+    }
+    if (use_tag) {
+      tag_val <- if ("Tag" %in% names(subtree)) row$Tag else NA
+      columns <- c(columns, "Tag")
+      values <- c(values, list(tag_val))
+    }
+    placeholders <- paste(rep("?", length(columns)), collapse = ", ")
+    sql <- sprintf("INSERT INTO Sample_Hierarchy (%s) VALUES (%s)", paste(columns, collapse = ", "), placeholders)
+    DBI::dbExecute(con, sql, values)
     count <- count + 1
   }
 
@@ -641,6 +633,7 @@ insert_rekeyed_hierarchy <- function(con, source_df, parent_level = -1L) {
 
   use_level <- hierarchy_has_column(con, "Level")
   use_order <- hierarchy_has_column(con, "MyOrder")
+  use_tag <- hierarchy_has_column(con, "Tag")
 
   temp_df <- source_df
   if (!is.null(temp_df$Parent)) {
@@ -698,33 +691,24 @@ insert_rekeyed_hierarchy <- function(con, source_df, parent_level = -1L) {
       }
     }
 
-    if (use_level && use_order) {
-      level_val <- level_map[[as.character(old_id)]]
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level, MyOrder) VALUES (?, ?, ?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val, order_val)
-      )
-    } else if (use_level) {
-      level_val <- level_map[[as.character(old_id)]]
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level) VALUES (?, ?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new, level_val)
-      )
-    } else if (use_order) {
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent, MyOrder) VALUES (?, ?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new, order_val)
-      )
-    } else {
-      DBI::dbExecute(
-        con,
-        "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
-        list(id_map[[as.character(old_id)]], row$Name, parent_new)
-      )
+    columns <- c("ID", "Name", "Parent")
+    values <- list(id_map[[as.character(old_id)]], row$Name, parent_new)
+    if (use_level) {
+      columns <- c(columns, "Level")
+      values <- c(values, list(level_map[[as.character(old_id)]]))
     }
+    if (use_order) {
+      columns <- c(columns, "MyOrder")
+      values <- c(values, list(order_val))
+    }
+    if (use_tag) {
+      tag_val <- if ("Tag" %in% names(temp_df)) row$Tag else NA
+      columns <- c(columns, "Tag")
+      values <- c(values, list(tag_val))
+    }
+    placeholders <- paste(rep("?", length(columns)), collapse = ", ")
+    sql <- sprintf("INSERT INTO Sample_Hierarchy (%s) VALUES (%s)", paste(columns, collapse = ", "), placeholders)
+    DBI::dbExecute(con, sql, values)
     count <- count + 1L
   }
 
@@ -755,8 +739,10 @@ mod_hierarchy_ui <- function(id) {
           ),
           layout_columns(
             textInput(ns("hier_name"), "Name"),
+            textInput(ns("hier_tag"), "Tag"),
             actionButton(ns("hier_add"), "Add Node", class = "btn-primary"),
             actionButton(ns("hier_rename"), "Rename", class = "btn-warning"),
+            actionButton(ns("hier_update_tag"), "Update Tag", class = "btn-outline-secondary"),
             actionButton(ns("hier_delete"), "Delete", class = "btn-danger"),
             actionButton(ns("hier_delete_subtree"), "Delete Subtree", class = "btn-danger"),
             actionButton(ns("hier_refresh"), "Refresh", class = "btn-secondary"),
@@ -764,7 +750,7 @@ mod_hierarchy_ui <- function(id) {
             actionButton(ns("hier_clip"), "Clip Hierarchy", class = "btn-outline-secondary"),
             actionButton(ns("hier_below_breaks"), "Below Breaks", class = "btn-outline-secondary"),
             actionButton(ns("hier_show_original"), "Show Original", class = "btn-outline-secondary"),
-            col_widths = c(3, 2, 2, 2, 2, 1, 2, 2, 2, 2)
+            col_widths = c(2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2)
           ),
           tags$small(textOutput(ns("hier_clip_status"))),
           layout_columns(
@@ -891,6 +877,92 @@ mod_hierarchy_server <- function(id, state, con) {
       TRUE
     }
 
+    normalize_text <- function(value) {
+      val <- as.character(value)
+      val[is.na(val)] <- ""
+      trimws(val)
+    }
+
+    log_su_audit_changes <- function(before_df, after_df) {
+      if (is.null(before_df)) before_df <- data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+      if (is.null(after_df)) after_df <- data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+
+      if (!all(c("PlotNumber", "SiteUnit") %in% names(before_df)) || !all(c("PlotNumber", "SiteUnit") %in% names(after_df))) {
+        return(0L)
+      }
+
+      before_df <- before_df[, c("PlotNumber", "SiteUnit"), drop = FALSE]
+      after_df <- after_df[, c("PlotNumber", "SiteUnit"), drop = FALSE]
+      before_df$PlotNumber <- normalize_text(before_df$PlotNumber)
+      before_df$SiteUnit <- normalize_text(before_df$SiteUnit)
+      after_df$PlotNumber <- normalize_text(after_df$PlotNumber)
+      after_df$SiteUnit <- normalize_text(after_df$SiteUnit)
+
+      before_map <- setNames(before_df$SiteUnit, before_df$PlotNumber)
+      after_map <- setNames(after_df$SiteUnit, after_df$PlotNumber)
+      all_plots <- union(names(before_map), names(after_map))
+
+      logged <- 0L
+      for (plot_id in all_plots) {
+        if (!nzchar(plot_id)) next
+        old_val <- before_map[[plot_id]]
+        new_val <- after_map[[plot_id]]
+        if (identical(old_val, new_val)) next
+        if (!nzchar(old_val)) old_val <- NA
+        if (!nzchar(new_val)) new_val <- NA
+
+        project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+        if (isTRUE(log_audit_change(con, project_id, state$User, plot_id, "Sample_SU", "SiteUnit", old_val, new_val))) {
+          logged <- logged + 1L
+        }
+      }
+
+      logged
+    }
+
+    log_env_siteunit_changes <- function(before_df, after_df, field_name = "UserSiteUnit") {
+      if (is.null(before_df)) return(0L)
+      if (is.null(after_df)) return(0L)
+      if (!(field_name %in% names(before_df)) || !(field_name %in% names(after_df))) return(0L)
+      if (!("PlotNumber" %in% names(before_df)) || !("PlotNumber" %in% names(after_df))) return(0L)
+
+      before_df$PlotNumber <- normalize_text(before_df$PlotNumber)
+      after_df$PlotNumber <- normalize_text(after_df$PlotNumber)
+      before_vals <- normalize_text(before_df[[field_name]])
+      after_vals <- normalize_text(after_df[[field_name]])
+
+      before_map <- setNames(before_vals, before_df$PlotNumber)
+      after_map <- setNames(after_vals, after_df$PlotNumber)
+      all_plots <- union(names(before_map), names(after_map))
+
+      logged <- 0L
+      for (plot_id in all_plots) {
+        if (!nzchar(plot_id)) next
+        old_val <- before_map[[plot_id]]
+        new_val <- after_map[[plot_id]]
+        if (identical(old_val, new_val)) next
+        if (!nzchar(old_val)) old_val <- NA
+        if (!nzchar(new_val)) new_val <- NA
+
+        project_id <- NA_character_
+        if ("ProjectID" %in% names(after_df)) {
+          project_id <- after_df$ProjectID[after_df$PlotNumber == plot_id][1]
+        }
+        if ((is.na(project_id) || !nzchar(as.character(project_id))) && "ProjectID" %in% names(before_df)) {
+          project_id <- before_df$ProjectID[before_df$PlotNumber == plot_id][1]
+        }
+        if (is.na(project_id) || !nzchar(as.character(project_id))) {
+          project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+        }
+
+        if (isTRUE(log_audit_change(con, project_id, state$User, plot_id, "Sample_Env", field_name, old_val, new_val))) {
+          logged <- logged + 1L
+        }
+      }
+
+      logged
+    }
+
     load_hierarchy <- function() {
       table_name <- if (isTRUE(rv$use_clipped) && DBI::dbExistsTable(con, "USysLowestBreakpoints_Hierarchy")) {
         "USysLowestBreakpoints_Hierarchy"
@@ -900,7 +972,7 @@ mod_hierarchy_server <- function(id, state, con) {
 
       if (!DBI::dbExistsTable(con, table_name)) return(data.frame())
       fields <- DBI::dbListFields(con, table_name)
-      select_cols <- intersect(c("ID", "Name", "Parent", "Level", "MyOrder"), fields)
+      select_cols <- intersect(c("ID", "Name", "Parent", "Level", "Tag", "MyOrder"), fields)
       if (length(select_cols) == 0) return(data.frame())
       order_clause <- if ("MyOrder" %in% select_cols) {
         "ORDER BY Parent NULLS FIRST, MyOrder NULLS LAST, Name"
@@ -1147,6 +1219,8 @@ mod_hierarchy_server <- function(id, state, con) {
       if (!require_hierarchy_write()) return()
       name_val <- trimws(input$hier_name)
       req(nzchar(name_val))
+      tag_val <- trimws(input$hier_tag)
+      if (!nzchar(tag_val)) tag_val <- NA
       refresh_tree()
 
       if (!is.null(rv$data) && name_val %in% rv$data$Name) {
@@ -1164,49 +1238,40 @@ mod_hierarchy_server <- function(id, state, con) {
       tryCatch({
         has_level <- hierarchy_has_column(con, "Level")
         has_order <- hierarchy_has_column(con, "MyOrder")
-        if (has_level || has_order) {
-          level_val <- 0L
-          if (!is.null(rv$data) && "Level" %in% names(rv$data) && !is.na(parent_id)) {
-            parent_level <- rv$data$Level[rv$data$ID == parent_id][1]
-            if (!is.na(parent_level)) level_val <- as.integer(parent_level) + 1L
-          }
-          order_val <- NULL
-          if (has_order && !is.null(rv$data)) {
-            siblings <- get_sibling_order(rv$data, parent_id)
-            if (nrow(siblings) == 0 || all(is.na(suppressWarnings(as.numeric(siblings$MyOrder))))) {
-              order_val <- 1
-            } else {
-              max_order <- suppressWarnings(max(as.numeric(siblings$MyOrder), na.rm = TRUE))
-              order_val <- if (is.finite(max_order)) max_order + 1 else 1
-            }
-          }
-
-          if (has_level && has_order) {
-            DBI::dbExecute(
-              con,
-              "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level, MyOrder) VALUES (?, ?, ?, ?, ?)",
-              list(new_id, name_val, parent_id, level_val, order_val)
-            )
-          } else if (has_level) {
-            DBI::dbExecute(
-              con,
-              "INSERT INTO Sample_Hierarchy (ID, Name, Parent, Level) VALUES (?, ?, ?, ?)",
-              list(new_id, name_val, parent_id, level_val)
-            )
-          } else if (has_order) {
-            DBI::dbExecute(
-              con,
-              "INSERT INTO Sample_Hierarchy (ID, Name, Parent, MyOrder) VALUES (?, ?, ?, ?)",
-              list(new_id, name_val, parent_id, order_val)
-            )
-          }
-        } else {
-          DBI::dbExecute(
-            con,
-            "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (?, ?, ?)",
-            list(new_id, name_val, parent_id)
-          )
+        has_tag <- hierarchy_has_column(con, "Tag")
+        level_val <- 0L
+        if (has_level && !is.null(rv$data) && "Level" %in% names(rv$data) && !is.na(parent_id)) {
+          parent_level <- rv$data$Level[rv$data$ID == parent_id][1]
+          if (!is.na(parent_level)) level_val <- as.integer(parent_level) + 1L
         }
+        order_val <- NULL
+        if (has_order && !is.null(rv$data)) {
+          siblings <- get_sibling_order(rv$data, parent_id)
+          if (nrow(siblings) == 0 || all(is.na(suppressWarnings(as.numeric(siblings$MyOrder))))) {
+            order_val <- 1
+          } else {
+            max_order <- suppressWarnings(max(as.numeric(siblings$MyOrder), na.rm = TRUE))
+            order_val <- if (is.finite(max_order)) max_order + 1 else 1
+          }
+        }
+
+        columns <- c("ID", "Name", "Parent")
+        values <- list(new_id, name_val, parent_id)
+        if (has_level) {
+          columns <- c(columns, "Level")
+          values <- c(values, list(level_val))
+        }
+        if (has_order) {
+          columns <- c(columns, "MyOrder")
+          values <- c(values, list(order_val))
+        }
+        if (has_tag) {
+          columns <- c(columns, "Tag")
+          values <- c(values, list(tag_val))
+        }
+        placeholders <- paste(rep("?", length(columns)), collapse = ", ")
+        sql <- sprintf("INSERT INTO Sample_Hierarchy (%s) VALUES (%s)", paste(columns, collapse = ", "), placeholders)
+        DBI::dbExecute(con, sql, values)
         showNotification("Node added.", type = "message")
         refresh_tree()
         update_move_choices()
@@ -1242,6 +1307,34 @@ mod_hierarchy_server <- function(id, state, con) {
         update_move_choices()
       }, error = function(e) {
         showNotification(paste("Rename failed:", e$message), type = "error")
+      })
+    })
+
+    observeEvent(input$hier_update_tag, {
+      if (!require_hierarchy_write()) return()
+      selected <- shinyTree::get_selected(input$hier_tree)
+      node_id <- parse_hierarchy_id(selected)
+      req(node_id)
+
+      if (!hierarchy_has_column(con, "Tag")) {
+        showNotification("Tag column not available for this hierarchy.", type = "warning")
+        return()
+      }
+
+      tag_val <- trimws(input$hier_tag)
+      if (!nzchar(tag_val)) tag_val <- NA
+
+      tryCatch({
+        DBI::dbExecute(
+          con,
+          "UPDATE Sample_Hierarchy SET Tag = ? WHERE ID = ?",
+          list(tag_val, node_id)
+        )
+        showNotification("Tag updated.", type = "message")
+        refresh_tree()
+        update_move_choices()
+      }, error = function(e) {
+        showNotification(paste("Tag update failed:", e$message), type = "error")
       })
     })
 
@@ -1581,7 +1674,7 @@ mod_hierarchy_server <- function(id, state, con) {
         showNotification("Merge table is missing Name column.", type = "error")
         return()
       }
-      merge_cols <- intersect(c("ID", "Name", "Parent", "MyOrder"), merge_fields)
+      merge_cols <- intersect(c("ID", "Name", "Parent", "Level", "Tag", "MyOrder"), merge_fields)
       if (length(merge_cols) == 0) {
         showNotification("Merge table is missing required fields.", type = "error")
         return()
@@ -1763,6 +1856,9 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$selected_id <- node_id
       rv$selected_path <- get_node_path(rv$data, node_id)
       updateTextInput(session, "hier_name", value = row$Name[1])
+      if ("Tag" %in% names(row)) {
+        updateTextInput(session, "hier_tag", value = ifelse(is.na(row$Tag[1]), "", row$Tag[1]))
+      }
       parent_id <- row$Parent[1]
       updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
     })
@@ -1774,6 +1870,9 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$selected_id <- node_id
       rv$selected_path <- get_node_path(rv$data, node_id)
       updateTextInput(session, "hier_name", value = rv$data$Name[idx[1]])
+      if ("Tag" %in% names(rv$data)) {
+        updateTextInput(session, "hier_tag", value = ifelse(is.na(rv$data$Tag[idx[1]]), "", rv$data$Tag[idx[1]]))
+      }
       parent_id <- rv$data$Parent[idx[1]]
       updateSelectInput(session, "move_parent", selected = if (is.na(parent_id)) "" else as.character(parent_id))
       TRUE
@@ -1865,10 +1964,13 @@ mod_hierarchy_server <- function(id, state, con) {
       if (row_idx < 1 || row_idx > nrow(rv$su)) return()
 
       plot_id <- rv$su$PlotNumber[row_idx]
+      site_unit <- rv$su$SiteUnit[row_idx]
       rv$su <- rv$su[-row_idx, , drop = FALSE]
       if (!is.null(plot_id) && nzchar(plot_id)) {
         tryCatch({
           DBI::dbExecute(con, "DELETE FROM Sample_SU WHERE PlotNumber = ?", list(plot_id))
+          project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          log_audit_change(con, project_id, state$User, plot_id, "Sample_SU", "SiteUnit", site_unit, NA)
           rv$su_status <- paste("Deleted plot", plot_id)
         }, error = function(e) {
           rv$su_status <- paste("Delete failed:", e$message)
@@ -1912,8 +2014,11 @@ mod_hierarchy_server <- function(id, state, con) {
       changed <- FALSE
 
       for (plot_id in to_delete) {
+        old_val <- old_df$SiteUnit[old_df$PlotNumber == plot_id][1]
         tryCatch({
           DBI::dbExecute(con, "DELETE FROM Sample_SU WHERE PlotNumber = ?", list(plot_id))
+          project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          log_audit_change(con, project_id, state$User, plot_id, "Sample_SU", "SiteUnit", old_val, NA)
           changed <- TRUE
         }, error = function(e) {
           rv$su_status <- paste("Delete failed:", e$message)
@@ -1928,6 +2033,8 @@ mod_hierarchy_server <- function(id, state, con) {
             "INSERT INTO Sample_SU (PlotNumber, SiteUnit) VALUES (?, ?)",
             list(plot_id, site_unit)
           )
+          project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          log_audit_change(con, project_id, state$User, plot_id, "Sample_SU", "SiteUnit", NA, site_unit)
           changed <- TRUE
         }, error = function(e) {
           rv$su_status <- paste("Insert failed:", e$message)
@@ -1944,6 +2051,8 @@ mod_hierarchy_server <- function(id, state, con) {
             "UPDATE Sample_SU SET SiteUnit = ? WHERE PlotNumber = ?",
             list(new_val, plot_id)
           )
+          project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          log_audit_change(con, project_id, state$User, plot_id, "Sample_SU", "SiteUnit", old_val, new_val)
           changed <- TRUE
         }, error = function(e) {
           rv$su_status <- paste("Update failed:", e$message)
@@ -1987,7 +2096,18 @@ mod_hierarchy_server <- function(id, state, con) {
     observeEvent(input$su_env_to_su, {
       if (!require_su_write()) return()
       tryCatch({
+        before_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
         count <- sync_env_to_su(con)
+        after_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
+        log_su_audit_changes(before_su, after_su)
         rv$su <- load_su("plots")
         rv$su_status <- paste("Env -> SU updated", count, "rows")
       }, error = function(e) {
@@ -1998,7 +2118,24 @@ mod_hierarchy_server <- function(id, state, con) {
     observeEvent(input$su_su_to_env, {
       if (!require_su_write()) return()
       tryCatch({
+        before_env <- data.frame()
+        if (DBI::dbExistsTable(con, "Sample_Env")) {
+          fields <- DBI::dbListFields(con, "Sample_Env")
+          select_cols <- intersect(c("PlotNumber", "ProjectID", "UserSiteUnit"), fields)
+          if (all(c("PlotNumber", "UserSiteUnit") %in% select_cols)) {
+            before_env <- DBI::dbGetQuery(con, sprintf("SELECT %s FROM Sample_Env", paste(select_cols, collapse = ", ")))
+          }
+        }
         count <- sync_su_to_env(con)
+        after_env <- data.frame()
+        if (DBI::dbExistsTable(con, "Sample_Env")) {
+          fields <- DBI::dbListFields(con, "Sample_Env")
+          select_cols <- intersect(c("PlotNumber", "ProjectID", "UserSiteUnit"), fields)
+          if (all(c("PlotNumber", "UserSiteUnit") %in% select_cols)) {
+            after_env <- DBI::dbGetQuery(con, sprintf("SELECT %s FROM Sample_Env", paste(select_cols, collapse = ", ")))
+          }
+        }
+        log_env_siteunit_changes(before_env, after_env, "UserSiteUnit")
         rv$su_status <- paste("SU -> Env updated", count, "rows")
       }, error = function(e) {
         rv$su_status <- paste("SU -> Env failed:", e$message)
@@ -2008,7 +2145,18 @@ mod_hierarchy_server <- function(id, state, con) {
     observeEvent(input$su_bec_to_su, {
       if (!require_su_write()) return()
       tryCatch({
+        before_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
         count <- copy_bec_to_su(con)
+        after_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
+        log_su_audit_changes(before_su, after_su)
         rv$su <- load_su("plots")
         rv$su_status <- paste("BEC -> SU updated", count, "rows")
       }, error = function(e) {
@@ -2022,7 +2170,18 @@ mod_hierarchy_server <- function(id, state, con) {
       subzone_val <- trimws(input$su_filter_subzone)
       replace_flag <- isTRUE(input$su_replace)
       tryCatch({
+        before_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
         count <- build_su_from_env(con, zone = zone_val, subzone = subzone_val, replace = replace_flag)
+        after_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
+        log_su_audit_changes(before_su, after_su)
         rv$su <- load_su("plots")
         rv$su_status <- paste("Built SU from Env:", count, "rows")
       }, error = function(e) {
@@ -2037,6 +2196,11 @@ mod_hierarchy_server <- function(id, state, con) {
       replace_flag <- isTRUE(input$su_replace)
       carry_flag <- isTRUE(input$su_carry_siteunit)
       tryCatch({
+        before_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
         count <- build_su_from_env_filter(
           con,
           column = column_val,
@@ -2044,6 +2208,12 @@ mod_hierarchy_server <- function(id, state, con) {
           replace = replace_flag,
           carry_siteunit = carry_flag
         )
+        after_su <- if (DBI::dbExistsTable(con, "Sample_SU")) {
+          DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+        } else {
+          data.frame(PlotNumber = character(0), SiteUnit = character(0), stringsAsFactors = FALSE)
+        }
+        log_su_audit_changes(before_su, after_su)
         rv$su <- load_su("plots")
         rv$su_status <- paste("Built SU from filter:", count, "rows")
       }, error = function(e) {

@@ -76,6 +76,25 @@ test_that("insert_subtree remaps ids and parents", {
   expect_equal(level_b, 2)
 })
 
+test_that("insert_subtree preserves tag when available", {
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER, Tag TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (1, 'Root', NULL)")
+
+  subtree <- data.frame(
+    ID = c(10),
+    Name = c("Tagged"),
+    Parent = c(NA),
+    Tag = c("yellow")
+  )
+
+  insert_subtree(con, subtree, 1L, 0L)
+  rows <- DBI::dbGetQuery(con, "SELECT Tag FROM Sample_Hierarchy WHERE Name = 'Tagged'")
+  expect_equal(rows$Tag[1], "yellow")
+})
+
 test_that("compute_subtree_levels assigns depth", {
   df <- data.frame(
     ID = c(1, 2, 3, 4),
@@ -205,6 +224,25 @@ test_that("insert_rekeyed_hierarchy remaps parents", {
   b_parent <- rows$Parent[rows$Name == "B"][1]
   expect_true(is.na(a_id))
   expect_false(is.na(b_parent))
+})
+
+test_that("insert_rekeyed_hierarchy preserves tag when available", {
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Tag TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (1, 'Root', NULL, NULL)")
+
+  source <- data.frame(
+    ID = c(10),
+    Name = c("Tagged"),
+    Parent = c(NA),
+    Tag = c("green")
+  )
+
+  insert_rekeyed_hierarchy(con, source)
+  rows <- DBI::dbGetQuery(con, "SELECT Tag FROM Sample_Hierarchy WHERE Name = 'Tagged'")
+  expect_equal(rows$Tag[1], "green")
 })
 
 test_that("clip_hierarchy_ids removes non-tilde branches", {

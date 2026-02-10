@@ -119,6 +119,24 @@ log_audit_diff <- function(con, project_id, user, plot_number, table_name, old_r
   logged
 }
 
+resolve_project_id_for_plot <- function(con, plot_number, fallback_project = NULL) {
+  if (is.null(plot_number) || !nzchar(as.character(plot_number))) return(fallback_project)
+  if (!DBI::dbExistsTable(con, "Sample_Env")) return(fallback_project)
+
+  fields <- tryCatch(DBI::dbListFields(con, "Sample_Env"), error = function(e) character(0))
+  if (!("PlotNumber" %in% fields) || !("ProjectID" %in% fields)) return(fallback_project)
+
+  res <- DBI::dbGetQuery(
+    con,
+    "SELECT ProjectID FROM Sample_Env WHERE PlotNumber = ? LIMIT 1",
+    list(as.character(plot_number))
+  )
+  if (nrow(res) == 0) return(fallback_project)
+  project_id <- res$ProjectID[1]
+  if (is.na(project_id) || !nzchar(as.character(project_id))) return(fallback_project)
+  as.character(project_id)
+}
+
 fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, table_name = NULL, date_from = NULL, date_to = NULL, limit = NULL, offset = NULL) {
   if (!audit_table_exists(con)) return(data.frame())
 

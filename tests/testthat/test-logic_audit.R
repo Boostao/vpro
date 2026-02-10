@@ -95,3 +95,24 @@ test_that("fetch_master_audit_entries filters entries", {
   expect_equal(nrow(rows), 1)
   expect_equal(rows$NodeName[1], "UnitB")
 })
+
+test_that("resolve_project_id_for_plot finds project", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES (?, ?)", list("P1", "PRJ1"))
+
+  project_id <- resolve_project_id_for_plot(con, "P1")
+  expect_equal(project_id, "PRJ1")
+})
+
+test_that("resolve_project_id_for_plot falls back when missing", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
+
+  project_id <- resolve_project_id_for_plot(con, "P2", fallback_project = "PRJX")
+  expect_equal(project_id, "PRJX")
+})
