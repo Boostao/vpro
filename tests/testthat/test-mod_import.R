@@ -96,6 +96,49 @@ test_that("mod_import imports CSV into target table", {
   expect_equal(nrow(rows), 2)
 })
 
+test_that("mod_import maps project-suffixed CSV and fills projectid", {
+  testthat::skip_if_not_installed("shiny")
+
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_import_env_table(con)
+
+  temp_dir <- tempfile("vpro_import_project_")
+  dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+  csv_path <- write_csv_named(
+    temp_dir,
+    "PRJ_Env.csv",
+    data.frame(
+      plotnumber = "P1",
+      zone = "ICH",
+      subzone = "wk",
+      latitude = 55,
+      longitude = -120,
+      elevation = 100,
+      slopegradient = 10,
+      aspect = 180
+    )
+  )
+
+  state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
+
+  shiny::testServer(mod_import_server, args = list(state = state, con = con), {
+    session$setInputs(import_file = list(datapath = csv_path, name = "PRJ_Env.csv"))
+    session$setInputs(target_table = "Sample_Env")
+    session$setInputs(import_analyze = 1)
+
+    expect_equal(rv$import_project_override, "PRJ")
+    expect_equal(rv$import_validation$status[1], "Columns match target")
+
+    session$setInputs(import_apply = 1)
+    expect_true(grepl("Imported 1 rows", rv$status))
+  })
+
+  rows <- DBI::dbGetQuery(con, "SELECT projectid FROM Sample_Env WHERE plotnumber = 'P1'")
+  expect_equal(rows$projectid[[1]], "PRJ")
+})
+
 test_that("mod_import handles ZIP files and imports selected tables", {
   testthat::skip_if_not_installed("shiny")
 

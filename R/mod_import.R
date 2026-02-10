@@ -23,6 +23,91 @@ mod_import_ui <- function(id) {
   )
 }
 
+import_suffix_map <- function() {
+  c(
+    env = "Sample_Env",
+    veg = "Sample_Veg",
+    humus = "Sample_Humus",
+    mineral = "Sample_Mineral",
+    other = "Sample_Other",
+    admin = "Sample_Admin",
+    metadata = "Sample_Metadata",
+    audit = "Sample_Audit",
+    su = "Sample_SU"
+  )
+}
+
+resolve_import_target <- function(file_base, tables) {
+  base <- tools::file_path_sans_ext(basename(file_base))
+  if (base %in% tables) return(list(table = base, project_id = NULL))
+
+  suffixes <- names(import_suffix_map())
+  pattern <- paste0("_(", paste(suffixes, collapse = "|"), ")$")
+  match <- regexpr(pattern, base, ignore.case = TRUE)
+  if (match[1] == -1) return(list(table = base, project_id = NULL))
+
+  suffix <- tolower(regmatches(base, match))
+  suffix <- sub("^_", "", suffix)
+  project_id <- substr(base, 1, match[1] - 1)
+  target <- import_suffix_map()[[suffix]]
+  if (is.null(target)) target <- base
+
+  list(table = target, project_id = project_id)
+}
+
+align_import_columns <- function(data, target_fields, allow_missing = character(0)) {
+  if (is.null(target_fields) || length(target_fields) == 0) {
+    return(list(data = data, missing = character(0), extra = character(0), ok = TRUE))
+  }
+  data_names <- names(data)
+  target_lower <- tolower(target_fields)
+  data_lower <- tolower(data_names)
+  allow_missing <- tolower(allow_missing)
+
+  missing <- setdiff(target_lower, data_lower)
+  if (length(allow_missing) > 0) {
+    missing <- setdiff(missing, allow_missing)
+  }
+  extra <- setdiff(data_lower, target_lower)
+  ok <- length(missing) == 0 && length(extra) == 0
+
+  if (ok) {
+    order_idx <- match(target_lower, data_lower)
+    data_out <- data.frame(stringsAsFactors = FALSE)
+    for (i in seq_along(target_fields)) {
+      if (!is.na(order_idx[i])) {
+        data_out[[target_fields[i]]] <- data[[order_idx[i]]]
+      } else if (target_lower[i] %in% allow_missing) {
+        data_out[[target_fields[i]]] <- rep(NA, nrow(data))
+      }
+    }
+    data <- data_out
+  }
+
+  list(data = data, missing = missing, extra = extra, ok = ok)
+}
+
+apply_project_override <- function(data, target_fields, project_id) {
+  if (is.null(project_id) || !nzchar(project_id)) return(data)
+  if (is.null(target_fields) || length(target_fields) == 0) return(data)
+
+  idx <- match("projectid", tolower(target_fields))
+  if (is.na(idx)) return(data)
+
+  col_name <- target_fields[[idx]]
+  if (!col_name %in% names(data)) {
+    data[[col_name]] <- project_id
+    return(data)
+  }
+
+  missing <- is.na(data[[col_name]]) | data[[col_name]] == ""
+  if (any(missing)) {
+    data[[col_name]][missing] <- project_id
+  }
+
+  data
+}
+
 mod_import_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     rv <- reactiveValues(
@@ -33,7 +118,8 @@ mod_import_server <- function(id, state, con) {
       import_validation = NULL,
       zip_meta = NULL,
       zip_map = NULL,
-      import_results = NULL
+      import_results = NULL,
+      import_project_override = NULL
     )
 
     compliance_tables <- c("Sample_Env", "Sample_Veg")
@@ -58,8 +144,7 @@ mod_import_server <- function(id, state, con) {
     })
 
     infer_table_name <- function(file_name) {
-      base <- tools::file_path_sans_ext(basename(file_name))
-      base
+      tools::file_path_sans_ext(basename(file_name))
     }
 
     csv_row_count <- function(path) {
@@ -68,7 +153,7 @@ mod_import_server <- function(id, state, con) {
       max(lines - 1, 0)
     }
 
-    build_csv_validation <- function(file_path, file_name, preview, target_table) {
+    build_csv_validation <- function(file_path, file_name, preview, target_table, project_override = NULL) {
       total_rows <- csv_row_count(file_path)
       validation <- data.frame(
         file = file_name,
@@ -85,8 +170,11 @@ mod_import_server <- function(id, state, con) {
       if (!is.null(target_table) && nzchar(target_table)) {
         target_fields <- DBI::dbListFields(con, target_table)
         rv$target_fields <- target_fields
-        missing_cols <- setdiff(target_fields, names(preview))
-        extra_cols <- setdiff(names(preview), target_fields)
+        allow_missing <- if (!is.null(project_override) && nzchar(project_override)) c("projectid") else character(0)
+        aligned <- align_import_columns(preview, target_fields, allow_missing = allow_missing)
+        missing_cols <- aligned$missing
+        extra_cols <- aligned$extra
+        rv$preview <- aligned$data
 
         validation$missing <- if (length(missing_cols) > 0) paste(missing_cols, collapse = ", ") else ""
         validation$extra <- if (length(extra_cols) > 0) paste(extra_cols, collapse = ", ") else ""
@@ -125,8 +213,21 @@ mod_import_server <- function(id, state, con) {
 
       if (ext == "csv") {
         tryCatch({
+          tables <- DBI::dbListTables(con)
+          tables <- tables[!grepl("^duckdb_|^sqlite_", tables)]
+          suggested <- resolve_import_target(infer_table_name(file_name), tables)
+          rv$import_project_override <- suggested$project_id
+
+          target_table <- input$target_table
+          if (is.null(target_table) || !nzchar(target_table)) {
+            target_table <- suggested$table
+            if (nzchar(target_table) && target_table %in% tables) {
+              updateSelectInput(session, "target_table", selected = target_table)
+            }
+          }
+
           rv$preview <- utils::read.csv(file_path, nrows = 100, stringsAsFactors = FALSE)
-          result <- build_csv_validation(file_path, file_name, rv$preview, input$target_table)
+          result <- build_csv_validation(file_path, file_name, rv$preview, target_table, rv$import_project_override)
           rv$status <- result$status
           rv$import_validation <- result$validation
         }, error = function(e) {
@@ -155,15 +256,18 @@ mod_import_server <- function(id, state, con) {
 
           meta <- lapply(csv_paths, function(path) {
             table_guess <- infer_table_name(path)
+            resolved <- resolve_import_target(table_guess, tables)
             header <- tryCatch(utils::read.csv(path, nrows = 0, stringsAsFactors = FALSE),
                                error = function(e) NULL)
             cols <- if (is.null(header)) character(0) else names(header)
             row_count <- csv_row_count(path)
 
-            if (table_guess %in% tables) {
-              target_fields <- DBI::dbListFields(con, table_guess)
-              missing_cols <- setdiff(target_fields, cols)
-              extra_cols <- setdiff(cols, target_fields)
+            if (resolved$table %in% tables) {
+              target_fields <- DBI::dbListFields(con, resolved$table)
+              allow_missing <- if (!is.null(resolved$project_id) && nzchar(resolved$project_id)) c("projectid") else character(0)
+              aligned <- align_import_columns(as.data.frame(setNames(vector("list", length(cols)), cols)), target_fields, allow_missing = allow_missing)
+              missing_cols <- aligned$missing
+              extra_cols <- aligned$extra
               status <- if (length(missing_cols) == 0 && length(extra_cols) == 0) {
                 "Columns match target"
               } else {
@@ -182,7 +286,9 @@ mod_import_server <- function(id, state, con) {
 
             data.frame(
               file = basename(path),
-              table = table_guess,
+              table = resolved$table,
+              source = table_guess,
+              project_id = resolved$project_id,
               rows = row_count,
               status = status,
               stringsAsFactors = FALSE
@@ -194,6 +300,7 @@ mod_import_server <- function(id, state, con) {
             id = seq_len(nrow(rv$zip_meta)),
             path = csv_paths,
             table = rv$zip_meta$table,
+            project_id = rv$zip_meta$project_id,
             stringsAsFactors = FALSE
           )
 
@@ -235,7 +342,12 @@ mod_import_server <- function(id, state, con) {
       ext <- tolower(tools::file_ext(file_name))
       if (ext != "csv") return()
 
-      result <- build_csv_validation(input$import_file$datapath, file_name, rv$preview, input$target_table)
+      tables <- DBI::dbListTables(con)
+      tables <- tables[!grepl("^duckdb_|^sqlite_", tables)]
+      suggested <- resolve_import_target(infer_table_name(file_name), tables)
+      rv$import_project_override <- if (identical(input$target_table, suggested$table)) suggested$project_id else NULL
+
+      result <- build_csv_validation(input$import_file$datapath, file_name, rv$preview, input$target_table, rv$import_project_override)
       rv$status <- result$status
       rv$import_validation <- result$validation
     })
@@ -328,8 +440,11 @@ mod_import_server <- function(id, state, con) {
             next
           }
 
-          missing_cols <- setdiff(target_fields, names(data))
-          extra_cols <- setdiff(names(data), target_fields)
+          allow_missing <- if (!is.null(row$project_id[1]) && nzchar(row$project_id[1])) c("projectid") else character(0)
+          aligned <- align_import_columns(data, target_fields, allow_missing = allow_missing)
+          data <- apply_project_override(aligned$data, target_fields, row$project_id[1])
+          missing_cols <- aligned$missing
+          extra_cols <- aligned$extra
           if (length(missing_cols) > 0 || length(extra_cols) > 0) {
             results_status[[length(results_status) + 1]] <- data.frame(
               table = table,
@@ -340,7 +455,11 @@ mod_import_server <- function(id, state, con) {
             next
           }
 
-          pending_imports[[length(pending_imports) + 1]] <- list(table = table, data = data)
+          pending_imports[[length(pending_imports) + 1]] <- list(
+            table = table,
+            data = data,
+            project_id = row$project_id[1]
+          )
         }
 
         use_compliance <- any(selected_tables %in% compliance_tables)
@@ -391,7 +510,9 @@ mod_import_server <- function(id, state, con) {
         rv$import_results <- if (length(results_status) > 0) do.call(rbind, results_status) else data.frame()
 
         if (use_compliance) {
-          rv$compliance <- run_compliance_checks(con, state$CurrProject)
+          project_scope <- unique(na.omit(vapply(pending_imports, function(x) x$project_id, character(1))))
+          project_scope <- if (length(project_scope) == 1) project_scope else state$CurrProject
+          rv$compliance <- run_compliance_checks(con, project_scope)
           if (!isTRUE(rv$compliance$passed)) {
             rv$import_results$status <- "Rolled back (compliance failed)"
             rv$preview <- rv$import_results
@@ -405,7 +526,8 @@ mod_import_server <- function(id, state, con) {
 
         for (entry in pending_imports) {
           if (entry$table %in% compliance_tables) {
-            log_audit_rows(con, state$CurrProject, "Import", entry$table, entry$data)
+            log_project <- entry$project_id %||% state$CurrProject
+            log_audit_rows(con, log_project, "Import", entry$table, entry$data)
           }
         }
 
@@ -427,8 +549,11 @@ mod_import_server <- function(id, state, con) {
         rv$target_fields <- DBI::dbListFields(con, input$target_table)
       }
 
-      missing_cols <- setdiff(rv$target_fields, names(rv$preview))
-      extra_cols <- setdiff(names(rv$preview), rv$target_fields)
+      allow_missing <- if (!is.null(rv$import_project_override) && nzchar(rv$import_project_override)) c("projectid") else character(0)
+      aligned <- align_import_columns(rv$preview, rv$target_fields, allow_missing = allow_missing)
+      rv$preview <- aligned$data
+      missing_cols <- aligned$missing
+      extra_cols <- aligned$extra
 
       if (length(missing_cols) > 0) {
         rv$status <- paste("Import blocked: missing columns", paste(missing_cols, collapse = ", "))
@@ -453,9 +578,11 @@ mod_import_server <- function(id, state, con) {
       }
 
       tryCatch({
-        DBI::dbAppendTable(con, input$target_table, rv$preview)
+        import_data <- apply_project_override(rv$preview, rv$target_fields, rv$import_project_override)
+        DBI::dbAppendTable(con, input$target_table, import_data)
         if (use_compliance) {
-          rv$compliance <- run_compliance_checks(con, state$CurrProject)
+          project_scope <- rv$import_project_override %||% state$CurrProject
+          rv$compliance <- run_compliance_checks(con, project_scope)
           if (!isTRUE(rv$compliance$passed)) {
             rv$status <- "Import blocked: compliance checks failed"
             return()
@@ -466,16 +593,17 @@ mod_import_server <- function(id, state, con) {
         }
 
         if (input$target_table %in% compliance_tables) {
-          log_audit_rows(con, state$CurrProject, "Import", input$target_table, rv$preview)
+          log_project <- rv$import_project_override %||% state$CurrProject
+          log_audit_rows(con, log_project, "Import", input$target_table, import_data)
         }
 
         rv$import_results <- data.frame(
           table = input$target_table,
-          rows = nrow(rv$preview),
+          rows = nrow(import_data),
           status = "Imported",
           stringsAsFactors = FALSE
         )
-        rv$status <- paste("Imported", nrow(rv$preview), "rows into", input$target_table)
+        rv$status <- paste("Imported", nrow(import_data), "rows into", input$target_table)
       }, error = function(e) {
         rv$status <- paste("Import error:", e$message)
       })
