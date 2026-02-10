@@ -80,20 +80,20 @@ if (length(plots) > 0) {
   labels <- dbGetQuery(
     con,
     sprintf(
-      "SELECT plotnumber, projectid, zone, subzone FROM Sample_Env WHERE PlotNumber IN (%s) ORDER BY plotnumber",
+      "SELECT * FROM Sample_Env WHERE PlotNumber IN (%s) ORDER BY PlotNumber",
       plot_sql
     )
   )
 } else if (nzchar(trimws(params$project_id))) {
   labels <- dbGetQuery(
     con,
-    "SELECT plotnumber, projectid, zone, subzone FROM Sample_Env WHERE ProjectID = ? ORDER BY plotnumber",
+    "SELECT * FROM Sample_Env WHERE ProjectID = ? ORDER BY PlotNumber",
     list(trimws(params$project_id))
   )
 } else {
   labels <- dbGetQuery(
     con,
-    "SELECT plotnumber, projectid, zone, subzone FROM Sample_Env ORDER BY plotnumber"
+    "SELECT * FROM Sample_Env ORDER BY PlotNumber"
   )
 }
 
@@ -116,6 +116,12 @@ normalize_env_cols <- function(df) {
 }
 
 labels <- normalize_env_cols(labels)
+
+if (nrow(labels) > 0) {
+  desired <- c("plotnumber", "projectid", "zone", "subzone")
+  cols <- intersect(desired, names(labels))
+  labels <- labels[, cols, drop = FALSE]
+}
 
 dbDisconnect(con, shutdown = TRUE)
 ```
