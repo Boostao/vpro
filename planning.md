@@ -55,7 +55,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Diagnostics/QC**: diagnostic helper functions (presence class + diagnosis + matrix runner + live matrix builder) in `R/logic_diagnostic.R`; UI/report wiring in Reports module complete
 - **UI regression tests**: shinytest2 scaffold complete; initial smoke test added; core flow coverage pending
 - **Report logic parity**: QC report wiring complete
-- **Report logic parity**: env/hierarchy report normalization in progress
+- **Report logic parity**: env/site/bec/layer filters added; hierarchy normalization complete
 - **Report logic parity**: short/long veg filters, grouping, and common-name support added
 - **Report logic parity**: lifeform + hierarchy reports updated with filters
 

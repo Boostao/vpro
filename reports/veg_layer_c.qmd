@@ -5,6 +5,9 @@ format:
     theme: journal
 params:
   plot_number: "00000"
+  plot_numbers: ""
+  site_unit: ""
+  project_id: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -16,10 +19,27 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+root_candidates <- c(
+  Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
+  getwd(),
+  file.path(getwd(), ".."),
+  file.path(getwd(), "../..")
+)
+root_candidates <- unique(root_candidates[nzchar(root_candidates)])
+root_dir <- NA_character_
+for (candidate in root_candidates) {
+  candidate <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+  if (file.exists(file.path(candidate, "R", "logic_reports_veg.R"))) {
+    root_dir <- candidate
+    break
+  }
+}
+if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
+source(file.path(root_dir, "R", "logic_reports_veg.R"))
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
-  tbls <- c("vw_USysAllVeg")
+  tbls <- c("vw_USysAllVeg", "Sample_SU", "Sample_Env")
   for (tbl in tbls) {
     file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
     file_path <- file.path(parquet_dir, file_name)
@@ -36,11 +56,31 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```
 
 ```{r load-data, include=FALSE}
-veg <- dbGetQuery(
-  con,
-  "SELECT * FROM vw_USysAllVeg WHERE PlotNumber = ?",
-  list(params$plot_number)
-)
+plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
+if (length(plots) == 0 && nzchar(trimws(params$site_unit)) && DBI::dbExistsTable(con, "Sample_SU")) {
+  su_df <- DBI::dbGetQuery(
+    con,
+    "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+    list(trimws(params$site_unit))
+  )
+  plots <- unique(as.character(su_df$PlotNumber))
+}
+if (length(plots) == 0 && nzchar(trimws(params$project_id)) && DBI::dbExistsTable(con, "Sample_Env")) {
+  env_df <- DBI::dbGetQuery(
+    con,
+    "SELECT PlotNumber FROM Sample_Env WHERE ProjectID = ?",
+    list(trimws(params$project_id))
+  )
+  plots <- unique(as.character(env_df$PlotNumber))
+}
+
+plots <- plots[nzchar(plots)]
+if (length(plots) > 0) {
+  plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
+  veg <- dbGetQuery(con, sprintf("SELECT * FROM vw_USysAllVeg WHERE PlotNumber IN (%s)", plot_sql))
+} else {
+  veg <- data.frame()
+}
 
 normalize_veg_cols <- function(df) {
   if (nrow(df) == 0) return(df)
@@ -69,7 +109,7 @@ dbDisconnect(con, shutdown = TRUE)
 layer_col <- if ("LayerCode" %in% names(veg)) "LayerCode" else if ("MyLayer" %in% names(veg)) "MyLayer" else NULL
 ```
 
-# Plot: `r params$plot_number`
+# Plot: `r if (length(plots) > 0) plots[1] else params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
 if (!is.null(layer_col) && nrow(veg) > 0) {
