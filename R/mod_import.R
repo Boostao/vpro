@@ -13,7 +13,7 @@ mod_import_ui <- function(id) {
       ),
       tags$hr(),
       tags$h5("Import from Access (Windows only)"),
-      tags$p("Requires the Microsoft Access ODBC driver. For macOS/Linux, export to CSV/ZIP first."),
+      tags$p("Windows only: install the Microsoft Access ODBC driver. macOS/Linux users should export to CSV/ZIP first."),
       layout_columns(
         fileInput(ns("access_file"), "Access .mdb/.accdb", accept = c(".mdb", ".accdb")),
         textInput(ns("access_project_id"), "New Project ID (optional)", value = ""),
@@ -134,6 +134,19 @@ apply_project_override <- function(data, target_fields, project_id) {
   }
 
   data
+}
+
+project_exists <- function(con, project_id) {
+  if (is.null(project_id) || !nzchar(project_id)) return(FALSE)
+  if (DBI::dbExistsTable(con, "Sample_Metadata")) {
+    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Sample_Metadata WHERE ProjectID = ? LIMIT 1", list(project_id))
+    if (nrow(res) > 0) return(TRUE)
+  }
+  if (DBI::dbExistsTable(con, "Sample_Env")) {
+    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Sample_Env WHERE ProjectID = ? LIMIT 1", list(project_id))
+    if (nrow(res) > 0) return(TRUE)
+  }
+  FALSE
 }
 
 mod_import_server <- function(id, state, con) {
@@ -570,6 +583,11 @@ mod_import_server <- function(id, state, con) {
         project_override <- trimws(input$access_project_id)
         if (!nzchar(project_override)) project_override <- project_name
 
+        if (project_exists(con, project_override)) {
+          rv$access_status <- paste("Import blocked: project already exists:", project_override)
+          return()
+        }
+
         import_plan <- list()
         for (suffix in names(access_suffix_map())) {
           access_table <- paste0(project_name, "_", access_suffix_map()[[suffix]])
@@ -758,6 +776,15 @@ mod_import_server <- function(id, state, con) {
           )
         }
 
+          if (length(pending_imports) > 0) {
+            project_ids <- unique(na.omit(vapply(pending_imports, function(x) x$project_id, character(1))))
+            existing <- project_ids[vapply(project_ids, function(pid) project_exists(con, pid), logical(1))]
+            if (length(existing) > 0) {
+              rv$status <- paste("Import blocked: project already exists:", paste(existing, collapse = ", "))
+              return()
+            }
+          }
+
         use_compliance <- any(selected_tables %in% compliance_tables)
         commit_ok <- TRUE
 
@@ -835,6 +862,13 @@ mod_import_server <- function(id, state, con) {
       }
 
       req(input$target_table)
+
+      if (!is.null(rv$import_project_override) && nzchar(rv$import_project_override)) {
+        if (project_exists(con, rv$import_project_override)) {
+          rv$status <- paste("Import blocked: project already exists:", rv$import_project_override)
+          return()
+        }
+      }
 
       if (!is.null(rv$import_validation) && nrow(rv$import_validation) > 0) {
         if (rv$import_validation$status[1] != "Columns match target") {
