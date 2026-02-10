@@ -55,6 +55,7 @@ setup_compliance_tables <- function(con) {
   DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ', 'ICH', 'vm', 55, -120, 100, 'BAD', 10, 180, 10)")
   DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P1', 'BAD', 'PRJ', 'BADCODE')")
   DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P1', 'BAD', 'PRJ', '20')")
+  DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P2', 'OK', 'PRJ', '200')")
   if ("code" %in% DBI::dbListFields(con, DBI::Id(schema = "lists", table = "SppList"))) {
     DBI::dbExecute(con, "INSERT INTO lists.SppList (code) VALUES ('OK')")
   }
@@ -82,8 +83,26 @@ test_that("run_compliance_checks returns rule summaries", {
   expect_true(nrow(result$detail_tibble) > 0)
   expect_true(any(grepl("^fk_list_", result$detail_tibble$rule)))
   expect_true(any(result$detail_tibble$rule == "code_cover"))
+  expect_true(any(result$detail_tibble$rule == "range_cover"))
+  expect_true(any(result$detail_tibble$rule == "range_lat"))
+  expect_true(any(result$detail_tibble$rule == "range_lon"))
+  expect_true(any(result$detail_tibble$rule == "range_elev"))
   expect_true(any(result$detail_tibble$rule == "range_slope"))
   expect_true(any(result$detail_tibble$rule == "range_aspect"))
   expect_true(any(result$detail_tibble$rule == "fk_zone_subzone"))
+  expect_true(any(result$detail_tibble$rule == "dup_plot"))
+  expect_true(any(result$detail_tibble$rule == "dup_veg"))
   expect_true(any(grepl("^range_nonneg_", result$detail_tibble$rule)))
+})
+
+test_that("required fields flag missing values", {
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_compliance_tables(con)
+
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P3', 'PRJ', NULL, '', 55, -120, 100, 'MID', 10, 180, 10)")
+  missing <- check_required_fields(con, project_id = "PRJ")
+
+  expect_true(any(missing$column == "zone"))
+  expect_true(any(missing$column == "subzone"))
 })
