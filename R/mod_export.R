@@ -151,12 +151,15 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
     if (is.null(value)) fallback else value
   }
 
-  build_column_plan <- function(table_name, data_cols, desired_cols) {
+  build_column_plan <- function(table_name, data_cols, desired_cols, alias_map = NULL) {
     desired_cols <- null_coalesce(desired_cols, character(0))
     data_lower <- tolower(data_cols)
     desired_lower <- tolower(desired_cols)
     used <- rep(FALSE, length(data_cols))
     plan <- list()
+
+    alias_map <- null_coalesce(alias_map, list())
+    alias_for_table <- alias_map[[table_name]] %||% list()
 
     virtual_cols <- list(
       Sample_Env = c(
@@ -178,6 +181,23 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
             data_col = data_cols[match_idx],
             tag_col = desired_cols[idx]
           )
+        } else if (!is.null(alias_for_table[[desired_cols[idx]]])) {
+          alias_names <- alias_for_table[[desired_cols[idx]]]
+          if (!is.character(alias_names)) alias_names <- as.character(alias_names)
+          alias_lower <- tolower(alias_names)
+          alias_match <- which(data_lower %in% alias_lower)
+          if (length(alias_match) > 0) {
+            match_idx <- alias_match[1]
+            if (!used[match_idx]) {
+              used[match_idx] <- TRUE
+              plan[[length(plan) + 1]] <- list(
+                kind = "data",
+                data_col = data_cols[match_idx],
+                tag_col = desired_cols[idx]
+              )
+              next
+            }
+          }
         } else if (!is.null(virtual_set) && desired_cols[idx] %in% virtual_set) {
           plan[[length(plan) + 1]] <- list(
             kind = "virtual",
@@ -224,7 +244,19 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
     data <- fetch_table_data(table_name, project_ids)
     if (is.null(data) || nrow(data) == 0) return()
 
-    col_plan <- build_column_plan(table_name, names(data), access_column_order[[table_name]])
+    alias_map <- list(
+      Sample_Env = list(
+        Location = c("_location")
+      ),
+      Sample_Humus = list(
+        Comment = c("_comment", "_comments")
+      ),
+      Sample_Mineral = list(
+        Comments = c("_comments", "_comment")
+      )
+    )
+
+    col_plan <- build_column_plan(table_name, names(data), access_column_order[[table_name]], alias_map = alias_map)
     col_map <- list(
       Latitude = get_case_insensitive_col(names(data), "Latitude"),
       Longitude = get_case_insensitive_col(names(data), "Longitude")
