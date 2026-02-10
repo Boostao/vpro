@@ -53,7 +53,9 @@ import_suffix_map <- function() {
     admin = "Sample_Admin",
     metadata = "Sample_Metadata",
     audit = "Sample_Audit",
-    su = "Sample_SU"
+    su = "Sample_SU",
+    hierarchy = "Sample_Hierarchy",
+    spplist = "lists.SppList"
   )
 }
 
@@ -67,13 +69,64 @@ access_suffix_map <- function() {
     admin = "Admin",
     metadata = "Metadata",
     audit = "Audit",
-    su = "SU"
+    su = "SU",
+    hierarchy = "Hierarchy"
   )
+}
+
+import_table_id <- function(table_name) {
+  if (grepl("\\.", table_name)) {
+    parts <- strsplit(table_name, "\\.")[[1]]
+    if (length(parts) == 2) {
+      return(DBI::Id(schema = parts[1], table = parts[2]))
+    }
+  }
+  table_name
+}
+
+import_get_table_fields <- function(con, table_name) {
+  DBI::dbListFields(con, import_table_id(table_name))
+}
+
+import_append_table <- function(con, table_name, data) {
+  DBI::dbAppendTable(con, import_table_id(table_name), data)
+}
+
+list_import_tables <- function(con) {
+  base_tables <- DBI::dbListTables(con)
+  base_tables <- base_tables[!grepl("^duckdb_|^sqlite_", base_tables)]
+
+  schema_tables <- tryCatch({
+    DBI::dbGetQuery(
+      con,
+      "SELECT schema_name, table_name FROM duckdb_tables() WHERE internal = FALSE"
+    )
+  }, error = function(e) data.frame())
+
+  qualified <- character(0)
+  if (nrow(schema_tables) > 0) {
+    schema_tables <- schema_tables[schema_tables$schema_name %in% c("lists", "user"), , drop = FALSE]
+    if (nrow(schema_tables) > 0) {
+      qualified <- paste(schema_tables$schema_name, schema_tables$table_name, sep = ".")
+    }
+  }
+
+  unique(c(base_tables, qualified))
 }
 
 resolve_import_target <- function(file_base, tables) {
   base <- tools::file_path_sans_ext(basename(file_base))
+  schema_match <- tables[grepl(paste0("\\.", base, "$"), tables, ignore.case = TRUE)]
+  if (length(schema_match) > 0) {
+    lists_match <- schema_match[grepl("^lists\\.", schema_match, ignore.case = TRUE)]
+    if (length(lists_match) > 0) return(list(table = lists_match[[1]], project_id = NULL))
+    return(list(table = schema_match[[1]], project_id = NULL))
+  }
+
   if (base %in% tables) return(list(table = base, project_id = NULL))
+
+  base_match <- tables[tolower(tables) == tolower(base)]
+  if (length(base_match) > 0) return(list(table = base_match[[1]], project_id = NULL))
 
   suffixes <- names(import_suffix_map())
   pattern <- paste0("_(", paste(suffixes, collapse = "|"), ")$")
@@ -107,7 +160,7 @@ align_import_columns <- function(data, target_fields, allow_missing = character(
 
   if (ok) {
     order_idx <- match(target_lower, data_lower)
-    data_out <- data.frame(stringsAsFactors = FALSE)
+    data_out <- data.frame(matrix(nrow = nrow(data), ncol = 0), stringsAsFactors = FALSE)
     for (i in seq_along(target_fields)) {
       if (!is.na(order_idx[i])) {
         data_out[[target_fields[i]]] <- data[[order_idx[i]]]
@@ -156,7 +209,7 @@ project_exists <- function(con, project_id) {
 }
 
 delete_project_rows <- function(con, table, project_id) {
-  fields <- tryCatch(DBI::dbListFields(con, table), error = function(e) character(0))
+  fields <- tryCatch(import_get_table_fields(con, table), error = function(e) character(0))
   if (length(fields) == 0) return(list(status = "No fields", deleted = 0L))
 
   field_lower <- tolower(fields)
@@ -200,6 +253,9 @@ mod_import_server <- function(id, state, con) {
     )
 
     compliance_tables <- c("Sample_Env", "Sample_Veg")
+    is_compliance_table <- function(table_name) {
+      tolower(table_name) %in% tolower(compliance_tables)
+    }
 
     require_import_permission <- function() {
       if (!auth_is_authenticated(state)) {
@@ -215,8 +271,7 @@ mod_import_server <- function(id, state, con) {
     }
 
     observe({
-      tables <- DBI::dbListTables(con)
-      tables <- tables[!grepl("^duckdb_|^sqlite_", tables)]
+      tables <- list_import_tables(con)
       updateSelectInput(session, "target_table", choices = c("(none)" = "", tables))
     })
 
@@ -333,7 +388,7 @@ mod_import_server <- function(id, state, con) {
       status <- paste("Loaded", nrow(preview), "rows from", file_name)
 
       if (!is.null(target_table) && nzchar(target_table)) {
-        target_fields <- DBI::dbListFields(con, target_table)
+        target_fields <- import_get_table_fields(con, target_table)
         rv$target_fields <- target_fields
         allow_missing <- if (!is.null(project_override) && nzchar(project_override)) c("projectid") else character(0)
         aligned <- align_import_columns(preview, target_fields, allow_missing = allow_missing)
@@ -378,8 +433,7 @@ mod_import_server <- function(id, state, con) {
 
       if (ext == "csv") {
         tryCatch({
-          tables <- DBI::dbListTables(con)
-          tables <- tables[!grepl("^duckdb_|^sqlite_", tables)]
+          tables <- list_import_tables(con)
           suggested <- resolve_import_target(infer_table_name(file_name), tables)
           rv$import_project_override <- suggested$project_id
 
@@ -416,21 +470,25 @@ mod_import_server <- function(id, state, con) {
             return()
           }
 
-          tables <- DBI::dbListTables(con)
-          tables <- tables[!grepl("^duckdb_|^sqlite_", tables)]
+          tables <- list_import_tables(con)
 
           meta <- lapply(csv_paths, function(path) {
             table_guess <- infer_table_name(path)
             resolved <- resolve_import_target(table_guess, tables)
+            project_id <- if (is.null(resolved$project_id)) "" else resolved$project_id
             header <- tryCatch(utils::read.csv(path, nrows = 0, stringsAsFactors = FALSE),
                                error = function(e) NULL)
             cols <- if (is.null(header)) character(0) else names(header)
             row_count <- csv_row_count(path)
 
             if (resolved$table %in% tables) {
-              target_fields <- DBI::dbListFields(con, resolved$table)
+              target_fields <- import_get_table_fields(con, resolved$table)
               allow_missing <- if (!is.null(resolved$project_id) && nzchar(resolved$project_id)) c("projectid") else character(0)
-              aligned <- align_import_columns(as.data.frame(setNames(vector("list", length(cols)), cols)), target_fields, allow_missing = allow_missing)
+              preview_stub <- setNames(
+                as.data.frame(matrix(nrow = 0, ncol = length(cols))),
+                cols
+              )
+              aligned <- align_import_columns(preview_stub, target_fields, allow_missing = allow_missing)
               missing_cols <- aligned$missing
               extra_cols <- aligned$extra
               status <- if (length(missing_cols) == 0 && length(extra_cols) == 0) {
@@ -453,7 +511,7 @@ mod_import_server <- function(id, state, con) {
               file = basename(path),
               table = resolved$table,
               source = table_guess,
-              project_id = resolved$project_id,
+              project_id = project_id,
               rows = row_count,
               status = status,
               stringsAsFactors = FALSE
@@ -515,8 +573,7 @@ mod_import_server <- function(id, state, con) {
       ext <- tolower(tools::file_ext(file_name))
       if (ext != "csv") return()
 
-      tables <- DBI::dbListTables(con)
-      tables <- tables[!grepl("^duckdb_|^sqlite_", tables)]
+      tables <- list_import_tables(con)
       suggested <- resolve_import_target(infer_table_name(file_name), tables)
       rv$import_project_override <- if (identical(input$target_table, suggested$table)) suggested$project_id else NULL
 
@@ -717,7 +774,7 @@ mod_import_server <- function(id, state, con) {
           return()
         }
 
-        use_compliance <- any(vapply(import_plan, function(x) x$target_table %in% compliance_tables, logical(1)))
+        use_compliance <- any(vapply(import_plan, function(x) is_compliance_table(x$target_table), logical(1)))
         commit_ok <- TRUE
         if (use_compliance) {
           commit_ok <- FALSE
@@ -750,7 +807,7 @@ mod_import_server <- function(id, state, con) {
             next
           }
 
-          target_fields <- DBI::dbListFields(con, entry$target_table)
+          target_fields <- import_get_table_fields(con, entry$target_table)
           allow_missing <- c("projectid")
           aligned <- align_import_columns(data, target_fields, allow_missing = allow_missing)
           missing_cols <- aligned$missing
@@ -768,7 +825,7 @@ mod_import_server <- function(id, state, con) {
 
           import_data <- apply_project_override(aligned$data, target_fields, project_override)
           tryCatch({
-            DBI::dbAppendTable(con, entry$target_table, import_data)
+            import_append_table(con, entry$target_table, import_data)
             imported_payloads[[entry$target_table]] <- import_data
             results_status[[length(results_status) + 1]] <- data.frame(
               table = entry$target_table,
@@ -802,7 +859,7 @@ mod_import_server <- function(id, state, con) {
         }
 
         for (entry in import_plan) {
-          if (entry$target_table %in% compliance_tables && !is.null(imported_payloads[[entry$target_table]])) {
+          if (is_compliance_table(entry$target_table) && !is.null(imported_payloads[[entry$target_table]])) {
             log_audit_rows(con, project_override, "Import", entry$target_table, imported_payloads[[entry$target_table]])
           }
         }
@@ -859,7 +916,7 @@ mod_import_server <- function(id, state, con) {
             next
           }
 
-          target_fields <- DBI::dbListFields(con, table)
+          target_fields <- import_get_table_fields(con, table)
           data <- tryCatch(utils::read.csv(path, stringsAsFactors = FALSE), error = function(e) NULL)
           if (is.null(data)) {
             results_status[[length(results_status) + 1]] <- data.frame(
@@ -913,7 +970,7 @@ mod_import_server <- function(id, state, con) {
           }
         }
 
-        use_compliance <- any(selected_tables %in% compliance_tables)
+        use_compliance <- any(vapply(selected_tables, is_compliance_table, logical(1)))
         commit_ok <- TRUE
 
         if (use_compliance) {
@@ -942,7 +999,7 @@ mod_import_server <- function(id, state, con) {
           }
 
           tryCatch({
-            DBI::dbAppendTable(con, table, data)
+            import_append_table(con, table, data)
             results_status[[length(results_status) + 1]] <- data.frame(
               table = table,
               rows = nrow(data),
@@ -978,7 +1035,7 @@ mod_import_server <- function(id, state, con) {
         }
 
         for (entry in pending_imports) {
-          if (entry$table %in% compliance_tables) {
+          if (is_compliance_table(entry$table)) {
             log_project <- entry$project_id %||% state$CurrProject
             log_audit_rows(con, log_project, "Import", entry$table, entry$data)
           }
@@ -1009,7 +1066,7 @@ mod_import_server <- function(id, state, con) {
       }
 
       if (is.null(rv$target_fields)) {
-        rv$target_fields <- DBI::dbListFields(con, input$target_table)
+        rv$target_fields <- import_get_table_fields(con, input$target_table)
       }
 
       allow_missing <- if (!is.null(rv$import_project_override) && nzchar(rv$import_project_override)) c("projectid") else character(0)
@@ -1028,7 +1085,7 @@ mod_import_server <- function(id, state, con) {
         return()
       }
 
-      use_compliance <- input$target_table %in% compliance_tables
+      use_compliance <- is_compliance_table(input$target_table)
       commit_ok <- TRUE
       if (use_compliance) {
         commit_ok <- FALSE
@@ -1042,7 +1099,7 @@ mod_import_server <- function(id, state, con) {
 
       tryCatch({
         import_data <- apply_project_override(rv$preview, rv$target_fields, rv$import_project_override)
-        DBI::dbAppendTable(con, input$target_table, import_data)
+        import_append_table(con, input$target_table, import_data)
         if (use_compliance) {
           project_scope <- rv$import_project_override %||% state$CurrProject
           rv$compliance <- run_compliance_for_projects(project_scope)
@@ -1055,7 +1112,7 @@ mod_import_server <- function(id, state, con) {
           commit_ok <- TRUE
         }
 
-        if (input$target_table %in% compliance_tables) {
+        if (is_compliance_table(input$target_table)) {
           log_project <- rv$import_project_override %||% state$CurrProject
           log_audit_rows(con, log_project, "Import", input$target_table, import_data)
         }

@@ -49,6 +49,14 @@ setup_import_veg_table <- function(con) {
   DBI::dbExecute(con, sprintf("INSERT INTO lists.SppList (%s) VALUES ('OK')", code_col))
 }
 
+setup_import_lists_table <- function(con) {
+  DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
+  if (DBI::dbExistsTable(con, DBI::Id(schema = "lists", table = "SppList"))) {
+    DBI::dbExecute(con, "DROP TABLE lists.SppList")
+  }
+  DBI::dbExecute(con, "CREATE TABLE lists.SppList (code TEXT, common TEXT)")
+}
+
 write_csv_named <- function(dir_path, file_name, data) {
   path <- file.path(dir_path, file_name)
   utils::write.csv(data, path, row.names = FALSE)
@@ -380,6 +388,80 @@ test_that("mod_import updates validation when target table changes", {
     session$setInputs(target_table = "Test_Table")
     expect_equal(rv$import_validation$status[1], "Columns match target")
   })
+})
+
+test_that("mod_import imports CSV into schema-qualified list table", {
+  testthat::skip_if_not_installed("shiny")
+
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_import_lists_table(con)
+
+  temp_dir <- tempfile("vpro_import_lists_")
+  dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+  csv_path <- write_csv_named(
+    temp_dir,
+    "SppList.csv",
+    data.frame(code = "ABBA", common = "Fir", stringsAsFactors = FALSE)
+  )
+
+  state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
+
+  shiny::testServer(mod_import_server, args = list(state = state, con = con), {
+    session$setInputs(import_file = list(datapath = csv_path, name = "SppList.csv"))
+    session$setInputs(target_table = "lists.SppList")
+    session$setInputs(import_analyze = 1)
+
+    expect_equal(rv$import_validation$status[1], "Columns match target")
+
+    session$setInputs(import_apply = 1)
+    expect_true(grepl("Imported 1 rows", rv$status))
+  })
+
+  rows <- DBI::dbGetQuery(con, "SELECT code, common FROM lists.SppList")
+  expect_equal(nrow(rows), 1)
+  expect_equal(rows$code[[1]], "ABBA")
+})
+
+test_that("mod_import resolves list table names in ZIP imports", {
+  testthat::skip_if_not_installed("shiny")
+
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_import_lists_table(con)
+
+  temp_dir <- tempfile("vpro_import_lists_zip_")
+  dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+  csv_lists <- write_csv_named(
+    temp_dir,
+    "SppList.csv",
+    data.frame(code = "PICEA", common = "Spruce", stringsAsFactors = FALSE)
+  )
+
+  zip_path <- tempfile(fileext = ".zip")
+  utils::zip(zipfile = zip_path, files = csv_lists)
+
+  state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
+
+  shiny::testServer(mod_import_server, args = list(state = state, con = con), {
+    session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
+    session$setInputs(import_analyze = 1)
+
+    expect_true(any(rv$zip_map$table == "lists.SppList"))
+
+    list_id <- rv$zip_map$id[rv$zip_map$table == "lists.SppList"][1]
+    session$setInputs(zip_tables = as.character(list_id))
+    session$setInputs(import_apply = 1)
+
+    expect_true(grepl("Imported 1 tables", rv$status))
+    expect_true(all(rv$import_results$status == "Imported"))
+  })
+
+  rows <- DBI::dbGetQuery(con, "SELECT code, common FROM lists.SppList")
+  expect_equal(nrow(rows), 1)
+  expect_equal(rows$code[[1]], "PICEA")
 })
 
 test_that("mod_import rolls back ZIP imports on compliance failure", {
