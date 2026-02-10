@@ -9,10 +9,12 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
   project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
----
 
 ```{r setup, include=FALSE}
 library(duckdb)
@@ -174,6 +176,39 @@ format_numeric_summary <- function(values, digits = 1) {
     parts <- paste0(parts, "  (Null ", nulls, ")")
   }
   parts
+}
+
+apply_theme <- isTRUE(params$apply_theme)
+colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
+gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
+
+style_report_table <- function(df, columns = NULL) {
+  if (!apply_theme || nrow(df) == 0) return(df)
+  style_numeric <- function(vec) {
+    labels <- as.character(vec)
+    vapply(seq_along(labels), function(i) {
+      label <- labels[[i]]
+      if (!nzchar(label)) return("")
+      num <- suppressWarnings(as.numeric(label))
+      if (is.na(num)) return(label)
+      bg <- ""
+      if (!is.na(gray_greater) && num >= gray_greater) {
+        bg <- "#e6e6e6"
+      } else if (!is.na(colour_greater) && num >= colour_greater) {
+        bg <- "#f9e27d"
+      }
+      if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+    }, character(1))
+  }
+  target_cols <- columns
+  if (is.null(target_cols) || length(target_cols) == 0) {
+    target_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+  }
+  target_cols <- intersect(target_cols, names(df))
+  for (col_name in target_cols) {
+    df[[col_name]] <- style_numeric(df[[col_name]])
+  }
+  df
 }
 ```
 
@@ -346,7 +381,7 @@ if (DBI::dbExistsTable(con, "lists.LifeformCodes")) {
 dbDisconnect(con, shutdown = TRUE)
 ```
 
-# Site Unit Report
+# `r params$report_title`
 
 ```{r site-unit-list, echo=FALSE}
 if (nrow(site_unit_overview) > 0) {
@@ -356,7 +391,8 @@ if (nrow(site_unit_overview) > 0) {
       `#Plots` = n_plots,
       `Long Name` = siteserieslongname
     )
-  kbl(display_df) %>%
+  display_df <- style_report_table(display_df, columns = c("#Plots"))
+  kbl(display_df, escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No site units found for the selection.")
@@ -528,7 +564,8 @@ if (nrow(env_active) > 0) {
 
 if (length(summary_rows) > 0) {
   summary_df <- do.call(rbind, summary_rows)
-  kbl(summary_df) %>%
+  summary_df <- style_report_table(summary_df)
+  kbl(summary_df, escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No environment summaries available.")
@@ -574,7 +611,8 @@ if (plots_in_unit > 0 && nrow(veg) > 0 && "species_lifeform" %in% names(veg)) {
       Max = round(max_cover, 1)
     )
 
-  kbl(lf_summary) %>%
+  lf_summary <- style_report_table(lf_summary, columns = c("Min", "Avg", "Max"))
+  kbl(lf_summary, escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No lifeform cover data available.")
@@ -602,7 +640,8 @@ if (nrow(env_active) > 0) {
       )
     })
     strata_df <- do.call(rbind, strata_rows)
-    kbl(strata_df) %>%
+    strata_df <- style_report_table(strata_df)
+    kbl(strata_df, escape = !apply_theme) %>%
       kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
   } else {
     cat("No strata cover fields found.")
@@ -635,7 +674,8 @@ if (nrow(env_active) > 0) {
       )
     })
     gc_df <- do.call(rbind, gc_rows)
-    kbl(gc_df) %>%
+    gc_df <- style_report_table(gc_df)
+    kbl(gc_df, escape = !apply_theme) %>%
       kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
   } else {
     cat("No ground cover fields found.")

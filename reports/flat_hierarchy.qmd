@@ -8,6 +8,10 @@ params:
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
   cutoff_level: 11
+  report_title: "Flat Hierarchy"
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
 ---
 
 ```{r setup, include=FALSE}
@@ -44,6 +48,7 @@ for (candidate in root_candidates) {
   }
 }
 if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
+apply_theme <- isTRUE(params$apply_theme)
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
@@ -144,7 +149,7 @@ build_flat_rows <- function(df, parent_id = NA_integer_, level_col = "Level", ma
 }
 ```
 
-# Hierarchy (Flat)
+# `r params$report_title`
 
 Lowest level: `r params$cutoff_level`
 
@@ -167,14 +172,18 @@ if (nrow(hier) > 0) {
       tag_col <- tag_cols[[i]]
       view[[i]] <- ifelse(
         nzchar(flat[[level_cols[[i]]]]),
-        kableExtra::cell_spec(
-          flat[[level_cols[[i]]]],
-          background = tag_to_color(flat[[tag_col]])
-        ),
+        if (apply_theme) {
+          kableExtra::cell_spec(
+            flat[[level_cols[[i]]]],
+            background = tag_to_color(flat[[tag_col]])
+          )
+        } else {
+          flat[[level_cols[[i]]]]
+        },
         ""
       )
     }
-    kbl(view, escape = FALSE, align = "l") %>%
+    kbl(view, escape = !apply_theme, align = "l") %>%
       kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
   }
 } else {

@@ -8,6 +8,10 @@ params:
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
   cutoff_level: 11
+  report_title: "Hierarchy Diagram"
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
 ---
 
 ```{r setup, include=FALSE}
@@ -41,6 +45,8 @@ for (candidate in root_candidates) {
   }
 }
 if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
+
+apply_theme <- isTRUE(params$apply_theme)
 
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
@@ -136,7 +142,7 @@ tag_to_color <- function(tag) {
 format_node_label <- function(row) {
   label <- paste0(row$Name, " : ", row$long_name)
   color <- tag_to_color(row$Tag)
-  if (nzchar(color)) {
+  if (apply_theme && nzchar(color)) {
     paste0("<span style=\"background-color:", color, "; padding:2px 4px; border-radius:2px;\">", label, "</span>")
   } else {
     label
@@ -174,7 +180,7 @@ build_tree_html <- function(df, parent_id = NA_integer_, visited = character(), 
 }
 ```
 
-# Hierarchy Diagram
+# `r params$report_title`
 
 Lowest level: `r params$cutoff_level`
 

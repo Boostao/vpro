@@ -18,6 +18,9 @@ params:
   apply_lumping: false
   constancy_format: false
   display_value: "standard"
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
   report_title: "Short Vegetation Table"
   project_root: ""
   db_path: "../data/vpro.duckdb"
@@ -163,7 +166,35 @@ if (nrow(summary) > 0) {
     }
   }
 
-  kbl(view, align = "l") %>%
+  apply_theme <- isTRUE(params$apply_theme)
+  colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
+  gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
+  if (apply_theme && nrow(view) > 0) {
+    num_cols <- names(view)[vapply(view, is.numeric, logical(1))]
+    if (length(num_cols) > 0) {
+      style_numeric <- function(vec) {
+        num <- suppressWarnings(as.numeric(vec))
+        labels <- ifelse(is.na(num), "", as.character(vec))
+        vapply(seq_along(num), function(i) {
+          value <- num[[i]]
+          label <- labels[[i]]
+          if (is.na(value) || !nzchar(label)) return("")
+          bg <- ""
+          if (!is.na(gray_greater) && value >= gray_greater) {
+            bg <- "#e6e6e6"
+          } else if (!is.na(colour_greater) && value >= colour_greater) {
+            bg <- "#f9e27d"
+          }
+          if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+        }, character(1))
+      }
+      for (col_name in num_cols) {
+        view[[col_name]] <- style_numeric(view[[col_name]])
+      }
+    }
+  }
+
+  kbl(view, align = "l", escape = !apply_theme) %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {
   cat("No vegetation data found.")

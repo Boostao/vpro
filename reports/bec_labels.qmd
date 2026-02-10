@@ -8,6 +8,10 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  report_title: "BEC Labels"
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
   project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
@@ -168,20 +172,31 @@ if (nrow(labels) > 0) {
 dbDisconnect(con, shutdown = TRUE)
 ```
 
-# BEC Labels
+# `r params$report_title`
 
 ```{r labels-style, echo=FALSE, results='asis'}
+apply_theme <- isTRUE(params$apply_theme)
+label_border <- if (apply_theme) "#666" else "#999"
+label_font <- if (apply_theme) "Arial, Helvetica, sans-serif" else "Arial, sans-serif"
+plot_size <- if (apply_theme) "11px" else "12px"
+project_size <- if (apply_theme) "11px" else "12px"
+zone_size <- if (apply_theme) "11px" else "12px"
+represent_size <- if (apply_theme) "9px" else "10px"
+date_size <- if (apply_theme) "8px" else "9px"
+min_height <- if (apply_theme) "96px" else "110px"
+
 cat(
   "<style>\n",
-  ".bec-label-grid { width: 100%; border-collapse: collapse; margin-bottom: 18px; }\n",
-  ".bec-label-grid td { width: 33%; vertical-align: top; padding: 6px; }\n",
-  ".bec-label { border: 1px solid #999; padding: 6px 8px; min-height: 110px; font-family: Arial, sans-serif; }\n",
-  ".bec-label .plot { font-size: 12px; font-weight: 700; }\n",
-  ".bec-label .project { font-size: 12px; font-weight: 700; }\n",
-  ".bec-label .zone { font-size: 12px; font-weight: 700; text-align: right; }\n",
-  ".bec-label .representing { font-size: 10px; margin-top: 2px; }\n",
-  ".bec-label .date { font-size: 9px; margin-top: 4px; }\n",
-  "</style>\n"
+  ".bec-label-grid { width: 100%; border-collapse: collapse; margin-bottom: 14px; table-layout: fixed; }\n",
+  ".bec-label-grid td { width: 33%; vertical-align: top; padding: 4px; }\n",
+  ".bec-label { border: 1px solid ", label_border, "; padding: 5px 6px; min-height: ", min_height, "; font-family: ", label_font, "; line-height: 1.15; }\n",
+  ".bec-label .plot { font-size: ", plot_size, "; font-weight: 700; }\n",
+  ".bec-label .project { font-size: ", project_size, "; font-weight: 700; }\n",
+  ".bec-label .zone { font-size: ", zone_size, "; font-weight: 700; text-align: right; }\n",
+  ".bec-label .representing { font-size: ", represent_size, "; margin-top: 1px; }\n",
+  ".bec-label .date { font-size: ", date_size, "; margin-top: 3px; }\n",
+  "</style>\n",
+  sep = ""
 )
 ```
 

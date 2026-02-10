@@ -8,6 +8,10 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  report_title: "Vegetation Layer C (Herbs)"
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
   project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
@@ -116,6 +120,8 @@ dbDisconnect(con, shutdown = TRUE)
 layer_col <- if ("LayerCode" %in% names(veg)) "LayerCode" else if ("MyLayer" %in% names(veg)) "MyLayer" else NULL
 ```
 
+# `r params$report_title`
+
 # Plot: `r if (length(plots) > 0) plots[1] else params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
@@ -130,7 +136,36 @@ if (nrow(veg) > 0) {
   view <- veg[keep_rows, present_cols, drop = FALSE]
 
   if (nrow(view) > 0) {
-    kbl(view, align = "l") %>%
+    apply_theme <- isTRUE(params$apply_theme)
+    colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
+    gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
+    if (apply_theme && nrow(view) > 0) {
+      style_numeric <- function(vec) {
+        labels <- as.character(vec)
+        vapply(seq_along(labels), function(i) {
+          label <- labels[[i]]
+          if (!nzchar(label)) return("")
+          num <- suppressWarnings(as.numeric(label))
+          if (is.na(num)) return(label)
+          bg <- ""
+          if (!is.na(gray_greater) && num >= gray_greater) {
+            bg <- "#e6e6e6"
+          } else if (!is.na(colour_greater) && num >= colour_greater) {
+            bg <- "#f9e27d"
+          }
+          if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+        }, character(1))
+      }
+      num_cols <- names(view)[vapply(view, is.numeric, logical(1))]
+      if (length(num_cols) == 0) {
+        num_cols <- intersect(c("Cover6", "Height6"), names(view))
+      }
+      for (col_name in num_cols) {
+        view[[col_name]] <- style_numeric(view[[col_name]])
+      }
+    }
+
+    kbl(view, align = "l", escape = !apply_theme) %>%
       kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
   } else {
     cat("No layer C records found.")
