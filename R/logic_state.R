@@ -106,6 +106,79 @@ init_sys_state <- function() {
   )
 }
 
+# Preferences storage (SaveSetting/GetSetting analog)
+ensure_user_settings_table <- function(con, schema = "user", table = "user_settings") {
+  DBI::dbExecute(
+    con,
+    paste0(
+      "CREATE TABLE IF NOT EXISTS ", schema, ".", table, " (",
+      "app TEXT, ",
+      "section TEXT, ",
+      "key TEXT, ",
+      "value TEXT, ",
+      "updated_at TIMESTAMP, ",
+      "PRIMARY KEY(app, section, key)",
+      ")"
+    )
+  )
+}
+
+coerce_pref_value <- function(value, default) {
+  if (is.null(default)) return(value)
+  if (is.logical(default)) return(tolower(value) %in% c("true", "1", "yes"))
+  if (is.integer(default)) return(as.integer(value))
+  if (is.double(default)) return(as.numeric(value))
+  return(value)
+}
+
+get_pref <- function(con, section, key, default = NULL, app = "VPro64", schema = "user", table = "user_settings") {
+  ensure_user_settings_table(con, schema = schema, table = table)
+  res <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT value FROM ", schema, ".", table, " ",
+      "WHERE app = ? AND section = ? AND key = ?"
+    ),
+    list(app, section, key)
+  )
+  if (nrow(res) == 0) return(default)
+  coerce_pref_value(res$value[[1]], default)
+}
+
+set_pref <- function(con, section, key, value, app = "VPro64", schema = "user", table = "user_settings") {
+  ensure_user_settings_table(con, schema = schema, table = table)
+  DBI::dbExecute(
+    con,
+    paste0(
+      "INSERT INTO ", schema, ".", table, " (app, section, key, value, updated_at) ",
+      "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) ",
+      "ON CONFLICT (app, section, key) DO UPDATE SET ",
+      "value = excluded.value, updated_at = excluded.updated_at"
+    ),
+    list(app, section, key, as.character(value))
+  )
+}
+
+seed_pref_default <- function(con, section, key, value, app = "VPro64") {
+  existing <- get_pref(con, section, key, default = NULL, app = app)
+  if (is.null(existing)) {
+    set_pref(con, section, key, value, app = app)
+  }
+}
+
+seed_default_preferences <- function(con, app = "VPro64") {
+  seed_pref_default(con, "Current", "CurrProject", "Sample", app = app)
+  seed_pref_default(con, "Current", "CurrPlotList", "None", app = app)
+  seed_pref_default(con, "Current", "CurrHierarchy", "Sample", app = app)
+  seed_pref_default(con, "Current", "DataFormName", "FS882-6x4", app = app)
+  seed_pref_default(con, "ReportOptions", "cmbColourGreater", 5, app = app)
+  seed_pref_default(con, "ReportOptions", "cmbGrayGreater", 65, app = app)
+  seed_pref_default(con, "ReportOptions", "cmbApplyTheme", 1, app = app)
+  seed_pref_default(con, "System", "Version", 3, app = app)
+  seed_pref_default(con, "System", "Build", format(Sys.Date(), "%Y-%m-%d"), app = app)
+  seed_pref_default(con, "System", "Installed", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), app = app)
+}
+
 #' Set Current Project
 #' Updates state and loads relevant metadata
 #' @param state The global reactiveValues object

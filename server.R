@@ -19,6 +19,17 @@ server <- function(input, output, session) {
   
   # 2. Global State
   state <- init_sys_state()
+
+  # Preferences (SaveSetting/GetSetting analog)
+  seed_default_preferences(con)
+  state$PrefProject <- get_pref(con, "Current", "CurrProject", default = NULL)
+  state$PrefPlot <- get_pref(con, "Current", "CurrPlotList", default = NULL)
+  state$PrefHierarchy <- get_pref(con, "Current", "CurrHierarchy", default = NULL)
+  state$CurrHierarchy <- state$PrefHierarchy
+  state$sysCurrHierarchy <- state$PrefHierarchy
+  state$CurrForm <- get_pref(con, "Current", "DataFormName", default = state$CurrForm)
+  state$sysCurrForm <- state$CurrForm
+  state$User <- get_pref(con, "User", "UserName", default = state$User)
   
   # 3. Populate Project Dropdown
   observe({
@@ -27,7 +38,11 @@ server <- function(input, output, session) {
       projects <- dbGetQuery(con, "SELECT projectid, projecttitle FROM Sample_Metadata ORDER BY projectid")
       if (nrow(projects) > 0) {
         choices <- setNames(projects$projectid, paste(projects$projectid, "-", projects$projecttitle))
-        updateSelectInput(session, "sel_project", choices = choices)
+        selected <- state$PrefProject
+        if (is.null(selected) || !(selected %in% projects$projectid)) {
+          selected <- projects$projectid[[1]]
+        }
+        updateSelectInput(session, "sel_project", choices = choices, selected = selected)
       }
     }, error = function(e) {
       log_msg("Error loading projects: ", conditionMessage(e))
@@ -40,6 +55,7 @@ server <- function(input, output, session) {
     
     # Update State Logic
     set_project(state, input$sel_project, con)
+    set_pref(con, "Current", "CurrProject", input$sel_project)
     
     # Update Dependent Dropdown (Cascade)
     # Filter Sample_Env by this ProjectID to get valid plots
@@ -49,13 +65,21 @@ server <- function(input, output, session) {
       WHERE ProjectID = '%s' 
       ORDER BY PlotNumber", input$sel_project))
       
-    updateSelectInput(session, "sel_su", choices = plots$plotnumber)
+    selected_plot <- state$PrefPlot
+    if (!is.null(selected_plot) && !(selected_plot %in% plots$plotnumber)) {
+      selected_plot <- NULL
+    }
+    if (is.null(selected_plot) && nrow(plots) > 0) {
+      selected_plot <- plots$plotnumber[[1]]
+    }
+    updateSelectInput(session, "sel_su", choices = plots$plotnumber, selected = selected_plot)
   })
   
   # 5. Handle SU Change
   observeEvent(input$sel_su, {
     req(input$sel_su)
     set_su(state, input$sel_su)
+    set_pref(con, "Current", "CurrPlotList", input$sel_su)
   })
   
   # 6. Context Summary
