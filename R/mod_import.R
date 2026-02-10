@@ -11,6 +11,11 @@ mod_import_ui <- function(id) {
         shinyjs::disabled(actionButton(ns("import_apply"), "Import", class = "btn-primary")),
         col_widths = c(5, 3, 2, 2)
       ),
+      layout_columns(
+        checkboxInput(ns("import_allow_replace"), "Replace existing project data", value = FALSE),
+        checkboxInput(ns("import_confirm_replace"), "I understand this deletes existing project rows", value = FALSE),
+        col_widths = c(6, 6)
+      ),
       tags$hr(),
       tags$h5("Import from Access (Windows only)"),
       tags$p("Windows only: install the Microsoft Access ODBC driver. macOS/Linux users should export to CSV/ZIP first."),
@@ -148,6 +153,31 @@ project_exists <- function(con, project_id) {
     if (nrow(res) > 0) return(TRUE)
   }
   FALSE
+}
+
+delete_project_rows <- function(con, table, project_id) {
+  fields <- tryCatch(DBI::dbListFields(con, table), error = function(e) character(0))
+  if (length(fields) == 0) return(list(status = "No fields", deleted = 0L))
+
+  field_lower <- tolower(fields)
+  project_col <- if ("projectid" %in% field_lower) {
+    fields[[match("projectid", field_lower)]]
+  } else if ("project_id" %in% field_lower) {
+    fields[[match("project_id", field_lower)]]
+  } else {
+    NULL
+  }
+
+  if (is.null(project_col)) {
+    return(list(status = "No ProjectID column", deleted = 0L))
+  }
+
+  res <- DBI::dbExecute(
+    con,
+    paste0("DELETE FROM ", table, " WHERE ", project_col, " = ?"),
+    list(project_id)
+  )
+  list(status = "Deleted", deleted = as.integer(res %||% 0))
 }
 
 mod_import_server <- function(id, state, con) {
@@ -565,6 +595,19 @@ mod_import_server <- function(id, state, con) {
       TRUE
     })
 
+    replace_ready <- reactive({
+      isTRUE(input$import_allow_replace) && isTRUE(input$import_confirm_replace)
+    })
+
+    observe({
+      if (isTRUE(input$import_allow_replace)) {
+        shinyjs::enable("import_confirm_replace")
+      } else {
+        shinyjs::disable("import_confirm_replace")
+        updateCheckboxInput(session, "import_confirm_replace", value = FALSE)
+      }
+    })
+
     observe({
       if (isTRUE(access_ready())) {
         shinyjs::enable("access_import")
@@ -653,7 +696,7 @@ mod_import_server <- function(id, state, con) {
           return()
         }
 
-        if (project_exists(con, project_override)) {
+        if (project_exists(con, project_override) && !isTRUE(replace_ready())) {
           rv$access_status <- paste("Import blocked: project already exists:", project_override)
           return()
         }
@@ -688,6 +731,12 @@ mod_import_server <- function(id, state, con) {
 
         results_status <- list()
         imported_payloads <- list()
+
+        if (project_exists(con, project_override) && isTRUE(replace_ready())) {
+          for (entry in import_plan) {
+            delete_project_rows(con, entry$target_table, project_override)
+          }
+        }
         for (entry in import_plan) {
           data <- tryCatch(DBI::dbReadTable(con_access, entry$access_table), error = function(e) NULL)
           if (is.null(data)) {
@@ -846,14 +895,23 @@ mod_import_server <- function(id, state, con) {
           )
         }
 
-          if (length(pending_imports) > 0) {
-            project_ids <- unique(na.omit(vapply(pending_imports, function(x) x$project_id, character(1))))
+        if (length(pending_imports) > 0) {
+          project_ids <- unique(na.omit(vapply(pending_imports, function(x) x$project_id, character(1))))
+          if (length(project_ids) > 0) {
             existing <- project_ids[vapply(project_ids, function(pid) project_exists(con, pid), logical(1))]
-            if (length(existing) > 0) {
+            if (length(existing) > 0 && !isTRUE(replace_ready())) {
               rv$status <- paste("Import blocked: project already exists:", paste(existing, collapse = ", "))
               return()
             }
+            if (length(existing) > 0 && isTRUE(replace_ready())) {
+              for (table_name in unique(vapply(pending_imports, function(x) x$table, character(1)))) {
+                for (pid in existing) {
+                  delete_project_rows(con, table_name, pid)
+                }
+              }
+            }
           }
+        }
 
         use_compliance <- any(selected_tables %in% compliance_tables)
         commit_ok <- TRUE
@@ -934,9 +992,12 @@ mod_import_server <- function(id, state, con) {
       req(input$target_table)
 
       if (!is.null(rv$import_project_override) && nzchar(rv$import_project_override)) {
-        if (project_exists(con, rv$import_project_override)) {
+        if (project_exists(con, rv$import_project_override) && !isTRUE(replace_ready())) {
           rv$status <- paste("Import blocked: project already exists:", rv$import_project_override)
           return()
+        }
+        if (project_exists(con, rv$import_project_override) && isTRUE(replace_ready())) {
+          delete_project_rows(con, input$target_table, rv$import_project_override)
         }
       }
 

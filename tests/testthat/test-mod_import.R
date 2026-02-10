@@ -139,6 +139,50 @@ test_that("mod_import maps project-suffixed CSV and fills projectid", {
   expect_equal(rows$projectid[[1]], "PRJ")
 })
 
+test_that("mod_import can replace existing project data", {
+  testthat::skip_if_not_installed("shiny")
+
+  con <- test_connect_duckdb()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  setup_import_env_table(con)
+
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('OLD', 'PRJ', 'ICH', 'wk', 55, -120, 100, 10, 180)")
+
+  temp_dir <- tempfile("vpro_import_replace_")
+  dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
+  csv_path <- write_csv_named(
+    temp_dir,
+    "PRJ_Env.csv",
+    data.frame(
+      plotnumber = "NEW",
+      zone = "ICH",
+      subzone = "wk",
+      latitude = 55,
+      longitude = -120,
+      elevation = 100,
+      slopegradient = 10,
+      aspect = 180
+    )
+  )
+
+  state <- shiny::reactiveValues(CurrProject = NULL)
+  setup_import_auth(state)
+
+  shiny::testServer(mod_import_server, args = list(state = state, con = con), {
+    session$setInputs(import_file = list(datapath = csv_path, name = "PRJ_Env.csv"))
+    session$setInputs(target_table = "Sample_Env")
+    session$setInputs(import_analyze = 1)
+    session$setInputs(import_allow_replace = TRUE)
+    session$setInputs(import_confirm_replace = TRUE)
+    session$setInputs(import_apply = 1)
+
+    expect_true(grepl("Imported 1 rows", rv$status))
+  })
+
+  rows <- DBI::dbGetQuery(con, "SELECT plotnumber FROM Sample_Env WHERE projectid = 'PRJ'")
+  expect_equal(rows$plotnumber, "NEW")
+})
+
 test_that("mod_import handles ZIP files and imports selected tables", {
   testthat::skip_if_not_installed("shiny")
 
