@@ -416,23 +416,70 @@ mod_export_server <- function(id, sys_state, con) {
         
         return(df_final)
     }
+
+    resolve_download_user <- function() {
+      list(
+        user_id = sys_state$AuthUserId %||% NA,
+        username = sys_state$AuthUser %||% sys_state$User %||% "anonymous"
+      )
+    }
+
+    log_export_action <- function(format, row_count, status = "success", error_message = NULL) {
+      filters <- list(
+        project_id = input$export_proj %||% NULL,
+        layers = input$export_layers %||% NULL,
+        lumping = isTRUE(input$export_lump)
+      )
+      user <- resolve_download_user()
+      log_export_download(
+        con,
+        dataset_name = paste0("vpro_export_", Sys.Date()),
+        format = format,
+        filters_applied = filters,
+        row_count = row_count,
+        user_id = user$user_id,
+        username = user$username,
+        download_status = status,
+        error_message = error_message
+      )
+    }
     
     # -- Download Handlers --
     output$dl_r_csv <- downloadHandler(
         filename = function() { paste0("vpro_export_", Sys.Date(), ".csv") },
         content = function(file) {
-            d <- get_export_data()
-            if(is.null(d)) { write.csv(data.frame(Message="No Data Found"), file); return() }
-            write.csv(d, file, row.names=FALSE)
+            tryCatch({
+              d <- get_export_data()
+              if (is.null(d)) {
+                write.csv(data.frame(Message = "No Data Found"), file, row.names = FALSE)
+                log_export_action("csv", 0L)
+                return()
+              }
+              write.csv(d, file, row.names = FALSE)
+              log_export_action("csv", nrow(d))
+            }, error = function(e) {
+              log_export_action("csv", NA_integer_, status = "failed", error_message = e$message)
+              stop(e)
+            })
         }
     )
     
     output$dl_r_rds <- downloadHandler(
         filename = function() { paste0("vpro_export_", Sys.Date(), ".rds") },
         content = function(file) {
-            d <- get_export_data()
-            if(is.null(d)) { saveRDS(data.frame(Message="No Data Found"), file); return() }
-            saveRDS(d, file)
+            tryCatch({
+              d <- get_export_data()
+              if (is.null(d)) {
+                saveRDS(data.frame(Message = "No Data Found"), file)
+                log_export_action("rds", 0L)
+                return()
+              }
+              saveRDS(d, file)
+              log_export_action("rds", nrow(d))
+            }, error = function(e) {
+              log_export_action("rds", NA_integer_, status = "failed", error_message = e$message)
+              stop(e)
+            })
         }
     )
 
@@ -449,11 +496,17 @@ mod_export_server <- function(id, sys_state, con) {
     output$dl_venus <- downloadHandler(
       filename = function() { paste0("vpro_venus_", Sys.Date(), ".xml") },
       content = function(file) {
-        project_ids <- get_venus_project_ids()
-        prefix <- trimws(as.character(input$venus_prefix))
-        if (!nzchar(prefix)) prefix <- NULL
-        doc <- build_venus_xml_doc(con, project_ids, table_prefix = prefix)
-        xml2::write_xml(doc, file)
+        tryCatch({
+          project_ids <- get_venus_project_ids()
+          prefix <- trimws(as.character(input$venus_prefix))
+          if (!nzchar(prefix)) prefix <- NULL
+          doc <- build_venus_xml_doc(con, project_ids, table_prefix = prefix)
+          xml2::write_xml(doc, file)
+          log_export_action("xml", NA_integer_)
+        }, error = function(e) {
+          log_export_action("xml", NA_integer_, status = "failed", error_message = e$message)
+          stop(e)
+        })
       }
     )
     

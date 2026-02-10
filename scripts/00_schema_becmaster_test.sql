@@ -520,8 +520,8 @@ INSERT INTO admin.roles (role_name, description, permissions) VALUES
 ('viewer', 'Read-only access to public/exported data', ARRAY['read:public']),
 ('field_user', 'Enter/edit own plots, upload datasets', ARRAY['read:own_projects', 'write:own_plots', 'create:merge_requests']),
 ('project_lead', 'Manage project plots, approve uploads', ARRAY['read:project', 'write:project_plots', 'approve:merge_requests']),
-('db_manager', 'Review merges, edit all data, manage codes', ARRAY['read:all', 'write:all', 'merge:all', 'manage:codes']),
-('admin', 'Full system access', ARRAY['*'])
+('db_manager', 'Review merges, edit all data, manage codes', ARRAY['read:all', 'write:all', 'merge:all', 'manage:codes', 'publish_rds', 'view_download_logs']),
+('admin', 'Full system access', ARRAY['*', 'publish_rds', 'view_download_logs'])
 ON CONFLICT (role_name) DO NOTHING;
 
 -- Test users

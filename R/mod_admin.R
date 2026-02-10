@@ -1,4 +1,46 @@
 
+publish_panel_ui <- function(ns) {
+  layout_sidebar(
+    sidebar = sidebar(
+      textInput(ns("publish_out_dir"), "RDS output dir", value = ""),
+      textInput(ns("publish_version"), "Version (optional)", value = ""),
+      selectInput(ns("publish_projects"), "Projects (optional)", choices = NULL, multiple = TRUE),
+      checkboxInput(ns("publish_lump"), "Apply species lumping", value = TRUE),
+      actionButton(ns("publish_run"), "Publish RDS Snapshot", class = "btn-primary w-100 mt-2"),
+      actionButton(ns("publish_refresh"), "Refresh Snapshot List", class = "btn-outline-secondary w-100 mt-2")
+    ),
+    card(
+      card_header("RDS Publishing"),
+      card_body(
+        textOutput(ns("publish_status")),
+        tableOutput(ns("publish_snapshots"))
+      )
+    )
+  )
+}
+
+download_panel_ui <- function(ns) {
+  layout_sidebar(
+    sidebar = sidebar(
+      textInput(ns("download_user"), "User", value = ""),
+      textInput(ns("download_dataset"), "Dataset", value = ""),
+      selectInput(ns("download_format"), "Format", choices = c("All" = "", "rds", "csv", "excel", "xml"), selected = ""),
+      selectInput(ns("download_status"), "Status", choices = c("All" = "", "success", "failed"), selected = ""),
+      dateInput(ns("download_from"), "From", value = NULL),
+      dateInput(ns("download_to"), "To", value = NULL),
+      actionButton(ns("download_refresh"), "Refresh", class = "btn-secondary w-100 mt-2"),
+      downloadButton(ns("download_export"), "Export CSV", class = "btn-outline-primary w-100 mt-2")
+    ),
+    card(
+      card_header("Download Log"),
+      card_body(
+        textOutput(ns("download_status_text")),
+        DTOutput(ns("download_dt"))
+      )
+    )
+  )
+}
+
 mod_admin_ui <- function(id) {
   ns <- NS(id)
   tagList(
@@ -160,6 +202,12 @@ mod_admin_ui <- function(id) {
               )
             )
           )
+        ),
+        nav_panel("Publishing",
+          uiOutput(ns("publish_panel"))
+        ),
+        nav_panel("Download Logs",
+          uiOutput(ns("download_panel"))
         )
       )
       )
@@ -169,6 +217,7 @@ mod_admin_ui <- function(id) {
 
 mod_admin_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
+    ns <- session$ns
     
     # ==========================================================================
     # 1. Project Metadata Logic
@@ -547,6 +596,181 @@ mod_admin_server <- function(id, state, con) {
     output$sync_snapshot_status <- renderText({
       sync_snapshot_status()
     })
+
+    # ==========================================================================
+    # 2.2 Publish Panel
+    # ==========================================================================
+
+    publish_status <- reactiveVal("")
+    publish_snapshots <- reactiveVal(data.frame())
+
+    require_admin_permission <- function(permission) {
+      if (!auth_is_authenticated(state)) {
+        showNotification("Sign in required.", type = "error")
+        return(FALSE)
+      }
+      if (!auth_user_has_permission(state, permission)) {
+        showNotification(paste("Permission required:", permission), type = "error")
+        return(FALSE)
+      }
+      TRUE
+    }
+
+    output$publish_panel <- renderUI({
+      if (!auth_is_authenticated(state) || !auth_user_has_permission(state, "publish_rds")) {
+        return(card(
+          card_header("RDS Publishing"),
+          card_body("Sign in with publish permissions to access this panel.")
+        ))
+      }
+      publish_panel_ui(ns)
+    })
+
+    output$download_panel <- renderUI({
+      if (!auth_is_authenticated(state) || !auth_user_has_permission(state, "view_download_logs")) {
+        return(card(
+          card_header("Download Log"),
+          card_body("Sign in with download log permissions to access this panel.")
+        ))
+      }
+      download_panel_ui(ns)
+    })
+
+    observe({
+      if (!auth_is_authenticated(state) || !auth_user_has_permission(state, "publish_rds")) return()
+      if (is.null(input$publish_projects)) return()
+      if (!sync_cloud_connected(con)) return()
+      projects <- tryCatch({
+        dbGetQuery(con, "SELECT project_id, project_name FROM master.core.sample_metadata ORDER BY project_id")
+      }, error = function(e) data.frame())
+      if (nrow(projects) > 0) {
+        updateSelectInput(
+          session,
+          "publish_projects",
+          choices = setNames(projects$project_id, paste(projects$project_id, "-", projects$project_name))
+        )
+      }
+    })
+
+    refresh_publish_snapshots <- function() {
+      tryCatch({
+        sync_require_cloud(con, allow_attach = TRUE)
+        snaps <- dbGetQuery(
+          con,
+          paste(
+            "SELECT version, snapshot_date, created_by, veg_row_count, env_row_count,",
+            "rds_filename_veg, rds_filename_env",
+            "FROM master.public_export.rds_snapshots",
+            "ORDER BY created_utc DESC LIMIT 25"
+          )
+        )
+        publish_snapshots(snaps)
+        publish_status("")
+      }, error = function(e) {
+        publish_snapshots(data.frame())
+        publish_status(paste("Snapshot list unavailable:", e$message))
+      })
+    }
+
+    observeEvent(input$publish_refresh, {
+      refresh_publish_snapshots()
+    })
+
+    observeEvent(input$publish_run, {
+      out_dir <- trimws(input$publish_out_dir)
+      if (!nzchar(out_dir)) {
+        showNotification("Provide an output directory.", type = "warning")
+        return()
+      }
+
+      if (!require_admin_permission("publish_rds")) return()
+
+      version <- trimws(input$publish_version)
+      if (!nzchar(version)) version <- NULL
+      project_ids <- input$publish_projects %||% character(0)
+      if (length(project_ids) == 0) project_ids <- NULL
+
+      tryCatch({
+        result <- publish_becmaster_rds(
+          con,
+          out_dir = out_dir,
+          version = version,
+          project_ids = project_ids,
+          apply_lumping = isTRUE(input$publish_lump)
+        )
+        publish_status(paste("Published version", result$version, "(veg", result$veg_rows, "env", result$env_rows, ")"))
+        showNotification("RDS snapshot published.", type = "message")
+        refresh_publish_snapshots()
+      }, error = function(e) {
+        publish_status("")
+        showNotification(paste("Publish failed:", e$message), type = "error")
+      })
+    })
+
+    output$publish_status <- renderText({
+      publish_status()
+    })
+
+    output$publish_snapshots <- renderTable({
+      publish_snapshots()
+    })
+
+    # ==========================================================================
+    # 2.3 Download Log Viewer
+    # ==========================================================================
+
+    download_status <- reactiveVal("")
+    download_log <- reactiveVal(data.frame())
+
+    refresh_download_log <- function() {
+      if (!require_admin_permission("view_download_logs")) {
+        download_log(data.frame())
+        download_status("Permission required: view_download_logs")
+        return()
+      }
+      tryCatch({
+        sync_require_cloud(con, allow_attach = TRUE)
+        query <- build_download_log_query(
+          filters = list(
+            user = trimws(input$download_user),
+            dataset = trimws(input$download_dataset),
+            format = input$download_format,
+            status = input$download_status,
+            from = if (!is.null(input$download_from)) as.POSIXct(input$download_from) else NULL,
+            to = if (!is.null(input$download_to)) as.POSIXct(input$download_to) + 86400 else NULL
+          ),
+          limit = 1000L
+        )
+        rows <- dbGetQuery(con, query$sql, query$params)
+        download_log(rows)
+        download_status("")
+      }, error = function(e) {
+        download_log(data.frame())
+        download_status(paste("Download log unavailable:", e$message))
+      })
+    }
+
+    observeEvent(input$download_refresh, {
+      refresh_download_log()
+    })
+
+    output$download_status_text <- renderText({
+      download_status()
+    })
+
+    output$download_dt <- renderDT({
+      datatable(download_log(), options = list(pageLength = 25, order = list(list(0, "desc"))))
+    })
+
+    output$download_export <- downloadHandler(
+      filename = function() { paste0("download_log_", Sys.Date(), ".csv") },
+      content = function(file) {
+        if (!require_admin_permission("view_download_logs")) {
+          stop("Permission required: view_download_logs")
+        }
+        write.csv(download_log(), file, row.names = FALSE)
+      }
+    )
 
     # ==========================================================================
     # 3. Master Site Units

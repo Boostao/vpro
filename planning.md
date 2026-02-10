@@ -58,12 +58,12 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Report logic parity**: env/site/bec/layer filters added; hierarchy normalization complete
 - **Report logic parity**: short/long veg filters, grouping, and common-name support added
 - **Report logic parity**: lifeform + hierarchy reports updated with filters
+- **Cloud sync**: `R/logic_sync.R` pull/push for Sample_Env/Sample_SU + wide Sample_Veg staging, admin sync panel, parquet snapshot helper
+- **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` staging UI, validation, and basic merge actions
+- **Auth/RBAC**: `R/mod_auth.R` login + roles/permissions, write gating in upload/merge
+- **RDS publishing**: `R/logic_publish.R` pipeline, admin publish UI, download logging, and tests
 
 ### 🔲 Not Started
-- **Cloud sync**: `R/logic_sync.R` pull/push for Sample_Env/Sample_SU + wide Sample_Veg staging + admin sync panel + parquet snapshot helper
-- **Auth/RBAC**: `R/mod_auth.R` (UI shell)
-- **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` (UI shells)
-- **RDS publishing**: `R/logic_publish.R` (stub added)
 - **Tests**: remaining module and report tests (view tests + compliance tests + hierarchy tests done)
 
 ---

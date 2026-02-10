@@ -360,3 +360,178 @@ export_parquet_snapshot <- function(con,
 
   list(files = files, errors = errors, manifest = manifest_path)
 }
+
+merge_request_compliance_ok <- function(con, merge_request_id) {
+  compliance <- DBI::dbGetQuery(
+    con,
+    "SELECT compliance_passed FROM master.admin.merge_requests WHERE id = ?",
+    list(merge_request_id)
+  )
+  if (nrow(compliance) == 0) return(FALSE)
+
+  value <- compliance$compliance_passed[1]
+  if (isTRUE(value)) return(TRUE)
+  if (is.numeric(value)) return(!is.na(value) && value == 1)
+  if (is.character(value)) return(tolower(value) %in% c("true", "t", "1"))
+  FALSE
+}
+
+staging_compliance_checks <- function(con, merge_request_id, project_id = NULL) {
+  if (is.null(merge_request_id)) return(NULL)
+
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Env")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Veg")
+
+  DBI::dbExecute(
+    con,
+    "CREATE TEMP TABLE Sample_Env AS
+     SELECT
+       plot_number AS plotnumber,
+       project_id AS projectid,
+       latitude AS latitude,
+       longitude AS longitude,
+       elevation_m AS elevation
+     FROM master.staging.sample_env
+     WHERE merge_request_id = ?",
+    list(merge_request_id)
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TEMP TABLE Sample_Veg AS
+     SELECT
+       plot_number AS plotnumber,
+       project_id AS projectid,
+       species_code AS species,
+       layer_code AS layer
+     FROM master.staging.sample_veg
+     WHERE merge_request_id = ?",
+    list(merge_request_id)
+  )
+
+  result <- run_compliance_checks(con, project_id)
+
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Env")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Veg")
+
+  result
+}
+
+merge_apply_request <- function(con, merge_request_id, reviewer, review_notes = "") {
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.sample_env
+     (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, modified_by)
+     SELECT plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, modified_by
+     FROM master.staging.sample_env WHERE merge_request_id = ?
+     ON CONFLICT (plot_number) DO UPDATE SET
+       project_id = EXCLUDED.project_id,
+       latitude = EXCLUDED.latitude,
+       longitude = EXCLUDED.longitude,
+       elevation_m = EXCLUDED.elevation_m,
+       survey_date = EXCLUDED.survey_date,
+       surveyor_name = EXCLUDED.surveyor_name,
+       plot_notes = EXCLUDED.plot_notes,
+       modified_by = EXCLUDED.modified_by,
+       last_modified_utc = now(),
+       row_version = coalesce(row_version, 0) + 1",
+    list(merge_request_id)
+  )
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.sample_su
+     (plot_number, project_id, su_number, bec_zone, bec_subzone, site_series, modified_by)
+     SELECT plot_number, project_id, su_number, bec_zone, bec_subzone, site_series, modified_by
+     FROM master.staging.sample_su WHERE merge_request_id = ?
+     ON CONFLICT (plot_number) DO UPDATE SET
+       project_id = EXCLUDED.project_id,
+       su_number = EXCLUDED.su_number,
+       bec_zone = EXCLUDED.bec_zone,
+       bec_subzone = EXCLUDED.bec_subzone,
+       site_series = EXCLUDED.site_series,
+       modified_by = EXCLUDED.modified_by,
+       last_modified_utc = now(),
+       row_version = coalesce(row_version, 0) + 1",
+    list(merge_request_id)
+  )
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.sample_veg
+     (plot_number, species_code, layer_code, cover1, height1, cover2, height2, cover3, height3, totala, heighta,
+      cover4, height4, cover5, height5, cover5a, height5a, cover5b, height5b, cover5c, height5c, totalb, heightb,
+      cover6, height6, cover7, cover8, cover9, cover10, collected, flag, veg_id, ll, af, dc, ut, vi, pv, pg, ffa,
+      cultural1, cultural2, other1, other2, project_id, modified_by)
+     SELECT plot_number, species_code, layer_code, cover1, height1, cover2, height2, cover3, height3, totala, heighta,
+      cover4, height4, cover5, height5, cover5a, height5a, cover5b, height5b, cover5c, height5c, totalb, heightb,
+      cover6, height6, cover7, cover8, cover9, cover10, collected, flag, veg_id, ll, af, dc, ut, vi, pv, pg, ffa,
+      cultural1, cultural2, other1, other2, project_id, modified_by
+     FROM master.staging.sample_veg WHERE merge_request_id = ?
+     ON CONFLICT (plot_number, species_code, layer_code, project_id) DO UPDATE SET
+       cover1 = EXCLUDED.cover1,
+       height1 = EXCLUDED.height1,
+       cover2 = EXCLUDED.cover2,
+       height2 = EXCLUDED.height2,
+       cover3 = EXCLUDED.cover3,
+       height3 = EXCLUDED.height3,
+       totala = EXCLUDED.totala,
+       heighta = EXCLUDED.heighta,
+       cover4 = EXCLUDED.cover4,
+       height4 = EXCLUDED.height4,
+       cover5 = EXCLUDED.cover5,
+       height5 = EXCLUDED.height5,
+       cover5a = EXCLUDED.cover5a,
+       height5a = EXCLUDED.height5a,
+       cover5b = EXCLUDED.cover5b,
+       height5b = EXCLUDED.height5b,
+       cover5c = EXCLUDED.cover5c,
+       height5c = EXCLUDED.height5c,
+       totalb = EXCLUDED.totalb,
+       heightb = EXCLUDED.heightb,
+       cover6 = EXCLUDED.cover6,
+       height6 = EXCLUDED.height6,
+       cover7 = EXCLUDED.cover7,
+       cover8 = EXCLUDED.cover8,
+       cover9 = EXCLUDED.cover9,
+       cover10 = EXCLUDED.cover10,
+       collected = EXCLUDED.collected,
+       flag = EXCLUDED.flag,
+       veg_id = EXCLUDED.veg_id,
+       ll = EXCLUDED.ll,
+       af = EXCLUDED.af,
+       dc = EXCLUDED.dc,
+       ut = EXCLUDED.ut,
+       vi = EXCLUDED.vi,
+       pv = EXCLUDED.pv,
+       pg = EXCLUDED.pg,
+       ffa = EXCLUDED.ffa,
+       cultural1 = EXCLUDED.cultural1,
+       cultural2 = EXCLUDED.cultural2,
+       other1 = EXCLUDED.other1,
+       other2 = EXCLUDED.other2,
+       modified_by = EXCLUDED.modified_by,
+       last_modified_utc = now(),
+       row_version = coalesce(row_version, 0) + 1",
+    list(merge_request_id)
+  )
+
+  DBI::dbExecute(con, "DELETE FROM master.staging.sample_env WHERE merge_request_id = ?", list(merge_request_id))
+  DBI::dbExecute(con, "DELETE FROM master.staging.sample_su WHERE merge_request_id = ?", list(merge_request_id))
+  DBI::dbExecute(con, "DELETE FROM master.staging.sample_veg WHERE merge_request_id = ?", list(merge_request_id))
+
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.merge_requests
+     SET status = 'merged', reviewer_user_id = ?, review_notes = ?, reviewed_utc = now()
+     WHERE id = ?",
+    list(reviewer, review_notes, merge_request_id)
+  )
+}
+
+merge_approve_request <- function(con, merge_request_id, reviewer, review_notes = "") {
+  if (!merge_request_compliance_ok(con, merge_request_id)) {
+    stop(sprintf("Merge blocked: compliance failed for request %s", merge_request_id))
+  }
+  merge_apply_request(con, merge_request_id, reviewer, review_notes)
+}
