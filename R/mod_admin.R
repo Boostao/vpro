@@ -527,13 +527,26 @@ mod_admin_server <- function(id, state, con) {
       sync_ensure_state_tables(con)
       tables <- input$sync_tables %||% character(0)
       project_id <- trimws(input$sync_project)
+      if (!length(tables)) {
+        sync_status_table(data.frame(
+          table = character(0),
+          last_pull = character(0),
+          last_push = character(0),
+          stringsAsFactors = FALSE
+        ))
+        cloud_state <- if (sync_cloud_connected(con)) "connected" else "not attached"
+        output$sync_status <- renderText(paste("Cloud:", cloud_state))
+        return(invisible(FALSE))
+      }
       table_rows <- lapply(tables, function(table_key) {
         pull_scope <- paste("last_pull", table_key, if (nzchar(project_id)) project_id else "all", sep = ":")
         push_scope <- paste("last_push", table_key, if (nzchar(project_id)) project_id else "all", sep = ":")
+        last_pull <- sync_get_state(con, pull_scope) %||% NA_character_
+        last_push <- sync_get_state(con, push_scope) %||% NA_character_
         data.frame(
           table = table_key,
-          last_pull = sync_get_state(con, pull_scope),
-          last_push = sync_get_state(con, push_scope),
+          last_pull = last_pull,
+          last_push = last_push,
           stringsAsFactors = FALSE
         )
       })

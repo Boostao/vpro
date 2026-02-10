@@ -39,7 +39,19 @@ mod_merge_server <- function(id, state, con) {
     )
 
     refresh_requests <- function() {
-      sync_require_cloud(con, allow_attach = TRUE)
+      rv$status <- ""
+      ready <- tryCatch({
+        sync_require_cloud(con, allow_attach = TRUE)
+        TRUE
+      }, error = function(e) {
+        rv$status <- paste("Cloud unavailable:", e$message)
+        rv$merge_requests <- data.frame()
+        updateSelectInput(session, "merge_request", choices = c("(none)" = ""), selected = "")
+        FALSE
+      })
+
+      if (!isTRUE(ready)) return(invisible(FALSE))
+
       rv$merge_requests <- DBI::dbGetQuery(
         con,
         "SELECT id, project_id, submitter_user_id, submitted_utc, status, env_record_count, veg_record_count
@@ -55,6 +67,7 @@ mod_merge_server <- function(id, state, con) {
       }
       selected_value <- if (length(choices) > 0) unname(choices[1]) else ""
       updateSelectInput(session, "merge_request", choices = choices, selected = selected_value)
+      invisible(TRUE)
     }
 
     observeEvent(input$merge_refresh, {

@@ -33,7 +33,9 @@ sync_resolve_schema <- function(con) {
   attached <- tryCatch({
     DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
   }, error = function(e) character(0))
-  if ("user" %in% attached) "user" else NULL
+  if ("user_db" %in% attached) return("user_db")
+  if ("user" %in% attached) return(NULL)
+  NULL
 }
 
 sync_ensure_state_tables <- function(con) {
