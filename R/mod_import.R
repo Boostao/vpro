@@ -23,6 +23,7 @@ mod_import_ui <- function(id) {
         col_widths = c(4, 3, 2, 2, 1)
       ),
       verbatimTextOutput(ns("access_status")),
+      DT::DTOutput(ns("access_preview")),
       DT::DTOutput(ns("access_results")),
       checkboxGroupInput(ns("zip_tables"), "ZIP Tables to Import", choices = NULL),
       uiOutput(ns("import_ready")),
@@ -164,7 +165,8 @@ mod_import_server <- function(id, state, con) {
       access_tables = NULL,
       access_projects = NULL,
       access_status = "",
-      access_results = NULL
+      access_results = NULL,
+      access_preview = NULL
     )
 
     compliance_tables <- c("Sample_Env", "Sample_Veg")
@@ -190,6 +192,11 @@ mod_import_server <- function(id, state, con) {
 
     is_windows_access <- function() {
       .Platform$OS.type == "windows"
+    }
+
+    is_legacy_access_project <- function(project_name) {
+      if (is.null(project_name) || !nzchar(project_name)) return(FALSE)
+      grepl("^vpro\\d+$", tolower(project_name))
     }
 
     get_access_driver <- function() {
@@ -219,6 +226,55 @@ mod_import_server <- function(id, state, con) {
       env_tables <- table_names[grepl("_Env$", table_names, ignore.case = TRUE)]
       projects <- gsub("(?i)_Env$", "", env_tables, perl = TRUE)
       sort(unique(projects))
+    }
+
+    access_table_count <- function(con_access, table_name) {
+      count_res <- tryCatch(
+        DBI::dbGetQuery(con_access, paste0("SELECT COUNT(*) AS n FROM [", table_name, "]")),
+        error = function(e) NULL
+      )
+      if (is.null(count_res) || nrow(count_res) == 0) return(NA_integer_)
+      as.integer(count_res$n[[1]])
+    }
+
+    build_access_preview <- function(project_name) {
+      if (is.null(project_name) || !nzchar(project_name)) return(NULL)
+      if (is.null(rv$access_tables) || length(rv$access_tables) == 0) return(NULL)
+
+      con_access <- NULL
+      on.exit({
+        if (!is.null(con_access)) DBI::dbDisconnect(con_access)
+      }, add = TRUE)
+
+      con_access <- tryCatch(connect_access_db(input$access_file$datapath), error = function(e) NULL)
+      if (is.null(con_access)) return(NULL)
+
+      rows <- list()
+      for (suffix in names(access_suffix_map())) {
+        access_table <- paste0(project_name, "_", access_suffix_map()[[suffix]])
+        match_idx <- which(tolower(rv$access_tables) == tolower(access_table))
+        if (length(match_idx) == 0) {
+          rows[[length(rows) + 1]] <- data.frame(
+            access_table = access_table,
+            target_table = import_suffix_map()[[suffix]],
+            rows = NA_integer_,
+            status = "Missing",
+            stringsAsFactors = FALSE
+          )
+          next
+        }
+        actual_table <- rv$access_tables[[match_idx[[1]]]]
+        row_count <- access_table_count(con_access, actual_table)
+        rows[[length(rows) + 1]] <- data.frame(
+          access_table = actual_table,
+          target_table = import_suffix_map()[[suffix]],
+          rows = row_count,
+          status = "Ready",
+          stringsAsFactors = FALSE
+        )
+      }
+
+      do.call(rbind, rows)
     }
 
     infer_table_name <- function(file_name) {
@@ -505,6 +561,7 @@ mod_import_server <- function(id, state, con) {
       if (!is_windows_access()) return(FALSE)
       if (is.null(get_access_driver())) return(FALSE)
       if (is.null(input$access_project) || !nzchar(input$access_project)) return(FALSE)
+      if (is_legacy_access_project(input$access_project) && !nzchar(trimws(input$access_project_id))) return(FALSE)
       TRUE
     })
 
@@ -554,11 +611,19 @@ mod_import_server <- function(id, state, con) {
         } else {
           updateSelectInput(session, "access_project", choices = projects, selected = projects[[1]])
           rv$access_status <- paste("Found", length(projects), "projects in Access database.")
+          rv$access_preview <- build_access_preview(projects[[1]])
         }
       }, error = function(e) {
         rv$access_status <- paste("Access analyze error:", e$message)
         updateSelectInput(session, "access_project", choices = c("(error)" = ""), selected = "")
       })
+    })
+
+    observeEvent(input$access_project, {
+      rv$access_preview <- build_access_preview(input$access_project)
+      if (is_legacy_access_project(input$access_project)) {
+        rv$access_status <- "Legacy export detected. Provide a new Project ID before importing."
+      }
     })
 
     observeEvent(input$access_import, {
@@ -582,6 +647,11 @@ mod_import_server <- function(id, state, con) {
         project_name <- input$access_project
         project_override <- trimws(input$access_project_id)
         if (!nzchar(project_override)) project_override <- project_name
+
+        if (is_legacy_access_project(project_name) && identical(project_override, project_name)) {
+          rv$access_status <- "Legacy export requires a new Project ID."
+          return()
+        }
 
         if (project_exists(con, project_override)) {
           rv$access_status <- paste("Import blocked: project already exists:", project_override)
@@ -1036,6 +1106,12 @@ mod_import_server <- function(id, state, con) {
       req(rv$access_results)
       if (nrow(rv$access_results) == 0) return(NULL)
       DT::datatable(rv$access_results, rownames = FALSE, options = list(pageLength = 6, ordering = FALSE))
+    })
+
+    output$access_preview <- DT::renderDT({
+      req(rv$access_preview)
+      if (nrow(rv$access_preview) == 0) return(NULL)
+      DT::datatable(rv$access_preview, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })
   })
 }
