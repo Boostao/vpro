@@ -9,6 +9,9 @@ params:
   site_unit: ""
   project_id: ""
   apply_lumping: false
+  display_value: "standard"
+  report_title: "Short Vegetation Ordered by Hierarchy"
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -20,7 +23,18 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
 root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
   Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
   getwd(),
   file.path(getwd(), ".."),
@@ -106,6 +120,8 @@ for (candidate in c("Hierarchy", "HierarchyName", "hierarchy", "Hierarchy_Path",
 }
 ```
 
+# `r params$report_title`
+
 # Plot: `r params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
@@ -117,6 +133,14 @@ if (nrow(veg) > 0) {
 
   if (!is.null(hier_col)) {
     view <- view[order(view[[hier_col]], view$Species), , drop = FALSE]
+    split_view <- split(view, view[[hier_col]], drop = TRUE)
+    view <- do.call(rbind, lapply(names(split_view), function(name) {
+      section <- split_view[[name]]
+      header <- section[1, , drop = FALSE]
+      header[] <- ""
+      header[[hier_col]] <- paste0("Hierarchy: ", name)
+      rbind(header, section)
+    }))
   }
 
   kbl(view, align = "l") %>%

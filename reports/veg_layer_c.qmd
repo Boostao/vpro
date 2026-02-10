@@ -8,6 +8,7 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -19,7 +20,18 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
 root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
   Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
   getwd(),
   file.path(getwd(), ".."),
@@ -39,7 +51,7 @@ source(file.path(root_dir, "R", "logic_reports_veg.R"))
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
-  tbls <- c("vw_USysAllVeg", "Sample_SU", "Sample_Env")
+  tbls <- c("Sample_Veg", "Sample_SU", "Sample_Env")
   for (tbl in tbls) {
     file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
     file_path <- file.path(parquet_dir, file_name)
@@ -77,7 +89,7 @@ if (length(plots) == 0 && nzchar(trimws(params$project_id)) && DBI::dbExistsTabl
 plots <- plots[nzchar(plots)]
 if (length(plots) > 0) {
   plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
-  veg <- dbGetQuery(con, sprintf("SELECT * FROM vw_USysAllVeg WHERE PlotNumber IN (%s)", plot_sql))
+  veg <- dbGetQuery(con, sprintf("SELECT * FROM Sample_Veg WHERE PlotNumber IN (%s)", plot_sql))
 } else {
   veg <- data.frame()
 }
@@ -92,13 +104,8 @@ normalize_veg_cols <- function(df) {
   plot_col <- pick_col(c("plotnumber", "PlotNumber"))
   layer_col <- pick_col(c("mylayer", "layer", "layer_code", "MyLayer"))
   species_col <- pick_col(c("species", "species_code", "Species"))
-  cover_col <- pick_col(c("covervalue", "cover_value", "cover", "CoverValue"))
-  height_col <- pick_col(c("heightvalue", "height_value", "height", "HeightValue"))
   if (!is.na(plot_col)) df$PlotNumber <- df[[plot_col]]
-  if (!is.na(layer_col)) df$LayerCode <- df[[layer_col]]
   if (!is.na(species_col)) df$Species <- df[[species_col]]
-  if (!is.na(cover_col)) df$CoverValue <- df[[cover_col]]
-  if (!is.na(height_col)) df$HeightValue <- df[[height_col]]
   df
 }
 
@@ -112,12 +119,15 @@ layer_col <- if ("LayerCode" %in% names(veg)) "LayerCode" else if ("MyLayer" %in
 # Plot: `r if (length(plots) > 0) plots[1] else params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
-if (!is.null(layer_col) && nrow(veg) > 0) {
-  target <- veg[[layer_col]]
-  veg <- veg[target %in% c("C", "6"), , drop = FALSE]
-  desired <- c("PlotNumber", layer_col, "Species", "CoverValue", "HeightValue")
-  cols <- intersect(desired, names(veg))
-  view <- veg[, cols, drop = FALSE]
+if (nrow(veg) > 0) {
+  cover_cols <- c("Cover6")
+  height_cols <- c("Height6")
+  present_cols <- intersect(c("PlotNumber", "Species", cover_cols, height_cols, "Collected"), names(veg))
+  keep_rows <- rep(FALSE, nrow(veg))
+  for (col in intersect(cover_cols, names(veg))) {
+    keep_rows <- keep_rows | !is.na(veg[[col]])
+  }
+  view <- veg[keep_rows, present_cols, drop = FALSE]
 
   if (nrow(view) > 0) {
     kbl(view, align = "l") %>%
@@ -126,6 +136,6 @@ if (!is.null(layer_col) && nrow(veg) > 0) {
     cat("No layer C records found.")
   }
 } else {
-  cat("Layer field not available in vw_USysAllVeg.")
+  cat("No vegetation data found.")
 }
 ```

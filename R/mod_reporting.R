@@ -10,6 +10,14 @@ mod_reporting_ui <- function(id) {
             p("Generate Quarto reports for the current context."),
             selectInput(ns("report_template"), "Report Template", choices = NULL),
             radioButtons(ns("report_format"), "Format", choices = c("HTML" = "html", "PDF" = "pdf"), inline = TRUE),
+            tags$hr(),
+            tags$h5("Report Options"),
+            layout_columns(
+              numericInput(ns("opt_colour_greater"), "Colour threshold", value = 5, min = 0, max = 100, step = 1),
+              numericInput(ns("opt_gray_greater"), "Gray threshold", value = 65, min = 0, max = 100, step = 1),
+              checkboxInput(ns("opt_apply_theme"), "Apply theme", value = TRUE),
+              col_widths = c(4, 4, 4)
+            ),
             uiOutput(ns("plot_params_ui")),
             uiOutput(ns("veg_params_ui")),
             uiOutput(ns("hier_params_ui")),
@@ -17,7 +25,8 @@ mod_reporting_ui <- function(id) {
             verbatimTextOutput(ns("report_ctx")),
             div(class="mt-3",
                 actionButton(ns("preview_report"), "Preview HTML", class = "btn-secondary"),
-                downloadButton(ns("dl_report"), "Generate Report", class="btn-lg btn-danger")
+              downloadButton(ns("dl_report"), "Generate Report", class="btn-lg btn-danger"),
+              actionButton(ns("open_report"), "Open last report", class = "btn-outline-secondary")
             ),
             uiOutput(ns("report_preview")),
             uiOutput(ns("report_open_link"))
@@ -55,6 +64,35 @@ mod_reporting_server <- function(id, sys_state, con) {
       paste0("'", gsub("'", "\\'", value), "'")
     }
 
+    report_prefs_loaded <- reactiveVal(FALSE)
+    report_pref_defaults <- list(
+      colour_greater = get_pref(con, "ReportOptions", "cmbColourGreater", default = 5L),
+      gray_greater = get_pref(con, "ReportOptions", "cmbGrayGreater", default = 65L),
+      apply_theme = get_pref(con, "ReportOptions", "cmbApplyTheme", default = 1L)
+    )
+    report_pref_defaults$apply_theme <- isTRUE(as.logical(report_pref_defaults$apply_theme))
+
+    observe({
+      if (report_prefs_loaded()) return()
+      if (is.null(input$opt_colour_greater)) return()
+      updateNumericInput(session, "opt_colour_greater", value = report_pref_defaults$colour_greater)
+      updateNumericInput(session, "opt_gray_greater", value = report_pref_defaults$gray_greater)
+      updateCheckboxInput(session, "opt_apply_theme", value = report_pref_defaults$apply_theme)
+      report_prefs_loaded(TRUE)
+    })
+
+    observeEvent(input$opt_colour_greater, {
+      set_pref(con, "ReportOptions", "cmbColourGreater", input$opt_colour_greater)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$opt_gray_greater, {
+      set_pref(con, "ReportOptions", "cmbGrayGreater", input$opt_gray_greater)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$opt_apply_theme, {
+      set_pref(con, "ReportOptions", "cmbApplyTheme", as.integer(isTRUE(input$opt_apply_theme)))
+    }, ignoreInit = TRUE)
+
     export_tables_to_parquet <- function(tables) {
       if (length(tables) == 0) return(NULL)
       export_dir <- file.path(tempdir(), paste0("report_parquet_", as.integer(Sys.time())))
@@ -83,12 +121,12 @@ mod_reporting_server <- function(id, sys_state, con) {
         "short_veg_env.qmd" = c("vw_USysAllVeg", "Sample_Env", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "lifeform.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "flat_hierarchy.qmd" = c("Sample_Hierarchy"),
-        "hierarchy.qmd" = c("Sample_Hierarchy"),
+        "hierarchy.qmd" = c("Sample_Hierarchy", "lists.MasterSiteUnitList"),
         "short_veg_hierarchy.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
         "short_veg_order_hierarchy.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
-        "veg_layer_a.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Env"),
-        "veg_layer_c.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Env"),
-        "veg_layer_d.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Env"),
+        "veg_layer_a.qmd" = c("Sample_Veg", "Sample_SU", "Sample_Env"),
+        "veg_layer_c.qmd" = c("Sample_Veg", "Sample_SU", "Sample_Env"),
+        "veg_layer_d.qmd" = c("Sample_Veg", "Sample_SU", "Sample_Env"),
         "bec_labels.qmd" = c("Sample_Env", "Sample_SU"),
         "quality_control.qmd" = c("Sample_SU", "Sample_Admin", "Sample_Env", "Sample_Veg", "lists.USysTableOfLists")
       )
@@ -127,7 +165,13 @@ mod_reporting_server <- function(id, sys_state, con) {
           textInput(ns("plot_site_unit"), "Site unit (optional)", value = ""),
           textInput(ns("plot_project_id"), "Project ID (optional)", value = value_or(sys_state$CurrProject, "")),
           col_widths = c(4, 4, 4)
-        )
+        ),
+        if (identical(input$report_template, "env_summary.qmd")) {
+          layout_columns(
+            textInput(ns("env_report_title"), "Report title", value = "Environment Summary"),
+            col_widths = c(6)
+          )
+        }
       )
     })
 
@@ -157,6 +201,41 @@ mod_reporting_server <- function(id, sys_state, con) {
           col_widths = c(4, 4)
         ),
         layout_columns(
+          textInput(
+            ns("veg_report_title"),
+            "Report title",
+            value = if (identical(input$report_template, "long_veg.qmd")) {
+              "Long Vegetation Table"
+            } else if (identical(input$report_template, "lifeform.qmd")) {
+              "Lifeform Summary"
+            } else if (identical(input$report_template, "short_veg_hierarchy.qmd")) {
+              "Short Vegetation + Hierarchy"
+            } else if (identical(input$report_template, "short_veg_order_hierarchy.qmd")) {
+              "Short Vegetation Ordered by Hierarchy"
+            } else {
+              "Short Vegetation Table"
+            }
+          ),
+          col_widths = c(6)
+        ),
+        layout_columns(
+          selectInput(
+            ns("veg_display_value"),
+            "Display value",
+            choices = c(
+              "Presence + mean cover" = "standard",
+              "Presence ratio - cover" = "presence_mean",
+              "Presence class - significance" = "presence_signif",
+              "Presence class - cover" = "rk",
+              "Prominence class" = "prominence",
+              "Goldstream class" = "goldstream",
+              "Cover only" = "cover"
+            ),
+            selected = "presence_mean"
+          ),
+          col_widths = c(6)
+        ),
+        layout_columns(
           selectInput(
             ns("veg_group_by"),
             "Group by",
@@ -180,6 +259,10 @@ mod_reporting_server <- function(id, sys_state, con) {
         layout_columns(
           numericInput(ns("veg_presence_min"), "Presence min (%)", value = 0, min = 0, max = 100, step = 1),
           numericInput(ns("veg_cover_min"), "Cover min", value = 0, min = 0, step = 1),
+          numericInput(ns("veg_value_limit"), "Value limit (order by value)", value = 0, min = 0, step = 0.01),
+          col_widths = c(3, 3, 3)
+        ),
+        layout_columns(
           selectInput(
             ns("veg_show_common"),
             "Extra label",
@@ -192,7 +275,7 @@ mod_reporting_server <- function(id, sys_state, con) {
             ),
             selected = "none"
           ),
-          col_widths = c(3, 3, 6)
+          col_widths = c(6)
         )
       )
     })
@@ -281,9 +364,11 @@ mod_reporting_server <- function(id, sys_state, con) {
     }, ignoreInit = TRUE)
 
     build_report_params <- function(template_name, parquet_dir = "") {
-      db_path <- file.path(getwd(), "data", "vpro.duckdb")
+      db_path <- normalizePath(file.path(getwd(), "data", "vpro.duckdb"), winslash = "/", mustWork = FALSE)
+      project_root <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
       if (identical(template_name, "quality_control.qmd")) {
         list(
+          project_root = project_root,
           db_path = db_path,
           parquet_dir = parquet_dir,
           project_id = trimws(value_or(input$qc_project_id, "")),
@@ -306,6 +391,7 @@ mod_reporting_server <- function(id, sys_state, con) {
         "short_veg_order_hierarchy.qmd"
       )) {
         list(
+          project_root = project_root,
           plot_number = as.character(sys_state$CurrSU),
           plot_numbers = trimws(value_or(input$veg_plot_numbers, "")),
           site_unit = trimws(value_or(input$veg_site_unit, "")),
@@ -315,7 +401,10 @@ mod_reporting_server <- function(id, sys_state, con) {
           avg_type = value_or(input$veg_avg_type, "mean"),
           presence_min = as.numeric(value_or(input$veg_presence_min, 0)),
           cover_min = as.numeric(value_or(input$veg_cover_min, 0)),
+          value_limit = as.numeric(value_or(input$veg_value_limit, 0)),
           show_common = value_or(input$veg_show_common, "none"),
+          display_value = value_or(input$veg_display_value, "presence_mean"),
+          report_title = value_or(input$veg_report_title, "Short Vegetation Table"),
           apply_lumping = isTRUE(input$veg_apply_lumping),
           constancy_format = isTRUE(input$veg_constancy_format),
           db_path = db_path,
@@ -323,6 +412,7 @@ mod_reporting_server <- function(id, sys_state, con) {
         )
       } else if (template_name %in% c("hierarchy.qmd", "flat_hierarchy.qmd")) {
         list(
+          project_root = project_root,
           db_path = db_path,
           parquet_dir = parquet_dir,
           cutoff_level = as.integer(value_or(input$hier_cutoff_level, 11))
@@ -335,7 +425,8 @@ mod_reporting_server <- function(id, sys_state, con) {
         "veg_layer_d.qmd",
         "bec_labels.qmd"
       )) {
-        list(
+        params <- list(
+          project_root = project_root,
           plot_number = as.character(sys_state$CurrSU),
           plot_numbers = trimws(value_or(input$plot_plot_numbers, "")),
           site_unit = trimws(value_or(input$plot_site_unit, "")),
@@ -343,8 +434,13 @@ mod_reporting_server <- function(id, sys_state, con) {
           db_path = db_path,
           parquet_dir = parquet_dir
         )
+        if (identical(template_name, "env_summary.qmd")) {
+          params$report_title <- value_or(input$env_report_title, "Environment Summary")
+        }
+        params
       } else {
         list(
+          project_root = project_root,
           plot_number = as.character(sys_state$CurrSU),
           db_path = db_path,
           parquet_dir = parquet_dir
@@ -356,9 +452,26 @@ mod_reporting_server <- function(id, sys_state, con) {
     report_file <- reactiveVal(NULL)
     report_url <- reactiveVal(NULL)
 
+    set_report_url <- function(report_path) {
+      if (is.null(report_path) || !file.exists(report_path)) return(invisible(FALSE))
+      addResourcePath("report_output", dirname(report_path))
+      report_url(file.path("report_output", basename(report_path)))
+      invisible(TRUE)
+    }
+
     observeEvent(input$preview_report, {
       req(sys_state$CurrSU)
       req(input$report_template)
+
+      old_quarto_root <- Sys.getenv("QUARTO_PROJECT_DIR", unset = NA)
+      Sys.setenv(QUARTO_PROJECT_DIR = getwd())
+      on.exit({
+        if (is.na(old_quarto_root)) {
+          Sys.unsetenv("QUARTO_PROJECT_DIR")
+        } else {
+          Sys.setenv(QUARTO_PROJECT_DIR = old_quarto_root)
+        }
+      }, add = TRUE)
 
       tmp_dir <- file.path(tempdir(), "report_preview")
       if (!dir.exists(tmp_dir)) dir.create(tmp_dir, recursive = TRUE)
@@ -394,6 +507,7 @@ mod_reporting_server <- function(id, sys_state, con) {
         if (file.exists(out_generated)) {
           preview_path(out_generated)
           report_file(out_generated)
+          set_report_url(out_generated)
         } else {
           showNotification("Preview generation failed.", type = "error")
         }
@@ -414,15 +528,15 @@ mod_reporting_server <- function(id, sys_state, con) {
     })
 
     observeEvent(report_file(), {
-      report_path <- report_file()
-      if (is.null(report_path) || !file.exists(report_path)) return()
-      addResourcePath("report_output", dirname(report_path))
-      report_url(file.path("report_output", basename(report_path)))
+      set_report_url(report_file())
     })
 
-    observeEvent(report_url(), {
+    observeEvent(input$open_report, {
       target_url <- report_url()
-      if (is.null(target_url) || !nzchar(target_url)) return()
+      if (is.null(target_url) || !nzchar(target_url)) {
+        showNotification("No report generated yet.", type = "warning")
+        return()
+      }
       shinyjs::runjs(paste0("window.open(", js_quote(target_url), ", '_blank');"))
     })
 
@@ -450,6 +564,16 @@ mod_reporting_server <- function(id, sys_state, con) {
       content = function(file) {
         req(sys_state$CurrSU)
         req(input$report_template)
+
+        old_quarto_root <- Sys.getenv("QUARTO_PROJECT_DIR", unset = NA)
+        Sys.setenv(QUARTO_PROJECT_DIR = getwd())
+        on.exit({
+          if (is.na(old_quarto_root)) {
+            Sys.unsetenv("QUARTO_PROJECT_DIR")
+          } else {
+            Sys.setenv(QUARTO_PROJECT_DIR = old_quarto_root)
+          }
+        }, add = TRUE)
         
         # Show Notification
         id <- showNotification("Generating Quarto Report...", duration = NULL, closeButton = FALSE)
@@ -467,7 +591,7 @@ mod_reporting_server <- function(id, sys_state, con) {
         
         # Render to temp file
         tmp_dir <- tempdir()
-        tmp_qmd <- file.path(tmp_dir, "site_summary.qmd")
+        tmp_qmd <- file.path(tmp_dir, basename(input$report_template))
         file.copy(qmd_path, tmp_qmd, overwrite = TRUE)
         
         out_format <- if (is.null(input$report_format) || input$report_format == "") "html" else input$report_format
@@ -496,7 +620,8 @@ mod_reporting_server <- function(id, sys_state, con) {
         
         if (file.exists(out_generated)) {
           report_file(out_generated)
-            file.copy(out_generated, file)
+          set_report_url(out_generated)
+          file.copy(out_generated, file)
         } else {
             showNotification("Report generation failed.", type = "error")
         }

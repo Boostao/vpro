@@ -12,10 +12,13 @@ params:
   order_by: "species"
   presence_min: 0
   cover_min: 0
+  value_limit: 0
   avg_type: "mean"
   show_common: "none"
   apply_lumping: false
   constancy_format: false
+  display_value: "standard"
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -27,7 +30,18 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
 root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
   Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
   getwd(),
   file.path(getwd(), ".."),
@@ -89,6 +103,7 @@ summary <- summarize_veg_report(
   order_by = params$order_by,
   presence_min = params$presence_min,
   cover_min = params$cover_min,
+  value_limit = params$value_limit,
   avg_type = params$avg_type,
   show_common = params$show_common
 )

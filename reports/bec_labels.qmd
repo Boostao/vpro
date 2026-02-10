@@ -8,6 +8,7 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -19,7 +20,18 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
 root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
   Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
   getwd(),
   file.path(getwd(), ".."),
@@ -106,21 +118,51 @@ normalize_env_cols <- function(df) {
   }
   plot_col <- pick_col(c("plotnumber", "PlotNumber"))
   proj_col <- pick_col(c("projectid", "ProjectID"))
-  zone_col <- pick_col(c("zone", "Zone"))
+  zone_col <- pick_col(c("zone", "_zone", "Zone"))
   subzone_col <- pick_col(c("subzone", "SubZone"))
+  site_series_col <- pick_col(c("siteseries", "SiteSeries"))
+  representing_col <- pick_col(c("plotrepresenting", "PlotRepresenting"))
   if (!is.na(plot_col)) df$plotnumber <- df[[plot_col]]
   if (!is.na(proj_col)) df$projectid <- df[[proj_col]]
   if (!is.na(zone_col)) df$zone <- df[[zone_col]]
   if (!is.na(subzone_col)) df$subzone <- df[[subzone_col]]
+  if (!is.na(site_series_col)) df$siteseries <- df[[site_series_col]]
+  if (!is.na(representing_col)) df$representing <- df[[representing_col]]
   df
 }
 
 labels <- normalize_env_cols(labels)
 
 if (nrow(labels) > 0) {
-  desired <- c("plotnumber", "projectid", "zone", "subzone")
+  desired <- c("plotnumber", "projectid", "zone", "subzone", "siteseries", "representing")
   cols <- intersect(desired, names(labels))
   labels <- labels[, cols, drop = FALSE]
+}
+
+null_to_empty <- function(value) {
+  if (is.null(value)) return("")
+  value <- as.character(value)
+  value[is.na(value)] <- ""
+  value
+}
+
+pad_right <- function(value, width) {
+  value <- null_to_empty(value)
+  padding <- pmax(width - nchar(value), 0)
+  paste0(value, strrep(" ", padding))
+}
+
+if (nrow(labels) > 0) {
+  labels <- labels %>%
+    mutate(
+      plotnumber = null_to_empty(plotnumber),
+      projectid = null_to_empty(projectid),
+      zone = null_to_empty(zone),
+      subzone = null_to_empty(subzone),
+      siteseries = null_to_empty(siteseries),
+      representing = null_to_empty(representing),
+      zone_label = paste0(pad_right(zone, 4), subzone, "/", siteseries)
+    )
 }
 
 dbDisconnect(con, shutdown = TRUE)
@@ -128,11 +170,72 @@ dbDisconnect(con, shutdown = TRUE)
 
 # BEC Labels
 
-```{r labels-table, echo=FALSE, results='asis'}
-if (nrow(labels) > 0) {
-  kbl(labels, align = "l") %>%
-    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
-} else {
+```{r labels-style, echo=FALSE, results='asis'}
+cat(
+  "<style>\n",
+  ".bec-label-grid { width: 100%; border-collapse: collapse; margin-bottom: 18px; }\n",
+  ".bec-label-grid td { width: 33%; vertical-align: top; padding: 6px; }\n",
+  ".bec-label { border: 1px solid #999; padding: 6px 8px; min-height: 110px; font-family: Arial, sans-serif; }\n",
+  ".bec-label .plot { font-size: 12px; font-weight: 700; }\n",
+  ".bec-label .project { font-size: 12px; font-weight: 700; }\n",
+  ".bec-label .zone { font-size: 12px; font-weight: 700; text-align: right; }\n",
+  ".bec-label .representing { font-size: 10px; margin-top: 2px; }\n",
+  ".bec-label .date { font-size: 9px; margin-top: 4px; }\n",
+  "</style>\n"
+)
+```
+
+```{r labels-render, echo=FALSE, results='asis'}
+if (nrow(labels) == 0) {
   cat("No labels available.")
+} else {
+  label_date <- format(Sys.Date(), "%B %d, %Y")
+  label_rows <- lapply(seq_len(nrow(labels)), function(i) {
+    row <- labels[i, , drop = FALSE]
+    list(
+      plot = row$plotnumber,
+      project = row$projectid,
+      zone = row$zone_label,
+      representing = row$representing
+    )
+  })
+
+  chunk_size <- 12
+  total_chunks <- ceiling(length(label_rows) / chunk_size)
+
+  for (chunk in seq_len(total_chunks)) {
+    start_idx <- (chunk - 1) * chunk_size + 1
+    end_idx <- min(chunk * chunk_size, length(label_rows))
+    chunk_rows <- label_rows[start_idx:end_idx]
+
+    cells <- vector("list", chunk_size)
+    for (i in seq_len(chunk_size)) {
+      if (i <= length(chunk_rows)) {
+        cell <- chunk_rows[[i]]
+        cells[[i]] <- sprintf(
+          "<div class=\"bec-label\"><div class=\"plot\">%s</div><div class=\"project\">%s</div><div class=\"zone\">%s</div><div class=\"representing\">%s</div><div class=\"date\">Label Date: %s</div></div>",
+          cell$plot,
+          cell$project,
+          cell$zone,
+          cell$representing,
+          label_date
+        )
+      } else {
+        cells[[i]] <- "<div class=\"bec-label\"></div>"
+      }
+    }
+
+    cat("<table class=\"bec-label-grid\">\n")
+    row_idx <- 1
+    for (r in seq_len(4)) {
+      cat("<tr>\n")
+      for (c in seq_len(3)) {
+        cat("<td>", cells[[row_idx]], "</td>\n")
+        row_idx <- row_idx + 1
+      }
+      cat("</tr>\n")
+    }
+    cat("</table>\n")
+  }
 }
 ```

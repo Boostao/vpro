@@ -8,6 +8,8 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  report_title: "Environment Summary"
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -19,7 +21,18 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
 root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
   Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
   getwd(),
   file.path(getwd(), ".."),
@@ -82,6 +95,16 @@ if (length(plots) > 0) {
   env <- data.frame()
 }
 
+site_unit_map <- data.frame()
+if (DBI::dbExistsTable(con, "Sample_SU")) {
+  site_unit_map <- dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+}
+
+unit_names <- data.frame()
+if (DBI::dbExistsTable(con, "lists.MasterSiteUnitList")) {
+  unit_names <- dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList")
+}
+
 normalize_env_cols <- function(df) {
   if (nrow(df) == 0) return(df)
   cols <- names(df)
@@ -113,9 +136,21 @@ normalize_env_cols <- function(df) {
 }
 
 env <- normalize_env_cols(env)
+if (nrow(env) > 0 && nrow(site_unit_map) > 0) {
+  site_unit_map <- dplyr::rename(site_unit_map, plotnumber = PlotNumber, siteunit = SiteUnit)
+  env <- dplyr::left_join(env, site_unit_map, by = "plotnumber")
+}
+if (nrow(env) > 0 && nrow(unit_names) > 0) {
+  unit_names <- dplyr::rename(unit_names, siteunit = SiteSeries, siteunit_long = SiteSeriesLongName)
+  env <- dplyr::left_join(env, unit_names, by = "siteunit")
+}
+
+if (nzchar(trimws(params$site_unit))) {
+  env <- env[env$siteunit == trimws(params$site_unit), , drop = FALSE]
+}
 
 if (nrow(env) > 0) {
-  desired <- c("plotnumber", "projectid", "date", "sitesurveyor", "latitude", "longitude", "elevation",
+  desired <- c("plotnumber", "siteunit", "siteunit_long", "projectid", "date", "sitesurveyor", "latitude", "longitude", "elevation",
                "aspect", "slopegradient", "mesoslopeposition", "surfaceshape", "moistureregime",
                "nutrientregime", "sitenotes")
   cols <- intersect(desired, names(env))
@@ -125,10 +160,15 @@ if (nrow(env) > 0) {
 dbDisconnect(con, shutdown = TRUE)
 ```
 
+# `r params$report_title`
+
 # Plot: `r if (length(plots) > 0) plots[1] else params$plot_number`
 
 ```{r env-table, echo=FALSE, results='asis'}
 if (nrow(env) > 0) {
+  if ("siteunit" %in% names(env)) {
+    env <- env[order(env$siteunit, env$plotnumber), , drop = FALSE]
+  }
   kbl(env, align = "l") %>%
     kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 } else {

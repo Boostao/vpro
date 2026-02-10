@@ -12,10 +12,14 @@ params:
   order_by: "species"
   presence_min: 0
   cover_min: 0
+  value_limit: 0
   avg_type: "mean"
   show_common: "none"
   apply_lumping: false
   constancy_format: false
+  display_value: "standard"
+  report_title: "Short Vegetation Table"
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -27,7 +31,18 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
 root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
   Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
   getwd(),
   file.path(getwd(), ".."),
@@ -85,27 +100,50 @@ veg <- load_veg_report_data(
 
 summary <- summarize_veg_report(
   veg,
-  group_by = params$group_by,
+  group_by = if (isTRUE(params$constancy_format)) "lifeform" else params$group_by,
   order_by = params$order_by,
   presence_min = params$presence_min,
   cover_min = params$cover_min,
+  value_limit = params$value_limit,
   avg_type = params$avg_type,
-  show_common = params$show_common
+  show_common = params$show_common,
+  display_value = params$display_value
 )
 
 dbDisconnect(con, shutdown = TRUE)
 ```
+
+# `r params$report_title`
+
+`r if (isTRUE(params$constancy_format)) "Vegetation Table - Constancy Format" else "Vegetation Table"`
+
+`r if (isTRUE(params$apply_lumping)) "Lumping applied" else ""`
 
 # Plot: `r params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
 if (nrow(summary) > 0) {
   constancy_format <- isTRUE(params$constancy_format)
-  if (constancy_format) {
+  display_mode <- if (!is.null(params$display_value) && nzchar(params$display_value)) {
+    tolower(params$display_value)
+  } else {
+    "standard"
+  }
+  if (constancy_format && display_mode == "standard") {
+    display_mode <- "presence_mean"
+  }
+  if (constancy_format && display_mode == "standard") {
     view <- data.frame(
       Group = summary$group_label,
       Species = summary$species_label,
       Constancy = round(summary$presence_pct, 1),
+      stringsAsFactors = FALSE
+    )
+  } else if (display_mode != "standard") {
+    view <- data.frame(
+      Group = summary$group_label,
+      Species = summary$species_label,
+      Display = summary$display_value,
       stringsAsFactors = FALSE
     )
   } else {
@@ -121,6 +159,8 @@ if (nrow(summary) > 0) {
   if (params$show_common != "none") {
     if (constancy_format) {
       view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, "Constancy", drop = FALSE])
+    } else if (display_mode != "standard") {
+      view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, "Display", drop = FALSE])
     } else {
       view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, c("Presence", "MeanCover")])
     }

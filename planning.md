@@ -29,6 +29,8 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Schema fixes**: `scripts/04_fix_metadata_schema.R`, `scripts/05_fix_spplist_schema.R`
 - **Connection layer**: `R/db_connections.R` — factory, cloud ATTACH, helpers (323 lines)
 - **Global state**: `R/logic_state.R` — `init_sys_state()`, `set_project()`, `set_su()` + VBA globals
+- **Preferences persistence**: `R/logic_state.R` + `server.R` — SaveSetting/GetSetting analog stored in `vpro_user.duckdb`
+- **Report options persistence**: `R/mod_reporting.R` — Report options wired to preferences (colour/gray thresholds, apply theme)
 - **Vegetation entry**: `R/mod_veg_sample.R` — 4-layer tabs, CRUD, species modal (rhandsontable)
 - **Site/Env entry**: `R/mod_site_env.R` — General/Mensuration/Soil tabs, full CRUD (rhandsontable)
 - **Administration**: `R/mod_admin.R` — Project Metadata CRUD + Code Maintenance (240 lines)
@@ -56,8 +58,10 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **UI regression tests**: shinytest2 smoke coverage expanded to core tabs; full flow coverage pending
 - **Report logic parity**: QC report wiring complete
 - **Report logic parity**: env/site/bec/layer filters added; hierarchy normalization complete
-- **Report logic parity**: short/long veg filters, grouping, and common-name support added
-- **Report logic parity**: lifeform + hierarchy reports updated with filters
+- **Report logic parity**: short/long veg filters, grouping, common-name support, long-veg plot pivots, and value-limit thresholds added
+- **Report logic parity**: lifeform report now includes per-site-unit summaries + attribute counts; hierarchy + flat hierarchy reports include tag highlighting and cutoff filtering; veg layer reports now match Access Sample_Veg columns
+- **Report logic parity**: site unit report now includes site unit list, env summaries, and lifeform/strata cover summaries
+- **Report logic parity**: BEC labels now render 12-label pages with zone/subzone/site series formatting
 - **Cloud sync**: `R/logic_sync.R` pull/push for Sample_Env/Sample_SU + wide Sample_Veg staging, admin sync panel, parquet snapshot helper
 - **Upload/Merge workflow**: `R/mod_upload.R`, `R/mod_merge.R` staging UI, validation, and basic merge actions
 - **Auth/RBAC**: `R/mod_auth.R` login + roles/permissions, write gating in upload/merge
@@ -193,8 +197,29 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - Parameter inputs per report type (project, plot range, layer filters)
 - Download as PDF or HTML ✅
 - Preview pane (rendered HTML inline) ✅
+- Report options persistence (colour/gray thresholds, apply theme) ✅
 
 ---
+
+## Phase 6: Access → Shiny Parity Review (Planned)
+
+**Goal**: Produce a clear, client-friendly parity report that shows what is done, partial, and missing, and why certain design choices were made.
+
+### 6.1 Parity Inventory (Full)
+- Forms: map Access forms to Shiny modules; status: done / partial / missing
+- Modules: map VBA modules to `R/logic_*.R` and `R/mod_*.R`; status + notes
+- Reports: map Access reports + VBA report modules to Quarto templates; status + gaps
+
+### 6.2 Workflow Parity (Field-first)
+- Project selection, plot selection, data entry, save, and export flows
+- Vegetation + Site/Env workflows (happy path + edge cases)
+- Import/export workflows (CSV/ZIP/VENUS/XML) and audit/compliance behavior
+
+### 6.3 Client Design Decisions (Plain Language)
+- Offline-first behavior (why DuckDB is used locally)
+- Cloud sync optionality and how it preserves field workflows
+- Single-table model keyed by ProjectID (why no per-project schemas)
+- Data safety and audit trail approach
 
 ## Phase 6: Cloud Integration
 

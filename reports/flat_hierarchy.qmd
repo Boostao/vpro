@@ -4,6 +4,7 @@ format:
   html:
     theme: journal
 params:
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
   cutoff_level: 11
@@ -16,6 +17,33 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
+root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
+  Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
+  getwd(),
+  file.path(getwd(), ".."),
+  file.path(getwd(), "../..")
+)
+root_candidates <- unique(root_candidates[nzchar(root_candidates)])
+root_dir <- NA_character_
+for (candidate in root_candidates) {
+  candidate <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+  if (file.exists(file.path(candidate, "R"))) {
+    root_dir <- candidate
+    break
+  }
+}
+if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
@@ -58,26 +86,97 @@ normalize_hier_cols <- function(df) {
 }
 
 hier <- normalize_hier_cols(hier)
-if (nrow(hier) > 0) {
-  if ("Parent" %in% names(hier) && "Name" %in% names(hier)) {
-    hier <- hier[order(hier$Parent, hier$Name), , drop = FALSE]
-  } else if ("Name" %in% names(hier)) {
-    hier <- hier[order(hier$Name), , drop = FALSE]
-  }
+hier$Name <- as.character(hier$Name)
+hier$Tag <- ifelse(is.null(hier$Tag), "", as.character(hier$Tag))
+if (nrow(hier) > 0 && "Name" %in% names(hier)) {
+  hier <- hier[!grepl("\\?$", hier$Name), , drop = FALSE]
 }
 cutoff_level <- params$cutoff_level
 if (!is.null(cutoff_level) && !is.na(cutoff_level) && ("Level" %in% names(hier))) {
   hier <- hier[hier$Level <= cutoff_level, , drop = FALSE]
 }
 dbDisconnect(con, shutdown = TRUE)
+
+tag_to_color <- function(tag) {
+  tag <- if (is.null(tag)) "" else tag
+  tag <- tolower(trimws(tag))
+  if (tag == "yellow") return("#f9e27d")
+  if (tag == "blue") return("#9db8d8")
+  if (tag == "green") return("#b5d6a7")
+  if (tag == "red") return("#f4a6a0")
+  if (tag == "orange") return("#f7c59d")
+  ""
+}
+
+build_flat_rows <- function(df, parent_id = NA_integer_, level_col = "Level", max_level = 11, visited = character()) {
+  if (nrow(df) == 0) return(list())
+  parent_vals <- df$Parent
+  match_parent <- if (is.na(parent_id)) {
+    is.na(parent_vals)
+  } else {
+    parent_vals == parent_id
+  }
+  nodes <- df[match_parent, , drop = FALSE]
+  if (nrow(nodes) == 0) return(list())
+  nodes <- nodes[order(nodes$Name), , drop = FALSE]
+
+  rows <- list()
+  for (i in seq_len(nrow(nodes))) {
+    row <- nodes[i, ]
+    row_id <- as.character(row$ID)
+    if (row_id %in% visited) next
+    level_val <- if (!is.null(row[[level_col]])) as.integer(row[[level_col]]) else NA_integer_
+    if (is.na(level_val)) level_val <- 1L
+    if (level_val <= max_level) {
+      row_entry <- list()
+      for (lvl in seq_len(max_level)) {
+        row_entry[[paste0("Level", lvl)]] <- ""
+        row_entry[[paste0("Tag", lvl)]] <- ""
+      }
+      row_entry[[paste0("Level", level_val)]] <- row$Name
+      row_entry[[paste0("Tag", level_val)]] <- row$Tag
+      rows[[length(rows) + 1]] <- row_entry
+    }
+    child_rows <- build_flat_rows(df, row$ID, level_col, max_level, c(visited, row_id))
+    if (length(child_rows) > 0) rows <- c(rows, child_rows)
+  }
+  rows
+}
 ```
 
 # Hierarchy (Flat)
 
+Lowest level: `r params$cutoff_level`
+
 ```{r hierarchy-table, echo=FALSE, results='asis'}
 if (nrow(hier) > 0) {
-  kbl(hier, align = "l") %>%
-    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+  max_level <- if (!is.null(params$cutoff_level) && !is.na(params$cutoff_level)) {
+    as.integer(params$cutoff_level)
+  } else {
+    11L
+  }
+  rows <- build_flat_rows(hier, max_level = max_level)
+  if (length(rows) == 0) {
+    cat("No hierarchy records found.")
+  } else {
+    flat <- do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
+    tag_cols <- grep("^Tag", names(flat), value = TRUE)
+    level_cols <- grep("^Level", names(flat), value = TRUE)
+    view <- flat[, level_cols, drop = FALSE]
+    for (i in seq_along(level_cols)) {
+      tag_col <- tag_cols[[i]]
+      view[[i]] <- ifelse(
+        nzchar(flat[[level_cols[[i]]]]),
+        kableExtra::cell_spec(
+          flat[[level_cols[[i]]]],
+          background = tag_to_color(flat[[tag_col]])
+        ),
+        ""
+      )
+    }
+    kbl(view, escape = FALSE, align = "l") %>%
+      kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+  }
 } else {
   cat("No hierarchy records found.")
 }

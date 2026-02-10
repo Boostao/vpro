@@ -16,6 +16,9 @@ params:
   show_common: "none"
   apply_lumping: false
   constancy_format: false
+  display_value: "standard"
+  report_title: "Long Vegetation Table"
+  project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
 ---
@@ -27,7 +30,18 @@ library(knitr)
 library(kableExtra)
 
 options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
 root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
   Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
   getwd(),
   file.path(getwd(), ".."),
@@ -93,36 +107,90 @@ summary <- summarize_veg_report(
   show_common = params$show_common
 )
 
+veg_labeled <- label_veg_records(veg, params$group_by, params$show_common)
+if (nrow(veg_labeled) > 0) {
+  summary$common_key <- ifelse(is.na(summary$common_label), "", summary$common_label)
+  veg_labeled$common_key <- ifelse(is.na(veg_labeled$common_label), "", veg_labeled$common_label)
+  summary_keep <- summary[, c("group_label", "species_label", "common_key", "presence_ratio", "mean_cover", "common_label")]
+  veg_labeled <- dplyr::inner_join(
+    veg_labeled,
+    summary_keep[, c("group_label", "species_label", "common_key")],
+    by = c("group_label", "species_label", "common_key")
+  )
+}
+
+veg_pivot <- data.frame()
+if (nrow(veg_labeled) > 0) {
+  veg_pivot <- veg_labeled %>%
+    dplyr::group_by(group_label, species_label, common_key, plotnumber) %>%
+    dplyr::summarise(cover = sum(cover_num, na.rm = TRUE), .groups = "drop")
+}
+
+veg_wide <- data.frame()
+if (nrow(veg_pivot) > 0) {
+  veg_wide <- reshape(
+    veg_pivot,
+    idvar = c("group_label", "species_label", "common_key"),
+    timevar = "plotnumber",
+    direction = "wide"
+  )
+  plot_cols_raw <- grep("^cover\\.", names(veg_wide), value = TRUE)
+  if (length(plot_cols_raw) > 0) {
+    plot_cols <- sub("^cover\\.", "", plot_cols_raw)
+    names(veg_wide)[match(plot_cols_raw, names(veg_wide))] <- plot_cols
+  }
+}
+
+report_table <- data.frame()
+if (nrow(summary) > 0) {
+  summary$common_key <- ifelse(is.na(summary$common_label), "", summary$common_label)
+  summary_keep <- summary[, c("group_label", "species_label", "common_key", "presence_ratio", "mean_cover", "common_label")]
+  if (nrow(veg_wide) > 0) {
+    report_table <- dplyr::left_join(
+      summary_keep,
+      veg_wide,
+      by = c("group_label", "species_label", "common_key")
+    )
+  } else {
+    report_table <- summary_keep
+  }
+}
+
 dbDisconnect(con, shutdown = TRUE)
 ```
+
+# `r params$report_title`
+
+`r if (isTRUE(params$apply_lumping)) "Lumping applied" else ""`
 
 # Plot: `r params$plot_number`
 
 ```{r veg-table, echo=FALSE, results='asis'}
-if (nrow(summary) > 0) {
-  constancy_format <- isTRUE(params$constancy_format)
-  if (constancy_format) {
-    view <- data.frame(
-      Group = summary$group_label,
-      Species = summary$species_label,
-      Constancy = round(summary$presence_pct, 1),
-      stringsAsFactors = FALSE
-    )
-  } else {
-    view <- data.frame(
-      Group = summary$group_label,
-      Species = summary$species_label,
-      Presence = round(summary$presence_pct, 1),
-      MeanCover = round(summary$mean_cover, 1),
-      stringsAsFactors = FALSE
-    )
-  }
+if (nrow(report_table) > 0) {
+  plot_cols <- setdiff(
+    names(report_table),
+    c("group_label", "species_label", "common_key", "presence_ratio", "mean_cover", "common_label")
+  )
+  plot_cols <- plot_cols[order(plot_cols)]
+
+  view <- data.frame(
+    Group = report_table$group_label,
+    Species = report_table$species_label,
+    stringsAsFactors = FALSE
+  )
   if (params$show_common != "none") {
-    if (constancy_format) {
-      view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, "Constancy", drop = FALSE])
-    } else {
-      view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, c("Presence", "MeanCover")])
-    }
+    view$Common <- report_table$common_label
+  }
+  view$Presence <- round(report_table$presence_ratio * 100, 1)
+  view$MeanCover <- round(report_table$mean_cover, 1)
+
+  if (length(plot_cols) > 0) {
+    plot_data <- report_table[, plot_cols, drop = FALSE]
+    plot_data <- as.data.frame(lapply(plot_data, function(col) {
+      ifelse(is.na(col), "", round(col, 1))
+    }), stringsAsFactors = FALSE)
+    names(plot_data) <- plot_cols
+    view <- cbind(view, plot_data)
   }
 
   kbl(view, align = "l") %>%
