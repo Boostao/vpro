@@ -107,7 +107,7 @@ init_sys_state <- function() {
 }
 
 # Preferences storage (SaveSetting/GetSetting analog)
-ensure_user_settings_table <- function(con, schema = "user", table = "user_settings") {
+ensure_user_settings_table <- function(con, schema = "user_db.main", table = "user_settings") {
   DBI::dbExecute(
     con,
     paste0(
@@ -131,7 +131,7 @@ coerce_pref_value <- function(value, default) {
   return(value)
 }
 
-get_pref <- function(con, section, key, default = NULL, app = "VPro64", schema = "user", table = "user_settings") {
+get_pref <- function(con, section, key, default = NULL, app = "VPro64", schema = "user_db.main", table = "user_settings") {
   ensure_user_settings_table(con, schema = schema, table = table)
   res <- DBI::dbGetQuery(
     con,
@@ -145,7 +145,7 @@ get_pref <- function(con, section, key, default = NULL, app = "VPro64", schema =
   coerce_pref_value(res$value[[1]], default)
 }
 
-set_pref <- function(con, section, key, value, app = "VPro64", schema = "user", table = "user_settings") {
+set_pref <- function(con, section, key, value, app = "VPro64", schema = "user_db.main", table = "user_settings") {
   ensure_user_settings_table(con, schema = schema, table = table)
   DBI::dbExecute(
     con,

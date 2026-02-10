@@ -1,6 +1,6 @@
 # Audit trail helpers
 
-audit_table_name <- "user.USysAuditTrail"
+audit_table_name <- "user_db.main.USysAuditTrail"
 
 quote_ident <- function(name) {
   if (is.null(name) || !nzchar(name)) return(NA_character_)
@@ -11,7 +11,7 @@ get_audit_table_fields <- function(con) {
   if (!audit_table_exists(con)) return(character(0))
   fields <- character(0)
   try({
-    fields <- DBI::dbListFields(con, DBI::Id(schema = "user", table = "USysAuditTrail"))
+    fields <- DBI::dbListFields(con, audit_table_name)
   }, silent = TRUE)
   if (length(fields) == 0) {
     try({
@@ -36,17 +36,15 @@ audit_table_name_col <- function(con) {
 }
 
 audit_table_exists <- function(con) {
-  DBI::dbExistsTable(con, DBI::Id(schema = "user", table = "USysAuditTrail")) ||
-    DBI::dbExistsTable(con, audit_table_name)
+  DBI::dbExistsTable(con, audit_table_name)
 }
 
 ensure_audit_table <- function(con) {
   if (audit_table_exists(con)) return(TRUE)
 
   tryCatch({
-    DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS user")
     DBI::dbExecute(con, "
-      CREATE TABLE IF NOT EXISTS user.USysAuditTrail (
+      CREATE TABLE IF NOT EXISTS user_db.main.USysAuditTrail (
         Project TEXT,
         \"User\" TEXT,
         PlotNumber TEXT,
@@ -77,7 +75,7 @@ log_audit_change <- function(con, project_id, user, plot_number, table_name, fie
 
   DBI::dbExecute(
     con,
-    "INSERT INTO user.USysAuditTrail (Project, \"User\", PlotNumber, \"Table\", EditField, EditWhen, BeforeEdit, AfterEdit)
+    "INSERT INTO user_db.main.USysAuditTrail (Project, \"User\", PlotNumber, \"Table\", EditField, EditWhen, BeforeEdit, AfterEdit)
      VALUES (?, ?, ?, ?, ?, now(), ?, ?)",
     list(
       project_id,
@@ -143,10 +141,10 @@ fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, tabl
   table_col <- audit_table_name_col(con)
   if (is.null(table_col)) return(data.frame())
   table_col_sql <- quote_ident(table_col)
-  sql <- sprintf(
-    "SELECT Project, \"User\", PlotNumber, %s AS TableName, EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysAuditTrail",
-    table_col_sql
-  )
+    sql <- sprintf(
+      "SELECT Project, \"User\", PlotNumber, %s AS TableName, EditField, EditWhen, BeforeEdit, AfterEdit FROM user_db.main.USysAuditTrail",
+      table_col_sql
+    )
   filters <- c()
   params <- list()
 
@@ -190,7 +188,7 @@ fetch_audit_entries <- function(con, plot_number = NULL, project_id = NULL, tabl
 fetch_master_audit_entries <- function(con, user = NULL, action = NULL, node_name = NULL, date_from = NULL, date_to = NULL, limit = NULL, offset = NULL) {
   if (!master_audit_table_exists(con)) return(data.frame())
 
-  sql <- "SELECT \"User\", Action, NodeName, NodeID, Parent, EditField, EditWhen, BeforeEdit, AfterEdit FROM user.USysMasterAudit"
+  sql <- "SELECT \"User\", Action, NodeName, NodeID, Parent, EditField, EditWhen, BeforeEdit, AfterEdit FROM user_db.main.USysMasterAudit"
   filters <- c()
   params <- list()
 
@@ -267,20 +265,18 @@ log_audit_rows <- function(con, project_id, user, table_name, rows, fields = NUL
   logged
 }
 
-master_audit_table_name <- "user.USysMasterAudit"
+master_audit_table_name <- "user_db.main.USysMasterAudit"
 
 master_audit_table_exists <- function(con) {
-  DBI::dbExistsTable(con, DBI::Id(schema = "user", table = "USysMasterAudit")) ||
-    DBI::dbExistsTable(con, master_audit_table_name)
+  DBI::dbExistsTable(con, master_audit_table_name)
 }
 
 ensure_master_audit_table <- function(con) {
   if (master_audit_table_exists(con)) return(TRUE)
 
   tryCatch({
-    DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS user")
     DBI::dbExecute(con, "
-      CREATE TABLE IF NOT EXISTS user.USysMasterAudit (
+      CREATE TABLE IF NOT EXISTS user_db.main.USysMasterAudit (
         \"User\" TEXT,
         Action TEXT,
         NodeName TEXT,
@@ -304,7 +300,7 @@ log_master_audit <- function(con, user, action, node_name, node_id, edit_field, 
 
   DBI::dbExecute(
     con,
-    "INSERT INTO user.USysMasterAudit (\"User\", Action, NodeName, NodeID, Parent, EditField, EditWhen, BeforeEdit, AfterEdit)
+    "INSERT INTO user_db.main.USysMasterAudit (\"User\", Action, NodeName, NodeID, Parent, EditField, EditWhen, BeforeEdit, AfterEdit)
      VALUES (?, ?, ?, ?, ?, ?, now(), ?, ?)",
     list(
       if (is.null(user) || length(user) == 0) "Unknown" else user,

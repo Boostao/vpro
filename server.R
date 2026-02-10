@@ -10,7 +10,7 @@ server <- function(input, output, session) {
   # Attach Reference Database
   # This makes USysTableOfLists available as 'lists.USysTableOfLists' or just 'USysTableOfLists' if unambiguous
   dbExecute(con, "ATTACH 'data/vpro_lists.duckdb' AS lists")
-  dbExecute(con, "ATTACH 'data/vpro_user.duckdb' AS user")
+  dbExecute(con, "ATTACH 'data/vpro_user.duckdb' AS user_db")
   
   # Ensure clean disconnect when session ends
   onSessionEnded(function() {
@@ -22,14 +22,20 @@ server <- function(input, output, session) {
 
   # Preferences (SaveSetting/GetSetting analog)
   seed_default_preferences(con)
-  state$PrefProject <- get_pref(con, "Current", "CurrProject", default = NULL)
-  state$PrefPlot <- get_pref(con, "Current", "CurrPlotList", default = NULL)
-  state$PrefHierarchy <- get_pref(con, "Current", "CurrHierarchy", default = NULL)
-  state$CurrHierarchy <- state$PrefHierarchy
-  state$sysCurrHierarchy <- state$PrefHierarchy
-  state$CurrForm <- get_pref(con, "Current", "DataFormName", default = state$CurrForm)
-  state$sysCurrForm <- state$CurrForm
-  state$User <- get_pref(con, "User", "UserName", default = state$User)
+  pref_project <- get_pref(con, "Current", "CurrProject", default = NULL)
+  pref_plot <- get_pref(con, "Current", "CurrPlotList", default = NULL)
+  pref_hierarchy <- get_pref(con, "Current", "CurrHierarchy", default = NULL)
+  pref_form <- get_pref(con, "Current", "DataFormName", default = NULL)
+  pref_user <- get_pref(con, "User", "UserName", default = Sys.getenv("USER", "Unknown"))
+
+  state$PrefProject <- pref_project
+  state$PrefPlot <- pref_plot
+  state$PrefHierarchy <- pref_hierarchy
+  state$CurrHierarchy <- pref_hierarchy
+  state$sysCurrHierarchy <- pref_hierarchy
+  state$CurrForm <- pref_form
+  state$sysCurrForm <- pref_form
+  state$User <- pref_user
   
   # 3. Populate Project Dropdown
   observe({

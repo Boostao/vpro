@@ -33,17 +33,13 @@ sync_resolve_schema <- function(con) {
   attached <- tryCatch({
     DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
   }, error = function(e) character(0))
-  if ("user_db" %in% attached) return("user_db")
-  if ("user" %in% attached) return(NULL)
+  if ("user_db" %in% attached) return(list(catalog = "user_db", schema = "main"))
   NULL
 }
 
 sync_ensure_state_tables <- function(con) {
   schema <- sync_resolve_schema(con)
-  prefix <- if (is.null(schema)) "" else paste0(schema, ".")
-  if (!is.null(schema)) {
-    DBI::dbExecute(con, sprintf("CREATE SCHEMA IF NOT EXISTS %s", schema))
-  }
+  prefix <- if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
   DBI::dbExecute(con, sprintf(
     "CREATE TABLE IF NOT EXISTS %ssync_state (\n      scope TEXT NOT NULL,\n      value TEXT,\n      updated_utc TIMESTAMPTZ DEFAULT now(),\n      PRIMARY KEY (scope)\n    )",
     prefix
@@ -56,9 +52,9 @@ sync_ensure_state_tables <- function(con) {
 
 sync_get_state <- function(con, scope) {
   schema <- sync_resolve_schema(con)
-  table_id <- if (is.null(schema)) "sync_state" else DBI::Id(schema = schema, table = "sync_state")
+  table_id <- if (is.null(schema)) "sync_state" else sprintf("\"%s\".\"%s\".sync_state", schema$catalog, schema$schema)
   if (!DBI::dbExistsTable(con, table_id)) return(NULL)
-  prefix <- if (is.null(schema)) "" else paste0(schema, ".")
+  prefix <- if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
   result <- DBI::dbGetQuery(
     con,
     sprintf("SELECT value FROM %ssync_state WHERE scope = ?", prefix),
@@ -70,7 +66,7 @@ sync_get_state <- function(con, scope) {
 
 sync_set_state <- function(con, scope, value) {
   schema <- sync_resolve_schema(con)
-  prefix <- if (is.null(schema)) "" else paste0(schema, ".")
+  prefix <- if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
   DBI::dbExecute(
     con,
     sprintf(

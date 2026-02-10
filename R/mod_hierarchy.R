@@ -345,17 +345,17 @@ get_master_site_units <- function(con, level = NULL) {
 
 get_user_site_unit_table <- function(con) {
   candidates <- list(
-    list(schema = "user", table = "UserSiteUnitList"),
-    list(schema = "user", table = "USysUserSiteUnitList"),
-    list(schema = "main", table = "UserSiteUnitList"),
-    list(schema = "main", table = "USysUserSiteUnitList")
+    list(name = "user_db.main.UserSiteUnitList"),
+    list(name = "user_db.main.USysUserSiteUnitList"),
+    list(name = "main.UserSiteUnitList"),
+    list(name = "main.USysUserSiteUnitList")
   )
 
   for (candidate in candidates) {
-    if (DBI::dbExistsTable(con, DBI::Id(schema = candidate$schema, table = candidate$table))) {
+    if (DBI::dbExistsTable(con, candidate$name)) {
       return(list(
-        id = DBI::Id(schema = candidate$schema, table = candidate$table),
-        name = paste(candidate$schema, candidate$table, sep = ".")
+        id = candidate$name,
+        name = candidate$name
       ))
     }
   }

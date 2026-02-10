@@ -1126,7 +1126,7 @@ mod_admin_server <- function(id, state, con) {
       }
       table_col_sql <- quote_ident(table_col)
       sql <- sprintf(
-        "SELECT DISTINCT %s AS table_name FROM user.USysAuditTrail ORDER BY %s",
+        "SELECT DISTINCT %s AS table_name FROM user_db.main.USysAuditTrail ORDER BY %s",
         table_col_sql,
         table_col_sql
       )
