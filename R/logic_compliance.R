@@ -482,14 +482,18 @@ check_table_list_values <- function(con, project_id = NULL) {
   project_col <- if ("projectid" %in% env_fields) "projectid" else if ("ProjectID" %in% env_fields) "ProjectID" else NULL
   if (is.null(plot_col)) return(data.frame())
 
-  list_map <- c(
-    mesoslopeposition = "MesoSlopePosition",
-    surfaceshape = "SurfaceShape",
-    moistureregime = "MoistureRegime",
-    nutrientregime = "NutrientRegime",
-    structuralstage = "StructuralStage"
-  )
-  present_cols <- intersect(names(list_map), env_fields)
+  list_names <- DBI::dbGetQuery(con, sprintf("SELECT DISTINCT %s AS listname FROM lists.USysTableOfLists", listname_col))$listname
+  list_names <- list_names[!is.na(list_names) & nzchar(trimws(list_names))]
+  if (length(list_names) == 0) return(data.frame())
+
+  env_lower <- tolower(env_fields)
+  list_lower <- tolower(list_names)
+  matching <- list_lower %in% env_lower
+  if (!any(matching)) return(data.frame())
+
+  matched_lists <- list_names[matching]
+  matched_cols <- env_fields[match(list_lower[matching], env_lower)]
+  present_cols <- matched_cols[!is.na(matched_cols)]
   if (length(present_cols) == 0) return(data.frame())
 
   select_cols <- paste(c(plot_col, present_cols), collapse = ", ")
@@ -504,8 +508,9 @@ check_table_list_values <- function(con, project_id = NULL) {
   if (nrow(env) == 0) return(data.frame())
 
   issues <- list()
+  list_lookup <- setNames(matched_lists, present_cols)
   for (col_name in present_cols) {
-    list_name <- list_map[[col_name]]
+    list_name <- list_lookup[[col_name]]
     list_sql <- sprintf("SELECT %s AS item FROM lists.USysTableOfLists WHERE %s = ?", item_col, listname_col)
     list_items <- DBI::dbGetQuery(con, list_sql, list(list_name))
     valid <- unique(list_items$item)

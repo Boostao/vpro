@@ -14,6 +14,7 @@ setup_compliance_tables <- function(con) {
       longitude DOUBLE,
       elevation DOUBLE,
       mesoslopeposition TEXT,
+      surfaceshape TEXT,
       slopegradient DOUBLE,
       aspect DOUBLE,
       rootingdepth DOUBLE
@@ -50,9 +51,9 @@ setup_compliance_tables <- function(con) {
     )
   ")
 
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 62, -150, 5000, 'BAD', 150, 400, -5)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 55, -120, 100, 'BAD', 10, 180, 10)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ', 'ICH', 'vm', 55, -120, 100, 'BAD', 10, 180, 10)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 62, -150, 5000, 'BAD', 'BAD', 150, 400, -5)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 55, -120, 100, 'BAD', 'OK', 10, 180, 10)")
+  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ', 'ICH', 'vm', 55, -120, 100, 'BAD', 'OK', 10, 180, 10)")
   DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P1', 'BAD', 'PRJ', 'BADCODE')")
   DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P1', 'BAD', 'PRJ', '20')")
   DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P2', 'OK', 'PRJ', '200')")
@@ -69,6 +70,7 @@ setup_compliance_tables <- function(con) {
 
   DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS lists.USysTableOfLists (listname TEXT, item TEXT)")
   DBI::dbExecute(con, "INSERT INTO lists.USysTableOfLists (listname, item) VALUES ('MesoSlopePosition', 'MID')")
+  DBI::dbExecute(con, "INSERT INTO lists.USysTableOfLists (listname, item) VALUES ('SurfaceShape', 'OK')")
 }
 
 test_that("run_compliance_checks returns rule summaries", {
