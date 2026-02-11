@@ -12,6 +12,21 @@ This project is a migration of the VPro64 Microsoft Access application to R Shin
 - **ui.R**: Main UI definition.
 - **server.R**: Main server logic.
 
+## Dependencies
+
+**Required packages** (installed via renv):
+- shiny, bslib, DT, rhandsontable, shinyjs, shinyTree
+- duckdb, dplyr, dbplyr
+- quarto (for report generation)
+- testthat (for testing)
+
+**Optional packages**:
+- **climr** (bcgov/climr): Enables automatic climate data fetching for BC plot locations
+  - Provides climate normals (MAT, MAP, MWMT, MCMT, etc.), BEC zone prediction, and elevation from DEM
+  - Install: `remotes::install_github('bcgov/climr')`
+  - If not installed, climate data features will be disabled with graceful degradation
+  - See Site & Environment module for "Fetch Climate Data" button
+
 ## Usage
 
 1. Run `scripts/01_build_database.R` to populate the DuckDB database (to be created).

@@ -28,6 +28,7 @@ source("R/logic_audit.R") # Audit trail
 source("R/logic_diagnostic.R") # Diagnostic helpers
 source("R/logic_auth.R") # Auth + RBAC helpers
 source("R/logic_coord_tools.R") # Coordinate conversion tools
+source("R/logic_climr.R") # ClimR climate data integration
 source("R/db_connections.R") # Connection helpers + %||%
 source("R/logic_sync.R") # Sync engine (stub)
 source("R/logic_publish.R") # Publish pipeline (stub)
@@ -50,6 +51,7 @@ source("R/mod_hierarchy.R")
 source("R/mod_upload.R")
 source("R/mod_merge.R")
 source("R/mod_auth.R")
+source("R/mod_becweb_map.R")
 
 # Note: The actual 'SysState' object is initialized in server.R 
 # because it must be reactive and unique to the session.

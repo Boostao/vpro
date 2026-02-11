@@ -106,6 +106,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Test infra**: `tests/testthat/` — setup, helpers (in-memory DuckDB), db_connections + core logic/module tests
 - **Compliance engine**: rule set + tests in `R/logic_compliance.R`, wired to Import + Reports diagnostics
 - **Coord tools**: `R/logic_coord_tools.R` — Complete DMS↔DD with NULL-safe Access `Nz()` parity, format detection, validation, UTM conversions (17 passing tests); integrated in `mod_site_env.R` with validation feedback
+- **ClimR integration**: `R/logic_climr.R` — Climate data fetching from bcgov/climr package (MAT, MAP, MWMT, MCMT, DD5, AHM, SHM, NFFD, PAS, MSP, Eref, CMD), BEC zone prediction, elevation from DEM, coordinate-based caching, batch processing, graceful degradation when unavailable; UI integrated in `mod_site_env.R` with "Fetch Climate Data" button and auto-fetch on coordinate change; database persistence in Sample_Env (climr_* columns); 24 passing tests (8 skipped when package unavailable)
 - **Keyboard shortcuts**: Ctrl+S / Ctrl+N via `shinyjs` (global save/new wiring)
 - **Tab order**: Site/Env General + Mensuration explicit `tabindex`, Vegetation action buttons
 - **Cloud infra**: docker-compose, PostgreSQL test schema, config.yml, DuckDB postgres ATTACH

@@ -84,67 +84,23 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
     "updated"
 }
 
+# Wrapper functions that call logic_coord_tools.R with proper NULL handling
 format_dms_value <- function(value, is_lat) {
-    if (is.null(value) || length(value) == 0 || is.na(value)) {
+    # Use coordinate tools module for NULL-safe conversion
+    dms <- dd_to_dms(value, is_lat)
+    
+    # Return empty string if conversion failed
+    if (is.na(dms$d)) {
         return("")
     }
-    value_num <- suppressWarnings(as.numeric(value))
-    if (is.na(value_num)) return("")
-    hemi <- if (is_lat) {
-        if (value_num < 0) "S" else "N"
-    } else {
-        if (value_num < 0) "W" else "E"
-    }
-    abs_val <- abs(value_num)
-    d <- floor(abs_val)
-    m_full <- (abs_val - d) * 60
-    m <- floor(m_full)
-    s <- (m_full - m) * 60
-    if (is.na(s)) return("")
-    if (s >= 59.995) {
-        s <- 0
-        m <- m + 1
-    }
-    if (m >= 60) {
-        m <- 0
-        d <- d + 1
-    }
-    sprintf("%d %02d %05.2f %s", d, m, s, hemi)
+    
+    # Format for display using coordinate tools
+    format_dms_display(dms$d, dms$m, dms$s, dms$direction)
 }
 
 parse_dms_value <- function(text, is_lat) {
-    if (is.null(text) || length(text) == 0) return(NA_real_)
-    raw <- toupper(trimws(text))
-    if (!nzchar(raw)) return(NA_real_)
-
-    dir_sign <- if (grepl("[SW]", raw)) {
-        -1
-    } else if (grepl("[NE]", raw)) {
-        1
-    } else {
-        NA_real_
-    }
-
-    cleaned <- gsub("[^0-9.+-]", " ", raw)
-    parts <- strsplit(cleaned, "\\s+")[[1]]
-    parts <- parts[nzchar(parts)]
-    if (length(parts) == 0) return(NA_real_)
-
-    nums <- suppressWarnings(as.numeric(parts))
-    nums <- nums[!is.na(nums)]
-    if (length(nums) == 0) return(NA_real_)
-
-    deg <- abs(nums[1])
-    min <- if (length(nums) >= 2) abs(nums[2]) else 0
-    sec <- if (length(nums) >= 3) abs(nums[3]) else 0
-    val <- deg + (min + sec / 60) / 60
-    if (is.na(val)) return(NA_real_)
-
-    sign <- if (!is.na(dir_sign)) dir_sign else if (nums[1] < 0) -1 else 1
-    val <- sign * val
-    max_abs <- if (is_lat) 90 else 180
-    if (abs(val) > max_abs) return(NA_real_)
-    val
+    # Use coordinate tools module for NULL-safe parsing
+    parse_coordinate(text, is_lat)
 }
 
 soil_numeric_cols <- list(
@@ -223,6 +179,28 @@ mod_site_env_ui <- function(id) {
                                       tab_input(selectInput(ns("env_moisture"), "Moisture Regime", choices=NULL), 17),
                                       tab_input(selectInput(ns("env_nutrient"), "Nutrient Regime", choices=NULL), 18),
                     col_widths = c(3, 3, 3, 3)
+                ),
+                hr(),
+                div(class = "card border-info mb-3",
+                    div(class = "card-header bg-info-subtle", "Climate Data (ClimR)"),
+                    div(class = "card-body",
+                        layout_columns(
+                            div(
+                                actionButton(ns("btn_fetch_climate"), "Fetch Climate Data", 
+                                           class = "btn-info", icon = icon("cloud-download")),
+                                checkboxInput(ns("chk_auto_fetch_climate"), 
+                                            "Auto-fetch on coordinate change", value = FALSE),
+                                uiOutput(ns("climr_status"))
+                            ),
+                            div(
+                                uiOutput(ns("climr_summary"))
+                            ),
+                            col_widths = c(4, 8)
+                        ),
+                        p(class = "text-muted small mt-2",
+                          "ClimR provides climate normals (MAT, MAP, MWMT, etc.) for BC locations. ",
+                          "Data is fetched from bcgov/climr package and cached in the database.")
+                    )
                 ),
                                 tab_input(textAreaInput(ns("env_notes"), "Site Notes", width = "100%", height = "100px"), 19),
                                 div(class="mt-3", tab_input(actionButton(ns("save_header"), "Save General Info", class="btn-primary"), 20)),
@@ -419,25 +397,258 @@ mod_site_env_server <- function(id, sys_state, con) {
     })
 
     observeEvent(input$apply_dms, {
+        # Parse using NULL-safe coordinate tools
         lat <- parse_dms_value(input$env_lat_dms, TRUE)
         lon <- parse_dms_value(input$env_long_dms, FALSE)
 
+        # Validate and apply latitude
         if (!is.na(lat)) {
-            updateNumericInput(session, "env_lat", value = lat)
+            lat_check <- validate_latitude(lat, strict = FALSE)
+            if (lat_check$valid) {
+                updateNumericInput(session, "env_lat", value = lat)
+                showNotification("Latitude updated from DMS.", type = "message", duration = 2)
+            } else {
+                showNotification(paste("Latitude validation:", lat_check$message), type = "warning")
+            }
         } else if (nzchar(trimws(safe_chr(input$env_lat_dms)))) {
-            showNotification("Invalid latitude DMS.", type = "error")
+            showNotification("Invalid latitude DMS format. Use: DD MM SS.S N/S", type = "error")
         }
 
+        # Validate and apply longitude
         if (!is.na(lon)) {
-            updateNumericInput(session, "env_long", value = lon)
+            lon_check <- validate_longitude(lon, strict = FALSE)
+            if (lon_check$valid) {
+                updateNumericInput(session, "env_long", value = lon)
+                showNotification("Longitude updated from DMS.", type = "message", duration = 2)
+            } else {
+                showNotification(paste("Longitude validation:", lon_check$message), type = "warning")
+            }
         } else if (nzchar(trimws(safe_chr(input$env_long_dms)))) {
-            showNotification("Invalid longitude DMS.", type = "error")
+            showNotification("Invalid longitude DMS format. Use: DD MM SS.S E/W", type = "error")
         }
     })
 
     observeEvent(input$fill_dms, {
-        updateTextInput(session, "env_lat_dms", value = format_dms_value(input$env_lat, TRUE))
-        updateTextInput(session, "env_long_dms", value = format_dms_value(input$env_long, FALSE))
+        # Convert DD to DMS using NULL-safe coordinate tools
+        lat_dms <- format_dms_value(input$env_lat, TRUE)
+        lon_dms <- format_dms_value(input$env_long, FALSE)
+        
+        updateTextInput(session, "env_lat_dms", value = lat_dms)
+        updateTextInput(session, "env_long_dms", value = lon_dms)
+        
+        if (nzchar(lat_dms) || nzchar(lon_dms)) {
+            showNotification("DMS fields updated from decimal degrees.", type = "message", duration = 2)
+        }
+    })
+
+    # -- ClimR Integration --
+    rv$climate_data <- reactiveVal(NULL)
+    rv$climr_available <- reactiveVal(NULL)
+    
+    # Check ClimR availability on startup
+    observe({
+        is_available <- check_climr_availability(silent = TRUE)
+        rv$climr_available(is_available)
+    })
+    
+    # Fetch Climate Data button
+    observeEvent(input$btn_fetch_climate, {
+        # Validate coordinates
+        lat <- input$env_lat
+        lon <- input$env_long
+        
+        if (is.null(lat) || is.null(lon) || is.na(lat) || is.na(lon)) {
+            showNotification("Please enter valid latitude and longitude first.", type = "warning")
+            return()
+        }
+        
+        if (lat == 0 && lon == 0) {
+            showNotification("Coordinates appear to be default values (0, 0). Please enter actual coordinates.", type = "warning")
+            return()
+        }
+        
+        # Validate using coordinate tools
+        lat_check <- validate_latitude(lat, strict = FALSE)
+        lon_check <- validate_longitude(lon, strict = FALSE)
+        
+        if (!lat_check$valid || !lon_check$valid) {
+            showNotification(
+                paste("Invalid coordinates:", lat_check$message, lon_check$message), 
+                type = "error"
+            )
+            return()
+        }
+        
+        # Show loading notification
+        showNotification("Fetching climate data from ClimR...", id = "climr_fetch", 
+                       type = "message", duration = NULL)
+        
+        # Fetch climate data
+        climate <- get_climate_data(
+            latitude = lat,
+            longitude = lon,
+            use_cache = TRUE,
+            silent = TRUE
+        )
+        
+        if (is.null(climate)) {
+            removeNotification("climr_fetch")
+            showNotification(
+                "Failed to fetch climate data. ClimR may not be installed or coordinates are outside BC.", 
+                type = "error"
+            )
+            return()
+        }
+        
+        # Store in reactive
+        rv$climate_data(climate)
+        
+        # Auto-populate elevation if available and current is 0/NA
+        if (!is.na(climate$elevation) && (is.null(input$env_elev) || input$env_elev == 0)) {
+            updateNumericInput(session, "env_elev", value = round(climate$elevation))
+        }
+        
+        # Save to database if plot exists
+        req(sys_state$CurrSU)
+        plot_id <- as.character(sys_state$CurrSU)
+        save_result <- save_climate_to_db(
+            con, 
+            plot_id, 
+            climate, 
+            overwrite = TRUE,
+            silent = TRUE
+        )
+        
+        removeNotification("climr_fetch")
+        
+        if (save_result) {
+            showNotification(
+                "Climate data fetched and saved successfully!", 
+                type = "default",
+                duration = 3
+            )
+        } else {
+            showNotification(
+                "Climate data fetched but not saved to database.", 
+                type = "warning"
+            )
+        }
+    })
+    
+    # Auto-fetch on coordinate change
+    observeEvent(list(input$env_lat, input$env_long), {
+        # Only auto-fetch if checkbox is enabled
+        if (!isTRUE(input$chk_auto_fetch_climate)) return()
+        
+        lat <- input$env_lat
+        lon <- input$env_long
+        
+        # Skip if invalid
+        if (is.null(lat) || is.null(lon) || is.na(lat) || is.na(lon)) return()
+        if (lat == 0 && lon == 0) return()
+        
+        # Validate
+        lat_check <- validate_latitude(lat, strict = FALSE)
+        lon_check <- validate_longitude(lon, strict = FALSE)
+        
+        if (!lat_check$valid || !lon_check$valid) return()
+        
+        # Fetch climate data silently
+        climate <- get_climate_data(
+            latitude = lat,
+            longitude = lon,
+            use_cache = TRUE,
+            silent = TRUE
+        )
+        
+        if (!is.null(climate)) {
+            rv$climate_data(climate)
+            
+            # Auto-populate elevation if 0/NA
+            if (!is.na(climate$elevation) && (is.null(input$env_elev) || input$env_elev == 0)) {
+                updateNumericInput(session, "env_elev", value = round(climate$elevation))
+            }
+        }
+    }, ignoreInit = TRUE)
+    
+    # ClimR status output
+    output$climr_status <- renderUI({
+        is_available <- rv$climr_available()
+        
+        if (is.null(is_available)) {
+            return(p(class = "text-muted small", "Checking ClimR availability..."))
+        }
+        
+        if (!is_available) {
+            return(
+                div(class = "alert alert-warning alert-dismissible fade show mt-2", role = "alert",
+                    strong("ClimR not available."),
+                    p(class = "mb-0 small", 
+                      "Install with: ", 
+                      code("remotes::install_github('bcgov/climr')")),
+                    tags$button(type = "button", class = "btn-close", 
+                              `data-bs-dismiss` = "alert", `aria-label` = "Close")
+                )
+            )
+        }
+        
+        climate <- rv$climate_data()
+        
+        if (is.null(climate)) {
+            return(p(class = "text-success small", icon("check-circle"), " ClimR ready"))
+        }
+        
+        fetch_time <- if (!is.null(climate$fetch_time)) {
+            format(climate$fetch_time, "%Y-%m-%d %H:%M")
+        } else {
+            "Unknown"
+        }
+        
+        p(class = "text-success small", 
+          icon("check-circle"), 
+          sprintf(" Last fetch: %s", fetch_time))
+    })
+    
+    # ClimR data summary
+    output$climr_summary <- renderUI({
+        climate <- rv$climate_data()
+        
+        if (is.null(climate)) {
+            return(p(class = "text-muted", "No climate data fetched yet."))
+        }
+        
+        # Check if stub implementation (all NA)
+        if (is.na(climate$MAT)) {
+            return(
+                div(class = "alert alert-info",
+                    p(class = "mb-0", 
+                      "Climate data structure ready, but ClimR package needs full configuration."))
+            )
+        }
+        
+        # Format climate variables
+        tagList(
+            tags$table(class = "table table-sm table-borderless",
+                tags$tbody(
+                    tags$tr(
+                        tags$td(strong("MAT:")), tags$td(sprintf("%.1f°C", climate$MAT)),
+                        tags$td(strong("MAP:")), tags$td(sprintf("%.0f mm", climate$MAP))
+                    ),
+                    tags$tr(
+                        tags$td(strong("MWMT:")), tags$td(sprintf("%.1f°C", climate$MWMT)),
+                        tags$td(strong("MCMT:")), tags$td(sprintf("%.1f°C", climate$MCMT))
+                    ),
+                    tags$tr(
+                        tags$td(strong("AHM:")), tags$td(sprintf("%.1f", climate$AHM)),
+                        tags$td(strong("NFFD:")), tags$td(sprintf("%.0f days", climate$NFFD))
+                    ),
+                    tags$tr(
+                        tags$td(strong("Elevation:")), tags$td(sprintf("%.0f m", climate$elevation)),
+                        tags$td(strong("Period:")), tags$td(climate$period)
+                    )
+                )
+            )
+        )
     })
 
     # -- Save Mensuration --
