@@ -27,11 +27,18 @@ source("R/logic_compliance.R") # Compliance checks
 source("R/logic_audit.R") # Audit trail
 source("R/logic_diagnostic.R") # Diagnostic helpers
 source("R/logic_auth.R") # Auth + RBAC helpers
+source("R/logic_coord_tools.R") # Coordinate conversion tools
 source("R/db_connections.R") # Connection helpers + %||%
 source("R/logic_sync.R") # Sync engine (stub)
 source("R/logic_publish.R") # Publish pipeline (stub)
 source("R/logic_reports_veg.R") # Veg report helpers
+source("R/logic_reports_qc.R") # Quality control filtering
+source("R/logic_reports_hierarchy.R") # Hierarchy tree formatting
+source("R/logic_reports_env.R") # Environmental statistics
+source("R/logic_reports_validation.R") # Data validation
 source("R/logic_report_export.R") # Excel report export helpers
+source("R/logic_excel_export.R") # Excel export with styled formatting
+source("R/logic_venus_export.R") # VENUS XML export
 source("R/mod_admin.R")
 source("R/mod_images.R")
 source("R/mod_veg_sample.R")
