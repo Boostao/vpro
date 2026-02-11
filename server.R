@@ -163,4 +163,7 @@ server <- function(input, output, session) {
 
   # Hierarchy Module
   mod_hierarchy_server("hier", state, con)
+  
+  # BEC Web Map Module (public-facing, no auth requirement)
+  mod_becweb_map_server("becmap", con = con, auth_level = "public")
 }

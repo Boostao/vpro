@@ -51,6 +51,9 @@ ui <- page_navbar(
   nav_panel("Hierarchy",
     mod_hierarchy_ui("hier")
   ),
+  nav_panel("BEC Map Explorer",
+    mod_becweb_map_ui("becmap")
+  ),
   nav_panel("Administration", 
     mod_admin_ui("admin")
   )

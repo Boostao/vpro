@@ -40,6 +40,60 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 
 ---
 
+## Latest Session: BEC Web Map Explorer (Complete ✅)
+
+**Date**: February 2026
+
+**Completed**: Public-facing interactive map for geographic discovery of published BEC plot data
+
+**Deliverables**:
+- **New module** (`R/mod_becweb_map.R`, 579 lines):
+  - Leaflet-based interactive map showing plot locations across BC
+  - Multi-criteria filtering: BEC zone/subzone, project, date range, species search, data quality
+  - Marker clustering for high-density areas (>100 plots)
+  - Color-coded by BEC zone (12 zones: IDF, BG, MS, ESSF, ICH, CDF, CWH, MH, BAFA, SBS, SBPS, SWB)
+  - Rich popups: plot ID, project, date, BEC classification, dominant species (top 5), quality rating
+  - CSV export of filtered results
+  - Auth-aware: public mode shows only `is_public = TRUE` datasets
+  - Performance-optimized: lazy loading, session caching, 5000 plot display limit
+  
+- **Publishing infrastructure**:
+  - `scripts/publish_dataset.R` — Extract projects from VPRO DB to RDS format
+  - `data/published/` directory structure for RDS datasets
+  - Dataset format: `<project_id>_environment.rds`, `<project_id>_vegetation.rds`, `<project_id>_metadata.rds`
+  - `data/published/README.md` — Comprehensive publishing documentation
+  
+- **Documentation**:
+  - `BEC_MAP_README.md` — User guide, features, troubleshooting, extension hooks
+  - Dataset format specification and quality standards
+  - Access control documentation (public vs. authenticated datasets)
+  
+- **Comprehensive test suite** (`test-mod_becweb_map.R`, 41 tests):
+  - RDS dataset discovery and loading
+  - Multi-criteria filter logic (BEC, date, species, quality)
+  - Coordinate validation and filtering
+  - BEC zone color assignment
+  - Popup HTML generation
+  - CSV export structure
+  - Access control enforcement
+  - Performance limits (clustering threshold, max plots)
+  - Empty dataset handling
+
+- **Integration**: 
+  - Added to `ui.R` as "BEC Map Explorer" tab (before Administration)
+  - Module server initialized in `server.R` with public auth level
+  - Standalone operation (no project/plot context required)
+  - Leaflet and sf package dependencies
+
+**Requirements Source**: Schedule A - Services, Task 1b:  
+*"Build a map-based R-shiny tool for public access to BECMaster plot data and user download in multiple data formats"*
+
+**Testing**: All 41 tests passing ✅
+
+**Public Access Ready**: Map interface immediately functional for published datasets
+
+---
+
 ## Next Session Bootstrap: Deployment Stack (Client Evaluation)
 
 **Goal**: Stand up a simple, repeatable deployment stack so the client can evaluate progress.
@@ -107,6 +161,7 @@ Migrate the **VPro64 Microsoft Access** application (BC Government ecosystem fie
 - **Compliance engine**: rule set + tests in `R/logic_compliance.R`, wired to Import + Reports diagnostics
 - **Coord tools**: `R/logic_coord_tools.R` — Complete DMS↔DD with NULL-safe Access `Nz()` parity, format detection, validation, UTM conversions (17 passing tests); integrated in `mod_site_env.R` with validation feedback
 - **ClimR integration**: `R/logic_climr.R` — Climate data fetching from bcgov/climr package (MAT, MAP, MWMT, MCMT, DD5, AHM, SHM, NFFD, PAS, MSP, Eref, CMD), BEC zone prediction, elevation from DEM, coordinate-based caching, batch processing, graceful degradation when unavailable; UI integrated in `mod_site_env.R` with "Fetch Climate Data" button and auto-fetch on coordinate change; database persistence in Sample_Env (climr_* columns); 24 passing tests (8 skipped when package unavailable)
+- **BEC Web Map Explorer**: `R/mod_becweb_map.R` — Public-facing interactive Leaflet map for browsing published BEC plot data (579 lines); multi-criteria filtering (BEC zone/subzone, project, date, species, quality); marker clustering for >100 plots; color-coded by BEC zone (12 zones); rich popups with plot ID, project, BEC classification, dominant species, quality; CSV export; auth-aware public/private datasets; publishing script `scripts/publish_dataset.R`; RDS dataset format in `data/published/`; comprehensive documentation in `BEC_MAP_README.md` and `data/published/README.md`; 41 passing tests covering discovery, filtering, validation, export, access control, and performance limits
 - **Keyboard shortcuts**: Ctrl+S / Ctrl+N via `shinyjs` (global save/new wiring)
 - **Tab order**: Site/Env General + Mensuration explicit `tabindex`, Vegetation action buttons
 - **Cloud infra**: docker-compose, PostgreSQL test schema, config.yml, DuckDB postgres ATTACH
