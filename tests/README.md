@@ -54,6 +54,11 @@ Run all tests (unit + UI):
 Rscript -e "testthat::test_dir('tests/testthat')"
 ```
 
+Run only E2E workflow tests:
+```bash
+Rscript -e "testthat::test_file('tests/shinytest2/test-e2e-workflows.R')"
+```
+
 ### 3. Stop the Database
 
 ```bash
@@ -112,6 +117,23 @@ docker-compose down -v
 - 20+ tests covering:
   - Local DuckDB connections
   - Schema initialization
+**tests/shinytest2/test-e2e-workflows.R** 🆕
+- Comprehensive end-to-end workflow tests for critical data paths:
+  1. **Complete Data Entry Cycle**: Project → Plot → Veg → Site/Env → Save → DB Verification
+  2. **Lumping Application**: Export with/without species lumping enabled
+  3. **Import Workflow**: CSV upload → validation → save (skipped: not yet implemented)
+  4. **Hierarchy Operations**: Create → Assign → Merge → Clip (skipped: 0% complete per roadmap)
+  5. **Cloud Sync**: Local change → Push → Pull → Verify (skipped: not yet implemented)
+  6. **Merge Requests**: Upload → Review → Approve → Cloud verification (skipped: not yet implemented)
+  7. **Referential Integrity**: FK enforcement across tables
+  8. **Compliance Validation**: Mandatory field checks (skipped: UI not complete)
+  9. **State Consistency**: Project/Plot persistence across tab navigation
+  10. **Export Formats**: CSV vs RDS consistency
+- Uses `AppDriver` for UI interaction + direct DB queries to verify state
+- Each test creates/cleans up own test data
+- Async operation handling with `wait_for_idle()`
+- Database verification via `verify_db_state()` helper
+
   - Reference data seeding
   - Data insertion & retrieval
   - PostgreSQL attachment (when available)
@@ -127,6 +149,49 @@ docker-compose down -v
 - `test-db_connections.R::insert_test_plot() creates valid records`
 
 **Status**: ✅ Fast, no external dependencies
+
+### shinytest2 UI Tests (Require Chromium/Chrome)
+- `test-smoke.R` — Basic app loading and context inputs
+- `test-tabs.R` — Secondary tab navigation without errors
+- `test-flow.R` — Project → Site/Env → Export workflow
+- `test-import.R` — Import tab loading
+- **`test-e2e-workflows.R`** 🆕 — **Comprehensive end-to-end critical paths**:
+  - ✅ Test 1: Complete data entry cycle (runs always)
+  - ✅ Test 2: Lumping application during export (runs always)
+  - ⏭️ Test 3: Import validation workflow (skipped: not implemented)
+  - ⏭️ Test 4: Hierarchy operations (skipped: 0% complete)
+  - ⏭️ Test 5: Cloud sync bidirectional (skipped: not implemented)
+  - ⏭️ Test 6: Merge request workflow (skipped: not implemented)
+  - ✅ Test 7: Referential integrity checks (runs always)
+  - ⏭️ Test 8: Compliance validation UI (skipped: not complete)
+  - ✅ Test 9: Multi-tab state consistency (runs always)
+  - ✅ Test 10: Export format validation (runs always)
+
+**Status**: ✅ 5 tests run immediately, 5 ready for future feature implementation
+
+**Run E2E tests only**:
+```bash
+Rscript -e "testthat::test_file('tests/shinytest2/test-e2e-workflows.R')"
+```
+
+### Conflict Resolution Tests (Cloud Sync Workflow)
+- **`test-conflicts.R`** 🆕 — **Comprehensive conflict detection & resolution UI tests**:
+  - ✅ Infrastructure tests: `sync_state`, `sync_conflicts` table setup (runs always)
+  - ✅ Conflict creation: Single, multiple, diverse scenario helpers (runs always)
+  - ⏭️ UI Tests: Diff viewer, Keep Local/Cloud, Dismiss actions (skipped: UI pending)
+  - ⏭️ Batch Tests: Accept All Local/Cloud, selective resolution (skipped: UI pending)
+  - ⏭️ Edge Cases: Delete conflicts, UUID collisions, sync cancellation (skipped: pending)
+  - ⏭️ Integration: Conflict detection during sync operations (skipped: requires cloud mock)
+  - ⏭️ Performance: Pagination, resolution speed benchmarks (skipped: pending)
+
+**Status**: ✅ 6 infrastructure tests run immediately, 15 UI tests ready for implementation
+
+**Documentation**: See [CONFLICT_RESOLUTION_TESTING.md](CONFLICT_RESOLUTION_TESTING.md) for detailed architecture, helper functions, and UI design specs.
+
+**Run conflict tests only**:
+```bash
+Rscript -e "testthat::test_file('tests/shinytest2/test-conflicts.R')"
+```
 
 ### PostgreSQL Integration Tests (Require docker-compose)
 - `test-db_connections.R::attach_cloud_db() successfully attaches`
