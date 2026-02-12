@@ -592,4 +592,8 @@ validate_venus_schema <- function(xml_doc) {
 
 #' Helper: NULL coalescing operator
 #' @keywords internal
-`%||%` <- function(a, b) if (is.null(a) || is.na(a) || (is.character(a) && !nzchar(a))) b else a
+`%||%` <- function(a, b) {
+  if (is.null(a) || length(a) == 0) return(b)
+  if (length(a) == 1 && (is.na(a) || (is.character(a) && !nzchar(a)))) return(b)
+  a
+}
