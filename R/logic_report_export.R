@@ -529,7 +529,7 @@ build_excel_report_data <- function(con, template_name, params) {
   if (template_name %in% c("hierarchy.qmd", "flat_hierarchy.qmd")) {
     hier <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Hierarchy")
     long_names <- data.frame()
-    if (DBI::dbExistsTable(con, "lists.MasterSiteUnitList")) {
+    if (DBI::dbExistsTable(con, c("lists", "MasterSiteUnitList"))) {
       long_names <- DBI::dbGetQuery(
         con,
         "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList"

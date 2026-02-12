@@ -359,11 +359,51 @@ mod_export_ui <- function(id) {
     ),
     
     card(
+      card_header("Export Excel (Formatted)"),
+      card_body(
+        p("Export data to Excel (.xlsx) with professional formatting, styled headers, and conditional formatting."),
+        layout_columns(
+          div(
+            selectInput(ns("excel_type"), "Export Type", 
+                       choices = c("Vegetation Only" = "veg",
+                                  "Environment & Soil" = "env",
+                                  "Combined (All Data)" = "combined"),
+                       selected = "combined"),
+            checkboxInput(ns("excel_separate_layers"), "Separate sheet per vegetation layer", value = TRUE),
+            checkboxInput(ns("excel_apply_lumping"), "Apply species lumping", value = FALSE)
+          ),
+          div(
+            checkboxInput(ns("excel_include_soil"), "Include soil data (humus & mineral)", value = TRUE),
+            checkboxInput(ns("excel_include_metadata"), "Include project metadata sheet", value = TRUE),
+            checkboxInput(ns("excel_conditional_fmt"), "Apply conditional formatting (colors)", value = TRUE)
+          ),
+          col_widths = c(6, 6)
+        ),
+        downloadButton(ns("dl_excel"), "Download Excel (.xlsx)", class="btn-success"),
+        div(class="mt-2 small text-muted", 
+            uiOutput(ns("excel_status")))
+      )
+    ),
+    
+    card(
       card_header("Export VENUS (XML)"),
       card_body(
-        p("Export data in the VENUS XML format for submission."),
-        textInput(ns("venus_prefix"), "Export name (optional)", placeholder = "e.g., MyProject"),
-        downloadButton(ns("dl_venus"), "Download VENUS XML", class="btn-info")
+        p("Export data in the VENUS (Vegetation Ecology National Unified System) XML format for submission to BC government databases."),
+        layout_columns(
+          div(
+            selectInput(ns("venus_proj"), "Filter by Project (Optional)", choices = NULL, multiple = FALSE),
+            checkboxInput(ns("venus_lump"), "Apply Species Lumping", value = TRUE),
+            checkboxInput(ns("venus_draft"), "Include Draft Plots", value = FALSE)
+          ),
+          div(
+            checkboxInput(ns("venus_coords_req"), "Require Coordinates", value = TRUE),
+            dateRangeInput(ns("venus_dates"), "Date Range (Optional)", start = NULL, end = NULL)
+          ),
+          col_widths = c(6, 6)
+        ),
+        div(class="d-flex gap-2 mt-3",
+          downloadButton(ns("dl_venus"), "Download VENUS XML", class="btn-info")
+        )
       )
     )
   )
@@ -377,9 +417,11 @@ mod_export_server <- function(id, sys_state, con) {
         # Load projects
         projs <- dbGetQuery(con, "SELECT projectid, projecttitle FROM Sample_Metadata ORDER BY projectid")
         if (nrow(projs) > 0) {
-            updateSelectInput(session, "export_proj", choices = setNames(projs$projectid, paste(projs$projectid, "-", projs$projecttitle)))
+            proj_choices <- setNames(projs$projectid, paste(projs$projectid, "-", projs$projecttitle))
+            updateSelectInput(session, "export_proj", choices = proj_choices)
+            updateSelectInput(session, "venus_proj", choices = c("All Projects" = "", proj_choices))
         }
-    })
+    })  # closes observe
     
     # -- Data Generation Helper --
     get_export_data <- function() {
@@ -515,32 +557,160 @@ mod_export_server <- function(id, sys_state, con) {
         }
     )
 
-    get_venus_project_ids <- function() {
-      if (!is.null(input$export_proj) && length(input$export_proj) > 0) {
-        return(input$export_proj)
+    get_venus_project_id <- function() {
+      # Single project selection for VENUS export
+      if (!is.null(input$venus_proj) && nzchar(input$venus_proj)) {
+        return(input$venus_proj)
       }
+      # Fall back to current project from state
       if (!is.null(sys_state$CurrProject) && nzchar(as.character(sys_state$CurrProject))) {
         return(as.character(sys_state$CurrProject))
       }
-      character(0)
+      NULL
     }
 
     output$dl_venus <- downloadHandler(
-      filename = function() { paste0("vpro_venus_", Sys.Date(), ".xml") },
+      filename = function() { 
+        proj_id <- get_venus_project_id()
+        if (!is.null(proj_id)) {
+          paste0("venus_", proj_id, "_", Sys.Date(), ".xml")
+        } else {
+          paste0("venus_export_", Sys.Date(), ".xml")
+        }
+      },
       content = function(file) {
         tryCatch({
-          project_ids <- get_venus_project_ids()
-          prefix <- trimws(as.character(input$venus_prefix))
-          if (!nzchar(prefix)) prefix <- NULL
-          doc <- build_venus_xml_doc(con, project_ids, table_prefix = prefix)
-          xml2::write_xml(doc, file)
-          log_export_action("xml", NA_integer_)
+          project_id <- get_venus_project_id()
+          
+          # Build export options
+          opts <- list(
+            apply_lumping = isTRUE(input$venus_lump),
+            include_draft = isTRUE(input$venus_draft),
+            coords_required = isTRUE(input$venus_coords_req)
+          )
+          
+          # Add date filters if specified
+          if (!is.null(input$venus_dates)) {
+            if (!is.na(input$venus_dates[1])) {
+              opts$date_from <- as.character(input$venus_dates[1])
+            }
+            if (!is.na(input$venus_dates[2])) {
+              opts$date_to <- as.character(input$venus_dates[2])
+            }
+          }
+          
+          # Export using new VENUS logic
+          result <- export_venus_xml(con, project_id, file, opts)
+          
+          if (result$success) {
+            showNotification(
+              sprintf("VENUS XML exported successfully: %d plots, %d bytes", 
+                      result$plot_count, result$file_size),
+              type = "message",
+              duration = 5
+            )
+            log_export_action("venus_xml", result$plot_count)
+          } else {
+            stop(result$error)
+          }
         }, error = function(e) {
-          log_export_action("xml", NA_integer_, status = "failed", error_message = e$message)
+          showNotification(
+            paste("VENUS export failed:", e$message),
+            type = "error",
+            duration = 10
+          )
+          log_export_action("venus_xml", NA_integer_, status = "failed", error_message = e$message)
+          # Write an error message to the file so download still works
+          writeLines(paste("Error:", e$message), file)
+        })
+      }
+    )
+    
+    # -- Excel Export Handler --
+    output$dl_excel <- downloadHandler(
+      filename = function() { 
+        type_label <- switch(input$excel_type,
+                            "veg" = "vegetation",
+                            "env" = "environment",
+                            "combined" = "combined")
+        paste0("vpro_", type_label, "_", Sys.Date(), ".xlsx") 
+      },
+      content = function(file) {
+        tryCatch({
+          # Build options from UI inputs
+          project_ids <- NULL
+          if (!is.null(input$export_proj) && length(input$export_proj) > 0) {
+            project_ids <- input$export_proj
+          }
+          
+          options <- list(
+            project_ids = project_ids,
+            layers = input$export_layers,
+            apply_lumping = isTRUE(input$excel_apply_lumping),
+            separate_sheets = isTRUE(input$excel_separate_layers),
+            include_soil = isTRUE(input$excel_include_soil),
+            include_metadata = isTRUE(input$excel_include_metadata),
+            conditional_formatting = isTRUE(input$excel_conditional_fmt)
+          )
+          
+          # Source the excel export logic
+          source("R/logic_excel_export.R", local = TRUE)
+          
+          # Call appropriate export function
+          success <- switch(input$excel_type,
+            "veg" = export_vegetation_excel(con, file, options),
+            "env" = export_environment_excel(con, file, options),
+            "combined" = export_combined_excel(con, file, options),
+            FALSE
+          )
+          
+          if (success) {
+            # Get file info for status
+            file_size <- file.info(file)$size
+            size_kb <- round(file_size / 1024, 1)
+            
+            # Count sheets (basic estimate)
+            n_sheets <- 1
+            if (input$excel_type == "combined") {
+              n_sheets <- length(input$export_layers) + 2  # layers + env + instructions
+              if (options$include_soil) n_sheets <- n_sheets + 2
+              if (options$include_metadata) n_sheets <- n_sheets + 1
+            } else if (input$excel_type == "veg" && options$separate_sheets) {
+              n_sheets <- length(input$export_layers) + 1
+            }
+            
+            log_export_action("xlsx", NA_integer_)
+            showNotification(
+              paste0("Excel export complete: ", size_kb, " KB, ", n_sheets, " sheets"),
+              type = "message",
+              duration = 5
+            )
+          }
+          
+        }, error = function(e) {
+          log_export_action("xlsx", NA_integer_, status = "failed", error_message = e$message)
+          showNotification(
+            paste("Excel export failed:", e$message),
+            type = "error",
+            duration = 10
+          )
           stop(e)
         })
       }
     )
     
-  })
-}
+    # Excel status output
+    output$excel_status <- renderUI({
+      req(input$excel_type)
+      
+      msg <- switch(input$excel_type,
+        "veg" = "Exports vegetation data with species, cover values, and scientific names.",
+        "env" = "Exports site/environment data, soil horizons, and project metadata.",
+        "combined" = "Exports all data types in a multi-sheet workbook."
+      )
+      
+      tags$em(msg)
+    })
+    
+  })  # closes moduleServer inner function
+}  # closes mod_export_server function

@@ -6,6 +6,7 @@ mod_reporting_ui <- function(id) {
       card_header("Reporting"),
       card_body(
         navset_tab(
+          id = ns("reporting_tabs"),
           nav_panel("Reports",
             p("Generate Quarto reports for the current context."),
             selectInput(ns("report_template"), "Report Template", choices = NULL),

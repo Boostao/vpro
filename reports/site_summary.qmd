@@ -15,6 +15,7 @@ params:
   project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
+---
 
 ```{r setup, include=FALSE}
 library(duckdb)
