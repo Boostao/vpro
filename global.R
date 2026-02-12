@@ -7,6 +7,9 @@ library(DT)
 library(rhandsontable)
 library(shinyjs)
 library(shinyTree)
+library(leaflet)
+library(sf)
+library(quarto)
 
 # Database Connection
 # Using a function to get a fresh connection or manage a pool object

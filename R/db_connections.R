@@ -102,7 +102,7 @@ connect_local_db <- function(environment = NULL) {
 #' }
 #'
 #' @export
-attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = 'master') {
+attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = 'master', fail_on_error = TRUE) {
   
   # Determine active environment
   if (is.null(environment)) {
@@ -178,8 +178,15 @@ attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = '
     DBI::dbExecute(con, attach_sql)
     message("[db_connections] PostgreSQL attached successfully as '", alias, "'")
   }, error = function(e) {
-    stop("Failed to attach PostgreSQL: ", e$message, "\n",
-         "Check connection string: ", conn_string)
+    msg <- paste0(
+      "Failed to attach PostgreSQL: ", e$message, "\n",
+      "Check connection string: ", conn_string
+    )
+    if (isTRUE(fail_on_error)) {
+      stop(msg)
+    }
+    warning(msg)
+    return(invisible(NULL))
   })
   
   return(invisible(NULL))

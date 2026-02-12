@@ -5,12 +5,23 @@ server <- function(input, output, session) {
   
   # 1. Database Connection
   # Using a persistent connection for simplicity (DuckDB single user mode)
-  con <- dbConnect(duckdb(), "data/vpro.duckdb")
+  environment <- Sys.getenv("R_CONFIG_ACTIVE", unset = "default")
+  cfg <- tryCatch({
+    config::get(config = environment)
+  }, error = function(e) {
+    stop("Failed to load config for environment '", environment, "': ", conditionMessage(e))
+  })
   
-  # Attach Reference Database
-  # This makes USysTableOfLists available as 'lists.USysTableOfLists' or just 'USysTableOfLists' if unambiguous
-  dbExecute(con, "ATTACH 'data/vpro_lists.duckdb' AS lists")
-  dbExecute(con, "ATTACH 'data/vpro_user.duckdb' AS user_db")
+  con <- connect_local_db(environment = environment)
+  
+  # Optionally attach cloud DB (non-fatal for local-only workflows)
+  if (isTRUE(cfg$cloud$enabled) && isTRUE(cfg$cloud$attach_on_startup)) {
+    tryCatch({
+      attach_cloud_db(con, environment = environment, alias = "master", fail_on_error = FALSE)
+    }, error = function(e) {
+      warning("Cloud ATTACH failed (continuing in local-only mode): ", conditionMessage(e))
+    })
+  }
   
   # Ensure clean disconnect when session ends
   onSessionEnded(function() {
