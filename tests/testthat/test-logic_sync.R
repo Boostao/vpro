@@ -1,6 +1,16 @@
 testthat::context("logic_sync")
 
+source(here::here("R", "db_connections.R"))
 source(here::here("R", "logic_sync.R"))
+
+# Deterministic compliance for unit tests (avoid pulling full lists/validation dependencies)
+assign(
+  "run_compliance_checks",
+  function(con, project_id = NULL, ...) {
+    list(passed = TRUE, summary_tibble = data.frame(), detail_tibble = data.frame())
+  },
+  envir = environment(staging_compliance_checks)
+)
 
 assign(
   "sync_cloud_connected",
@@ -27,6 +37,7 @@ setup_sync_test_db <- function() {
       project_id TEXT NOT NULL,
       submitter_user_id TEXT NOT NULL,
       env_record_count INTEGER DEFAULT 0,
+      su_record_count INTEGER DEFAULT 0,
       veg_record_count INTEGER DEFAULT 0
     )
   ")
@@ -41,7 +52,10 @@ setup_sync_test_db <- function() {
       survey_date DATE,
       surveyor_name TEXT,
       plot_notes TEXT,
-      last_modified_utc TIMESTAMPTZ DEFAULT now()
+      modified_by TEXT,
+      row_version INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now(),
+      PRIMARY KEY (plot_number, project_id)
     )
   ")
 
@@ -52,7 +66,65 @@ setup_sync_test_db <- function() {
       su_number TEXT,
       bec_zone TEXT,
       bec_subzone TEXT,
-      site_series TEXT
+      site_series TEXT,
+      modified_by TEXT,
+      row_version INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now(),
+      PRIMARY KEY (plot_number, project_id)
+    )
+  ")
+
+  DBI::dbExecute(con, "
+    CREATE TABLE master.core.sample_veg (
+      plot_number TEXT,
+      project_id TEXT,
+      species_code TEXT,
+      layer_code TEXT,
+      cover1 TEXT,
+      height1 TEXT,
+      cover2 TEXT,
+      height2 TEXT,
+      cover3 TEXT,
+      height3 TEXT,
+      totala TEXT,
+      heighta TEXT,
+      cover4 TEXT,
+      height4 TEXT,
+      cover5 TEXT,
+      height5 TEXT,
+      cover5a TEXT,
+      height5a TEXT,
+      cover5b TEXT,
+      height5b TEXT,
+      cover5c TEXT,
+      height5c TEXT,
+      totalb TEXT,
+      heightb TEXT,
+      cover6 TEXT,
+      height6 TEXT,
+      cover7 TEXT,
+      cover8 TEXT,
+      cover9 TEXT,
+      cover10 TEXT,
+      collected TEXT,
+      flag TEXT,
+      veg_id INTEGER,
+      ll TEXT,
+      af TEXT,
+      dc TEXT,
+      ut TEXT,
+      vi TEXT,
+      pv TEXT,
+      pg TEXT,
+      ffa TEXT,
+      cultural1 TEXT,
+      cultural2 TEXT,
+      other1 TEXT,
+      other2 TEXT,
+      modified_by TEXT,
+      row_version INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now(),
+      PRIMARY KEY (plot_number, project_id, species_code, layer_code)
     )
   ")
 
@@ -66,6 +138,7 @@ setup_sync_test_db <- function() {
       survey_date DATE,
       surveyor_name TEXT,
       plot_notes TEXT,
+      base_row_version INTEGER,
       merge_request_id INTEGER,
       modified_by TEXT
     )
@@ -79,6 +152,7 @@ setup_sync_test_db <- function() {
       bec_zone TEXT,
       bec_subzone TEXT,
       site_series TEXT,
+      base_row_version INTEGER,
       merge_request_id INTEGER,
       modified_by TEXT
     )
@@ -131,6 +205,7 @@ setup_sync_test_db <- function() {
       cultural2 TEXT,
       other1 TEXT,
       other2 TEXT,
+      base_row_version INTEGER,
       merge_request_id INTEGER,
       modified_by TEXT
     )
@@ -290,4 +365,66 @@ testthat::test_that("sync_push stages env, su, and veg rows", {
   )
   testthat::expect_equal(mr_counts$env_record_count[1], 1)
   testthat::expect_equal(mr_counts$veg_record_count[1], 1)
+})
+
+testthat::test_that("merge request conflicts are detected and resolvable", {
+  setup <- setup_sync_test_db()
+  con <- setup$con
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  # Seed an existing core row (row_version 1 at time of submit)
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.sample_env
+      (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, modified_by, row_version)
+     VALUES ('P-201', 'PRJ', 50.0, -120.0, 900, DATE '2026-02-01', 'CoreUser', 'core', 'core', 1)"
+  )
+
+  # Local edit that will be staged
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Sample_Env
+      (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes, Zone, SubZone, SiteSeries)
+     VALUES
+      ('P-201', 'PRJ', 51.0, -121.0, 950, DATE '2026-02-02', 'LocalUser', 'staged', 'ICH', 'dw', '01')"
+  )
+
+  results <- sync_push(
+    con,
+    project_id = "PRJ",
+    tables = c("sample_env"),
+    allow_attach = FALSE,
+    submitter = "tester"
+  )
+
+  mr_id <- as.integer(results$merge_request_id)
+  staged <- DBI::dbGetQuery(con, "SELECT base_row_version FROM master.staging.sample_env WHERE merge_request_id = ?", list(mr_id))
+  testthat::expect_equal(staged$base_row_version[1], 1)
+
+  # Simulate a concurrent core change after submission
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.sample_env
+     SET latitude = 49.5, row_version = 2
+     WHERE plot_number = 'P-201' AND project_id = 'PRJ'"
+  )
+
+  merge_request_refresh_conflicts(con, mr_id)
+  conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
+  testthat::expect_equal(nrow(conflicts), 1)
+  testthat::expect_equal(conflicts$table_name[1], "sample_env")
+
+  # Resolve by keeping core (skip applying staged env row)
+  merge_request_resolve_conflict(con, conflicts$id[1], "keep_core", actor = "reviewer")
+  testthat::expect_equal(merge_request_unresolved_conflict_count(con, mr_id), 0)
+
+  # Merge should now succeed and preserve the core value
+  merge_approve_request(con, mr_id, reviewer = "reviewer", review_notes = "ok")
+
+  env <- DBI::dbGetQuery(con, "SELECT latitude, row_version FROM master.core.sample_env WHERE plot_number = 'P-201' AND project_id = 'PRJ'")
+  testthat::expect_equal(env$latitude[1], 49.5)
+  testthat::expect_equal(env$row_version[1], 2)
+
+  mr <- DBI::dbGetQuery(con, "SELECT status FROM master.admin.merge_requests WHERE id = ?", list(mr_id))
+  testthat::expect_equal(mr$status[1], "merged")
 })
