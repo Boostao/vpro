@@ -2,15 +2,21 @@
 publish_panel_ui <- function(ns) {
   layout_sidebar(
     sidebar = sidebar(
-      textInput(ns("publish_out_dir"), "RDS output dir", value = ""),
-      textInput(ns("publish_version"), "Version (optional)", value = ""),
-      selectInput(ns("publish_projects"), "Projects (optional)", choices = NULL, multiple = TRUE),
+      textInput(ns("publish_out_dir"), "Output dir", value = "data/published"),
+      selectInput(ns("publish_projects"), "Projects", choices = NULL, multiple = TRUE),
+      checkboxGroupInput(
+        ns("publish_formats"),
+        "Formats",
+        choices = c("RDS" = "rds", "CSV" = "csv", "XLSX" = "xlsx"),
+        selected = c("rds")
+      ),
       checkboxInput(ns("publish_lump"), "Apply species lumping", value = TRUE),
-      actionButton(ns("publish_run"), "Publish RDS Snapshot", class = "btn-primary w-100 mt-2"),
-      actionButton(ns("publish_refresh"), "Refresh Snapshot List", class = "btn-outline-secondary w-100 mt-2")
+      checkboxInput(ns("publish_is_public"), "Public dataset (BEC Map)", value = TRUE),
+      actionButton(ns("publish_run"), "Publish Project Dataset", class = "btn-primary w-100 mt-2"),
+      actionButton(ns("publish_refresh"), "Refresh Published List", class = "btn-outline-secondary w-100 mt-2")
     ),
     card(
-      card_header("RDS Publishing"),
+      card_header("Project Publishing (BEC Map Explorer)"),
       card_body(
         textOutput(ns("publish_status")),
         tableOutput(ns("publish_snapshots"))
@@ -756,7 +762,7 @@ mod_admin_server <- function(id, state, con) {
     output$publish_panel <- renderUI({
       if (!auth_is_authenticated(state) || !auth_user_has_permission(state, "publish_rds")) {
         return(card(
-          card_header("RDS Publishing"),
+          card_header("Project Publishing"),
           card_body("Sign in with publish permissions to access this panel.")
         ))
       }
@@ -776,37 +782,37 @@ mod_admin_server <- function(id, state, con) {
     observe({
       if (!auth_is_authenticated(state) || !auth_user_has_permission(state, "publish_rds")) return()
       if (is.null(input$publish_projects)) return()
-      if (!sync_cloud_connected(con)) return()
+
       projects <- tryCatch({
-        dbGetQuery(con, "SELECT project_id, project_name FROM master.core.sample_metadata ORDER BY project_id")
+        dbGetQuery(con, "SELECT projectid, projecttitle FROM USysProjectMetadata ORDER BY projectid")
       }, error = function(e) data.frame())
       if (nrow(projects) > 0) {
         updateSelectInput(
           session,
           "publish_projects",
-          choices = setNames(projects$project_id, paste(projects$project_id, "-", projects$project_name))
+          choices = setNames(projects$projectid, paste(projects$projectid, "-", projects$projecttitle))
         )
       }
     })
 
     refresh_publish_snapshots <- function() {
-      tryCatch({
-        sync_require_cloud(con, allow_attach = TRUE)
-        snaps <- dbGetQuery(
-          con,
-          paste(
-            "SELECT version, snapshot_date, created_by, veg_row_count, env_row_count,",
-            "rds_filename_veg, rds_filename_env",
-            "FROM master.public_export.rds_snapshots",
-            "ORDER BY created_utc DESC LIMIT 25"
-          )
-        )
-        publish_snapshots(snaps)
-        publish_status("")
-      }, error = function(e) {
+      out_dir <- trimws(input$publish_out_dir %||% "")
+      if (!nzchar(out_dir)) out_dir <- "data/published"
+      reg_path <- file.path(out_dir, "publication_registry.csv")
+      if (!file.exists(reg_path)) {
         publish_snapshots(data.frame())
-        publish_status(paste("Snapshot list unavailable:", e$message))
-      })
+        publish_status("No publication registry found yet.")
+        return(invisible(NULL))
+      }
+      snaps <- tryCatch(utils::read.csv(reg_path, stringsAsFactors = FALSE), error = function(e) NULL)
+      if (is.null(snaps) || nrow(snaps) == 0) {
+        publish_snapshots(data.frame())
+        publish_status("Publication registry is empty.")
+        return(invisible(NULL))
+      }
+      snaps <- snaps[order(snaps$timestamp_utc, decreasing = TRUE), , drop = FALSE]
+      publish_snapshots(utils::head(snaps, 25))
+      publish_status("")
     }
 
     observeEvent(input$publish_refresh, {
@@ -814,29 +820,39 @@ mod_admin_server <- function(id, state, con) {
     })
 
     observeEvent(input$publish_run, {
-      out_dir <- trimws(input$publish_out_dir)
-      if (!nzchar(out_dir)) {
-        showNotification("Provide an output directory.", type = "warning")
+      if (!require_admin_permission("publish_rds")) return()
+
+      out_dir <- trimws(input$publish_out_dir %||% "")
+      if (!nzchar(out_dir)) out_dir <- "data/published"
+
+      project_ids <- input$publish_projects %||% character(0)
+      if (length(project_ids) == 0) {
+        showNotification("Select one or more projects to publish.", type = "warning")
         return()
       }
 
-      if (!require_admin_permission("publish_rds")) return()
-
-      version <- trimws(input$publish_version)
-      if (!nzchar(version)) version <- NULL
-      project_ids <- input$publish_projects %||% character(0)
-      if (length(project_ids) == 0) project_ids <- NULL
+      formats <- input$publish_formats %||% character(0)
+      if (length(formats) == 0) {
+        showNotification("Select at least one output format.", type = "warning")
+        return()
+      }
 
       tryCatch({
-        result <- publish_becmaster_rds(
-          con,
-          out_dir = out_dir,
-          version = version,
-          project_ids = project_ids,
-          apply_lumping = isTRUE(input$publish_lump)
+        source("R/logic_publish.R", local = TRUE)
+        results <- publish_project_dataset(
+          project_id = project_ids,
+          output_dir = out_dir,
+          formats = formats,
+          apply_lumping = isTRUE(input$publish_lump),
+          con = con,
+          is_public = isTRUE(input$publish_is_public)
         )
-        publish_status(paste("Published version", result$version, "(veg", result$veg_rows, "env", result$env_rows, ")"))
-        showNotification("RDS snapshot published.", type = "message")
+        if (is.list(results) && !is.null(results$project_id)) {
+          publish_status(paste("Published", results$project_id, "(env", results$env_rows, "veg", results$veg_rows, ")"))
+        } else {
+          publish_status(paste("Published", length(results), "projects"))
+        }
+        showNotification("Project dataset published.", type = "message")
         refresh_publish_snapshots()
       }, error = function(e) {
         publish_status("")
