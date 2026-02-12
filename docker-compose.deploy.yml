@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Shiny Application Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vpro-shiny-app
+    restart: unless-stopped
+    ports:
+      - "3838:3838"
+    volumes:
+      # Mount local data directory for DuckDB
+      # Mounted as Read-Only (:ro) for safety as requested. 
+      # Note: Local saves to DuckDB will fail in this mode if not configured explicitly as READ_ONLY.
+      - ./data:/srv/shiny-server/data:ro
+    env_file:
+      - .env
+    environment:
+      - R_CONFIG_ACTIVE=${R_CONFIG_ACTIVE:-production}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - vpro-deploy-network
+
+  # PostgreSQL Service (for Cloud Sync Demo/Production Sync)
+  db:
+    image: postgres:15-alpine
+    container_name: vpro-postgres-deploy
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-becmaster}
+      POSTGRES_USER: ${POSTGRES_USER:-vpro_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_deploy_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vpro-deploy-network
+
+volumes:
+  # Persistent volume for PostgreSQL data
+  postgres_deploy_data:
+
+networks:
+  # Dedicated network for the deployment services
+  vpro-deploy-network:
+    driver: bridge
