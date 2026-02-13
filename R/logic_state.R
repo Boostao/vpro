@@ -107,7 +107,24 @@ init_sys_state <- function() {
 }
 
 # Preferences storage (SaveSetting/GetSetting analog)
+resolve_pref_schema <- function(con, schema) {
+  if (!is.character(schema) || length(schema) != 1L || is.na(schema) || !nzchar(schema)) {
+    return("main")
+  }
+
+  schema_parts <- strsplit(schema, "\\.", fixed = FALSE)[[1]]
+  if (length(schema_parts) >= 2L && identical(schema_parts[[1]], "user_db")) {
+    dbs <- tryCatch(DBI::dbGetQuery(con, "PRAGMA database_list"), error = function(e) NULL)
+    if (is.null(dbs) || !("name" %in% names(dbs)) || !("user_db" %in% dbs$name)) {
+      return("main")
+    }
+  }
+
+  schema
+}
+
 ensure_user_settings_table <- function(con, schema = "user_db.main", table = "user_settings") {
+  schema <- resolve_pref_schema(con, schema)
   DBI::dbExecute(
     con,
     paste0(
@@ -121,6 +138,7 @@ ensure_user_settings_table <- function(con, schema = "user_db.main", table = "us
       ")"
     )
   )
+  invisible(schema)
 }
 
 coerce_pref_value <- function(value, default) {
@@ -132,7 +150,7 @@ coerce_pref_value <- function(value, default) {
 }
 
 get_pref <- function(con, section, key, default = NULL, app = "VPro64", schema = "user_db.main", table = "user_settings") {
-  ensure_user_settings_table(con, schema = schema, table = table)
+  schema <- ensure_user_settings_table(con, schema = schema, table = table)
   res <- DBI::dbGetQuery(
     con,
     paste0(
@@ -146,7 +164,7 @@ get_pref <- function(con, section, key, default = NULL, app = "VPro64", schema =
 }
 
 set_pref <- function(con, section, key, value, app = "VPro64", schema = "user_db.main", table = "user_settings") {
-  ensure_user_settings_table(con, schema = schema, table = table)
+  schema <- ensure_user_settings_table(con, schema = schema, table = table)
   DBI::dbExecute(
     con,
     paste0(

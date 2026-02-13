@@ -345,17 +345,21 @@ get_master_site_units <- function(con, level = NULL) {
 
 get_user_site_unit_table <- function(con) {
   candidates <- list(
-    list(name = "user_db.main.UserSiteUnitList"),
-    list(name = "user_db.main.USysUserSiteUnitList"),
-    list(name = "main.UserSiteUnitList"),
-    list(name = "main.USysUserSiteUnitList")
+    DBI::Id(schema = "user", table = "UserSiteUnitList"),
+    DBI::Id(schema = "user", table = "USysUserSiteUnitList"),
+    DBI::Id(catalog = "user_db", schema = "main", table = "UserSiteUnitList"),
+    DBI::Id(catalog = "user_db", schema = "main", table = "USysUserSiteUnitList"),
+    DBI::Id(schema = "main", table = "UserSiteUnitList"),
+    DBI::Id(schema = "main", table = "USysUserSiteUnitList"),
+    DBI::Id(table = "UserSiteUnitList"),
+    DBI::Id(table = "USysUserSiteUnitList")
   )
 
-  for (candidate in candidates) {
-    if (DBI::dbExistsTable(con, candidate$name)) {
+  for (id in candidates) {
+    if (isTRUE(DBI::dbExistsTable(con, id))) {
       return(list(
-        id = candidate$name,
-        name = candidate$name
+        id = id,
+        ref = as.character(DBI::dbQuoteIdentifier(con, id))
       ))
     }
   }
@@ -381,7 +385,7 @@ get_user_site_units <- function(con, level = NULL) {
     params <- list(as.integer(level))
   }
 
-  sql <- sprintf("SELECT %s FROM %s %s ORDER BY SiteSeries", paste(select_cols, collapse = ", "), table_info$name, where_clause)
+  sql <- sprintf("SELECT %s FROM %s %s ORDER BY SiteSeries", paste(select_cols, collapse = ", "), table_info$ref, where_clause)
   DBI::dbGetQuery(con, sql, params)
 }
 
