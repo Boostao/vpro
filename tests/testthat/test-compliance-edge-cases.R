@@ -109,21 +109,34 @@ setup_full_compliance_schema <- function(con) {
 seed_reference_data <- function(con) {
   # Species codes (subset of BC species)
   species <- data.frame(
-    code = c("ABGR", "PSME", "TSHE", "THPL", "PICO", "PIEN", "ODE", "ACMA"),
-    species_name = c("Grand fir", "Douglas-fir", "Western hemlock", 
-                     "Western redcedar", "Lodgepole pine", "Engelmann spruce",
-                     "Oregon grape", "Bigleaf maple")
+    # NOTE: Keep this aligned with any "should pass" fixtures in this file.
+    # In particular the 10k veg stress test uses a fixed 10-code list.
+    code = c(
+      "ABGR", "PSME", "TSHE", "THPL", "PICO", "PIEN", "ODE", "ACMA",
+      "ABLA", "PIMO", "ACGL", "ALVI", "AMAL"
+    ),
+    species_name = c(
+      "Grand fir", "Douglas-fir", "Western hemlock",
+      "Western redcedar", "Lodgepole pine", "Engelmann spruce",
+      "Oregon grape", "Bigleaf maple",
+      "Subalpine fir", "Western white pine", "Douglas maple", "Sitka alder", "Serviceberry"
+    )
   )
   DBI::dbWriteTable(con, DBI::Id(schema = "lists", table = "SppList"), species, append = TRUE)
   
   # BEC zones (BC biogeoclimatic ecosystem classification)
   zones <- data.frame(
-    zone_code = c("CDF", "CWH", "ICH", "IDF", "SBPS", "MH", "ESSF"),
-    subzone = c("mm", "vm2", "mk1", "dk1", "xc", "mm", "wk"),
-    zone_name = c("Coastal Douglas-fir", "Coastal Western Hemlock",
-                  "Interior Cedar-Hemlock", "Interior Douglas-fir",
-                  "Sub-Boreal Pine-Spruce", "Mountain Hemlock",
-                  "Engelmann Spruce-Subalpine Fir")
+    # NOTE: Include any zone/subzone pairs used by "should pass" stress tests.
+    # Many stress fixtures use ICH/mw and one duplicate-plot fixture uses IDF/dk.
+    zone_code = c("CDF", "CWH", "ICH", "ICH", "IDF", "IDF", "SBPS", "MH", "ESSF"),
+    subzone = c("mm", "vm2", "mk1", "mw", "dk1", "dk", "xc", "mm", "wk"),
+    zone_name = c(
+      "Coastal Douglas-fir", "Coastal Western Hemlock",
+      "Interior Cedar-Hemlock", "Interior Cedar-Hemlock",
+      "Interior Douglas-fir", "Interior Douglas-fir",
+      "Sub-Boreal Pine-Spruce", "Mountain Hemlock",
+      "Engelmann Spruce-Subalpine Fir"
+    )
   )
   DBI::dbWriteTable(con, DBI::Id(schema = "lists", table = "USysZoneList"), zones, append = TRUE)
   
@@ -944,7 +957,7 @@ test_that("Compliance summary: aggregates by rule type", {
   ")
   DBI::dbExecute(con, "
     INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
-    VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 45)
+    VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 50)
   ")
   DBI::dbExecute(con, "
     INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
@@ -1010,11 +1023,13 @@ test_that("Performance: 1000 records with mixed violations", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   setup_full_compliance_schema(con)
   
-  # Insert 1000 records with varying compliance
-  # 70% valid, 30% violations
+  # Insert 1000 records with varying compliance.
+  # Keep the invalid fixtures violating ONE rule so the expected
+  # violation count is stable (avoid double-counting across rules).
+  # 70% valid, 30% latitude out-of-range.
   for (i in 1:1000) {
-    lat <- if (i %% 10 < 7) 50 else 70  # 30% invalid
-    zone <- if (i %% 10 < 7) 'ICH' else 'BADZONE'
+    lat <- if (i %% 10 < 7) 50 else 70  # 30% invalid latitude
+    zone <- 'ICH'
     
     DBI::dbExecute(con, sprintf("
       INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)

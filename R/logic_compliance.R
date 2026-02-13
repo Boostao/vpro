@@ -85,6 +85,10 @@ check_species_fk <- function(con, project_id = NULL) {
   veg <- DBI::dbGetQuery(con, sql, params)
   if (nrow(veg) == 0) return(data.frame())
 
+  veg$species <- trimws(veg$species)
+  veg <- veg[!is.na(veg$species) & veg$species != "", , drop = FALSE]
+  if (nrow(veg) == 0) return(data.frame())
+
   spp <- DBI::dbGetQuery(con, sprintf("SELECT %s AS code FROM lists.SppList", code_col))
   valid <- unique(spp$code)
   missing <- veg[!(veg$species %in% valid), , drop = FALSE]

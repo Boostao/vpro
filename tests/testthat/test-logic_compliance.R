@@ -102,7 +102,11 @@ test_that("required fields flag missing values", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   setup_compliance_tables(con)
 
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P3', 'PRJ', NULL, '', 55, -120, 100, 'MID', 10, 180, 10)")
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation, mesoslopeposition, slopegradient, aspect, rootingdepth)
+     VALUES ('P3', 'PRJ', NULL, '', 55, -120, 100, 'MID', 10, 180, 10)"
+  )
   missing <- check_required_fields(con, project_id = "PRJ")
 
   expect_true(any(missing$column == "zone"))
