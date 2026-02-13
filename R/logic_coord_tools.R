@@ -459,8 +459,10 @@ format_dms_display <- function(deg, min, sec, direction) {
   if (is.na(deg) || is.na(min) || is.na(sec)) {
     return("")
   }
-  
-  sprintf("%d° %02d' %05.2f\" %s", deg, min, sec, direction)
+
+  # Match Access-like, keyboard-friendly formatting.
+  # Tests and UI expect a simple space-delimited form, e.g. "49 12 00.00 N".
+  sprintf("%d %02d %05.2f %s", deg, min, sec, direction)
 }
 
 #' Normalize Bearing to 0-360
