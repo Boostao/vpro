@@ -1,5 +1,8 @@
 # Tests for ClimR integration (R/logic_climr.R)
 
+# Ensure CLIMR logic is available when running tests from repo
+source(here::here("R", "logic_climr.R"), local = TRUE)
+
 test_that("climr availability check works", {
   # This function should return TRUE or FALSE, never error
   result <- check_climr_availability(silent = TRUE)
@@ -14,16 +17,16 @@ test_that("climr availability check works", {
 
 test_that("coordinate cache key generation works", {
   # Internal function test
-  key1 <- will_vpro:::get_coord_cache_key(50.6745, -120.3273)
+  key1 <- get_coord_cache_key(50.6745, -120.3273)
   expect_type(key1, "character")
   expect_match(key1, "^[0-9.]+_-[0-9.]+$")
   
   # Should round to 4 decimal places
-  key2 <- will_vpro:::get_coord_cache_key(50.67449999, -120.32729999)
+  key2 <- get_coord_cache_key(50.67449999, -120.32729999)
   expect_identical(key1, key2)
   
   # Different coordinates = different keys
-  key3 <- will_vpro:::get_coord_cache_key(49.2827, -123.1207)
+  key3 <- get_coord_cache_key(49.2827, -123.1207)
   expect_false(key1 == key3)
 })
 
@@ -119,7 +122,7 @@ test_that("cache clearing works", {
   clear_climr_cache(silent = TRUE)
   
   # Cache should be empty (internal check)
-  cache_env <- will_vpro:::.climr_cache
+  cache_env <- .climr_cache
   expect_equal(length(names(cache_env)), 0)
 })
 
