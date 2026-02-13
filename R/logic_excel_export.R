@@ -42,13 +42,13 @@ export_vegetation_excel <- function(con, output_path, options = list()) {
   
   # Export by layer (separate sheets) or combined
   if (opts$separate_sheets) {
-    layers_present <- unique(veg_data$MyLayer)
+    layers_present <- unique(veg_data$Layer)
     layer_names <- c("1" = "VegA_Trees1", "2" = "VegA_Trees2", "3" = "VegA_Trees3",
                      "4" = "VegB_Shrub1", "5" = "VegB_Shrub2", 
                      "6" = "VegC_Herbs", "7" = "VegD_Moss")
     
     for (layer in layers_present) {
-      layer_data <- veg_data[veg_data$MyLayer == layer, ]
+      layer_data <- veg_data[veg_data$Layer == layer, ]
       sheet_name <- layer_names[layer]
       if (is.na(sheet_name)) sheet_name <- paste0("Layer_", layer)
       
@@ -149,13 +149,13 @@ export_combined_excel <- function(con, output_path, options = list()) {
   # Vegetation sheets (by layer)
   veg_data <- get_vegetation_data_for_excel(con, opts$project_ids, opts$layers, opts$apply_lumping)
   if (nrow(veg_data) > 0) {
-    layers_present <- unique(veg_data$MyLayer)
+    layers_present <- unique(veg_data$Layer)
     layer_names <- c("1" = "VegA_Trees1", "2" = "VegA_Trees2", "3" = "VegA_Trees3",
                      "4" = "VegB_Shrub1", "5" = "VegB_Shrub2", 
                      "6" = "VegC_Herbs", "7" = "VegD_Moss")
     
     for (layer in layers_present) {
-      layer_data <- veg_data[veg_data$MyLayer == layer, ]
+      layer_data <- veg_data[veg_data$Layer == layer, ]
       sheet_name <- layer_names[layer]
       if (is.na(sheet_name)) sheet_name <- paste0("Layer_", layer)
       add_vegetation_sheet(wb, sheet_name, layer_data, opts$conditional_formatting)
@@ -212,32 +212,70 @@ get_vegetation_data_for_excel <- function(con, project_ids = NULL, layers = c("1
   df <- DBI::dbGetQuery(con, query)
   
   if (nrow(df) == 0) return(df)
+
+  # Normalize column names for compatibility with lumping logic
+  names(df) <- tolower(names(df))
   
   # Convert cover to numeric (handle text codes)
-  cover_chr <- trimws(as.character(df$Cover))
+  cover_chr <- trimws(as.character(df$cover))
   cover_num <- suppressWarnings(as.numeric(cover_chr))
   cover_num[cover_chr == ""] <- NA_real_
   cover_num[is.na(cover_num) & nzchar(cover_chr)] <- 0.1  # '+' or 'r' codes
-  df$CoverNum <- cover_num
+  df$cover_num <- cover_num
   
   # Apply lumping if requested
   if (apply_lumping) {
-    source("R/logic_lumping.R", local = TRUE)  # Ensure loaded
-    df <- apply_lumping(con, df, 
-                        group_cols = c("PlotNumber", "MyLayer"), 
-                        measure_cols = c("CoverNum"))
+    if (!exists("apply_lumping", mode = "function")) {
+      stop("apply_lumping() not found. Source R/logic_lumping.R before using apply_lumping = TRUE.")
+    }
+    df <- apply_lumping(
+      con,
+      df,
+      group_cols = c("plotnumber", "mylayer"),
+      measure_cols = c("cover_num")
+    )
   }
   
   # Join species names
-  spp_query <- "SELECT code, scientificname, commonname FROM lists.SppList"
-  spp <- DBI::dbGetQuery(con, spp_query)
+  meta_table <- NULL
+  has_lists_specs <- tryCatch({
+    DBI::dbGetQuery(
+      con,
+      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_catalog = 'lists' AND table_name = 'USysAllSpecs'"
+    )$n > 0
+  }, error = function(e) FALSE)
+
+  if (isTRUE(has_lists_specs)) {
+    meta_table <- "lists.USysAllSpecs"
+  } else if (DBI::dbExistsTable(con, "USysAllSpecs")) {
+    meta_table <- "USysAllSpecs"
+  } else if (DBI::dbExistsTable(con, "SppList")) {
+    meta_table <- "SppList"
+  }
+
+  spp <- data.frame(code = character(), scientificname = character(), commonname = character())
+  if (!is.null(meta_table) && identical(meta_table, "SppList")) {
+    spp <- DBI::dbGetQuery(con, "SELECT code, scientificname, '' AS commonname FROM SppList")
+  } else if (!is.null(meta_table)) {
+    spp <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT code AS code, scientificname AS scientificname, COALESCE(common_name_pb, englishname, combinedenglishname, '') AS commonname FROM %s",
+        meta_table
+      )
+    )
+  }
+
+  if (nrow(spp) > 0 && "code" %in% names(spp)) {
+    spp <- spp[!duplicated(spp$code), , drop = FALSE]
+  }
   
-  df <- merge(df, spp, by.x = "Species", by.y = "code", all.x = TRUE)
-  df$ScientificName <- ifelse(is.na(df$scientificname), df$Species, df$scientificname)
+  df <- merge(df, spp, by.x = "species", by.y = "code", all.x = TRUE)
+  df$ScientificName <- ifelse(is.na(df$scientificname), df$species, df$scientificname)
   df$CommonName <- ifelse(is.na(df$commonname), "", df$commonname)
   
   # Select and order columns for Excel
-  df <- df[, c("PlotNumber", "MyLayer", "Species", "ScientificName", "CommonName", "CoverNum")]
+  df <- df[, c("plotnumber", "mylayer", "species", "ScientificName", "CommonName", "cover_num")]
   colnames(df) <- c("Plot", "Layer", "Code", "Scientific Name", "Common Name", "Cover %")
   
   df[order(df$Plot, df$Layer, df$`Scientific Name`), ]
@@ -259,9 +297,9 @@ get_environment_data_for_excel <- function(con, project_ids = NULL) {
     elevation AS Elevation,
     slopegradient AS Slope,
     aspect AS Aspect,
-    zone AS Zone,
+    _zone AS Zone,
     subzone AS Subzone,
-    siteseries AS 'Site Series',
+    siteseries AS \"Site Series\",
     moistureregime AS Moisture,
     nutrientregime AS Nutrient,
     sitenotes AS Notes
@@ -394,10 +432,10 @@ add_metadata_sheet <- function(wb, con, project_ids) {
   query <- sprintf("SELECT 
     projectid AS 'Project ID',
     projecttitle AS 'Project Title',
-    projectlead AS 'Project Lead',
-    organisation AS Organisation,
+    fieldleader AS 'Project Lead',
+    coordinatingagency AS Organisation,
     projectpurpose AS Purpose,
-    projectstatus AS Status,
+    NULL AS Status,
     startdate AS 'Start Date',
     enddate AS 'End Date'
   FROM Sample_Metadata
@@ -520,7 +558,7 @@ apply_excel_styles <- function(workbook, sheet_name, data, table_type = "vegetat
         workbook, sheet_name,
         cols = cover_col,
         rows = 2:(n_rows + 1),
-        type = "containsBlanks",
+        type = "blanks",
         style = missing_style
       )
     }

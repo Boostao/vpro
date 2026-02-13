@@ -1,5 +1,18 @@
 # Tests for Excel Export Logic with Styling
 
+connect_vpro_duckdb_for_tests <- function() {
+  con <- DBI::dbConnect(duckdb::duckdb(), here::here("data", "vpro.duckdb"), read_only = TRUE)
+  DBI::dbExecute(
+    con,
+    paste0(
+      "ATTACH ",
+      DBI::dbQuoteString(con, here::here("data", "vpro_lists.duckdb")),
+      " AS lists"
+    )
+  )
+  con
+}
+
 test_that("openxlsx package is available", {
   skip_if_not_installed("openxlsx")
   expect_true(requireNamespace("openxlsx", quietly = TRUE))
@@ -7,16 +20,16 @@ test_that("openxlsx package is available", {
 
 test_that("export_vegetation_excel creates valid workbook with correct structure", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
   # Test with separate sheets (default)
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -45,15 +58,16 @@ test_that("export_vegetation_excel creates valid workbook with correct structure
 
 test_that("export_vegetation_excel with lumping applies species consolidation", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_lumping.R"), local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -75,15 +89,15 @@ test_that("export_vegetation_excel with lumping applies species consolidation", 
 
 test_that("export_environment_excel creates environment and soil sheets", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_environment_excel(
     con, temp_file,
     options = list(
@@ -105,15 +119,15 @@ test_that("export_environment_excel creates environment and soil sheets", {
 
 test_that("export_combined_excel creates multi-sheet workbook", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_combined_excel(
     con, temp_file,
     options = list(
@@ -136,15 +150,15 @@ test_that("export_combined_excel creates multi-sheet workbook", {
 
 test_that("workbook has proper styling applied", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -184,7 +198,7 @@ test_that("excel export handles empty data gracefully", {
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   
   # Should handle empty data without crashing
   expect_warning(
@@ -197,23 +211,34 @@ test_that("excel export handles empty data gracefully", {
 
 test_that("project filtering works correctly", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   # Get list of projects
   projects <- DBI::dbGetQuery(con, "SELECT DISTINCT projectid FROM Sample_Metadata LIMIT 1")
   
   if (nrow(projects) > 0) {
+    project_id <- projects$projectid[1]
+    has_veg <- DBI::dbGetQuery(
+      con,
+      "SELECT COUNT(*) AS n FROM vw_USysAllVeg v JOIN Sample_Env e ON v.PlotNumber = e.plotnumber WHERE v.MyLayer = '1' AND e.projectid = ?",
+      list(project_id)
+    )$n
+
+    if (isTRUE(has_veg == 0)) {
+      skip("Selected project has no layer 1 vegetation data")
+    }
+
     temp_file <- tempfile(fileext = ".xlsx")
     on.exit(unlink(temp_file), add = TRUE)
     
-    source("R/logic_excel_export.R", local = TRUE)
+    source(here::here("R", "logic_excel_export.R"), local = TRUE)
     result <- export_vegetation_excel(
       con, temp_file,
       options = list(
-        project_ids = projects$projectid[1],
+        project_ids = project_id,
         layers = c("1"),
         separate_sheets = FALSE,
         include_metadata = TRUE
@@ -230,15 +255,15 @@ test_that("project filtering works correctly", {
 
 test_that("data type formatting is correct for numeric columns", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -261,16 +286,16 @@ test_that("data type formatting is correct for numeric columns", {
 
 test_that("performance - large dataset exports in reasonable time", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   skip("Performance test - run manually when needed")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   
   # Time the export
   start_time <- Sys.time()
@@ -295,15 +320,15 @@ test_that("performance - large dataset exports in reasonable time", {
 
 test_that("instructions sheet is created with proper content", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -328,15 +353,15 @@ test_that("instructions sheet is created with proper content", {
 
 test_that("conditional formatting can be disabled", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -355,15 +380,15 @@ test_that("conditional formatting can be disabled", {
 
 test_that("column widths are set appropriately", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -384,15 +409,15 @@ test_that("column widths are set appropriately", {
 
 test_that("layer names are correctly mapped to sheet names", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
   
-  source("R/logic_excel_export.R", local = TRUE)
+  source(here::here("R", "logic_excel_export.R"), local = TRUE)
   result <- export_vegetation_excel(
     con, temp_file,
     options = list(
@@ -414,9 +439,9 @@ test_that("layer names are correctly mapped to sheet names", {
 
 test_that("exported data matches database query results", {
   skip_if_not_installed("openxlsx")
-  skip_if_not(file.exists("data/vpro.duckdb"), "Main database not found")
+  skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
-  con <- test_connect_duckdb()
+  con <- connect_vpro_duckdb_for_tests()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   # Get expected row count from database
@@ -427,7 +452,7 @@ test_that("exported data matches database query results", {
     temp_file <- tempfile(fileext = ".xlsx")
     on.exit(unlink(temp_file), add = TRUE)
     
-    source("R/logic_excel_export.R", local = TRUE)
+    source(here::here("R", "logic_excel_export.R"), local = TRUE)
     result <- export_vegetation_excel(
       con, temp_file,
       options = list(
