@@ -55,6 +55,7 @@ source("R/mod_upload.R")
 source("R/mod_merge.R")
 source("R/mod_auth.R")
 source("R/mod_becweb_map.R")
+source("R/mod_whatsnew.R")
 
 # Note: The actual 'SysState' object is initialized in server.R 
 # because it must be reactive and unique to the session.

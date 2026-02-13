@@ -26,6 +26,36 @@ test_that("All Quarto reports render without error using demo data", {
   project_root <- normalizePath(file.path("..", ".."), winslash = "/", mustWork = TRUE)
   report_dir <- normalizePath(file.path("..", "..", "reports"), winslash = "/", mustWork = TRUE)
 
+  stale_smoke_dirs <- list.files(
+    path = report_dir,
+    pattern = "^vpro_report_tests_",
+    full.names = TRUE,
+    recursive = FALSE
+  )
+  if (length(stale_smoke_dirs) > 0) {
+    unlink(stale_smoke_dirs, recursive = TRUE, force = TRUE)
+  }
+
+  stale_smoke_outputs <- list.files(
+    path = report_dir,
+    pattern = "_smoke_test\\.html$",
+    full.names = TRUE,
+    recursive = FALSE
+  )
+  if (length(stale_smoke_outputs) > 0) {
+    unlink(stale_smoke_outputs, force = TRUE)
+  }
+
+  stale_smoke_assets <- list.files(
+    path = report_dir,
+    pattern = "_smoke_test_files$",
+    full.names = TRUE,
+    recursive = FALSE
+  )
+  if (length(stale_smoke_assets) > 0) {
+    unlink(stale_smoke_assets, recursive = TRUE, force = TRUE)
+  }
+
   # Quarto may attempt to write cache assets under <execute-dir>/.quarto.
   # Ensure it exists to avoid NotFound errors in clean workspaces.
   dir.create(file.path(report_dir, ".quarto"), recursive = TRUE, showWarnings = FALSE)
@@ -89,7 +119,7 @@ test_that("All Quarto reports render without error using demo data", {
     qmd_cli_path <- file.path("reports", report_name)
     
     # Define output file path
-    output_filename <- paste0(tools::file_path_sans_ext(report_name), ".html")
+    output_filename <- paste0(tools::file_path_sans_ext(report_name), "_smoke_test.html")
     
     params_file <- tempfile("quarto_params_", fileext = ".yml")
     on.exit(unlink(params_file), add = TRUE)
@@ -164,5 +194,13 @@ test_that("All Quarto reports render without error using demo data", {
 
     generated_files_dir <- file.path(render_out_dir, paste0(tools::file_path_sans_ext(report_name), "_files"))
     if (dir.exists(generated_files_dir)) unlink(generated_files_dir, recursive = TRUE)
+
+    # Defensive cleanup: if Quarto falls back to writing beside the .qmd,
+    # remove smoke-only artifacts from reports/ as well.
+    stray_html <- file.path(report_dir, output_filename)
+    if (file.exists(stray_html)) unlink(stray_html)
+
+    stray_files_dir <- file.path(report_dir, paste0(tools::file_path_sans_ext(output_filename), "_files"))
+    if (dir.exists(stray_files_dir)) unlink(stray_files_dir, recursive = TRUE)
   }
 })

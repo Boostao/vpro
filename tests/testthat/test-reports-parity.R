@@ -35,6 +35,48 @@ if (requireNamespace("rvest", quietly = TRUE)) {
   library(rvest)
 }
 
+cleanup_reports_parity_artifacts <- function() {
+  report_dir <- here::here("reports")
+
+  parity_dirs <- list.files(
+    path = report_dir,
+    pattern = "^vpro_report_parity_",
+    full.names = TRUE,
+    recursive = FALSE
+  )
+  if (length(parity_dirs) > 0) {
+    unlink(parity_dirs, recursive = TRUE, force = TRUE)
+  }
+
+  parity_html <- list.files(
+    path = report_dir,
+    pattern = "_parity_test\\.(html|pdf)$",
+    full.names = TRUE,
+    recursive = FALSE
+  )
+  if (length(parity_html) > 0) {
+    unlink(parity_html, force = TRUE)
+  }
+
+  parity_asset_dirs <- list.files(
+    path = report_dir,
+    pattern = "_parity_test_files$",
+    full.names = TRUE,
+    recursive = FALSE
+  )
+  if (length(parity_asset_dirs) > 0) {
+    unlink(parity_asset_dirs, recursive = TRUE, force = TRUE)
+  }
+}
+
+# Remove stale artifacts from previous interrupted runs.
+cleanup_reports_parity_artifacts()
+
+# Ensure this test file leaves no render artifacts behind.
+teardown({
+  cleanup_reports_parity_artifacts()
+})
+
 # ============================================================================
 # Test Helpers - Report Validation Infrastructure
 # ============================================================================
@@ -72,8 +114,15 @@ render_test_report <- function(template_name, params = list(), format = "html") 
   
   # Set output file name
   output_base <- tools::file_path_sans_ext(template_name)
-  output_name <- paste0(output_base, ".", format)
+  output_name <- paste0(output_base, "_parity_test.", format)
   output_file <- file.path(output_dir, output_name)
+  stray_output_file <- file.path(report_dir, output_name)
+  stray_assets_dir <- file.path(report_dir, paste0(tools::file_path_sans_ext(output_name), "_files"))
+
+  on.exit({
+    if (file.exists(stray_output_file)) unlink(stray_output_file, force = TRUE)
+    if (dir.exists(stray_assets_dir)) unlink(stray_assets_dir, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
 
   param_to_yaml_scalar <- function(x) {
     if (is.null(x)) return("null")
