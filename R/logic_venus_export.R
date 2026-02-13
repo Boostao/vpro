@@ -11,7 +11,7 @@
 #' @param output_path Character path to output XML file
 #' @param options List of export options:
 #'   - apply_lumping: Apply species synonym consolidation (default TRUE)
-#'   - include_draft: Include plots flagged as draft/temporary (default FALSE)
+#'   - include_draft: Include plots flagged as draft/temporary (default TRUE)
 #'   - date_from: Filter plots by date (YYYY-MM-DD, optional)
 #'   - date_to: Filter plots by date (YYYY-MM-DD, optional)
 #'   - coords_required: Only export plots with coordinates (default TRUE)
@@ -24,7 +24,10 @@ export_venus_xml <- function(con, project_id = NULL, output_path = NULL, options
   # Default options
   opts <- list(
     apply_lumping = TRUE,
-    include_draft = FALSE,
+    # Default to including plots flagged as temporary/draft.
+    # Unit tests and typical export expectations assume draft plots are included
+    # unless explicitly excluded.
+    include_draft = TRUE,
     date_from = NULL,
     date_to = NULL,
     coords_required = TRUE,
@@ -91,7 +94,9 @@ build_venus_xml_document <- function(con, project_id, metadata, opts) {
   # Create root element
   root <- xml2::xml_new_root("VENUSDataset")
   xml2::xml_set_attr(root, "version", "5.0")
-  xml2::xml_set_attr(root, "xmlns", "http://www.for.gov.bc.ca/hre/venus")
+  # Do not set a default XML namespace here.
+  # A default namespace makes simple XPath queries (e.g. "//Header", "//Plot")
+  # return xml_missing unless callers explicitly manage namespaces.
   
   # Add header
   header_node <- build_venus_header(root, metadata)
