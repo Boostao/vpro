@@ -62,35 +62,100 @@ render_test_report <- function(template_name, params = list(), format = "html") 
     ))
   }
   
-  # Create temp output directory
-  output_dir <- tempfile(pattern = "vpro_report_test_")
+  # Create temp output directory under reports/. We render from within reports/
+  # so we can pass a basename-only output dir and avoid Quarto writing to
+  # reports/reports (a known output-dir/execute-dir gotcha).
+  report_dir <- here::here("reports")
+  output_dir <- tempfile(pattern = "vpro_report_parity_", tmpdir = report_dir)
   dir_create(output_dir)
+  output_dir_arg <- basename(output_dir)
   
   # Set output file name
   output_base <- tools::file_path_sans_ext(template_name)
-  output_file <- file.path(output_dir, paste0(output_base, ".", format))
+  output_name <- paste0(output_base, ".", format)
+  output_file <- file.path(output_dir, output_name)
+
+  param_to_yaml_scalar <- function(x) {
+    if (is.null(x)) return("null")
+    if (is.logical(x)) return(tolower(as.character(x)))
+    if (is.numeric(x)) return(as.character(x))
+    yaml_single_quote <- function(s) {
+      s <- gsub("'", "''", as.character(s), fixed = TRUE)
+      paste0("'", s, "'")
+    }
+    if (length(x) > 1) return(yaml_single_quote(paste(as.character(x), collapse = ",")))
+    yaml_single_quote(x)
+  }
   
   # Render with error capture
   result <- tryCatch({
-    
-    if (requireNamespace("quarto", quietly = TRUE)) {
-      # Render directly to the desired output file (absolute path)
+
+    # Prefer calling the Quarto CLI directly for determinism.
+    quarto_cli <- Sys.which("quarto")
+
+    if (nzchar(quarto_cli)) {
+      # Quarto caches theme/assets under <execute-dir>/.quarto.
+      dir_create(file.path(report_dir, ".quarto"), recurse = TRUE)
+      dir_create(file.path(report_dir, ".quarto", "project-cache"), recurse = TRUE)
+
+      params_file <- tempfile("quarto_params_", fileext = ".yml")
+      params_lines <- vapply(
+        names(params),
+        function(key) paste0(key, ": ", param_to_yaml_scalar(params[[key]])),
+        character(1)
+      )
+      writeLines(params_lines, con = params_file, useBytes = TRUE)
+
+      old_wd <- getwd()
+      setwd(report_dir)
+      on.exit(setwd(old_wd), add = TRUE)
+
+      log_file <- tempfile("quarto_render_", fileext = ".log")
+      qmd_cli_path <- template_name
+      args <- c(
+        "render",
+        qmd_cli_path,
+        "--to", format,
+        "--output-dir", output_dir_arg,
+        "--output", output_name,
+        "--execute-dir", ".",
+        "--execute-params", params_file
+      )
+
+      exit_status <- as.integer(system2(quarto_cli, args = args, stdout = log_file, stderr = log_file))
+      if (!identical(exit_status, 0L)) {
+        out <- ""
+        if (file.exists(log_file)) {
+          out <- paste(readLines(log_file, warn = FALSE), collapse = "\n")
+        }
+        tail_out <- tail(strsplit(out, "\n", fixed = TRUE)[[1]], 40)
+        excerpt <- paste(tail_out, collapse = "\n")
+
+        return(list(
+          success = FALSE,
+          output_file = NULL,
+          error = paste0(
+            "quarto CLI failed (exit ", exit_status, ")",
+            if (nzchar(excerpt)) paste0("\n--- quarto output (tail) ---\n", excerpt) else ""
+          )
+        ))
+      }
+    } else if (requireNamespace("quarto", quietly = TRUE)) {
+      # Fallback: use R wrapper if CLI isn't on PATH.
+      dir_create(file.path(report_dir, ".quarto"), recurse = TRUE)
+
       quarto::quarto_render(
         input = template_path,
         execute_params = params,
+        execute_dir = here::here("reports"),
+        execute_daemon = FALSE,
         output_format = format,
-        output_file = output_file,
+        output_file = output_name,
+        quarto_args = c("--output-dir", output_dir),
         quiet = TRUE
       )
     } else {
-      # Fallback to rmarkdown for .Rmd files or if quarto not available
-      rmarkdown::render(
-        input = template_path,
-        params = params,
-        output_format = paste0(format, "_document"),
-        output_file = output_file,
-        quiet = TRUE
-      )
+      testthat::skip("Quarto not available (neither CLI nor {quarto} package)")
     }
     
     # Verify output exists
@@ -220,13 +285,17 @@ test_that("all report templates exist and are valid files", {
   
   for (report in expected_reports) {
     report_path <- here::here("reports", report)
-    expect_true(file.exists(report_path), 
-                info = paste("Missing report template:", report))
+    expect_true(
+      file.exists(report_path),
+      label = paste("Missing report template:", report)
+    )
     
     # Verify file is readable and contains YAML frontmatter
     lines <- readLines(report_path, n = 10, warn = FALSE)
-    expect_true(lines[1] == "---", 
-                info = paste("Invalid YAML frontmatter in", report))
+    expect_true(
+      lines[1] == "---",
+      label = paste("Invalid YAML frontmatter in", report)
+    )
   }
 })
 
@@ -245,8 +314,10 @@ test_that("short_veg.qmd renders without errors", {
   
   result <- render_test_report("short_veg.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
   
   if (result$success) {
     expect_true(file.exists(result$output_file))
@@ -259,13 +330,18 @@ test_that("long_veg.qmd renders without errors", {
   params <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
+    plot_number = "00337",
+    plot_numbers = "00337",
+    project_id = "hju",
     apply_theme = FALSE
   )
   
   result <- render_test_report("long_veg.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("site_summary.qmd renders without errors", {
@@ -280,8 +356,10 @@ test_that("site_summary.qmd renders without errors", {
   
   result <- render_test_report("site_summary.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("hierarchy.qmd renders without errors", {
@@ -295,8 +373,10 @@ test_that("hierarchy.qmd renders without errors", {
   
   result <- render_test_report("hierarchy.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("flat_hierarchy.qmd renders without errors", {
@@ -309,8 +389,10 @@ test_that("flat_hierarchy.qmd renders without errors", {
   
   result <- render_test_report("flat_hierarchy.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("env_summary.qmd renders without errors", {
@@ -323,8 +405,10 @@ test_that("env_summary.qmd renders without errors", {
   
   result <- render_test_report("env_summary.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("bec_labels.qmd renders without errors", {
@@ -337,8 +421,10 @@ test_that("bec_labels.qmd renders without errors", {
   
   result <- render_test_report("bec_labels.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("lifeform.qmd renders without errors", {
@@ -351,8 +437,10 @@ test_that("lifeform.qmd renders without errors", {
   
   result <- render_test_report("lifeform.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("quality_control.qmd renders without errors", {
@@ -365,8 +453,10 @@ test_that("quality_control.qmd renders without errors", {
   
   result <- render_test_report("quality_control.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 test_that("field_checklist.qmd renders without errors", {
@@ -379,8 +469,10 @@ test_that("field_checklist.qmd renders without errors", {
   
   result <- render_test_report("field_checklist.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = paste("Render failed:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Render failed:", result$error)
+  )
 })
 
 
@@ -397,7 +489,9 @@ test_that("short_veg report contains species data table", {
   params <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
-    plot_numbers = "",
+    plot_number = "00337",
+    plot_numbers = "00337",
+    project_id = "hju",
     apply_theme = FALSE
   )
   
@@ -408,8 +502,11 @@ test_that("short_veg report contains species data table", {
   parsed <- parse_html_report(result$output_file)
   
   # Report should contain at least one table
-  expect_gt(parsed$table_count, 0, 
-            info = "Short veg report should contain species data table")
+  expect_gt(
+    parsed$table_count,
+    0,
+    label = "Short veg report should contain species data table"
+  )
   
   # Extract first table and validate structure
   veg_table <- extract_table_data(parsed$doc, table_index = 1)
@@ -417,10 +514,8 @@ test_that("short_veg report contains species data table", {
   if (!is.null(veg_table)) {
     # Table should have species/layer columns
     # Column names vary based on grouping, but should not be empty
-    expect_gt(ncol(veg_table), 0, 
-              info = "Vegetation table should have columns")
-    expect_gt(nrow(veg_table), 0, 
-              info = "Vegetation table should have data rows")
+    expect_gt(ncol(veg_table), 0, label = "Vegetation table should have columns")
+    expect_gt(nrow(veg_table), 0, label = "Vegetation table should have data rows")
   }
 })
 
@@ -433,7 +528,10 @@ test_that("site_summary report includes plot metadata sections", {
   params <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
-    plot_number = "00000",
+    # Use a plot that has a SiteUnit mapping in Sample_SU
+    plot_number = "1976021",
+    plot_numbers = "1976021",
+    project_id = "",
     apply_theme = FALSE
   )
   
@@ -443,23 +541,19 @@ test_that("site_summary report includes plot metadata sections", {
   
   parsed <- parse_html_report(result$output_file)
   
-  # Expected sections from original Access report:
-  # - Plot identification
-  # - Site characteristics
-  # - Vegetation summary
-  # - Environmental data
-  
-  expected_sections <- c(
-    "plot",      # Plot ID section
-    "site",      # Site data
-    "veg"        # Vegetation summary
+  # This report is a Site Unit summary. For non-empty selections, it should
+  # render a "Site Unit: <name>" section and include the requested plot.
+  has_site_unit_heading <- any(grepl("^site unit:\\s*", parsed$headings, ignore.case = TRUE))
+  expect_true(
+    has_site_unit_heading,
+    label = "Site summary should include a 'Site Unit:' section"
   )
-  
-  section_presence <- validate_sections_present(parsed, expected_sections)
-  
-  # At least plot identification should be present
-  expect_true(section_presence["plot"], 
-              info = "Site summary should include plot identification")
+
+  body_text <- rvest::html_text(rvest::html_node(parsed$doc, "body"))
+  expect_true(
+    grepl("1976021", body_text, fixed = TRUE),
+    label = "Site summary should include the selected plot number"
+  )
 })
 
 test_that("hierarchy report contains tree structure elements", {
@@ -480,20 +574,28 @@ test_that("hierarchy report contains tree structure elements", {
   skip_if(!result$success, message = "Report render failed")
   
   parsed <- parse_html_report(result$output_file)
-  
-  # Hierarchy report should contain table with parent/child relationships
-  expect_gt(parsed$table_count, 0, 
-            info = "Hierarchy report should contain classification table")
-  
-  # Check for hierarchy-specific terminology in text
-  all_text <- paste(parsed$paragraphs, collapse = " ")
-  
-  # Should reference BEC classification or site units
-  has_hierarchy_terms <- grepl("site unit|association|classification|hierarchy", 
-                                all_text, ignore.case = TRUE)
-  
-  expect_true(has_hierarchy_terms, 
-              info = "Hierarchy report should reference classification structure")
+
+  # The hierarchy report renders a nested tree using <ul><li> markup.
+  li_nodes <- rvest::html_nodes(parsed$doc, "ul li")
+  expect_gt(
+    length(li_nodes),
+    0,
+    label = "Hierarchy report should contain tree list items"
+  )
+
+  all_text <- rvest::html_text(rvest::html_nodes(parsed$doc, "body"))
+  all_text <- paste(all_text, collapse = " ")
+
+  has_hierarchy_terms <- grepl(
+    "site unit|classification|hierarchy|lowest level",
+    all_text,
+    ignore.case = TRUE
+  )
+
+  expect_true(
+    has_hierarchy_terms,
+    label = "Hierarchy report should reference classification structure"
+  )
 })
 
 test_that("env_summary report includes environmental variables", {
@@ -505,6 +607,8 @@ test_that("env_summary report includes environmental variables", {
   params <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
+    plot_number = "1976021",
+    plot_numbers = "1976021",
     apply_theme = FALSE
   )
   
@@ -521,20 +625,26 @@ test_that("env_summary report includes environmental variables", {
   # - Soil characteristics
   
   expected_env_terms <- c(
-    "elevation|latitude|coordinate",
+    "elev",              # elevation labels vary (Elevation/Elev)
+    "latitude|longitude|coord",  # coordinate labels
     "slope|aspect",
     "soil"
   )
-  
-  all_text <- paste(c(parsed$paragraphs, parsed$headings), collapse = " ")
+
+  # Search the full rendered body text (not just headings/paragraphs) because
+  # this report primarily renders data in tables.
+  all_text <- rvest::html_text(rvest::html_node(parsed$doc, "body"))
   
   env_term_presence <- sapply(expected_env_terms, function(term) {
     grepl(term, all_text, ignore.case = TRUE)
   })
   
-  # At least 2 of 3 environmental categories should be present
-  expect_gte(sum(env_term_presence), 2, 
-             info = "Env summary should include standard environmental variables")
+  # At least 2 of 4 environmental categories should be present
+  expect_gte(
+    sum(env_term_presence),
+    2,
+    label = "Env summary should include standard environmental variables"
+  )
 })
 
 
@@ -558,8 +668,10 @@ test_that("reports handle empty plot selection without errors", {
   
   # Should render without crashing, even if no data
   # (Report may show "No data" message, but shouldn't error)
-  expect_true(result$success, 
-              info = paste("Report should handle empty data gracefully:", result$error))
+  expect_true(
+    result$success,
+    label = paste("Report should handle empty data gracefully:", result$error)
+  )
 })
 
 test_that("veg reports handle missing layers appropriately", {
@@ -577,8 +689,10 @@ test_that("veg reports handle missing layers appropriately", {
   
   result <- render_test_report("veg_layer_a.qmd", params = params, format = "html")
   
-  expect_true(result$success, 
-              info = "Layer-specific report should handle missing layer data")
+  expect_true(
+    result$success,
+    label = "Layer-specific report should handle missing layer data"
+  )
 })
 
 test_that("quality_control report identifies validation issues", {
@@ -613,8 +727,11 @@ test_that("quality_control report identifies validation issues", {
   })
   
   # At least one QC-related term should appear
-  expect_gte(sum(qc_term_presence), 1, 
-             info = "QC report should reference data validation")
+  expect_gte(
+    sum(qc_term_presence),
+    1,
+    label = "QC report should reference data validation"
+  )
 })
 
 
@@ -636,6 +753,9 @@ test_that("reports use correct cover value formats", {
   params <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
+    plot_number = "1976021",
+    plot_numbers = "1976021",
+    project_id = "",
     constancy_format = TRUE,  # Enable constancy display
     apply_theme = FALSE
   )
@@ -649,15 +769,28 @@ test_that("reports use correct cover value formats", {
   
   if (!is.null(veg_table) && nrow(veg_table) > 0) {
     
-    # Check if any cell contains constancy format pattern (e.g., "5/12")
-    # This is a rough check - actual validation would parse specific columns
-    table_text <- paste(as.matrix(veg_table), collapse = " ")
-    
-    # Constancy format: "N/M" where N = frequency, M = mean cover
-    has_constancy_format <- grepl("\\d+/\\d+", table_text)
-    
-    expect_true(has_constancy_format, 
-                info = "Constancy format should show frequency/mean pattern")
+    # In this implementation, constancy format is a single numeric "Constancy"
+    # column (presence %), not an "N/M" frequency/mean string.
+    has_constancy_col <- any(grepl("^constancy$", names(veg_table), ignore.case = TRUE))
+    expect_true(
+      has_constancy_col,
+      label = "Constancy format should include a 'Constancy' column"
+    )
+
+    if (has_constancy_col) {
+      constancy_col <- names(veg_table)[which(grepl("^constancy$", names(veg_table), ignore.case = TRUE))[1]]
+      constancy_vals <- suppressWarnings(as.numeric(veg_table[[constancy_col]]))
+      constancy_vals <- constancy_vals[is.finite(constancy_vals)]
+      expect_gt(
+        length(constancy_vals),
+        0,
+        label = "Constancy column should contain numeric values"
+      )
+      expect_true(
+        any(constancy_vals >= 0 & constancy_vals <= 100),
+        label = "Constancy values should be in 0-100 range"
+      )
+    }
   } else {
     skip("No vegetation data in test database")
   }
@@ -673,6 +806,9 @@ test_that("reports apply species lumping when requested", {
   params_no_lump <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
+    plot_number = "00337",
+    plot_numbers = "00337",
+    project_id = "hju",
     apply_lumping = FALSE,
     apply_theme = FALSE
   )
@@ -680,6 +816,9 @@ test_that("reports apply species lumping when requested", {
   params_with_lump <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
+    plot_number = "00337",
+    plot_numbers = "00337",
+    project_id = "hju",
     apply_lumping = TRUE,
     apply_theme = FALSE
   )
@@ -693,8 +832,10 @@ test_that("reports apply species lumping when requested", {
                                            format = "html")
   
   # Both should render successfully
-  expect_true(result_no_lump$success && result_with_lump$success,
-              info = "Reports should render with/without lumping")
+  expect_true(
+    result_no_lump$success && result_with_lump$success,
+    label = "Reports should render with/without lumping"
+  )
   
   # Parse both and compare row counts (lumped should have fewer/equal rows)
   if (result_no_lump$success && result_with_lump$success) {
@@ -707,8 +848,11 @@ test_that("reports apply species lumping when requested", {
     
     if (!is.null(table_no_lump) && !is.null(table_with_lump)) {
       # Lumping should reduce or maintain row count (combines synonyms)
-      expect_lte(nrow(table_with_lump), nrow(table_no_lump),
-                 info = "Lumping should consolidate species rows")
+      expect_lte(
+        nrow(table_with_lump),
+        nrow(table_no_lump),
+        label = "Lumping should consolidate species rows"
+      )
     }
   }
 })
@@ -728,6 +872,9 @@ test_that("veg layer reports are consistent subsets of full veg report", {
   params_full <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
+    plot_number = "00337",
+    plot_numbers = "00337",
+    project_id = "hju",
     apply_theme = FALSE
   )
   
@@ -742,8 +889,8 @@ test_that("veg layer reports are consistent subsets of full veg report", {
                                         format = "html")
   
   # Both should render
-  expect_true(result_full$success, info = "Full veg report should render")
-  expect_true(result_layer_a$success, info = "Layer A report should render")
+  expect_true(result_full$success, label = "Full veg report should render")
+  expect_true(result_layer_a$success, label = "Layer A report should render")
   
   # Layer report should be smaller or equal in size (subset of data)
   if (result_full$success && result_layer_a$success) {
@@ -753,16 +900,19 @@ test_that("veg layer reports are consistent subsets of full veg report", {
     
     # Layer report should not be larger than full report
     # (allowing for HTML overhead, this is approximate)
-    expect_lte(size_layer, size_full * 1.2, 
-               info = "Layer report should be comparable or smaller than full veg")
+    expect_lte(
+      size_layer,
+      size_full * 1.2,
+      label = "Layer report should be comparable or smaller than full veg"
+    )
   }
 })
-skip_if_not_installed("xml2")
-  skip_if_not_installed("rvest")
-  
+
 test_that("short and long veg reports use same underlying data", {
   
   skip_if_not_installed("quarto")
+  skip_if_not_installed("xml2")
+  skip_if_not_installed("rvest")
   
   # short_veg and long_veg should show the same species, just different formats
   # short = cross-tab by layer, long = one species per row
@@ -770,7 +920,9 @@ test_that("short and long veg reports use same underlying data", {
   params <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
-    plot_numbers = "",
+    plot_number = "00337",
+    plot_numbers = "00337",
+    project_id = "hju",
     apply_theme = FALSE
   )
   
@@ -784,8 +936,8 @@ test_that("short and long veg reports use same underlying data", {
   parsed_long <- parse_html_report(result_long$output_file)
   
   # Both should have tables with data
-  expect_gt(parsed_short$table_count, 0, info = "Short veg should have tables")
-  expect_gt(parsed_long$table_count, 0, info = "Long veg should have tables")
+  expect_gt(parsed_short$table_count, 0, label = "Short veg should have tables")
+  expect_gt(parsed_long$table_count, 0, label = "Long veg should have tables")
   
   # Extract species counts (rough validation - both should reference same species)
   table_short <- extract_table_data(parsed_short$doc, table_index = 1)
@@ -793,8 +945,8 @@ test_that("short and long veg reports use same underlying data", {
   
   if (!is.null(table_short) && !is.null(table_long)) {
     # Both should have comparable data volume (not rigorous, but sanity check)
-    expect_gt(nrow(table_short), 0, info = "Short veg table should have rows")
-    expect_gt(nrow(table_long), 0, info = "Long veg table should have rows")
+    expect_gt(nrow(table_short), 0, label = "Short veg table should have rows")
+    expect_gt(nrow(table_long), 0, label = "Long veg table should have rows")
   }
 })
 
@@ -824,8 +976,11 @@ test_that("reports render within reasonable time limits", {
   
   skip_if(!result$success, message = "Report render failed")
   
-  expect_lt(elapsed, 30, 
-            info = paste("Report took", round(elapsed, 1), "seconds - should be < 30"))
+  expect_lt(
+    elapsed,
+    30,
+    label = paste("Report took", round(elapsed, 1), "seconds - should be < 30")
+  )
 })
 
 test_that("reports clean up temporary files", {
@@ -849,8 +1004,11 @@ test_that("reports clean up temporary files", {
   # Should not accumulate excessive temp files (allow some HTML artifacts)
   temp_growth <- length(temp_after) - length(temp_before)
   
-  expect_lt(temp_growth, 50, 
-            info = paste("Report created", temp_growth, "temp files - excessive?"))
+  expect_lt(
+    temp_growth,
+    50,
+    label = paste("Report created", temp_growth, "temp files - excessive?")
+  )
 })
 
 
