@@ -106,6 +106,322 @@ init_sys_state <- function() {
   )
 }
 
+list_main_tables <- function(con) {
+  tryCatch({
+    tbl <- DBI::dbGetQuery(
+      con,
+      "SELECT table_name FROM duckdb_tables() WHERE internal = FALSE AND schema_name = 'main'"
+    )
+    unique(as.character(tbl$table_name))
+  }, error = function(e) {
+    unique(as.character(DBI::dbListTables(con)))
+  })
+}
+
+discover_prefixes_by_suffix <- function(con, suffix) {
+  if (is.null(suffix) || !nzchar(suffix)) return(character(0))
+
+  tables <- list_main_tables(con)
+  if (length(tables) == 0) return(character(0))
+
+  suffix_lower <- tolower(suffix)
+  out <- character(0)
+
+  for (tbl in tables) {
+    tbl_lower <- tolower(tbl)
+    if (!endsWith(tbl_lower, suffix_lower)) next
+    if (startsWith(tbl_lower, "usys")) next
+    out <- c(out, substr(tbl, 1, nchar(tbl) - nchar(suffix)))
+  }
+
+  sort(unique(out))
+}
+
+resolve_prefixed_table <- function(con, prefix, suffix) {
+  if (is.null(prefix) || !nzchar(prefix) || is.null(suffix) || !nzchar(suffix)) {
+    return(NULL)
+  }
+
+  target <- paste0(prefix, suffix)
+  tables <- list_main_tables(con)
+  if (target %in% tables) return(target)
+
+  idx <- match(tolower(target), tolower(tables))
+  if (!is.na(idx)) return(tables[[idx]])
+
+  NULL
+}
+
+is_valid_project_prefix <- function(prefix) {
+  is.character(prefix) &&
+    length(prefix) == 1L &&
+    !is.na(prefix) &&
+    grepl("^[A-Za-z][A-Za-z0-9_]*$", prefix)
+}
+
+list_project_tables <- function(con, prefix) {
+  if (!is_valid_project_prefix(prefix)) return(character(0))
+
+  tables <- list_main_tables(con)
+  pattern <- paste0("^", prefix, "_")
+  tables[grepl(pattern, tables, ignore.case = TRUE)]
+}
+
+create_project_table_set <- function(con, prefix, template_prefix = "Sample", overwrite = FALSE) {
+  if (!is_valid_project_prefix(prefix)) {
+    stop("Invalid project prefix. Use letters, numbers, and underscore; must start with a letter.")
+  }
+  if (!is_valid_project_prefix(template_prefix)) {
+    stop("Invalid template prefix.")
+  }
+  if (tolower(prefix) == tolower(template_prefix)) {
+    stop("New project prefix must differ from template prefix.")
+  }
+
+  tables <- list_main_tables(con)
+  template_pattern <- paste0("^", template_prefix, "_")
+  template_tables <- tables[grepl(template_pattern, tables, ignore.case = TRUE)]
+
+  if (length(template_tables) == 0) {
+    stop("No template tables found for prefix '", template_prefix, "'.")
+  }
+
+  for (template_tbl in template_tables) {
+    suffix <- sub(
+      paste0("^", template_prefix),
+      "",
+      template_tbl,
+      ignore.case = TRUE
+    )
+    target_tbl <- paste0(prefix, suffix)
+
+    if (DBI::dbExistsTable(con, target_tbl)) {
+      if (!isTRUE(overwrite)) {
+        stop("Target table already exists: ", target_tbl)
+      }
+      DBI::dbExecute(con, paste0("DROP TABLE ", DBI::dbQuoteIdentifier(con, target_tbl)))
+    }
+
+    DBI::dbExecute(
+      con,
+      paste0(
+        "CREATE TABLE ", DBI::dbQuoteIdentifier(con, target_tbl), " AS ",
+        "SELECT * FROM ", DBI::dbQuoteIdentifier(con, template_tbl), " WHERE 1=0"
+      )
+    )
+  }
+
+  metadata_table <- resolve_prefixed_table(con, prefix, "_Metadata")
+  if (!is.null(metadata_table)) {
+    cols <- tryCatch(DBI::dbListFields(con, metadata_table), error = function(e) character(0))
+    project_col <- cols[[match("projectid", tolower(cols))]]
+    if (!is.null(project_col) && nzchar(project_col)) {
+      DBI::dbExecute(
+        con,
+        paste0(
+          "INSERT INTO ", DBI::dbQuoteIdentifier(con, metadata_table), " (",
+          DBI::dbQuoteIdentifier(con, project_col), ") VALUES (?)"
+        ),
+        list(prefix)
+      )
+    }
+  }
+
+  invisible(prefix)
+}
+
+unattach_project_table_set <- function(con, prefix, protected_prefixes = c("Sample")) {
+  if (!is_valid_project_prefix(prefix)) {
+    stop("Invalid project prefix.")
+  }
+
+  protected <- tolower(protected_prefixes)
+  if (tolower(prefix) %in% protected) {
+    stop("Cannot unattach protected project prefix: ", prefix)
+  }
+
+  project_tables <- list_project_tables(con, prefix)
+  if (length(project_tables) == 0) {
+    return(invisible(character(0)))
+  }
+
+  for (tbl in project_tables) {
+    DBI::dbExecute(con, paste0("DROP TABLE ", DBI::dbQuoteIdentifier(con, tbl)))
+  }
+
+  invisible(project_tables)
+}
+
+attach_project_table_set <- function(con, db_path, prefix, replace_existing = FALSE, alias = "tmp_project_attach") {
+  if (!is_valid_project_prefix(prefix)) {
+    stop("Invalid project prefix.")
+  }
+  if (!is.character(db_path) || length(db_path) != 1L || is.na(db_path) || !nzchar(db_path)) {
+    stop("Database path is required.")
+  }
+  if (!file.exists(db_path)) {
+    stop("Database file does not exist: ", db_path)
+  }
+
+  attached <- list_attached_dbs(con)
+  if (alias %in% attached) {
+    detach_db(con, alias)
+  }
+
+  path_literal <- DBI::dbQuoteString(con, db_path)
+  alias_ident <- DBI::dbQuoteIdentifier(con, alias)
+  DBI::dbExecute(con, paste0("ATTACH ", path_literal, " AS ", alias_ident))
+
+  on.exit({
+    try(detach_db(con, alias), silent = TRUE)
+  }, add = TRUE)
+
+  src_tables <- DBI::dbGetQuery(
+    con,
+    "SELECT table_name FROM duckdb_tables() WHERE internal = FALSE AND schema_name = 'main' AND database_name = ?",
+    list(alias)
+  )$table_name
+
+  pattern <- paste0("^", prefix, "_")
+  src_tables <- src_tables[grepl(pattern, src_tables, ignore.case = TRUE)]
+  if (length(src_tables) == 0) {
+    stop("No project tables found in source DB for prefix: ", prefix)
+  }
+
+  copied <- character(0)
+  for (tbl in src_tables) {
+    if (DBI::dbExistsTable(con, tbl)) {
+      if (!isTRUE(replace_existing)) {
+        stop("Target table already exists: ", tbl)
+      }
+      DBI::dbExecute(con, paste0("DROP TABLE ", DBI::dbQuoteIdentifier(con, tbl)))
+    }
+
+    DBI::dbExecute(
+      con,
+      paste0(
+        "CREATE TABLE ", DBI::dbQuoteIdentifier(con, tbl), " AS ",
+        "SELECT * FROM ", DBI::dbQuoteIdentifier(con, alias), ".", DBI::dbQuoteIdentifier(con, tbl)
+      )
+    )
+    copied <- c(copied, tbl)
+  }
+
+  invisible(copied)
+}
+
+create_prefixed_table_from_template <- function(con, prefix, suffix, template_prefix = "Sample", overwrite = FALSE) {
+  if (!is_valid_project_prefix(prefix)) {
+    stop("Invalid project prefix. Use letters, numbers, and underscore; must start with a letter.")
+  }
+  if (!is_valid_project_prefix(template_prefix)) {
+    stop("Invalid template prefix.")
+  }
+  if (is.null(suffix) || !nzchar(suffix) || !grepl("^_[A-Za-z0-9_]+$", suffix)) {
+    stop("Invalid suffix.")
+  }
+
+  template_tbl <- resolve_prefixed_table(con, template_prefix, suffix)
+  if (is.null(template_tbl)) {
+    stop("Template table not found: ", paste0(template_prefix, suffix))
+  }
+
+  target_tbl <- paste0(prefix, suffix)
+  if (DBI::dbExistsTable(con, target_tbl)) {
+    if (!isTRUE(overwrite)) {
+      stop("Target table already exists: ", target_tbl)
+    }
+    DBI::dbExecute(con, paste0("DROP TABLE ", DBI::dbQuoteIdentifier(con, target_tbl)))
+  }
+
+  DBI::dbExecute(
+    con,
+    paste0(
+      "CREATE TABLE ", DBI::dbQuoteIdentifier(con, target_tbl), " AS ",
+      "SELECT * FROM ", DBI::dbQuoteIdentifier(con, template_tbl), " WHERE 1=0"
+    )
+  )
+
+  invisible(target_tbl)
+}
+
+unattach_prefixed_table <- function(con, prefix, suffix, protected_prefixes = c("Sample")) {
+  if (!is_valid_project_prefix(prefix)) {
+    stop("Invalid project prefix.")
+  }
+  if (is.null(suffix) || !nzchar(suffix) || !grepl("^_[A-Za-z0-9_]+$", suffix)) {
+    stop("Invalid suffix.")
+  }
+
+  if (tolower(prefix) %in% tolower(protected_prefixes)) {
+    stop("Cannot unattach protected prefix: ", prefix)
+  }
+
+  target_tbl <- resolve_prefixed_table(con, prefix, suffix)
+  if (is.null(target_tbl)) {
+    return(invisible(NULL))
+  }
+
+  DBI::dbExecute(con, paste0("DROP TABLE ", DBI::dbQuoteIdentifier(con, target_tbl)))
+  invisible(target_tbl)
+}
+
+attach_prefixed_table <- function(con, db_path, prefix, suffix, replace_existing = FALSE, alias = "tmp_single_attach") {
+  if (!is_valid_project_prefix(prefix)) {
+    stop("Invalid project prefix.")
+  }
+  if (is.null(suffix) || !nzchar(suffix) || !grepl("^_[A-Za-z0-9_]+$", suffix)) {
+    stop("Invalid suffix.")
+  }
+  if (!is.character(db_path) || length(db_path) != 1L || is.na(db_path) || !nzchar(db_path)) {
+    stop("Database path is required.")
+  }
+  if (!file.exists(db_path)) {
+    stop("Database file does not exist: ", db_path)
+  }
+
+  attached <- list_attached_dbs(con)
+  if (alias %in% attached) {
+    detach_db(con, alias)
+  }
+
+  path_literal <- DBI::dbQuoteString(con, db_path)
+  alias_ident <- DBI::dbQuoteIdentifier(con, alias)
+  DBI::dbExecute(con, paste0("ATTACH ", path_literal, " AS ", alias_ident))
+
+  on.exit({
+    try(detach_db(con, alias), silent = TRUE)
+  }, add = TRUE)
+
+  src_table <- paste0(prefix, suffix)
+  src_exists <- DBI::dbGetQuery(
+    con,
+    "SELECT COUNT(*) AS n FROM duckdb_tables() WHERE internal = FALSE AND schema_name = 'main' AND database_name = ? AND lower(table_name) = lower(?)",
+    list(alias, src_table)
+  )$n[[1]] > 0
+
+  if (!isTRUE(src_exists)) {
+    stop("Source table not found in attached DB: ", src_table)
+  }
+
+  if (DBI::dbExistsTable(con, src_table)) {
+    if (!isTRUE(replace_existing)) {
+      stop("Target table already exists: ", src_table)
+    }
+    DBI::dbExecute(con, paste0("DROP TABLE ", DBI::dbQuoteIdentifier(con, src_table)))
+  }
+
+  DBI::dbExecute(
+    con,
+    paste0(
+      "CREATE TABLE ", DBI::dbQuoteIdentifier(con, src_table), " AS ",
+      "SELECT * FROM ", DBI::dbQuoteIdentifier(con, alias), ".", DBI::dbQuoteIdentifier(con, src_table)
+    )
+  )
+
+  invisible(src_table)
+}
+
 # Preferences storage (SaveSetting/GetSetting analog)
 resolve_pref_schema <- function(con, schema) {
   if (!is.character(schema) || length(schema) != 1L || is.na(schema) || !nzchar(schema)) {
@@ -195,6 +511,7 @@ seed_default_preferences <- function(con, app = "VPro64") {
   seed_pref_default(con, "System", "Version", 3, app = app)
   seed_pref_default(con, "System", "Build", format(Sys.Date(), "%Y-%m-%d"), app = app)
   seed_pref_default(con, "System", "Installed", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), app = app)
+  seed_pref_default(con, "Message", "ShowWhatsNew", TRUE, app = app)
 }
 
 #' Set Current Project
@@ -210,15 +527,27 @@ set_project <- function(state, project_id, con) {
   state$sysCurrProject <- project_id
   state$CurrProjectName <- project_id
   
-  # Load Metadata
-  # VPro: USysProjectMetadata
-  meta <- dbGetQuery(con, "SELECT * FROM Sample_Metadata WHERE ProjectID = ?", list(project_id))
-  
+  meta <- data.frame()
+
+  project_meta_table <- resolve_prefixed_table(con, project_id, "_Metadata")
+  if (!is.null(project_meta_table)) {
+    meta <- tryCatch(
+      DBI::dbGetQuery(con, paste0("SELECT * FROM ", DBI::dbQuoteIdentifier(con, project_meta_table), " LIMIT 1")),
+      error = function(e) data.frame()
+    )
+  }
+
+  if (nrow(meta) == 0 && DBI::dbExistsTable(con, "Sample_Metadata")) {
+    meta <- tryCatch(
+      DBI::dbGetQuery(con, "SELECT * FROM Sample_Metadata WHERE ProjectID = ?", list(project_id)),
+      error = function(e) data.frame()
+    )
+  }
+
   if (nrow(meta) > 0) {
-    state$ProjectMetadata <- as.list(meta[1, ])
+    state$ProjectMetadata <- as.list(meta[1, , drop = FALSE])
   } else {
-    state$ProjectMetadata <- list()
-    warning(paste("No metadata found for project:", project_id))
+    state$ProjectMetadata <- list(projectid = project_id)
   }
   
   # Reset dependent context
