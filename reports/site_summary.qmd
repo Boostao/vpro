@@ -345,6 +345,9 @@ if (length(site_units) > 0 && nrow(su_data) > 0) {
     overview <- overview %>%
       left_join(site_meta, by = c("siteunit" = "siteseries"))
   }
+  if (!"siteserieslongname" %in% names(overview)) {
+    overview$siteserieslongname <- ""
+  }
   site_unit_overview <- overview %>%
     arrange(siteunit) %>%
     mutate(siteserieslongname = ifelse(is.na(siteserieslongname), "", siteserieslongname))
