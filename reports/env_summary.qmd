@@ -8,6 +8,9 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  display_value: "presence_mean"
+  constancy_format: false
+  apply_lumping: false
   colour_greater: 5
   gray_greater: 65
   apply_theme: true
@@ -21,7 +24,16 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
+
+utils_candidates <- c(
+  file.path(dirname(tryCatch(knitr::current_input(dir = TRUE), error = function(e) "")), "_vpro_report_utils.R"),
+  file.path(Sys.getenv("QUARTO_PROJECT_DIR", unset = ""), "reports", "_vpro_report_utils.R"),
+  file.path(getwd(), "reports", "_vpro_report_utils.R")
+)
+utils_candidates <- utils_candidates[nzchar(utils_candidates)]
+utils_path <- utils_candidates[file.exists(utils_candidates)][1]
+if (!nzchar(utils_path)) stop("Unable to locate reports/_vpro_report_utils.R")
+source(utils_path)
 
 options(knitr.table.format = "html")
 project_root <- params$project_root
@@ -30,6 +42,7 @@ db_path <- params$db_path
 if (!is.null(db_path) && nzchar(trimws(db_path))) {
   db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
   if (nzchar(db_candidate)) {
+    db_path <- db_candidate
     db_root <- dirname(dirname(db_candidate))
   }
 }
@@ -67,7 +80,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
     }
   }
 } else {
-  con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+  con <- vpro_duckdb_connect(db_path, root_dir = root_dir, read_only = TRUE, attach_lists = TRUE)
 }
 ```
 
@@ -140,12 +153,20 @@ normalize_env_cols <- function(df) {
 
 env <- normalize_env_cols(env)
 if (nrow(env) > 0 && nrow(site_unit_map) > 0) {
-  site_unit_map <- dplyr::rename(site_unit_map, plotnumber = PlotNumber, siteunit = SiteUnit)
-  env <- dplyr::left_join(env, site_unit_map, by = "plotnumber")
+  site_unit_map <- vpro_ensure_col(site_unit_map, "plotnumber", c("PlotNumber", "plotnumber"))
+  site_unit_map <- vpro_ensure_col(site_unit_map, "siteunit", c("SiteUnit", "siteunit"))
+  if (all(c("plotnumber", "siteunit") %in% names(site_unit_map))) {
+    site_unit_map <- site_unit_map[, c("plotnumber", "siteunit"), drop = FALSE]
+    env <- dplyr::left_join(env, site_unit_map, by = "plotnumber")
+  }
 }
 if (nrow(env) > 0 && nrow(unit_names) > 0) {
-  unit_names <- dplyr::rename(unit_names, siteunit = SiteSeries, siteunit_long = SiteSeriesLongName)
-  env <- dplyr::left_join(env, unit_names, by = "siteunit")
+  unit_names <- vpro_ensure_col(unit_names, "siteunit", c("SiteSeries", "siteseries", "siteunit"))
+  unit_names <- vpro_ensure_col(unit_names, "siteunit_long", c("SiteSeriesLongName", "siteserieslongname", "siteunit_long"))
+  if (all(c("siteunit", "siteunit_long") %in% names(unit_names))) {
+    unit_names <- unit_names[, c("siteunit", "siteunit_long"), drop = FALSE]
+    env <- dplyr::left_join(env, unit_names, by = "siteunit")
+  }
 }
 
 if (nzchar(trimws(params$site_unit))) {
@@ -189,7 +210,7 @@ if (nrow(env) > 0) {
         } else if (!is.na(colour_greater) && num >= colour_greater) {
           bg <- "#f9e27d"
         }
-        if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+        if (nzchar(bg)) cell_spec(label, background = bg) else label
       }, character(1))
     }
     num_cols <- names(env)[vapply(env, is.numeric, logical(1))]

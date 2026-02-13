@@ -8,6 +8,9 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  display_value: "presence_mean"
+  constancy_format: false
+  apply_lumping: false
   report_title: "Long Environment"
   project_root: ""
   db_path: "../data/vpro.duckdb"
@@ -21,7 +24,6 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
 
 options(knitr.table.format = "html")
 project_root <- params$project_root
@@ -52,6 +54,9 @@ for (candidate in root_candidates) {
 }
 if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
 source(file.path(root_dir, "R", "logic_reports_veg.R"))
+source(file.path(root_dir, "reports", "_vpro_report_utils.R"))
+
+has_kableExtra <- requireNamespace("kableExtra", quietly = TRUE)
 
 parquet_dir <- params$parquet_dir
 if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
@@ -77,8 +82,12 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   }
 } else {
   con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
-  if (file.exists(file.path(root_dir, "data", "vpro_lists.duckdb"))) {
-    dbExecute(con, "ATTACH 'data/vpro_lists.duckdb' AS lists")
+  lists_db <- file.path(root_dir, "data", "vpro_lists.duckdb")
+  if (file.exists(lists_db)) {
+    dbExecute(
+      con,
+      sprintf("ATTACH '%s' AS lists", gsub("'", "''", lists_db))
+    )
   }
 }
 ```
@@ -206,12 +215,20 @@ normalize_env_cols <- function(df) {
 
 env <- normalize_env_cols(env)
 if (nrow(env) > 0 && nrow(site_unit_map) > 0) {
-  site_unit_map <- dplyr::rename(site_unit_map, plotnumber = PlotNumber, siteunit = SiteUnit)
-  env <- dplyr::left_join(env, site_unit_map, by = "plotnumber")
+  site_unit_map <- vpro_ensure_col(site_unit_map, "plotnumber", c("PlotNumber", "plotnumber"))
+  site_unit_map <- vpro_ensure_col(site_unit_map, "siteunit", c("SiteUnit", "siteunit"))
+  if (all(c("plotnumber", "siteunit") %in% names(site_unit_map))) {
+    site_unit_map <- site_unit_map[, c("plotnumber", "siteunit"), drop = FALSE]
+    env <- dplyr::left_join(env, site_unit_map, by = "plotnumber")
+  }
 }
 if (nrow(env) > 0 && nrow(unit_names) > 0) {
-  unit_names <- dplyr::rename(unit_names, siteunit = SiteSeries, siteunit_long = SiteSeriesLongName)
-  env <- dplyr::left_join(env, unit_names, by = "siteunit")
+  unit_names <- vpro_ensure_col(unit_names, "siteunit", c("SiteSeries", "siteseries", "siteunit"))
+  unit_names <- vpro_ensure_col(unit_names, "siteunit_long", c("SiteSeriesLongName", "siteserieslongname", "siteunit_long"))
+  if (all(c("siteunit", "siteunit_long") %in% names(unit_names))) {
+    unit_names <- unit_names[, c("siteunit", "siteunit_long"), drop = FALSE]
+    env <- dplyr::left_join(env, unit_names, by = "siteunit")
+  }
 }
 
 if (nzchar(trimws(params$site_unit))) {
@@ -254,9 +271,10 @@ if (nrow(env) > 0) {
       header <- paste0("## Site Unit: ", name)
       cat(header, "\n\n")
       apply_theme <- isTRUE(params$apply_theme)
+      apply_table_theme <- apply_theme && has_kableExtra
       colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
       gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
-      if (apply_theme && nrow(section) > 0) {
+      if (apply_table_theme && nrow(section) > 0) {
         style_numeric <- function(vec) {
           labels <- as.character(vec)
           vapply(seq_along(labels), function(i) {
@@ -270,7 +288,7 @@ if (nrow(env) > 0) {
             } else if (!is.na(colour_greater) && num >= colour_greater) {
               bg <- "#f9e27d"
             }
-            if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+            if (nzchar(bg) && has_kableExtra) kableExtra::cell_spec(label, background = bg) else label
           }, character(1))
         }
         num_cols <- names(section)[vapply(section, is.numeric, logical(1))]
@@ -282,16 +300,23 @@ if (nrow(env) > 0) {
         }
       }
 
-      kbl(section, align = "l", escape = !apply_theme) %>%
-        kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE) %>%
-        print()
+      tbl <- kbl(section, align = "l", escape = !apply_table_theme)
+      if (apply_table_theme) {
+        tbl <- kableExtra::kable_styling(
+          tbl,
+          bootstrap_options = c("striped", "hover", "condensed"),
+          full_width = FALSE
+        )
+      }
+      print(tbl)
       cat("\n\n")
     }
   } else {
     apply_theme <- isTRUE(params$apply_theme)
+    apply_table_theme <- apply_theme && has_kableExtra
     colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
     gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
-    if (apply_theme && nrow(env) > 0) {
+    if (apply_table_theme && nrow(env) > 0) {
       style_numeric <- function(vec) {
         labels <- as.character(vec)
         vapply(seq_along(labels), function(i) {
@@ -305,7 +330,7 @@ if (nrow(env) > 0) {
           } else if (!is.na(colour_greater) && num >= colour_greater) {
             bg <- "#f9e27d"
           }
-          if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+          if (nzchar(bg) && has_kableExtra) kableExtra::cell_spec(label, background = bg) else label
         }, character(1))
       }
       num_cols <- names(env)[vapply(env, is.numeric, logical(1))]
@@ -317,8 +342,15 @@ if (nrow(env) > 0) {
       }
     }
 
-    kbl(env, align = "l", escape = !apply_theme) %>%
-      kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+    tbl <- kbl(env, align = "l", escape = !apply_table_theme)
+    if (apply_table_theme) {
+      tbl <- kableExtra::kable_styling(
+        tbl,
+        bootstrap_options = c("striped", "hover", "condensed"),
+        full_width = FALSE
+      )
+    }
+    tbl
   }
 } else {
   cat("No environment data found.")

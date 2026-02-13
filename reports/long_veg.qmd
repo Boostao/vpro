@@ -31,9 +31,18 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
 
 options(knitr.table.format = "html")
+has_kableExtra <- requireNamespace("kableExtra", quietly = TRUE)
+if (has_kableExtra) {
+  kbl <- kableExtra::kbl
+  kable_styling <- kableExtra::kable_styling
+  cell_spec <- kableExtra::cell_spec
+} else {
+  kbl <- function(x, ...) knitr::kable(x, ...)
+  kable_styling <- function(x, ...) x
+  cell_spec <- function(x, ...) x
+}
 project_root <- params$project_root
 db_root <- ""
 db_path <- params$db_path
@@ -92,7 +101,9 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```
 
 ```{r load-data, include=FALSE}
-plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
+plot_number <- if (is.null(params$plot_number)) "" else as.character(params$plot_number)
+plot_numbers <- if (is.null(params$plot_numbers)) "" else as.character(params$plot_numbers)
+plots <- parse_plot_numbers(plot_number, plot_numbers)
 veg <- load_veg_report_data(
   con,
   plot_numbers = plots,
@@ -224,7 +235,12 @@ if (nrow(report_table) > 0) {
   if (length(plot_cols) > 0) {
     plot_data <- report_table[, plot_cols, drop = FALSE]
     plot_data <- as.data.frame(lapply(plot_data, function(col) {
-      ifelse(is.na(col), "", round(col, 1))
+      if (is.numeric(col)) {
+        return(ifelse(is.na(col), "", round(col, 1)))
+      }
+      num <- suppressWarnings(as.numeric(col))
+      out <- ifelse(is.na(num), ifelse(is.na(col), "", as.character(col)), round(num, 1))
+      out
     }), stringsAsFactors = FALSE)
     names(plot_data) <- plot_cols
     view <- cbind(view, plot_data)
@@ -249,7 +265,7 @@ if (nrow(report_table) > 0) {
           } else if (!is.na(colour_greater) && value >= colour_greater) {
             bg <- "#f9e27d"
           }
-          if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+          if (nzchar(bg)) cell_spec(label, background = bg) else label
         }, character(1))
       }
       for (col_name in num_cols) {

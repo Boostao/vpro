@@ -8,6 +8,9 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  display_value: "standard"
+  constancy_format: false
+  apply_lumping: false
   report_title: "BEC Labels"
   colour_greater: 5
   gray_greater: 65
@@ -21,7 +24,6 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
 
 options(knitr.table.format = "html")
 project_root <- params$project_root

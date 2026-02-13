@@ -9,6 +9,10 @@ params:
   plot_numbers: ""
   site_unit: ""
   project_id: ""
+  report_title: "Site Unit Report"
+  display_value: "presence_mean"
+  constancy_format: false
+  apply_lumping: false
   colour_greater: 5
   gray_greater: 65
   apply_theme: true
@@ -21,7 +25,16 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
+
+utils_candidates <- c(
+  file.path(dirname(tryCatch(knitr::current_input(dir = TRUE), error = function(e) "")), "_vpro_report_utils.R"),
+  file.path(Sys.getenv("QUARTO_PROJECT_DIR", unset = ""), "reports", "_vpro_report_utils.R"),
+  file.path(getwd(), "reports", "_vpro_report_utils.R")
+)
+utils_candidates <- utils_candidates[nzchar(utils_candidates)]
+utils_path <- utils_candidates[file.exists(utils_candidates)][1]
+if (!nzchar(utils_path)) stop("Unable to locate reports/_vpro_report_utils.R")
+source(utils_path)
 
 options(knitr.table.format = "html")
 project_root <- params$project_root
@@ -30,6 +43,7 @@ db_path <- params$db_path
 if (!is.null(db_path) && nzchar(trimws(db_path))) {
   db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
   if (nzchar(db_candidate)) {
+    db_path <- db_candidate
     db_root <- dirname(dirname(db_candidate))
   }
 }
@@ -83,8 +97,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
     }
   }
 } else {
-  con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
-  dbExecute(con, "ATTACH '../data/vpro_lists.duckdb' AS lists")
+  con <- vpro_duckdb_connect(db_path, root_dir = root_dir, read_only = TRUE, attach_lists = TRUE)
 }
 
 aspect_to_text <- function(value_in) {
@@ -198,7 +211,7 @@ style_report_table <- function(df, columns = NULL) {
       } else if (!is.na(colour_greater) && num >= colour_greater) {
         bg <- "#f9e27d"
       }
-      if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+      if (nzchar(bg)) cell_spec(label, background = bg) else label
     }, character(1))
   }
   target_cols <- columns
@@ -283,10 +296,15 @@ if (length(plots) > 0 && DBI::dbExistsTable(con, "Sample_Mineral")) {
 }
 
 if (nrow(su_data) == 0 && nrow(env_data) > 0 && DBI::dbExistsTable(con, "Sample_SU")) {
-  env_plots <- unique(as.character(env_data$PlotNumber))
-  plot_sql <- paste(DBI::dbQuoteString(con, env_plots), collapse = ", ")
-  su_sql <- sprintf("SELECT PlotNumber, SiteUnit FROM Sample_SU WHERE PlotNumber IN (%s)", plot_sql)
-  su_data <- DBI::dbGetQuery(con, su_sql)
+  plot_col <- vpro_first_existing_col(env_data, c("PlotNumber", "plotnumber"))
+  if (!is.na(plot_col)) {
+    env_plots <- unique(as.character(env_data[[plot_col]]))
+    plot_sql <- vpro_sql_in_list(con, env_plots)
+    if (!is.null(plot_sql)) {
+      su_sql <- sprintf("SELECT PlotNumber, SiteUnit FROM Sample_SU WHERE PlotNumber IN (%s)", plot_sql)
+      su_data <- DBI::dbGetQuery(con, su_sql)
+    }
+  }
 }
 
 if (nrow(env_data) > 0) {

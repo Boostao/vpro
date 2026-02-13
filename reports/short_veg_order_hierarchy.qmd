@@ -24,9 +24,18 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
 
 options(knitr.table.format = "html")
+has_kableExtra <- requireNamespace("kableExtra", quietly = TRUE)
+if (has_kableExtra) {
+  kbl <- kableExtra::kbl
+  kable_styling <- kableExtra::kable_styling
+  cell_spec <- kableExtra::cell_spec
+} else {
+  kbl <- function(x, ...) knitr::kable(x, ...)
+  kable_styling <- function(x, ...) x
+  cell_spec <- function(x, ...) x
+}
 project_root <- params$project_root
 db_root <- ""
 db_path <- params$db_path
@@ -75,7 +84,9 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```
 
 ```{r load-data, include=FALSE}
-plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
+plot_number <- if (is.null(params$plot_number)) "" else as.character(params$plot_number)
+plot_numbers <- if (is.null(params$plot_numbers)) "" else as.character(params$plot_numbers)
+plots <- parse_plot_numbers(plot_number, plot_numbers)
 if (length(plots) == 0 && (nzchar(trimws(params$site_unit)) || nzchar(trimws(params$project_id)))) {
   seed <- load_veg_report_data(
     con,
@@ -201,7 +212,7 @@ if (nrow(summary) > 0 && (constancy_format || display_mode != "standard")) {
         } else if (!is.na(colour_greater) && num >= colour_greater) {
           bg <- "#f9e27d"
         }
-        if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+        if (nzchar(bg)) cell_spec(label, background = bg) else label
       }, character(1))
     }
     num_cols <- names(view)[vapply(view, is.numeric, logical(1))]
@@ -250,7 +261,7 @@ if (nrow(summary) > 0 && (constancy_format || display_mode != "standard")) {
         } else if (!is.na(colour_greater) && num >= colour_greater) {
           bg <- "#f9e27d"
         }
-        if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+        if (nzchar(bg)) cell_spec(label, background = bg) else label
       }, character(1))
     }
     num_cols <- names(view)[vapply(view, is.numeric, logical(1))]

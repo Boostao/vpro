@@ -4,6 +4,13 @@ format:
   html:
     theme: journal
 params:
+  plot_number: "00000"
+  plot_numbers: ""
+  site_unit: ""
+  project_id: ""
+  display_value: "presence_mean"
+  constancy_format: false
+  apply_lumping: false
   project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
@@ -18,7 +25,16 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
+
+utils_candidates <- c(
+  file.path(dirname(tryCatch(knitr::current_input(dir = TRUE), error = function(e) "")), "_vpro_report_utils.R"),
+  file.path(Sys.getenv("QUARTO_PROJECT_DIR", unset = ""), "reports", "_vpro_report_utils.R"),
+  file.path(getwd(), "reports", "_vpro_report_utils.R")
+)
+utils_candidates <- utils_candidates[nzchar(utils_candidates)]
+utils_path <- utils_candidates[file.exists(utils_candidates)][1]
+if (!nzchar(utils_path)) stop("Unable to locate reports/_vpro_report_utils.R")
+source(utils_path)
 
 options(knitr.table.format = "html")
 project_root <- params$project_root
@@ -89,7 +105,6 @@ normalize_hier_cols <- function(df) {
   if (!is.na(tag_col)) df$Tag <- df[[tag_col]]
   df
 }
-
 hier <- normalize_hier_cols(hier)
 hier$Name <- as.character(hier$Name)
 hier$Tag <- ifelse(is.null(hier$Tag), "", as.character(hier$Tag))
@@ -173,7 +188,7 @@ if (nrow(hier) > 0) {
       view[[i]] <- ifelse(
         nzchar(flat[[level_cols[[i]]]]),
         if (apply_theme) {
-          kableExtra::cell_spec(
+          cell_spec(
             flat[[level_cols[[i]]]],
             background = tag_to_color(flat[[tag_col]])
           )

@@ -10,37 +10,11 @@ params:
   project_id: ""
   apply_lumping: false
   display_value: "standard"
+  constancy_format: false
   colour_greater: 5
-        apply_theme <- isTRUE(params$apply_theme)
-        colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
-        gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
-        if (apply_theme && nrow(view) > 0) {
-          style_numeric <- function(vec) {
-            labels <- as.character(vec)
-            vapply(seq_along(labels), function(i) {
-              label <- labels[[i]]
-              if (!nzchar(label)) return("")
-              num <- suppressWarnings(as.numeric(label))
-              if (is.na(num)) return(label)
-              bg <- ""
-              if (!is.na(gray_greater) && num >= gray_greater) {
-                bg <- "#e6e6e6"
-              } else if (!is.na(colour_greater) && num >= colour_greater) {
-                bg <- "#f9e27d"
-              }
-              if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
-            }, character(1))
-          }
-          num_cols <- names(view)[vapply(view, is.numeric, logical(1))]
-          if (length(num_cols) == 0) {
-            num_cols <- intersect(c("Presence", "MeanCover"), names(view))
-          }
-          for (col_name in num_cols) {
-            view[[col_name]] <- style_numeric(view[[col_name]])
-          }
-        }
+  gray_greater: 65
   apply_theme: true
-        kbl(view, align = "l", escape = !apply_theme) %>%
+  report_title: "Lifeform Summary"
   project_root: ""
   db_path: "../data/vpro.duckdb"
   parquet_dir: ""
@@ -50,9 +24,18 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
 
 options(knitr.table.format = "html")
+has_kableExtra <- requireNamespace("kableExtra", quietly = TRUE)
+if (has_kableExtra) {
+  kbl <- kableExtra::kbl
+  kable_styling <- kableExtra::kable_styling
+  cell_spec <- kableExtra::cell_spec
+} else {
+  kbl <- function(x, ...) knitr::kable(x, ...)
+  kable_styling <- function(x, ...) x
+  cell_spec <- function(x, ...) x
+}
 project_root <- params$project_root
 db_root <- ""
 db_path <- params$db_path
@@ -111,7 +94,9 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```
 
 ```{r load-data, include=FALSE}
-plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
+plot_number <- if (is.null(params$plot_number)) "" else as.character(params$plot_number)
+plot_numbers <- if (is.null(params$plot_numbers)) "" else as.character(params$plot_numbers)
+plots <- parse_plot_numbers(plot_number, plot_numbers)
 veg <- load_veg_report_data(
   con,
   plot_numbers = plots,
@@ -121,10 +106,17 @@ veg <- load_veg_report_data(
 )
 
 if (DBI::dbExistsTable(con, "Sample_SU")) {
-  su <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
-  su$plotnumber <- as.character(su$PlotNumber)
-  su$siteunit <- as.character(su$SiteUnit)
-  veg <- dplyr::left_join(veg, su[, c("plotnumber", "siteunit")], by = "plotnumber")
+  su <- DBI::dbGetQuery(con, "SELECT * FROM Sample_SU")
+  if (nrow(su) > 0) {
+    names(su) <- tolower(names(su))
+    plot_col <- if ("plotnumber" %in% names(su)) "plotnumber" else NULL
+    site_col <- if ("siteunit" %in% names(su)) "siteunit" else NULL
+    if (!is.null(plot_col) && !is.null(site_col)) {
+      su$plotnumber <- as.character(su[[plot_col]])
+      su$siteunit <- as.character(su[[site_col]])
+      veg <- dplyr::left_join(veg, su[, c("plotnumber", "siteunit")], by = "plotnumber")
+    }
+  }
 }
 
 if (nzchar(trimws(params$site_unit))) {

@@ -4,6 +4,9 @@ format:
   html:
     theme: journal
 params:
+  plot_number: "00000"
+  plot_numbers: ""
+  site_unit: ""
   project_root: ""
   db_path: "../data/vpro.duckdb"
   report_title: "Quality Control"
@@ -11,6 +14,9 @@ params:
   gray_greater: 65
   apply_theme: true
   project_id: ""
+  display_value: "presence_mean"
+  constancy_format: false
+  apply_lumping: false
   enforce_filter: true
   site_quality_min: "Good"
   veg_quality_min: "Good"
@@ -27,12 +33,30 @@ params:
 library(duckdb)
 library(dplyr)
 library(knitr)
-library(kableExtra)
+
+utils_candidates <- c(
+  file.path(dirname(tryCatch(knitr::current_input(dir = TRUE), error = function(e) "")), "_vpro_report_utils.R"),
+  file.path(Sys.getenv("QUARTO_PROJECT_DIR", unset = ""), "reports", "_vpro_report_utils.R"),
+  file.path(getwd(), "reports", "_vpro_report_utils.R")
+)
+utils_candidates <- utils_candidates[nzchar(utils_candidates)]
+utils_path <- utils_candidates[file.exists(utils_candidates)][1]
+if (!nzchar(utils_path)) stop("Unable to locate reports/_vpro_report_utils.R")
+source(utils_path)
 
 options(knitr.table.format = "html")
 apply_theme <- isTRUE(params$apply_theme)
 colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
 gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
+
+root_dir <- vpro_project_root(params$project_root)
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_path <- tryCatch(
+    normalizePath(db_path, winslash = "/", mustWork = FALSE),
+    error = function(e) params$db_path
+  )
+}
 
 style_qc_table <- function(df, columns = NULL) {
   if (!apply_theme || nrow(df) == 0) return(df)
@@ -49,7 +73,7 @@ style_qc_table <- function(df, columns = NULL) {
       } else if (!is.na(colour_greater) && num >= colour_greater) {
         bg <- "#f9e27d"
       }
-      if (nzchar(bg)) kableExtra::cell_spec(label, background = bg) else label
+      if (nzchar(bg)) cell_spec(label, background = bg) else label
     }, character(1))
   }
   target_cols <- columns
@@ -85,10 +109,8 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
     )
   }
 } else {
-  con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
-  dbExecute(con, "ATTACH '../data/vpro_lists.duckdb' AS lists")
+  con <- vpro_duckdb_connect(db_path, root_dir = root_dir, read_only = TRUE, attach_lists = TRUE)
 }
-on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
 ```
 
 ```{r queries, include=FALSE}
@@ -105,7 +127,9 @@ dq_map <- setNames(dq_list$ItemOrder, dq_list$Item)
 
 lookup_quality_order <- function(value) {
   if (is.null(value) || is.na(value) || !nzchar(trimws(as.character(value)))) return(NA_integer_)
-  dq_map[[as.character(value)]]
+  out <- dq_map[[as.character(value)]]
+  if (is.null(out) || length(out) == 0) return(NA_integer_)
+  suppressWarnings(as.integer(out))
 }
 
 site_threshold <- lookup_quality_order(params$site_quality_min)
@@ -114,12 +138,30 @@ soil_threshold <- lookup_quality_order(params$soil_quality_min)
 
 safe_query <- function(table, sql) {
   if (!DBI::dbExistsTable(con, table)) return(data.frame())
-  DBI::dbGetQuery(con, sql)
+  tryCatch(
+    DBI::dbGetQuery(con, sql),
+    error = function(e) data.frame()
+  )
 }
 
-su_df <- safe_query("Sample_SU", "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+su_df <- safe_query(
+  "Sample_SU",
+  "SELECT plotnumber AS PlotNumber,
+          siteunit AS SiteUnit
+   FROM Sample_SU"
+)
 admin_df <- safe_query("Sample_Admin", "SELECT Plot AS PlotNumber, SitePlotQuality, VegPlotQuality, SoilPlotQuality, BEC_Use FROM Sample_Admin")
-env_df <- safe_query("Sample_Env", "SELECT PlotNumber, ProjectID, Zone, SubZone, Latitude, Longitude, Elevation FROM Sample_Env")
+env_df <- safe_query(
+  "Sample_Env",
+  "SELECT plotnumber AS PlotNumber,
+          projectid AS ProjectID,
+          _zone AS Zone,
+          subzone AS SubZone,
+          latitude AS Latitude,
+          longitude AS Longitude,
+          elevation AS Elevation
+   FROM Sample_Env"
+)
 
 qc_df <- merge(su_df, admin_df, by = "PlotNumber", all.x = TRUE)
 qc_df <- merge(qc_df, env_df, by = "PlotNumber", all.x = TRUE)
@@ -172,7 +214,7 @@ qc_df$include <- site_ok & veg_ok & soil_ok & bec_ok
 qc_included <- qc_df[qc_df$include, , drop = FALSE]
 qc_removed <- qc_df[!qc_df$include, , drop = FALSE]
 
-qc_removed$RemovedBy <- ""
+qc_removed$RemovedBy <- character(nrow(qc_removed))
 if (nrow(qc_removed) > 0) {
   fail_site <- !site_ok[!qc_df$include]
   fail_veg <- !veg_ok[!qc_df$include]
@@ -199,18 +241,35 @@ range_issues <- env_df[
 
 species_issues <- data.frame()
 if (DBI::dbExistsTable(con, "Sample_Veg")) {
-  species_issues <- dbGetQuery(
-    con,
-    "SELECT v.plotnumber, v.species
-     FROM Sample_Veg v
-     LEFT JOIN lists.SppList s ON v.species = s.code
-     WHERE s.code IS NULL"
-  )
+  spp_table <- if (DBI::dbExistsTable(con, "lists.SppList")) {
+    "lists.SppList"
+  } else if (DBI::dbExistsTable(con, "SppList")) {
+    "SppList"
+  } else if (DBI::dbExistsTable(con, "vpro.SppList")) {
+    "vpro.SppList"
+  } else {
+    NA_character_
+  }
+
+  if (!is.na(spp_table)) {
+    species_issues <- tryCatch(
+      dbGetQuery(
+        con,
+        sprintf(
+          "SELECT v.plotnumber, v.species\n     FROM Sample_Veg v\n     LEFT JOIN %s s ON v.species = s.code\n     WHERE s.code IS NULL",
+          spp_table
+        )
+      ),
+      error = function(e) data.frame()
+    )
+  }
   if (nzchar(project_filter) && DBI::dbExistsTable(con, "Sample_Env")) {
     species_issues <- merge(species_issues, env_df[, c("PlotNumber", "ProjectID")], by.x = "plotnumber", by.y = "PlotNumber", all.x = TRUE)
     species_issues <- species_issues[species_issues$ProjectID == project_filter, c("plotnumber", "species"), drop = FALSE]
   }
 }
+
+dbDisconnect(con, shutdown = TRUE)
 ```
 
 # `r params$report_title`
