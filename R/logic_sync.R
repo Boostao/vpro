@@ -532,6 +532,32 @@ merge_ensure_tables <- function(con) {
     tryCatch(db_add_column_if_missing(con, staging_table, "base_row_version", "INTEGER"), error = function(e) NULL)
   }
 
+  # DuckDB requires a UNIQUE/PRIMARY KEY constraint (or unique index) for
+  # `INSERT .. ON CONFLICT (cols)` to be valid. In production, cloud tables
+  # should already have these constraints, but in tests we often create minimal
+  # tables without indexes.
+  tryCatch(
+    DBI::dbExecute(
+      con,
+      "CREATE UNIQUE INDEX IF NOT EXISTS uq_sample_env_plot_project ON master.core.sample_env(plot_number, project_id)"
+    ),
+    error = function(e) NULL
+  )
+  tryCatch(
+    DBI::dbExecute(
+      con,
+      "CREATE UNIQUE INDEX IF NOT EXISTS uq_sample_su_plot_project ON master.core.sample_su(plot_number, project_id)"
+    ),
+    error = function(e) NULL
+  )
+  tryCatch(
+    DBI::dbExecute(
+      con,
+      "CREATE UNIQUE INDEX IF NOT EXISTS uq_sample_veg_keys ON master.core.sample_veg(plot_number, species_code, layer_code, project_id)"
+    ),
+    error = function(e) NULL
+  )
+
   invisible(TRUE)
 }
 
