@@ -1,0 +1,23 @@
+// BC Gov Bootstrap 5 theme (compiled locally)
+//
+// This file is the single entrypoint that stitches together:
+// - BC Gov variable overrides (lib/bsw5/dist/bcgov/_variables.scss)
+// - Bootstrap 5 SCSS shipped with bslib
+// - BC Gov component/override rules (lib/bsw5/dist/bcgov/_bootswatch.scss)
+
+// Bootstrap 5 functions first (BC Gov variables use e.g. tint-color())
+@import "functions";
+
+@import "bcgov/variables";
+
+// Bootstrap 5 (provided by the bslib package; see build script load paths)
+@import "bootstrap";
+
+@import "bcgov/bootswatch";
+
+// The upstream BC Gov theme targets `nav.navbar-static-top`. bslib uses the
+// Bootstrap 5 `.navbar` class, so apply the key header styling there too.
+nav.navbar {
+  background-color: theme-color(primary-nav);
+  border-bottom: 2px solid theme-color(bcgold);
+}

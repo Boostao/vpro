@@ -4,16 +4,31 @@
 ui <- page_navbar(
   id = "main_tabs",
   title = "VPro Shiny",
-  theme = bs_theme(version = 5, bootswatch = "flatly"),
+  theme = bs_theme(version = 5),
   header = tagList(
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "bcgov-static/font.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "bcgov/bcgov.css")
+    ),
     shinyjs::useShinyjs(),
     tags$script(HTML("(function(){\n  function shouldIgnoreKey(evt){\n    var tag = (evt.target && evt.target.tagName) ? evt.target.tagName.toLowerCase() : '';\n    return tag === 'input' || tag === 'textarea' || evt.target.isContentEditable;\n  }\n\n  document.addEventListener('keydown', function(e){\n    var key = (e.key || '').toLowerCase();\n    if ((e.ctrlKey || e.metaKey) && key === 's') {\n      e.preventDefault();\n      Shiny.setInputValue('global_save', Date.now());\n      return;\n    }\n    if ((e.ctrlKey || e.metaKey) && key === 'n') {\n      e.preventDefault();\n      Shiny.setInputValue('global_new', Date.now());\n      return;\n    }\n    if (shouldIgnoreKey(e)) return;\n  });\n})();"))
+    ,
+    tags$div(
+      class = "d-md-none px-2 pb-2",
+      actionButton(
+        "btn_toggle_context",
+        "Context",
+        class = "btn btn-outline-secondary btn-sm w-100"
+      )
+    )
   ),
   
   # Sidebar (Global Context)
   sidebar = sidebar(
     width = 300,
     title = "Context",
+    id = "context_sidebar",
+    open = "desktop",
     selectInput("sel_project", "Project", choices = NULL),
     selectInput("sel_su", "Site Unit / Plot", choices = NULL),
     hr(),

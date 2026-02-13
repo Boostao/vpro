@@ -1,6 +1,36 @@
 # Server Logic Code
 # Manages Global State and Module Initializations
 
+init_bcgov_static_resources <- function() {
+  static_dir <- file.path(tempdir(), "vpro-bcgov-static")
+  fonts_dir <- file.path(static_dir, "fonts")
+  dir.create(fonts_dir, recursive = TRUE, showWarnings = FALSE)
+
+  font_css_src <- file.path(getwd(), "lib", "bsw5", "dist", "bcgov", "font.css")
+  font_css_dst <- file.path(static_dir, "font.css")
+  if (file.exists(font_css_src)) {
+    file.copy(font_css_src, font_css_dst, overwrite = TRUE)
+  }
+
+  font_files_src <- list.files(
+    file.path(getwd(), "fonts"),
+    pattern = "\\.woff2?$",
+    full.names = TRUE
+  )
+  if (length(font_files_src) > 0) {
+    file.copy(font_files_src, fonts_dir, overwrite = TRUE)
+  }
+
+  tryCatch(
+    shiny::addResourcePath("bcgov-static", static_dir),
+    error = function(e) {
+      message("BC Gov static resources not registered: ", conditionMessage(e))
+    }
+  )
+}
+
+init_bcgov_static_resources()
+
 server <- function(input, output, session) {
   
   # 1. Database Connection
@@ -138,6 +168,10 @@ server <- function(input, output, session) {
     }
 
     showNotification("No default New action for this tab.", type = "message")
+  })
+
+  observeEvent(input$btn_toggle_context, {
+    bslib::toggle_sidebar("context_sidebar")
   })
   
   # 7. Initialize Sub-Modules

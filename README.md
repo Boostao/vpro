@@ -32,6 +32,10 @@ This project is a migration of the VPro64 Microsoft Access application to R Shin
 1. Run `scripts/01_build_database.R` to populate the DuckDB database (to be created).
 2. Run the application using `shiny::runApp()`.
 
+### Mobile Context sidebar
+
+On narrow/mobile layouts, the **Context** sidebar (Project/Plot selectors) collapses into an off-canvas panel. Use the **Context** button to open/close it.
+
 ## Testing
 
 - Unit and integration tests: `Rscript -e "testthat::test_dir('tests/testthat')"`
