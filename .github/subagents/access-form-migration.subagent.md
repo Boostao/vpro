@@ -38,14 +38,22 @@ Do not skip the implementation spec. It is the authoritative behavior contract.
 1. Generate or refresh form implementation spec.
 2. Generate or refresh UI scaffold (Shiny skill), or derive equivalent target-framework layout from it.
 3. Reimplement event behavior and data flows from the spec:
-   - Event mapping (`[Event Procedure]` -> handlers)
+   - Event mapping (`[Event Procedure]` -> handlers for all `On*` properties)
+   - Event-to-logic trace (handler -> local calls -> module calls)
    - Procedure call graph and module dependencies
-   - Source bindings (`RecordSource`, `ControlSource`, `RowSource`, etc.)
+   - Source bindings (`RecordSource`, `ControlSource`, `RowSource`, and other `*Source` contracts)
 4. Adapt UI to target environment while preserving functional intent:
    - Respect platform conventions and usability
    - Keep naming traceable to original controls where feasible
 5. Insert placeholders for missing dependencies/integration surfaces.
 6. Produce a migration report with parity status and unresolved gaps.
+
+## Investigation strategy (required)
+
+For complex forms, investigate recursively and in parallel where safe:
+- Resolve each event handler chain independently when possible.
+- Trace subforms recursively and merge findings into a coherent parent-child architecture.
+- Split module dependency lookups across parallel investigations, then consolidate unresolved hooks.
 
 ## Placeholder policy (required)
 
@@ -85,6 +93,8 @@ Return a concise report containing:
    - each item includes: source reference, impact, proposed hookup
 5. Validation performed
    - commands/tests run and results
+
+The report must be explicit enough for another agent instance to continue implementation without re-discovery.
 
 ## Definition of done
 

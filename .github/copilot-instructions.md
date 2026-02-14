@@ -75,6 +75,8 @@ When the user asks to migrate, port, adapt, reimplement, or modernize an Access 
 
 `.github/subagents/access-form-migration.subagent.md`
 
+Do not implement full form migration directly in the primary agent when this route applies.
+
 Trigger this delegation for prompts containing intents such as:
 - "migrate form"
 - "reimplement Access form"

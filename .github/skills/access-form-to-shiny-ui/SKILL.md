@@ -1,4 +1,3 @@
-```skill
 ---
 name: access-form-to-shiny-ui
 description: Convert Microsoft Access forms exported with Application.SaveAsText into Shiny UI R files using Tools/access_form_to_shiny.R. Use this when asked to migrate or scaffold Access form UI into Shiny.
@@ -8,6 +7,8 @@ license: Proprietary - Internal project use only
 # Access Form to Shiny UI
 
 Use this skill to convert Access form export files (`*.txt`, generated with `Application.SaveAsText`) into Shiny UI files (`ui_<form>.R`) while preserving visual layout metadata and control names.
+
+Treat generated UI as the DOM/layout equivalent scaffold for migration analysis.
 
 ## Preconditions
 
@@ -26,7 +27,7 @@ Use this skill to convert Access form export files (`*.txt`, generated with `App
 ## Notes
 
 - Preserve layout scaffold and control names where possible.
+- Keep generated identifiers traceable to Access control names for event/logic mapping.
+- Use this output together with `FORM_IMPL_SPEC_<form>.md` (from `access-form-impl-spec`) for full behavior migration.
 - Do not claim VBA/event logic has been migrated by this script.
 - Report unsupported controls as placeholders.
-
-```

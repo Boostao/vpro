@@ -324,6 +324,58 @@ write_spec <- function(form_file, spec_path, recursive = TRUE, visited = charact
     )
   }
 
+  detected_event_props <- sort(unique(vapply(handlers, function(h) h$event_property, character(1))))
+  event_rule_lines <- character(0)
+  if (length(detected_event_props) > 0L) {
+    for (ep in detected_event_props) {
+      suffix <- get_event_suffix(ep)
+      event_rule_lines <- c(
+        event_rule_lines,
+        paste0("- `", ep, "` -> control scope handler `", "<ControlName>_", suffix, "` ; form scope handler `Form_", suffix, "`")
+      )
+    }
+  }
+
+  event_trace_rows <- list()
+  for (h in handlers) {
+    proc <- proc_map[[tolower(h$handler_name)]]
+    if (is.null(proc)) {
+      event_trace_rows[[length(event_trace_rows) + 1L]] <- sprintf(
+        "| %s | %s | %s | Missing local handler | None | None | None found |",
+        escape_md(h$control_name),
+        h$event_property,
+        h$handler_name
+      )
+      next
+    }
+
+    calls <- extract_called_functions(proc$body)
+    refs <- extract_me_control_refs(proc$body)
+    local_proc_names <- vapply(procs, function(x) x$name, character(1))
+    local_calls <- calls[tolower(calls) %in% tolower(local_proc_names)]
+    external_calls <- setdiff(calls, local_calls)
+
+    ext_locs <- character(0)
+    for (fn in external_calls) {
+      key <- tolower(fn)
+      if (!is.null(module_defs[[key]])) {
+        ext_locs <- c(ext_locs, paste0(fn, " -> ", paste(unique(module_defs[[key]]), collapse = "; ")))
+      }
+    }
+
+    event_trace_rows[[length(event_trace_rows) + 1L]] <- sprintf(
+      "| %s | %s | %s | lines %d-%d | %s | %s | %s |",
+      escape_md(h$control_name),
+      h$event_property,
+      h$handler_name,
+      proc$start_line,
+      proc$end_line,
+      if (length(local_calls) > 0L) escape_md(paste(unique(local_calls), collapse = ", ")) else "None",
+      if (length(external_calls) > 0L) escape_md(paste(unique(external_calls), collapse = ", ")) else "None",
+      if (length(ext_locs) > 0L) escape_md(paste(ext_locs, collapse = " | ")) else "None found"
+    )
+  }
+
   proc_sections <- character(0)
   for (p in procs) {
     calls <- extract_called_functions(p$body)
@@ -394,6 +446,15 @@ write_spec <- function(form_file, spec_path, recursive = TRUE, visited = charact
     "| Control | Type | Event Property | Expected Handler | Local Procedure Found |",
     "|---|---|---|---|---|",
     if (length(event_rows) > 0L) unlist(event_rows) else "| (none) | - | - | - | - |",
+    "",
+    "## 4b) Event Resolution Rules",
+    "- Access event properties with `[Event Procedure]` map by removing the `On` prefix and binding to VBA handlers.",
+    if (length(event_rule_lines) > 0L) event_rule_lines else "- No `[Event Procedure]` bindings detected.",
+    "",
+    "## 4c) Event-to-Logic Trace",
+    "| Control | Event Property | Handler | Local Handler Status | Local Calls | External Calls | Module Definitions |",
+    "|---|---|---|---|---|---|---|",
+    if (length(event_trace_rows) > 0L) unlist(event_trace_rows) else "| (none) | - | - | - | - | - | - |",
     "",
     "## 5) VBA Procedure Graph (Form Scope)",
     if (length(proc_sections) > 0L) proc_sections else "No local VBA procedures parsed.",
