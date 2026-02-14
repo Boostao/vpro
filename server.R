@@ -67,12 +67,14 @@ server <- function(input, output, session) {
   # Preferences (SaveSetting/GetSetting analog)
   seed_default_preferences(con)
   pref_project <- get_pref(con, "Current", "CurrProject", default = NULL)
-  pref_plot <- get_pref(con, "Current", "CurrPlotList", default = NULL)
+  pref_su_table <- get_pref(con, "Current", "CurrPlotList", default = "None")
+  pref_plot <- get_pref(con, "Current", "CurrPlotNumber", default = NULL)
   pref_hierarchy <- get_pref(con, "Current", "CurrHierarchy", default = NULL)
   pref_form <- get_pref(con, "Current", "DataFormName", default = NULL)
   pref_user <- get_pref(con, "User", "UserName", default = Sys.getenv("USER", "Unknown"))
 
   state$PrefProject <- pref_project
+  state$PrefSUTable <- pref_su_table
   state$PrefPlot <- pref_plot
   state$PrefHierarchy <- pref_hierarchy
   state$CurrHierarchy <- pref_hierarchy
@@ -93,7 +95,6 @@ server <- function(input, output, session) {
   HIER_ACTION_ATTACH <- "__hier_action_attach__"
   HIER_ACTION_NEW <- "__hier_action_new__"
   HIER_ACTION_UNATTACH <- "__hier_action_unattach__"
-  HIER_ACTION_NONE <- "__hier_action_none__"
   HIER_ACTION_SEPARATOR <- "__hier_action_separator__"
   project_refresh <- reactiveVal(0L)
 
@@ -131,7 +132,7 @@ server <- function(input, output, session) {
     selected
   }
 
-  refresh_su_dropdown <- function(project_prefix, selected_plot = NULL) {
+  refresh_su_dropdown <- function(selected_su = NULL) {
     su_actions <- c(
       "Attach" = SU_ACTION_ATTACH,
       "New" = SU_ACTION_NEW,
@@ -140,42 +141,58 @@ server <- function(input, output, session) {
       "--------------------------------------" = SU_ACTION_SEPARATOR
     )
 
-    if (is.null(project_prefix) || !nzchar(project_prefix)) {
-      choices <- build_selector_choices(character(0), su_actions, include_none = TRUE)
-      updateSelectInput(session, "sel_su", choices = choices, selected = SU_ACTION_NONE)
+    su_choices <- discover_prefixes_by_suffix(con, "_SU")
+    values <- build_selector_choices(su_choices, su_actions, include_none = TRUE)
+    selected_su <- resolve_dynamic_selection(
+      selected = selected_su,
+      preferred = state$PrefSUTable,
+      dynamic_values = su_choices,
+      none_value = SU_ACTION_NONE
+    )
+
+    updateSelectInput(session, "sel_su", choices = values, selected = selected_su)
+    invisible(su_choices)
+  }
+
+  refresh_plot_dropdown <- function(su_prefix, selected_plot = NULL) {
+    if (is.null(su_prefix) || !nzchar(su_prefix) || identical(su_prefix, "None")) {
+      updateSelectInput(session, "sel_plot", choices = character(0), selected = character(0))
       return(invisible(character(0)))
     }
 
-    env_table <- resolve_prefixed_table(con, project_prefix, "_Env")
-    plot_values <- character(0)
-
-    if (!is.null(env_table)) {
-      plot_col <- tryCatch({
-        cols <- DBI::dbListFields(con, env_table)
-        cols[[match("plotnumber", tolower(cols))]]
-      }, error = function(e) NULL)
-
-      if (!is.null(plot_col) && nzchar(plot_col)) {
-        query <- paste0(
-          "SELECT DISTINCT ", DBI::dbQuoteIdentifier(con, plot_col), " AS plotnumber ",
-          "FROM ", DBI::dbQuoteIdentifier(con, env_table), " ",
-          "WHERE ", DBI::dbQuoteIdentifier(con, plot_col), " IS NOT NULL ",
-          "ORDER BY ", DBI::dbQuoteIdentifier(con, plot_col)
-        )
-        plots <- dbGetQuery(con, query)
-        plot_values <- as.character(plots$plotnumber)
-      }
+    su_table <- resolve_prefixed_table(con, su_prefix, "_SU")
+    if (is.null(su_table)) {
+      updateSelectInput(session, "sel_plot", choices = character(0), selected = character(0))
+      return(invisible(character(0)))
     }
 
-    values <- build_selector_choices(plot_values, su_actions, include_none = TRUE)
+    plot_col <- tryCatch({
+      cols <- DBI::dbListFields(con, su_table)
+      cols[[match("plotnumber", tolower(cols))]]
+    }, error = function(e) NULL)
+
+    if (is.null(plot_col) || !nzchar(plot_col)) {
+      updateSelectInput(session, "sel_plot", choices = character(0), selected = character(0))
+      return(invisible(character(0)))
+    }
+
+    query <- paste0(
+      "SELECT DISTINCT ", DBI::dbQuoteIdentifier(con, plot_col), " AS plotnumber ",
+      "FROM ", DBI::dbQuoteIdentifier(con, su_table), " ",
+      "WHERE ", DBI::dbQuoteIdentifier(con, plot_col), " IS NOT NULL ",
+      "ORDER BY ", DBI::dbQuoteIdentifier(con, plot_col)
+    )
+    plots <- dbGetQuery(con, query)
+    plot_values <- as.character(plots$plotnumber)
+
     selected_plot <- resolve_dynamic_selection(
       selected = selected_plot,
       preferred = state$PrefPlot,
       dynamic_values = plot_values,
-      none_value = SU_ACTION_NONE
+      none_value = NULL
     )
 
-    updateSelectInput(session, "sel_su", choices = values, selected = selected_plot)
+    updateSelectInput(session, "sel_plot", choices = plot_values, selected = selected_plot)
     invisible(plot_values)
   }
 
@@ -185,16 +202,15 @@ server <- function(input, output, session) {
       "Attach" = HIER_ACTION_ATTACH,
       "New" = HIER_ACTION_NEW,
       "Unattach" = HIER_ACTION_UNATTACH,
-      "None" = HIER_ACTION_NONE,
       "--------------------------------------" = HIER_ACTION_SEPARATOR
     )
 
-    values <- build_selector_choices(hierarchy_choices, hierarchy_actions, include_none = TRUE)
+    values <- build_selector_choices(hierarchy_choices, hierarchy_actions, include_none = FALSE)
     selected_hierarchy <- resolve_dynamic_selection(
       selected = selected_hierarchy,
       preferred = state$PrefHierarchy,
       dynamic_values = hierarchy_choices,
-      none_value = HIER_ACTION_NONE
+      none_value = NULL
     )
 
     updateSelectInput(
@@ -301,8 +317,10 @@ server <- function(input, output, session) {
     # Update State Logic
     set_project(state, input$sel_project, con)
     set_pref(con, "Current", "CurrProject", input$sel_project)
-
-    refresh_su_dropdown(input$sel_project)
+    state$PrefSUTable <- "None"
+    set_pref(con, "Current", "CurrPlotList", "None")
+    refresh_su_dropdown(selected_su = "None")
+    refresh_plot_dropdown("None")
   })
 
   observeEvent(input$project_new_confirm, {
@@ -370,15 +388,18 @@ server <- function(input, output, session) {
     req(input$sel_su)
 
     if (identical(input$sel_su, SU_ACTION_SEPARATOR)) {
-      refresh_su_dropdown(state$CurrProject %||% state$PrefProject, selected_plot = state$CurrSU %||% state$PrefPlot)
+      refresh_su_dropdown(selected_su = state$PrefSUTable)
       return()
     }
 
     if (identical(input$sel_su, SU_ACTION_NONE)) {
-      set_su(state, NULL)
+      state$PrefSUTable <- "None"
       set_pref(con, "Current", "CurrPlotList", "None")
-      state$PrefPlot <- "None"
-      showNotification("Current site unit cleared.", type = "message")
+      refresh_plot_dropdown("None")
+      set_su(state, NULL)
+      state$PrefPlot <- NULL
+      set_pref(con, "Current", "CurrPlotNumber", "")
+      showNotification("Current site unit table cleared.", type = "message")
       return()
     }
 
@@ -394,7 +415,7 @@ server <- function(input, output, session) {
         ),
         easyClose = TRUE
       ))
-      refresh_su_dropdown(state$CurrProject %||% state$PrefProject, selected_plot = state$CurrSU %||% state$PrefPlot)
+      refresh_su_dropdown(selected_su = state$PrefSUTable)
       return()
     }
 
@@ -410,7 +431,7 @@ server <- function(input, output, session) {
         ),
         easyClose = TRUE
       ))
-      refresh_su_dropdown(state$CurrProject %||% state$PrefProject, selected_plot = state$CurrSU %||% state$PrefPlot)
+      refresh_su_dropdown(selected_su = state$PrefSUTable)
       return()
     }
 
@@ -430,13 +451,20 @@ server <- function(input, output, session) {
         ),
         easyClose = TRUE
       ))
-      refresh_su_dropdown(state$CurrProject %||% state$PrefProject, selected_plot = state$CurrSU %||% state$PrefPlot)
+      refresh_su_dropdown(selected_su = state$PrefSUTable)
       return()
     }
 
-    set_su(state, input$sel_su)
+    state$PrefSUTable <- input$sel_su
     set_pref(con, "Current", "CurrPlotList", input$sel_su)
-    state$PrefPlot <- input$sel_su
+    refresh_plot_dropdown(input$sel_su)
+  })
+
+  observeEvent(input$sel_plot, {
+    req(input$sel_plot)
+    set_su(state, input$sel_plot)
+    state$PrefPlot <- input$sel_plot
+    set_pref(con, "Current", "CurrPlotNumber", input$sel_plot)
   })
 
   observeEvent(input$su_new_confirm, {
@@ -450,7 +478,9 @@ server <- function(input, output, session) {
         overwrite = isTRUE(input$su_new_overwrite)
       )
       removeModal()
-      refresh_su_dropdown(state$CurrProject %||% state$PrefProject, selected_plot = state$CurrSU %||% state$PrefPlot)
+      refresh_su_dropdown(selected_su = trimws(input$su_new_prefix))
+      updateSelectInput(session, "sel_su", selected = trimws(input$su_new_prefix))
+      refresh_plot_dropdown(trimws(input$su_new_prefix))
       showNotification(paste0("Created site unit table: ", trimws(input$su_new_prefix), "_SU"), type = "message")
     }, error = function(e) {
       showNotification(conditionMessage(e), type = "error")
@@ -468,7 +498,9 @@ server <- function(input, output, session) {
         replace_existing = isTRUE(input$su_attach_replace)
       )
       removeModal()
-      refresh_su_dropdown(state$CurrProject %||% state$PrefProject, selected_plot = state$CurrSU %||% state$PrefPlot)
+      refresh_su_dropdown(selected_su = trimws(input$su_attach_prefix))
+      updateSelectInput(session, "sel_su", selected = trimws(input$su_attach_prefix))
+      refresh_plot_dropdown(trimws(input$su_attach_prefix))
       showNotification(paste0("Attached site unit table: ", trimws(input$su_attach_prefix), "_SU"), type = "message")
     }, error = function(e) {
       showNotification(conditionMessage(e), type = "error")
@@ -480,7 +512,12 @@ server <- function(input, output, session) {
     tryCatch({
       removed <- unattach_prefixed_table(con, input$su_unattach_prefix, suffix = "_SU")
       removeModal()
-      refresh_su_dropdown(state$CurrProject %||% state$PrefProject, selected_plot = state$CurrSU %||% state$PrefPlot)
+      if (identical(tolower(state$PrefSUTable %||% ""), tolower(input$su_unattach_prefix))) {
+        state$PrefSUTable <- "None"
+        set_pref(con, "Current", "CurrPlotList", "None")
+        refresh_plot_dropdown("None")
+      }
+      refresh_su_dropdown(selected_su = state$PrefSUTable)
       if (!is.null(removed)) {
         showNotification(paste0("Unattached site unit table: ", removed), type = "message")
       }
@@ -498,15 +535,6 @@ server <- function(input, output, session) {
 
     if (identical(input$sel_hierarchy, HIER_ACTION_SEPARATOR)) {
       refresh_hierarchy_dropdown(selected_hierarchy = state$CurrHierarchy %||% state$PrefHierarchy)
-      return()
-    }
-
-    if (identical(input$sel_hierarchy, HIER_ACTION_NONE)) {
-      state$CurrHierarchy <- NULL
-      state$sysCurrHierarchy <- NULL
-      state$PrefHierarchy <- "None"
-      set_pref(con, "Current", "CurrHierarchy", "None")
-      showNotification("Current hierarchy cleared.", type = "message")
       return()
     }
 
@@ -628,6 +656,13 @@ server <- function(input, output, session) {
   observeEvent(input$btn_nav_data_entry, {
     bslib::nav_select("main_tabs", "Vegetation", session = session)
   })
+
+  mod_data_entry_context_server(
+    "data_entry_context",
+    state = state,
+    con = con,
+    open_data_entry_trigger = reactive(input$btn_nav_data_entry)
+  )
 
   observeEvent(input$btn_nav_two_page, {
     bslib::nav_select("main_tabs", "Site & Env", session = session)
