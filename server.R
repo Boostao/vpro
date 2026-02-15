@@ -154,48 +154,6 @@ server <- function(input, output, session) {
     invisible(su_choices)
   }
 
-  refresh_plot_dropdown <- function(su_prefix, selected_plot = NULL) {
-    if (is.null(su_prefix) || !nzchar(su_prefix) || identical(su_prefix, "None")) {
-      updateSelectInput(session, "sel_plot", choices = character(0), selected = character(0))
-      return(invisible(character(0)))
-    }
-
-    su_table <- resolve_prefixed_table(con, su_prefix, "_SU")
-    if (is.null(su_table)) {
-      updateSelectInput(session, "sel_plot", choices = character(0), selected = character(0))
-      return(invisible(character(0)))
-    }
-
-    plot_col <- tryCatch({
-      cols <- DBI::dbListFields(con, su_table)
-      cols[[match("plotnumber", tolower(cols))]]
-    }, error = function(e) NULL)
-
-    if (is.null(plot_col) || !nzchar(plot_col)) {
-      updateSelectInput(session, "sel_plot", choices = character(0), selected = character(0))
-      return(invisible(character(0)))
-    }
-
-    query <- paste0(
-      "SELECT DISTINCT ", DBI::dbQuoteIdentifier(con, plot_col), " AS plotnumber ",
-      "FROM ", DBI::dbQuoteIdentifier(con, su_table), " ",
-      "WHERE ", DBI::dbQuoteIdentifier(con, plot_col), " IS NOT NULL ",
-      "ORDER BY ", DBI::dbQuoteIdentifier(con, plot_col)
-    )
-    plots <- dbGetQuery(con, query)
-    plot_values <- as.character(plots$plotnumber)
-
-    selected_plot <- resolve_dynamic_selection(
-      selected = selected_plot,
-      preferred = state$PrefPlot,
-      dynamic_values = plot_values,
-      none_value = NULL
-    )
-
-    updateSelectInput(session, "sel_plot", choices = plot_values, selected = selected_plot)
-    invisible(plot_values)
-  }
-
   refresh_hierarchy_dropdown <- function(selected_hierarchy = NULL) {
     hierarchy_choices <- discover_prefixes_by_suffix(con, "_Hierarchy")
     hierarchy_actions <- c(
@@ -458,13 +416,6 @@ server <- function(input, output, session) {
     state$PrefSUTable <- input$sel_su
     set_pref(con, "Current", "CurrPlotList", input$sel_su)
     refresh_plot_dropdown(input$sel_su)
-  })
-
-  observeEvent(input$sel_plot, {
-    req(input$sel_plot)
-    set_su(state, input$sel_plot)
-    state$PrefPlot <- input$sel_plot
-    set_pref(con, "Current", "CurrPlotNumber", input$sel_plot)
   })
 
   observeEvent(input$su_new_confirm, {

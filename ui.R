@@ -44,7 +44,6 @@ ui <- page_navbar(
       ),
       selectInput("sel_project", "Project:", choices = NULL),
       selectInput("sel_su", "Site Unit:", choices = NULL),
-      selectInput("sel_plot", "Plot:", choices = NULL),
       selectInput(
         "sel_hierarchy",
         "Hierarchy:",
