@@ -29,6 +29,19 @@ fs882_coerce_chr <- function(value) {
   if (!nzchar(text)) NA_character_ else text
 }
 
+fs882_coerce_soil_value <- function(table_name, col_name, value) {
+  numeric_cols <- list(
+    Sample_Humus = c("upperdepth", "lowerdepth", "humusformph"),
+    Sample_Mineral = c("upperdepth", "lowerdepth", "percentcoarsefragstotal")
+  )
+
+  if (!is.null(numeric_cols[[table_name]]) && col_name %in% numeric_cols[[table_name]]) {
+    return(fs882_coerce_numeric(value))
+  }
+
+  fs882_coerce_chr(value)
+}
+
 fs882_list_choices <- function(con, list_name) {
   sql <- paste(
     "SELECT item, itemdescription",
@@ -180,6 +193,14 @@ mod_fs882_6x4xl_ui <- function(id) {
             actionButton(ns("btnSaveVeg"), "Save Vegetation", class = "btn-success")
           ),
           DT::DTOutput(ns("veg_table"))
+        ),
+        nav_panel(
+          "Soil: Humus",
+          rhandsontable::rHandsontableOutput(ns("hot_humus"))
+        ),
+        nav_panel(
+          "Soil: Mineral",
+          rhandsontable::rHandsontableOutput(ns("hot_mineral"))
         )
       )
     )
@@ -192,6 +213,8 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
 
     rv <- reactiveValues(
       veg = data.frame(),
+      humus = data.frame(),
+      mineral = data.frame(),
       selected_row = NULL,
       current_plot = NULL
     )
@@ -274,7 +297,21 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
         list(plot_id)
       )
 
+      humus_df <- DBI::dbGetQuery(
+        con,
+        "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon",
+        list(plot_id)
+      )
+
+      mineral_df <- DBI::dbGetQuery(
+        con,
+        "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon",
+        list(plot_id)
+      )
+
       rv$veg <- veg_df
+      rv$humus <- humus_df
+      rv$mineral <- mineral_df
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
       set_pref(con, "Current", "CurrPlotNumber", plot_id)
@@ -332,6 +369,73 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
         editable = list(target = "cell", disable = list(columns = c(0, 1))),
         options = list(pageLength = 12, scrollX = TRUE)
       )
+    })
+
+    render_soil_hot <- function(data_source, display_cols) {
+      rhandsontable::renderRHandsontable({
+        req(data_source())
+        soil_df <- data_source()
+        valid_cols <- intersect(display_cols, names(soil_df))
+        if (!length(valid_cols)) {
+          return(rhandsontable::rhandsontable(data.frame()))
+        }
+        rhandsontable::rhandsontable(
+          soil_df[, valid_cols, drop = FALSE],
+          rowHeaders = FALSE,
+          useTypes = TRUE,
+          stretchH = "all"
+        )
+      })
+    }
+
+    humus_cols <- c("horizon", "upperdepth", "lowerdepth", "humusstructuredegree", "humusstructurekind", "humusformph", "_comment")
+    mineral_cols <- c("horizon", "upperdepth", "lowerdepth", "texture", "percentcoarsefragstotal", "mineralstructureclass", "colour", "_comments")
+
+    output$hot_humus <- render_soil_hot(reactive(rv$humus), humus_cols)
+    output$hot_mineral <- render_soil_hot(reactive(rv$mineral), mineral_cols)
+
+    update_soil_from_hot <- function(hot_input, table_name, display_cols) {
+      req(hot_input)
+
+      new_df <- rhandsontable::hot_to_r(hot_input)
+      current <- if (identical(table_name, "Sample_Humus")) rv$humus else rv$mineral
+      req(current)
+
+      valid_cols <- intersect(display_cols, names(current))
+      old_df <- current[, valid_cols, drop = FALSE]
+      if (nrow(new_df) != nrow(old_df)) {
+        return(invisible(NULL))
+      }
+
+      for (row_idx in seq_len(nrow(new_df))) {
+        for (col_name in valid_cols) {
+          old_val <- old_df[[col_name]][row_idx]
+          new_val <- new_df[[col_name]][row_idx]
+
+          if (is.na(old_val) && is.na(new_val)) next
+          if (!is.na(old_val) && !is.na(new_val) && identical(as.character(old_val), as.character(new_val))) next
+          if (is.na(old_val) && !nzchar(trimws(as.character(new_val)))) next
+
+          record_id <- current$id[row_idx]
+          typed_val <- fs882_coerce_soil_value(table_name, col_name, new_val)
+          sql <- sprintf("UPDATE %s SET %s = ? WHERE id = ?", table_name, col_name)
+          DBI::dbExecute(con, sql, list(typed_val, record_id))
+        }
+      }
+
+      if (identical(table_name, "Sample_Humus")) {
+        rv$humus <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
+      } else {
+        rv$mineral <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
+      }
+    }
+
+    observeEvent(input$hot_humus, {
+      update_soil_from_hot(input$hot_humus, "Sample_Humus", humus_cols)
+    })
+
+    observeEvent(input$hot_mineral, {
+      update_soil_from_hot(input$hot_mineral, "Sample_Mineral", mineral_cols)
     })
 
     observeEvent(input$veg_table_rows_selected, {

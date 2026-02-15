@@ -73,10 +73,26 @@ Deliver Access-accurate workflows incrementally, block by block, with fast feedb
 
 When the user asks to migrate, port, adapt, reimplement, or modernize an Access form (UI + behavior), execute the migration directly in the primary agent.
 
+Default mode for migration requests is **strict parity**, not MVP. Do not silently downgrade to MVP unless the user explicitly requests MVP/minimal scope.
+
 Use both skills in this order:
 1. `access-form-impl-spec` for behavior/architecture contract (`FORM_IMPL_SPEC_<form>.md`)
 2. `access-form-to-shiny-ui` for generated layout scaffold/reference (`ui_<form>.R`)
 3. Targeted raw form lookups by line-range from spec trace tables
+
+## Skill artifact retention (mandatory)
+
+During migration, preserve generated skill artifacts under `/tmp` and do not delete them during the active migration session.
+
+Default location:
+- `/tmp/vpro_parity/<block_id>/`
+
+Expected retained artifacts (at minimum):
+- `FORM_IMPL_SPEC_<form>.md`
+- `ui_<form>.R`
+- block parity notes/checklist (for example `PARITY_CHECKLIST_<block_id>.md`)
+
+If a skill writes outputs under `VPRO_ACCESS/.../Forms/`, copy the artifacts to `/tmp/vpro_parity/<block_id>/` immediately and keep that `/tmp` copy as canonical migration evidence for the block.
 
 Do not parse whole Access form exports upfront as a primary discovery method.
 
@@ -93,6 +109,11 @@ Completion requirements:
 - Do not treat analysis-only output as complete
 - Do not report success when no workspace files changed
 - Report deferred dependencies with placeholders and actionable hookup notes
+
+Strict parity completion gates:
+- Do not mark a block complete unless targeted Access controls/events for that block are mapped to runtime behavior or explicitly deferred.
+- Do not mark a block complete based only on startup or save/load smoke.
+- Include a control/event parity checklist in handoff with `implemented | deferred | missing` status per item.
 
 Do not claim feature parity unless event mapping, dependency tracing, and source bindings are implemented or explicitly deferred with placeholders.
 

@@ -16,6 +16,10 @@ Generate a comprehensive implementation report next to each form export:
 
 `VPRO_ACCESS/VPro64_forAI/Forms/FORM_IMPL_SPEC_<form>.md`
 
+For parity work, also preserve a copy under:
+
+`/tmp/vpro_parity/<block_id>/FORM_IMPL_SPEC_<form>.md`
+
 ## Preconditions
 
 1. Run from repository root.
@@ -35,6 +39,13 @@ Generate a comprehensive implementation report next to each form export:
 ### Entire forms directory
 
 `Rscript "scripts/Tools/access_form_impl_spec.R" "VPRO_ACCESS/VPro64_forAI/Forms"`
+
+## Artifact retention (mandatory)
+
+- Do not delete generated spec artifacts during the active migration session.
+- Preserve a copy of every generated spec in `/tmp/vpro_parity/<block_id>/`.
+- If the script output lands in `VPRO_ACCESS/.../Forms/`, copy it to `/tmp/vpro_parity/<block_id>/` immediately.
+- Treat `/tmp/vpro_parity/<block_id>/` copies as migration evidence for parity review.
 
 ## Event mapping conventions
 
@@ -85,5 +96,6 @@ For each run, report:
 2. Generated spec file(s)
 3. Recursive subforms included/excluded
 4. Any unresolved procedure references
+5. `/tmp` artifact paths where the preserved specs were written
 
 When unresolved items exist, record actionable follow-up hooks (where to connect and expected behavior).
