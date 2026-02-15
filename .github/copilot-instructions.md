@@ -69,47 +69,30 @@ For each requested block:
 ## Immediate Priority
 Deliver Access-accurate workflows incrementally, block by block, with fast feedback.
 
-## Form migration routing (mandatory)
+## Form migration execution (mandatory)
 
-When the user asks to migrate, port, adapt, reimplement, or modernize an Access form (UI + behavior), you MUST delegate execution to the subagent spec at:
+When the user asks to migrate, port, adapt, reimplement, or modernize an Access form (UI + behavior), execute the migration directly in the primary agent.
 
-`.github/subagents/access-form-migration.subagent.md`
-
-Do not implement full form migration directly in the primary agent when this route applies.
-
-Trigger this delegation for prompts containing intents such as:
-- "migrate form"
-- "reimplement Access form"
-- "port form logic"
-- "adapt this form to <framework/environment>"
-
-## Delegation requirements
-
-When using the subagent, include these inputs in the prompt:
-- Target form path(s) in `VPRO_ACCESS/VPro64_forAI/Forms/`
-- When a menu/button launches another form, include both:
-  - Launcher form path(s) (event source)
-  - Destination form path(s) (actual form to migrate/render)
-- Target framework
-- Target execution environment
-- Any constraints (minimal/MVP, design-system restrictions, deployment/runtime constraints)
-- Explicit target navigation contract in the current app:
-  - trigger control id/name
-  - expected destination tab/module/form identifier
-
-If framework/environment is unspecified, default to Shiny and state the assumption.
-
-Do not accept a delegation result that only modifies launcher/menu form logic when destination-form implementation was requested.
-
-## Required skill usage during migration
-
-The delegated migration MUST leverage both skills:
+Use both skills in this order:
 1. `access-form-impl-spec` for behavior/architecture contract (`FORM_IMPL_SPEC_<form>.md`)
 2. `access-form-to-shiny-ui` for generated layout scaffold/reference (`ui_<form>.R`)
+3. Targeted raw form lookups by line-range from spec trace tables
 
-Execution order is mandatory:
-- First use `access-form-impl-spec`, then `access-form-to-shiny-ui`, then targeted raw form lookups.
-- Raw `VPRO_ACCESS/.../Forms/*.txt` must be consulted by line-range from spec trace tables, not parsed wholesale upfront.
+Do not parse whole Access form exports upfront as a primary discovery method.
+
+Required migration inputs:
+- Target form path(s) in `VPRO_ACCESS/VPro64_forAI/Forms/`
+- If a launcher/menu opens another form, include both launcher and destination form paths
+- Target framework and execution environment (default to Shiny if unspecified)
+- Constraints (minimal/MVP, design system, deployment/runtime)
+- Explicit navigation contract in app runtime (trigger control + destination tab/module/form id)
+
+Completion requirements:
+- Apply concrete runtime code changes in app files (`R/mod_*`, `R/logic_*`, `ui.R`, `server.R`, `global.R`) for destination-form behavior
+- Do not treat redirect-only changes as complete when destination implementation is requested
+- Do not treat analysis-only output as complete
+- Do not report success when no workspace files changed
+- Report deferred dependencies with placeholders and actionable hookup notes
 
 Do not claim feature parity unless event mapping, dependency tracing, and source bindings are implemented or explicitly deferred with placeholders.
 

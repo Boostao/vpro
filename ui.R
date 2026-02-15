@@ -67,8 +67,8 @@ ui <- page_navbar(
   nav_panel(tagList(icon("leaf"), "Vegetation"), value = "Vegetation",
     mod_veg_sample_ui("veg")
   ),
-  nav_panel(tagList(icon("mountain"), "Site & Env"), value = "Site & Env",
-    mod_site_env_ui("env")
+  nav_panel(tagList(icon("mountain"), "FS882-6x4XL"), value = "FS882-6x4XL",
+    mod_fs882_6x4xl_ui("fs882_6x4xl")
   ),
   nav_panel(tagList(icon("file-export"), "Export"), value = "Export",
     mod_export_ui("export")

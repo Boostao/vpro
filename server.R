@@ -154,6 +154,10 @@ server <- function(input, output, session) {
     invisible(su_choices)
   }
 
+  refresh_plot_dropdown <- function(selected_plot = NULL) {
+    refresh_su_dropdown(selected_su = selected_plot)
+  }
+
   refresh_hierarchy_dropdown <- function(selected_hierarchy = NULL) {
     hierarchy_choices <- discover_prefixes_by_suffix(con, "_Hierarchy")
     hierarchy_actions <- c(
@@ -599,26 +603,37 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$btn_nav_data_entry, {
-    bslib::nav_select("main_tabs", "Site & Env", session = session)
+    open_fs882_destination_context(
+      state = state,
+      con = con,
+      form_name = "FS882-6x4XL",
+      close_forms = c("FS882-8x6XL", "FS882-1x1")
+    )
+    bslib::nav_select("main_tabs", "FS882-6x4XL", session = session)
   })
 
-  mod_data_entry_context_server(
-    "data_entry_context",
-    state = state,
-    con = con,
-    open_data_entry_trigger = reactive(input$btn_nav_data_entry)
-  )
+  observeEvent(input$main_tabs, {
+    if (!identical(input$main_tabs, "FS882-6x4XL")) {
+      return()
+    }
+    open_fs882_destination_context(
+      state = state,
+      con = con,
+      form_name = "FS882-6x4XL",
+      close_forms = c("FS882-8x6XL", "FS882-1x1")
+    )
+  }, ignoreInit = TRUE)
 
   observeEvent(input$btn_nav_two_page, {
-    bslib::nav_select("main_tabs", "Site & Env", session = session)
+    bslib::nav_select("main_tabs", "FS882-6x4XL", session = session)
   })
 
   observeEvent(input$btn_nav_single_page, {
-    bslib::nav_select("main_tabs", "Site & Env", session = session)
+    bslib::nav_select("main_tabs", "FS882-6x4XL", session = session)
   })
 
   observeEvent(input$btn_nav_sivi, {
-    bslib::nav_select("main_tabs", "Site & Env", session = session)
+    bslib::nav_select("main_tabs", "FS882-6x4XL", session = session)
   })
 
   observeEvent(input$btn_nav_su_tree, {
@@ -637,10 +652,10 @@ server <- function(input, output, session) {
   observeEvent(input$global_save, {
     req(input$main_tabs)
 
-    if (input$main_tabs == "Site & Env") {
-      shinyjs::click("env-save_header")
-      shinyjs::click("env-save_mensuration")
-      showNotification("Saved site/env fields.", type = "message")
+    if (input$main_tabs == "FS882-6x4XL") {
+      shinyjs::click("fs882_6x4xl-btnSaveRecord")
+      shinyjs::click("fs882_6x4xl-btnSaveVeg")
+      showNotification("Saved FS882 header and vegetation.", type = "message")
       return()
     }
 
@@ -658,6 +673,11 @@ server <- function(input, output, session) {
       return()
     }
 
+    if (input$main_tabs == "FS882-6x4XL") {
+      shinyjs::click("fs882_6x4xl-btnAddVegRow")
+      return()
+    }
+
     showNotification("No default New action for this tab.", type = "message")
   })
 
@@ -672,9 +692,8 @@ server <- function(input, output, session) {
   # Also passing con to avoid multiple connections
   mod_veg_sample_server("veg", state, con)
   
-  # Site & Env Module
-  # Refactored to accept shared connection 'con' to avoid DB locking issues
-  mod_site_env_server("env", state, con)
+  # FS882-6x4XL destination module (wrapper over existing site/env implementation)
+  mod_fs882_6x4xl_server("fs882_6x4xl", state, con)
   
   # Export Module
   mod_export_server("export", state, con)

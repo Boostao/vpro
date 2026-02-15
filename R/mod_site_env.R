@@ -255,8 +255,13 @@ mod_site_env_server <- function(id, sys_state, con) {
     ns <- session$ns
     
     output$env_context_hint <- renderUI({
-        req(sys_state$CurrSU)
-        tags$span(class = "text-muted ms-2", paste("Plot:", sys_state$CurrSU))
+        project_name <- sys_state$CurrProject %||% sys_state$PrefProject %||% "None"
+        su_table <- sys_state$PrefSUTable %||% "None"
+        plot_name <- sys_state$CurrSU %||% "None"
+        tags$span(
+            class = "text-muted ms-2",
+            paste0("Project: ", project_name, " / SU Table: ", su_table, " / Plot: ", plot_name)
+        )
     })
 
     # Reactive Data Store

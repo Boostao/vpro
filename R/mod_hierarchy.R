@@ -1526,7 +1526,7 @@ mod_hierarchy_server <- function(id, state, con) {
       }
 
       if (!is.null(session$parent)) {
-        bslib::nav_select("main_tabs", "Site & Env", session = session$parent)
+        bslib::nav_select("main_tabs", "FS882-6x4XL", session = session$parent)
       }
       showNotification(paste("Jumped to plot", plot_number), type = "message")
     })
