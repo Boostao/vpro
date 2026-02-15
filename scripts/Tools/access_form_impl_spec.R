@@ -13,6 +13,7 @@ escape_md <- function(x) {
 
 safe_name <- function(node, fallback = "") {
   nm <- node$props$Name %||% fallback
+  if (identical(trim_ws(nm), "<BeginBlock>")) nm <- fallback
   trim_ws(nm)
 }
 
@@ -88,7 +89,7 @@ collect_ui_tree <- function(form_node) {
   entries <- list()
   by_id <- new.env(parent = emptyenv())
 
-  walk <- function(node, parent_id = NA_integer_, depth = 0L, path = "Form") {
+  walk <- function(node, parent_id = NA_integer_, depth = 0L, path = "Form", include_node = TRUE) {
     nm <- safe_name(node, fallback = node$type)
     this_path <- if (depth == 0L) "Form" else paste0(path, " > ", node$type, "[", nm, "]")
 
@@ -99,7 +100,14 @@ collect_ui_tree <- function(form_node) {
       identical(trim_ws(val), "[Event Procedure]")
     }, logical(1))]
 
-    source_props <- c("RecordSource", "ControlSource", "RowSource", "RowSourceType", "SourceObject", "LinkChildFields", "LinkMasterFields")
+    source_props <- names(node$props)
+    if (is.null(source_props)) source_props <- character(0)
+    source_props <- source_props[
+      grepl("Source", source_props, ignore.case = TRUE) |
+        grepl("Filter", source_props, ignore.case = TRUE) |
+        grepl("OrderBy", source_props, ignore.case = TRUE)
+    ]
+    source_props <- unique(c(source_props, "LinkChildFields", "LinkMasterFields"))
     source_vals <- list()
     for (sp in source_props) {
       if (!is.null(node$props[[sp]]) && nzchar(trim_ws(node$props[[sp]]))) {
@@ -107,29 +115,41 @@ collect_ui_tree <- function(form_node) {
       }
     }
 
-    entry <- list(
-      id = node$id,
-      type = node$type,
-      name = safe_name(node, fallback = paste0(node$type, "_", node$id)),
-      caption = node$props$Caption %||% "",
-      parent_id = parent_id,
-      depth = depth,
-      path = this_path,
-      left = node$props$Left %||% "",
-      top = node$props$Top %||% "",
-      width = node$props$Width %||% "",
-      height = node$props$Height %||% "",
-      event_props = event_props,
-      source_vals = source_vals,
-      node_ref = node
-    )
+    next_parent_id <- parent_id
+    next_depth <- depth
+    next_path <- path
 
-    entries[[length(entries) + 1L]] <<- entry
-    by_id[[as.character(node$id)]] <- entry
+    if (isTRUE(include_node)) {
+      entry <- list(
+        id = node$id,
+        type = node$type,
+        name = safe_name(node, fallback = paste0(node$type, "_", node$id)),
+        caption = node$props$Caption %||% "",
+        parent_id = parent_id,
+        depth = depth,
+        path = this_path,
+        left = node$props$Left %||% "",
+        top = node$props$Top %||% "",
+        width = node$props$Width %||% "",
+        height = node$props$Height %||% "",
+        event_props = event_props,
+        source_vals = source_vals,
+        node_ref = node
+      )
+
+      entries[[length(entries) + 1L]] <<- entry
+      by_id[[as.character(node$id)]] <- entry
+      next_parent_id <- node$id
+      next_depth <- depth + 1L
+      next_path <- this_path
+    }
 
     for (ch in node$children) {
-      if (startsWith(ch$type, "__PROP") || ch$type == "__BEGIN__") next
-      walk(ch, parent_id = node$id, depth = depth + 1L, path = this_path)
+      if (startsWith(ch$type, "__PROP") || ch$type == "__BEGIN__") {
+        walk(ch, parent_id = next_parent_id, depth = next_depth, path = next_path, include_node = FALSE)
+      } else {
+        walk(ch, parent_id = next_parent_id, depth = next_depth, path = next_path, include_node = TRUE)
+      }
     }
   }
 
@@ -147,9 +167,11 @@ extract_procedures <- function(code_lines, code_start_line = NA_integer_) {
 
   while (i <= n) {
     ln <- code_lines[i]
-    if (grepl(start_pat, ln, perl = TRUE, ignore.case = TRUE)) {
-      name <- sub(start_pat, "\\3", ln, perl = TRUE, ignore.case = TRUE)
-      kind <- sub(start_pat, "\\2", ln, perl = TRUE, ignore.case = TRUE)
+    m <- regexec(start_pat, ln, perl = TRUE, ignore.case = TRUE)
+    r <- regmatches(ln, m)[[1]]
+    if (length(r) > 0L) {
+      kind <- r[3]
+      name <- r[4]
       start_i <- i
       j <- i + 1L
       while (j <= n && !grepl(end_pat, code_lines[j], perl = TRUE, ignore.case = TRUE)) {
@@ -175,7 +197,12 @@ extract_procedures <- function(code_lines, code_start_line = NA_integer_) {
 }
 
 extract_called_functions <- function(proc_body) {
-  lines <- gsub("'.*$", "", proc_body)
+  lines <- proc_body
+  if (length(lines) > 0L && grepl("^\\s*(Private|Public|Friend)?\\s*(Sub|Function)\\b", lines[1], perl = TRUE, ignore.case = TRUE)) {
+    lines <- lines[-1]
+  }
+  if (length(lines) == 0L) return(character(0))
+  lines <- gsub("'.*$", "", lines)
   txt <- paste(lines, collapse = "\n")
   m <- gregexpr("\\b([A-Za-z_][A-Za-z0-9_]*)\\s*\\(", txt, perl = TRUE)
   hits <- regmatches(txt, m)[[1]]
@@ -206,7 +233,7 @@ find_module_defs <- function(module_dir) {
   pat <- "^\\s*(Private|Public|Friend)?\\s*(Sub|Function)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b"
 
   for (f in files) {
-    lines <- tryCatch(read_lines_auto(f), error = function(e) character(0))
+    lines <- tryCatch(suppressWarnings(read_lines_auto(f)), error = function(e) character(0))
     if (length(lines) == 0L) next
     for (i in seq_along(lines)) {
       ln <- lines[i]
@@ -292,8 +319,15 @@ write_spec <- function(form_file, spec_path, recursive = TRUE, visited = charact
   }
 
   form_name <- form_node$props$Name %||% tools::file_path_sans_ext(basename(form_file))
+  if (identical(trim_ws(form_name), "<BeginBlock>") || !nzchar(trim_ws(form_name))) {
+    form_name <- tools::file_path_sans_ext(basename(form_file))
+  }
   form_caption <- form_node$props$Caption %||% ""
   record_source <- form_node$props$RecordSource %||% ""
+  form_filter <- form_node$props$Filter %||% ""
+  form_order_by <- form_node$props$OrderBy %||% ""
+  form_filter_on_load <- form_node$props$FilterOnLoad %||% ""
+  form_order_by_on <- form_node$props$OrderByOn %||% ""
 
   source_rows <- list()
   data_objects <- character(0)
@@ -349,7 +383,7 @@ write_spec <- function(form_file, spec_path, recursive = TRUE, visited = charact
       next
     }
 
-    calls <- extract_called_functions(proc$body)
+    calls <- setdiff(extract_called_functions(proc$body), proc$name)
     refs <- extract_me_control_refs(proc$body)
     local_proc_names <- vapply(procs, function(x) x$name, character(1))
     local_calls <- calls[tolower(calls) %in% tolower(local_proc_names)]
@@ -378,7 +412,7 @@ write_spec <- function(form_file, spec_path, recursive = TRUE, visited = charact
 
   proc_sections <- character(0)
   for (p in procs) {
-    calls <- extract_called_functions(p$body)
+    calls <- setdiff(extract_called_functions(p$body), p$name)
     refs <- extract_me_control_refs(p$body)
 
     local_calls <- calls[tolower(calls) %in% tolower(vapply(procs, function(x) x$name, character(1)))]
@@ -432,6 +466,10 @@ write_spec <- function(form_file, spec_path, recursive = TRUE, visited = charact
     paste0("- Form name: `", form_name, "`"),
     paste0("- Caption: ", if (nzchar(form_caption)) paste0("`", escape_md(form_caption), "`") else "(none)"),
     paste0("- RecordSource: ", if (nzchar(record_source)) paste0("`", escape_md(record_source), "`") else "(none)"),
+    paste0("- Filter: ", if (nzchar(form_filter)) paste0("`", escape_md(form_filter), "`") else "(none)"),
+    paste0("- OrderBy: ", if (nzchar(form_order_by)) paste0("`", escape_md(form_order_by), "`") else "(none)"),
+    paste0("- FilterOnLoad: ", if (nzchar(form_filter_on_load)) paste0("`", escape_md(form_filter_on_load), "`") else "(none)"),
+    paste0("- OrderByOn: ", if (nzchar(form_order_by_on)) paste0("`", escape_md(form_order_by_on), "`") else "(none)"),
     "",
     "## 2) Parent-Child UI Tree",
     "",
