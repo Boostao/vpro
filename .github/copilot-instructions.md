@@ -87,17 +87,29 @@ Trigger this delegation for prompts containing intents such as:
 
 When using the subagent, include these inputs in the prompt:
 - Target form path(s) in `VPRO_ACCESS/VPro64_forAI/Forms/`
+- When a menu/button launches another form, include both:
+  - Launcher form path(s) (event source)
+  - Destination form path(s) (actual form to migrate/render)
 - Target framework
 - Target execution environment
 - Any constraints (minimal/MVP, design-system restrictions, deployment/runtime constraints)
+- Explicit target navigation contract in the current app:
+  - trigger control id/name
+  - expected destination tab/module/form identifier
 
 If framework/environment is unspecified, default to Shiny and state the assumption.
+
+Do not accept a delegation result that only modifies launcher/menu form logic when destination-form implementation was requested.
 
 ## Required skill usage during migration
 
 The delegated migration MUST leverage both skills:
 1. `access-form-impl-spec` for behavior/architecture contract (`FORM_IMPL_SPEC_<form>.md`)
 2. `access-form-to-shiny-ui` for generated layout scaffold/reference (`ui_<form>.R`)
+
+Execution order is mandatory:
+- First use `access-form-impl-spec`, then `access-form-to-shiny-ui`, then targeted raw form lookups.
+- Raw `VPRO_ACCESS/.../Forms/*.txt` must be consulted by line-range from spec trace tables, not parsed wholesale upfront.
 
 Do not claim feature parity unless event mapping, dependency tracing, and source bindings are implemented or explicitly deferred with placeholders.
 

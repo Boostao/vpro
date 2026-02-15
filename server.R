@@ -278,7 +278,6 @@ server <- function(input, output, session) {
     state$PrefSUTable <- "None"
     set_pref(con, "Current", "CurrPlotList", "None")
     refresh_su_dropdown(selected_su = "None")
-    refresh_plot_dropdown("None")
   })
 
   observeEvent(input$project_new_confirm, {
@@ -353,7 +352,6 @@ server <- function(input, output, session) {
     if (identical(input$sel_su, SU_ACTION_NONE)) {
       state$PrefSUTable <- "None"
       set_pref(con, "Current", "CurrPlotList", "None")
-      refresh_plot_dropdown("None")
       set_su(state, NULL)
       state$PrefPlot <- NULL
       set_pref(con, "Current", "CurrPlotNumber", "")
@@ -415,7 +413,6 @@ server <- function(input, output, session) {
 
     state$PrefSUTable <- input$sel_su
     set_pref(con, "Current", "CurrPlotList", input$sel_su)
-    refresh_plot_dropdown(input$sel_su)
   })
 
   observeEvent(input$su_new_confirm, {
@@ -431,7 +428,6 @@ server <- function(input, output, session) {
       removeModal()
       refresh_su_dropdown(selected_su = trimws(input$su_new_prefix))
       updateSelectInput(session, "sel_su", selected = trimws(input$su_new_prefix))
-      refresh_plot_dropdown(trimws(input$su_new_prefix))
       showNotification(paste0("Created site unit table: ", trimws(input$su_new_prefix), "_SU"), type = "message")
     }, error = function(e) {
       showNotification(conditionMessage(e), type = "error")
@@ -451,7 +447,6 @@ server <- function(input, output, session) {
       removeModal()
       refresh_su_dropdown(selected_su = trimws(input$su_attach_prefix))
       updateSelectInput(session, "sel_su", selected = trimws(input$su_attach_prefix))
-      refresh_plot_dropdown(trimws(input$su_attach_prefix))
       showNotification(paste0("Attached site unit table: ", trimws(input$su_attach_prefix), "_SU"), type = "message")
     }, error = function(e) {
       showNotification(conditionMessage(e), type = "error")
@@ -466,7 +461,6 @@ server <- function(input, output, session) {
       if (identical(tolower(state$PrefSUTable %||% ""), tolower(input$su_unattach_prefix))) {
         state$PrefSUTable <- "None"
         set_pref(con, "Current", "CurrPlotList", "None")
-        refresh_plot_dropdown("None")
       }
       refresh_su_dropdown(selected_su = state$PrefSUTable)
       if (!is.null(removed)) {
@@ -605,7 +599,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$btn_nav_data_entry, {
-    bslib::nav_select("main_tabs", "Vegetation", session = session)
+    bslib::nav_select("main_tabs", "Site & Env", session = session)
   })
 
   mod_data_entry_context_server(
