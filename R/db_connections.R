@@ -104,6 +104,12 @@ connect_local_db <- function(environment = NULL) {
 #' @export
 attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = 'master', fail_on_error = TRUE) {
   
+  # Check if already attached
+  if (is_cloud_connected(con, alias)) {
+    message("[db_connections] Cloud database '", alias, "' is already attached")
+    return(invisible(NULL))
+  }
+  
   # Determine active environment
   if (is.null(environment)) {
     environment <- Sys.getenv("R_CONFIG_ACTIVE", unset = "default")
@@ -272,7 +278,7 @@ detach_db <- function(con, alias) {
 
 #' Close Database Connection
 #'
-#' Safely closes a DuckDB connection
+#' Safely closes a DuckDB connection. Detaches all attached databases first.
 #'
 #' @param con DBI connection object
 #'
@@ -287,8 +293,20 @@ detach_db <- function(con, alias) {
 #'
 #' @export
 close_db <- function(con) {
+  # Detach all attached databases before closing
+  attached_dbs <- list_attached_dbs(con)
+  # Filter out the main database (usually named "main" or "memory")
+  attached_dbs <- attached_dbs[!attached_dbs %in% c("vpro", "memory", "temp")]
+  
+  if (length(attached_dbs) > 0) {
+    message("[db_connections] Detaching ", length(attached_dbs), " database(s): ", paste(attached_dbs, collapse = ", "))
+    for (db in attached_dbs) {
+      detach_db(con, db)
+    }
+  }
+  
   tryCatch({
-    DBI::dbDisconnect(con)
+    DBI::dbDisconnect(con, shutdown = TRUE)
     message("[db_connections] Database connection closed")
   }, error = function(e) {
     warning("Error closing database: ", e$message)

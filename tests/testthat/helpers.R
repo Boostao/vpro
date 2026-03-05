@@ -120,6 +120,48 @@ seed_test_reference_data <- function(con) {
                     zones_df, overwrite = TRUE)
 }
 
+#' Check if PostgreSQL is Available
+#'
+#' Tests connection to Docker PostgreSQL instance
+#'
+#' @return Logical. TRUE if PostgreSQL is available
+#'
+pg_available <- function() {
+  tryCatch({
+    con <- DBI::dbConnect(
+      RPostgres::Postgres(),
+      host = "localhost",
+      port = 5433,
+      user = "testuser",
+      password = "testpass",
+      dbname = "becmaster"
+    )
+    DBI::dbDisconnect(con)
+    return(TRUE)
+  }, error = function(e) {
+    return(FALSE)
+  })
+}
+
+#' Get Test PostgreSQL Connection
+#'
+#' Creates connection to docker-compose postgres instance as superuser.
+#' Used for setting up test fixtures and roles.
+#'
+#' @return DBI connection object
+#'
+get_test_pg_connection <- function() {
+  con <- DBI::dbConnect(
+    RPostgres::Postgres(),
+    host = "localhost",
+    port = 5433,
+    user = "testuser",
+    password = "testpass",
+    dbname = "becmaster"
+  )
+  return(con)
+}
+
 #' Create Test Postgres Connection
 #'
 #' Attempts to connect to docker-compose postgres instance.
@@ -131,31 +173,13 @@ seed_test_reference_data <- function(con) {
 #'
 test_connect_postgres <- function(skip_if_unavailable = TRUE) {
   
-  if (skip_if_unavailable && !pg_available) {
+  if (skip_if_unavailable && !pg_available()) {
     testthat::skip("PostgreSQL not available. Start with: docker-compose up -d")
   }
   
   message("[test-helpers] Creating PostgreSQL test connection")
   
-  # This requires RPostgres - would need to add to renv
-  # For now, this is a placeholder
-  tryCatch({
-    con <- DBI::dbConnect(
-      RPostgres::Postgres(),
-      host = "localhost",
-      port = 5433,
-      user = "testuser",
-      password = "testpass",
-      dbname = "becmaster"
-    )
-    return(con)
-  }, error = function(e) {
-    if (skip_if_unavailable) {
-      testthat::skip("Could not connect to PostgreSQL: ", e$message)
-    } else {
-      stop(e)
-    }
-  })
+  return(get_test_pg_connection())
 }
 
 #' Reset Database to Clean State
@@ -242,4 +266,30 @@ expect_query_result <- function(con, sql, expected_rows = NULL, label = "query")
   }
   
   return(result)
+}
+
+#' Clear Core Tables
+#'
+#' Helper to clean up core.* tables for testing
+#'
+#' @param con DBI connection object (PostgreSQL)
+#'
+clear_core_tables <- function(con) {
+  DBI::dbExecute(con, "DELETE FROM core.sample_veg")
+  DBI::dbExecute(con, "DELETE FROM core.sample_env")
+  DBI::dbExecute(con, "DELETE FROM core.sample_su")
+}
+
+#' Clear Staging Tables
+#'
+#' Helper to clean up staging.* tables for testing
+#'
+#' @param con DBI connection object (PostgreSQL)
+#'
+clear_staging_tables <- function(con) {
+  DBI::dbExecute(con, "DELETE FROM staging.sample_veg")
+  DBI::dbExecute(con, "DELETE FROM staging.sample_env")
+  DBI::dbExecute(con, "DELETE FROM staging.sample_su")
+  DBI::dbExecute(con, "DELETE FROM staging.merge_conflicts")
+  DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
 }

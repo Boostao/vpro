@@ -1,18 +1,18 @@
--- BECMaster PostgreSQL Schema & Test Data
--- This script creates the complete schema structure for cloud-based VPro data management
-
 -- ============================================================================
--- SCHEMAS
+-- PostgreSQL Schema for VPro BEC Data Management
+-- Full rewrite with audit triggers, row versioning, and staging workflow
 -- ============================================================================
 
-CREATE SCHEMA IF NOT EXISTS core;
-CREATE SCHEMA IF NOT EXISTS lists;
-CREATE SCHEMA IF NOT EXISTS staging;
-CREATE SCHEMA IF NOT EXISTS admin;
-CREATE SCHEMA IF NOT EXISTS public_export;
+-- Drop existing schemas (for clean rebuild)
+DROP SCHEMA IF EXISTS audit CASCADE;
+DROP SCHEMA IF EXISTS core CASCADE;
+DROP SCHEMA IF EXISTS lists CASCADE;
+DROP SCHEMA IF EXISTS staging CASCADE;
+DROP SCHEMA IF EXISTS admin CASCADE;
 
 -- ============================================================================
--- CORE SCHEMA - Approved Plot Data
+-- SCHEMA 1: audit - Append-only audit log with JSONB
+-- Based on: https://exaspark.medium.com/the-ultimate-guide-to-postgresql-data-change-tracking-c3fa88779572
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS core.veg (
@@ -142,54 +142,79 @@ CREATE TABLE IF NOT EXISTS core.admin (
 
 CREATE TABLE IF NOT EXISTS core.metadata (
     id SERIAL PRIMARY KEY,
-    project_id INTEGER NOT NULL UNIQUE,
+    project_id INTEGER UNIQUE NOT NULL,
     project_name TEXT NOT NULL,
     description TEXT,
     organization TEXT,
     contact_email TEXT,
-    created_utc TIMESTAMPTZ DEFAULT now(),
-    row_version INTEGER DEFAULT 1,
-    last_modified_utc TIMESTAMPTZ DEFAULT now(),
-    modified_by TEXT NOT NULL
+    created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    row_version INTEGER NOT NULL DEFAULT 1,
+    last_modified_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    modified_by TEXT
 );
 
--- ============================================================================
--- LISTS SCHEMA - Reference & Lookup Tables
--- ============================================================================
+CREATE INDEX idx_sample_metadata_modified ON core.sample_metadata(last_modified_utc);
 
-CREATE TABLE IF NOT EXISTS lists.spplist (
-    spp_code TEXT PRIMARY KEY,
-    spp_name TEXT NOT NULL,
-    spp_scientific TEXT,
-    is_active BOOLEAN DEFAULT TRUE
+CREATE TRIGGER sample_metadata_row_version
+    BEFORE INSERT OR UPDATE ON core.sample_metadata
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER sample_metadata_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.sample_metadata
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.sample_env: environmental/site data
+CREATE TABLE core.sample_env (
+    id SERIAL PRIMARY KEY,
+    plot_number TEXT NOT NULL UNIQUE,
+    project_id INTEGER NOT NULL,
+    latitude NUMERIC CHECK (latitude >= 48 AND latitude <= 60),
+    longitude NUMERIC CHECK (longitude >= -140 AND longitude <= -114),
+    elevation_m INTEGER CHECK (elevation_m >= 0 AND elevation_m <= 4000),
+    survey_date DATE,
+    surveyor_name TEXT,
+    plot_notes TEXT,
+    row_version INTEGER NOT NULL DEFAULT 1,
+    last_modified_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    modified_by TEXT
 );
 
-CREATE TABLE IF NOT EXISTS lists.layercode (
-    layer_code TEXT PRIMARY KEY,
-    layer_name TEXT NOT NULL,
-    sort_order INTEGER
+CREATE INDEX idx_sample_env_plot ON core.sample_env(plot_number);
+CREATE INDEX idx_sample_env_project ON core.sample_env(project_id);
+CREATE INDEX idx_sample_env_modified ON core.sample_env(last_modified_utc);
+
+CREATE TRIGGER sample_env_row_version
+    BEFORE INSERT OR UPDATE ON core.sample_env
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER sample_env_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.sample_env
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.sample_su: site unit (BEC zone/subzone/series)
+CREATE TABLE core.sample_su (
+    id SERIAL PRIMARY KEY,
+    plot_number TEXT NOT NULL UNIQUE,
+    project_id INTEGER NOT NULL,
+    su_number TEXT,
+    bec_zone TEXT,
+    bec_subzone TEXT,
+    site_series TEXT,
+    row_version INTEGER NOT NULL DEFAULT 1,
+    last_modified_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    modified_by TEXT
 );
 
-CREATE TABLE IF NOT EXISTS lists.usyszonelist (
-    zone_code TEXT PRIMARY KEY,
-    zone_name TEXT NOT NULL,
-    province TEXT
-);
+CREATE INDEX idx_sample_su_plot ON core.sample_su(plot_number);
+CREATE INDEX idx_sample_su_modified ON core.sample_su(last_modified_utc);
 
-CREATE TABLE IF NOT EXISTS lists.usyssubzonelist (
-    zone_code TEXT,
-    subzone_code TEXT,
-    subzone_name TEXT,
-    PRIMARY KEY (zone_code, subzone_code),
-    FOREIGN KEY (zone_code) REFERENCES lists.usyszonelist(zone_code)
-);
+CREATE TRIGGER sample_su_row_version
+    BEFORE INSERT OR UPDATE ON core.sample_su
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
 
-CREATE TABLE IF NOT EXISTS lists.mastersiteunitlist (
-    su_code TEXT PRIMARY KEY,
-    su_name TEXT NOT NULL,
-    zone_code TEXT,
-    FOREIGN KEY (zone_code) REFERENCES lists.usyszonelist(zone_code)
-);
+CREATE TRIGGER sample_su_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.sample_su
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
 
 CREATE TABLE IF NOT EXISTS lists.usystableoflists (
     list_id TEXT,
@@ -257,127 +282,117 @@ CREATE TABLE IF NOT EXISTS staging.veg (
     other1 INTEGER,
     other2 INTEGER,
     project_id INTEGER NOT NULL,
-    merge_request_id INTEGER NOT NULL,
-    row_version INTEGER DEFAULT 1,
-    last_modified_utc TIMESTAMPTZ DEFAULT now(),
-    modified_by TEXT NOT NULL
+    row_version INTEGER NOT NULL DEFAULT 1,
+    last_modified_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    modified_by TEXT,
+    UNIQUE(plot_number, species_code, layer_code, project_id)
 );
 
 CREATE TABLE IF NOT EXISTS staging.env (
     id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL,
+    submitter_name TEXT NOT NULL,
+    submitter_email TEXT NOT NULL,
+    submitted_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    status TEXT NOT NULL DEFAULT 'pending_review' 
+        CHECK (status IN ('pending_review', 'approved', 'rejected', 'merged')),
+    reviewer TEXT,
+    review_notes TEXT,
+    reviewed_utc TIMESTAMPTZ,
+    record_counts JSONB
+);
+
+CREATE INDEX idx_merge_requests_status ON staging.merge_requests(status);
+CREATE INDEX idx_merge_requests_submitted ON staging.merge_requests(submitted_utc);
+
+-- staging.merge_conflicts: detected conflicts during review
+CREATE TABLE staging.merge_conflicts (
+    id SERIAL PRIMARY KEY,
+    merge_request_id INTEGER NOT NULL REFERENCES staging.merge_requests(id) ON DELETE CASCADE,
+    table_name TEXT NOT NULL,
+    plot_number TEXT,
+    column_name TEXT,
+    local_value TEXT,
+    incoming_value TEXT,
+    resolved BOOLEAN DEFAULT FALSE,
+    resolution TEXT
+);
+
+CREATE INDEX idx_merge_conflicts_request ON staging.merge_conflicts(merge_request_id);
+
+-- staging.sample_veg: pending veg changes
+CREATE TABLE staging.sample_veg (
+    id SERIAL PRIMARY KEY,
+    merge_request_id INTEGER NOT NULL REFERENCES staging.merge_requests(id) ON DELETE CASCADE,
+    change_type TEXT NOT NULL CHECK (change_type IN ('I','U','D')),
+    plot_number TEXT NOT NULL,
+    species_code TEXT NOT NULL,
+    layer_code TEXT NOT NULL,
+    cover_percent INTEGER,
+    height_cm INTEGER,
+    cover_code TEXT,
+    project_id INTEGER NOT NULL,
+    modified_by TEXT
+);
+
+CREATE INDEX idx_staging_sample_veg_request ON staging.sample_veg(merge_request_id);
+
+-- staging.sample_env: pending env changes (no range constraints in staging)
+CREATE TABLE staging.sample_env (
+    id SERIAL PRIMARY KEY,
+    merge_request_id INTEGER NOT NULL REFERENCES staging.merge_requests(id) ON DELETE CASCADE,
+    change_type TEXT NOT NULL CHECK (change_type IN ('I','U','D')),
     plot_number TEXT NOT NULL,
     project_id INTEGER NOT NULL,
-    latitude NUMERIC(9, 6),
-    longitude NUMERIC(10, 6),
+    latitude NUMERIC,
+    longitude NUMERIC,
     elevation_m INTEGER,
     survey_date DATE,
     surveyor_name TEXT,
     plot_notes TEXT,
-    merge_request_id INTEGER NOT NULL,
-    row_version INTEGER DEFAULT 1,
-    last_modified_utc TIMESTAMPTZ DEFAULT now(),
-    modified_by TEXT NOT NULL
+    modified_by TEXT
 );
 
 CREATE TABLE IF NOT EXISTS staging.su (
     id SERIAL PRIMARY KEY,
+    merge_request_id INTEGER NOT NULL REFERENCES staging.merge_requests(id) ON DELETE CASCADE,
+    change_type TEXT NOT NULL CHECK (change_type IN ('I','U','D')),
     plot_number TEXT NOT NULL,
     project_id INTEGER NOT NULL,
     su_number TEXT,
     bec_zone TEXT,
     bec_subzone TEXT,
     site_series TEXT,
-    merge_request_id INTEGER NOT NULL,
-    row_version INTEGER DEFAULT 1,
-    last_modified_utc TIMESTAMPTZ DEFAULT now(),
-    modified_by TEXT NOT NULL
+    modified_by TEXT
 );
 
-CREATE TABLE IF NOT EXISTS admin.merge_requests (
-    id SERIAL PRIMARY KEY,
-    project_id INTEGER NOT NULL,
-    submitter_user_id TEXT NOT NULL,
-    submitted_utc TIMESTAMPTZ DEFAULT now(),
-    status TEXT DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'approved', 'rejected', 'merged')),
-    reviewer_user_id TEXT,
-    review_notes TEXT,
-    reviewed_utc TIMESTAMPTZ,
-    veg_record_count INTEGER DEFAULT 0,
-    env_record_count INTEGER DEFAULT 0,
-    compliance_passed BOOLEAN DEFAULT FALSE,
-    compliance_report JSONB
-);
-
-CREATE TABLE IF NOT EXISTS staging.merge_conflicts (
-    id SERIAL PRIMARY KEY,
-    merge_request_id INTEGER NOT NULL,
-    table_name TEXT NOT NULL,
-    plot_number TEXT NOT NULL,
-    column_name TEXT NOT NULL,
-    local_value TEXT,
-    incoming_value TEXT,
-    resolved BOOLEAN DEFAULT FALSE,
-    resolution TEXT,
-    FOREIGN KEY (merge_request_id) REFERENCES admin.merge_requests(id)
-);
+CREATE INDEX idx_staging_sample_su_request ON staging.sample_su(merge_request_id);
 
 -- ============================================================================
--- ADMIN SCHEMA - Users, Roles, Audit & Change Tracking
+-- SCHEMA 5: admin - User and sync state management
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS admin.users (
+CREATE SCHEMA admin;
+
+-- admin.users: simple user registry
+CREATE TABLE admin.users (
     id SERIAL PRIMARY KEY,
-    username TEXT NOT NULL UNIQUE,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
     full_name TEXT,
+    role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('reader', 'writer', 'admin')),
     is_active BOOLEAN DEFAULT TRUE,
-    created_utc TIMESTAMPTZ DEFAULT now(),
-    last_login_utc TIMESTAMPTZ
+    created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );
 
-CREATE TABLE IF NOT EXISTS admin.roles (
+-- admin.sync_state: tracks per-user, per-table sync watermarks
+CREATE TABLE admin.sync_state (
     id SERIAL PRIMARY KEY,
-    role_name TEXT NOT NULL UNIQUE,
-    description TEXT,
-    permissions TEXT[] DEFAULT ARRAY[]::TEXT[]
-);
-
-CREATE TABLE IF NOT EXISTS admin.user_roles (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    role_id INTEGER NOT NULL,
-    assigned_utc TIMESTAMPTZ DEFAULT now(),
-    FOREIGN KEY (user_id) REFERENCES admin.users(id),
-    FOREIGN KEY (role_id) REFERENCES admin.roles(id),
-    UNIQUE(user_id, role_id)
-);
-
-CREATE TABLE IF NOT EXISTS admin.user_restrictions (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    project_id INTEGER,
-    bec_zone TEXT,
-    restriction_type TEXT NOT NULL CHECK (restriction_type IN ('project', 'zone', 'tag')),
-    created_utc TIMESTAMPTZ DEFAULT now(),
-    FOREIGN KEY (user_id) REFERENCES admin.users(id)
-);
-
-CREATE TABLE IF NOT EXISTS admin.change_log (
-    id SERIAL PRIMARY KEY,
-    sync_id TEXT,
-    user_id INTEGER,
-    username TEXT NOT NULL,
-    timestamp_utc TIMESTAMPTZ DEFAULT now(),
-    operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE', 'MERGE', 'SYNC_PULL', 'SYNC_PUSH')),
+    user_id INTEGER NOT NULL REFERENCES admin.users(id) ON DELETE CASCADE,
     table_name TEXT NOT NULL,
-    record_id TEXT,
-    plot_number TEXT,
-    field_name TEXT,
-    old_value TEXT,
-    new_value TEXT,
-    change_reason TEXT,
-    FOREIGN KEY (user_id) REFERENCES admin.users(id)
+    last_pulled_utc TIMESTAMPTZ,
+    last_pulled_row_version INTEGER,
+    UNIQUE(user_id, table_name)
 );
 
 CREATE TABLE IF NOT EXISTS admin.merge_history (
@@ -443,77 +458,61 @@ CREATE INDEX IF NOT EXISTS idx_download_log_user ON public_export.download_log(u
 -- SEED DATA
 -- ============================================================================
 
--- Reference species
+-- Seed: species list (10 common BC species)
 INSERT INTO lists.spplist (spp_code, spp_name, spp_scientific, is_active) VALUES
-('AB', 'Abies lasiocarpa', 'Subalpine Fir', TRUE),
-('AT', 'Athyrium filix-femina', 'Lady Fern', TRUE),
-('DR', 'Dryas integrifolia', 'Entire-leaved Avens', TRUE),
-('FD', 'Pseudotsuga menziesii', 'Douglas-fir', TRUE),
-('HW', 'Tsuga heterophylla', 'Western Hemlock', TRUE),
-('PA', 'Pinus albicaulis', 'Whitebark Pine', TRUE),
-('PW', 'Pinus ponderosa', 'Ponderosa Pine', TRUE),
-('SX', 'Picea sitchensis', 'Sitka Spruce', TRUE),
-('SW', 'Pinus strobus', 'Eastern White Pine', TRUE),
-('YC', 'Thuja plicata', 'Western Redcedar', TRUE)
-ON CONFLICT DO NOTHING;
+    ('TSUGHET', 'western hemlock', 'Tsuga heterophylla', TRUE),
+    ('PSEUMEN', 'Douglas-fir', 'Pseudotsuga menziesii', TRUE),
+    ('ABIALAM', 'subalpine fir', 'Abies lasiocarpa', TRUE),
+    ('PINUCON', 'lodgepole pine', 'Pinus contorta', TRUE),
+    ('THUJOCC', 'western redcedar', 'Thuja plicata', TRUE),
+    ('VACCOVER', 'oval-leaved blueberry', 'Vaccinium ovalifolium', TRUE),
+    ('RUBUSPE', 'salmonberry', 'Rubus spectabilis', TRUE),
+    ('RHYTLOR', 'lanky moss', 'Rhytidiadelphus loreus', TRUE),
+    ('HYLOCOL', 'step moss', 'Hylocomium splendens', TRUE),
+    ('PLEUSCH', 'Schreber''s feather moss', 'Pleurozium schreberi', TRUE);
 
--- Layer codes
+-- Seed: layer codes (5 standard layers)
 INSERT INTO lists.layercode (layer_code, layer_name, sort_order) VALUES
-('T', 'Tree', 1),
-('S', 'Shrub', 2),
-('H', 'Herb', 3),
-('M', 'Moss', 4),
-('L', 'Lichen', 5)
-ON CONFLICT DO NOTHING;
+    ('T1', 'Tree canopy layer 1', 1),
+    ('T2', 'Tree canopy layer 2', 2),
+    ('S', 'Shrub layer', 3),
+    ('H', 'Herb layer', 4),
+    ('M', 'Moss layer', 5);
 
--- BEC zones
+-- Seed: BEC zones (7 common zones)
 INSERT INTO lists.usyszonelist (zone_code, zone_name, province) VALUES
-('AT', 'Alpine Tundra', 'BC'),
-('BWBS', 'Boreal White and Black Spruce', 'BC'),
-('CDF', 'Coastal Douglas-fir', 'BC'),
-('ICH', 'Interior Cedar-Hemlock', 'BC'),
-('IDF', 'Interior Douglas-fir', 'BC'),
-('MH', 'Mountain Hemlock', 'BC'),
-('SBPS', 'Sub-Boreal Pine-Spruce', 'BC')
-ON CONFLICT DO NOTHING;
+    ('CDF', 'Coastal Douglas-fir', 'BC'),
+    ('CWH', 'Coastal Western Hemlock', 'BC'),
+    ('MH', 'Mountain Hemlock', 'BC'),
+    ('ESSF', 'Engelmann Spruce - Subalpine Fir', 'BC'),
+    ('ICH', 'Interior Cedar - Hemlock', 'BC'),
+    ('IDF', 'Interior Douglas-fir', 'BC'),
+    ('MS', 'Montane Spruce', 'BC');
 
--- Sub-zones
+-- Seed: BEC subzones (7 examples)
 INSERT INTO lists.usyssubzonelist (zone_code, subzone_code, subzone_name) VALUES
-('AT', 'a', 'Alpine Tundra - a'),
-('CDF', 'mm', 'Moist Maritime'),
-('CDF', 'xm', 'Xeric Maritime'),
-('ICH', 'dw', 'Dry Warm'),
-('ICH', 'mw', 'Moist Warm'),
-('IDF', 'dw', 'Dry Warm'),
-('MH', 'mm', 'Moist Maritime')
-ON CONFLICT DO NOTHING;
+    ('CWH', 'dm', 'dry maritime'),
+    ('CWH', 'vm', 'very dry maritime'),
+    ('CWH', 'xm', 'very wet maritime'),
+    ('ICH', 'mk', 'moist cool'),
+    ('IDF', 'dk', 'dry cool'),
+    ('ESSF', 'mk', 'moist cool'),
+    ('MH', 'mm', 'moist maritime');
 
--- Generic list values
+-- Seed: generic list values
 INSERT INTO lists.usystableoflists (list_id, item_code, item_name, item_sort) VALUES
-('COVER_CODE', '+', 'Trace', 1),
-('COVER_CODE', 'r', 'Rare', 2),
-('COVER_CODE', 'P', 'Present', 3),
-('QA_STATUS', 'unreviewed', 'Unreviewed', 1),
-('QA_STATUS', 'pending', 'Pending Review', 2),
-('QA_STATUS', 'approved', 'Approved', 3),
-('QA_STATUS', 'rejected', 'Rejected', 4),
-('SURVEY_TYPE', 'field', 'Field Survey', 1),
-('SURVEY_TYPE', 'desktop', 'Desktop Review', 2)
-ON CONFLICT DO NOTHING;
+    ('COVER_CLASS', '1', '0-1%', 1),
+    ('COVER_CLASS', '2', '1-5%', 2),
+    ('COVER_CLASS', '3', '5-25%', 3),
+    ('COVER_CLASS', '4', '25-50%', 4),
+    ('COVER_CLASS', '5', '50-75%', 5),
+    ('COVER_CLASS', '6', '75-100%', 6);
 
--- Species attributes
-INSERT INTO lists.usyssppattributes (spp_code, tree_shrub_herb, native_introduced) VALUES
-('AB', 'Tree', 'Native'),
-('AT', 'Herb', 'Native'),
-('DR', 'Herb', 'Native'),
-('FD', 'Tree', 'Native'),
-('HW', 'Tree', 'Native'),
-('PA', 'Tree', 'Native'),
-('PW', 'Tree', 'Native'),
-('SX', 'Tree', 'Native'),
-('SW', 'Tree', 'Native'),
-('YC', 'Tree', 'Native')
-ON CONFLICT DO NOTHING;
+-- Seed: users (3 test users)
+INSERT INTO admin.users (username, email, full_name, role, is_active) VALUES
+    ('reader_user', 'reader@vpro.test', 'Test Reader', 'reader', TRUE),
+    ('writer_user', 'writer@vpro.test', 'Test Writer', 'writer', TRUE),
+    ('admin_user', 'admin@vpro.test', 'Test Admin', 'admin', TRUE);
 
 -- Default roles
 INSERT INTO admin.roles (role_name, description, permissions) VALUES
