@@ -2,8 +2,17 @@ open_fs882_destination_context <- function(state,
                                            con,
                                            form_name = "FS882-6x4XL",
                                            close_forms = c("FS882-8x6XL", "FS882-1x1")) {
+  curr_su <- shiny::isolate(state$CurrSU)
+  pref_plot <- shiny::isolate(state$PrefPlot)
+
   state$CurrForm <- form_name
   state$sysCurrForm <- form_name
+  state$DeferredCloseForms <- close_forms
+  if ((is.null(curr_su) || !nzchar(trimws(as.character(curr_su)))) &&
+      !is.null(pref_plot) && nzchar(trimws(as.character(pref_plot)))) {
+    state$CurrSU <- pref_plot
+    state$sysCurrSU <- pref_plot
+  }
   set_pref(con, "Current", "DataFormName", form_name)
 }
 
@@ -138,7 +147,7 @@ mod_fs882_6x4xl_ui <- function(id) {
     card(
       full_screen = TRUE,
       card_header(
-        "FS882-6x4XL",
+        uiOutput(ns("fs882_caption")),
         uiOutput(ns("fs882_context"))
       ),
       navset_card_tab(
@@ -220,13 +229,17 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
     )
 
     output$fs882_context <- renderUI({
-      project_name <- state$CurrProject %||% state$PrefProject %||% "None"
-      su_name <- state$PrefSUTable %||% "None"
       plot_name <- state$CurrSU %||% rv$current_plot %||% "None"
       tags$small(
         class = "text-muted",
-        sprintf("Project: %s / SU Table: %s / Plot: %s", project_name, su_name, plot_name)
+        sprintf("Plot: %s", plot_name)
       )
+    })
+
+    output$fs882_caption <- renderUI({
+      project_name <- state$CurrProject %||% state$PrefProject %||% "None"
+      su_name <- state$PrefSUTable %||% "None"
+      tags$span(sprintf("Project: %s / SU Table: %s", project_name, su_name))
     })
 
     observe({
@@ -577,7 +590,10 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
     })
 
     observeEvent(input$btnG2MainMenu, {
-      bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+      return_tab <- state$DataEntryReturnTab %||% "Vegetation"
+      state$CurrForm <- "frmMainMenuFloat"
+      state$sysCurrForm <- "frmMainMenuFloat"
+      bslib::nav_select("main_tabs", return_tab, session = session$parent)
     })
   })
 }

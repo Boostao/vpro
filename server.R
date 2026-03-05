@@ -603,6 +603,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$btn_nav_data_entry, {
+    state$DataEntryReturnTab <- input$main_tabs %||% "Vegetation"
     open_fs882_destination_context(
       state = state,
       con = con,
@@ -615,6 +616,9 @@ server <- function(input, output, session) {
   observeEvent(input$main_tabs, {
     if (!identical(input$main_tabs, "FS882-6x4XL")) {
       return()
+    }
+    if (is.null(state$DataEntryReturnTab) || !nzchar(state$DataEntryReturnTab)) {
+      state$DataEntryReturnTab <- "Vegetation"
     }
     open_fs882_destination_context(
       state = state,
