@@ -15,7 +15,7 @@ CREATE SCHEMA IF NOT EXISTS public_export;
 -- CORE SCHEMA - Approved Plot Data
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS core.sample_veg (
+CREATE TABLE IF NOT EXISTS core.veg (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL,
     species_code TEXT NOT NULL,
@@ -69,37 +69,37 @@ CREATE TABLE IF NOT EXISTS core.sample_veg (
 );
 
 CREATE OR REPLACE VIEW core.vw_usysallveg AS
-SELECT plot_number AS plotnumber, '1' AS mylayer, species_code AS species, cover1 AS cover FROM core.sample_veg WHERE cover1 IS NOT NULL
+SELECT plot_number AS plotnumber, '1' AS mylayer, species_code AS species, cover1 AS cover FROM core.veg WHERE cover1 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '2' AS mylayer, species_code AS species, cover2 AS cover FROM core.sample_veg WHERE cover2 IS NOT NULL
+SELECT plot_number AS plotnumber, '2' AS mylayer, species_code AS species, cover2 AS cover FROM core.veg WHERE cover2 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '3' AS mylayer, species_code AS species, cover3 AS cover FROM core.sample_veg WHERE cover3 IS NOT NULL
+SELECT plot_number AS plotnumber, '3' AS mylayer, species_code AS species, cover3 AS cover FROM core.veg WHERE cover3 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '4' AS mylayer, species_code AS species, cover4 AS cover FROM core.sample_veg WHERE cover4 IS NOT NULL
+SELECT plot_number AS plotnumber, '4' AS mylayer, species_code AS species, cover4 AS cover FROM core.veg WHERE cover4 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '5' AS mylayer, species_code AS species, cover5 AS cover FROM core.sample_veg WHERE cover5 IS NOT NULL
+SELECT plot_number AS plotnumber, '5' AS mylayer, species_code AS species, cover5 AS cover FROM core.veg WHERE cover5 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '5a' AS mylayer, species_code AS species, cover5a AS cover FROM core.sample_veg WHERE cover5a IS NOT NULL
+SELECT plot_number AS plotnumber, '5a' AS mylayer, species_code AS species, cover5a AS cover FROM core.veg WHERE cover5a IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '5b' AS mylayer, species_code AS species, cover5b AS cover FROM core.sample_veg WHERE cover5b IS NOT NULL
+SELECT plot_number AS plotnumber, '5b' AS mylayer, species_code AS species, cover5b AS cover FROM core.veg WHERE cover5b IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '5c' AS mylayer, species_code AS species, cover5c AS cover FROM core.sample_veg WHERE cover5c IS NOT NULL
+SELECT plot_number AS plotnumber, '5c' AS mylayer, species_code AS species, cover5c AS cover FROM core.veg WHERE cover5c IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '6' AS mylayer, species_code AS species, cover6 AS cover FROM core.sample_veg WHERE cover6 IS NOT NULL
+SELECT plot_number AS plotnumber, '6' AS mylayer, species_code AS species, cover6 AS cover FROM core.veg WHERE cover6 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '7' AS mylayer, species_code AS species, cover7 AS cover FROM core.sample_veg WHERE cover7 IS NOT NULL
+SELECT plot_number AS plotnumber, '7' AS mylayer, species_code AS species, cover7 AS cover FROM core.veg WHERE cover7 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '8' AS mylayer, species_code AS species, cover8 AS cover FROM core.sample_veg WHERE cover8 IS NOT NULL
+SELECT plot_number AS plotnumber, '8' AS mylayer, species_code AS species, cover8 AS cover FROM core.veg WHERE cover8 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '9' AS mylayer, species_code AS species, cover9 AS cover FROM core.sample_veg WHERE cover9 IS NOT NULL
+SELECT plot_number AS plotnumber, '9' AS mylayer, species_code AS species, cover9 AS cover FROM core.veg WHERE cover9 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, '10' AS mylayer, species_code AS species, cover10 AS cover FROM core.sample_veg WHERE cover10 IS NOT NULL
+SELECT plot_number AS plotnumber, '10' AS mylayer, species_code AS species, cover10 AS cover FROM core.veg WHERE cover10 IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, 'A' AS mylayer, species_code AS species, totala AS cover FROM core.sample_veg WHERE totala IS NOT NULL
+SELECT plot_number AS plotnumber, 'A' AS mylayer, species_code AS species, totala AS cover FROM core.veg WHERE totala IS NOT NULL
 UNION ALL
-SELECT plot_number AS plotnumber, 'B' AS mylayer, species_code AS species, totalb AS cover FROM core.sample_veg WHERE totalb IS NOT NULL;
+SELECT plot_number AS plotnumber, 'B' AS mylayer, species_code AS species, totalb AS cover FROM core.veg WHERE totalb IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS core.sample_env (
+CREATE TABLE IF NOT EXISTS core.env (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL UNIQUE,
     project_id INTEGER NOT NULL,
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS core.sample_env (
     modified_by TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS core.sample_su (
+CREATE TABLE IF NOT EXISTS core.su (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL UNIQUE,
     project_id INTEGER NOT NULL,
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS core.sample_su (
     modified_by TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS core.sample_admin (
+CREATE TABLE IF NOT EXISTS core.admin (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL UNIQUE,
     project_id INTEGER NOT NULL,
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS core.sample_admin (
     modified_by TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS core.sample_metadata (
+CREATE TABLE IF NOT EXISTS core.metadata (
     id SERIAL PRIMARY KEY,
     project_id INTEGER NOT NULL UNIQUE,
     project_name TEXT NOT NULL,
@@ -210,7 +210,7 @@ CREATE TABLE IF NOT EXISTS lists.usyssppattributes (
 -- STAGING SCHEMA - Pending Uploads & Merge Requests
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS staging.sample_veg (
+CREATE TABLE IF NOT EXISTS staging.veg (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL,
     species_code TEXT NOT NULL,
@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS staging.sample_veg (
     modified_by TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS staging.sample_env (
+CREATE TABLE IF NOT EXISTS staging.env (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL,
     project_id INTEGER NOT NULL,
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS staging.sample_env (
     modified_by TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS staging.sample_su (
+CREATE TABLE IF NOT EXISTS staging.su (
     id SERIAL PRIMARY KEY,
     plot_number TEXT NOT NULL,
     project_id INTEGER NOT NULL,
@@ -429,11 +429,11 @@ CREATE TABLE IF NOT EXISTS public_export.download_log (
 -- INDEXES
 -- ============================================================================
 
-CREATE INDEX IF NOT EXISTS idx_sample_veg_plot ON core.sample_veg(plot_number);
-CREATE INDEX IF NOT EXISTS idx_sample_veg_project ON core.sample_veg(project_id);
-CREATE INDEX IF NOT EXISTS idx_sample_veg_species ON core.sample_veg(species_code);
-CREATE INDEX IF NOT EXISTS idx_sample_env_plot ON core.sample_env(plot_number);
-CREATE INDEX IF NOT EXISTS idx_sample_env_project ON core.sample_env(project_id);
+CREATE INDEX IF NOT EXISTS idx_veg_plot ON core.veg(plot_number);
+CREATE INDEX IF NOT EXISTS idx_veg_project ON core.veg(project_id);
+CREATE INDEX IF NOT EXISTS idx_veg_species ON core.veg(species_code);
+CREATE INDEX IF NOT EXISTS idx_env_plot ON core.env(plot_number);
+CREATE INDEX IF NOT EXISTS idx_env_project ON core.env(project_id);
 CREATE INDEX IF NOT EXISTS idx_change_log_timestamp ON admin.change_log(timestamp_utc);
 CREATE INDEX IF NOT EXISTS idx_change_log_user ON admin.change_log(username);
 CREATE INDEX IF NOT EXISTS idx_download_log_timestamp ON public_export.download_log(timestamp_utc);
@@ -560,6 +560,6 @@ WHERE u.username = 'test_admin' AND r.role_name = 'admin'
 ON CONFLICT DO NOTHING;
 
 -- Sample project
-INSERT INTO core.sample_metadata (project_id, project_name, description, organization, contact_email, modified_by) VALUES
+INSERT INTO core.metadata (project_id, project_name, description, organization, contact_email, modified_by) VALUES
 (1, 'Test Project Alpha', 'Initial test dataset for BECMaster', 'Test Organization', 'test@example.com', 'test_admin')
 ON CONFLICT DO NOTHING;
