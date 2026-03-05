@@ -97,7 +97,7 @@ test_that("test schema initializes with required tables", {
     WHERE table_schema = 'core'
   ")
   
-  expected_tables <- c("sample_veg", "sample_env")
+  expected_tables <- c("veg", "env")
   for (tbl in expected_tables) {
     expect_true(tbl %in% core_tables$table_name,
                label = paste0("Table 'core.", tbl, "' exists"))
@@ -146,13 +146,13 @@ test_that("insert_test_plot() creates valid plot records", {
   
   # Verify environment record
   env_result <- DBI::dbGetQuery(con, 
-    "SELECT COUNT(*) as n FROM core.sample_env WHERE plot_number = 'TEST-PLOT-01'"
+    "SELECT COUNT(*) as n FROM core.env WHERE plot_number = 'TEST-PLOT-01'"
   )
   expect_equal(env_result$n[1], 1L)
   
   # Verify vegetation records
   veg_result <- DBI::dbGetQuery(con,
-    "SELECT COUNT(*) as n FROM core.sample_veg WHERE plot_number = 'TEST-PLOT-01'"
+    "SELECT COUNT(*) as n FROM core.veg WHERE plot_number = 'TEST-PLOT-01'"
   )
   expect_equal(veg_result$n[1], 3L)
   
@@ -176,12 +176,12 @@ test_that("Data validation constraints are enforced", {
   
   # Attempt insert (may or may not fail depending on constraint enforcement)
   # For now, just verify the insert works
-  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "sample_env"), 
+  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "env"), 
                     invalid_env)
   
   # Verify the record was inserted
   result <- DBI::dbGetQuery(con, 
-    "SELECT COUNT(*) as n FROM core.sample_env WHERE plot_number = 'INVALID-01'"
+    "SELECT COUNT(*) as n FROM core.env WHERE plot_number = 'INVALID-01'"
   )
   expect_equal(result$n[1], 1L)
   
@@ -212,7 +212,7 @@ test_that("query_db() handles non-SELECT statements", {
   con <- test_connect_duckdb()
   
   # Should not error on non-SELECT
-  result <- query_db(con, "DELETE FROM core.sample_veg WHERE plot_number = 'NEVER-EXISTS'")
+  result <- query_db(con, "DELETE FROM core.veg WHERE plot_number = 'NEVER-EXISTS'")
   
   # Result should be invisible NULL for non-SELECT
   expect_null(result)
@@ -330,7 +330,7 @@ test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
     
     # Verify local record was created
     local_count <- DBI::dbGetQuery(con, "
-      SELECT COUNT(*) as n FROM core.sample_veg WHERE plot_number = 'CLOUD-TEST-01'
+      SELECT COUNT(*) as n FROM core.veg WHERE plot_number = 'CLOUD-TEST-01'
     ")
     
     expect_equal(local_count$n[1], 1L)

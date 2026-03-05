@@ -19,7 +19,7 @@ test_that("submit_changes creates merge request and inserts single table veg dat
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Clean up any existing staging data
-  DBI::dbExecute(con, "DELETE FROM staging.sample_veg")
+  DBI::dbExecute(con, "DELETE FROM staging.veg")
   DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
   
   veg_data <- data.frame(
@@ -32,7 +32,7 @@ test_that("submit_changes creates merge request and inserts single table veg dat
     stringsAsFactors = FALSE
   )
   
-  result <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  result <- submit_changes(con, list(veg = list(inserts = veg_data)),
                           "Test User", "test@example.com", 1)
   
   expect_type(result$merge_request_id, "integer")
@@ -51,7 +51,7 @@ test_that("submit_changes creates merge request and inserts single table veg dat
   
   # Verify data in staging table
   staging_rows <- DBI::dbGetQuery(con, sprintf("
-    SELECT * FROM staging.sample_veg WHERE merge_request_id = %d
+    SELECT * FROM staging.veg WHERE merge_request_id = %d
   ", result$merge_request_id))
   
   expect_equal(nrow(staging_rows), 1)
@@ -77,7 +77,7 @@ test_that("submit_changes validates data before submission", {
   )
   
   expect_error(
-    submit_changes(con, list(sample_veg = list(inserts = invalid_veg)),
+    submit_changes(con, list(veg = list(inserts = invalid_veg)),
                   "Test User", "test@example.com", 1),
     "validation failed"
   )
@@ -105,7 +105,7 @@ test_that("submit_changes handles env data correctly", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Clean up
-  DBI::dbExecute(con, "DELETE FROM staging.sample_env")
+  DBI::dbExecute(con, "DELETE FROM staging.env")
   DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
   
   env_data <- data.frame(
@@ -117,13 +117,13 @@ test_that("submit_changes handles env data correctly", {
     stringsAsFactors = FALSE
   )
   
-  result <- submit_changes(con, list(sample_env = list(inserts = env_data)),
+  result <- submit_changes(con, list(env = list(inserts = env_data)),
                           "Test User", "test@example.com", 1)
   
   expect_type(result$merge_request_id, "integer")
   
   staging_rows <- DBI::dbGetQuery(con, sprintf("
-    SELECT * FROM staging.sample_env WHERE merge_request_id = %d
+    SELECT * FROM staging.env WHERE merge_request_id = %d
   ", result$merge_request_id))
   
   expect_equal(nrow(staging_rows), 1)
@@ -138,7 +138,7 @@ test_that("submit_changes handles su data correctly", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Clean up
-  DBI::dbExecute(con, "DELETE FROM staging.sample_su")
+  DBI::dbExecute(con, "DELETE FROM staging.su")
   DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
   
   su_data <- data.frame(
@@ -149,13 +149,13 @@ test_that("submit_changes handles su data correctly", {
     stringsAsFactors = FALSE
   )
   
-  result <- submit_changes(con, list(sample_su = list(inserts = su_data)),
+  result <- submit_changes(con, list(su = list(inserts = su_data)),
                           "Test User", "test@example.com", 1)
   
   expect_type(result$merge_request_id, "integer")
   
   staging_rows <- DBI::dbGetQuery(con, sprintf("
-    SELECT * FROM staging.sample_su WHERE merge_request_id = %d
+    SELECT * FROM staging.su WHERE merge_request_id = %d
   ", result$merge_request_id))
   
   expect_equal(nrow(staging_rows), 1)
@@ -169,12 +169,12 @@ test_that("submit_changes handles multiple tables and change types", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Clean up
-  DBI::dbExecute(con, "DELETE FROM staging.sample_veg")
-  DBI::dbExecute(con, "DELETE FROM staging.sample_env")
+  DBI::dbExecute(con, "DELETE FROM staging.veg")
+  DBI::dbExecute(con, "DELETE FROM staging.env")
   DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
   
   changes <- list(
-    sample_veg = list(
+    veg = list(
       inserts = data.frame(
         plot_number = "MULTI_001",
         species_code = "TSUGHET",
@@ -194,7 +194,7 @@ test_that("submit_changes handles multiple tables and change types", {
         stringsAsFactors = FALSE
       )
     ),
-    sample_env = list(
+    env = list(
       inserts = data.frame(
         plot_number = "MULTI_001",
         project_id = 1,
@@ -214,7 +214,7 @@ test_that("submit_changes handles multiple tables and change types", {
   
   # Verify all data submitted under same merge request
   veg_rows <- DBI::dbGetQuery(con, sprintf("
-    SELECT * FROM staging.sample_veg 
+    SELECT * FROM staging.veg 
     WHERE merge_request_id = %d
   ", result$merge_request_id))
   
@@ -222,7 +222,7 @@ test_that("submit_changes handles multiple tables and change types", {
   expect_true(all(c("I", "U") %in% veg_rows$change_type))
   
   env_rows <- DBI::dbGetQuery(con, sprintf("
-    SELECT * FROM staging.sample_env 
+    SELECT * FROM staging.env 
     WHERE merge_request_id = %d
   ", result$merge_request_id))
   
@@ -237,12 +237,12 @@ test_that("submit_changes updates record_counts correctly", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Clean up
-  DBI::dbExecute(con, "DELETE FROM staging.sample_veg")
-  DBI::dbExecute(con, "DELETE FROM staging.sample_env")
+  DBI::dbExecute(con, "DELETE FROM staging.veg")
+  DBI::dbExecute(con, "DELETE FROM staging.env")
   DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
   
   changes <- list(
-    sample_veg = list(
+    veg = list(
       inserts = data.frame(
         plot_number = c("COUNT_001", "COUNT_002"),
         species_code = c("TSUGHET", "THUJOCC"),
@@ -262,7 +262,7 @@ test_that("submit_changes updates record_counts correctly", {
     SELECT record_counts FROM staging.merge_requests WHERE id = %d
   ", result$merge_request_id))
   
-  expect_true(grepl("sample_veg", mr$record_counts))
+  expect_true(grepl("veg", mr$record_counts))
   expect_true(grepl("inserts", mr$record_counts))
 })
 
@@ -273,11 +273,11 @@ test_that("submit_changes handles deletes correctly", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Clean up
-  DBI::dbExecute(con, "DELETE FROM staging.sample_veg")
+  DBI::dbExecute(con, "DELETE FROM staging.veg")
   DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
   
   changes <- list(
-    sample_veg = list(
+    veg = list(
       deletes = data.frame(
         plot_number = "DELETE_001",
         species_code = "TSUGHET",
@@ -292,7 +292,7 @@ test_that("submit_changes handles deletes correctly", {
   
   # Verify delete change_type
   veg_rows <- DBI::dbGetQuery(con, sprintf("
-    SELECT * FROM staging.sample_veg 
+    SELECT * FROM staging.veg 
     WHERE merge_request_id = %d
   ", result$merge_request_id))
   
@@ -307,7 +307,7 @@ test_that("submit_changes validates all data before submission", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   changes <- list(
-    sample_veg = list(
+    veg = list(
       inserts = data.frame(
         plot_number = "INVALID",
         species_code = "INVALID_SPECIES",  # Bad species
@@ -341,7 +341,7 @@ test_that("submit_changes rejects empty changes", {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   changes <- list(
-    sample_veg = list(
+    veg = list(
       inserts = data.frame(),
       updates = data.frame()
     )
@@ -365,11 +365,11 @@ test_that("submit_changes rolls back on error", {
   ")$cnt
   
   initial_veg_count <- DBI::dbGetQuery(con, "
-    SELECT COUNT(*) as cnt FROM staging.sample_veg
+    SELECT COUNT(*) as cnt FROM staging.veg
   ")$cnt
   
   changes <- list(
-    sample_veg = list(
+    veg = list(
       inserts = data.frame(
         plot_number = "ROLLBACK_001",
         species_code = "INVALID_SPP",  # This will fail validation
@@ -392,7 +392,7 @@ test_that("submit_changes rolls back on error", {
   ")$cnt
   
   final_veg_count <- DBI::dbGetQuery(con, "
-    SELECT COUNT(*) as cnt FROM staging.sample_veg
+    SELECT COUNT(*) as cnt FROM staging.veg
   ")$cnt
   
   expect_equal(final_mr_count, initial_mr_count)

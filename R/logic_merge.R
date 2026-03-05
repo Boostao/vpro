@@ -51,20 +51,20 @@ list_pending_merges <- function(pg_con) {
 #'
 #' @param pg_con DBI connection to PostgreSQL
 #' @param merge_request_id integer merge request ID
-#' @return Named list with elements: sample_veg, sample_env, sample_su.
+#' @return Named list with elements: veg, env, su.
 #'   Each element is a data.frame with staging rows (if any exist).
 #' @export
 #' @examples
 #' \dontrun{
 #'   details <- get_merge_details(pg_con, merge_request_id = 1)
-#'   print(details$sample_veg)
+#'   print(details$veg)
 #' }
 get_merge_details <- function(pg_con, merge_request_id) {
   if (!is.numeric(merge_request_id) || merge_request_id <= 0) {
     stop("merge_request_id must be a positive integer")
   }
   
-  tables <- c("sample_veg", "sample_env", "sample_su")
+  tables <- c("veg", "env", "su")
   result <- list()
   
   for (tbl in tables) {
@@ -236,16 +236,16 @@ detect_conflicts <- function(pg_con, merge_request_id) {
   
   # Define natural keys for each table
   table_configs <- list(
-    sample_veg = c("plot_number", "species_code", "layer_code", "project_id"),
-    sample_env = c("plot_number"),
-    sample_su = c("plot_number")
+    veg = c("plot_number", "species_code", "layer_code", "project_id"),
+    env = c("plot_number"),
+    su = c("plot_number")
   )
   
   # Define natural keys for each table
   table_configs <- list(
-    sample_veg = c("plot_number", "species_code", "layer_code", "project_id"),
-    sample_env = c("plot_number"),
-    sample_su = c("plot_number")
+    veg = c("plot_number", "species_code", "layer_code", "project_id"),
+    env = c("plot_number"),
+    su = c("plot_number")
   )
   
   # Detect conflicts for each table
@@ -384,26 +384,26 @@ approve_merge <- function(pg_con, merge_request_id, reviewer) {
     audit_before <- DBI::dbGetQuery(pg_con, 
       "SELECT COUNT(*) as cnt FROM audit.logged_actions")$cnt
     
-    # Process sample_veg
+    # Process veg
     veg_inserts <- DBI::dbExecute(pg_con, "
-      INSERT INTO core.sample_veg 
+      INSERT INTO core.veg 
         (plot_number, species_code, layer_code, cover_percent, height_cm, 
          cover_code, project_id, modified_by)
       SELECT 
         plot_number, species_code, layer_code, cover_percent, height_cm,
         cover_code, project_id, $2
-      FROM staging.sample_veg
+      FROM staging.veg
       WHERE merge_request_id = $1 AND change_type = 'I'
     ", params = list(merge_request_id, reviewer))
     
     veg_updates <- DBI::dbExecute(pg_con, "
-      UPDATE core.sample_veg cv
+      UPDATE core.veg cv
       SET 
         cover_percent = sv.cover_percent,
         height_cm = sv.height_cm,
         cover_code = sv.cover_code,
         modified_by = $2
-      FROM staging.sample_veg sv
+      FROM staging.veg sv
       WHERE sv.merge_request_id = $1 
         AND sv.change_type = 'U'
         AND cv.plot_number = sv.plot_number
@@ -413,8 +413,8 @@ approve_merge <- function(pg_con, merge_request_id, reviewer) {
     ", params = list(merge_request_id, reviewer))
     
     veg_deletes <- DBI::dbExecute(pg_con, "
-      DELETE FROM core.sample_veg cv
-      USING staging.sample_veg sv
+      DELETE FROM core.veg cv
+      USING staging.veg sv
       WHERE sv.merge_request_id = $1 
         AND sv.change_type = 'D'
         AND cv.plot_number = sv.plot_number
@@ -424,26 +424,26 @@ approve_merge <- function(pg_con, merge_request_id, reviewer) {
     ", params = list(merge_request_id))
     
     if (veg_inserts + veg_updates + veg_deletes > 0) {
-      summary$tables_merged <- c(summary$tables_merged, "sample_veg")
+      summary$tables_merged <- c(summary$tables_merged, "veg")
       summary$rows_inserted <- summary$rows_inserted + veg_inserts
       summary$rows_updated <- summary$rows_updated + veg_updates
       summary$rows_deleted <- summary$rows_deleted + veg_deletes
     }
     
-    # Process sample_env
+    # Process env
     env_inserts <- DBI::dbExecute(pg_con, "
-      INSERT INTO core.sample_env 
+      INSERT INTO core.env 
         (plot_number, project_id, latitude, longitude, elevation_m,
          survey_date, surveyor_name, plot_notes, modified_by)
       SELECT 
         plot_number, project_id, latitude, longitude, elevation_m,
         survey_date, surveyor_name, plot_notes, $2
-      FROM staging.sample_env
+      FROM staging.env
       WHERE merge_request_id = $1 AND change_type = 'I'
     ", params = list(merge_request_id, reviewer))
     
     env_updates <- DBI::dbExecute(pg_con, "
-      UPDATE core.sample_env ce
+      UPDATE core.env ce
       SET 
         latitude = se.latitude,
         longitude = se.longitude,
@@ -452,63 +452,63 @@ approve_merge <- function(pg_con, merge_request_id, reviewer) {
         surveyor_name = se.surveyor_name,
         plot_notes = se.plot_notes,
         modified_by = $2
-      FROM staging.sample_env se
+      FROM staging.env se
       WHERE se.merge_request_id = $1 
         AND se.change_type = 'U'
         AND ce.plot_number = se.plot_number
     ", params = list(merge_request_id, reviewer))
     
     env_deletes <- DBI::dbExecute(pg_con, "
-      DELETE FROM core.sample_env ce
-      USING staging.sample_env se
+      DELETE FROM core.env ce
+      USING staging.env se
       WHERE se.merge_request_id = $1 
         AND se.change_type = 'D'
         AND ce.plot_number = se.plot_number
     ", params = list(merge_request_id))
     
     if (env_inserts + env_updates + env_deletes > 0) {
-      summary$tables_merged <- c(summary$tables_merged, "sample_env")
+      summary$tables_merged <- c(summary$tables_merged, "env")
       summary$rows_inserted <- summary$rows_inserted + env_inserts
       summary$rows_updated <- summary$rows_updated + env_updates
       summary$rows_deleted <- summary$rows_deleted + env_deletes
     }
     
-    # Process sample_su
+    # Process su
     su_inserts <- DBI::dbExecute(pg_con, "
-      INSERT INTO core.sample_su 
+      INSERT INTO core.su 
         (plot_number, project_id, su_number, bec_zone, bec_subzone, 
          site_series, modified_by)
       SELECT 
         plot_number, project_id, su_number, bec_zone, bec_subzone,
         site_series, $2
-      FROM staging.sample_su
+      FROM staging.su
       WHERE merge_request_id = $1 AND change_type = 'I'
     ", params = list(merge_request_id, reviewer))
     
     su_updates <- DBI::dbExecute(pg_con, "
-      UPDATE core.sample_su cs
+      UPDATE core.su cs
       SET 
         su_number = ss.su_number,
         bec_zone = ss.bec_zone,
         bec_subzone = ss.bec_subzone,
         site_series = ss.site_series,
         modified_by = $2
-      FROM staging.sample_su ss
+      FROM staging.su ss
       WHERE ss.merge_request_id = $1 
         AND ss.change_type = 'U'
         AND cs.plot_number = ss.plot_number
     ", params = list(merge_request_id, reviewer))
     
     su_deletes <- DBI::dbExecute(pg_con, "
-      DELETE FROM core.sample_su cs
-      USING staging.sample_su ss
+      DELETE FROM core.su cs
+      USING staging.su ss
       WHERE ss.merge_request_id = $1 
         AND ss.change_type = 'D'
         AND cs.plot_number = ss.plot_number
     ", params = list(merge_request_id))
     
     if (su_inserts + su_updates + su_deletes > 0) {
-      summary$tables_merged <- c(summary$tables_merged, "sample_su")
+      summary$tables_merged <- c(summary$tables_merged, "su")
       summary$rows_inserted <- summary$rows_inserted + su_inserts
       summary$rows_updated <- summary$rows_updated + su_updates
       summary$rows_deleted <- summary$rows_deleted + su_deletes

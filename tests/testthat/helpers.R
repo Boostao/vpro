@@ -55,7 +55,7 @@ initialize_test_schema <- function(con) {
   ")
   
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS core.sample_veg (
+    CREATE TABLE IF NOT EXISTS core.veg (
       plot_number TEXT NOT NULL,
       species_code TEXT NOT NULL,
       layer_code TEXT NOT NULL,
@@ -68,7 +68,7 @@ initialize_test_schema <- function(con) {
   ")
   
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS core.sample_env (
+    CREATE TABLE IF NOT EXISTS core.env (
       plot_number TEXT NOT NULL UNIQUE,
       project_id INTEGER,
       latitude NUMERIC,
@@ -193,8 +193,8 @@ reset_test_db <- function(con) {
   
   # Truncate data tables (keep reference data)
   tryCatch({
-    DBI::dbExecute(con, "TRUNCATE TABLE core.sample_veg")
-    DBI::dbExecute(con, "TRUNCATE TABLE core.sample_env")
+    DBI::dbExecute(con, "TRUNCATE TABLE core.veg")
+    DBI::dbExecute(con, "TRUNCATE TABLE core.env")
   }, error = function(e) {
     warning("Could not truncate tables: ", e$message)
   })
@@ -231,7 +231,7 @@ insert_test_plot <- function(con, plot_number = "TEST-001",
     modified_by = modified_by
   )
   
-  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "sample_env"), env_df)
+  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "env"), env_df)
   
   # Insert vegetation records
   veg_df <- data.frame(
@@ -243,7 +243,7 @@ insert_test_plot <- function(con, plot_number = "TEST-001",
     modified_by = modified_by
   )
   
-  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "sample_veg"), veg_df)
+  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "veg"), veg_df)
   
   message("[test-helpers] Inserted ", nrow(veg_df), " vegetation records")
 }
@@ -275,9 +275,9 @@ expect_query_result <- function(con, sql, expected_rows = NULL, label = "query")
 #' @param con DBI connection object (PostgreSQL)
 #'
 clear_core_tables <- function(con) {
-  DBI::dbExecute(con, "DELETE FROM core.sample_veg")
-  DBI::dbExecute(con, "DELETE FROM core.sample_env")
-  DBI::dbExecute(con, "DELETE FROM core.sample_su")
+  DBI::dbExecute(con, "DELETE FROM core.veg")
+  DBI::dbExecute(con, "DELETE FROM core.env")
+  DBI::dbExecute(con, "DELETE FROM core.su")
 }
 
 #' Clear Staging Tables
@@ -287,9 +287,9 @@ clear_core_tables <- function(con) {
 #' @param con DBI connection object (PostgreSQL)
 #'
 clear_staging_tables <- function(con) {
-  DBI::dbExecute(con, "DELETE FROM staging.sample_veg")
-  DBI::dbExecute(con, "DELETE FROM staging.sample_env")
-  DBI::dbExecute(con, "DELETE FROM staging.sample_su")
+  DBI::dbExecute(con, "DELETE FROM staging.veg")
+  DBI::dbExecute(con, "DELETE FROM staging.env")
+  DBI::dbExecute(con, "DELETE FROM staging.su")
   DBI::dbExecute(con, "DELETE FROM staging.merge_conflicts")
   DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
 }

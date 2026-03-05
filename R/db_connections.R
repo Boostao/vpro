@@ -98,7 +98,7 @@ connect_local_db <- function(environment = NULL) {
 #'   DBI::dbExecute(con, "INSTALL postgres; LOAD postgres;")
 #'   attach_cloud_db(con, environment = 'test')
 #'   # Now queries can use 'master.*' tables
-#'   DBI::dbGetQuery(con, "SELECT * FROM master.core.sample_veg LIMIT 5")
+#'   DBI::dbGetQuery(con, "SELECT * FROM master.core.veg LIMIT 5")
 #' }
 #'
 #' @export

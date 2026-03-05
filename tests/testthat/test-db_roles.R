@@ -132,7 +132,7 @@ test_that("vpro_default role has correct permissions", {
   
   # Should be able to SELECT from core tables
   expect_no_error({
-    result <- DBI::dbGetQuery(default_con, "SELECT * FROM core.sample_veg LIMIT 1")
+    result <- DBI::dbGetQuery(default_con, "SELECT * FROM core.veg LIMIT 1")
   })
   
   # Should be able to SELECT from lists tables
@@ -147,7 +147,7 @@ test_that("vpro_default role has correct permissions", {
   
   # Should be able to SELECT from staging
   expect_no_error({
-    result <- DBI::dbGetQuery(default_con, "SELECT * FROM staging.sample_veg LIMIT 1")
+    result <- DBI::dbGetQuery(default_con, "SELECT * FROM staging.veg LIMIT 1")
   })
   
   # Should be able to INSERT into staging tables
@@ -161,7 +161,7 @@ test_that("vpro_default role has correct permissions", {
     ")$id
     
     DBI::dbExecute(default_con, sprintf("
-      INSERT INTO staging.sample_veg 
+      INSERT INTO staging.veg 
       (plot_number, species_code, layer_code, cover_percent, project_id, merge_request_id, change_type)
       VALUES ('TEST_DEFAULT_PLOT', 'PICO', 'T1', 50, 1, %d, 'I')
     ", merge_id))
@@ -170,7 +170,7 @@ test_that("vpro_default role has correct permissions", {
   # Should be able to UPDATE staging tables
   expect_no_error({
     DBI::dbExecute(default_con, "
-      UPDATE staging.sample_veg 
+      UPDATE staging.veg 
       SET cover_percent = 60 
       WHERE plot_number = 'TEST_DEFAULT_PLOT'
     ")
@@ -179,7 +179,7 @@ test_that("vpro_default role has correct permissions", {
   # Should NOT be able to INSERT into core tables
   expect_error({
     DBI::dbExecute(default_con, "
-      INSERT INTO core.sample_veg 
+      INSERT INTO core.veg 
       (plot_number, species_code, layer_code, cover_percent, project_id)
       VALUES ('TEST_PLOT', 'PICO', 'T1', 50, 1)
     ")
@@ -188,7 +188,7 @@ test_that("vpro_default role has correct permissions", {
   # Should NOT be able to UPDATE core tables
   expect_error({
     DBI::dbExecute(default_con, "
-      UPDATE core.sample_veg 
+      UPDATE core.veg 
       SET cover_percent = 75 
       WHERE plot_number = 'PLOT_001'
     ")
@@ -197,7 +197,7 @@ test_that("vpro_default role has correct permissions", {
   # Should NOT be able to DELETE from core tables
   expect_error({
     DBI::dbExecute(default_con, "
-      DELETE FROM core.sample_veg 
+      DELETE FROM core.veg 
       WHERE plot_number = 'PLOT_001'
     ")
   }, "permission denied")
@@ -207,7 +207,7 @@ test_that("vpro_default role has correct permissions", {
     DBI::dbExecute(default_con, "
       INSERT INTO audit.logged_actions 
       (schema_name, table_name, action, new_data)
-      VALUES ('core', 'sample_veg', 'I', '{\"test\": \"data\"}'::jsonb)
+      VALUES ('core', 'veg', 'I', '{\"test\": \"data\"}'::jsonb)
     ")
   }, "permission denied")
   
@@ -257,9 +257,9 @@ test_that("vpro_admin role has correct permissions", {
   
   # Should be able to SELECT from all schemas
   expect_no_error({
-    DBI::dbGetQuery(admin_con, "SELECT * FROM core.sample_veg LIMIT 1")
+    DBI::dbGetQuery(admin_con, "SELECT * FROM core.veg LIMIT 1")
     DBI::dbGetQuery(admin_con, "SELECT * FROM lists.spplist LIMIT 1")
-    DBI::dbGetQuery(admin_con, "SELECT * FROM staging.sample_veg LIMIT 1")
+    DBI::dbGetQuery(admin_con, "SELECT * FROM staging.veg LIMIT 1")
     DBI::dbGetQuery(admin_con, "SELECT * FROM admin.users LIMIT 1")
     DBI::dbGetQuery(admin_con, "SELECT * FROM audit.logged_actions LIMIT 1")
   })
@@ -267,7 +267,7 @@ test_that("vpro_admin role has correct permissions", {
   # Should be able to INSERT into core tables
   expect_no_error({
     DBI::dbExecute(admin_con, "
-      INSERT INTO core.sample_veg 
+      INSERT INTO core.veg 
       (plot_number, species_code, layer_code, cover_percent, project_id)
       VALUES ('ADMIN_TEST_PLOT', 'PICO', 'T1', 50, 1)
     ")
@@ -276,7 +276,7 @@ test_that("vpro_admin role has correct permissions", {
   # Should be able to UPDATE core tables
   expect_no_error({
     DBI::dbExecute(admin_con, "
-      UPDATE core.sample_veg 
+      UPDATE core.veg 
       SET cover_percent = 75 
       WHERE plot_number = 'ADMIN_TEST_PLOT'
     ")
@@ -285,7 +285,7 @@ test_that("vpro_admin role has correct permissions", {
   # Should be able to DELETE from core tables
   expect_no_error({
     DBI::dbExecute(admin_con, "
-      DELETE FROM core.sample_veg 
+      DELETE FROM core.veg 
       WHERE plot_number = 'ADMIN_TEST_PLOT'
     ")
   })
@@ -300,7 +300,7 @@ test_that("vpro_admin role has correct permissions", {
     ")$id
     
     DBI::dbExecute(admin_con, sprintf("
-      INSERT INTO staging.sample_veg 
+      INSERT INTO staging.veg 
       (plot_number, species_code, layer_code, cover_percent, project_id, merge_request_id, change_type)
       VALUES ('ADMIN_STAGING_PLOT', 'PICO', 'T1', 50, 1, %d, 'I')
     ", merge_id))
@@ -342,7 +342,7 @@ test_that("vpro_admin role has correct permissions", {
     DBI::dbExecute(admin_con, "
       INSERT INTO audit.logged_actions 
       (schema_name, table_name, action, new_data)
-      VALUES ('core', 'sample_veg', 'I', '{\"test\": \"data\"}'::jsonb)
+      VALUES ('core', 'veg', 'I', '{\"test\": \"data\"}'::jsonb)
     ")
   })
   
@@ -505,6 +505,6 @@ test_that("vpro_default role can be granted to users", {
   
   # Verify they can read from core
   expect_no_error({
-    DBI::dbGetQuery(default_con, "SELECT * FROM core.sample_veg LIMIT 1")
+    DBI::dbGetQuery(default_con, "SELECT * FROM core.veg LIMIT 1")
   })
 })

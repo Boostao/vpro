@@ -12,9 +12,9 @@
 #' @param pg_con PostgreSQL database connection
 #' @param changes_list Named list with structure:
 #'   list(
-#'     sample_veg = list(inserts = df, updates = df, deletes = df),
-#'     sample_env = list(inserts = df, updates = df, deletes = df),
-#'     sample_su = list(inserts = df, updates = df, deletes = df)
+#'     veg = list(inserts = df, updates = df, deletes = df),
+#'     env = list(inserts = df, updates = df, deletes = df),
+#'     su = list(inserts = df, updates = df, deletes = df)
 #'   )
 #' @param user_name Character: submitter's name
 #' @param user_email Character: submitter's email
@@ -28,12 +28,12 @@
 #' \dontrun{
 #' # Multiple tables with multiple change types
 #' changes <- list(
-#'   sample_veg = list(
+#'   veg = list(
 #'     inserts = data.frame(plot_number = "PLOT001", ...),
 #'     updates = data.frame(plot_number = "PLOT002", ...),
 #'     deletes = data.frame(plot_number = "PLOT003", ...)
 #'   ),
-#'   sample_env = list(
+#'   env = list(
 #'     inserts = data.frame(plot_number = "PLOT001", ...)
 #'   )
 #' )
@@ -41,7 +41,7 @@
 #' 
 #' # Single table with single change type
 #' single_change <- list(
-#'   sample_veg = list(inserts = veg_data)
+#'   veg = list(inserts = veg_data)
 #' )
 #' result <- submit_changes(pg_con, single_change, "John Doe", "john@example.com", 1)
 #' }
@@ -82,7 +82,7 @@ submit_changes <- function(pg_con, changes_list, user_name, user_email, project_
     
     # Process each table
     for (table in names(changes_list)) {
-      if (!table %in% c("sample_veg", "sample_env", "sample_su")) {
+      if (!table %in% c("veg", "env", "su")) {
         stop(sprintf("Invalid table name: %s", table))
       }
       
@@ -94,7 +94,7 @@ submit_changes <- function(pg_con, changes_list, user_name, user_email, project_
         data <- changes_list[[table]]$inserts
         
         # Validate before inserting
-        if (table == "sample_veg") {
+        if (table == "veg") {
           for (i in seq_len(nrow(data))) {
             val_result <- validate_veg_row(data[i, ], pg_con, "postgres")
             if (!val_result$valid) {
@@ -102,7 +102,7 @@ submit_changes <- function(pg_con, changes_list, user_name, user_email, project_
                           paste(val_result$errors, collapse = "; ")))
             }
           }
-        } else if (table == "sample_env") {
+        } else if (table == "env") {
           for (i in seq_len(nrow(data))) {
             val_result <- validate_env_row(data[i, ], pg_con)
             if (!val_result$valid) {
@@ -110,7 +110,7 @@ submit_changes <- function(pg_con, changes_list, user_name, user_email, project_
                           paste(val_result$errors, collapse = "; ")))
             }
           }
-        } else if (table == "sample_su") {
+        } else if (table == "su") {
           for (i in seq_len(nrow(data))) {
             val_result <- validate_su_row(data[i, ], pg_con, "postgres")
             if (!val_result$valid) {
@@ -140,7 +140,7 @@ submit_changes <- function(pg_con, changes_list, user_name, user_email, project_
         data <- changes_list[[table]]$updates
         
         # Validate before updating
-        if (table == "sample_veg") {
+        if (table == "veg") {
           for (i in seq_len(nrow(data))) {
             val_result <- validate_veg_row(data[i, ], pg_con, "postgres")
             if (!val_result$valid) {
@@ -148,7 +148,7 @@ submit_changes <- function(pg_con, changes_list, user_name, user_email, project_
                           paste(val_result$errors, collapse = "; ")))
             }
           }
-        } else if (table == "sample_env") {
+        } else if (table == "env") {
           for (i in seq_len(nrow(data))) {
             val_result <- validate_env_row(data[i, ], pg_con)
             if (!val_result$valid) {
@@ -156,7 +156,7 @@ submit_changes <- function(pg_con, changes_list, user_name, user_email, project_
                           paste(val_result$errors, collapse = "; ")))
             }
           }
-        } else if (table == "sample_su") {
+        } else if (table == "su") {
           for (i in seq_len(nrow(data))) {
             val_result <- validate_su_row(data[i, ], pg_con, "postgres")
             if (!val_result$valid) {

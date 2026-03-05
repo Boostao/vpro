@@ -34,7 +34,7 @@ test_that("list_pending_merges returns pending requests with record counts", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)), 
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)), 
                           "test_user", "test@example.com", 1L)$merge_request_id
   
   result <- list_pending_merges(con)
@@ -45,7 +45,7 @@ test_that("list_pending_merges returns pending requests with record counts", {
   expect_equal(result$submitter_email, "test@example.com")
   expect_equal(result$status, "pending_review")
   expect_type(result$record_counts, "list")
-  expect_equal(result$record_counts[[1]]$sample_veg$inserts, 1)
+  expect_equal(result$record_counts[[1]]$veg$inserts, 1)
 })
 
 test_that("get_merge_details returns empty for non-existent request", {
@@ -57,9 +57,9 @@ test_that("get_merge_details returns empty for non-existent request", {
   
   expect_type(result, "list")
   expect_equal(length(result), 3)
-  expect_equal(nrow(result$sample_veg), 0)
-  expect_equal(nrow(result$sample_env), 0)
-  expect_equal(nrow(result$sample_su), 0)
+  expect_equal(nrow(result$veg), 0)
+  expect_equal(nrow(result$env), 0)
+  expect_equal(nrow(result$su), 0)
 })
 
 test_that("get_merge_details validates input", {
@@ -102,17 +102,17 @@ test_that("get_merge_details returns staging data for valid request", {
   )
   
   mr_id <- submit_changes(con, 
-                         list(sample_veg = list(inserts = veg_data), 
-                              sample_env = list(inserts = env_data)),
+                         list(veg = list(inserts = veg_data), 
+                              env = list(inserts = env_data)),
                          "test_user", "test@example.com", 1L)$merge_request_id
   
   result <- get_merge_details(con, mr_id)
   
-  expect_equal(nrow(result$sample_veg), 1)
-  expect_equal(nrow(result$sample_env), 1)
-  expect_equal(nrow(result$sample_su), 0)
-  expect_equal(result$sample_veg$plot_number, "TEST001")
-  expect_equal(result$sample_env$plot_number, "TEST001")
+  expect_equal(nrow(result$veg), 1)
+  expect_equal(nrow(result$env), 1)
+  expect_equal(nrow(result$su), 0)
+  expect_equal(result$veg$plot_number, "TEST001")
+  expect_equal(result$env$plot_number, "TEST001")
 })
 
 test_that("detect_conflicts identifies insert collisions", {
@@ -125,7 +125,7 @@ test_that("detect_conflicts identifies insert collisions", {
   
   # Insert a row into core
   DBI::dbExecute(con, "
-    INSERT INTO core.sample_veg 
+    INSERT INTO core.veg 
       (plot_number, species_code, layer_code, cover_percent, 
        height_cm, project_id, modified_by)
     VALUES ('PLOT001', 'TSUGHET', 'T1', 30, 1200, 1, 'seeder')
@@ -143,13 +143,13 @@ test_that("detect_conflicts identifies insert collisions", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   conflicts <- detect_conflicts(con, mr_id)
   
   expect_equal(nrow(conflicts), 1)
-  expect_equal(conflicts$table_name, "sample_veg")
+  expect_equal(conflicts$table_name, "veg")
   expect_true(conflicts$conflict_count > 0)
   
   # Check merge_conflicts table
@@ -180,7 +180,7 @@ test_that("detect_conflicts identifies update target missing", {
   mr_id <- DBI::dbGetQuery(con, "SELECT lastval()")[[1]]
   
   DBI::dbExecute(con, "
-    INSERT INTO staging.sample_veg 
+    INSERT INTO staging.veg 
       (merge_request_id, plot_number, species_code, layer_code,
        cover_percent, height_cm, project_id, change_type)
     VALUES ($1, 'PLOT999', 'TSUGHET', 'T1', 40, 1300, 1, 'U')
@@ -189,7 +189,7 @@ test_that("detect_conflicts identifies update target missing", {
   conflicts <- detect_conflicts(con, mr_id)
   
   expect_true(nrow(conflicts) > 0)
-  expect_equal(conflicts$table_name, "sample_veg")
+  expect_equal(conflicts$table_name, "veg")
 })
 
 test_that("detect_conflicts identifies cross-request conflicts", {
@@ -212,7 +212,7 @@ test_that("detect_conflicts identifies cross-request conflicts", {
     stringsAsFactors = FALSE
   )
   
-  mr_id1 <- submit_changes(con, list(sample_veg = list(inserts = veg_data1)),
+  mr_id1 <- submit_changes(con, list(veg = list(inserts = veg_data1)),
                           "user1", "user1@example.com", 1L)$merge_request_id
   
   # Submit second merge request with same key
@@ -227,7 +227,7 @@ test_that("detect_conflicts identifies cross-request conflicts", {
     stringsAsFactors = FALSE
   )
   
-  mr_id2 <- submit_changes(con, list(sample_veg = list(inserts = veg_data2)),
+  mr_id2 <- submit_changes(con, list(veg = list(inserts = veg_data2)),
                           "user2", "user2@example.com", 1L)$merge_request_id
   
   # Detect conflicts in second request
@@ -247,7 +247,7 @@ test_that("detect_conflicts handles env and su tables", {
   
   # Insert core data
   DBI::dbExecute(con, "
-    INSERT INTO core.sample_env 
+    INSERT INTO core.env 
       (plot_number, project_id, latitude, longitude, elevation_m, modified_by)
     VALUES ('ENV001', 1, 50.0, -120.0, 500, 'seeder')
   ")
@@ -265,13 +265,13 @@ test_that("detect_conflicts handles env and su tables", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_env = list(inserts = env_data)),
+  mr_id <- submit_changes(con, list(env = list(inserts = env_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   conflicts <- detect_conflicts(con, mr_id)
   
   expect_equal(nrow(conflicts), 1)
-  expect_equal(conflicts$table_name, "sample_env")
+  expect_equal(conflicts$table_name, "env")
 })
 
 test_that("resolve_conflict validates inputs", {
@@ -294,7 +294,7 @@ test_that("resolve_conflict marks conflict as resolved", {
   
   # Create a conflict
   DBI::dbExecute(con, "
-    INSERT INTO core.sample_veg 
+    INSERT INTO core.veg 
       (plot_number, species_code, layer_code, cover_percent,
        height_cm, project_id, modified_by)
     VALUES ('PLOT001', 'TSUGHET', 'T1', 30, 1200, 1, 'seeder')
@@ -311,7 +311,7 @@ test_that("resolve_conflict marks conflict as resolved", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   detect_conflicts(con, mr_id)
@@ -356,7 +356,7 @@ test_that("approve_merge rejects request with unresolved conflicts", {
   
   # Create conflict
   DBI::dbExecute(con, "
-    INSERT INTO core.sample_veg 
+    INSERT INTO core.veg 
       (plot_number, species_code, layer_code, cover_percent,
        height_cm, project_id, modified_by)
     VALUES ('PLOT001', 'TSUGHET', 'T1', 30, 1200, 1, 'seeder')
@@ -373,7 +373,7 @@ test_that("approve_merge rejects request with unresolved conflicts", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   detect_conflicts(con, mr_id)
@@ -401,7 +401,7 @@ test_that("approve_merge processes INSERT operations correctly", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   # No conflicts for new insert
@@ -414,11 +414,11 @@ test_that("approve_merge processes INSERT operations correctly", {
   expect_equal(summary$rows_inserted, 1)
   expect_equal(summary$rows_updated, 0)
   expect_equal(summary$rows_deleted, 0)
-  expect_true("sample_veg" %in% summary$tables_merged)
+  expect_true("veg" %in% summary$tables_merged)
   
   # Verify data in core
   core_data <- DBI::dbGetQuery(con, "
-    SELECT * FROM core.sample_veg WHERE plot_number = 'INSERT001'
+    SELECT * FROM core.veg WHERE plot_number = 'INSERT001'
   ")
   
   expect_equal(nrow(core_data), 1)
@@ -445,7 +445,7 @@ test_that("approve_merge processes UPDATE operations correctly", {
   
   # Insert initial data
   DBI::dbExecute(con, "
-    INSERT INTO core.sample_veg 
+    INSERT INTO core.veg 
       (plot_number, species_code, layer_code, cover_percent,
        height_cm, project_id, modified_by)
     VALUES ('UPDATE001', 'TSUGHET', 'T1', 30, 1200, 1, 'initial')
@@ -460,7 +460,7 @@ test_that("approve_merge processes UPDATE operations correctly", {
   mr_id <- DBI::dbGetQuery(con, "SELECT lastval()")[[1]]
   
   DBI::dbExecute(con, "
-    INSERT INTO staging.sample_veg 
+    INSERT INTO staging.veg 
       (merge_request_id, plot_number, species_code, layer_code,
        cover_percent, height_cm, project_id, change_type)
     VALUES ($1, 'UPDATE001', 'TSUGHET', 'T1', 60, 1800, 1, 'U')
@@ -479,7 +479,7 @@ test_that("approve_merge processes UPDATE operations correctly", {
   
   # Verify update in core
   core_data <- DBI::dbGetQuery(con, "
-    SELECT * FROM core.sample_veg WHERE plot_number = 'UPDATE001'
+    SELECT * FROM core.veg WHERE plot_number = 'UPDATE001'
   ")
   
   expect_equal(nrow(core_data), 1)
@@ -499,7 +499,7 @@ test_that("approve_merge processes DELETE operations correctly", {
   
   # Insert data to delete
   DBI::dbExecute(con, "
-    INSERT INTO core.sample_veg 
+    INSERT INTO core.veg 
       (plot_number, species_code, layer_code, cover_percent,
        height_cm, project_id, modified_by)
     VALUES ('DELETE001', 'TSUGHET', 'T1', 30, 1200, 1, 'initial')
@@ -514,7 +514,7 @@ test_that("approve_merge processes DELETE operations correctly", {
   mr_id <- DBI::dbGetQuery(con, "SELECT lastval()")[[1]]
   
   DBI::dbExecute(con, "
-    INSERT INTO staging.sample_veg 
+    INSERT INTO staging.veg 
       (merge_request_id, plot_number, species_code, layer_code,
        cover_percent, height_cm, project_id, change_type)
     VALUES ($1, 'DELETE001', 'TSUGHET', 'T1', 30, 1200, 1, 'D')
@@ -529,7 +529,7 @@ test_that("approve_merge processes DELETE operations correctly", {
   
   # Verify deletion from core
   core_data <- DBI::dbGetQuery(con, "
-    SELECT * FROM core.sample_veg WHERE plot_number = 'DELETE001'
+    SELECT * FROM core.veg WHERE plot_number = 'DELETE001'
   ")
   
   expect_equal(nrow(core_data), 0)
@@ -557,7 +557,7 @@ test_that("approve_merge triggers audit logging", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   summary <- approve_merge(con, mr_id, "admin@example.com")
@@ -567,7 +567,7 @@ test_that("approve_merge triggers audit logging", {
   # Verify audit log entry
   audit_entries <- DBI::dbGetQuery(con, "
     SELECT * FROM audit.logged_actions 
-    WHERE table_name = 'sample_veg'
+    WHERE table_name = 'veg'
     ORDER BY action_tstamp DESC
   ")
   
@@ -623,27 +623,27 @@ test_that("approve_merge handles multiple tables in one transaction", {
   )
   
   mr_id <- submit_changes(con, 
-                         list(sample_veg = list(inserts = veg_data), 
-                              sample_env = list(inserts = env_data),
-                              sample_su = list(inserts = su_data)),
+                         list(veg = list(inserts = veg_data), 
+                              env = list(inserts = env_data),
+                              su = list(inserts = su_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   summary <- approve_merge(con, mr_id, "admin@example.com")
   
   expect_equal(summary$rows_inserted, 3)
   expect_equal(length(summary$tables_merged), 3)
-  expect_true(all(c("sample_veg", "sample_env", "sample_su") %in% 
+  expect_true(all(c("veg", "env", "su") %in% 
                   summary$tables_merged))
   
   # Verify all tables have data
   veg_count <- DBI::dbGetQuery(con, "
-    SELECT COUNT(*) as cnt FROM core.sample_veg WHERE plot_number = 'MULTI001'
+    SELECT COUNT(*) as cnt FROM core.veg WHERE plot_number = 'MULTI001'
   ")$cnt
   env_count <- DBI::dbGetQuery(con, "
-    SELECT COUNT(*) as cnt FROM core.sample_env WHERE plot_number = 'MULTI001'
+    SELECT COUNT(*) as cnt FROM core.env WHERE plot_number = 'MULTI001'
   ")$cnt
   su_count <- DBI::dbGetQuery(con, "
-    SELECT COUNT(*) as cnt FROM core.sample_su WHERE plot_number = 'MULTI001'
+    SELECT COUNT(*) as cnt FROM core.su WHERE plot_number = 'MULTI001'
   ")$cnt
   
   expect_equal(veg_count, 1)
@@ -669,7 +669,7 @@ test_that("approve_merge rolls back on error", {
   
   # Insert veg row with invalid cover_percent (violates CHECK constraint)
   DBI::dbExecute(con, "
-    INSERT INTO staging.sample_veg 
+    INSERT INTO staging.veg 
       (merge_request_id, plot_number, species_code, layer_code,
        cover_percent, height_cm, project_id, change_type)
     VALUES ($1, 'FAIL001', 'TSUGHET', 'T1', 150, 1200, 1, 'I')
@@ -687,7 +687,7 @@ test_that("approve_merge rolls back on error", {
   
   # Verify no data in core
   core_count <- DBI::dbGetQuery(con, "
-    SELECT COUNT(*) as cnt FROM core.sample_veg WHERE plot_number = 'FAIL001'
+    SELECT COUNT(*) as cnt FROM core.veg WHERE plot_number = 'FAIL001'
   ")$cnt
   
   expect_equal(core_count, 0)
@@ -722,7 +722,7 @@ test_that("reject_merge marks request as rejected", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   reject_merge(con, mr_id, "admin@example.com", 
@@ -742,7 +742,7 @@ test_that("reject_merge marks request as rejected", {
   # Verify staging data remains
   staging_count <- DBI::dbGetQuery(con, "
     SELECT COUNT(*) as cnt 
-    FROM staging.sample_veg 
+    FROM staging.veg 
     WHERE merge_request_id = $1
   ", params = list(mr_id))$cnt
   
@@ -768,7 +768,7 @@ test_that("reject_merge prevents rejection of non-pending requests", {
     stringsAsFactors = FALSE
   )
   
-  mr_id <- submit_changes(con, list(sample_veg = list(inserts = veg_data)),
+  mr_id <- submit_changes(con, list(veg = list(inserts = veg_data)),
                          "user", "user@example.com", 1L)$merge_request_id
   
   # Approve it first
