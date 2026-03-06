@@ -135,7 +135,7 @@ test_that("publish_project_dataset can write XLSX via existing exporter (optiona
   source(here::here("R", "logic_compliance.R"), local = TRUE)
   source(here::here("R", "logic_publish.R"), local = TRUE)
 
-  con <- connect_local_db(environment = Sys.getenv("R_CONFIG_ACTIVE", "default"))
+  con <- connect_local_db()
   on.exit(close_db(con), add = TRUE)
 
   # Find a publishable project id with valid coordinates

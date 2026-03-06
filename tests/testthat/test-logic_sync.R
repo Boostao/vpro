@@ -206,14 +206,14 @@ source(here::here("R", "logic_sync.R"))
   DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.users_seq START 1")
   DBI::dbExecute(mc, "
     CREATE TABLE IF NOT EXISTS admin.users (
-      id       INTEGER PRIMARY KEY DEFAULT nextval('admin.users_seq'),
-      username TEXT UNIQUE NOT NULL,
-      email    TEXT,
-      role     TEXT DEFAULT 'admin',
+      id        INTEGER PRIMARY KEY DEFAULT nextval('admin.users_seq'),
+      email     TEXT UNIQUE NOT NULL,
+      full_name TEXT NOT NULL DEFAULT '',
+      app_role  TEXT DEFAULT 'admin',
       is_active BOOLEAN DEFAULT TRUE
     )
   ")
-  DBI::dbExecute(mc, "INSERT INTO admin.users (username, email) VALUES ('admin', 'admin@test.local') ON CONFLICT DO NOTHING")
+  DBI::dbExecute(mc, "INSERT INTO admin.users (email, full_name) VALUES ('admin@test.local', 'Test Admin') ON CONFLICT DO NOTHING")
 
   # admin.merge_history
   DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mh_seq START 1")

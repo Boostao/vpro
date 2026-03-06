@@ -130,11 +130,11 @@ pg_available <- function() {
   tryCatch({
     con <- DBI::dbConnect(
       RPostgres::Postgres(),
-      host = "localhost",
-      port = 5433,
-      user = "testuser",
+      host     = Sys.getenv("PGHOST",     "localhost"),
+      port     = as.integer(Sys.getenv("PGPORT", "5433")),
+      user     = "testuser",
       password = "testpass",
-      dbname = "becmaster"
+      dbname   = Sys.getenv("PGDATABASE", "becmaster")
     )
     DBI::dbDisconnect(con)
     return(TRUE)
@@ -153,11 +153,11 @@ pg_available <- function() {
 get_test_pg_connection <- function() {
   con <- DBI::dbConnect(
     RPostgres::Postgres(),
-    host = "localhost",
-    port = 5433,
-    user = "testuser",
+    host     = Sys.getenv("PGHOST",     "localhost"),
+    port     = as.integer(Sys.getenv("PGPORT", "5433")),
+    user     = "testuser",
     password = "testpass",
-    dbname = "becmaster"
+    dbname   = Sys.getenv("PGDATABASE", "becmaster")
   )
   return(con)
 }

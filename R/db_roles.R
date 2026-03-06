@@ -55,10 +55,14 @@ create_vpro_default_role <- function(con) {
     DBI::dbExecute(con, "GRANT USAGE ON ALL SEQUENCES IN SCHEMA staging TO vpro_default")
     DBI::dbExecute(con, "ALTER DEFAULT PRIVILEGES IN SCHEMA staging GRANT USAGE ON SEQUENCES TO vpro_default")
     
+    # Grant access to admin.users for authentication lookups (read-only; no other admin tables)
+    DBI::dbExecute(con, "GRANT USAGE ON SCHEMA admin TO vpro_default")
+    DBI::dbExecute(con, "GRANT SELECT ON admin.users TO vpro_default")
+
     # Ensure no write access to core tables (only via staging workflow)
     DBI::dbExecute(con, "REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA core FROM vpro_default")
     DBI::dbExecute(con, "REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA lists FROM vpro_default")
-    
+
     # Explicitly revoke write permissions on audit.logged_actions
     DBI::dbExecute(con, "REVOKE INSERT, UPDATE, DELETE ON audit.logged_actions FROM vpro_default")
     

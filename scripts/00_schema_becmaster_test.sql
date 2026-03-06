@@ -243,6 +243,11 @@ CREATE INDEX IF NOT EXISTS idx_veg_plot ON core.veg(plot_number);
 CREATE INDEX IF NOT EXISTS idx_veg_project ON core.veg(project_id);
 CREATE INDEX IF NOT EXISTS idx_veg_species ON core.veg(species_code);
 
+CREATE TRIGGER veg_row_version
+    BEFORE INSERT OR UPDATE ON core.veg
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+
 CREATE TRIGGER veg_audit
     AFTER INSERT OR UPDATE OR DELETE ON core.veg
     FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
@@ -325,40 +330,19 @@ SELECT plot_number AS plotnumber, 'B' AS mylayer, species_code AS species, total
 -- ADMIN SCHEMA - User & Role Management (must come BEFORE STAGING)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS admin.roles (
-    id SERIAL PRIMARY KEY,
-    role_name TEXT UNIQUE NOT NULL,
-    description TEXT,
-    permissions TEXT[] DEFAULT ARRAY[]::TEXT[],
-    created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
-);
+
 
 CREATE TABLE IF NOT EXISTS admin.users (
     id SERIAL PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    full_name TEXT,
-    role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('reader', 'writer', 'admin')),
+    full_name TEXT NOT NULL,
+    app_role TEXT NOT NULL DEFAULT 'guest' CHECK (app_role IN ('guest', 'admin')),
+    password_hash TEXT,                                 -- NULL for guests; bcrypt hash for admins
     is_active BOOLEAN DEFAULT TRUE,
-    created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
+    created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    last_login_utc TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS admin.user_roles (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES admin.users(id) ON DELETE CASCADE,
-    role_id INTEGER NOT NULL REFERENCES admin.roles(id) ON DELETE CASCADE,
-    UNIQUE(user_id, role_id)
-);
-
--- admin.sync_state: tracks per-user, per-table sync watermarks
-CREATE TABLE IF NOT EXISTS admin.sync_state (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES admin.users(id) ON DELETE CASCADE,
-    table_name TEXT NOT NULL,
-    last_pulled_utc TIMESTAMPTZ,
-    last_pulled_row_version INTEGER,
-    UNIQUE(user_id, table_name)
-);
 
 -- admin.change_log: audit log for all changes
 CREATE TABLE IF NOT EXISTS admin.change_log (
@@ -640,23 +624,14 @@ INSERT INTO lists.usystableoflists (list_id, item_code, item_name, item_sort) VA
     ('COVER_CLASS', '6', '75-100%', 6)
 ON CONFLICT (list_id, item_code) DO NOTHING;
 
--- Seed: roles
-INSERT INTO admin.roles (role_name, description, permissions) VALUES
-    ('viewer', 'Read-only access to public/exported data', ARRAY['read:public']),
-    ('field_user', 'Enter/edit own plots, upload datasets', ARRAY['read:own_projects', 'write:own_plots', 'create:merge_requests']),
-    ('project_lead', 'Manage project plots, approve uploads', ARRAY['read:project', 'write:project_plots', 'approve:merge_requests']),
-    ('db_manager', 'Review merges, edit all data, manage codes', ARRAY['read:all', 'write:all', 'merge:all', 'manage:codes', 'publish_rds', 'view_download_logs']),
-    ('admin', 'Full system access', ARRAY['*', 'publish_rds', 'view_download_logs'])
-ON CONFLICT (role_name) DO NOTHING;
-
--- Seed: test users
-INSERT INTO admin.users (username, email, full_name, role, is_active) VALUES
-    ('test_viewer', 'viewer@test.local', 'Test Viewer', 'reader', TRUE),
-    ('test_field', 'field@test.local', 'Test Field User', 'writer', TRUE),
-    ('test_lead', 'lead@test.local', 'Test Project Lead', 'writer', TRUE),
-    ('test_dba', 'dba@test.local', 'Test DBA', 'admin', TRUE),
-    ('test_admin', 'admin@test.local', 'Test Admin', 'admin', TRUE)
-ON CONFLICT (username) DO NOTHING;
+-- Seed: test users (admin accounts need password set via auth_grant_admin before first use)
+INSERT INTO admin.users (email, full_name, app_role, is_active) VALUES
+    ('viewer@test.local',  'Test Viewer',       'guest', TRUE),
+    ('field@test.local',   'Test Field User',   'guest', TRUE),
+    ('lead@test.local',    'Test Project Lead', 'guest', TRUE),
+    ('dba@test.local',     'Test DBA',          'admin', TRUE),
+    ('admin@test.local',   'Test Admin',        'admin', TRUE)
+ON CONFLICT (email) DO NOTHING;
 
 -- Seed: sample project
 INSERT INTO core.metadata (project_id, project_name, description, organization, contact_email, modified_by) VALUES

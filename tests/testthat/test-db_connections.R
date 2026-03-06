@@ -271,7 +271,7 @@ test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL"
   
   # Try to attach cloud database
   tryCatch({
-    attach_cloud_db(con, environment = "test", read_only = FALSE, alias = "master")
+    attach_cloud_db(con, pg_user = "testuser", pg_password = "testpass", alias = "master")
     
     # Verify attachment worked
     is_attached <- is_cloud_connected(con, alias = "master")
@@ -294,7 +294,7 @@ test_that("Queries can reference attached PostgreSQL tables", {
   tryCatch({
     DBI::dbExecute(con, "INSTALL postgres")
     DBI::dbExecute(con, "LOAD postgres")
-    attach_cloud_db(con, environment = "test", alias = "master")
+    attach_cloud_db(con, pg_user = "testuser", pg_password = "testpass", alias = "master")
     
     # Try to query a reference table from master
     result <- DBI::dbGetQuery(con, "
@@ -321,7 +321,8 @@ test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
   tryCatch({
     DBI::dbExecute(con, "INSTALL postgres")
     DBI::dbExecute(con, "LOAD postgres")
-    attach_cloud_db(con, environment = "test", alias = "master", read_only = FALSE)
+    attach_cloud_db(con, pg_user = "testuser", pg_password = "testpass",
+                    alias = "master")
     
     # Create a test staging record
     # Note: This is a simple test; real staging would go through merge requests

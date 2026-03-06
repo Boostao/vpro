@@ -1,8 +1,15 @@
 # Test Setup - Initialize test environment and fixtures
 # Runs once before all tests
 
-# Set test environment to ensure config pulls test/docker settings
-Sys.setenv(R_CONFIG_ACTIVE = "test")
+# Set PG connection env vars for test environment (docker-compose)
+Sys.setenv(
+  PGHOST                 = "localhost",
+  PGPORT                 = "5433",
+  PGDATABASE             = "becmaster",
+  VPRO_PG_GUEST_USER     = "vpro_default",
+  VPRO_PG_ADMIN_USER     = "vpro_admin",
+  VPRO_PG_ADMIN_PASSWORD = "admin_password"
+)
 
 # Load required packages
 library(testthat)
@@ -45,11 +52,11 @@ check_postgres_available <- function() {
   tryCatch({
     con_test <- DBI::dbConnect(
       RPostgres::Postgres(),
-      host = "localhost",
-      port = 5433,
+      host = Sys.getenv("PGHOST", "localhost"),
+      port = as.integer(Sys.getenv("PGPORT", "5433")),
       user = "testuser",
       password = "testpass",
-      dbname = "becmaster",
+      dbname = Sys.getenv("PGDATABASE", "becmaster"),
       check_interrupts = FALSE,
       connect_timeout = 10
     )
@@ -61,6 +68,7 @@ check_postgres_available <- function() {
     message("[test-setup] To run cloud attachment tests:")
     message("[test-setup]   cd /Users/nicolas/Documents/GitHub/vpro")
     message("[test-setup]   docker-compose up -d")
+    message("[test-setup]   then set PGHOST/PGPORT/PGDATABASE env vars")
     return(FALSE)
   })
 }

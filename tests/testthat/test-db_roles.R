@@ -180,6 +180,18 @@ test_that("vpro_default role has correct permissions", {
     ")
   })
   
+  # Should be able to SELECT from admin.users (needed for auth lookups)
+  expect_no_error({
+    DBI::dbGetQuery(default_con, "SELECT id, email, app_role FROM admin.users LIMIT 1")
+  })
+
+  # Should NOT be able to INSERT/UPDATE/DELETE admin.users
+  expect_error({
+    DBI::dbExecute(default_con, "
+      INSERT INTO admin.users (email, full_name, app_role) VALUES ('x@x.com', 'X', 'guest')
+    ")
+  })
+
   # Should NOT be able to INSERT into core tables
   expect_error({
     DBI::dbExecute(default_con, "
@@ -333,11 +345,11 @@ test_that("vpro_admin role has correct permissions", {
   # Should be able to manage admin tables
   expect_no_error({
     # Clean up any existing test data first
-    DBI::dbExecute(admin_con, "DELETE FROM admin.users WHERE username = 'testadminuser'")
+    DBI::dbExecute(admin_con, "DELETE FROM admin.users WHERE email = 'testadmin@example.com'")
     DBI::dbExecute(admin_con, "
       INSERT INTO admin.users 
-      (username, email, full_name, role, is_active)
-      VALUES ('testadminuser', 'testadmin@example.com', 'Test Admin User', 'writer', TRUE)
+      (email, full_name, app_role, is_active)
+      VALUES ('testadmin@example.com', 'Test Admin User', 'admin', TRUE)
     ")
   })
   

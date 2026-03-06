@@ -35,26 +35,15 @@ server <- function(input, output, session) {
   
   # 1. Database Connection
   # Using a persistent connection for simplicity (DuckDB single user mode)
-  environment <- Sys.getenv("R_CONFIG_ACTIVE", unset = "default")
-  cfg <- tryCatch({
-    config::get(config = environment)
-  }, error = function(e) {
-    stop("Failed to load config for environment '", environment, "': ", conditionMessage(e))
-  })
-  
-  con <- connect_local_db(environment = environment)
-  
-  # Optionally attach cloud DB (non-fatal for local-only workflows)
-  if (isTRUE(cfg$cloud$enabled) && isTRUE(cfg$cloud$attach_on_startup)) {
-    tryCatch({
-      attach_cloud_db(con, environment = environment, alias = "master", fail_on_error = FALSE)
-    }, error = function(e) {
-      warning("Cloud ATTACH failed (continuing in local-only mode): ", conditionMessage(e))
-    })
-  }
-  
+  con <- connect_local_db()
+
+  # Cloud PostgreSQL is NOT attached on startup.
+  # It is attached by mod_auth_server when the user logs in,
+  # and detached on logout. All local features work without it.
+
   # Ensure clean disconnect when session ends
   onSessionEnded(function() {
+    if (is_cloud_connected(con)) detach_db(con, "master")
     dbDisconnect(con, shutdown = TRUE)
   })
   

@@ -60,17 +60,17 @@ sync_cloud_connected <- function(con, alias = "master") {
   }, error = function(e) FALSE)
 }
 
-#' Ensure the cloud master database is attached; optionally auto-attach.
+#' Ensure the cloud master database is attached.
+#'
+#' Stops with a clear message if the cloud is not attached.  Sync always
+#' requires an authenticated session; auto-attach is not supported.
 #'
 #' @param con          DuckDB connection.
-#' @param allow_attach Logical. Call attach_cloud_db() if not connected.
+#' @param allow_attach Logical. Unused; kept for backward compatibility.
 #' @param alias        Character. Expected catalog alias.
-sync_require_cloud <- function(con, allow_attach = TRUE, alias = "master") {
+sync_require_cloud <- function(con, allow_attach = FALSE, alias = "master") {
   if (sync_cloud_connected(con, alias)) return(invisible(TRUE))
-  if (!allow_attach) stop("Cloud database '", alias, "' is not attached.")
-  attach_cloud_db(con, alias = alias)
-  if (!sync_cloud_connected(con, alias)) stop("Failed to attach cloud database '", alias, "'.")
-  invisible(TRUE)
+  stop("Cloud database '", alias, "' is not attached. Please log in first.")
 }
 
 
@@ -1696,11 +1696,11 @@ merge_approve_request <- function(con, merge_request_id, reviewer, review_notes 
     list(as.character(reviewer), as.character(review_notes), mr_id)
   )
 
-  # Resolve approver user_id by username (best-effort; NULL if not in admin.users)
+  # Resolve approver user_id by email (best-effort; NULL if not found)
   uid_row <- tryCatch(
     DBI::dbGetQuery(
       con,
-      "SELECT id FROM master.admin.users WHERE username = ? LIMIT 1",
+      "SELECT id FROM master.admin.users WHERE email = ? LIMIT 1",
       list(as.character(reviewer))
     ),
     error = function(e) data.frame(id = integer(0))
