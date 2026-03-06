@@ -30,7 +30,7 @@ Rewrite the PG schema from scratch. Audit via generic trigger + `audit.logged_ac
 │                 │         │  staging.sample_veg  ──┐         │
 │                 │         │  staging.sample_env    │ review  │
 │                 │         │  staging.sample_su     │         │
-│                 │         │  staging.merge_requests─┘         │
+│                 │         │  admin.merge_requests─┘         │
 │                 │         │  staging.merge_conflicts          │
 │                 │         │                                  │
 │                 │         │  audit.logged_actions (append-only)│
@@ -160,14 +160,14 @@ Rewrite the PG schema from scratch. Audit via generic trigger + `audit.logged_ac
 **Functions**:
 - `submit_to_staging(pg_con, table, data, user_name, user_email, change_type = "I")` — in a transaction:
   1. Calls validation (step 3) against PG lists tables
-  2. Creates `staging.merge_requests` row (submitter_name, submitter_email, status = `pending_review`)
+  2. Creates `admin.merge_requests` row (submitter_name, submitter_email, status = `pending_review`)
   3. Inserts rows into `staging.{table}` with `merge_request_id` and `change_type`
   4. Updates record counts on `merge_requests`
   5. Returns the `merge_request_id`
 
 - `submit_changes(pg_con, changes_list, user_name, user_email)` — wraps `submit_to_staging` for multiple tables at once. `changes_list` is a named list like `list(sample_veg = list(inserts = df, updates = df, deletes = df), ...)`.
 
-**Test**: Submit veg + env rows to Docker PG. Query `staging.sample_veg` → assert rows present with correct `merge_request_id`. Query `staging.merge_requests` → assert status = `pending_review`, correct record counts.
+**Test**: Submit veg + env rows to Docker PG. Query `staging.sample_veg` → assert rows present with correct `merge_request_id`. Query `admin.merge_requests` → assert status = `pending_review`, correct record counts.
 
 ---
 

@@ -1,5 +1,9 @@
 # Tests for validation logic (Step 3)
 # These tests validate business rules and reference data checks
+library(testthat)
+library(DBI)
+source(here::here("R", "logic_validation.R"))
+source(here::here("tests", "testthat", "helpers.R"))
 
 # Test setup ----
 test_that("Test database connection available", {
@@ -22,8 +26,8 @@ test_that("validate_veg_row accepts valid vegetation row", {
     plot_number = "PLOT001",
     species_code = "TSUGHET",
     layer_code = "T1",
-    cover_percent = 25,
-    height_cm = 1500,
+    cover1 = 25,
+    height1 = 1500,
     project_id = 1,
     stringsAsFactors = FALSE
   )
@@ -34,7 +38,7 @@ test_that("validate_veg_row accepts valid vegetation row", {
   expect_length(result$errors, 0)
 })
 
-test_that("validate_veg_row rejects invalid cover_percent", {
+test_that("validate_veg_row rejects invalid cover1", {
   skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- get_test_pg_connection()
@@ -44,8 +48,8 @@ test_that("validate_veg_row rejects invalid cover_percent", {
     plot_number = "PLOT001",
     species_code = "TSUGHET",
     layer_code = "T1",
-    cover_percent = 150,  # Invalid: > 100
-    height_cm = 1500,
+    cover1 = 150,
+    height1 = 1500,
     project_id = 1,
     stringsAsFactors = FALSE
   )
@@ -53,10 +57,10 @@ test_that("validate_veg_row rejects invalid cover_percent", {
   result <- validate_veg_row(invalid_row, con, "postgres")
   
   expect_false(result$valid)
-  expect_true(any(grepl("cover_percent must be between 0 and 100", result$errors)))
+  expect_true(any(grepl("cover1 must be numeric between 0 and 100", result$errors)))
 })
 
-test_that("validate_veg_row rejects negative height_cm", {
+test_that("validate_veg_row rejects negative height1", {
   skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- get_test_pg_connection()
@@ -66,8 +70,8 @@ test_that("validate_veg_row rejects negative height_cm", {
     plot_number = "PLOT001",
     species_code = "TSUGHET",
     layer_code = "T1",
-    cover_percent = 25,
-    height_cm = -100,  # Invalid: negative
+    cover1 = 25,
+    height1 = -100,
     project_id = 1,
     stringsAsFactors = FALSE
   )
@@ -75,7 +79,7 @@ test_that("validate_veg_row rejects negative height_cm", {
   result <- validate_veg_row(invalid_row, con, "postgres")
   
   expect_false(result$valid)
-  expect_true(any(grepl("height_cm must be >= 0", result$errors)))
+  expect_true(any(grepl("height1 must be numeric >= 0", result$errors)))
 })
 
 test_that("validate_veg_row rejects unknown species_code", {
@@ -86,10 +90,10 @@ test_that("validate_veg_row rejects unknown species_code", {
   
   invalid_row <- data.frame(
     plot_number = "PLOT001",
-    species_code = "INVALID_SPP",  # Not in seed data
+    species_code = "INVALID_SPP",
     layer_code = "T1",
-    cover_percent = 25,
-    height_cm = 1500,
+    cover1 = 25,
+    height1 = 1500,
     project_id = 1,
     stringsAsFactors = FALSE
   )
@@ -109,9 +113,9 @@ test_that("validate_veg_row rejects unknown layer_code", {
   invalid_row <- data.frame(
     plot_number = "PLOT001",
     species_code = "TSUGHET",
-    layer_code = "INVALID",  # Not in seed data
-    cover_percent = 25,
-    height_cm = 1500,
+    layer_code = "INVALID",
+    cover1 = 25,
+    height1 = 1500,
     project_id = 1,
     stringsAsFactors = FALSE
   )
@@ -132,8 +136,8 @@ test_that("validate_veg_row rejects empty plot_number", {
     plot_number = "",  # Empty
     species_code = "TSUGHET",
     layer_code = "T1",
-    cover_percent = 25,
-    height_cm = 1500,
+    cover1 = 25,
+    height1 = 1500,
     project_id = 1,
     stringsAsFactors = FALSE
   )
@@ -154,9 +158,9 @@ test_that("validate_veg_row rejects invalid project_id", {
     plot_number = "PLOT001",
     species_code = "TSUGHET",
     layer_code = "T1",
-    cover_percent = 25,
-    height_cm = 1500,
-    project_id = -1,  # Invalid: negative
+    cover1 = 25,
+    height1 = 1500,
+    project_id = -1,
     stringsAsFactors = FALSE
   )
   
@@ -164,6 +168,159 @@ test_that("validate_veg_row rejects invalid project_id", {
   
   expect_false(result$valid)
   expect_true(any(grepl("project_id must be a positive integer", result$errors)))
+})
+
+test_that("validate_veg_row validates all cover fields (cover2-10, totala, totalb, cover5a/b/c)", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  # Test invalid cover2
+  invalid_row <- data.frame(
+    plot_number = "PLOT001",
+    species_code = "TSUGHET",
+    layer_code = "T1",
+    cover1 = 25,
+    cover2 = 105,
+    height1 = 1500,
+    project_id = 1,
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("cover2 must be numeric between 0 and 100", result$errors)))
+  
+  # Test invalid totala
+  invalid_row$cover2 <- 50
+  invalid_row$totala <- -10
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("totala must be numeric between 0 and 100", result$errors)))
+  
+  # Test invalid cover5a
+  invalid_row$totala <- 75
+  invalid_row$cover5a <- 150
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("cover5a must be numeric between 0 and 100", result$errors)))
+})
+
+test_that("validate_veg_row validates all height fields", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  # Test invalid height2
+  invalid_row <- data.frame(
+    plot_number = "PLOT001",
+    species_code = "TSUGHET",
+    layer_code = "T1",
+    cover1 = 25,
+    height1 = 1500,
+    height2 = -50,
+    project_id = 1,
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("height2 must be numeric >= 0", result$errors)))
+  
+  # Test invalid height5a
+  invalid_row$height2 <- 1200
+  invalid_row$height5a <- -100
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("height5a must be numeric >= 0", result$errors)))
+})
+
+test_that("validate_veg_row validates metric fields as non-negative integers", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  # Test invalid veg_id (negative)
+  invalid_row <- data.frame(
+    plot_number = "PLOT001",
+    species_code = "TSUGHET",
+    layer_code = "T1",
+    cover1 = 25,
+    height1 = 1500,
+    veg_id = -1,
+    project_id = 1,
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("veg_id must be a non-negative integer", result$errors)))
+  
+  # Test invalid ll (non-integer)
+  invalid_row$veg_id <- 10
+  invalid_row$ll <- 3.5
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("ll must be a non-negative integer", result$errors)))
+  
+  # Test cultural1 valid
+  invalid_row$ll <- 5
+  invalid_row$cultural1 <- 0
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_true(result$valid)
+})
+
+test_that("validate_veg_row validates collected as text", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  valid_row <- data.frame(
+    plot_number = "PLOT001",
+    species_code = "TSUGHET",
+    layer_code = "T1",
+    cover1 = 25,
+    height1 = 1500,
+    collected = "yes",
+    project_id = 1,
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_veg_row(valid_row, con, "postgres")
+  expect_true(result$valid)
+})
+
+test_that("validate_veg_row validates flag as boolean", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  # Valid: flag = TRUE
+  valid_row <- data.frame(
+    plot_number = "PLOT001",
+    species_code = "TSUGHET",
+    layer_code = "T1",
+    cover1 = 25,
+    height1 = 1500,
+    flag = TRUE,
+    project_id = 1,
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_veg_row(valid_row, con, "postgres")
+  expect_true(result$valid)
+  
+  # Invalid: flag = 1 (not boolean)
+  invalid_row <- valid_row
+  invalid_row$flag <- 1
+  result <- validate_veg_row(invalid_row, con, "postgres")
+  expect_false(result$valid)
+  expect_true(any(grepl("flag must be TRUE/FALSE", result$errors)))
 })
 
 
@@ -198,7 +355,7 @@ test_that("validate_env_row rejects invalid latitude", {
   result <- validate_env_row(invalid_row)
   
   expect_false(result$valid)
-  expect_true(any(grepl("latitude must be between 48 and 60", result$errors)))
+  expect_true(any(grepl("latitude must be numeric between 48 and 60", result$errors)))
 })
 
 test_that("validate_env_row rejects invalid longitude", {
@@ -214,7 +371,7 @@ test_that("validate_env_row rejects invalid longitude", {
   result <- validate_env_row(invalid_row)
   
   expect_false(result$valid)
-  expect_true(any(grepl("longitude must be between -140 and -114", result$errors)))
+  expect_true(any(grepl("longitude must be numeric between -140 and -114", result$errors)))
 })
 
 test_that("validate_env_row rejects invalid elevation_m", {
@@ -230,7 +387,7 @@ test_that("validate_env_row rejects invalid elevation_m", {
   result <- validate_env_row(invalid_row)
   
   expect_false(result$valid)
-  expect_true(any(grepl("elevation_m must be between 0 and 4000", result$errors)))
+  expect_true(any(grepl("elevation_m must be numeric between 0 and 4000", result$errors)))
 })
 
 test_that("validate_env_row accepts NULL optional fields", {
@@ -248,6 +405,53 @@ test_that("validate_env_row accepts NULL optional fields", {
   
   expect_true(result$valid)
   expect_length(result$errors, 0)
+})
+
+test_that("validate_env_row validates surveyor_name as text", {
+  valid_row <- data.frame(
+    plot_number = "PLOT001",
+    project_id = 1,
+    latitude = 49.5,
+    longitude = -123.5,
+    elevation_m = 500,
+    surveyor_name = "John Doe",
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_env_row(valid_row)
+  expect_true(result$valid)
+})
+
+test_that("validate_env_row validates plot_notes as text", {
+  valid_row <- data.frame(
+    plot_number = "PLOT001",
+    project_id = 1,
+    latitude = 49.5,
+    longitude = -123.5,
+    elevation_m = 500,
+    plot_notes = "Sample notes for this plot",
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_env_row(valid_row)
+  expect_true(result$valid)
+})
+
+test_that("validate_env_row rejects invalid survey_date format", {
+  invalid_row <- data.frame(
+    plot_number = "PLOT001",
+    project_id = 1,
+    latitude = 49.5,
+    longitude = -123.5,
+    elevation_m = 500,
+    survey_date = "not-a-date",
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_env_row(invalid_row)
+  
+  expect_false(result$valid)
+  expect_true(any(grepl("survey_date must be a valid date", result$errors)))
 })
 
 
@@ -333,6 +537,66 @@ test_that("validate_su_row accepts NULL zone/subzone", {
   expect_length(result$errors, 0)
 })
 
+test_that("validate_su_row validates su_number as text", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  valid_row <- data.frame(
+    plot_number = "PLOT001",
+    project_id = 1,
+    su_number = "SU001",
+    bec_zone = "CWH",
+    bec_subzone = "dm",
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_su_row(valid_row, con, "postgres")
+  
+  expect_true(result$valid)
+})
+
+test_that("validate_su_row validates site_series as text", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  valid_row <- data.frame(
+    plot_number = "PLOT001",
+    project_id = 1,
+    site_series = "CWHdm/01",
+    bec_zone = "CWH",
+    bec_subzone = "dm",
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_su_row(valid_row, con, "postgres")
+  
+  expect_true(result$valid)
+})
+
+test_that("validate_su_row rejects orphaned subzone (no zone)", {
+  skip_if_not(pg_available(), "PostgreSQL not available")
+  
+  con <- get_test_pg_connection()
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  invalid_row <- data.frame(
+    plot_number = "PLOT001",
+    project_id = 1,
+    bec_zone = NA,
+    bec_subzone = "dm",  # Subzone without zone
+    stringsAsFactors = FALSE
+  )
+  
+  result <- validate_su_row(invalid_row, con, "postgres")
+  
+  expect_false(result$valid)
+  expect_true(any(grepl("bec_zone must be provided if bec_subzone is specified", result$errors)))
+})
+
 
 # validate_submission tests ----
 test_that("validate_submission validates multiple tables correctly", {
@@ -346,8 +610,8 @@ test_that("validate_submission validates multiple tables correctly", {
       plot_number = c("PLOT001", "PLOT002"),
       species_code = c("TSUGHET", "THUJOCC"),
       layer_code = c("T1", "T2"),
-      cover_percent = c(25, 30),
-      height_cm = c(1500, 1200),
+      cover1 = c(25, 30),
+      height1 = c(1500, 1200),
       project_id = c(1, 1),
       stringsAsFactors = FALSE
     ),
@@ -384,10 +648,10 @@ test_that("validate_submission detects errors across multiple tables", {
   data_list <- list(
     veg = data.frame(
       plot_number = c("TEST_VALID_PLOT", "TEST_INVALID_PLOT"),
-      species_code = c("TSUGHET", "INVALID_SPP"),  # Second row invalid
+      species_code = c("TSUGHET", "INVALID_SPP"),
       layer_code = c("T1", "T2"),
-      cover_percent = c(25, 30),
-      height_cm = c(1500, 1200),
+      cover1 = c(25, 30),
+      height1 = c(1500, 1200),
       project_id = c(1, 1),
       stringsAsFactors = FALSE
     ),
@@ -422,8 +686,8 @@ test_that("validate_submission returns proper summary structure", {
       plot_number = "PLOT001",
       species_code = "TSUGHET",
       layer_code = "T1",
-      cover_percent = 25,
-      height_cm = 1500,
+      cover1 = 25,
+      height1 = 1500,
       project_id = 1,
       stringsAsFactors = FALSE
     )

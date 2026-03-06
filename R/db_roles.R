@@ -8,7 +8,7 @@
 #' Creates the vpro_default role with:
 #' - Read access to core, lists, and audit schemas
 #' - Write access to staging schema
-#' - LOGIN capability without password (no authentication required)
+#' - LOGIN capability (authentication via pg_hba.conf trust method, no password required)
 #'
 #' @param con A DBI connection to PostgreSQL with superuser privileges
 #' @return A list with status information
@@ -27,7 +27,8 @@ create_vpro_default_role <- function(con) {
   message("Creating vpro_default role...")
   
   tryCatch({
-    # Create role with LOGIN capability but no password
+    # Create role with LOGIN capability
+    # Authentication is handled by pg_hba.conf (trust method for this role)
     DBI::dbExecute(con, "CREATE ROLE vpro_default WITH LOGIN")
     
     # Grant USAGE on schemas
@@ -65,7 +66,7 @@ create_vpro_default_role <- function(con) {
     
     return(list(
       status = "success",
-      message = "Default role created with read access to core/lists and write to staging (no password required for login)"
+      message = "Default role created with read access to core/lists and write to staging (trust auth required in pg_hba.conf)"
     ))
     
   }, error = function(e) {
@@ -185,8 +186,10 @@ create_vpro_admin_role <- function(con, password = "admin_password") {
 #'                       password = "testpass")
 #' result <- create_pg_roles(con, admin_password = "secure_password")
 #' 
-#' # Now anyone can connect as vpro_default without password:
-#' # psql -h localhost -p 5433 -U vpro_default -d becmaster
+#' # Now vpro_default can connect without a password (requires trust auth in pg_hba.conf):
+#' # R: DBI::dbConnect(RPostgres::Postgres(), user="vpro_default", host="localhost", ...)
+#' # psql: psql -U vpro_default -d becmaster (no password prompt)
+#' # And vpro_admin can connect with the admin password set above
 #' 
 #' DBI::dbDisconnect(con)
 #' }

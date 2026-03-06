@@ -1,430 +1,1097 @@
 testthat::context("logic_sync")
 
-source(here::here("R", "db_connections.R"))
+library(DBI)
+library(duckdb)
+
 source(here::here("R", "logic_sync.R"))
 
-# Deterministic compliance for unit tests (avoid pulling full lists/validation dependencies)
-assign(
-  "run_compliance_checks",
-  function(con, project_id = NULL, ...) {
-    list(passed = TRUE, summary_tibble = data.frame(), detail_tibble = data.frame())
-  },
-  envir = environment(staging_compliance_checks)
-)
+# =============================================================================
+# Test infrastructure
+# =============================================================================
+#
+# We simulate the cloud PostgreSQL master using a second DuckDB file attached
+# as the `master` catalog. This avoids any live-database dependency and keeps
+# tests fast and reproducible.
+#
+# Layout:
+#   local_con (in-memory DuckDB)  — field user's working copy
+#   master_path (temp DuckDB file) — simulates master.core / staging / admin
+# =============================================================================
 
-assign(
-  "sync_cloud_connected",
-  function(con) {
-    "master" %in% DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
-  },
-  envir = environment(sync_require_cloud)
-)
+# Build the master DuckDB schema (mirrors the PostgreSQL layout without triggers)
+.setup_master_db <- function(master_path) {
+  mc <- DBI::dbConnect(duckdb::duckdb(), master_path)
+  on.exit(DBI::dbDisconnect(mc), add = TRUE)
 
-setup_sync_test_db <- function() {
-  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  master_path <- tempfile(pattern = "master_", fileext = ".duckdb")
-  DBI::dbExecute(con, sprintf("ATTACH '%s' AS master", gsub("'", "''", master_path)))
+  DBI::dbExecute(mc, "CREATE SCHEMA IF NOT EXISTS core")
+  DBI::dbExecute(mc, "CREATE SCHEMA IF NOT EXISTS staging")
+  DBI::dbExecute(mc, "CREATE SCHEMA IF NOT EXISTS admin")
+  DBI::dbExecute(mc, "CREATE SCHEMA IF NOT EXISTS lists")
 
-
-  DBI::dbExecute(con, "CREATE SCHEMA master.core")
-  DBI::dbExecute(con, "CREATE SCHEMA master.staging")
-  DBI::dbExecute(con, "CREATE SCHEMA master.admin")
-
-  DBI::dbExecute(con, "CREATE SEQUENCE master.admin.merge_requests_id_seq")
-  DBI::dbExecute(con, "
-    CREATE TABLE master.admin.merge_requests (
-      id BIGINT PRIMARY KEY DEFAULT nextval('master.admin.merge_requests_id_seq'),
-      project_id TEXT NOT NULL,
-      submitter_user_id TEXT NOT NULL,
-      env_record_count INTEGER DEFAULT 0,
-      su_record_count INTEGER DEFAULT 0,
-      veg_record_count INTEGER DEFAULT 0
+  # lists tables (mirror local vpro_lists.duckdb structure for test purposes)
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS lists.USysTableOfLists (
+      listname        TEXT,
+      item            TEXT,
+      itemorder       DOUBLE,
+      itemdescription TEXT
+    )
+  ")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS lists.USysZoneList (
+      _zone                TEXT,
+      subzone              TEXT,
+      zonedescription      TEXT,
+      subzonevardescription TEXT
     )
   ")
 
-  DBI::dbExecute(con, "
-    CREATE TABLE master.core.sample_env (
-      plot_number TEXT,
-      project_id TEXT,
-      latitude DOUBLE,
-      longitude DOUBLE,
-      elevation_m DOUBLE,
-      survey_date DATE,
+  # core.env
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS core.env (
+      id            INTEGER,
+      plot_number   TEXT NOT NULL UNIQUE,
+      project_id    INTEGER NOT NULL,
+      latitude      DOUBLE,
+      longitude     DOUBLE,
+      elevation_m   INTEGER,
+      survey_date   DATE,
       surveyor_name TEXT,
-      plot_notes TEXT,
-      modified_by TEXT,
-      row_version INTEGER DEFAULT 1,
+      plot_notes    TEXT,
+      row_version   INTEGER NOT NULL DEFAULT 1,
       last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      PRIMARY KEY (plot_number, project_id)
+      modified_by   TEXT
     )
   ")
 
-  DBI::dbExecute(con, "
-    CREATE TABLE master.core.sample_su (
-      plot_number TEXT,
-      project_id TEXT,
-      su_number TEXT,
-      bec_zone TEXT,
-      bec_subzone TEXT,
-      site_series TEXT,
-      modified_by TEXT,
-      row_version INTEGER DEFAULT 1,
+  # core.su
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS core.su (
+      id            INTEGER,
+      plot_number   TEXT NOT NULL UNIQUE,
+      project_id    INTEGER NOT NULL,
+      su_number     TEXT,
+      bec_zone      TEXT,
+      bec_subzone   TEXT,
+      site_series   TEXT,
+      row_version   INTEGER NOT NULL DEFAULT 1,
       last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      PRIMARY KEY (plot_number, project_id)
+      modified_by   TEXT
     )
   ")
 
-  DBI::dbExecute(con, "
-    CREATE TABLE master.core.sample_veg (
-      plot_number TEXT,
-      project_id TEXT,
-      species_code TEXT,
-      layer_code TEXT,
-      cover1 TEXT,
-      height1 TEXT,
-      cover2 TEXT,
-      height2 TEXT,
-      cover3 TEXT,
-      height3 TEXT,
-      totala TEXT,
-      heighta TEXT,
-      cover4 TEXT,
-      height4 TEXT,
-      cover5 TEXT,
-      height5 TEXT,
-      cover5a TEXT,
-      height5a TEXT,
-      cover5b TEXT,
-      height5b TEXT,
-      cover5c TEXT,
-      height5c TEXT,
-      totalb TEXT,
-      heightb TEXT,
-      cover6 TEXT,
-      height6 TEXT,
-      cover7 TEXT,
-      cover8 TEXT,
-      cover9 TEXT,
-      cover10 TEXT,
+  # core.veg
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS core.veg (
+      id            INTEGER,
+      plot_number   TEXT NOT NULL,
+      species_code  TEXT NOT NULL,
+      layer_code    TEXT NOT NULL,
+      cover1  REAL, height1 REAL,
+      cover2  REAL, height2 REAL,
+      cover3  REAL, height3 REAL,
+      totala  REAL, heighta REAL,
+      cover4  REAL, height4 REAL,
+      cover5  REAL, height5 REAL,
+      cover5a REAL, height5a REAL,
+      cover5b REAL, height5b REAL,
+      cover5c REAL, height5c REAL,
+      totalb  REAL, heightb TEXT,
+      cover6  REAL, height6 REAL,
+      cover7  REAL, cover8  REAL,
+      cover9  REAL, cover10 REAL,
       collected TEXT,
-      flag TEXT,
-      veg_id INTEGER,
-      ll TEXT,
-      af TEXT,
-      dc TEXT,
-      ut TEXT,
-      vi TEXT,
-      pv TEXT,
-      pg TEXT,
-      ffa TEXT,
-      cultural1 TEXT,
-      cultural2 TEXT,
-      other1 TEXT,
-      other2 TEXT,
-      modified_by TEXT,
-      row_version INTEGER DEFAULT 1,
+      flag      BOOLEAN,
+      veg_id    INTEGER,
+      ll INTEGER, af INTEGER, dc INTEGER, ut INTEGER, vi INTEGER,
+      pv INTEGER, pg INTEGER, ffa INTEGER,
+      cultural1 INTEGER, cultural2 INTEGER,
+      other1 INTEGER, other2 INTEGER,
+      project_id INTEGER NOT NULL,
+      row_version INTEGER NOT NULL DEFAULT 1,
       last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      PRIMARY KEY (plot_number, project_id, species_code, layer_code)
+      modified_by TEXT,
+      UNIQUE(plot_number, species_code, layer_code, project_id)
     )
   ")
 
-  DBI::dbExecute(con, "
-    CREATE TABLE master.staging.sample_env (
-      plot_number TEXT,
-      project_id TEXT,
-      latitude DOUBLE,
-      longitude DOUBLE,
-      elevation_m DOUBLE,
-      survey_date DATE,
-      surveyor_name TEXT,
-      plot_notes TEXT,
-      base_row_version INTEGER,
-      merge_request_id INTEGER,
-      modified_by TEXT
+  # staging.env
+  DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS staging.env_seq START 1")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS staging.env (
+      id                INTEGER PRIMARY KEY DEFAULT nextval('staging.env_seq'),
+      merge_request_id  INTEGER NOT NULL,
+      change_type       TEXT NOT NULL,
+      base_row_version  INTEGER,
+      plot_number       TEXT NOT NULL,
+      project_id        INTEGER NOT NULL,
+      latitude          DOUBLE,
+      longitude         DOUBLE,
+      elevation_m       INTEGER,
+      survey_date       DATE,
+      surveyor_name     TEXT,
+      plot_notes        TEXT,
+      modified_by       TEXT,
+      last_modified_utc TIMESTAMPTZ DEFAULT now()
     )
   ")
 
-  DBI::dbExecute(con, "
-    CREATE TABLE master.staging.sample_su (
-      plot_number TEXT,
-      project_id TEXT,
-      su_number TEXT,
-      bec_zone TEXT,
-      bec_subzone TEXT,
-      site_series TEXT,
-      base_row_version INTEGER,
-      merge_request_id INTEGER,
-      modified_by TEXT
+  # staging.su
+  DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS staging.su_seq START 1")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS staging.su (
+      id                INTEGER PRIMARY KEY DEFAULT nextval('staging.su_seq'),
+      merge_request_id  INTEGER NOT NULL,
+      change_type       TEXT NOT NULL,
+      base_row_version  INTEGER,
+      plot_number       TEXT NOT NULL,
+      project_id        INTEGER NOT NULL,
+      su_number         TEXT,
+      bec_zone          TEXT,
+      bec_subzone       TEXT,
+      site_series       TEXT,
+      modified_by       TEXT,
+      last_modified_utc TIMESTAMPTZ DEFAULT now()
     )
   ")
 
-  DBI::dbExecute(con, "
-    CREATE TABLE master.staging.sample_veg (
-      plot_number TEXT,
-      project_id TEXT,
-      species_code TEXT,
-      layer_code TEXT,
-      cover1 TEXT,
-      height1 TEXT,
-      cover2 TEXT,
-      height2 TEXT,
-      cover3 TEXT,
-      height3 TEXT,
-      totala TEXT,
-      heighta TEXT,
-      cover4 TEXT,
-      height4 TEXT,
-      cover5 TEXT,
-      height5 TEXT,
-      cover5a TEXT,
-      height5a TEXT,
-      cover5b TEXT,
-      height5b TEXT,
-      cover5c TEXT,
-      height5c TEXT,
-      totalb TEXT,
-      heightb TEXT,
-      cover6 TEXT,
-      height6 TEXT,
-      cover7 TEXT,
-      cover8 TEXT,
-      cover9 TEXT,
-      cover10 TEXT,
-      collected TEXT,
-      flag TEXT,
-      veg_id INTEGER,
-      ll TEXT,
-      af TEXT,
-      dc TEXT,
-      ut TEXT,
-      vi TEXT,
-      pv TEXT,
-      pg TEXT,
-      ffa TEXT,
-      cultural1 TEXT,
-      cultural2 TEXT,
-      other1 TEXT,
-      other2 TEXT,
-      base_row_version INTEGER,
-      merge_request_id INTEGER,
-      modified_by TEXT
+  # staging.veg
+  DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS staging.veg_seq START 1")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS staging.veg (
+      id                INTEGER PRIMARY KEY DEFAULT nextval('staging.veg_seq'),
+      merge_request_id  INTEGER NOT NULL,
+      change_type       TEXT NOT NULL,
+      base_row_version  INTEGER,
+      plot_number       TEXT NOT NULL,
+      species_code      TEXT NOT NULL,
+      layer_code        TEXT,
+      cover1 REAL, height1 REAL, cover2 REAL, height2 REAL,
+      cover3 REAL, height3 REAL, totala REAL, heighta REAL,
+      cover4 REAL, height4 REAL, cover5 REAL, height5 REAL,
+      cover5a REAL, height5a REAL, cover5b REAL, height5b REAL,
+      cover5c REAL, height5c REAL, totalb REAL, heightb TEXT,
+      cover6 REAL, height6 REAL, cover7 REAL, cover8 REAL,
+      cover9 REAL, cover10 REAL, collected TEXT, flag BOOLEAN,
+      veg_id INTEGER, ll INTEGER, af INTEGER, dc INTEGER, ut INTEGER,
+      vi INTEGER, pv INTEGER, pg INTEGER, ffa INTEGER,
+      cultural1 INTEGER, cultural2 INTEGER, other1 INTEGER, other2 INTEGER,
+      project_id        INTEGER NOT NULL,
+      modified_by       TEXT,
+      last_modified_utc TIMESTAMPTZ DEFAULT now()
     )
   ")
 
-  DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
-      PlotNumber TEXT,
-      ProjectID TEXT,
-      Latitude DOUBLE,
-      Longitude DOUBLE,
-      Elevation DOUBLE,
-      Date DATE,
+  # admin.merge_requests (sequence + table)
+  DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mr_seq START 1")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS admin.merge_requests (
+      id                 INTEGER PRIMARY KEY DEFAULT nextval('admin.mr_seq'),
+      project_id         INTEGER NOT NULL,
+      submitter_name     TEXT NOT NULL,
+      submitted_utc      TIMESTAMPTZ DEFAULT now(),
+      status             TEXT NOT NULL DEFAULT 'pending_review',
+      reviewer           TEXT,
+      review_notes       TEXT,
+      reviewed_utc       TIMESTAMPTZ,
+      env_record_count   INTEGER DEFAULT 0,
+      su_record_count    INTEGER DEFAULT 0,
+      veg_record_count   INTEGER DEFAULT 0,
+      compliance_passed  BOOLEAN,
+      compliance_report  TEXT
+    )
+  ")
+
+  # admin.users (minimal seed; used for merge_history approved_by_user_id lookup)
+  DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.users_seq START 1")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS admin.users (
+      id       INTEGER PRIMARY KEY DEFAULT nextval('admin.users_seq'),
+      username TEXT UNIQUE NOT NULL,
+      email    TEXT,
+      role     TEXT DEFAULT 'admin',
+      is_active BOOLEAN DEFAULT TRUE
+    )
+  ")
+  DBI::dbExecute(mc, "INSERT INTO admin.users (username, email) VALUES ('admin', 'admin@test.local') ON CONFLICT DO NOTHING")
+
+  # admin.merge_history
+  DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mh_seq START 1")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS admin.merge_history (
+      id                  INTEGER PRIMARY KEY DEFAULT nextval('admin.mh_seq'),
+      merge_request_id    INTEGER NOT NULL,
+      merged_utc          TIMESTAMPTZ DEFAULT now(),
+      approved_by_user_id INTEGER,
+      record_count        INTEGER,
+      merge_summary       TEXT
+    )
+  ")
+
+  # admin.merge_conflicts (sequence + table)
+  DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mc_seq START 1")
+  DBI::dbExecute(mc, "
+    CREATE TABLE IF NOT EXISTS admin.merge_conflicts (
+      id                 INTEGER PRIMARY KEY DEFAULT nextval('admin.mc_seq'),
+      merge_request_id   INTEGER NOT NULL,
+      table_name         TEXT NOT NULL,
+      plot_number        TEXT,
+      project_id         TEXT,
+      species_code       TEXT NOT NULL DEFAULT '',
+      layer_code         TEXT NOT NULL DEFAULT '',
+      details            TEXT,
+      resolution         TEXT,
+      resolved_by        TEXT,
+      resolved_utc       TIMESTAMPTZ,
+      created_utc        TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(merge_request_id, table_name, plot_number, project_id, species_code, layer_code)
+    )
+  ")
+}
+
+# Create a local DuckDB connection with Env / SU / Veg field tables and the
+# master DuckDB file attached as catalog `master`.
+.make_test_con <- function(master_path) {
+  local_con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+
+  # Local field tables (PascalCase, minimal for tests)
+  DBI::dbExecute(local_con, "
+    CREATE TABLE Env (
+      PlotNumber   TEXT,
+      ProjectID    TEXT,
+      Latitude     DOUBLE,
+      Longitude    DOUBLE,
+      Elevation    DOUBLE,
+      Date         DATE,
       SiteSurveyor TEXT,
-      SiteNotes TEXT,
-      Zone TEXT,
-      SubZone TEXT,
-      SiteSeries TEXT
+      SiteNotes    TEXT,
+      Zone         TEXT,
+      SubZone      TEXT,
+      SiteSeries   TEXT
     )
   ")
-
-  DBI::dbExecute(con, "
-    CREATE TABLE Sample_SU (
+  DBI::dbExecute(local_con, "
+    CREATE TABLE SU (
       PlotNumber TEXT,
-      SiteUnit TEXT
+      SiteUnit   TEXT
     )
   ")
-
-  DBI::dbExecute(con, "
-    CREATE TABLE Sample_Veg (
+  DBI::dbExecute(local_con, "
+    CREATE TABLE Veg (
       PlotNumber TEXT,
-      Species TEXT,
-      Layer TEXT,
-      Cover1 TEXT,
-      Height1 TEXT,
-      Cover2 TEXT,
-      Height2 TEXT,
-      Cover3 TEXT,
-      Height3 TEXT,
-      TotalA TEXT,
-      HeightA TEXT,
-      Cover4 TEXT,
-      Height4 TEXT,
-      Cover5 TEXT,
-      Height5 TEXT,
-      Cover5a TEXT,
-      Height5a TEXT,
-      Cover5b TEXT,
-      Height5b TEXT,
-      Cover5c TEXT,
-      Height5c TEXT,
-      TotalB TEXT,
-      HeightB TEXT,
-      Cover6 TEXT,
-      Height6 TEXT,
-      Cover7 TEXT,
-      Cover8 TEXT,
-      Cover9 TEXT,
-      Cover10 TEXT,
-      Collected TEXT,
-      Flag TEXT,
-      ID INTEGER,
-      LL TEXT,
-      AF TEXT,
-      DC TEXT,
-      UT TEXT,
-      VI TEXT,
-      PV TEXT,
-      PG TEXT,
-      FFA TEXT,
-      Cultural1 TEXT,
-      Cultural2 TEXT,
-      Other1 TEXT,
-      Other2 TEXT
+      Species    TEXT,
+      Layer      TEXT,
+      Cover1     TEXT,
+      Height1    TEXT,
+      Cover2     TEXT,
+      Height2    TEXT,
+      Cover3     TEXT,
+      Height3    TEXT,
+      TotalA     TEXT,
+      HeightA    TEXT,
+      Cover4     TEXT,
+      Height4    TEXT,
+      Cover5     TEXT,
+      Height5    TEXT,
+      Cover5a    TEXT,
+      Height5a   TEXT,
+      Cover5b    TEXT,
+      Height5b   TEXT,
+      Cover5c    TEXT,
+      Height5c   TEXT,
+      TotalB     TEXT,
+      HeightB    TEXT,
+      Cover6     TEXT,
+      Height6    TEXT,
+      Cover7     TEXT,
+      Cover8     TEXT,
+      Cover9     TEXT,
+      Cover10    TEXT,
+      Collected  TEXT,
+      Flag       TEXT,
+      ID         INTEGER,
+      LL TEXT, AF TEXT, DC TEXT, UT TEXT, VI TEXT,
+      PV TEXT, PG TEXT, FFA TEXT,
+      Cultural1 TEXT, Cultural2 TEXT, Other1 TEXT, Other2 TEXT
     )
   ")
 
+  # Attach the master DuckDB file
+  DBI::dbExecute(local_con, paste0("ATTACH '", master_path, "' AS master"))
+
+  local_con
+}
+
+# Convenience: build a fresh pair (local, master) and run a test body.
+# Returns list(con, master_path); caller is responsible for cleanup.
+.sync_test_setup <- function() {
+  master_path <- tempfile(fileext = ".duckdb")
+  .setup_master_db(master_path)
+  con         <- .make_test_con(master_path)
   list(con = con, master_path = master_path)
 }
 
-testthat::test_that("sync state tables store values", {
-  setup <- setup_sync_test_db()
-  con <- setup$con
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
+.sync_test_teardown <- function(setup) {
+  tryCatch(DBI::dbDisconnect(setup$con, shutdown = TRUE), error = function(e) NULL)
+  tryCatch(unlink(setup$master_path), error = function(e) NULL)
+  if (!is.null(setup$lists_path)) tryCatch(unlink(setup$lists_path), error = function(e) NULL)
+}
 
-  sync_ensure_state_tables(con)
-  sync_set_state(con, "last_pull:sample_env:all", "2026-02-01 10:00:00")
-  value <- sync_get_state(con, "last_pull:sample_env:all")
 
-  testthat::expect_equal(value, "2026-02-01 10:00:00")
+# =============================================================================
+# Tests — Local infrastructure
+# =============================================================================
+
+testthat::test_that("sync_ensure_local_tables creates sync schema and tables", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  sync_ensure_local_tables(con)
+
+  testthat::expect_true(
+    DBI::dbExistsTable(con, DBI::Id(schema = "sync", table = "watermarks"))
+  )
+  testthat::expect_true(
+    DBI::dbExistsTable(con, DBI::Id(schema = "sync", table = "conflict_queue"))
+  )
+  # master_row_version should be added to Env and SU
+  env_cols <- DBI::dbListFields(con, "Env")
+  testthat::expect_true("master_row_version" %in% env_cols)
+  su_cols  <- DBI::dbListFields(con, "SU")
+  testthat::expect_true("master_row_version" %in% su_cols)
 })
 
-testthat::test_that("sync_pull copies sample_env rows", {
-  setup <- setup_sync_test_db()
-  con <- setup$con
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
+testthat::test_that("watermark round-trip stores and retrieves timestamp", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+  sync_ensure_local_tables(con)
 
-  DBI::dbExecute(con, "
-    INSERT INTO master.core.sample_env
-      (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes)
-    VALUES
-      ('P-001', 'PRJ', 53.1, -120.2, 950, DATE '2026-02-01', 'Tester', 'notes')
-  ")
+  ts <- as.POSIXct("2026-01-15 08:00:00", tz = "UTC")
+  sync_set_watermark(con, "env", "pull", ts)
+  got <- sync_get_watermark(con, "env", "pull")
 
-  results <- sync_pull(con, project_id = "PRJ", tables = c("sample_env"), allow_attach = FALSE)
-
-  count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM Sample_Env")$n[1]
-  testthat::expect_equal(count, 1)
-  testthat::expect_equal(results$sample_env$pulled, 1)
+  testthat::expect_false(is.null(got))
+  # Flexible comparison: allow sub-second rounding
+  testthat::expect_equal(as.numeric(as.POSIXct(got, tz = "UTC")),
+                         as.numeric(ts), tolerance = 2)
 })
 
-testthat::test_that("sync_push stages env, su, and veg rows", {
-  setup <- setup_sync_test_db()
-  con <- setup$con
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
+testthat::test_that("sync_get_watermark returns NULL when no record exists", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+  sync_ensure_local_tables(con)
 
-  DBI::dbExecute(con, "
-    INSERT INTO Sample_Env
-      (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes, Zone, SubZone, SiteSeries)
-    VALUES
-      ('P-101', 'PRJ', 52.7, -118.9, 1234, DATE '2026-02-01', 'Tester', 'notes', 'ICH', 'dw', '01')
-  ")
+  testthat::expect_null(sync_get_watermark(con, "env",  "pull"))
+  testthat::expect_null(sync_get_watermark(con, "veg", "push"))
+})
 
-  DBI::dbExecute(con, "
-    INSERT INTO Sample_SU (PlotNumber, SiteUnit)
-    VALUES ('P-101', 'SU1')
-  ")
 
-  DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg
-      (PlotNumber, Species, Layer, Cover1, Height1, ID)
-    VALUES
-      ('P-101', 'AB', 'T', '10', '5', 1)
-  ")
+# =============================================================================
+# Tests — Pull: master.core -> local
+# =============================================================================
 
-  results <- sync_push(
+testthat::test_that("sync_pull inserts new master env record locally (fast-forward)", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # Seed master with one env row
+  DBI::dbExecute(
     con,
-    project_id = "PRJ",
-    tables = c("sample_env", "sample_su", "sample_veg"),
-    allow_attach = FALSE,
-    submitter = "tester"
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, longitude, elevation_m,
+        survey_date, surveyor_name, row_version, last_modified_utc)
+     VALUES ('P-001', 1, 53.1, -120.2, 950, DATE '2026-01-01', 'Field A', 1, now())"
   )
 
-  env_rows <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM master.staging.sample_env")$n[1]
-  su_rows <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM master.staging.sample_su")$n[1]
-  veg_rows <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM master.staging.sample_veg")$n[1]
+  result <- sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
 
-  testthat::expect_equal(env_rows, 1)
-  testthat::expect_equal(su_rows, 1)
-  testthat::expect_equal(veg_rows, 1)
-  testthat::expect_true(is.numeric(results$merge_request_id))
+  local_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM Env")$n[1]
+  testthat::expect_equal(local_count, 1L)
+  testthat::expect_equal(result$env$pulled, 1L)
+  testthat::expect_equal(result$env$fast_forwarded, 1L)
+  testthat::expect_equal(result$env$conflicts, 0L)
 
-  mr_counts <- DBI::dbGetQuery(
+  # master_row_version should be set to 1
+  mrv <- DBI::dbGetQuery(con, "SELECT master_row_version FROM Env WHERE PlotNumber = 'P-001'")$master_row_version[1]
+  testthat::expect_equal(as.integer(mrv), 1L)
+})
+
+testthat::test_that("sync_pull fast-forwards when master updated but local unchanged", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # The local row already matches the initial master values; master_row_version = 1
+  DBI::dbExecute(
     con,
-    "SELECT env_record_count, veg_record_count FROM master.admin.merge_requests WHERE id = ?",
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, longitude, elevation_m, row_version, last_modified_utc)
+     VALUES ('P-010', 1, 50.0, -119.0, 800, 1, now())"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+
+  # Now master gets updated (row_version -> 2, new elevation)
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.env
+     SET elevation_m = 900, row_version = 2, last_modified_utc = now()
+     WHERE plot_number = 'P-010'"
+  )
+
+  result <- sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+
+  # Should fast-forward (local was never modified by user — still has original values)
+  local <- DBI::dbGetQuery(con, "SELECT Elevation, master_row_version FROM Env WHERE PlotNumber = 'P-010'")
+  testthat::expect_equal(as.integer(local$Elevation[1]), 900L)
+  testthat::expect_equal(as.integer(local$master_row_version[1]), 2L)
+  testthat::expect_equal(result$env$conflicts, 0L)
+})
+
+testthat::test_that("sync_pull detects true conflict when both sides diverged", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # Initial pull: plant the row locally with master_row_version = 1
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, longitude, elevation_m, row_version, last_modified_utc)
+     VALUES ('P-020', 1, 50.0, -119.0, 800, 1, now())"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+
+  # User edits the local copy (different elevation) — mark the row dirty
+  DBI::dbExecute(
+    con,
+    "UPDATE Env SET Elevation = 1200, local_modified_utc = now() WHERE PlotNumber = 'P-020'"
+  )
+  # master_row_version is still 1 (user edit doesn't change it)
+
+  # Master also updates (row_version -> 2, different elevation)
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.env
+     SET elevation_m = 600, row_version = 2, last_modified_utc = now()
+     WHERE plot_number = 'P-020'"
+  )
+
+  result <- sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+
+  # Should detect a conflict, NOT overwrite local
+  testthat::expect_equal(result$env$conflicts, 1L)
+  local_elev <- DBI::dbGetQuery(con, "SELECT Elevation FROM Env WHERE PlotNumber = 'P-020'")$Elevation[1]
+  testthat::expect_equal(as.numeric(local_elev), 1200)   # local value preserved
+
+  queue <- sync_get_local_conflicts(con, project_id = "1")
+  testthat::expect_equal(nrow(queue), 1L)
+  testthat::expect_equal(queue$table_name[1], "env")
+})
+
+testthat::test_that("sync_pull inserts new master su record locally", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.su
+       (plot_number, project_id, su_number, row_version, last_modified_utc)
+     VALUES ('P-030', 1, 'SU-Alpha', 1, now())"
+  )
+
+  result <- sync_pull(con, project_id = 1, tables = "su", allow_attach = FALSE)
+
+  row <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM SU WHERE PlotNumber = 'P-030'")
+  testthat::expect_equal(nrow(row), 1L)
+  testthat::expect_equal(row$SiteUnit[1], "SU-Alpha")
+  testthat::expect_equal(result$su$fast_forwarded, 1L)
+})
+
+
+# =============================================================================
+# Tests — Local conflict queue
+# =============================================================================
+
+testthat::test_that("sync_count_local_conflicts returns 0 when queue is empty", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  sync_ensure_local_tables(s$con)
+  testthat::expect_equal(sync_count_local_conflicts(s$con), 0L)
+})
+
+testthat::test_that("sync_resolve_local_conflict keep_local marks resolved without touching local", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc)
+     VALUES ('P-040', 1, 50.0, 800, 1, now())"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+  DBI::dbExecute(con, "UPDATE Env SET Elevation = 1000, local_modified_utc = now() WHERE PlotNumber = 'P-040'")
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.env SET elevation_m = 600, row_version = 2, last_modified_utc = now()
+     WHERE plot_number = 'P-040'"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+
+  conflicts <- sync_get_local_conflicts(con)
+  testthat::expect_equal(nrow(conflicts), 1L)
+
+  sync_resolve_local_conflict(con, conflicts$id[1], "keep_local")
+
+  # Local elevation unchanged
+  elev <- DBI::dbGetQuery(con, "SELECT Elevation FROM Env WHERE PlotNumber = 'P-040'")$Elevation[1]
+  testthat::expect_equal(as.numeric(elev), 1000)
+
+  # Queue entry no longer in unresolved
+  testthat::expect_equal(sync_count_local_conflicts(con), 0L)
+})
+
+testthat::test_that("sync_resolve_local_conflict accept_master overwrites local env", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc)
+     VALUES ('P-050', 1, 50.0, 800, 1, now())"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+  DBI::dbExecute(con, "UPDATE Env SET Elevation = 1000, local_modified_utc = now() WHERE PlotNumber = 'P-050'")
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.env
+     SET elevation_m = 300, row_version = 2, last_modified_utc = now()
+     WHERE plot_number = 'P-050'"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+
+  conflicts <- sync_get_local_conflicts(con)
+  sync_resolve_local_conflict(con, conflicts$id[1], "accept_master")
+
+  elev <- DBI::dbGetQuery(con, "SELECT Elevation FROM Env WHERE PlotNumber = 'P-050'")$Elevation[1]
+  testthat::expect_equal(as.numeric(elev), 300)
+  testthat::expect_equal(sync_count_local_conflicts(con), 0L)
+})
+
+
+# =============================================================================
+# Tests — Push: local -> master.staging
+# =============================================================================
+
+testthat::test_that("sync_push creates merge request and stages new env row", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-101', '1', 52.7, -118.9, 1234, DATE '2026-02-01', 'Alice', 'notes')"
+  )
+
+  results <- sync_push(con, project_id = 1, submitter = "alice", tables = "env",
+                       allow_attach = FALSE)
+
+  testthat::expect_true(!is.null(results$merge_request_id))
+  testthat::expect_equal(results$env, 1L)
+
+  staged <- DBI::dbGetQuery(
+    con,
+    "SELECT change_type, base_row_version FROM master.staging.env
+     WHERE merge_request_id = ?",
     list(results$merge_request_id)
   )
-  testthat::expect_equal(mr_counts$env_record_count[1], 1)
-  testthat::expect_equal(mr_counts$veg_record_count[1], 1)
+  testthat::expect_equal(nrow(staged), 1L)
+  testthat::expect_equal(staged$change_type[1], "I")       # new row
+  testthat::expect_true(is.na(staged$base_row_version[1]))  # no prior master version
+
+  mr <- DBI::dbGetQuery(
+    con,
+    "SELECT env_record_count, status FROM master.admin.merge_requests WHERE id = ?",
+    list(results$merge_request_id)
+  )
+  testthat::expect_equal(mr$env_record_count[1], 1L)
+  testthat::expect_equal(mr$status[1], "pending_review")
 })
 
-testthat::test_that("merge request conflicts are detected and resolvable", {
-  setup <- setup_sync_test_db()
-  con <- setup$con
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
+testthat::test_that("sync_push captures base_row_version for existing master row", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
 
-  # Seed an existing core row (row_version 1 at time of submit)
+  # Existing master row at version 3
   DBI::dbExecute(
     con,
-    "INSERT INTO master.core.sample_env
-      (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, modified_by, row_version)
-     VALUES ('P-201', 'PRJ', 50.0, -120.0, 900, DATE '2026-02-01', 'CoreUser', 'core', 'core', 1)"
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc, modified_by)
+     VALUES ('P-110', 1, 50.0, 800, 3, now(), 'master_user')"
   )
 
-  # Local edit that will be staged
+  # Local version differs (elevation changed by user)
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Env
-      (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes, Zone, SubZone, SiteSeries)
-     VALUES
-      ('P-201', 'PRJ', 51.0, -121.0, 950, DATE '2026-02-02', 'LocalUser', 'staged', 'ICH', 'dw', '01')"
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-110', '1', 50.0, -120.0, 999, DATE '2026-02-01', 'Bob', '')"
   )
 
-  results <- sync_push(
+  results <- sync_push(con, project_id = 1, submitter = "bob", tables = "env",
+                       allow_attach = FALSE)
+
+  staged <- DBI::dbGetQuery(
     con,
-    project_id = "PRJ",
-    tables = c("sample_env"),
-    allow_attach = FALSE,
-    submitter = "tester"
+    "SELECT change_type, base_row_version FROM master.staging.env WHERE merge_request_id = ?",
+    list(results$merge_request_id)
+  )
+  testthat::expect_equal(staged$change_type[1], "U")
+  testthat::expect_equal(staged$base_row_version[1], 3L)  # captured at push time
+})
+
+testthat::test_that("sync_push stages su and veg rows in the same merge request", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes, Zone, SubZone, SiteSeries)
+     VALUES ('P-120', '1', 52.0, -119.0, 1000, DATE '2026-02-01', 'Carol', '', 'ICH', 'mk', '01')"
+  )
+  DBI::dbExecute(con, "INSERT INTO SU (PlotNumber, SiteUnit) VALUES ('P-120', 'ICH mk 01')")
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Veg (PlotNumber, Species, Layer, Cover1) VALUES ('P-120', 'TSUGHET', 'T1', '30')"
   )
 
+  results <- sync_push(con, project_id = 1, submitter = "carol",
+                       tables = c("env", "su", "veg"), allow_attach = FALSE)
+
+  testthat::expect_equal(results$env, 1L)
+  testthat::expect_equal(results$su,  1L)
+  testthat::expect_equal(results$veg, 1L)
+
+  env_staged <- DBI::dbGetQuery(
+    con, "SELECT COUNT(*) AS n FROM master.staging.env WHERE merge_request_id = ?",
+    list(results$merge_request_id)
+  )$n[1]
+  su_staged  <- DBI::dbGetQuery(
+    con, "SELECT COUNT(*) AS n FROM master.staging.su  WHERE merge_request_id = ?",
+    list(results$merge_request_id)
+  )$n[1]
+  veg_staged <- DBI::dbGetQuery(
+    con, "SELECT COUNT(*) AS n FROM master.staging.veg WHERE merge_request_id = ?",
+    list(results$merge_request_id)
+  )$n[1]
+
+  testthat::expect_equal(env_staged, 1L)
+  testthat::expect_equal(su_staged,  1L)
+  testthat::expect_equal(veg_staged, 1L)
+})
+
+testthat::test_that("sync_push is blocked when unresolved pull conflicts exist", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # Create a pull conflict
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc)
+     VALUES ('P-130', 1, 50.0, 800, 1, now())"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+  DBI::dbExecute(con, "UPDATE Env SET Elevation = 999, local_modified_utc = now() WHERE PlotNumber = 'P-130'")
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.env SET elevation_m = 100, row_version = 2, last_modified_utc = now()
+     WHERE plot_number = 'P-130'"
+  )
+  sync_pull(con, project_id = 1, tables = "env", allow_attach = FALSE)
+  testthat::expect_equal(sync_count_local_conflicts(con, project_id = "1"), 1L)
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-131', '1', 55.0, -120.0, 500, DATE '2026-01-01', 'Dave', '')"
+  )
+
+  testthat::expect_error(
+    sync_push(con, project_id = 1, submitter = "dave", allow_attach = FALSE),
+    "Push blocked"
+  )
+})
+
+testthat::test_that("sync_push skips unchanged rows (no delta = no staging row)", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # Identical data in both master and local
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, longitude, elevation_m, row_version, last_modified_utc, modified_by)
+     VALUES ('P-140', 1, 53.0, -120.0, 700, 1, now(), 'system')"
+  )
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-140', '1', 53.0, -120.0, 700, NULL, NULL, NULL)"
+  )
+
+  results <- sync_push(con, project_id = 1, submitter = "auto", tables = "env",
+                       allow_attach = FALSE)
+  testthat::expect_equal(results$env, 0L)
+
+  n_staged <- DBI::dbGetQuery(
+    con, "SELECT COUNT(*) AS n FROM master.staging.env WHERE merge_request_id = ?",
+    list(results$merge_request_id)
+  )$n[1]
+  testthat::expect_equal(n_staged, 0L)
+})
+
+
+# =============================================================================
+# Tests — Server-side merge management
+# =============================================================================
+
+testthat::test_that("merge_request_refresh_conflicts detects row_version mismatch", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # User pushes based on master at row_version = 1
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc, modified_by)
+     VALUES ('P-200', 1, 50.0, 800, 1, now(), 'original')"
+  )
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-200', '1', 50.0, -120.0, 900, DATE '2026-01-01', 'Eve', '')"
+  )
+  results <- sync_push(con, project_id = 1, submitter = "eve", tables = "env",
+                       allow_attach = FALSE)
   mr_id <- as.integer(results$merge_request_id)
-  staged <- DBI::dbGetQuery(con, "SELECT base_row_version FROM master.staging.sample_env WHERE merge_request_id = ?", list(mr_id))
-  testthat::expect_equal(staged$base_row_version[1], 1)
 
-  # Simulate a concurrent core change after submission
+  # Simulate concurrent master edit AFTER push (row_version advances to 2)
   DBI::dbExecute(
     con,
-    "UPDATE master.core.sample_env
-     SET latitude = 49.5, row_version = 2
-     WHERE plot_number = 'P-201' AND project_id = 'PRJ'"
+    "UPDATE master.core.env SET elevation_m = 500, row_version = 2 WHERE plot_number = 'P-200'"
   )
 
   merge_request_refresh_conflicts(con, mr_id)
+
   conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
-  testthat::expect_equal(nrow(conflicts), 1)
-  testthat::expect_equal(conflicts$table_name[1], "sample_env")
+  testthat::expect_equal(nrow(conflicts), 1L)
+  testthat::expect_equal(conflicts$table_name[1], "env")
+  testthat::expect_equal(conflicts$plot_number[1], "P-200")
+})
 
-  # Resolve by keeping core (skip applying staged env row)
-  merge_request_resolve_conflict(con, conflicts$id[1], "keep_core", actor = "reviewer")
-  testthat::expect_equal(merge_request_unresolved_conflict_count(con, mr_id), 0)
+testthat::test_that("merge_request_refresh_conflicts finds no conflict when master unchanged", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
 
-  # Merge should now succeed and preserve the core value
-  merge_approve_request(con, mr_id, reviewer = "reviewer", review_notes = "ok")
+  # Push with base_row_version = 2; master still at 2 → no conflict
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc, modified_by)
+     VALUES ('P-210', 1, 50.0, 800, 2, now(), 'admin')"
+  )
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-210', '1', 50.0, -120.0, 900, DATE '2026-01-01', 'Frank', '')"
+  )
+  results <- sync_push(con, project_id = 1, submitter = "frank", tables = "env",
+                       allow_attach = FALSE)
+  mr_id <- as.integer(results$merge_request_id)
 
-  env <- DBI::dbGetQuery(con, "SELECT latitude, row_version FROM master.core.sample_env WHERE plot_number = 'P-201' AND project_id = 'PRJ'")
-  testthat::expect_equal(env$latitude[1], 49.5)
-  testthat::expect_equal(env$row_version[1], 2)
+  # No concurrent master changes
+  merge_request_refresh_conflicts(con, mr_id)
 
-  mr <- DBI::dbGetQuery(con, "SELECT status FROM master.admin.merge_requests WHERE id = ?", list(mr_id))
+  conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
+  testthat::expect_equal(nrow(conflicts), 0L)
+})
+
+testthat::test_that("merge_approve_request applies staged rows to core", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # No existing master row → new insert
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-300', '1', 54.0, -121.0, 1500, DATE '2026-03-01', 'Grace', 'summit plot')"
+  )
+  results <- sync_push(con, project_id = 1, submitter = "grace", tables = "env",
+                       allow_attach = FALSE)
+  mr_id <- as.integer(results$merge_request_id)
+
+  merge_approve_request(con, mr_id, reviewer = "admin", review_notes = "looks good")
+
+  # Row should be in core
+  core_row <- DBI::dbGetQuery(
+    con, "SELECT plot_number, elevation_m FROM master.core.env WHERE plot_number = 'P-300'"
+  )
+  testthat::expect_equal(nrow(core_row), 1L)
+  testthat::expect_equal(core_row$elevation_m[1], 1500L)
+
+  # Staging should be cleaned up
+  staged <- DBI::dbGetQuery(
+    con, "SELECT COUNT(*) AS n FROM master.staging.env WHERE merge_request_id = ?",
+    list(mr_id)
+  )
+  testthat::expect_equal(staged$n[1], 0L)
+
+  # Merge request status
+  mr <- merge_request_get(con, mr_id)
   testthat::expect_equal(mr$status[1], "merged")
+  testthat::expect_equal(mr$reviewer[1], "admin")
+
+  # merge_history should have exactly one row for this merge request
+  hist <- DBI::dbGetQuery(
+    con, "SELECT * FROM master.admin.merge_history WHERE merge_request_id = ?",
+    list(mr_id)
+  )
+  testthat::expect_equal(nrow(hist), 1L)
+  testthat::expect_equal(hist$record_count[1], 1L)   # 1 env row pushed
+  testthat::expect_equal(hist$approved_by_user_id[1], 1L)  # admin user id = 1
+})
+
+testthat::test_that("merge_approve_request respects keep_core resolution", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # Existing master row at row_version = 1
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc, modified_by)
+     VALUES ('P-310', 1, 50.0, 800, 1, now(), 'original')"
+  )
+
+  # User pushes different elevation
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-310', '1', 50.0, -120.0, 1200, DATE '2026-01-01', 'Hank', '')"
+  )
+  results <- sync_push(con, project_id = 1, submitter = "hank", tables = "env",
+                       allow_attach = FALSE)
+  mr_id <- as.integer(results$merge_request_id)
+
+  # Admin updates master concurrently (row_version -> 2)
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.env SET elevation_m = 600, row_version = 2 WHERE plot_number = 'P-310'"
+  )
+
+  merge_request_refresh_conflicts(con, mr_id)
+  conflicts <- merge_request_get_conflicts(con, mr_id)
+  testthat::expect_equal(nrow(conflicts), 1L)
+
+  # Admin chooses to keep master (core) value
+  merge_request_resolve_conflict(con, conflicts$id[1], "keep_core", actor = "admin")
+  testthat::expect_equal(merge_request_unresolved_count(con, mr_id), 0L)
+
+  merge_approve_request(con, mr_id, reviewer = "admin")
+
+  # Core value should still be 600 (keep_core was chosen)
+  core_elev <- DBI::dbGetQuery(
+    con, "SELECT elevation_m FROM master.core.env WHERE plot_number = 'P-310'"
+  )$elevation_m[1]
+  testthat::expect_equal(core_elev, 600L)
+
+  # merge_history should still record the merge outcome even when keep_core is chosen
+  hist <- DBI::dbGetQuery(
+    con, "SELECT * FROM master.admin.merge_history WHERE merge_request_id = ?",
+    list(mr_id)
+  )
+  testthat::expect_equal(nrow(hist), 1L)
+})
+
+testthat::test_that("merge_approve_request blocks with unresolved conflicts", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO master.core.env
+       (plot_number, project_id, latitude, elevation_m, row_version, last_modified_utc, modified_by)
+     VALUES ('P-320', 1, 50.0, 800, 1, now(), 'original')"
+  )
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-320', '1', 50.0, -120.0, 999, DATE '2026-01-01', 'Ivy', '')"
+  )
+  results <- sync_push(con, project_id = 1, submitter = "ivy", tables = "env",
+                       allow_attach = FALSE)
+  mr_id <- as.integer(results$merge_request_id)
+
+  # Advance master row_version to force conflict
+  DBI::dbExecute(
+    con,
+    "UPDATE master.core.env SET elevation_m = 300, row_version = 2 WHERE plot_number = 'P-320'"
+  )
+  merge_request_refresh_conflicts(con, mr_id)
+
+  # Attempt approve without resolving
+  testthat::expect_error(
+    merge_approve_request(con, mr_id, reviewer = "admin"),
+    "unresolved conflict"
+  )
+})
+
+testthat::test_that("merge_reject_request removes staging rows and updates status", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-400', '1', 55.0, -122.0, 200, DATE '2026-01-01', 'Jack', '')"
+  )
+  results <- sync_push(con, project_id = 1, submitter = "jack", tables = "env",
+                       allow_attach = FALSE)
+  mr_id <- as.integer(results$merge_request_id)
+
+  merge_reject_request(con, mr_id, reviewer = "admin", review_notes = "bad data")
+
+  mr <- merge_request_get(con, mr_id)
+  testthat::expect_equal(mr$status[1], "rejected")
+
+  staged <- DBI::dbGetQuery(
+    con, "SELECT COUNT(*) AS n FROM master.staging.env WHERE merge_request_id = ?",
+    list(mr_id)
+  )
+  testthat::expect_equal(staged$n[1], 0L)
+
+  # Core should NOT have received the data
+  core_row <- DBI::dbGetQuery(
+    con, "SELECT COUNT(*) AS n FROM master.core.env WHERE plot_number = 'P-400'"
+  )
+  testthat::expect_equal(core_row$n[1], 0L)
+})
+
+testthat::test_that("merge_request_list returns pending requests with conflict count", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  DBI::dbExecute(
+    con,
+    "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
+     VALUES ('P-500', '1', 51.0, -118.0, 700, DATE '2026-01-01', 'Kim', '')"
+  )
+  sync_push(con, project_id = 1, submitter = "kim", tables = "env", allow_attach = FALSE)
+
+  listing <- merge_request_list(con)
+  testthat::expect_true(nrow(listing) >= 1L)
+  testthat::expect_true("unresolved_conflicts" %in% names(listing))
+})
+
+
+# =============================================================================
+# Tests — Lists pull
+# =============================================================================
+
+# Helper: create a temp DuckDB file for the local lists attachment.
+.make_local_lists_db <- function() {
+  lists_path <- tempfile(fileext = ".duckdb")
+  lc <- DBI::dbConnect(duckdb::duckdb(), lists_path)
+  tryCatch({
+    DBI::dbExecute(lc, "
+      CREATE TABLE USysTableOfLists (
+        listname        TEXT,
+        item            TEXT,
+        itemorder       DOUBLE,
+        itemdescription TEXT
+      )
+    ")
+    DBI::dbExecute(lc, "
+      CREATE TABLE USysZoneList (
+        _zone                TEXT,
+        subzone              TEXT,
+        zonedescription      TEXT,
+        subzonevardescription TEXT
+      )
+    ")
+    # Seed one stale row so we can confirm it gets replaced
+    DBI::dbExecute(lc, "INSERT INTO USysTableOfLists VALUES ('SLOPE', 'FLAT', 1, 'Old description')")
+    DBI::dbExecute(lc, "INSERT INTO USysZoneList VALUES ('CWH', 'dm', 'Old zone name', 'dry maritime')")
+  }, error = function(e) NULL)
+  DBI::dbDisconnect(lc, shutdown = TRUE)
+  lists_path
+}
+
+testthat::test_that("sync_pull lists: replaces local lists tables with master content", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # Build and attach a local lists database
+  lists_path <- .make_local_lists_db()
+  s$lists_path <- lists_path  # register for teardown
+  DBI::dbExecute(con, paste0("ATTACH '", lists_path, "' AS lists"))
+
+  # Seed master.lists with updated/expanded data
+  DBI::dbExecute(con, "INSERT INTO master.lists.USysTableOfLists VALUES
+    ('SLOPE', 'FLAT',   1, 'Flat (updated)'),
+    ('SLOPE', 'GENTLE', 2, 'Gentle slope')")
+  DBI::dbExecute(con, "INSERT INTO master.lists.USysZoneList VALUES
+    ('CWH', 'dm', 'Coastal Western Hemlock', 'dry maritime'),
+    ('IDF', 'dk', 'Interior Douglas-fir',    'dry cool')")
+
+  result <- sync_pull(con, tables = "lists", allow_attach = FALSE)
+
+  # Both tables synced
+  testthat::expect_equal(result$lists$synced_tables, 2L)
+  testthat::expect_equal(length(result$lists$skipped), 0L)
+
+  # USysTableOfLists: stale row replaced, new row added
+  tol_rows <- DBI::dbGetQuery(con, "SELECT * FROM lists.USysTableOfLists ORDER BY itemorder")
+  testthat::expect_equal(nrow(tol_rows), 2L)
+  testthat::expect_equal(tol_rows$itemdescription[1], "Flat (updated)")
+  testthat::expect_equal(tol_rows$item[2], "GENTLE")
+
+  # USysZoneList: stale row replaced, new row added
+  zone_rows <- DBI::dbGetQuery(con, "SELECT * FROM lists.USysZoneList ORDER BY \"_zone\"")
+  testthat::expect_equal(nrow(zone_rows), 2L)
+  testthat::expect_equal(zone_rows$zonedescription[zone_rows$`_zone` == 'CWH'], "Coastal Western Hemlock")
+
+  # Watermark for lists was updated
+  wm <- sync_get_watermark(con, "lists", "pull")
+  testthat::expect_false(is.null(wm))
+})
+
+testthat::test_that("sync_pull lists: skips local tables absent from master", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  lists_path <- tempfile(fileext = ".duckdb")
+  s$lists_path <- lists_path
+  lc <- DBI::dbConnect(duckdb::duckdb(), lists_path)
+  DBI::dbExecute(lc, "CREATE TABLE USysTableOfLists (listname TEXT, item TEXT, itemorder DOUBLE, itemdescription TEXT)")
+  DBI::dbExecute(lc, "CREATE TABLE USysLocalOnly (val TEXT)")
+  DBI::dbDisconnect(lc, shutdown = TRUE)
+
+  DBI::dbExecute(con, paste0("ATTACH '", lists_path, "' AS lists"))
+
+  # Only USysTableOfLists exists in master; USysLocalOnly does not
+  DBI::dbExecute(con, "INSERT INTO master.lists.USysTableOfLists VALUES ('X', 'A', 1, 'desc')")
+
+  result <- sync_pull(con, tables = "lists", allow_attach = FALSE)
+
+  testthat::expect_equal(result$lists$synced_tables, 1L)
+  testthat::expect_true("USysLocalOnly" %in% result$lists$skipped)
+})
+
+testthat::test_that("sync_pull lists: returns zero synced when no lists catalog is attached", {
+  s <- .sync_test_setup(); on.exit(.sync_test_teardown(s), add = TRUE)
+  con <- s$con
+
+  # No local lists attachment — should not error, just return 0
+  result <- sync_pull(con, tables = "lists", allow_attach = FALSE)
+
+  testthat::expect_equal(result$lists$synced_tables, 0L)
 })

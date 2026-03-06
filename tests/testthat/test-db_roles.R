@@ -4,8 +4,12 @@
 # permissions as specified in the BEC Data Management plan (Step 2).
 # 
 # Two roles:
-# - vpro_default: Read core/lists + write staging (no password)
-# - vpro_admin: Full administrative access
+# - vpro_default: Read core/lists + write staging (trust auth - no password)
+# - vpro_admin: Full administrative access (requires password)
+library(testthat)
+library(DBI)
+source(here::here("R", "db_roles.R"))
+source(here::here("tests", "testthat", "helpers.R"))
 
 test_that("create_vpro_default_role creates role successfully", {
   skip_if_not(pg_available(), "PostgreSQL not available")
@@ -37,7 +41,7 @@ test_that("create_vpro_default_role creates role successfully", {
   
   expect_equal(nrow(roles), 1)
   expect_equal(roles$rolname, "vpro_default")
-  expect_true(roles$rolcanlogin)  # Can login without password
+  expect_true(roles$rolcanlogin)  # Can login with trust auth (no password)
 })
 
 
@@ -119,14 +123,14 @@ test_that("vpro_default role has correct permissions", {
   drop_vpro_roles(admin_con, force = TRUE)
   create_pg_roles(admin_con)
   
-  # Connect directly as vpro_default (no password required)
+  # Connect directly as vpro_default (trust authentication in pg_hba.conf - no password needed)
   default_con <- DBI::dbConnect(
     RPostgres::Postgres(),
     host = "localhost",
     port = 5433,
     dbname = "becmaster",
     user = "vpro_default"
-    # No password parameter - can login without authentication
+    # No password parameter - trust auth allows password-less login
   )
   on.exit(DBI::dbDisconnect(default_con), add = TRUE, after = FALSE)
   
@@ -154,7 +158,7 @@ test_that("vpro_default role has correct permissions", {
   expect_no_error({
     # First create a merge request
     merge_id <- DBI::dbGetQuery(admin_con, "
-      INSERT INTO staging.merge_requests 
+      INSERT INTO admin.merge_requests 
       (project_id, submitter_name, submitter_email, status)
       VALUES (1, 'Test User', 'test@example.com', 'pending_review')
       RETURNING id
@@ -162,8 +166,8 @@ test_that("vpro_default role has correct permissions", {
     
     DBI::dbExecute(default_con, sprintf("
       INSERT INTO staging.veg 
-      (plot_number, species_code, layer_code, cover_percent, project_id, merge_request_id, change_type)
-      VALUES ('TEST_DEFAULT_PLOT', 'PICO', 'T1', 50, 1, %d, 'I')
+      (plot_number, species_code, layer_code, cover1, project_id, merge_request_id, change_type, modified_by)
+      VALUES ('TEST_DEFAULT_PLOT', 'PICO', 'T1', 50, 1, %d, 'I', 'testuser')
     ", merge_id))
   })
   
@@ -171,7 +175,7 @@ test_that("vpro_default role has correct permissions", {
   expect_no_error({
     DBI::dbExecute(default_con, "
       UPDATE staging.veg 
-      SET cover_percent = 60 
+      SET cover1 = 60 
       WHERE plot_number = 'TEST_DEFAULT_PLOT'
     ")
   })
@@ -180,7 +184,7 @@ test_that("vpro_default role has correct permissions", {
   expect_error({
     DBI::dbExecute(default_con, "
       INSERT INTO core.veg 
-      (plot_number, species_code, layer_code, cover_percent, project_id)
+      (plot_number, species_code, layer_code, cover1, project_id)
       VALUES ('TEST_PLOT', 'PICO', 'T1', 50, 1)
     ")
   }, "permission denied")
@@ -189,7 +193,7 @@ test_that("vpro_default role has correct permissions", {
   expect_error({
     DBI::dbExecute(default_con, "
       UPDATE core.veg 
-      SET cover_percent = 75 
+      SET cover1 = 75 
       WHERE plot_number = 'PLOT_001'
     ")
   }, "permission denied")
@@ -206,8 +210,8 @@ test_that("vpro_default role has correct permissions", {
   expect_error({
     DBI::dbExecute(default_con, "
       INSERT INTO audit.logged_actions 
-      (schema_name, table_name, action, new_data)
-      VALUES ('core', 'veg', 'I', '{\"test\": \"data\"}'::jsonb)
+      (schema_name, table_name, action)
+      VALUES ('core', 'veg', 'I')
     ")
   }, "permission denied")
   
@@ -268,8 +272,8 @@ test_that("vpro_admin role has correct permissions", {
   expect_no_error({
     DBI::dbExecute(admin_con, "
       INSERT INTO core.veg 
-      (plot_number, species_code, layer_code, cover_percent, project_id)
-      VALUES ('ADMIN_TEST_PLOT', 'PICO', 'T1', 50, 1)
+      (plot_number, species_code, layer_code, cover1, project_id, modified_by)
+      VALUES ('ADMIN_TEST_PLOT', 'PICO', 'T1', 50, 1, 'adminuser')
     ")
   })
   
@@ -277,7 +281,7 @@ test_that("vpro_admin role has correct permissions", {
   expect_no_error({
     DBI::dbExecute(admin_con, "
       UPDATE core.veg 
-      SET cover_percent = 75 
+      SET cover1 = 75 
       WHERE plot_number = 'ADMIN_TEST_PLOT'
     ")
   })
@@ -293,7 +297,7 @@ test_that("vpro_admin role has correct permissions", {
   # Should be able to INSERT into staging
   expect_no_error({
     merge_id <- DBI::dbGetQuery(admin_con, "
-      INSERT INTO staging.merge_requests 
+      INSERT INTO admin.merge_requests 
       (project_id, submitter_name, submitter_email, status)
       VALUES (1, 'Admin User', 'admin@example.com', 'pending_review')
       RETURNING id
@@ -301,8 +305,8 @@ test_that("vpro_admin role has correct permissions", {
     
     DBI::dbExecute(admin_con, sprintf("
       INSERT INTO staging.veg 
-      (plot_number, species_code, layer_code, cover_percent, project_id, merge_request_id, change_type)
-      VALUES ('ADMIN_STAGING_PLOT', 'PICO', 'T1', 50, 1, %d, 'I')
+      (plot_number, species_code, layer_code, cover1, project_id, merge_request_id, change_type, modified_by)
+      VALUES ('ADMIN_STAGING_PLOT', 'PICO', 'T1', 50, 1, %d, 'I', 'adminuser')
     ", merge_id))
   })
   
@@ -341,8 +345,8 @@ test_that("vpro_admin role has correct permissions", {
   expect_no_error({
     DBI::dbExecute(admin_con, "
       INSERT INTO audit.logged_actions 
-      (schema_name, table_name, action, new_data)
-      VALUES ('core', 'veg', 'I', '{\"test\": \"data\"}'::jsonb)
+      (schema_name, table_name, action, action_tstamp_stm,statement_only)
+      VALUES ('core', 'veg', 'I', NOW(), TRUE)
     ")
   })
   
@@ -385,7 +389,7 @@ test_that("list_vpro_roles returns correct information", {
   admin_row <- roles_info[roles_info$role_name == "vpro_admin", ]
   expect_true(admin_row$can_create_role)
   
-  # Check that vpro_default CAN login (no password required)
+  # Check that vpro_default CAN login (trust auth allows password-less login)
   default_row <- roles_info[roles_info$role_name == "vpro_default", ]
   expect_true(default_row$can_login)
 })
@@ -490,7 +494,7 @@ test_that("vpro_default role can be granted to users", {
   drop_vpro_roles(admin_con, force = TRUE)
   create_pg_roles(admin_con)
   
-  # Connect directly as vpro_default (no password)
+  # Connect directly as vpro_default (trust authentication - no password required)
   expect_no_error({
     default_con <- DBI::dbConnect(
       RPostgres::Postgres(),

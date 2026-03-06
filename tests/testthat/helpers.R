@@ -290,6 +290,6 @@ clear_staging_tables <- function(con) {
   DBI::dbExecute(con, "DELETE FROM staging.veg")
   DBI::dbExecute(con, "DELETE FROM staging.env")
   DBI::dbExecute(con, "DELETE FROM staging.su")
-  DBI::dbExecute(con, "DELETE FROM staging.merge_conflicts")
-  DBI::dbExecute(con, "DELETE FROM staging.merge_requests")
+  DBI::dbExecute(con, "DELETE FROM admin.merge_conflicts")
+  DBI::dbExecute(con, "DELETE FROM admin.merge_requests")
 }

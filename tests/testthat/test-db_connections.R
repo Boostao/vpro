@@ -3,7 +3,8 @@
 
 library(testthat)
 library(DBI)
-
+source(here::here("R", "db_connections.R"))
+source(here::here("tests", "testthat", "helpers.R"))
 # ============================================================================
 # LOCAL DUCKDB CONNECTIONS
 # ============================================================================
@@ -238,7 +239,7 @@ test_that("is_cloud_connected() returns FALSE for non-attached alias", {
 
 test_that("PostgreSQL extension can be installed and loaded", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   
@@ -256,7 +257,7 @@ test_that("PostgreSQL extension can be installed and loaded", {
 
 test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   
@@ -285,7 +286,7 @@ test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL"
 
 test_that("Queries can reference attached PostgreSQL tables", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   
@@ -312,7 +313,7 @@ test_that("Queries can reference attached PostgreSQL tables", {
 
 test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   

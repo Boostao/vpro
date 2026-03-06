@@ -122,39 +122,18 @@ attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = '
     stop("Failed to load config for environment '", environment, "': ", e$message)
   })
   
-  # Check if cloud is enabled
-  if (!isTRUE(cfg$cloud$enabled)) {
-    message("[db_connections] Cloud attachment disabled in config for environment: ", environment)
-    return(invisible(NULL))
-  }
-  
   # Extract PostgreSQL config
   pg_cfg <- cfg$postgres
   if (is.null(pg_cfg)) {
     stop("No 'postgres' configuration found in config.yml for environment: ", environment)
   }
   
-  # Determine read/write mode
-  if (is.null(read_only)) {
-    read_only <- isTRUE(cfg$cloud$read_only)
-  }
-  mode <- if (read_only) "READ_ONLY" else "READ_WRITE"
   
-  # Build connection string from config or environment variables
-  # Prioritize environment variables if use_env_vars is TRUE
-  if (isTRUE(pg_cfg$use_env_vars)) {
-    host <- Sys.getenv("PGHOST", unset = pg_cfg$host)
-    port <- Sys.getenv("PGPORT", unset = pg_cfg$port)
-    database <- Sys.getenv("PGDATABASE", unset = pg_cfg$database)
-    user <- Sys.getenv("PGUSER", unset = pg_cfg$user)
-    password <- Sys.getenv("PGPASSWORD", unset = pg_cfg$password)
-  } else {
-    host <- pg_cfg$host
-    port <- pg_cfg$port
-    database <- pg_cfg$database
-    user <- pg_cfg$user
-    password <- pg_cfg$password
-  }
+  host <- pg_cfg$host
+  port <- pg_cfg$port
+  database <- pg_cfg$database
+  user <- pg_cfg$user
+  password <- pg_cfg$password
   
   # Construct connection string
   conn_string <- sprintf(
@@ -162,7 +141,7 @@ attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = '
     user, password, host, port, database
   )
   
-  message("[db_connections] Attaching PostgreSQL as '", alias, "' in ", mode, " mode")
+  message("[db_connections] Attaching PostgreSQL as '", alias)
   message("[db_connections] Host: ", host, ":", port, " Database: ", database)
   
   # Ensure postgres extension is loaded
@@ -173,11 +152,8 @@ attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = '
     warning("postgres extension install/load may have failed: ", e$message)
   })
   
-  # Attempt ATTACH with timeout
-  timeout_secs <- cfg$cloud$attach_timeout_seconds %||% 30
-  
   attach_sql <- paste0(
-    "ATTACH '", conn_string, "' AS ", alias, " (TYPE postgres, ", mode, ")"
+    "ATTACH '", conn_string, "' AS ", alias, " (TYPE postgres)"
   )
   
   tryCatch({
@@ -296,7 +272,7 @@ close_db <- function(con) {
   # Detach all attached databases before closing
   attached_dbs <- list_attached_dbs(con)
   # Filter out the main database (usually named "main" or "memory")
-  attached_dbs <- attached_dbs[!attached_dbs %in% c("vpro", "memory", "temp")]
+  attached_dbs <- attached_dbs[!attached_dbs %in% c("vpro", "memory", "temp", "system")]
   
   if (length(attached_dbs) > 0) {
     message("[db_connections] Detaching ", length(attached_dbs), " database(s): ", paste(attached_dbs, collapse = ", "))
