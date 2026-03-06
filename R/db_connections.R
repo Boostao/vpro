@@ -4,7 +4,7 @@
 
 # Internal helpers — read standard PG env vars with app defaults
 .pg_host     <- function() Sys.getenv("PGHOST",     "localhost")
-.pg_port     <- function() as.integer(Sys.getenv("PGPORT",     "5432"))
+.pg_port     <- function() as.integer(Sys.getenv("PGPORT",     "5433"))
 .pg_database <- function() Sys.getenv("PGDATABASE", "becmaster")
 
 #' Connect to Local DuckDB Instance
@@ -123,36 +123,21 @@ attach_cloud_db <- function(con, pg_user, pg_password = NULL, alias = "master",
   return(invisible(NULL))
 }
 
-#' Attach cloud PostgreSQL as the guest role (vpro_default, trust auth)
+#' Attach cloud PostgreSQL as the application role (vpro_app)
 #'
-#' Guest user name read from VPRO_PG_GUEST_USER env var (default "vpro_default").
-#' No password — pg_hba.conf must have a trust entry for this role.
-#'
-#' @param con           DuckDB connection.
-#' @param alias         Catalog alias. Default "master".
-#' @param fail_on_error Logical.
-#' @return Invisible NULL.
-#' @export
-attach_cloud_as_guest <- function(con, alias = "master", fail_on_error = TRUE) {
-  pg_user <- Sys.getenv("VPRO_PG_GUEST_USER", "vpro_default")
-  attach_cloud_db(con, pg_user = pg_user, pg_password = NULL,
-                  alias = alias, fail_on_error = fail_on_error)
-}
-
-#' Attach cloud PostgreSQL as the admin role (vpro_admin)
-#'
-#' Admin user/password read from VPRO_PG_ADMIN_USER / VPRO_PG_ADMIN_PASSWORD env vars.
-#' Stops if VPRO_PG_ADMIN_PASSWORD is not set.
+#' User/password read from VPRO_PG_APP_USER (default "vpro_app") and
+#' VPRO_PG_APP_PASSWORD env vars.  Stops if VPRO_PG_APP_PASSWORD is not set.
+#' All authentication (guest vs admin) is handled at the R level via admin.users.
 #'
 #' @param con           DuckDB connection.
 #' @param alias         Catalog alias. Default "master".
-#' @param fail_on_error Logical.
+#' @param fail_on_error Logical. Stop on attach failure. Default TRUE.
 #' @return Invisible NULL.
 #' @export
-attach_cloud_as_admin <- function(con, alias = "master", fail_on_error = TRUE) {
-  pg_user <- Sys.getenv("VPRO_PG_ADMIN_USER", "vpro_admin")
-  pg_pass <- Sys.getenv("VPRO_PG_ADMIN_PASSWORD", "")
-  if (!nzchar(pg_pass)) stop("VPRO_PG_ADMIN_PASSWORD env var is not set")
+attach_cloud <- function(con, alias = "master", fail_on_error = TRUE) {
+  pg_user <- Sys.getenv("VPRO_PG_APP_USER", "vpro_app")
+  pg_pass <- Sys.getenv("VPRO_PG_APP_PASSWORD", "")
+  if (!nzchar(pg_pass)) stop("VPRO_PG_APP_PASSWORD env var is not set")
   attach_cloud_db(con, pg_user = pg_user, pg_password = pg_pass,
                   alias = alias, fail_on_error = fail_on_error)
 }

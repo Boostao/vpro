@@ -3,8 +3,16 @@
 
 library(testthat)
 library(DBI)
+source(here::here("tests", "testthat", "setup.R"))
 source(here::here("R", "db_connections.R"))
 source(here::here("tests", "testthat", "helpers.R"))
+
+
+# Ensure docker-compose PG env vars are set when running this file in isolation
+# (setup.R sets these when running via devtools::test(), but not test_file())
+if (!nzchar(Sys.getenv("PGPORT")))     Sys.setenv(PGPORT     = "5433")
+if (!nzchar(Sys.getenv("PGHOST")))     Sys.setenv(PGHOST     = "localhost")
+if (!nzchar(Sys.getenv("PGDATABASE"))) Sys.setenv(PGDATABASE = "becmaster")
 # ============================================================================
 # LOCAL DUCKDB CONNECTIONS
 # ============================================================================
@@ -271,7 +279,7 @@ test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL"
   
   # Try to attach cloud database
   tryCatch({
-    attach_cloud_db(con, pg_user = "testuser", pg_password = "testpass", alias = "master")
+    attach_cloud_db(con, pg_user = "vpro_app", pg_password = "testpass", alias = "master")
     
     # Verify attachment worked
     is_attached <- is_cloud_connected(con, alias = "master")
@@ -294,7 +302,7 @@ test_that("Queries can reference attached PostgreSQL tables", {
   tryCatch({
     DBI::dbExecute(con, "INSTALL postgres")
     DBI::dbExecute(con, "LOAD postgres")
-    attach_cloud_db(con, pg_user = "testuser", pg_password = "testpass", alias = "master")
+    attach_cloud_db(con, pg_user = "vpro_app", pg_password = "testpass", alias = "master")
     
     # Try to query a reference table from master
     result <- DBI::dbGetQuery(con, "
@@ -321,7 +329,7 @@ test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
   tryCatch({
     DBI::dbExecute(con, "INSTALL postgres")
     DBI::dbExecute(con, "LOAD postgres")
-    attach_cloud_db(con, pg_user = "testuser", pg_password = "testpass",
+    attach_cloud_db(con, pg_user = "vpro_app", pg_password = "testpass",
                     alias = "master")
     
     # Create a test staging record

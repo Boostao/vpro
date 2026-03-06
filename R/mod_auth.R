@@ -44,12 +44,14 @@ mod_auth_server <- function(id, state, con) {
         )
       } else {
         tagList(
+          p(class = "text-muted small", "Sign in to enable cloud sync"),
           navset_tab(
             id = ns("login_tabs"),
             nav_panel("Continue as Guest",
               div(class = "mt-3",
                 textInput(ns("guest_email"), "Email"),
-                textInput(ns("guest_name"),  "Full Name"),
+                textInput(ns("guest_name"),  "Full Name",
+                          placeholder = "Optional"),
                 actionButton(ns("guest_login"), "Continue", class = "btn-primary")
               )
             ),
@@ -67,15 +69,15 @@ mod_auth_server <- function(id, state, con) {
     })
 
     # ---- Guest login -----------------------------------------------------------
-    # 1. Attach cloud as vpro_default (trust auth, no password)
+    # 1. Attach cloud as vpro_app (single password-protected role)
     # 2. Look up / create user in master.admin.users
     # 3. On failure: detach and show error
     observeEvent(input$guest_login, {
-      req(input$guest_email, input$guest_name)
+      req(input$guest_email)
 
       if (!is_cloud_connected(con)) {
         attached <- tryCatch({
-          attach_cloud_as_guest(con, fail_on_error = TRUE)
+          attach_cloud(con, fail_on_error = TRUE)
           TRUE
         }, error = function(e) {
           rv$login_status <- paste("Cannot connect to cloud database:", conditionMessage(e))
@@ -84,8 +86,9 @@ mod_auth_server <- function(id, state, con) {
         if (!isTRUE(attached)) return()
       }
 
+      guest_name <- if (nzchar(trimws(input$guest_name %||% ""))) input$guest_name else NULL
       result <- tryCatch(
-        auth_guest_login(con, state, input$guest_email, input$guest_name),
+        auth_guest_login(con, state, input$guest_email, guest_name),
         error = function(e) list(ok = FALSE, message = conditionMessage(e))
       )
 
@@ -96,27 +99,23 @@ mod_auth_server <- function(id, state, con) {
     })
 
     # ---- Admin login -----------------------------------------------------------
-    # 1. Attach cloud as vpro_default to bootstrap the bcrypt lookup
+    # 1. Attach cloud as vpro_app (single role; auth happens at R level via bcrypt)
     # 2. Verify credentials via auth_login (reads admin.users, checks bcrypt)
-    # 3. On bcrypt success: re-attach as vpro_admin for full admin access
-    # 4. On any failure: detach and show error
+    # 3. On failure: detach and show error
     observeEvent(input$admin_login, {
       req(input$admin_email, input$admin_pass)
 
-      # Detach any existing cloud connection first (clean slate)
-      if (is_cloud_connected(con)) detach_db(con, "master")
+      if (!is_cloud_connected(con)) {
+        attached <- tryCatch({
+          attach_cloud(con, fail_on_error = TRUE)
+          TRUE
+        }, error = function(e) {
+          rv$login_status <- paste("Cannot connect to cloud database:", conditionMessage(e))
+          FALSE
+        })
+        if (!isTRUE(attached)) return()
+      }
 
-      # Step 1: bootstrap attach as guest role to read admin.users
-      attached <- tryCatch({
-        attach_cloud_as_guest(con, fail_on_error = TRUE)
-        TRUE
-      }, error = function(e) {
-        rv$login_status <- paste("Cannot connect to cloud database:", conditionMessage(e))
-        FALSE
-      })
-      if (!isTRUE(attached)) return()
-
-      # Step 2: verify identity (reads password_hash, checks bcrypt)
       result <- tryCatch(
         auth_login(con, state, input$admin_email, input$admin_pass),
         error = function(e) list(ok = FALSE, message = conditionMessage(e))
@@ -127,18 +126,6 @@ mod_auth_server <- function(id, state, con) {
         rv$login_status <- result$message %||% "Authentication failed"
         return()
       }
-
-      # Step 3: upgrade to admin role connection
-      detach_db(con, "master")
-      upgraded <- tryCatch({
-        attach_cloud_as_admin(con, fail_on_error = TRUE)
-        TRUE
-      }, error = function(e) {
-        auth_logout(state)
-        rv$login_status <- paste("Admin connection failed:", conditionMessage(e))
-        FALSE
-      })
-      if (!isTRUE(upgraded)) return()
 
       rv$login_status <- result$message %||% ""
     })

@@ -68,18 +68,15 @@ auth_login <- function(con, state, email, password) {
   list(ok = TRUE, message = "Authenticated")
 }
 
-#' Guest login by email + full name (creates user record on first visit)
+#' Guest login by email, optional full name (creates user record on first visit)
 #' Requires master (cloud PG) to be attached to con before calling.
-auth_guest_login <- function(con, state, email, full_name) {
+auth_guest_login <- function(con, state, email, full_name = NULL) {
   auth_init_state(state)
   email     <- trimws(email)
-  full_name <- trimws(full_name)
+  full_name <- if (!is.null(full_name) && nzchar(trimws(full_name))) trimws(full_name) else NULL
 
   if (!grepl("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email, perl = TRUE)) {
     return(list(ok = FALSE, message = "Please enter a valid email address"))
-  }
-  if (!nzchar(full_name)) {
-    return(list(ok = FALSE, message = "Please enter your full name"))
   }
 
   existing <- DBI::dbGetQuery(
@@ -101,7 +98,7 @@ auth_guest_login <- function(con, state, email, full_name) {
     DBI::dbExecute(
       con,
       "INSERT INTO master.admin.users (email, full_name, app_role) VALUES (?, ?, 'guest')",
-      list(email, full_name)
+      list(email, if (is.null(full_name)) NA_character_ else full_name)
     )
     user <- DBI::dbGetQuery(
       con,

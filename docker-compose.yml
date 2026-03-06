@@ -5,7 +5,7 @@ services:
     image: postgres:15-alpine
     container_name: vpro-postgres-test
     environment:
-      POSTGRES_USER: testuser
+      POSTGRES_USER: vpro_app
       POSTGRES_PASSWORD: testpass
       POSTGRES_DB: becmaster
     ports:
@@ -16,7 +16,7 @@ services:
       - ./pg_hba.conf:/docker-entrypoint-initdb.d/pg_hba_custom.conf:ro
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U testuser -d becmaster"]
+      test: ["CMD-SHELL", "pg_isready -U vpro_app -d becmaster"]
       interval: 10s
       timeout: 5s
       retries: 5

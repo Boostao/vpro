@@ -12,7 +12,7 @@ connect_pg <- function() {
     host = "localhost",
     port = 5433,
     dbname = "becmaster",
-    user = "testuser",
+    user = "vpro_app",
     password = "testpass"
   )
   return(con)

@@ -679,7 +679,7 @@ server <- function(input, output, session) {
   })
   
   # 7. Initialize Sub-Modules
-  mod_admin_server("admin", state, con)
+  #mod_admin_server("admin", state, con)
   
   # For Veg, we pass the state directly as it needs plot context
   # Also passing con to avoid multiple connections

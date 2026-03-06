@@ -12,9 +12,6 @@ DROP SCHEMA IF EXISTS admin CASCADE;
 DROP SCHEMA IF EXISTS public_export CASCADE;
 
 -- ============================================================================
--- CREATE ALL SCHEMAS
--- ============================================================================
-
 CREATE SCHEMA audit;
 CREATE SCHEMA core;
 CREATE SCHEMA lists;
@@ -25,7 +22,6 @@ CREATE SCHEMA public_export;
 -- ============================================================================
 -- AUDIT SCHEMA - Change tracking
 -- ============================================================================
-
 CREATE TABLE IF NOT EXISTS audit.logged_actions (
     id SERIAL PRIMARY KEY,
     schema_name TEXT NOT NULL,
@@ -33,14 +29,12 @@ CREATE TABLE IF NOT EXISTS audit.logged_actions (
     user_name TEXT DEFAULT CURRENT_USER,
     action_tstamp_tx TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     action_tstamp_stm TIMESTAMPTZ NOT NULL,
-    action_tstamp_clk TIMESTAMPTZ NOT NULL DEFAULT CLOCK_TIMESTAMP(),
     transaction_id BIGINT,
     application_name TEXT,
     client_addr INET,
     client_port INTEGER,
     client_query TEXT,
     action TEXT NOT NULL CHECK (action IN ('I','D','U')),
-    row_data JSONB,
     changed_fields JSONB,
     statement_only BOOLEAN NOT NULL
 );
@@ -48,7 +42,6 @@ CREATE TABLE IF NOT EXISTS audit.logged_actions (
 CREATE INDEX IF NOT EXISTS logged_actions_schema_table_idx ON audit.logged_actions(schema_name, table_name);
 CREATE INDEX IF NOT EXISTS logged_actions_action_tstamp_tx_idx ON audit.logged_actions(action_tstamp_tx);
 CREATE INDEX IF NOT EXISTS logged_actions_action_idx ON audit.logged_actions(action);
-
 -- ============================================================================
 -- TRIGGER FUNCTIONS
 -- ============================================================================
@@ -66,13 +59,11 @@ CREATE OR REPLACE FUNCTION audit.if_modified_func()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Simple audit log: just record the action without detailed state tracking
-    INSERT INTO audit.logged_actions (
-        schema_name, table_name, user_name, action_tstamp_stm, 
-        action_tstamp_clk, action, statement_only
-    ) VALUES (
-        TG_TABLE_SCHEMA, TG_TABLE_NAME, CURRENT_USER, CURRENT_TIMESTAMP,
-        CLOCK_TIMESTAMP(), SUBSTRING(TG_OP FOR 1), false
-    );
+    INSERT INTO audit.logged_actions (schema_name, table_name, user_name, action_tstamp_stm, 
+        action, statement_only)
+    VALUES (TG_TABLE_SCHEMA, TG_TABLE_NAME, CURRENT_USER, NOW(), 
+            CASE TG_OP WHEN 'INSERT' THEN 'I' WHEN 'UPDATE' THEN 'U' WHEN 'DELETE' THEN 'D' END, 
+            FALSE);
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -335,7 +326,7 @@ SELECT plot_number AS plotnumber, 'B' AS mylayer, species_code AS species, total
 CREATE TABLE IF NOT EXISTS admin.users (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
-    full_name TEXT NOT NULL,
+    full_name TEXT,
     app_role TEXT NOT NULL DEFAULT 'guest' CHECK (app_role IN ('guest', 'admin')),
     password_hash TEXT,                                 -- NULL for guests; bcrypt hash for admins
     is_active BOOLEAN DEFAULT TRUE,
@@ -363,11 +354,12 @@ CREATE INDEX IF NOT EXISTS idx_change_log_user ON admin.change_log(username);
 CREATE TABLE IF NOT EXISTS admin.merge_requests (
     id SERIAL PRIMARY KEY,
     project_id INTEGER NOT NULL,
+    submitter_user_id INTEGER REFERENCES admin.users(id),
     submitter_name TEXT NOT NULL,
-    submitter_email TEXT,                               -- optional
     submitted_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     status TEXT NOT NULL DEFAULT 'pending_review'
         CHECK (status IN ('pending_review', 'approved', 'rejected', 'merged')),
+    reviewer_user_id INTEGER REFERENCES admin.users(id),
     reviewer TEXT,
     review_notes TEXT,
     reviewed_utc TIMESTAMPTZ,

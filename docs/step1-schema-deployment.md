@@ -43,7 +43,7 @@ The schema auto-deploys on container startup via `docker-compose.yml` volume mou
 To manually redeploy:
 
 ```bash
-docker exec -i vpro-postgres-test psql -U testuser -d becmaster < scripts/00_schema_becmaster_test.sql
+docker exec -i vpro-postgres-test psql -U vpro_app -d becmaster < scripts/00_schema_becmaster_test.sql
 ```
 
 ### 3. Verify Deployment
@@ -51,7 +51,7 @@ docker exec -i vpro-postgres-test psql -U testuser -d becmaster < scripts/00_sch
 Connect to PostgreSQL:
 
 ```bash
-docker exec -it vpro-postgres-test psql -U testuser -d becmaster
+docker exec -it vpro-postgres-test psql -U vpro_app -d becmaster
 ```
 
 Check schemas:
@@ -115,7 +115,7 @@ The test suite includes 16 tests covering:
 The schema file includes built-in test queries at the end. After deployment:
 
 ```bash
-docker exec -it vpro-postgres-test psql -U testuser -d becmaster
+docker exec -it vpro-postgres-test psql -U vpro_app -d becmaster
 ```
 
 Run the embedded tests:
@@ -183,7 +183,7 @@ docker-compose up -d
 docker logs vpro-postgres-test
 
 # Manually deploy to see errors
-docker exec -i vpro-postgres-test psql -U testuser -d becmaster < scripts/00_schema_becmaster_test.sql
+docker exec -i vpro-postgres-test psql -U vpro_app -d becmaster < scripts/00_schema_becmaster_test.sql
 ```
 
 ### Tests fail with "PostgreSQL not available"
@@ -193,7 +193,7 @@ docker exec -i vpro-postgres-test psql -U testuser -d becmaster < scripts/00_sch
 docker ps | grep vpro-postgres
 
 # Test connection
-docker exec vpro-postgres-test pg_isready -U testuser -d becmaster
+docker exec vpro-postgres-test pg_isready -U vpro_app -d becmaster
 ```
 
 ## Next Steps

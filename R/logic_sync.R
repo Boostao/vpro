@@ -1115,13 +1115,25 @@ sync_push <- function(con,
 # ── internal push helpers ───────────────────────────────────────────────────
 
 .create_merge_request <- function(con, project_id, submitter) {
+  # Resolve submitter's user_id — submitter is expected to be the user's email,
+  # matching admin.users.email (always present: auth_guest_login upserts on login).
+  uid_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT id FROM master.admin.users WHERE email = ? LIMIT 1",
+      list(as.character(submitter))
+    ),
+    error = function(e) data.frame(id = integer(0))
+  )
+  submitter_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
+
   res <- DBI::dbGetQuery(
     con,
     "INSERT INTO master.admin.merge_requests
-       (project_id, submitter_name, submitted_utc, status)
-     VALUES (?, ?, now(), 'pending_review')
+       (project_id, submitter_user_id, submitter_name, submitted_utc, status)
+     VALUES (?, ?, ?, now(), 'pending_review')
      RETURNING id",
-    list(as.integer(project_id), as.character(submitter))
+    list(as.integer(project_id), submitter_user_id, as.character(submitter))
   )
   if (nrow(res) == 0) stop("Failed to create merge request.")
   res$id[1]
@@ -1682,21 +1694,7 @@ merge_approve_request <- function(con, merge_request_id, reviewer, review_notes 
     ))
   }
 
-  .apply_env(con, mr_id)
-  .apply_su( con, mr_id)
-  .apply_veg(con, mr_id)
-
-  .delete_staging(con, mr_id)
-
-  DBI::dbExecute(
-    con,
-    "UPDATE master.admin.merge_requests
-     SET status = 'merged', reviewer = ?, review_notes = ?, reviewed_utc = now()
-     WHERE id = ?",
-    list(as.character(reviewer), as.character(review_notes), mr_id)
-  )
-
-  # Resolve approver user_id by email (best-effort; NULL if not found)
+  # Resolve reviewer user_id by email — reviewer is always authenticated (admin role).
   uid_row <- tryCatch(
     DBI::dbGetQuery(
       con,
@@ -1706,6 +1704,22 @@ merge_approve_request <- function(con, merge_request_id, reviewer, review_notes 
     error = function(e) data.frame(id = integer(0))
   )
   approved_by_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
+
+  .apply_env(con, mr_id)
+  .apply_su( con, mr_id)
+  .apply_veg(con, mr_id)
+
+  .delete_staging(con, mr_id)
+
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.merge_requests
+     SET status = 'merged', reviewer = ?, reviewer_user_id = ?,
+         review_notes = ?, reviewed_utc = now()
+     WHERE id = ?",
+    list(as.character(reviewer), approved_by_user_id,
+         as.character(review_notes), mr_id)
+  )
 
   # Fetch record counts to populate merge_history
   mr_row <- tryCatch(
@@ -1745,6 +1759,18 @@ merge_approve_request <- function(con, merge_request_id, reviewer, review_notes 
 #' @param review_notes     Character. Optional notes.
 merge_reject_request <- function(con, merge_request_id, reviewer, review_notes = "") {
   mr_id <- as.integer(merge_request_id)
+
+  # Resolve reviewer user_id by email — reviewer is always authenticated (admin role).
+  uid_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT id FROM master.admin.users WHERE email = ? LIMIT 1",
+      list(as.character(reviewer))
+    ),
+    error = function(e) data.frame(id = integer(0))
+  )
+  reviewer_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
+
   .delete_staging(con, mr_id)
   DBI::dbExecute(
     con,
@@ -1754,9 +1780,11 @@ merge_reject_request <- function(con, merge_request_id, reviewer, review_notes =
   DBI::dbExecute(
     con,
     "UPDATE master.admin.merge_requests
-     SET status = 'rejected', reviewer = ?, review_notes = ?, reviewed_utc = now()
+     SET status = 'rejected', reviewer = ?, reviewer_user_id = ?,
+         review_notes = ?, reviewed_utc = now()
      WHERE id = ?",
-    list(as.character(reviewer), as.character(review_notes), mr_id)
+    list(as.character(reviewer), reviewer_user_id,
+         as.character(review_notes), mr_id)
   )
   invisible(TRUE)
 }

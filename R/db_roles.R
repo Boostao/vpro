@@ -186,7 +186,7 @@ create_vpro_admin_role <- function(con, password = "admin_password") {
 #'                       host = "localhost",
 #'                       port = 5433,
 #'                       dbname = "becmaster",
-#'                       user = "testuser",
+#'                       user = "vpro_app",
 #'                       password = "testpass")
 #' result <- create_pg_roles(con, admin_password = "secure_password")
 #' 

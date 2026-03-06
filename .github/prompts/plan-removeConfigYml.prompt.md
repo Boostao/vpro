@@ -94,20 +94,20 @@ Also update `check_postgres_available()` to use env vars (PGHOST/PGPORT) instead
 
 ### `tests/testthat/helpers.R`
 `pg_available()` and `get_test_pg_connection()` / `test_connect_postgres()`:
-- Replace hardcoded `host="localhost", port=5433, user="testuser", password="testpass"` with env var reads:
+- Replace hardcoded `host="localhost", port=5433, user="vpro_app", password="testpass"` with env var reads:
   ```r
   Sys.getenv("PGHOST", "localhost")
   as.integer(Sys.getenv("PGPORT", "5433"))
   Sys.getenv("PGDATABASE", "becmaster")
-  # testuser/testpass still hardcoded — these are docker-compose superuser credentials
+  # vpro_app/testpass still hardcoded — these are docker-compose superuser credentials
   # used only in integration test helpers, not app code
   ```
-  Keep `testuser:testpass` hardcoded for the test superuser connection (that's intentional and specific to docker-compose, not the app).
+  Keep `vpro_app:testpass` hardcoded for the test superuser connection (that's intentional and specific to docker-compose, not the app).
 
 ### `tests/testthat/test-db_connections.R`
 Three calls to `attach_cloud_db(con, environment = "test", ...)` → change to explicit credentials:
 ```r
-attach_cloud_db(con, pg_user = "testuser", pg_password = "testpass", alias = "master")
+attach_cloud_db(con, pg_user = "vpro_app", pg_password = "testpass", alias = "master")
 ```
 (These directly test the raw attach mechanism with the docker superuser.)
 
@@ -176,4 +176,4 @@ Replace `R_CONFIG_ACTIVE=${R_CONFIG_ACTIVE:-production}` with proper PG env vars
 ---
 
 ## Open question
-The `testuser:testpass` docker-compose superuser credentials are hardcoded in test helpers. Want them as env vars too (`VPRO_TEST_PG_USER` / `VPRO_TEST_PG_PASSWORD`), or keep hardcoded since they're test-infra-only?
+The `vpro_app:testpass` docker-compose superuser credentials are hardcoded in test helpers. Want them as env vars too (`VPRO_TEST_PG_USER` / `VPRO_TEST_PG_PASSWORD`), or keep hardcoded since they're test-infra-only?

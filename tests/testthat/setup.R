@@ -54,7 +54,7 @@ check_postgres_available <- function() {
       RPostgres::Postgres(),
       host = Sys.getenv("PGHOST", "localhost"),
       port = as.integer(Sys.getenv("PGPORT", "5433")),
-      user = "testuser",
+      user = "vpro_app",
       password = "testpass",
       dbname = Sys.getenv("PGDATABASE", "becmaster"),
       check_interrupts = FALSE,

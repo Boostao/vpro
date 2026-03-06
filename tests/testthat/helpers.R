@@ -132,7 +132,7 @@ pg_available <- function() {
       RPostgres::Postgres(),
       host     = Sys.getenv("PGHOST",     "localhost"),
       port     = as.integer(Sys.getenv("PGPORT", "5433")),
-      user     = "testuser",
+      user     = "vpro_app",
       password = "testpass",
       dbname   = Sys.getenv("PGDATABASE", "becmaster")
     )
@@ -155,7 +155,7 @@ get_test_pg_connection <- function() {
     RPostgres::Postgres(),
     host     = Sys.getenv("PGHOST",     "localhost"),
     port     = as.integer(Sys.getenv("PGPORT", "5433")),
-    user     = "testuser",
+    user     = "vpro_app",
     password = "testpass",
     dbname   = Sys.getenv("PGDATABASE", "becmaster")
   )

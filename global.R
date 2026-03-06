@@ -11,6 +11,13 @@ library(leaflet)
 library(sf)
 library(quarto)
 
+
+Sys.setenv(PGHOST = "localhost")
+Sys.setenv(PGPORT = "5433")
+Sys.setenv(PGDATABASE = "becmaster")
+Sys.setenv(VPRO_PG_APP_USER = "vpro_app")
+Sys.setenv(VPRO_PG_APP_PASSWORD = "testpass")
+
 # Database Connection
 # Using a function to get a fresh connection or manage a pool object
 # For Shiny, usually we want a persistent connection or a pool.

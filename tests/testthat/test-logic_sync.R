@@ -2,7 +2,8 @@ testthat::context("logic_sync")
 
 library(DBI)
 library(duckdb)
-
+source(here::here("tests", "testthat", "setup.R"))
+source(here::here("tests", "testthat", "helpers.R"))
 source(here::here("R", "logic_sync.R"))
 
 # =============================================================================
@@ -188,9 +189,11 @@ source(here::here("R", "logic_sync.R"))
     CREATE TABLE IF NOT EXISTS admin.merge_requests (
       id                 INTEGER PRIMARY KEY DEFAULT nextval('admin.mr_seq'),
       project_id         INTEGER NOT NULL,
+      submitter_user_id  INTEGER,
       submitter_name     TEXT NOT NULL,
       submitted_utc      TIMESTAMPTZ DEFAULT now(),
       status             TEXT NOT NULL DEFAULT 'pending_review',
+      reviewer_user_id   INTEGER,
       reviewer           TEXT,
       review_notes       TEXT,
       reviewed_utc       TIMESTAMPTZ,
@@ -209,11 +212,29 @@ source(here::here("R", "logic_sync.R"))
       id        INTEGER PRIMARY KEY DEFAULT nextval('admin.users_seq'),
       email     TEXT UNIQUE NOT NULL,
       full_name TEXT NOT NULL DEFAULT '',
-      app_role  TEXT DEFAULT 'admin',
+      app_role  TEXT DEFAULT 'guest',
       is_active BOOLEAN DEFAULT TRUE
     )
   ")
-  DBI::dbExecute(mc, "INSERT INTO admin.users (email, full_name) VALUES ('admin@test.local', 'Test Admin') ON CONFLICT DO NOTHING")
+  # Seed all test actors so submitter_user_id / reviewer_user_id can be resolved.
+  # admin@test.local is seeded first so it reliably receives id = 1.
+  DBI::dbExecute(mc, "
+    INSERT INTO admin.users (email, full_name, app_role) VALUES
+      ('admin@test.local', 'Test Admin',  'admin'),
+      ('alice@test.local', 'Alice',        'guest'),
+      ('bob@test.local',   'Bob',          'guest'),
+      ('carol@test.local', 'Carol',        'guest'),
+      ('dave@test.local',  'Dave',         'guest'),
+      ('auto@test.local',  'Auto',         'guest'),
+      ('eve@test.local',   'Eve',          'guest'),
+      ('frank@test.local', 'Frank',        'guest'),
+      ('grace@test.local', 'Grace',        'guest'),
+      ('hank@test.local',  'Hank',         'guest'),
+      ('ivy@test.local',   'Ivy',          'guest'),
+      ('jack@test.local',  'Jack',         'guest'),
+      ('kim@test.local',   'Kim',          'guest')
+    ON CONFLICT DO NOTHING
+  ")
 
   # admin.merge_history
   DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mh_seq START 1")
@@ -591,7 +612,7 @@ testthat::test_that("sync_push creates merge request and stages new env row", {
      VALUES ('P-101', '1', 52.7, -118.9, 1234, DATE '2026-02-01', 'Alice', 'notes')"
   )
 
-  results <- sync_push(con, project_id = 1, submitter = "alice", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "alice@test.local", tables = "env",
                        allow_attach = FALSE)
 
   testthat::expect_true(!is.null(results$merge_request_id))
@@ -635,7 +656,7 @@ testthat::test_that("sync_push captures base_row_version for existing master row
      VALUES ('P-110', '1', 50.0, -120.0, 999, DATE '2026-02-01', 'Bob', '')"
   )
 
-  results <- sync_push(con, project_id = 1, submitter = "bob", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "bob@test.local", tables = "env",
                        allow_attach = FALSE)
 
   staged <- DBI::dbGetQuery(
@@ -662,7 +683,7 @@ testthat::test_that("sync_push stages su and veg rows in the same merge request"
     "INSERT INTO Veg (PlotNumber, Species, Layer, Cover1) VALUES ('P-120', 'TSUGHET', 'T1', '30')"
   )
 
-  results <- sync_push(con, project_id = 1, submitter = "carol",
+  results <- sync_push(con, project_id = 1, submitter = "carol@test.local",
                        tables = c("env", "su", "veg"), allow_attach = FALSE)
 
   testthat::expect_equal(results$env, 1L)
@@ -715,7 +736,7 @@ testthat::test_that("sync_push is blocked when unresolved pull conflicts exist",
   )
 
   testthat::expect_error(
-    sync_push(con, project_id = 1, submitter = "dave", allow_attach = FALSE),
+    sync_push(con, project_id = 1, submitter = "dave@test.local", allow_attach = FALSE),
     "Push blocked"
   )
 })
@@ -737,7 +758,7 @@ testthat::test_that("sync_push skips unchanged rows (no delta = no staging row)"
      VALUES ('P-140', '1', 53.0, -120.0, 700, NULL, NULL, NULL)"
   )
 
-  results <- sync_push(con, project_id = 1, submitter = "auto", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "auto@test.local", tables = "env",
                        allow_attach = FALSE)
   testthat::expect_equal(results$env, 0L)
 
@@ -769,7 +790,7 @@ testthat::test_that("merge_request_refresh_conflicts detects row_version mismatc
     "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
      VALUES ('P-200', '1', 50.0, -120.0, 900, DATE '2026-01-01', 'Eve', '')"
   )
-  results <- sync_push(con, project_id = 1, submitter = "eve", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "eve@test.local", tables = "env",
                        allow_attach = FALSE)
   mr_id <- as.integer(results$merge_request_id)
 
@@ -803,7 +824,7 @@ testthat::test_that("merge_request_refresh_conflicts finds no conflict when mast
     "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
      VALUES ('P-210', '1', 50.0, -120.0, 900, DATE '2026-01-01', 'Frank', '')"
   )
-  results <- sync_push(con, project_id = 1, submitter = "frank", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "frank@test.local", tables = "env",
                        allow_attach = FALSE)
   mr_id <- as.integer(results$merge_request_id)
 
@@ -824,11 +845,11 @@ testthat::test_that("merge_approve_request applies staged rows to core", {
     "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
      VALUES ('P-300', '1', 54.0, -121.0, 1500, DATE '2026-03-01', 'Grace', 'summit plot')"
   )
-  results <- sync_push(con, project_id = 1, submitter = "grace", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "grace@test.local", tables = "env",
                        allow_attach = FALSE)
   mr_id <- as.integer(results$merge_request_id)
 
-  merge_approve_request(con, mr_id, reviewer = "admin", review_notes = "looks good")
+  merge_approve_request(con, mr_id, reviewer = "admin@test.local", review_notes = "looks good")
 
   # Row should be in core
   core_row <- DBI::dbGetQuery(
@@ -847,7 +868,7 @@ testthat::test_that("merge_approve_request applies staged rows to core", {
   # Merge request status
   mr <- merge_request_get(con, mr_id)
   testthat::expect_equal(mr$status[1], "merged")
-  testthat::expect_equal(mr$reviewer[1], "admin")
+  testthat::expect_equal(mr$reviewer[1], "admin@test.local")
 
   # merge_history should have exactly one row for this merge request
   hist <- DBI::dbGetQuery(
@@ -877,7 +898,7 @@ testthat::test_that("merge_approve_request respects keep_core resolution", {
     "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
      VALUES ('P-310', '1', 50.0, -120.0, 1200, DATE '2026-01-01', 'Hank', '')"
   )
-  results <- sync_push(con, project_id = 1, submitter = "hank", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "hank@test.local", tables = "env",
                        allow_attach = FALSE)
   mr_id <- as.integer(results$merge_request_id)
 
@@ -892,10 +913,10 @@ testthat::test_that("merge_approve_request respects keep_core resolution", {
   testthat::expect_equal(nrow(conflicts), 1L)
 
   # Admin chooses to keep master (core) value
-  merge_request_resolve_conflict(con, conflicts$id[1], "keep_core", actor = "admin")
+  merge_request_resolve_conflict(con, conflicts$id[1], "keep_core", actor = "admin@test.local")
   testthat::expect_equal(merge_request_unresolved_count(con, mr_id), 0L)
 
-  merge_approve_request(con, mr_id, reviewer = "admin")
+  merge_approve_request(con, mr_id, reviewer = "admin@test.local")
 
   # Core value should still be 600 (keep_core was chosen)
   core_elev <- DBI::dbGetQuery(
@@ -926,7 +947,7 @@ testthat::test_that("merge_approve_request blocks with unresolved conflicts", {
     "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
      VALUES ('P-320', '1', 50.0, -120.0, 999, DATE '2026-01-01', 'Ivy', '')"
   )
-  results <- sync_push(con, project_id = 1, submitter = "ivy", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "ivy@test.local", tables = "env",
                        allow_attach = FALSE)
   mr_id <- as.integer(results$merge_request_id)
 
@@ -939,7 +960,7 @@ testthat::test_that("merge_approve_request blocks with unresolved conflicts", {
 
   # Attempt approve without resolving
   testthat::expect_error(
-    merge_approve_request(con, mr_id, reviewer = "admin"),
+    merge_approve_request(con, mr_id, reviewer = "admin@test.local"),
     "unresolved conflict"
   )
 })
@@ -953,11 +974,11 @@ testthat::test_that("merge_reject_request removes staging rows and updates statu
     "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
      VALUES ('P-400', '1', 55.0, -122.0, 200, DATE '2026-01-01', 'Jack', '')"
   )
-  results <- sync_push(con, project_id = 1, submitter = "jack", tables = "env",
+  results <- sync_push(con, project_id = 1, submitter = "jack@test.local", tables = "env",
                        allow_attach = FALSE)
   mr_id <- as.integer(results$merge_request_id)
 
-  merge_reject_request(con, mr_id, reviewer = "admin", review_notes = "bad data")
+  merge_reject_request(con, mr_id, reviewer = "admin@test.local", review_notes = "bad data")
 
   mr <- merge_request_get(con, mr_id)
   testthat::expect_equal(mr$status[1], "rejected")
@@ -984,7 +1005,7 @@ testthat::test_that("merge_request_list returns pending requests with conflict c
     "INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation, Date, SiteSurveyor, SiteNotes)
      VALUES ('P-500', '1', 51.0, -118.0, 700, DATE '2026-01-01', 'Kim', '')"
   )
-  sync_push(con, project_id = 1, submitter = "kim", tables = "env", allow_attach = FALSE)
+  sync_push(con, project_id = 1, submitter = "kim@test.local", tables = "env", allow_attach = FALSE)
 
   listing <- merge_request_list(con)
   testthat::expect_true(nrow(listing) >= 1L)

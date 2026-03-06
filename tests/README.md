@@ -12,7 +12,7 @@ docker-compose up -d
 ```
 
 This starts a PostgreSQL 15 container at `localhost:5433` with:
-- **User**: `testuser`
+- **User**: `vpro_app`
 - **Password**: `testpass`
 - **Database**: `becmaster`
 - **Schema**: Automatically initialized with BECMaster schema and seed data
@@ -224,7 +224,7 @@ development:
     host: localhost
     port: 5433
     database: becmaster
-    user: testuser
+    user: vpro_app
     password: testpass
   cloud:
     enabled: true
@@ -287,10 +287,10 @@ docker --version
 docker-compose logs vpro-postgres-test
 
 # Try to manually connect
-psql -h localhost -p 5433 -U testuser -d becmaster
+psql -h localhost -p 5433 -U vpro_app -d becmaster
 
 # If psql not available, use docker exec
-docker exec -it vpro-postgres-test psql -U testuser -d becmaster
+docker exec -it vpro-postgres-test psql -U vpro_app -d becmaster
 ```
 
 ### Tests Timeout or Hang
@@ -356,7 +356,7 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: testuser
+          POSTGRES_USER: vpro_app
           POSTGRES_PASSWORD: testpass
           POSTGRES_DB: becmaster
         options: >-
