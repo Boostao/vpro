@@ -97,8 +97,7 @@ ui <- page_navbar(
   ),
   nav_panel(tagList(icon("user-shield"), "Auth"), value = "Auth",
     mod_auth_ui("auth")
-  ),
-  #nav_panel(tagList(icon("gear"), "Administration"), value = "Administration",
+  ),  nav_item(mod_auth_status_ui("auth_status")),  #nav_panel(tagList(icon("gear"), "Administration"), value = "Administration",
   #  mod_admin_ui("admin")
   #)
 )

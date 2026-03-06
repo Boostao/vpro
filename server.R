@@ -702,6 +702,15 @@ server <- function(input, output, session) {
 
   # Auth Module
   mod_auth_server("auth", state, con)
+
+  # Auth Status Widget
+  auth_status_nav_signal <- mod_auth_status_server("auth_status", state, con)
+  observe({
+    dest <- auth_status_nav_signal()
+    if (!is.null(dest)) {
+      nav_select("main_tabs", selected = dest)
+    }
+  })
   
   # Images & Maps Module
   mod_images_server("imgs", state, con)

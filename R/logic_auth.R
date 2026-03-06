@@ -11,6 +11,7 @@ auth_init_state <- function(state) {
     if (is.null(state$AuthRole))          state$AuthRole          <- NULL
     if (is.null(state$AuthRoles))         state$AuthRoles         <- character(0)
     if (is.null(state$AuthPermissions))   state$AuthPermissions   <- character(0)
+    if (is.null(state$SyncVersion))       state$SyncVersion       <- 0L
   })
 }
 

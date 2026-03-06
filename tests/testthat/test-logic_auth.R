@@ -385,3 +385,17 @@ testthat::test_that("auth_user_has_permission returns FALSE when not authenticat
   testthat::expect_false(auth_user_has_permission(state, "read:core"))
 })
 
+# ---- auth_init_state: SyncVersion --------------------------------------------
+
+testthat::test_that("auth_init_state initialises SyncVersion to 0L", {
+  state <- shiny::reactiveValues()
+  shiny::isolate(auth_init_state(state))
+  testthat::expect_equal(shiny::isolate(state$SyncVersion), 0L)
+})
+
+testthat::test_that("auth_init_state does not overwrite existing SyncVersion", {
+  state <- shiny::reactiveValues(SyncVersion = 5L)
+  shiny::isolate(auth_init_state(state))
+  testthat::expect_equal(shiny::isolate(state$SyncVersion), 5L)
+})
+
