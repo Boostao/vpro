@@ -422,7 +422,7 @@ mod_reporting_server <- function(id, sys_state, con) {
                 ns("lv_show_field"),
                 "Attribute field (when Extra label = Attribute)",
                 choices = c(
-                  "none" = "",
+                  "- none -"  = "",
                   "Red/Blue List"     = "RedBlueList",
                   "Wetland Indicator" = "Wetland_Ind",
                   "Weed Status"       = "WeedStatus"
@@ -449,7 +449,7 @@ mod_reporting_server <- function(id, sys_state, con) {
               layout_columns(
                 selectInput(
                   ns("lv_site_quality_min"), "Site quality min",
-                  choices = c("â€” any â€”" = "", "Poor", "Fair", "Good", "Excellent"),
+                  choices = c("- any -" = "", "Poor", "Fair", "Good", "Excellent"),
                   selected = ""
                 ),
                 checkboxInput(ns("lv_site_quality_include_null"), "Include null site quality", value = TRUE),
@@ -458,7 +458,7 @@ mod_reporting_server <- function(id, sys_state, con) {
               layout_columns(
                 selectInput(
                   ns("lv_veg_quality_min"), "Veg quality min",
-                  choices = c("â€” any â€”" = "", "Poor", "Fair", "Good", "Excellent"),
+                  choices = c("- any -" = "", "Poor", "Fair", "Good", "Excellent"),
                   selected = ""
                 ),
                 checkboxInput(ns("lv_veg_quality_include_null"), "Include null veg quality", value = TRUE),
@@ -467,7 +467,7 @@ mod_reporting_server <- function(id, sys_state, con) {
               layout_columns(
                 selectInput(
                   ns("lv_soil_quality_min"), "Soil quality min",
-                  choices = c("â€” any â€”" = "", "Poor", "Fair", "Good", "Excellent"),
+                  choices = c("- any -" = "", "Poor", "Fair", "Good", "Excellent"),
                   selected = ""
                 ),
                 checkboxInput(ns("lv_soil_quality_include_null"), "Include null soil quality", value = TRUE),
