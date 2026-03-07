@@ -1,6 +1,6 @@
 -- ============================================================================
 -- PostgreSQL Schema for VPro BEC Data Management
--- Full rewrite with audit triggers, row versioning, and staging workflow
+-- Complete schema with all Sample_ table definitions from DuckDB
 -- ============================================================================
 
 -- Drop existing schemas (for clean rebuild)
@@ -18,6 +18,31 @@ CREATE SCHEMA lists;
 CREATE SCHEMA staging;
 CREATE SCHEMA admin;
 CREATE SCHEMA public_export;
+
+-- ============================================================================
+-- TRIGGER FUNCTIONS (before table definitions)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION core.row_version_trigger()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW."rowVersion" := COALESCE(OLD."rowVersion", 0) + 1;
+    NEW."lastModifiedUTC" := NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION audit.if_modified_func()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO audit.logged_actions ("schemaName", "tableName", "userName", "actionTstampSTM", 
+        action, "statementOnly")
+    VALUES (TG_TABLE_SCHEMA, TG_TABLE_NAME, CURRENT_USER, NOW(), 
+            CASE TG_OP WHEN 'INSERT' THEN 'I' WHEN 'UPDATE' THEN 'U' WHEN 'DELETE' THEN 'D' END, 
+            FALSE);
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================================================
 -- AUDIT SCHEMA - Change tracking
@@ -42,31 +67,6 @@ CREATE TABLE IF NOT EXISTS audit.logged_actions (
 CREATE INDEX IF NOT EXISTS logged_actions_schema_table_idx ON audit.logged_actions("schemaName", "tableName");
 CREATE INDEX IF NOT EXISTS logged_actions_action_tstamp_tx_idx ON audit.logged_actions("actionTstampTX");
 CREATE INDEX IF NOT EXISTS logged_actions_action_idx ON audit.logged_actions(action);
--- ============================================================================
--- TRIGGER FUNCTIONS
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION core.row_version_trigger()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW."rowVersion" := COALESCE(OLD."rowVersion", 0) + 1;
-    NEW."lastModifiedUTC" := NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION audit.if_modified_func()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Simple audit log: just record the action without detailed state tracking
-    INSERT INTO audit.logged_actions ("schemaName", "tableName", "userName", "actionTstampSTM", 
-        action, "statementOnly")
-    VALUES (TG_TABLE_SCHEMA, TG_TABLE_NAME, CURRENT_USER, NOW(), 
-            CASE TG_OP WHEN 'INSERT' THEN 'I' WHEN 'UPDATE' THEN 'U' WHEN 'DELETE' THEN 'D' END, 
-            FALSE);
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
 
 -- ============================================================================
 -- LISTS SCHEMA - Reference tables for codes and lookups
@@ -120,23 +120,129 @@ CREATE TABLE IF NOT EXISTS lists.usyssppattributes (
 );
 
 -- ============================================================================
--- CORE SCHEMA - Main data tables
+-- CORE SCHEMA - Main data tables (from Sample_* tables in DuckDB)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS core.metadata (
-    id SERIAL PRIMARY KEY,
-    "projectID" TEXT UNIQUE NOT NULL,
-    "projectName" TEXT NOT NULL,
-    description TEXT,
-    organization TEXT,
-    "contactEmail" TEXT,
-    "createdUTC" TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    "rowVersion" INTEGER NOT NULL DEFAULT 1,
-    "lastModifiedUTC" TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+-- core.admin: Master record for plot administration and metadata
+CREATE TABLE IF NOT EXISTS core.admin (
+    plot TEXT PRIMARY KEY,
+    startdate BIGINT,
+    plottype TEXT,
+    plotsize NUMERIC,
+    provincestateterritory TEXT,
+    siteplotquality TEXT,
+    vegplotquality TEXT,
+    soilplotquality TEXT,
+    updatedfromcards BIGINT,
+    enteredby TEXT,
+    usersiteunit TEXT,
+    becsiteunit TEXT,
+    siteunitshortname TEXT,
+    siteunitlongname TEXT,
+    officenotes TEXT,
+    humusthickness NUMERIC,
+    gis_bgc TEXT,
+    gis_bgc_ver TEXT,
+    bec_use NUMERIC,
+    stratacovertotal TEXT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
     "modifiedBy" TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_metadata_modified ON core.metadata("lastModifiedUTC");
+CREATE INDEX IF NOT EXISTS idx_core_admin_modified ON core.admin("lastModifiedUTC");
+
+CREATE TRIGGER admin_row_version
+    BEFORE INSERT OR UPDATE ON core.admin
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER admin_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.admin
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.metadata: Comprehensive project metadata
+CREATE TABLE IF NOT EXISTS core.metadata (
+    id BIGINT PRIMARY KEY,
+    projectid TEXT,
+    startdate BIGINT,
+    enddate TEXT,
+    projecttitle TEXT,
+    coordinatingagency TEXT,
+    proponentfunder TEXT,
+    fieldcompanyagency TEXT,
+    fieldleader TEXT,
+    fielddatacollectionteam TEXT,
+    projectpurpose TEXT,
+    geographicstudyarea TEXT,
+    geographicstudyregion TEXT,
+    numberoffs882plots TEXT,
+    numberofsitevisits TEXT,
+    projecttype TEXT,
+    projecttypeother TEXT,
+    ecosyscollectionstandard TEXT,
+    ecosyscollectionstandardother TEXT,
+    vegcovermethod TEXT,
+    vegcovermethodother TEXT,
+    plotmethod TEXT,
+    plotmethodother TEXT,
+    mensurationmethod TEXT,
+    mensurationmethodother TEXT,
+    extravegfielddescription TEXT,
+    datacustodian TEXT,
+    storagelocation TEXT,
+    collectedsite BIGINT,
+    dataqualitysite TEXT,
+    collectedveg BIGINT,
+    dataqualityveg TEXT,
+    collectedsoil BIGINT,
+    dataqualitysoil TEXT,
+    collectedterrain TEXT,
+    dataqualityterrain TEXT,
+    collectedmens TEXT,
+    dataqualitymens TEXT,
+    collectedcwd TEXT,
+    dataqualitycwd TEXT,
+    collectedwildtree TEXT,
+    dataqualitywildtree TEXT,
+    collectedsoilchem TEXT,
+    dataqualitysoilchem TEXT,
+    collectedwildlifehabitatassessment TEXT,
+    dataqualitywildlifehabitatassessment TEXT,
+    collectedcompleteother TEXT,
+    collectedpartialother TEXT,
+    collectednoneother TEXT,
+    georefmethod TEXT,
+    georefmethodother TEXT,
+    datum TEXT,
+    datumother TEXT,
+    coordinatesystem TEXT,
+    coordinatesystemother TEXT,
+    allspecs TEXT,
+    tableoflists TEXT,
+    covera1description TEXT,
+    covera2description TEXT,
+    covera3description TEXT,
+    coveradescription TEXT,
+    coverb1description TEXT,
+    coverb2description TEXT,
+    coverb2adescription TEXT,
+    coverb2bdescription TEXT,
+    coverb2cdescription TEXT,
+    coverbdescription TEXT,
+    covercdescription TEXT,
+    coverddescription TEXT,
+    cover8description TEXT,
+    cover9description TEXT,
+    cover10description TEXT,
+    bapid TEXT,
+    datelastedited TEXT,
+    notes TEXT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_metadata_modified ON core.metadata("lastModifiedUTC");
 
 CREATE TRIGGER metadata_row_version
     BEFORE INSERT OR UPDATE ON core.metadata
@@ -146,29 +252,155 @@ CREATE TRIGGER metadata_audit
     AFTER INSERT OR UPDATE OR DELETE ON core.metadata
     FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
 
-
--- core.env: environmental/site data
-CREATE TABLE IF NOT EXISTS core.env (
-    id SERIAL PRIMARY KEY,
-    "PlotNumber" TEXT NOT NULL UNIQUE,
-    "ProjectID" TEXT NOT NULL,
-    "Latitude" NUMERIC CHECK ("Latitude" >= 48 AND "Latitude" <= 60),
-    "Longitude" NUMERIC CHECK ("Longitude" >= -140 AND "Longitude" <= -114),
-    "Elevation" INTEGER CHECK ("Elevation" >= 0 AND "Elevation" <= 4000),
-    "SurveyDate" DATE,
-    "SurveyorName" TEXT,
-    "PlotNotes" TEXT,
-    "Zone" TEXT,
-    "SubZone" TEXT,
-    "SiteSeries" TEXT,
-    "rowVersion" INTEGER NOT NULL DEFAULT 1,
-    "lastModifiedUTC" TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+-- core.hierarchy: Hierarchical classification/organization data
+CREATE TABLE IF NOT EXISTS core.hierarchy (
+    id BIGINT PRIMARY KEY,
+    _name TEXT,
+    parent BIGINT,
+    _level BIGINT,
+    tag BIGINT,
+    myorder TEXT,
+    childid BIGINT,
+    startchild BIGINT,
+    lastchild BIGINT,
+    flag BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
     "modifiedBy" TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_env_plot ON core.env("PlotNumber");
-CREATE INDEX IF NOT EXISTS idx_env_project ON core.env("ProjectID");
-CREATE INDEX IF NOT EXISTS idx_env_modified ON core.env("lastModifiedUTC");
+CREATE INDEX IF NOT EXISTS idx_core_hierarchy_parent ON core.hierarchy(parent);
+CREATE INDEX IF NOT EXISTS idx_core_hierarchy_modified ON core.hierarchy("lastModifiedUTC");
+
+CREATE TRIGGER hierarchy_row_version
+    BEFORE INSERT OR UPDATE ON core.hierarchy
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER hierarchy_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.hierarchy
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.env: Central environmental site characterization table
+CREATE TABLE IF NOT EXISTS core.env (
+    plotnumber TEXT PRIMARY KEY,
+    fieldnumber TEXT,
+    projectid TEXT,
+    fsregiondistrict TEXT,
+    date TEXT,
+    sitesurveyor TEXT,
+    plotrepresenting TEXT,
+    _location TEXT,
+    ecosection TEXT,
+    ntsmapsheet TEXT,
+    longitude NUMERIC,
+    latitude NUMERIC,
+    utmzone BIGINT,
+    utmeasting NUMERIC,
+    utmnorthing NUMERIC,
+    locationaccuracy BIGINT,
+    airphotonum TEXT,
+    xcoord NUMERIC,
+    ycoord NUMERIC,
+    _zone TEXT,
+    subzone TEXT,
+    siteseries TEXT,
+    sitemodifier1 TEXT,
+    sitemodifier2 BOOLEAN,
+    transdistrib BIGINT,
+    realmclass TEXT,
+    mapunit TEXT,
+    snowcoverregime TEXT,
+    moistureregime TEXT,
+    nutrientregime TEXT,
+    successionalstatus TEXT,
+    structuralstage TEXT,
+    structuralstagemod TEXT,
+    standage BIGINT,
+    elevation BIGINT,
+    slopegradient NUMERIC,
+    aspect BIGINT,
+    mesoslopeposition TEXT,
+    surfaceshape TEXT,
+    surfacetopographytype TEXT,
+    surfacetopographysize TEXT,
+    watersource TEXT,
+    photo TEXT,
+    exposure1 TEXT,
+    exposure2 TEXT,
+    sitedisturbance1 TEXT,
+    sitedisturbance2 TEXT,
+    sitedisturbance3 TEXT,
+    substratedecwood NUMERIC,
+    substratebedrock NUMERIC,
+    substraterocks NUMERIC,
+    substratemineralsoil NUMERIC,
+    substrateorganicmatter NUMERIC,
+    substratewater NUMERIC,
+    sitenotes TEXT,
+    soilsurveyor TEXT,
+    bedrockgeology1 TEXT,
+    bedrockgeology2 TEXT,
+    bedrockgeology3 TEXT,
+    coarsefraglith1 TEXT,
+    coarsefraglith2 TEXT,
+    coarsefraglith3 TEXT,
+    terraintexturesurf TEXT,
+    surficialmaterialsurf TEXT,
+    surfaceexpsurf TEXT,
+    geomorprosurf TEXT,
+    terraintexturesubsurf TEXT,
+    surficialmaterialsubsurf TEXT,
+    surfaceexpsubsurf TEXT,
+    geomorprosubsurf TEXT,
+    floodingregimefreq TEXT,
+    moistureregimesub TEXT,
+    floodingregimedur TEXT,
+    soildrainage TEXT,
+    seepagedepth BIGINT,
+    rootrestrictingtype TEXT,
+    rootrestrictingdepth BIGINT,
+    rootzoneparticlesize TEXT,
+    rootingdepth BIGINT,
+    soilclasssubgroup TEXT,
+    soilclassgroup TEXT,
+    humusform TEXT,
+    humusformphase TEXT,
+    phmethodcodemineral TEXT,
+    phmethodcodeorganic TEXT,
+    soilnotes TEXT,
+    vegsurveyor TEXT,
+    stratacovertree NUMERIC,
+    stratacovershrub NUMERIC,
+    stratacoverherb NUMERIC,
+    stratacovermoss NUMERIC,
+    vegnotes TEXT,
+    hydrogeosystem TEXT,
+    hydrogeosubsystem TEXT,
+    specieslistcomplete BIGINT,
+    _temporary TEXT,
+    flag BIGINT,
+    sv_polygonnumber TEXT,
+    sv_floodplain BIGINT,
+    sv_standageestmeas BIGINT,
+    sv_standheight NUMERIC,
+    sv_standheightestmeas BIGINT,
+    sv_canopycomposition TEXT,
+    sv_soildepth NUMERIC,
+    sv_rootzonetexture TEXT,
+    sv_percentcoarsefrags NUMERIC,
+    sv_gleyingmottlingcm NUMERIC,
+    sv_watertablecm NUMERIC,
+    sv_fullcruisecard TEXT,
+    sv_ahorizontype TEXT,
+    sv_ahorizondepth NUMERIC,
+    activelayerdepth NUMERIC,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_env_projectid ON core.env(projectid);
+CREATE INDEX IF NOT EXISTS idx_core_env_modified ON core.env("lastModifiedUTC");
 
 CREATE TRIGGER env_row_version
     BEFORE INSERT OR UPDATE ON core.env
@@ -178,39 +410,149 @@ CREATE TRIGGER env_audit
     AFTER INSERT OR UPDATE OR DELETE ON core.env
     FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
 
+-- core.humus: Humus/organic layer characterization data
+CREATE TABLE IF NOT EXISTS core.humus (
+    id BIGINT PRIMARY KEY,
+    plotnumber TEXT,
+    horizon TEXT,
+    upperdepth NUMERIC,
+    lowerdepth NUMERIC,
+    humusstructuredegree TEXT,
+    humusstructurekind TEXT,
+    mycelabundance TEXT,
+    fecalabundance TEXT,
+    rootsabundance TEXT,
+    rootssize TEXT,
+    vonpost BIGINT,
+    humusformph NUMERIC,
+    consistence TEXT,
+    character TEXT,
+    fauna TEXT,
+    _comment TEXT,
+    flag BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
 
--- core.veg: vegetation/species data
+CREATE INDEX IF NOT EXISTS idx_core_humus_plotnumber ON core.humus(plotnumber);
+CREATE INDEX IF NOT EXISTS idx_core_humus_modified ON core.humus("lastModifiedUTC");
+
+CREATE TRIGGER humus_row_version
+    BEFORE INSERT OR UPDATE ON core.humus
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER humus_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.humus
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.mineral: Mineral soil layer characterization data
+CREATE TABLE IF NOT EXISTS core.mineral (
+    id BIGINT PRIMARY KEY,
+    plotnumber TEXT,
+    horizon TEXT,
+    upperdepth NUMERIC,
+    lowerdepth NUMERIC,
+    pitdepthlimit TEXT,
+    colour TEXT,
+    asp BIGINT,
+    texture TEXT,
+    percentcoarsefragsgravel BIGINT,
+    percentcoarsefragscobbles BIGINT,
+    percentcoarsefragsstones BIGINT,
+    percentcoarsefragstotal BIGINT,
+    percentcoarsefragsshape TEXT,
+    rootsabundance TEXT,
+    rootssize TEXT,
+    mineralstructureclass TEXT,
+    mineralstructurekind TEXT,
+    mineralformph TEXT,
+    mottlesabundance TEXT,
+    mottlessize TEXT,
+    mottlescontrast TEXT,
+    clayfilmsfreq TEXT,
+    clayfilmthickness TEXT,
+    effervescence TEXT,
+    porosity TEXT,
+    _comments TEXT,
+    flag BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_mineral_plotnumber ON core.mineral(plotnumber);
+CREATE INDEX IF NOT EXISTS idx_core_mineral_modified ON core.mineral("lastModifiedUTC");
+
+CREATE TRIGGER mineral_row_version
+    BEFORE INSERT OR UPDATE ON core.mineral
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER mineral_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.mineral
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.other: Miscellaneous plot data
+CREATE TABLE IF NOT EXISTS core.other (
+    id BIGINT PRIMARY KEY,
+    plotnumber TEXT,
+    dataname TEXT,
+    dataitem TEXT,
+    useritem1 TEXT,
+    useritem2 TEXT,
+    useritem3 TEXT,
+    userflag1 BIGINT,
+    userflag2 BIGINT,
+    userflag3 BIGINT,
+    flag BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_other_plotnumber ON core.other(plotnumber);
+CREATE INDEX IF NOT EXISTS idx_core_other_modified ON core.other("lastModifiedUTC");
+
+CREATE TRIGGER other_row_version
+    BEFORE INSERT OR UPDATE ON core.other
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER other_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.other
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.veg: Vegetation species and layer composition with cover measurements
 CREATE TABLE IF NOT EXISTS core.veg (
-    id SERIAL PRIMARY KEY,
-    "PlotNumber" TEXT NOT NULL,
-    "SpeciesCode" TEXT NOT NULL,
-    "LayerCode" TEXT,
-    "Cover1" REAL,
-    "Height1" TEXT,
-    "Cover2" REAL,
-    "Height2" TEXT,
-    "Cover3" REAL,
-    "Height3" TEXT,
-    "TotalA" REAL,
-    "HeightA" TEXT,
-    "Cover4" REAL,
-    "Height4" TEXT,
-    "Cover5" REAL,
-    "Height5" TEXT,
-    "Cover5a" REAL,
-    "Height5a" TEXT,
-    "Cover5b" REAL,
-    "Height5b" TEXT,
-    "Cover5c" REAL,
-    "Height5c" TEXT,
-    "TotalB" REAL,
-    "HeightB" TEXT,
-    "Cover6" REAL,
-    "Height6" REAL,
-    "Cover7" REAL,
-    "Cover8" REAL,
-    "Cover9" REAL,
-    "Cover10" TEXT,
+    id BIGINT PRIMARY KEY,
+    plotnumber TEXT,
+    species TEXT,
+    layer TEXT,
+    cover1 NUMERIC,
+    height1 TEXT,
+    cover2 NUMERIC,
+    height2 TEXT,
+    cover3 NUMERIC,
+    height3 TEXT,
+    totala NUMERIC,
+    heighta TEXT,
+    cover4 NUMERIC,
+    height4 TEXT,
+    cover5 NUMERIC,
+    height5 TEXT,
+    cover5a NUMERIC,
+    height5a TEXT,
+    cover5b NUMERIC,
+    height5b TEXT,
+    cover5c NUMERIC,
+    height5c TEXT,
+    totalb NUMERIC,
+    heightb TEXT,
+    cover6 NUMERIC,
+    height6 NUMERIC,
+    cover7 NUMERIC,
+    cover8 NUMERIC,
+    cover9 NUMERIC,
+    cover10 TEXT,
     collected TEXT,
     flag BIGINT,
     ll BIGINT,
@@ -221,41 +563,89 @@ CREATE TABLE IF NOT EXISTS core.veg (
     pv BIGINT,
     pg BIGINT,
     ffa BIGINT,
-    "Cultural1" TEXT,
-    "Cultural2" TEXT,
-    "Other1" TEXT,
-    "Other2" TEXT,
+    cultural1 TEXT,
+    cultural2 TEXT,
+    other1 TEXT,
+    other2 TEXT,
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT NOT NULL,
-    UNIQUE("PlotNumber", "SpeciesCode", "LayerCode")
+    "modifiedBy" TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_veg_plot ON core.veg("PlotNumber");
-CREATE INDEX IF NOT EXISTS idx_veg_species ON core.veg("SpeciesCode");
+CREATE INDEX IF NOT EXISTS idx_core_veg_plotnumber ON core.veg(plotnumber);
+CREATE INDEX IF NOT EXISTS idx_core_veg_species ON core.veg(species);
+CREATE INDEX IF NOT EXISTS idx_core_veg_modified ON core.veg("lastModifiedUTC");
 
 CREATE TRIGGER veg_row_version
     BEFORE INSERT OR UPDATE ON core.veg
     FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
 
-
 CREATE TRIGGER veg_audit
     AFTER INSERT OR UPDATE OR DELETE ON core.veg
     FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
 
-
--- core.su: site unit (BEC zone/subzone/series)
-CREATE TABLE IF NOT EXISTS core.su (
-    id SERIAL PRIMARY KEY,
-    "PlotNumber" TEXT NOT NULL UNIQUE,
-    "SiteUnit" TEXT,
-    "rowVersion" INTEGER NOT NULL DEFAULT 1,
-    "lastModifiedUTC" TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+-- core.herbarium: Herbarium specimen and photographic records
+CREATE TABLE IF NOT EXISTS core.herbarium (
+    recid BIGINT PRIMARY KEY,
+    accessionnumber BIGINT,
+    accessiondate TEXT,
+    plotnumber TEXT,
+    species TEXT,
+    scientificnamerich TEXT,
+    specimenpreviousname TEXT,
+    identifier TEXT,
+    habitat TEXT,
+    countryoforigin TEXT,
+    provinceoforigin TEXT,
+    collectionnumber TEXT,
+    locationdescription TEXT,
+    collectors TEXT,
+    dateofcollection TIMESTAMP,
+    generalremarks TEXT,
+    permanentstoragelocation TEXT,
+    entryoperator TEXT,
+    entryoperatordate TIMESTAMP,
+    _comments TEXT,
+    photo TEXT,
+    flag01 BIGINT,
+    flag02 BIGINT,
+    longitudedegrees TEXT,
+    longitudeminutes TEXT,
+    longitudeseconds TEXT,
+    latitudedegrees TEXT,
+    latitudeminutes TEXT,
+    latitudeseconds TEXT,
+    duplicatesentto TEXT,
+    onloanto TEXT,
+    loandate TEXT,
+    print BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
     "modifiedBy" TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_su_plot ON core.su("PlotNumber");
-CREATE INDEX IF NOT EXISTS idx_su_modified ON core.su("lastModifiedUTC");
+CREATE INDEX IF NOT EXISTS idx_core_herbarium_plotnumber ON core.herbarium(plotnumber);
+CREATE INDEX IF NOT EXISTS idx_core_herbarium_species ON core.herbarium(species);
+CREATE INDEX IF NOT EXISTS idx_core_herbarium_modified ON core.herbarium("lastModifiedUTC");
+
+CREATE TRIGGER herbarium_row_version
+    BEFORE INSERT OR UPDATE ON core.herbarium
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER herbarium_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.herbarium
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.su: Site unit assignments for plots
+CREATE TABLE IF NOT EXISTS core.su (
+    plotnumber TEXT PRIMARY KEY,
+    siteunit TEXT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_su_modified ON core.su("lastModifiedUTC");
 
 CREATE TRIGGER su_row_version
     BEFORE INSERT OR UPDATE ON core.su
@@ -265,73 +655,353 @@ CREATE TRIGGER su_audit
     AFTER INSERT OR UPDATE OR DELETE ON core.su
     FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
 
-
--- core.admin: QA/review status per plot
-CREATE TABLE IF NOT EXISTS core.admin (
-    id SERIAL PRIMARY KEY,
-    "PlotNumber" TEXT NOT NULL UNIQUE,
-    "ProjectID" TEXT NOT NULL,
-    "qaStatus" TEXT DEFAULT 'unreviewed' CHECK ("qaStatus" IN ('unreviewed', 'pending', 'approved', 'rejected')),
-    "qaComments" TEXT,
-    "qaBy" TEXT,
-    "qaDate" TIMESTAMPTZ,
+-- core.profile: Reference profiles for species and layers
+CREATE TABLE IF NOT EXISTS core.profile (
+    _order BIGINT,
+    _table TEXT,
+    field TEXT,
+    _operator TEXT,
+    layer TEXT,
+    species TEXT PRIMARY KEY,
+    criteria TEXT,
+    operation TEXT,
+    plotcount BIGINT,
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT NOT NULL
+    "modifiedBy" TEXT
 );
 
--- core.vw_usysallveg: view flattening multi-layer veg into single layer per row
-CREATE OR REPLACE VIEW core.vw_usysallveg AS
-SELECT "PlotNumber", '1' AS mylayer, "SpeciesCode" AS species, "Cover1" AS cover FROM core.veg WHERE "Cover1" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '2' AS mylayer, "SpeciesCode" AS species, "Cover2" AS cover FROM core.veg WHERE "Cover2" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '3' AS mylayer, "SpeciesCode" AS species, "Cover3" AS cover FROM core.veg WHERE "Cover3" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '4' AS mylayer, "SpeciesCode" AS species, "Cover4" AS cover FROM core.veg WHERE "Cover4" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '5' AS mylayer, "SpeciesCode" AS species, "Cover5" AS cover FROM core.veg WHERE "Cover5" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '5a' AS mylayer, "SpeciesCode" AS species, "Cover5a" AS cover FROM core.veg WHERE "Cover5a" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '5b' AS mylayer, "SpeciesCode" AS species, "Cover5b" AS cover FROM core.veg WHERE "Cover5b" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '5c' AS mylayer, "SpeciesCode" AS species, "Cover5c" AS cover FROM core.veg WHERE "Cover5c" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '6' AS mylayer, "SpeciesCode" AS species, "Cover6" AS cover FROM core.veg WHERE "Cover6" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '7' AS mylayer, "SpeciesCode" AS species, "Cover7" AS cover FROM core.veg WHERE "Cover7" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '8' AS mylayer, "SpeciesCode" AS species, "Cover8" AS cover FROM core.veg WHERE "Cover8" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '9' AS mylayer, "SpeciesCode" AS species, "Cover9" AS cover FROM core.veg WHERE "Cover9" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", '10' AS mylayer, "SpeciesCode" AS species, CAST("Cover10" AS REAL) AS cover FROM core.veg WHERE "Cover10" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", 'A' AS mylayer, "SpeciesCode" AS species, "TotalA" AS cover FROM core.veg WHERE "TotalA" IS NOT NULL
-UNION ALL
-SELECT "PlotNumber", 'B' AS mylayer, "SpeciesCode" AS species, "TotalB" AS cover FROM core.veg WHERE "TotalB" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_core_profile_modified ON core.profile("lastModifiedUTC");
 
+CREATE TRIGGER profile_row_version
+    BEFORE INSERT OR UPDATE ON core.profile
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER profile_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.profile
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.veg_profile: Operational vegetation profile data
+CREATE TABLE IF NOT EXISTS core.veg_profile (
+    _order BIGINT,
+    _table TEXT,
+    field TEXT,
+    _operator TEXT,
+    layer TEXT,
+    species TEXT,
+    criteria BIGINT,
+    operation TEXT,
+    plotcount BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_veg_profile_modified ON core.veg_profile("lastModifiedUTC");
+
+CREATE TRIGGER veg_profile_row_version
+    BEFORE INSERT OR UPDATE ON core.veg_profile
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER veg_profile_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.veg_profile
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.lump: Species lumping/aggregation codes
+CREATE TABLE IF NOT EXISTS core.lump (
+    lumpcode TEXT PRIMARY KEY,
+    sppcode TEXT,
+    _use BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_lump_modified ON core.lump("lastModifiedUTC");
+
+CREATE TRIGGER lump_row_version
+    BEFORE INSERT OR UPDATE ON core.lump
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER lump_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.lump
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.theme: Species theme and classification with lumping codes
+CREATE TABLE IF NOT EXISTS core.theme (
+    sppcode TEXT PRIMARY KEY,
+    lumpcode TEXT,
+    scientificname TEXT,
+    colourcode BIGINT,
+    patterncode BIGINT,
+    fontcolour BIGINT,
+    _use BIGINT,
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_theme_modified ON core.theme("lastModifiedUTC");
+
+CREATE TRIGGER theme_row_version
+    BEFORE INSERT OR UPDATE ON core.theme
+    FOR EACH ROW EXECUTE FUNCTION core.row_version_trigger();
+
+CREATE TRIGGER theme_audit
+    AFTER INSERT OR UPDATE OR DELETE ON core.theme
+    FOR EACH ROW EXECUTE FUNCTION audit.if_modified_func();
+
+-- core.audit: Audit log of all edits across all tables
+CREATE TABLE IF NOT EXISTS core.audit (
+    id BIGINT PRIMARY KEY,
+    project TEXT,
+    _user TEXT,
+    plotnumber TEXT,
+    _table TEXT,
+    editfield TEXT,
+    editwhen TEXT,
+    beforeedit TEXT,
+    afteredit TEXT,
+    restore BIGINT,
+    flag BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS idx_core_audit_plotnumber ON core.audit(plotnumber);
+CREATE INDEX IF NOT EXISTS idx_core_audit_table ON core.audit(_table);
 
 -- ============================================================================
--- ADMIN SCHEMA - User & Role Management (must come BEFORE STAGING)
+-- STAGING SCHEMA - Mirrors of core tables with change tracking
 -- ============================================================================
 
+-- staging.admin
+CREATE TABLE IF NOT EXISTS staging.admin (
+    plot TEXT PRIMARY KEY,
+    startdate BIGINT,
+    plottype TEXT,
+    plotsize NUMERIC,
+    provincestateterritory TEXT,
+    siteplotquality TEXT,
+    vegplotquality TEXT,
+    soilplotquality TEXT,
+    updatedfromcards BIGINT,
+    enteredby TEXT,
+    usersiteunit TEXT,
+    becsiteunit TEXT,
+    siteunitshortname TEXT,
+    siteunitlongname TEXT,
+    officenotes TEXT,
+    humusthickness NUMERIC,
+    gis_bgc TEXT,
+    gis_bgc_ver TEXT,
+    bec_use NUMERIC,
+    stratacovertotal TEXT,
+    "baseRowVersion" INTEGER,
+    "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
 
+-- staging.env
+CREATE TABLE IF NOT EXISTS staging.env (
+    plotnumber TEXT PRIMARY KEY,
+    fieldnumber TEXT,
+    projectid TEXT,
+    fsregiondistrict TEXT,
+    date TEXT,
+    sitesurveyor TEXT,
+    plotrepresenting TEXT,
+    _location TEXT,
+    ecosection TEXT,
+    ntsmapsheet TEXT,
+    longitude NUMERIC,
+    latitude NUMERIC,
+    utmzone BIGINT,
+    utmeasting NUMERIC,
+    utmnorthing NUMERIC,
+    locationaccuracy BIGINT,
+    airphotonum TEXT,
+    xcoord NUMERIC,
+    ycoord NUMERIC,
+    _zone TEXT,
+    subzone TEXT,
+    siteseries TEXT,
+    sitemodifier1 TEXT,
+    sitemodifier2 BOOLEAN,
+    transdistrib BIGINT,
+    realmclass TEXT,
+    mapunit TEXT,
+    snowcoverregime TEXT,
+    moistureregime TEXT,
+    nutrientregime TEXT,
+    successionalstatus TEXT,
+    structuralstage TEXT,
+    structuralstagemod TEXT,
+    standage BIGINT,
+    elevation BIGINT,
+    slopegradient NUMERIC,
+    aspect BIGINT,
+    mesoslopeposition TEXT,
+    surfaceshape TEXT,
+    surfacetopographytype TEXT,
+    surfacetopographysize TEXT,
+    watersource TEXT,
+    photo TEXT,
+    exposure1 TEXT,
+    exposure2 TEXT,
+    sitedisturbance1 TEXT,
+    sitedisturbance2 TEXT,
+    sitedisturbance3 TEXT,
+    substratedecwood NUMERIC,
+    substratebedrock NUMERIC,
+    substraterocks NUMERIC,
+    substratemineralsoil NUMERIC,
+    substrateorganicmatter NUMERIC,
+    substratewater NUMERIC,
+    sitenotes TEXT,
+    soilsurveyor TEXT,
+    bedrockgeology1 TEXT,
+    bedrockgeology2 TEXT,
+    bedrockgeology3 TEXT,
+    coarsefraglith1 TEXT,
+    coarsefraglith2 TEXT,
+    coarsefraglith3 TEXT,
+    terraintexturesurf TEXT,
+    surficialmaterialsurf TEXT,
+    surfaceexpsurf TEXT,
+    geomorprosurf TEXT,
+    terraintexturesubsurf TEXT,
+    surficialmaterialsubsurf TEXT,
+    surfaceexpsubsurf TEXT,
+    geomorprosubsurf TEXT,
+    floodingregimefreq TEXT,
+    moistureregimesub TEXT,
+    floodingregimedur TEXT,
+    soildrainage TEXT,
+    seepagedepth BIGINT,
+    rootrestrictingtype TEXT,
+    rootrestrictingdepth BIGINT,
+    rootzoneparticlesize TEXT,
+    rootingdepth BIGINT,
+    soilclasssubgroup TEXT,
+    soilclassgroup TEXT,
+    humusform TEXT,
+    humusformphase TEXT,
+    phmethodcodemineral TEXT,
+    phmethodcodeorganic TEXT,
+    soilnotes TEXT,
+    vegsurveyor TEXT,
+    stratacovertree NUMERIC,
+    stratacovershrub NUMERIC,
+    stratacoverherb NUMERIC,
+    stratacovermoss NUMERIC,
+    vegnotes TEXT,
+    hydrogeosystem TEXT,
+    hydrogeosubsystem TEXT,
+    specieslistcomplete BIGINT,
+    _temporary TEXT,
+    flag BIGINT,
+    sv_polygonnumber TEXT,
+    sv_floodplain BIGINT,
+    sv_standageestmeas BIGINT,
+    sv_standheight NUMERIC,
+    sv_standheightestmeas BIGINT,
+    sv_canopycomposition TEXT,
+    sv_soildepth NUMERIC,
+    sv_rootzonetexture TEXT,
+    sv_percentcoarsefrags NUMERIC,
+    sv_gleyingmottlingcm NUMERIC,
+    sv_watertablecm NUMERIC,
+    sv_fullcruisecard TEXT,
+    sv_ahorizontype TEXT,
+    sv_ahorizondepth NUMERIC,
+    activelayerdepth NUMERIC,
+    "baseRowVersion" INTEGER,
+    "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+-- staging.veg
+CREATE TABLE IF NOT EXISTS staging.veg (
+    id BIGINT PRIMARY KEY,
+    plotnumber TEXT,
+    species TEXT,
+    layer TEXT,
+    cover1 NUMERIC,
+    height1 TEXT,
+    cover2 NUMERIC,
+    height2 TEXT,
+    cover3 NUMERIC,
+    height3 TEXT,
+    totala NUMERIC,
+    heighta TEXT,
+    cover4 NUMERIC,
+    height4 TEXT,
+    cover5 NUMERIC,
+    height5 TEXT,
+    cover5a NUMERIC,
+    height5a TEXT,
+    cover5b NUMERIC,
+    height5b TEXT,
+    cover5c NUMERIC,
+    height5c TEXT,
+    totalb NUMERIC,
+    heightb TEXT,
+    cover6 NUMERIC,
+    height6 NUMERIC,
+    cover7 NUMERIC,
+    cover8 NUMERIC,
+    cover9 NUMERIC,
+    cover10 TEXT,
+    collected TEXT,
+    flag BIGINT,
+    ll BIGINT,
+    af TEXT,
+    dc BIGINT,
+    ut BIGINT,
+    vi BIGINT,
+    pv BIGINT,
+    pg BIGINT,
+    ffa BIGINT,
+    cultural1 TEXT,
+    cultural2 TEXT,
+    other1 TEXT,
+    other2 TEXT,
+    "baseRowVersion" INTEGER,
+    "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+-- staging.su
+CREATE TABLE IF NOT EXISTS staging.su (
+    plotnumber TEXT PRIMARY KEY,
+    siteunit TEXT,
+    "baseRowVersion" INTEGER,
+    "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
+    "rowVersion" INTEGER DEFAULT 1,
+    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
+    "modifiedBy" TEXT
+);
+
+-- ============================================================================
+-- ADMIN SCHEMA - User & Role Management
+-- ============================================================================
 
 CREATE TABLE IF NOT EXISTS admin.users (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
     app_role TEXT NOT NULL DEFAULT 'guest' CHECK (app_role IN ('guest', 'admin')),
-    password_hash TEXT,                                 -- NULL for guests; bcrypt hash for admins
+    password_hash TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     last_login_utc TIMESTAMPTZ
 );
 
-
--- admin.change_log: audit log for all changes
 CREATE TABLE IF NOT EXISTS admin.change_log (
     id SERIAL PRIMARY KEY,
     timestamp_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
@@ -346,7 +1016,6 @@ CREATE TABLE IF NOT EXISTS admin.change_log (
 CREATE INDEX IF NOT EXISTS idx_change_log_timestamp ON admin.change_log(timestamp_utc);
 CREATE INDEX IF NOT EXISTS idx_change_log_user ON admin.change_log(username);
 
--- admin.merge_requests: merge request lifecycle governance
 CREATE TABLE IF NOT EXISTS admin.merge_requests (
     id SERIAL PRIMARY KEY,
     project_id TEXT NOT NULL,
@@ -359,11 +1028,9 @@ CREATE TABLE IF NOT EXISTS admin.merge_requests (
     reviewer TEXT,
     review_notes TEXT,
     reviewed_utc TIMESTAMPTZ,
-    -- per-table record counts populated by sync_push()
     env_record_count INTEGER NOT NULL DEFAULT 0,
     su_record_count  INTEGER NOT NULL DEFAULT 0,
     veg_record_count INTEGER NOT NULL DEFAULT 0,
-    -- compliance gate (populated by staging_compliance_checks if loaded)
     compliance_passed BOOLEAN,
     compliance_report TEXT
 );
@@ -371,18 +1038,15 @@ CREATE TABLE IF NOT EXISTS admin.merge_requests (
 CREATE INDEX IF NOT EXISTS idx_merge_requests_status ON admin.merge_requests(status);
 CREATE INDEX IF NOT EXISTS idx_merge_requests_submitted ON admin.merge_requests(submitted_utc);
 
--- admin.merge_conflicts: row-level conflicts detected during admin review.
--- One row per conflicted record (not per column); field-level diff stored in `details` JSONB.
--- Conflict is detected when core.rowVersion > staging.baseRowVersion at review time.
 CREATE TABLE IF NOT EXISTS admin.merge_conflicts (
     id SERIAL PRIMARY KEY,
     merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
     table_name TEXT NOT NULL,
     "PlotNumber" TEXT,
-    "ProjectID" TEXT,                -- stored as TEXT for cross-type comparison
-    "SpeciesCode" TEXT NOT NULL DEFAULT '',   -- '' for env/su conflicts
-    "LayerCode"   TEXT NOT NULL DEFAULT '',   -- '' for env/su conflicts
-    details JSONB,                  -- {field: {staged: val, core: val}, rowVersion: {staged_base, core_current}}
+    "ProjectID" TEXT,
+    "SpeciesCode" TEXT NOT NULL DEFAULT '',
+    "LayerCode"   TEXT NOT NULL DEFAULT '',
+    details JSONB,
     resolution TEXT CHECK (resolution IN ('keep_staged', 'keep_core', 'dismiss')),
     resolved_by TEXT,
     resolved_utc TIMESTAMPTZ,
@@ -392,7 +1056,6 @@ CREATE TABLE IF NOT EXISTS admin.merge_conflicts (
 
 CREATE INDEX IF NOT EXISTS idx_merge_conflicts_request ON admin.merge_conflicts(merge_request_id);
 
--- admin.merge_history: approved merge outcomes
 CREATE TABLE IF NOT EXISTS admin.merge_history (
     id SERIAL PRIMARY KEY,
     merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id),
@@ -401,116 +1064,6 @@ CREATE TABLE IF NOT EXISTS admin.merge_history (
     record_count INTEGER,
     merge_summary JSONB
 );
-
-
--- ============================================================================
--- STAGING SCHEMA - Pending Uploads
--- ============================================================================
-
--- staging.veg: mirrors core.veg with change tracking
-CREATE TABLE IF NOT EXISTS staging.veg (
-    id SERIAL PRIMARY KEY,
-    "mergeRequestID" INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    "changeType" TEXT NOT NULL CHECK ("changeType" IN ('I','U','D')),
-    -- baseRowVersion: the rowVersion in core at the time the user last synced.
-    -- NULL means the row is new (did not exist in core at push time).
-    -- Conflict = core.rowVersion > baseRowVersion at review time.
-    "baseRowVersion" INTEGER,
-    "PlotNumber" TEXT NOT NULL,
-    "SpeciesCode" TEXT NOT NULL,
-    "LayerCode" TEXT,
-    "Cover1" REAL,
-    "Height1" TEXT,
-    "Cover2" REAL,
-    "Height2" TEXT,
-    "Cover3" REAL,
-    "Height3" TEXT,
-    "TotalA" REAL,
-    "HeightA" TEXT,
-    "Cover4" REAL,
-    "Height4" TEXT,
-    "Cover5" REAL,
-    "Height5" TEXT,
-    "Cover5a" REAL,
-    "Height5a" TEXT,
-    "Cover5b" REAL,
-    "Height5b" TEXT,
-    "Cover5c" REAL,
-    "Height5c" TEXT,
-    "TotalB" REAL,
-    "HeightB" TEXT,
-    "Cover6" REAL,
-    "Height6" REAL,
-    "Cover7" REAL,
-    "Cover8" REAL,
-    "Cover9" REAL,
-    "Cover10" TEXT,
-    collected TEXT,
-    flag BIGINT,
-    ll BIGINT,
-    af TEXT,
-    dc BIGINT,
-    ut BIGINT,
-    vi BIGINT,
-    pv BIGINT,
-    pg BIGINT,
-    ffa BIGINT,
-    "Cultural1" TEXT,
-    "Cultural2" TEXT,
-    "Other1" TEXT,
-    "Other2" TEXT,
-    "rowVersion" INTEGER DEFAULT 1,
-    "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_staging_veg_request ON staging.veg("mergeRequestID");
-CREATE INDEX IF NOT EXISTS idx_staging_veg_plot ON staging.veg("PlotNumber");
-
--- staging.env: mirrors core.env with change tracking
-CREATE TABLE IF NOT EXISTS staging.env (
-    id SERIAL PRIMARY KEY,
-    "mergeRequestID" INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    "changeType" TEXT NOT NULL CHECK ("changeType" IN ('I','U','D')),
-    -- baseRowVersion: core.rowVersion captured at push time (NULL = new row).
-    "baseRowVersion" INTEGER,
-    "PlotNumber" TEXT NOT NULL,
-    "ProjectID" TEXT NOT NULL,
-    "Latitude" NUMERIC,
-    "Longitude" NUMERIC,
-    "Elevation" INTEGER,
-    "SurveyDate" DATE,
-    "SurveyorName" TEXT,
-    "PlotNotes" TEXT,
-    "Zone" TEXT,
-    "SubZone" TEXT,
-    "SiteSeries" TEXT,
-    "rowVersion" INTEGER NOT NULL DEFAULT 1,
-    "lastModifiedUTC" TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    "modifiedBy" TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_staging_env_request ON staging.env("mergeRequestID");
-CREATE INDEX IF NOT EXISTS idx_staging_env_plot ON staging.env("PlotNumber");
-CREATE INDEX IF NOT EXISTS idx_staging_env_project ON staging.env("ProjectID");
-
--- staging.su: mirrors core.su with change tracking
-CREATE TABLE IF NOT EXISTS staging.su (
-    id SERIAL PRIMARY KEY,
-    "mergeRequestID" INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    "changeType" TEXT NOT NULL CHECK ("changeType" IN ('I','U','D')),
-    -- baseRowVersion: core.rowVersion captured at push time (NULL = new row).
-    "baseRowVersion" INTEGER,
-    "PlotNumber" TEXT NOT NULL,
-    "SiteUnit" TEXT,
-    "rowVersion" INTEGER NOT NULL DEFAULT 1,
-    "lastModifiedUTC" TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    "modifiedBy" TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_staging_su_request ON staging.su("mergeRequestID");
-CREATE INDEX IF NOT EXISTS idx_staging_su_plot ON staging.su("PlotNumber");
-
 
 -- ============================================================================
 -- PUBLIC_EXPORT SCHEMA - RDS Snapshots & Download Log
@@ -548,12 +1101,10 @@ CREATE TABLE IF NOT EXISTS public_export.download_log (
 CREATE INDEX IF NOT EXISTS idx_download_log_timestamp ON public_export.download_log("timestampUTC");
 CREATE INDEX IF NOT EXISTS idx_download_log_user ON public_export.download_log(username);
 
-
 -- ============================================================================
 -- SEED DATA
 -- ============================================================================
 
--- Seed: species list (10 common BC species)
 INSERT INTO lists.spplist ("sppCode", "sppName", "sppScientific", "isActive") VALUES
     ('TSUGHET', 'western hemlock', 'Tsuga heterophylla', TRUE),
     ('PSEUMEN', 'Douglas-fir', 'Pseudotsuga menziesii', TRUE),
@@ -567,7 +1118,6 @@ INSERT INTO lists.spplist ("sppCode", "sppName", "sppScientific", "isActive") VA
     ('PLEUSCH', 'Schreber''s feather moss', 'Pleurozium schreberi', TRUE)
 ON CONFLICT ("sppCode") DO NOTHING;
 
--- Seed: layer codes (5 standard layers)
 INSERT INTO lists.layercode ("layerCode", "layerName", "sortOrder") VALUES
     ('T1', 'Tree canopy layer 1', 1),
     ('T2', 'Tree canopy layer 2', 2),
@@ -576,7 +1126,6 @@ INSERT INTO lists.layercode ("layerCode", "layerName", "sortOrder") VALUES
     ('M', 'Moss layer', 5)
 ON CONFLICT ("layerCode") DO NOTHING;
 
--- Seed: BEC zones (7 common zones)
 INSERT INTO lists.usyszonelist ("zoneCode", "zoneName", province) VALUES
     ('CDF', 'Coastal Douglas-fir', 'BC'),
     ('CWH', 'Coastal Western Hemlock', 'BC'),
@@ -587,7 +1136,6 @@ INSERT INTO lists.usyszonelist ("zoneCode", "zoneName", province) VALUES
     ('MS', 'Montane Spruce', 'BC')
 ON CONFLICT ("zoneCode") DO NOTHING;
 
--- Seed: BEC subzones (7 examples)
 INSERT INTO lists.usyssubzonelist ("zoneCode", "subzoneCode", "subzoneName") VALUES
     ('CWH', 'dm', 'dry maritime'),
     ('CWH', 'vm', 'very dry maritime'),
@@ -597,32 +1145,3 @@ INSERT INTO lists.usyssubzonelist ("zoneCode", "subzoneCode", "subzoneName") VAL
     ('ESSF', 'mk', 'moist cool'),
     ('MH', 'mm', 'moist maritime')
 ON CONFLICT ("zoneCode", "subzoneCode") DO NOTHING;
-
--- Seed: generic list values
-INSERT INTO lists.usystableoflists ("listID", "itemCode", "itemName", "itemSort") VALUES
-    ('COVER_CLASS', '1', '0-1%', 1),
-    ('COVER_CLASS', '2', '1-5%', 2),
-    ('COVER_CLASS', '3', '5-25%', 3),
-    ('COVER_CLASS', '4', '25-50%', 4),
-    ('COVER_CLASS', '5', '50-75%', 5),
-    ('COVER_CLASS', '6', '75-100%', 6)
-ON CONFLICT ("listID", "itemCode") DO NOTHING;
-
--- Seed: test users (password: test)
--- Bcrypt hash for password "test" generated with bcrypt::hashpw()
-INSERT INTO admin.users (email, full_name, app_role, password_hash, is_active) VALUES
-    ('viewer@test.local',  'Test Viewer',       'guest', NULL, TRUE),
-    ('field@test.local',   'Test Field User',   'guest', NULL, TRUE),
-    ('lead@test.local',    'Test Project Lead', 'guest', NULL, TRUE),
-    ('dba@test.local',     'Test DBA',          'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
-    ('admin@test.local',   'Test Admin',        'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
-    ('nicolas@boostao.ca', 'Nicolas Gauthier',  'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
-    ('bruno@boostao.ca',   'Bruno Tremblay',    'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
-    ('francois@boostao.ca','François Bornais',  'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE)
-ON CONFLICT (email) DO NOTHING;
-
--- Seed: sample project
-INSERT INTO core.metadata ("projectID", "projectName", description, organization, "contactEmail", "modifiedBy") VALUES
-    ('DEMO_IDF_2023', 'Test Project Alpha', 'Initial test dataset for BECMaster', 'Test Organization', 'test@example.com', 'test_admin')
-ON CONFLICT ("projectID") DO NOTHING;
-

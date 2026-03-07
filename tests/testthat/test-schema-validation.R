@@ -146,11 +146,24 @@ run_schema_test <- function(schema, table) {
 }
 
 # ---- Core Tables Tests ----
+testthat::test_that("core.admin table schema matches", { run_schema_test("core", "admin") })
+testthat::test_that("core.metadata table schema matches", { run_schema_test("core", "metadata") })
+testthat::test_that("core.hierarchy table schema matches", { run_schema_test("core", "hierarchy") })
 testthat::test_that("core.env table schema matches", { run_schema_test("core", "env") })
+testthat::test_that("core.humus table schema matches", { run_schema_test("core", "humus") })
+testthat::test_that("core.mineral table schema matches", { run_schema_test("core", "mineral") })
+testthat::test_that("core.other table schema matches", { run_schema_test("core", "other") })
 testthat::test_that("core.veg table schema matches", { run_schema_test("core", "veg") })
+testthat::test_that("core.herbarium table schema matches", { run_schema_test("core", "herbarium") })
 testthat::test_that("core.su table schema matches", { run_schema_test("core", "su") })
+testthat::test_that("core.profile table schema matches", { run_schema_test("core", "profile") })
+testthat::test_that("core.veg_profile table schema matches", { run_schema_test("core", "veg_profile") })
+testthat::test_that("core.lump table schema matches", { run_schema_test("core", "lump") })
+testthat::test_that("core.theme table schema matches", { run_schema_test("core", "theme") })
+testthat::test_that("core.audit table schema matches", { run_schema_test("core", "audit") })
 
 # ---- Staging Tables Tests ----
+testthat::test_that("staging.admin table schema matches", { run_schema_test("staging", "admin") })
 testthat::test_that("staging.env table schema matches", { run_schema_test("staging", "env") })
 testthat::test_that("staging.veg table schema matches", { run_schema_test("staging", "veg") })
 testthat::test_that("staging.su table schema matches", { run_schema_test("staging", "su") })
@@ -172,12 +185,28 @@ testthat::test_that("All core, staging, and list tables have matching schemas", 
   attach_cloud(con, fail_on_error = TRUE)
   
   tables <- list(
+    # Core Sample_ tables
+    list(schema = "core", table = "admin"),
+    list(schema = "core", table = "metadata"),
+    list(schema = "core", table = "hierarchy"),
     list(schema = "core", table = "env"),
+    list(schema = "core", table = "humus"),
+    list(schema = "core", table = "mineral"),
+    list(schema = "core", table = "other"),
     list(schema = "core", table = "veg"),
+    list(schema = "core", table = "herbarium"),
     list(schema = "core", table = "su"),
+    list(schema = "core", table = "profile"),
+    list(schema = "core", table = "veg_profile"),
+    list(schema = "core", table = "lump"),
+    list(schema = "core", table = "theme"),
+    list(schema = "core", table = "audit"),
+    # Staging tables
+    list(schema = "staging", table = "admin"),
     list(schema = "staging", table = "env"),
     list(schema = "staging", table = "veg"),
     list(schema = "staging", table = "su"),
+    # Lists tables
     list(schema = "lists", table = "spplist"),
     list(schema = "lists", table = "layercode"),
     list(schema = "lists", table = "usyszonelist"),
