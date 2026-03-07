@@ -1471,3 +1471,9 @@ INSERT INTO lists.usyssubzonelist ("zoneCode", "subzoneCode", "subzoneName") VAL
     ('ESSF', 'mk', 'moist cool'),
     ('MH', 'mm', 'moist maritime')
 ON CONFLICT ("zoneCode", "subzoneCode") DO NOTHING;
+
+INSERT INTO admin.users (email, full_name, app_role, password_hash, is_active) VALUES
+    ('nicolas@boostao.ca', 'Nicolas Gauthier', 'admin', '$2a$12$iZCXRSLhCf./gTwQ1RuwzeeERl4JOmcIFOiTooYNBXfkvmV5wrJia', TRUE),
+    ('bruno@boostao.ca', 'Bruno Tremblay', 'admin', '$2a$12$iZCXRSLhCf./gTwQ1RuwzeeERl4JOmcIFOiTooYNBXfkvmV5wrJia', TRUE),
+    ('francois@boostao.ca', 'Francois Bornais', 'admin', '$2a$12$iZCXRSLhCf./gTwQ1RuwzeeERl4JOmcIFOiTooYNBXfkvmV5wrJia', TRUE)
+ON CONFLICT (email) DO NOTHING;
