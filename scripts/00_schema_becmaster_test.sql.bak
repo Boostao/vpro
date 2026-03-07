@@ -120,79 +120,6 @@ CREATE TABLE IF NOT EXISTS lists.usyssppattributes (
 );
 
 -- ============================================================================
--- ADMIN SCHEMA - User & Role Management
--- ============================================================================
-
-CREATE TABLE IF NOT EXISTS admin.users (
-    id SERIAL PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
-    full_name TEXT,
-    app_role TEXT NOT NULL DEFAULT 'guest' CHECK (app_role IN ('guest', 'admin')),
-    password_hash TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    last_login_utc TIMESTAMPTZ
-);
-
-CREATE TABLE IF NOT EXISTS admin.change_log (
-    id SERIAL PRIMARY KEY,
-    timestamp_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    username TEXT NOT NULL,
-    table_name TEXT NOT NULL,
-    operation TEXT CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
-    record_id INTEGER,
-    old_values JSONB,
-    new_values JSONB
-);
-
-CREATE INDEX IF NOT EXISTS idx_change_log_timestamp ON admin.change_log(timestamp_utc);
-CREATE INDEX IF NOT EXISTS idx_change_log_user ON admin.change_log(username);
-
-CREATE TABLE IF NOT EXISTS admin.merge_requests (
-    id SERIAL PRIMARY KEY,
-    project_id TEXT NOT NULL,
-    submitter_user_id INTEGER REFERENCES admin.users(id),
-    submitter_name TEXT NOT NULL,
-    submitted_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    status TEXT NOT NULL DEFAULT 'pending_review'
-        CHECK (status IN ('pending_review', 'approved', 'rejected', 'merged')),
-    reviewer_user_id INTEGER REFERENCES admin.users(id),
-    reviewer TEXT,
-    review_notes TEXT,
-    reviewed_utc TIMESTAMPTZ,
-    record_counts JSONB NOT NULL DEFAULT '{}',  -- map: table_name -> row count
-    compliance_passed BOOLEAN,
-    compliance_report TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_merge_requests_status ON admin.merge_requests(status);
-CREATE INDEX IF NOT EXISTS idx_merge_requests_submitted ON admin.merge_requests(submitted_utc);
-
-CREATE TABLE IF NOT EXISTS admin.merge_conflicts (
-    id SERIAL PRIMARY KEY,
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    table_name TEXT NOT NULL,
-    record_id TEXT NOT NULL DEFAULT '',
-    details JSONB,
-    resolution TEXT CHECK (resolution IN ('keep_staged', 'keep_core', 'dismiss')),
-    resolved_by TEXT,
-    resolved_utc TIMESTAMPTZ,
-    created_utc TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(merge_request_id, table_name, record_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_merge_conflicts_request ON admin.merge_conflicts(merge_request_id);
-
-CREATE TABLE IF NOT EXISTS admin.merge_history (
-    id SERIAL PRIMARY KEY,
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id),
-    merged_utc TIMESTAMPTZ DEFAULT now(),
-    approved_by_user_id INTEGER NOT NULL REFERENCES admin.users(id),
-    record_count INTEGER,
-    merge_summary JSONB
-);
-
--- ============================================================================
 -- CORE SCHEMA - Main data tables (from Sample_* tables in DuckDB)
 -- ============================================================================
 
@@ -848,8 +775,7 @@ CREATE INDEX IF NOT EXISTS idx_core_audit_table ON core.audit(_table);
 
 -- staging.admin
 CREATE TABLE IF NOT EXISTS staging.admin (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    plot TEXT NOT NULL,
+    plot TEXT PRIMARY KEY,
     startdate BIGINT,
     plottype TEXT,
     plotsize NUMERIC,
@@ -873,14 +799,12 @@ CREATE TABLE IF NOT EXISTS staging.admin (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, plot)
+    "modifiedBy" TEXT
 );
 
 -- staging.env
 CREATE TABLE IF NOT EXISTS staging.env (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    plotnumber TEXT NOT NULL,
+    plotnumber TEXT PRIMARY KEY,
     fieldnumber TEXT,
     projectid TEXT,
     fsregiondistrict TEXT,
@@ -996,14 +920,12 @@ CREATE TABLE IF NOT EXISTS staging.env (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, plotnumber)
+    "modifiedBy" TEXT
 );
 
 -- staging.veg
 CREATE TABLE IF NOT EXISTS staging.veg (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    id BIGINT NOT NULL,
+    id BIGINT PRIMARY KEY,
     plotnumber TEXT,
     species TEXT,
     layer TEXT,
@@ -1051,27 +973,23 @@ CREATE TABLE IF NOT EXISTS staging.veg (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, id)
+    "modifiedBy" TEXT
 );
 
 -- staging.su
 CREATE TABLE IF NOT EXISTS staging.su (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    plotnumber TEXT NOT NULL,
+    plotnumber TEXT PRIMARY KEY,
     siteunit TEXT,
     "baseRowVersion" INTEGER,
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, plotnumber)
+    "modifiedBy" TEXT
 );
 
 -- staging.metadata: Mirror of core.metadata with change tracking
 CREATE TABLE IF NOT EXISTS staging.metadata (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    id BIGINT NOT NULL,
+    id BIGINT PRIMARY KEY,
     projectid TEXT,
     startdate BIGINT,
     enddate TEXT,
@@ -1150,8 +1068,7 @@ CREATE TABLE IF NOT EXISTS staging.metadata (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, id)
+    "modifiedBy" TEXT
 );
 
 -- staging.hierarchy: Mirror of core.hierarchy with change tracking
@@ -1175,8 +1092,7 @@ CREATE TABLE IF NOT EXISTS staging.hierarchy (
 
 -- staging.humus: Mirror of core.humus with change tracking
 CREATE TABLE IF NOT EXISTS staging.humus (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    id BIGINT NOT NULL,
+    id BIGINT PRIMARY KEY,
     plotnumber TEXT,
     horizon TEXT,
     upperdepth NUMERIC,
@@ -1198,14 +1114,12 @@ CREATE TABLE IF NOT EXISTS staging.humus (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, id)
+    "modifiedBy" TEXT
 );
 
 -- staging.mineral: Mirror of core.mineral with change tracking
 CREATE TABLE IF NOT EXISTS staging.mineral (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    id BIGINT NOT NULL,
+    id BIGINT PRIMARY KEY,
     plotnumber TEXT,
     horizon TEXT,
     upperdepth NUMERIC,
@@ -1237,14 +1151,12 @@ CREATE TABLE IF NOT EXISTS staging.mineral (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, id)
+    "modifiedBy" TEXT
 );
 
 -- staging.other: Mirror of core.other with change tracking
 CREATE TABLE IF NOT EXISTS staging.other (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    id BIGINT NOT NULL,
+    id BIGINT PRIMARY KEY,
     plotnumber TEXT,
     dataname TEXT,
     dataitem TEXT,
@@ -1259,14 +1171,12 @@ CREATE TABLE IF NOT EXISTS staging.other (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, id)
+    "modifiedBy" TEXT
 );
 
 -- staging.herbarium: Mirror of core.herbarium with change tracking
 CREATE TABLE IF NOT EXISTS staging.herbarium (
-    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
-    recid BIGINT NOT NULL,
+    recid BIGINT PRIMARY KEY,
     accessionnumber BIGINT,
     accessiondate TEXT,
     plotnumber TEXT,
@@ -1303,8 +1213,7 @@ CREATE TABLE IF NOT EXISTS staging.herbarium (
     "changeType" TEXT CHECK ("changeType" IN ('I','U','D')),
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
-    "modifiedBy" TEXT,
-    PRIMARY KEY (merge_request_id, recid)
+    "modifiedBy" TEXT
 );
 
 -- staging.profile: Mirror of core.profile with change tracking
@@ -1389,6 +1298,84 @@ CREATE TABLE IF NOT EXISTS staging.audit (
     "rowVersion" INTEGER DEFAULT 1,
     "lastModifiedUTC" TIMESTAMPTZ DEFAULT now(),
     "modifiedBy" TEXT
+);
+
+-- ============================================================================
+-- ADMIN SCHEMA - User & Role Management
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS admin.users (
+    id SERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    full_name TEXT,
+    app_role TEXT NOT NULL DEFAULT 'guest' CHECK (app_role IN ('guest', 'admin')),
+    password_hash TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    last_login_utc TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS admin.change_log (
+    id SERIAL PRIMARY KEY,
+    timestamp_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    username TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    operation TEXT CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+    record_id INTEGER,
+    old_values JSONB,
+    new_values JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_change_log_timestamp ON admin.change_log(timestamp_utc);
+CREATE INDEX IF NOT EXISTS idx_change_log_user ON admin.change_log(username);
+
+CREATE TABLE IF NOT EXISTS admin.merge_requests (
+    id SERIAL PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    submitter_user_id INTEGER REFERENCES admin.users(id),
+    submitter_name TEXT NOT NULL,
+    submitted_utc TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    status TEXT NOT NULL DEFAULT 'pending_review'
+        CHECK (status IN ('pending_review', 'approved', 'rejected', 'merged')),
+    reviewer_user_id INTEGER REFERENCES admin.users(id),
+    reviewer TEXT,
+    review_notes TEXT,
+    reviewed_utc TIMESTAMPTZ,
+    env_record_count INTEGER NOT NULL DEFAULT 0,
+    su_record_count  INTEGER NOT NULL DEFAULT 0,
+    veg_record_count INTEGER NOT NULL DEFAULT 0,
+    compliance_passed BOOLEAN,
+    compliance_report TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_merge_requests_status ON admin.merge_requests(status);
+CREATE INDEX IF NOT EXISTS idx_merge_requests_submitted ON admin.merge_requests(submitted_utc);
+
+CREATE TABLE IF NOT EXISTS admin.merge_conflicts (
+    id SERIAL PRIMARY KEY,
+    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id) ON DELETE CASCADE,
+    table_name TEXT NOT NULL,
+    "PlotNumber" TEXT,
+    "ProjectID" TEXT,
+    "SpeciesCode" TEXT NOT NULL DEFAULT '',
+    "LayerCode"   TEXT NOT NULL DEFAULT '',
+    details JSONB,
+    resolution TEXT CHECK (resolution IN ('keep_staged', 'keep_core', 'dismiss')),
+    resolved_by TEXT,
+    resolved_utc TIMESTAMPTZ,
+    created_utc TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(merge_request_id, table_name, "PlotNumber", "ProjectID", "SpeciesCode", "LayerCode")
+);
+
+CREATE INDEX IF NOT EXISTS idx_merge_conflicts_request ON admin.merge_conflicts(merge_request_id);
+
+CREATE TABLE IF NOT EXISTS admin.merge_history (
+    id SERIAL PRIMARY KEY,
+    merge_request_id INTEGER NOT NULL REFERENCES admin.merge_requests(id),
+    merged_utc TIMESTAMPTZ DEFAULT now(),
+    approved_by_user_id INTEGER NOT NULL REFERENCES admin.users(id),
+    record_count INTEGER,
+    merge_summary JSONB
 );
 
 -- ============================================================================

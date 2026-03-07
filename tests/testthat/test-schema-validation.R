@@ -164,9 +164,20 @@ testthat::test_that("core.audit table schema matches", { run_schema_test("core",
 
 # ---- Staging Tables Tests ----
 testthat::test_that("staging.admin table schema matches", { run_schema_test("staging", "admin") })
+testthat::test_that("staging.metadata table schema matches", { run_schema_test("staging", "metadata") })
+testthat::test_that("staging.hierarchy table schema matches", { run_schema_test("staging", "hierarchy") })
 testthat::test_that("staging.env table schema matches", { run_schema_test("staging", "env") })
+testthat::test_that("staging.humus table schema matches", { run_schema_test("staging", "humus") })
+testthat::test_that("staging.mineral table schema matches", { run_schema_test("staging", "mineral") })
+testthat::test_that("staging.other table schema matches", { run_schema_test("staging", "other") })
 testthat::test_that("staging.veg table schema matches", { run_schema_test("staging", "veg") })
+testthat::test_that("staging.herbarium table schema matches", { run_schema_test("staging", "herbarium") })
 testthat::test_that("staging.su table schema matches", { run_schema_test("staging", "su") })
+testthat::test_that("staging.profile table schema matches", { run_schema_test("staging", "profile") })
+testthat::test_that("staging.veg_profile table schema matches", { run_schema_test("staging", "veg_profile") })
+testthat::test_that("staging.lump table schema matches", { run_schema_test("staging", "lump") })
+testthat::test_that("staging.theme table schema matches", { run_schema_test("staging", "theme") })
+testthat::test_that("staging.audit table schema matches", { run_schema_test("staging", "audit") })
 
 # ---- Lists Tables Tests ----
 testthat::test_that("lists.spplist table schema matches", { run_schema_test("lists", "spplist") })
@@ -203,9 +214,20 @@ testthat::test_that("All core, staging, and list tables have matching schemas", 
     list(schema = "core", table = "audit"),
     # Staging tables
     list(schema = "staging", table = "admin"),
+    list(schema = "staging", table = "metadata"),
+    list(schema = "staging", table = "hierarchy"),
     list(schema = "staging", table = "env"),
+    list(schema = "staging", table = "humus"),
+    list(schema = "staging", table = "mineral"),
+    list(schema = "staging", table = "other"),
     list(schema = "staging", table = "veg"),
+    list(schema = "staging", table = "herbarium"),
     list(schema = "staging", table = "su"),
+    list(schema = "staging", table = "profile"),
+    list(schema = "staging", table = "veg_profile"),
+    list(schema = "staging", table = "lump"),
+    list(schema = "staging", table = "theme"),
+    list(schema = "staging", table = "audit"),
     # Lists tables
     list(schema = "lists", table = "spplist"),
     list(schema = "lists", table = "layercode"),

@@ -1,7 +1,7 @@
 # =============================================================================
 # mod_sync.R
-# Field-user sync module: view local changes, pull from master, push to staging,
-# view own merge requests. Full-blocking conflict modal when queue is non-empty.
+# Field-user push-only sync module: view local changes (9 tables), push to
+# staging, view own merge requests. No pull functionality.
 # =============================================================================
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -21,12 +21,11 @@ mod_sync_ui <- function(id) {
       div(
         class = "d-flex align-items-center gap-2 flex-wrap mb-3 mt-1",
         uiOutput(ns("project_badge")),
-        uiOutput(ns("pull_count_badge")),
-        uiOutput(ns("btn_pull_ui")),
         actionButton(
           ns("sync_push"),
-          label = tagList(icon("cloud-arrow-up"), "Push changes"),
-          class = "btn btn-success btn-sm"
+            label = tagList(icon("cloud-arrow-up"), "Push changes"),
+            style = "background-color: #fcba19; border-color: #fcba19; color: #222;",
+            class = "btn btn-sm"
         ),
         actionButton(
           ns("sync_refresh"),
@@ -38,24 +37,42 @@ mod_sync_ui <- function(id) {
       # Status message
       uiOutput(ns("sync_status")),
 
-      # Accordions for each table
+      # 4 accordion groups ordered by field workflow: Site, Soil, Veg, Project
       bslib::accordion(
         id = ns("acc_changes"),
         open = FALSE,
+
         bslib::accordion_panel(
-          title = tagList(icon("mountain"), " Environment"),
-          value = "env",
-          DT::dataTableOutput(ns("tbl_env_changes"))
-        ),
-        bslib::accordion_panel(
-          title = tagList(icon("layer-group"), " Site Units"),
-          value = "su",
+          title = tagList(icon("map-location-dot"), " Site"),
+          value = "site",
+          tags$p(class = "text-muted small mb-1", "Admin, Env, SU"),
+          DT::dataTableOutput(ns("tbl_admin_changes")),
+          DT::dataTableOutput(ns("tbl_env_changes")),
           DT::dataTableOutput(ns("tbl_su_changes"))
         ),
+
+        bslib::accordion_panel(
+          title = tagList(icon("layer-group"), " Soil"),
+          value = "soil",
+          tags$p(class = "text-muted small mb-1", "Humus, Mineral, Other"),
+          DT::dataTableOutput(ns("tbl_humus_changes")),
+          DT::dataTableOutput(ns("tbl_mineral_changes")),
+          DT::dataTableOutput(ns("tbl_other_changes"))
+        ),
+
         bslib::accordion_panel(
           title = tagList(icon("leaf"), " Vegetation"),
           value = "veg",
-          DT::dataTableOutput(ns("tbl_veg_changes"))
+          tags$p(class = "text-muted small mb-1", "Veg, Herbarium"),
+          DT::dataTableOutput(ns("tbl_veg_changes")),
+          DT::dataTableOutput(ns("tbl_herbarium_changes"))
+        ),
+
+        bslib::accordion_panel(
+          title = tagList(icon("folder-open"), " Project"),
+          value = "project",
+          tags$p(class = "text-muted small mb-1", "Metadata"),
+          DT::dataTableOutput(ns("tbl_metadata_changes"))
         )
       )
     ),
@@ -92,126 +109,16 @@ mod_sync_server <- function(id, state, con) {
     ns <- session$ns
 
     # ── Invalidation signals ─────────────────────────────────────────────────
-    # rv_refresh: incremented by Refresh button and push/pull success
     rv_refresh   <- reactiveVal(0L)
-    # rv_mr_reload: also incremented after push to force MR list refresh
     rv_mr_reload <- reactiveVal(0L)
 
     observeEvent(input$sync_refresh, rv_refresh(rv_refresh() + 1L))
     observeEvent(input$mr_refresh,   rv_mr_reload(rv_mr_reload() + 1L))
 
-    # Also refresh incoming count whenever the Sync tab is navigated to
+    # Refresh when Sync tab is navigated to
     observeEvent(state$SyncTabActivated, {
       rv_refresh(rv_refresh() + 1L)
     }, ignoreInit = TRUE)
-
-
-    # ── Conflict modal (global blocking) ─────────────────────────────────────
-    # Check on startup and whenever SyncVersion changes.
-    conflict_modal_shown <- reactiveVal(FALSE)
-
-    # Render the conflict table with proper Shiny bindings
-    output$conflict_table <- DT::renderDataTable({
-      n <- tryCatch(
-        sync_count_local_conflicts(con),
-        error = function(e) 0L
-      )
-      if (n == 0) {
-        return(DT::datatable(
-          data.frame(Message = "No conflicts."),
-          rownames = FALSE,
-          options = list(dom = "t")
-        ))
-      }
-      conflict_rows <- tryCatch(
-        sync_get_local_conflicts(con),
-        error = function(e) data.frame()
-      )
-      DT::datatable(
-        conflict_rows[, intersect(c("id", "table_name", "plot_number", "project_id",
-                                    "species_code", "layer_code", "local_values",
-                                    "master_values", "conflict_at"), names(conflict_rows))],
-        selection = "single",
-        rownames  = FALSE,
-        options   = list(pageLength = 10, scrollX = TRUE)
-      )
-    })
-
-    check_conflicts <- function() {
-      n <- tryCatch(
-        sync_count_local_conflicts(con),
-        error = function(e) 0L
-      )
-      if (n > 0 && !isTRUE(conflict_modal_shown())) {
-        showModal(modalDialog(
-          title = tagList(icon("triangle-exclamation", class = "text-danger"), " Unresolved Sync Conflicts"),
-          easyClose = FALSE,
-          footer = NULL,
-          div(
-            class = "alert alert-danger mb-2",
-            strong("You have unresolved pull conflicts that must be resolved before you can push."),
-            " For each row below, choose whether to keep your local version or accept the master version."
-          ),
-          # Reference the bound datatable output
-          DT::dataTableOutput(ns("conflict_table")),
-          div(
-            class = "d-flex gap-2 mt-3",
-            uiOutput(ns("conflict_selected_info")),
-            actionButton(ns("conflict_keep_local"),    "Keep Local",    class = "btn btn-warning btn-sm"),
-            actionButton(ns("conflict_accept_master"), "Accept Master", class = "btn btn-danger btn-sm ms-auto")
-          )
-        ))
-        conflict_modal_shown(TRUE)
-      } else if (n == 0 && isTRUE(conflict_modal_shown())) {
-        removeModal()
-        conflict_modal_shown(FALSE)
-      }
-    }
-
-    # Run on module load
-    observe({ check_conflicts() })
-
-    # Re-run when SyncVersion increments
-    observeEvent(state$SyncVersion, {
-      check_conflicts()
-    }, ignoreInit = TRUE)
-
-    # Selected conflict row id
-    selected_conflict_id <- reactive({
-      # Use DT selection via proxy name
-      sel  <- input$conflict_table_rows_selected
-      if (is.null(sel) || length(sel) == 0) return(NULL)
-      cq <- tryCatch(sync_get_local_conflicts(con), error = function(e) data.frame())
-      if (nrow(cq) == 0 || sel > nrow(cq)) return(NULL)
-      cq$id[sel]
-    })
-
-    output$conflict_selected_info <- renderUI({
-      id <- selected_conflict_id()
-      if (is.null(id)) {
-        span(class = "text-muted small", "Select a row above to resolve it.")
-      } else {
-        span(class = "text-muted small", paste("Conflict #", id, "selected"))
-      }
-    })
-
-    resolve_conflict_and_recheck <- function(resolution) {
-      id <- selected_conflict_id()
-      if (is.null(id)) {
-        showNotification("Select a conflict row first.", type = "warning")
-        return()
-      }
-      tryCatch({
-        sync_resolve_local_conflict(con, id, resolution)
-        state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
-        check_conflicts()
-      }, error = function(e) {
-        showNotification(paste("Error resolving conflict:", e$message), type = "error")
-      })
-    }
-
-    observeEvent(input$conflict_keep_local,    resolve_conflict_and_recheck("keep_local"))
-    observeEvent(input$conflict_accept_master, resolve_conflict_and_recheck("accept_master"))
 
 
     # ── Current project from state ────────────────────────────────────────────
@@ -227,82 +134,42 @@ mod_sync_server <- function(id, state, con) {
     })
 
 
-    # ── Incoming count (computed on tab open + Refresh) ───────────────────────
-    reactive_incoming <- reactive({
-      rv_refresh()
-      tryCatch(
-        sync_count_incoming(con, project_id = current_project_id()),
-        error = function(e) list(env = 0L, su = 0L, veg = 0L, available = FALSE)
-      )
-    })
-
-    output$pull_count_badge <- renderUI({
-      inc <- reactive_incoming()
-      if (!isTRUE(inc$available)) {
-        span(class = "badge bg-secondary", "Cloud: offline")
-      } else {
-        total <- (inc$env %||% 0L) + (inc$su %||% 0L) + (inc$veg %||% 0L)
-        if (total > 0) {
-          span(class = "badge bg-info text-dark", paste(total, "incoming"))
-        } else {
-          span(class = "badge bg-success", "Up to date")
-        }
-      }
-    })
-
-    output$btn_pull_ui <- renderUI({
-      inc   <- reactive_incoming()
-      total <- (inc$env %||% 0L) + (inc$su %||% 0L) + (inc$veg %||% 0L)
-      label <- if (isTRUE(inc$available) && total > 0) {
-        tagList(icon("cloud-arrow-down"), paste0("Pull (", total, " changes)"))
-      } else {
-        tagList(icon("cloud-arrow-down"), "Pull")
-      }
-      disabled <- !isTRUE(inc$available)
-      btn <- actionButton(
-        ns("sync_pull"),
-        label = label,
-        class = if (disabled) "btn btn-outline-primary btn-sm disabled" else "btn btn-primary btn-sm"
-      )
-      btn
-    })
-
-
     # ── Local changes reactive ────────────────────────────────────────────────
     reactive_changes <- reactive({
       rv_refresh()
-      state$SyncVersion  # invalidation
+      state$SyncVersion  # invalidation signal
       tryCatch(
         sync_get_local_changes(con, project_id = current_project_id()),
-        error = function(e) list(
-          env = data.frame(change_type = character(0)),
-          su  = data.frame(change_type = character(0)),
-          veg = data.frame(change_type = character(0))
-        )
+        error = function(e) {
+          setNames(
+            lapply(c("admin","env","su","humus","mineral","other","veg","herbarium","metadata"),
+                   function(x) data.frame(table_pg = character(0), change_type = character(0))),
+            c("admin","env","su","humus","mineral","other","veg","herbarium","metadata")
+          )
+        }
       )
     })
 
-    # Helper: render a changes table with row background coloring
-    render_changes_table <- function(df_reactive, id) {
-      output[[id]] <- DT::renderDataTable({
-        df <- df_reactive()
-        if (nrow(df) == 0) {
+    # Helper: render one table's changes as a compact DT
+    .render_changes <- function(pg_name, dt_output_id) {
+      output[[dt_output_id]] <- DT::renderDataTable({
+        changes <- reactive_changes()
+        df      <- changes[[pg_name]]
+        if (is.null(df) || nrow(df) == 0) {
           return(DT::datatable(
-            data.frame(Message = "No local changes."),
+            data.frame(Status = paste0(pg_name, ": no local changes")),
             rownames = FALSE,
             options  = list(dom = "t", pageLength = 5)
           ))
         }
         dt <- DT::datatable(
           df,
+          caption  = pg_name,
           rownames  = FALSE,
           selection = "none",
           options   = list(pageLength = 20, scrollX = TRUE)
         )
-        # Row background: green = insert, yellow = update
         if ("change_type" %in% names(df)) {
-          insert_rows <- which(df$change_type == "insert") - 1L  # 0-indexed for JS
-          update_rows <- which(df$change_type == "update") - 1L
           dt <- DT::formatStyle(
             dt, "change_type",
             target          = "row",
@@ -316,9 +183,15 @@ mod_sync_server <- function(id, state, con) {
       })
     }
 
-    render_changes_table(reactive({ reactive_changes()$env }), "tbl_env_changes")
-    render_changes_table(reactive({ reactive_changes()$su  }), "tbl_su_changes")
-    render_changes_table(reactive({ reactive_changes()$veg }), "tbl_veg_changes")
+    .render_changes("admin",     "tbl_admin_changes")
+    .render_changes("env",       "tbl_env_changes")
+    .render_changes("su",        "tbl_su_changes")
+    .render_changes("humus",     "tbl_humus_changes")
+    .render_changes("mineral",   "tbl_mineral_changes")
+    .render_changes("other",     "tbl_other_changes")
+    .render_changes("veg",       "tbl_veg_changes")
+    .render_changes("herbarium", "tbl_herbarium_changes")
+    .render_changes("metadata",  "tbl_metadata_changes")
 
 
     # ── Status output ─────────────────────────────────────────────────────────
@@ -332,76 +205,32 @@ mod_sync_server <- function(id, state, con) {
     })
 
 
-    # ── Pull handler ─────────────────────────────────────────────────────────
-    observeEvent(input$sync_pull, {
-      pid <- current_project_id()
-      tryCatch({
-        result <- sync_pull(
-          con,
-          project_id   = pid,
-          tables       = c("env", "su", "veg", "lists"),
-          allow_attach = FALSE
-        )
-        state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
-        rv_refresh(rv_refresh() + 1L)
-
-        env_n   <- result$env$pulled       %||% 0L
-        su_n    <- result$su$pulled        %||% 0L
-        veg_n   <- result$veg$pulled       %||% 0L
-        conf_n  <- (result$env$conflicts   %||% 0L) +
-                   (result$su$conflicts    %||% 0L) +
-                   (result$veg$conflicts   %||% 0L)
-        msg <- sprintf(
-          "Pull complete — env: %d, su: %d, veg: %d rows. Conflicts queued: %d.",
-          as.integer(env_n), as.integer(su_n), as.integer(veg_n), as.integer(conf_n)
-        )
-        sync_status_msg(msg)
-      }, error = function(e) {
-        m <- conditionMessage(e)
-        attr(m, "error") <- TRUE
-        sync_status_msg(m)
-      })
-    })
-
-
     # ── Push handler ─────────────────────────────────────────────────────────
     observeEvent(input$sync_push, {
-      # Guard: unresolved conflicts
-      n_conf <- tryCatch(sync_count_local_conflicts(con), error = function(e) 0L)
-      if (n_conf > 0) {
-        showNotification(
-          paste0("Push blocked: ", n_conf, " unresolved conflict(s). Resolve them first."),
-          type     = "error",
-          duration = 8
-        )
-        return()
-      }
-
       pid       <- current_project_id()
       submitter <- state$User %||% "unknown"
 
       tryCatch({
-        result  <- sync_push(
-          con,
-          project_id   = pid,
-          submitter    = submitter,
-          allow_attach = FALSE
-        )
+        result <- sync_push(con, project_id = pid, submitter = submitter)
+
         state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
         rv_refresh(rv_refresh() + 1L)
         rv_mr_reload(rv_mr_reload() + 1L)
 
-        mr_id <- result$merge_request_id %||% "?"
-        env_n <- result$env  %||% 0L
-        su_n  <- result$su   %||% 0L
-        veg_n <- result$veg  %||% 0L
-        msg   <- sprintf(
-          "Push submitted — MR #%s (env: %d, su: %d, veg: %d rows). Awaiting admin review.",
-          mr_id, as.integer(env_n), as.integer(su_n), as.integer(veg_n)
+        mr_id  <- result$merge_request_id %||% "?"
+        counts <- result$counts %||% list()
+        # Build per-table summary (omit tables with 0 rows)
+        non_zero <- Filter(function(n) as.integer(n) > 0L, counts)
+        count_str <- if (length(non_zero) > 0)
+          paste(names(non_zero), unlist(non_zero), sep = ": ", collapse = ", ")
+        else
+          "no rows"
+
+        msg <- sprintf(
+          "Push submitted \u2014 MR #%s (%s). Awaiting admin review.",
+          mr_id, count_str
         )
         sync_status_msg(msg)
-
-        # Navigate to Merge Requests tab
         bslib::nav_select(session$ns("sync_tabs"), selected = "merge_requests")
       }, error = function(e) {
         m <- conditionMessage(e)
@@ -433,7 +262,6 @@ mod_sync_server <- function(id, state, con) {
         ))
       }
 
-      # Format status as badge-style label
       df$status_label <- dplyr::case_when(
         df$status == "pending_review" ~ "Pending",
         df$status == "merged"         ~ "Merged",
@@ -442,9 +270,16 @@ mod_sync_server <- function(id, state, con) {
         TRUE                          ~ df$status
       )
 
+      # Parse record_counts JSONB to compute total
+      df$total_rows <- vapply(df$record_counts, function(rc) {
+        tryCatch({
+          nn <- jsonlite::fromJSON(rc %||% "{}")
+          as.integer(sum(unlist(nn), na.rm = TRUE))
+        }, error = function(e) NA_integer_)
+      }, integer(1))
+
       display_cols <- intersect(
-        c("id", "project_id", "submitted_utc", "status_label",
-          "env_record_count", "su_record_count", "veg_record_count", "review_notes"),
+        c("id", "project_id", "submitted_utc", "status_label", "total_rows", "review_notes"),
         names(df)
       )
 
@@ -452,8 +287,7 @@ mod_sync_server <- function(id, state, con) {
         df[, display_cols, drop = FALSE],
         rownames  = FALSE,
         selection = "single",
-        colnames  = c("ID", "Project", "Submitted", "Status",
-                      "Env", "SU", "Veg", "Review Notes")[seq_along(display_cols)],
+        colnames  = c("ID", "Project", "Submitted", "Status", "Rows", "Review Notes")[seq_along(display_cols)],
         options   = list(pageLength = 20, scrollX = TRUE)
       ) |>
         DT::formatStyle(
@@ -473,8 +307,32 @@ mod_sync_server <- function(id, state, con) {
       if (nrow(df) == 0 || sel > nrow(df)) return(NULL)
       row <- df[sel, , drop = FALSE]
 
-      notes    <- row$review_notes[1]
-      rev_utc  <- row$reviewed_utc[1]
+      # Parse record_counts JSON -> per-table display
+      counts_list <- tryCatch(
+        jsonlite::fromJSON(row$record_counts[1] %||% "{}"),
+        error = function(e) list()
+      )
+      count_rows <- if (length(counts_list) > 0) {
+        tagList(
+          tags$dt(class = "col-sm-3", "Rows by table"),
+          tags$dd(class = "col-sm-9",
+            tags$ul(
+              class = "list-unstyled mb-0",
+              lapply(names(counts_list), function(tbl)
+                tags$li(paste0(tbl, ": ", counts_list[[tbl]]))
+              )
+            )
+          )
+        )
+      } else {
+        tagList(
+          tags$dt(class = "col-sm-3", "Rows"),
+          tags$dd(class = "col-sm-9", "—")
+        )
+      }
+
+      notes   <- row$review_notes[1]
+      rev_utc <- row$reviewed_utc[1]
 
       div(
         class = "card mt-3",
@@ -483,12 +341,7 @@ mod_sync_server <- function(id, state, con) {
           h6(class = "card-title", paste("MR #", row$id[1], "— detail")),
           tags$dl(
             class = "row mb-0",
-            tags$dt(class = "col-sm-3", "Env rows"),
-            tags$dd(class = "col-sm-9", row$env_record_count[1] %||% "—"),
-            tags$dt(class = "col-sm-3", "SU rows"),
-            tags$dd(class = "col-sm-9", row$su_record_count[1]  %||% "—"),
-            tags$dt(class = "col-sm-3", "Veg rows"),
-            tags$dd(class = "col-sm-9", row$veg_record_count[1] %||% "—"),
+            count_rows,
             tags$dt(class = "col-sm-3", "Reviewed"),
             tags$dd(class = "col-sm-9",
               if (!is.na(rev_utc) && !is.null(rev_utc)) as.character(rev_utc) else "—"
