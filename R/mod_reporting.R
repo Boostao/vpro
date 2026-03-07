@@ -422,7 +422,7 @@ mod_reporting_server <- function(id, sys_state, con) {
                 ns("lv_show_field"),
                 "Attribute field (when Extra label = Attribute)",
                 choices = c(
-                  "â€” none â€”"  = "",
+                  "none" = "",
                   "Red/Blue List"     = "RedBlueList",
                   "Wetland Indicator" = "Wetland_Ind",
                   "Weed Status"       = "WeedStatus"
