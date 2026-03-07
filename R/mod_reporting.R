@@ -402,7 +402,7 @@ mod_reporting_server <- function(id, sys_state, con) {
           ),
           col_widths = c(6)
         ),
-        # â”€â”€ Long Vegetation only options â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # Long Vegetation only options 
         if (identical(input$report_template, "long_veg.qmd")) {
           tagList(
             tags$hr(),

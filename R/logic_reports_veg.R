@@ -1,8 +1,3 @@
-# Shared helpers for vegetation reporting.
-if (!exists("%>%", mode = "function", envir = globalenv())) {
-  `%>%` <- magrittr::`%>%`
-}
-
 presence_to_class <- function(presence_ratio) {
   if (is.na(presence_ratio)) return(NA_character_)
   if (presence_ratio >= 0 && presence_ratio <= 0.2) return("I")
