@@ -1,5 +1,3 @@
-# Shared helpers for vegetation reporting.
-
 presence_to_class <- function(presence_ratio) {
   if (is.na(presence_ratio)) return(NA_character_)
   if (presence_ratio >= 0 && presence_ratio <= 0.2) return("I")
@@ -259,15 +257,28 @@ summarize_veg_report <- function(df,
     cover_num = as.numeric(df$cover_num)
   )
 
+  # Normalise avg_type aliases:
+  #   Access "By n Plots"    → "by_n_plots" / "sum_per_plot" / "10" / "mean"
+  #   Access "Characteristic"→ "characteristic" / "20"
+  avg_type_norm <- switch(tolower(avg_type),
+    "10"           = "by_n_plots",
+    "sum_per_plot" = "by_n_plots",
+    "mean"         = "by_n_plots",
+    "20"           = "characteristic",
+    tolower(avg_type)
+  )
+
   summary <- summary %>%
     dplyr::group_by(group_label, species_label, common_label) %>%
     dplyr::summarise(
-      plots_total = dplyr::n_distinct(plotnumber),
+      plots_total   = dplyr::n_distinct(plotnumber),
       plots_present = dplyr::n_distinct(plotnumber[present]),
-      sum_cover = sum(cover_num, na.rm = TRUE),
-      mean_cover = if (tolower(avg_type) == "sum_per_plot") {
+      sum_cover     = sum(cover_num, na.rm = TRUE),
+      mean_cover    = if (avg_type_norm == "by_n_plots") {
+        # Denominator = all plots in set (Access: "By n Plots")
         ifelse(plots_total > 0, sum(cover_num, na.rm = TRUE) / plots_total, NA_real_)
       } else {
+        # Denominator = only plots where species recorded (Access: "Characteristic")
         ifelse(sum(present, na.rm = TRUE) > 0, mean(cover_num[present], na.rm = TRUE), NA_real_)
       },
       .groups = "drop"

@@ -107,7 +107,14 @@ mod_reporting_server <- function(id, sys_state, con) {
           table_name,
           sql_quote(file_path)
         )
-        try(DBI::dbExecute(con, sql), silent = TRUE)
+        result <- tryCatch(
+          DBI::dbExecute(con, sql),
+          error = function(e) {
+            # Non-fatal: warn but keep going so other tables still export
+            warning(sprintf("[export_tables_to_parquet] %s: %s", table_name, conditionMessage(e)))
+            NULL
+          }
+        )
       }
 
       export_dir
@@ -117,7 +124,8 @@ mod_reporting_server <- function(id, sys_state, con) {
       exports <- list(
         "site_summary.qmd" = c("Sample_Env", "Sample_SU", "vw_USysAllVeg", "Sample_Humus", "Sample_Mineral"),
         "short_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
-        "long_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
+        "long_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode",
+                           "lists.USysAllSpecs", "Sample_Admin", "vw_USysEnv"),
         "env_summary.qmd" = c("Sample_Env", "Sample_SU"),
         "long_env.qmd" = c("Sample_Env", "Sample_SU", "lists.MasterSiteUnitList"),
         "short_veg_env.qmd" = c("vw_USysAllVeg", "Sample_Env", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
@@ -153,7 +161,6 @@ mod_reporting_server <- function(id, sys_state, con) {
         "veg_layer_d.qmd",
         "bec_labels.qmd",
         "short_veg.qmd",
-        "long_veg.qmd",
         "lifeform.qmd",
         "short_veg_env.qmd",
         "short_veg_hierarchy.qmd",
@@ -365,8 +372,11 @@ mod_reporting_server <- function(id, sys_state, con) {
           selectInput(
             ns("veg_avg_type"),
             "Average type",
-            choices = c("Mean cover" = "mean", "Sum per plot" = "sum_per_plot"),
-            selected = "mean"
+            choices = c(
+              "By n Plots (incl. absences)"        = "by_n_plots",
+              "Characteristic (present plots only)" = "characteristic"
+            ),
+            selected = "by_n_plots"
           ),
           col_widths = c(4, 4, 4)
         ),
@@ -385,12 +395,89 @@ mod_reporting_server <- function(id, sys_state, con) {
               "English name" = "english",
               "Short guide name" = "short",
               "Combined English" = "combined",
-              "Species code" = "code"
+              "Species code" = "code",
+              "Species attribute" = "attribute"
             ),
             selected = "none"
           ),
           col_widths = c(6)
-        )
+        ),
+        # Long Vegetation only options 
+        if (identical(input$report_template, "long_veg.qmd")) {
+          tagList(
+            tags$hr(),
+            tags$h5("Long Vegetation Options"),
+            layout_columns(
+              selectInput(
+                ns("lv_unit_groups"),
+                "Plot source",
+                choices = c(
+                  "Site unit table"          = "site_unit",
+                  "Selected fields"          = "selected_fields",
+                  "None (plot numbers only)" = "none"
+                ),
+                selected = "site_unit"
+              ),
+              selectInput(
+                ns("lv_show_field"),
+                "Attribute field (when Extra label = Attribute)",
+                choices = c(
+                  "- none -"  = "",
+                  "Red/Blue List"     = "RedBlueList",
+                  "Wetland Indicator" = "Wetland_Ind",
+                  "Weed Status"       = "WeedStatus"
+                ),
+                selected = ""
+              ),
+              col_widths = c(4, 4)
+            ),
+            layout_columns(
+              checkboxInput(ns("lv_space_between_groups"), "Space between groups",   value = FALSE),
+              checkboxInput(ns("lv_use_spp_codes_only"),   "Species codes only",     value = FALSE),
+              checkboxInput(ns("lv_constant_spp_list"),    "Constant species list",  value = FALSE),
+              checkboxInput(ns("lv_screen_report"),        "Screen report (faster)", value = TRUE),
+              checkboxInput(ns("lv_create_summary"),       "Append summary section", value = FALSE),
+              col_widths = c(3, 3, 2, 2, 2)
+            ),
+            tags$h6("Data Quality Gate"),
+            layout_columns(
+              checkboxInput(ns("lv_enforce_qc"), "Enforce quality control", value = FALSE),
+              col_widths = c(4)
+            ),
+            conditionalPanel(
+              condition = sprintf("input['%s'] == true", ns("lv_enforce_qc")),
+              layout_columns(
+                selectInput(
+                  ns("lv_site_quality_min"), "Site quality min",
+                  choices = c("- any -" = "", "Poor", "Fair", "Good", "Excellent"),
+                  selected = ""
+                ),
+                checkboxInput(ns("lv_site_quality_include_null"), "Include null site quality", value = TRUE),
+                col_widths = c(4, 4)
+              ),
+              layout_columns(
+                selectInput(
+                  ns("lv_veg_quality_min"), "Veg quality min",
+                  choices = c("- any -" = "", "Poor", "Fair", "Good", "Excellent"),
+                  selected = ""
+                ),
+                checkboxInput(ns("lv_veg_quality_include_null"), "Include null veg quality", value = TRUE),
+                col_widths = c(4, 4)
+              ),
+              layout_columns(
+                selectInput(
+                  ns("lv_soil_quality_min"), "Soil quality min",
+                  choices = c("- any -" = "", "Poor", "Fair", "Good", "Excellent"),
+                  selected = ""
+                ),
+                checkboxInput(ns("lv_soil_quality_include_null"), "Include null soil quality", value = TRUE),
+                col_widths = c(4, 4)
+              )
+            )
+          )
+        } else {
+          NULL
+        }
       )
     })
 
@@ -522,29 +609,51 @@ mod_reporting_server <- function(id, sys_state, con) {
         "short_veg_hierarchy.qmd",
         "short_veg_order_hierarchy.qmd"
       )) {
-        list(
-          project_root = project_root,
-          plot_number = as.character(sys_state$CurrSU),
-          plot_numbers = trimws(value_or(input$veg_plot_numbers, "")),
-          site_unit = trimws(value_or(input$veg_site_unit, "")),
-          project_id = trimws(value_or(input$veg_project_id, "")),
-          group_by = value_or(input$veg_group_by, "layer"),
-          order_by = value_or(input$veg_order_by, "species"),
-          avg_type = value_or(input$veg_avg_type, "mean"),
-          presence_min = as.numeric(value_or(input$veg_presence_min, 0)),
-          cover_min = as.numeric(value_or(input$veg_cover_min, 0)),
-          value_limit = as.numeric(value_or(input$veg_value_limit, 0)),
-          show_common = value_or(input$veg_show_common, "none"),
-          display_value = value_or(input$veg_display_value, "presence_mean"),
-          report_title = value_or(input$veg_report_title, "Short Vegetation Table"),
-          apply_lumping = isTRUE(input$veg_apply_lumping),
+        # Base params shared by all veg templates
+        base_veg <- list(
+          project_root     = project_root,
+          plot_number      = as.character(sys_state$CurrSU),
+          plot_numbers     = trimws(value_or(input$veg_plot_numbers, "")),
+          site_unit        = trimws(value_or(input$veg_site_unit, "")),
+          project_id       = trimws(value_or(input$veg_project_id, "")),
+          group_by         = value_or(input$veg_group_by, "layer"),
+          order_by         = value_or(input$veg_order_by, "species"),
+          avg_type         = value_or(input$veg_avg_type, "by_n_plots"),
+          presence_min     = as.numeric(value_or(input$veg_presence_min, 0)),
+          cover_min        = as.numeric(value_or(input$veg_cover_min, 0)),
+          value_limit      = as.numeric(value_or(input$veg_value_limit, 0)),
+          show_common      = value_or(input$veg_show_common, "none"),
+          display_value    = value_or(input$veg_display_value, "presence_mean"),
+          report_title     = value_or(input$veg_report_title, "Short Vegetation Table"),
+          apply_lumping    = isTRUE(input$veg_apply_lumping),
           constancy_format = isTRUE(input$veg_constancy_format),
-          colour_greater = as.numeric(value_or(input$opt_colour_greater, 5)),
-          gray_greater = as.numeric(value_or(input$opt_gray_greater, 65)),
-          apply_theme = isTRUE(input$opt_apply_theme),
-          db_path = db_path,
-          parquet_dir = parquet_dir
+          colour_greater   = as.numeric(value_or(input$opt_colour_greater, 5)),
+          gray_greater     = as.numeric(value_or(input$opt_gray_greater, 65)),
+          apply_theme      = isTRUE(input$opt_apply_theme),
+          db_path          = db_path,
+          parquet_dir      = parquet_dir
         )
+        # Long Veg gets 14 additional params from the lv_* inputs
+        if (identical(template_name, "long_veg.qmd")) {
+          c(base_veg, list(
+            show_field                = value_or(input$lv_show_field, ""),
+            unit_groups               = value_or(input$lv_unit_groups, "site_unit"),
+            space_between_groups      = isTRUE(input$lv_space_between_groups),
+            use_spp_codes_only        = isTRUE(input$lv_use_spp_codes_only),
+            constant_spp_list         = isTRUE(input$lv_constant_spp_list),
+            screen_report             = isTRUE(input$lv_screen_report),
+            create_summary            = isTRUE(input$lv_create_summary),
+            enforce_qc                = isTRUE(input$lv_enforce_qc),
+            site_quality_min          = value_or(input$lv_site_quality_min, ""),
+            veg_quality_min           = value_or(input$lv_veg_quality_min, ""),
+            soil_quality_min          = value_or(input$lv_soil_quality_min, ""),
+            site_quality_include_null = isTRUE(input$lv_site_quality_include_null),
+            veg_quality_include_null  = isTRUE(input$lv_veg_quality_include_null),
+            soil_quality_include_null = isTRUE(input$lv_soil_quality_include_null)
+          ))
+        } else {
+          base_veg
+        }
       } else if (template_name %in% c("hierarchy.qmd", "flat_hierarchy.qmd")) {
         list(
           project_root = project_root,
@@ -654,6 +763,8 @@ mod_reporting_server <- function(id, sys_state, con) {
 
       tmp_qmd <- file.path(tmp_dir, basename(input$report_template))
       file.copy(qmd_path, tmp_qmd, overwrite = TRUE)
+      notif_id <- showNotification("Generating preview...", duration = NULL, closeButton = FALSE)
+      on.exit(removeNotification(notif_id), add = TRUE)
 
       tryCatch({
         export_tables <- get_report_exports(input$report_template)
@@ -661,17 +772,16 @@ mod_reporting_server <- function(id, sys_state, con) {
         if (!is.null(export_tables) && length(export_tables) > 0) {
           parquet_dir <- export_tables_to_parquet(export_tables)
         }
-        on.exit({
-          if (nzchar(parquet_dir) && dir.exists(parquet_dir)) {
-            unlink(parquet_dir, recursive = TRUE, force = TRUE)
-          }
-        }, add = TRUE)
-
         quarto::quarto_render(
           input = tmp_qmd,
           output_format = "html",
           execute_params = build_report_params(input$report_template, parquet_dir = parquet_dir)
         )
+
+        # Clean up parquet temp dir AFTER render completes
+        if (nzchar(parquet_dir) && dir.exists(parquet_dir)) {
+          unlink(parquet_dir, recursive = TRUE, force = TRUE)
+        }
 
         out_generated <- file.path(tmp_dir, paste0(tools::file_path_sans_ext(basename(input$report_template)), ".html"))
         if (file.exists(out_generated)) {
@@ -679,10 +789,10 @@ mod_reporting_server <- function(id, sys_state, con) {
           report_file(out_generated)
           set_report_url(out_generated)
         } else {
-          showNotification("Preview generation failed.", type = "error")
+          showNotification("Preview generation failed - check R console for Quarto errors.", type = "error")
         }
       }, error = function(e) {
-        showNotification(paste("Preview error:", e$message), type = "error")
+        showNotification(paste("Preview error:", conditionMessage(e)), type = "error")
       })
     }, ignoreInit = TRUE)
 
