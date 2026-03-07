@@ -76,7 +76,8 @@ build_long_veg_view <- function(report_table, constancy_format, display_mode, sh
   if (length(plot_cols) > 0) {
     plot_data <- report_table[, plot_cols, drop = FALSE]
     plot_data <- as.data.frame(lapply(plot_data, function(col) {
-      ifelse(is.na(col), "", round(col, 1))
+      col_num <- as.numeric(col)
+      ifelse(is.na(col_num), "", round(col_num, 1))
     }), stringsAsFactors = FALSE)
     names(plot_data) <- plot_cols
     view <- cbind(view, plot_data)
