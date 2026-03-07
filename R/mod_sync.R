@@ -37,42 +37,74 @@ mod_sync_ui <- function(id) {
       # Status message
       uiOutput(ns("sync_status")),
 
+      # Diff card CSS
+      tags$style(HTML("
+        .sync-diff-card { border-left: 4px solid #ccc; margin-bottom: 10px; border-radius: 4px; background: #fff; }
+        .sync-diff-card.sync-insert { border-color: #43893e; }
+        .sync-diff-card.sync-update { border-color: #f9ca54; }
+        .sync-diff-header { padding: 7px 12px; font-size: 0.82em; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .sync-diff-card.sync-insert .sync-diff-header { background: #edf7ea; }
+        .sync-diff-card.sync-update .sync-diff-header { background: #fef9ec; }
+        .sync-diff-body { padding: 4px 0; }
+        .sync-diff-row { display: grid; grid-template-columns: 160px 1fr; font-size: 0.8em; padding: 2px 12px; }
+        .sync-diff-row.changed { grid-template-columns: 160px 1fr auto 1fr; }
+        .sync-diff-field { color: #666; font-family: monospace; }
+        .sync-val-before { font-family: monospace; background: #fff3cd; padding: 1px 4px; border-radius: 2px; }
+        .sync-val-after  { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
+        .sync-val-new    { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
+        .sync-diff-arrow { color: #888; padding: 0 6px; }
+        .sync-section-badge { display: inline-flex; gap: 4px; margin-left: 8px; }
+        .sync-section-badge .badge { font-size: 0.72em; font-weight: 600; vertical-align: middle; }
+      ")),
+
       # 4 accordion groups ordered by field workflow: Site, Soil, Veg, Project
       bslib::accordion(
         id = ns("acc_changes"),
         open = FALSE,
 
         bslib::accordion_panel(
-          title = tagList(icon("map-location-dot"), " Site"),
+          title = div(
+            style = "display:inline-flex;align-items:center;",
+            tagList(icon("map-location-dot"), " Site"),
+            uiOutput(ns("badges_site"), inline = TRUE)
+          ),
           value = "site",
-          tags$p(class = "text-muted small mb-1", "Admin, Env, SU"),
-          DT::dataTableOutput(ns("tbl_admin_changes")),
-          DT::dataTableOutput(ns("tbl_env_changes")),
-          DT::dataTableOutput(ns("tbl_su_changes"))
+          uiOutput(ns("cards_admin")),
+          uiOutput(ns("cards_env")),
+          uiOutput(ns("cards_su"))
         ),
 
         bslib::accordion_panel(
-          title = tagList(icon("layer-group"), " Soil"),
+          title = div(
+            style = "display:inline-flex;align-items:center;",
+            tagList(icon("layer-group"), " Soil"),
+            uiOutput(ns("badges_soil"), inline = TRUE)
+          ),
           value = "soil",
-          tags$p(class = "text-muted small mb-1", "Humus, Mineral, Other"),
-          DT::dataTableOutput(ns("tbl_humus_changes")),
-          DT::dataTableOutput(ns("tbl_mineral_changes")),
-          DT::dataTableOutput(ns("tbl_other_changes"))
+          uiOutput(ns("cards_humus")),
+          uiOutput(ns("cards_mineral")),
+          uiOutput(ns("cards_other"))
         ),
 
         bslib::accordion_panel(
-          title = tagList(icon("leaf"), " Vegetation"),
+          title = div(
+            style = "display:inline-flex;align-items:center;",
+            tagList(icon("leaf"), " Vegetation"),
+            uiOutput(ns("badges_veg"), inline = TRUE)
+          ),
           value = "veg",
-          tags$p(class = "text-muted small mb-1", "Veg, Herbarium"),
-          DT::dataTableOutput(ns("tbl_veg_changes")),
-          DT::dataTableOutput(ns("tbl_herbarium_changes"))
+          uiOutput(ns("cards_veg")),
+          uiOutput(ns("cards_herbarium"))
         ),
 
         bslib::accordion_panel(
-          title = tagList(icon("folder-open"), " Project"),
+          title = div(
+            style = "display:inline-flex;align-items:center;",
+            tagList(icon("folder-open"), " Project"),
+            uiOutput(ns("badges_project"), inline = TRUE)
+          ),
           value = "project",
-          tags$p(class = "text-muted small mb-1", "Metadata"),
-          DT::dataTableOutput(ns("tbl_metadata_changes"))
+          uiOutput(ns("cards_metadata"))
         )
       )
     ),
@@ -150,48 +182,176 @@ mod_sync_server <- function(id, state, con) {
       )
     })
 
-    # Helper: render one table's changes as a compact DT
-    .render_changes <- function(pg_name, dt_output_id) {
-      output[[dt_output_id]] <- DT::renderDataTable({
+    # ── Badge + diff card helpers ──────────────────────────────────────────────
+
+    # Helper: count inserts/updates for a set of pg_names from reactive_changes()
+    .section_counts <- function(pg_names) {
+      reactive({
         changes <- reactive_changes()
-        df      <- changes[[pg_name]]
-        if (is.null(df) || nrow(df) == 0) {
-          return(DT::datatable(
-            data.frame(Status = paste0(pg_name, ": no local changes")),
-            rownames = FALSE,
-            options  = list(dom = "t", pageLength = 5)
-          ))
-        }
-        dt <- DT::datatable(
-          df,
-          caption  = pg_name,
-          rownames  = FALSE,
-          selection = "none",
-          options   = list(pageLength = 20, scrollX = TRUE)
-        )
-        if ("change_type" %in% names(df)) {
-          dt <- DT::formatStyle(
-            dt, "change_type",
-            target          = "row",
-            backgroundColor = DT::styleEqual(
-              c("insert", "update"),
-              c("#d4edda",  "#fff3cd")
-            )
-          )
-        }
-        dt
+        n_insert <- sum(vapply(pg_names, function(p) {
+          df <- changes[[p]]
+          if (is.null(df) || nrow(df) == 0) return(0L)
+          sum(df$change_type == "insert", na.rm = TRUE)
+        }, integer(1)))
+        n_update <- sum(vapply(pg_names, function(p) {
+          df <- changes[[p]]
+          if (is.null(df) || nrow(df) == 0) return(0L)
+          sum(df$change_type == "update", na.rm = TRUE)
+        }, integer(1)))
+        c(insert = n_insert, update = n_update)
       })
     }
 
-    .render_changes("admin",     "tbl_admin_changes")
-    .render_changes("env",       "tbl_env_changes")
-    .render_changes("su",        "tbl_su_changes")
-    .render_changes("humus",     "tbl_humus_changes")
-    .render_changes("mineral",   "tbl_mineral_changes")
-    .render_changes("other",     "tbl_other_changes")
-    .render_changes("veg",       "tbl_veg_changes")
-    .render_changes("herbarium", "tbl_herbarium_changes")
-    .render_changes("metadata",  "tbl_metadata_changes")
+    # Helper: renderUI that emits count badges (hidden when 0)
+    .render_badges <- function(counts_rv) {
+      renderUI({
+        counts <- counts_rv()
+        badges <- list()
+        if (counts[["insert"]] > 0)
+          badges <- c(badges, list(
+            tags$span(
+              class = "badge",
+              style = "background:#43893e;color:#fff;",
+              paste(counts[["insert"]], "new")
+            )
+          ))
+        if (counts[["update"]] > 0)
+          badges <- c(badges, list(
+            tags$span(
+              class = "badge",
+              style = "background:#f9ca54;color:#222;",
+              paste(counts[["update"]], "updated")
+            )
+          ))
+        if (length(badges) == 0) return(NULL)
+        div(class = "sync-section-badge", badges)
+      })
+    }
+
+    counts_site    <- .section_counts(c("admin", "env", "su"))
+    counts_soil    <- .section_counts(c("humus", "mineral", "other"))
+    counts_veg     <- .section_counts(c("veg", "herbarium"))
+    counts_project <- .section_counts(c("metadata"))
+
+    output$badges_site    <- .render_badges(counts_site)
+    output$badges_soil    <- .render_badges(counts_soil)
+    output$badges_veg     <- .render_badges(counts_veg)
+    output$badges_project <- .render_badges(counts_project)
+
+    # ── Detailed change records ────────────────────────────────────────────────
+
+    reactive_all_details <- reactive({
+      rv_refresh()
+      state$SyncVersion
+      pid <- current_project_id()
+      out <- list()
+      for (cfg in SYNC_TABLE_CONFIG) {
+        out[[cfg$pg]] <- tryCatch(
+          sync_get_change_detail(con, cfg, project_id = pid),
+          error = function(e) list()
+        )
+      }
+      out
+    })
+
+    # Helper: build one diff card HTML tag
+    .build_diff_card <- function(record, pk) {
+      is_insert  <- identical(record$change_type, "insert")
+      card_class <- if (is_insert) "sync-diff-card sync-insert" else "sync-diff-card sync-update"
+      badge_text <- if (is_insert) "INSERT" else "UPDATE"
+      badge_col  <- if (is_insert) "#43893e" else "#f9ca54"
+      badge_txt_col <- if (is_insert) "#fff" else "#222"
+
+      header <- div(
+        class = "sync-diff-header",
+        tags$span(
+          class = "badge",
+          style = paste0("background:", badge_col, ";color:", badge_txt_col, ";"),
+          badge_text
+        ),
+        tags$span(paste(pk, "=", record$pk_value))
+      )
+
+      local_d <- record$local_data
+      core_d  <- record$core_data
+      pk_lc   <- tolower(pk)
+
+      rows <- if (is_insert) {
+        # show non-PK, non-null local fields
+        field_names <- names(local_d)
+        field_names <- field_names[tolower(field_names) != pk_lc]
+        field_names <- field_names[vapply(field_names, function(f) {
+          v <- local_d[[f]]
+          !is.null(v) && length(v) > 0 && !is.na(v[1]) && nzchar(as.character(v[1]))
+        }, logical(1))]
+        lapply(field_names, function(f) {
+          div(
+            class = "sync-diff-row",
+            span(class = "sync-diff-field", f),
+            span(class = "sync-val-new", as.character(local_d[[f]]))
+          )
+        })
+      } else {
+        # show only fields that differ between local and core
+        field_names <- names(local_d)
+        field_names <- field_names[tolower(field_names) != pk_lc]
+        diff_fields <- Filter(function(f) {
+          lv <- as.character(local_d[[f]] %||% NA)
+          cv <- if (!is.null(core_d) && f %in% names(core_d))
+            as.character(core_d[[f]] %||% NA) else NA_character_
+          !identical(lv, cv)
+        }, field_names)
+        if (length(diff_fields) == 0) {
+          return(div(
+            class = card_class,
+            header,
+            div(class = "sync-diff-body",
+              div(class = "sync-diff-row",
+                tags$em(class = "text-muted", "no field differences detected")
+              )
+            )
+          ))
+        }
+        lapply(diff_fields, function(f) {
+          lv <- as.character(local_d[[f]] %||% NA)
+          cv <- if (!is.null(core_d) && f %in% names(core_d))
+            as.character(core_d[[f]] %||% NA) else NA_character_
+          div(
+            class = "sync-diff-row changed",
+            span(class = "sync-diff-field", f),
+            span(class = "sync-val-before", cv),
+            span(class = "sync-diff-arrow", "\u2192"),
+            span(class = "sync-val-after",  lv)
+          )
+        })
+      }
+
+      div(
+        class = card_class,
+        header,
+        div(class = "sync-diff-body", rows)
+      )
+    }
+
+    # Helper: wire output$cards_<pg> for one table
+    .render_cards_output <- function(pg_name, cfg) {
+      output[[paste0("cards_", pg_name)]] <- renderUI({
+        details <- reactive_all_details()[[pg_name]]
+        if (is.null(details) || length(details) == 0) {
+          return(div(class = "text-muted small py-2",
+            paste0(pg_name, ": no local changes")
+          ))
+        }
+        tagList(lapply(details, .build_diff_card, pk = cfg$pk))
+      })
+    }
+
+    for (cfg in SYNC_TABLE_CONFIG) {
+      local({
+        .cfg <- cfg
+        .render_cards_output(.cfg$pg, .cfg)
+      })
+    }
 
 
     # ── Status output ─────────────────────────────────────────────────────────

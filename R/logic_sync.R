@@ -372,7 +372,108 @@ sync_get_local_changes <- function(con, project_id = NULL) {
 
 
 # =============================================================================
-# 6. Internal push helpers
+# 6. Detailed change records (for diff cards)
+# =============================================================================
+
+#' Fetch full before/after data for all dirty local rows.
+#'
+#' For each dirty row the function determines change_type ("insert" when no
+#' matching row exists in master.core, "update" otherwise) and packages the
+#' local data together with the core data for rendering diff cards.
+#'
+#' @param con        DuckDB connection (master optionally attached for updates).
+#' @param cfg        One entry from SYNC_TABLE_CONFIG.
+#' @param project_id Optional project filter (same semantics as sync_get_local_changes).
+#' @param max_rows   Integer. Safety cap; default 50L.
+#' @return List of records, each: list(pk_value, change_type, local_data, core_data).
+sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) {
+  if (!DBI::dbExistsTable(con, cfg$local)) return(list())
+
+  fields <- tryCatch(DBI::dbListFields(con, cfg$local), error = function(e) character(0))
+  if (!"local_modified_utc" %in% fields) return(list())
+
+  pk       <- cfg$pk
+  pid_safe <- if (!is.null(project_id) && nzchar(as.character(project_id)))
+    gsub("[^A-Za-z0-9_-]", "", as.character(project_id)) else NULL
+
+  # Build project filter (same logic as sync_get_local_changes)
+  proj_filter <- if (!is.null(pid_safe)) {
+    if (cfg$project_scope == "direct") {
+      paste0(' AND "projectid" = \'', pid_safe, '\'')
+    } else {
+      sprintf(
+        ' AND "%s" IN (SELECT "plotnumber" FROM "Env" WHERE "projectid" = \'%s\')',
+        cfg$env_fk, pid_safe
+      )
+    }
+  } else ""
+
+  local_rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        'SELECT * FROM "%s" WHERE local_modified_utc IS NOT NULL%s LIMIT %d',
+        cfg$local, proj_filter, as.integer(max_rows)
+      )
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(local_rows) == 0) return(list())
+
+  # Fetch matching core rows (only when cloud is connected)
+  pk_values <- as.character(local_rows[[pk]])
+  pk_placeholders <- paste(rep("?", length(pk_values)), collapse = ", ")
+
+  core_rows <- if (sync_cloud_connected(con) && length(pk_values) > 0) {
+    tryCatch(
+      DBI::dbGetQuery(
+        con,
+        sprintf(
+          'SELECT * FROM master.core.%s WHERE CAST("%s" AS TEXT) IN (%s)',
+          cfg$pg, pk, pk_placeholders
+        ),
+        as.list(pk_values)
+      ),
+      error = function(e) data.frame()
+    )
+  } else {
+    data.frame()
+  }
+
+  # Build lookup: pk_value (character) -> core row as list
+  core_lookup <- if (nrow(core_rows) > 0) {
+    setNames(
+      lapply(seq_len(nrow(core_rows)), function(i) as.list(core_rows[i, , drop = FALSE])),
+      as.character(core_rows[[pk]])
+    )
+  } else {
+    list()
+  }
+
+  # Build per-row detail records
+  lapply(seq_len(nrow(local_rows)), function(i) {
+    row       <- local_rows[i, , drop = FALSE]
+    pk_val    <- as.character(row[[pk]])
+    core_data <- core_lookup[[pk_val]]
+
+    change_type <- if (is.null(core_data)) "insert" else "update"
+
+    # Strip internal metadata from local_data
+    local_list <- as.list(row)
+    local_list[["local_modified_utc"]] <- NULL
+
+    list(
+      pk_value    = pk_val,
+      change_type = change_type,
+      local_data  = local_list,
+      core_data   = core_data
+    )
+  })
+}
+
+
+# =============================================================================
+# 7. Internal push helpers
 # =============================================================================
 
 .create_merge_request <- function(con, project_id, submitter) {

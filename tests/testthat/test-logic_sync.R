@@ -268,3 +268,147 @@ test_that(".get_shared_columns returns intersection excluding metadata", {
   expect_false("merge_request_id"   %in% cols)
   expect_false("baserowversion"     %in% cols)
 })
+
+# =============================================================================
+# sync_get_change_detail() tests
+# =============================================================================
+
+test_that("sync_get_change_detail: returns empty list when table has no dirty rows", {
+  lc <- .make_local()
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+
+  cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "env")]]
+  result <- sync_get_change_detail(lc, cfg)
+  expect_equal(length(result), 0L)
+})
+
+test_that("sync_get_change_detail: returns empty list when table does not exist", {
+  lc <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+
+  cfg <- list(local = "NonExistent", pg = "nonexistent", pk = "id",
+              project_scope = "direct")
+  result <- sync_get_change_detail(lc, cfg)
+  expect_equal(length(result), 0L)
+})
+
+test_that("sync_get_change_detail: dirty Env row without cloud → insert record", {
+  lc <- .make_local()
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+
+  DBI::dbExecute(lc,
+    "INSERT INTO Env (plotnumber, fieldnumber, projectid, local_modified_utc)
+     VALUES ('P1', 'F1', 'PROJ1', now())"
+  )
+
+  cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "env")]]
+  result <- sync_get_change_detail(lc, cfg, project_id = "PROJ1")
+
+  expect_equal(length(result), 1L)
+  expect_equal(result[[1]]$pk_value, "P1")
+  expect_equal(result[[1]]$change_type, "insert")
+  expect_null(result[[1]]$core_data)
+  expect_equal(result[[1]]$local_data[["plotnumber"]], "P1")
+  # local_modified_utc must be stripped from local_data
+  expect_false("local_modified_utc" %in% names(result[[1]]$local_data))
+})
+
+test_that("sync_get_change_detail: dirty Env with matching core row → update record", {
+  m  <- .make_master()
+  master_path <- m$path
+  on.exit(try(unlink(master_path), silent = TRUE), add = TRUE)
+
+  # Add core row and checkpoint so lc can see it via ATTACH, then close master
+  DBI::dbExecute(m$con,
+    "INSERT INTO core.env (plotnumber, fieldnumber, projectid, latitude)
+     VALUES ('P1', 'F1', 'PROJ1', 49.5)"
+  )
+  DBI::dbExecute(m$con, "CHECKPOINT")
+  DBI::dbDisconnect(m$con)
+
+  lc <- .make_local()
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+  # Attach master read-only so lc can query core.env
+  DBI::dbExecute(lc, sprintf("ATTACH '%s' AS master (READ_ONLY)", master_path))
+
+  # Add dirty local row with same PK
+  DBI::dbExecute(lc,
+    "INSERT INTO Env (plotnumber, fieldnumber, projectid, latitude, local_modified_utc)
+     VALUES ('P1', 'F1', 'PROJ1', 49.9, now())"
+  )
+
+  cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "env")]]
+  result <- sync_get_change_detail(lc, cfg, project_id = "PROJ1")
+
+  expect_equal(length(result), 1L)
+  expect_equal(result[[1]]$pk_value, "P1")
+  expect_equal(result[[1]]$change_type, "update")
+  expect_false(is.null(result[[1]]$core_data))
+  expect_equal(as.double(result[[1]]$local_data[["latitude"]]), 49.9)
+  expect_equal(as.double(result[[1]]$core_data[["latitude"]]), 49.5)
+})
+
+test_that("sync_get_change_detail: project_id filter excludes other projects", {
+  lc <- .make_local()
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+
+  DBI::dbExecute(lc,
+    "INSERT INTO Env (plotnumber, projectid, local_modified_utc) VALUES
+     ('P1', 'PROJ1', now()),
+     ('P2', 'PROJ2', now())"
+  )
+
+  cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "env")]]
+  result <- sync_get_change_detail(lc, cfg, project_id = "PROJ1")
+
+  expect_equal(length(result), 1L)
+  expect_equal(result[[1]]$pk_value, "P1")
+})
+
+test_that("sync_get_change_detail: max_rows cap is respected", {
+  lc <- .make_local()
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+
+  for (i in seq_len(10)) {
+    DBI::dbExecute(lc, sprintf(
+      "INSERT INTO Env (plotnumber, projectid, local_modified_utc) VALUES ('P%d', 'PROJ1', now())",
+      i
+    ))
+  }
+
+  cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "env")]]
+  result <- sync_get_change_detail(lc, cfg, project_id = "PROJ1", max_rows = 3L)
+
+  expect_lte(length(result), 3L)
+})
+
+test_that("sync_get_change_detail: Veg row (via_env scope) classified as insert without cloud", {
+  lc <- .make_local()
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+
+  DBI::dbExecute(lc,
+    "INSERT INTO Env (plotnumber, projectid) VALUES ('P1', 'PROJ1')"
+  )
+  DBI::dbExecute(lc,
+    "INSERT INTO Veg (id, plotnumber, species, local_modified_utc) VALUES (1, 'P1', 'ACER', now())"
+  )
+
+  cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "veg")]]
+  result <- sync_get_change_detail(lc, cfg, project_id = "PROJ1")
+
+  expect_equal(length(result), 1L)
+  expect_equal(result[[1]]$change_type, "insert")
+  expect_equal(result[[1]]$pk_value, "1")
+})
+
+test_that("sync_get_change_detail: returns empty list when local_modified_utc column absent", {
+  lc <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  on.exit(DBI::dbDisconnect(lc), add = TRUE)
+
+  DBI::dbExecute(lc, "CREATE TABLE Env (plotnumber TEXT, projectid TEXT)")
+  DBI::dbExecute(lc, "INSERT INTO Env VALUES ('P1', 'PROJ1')")
+
+  cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "env")]]
+  result <- sync_get_change_detail(lc, cfg)
+  expect_equal(length(result), 0L)
+})

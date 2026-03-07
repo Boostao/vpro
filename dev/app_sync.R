@@ -5,8 +5,8 @@
 #   shiny::runApp("dev/app_sync.R")
 #
 # ── Scenario sidebar buttons ───────────────────────────────────────────────────
-#   1. Insert 3 fake Env rows (DEV_TEST_ prefix) → should appear as green inserts
-#   2. Mark 2 existing Env rows as updated       → yellow updates
+#   1. Insert 3 Env rows with location/survey data → should appear as green inserts
+#   2. Update 2 existing Env rows (GPS, slope, regime)  → yellow updates
 #   3. Inject a sync.conflict_queue row          → blocking conflict modal fires
 #   4. Insert 3 fake MRs in master.admin         → requires cloud attached
 #   5. Reset — delete all DEV_TEST_ artefacts
@@ -57,8 +57,8 @@ ui <- page_sidebar(
     width = 250,
     h6(class = "text-muted mt-2", "Scenarios"),
     hr(class = "my-1"),
-    actionButton("btn_scenario_inserts",  "1. Add 3 Env inserts",  class = "btn btn-outline-success btn-sm w-100 mb-1"),
-    actionButton("btn_scenario_updates",  "2. Mark 2 Env updates", class = "btn btn-outline-warning btn-sm w-100 mb-1"),
+    actionButton("btn_scenario_inserts",  "1. Insert Env + location data", class = "btn btn-outline-success btn-sm w-100 mb-1"),
+    actionButton("btn_scenario_updates",  "2. Update GPS/slope/regime", class = "btn btn-outline-warning btn-sm w-100 mb-1"),
     actionButton("btn_scenario_conflict", "3. Inject conflict",    class = "btn btn-outline-danger  btn-sm w-100 mb-1"),
     actionButton("btn_scenario_mrs",      "4. Add fake MRs",       class = "btn btn-outline-info    btn-sm w-100 mb-1"),
     hr(class = "my-2"),
@@ -85,27 +85,85 @@ server <- function(input, output, session) {
 
   # ── DEV ONLY: scenario handlers ───────────────────────────────────────────
 
-  # Scenario 1: 3 new Env inserts
+  # Scenario 1: 3 new Env inserts with realistic field data
   observeEvent(input$btn_scenario_inserts, {
-    # DEV ONLY
-    for (i in 1:3) {
-      pn <- paste0(DEV_PREFIX, "ENV_", format(Sys.time(), "%H%M%S"), "_", i)
+    # DEV ONLY - insert realistic Env records with location and site data
+    env_data <- list(
+      list(
+        plotnumber = paste0(DEV_PREFIX, "ENV_NEW_001"),
+        fieldnumber = "FLD-2026-001",
+        projectid = DEV_PROJECT_ID,
+        date = "2026-03-07",
+        sitesurveyor = "Test Surveyor 1",
+        longitude = -120.5,
+        latitude = 53.2,
+        utmzone = 10,
+        utmeasting = 450000,
+        utmnorthing = 5900000,
+        elevation = 800,
+        slopegradient = 15.5,
+        aspect = "NW",
+        mensurationmethod = "fixed plot",
+        local_modified_utc = "now()"
+      ),
+      list(
+        plotnumber = paste0(DEV_PREFIX, "ENV_NEW_002"),
+        fieldnumber = "FLD-2026-002",
+        projectid = DEV_PROJECT_ID,
+        date = "2026-03-07",
+        sitesurveyor = "Test Surveyor 2",
+        longitude = -120.6,
+        latitude = 53.3,
+        utmzone = 10,
+        utmeasting = 451000,
+        utmnorthing = 5901000,
+        elevation = 950,
+        slopegradient = 22.0,
+        aspect = "SE",
+        mensurationmethod = "variable plot",
+        local_modified_utc = "now()"
+      ),
+      list(
+        plotnumber = paste0(DEV_PREFIX, "ENV_NEW_003"),
+        fieldnumber = "FLD-2026-003",
+        projectid = DEV_PROJECT_ID,
+        date = "2026-03-07",
+        sitesurveyor = "Test Surveyor 1",
+        longitude = -120.7,
+        latitude = 53.1,
+        utmzone = 10,
+        utmeasting = 449500,
+        utmnorthing = 5899500,
+        elevation = 720,
+        slopegradient = 8.5,
+        aspect = "N",
+        mensurationmethod = "fixed plot",
+        local_modified_utc = "now()"
+      )
+    )
+    
+    for (env in env_data) {
       tryCatch(
         DBI::dbExecute(con,
-          "INSERT INTO Env (PlotNumber, ProjectID, local_modified_utc)
-           VALUES (?, ?, now())",
-          list(pn, DEV_PROJECT_ID)
+          "INSERT INTO Env (PlotNumber, FieldNumber, ProjectID, Date, SiteSurveyor,
+                            Longitude, Latitude, UTMZone, UTMEasting, UTMNorthing,
+                            Elevation, SlopeGradient, Aspect, MensurationMethod,
+                            local_modified_utc)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+          list(env$plotnumber, env$fieldnumber, env$projectid, env$date, env$sitesurveyor,
+               env$longitude, env$latitude, env$utmzone, env$utmeasting, env$utmnorthing,
+               env$elevation, env$slopegradient, env$aspect, env$mensurationmethod)
         ),
-        error = function(e) print(e)
+        error = function(e) print(paste("Insert error:", e$message))
       )
     }
     state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
-    showNotification("Scenario 1: 3 DEV_TEST_ Env inserts added.", type = "message")
+    showNotification("Scenario 1: 3 DEV_TEST_ Env inserts with location/survey data added.", type = "message")
   })
 
-  # Scenario 2: mark 2 existing Env rows as updated locally
+  # Scenario 2: mark 2 existing Env rows as updated with realistic field changes
   observeEvent(input$btn_scenario_updates, {
-    # DEV ONLY
+    # DEV ONLY - update meaningful fields like elevation, coordinates, aspect
     existing <- tryCatch(
       DBI::dbGetQuery(con,
         "SELECT PlotNumber FROM Env WHERE PlotNumber NOT LIKE ? LIMIT 2",
@@ -117,18 +175,37 @@ server <- function(input, output, session) {
       showNotification("No existing non-DEV rows to mark as updated.", type = "warning")
       return()
     }
-    for (pn in existing) {
-      tryCatch(
-        DBI::dbExecute(con,
-          "UPDATE Env SET local_modified_utc = now() WHERE PlotNumber = ?",
-          list(pn)
-        ),
-        error = function(e) NULL
-      )
-    }
+    
+    # Update scenario 1: fix GPS coordinates and elevation
+    tryCatch(
+      DBI::dbExecute(con,
+        "UPDATE Env
+         SET Longitude = -120.45, Latitude = 53.25, Elevation = 850,
+             SiteSurveyor = 'Updated by QC review',
+             local_modified_utc = now()
+         WHERE PlotNumber = ?",
+        list(existing[1])
+      ),
+      error = function(e) print(paste("Update error:", e$message))
+    )
+    
+    # Update scenario 2: correct slope and aspect from field revisit
+    tryCatch(
+      DBI::dbExecute(con,
+        "UPDATE Env
+         SET SlopeGradient = 18.5, Aspect = 'NE',
+             MoisturRegime = 'mesic', NutrientRegime = 'medium',
+             SiteSurveyor = 'Updated by QC review',
+             local_modified_utc = now()
+         WHERE PlotNumber = ?",
+        list(existing[2])
+      ),
+      error = function(e) print(paste("Update error:", e$message))
+    )
+    
     state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
     showNotification(
-      paste0("Scenario 2: marked ", length(existing), " row(s) as locally updated."),
+      paste0("Scenario 2: updated ", length(existing), " row(s) with GPS/slope/regime changes."),
       type = "message"
     )
   })
