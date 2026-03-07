@@ -426,7 +426,6 @@ publish_project_dataset <- function(project_id,
                                     formats = c("rds", "csv", "xlsx"),
                                     apply_lumping = TRUE,
                                     con = NULL,
-                                    environment = NULL,
                                     anonymize = FALSE,
                                     coordinate_round_digits = 5,
                                     is_public = TRUE,
@@ -444,7 +443,7 @@ publish_project_dataset <- function(project_id,
   close_when_done <- FALSE
   if (is.null(con)) {
     source(publish_resolve_path("R/db_connections.R"), local = TRUE)
-    con <- connect_local_db(environment = environment)
+    con <- connect_local_db()
     close_when_done <- TRUE
   }
   on.exit({
@@ -546,14 +545,13 @@ publish_becmaster_rds <- function(con,
                                  project_ids = NULL,
                                  apply_lumping = TRUE,
                                  created_by = Sys.getenv("USER", "unknown"),
-                                 environment = NULL,
                                  allow_attach = TRUE) {
   if (is.null(out_dir) || !nzchar(out_dir)) {
     stop("Output directory is required for RDS publishing.")
   }
 
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  sync_require_cloud(con, environment = environment, allow_attach = allow_attach)
+  sync_require_cloud(con, allow_attach = allow_attach)
 
   filters <- c("a.qa_status = 'approved'")
   params <- list()
@@ -661,7 +659,6 @@ publish_snapshot <- function(con,
                              project_ids = NULL,
                              apply_lumping = TRUE,
                              created_by = Sys.getenv("USER", "unknown"),
-                             environment = NULL,
                              allow_attach = TRUE) {
   publish_becmaster_rds(
     con = con,
@@ -670,7 +667,6 @@ publish_snapshot <- function(con,
     project_ids = project_ids,
     apply_lumping = apply_lumping,
     created_by = created_by,
-    environment = environment,
     allow_attach = allow_attach
   )
 }
@@ -685,7 +681,6 @@ log_export_download <- function(con,
                                 download_status = "success",
                                 error_message = NULL,
                                 ip_address = NULL,
-                                environment = NULL,
                                 allow_attach = TRUE) {
   allowed_formats <- c("rds", "csv", "excel", "xml")
   if (is.null(dataset_name) || !nzchar(dataset_name)) return(FALSE)
@@ -697,7 +692,7 @@ log_export_download <- function(con,
   }
 
   result <- tryCatch({
-    sync_require_cloud(con, environment = environment, allow_attach = allow_attach)
+    sync_require_cloud(con, allow_attach = allow_attach)
     DBI::dbExecute(
       con,
       paste0(

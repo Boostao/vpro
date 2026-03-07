@@ -1,0 +1,529 @@
+// VPRO Sample Tables Database Schema - COMPLETE
+// Generated from DuckDB information_schema analysis
+// Shows all columns and relationships between all tables starting with "Sample_"
+
+// ============================================================================
+// MASTER TABLES
+// ============================================================================
+
+Table Sample_Admin {
+  plot varchar [pk, note: "Unique plot identifier"]
+  startdate bigint
+  plottype varchar
+  plotsize double
+  provincestateterritory varchar
+  siteplotquality varchar
+  vegplotquality varchar
+  soilplotquality varchar
+  updatedfromcards bigint
+  enteredby varchar
+  usersiteunit varchar
+  becsiteunit varchar
+  siteunitshortname varchar
+  siteunitlongname varchar
+  officenotes varchar
+  humusthickness double
+  gis_bgc varchar
+  gis_bgc_ver varchar
+  bec_use double
+  stratacovertotal varchar
+  
+  note: "Master record for plot administration and metadata"
+}
+
+Table Sample_Metadata {
+  id bigint [pk]
+  projectid varchar
+  startdate bigint
+  enddate varchar
+  projecttitle varchar
+  coordinatingagency varchar
+  proponentfunder varchar
+  fieldcompanyagency varchar
+  fieldleader varchar
+  fielddatacollectionteam varchar
+  projectpurpose varchar
+  geographicstudyarea varchar
+  geographicstudyregion varchar
+  numberoffs882plots varchar
+  numberofsitevisits varchar
+  projecttype varchar
+  projecttypeother varchar
+  ecosyscollectionstandard varchar
+  ecosyscollectionstandardother varchar
+  vegcovermethod varchar
+  vegcovermethodother varchar
+  plotmethod varchar
+  plotmethodother varchar
+  mensurationmethod varchar
+  mensurationmethodother varchar
+  extravegfielddescription varchar
+  datacustodian varchar
+  storagelocation varchar
+  collectedsite bigint
+  dataqualitysite varchar
+  collectedveg bigint
+  dataqualityveg varchar
+  collectedsoil bigint
+  dataqualitysoil varchar
+  collectedterrain varchar
+  dataqualityterrain varchar
+  collectedmens varchar
+  dataqualitymens varchar
+  collectedcwd varchar
+  dataqualitycwd varchar
+  collectedwildtree varchar
+  dataqualitywildtree varchar
+  collectedsoilchem varchar
+  dataqualitysoilchem varchar
+  collectedwildlifehabitatassessment varchar
+  dataqualitywildlifehabitatassessment varchar
+  collectedcompleteother varchar
+  collectedpartialother varchar
+  collectednoneother varchar
+  georefmethod varchar
+  georefmethodother varchar
+  datum varchar
+  datumother varchar
+  coordinatesystem varchar
+  coordinatesystemother varchar
+  allspecs varchar
+  tableoflists varchar
+  covera1description varchar
+  covera2description varchar
+  covera3description varchar
+  coveradescription varchar
+  coverb1description varchar
+  coverb2description varchar
+  coverb2adescription varchar
+  coverb2bdescription varchar
+  coverb2cdescription varchar
+  coverbdescription varchar
+  covercdescription varchar
+  coverddescription varchar
+  cover8description varchar
+  cover9description varchar
+  cover10description varchar
+  bapid varchar
+  datelastedited varchar
+  notes varchar
+  
+  note: "Comprehensive project metadata"
+}
+
+Table Sample_Hierarchy {
+  id bigint [pk]
+  _name varchar
+  parent bigint
+  _level bigint
+  tag bigint
+  myorder varchar
+  childid bigint
+  startchild bigint
+  lastchild bigint
+  flag bigint
+  
+  note: "Hierarchical classification/organization data"
+}
+
+// ============================================================================
+// ENVIRONMENTAL & SITE CHARACTERIZATION TABLE (Central Hub)
+// ============================================================================
+
+Table Sample_Env {
+  plotnumber varchar [pk, note: "Links to Sample_Admin.plot"]
+  fieldnumber varchar
+  projectid varchar
+  fsregiondistrict varchar
+  date varchar
+  sitesurveyor varchar
+  plotrepresenting varchar
+  _location varchar
+  ecosection varchar
+  ntsmapsheet varchar
+  longitude double
+  latitude double
+  utmzone bigint
+  utmeasting double
+  utmnorthing double
+  locationaccuracy bigint
+  airphotonum varchar
+  xcoord double
+  ycoord double
+  _zone varchar
+  subzone varchar
+  siteseries varchar
+  sitemodifier1 varchar
+  sitemodifier2 boolean
+  transdistrib bigint
+  realmclass varchar
+  mapunit varchar
+  snowcoverregime varchar
+  moistureregime varchar
+  nutrientregime varchar
+  successionalstatus varchar
+  structuralstage varchar
+  structuralstagemod varchar
+  standage bigint
+  elevation bigint
+  slopegradient double
+  aspect bigint
+  mesoslopeposition varchar
+  surfaceshape varchar
+  surfacetopographytype varchar
+  surfacetopographysize varchar
+  watersource varchar
+  photo varchar
+  exposure1 varchar
+  exposure2 varchar
+  sitedisturbance1 varchar
+  sitedisturbance2 varchar
+  sitedisturbance3 varchar
+  substratedecwood double
+  substratebedrock double
+  substraterocks double
+  substratemineralsoil double
+  substrateorganicmatter double
+  substratewater double
+  sitenotes varchar
+  soilsurveyor varchar
+  bedrockgeology1 varchar
+  bedrockgeology2 varchar
+  bedrockgeology3 varchar
+  coarsefraglith1 varchar
+  coarsefraglith2 varchar
+  coarsefraglith3 varchar
+  terraintexturesurf varchar
+  surficialmaterialsurf varchar
+  surfaceexpsurf varchar
+  geomorprosurf varchar
+  terraintexturesubsurf varchar
+  surficialmaterialsubsurf varchar
+  surfaceexpsubsurf varchar
+  geomorprosubsurf varchar
+  floodingregimefreq varchar
+  moistureregimesub varchar
+  floodingregimedur varchar
+  soildrainage varchar
+  seepagedepth bigint
+  rootrestrictingtype varchar
+  rootrestrictingdepth bigint
+  rootzoneparticlesize varchar
+  rootingdepth bigint
+  soilclasssubgroup varchar
+  soilclassgroup varchar
+  humusform varchar
+  humusformphase varchar
+  phmethodcodemineral varchar
+  phmethodcodeorganic varchar
+  soilnotes varchar
+  vegsurveyor varchar
+  stratacovertree double
+  stratacovershrub double
+  stratacoverherb double
+  stratacovermoss double
+  vegnotes varchar
+  hydrogeosystem varchar
+  hydrogeosubsystem varchar
+  specieslistcomplete bigint
+  _temporary varchar
+  flag bigint
+  sv_polygonnumber varchar
+  sv_floodplain bigint
+  sv_standageestmeas bigint
+  sv_standheight double
+  sv_standheightestmeas bigint
+  sv_canopycomposition varchar
+  sv_soildepth double
+  sv_rootzonetexture varchar
+  sv_percentcoarsefrags double
+  sv_gleyingmottlingcm double
+  sv_watertablecm double
+  sv_fullcruisecard varchar
+  sv_ahorizontype varchar
+  sv_ahorizondepth double
+  activelayerdepth double
+  
+  note: "Central environmental site characterization table"
+}
+
+// ============================================================================
+// SOIL CHARACTERIZATION TABLES
+// ============================================================================
+
+Table Sample_Humus {
+  id bigint [pk]
+  plotnumber varchar [note: "Links to Sample_Env.plotnumber"]
+  horizon varchar
+  upperdepth double
+  lowerdepth double
+  humusstructuredegree varchar
+  humusstructurekind varchar
+  mycelabundance varchar
+  fecalabundance varchar
+  rootsabundance varchar
+  rootssize varchar
+  vonpost bigint
+  humusformph double
+  consistence varchar
+  character varchar
+  fauna varchar
+  _comment varchar
+  flag bigint
+  
+  note: "Humus/organic layer characterization data"
+}
+
+Table Sample_Mineral {
+  id bigint [pk]
+  plotnumber varchar [note: "Links to Sample_Env.plotnumber"]
+  horizon varchar
+  upperdepth double
+  lowerdepth double
+  pitdepthlimit varchar
+  colour varchar
+  asp bigint
+  texture varchar
+  percentcoarsefragsgravel bigint
+  percentcoarsefragscobbles bigint
+  percentcoarsefragsstones bigint
+  percentcoarsefragstotal bigint
+  percentcoarsefragsshape varchar
+  rootsabundance varchar
+  rootssize varchar
+  mineralstructureclass varchar
+  mineralstructurekind varchar
+  mineralformph varchar
+  mottlesabundance varchar
+  mottlessize varchar
+  mottlescontrast varchar
+  clayfilmsfreq varchar
+  clayfilmthickness varchar
+  effervescence varchar
+  porosity varchar
+  _comments varchar
+  flag bigint
+  
+  note: "Mineral soil layer characterization data"
+}
+
+Table Sample_Other {
+  id bigint [pk]
+  plotnumber bigint [note: "Links to Sample_Env.plotnumber"]
+  dataname varchar
+  dataitem varchar
+  useritem1 varchar
+  useritem2 varchar
+  useritem3 varchar
+  userflag1 bigint
+  userflag2 bigint
+  userflag3 bigint
+  flag bigint
+  
+  note: "Miscellaneous plot data"
+}
+
+// ============================================================================
+// VEGETATION DATA TABLES
+// ============================================================================
+
+Table Sample_Veg {
+  id bigint [pk]
+  plotnumber varchar [note: "Links to Sample_Env.plotnumber"]
+  species varchar
+  layer varchar
+  cover1 double
+  height1 varchar
+  cover2 double
+  height2 varchar
+  cover3 double
+  height3 varchar
+  totala double
+  heighta varchar
+  cover4 double
+  height4 varchar
+  cover5 double
+  height5 varchar
+  cover5a double
+  height5a varchar
+  cover5b double
+  height5b varchar
+  cover5c double
+  height5c varchar
+  totalb double
+  heightb varchar
+  cover6 double
+  height6 double
+  cover7 double
+  cover8 double
+  cover9 double
+  cover10 varchar
+  collected varchar
+  flag bigint
+  ll bigint
+  af varchar
+  dc bigint
+  ut bigint
+  vi bigint
+  pv bigint
+  pg bigint
+  ffa bigint
+  cultural1 varchar
+  cultural2 varchar
+  other1 varchar
+  other2 varchar
+  
+  note: "Vegetation species and layer composition with cover measurements (cover1-cover10)"
+}
+
+Table Sample_Herbarium {
+  recid bigint [pk]
+  accessionnumber bigint
+  accessiondate varchar
+  plotnumber bigint [note: "Links to Sample_Env"]
+  species varchar
+  scientificnamerich varchar
+  specimenpreviousname varchar
+  identifier varchar
+  habitat varchar
+  countryoforigin varchar
+  provinceoforigin varchar
+  collectionnumber varchar
+  locationdescription varchar
+  collectors varchar
+  dateofcollection timestamp
+  generalremarks varchar
+  permanentstoragelocation varchar
+  entryoperator varchar
+  entryoperatordate timestamp
+  _comments varchar
+  photo varchar
+  flag01 bigint
+  flag02 bigint
+  longitudedegrees varchar
+  longitudeminutes varchar
+  longitudeseconds varchar
+  latitudedegrees varchar
+  latitudeminutes varchar
+  latitudeseconds varchar
+  duplicatesentto varchar
+  onloanto varchar
+  loandate varchar
+  print bigint
+  
+  note: "Herbarium specimen and photographic records with specimen metadata"
+}
+
+Table Sample_SU {
+  plotnumber varchar [pk, note: "Links to Sample_Env.plotnumber"]
+  siteunit varchar
+  
+  note: "Site unit assignments for plots"
+}
+
+// ============================================================================
+// VEGETATION PROFILE & SPECIES REFERENCE TABLES
+// ============================================================================
+
+Table Sample_Profile {
+  _order bigint
+  _table varchar
+  field varchar
+  _operator varchar
+  layer varchar
+  species varchar [pk, note: "Species code/identifier"]
+  criteria varchar
+  operation varchar
+  plotcount bigint
+  
+  note: "Reference profiles for species and layers"
+}
+
+Table SampleVeg_Profile {
+  _order bigint
+  _table varchar
+  field varchar
+  _operator varchar
+  layer varchar
+  species varchar
+  criteria bigint
+  operation varchar
+  plotcount bigint
+  
+  note: "Operational vegetation profile data"
+}
+
+// ============================================================================
+// LOOKUP / MAPPING TABLES
+// ============================================================================
+
+Table Sample_Lump {
+  lumpcode varchar [pk, note: "Lumped group code"]
+  sppcode varchar [note: "Individual species in group"]
+  _use bigint
+  
+  note: "Species lumping/aggregation codes - maps to Sample_Theme"
+}
+
+Table Sample_Theme {
+  lumpcode varchar
+  sppcode varchar [pk, note: "Species code/identifier"]
+  scientificname varchar
+  colourcode bigint
+  patterncode bigint
+  fontcolour bigint
+  _use bigint
+  
+  note: "Species theme and classification with lumping codes"
+}
+
+// ============================================================================
+// AUDIT TABLE
+// ============================================================================
+
+Table Sample_Audit {
+  id bigint [pk]
+  project varchar
+  _user varchar
+  plotnumber varchar
+  _table varchar
+  editfield varchar
+  editwhen varchar
+  beforeedit varchar
+  afteredit varchar
+  restore bigint
+  flag bigint
+  
+  note: "Audit log of all edits across all Sample_ tables"
+}
+
+// ============================================================================
+// RELATIONSHIPS
+// ============================================================================
+
+// Plot-centric hub relationships
+Ref: Sample_Admin.plot < Sample_Env.plotnumber
+Ref: Sample_Env.plotnumber < Sample_Humus.plotnumber
+Ref: Sample_Env.plotnumber < Sample_Mineral.plotnumber
+Ref: Sample_Env.plotnumber < Sample_Other.plotnumber
+Ref: Sample_Env.plotnumber < Sample_Veg.plotnumber
+Ref: Sample_Env.plotnumber < Sample_Herbarium.plotnumber
+Ref: Sample_Env.plotnumber < Sample_SU.plotnumber
+
+// Project/Metadata relationships
+Ref: Sample_Env.projectid < Sample_Metadata.projectid
+
+// Vegetation/Species relationships
+Ref: Sample_Veg.species < Sample_Herbarium.species
+Ref: Sample_Veg.species < Sample_Profile.species
+Ref: Sample_Profile.species < SampleVeg_Profile.species
+
+// Lookup table relationships
+Ref: Sample_Lump.sppcode < Sample_Theme.sppcode
+
+// Record-level relationships
+Ref: Sample_Metadata.id < Sample_Hierarchy.id
+Ref: Sample_Metadata.id < Sample_Humus.id
+Ref: Sample_Metadata.id < Sample_Mineral.id
+Ref: Sample_Metadata.id < Sample_Other.id
+Ref: Sample_Metadata.id < Sample_Veg.id

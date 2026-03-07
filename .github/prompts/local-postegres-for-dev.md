@@ -16,7 +16,7 @@ A complete mock PostgreSQL testing environment has been set up for the VPro BECM
 
 - PostgreSQL 15 Alpine container
 - Runs on `localhost:5433` (avoids conflicts with local postgres)
-- Credentials: `testuser` / `testpass` / `becmaster`
+- Credentials: `vpro_app` / `testpass` / `becmaster`
 - Auto-initializes with BECMaster schema
 - Persistent volume for data between restarts
 - Health check ensures readiness
@@ -314,7 +314,7 @@ renv::update("duckdb")
 Verify docker-compose is running:
 ```bash
 docker-compose ps
-docker exec vpro-postgres-test psql -U testuser -d becmaster -c "SELECT 1"
+docker exec vpro-postgres-test psql -U vpro_app -d becmaster -c "SELECT 1"
 ```
 
 ---

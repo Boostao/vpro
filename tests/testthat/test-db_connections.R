@@ -3,7 +3,16 @@
 
 library(testthat)
 library(DBI)
+source(here::here("tests", "testthat", "setup.R"))
+source(here::here("R", "db_connections.R"))
+source(here::here("tests", "testthat", "helpers.R"))
 
+
+# Ensure docker-compose PG env vars are set when running this file in isolation
+# (setup.R sets these when running via devtools::test(), but not test_file())
+if (!nzchar(Sys.getenv("PGPORT")))     Sys.setenv(PGPORT     = "5433")
+if (!nzchar(Sys.getenv("PGHOST")))     Sys.setenv(PGHOST     = "localhost")
+if (!nzchar(Sys.getenv("PGDATABASE"))) Sys.setenv(PGDATABASE = "becmaster")
 # ============================================================================
 # LOCAL DUCKDB CONNECTIONS
 # ============================================================================
@@ -97,7 +106,7 @@ test_that("test schema initializes with required tables", {
     WHERE table_schema = 'core'
   ")
   
-  expected_tables <- c("sample_veg", "sample_env")
+  expected_tables <- c("veg", "env")
   for (tbl in expected_tables) {
     expect_true(tbl %in% core_tables$table_name,
                label = paste0("Table 'core.", tbl, "' exists"))
@@ -146,13 +155,13 @@ test_that("insert_test_plot() creates valid plot records", {
   
   # Verify environment record
   env_result <- DBI::dbGetQuery(con, 
-    "SELECT COUNT(*) as n FROM core.sample_env WHERE plot_number = 'TEST-PLOT-01'"
+    "SELECT COUNT(*) as n FROM core.env WHERE plot_number = 'TEST-PLOT-01'"
   )
   expect_equal(env_result$n[1], 1L)
   
   # Verify vegetation records
   veg_result <- DBI::dbGetQuery(con,
-    "SELECT COUNT(*) as n FROM core.sample_veg WHERE plot_number = 'TEST-PLOT-01'"
+    "SELECT COUNT(*) as n FROM core.veg WHERE plot_number = 'TEST-PLOT-01'"
   )
   expect_equal(veg_result$n[1], 3L)
   
@@ -176,12 +185,12 @@ test_that("Data validation constraints are enforced", {
   
   # Attempt insert (may or may not fail depending on constraint enforcement)
   # For now, just verify the insert works
-  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "sample_env"), 
+  DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "env"), 
                     invalid_env)
   
   # Verify the record was inserted
   result <- DBI::dbGetQuery(con, 
-    "SELECT COUNT(*) as n FROM core.sample_env WHERE plot_number = 'INVALID-01'"
+    "SELECT COUNT(*) as n FROM core.env WHERE plot_number = 'INVALID-01'"
   )
   expect_equal(result$n[1], 1L)
   
@@ -212,7 +221,7 @@ test_that("query_db() handles non-SELECT statements", {
   con <- test_connect_duckdb()
   
   # Should not error on non-SELECT
-  result <- query_db(con, "DELETE FROM core.sample_veg WHERE plot_number = 'NEVER-EXISTS'")
+  result <- query_db(con, "DELETE FROM core.veg WHERE plot_number = 'NEVER-EXISTS'")
   
   # Result should be invisible NULL for non-SELECT
   expect_null(result)
@@ -238,7 +247,7 @@ test_that("is_cloud_connected() returns FALSE for non-attached alias", {
 
 test_that("PostgreSQL extension can be installed and loaded", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   
@@ -256,7 +265,7 @@ test_that("PostgreSQL extension can be installed and loaded", {
 
 test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   
@@ -270,7 +279,7 @@ test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL"
   
   # Try to attach cloud database
   tryCatch({
-    attach_cloud_db(con, environment = "test", read_only = FALSE, alias = "master")
+    attach_cloud_db(con, pg_user = "vpro_app", pg_password = "testpass", alias = "master")
     
     # Verify attachment worked
     is_attached <- is_cloud_connected(con, alias = "master")
@@ -285,7 +294,7 @@ test_that("attach_cloud_db() successfully attaches to docker-compose PostgreSQL"
 
 test_that("Queries can reference attached PostgreSQL tables", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   
@@ -293,7 +302,7 @@ test_that("Queries can reference attached PostgreSQL tables", {
   tryCatch({
     DBI::dbExecute(con, "INSTALL postgres")
     DBI::dbExecute(con, "LOAD postgres")
-    attach_cloud_db(con, environment = "test", alias = "master")
+    attach_cloud_db(con, pg_user = "vpro_app", pg_password = "testpass", alias = "master")
     
     # Try to query a reference table from master
     result <- DBI::dbGetQuery(con, "
@@ -312,7 +321,7 @@ test_that("Queries can reference attached PostgreSQL tables", {
 
 test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
   
-  skip_if_not(pg_available, "PostgreSQL not available")
+  skip_if_not(pg_available(), "PostgreSQL not available")
   
   con <- test_connect_duckdb()
   
@@ -320,7 +329,8 @@ test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
   tryCatch({
     DBI::dbExecute(con, "INSTALL postgres")
     DBI::dbExecute(con, "LOAD postgres")
-    attach_cloud_db(con, environment = "test", alias = "master", read_only = FALSE)
+    attach_cloud_db(con, pg_user = "vpro_app", pg_password = "testpass",
+                    alias = "master")
     
     # Create a test staging record
     # Note: This is a simple test; real staging would go through merge requests
@@ -330,7 +340,7 @@ test_that("DuckDB can write to PostgreSQL staging tables via ATTACH", {
     
     # Verify local record was created
     local_count <- DBI::dbGetQuery(con, "
-      SELECT COUNT(*) as n FROM core.sample_veg WHERE plot_number = 'CLOUD-TEST-01'
+      SELECT COUNT(*) as n FROM core.veg WHERE plot_number = 'CLOUD-TEST-01'
     ")
     
     expect_equal(local_count$n[1], 1L)

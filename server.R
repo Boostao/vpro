@@ -35,26 +35,15 @@ server <- function(input, output, session) {
   
   # 1. Database Connection
   # Using a persistent connection for simplicity (DuckDB single user mode)
-  environment <- Sys.getenv("R_CONFIG_ACTIVE", unset = "default")
-  cfg <- tryCatch({
-    config::get(config = environment)
-  }, error = function(e) {
-    stop("Failed to load config for environment '", environment, "': ", conditionMessage(e))
-  })
-  
-  con <- connect_local_db(environment = environment)
-  
-  # Optionally attach cloud DB (non-fatal for local-only workflows)
-  if (isTRUE(cfg$cloud$enabled) && isTRUE(cfg$cloud$attach_on_startup)) {
-    tryCatch({
-      attach_cloud_db(con, environment = environment, alias = "master", fail_on_error = FALSE)
-    }, error = function(e) {
-      warning("Cloud ATTACH failed (continuing in local-only mode): ", conditionMessage(e))
-    })
-  }
-  
+  con <- connect_local_db()
+
+  # Cloud PostgreSQL is NOT attached on startup.
+  # It is attached by mod_auth_server when the user logs in,
+  # and detached on logout. All local features work without it.
+
   # Ensure clean disconnect when session ends
   onSessionEnded(function() {
+    if (is_cloud_connected(con)) detach_db(con, "master")
     dbDisconnect(con, shutdown = TRUE)
   })
   
@@ -706,13 +695,32 @@ server <- function(input, output, session) {
   mod_import_server("import", state, con)
 
   # Upload Module
-  mod_upload_server("upload", state, con)
+  #mod_upload_server("upload", state, con)
 
-  # Merge Module
-  mod_merge_server("merge", state, con)
+  # Sync Module
+  mod_sync_server("sync", state, con)
+
+  # Invalidate sync incoming count whenever the Sync tab is activated
+  observeEvent(input$main_tabs, {
+    if (identical(input$main_tabs, "Sync")) {
+      state$SyncTabActivated <- (state$SyncTabActivated %||% 0L) + 1L
+    }
+  }, ignoreInit = TRUE)
+
+  # Merge Module (standalone tab unwired; Merge Review lives in Admin > Merge Review)
+  # mod_merge_server("merge", state, con)
 
   # Auth Module
   mod_auth_server("auth", state, con)
+
+  # Auth Status Widget
+  auth_status_nav_signal <- mod_auth_status_server("auth_status", state, con)
+  observe({
+    dest <- auth_status_nav_signal()
+    if (!is.null(dest)) {
+      nav_select("main_tabs", selected = dest)
+    }
+  })
   
   # Images & Maps Module
   mod_images_server("imgs", state, con)

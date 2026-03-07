@@ -1,955 +1,677 @@
-# Sync engine helpers (local DuckDB <-> cloud PostgreSQL via DuckDB ATTACH).
+# =============================================================================
+# logic_sync.R  —  push-only sync engine
+# Local DuckDB <-> master PostgreSQL: push dirty rows to staging, admin merges
+# =============================================================================
 
-# Optional in-app notifications (vpro_messages via DuckDB ATTACH as schema 'messages').
-if (file.exists("R/logic_notifications.R")) {
-  tryCatch(source("R/logic_notifications.R"), error = function(e) NULL)
+# NULL-coalescing operator
+if (!exists("%||%", inherits = FALSE)) {
+  `%||%` <- function(x, y) if (!is.null(x)) x else y
 }
 
-db_table_id <- function(table) {
-  if (!is.character(table) || length(table) != 1) return(table)
-  if (!grepl("\\.", table, fixed = FALSE)) return(table)
-  parts <- strsplit(table, "\\.")[[1]]
-  parts <- parts[nzchar(parts)]
-  if (length(parts) == 2) {
-    return(DBI::Id(schema = parts[[1]], table = parts[[2]]))
-  }
-  if (length(parts) == 3) {
-    return(DBI::Id(catalog = parts[[1]], schema = parts[[2]], table = parts[[3]]))
-  }
-  table
-}
 
-db_table_exists <- function(con, table) {
-  tryCatch({
-    DBI::dbExistsTable(con, db_table_id(table))
-  }, error = function(e) FALSE)
-}
+# =============================================================================
+# 0. Table registry
+# =============================================================================
 
-db_has_column <- function(con, table, column) {
-  tryCatch({
-    fields <- DBI::dbListFields(con, db_table_id(table))
-    column %in% fields
-  }, error = function(e) FALSE)
-}
+#' Configuration for all push-eligible tables.
+#'
+#' Fields per entry:
+#'   local          - Local DuckDB table name (PascalCase, as created)
+#'   pg             - PostgreSQL staging/core schema name (lowercase)
+#'   pk             - Natural primary key column name (same in local and PG)
+#'   project_scope  - "direct"  = table has its own projectid column
+#'                    "via_env" = project derived by joining through Env
+#'   env_fk         - (via_env only) column in local table matching Env.plotnumber
+SYNC_TABLE_CONFIG <- list(
+  list(local = "Admin",     pg = "admin",     pk = "plot",
+       project_scope = "via_env",  env_fk = "plot"),
+  list(local = "Env",       pg = "env",       pk = "plotnumber",
+       project_scope = "direct"),
+  list(local = "SU",        pg = "su",        pk = "plotnumber",
+       project_scope = "via_env",  env_fk = "plotnumber"),
+  list(local = "Humus",     pg = "humus",     pk = "id",
+       project_scope = "via_env",  env_fk = "plotnumber"),
+  list(local = "Mineral",   pg = "mineral",   pk = "id",
+       project_scope = "via_env",  env_fk = "plotnumber"),
+  list(local = "Other",     pg = "other",     pk = "id",
+       project_scope = "via_env",  env_fk = "plotnumber"),
+  list(local = "Veg",       pg = "veg",       pk = "id",
+       project_scope = "via_env",  env_fk = "plotnumber"),
+  list(local = "Herbarium", pg = "herbarium", pk = "recid",
+       project_scope = "via_env",  env_fk = "plotnumber"),
+  list(local = "Metadata",  pg = "metadata",  pk = "id",
+       project_scope = "direct")
+)
 
-db_add_column_if_missing <- function(con, table, column, type_sql) {
-  if (db_has_column(con, table, column)) return(invisible(FALSE))
-  DBI::dbExecute(con, sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, type_sql))
-  invisible(TRUE)
-}
 
-sync_table_mappings <- function() {
-  list(
-    sample_env = list(
-      local_table = "Sample_Env",
-      cloud_table = "master.core.sample_env",
-      staging_table = "master.staging.sample_env",
-      key_cols = c("PlotNumber", "ProjectID"),
-      local_cols = c("PlotNumber", "ProjectID", "Latitude", "Longitude", "Elevation", "Date", "SiteSurveyor", "SiteNotes"),
-      cloud_cols = c("plot_number", "project_id", "latitude", "longitude", "elevation_m", "survey_date", "surveyor_name", "plot_notes")
-    ),
-    sample_su = list(
-      local_table = "Sample_SU",
-      cloud_table = "master.core.sample_su",
-      staging_table = "master.staging.sample_su",
-      key_cols = c("PlotNumber"),
-      local_cols = c("PlotNumber", "SiteUnit"),
-      cloud_cols = c("plot_number", "su_number")
-    ),
-    sample_veg = list(
-      local_table = "Sample_Veg",
-      cloud_table = "master.core.sample_veg",
-      staging_table = "master.staging.sample_veg",
-      key_cols = c("PlotNumber", "Species", "Layer"),
-      local_cols = c("PlotNumber", "Species", "Layer", "Cover"),
-      cloud_cols = c("plot_number", "species_code", "layer_code", "cover_percent")
-    )
-  )
-}
+# =============================================================================
+# 1. Cloud connectivity
+# =============================================================================
 
-sync_mapping_by_local_table <- function(local_table) {
-  if (is.null(local_table) || !nzchar(local_table)) return(NULL)
-  mappings <- sync_table_mappings()
-  for (mapping in mappings) {
-    if (!is.null(mapping$local_table) && tolower(mapping$local_table) == tolower(local_table)) {
-      return(mapping)
-    }
-  }
-  NULL
-}
-
-sync_resolve_schema <- function(con) {
-  attached <- tryCatch({
-    DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
-  }, error = function(e) character(0))
-  if ("user_db" %in% attached) return(list(catalog = "user_db", schema = "main"))
-  NULL
-}
-
-sync_ensure_state_tables <- function(con) {
-  schema <- sync_resolve_schema(con)
-  prefix <- if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
-  DBI::dbExecute(con, sprintf(
-    "CREATE TABLE IF NOT EXISTS %ssync_state (\n      scope TEXT NOT NULL,\n      value TEXT,\n      updated_utc TIMESTAMPTZ DEFAULT now(),\n      PRIMARY KEY (scope)\n    )",
-    prefix
-  ))
-  DBI::dbExecute(con, sprintf(
-    "CREATE TABLE IF NOT EXISTS %ssync_conflicts (\n      id INTEGER PRIMARY KEY,\n      table_name TEXT NOT NULL,\n      plot_number TEXT,\n      project_id TEXT,\n      local_seen_utc TIMESTAMPTZ,\n      cloud_seen_utc TIMESTAMPTZ,\n      details TEXT,\n      detected_utc TIMESTAMPTZ DEFAULT now()\n    )",
-    prefix
-  ))
-}
-
-sync_conflict_prefix <- function(con) {
-  schema <- sync_resolve_schema(con)
-  if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
-}
-
-sync_clear_conflicts <- function(con, table_name, project_id = NULL) {
-  prefix <- sync_conflict_prefix(con)
-  if (!nzchar(prefix)) return(invisible(FALSE))
-  if (!is.null(project_id) && nzchar(project_id)) {
-    DBI::dbExecute(
-      con,
-      sprintf("DELETE FROM %ssync_conflicts WHERE table_name = ? AND project_id = ?", prefix),
-      list(table_name, project_id)
-    )
-  } else {
-    DBI::dbExecute(
-      con,
-      sprintf("DELETE FROM %ssync_conflicts WHERE table_name = ?", prefix),
-      list(table_name)
-    )
-  }
-  invisible(TRUE)
-}
-
-sync_log_conflict <- function(con, table_name, plot_number, project_id, local_seen_utc, cloud_seen_utc, details) {
-  prefix <- sync_conflict_prefix(con)
-  if (!nzchar(prefix)) return(invisible(FALSE))
-  DBI::dbExecute(
-    con,
-    sprintf(
-      "INSERT INTO %ssync_conflicts (table_name, plot_number, project_id, local_seen_utc, cloud_seen_utc, details)\n       VALUES (?, ?, ?, ?, ?, ?)",
-      prefix
-    ),
-    list(table_name, plot_number, project_id, local_seen_utc, cloud_seen_utc, details)
-  )
-  invisible(TRUE)
-}
-
-sync_count_conflicts <- function(con, project_id = NULL, table_name = NULL) {
-  prefix <- sync_conflict_prefix(con)
-  if (!nzchar(prefix)) return(0L)
-  sql <- sprintf("SELECT COUNT(*) AS n FROM %ssync_conflicts", prefix)
-  filters <- character(0)
-  params <- list()
-  if (!is.null(project_id) && nzchar(project_id)) {
-    filters <- c(filters, "project_id = ?")
-    params <- c(params, list(project_id))
-  }
-  if (!is.null(table_name) && nzchar(table_name)) {
-    filters <- c(filters, "table_name = ?")
-    params <- c(params, list(table_name))
-  }
-  if (length(filters) > 0) {
-    sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
-  }
-  res <- DBI::dbGetQuery(con, sql, params)
-  if (nrow(res) == 0) return(0L)
-  as.integer(res$n[1])
-}
-
-sync_detect_conflicts <- function(con, mapping, temp_table, project_id = NULL, cloud_seen_utc = NULL) {
-  if (is.null(mapping) || is.null(mapping$local_table) || is.null(mapping$key_cols)) return(0L)
-  if (!DBI::dbExistsTable(con, mapping$local_table)) return(0L)
-
-  sync_clear_conflicts(con, mapping$local_table, project_id)
-
-  key_cols <- mapping$key_cols
-  compare_cols <- setdiff(mapping$local_cols, key_cols)
-  if (length(compare_cols) == 0) return(0L)
-  join_clause <- paste(sprintf("l.%s = t.%s", key_cols, key_cols), collapse = " AND ")
-  diff_clause <- paste(sprintf("l.%s IS DISTINCT FROM t.%s", compare_cols, compare_cols), collapse = " OR ")
-
-  select_cols <- c(
-    sprintf("l.%s AS %s", key_cols, key_cols),
-    sprintf("l.%s AS local_%s", compare_cols, compare_cols),
-    sprintf("t.%s AS cloud_%s", compare_cols, compare_cols)
-  )
-  sql <- sprintf(
-    "SELECT %s FROM %s l JOIN %s t ON %s WHERE %s",
-    paste(select_cols, collapse = ", "),
-    mapping$local_table,
-    temp_table,
-    join_clause,
-    diff_clause
-  )
-
-  diffs <- DBI::dbGetQuery(con, sql)
-  if (nrow(diffs) == 0) return(0L)
-
-  conflict_count <- 0L
-  for (row_idx in seq_len(nrow(diffs))) {
-    row <- diffs[row_idx, , drop = FALSE]
-    plot_number <- if ("PlotNumber" %in% names(row)) row$PlotNumber[1] else NA
-    project_val <- project_id
-    if (is.null(project_val) || !nzchar(as.character(project_val))) {
-      if ("ProjectID" %in% names(row)) project_val <- row$ProjectID[1]
-    }
-    changes <- list()
-    for (col_name in compare_cols) {
-      local_val <- row[[paste0("local_", col_name)]][1]
-      cloud_val <- row[[paste0("cloud_", col_name)]][1]
-      if (is.na(local_val) && is.na(cloud_val)) next
-      if (!is.na(local_val) && !is.na(cloud_val) && as.character(local_val) == as.character(cloud_val)) next
-      changes[[col_name]] <- list(local = local_val, cloud = cloud_val)
-    }
-    if (length(changes) == 0) next
-    details <- NULL
-    if (requireNamespace("jsonlite", quietly = TRUE)) {
-      details <- jsonlite::toJSON(changes, auto_unbox = TRUE, na = "null")
-    } else {
-      details <- paste(names(changes), collapse = ", ")
-    }
-    sync_log_conflict(con, mapping$local_table, plot_number, project_val, NA, cloud_seen_utc, details)
-    conflict_count <- conflict_count + 1L
-  }
-
-  conflict_count
-}
-
-sync_get_state <- function(con, scope) {
-  schema <- sync_resolve_schema(con)
-  table_id <- if (is.null(schema)) "sync_state" else sprintf("\"%s\".\"%s\".sync_state", schema$catalog, schema$schema)
-  if (!DBI::dbExistsTable(con, table_id)) return(NULL)
-  prefix <- if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
-  result <- DBI::dbGetQuery(
-    con,
-    sprintf("SELECT value FROM %ssync_state WHERE scope = ?", prefix),
-    list(scope)
-  )
-  if (nrow(result) == 0) return(NULL)
-  result$value[1]
-}
-
-sync_set_state <- function(con, scope, value) {
-  schema <- sync_resolve_schema(con)
-  prefix <- if (is.null(schema)) "" else sprintf("\"%s\".\"%s\".", schema$catalog, schema$schema)
-  DBI::dbExecute(
-    con,
-    sprintf(
-      "INSERT INTO %ssync_state (scope, value, updated_utc)\n       VALUES (?, ?, now())\n       ON CONFLICT (scope) DO UPDATE SET value = EXCLUDED.value, updated_utc = EXCLUDED.updated_utc",
-      prefix
-    ),
-    list(scope, value)
-  )
-}
-
+#' Check whether the cloud master database is currently attached.
+#' @param con   DuckDB connection.
+#' @param alias Catalog alias. Default "master".
+#' @return Logical.
 sync_cloud_connected <- function(con, alias = "master") {
-  # DuckDB catalogs don't expose `catalog.information_schema.*` the way Postgres does.
-  # The most reliable cross-backend check is whether the catalog alias is attached.
   tryCatch({
-    attached <- DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
-    alias %in% attached
-  }, error = function(e) {
-    FALSE
-  })
+    dbs <- DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
+    alias %in% dbs
+  }, error = function(e) FALSE)
 }
 
-sync_conflicts_table_name <- function(con) {
-  schema <- sync_resolve_schema(con)
-  if (is.null(schema)) return("sync_conflicts")
-  sprintf("\"%s\".\"%s\".sync_conflicts", schema$catalog, schema$schema)
+#' Stop if the cloud master is not attached.
+#' @param con          DuckDB connection.
+#' @param allow_attach Unused; kept for backward compatibility.
+#' @param alias        Expected catalog alias.
+sync_require_cloud <- function(con, allow_attach = FALSE, alias = "master") {
+  if (sync_cloud_connected(con, alias)) return(invisible(TRUE))
+  stop("Cloud database '", alias, "' is not attached. Please log in first.")
 }
 
-sync_get_conflicts <- function(con, project_id = NULL, table_name = NULL, limit = 200L) {
-  table_id <- sync_conflicts_table_name(con)
-  if (!DBI::dbExistsTable(con, table_id)) return(data.frame())
-  sql <- sprintf("SELECT id, table_name, plot_number, project_id, detected_utc, details FROM %s", table_id)
-  filters <- character(0)
-  params <- list()
-  if (!is.null(project_id) && nzchar(project_id)) {
-    filters <- c(filters, "project_id = ?")
-    params <- c(params, list(project_id))
-  }
-  if (!is.null(table_name) && nzchar(table_name)) {
-    filters <- c(filters, "table_name = ?")
-    params <- c(params, list(table_name))
-  }
-  if (length(filters) > 0) {
-    sql <- paste(sql, "WHERE", paste(filters, collapse = " AND "))
-  }
-  sql <- paste(sql, "ORDER BY detected_utc DESC LIMIT ?")
-  params <- c(params, list(as.integer(limit)))
-  DBI::dbGetQuery(con, sql, params)
-}
 
-sync_fetch_conflict <- function(con, conflict_id) {
-  table_id <- sync_conflicts_table_name(con)
-  if (!DBI::dbExistsTable(con, table_id)) return(NULL)
-  rows <- DBI::dbGetQuery(con, sprintf("SELECT * FROM %s WHERE id = ?", table_id), list(as.integer(conflict_id)))
-  if (nrow(rows) == 0) return(NULL)
-  rows[1, , drop = FALSE]
-}
+# =============================================================================
+# 2. Local schema setup
+# =============================================================================
 
-sync_delete_conflict <- function(con, conflict_id) {
-  table_id <- sync_conflicts_table_name(con)
-  if (!DBI::dbExistsTable(con, table_id)) return(invisible(FALSE))
-  DBI::dbExecute(con, sprintf("DELETE FROM %s WHERE id = ?", table_id), list(as.integer(conflict_id)))
-  invisible(TRUE)
-}
-
-sync_cloud_key_filters <- function(mapping, plot_number, project_id) {
-  key_cols <- mapping$key_cols
-  local_to_cloud <- setNames(mapping$cloud_cols, mapping$local_cols)
-  cloud_keys <- local_to_cloud[key_cols]
-  cloud_keys <- cloud_keys[!is.na(cloud_keys)]
-  filters <- character(0)
-  params <- list()
-  for (idx in seq_along(key_cols)) {
-    local_key <- key_cols[[idx]]
-    cloud_key <- cloud_keys[[idx]]
-    if (is.null(cloud_key) || !nzchar(cloud_key)) next
-    value <- if (tolower(local_key) == "plotnumber") plot_number else project_id
-    if (is.null(value) || !nzchar(as.character(value))) next
-    filters <- c(filters, paste0(cloud_key, " = ?"))
-    params <- c(params, list(value))
-  }
-  list(filters = filters, params = params)
-}
-
-sync_upsert_local_to_cloud <- function(con, mapping, plot_number, project_id, submitter) {
-  cloud_table <- mapping$cloud_table
-  local_table <- mapping$local_table
-  local_cols <- mapping$local_cols
-  cloud_cols <- mapping$cloud_cols
-
-  if (!DBI::dbExistsTable(con, local_table)) return(FALSE)
-
-  local_to_cloud <- setNames(cloud_cols, local_cols)
-  key_filters <- sync_cloud_key_filters(mapping, plot_number, project_id)
-  if (length(key_filters$filters) == 0) return(FALSE)
-
-  temp_name <- "tmp_sync_conflict_local"
-  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-
-  select_cols <- paste(sprintf("%s AS %s", local_cols, cloud_cols), collapse = ", ")
-  where_clause <- paste(key_filters$filters, collapse = " AND ")
-  sql <- sprintf("CREATE TEMP TABLE %s AS SELECT %s FROM %s WHERE %s", temp_name, select_cols, local_table, where_clause)
-  DBI::dbExecute(con, sql, key_filters$params)
-
-  row_count <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", temp_name))$n[1]
-  if (row_count == 0) {
-    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-    return(FALSE)
-  }
-
-  cloud_fields <- tryCatch(DBI::dbListFields(con, cloud_table), error = function(e) character(0))
-  insert_cols <- intersect(cloud_cols, cloud_fields)
-  insert_cols <- unique(c(insert_cols, if ("modified_by" %in% cloud_fields) "modified_by" else character(0)))
-
-  insert_select <- paste(intersect(cloud_cols, insert_cols), collapse = ", ")
-  if ("modified_by" %in% insert_cols) {
-    insert_select <- paste(insert_select, "?", sep = ", ")
-  }
-
-  update_cols <- setdiff(intersect(cloud_cols, cloud_fields), mapping$key_cols)
-  update_sql <- paste(sprintf("%s = EXCLUDED.%s", update_cols, update_cols), collapse = ", ")
-  extra_updates <- character(0)
-  if ("modified_by" %in% cloud_fields) extra_updates <- c(extra_updates, "modified_by = EXCLUDED.modified_by")
-  if ("last_modified_utc" %in% cloud_fields) extra_updates <- c(extra_updates, "last_modified_utc = now()")
-  if ("row_version" %in% cloud_fields) extra_updates <- c(extra_updates, "row_version = coalesce(row_version, 0) + 1")
-  if (length(extra_updates) > 0) {
-    update_sql <- paste(c(update_sql, extra_updates), collapse = ", ")
-  }
-
-  cloud_key_cols <- local_to_cloud[mapping$key_cols]
-  cloud_key_cols <- cloud_key_cols[!is.na(cloud_key_cols) & nzchar(cloud_key_cols)]
-  if (length(cloud_key_cols) == 0) cloud_key_cols <- mapping$cloud_cols[1]
-  conflict_clause <- paste(cloud_key_cols, collapse = ", ")
-
-  insert_sql <- sprintf(
-    "INSERT INTO %s (%s) SELECT %s FROM %s ON CONFLICT (%s) DO UPDATE SET %s",
-    cloud_table,
-    paste(insert_cols, collapse = ", "),
-    insert_select,
-    temp_name,
-    conflict_clause,
-    update_sql
-  )
-  params <- if ("modified_by" %in% insert_cols) list(submitter) else list()
-  DBI::dbExecute(con, insert_sql, params)
-  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-  TRUE
-}
-
-sync_replace_local_from_cloud <- function(con, mapping, plot_number, project_id) {
-  cloud_table <- mapping$cloud_table
-  local_table <- mapping$local_table
-  local_cols <- mapping$local_cols
-  cloud_cols <- mapping$cloud_cols
-
-  if (!DBI::dbExistsTable(con, local_table)) return(FALSE)
-
-  key_filters <- sync_cloud_key_filters(mapping, plot_number, project_id)
-  if (length(key_filters$filters) == 0) return(FALSE)
-
-  temp_name <- "tmp_sync_conflict_cloud"
-  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-
-  select_cols <- paste(sprintf("%s AS %s", cloud_cols, local_cols), collapse = ", ")
-  where_clause <- paste(key_filters$filters, collapse = " AND ")
-  sql <- sprintf("CREATE TEMP TABLE %s AS SELECT %s FROM %s WHERE %s", temp_name, select_cols, cloud_table, where_clause)
-  DBI::dbExecute(con, sql, key_filters$params)
-
-  row_count <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", temp_name))$n[1]
-  if (row_count == 0) {
-    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-    return(FALSE)
-  }
-
-  key_clause <- paste(sprintf("%s = ?", mapping$key_cols), collapse = " AND ")
-  key_params <- list(plot_number)
-  if (length(mapping$key_cols) > 1 && !is.null(project_id)) {
-    key_params <- c(key_params, list(project_id))
-  }
-  DBI::dbExecute(con, sprintf("DELETE FROM %s WHERE %s", local_table, key_clause), key_params)
-  DBI::dbExecute(con, sprintf("INSERT INTO %s (%s) SELECT %s FROM %s",
-    local_table,
-    paste(local_cols, collapse = ", "),
-    paste(local_cols, collapse = ", "),
-    temp_name
-  ))
-  DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-  TRUE
-}
-
-sync_resolve_conflict <- function(con, conflict_id, resolution, submitter = Sys.getenv("USER", "unknown")) {
-  conflict <- sync_fetch_conflict(con, conflict_id)
-  if (is.null(conflict) || nrow(conflict) == 0) return(FALSE)
-
-  mapping <- sync_mapping_by_local_table(conflict$table_name[1])
-  if (is.null(mapping)) return(FALSE)
-
-  plot_number <- conflict$plot_number[1]
-  project_id <- conflict$project_id[1]
-
-  sync_require_cloud(con, allow_attach = TRUE)
-
-  ok <- FALSE
-  if (identical(resolution, "keep_local")) {
-    ok <- sync_upsert_local_to_cloud(con, mapping, plot_number, project_id, submitter)
-  } else if (identical(resolution, "keep_cloud")) {
-    ok <- sync_replace_local_from_cloud(con, mapping, plot_number, project_id)
-  } else if (identical(resolution, "dismiss")) {
-    ok <- TRUE
-  }
-
-  if (isTRUE(ok)) {
-    sync_delete_conflict(con, conflict_id)
-  }
-  ok
-}
-
-sync_require_cloud <- function(con, environment = NULL, allow_attach = TRUE) {
-  if (sync_cloud_connected(con)) return(invisible(TRUE))
-  if (!allow_attach) stop("Cloud database is not attached.")
-  attach_cloud_db(con, environment = environment, read_only = FALSE, alias = "master")
-  if (!sync_cloud_connected(con)) stop("Cloud database attach failed.")
-  invisible(TRUE)
-}
-
-merge_ensure_tables <- function(con) {
-  sync_require_cloud(con, allow_attach = TRUE)
-
-  # Schemas
-  tryCatch(DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS master.admin"), error = function(e) NULL)
-  tryCatch(DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS master.staging"), error = function(e) NULL)
-  tryCatch(DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS master.core"), error = function(e) NULL)
-
-  # Merge requests
-  tryCatch(DBI::dbExecute(con, "CREATE SEQUENCE IF NOT EXISTS master.admin.merge_requests_id_seq"), error = function(e) NULL)
-  tryCatch({
-    DBI::dbExecute(
-      con,
-      "CREATE TABLE IF NOT EXISTS master.admin.merge_requests (
-         id BIGINT PRIMARY KEY DEFAULT nextval('master.admin.merge_requests_id_seq'),
-         project_id TEXT NOT NULL,
-         submitter_user_id TEXT NOT NULL,
-         submitted_utc TIMESTAMPTZ DEFAULT now(),
-         status TEXT DEFAULT 'pending_review',
-         reviewer_user_id TEXT,
-         reviewed_utc TIMESTAMPTZ,
-         review_notes TEXT,
-         env_record_count INTEGER DEFAULT 0,
-         su_record_count INTEGER DEFAULT 0,
-         veg_record_count INTEGER DEFAULT 0,
-         compliance_passed BOOLEAN,
-         compliance_report TEXT
-       )"
-    )
-  }, error = function(e) NULL)
-
-  # Backfill/upgrade older schemas (best-effort)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "submitted_utc", "TIMESTAMPTZ DEFAULT now()"), error = function(e) NULL)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "status", "TEXT DEFAULT 'pending_review'"), error = function(e) NULL)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "reviewer_user_id", "TEXT"), error = function(e) NULL)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "reviewed_utc", "TIMESTAMPTZ"), error = function(e) NULL)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "review_notes", "TEXT"), error = function(e) NULL)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "su_record_count", "INTEGER DEFAULT 0"), error = function(e) NULL)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "compliance_passed", "BOOLEAN"), error = function(e) NULL)
-  tryCatch(db_add_column_if_missing(con, "master.admin.merge_requests", "compliance_report", "TEXT"), error = function(e) NULL)
-
-  # Merge conflicts
-  tryCatch(DBI::dbExecute(con, "CREATE SEQUENCE IF NOT EXISTS master.admin.merge_conflicts_id_seq"), error = function(e) NULL)
-  tryCatch({
-    DBI::dbExecute(
-      con,
-      "CREATE TABLE IF NOT EXISTS master.admin.merge_conflicts (
-         id BIGINT PRIMARY KEY DEFAULT nextval('master.admin.merge_conflicts_id_seq'),
-         merge_request_id BIGINT NOT NULL,
-         table_name TEXT NOT NULL,
-         plot_number TEXT,
-         project_id TEXT,
-         species_code TEXT NOT NULL DEFAULT '',
-         layer_code TEXT NOT NULL DEFAULT '',
-         details TEXT,
-         resolution TEXT,
-         resolved_by TEXT,
-         resolved_utc TIMESTAMPTZ,
-         created_utc TIMESTAMPTZ DEFAULT now(),
-         UNIQUE (merge_request_id, table_name, plot_number, project_id, species_code, layer_code)
-       )"
-    )
-  }, error = function(e) NULL)
-
-  # Normalise legacy NULL keys so uniqueness/ON CONFLICT behaves deterministically.
-  tryCatch(DBI::dbExecute(con, "UPDATE master.admin.merge_conflicts SET species_code = '' WHERE species_code IS NULL"), error = function(e) NULL)
-  tryCatch(DBI::dbExecute(con, "UPDATE master.admin.merge_conflicts SET layer_code = '' WHERE layer_code IS NULL"), error = function(e) NULL)
-
-  # Ensure staging tables support optimistic concurrency (base_row_version captured at submit time)
-  for (staging_table in c("master.staging.sample_env", "master.staging.sample_su", "master.staging.sample_veg")) {
-    tryCatch(db_add_column_if_missing(con, staging_table, "base_row_version", "INTEGER"), error = function(e) NULL)
-  }
-
-  # DuckDB requires a UNIQUE/PRIMARY KEY constraint (or unique index) for
-  # `INSERT .. ON CONFLICT (cols)` to be valid. In production, cloud tables
-  # should already have these constraints, but in tests we often create minimal
-  # tables without indexes.
-  tryCatch(
-    DBI::dbExecute(
-      con,
-      "CREATE UNIQUE INDEX IF NOT EXISTS uq_sample_env_plot_project ON master.core.sample_env(plot_number, project_id)"
-    ),
-    error = function(e) NULL
-  )
-  tryCatch(
-    DBI::dbExecute(
-      con,
-      "CREATE UNIQUE INDEX IF NOT EXISTS uq_sample_su_plot_project ON master.core.sample_su(plot_number, project_id)"
-    ),
-    error = function(e) NULL
-  )
-  tryCatch(
-    DBI::dbExecute(
-      con,
-      "CREATE UNIQUE INDEX IF NOT EXISTS uq_sample_veg_keys ON master.core.sample_veg(plot_number, species_code, layer_code, project_id)"
-    ),
-    error = function(e) NULL
-  )
-
-  invisible(TRUE)
-}
-
-sync_pull <- function(con,
-                      project_id = NULL,
-                      tables = c("sample_env", "sample_su"),
-                      environment = NULL,
-                      allow_attach = TRUE) {
-  sync_require_cloud(con, environment = environment, allow_attach = allow_attach)
-  sync_ensure_state_tables(con)
-
-  mappings <- sync_table_mappings()
-  results <- list()
-
-  for (table_key in tables) {
-    mapping <- mappings[[table_key]]
-    if (is.null(mapping)) {
-      results[[table_key]] <- list(pulled = 0L, skipped = TRUE, reason = "unsupported")
-      next
-    }
-
-    if (identical(table_key, "sample_veg")) {
-      results[[table_key]] <- list(pulled = 0L, skipped = TRUE, reason = "pull_not_supported")
-      next
-    }
-
-    if (!DBI::dbExistsTable(con, mapping$local_table)) {
-      results[[table_key]] <- list(pulled = 0L, skipped = TRUE)
-      next
-    }
-
-    scope <- paste("last_pull", table_key, project_id %||% "all", sep = ":")
-    last_pull <- sync_get_state(con, scope)
-
-    select_cols <- sprintf(
-      "SELECT %s FROM %s",
-      paste(sprintf("%s AS %s", mapping$cloud_cols, mapping$local_cols), collapse = ", "),
-      mapping$cloud_table
-    )
-
-    filters <- character(0)
-    params <- list()
-    if (!is.null(project_id) && nzchar(project_id) && "project_id" %in% mapping$cloud_cols) {
-      filters <- c(filters, "project_id = ?")
-      params <- c(params, list(project_id))
-    }
-    if (!is.null(last_pull) && nzchar(last_pull) && db_table_exists(con, "master.core.sample_env")) {
-      filters <- c(filters, "last_modified_utc > ?")
-      params <- c(params, list(last_pull))
-    }
-
-    where_clause <- if (length(filters) > 0) paste("WHERE", paste(filters, collapse = " AND ")) else ""
-    sql <- paste(select_cols, where_clause)
-
-    temp_name <- paste0("tmp_sync_pull_", table_key)
-    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-    DBI::dbExecute(con, sprintf("CREATE TEMP TABLE %s AS %s", temp_name, sql), params)
-
-    pulled <- DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", temp_name))$n[1]
-    conflict_count <- sync_detect_conflicts(con, mapping, temp_name, project_id = project_id, cloud_seen_utc = last_pull)
-    if (pulled > 0) {
-      key_col <- mapping$key_cols[1]
-      DBI::dbExecute(
-        con,
-        sprintf("DELETE FROM %s WHERE %s IN (SELECT %s FROM %s)", mapping$local_table, key_col, key_col, temp_name)
-      )
-      DBI::dbExecute(
-        con,
-        sprintf("INSERT INTO %s (%s) SELECT %s FROM %s",
-          mapping$local_table,
-          paste(mapping$local_cols, collapse = ", "),
-          paste(mapping$local_cols, collapse = ", "),
-          temp_name
-        )
+#' Add local_modified_utc to all 9 push-eligible tables (idempotent).
+#' @param con DuckDB connection.
+sync_ensure_local_tables <- function(con) {
+  for (cfg in SYNC_TABLE_CONFIG) {
+    if (DBI::dbExistsTable(con, cfg$local)) {
+      tryCatch(
+        DBI::dbExecute(con, sprintf(
+          'ALTER TABLE "%s" ADD COLUMN IF NOT EXISTS local_modified_utc TIMESTAMPTZ',
+          cfg$local
+        )),
+        error = function(e) NULL
       )
     }
-
-    DBI::dbExecute(con, sprintf("DROP TABLE IF EXISTS %s", temp_name))
-    sync_set_state(con, scope, format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
-    results[[table_key]] <- list(pulled = pulled, skipped = FALSE, conflicts = conflict_count)
   }
-
-  results
+  invisible(TRUE)
 }
 
-sync_create_merge_request <- function(con, project_id, submitter) {
-  merge_ensure_tables(con)
-  result <- DBI::dbGetQuery(
-    con,
+
+# =============================================================================
+# 3. Column discovery
+# =============================================================================
+
+# Staging metadata columns to exclude from shared-column intersection.
+.STAGING_META_COLS <- tolower(c(
+  "merge_request_id", "baseRowVersion", "changeType",
+  "rowVersion", "lastModifiedUTC", "modifiedBy"
+))
+
+# Local metadata columns to exclude.
+.LOCAL_META_COLS <- c("local_modified_utc")
+
+#' Discover shared data columns between a local table and its PG staging mirror.
+#' Returns lowercase column names safe to use in SQL on both sides.
+#'
+#' @param con         DuckDB connection with master attached.
+#' @param local_table Local DuckDB table name.
+#' @param pg_table    PG staging/core schema name (lowercase).
+#' @return Character vector of shared lowercase column names.
+.get_shared_columns <- function(con, local_table, pg_table) {
+  local_cols <- tryCatch(
+    tolower(DBI::dbListFields(con, local_table)),
+    error = function(e) character(0)
+  )
+  staging_cols <- tryCatch({
+    res <- DBI::dbGetQuery(
+      con,
+      "SELECT column_name
+       FROM information_schema.columns
+       WHERE table_catalog = 'master'
+         AND table_schema  = 'staging'
+         AND table_name    = ?",
+      list(pg_table)
+    )
+    tolower(res$column_name)
+  }, error = function(e) character(0))
+
+  local_cols   <- setdiff(local_cols,   .LOCAL_META_COLS)
+  staging_cols <- setdiff(staging_cols, .STAGING_META_COLS)
+  intersect(local_cols, staging_cols)
+}
+
+
+# =============================================================================
+# 4. PUSH: local -> master.staging
+# =============================================================================
+
+#' Push dirty rows of one table into the staging area.
+#'
+#' Sanitizes project_id for safe SQL embedding. project_id comes from the
+#' authenticated session (user-selected project), validated upstream.
+#'
+#' @param con        DuckDB connection (master attached).
+#' @param cfg        One entry from SYNC_TABLE_CONFIG.
+#' @param mr_id      Integer merge request id (already created).
+#' @param submitter  Character. Username / email of the submitter.
+#' @param project_id Character. Project filter.
+#' @return Integer count of rows staged.
+.push_table <- function(con, cfg, mr_id, submitter, project_id) {
+  if (!DBI::dbExistsTable(con, cfg$local)) return(0L)
+
+  shared_cols <- .get_shared_columns(con, cfg$local, cfg$pg)
+  if (length(shared_cols) == 0) return(0L)
+
+  pk       <- cfg$pk
+  tmp_name <- paste0("tmp_push_", cfg$pg)
+  DBI::dbExecute(con, paste0("DROP TABLE IF EXISTS ", tmp_name))
+
+  # Sanitize project_id: only allow alphanumeric and simple separators
+  pid_safe <- gsub("[^A-Za-z0-9_-]", "", as.character(project_id))
+
+  # Build project scoping filter (project_id from auth session, sanitized)
+  proj_filter <- if (cfg$project_scope == "direct") {
+    paste0('l."projectid" = ', "'", pid_safe, "'")
+  } else {
     paste0(
-      "INSERT INTO master.admin.merge_requests (project_id, submitter_user_id, submitted_utc, status)",
-      " VALUES (?, ?, now(), 'pending_review') RETURNING id"
-    ),
-    list(project_id, submitter)
+      'l."', cfg$env_fk, '" IN ',
+      '(SELECT "plotnumber" FROM "Env" WHERE "projectid" = ', "'", pid_safe, "')"
+    )
+  }
+
+  col_select <- paste(sprintf('l."%s"', shared_cols), collapse = ", ")
+
+  DBI::dbExecute(con, sprintf(
+    'CREATE TEMP TABLE %s AS
+     SELECT %s,
+            CAST(c."rowVersion" AS INTEGER) AS _base_row_version,
+            CASE WHEN CAST(c."%s" AS TEXT) IS NULL THEN \'I\' ELSE \'U\' END AS _changetype
+     FROM "%s" l
+     LEFT JOIN master.core.%s c
+       ON CAST(c."%s" AS TEXT) = CAST(l."%s" AS TEXT)
+     WHERE l.local_modified_utc IS NOT NULL
+       AND %s',
+    tmp_name, col_select,
+    pk,
+    cfg$local, cfg$pg,
+    pk, pk,
+    proj_filter
+  ))
+
+  n <- tryCatch(
+    as.integer(DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", tmp_name))$n[1]),
+    error = function(e) 0L
   )
-  if (nrow(result) == 0) stop("Failed to create merge request.")
-  result$id[1]
+  if (n == 0L) return(0L)
+
+  staging_col_list <- paste(
+    c('"merge_request_id"', '"changeType"', '"baseRowVersion"', '"modifiedBy"',
+      sprintf('"%s"', shared_cols)),
+    collapse = ", "
+  )
+  # Build select list: literal mr_id via DBI param, submitter as sanitized literal
+  sub_safe <- gsub("'", "", as.character(submitter))
+  select_col_list <- paste(
+    c("?", "_changetype", "_base_row_version",
+      paste0("'", sub_safe, "'"),
+      sprintf('"%s"', shared_cols)),
+    collapse = ", "
+  )
+
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "INSERT INTO master.staging.%s (%s) SELECT %s FROM %s",
+      cfg$pg, staging_col_list, select_col_list, tmp_name
+    ),
+    list(as.integer(mr_id))
+  )
+  n
 }
 
+#' Push all local changes for a project to master.staging, creating a merge request.
+#'
+#' @param con        DuckDB connection (master must be attached).
+#' @param project_id Character. Project to push.
+#' @param submitter  Character. Username / email of the submitter.
+#' @return Named list: merge_request_id, counts (named by pg table), total.
 sync_push <- function(con,
                       project_id = NULL,
-                      tables = c("sample_env", "sample_su", "sample_veg"),
-                      environment = NULL,
-                      allow_attach = TRUE,
-                      submitter = Sys.getenv("USER", "unknown")) {
-  sync_require_cloud(con, environment = environment, allow_attach = allow_attach)
-  merge_ensure_tables(con)
-  sync_ensure_state_tables(con)
+                      submitter  = Sys.getenv("USER", "unknown")) {
+  sync_require_cloud(con)
+  sync_ensure_local_tables(con)
 
-  if (is.null(project_id) || !nzchar(project_id)) {
-    if (DBI::dbExistsTable(con, "Sample_Env")) {
-      projects <- DBI::dbGetQuery(con, "SELECT DISTINCT ProjectID FROM Sample_Env")$ProjectID
-      projects <- projects[!is.na(projects) & nzchar(projects)]
-      if (length(projects) == 1) {
-        project_id <- projects[1]
-      } else {
-        stop("Project ID is required for sync_push when multiple projects exist.")
-      }
-    } else {
-      stop("Project ID is required for sync_push.")
-    }
+  if (is.null(project_id) || !nzchar(as.character(project_id))) {
+    stop("project_id is required for sync_push.")
   }
 
-  merge_request_id <- sync_create_merge_request(con, project_id, submitter)
-  results <- list(merge_request_id = merge_request_id)
+  mr_id  <- .create_merge_request(con, project_id, submitter)
+  counts <- list()
 
-  if (exists("notifications_post_merge_event", mode = "function")) {
-    tryCatch(
-      notifications_post_merge_event(con, merge_request_id, project_id, event = "submitted", actor = submitter),
+  for (cfg in SYNC_TABLE_CONFIG) {
+    n <- tryCatch(
+      .push_table(con, cfg, mr_id, submitter, project_id),
+      error = function(e) {
+        warning(sprintf(".push_table failed for %s: %s", cfg$local, e$message))
+        0L
+      }
+    )
+    counts[[cfg$pg]] <- as.integer(n)
+  }
+
+  counts_json <- tryCatch(
+    as.character(jsonlite::toJSON(counts, auto_unbox = TRUE)),
+    error = function(e) "{}"
+  )
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.merge_requests SET record_counts = ? WHERE id = ?",
+    list(counts_json, as.integer(mr_id))
+  )
+
+  # Optional compliance gate
+  if (exists("staging_compliance_checks", mode = "function")) {
+    compliance    <- tryCatch(
+      staging_compliance_checks(con, mr_id, project_id),
+      error = function(e) list(passed = TRUE)
+    )
+    compliance_ok <- isTRUE(compliance$passed)
+    report_json   <- tryCatch(
+      as.character(jsonlite::toJSON(
+        list(summary = compliance$summary_tibble, details = compliance$detail_tibble),
+        auto_unbox = TRUE, na = "null"
+      )),
       error = function(e) NULL
     )
-  }
-
-  if ("sample_env" %in% tables && DBI::dbExistsTable(con, "Sample_Env")) {
-    DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_env_push")
-    DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_env_delta")
-
-    DBI::dbExecute(
-      con,
-      "CREATE TEMP TABLE tmp_env_push AS\n       SELECT\n         PlotNumber AS plot_number,\n         ProjectID AS project_id,\n         Latitude AS latitude,\n         Longitude AS longitude,\n         Elevation AS elevation_m,\n         Date AS survey_date,\n         SiteSurveyor AS surveyor_name,\n         SiteNotes AS plot_notes\n       FROM Sample_Env\n       WHERE ProjectID = ?",
-      list(project_id)
-    )
-
-    base_env_expr <- if (db_has_column(con, "master.core.sample_env", "row_version")) "c.row_version" else "CAST(NULL AS INTEGER)"
-    DBI::dbExecute(
-      con,
-      sprintf(
-        "CREATE TEMP TABLE tmp_env_delta AS\n         SELECT t.*, %s AS base_row_version\n         FROM tmp_env_push t\n         LEFT JOIN master.core.sample_env c\n           ON c.plot_number = t.plot_number AND c.project_id = t.project_id\n         WHERE c.plot_number IS NULL\n            OR c.latitude IS DISTINCT FROM t.latitude\n            OR c.longitude IS DISTINCT FROM t.longitude\n            OR c.elevation_m IS DISTINCT FROM t.elevation_m\n            OR c.survey_date IS DISTINCT FROM t.survey_date\n            OR c.surveyor_name IS DISTINCT FROM t.surveyor_name\n            OR c.plot_notes IS DISTINCT FROM t.plot_notes",
-        base_env_expr
-      )
-    )
-
-    env_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM tmp_env_delta")$n[1]
-    if (env_count > 0) {
-      DBI::dbExecute(
-        con,
-        "INSERT INTO master.staging.sample_env\n         (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, base_row_version, merge_request_id, modified_by)\n         SELECT plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, base_row_version, ?, ?\n         FROM tmp_env_delta",
-        list(merge_request_id, submitter)
-      )
-    }
-
-    DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_env_push")
-    DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_env_delta")
-    results$sample_env <- env_count
-  }
-
-  if ("sample_su" %in% tables && DBI::dbExistsTable(con, "Sample_SU")) {
-    if (!DBI::dbExistsTable(con, "Sample_Env")) {
-      results$sample_su <- 0L
-    } else {
-      DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_su_push")
-      DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_su_delta")
-
-      DBI::dbExecute(
-        con,
-        "CREATE TEMP TABLE tmp_su_push AS\n         SELECT\n           su.PlotNumber AS plot_number,\n           env.ProjectID AS project_id,\n           su.SiteUnit AS su_number,\n           env.Zone AS bec_zone,\n           env.SubZone AS bec_subzone,\n           env.SiteSeries AS site_series\n         FROM Sample_SU su\n         LEFT JOIN Sample_Env env ON env.PlotNumber = su.PlotNumber\n         WHERE env.ProjectID = ?",
-        list(project_id)
-      )
-
-      base_su_expr <- if (db_has_column(con, "master.core.sample_su", "row_version")) "c.row_version" else "CAST(NULL AS INTEGER)"
-      DBI::dbExecute(
-        con,
-        sprintf(
-          "CREATE TEMP TABLE tmp_su_delta AS\n           SELECT t.*, %s AS base_row_version\n           FROM tmp_su_push t\n           LEFT JOIN master.core.sample_su c\n             ON c.plot_number = t.plot_number AND c.project_id = t.project_id\n           WHERE c.plot_number IS NULL\n              OR c.su_number IS DISTINCT FROM t.su_number\n              OR c.bec_zone IS DISTINCT FROM t.bec_zone\n              OR c.bec_subzone IS DISTINCT FROM t.bec_subzone\n              OR c.site_series IS DISTINCT FROM t.site_series",
-          base_su_expr
-        )
-      )
-
-      su_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM tmp_su_delta")$n[1]
-      if (su_count > 0) {
-        DBI::dbExecute(
-          con,
-          "INSERT INTO master.staging.sample_su\n           (plot_number, project_id, su_number, bec_zone, bec_subzone, site_series, base_row_version, merge_request_id, modified_by)\n           SELECT plot_number, project_id, su_number, bec_zone, bec_subzone, site_series, base_row_version, ?, ?\n           FROM tmp_su_delta",
-          list(merge_request_id, submitter)
-        )
-      }
-
-      DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_su_push")
-      DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_su_delta")
-      results$sample_su <- su_count
-    }
-  }
-
-  if ("sample_veg" %in% tables && DBI::dbExistsTable(con, "Sample_Veg")) {
-    if (!DBI::dbExistsTable(con, "Sample_Env") || !DBI::dbExistsTable(con, "Sample_Veg")) {
-      results$sample_veg <- 0L
-    } else {
-      DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_veg_push")
-
-      DBI::dbExecute(
-        con,
-        "CREATE TEMP TABLE tmp_veg_push AS\n         SELECT\n           v.PlotNumber AS plot_number,\n           env.ProjectID AS project_id,\n           TRIM(v.Species) AS species_code,\n           v.Layer AS layer_code,\n           v.Cover1 AS cover1,\n           v.Height1 AS height1,\n           v.Cover2 AS cover2,\n           v.Height2 AS height2,\n           v.Cover3 AS cover3,\n           v.Height3 AS height3,\n           v.TotalA AS totala,\n           v.HeightA AS heighta,\n           v.Cover4 AS cover4,\n           v.Height4 AS height4,\n           v.Cover5 AS cover5,\n           v.Height5 AS height5,\n           v.Cover5a AS cover5a,\n           v.Height5a AS height5a,\n           v.Cover5b AS cover5b,\n           v.Height5b AS height5b,\n           v.Cover5c AS cover5c,\n           v.Height5c AS height5c,\n           v.TotalB AS totalb,\n           v.HeightB AS heightb,\n           v.Cover6 AS cover6,\n           v.Height6 AS height6,\n           v.Cover7 AS cover7,\n           v.Cover8 AS cover8,\n           v.Cover9 AS cover9,\n           v.Cover10 AS cover10,\n           v.Collected AS collected,\n           v.Flag AS flag,\n           v.ID AS veg_id,\n           v.LL AS ll,\n           v.AF AS af,\n           v.DC AS dc,\n           v.UT AS ut,\n           v.VI AS vi,\n           v.PV AS pv,\n           v.PG AS pg,\n           v.FFA AS ffa,\n           v.Cultural1 AS cultural1,\n           v.Cultural2 AS cultural2,\n           v.Other1 AS other1,\n           v.Other2 AS other2\n         FROM Sample_Veg v\n         LEFT JOIN Sample_Env env ON env.PlotNumber = v.PlotNumber\n         WHERE env.ProjectID = ?",
-        list(project_id)
-      )
-
-      veg_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM tmp_veg_push")$n[1]
-      if (veg_count > 0) {
-        DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_veg_stage")
-        base_veg_expr <- if (db_has_column(con, "master.core.sample_veg", "row_version")) "c.row_version" else "CAST(NULL AS INTEGER)"
-        DBI::dbExecute(
-          con,
-          sprintf(
-            "CREATE TEMP TABLE tmp_veg_stage AS\n             SELECT t.*, %s AS base_row_version\n             FROM tmp_veg_push t\n             LEFT JOIN master.core.sample_veg c\n               ON c.plot_number = t.plot_number\n              AND c.project_id = t.project_id\n              AND c.species_code = t.species_code\n              AND c.layer_code = t.layer_code",
-            base_veg_expr
-          )
-        )
-
-        DBI::dbExecute(
-          con,
-          "INSERT INTO master.staging.sample_veg\n           (plot_number, project_id, species_code, layer_code,\n            cover1, height1, cover2, height2, cover3, height3, totala, heighta, cover4, height4, cover5, height5, cover5a, height5a, cover5b, height5b, cover5c, height5c, totalb, heightb, cover6, height6, cover7, cover8, cover9, cover10, collected, flag, veg_id, ll, af, dc, ut, vi, pv, pg, ffa, cultural1, cultural2, other1, other2, base_row_version, merge_request_id, modified_by)\n           SELECT plot_number, project_id, species_code, layer_code,\n            cover1, height1, cover2, height2, cover3, height3, totala, heighta, cover4, height4, cover5, height5, cover5a, height5a, cover5b, height5b, cover5c, height5c, totalb, heightb, cover6, height6, cover7, cover8, cover9, cover10, collected, flag, veg_id, ll, af, dc, ut, vi, pv, pg, ffa, cultural1, cultural2, other1, other2, base_row_version, ?, ?\n           FROM tmp_veg_stage",
-          list(merge_request_id, submitter)
-        )
-        DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_veg_stage")
-      }
-
-      DBI::dbExecute(con, "DROP TABLE IF EXISTS tmp_veg_push")
-      results$sample_veg <- veg_count
-    }
-  }
-
-  env_total <- results$sample_env %||% 0L
-  su_total <- results$sample_su %||% 0L
-  veg_total <- results$sample_veg %||% 0L
-  DBI::dbExecute(
-    con,
-    "UPDATE master.admin.merge_requests SET env_record_count = ?, su_record_count = ?, veg_record_count = ? WHERE id = ?",
-    list(env_total, su_total, veg_total, merge_request_id)
-  )
-
-  compliance <- staging_compliance_checks(con, merge_request_id, project_id)
-  report_json <- NULL
-  if (!is.null(compliance) && requireNamespace("jsonlite", quietly = TRUE)) {
-    report_json <- jsonlite::toJSON(
-      list(summary = compliance$summary_tibble, details = compliance$detail_tibble),
-      auto_unbox = TRUE,
-      na = "null"
-    )
-  }
-
-  compliance_ok <- isTRUE(compliance$passed)
-  DBI::dbExecute(
-    con,
-    "UPDATE master.admin.merge_requests
-     SET compliance_passed = ?, compliance_report = ?
-     WHERE id = ?",
-    list(compliance_ok, report_json, merge_request_id)
-  )
-
-  if (!compliance_ok) {
     DBI::dbExecute(
       con,
       "UPDATE master.admin.merge_requests
-       SET status = 'rejected'
-       WHERE id = ?",
-      list(merge_request_id)
+       SET compliance_passed = ?, compliance_report = ? WHERE id = ?",
+      list(compliance_ok, report_json, as.integer(mr_id))
     )
-    DBI::dbExecute(con, "DELETE FROM master.staging.sample_env WHERE merge_request_id = ?", list(merge_request_id))
-    DBI::dbExecute(con, "DELETE FROM master.staging.sample_su WHERE merge_request_id = ?", list(merge_request_id))
-    DBI::dbExecute(con, "DELETE FROM master.staging.sample_veg WHERE merge_request_id = ?", list(merge_request_id))
-    results$compliance_failed <- TRUE
-    return(results)
-  }
-
-  for (table_key in tables) {
-    scope <- paste("last_push", table_key, project_id, sep = ":")
-    sync_set_state(con, scope, format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
-  }
-
-  results
-}
-
-export_parquet_snapshot <- function(con,
-                                   out_dir,
-                                   tables = c("Sample_Env", "Sample_SU", "Sample_Veg"),
-                                   views = c("vw_USysAllVeg"),
-                                   overwrite = FALSE) {
-  if (is.null(out_dir) || !nzchar(trimws(out_dir))) {
-    stop("Output directory is required for parquet snapshot.")
-  }
-
-  out_dir <- normalizePath(out_dir, winslash = "/", mustWork = FALSE)
-  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-
-  export_items <- c(tables, views)
-  files <- character(0)
-  errors <- character(0)
-
-  for (item in export_items) {
-    if (!DBI::dbExistsTable(con, item)) {
-      errors <- c(errors, paste("Missing table/view:", item))
-      next
+    if (!compliance_ok) {
+      .delete_staging(con, mr_id)
+      DBI::dbExecute(
+        con,
+        "UPDATE master.admin.merge_requests SET status = 'rejected' WHERE id = ?",
+        list(as.integer(mr_id))
+      )
+      return(list(
+        merge_request_id  = mr_id,
+        counts            = counts,
+        total             = sum(unlist(counts)),
+        compliance_failed = TRUE
+      ))
     }
-    file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", item), ".parquet")
-    file_path <- file.path(out_dir, file_name)
-    if (file.exists(file_path) && !isTRUE(overwrite)) {
-      errors <- c(errors, paste("File exists:", file_name))
-      next
-    }
-    sql <- sprintf("COPY (SELECT * FROM %s) TO '%s' (FORMAT PARQUET)", item, gsub("'", "''", file_path))
-    tryCatch({
-      DBI::dbExecute(con, sql)
-      files <- c(files, file_path)
-    }, error = function(e) {
-      errors <<- c(errors, paste("Failed export", item, ":", e$message))
-    })
   }
 
-  manifest_path <- file.path(out_dir, "parquet_snapshot_manifest.csv")
-  manifest_df <- data.frame(file = files, stringsAsFactors = FALSE)
-  utils::write.csv(manifest_df, manifest_path, row.names = FALSE)
-
-  list(files = files, errors = errors, manifest = manifest_path)
-}
-
-merge_request_compliance_ok <- function(con, merge_request_id) {
-  compliance <- DBI::dbGetQuery(
-    con,
-    "SELECT compliance_passed FROM master.admin.merge_requests WHERE id = ?",
-    list(merge_request_id)
+  list(
+    merge_request_id = mr_id,
+    counts           = counts,
+    total            = sum(unlist(counts))
   )
-  if (nrow(compliance) == 0) return(FALSE)
-
-  value <- compliance$compliance_passed[1]
-  if (isTRUE(value)) return(TRUE)
-  if (is.numeric(value)) return(!is.na(value) && value == 1)
-  if (is.character(value)) return(tolower(value) %in% c("true", "t", "1"))
-  FALSE
 }
 
-staging_compliance_checks <- function(con, merge_request_id, project_id = NULL) {
-  if (is.null(merge_request_id)) return(NULL)
 
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Env")
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Veg")
+# =============================================================================
+# 5. Local change summary (used by mod_sync)
+# =============================================================================
+
+#' Return local dirty rows across all 9 tables for a project.
+#'
+#' @param con        DuckDB connection.
+#' @param project_id Optional character/integer filter.
+#' @return Named list keyed by cfg$pg; each element is a data.frame with
+#'   columns table_pg and change_type.
+sync_get_local_changes <- function(con, project_id = NULL) {
+  out <- list()
+
+  for (cfg in SYNC_TABLE_CONFIG) {
+    if (!DBI::dbExistsTable(con, cfg$local)) {
+      out[[cfg$pg]] <- data.frame(table_pg = character(0), change_type = character(0))
+      next
+    }
+    fields  <- tryCatch(DBI::dbListFields(con, cfg$local), error = function(e) character(0))
+    has_lmu <- "local_modified_utc" %in% fields
+    if (!has_lmu) {
+      out[[cfg$pg]] <- data.frame(table_pg = character(0), change_type = character(0))
+      next
+    }
+
+    pid_safe <- if (!is.null(project_id) && nzchar(as.character(project_id)))
+      gsub("[^A-Za-z0-9_-]", "", as.character(project_id)) else NULL
+
+    if (cfg$project_scope == "direct") {
+      pid_clause <- if (!is.null(pid_safe))
+        paste0(' AND "projectid" = \'', pid_safe, '\'') else ""
+
+      has_rv <- "rowversion" %in% tolower(fields)
+      ct_expr <- if (has_rv)
+        "CASE WHEN \"rowVersion\" IS NULL THEN 'insert' ELSE 'update' END"
+      else
+        "'insert'"
+
+      sql <- sprintf(
+        "SELECT '%s' AS table_pg, %s AS change_type FROM \"%s\" WHERE local_modified_utc IS NOT NULL%s",
+        cfg$pg, ct_expr, cfg$local, pid_clause
+      )
+    } else {
+      pid_clause <- if (!is.null(pid_safe))
+        sprintf(
+          ' AND "%s" IN (SELECT "plotnumber" FROM "Env" WHERE "projectid" = \'%s\')',
+          cfg$env_fk, pid_safe
+        ) else ""
+
+      sql <- sprintf(
+        "SELECT '%s' AS table_pg, 'update' AS change_type FROM \"%s\" WHERE local_modified_utc IS NOT NULL%s",
+        cfg$pg, cfg$local, pid_clause
+      )
+    }
+
+    out[[cfg$pg]] <- tryCatch(
+      DBI::dbGetQuery(con, sql),
+      error = function(e) data.frame(table_pg = character(0), change_type = character(0))
+    )
+  }
+  out
+}
+
+
+# =============================================================================
+# 6. Detailed change records (for diff cards)
+# =============================================================================
+
+#' Fetch full before/after data for all dirty local rows.
+#'
+#' For each dirty row the function determines change_type ("insert" when no
+#' matching row exists in master.core, "update" otherwise) and packages the
+#' local data together with the core data for rendering diff cards.
+#'
+#' @param con        DuckDB connection (master optionally attached for updates).
+#' @param cfg        One entry from SYNC_TABLE_CONFIG.
+#' @param project_id Optional project filter (same semantics as sync_get_local_changes).
+#' @param max_rows   Integer. Safety cap; default 50L.
+#' @return List of records, each: list(pk_value, change_type, local_data, core_data).
+sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) {
+  if (!DBI::dbExistsTable(con, cfg$local)) return(list())
+
+  fields <- tryCatch(DBI::dbListFields(con, cfg$local), error = function(e) character(0))
+  if (!"local_modified_utc" %in% fields) return(list())
+
+  pk       <- cfg$pk
+  pid_safe <- if (!is.null(project_id) && nzchar(as.character(project_id)))
+    gsub("[^A-Za-z0-9_-]", "", as.character(project_id)) else NULL
+
+  # Build project filter (same logic as sync_get_local_changes)
+  proj_filter <- if (!is.null(pid_safe)) {
+    if (cfg$project_scope == "direct") {
+      paste0(' AND "projectid" = \'', pid_safe, '\'')
+    } else {
+      sprintf(
+        ' AND "%s" IN (SELECT "plotnumber" FROM "Env" WHERE "projectid" = \'%s\')',
+        cfg$env_fk, pid_safe
+      )
+    }
+  } else ""
+
+  local_rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        'SELECT * FROM "%s" WHERE local_modified_utc IS NOT NULL%s LIMIT %d',
+        cfg$local, proj_filter, as.integer(max_rows)
+      )
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(local_rows) == 0) return(list())
+
+  # Fetch matching core rows (only when cloud is connected)
+  pk_values <- as.character(local_rows[[pk]])
+  pk_placeholders <- paste(rep("?", length(pk_values)), collapse = ", ")
+
+  core_rows <- if (sync_cloud_connected(con) && length(pk_values) > 0) {
+    tryCatch(
+      DBI::dbGetQuery(
+        con,
+        sprintf(
+          'SELECT * FROM master.core.%s WHERE CAST("%s" AS TEXT) IN (%s)',
+          cfg$pg, pk, pk_placeholders
+        ),
+        as.list(pk_values)
+      ),
+      error = function(e) data.frame()
+    )
+  } else {
+    data.frame()
+  }
+
+  # Build lookup: pk_value (character) -> core row as list
+  core_lookup <- if (nrow(core_rows) > 0) {
+    setNames(
+      lapply(seq_len(nrow(core_rows)), function(i) as.list(core_rows[i, , drop = FALSE])),
+      as.character(core_rows[[pk]])
+    )
+  } else {
+    list()
+  }
+
+  # Build per-row detail records
+  lapply(seq_len(nrow(local_rows)), function(i) {
+    row       <- local_rows[i, , drop = FALSE]
+    pk_val    <- as.character(row[[pk]])
+    core_data <- core_lookup[[pk_val]]
+
+    change_type <- if (is.null(core_data)) "insert" else "update"
+
+    # Strip internal metadata from local_data
+    local_list <- as.list(row)
+    local_list[["local_modified_utc"]] <- NULL
+
+    list(
+      pk_value    = pk_val,
+      change_type = change_type,
+      local_data  = local_list,
+      core_data   = core_data
+    )
+  })
+}
+
+
+# =============================================================================
+# 7. Internal push helpers
+# =============================================================================
+
+.create_merge_request <- function(con, project_id, submitter) {
+  uid_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT id FROM master.admin.users WHERE email = ? LIMIT 1",
+      list(as.character(submitter))
+    ),
+    error = function(e) data.frame(id = integer(0))
+  )
+  submitter_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
 
   DBI::dbExecute(
     con,
-    "CREATE TEMP TABLE Sample_Env AS
-     SELECT
-       plot_number AS plotnumber,
-       project_id AS projectid,
-       latitude AS latitude,
-       longitude AS longitude,
-       elevation_m AS elevation
-     FROM master.staging.sample_env
-     WHERE merge_request_id = ?",
-    list(merge_request_id)
+    "INSERT INTO master.admin.merge_requests
+       (project_id, submitter_user_id, submitter_name, submitted_utc, status)
+     VALUES (?, ?, ?, now(), 'pending_review')",
+    list(as.character(project_id), submitter_user_id, as.character(submitter))
   )
+
+  res <- DBI::dbGetQuery(
+    con,
+    "SELECT id FROM master.admin.merge_requests
+     WHERE project_id = ? AND submitter_name = ? AND status = 'pending_review'
+     ORDER BY submitted_utc DESC LIMIT 1",
+    list(as.character(project_id), as.character(submitter))
+  )
+  if (nrow(res) == 0) stop("Failed to create merge request.")
+  res$id[1]
+}
+
+.delete_staging <- function(con, mr_id) {
+  for (cfg in SYNC_TABLE_CONFIG) {
+    tryCatch(
+      DBI::dbExecute(
+        con,
+        sprintf("DELETE FROM master.staging.%s WHERE merge_request_id = ?", cfg$pg),
+        list(as.integer(mr_id))
+      ),
+      error = function(e) NULL
+    )
+  }
+}
+
+
+# =============================================================================
+# 7. Server-side conflict detection
+# =============================================================================
+
+.to_json <- function(x) {
+  tryCatch(
+    as.character(jsonlite::toJSON(x, auto_unbox = TRUE, na = "null")),
+    error = function(e) "{}"
+  )
+}
+
+#' Detect version conflicts for one table in a merge request.
+#' A conflict exists when core.rowVersion > staging.baseRowVersion at the
+#' same natural key (master was updated after the user's last push).
+#'
+#' @param con   DuckDB connection.
+#' @param mr_id Integer merge request id.
+#' @param cfg   One entry from SYNC_TABLE_CONFIG.
+.detect_table_conflicts <- function(con, mr_id, cfg) {
+  pk   <- cfg$pk
+  rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        'SELECT CAST(s."%s" AS TEXT)  AS record_id,
+                s."baseRowVersion"   AS staged_rv,
+                c."rowVersion"       AS core_rv
+         FROM master.staging.%s s
+         JOIN master.core.%s c
+           ON CAST(c."%s" AS TEXT) = CAST(s."%s" AS TEXT)
+         WHERE s.merge_request_id = ?
+           AND s."baseRowVersion" IS NOT NULL
+           AND c."rowVersion" > s."baseRowVersion"',
+        pk, cfg$pg, cfg$pg, pk, pk
+      ),
+      list(as.integer(mr_id))
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(rows) == 0) return(invisible(NULL))
+
+  for (i in seq_len(nrow(rows))) {
+    r       <- rows[i, , drop = FALSE]
+    details <- list(row_version = list(
+      staged_base  = r$staged_rv[1],
+      core_current = r$core_rv[1]
+    ))
+    .insert_conflict(con, mr_id, cfg$pg, as.character(r$record_id[1]), .to_json(details))
+  }
+}
+
+#' Insert or update a conflict record using record_id TEXT.
+#' Skips update if the conflict is already resolved (preserves decisions).
+#'
+#' @param con         DuckDB connection.
+#' @param mr_id       Integer merge request id.
+#' @param table_name  Character. PG staging table name.
+#' @param record_id   Character. String representation of the natural PK value.
+#' @param details_json Character. JSON-encoded conflict details.
+.insert_conflict <- function(con, mr_id, table_name, record_id, details_json) {
+  existing <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT id, resolution FROM master.admin.merge_conflicts
+       WHERE merge_request_id = ? AND table_name = ? AND record_id = ?",
+      list(as.integer(mr_id), as.character(table_name), as.character(record_id))
+    ),
+    error = function(e) data.frame()
+  )
+
+  if (nrow(existing) > 0) {
+    if (is.na(existing$resolution[1])) {
+      DBI::dbExecute(
+        con,
+        "UPDATE master.admin.merge_conflicts SET details = ? WHERE id = ?",
+        list(as.character(details_json), as.integer(existing$id[1]))
+      )
+    }
+    return(invisible(NULL))
+  }
 
   DBI::dbExecute(
     con,
-    "CREATE TEMP TABLE Sample_Veg AS
-     SELECT
-       plot_number AS plotnumber,
-       project_id AS projectid,
-       species_code AS species,
-       layer_code AS layer
-     FROM master.staging.sample_veg
-     WHERE merge_request_id = ?",
-    list(merge_request_id)
+    "INSERT INTO master.admin.merge_conflicts
+       (merge_request_id, table_name, record_id, details)
+     VALUES (?, ?, ?, ?)",
+    list(as.integer(mr_id), as.character(table_name),
+         as.character(record_id), as.character(details_json))
   )
-
-  result <- run_compliance_checks(con, project_id)
-
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Env")
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS temp.Sample_Veg")
-
-  result
 }
 
+
+# =============================================================================
+# 8. Apply staging to core (admin approval)
+# =============================================================================
+
+#' Apply staged rows for one table to master.core.
+#'
+#' Uses dynamic column list from .get_shared_columns().
+#' Rows with resolution = 'keep_core' are excluded via LEFT JOIN filter.
+#' Production BEFORE UPDATE trigger auto-increments rowVersion.
+#'
+#' @param con   DuckDB connection (master attached).
+#' @param mr_id Integer merge request id.
+#' @param cfg   One entry from SYNC_TABLE_CONFIG.
+.apply_table <- function(con, mr_id, cfg) {
+  pk          <- cfg$pk
+  shared_cols <- .get_shared_columns(con, cfg$local, cfg$pg)
+  if (length(shared_cols) == 0) return(invisible(NULL))
+
+  col_list    <- paste(sprintf('"%s"', shared_cols), collapse = ", ")
+  select_list <- paste(sprintf('s."%s"', shared_cols), collapse = ", ")
+  update_set  <- paste(
+    sprintf('"%s" = EXCLUDED."%s"', shared_cols, shared_cols),
+    collapse = ", "
+  )
+
+  tbl <- cfg$pg
+
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "INSERT INTO master.core.%s (%s)
+       SELECT %s
+       FROM master.staging.%s s
+       LEFT JOIN master.admin.merge_conflicts mc
+         ON  mc.merge_request_id = s.merge_request_id
+         AND mc.table_name       = '%s'
+         AND mc.record_id        = CAST(s.\"%s\" AS TEXT)
+       WHERE s.merge_request_id = ?
+         AND (mc.id IS NULL OR mc.resolution IN ('keep_staged', 'dismiss'))
+       ON CONFLICT (\"%s\") DO UPDATE SET %s",
+      tbl, col_list,
+      select_list,
+      tbl,
+      tbl, pk,
+      pk, update_set
+    ),
+    list(as.integer(mr_id))
+  )
+}
+
+
+# =============================================================================
+# 9. Merge request management (public API)
+# =============================================================================
+
+#' Retrieve a single merge request by id.
+#' @param con              DuckDB connection (master attached).
+#' @param merge_request_id Integer.
+#' @return Single-row data.frame or NULL.
 merge_request_get <- function(con, merge_request_id) {
-  merge_ensure_tables(con)
   rows <- DBI::dbGetQuery(
     con,
     "SELECT * FROM master.admin.merge_requests WHERE id = ?",
@@ -959,438 +681,474 @@ merge_request_get <- function(con, merge_request_id) {
   rows[1, , drop = FALSE]
 }
 
+#' List merge requests, optionally filtered by status.
+#' @param con    DuckDB connection.
+#' @param status Optional character filter.
+#' @param limit  Integer. Max rows.
+#' @return data.frame with unresolved_conflicts column appended.
 merge_request_list <- function(con, status = NULL, limit = 200L) {
-  merge_ensure_tables(con)
-  sql <- "SELECT id, project_id, submitter_user_id, submitted_utc, status, env_record_count, su_record_count, veg_record_count, compliance_passed
-          FROM master.admin.merge_requests"
+  sql    <- paste0(
+    "SELECT id, project_id, submitter_name, submitted_utc, status,",
+    " record_counts, compliance_passed",
+    " FROM master.admin.merge_requests"
+  )
   params <- list()
   if (!is.null(status) && nzchar(status)) {
-    sql <- paste(sql, "WHERE status = ?")
-    params <- c(params, list(status))
+    sql    <- paste0(sql, " WHERE status = ?")
+    params <- list(status)
   }
-  sql <- paste(sql, "ORDER BY submitted_utc DESC LIMIT ?")
+  sql    <- paste0(sql, " ORDER BY submitted_utc DESC LIMIT ?")
   params <- c(params, list(as.integer(limit)))
+
   out <- DBI::dbGetQuery(con, sql, params)
   if (nrow(out) == 0) return(out)
-  unresolved <- tryCatch({
+
+  unresolved <- tryCatch(
     DBI::dbGetQuery(
       con,
       "SELECT merge_request_id, COUNT(*) AS unresolved_conflicts
        FROM master.admin.merge_conflicts
        WHERE resolution IS NULL
        GROUP BY merge_request_id"
-    )
-  }, error = function(e) data.frame())
+    ),
+    error = function(e) data.frame()
+  )
   if (nrow(unresolved) > 0) {
     out <- merge(out, unresolved, by.x = "id", by.y = "merge_request_id", all.x = TRUE)
   }
-  if (!"unresolved_conflicts" %in% names(out)) out$unresolved_conflicts <- NA_integer_
+  if (!"unresolved_conflicts" %in% names(out)) out$unresolved_conflicts <- 0L
   out$unresolved_conflicts[is.na(out$unresolved_conflicts)] <- 0L
   out
 }
 
-merge_request_unresolved_conflict_count <- function(con, merge_request_id) {
-  merge_ensure_tables(con)
-  res <- DBI::dbGetQuery(
+#' Detect and refresh version conflicts for all tables in a merge request.
+#' @param con              DuckDB connection.
+#' @param merge_request_id Integer.
+merge_request_refresh_conflicts <- function(con, merge_request_id) {
+  mr_id <- as.integer(merge_request_id)
+  DBI::dbExecute(
     con,
-    "SELECT COUNT(*) AS n FROM master.admin.merge_conflicts WHERE merge_request_id = ? AND resolution IS NULL",
-    list(as.integer(merge_request_id))
+    "DELETE FROM master.admin.merge_conflicts
+     WHERE merge_request_id = ? AND resolution IS NULL",
+    list(mr_id)
   )
-  if (nrow(res) == 0) return(0L)
-  as.integer(res$n[1])
+  for (cfg in SYNC_TABLE_CONFIG) {
+    tryCatch(.detect_table_conflicts(con, mr_id, cfg), error = function(e) NULL)
+  }
+  invisible(TRUE)
 }
 
-merge_request_get_conflicts <- function(con, merge_request_id, unresolved_only = TRUE, limit = 500L) {
-  merge_ensure_tables(con)
-  sql <- "SELECT id, table_name, plot_number, project_id, species_code, layer_code, created_utc, resolution, details
-          FROM master.admin.merge_conflicts
-          WHERE merge_request_id = ?"
+#' List conflicts for a merge request.
+#' @param con              DuckDB connection.
+#' @param merge_request_id Integer.
+#' @param unresolved_only  Logical. Default TRUE.
+#' @param limit            Integer.
+#' @return data.frame with id, table_name, record_id, resolution, details.
+merge_request_get_conflicts <- function(con, merge_request_id,
+                                         unresolved_only = TRUE, limit = 500L) {
+  sql    <- paste0(
+    "SELECT id, table_name, record_id, created_utc, resolution, details",
+    " FROM master.admin.merge_conflicts",
+    " WHERE merge_request_id = ?"
+  )
   params <- list(as.integer(merge_request_id))
-  if (isTRUE(unresolved_only)) {
-    sql <- paste(sql, "AND resolution IS NULL")
-  }
-  sql <- paste(sql, "ORDER BY created_utc DESC LIMIT ?")
+  if (isTRUE(unresolved_only)) sql <- paste0(sql, " AND resolution IS NULL")
+  sql    <- paste0(sql, " ORDER BY created_utc DESC LIMIT ?")
   params <- c(params, list(as.integer(limit)))
   DBI::dbGetQuery(con, sql, params)
 }
 
-merge_request_resolve_conflict <- function(con, conflict_id, resolution, actor = Sys.getenv("USER", "unknown")) {
-  merge_ensure_tables(con)
+#' Count unresolved conflicts for a merge request.
+#' @param con              DuckDB connection.
+#' @param merge_request_id Integer.
+#' @return Integer.
+merge_request_unresolved_count <- function(con, merge_request_id) {
+  res <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT COUNT(*) AS n FROM master.admin.merge_conflicts
+       WHERE merge_request_id = ? AND resolution IS NULL",
+      list(as.integer(merge_request_id))
+    ),
+    error = function(e) data.frame(n = 0L)
+  )
+  as.integer(res$n[1])
+}
+
+#' Resolve a single conflict entry.
+#' @param con         DuckDB connection.
+#' @param conflict_id Integer. Row id in master.admin.merge_conflicts.
+#' @param resolution  One of: 'keep_staged', 'keep_core', 'dismiss'.
+#' @param actor       Character. Reviewer username.
+merge_request_resolve_conflict <- function(con, conflict_id, resolution,
+                                            actor = Sys.getenv("USER", "unknown")) {
   if (!resolution %in% c("keep_staged", "keep_core", "dismiss")) {
-    stop("Unsupported resolution: ", resolution)
+    stop("resolution must be 'keep_staged', 'keep_core', or 'dismiss'")
   }
   DBI::dbExecute(
     con,
     "UPDATE master.admin.merge_conflicts
      SET resolution = ?, resolved_by = ?, resolved_utc = now()
      WHERE id = ?",
-    list(resolution, actor, as.integer(conflict_id))
+    list(resolution, as.character(actor), as.integer(conflict_id))
   )
   invisible(TRUE)
 }
 
-merge_request_refresh_conflicts <- function(con, merge_request_id) {
-  merge_ensure_tables(con)
-  mr <- merge_request_get(con, merge_request_id)
-  if (is.null(mr)) return(invisible(FALSE))
+#' Approve and apply a merge request to master.core.
+#'
+#' Refreshes conflicts first; blocks if any remain unresolved.
+#' Applies all 9 tables generically via .apply_table().
+#'
+#' @param con              DuckDB connection (master attached).
+#' @param merge_request_id Integer.
+#' @param reviewer         Character. Reviewer email/username.
+#' @param review_notes     Character. Optional notes.
+merge_approve_request <- function(con, merge_request_id, reviewer, review_notes = "") {
+  mr_id <- as.integer(merge_request_id)
 
-  # Remove only unresolved conflicts; keep resolved history.
+  # Check compliance gate
+  compliance_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT compliance_passed FROM master.admin.merge_requests WHERE id = ? LIMIT 1",
+      list(mr_id)
+    ),
+    error = function(e) data.frame(compliance_passed = NA)
+  )
+  if (!isTRUE(compliance_row$compliance_passed[1])) {
+    stop("Merge blocked: compliance failed. Run compliance check before approving.")
+  }
+
+  merge_request_refresh_conflicts(con, mr_id)
+
+  n_unresolved <- merge_request_unresolved_count(con, mr_id)
+  if (n_unresolved > 0) {
+    stop(sprintf(
+      "Merge blocked: %d unresolved conflict(s). Resolve via merge_request_resolve_conflict().",
+      n_unresolved
+    ))
+  }
+
+  uid_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT id FROM master.admin.users WHERE email = ? LIMIT 1",
+      list(as.character(reviewer))
+    ),
+    error = function(e) data.frame(id = integer(0))
+  )
+  approved_by_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
+
+  for (cfg in SYNC_TABLE_CONFIG) {
+    tryCatch(
+      .apply_table(con, mr_id, cfg),
+      error = function(e) warning(sprintf(".apply_table failed for %s: %s", cfg$local, e$message))
+    )
+  }
+
+  .delete_staging(con, mr_id)
+
   DBI::dbExecute(
     con,
-    "DELETE FROM master.admin.merge_conflicts WHERE merge_request_id = ? AND resolution IS NULL",
-    list(as.integer(merge_request_id))
+    "UPDATE master.admin.merge_requests
+     SET status = 'merged', reviewer = ?, reviewer_user_id = ?,
+         review_notes = ?, reviewed_utc = now()
+     WHERE id = ?",
+    list(as.character(reviewer), approved_by_user_id,
+         as.character(review_notes), mr_id)
   )
 
-  insert_conflict <- function(table_name, plot_number, project_id, species_code = NULL, layer_code = NULL, details_json) {
+  mr_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT record_counts FROM master.admin.merge_requests WHERE id = ?",
+      list(mr_id)
+    ),
+    error = function(e) data.frame(record_counts = "{}")
+  )
+  total_records <- tryCatch({
+    rc <- jsonlite::fromJSON(mr_row$record_counts[1] %||% "{}")
+    as.integer(sum(unlist(rc), na.rm = TRUE))
+  }, error = function(e) 0L)
+
+  tryCatch(
     DBI::dbExecute(
       con,
-      "INSERT INTO master.admin.merge_conflicts
-        (merge_request_id, table_name, plot_number, project_id, species_code, layer_code, details)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (merge_request_id, table_name, plot_number, project_id, species_code, layer_code)
-       DO UPDATE SET details = EXCLUDED.details",
-      list(
-        as.integer(merge_request_id),
-        as.character(table_name),
-        as.character(plot_number),
-        as.character(project_id),
-        if (is.null(species_code) || !nzchar(as.character(species_code))) "" else as.character(species_code),
-        if (is.null(layer_code) || !nzchar(as.character(layer_code))) "" else as.character(layer_code),
-        as.character(details_json)
-      )
-    )
-  }
-
-  to_details <- function(changes) {
-    if (requireNamespace("jsonlite", quietly = TRUE)) {
-      return(jsonlite::toJSON(changes, auto_unbox = TRUE, na = "null"))
-    }
-    paste(names(changes), collapse = ", ")
-  }
-
-  # ENV
-  if (db_table_exists(con, "master.staging.sample_env") && db_table_exists(con, "master.core.sample_env") &&
-      db_has_column(con, "master.staging.sample_env", "base_row_version") && db_has_column(con, "master.core.sample_env", "row_version")) {
-    rows <- DBI::dbGetQuery(
-      con,
-      "SELECT
-         s.plot_number, s.project_id,
-         s.base_row_version, c.row_version AS core_row_version,
-         s.latitude AS staged_latitude, c.latitude AS core_latitude,
-         s.longitude AS staged_longitude, c.longitude AS core_longitude,
-         s.elevation_m AS staged_elevation_m, c.elevation_m AS core_elevation_m,
-         s.survey_date AS staged_survey_date, c.survey_date AS core_survey_date,
-         s.surveyor_name AS staged_surveyor_name, c.surveyor_name AS core_surveyor_name,
-         s.plot_notes AS staged_plot_notes, c.plot_notes AS core_plot_notes
-       FROM master.staging.sample_env s
-       JOIN master.core.sample_env c
-         ON c.plot_number = s.plot_number AND c.project_id = s.project_id
-       WHERE s.merge_request_id = ?
-         AND s.base_row_version IS NOT NULL
-         AND c.row_version IS NOT NULL
-         AND c.row_version <> s.base_row_version",
-      list(as.integer(merge_request_id))
-    )
-    if (nrow(rows) > 0) {
-      for (i in seq_len(nrow(rows))) {
-        r <- rows[i, , drop = FALSE]
-        changes <- list(
-          base_row_version = list(staged = r$base_row_version[1], core = r$core_row_version[1])
-        )
-        for (fld in c("latitude", "longitude", "elevation_m", "survey_date", "surveyor_name", "plot_notes")) {
-          staged <- r[[paste0("staged_", fld)]][1]
-          core <- r[[paste0("core_", fld)]][1]
-          if (is.na(staged) && is.na(core)) next
-          if (!is.na(staged) && !is.na(core) && as.character(staged) == as.character(core)) next
-          changes[[fld]] <- list(staged = staged, core = core)
-        }
-        insert_conflict(
-          table_name = "sample_env",
-          plot_number = r$plot_number[1],
-          project_id = r$project_id[1],
-          details_json = to_details(changes)
-        )
-      }
-    }
-  }
-
-  # SU
-  if (db_table_exists(con, "master.staging.sample_su") && db_table_exists(con, "master.core.sample_su") &&
-      db_has_column(con, "master.staging.sample_su", "base_row_version") && db_has_column(con, "master.core.sample_su", "row_version")) {
-    rows <- DBI::dbGetQuery(
-      con,
-      "SELECT
-         s.plot_number, s.project_id,
-         s.base_row_version, c.row_version AS core_row_version,
-         s.su_number AS staged_su_number, c.su_number AS core_su_number,
-         s.bec_zone AS staged_bec_zone, c.bec_zone AS core_bec_zone,
-         s.bec_subzone AS staged_bec_subzone, c.bec_subzone AS core_bec_subzone,
-         s.site_series AS staged_site_series, c.site_series AS core_site_series
-       FROM master.staging.sample_su s
-       JOIN master.core.sample_su c
-         ON c.plot_number = s.plot_number AND c.project_id = s.project_id
-       WHERE s.merge_request_id = ?
-         AND s.base_row_version IS NOT NULL
-         AND c.row_version IS NOT NULL
-         AND c.row_version <> s.base_row_version",
-      list(as.integer(merge_request_id))
-    )
-    if (nrow(rows) > 0) {
-      for (i in seq_len(nrow(rows))) {
-        r <- rows[i, , drop = FALSE]
-        changes <- list(
-          base_row_version = list(staged = r$base_row_version[1], core = r$core_row_version[1])
-        )
-        for (fld in c("su_number", "bec_zone", "bec_subzone", "site_series")) {
-          staged <- r[[paste0("staged_", fld)]][1]
-          core <- r[[paste0("core_", fld)]][1]
-          if (is.na(staged) && is.na(core)) next
-          if (!is.na(staged) && !is.na(core) && as.character(staged) == as.character(core)) next
-          changes[[fld]] <- list(staged = staged, core = core)
-        }
-        insert_conflict(
-          table_name = "sample_su",
-          plot_number = r$plot_number[1],
-          project_id = r$project_id[1],
-          details_json = to_details(changes)
-        )
-      }
-    }
-  }
-
-  # VEG
-  if (db_table_exists(con, "master.staging.sample_veg") && db_table_exists(con, "master.core.sample_veg") &&
-      db_has_column(con, "master.staging.sample_veg", "base_row_version") && db_has_column(con, "master.core.sample_veg", "row_version")) {
-    rows <- DBI::dbGetQuery(
-      con,
-      "SELECT
-         s.plot_number, s.project_id, s.species_code, s.layer_code,
-         s.base_row_version, c.row_version AS core_row_version,
-         s.cover1 AS staged_cover1, c.cover1 AS core_cover1,
-         s.cover2 AS staged_cover2, c.cover2 AS core_cover2,
-         s.cover3 AS staged_cover3, c.cover3 AS core_cover3,
-         s.totala AS staged_totala, c.totala AS core_totala,
-         s.totalb AS staged_totalb, c.totalb AS core_totalb,
-         s.flag AS staged_flag, c.flag AS core_flag
-       FROM master.staging.sample_veg s
-       JOIN master.core.sample_veg c
-         ON c.plot_number = s.plot_number
-        AND c.project_id = s.project_id
-        AND c.species_code = s.species_code
-        AND c.layer_code = s.layer_code
-       WHERE s.merge_request_id = ?
-         AND s.base_row_version IS NOT NULL
-         AND c.row_version IS NOT NULL
-         AND c.row_version <> s.base_row_version",
-      list(as.integer(merge_request_id))
-    )
-    if (nrow(rows) > 0) {
-      for (i in seq_len(nrow(rows))) {
-        r <- rows[i, , drop = FALSE]
-        changes <- list(
-          base_row_version = list(staged = r$base_row_version[1], core = r$core_row_version[1])
-        )
-        for (fld in c("cover1", "cover2", "cover3", "totala", "totalb", "flag")) {
-          staged <- r[[paste0("staged_", fld)]][1]
-          core <- r[[paste0("core_", fld)]][1]
-          if (is.na(staged) && is.na(core)) next
-          if (!is.na(staged) && !is.na(core) && as.character(staged) == as.character(core)) next
-          changes[[fld]] <- list(staged = staged, core = core)
-        }
-        insert_conflict(
-          table_name = "sample_veg",
-          plot_number = r$plot_number[1],
-          project_id = r$project_id[1],
-          species_code = r$species_code[1],
-          layer_code = r$layer_code[1],
-          details_json = to_details(changes)
-        )
-      }
-    }
-  }
+      "INSERT INTO master.admin.merge_history
+         (merge_request_id, approved_by_user_id, record_count)
+       VALUES (?, ?, ?)",
+      list(mr_id, approved_by_user_id, total_records)
+    ),
+    error = function(e) warning("merge_history INSERT failed: ", e$message)
+  )
 
   invisible(TRUE)
 }
 
+#' Reject a merge request, discarding all staged data.
+#' @param con              DuckDB connection.
+#' @param merge_request_id Integer.
+#' @param reviewer         Character. Reviewer email/username.
+#' @param review_notes     Character. Optional notes.
 merge_reject_request <- function(con, merge_request_id, reviewer, review_notes = "") {
-  merge_ensure_tables(con)
-  mr <- tryCatch(merge_request_get(con, merge_request_id), error = function(e) NULL)
+  mr_id <- as.integer(merge_request_id)
+
+  uid_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT id FROM master.admin.users WHERE email = ? LIMIT 1",
+      list(as.character(reviewer))
+    ),
+    error = function(e) data.frame(id = integer(0))
+  )
+  reviewer_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
+
+  .delete_staging(con, mr_id)
+  DBI::dbExecute(
+    con,
+    "DELETE FROM master.admin.merge_conflicts WHERE merge_request_id = ?",
+    list(mr_id)
+  )
   DBI::dbExecute(
     con,
     "UPDATE master.admin.merge_requests
-     SET status = 'rejected', reviewer_user_id = ?, review_notes = ?, reviewed_utc = now()
+     SET status = 'rejected', reviewer = ?, reviewer_user_id = ?,
+         review_notes = ?, reviewed_utc = now()
      WHERE id = ?",
-    list(as.character(reviewer), as.character(review_notes), as.integer(merge_request_id))
+    list(as.character(reviewer), reviewer_user_id,
+         as.character(review_notes), mr_id)
   )
-  DBI::dbExecute(con, "DELETE FROM master.staging.sample_env WHERE merge_request_id = ?", list(as.integer(merge_request_id)))
-  DBI::dbExecute(con, "DELETE FROM master.staging.sample_su WHERE merge_request_id = ?", list(as.integer(merge_request_id)))
-  DBI::dbExecute(con, "DELETE FROM master.staging.sample_veg WHERE merge_request_id = ?", list(as.integer(merge_request_id)))
-  DBI::dbExecute(con, "DELETE FROM master.admin.merge_conflicts WHERE merge_request_id = ?", list(as.integer(merge_request_id)))
-
-  if (exists("notifications_post_merge_event", mode = "function")) {
-    tryCatch({
-      project_id <- if (is.null(mr)) NA_character_ else mr$project_id[1]
-      notifications_post_merge_event(con, merge_request_id, project_id, event = "rejected", actor = reviewer)
-    }, error = function(e) NULL)
-  }
   invisible(TRUE)
 }
 
-merge_apply_request <- function(con, merge_request_id, reviewer, review_notes = "") {
-  merge_request_refresh_conflicts(con, merge_request_id)
-  unresolved <- merge_request_unresolved_conflict_count(con, merge_request_id)
-  if (unresolved > 0) {
-    stop(sprintf("Merge blocked: %s unresolved conflict(s)", unresolved))
+
+# =============================================================================
+# 10. Field-user helpers (used by mod_sync)
+# =============================================================================
+
+#' Retrieve the current user's merge requests from master.
+#' @param con           DuckDB connection.
+#' @param submitter     Character. Matched against submitter_name.
+#' @param show_approved Logical. Include merged/approved. Default TRUE.
+#' @param show_rejected Logical. Include rejected. Default TRUE.
+#' @return data.frame: id, project_id, submitted_utc, status,
+#'   record_counts, review_notes, reviewed_utc.
+# =============================================================================
+# 11. Master schema bootstrap (idempotent)
+# =============================================================================
+
+#' Ensure all required master schemas and tables exist.
+#'
+#' Idempotent — safe to call multiple times. Creates:
+#'   master.admin  — merge_requests, merge_conflicts
+#'   master.staging — sample_env, sample_su, sample_veg
+#'   master.core    — sample_env, sample_su, sample_veg
+#'
+#' @param con DuckDB connection (master must already be attached).
+#' @return Invisible TRUE.
+merge_ensure_tables <- function(con) {
+  sync_require_cloud(con)
+
+  # Schemas
+  for (schema in c("master.admin", "master.staging", "master.core")) {
+    DBI::dbExecute(con, sprintf("CREATE SCHEMA IF NOT EXISTS %s", schema))
   }
 
-  DBI::dbExecute(
-    con,
-    "INSERT INTO master.core.sample_env
-     (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, modified_by)
-     SELECT s.plot_number, s.project_id, s.latitude, s.longitude, s.elevation_m, s.survey_date, s.surveyor_name, s.plot_notes, s.modified_by
-     FROM master.staging.sample_env s
-     LEFT JOIN master.admin.merge_conflicts mc
-       ON mc.merge_request_id = s.merge_request_id
-      AND mc.table_name = 'sample_env'
-      AND mc.plot_number = s.plot_number
-      AND mc.project_id = s.project_id
-      AND (mc.species_code = '' OR mc.species_code IS NULL)
-      AND (mc.layer_code = '' OR mc.layer_code IS NULL)
-     WHERE s.merge_request_id = ?
-       AND (mc.id IS NULL OR mc.resolution = 'keep_staged')
-     ON CONFLICT (plot_number, project_id) DO UPDATE SET
-       latitude = EXCLUDED.latitude,
-       longitude = EXCLUDED.longitude,
-       elevation_m = EXCLUDED.elevation_m,
-       survey_date = EXCLUDED.survey_date,
-       surveyor_name = EXCLUDED.surveyor_name,
-       plot_notes = EXCLUDED.plot_notes,
-       modified_by = EXCLUDED.modified_by,
-       last_modified_utc = now(),
-       row_version = coalesce(row_version, 0) + 1",
-    list(merge_request_id)
-  )
+  # master.admin.merge_requests
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.admin.merge_requests (
+      id                INTEGER PRIMARY KEY,
+      project_id        TEXT NOT NULL,
+      submitter_user_id TEXT,
+      submitter_name    TEXT,
+      submitted_utc     TIMESTAMPTZ DEFAULT now(),
+      status            TEXT DEFAULT 'pending_review',
+      reviewer          TEXT,
+      reviewer_user_id  INTEGER,
+      review_notes      TEXT,
+      reviewed_utc      TIMESTAMPTZ,
+      env_record_count  INTEGER DEFAULT 0,
+      su_record_count   INTEGER DEFAULT 0,
+      veg_record_count  INTEGER DEFAULT 0,
+      record_counts     TEXT,
+      compliance_passed BOOLEAN,
+      compliance_report TEXT
+    )
+  ")
 
-  DBI::dbExecute(
-    con,
-    "INSERT INTO master.core.sample_su
-     (plot_number, project_id, su_number, bec_zone, bec_subzone, site_series, modified_by)
-     SELECT s.plot_number, s.project_id, s.su_number, s.bec_zone, s.bec_subzone, s.site_series, s.modified_by
-     FROM master.staging.sample_su s
-     LEFT JOIN master.admin.merge_conflicts mc
-       ON mc.merge_request_id = s.merge_request_id
-      AND mc.table_name = 'sample_su'
-      AND mc.plot_number = s.plot_number
-      AND mc.project_id = s.project_id
-      AND (mc.species_code = '' OR mc.species_code IS NULL)
-      AND (mc.layer_code = '' OR mc.layer_code IS NULL)
-     WHERE s.merge_request_id = ?
-       AND (mc.id IS NULL OR mc.resolution = 'keep_staged')
-     ON CONFLICT (plot_number, project_id) DO UPDATE SET
-       su_number = EXCLUDED.su_number,
-       bec_zone = EXCLUDED.bec_zone,
-       bec_subzone = EXCLUDED.bec_subzone,
-       site_series = EXCLUDED.site_series,
-       modified_by = EXCLUDED.modified_by,
-       last_modified_utc = now(),
-       row_version = coalesce(row_version, 0) + 1",
-    list(merge_request_id)
-  )
+  # master.admin.merge_conflicts
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.admin.merge_conflicts (
+      id                INTEGER PRIMARY KEY,
+      merge_request_id  INTEGER NOT NULL,
+      table_name        TEXT NOT NULL,
+      record_id         TEXT NOT NULL,
+      details           TEXT,
+      resolution        TEXT,
+      resolved_by       TEXT,
+      resolved_utc      TIMESTAMPTZ,
+      created_utc       TIMESTAMPTZ DEFAULT now()
+    )
+  ")
 
-  DBI::dbExecute(
-    con,
-    "INSERT INTO master.core.sample_veg
-     (plot_number, species_code, layer_code, cover1, height1, cover2, height2, cover3, height3, totala, heighta,
-      cover4, height4, cover5, height5, cover5a, height5a, cover5b, height5b, cover5c, height5c, totalb, heightb,
-      cover6, height6, cover7, cover8, cover9, cover10, collected, flag, veg_id, ll, af, dc, ut, vi, pv, pg, ffa,
-      cultural1, cultural2, other1, other2, project_id, modified_by)
-     SELECT s.plot_number, s.species_code, s.layer_code, s.cover1, s.height1, s.cover2, s.height2, s.cover3, s.height3, s.totala, s.heighta,
-      s.cover4, s.height4, s.cover5, s.height5, s.cover5a, s.height5a, s.cover5b, s.height5b, s.cover5c, s.height5c, s.totalb, s.heightb,
-      s.cover6, s.height6, s.cover7, s.cover8, s.cover9, s.cover10, s.collected, s.flag, s.veg_id, s.ll, s.af, s.dc, s.ut, s.vi, s.pv, s.pg, s.ffa,
-      s.cultural1, s.cultural2, s.other1, s.other2, s.project_id, s.modified_by
-     FROM master.staging.sample_veg s
-     LEFT JOIN master.admin.merge_conflicts mc
-       ON mc.merge_request_id = s.merge_request_id
-      AND mc.table_name = 'sample_veg'
-      AND mc.plot_number = s.plot_number
-      AND mc.project_id = s.project_id
-      AND mc.species_code = s.species_code
-      AND mc.layer_code = s.layer_code
-     WHERE s.merge_request_id = ?
-       AND (mc.id IS NULL OR mc.resolution = 'keep_staged')
-     ON CONFLICT (plot_number, species_code, layer_code, project_id) DO UPDATE SET
-       cover1 = EXCLUDED.cover1,
-       height1 = EXCLUDED.height1,
-       cover2 = EXCLUDED.cover2,
-       height2 = EXCLUDED.height2,
-       cover3 = EXCLUDED.cover3,
-       height3 = EXCLUDED.height3,
-       totala = EXCLUDED.totala,
-       heighta = EXCLUDED.heighta,
-       cover4 = EXCLUDED.cover4,
-       height4 = EXCLUDED.height4,
-       cover5 = EXCLUDED.cover5,
-       height5 = EXCLUDED.height5,
-       cover5a = EXCLUDED.cover5a,
-       height5a = EXCLUDED.height5a,
-       cover5b = EXCLUDED.cover5b,
-       height5b = EXCLUDED.height5b,
-       cover5c = EXCLUDED.cover5c,
-       height5c = EXCLUDED.height5c,
-       totalb = EXCLUDED.totalb,
-       heightb = EXCLUDED.heightb,
-       cover6 = EXCLUDED.cover6,
-       height6 = EXCLUDED.height6,
-       cover7 = EXCLUDED.cover7,
-       cover8 = EXCLUDED.cover8,
-       cover9 = EXCLUDED.cover9,
-       cover10 = EXCLUDED.cover10,
-       collected = EXCLUDED.collected,
-       flag = EXCLUDED.flag,
-       veg_id = EXCLUDED.veg_id,
-       ll = EXCLUDED.ll,
-       af = EXCLUDED.af,
-       dc = EXCLUDED.dc,
-       ut = EXCLUDED.ut,
-       vi = EXCLUDED.vi,
-       pv = EXCLUDED.pv,
-       pg = EXCLUDED.pg,
-       ffa = EXCLUDED.ffa,
-       cultural1 = EXCLUDED.cultural1,
-       cultural2 = EXCLUDED.cultural2,
-       other1 = EXCLUDED.other1,
-       other2 = EXCLUDED.other2,
-       modified_by = EXCLUDED.modified_by,
-       last_modified_utc = now(),
-       row_version = coalesce(row_version, 0) + 1",
-    list(merge_request_id)
-  )
+  # master.staging tables
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.staging.sample_env (
+      plot_number       TEXT,
+      project_id        TEXT,
+      latitude          DOUBLE,
+      longitude         DOUBLE,
+      elevation_m       DOUBLE,
+      survey_date       DATE,
+      surveyor_name     TEXT,
+      plot_notes        TEXT,
+      merge_request_id  INTEGER,
+      modified_by       TEXT,
+      baseRowVersion    INTEGER,
+      changeType        TEXT,
+      rowVersion        INTEGER,
+      lastModifiedUTC   TIMESTAMPTZ,
+      modifiedBy        TEXT
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.staging.sample_su (
+      plot_number       TEXT,
+      project_id        TEXT,
+      su_number         TEXT,
+      bec_zone          TEXT,
+      bec_subzone       TEXT,
+      site_series       TEXT,
+      merge_request_id  INTEGER,
+      modified_by       TEXT,
+      baseRowVersion    INTEGER,
+      changeType        TEXT,
+      rowVersion        INTEGER,
+      lastModifiedUTC   TIMESTAMPTZ,
+      modifiedBy        TEXT
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.staging.sample_veg (
+      plot_number       TEXT,
+      project_id        TEXT,
+      species_code      TEXT,
+      layer_code        TEXT,
+      cover1            REAL,
+      cover2            REAL,
+      cover3            REAL,
+      totala            REAL,
+      totalb            REAL,
+      merge_request_id  INTEGER,
+      modified_by       TEXT,
+      baseRowVersion    INTEGER,
+      changeType        TEXT,
+      rowVersion        INTEGER,
+      lastModifiedUTC   TIMESTAMPTZ,
+      modifiedBy        TEXT
+    )
+  ")
 
-  DBI::dbExecute(con, "DELETE FROM master.staging.sample_env WHERE merge_request_id = ?", list(merge_request_id))
-  DBI::dbExecute(con, "DELETE FROM master.staging.sample_su WHERE merge_request_id = ?", list(merge_request_id))
-  DBI::dbExecute(con, "DELETE FROM master.staging.sample_veg WHERE merge_request_id = ?", list(merge_request_id))
+  # master.core tables
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.core.sample_env (
+      plot_number       TEXT UNIQUE,
+      project_id        TEXT,
+      latitude          DOUBLE,
+      longitude         DOUBLE,
+      elevation_m       DOUBLE,
+      survey_date       DATE,
+      surveyor_name     TEXT,
+      plot_notes        TEXT,
+      modified_by       TEXT,
+      row_version       INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now()
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.core.sample_su (
+      plot_number       TEXT UNIQUE,
+      project_id        TEXT,
+      su_number         TEXT,
+      bec_zone          TEXT,
+      bec_subzone       TEXT,
+      site_series       TEXT,
+      modified_by       TEXT,
+      row_version       INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now()
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.core.sample_veg (
+      plot_number       TEXT,
+      project_id        TEXT,
+      species_code      TEXT,
+      layer_code        TEXT,
+      cover1            REAL,
+      cover2            REAL,
+      cover3            REAL,
+      totala            REAL,
+      totalb            REAL,
+      modified_by       TEXT,
+      row_version       INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(plot_number, species_code, layer_code, project_id)
+    )
+  ")
 
-  DBI::dbExecute(
-    con,
-    "UPDATE master.admin.merge_requests
-     SET status = 'merged', reviewer_user_id = ?, review_notes = ?, reviewed_utc = now()
-     WHERE id = ?",
-    list(reviewer, review_notes, merge_request_id)
-  )
-
-  if (exists("notifications_post_merge_event", mode = "function")) {
-    tryCatch({
-      mr <- merge_request_get(con, merge_request_id)
-      project_id <- if (is.null(mr)) NA_character_ else mr$project_id[1]
-      notifications_post_merge_event(con, merge_request_id, project_id, event = "merged", actor = reviewer)
-    }, error = function(e) NULL)
-  }
+  invisible(TRUE)
 }
 
-merge_approve_request <- function(con, merge_request_id, reviewer, review_notes = "") {
-  merge_ensure_tables(con)
-  if (!merge_request_compliance_ok(con, merge_request_id)) {
-    stop(sprintf("Merge blocked: compliance failed for request %s", merge_request_id))
+#' Alias for merge_request_unresolved_count (used in mod_merge.R / mod_admin_merge.R).
+#' @param con              DuckDB connection.
+#' @param merge_request_id Integer.
+#' @return Integer.
+merge_request_unresolved_conflict_count <- function(con, merge_request_id) {
+  merge_request_unresolved_count(con, merge_request_id)
+}
+
+
+# =============================================================================
+# 12. Field-user helpers (used by mod_sync)
+# =============================================================================
+
+sync_get_user_merge_requests <- function(con, submitter,
+                                          show_approved = TRUE,
+                                          show_rejected = TRUE) {
+  empty_mr <- data.frame(
+    id            = integer(0),
+    project_id    = character(0),
+    submitted_utc = as.POSIXct(character(0)),
+    status        = character(0),
+    record_counts = character(0),
+    review_notes  = character(0),
+    reviewed_utc  = as.POSIXct(character(0)),
+    stringsAsFactors = FALSE
+  )
+  if (!sync_cloud_connected(con)) return(empty_mr)
+
+  out <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      paste0(
+        "SELECT id, project_id, submitted_utc, status,",
+        " record_counts, review_notes, reviewed_utc",
+        " FROM master.admin.merge_requests",
+        " WHERE submitter_name = ?",
+        " ORDER BY submitted_utc DESC"
+      ),
+      list(as.character(submitter))
+    ),
+    error = function(e) empty_mr
+  )
+  if (nrow(out) == 0) return(empty_mr)
+
+  if (!isTRUE(show_approved)) {
+    out <- out[!out$status %in% c("merged", "approved"), , drop = FALSE]
   }
-  merge_apply_request(con, merge_request_id, reviewer, review_notes)
+  if (!isTRUE(show_rejected)) {
+    out <- out[out$status != "rejected", , drop = FALSE]
+  }
+  out
 }

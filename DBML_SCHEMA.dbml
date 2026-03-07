@@ -1,0 +1,669 @@
+// ============================================================================
+// VPRO DATABASE SCHEMA — DBML Format
+// ============================================================================
+// This document describes all DuckDB catalogs and the cloud PostgreSQL (master)
+// schema attached to the local DuckDB instance.
+//
+// Local DuckDB Structure:
+//   - vpro.duckdb          Main application data (Env, Veg, SU, Admin)
+//   - vpro_lists.duckdb    Reference/lookup tables (species, layers, zones)
+//   - vpro_metadata.duckdb Project metadata
+//   - vpro_user.duckdb     User preferences
+//   - vpro_messages.duckdb Message queue / notifications
+//   - master               Cloud PostgreSQL attached at runtime (optional)
+//
+// ============================================================================
+
+
+// ============================================================================
+// PRIMARY CATALOG: vpro.duckdb — Main Application Data
+// ============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: Env (Environmental/Site Data)
+// Stores location, survey date, and BEC classification for each plot.
+// ─────────────────────────────────────────────────────────────────────────
+Table Env {
+  PlotNumber TEXT [pk, not null, unique, note: "Primary site identifier"]
+  ProjectID TEXT [not null, ref: > metadata_projects.project_id, note: "Links to project"]
+  Latitude DOUBLE [not null, note: "WGS84 latitude (48-60)"]
+  Longitude DOUBLE [not null, note: "WGS84 longitude (-140 to -114)"]
+  Elevation DOUBLE [note: "Elevation in meters above sea level"]
+  Date DATE [note: "Survey date (YYYY-MM-DD)"]
+  SiteSurveyor TEXT [note: "Name of field surveyor"]
+  SiteNotes TEXT [note: "Plot-level comments and observations"]
+  Zone TEXT [note: "BEC Zone code (e.g., CWH, IDF, ESSF)"]
+  SubZone TEXT [note: "BEC SubZone code (e.g., dm, mk)"]
+  SiteSeries TEXT [note: "Site series identifier"]
+  master_row_version INTEGER [note: "Row version from master.core.env at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: SU (Site Unit — BEC Classification)
+// One row per plot. Denormalizes BEC zone/subzone/series from Env.
+// ─────────────────────────────────────────────────────────────────────────
+Table SU {
+  PlotNumber TEXT [pk, not null, unique, ref: > Env.PlotNumber]
+  SiteUnit TEXT [note: "Concatenated BEC identifier"]
+  master_row_version INTEGER [note: "Row version from master.core.su at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: Veg (Vegetation/Species Data)
+// Multiple rows per plot (one row per species per layer combination).
+// Cover values collected in up to 10 layers plus aggregate layers (A, B).
+// ─────────────────────────────────────────────────────────────────────────
+Table Veg {
+  PlotNumber TEXT [not null, ref: > Env.PlotNumber]
+  Species TEXT [not null, note: "Species code (e.g., TSUGHET)"]
+  Layer TEXT [note: "Layer code (T1, T2, S, H, M, or numeric 1-10)"]
+  Cover1 TEXT [note: "Layer 1 percent cover (0-100)"]
+  Height1 TEXT [note: "Layer 1 height (meters or category)"]
+  Cover2 TEXT [note: "Layer 2 percent cover"]
+  Height2 TEXT
+  Cover3 TEXT [note: "Layer 3 percent cover"]
+  Height3 TEXT
+  TotalA TEXT [note: "Aggregate layer A (canopy) total cover"]
+  HeightA TEXT [note: "Aggregate layer A height"]
+  Cover4 TEXT [note: "Layer 4 percent cover"]
+  Height4 TEXT
+  Cover5 TEXT [note: "Layer 5 percent cover"]
+  Height5 TEXT
+  Cover5a TEXT [note: "Layer 5a sublayer percent cover"]
+  Height5a TEXT
+  Cover5b TEXT [note: "Layer 5b sublayer percent cover"]
+  Height5b TEXT
+  Cover5c TEXT [note: "Layer 5c sublayer percent cover"]
+  Height5c TEXT
+  TotalB TEXT [note: "Aggregate layer B (understory) total cover"]
+  HeightB TEXT [note: "Aggregate layer B height"]
+  Cover6 TEXT [note: "Layer 6 percent cover"]
+  Height6 DOUBLE
+  Cover7 TEXT [note: "Layer 7 percent cover"]
+  Cover8 REAL [note: "Layer 8 percent cover"]
+  Cover9 REAL [note: "Layer 9 percent cover"]
+  Cover10 TEXT [note: "Layer 10 percent cover"]
+  Collected TEXT [note: "Was this species actively collected? (Y/N or flag)"]
+  Flag BIGINT [note: "QC flag/status code"]
+  LL BIGINT [note: "Lower layer indicator"]
+  AF TEXT [note: "Age/form attribute"]
+  DC BIGINT [note: "Decadence code"]
+  UT BIGINT [note: "Utilization code"]
+  VI BIGINT [note: "Vigour indicator"]
+  PV BIGINT [note: "Plant vigour code"]
+  PG BIGINT [note: "Plant growth form"]
+  FFA BIGINT [note: "Forest floor attribute"]
+  Cultural1 TEXT [note: "Cultural value attribute 1"]
+  Cultural2 TEXT [note: "Cultural value attribute 2"]
+  Other1 TEXT [note: "Additional observation 1"]
+  Other2 TEXT [note: "Additional observation 2"]
+  master_row_version INTEGER [note: "Row version from master.core.veg at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+  indexes {
+    (PlotNumber, Species, Layer) [unique, name: "veg_pk"]
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: Admin (QA/Review Status)
+// Tracks QA approval status, reviewer notes, and review timestamp per plot.
+// ─────────────────────────────────────────────────────────────────────────
+Table Admin {
+  PlotNumber TEXT [pk, unique, ref: > Env.PlotNumber]
+  ProjectID TEXT [not null, note: "Project identifier"]
+  QAStatus TEXT [default: "unreviewed", note: "unreviewed | pending | approved | rejected"]
+  QAComments TEXT [note: "Reviewer comments"]
+  QABy TEXT [note: "Email or name of reviewer"]
+  QADate TIMESTAMP [note: "QA review timestamp (UTC)"]
+  master_row_version INTEGER [note: "Row version from master.core.admin at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+}
+
+
+// ============================================================================
+// SYNC SCHEMA — Local Sync Infrastructure
+// ============================================================================
+// Manages pull/push watermarks and conflict tracking.
+
+Table sync_watermarks {
+  table_name TEXT [pk, note: "env | su | veg | lists"]
+  last_pull_utc TIMESTAMP [note: "Watermark for last successful pull"]
+  last_push_utc TIMESTAMP [note: "Watermark for last successful push"]
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: sync.conflict_queue
+// Rows queued from master during pull when local and master both have changes.
+// User must resolve (keep_local or accept_master) before next push.
+// ─────────────────────────────────────────────────────────────────────────
+Table sync_conflict_queue {
+  id INTEGER [pk, increment, note: "Auto-incremented conflict ID"]
+  table_name TEXT [not null, note: "env | su | veg"]
+  plot_number TEXT [not null]
+  project_id TEXT [note: "Project identifier; empty string for null"]
+  species_code TEXT [note: "Empty string for env/su conflicts"]
+  layer_code TEXT [note: "Empty string for env/su conflicts"]
+  conflict_at TIMESTAMP [default: "now()", note: "When conflict was detected"]
+  local_values TEXT [not null, note: "JSON-serialized local row values"]
+  master_values TEXT [not null, note: "JSON-serialized master row values"]
+  resolution TEXT [note: "keep_local | accept_master | NULL (unresolved)"]
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_lists.duckdb — Reference Tables
+// ============================================================================
+// Shared lookup/reference data (species, layers, BEC zones, etc.)
+// Admin-only; field users never edit these.
+
+Table lists_spplist {
+  id INTEGER [pk, increment]
+  spp_code TEXT [unique, not null, note: "Species code (e.g., TSUGHET)"]
+  spp_name TEXT [not null, note: "Common name"]
+  spp_scientific TEXT [note: "Scientific (binomial) name"]
+  is_active BOOLEAN [default: true, note: "Active in current classification"]
+}
+
+Table lists_layercode {
+  id INTEGER [pk, increment]
+  layer_code TEXT [unique, not null, note: "Layer code (T1, T2, S, H, M, 1-10)"]
+  layer_name TEXT [not null, note: "Layer description"]
+  sort_order INTEGER [note: "Display order"]
+}
+
+Table lists_usyszonelist {
+  id INTEGER [pk, increment]
+  zone_code TEXT [unique, not null, note: "BEC zone code (CDF, CWH, ESSF, etc.)"]
+  zone_name TEXT [not null, note: "Full zone name"]
+  province TEXT [note: "Province code (BC, AB)"]
+}
+
+Table lists_usyssubzonelist {
+  id INTEGER [pk, increment]
+  zone_code TEXT [not null, ref: > lists_usyszonelist.zone_code]
+  subzone_code TEXT [not null, note: "Subzone code (dm, vm, xm, etc.)"]
+  subzone_name TEXT [not null, note: "Subzone description"]
+  indexes {
+    (zone_code, subzone_code) [unique, name: "subzone_pk"]
+  }
+}
+
+Table lists_usystableoflists {
+  id INTEGER [pk, increment]
+  list_id TEXT [not null, note: "Reference list category (COVER_CLASS, etc.)"]
+  item_code TEXT [not null, note: "Item code within list"]
+  item_name TEXT [not null, note: "Display name"]
+  item_sort INTEGER [note: "Sort order within list"]
+  indexes {
+    (list_id, item_code) [unique, name: "list_item_pk"]
+  }
+}
+
+Table lists_usyssppattributes {
+  id INTEGER [pk, increment]
+  spp_code TEXT [unique, not null, ref: > lists_spplist.spp_code]
+  tree_shrub_herb TEXT [note: "Life form classification"]
+  native_introduced TEXT [note: "Native | Introduced"]
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_metadata.duckdb — Project Metadata
+// ============================================================================
+
+Table metadata_projects {
+  id INTEGER [pk, increment]
+  project_id TEXT [unique, not null, note: "Project identifier (DEMO_IDF_2023, etc.)"]
+  project_name TEXT [not null, note: "Human-readable project name"]
+  description TEXT [note: "Project description"]
+  organization TEXT [note: "Organization name"]
+  contact_email TEXT [note: "Project contact email"]
+  created_utc TIMESTAMP [default: "now()"]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT [note: "User who last modified"]
+  note: "Metadata about each project, synced from master.core.metadata"
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_user.duckdb — User Preferences
+// ============================================================================
+
+Table user_preferences {
+  id INTEGER [pk, increment]
+  email TEXT [unique, not null, note: "User email"]
+  full_name TEXT [note: "User display name"]
+  default_project TEXT [note: "Last selected project"]
+  theme TEXT [note: "UI theme preference (light/dark)"]
+  language TEXT [default: "en"]
+  last_login TIMESTAMP
+  preferences_json TEXT [note: "Additional preferences as JSON"]
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_messages.duckdb — Message Queue
+// ============================================================================
+
+Table messages_queue {
+  id INTEGER [pk, increment]
+  message_type TEXT [not null, note: "notification | warning | error | alert"]
+  recipient_email TEXT [not null]
+  subject TEXT
+  body TEXT [not null]
+  created_utc TIMESTAMP [default: "now()"]
+  sent_utc TIMESTAMP [note: "NULL if not yet sent"]
+  read_utc TIMESTAMP [note: "NULL if not yet read by user"]
+  priority TEXT [default: "normal", note: "low | normal | high | critical"]
+}
+
+
+// ============================================================================
+// CLOUD SCHEMA: master — PostgreSQL (optional, attached at runtime)
+// ============================================================================
+// When PGHOST/PGPORT are available, this schema is attached as 'master'.
+// Contains authoritative core data, admin workflows, staging area, and audit log.
+
+// ───────────────────────────────────────────────────────────────────────
+// CORE SCHEMA — Authoritative Data Tables (master.core.*)
+// ───────────────────────────────────────────────────────────────────────
+
+Table core_metadata {
+    id INTEGER [pk, increment]
+    project_id TEXT [unique, not null, note: "Project identifier"]
+    project_name TEXT [not null]
+    description TEXT
+    organization TEXT
+    contact_email TEXT
+    created_utc TIMESTAMP [default: "now()"]
+    row_version INTEGER [default: 1, note: "Incremented on each UPDATE"]
+    last_modified_utc TIMESTAMP [default: "now()"]
+    modified_by TEXT
+    indexes {
+      (last_modified_utc) [name: "idx_metadata_modified"]
+    }
+  }
+
+Table core_env {
+    id INTEGER [pk, increment]
+    plot_number TEXT [unique, not null, note: "Primary site identifier"]
+    project_id TEXT [not null, ref: > core_metadata.project_id]
+    latitude NUMERIC [not null, note: "WGS84, checked 48-60"]
+    longitude NUMERIC [not null, note: "WGS84, checked -140 to -114"]
+    elevation_m INTEGER [note: "Meters ASL (0-4000)"]
+    survey_date DATE
+    surveyor_name TEXT
+    plot_notes TEXT
+    row_version INTEGER [default: 1, note: "Incremented on each UPDATE"]
+    last_modified_utc TIMESTAMP [default: "now()"]
+    modified_by TEXT
+    indexes {
+      (plot_number)
+      (project_id)
+      (last_modified_utc)
+    }
+  }
+
+Table core_veg {
+  id INTEGER [pk, increment]
+  plot_number TEXT [not null, ref: > core_env.plot_number]
+  species_code TEXT [not null, ref: > lists_spplist.spp_code]
+  layer_code TEXT [ref: > lists_layercode.layer_code]
+  cover1 REAL
+  height1 TEXT
+  cover2 REAL
+  height2 TEXT
+  cover3 REAL
+  height3 TEXT
+  totala REAL [note: "Aggregate layer A total"]
+  heighta TEXT
+  cover4 REAL
+  height4 TEXT
+  cover5 REAL
+  height5 TEXT
+  cover5a REAL
+  height5a TEXT
+  cover5b REAL
+  height5b TEXT
+  cover5c REAL
+  height5c TEXT
+  totalb REAL [note: "Aggregate layer B total"]
+  heightb TEXT
+  cover6 REAL
+  height6 DOUBLE
+  cover7 REAL
+  cover8 REAL
+  cover9 REAL
+  cover10 TEXT
+  collected TEXT [note: "Y/N or numeric flag"]
+  flag BIGINT
+  ll BIGINT
+  af TEXT
+  dc BIGINT
+  ut BIGINT
+  vi BIGINT
+  pv BIGINT
+  pg BIGINT
+  ffa BIGINT
+  cultural1 TEXT
+  cultural2 TEXT
+  other1 TEXT
+  other2 TEXT
+  row_version INTEGER [default: 1]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT [not null]
+  indexes {
+    (plot_number)
+    (species_code)
+    (plot_number, species_code, layer_code) [unique, name: "core_veg_pk"]
+  }
+}
+
+Table core_su {
+  id INTEGER [pk, increment]
+  plot_number TEXT [unique, not null, ref: > core_env.plot_number]
+  siteunit TEXT [note: "BEC zone + subzone + series identifier"]
+  row_version INTEGER [default: 1]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT
+  indexes {
+    (plot_number)
+    (last_modified_utc)
+  }
+}
+
+Table core_admin {
+  id INTEGER [pk, increment]
+  plot_number TEXT [unique, not null, ref: > core_env.plot_number]
+  project_id TEXT [not null, ref: > core_metadata.project_id]
+  qa_status TEXT [default: "unreviewed", note: "unreviewed|pending|approved|rejected"]
+  qa_comments TEXT
+  qa_by TEXT
+  qa_date TIMESTAMP
+  row_version INTEGER [default: 1]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT [not null]
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// LISTS SCHEMA — Reference/Lookup Tables (synced from master.lists.*)
+// ───────────────────────────────────────────────────────────────────────
+// The lists_* tables above (in vpro_lists.duckdb section) are synced in full
+// from master.lists.* on each pull. Defined once to avoid duplication.
+
+// ───────────────────────────────────────────────────────────────────────
+// ADMIN SCHEMA — User Management & Merge Request Workflow
+// ───────────────────────────────────────────────────────────────────────
+
+Table admin_users {
+  id INTEGER [pk, increment]
+  email TEXT [unique, not null, note: "Primary key for auth & role lookup"]
+  full_name TEXT
+  app_role TEXT [default: "guest", note: "guest | admin"]
+  password_hash TEXT [note: "NULL for guest; bcrypt hash for admin"]
+  is_active BOOLEAN [default: true]
+  created_utc TIMESTAMP [default: "now()"]
+  last_login_utc TIMESTAMP
+}
+
+Table admin_change_log {
+  id INTEGER [pk, increment]
+  timestamp_utc TIMESTAMP [default: "now()"]
+  username TEXT [not null]
+  table_name TEXT [not null]
+  operation TEXT [note: "INSERT | UPDATE | DELETE"]
+  record_id INTEGER [note: "PK of affected row"]
+  old_values TEXT [note: "JSON-serialized old values"]
+  new_values TEXT [note: "JSON-serialized new values"]
+  indexes {
+    (timestamp_utc)
+    (username)
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Merge Request Lifecycle
+// ───────────────────────────────────────────────────────────────────────
+// A merge request aggregates pending changes from one user/submitter.
+// It goes through: pending_review → approved/rejected → merged
+
+Table admin_merge_requests {
+  id INTEGER [pk, increment]
+  project_id TEXT [not null, ref: > core_metadata.project_id]
+  submitter_user_id INTEGER [ref: > admin_users.id]
+  submitter_name TEXT [not null, note: "Email used at push time"]
+  submitted_utc TIMESTAMP [default: "now()"]
+  status TEXT [default: "pending_review", note: "pending_review|approved|rejected|merged"]
+  reviewer_user_id INTEGER [ref: > admin_users.id]
+  reviewer TEXT [note: "Reviewer email"]
+  review_notes TEXT
+  reviewed_utc TIMESTAMP
+  env_record_count INTEGER [default: 0, note: "Count of env changes in this MR"]
+  su_record_count INTEGER [default: 0, note: "Count of su changes in this MR"]
+  veg_record_count INTEGER [default: 0, note: "Count of veg changes in this MR"]
+  compliance_passed BOOLEAN [note: "Result of staging_compliance_checks()"]
+  compliance_report TEXT [note: "JSON report from compliance check"]
+  indexes {
+    (status)
+    (submitted_utc)
+  }
+}
+
+Table admin_merge_conflicts {
+  id INTEGER [pk, increment]
+  merge_request_id INTEGER [not null, ref: > admin_merge_requests.id]
+  table_name TEXT [not null, note: "env | su | veg"]
+  plot_number TEXT
+  project_id TEXT [note: "Stored as TEXT for cross-type comparison"]
+  species_code TEXT [default: "", note: "Empty string for env/su conflicts"]
+  layer_code TEXT [default: "", note: "Empty string for env/su conflicts"]
+  details TEXT [note: "JSON: {field: {staged: val, core: val}, row_version: {staged_base, core_current}}"]
+  resolution TEXT [note: "keep_staged | keep_core | dismiss"]
+  resolved_by TEXT
+  resolved_utc TIMESTAMP
+  created_utc TIMESTAMP [default: "now()"]
+  indexes {
+    (merge_request_id)
+    (merge_request_id, table_name, plot_number, project_id, species_code, layer_code) [unique]
+  }
+}
+
+Table admin_merge_history {
+  id INTEGER [pk, increment]
+  merge_request_id INTEGER [not null, ref: > admin_merge_requests.id]
+  merged_utc TIMESTAMP [default: "now()"]
+  approved_by_user_id INTEGER [not null, ref: > admin_users.id]
+  record_count INTEGER
+  merge_summary TEXT [note: "JSON summary of merged records"]
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// STAGING SCHEMA — Pending User Uploads
+// ───────────────────────────────────────────────────────────────────────
+// When a user calls sync_push(), their local changes are written here.
+// Admin then reviews and merges back into core.
+
+Table staging_env {
+  id INTEGER [pk, increment]
+  merge_request_id INTEGER [not null, ref: > admin_merge_requests.id]
+  change_type TEXT [not null, note: "I (insert) | U (update) | D (delete)"]
+  base_row_version INTEGER [note: "core.row_version captured at push time; NULL = new row"]
+  plot_number TEXT [not null]
+  project_id TEXT [not null]
+  latitude NUMERIC
+  longitude NUMERIC
+  elevation_m INTEGER
+  survey_date DATE
+  surveyor_name TEXT
+  plot_notes TEXT
+  row_version INTEGER [default: 1]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT
+  indexes {
+    (merge_request_id)
+    (plot_number)
+    (project_id)
+  }
+}
+
+Table staging_su {
+  id INTEGER [pk, increment]
+  merge_request_id INTEGER [not null, ref: > admin_merge_requests.id]
+  change_type TEXT [not null, note: "I | U | D"]
+  base_row_version INTEGER [note: "NULL = new row"]
+  plot_number TEXT [not null]
+  siteunit TEXT
+  row_version INTEGER [default: 1]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT
+  indexes {
+    (merge_request_id)
+    (plot_number)
+  }
+}
+
+Table staging_veg {
+  id INTEGER [pk, increment]
+  merge_request_id INTEGER [not null, ref: > admin_merge_requests.id]
+  change_type TEXT [not null, note: "I | U | D"]
+  base_row_version INTEGER [note: "NULL = new row"]
+  plot_number TEXT [not null]
+  species_code TEXT [not null]
+  layer_code TEXT
+  cover1 REAL
+  height1 TEXT
+  cover2 REAL
+  height2 TEXT
+  cover3 REAL
+  height3 TEXT
+  totala REAL
+  heighta TEXT
+  cover4 REAL
+  height4 TEXT
+  cover5 REAL
+  height5 TEXT
+  cover5a REAL
+  height5a TEXT
+  cover5b REAL
+  height5b TEXT
+  cover5c REAL
+  height5c TEXT
+  totalb REAL
+  heightb TEXT
+  cover6 REAL
+  height6 DOUBLE
+  cover7 REAL
+  cover8 REAL
+  cover9 REAL
+  cover10 TEXT
+  collected TEXT
+  flag BIGINT
+  ll BIGINT
+  af TEXT
+  dc BIGINT
+  ut BIGINT
+  vi BIGINT
+  pv BIGINT
+  pg BIGINT
+  ffa BIGINT
+  cultural1 TEXT
+  cultural2 TEXT
+  other1 TEXT
+  other2 TEXT
+  row_version INTEGER [default: 1]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT
+  indexes {
+    (merge_request_id)
+    (plot_number)
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// AUDIT SCHEMA — Change Tracking & Audit Log
+// ───────────────────────────────────────────────────────────────────────
+
+Table audit_logged_actions {
+  id INTEGER [pk, increment]
+  schema_name TEXT [not null]
+  table_name TEXT [not null]
+  user_name TEXT [default: "current_user"]
+  action_tstamp_tx TIMESTAMP [default: "now()"]
+  action_tstamp_stm TIMESTAMP [not null]
+  transaction_id BIGINT
+  application_name TEXT
+  client_addr INET
+  client_port INTEGER
+  client_query TEXT
+  action TEXT [not null, note: "I (insert) | D (delete) | U (update)"]
+  changed_fields TEXT [note: "JSON-serialized field changes"]
+  statement_only BOOLEAN [not null]
+  indexes {
+    (schema_name, table_name) [name: "idx_logged_actions_schema_table"]
+    (action_tstamp_tx) [name: "idx_logged_actions_timestamp"]
+    (action) [name: "idx_logged_actions_action"]
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// PUBLIC_EXPORT SCHEMA — RDS Snapshots & Download Log
+// ───────────────────────────────────────────────────────────────────────
+
+Table public_export_rds_snapshots {
+  id INTEGER [pk, increment]
+  version TEXT [unique, not null, note: "Snapshot version tag (e.g., 2024-01-15)"]
+  snapshot_date DATE [default: "current_date"]
+  created_utc TIMESTAMP [default: "now()"]
+  created_by TEXT [not null]
+  rds_filename_veg TEXT [note: "Path to veg RDS file"]
+  rds_filename_env TEXT [note: "Path to env RDS file"]
+  veg_row_count INTEGER [note: "Row count in snapshot"]
+  env_row_count INTEGER [note: "Row count in snapshot"]
+  md5_hash_veg TEXT [note: "Checksum for integrity verification"]
+  md5_hash_env TEXT
+  snapshot_metadata TEXT [note: "JSON: filters, projection date, etc."]
+}
+
+Table public_export_download_log {
+  id INTEGER [pk, increment]
+  user_id INTEGER [ref: > admin_users.id]
+  username TEXT [default: "anonymous"]
+  timestamp_utc TIMESTAMP [default: "now()"]
+  dataset_name TEXT [not null]
+  format TEXT [not null, note: "rds | csv | excel"]
+  filters_applied TEXT [note: "JSON-serialized applied filters"]
+  row_count INTEGER [note: "Rows in download"]
+  ip_address INET
+  download_status TEXT [default: "success", note: "success | failed"]
+  error_message TEXT
+  indexes {
+    (timestamp_utc)
+    (username)
+  }
+}
+
+// ============================================================================
+// NOTES
+// ============================================================================
+
+Note watermarks {
+  "Watermark timestamps (last_pull_utc, last_push_utc) filter updates from master and detect if master has advanced since user last pulled."
+}
+
+Note versioning {
+  "row_version incremented by 1 on each UPDATE. master_row_version captures master.core.row_version at last pull. Conflict detected when master.core.row_version exceeds staging.base_row_version at review time."
+}
+
+Note conflicts {
+  "When both local and master have changes, conflict is queued. User resolves via keep_local (discard master) or accept_master (overwrite). Push blocked until all conflicts resolved."
+}
+
+Note master_attach {
+  "master PostgreSQL schema is optional, attached dynamically at runtime. Requires PGHOST, PGPORT, PGDATABASE env vars. All master schemas read-only for local users. Only merge requests written by users; admins write outcomes."
+}
+
+Note semantics {
+  "Local tables use CamelCase (PlotNumber, Species). Master.core uses snake_case (plot_number, species_code). master_row_version is NULL for new rows, otherwise holds prior version. local_modified_utc is NULL if clean, else edit timestamp."
+}

@@ -1,48 +1,33 @@
-# Authentication and RBAC helpers
+# Authentication helpers
+# Two user types:
+#   guest  — email + full name only; read core/lists, write staging
+#   admin  — email + bcrypt password; full access, can grant admin to others
 
 auth_init_state <- function(state) {
   shiny::isolate({
     if (is.null(state$AuthAuthenticated)) state$AuthAuthenticated <- FALSE
-    if (is.null(state$AuthUser)) state$AuthUser <- NULL
-    if (is.null(state$AuthUserId)) state$AuthUserId <- NULL
-    if (is.null(state$AuthRoles)) state$AuthRoles <- character(0)
-    if (is.null(state$AuthPermissions)) state$AuthPermissions <- character(0)
+    if (is.null(state$AuthUser))          state$AuthUser          <- NULL
+    if (is.null(state$AuthUserId))        state$AuthUserId        <- NULL
+    if (is.null(state$AuthRole))          state$AuthRole          <- NULL
+    if (is.null(state$AuthPermissions))   state$AuthPermissions   <- character(0)
+    if (is.null(state$SyncVersion))       state$SyncVersion       <- 0L
   })
 }
 
-auth_parse_permissions <- function(value) {
-  if (is.null(value)) return(character(0))
-  if (is.list(value)) value <- unlist(value, use.names = FALSE)
-  if (!is.character(value)) return(character(0))
-
-  pieces <- unlist(lapply(value, function(item) {
-    cleaned <- gsub("^[\\{\\[]|[\\}\\]]$", "", item)
-    parts <- unlist(strsplit(cleaned, "[,[:space:]]+"))
-    parts[nzchar(parts)]
-  }))
-
-  unique(pieces)
+# Derive permissions from app_role (admin gets wildcard, guest gets scoped set)
+.auth_permissions <- function(app_role) {
+  if (identical(app_role, "admin")) c("*") else c("write:staging", "read:core")
 }
 
-auth_fetch_roles_permissions <- function(con, user_id) {
-  roles <- DBI::dbGetQuery(
-    con,
-    "SELECT r.role_name, r.permissions
-     FROM master.admin.user_roles ur
-     JOIN master.admin.roles r ON r.id = ur.role_id
-     WHERE ur.user_id = ?",
-    list(user_id)
-  )
-
-  role_names <- character(0)
-  permissions <- character(0)
-
-  if (nrow(roles) > 0) {
-    role_names <- unique(roles$role_name)
-    permissions <- unique(unlist(lapply(roles$permissions, auth_parse_permissions)))
-  }
-
-  list(roles = role_names, permissions = permissions)
+# Populate reactive state from a user data.frame row
+.auth_set_state <- function(state, user) {
+  role <- user$app_role[1]
+  state$AuthAuthenticated <- TRUE
+  state$AuthUser          <- user$email[1]
+  state$AuthUserId        <- user$id[1]
+  state$AuthRole          <- role
+  state$AuthPermissions   <- .auth_permissions(role)
+  state$User              <- user$email[1]
 }
 
 auth_verify_password <- function(stored_hash, password) {
@@ -56,55 +41,152 @@ auth_verify_password <- function(stored_hash, password) {
   list(ok = isTRUE(ok), reason = if (ok) NULL else "Invalid credentials")
 }
 
-auth_login <- function(con, state, username, password) {
+#' Admin login by email + password
+#' Requires master (cloud PG) to be attached to con before calling.
+auth_login <- function(con, state, email, password) {
   auth_init_state(state)
-  attached <- tryCatch({
-    DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
-  }, error = function(e) character(0))
-  if (!("master" %in% attached)) {
-    sync_require_cloud(con, allow_attach = TRUE)
-  }
 
   user <- DBI::dbGetQuery(
     con,
-    "SELECT id, username, password_hash, is_active
+    "SELECT id, email, full_name, app_role, password_hash, is_active
      FROM master.admin.users
-     WHERE username = ?",
-    list(username)
+     WHERE email = ? AND app_role = 'admin'",
+    list(email)
   )
 
   if (nrow(user) == 0 || !isTRUE(user$is_active[1])) {
-    return(list(ok = FALSE, message = "Invalid username or inactive account"))
+    return(list(ok = FALSE, message = "Invalid credentials or inactive account"))
   }
 
   verify <- auth_verify_password(user$password_hash[1], password)
   if (!isTRUE(verify$ok)) {
-    return(list(ok = FALSE, message = verify$reason %||% "Invalid credentials"))
+    return(list(ok = FALSE, message = "Invalid credentials"))
   }
 
-  roles_info <- auth_fetch_roles_permissions(con, user$id[1])
-
-  state$AuthAuthenticated <- TRUE
-  state$AuthUser <- user$username[1]
-  state$AuthUserId <- user$id[1]
-  state$AuthRoles <- roles_info$roles
-  state$AuthPermissions <- roles_info$permissions
-  state$User <- user$username[1]
-
+  .auth_set_state(state, user)
   list(ok = TRUE, message = "Authenticated")
+}
+
+#' Guest login by email, optional full name (creates user record on first visit)
+#' Requires master (cloud PG) to be attached to con before calling.
+auth_guest_login <- function(con, state, email, full_name = NULL) {
+  auth_init_state(state)
+  email     <- trimws(email)
+  full_name <- if (!is.null(full_name) && nzchar(trimws(full_name))) trimws(full_name) else NULL
+
+  if (!grepl("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email, perl = TRUE)) {
+    return(list(ok = FALSE, message = "Please enter a valid email address"))
+  }
+
+  existing <- DBI::dbGetQuery(
+    con,
+    "SELECT id, email, full_name, app_role, is_active
+     FROM master.admin.users WHERE email = ?",
+    list(email)
+  )
+
+  if (nrow(existing) > 0) {
+    if (existing$app_role[1] == "admin") {
+      return(list(ok = FALSE, message = "Please use Admin Sign In for this account"))
+    }
+    if (!isTRUE(existing$is_active[1])) {
+      return(list(ok = FALSE, message = "Account is inactive"))
+    }
+    .auth_set_state(state, existing)
+  } else {
+    DBI::dbExecute(
+      con,
+      "INSERT INTO master.admin.users (email, full_name, app_role) VALUES (?, ?, 'guest')",
+      list(email, if (is.null(full_name)) NA_character_ else full_name)
+    )
+    user <- DBI::dbGetQuery(
+      con,
+      "SELECT id, email, full_name, app_role, is_active
+       FROM master.admin.users WHERE email = ?",
+      list(email)
+    )
+    .auth_set_state(state, user)
+  }
+
+  list(ok = TRUE, message = "Signed in as guest")
+}
+
+#' Change password — admin accounts only
+auth_change_password <- function(con, state, old_password, new_password) {
+  if (!auth_is_admin(state)) {
+    return(list(ok = FALSE, message = "Admin account required"))
+  }
+  if (nchar(new_password) < 8) {
+    return(list(ok = FALSE, message = "Password must be at least 8 characters"))
+  }
+
+  user_id <- shiny::isolate(state$AuthUserId)
+  user <- DBI::dbGetQuery(
+    con,
+    "SELECT password_hash FROM master.admin.users WHERE id = ?",
+    list(user_id)
+  )
+
+  verify <- auth_verify_password(user$password_hash[1], old_password)
+  if (!isTRUE(verify$ok)) {
+    return(list(ok = FALSE, message = "Current password is incorrect"))
+  }
+
+  new_hash <- bcrypt::hashpw(new_password)
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.users SET password_hash = ? WHERE id = ?",
+    list(new_hash, user_id)
+  )
+  list(ok = TRUE, message = "Password updated successfully")
+}
+
+#' Grant admin role to an existing user — admin-only operation
+auth_grant_admin <- function(con, state, target_email, initial_password) {
+  if (!auth_is_admin(state)) {
+    return(list(ok = FALSE, message = "Admin permission required"))
+  }
+  if (nchar(initial_password) < 8) {
+    return(list(ok = FALSE, message = "Initial password must be at least 8 characters"))
+  }
+
+  target <- DBI::dbGetQuery(
+    con,
+    "SELECT id, app_role FROM master.admin.users WHERE email = ?",
+    list(target_email)
+  )
+
+  if (nrow(target) == 0) {
+    return(list(ok = FALSE, message = "User not found"))
+  }
+  if (target$app_role[1] == "admin") {
+    return(list(ok = FALSE, message = "User already has admin access"))
+  }
+
+  new_hash <- bcrypt::hashpw(initial_password)
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.users SET app_role = 'admin', password_hash = ? WHERE id = ?",
+    list(new_hash, target$id[1])
+  )
+  list(ok = TRUE, message = sprintf("Admin access granted to %s", target_email))
 }
 
 auth_logout <- function(state) {
   auth_init_state(state)
   state$AuthAuthenticated <- FALSE
-  state$AuthUser <- NULL
-  state$AuthUserId <- NULL
-  state$AuthRoles <- character(0)
-  state$AuthPermissions <- character(0)
+  state$AuthUser          <- NULL
+  state$AuthUserId        <- NULL
+  state$AuthRole          <- NULL
+  state$AuthPermissions   <- character(0)
 }
 
 auth_is_authenticated <- function(state) {
   shiny::isolate(isTRUE(state$AuthAuthenticated))
+}
+
+auth_is_admin <- function(state) {
+  auth_is_authenticated(state) && identical(shiny::isolate(state$AuthRole), "admin")
 }
 
 auth_user_has_permission <- function(state, permission) {

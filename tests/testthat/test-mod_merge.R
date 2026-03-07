@@ -12,6 +12,21 @@ setup_merge_db <- function() {
   DBI::dbExecute(con, "CREATE SCHEMA master.staging")
   DBI::dbExecute(con, "CREATE SCHEMA master.core")
 
+  # Local table matching cfg$local = "Env" so .get_shared_columns() finds columns
+  DBI::dbExecute(con, "
+    CREATE TABLE Env (
+      plotnumber TEXT,
+      project_id TEXT,
+      latitude DOUBLE,
+      longitude DOUBLE,
+      elevation_m DOUBLE,
+      survey_date DATE,
+      surveyor_name TEXT,
+      plot_notes TEXT,
+      modified_by TEXT
+    )
+  ")
+
   DBI::dbExecute(con, "
     CREATE TABLE master.admin.merge_requests (
       id INTEGER PRIMARY KEY,
@@ -19,18 +34,20 @@ setup_merge_db <- function() {
       submitter_user_id TEXT NOT NULL,
       submitted_utc TIMESTAMPTZ DEFAULT now(),
       status TEXT DEFAULT 'pending_review',
+      reviewer TEXT,
       reviewer_user_id TEXT,
       review_notes TEXT,
       reviewed_utc TIMESTAMPTZ,
       veg_record_count INTEGER DEFAULT 0,
       env_record_count INTEGER DEFAULT 0,
+      record_counts TEXT,
       compliance_passed BOOLEAN DEFAULT FALSE
     )
   ")
 
   DBI::dbExecute(con, "
-    CREATE TABLE master.staging.sample_env (
-      plot_number TEXT,
+    CREATE TABLE master.staging.env (
+      plotnumber TEXT,
       project_id TEXT,
       latitude DOUBLE,
       longitude DOUBLE,
@@ -44,8 +61,8 @@ setup_merge_db <- function() {
   ")
 
   DBI::dbExecute(con, "
-    CREATE TABLE master.staging.sample_su (
-      plot_number TEXT,
+    CREATE TABLE master.staging.su (
+      plotnumber TEXT,
       project_id TEXT,
       su_number TEXT,
       bec_zone TEXT,
@@ -57,8 +74,8 @@ setup_merge_db <- function() {
   ")
 
   DBI::dbExecute(con, "
-    CREATE TABLE master.staging.sample_veg (
-      plot_number TEXT,
+    CREATE TABLE master.staging.veg (
+      plotnumber TEXT,
       project_id TEXT,
       species_code TEXT,
       layer_code TEXT,
@@ -109,8 +126,8 @@ setup_merge_db <- function() {
   ")
 
   DBI::dbExecute(con, "
-    CREATE TABLE master.core.sample_env (
-      plot_number TEXT,
+    CREATE TABLE master.core.env (
+      plotnumber TEXT,
       project_id TEXT,
       latitude DOUBLE,
       longitude DOUBLE,
@@ -121,13 +138,13 @@ setup_merge_db <- function() {
       modified_by TEXT,
       row_version INTEGER DEFAULT 1,
       last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      UNIQUE(plot_number)
+      UNIQUE(plotnumber)
     )
   ")
 
   DBI::dbExecute(con, "
-    CREATE TABLE master.core.sample_su (
-      plot_number TEXT,
+    CREATE TABLE master.core.su (
+      plotnumber TEXT,
       project_id TEXT,
       su_number TEXT,
       bec_zone TEXT,
@@ -136,13 +153,13 @@ setup_merge_db <- function() {
       modified_by TEXT,
       row_version INTEGER DEFAULT 1,
       last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      UNIQUE(plot_number)
+      UNIQUE(plotnumber)
     )
   ")
 
   DBI::dbExecute(con, "
-    CREATE TABLE master.core.sample_veg (
-      plot_number TEXT,
+    CREATE TABLE master.core.veg (
+      plotnumber TEXT,
       species_code TEXT,
       layer_code TEXT,
       cover1 REAL,
@@ -190,7 +207,21 @@ setup_merge_db <- function() {
       modified_by TEXT,
       row_version INTEGER DEFAULT 1,
       last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      UNIQUE(plot_number, species_code, layer_code, project_id)
+      UNIQUE(plotnumber, species_code, layer_code, project_id)
+    )
+  ")
+
+  DBI::dbExecute(con, "
+    CREATE TABLE master.admin.merge_conflicts (
+      id                INTEGER PRIMARY KEY,
+      merge_request_id  INTEGER NOT NULL,
+      table_name        TEXT NOT NULL,
+      record_id         TEXT NOT NULL,
+      details           TEXT,
+      resolution        TEXT,
+      resolved_by       TEXT,
+      resolved_utc      TIMESTAMPTZ,
+      created_utc       TIMESTAMPTZ DEFAULT now()
     )
   ")
 
@@ -207,8 +238,8 @@ testthat::test_that("merge is blocked when compliance fails", {
   ")
 
   DBI::dbExecute(con, "
-    INSERT INTO master.staging.sample_env
-      (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, merge_request_id, modified_by)
+    INSERT INTO master.staging.env
+      (plotnumber, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, merge_request_id, modified_by)
     VALUES ('P-1', 'PRJ', 52.1, -118.5, 500, DATE '2026-02-01', 'Tester', 'notes', 1, 'user1')
   ")
 
@@ -217,7 +248,7 @@ testthat::test_that("merge is blocked when compliance fails", {
     "compliance failed"
   )
 
-  count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM master.core.sample_env")$n[1]
+  count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM master.core.env")$n[1]
   status <- DBI::dbGetQuery(con, "SELECT status FROM master.admin.merge_requests WHERE id = 1")$status[1]
 
   testthat::expect_equal(count, 0)
@@ -234,14 +265,14 @@ testthat::test_that("merge succeeds when compliance passes", {
   ")
 
   DBI::dbExecute(con, "
-    INSERT INTO master.staging.sample_env
-      (plot_number, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, merge_request_id, modified_by)
+    INSERT INTO master.staging.env
+      (plotnumber, project_id, latitude, longitude, elevation_m, survey_date, surveyor_name, plot_notes, merge_request_id, modified_by)
     VALUES ('P-2', 'PRJ', 52.1, -118.5, 500, DATE '2026-02-01', 'Tester', 'notes', 2, 'user1')
   ")
 
   merge_approve_request(con, 2, "reviewer")
 
-  count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM master.core.sample_env")$n[1]
+  count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM master.core.env")$n[1]
   status <- DBI::dbGetQuery(con, "SELECT status FROM master.admin.merge_requests WHERE id = 2")$status[1]
 
   testthat::expect_equal(count, 1)

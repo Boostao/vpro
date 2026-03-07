@@ -1,0 +1,275 @@
+// ============================================================================
+// VPRO DATABASE SCHEMA — DuckDB Only (DBML Format)
+// ============================================================================
+// This document describes all local DuckDB catalogs.
+//
+// Local DuckDB Structure:
+//   - vpro.duckdb          Main application data (Env, Veg, SU, Admin)
+//   - vpro_lists.duckdb    Reference/lookup tables (species, layers, zones)
+//   - vpro_metadata.duckdb Project metadata
+//   - vpro_user.duckdb     User preferences
+//   - vpro_messages.duckdb Message queue / notifications
+//
+// ============================================================================
+
+
+// ============================================================================
+// PRIMARY CATALOG: vpro.duckdb — Main Application Data
+// ============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: Env (Environmental/Site Data)
+// Stores location, survey date, and BEC classification for each plot.
+// ─────────────────────────────────────────────────────────────────────────
+Table Env {
+  PlotNumber TEXT [pk, not null, unique, note: "Primary site identifier"]
+  ProjectID TEXT [not null, ref: > metadata_projects.project_id, note: "Links to project"]
+  Latitude DOUBLE [not null, note: "WGS84 latitude (48-60)"]
+  Longitude DOUBLE [not null, note: "WGS84 longitude (-140 to -114)"]
+  Elevation DOUBLE [note: "Elevation in meters above sea level"]
+  Date DATE [note: "Survey date (YYYY-MM-DD)"]
+  SiteSurveyor TEXT [note: "Name of field surveyor"]
+  SiteNotes TEXT [note: "Plot-level comments and observations"]
+  Zone TEXT [note: "BEC Zone code (e.g., CWH, IDF, ESSF)"]
+  SubZone TEXT [note: "BEC SubZone code (e.g., dm, mk)"]
+  SiteSeries TEXT [note: "Site series identifier"]
+  master_row_version INTEGER [note: "Row version from master.core.env at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: SU (Site Unit — BEC Classification)
+// One row per plot. Denormalizes BEC zone/subzone/series from Env.
+// ─────────────────────────────────────────────────────────────────────────
+Table SU {
+  PlotNumber TEXT [pk, not null, unique, ref: > Env.PlotNumber]
+  SiteUnit TEXT [note: "Concatenated BEC identifier"]
+  master_row_version INTEGER [note: "Row version from master.core.su at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: Veg (Vegetation/Species Data)
+// Multiple rows per plot (one row per species per layer combination).
+// Cover values collected in up to 10 layers plus aggregate layers (A, B).
+// ─────────────────────────────────────────────────────────────────────────
+Table Veg {
+  PlotNumber TEXT [not null, ref: > Env.PlotNumber]
+  Species TEXT [not null, note: "Species code (e.g., TSUGHET)"]
+  Layer TEXT [note: "Layer code (T1, T2, S, H, M, or numeric 1-10)"]
+  Cover1 TEXT [note: "Layer 1 percent cover (0-100)"]
+  Height1 TEXT [note: "Layer 1 height (meters or category)"]
+  Cover2 TEXT [note: "Layer 2 percent cover"]
+  Height2 TEXT
+  Cover3 TEXT [note: "Layer 3 percent cover"]
+  Height3 TEXT
+  TotalA TEXT [note: "Aggregate layer A (canopy) total cover"]
+  HeightA TEXT [note: "Aggregate layer A height"]
+  Cover4 TEXT [note: "Layer 4 percent cover"]
+  Height4 TEXT
+  Cover5 TEXT [note: "Layer 5 percent cover"]
+  Height5 TEXT
+  Cover5a TEXT [note: "Layer 5a sublayer percent cover"]
+  Height5a TEXT
+  Cover5b TEXT [note: "Layer 5b sublayer percent cover"]
+  Height5b TEXT
+  Cover5c TEXT [note: "Layer 5c sublayer percent cover"]
+  Height5c TEXT
+  TotalB TEXT [note: "Aggregate layer B (understory) total cover"]
+  HeightB TEXT [note: "Aggregate layer B height"]
+  Cover6 TEXT [note: "Layer 6 percent cover"]
+  Height6 DOUBLE
+  Cover7 TEXT [note: "Layer 7 percent cover"]
+  Cover8 REAL [note: "Layer 8 percent cover"]
+  Cover9 REAL [note: "Layer 9 percent cover"]
+  Cover10 TEXT [note: "Layer 10 percent cover"]
+  Collected TEXT [note: "Was this species actively collected? (Y/N or flag)"]
+  Flag BIGINT [note: "QC flag/status code"]
+  LL BIGINT [note: "Lower layer indicator"]
+  AF TEXT [note: "Age/form attribute"]
+  DC BIGINT [note: "Decadence code"]
+  UT BIGINT [note: "Utilization code"]
+  VI BIGINT [note: "Vigour indicator"]
+  PV BIGINT [note: "Plant vigour code"]
+  PG BIGINT [note: "Plant growth form"]
+  FFA BIGINT [note: "Forest floor attribute"]
+  Cultural1 TEXT [note: "Cultural value attribute 1"]
+  Cultural2 TEXT [note: "Cultural value attribute 2"]
+  Other1 TEXT [note: "Additional observation 1"]
+  Other2 TEXT [note: "Additional observation 2"]
+  master_row_version INTEGER [note: "Row version from master.core.veg at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+  indexes {
+    (PlotNumber, Species, Layer) [unique, name: "veg_pk"]
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: Admin (QA/Review Status)
+// Tracks QA approval status, reviewer notes, and review timestamp per plot.
+// ─────────────────────────────────────────────────────────────────────────
+Table Admin {
+  PlotNumber TEXT [pk, unique, ref: > Env.PlotNumber]
+  ProjectID TEXT [not null, note: "Project identifier"]
+  QAStatus TEXT [default: "unreviewed", note: "unreviewed | pending | approved | rejected"]
+  QAComments TEXT [note: "Reviewer comments"]
+  QABy TEXT [note: "Email or name of reviewer"]
+  QADate TIMESTAMP [note: "QA review timestamp (UTC)"]
+  master_row_version INTEGER [note: "Row version from master.core.admin at last pull"]
+  local_modified_utc TIMESTAMP [note: "UTC timestamp of local edit; NULL = clean"]
+}
+
+
+// ============================================================================
+// SYNC SCHEMA — Local Sync Infrastructure
+// ============================================================================
+// Manages pull/push watermarks and conflict tracking.
+
+Table sync_watermarks {
+  table_name TEXT [pk, note: "env | su | veg | lists"]
+  last_pull_utc TIMESTAMP [note: "Watermark for last successful pull"]
+  last_push_utc TIMESTAMP [note: "Watermark for last successful push"]
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Table: sync_conflict_queue
+// Rows queued from master during pull when local and master both have changes.
+// User must resolve (keep_local or accept_master) before next push.
+// ─────────────────────────────────────────────────────────────────────────
+Table sync_conflict_queue {
+  id INTEGER [pk, increment, note: "Auto-incremented conflict ID"]
+  table_name TEXT [not null, note: "env | su | veg"]
+  plot_number TEXT [not null]
+  project_id TEXT [note: "Project identifier; empty string for null"]
+  species_code TEXT [note: "Empty string for env/su conflicts"]
+  layer_code TEXT [note: "Empty string for env/su conflicts"]
+  conflict_at TIMESTAMP [default: "now()", note: "When conflict was detected"]
+  local_values TEXT [not null, note: "JSON-serialized local row values"]
+  master_values TEXT [not null, note: "JSON-serialized master row values"]
+  resolution TEXT [note: "keep_local | accept_master | NULL (unresolved)"]
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_lists.duckdb — Reference Tables
+// ============================================================================
+// Shared lookup/reference data (species, layers, BEC zones, etc.)
+// Admin-only; field users never edit these.
+
+Table lists_spplist {
+  id INTEGER [pk, increment]
+  spp_code TEXT [unique, not null, note: "Species code (e.g., TSUGHET)"]
+  spp_name TEXT [not null, note: "Common name"]
+  spp_scientific TEXT [note: "Scientific (binomial) name"]
+  is_active BOOLEAN [default: true, note: "Active in current classification"]
+}
+
+Table lists_layercode {
+  id INTEGER [pk, increment]
+  layer_code TEXT [unique, not null, note: "Layer code (T1, T2, S, H, M, 1-10)"]
+  layer_name TEXT [not null, note: "Layer description"]
+  sort_order INTEGER [note: "Display order"]
+}
+
+Table lists_usyszonelist {
+  id INTEGER [pk, increment]
+  zone_code TEXT [unique, not null, note: "BEC zone code (CDF, CWH, ESSF, etc.)"]
+  zone_name TEXT [not null, note: "Full zone name"]
+  province TEXT [note: "Province code (BC, AB)"]
+}
+
+Table lists_usyssubzonelist {
+  id INTEGER [pk, increment]
+  zone_code TEXT [not null, ref: > lists_usyszonelist.zone_code]
+  subzone_code TEXT [not null, note: "Subzone code (dm, vm, xm, etc.)"]
+  subzone_name TEXT [not null, note: "Subzone description"]
+  indexes {
+    (zone_code, subzone_code) [unique, name: "subzone_pk"]
+  }
+}
+
+Table lists_usystableoflists {
+  id INTEGER [pk, increment]
+  list_id TEXT [not null, note: "Reference list category (COVER_CLASS, etc.)"]
+  item_code TEXT [not null, note: "Item code within list"]
+  item_name TEXT [not null, note: "Display name"]
+  item_sort INTEGER [note: "Sort order within list"]
+  indexes {
+    (list_id, item_code) [unique, name: "list_item_pk"]
+  }
+}
+
+Table lists_usyssppattributes {
+  id INTEGER [pk, increment]
+  spp_code TEXT [unique, not null, ref: > lists_spplist.spp_code]
+  tree_shrub_herb TEXT [note: "Life form classification"]
+  native_introduced TEXT [note: "Native | Introduced"]
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_metadata.duckdb — Project Metadata
+// ============================================================================
+
+Table metadata_projects {
+  id INTEGER [pk, increment]
+  project_id TEXT [unique, not null, note: "Project identifier (DEMO_IDF_2023, etc.)"]
+  project_name TEXT [not null, note: "Human-readable project name"]
+  description TEXT [note: "Project description"]
+  organization TEXT [note: "Organization name"]
+  contact_email TEXT [note: "Project contact email"]
+  created_utc TIMESTAMP [default: "now()"]
+  last_modified_utc TIMESTAMP [default: "now()"]
+  modified_by TEXT [note: "User who last modified"]
+  note: "Metadata about each project, synced from master.core.metadata"
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_user.duckdb — User Preferences
+// ============================================================================
+
+Table user_preferences {
+  id INTEGER [pk, increment]
+  email TEXT [unique, not null, note: "User email"]
+  full_name TEXT [note: "User display name"]
+  default_project TEXT [note: "Last selected project"]
+  theme TEXT [note: "UI theme preference (light/dark)"]
+  language TEXT [default: "en"]
+  last_login TIMESTAMP
+  preferences_json TEXT [note: "Additional preferences as JSON"]
+}
+
+
+// ============================================================================
+// AUXILIARY CATALOG: vpro_messages.duckdb — Message Queue
+// ============================================================================
+
+Table messages_queue {
+  id INTEGER [pk, increment]
+  message_type TEXT [not null, note: "notification | warning | error | alert"]
+  recipient_email TEXT [not null]
+  subject TEXT
+  body TEXT [not null]
+  created_utc TIMESTAMP [default: "now()"]
+  sent_utc TIMESTAMP [note: "NULL if not yet sent"]
+  read_utc TIMESTAMP [note: "NULL if not yet read by user"]
+  priority TEXT [default: "normal", note: "low | normal | high | critical"]
+}
+
+
+// ============================================================================
+// NOTES
+// ============================================================================
+
+Note watermarks {
+  "Watermark timestamps (last_pull_utc, last_push_utc) filter updates from master and detect if master has advanced since user last pulled."
+}
+
+Note conflicts {
+  "When both local and master have changes, conflict is queued. User resolves via keep_local (discard master) or accept_master (overwrite). Push blocked until all conflicts resolved."
+}
+
+Note semantics {
+  "All tables use CamelCase (PlotNumber, Species). master_row_version is NULL for new rows, otherwise holds prior version from cloud. local_modified_utc is NULL if clean, else edit timestamp."
+}

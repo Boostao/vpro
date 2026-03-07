@@ -1,62 +1,48 @@
 # Database Connection Factory for VPro
 # Handles local DuckDB + optional cloud PostgreSQL attachment
-# Uses config.yml for environment-specific settings
+# Connection settings come from environment variables; no config.yml required.
 
-# Load required libraries (assumes already installed)
+# Internal helpers — read standard PG env vars with app defaults
+.pg_host     <- function() Sys.getenv("PGHOST",     "localhost")
+.pg_port     <- function() as.integer(Sys.getenv("PGPORT",     "5433"))
+.pg_database <- function() Sys.getenv("PGDATABASE", "becmaster")
 
 #' Connect to Local DuckDB Instance
 #'
 #' Opens the main local DuckDB database and attaches auxiliary databases
-#' (lists, metadata, user, messages) as defined in config.yml
-#'
-#' @param environment Character. One of 'development', 'test', 'production'.
-#'                    If NULL, uses Sys.getenv('R_CONFIG_ACTIVE') or 'default'
+#' (lists, metadata, user, messages).  Paths are read from env vars with
+#' hardcoded defaults so the function requires no arguments.
 #'
 #' @return DBI connection object pointing to local DuckDB
 #'
 #' @examples
 #' \dontrun{
-#'   con <- connect_local_db(environment = 'test')
+#'   con <- connect_local_db()
 #'   DBI::dbListTables(con)
 #' }
 #'
 #' @export
-connect_local_db <- function(environment = NULL) {
-  
-  # Determine active environment
-  if (is.null(environment)) {
-    environment <- Sys.getenv("R_CONFIG_ACTIVE", unset = "default")
-  }
-  
-  # Load config from config.yml
-  tryCatch({
-    cfg <- config::get(config = environment)
-  }, error = function(e) {
-    stop("Failed to load config for environment '", environment, "': ", e$message)
-  })
-  
-  # Extract DuckDB paths
-  duckdb_paths <- cfg$duckdb
-  if (is.null(duckdb_paths)) {
-    stop("No 'duckdb' configuration found in config.yml for environment: ", environment)
-  }
-  
-  # Open main DuckDB connection
-  message("[db_connections] Connecting to local DuckDB: ", duckdb_paths$main_db)
+connect_local_db <- function() {
+  main_db     <- Sys.getenv("VPRO_MAIN_DB",     "data/vpro.duckdb")
+  lists_db    <- Sys.getenv("VPRO_LISTS_DB",    "data/vpro_lists.duckdb")
+  metadata_db <- Sys.getenv("VPRO_METADATA_DB", "data/vpro_metadata.duckdb")
+  user_db     <- Sys.getenv("VPRO_USER_DB",     "data/vpro_user.duckdb")
+  messages_db <- Sys.getenv("VPRO_MESSAGES_DB", "data/vpro_messages.duckdb")
+
+  message("[db_connections] Connecting to local DuckDB: ", main_db)
   con <- tryCatch({
-    DBI::dbConnect(duckdb::duckdb(), duckdb_paths$main_db)
+    DBI::dbConnect(duckdb::duckdb(), main_db)
   }, error = function(e) {
-    stop("Failed to connect to DuckDB at '", duckdb_paths$main_db, "': ", e$message)
+    stop("Failed to connect to DuckDB at '", main_db, "': ", e$message)
   })
-  
-  # Attach auxiliary databases
+
   auxiliary_dbs <- list(
-    lists = duckdb_paths$lists_db,
-    metadata = duckdb_paths$metadata_db,
-    user_db = duckdb_paths$user_db,
-    messages = duckdb_paths$messages_db
+    lists    = lists_db,
+    metadata = metadata_db,
+    user_db  = user_db,
+    messages = messages_db
   )
-  
+
   for (alias in names(auxiliary_dbs)) {
     db_path <- auxiliary_dbs[[alias]]
     if (!is.null(db_path)) {
@@ -68,7 +54,7 @@ connect_local_db <- function(environment = NULL) {
       })
     }
   }
-  
+
   message("[db_connections] Local DuckDB connection established")
   return(con)
 }
@@ -76,120 +62,84 @@ connect_local_db <- function(environment = NULL) {
 #' Connect to Cloud PostgreSQL via DuckDB postgres Extension
 #'
 #' Attaches a remote PostgreSQL database to an existing DuckDB connection
-#' using DuckDB's native `postgres` extension. Reads connection details from config.yml
+#' using DuckDB's native `postgres` extension.  Host/port/database are read
+#' from env vars (PGHOST, PGPORT, PGDATABASE); credentials are passed explicitly.
 #'
-#' @param con DBI connection object (typically from \code{connect_local_db()})
-#' @param environment Character. Environment to load config from.
-#' @param read_only Logical. If TRUE, creates read-only ATTACH. Default from config.
-#' @param alias Character. Name to use for attached schema. Default 'master'.
+#' @param con         DBI connection object (from \code{connect_local_db()})
+#' @param pg_user     Character. PostgreSQL role name.
+#' @param pg_password Character or NULL. Password; omitted for trust-auth roles.
+#' @param alias       Character. Catalog alias. Default 'master'.
+#' @param fail_on_error Logical. Stop on attach failure. Default TRUE.
 #'
 #' @return Invisible NULL. Connection is modified in-place.
 #'
-#' @details
-#'   Before calling this function, ensure the postgres extension is installed:
-#'   \code{DBI::dbExecute(con, "INSTALL postgres; LOAD postgres;")}
-#'
-#'   Credentials can be provided via config.yml or environment variables
-#'   (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD).
-#'
 #' @examples
 #' \dontrun{
-#'   con <- connect_local_db(environment = 'test')
-#'   DBI::dbExecute(con, "INSTALL postgres; LOAD postgres;")
-#'   attach_cloud_db(con, environment = 'test')
-#'   # Now queries can use 'master.*' tables
-#'   DBI::dbGetQuery(con, "SELECT * FROM master.core.sample_veg LIMIT 5")
+#'   con <- connect_local_db()
+#'   attach_cloud_db(con, pg_user = "vpro_default")
+#'   DBI::dbGetQuery(con, "SELECT * FROM master.core.veg LIMIT 5")
 #' }
 #'
 #' @export
-attach_cloud_db <- function(con, environment = NULL, read_only = NULL, alias = 'master', fail_on_error = TRUE) {
-  
-  # Determine active environment
-  if (is.null(environment)) {
-    environment <- Sys.getenv("R_CONFIG_ACTIVE", unset = "default")
-  }
-  
-  # Load config
-  tryCatch({
-    cfg <- config::get(config = environment)
-  }, error = function(e) {
-    stop("Failed to load config for environment '", environment, "': ", e$message)
-  })
-  
-  # Check if cloud is enabled
-  if (!isTRUE(cfg$cloud$enabled)) {
-    message("[db_connections] Cloud attachment disabled in config for environment: ", environment)
+attach_cloud_db <- function(con, pg_user, pg_password = NULL, alias = "master",
+                            fail_on_error = TRUE) {
+
+  if (is_cloud_connected(con, alias)) {
+    message("[db_connections] Cloud database '", alias, "' is already attached")
     return(invisible(NULL))
   }
-  
-  # Extract PostgreSQL config
-  pg_cfg <- cfg$postgres
-  if (is.null(pg_cfg)) {
-    stop("No 'postgres' configuration found in config.yml for environment: ", environment)
-  }
-  
-  # Determine read/write mode
-  if (is.null(read_only)) {
-    read_only <- isTRUE(cfg$cloud$read_only)
-  }
-  mode <- if (read_only) "READ_ONLY" else "READ_WRITE"
-  
-  # Build connection string from config or environment variables
-  # Prioritize environment variables if use_env_vars is TRUE
-  if (isTRUE(pg_cfg$use_env_vars)) {
-    host <- Sys.getenv("PGHOST", unset = pg_cfg$host)
-    port <- Sys.getenv("PGPORT", unset = pg_cfg$port)
-    database <- Sys.getenv("PGDATABASE", unset = pg_cfg$database)
-    user <- Sys.getenv("PGUSER", unset = pg_cfg$user)
-    password <- Sys.getenv("PGPASSWORD", unset = pg_cfg$password)
+
+  host     <- .pg_host()
+  port     <- .pg_port()
+  database <- .pg_database()
+
+  if (is.null(pg_password) || !nzchar(pg_password %||% "")) {
+    conn_string <- sprintf("postgres://%s@%s:%s/%s", pg_user, host, port, database)
   } else {
-    host <- pg_cfg$host
-    port <- pg_cfg$port
-    database <- pg_cfg$database
-    user <- pg_cfg$user
-    password <- pg_cfg$password
+    conn_string <- sprintf("postgres://%s:%s@%s:%s/%s", pg_user, pg_password, host, port, database)
   }
-  
-  # Construct connection string
-  conn_string <- sprintf(
-    "postgres://%s:%s@%s:%s/%s",
-    user, password, host, port, database
-  )
-  
-  message("[db_connections] Attaching PostgreSQL as '", alias, "' in ", mode, " mode")
-  message("[db_connections] Host: ", host, ":", port, " Database: ", database)
-  
-  # Ensure postgres extension is loaded
+
+  message("[db_connections] Attaching PostgreSQL as '", alias, "' (user: ", pg_user, ")")
+
   tryCatch({
     DBI::dbExecute(con, "INSTALL postgres")
     DBI::dbExecute(con, "LOAD postgres")
   }, error = function(e) {
     warning("postgres extension install/load may have failed: ", e$message)
   })
-  
-  # Attempt ATTACH with timeout
-  timeout_secs <- cfg$cloud$attach_timeout_seconds %||% 30
-  
-  attach_sql <- paste0(
-    "ATTACH '", conn_string, "' AS ", alias, " (TYPE postgres, ", mode, ")"
-  )
-  
+
+  attach_sql <- paste0("ATTACH '", conn_string, "' AS ", alias, " (TYPE postgres)")
+
   tryCatch({
     DBI::dbExecute(con, attach_sql)
     message("[db_connections] PostgreSQL attached successfully as '", alias, "'")
   }, error = function(e) {
-    msg <- paste0(
-      "Failed to attach PostgreSQL: ", e$message, "\n",
-      "Check connection string: ", conn_string
-    )
-    if (isTRUE(fail_on_error)) {
-      stop(msg)
-    }
+    msg <- paste0("Failed to attach PostgreSQL as '", pg_user, "': ", e$message)
+    if (isTRUE(fail_on_error)) stop(msg)
     warning(msg)
     return(invisible(NULL))
   })
-  
+
   return(invisible(NULL))
+}
+
+#' Attach cloud PostgreSQL as the application role (vpro_app)
+#'
+#' User/password read from VPRO_PG_APP_USER (default "vpro_app") and
+#' VPRO_PG_APP_PASSWORD env vars.  Stops if VPRO_PG_APP_PASSWORD is not set.
+#' All authentication (guest vs admin) is handled at the R level via admin.users.
+#'
+#' @param con           DuckDB connection.
+#' @param alias         Catalog alias. Default "master".
+#' @param fail_on_error Logical. Stop on attach failure. Default TRUE.
+#' @return Invisible NULL.
+#' @export
+attach_cloud <- function(con, alias = "master", fail_on_error = TRUE) {
+  pg_user <- Sys.getenv("VPRO_PG_APP_USER", "vpro_app")
+  pg_pass <- Sys.getenv("VPRO_PG_APP_PASSWORD", "")
+  if (!nzchar(pg_pass)) stop("VPRO_PG_APP_PASSWORD env var is not set")
+  attach_cloud_db(con, pg_user = pg_user, pg_password = pg_pass,
+                  alias = alias, fail_on_error = fail_on_error)
 }
 
 #' Check if Cloud Database is Connected
@@ -272,7 +222,7 @@ detach_db <- function(con, alias) {
 
 #' Close Database Connection
 #'
-#' Safely closes a DuckDB connection
+#' Safely closes a DuckDB connection. Detaches all attached databases first.
 #'
 #' @param con DBI connection object
 #'
@@ -287,8 +237,20 @@ detach_db <- function(con, alias) {
 #'
 #' @export
 close_db <- function(con) {
+  # Detach all attached databases before closing
+  attached_dbs <- list_attached_dbs(con)
+  # Filter out the main database (usually named "main" or "memory")
+  attached_dbs <- attached_dbs[!attached_dbs %in% c("vpro", "memory", "temp", "system")]
+  
+  if (length(attached_dbs) > 0) {
+    message("[db_connections] Detaching ", length(attached_dbs), " database(s): ", paste(attached_dbs, collapse = ", "))
+    for (db in attached_dbs) {
+      detach_db(con, db)
+    }
+  }
+  
   tryCatch({
-    DBI::dbDisconnect(con)
+    DBI::dbDisconnect(con, shutdown = TRUE)
     message("[db_connections] Database connection closed")
   }, error = function(e) {
     warning("Error closing database: ", e$message)

@@ -11,6 +11,13 @@ library(leaflet)
 library(sf)
 library(quarto)
 
+
+Sys.setenv(PGHOST = "localhost")
+Sys.setenv(PGPORT = "5433")
+Sys.setenv(PGDATABASE = "becmaster")
+Sys.setenv(VPRO_PG_APP_USER = "vpro_app")
+Sys.setenv(VPRO_PG_APP_PASSWORD = "testpass")
+
 # Database Connection
 # Using a function to get a fresh connection or manage a pool object
 # For Shiny, usually we want a persistent connection or a pool.
@@ -43,6 +50,12 @@ source("R/logic_reports_validation.R") # Data validation
 source("R/logic_report_export.R") # Excel report export helpers
 source("R/logic_excel_export.R") # Excel export with styled formatting
 source("R/logic_venus_export.R") # VENUS XML export
+source("R/mod_admin_projects.R")
+source("R/mod_admin_codes.R")
+source("R/mod_admin_master.R")
+source("R/mod_admin_audit.R")
+source("R/mod_admin_merge.R")
+source("R/mod_admin_publishing.R")
 source("R/mod_admin.R")
 source("R/mod_images.R")
 source("R/mod_veg_sample.R")
@@ -51,13 +64,17 @@ source("R/mod_fs882_6x4_reimagined_ui.R")
 source("R/mod_export.R")
 source("R/mod_reporting.R")
 source("R/mod_import.R")
+source("R/mod_auth.R")
+source("R/mod_auth_status.R")
+source("R/mod_sync.R")
 source("R/mod_hierarchy.R")
 source("R/mod_upload.R")
 source("R/mod_merge.R")
-source("R/mod_auth.R")
+
 source("R/mod_becweb_map.R")
 source("R/mod_whatsnew.R")
 source("R/mod_data_entry_context.R")
 
 # Note: The actual 'SysState' object is initialized in server.R 
 # because it must be reactive and unique to the session.
+

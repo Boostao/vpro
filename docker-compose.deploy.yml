@@ -18,7 +18,12 @@ services:
     env_file:
       - .env
     environment:
-      - R_CONFIG_ACTIVE=${R_CONFIG_ACTIVE:-production}
+      - PGHOST=${PGHOST:-db}
+      - PGPORT=${PGPORT:-5432}
+      - PGDATABASE=${PGDATABASE:-becmaster}
+      - VPRO_PG_GUEST_USER=${VPRO_PG_GUEST_USER:-vpro_default}
+      - VPRO_PG_ADMIN_USER=${VPRO_PG_ADMIN_USER:-vpro_admin}
+      - VPRO_PG_ADMIN_PASSWORD=${VPRO_PG_ADMIN_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
