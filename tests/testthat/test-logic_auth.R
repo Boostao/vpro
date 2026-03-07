@@ -342,7 +342,6 @@ testthat::test_that("auth_logout clears all state", {
   state$AuthAuthenticated <- TRUE
   state$AuthUser          <- "someone@test.com"
   state$AuthRole          <- "admin"
-  state$AuthRoles         <- "admin"
   state$AuthPermissions   <- c("*")
 
   auth_logout(state)

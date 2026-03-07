@@ -110,16 +110,39 @@ mod_sync_server <- function(id, state, con) {
     # Check on startup and whenever SyncVersion changes.
     conflict_modal_shown <- reactiveVal(FALSE)
 
+    # Render the conflict table with proper Shiny bindings
+    output$conflict_table <- DT::renderDataTable({
+      n <- tryCatch(
+        sync_count_local_conflicts(con),
+        error = function(e) 0L
+      )
+      if (n == 0) {
+        return(DT::datatable(
+          data.frame(Message = "No conflicts."),
+          rownames = FALSE,
+          options = list(dom = "t")
+        ))
+      }
+      conflict_rows <- tryCatch(
+        sync_get_local_conflicts(con),
+        error = function(e) data.frame()
+      )
+      DT::datatable(
+        conflict_rows[, intersect(c("id", "table_name", "plot_number", "project_id",
+                                    "species_code", "layer_code", "local_values",
+                                    "master_values", "conflict_at"), names(conflict_rows))],
+        selection = "single",
+        rownames  = FALSE,
+        options   = list(pageLength = 10, scrollX = TRUE)
+      )
+    })
+
     check_conflicts <- function() {
       n <- tryCatch(
         sync_count_local_conflicts(con),
         error = function(e) 0L
       )
       if (n > 0 && !isTRUE(conflict_modal_shown())) {
-        conflict_rows <- tryCatch(
-          sync_get_local_conflicts(con),
-          error = function(e) data.frame()
-        )
         showModal(modalDialog(
           title = tagList(icon("triangle-exclamation", class = "text-danger"), " Unresolved Sync Conflicts"),
           easyClose = FALSE,
@@ -129,16 +152,8 @@ mod_sync_server <- function(id, state, con) {
             strong("You have unresolved pull conflicts that must be resolved before you can push."),
             " For each row below, choose whether to keep your local version or accept the master version."
           ),
-          DT::renderDataTable({
-            DT::datatable(
-              conflict_rows[, intersect(c("id", "table_name", "plot_number", "project_id",
-                                          "species_code", "layer_code", "local_values",
-                                          "master_values", "conflict_at"), names(conflict_rows))],
-              selection = "single",
-              rownames  = FALSE,
-              options   = list(pageLength = 10, scrollX = TRUE)
-            )
-          }),
+          # Reference the bound datatable output
+          DT::dataTableOutput(ns("conflict_table")),
           div(
             class = "d-flex gap-2 mt-3",
             uiOutput(ns("conflict_selected_info")),
@@ -163,7 +178,6 @@ mod_sync_server <- function(id, state, con) {
 
     # Selected conflict row id
     selected_conflict_id <- reactive({
-      rows <- input$`conflict_rows-rows_current`  # not reliable for selection
       # Use DT selection via proxy name
       sel  <- input$conflict_table_rows_selected
       if (is.null(sel) || length(sel) == 0) return(NULL)

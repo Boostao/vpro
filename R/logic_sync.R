@@ -250,11 +250,11 @@ sync_pull <- function(con,
   filters <- "1=1"
   params  <- list()
   if (!is.null(project_id) && nzchar(as.character(project_id))) {
-    filters <- paste0(filters, " AND project_id = ?")
+    filters <- paste0(filters, " AND \"ProjectID\" = ?")
     params  <- c(params, list(project_id))
   }
   if (!is.null(last_pull)) {
-    filters <- paste0(filters, " AND last_modified_utc > ?")
+    filters <- paste0(filters, " AND \"lastModifiedUTC\" > ?")
     params  <- c(params, list(last_pull))
   }
 
@@ -262,8 +262,9 @@ sync_pull <- function(con,
     DBI::dbGetQuery(
       con,
       sprintf(
-        "SELECT plot_number, project_id, latitude, longitude, elevation_m,
-                survey_date, surveyor_name, plot_notes, row_version
+        "SELECT \"PlotNumber\", \"ProjectID\", \"Latitude\", \"Longitude\", \"Elevation\",
+                \"SurveyDate\", \"SurveyorName\", \"PlotNotes\", \"Zone\", \"SubZone\", \"SiteSeries\",
+                \"rowVersion\"
          FROM master.core.env WHERE %s",
         filters
       ),
@@ -280,12 +281,15 @@ sync_pull <- function(con,
   fast_forwarded <- 0L
   conflicts      <- 0L
   env_fields     <- list(
-    c("Latitude",    "latitude"),
-    c("Longitude",   "longitude"),
-    c("Elevation",   "elevation_m"),
-    c("Date",        "survey_date"),
-    c("SiteSurveyor","surveyor_name"),
-    c("SiteNotes",   "plot_notes")
+    c("Latitude",    "Latitude"),
+    c("Longitude",   "Longitude"),
+    c("Elevation",   "Elevation"),
+    c("Date",        "SurveyDate"),
+    c("SiteSurveyor","SurveyorName"),
+    c("SiteNotes",   "PlotNotes"),
+    c("Zone",        "Zone"),
+    c("SubZone",     "SubZone"),
+    c("SiteSeries",  "SiteSeries")
   )
 
   for (i in seq_len(nrow(incoming))) {
@@ -352,12 +356,12 @@ sync_pull <- function(con,
           SiteNotes    = local_row$SiteNotes[1]
         )
         master_vals <- list(
-          latitude      = row$latitude[1],
-          longitude     = row$longitude[1],
-          elevation_m   = row$elevation_m[1],
-          survey_date   = as.character(row$survey_date[1]),
-          surveyor_name = row$surveyor_name[1],
-          plot_notes    = row$plot_notes[1]
+          Latitude      = row$Latitude[1],
+          Longitude     = row$Longitude[1],
+          Elevation     = row$Elevation[1],
+          SurveyDate    = as.character(row$SurveyDate[1]),
+          SurveyorName  = row$SurveyorName[1],
+          PlotNotes     = row$PlotNotes[1]
         )
         .queue_conflict(con, "env", pn, pid, NA, NA, local_vals, master_vals)
         conflicts <- conflicts + 1L
@@ -382,18 +386,18 @@ sync_pull <- function(con,
   filters <- "1=1"
   params  <- list()
   if (!is.null(project_id) && nzchar(as.character(project_id))) {
-    filters <- paste0(filters, " AND project_id = ?")
+    filters <- paste0(filters, " AND \"ProjectID\" = ?")
     params  <- c(params, list(project_id))
   }
   if (!is.null(last_pull)) {
-    filters <- paste0(filters, " AND last_modified_utc > ?")
+    filters <- paste0(filters, " AND \"lastModifiedUTC\" > ?")
     params  <- c(params, list(last_pull))
   }
 
   incoming <- tryCatch(
     DBI::dbGetQuery(
       con,
-      sprintf("SELECT plot_number, project_id, su_number, row_version
+      sprintf("SELECT \"PlotNumber\", \"ProjectID\", \"SiteUnit\", \"rowVersion\"
                FROM master.core.su WHERE %s", filters),
       params
     ),
@@ -407,12 +411,12 @@ sync_pull <- function(con,
 
   fast_forwarded <- 0L
   conflicts      <- 0L
-  su_fields      <- list(c("SiteUnit", "su_number"))
+  su_fields      <- list(c("SiteUnit", "SiteUnit"))
 
   for (i in seq_len(nrow(incoming))) {
     row <- incoming[i, , drop = FALSE]
-    pn  <- row$plot_number[1]
-    pid <- as.character(row$project_id[1])
+    pn  <- row$PlotNumber[1]
+    pid <- as.character(row$ProjectID[1])
 
     lmu_col   <- if (has_lmu) ", local_modified_utc" else ""
     local_row <- tryCatch(
@@ -432,7 +436,7 @@ sync_pull <- function(con,
     }
 
     local_mrv <- if (has_mrv) local_row$master_row_version[1] else NA_integer_
-    master_rv <- row$row_version[1]
+    master_rv <- row$rowVersion[1]
 
     if (!is.na(local_mrv) && !is.na(master_rv) &&
         identical(as.integer(local_mrv), as.integer(master_rv))) {
@@ -452,7 +456,7 @@ sync_pull <- function(con,
         fast_forwarded <- fast_forwarded + 1L
       } else {
         local_vals  <- list(SiteUnit  = local_row$SiteUnit[1])
-        master_vals <- list(su_number = row$su_number[1])
+        master_vals <- list(SiteUnit  = row$SiteUnit[1])
         .queue_conflict(con, "su", pn, pid, NA, NA, local_vals, master_vals)
         conflicts <- conflicts + 1L
       }
@@ -480,13 +484,13 @@ sync_pull <- function(con,
 
 # Upsert an env row received from master into the local Env table.
 .upsert_local_env <- function(con, master_row, has_mrv, has_lmu = FALSE) {
-  pn <- master_row$plot_number[1]
+  pn <- master_row$PlotNumber[1]
   exists <- nrow(DBI::dbGetQuery(con, "SELECT 1 FROM Env WHERE PlotNumber = ?", list(pn))) > 0
 
   mrv_sql    <- if (isTRUE(has_mrv)) ", master_row_version = ?" else ""
   mrv_insert <- if (isTRUE(has_mrv)) ", master_row_version" else ""
   mrv_ph     <- if (isTRUE(has_mrv)) ", ?" else ""
-  mrv_val    <- if (isTRUE(has_mrv)) list(as.integer(master_row$row_version[1])) else list()
+  mrv_val    <- if (isTRUE(has_mrv)) list(as.integer(master_row$rowVersion[1])) else list()
 
   # On pull, clear the dirty flag so the row is treated as clean until next user edit
   lmu_sql    <- if (isTRUE(has_lmu)) ", local_modified_utc = NULL" else ""
@@ -494,15 +498,17 @@ sync_pull <- function(con,
   lmu_ph     <- if (isTRUE(has_lmu)) ", NULL" else ""
 
   base_params <- list(
-    master_row$latitude[1], master_row$longitude[1], master_row$elevation_m[1],
-    master_row$survey_date[1], master_row$surveyor_name[1], master_row$plot_notes[1]
+    master_row$Latitude[1], master_row$Longitude[1], master_row$Elevation[1],
+    master_row$SurveyDate[1], master_row$SurveyorName[1], master_row$PlotNotes[1],
+    master_row$Zone[1], master_row$SubZone[1], master_row$SiteSeries[1]
   )
 
   if (exists) {
     DBI::dbExecute(
       con,
       paste0("UPDATE Env SET Latitude = ?, Longitude = ?, Elevation = ?,",
-             " Date = ?, SiteSurveyor = ?, SiteNotes = ?", mrv_sql, lmu_sql,
+             " Date = ?, SiteSurveyor = ?, SiteNotes = ?,",
+             " Zone = ?, SubZone = ?, SiteSeries = ?", mrv_sql, lmu_sql,
              " WHERE PlotNumber = ?"),
       c(base_params, mrv_val, list(pn))
     )
@@ -510,22 +516,23 @@ sync_pull <- function(con,
     DBI::dbExecute(
       con,
       paste0("INSERT INTO Env (PlotNumber, ProjectID, Latitude, Longitude, Elevation,",
-             " Date, SiteSurveyor, SiteNotes", mrv_insert, lmu_insert, ")",
-             " VALUES (?, ?, ?, ?, ?, ?, ?, ?", mrv_ph, lmu_ph, ")"),
-      c(list(pn, as.character(master_row$project_id[1])), base_params, mrv_val)
+             " Date, SiteSurveyor, SiteNotes, Zone, SubZone, SiteSeries", 
+             mrv_insert, lmu_insert, ")",
+             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?", mrv_ph, lmu_ph, ")"),
+      c(list(pn, as.character(master_row$ProjectID[1])), base_params, mrv_val)
     )
   }
 }
 
 # Upsert a su row received from master into the local SU table.
 .upsert_local_su <- function(con, master_row, has_mrv, has_lmu = FALSE) {
-  pn <- master_row$plot_number[1]
+  pn <- master_row$PlotNumber[1]
   exists <- nrow(DBI::dbGetQuery(con, "SELECT 1 FROM SU WHERE PlotNumber = ?", list(pn))) > 0
 
   mrv_sql    <- if (isTRUE(has_mrv)) ", master_row_version = ?" else ""
   mrv_insert <- if (isTRUE(has_mrv)) ", master_row_version" else ""
   mrv_ph     <- if (isTRUE(has_mrv)) ", ?" else ""
-  mrv_val    <- if (isTRUE(has_mrv)) list(as.integer(master_row$row_version[1])) else list()
+  mrv_val    <- if (isTRUE(has_mrv)) list(as.integer(master_row$rowVersion[1])) else list()
 
   # On pull, clear the dirty flag so the row is treated as clean until next user edit
   lmu_sql    <- if (isTRUE(has_lmu)) ", local_modified_utc = NULL" else ""
@@ -536,14 +543,14 @@ sync_pull <- function(con,
     DBI::dbExecute(
       con,
       paste0("UPDATE SU SET SiteUnit = ?", mrv_sql, lmu_sql, " WHERE PlotNumber = ?"),
-      c(list(master_row$su_number[1]), mrv_val, list(pn))
+      c(list(master_row$SiteUnit[1]), mrv_val, list(pn))
     )
   } else {
     DBI::dbExecute(
       con,
       paste0("INSERT INTO SU (PlotNumber, SiteUnit", mrv_insert, lmu_insert, ")",
              " VALUES (?, ?", mrv_ph, lmu_ph, ")"),
-      c(list(pn, master_row$su_number[1]), mrv_val)
+      c(list(pn, master_row$SiteUnit[1]), mrv_val)
     )
   }
 }
@@ -561,11 +568,11 @@ sync_pull <- function(con,
   filters <- "1=1"
   params  <- list()
   if (!is.null(project_id) && nzchar(as.character(project_id))) {
-    filters <- paste0(filters, " AND project_id = ?")
+    filters <- paste0(filters, " AND \"ProjectID\" = ?")
     params  <- c(params, list(as.integer(project_id)))
   }
   if (!is.null(last_pull)) {
-    filters <- paste0(filters, " AND last_modified_utc > ?")
+    filters <- paste0(filters, " AND \"lastModifiedUTC\" > ?")
     params  <- c(params, list(last_pull))
   }
 
@@ -573,13 +580,13 @@ sync_pull <- function(con,
     DBI::dbGetQuery(
       con,
       sprintf(
-        "SELECT plot_number, project_id, species_code, layer_code,
-                cover1, height1, cover2, height2, cover3, height3,
-                totala, heighta, cover4, height4, cover5, height5,
-                cover5a, height5a, cover5b, height5b, cover5c, height5c,
-                totalb, heightb, cover6, height6, cover7, cover8, cover9, cover10,
-                collected, flag, veg_id, ll, af, dc, ut, vi, pv, pg, ffa,
-                cultural1, cultural2, other1, other2, row_version
+        "SELECT \"PlotNumber\", \"ProjectID\", \"SpeciesCode\", \"LayerCode\",
+                \"Cover1\", \"Height1\", \"Cover2\", \"Height2\", \"Cover3\", \"Height3\",
+                \"TotalA\", \"HeightA\", \"Cover4\", \"Height4\", \"Cover5\", \"Height5\",
+                \"Cover5a\", \"Height5a\", \"Cover5b\", \"Height5b\", \"Cover5c\", \"Height5c\",
+                \"TotalB\", \"HeightB\", \"Cover6\", \"Height6\", \"Cover7\", \"Cover8\", \"Cover9\", \"Cover10\",
+                collected, flag, ll, af, dc, ut, vi, pv, pg, ffa,
+                \"Cultural1\", \"Cultural2\", \"Other1\", \"Other2\", \"rowVersion\"
          FROM master.core.veg WHERE %s",
         filters
       ),
@@ -597,22 +604,34 @@ sync_pull <- function(con,
   conflicts      <- 0L
   # Compare the primary coverage/measurement fields; cover1 is the most critical
   veg_fields <- list(
-    c("Cover1",  "cover1"),  c("Height1", "height1"),
-    c("Cover2",  "cover2"),  c("Height2", "height2"),
-    c("Cover3",  "cover3"),  c("TotalA",  "totala"),
-    c("Cover4",  "cover4"),  c("Cover5",  "cover5"),
-    c("TotalB",  "totalb"),  c("Cover6",  "cover6"),
-    c("Cover7",  "cover7"),  c("Cover8",  "cover8"),
-    c("Cover9",  "cover9"),  c("Cover10", "cover10"),
-    c("Collected", "collected"), c("Flag", "flag")
+    c("Cover1",  "Cover1"),  c("Height1", "Height1"),
+    c("Cover2",  "Cover2"),  c("Height2", "Height2"),
+    c("Cover3",  "Cover3"),  c("Height3", "Height3"),
+    c("TotalA",  "TotalA"),  c("HeightA", "HeightA"),
+    c("Cover4",  "Cover4"),  c("Height4", "Height4"),
+    c("Cover5",  "Cover5"),  c("Height5", "Height5"),
+    c("Cover5a", "Cover5a"), c("Height5a", "Height5a"),
+    c("Cover5b", "Cover5b"), c("Height5b", "Height5b"),
+    c("Cover5c", "Cover5c"), c("Height5c", "Height5c"),
+    c("TotalB",  "TotalB"),  c("HeightB", "HeightB"),
+    c("Cover6",  "Cover6"),  c("Height6", "Height6"),
+    c("Cover7",  "Cover7"),  c("Cover8",  "Cover8"),
+    c("Cover9",  "Cover9"),  c("Cover10", "Cover10"),
+    c("Collected", "Collected"), c("Flag", "Flag"),
+    c("ID",  "ID"),  c("LL",  "LL"),
+    c("AF",  "AF"),  c("DC",  "DC"),
+    c("UT",  "UT"),  c("VI",  "VI"),
+    c("PV",  "PV"),  c("PG",  "PG"),  c("FFA", "FFA"),
+    c("Cultural1", "Cultural1"), c("Cultural2", "Cultural2"),
+    c("Other1", "Other1"), c("Other2", "Other2")
   )
 
   for (i in seq_len(nrow(incoming))) {
     row  <- incoming[i, , drop = FALSE]
-    pn   <- row$plot_number[1]
-    pid  <- as.integer(row$project_id[1])
-    sc   <- row$species_code[1]
-    lc   <- row$layer_code[1]
+    pn   <- row$PlotNumber[1]
+    pid  <- as.integer(row$ProjectID[1])
+    sc   <- row$SpeciesCode[1]
+    lc   <- row$LayerCode[1]
 
     lmu_col   <- if (has_lmu) ", local_modified_utc" else ""
     local_row <- tryCatch(
@@ -627,7 +646,7 @@ sync_pull <- function(con,
            FROM Veg v
            JOIN Env e ON e.PlotNumber = v.PlotNumber
            WHERE v.PlotNumber = ? AND TRIM(v.Species) = ? AND v.Layer = ?
-             AND CAST(e.ProjectID AS INTEGER) = ?",
+             AND e.ProjectID = ?",
           lmu_col
         ),
         list(pn, sc, lc %||% "", pid)
@@ -642,7 +661,7 @@ sync_pull <- function(con,
     }
 
     local_mrv <- if (has_mrv) local_row$master_row_version[1] else NA_integer_
-    master_rv <- row$row_version[1]
+    master_rv <- row$rowVersion[1]
 
     if (!is.na(local_mrv) && !is.na(master_rv) &&
         identical(as.integer(local_mrv), as.integer(master_rv))) {
@@ -682,42 +701,42 @@ sync_pull <- function(con,
 
 # Upsert a veg row received from master into the local Veg table.
 .upsert_local_veg <- function(con, master_row, has_mrv, has_lmu = FALSE) {
-  pn <- master_row$plot_number[1]
-  sc <- master_row$species_code[1]
-  lc <- master_row$layer_code[1] %||% ""
+  pn <- master_row$PlotNumber[1]
+  sc <- master_row$SpeciesCode[1]
+  lc <- master_row$LayerCode[1] %||% ""
 
   exists <- nrow(DBI::dbGetQuery(
     con,
     "SELECT 1 FROM Veg v JOIN Env e ON e.PlotNumber = v.PlotNumber
      WHERE v.PlotNumber = ? AND TRIM(v.Species) = ? AND v.Layer = ?
-       AND CAST(e.ProjectID AS INTEGER) = ?",
-    list(pn, sc, lc, as.integer(master_row$project_id[1]))
+       AND e.ProjectID = ?",
+    list(pn, sc, lc, as.integer(master_row$ProjectID[1]))
   )) > 0
 
-  mrv_val <- if (isTRUE(has_mrv)) list(as.integer(master_row$row_version[1])) else list()
+  mrv_val <- if (isTRUE(has_mrv)) list(as.integer(master_row$rowVersion[1])) else list()
 
   cover_params <- list(
-    master_row$cover1[1],   master_row$height1[1],
-    master_row$cover2[1],   master_row$height2[1],
-    master_row$cover3[1],   master_row$height3[1],
-    master_row$totala[1],   master_row$heighta[1],
-    master_row$cover4[1],   master_row$height4[1],
-    master_row$cover5[1],   master_row$height5[1],
-    master_row$cover5a[1],  master_row$height5a[1],
-    master_row$cover5b[1],  master_row$height5b[1],
-    master_row$cover5c[1],  master_row$height5c[1],
-    master_row$totalb[1],   master_row$heightb[1],
-    master_row$cover6[1],   master_row$height6[1],
-    master_row$cover7[1],   master_row$cover8[1],
-    master_row$cover9[1],   master_row$cover10[1],
-    master_row$collected[1], master_row$flag[1],
-    master_row$veg_id[1],   master_row$ll[1],
-    master_row$af[1],        master_row$dc[1],
-    master_row$ut[1],        master_row$vi[1],
-    master_row$pv[1],        master_row$pg[1],
-    master_row$ffa[1],       master_row$cultural1[1],
-    master_row$cultural2[1], master_row$other1[1],
-    master_row$other2[1]
+    master_row$Cover1[1],   master_row$Height1[1],
+    master_row$Cover2[1],   master_row$Height2[1],
+    master_row$Cover3[1],   master_row$Height3[1],
+    master_row$TotalA[1],   master_row$HeightA[1],
+    master_row$Cover4[1],   master_row$Height4[1],
+    master_row$Cover5[1],   master_row$Height5[1],
+    master_row$Cover5a[1],  master_row$Height5a[1],
+    master_row$Cover5b[1],  master_row$Height5b[1],
+    master_row$Cover5c[1],  master_row$Height5c[1],
+    master_row$TotalB[1],   master_row$HeightB[1],
+    master_row$Cover6[1],   master_row$Height6[1],
+    master_row$Cover7[1],   master_row$Cover8[1],
+    master_row$Cover9[1],   master_row$Cover10[1],
+    master_row$Collected[1], master_row$Flag[1],
+    master_row$ll[1],   master_row$af[1],
+    master_row$dc[1],        master_row$ut[1],
+    master_row$vi[1],        master_row$pv[1],
+    master_row$pg[1],        master_row$ffa[1],
+    master_row$Cultural1[1],
+    master_row$Cultural2[1], master_row$Other1[1],
+    master_row$Other2[1]
   )
 
   mrv_set_sql    <- if (isTRUE(has_mrv)) ", master_row_version = ?" else ""
@@ -1127,13 +1146,21 @@ sync_push <- function(con,
   )
   submitter_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
 
-  res <- DBI::dbGetQuery(
+  DBI::dbExecute(
     con,
     "INSERT INTO master.admin.merge_requests
        (project_id, submitter_user_id, submitter_name, submitted_utc, status)
-     VALUES (?, ?, ?, now(), 'pending_review')
-     RETURNING id",
+     VALUES (?, ?, ?, now(), 'pending_review')",
     list(as.integer(project_id), submitter_user_id, as.character(submitter))
+  )
+  
+  # Fetch the ID of the newly inserted merge request
+  res <- DBI::dbGetQuery(
+    con,
+    "SELECT id FROM master.admin.merge_requests
+     WHERE project_id = ? AND submitter_name = ? AND status = 'pending_review'
+     ORDER BY submitted_utc DESC LIMIT 1",
+    list(as.integer(project_id), as.character(submitter))
   )
   if (nrow(res) == 0) stop("Failed to create merge request.")
   res$id[1]
@@ -1148,20 +1175,23 @@ sync_push <- function(con,
     "CREATE TEMP TABLE tmp_push_env_delta AS
      SELECT
        l.PlotNumber::TEXT            AS plot_number,
-       CAST(l.ProjectID AS INTEGER)  AS project_id,
+       l.ProjectID  AS project_id,
        l.Latitude::DOUBLE            AS latitude,
        l.Longitude::DOUBLE           AS longitude,
        l.Elevation::INTEGER          AS elevation_m,
        l.Date::DATE                  AS survey_date,
        l.SiteSurveyor::TEXT          AS surveyor_name,
        l.SiteNotes::TEXT             AS plot_notes,
+       l.Zone::TEXT                  AS zone,
+       l.SubZone::TEXT               AS subzone,
+       l.SiteSeries::TEXT            AS site_series,
        c.row_version                 AS base_row_version,
        CASE WHEN c.plot_number IS NULL THEN 'I' ELSE 'U' END AS change_type
      FROM Env l
      LEFT JOIN master.core.env c
        ON  c.plot_number = l.PlotNumber
-       AND c.project_id  = CAST(l.ProjectID AS INTEGER)
-     WHERE CAST(l.ProjectID AS INTEGER) = ?
+       AND c.project_id  = l.ProjectID
+     WHERE l.ProjectID = ?
        AND (
          c.plot_number IS NULL
          OR c.latitude      IS DISTINCT FROM l.Latitude::DOUBLE
@@ -1170,8 +1200,11 @@ sync_push <- function(con,
          OR c.survey_date   IS DISTINCT FROM l.Date::DATE
          OR c.surveyor_name IS DISTINCT FROM l.SiteSurveyor
          OR c.plot_notes    IS DISTINCT FROM l.SiteNotes
+         OR c.zone          IS DISTINCT FROM l.Zone
+         OR c.subzone       IS DISTINCT FROM l.SubZone
+         OR c.site_series   IS DISTINCT FROM l.SiteSeries
        )",
-    list(as.integer(project_id))
+    list(as.character(project_id))
   )
 
   n <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM tmp_push_env_delta")$n[1]
@@ -1181,10 +1214,11 @@ sync_push <- function(con,
       "INSERT INTO master.staging.env
          (merge_request_id, change_type, base_row_version,
           plot_number, project_id, latitude, longitude, elevation_m,
-          survey_date, surveyor_name, plot_notes, modified_by)
+          survey_date, surveyor_name, plot_notes, zone, subzone, site_series,
+          modified_by)
        SELECT ?, change_type, base_row_version,
               plot_number, project_id, latitude, longitude, elevation_m,
-              survey_date, surveyor_name, plot_notes, ?
+              survey_date, surveyor_name, plot_notes, zone, subzone, site_series, ?
        FROM tmp_push_env_delta",
       list(mr_id, submitter)
     )
@@ -1203,7 +1237,7 @@ sync_push <- function(con,
     "CREATE TEMP TABLE tmp_push_su_delta AS
      SELECT
        su.PlotNumber::TEXT           AS plot_number,
-       CAST(e.ProjectID AS INTEGER)  AS project_id,
+       e.ProjectID  AS project_id,
        su.SiteUnit::TEXT             AS su_number,
        e.Zone::TEXT                  AS bec_zone,
        e.SubZone::TEXT               AS bec_subzone,
@@ -1214,9 +1248,9 @@ sync_push <- function(con,
      LEFT JOIN Env e  ON e.PlotNumber = su.PlotNumber
      LEFT JOIN master.core.su c
        ON  c.plot_number = su.PlotNumber
-       AND c.project_id  = CAST(e.ProjectID AS INTEGER)
+       AND c.project_id  = e.ProjectID
      WHERE e.PlotNumber IS NOT NULL
-       AND CAST(e.ProjectID AS INTEGER) = ?
+       AND e.ProjectID = ?
        AND (
          c.plot_number IS NULL
          OR c.su_number   IS DISTINCT FROM su.SiteUnit
@@ -1255,7 +1289,7 @@ sync_push <- function(con,
     "CREATE TEMP TABLE tmp_push_veg_all AS
      SELECT
        v.PlotNumber::TEXT              AS plot_number,
-       CAST(e.ProjectID AS INTEGER)    AS project_id,
+       e.ProjectID    AS project_id,
        TRIM(v.Species)::TEXT           AS species_code,
        v.Layer::TEXT                   AS layer_code,
        TRY_CAST(v.Cover1   AS REAL)    AS cover1,
@@ -1305,11 +1339,11 @@ sync_push <- function(con,
      LEFT JOIN Env e ON e.PlotNumber = v.PlotNumber
      LEFT JOIN master.core.veg c
        ON  c.plot_number  = v.PlotNumber
-       AND c.project_id   = CAST(e.ProjectID AS INTEGER)
+       AND c.project_id   = e.ProjectID
        AND c.species_code = TRIM(v.Species)
        AND c.layer_code   = v.Layer
      WHERE e.PlotNumber IS NOT NULL
-       AND CAST(e.ProjectID AS INTEGER) = ?",
+       AND e.ProjectID = ?",
     list(as.integer(project_id))
   )
 
@@ -1811,7 +1845,7 @@ merge_reject_request <- function(con, merge_request_id, reviewer, review_notes =
        ON  mc.merge_request_id = s.merge_request_id
        AND mc.table_name       = 'env'
        AND mc.plot_number      = s.plot_number
-       AND mc.project_id       = CAST(s.project_id AS TEXT)
+       AND mc.project_id       = s.project_id
        AND (mc.species_code IS NULL OR mc.species_code = '')
        AND (mc.layer_code   IS NULL OR mc.layer_code   = '')
      WHERE s.merge_request_id = ?
@@ -1840,7 +1874,7 @@ merge_reject_request <- function(con, merge_request_id, reviewer, review_notes =
        ON  mc.merge_request_id = s.merge_request_id
        AND mc.table_name       = 'su'
        AND mc.plot_number      = s.plot_number
-       AND mc.project_id       = CAST(s.project_id AS TEXT)
+       AND mc.project_id       = s.project_id
        AND (mc.species_code IS NULL OR mc.species_code = '')
        AND (mc.layer_code   IS NULL OR mc.layer_code   = '')
      WHERE s.merge_request_id = ?
@@ -1880,7 +1914,7 @@ merge_reject_request <- function(con, merge_request_id, reviewer, review_notes =
        ON  mc.merge_request_id = s.merge_request_id
        AND mc.table_name       = 'veg'
        AND mc.plot_number      = s.plot_number
-       AND mc.project_id       = CAST(s.project_id AS TEXT)
+       AND mc.project_id       = s.project_id
        AND mc.species_code     = s.species_code
        AND mc.layer_code       = s.layer_code
      WHERE s.merge_request_id = ?
@@ -1935,7 +1969,7 @@ sync_get_local_changes <- function(con, project_id = NULL) {
     pid_filter <- ""
     pid_params <- list()
     if (!is.null(project_id) && nzchar(as.character(project_id))) {
-      pid_filter <- " AND CAST(ProjectID AS TEXT) = ?"
+      pid_filter <- " AND ProjectID = ?"
       pid_params <- list(as.character(project_id))
     }
 
@@ -1998,11 +2032,11 @@ sync_count_incoming <- function(con, project_id = NULL) {
     filters <- "1=1"
     params  <- list()
     if (!is.null(project_id) && nzchar(as.character(project_id))) {
-      filters <- paste0(filters, " AND project_id = ?")
+      filters <- paste0(filters, " AND \"ProjectID\" = ?")
       params  <- c(params, list(as.character(project_id)))
     }
     if (!is.null(last_pull)) {
-      filters <- paste0(filters, " AND last_modified_utc > ?")
+      filters <- paste0(filters, " AND \"lastModifiedUTC\" > ?")
       params  <- c(params, list(last_pull))
     }
     res <- tryCatch(

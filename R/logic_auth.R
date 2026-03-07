@@ -9,7 +9,6 @@ auth_init_state <- function(state) {
     if (is.null(state$AuthUser))          state$AuthUser          <- NULL
     if (is.null(state$AuthUserId))        state$AuthUserId        <- NULL
     if (is.null(state$AuthRole))          state$AuthRole          <- NULL
-    if (is.null(state$AuthRoles))         state$AuthRoles         <- character(0)
     if (is.null(state$AuthPermissions))   state$AuthPermissions   <- character(0)
     if (is.null(state$SyncVersion))       state$SyncVersion       <- 0L
   })
@@ -27,7 +26,6 @@ auth_init_state <- function(state) {
   state$AuthUser          <- user$email[1]
   state$AuthUserId        <- user$id[1]
   state$AuthRole          <- role
-  state$AuthRoles         <- role
   state$AuthPermissions   <- .auth_permissions(role)
   state$User              <- user$email[1]
 }
@@ -180,7 +178,6 @@ auth_logout <- function(state) {
   state$AuthUser          <- NULL
   state$AuthUserId        <- NULL
   state$AuthRole          <- NULL
-  state$AuthRoles         <- character(0)
   state$AuthPermissions   <- character(0)
 }
 

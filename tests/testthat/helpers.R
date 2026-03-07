@@ -21,64 +21,259 @@ test_connect_duckdb <- function() {
 
 #' Initialize Test Schema in DuckDB
 #'
-#' Creates minimal tables for testing without full postgres dependency
+#' Creates full schema tables matching PostgreSQL for testing
 #'
 #' @param con DBI connection object
 #'
 initialize_test_schema <- function(con) {
   message("[test-helpers] Initializing test schema")
   
-  # Create minimal schema for testing
-  DBI::dbExecute(con, "
-    CREATE SCHEMA IF NOT EXISTS lists
-  ")
+  # ==================== LISTS SCHEMA ====================
+  DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
   
+  # lists.spplist
   DBI::dbExecute(con, "
     CREATE TABLE IF NOT EXISTS lists.spplist (
-      spp_code TEXT PRIMARY KEY,
-      spp_name TEXT NOT NULL,
-      spp_scientific TEXT,
-      is_active BOOLEAN DEFAULT TRUE
+      id INTEGER PRIMARY KEY,
+      \"sppCode\" TEXT UNIQUE NOT NULL,
+      \"sppName\" TEXT NOT NULL,
+      \"sppScientific\" TEXT,
+      \"isActive\" BOOLEAN DEFAULT TRUE
     )
   ")
   
+  # lists.layercode
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS lists.layercode (
+      id INTEGER PRIMARY KEY,
+      \"layerCode\" TEXT UNIQUE NOT NULL,
+      \"layerName\" TEXT NOT NULL,
+      \"sortOrder\" INTEGER
+    )
+  ")
+  
+  # lists.usyszonelist
   DBI::dbExecute(con, "
     CREATE TABLE IF NOT EXISTS lists.usyszonelist (
-      zone_code TEXT PRIMARY KEY,
-      zone_name TEXT NOT NULL,
+      id INTEGER PRIMARY KEY,
+      \"zoneCode\" TEXT UNIQUE NOT NULL,
+      \"zoneName\" TEXT NOT NULL,
       province TEXT
     )
   ")
   
+  # lists.usyssubzonelist
   DBI::dbExecute(con, "
-    CREATE SCHEMA IF NOT EXISTS core
-  ")
-  
-  DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS core.veg (
-      plot_number TEXT NOT NULL,
-      species_code TEXT NOT NULL,
-      layer_code TEXT NOT NULL,
-      cover_percent INTEGER,
-      project_id INTEGER,
-      row_version INTEGER DEFAULT 1,
-      last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      modified_by TEXT NOT NULL
+    CREATE TABLE IF NOT EXISTS lists.usyssubzonelist (
+      id INTEGER PRIMARY KEY,
+      \"zoneCode\" TEXT NOT NULL,
+      \"subzoneCode\" TEXT NOT NULL,
+      \"subzoneName\" TEXT NOT NULL,
+      UNIQUE(\"zoneCode\", \"subzoneCode\")
     )
   ")
   
+  # lists.usystableoflists
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS lists.usystableoflists (
+      id INTEGER PRIMARY KEY,
+      \"listID\" TEXT NOT NULL,
+      \"itemCode\" TEXT NOT NULL,
+      \"itemName\" TEXT NOT NULL,
+      \"itemSort\" INTEGER,
+      UNIQUE(\"listID\", \"itemCode\")
+    )
+  ")
+  
+  # lists.usyssppattributes
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS lists.usyssppattributes (
+      id INTEGER PRIMARY KEY,
+      \"sppCode\" TEXT UNIQUE NOT NULL,
+      \"treeShrubHerb\" TEXT,
+      \"nativeIntroduced\" TEXT
+    )
+  ")
+  
+  # ==================== CORE SCHEMA ====================
+  DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS core")
+  
+  # core.env
   DBI::dbExecute(con, "
     CREATE TABLE IF NOT EXISTS core.env (
-      plot_number TEXT NOT NULL UNIQUE,
-      project_id INTEGER,
-      latitude NUMERIC,
-      longitude NUMERIC,
-      elevation_m INTEGER,
-      survey_date DATE,
-      surveyor_name TEXT,
-      row_version INTEGER DEFAULT 1,
-      last_modified_utc TIMESTAMPTZ DEFAULT now(),
-      modified_by TEXT NOT NULL
+      id INTEGER PRIMARY KEY,
+      \"PlotNumber\" TEXT NOT NULL UNIQUE,
+      \"ProjectID\" TEXT NOT NULL,
+      \"Latitude\" NUMERIC,
+      \"Longitude\" NUMERIC,
+      \"Elevation\" INTEGER,
+      \"SurveyDate\" DATE,
+      \"SurveyorName\" TEXT,
+      \"PlotNotes\" TEXT,
+      \"rowVersion\" INTEGER NOT NULL DEFAULT 1,
+      \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      \"modifiedBy\" TEXT
+    )
+  ")
+  
+  # core.veg
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS core.veg (
+      id INTEGER PRIMARY KEY,
+      \"PlotNumber\" TEXT NOT NULL,
+      \"SpeciesCode\" TEXT NOT NULL,
+      \"LayerCode\" TEXT,
+      \"Cover1\" REAL,
+      \"Height1\" TEXT,
+      \"Cover2\" REAL,
+      \"Height2\" TEXT,
+      \"Cover3\" REAL,
+      \"Height3\" TEXT,
+      \"TotalA\" REAL,
+      \"HeightA\" TEXT,
+      \"Cover4\" REAL,
+      \"Height4\" TEXT,
+      \"Cover5\" REAL,
+      \"Height5\" TEXT,
+      \"Cover5a\" REAL,
+      \"Height5a\" TEXT,
+      \"Cover5b\" REAL,
+      \"Height5b\" TEXT,
+      \"Cover5c\" REAL,
+      \"Height5c\" TEXT,
+      \"TotalB\" REAL,
+      \"HeightB\" TEXT,
+      \"Cover6\" REAL,
+      \"Height6\" REAL,
+      \"Cover7\" REAL,
+      \"Cover8\" REAL,
+      \"Cover9\" REAL,
+      \"Cover10\" TEXT,
+      collected TEXT,
+      flag BIGINT,
+      ll BIGINT,
+      af TEXT,
+      dc BIGINT,
+      ut BIGINT,
+      vi BIGINT,
+      pv BIGINT,
+      pg BIGINT,
+      ffa BIGINT,
+      \"Cultural1\" TEXT,
+      \"Cultural2\" TEXT,
+      \"Other1\" TEXT,
+      \"Other2\" TEXT,
+      \"rowVersion\" INTEGER DEFAULT 1,
+      \"lastModifiedUTC\" TIMESTAMPTZ DEFAULT now(),
+      \"modifiedBy\" TEXT NOT NULL,
+      UNIQUE(\"PlotNumber\", \"SpeciesCode\", \"LayerCode\")
+    )
+  ")
+  
+  # core.su
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS core.su (
+      id INTEGER PRIMARY KEY,
+      \"PlotNumber\" TEXT NOT NULL UNIQUE,
+      \"SiteUnit\" TEXT,
+      \"rowVersion\" INTEGER NOT NULL DEFAULT 1,
+      \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      \"modifiedBy\" TEXT
+    )
+  ")
+  
+  # ==================== STAGING SCHEMA ====================
+  DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS staging")
+  
+  # staging.env
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS staging.env (
+      id INTEGER PRIMARY KEY,
+      \"mergeRequestID\" INTEGER NOT NULL,
+      \"changeType\" TEXT NOT NULL CHECK (\"changeType\" IN ('I','U','D')),
+      \"baseRowVersion\" INTEGER,
+      \"PlotNumber\" TEXT NOT NULL,
+      \"ProjectID\" TEXT NOT NULL,
+      \"Latitude\" NUMERIC,
+      \"Longitude\" NUMERIC,
+      \"Elevation\" INTEGER,
+      \"SurveyDate\" DATE,
+      \"SurveyorName\" TEXT,
+      \"PlotNotes\" TEXT,
+      \"rowVersion\" INTEGER NOT NULL DEFAULT 1,
+      \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      \"modifiedBy\" TEXT
+    )
+  ")
+  
+  # staging.veg
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS staging.veg (
+      id INTEGER PRIMARY KEY,
+      \"mergeRequestID\" INTEGER NOT NULL,
+      \"changeType\" TEXT NOT NULL CHECK (\"changeType\" IN ('I','U','D')),
+      \"baseRowVersion\" INTEGER,
+      \"PlotNumber\" TEXT NOT NULL,
+      \"SpeciesCode\" TEXT NOT NULL,
+      \"LayerCode\" TEXT,
+      \"Cover1\" REAL,
+      \"Height1\" TEXT,
+      \"Cover2\" REAL,
+      \"Height2\" TEXT,
+      \"Cover3\" REAL,
+      \"Height3\" TEXT,
+      \"TotalA\" REAL,
+      \"HeightA\" TEXT,
+      \"Cover4\" REAL,
+      \"Height4\" TEXT,
+      \"Cover5\" REAL,
+      \"Height5\" TEXT,
+      \"Cover5a\" REAL,
+      \"Height5a\" TEXT,
+      \"Cover5b\" REAL,
+      \"Height5b\" TEXT,
+      \"Cover5c\" REAL,
+      \"Height5c\" TEXT,
+      \"TotalB\" REAL,
+      \"HeightB\" TEXT,
+      \"Cover6\" REAL,
+      \"Height6\" REAL,
+      \"Cover7\" REAL,
+      \"Cover8\" REAL,
+      \"Cover9\" REAL,
+      \"Cover10\" TEXT,
+      collected TEXT,
+      flag BIGINT,
+      ll BIGINT,
+      af TEXT,
+      dc BIGINT,
+      ut BIGINT,
+      vi BIGINT,
+      pv BIGINT,
+      pg BIGINT,
+      ffa BIGINT,
+      \"Cultural1\" TEXT,
+      \"Cultural2\" TEXT,
+      \"Other1\" TEXT,
+      \"Other2\" TEXT,
+      \"rowVersion\" INTEGER DEFAULT 1,
+      \"lastModifiedUTC\" TIMESTAMPTZ DEFAULT now(),
+      \"modifiedBy\" TEXT NOT NULL
+    )
+  ")
+  
+  # staging.su
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS staging.su (
+      id INTEGER PRIMARY KEY,
+      \"mergeRequestID\" INTEGER NOT NULL,
+      \"changeType\" TEXT NOT NULL CHECK (\"changeType\" IN ('I','U','D')),
+      \"baseRowVersion\" INTEGER,
+      \"PlotNumber\" TEXT NOT NULL,
+      \"SiteUnit\" TEXT,
+      \"rowVersion\" INTEGER NOT NULL DEFAULT 1,
+      \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      \"modifiedBy\" TEXT
     )
   ")
   
@@ -95,29 +290,32 @@ initialize_test_schema <- function(con) {
 seed_test_reference_data <- function(con) {
   message("[test-helpers] Seeding reference data")
   
-  # Species
-  species_df <- data.frame(
-    spp_code = c("AB", "FD", "HW", "YC", "AT"),
-    spp_name = c("Abies lasiocarpa", "Pseudotsuga menziesii", "Tsuga heterophylla", 
-                 "Thuja plicata", "Athyrium filix-femina"),
-    spp_scientific = c("Subalpine Fir", "Douglas-fir", "Western Hemlock", 
-                       "Western Redcedar", "Lady Fern"),
-    is_active = c(TRUE, TRUE, TRUE, TRUE, TRUE)
-  )
+  # Only seed minimal test data - don't overwrite table structures
+  # Insert species
+  tryCatch({
+    DBI::dbExecute(con,
+      "INSERT INTO lists.spplist (\"sppCode\", \"sppName\", \"sppScientific\", \"isActive\")
+       VALUES ('AB', 'Abies lasiocarpa', 'Subalpine Fir', TRUE),
+              ('FD', 'Pseudotsuga menziesii', 'Douglas-fir', TRUE),
+              ('HW', 'Tsuga heterophylla', 'Western Hemlock', TRUE),
+              ('YC', 'Thuja plicata', 'Western Redcedar', TRUE),
+              ('AT', 'Athyrium filix-femina', 'Lady Fern', TRUE)")
+  }, error = function(e) {
+    message("[test-helpers] Note: Could not seed spplist (may already exist)")
+  })
   
-  DBI::dbWriteTable(con, DBI::Id(schema = "lists", table = "spplist"), 
-                    species_df, overwrite = TRUE)
-  
-  # Zones
-  zones_df <- data.frame(
-    zone_code = c("CDF", "ICH", "IDF", "MH", "SBPS"),
-    zone_name = c("Coastal Douglas-fir", "Interior Cedar-Hemlock", "Interior Douglas-fir",
-                  "Mountain Hemlock", "Sub-Boreal Pine-Spruce"),
-    province = c("BC", "BC", "BC", "BC", "BC")
-  )
-  
-  DBI::dbWriteTable(con, DBI::Id(schema = "lists", table = "usyszonelist"),
-                    zones_df, overwrite = TRUE)
+  # Insert zones
+  tryCatch({
+    DBI::dbExecute(con,
+      "INSERT INTO lists.usyszonelist (\"zoneCode\", \"zoneName\", province)
+       VALUES ('CDF', 'Coastal Douglas-fir', 'BC'),
+              ('ICH', 'Interior Cedar-Hemlock', 'BC'),
+              ('IDF', 'Interior Douglas-fir', 'BC'),
+              ('MH', 'Mountain Hemlock', 'BC'),
+              ('SBPS', 'Sub-Boreal Pine-Spruce', 'BC')")
+  }, error = function(e) {
+    message("[test-helpers] Note: Could not seed usyszonelist (may already exist)")
+  })
 }
 
 #' Check if PostgreSQL is Available

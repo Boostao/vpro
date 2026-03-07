@@ -47,7 +47,7 @@ sync_ensure_local_tables(con)
 
 # ── DEV ONLY defaults ─────────────────────────────────────────────────────────
 DEV_PREFIX     <- "DEV_TEST_"
-DEV_PROJECT_ID <- "99"
+DEV_PROJECT_ID <- 99L
 
 ui <- page_sidebar(
   title  = "Sync Module — Dev Test",
@@ -68,8 +68,16 @@ ui <- page_sidebar(
 )
 
 server <- function(input, output, session) {
+  
   state <- init_sys_state()
+  attach_cloud(con, fail_on_error = TRUE)
   auth_init_state(state)
+  .auth_set_state(state, data.frame(
+    email = paste0(Sys.getenv("USER", "dev"), "@dev.local"),
+    id = 1L,
+    app_role = "guest",
+    stringsAsFactors = FALSE
+  ))
   state$User        <- paste0(Sys.getenv("USER", "dev"), "@dev.local")
   state$CurrProject <- DEV_PROJECT_ID
 
@@ -84,11 +92,11 @@ server <- function(input, output, session) {
       pn <- paste0(DEV_PREFIX, "ENV_", format(Sys.time(), "%H%M%S"), "_", i)
       tryCatch(
         DBI::dbExecute(con,
-          "INSERT OR IGNORE INTO Env (PlotNumber, ProjectID, local_modified_utc)
+          "INSERT INTO Env (PlotNumber, ProjectID, local_modified_utc)
            VALUES (?, ?, now())",
           list(pn, DEV_PROJECT_ID)
         ),
-        error = function(e) NULL
+        error = function(e) print(e)
       )
     }
     state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
@@ -166,7 +174,7 @@ server <- function(input, output, session) {
           "INSERT INTO master.admin.merge_requests
              (project_id, submitter_name, status, env_record_count, review_notes)
            VALUES (?, ?, ?, 3, 'DEV_TEST scenario 4')",
-          list(as.integer(DEV_PROJECT_ID), state$User, st)
+          list(DEV_PROJECT_ID, state$User, st)
         ),
         error = function(e) {
           showNotification(paste("Scenario 4 error:", e$message), type = "error")
