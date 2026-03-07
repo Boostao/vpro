@@ -616,13 +616,17 @@ INSERT INTO lists.usystableoflists (list_id, item_code, item_name, item_sort) VA
     ('COVER_CLASS', '6', '75-100%', 6)
 ON CONFLICT (list_id, item_code) DO NOTHING;
 
--- Seed: test users (admin accounts need password set via auth_grant_admin before first use)
-INSERT INTO admin.users (email, full_name, app_role, is_active) VALUES
-    ('viewer@test.local',  'Test Viewer',       'guest', TRUE),
-    ('field@test.local',   'Test Field User',   'guest', TRUE),
-    ('lead@test.local',    'Test Project Lead', 'guest', TRUE),
-    ('dba@test.local',     'Test DBA',          'admin', TRUE),
-    ('admin@test.local',   'Test Admin',        'admin', TRUE)
+-- Seed: test users (password: test)
+-- Bcrypt hash for password "test" generated with bcrypt::hashpw()
+INSERT INTO admin.users (email, full_name, app_role, password_hash, is_active) VALUES
+    ('viewer@test.local',  'Test Viewer',       'guest', NULL, TRUE),
+    ('field@test.local',   'Test Field User',   'guest', NULL, TRUE),
+    ('lead@test.local',    'Test Project Lead', 'guest', NULL, TRUE),
+    ('dba@test.local',     'Test DBA',          'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
+    ('admin@test.local',   'Test Admin',        'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
+    ('nicolas@boostao.ca', 'Nicolas Gauthier',  'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
+    ('bruno@boostao.ca',   'Bruno Tremblay',    'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE),
+    ('francois@boostao.ca','François Bornais',  'admin', '$2a$12$f.Dzj8AKQvFFR1ecdFSK6.t9DQT7EMGNSt8Q81TPJLNQq1FygH3l6', TRUE)
 ON CONFLICT (email) DO NOTHING;
 
 -- Seed: sample project

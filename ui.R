@@ -92,6 +92,9 @@ ui <- page_navbar(
   nav_panel(tagList(icon("cloud-arrow-up"), "Upload"), value = "Upload",
     mod_upload_ui("upload")
   ),
+  nav_panel(tagList(icon("arrows-rotate"), "Sync"), value = "Sync",
+    mod_sync_ui("sync")
+  ),
   nav_panel(tagList(icon("code-merge"), "Merge"), value = "Merge",
     mod_merge_ui("merge")
   ),

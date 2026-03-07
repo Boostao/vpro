@@ -697,6 +697,16 @@ server <- function(input, output, session) {
   # Upload Module
   mod_upload_server("upload", state, con)
 
+  # Sync Module
+  mod_sync_server("sync", state, con)
+
+  # Invalidate sync incoming count whenever the Sync tab is activated
+  observeEvent(input$main_tabs, {
+    if (identical(input$main_tabs, "Sync")) {
+      state$SyncTabActivated <- (state$SyncTabActivated %||% 0L) + 1L
+    }
+  }, ignoreInit = TRUE)
+
   # Merge Module
   mod_merge_server("merge", state, con)
 

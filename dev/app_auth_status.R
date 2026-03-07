@@ -34,6 +34,7 @@ library(shiny)
 library(bslib)
 library(DBI)
 library(duckdb)
+library(shinyjs)
 
 source("R/db_connections.R")
 source("R/logic_auth.R")
@@ -56,6 +57,7 @@ ui <- page_navbar(
   title = "Auth Status Widget — Dev Test",
   id    = "main_nav",
   theme = bs_theme(version = 5),
+  shinyjs::useShinyjs(),
   nav_panel("Auth", value = "Auth", mod_auth_ui("Auth")),
   nav_panel("Sync", value = "Sync", p("Sync page — coming soon")),
   nav_item(mod_auth_status_ui("auth_status"))

@@ -118,7 +118,11 @@ mod_auth_server <- function(id, state, con) {
 
       result <- tryCatch(
         auth_login(con, state, input$admin_email, input$admin_pass),
-        error = function(e) list(ok = FALSE, message = conditionMessage(e))
+        error = function(e) list(ok = FALSE, message = conditionMessage(e)),
+        finally = {
+          # Clear password input on every attempt for security
+          updateTextInput(session, "admin_pass", value = "")
+        }
       )
 
       if (!isTRUE(result$ok)) {

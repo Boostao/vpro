@@ -21,8 +21,16 @@ mod_auth_status_server <- function(id, state, con) {
     # Navigation signal — parent observe()s this and calls nav_select()
     nav_dest <- reactiveVal(NULL)
     
-    observeEvent(input$go_auth, { nav_dest("Auth") })
-    observeEvent(input$go_sync, { nav_dest("Sync") })
+    observeEvent(input$go_auth, { 
+      nav_dest("Auth")
+      # Reset to NULL after brief delay so next click is detected
+      shinyjs::delay(100, nav_dest(NULL))
+    })
+    observeEvent(input$go_sync, { 
+      nav_dest("Sync")
+      # Reset to NULL after brief delay so next click is detected
+      shinyjs::delay(100, nav_dest(NULL))
+    })
 
     observeEvent(input$logout, {
       auth_logout(state)
@@ -39,41 +47,44 @@ mod_auth_status_server <- function(id, state, con) {
 
       # ---- Badge (3 states) ----
       if (!auth_ok) {
-        # Offline state: entire badge is clickable to go to auth
+        # Offline state: bright gold (#fcba19) with dark text for excellent contrast on #036
         badge <- actionLink(
           ns("go_auth"),
           span(
-            class = "badge rounded-pill bg-secondary d-inline-flex align-items-center gap-1",
-            bsicons::bs_icon("wifi-off"), "Offline", "Sign In"
+            class = "badge rounded-pill d-inline-flex align-items-center gap-1",
+            style = "background-color: #fcba19; color: #1a1a1a; font-weight: 700; font-size: 0.85rem;",
+            bsicons::bs_icon("wifi-off"), "Sign In"
           ),
           style = "text-decoration: none; cursor: pointer;"
         )
       } else if (identical(role, "admin")) {
-        # Admin state: badge + logout button
+        # Admin state: bright cyan with white text
         badge <- div(
-          class = "d-inline-flex align-items-center gap-1",
+          class = "d-inline-flex align-items-center gap-2",
           span(
-            class = "badge rounded-pill bg-primary d-inline-flex align-items-center gap-1",
+            class = "badge rounded-pill d-inline-flex align-items-center gap-1",
+            style = "background-color: #00d9ff; color: #ffffff; font-weight: 700; font-size: 0.85rem;",
             bsicons::bs_icon("shield-fill"), user_email
           ),
           actionLink(
             ns("logout"), 
             bsicons::bs_icon("box-arrow-right"),
-            title = "Sign out"
+            style = "color: #ffffff; font-size: 1.1rem; text-decoration: none; opacity: 0.9; transition: opacity 0.2s;"
           )
         )
       } else {
-        # Guest state: badge + logout button
+        # Guest state: bright lime green with white text
         badge <- div(
-          class = "d-inline-flex align-items-center gap-1",
+          class = "d-inline-flex align-items-center gap-2",
           span(
-            class = "badge rounded-pill bg-success d-inline-flex align-items-center gap-1",
+            class = "badge rounded-pill d-inline-flex align-items-center gap-1",
+            style = "background-color: #2ecc71; color: #ffffff; font-weight: 700; font-size: 0.85rem;",
             bsicons::bs_icon("cloud"), user_email
           ),
           actionLink(
             ns("logout"), 
             bsicons::bs_icon("box-arrow-right"),
-            title = "Sign out"
+            style = "color: #ffffff; font-size: 1.1rem; text-decoration: none; opacity: 0.9; transition: opacity 0.2s;"
           )
         )
       }
@@ -111,12 +122,13 @@ mod_auth_status_server <- function(id, state, con) {
       }
 
       div(
-        class = "d-flex flex-column align-items-end px-2",
+        class = "d-flex flex-column align-items-end px-3",
         badge,
         div(
-          class = "text-muted small mt-1",
+          class = "small mt-2",
+          style = "color: #ffffff; opacity: 0.95;",
           sync_label, "\u00a0",
-          actionLink(ns("go_sync"), "Sync \u2192", style = "font-size: 0.8em;")
+          actionLink(ns("go_sync"), "Sync \u2192", style = "color: #fcba19; font-weight: 600; text-decoration: none; font-size: 0.85rem;")
         )
       )
     })

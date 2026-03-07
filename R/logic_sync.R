@@ -1910,3 +1910,167 @@ merge_reject_request <- function(con, merge_request_id, reviewer, review_notes =
     list(mr_id)
   )
 }
+
+
+# =============================================================================
+# 7. Field-user sync helpers (used by mod_sync)
+# =============================================================================
+
+#' Retrieve local dirty rows (insert / update) across Env, SU, Veg.
+#'
+#' @param con        DuckDB connection.
+#' @param project_id Optional character/integer filter.
+#' @return Named list: `$env`, `$su`, `$veg` — each a data.frame with a
+#'   `change_type` column ("insert" | "update").
+sync_get_local_changes <- function(con, project_id = NULL) {
+  empty_with_type <- function() data.frame(change_type = character(0))
+
+  .query_table <- function(tbl, key_cols, extra_cols) {
+    if (!DBI::dbExistsTable(con, tbl)) return(empty_with_type())
+    fields <- tryCatch(DBI::dbListFields(con, tbl), error = function(e) character(0))
+    has_lmu <- "local_modified_utc" %in% fields
+    has_mrv <- "master_row_version"  %in% fields
+    if (!has_lmu) return(empty_with_type())
+
+    pid_filter <- ""
+    pid_params <- list()
+    if (!is.null(project_id) && nzchar(as.character(project_id))) {
+      pid_filter <- " AND CAST(ProjectID AS TEXT) = ?"
+      pid_params <- list(as.character(project_id))
+    }
+
+    sql <- sprintf(
+      "SELECT %s,
+              CASE WHEN master_row_version IS NULL THEN 'insert' ELSE 'update' END AS change_type
+       FROM %s
+       WHERE local_modified_utc IS NOT NULL%s",
+      paste(c(key_cols, extra_cols), collapse = ", "),
+      tbl,
+      pid_filter
+    )
+    if (!has_mrv) {
+      sql <- sprintf(
+        "SELECT %s, 'insert' AS change_type
+         FROM %s
+         WHERE local_modified_utc IS NOT NULL%s",
+        paste(c(key_cols, extra_cols), collapse = ", "),
+        tbl,
+        pid_filter
+      )
+    }
+    tryCatch(
+      DBI::dbGetQuery(con, sql, pid_params),
+      error = function(e) empty_with_type()
+    )
+  }
+
+  env_extra  <- intersect(
+    c("Latitude", "Longitude", "Elevation", "Date", "SiteSurveyor", "SiteNotes"),
+    tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  )
+  su_extra   <- intersect(
+    c("SiteUnit"),
+    tryCatch(DBI::dbListFields(con, "SU"), error = function(e) character(0))
+  )
+  veg_extra  <- intersect(
+    c("Species", "Layer", "Cover1"),
+    tryCatch(DBI::dbListFields(con, "Veg"), error = function(e) character(0))
+  )
+
+  list(
+    env = .query_table("Env", c("PlotNumber", "ProjectID"), env_extra),
+    su  = .query_table("SU",  c("PlotNumber"),              su_extra),
+    veg = .query_table("Veg", c("PlotNumber"),              veg_extra)
+  )
+}
+
+#' Count incoming rows available from master since last pull watermark.
+#'
+#' @param con        DuckDB connection.
+#' @param project_id Optional filter.
+#' @return Named list: `$env`, `$su`, `$veg` (integer counts), `$available` (logical).
+sync_count_incoming <- function(con, project_id = NULL) {
+  not_available <- list(env = 0L, su = 0L, veg = 0L, available = FALSE)
+  if (!sync_cloud_connected(con)) return(not_available)
+
+  .count_table <- function(master_tbl, watermark_name) {
+    last_pull <- sync_get_watermark(con, watermark_name, "pull")
+    filters <- "1=1"
+    params  <- list()
+    if (!is.null(project_id) && nzchar(as.character(project_id))) {
+      filters <- paste0(filters, " AND project_id = ?")
+      params  <- c(params, list(as.character(project_id)))
+    }
+    if (!is.null(last_pull)) {
+      filters <- paste0(filters, " AND last_modified_utc > ?")
+      params  <- c(params, list(last_pull))
+    }
+    res <- tryCatch(
+      DBI::dbGetQuery(
+        con,
+        sprintf("SELECT COUNT(*) AS n FROM %s WHERE %s", master_tbl, filters),
+        params
+      ),
+      error = function(e) data.frame(n = 0L)
+    )
+    as.integer(res$n[1] %||% 0L)
+  }
+
+  list(
+    env       = .count_table("master.core.env", "env"),
+    su        = .count_table("master.core.su",  "su"),
+    veg       = .count_table("master.core.veg", "veg"),
+    available = TRUE
+  )
+}
+
+#' Retrieve the current user's merge requests from master.
+#'
+#' @param con             DuckDB connection.
+#' @param submitter       Character. Matched against `submitter_name`.
+#' @param show_approved   Logical. Include approved/merged rows.
+#' @param show_rejected   Logical. Include rejected rows.
+#' @return data.frame with columns:
+#'   id, project_id, submitted_utc, status, env_record_count, su_record_count,
+#'   veg_record_count, review_notes, reviewed_utc.
+sync_get_user_merge_requests <- function(con, submitter,
+                                          show_approved = TRUE,
+                                          show_rejected = TRUE) {
+  empty_mr <- data.frame(
+    id               = integer(0),
+    project_id       = integer(0),
+    submitted_utc    = as.POSIXct(character(0)),
+    status           = character(0),
+    env_record_count = integer(0),
+    su_record_count  = integer(0),
+    veg_record_count = integer(0),
+    review_notes     = character(0),
+    reviewed_utc     = as.POSIXct(character(0)),
+    stringsAsFactors = FALSE
+  )
+  if (!sync_cloud_connected(con)) return(empty_mr)
+
+  sql    <- paste0(
+    "SELECT id, project_id, submitted_utc, status,",
+    " env_record_count, su_record_count, veg_record_count,",
+    " review_notes, reviewed_utc",
+    " FROM master.admin.merge_requests",
+    " WHERE submitter_name = ?",
+    " ORDER BY submitted_utc DESC"
+  )
+  params <- list(as.character(submitter))
+
+  out <- tryCatch(
+    DBI::dbGetQuery(con, sql, params),
+    error = function(e) empty_mr
+  )
+  if (nrow(out) == 0) return(empty_mr)
+
+  if (!isTRUE(show_approved)) {
+    out <- out[!out$status %in% c("merged", "approved"), , drop = FALSE]
+  }
+  if (!isTRUE(show_rejected)) {
+    out <- out[out$status != "rejected", , drop = FALSE]
+  }
+  out
+}
