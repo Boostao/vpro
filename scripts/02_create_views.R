@@ -12,10 +12,8 @@ cat("Connected to database.\n")
 # --- 1. vw_USysAllVeg (The Unpivot Logic) ---
 # Replicates Queries/USysAllVeg.txt
 # Unions specific Cover columns and Total strings to create a normalized list
-
 cat("Creating View vw_USysAllVeg...\n")
 
-# We will construct this as a series of selects unioned together, similar to the Access query.
 sql_usysallveg <- "
 CREATE OR REPLACE VIEW vw_USysAllVeg AS
 SELECT PlotNumber, '1' AS MyLayer, Species, CAST(Cover1 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover1 IS NOT NULL
@@ -50,45 +48,66 @@ SELECT PlotNumber, 'B' AS MyLayer, Species, CAST(TotalB AS VARCHAR) as Cover FRO
 "
 
 tryCatch({
-    dbExecute(con, sql_usysallveg)
-    cat("View vw_USysAllVeg created.\n")
+  dbExecute(con, sql_usysallveg)
+  cat("View vw_USysAllVeg created.\n")
 }, error = function(e) {
-    cat("Error creating vw_USysAllVeg: ", conditionMessage(e), "\n")
+  cat("Error creating vw_USysAllVeg: ", conditionMessage(e), "\n")
 })
 
 # --- 2. vw_USysEnv (The Master Site Record) ---
-# Replicates Queries/USysEnv.txt
+# Access-parity: Queries/USysEnv.txt
+#   SELECT DISTINCTROW [Sample_Env].*, [Sample_Admin].*
+#   FROM Sample_Env INNER JOIN Sample_Admin ON [Sample_Env].PlotNumber = [Sample_Admin].Plot
+#
+# Column audit (no collisions between Sample_Env and Sample_Admin confirmed):
+#   Sample_Env  join key : plotnumber
+#   Sample_Admin join key: plot  → aliased as admin_plot
+#   Quality columns added: siteplotquality, vegplotquality, soilplotquality
 cat("Creating View vw_USysEnv...\n")
 
-# Access syntax: FROM (Sample_Env INNER JOIN Sample_SU ...) INNER JOIN Sample_Admin
-# We check if columns overlap. Usually PlotNumber is in all, and Id might be in all.
-# We will use explicit selection if strictly necessary, but let's try a safer join.
-
-sql_usysenv <- "
-CREATE OR REPLACE VIEW vw_USysEnv AS
-SELECT 
-    e.*,
-    a.Collected AS AdminCollected, -- Rename colliding columns if needed, assuming duplicates exist
-    -- We'll assume simple * for now but catch errors
-    s.SiteSeries
-FROM Sample_Env e
-LEFT JOIN Sample_Admin a ON e.PlotNumber = a.Plot
-INNER JOIN Sample_SU s ON e.PlotNumber = s.PlotNumber;
-"
-
-# Since we don't know the exact columns of Sample_Admin vs Env without inspecting,
-# we will try a standard join. DuckDB supports * but requires unique output column names.
-# If this fails, we will do a simpler query.
-
 tryCatch({
-    dbExecute(con, "CREATE OR REPLACE VIEW vw_USysEnv AS SELECT e.* FROM Sample_Env e JOIN Sample_SU s ON e.PlotNumber = s.PlotNumber")
-    cat("View vw_USysEnv created (Simplified version - Full join deferred pending schema check).\n")
+  dbExecute(con, "
+    CREATE OR REPLACE VIEW vw_USysEnv AS
+    SELECT
+      e.*,
+      a.plot               AS admin_plot,
+      a.startdate,
+      a.plottype,
+      a.plotsize,
+      a.provincestateterritory,
+      a.siteplotquality,
+      a.vegplotquality,
+      a.soilplotquality,
+      a.updatedfromcards,
+      a.enteredby,
+      a.usersiteunit,
+      a.becsiteunit,
+      a.siteunitshortname,
+      a.siteunitlongname,
+      a.officenotes,
+      a.humusthickness,
+      a.gis_bgc,
+      a.gis_bgc_ver,
+      a.bec_use,
+      a.stratacovertotal
+    FROM Sample_Env e
+    INNER JOIN Sample_Admin a ON e.plotnumber = a.plot
+  ")
+  cat("View vw_USysEnv created (Access-parity: Sample_Env INNER JOIN Sample_Admin).\n")
 }, error = function(e) {
-    cat("Error creating vw_USysEnv: ", conditionMessage(e), "\n")
+  cat("Error creating vw_USysEnv: ", conditionMessage(e), "\n")
 })
 
 # Verify
 cat("Verifying Views...\n")
 if (dbExistsTable(con, "vw_USysAllVeg")) {
-    print(dbGetQuery(con, "SELECT PlotNumber, MyLayer, Species, Cover FROM vw_USysAllVeg LIMIT 5"))
+  print(dbGetQuery(con, "SELECT PlotNumber, MyLayer, Species, Cover FROM vw_USysAllVeg LIMIT 5"))
+}
+if (dbExistsTable(con, "vw_USysEnv")) {
+  cols <- dbGetQuery(con, "SELECT column_name FROM information_schema.columns WHERE table_name = 'vw_USysEnv' ORDER BY ordinal_position")
+  cat("vw_USysEnv columns (", nrow(cols), "):\n")
+  cat(paste(cols$column_name, collapse = ", "), "\n")
+  # Confirm quality cols present
+  qc_present <- all(c("siteplotquality", "vegplotquality", "soilplotquality") %in% cols$column_name)
+  cat("Quality columns present:", qc_present, "\n")
 }
