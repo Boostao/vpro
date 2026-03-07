@@ -89,18 +89,15 @@ ui <- page_navbar(
     mod_becweb_map_ui("becmap")
   ),
   nav_spacer(),
-  nav_panel(tagList(icon("cloud-arrow-up"), "Upload"), value = "Upload",
-    mod_upload_ui("upload")
-  ),
+  #nav_panel(tagList(icon("cloud-arrow-up"), "Upload"), value = "Upload",
+  #  mod_upload_ui("upload")
+  #),
   nav_panel(tagList(icon("arrows-rotate"), "Sync"), value = "Sync",
     mod_sync_ui("sync")
   ),
-  nav_panel(tagList(icon("code-merge"), "Merge"), value = "Merge",
-    mod_merge_ui("merge")
-  ),
   nav_panel(tagList(icon("user-shield"), "Auth"), value = "Auth",
     mod_auth_ui("auth")
-  ),  nav_item(mod_auth_status_ui("auth_status")),  #nav_panel(tagList(icon("gear"), "Administration"), value = "Administration",
-  #  mod_admin_ui("admin")
-  #)
+  ),  nav_item(mod_auth_status_ui("auth_status")),  nav_panel(tagList(icon("gear"), "Administration"), value = "Administration",
+    mod_admin_ui("admin")
+  )
 )

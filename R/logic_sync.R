@@ -807,6 +807,19 @@ merge_request_resolve_conflict <- function(con, conflict_id, resolution,
 merge_approve_request <- function(con, merge_request_id, reviewer, review_notes = "") {
   mr_id <- as.integer(merge_request_id)
 
+  # Check compliance gate
+  compliance_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT compliance_passed FROM master.admin.merge_requests WHERE id = ? LIMIT 1",
+      list(mr_id)
+    ),
+    error = function(e) data.frame(compliance_passed = NA)
+  )
+  if (!isTRUE(compliance_row$compliance_passed[1])) {
+    stop("Merge blocked: compliance failed. Run compliance check before approving.")
+  }
+
   merge_request_refresh_conflicts(con, mr_id)
 
   n_unresolved <- merge_request_unresolved_count(con, mr_id)
@@ -921,6 +934,185 @@ merge_reject_request <- function(con, merge_request_id, reviewer, review_notes =
 #' @param show_rejected Logical. Include rejected. Default TRUE.
 #' @return data.frame: id, project_id, submitted_utc, status,
 #'   record_counts, review_notes, reviewed_utc.
+# =============================================================================
+# 11. Master schema bootstrap (idempotent)
+# =============================================================================
+
+#' Ensure all required master schemas and tables exist.
+#'
+#' Idempotent — safe to call multiple times. Creates:
+#'   master.admin  — merge_requests, merge_conflicts
+#'   master.staging — sample_env, sample_su, sample_veg
+#'   master.core    — sample_env, sample_su, sample_veg
+#'
+#' @param con DuckDB connection (master must already be attached).
+#' @return Invisible TRUE.
+merge_ensure_tables <- function(con) {
+  sync_require_cloud(con)
+
+  # Schemas
+  for (schema in c("master.admin", "master.staging", "master.core")) {
+    DBI::dbExecute(con, sprintf("CREATE SCHEMA IF NOT EXISTS %s", schema))
+  }
+
+  # master.admin.merge_requests
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.admin.merge_requests (
+      id                INTEGER PRIMARY KEY,
+      project_id        TEXT NOT NULL,
+      submitter_user_id TEXT,
+      submitter_name    TEXT,
+      submitted_utc     TIMESTAMPTZ DEFAULT now(),
+      status            TEXT DEFAULT 'pending_review',
+      reviewer          TEXT,
+      reviewer_user_id  INTEGER,
+      review_notes      TEXT,
+      reviewed_utc      TIMESTAMPTZ,
+      env_record_count  INTEGER DEFAULT 0,
+      su_record_count   INTEGER DEFAULT 0,
+      veg_record_count  INTEGER DEFAULT 0,
+      record_counts     TEXT,
+      compliance_passed BOOLEAN,
+      compliance_report TEXT
+    )
+  ")
+
+  # master.admin.merge_conflicts
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.admin.merge_conflicts (
+      id                INTEGER PRIMARY KEY,
+      merge_request_id  INTEGER NOT NULL,
+      table_name        TEXT NOT NULL,
+      record_id         TEXT NOT NULL,
+      details           TEXT,
+      resolution        TEXT,
+      resolved_by       TEXT,
+      resolved_utc      TIMESTAMPTZ,
+      created_utc       TIMESTAMPTZ DEFAULT now()
+    )
+  ")
+
+  # master.staging tables
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.staging.sample_env (
+      plot_number       TEXT,
+      project_id        TEXT,
+      latitude          DOUBLE,
+      longitude         DOUBLE,
+      elevation_m       DOUBLE,
+      survey_date       DATE,
+      surveyor_name     TEXT,
+      plot_notes        TEXT,
+      merge_request_id  INTEGER,
+      modified_by       TEXT,
+      baseRowVersion    INTEGER,
+      changeType        TEXT,
+      rowVersion        INTEGER,
+      lastModifiedUTC   TIMESTAMPTZ,
+      modifiedBy        TEXT
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.staging.sample_su (
+      plot_number       TEXT,
+      project_id        TEXT,
+      su_number         TEXT,
+      bec_zone          TEXT,
+      bec_subzone       TEXT,
+      site_series       TEXT,
+      merge_request_id  INTEGER,
+      modified_by       TEXT,
+      baseRowVersion    INTEGER,
+      changeType        TEXT,
+      rowVersion        INTEGER,
+      lastModifiedUTC   TIMESTAMPTZ,
+      modifiedBy        TEXT
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.staging.sample_veg (
+      plot_number       TEXT,
+      project_id        TEXT,
+      species_code      TEXT,
+      layer_code        TEXT,
+      cover1            REAL,
+      cover2            REAL,
+      cover3            REAL,
+      totala            REAL,
+      totalb            REAL,
+      merge_request_id  INTEGER,
+      modified_by       TEXT,
+      baseRowVersion    INTEGER,
+      changeType        TEXT,
+      rowVersion        INTEGER,
+      lastModifiedUTC   TIMESTAMPTZ,
+      modifiedBy        TEXT
+    )
+  ")
+
+  # master.core tables
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.core.sample_env (
+      plot_number       TEXT UNIQUE,
+      project_id        TEXT,
+      latitude          DOUBLE,
+      longitude         DOUBLE,
+      elevation_m       DOUBLE,
+      survey_date       DATE,
+      surveyor_name     TEXT,
+      plot_notes        TEXT,
+      modified_by       TEXT,
+      row_version       INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now()
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.core.sample_su (
+      plot_number       TEXT UNIQUE,
+      project_id        TEXT,
+      su_number         TEXT,
+      bec_zone          TEXT,
+      bec_subzone       TEXT,
+      site_series       TEXT,
+      modified_by       TEXT,
+      row_version       INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now()
+    )
+  ")
+  DBI::dbExecute(con, "
+    CREATE TABLE IF NOT EXISTS master.core.sample_veg (
+      plot_number       TEXT,
+      project_id        TEXT,
+      species_code      TEXT,
+      layer_code        TEXT,
+      cover1            REAL,
+      cover2            REAL,
+      cover3            REAL,
+      totala            REAL,
+      totalb            REAL,
+      modified_by       TEXT,
+      row_version       INTEGER DEFAULT 1,
+      last_modified_utc TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(plot_number, species_code, layer_code, project_id)
+    )
+  ")
+
+  invisible(TRUE)
+}
+
+#' Alias for merge_request_unresolved_count (used in mod_merge.R / mod_admin_merge.R).
+#' @param con              DuckDB connection.
+#' @param merge_request_id Integer.
+#' @return Integer.
+merge_request_unresolved_conflict_count <- function(con, merge_request_id) {
+  merge_request_unresolved_count(con, merge_request_id)
+}
+
+
+# =============================================================================
+# 12. Field-user helpers (used by mod_sync)
+# =============================================================================
+
 sync_get_user_merge_requests <- function(con, submitter,
                                           show_approved = TRUE,
                                           show_rejected = TRUE) {

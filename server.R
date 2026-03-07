@@ -679,7 +679,7 @@ server <- function(input, output, session) {
   })
   
   # 7. Initialize Sub-Modules
-  #mod_admin_server("admin", state, con)
+  mod_admin_server("admin", state, con)
   
   # For Veg, we pass the state directly as it needs plot context
   # Also passing con to avoid multiple connections
@@ -695,7 +695,7 @@ server <- function(input, output, session) {
   mod_import_server("import", state, con)
 
   # Upload Module
-  mod_upload_server("upload", state, con)
+  #mod_upload_server("upload", state, con)
 
   # Sync Module
   mod_sync_server("sync", state, con)
@@ -707,8 +707,8 @@ server <- function(input, output, session) {
     }
   }, ignoreInit = TRUE)
 
-  # Merge Module
-  mod_merge_server("merge", state, con)
+  # Merge Module (standalone tab unwired; Merge Review lives in Admin > Merge Review)
+  # mod_merge_server("merge", state, con)
 
   # Auth Module
   mod_auth_server("auth", state, con)

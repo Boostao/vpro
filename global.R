@@ -50,6 +50,12 @@ source("R/logic_reports_validation.R") # Data validation
 source("R/logic_report_export.R") # Excel report export helpers
 source("R/logic_excel_export.R") # Excel export with styled formatting
 source("R/logic_venus_export.R") # VENUS XML export
+source("R/mod_admin_projects.R")
+source("R/mod_admin_codes.R")
+source("R/mod_admin_master.R")
+source("R/mod_admin_audit.R")
+source("R/mod_admin_merge.R")
+source("R/mod_admin_publishing.R")
 source("R/mod_admin.R")
 source("R/mod_images.R")
 source("R/mod_veg_sample.R")

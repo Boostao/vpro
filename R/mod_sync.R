@@ -165,6 +165,23 @@ mod_sync_server <- function(id, state, con) {
       }
     })
 
+    # ── Detect if any changes exist ───────────────────────────────────────────
+    has_any_changes <- reactive({
+      changes <- reactive_changes()
+      any(vapply(changes, function(df) {
+        !is.null(df) && nrow(df) > 0
+      }, logical(1)))
+    })
+
+    # Disable/enable push button based on changes
+    observeEvent(has_any_changes(), {
+      if (has_any_changes()) {
+        shinyjs::enable("sync_push")
+      } else {
+        shinyjs::disable("sync_push")
+      }
+    })
+
 
     # ── Local changes reactive ────────────────────────────────────────────────
     reactive_changes <- reactive({
