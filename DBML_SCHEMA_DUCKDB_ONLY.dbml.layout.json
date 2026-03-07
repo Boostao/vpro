@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "positions": {
+    "table-Env": {
+      "x": -212.83571427158282,
+      "y": 1028.6161490814304
+    },
+    "table-SU": {
+      "x": -746.2985816393564,
+      "y": 639.1009564226518
+    },
+    "table-Veg": {
+      "x": 304,
+      "y": -403.7400840088619
+    },
+    "table-Admin": {
+      "x": -992.6112320989323,
+      "y": 1039.4663011415182
+    },
+    "table-sync_watermarks": {
+      "x": 912,
+      "y": 630
+    },
+    "table-sync_conflict_queue": {
+      "x": 1181,
+      "y": 525
+    },
+    "table-lists_spplist": {
+      "x": 1694.5,
+      "y": 1628
+    },
+    "table-lists_layercode": {
+      "x": 1436,
+      "y": 615
+    },
+    "table-lists_usyszonelist": {
+      "x": 2203,
+      "y": 1643
+    },
+    "table-lists_usyssubzonelist": {
+      "x": 2203,
+      "y": 615
+    },
+    "table-lists_usystableoflists": {
+      "x": 1953,
+      "y": 600
+    },
+    "table-lists_usyssppattributes": {
+      "x": 1686,
+      "y": 615
+    },
+    "table-metadata_projects": {
+      "x": 314.5178908001547,
+      "y": 1680.5428421917238
+    },
+    "table-user_preferences": {
+      "x": 2453,
+      "y": 555
+    },
+    "table-messages_queue": {
+      "x": 2713,
+      "y": 540
+    },
+    "note-watermarks": {
+      "x": 2968,
+      "y": 614,
+      "width": 250,
+      "height": 180
+    },
+    "note-conflicts": {
+      "x": 3268,
+      "y": 614,
+      "width": 250,
+      "height": 180
+    },
+    "note-semantics": {
+      "x": 3568,
+      "y": 614,
+      "width": 250,
+      "height": 180
+    }
+  }
+}

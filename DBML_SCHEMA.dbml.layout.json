@@ -1,4 +1,159 @@
 {
   "version": 1,
-  "positions": {}
+  "positions": {
+    "table-Env": {
+      "x": 317.9673256889707,
+      "y": 1459.3249457767365
+    },
+    "table-SU": {
+      "x": -130.67145955615058,
+      "y": 588.7296188439833
+    },
+    "table-Veg": {
+      "x": 264.7985621331548,
+      "y": -1172.9124387612378
+    },
+    "table-Admin": {
+      "x": 608,
+      "y": 630
+    },
+    "table-sync_watermarks": {
+      "x": 912,
+      "y": 705
+    },
+    "table-sync_conflict_queue": {
+      "x": 1181,
+      "y": 600
+    },
+    "table-lists_spplist": {
+      "x": 1450.5,
+      "y": 1808
+    },
+    "table-lists_layercode": {
+      "x": 1976.5,
+      "y": 1823
+    },
+    "table-lists_usyszonelist": {
+      "x": 2765,
+      "y": 1823
+    },
+    "table-lists_usyssubzonelist": {
+      "x": 2765,
+      "y": 690
+    },
+    "table-lists_usystableoflists": {
+      "x": 1703,
+      "y": 675
+    },
+    "table-lists_usyssppattributes": {
+      "x": 1436,
+      "y": 690
+    },
+    "table-metadata_projects": {
+      "x": -87.6574403277811,
+      "y": 2098.606362094349
+    },
+    "table-user_preferences": {
+      "x": 2250,
+      "y": 630
+    },
+    "table-messages_queue": {
+      "x": 2510,
+      "y": 615
+    },
+    "table-core_metadata": {
+      "x": 3322,
+      "y": 2266
+    },
+    "table-core_env": {
+      "x": 3015,
+      "y": 1703
+    },
+    "table-core_veg": {
+      "x": 1953,
+      "y": 45
+    },
+    "table-core_su": {
+      "x": 3015,
+      "y": 660
+    },
+    "table-core_admin": {
+      "x": 3312,
+      "y": 600
+    },
+    "table-admin_users": {
+      "x": 4772,
+      "y": 2296
+    },
+    "table-admin_change_log": {
+      "x": 3609,
+      "y": 630
+    },
+    "table-admin_merge_requests": {
+      "x": 4450,
+      "y": 1658
+    },
+    "table-admin_merge_conflicts": {
+      "x": 3878,
+      "y": 570
+    },
+    "table-admin_merge_history": {
+      "x": 4453,
+      "y": 660
+    },
+    "table-staging_env": {
+      "x": 4156,
+      "y": 525
+    },
+    "table-staging_su": {
+      "x": 4752,
+      "y": 615
+    },
+    "table-staging_veg": {
+      "x": 5049,
+      "y": 0
+    },
+    "table-audit_logged_actions": {
+      "x": 5346,
+      "y": 540
+    },
+    "table-public_export_rds_snapshots": {
+      "x": 5643,
+      "y": 570
+    },
+    "table-public_export_download_log": {
+      "x": 4930,
+      "y": 1718
+    },
+    "note-watermarks": {
+      "x": 5933,
+      "y": 689,
+      "width": 250,
+      "height": 180
+    },
+    "note-versioning": {
+      "x": 6233,
+      "y": 689,
+      "width": 250,
+      "height": 180
+    },
+    "note-conflicts": {
+      "x": 6533,
+      "y": 689,
+      "width": 250,
+      "height": 180
+    },
+    "note-master_attach": {
+      "x": 6833,
+      "y": 689,
+      "width": 250,
+      "height": 180
+    },
+    "note-semantics": {
+      "x": 7133,
+      "y": 689,
+      "width": 250,
+      "height": 180
+    }
+  }
 }
