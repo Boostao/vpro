@@ -82,21 +82,19 @@ server <- function(input, output, session) {
     refresh_hierarchy_dropdown()
   })
 
-  # Returns site units for the currently active project (via Env → SU join)
+  # Returns plot numbers for the currently active project
   refresh_su_dropdown <- function(selected_su = NULL) {
     pid <- isolate(state$CurrProject)
     su_choices <- if (!is.null(pid) && nzchar(pid %||% "") && 
-                      DBI::dbExistsTable(con, "Env") && 
-                      DBI::dbExistsTable(con, "SU")) {
+                      DBI::dbExistsTable(con, "Env")) {
       tryCatch(
         as.character(DBI::dbGetQuery(
           con,
-          "SELECT DISTINCT SU.siteunit FROM SU
-           INNER JOIN Env ON SU.plotnumber = Env.plotnumber
-           WHERE Env.projectid = ?
-           ORDER BY SU.siteunit",
+          "SELECT DISTINCT plotnumber FROM Env
+           WHERE projectid = ?
+           ORDER BY plotnumber",
           list(pid)
-        )$siteunit),
+        )$plotnumber),
         error = function(e) character(0)
       )
     } else character(0)
