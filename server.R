@@ -62,6 +62,17 @@ server <- function(input, output, session) {
   pref_form <- get_pref(con, "Current", "DataFormName", default = NULL)
   pref_user <- get_pref(con, "User", "UserName", default = Sys.getenv("USER", "Unknown"))
 
+  # Dev mode overrides (temporary)
+  if (isTRUE(exists("VPRO_DEV_MODE") && VPRO_DEV_MODE)) {
+    if (exists("VPRO_DEV_DEFAULT_PROJECT")) {
+      pref_project <- VPRO_DEV_DEFAULT_PROJECT
+    }
+    if (exists("VPRO_DEV_DEFAULT_PLOTNUMBER")) {
+      pref_plot <- VPRO_DEV_DEFAULT_PLOTNUMBER
+      pref_su_table <- VPRO_DEV_DEFAULT_PLOTNUMBER
+    }
+  }
+
   state$PrefProject <- pref_project
   state$PrefSUTable <- pref_su_table
   state$PrefPlot <- pref_plot
@@ -71,6 +82,12 @@ server <- function(input, output, session) {
   state$CurrForm <- pref_form
   state$sysCurrForm <- pref_form
   state$User <- pref_user
+
+  # Initialize CurrSU from preferred plot
+  if (!is.null(pref_plot) && nzchar(pref_plot)) {
+    state$CurrSU <- pref_plot
+    state$sysCurrSU <- pref_plot
+  }
 
   # 3. Project module (replaces old sel_project sentinel dropdown)
   project_mod <- mod_project_server("project", state, con)

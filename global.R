@@ -18,6 +18,12 @@ Sys.setenv(PGDATABASE = "becmaster")
 Sys.setenv(VPRO_PG_APP_USER = "vpro_app")
 Sys.setenv(VPRO_PG_APP_PASSWORD = "testpass")
 
+# ---- Dev/Test Defaults (temporary) ----
+VPRO_DEV_MODE <- TRUE
+VPRO_DEV_DEFAULT_PROJECT <- "BEC"
+VPRO_DEV_DEFAULT_PLOTNUMBER <- "9624781"
+
+
 # Database Connection
 # Using a function to get a fresh connection or manage a pool object
 # For Shiny, usually we want a persistent connection or a pool.
@@ -40,6 +46,7 @@ source("R/logic_auth.R") # Auth + RBAC helpers
 source("R/logic_coord_tools.R") # Coordinate conversion tools
 source("R/logic_climr.R") # ClimR climate data integration
 source("R/db_connections.R") # Connection helpers + %||%
+source("R/logic_project.R") # Project file management
 source("R/logic_sync.R") # Sync engine (stub)
 source("R/logic_publish.R") # Publish pipeline (stub)
 source("R/logic_reports_veg.R") # Veg report helpers
@@ -50,6 +57,7 @@ source("R/logic_reports_validation.R") # Data validation
 source("R/logic_report_export.R") # Excel report export helpers
 source("R/logic_excel_export.R") # Excel export with styled formatting
 source("R/logic_venus_export.R") # VENUS XML export
+source("R/mod_project.R") # Project management (Open/New/Save/Close)
 source("R/mod_admin_projects.R")
 source("R/mod_admin_codes.R")
 source("R/mod_admin_master.R")

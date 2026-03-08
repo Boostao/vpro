@@ -44,6 +44,14 @@ mod_project_server <- function(id, state, con) {
       }
 
       set_project(state, pid_to_activate, con)
+      
+      # Restore preferred plot/SU after project activation (set_project clears it)
+      pref_plot <- shiny::isolate(state$PrefPlot)
+      if (!is.null(pref_plot) && nzchar(pref_plot %||% "")) {
+        state$CurrSU <- pref_plot
+        state$sysCurrSU <- pref_plot
+      }
+      
       project_changed(project_changed() + 1L)
     }) |> bindEvent(session$clientData$url_hostname, once = TRUE, ignoreNULL = FALSE)
 
