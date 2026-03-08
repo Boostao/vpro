@@ -72,16 +72,6 @@ server <- function(input, output, session) {
   state$sysCurrForm <- pref_form
   state$User <- pref_user
 
-  SU_ACTION_ATTACH <- "__su_action_attach__"
-  SU_ACTION_NEW <- "__su_action_new__"
-  SU_ACTION_UNATTACH <- "__su_action_unattach__"
-  SU_ACTION_NONE <- "__su_action_none__"
-  SU_ACTION_SEPARATOR <- "__su_action_separator__"
-  HIER_ACTION_ATTACH <- "__hier_action_attach__"
-  HIER_ACTION_NEW <- "__hier_action_new__"
-  HIER_ACTION_UNATTACH <- "__hier_action_unattach__"
-  HIER_ACTION_SEPARATOR <- "__hier_action_separator__"
-
   # 3. Project module (replaces old sel_project sentinel dropdown)
   project_mod <- mod_project_server("project", state, con)
 
@@ -92,322 +82,90 @@ server <- function(input, output, session) {
     refresh_hierarchy_dropdown()
   })
 
-  build_selector_choices <- function(dynamic_values, action_values, include_none = FALSE) {
-    action_labels <- function(include_none = FALSE) {
-      base <- c("Attach", "New", "Unattach")
-      if (isTRUE(include_none)) base <- c(base, "None")
-      c(base, "--------------------------------------")
-    }
-    if (length(dynamic_values) == 0 && !isTRUE(include_none)) {
-      lbl <- action_labels(include_none = FALSE)[1:3]
-      return(stats::setNames(action_values[lbl], lbl))
-    }
-    lbl <- c(action_labels(include_none = include_none), dynamic_values)
-    val <- c(unname(action_values[action_labels(include_none = include_none)]), dynamic_values)
-    stats::setNames(val, lbl)
-  }
-
-  resolve_dynamic_selection <- function(selected, preferred, dynamic_values, none_value = NULL) {
-    if (is.null(selected) || !nzchar(selected) || !(selected %in% dynamic_values)) selected <- preferred
-    if (is.null(selected) || !nzchar(selected %||% "") || !(selected %in% dynamic_values)) {
-      if (length(dynamic_values) > 0) selected <- dynamic_values[[1]]
-      else if (!is.null(none_value)) selected <- none_value
-    }
-    selected
-  }
-
+  # Returns site units for the currently active project (via Env → SU join)
   refresh_su_dropdown <- function(selected_su = NULL) {
-    su_actions <- c(
-      "Attach" = SU_ACTION_ATTACH, "New" = SU_ACTION_NEW,
-      "Unattach" = SU_ACTION_UNATTACH, "None" = SU_ACTION_NONE,
-      "--------------------------------------" = SU_ACTION_SEPARATOR
-    )
-    su_choices <- if (DBI::dbExistsTable(con, "SU")) {
-      tryCatch(as.character(DBI::dbGetQuery(con, "SELECT DISTINCT plotnumber FROM SU ORDER BY plotnumber")$plotnumber), error = function(e) character(0))
+    pid <- isolate(state$CurrProject)
+    su_choices <- if (!is.null(pid) && nzchar(pid %||% "") && 
+                      DBI::dbExistsTable(con, "Env") && 
+                      DBI::dbExistsTable(con, "SU")) {
+      tryCatch(
+        as.character(DBI::dbGetQuery(
+          con,
+          "SELECT DISTINCT SU.siteunit FROM SU
+           INNER JOIN Env ON SU.plotnumber = Env.plotnumber
+           WHERE Env.projectid = ?
+           ORDER BY SU.siteunit",
+          list(pid)
+        )$siteunit),
+        error = function(e) character(0)
+      )
     } else character(0)
-    values <- build_selector_choices(su_choices, su_actions, include_none = TRUE)
-    selected_su <- resolve_dynamic_selection(selected_su, state$PrefSUTable, su_choices, SU_ACTION_NONE)
-    updateSelectInput(session, "sel_su", choices = values, selected = selected_su)
+
+    choices <- c("(None)" = "", su_choices)
+    if (is.null(selected_su)) selected_su <- state$CurrSU %||% ""
+    if (!is.null(selected_su) && !(selected_su %in% su_choices)) selected_su <- ""
+    updateSelectInput(session, "sel_su", choices = choices, selected = selected_su)
     invisible(su_choices)
   }
 
-  refresh_plot_dropdown <- function(selected_plot = NULL) refresh_su_dropdown(selected_su = selected_plot)
-
+  # Returns site units for the currently active project
   refresh_hierarchy_dropdown <- function(selected_hierarchy = NULL) {
-    hier_actions <- c(
-      "Attach" = HIER_ACTION_ATTACH, "New" = HIER_ACTION_NEW,
-      "Unattach" = HIER_ACTION_UNATTACH,
-      "--------------------------------------" = HIER_ACTION_SEPARATOR
-    )
-    hier_choices <- if (DBI::dbExistsTable(con, "Hierarchy")) {
-      tryCatch(as.character(DBI::dbGetQuery(con, "SELECT DISTINCT siteunit FROM Hierarchy ORDER BY siteunit")$siteunit), error = function(e) character(0))
+    pid <- isolate(state$CurrProject)
+    hier_choices <- if (!is.null(pid) && nzchar(pid %||% "") && DBI::dbExistsTable(con, "Hierarchy")) {
+      tryCatch(
+        as.character(DBI::dbGetQuery(
+          con,
+          "SELECT DISTINCT siteunit FROM Hierarchy WHERE projectid = ? ORDER BY siteunit",
+          list(pid)
+        )$siteunit),
+        error = function(e) character(0)
+      )
     } else character(0)
-    values <- build_selector_choices(hier_choices, hier_actions, include_none = FALSE)
-    selected_hierarchy <- resolve_dynamic_selection(selected_hierarchy, state$PrefHierarchy, hier_choices, NULL)
-    updateSelectInput(session, "sel_hierarchy", choices = values, selected = selected_hierarchy)
+
+    choices <- c("(None)" = "", hier_choices)
+    if (is.null(selected_hierarchy)) selected_hierarchy <- state$CurrHierarchy %||% ""
+    if (!is.null(selected_hierarchy) && !(selected_hierarchy %in% hier_choices)) selected_hierarchy <- ""
+    updateSelectInput(session, "sel_hierarchy", choices = choices, selected = selected_hierarchy)
     invisible(hier_choices)
   }
 
   observe({ refresh_su_dropdown() })
-  
-  # 5. Handle SU Change
+
+  # 5. Handle SU (site plot) selection
   observeEvent(input$sel_su, {
-    req(input$sel_su)
-
-    if (identical(input$sel_su, SU_ACTION_SEPARATOR)) {
-      refresh_su_dropdown(selected_su = state$PrefSUTable)
-      return()
-    }
-
-    if (identical(input$sel_su, SU_ACTION_NONE)) {
-      state$PrefSUTable <- "None"
-      set_pref(con, "Current", "CurrPlotList", "None")
+    su <- input$sel_su %||% ""
+    if (!nzchar(su)) {
       set_su(state, NULL)
       state$PrefPlot <- NULL
       set_pref(con, "Current", "CurrPlotNumber", "")
-      showNotification("Current site unit table cleared.", type = "message")
-      return()
+    } else {
+      set_su(state, su)
+      state$PrefSUTable <- su
+      set_pref(con, "Current", "CurrPlotList", su)
+      set_pref(con, "Current", "CurrPlotNumber", su)
     }
-
-    if (identical(input$sel_su, SU_ACTION_ATTACH)) {
-      showModal(modalDialog(
-        title = "Attach Site Unit Table",
-        textInput("su_attach_db_path", "DuckDB file path", value = ""),
-        textInput("su_attach_prefix", "Prefix for <prefix>_SU", value = state$CurrProject %||% ""),
-        checkboxInput("su_attach_replace", "Replace existing table if present", value = FALSE),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("su_attach_confirm", "Attach", class = "btn-primary")
-        ),
-        easyClose = TRUE
-      ))
-      refresh_su_dropdown(selected_su = state$PrefSUTable)
-      return()
-    }
-
-    if (identical(input$sel_su, SU_ACTION_NEW)) {
-      showModal(modalDialog(
-        title = "New Site Unit Table",
-        textInput("su_new_prefix", "New prefix", value = state$CurrProject %||% ""),
-        textInput("su_new_template", "Template prefix", value = "Sample"),
-        checkboxInput("su_new_overwrite", "Overwrite if table exists", value = FALSE),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("su_new_confirm", "Create", class = "btn-primary")
-        ),
-        easyClose = TRUE
-      ))
-      refresh_su_dropdown(selected_su = state$PrefSUTable)
-      return()
-    }
-
-    if (identical(input$sel_su, SU_ACTION_UNATTACH)) {
-      su_prefixes <- discover_prefixes_by_suffix(con, "_SU")
-      su_choices <- su_prefixes[!tolower(su_prefixes) %in% c("sample")]
-      showModal(modalDialog(
-        title = "Unattach Site Unit Table",
-        if (length(su_choices) == 0) {
-          tags$p("No detachable site unit tables found.")
-        } else {
-          selectInput("su_unattach_prefix", "Prefix", choices = su_choices)
-        },
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("su_unattach_confirm", "Unattach", class = "btn-danger")
-        ),
-        easyClose = TRUE
-      ))
-      refresh_su_dropdown(selected_su = state$PrefSUTable)
-      return()
-    }
-
-    state$PrefSUTable <- input$sel_su
-    set_pref(con, "Current", "CurrPlotList", input$sel_su)
-  })
-
-  observeEvent(input$su_new_confirm, {
-    req(input$su_new_prefix)
-    tryCatch({
-      create_prefixed_table_from_template(
-        con,
-        prefix = trimws(input$su_new_prefix),
-        suffix = "_SU",
-        template_prefix = trimws(input$su_new_template),
-        overwrite = isTRUE(input$su_new_overwrite)
-      )
-      removeModal()
-      refresh_su_dropdown(selected_su = trimws(input$su_new_prefix))
-      updateSelectInput(session, "sel_su", selected = trimws(input$su_new_prefix))
-      showNotification(paste0("Created site unit table: ", trimws(input$su_new_prefix), "_SU"), type = "message")
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
-
-  observeEvent(input$su_attach_confirm, {
-    req(input$su_attach_db_path, input$su_attach_prefix)
-    tryCatch({
-      attach_prefixed_table(
-        con,
-        db_path = trimws(input$su_attach_db_path),
-        prefix = trimws(input$su_attach_prefix),
-        suffix = "_SU",
-        replace_existing = isTRUE(input$su_attach_replace)
-      )
-      removeModal()
-      refresh_su_dropdown(selected_su = trimws(input$su_attach_prefix))
-      updateSelectInput(session, "sel_su", selected = trimws(input$su_attach_prefix))
-      showNotification(paste0("Attached site unit table: ", trimws(input$su_attach_prefix), "_SU"), type = "message")
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
-
-  observeEvent(input$su_unattach_confirm, {
-    req(input$su_unattach_prefix)
-    tryCatch({
-      removed <- unattach_prefixed_table(con, input$su_unattach_prefix, suffix = "_SU")
-      removeModal()
-      if (identical(tolower(state$PrefSUTable %||% ""), tolower(input$su_unattach_prefix))) {
-        state$PrefSUTable <- "None"
-        set_pref(con, "Current", "CurrPlotList", "None")
-      }
-      refresh_su_dropdown(selected_su = state$PrefSUTable)
-      if (!is.null(removed)) {
-        showNotification(paste0("Unattached site unit table: ", removed), type = "message")
-      }
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
   })
 
   observe({
     refresh_hierarchy_dropdown()
   })
 
+  # 5b. Handle Hierarchy selection
   observeEvent(input$sel_hierarchy, {
-    req(input$sel_hierarchy)
-
-    if (identical(input$sel_hierarchy, HIER_ACTION_SEPARATOR)) {
-      refresh_hierarchy_dropdown(selected_hierarchy = state$CurrHierarchy %||% state$PrefHierarchy)
-      return()
+    hier <- input$sel_hierarchy %||% ""
+    if (!nzchar(hier)) {
+      state$CurrHierarchy <- NULL
+      state$sysCurrHierarchy <- NULL
+      state$PrefHierarchy <- NULL
+      set_pref(con, "Current", "CurrHierarchy", "")
+    } else {
+      state$CurrHierarchy <- hier
+      state$sysCurrHierarchy <- hier
+      state$PrefHierarchy <- hier
+      set_pref(con, "Current", "CurrHierarchy", hier)
     }
-
-    if (identical(input$sel_hierarchy, HIER_ACTION_ATTACH)) {
-      showModal(modalDialog(
-        title = "Attach Hierarchy Table",
-        textInput("hier_attach_db_path", "DuckDB file path", value = ""),
-        textInput("hier_attach_prefix", "Prefix for <prefix>_Hierarchy", value = state$CurrProject %||% ""),
-        checkboxInput("hier_attach_replace", "Replace existing table if present", value = FALSE),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("hier_attach_confirm", "Attach", class = "btn-primary")
-        ),
-        easyClose = TRUE
-      ))
-      refresh_hierarchy_dropdown(selected_hierarchy = state$CurrHierarchy %||% state$PrefHierarchy)
-      return()
-    }
-
-    if (identical(input$sel_hierarchy, HIER_ACTION_NEW)) {
-      showModal(modalDialog(
-        title = "New Hierarchy Table",
-        textInput("hier_new_prefix", "New prefix", value = state$CurrProject %||% ""),
-        textInput("hier_new_template", "Template prefix", value = "Sample"),
-        checkboxInput("hier_new_overwrite", "Overwrite if table exists", value = FALSE),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("hier_new_confirm", "Create", class = "btn-primary")
-        ),
-        easyClose = TRUE
-      ))
-      refresh_hierarchy_dropdown(selected_hierarchy = state$CurrHierarchy %||% state$PrefHierarchy)
-      return()
-    }
-
-    if (identical(input$sel_hierarchy, HIER_ACTION_UNATTACH)) {
-      hierarchy_prefixes <- discover_prefixes_by_suffix(con, "_Hierarchy")
-      hierarchy_choices <- hierarchy_prefixes[!tolower(hierarchy_prefixes) %in% c("sample")]
-      showModal(modalDialog(
-        title = "Unattach Hierarchy Table",
-        if (length(hierarchy_choices) == 0) {
-          tags$p("No detachable hierarchy tables found.")
-        } else {
-          selectInput("hier_unattach_prefix", "Prefix", choices = hierarchy_choices)
-        },
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("hier_unattach_confirm", "Unattach", class = "btn-danger")
-        ),
-        easyClose = TRUE
-      ))
-      refresh_hierarchy_dropdown(selected_hierarchy = state$CurrHierarchy %||% state$PrefHierarchy)
-      return()
-    }
-
-    state$CurrHierarchy <- input$sel_hierarchy
-    state$sysCurrHierarchy <- input$sel_hierarchy
-    state$PrefHierarchy <- input$sel_hierarchy
-    set_pref(con, "Current", "CurrHierarchy", input$sel_hierarchy)
   })
 
-  observeEvent(input$hier_new_confirm, {
-    req(input$hier_new_prefix)
-    tryCatch({
-      create_prefixed_table_from_template(
-        con,
-        prefix = trimws(input$hier_new_prefix),
-        suffix = "_Hierarchy",
-        template_prefix = trimws(input$hier_new_template),
-        overwrite = isTRUE(input$hier_new_overwrite)
-      )
-      removeModal()
-      refresh_hierarchy_dropdown(selected_hierarchy = trimws(input$hier_new_prefix))
-      updateSelectInput(session, "sel_hierarchy", selected = trimws(input$hier_new_prefix))
-      showNotification(paste0("Created hierarchy table: ", trimws(input$hier_new_prefix), "_Hierarchy"), type = "message")
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
-
-  observeEvent(input$hier_attach_confirm, {
-    req(input$hier_attach_db_path, input$hier_attach_prefix)
-    tryCatch({
-      attach_prefixed_table(
-        con,
-        db_path = trimws(input$hier_attach_db_path),
-        prefix = trimws(input$hier_attach_prefix),
-        suffix = "_Hierarchy",
-        replace_existing = isTRUE(input$hier_attach_replace)
-      )
-      removeModal()
-      refresh_hierarchy_dropdown(selected_hierarchy = trimws(input$hier_attach_prefix))
-      updateSelectInput(session, "sel_hierarchy", selected = trimws(input$hier_attach_prefix))
-      showNotification(paste0("Attached hierarchy table: ", trimws(input$hier_attach_prefix), "_Hierarchy"), type = "message")
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
-
-  observeEvent(input$hier_unattach_confirm, {
-    req(input$hier_unattach_prefix)
-    tryCatch({
-      removed <- unattach_prefixed_table(con, input$hier_unattach_prefix, suffix = "_Hierarchy")
-      removeModal()
-      if (identical(tolower(state$CurrHierarchy %||% ""), tolower(input$hier_unattach_prefix))) {
-        state$CurrHierarchy <- NULL
-        state$sysCurrHierarchy <- NULL
-        state$PrefHierarchy <- NULL
-      }
-      refresh_hierarchy_dropdown()
-      if (!is.null(removed)) {
-        showNotification(paste0("Unattached hierarchy table: ", removed), type = "message")
-      }
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
-  
   observeEvent(input$btn_nav_data_entry, {
     state$DataEntryReturnTab <- input$main_tabs %||% "Vegetation"
     open_fs882_destination_context(

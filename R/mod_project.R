@@ -1,10 +1,15 @@
 # Module: Project Management
-# Sidebar UI: label showing open project + Open/New/Save/Close buttons.
+# Sidebar UI: project switcher + Open/New/Save/Close buttons.
+
+# Default data folder path used to pre-populate the Open dialog and auto-restore
+.default_db_path <- function() {
+  normalizePath(file.path(getwd(), "data", "vpro.duckdb"), mustWork = FALSE)
+}
 
 mod_project_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    uiOutput(ns("project_label")),
+    uiOutput(ns("project_switcher")),
     div(
       class = "d-flex gap-1 mb-1",
       actionButton(ns("btn_open"),  "Open",  class = "btn btn-sm btn-outline-primary flex-fill"),
@@ -19,33 +24,60 @@ mod_project_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # Reactive: last known file path for this session
+    # Reactive: last known file path (NULL = main db, no separate file)
     current_path <- reactiveVal(NULL)
 
     # Reactive: triggers downstream refresh (SU dropdown etc.)
     project_changed <- reactiveVal(0L)
 
-    # ---- Label ----
-    output$project_label <- renderUI({
-      pid <- isolate(state$CurrProject)
-      if (is.null(pid) || !nzchar(pid %||% "")) {
-        div(class = "text-muted small mb-1", "No project open")
-      } else {
-        div(class = "fw-semibold small mb-1 text-primary", pid)
-      }
-    })
-
-    # Re-render label when project changes
+    # ---- Startup: auto-restore project from main db ----
     observe({
-      state$CurrProject  # take dependency
-      output$project_label <- renderUI({
-        pid <- state$CurrProject
+      open_pids <- list_open_projects(con)
+      if (length(open_pids) == 0) return()
+
+      # If there's only one project, or the preferred project is in the db, activate it
+      pref <- shiny::isolate(state$PrefProject)
+      pid_to_activate <- if (!is.null(pref) && nzchar(pref %||% "") && pref %in% open_pids) {
+        pref
+      } else {
+        open_pids[[1]]
+      }
+
+      set_project(state, pid_to_activate, con)
+      project_changed(project_changed() + 1L)
+    }) |> bindEvent(session$clientData$url_hostname, once = TRUE, ignoreNULL = FALSE)
+
+    # ---- Project switcher (visible when multiple projects are open) ----
+    output$project_switcher <- renderUI({
+      open_pids <- list_open_projects(con)
+      pid       <- state$CurrProject
+
+      if (length(open_pids) <= 1) {
+        # Single project: just show the label
         if (is.null(pid) || !nzchar(pid %||% "")) {
           div(class = "text-muted small mb-1", "No project open")
         } else {
           div(class = "fw-semibold small mb-1 text-primary", pid)
         }
-      })
+      } else {
+        # Multiple projects: show a dropdown to switch
+        selectInput(
+          ns("sel_active_project"),
+          label = NULL,
+          choices = open_pids,
+          selected = pid %||% open_pids[[1]]
+        )
+      }
+    })
+
+    # Handle active project switch via the dropdown
+    observeEvent(input$sel_active_project, {
+      pid <- input$sel_active_project
+      if (!is.null(pid) && nzchar(pid) && !identical(pid, isolate(state$CurrProject))) {
+        set_project(state, pid, con)
+        set_pref(con, "Current", "CurrProject", pid)
+        project_changed(project_changed() + 1L)
+      }
     })
 
     # ---- Close button (only when project open) ----
@@ -59,9 +91,10 @@ mod_project_server <- function(id, state, con) {
 
     # ---- Open ----
     observeEvent(input$btn_open, {
+      default_path <- current_path() %||% .default_db_path()
       showModal(modalDialog(
-        title = "Open Project",
-        textInput(ns("open_path"), "Project file path (.duckdb)", value = current_path() %||% ""),
+        title = "Open Project File",
+        textInput(ns("open_path"), "Project file path (.duckdb)", value = default_path),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("open_confirm"), "Open", class = "btn-primary")
@@ -70,17 +103,71 @@ mod_project_server <- function(id, state, con) {
       ))
     })
 
+    # Internal: holds path pending project selection when file has multiple projects
+    .pending_open_path <- reactiveVal(NULL)
+
     observeEvent(input$open_confirm, {
       path <- trimws(input$open_path %||% "")
       if (!nzchar(path)) {
         showNotification("File path is required.", type = "error")
         return()
       }
+      if (!file.exists(path)) {
+        showNotification(paste0("File not found: ", path), type = "error")
+        return()
+      }
+
+      # Check if the file contains multiple projects before loading
+      file_pids <- tryCatch(list_projects_in_file(path), error = function(e) character(0))
+
+      if (length(file_pids) > 1) {
+        # Multiple projects in file — ask which to activate
+        .pending_open_path(path)
+        removeModal()
+        showModal(modalDialog(
+          title = "Select Project to Activate",
+          p(class = "text-muted small", paste0("File: ", path)),
+          selectInput(ns("open_pick_pid"), "Project", choices = file_pids),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(ns("open_pick_confirm"), "Activate", class = "btn-primary")
+          ),
+          easyClose = TRUE
+        ))
+      } else {
+        # Single project (or unknown — let open_project detect)
+        tryCatch({
+          pid <- open_project(con, path)
+          current_path(path)
+          set_project(state, pid, con)
+          set_pref(con, "Current", "CurrProject", pid)
+          removeModal()
+          project_changed(project_changed() + 1L)
+          showNotification(paste0("Opened project: ", pid), type = "message")
+        }, error = function(e) {
+          showNotification(conditionMessage(e), type = "error")
+        })
+      }
+    })
+
+    # Confirm project selection after multi-project file open
+    observeEvent(input$open_pick_confirm, {
+      path <- .pending_open_path()
+      pid  <- input$open_pick_pid
+      if (is.null(path) || !nzchar(path %||% "")) {
+        showNotification("No pending file path.", type = "error")
+        return()
+      }
+      if (is.null(pid) || !nzchar(pid %||% "")) {
+        showNotification("No project selected.", type = "error")
+        return()
+      }
       tryCatch({
-        pid <- open_project(con, path)
+        open_project(con, path)  # loads ALL projects from file into main db
         current_path(path)
         set_project(state, pid, con)
         set_pref(con, "Current", "CurrProject", pid)
+        .pending_open_path(NULL)
         removeModal()
         project_changed(project_changed() + 1L)
         showNotification(paste0("Opened project: ", pid), type = "message")

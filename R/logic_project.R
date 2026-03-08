@@ -221,6 +221,44 @@ new_project <- function(con, project_id, project_title) {
   invisible(project_id)
 }
 
+#' List project IDs available in an external .duckdb file
+#'
+#' Opens a read-only connection to the file and returns distinct projectid
+#' values.  Use this to detect multiple projects before calling open_project().
+#' Do NOT pass the main vpro.duckdb path — use list_open_projects(con) for that.
+#'
+#' @param path Character. Path to an external project .duckdb file.
+#' @return Character vector of project IDs, or character(0) if none found.
+list_projects_in_file <- function(path) {
+  if (!is.character(path) || !nzchar(path %||% "")) return(character(0))
+  if (!file.exists(path)) return(character(0))
+
+  con <- tryCatch(
+    DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(con)) return(character(0))
+  on.exit(try(DBI::dbDisconnect(con, shutdown = TRUE), silent = TRUE), add = TRUE)
+
+  for (tbl in c("Metadata", "Env")) {
+    if (!DBI::dbExistsTable(con, tbl)) next
+    fields <- tryCatch(tolower(DBI::dbListFields(con, tbl)), error = function(e) character(0))
+    if (!("projectid" %in% fields)) next
+    res <- tryCatch(
+      DBI::dbGetQuery(
+        con,
+        paste0("SELECT DISTINCT projectid FROM ", DBI::dbQuoteIdentifier(con, tbl),
+               " WHERE projectid IS NOT NULL ORDER BY projectid")
+      ),
+      error = function(e) data.frame(projectid = character(0))
+    )
+    pids <- as.character(res$projectid)
+    pids <- pids[!is.na(pids) & nzchar(pids)]
+    if (length(pids) > 0) return(pids)
+  }
+  character(0)
+}
+
 #' Check if a project exists in Metadata
 #'
 #' @param con DBI connection
