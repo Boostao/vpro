@@ -413,7 +413,7 @@ get_project_metadata <- function(con, project_id) {
     ))
   }
   
-  sql <- "SELECT projectid, projecttitle, projectdescription FROM Sample_Metadata WHERE projectid = ?"
+  sql <- "SELECT projectid, projecttitle, projectdescription FROM Metadata WHERE projectid = ?"
   result <- DBI::dbGetQuery(con, sql, list(project_id))
   
   if (nrow(result) == 0) {
@@ -437,7 +437,7 @@ get_project_metadata <- function(con, project_id) {
 get_plot_data <- function(con, project_id, opts) {
   
   # Base query
-  sql <- "SELECT * FROM Sample_Env WHERE 1=1"
+  sql <- "SELECT * FROM Env WHERE 1=1"
   params <- list()
   
   # Filter by project
@@ -525,11 +525,11 @@ get_vegetation_for_plot <- function(con, plot_number, opts) {
 get_soil_data_for_plot <- function(con, plot_number) {
   
   # Get humus horizons
-  sql_humus <- "SELECT * FROM Sample_Humus WHERE PlotNumber = ? ORDER BY UpperDepth"
+  sql_humus <- "SELECT * FROM Humus WHERE PlotNumber = ? ORDER BY UpperDepth"
   humus <- DBI::dbGetQuery(con, sql_humus, list(plot_number))
   
   # Get mineral horizons
-  sql_mineral <- "SELECT * FROM Sample_Mineral WHERE PlotNumber = ? ORDER BY UpperDepth"
+  sql_mineral <- "SELECT * FROM Mineral WHERE PlotNumber = ? ORDER BY UpperDepth"
   mineral <- DBI::dbGetQuery(con, sql_mineral, list(plot_number))
   
   list(

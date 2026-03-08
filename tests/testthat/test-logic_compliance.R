@@ -5,7 +5,7 @@ source(here::here("R", "logic_compliance.R"))
 setup_compliance_tables <- function(con) {
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber TEXT,
       projectid TEXT,
       zone TEXT,
@@ -21,7 +21,7 @@ setup_compliance_tables <- function(con) {
     )
   ")
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Veg (
+    CREATE TABLE Veg (
       plotnumber TEXT,
       species TEXT,
       projectid TEXT,
@@ -40,7 +40,7 @@ setup_compliance_tables <- function(con) {
            'A'::TEXT AS layer,
           cover AS cover_value,
            projectid
-    FROM Sample_Veg
+    FROM Veg
   ")
 
   DBI::dbExecute(con, "DROP TABLE IF EXISTS lists.USysZoneList")
@@ -51,12 +51,12 @@ setup_compliance_tables <- function(con) {
     )
   ")
 
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 62, -150, 5000, 'BAD', 'BAD', 150, 400, -5)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 55, -120, 100, 'BAD', 'OK', 10, 180, 10)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ', 'ICH', 'vm', 55, -120, 100, 'BAD', 'OK', 10, 180, 10)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P1', 'BAD', 'PRJ', 'BADCODE')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P1', 'BAD', 'PRJ', '20')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P2', 'OK', 'PRJ', '200')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 62, -150, 5000, 'BAD', 'BAD', 150, 400, -5)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 55, -120, 100, 'BAD', 'OK', 10, 180, 10)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P2', 'PRJ', 'ICH', 'vm', 55, -120, 100, 'BAD', 'OK', 10, 180, 10)")
+  DBI::dbExecute(con, "INSERT INTO Veg VALUES ('P1', 'BAD', 'PRJ', 'BADCODE')")
+  DBI::dbExecute(con, "INSERT INTO Veg VALUES ('P1', 'BAD', 'PRJ', '20')")
+  DBI::dbExecute(con, "INSERT INTO Veg VALUES ('P2', 'OK', 'PRJ', '200')")
   if ("code" %in% DBI::dbListFields(con, DBI::Id(schema = "lists", table = "SppList"))) {
     DBI::dbExecute(con, "INSERT INTO lists.SppList (code) VALUES ('OK')")
   }
@@ -104,7 +104,7 @@ test_that("required fields flag missing values", {
 
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation, mesoslopeposition, slopegradient, aspect, rootingdepth)
+    "INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation, mesoslopeposition, slopegradient, aspect, rootingdepth)
      VALUES ('P3', 'PRJ', NULL, '', 55, -120, 100, 'MID', 10, 180, 10)"
   )
   missing <- check_required_fields(con, project_id = "PRJ")

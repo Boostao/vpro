@@ -33,16 +33,16 @@ setup_test_db <- function() {
     ('dataquality', 'Excellent', 4, '', 'Yes')
   ")
   
-  # Create Sample_SU
+  # Create SU
   dbExecute(con, "
-    CREATE TABLE Sample_SU (
+    CREATE TABLE SU (
       PlotNumber VARCHAR,
       SiteUnit VARCHAR
     )
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_SU VALUES
+    INSERT INTO SU VALUES
     ('00001', 'SU1'),
     ('00002', 'SU1'),
     ('00003', 'SU2'),
@@ -50,9 +50,9 @@ setup_test_db <- function() {
     ('00005', 'SU3')
   ")
   
-  # Create Sample_Env with quality fields
+  # Create Env with quality fields
   dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       PlotNumber VARCHAR,
       ProjectID VARCHAR,
       SitePlotQuality VARCHAR,
@@ -63,7 +63,7 @@ setup_test_db <- function() {
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_Env VALUES
+    INSERT INTO Env VALUES
     ('00001', 'TEST', 'Excellent', 'Good', 'Good', 'A'),
     ('00002', 'TEST', 'Good', 'Fair', 'Good', 'B'),
     ('00003', 'TEST', 'Fair', 'Good', 'Poor', 'C'),

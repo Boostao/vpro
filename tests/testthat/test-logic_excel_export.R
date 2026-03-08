@@ -192,7 +192,7 @@ test_that("excel export handles empty data gracefully", {
   # Create minimal schema
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
   DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (PlotNumber VARCHAR, MyLayer VARCHAR, Species VARCHAR, Cover VARCHAR)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (plotnumber VARCHAR, projectid VARCHAR)")
+  DBI::dbExecute(con, "CREATE TABLE Env (plotnumber VARCHAR, projectid VARCHAR)")
   DBI::dbExecute(con, "CREATE TABLE lists.SppList (code VARCHAR, scientificname VARCHAR, commonname VARCHAR)")
   
   temp_file <- tempfile(fileext = ".xlsx")
@@ -217,13 +217,13 @@ test_that("project filtering works correctly", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   
   # Get list of projects
-  projects <- DBI::dbGetQuery(con, "SELECT DISTINCT projectid FROM Sample_Metadata LIMIT 1")
+  projects <- DBI::dbGetQuery(con, "SELECT DISTINCT projectid FROM Metadata LIMIT 1")
   
   if (nrow(projects) > 0) {
     project_id <- projects$projectid[1]
     has_veg <- DBI::dbGetQuery(
       con,
-      "SELECT COUNT(*) AS n FROM vw_USysAllVeg v JOIN Sample_Env e ON v.PlotNumber = e.plotnumber WHERE v.MyLayer = '1' AND e.projectid = ?",
+      "SELECT COUNT(*) AS n FROM vw_USysAllVeg v JOIN Env e ON v.PlotNumber = e.plotnumber WHERE v.MyLayer = '1' AND e.projectid = ?",
       list(project_id)
     )$n
 

@@ -6,7 +6,7 @@ source(here::here("R", "mod_site_env.R"))
 
 setup_site_env_tables <- function(con) {
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber TEXT PRIMARY KEY,
       _location TEXT,
       date TEXT,
@@ -29,7 +29,7 @@ setup_site_env_tables <- function(con) {
     )
   ")
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Humus (
+    CREATE TABLE Humus (
       id INTEGER,
       plotnumber TEXT,
       horizon TEXT,
@@ -42,7 +42,7 @@ setup_site_env_tables <- function(con) {
     )
   ")
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Mineral (
+    CREATE TABLE Mineral (
       id INTEGER,
       plotnumber TEXT,
       horizon TEXT,
@@ -66,7 +66,7 @@ setup_site_env_tables <- function(con) {
 
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Env (plotnumber, _location, latitude, longitude) VALUES (?, ?, ?, ?)",
+    "INSERT INTO Env (plotnumber, _location, latitude, longitude) VALUES (?, ?, ?, ?)",
     list("P1", "Loc A", 52.1, -119.2)
   )
 }
@@ -101,7 +101,7 @@ test_that("mod_site_env loads inputs and saves header", {
     )
   )
 
-  saved <- DBI::dbGetQuery(con, "SELECT _location, latitude, longitude FROM Sample_Env WHERE plotnumber = ?", list("P1"))
+  saved <- DBI::dbGetQuery(con, "SELECT _location, latitude, longitude FROM Env WHERE plotnumber = ?", list("P1"))
   expect_equal(saved$`_location`[1], "Loc B")
   expect_equal(saved$latitude[1], 50.0)
   expect_equal(saved$longitude[1], -120.5)

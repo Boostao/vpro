@@ -69,7 +69,7 @@ test_that("Excel export splits long environment by site unit", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       PlotNumber TEXT,
       SitePlotQuality TEXT,
       Zone TEXT,
@@ -78,7 +78,7 @@ test_that("Excel export splits long environment by site unit", {
     )
   ")
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_SU (
+    CREATE TABLE SU (
       PlotNumber TEXT,
       SiteUnit TEXT
     )
@@ -86,22 +86,22 @@ test_that("Excel export splits long environment by site unit", {
 
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Env (PlotNumber, SitePlotQuality, Zone, SubZone, Elevation) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO Env (PlotNumber, SitePlotQuality, Zone, SubZone, Elevation) VALUES (?, ?, ?, ?, ?)",
     list("P1", "Good", "BWBS", "dk", 100)
   )
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Env (PlotNumber, SitePlotQuality, Zone, SubZone, Elevation) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO Env (PlotNumber, SitePlotQuality, Zone, SubZone, Elevation) VALUES (?, ?, ?, ?, ?)",
     list("P2", "Good", "BWBS", "dk", 120)
   )
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_SU (PlotNumber, SiteUnit) VALUES (?, ?)",
+    "INSERT INTO SU (PlotNumber, SiteUnit) VALUES (?, ?)",
     list("P1", "SU01")
   )
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_SU (PlotNumber, SiteUnit) VALUES (?, ?)",
+    "INSERT INTO SU (PlotNumber, SiteUnit) VALUES (?, ?)",
     list("P2", "SU02")
   )
 

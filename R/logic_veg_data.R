@@ -14,8 +14,8 @@ get_vegetation_data <- function(con, site_unit_id, project_id = NULL) {
   }
   
   # Tables
-  veg <- tbl(con, "vw_Sample_Veg_Long")
-  su <- tbl(con, "Sample_SU")
+  veg <- tbl(con, "vw_Veg_Long")
+  su <- tbl(con, "SU")
   spp <- tbl(con, "SppList")
   layers <- tbl(con, "LayerCode")
   

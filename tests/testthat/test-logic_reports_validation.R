@@ -74,9 +74,9 @@ setup_validation_db <- function() {
     ('SYNONYM1', 'Old name', 'S')
   ")
   
-  # Create Sample_Env with some invalid codes
+  # Create Env with some invalid codes
   dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       PlotNumber VARCHAR,
       ProjectID VARCHAR,
       MoistureRegime VARCHAR,
@@ -87,7 +87,7 @@ setup_validation_db <- function() {
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_Env VALUES
+    INSERT INTO Env VALUES
     ('001', 'TEST', '5', 'C', 'N', 'E'),
     ('002', 'TEST', 'X', 'C', 'N', NULL),
     ('003', 'TEST', '6', 'Z', 'Q', 'S'),
@@ -114,16 +114,16 @@ setup_validation_db <- function() {
     ('004', 'A', 'SYNONYM1', 20.0)
   ")
   
-  # Create Sample_SU
+  # Create SU
   dbExecute(con, "
-    CREATE TABLE Sample_SU (
+    CREATE TABLE SU (
       PlotNumber VARCHAR,
       SiteUnit VARCHAR
     )
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_SU VALUES
+    INSERT INTO SU VALUES
     ('001', 'SU1'),
     ('002', 'SU1'),
     ('003', 'SU2')
@@ -138,7 +138,7 @@ test_that("validate_env_data detects invalid codes", {
   
   # VBA source: ValidateEnvData() in V7mdlReportsValidateEnvData.txt
   
-  env <- dbGetQuery(con, "SELECT * FROM Sample_Env")
+  env <- dbGetQuery(con, "SELECT * FROM Env")
   errors <- validate_env_data(con, env)
   
   expect_true(nrow(errors) > 0)
@@ -160,7 +160,7 @@ test_that("validate_env_data handles looped fields (Exposure1, Exposure2)", {
   
   # VBA source: ValidateLoops logic in ValidateEnvData()
   
-  env <- dbGetQuery(con, "SELECT * FROM Sample_Env")
+  env <- dbGetQuery(con, "SELECT * FROM Env")
   errors <- validate_env_data(con, env)
   
   # Plot 003 has invalid Exposure1 'Q'
@@ -174,7 +174,7 @@ test_that("validate_env_data ignores NULL values", {
   on.exit(dbDisconnect(con, shutdown = TRUE))
   
   # Plot 002 has NULL Exposure2 - should not be an error
-  env <- dbGetQuery(con, "SELECT * FROM Sample_Env")
+  env <- dbGetQuery(con, "SELECT * FROM Env")
   errors <- validate_env_data(con, env)
   
   exp2_errors <- errors[errors$FieldName == "Exposure2" & errors$PlotNumber == "002", ]
@@ -222,7 +222,7 @@ test_that("check_orphaned_veg_records finds orphans", {
   con <- setup_validation_db()
   on.exit(dbDisconnect(con, shutdown = TRUE))
   
-  # Add a veg record for plot that doesn't exist in Sample_Env
+  # Add a veg record for plot that doesn't exist in Env
   dbExecute(con, "
     INSERT INTO vw_USysAllVeg VALUES
     ('999', 'A', 'ABIEGRA', 10.0)
@@ -238,9 +238,9 @@ test_that("check_orphaned_env_records finds orphans", {
   con <- setup_validation_db()
   on.exit(dbDisconnect(con, shutdown = TRUE))
   
-  # Add an env record for plot that doesn't exist in Sample_SU
+  # Add an env record for plot that doesn't exist in SU
   dbExecute(con, "
-    INSERT INTO Sample_Env VALUES
+    INSERT INTO Env VALUES
     ('888', 'TEST', '5', 'C', 'N', 'E')
   ")
   
@@ -278,7 +278,7 @@ test_that("check_duplicate_plots finds duplicates", {
   
   # Add duplicate plot
   dbExecute(con, "
-    INSERT INTO Sample_Env VALUES
+    INSERT INTO Env VALUES
     ('001', 'TEST2', '6', 'D', 'S', 'W')
   ")
   

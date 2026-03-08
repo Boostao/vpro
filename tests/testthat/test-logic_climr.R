@@ -259,9 +259,9 @@ test_that("save climate to db handles missing data", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
-  # Create Sample_Env table
+  # Create Env table
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber TEXT PRIMARY KEY,
       latitude DOUBLE,
       longitude DOUBLE,
@@ -270,7 +270,7 @@ test_that("save climate to db handles missing data", {
   ")
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, latitude, longitude)
+    INSERT INTO Env (plotnumber, latitude, longitude)
     VALUES ('P001', 50.6745, -120.3273)
   ")
   
@@ -283,9 +283,9 @@ test_that("save climate to db creates columns and saves data", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
-  # Create Sample_Env table
+  # Create Env table
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber TEXT PRIMARY KEY,
       latitude DOUBLE,
       longitude DOUBLE
@@ -293,7 +293,7 @@ test_that("save climate to db creates columns and saves data", {
   ")
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, latitude, longitude)
+    INSERT INTO Env (plotnumber, latitude, longitude)
     VALUES ('P001', 50.6745, -120.3273)
   ")
   
@@ -326,7 +326,7 @@ test_that("save climate to db creates columns and saves data", {
   expect_true(result)
   
   # Verify columns were created
-  cols <- tolower(DBI::dbListFields(con, "Sample_Env"))
+  cols <- tolower(DBI::dbListFields(con, "Env"))
   expect_true("climr_mat" %in% cols)
   expect_true("climr_map" %in% cols)
   expect_true("climr_period" %in% cols)
@@ -334,7 +334,7 @@ test_that("save climate to db creates columns and saves data", {
   # Verify data was saved
   saved <- DBI::dbGetQuery(con, "
     SELECT climr_mat, climr_map, climr_elevation, climr_period
-    FROM Sample_Env
+    FROM Env
     WHERE plotnumber = 'P001'
   ")
   
@@ -351,7 +351,7 @@ test_that("save climate to db respects overwrite parameter", {
   
   # Create table with climate columns
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber TEXT PRIMARY KEY,
       latitude DOUBLE,
       climr_mat DOUBLE,
@@ -361,7 +361,7 @@ test_that("save climate to db respects overwrite parameter", {
   
   # Insert plot with existing climate data
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, latitude, climr_mat, climr_fetch_time)
+    INSERT INTO Env (plotnumber, latitude, climr_mat, climr_fetch_time)
     VALUES ('P001', 50.6745, 7.5, '2024-01-01 12:00:00')
   ")
   
@@ -392,7 +392,7 @@ test_that("save climate to db respects overwrite parameter", {
   expect_false(result)
   
   # Original value should be unchanged
-  mat_old <- DBI::dbGetQuery(con, "SELECT climr_mat FROM Sample_Env WHERE plotnumber = 'P001'")$climr_mat[1]
+  mat_old <- DBI::dbGetQuery(con, "SELECT climr_mat FROM Env WHERE plotnumber = 'P001'")$climr_mat[1]
   expect_equal(mat_old, 7.5)
   
   # Save with overwrite = TRUE (should succeed)
@@ -400,7 +400,7 @@ test_that("save climate to db respects overwrite parameter", {
   expect_true(result)
   
   # Value should be updated
-  mat_new <- DBI::dbGetQuery(con, "SELECT climr_mat FROM Sample_Env WHERE plotnumber = 'P001'")$climr_mat[1]
+  mat_new <- DBI::dbGetQuery(con, "SELECT climr_mat FROM Env WHERE plotnumber = 'P001'")$climr_mat[1]
   expect_equal(mat_new, 8.3)
 })
 

@@ -16,35 +16,35 @@ cat("Creating View vw_USysAllVeg...\n")
 
 sql_usysallveg <- "
 CREATE OR REPLACE VIEW vw_USysAllVeg AS
-SELECT PlotNumber, '1' AS MyLayer, Species, CAST(Cover1 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover1 IS NOT NULL
+SELECT PlotNumber, '1' AS MyLayer, Species, CAST(Cover1 AS VARCHAR) as Cover FROM Veg WHERE Cover1 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '2' AS MyLayer, Species, CAST(Cover2 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover2 IS NOT NULL
+SELECT PlotNumber, '2' AS MyLayer, Species, CAST(Cover2 AS VARCHAR) as Cover FROM Veg WHERE Cover2 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '3' AS MyLayer, Species, CAST(Cover3 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover3 IS NOT NULL
+SELECT PlotNumber, '3' AS MyLayer, Species, CAST(Cover3 AS VARCHAR) as Cover FROM Veg WHERE Cover3 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '4' AS MyLayer, Species, CAST(Cover4 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover4 IS NOT NULL
+SELECT PlotNumber, '4' AS MyLayer, Species, CAST(Cover4 AS VARCHAR) as Cover FROM Veg WHERE Cover4 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '5' AS MyLayer, Species, CAST(Cover5 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover5 IS NOT NULL
+SELECT PlotNumber, '5' AS MyLayer, Species, CAST(Cover5 AS VARCHAR) as Cover FROM Veg WHERE Cover5 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '5a' AS MyLayer, Species, CAST(Cover5a AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover5a IS NOT NULL
+SELECT PlotNumber, '5a' AS MyLayer, Species, CAST(Cover5a AS VARCHAR) as Cover FROM Veg WHERE Cover5a IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '5b' AS MyLayer, Species, CAST(Cover5b AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover5b IS NOT NULL
+SELECT PlotNumber, '5b' AS MyLayer, Species, CAST(Cover5b AS VARCHAR) as Cover FROM Veg WHERE Cover5b IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '5c' AS MyLayer, Species, CAST(Cover5c AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover5c IS NOT NULL
+SELECT PlotNumber, '5c' AS MyLayer, Species, CAST(Cover5c AS VARCHAR) as Cover FROM Veg WHERE Cover5c IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '6' AS MyLayer, Species, CAST(Cover6 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover6 IS NOT NULL
+SELECT PlotNumber, '6' AS MyLayer, Species, CAST(Cover6 AS VARCHAR) as Cover FROM Veg WHERE Cover6 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '7' AS MyLayer, Species, CAST(Cover7 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover7 IS NOT NULL
+SELECT PlotNumber, '7' AS MyLayer, Species, CAST(Cover7 AS VARCHAR) as Cover FROM Veg WHERE Cover7 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '8' AS MyLayer, Species, CAST(Cover8 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover8 IS NOT NULL
+SELECT PlotNumber, '8' AS MyLayer, Species, CAST(Cover8 AS VARCHAR) as Cover FROM Veg WHERE Cover8 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '9' AS MyLayer, Species, CAST(Cover9 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover9 IS NOT NULL
+SELECT PlotNumber, '9' AS MyLayer, Species, CAST(Cover9 AS VARCHAR) as Cover FROM Veg WHERE Cover9 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, '10' AS MyLayer, Species, CAST(Cover10 AS VARCHAR) as Cover FROM Sample_Veg WHERE Cover10 IS NOT NULL
+SELECT PlotNumber, '10' AS MyLayer, Species, CAST(Cover10 AS VARCHAR) as Cover FROM Veg WHERE Cover10 IS NOT NULL
 UNION ALL
-SELECT PlotNumber, 'A' AS MyLayer, Species, CAST(TotalA AS VARCHAR) as Cover FROM Sample_Veg WHERE TotalA IS NOT NULL
+SELECT PlotNumber, 'A' AS MyLayer, Species, CAST(TotalA AS VARCHAR) as Cover FROM Veg WHERE TotalA IS NOT NULL
 UNION ALL
-SELECT PlotNumber, 'B' AS MyLayer, Species, CAST(TotalB AS VARCHAR) as Cover FROM Sample_Veg WHERE TotalB IS NOT NULL;
+SELECT PlotNumber, 'B' AS MyLayer, Species, CAST(TotalB AS VARCHAR) as Cover FROM Veg WHERE TotalB IS NOT NULL;
 "
 
 tryCatch({
@@ -56,12 +56,12 @@ tryCatch({
 
 # --- 2. vw_USysEnv (The Master Site Record) ---
 # Access-parity: Queries/USysEnv.txt
-#   SELECT DISTINCTROW [Sample_Env].*, [Sample_Admin].*
-#   FROM Sample_Env INNER JOIN Sample_Admin ON [Sample_Env].PlotNumber = [Sample_Admin].Plot
+#   SELECT DISTINCTROW [Env].*, [Admin].*
+#   FROM Env INNER JOIN Admin ON [Env].PlotNumber = [Admin].Plot
 #
-# Column audit (no collisions between Sample_Env and Sample_Admin confirmed):
-#   Sample_Env  join key : plotnumber
-#   Sample_Admin join key: plot  → aliased as admin_plot
+# Column audit (no collisions between Env and Admin confirmed):
+#   Env  join key : plotnumber
+#   Admin join key: plot  → aliased as admin_plot
 #   Quality columns added: siteplotquality, vegplotquality, soilplotquality
 cat("Creating View vw_USysEnv...\n")
 
@@ -90,10 +90,10 @@ tryCatch({
       a.gis_bgc_ver,
       a.bec_use,
       a.stratacovertotal
-    FROM Sample_Env e
-    INNER JOIN Sample_Admin a ON e.plotnumber = a.plot
+    FROM Env e
+    INNER JOIN Admin a ON e.plotnumber = a.plot
   ")
-  cat("View vw_USysEnv created (Access-parity: Sample_Env INNER JOIN Sample_Admin).\n")
+  cat("View vw_USysEnv created (Access-parity: Env INNER JOIN Admin).\n")
 }, error = function(e) {
   cat("Error creating vw_USysEnv: ", conditionMessage(e), "\n")
 })

@@ -548,12 +548,12 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
       veg_other = data.frame()
     )
 
-    env_table <- fs882_reimagined_find_table(con, c("main.Sample_Env", "Sample_Env"))
-    veg_table <- fs882_reimagined_find_table(con, c("main.Sample_Veg", "Sample_Veg"))
-    humus_table <- fs882_reimagined_find_table(con, c("main.Sample_Humus", "Sample_Humus"))
-    mineral_table <- fs882_reimagined_find_table(con, c("main.Sample_Mineral", "Sample_Mineral"))
+    env_table <- fs882_reimagined_find_table(con, c("main.Env", "Env"))
+    veg_table <- fs882_reimagined_find_table(con, c("main.Veg", "Veg"))
+    humus_table <- fs882_reimagined_find_table(con, c("main.Humus", "Humus"))
+    mineral_table <- fs882_reimagined_find_table(con, c("main.Mineral", "Mineral"))
     audit_table <- fs882_reimagined_find_table(con, c("main.USysAudit", "USysAudit", "main.AuditTrail", "AuditTrail"))
-    veg_other_table <- fs882_reimagined_find_table(con, c("main.USysVegOther", "USysVegOther", "main.Sample_VegOther", "Sample_VegOther"))
+    veg_other_table <- fs882_reimagined_find_table(con, c("main.USysVegOther", "USysVegOther", "main.VegOther", "VegOther"))
 
     current_plot_from_state <- shiny::reactive({
       state_plot <- trimws(as.character(state$CurrSU %||% ""))
@@ -741,7 +741,7 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
 
     observeEvent(input$btnSaveRecord, {
       if (is.null(env_table)) {
-        shiny::showNotification("Sample_Env table is not available.", type = "error")
+        shiny::showNotification("Env table is not available.", type = "error")
         return()
       }
 
@@ -775,7 +775,7 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
 
       ok <- fs882_reimagined_upsert_env(con, env_table, field_values)
       if (!isTRUE(ok)) {
-        shiny::showNotification("Save failed for Sample_Env.", type = "error")
+        shiny::showNotification("Save failed for Env.", type = "error")
         return()
       }
 

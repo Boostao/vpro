@@ -165,7 +165,7 @@ filter_plots_by_quality <- function(con,
     if (!is.null(site_unit) && nzchar(trimws(site_unit))) {
       plots <- DBI::dbGetQuery(
         con,
-        "SELECT PlotNumber, SiteUnit FROM Sample_SU WHERE SiteUnit = ?",
+        "SELECT PlotNumber, SiteUnit FROM SU WHERE SiteUnit = ?",
         list(trimws(site_unit))
       )
       return(plots)
@@ -173,7 +173,7 @@ filter_plots_by_quality <- function(con,
     if (!is.null(project_id) && nzchar(trimws(project_id))) {
       plots <- DBI::dbGetQuery(
         con,
-        "SELECT PlotNumber FROM Sample_Env WHERE ProjectID = ?",
+        "SELECT PlotNumber FROM Env WHERE ProjectID = ?",
         list(trimws(project_id))
       )
       return(data.frame(PlotNumber = plots$PlotNumber, stringsAsFactors = FALSE))
@@ -195,7 +195,7 @@ filter_plots_by_quality <- function(con,
   )
   
   # Determine base plot list
-  base_from <- "Sample_SU su"
+  base_from <- "SU su"
   where_clause <- "1=1"
   
   if (!is.null(plot_list) && length(plot_list) > 0) {
@@ -213,7 +213,7 @@ filter_plots_by_quality <- function(con,
   sql <- sprintf("
     SELECT DISTINCT su.PlotNumber, su.SiteUnit
     FROM %s
-    INNER JOIN Sample_Env env ON su.PlotNumber = env.PlotNumber
+    INNER JOIN Env env ON su.PlotNumber = env.PlotNumber
     LEFT JOIN lists.USysTableOfLists site_q 
       ON env.SitePlotQuality = site_q.Item AND site_q.ListName = 'dataquality'
     LEFT JOIN lists.USysTableOfLists veg_q 
@@ -290,7 +290,7 @@ identify_removed_plots <- function(con,
       env.VegPlotQuality AS Veg,
       env.SoilPlotQuality AS Soil,
       env.BEC_Use AS BEC
-    FROM Sample_Env env
+    FROM Env env
     WHERE env.PlotNumber IN %s
   ", plot_sql)
   
@@ -357,7 +357,7 @@ get_quality_summary <- function(con, plot_list = NULL) {
       VegPlotQuality,
       SoilPlotQuality,
       COUNT(*) as Count
-    FROM Sample_Env
+    FROM Env
     WHERE %s
     GROUP BY SitePlotQuality, VegPlotQuality, SoilPlotQuality
     ORDER BY Count DESC

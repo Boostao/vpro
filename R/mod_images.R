@@ -78,7 +78,7 @@ mod_images_server <- function(id, sys_state, con) {
     # 2. Location Debug
     output$loc_debug <- renderText({
       req(sys_state$CurrSU)
-      loc <- dbGetQuery(con, "SELECT latitude, longitude, utmzone, utmeasting, utmnorthing FROM Sample_Env WHERE plotnumber = ?", list(sys_state$CurrSU))
+      loc <- dbGetQuery(con, "SELECT latitude, longitude, utmzone, utmeasting, utmnorthing FROM Env WHERE plotnumber = ?", list(sys_state$CurrSU))
       if (nrow(loc) > 0) {
         lat <- suppressWarnings(as.numeric(loc$latitude[1]))
         lon <- suppressWarnings(as.numeric(loc$longitude[1]))
@@ -99,7 +99,7 @@ mod_images_server <- function(id, sys_state, con) {
         req(sys_state$CurrProject)
         
         # 1. Fetch Data
-        sql <- "SELECT plotnumber, latitude, longitude, _location FROM Sample_Env WHERE projectid = ? AND latitude IS NOT NULL AND longitude IS NOT NULL"
+        sql <- "SELECT plotnumber, latitude, longitude, _location FROM Env WHERE projectid = ? AND latitude IS NOT NULL AND longitude IS NOT NULL"
         pts <- dbGetQuery(con, sql, list(sys_state$CurrProject))
         pts$latitude_num <- suppressWarnings(as.numeric(pts$latitude))
         pts$longitude_num <- suppressWarnings(as.numeric(pts$longitude))

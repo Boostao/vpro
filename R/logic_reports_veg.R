@@ -131,19 +131,19 @@ load_veg_report_data <- function(con,
                                  apply_lumping = FALSE) {
   plots <- plot_numbers
 
-  if (length(plots) == 0 && nzchar(site_unit) && DBI::dbExistsTable(con, "Sample_SU")) {
+  if (length(plots) == 0 && nzchar(site_unit) && DBI::dbExistsTable(con, "SU")) {
     su_df <- DBI::dbGetQuery(
       con,
-      "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+      "SELECT PlotNumber FROM SU WHERE SiteUnit = ?",
       list(site_unit)
     )
     plots <- unique(as.character(su_df$PlotNumber))
   }
 
-  if (length(plots) == 0 && nzchar(project_id) && DBI::dbExistsTable(con, "Sample_Env")) {
+  if (length(plots) == 0 && nzchar(project_id) && DBI::dbExistsTable(con, "Env")) {
     env_df <- DBI::dbGetQuery(
       con,
-      "SELECT PlotNumber FROM Sample_Env WHERE ProjectID = ?",
+      "SELECT PlotNumber FROM Env WHERE ProjectID = ?",
       list(project_id)
     )
     plots <- unique(as.character(env_df$PlotNumber))

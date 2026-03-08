@@ -149,14 +149,14 @@ log_audit_diff <- function(con, project_id, user, plot_number, table_name, old_r
 
 resolve_project_id_for_plot <- function(con, plot_number, fallback_project = NULL) {
   if (is.null(plot_number) || !nzchar(as.character(plot_number))) return(fallback_project)
-  if (!DBI::dbExistsTable(con, "Sample_Env")) return(fallback_project)
+  if (!DBI::dbExistsTable(con, "Env")) return(fallback_project)
 
-  fields <- tryCatch(DBI::dbListFields(con, "Sample_Env"), error = function(e) character(0))
+  fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
   if (!("PlotNumber" %in% fields) || !("ProjectID" %in% fields)) return(fallback_project)
 
   res <- DBI::dbGetQuery(
     con,
-    "SELECT ProjectID FROM Sample_Env WHERE PlotNumber = ? LIMIT 1",
+    "SELECT ProjectID FROM Env WHERE PlotNumber = ? LIMIT 1",
     list(as.character(plot_number))
   )
   if (nrow(res) == 0) return(fallback_project)

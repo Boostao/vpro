@@ -11,7 +11,7 @@ setup_import_tables <- function(con) {
 
 setup_import_env_table <- function(con) {
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber TEXT,
       projectid TEXT,
       zone TEXT,
@@ -27,7 +27,7 @@ setup_import_env_table <- function(con) {
 
 setup_import_veg_table <- function(con) {
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Veg (
+    CREATE TABLE Veg (
       plotnumber TEXT,
       species TEXT,
       projectid TEXT,
@@ -133,7 +133,7 @@ test_that("mod_import maps project-suffixed CSV and fills projectid", {
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = csv_path, name = "PRJ_Env.csv"))
-    session$setInputs(target_table = "Sample_Env")
+    session$setInputs(target_table = "Env")
     session$setInputs(import_analyze = 1)
 
     expect_equal(rv$import_project_override, "PRJ")
@@ -143,7 +143,7 @@ test_that("mod_import maps project-suffixed CSV and fills projectid", {
     expect_true(grepl("Imported 1 rows", rv$status))
   })
 
-  rows <- DBI::dbGetQuery(con, "SELECT projectid FROM Sample_Env WHERE plotnumber = 'P1'")
+  rows <- DBI::dbGetQuery(con, "SELECT projectid FROM Env WHERE plotnumber = 'P1'")
   expect_equal(rows$projectid[[1]], "PRJ")
 })
 
@@ -154,7 +154,7 @@ test_that("mod_import can replace existing project data", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   setup_import_env_table(con)
 
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('OLD', 'PRJ', 'ICH', 'wk', 55, -120, 100, 10, 180)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('OLD', 'PRJ', 'ICH', 'wk', 55, -120, 100, 10, 180)")
 
   temp_dir <- tempfile("vpro_import_replace_")
   dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
@@ -178,7 +178,7 @@ test_that("mod_import can replace existing project data", {
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
     session$setInputs(import_file = list(datapath = csv_path, name = "PRJ_Env.csv"))
-    session$setInputs(target_table = "Sample_Env")
+    session$setInputs(target_table = "Env")
     session$setInputs(import_analyze = 1)
     session$setInputs(import_allow_replace = TRUE)
     session$setInputs(import_confirm_replace = TRUE)
@@ -187,7 +187,7 @@ test_that("mod_import can replace existing project data", {
     expect_true(grepl("Imported 1 rows", rv$status))
   })
 
-  rows <- DBI::dbGetQuery(con, "SELECT plotnumber FROM Sample_Env WHERE projectid = 'PRJ'")
+  rows <- DBI::dbGetQuery(con, "SELECT plotnumber FROM Env WHERE projectid = 'PRJ'")
   expect_equal(rows$plotnumber, "NEW")
 })
 
@@ -286,7 +286,7 @@ test_that("mod_import supports ZIP imports with multiple project IDs", {
     expect_true(all(rv$import_results$status == "Imported"))
   })
 
-  rows <- DBI::dbGetQuery(con, "SELECT plotnumber, projectid FROM Sample_Env ORDER BY plotnumber")
+  rows <- DBI::dbGetQuery(con, "SELECT plotnumber, projectid FROM Env ORDER BY plotnumber")
   expect_equal(rows$projectid, c("PRJ", "PR2"))
 })
 
@@ -301,7 +301,7 @@ test_that("mod_import blocks CSV import when compliance fails", {
   dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
   csv_path <- write_csv_named(
     temp_dir,
-    "Sample_Env.csv",
+    "Env.csv",
     data.frame(
       plotnumber = "P1",
       projectid = "PRJ",
@@ -321,8 +321,8 @@ test_that("mod_import blocks CSV import when compliance fails", {
   setup_import_auth(state)
 
   shiny::testServer(mod_import_server, args = list(state = state, con = con), {
-    session$setInputs(import_file = list(datapath = csv_path, name = "Sample_Env.csv"))
-    session$setInputs(target_table = "Sample_Env")
+    session$setInputs(import_file = list(datapath = csv_path, name = "Env.csv"))
+    session$setInputs(target_table = "Env")
     session$setInputs(import_analyze = 1)
     session$setInputs(import_apply = 1)
 
@@ -330,7 +330,7 @@ test_that("mod_import blocks CSV import when compliance fails", {
     expect_false(is.null(rv$compliance))
   })
 
-  rows <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Env")
+  rows <- DBI::dbGetQuery(con, "SELECT * FROM Env")
   expect_equal(nrow(rows), 0)
 })
 
@@ -476,7 +476,7 @@ test_that("mod_import rolls back ZIP imports on compliance failure", {
   dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
   csv_env <- write_csv_named(
     temp_dir,
-    "Sample_Env.csv",
+    "Env.csv",
     data.frame(
       plotnumber = "P1",
       projectid = "PRJ",
@@ -501,14 +501,14 @@ test_that("mod_import rolls back ZIP imports on compliance failure", {
     session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
     session$setInputs(import_analyze = 1)
 
-    ids <- rv$zip_map$id[rv$zip_map$table %in% c("Sample_Env", "Test_Table")]
+    ids <- rv$zip_map$id[rv$zip_map$table %in% c("Env", "Test_Table")]
     session$setInputs(zip_tables = as.character(ids))
     session$setInputs(import_apply = 1)
 
     expect_true(grepl("compliance checks failed", rv$status))
   })
 
-  expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM Sample_Env")), 0)
+  expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM Env")), 0)
   expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM Test_Table")), 0)
 })
 
@@ -557,7 +557,7 @@ test_that("mod_import rolls back ZIP imports on veg compliance failure", {
   dir.create(temp_dir, recursive = TRUE, showWarnings = FALSE)
   csv_veg <- write_csv_named(
     temp_dir,
-    "Sample_Veg.csv",
+    "Veg.csv",
     data.frame(
       plotnumber = "P1",
       species = "BAD",
@@ -577,13 +577,13 @@ test_that("mod_import rolls back ZIP imports on veg compliance failure", {
     session$setInputs(import_file = list(datapath = zip_path, name = "batch.zip"))
     session$setInputs(import_analyze = 1)
 
-    ids <- rv$zip_map$id[rv$zip_map$table %in% c("Sample_Veg", "Test_Table")]
+    ids <- rv$zip_map$id[rv$zip_map$table %in% c("Veg", "Test_Table")]
     session$setInputs(zip_tables = as.character(ids))
     session$setInputs(import_apply = 1)
 
     expect_true(grepl("compliance checks failed", rv$status))
   })
 
-  expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM Sample_Veg")), 0)
+  expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM Veg")), 0)
   expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM Test_Table")), 0)
 })

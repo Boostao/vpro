@@ -4,15 +4,15 @@ source(here::here("R", "logic_state.R"))
 
 setup_test_metadata <- function(con) {
   DBI::dbExecute(con, "
-    CREATE TABLE IF NOT EXISTS Sample_Metadata (
+    CREATE TABLE IF NOT EXISTS Metadata (
       ProjectID TEXT PRIMARY KEY,
       ProjectName TEXT
     )
   ")
-  DBI::dbExecute(con, "DELETE FROM Sample_Metadata")
+  DBI::dbExecute(con, "DELETE FROM Metadata")
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Metadata (ProjectID, ProjectName) VALUES (?, ?)",
+    "INSERT INTO Metadata (ProjectID, ProjectName) VALUES (?, ?)",
     list("P-001", "Test Project")
   )
 }

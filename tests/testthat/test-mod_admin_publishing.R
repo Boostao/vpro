@@ -25,15 +25,15 @@ make_minimal_db <- function() {
   DBI::dbExecute(con, "CREATE TABLE USysProjectMetadata (
     projectid TEXT, projecttitle TEXT, ispublic TEXT,
     beczone TEXT, description TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (
+  DBI::dbExecute(con, "CREATE TABLE Env (
     plotnumber TEXT, projectid TEXT, date_sampled DATE,
     latitude DOUBLE, longitude DOUBLE,
     bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (
+  DBI::dbExecute(con, "CREATE TABLE SU (
     plotnumber TEXT, dataquality TEXT)")
   DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (
     plotnumber TEXT, projectid TEXT, code TEXT, layer TEXT, cover TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Lump (
+  DBI::dbExecute(con, "CREATE TABLE Lump (
     sppcode TEXT, lumpcode TEXT, _use INTEGER)")
 
   con
@@ -53,11 +53,11 @@ testthat::test_that("publish_rds creates output files for a project", {
     "INSERT INTO USysProjectMetadata VALUES
        ('P1', 'Project One', 'True', 'IDF', 'Test')")
   DBI::dbExecute(con,
-    "INSERT INTO Sample_Env VALUES
+    "INSERT INTO Env VALUES
        ('PLOT-001', 'P1', DATE '2024-06-01', 49.123, -120.765,
         'IDF', 'xh', '01', 'Test area')")
   DBI::dbExecute(con,
-    "INSERT INTO Sample_SU VALUES ('PLOT-001', 'Good')")
+    "INSERT INTO SU VALUES ('PLOT-001', 'Good')")
   DBI::dbExecute(con,
     "INSERT INTO vw_USysAllVeg VALUES ('PLOT-001', 'P1', 'FD', 'A', '50')")
 
@@ -90,11 +90,11 @@ testthat::test_that("publish_project_dataset errors when no formats requested", 
     "INSERT INTO USysProjectMetadata VALUES
        ('P2', 'Project Two', 'True', 'IDF', 'Test')")
   DBI::dbExecute(con,
-    "INSERT INTO Sample_Env VALUES
+    "INSERT INTO Env VALUES
        ('PLOT-002', 'P2', DATE '2024-06-01', 49.5, -120.5,
         'IDF', 'xh', '01', 'Area')")
   DBI::dbExecute(con,
-    "INSERT INTO Sample_SU VALUES ('PLOT-002', 'Good')")
+    "INSERT INTO SU VALUES ('PLOT-002', 'Good')")
 
   out_dir <- tempfile("pub_empty_")
   dir.create(out_dir, recursive = TRUE)
@@ -122,11 +122,11 @@ testthat::test_that("registry CSV is created and readable after publish", {
     "INSERT INTO USysProjectMetadata VALUES
        ('P3', 'Project Three', 'True', 'IDF', 'Test')")
   DBI::dbExecute(con,
-    "INSERT INTO Sample_Env VALUES
+    "INSERT INTO Env VALUES
        ('PLOT-003', 'P3', DATE '2024-07-01', 50.0, -121.0,
         'IDF', 'xh', '01', 'Area')")
   DBI::dbExecute(con,
-    "INSERT INTO Sample_SU VALUES ('PLOT-003', 'Good')")
+    "INSERT INTO SU VALUES ('PLOT-003', 'Good')")
 
   out_dir <- tempfile("pub_reg_")
   dir.create(out_dir, recursive = TRUE)

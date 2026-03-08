@@ -1,10 +1,10 @@
 
 #' Apply Species Lumping to Vegetation Data
 #'
-#' Consolidates species codes based on the 'Sample_Lump' table.
+#' Consolidates species codes based on the 'Lump' table.
 #' Rows with synonymous species codes are merged, and their cover values are summed.
 #'
-#' @param con Database connection to read 'Sample_Lump'
+#' @param con Database connection to read 'Lump'
 #' @param df Dataframe containing at least 'species' column and numeric measure columns (e.g. 'cover_num')
 #' @param group_cols detailed vector of columns to group by (e.g. c("plotnumber", "mylayer"))
 #' @param measure_cols vector of numeric columns to sum (e.g. c("cover_num"))
@@ -14,12 +14,12 @@ apply_lumping <- function(con, df, group_cols, measure_cols) {
   
   # Load lumping map
   # Check if table exists first - precautionary
-  if (!dbExistsTable(con, "Sample_Lump")) {
-      warning("Sample_Lump table not found. Skipping lumping.")
+  if (!dbExistsTable(con, "Lump")) {
+      warning("Lump table not found. Skipping lumping.")
       return(df)
   }
   
-  lump_map <- dbGetQuery(con, "SELECT sppcode, lumpcode FROM Sample_Lump WHERE _use = 1")
+  lump_map <- dbGetQuery(con, "SELECT sppcode, lumpcode FROM Lump WHERE _use = 1")
   
   if (nrow(lump_map) == 0) return(df)
   

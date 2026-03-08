@@ -529,17 +529,9 @@ set_project <- function(state, project_id, con) {
   
   meta <- data.frame()
 
-  project_meta_table <- resolve_prefixed_table(con, project_id, "_Metadata")
-  if (!is.null(project_meta_table)) {
+  if (DBI::dbExistsTable(con, "Metadata")) {
     meta <- tryCatch(
-      DBI::dbGetQuery(con, paste0("SELECT * FROM ", DBI::dbQuoteIdentifier(con, project_meta_table), " LIMIT 1")),
-      error = function(e) data.frame()
-    )
-  }
-
-  if (nrow(meta) == 0 && DBI::dbExistsTable(con, "Sample_Metadata")) {
-    meta <- tryCatch(
-      DBI::dbGetQuery(con, "SELECT * FROM Sample_Metadata WHERE ProjectID = ?", list(project_id)),
+      DBI::dbGetQuery(con, "SELECT * FROM Metadata WHERE projectid = ? LIMIT 1", list(project_id)),
       error = function(e) data.frame()
     )
   }

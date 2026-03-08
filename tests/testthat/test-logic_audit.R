@@ -29,7 +29,7 @@ test_that("log_audit_change writes entries", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   setup_audit_env(con)
 
-  log_audit_change(con, "PRJ", "tester", "P1", "Sample_Env", "latitude", 50, 51)
+  log_audit_change(con, "PRJ", "tester", "P1", "Env", "latitude", 50, 51)
 
   rows <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
   expect_equal(nrow(rows), 1)
@@ -48,7 +48,7 @@ test_that("log_audit_diff logs multiple field changes", {
   old_row <- data.frame(latitude = 50, longitude = -120, stringsAsFactors = FALSE)
   new_row <- data.frame(latitude = 51, longitude = -120, stringsAsFactors = FALSE)
 
-  logged <- log_audit_diff(con, "PRJ", "tester", "P1", "Sample_Env", old_row, new_row)
+  logged <- log_audit_diff(con, "PRJ", "tester", "P1", "Env", old_row, new_row)
   expect_equal(logged, 1L)
 
   rows <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
@@ -68,7 +68,7 @@ test_that("log_audit_rows logs insert values", {
     stringsAsFactors = FALSE
   )
 
-  logged <- log_audit_rows(con, "PRJ", "tester", "Sample_Env", rows)
+  logged <- log_audit_rows(con, "PRJ", "tester", "Env", rows)
   expect_true(logged >= 2)
 
   audit <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
@@ -81,10 +81,10 @@ test_that("log_audit_change resolves project from plot", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   setup_audit_env(con)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES (?, ?)", list("P1", "PRJ1"))
+  DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES (?, ?)", list("P1", "PRJ1"))
 
-  log_audit_change(con, NULL, "tester", "P1", "Sample_Env", "latitude", 50, 51)
+  log_audit_change(con, NULL, "tester", "P1", "Env", "latitude", 50, 51)
 
   rows <- DBI::dbGetQuery(con, "SELECT * FROM user_db.main.USysAuditTrail")
   expect_equal(nrow(rows), 1)
@@ -123,8 +123,8 @@ test_that("resolve_project_id_for_plot finds project", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES (?, ?)", list("P1", "PRJ1"))
+  DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES (?, ?)", list("P1", "PRJ1"))
 
   project_id <- resolve_project_id_for_plot(con, "P1")
   expect_equal(project_id, "PRJ1")
@@ -134,7 +134,7 @@ test_that("resolve_project_id_for_plot falls back when missing", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")
 
   project_id <- resolve_project_id_for_plot(con, "P2", fallback_project = "PRJX")
   expect_equal(project_id, "PRJX")

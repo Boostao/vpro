@@ -204,7 +204,7 @@ get_vegetation_data_for_excel <- function(con, project_ids = NULL, layers = c("1
   if (!is.null(project_ids) && length(project_ids) > 0) {
     projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
     query <- sprintf("SELECT v.* FROM vw_USysAllVeg v 
-                      JOIN Sample_Env e ON v.PlotNumber = e.plotnumber 
+                      JOIN Env e ON v.PlotNumber = e.plotnumber 
                       WHERE v.MyLayer IN (%s) AND e.projectid IN (%s)", 
                      layers_sql, projs_sql)
   }
@@ -303,7 +303,7 @@ get_environment_data_for_excel <- function(con, project_ids = NULL) {
     moistureregime AS Moisture,
     nutrientregime AS Nutrient,
     sitenotes AS Notes
-  FROM Sample_Env"
+  FROM Env"
   
   if (!is.null(project_ids) && length(project_ids) > 0) {
     projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
@@ -327,12 +327,12 @@ get_soil_humus_data <- function(con, project_ids = NULL) {
     h.humusformbh AS 'Humus Form pH',
     h.vonpost AS 'von Post',
     h.comment AS Comment
-  FROM Sample_Humus h"
+  FROM Humus h"
   
   if (!is.null(project_ids) && length(project_ids) > 0) {
     projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
     query <- paste0(query, sprintf(" 
-      JOIN Sample_Env e ON h.plotnumber = e.plotnumber
+      JOIN Env e ON h.plotnumber = e.plotnumber
       WHERE e.projectid IN (%s)", projs_sql))
   }
   
@@ -357,12 +357,12 @@ get_soil_mineral_data <- function(con, project_ids = NULL) {
     m.percentcoarsefragstotal AS 'Coarse Frags %',
     m.mineralformbh AS 'pH',
     m.comments AS Comment
-  FROM Sample_Mineral m"
+  FROM Mineral m"
   
   if (!is.null(project_ids) && length(project_ids) > 0) {
     projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
     query <- paste0(query, sprintf(" 
-      JOIN Sample_Env e ON m.plotnumber = e.plotnumber
+      JOIN Env e ON m.plotnumber = e.plotnumber
       WHERE e.projectid IN (%s)", projs_sql))
   }
   
@@ -438,7 +438,7 @@ add_metadata_sheet <- function(wb, con, project_ids) {
     NULL AS Status,
     startdate AS 'Start Date',
     enddate AS 'End Date'
-  FROM Sample_Metadata
+  FROM Metadata
   WHERE projectid IN (%s)", projs_sql)
   
   meta <- DBI::dbGetQuery(con, query)

@@ -12,14 +12,14 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
     if (!is.na(d_save)) d_save <- as.character(d_save)
 
     sql <- paste(
-        "UPDATE Sample_Env SET",
+        "UPDATE Env SET",
         "_location=?, date=?, sitesurveyor=?, latitude=?, longitude=?,",
         "utmeasting=?, utmnorthing=?, elevation=?, slopegradient=?, aspect=?,",
         "mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=?",
         "WHERE plotnumber=?"
     )
 
-    existing <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
+    existing <- DBI::dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
 
     res <- DBI::dbExecute(con, sql, list(
         fields$`_location`,
@@ -42,7 +42,7 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
 
     if (res == 0) {
         sql_ins <- paste(
-            "INSERT INTO Sample_Env (plotnumber, _location, date, sitesurveyor, latitude,",
+            "INSERT INTO Env (plotnumber, _location, date, sitesurveyor, latitude,",
             "longitude, utmeasting, utmnorthing, elevation, slopegradient, aspect,",
             "mesoslopeposition, surfaceshape, moistureregime, nutrientregime, sitenotes)",
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -67,7 +67,7 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
         ))
         if (nrow(existing) == 0) {
             for (field_name in names(fields)) {
-                log_audit_change(con, project_id, user, plot_id, "Sample_Env", field_name, NA, fields[[field_name]])
+                log_audit_change(con, project_id, user, plot_id, "Env", field_name, NA, fields[[field_name]])
             }
         }
         return("inserted")
@@ -77,7 +77,7 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
         old_row <- existing[1, , drop = FALSE]
         for (field_name in names(fields)) {
             if (!(field_name %in% names(old_row))) next
-            log_audit_change(con, project_id, user, plot_id, "Sample_Env", field_name, old_row[[field_name]][1], fields[[field_name]])
+            log_audit_change(con, project_id, user, plot_id, "Env", field_name, old_row[[field_name]][1], fields[[field_name]])
         }
     }
 
@@ -104,8 +104,8 @@ parse_dms_value <- function(text, is_lat) {
 }
 
 soil_numeric_cols <- list(
-    Sample_Humus = c("upperdepth", "lowerdepth", "humusformph"),
-    Sample_Mineral = c("upperdepth", "lowerdepth", "percentcoarsefragstotal")
+    Humus = c("upperdepth", "lowerdepth", "humusformph"),
+    Mineral = c("upperdepth", "lowerdepth", "percentcoarsefragstotal")
 )
 
 coerce_soil_value <- function(table, col_name, value) {
@@ -242,7 +242,7 @@ mod_site_env_ui <- function(id) {
             rhandsontable::rHandsontableOutput(ns("hot_mineral"))
                 ),
                 nav_panel("Audit",
-                    selectInput(ns("env_audit_table"), "Table", choices = c("All" = "", "Sample_Env", "Sample_Humus", "Sample_Mineral")),
+                    selectInput(ns("env_audit_table"), "Table", choices = c("All" = "", "Env", "Humus", "Mineral")),
                     DT::DTOutput(ns("dt_audit_env"))
                 )
       )
@@ -289,9 +289,9 @@ mod_site_env_server <- function(id, sys_state, con) {
         
         # con provided by moduleServer arguments
         
-        rv$env <- dbGetQuery(con, "SELECT * FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
-        rv$humus <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(plot_id))
-        rv$mineral <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(plot_id))
+        rv$env <- dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
+        rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(plot_id))
+        rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(plot_id))
         
         # Populate Inputs
         if(nrow(rv$env) > 0) {
@@ -395,7 +395,7 @@ mod_site_env_server <- function(id, sys_state, con) {
                 showNotification("Header updated successfully.", type = "message")
             }
 
-            rv$env <- dbGetQuery(con, "SELECT * FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
+            rv$env <- dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
         }, error = function(e) {
             showNotification(paste("Error saving header:", e$message), type="error")
         })
@@ -662,10 +662,10 @@ mod_site_env_server <- function(id, sys_state, con) {
         if (!require_plot_write()) return()
         plot_id <- as.character(sys_state$CurrSU)
         
-        sql <- "UPDATE Sample_Env SET standage=?, sv_standheight=?, structuralstage=? WHERE plotnumber=?"
+        sql <- "UPDATE Env SET standage=?, sv_standheight=?, structuralstage=? WHERE plotnumber=?"
         
         tryCatch({
-            before_row <- dbGetQuery(con, "SELECT standage, sv_standheight, structuralstage FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
+            before_row <- dbGetQuery(con, "SELECT standage, sv_standheight, structuralstage FROM Env WHERE plotnumber = ?", list(plot_id))
             res <- dbExecute(con, sql, list(
                 input$men_age,
                 input$men_hgt,
@@ -688,7 +688,7 @@ mod_site_env_server <- function(id, sys_state, con) {
                         sys_state$CurrProject,
                         sys_state$User,
                         plot_id,
-                        "Sample_Env",
+                        "Env",
                         before_row,
                         after_row,
                         fields = c("standage", "sv_standheight", "structuralstage")
@@ -768,7 +768,7 @@ mod_site_env_server <- function(id, sys_state, con) {
         req(hot_input)
         new_df <- rhandsontable::hot_to_r(hot_input)
 
-        current <- if (table == "Sample_Humus") rv$humus else rv$mineral
+        current <- if (table == "Humus") rv$humus else rv$mineral
         req(current)
         valid_cols <- intersect(display_cols, names(current))
         old_df <- current[, valid_cols, drop = FALSE]
@@ -805,20 +805,20 @@ mod_site_env_server <- function(id, sys_state, con) {
             }
         }
 
-        if (table == "Sample_Humus") {
-            rv$humus <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
+        if (table == "Humus") {
+            rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
         }
-        if (table == "Sample_Mineral") {
-            rv$mineral <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
+        if (table == "Mineral") {
+            rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
         }
     }
 
     observeEvent(input$hot_humus, {
-        update_soil_from_hot(input$hot_humus, "Sample_Humus", cols_humus)
+        update_soil_from_hot(input$hot_humus, "Humus", cols_humus)
     })
 
     observeEvent(input$hot_mineral, {
-        update_soil_from_hot(input$hot_mineral, "Sample_Mineral", cols_mineral)
+        update_soil_from_hot(input$hot_mineral, "Mineral", cols_mineral)
     })
 
     # -- Better Modal State Management --
@@ -920,7 +920,7 @@ mod_site_env_server <- function(id, sys_state, con) {
     observeEvent(input$save_humus, {
         req(rv_modal$type == "humus")
         if (!require_plot_write()) return()
-        save_soil_record("Sample_Humus", rv_modal$mode, rv_modal$id, 
+        save_soil_record("Humus", rv_modal$mode, rv_modal$id, 
                          list(
                              horizon = input$h_horizon,
                              upperdepth = input$h_upper,
@@ -965,7 +965,7 @@ mod_site_env_server <- function(id, sys_state, con) {
     observeEvent(input$save_mineral, {
         req(rv_modal$type == "mineral")
         if (!require_plot_write()) return()
-        save_soil_record("Sample_Mineral", rv_modal$mode, rv_modal$id, 
+        save_soil_record("Mineral", rv_modal$mode, rv_modal$id, 
                          list(
                              horizon = input$m_horizon,
                              upperdepth = input$m_upper,
@@ -1014,8 +1014,8 @@ mod_site_env_server <- function(id, sys_state, con) {
                     )
                 }
                 # Refresh Data
-                if(table == "Sample_Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
-                if(table == "Sample_Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
+                if(table == "Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
+                if(table == "Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
             }, error = function(e) { showNotification(paste("Insert Error:", e$message), type="error") })
             
         } else {
@@ -1051,8 +1051,8 @@ mod_site_env_server <- function(id, sys_state, con) {
                     )
                 }
                 # Refresh Data
-                if(table == "Sample_Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
-                if(table == "Sample_Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
+                if(table == "Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
+                if(table == "Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
             }, error = function(e) { showNotification(paste("Update Error:", e$message), type="error") })
         }
     }

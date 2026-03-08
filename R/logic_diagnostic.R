@@ -113,7 +113,7 @@ diagnostic_from_matrix <- function(df, species_col = "Species") {
   )
 }
 
-build_diagnostic_matrix <- function(con, su_table = "Sample_SU", project_id = NULL, average_type = c("plots", "covers")) {
+build_diagnostic_matrix <- function(con, su_table = "SU", project_id = NULL, average_type = c("plots", "covers")) {
   average_type <- match.arg(average_type)
   if (!DBI::dbExistsTable(con, su_table) || !DBI::dbExistsTable(con, "vw_USysAllVeg")) {
     return(list(matrix = data.frame(), diagnostics = data.frame()))
@@ -139,12 +139,12 @@ build_diagnostic_matrix <- function(con, su_table = "Sample_SU", project_id = NU
   su_df <- DBI::dbGetQuery(con, su_sql)
   if (nrow(su_df) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
 
-  if (!is.null(project_id) && DBI::dbExistsTable(con, "Sample_Env")) {
-    env_fields <- DBI::dbListFields(con, "Sample_Env")
+  if (!is.null(project_id) && DBI::dbExistsTable(con, "Env")) {
+    env_fields <- DBI::dbListFields(con, "Env")
     env_plot_col <- if ("PlotNumber" %in% env_fields) "PlotNumber" else if ("plotnumber" %in% env_fields) "plotnumber" else NULL
     env_project_col <- if ("ProjectID" %in% env_fields) "ProjectID" else if ("projectid" %in% env_fields) "projectid" else NULL
     if (!is.null(env_plot_col) && !is.null(env_project_col)) {
-      env_sql <- sprintf("SELECT %s AS plotnumber FROM Sample_Env WHERE %s = ?", env_plot_col, env_project_col)
+      env_sql <- sprintf("SELECT %s AS plotnumber FROM Env WHERE %s = ?", env_plot_col, env_project_col)
       env_plots <- DBI::dbGetQuery(con, env_sql, list(as.character(project_id)))
       if (nrow(env_plots) == 0) return(list(matrix = data.frame(), diagnostics = data.frame()))
       su_df <- su_df[su_df$plotnumber %in% env_plots$plotnumber, , drop = FALSE]

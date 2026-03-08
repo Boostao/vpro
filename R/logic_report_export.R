@@ -317,7 +317,7 @@ build_excel_report_data <- function(con, template_name, params) {
       if (length(plot_list) == 0) plot_list <- plots
       if (length(plot_list) > 0) {
         plot_sql <- paste(DBI::dbQuoteString(con, plot_list), collapse = ", ")
-        env <- DBI::dbGetQuery(con, sprintf("SELECT * FROM Sample_Env WHERE PlotNumber IN (%s)", plot_sql))
+        env <- DBI::dbGetQuery(con, sprintf("SELECT * FROM Env WHERE PlotNumber IN (%s)", plot_sql))
       } else {
         env <- data.frame()
       }
@@ -466,18 +466,18 @@ build_excel_report_data <- function(con, template_name, params) {
 
   if (template_name == "env_summary.qmd") {
     plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
-    if (length(plots) == 0 && nzchar(trimws(params$site_unit)) && DBI::dbExistsTable(con, "Sample_SU")) {
+    if (length(plots) == 0 && nzchar(trimws(params$site_unit)) && DBI::dbExistsTable(con, "SU")) {
       su_df <- DBI::dbGetQuery(
         con,
-        "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+        "SELECT PlotNumber FROM SU WHERE SiteUnit = ?",
         list(trimws(params$site_unit))
       )
       plots <- unique(as.character(su_df$PlotNumber))
     }
-    if (length(plots) == 0 && nzchar(trimws(params$project_id)) && DBI::dbExistsTable(con, "Sample_Env")) {
+    if (length(plots) == 0 && nzchar(trimws(params$project_id)) && DBI::dbExistsTable(con, "Env")) {
       env_df <- DBI::dbGetQuery(
         con,
-        "SELECT PlotNumber FROM Sample_Env WHERE ProjectID = ?",
+        "SELECT PlotNumber FROM Env WHERE ProjectID = ?",
         list(trimws(params$project_id))
       )
       plots <- unique(as.character(env_df$PlotNumber))
@@ -486,14 +486,14 @@ build_excel_report_data <- function(con, template_name, params) {
     plots <- plots[nzchar(plots)]
     if (length(plots) > 0) {
       plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
-      env <- DBI::dbGetQuery(con, sprintf("SELECT * FROM Sample_Env WHERE PlotNumber IN (%s)", plot_sql))
+      env <- DBI::dbGetQuery(con, sprintf("SELECT * FROM Env WHERE PlotNumber IN (%s)", plot_sql))
     } else {
       env <- data.frame()
     }
 
     site_unit_map <- data.frame()
-    if (DBI::dbExistsTable(con, "Sample_SU")) {
-      site_unit_map <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+    if (DBI::dbExistsTable(con, "SU")) {
+      site_unit_map <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM SU")
     }
 
     unit_names <- data.frame()
@@ -528,7 +528,7 @@ build_excel_report_data <- function(con, template_name, params) {
   }
 
   if (template_name %in% c("hierarchy.qmd", "flat_hierarchy.qmd")) {
-    hier <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Hierarchy")
+    hier <- DBI::dbGetQuery(con, "SELECT * FROM Hierarchy")
     long_names <- data.frame()
     if (DBI::dbExistsTable(con, c("lists", "MasterSiteUnitList"))) {
       long_names <- DBI::dbGetQuery(
@@ -561,18 +561,18 @@ build_excel_report_data <- function(con, template_name, params) {
 
   if (template_name == "long_env.qmd") {
     plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
-    if (length(plots) == 0 && nzchar(trimws(params$site_unit)) && DBI::dbExistsTable(con, "Sample_SU")) {
+    if (length(plots) == 0 && nzchar(trimws(params$site_unit)) && DBI::dbExistsTable(con, "SU")) {
       su_df <- DBI::dbGetQuery(
         con,
-        "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+        "SELECT PlotNumber FROM SU WHERE SiteUnit = ?",
         list(trimws(params$site_unit))
       )
       plots <- unique(as.character(su_df$PlotNumber))
     }
-    if (length(plots) == 0 && nzchar(trimws(params$project_id)) && DBI::dbExistsTable(con, "Sample_Env")) {
+    if (length(plots) == 0 && nzchar(trimws(params$project_id)) && DBI::dbExistsTable(con, "Env")) {
       env_df <- DBI::dbGetQuery(
         con,
-        "SELECT PlotNumber FROM Sample_Env WHERE ProjectID = ?",
+        "SELECT PlotNumber FROM Env WHERE ProjectID = ?",
         list(trimws(params$project_id))
       )
       plots <- unique(as.character(env_df$PlotNumber))
@@ -581,14 +581,14 @@ build_excel_report_data <- function(con, template_name, params) {
     plots <- plots[nzchar(plots)]
     if (length(plots) > 0) {
       plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
-      env <- DBI::dbGetQuery(con, sprintf("SELECT * FROM Sample_Env WHERE PlotNumber IN (%s)", plot_sql))
+      env <- DBI::dbGetQuery(con, sprintf("SELECT * FROM Env WHERE PlotNumber IN (%s)", plot_sql))
     } else {
       env <- data.frame()
     }
 
     site_unit_map <- data.frame()
-    if (DBI::dbExistsTable(con, "Sample_SU")) {
-      site_unit_map <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+    if (DBI::dbExistsTable(con, "SU")) {
+      site_unit_map <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM SU")
     }
 
     unit_names <- data.frame()

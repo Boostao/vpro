@@ -45,16 +45,16 @@ mod_import_ui <- function(id) {
 
 import_suffix_map <- function() {
   c(
-    env = "Sample_Env",
-    veg = "Sample_Veg",
-    humus = "Sample_Humus",
-    mineral = "Sample_Mineral",
-    other = "Sample_Other",
-    admin = "Sample_Admin",
-    metadata = "Sample_Metadata",
-    audit = "Sample_Audit",
-    su = "Sample_SU",
-    hierarchy = "Sample_Hierarchy",
+    env = "Env",
+    veg = "Veg",
+    humus = "Humus",
+    mineral = "Mineral",
+    other = "Other",
+    admin = "Admin",
+    metadata = "Metadata",
+    audit = "Audit",
+    su = "SU",
+    hierarchy = "Hierarchy",
     spplist = "lists.SppList"
   )
 }
@@ -197,12 +197,12 @@ apply_project_override <- function(data, target_fields, project_id) {
 
 project_exists <- function(con, project_id) {
   if (is.null(project_id) || !nzchar(project_id)) return(FALSE)
-  if (DBI::dbExistsTable(con, "Sample_Metadata")) {
-    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Sample_Metadata WHERE ProjectID = ? LIMIT 1", list(project_id))
+  if (DBI::dbExistsTable(con, "Metadata")) {
+    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Metadata WHERE ProjectID = ? LIMIT 1", list(project_id))
     if (nrow(res) > 0) return(TRUE)
   }
-  if (DBI::dbExistsTable(con, "Sample_Env")) {
-    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Sample_Env WHERE ProjectID = ? LIMIT 1", list(project_id))
+  if (DBI::dbExistsTable(con, "Env")) {
+    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Env WHERE ProjectID = ? LIMIT 1", list(project_id))
     if (nrow(res) > 0) return(TRUE)
   }
   FALSE
@@ -252,7 +252,7 @@ mod_import_server <- function(id, state, con) {
       access_preview = NULL
     )
 
-    compliance_tables <- c("Sample_Env", "Sample_Veg")
+    compliance_tables <- c("Env", "Veg")
     is_compliance_table <- function(table_name) {
       tolower(table_name) %in% tolower(compliance_tables)
     }

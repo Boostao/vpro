@@ -48,19 +48,19 @@ test_that("publish_project_dataset writes BEC Map contract files (RDS/CSV) and r
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (plotnumber TEXT, projectid TEXT, date_sampled DATE, latitude DOUBLE, longitude DOUBLE, bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (plotnumber TEXT, dataquality TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Env (plotnumber TEXT, projectid TEXT, date_sampled DATE, latitude DOUBLE, longitude DOUBLE, bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE SU (plotnumber TEXT, dataquality TEXT)")
   DBI::dbExecute(con, "CREATE TABLE USysProjectMetadata (projectid TEXT, projecttitle TEXT, ispublic TEXT, beczone TEXT, description TEXT)")
   DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (plotnumber TEXT, projectid TEXT, code TEXT, layer TEXT, cover TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Lump (sppcode TEXT, lumpcode TEXT, _use INTEGER)")
+  DBI::dbExecute(con, "CREATE TABLE Lump (sppcode TEXT, lumpcode TEXT, _use INTEGER)")
 
   DBI::dbExecute(con, "INSERT INTO USysProjectMetadata VALUES ('P1', 'Project One', 'True', 'IDF', 'Test project')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('PLOT-001', 'P1', DATE '2024-06-01', 49.1234567, -120.7654321, 'IDF', 'xh', '01', 'Near Somewhere')")
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('PLOT-001', 'Good')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('PLOT-001', 'P1', DATE '2024-06-01', 49.1234567, -120.7654321, 'IDF', 'xh', '01', 'Near Somewhere')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('PLOT-001', 'Good')")
 
   DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('PLOT-001', 'P1', 'FD', 'A', '50')")
   DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('PLOT-001', 'P1', 'HW', 'A', '20')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Lump VALUES ('HW', 'FD', 1)")
+  DBI::dbExecute(con, "INSERT INTO Lump VALUES ('HW', 'FD', 1)")
 
   out_dir <- tempfile("published_")
   dir.create(out_dir, recursive = TRUE)
@@ -119,8 +119,8 @@ test_that("validate_for_publishing flags missing/zero coordinates", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (plotnumber TEXT, projectid TEXT, latitude DOUBLE, longitude DOUBLE)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('PLOT-001', 'P2', 0, NULL)")
+  DBI::dbExecute(con, "CREATE TABLE Env (plotnumber TEXT, projectid TEXT, latitude DOUBLE, longitude DOUBLE)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('PLOT-001', 'P2', 0, NULL)")
 
   v <- validate_for_publishing(con, "P2")
   expect_false(v$passed)
@@ -144,7 +144,7 @@ test_that("publish_project_dataset can write XLSX via existing exporter (optiona
       con,
       paste(
         "SELECT projectid AS project_id",
-        "FROM Sample_Env",
+        "FROM Env",
         "WHERE latitude IS NOT NULL AND longitude IS NOT NULL",
         "AND latitude <> 0 AND longitude <> 0",
         "LIMIT 1"

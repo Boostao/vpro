@@ -23,7 +23,8 @@
 #'
 #' @export
 connect_local_db <- function() {
-  main_db     <- Sys.getenv("VPRO_MAIN_DB",     "data/vpro.duckdb")
+  # Main db path is fixed; project data is loaded at runtime via open_project().
+  main_db     <- "data/vpro.duckdb"
   lists_db    <- Sys.getenv("VPRO_LISTS_DB",    "data/vpro_lists.duckdb")
   metadata_db <- Sys.getenv("VPRO_METADATA_DB", "data/vpro_metadata.duckdb")
   user_db     <- Sys.getenv("VPRO_USER_DB",     "data/vpro_user.duckdb")

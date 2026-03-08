@@ -42,7 +42,7 @@ ui <- page_navbar(
         div(class = "h4 mb-0 text-primary fw-bold", "VPro 64"),
         div(class = "text-primary", "Data")
       ),
-      selectInput("sel_project", "Project:", choices = NULL),
+      mod_project_ui("project"),
       selectInput("sel_su", "Site Unit:", choices = NULL),
       selectInput(
         "sel_hierarchy",

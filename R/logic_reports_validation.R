@@ -24,7 +24,7 @@
 #' \dontrun{
 #' con <- DBI::dbConnect(duckdb::duckdb(), "data/vpro.duckdb")
 #' DBI::dbExecute(con, "ATTACH 'data/vpro_lists.duckdb' AS lists")
-#' env <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Env LIMIT 10")
+#' env <- DBI::dbGetQuery(con, "SELECT * FROM Env LIMIT 10")
 #' errors <- validate_env_data(con, env)
 #' DBI::dbDisconnect(con)
 #' }
@@ -280,7 +280,7 @@ validate_veg_codes <- function(con, veg_df) {
 
 #' Check for orphaned vegetation records
 #'
-#' Finds vegetation records where plot doesn't exist in Sample_Env
+#' Finds vegetation records where plot doesn't exist in Env
 #'
 #' @param con DBI connection
 #' @return Data frame with orphaned PlotNumber, Layer, Species
@@ -288,7 +288,7 @@ validate_veg_codes <- function(con, veg_df) {
 #' @family validation
 check_orphaned_veg_records <- function(con) {
   
-  if (!DBI::dbExistsTable(con, "vw_USysAllVeg") || !DBI::dbExistsTable(con, "Sample_Env")) {
+  if (!DBI::dbExistsTable(con, "vw_USysAllVeg") || !DBI::dbExistsTable(con, "Env")) {
     return(data.frame(
       PlotNumber = character(),
       Layer = character(),
@@ -303,7 +303,7 @@ check_orphaned_veg_records <- function(con) {
       v.MyLayer as Layer,
       v.Species
     FROM vw_USysAllVeg v
-    LEFT JOIN Sample_Env e ON v.PlotNumber = e.PlotNumber
+    LEFT JOIN Env e ON v.PlotNumber = e.PlotNumber
     WHERE e.PlotNumber IS NULL
     ORDER BY v.PlotNumber, v.MyLayer, v.Species
   "
@@ -313,7 +313,7 @@ check_orphaned_veg_records <- function(con) {
 
 #' Check for orphaned environmental records
 #'
-#' Finds environmental records where plot doesn't exist in Sample_SU
+#' Finds environmental records where plot doesn't exist in SU
 #'
 #' @param con DBI connection
 #' @return Data frame with orphaned PlotNumber, ProjectID
@@ -321,7 +321,7 @@ check_orphaned_veg_records <- function(con) {
 #' @family validation
 check_orphaned_env_records <- function(con) {
   
-  if (!DBI::dbExistsTable(con, "Sample_Env") || !DBI::dbExistsTable(con, "Sample_SU")) {
+  if (!DBI::dbExistsTable(con, "Env") || !DBI::dbExistsTable(con, "SU")) {
     return(data.frame(
       PlotNumber = character(),
       ProjectID = character(),
@@ -333,8 +333,8 @@ check_orphaned_env_records <- function(con) {
     SELECT DISTINCT
       e.PlotNumber,
       e.ProjectID
-    FROM Sample_Env e
-    LEFT JOIN Sample_SU su ON e.PlotNumber = su.PlotNumber
+    FROM Env e
+    LEFT JOIN SU su ON e.PlotNumber = su.PlotNumber
     WHERE su.PlotNumber IS NULL
     ORDER BY e.PlotNumber
   "
@@ -368,14 +368,14 @@ generate_validation_report <- function(con, project_id = NULL, site_unit = NULL)
   if (!is.null(site_unit) && nzchar(trimws(site_unit))) {
     plots <- DBI::dbGetQuery(
       con,
-      "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+      "SELECT PlotNumber FROM SU WHERE SiteUnit = ?",
       list(trimws(site_unit))
     )
     plot_list <- plots$PlotNumber
   } else if (!is.null(project_id) && nzchar(trimws(project_id))) {
     plots <- DBI::dbGetQuery(
       con,
-      "SELECT PlotNumber FROM Sample_Env WHERE ProjectID = ?",
+      "SELECT PlotNumber FROM Env WHERE ProjectID = ?",
       list(trimws(project_id))
     )
     plot_list <- plots$PlotNumber
@@ -386,14 +386,14 @@ generate_validation_report <- function(con, project_id = NULL, site_unit = NULL)
     plot_sql <- paste0("('", paste(plot_list, collapse = "', '"), "')")
     env <- DBI::dbGetQuery(
       con,
-      sprintf("SELECT * FROM Sample_Env WHERE PlotNumber IN %s", plot_sql)
+      sprintf("SELECT * FROM Env WHERE PlotNumber IN %s", plot_sql)
     )
     veg <- DBI::dbGetQuery(
       con,
       sprintf("SELECT * FROM vw_USysAllVeg WHERE PlotNumber IN %s", plot_sql)
     )
   } else {
-    env <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Env")
+    env <- DBI::dbGetQuery(con, "SELECT * FROM Env")
     veg <- DBI::dbGetQuery(con, "SELECT * FROM vw_USysAllVeg")
   }
   
@@ -424,7 +424,7 @@ generate_validation_report <- function(con, project_id = NULL, site_unit = NULL)
 
 #' Check for duplicate plot numbers
 #'
-#' Finds plots that appear multiple times in Sample_Env
+#' Finds plots that appear multiple times in Env
 #'
 #' @param con DBI connection
 #' @return Data frame with PlotNumber, DuplicateCount
@@ -432,7 +432,7 @@ generate_validation_report <- function(con, project_id = NULL, site_unit = NULL)
 #' @family validation
 check_duplicate_plots <- function(con) {
   
-  if (!DBI::dbExistsTable(con, "Sample_Env")) {
+  if (!DBI::dbExistsTable(con, "Env")) {
     return(data.frame(
       PlotNumber = character(),
       DuplicateCount = integer(),
@@ -444,7 +444,7 @@ check_duplicate_plots <- function(con) {
     SELECT
       PlotNumber,
       COUNT(*) as DuplicateCount
-    FROM Sample_Env
+    FROM Env
     GROUP BY PlotNumber
     HAVING COUNT(*) > 1
     ORDER BY DuplicateCount DESC, PlotNumber

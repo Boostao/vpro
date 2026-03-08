@@ -9,7 +9,7 @@ con <- dbConnect(duckdb(), "data/vpro.duckdb", read_only = TRUE)
 
 print("--- Verifying Project List (Server Logic) ---")
 # Mimic server.R logic
-projects <- dbGetQuery(con, "SELECT DISTINCT projectid, projecttitle FROM Sample_Metadata WHERE projectid IS NOT NULL")
+projects <- dbGetQuery(con, "SELECT DISTINCT projectid, projecttitle FROM Metadata WHERE projectid IS NOT NULL")
 print(projects)
 
 if (nrow(projects) == 0) stop("No projects found!")
@@ -17,7 +17,7 @@ pid <- projects$projectid[1]
 print(paste("Selected Project:", pid))
 
 print("--- Verifying Site Unit List ---")
-sus <- dbGetQuery(con, "SELECT DISTINCT siteunit FROM Sample_SU ORDER BY siteunit")
+sus <- dbGetQuery(con, "SELECT DISTINCT siteunit FROM SU ORDER BY siteunit")
 print(head(sus))
 
 if (nrow(sus) > 0) {

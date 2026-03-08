@@ -14,7 +14,7 @@ setup_hierarchy_db <- function() {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
   
   dbExecute(con, "
-    CREATE TABLE Sample_Hierarchy (
+    CREATE TABLE Hierarchy (
       ID INTEGER,
       Name VARCHAR,
       Parent INTEGER,
@@ -32,7 +32,7 @@ setup_hierarchy_db <- function() {
   #       └── Leaf2A (6)
   
   dbExecute(con, "
-    INSERT INTO Sample_Hierarchy VALUES
+    INSERT INTO Hierarchy VALUES
     (1, 'Root', NULL, 1, NULL),
     (2, 'Branch1', 1, 2, NULL),
     (3, 'Branch2', 1, 2, NULL),
@@ -235,7 +235,7 @@ test_that("check_hierarchy_circular_refs detects cycles", {
   
   # Create hierarchy with circular reference
   dbExecute(con, "
-    CREATE TABLE Sample_Hierarchy (
+    CREATE TABLE Hierarchy (
       ID INTEGER,
       Name VARCHAR,
       Parent INTEGER,
@@ -244,7 +244,7 @@ test_that("check_hierarchy_circular_refs detects cycles", {
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_Hierarchy VALUES
+    INSERT INTO Hierarchy VALUES
     (1, 'A', 3, 1),
     (2, 'B', 1, 2),
     (3, 'C', 2, 3)

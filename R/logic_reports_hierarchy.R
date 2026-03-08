@@ -16,11 +16,11 @@
 #'
 #' @param con DBI connection to hierarchy table
 #' @param node_id Integer ID of target node
-#' @param hierarchy_table Name of hierarchy table (default "Sample_Hierarchy")
+#' @param hierarchy_table Name of hierarchy table (default "Hierarchy")
 #' @param separator Path separator (default " / ")
 #' @return Character path string
 #' @family hierarchy
-build_hierarchy_path <- function(con, node_id, hierarchy_table = "Sample_Hierarchy", separator = " / ") {
+build_hierarchy_path <- function(con, node_id, hierarchy_table = "Hierarchy", separator = " / ") {
   
   # VBA source: V7mdlReportsHierarchyDiagram.txt::BuildListInXl() logic
   
@@ -60,7 +60,7 @@ build_hierarchy_path <- function(con, node_id, hierarchy_table = "Sample_Hierarc
 #' @family hierarchy
 walk_hierarchy_down <- function(con,
                                parent_id = NULL,
-                               hierarchy_table = "Sample_Hierarchy",
+                               hierarchy_table = "Hierarchy",
                                max_level = 20,
                                current_level = 1) {
   
@@ -186,7 +186,7 @@ format_hierarchy_indented <- function(hier_df,
 #' @export
 #' @family hierarchy
 order_hierarchy_tree <- function(con,
-                                hierarchy_table = "Sample_Hierarchy",
+                                hierarchy_table = "Hierarchy",
                                 cutoff_level = NULL) {
   
   # VBA source: V7mdlReportsShortVegHierarchy.txt::ControlHierarchyOrder()
@@ -304,7 +304,7 @@ get_all_descendants <- function(hier_df, parent_id, max_depth = 100) {
 #' @return Data frame with Level, Count columns
 #' @export
 #' @family hierarchy
-get_hierarchy_level_stats <- function(con, hierarchy_table = "Sample_Hierarchy") {
+get_hierarchy_level_stats <- function(con, hierarchy_table = "Hierarchy") {
   sql <- sprintf("
     SELECT 
       Level,
@@ -329,7 +329,7 @@ get_hierarchy_level_stats <- function(con, hierarchy_table = "Sample_Hierarchy")
 #' @export
 #' @family hierarchy
 build_flat_hierarchy <- function(con,
-                                hierarchy_table = "Sample_Hierarchy",
+                                hierarchy_table = "Hierarchy",
                                 include_long_names = TRUE,
                                 cutoff_level = NULL) {
   
@@ -377,7 +377,7 @@ build_flat_hierarchy <- function(con,
 #' @return Data frame with circular reference chains, or empty if none
 #' @export
 #' @family hierarchy
-check_hierarchy_circular_refs <- function(con, hierarchy_table = "Sample_Hierarchy") {
+check_hierarchy_circular_refs <- function(con, hierarchy_table = "Hierarchy") {
   hier <- DBI::dbGetQuery(con, sprintf("SELECT ID, Name, Parent FROM %s", hierarchy_table))
   
   circular_refs <- data.frame(

@@ -3,22 +3,22 @@
 source(here::here("R", "mod_export.R"))
 
 setup_export_tables <- function(con) {
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (plotnumber TEXT, projectid TEXT, latitude DOUBLE, longitude DOUBLE, _location TEXT, extrafield TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Veg (plotnumber TEXT, species TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Humus (plotnumber TEXT, horizon TEXT, upperdepth DOUBLE, lowerdepth DOUBLE, humusstructuredegree TEXT, _comment TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Mineral (plotnumber TEXT, horizon TEXT, upperdepth DOUBLE, lowerdepth DOUBLE, pitdepthlimit TEXT, _comments TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Other (plotnumber TEXT, dataname TEXT, dataitem TEXT, useritem1 TEXT, useritem2 TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Audit (Project TEXT, \"User\" TEXT, PlotNumber TEXT, \"Table\" TEXT, EditField TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Env (plotnumber TEXT, projectid TEXT, latitude DOUBLE, longitude DOUBLE, _location TEXT, extrafield TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Veg (plotnumber TEXT, species TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Humus (plotnumber TEXT, horizon TEXT, upperdepth DOUBLE, lowerdepth DOUBLE, humusstructuredegree TEXT, _comment TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Mineral (plotnumber TEXT, horizon TEXT, upperdepth DOUBLE, lowerdepth DOUBLE, pitdepthlimit TEXT, _comments TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Other (plotnumber TEXT, dataname TEXT, dataitem TEXT, useritem1 TEXT, useritem2 TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Audit (Project TEXT, \"User\" TEXT, PlotNumber TEXT, \"Table\" TEXT, EditField TEXT)")
 
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ1', 49.0, -123.5, 'LOC1', 'X')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ2', 50.0, -120.0, 'LOC2', 'Y')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P1', 'AB')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Veg VALUES ('P2', 'FD')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Humus VALUES ('P1', 'H1', 0, 5, 'D', 'Humus note')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Mineral VALUES ('P1', 'M1', 5, 10, 'Y', 'Mineral note')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Other VALUES ('P1', 'Note', 'Item', 'U1', 'U2')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Audit (Project, \"User\", PlotNumber, \"Table\", EditField) VALUES ('PRJ1', 'tester', 'P1', 'Sample_Env', 'FieldNumber')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Audit (Project, \"User\", PlotNumber, \"Table\", EditField) VALUES ('PRJ2', 'tester', 'P2', 'Sample_Env', 'FieldNumber')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'PRJ1', 49.0, -123.5, 'LOC1', 'X')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P2', 'PRJ2', 50.0, -120.0, 'LOC2', 'Y')")
+  DBI::dbExecute(con, "INSERT INTO Veg VALUES ('P1', 'AB')")
+  DBI::dbExecute(con, "INSERT INTO Veg VALUES ('P2', 'FD')")
+  DBI::dbExecute(con, "INSERT INTO Humus VALUES ('P1', 'H1', 0, 5, 'D', 'Humus note')")
+  DBI::dbExecute(con, "INSERT INTO Mineral VALUES ('P1', 'M1', 5, 10, 'Y', 'Mineral note')")
+  DBI::dbExecute(con, "INSERT INTO Other VALUES ('P1', 'Note', 'Item', 'U1', 'U2')")
+  DBI::dbExecute(con, "INSERT INTO Audit (Project, \"User\", PlotNumber, \"Table\", EditField) VALUES ('PRJ1', 'tester', 'P1', 'Env', 'FieldNumber')")
+  DBI::dbExecute(con, "INSERT INTO Audit (Project, \"User\", PlotNumber, \"Table\", EditField) VALUES ('PRJ2', 'tester', 'P2', 'Env', 'FieldNumber')")
 }
 
 test_that("build_venus_xml_doc filters by project", {
@@ -31,7 +31,7 @@ test_that("build_venus_xml_doc filters by project", {
   doc <- build_venus_xml_doc(
     con,
     project_ids = "PRJ1",
-    tables = c("Sample_Env", "Sample_Veg", "Sample_Humus", "Sample_Mineral", "Sample_Other", "Sample_Audit")
+    tables = c("Env", "Veg", "Humus", "Mineral", "Other", "Audit")
   )
 
   meta_name <- xml2::xml_text(xml2::xml_find_first(doc, "/VProExport/ExportMeta/Name"))
@@ -121,7 +121,7 @@ test_that("build_venus_xml_doc exports all when project_ids empty", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   setup_export_tables(con)
 
-  doc <- build_venus_xml_doc(con, project_ids = character(0), tables = c("Sample_Env"))
+  doc <- build_venus_xml_doc(con, project_ids = character(0), tables = c("Env"))
 
   meta_name <- xml2::xml_text(xml2::xml_find_first(doc, "/VProExport/ExportMeta/Name"))
   meta_count <- xml2::xml_text(xml2::xml_find_first(doc, "/VProExport/ExportMeta/ProjectCount"))
@@ -143,7 +143,7 @@ test_that("build_venus_xml_doc uses optional table prefix", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   setup_export_tables(con)
 
-  doc <- build_venus_xml_doc(con, project_ids = "PRJ1", tables = c("Sample_Env"), table_prefix = "MyExport")
+  doc <- build_venus_xml_doc(con, project_ids = "PRJ1", tables = c("Env"), table_prefix = "MyExport")
 
   meta_name <- xml2::xml_text(xml2::xml_find_first(doc, "/VProExport/ExportMeta/Name"))
   expect_equal(meta_name, "MyExport")
@@ -162,7 +162,7 @@ test_that("build_venus_xml_doc prefixes per project when exporting multiple", {
   doc <- build_venus_xml_doc(
     con,
     project_ids = c("PRJ1", "PRJ2"),
-    tables = c("Sample_Env"),
+    tables = c("Env"),
     table_prefix = "Batch"
   )
 
@@ -185,7 +185,7 @@ test_that("build_venus_xml_doc uses project ids when no prefix provided", {
   doc <- build_venus_xml_doc(
     con,
     project_ids = c("PRJ1", "PRJ2"),
-    tables = c("Sample_Env")
+    tables = c("Env")
   )
 
   env_prj1 <- xml2::xml_find_all(doc, "/VProExport/Project/PRJ1_Env/Row")

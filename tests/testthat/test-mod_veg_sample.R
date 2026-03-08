@@ -5,7 +5,7 @@ source(here::here("R", "mod_veg_sample.R"))
 
 setup_veg_sample_tables <- function(con) {
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Veg (
+    CREATE TABLE Veg (
       id INTEGER,
       plotnumber TEXT,
       species TEXT,
@@ -24,7 +24,7 @@ setup_veg_sample_tables <- function(con) {
 
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Veg (id, plotnumber, species, cover1, height1) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO Veg (id, plotnumber, species, cover1, height1) VALUES (?, ?, ?, ?, ?)",
     list(1, "P1", "AB", "10", 5.0)
   )
   DBI::dbExecute(
@@ -43,7 +43,7 @@ test_that("mod_veg_sample preserves cover codes as text", {
 
   save_veg_cell(con, 1, "cover1", "+")
 
-  saved <- DBI::dbGetQuery(con, "SELECT cover1 FROM Sample_Veg WHERE id = 1")
+  saved <- DBI::dbGetQuery(con, "SELECT cover1 FROM Veg WHERE id = 1")
   expect_equal(saved$cover1[1], "+")
 })
 

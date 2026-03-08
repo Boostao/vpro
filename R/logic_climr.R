@@ -481,10 +481,10 @@ clear_climr_cache <- function(silent = FALSE) {
   invisible(NULL)
 }
 
-#' Save climate data to Sample_Env table
+#' Save climate data to Env table
 #' 
 #' @description
-#' Writes fetched climate variables to the Sample_Env table.
+#' Writes fetched climate variables to the Env table.
 #' Creates columns if they don't exist (requires ALTER TABLE privileges).
 #' 
 #' @param con DBI connection to vpro database
@@ -515,18 +515,18 @@ save_climate_to_db <- function(con,
   )
   
   # Check if columns exist, create if missing
-  existing_cols <- tolower(DBI::dbListFields(con, "Sample_Env"))
+  existing_cols <- tolower(DBI::dbListFields(con, "Env"))
   missing_cols <- setdiff(climate_cols, existing_cols)
   
   if (length(missing_cols) > 0) {
     if (!silent) {
-      message("Creating climate columns in Sample_Env: ", paste(missing_cols, collapse = ", "))
+      message("Creating climate columns in Env: ", paste(missing_cols, collapse = ", "))
     }
     
     # Create missing columns
     for (col in missing_cols) {
       col_type <- if (col == "climr_period") "TEXT" else if (col == "climr_fetch_time") "TIMESTAMP" else "DOUBLE"
-      sql <- sprintf("ALTER TABLE Sample_Env ADD COLUMN %s %s", col, col_type)
+      sql <- sprintf("ALTER TABLE Env ADD COLUMN %s %s", col, col_type)
       
       tryCatch({
         DBI::dbExecute(con, sql)
@@ -554,7 +554,7 @@ save_climate_to_db <- function(con,
     )
   }
   
-  sql <- paste("UPDATE Sample_Env SET", set_clause, where_clause)
+  sql <- paste("UPDATE Env SET", set_clause, where_clause)
   
   # Prepare parameters
   params <- list(

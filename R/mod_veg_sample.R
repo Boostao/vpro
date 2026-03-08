@@ -14,7 +14,7 @@ coerce_veg_value <- function(col_name, value) {
 }
 
 save_veg_cell <- function(con, record_id, col_name, value) {
-  sql <- sprintf("UPDATE Sample_Veg SET %s = ? WHERE id = ?", col_name)
+  sql <- sprintf("UPDATE Veg SET %s = ? WHERE id = ?", col_name)
   DBI::dbExecute(con, sql, list(value, record_id))
 }
 
@@ -82,7 +82,7 @@ mod_veg_sample_ui <- function(id) {
         nav_panel("Layer C (Herbs)", rhandsontable::rHandsontableOutput(ns("hot_veg_c"))),
         nav_panel("Layer D (Moss)", rhandsontable::rHandsontableOutput(ns("hot_veg_d"))),
         nav_panel("Audit",
-          selectInput(ns("veg_audit_table"), "Table", choices = c("Sample_Veg")),
+          selectInput(ns("veg_audit_table"), "Table", choices = c("Veg")),
           DT::DTOutput(ns("dt_audit_veg"))
         ),
         nav_panel("Compliance",
@@ -115,7 +115,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
       # Using shared con
       
       # Fetch all columns for the current plot, ordered by species
-      query <- "SELECT * FROM Sample_Veg WHERE plotnumber = ? ORDER BY species"
+      query <- "SELECT * FROM Veg WHERE plotnumber = ? ORDER BY species"
       
       # Debug / Fix: ensure simple string passed to duckdb
       plot_id <- as.character(sys_state$CurrSU)
@@ -203,7 +203,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
               sys_state$CurrProject,
               sys_state$User,
               rv$data$plotnumber[row_idx],
-              "Sample_Veg",
+              "Veg",
               "totala",
               old_total_a,
               total_a
@@ -222,7 +222,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
               sys_state$CurrProject,
               sys_state$User,
               rv$data$plotnumber[row_idx],
-              "Sample_Veg",
+              "Veg",
               "totalb",
               old_total_b,
               total_b
@@ -246,7 +246,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             sys_state$CurrProject,
             sys_state$User,
             rv$data$plotnumber[change$row],
-            "Sample_Veg",
+            "Veg",
             col_name,
             old_df[[col_name]][change$row],
             typed_val
@@ -308,25 +308,25 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         # Insert
         tryCatch({
             # Get max ID for safety if not auto-increment (Access migration implies we might need to handle IDs)
-            # Sample_Veg usually has 'id' column.
-            max_res <- dbGetQuery(con, "SELECT MAX(id) as m FROM Sample_Veg")
+            # Veg usually has 'id' column.
+            max_res <- dbGetQuery(con, "SELECT MAX(id) as m FROM Veg")
             new_id <- if(is.na(max_res[[1]])) 1 else max_res[[1]] + 1
             
-            dbExecute(con, "INSERT INTO Sample_Veg (id, plotnumber, species) VALUES (?, ?, ?)", 
+            dbExecute(con, "INSERT INTO Veg (id, plotnumber, species) VALUES (?, ?, ?)", 
                       list(new_id, plot_id, new_species))
           log_audit_change(
             con,
             sys_state$CurrProject,
             sys_state$User,
             plot_id,
-            "Sample_Veg",
+            "Veg",
             "species",
             NA,
             new_species
           )
             
             # Refresh
-            rv$data <- dbGetQuery(con, "SELECT * FROM Sample_Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
+            rv$data <- dbGetQuery(con, "SELECT * FROM Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
             showNotification(paste("Added:", new_species), type="message")
             
         }, error = function(e) {
@@ -377,17 +377,17 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             sys_state$CurrProject,
             sys_state$User,
             row$plotnumber[1],
-            "Sample_Veg",
+            "Veg",
             "species",
             row$species[1],
             NA
           )
         }
-            dbExecute(con, "DELETE FROM Sample_Veg WHERE id = ?", list(rv_del$id))
+            dbExecute(con, "DELETE FROM Veg WHERE id = ?", list(rv_del$id))
             
             # Refresh
             plot_id <- as.character(sys_state$CurrSU)
-            rv$data <- dbGetQuery(con, "SELECT * FROM Sample_Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
+            rv$data <- dbGetQuery(con, "SELECT * FROM Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
             showNotification("Species deleted.", type="message")
             
         }, error = function(e) {
@@ -398,7 +398,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
     output$dt_audit_veg <- DT::renderDT({
       req(sys_state$CurrSU)
       table_filter <- input$veg_audit_table
-      table_name <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else "Sample_Veg"
+      table_name <- if (!is.null(table_filter) && nzchar(table_filter)) table_filter else "Veg"
       audit <- fetch_audit_entries(con, plot_number = sys_state$CurrSU, project_id = sys_state$CurrProject, table_name = table_name)
       DT::datatable(audit, rownames = FALSE, options = list(pageLength = 8, ordering = FALSE))
     })

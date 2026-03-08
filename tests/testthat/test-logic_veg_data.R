@@ -6,13 +6,13 @@ source(here::here("R", "logic_veg_data.R"))
 
 setup_veg_tables <- function(con) {
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_SU (
+    CREATE TABLE SU (
       siteunit TEXT,
       plotnumber TEXT
     )
   ")
   DBI::dbExecute(con, "
-    CREATE TABLE vw_Sample_Veg_Long (
+    CREATE TABLE vw_Veg_Long (
       plotnumber TEXT,
       species_code TEXT,
       layer TEXT,
@@ -34,23 +34,23 @@ setup_veg_tables <- function(con) {
 
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_SU (siteunit, plotnumber) VALUES (?, ?)",
+    "INSERT INTO SU (siteunit, plotnumber) VALUES (?, ?)",
     list("SU-1", "P1")
   )
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_SU (siteunit, plotnumber) VALUES (?, ?)",
+    "INSERT INTO SU (siteunit, plotnumber) VALUES (?, ?)",
     list("SU-1", "P2")
   )
 
   DBI::dbExecute(
     con,
-    "INSERT INTO vw_Sample_Veg_Long (plotnumber, species_code, layer, cover_value) VALUES (?, ?, ?, ?)",
+    "INSERT INTO vw_Veg_Long (plotnumber, species_code, layer, cover_value) VALUES (?, ?, ?, ?)",
     list("P1", "AB", "T", "10")
   )
   DBI::dbExecute(
     con,
-    "INSERT INTO vw_Sample_Veg_Long (plotnumber, species_code, layer, cover_value) VALUES (?, ?, ?, ?)",
+    "INSERT INTO vw_Veg_Long (plotnumber, species_code, layer, cover_value) VALUES (?, ?, ?, ?)",
     list("P2", "ZZ", "S", "+")
   )
 

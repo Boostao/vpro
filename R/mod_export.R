@@ -29,7 +29,7 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
   }
 
   access_column_order <- list(
-    Sample_Env = c(
+    Env = c(
       "PlotNumber", "FieldNumber", "ProjectID", "FSRegionDistrict", "Date", "SiteSurveyor",
       "PlotRepresenting", "Location", "Ecosection", "NtsMapSheet", "Latitude",
       "LatitudeDegrees", "LatitudeMinutes", "LatitudeSeconds",
@@ -56,19 +56,19 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
       "SV_SoilDepth", "SV_RootZoneTexture", "SV_PercentCoarseFrags", "SV_GleyingMottlingCM",
       "SV_WaterTableCM", "SV_FullCruiseCard", "SV_AhorizonType", "SV_AhorizonDepth", "ActiveLayerDepth"
     ),
-    Sample_Veg = c(
+    Veg = c(
       "PlotNumber", "Species", "Layer", "Cover1", "Height1", "Cover2", "Height2", "Cover3",
       "Height3", "TotalA", "HeightA", "Cover4", "Height4", "Cover5", "Height5", "Cover5a",
       "Height5a", "Cover5b", "Height5b", "Cover5c", "Height5c", "TotalB", "HeightB", "Cover6",
       "Height6", "Cover7", "Cover8", "Cover9", "Cover10", "Collected", "Flag", "ID", "LL",
       "AF", "DC", "UT", "VI", "PV", "PG", "FFA", "Cultural1", "Cultural2", "Other1", "Other2"
     ),
-    Sample_Humus = c(
+    Humus = c(
       "PlotNumber", "Horizon", "UpperDepth", "LowerDepth", "HumusStructureDegree",
       "HumusStructureKind", "MycelAbundance", "FecalAbundance", "RootsAbundance", "RootsSize",
       "vonPost", "HumusFormpH", "Consistence", "Character", "Fauna", "Comment", "Flag", "ID"
     ),
-    Sample_Mineral = c(
+    Mineral = c(
       "PlotNumber", "Horizon", "UpperDepth", "LowerDepth", "PitDepthLimit", "Colour", "ASP",
       "Texture", "PercentCoarseFragsGravel", "PercentCoarseFragsCobbles", "PercentCoarseFragsStones",
       "PercentCoarseFragsTotal", "PercentCoarseFragsShape", "RootsAbundance", "RootsSize",
@@ -76,18 +76,18 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
       "MottlesSize", "MottlesContrast", "ClayFilmsFreq", "ClayFilmThickness", "Effervescence",
       "Porosity", "Comments", "Flag", "ID"
     ),
-    Sample_Other = c(
+    Other = c(
       "PlotNumber", "DataName", "DataItem", "UserItem1", "UserItem2", "UserItem3", "UserFlag1",
       "UserFlag2", "UserFlag3", "Flag", "ID"
     ),
-    Sample_Audit = c(
+    Audit = c(
       "Project", "User", "PlotNumber", "Table", "EditField", "EditWhen", "BeforeEdit", "AfterEdit",
       "Restore", "Flag", "ID"
     )
   )
 
   if (is.null(tables)) {
-    tables <- c("Sample_Env", "Sample_Veg", "Sample_Humus", "Sample_Mineral", "Sample_Other", "Sample_Audit")
+    tables <- c("Env", "Veg", "Humus", "Mineral", "Other", "Audit")
   }
 
   tables <- tables[vapply(tables, function(x) DBI::dbExistsTable(con, x), logical(1))]
@@ -108,14 +108,14 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
       if (!is.null(project_col)) {
         sql <- paste0(sql, " WHERE ", project_col, " IN (", placeholders, ")")
         params <- as.list(project_ids)
-      } else if (!is.null(plot_col) && DBI::dbExistsTable(con, "Sample_Env")) {
-        env_fields <- DBI::dbListFields(con, "Sample_Env")
+      } else if (!is.null(plot_col) && DBI::dbExistsTable(con, "Env")) {
+        env_fields <- DBI::dbListFields(con, "Env")
         env_project_col <- get_case_insensitive_col(env_fields, "ProjectID")
         env_plot_col <- get_case_insensitive_col(env_fields, "PlotNumber")
         if (!is.null(env_project_col) && !is.null(env_plot_col)) {
           sql <- paste(
             "SELECT t.* FROM", table_name, "t",
-            "INNER JOIN Sample_Env e ON t.", plot_col, "= e.", env_plot_col
+            "INNER JOIN Env e ON t.", plot_col, "= e.", env_plot_col
           )
           sql <- paste0(sql, " WHERE e.", env_project_col, " IN (", placeholders, ")")
           params <- as.list(project_ids)
@@ -135,12 +135,12 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
 
   venus_table_name <- function(project_id, table_name, prefix, multi_project) {
     suffix_map <- c(
-      Sample_Env = "Env",
-      Sample_Veg = "Veg",
-      Sample_Humus = "Humus",
-      Sample_Mineral = "Mineral",
-      Sample_Other = "Other",
-      Sample_Audit = "Audit"
+      Env = "Env",
+      Veg = "Veg",
+      Humus = "Humus",
+      Mineral = "Mineral",
+      Other = "Other",
+      Audit = "Audit"
     )
     suffix <- suffix_map[[table_name]]
     if (is.null(suffix)) suffix <- table_name
@@ -162,7 +162,7 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
     alias_for_table <- alias_map[[table_name]] %||% list()
 
     virtual_cols <- list(
-      Sample_Env = c(
+      Env = c(
         "LatitudeDegrees", "LatitudeMinutes", "LatitudeSeconds",
         "LongitudeDegrees", "LongitudeMinutes", "LongitudeSeconds"
       )
@@ -221,7 +221,7 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
   }
 
   resolve_virtual_value <- function(table_name, tag_col, row, col_map) {
-    if (table_name != "Sample_Env") return("")
+    if (table_name != "Env") return("")
     if (is.null(col_map$Latitude) || is.null(col_map$Longitude)) return("")
 
     lat <- suppressWarnings(as.numeric(row[[col_map$Latitude]]))
@@ -245,13 +245,13 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
     if (is.null(data) || nrow(data) == 0) return()
 
     alias_map <- list(
-      Sample_Env = list(
+      Env = list(
         Location = c("_location")
       ),
-      Sample_Humus = list(
+      Humus = list(
         Comment = c("_comment", "_comments")
       ),
-      Sample_Mineral = list(
+      Mineral = list(
         Comments = c("_comments", "_comment")
       )
     )
@@ -283,11 +283,11 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
     if (length(project_ids) > 0) {
       return(length(unique(as.character(project_ids))))
     }
-    if (DBI::dbExistsTable(con, "Sample_Env")) {
-      env_fields <- DBI::dbListFields(con, "Sample_Env")
+    if (DBI::dbExistsTable(con, "Env")) {
+      env_fields <- DBI::dbListFields(con, "Env")
       env_project_col <- get_case_insensitive_col(env_fields, "ProjectID")
       if (!is.null(env_project_col)) {
-        sql <- paste0("SELECT COUNT(DISTINCT ", env_project_col, ") AS n FROM Sample_Env")
+        sql <- paste0("SELECT COUNT(DISTINCT ", env_project_col, ") AS n FROM Env")
         count <- DBI::dbGetQuery(con, sql)$n
         if (length(count) == 1 && !is.na(count) && count > 0) return(as.integer(count))
       }
@@ -415,7 +415,7 @@ mod_export_server <- function(id, sys_state, con) {
     # -- Initialize Choices --
     observe({
         # Load projects
-        projs <- dbGetQuery(con, "SELECT projectid, projecttitle FROM Sample_Metadata ORDER BY projectid")
+        projs <- dbGetQuery(con, "SELECT projectid, projecttitle FROM Metadata ORDER BY projectid")
         if (nrow(projs) > 0) {
             proj_choices <- setNames(projs$projectid, paste(projs$projectid, "-", projs$projecttitle))
             updateSelectInput(session, "export_proj", choices = proj_choices)
@@ -436,12 +436,12 @@ mod_export_server <- function(id, sys_state, con) {
         
         # Filter Project
         if (!is.null(input$export_proj) && length(input$export_proj) > 0) {
-            # Filter by project requires joining Sample_Env/Admin to find which project a plot belongs to?
-            # Or Sample_Metadata?
-            # Sample_Env contains 'projectid'
+            # Filter by project requires joining Env/Admin to find which project a plot belongs to?
+            # Or Metadata?
+            # Env contains 'projectid'
             projs_sql <- paste(paste0("'", input$export_proj, "'"), collapse=", ")
             query_veg <- sprintf("SELECT v.* FROM vw_USysAllVeg v 
-                                  JOIN Sample_Env e ON v.PlotNumber = e.plotnumber 
+                                  JOIN Env e ON v.PlotNumber = e.plotnumber 
                                   WHERE v.MyLayer IN (%s) AND e.projectid IN (%s)", 
                                   layers_sql, projs_sql)
         }
@@ -477,7 +477,7 @@ mod_export_server <- function(id, sys_state, con) {
             pivot_wider(names_from = ColName, values_from = CoverNum, values_fill = 0)
             
         # 3. Get Env Data
-        query_env <- "SELECT plotnumber, projectid, _location, date, latitude, longitude, elevation, slopegradient, aspect, sitenotes FROM Sample_Env"
+        query_env <- "SELECT plotnumber, projectid, _location, date, latitude, longitude, elevation, slopegradient, aspect, sitenotes FROM Env"
         if (!is.null(input$export_proj) && length(input$export_proj) > 0) {
              projs_sql <- paste(paste0("'", input$export_proj, "'"), collapse=", ")
              query_env <- sprintf("%s WHERE projectid IN (%s)", query_env, projs_sql)

@@ -40,8 +40,8 @@ fs882_coerce_chr <- function(value) {
 
 fs882_coerce_soil_value <- function(table_name, col_name, value) {
   numeric_cols <- list(
-    Sample_Humus = c("upperdepth", "lowerdepth", "humusformph"),
-    Sample_Mineral = c("upperdepth", "lowerdepth", "percentcoarsefragstotal")
+    Humus = c("upperdepth", "lowerdepth", "humusformph"),
+    Mineral = c("upperdepth", "lowerdepth", "percentcoarsefragstotal")
   )
 
   if (!is.null(numeric_cols[[table_name]]) && col_name %in% numeric_cols[[table_name]]) {
@@ -70,7 +70,7 @@ fs882_list_choices <- function(con, list_name) {
 
 fs882_upsert_env_header <- function(con, fields) {
   update_sql <- paste(
-    "UPDATE Sample_Env SET",
+    "UPDATE Env SET",
     "fieldnumber=?, date=?, sitesurveyor=?, _location=?, latitude=?, longitude=?,",
     "utmeasting=?, utmnorthing=?, elevation=?, slopegradient=?, aspect=?,",
     "mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=?",
@@ -102,7 +102,7 @@ fs882_upsert_env_header <- function(con, fields) {
   }
 
   insert_sql <- paste(
-    "INSERT INTO Sample_Env (",
+    "INSERT INTO Env (",
     "plotnumber, fieldnumber, date, sitesurveyor, _location, latitude, longitude,",
     "utmeasting, utmnorthing, elevation, slopegradient, aspect,",
     "mesoslopeposition, surfaceshape, moistureregime, nutrientregime, sitenotes",
@@ -257,7 +257,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
       plot_id <- trimws(as.character(plot_id))
       rv$current_plot <- plot_id
 
-      env_df <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Env WHERE plotnumber = ?", list(plot_id))
+      env_df <- DBI::dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
       if (nrow(env_df) == 0) {
         env_df <- data.frame(
           plotnumber = plot_id,
@@ -305,20 +305,20 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
           "SELECT id, plotnumber, species, layer,",
           "cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8, cover9,",
           "totala, totalb, collected",
-          "FROM Sample_Veg WHERE plotnumber = ? ORDER BY species, id"
+          "FROM Veg WHERE plotnumber = ? ORDER BY species, id"
         ),
         list(plot_id)
       )
 
       humus_df <- DBI::dbGetQuery(
         con,
-        "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon",
+        "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon",
         list(plot_id)
       )
 
       mineral_df <- DBI::dbGetQuery(
         con,
-        "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon",
+        "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon",
         list(plot_id)
       )
 
@@ -411,7 +411,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
       req(hot_input)
 
       new_df <- rhandsontable::hot_to_r(hot_input)
-      current <- if (identical(table_name, "Sample_Humus")) rv$humus else rv$mineral
+      current <- if (identical(table_name, "Humus")) rv$humus else rv$mineral
       req(current)
 
       valid_cols <- intersect(display_cols, names(current))
@@ -436,19 +436,19 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
         }
       }
 
-      if (identical(table_name, "Sample_Humus")) {
-        rv$humus <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Humus WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
+      if (identical(table_name, "Humus")) {
+        rv$humus <- DBI::dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
       } else {
-        rv$mineral <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Mineral WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
+        rv$mineral <- DBI::dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
       }
     }
 
     observeEvent(input$hot_humus, {
-      update_soil_from_hot(input$hot_humus, "Sample_Humus", humus_cols)
+      update_soil_from_hot(input$hot_humus, "Humus", humus_cols)
     })
 
     observeEvent(input$hot_mineral, {
-      update_soil_from_hot(input$hot_mineral, "Sample_Mineral", mineral_cols)
+      update_soil_from_hot(input$hot_mineral, "Mineral", mineral_cols)
     })
 
     observeEvent(input$veg_table_rows_selected, {
@@ -511,7 +511,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
 
       veg_df <- rv$veg
       if (!nrow(veg_df)) {
-        DBI::dbExecute(con, "DELETE FROM Sample_Veg WHERE plotnumber = ?", list(plot_id))
+        DBI::dbExecute(con, "DELETE FROM Veg WHERE plotnumber = ?", list(plot_id))
         showNotification("Vegetation saved (no rows).", type = "message")
         return()
       }
@@ -530,7 +530,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
         DBI::dbExecute(con, "BEGIN TRANSACTION")
         on.exit(DBI::dbExecute(con, "ROLLBACK"), add = TRUE)
 
-        existing_max <- DBI::dbGetQuery(con, "SELECT COALESCE(MAX(id), 0) AS max_id FROM Sample_Veg")$max_id[[1]]
+        existing_max <- DBI::dbGetQuery(con, "SELECT COALESCE(MAX(id), 0) AS max_id FROM Veg")$max_id[[1]]
         next_id <- as.integer(existing_max)
 
         for (row_idx in seq_len(nrow(veg_df))) {
@@ -540,10 +540,10 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
           }
         }
 
-        DBI::dbExecute(con, "DELETE FROM Sample_Veg WHERE plotnumber = ?", list(plot_id))
+        DBI::dbExecute(con, "DELETE FROM Veg WHERE plotnumber = ?", list(plot_id))
 
         insert_sql <- paste(
-          "INSERT INTO Sample_Veg (",
+          "INSERT INTO Veg (",
           "id, plotnumber, species, layer,",
           "cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8, cover9,",
           "totala, totalb, collected",
@@ -579,7 +579,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
             "SELECT id, plotnumber, species, layer,",
             "cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8, cover9,",
             "totala, totalb, collected",
-            "FROM Sample_Veg WHERE plotnumber = ? ORDER BY species, id"
+            "FROM Veg WHERE plotnumber = ? ORDER BY species, id"
           ),
           list(plot_id)
         )

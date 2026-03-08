@@ -363,7 +363,7 @@ build_env_summary_by_su <- function(con,
   if (!is.null(site_unit) && nzchar(trimws(site_unit))) {
     plots <- DBI::dbGetQuery(
       con,
-      "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+      "SELECT PlotNumber FROM SU WHERE SiteUnit = ?",
       list(trimws(site_unit))
     )
     plot_list <- plots$PlotNumber
@@ -375,10 +375,10 @@ build_env_summary_by_su <- function(con,
     plot_sql <- paste0("('", paste(plot_list, collapse = "', '"), "')")
     env <- DBI::dbGetQuery(
       con,
-      sprintf("SELECT * FROM Sample_Env WHERE PlotNumber IN %s", plot_sql)
+      sprintf("SELECT * FROM Env WHERE PlotNumber IN %s", plot_sql)
     )
   } else {
-    env <- DBI::dbGetQuery(con, "SELECT * FROM Sample_Env")
+    env <- DBI::dbGetQuery(con, "SELECT * FROM Env")
   }
   
   if (nrow(env) == 0) {

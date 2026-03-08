@@ -11,7 +11,7 @@ create_test_db <- function() {
   
   # Create tables
   dbExecute(con, "
-    CREATE TABLE Sample_Metadata (
+    CREATE TABLE Metadata (
       projectid VARCHAR,
       projecttitle VARCHAR,
       projectdescription VARCHAR
@@ -19,7 +19,7 @@ create_test_db <- function() {
   ")
   
   dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber VARCHAR,
       fieldnumber VARCHAR,
       projectid VARCHAR,
@@ -70,7 +70,7 @@ create_test_db <- function() {
   ")
   
   dbExecute(con, "
-    CREATE TABLE Sample_Veg (
+    CREATE TABLE Veg (
       plotnumber VARCHAR,
       species VARCHAR,
       cover1 VARCHAR,
@@ -86,23 +86,23 @@ create_test_db <- function() {
   # Create view
   dbExecute(con, "
     CREATE VIEW vw_USysAllVeg AS
-    SELECT PlotNumber, 1 AS MyLayer, Species, Cover1 AS Cover FROM Sample_Veg WHERE Cover1 IS NOT NULL
+    SELECT PlotNumber, 1 AS MyLayer, Species, Cover1 AS Cover FROM Veg WHERE Cover1 IS NOT NULL
     UNION ALL
-    SELECT PlotNumber, 2 AS MyLayer, Species, Cover2 AS Cover FROM Sample_Veg WHERE Cover2 IS NOT NULL
+    SELECT PlotNumber, 2 AS MyLayer, Species, Cover2 AS Cover FROM Veg WHERE Cover2 IS NOT NULL
     UNION ALL
-    SELECT PlotNumber, 3 AS MyLayer, Species, Cover3 AS Cover FROM Sample_Veg WHERE Cover3 IS NOT NULL
+    SELECT PlotNumber, 3 AS MyLayer, Species, Cover3 AS Cover FROM Veg WHERE Cover3 IS NOT NULL
     UNION ALL
-    SELECT PlotNumber, 4 AS MyLayer, Species, Cover4 AS Cover FROM Sample_Veg WHERE Cover4 IS NOT NULL
+    SELECT PlotNumber, 4 AS MyLayer, Species, Cover4 AS Cover FROM Veg WHERE Cover4 IS NOT NULL
     UNION ALL
-    SELECT PlotNumber, 5 AS MyLayer, Species, Cover5 AS Cover FROM Sample_Veg WHERE Cover5 IS NOT NULL
+    SELECT PlotNumber, 5 AS MyLayer, Species, Cover5 AS Cover FROM Veg WHERE Cover5 IS NOT NULL
     UNION ALL
-    SELECT PlotNumber, 6 AS MyLayer, Species, Cover6 AS Cover FROM Sample_Veg WHERE Cover6 IS NOT NULL
+    SELECT PlotNumber, 6 AS MyLayer, Species, Cover6 AS Cover FROM Veg WHERE Cover6 IS NOT NULL
     UNION ALL
-    SELECT PlotNumber, 7 AS MyLayer, Species, Cover7 AS Cover FROM Sample_Veg WHERE Cover7 IS NOT NULL
+    SELECT PlotNumber, 7 AS MyLayer, Species, Cover7 AS Cover FROM Veg WHERE Cover7 IS NOT NULL
   ")
   
   dbExecute(con, "
-    CREATE TABLE Sample_Humus (
+    CREATE TABLE Humus (
       plotnumber VARCHAR,
       horizon VARCHAR,
       upperdepth DOUBLE,
@@ -114,7 +114,7 @@ create_test_db <- function() {
   ")
   
   dbExecute(con, "
-    CREATE TABLE Sample_Mineral (
+    CREATE TABLE Mineral (
       plotnumber VARCHAR,
       horizon VARCHAR,
       upperdepth DOUBLE,
@@ -128,7 +128,7 @@ create_test_db <- function() {
   ")
   
   dbExecute(con, "
-    CREATE TABLE Sample_Lump (
+    CREATE TABLE Lump (
       sppcode VARCHAR,
       lumpcode VARCHAR,
       _use INTEGER
@@ -142,14 +142,14 @@ create_test_db <- function() {
 seed_test_data <- function(con) {
   # Add metadata
   dbExecute(con, "
-    INSERT INTO Sample_Metadata VALUES
+    INSERT INTO Metadata VALUES
     ('TEST01', 'Test Project 1', 'A test project for VENUS export'),
     ('TEST02', 'Test Project 2', 'Another test project')
   ")
   
   # Add plots
   dbExecute(con, "
-    INSERT INTO Sample_Env (
+    INSERT INTO Env (
       plotnumber, fieldnumber, projectid, date, sitesurveyor,
       plotrepresenting, _location, ecosection, ntsmapsheet,
       latitude, longitude, utmzone, utmeasting, utmnorthing,
@@ -191,7 +191,7 @@ seed_test_data <- function(con) {
   
   # Add vegetation
   dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, cover1, cover2, cover4, cover6, cover7) VALUES
+    INSERT INTO Veg (plotnumber, species, cover1, cover2, cover4, cover6, cover7) VALUES
     ('P001', 'TSHE', '40', '15', NULL, NULL, NULL),
     ('P001', 'THPL', '25', NULL, NULL, NULL, NULL),
     ('P001', 'VAOV', NULL, NULL, '30', NULL, NULL),
@@ -205,14 +205,14 @@ seed_test_data <- function(con) {
   
   # Add soil horizons
   dbExecute(con, "
-    INSERT INTO Sample_Humus (plotnumber, horizon, upperdepth, lowerdepth, vonpost, humusformpH, _comment) VALUES
+    INSERT INTO Humus (plotnumber, horizon, upperdepth, lowerdepth, vonpost, humusformpH, _comment) VALUES
     ('P001', 'L', 0, 2, NULL, NULL, 'Fresh litter'),
     ('P001', 'F', 2, 5, 3, 4.5, 'Partially decomposed'),
     ('P001', 'H', 5, 10, 6, 4.2, 'Well decomposed')
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_Mineral (plotnumber, horizon, upperdepth, lowerdepth, colour, texture, percentcoarsefragstotal, mineralformpH, _comments) VALUES
+    INSERT INTO Mineral (plotnumber, horizon, upperdepth, lowerdepth, colour, texture, percentcoarsefragstotal, mineralformpH, _comments) VALUES
     ('P001', 'Ae', 10, 15, '10YR 5/2', 'SL', 15, 5.0, 'Eluviated horizon'),
     ('P001', 'Bt', 15, 45, '7.5YR 4/4', 'SCL', 25, 5.5, 'Clay accumulation'),
     ('P001', 'C', 45, 100, '2.5Y 5/3', 'L', 30, 6.0, 'Parent material')
@@ -220,7 +220,7 @@ seed_test_data <- function(con) {
   
   # Add lumping data
   dbExecute(con, "
-    INSERT INTO Sample_Lump (sppcode, lumpcode, _use) VALUES
+    INSERT INTO Lump (sppcode, lumpcode, _use) VALUES
     ('TSHE', 'TSHE', 1),
     ('THPL', 'THPL', 1),
     ('VAOV', 'VACCINIUM', 1),

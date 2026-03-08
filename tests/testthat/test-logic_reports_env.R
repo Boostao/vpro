@@ -217,21 +217,21 @@ test_that("build_env_summary_by_su returns complete summary", {
   
   # Create test tables
   dbExecute(con, "
-    CREATE TABLE Sample_SU (
+    CREATE TABLE SU (
       PlotNumber VARCHAR,
       SiteUnit VARCHAR
     )
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_SU VALUES
+    INSERT INTO SU VALUES
     ('001', 'SU1'),
     ('002', 'SU1'),
     ('003', 'SU2')
   ")
   
   dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       PlotNumber VARCHAR,
       Elevation INTEGER,
       SlopeGradient INTEGER,
@@ -240,7 +240,7 @@ test_that("build_env_summary_by_su returns complete summary", {
   ")
   
   dbExecute(con, "
-    INSERT INTO Sample_Env VALUES
+    INSERT INTO Env VALUES
     ('001', 450, 15, '5'),
     ('002', 520, 25, '6'),
     ('003', 380, 10, '5')

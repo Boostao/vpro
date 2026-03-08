@@ -72,10 +72,6 @@ server <- function(input, output, session) {
   state$sysCurrForm <- pref_form
   state$User <- pref_user
 
-  PROJECT_ACTION_ATTACH <- "__project_action_attach__"
-  PROJECT_ACTION_NEW <- "__project_action_new__"
-  PROJECT_ACTION_UNATTACH <- "__project_action_unattach__"
-  PROJECT_ACTION_SEPARATOR <- "__project_action_separator__"
   SU_ACTION_ATTACH <- "__su_action_attach__"
   SU_ACTION_NEW <- "__su_action_new__"
   SU_ACTION_UNATTACH <- "__su_action_unattach__"
@@ -85,253 +81,74 @@ server <- function(input, output, session) {
   HIER_ACTION_NEW <- "__hier_action_new__"
   HIER_ACTION_UNATTACH <- "__hier_action_unattach__"
   HIER_ACTION_SEPARATOR <- "__hier_action_separator__"
-  project_refresh <- reactiveVal(0L)
 
-  action_labels <- function(include_none = FALSE) {
-    base <- c("Attach", "New", "Unattach")
-    if (isTRUE(include_none)) {
-      base <- c(base, "None")
-    }
-    c(base, "--------------------------------------")
-  }
+  # 3. Project module (replaces old sel_project sentinel dropdown)
+  project_mod <- mod_project_server("project", state, con)
+
+  # Refresh SU + hierarchy when project changes
+  observe({
+    project_mod$project_changed()
+    refresh_su_dropdown()
+    refresh_hierarchy_dropdown()
+  })
 
   build_selector_choices <- function(dynamic_values, action_values, include_none = FALSE) {
-    if (length(dynamic_values) == 0 && !isTRUE(include_none)) {
-      labels <- action_labels(include_none = FALSE)[1:3]
-      values <- action_values[labels]
-      return(stats::setNames(values, labels))
+    action_labels <- function(include_none = FALSE) {
+      base <- c("Attach", "New", "Unattach")
+      if (isTRUE(include_none)) base <- c(base, "None")
+      c(base, "--------------------------------------")
     }
-
-    labels <- c(action_labels(include_none = include_none), dynamic_values)
-    values <- c(unname(action_values[action_labels(include_none = include_none)]), dynamic_values)
-    stats::setNames(values, labels)
+    if (length(dynamic_values) == 0 && !isTRUE(include_none)) {
+      lbl <- action_labels(include_none = FALSE)[1:3]
+      return(stats::setNames(action_values[lbl], lbl))
+    }
+    lbl <- c(action_labels(include_none = include_none), dynamic_values)
+    val <- c(unname(action_values[action_labels(include_none = include_none)]), dynamic_values)
+    stats::setNames(val, lbl)
   }
 
   resolve_dynamic_selection <- function(selected, preferred, dynamic_values, none_value = NULL) {
-    if (is.null(selected) || !nzchar(selected) || !(selected %in% dynamic_values)) {
-      selected <- preferred
-    }
-    if (is.null(selected) || !nzchar(selected) || !(selected %in% dynamic_values)) {
-      if (length(dynamic_values) > 0) {
-        selected <- dynamic_values[[1]]
-      } else if (!is.null(none_value)) {
-        selected <- none_value
-      }
+    if (is.null(selected) || !nzchar(selected) || !(selected %in% dynamic_values)) selected <- preferred
+    if (is.null(selected) || !nzchar(selected %||% "") || !(selected %in% dynamic_values)) {
+      if (length(dynamic_values) > 0) selected <- dynamic_values[[1]]
+      else if (!is.null(none_value)) selected <- none_value
     }
     selected
   }
 
   refresh_su_dropdown <- function(selected_su = NULL) {
     su_actions <- c(
-      "Attach" = SU_ACTION_ATTACH,
-      "New" = SU_ACTION_NEW,
-      "Unattach" = SU_ACTION_UNATTACH,
-      "None" = SU_ACTION_NONE,
+      "Attach" = SU_ACTION_ATTACH, "New" = SU_ACTION_NEW,
+      "Unattach" = SU_ACTION_UNATTACH, "None" = SU_ACTION_NONE,
       "--------------------------------------" = SU_ACTION_SEPARATOR
     )
-
-    su_choices <- discover_prefixes_by_suffix(con, "_SU")
+    su_choices <- if (DBI::dbExistsTable(con, "SU")) {
+      tryCatch(as.character(DBI::dbGetQuery(con, "SELECT DISTINCT plotnumber FROM SU ORDER BY plotnumber")$plotnumber), error = function(e) character(0))
+    } else character(0)
     values <- build_selector_choices(su_choices, su_actions, include_none = TRUE)
-    selected_su <- resolve_dynamic_selection(
-      selected = selected_su,
-      preferred = state$PrefSUTable,
-      dynamic_values = su_choices,
-      none_value = SU_ACTION_NONE
-    )
-
+    selected_su <- resolve_dynamic_selection(selected_su, state$PrefSUTable, su_choices, SU_ACTION_NONE)
     updateSelectInput(session, "sel_su", choices = values, selected = selected_su)
     invisible(su_choices)
   }
 
-  refresh_plot_dropdown <- function(selected_plot = NULL) {
-    refresh_su_dropdown(selected_su = selected_plot)
-  }
+  refresh_plot_dropdown <- function(selected_plot = NULL) refresh_su_dropdown(selected_su = selected_plot)
 
   refresh_hierarchy_dropdown <- function(selected_hierarchy = NULL) {
-    hierarchy_choices <- discover_prefixes_by_suffix(con, "_Hierarchy")
-    hierarchy_actions <- c(
-      "Attach" = HIER_ACTION_ATTACH,
-      "New" = HIER_ACTION_NEW,
+    hier_actions <- c(
+      "Attach" = HIER_ACTION_ATTACH, "New" = HIER_ACTION_NEW,
       "Unattach" = HIER_ACTION_UNATTACH,
       "--------------------------------------" = HIER_ACTION_SEPARATOR
     )
-
-    values <- build_selector_choices(hierarchy_choices, hierarchy_actions, include_none = FALSE)
-    selected_hierarchy <- resolve_dynamic_selection(
-      selected = selected_hierarchy,
-      preferred = state$PrefHierarchy,
-      dynamic_values = hierarchy_choices,
-      none_value = NULL
-    )
-
-    updateSelectInput(
-      session,
-      "sel_hierarchy",
-      choices = values,
-      selected = selected_hierarchy
-    )
-    invisible(hierarchy_choices)
+    hier_choices <- if (DBI::dbExistsTable(con, "Hierarchy")) {
+      tryCatch(as.character(DBI::dbGetQuery(con, "SELECT DISTINCT siteunit FROM Hierarchy ORDER BY siteunit")$siteunit), error = function(e) character(0))
+    } else character(0)
+    values <- build_selector_choices(hier_choices, hier_actions, include_none = FALSE)
+    selected_hierarchy <- resolve_dynamic_selection(selected_hierarchy, state$PrefHierarchy, hier_choices, NULL)
+    updateSelectInput(session, "sel_hierarchy", choices = values, selected = selected_hierarchy)
+    invisible(hier_choices)
   }
 
-  refresh_project_dropdown <- function(selected = NULL) {
-    projects <- discover_prefixes_by_suffix(con, "_Env")
-    project_actions <- c(
-      "Attach" = PROJECT_ACTION_ATTACH,
-      "New" = PROJECT_ACTION_NEW,
-      "Unattach" = PROJECT_ACTION_UNATTACH,
-      "--------------------------------------" = PROJECT_ACTION_SEPARATOR
-    )
-    values <- build_selector_choices(projects, project_actions, include_none = FALSE)
-
-    selected <- resolve_dynamic_selection(
-      selected = selected,
-      preferred = state$PrefProject,
-      dynamic_values = projects,
-      none_value = PROJECT_ACTION_NEW
-    )
-
-    updateSelectInput(session, "sel_project", choices = values, selected = selected)
-    invisible(projects)
-  }
-  
-  # 3. Populate Project Dropdown
-  observe({
-    project_refresh()
-    tryCatch({
-      refresh_project_dropdown()
-    }, error = function(e) {
-      log_msg("Error loading projects: ", conditionMessage(e))
-    })
-  })
-  
-  # 4. Handle Project Change
-  observeEvent(input$sel_project, {
-    req(input$sel_project)
-
-    if (identical(input$sel_project, PROJECT_ACTION_SEPARATOR)) {
-      isolate(refresh_project_dropdown(selected = state$CurrProject %||% state$PrefProject))
-      return()
-    }
-
-    if (identical(input$sel_project, PROJECT_ACTION_ATTACH)) {
-      showModal(modalDialog(
-        title = "Attach Project",
-        textInput("project_attach_db_path", "DuckDB file path", value = ""),
-        textInput("project_attach_prefix", "Project prefix", value = ""),
-        checkboxInput("project_attach_replace", "Replace existing project tables", value = FALSE),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("project_attach_confirm", "Attach", class = "btn-primary")
-        ),
-        easyClose = TRUE
-      ))
-      isolate(refresh_project_dropdown(selected = state$CurrProject %||% state$PrefProject))
-      return()
-    }
-
-    if (identical(input$sel_project, PROJECT_ACTION_NEW)) {
-      showModal(modalDialog(
-        title = "New Project",
-        textInput("project_new_prefix", "New project prefix", value = ""),
-        textInput("project_new_template", "Template prefix", value = "Sample"),
-        checkboxInput("project_new_overwrite", "Overwrite if project tables already exist", value = FALSE),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("project_new_confirm", "Create", class = "btn-primary")
-        ),
-        easyClose = TRUE
-      ))
-      isolate(refresh_project_dropdown(selected = state$CurrProject %||% state$PrefProject))
-      return()
-    }
-
-    if (identical(input$sel_project, PROJECT_ACTION_UNATTACH)) {
-      projects <- discover_prefixes_by_suffix(con, "_Env")
-      choices <- projects[!tolower(projects) %in% c("sample")]
-      showModal(modalDialog(
-        title = "Unattach Project",
-        if (length(choices) == 0) {
-          tags$p("No detachable projects found.")
-        } else {
-          selectInput("project_unattach_prefix", "Project prefix", choices = choices)
-        },
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton("project_unattach_confirm", "Unattach", class = "btn-danger")
-        ),
-        easyClose = TRUE
-      ))
-      isolate(refresh_project_dropdown(selected = state$CurrProject %||% state$PrefProject))
-      return()
-    }
-    
-    # Update State Logic
-    set_project(state, input$sel_project, con)
-    set_pref(con, "Current", "CurrProject", input$sel_project)
-    state$PrefSUTable <- "None"
-    set_pref(con, "Current", "CurrPlotList", "None")
-    refresh_su_dropdown(selected_su = "None")
-  })
-
-  observeEvent(input$project_new_confirm, {
-    req(input$project_new_prefix)
-    tryCatch({
-      create_project_table_set(
-        con,
-        prefix = trimws(input$project_new_prefix),
-        template_prefix = trimws(input$project_new_template),
-        overwrite = isTRUE(input$project_new_overwrite)
-      )
-      removeModal()
-      state$PrefProject <- trimws(input$project_new_prefix)
-      project_refresh(project_refresh() + 1L)
-      refresh_project_dropdown(selected = state$PrefProject)
-      updateSelectInput(session, "sel_project", selected = state$PrefProject)
-      showNotification(paste0("Created project table set: ", state$PrefProject), type = "message")
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
-
-  observeEvent(input$project_attach_confirm, {
-    req(input$project_attach_db_path, input$project_attach_prefix)
-    tryCatch({
-      attach_project_table_set(
-        con,
-        db_path = trimws(input$project_attach_db_path),
-        prefix = trimws(input$project_attach_prefix),
-        replace_existing = isTRUE(input$project_attach_replace)
-      )
-      removeModal()
-      state$PrefProject <- trimws(input$project_attach_prefix)
-      project_refresh(project_refresh() + 1L)
-      refresh_project_dropdown(selected = state$PrefProject)
-      updateSelectInput(session, "sel_project", selected = state$PrefProject)
-      showNotification(paste0("Attached project table set: ", state$PrefProject), type = "message")
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
-
-  observeEvent(input$project_unattach_confirm, {
-    req(input$project_unattach_prefix)
-    tryCatch({
-      dropped <- unattach_project_table_set(con, input$project_unattach_prefix)
-      removeModal()
-      project_refresh(project_refresh() + 1L)
-      if (identical(tolower(state$CurrProject %||% ""), tolower(input$project_unattach_prefix))) {
-        state$CurrProject <- NULL
-        state$sysCurrProject <- NULL
-      }
-      refresh_project_dropdown()
-      showNotification(
-        paste0("Unattached project '", input$project_unattach_prefix, "' (", length(dropped), " tables)."),
-        type = "message"
-      )
-    }, error = function(e) {
-      showNotification(conditionMessage(e), type = "error")
-    })
-  })
+  observe({ refresh_su_dropdown() })
   
   # 5. Handle SU Change
   observeEvent(input$sel_su, {

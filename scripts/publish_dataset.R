@@ -52,8 +52,8 @@ env_sql <- "
     e.bec_site_series,
     e._location,
     s.dataquality AS data_quality
-  FROM Sample_Env e
-  LEFT JOIN Sample_SU s ON e.plotnumber = s.plotnumber
+  FROM Env e
+  LEFT JOIN SU s ON e.plotnumber = s.plotnumber
   WHERE e.projectid = ?
     AND e.latitude IS NOT NULL 
     AND e.longitude IS NOT NULL

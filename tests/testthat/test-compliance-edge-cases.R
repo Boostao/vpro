@@ -12,16 +12,16 @@ setup_full_compliance_schema <- function(con) {
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
   
   # Drop and recreate tables to avoid conflicts with helpers
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS Sample_Env CASCADE")
-  DBI::dbExecute(con, "DROP TABLE IF EXISTS Sample_Veg CASCADE")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS Env CASCADE")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS Veg CASCADE")
   DBI::dbExecute(con, "DROP VIEW IF EXISTS vw_USysAllVeg")
   DBI::dbExecute(con, "DROP TABLE IF EXISTS lists.SppList CASCADE")
   DBI::dbExecute(con, "DROP TABLE IF EXISTS lists.USysZoneList CASCADE")
   DBI::dbExecute(con, "DROP TABLE IF EXISTS lists.USysTableOfLists CASCADE")
   
-  # Sample_Env with all fields referenced by compliance checks
+  # Env with all fields referenced by compliance checks
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Env (
+    CREATE TABLE Env (
       plotnumber TEXT,
       projectid TEXT,
       zone TEXT,
@@ -44,9 +44,9 @@ setup_full_compliance_schema <- function(con) {
     )
   ")
   
-  # Sample_Veg for vegetation validation
+  # Veg for vegetation validation
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Veg (
+    CREATE TABLE Veg (
       plotnumber TEXT,
       species TEXT,
       projectid TEXT,
@@ -66,7 +66,7 @@ setup_full_compliance_schema <- function(con) {
            layer AS layer,
            cover1 AS cover_value,
            projectid
-    FROM Sample_Veg
+    FROM Veg
     WHERE cover1 IS NOT NULL
     UNION ALL
     SELECT plotnumber,
@@ -74,7 +74,7 @@ setup_full_compliance_schema <- function(con) {
            layer AS layer,
            cover2 AS cover_value,
            projectid
-    FROM Sample_Veg
+    FROM Veg
     WHERE cover2 IS NOT NULL
   ")
   
@@ -166,7 +166,7 @@ test_that("Required fields: null values are flagged", {
   
   # Insert record with NULL plotnumber
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES (NULL, 'P001', 'ICH', 'mk1')
   ")
   
@@ -182,11 +182,11 @@ test_that("Required fields: empty strings are flagged", {
   
   # Insert records with empty strings
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', '', 'ICH', 'mk1')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT002', 'P001', '', 'mk1')
   ")
   
@@ -203,7 +203,7 @@ test_that("Required fields: all four required fields", {
   
   # Completely empty required fields
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES (NULL, NULL, NULL, NULL)
   ")
   
@@ -220,7 +220,7 @@ test_that("Required fields: whitespace-only strings treated as empty", {
   # Whitespace should not pass (current implementation checks == "")
   # This tests for false negatives
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', '   ', 'ICH', 'mk1')
   ")
   
@@ -239,7 +239,7 @@ test_that("Species FK: invalid species code flagged", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'INVALID', 'P001', 'A', '25')
   ")
   
@@ -255,7 +255,7 @@ test_that("Species FK: case sensitivity", {
   
   # Test lowercase version of valid code (ABGR exists, but not abgr)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'abgr', 'P001', 'A', '25')
   ")
   
@@ -270,7 +270,7 @@ test_that("Species FK: NULL species is skipped (not an FK violation)", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', NULL, 'P001', 'A', '25')
   ")
   
@@ -285,7 +285,7 @@ test_that("Zone FK: invalid zone code", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'XXX', 'mk1')
   ")
   
@@ -300,7 +300,7 @@ test_that("Zone FK: invalid subzone code", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'ICH', 'invalid')
   ")
   
@@ -316,7 +316,7 @@ test_that("Zone FK: valid zone but invalid zone/subzone combination", {
   
   # CWH exists with vm2, but not with mk1
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'CWH', 'mk1')
   ")
   
@@ -331,7 +331,7 @@ test_that("List FK: invalid value for table-driven list", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, mesoslopeposition, surfaceshape)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, mesoslopeposition, surfaceshape)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 'INVALID', 'FLAT')
   ")
   
@@ -351,11 +351,11 @@ test_that("Latitude: exact boundaries are valid", {
   
   # Valid: 48 and 60 (inclusive boundaries)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 48.0, -120, 1000)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 60.0, -120, 1000)
   ")
   
@@ -370,11 +370,11 @@ test_that("Latitude: just outside boundaries are invalid", {
   
   # Invalid: 47.9999 and 60.0001
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 47.9999, -120, 1000)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 60.0001, -120, 1000)
   ")
   
@@ -390,11 +390,11 @@ test_that("Longitude: exact boundaries are valid", {
   
   # Valid: -140 and -114 (inclusive)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 50, -140.0, 1000)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 50, -114.0, 1000)
   ")
   
@@ -408,11 +408,11 @@ test_that("Longitude: outside boundaries are invalid", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 50, -140.001, 1000)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 50, -113.999, 1000)
   ")
   
@@ -428,11 +428,11 @@ test_that("Elevation: boundaries 0-4000", {
   
   # Valid: 0, 4000
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 50, -120, 0)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 50, -120, 4000)
   ")
   
@@ -441,11 +441,11 @@ test_that("Elevation: boundaries 0-4000", {
   
   # Invalid: -0.1, 4000.1
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT003', 'P001', 'ICH', 'mk1', 50, -120, -0.1)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT004', 'P001', 'ICH', 'mk1', 50, -120, 4000.1)
   ")
   
@@ -461,11 +461,11 @@ test_that("Slope: boundaries 0-100", {
   
   # Valid: 0, 100
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, slopegradient)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, slopegradient)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 0)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, slopegradient)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, slopegradient)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 100)
   ")
   
@@ -474,11 +474,11 @@ test_that("Slope: boundaries 0-100", {
   
   # Invalid: -1, 101
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, slopegradient)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, slopegradient)
     VALUES ('PLOT003', 'P001', 'ICH', 'mk1', -1)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, slopegradient)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, slopegradient)
     VALUES ('PLOT004', 'P001', 'ICH', 'mk1', 101)
   ")
   
@@ -494,11 +494,11 @@ test_that("Aspect: boundaries 0-360", {
   
   # Valid: 0, 360
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, aspect)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, aspect)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 0)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, aspect)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, aspect)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 360)
   ")
   
@@ -507,11 +507,11 @@ test_that("Aspect: boundaries 0-360", {
   
   # Invalid: -0.1, 360.1
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, aspect)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, aspect)
     VALUES ('PLOT003', 'P001', 'ICH', 'mk1', -0.1)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, aspect)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, aspect)
     VALUES ('PLOT004', 'P001', 'ICH', 'mk1', 360.1)
   ")
   
@@ -527,11 +527,11 @@ test_that("Cover: boundaries 0-100", {
   
   # Valid: 0, 100
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', '0')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT002', 'ABGR', 'P001', 'A', '100')
   ")
   
@@ -540,11 +540,11 @@ test_that("Cover: boundaries 0-100", {
   
   # Invalid: -1, 101
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT003', 'ABGR', 'P001', 'A', '-1')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT004', 'ABGR', 'P001', 'A', '101')
   ")
   
@@ -563,15 +563,15 @@ test_that("Cover codes: valid text codes (+, r, P) are allowed", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', '+')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT002', 'ABGR', 'P001', 'A', 'r')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT003', 'ABGR', 'P001', 'A', 'P')
   ")
   
@@ -586,11 +586,11 @@ test_that("Cover codes: case-insensitive text codes", {
   
   # Test uppercase variants
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', 'R')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT002', 'ABGR', 'P001', 'A', 'p')
   ")
   
@@ -605,11 +605,11 @@ test_that("Cover codes: invalid codes flagged", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', 'x')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT002', 'ABGR', 'P001', 'A', 'INVALID')
   ")
   
@@ -625,7 +625,7 @@ test_that("Cover codes: numeric strings are not cover codes (parsed as numbers)"
   
   # "25" should be parsed as numeric, not a code
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', '25')
   ")
   
@@ -640,11 +640,11 @@ test_that("Cover codes: whitespace handling", {
   
   # Codes with whitespace
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', ' + ')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT002', 'ABGR', 'P001', 'A', ' r')
   ")
   
@@ -663,7 +663,7 @@ test_that("Non-negative: all depth fields at boundary (0)", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone,
+    INSERT INTO Env (plotnumber, projectid, zone, subzone,
                             rootingdepth, seepagedepth, sv_soildepth, activelayerdepth)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 0, 0, 0, 0)
   ")
@@ -678,7 +678,7 @@ test_that("Non-negative: negative values flagged", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone,
+    INSERT INTO Env (plotnumber, projectid, zone, subzone,
                             rootingdepth, seepagedepth, sv_soildepth)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', -1, -0.1, -100)
   ")
@@ -694,7 +694,7 @@ test_that("Non-negative: NULL values are allowed (not a non-negative violation)"
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone,
+    INSERT INTO Env (plotnumber, projectid, zone, subzone,
                             rootingdepth, seepagedepth)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', NULL, NULL)
   ")
@@ -713,11 +713,11 @@ test_that("Duplicate plots: same PlotNumber in same project", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1')
   ")
   
@@ -732,11 +732,11 @@ test_that("Duplicate plots: same PlotNumber in different projects is OK", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P002', 'ICH', 'mk1')
   ")
   
@@ -753,15 +753,15 @@ test_that("Duplicate plots: triple duplicates", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1')
   ")
   
@@ -775,11 +775,11 @@ test_that("Duplicate veg: same PlotNumber+Species+Layer", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', '25')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', '30')
   ")
   
@@ -794,11 +794,11 @@ test_that("Duplicate veg: same species in different layers is OK", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'A', '25')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ABGR', 'P001', 'B', '30')
   ")
   
@@ -821,7 +821,7 @@ test_that("Cascading: one record with multiple violations", {
   # - Negative rooting depth
   # - Aspect out of range
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (
+    INSERT INTO Env (
       plotnumber, projectid, zone, subzone,
       latitude, longitude, elevation,
       aspect, rootingdepth
@@ -852,69 +852,69 @@ test_that("Cascading: all rules violated in one dataset", {
   
   # Required field missing
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT001', NULL, 'ICH', 'mk1')
   ")
   
   # Invalid zone FK
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT002', 'P001', 'BADZONE', 'mk1')
   ")
   
   # Coordinates out of range
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('PLOT003', 'P001', 'ICH', 'mk1', 70, -150, 5000)
   ")
   
   # Slope/aspect out of range
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, slopegradient, aspect)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, slopegradient, aspect)
     VALUES ('PLOT004', 'P001', 'ICH', 'mk1', 150, 400)
   ")
   
   # Negative depth
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, rootingdepth)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, rootingdepth)
     VALUES ('PLOT005', 'P001', 'ICH', 'mk1', -10)
   ")
   
   # Duplicate plot
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT006', 'P001', 'ICH', 'mk1')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT006', 'P001', 'ICH', 'mk1')
   ")
   
   # Invalid species FK
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT007', 'BADSPECIES', 'P001', 'A', '25')
   ")
   
   # Cover out of range
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT008', 'ABGR', 'P001', 'A', '150')
   ")
   
   # Invalid cover code
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT009', 'ABGR', 'P001', 'A', 'BADCODE')
   ")
   
   # Duplicate veg
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT010', 'ABGR', 'P001', 'A', '25')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT010', 'ABGR', 'P001', 'A', '30')
   ")
   
@@ -952,15 +952,15 @@ test_that("Compliance summary: aggregates by rule type", {
   
   # Create multiple violations of the same rule
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 70)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude)
     VALUES ('PLOT002', 'P001', 'ICH', 'mk1', 50)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude)
     VALUES ('PLOT003', 'P001', 'ICH', 'mk1', 65)
   ")
   
@@ -978,7 +978,7 @@ test_that("Compliance summary: empty when no violations", {
   
   # Insert fully valid record
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (
+    INSERT INTO Env (
       plotnumber, projectid, zone, subzone,
       latitude, longitude, elevation,
       slopegradient, aspect, rootingdepth
@@ -1003,7 +1003,7 @@ test_that("Compliance detail: includes plot numbers", {
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude)
     VALUES ('SPECIFIC_PLOT_X', 'P001', 'ICH', 'mk1', 70)
   ")
   
@@ -1032,7 +1032,7 @@ test_that("Performance: 1000 records with mixed violations", {
     zone <- 'ICH'
     
     DBI::dbExecute(con, sprintf("
-      INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+      INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
       VALUES ('PLOT%04d', 'P001', '%s', 'mk1', %f, -120, 1000)
     ", i, zone, lat))
   }
@@ -1057,11 +1057,11 @@ test_that("Performance: correctly filters by project_id", {
   
   # Insert violations in two projects
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude)
     VALUES ('PLOT001', 'P001', 'ICH', 'mk1', 70)
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude)
     VALUES ('PLOT002', 'P002', 'ICH', 'mk1', 70)
   ")
   
@@ -1086,7 +1086,7 @@ test_that("Integration: BC forestry plot passes all checks", {
   
   # Realistic BC Interior Cedar-Hemlock plot
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (
+    INSERT INTO Env (
       plotnumber, projectid, zone, subzone,
       latitude, longitude, elevation,
       slopegradient, aspect,
@@ -1104,19 +1104,19 @@ test_that("Integration: BC forestry plot passes all checks", {
   
   # Vegetation: typical ICH species
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('BC-ICH-001', 'THPL', 'P001', 'A', '40')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('BC-ICH-001', 'TSHE', 'P001', 'A', '30')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('BC-ICH-001', 'ACMA', 'P001', 'B', '15')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('BC-ICH-001', 'ODE', 'P001', 'C', 'r')
   ") # Rare species with 'r' code
   
@@ -1133,19 +1133,19 @@ test_that("Integration: edge of BC boundary coordinates", {
   
   # Northern BC (near Yukon border)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('NORTH-BC', 'P001', 'SBPS', 'xc', 59.9, -120, 800)
   ")
   
   # Eastern BC (near Alberta border)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('EAST-BC', 'P001', 'IDF', 'dk1', 50, -114.1, 1000)
   ")
   
   # Western BC (coastal)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude, elevation)
     VALUES ('WEST-BC', 'P001', 'CDF', 'mm', 48.5, -123, 100)
   ")
   
@@ -1162,23 +1162,23 @@ test_that("Integration: cover codes in realistic context", {
   
   # Mix of numeric covers and text codes (typical field data)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'PSME', 'P001', 'A', '45')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'THPL', 'P001', 'A', '25')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ODE', 'P001', 'C', '+')
   ") # Present but <1%
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'ACMA', 'P001', 'C', 'r')
   ") # Rare
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'PIEN', 'P001', 'B', 'P')
   ") # Planted
   
@@ -1199,11 +1199,11 @@ test_that("Cover sum: total >100% per layer flagged as warning", {
   
   # Layer A with combined cover >100% (common overshooting in field data)
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'PSME', 'P001', 'A', '60')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT001', 'THPL', 'P001', 'A', '55')
   ")
   
@@ -1220,12 +1220,12 @@ test_that("Date validation: future survey dates flagged", {
   
   # Add survey_date column if schema supports it
   result <- tryCatch({
-    DBI::dbExecute(con, "ALTER TABLE Sample_Env ADD COLUMN survey_date DATE")
+    DBI::dbExecute(con, "ALTER TABLE Env ADD COLUMN survey_date DATE")
   }, error = function(e) NULL)
   
   # Insert plot with future date
   DBI::dbExecute(con, sprintf("
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, survey_date)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, survey_date)
     VALUES ('PLOT001', 'P001', 'ICH', 'mw', '%s')
   ", as.character(Sys.Date() + 365)))
   
@@ -1240,11 +1240,11 @@ test_that("Date validation: NULL survey date allowed (unknown date)", {
   setup_full_compliance_schema(con)
   
   result <- tryCatch({
-    DBI::dbExecute(con, "ALTER TABLE Sample_Env ADD COLUMN survey_date DATE")
+    DBI::dbExecute(con, "ALTER TABLE Env ADD COLUMN survey_date DATE")
   }, error = function(e) NULL)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, survey_date)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, survey_date)
     VALUES ('PLOT001', 'P001', 'ICH', 'mw', NULL)
   ")
   
@@ -1273,7 +1273,7 @@ test_that("Coordinate consistency: DMS vs DD format detection", {
   # Access used DMS→DD conversion with Nz() guards
   # DMS format: degrees > 180 indicates DMS not DD
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude)
     VALUES ('PLOT001', 'P001', 'ICH', 'mw', 53.30, 119.45)
   ") # Looks like DD but lon wrong sign
   
@@ -1292,7 +1292,7 @@ test_that("Stress: Maximum string lengths (255 chars)", {
   long_plot <- paste(rep("A", 255), collapse = "")
   
   DBI::dbExecute(con, sprintf("
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('%s', 'P001', 'ICH', 'mw')
   ", long_plot))
   
@@ -1307,17 +1307,17 @@ test_that("Stress: Unicode and special characters in text fields", {
   
   # Unicode, accents, quotes, backslashes
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('Plot-Québec-2024', 'P001', 'ICH', 'mw')
   ")
   
   # Add surveyor column for quote test
   result <- tryCatch({
-    DBI::dbExecute(con, "ALTER TABLE Sample_Env ADD COLUMN surveyor TEXT")
+    DBI::dbExecute(con, "ALTER TABLE Env ADD COLUMN surveyor TEXT")
   }, error = function(e) NULL)
   
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, surveyor)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, surveyor)
     VALUES ('PLOT002', 'P001', 'ICH', 'mw', 'O''Brien, François')
   ")
   
@@ -1332,7 +1332,7 @@ test_that("Stress: Whitespace variations (tabs, newlines, mixed)", {
   
   # Tabs and extra spaces in plotnumber
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('  PLOT001  ', 'P001', 'ICH', 'mw')
   ")
   
@@ -1351,7 +1351,7 @@ test_that("Stress: All fields at NULL (minimal record)", {
   
   # Only required fields populated, all optional NULL
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (
+    INSERT INTO Env (
       plotnumber, projectid, zone, subzone,
       latitude, longitude, elevation, slopegradient, aspect,
       mesoslopeposition, surfaceshape,
@@ -1386,7 +1386,7 @@ test_that("Stress: 10000 vegetation entries validate in <3 seconds", {
     
     # Insert env record
     DBI::dbExecute(con, sprintf("
-      INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+      INSERT INTO Env (plotnumber, projectid, zone, subzone)
       VALUES ('%s', 'P001', 'ICH', 'mw')
     ", plot_num))
     
@@ -1394,7 +1394,7 @@ test_that("Stress: 10000 vegetation entries validate in <3 seconds", {
     species_list <- c("PSME", "THPL", "TSHE", "ABLA", "PIEN", "PICO", "PIMO", "ACGL", "ALVI", "AMAL")
     for (j in 1:10) {
       DBI::dbExecute(con, sprintf("
-        INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+        INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
         VALUES ('%s', '%s', 'P001', 'A', '%d')
       ", plot_num, species_list[j], sample(1:50, 1)))
     }
@@ -1418,77 +1418,77 @@ test_that("Stress: Mixed valid and invalid across all rules", {
   
   # 1. Missing required field
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES (NULL, 'P001', 'ICH', 'mw')
   ")
   
   # 2. Invalid zone FK
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('PLOT-BAD-ZONE', 'P001', 'INVALIDZONE', 'mw')
   ")
   
   # 3. Latitude out of range
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude)
     VALUES ('PLOT-BAD-LAT', 'P001', 'ICH', 'mw', 99.0, -119.5)
   ")
   
   # 4. Longitude out of range
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, latitude, longitude)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, latitude, longitude)
     VALUES ('PLOT-BAD-LON', 'P001', 'ICH', 'mw', 53.5, -200.0)
   ")
   
   # 5. Elevation negative
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, elevation)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, elevation)
     VALUES ('PLOT-BAD-ELEV', 'P001', 'ICH', 'mw', -500)
   ")
   
   # 6. Slope > 100
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, slopegradient)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, slopegradient)
     VALUES ('PLOT-BAD-SLOPE', 'P001', 'ICH', 'mw', 150)
   ")
   
   # 7. Aspect > 360
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, aspect)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, aspect)
     VALUES ('PLOT-BAD-ASP', 'P001', 'ICH', 'mw', 400)
   ")
   
   # 8. Negative depth
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone, rootingdepth)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone, rootingdepth)
     VALUES ('PLOT-BAD-DEPTH', 'P001', 'ICH', 'mw', -50)
   ")
   
   # 9. Duplicate plot
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('DUP-PLOT', 'P001', 'ICH', 'mw')
   ")
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Env (plotnumber, projectid, zone, subzone)
+    INSERT INTO Env (plotnumber, projectid, zone, subzone)
     VALUES ('DUP-PLOT', 'P001', 'IDF', 'dk')
   ")
   
   # 10. Invalid species FK
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT-BAD-SPP', 'INVALIDSPP', 'P001', 'A', '50')
   ")
   
   # 11. Cover > 100
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT-BAD-COV', 'PSME', 'P001', 'A', '150')
   ")
   
   # 12. Invalid cover code
   DBI::dbExecute(con, "
-    INSERT INTO Sample_Veg (plotnumber, species, projectid, layer, cover1)
+    INSERT INTO Veg (plotnumber, species, projectid, layer, cover1)
     VALUES ('PLOT-BAD-CODE', 'PSME', 'P001', 'A', 'INVALID')
   ")
   

@@ -4,7 +4,7 @@ library(dplyr)
 
 source(here::here("R", "logic_lumping.R"))
 
-test_that("apply_lumping returns input when Sample_Lump missing", {
+test_that("apply_lumping returns input when Lump missing", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
@@ -16,7 +16,7 @@ test_that("apply_lumping returns input when Sample_Lump missing", {
 
   result <- expect_warning(
     apply_lumping(con, df, group_cols = c("plotnumber"), measure_cols = c("cover_num")),
-    "Sample_Lump table not found"
+    "Lump table not found"
   )
 
   expect_equal(result, df)
@@ -27,7 +27,7 @@ test_that("apply_lumping replaces and aggregates lumped species", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   DBI::dbExecute(con, "
-    CREATE TABLE Sample_Lump (
+    CREATE TABLE Lump (
       sppcode TEXT,
       lumpcode TEXT,
       _use INTEGER
@@ -35,12 +35,12 @@ test_that("apply_lumping replaces and aggregates lumped species", {
   ")
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Lump (sppcode, lumpcode, _use) VALUES (?, ?, ?)",
+    "INSERT INTO Lump (sppcode, lumpcode, _use) VALUES (?, ?, ?)",
     list("AB", "ABIE", 1)
   )
   DBI::dbExecute(
     con,
-    "INSERT INTO Sample_Lump (sppcode, lumpcode, _use) VALUES (?, ?, ?)",
+    "INSERT INTO Lump (sppcode, lumpcode, _use) VALUES (?, ?, ?)",
     list("FD", "ABIE", 1)
   )
 

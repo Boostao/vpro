@@ -49,8 +49,8 @@ test_that("insert_subtree remaps ids and parents", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (1, 'Root', NULL)")
+  DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy (ID, Name, Parent) VALUES (1, 'Root', NULL)")
 
   subtree <- data.frame(
     ID = c(10, 11),
@@ -61,7 +61,7 @@ test_that("insert_subtree remaps ids and parents", {
   count <- insert_subtree(con, subtree, 1L, 0L)
   expect_equal(count, 2)
 
-  rows <- DBI::dbGetQuery(con, "SELECT ID, Name, Parent FROM Sample_Hierarchy WHERE Name IN ('A','B')")
+  rows <- DBI::dbGetQuery(con, "SELECT ID, Name, Parent FROM Hierarchy WHERE Name IN ('A','B')")
   expect_equal(nrow(rows), 2)
 
   a_id <- rows$ID[rows$Name == "A"][1]
@@ -69,7 +69,7 @@ test_that("insert_subtree remaps ids and parents", {
   expect_equal(rows$Parent[rows$Name == "A"][1], 1)
   expect_equal(b_parent, a_id)
 
-  levels <- DBI::dbGetQuery(con, "SELECT Name, Level FROM Sample_Hierarchy WHERE Name IN ('A','B')")
+  levels <- DBI::dbGetQuery(con, "SELECT Name, Level FROM Hierarchy WHERE Name IN ('A','B')")
   level_a <- levels$Level[levels$Name == "A"][1]
   level_b <- levels$Level[levels$Name == "B"][1]
   expect_equal(level_a, 1)
@@ -80,8 +80,8 @@ test_that("insert_subtree preserves tag when available", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER, Tag TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy (ID, Name, Parent) VALUES (1, 'Root', NULL)")
+  DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER, Tag TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy (ID, Name, Parent) VALUES (1, 'Root', NULL)")
 
   subtree <- data.frame(
     ID = c(10),
@@ -91,7 +91,7 @@ test_that("insert_subtree preserves tag when available", {
   )
 
   insert_subtree(con, subtree, 1L, 0L)
-  rows <- DBI::dbGetQuery(con, "SELECT Tag FROM Sample_Hierarchy WHERE Name = 'Tagged'")
+  rows <- DBI::dbGetQuery(con, "SELECT Tag FROM Hierarchy WHERE Name = 'Tagged'")
   expect_equal(rows$Tag[1], "yellow")
 })
 
@@ -157,9 +157,9 @@ test_that("get_plots_for_site_unit returns plots", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P1', 'SU1')")
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P2', 'SU1')")
+  DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P1', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P2', 'SU1')")
 
   plots <- get_plots_for_site_unit(con, "SU1")
   expect_true(all(c("P1", "P2") %in% plots))
@@ -207,8 +207,8 @@ test_that("insert_rekeyed_hierarchy remaps parents", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (1, 'Root', NULL)")
+  DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, 'Root', NULL)")
 
   source <- data.frame(
     ID = c(10, 11),
@@ -219,7 +219,7 @@ test_that("insert_rekeyed_hierarchy remaps parents", {
   result <- insert_rekeyed_hierarchy(con, source)
   expect_equal(result$count, 2)
 
-  rows <- DBI::dbGetQuery(con, "SELECT Name, Parent FROM Sample_Hierarchy WHERE Name IN ('A', 'B')")
+  rows <- DBI::dbGetQuery(con, "SELECT Name, Parent FROM Hierarchy WHERE Name IN ('A', 'B')")
   a_id <- rows$Parent[rows$Name == "A"][1]
   b_parent <- rows$Parent[rows$Name == "B"][1]
   expect_true(is.na(a_id))
@@ -230,8 +230,8 @@ test_that("insert_rekeyed_hierarchy preserves tag when available", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Tag TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (1, 'Root', NULL, NULL)")
+  DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Tag TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, 'Root', NULL, NULL)")
 
   source <- data.frame(
     ID = c(10),
@@ -241,7 +241,7 @@ test_that("insert_rekeyed_hierarchy preserves tag when available", {
   )
 
   insert_rekeyed_hierarchy(con, source)
-  rows <- DBI::dbGetQuery(con, "SELECT Tag FROM Sample_Hierarchy WHERE Name = 'Tagged'")
+  rows <- DBI::dbGetQuery(con, "SELECT Tag FROM Hierarchy WHERE Name = 'Tagged'")
   expect_equal(rows$Tag[1], "green")
 })
 
@@ -291,12 +291,12 @@ test_that("create_lowest_breakpoints_table builds lowest tilde subtrees", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (1, 'Root', NULL, 1)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (2, '~Clip', 1, 2)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (3, 'ChildA', 2, 3)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (4, '~Keep', 1, 2)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (5, '~KeepChild', 4, 3)")
+  DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, 'Root', NULL, 1)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (2, '~Clip', 1, 2)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (3, 'ChildA', 2, 3)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (4, '~Keep', 1, 2)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (5, '~KeepChild', 4, 3)")
 
   result <- create_lowest_breakpoints_table(con)
   expect_equal(result$roots, 2)
@@ -312,27 +312,27 @@ test_that("sync helpers copy values between env and su", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, UserSiteUnit TEXT, BECSiteUnit TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'SU_A', 'BEC1')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', NULL, 'BEC2')")
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P1', 'OLD')")
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P2', 'OLD2')")
+  DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, UserSiteUnit TEXT, BECSiteUnit TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'SU_A', 'BEC1')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P2', NULL, 'BEC2')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P1', 'OLD')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P2', 'OLD2')")
 
   updated_env_to_su <- sync_env_to_su(con)
   expect_true(updated_env_to_su >= 0)
-  su_vals <- DBI::dbGetQuery(con, "SELECT SiteUnit FROM Sample_SU ORDER BY PlotNumber")$SiteUnit
+  su_vals <- DBI::dbGetQuery(con, "SELECT SiteUnit FROM SU ORDER BY PlotNumber")$SiteUnit
   expect_equal(su_vals, c("SU_A", NA))
 
   updated_bec <- copy_bec_to_su(con)
   expect_true(updated_bec >= 0)
-  su_vals_bec <- DBI::dbGetQuery(con, "SELECT SiteUnit FROM Sample_SU ORDER BY PlotNumber")$SiteUnit
+  su_vals_bec <- DBI::dbGetQuery(con, "SELECT SiteUnit FROM SU ORDER BY PlotNumber")$SiteUnit
   expect_equal(su_vals_bec, c("BEC1", "BEC2"))
 
-  DBI::dbExecute(con, "UPDATE Sample_SU SET SiteUnit = 'SU_NEW' WHERE PlotNumber = 'P1'")
+  DBI::dbExecute(con, "UPDATE SU SET SiteUnit = 'SU_NEW' WHERE PlotNumber = 'P1'")
   updated_su_to_env <- sync_su_to_env(con)
   expect_true(updated_su_to_env >= 0)
-  env_vals <- DBI::dbGetQuery(con, "SELECT UserSiteUnit FROM Sample_Env ORDER BY PlotNumber")$UserSiteUnit
+  env_vals <- DBI::dbGetQuery(con, "SELECT UserSiteUnit FROM Env ORDER BY PlotNumber")$UserSiteUnit
   expect_equal(env_vals, c("SU_NEW", "BEC2"))
 })
 
@@ -340,21 +340,21 @@ test_that("build_su_from_env builds filtered rows", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, Zone TEXT, SubZone TEXT, UserSiteUnit TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'Z1', 'A', 'SU1')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'Z1', 'B', 'SU2')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P3', 'Z2', 'A', 'SU3')")
+  DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, Zone TEXT, SubZone TEXT, UserSiteUnit TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'Z1', 'A', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P2', 'Z1', 'B', 'SU2')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P3', 'Z2', 'A', 'SU3')")
 
   count <- build_su_from_env(con, zone = "Z1", subzone = "A", replace = TRUE)
   expect_true(count >= 0)
-  rows <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU ORDER BY PlotNumber")
+  rows <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM SU ORDER BY PlotNumber")
   expect_equal(rows$PlotNumber, "P1")
   expect_equal(rows$SiteUnit, "SU1")
 
   count2 <- build_su_from_env(con, zone = "Z1", subzone = "", replace = TRUE)
   expect_true(count2 >= 0)
-  rows2 <- DBI::dbGetQuery(con, "SELECT PlotNumber FROM Sample_SU ORDER BY PlotNumber")$PlotNumber
+  rows2 <- DBI::dbGetQuery(con, "SELECT PlotNumber FROM SU ORDER BY PlotNumber")$PlotNumber
   expect_equal(rows2, c("P1", "P2"))
 })
 
@@ -362,14 +362,14 @@ test_that("build_su_from_env_filter respects column filters", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, Zone TEXT, UserSiteUnit TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'Z1', 'SU1')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'Z2', 'SU2')")
+  DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, Zone TEXT, UserSiteUnit TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'Z1', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P2', 'Z2', 'SU2')")
 
   count <- build_su_from_env_filter(con, column = "Zone", value = "Z1", replace = TRUE)
   expect_true(count >= 0)
-  rows <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM Sample_SU")
+  rows <- DBI::dbGetQuery(con, "SELECT PlotNumber, SiteUnit FROM SU")
   expect_equal(rows$PlotNumber, "P1")
   expect_equal(rows$SiteUnit, "SU1")
 })
@@ -425,13 +425,13 @@ test_that("fix_orphan_nodes resets missing parents", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_Hierarchy (ID INTEGER, Parent INTEGER)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (1, NULL)")
-  DBI::dbExecute(con, "INSERT INTO Sample_Hierarchy VALUES (2, 99)")
+  DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Parent INTEGER)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, NULL)")
+  DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (2, 99)")
 
   count <- fix_orphan_nodes(con)
   expect_equal(count, 1)
 
-  parents <- DBI::dbGetQuery(con, "SELECT Parent FROM Sample_Hierarchy WHERE ID = 2")$Parent
+  parents <- DBI::dbGetQuery(con, "SELECT Parent FROM Hierarchy WHERE ID = 2")$Parent
   expect_true(is.na(parents[1]))
 })

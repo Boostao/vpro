@@ -21,14 +21,14 @@ has_cols <- function(fields, cols) {
 }
 
 check_required_fields <- function(con, project_id = NULL) {
-  fields <- get_table_fields(con, "Sample_Env")
+  fields <- get_table_fields(con, "Env")
   required <- intersect(c("plotnumber", "projectid", "zone", "subzone"), fields)
 
   if (length(required) == 0) {
     return(data.frame())
   }
 
-  sql <- "SELECT * FROM Sample_Env"
+  sql <- "SELECT * FROM Env"
   params <- list()
   if (!is.null(project_id) && "projectid" %in% fields) {
     sql <- paste0(sql, " WHERE projectid = ?")
@@ -44,7 +44,7 @@ check_required_fields <- function(con, project_id = NULL) {
     if (length(missing) > 0) {
       issues[[length(issues) + 1]] <- data.frame(
         rule = "required",
-        table = "Sample_Env",
+        table = "Env",
         column = col_name,
         plotnumber = env$plotnumber[missing],
         details = "Missing required value",
@@ -58,11 +58,11 @@ check_required_fields <- function(con, project_id = NULL) {
 }
 
 check_species_fk <- function(con, project_id = NULL) {
-  if (length(get_table_fields(con, "Sample_Veg")) == 0 || length(get_table_fields(con, "lists.SppList")) == 0) {
+  if (length(get_table_fields(con, "Veg")) == 0 || length(get_table_fields(con, "lists.SppList")) == 0) {
     return(data.frame())
   }
 
-  veg_fields <- get_table_fields(con, "Sample_Veg")
+  veg_fields <- get_table_fields(con, "Veg")
   if (!has_cols(veg_fields, c("plotnumber", "species"))) return(data.frame())
 
   spp_fields <- get_table_fields(con, "lists.SppList")
@@ -75,7 +75,7 @@ check_species_fk <- function(con, project_id = NULL) {
   }
   if (is.null(code_col)) return(data.frame())
 
-  sql <- "SELECT plotnumber, species FROM Sample_Veg"
+  sql <- "SELECT plotnumber, species FROM Veg"
   params <- list()
   if (!is.null(project_id) && "projectid" %in% veg_fields) {
     sql <- paste0(sql, " WHERE projectid = ?")
@@ -96,7 +96,7 @@ check_species_fk <- function(con, project_id = NULL) {
 
   data.frame(
     rule = "fk_species",
-    table = "Sample_Veg",
+    table = "Veg",
     column = "species",
     plotnumber = missing$plotnumber,
     details = paste0("Unknown species: ", missing$species),
@@ -105,14 +105,14 @@ check_species_fk <- function(con, project_id = NULL) {
 }
 
 check_zone_fk <- function(con, project_id = NULL) {
-  if (length(get_table_fields(con, "Sample_Env")) == 0 || length(get_table_fields(con, "lists.USysZoneList")) == 0) {
+  if (length(get_table_fields(con, "Env")) == 0 || length(get_table_fields(con, "lists.USysZoneList")) == 0) {
     return(data.frame())
   }
 
-  env_fields <- get_table_fields(con, "Sample_Env")
+  env_fields <- get_table_fields(con, "Env")
   if (!has_cols(env_fields, c("plotnumber", "zone", "subzone"))) return(data.frame())
 
-  sql <- "SELECT plotnumber, zone, subzone FROM Sample_Env"
+  sql <- "SELECT plotnumber, zone, subzone FROM Env"
   params <- list()
   if (!is.null(project_id) && "projectid" %in% env_fields) {
     sql <- paste0(sql, " WHERE projectid = ?")
@@ -138,7 +138,7 @@ check_zone_fk <- function(con, project_id = NULL) {
   if (length(bad_zone) > 0) {
     issues[[length(issues) + 1]] <- data.frame(
       rule = "fk_zone",
-      table = "Sample_Env",
+      table = "Env",
       column = "zone",
       plotnumber = env$plotnumber[bad_zone],
       details = "Unknown zone",
@@ -152,7 +152,7 @@ check_zone_fk <- function(con, project_id = NULL) {
     if (length(bad_subzone) > 0) {
       issues[[length(issues) + 1]] <- data.frame(
         rule = "fk_subzone",
-        table = "Sample_Env",
+        table = "Env",
         column = "subzone",
         plotnumber = env$plotnumber[bad_subzone],
         details = "Unknown subzone",
@@ -170,7 +170,7 @@ check_zone_fk <- function(con, project_id = NULL) {
       if (length(bad_pair) > 0) {
         issues[[length(issues) + 1]] <- data.frame(
           rule = "fk_zone_subzone",
-          table = "Sample_Env",
+          table = "Env",
           column = "subzone",
           plotnumber = env_pairs$plotnumber[bad_pair],
           details = "Zone/subzone combination not valid",
@@ -185,10 +185,10 @@ check_zone_fk <- function(con, project_id = NULL) {
 }
 
 check_duplicate_plots <- function(con, project_id = NULL) {
-  fields <- get_table_fields(con, "Sample_Env")
+  fields <- get_table_fields(con, "Env")
   if (!has_cols(fields, c("plotnumber", "projectid"))) return(data.frame())
 
-  sql <- "SELECT plotnumber, projectid, COUNT(*) AS cnt FROM Sample_Env"
+  sql <- "SELECT plotnumber, projectid, COUNT(*) AS cnt FROM Env"
   params <- list()
   if (!is.null(project_id)) {
     sql <- paste0(sql, " WHERE projectid = ?")
@@ -201,7 +201,7 @@ check_duplicate_plots <- function(con, project_id = NULL) {
 
   data.frame(
     rule = "dup_plot",
-    table = "Sample_Env",
+    table = "Env",
     column = "plotnumber",
     plotnumber = dupes$plotnumber,
     details = "Duplicate plot number within project",
@@ -242,11 +242,11 @@ check_duplicate_veg <- function(con, project_id = NULL) {
 }
 
 check_coord_ranges <- function(con, project_id = NULL) {
-  fields <- get_table_fields(con, "Sample_Env")
+  fields <- get_table_fields(con, "Env")
   needed <- c("plotnumber", "latitude", "longitude", "elevation")
   if (!has_cols(fields, needed)) return(data.frame())
 
-  sql <- "SELECT plotnumber, latitude, longitude, elevation FROM Sample_Env"
+  sql <- "SELECT plotnumber, latitude, longitude, elevation FROM Env"
   params <- list()
   if (!is.null(project_id) && "projectid" %in% fields) {
     sql <- paste0(sql, " WHERE projectid = ?")
@@ -266,7 +266,7 @@ check_coord_ranges <- function(con, project_id = NULL) {
   if (length(bad_lat) > 0) {
     issues[[length(issues) + 1]] <- data.frame(
       rule = "range_lat",
-      table = "Sample_Env",
+      table = "Env",
       column = "latitude",
       plotnumber = env$plotnumber[bad_lat],
       details = "Latitude out of range",
@@ -278,7 +278,7 @@ check_coord_ranges <- function(con, project_id = NULL) {
   if (length(bad_lon) > 0) {
     issues[[length(issues) + 1]] <- data.frame(
       rule = "range_lon",
-      table = "Sample_Env",
+      table = "Env",
       column = "longitude",
       plotnumber = env$plotnumber[bad_lon],
       details = "Longitude out of range",
@@ -290,7 +290,7 @@ check_coord_ranges <- function(con, project_id = NULL) {
   if (length(bad_elev) > 0) {
     issues[[length(issues) + 1]] <- data.frame(
       rule = "range_elev",
-      table = "Sample_Env",
+      table = "Env",
       column = "elevation",
       plotnumber = env$plotnumber[bad_elev],
       details = "Elevation out of range",
@@ -303,11 +303,11 @@ check_coord_ranges <- function(con, project_id = NULL) {
 }
 
 check_slope_aspect_ranges <- function(con, project_id = NULL) {
-  fields <- get_table_fields(con, "Sample_Env")
+  fields <- get_table_fields(con, "Env")
   needed <- c("plotnumber", "slopegradient", "aspect")
   if (!has_cols(fields, needed)) return(data.frame())
 
-  sql <- "SELECT plotnumber, slopegradient, aspect FROM Sample_Env"
+  sql <- "SELECT plotnumber, slopegradient, aspect FROM Env"
   params <- list()
   if (!is.null(project_id) && "projectid" %in% fields) {
     sql <- paste0(sql, " WHERE projectid = ?")
@@ -325,7 +325,7 @@ check_slope_aspect_ranges <- function(con, project_id = NULL) {
   if (length(bad_slope) > 0) {
     issues[[length(issues) + 1]] <- data.frame(
       rule = "range_slope",
-      table = "Sample_Env",
+      table = "Env",
       column = "slopegradient",
       plotnumber = env$plotnumber[bad_slope],
       details = "Slope out of range",
@@ -337,7 +337,7 @@ check_slope_aspect_ranges <- function(con, project_id = NULL) {
   if (length(bad_aspect) > 0) {
     issues[[length(issues) + 1]] <- data.frame(
       rule = "range_aspect",
-      table = "Sample_Env",
+      table = "Env",
       column = "aspect",
       plotnumber = env$plotnumber[bad_aspect],
       details = "Aspect out of range",
@@ -350,7 +350,7 @@ check_slope_aspect_ranges <- function(con, project_id = NULL) {
 }
 
 check_non_negative_fields <- function(con, project_id = NULL) {
-  fields <- get_table_fields(con, "Sample_Env")
+  fields <- get_table_fields(con, "Env")
   targets <- c(
     "rootrestrictingdepth",
     "rootingdepth",
@@ -365,7 +365,7 @@ check_non_negative_fields <- function(con, project_id = NULL) {
   if (length(present) == 0) return(data.frame())
 
   select_cols <- paste(c("plotnumber", present), collapse = ", ")
-  sql <- sprintf("SELECT %s FROM Sample_Env", select_cols)
+  sql <- sprintf("SELECT %s FROM Env", select_cols)
   params <- list()
   if (!is.null(project_id) && "projectid" %in% fields) {
     sql <- paste0(sql, " WHERE projectid = ?")
@@ -382,7 +382,7 @@ check_non_negative_fields <- function(con, project_id = NULL) {
     if (length(bad) > 0) {
       issues[[length(issues) + 1]] <- data.frame(
         rule = paste0("range_nonneg_", col_name),
-        table = "Sample_Env",
+        table = "Env",
         column = col_name,
         plotnumber = env$plotnumber[bad],
         details = "Value must be non-negative",
@@ -471,7 +471,7 @@ check_cover_codes <- function(con, project_id = NULL) {
 }
 
 check_table_list_values <- function(con, project_id = NULL) {
-  if (length(get_table_fields(con, "lists.USysTableOfLists")) == 0 || length(get_table_fields(con, "Sample_Env")) == 0) {
+  if (length(get_table_fields(con, "lists.USysTableOfLists")) == 0 || length(get_table_fields(con, "Env")) == 0) {
     return(data.frame())
   }
 
@@ -481,7 +481,7 @@ check_table_list_values <- function(con, project_id = NULL) {
 
   if (is.null(listname_col) || is.null(item_col)) return(data.frame())
 
-  env_fields <- get_table_fields(con, "Sample_Env")
+  env_fields <- get_table_fields(con, "Env")
   plot_col <- if ("plotnumber" %in% env_fields) "plotnumber" else if ("PlotNumber" %in% env_fields) "PlotNumber" else NULL
   project_col <- if ("projectid" %in% env_fields) "projectid" else if ("ProjectID" %in% env_fields) "ProjectID" else NULL
   if (is.null(plot_col)) return(data.frame())
@@ -501,7 +501,7 @@ check_table_list_values <- function(con, project_id = NULL) {
   if (length(present_cols) == 0) return(data.frame())
 
   select_cols <- paste(c(plot_col, present_cols), collapse = ", ")
-  sql <- sprintf("SELECT %s FROM Sample_Env", select_cols)
+  sql <- sprintf("SELECT %s FROM Env", select_cols)
   params <- list()
   if (!is.null(project_id) && !is.null(project_col)) {
     sql <- paste0(sql, " WHERE ", project_col, " = ?")
@@ -524,7 +524,7 @@ check_table_list_values <- function(con, project_id = NULL) {
     if (length(invalid_idx) > 0) {
       issues[[length(issues) + 1]] <- data.frame(
         rule = paste0("fk_list_", col_name),
-        table = "Sample_Env",
+        table = "Env",
         column = col_name,
         plotnumber = env[[plot_col]][invalid_idx],
         details = paste0("Invalid value for list ", list_name),

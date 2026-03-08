@@ -52,11 +52,11 @@ test_that("build_diagnostic_matrix returns matrix", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
   DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (plotnumber TEXT, species_code TEXT, cover_value TEXT, projectid TEXT)")
 
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P1', 'SU1')")
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P2', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P1', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P2', 'SU1')")
   DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P1', 'SP1', '20', 'PRJ')")
   DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P2', 'SP1', '30', 'PRJ')")
 
@@ -67,18 +67,18 @@ test_that("build_diagnostic_matrix returns matrix", {
   expect_true(any(nzchar(result$matrix$SU1)))
 })
 
-test_that("build_diagnostic_matrix filters by project via Sample_Env", {
+test_that("build_diagnostic_matrix filters by project via Env", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, SiteUnit TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
+  DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")
   DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (plotnumber TEXT, species_code TEXT, cover_value TEXT)")
 
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P1', 'SU1')")
-  DBI::dbExecute(con, "INSERT INTO Sample_SU VALUES ('P2', 'SU2')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P1', 'PRJ1')")
-  DBI::dbExecute(con, "INSERT INTO Sample_Env VALUES ('P2', 'PRJ2')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P1', 'SU1')")
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('P2', 'SU2')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'PRJ1')")
+  DBI::dbExecute(con, "INSERT INTO Env VALUES ('P2', 'PRJ2')")
   DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P1', 'SP1', '20')")
   DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('P2', 'SP1', '30')")
 

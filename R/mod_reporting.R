@@ -122,23 +122,23 @@ mod_reporting_server <- function(id, sys_state, con) {
 
     get_report_exports <- function(template_name) {
       exports <- list(
-        "site_summary.qmd" = c("Sample_Env", "Sample_SU", "vw_USysAllVeg", "Sample_Humus", "Sample_Mineral"),
-        "short_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
-        "long_veg.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode",
-                           "lists.USysAllSpecs", "Sample_Admin", "vw_USysEnv"),
-        "env_summary.qmd" = c("Sample_Env", "Sample_SU"),
-        "long_env.qmd" = c("Sample_Env", "Sample_SU", "lists.MasterSiteUnitList"),
-        "short_veg_env.qmd" = c("vw_USysAllVeg", "Sample_Env", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
-        "lifeform.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
-        "flat_hierarchy.qmd" = c("Sample_Hierarchy"),
-        "hierarchy.qmd" = c("Sample_Hierarchy", "lists.MasterSiteUnitList"),
-        "short_veg_hierarchy.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
-        "short_veg_order_hierarchy.qmd" = c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "lists.USysAllSpecs"),
-        "veg_layer_a.qmd" = c("Sample_Veg", "Sample_SU", "Sample_Env"),
-        "veg_layer_c.qmd" = c("Sample_Veg", "Sample_SU", "Sample_Env"),
-        "veg_layer_d.qmd" = c("Sample_Veg", "Sample_SU", "Sample_Env"),
-        "bec_labels.qmd" = c("Sample_Env", "Sample_SU"),
-        "quality_control.qmd" = c("Sample_SU", "Sample_Admin", "Sample_Env", "Sample_Veg", "lists.USysTableOfLists")
+        "site_summary.qmd" = c("Env", "SU", "vw_USysAllVeg", "Humus", "Mineral"),
+        "short_veg.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "long_veg.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode",
+                           "lists.USysAllSpecs", "Admin", "vw_USysEnv"),
+        "env_summary.qmd" = c("Env", "SU"),
+        "long_env.qmd" = c("Env", "SU", "lists.MasterSiteUnitList"),
+        "short_veg_env.qmd" = c("vw_USysAllVeg", "Env", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "lifeform.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "flat_hierarchy.qmd" = c("Hierarchy"),
+        "hierarchy.qmd" = c("Hierarchy", "lists.MasterSiteUnitList"),
+        "short_veg_hierarchy.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "short_veg_order_hierarchy.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "veg_layer_a.qmd" = c("Veg", "SU", "Env"),
+        "veg_layer_c.qmd" = c("Veg", "SU", "Env"),
+        "veg_layer_d.qmd" = c("Veg", "SU", "Env"),
+        "bec_labels.qmd" = c("Env", "SU"),
+        "quality_control.qmd" = c("SU", "Admin", "Env", "Veg", "lists.USysTableOfLists")
       )
       exports[[template_name]]
     }

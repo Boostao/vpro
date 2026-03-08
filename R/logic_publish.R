@@ -114,11 +114,11 @@ publish_read_project_metadata <- function(con, project_id, is_public = TRUE, des
 }
 
 publish_extract_environment <- function(con, project_id) {
-  if (!publish_db_has(con, "Sample_Env")) {
-    stop("Sample_Env table not found; cannot publish project dataset.")
+  if (!publish_db_has(con, "Env")) {
+    stop("Env table not found; cannot publish project dataset.")
   }
 
-  env_cols <- DBI::dbListFields(con, "Sample_Env")
+  env_cols <- DBI::dbListFields(con, "Env")
   plot_col <- publish_ci_col(env_cols, "plotnumber") %||% publish_ci_col(env_cols, "plot_number")
   proj_col <- publish_ci_col(env_cols, "projectid") %||% publish_ci_col(env_cols, "project_id")
   date_col <- publish_ci_col(env_cols, "date_sampled") %||% publish_ci_col(env_cols, "date") %||% publish_ci_col(env_cols, "survey_date")
@@ -130,17 +130,17 @@ publish_extract_environment <- function(con, project_id) {
   loc_col <- publish_ci_col(env_cols, "_location") %||% publish_ci_col(env_cols, "location")
 
   if (is.null(plot_col) || is.null(proj_col) || is.null(lat_col) || is.null(lon_col)) {
-    stop("Sample_Env missing required columns for publishing (plotnumber/projectid/latitude/longitude).")
+    stop("Env missing required columns for publishing (plotnumber/projectid/latitude/longitude).")
   }
 
-  # Optional quality from Sample_SU
+  # Optional quality from SU
   quality_sql <- NULL
-  if (publish_db_has(con, "Sample_SU")) {
-    su_cols <- DBI::dbListFields(con, "Sample_SU")
+  if (publish_db_has(con, "SU")) {
+    su_cols <- DBI::dbListFields(con, "SU")
     su_plot_col <- publish_ci_col(su_cols, "plotnumber") %||% publish_ci_col(su_cols, "plot_number")
     qual_col <- publish_ci_col(su_cols, "dataquality") %||% publish_ci_col(su_cols, "data_quality")
     if (!is.null(su_plot_col) && !is.null(qual_col)) {
-      quality_sql <- sprintf("LEFT JOIN Sample_SU s ON e.%s = s.%s", plot_col, su_plot_col)
+      quality_sql <- sprintf("LEFT JOIN SU s ON e.%s = s.%s", plot_col, su_plot_col)
       quality_sel <- sprintf(", s.%s AS data_quality", qual_col)
     } else {
       quality_sel <- ", NULL AS data_quality"
@@ -164,7 +164,7 @@ publish_extract_environment <- function(con, project_id) {
   sql <- paste(
     "SELECT",
     sel,
-    "FROM Sample_Env e",
+    "FROM Env e",
     quality_sql %||% "",
     sprintf("WHERE e.%s = ?", proj_col)
   )
@@ -174,11 +174,11 @@ publish_extract_environment <- function(con, project_id) {
 
 publish_extract_vegetation <- function(con, project_id) {
   if (!publish_db_has(con, "vw_USysAllVeg")) {
-    # If the view doesn't exist, fallback to Sample_Veg if present.
-    if (!publish_db_has(con, "Sample_Veg")) {
+    # If the view doesn't exist, fallback to Veg if present.
+    if (!publish_db_has(con, "Veg")) {
       return(data.frame(plot_id = character(0), species_code = character(0), layer = character(0), cover = character(0)))
     }
-    veg_cols <- DBI::dbListFields(con, "Sample_Veg")
+    veg_cols <- DBI::dbListFields(con, "Veg")
     plot_col <- publish_ci_col(veg_cols, "plotnumber") %||% publish_ci_col(veg_cols, "plot_number")
     spp_col <- publish_ci_col(veg_cols, "species") %||% publish_ci_col(veg_cols, "species_code")
     layer_col <- publish_ci_col(veg_cols, "layer") %||% publish_ci_col(veg_cols, "layer_code")
@@ -192,7 +192,7 @@ publish_extract_vegetation <- function(con, project_id) {
     sql <- paste(
       "SELECT",
       sprintf("%s AS plot_id, %s AS species_code, %s AS layer, %s AS cover", plot_col, spp_col, layer_col, cover_col %||% "NULL"),
-      "FROM Sample_Veg",
+      "FROM Veg",
       sprintf("WHERE %s = ? AND %s IS NOT NULL", proj_col, spp_col)
     )
     return(DBI::dbGetQuery(con, sql, list(project_id)))
@@ -228,7 +228,7 @@ validate_for_publishing <- function(con, project_id) {
   if (is.null(env) || nrow(env) == 0) {
     details <- rbind(details, data.frame(
       rule = "publish_no_env",
-      table = "Sample_Env",
+      table = "Env",
       column = "plotnumber",
       plotnumber = NA,
       details = "No environment rows found for project",
@@ -241,7 +241,7 @@ validate_for_publishing <- function(con, project_id) {
     if (length(bad) > 0) {
       details <- rbind(details, data.frame(
         rule = "publish_bad_coords",
-        table = "Sample_Env",
+        table = "Env",
         column = "latitude/longitude",
         plotnumber = env$plotnumber[bad],
         details = "Missing or zero coordinates",

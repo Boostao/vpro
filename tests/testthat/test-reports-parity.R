@@ -577,7 +577,7 @@ test_that("site_summary report includes plot metadata sections", {
   params <- list(
     db_path = here::here("data", "vpro.duckdb"),
     project_root = here::here(),
-    # Use a plot that has a SiteUnit mapping in Sample_SU
+    # Use a plot that has a SiteUnit mapping in SU
     plot_number = "1976021",
     plot_numbers = "1976021",
     project_id = "",

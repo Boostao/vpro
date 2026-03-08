@@ -28,7 +28,7 @@ projects <- dbGetQuery(con, "
   SELECT DISTINCT 
     projectid, 
     MAX(projecttitle) as projecttitle 
-  FROM Sample_Metadata 
+  FROM Metadata 
   WHERE projectid IS NOT NULL AND projectid != ''
   GROUP BY projectid
 ")
@@ -46,7 +46,7 @@ if (nrow(projects) > 0) {
   }
   print("Migration complete.")
 } else {
-  print("No projects found in Sample_Metadata to migrate.")
+  print("No projects found in Metadata to migrate.")
 }
 
 # Verify

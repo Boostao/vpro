@@ -14,20 +14,20 @@ on.exit(dbDisconnect(con, shutdown = TRUE))
 
 # Mapping of Sample_* tables to their main table names
 table_mappings <- list(
-  list(from = "Sample_Admin", to = "Admin"),
-  list(from = "Sample_Audit", to = "Audit"),
-  list(from = "Sample_Env", to = "Env"),
-  list(from = "Sample_Herbarium", to = "Herbarium"),
-  list(from = "Sample_Hierarchy", to = "Hierarchy"),
-  list(from = "Sample_Humus", to = "Humus"),
-  list(from = "Sample_Lump", to = "Lump"),
-  list(from = "Sample_Metadata", to = "Metadata"),
-  list(from = "Sample_Mineral", to = "Mineral"),
-  list(from = "Sample_Other", to = "Other"),
-  list(from = "Sample_Profile", to = "Profile"),
-  list(from = "Sample_SU", to = "SU"),
-  list(from = "Sample_Theme", to = "Theme"),
-  list(from = "Sample_Veg", to = "Veg"),
+  list(from = "Admin", to = "Admin"),
+  list(from = "Audit", to = "Audit"),
+  list(from = "Env", to = "Env"),
+  list(from = "Herbarium", to = "Herbarium"),
+  list(from = "Hierarchy", to = "Hierarchy"),
+  list(from = "Humus", to = "Humus"),
+  list(from = "Lump", to = "Lump"),
+  list(from = "Metadata", to = "Metadata"),
+  list(from = "Mineral", to = "Mineral"),
+  list(from = "Other", to = "Other"),
+  list(from = "Profile", to = "Profile"),
+  list(from = "SU", to = "SU"),
+  list(from = "Theme", to = "Theme"),
+  list(from = "Veg", to = "Veg"),
   list(from = "SampleVeg_Profile", to = "Veg_Profile")
 )
 
