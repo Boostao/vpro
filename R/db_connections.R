@@ -44,12 +44,20 @@ connect_local_db <- function() {
     messages = messages_db
   )
 
+  attached_dbs <- list_attached_dbs(con)
+
   for (alias in names(auxiliary_dbs)) {
     db_path <- auxiliary_dbs[[alias]]
     if (!is.null(db_path)) {
+      if (alias %in% attached_dbs) {
+        message("[db_connections] Skipping attach for ", alias, ": already attached")
+        next
+      }
+
       message("[db_connections] Attaching ", alias, " -> ", db_path)
       tryCatch({
         DBI::dbExecute(con, paste0("ATTACH '", db_path, "' AS ", alias))
+        attached_dbs <- c(attached_dbs, alias)
       }, error = function(e) {
         warning("Failed to attach auxiliary DB '", alias, "': ", e$message)
       })

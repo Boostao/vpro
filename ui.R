@@ -1,6 +1,10 @@
 # UI Definition
 # Uses bslib for a modern dashboard layout replacing the Access Menu
 
+if (!"bcgov" %in% bslib::bootswatch_themes()) {
+  source("theme/add_bcgov_bootswatch_to_bslib.R")
+}
+
 ui <- page_navbar(
   id = "main_tabs",
   title = div(
@@ -9,11 +13,9 @@ ui <- page_navbar(
     span("VPro 64", class = "fw-bold"),
     tags$small("Data", class = "vpro-navbar-subtitle")
   ),
-  theme = bs_theme(version = 5),
+  theme = bs_theme(version = 5, bootswatch = "bcgov"),
   header = tagList(
     tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "bcgov-static/font.css"),
-      tags$link(rel = "stylesheet", type = "text/css", href = "bcgov/bcgov.css"),
       tags$style(HTML("\n        .vpro-navbar-title {\n          color: #ffffff;\n          line-height: 1;\n          margin-top: 0;\n          margin-bottom: 0;\n        }\n        .vpro-navbar-subtitle {\n          color: #d9ecff;\n          font-size: 0.78rem;\n          margin-left: 2px;\n        }\n        .navbar .navbar-brand {\n          display: flex;\n          align-items: center;\n          padding-top: 0;\n          padding-bottom: 0;\n          min-height: 32px;\n        }\n        .vpro-sidebar .form-group,\n        .vpro-sidebar .shiny-input-container {\n          margin-bottom: 0.45rem;\n        }\n        .vpro-sidebar .btn {\n          padding-top: 0.22rem;\n          padding-bottom: 0.22rem;\n          font-size: 0.82rem;\n        }\n        .vpro-sidebar .vpro-section-title {\n          margin-top: 0.35rem;\n          margin-bottom: 0.35rem;\n          font-size: 0.82rem;\n          font-weight: 600;\n          color: #355f98;\n        }\n      "))
     ),
     shinyjs::useShinyjs(),
