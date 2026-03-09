@@ -1,8 +1,6 @@
 # Project Initialization Script
 # Run this to set up dependencies
 
-if (!require("renv")) install.packages("renv")
-
 # Initialize renv for the project if not already done
 # renv::init()
 
@@ -17,7 +15,4 @@ required_packages <- c(
 )
 
 # Install packages
-install.packages(required_packages)
-
-# Snapshot the state
-renv::snapshot()
+installed.packages() |> rownames() |> setdiff(x = required_packages) |> install.packages()

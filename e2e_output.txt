@@ -1,6 +1,0 @@
-
-══ Testing test-e2e-workflows.R ════════════════════════════════════════════════
-
-[ FAIL 0 | WARN 0 | SKIP 0 | PASS 0 ]
-
-Execution halted
