@@ -164,7 +164,7 @@ The test `Species FK: case sensitivity` expects failure with lowercase species c
 
 ## References
 
-- **Access VBA Diagnostic**: `VPRO_ACCESS/VPro64_forAI/Modules/V7mdlDiagnostic.txt`
+- **Access VBA Diagnostic**: `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlDiagnostic.txt`
 - **Compliance Logic**: `R/logic_compliance.R`
 - **Test Helpers**: `tests/testthat/helpers.R`
 

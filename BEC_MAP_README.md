@@ -198,7 +198,7 @@ observe({
 **Developed for**: BC Ministry of Forests - Biogeoclimatic Ecosystem Classification Program
 
 **Requirements Source**: 
-- `VPRO_ACCESS/_BEC_data_system_fs1a_schedule_of_services_v2 (13).md`
+- `../VPRO_ACCESS/_BEC_data_system_fs1a_schedule_of_services_v2 (13).md`
 - Schedule A - Services, Task 1b: "Build a map-based R-shiny tool for public access to BECMaster plot data and user download in multiple data formats"
 
 **Related Systems**:

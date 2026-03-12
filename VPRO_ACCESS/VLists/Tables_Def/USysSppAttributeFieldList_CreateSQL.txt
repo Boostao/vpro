@@ -1,8 +1,0 @@
-CREATE TABLE [USysSppAttributeFieldList] (
-  [OriginalName] TEXT(255) DEFAULT ,
-  [Field] TEXT(255) DEFAULT ,
-  [ShortName] TEXT(255) DEFAULT ,
-  [Attribute] TEXT(255) DEFAULT 
-);
-
-

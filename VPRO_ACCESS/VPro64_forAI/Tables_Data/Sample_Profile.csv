@@ -1,9 +1,0 @@
-"Order","Table","Field","Operator","Layer","Species","Criteria","Operation","PlotCount"
-4,"Lump","LumpCode",">","SumAll","ALNUVIR","10","Add plots",0
-5,"Lump","LumpCode",">","6","EPILSPP","0","Common plots",0
-1,"Env","NutrientRegime","=",,,"c","Add plots",3
-6,"Env","SiteSurveyor","Like",,,"*Ru?sell*","Subtract plots",0
-8,"Env","Elevation",">",,,"500","Add plots",34
-3,"Veg","Species",">","5a","ABIE_RK","3","Add plots",0
-7,"Veg","Species",">","Any","VACCMEM","10","Add plots",0
-9,"Veg","Species","=","Any","ABIELAS","NULL","Subtract plots",23

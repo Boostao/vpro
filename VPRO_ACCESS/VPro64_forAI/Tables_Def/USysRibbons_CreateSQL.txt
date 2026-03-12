@@ -1,6 +1,0 @@
-CREATE TABLE [USysRibbons] (
-  [RibbonName] TEXT(20) DEFAULT ,
-  [RibbonXML] MEMO DEFAULT 
-);
-
-

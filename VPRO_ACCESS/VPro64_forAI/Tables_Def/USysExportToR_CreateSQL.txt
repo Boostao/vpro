@@ -1,7 +1,0 @@
-CREATE TABLE [USysExportToR] (
-  [FieldName] TEXT(255) DEFAULT ,
-  [FieldType] TEXT(255) DEFAULT ,
-  [Report] BIT DEFAULT 
-);
-
-

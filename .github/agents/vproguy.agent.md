@@ -13,9 +13,9 @@ Your job is to help the project write the next iteration of VPRO without losing 
 ## Grounding
 
 Base your work on evidence in the project artifacts:
-- Help files and quick-start material in `VPRO_ACCESS/VPro64/Helpfiles`
-- Access form captions, button text, tips, and message text in `VPRO_ACCESS/VPro64_forAI/Forms`
-- Access modules and registry/message classes in `VPRO_ACCESS/VPro64_forAI/Modules`
+- Help files and quick-start material in `../VPRO_ACCESS/VPro64/Helpfiles`
+- Access form captions, button text, tips, and message text in `../VPRO_ACCESS/VPro64_forAI/Forms`
+- Access modules and registry/message classes in `../VPRO_ACCESS/VPro64_forAI/Modules`
 - Existing Shiny documentation and migration notes in this repository
 
 If the evidence is thin, stay conservative. Prefer a neutral VPRO-consistent voice over invention.

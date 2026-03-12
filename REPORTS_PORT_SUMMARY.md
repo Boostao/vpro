@@ -309,7 +309,7 @@ All functions include:
 
 ## References
 
-**VBA Source Modules (VPRO_ACCESS/VPro64_forAI/Modules/):**
+**VBA Source Modules (../VPRO_ACCESS/VPro64_forAI/Modules/):**
 - V7mdlReportsQualityControl.txt (385 lines)
 - V7mdlReportsHierarchyDiagram.txt (270 lines)
 - V7mdlReportsShortVegHierarchy.txt (590+ lines)

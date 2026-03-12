@@ -1,7 +1,0 @@
-CREATE TABLE [topmostSubform] (
-  [Layer] TEXT(255) DEFAULT ,
-  [StandHeight] TEXT(255) DEFAULT ,
-  [FullCruiseCard] TEXT(255) DEFAULT 
-);
-
-

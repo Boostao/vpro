@@ -13,7 +13,7 @@ Do not attempt wholesale parity in one pass.
 
 ## Block Contract (Use This Every Time)
 For each requested block:
-1. **Access source**: identify exact form/module event(s) in `VPRO_ACCESS/VPro64_forAI`.
+1. **Access source**: identify exact form/module event(s) in `../VPRO_ACCESS/VPro64_forAI`.
 2. **Expected behavior**: restate only what that block must do.
 3. **Implementation**: edit only necessary files.
 4. **Manual check**: provide quick run/check steps (no test harness by default).
@@ -26,7 +26,7 @@ For each requested block:
 - Preserve existing naming and UX language from Access captions/status text.
 
 ## Access-Parity Rules
-- `VPRO_ACCESS/` is read-only canonical reference.
+- `../VPRO_ACCESS/` is read-only canonical reference.
 - Port semantics, not just labels.
 - Mirror event intent:
   - Access `GotFocus`/`Click` list refresh behavior
@@ -49,7 +49,7 @@ For each requested block:
 - App shell: `global.R`, `ui.R`, `server.R`
 - Core logic: `R/logic_state.R`, `R/logic_*.R`
 - Modules: `R/mod_*.R`
-- Canonical Access reference: `VPRO_ACCESS/VPro64_forAI/`
+- Canonical Access reference: `../VPRO_ACCESS/VPro64_forAI/`
 
 ## Validation Mode (Current)
 - Default: source/load smoke + manual in-app verification.
@@ -92,12 +92,12 @@ Expected retained artifacts (at minimum):
 - `ui_<form>.R`
 - block parity notes/checklist (for example `PARITY_CHECKLIST_<block_id>.md`)
 
-If a skill writes outputs under `VPRO_ACCESS/.../Forms/`, copy the artifacts to `/tmp/vpro_parity/<block_id>/` immediately and keep that `/tmp` copy as canonical migration evidence for the block.
+If a skill writes outputs under `../VPRO_ACCESS/.../Forms/`, copy the artifacts to `/tmp/vpro_parity/<block_id>/` immediately and keep that `/tmp` copy as canonical migration evidence for the block.
 
 Do not parse whole Access form exports upfront as a primary discovery method.
 
 Required migration inputs:
-- Target form path(s) in `VPRO_ACCESS/VPro64_forAI/Forms/`
+- Target form path(s) in `../VPRO_ACCESS/VPro64_forAI/Forms/`
 - If a launcher/menu opens another form, include both launcher and destination form paths
 - Target framework and execution environment (default to Shiny if unspecified)
 - Constraints (minimal/MVP, design system, deployment/runtime)

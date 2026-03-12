@@ -1,6 +1,0 @@
-CREATE TABLE [LumpedSpecies] (
-  [Lump] TEXT(50) DEFAULT ,
-  [Species] TEXT(255) DEFAULT 
-);
-
-

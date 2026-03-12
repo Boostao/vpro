@@ -30,37 +30,37 @@ Script: `scripts/Tools/access_form_to_shiny.R`
 Single form:
 
 ```bash
-Rscript scripts/Tools/access_form_to_shiny.R VPRO_ACCESS/VPro64_forAI/Forms/frmDirectories.txt
+Rscript scripts/Tools/access_form_to_shiny.R ../VPRO_ACCESS/VPro64_forAI/Forms/frmDirectories.txt
 ```
 
 Single form with explicit scale (recommended for dense forms):
 
 ```bash
-Rscript scripts/Tools/access_form_to_shiny.R --scale=1.8 VPRO_ACCESS/VPro64_forAI/Forms/FS882-6x4XL.txt
+Rscript scripts/Tools/access_form_to_shiny.R --scale=1.8 ../VPRO_ACCESS/VPro64_forAI/Forms/FS882-6x4XL.txt
 ```
 
 Single form with explicit output path:
 
 ```bash
-Rscript scripts/Tools/access_form_to_shiny.R VPRO_ACCESS/VPro64_forAI/Forms/frmDirectories.txt VPRO_ACCESS/VPro64_forAI/Forms/ui_frmDirectories.R
+Rscript scripts/Tools/access_form_to_shiny.R ../VPRO_ACCESS/VPro64_forAI/Forms/frmDirectories.txt ../VPRO_ACCESS/VPro64_forAI/Forms/ui_frmDirectories.R
 ```
 
 All forms in a directory:
 
 ```bash
-Rscript scripts/Tools/access_form_to_shiny.R VPRO_ACCESS/VPro64_forAI/Forms
+Rscript scripts/Tools/access_form_to_shiny.R ../VPRO_ACCESS/VPro64_forAI/Forms
 ```
 
 All forms with scaling:
 
 ```bash
-Rscript scripts/Tools/access_form_to_shiny.R --scale=1.8 VPRO_ACCESS/VPro64_forAI/Forms
+Rscript scripts/Tools/access_form_to_shiny.R --scale=1.8 ../VPRO_ACCESS/VPro64_forAI/Forms
 ```
 
 Force reverse stacking order (if needed for specific forms):
 
 ```bash
-Rscript scripts/Tools/access_form_to_shiny.R --scale=1.8 --zorder=reverse VPRO_ACCESS/VPro64_forAI/Forms/FS882-6x4XL.txt
+Rscript scripts/Tools/access_form_to_shiny.R --scale=1.8 --zorder=reverse ../VPRO_ACCESS/VPro64_forAI/Forms/FS882-6x4XL.txt
 ```
 
 ## Notes

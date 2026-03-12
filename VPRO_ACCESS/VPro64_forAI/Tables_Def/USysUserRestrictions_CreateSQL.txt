@@ -1,9 +1,0 @@
-CREATE TABLE [USysUserRestrictions] (
-  [ID] LONG DEFAULT GenUniqueID(),
-  [UserName] TEXT(100) DEFAULT ,
-  [Tag] BIT DEFAULT 
-);
-
-CREATE UNIQUE INDEX [ID] ON [USysUserRestrictions] ([ID]);
-CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [USysUserRestrictions] ([ID]);
-

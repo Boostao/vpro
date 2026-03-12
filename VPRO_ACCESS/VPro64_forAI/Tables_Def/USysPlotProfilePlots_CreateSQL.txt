@@ -1,6 +1,0 @@
-CREATE TABLE [USysPlotProfilePlots] (
-  [PlotNumber] TEXT(7) DEFAULT 
-);
-
-CREATE INDEX [PlotNumber] ON [USysPlotProfilePlots] ([PlotNumber]);
-

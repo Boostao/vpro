@@ -7,7 +7,7 @@
 #   - <project_id>_metadata.rds
 #
 # VBA Source: N/A (new feature per Schedule A - Services 1b)
-# Requirements: VPRO_ACCESS/_BEC_data_system_fs1a_schedule_of_services_v2 (13).md
+# Requirements: ../VPRO_ACCESS/_BEC_data_system_fs1a_schedule_of_services_v2 (13).md
 #   "Build a map-based R-shiny tool for public access to BECMaster
 #    plot data and user download in multiple data formats"
 # 

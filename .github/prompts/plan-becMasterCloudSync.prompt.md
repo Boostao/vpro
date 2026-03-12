@@ -33,7 +33,7 @@ Migrate the current single-user, file-based VPro Shiny app to a hybrid local/clo
 
 ### 1. Design and deploy the BECMaster PostgreSQL schema
 
-Translate all table schemas from `VPRO_ACCESS/VPro64_forAI/Tables_Def/` (plus VLists, VMetaData, VUser) into a PostgreSQL migration script. Use a **schema-per-concern** layout:
+Translate all table schemas from `../VPRO_ACCESS/VPro64_forAI/Tables_Def/` (plus VLists, VMetaData, VUser) into a PostgreSQL migration script. Use a **schema-per-concern** layout:
 
 | Schema | Tables | Purpose |
 |--------|--------|---------|

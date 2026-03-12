@@ -1,9 +1,0 @@
-CREATE TABLE [USysBreakFilter] (
-  [Level] TEXT(255) DEFAULT ,
-  [Parent] TEXT(255) DEFAULT ,
-  [Unit] TEXT(255) DEFAULT 
-);
-
-CREATE INDEX [BiGroup] ON [USysBreakFilter] ([Parent]);
-CREATE INDEX [BreakCode] ON [USysBreakFilter] ([Unit]);
-

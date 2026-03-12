@@ -23,8 +23,8 @@ Unit tests for vegetation calculation functions ported from Access VBA.
 
 #### Access VBA Source Verification:
 All formulas cross-referenced against:
-- `VPRO_ACCESS/VPro64_forAI/Modules/V7mdlExportToR1.txt`
-- `VPRO_ACCESS/VPro64_forAI/Modules/V7mdlExportToR2.txt`
+- `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlExportToR1.txt`
+- `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlExportToR2.txt`
 
 #### Test Results:
 ```

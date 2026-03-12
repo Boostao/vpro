@@ -1,9 +1,0 @@
-CREATE TABLE [Sample_Lump] (
-  [LumpCode] TEXT(50) DEFAULT ,
-  [SppCode] TEXT(8) DEFAULT ,
-  [Use] BIT DEFAULT 
-);
-
-CREATE INDEX [LumpCode] ON [Sample_Lump] ([LumpCode]);
-CREATE UNIQUE INDEX [SppCode] ON [Sample_Lump] ([SppCode]);
-

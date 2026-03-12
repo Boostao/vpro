@@ -1,7 +1,0 @@
-CREATE TABLE [USysServicePackLastCheck] (
-  [ID] LONG DEFAULT ,
-  [LastCheck] DATETIME DEFAULT 
-);
-
-CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [USysServicePackLastCheck] ([ID]);
-
