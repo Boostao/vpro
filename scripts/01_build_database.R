@@ -5,11 +5,11 @@ library(stringr)
 
 # Configuration mapping: Source Dir -> Target DB
 config <- list(
-  list(src = "VPRO_ACCESS/VPro64_forAI/Tables_Data", db = "data/vpro.duckdb"),
-  list(src = "VPRO_ACCESS/VLists/Tables_Data", db = "data/vpro_lists.duckdb"),
-  list(src = "VPRO_ACCESS/VMetaData/Tables_Data", db = "data/vpro_metadata.duckdb"),
-  list(src = "VPRO_ACCESS/VUser/Tables_Data", db = "data/vpro_user.duckdb"),
-  list(src = "VPRO_ACCESS/VMessageBoard/Tables_Data", db = "data/vpro_messages.duckdb")
+  list(src = "../VPRO_ACCESS/VPro64_forAI/Tables_Data", db = "data/vpro.duckdb"),
+  list(src = "../VPRO_ACCESS/VLists/Tables_Data", db = "data/vpro_lists.duckdb"),
+  list(src = "../VPRO_ACCESS/VMetaData/Tables_Data", db = "data/vpro_metadata.duckdb"),
+  list(src = "../VPRO_ACCESS/VUser/Tables_Data", db = "data/vpro_user.duckdb"),
+  list(src = "../VPRO_ACCESS/VMessageBoard/Tables_Data", db = "data/vpro_messages.duckdb")
 )
 
 clean_colnames <- function(names) {

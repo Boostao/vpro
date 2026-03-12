@@ -1,8 +1,0 @@
-CREATE TABLE [CodesToReplace] (
-  [Current code] TEXT(255) DEFAULT ,
-  [New code] TEXT(255) DEFAULT 
-);
-
-CREATE INDEX [Current code] ON [CodesToReplace] ([Current code]);
-CREATE INDEX [New code] ON [CodesToReplace] ([New code]);
-

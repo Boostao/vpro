@@ -52,7 +52,7 @@ Mark block **incomplete** unless all targeted controls/events are either:
 ## Example Values
 
 - `BLOCK_ID`: `fs882-site-shell-01`
-- `launcher_form_paths_or_NA`: `VPRO_ACCESS/VPro64_forAI/Forms/frmMainMenuFloat.txt`
-- `destination_form_paths`: `VPRO_ACCESS/VPro64_forAI/Forms/FS882-6x4XL.txt`
+- `launcher_form_paths_or_NA`: `../VPRO_ACCESS/VPro64_forAI/Forms/frmMainMenuFloat.txt`
+- `destination_form_paths`: `../VPRO_ACCESS/VPro64_forAI/Forms/FS882-6x4XL.txt`
 - `trigger_control_id`: `btn_nav_data_entry`
 - `destination_id`: `FS882-6x4XL`

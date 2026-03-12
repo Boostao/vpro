@@ -1,8 +1,0 @@
-CREATE TABLE [USysSuTable] (
-  [PlotNumber] TEXT(7) DEFAULT ,
-  [SiteUnit] TEXT(255) DEFAULT 
-);
-
-CREATE UNIQUE INDEX [PlotNumber] ON [USysSuTable] ([PlotNumber]);
-CREATE INDEX [SiteUnit] ON [USysSuTable] ([SiteUnit]);
-

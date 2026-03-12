@@ -1,8 +1,0 @@
-CREATE TABLE [tblSppCodesAndCover] (
-  [PlotNumber] TEXT(255) DEFAULT ,
-  [MyLayer] TEXT(255) DEFAULT ,
-  [Species] TEXT(255) DEFAULT ,
-  [Cover] SINGLE DEFAULT 
-);
-
-

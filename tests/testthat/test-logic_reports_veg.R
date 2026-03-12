@@ -559,4 +559,4 @@ test_that("boundary conditions match Access behavior exactly", {
 #    - R equivalent with minimum value guard
 #
 # All tests validated against sample Access reports generated from
-# VPRO_ACCESS/VPro64_forAI using identical input data.
+# ../VPRO_ACCESS/VPro64_forAI using identical input data.

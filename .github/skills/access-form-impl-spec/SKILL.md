@@ -14,7 +14,7 @@ This skill is optimized for downstream implementation agents, not human prose.
 
 Generate a comprehensive implementation report next to each form export:
 
-`VPRO_ACCESS/VPro64_forAI/Forms/FORM_IMPL_SPEC_<form>.md`
+`../VPRO_ACCESS/VPro64_forAI/Forms/FORM_IMPL_SPEC_<form>.md`
 
 For parity work, also preserve a copy under:
 
@@ -24,7 +24,7 @@ For parity work, also preserve a copy under:
 
 1. Run from repository root.
 2. Confirm script exists: `scripts/Tools/access_form_impl_spec.R`
-3. Confirm form export file(s) exist in `VPRO_ACCESS/VPro64_forAI/Forms/`.
+3. Confirm form export file(s) exist in `../VPRO_ACCESS/VPro64_forAI/Forms/`.
 
 ## Primary workflow
 
@@ -44,7 +44,7 @@ For parity work, also preserve a copy under:
 
 - Do not delete generated spec artifacts during the active migration session.
 - Preserve a copy of every generated spec in `/tmp/vpro_parity/<block_id>/`.
-- If the script output lands in `VPRO_ACCESS/.../Forms/`, copy it to `/tmp/vpro_parity/<block_id>/` immediately.
+- If the script output lands in `../VPRO_ACCESS/.../Forms/`, copy it to `/tmp/vpro_parity/<block_id>/` immediately.
 - Treat `/tmp/vpro_parity/<block_id>/` copies as migration evidence for parity review.
 
 ## Event mapping conventions

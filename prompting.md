@@ -10,11 +10,11 @@ I am migrating VPro64 to R Shiny.
 1. Initialize structure: `app.R`, `global.R`, `R/`, `data/`, `www/`, `reports/`.
 2. Packages: `shiny`, `duckdb`, `dplyr`, `dbplyr`, `bslib`, `DT`, `quarto`, `sf`, `janitor`.
 3. Create `scripts/01_build_database.R` to ingest CSVs into 5 separate DuckDB files:
-   - `data/vpro.duckdb`: From `VPRO_ACCESS/VPro64_forAI/Tables_Data/` (Main Data).
-   - `data/vpro_lists.duckdb`: From `VPRO_ACCESS/VLists/Tables_Data/` (Reference Lists).
-   - `data/vpro_metadata.duckdb`: From `VPRO_ACCESS/VMetaData/Tables_Data/` (Project Meta).
-   - `data/vpro_user.duckdb`: From `VPRO_ACCESS/VUser/Tables_Data/` (User Prefs).
-   - `data/vpro_messages.duckdb`: From `VPRO_ACCESS/VMessageBoard/Tables_Data/` (Messages).
+   - `data/vpro.duckdb`: From `../VPRO_ACCESS/VPro64_forAI/Tables_Data/` (Main Data).
+   - `data/vpro_lists.duckdb`: From `../VPRO_ACCESS/VLists/Tables_Data/` (Reference Lists).
+   - `data/vpro_metadata.duckdb`: From `../VPRO_ACCESS/VMetaData/Tables_Data/` (Project Meta).
+   - `data/vpro_user.duckdb`: From `../VPRO_ACCESS/VUser/Tables_Data/` (User Prefs).
+   - `data/vpro_messages.duckdb`: From `../VPRO_ACCESS/VMessageBoard/Tables_Data/` (Messages).
 4. Create `scripts/02_create_views.R`:
    - View `vw_USysAllVeg`: UNION query combining `Cover1`..`Cover10`, `TotalA/B` from `Sample_Veg` into a normalized `(PlotNumber, MyLayer, Species, Cover)` structure.
    - View `vw_USysEnv`: JOIN `Sample_Env` and `Sample_Admin` on `PlotNumber`.

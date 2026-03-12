@@ -1,8 +1,0 @@
-CREATE TABLE [Sample_SU] (
-  [PlotNumber] TEXT(7) DEFAULT ,
-  [SiteUnit] TEXT(255) DEFAULT 
-);
-
-CREATE UNIQUE INDEX [PlotNumber] ON [Sample_SU] ([PlotNumber]);
-CREATE INDEX [SiteUnit] ON [Sample_SU] ([SiteUnit]);
-

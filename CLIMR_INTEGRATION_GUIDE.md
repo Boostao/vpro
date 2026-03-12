@@ -213,7 +213,7 @@ ALTER TABLE Sample_Env ADD COLUMN climr_map DOUBLE;
 ## References
 
 - **ClimR package**: https://github.com/bcgov/climr
-- **BEC data systems contract**: See `VPRO_ACCESS/_BEC_data_system_fs1a_schedule_of_services_v2 (13).md`
+- **BEC data systems contract**: See `../VPRO_ACCESS/_BEC_data_system_fs1a_schedule_of_services_v2 (13).md`
 - **Implementation plan**: See `IMPLEMENTATION_PLAN.md` section 4.3
 - **Code**: `R/logic_climr.R`, `R/mod_site_env.R` (lines 420-650)
 - **Tests**: `tests/testthat/test-logic_climr.R`

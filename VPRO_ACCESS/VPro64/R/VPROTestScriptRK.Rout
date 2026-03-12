@@ -1,5 +1,0 @@
-Loading required package: permute
-Loading required package: lattice
-This is vegan 2.5-4
-Error in library(vegclust) : there is no package called 'vegclust'
-Execution halted

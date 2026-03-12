@@ -1,8 +1,0 @@
-CREATE TABLE [USysUserLog] (
-  [User] TEXT(50) DEFAULT ,
-  [InTime] DATETIME DEFAULT ,
-  [OutTime] DATETIME DEFAULT ,
-  [LocalMachine] TEXT(50) DEFAULT 
-);
-
-

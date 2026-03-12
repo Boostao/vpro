@@ -1,9 +1,0 @@
-CREATE TABLE [USysBreakTable] (
-  [Order] LONG DEFAULT ,
-  [Reference] TEXT(255) DEFAULT ,
-  [BreakCode] TEXT(255) DEFAULT ,
-  [PlotNumber] TEXT(8) DEFAULT 
-);
-
-CREATE INDEX [BreakCode] ON [USysBreakTable] ([BreakCode]);
-

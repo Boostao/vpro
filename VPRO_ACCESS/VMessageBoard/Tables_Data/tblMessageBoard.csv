@@ -1,6 +1,0 @@
-"ID","TopicType","TopicDate","Audience","From","Title","Message"
--1306107156,"System","2/13/2008","All","Russell Klassen","New message system","We are now in the process of adding a new feature named ""Message Board"" to VPro.  When starting VPro it will check to see if there are any new unread messages.  These messages will at first address just 3 topics: BEC, System, Users.  BEC topic messages will generally be from BEC administrators announcing changes.  System messages will be a method of notifying users of system changes and problems.  Users messages will allow individuals to gripe.
-
-In the future we may add canned filters and sorting, but for now you're on your own.  Also for now, any message composed with this tool is publicly available for all VPro users on the terminal server.  This may also change so that person-to-person messages are filtered at the user level.
-
-Note that you can not delete records using this form.  These records are shared with all the instances of VPro on the terminal server and therefore if a record is deleted from your instance, it is deleted from all the instances."

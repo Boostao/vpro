@@ -10,7 +10,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
 ### A. Primary Compliance/Validation Forms
 
 #### **USysValidateData.txt**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Forms/USysValidateData.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Forms/USysValidateData.txt`
 - **Purpose**: Main data validation and repair form
 - **Caption**: "Data Check and Repair"
 - **Record Source**: `UsysEnv` 
@@ -22,7 +22,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
   - Referenced by `DoCmd.OpenForm "USysValidateData"` in V7mdlRibbonOnAction
 
 #### **USysAudit.txt**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Forms/USysAudit.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Forms/USysAudit.txt`
 - **Purpose**: VPro Data History audit trail form
 - **Caption**: "VPro Data History"
 - **Record Source**: Query based on `USysAuditTrail` with filters for current project and plot number
@@ -40,7 +40,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
 - **Form Event**: `OnLoad=[Event Procedure]` for initialization
 
 #### **USysCodeCheck.txt**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Forms/USysCodeCheck.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Forms/USysCodeCheck.txt`
 - **Purpose**: Species code validation and spell-check interface
 - **Features**:
   - Validates species codes against list tables
@@ -50,7 +50,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
   - Referenced by spell-check modules for code correction
 
 #### **FS882-6x4.txt** (and variants: FS882-1x1, FS882-6x4XL, FS882-6x4XL-CHARS, FS882-8x6XL, FS882-8x6XL-CHARS)
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Forms/FS882-*.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Forms/FS882-*.txt`
 - **Purpose**: Main data entry forms with built-in audit sub-forms
 - **Compliance Features**:
   - Contains audit trail sub-form (`USysAudit` or `USysAuditxl`)
@@ -72,7 +72,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
 ### A. Audit Trail Module
 
 #### **V7mdlAudit.txt**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Modules/V7mdlAudit.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlAudit.txt`
 - **Core Functions**:
   - `LogVProOff()` - Logs application exit with timestamp
   - `LogVProOn()` - Logs application launch
@@ -93,7 +93,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
 ### B. Validation Modules
 
 #### **V7mdlReportsValidateEnvData.txt**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Modules/V7mdlReportsValidateEnvData.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlReportsValidateEnvData.txt`
 - **Public Sub**: `ValidateEnvData()`
 - **Logic Flow**:
   1. Creates Excel workbook for reporting
@@ -114,7 +114,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
 - **Metadata Source**: Fields marked with `ValidateLoops` indicate multi-instance fields (e.g., `MoistureRegime1`, `MoistureRegime2`)
 
 #### **V7mdlReportValidation.txt**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Modules/V7mdlReportValidation.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlReportValidation.txt`
 - **Public Function**: `ValidateData()`
 - **Advanced Validation Features**:
   - References `USysValidateData` form controls (e.g., `optSMR` option button)
@@ -151,7 +151,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
 ### A. Audit Trail Table
 
 #### **Sample_Audit Table**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Tables_Def/Sample_Audit_CreateSQL.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Tables_Def/Sample_Audit_CreateSQL.txt`
 - **Full Schema**:
   ```sql
   CREATE TABLE [Sample_Audit] (
@@ -324,7 +324,7 @@ The VPRO Access database and Shiny migration contain extensive compliance and da
 ### A. Query Files
 
 #### **UsysAuditTrail.txt**
-- **Location**: `/VPRO_ACCESS/VPro64_forAI/Queries/UsysAuditTrail.txt`
+- **Location**: `../VPRO_ACCESS/VPro64_forAI/Queries/UsysAuditTrail.txt`
 - **SQL**: `SELECT DISTINCTROW [Sample_Audit].* FROM Sample_Audit ORDER BY EditWhen`
 - **Purpose**: Base query for audit trail display with chronological order
 
@@ -415,7 +415,7 @@ Shiny R Application
 ## 8. KEY COMPLIANCE-RELATED FUNCTIONS IN RIBBON MENU
 
 ### Access Ribbon Commands
-Located in: `/VPRO_ACCESS/VPro64_forAI/Modules/V7mdlRibbonOnAction.txt`
+Located in: `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlRibbonOnAction.txt`
 
 ```
 Menu Command: "Tools > Validate Data"
@@ -553,7 +553,7 @@ Button: btnAudit (Caption: "Audit")
 ## 14. FILE PATH REFERENCE
 
 ```
-VPRO_ACCESS/VPro64_forAI/
+../VPRO_ACCESS/VPro64_forAI/
 ├── Forms/
 │   ├── USysValidateData.txt          [Data validation UI]
 │   ├── USysAudit.txt                 [Audit viewer]

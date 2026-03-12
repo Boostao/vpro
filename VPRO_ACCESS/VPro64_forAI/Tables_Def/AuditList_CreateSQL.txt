@@ -1,5 +1,0 @@
-CREATE TABLE [AuditList] (
-  [PlotNumber] TEXT(7) DEFAULT 
-);
-
-

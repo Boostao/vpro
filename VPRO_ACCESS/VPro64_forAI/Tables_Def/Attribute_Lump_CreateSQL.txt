@@ -1,9 +1,0 @@
-CREATE TABLE [Attribute_Lump] (
-  [LumpCode] TEXT(8) DEFAULT ,
-  [SppCode] TEXT(8) DEFAULT ,
-  [Use] BIT DEFAULT 
-);
-
-CREATE INDEX [LumpCode] ON [Attribute_Lump] ([LumpCode]);
-CREATE INDEX [SppCode] ON [Attribute_Lump] ([SppCode]);
-

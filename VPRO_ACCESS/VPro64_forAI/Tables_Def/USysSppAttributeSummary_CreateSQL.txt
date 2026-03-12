@@ -1,9 +1,0 @@
-CREATE TABLE [USysSppAttributeSummary] (
-  [ID] LONG DEFAULT GenUniqueID(),
-  [Report] BIT DEFAULT 0,
-  [Attribute] TEXT(255) DEFAULT ,
-  [ShortName] TEXT(255) DEFAULT 
-);
-
-CREATE PRIMARY UNIQUE INDEX [PrimaryKey] ON [USysSppAttributeSummary] ([ID]);
-

@@ -14,7 +14,7 @@ Treat generated UI as the DOM/layout equivalent scaffold for migration analysis.
 
 1. Work from the repository root.
 2. Confirm the converter exists at `scripts/Tools/access_form_to_shiny.R`.
-3. Confirm input file(s) exist in `VPRO_ACCESS/VPro64_forAI/Forms/` or another provided path.
+3. Confirm input file(s) exist in `../VPRO_ACCESS/VPro64_forAI/Forms/` or another provided path.
 
 ## Primary workflow
 
@@ -28,7 +28,7 @@ Treat generated UI as the DOM/layout equivalent scaffold for migration analysis.
 
 - Do not delete generated `ui_<form>.R` artifacts during the active migration session.
 - Preserve a copy under `/tmp/vpro_parity/<block_id>/ui_<form>.R`.
-- If output is generated in `VPRO_ACCESS/.../Forms/`, copy it to `/tmp/vpro_parity/<block_id>/` immediately.
+- If output is generated in `../VPRO_ACCESS/.../Forms/`, copy it to `/tmp/vpro_parity/<block_id>/` immediately.
 - Keep `/tmp/vpro_parity/<block_id>/` as the canonical evidence set for the block.
 
 ## Notes
