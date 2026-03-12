@@ -1,0 +1,270 @@
+---
+title: "Hierarchy Collapsible Tree"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    theme: cosmo
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  db_path: "../data/vpro.duckdb"
+  collapsed: true
+  report_title: "Hierarchy collapsible tree"
+---
+
+```{r setup}
+library(DBI)
+library(duckdb)
+library(dplyr)
+library(tibble)
+library(knitr)
+library(collapsibleTree)
+library(data.tree)
+library(htmltools)
+
+resolve_db_path <- function(db_path) {
+  input_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)), error = function(e) getwd())
+  candidates <- unique(c(
+    db_path,
+    file.path(input_dir, db_path),
+    file.path(getwd(), db_path),
+    file.path(input_dir, "../data/vpro.duckdb"),
+    file.path(getwd(), "data/vpro.duckdb")
+  ))
+  candidates <- candidates[file.exists(candidates)]
+  if (length(candidates) == 0) {
+    stop("Unable to locate the VPRO DuckDB file.")
+  }
+  normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
+}
+
+connect_hierarchy_db <- function(db_path) {
+  db_path <- resolve_db_path(db_path)
+  direct <- tryCatch(
+    DBI::dbConnect(duckdb::duckdb(), db_path, read_only = TRUE),
+    error = function(e) e
+  )
+
+  if (!inherits(direct, "error")) {
+    return(list(con = direct, source = "direct", db_path = db_path))
+  }
+
+  temp_copy <- file.path(tempdir(), paste0("vpro-hierarchy-", Sys.getpid(), "-", as.integer(Sys.time()), ".duckdb"))
+  copied <- file.copy(db_path, temp_copy, overwrite = TRUE)
+  if (!isTRUE(copied)) {
+    stop("Could not copy the locked DuckDB file for read-only reporting.")
+  }
+
+  con <- DBI::dbConnect(duckdb::duckdb(), temp_copy, read_only = TRUE)
+  list(con = con, source = "temp-copy", db_path = db_path)
+}
+
+normalize_hierarchy <- function(df) {
+  cols <- names(df)
+  pick_col <- function(candidates) {
+    idx <- which(tolower(cols) %in% tolower(candidates))
+    if (length(idx) == 0) return(NA_character_)
+    cols[[idx[[1]]]]
+  }
+
+  id_col <- pick_col(c("id", "ID"))
+  name_col <- pick_col(c("name", "Name", "_name"))
+  parent_col <- pick_col(c("parent", "Parent"))
+  level_col <- pick_col(c("level", "Level", "_level"))
+  order_col <- pick_col(c("myorder", "MyOrder"))
+
+  tibble(
+    ID = as.numeric(df[[id_col]]),
+    Name = as.character(df[[name_col]]),
+    Parent = as.numeric(df[[parent_col]]),
+    Level = as.integer(df[[level_col]]),
+    MyOrder = if (!is.na(order_col)) as.character(df[[order_col]]) else NA_character_
+  ) |>
+    filter(!is.na(ID), nzchar(Name)) |>
+    arrange(Level, MyOrder, Name) |>
+    distinct(ID, .keep_all = TRUE)
+}
+
+shorten_label <- function(label, max_chars = 26) {
+  ifelse(
+    is.na(label) | nchar(label) <= max_chars,
+    label,
+    paste0(substr(label, 1, max_chars - 3), "...")
+  )
+}
+
+make_display_labels <- function(labels, ids, max_chars = 26) {
+  short <- shorten_label(labels, max_chars = max_chars)
+  dup_count <- ave(short, short, FUN = length)
+  ifelse(dup_count > 1, paste0(short, " #", ids), short)
+}
+
+fetch_hierarchy <- function(db_path) {
+  db_info <- connect_hierarchy_db(db_path)
+  on.exit({
+    try(DBI::dbDisconnect(db_info$con, shutdown = TRUE), silent = TRUE)
+  }, add = TRUE)
+
+  if (!DBI::dbExistsTable(db_info$con, "Hierarchy")) {
+    stop("Hierarchy table was not found in the DuckDB database.")
+  }
+
+  hier <- DBI::dbGetQuery(db_info$con, "SELECT * FROM Hierarchy")
+  attr(hier, "db_source") <- db_info$source
+  attr(hier, "db_path") <- db_info$db_path
+  hier
+}
+
+build_hierarchy_paths <- function(nodes) {
+  child_lookup <- split(nodes$ID, ifelse(is.na(nodes$Parent), "ROOT", as.character(nodes$Parent)))
+  child_lookup <- lapply(child_lookup, function(values) {
+    ordered <- nodes |>
+      filter(ID %in% values) |>
+      arrange(Level, MyOrder, Name)
+    ordered$ID
+  })
+  name_lookup <- setNames(nodes$Name, nodes$ID)
+
+  roots <- nodes$ID[is.na(nodes$Parent) | !(nodes$Parent %in% nodes$ID)]
+  roots <- roots[order(match(roots, nodes$ID))]
+
+  walk_paths <- function(node_id, lineage = character(), visited = numeric()) {
+    if (node_id %in% visited) {
+      return(list(list(ID = node_id, path = c(lineage, paste0(name_lookup[[as.character(node_id)]], " [cycle]")))))
+    }
+
+    current_path <- c(lineage, name_lookup[[as.character(node_id)]])
+    children <- child_lookup[[as.character(node_id)]]
+    if (is.null(children) || length(children) == 0) {
+      return(list(list(ID = node_id, path = current_path)))
+    }
+
+    out <- list()
+    for (child_id in children) {
+      out <- c(out, walk_paths(child_id, current_path, c(visited, node_id)))
+    }
+    out
+  }
+
+  paths <- list()
+  for (root_id in roots) {
+    paths <- c(paths, walk_paths(root_id))
+  }
+  paths
+}
+
+build_collapsible_tree_node <- function(nodes, root_label = "Hierarchy") {
+  child_lookup <- split(nodes$ID, ifelse(is.na(nodes$Parent), "ROOT", as.character(nodes$Parent)))
+  child_lookup <- lapply(child_lookup, function(values) {
+    ordered <- nodes |>
+      filter(ID %in% values) |>
+      arrange(Level, MyOrder, Name)
+    ordered$ID
+  })
+  row_lookup <- split(nodes, nodes$ID)
+
+  root <- data.tree::Node$new(root_label)
+  root$tooltip_html <- "<strong>Hierarchy</strong><br>Root node"
+  root$isCollapsed <- FALSE
+
+  walk_node <- function(node_id, parent_node, lineage = character(), visited = numeric()) {
+    row <- row_lookup[[as.character(node_id)]][1, ]
+    current_path <- c(lineage, row$FullName)
+
+    child <- parent_node$AddChild(row$DisplayName)
+    child$tooltip_html <- paste0(
+      "<strong>", htmltools::htmlEscape(row$FullName), "</strong>",
+      "<br>ID: ", row$ID,
+      "<br>Level: ", row$Level,
+      "<br>Children: ", row$child_count,
+      "<br>Path: ", htmltools::htmlEscape(paste(current_path, collapse = " / "))
+    )
+    child$isCollapsed <- row$child_count > 0
+
+    if (node_id %in% visited) {
+      child$tooltip_html <- paste0(child$tooltip_html, "<br>Cycle detected")
+      return(invisible(NULL))
+    }
+
+    children <- child_lookup[[as.character(node_id)]]
+    if (is.null(children) || length(children) == 0) {
+      return(invisible(NULL))
+    }
+
+    for (child_id in children) {
+      walk_node(child_id, child, current_path, c(visited, node_id))
+    }
+  }
+
+  roots <- nodes$ID[is.na(nodes$Parent) | !(nodes$Parent %in% nodes$ID)]
+  roots <- roots[order(match(roots, nodes$ID))]
+
+  for (root_id in roots) {
+    walk_node(root_id, root)
+  }
+
+  root
+}
+
+hier_raw <- fetch_hierarchy(params$db_path)
+hier <- normalize_hierarchy(hier_raw)
+child_counts <- hier |>
+  filter(!is.na(Parent)) |>
+  count(Parent, name = "child_count")
+
+nodes <- hier |>
+  left_join(child_counts, by = c("ID" = "Parent")) |>
+  mutate(
+    child_count = ifelse(is.na(child_count), 0L, child_count),
+    FullName = Name,
+    DisplayName = make_display_labels(Name, ID, max_chars = 24)
+  )
+
+collapsible_tree_node <- build_collapsible_tree_node(nodes)
+
+summary_tbl <- tibble(
+  metric = c("Node count", "Root count", "Max level", "Database source"),
+  value = c(
+    nrow(nodes),
+    sum(is.na(nodes$Parent) | !(nodes$Parent %in% nodes$ID)),
+    max(nodes$Level, na.rm = TRUE),
+    attr(hier_raw, "db_source")
+  )
+)
+```
+
+# `r params$report_title`
+
+This is a focused example using only `collapsibleTree`. It starts collapsed by default so the user can uncover the hierarchy one branch at a time, with a direct click on the node they want to inspect.
+
+## Data Summary
+
+```{r summary}
+knitr::kable(summary_tbl, align = c("l", "l"))
+```
+
+## Collapsible Tree Example
+
+```{r tree}
+collapsibleTree::collapsibleTree(
+  collapsible_tree_node,
+  tooltip = TRUE,
+  tooltipHtml = "tooltip_html",
+  collapsed = "isCollapsed",
+  linkLength = 220,
+  fontSize = 14,
+  zoomable = TRUE,
+  width = "100%",
+  height = 1200
+)
+```
+
+## Notes
+
+- Nodes can be expanded and collapsed by clicking directly on the node label.
+- Branches now use explicit collapse flags, so the tree opens folded by default and reveals one path at a time.
+- Long labels are shortened on the canvas and the full label is shown in the tooltip.
+- This widget is better for exploration than for publication-style graphics.
