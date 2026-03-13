@@ -389,7 +389,7 @@ server <- function(input, output, session) {
 
   output$sidebar_hierarchy_tree <- renderUI({
     rows <- site_unit_tree_rows()
-    selected_key <- hierarchy_sidebar_normalize_key(current_sidebar_site_unit())
+    selected_key <- hierarchy_sidebar_normalize_key(isolate(current_sidebar_site_unit()))
 
     if (nrow(rows) == 0) {
       return(div(class = "vpro-hierarchy-empty", "No site units loaded for this project."))
@@ -485,15 +485,31 @@ server <- function(input, output, session) {
     sidebar_hierarchy_status()
   })
 
+  observe({
+    selected_site_unit <- current_sidebar_site_unit()
+    current_mode <- sidebar_mode()
+
+    session$onFlushed(function() {
+      session$sendCustomMessage(
+        "hierarchy-sidebar-selection",
+        list(
+          site_unit = selected_site_unit,
+          scroll = identical(current_mode, "hierarchy") && nzchar(selected_site_unit)
+        )
+      )
+    }, once = TRUE)
+  })
+
   output$context_sidebar_content <- renderUI({
     current_mode <- sidebar_mode()
-    site_unit_choices <- unique(project_su_scope()$siteunit)
-    selected_site_unit <- current_picker_site_unit()
-    if (!nzchar(selected_site_unit) || !(selected_site_unit %in% site_unit_choices)) {
-      selected_site_unit <- ""
-    }
 
     if (identical(current_mode, "picker")) {
+      site_unit_choices <- unique(project_su_scope()$siteunit)
+      selected_site_unit <- current_picker_site_unit()
+      if (!nzchar(selected_site_unit) || !(selected_site_unit %in% site_unit_choices)) {
+        selected_site_unit <- ""
+      }
+
       return(tagList(
         bslib::card(
           class = "vpro-picker-card mb-2",
@@ -535,8 +551,7 @@ server <- function(input, output, session) {
             div(class = "vpro-hierarchy-workbench",
               div(class = "vpro-hierarchy-tree-shell", uiOutput("sidebar_hierarchy_tree")),
               div(class = "vpro-hierarchy-plot-panel", uiOutput("sidebar_hierarchy_plots"))
-            ),
-            div(class = "vpro-hierarchy-status small text-muted mt-2", textOutput("sidebar_hierarchy_status"))
+            )
           )
         )
       ))
@@ -605,7 +620,6 @@ server <- function(input, output, session) {
     picker_site_unit(site_unit)
     state$PrefSUTable <- site_unit
     set_pref(con, "Current", "CurrPlotList", site_unit)
-    sidebar_hierarchy_status(paste("Viewing", site_unit))
   }, ignoreInit = TRUE)
 
   observeEvent(input$hierarchy_sidebar_select_plot, {

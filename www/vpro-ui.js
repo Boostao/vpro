@@ -1,4 +1,4 @@
-(function () {
+function initializeVproUi() {
   function shouldIgnoreKey(evt) {
     var tag = (evt.target && evt.target.tagName) ? evt.target.tagName.toLowerCase() : '';
     return tag === 'input' || tag === 'textarea' || evt.target.isContentEditable;
@@ -18,11 +18,59 @@
     }
     if (shouldIgnoreKey(e)) return;
   });
-})();
 
-(function () {
   var dragPayload = null;
   var draggingPlot = false;
+  var hierarchyScrollFrame = null;
+
+  function scheduleHierarchyActiveScroll(activeNode) {
+    if (hierarchyScrollFrame !== null) {
+      window.cancelAnimationFrame(hierarchyScrollFrame);
+    }
+
+    hierarchyScrollFrame = window.requestAnimationFrame(function () {
+      hierarchyScrollFrame = null;
+
+      var shell = document.querySelector('.vpro-hierarchy-tree-shell');
+      if (!shell) return;
+
+      activeNode = activeNode || shell.querySelector('.vpro-hierarchy-node.is-active');
+      if (!activeNode) return;
+
+      var shellRect = shell.getBoundingClientRect();
+      var nodeRect = activeNode.getBoundingClientRect();
+      var outsideTop = nodeRect.top < shellRect.top;
+      var outsideBottom = nodeRect.bottom > shellRect.bottom;
+
+      if (outsideTop || outsideBottom) {
+        activeNode.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+    });
+  }
+
+  function setHierarchyActiveSiteUnit(siteUnit, scrollIntoView) {
+    var nodes = document.querySelectorAll('.vpro-hierarchy-node.is-site-unit');
+    if (!nodes.length) return;
+
+    var selectedNode = null;
+    nodes.forEach(function (node) {
+      var isMatch = !!siteUnit && (node.dataset.siteUnit || '') === siteUnit;
+      node.classList.toggle('is-active', isMatch);
+      if (isMatch) {
+        selectedNode = node;
+      }
+    });
+
+    if (selectedNode && scrollIntoView) {
+      scheduleHierarchyActiveScroll(selectedNode);
+    }
+  }
+
+  Shiny.addCustomMessageHandler('hierarchy-sidebar-selection', function (message) {
+    var siteUnit = message && message.site_unit ? message.site_unit : '';
+    var scrollIntoView = !!(message && message.scroll);
+    setHierarchyActiveSiteUnit(siteUnit, scrollIntoView);
+  });
 
   function elementFromEventTarget(target) {
     if (!target) return null;
@@ -119,6 +167,7 @@
 
     var node = closestFromEventTarget(event.target, '.vpro-hierarchy-node.is-site-unit');
     if (!node) return;
+    setHierarchyActiveSiteUnit(node.dataset.siteUnit || '', true);
     Shiny.setInputValue('hierarchy_sidebar_select_site_unit', {
       site_unit: node.dataset.siteUnit || '',
       nonce: Date.now()
@@ -130,9 +179,16 @@
     if (!node) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
+    setHierarchyActiveSiteUnit(node.dataset.siteUnit || '', true);
     Shiny.setInputValue('hierarchy_sidebar_select_site_unit', {
       site_unit: node.dataset.siteUnit || '',
       nonce: Date.now()
     }, { priority: 'event' });
   });
-})();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeVproUi, { once: true });
+} else {
+  initializeVproUi();
+}
