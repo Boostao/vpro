@@ -96,6 +96,36 @@ server <- function(input, output, session) {
   sidebar_mode <- reactiveVal("main")
   picker_site_unit <- reactiveVal(NULL)
   hierarchy_choices <- reactiveVal(character(0))
+  site_unit_scope_version <- reactiveVal(0L)
+  sidebar_hierarchy_site_unit <- reactiveVal(NULL)
+  sidebar_hierarchy_status <- reactiveVal("")
+  su_table_refresh_version <- reactiveVal(0L)
+
+  refresh_site_unit_scope <- function() {
+    site_unit_scope_version(isolate(site_unit_scope_version()) + 1L)
+    invisible(site_unit_scope_version())
+  }
+
+  refresh_su_table_page <- function() {
+    su_table_refresh_version(isolate(su_table_refresh_version()) + 1L)
+    invisible(su_table_refresh_version())
+  }
+
+  require_sidebar_su_write <- function() {
+    if (!is_cloud_connected(con)) {
+      return(TRUE)
+    }
+    if (!auth_is_authenticated(state)) {
+      showNotification("Sign in required.", type = "error")
+      return(FALSE)
+    }
+    allowed <- c("write:project_plots", "write:all", "manage:codes")
+    if (!any(vapply(allowed, function(permission) auth_user_has_permission(state, permission), logical(1)))) {
+      showNotification("Permission required: edit site units", type = "error")
+      return(FALSE)
+    }
+    TRUE
+  }
 
   current_picker_site_unit <- reactive({
     site_unit <- input$picker_site_unit
@@ -103,6 +133,10 @@ server <- function(input, output, session) {
       site_unit <- picker_site_unit()
     }
     normalize_context_value(site_unit)
+  })
+
+  current_sidebar_site_unit <- reactive({
+    normalize_context_value(sidebar_hierarchy_site_unit())
   })
 
   empty_picker_scope <- function() {
@@ -114,42 +148,53 @@ server <- function(input, output, session) {
   }
 
   project_su_scope <- reactive({
-    pid <- normalize_context_value(state$CurrProject)
-    if (!nzchar(pid) || !DBI::dbExistsTable(con, "Env") || !DBI::dbExistsTable(con, "SU")) {
-      return(empty_picker_scope())
+    site_unit_scope_version()
+    scope <- read_project_site_unit_scope(con, state$CurrProject)
+    if (nrow(scope) == 0) empty_picker_scope() else scope
+  })
+
+  site_unit_tree_rows <- reactive({
+    scoped <- project_su_scope()
+    site_units <- unique(scoped$siteunit)
+    if (length(site_units) == 0) {
+      return(data.frame(
+        id = character(0),
+        name = character(0),
+        depth = integer(0),
+        is_site_unit = logical(0),
+        plot_count = integer(0),
+        stringsAsFactors = FALSE
+      ))
     }
 
-    scope <- tryCatch(
-      DBI::dbGetQuery(
-        con,
-        paste(
-          "SELECT DISTINCT s.plotnumber, s.siteunit",
-          "FROM SU s",
-          "INNER JOIN (",
-          "  SELECT DISTINCT plotnumber",
-          "  FROM Env",
-          "  WHERE projectid = ?",
-          "    AND plotnumber IS NOT NULL",
-          "    AND trim(plotnumber) <> ''",
-          ") env ON env.plotnumber = s.plotnumber",
-          "WHERE s.plotnumber IS NOT NULL",
-          "  AND trim(s.plotnumber) <> ''",
-          "  AND s.siteunit IS NOT NULL",
-          "  AND trim(s.siteunit) <> ''",
-          "ORDER BY s.siteunit, s.plotnumber"
-        ),
-        list(pid)
-      ),
-      error = function(e) empty_picker_scope()
+    rows <- data.frame(
+      id = site_units,
+      name = site_units,
+      depth = rep(0L, length(site_units)),
+      is_site_unit = rep(TRUE, length(site_units)),
+      plot_count = rep(0L, length(site_units)),
+      stringsAsFactors = FALSE
     )
 
-    if (nrow(scope) == 0) {
-      return(empty_picker_scope())
+    row_keys <- hierarchy_sidebar_normalize_key(rows$name)
+    count_map <- integer(0)
+    if (nrow(scoped) > 0) {
+      count_map <- tapply(
+        scoped$plotnumber,
+        hierarchy_sidebar_normalize_key(scoped$siteunit),
+        function(values) length(unique(values))
+      )
     }
 
-    scope$plotnumber <- as.character(scope$plotnumber)
-    scope$siteunit <- as.character(scope$siteunit)
-    unique(scope[, c("plotnumber", "siteunit"), drop = FALSE])
+    rows$plot_count <- if (length(count_map) == 0) {
+      rep(0L, nrow(rows))
+    } else {
+      counts <- count_map[row_keys]
+      counts[is.na(counts)] <- 0L
+      as.integer(counts)
+    }
+
+    rows[order(tolower(rows$name)), , drop = FALSE]
   })
 
   get_site_unit_for_plot <- function(plot_number, project_id = NULL) {
@@ -200,19 +245,7 @@ server <- function(input, output, session) {
   })
 
   refresh_hierarchy_dropdown <- function() {
-    pid <- normalize_context_value(state$CurrProject)
-    hier_values <- if (nzchar(pid) && DBI::dbExistsTable(con, "Hierarchy")) {
-      tryCatch(
-        as.character(DBI::dbGetQuery(
-          con,
-          "SELECT DISTINCT siteunit FROM Hierarchy WHERE projectid = ? ORDER BY siteunit",
-          list(pid)
-        )$siteunit),
-        error = function(e) character(0)
-      )
-    } else {
-      character(0)
-    }
+    hier_values <- sort(unique(project_su_scope()$siteunit))
 
     hierarchy_choices(hier_values[nzchar(hier_values)])
     invisible(hier_values)
@@ -320,6 +353,11 @@ server <- function(input, output, session) {
     if (!identical(normalize_context_value(normalized_choice), cached_choice)) {
       picker_site_unit(normalized_choice)
     }
+
+    cached_sidebar_choice <- normalize_context_value(isolate(sidebar_hierarchy_site_unit()))
+    if (!identical(normalize_context_value(normalized_choice), cached_sidebar_choice)) {
+      sidebar_hierarchy_site_unit(normalized_choice)
+    }
   })
 
   output$nav_plot_context <- renderUI({
@@ -347,6 +385,104 @@ server <- function(input, output, session) {
       div(class = "vpro-nav-context-sep"),
       make_context_item("Plot", plot_name)
     )
+  })
+
+  output$sidebar_hierarchy_tree <- renderUI({
+    rows <- site_unit_tree_rows()
+    selected_key <- hierarchy_sidebar_normalize_key(current_sidebar_site_unit())
+
+    if (nrow(rows) == 0) {
+      return(div(class = "vpro-hierarchy-empty", "No site units loaded for this project."))
+    }
+
+    tree_nodes <- lapply(seq_len(nrow(rows)), function(idx) {
+      row <- rows[idx, , drop = FALSE]
+      row_key <- hierarchy_sidebar_normalize_key(row$name[[1]])
+      classes <- c("vpro-hierarchy-node")
+      attrs <- list(style = sprintf("--hierarchy-depth:%d;", row$depth[[1]] %||% 0L))
+
+      if (isTRUE(row$is_site_unit[[1]])) {
+        classes <- c(classes, "is-site-unit", "vpro-hierarchy-drop-target")
+        attrs[["data-site-unit"]] <- row$name[[1]]
+        attrs[["tabindex"]] <- "0"
+      }
+      if (isTRUE(row$plot_count[[1]] > 0L)) {
+        classes <- c(classes, "has-plots")
+      }
+      if (identical(row_key, selected_key)) {
+        classes <- c(classes, "is-active")
+      }
+
+      attrs$class <- paste(unique(classes), collapse = " ")
+
+      do.call(
+        div,
+        c(
+          attrs,
+          list(
+            div(class = "vpro-hierarchy-node-main",
+              span(class = "vpro-hierarchy-node-label", row$name[[1]]),
+              if (isTRUE(row$is_site_unit[[1]])) {
+                span(class = "vpro-hierarchy-node-count", row$plot_count[[1]])
+              }
+            )
+          )
+        )
+      )
+    })
+
+    div(class = "vpro-hierarchy-tree", tree_nodes)
+  })
+
+  output$sidebar_hierarchy_plots <- renderUI({
+    site_unit <- current_sidebar_site_unit()
+    if (!nzchar(site_unit)) {
+      return(div(class = "vpro-hierarchy-empty", "Choose a site unit to browse its plots."))
+    }
+
+    scoped <- project_su_scope()
+    plot_rows <- scoped[scoped$siteunit == site_unit, , drop = FALSE]
+    plot_ids <- sort(unique(plot_rows$plotnumber))
+
+    if (length(plot_ids) == 0) {
+      return(
+        div(
+          class = "vpro-hierarchy-plot-shell",
+          div(class = "vpro-hierarchy-plot-header",
+            div(class = "vpro-hierarchy-plot-title", site_unit),
+            div(class = "vpro-hierarchy-plot-subtitle", "No plots are currently assigned.")
+          )
+        )
+      )
+    }
+
+    chips <- lapply(plot_ids, function(plot_id) {
+      chip_classes <- c("vpro-hierarchy-plot-chip")
+      if (identical(normalize_context_value(plot_id), normalize_context_value(state$CurrSU))) {
+        chip_classes <- c(chip_classes, "is-current")
+      }
+      div(
+        class = paste(chip_classes, collapse = " "),
+        draggable = "true",
+        `data-plot-number` = plot_id,
+        `data-site-unit` = site_unit,
+        plot_id
+      )
+    })
+
+    div(
+      class = "vpro-hierarchy-plot-shell",
+      div(class = "vpro-hierarchy-plot-header",
+        div(class = "vpro-hierarchy-plot-title", site_unit),
+        div(class = "vpro-hierarchy-plot-subtitle", sprintf("%d plot%s", length(plot_ids), if (length(plot_ids) == 1) "" else "s"))
+      ),
+      div(class = "vpro-hierarchy-plot-instruction", "Click a plot to select it. Drag it onto another site unit in the list to reassign it."),
+      div(class = "vpro-hierarchy-plot-list", chips)
+    )
+  })
+
+  output$sidebar_hierarchy_status <- renderText({
+    sidebar_hierarchy_status()
   })
 
   output$context_sidebar_content <- renderUI({
@@ -378,6 +514,30 @@ server <- function(input, output, session) {
               selected = selected_site_unit
             ),
             div(class = "vpro-picker-table", DT::DTOutput("site_unit_plot_table"))
+          )
+        )
+      ))
+    }
+
+    if (identical(current_mode, "hierarchy")) {
+      return(tagList(
+        bslib::card(
+          class = "vpro-picker-card vpro-hierarchy-card mb-2",
+          bslib::card_header(
+            div(class = "d-flex justify-content-between align-items-center",
+              div(
+                div(class = "fw-semibold", "Site Unit Tree View"),
+                div(class = "small text-muted", "Browse site units from the SU table, select plots, and drag them onto another site unit.")
+              ),
+              actionButton("btn_hierarchy_back", "Back", class = "btn btn-sm btn-outline-primary")
+            )
+          ),
+          bslib::card_body(
+            div(class = "vpro-hierarchy-workbench",
+              div(class = "vpro-hierarchy-tree-shell", uiOutput("sidebar_hierarchy_tree")),
+              div(class = "vpro-hierarchy-plot-panel", uiOutput("sidebar_hierarchy_plots"))
+            ),
+            div(class = "vpro-hierarchy-status small text-muted mt-2", textOutput("sidebar_hierarchy_status"))
           )
         )
       ))
@@ -428,9 +588,91 @@ server <- function(input, output, session) {
     if (!identical(site_unit, normalize_context_value(isolate(picker_site_unit())))) {
       picker_site_unit(if (nzchar(site_unit)) site_unit else NULL)
     }
+    if (!identical(site_unit, normalize_context_value(isolate(sidebar_hierarchy_site_unit())))) {
+      sidebar_hierarchy_site_unit(if (nzchar(site_unit)) site_unit else NULL)
+    }
     state$PrefSUTable <- if (nzchar(site_unit)) site_unit else NULL
     set_pref(con, "Current", "CurrPlotList", site_unit)
   }, ignoreNULL = FALSE)
+
+  observeEvent(input$hierarchy_sidebar_select_site_unit, {
+    info <- input$hierarchy_sidebar_select_site_unit
+    site_unit <- normalize_context_value(if (is.list(info)) info$site_unit else info)
+    if (!nzchar(site_unit)) {
+      return()
+    }
+
+    sidebar_hierarchy_site_unit(site_unit)
+    picker_site_unit(site_unit)
+    state$PrefSUTable <- site_unit
+    set_pref(con, "Current", "CurrPlotList", site_unit)
+    sidebar_hierarchy_status(paste("Viewing", site_unit))
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$hierarchy_sidebar_select_plot, {
+    info <- input$hierarchy_sidebar_select_plot
+    plot_number <- normalize_context_value(if (is.list(info)) info$plot_number else NULL)
+    site_unit <- normalize_context_value(if (is.list(info)) info$site_unit else NULL)
+    if (!nzchar(plot_number)) {
+      return()
+    }
+
+    if (nzchar(site_unit)) {
+      sidebar_hierarchy_site_unit(site_unit)
+    }
+    apply_plot_selection(plot_number = plot_number, site_unit = site_unit, persist = TRUE)
+    sidebar_hierarchy_status(paste("Selected plot", plot_number))
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$hierarchy_sidebar_drop, {
+    info <- input$hierarchy_sidebar_drop
+    plot_number <- normalize_context_value(if (is.list(info)) info$plot_number else NULL)
+    from_site_unit <- normalize_context_value(if (is.list(info)) info$from_site_unit else NULL)
+    to_site_unit <- normalize_context_value(if (is.list(info)) info$to_site_unit else NULL)
+
+    if (!nzchar(plot_number) || !nzchar(to_site_unit)) {
+      return()
+    }
+    if (identical(from_site_unit, to_site_unit)) {
+      sidebar_hierarchy_status(paste("Plot", plot_number, "is already assigned to", to_site_unit))
+      return()
+    }
+    if (!require_sidebar_su_write()) {
+      return()
+    }
+
+    result <- tryCatch(
+      hierarchy_sidebar_reassign_plot(
+        con = con,
+        plot_number = plot_number,
+        to_site_unit = to_site_unit,
+        user = state$User,
+        fallback_project = state$CurrProject,
+        allowed_site_units = unique(project_su_scope()$siteunit)
+      ),
+      error = function(e) e
+    )
+
+    if (inherits(result, "error")) {
+      showNotification(conditionMessage(result), type = "error")
+      sidebar_hierarchy_status(conditionMessage(result))
+      return()
+    }
+
+    refresh_site_unit_scope()
+    refresh_su_table_page()
+    picker_site_unit(to_site_unit)
+    sidebar_hierarchy_site_unit(to_site_unit)
+    state$PrefSUTable <- to_site_unit
+    set_pref(con, "Current", "CurrPlotList", to_site_unit)
+
+    if (identical(normalize_context_value(state$CurrSU), plot_number)) {
+      apply_plot_selection(plot_number = plot_number, site_unit = to_site_unit, persist = TRUE)
+    }
+
+    sidebar_hierarchy_status(sprintf("Moved %s from %s to %s.", plot_number, if (nzchar(from_site_unit)) from_site_unit else "(unassigned)", to_site_unit))
+    showNotification(sprintf("Moved %s to %s", plot_number, to_site_unit), type = "message")
+  }, ignoreInit = TRUE)
 
   observeEvent(input$picker_site_unit, {
     DT::selectRows(DT::dataTableProxy("site_unit_plot_table"), NULL)
@@ -526,15 +768,20 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$btn_nav_su_tree, {
-    sidebar_mode("picker")
+    sidebar_mode("hierarchy")
   })
 
   observeEvent(input$btn_picker_back, {
     sidebar_mode("main")
   })
 
+  observeEvent(input$btn_hierarchy_back, {
+    sidebar_mode("main")
+  })
+
   observeEvent(input$btn_nav_su_table, {
-    bslib::nav_select("main_tabs", "Hierarchy", session = session)
+    refresh_su_table_page()
+    bslib::nav_select("main_tabs", "SU Table", session = session)
   })
 
   observeEvent(input$btn_nav_hierarchy_tree, {
@@ -627,6 +874,14 @@ server <- function(input, output, session) {
   
   # Reporting Module
   mod_reporting_server("report", state, con)
+
+  mod_su_table_server(
+    "su_table",
+    state,
+    con,
+    refresh_trigger = reactive(su_table_refresh_version()),
+    active_tab = reactive(input$main_tabs)
+  )
 
   # Hierarchy Module
   mod_hierarchy_server("hier", state, con)
