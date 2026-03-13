@@ -4,11 +4,6 @@
   margin-top: 0;
   margin-bottom: 0;
 }
-.vpro-navbar-subtitle {
-  color: #d9ecff;
-  font-size: 0.78rem;
-  margin-left: 2px;
-}
 .navbar .navbar-brand {
   display: flex;
   align-items: center;
