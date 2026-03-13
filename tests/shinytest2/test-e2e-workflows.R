@@ -3,6 +3,11 @@ library(testthat)
 library(DBI)
 library(duckdb)
 
+new_app_driver <- function(name, height, width, ...) {
+  app_obj <- shiny::shinyAppFile(normalizePath(file.path("..", "..", "app.R")))
+  AppDriver$new(app = app_obj, name = name, height = height, width = width, ...)
+}
+
 # ============================================================================
 # End-to-End Workflow Tests for VPRO Shiny App
 # ============================================================================
@@ -43,6 +48,30 @@ verify_db_state <- function(query, expected_rows = NULL, description = "DB check
   
   invisible(result)
 }
+
+  project_plot_scope <- function(project_id) {
+    con <- dbConnect(duckdb(), "data/vpro.duckdb")
+    on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+    tryCatch(
+      dbGetQuery(
+        con,
+        paste(
+          "SELECT DISTINCT s.siteunit, s.plotnumber",
+          "FROM SU s",
+          "INNER JOIN Env e ON e.plotnumber = s.plotnumber",
+          "WHERE e.projectid = ?",
+          "  AND s.siteunit IS NOT NULL",
+          "  AND trim(s.siteunit) <> ''",
+          "  AND s.plotnumber IS NOT NULL",
+          "  AND trim(s.plotnumber) <> ''",
+          "ORDER BY s.siteunit, s.plotnumber"
+        ),
+        list(project_id)
+      ),
+      error = function(e) data.frame(siteunit = character(0), plotnumber = character(0))
+    )
+  }
 
 # Helper: Clean up test data
 cleanup_test_plot <- function(plot_number) {
@@ -119,9 +148,37 @@ select_project <- function(app, project_id = NULL) {
 
 # Helper: Select plot in app
 select_plot <- function(app, plot_id = NULL) {
-  if (!is.null(plot_id)) {
-    app$set_inputs(sel_su = plot_id)
+  project_id <- safe_get_value(app, input = "sel_project")
+  if (is.null(project_id) || !nzchar(project_id)) {
+    return(NULL)
   }
+
+  scope <- project_plot_scope(project_id)
+  if (nrow(scope) == 0) {
+    return(NULL)
+  }
+
+  if (is.null(plot_id)) {
+    plot_id <- scope$plotnumber[[1]]
+  }
+
+  target <- scope[scope$plotnumber == plot_id, , drop = FALSE]
+  if (nrow(target) == 0) {
+    return(NULL)
+  }
+
+  site_unit <- target$siteunit[[1]]
+  site_rows <- scope$plotnumber[scope$siteunit == site_unit]
+  row_index <- match(plot_id, site_rows)
+
+  if (is.null(safe_get_value(app, input = "picker_site_unit"))) {
+    app$click("btn_nav_su_tree")
+    app$wait_for_idle()
+  }
+
+  app$set_inputs(picker_site_unit = site_unit)
+  app$wait_for_idle()
+  app$set_inputs(site_unit_plot_table_rows_selected = row_index)
   app$wait_for_idle()
   
   safe_get_value(app, input = "sel_su")
@@ -133,7 +190,7 @@ select_plot <- function(app, plot_id = NULL) {
 test_that("E2E Workflow 1: Project selection loads plots and context", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "w1-project-load", height = 1000, width = 1600)
+  app <- new_app_driver(name = "w1-project-load", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -193,7 +250,7 @@ test_that("E2E Workflow 1: Project selection loads plots and context", {
 test_that("E2E Workflow 2: Vegetation data entry across layers", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "w2-veg-entry", height = 1000, width = 1600)
+  app <- new_app_driver(name = "w2-veg-entry", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -262,7 +319,7 @@ test_that("E2E Workflow 3: Site & environment data entry with coordinate calcula
   
   test_plot <- paste0("ENV-TEST-", format(Sys.time(), "%Y%m%d%H%M%S"))
   
-  app <- AppDriver$new("../..", name = "w3-site-env", height = 1000, width = 1600)
+  app <- new_app_driver(name = "w3-site-env", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -272,7 +329,7 @@ test_that("E2E Workflow 3: Site & environment data entry with coordinate calcula
   }
   
   # Navigate to Site & Env tab
-  app$set_inputs(main_tabs = "Site & Env")
+  app$set_inputs(main_tabs = "FS882-6x4XL")
   app$wait_for_idle()
   
   # Verify tab structure (General, Mensuration, Soil)
@@ -322,7 +379,7 @@ test_that("E2E Workflow 3: Site & environment data entry with coordinate calcula
 test_that("E2E Workflow 4: Export CSV/RDS with lumping options", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "w4-export", height = 1000, width = 1600)
+  app <- new_app_driver(name = "w4-export", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -391,7 +448,7 @@ test_that("E2E Workflow 4: Export CSV/RDS with lumping options", {
 test_that("E2E Workflow 5: Quarto report generation", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "w5-reports", height = 1000, width = 1600)
+  app <- new_app_driver(name = "w5-reports", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -454,7 +511,7 @@ test_that("E2E Workflow 5: Quarto report generation", {
 test_that("E2E Comprehensive: Full data entry cycle - Project → Veg → Site → Export → Report", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "comprehensive-cycle", height = 1000, width = 1600)
+  app <- new_app_driver(name = "comprehensive-cycle", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -480,7 +537,7 @@ test_that("E2E Comprehensive: Full data entry cycle - Project → Veg → Site �
   expect_true(!is.null(veg_layer_a_table), label = "Step 2: Vegetation Layer A loads")
   
   # STEP 3: Site & Env Tab - Verify data loads
-  app$set_inputs(main_tabs = "Site & Env")
+  app$set_inputs(main_tabs = "FS882-6x4XL")
   app$wait_for_idle()
   
   env_location <- safe_get_value(app, input = "env-env_location")
@@ -522,7 +579,7 @@ test_that("E2E Error Handling: Validation for missing required fields", {
   test_plot <- paste0("VALID-TEST-", format(Sys.time(), "%Y%m%d%H%M%S"))
   on.exit(cleanup_test_plot(test_plot), add = TRUE)
   
-  app <- AppDriver$new("../..", name = "error-validation", height = 1000, width = 1600)
+  app <- new_app_driver(name = "error-validation", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -532,7 +589,7 @@ test_that("E2E Error Handling: Validation for missing required fields", {
   }
   
   # Navigate to Site & Env
-  app$set_inputs(main_tabs = "Site & Env")
+  app$set_inputs(main_tabs = "FS882-6x4XL")
   app$wait_for_idle()
   
   # Try to save without filling mandatory fields
@@ -560,7 +617,7 @@ test_that("E2E Error Handling: Invalid species code rejection", {
   skip_on_cran()
   skip("Species validation modal not yet testable via shinytest2")
   
-  app <- AppDriver$new("../..", name = "error-species", height = 1000, width = 1600)
+  app <- new_app_driver(name = "error-species", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -591,7 +648,7 @@ test_that("E2E Error Handling: Invalid species code rejection", {
 test_that("E2E Data Integrity: Referential integrity enforcement", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "integrity-check", height = 1000, width = 1600)
+  app <- new_app_driver(name = "integrity-check", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -643,7 +700,7 @@ test_that("E2E Data Integrity: Referential integrity enforcement", {
 test_that("E2E State Persistence: Context persists across tab navigation", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "state-persistence", height = 1000, width = 1600)
+  app <- new_app_driver(name = "state-persistence", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -656,7 +713,7 @@ test_that("E2E State Persistence: Context persists across tab navigation", {
   }
   
   # Navigate through all major tabs
-  tabs <- c("Vegetation", "Site & Env", "Export", "Reports", "Administration")
+  tabs <- c("Vegetation", "FS882-6x4XL", "Export", "Reports", "Administration")
   
   for (tab in tabs) {
     app$set_inputs(main_tabs = tab)
@@ -681,8 +738,7 @@ test_that("E2E State Persistence: Context persists across tab navigation", {
   if (nrow(plots_query) > 1) {
     second_plot <- plots_query$PlotNumber[2]
     
-    app$set_inputs(sel_su = second_plot)
-    app$wait_for_idle()
+    select_plot(app, second_plot)
     
     # Navigate to different tab and verify new plot persists
     app$set_inputs(main_tabs = "Vegetation")
@@ -704,7 +760,7 @@ test_that("E2E State Persistence: Context persists across tab navigation", {
 test_that("E2E Performance: Rapid plot switching loads correctly", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "performance-switching", height = 1000, width = 1600)
+  app <- new_app_driver(name = "performance-switching", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -729,10 +785,10 @@ test_that("E2E Performance: Rapid plot switching loads correctly", {
   app$wait_for_idle()
   
   # Rapidly switch between plots
-  for (i in 1:min(3, nrow(plots_query))) {
+  for (i in seq_len(min(3, nrow(plots_query)))) {
     plot_id <- plots_query$PlotNumber[i]
     
-    app$set_inputs(sel_su = plot_id)
+    select_plot(app, plot_id)
     app$wait_for_idle(timeout = 3000)
     
     # Verify plot switched
@@ -754,7 +810,7 @@ test_that("E2E Performance: Rapid plot switching loads correctly", {
 test_that("E2E Database: Export format consistency", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "export-consistency", height = 1000, width = 1600)
+  app <- new_app_driver(name = "export-consistency", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -809,7 +865,7 @@ test_that("E2E Accessibility: Global shortcuts functional", {
   skip_on_cran()
   skip("Keyboard event testing requires special setup in shinytest2")
   
-  app <- AppDriver$new("../..", name = "keyboard-shortcuts", height = 1000, width = 1600)
+  app <- new_app_driver(name = "keyboard-shortcuts", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -831,7 +887,7 @@ test_that("E2E Accessibility: Global shortcuts functional", {
 test_that("E2E Happy Path: Select → Modify → Save → Verify → Report", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "happy-path-save", height = 1000, width = 1600)
+  app <- new_app_driver(name = "happy-path-save", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -843,7 +899,7 @@ test_that("E2E Happy Path: Select → Modify → Save → Verify → Report", {
   select_plot(app, plot_id)
   
   # 2. Site & Env Modification
-  app$set_inputs(main_tabs = "Site & Env")
+  app$set_inputs(main_tabs = "FS882-6x4XL")
   app$wait_for_idle()
   
   # Record original value to restore later
@@ -896,7 +952,7 @@ test_that("E2E Happy Path: Select → Modify → Save → Verify → Report", {
 test_that("E2E Happy Path: Export workflow exercising lumping toggle", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "export-lumping", height = 1000, width = 1600)
+  app <- new_app_driver(name = "export-lumping", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   
@@ -923,7 +979,7 @@ test_that("E2E Happy Path: Export workflow exercising lumping toggle", {
 test_that("E2E Summary: App loads and all tabs are accessible", {
   skip_on_cran()
   
-  app <- AppDriver$new("../..", name = "summary-load", height = 1000, width = 1600)
+  app <- new_app_driver(name = "summary-load", height = 1000, width = 1600)
   on.exit(app$stop(), add = TRUE)
   app$wait_for_idle(timeout = 5000)
   

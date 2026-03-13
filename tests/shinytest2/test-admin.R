@@ -3,6 +3,11 @@ library(testthat)
 library(DBI)
 library(duckdb)
 
+new_app_driver <- function(name, height, width, ...) {
+  app_obj <- shiny::shinyAppFile(normalizePath(file.path("..", "..", "app.R")))
+  AppDriver$new(app = app_obj, name = name, height = height, width = width, ...)
+}
+
 # ============================================================================
 # Admin Operations UI Regression Tests
 # ============================================================================
@@ -68,7 +73,7 @@ has_lists_db <- function() {
 
 # Helper: Navigate to Admin tab
 navigate_to_admin <- function(app, panel = NULL) {
-  app$set_inputs(main_tabs = "Admin")
+  app$set_inputs(main_tabs = "Administration")
   app$wait_for_idle()
   
   if (!is.null(panel)) {
@@ -98,9 +103,58 @@ select_project <- function(app, project_id = NULL) {
 
 # Helper: Select plot in app
 select_plot <- function(app, plot_id = NULL) {
-  if (!is.null(plot_id)) {
-    app$set_inputs(sel_su = plot_id)
+  project_id <- safe_get_value(app, input = "sel_project")
+  if (is.null(project_id) || !nzchar(project_id)) {
+    return(NULL)
   }
+
+  con <- dbConnect(duckdb(), "data/vpro.duckdb")
+  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  scope <- tryCatch(
+    dbGetQuery(
+      con,
+      paste(
+        "SELECT DISTINCT s.siteunit, s.plotnumber",
+        "FROM SU s",
+        "INNER JOIN Env e ON e.plotnumber = s.plotnumber",
+        "WHERE e.projectid = ?",
+        "  AND s.siteunit IS NOT NULL",
+        "  AND trim(s.siteunit) <> ''",
+        "  AND s.plotnumber IS NOT NULL",
+        "  AND trim(s.plotnumber) <> ''",
+        "ORDER BY s.siteunit, s.plotnumber"
+      ),
+      list(project_id)
+    ),
+    error = function(e) data.frame(siteunit = character(0), plotnumber = character(0))
+  )
+
+  if (nrow(scope) == 0) {
+    return(NULL)
+  }
+
+  if (is.null(plot_id)) {
+    plot_id <- scope$plotnumber[[1]]
+  }
+
+  target <- scope[scope$plotnumber == plot_id, , drop = FALSE]
+  if (nrow(target) == 0) {
+    return(NULL)
+  }
+
+  site_unit <- target$siteunit[[1]]
+  site_rows <- scope$plotnumber[scope$siteunit == site_unit]
+  row_index <- match(plot_id, site_rows)
+
+  if (is.null(safe_get_value(app, input = "picker_site_unit"))) {
+    app$click("btn_nav_su_tree")
+    app$wait_for_idle()
+  }
+
+  app$set_inputs(picker_site_unit = site_unit)
+  app$wait_for_idle()
+  app$set_inputs(site_unit_plot_table_rows_selected = row_index)
   app$wait_for_idle()
   
   safe_get_value(app, input = "sel_su")
@@ -116,24 +170,24 @@ describe("Admin - Project Metadata CRUD", {
   test_that("Admin tab is accessible", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-access", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-access", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
     # Navigate to Admin tab
-    app$set_inputs(main_tabs = "Admin")
+    app$set_inputs(main_tabs = "Administration")
     app$wait_for_idle()
     
     # Verify we're on Admin tab
     current_tab <- safe_get_value(app, input = "main_tabs")
-    expect_equal(current_tab, "Admin", 
+    expect_equal(current_tab, "Administration", 
                  label = "Admin tab accessible")
   })
   
   test_that("Project Metadata panel renders", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-proj-panel", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-proj-panel", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -148,7 +202,7 @@ describe("Admin - Project Metadata CRUD", {
   test_that("New Project button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-new-proj-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-new-proj-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -162,7 +216,7 @@ describe("Admin - Project Metadata CRUD", {
   test_that("Delete Project button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-del-proj-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-del-proj-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -176,7 +230,7 @@ describe("Admin - Project Metadata CRUD", {
   test_that("Project form fields exist", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-proj-fields", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-proj-fields", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -197,7 +251,7 @@ describe("Admin - Project Metadata CRUD", {
   test_that("Save Project button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-save-proj-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-save-proj-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -213,7 +267,7 @@ describe("Admin - Project Metadata CRUD", {
     
     if (!has_projects()) skip("No projects in metadata database")
     
-    app <- AppDriver$new("../..", name = "admin-proj-load", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-proj-load", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -244,7 +298,7 @@ describe("Admin - Project Metadata CRUD", {
     
     if (!has_projects()) skip("No projects in metadata database")
     
-    app <- AppDriver$new("../..", name = "admin-proj-header", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-proj-header", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -285,7 +339,7 @@ describe("Admin - Code Maintenance", {
     
     if (!has_lists_db()) skip("Lists database not available")
     
-    app <- AppDriver$new("../..", name = "admin-code-panel", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-code-panel", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -302,7 +356,7 @@ describe("Admin - Code Maintenance", {
     
     if (!has_lists_db()) skip("Lists database not available")
     
-    app <- AppDriver$new("../..", name = "admin-lookups", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-lookups", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -323,7 +377,7 @@ describe("Admin - Code Maintenance", {
     
     if (!has_lists_db()) skip("Lists database not available")
     
-    app <- AppDriver$new("../..", name = "admin-code-table", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-code-table", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -338,7 +392,7 @@ describe("Admin - Code Maintenance", {
   test_that("Add Row button exists in Code Maintenance", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-code-add-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-code-add-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -352,7 +406,7 @@ describe("Admin - Code Maintenance", {
   test_that("Save All Items button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-code-save-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-code-save-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -366,7 +420,7 @@ describe("Admin - Code Maintenance", {
   test_that("Refresh Lists button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-code-refresh-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-code-refresh-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -405,7 +459,7 @@ describe("Admin - Master Site Units", {
   test_that("Master Site Units panel is accessible", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-panel", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-panel", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -420,7 +474,7 @@ describe("Admin - Master Site Units", {
   test_that("Master unit datatable renders", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-dt", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-dt", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -434,7 +488,7 @@ describe("Admin - Master Site Units", {
   test_that("Master unit Add Row button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-add-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-add-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -448,7 +502,7 @@ describe("Admin - Master Site Units", {
   test_that("Master unit Save button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-save-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-save-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -462,7 +516,7 @@ describe("Admin - Master Site Units", {
   test_that("Master Refresh button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-refresh-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-refresh-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -524,7 +578,7 @@ describe("Admin - Master Audit", {
   test_that("Master Audit panel is accessible", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-audit-panel", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-audit-panel", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -539,7 +593,7 @@ describe("Admin - Master Audit", {
   test_that("Master Audit datatable renders", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-audit-dt", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-audit-dt", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -553,7 +607,7 @@ describe("Admin - Master Audit", {
   test_that("Master Audit pagination controls exist", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-audit-pages", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-audit-pages", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -569,7 +623,7 @@ describe("Admin - Master Audit", {
   test_that("Master Audit export button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "admin-master-audit-export", height = 1000, width = 1600)
+    app <- new_app_driver(name = "admin-master-audit-export", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -591,7 +645,7 @@ describe("Images & Maps Module", {
   test_that("Images tab is accessible", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "images-access", height = 1000, width = 1600)
+    app <- new_app_driver(name = "images-access", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -613,7 +667,7 @@ describe("Images & Maps Module", {
   test_that("Image gallery renders for plot with images", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "images-gallery", height = 1000, width = 1600)
+    app <- new_app_driver(name = "images-gallery", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -635,7 +689,7 @@ describe("Images & Maps Module", {
   test_that("KML download button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "images-kml-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "images-kml-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -656,7 +710,7 @@ describe("Images & Maps Module", {
   test_that("Location debug output renders", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "images-loc-debug", height = 1000, width = 1600)
+    app <- new_app_driver(name = "images-loc-debug", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     

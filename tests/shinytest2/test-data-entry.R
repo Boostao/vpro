@@ -3,6 +3,11 @@ library(testthat)
 library(DBI)
 library(duckdb)
 
+new_app_driver <- function(name, height, width, ...) {
+  app_obj <- shiny::shinyAppFile(normalizePath(file.path("..", "..", "app.R")))
+  AppDriver$new(app = app_obj, name = name, height = height, width = width, ...)
+}
+
 # ============================================================================
 # Data Entry UI Regression Tests
 # ============================================================================
@@ -49,9 +54,58 @@ select_project <- function(app, project_id = NULL) {
 
 # Helper: Select plot in app
 select_plot <- function(app, plot_id = NULL) {
-  if (!is.null(plot_id)) {
-    app$set_inputs(sel_su = plot_id)
+  project_id <- safe_get_value(app, input = "sel_project")
+  if (is.null(project_id) || !nzchar(project_id)) {
+    return(NULL)
   }
+
+  con <- dbConnect(duckdb(), "data/vpro.duckdb")
+  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  scope <- tryCatch(
+    dbGetQuery(
+      con,
+      paste(
+        "SELECT DISTINCT s.siteunit, s.plotnumber",
+        "FROM SU s",
+        "INNER JOIN Env e ON e.plotnumber = s.plotnumber",
+        "WHERE e.projectid = ?",
+        "  AND s.siteunit IS NOT NULL",
+        "  AND trim(s.siteunit) <> ''",
+        "  AND s.plotnumber IS NOT NULL",
+        "  AND trim(s.plotnumber) <> ''",
+        "ORDER BY s.siteunit, s.plotnumber"
+      ),
+      list(project_id)
+    ),
+    error = function(e) data.frame(siteunit = character(0), plotnumber = character(0))
+  )
+
+  if (nrow(scope) == 0) {
+    return(NULL)
+  }
+
+  if (is.null(plot_id)) {
+    plot_id <- scope$plotnumber[[1]]
+  }
+
+  target <- scope[scope$plotnumber == plot_id, , drop = FALSE]
+  if (nrow(target) == 0) {
+    return(NULL)
+  }
+
+  site_unit <- target$siteunit[[1]]
+  site_rows <- scope$plotnumber[scope$siteunit == site_unit]
+  row_index <- match(plot_id, site_rows)
+
+  if (is.null(safe_get_value(app, input = "picker_site_unit"))) {
+    app$click("btn_nav_su_tree")
+    app$wait_for_idle()
+  }
+
+  app$set_inputs(picker_site_unit = site_unit)
+  app$wait_for_idle()
+  app$set_inputs(site_unit_plot_table_rows_selected = row_index)
   app$wait_for_idle()
   
   safe_get_value(app, input = "sel_su")
@@ -104,7 +158,7 @@ describe("Vegetation Data Entry - Layer Navigation", {
   test_that("Layer switching preserves tab context", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "veg-layer-nav", height = 1000, width = 1600)
+    app <- new_app_driver(name = "veg-layer-nav", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -137,7 +191,7 @@ describe("Vegetation Data Entry - Layer Navigation", {
   test_that("Layer tabs render handsontable for each layer", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "veg-layer-tables", height = 1000, width = 1600)
+    app <- new_app_driver(name = "veg-layer-tables", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -174,7 +228,7 @@ describe("Vegetation Data Entry - Layer Navigation", {
   test_that("Vegetation context hint updates with current plot", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "veg-context-hint", height = 1000, width = 1600)
+    app <- new_app_driver(name = "veg-context-hint", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -199,7 +253,7 @@ describe("Vegetation Data Entry - Add/Delete Operations", {
   test_that("Add Species button exists on all layers", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "veg-add-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "veg-add-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -228,7 +282,7 @@ describe("Vegetation Data Entry - Add/Delete Operations", {
   test_that("Delete Selected button exists on all layers", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "veg-del-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "veg-del-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -258,7 +312,7 @@ describe("Vegetation Data Entry - Add/Delete Operations", {
     skip_on_cran()
     skip("Add Species modal implementation pending")
     
-    app <- AppDriver$new("../..", name = "veg-add-trigger", height = 1000, width = 1600)
+    app <- new_app_driver(name = "veg-add-trigger", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -338,7 +392,7 @@ describe("Site & Environment - Tab Structure", {
   test_that("Site/Env tabs exist and are navigable", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-tab-nav", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-tab-nav", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -348,7 +402,7 @@ describe("Site & Environment - Tab Structure", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     # Verify env_tabs exists
@@ -360,7 +414,7 @@ describe("Site & Environment - Tab Structure", {
   test_that("General tab fields are populated", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-general-fields", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-general-fields", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -370,7 +424,7 @@ describe("Site & Environment - Tab Structure", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     # Key General tab fields
@@ -406,7 +460,7 @@ describe("Site & Environment - Coordinate Calculations", {
   test_that("Latitude field accepts decimal degrees", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-lat-dd", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-lat-dd", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -416,7 +470,7 @@ describe("Site & Environment - Coordinate Calculations", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     # Set a valid latitude
@@ -431,7 +485,7 @@ describe("Site & Environment - Coordinate Calculations", {
   test_that("Longitude field accepts decimal degrees", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-lon-dd", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-lon-dd", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -441,7 +495,7 @@ describe("Site & Environment - Coordinate Calculations", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     # Set a valid longitude
@@ -465,7 +519,7 @@ describe("Site & Environment - Coordinate Calculations", {
   test_that("UTM coordinate fields exist", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-utm-fields", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-utm-fields", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -475,7 +529,7 @@ describe("Site & Environment - Coordinate Calculations", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     utm_east_exists <- !is.null(safe_get_value(app, input = "env-env_utm_east"))
@@ -492,7 +546,7 @@ describe("Site & Environment - Field Validation", {
   test_that("Elevation accepts numeric values", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-elevation", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-elevation", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -502,7 +556,7 @@ describe("Site & Environment - Field Validation", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     app$set_inputs(`env-env_elevation` = 1200)
@@ -524,7 +578,7 @@ describe("Site & Environment - Field Validation", {
   test_that("Aspect accepts 0-360 degrees", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-aspect", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-aspect", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -534,7 +588,7 @@ describe("Site & Environment - Field Validation", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     app$set_inputs(`env-env_aspect` = 180)
@@ -548,7 +602,7 @@ describe("Site & Environment - Field Validation", {
   test_that("Date picker enforces valid dates", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-date-valid", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-date-valid", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -558,7 +612,7 @@ describe("Site & Environment - Field Validation", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     test_date <- as.Date("2024-06-15")
@@ -577,7 +631,7 @@ describe("Site & Environment - Dropdowns & Code Lists", {
   test_that("Moisture regime dropdown populates from code lists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-moisture", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-moisture", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -587,7 +641,7 @@ describe("Site & Environment - Dropdowns & Code Lists", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     moisture_exists <- !is.null(safe_get_value(app, input = "env-env_moisture"))
@@ -598,7 +652,7 @@ describe("Site & Environment - Dropdowns & Code Lists", {
   test_that("Nutrient regime dropdown populates from code lists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-nutrient", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-nutrient", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -608,7 +662,7 @@ describe("Site & Environment - Dropdowns & Code Lists", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     nutrient_exists <- !is.null(safe_get_value(app, input = "env-env_nutrient"))
@@ -619,7 +673,7 @@ describe("Site & Environment - Dropdowns & Code Lists", {
   test_that("Meso slope position dropdown exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-meso-slope", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-meso-slope", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -629,7 +683,7 @@ describe("Site & Environment - Dropdowns & Code Lists", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     meso_exists <- !is.null(safe_get_value(app, input = "env-env_meso"))
@@ -644,7 +698,7 @@ describe("Site & Environment - Save Operations", {
   test_that("Save header button exists", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-save-btn", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-save-btn", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -654,7 +708,7 @@ describe("Site & Environment - Save Operations", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     save_btn_exists <- !is.null(safe_get_value(app, input = "env-save_header"))
@@ -665,7 +719,7 @@ describe("Site & Environment - Save Operations", {
   test_that("Save button click triggers without errors", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "env-save-click", height = 1000, width = 1600)
+    app <- new_app_driver(name = "env-save-click", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -675,7 +729,7 @@ describe("Site & Environment - Save Operations", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     # Click save without changes (should succeed or no-op gracefully)
@@ -723,7 +777,7 @@ describe("Data Entry Edge Cases", {
   test_that("Empty/NULL values handle gracefully", {
     skip_on_cran()
     
-    app <- AppDriver$new("../..", name = "null-handling", height = 1000, width = 1600)
+    app <- new_app_driver(name = "null-handling", height = 1000, width = 1600)
     on.exit(app$stop(), add = TRUE)
     app$wait_for_idle(timeout = 5000)
     
@@ -733,7 +787,7 @@ describe("Data Entry Edge Cases", {
     plot <- select_plot(app)
     if (is.null(plot)) skip("No plot available")
     
-    app$set_inputs(main_tabs = "Site & Env")
+    app$set_inputs(main_tabs = "FS882-6x4XL")
     app$wait_for_idle()
     
     # Clear elevation field (set to empty)

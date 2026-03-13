@@ -1518,15 +1518,18 @@ mod_hierarchy_server <- function(id, state, con) {
       }
 
       if (!is.null(project_id) && !is.null(session$parent)) {
-        updateSelectInput(session$parent, "sel_project", selected = as.character(project_id))
-      }
-
-      if (!is.null(session$parent)) {
-        updateSelectInput(session$parent, "sel_su", selected = as.character(plot_number))
-      }
-
-      if (!is.null(session$parent)) {
-        bslib::nav_select("main_tabs", "FS882-6x4XL", session = session$parent)
+        if (is.function(session$parent$userData$select_plot)) {
+          session$parent$userData$select_plot(
+            plot_number = plot_number,
+            project_id = project_id,
+            site_unit = node_row$Name[1],
+            navigate_tab = "FS882-6x4XL"
+          )
+        } else {
+          updateSelectInput(session$parent, "sel_project", selected = as.character(project_id))
+          updateSelectInput(session$parent, "sel_su", selected = as.character(plot_number))
+          bslib::nav_select("main_tabs", "FS882-6x4XL", session = session$parent)
+        }
       }
       showNotification(paste("Jumped to plot", plot_number), type = "message")
     })
@@ -1553,8 +1556,16 @@ mod_hierarchy_server <- function(id, state, con) {
       }
 
       if (!is.null(session$parent)) {
-        updateSelectInput(session$parent, "sel_su", selected = as.character(plots[1]))
-        bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+        if (is.function(session$parent$userData$select_plot)) {
+          session$parent$userData$select_plot(
+            plot_number = plots[1],
+            site_unit = node_row$Name[1],
+            navigate_tab = "Vegetation"
+          )
+        } else {
+          updateSelectInput(session$parent, "sel_su", selected = as.character(plots[1]))
+          bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+        }
       }
       showNotification("Opened vegetation for selected plot.", type = "message")
     })

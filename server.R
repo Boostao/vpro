@@ -69,7 +69,6 @@ server <- function(input, output, session) {
     }
     if (exists("VPRO_DEV_DEFAULT_PLOTNUMBER")) {
       pref_plot <- VPRO_DEV_DEFAULT_PLOTNUMBER
-      pref_su_table <- VPRO_DEV_DEFAULT_PLOTNUMBER
     }
   }
 
@@ -89,44 +88,120 @@ server <- function(input, output, session) {
     state$sysCurrSU <- pref_plot
   }
 
-  # 3. Project module (replaces old sel_project sentinel dropdown)
-  project_mod <- mod_project_server("project", state, con)
-
-  # Refresh SU + hierarchy when project changes
-  observe({
-    project_mod$project_changed()
-    refresh_su_dropdown()
-    refresh_hierarchy_dropdown()
-  })
-
-  # Returns plot numbers for the currently active project
-  refresh_su_dropdown <- function(selected_su = NULL) {
-    pid <- isolate(state$CurrProject)
-    su_choices <- if (!is.null(pid) && nzchar(pid %||% "") && 
-                      DBI::dbExistsTable(con, "Env")) {
-      tryCatch(
-        as.character(DBI::dbGetQuery(
-          con,
-          "SELECT DISTINCT plotnumber FROM Env
-           WHERE projectid = ?
-           ORDER BY plotnumber",
-          list(pid)
-        )$plotnumber),
-        error = function(e) character(0)
-      )
-    } else character(0)
-
-    choices <- c("(None)" = "", su_choices)
-    if (is.null(selected_su)) selected_su <- state$CurrSU %||% ""
-    if (!is.null(selected_su) && !(selected_su %in% su_choices)) selected_su <- ""
-    updateSelectInput(session, "sel_su", choices = choices, selected = selected_su)
-    invisible(su_choices)
+  normalize_context_value <- function(value) {
+    value <- trimws(as.character(value %||% ""))
+    if (!nzchar(value)) "" else value
   }
 
-  # Returns site units for the currently active project
-  refresh_hierarchy_dropdown <- function(selected_hierarchy = NULL) {
-    pid <- isolate(state$CurrProject)
-    hier_choices <- if (!is.null(pid) && nzchar(pid %||% "") && DBI::dbExistsTable(con, "Hierarchy")) {
+  sidebar_mode <- reactiveVal("main")
+  picker_site_unit <- reactiveVal(NULL)
+  hierarchy_choices <- reactiveVal(character(0))
+
+  current_picker_site_unit <- reactive({
+    site_unit <- input$picker_site_unit
+    if (is.null(site_unit)) {
+      site_unit <- picker_site_unit()
+    }
+    normalize_context_value(site_unit)
+  })
+
+  empty_picker_scope <- function() {
+    data.frame(
+      plotnumber = character(0),
+      siteunit = character(0),
+      stringsAsFactors = FALSE
+    )
+  }
+
+  project_su_scope <- reactive({
+    pid <- normalize_context_value(state$CurrProject)
+    if (!nzchar(pid) || !DBI::dbExistsTable(con, "Env") || !DBI::dbExistsTable(con, "SU")) {
+      return(empty_picker_scope())
+    }
+
+    scope <- tryCatch(
+      DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT DISTINCT s.plotnumber, s.siteunit",
+          "FROM SU s",
+          "INNER JOIN (",
+          "  SELECT DISTINCT plotnumber",
+          "  FROM Env",
+          "  WHERE projectid = ?",
+          "    AND plotnumber IS NOT NULL",
+          "    AND trim(plotnumber) <> ''",
+          ") env ON env.plotnumber = s.plotnumber",
+          "WHERE s.plotnumber IS NOT NULL",
+          "  AND trim(s.plotnumber) <> ''",
+          "  AND s.siteunit IS NOT NULL",
+          "  AND trim(s.siteunit) <> ''",
+          "ORDER BY s.siteunit, s.plotnumber"
+        ),
+        list(pid)
+      ),
+      error = function(e) empty_picker_scope()
+    )
+
+    if (nrow(scope) == 0) {
+      return(empty_picker_scope())
+    }
+
+    scope$plotnumber <- as.character(scope$plotnumber)
+    scope$siteunit <- as.character(scope$siteunit)
+    unique(scope[, c("plotnumber", "siteunit"), drop = FALSE])
+  })
+
+  get_site_unit_for_plot <- function(plot_number, project_id = NULL) {
+    plot_number <- normalize_context_value(plot_number)
+    project_id <- normalize_context_value(project_id %||% state$CurrProject)
+    if (!nzchar(plot_number) || !nzchar(project_id)) {
+      return("")
+    }
+
+    scoped <- project_su_scope()
+    hit <- scoped$siteunit[scoped$plotnumber == plot_number]
+    if (length(hit) > 0) {
+      return(hit[[1]])
+    }
+
+    if (!DBI::dbExistsTable(con, "Env") || !DBI::dbExistsTable(con, "SU")) {
+      return("")
+    }
+
+    res <- tryCatch(
+      DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT s.siteunit",
+          "FROM SU s",
+          "INNER JOIN Env e ON e.plotnumber = s.plotnumber",
+          "WHERE e.projectid = ? AND s.plotnumber = ?",
+          "LIMIT 1"
+        ),
+        list(project_id, plot_number)
+      ),
+      error = function(e) data.frame(siteunit = character(0))
+    )
+
+    if (nrow(res) == 0) "" else normalize_context_value(res$siteunit[[1]])
+  }
+
+  picker_plot_rows <- reactive({
+    site_unit <- current_picker_site_unit()
+    scoped <- project_su_scope()
+    if (!nzchar(site_unit) || nrow(scoped) == 0) {
+      return(data.frame(PlotNumber = character(0), stringsAsFactors = FALSE))
+    }
+
+    rows <- scoped[scoped$siteunit == site_unit, , drop = FALSE]
+    rows <- rows[order(rows$plotnumber), , drop = FALSE]
+    data.frame(PlotNumber = unique(rows$plotnumber), stringsAsFactors = FALSE)
+  })
+
+  refresh_hierarchy_dropdown <- function() {
+    pid <- normalize_context_value(state$CurrProject)
+    hier_values <- if (nzchar(pid) && DBI::dbExistsTable(con, "Hierarchy")) {
       tryCatch(
         as.character(DBI::dbGetQuery(
           con,
@@ -135,34 +210,265 @@ server <- function(input, output, session) {
         )$siteunit),
         error = function(e) character(0)
       )
-    } else character(0)
+    } else {
+      character(0)
+    }
 
-    choices <- c("(None)" = "", hier_choices)
-    if (is.null(selected_hierarchy)) selected_hierarchy <- state$CurrHierarchy %||% ""
-    if (!is.null(selected_hierarchy) && !(selected_hierarchy %in% hier_choices)) selected_hierarchy <- ""
-    updateSelectInput(session, "sel_hierarchy", choices = choices, selected = selected_hierarchy)
-    invisible(hier_choices)
+    hierarchy_choices(hier_values[nzchar(hier_values)])
+    invisible(hier_values)
   }
 
-  observe({ refresh_su_dropdown() })
+  apply_plot_selection <- function(plot_number, project_id = NULL, site_unit = NULL, persist = TRUE) {
+    plot_number <- normalize_context_value(plot_number)
+    project_id <- normalize_context_value(project_id %||% state$CurrProject)
+    site_unit <- normalize_context_value(site_unit)
+    current_sidebar_mode <- isolate(sidebar_mode())
 
-  # 5. Handle SU (site plot) selection
-  observeEvent(input$sel_su, {
-    su <- input$sel_su %||% ""
-    if (!nzchar(su)) {
+    if (nzchar(project_id) && !identical(project_id, normalize_context_value(state$CurrProject))) {
+      set_project(state, project_id, con)
+      state$PrefProject <- project_id
+      if (persist) {
+        set_pref(con, "Current", "CurrProject", project_id)
+      }
+      refresh_hierarchy_dropdown()
+    }
+
+    if (!nzchar(plot_number)) {
       set_su(state, NULL)
       state$PrefPlot <- NULL
-      set_pref(con, "Current", "CurrPlotNumber", "")
-    } else {
-      set_su(state, su)
-      state$PrefSUTable <- su
-      set_pref(con, "Current", "CurrPlotList", su)
-      set_pref(con, "Current", "CurrPlotNumber", su)
+      if (persist) {
+        set_pref(con, "Current", "CurrPlotNumber", "")
+      }
+      shiny::freezeReactiveValue(input, "sel_su")
+      updateTextInput(session, "sel_su", value = "")
+      return(invisible(NULL))
+    }
+
+    if (!nzchar(site_unit)) {
+      site_unit <- get_site_unit_for_plot(plot_number, project_id = project_id)
+    }
+
+    set_su(state, plot_number)
+    state$PrefPlot <- plot_number
+    if (nzchar(site_unit) && !identical(site_unit, isolate(picker_site_unit()) %||% "")) {
+      picker_site_unit(site_unit)
+    }
+    if (nzchar(site_unit)) {
+      state$PrefSUTable <- site_unit
+      if (persist) {
+        set_pref(con, "Current", "CurrPlotList", site_unit)
+      }
+    }
+
+    if (persist) {
+      set_pref(con, "Current", "CurrPlotNumber", plot_number)
+    }
+
+    shiny::freezeReactiveValue(input, "sel_su")
+    updateTextInput(session, "sel_su", value = plot_number)
+    if (identical(current_sidebar_mode, "picker")) {
+      sidebar_mode("picker")
+    }
+    invisible(plot_number)
+  }
+
+  session$userData$select_plot <- function(plot_number, project_id = NULL, site_unit = NULL, navigate_tab = NULL, sidebar = NULL) {
+    selected_plot <- apply_plot_selection(
+      plot_number = plot_number,
+      project_id = project_id,
+      site_unit = site_unit,
+      persist = TRUE
+    )
+
+    if (!is.null(sidebar)) {
+      sidebar_mode(sidebar)
+    }
+
+    if (!is.null(navigate_tab) && nzchar(navigate_tab)) {
+      bslib::nav_select("main_tabs", navigate_tab, session = session)
+    }
+
+    invisible(selected_plot)
+  }
+
+  session$userData$show_site_unit_picker <- function(site_unit = NULL) {
+    site_unit <- normalize_context_value(site_unit)
+    if (nzchar(site_unit)) {
+      picker_site_unit(site_unit)
+    }
+    sidebar_mode("picker")
+    invisible(site_unit)
+  }
+
+  observe({
+    scoped <- project_su_scope()
+    available_site_units <- unique(scoped$siteunit)
+
+    preferred_site_unit <- current_picker_site_unit()
+    if (!nzchar(preferred_site_unit) || !(preferred_site_unit %in% available_site_units)) {
+      preferred_site_unit <- normalize_context_value(state$PrefSUTable)
+    }
+    if (!nzchar(preferred_site_unit) || !(preferred_site_unit %in% available_site_units)) {
+      preferred_site_unit <- get_site_unit_for_plot(state$CurrSU)
+    }
+    if (!nzchar(preferred_site_unit) || !(preferred_site_unit %in% available_site_units)) {
+      preferred_site_unit <- if (length(available_site_units) > 0) available_site_units[[1]] else ""
+    }
+
+    normalized_choice <- if (nzchar(preferred_site_unit)) preferred_site_unit else NULL
+    cached_choice <- normalize_context_value(isolate(picker_site_unit()))
+    if (!identical(normalize_context_value(normalized_choice), cached_choice)) {
+      picker_site_unit(normalized_choice)
     }
   })
 
+  output$nav_plot_context <- renderUI({
+    project_name <- normalize_context_value(state$CurrProject %||% state$PrefProject)
+    plot_name <- normalize_context_value(state$CurrSU)
+    site_unit_name <- if (nzchar(plot_name)) {
+      get_site_unit_for_plot(plot_name, project_id = project_name)
+    } else {
+      ""
+    }
+
+    make_context_item <- function(label, value) {
+      div(
+        class = "vpro-nav-context-item",
+        div(class = "vpro-nav-context-label", label),
+        div(class = "vpro-nav-context-value", if (nzchar(value)) value else "None")
+      )
+    }
+
+    div(
+      class = "vpro-nav-context",
+      make_context_item("Project", project_name),
+      div(class = "vpro-nav-context-sep"),
+      make_context_item("Site Unit", site_unit_name),
+      div(class = "vpro-nav-context-sep"),
+      make_context_item("Plot", plot_name)
+    )
+  })
+
+  output$context_sidebar_content <- renderUI({
+    current_mode <- sidebar_mode()
+    site_unit_choices <- unique(project_su_scope()$siteunit)
+    selected_site_unit <- current_picker_site_unit()
+    if (!nzchar(selected_site_unit) || !(selected_site_unit %in% site_unit_choices)) {
+      selected_site_unit <- ""
+    }
+
+    if (identical(current_mode, "picker")) {
+      return(tagList(
+        bslib::card(
+          class = "vpro-picker-card mb-2",
+          bslib::card_header(
+            div(class = "d-flex justify-content-between align-items-center",
+              div(
+                div(class = "fw-semibold", "Site Unit Picker"),
+                div(class = "small text-muted", "Choose a Site Unit, then pick a PlotNumber")
+              ),
+              actionButton("btn_picker_back", "Back", class = "btn btn-sm btn-outline-primary")
+            )
+          ),
+          bslib::card_body(
+            selectInput(
+              "picker_site_unit",
+              "Site Unit",
+              choices = c("(None)" = "", site_unit_choices),
+              selected = selected_site_unit
+            ),
+            div(class = "vpro-picker-table", DT::DTOutput("site_unit_plot_table"))
+          )
+        )
+      ))
+    }
+
+    tagList(
+      mod_project_ui("project"),
+      selectInput(
+        "sel_hierarchy",
+        "Hierarchy:",
+        choices = c("(None)" = "", hierarchy_choices()),
+        selected = normalize_context_value(state$CurrHierarchy)
+      ),
+      div(class = "vpro-section-title", "Data Forms"),
+      actionButton("btn_nav_data_entry", "Data Entry Forms", class = "btn btn-light border w-100 mb-1"),
+      actionButton("btn_nav_two_page", "2-Page Forms", class = "btn btn-light border w-100 mb-1"),
+      actionButton("btn_nav_single_page", "Single-Page Form", class = "btn btn-light border w-100 mb-1"),
+      actionButton("btn_nav_sivi", "SIVI Form", class = "btn btn-light border w-100 mb-2"),
+      div(class = "vpro-section-title", "Classification"),
+      actionButton("btn_nav_su_tree", "Site Unit Tree View", class = "btn btn-light border w-100 mb-1"),
+      actionButton("btn_nav_su_table", "Site Unit Table", class = "btn btn-light border w-100 mb-1"),
+      actionButton("btn_nav_hierarchy_tree", "Hierarchy Tree View", class = "btn btn-light border w-100 mb-2"),
+      hr(class = "my-2"),
+      actionButton("btn_whatsnew", "What's New", class = "btn btn-outline-primary w-100 mb-2")
+    )
+  })
+
+  output$site_unit_plot_table <- DT::renderDT({
+    DT::datatable(
+      picker_plot_rows(),
+      rownames = FALSE,
+      colnames = FALSE,
+      selection = "single",
+      class = "compact",
+      options = list(
+        dom = "t",
+        pageLength = 8,
+        ordering = FALSE,
+        autoWidth = TRUE,
+        scrollY = "280px",
+        scroller = FALSE
+      )
+    )
+  })
+
+  observeEvent(input$picker_site_unit, {
+    site_unit <- normalize_context_value(input$picker_site_unit)
+    if (!identical(site_unit, normalize_context_value(isolate(picker_site_unit())))) {
+      picker_site_unit(if (nzchar(site_unit)) site_unit else NULL)
+    }
+    state$PrefSUTable <- if (nzchar(site_unit)) site_unit else NULL
+    set_pref(con, "Current", "CurrPlotList", site_unit)
+  }, ignoreNULL = FALSE)
+
+  observeEvent(input$picker_site_unit, {
+    DT::selectRows(DT::dataTableProxy("site_unit_plot_table"), NULL)
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$site_unit_plot_table_rows_selected, {
+    selected_index <- input$site_unit_plot_table_rows_selected
+    rows <- picker_plot_rows()
+    if (length(selected_index) != 1 || nrow(rows) < selected_index) {
+      return()
+    }
+
+    apply_plot_selection(
+      plot_number = rows$PlotNumber[[selected_index]],
+      site_unit = current_picker_site_unit(),
+      persist = TRUE
+    )
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$sel_su, {
+    incoming_plot <- normalize_context_value(input$sel_su)
+    current_plot <- normalize_context_value(state$CurrSU)
+    if (identical(incoming_plot, current_plot)) {
+      return()
+    }
+
+    apply_plot_selection(plot_number = incoming_plot, persist = TRUE)
+  }, ignoreInit = TRUE)
+
+  # 3. Project module (replaces old sel_project sentinel dropdown)
+  project_mod <- mod_project_server("project", state, con)
+
+  # Refresh picker scope + hierarchy when project changes
   observe({
+    project_mod$project_changed()
     refresh_hierarchy_dropdown()
+    shiny::freezeReactiveValue(input, "sel_su")
+    updateTextInput(session, "sel_su", value = normalize_context_value(state$CurrSU))
   })
 
   # 5b. Handle Hierarchy selection
@@ -220,7 +526,11 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$btn_nav_su_tree, {
-    bslib::nav_select("main_tabs", "Hierarchy", session = session)
+    sidebar_mode("picker")
+  })
+
+  observeEvent(input$btn_picker_back, {
+    sidebar_mode("main")
   })
 
   observeEvent(input$btn_nav_su_table, {
