@@ -554,7 +554,6 @@ server <- function(input, output, session) {
       div(class = "vpro-section-title", "Data Forms"),
       actionButton("btn_nav_data_entry", "Data Entry Forms", class = "btn btn-light border w-100 mb-1"),
       actionButton("btn_nav_two_page", "2-Page Forms", class = "btn btn-light border w-100 mb-1"),
-      actionButton("btn_nav_single_page", "Single-Page Form", class = "btn btn-light border w-100 mb-1"),
       actionButton("btn_nav_sivi", "SIVI Form", class = "btn btn-light border w-100 mb-2"),
       div(class = "vpro-section-title", "Classification"),
       actionButton("btn_nav_su_tree", "Site Unit Tree View", class = "btn btn-light border w-100 mb-1"),
