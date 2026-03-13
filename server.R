@@ -476,7 +476,7 @@ server <- function(input, output, session) {
         div(class = "vpro-hierarchy-plot-title", site_unit),
         div(class = "vpro-hierarchy-plot-subtitle", sprintf("%d plot%s", length(plot_ids), if (length(plot_ids) == 1) "" else "s"))
       ),
-      div(class = "vpro-hierarchy-plot-instruction", "Click a plot to select it. Drag it onto another site unit in the list to reassign it."),
+      div(class = "vpro-hierarchy-plot-instruction", "Click a plot to select it or drag it onto another site unit to reassign it."),
       div(class = "vpro-hierarchy-plot-list", chips)
     )
   })
@@ -526,8 +526,7 @@ server <- function(input, output, session) {
           bslib::card_header(
             div(class = "d-flex justify-content-between align-items-center",
               div(
-                div(class = "fw-semibold", "Site Unit Tree View"),
-                div(class = "small text-muted", "Browse site units from the SU table, select plots, and drag them onto another site unit.")
+                div(class = "fw-semibold", "Site Unit Tree View")
               ),
               actionButton("btn_hierarchy_back", "Back", class = "btn btn-sm btn-outline-primary")
             )
