@@ -125,6 +125,71 @@ test_that("save_project writes rows to file", {
   expect_equal(rows$plotnumber[[1]], "SP1")
 })
 
+test_that("project_capture_baseline writes baseline metadata and file", {
+  con <- make_main_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('BaseProj', 'Baseline Project')")
+  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'BP1', 'BaseProj')")
+
+  baseline <- project_capture_baseline(con, "BaseProj", source_kind = "test")
+
+  expect_false(is.null(baseline))
+  expect_true(file.exists(baseline$baseline_path[[1]]))
+  expect_equal(baseline$project_id[[1]], "BaseProj")
+  expect_equal(baseline$source_kind[[1]], "test")
+})
+
+test_that("project_read_baseline_rows returns baseline table rows", {
+  con <- make_main_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('ReadBase', 'Read Baseline')")
+  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'RB1', 'ReadBase')")
+  project_capture_baseline(con, "ReadBase", source_kind = "test")
+
+  rows <- project_read_baseline_rows(con, "ReadBase", "Env", "plotnumber", "RB1")
+  expect_equal(rows$plotnumber[[1]], "RB1")
+  expect_equal(rows$projectid[[1]], "ReadBase")
+})
+
+test_that("save_project includes via-env SU rows without projectid column", {
+  con <- make_main_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "DROP TABLE SU")
+  DBI::dbExecute(con, "CREATE TABLE SU (plotnumber TEXT, siteunit TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('Scoped', 'Scoped Project')")
+  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'SC1', 'Scoped')")
+  DBI::dbExecute(con, "INSERT INTO SU (plotnumber, siteunit) VALUES ('SC1', 'BWBSwk 1/06')")
+
+  dest <- tempfile(fileext = ".duckdb")
+  save_project(con, "Scoped", dest)
+
+  verify <- DBI::dbConnect(duckdb::duckdb(), dest, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(verify, shutdown = TRUE), add = TRUE)
+  rows <- DBI::dbGetQuery(verify, "SELECT plotnumber, siteunit FROM SU")
+  expect_equal(rows$plotnumber[[1]], "SC1")
+  expect_equal(rows$siteunit[[1]], "BWBSwk 1/06")
+})
+
+test_that("project baseline captures via-env SU rows", {
+  con <- make_main_con()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, "DROP TABLE SU")
+  DBI::dbExecute(con, "CREATE TABLE SU (plotnumber TEXT, siteunit TEXT)")
+  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('BaseSU', 'Baseline SU Project')")
+  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'BS1', 'BaseSU')")
+  DBI::dbExecute(con, "INSERT INTO SU (plotnumber, siteunit) VALUES ('BS1', 'BWBSwk 1/06')")
+
+  project_capture_baseline(con, "BaseSU", source_kind = "test", force = TRUE)
+  rows <- project_read_baseline_rows(con, "BaseSU", "SU", "plotnumber", "BS1")
+
+  expect_equal(rows$plotnumber[[1]], "BS1")
+  expect_equal(rows$siteunit[[1]], "BWBSwk 1/06")
+})
+
 test_that("multiple projects coexist in main tables", {
   path1 <- make_project_file("ProjA", plots = c("A1", "A2"))
   path2 <- make_project_file("ProjB", plots = c("B1"))

@@ -36,6 +36,8 @@ server <- function(input, output, session) {
   # 1. Database Connection
   # Using a persistent connection for simplicity (DuckDB single user mode)
   con <- connect_local_db()
+  sync_ensure_local_tables(con)
+  project_ensure_baseline_table(con)
 
   # Cloud PostgreSQL is NOT attached on startup.
   # It is attached by mod_auth_server when the user logs in,
@@ -110,6 +112,12 @@ server <- function(input, output, session) {
     su_table_refresh_version(isolate(su_table_refresh_version()) + 1L)
     invisible(su_table_refresh_version())
   }
+
+  observeEvent(state$HierarchyRefreshVersion, {
+    refresh_site_unit_scope()
+    refresh_hierarchy_dropdown()
+    refresh_su_table_page()
+  }, ignoreInit = TRUE)
 
   require_sidebar_su_write <- function() {
     if (!is_cloud_connected(con)) {
@@ -384,6 +392,24 @@ server <- function(input, output, session) {
       make_context_item("Site Unit", site_unit_name),
       div(class = "vpro-nav-context-sep"),
       make_context_item("Plot", plot_name)
+    )
+  })
+
+  output$nav_sync_label <- renderUI({
+    state$SyncVersion
+    project_id <- normalize_context_value(state$CurrProject %||% state$PrefProject)
+    pending_counts <- if (nzchar(project_id)) {
+      tryCatch(sync_get_pending_summary(con, project_id = project_id)$total[c("insert", "update", "delete")], error = function(e) c(insert = 0L, update = 0L, delete = 0L))
+    } else {
+      c(insert = 0L, update = 0L, delete = 0L)
+    }
+
+    tagList(
+      icon("arrows-rotate"),
+      span("Sync"),
+      if (pending_counts[["insert"]] > 0) tags$span(class = "badge rounded-pill ms-1", style = "background:#43893e;color:#fff;", pending_counts[["insert"]]),
+      if (pending_counts[["update"]] > 0) tags$span(class = "badge rounded-pill ms-1", style = "background:#f9ca54;color:#222;", pending_counts[["update"]]),
+      if (pending_counts[["delete"]] > 0) tags$span(class = "badge rounded-pill ms-1", style = "background:#c03b2b;color:#fff;", pending_counts[["delete"]])
     )
   })
 
@@ -683,6 +709,7 @@ server <- function(input, output, session) {
     }
 
     sidebar_hierarchy_status(sprintf("Moved %s from %s to %s.", plot_number, if (nzchar(from_site_unit)) from_site_unit else "(unassigned)", to_site_unit))
+    sync_touch_state(state)
     showNotification(sprintf("Moved %s to %s", plot_number, to_site_unit), type = "message")
   }, ignoreInit = TRUE)
 
@@ -877,7 +904,7 @@ server <- function(input, output, session) {
   observe({
     dest <- auth_status_nav_signal()
     if (!is.null(dest)) {
-      nav_select("main_tabs", selected = dest)
+      bslib::nav_select("main_tabs", selected = dest, session = session)
     }
   })
   

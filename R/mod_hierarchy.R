@@ -1983,9 +1983,11 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$su <- rv$su[-row_idx, , drop = FALSE]
       if (!is.null(plot_id) && nzchar(plot_id)) {
         tryCatch({
-          DBI::dbExecute(con, "DELETE FROM SU WHERE PlotNumber = ?", list(plot_id))
+          sync_ensure_local_tables(con)
           project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          sync_delete_local_row(con, table_name = "su", pk_value = plot_id, project_id = project_id)
           log_audit_change(con, project_id, state$User, plot_id, "SU", "SiteUnit", site_unit, NA)
+          sync_touch_state(state)
           rv$su_status <- paste("Deleted plot", plot_id)
         }, error = function(e) {
           rv$su_status <- paste("Delete failed:", e$message)
@@ -2027,12 +2029,13 @@ mod_hierarchy_server <- function(id, state, con) {
       to_update <- intersect(old_keys, new_keys)
 
       changed <- FALSE
+      sync_ensure_local_tables(con)
 
       for (plot_id in to_delete) {
         old_val <- old_df$SiteUnit[old_df$PlotNumber == plot_id][1]
         tryCatch({
-          DBI::dbExecute(con, "DELETE FROM SU WHERE PlotNumber = ?", list(plot_id))
           project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          sync_delete_local_row(con, table_name = "su", pk_value = plot_id, project_id = project_id)
           log_audit_change(con, project_id, state$User, plot_id, "SU", "SiteUnit", old_val, NA)
           changed <- TRUE
         }, error = function(e) {
@@ -2045,10 +2048,17 @@ mod_hierarchy_server <- function(id, state, con) {
         tryCatch({
           DBI::dbExecute(
             con,
-            "INSERT INTO SU (PlotNumber, SiteUnit) VALUES (?, ?)",
+            "INSERT INTO SU (PlotNumber, SiteUnit, local_modified_utc) VALUES (?, ?, CURRENT_TIMESTAMP)",
             list(plot_id, site_unit)
           )
           project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          sync_record_local_change(
+            con,
+            table_name = "su",
+            pk_value = plot_id,
+            project_id = project_id,
+            change_type = "insert"
+          )
           log_audit_change(con, project_id, state$User, plot_id, "SU", "SiteUnit", NA, site_unit)
           changed <- TRUE
         }, error = function(e) {
@@ -2061,12 +2071,24 @@ mod_hierarchy_server <- function(id, state, con) {
         old_val <- old_df$SiteUnit[old_df$PlotNumber == plot_id][1]
         if (identical(new_val, old_val)) next
         tryCatch({
+          prior_row <- tryCatch(
+            DBI::dbGetQuery(con, "SELECT * FROM SU WHERE PlotNumber = ? LIMIT 1", list(plot_id)),
+            error = function(e) data.frame()
+          )
           DBI::dbExecute(
             con,
-            "UPDATE SU SET SiteUnit = ? WHERE PlotNumber = ?",
+            "UPDATE SU SET SiteUnit = ?, local_modified_utc = CURRENT_TIMESTAMP WHERE PlotNumber = ?",
             list(new_val, plot_id)
           )
           project_id <- resolve_project_id_for_plot(con, plot_id, state$CurrProject)
+          sync_record_local_change(
+            con,
+            table_name = "su",
+            pk_value = plot_id,
+            project_id = project_id,
+            change_type = "update",
+            prior_payload = if (nrow(prior_row) > 0) as.list(prior_row[1, , drop = FALSE]) else NULL
+          )
           log_audit_change(con, project_id, state$User, plot_id, "SU", "SiteUnit", old_val, new_val)
           changed <- TRUE
         }, error = function(e) {
@@ -2076,6 +2098,7 @@ mod_hierarchy_server <- function(id, state, con) {
 
       if (changed) {
         rv$su <- load_su()
+        sync_touch_state(state)
         rv$su_status <- "SU table updated."
       }
     })
