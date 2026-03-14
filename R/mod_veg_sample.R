@@ -14,7 +14,8 @@ coerce_veg_value <- function(col_name, value) {
 }
 
 save_veg_cell <- function(con, record_id, col_name, value) {
-  sql <- sprintf("UPDATE Veg SET %s = ? WHERE id = ?", col_name)
+  sync_ensure_local_tables(con)
+  sql <- sprintf("UPDATE Veg SET %s = ?, local_modified_utc = CURRENT_TIMESTAMP WHERE id = ?", col_name)
   DBI::dbExecute(con, sql, list(value, record_id))
 }
 
@@ -251,6 +252,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             old_df[[col_name]][change$row],
             typed_val
           )
+          sync_touch_state(sys_state)
         }, error = function(e) {
           showNotification(paste("Error updating DB:", e$message), type = "error")
         })
@@ -307,6 +309,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         
         # Insert
         tryCatch({
+          sync_ensure_local_tables(con)
             # Get max ID for safety if not auto-increment (Access migration implies we might need to handle IDs)
             # Veg usually has 'id' column.
             max_res <- dbGetQuery(con, "SELECT MAX(id) as m FROM Veg")
@@ -314,6 +317,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             
             dbExecute(con, "INSERT INTO Veg (id, plotnumber, species) VALUES (?, ?, ?)", 
                       list(new_id, plot_id, new_species))
+            dbExecute(con, "UPDATE Veg SET local_modified_utc = CURRENT_TIMESTAMP WHERE id = ?", list(new_id))
           log_audit_change(
             con,
             sys_state$CurrProject,
@@ -327,6 +331,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             
             # Refresh
             rv$data <- dbGetQuery(con, "SELECT * FROM Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
+              sync_touch_state(sys_state)
             showNotification(paste("Added:", new_species), type="message")
             
         }, error = function(e) {
@@ -370,6 +375,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         removeModal()
         
         tryCatch({
+        sync_ensure_local_tables(con)
         row <- rv$data[rv$data$id == rv_del$id, , drop = FALSE]
         if (nrow(row) > 0) {
           log_audit_change(
@@ -383,11 +389,17 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             NA
           )
         }
-            dbExecute(con, "DELETE FROM Veg WHERE id = ?", list(rv_del$id))
+            sync_delete_local_row(
+              con,
+              table_name = "veg",
+              pk_value = rv_del$id,
+              project_id = sys_state$CurrProject
+            )
             
             # Refresh
             plot_id <- as.character(sys_state$CurrSU)
             rv$data <- dbGetQuery(con, "SELECT * FROM Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
+            sync_touch_state(sys_state)
             showNotification("Species deleted.", type="message")
             
         }, error = function(e) {

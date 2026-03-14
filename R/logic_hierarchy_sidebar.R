@@ -96,7 +96,7 @@ hierarchy_sidebar_reassign_plot <- function(con,
   if (any(is.na(c(su_plot_col, su_site_col)))) stop("SU table is missing required columns.")
 
   current_sql <- sprintf(
-    "SELECT %s AS plotnumber, %s AS siteunit FROM %s WHERE %s = ? LIMIT 1",
+    "SELECT rowid, %s AS plotnumber, %s AS siteunit FROM %s WHERE %s = ? ORDER BY rowid",
     hierarchy_sidebar_quote(con, su_plot_col),
     hierarchy_sidebar_quote(con, su_site_col),
     hierarchy_sidebar_quote(con, "SU"),
@@ -124,9 +124,26 @@ hierarchy_sidebar_reassign_plot <- function(con,
     env_field <- hierarchy_sidebar_match_col(env_fields, c("UserSiteUnit", "user_site_unit", "SiteUnit", "siteunit"))
     env_plot_col <- hierarchy_sidebar_match_col(env_fields, c("PlotNumber", "plotnumber"))
     env_modified_col <- hierarchy_sidebar_match_col(env_fields, c("local_modified_utc"))
+    env_current_row <- if (!is.na(env_plot_col)) {
+      tryCatch(
+        DBI::dbGetQuery(
+          con,
+          sprintf(
+            "SELECT * FROM %s WHERE %s = ? LIMIT 1",
+            hierarchy_sidebar_quote(con, "Env"),
+            hierarchy_sidebar_quote(con, env_plot_col)
+          ),
+          list(plot_number)
+        ),
+        error = function(e) data.frame()
+      )
+    } else {
+      data.frame()
+    }
   } else {
     env_plot_col <- NA_character_
     env_modified_col <- NA_character_
+    env_current_row <- data.frame()
   }
 
   result <- DBI::dbWithTransaction(con, {
@@ -145,6 +162,13 @@ hierarchy_sidebar_reassign_plot <- function(con,
         paste(insert_vals, collapse = ", ")
       )
       DBI::dbExecute(con, insert_sql, params)
+      sync_record_local_change(
+        con,
+        table_name = "su",
+        pk_value = plot_number,
+        project_id = project_id,
+        change_type = "insert"
+      )
     } else {
       set_parts <- sprintf("%s = ?", hierarchy_sidebar_quote(con, su_site_col))
       if (!is.na(su_modified_col)) {
@@ -157,6 +181,24 @@ hierarchy_sidebar_reassign_plot <- function(con,
         hierarchy_sidebar_quote(con, su_plot_col)
       )
       DBI::dbExecute(con, update_sql, list(to_site_unit, plot_number))
+      sync_record_local_change(
+        con,
+        table_name = "su",
+        pk_value = plot_number,
+        project_id = project_id,
+        change_type = "update",
+        prior_payload = as.list(current_row[1, , drop = FALSE])
+      )
+
+      if (nrow(current_row) > 1) {
+        dup_rowids <- current_row$rowid[-1]
+        placeholders <- paste(rep("?", length(dup_rowids)), collapse = ", ")
+        DBI::dbExecute(
+          con,
+          sprintf("DELETE FROM %s WHERE rowid IN (%s)", hierarchy_sidebar_quote(con, "SU"), placeholders),
+          as.list(dup_rowids)
+        )
+      }
     }
 
     if (!is.na(env_field) && !is.na(env_plot_col)) {
@@ -171,6 +213,14 @@ hierarchy_sidebar_reassign_plot <- function(con,
         hierarchy_sidebar_quote(con, env_plot_col)
       )
       DBI::dbExecute(con, env_sql, list(to_site_unit, plot_number))
+      sync_record_local_change(
+        con,
+        table_name = "env",
+        pk_value = plot_number,
+        project_id = project_id,
+        change_type = if (nrow(env_current_row) == 0) "insert" else "update",
+        prior_payload = if (nrow(env_current_row) > 0) as.list(env_current_row[1, , drop = FALSE]) else NULL
+      )
     }
 
     invisible(TRUE)

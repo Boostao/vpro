@@ -8,6 +8,230 @@ PROJECT_TABLES <- c(
   "Hierarchy", "Other"
 )
 
+PROJECT_TABLE_SCOPE <- list(
+  Env = list(mode = "direct", project_col = "projectid"),
+  Metadata = list(mode = "direct", project_col = "projectid"),
+  Audit = list(mode = "direct", project_col = "projectid"),
+  Veg = list(mode = "via_env", env_fk = "plotnumber"),
+  SU = list(mode = "via_env", env_fk = "plotnumber"),
+  Humus = list(mode = "via_env", env_fk = "plotnumber"),
+  Mineral = list(mode = "via_env", env_fk = "plotnumber"),
+  Other = list(mode = "via_env", env_fk = "plotnumber"),
+  Herbarium = list(mode = "via_env", env_fk = "plotnumber"),
+  Admin = list(mode = "via_env", env_fk = "plot")
+)
+
+PROJECT_BASELINE_TABLE <- "project_baselines"
+
+project_baseline_dir <- function() {
+  dir_path <- file.path(getwd(), "data", "project_baselines")
+  dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
+  normalizePath(dir_path, mustWork = FALSE)
+}
+
+project_baseline_path <- function(project_id) {
+  safe_id <- gsub("[^A-Za-z0-9_-]", "_", as.character(project_id %||% ""))
+  file.path(project_baseline_dir(), paste0(safe_id, "_baseline.duckdb"))
+}
+
+project_ensure_baseline_table <- function(con) {
+  DBI::dbExecute(
+    con,
+    paste(
+      "CREATE TABLE IF NOT EXISTS", PROJECT_BASELINE_TABLE, "(",
+      "project_id TEXT PRIMARY KEY,",
+      "baseline_path TEXT NOT NULL,",
+      "created_utc TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,",
+      "source_file_path TEXT,",
+      "source_kind TEXT,",
+      "file_size_bytes BIGINT,",
+      "file_md5 TEXT",
+      ")"
+    )
+  )
+  invisible(TRUE)
+}
+
+project_get_baseline <- function(con, project_id) {
+  if (is.null(project_id) || !nzchar(project_id %||% "")) return(NULL)
+  project_ensure_baseline_table(con)
+
+  rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      paste0("SELECT * FROM ", PROJECT_BASELINE_TABLE, " WHERE project_id = ? LIMIT 1"),
+      list(as.character(project_id))
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(rows) == 0) return(NULL)
+  rows[1, , drop = FALSE]
+}
+
+project_capture_baseline <- function(con,
+                                     project_id,
+                                     source_file_path = NULL,
+                                     source_kind = "project_open",
+                                     force = FALSE) {
+  if (is.null(project_id) || !nzchar(project_id %||% "")) {
+    stop("project_id is required.")
+  }
+
+  project_ensure_baseline_table(con)
+  existing <- project_get_baseline(con, project_id)
+  if (!isTRUE(force) && !is.null(existing)) {
+    return(existing)
+  }
+
+  baseline_path <- project_baseline_path(project_id)
+  if (file.exists(baseline_path)) {
+    unlink(baseline_path, force = TRUE)
+  }
+
+  save_project(
+    con,
+    project_id = project_id,
+    path = baseline_path,
+    alias = paste0("tmp_save_baseline_", gsub("[^A-Za-z0-9]", "_", project_id))
+  )
+
+  file_info <- file.info(baseline_path)
+  file_md5 <- tryCatch(unname(tools::md5sum(baseline_path)[[1]]), error = function(e) NA_character_)
+
+  DBI::dbExecute(
+    con,
+    paste0("DELETE FROM ", PROJECT_BASELINE_TABLE, " WHERE project_id = ?"),
+    list(as.character(project_id))
+  )
+
+  DBI::dbExecute(
+    con,
+    paste0(
+      "INSERT INTO ", PROJECT_BASELINE_TABLE,
+      " (project_id, baseline_path, created_utc, source_file_path, source_kind, file_size_bytes, file_md5)",
+      " VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)"
+    ),
+    list(
+      as.character(project_id),
+      baseline_path,
+      if (is.null(source_file_path) || !nzchar(source_file_path %||% "")) NA_character_ else as.character(source_file_path),
+      as.character(source_kind %||% "project_open"),
+      if (nrow(file_info) == 0 || is.na(file_info$size[[1]])) NA_integer_ else as.numeric(file_info$size[[1]]),
+      file_md5
+    )
+  )
+
+  project_get_baseline(con, project_id)
+}
+
+project_read_baseline_rows <- function(con, project_id, table_name, pk_name, pk_values = NULL) {
+  baseline <- project_get_baseline(con, project_id)
+  if (is.null(baseline) || nrow(baseline) == 0) return(data.frame())
+
+  baseline_path <- baseline$baseline_path[[1]]
+  if (is.null(baseline_path) || !file.exists(baseline_path)) return(data.frame())
+
+  bcon <- tryCatch(
+    DBI::dbConnect(duckdb::duckdb(), baseline_path, read_only = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(bcon)) return(data.frame())
+  on.exit(try(DBI::dbDisconnect(bcon, shutdown = TRUE), silent = TRUE), add = TRUE)
+
+  if (!DBI::dbExistsTable(bcon, table_name)) return(data.frame())
+  fields <- tryCatch(DBI::dbListFields(bcon, table_name), error = function(e) character(0))
+  pk_field <- .project_find_field(fields, pk_name)
+  if (is.na(pk_field)) return(data.frame())
+
+  if (is.null(pk_values) || length(pk_values) == 0) {
+    return(DBI::dbGetQuery(bcon, paste0("SELECT * FROM ", DBI::dbQuoteIdentifier(bcon, table_name))))
+  }
+
+  placeholders <- paste(rep("?", length(pk_values)), collapse = ", ")
+  DBI::dbGetQuery(
+    bcon,
+    paste0(
+      "SELECT * FROM ", DBI::dbQuoteIdentifier(bcon, table_name),
+      " WHERE CAST(", DBI::dbQuoteIdentifier(bcon, pk_field), " AS TEXT) IN (", placeholders, ")"
+    ),
+    as.list(as.character(pk_values))
+  )
+}
+
+project_baseline_has_tables <- function(con, project_id, required_tables = c("Env", "SU", "Veg")) {
+  baseline <- project_get_baseline(con, project_id)
+  if (is.null(baseline) || nrow(baseline) == 0) return(FALSE)
+
+  baseline_path <- baseline$baseline_path[[1]]
+  if (is.null(baseline_path) || !file.exists(baseline_path)) return(FALSE)
+
+  bcon <- tryCatch(
+    DBI::dbConnect(duckdb::duckdb(), baseline_path, read_only = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(bcon)) return(FALSE)
+  on.exit(try(DBI::dbDisconnect(bcon, shutdown = TRUE), silent = TRUE), add = TRUE)
+
+  all(vapply(required_tables, function(tbl) DBI::dbExistsTable(bcon, tbl), logical(1)))
+}
+
+.project_find_field <- function(fields, candidates) {
+  if (length(fields) == 0 || length(candidates) == 0) return(NA_character_)
+  idx <- match(tolower(candidates), tolower(fields), nomatch = 0L)
+  idx <- idx[idx > 0L]
+  if (length(idx) == 0) return(NA_character_)
+  fields[[idx[[1]]]]
+}
+
+.project_table_scope <- function(con, table_name) {
+  configured <- PROJECT_TABLE_SCOPE[[table_name]]
+  if (!is.null(configured)) {
+    return(configured)
+  }
+
+  fields <- tryCatch(DBI::dbListFields(con, table_name), error = function(e) character(0))
+  project_col <- .project_find_field(fields, c("projectid", "project_id"))
+  if (!is.na(project_col)) {
+    return(list(mode = "direct", project_col = project_col))
+  }
+
+  env_fk <- .project_find_field(fields, c("plotnumber", "plot"))
+  if (!is.na(env_fk)) {
+    return(list(mode = "via_env", env_fk = env_fk))
+  }
+
+  list(mode = "all")
+}
+
+.project_where_clause <- function(con, table_name, project_id) {
+  scope <- .project_table_scope(con, table_name)
+  if (identical(scope$mode, "direct")) {
+    list(
+      sql = paste0(" WHERE ", DBI::dbQuoteIdentifier(con, scope$project_col), " = ?"),
+      params = list(project_id)
+    )
+  } else if (identical(scope$mode, "via_env") && DBI::dbExistsTable(con, "Env")) {
+    env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+    env_plot_col <- .project_find_field(env_fields, c("plotnumber"))
+    env_project_col <- .project_find_field(env_fields, c("projectid", "project_id"))
+    if (!is.na(env_plot_col) && !is.na(env_project_col)) {
+      list(
+        sql = paste0(
+          " WHERE ", DBI::dbQuoteIdentifier(con, scope$env_fk),
+          " IN (SELECT ", DBI::dbQuoteIdentifier(con, env_plot_col),
+          " FROM ", DBI::dbQuoteIdentifier(con, "Env"),
+          " WHERE ", DBI::dbQuoteIdentifier(con, env_project_col), " = ?)"
+        ),
+        params = list(project_id)
+      )
+    } else {
+      list(sql = "", params = list())
+    }
+  } else {
+    list(sql = "", params = list())
+  }
+}
+
 #' List all open project IDs
 #'
 #' Returns distinct projectid values present in the Metadata table.
@@ -141,16 +365,14 @@ save_project <- function(con, project_id, path, alias = "tmp_save_project") {
       sapply(cols, function(c) DBI::dbQuoteIdentifier(con, c)),
       collapse = ", "
     )
-    pid_cols <- cols[tolower(cols) == "projectid"]
-    if (length(pid_cols) == 0) next
-    pid_col <- pid_cols[[1]]
+    where <- .project_where_clause(con, tbl, project_id)
     DBI::dbExecute(con, paste0(
       "INSERT INTO ", DBI::dbQuoteIdentifier(con, alias), ".main.", DBI::dbQuoteIdentifier(con, tbl),
       " (", col_list, ") ",
       "SELECT ", col_list,
       " FROM ", DBI::dbQuoteIdentifier(con, tbl),
-      " WHERE ", DBI::dbQuoteIdentifier(con, pid_col), " = ?"
-    ), list(project_id))
+      where$sql
+    ), where$params)
   }
 
   invisible(path)
@@ -172,12 +394,13 @@ close_project <- function(con, project_id, path = NULL) {
 
   for (tbl in PROJECT_TABLES) {
     if (!DBI::dbExistsTable(con, tbl)) next
-    cols <- tolower(DBI::dbListFields(con, tbl))
-    if (!("projectid" %in% cols)) next
-    DBI::dbExecute(con, paste0(
-      "DELETE FROM ", DBI::dbQuoteIdentifier(con, tbl),
-      " WHERE projectid = ?"
-    ), list(project_id))
+    where <- .project_where_clause(con, tbl, project_id)
+    if (!nzchar(where$sql)) next
+    DBI::dbExecute(
+      con,
+      paste0("DELETE FROM ", DBI::dbQuoteIdentifier(con, tbl), where$sql),
+      where$params
+    )
   }
 
   invisible(project_id)

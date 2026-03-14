@@ -191,10 +191,10 @@ ui <- page_navbar(
   #nav_panel(tagList(icon("cloud-arrow-up"), "Upload"), value = "Upload",
   #  mod_upload_ui("upload")
   #),
-  nav_panel(tagList(icon("arrows-rotate"), "Sync"), value = "Sync",
+  nav_panel(uiOutput("nav_sync_label"), value = "Sync",
     mod_sync_ui("sync")
   ),
-  nav_panel(tagList(icon("user-shield"), "Auth"), value = "Auth",
+  nav_panel(span(class = "vpro-auth-tab-label", tagList(icon("user-shield"), "Auth")), value = "Auth",
     mod_auth_ui("auth")
   ),
   nav_item(uiOutput("nav_plot_context")),

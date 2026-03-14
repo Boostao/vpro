@@ -24,8 +24,12 @@ mod_sync_ui <- function(id) {
         actionButton(
           ns("sync_push"),
             label = tagList(icon("cloud-arrow-up"), "Push changes"),
-            style = "background-color: #fcba19; border-color: #fcba19; color: #222;",
-            class = "btn btn-sm"
+            class = "btn btn-primary btn-sm"
+        ),
+        actionButton(
+          ns("sync_revert_all"),
+          label = tagList(icon("rotate-left"), "Revert all"),
+          class = "btn btn-outline-danger btn-sm"
         ),
         actionButton(
           ns("sync_refresh"),
@@ -34,27 +38,29 @@ mod_sync_ui <- function(id) {
         )
       ),
 
-      # Status message
-      uiOutput(ns("sync_status")),
-
       # Diff card CSS
       tags$style(HTML("
         .sync-diff-card { border-left: 4px solid #ccc; margin-bottom: 10px; border-radius: 4px; background: #fff; }
         .sync-diff-card.sync-insert { border-color: #43893e; }
         .sync-diff-card.sync-update { border-color: #f9ca54; }
+        .sync-diff-card.sync-delete { border-color: #c03b2b; }
         .sync-diff-header { padding: 7px 12px; font-size: 0.82em; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         .sync-diff-card.sync-insert .sync-diff-header { background: #edf7ea; }
         .sync-diff-card.sync-update .sync-diff-header { background: #fef9ec; }
+        .sync-diff-card.sync-delete .sync-diff-header { background: #fdecea; }
         .sync-diff-body { padding: 4px 0; }
         .sync-diff-row { display: grid; grid-template-columns: 160px 1fr; font-size: 0.8em; padding: 2px 12px; }
         .sync-diff-row.changed { grid-template-columns: 160px 1fr auto 1fr; }
+        .sync-diff-row.deleted { grid-template-columns: 160px 1fr; }
         .sync-diff-field { color: #666; font-family: monospace; }
         .sync-val-before { font-family: monospace; background: #fff3cd; padding: 1px 4px; border-radius: 2px; }
         .sync-val-after  { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
         .sync-val-new    { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
+        .sync-val-delete { font-family: monospace; background: #f8d7da; padding: 1px 4px; border-radius: 2px; }
         .sync-diff-arrow { color: #888; padding: 0 6px; }
         .sync-section-badge { display: inline-flex; gap: 4px; margin-left: 8px; }
         .sync-section-badge .badge { font-size: 0.72em; font-weight: 600; vertical-align: middle; }
+        .sync-diff-actions { margin-left: auto; }
       ")),
 
       # 4 accordion groups ordered by field workflow: Site, Soil, Veg, Project
@@ -69,6 +75,7 @@ mod_sync_ui <- function(id) {
             uiOutput(ns("badges_site"), inline = TRUE)
           ),
           value = "site",
+          uiOutput(ns("section_actions_site")),
           uiOutput(ns("cards_admin")),
           uiOutput(ns("cards_env")),
           uiOutput(ns("cards_su"))
@@ -81,6 +88,7 @@ mod_sync_ui <- function(id) {
             uiOutput(ns("badges_soil"), inline = TRUE)
           ),
           value = "soil",
+          uiOutput(ns("section_actions_soil")),
           uiOutput(ns("cards_humus")),
           uiOutput(ns("cards_mineral")),
           uiOutput(ns("cards_other"))
@@ -93,6 +101,7 @@ mod_sync_ui <- function(id) {
             uiOutput(ns("badges_veg"), inline = TRUE)
           ),
           value = "veg",
+          uiOutput(ns("section_actions_veg")),
           uiOutput(ns("cards_veg")),
           uiOutput(ns("cards_herbarium"))
         ),
@@ -104,6 +113,7 @@ mod_sync_ui <- function(id) {
             uiOutput(ns("badges_project"), inline = TRUE)
           ),
           value = "project",
+          uiOutput(ns("section_actions_project")),
           uiOutput(ns("cards_metadata"))
         )
       )
@@ -139,6 +149,31 @@ mod_sync_ui <- function(id) {
 mod_sync_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    section_groups <- list(
+      site = c("admin", "env", "su"),
+      soil = c("humus", "mineral", "other"),
+      veg = c("veg", "herbarium"),
+      project = c("metadata")
+    )
+
+    touch_site_hierarchy <- function(records = NULL, table_name = NULL) {
+      site_tables <- section_groups$site
+      should_refresh <- FALSE
+
+      if (!is.null(table_name)) {
+        should_refresh <- as.character(table_name) %in% site_tables
+      }
+      if (!should_refresh && !is.null(records) && length(records) > 0) {
+        should_refresh <- any(vapply(records, function(record) {
+          as.character(record$table_pg %||% "") %in% site_tables
+        }, logical(1)))
+      }
+
+      if (isTRUE(should_refresh)) {
+        state$HierarchyRefreshVersion <- (state$HierarchyRefreshVersion %||% 0L) + 1L
+      }
+      invisible(should_refresh)
+    }
 
     # ── Invalidation signals ─────────────────────────────────────────────────
     rv_refresh   <- reactiveVal(0L)
@@ -166,19 +201,40 @@ mod_sync_server <- function(id, state, con) {
     })
 
     # ── Detect if any changes exist ───────────────────────────────────────────
+    is_authenticated <- reactive({
+      isTRUE(state$AuthAuthenticated)
+    })
+
+    reactive_summary <- reactive({
+      rv_refresh()
+      state$SyncVersion
+      tryCatch(
+        sync_get_pending_summary(con, project_id = current_project_id()),
+        error = function(e) {
+          empty_counts <- c(insert = 0L, update = 0L, delete = 0L, total = 0L)
+          list(
+            by_table = setNames(replicate(length(SYNC_TABLE_CONFIG), empty_counts, simplify = FALSE), vapply(SYNC_TABLE_CONFIG, `[[`, character(1), "pg")),
+            total = empty_counts
+          )
+        }
+      )
+    })
+
     has_any_changes <- reactive({
-      changes <- reactive_changes()
-      any(vapply(changes, function(df) {
-        !is.null(df) && nrow(df) > 0
-      }, logical(1)))
+      reactive_summary()$total[["total"]] > 0L
     })
 
     # Disable/enable push button based on changes
-    observeEvent(has_any_changes(), {
-      if (has_any_changes()) {
+    observe({
+      if (has_any_changes() && is_authenticated()) {
         shinyjs::enable("sync_push")
       } else {
         shinyjs::disable("sync_push")
+      }
+      if (has_any_changes()) {
+        shinyjs::enable("sync_revert_all")
+      } else {
+        shinyjs::disable("sync_revert_all")
       }
     })
 
@@ -204,18 +260,11 @@ mod_sync_server <- function(id, state, con) {
     # Helper: count inserts/updates for a set of pg_names from reactive_changes()
     .section_counts <- function(pg_names) {
       reactive({
-        changes <- reactive_changes()
-        n_insert <- sum(vapply(pg_names, function(p) {
-          df <- changes[[p]]
-          if (is.null(df) || nrow(df) == 0) return(0L)
-          sum(df$change_type == "insert", na.rm = TRUE)
-        }, integer(1)))
-        n_update <- sum(vapply(pg_names, function(p) {
-          df <- changes[[p]]
-          if (is.null(df) || nrow(df) == 0) return(0L)
-          sum(df$change_type == "update", na.rm = TRUE)
-        }, integer(1)))
-        c(insert = n_insert, update = n_update)
+        summary <- reactive_summary()$by_table
+        n_insert <- sum(vapply(pg_names, function(p) summary[[p]][["insert"]] %||% 0L, numeric(1)))
+        n_update <- sum(vapply(pg_names, function(p) summary[[p]][["update"]] %||% 0L, numeric(1)))
+        n_delete <- sum(vapply(pg_names, function(p) summary[[p]][["delete"]] %||% 0L, numeric(1)))
+        c(insert = as.integer(n_insert), update = as.integer(n_update), delete = as.integer(n_delete))
       })
     }
 
@@ -238,6 +287,14 @@ mod_sync_server <- function(id, state, con) {
               class = "badge",
               style = "background:#f9ca54;color:#222;",
               paste(counts[["update"]], "updated")
+            )
+          ))
+        if (counts[["delete"]] > 0)
+          badges <- c(badges, list(
+            tags$span(
+              class = "badge",
+              style = "background:#c03b2b;color:#fff;",
+              paste(counts[["delete"]], "deleted")
             )
           ))
         if (length(badges) == 0) return(NULL)
@@ -271,13 +328,135 @@ mod_sync_server <- function(id, state, con) {
       out
     })
 
+    .records_for_tables <- function(pg_names) {
+      details <- reactive_all_details()
+      unlist(details[pg_names], recursive = FALSE, use.names = FALSE)
+    }
+
+    .count_change_types <- function(records) {
+      counts <- c(insert = 0L, update = 0L, delete = 0L)
+      if (length(records) == 0) return(counts)
+      for (record in records) {
+        change_type <- record$change_type %||% ""
+        if (change_type %in% names(counts)) {
+          counts[[change_type]] <- counts[[change_type]] + 1L
+        }
+      }
+      counts
+    }
+
+    .change_badges <- function(counts) {
+      tags$div(
+        class = "d-inline-flex align-items-center gap-2 flex-wrap ms-2",
+        if (counts[["insert"]] > 0) {
+          tags$span(class = "badge", style = "background:#43893e;color:#fff;", sprintf("%d insert%s", counts[["insert"]], if (counts[["insert"]] == 1) "" else "s"))
+        },
+        if (counts[["update"]] > 0) {
+          tags$span(class = "badge", style = "background:#f9ca54;color:#222;", sprintf("%d update%s", counts[["update"]], if (counts[["update"]] == 1) "" else "s"))
+        },
+        if (counts[["delete"]] > 0) {
+          tags$span(class = "badge", style = "background:#c03b2b;color:#fff;", sprintf("%d delete%s", counts[["delete"]], if (counts[["delete"]] == 1) "" else "s"))
+        }
+      )
+    }
+
+    .set_sync_status <- function(message = NULL, counts = NULL, error = FALSE) {
+      invisible(NULL)
+    }
+
+    .revert_records <- function(records, label = "changes") {
+      if (length(records) == 0) {
+        .set_sync_status(sprintf("No pending %s to revert.", label), counts = c(insert = 0L, update = 0L, delete = 0L), error = TRUE)
+        return(invisible(FALSE))
+      }
+
+      dedupe_keys <- unique(vapply(records, function(record) paste(record$table_pg %||% "", record$pk_value %||% "", sep = "::"), character(1)))
+      reverted_counts <- c(insert = 0L, update = 0L, delete = 0L)
+      failures <- character(0)
+
+      for (key in dedupe_keys) {
+        parts <- strsplit(key, "::", fixed = TRUE)[[1]]
+        result <- tryCatch(
+          sync_revert_pending_change(
+            con,
+            table_name = parts[[1]],
+            pk_value = parts[[2]],
+            project_id = current_project_id()
+          ),
+          error = function(e) e
+        )
+
+        if (inherits(result, "error")) {
+          failures <- c(failures, conditionMessage(result))
+          next
+        }
+
+        change_type <- result$change_type %||% ""
+        if (change_type %in% names(reverted_counts)) {
+          reverted_counts[[change_type]] <- reverted_counts[[change_type]] + 1L
+        }
+      }
+
+      if (sum(reverted_counts) > 0L) {
+        sync_touch_state(state)
+        rv_refresh(rv_refresh() + 1L)
+        touch_site_hierarchy(records = records)
+      }
+
+      if (length(failures) > 0L) {
+        .set_sync_status(
+          sprintf("Reverted %d %s, with %d failure%s.", sum(reverted_counts), label, length(failures), if (length(failures) == 1) "" else "s"),
+          counts = reverted_counts,
+          error = TRUE
+        )
+      } else {
+        .set_sync_status(
+          counts = reverted_counts,
+          error = FALSE
+        )
+      }
+
+      invisible(length(failures) == 0L)
+    }
+
+    for (section_name in names(section_groups)) {
+      local({
+        .section_name <- section_name
+        .button_id <- paste0("revert_all_", .section_name)
+        output[[paste0("section_actions_", .section_name)]] <- renderUI({
+          records <- .records_for_tables(section_groups[[.section_name]])
+          if (length(records) == 0) return(NULL)
+          div(
+            class = "d-flex justify-content-end mb-2",
+            actionButton(
+              ns(.button_id),
+              label = tagList(icon("rotate-left"), sprintf("Revert %s", .section_name)),
+              class = "btn btn-outline-danger btn-sm"
+            )
+          )
+        })
+
+        observeEvent(input[[.button_id]], {
+          .revert_records(.records_for_tables(section_groups[[.section_name]]), label = paste(.section_name, "changes"))
+        }, ignoreInit = TRUE)
+      })
+    }
+
     # Helper: build one diff card HTML tag
     .build_diff_card <- function(record, pk) {
-      is_insert  <- identical(record$change_type, "insert")
-      card_class <- if (is_insert) "sync-diff-card sync-insert" else "sync-diff-card sync-update"
-      badge_text <- if (is_insert) "INSERT" else "UPDATE"
-      badge_col  <- if (is_insert) "#43893e" else "#f9ca54"
-      badge_txt_col <- if (is_insert) "#fff" else "#222"
+      is_insert <- identical(record$change_type, "insert")
+      is_delete <- identical(record$change_type, "delete")
+      before_data <- record$core_data %||% record$baseline_data %||% record$delete_data
+      card_class <- if (is_insert) {
+        "sync-diff-card sync-insert"
+      } else if (is_delete) {
+        "sync-diff-card sync-delete"
+      } else {
+        "sync-diff-card sync-update"
+      }
+      badge_text <- if (is_insert) "INSERT" else if (is_delete) "DELETE" else "UPDATE"
+      badge_col  <- if (is_insert) "#43893e" else if (is_delete) "#c03b2b" else "#f9ca54"
+      badge_txt_col <- if (is_insert || is_delete) "#fff" else "#222"
 
       header <- div(
         class = "sync-diff-header",
@@ -286,11 +465,26 @@ mod_sync_server <- function(id, state, con) {
           style = paste0("background:", badge_col, ";color:", badge_txt_col, ";"),
           badge_text
         ),
-        tags$span(paste(pk, "=", record$pk_value))
+        tags$span(class = "text-muted small text-uppercase", record$table_pg %||% ""),
+        tags$span(paste(pk, "=", record$pk_value)),
+        div(
+          class = "sync-diff-actions",
+          tags$button(
+            type = "button",
+            class = "btn btn-outline-secondary btn-sm",
+            onclick = sprintf(
+              "Shiny.setInputValue('%s', {table: '%s', pk: %s, nonce: Date.now()}, {priority: 'event'})",
+              ns("revert_change"),
+              record$table_pg %||% "",
+              jsonlite::toJSON(as.character(record$pk_value), auto_unbox = TRUE)
+            ),
+            "Revert"
+          )
+        )
       )
 
       local_d <- record$local_data
-      core_d  <- record$core_data
+      core_d  <- before_data
       pk_lc   <- tolower(pk)
 
       rows <- if (is_insert) {
@@ -306,6 +500,20 @@ mod_sync_server <- function(id, state, con) {
             class = "sync-diff-row",
             span(class = "sync-diff-field", f),
             span(class = "sync-val-new", as.character(local_d[[f]]))
+          )
+        })
+      } else if (is_delete) {
+        field_names <- names(core_d %||% list())
+        field_names <- field_names[tolower(field_names) != pk_lc]
+        field_names <- field_names[vapply(field_names, function(f) {
+          v <- core_d[[f]]
+          !is.null(v) && length(v) > 0 && !is.na(v[1]) && nzchar(as.character(v[1]))
+        }, logical(1))]
+        lapply(field_names, function(f) {
+          div(
+            class = "sync-diff-row deleted",
+            span(class = "sync-diff-field", f),
+            span(class = "sync-val-delete", as.character(core_d[[f]]))
           )
         })
       } else {
@@ -369,28 +577,54 @@ mod_sync_server <- function(id, state, con) {
         .render_cards_output(.cfg$pg, .cfg)
       })
     }
+    observeEvent(input$revert_change, {
+      info <- input$revert_change
+      if (is.null(info$table) || is.null(info$pk)) return()
 
+      tryCatch({
+        result <- sync_revert_pending_change(
+          con,
+          table_name = as.character(info$table),
+          pk_value = as.character(info$pk),
+          project_id = current_project_id()
+        )
+        sync_touch_state(state)
+        rv_refresh(rv_refresh() + 1L)
+        touch_site_hierarchy(table_name = info$table)
+        counts <- c(insert = 0L, update = 0L, delete = 0L)
+        if ((result$change_type %||% "") %in% names(counts)) {
+          counts[[result$change_type]] <- 1L
+        }
+        .set_sync_status(counts = counts, error = FALSE)
+      }, error = function(e) {
+        .set_sync_status(conditionMessage(e), error = TRUE)
+      })
+    }, ignoreInit = TRUE)
 
-    # ── Status output ─────────────────────────────────────────────────────────
-    sync_status_msg <- reactiveVal(NULL)
-
-    output$sync_status <- renderUI({
-      msg <- sync_status_msg()
-      if (is.null(msg)) return(NULL)
-      cls <- if (isTRUE(attr(msg, "error"))) "alert alert-danger" else "alert alert-success"
-      div(class = paste(cls, "py-2 mt-2"), msg)
-    })
+    observeEvent(input$sync_revert_all, {
+      .revert_records(.records_for_tables(unname(unlist(section_groups))), label = "pending changes")
+    }, ignoreInit = TRUE)
 
 
     # ── Push handler ─────────────────────────────────────────────────────────
     observeEvent(input$sync_push, {
       pid       <- current_project_id()
       submitter <- state$User %||% "unknown"
+      pending_counts <- reactive_summary()$total[c("insert", "update", "delete")]
+
+      if (!is_authenticated()) {
+        .set_sync_status("Sign in required before pushing changes.", error = TRUE)
+        return()
+      }
+      if (!has_any_changes()) {
+        .set_sync_status("No pending changes to push.", error = TRUE)
+        return()
+      }
 
       tryCatch({
         result <- sync_push(con, project_id = pid, submitter = submitter)
 
-        state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
+        sync_touch_state(state)
         rv_refresh(rv_refresh() + 1L)
         rv_mr_reload(rv_mr_reload() + 1L)
 
@@ -407,12 +641,10 @@ mod_sync_server <- function(id, state, con) {
           "Push submitted \u2014 MR #%s (%s). Awaiting admin review.",
           mr_id, count_str
         )
-        sync_status_msg(msg)
+        .set_sync_status(counts = pending_counts, error = FALSE)
         bslib::nav_select(session$ns("sync_tabs"), selected = "merge_requests")
       }, error = function(e) {
-        m <- conditionMessage(e)
-        attr(m, "error") <- TRUE
-        sync_status_msg(m)
+        .set_sync_status(conditionMessage(e), error = TRUE)
       })
     })
 

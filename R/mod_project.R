@@ -30,6 +30,31 @@ mod_project_server <- function(id, state, con) {
     # Reactive: triggers downstream refresh (SU dropdown etc.)
     project_changed <- reactiveVal(0L)
 
+    ensure_project_baseline <- function(project_id, source_file_path = NULL, source_kind = "project_open") {
+      if (is.null(project_id) || !nzchar(project_id %||% "")) return(invisible(NULL))
+      force_refresh <- FALSE
+      if (!isTRUE(project_baseline_has_tables(con, project_id))) {
+        pending_total <- tryCatch(sync_get_pending_total(con, project_id = project_id), error = function(e) 0L)
+        force_refresh <- identical(as.integer(pending_total), 0L)
+      }
+      tryCatch(
+        project_capture_baseline(
+          con,
+          project_id = project_id,
+          source_file_path = source_file_path,
+          source_kind = source_kind,
+          force = force_refresh
+        ),
+        error = function(e) {
+          showNotification(
+            paste0("Baseline capture failed for project '", project_id, "': ", conditionMessage(e)),
+            type = "warning"
+          )
+          NULL
+        }
+      )
+    }
+
     # ---- Startup: auto-restore project from main db ----
     observe({
       open_pids <- list_open_projects(con)
@@ -44,6 +69,7 @@ mod_project_server <- function(id, state, con) {
       }
 
       set_project(state, pid_to_activate, con)
+      ensure_project_baseline(pid_to_activate, source_file_path = current_path(), source_kind = "project_activate")
       
       # Restore preferred plot/SU after project activation (set_project clears it)
       pref_plot <- shiny::isolate(state$PrefPlot)
@@ -84,6 +110,7 @@ mod_project_server <- function(id, state, con) {
       if (!is.null(pid) && nzchar(pid) && !identical(pid, isolate(state$CurrProject))) {
         set_project(state, pid, con)
         set_pref(con, "Current", "CurrProject", pid)
+        ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_activate")
         project_changed(project_changed() + 1L)
       }
     })
@@ -149,6 +176,7 @@ mod_project_server <- function(id, state, con) {
           current_path(path)
           set_project(state, pid, con)
           set_pref(con, "Current", "CurrProject", pid)
+          ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
           removeModal()
           project_changed(project_changed() + 1L)
           showNotification(paste0("Opened project: ", pid), type = "message")
@@ -175,6 +203,7 @@ mod_project_server <- function(id, state, con) {
         current_path(path)
         set_project(state, pid, con)
         set_pref(con, "Current", "CurrProject", pid)
+        ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
         .pending_open_path(NULL)
         removeModal()
         project_changed(project_changed() + 1L)
@@ -209,6 +238,7 @@ mod_project_server <- function(id, state, con) {
         new_project(con, pid, title)
         set_project(state, pid, con)
         set_pref(con, "Current", "CurrProject", pid)
+        ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_new")
         removeModal()
         project_changed(project_changed() + 1L)
         showNotification(paste0("Created project: ", pid), type = "message")

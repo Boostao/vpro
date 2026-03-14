@@ -87,7 +87,668 @@ sync_ensure_local_tables <- function(con) {
       )
     }
   }
+  DBI::dbExecute(
+    con,
+    paste(
+      "CREATE TABLE IF NOT EXISTS sync_local_changes (",
+      "table_pg TEXT NOT NULL,",
+      "local_table TEXT NOT NULL,",
+      "pk_name TEXT NOT NULL,",
+      "pk_value TEXT NOT NULL,",
+      "project_id TEXT,",
+      "change_type TEXT NOT NULL,",
+      "prior_payload TEXT,",
+      "updated_utc TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP",
+      ")"
+    )
+  )
+  DBI::dbExecute(
+    con,
+    paste(
+      "CREATE TABLE IF NOT EXISTS sync_local_deletes (",
+      "table_pg TEXT NOT NULL,",
+      "local_table TEXT NOT NULL,",
+      "pk_name TEXT NOT NULL,",
+      "pk_value TEXT NOT NULL,",
+      "project_id TEXT,",
+      "deleted_payload TEXT,",
+      "baseline_exists BOOLEAN DEFAULT FALSE,",
+      "core_exists BOOLEAN DEFAULT FALSE,",
+      "deleted_utc TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP",
+      ")"
+    )
+  )
   invisible(TRUE)
+}
+
+sync_touch_state <- function(state) {
+  state$SyncVersion <- (state$SyncVersion %||% 0L) + 1L
+  invisible(state$SyncVersion)
+}
+
+sync_get_table_config <- function(table_name, key = c("pg", "local")) {
+  key <- match.arg(key)
+  for (cfg in SYNC_TABLE_CONFIG) {
+    if (identical(cfg[[key]], table_name)) {
+      return(cfg)
+    }
+  }
+  NULL
+}
+
+.sync_find_field <- function(fields, candidates) {
+  if (length(fields) == 0 || length(candidates) == 0) return(NA_character_)
+  idx <- match(tolower(candidates), tolower(fields), nomatch = 0L)
+  idx <- idx[idx > 0L]
+  if (length(idx) == 0) return(NA_character_)
+  fields[[idx[[1]]]]
+}
+
+.sync_payload_from_row <- function(row) {
+  if (is.null(row) || length(row) == 0) return(NULL)
+  tryCatch(
+    as.character(jsonlite::toJSON(row, auto_unbox = TRUE, null = "null", na = "null")),
+    error = function(e) NULL
+  )
+}
+
+.sync_payload_to_row <- function(payload) {
+  if (is.null(payload) || !nzchar(as.character(payload))) return(NULL)
+  parsed <- tryCatch(jsonlite::fromJSON(payload, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.null(parsed) || !is.list(parsed)) return(NULL)
+  parsed
+}
+
+.sync_get_row_value <- function(row, field, default = NULL) {
+  if (is.null(row) || is.na(field) || !nzchar(field)) return(default)
+  row_names <- names(row)
+  if (is.null(row_names) || length(row_names) == 0) return(default)
+  idx <- match(tolower(field), tolower(row_names), nomatch = 0L)
+  if (idx == 0L) return(default)
+  value <- row[[idx]]
+  if (is.list(value) && length(value) == 1) value <- value[[1]]
+  if (length(value) == 0) return(default)
+  value
+}
+
+.sync_extract_row_version <- function(row) {
+  value <- .sync_get_row_value(row, "rowVersion")
+  if (is.null(value)) value <- .sync_get_row_value(row, "rowversion")
+  if (is.null(value) || length(value) == 0 || isTRUE(is.na(value[[1]]))) {
+    return(NA_integer_)
+  }
+  suppressWarnings(as.integer(value[[1]]))
+}
+
+.sync_has_row_version_field <- function(row) {
+  row_names <- names(row %||% list())
+  !is.na(.sync_find_field(row_names, c("rowVersion", "rowversion")))
+}
+
+.sync_make_lookup <- function(df, pk_name) {
+  if (is.null(df) || nrow(df) == 0) return(list())
+  pk_field <- .sync_find_field(names(df), pk_name)
+  if (is.na(pk_field)) return(list())
+  setNames(
+    lapply(seq_len(nrow(df)), function(i) as.list(df[i, , drop = FALSE])),
+    as.character(df[[pk_field]])
+  )
+}
+
+.sync_project_filter_sql <- function(cfg, project_id) {
+  pid_safe <- if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    gsub("[^A-Za-z0-9_-]", "", as.character(project_id))
+  } else {
+    NULL
+  }
+  if (is.null(pid_safe)) return("")
+
+  if (cfg$project_scope == "direct") {
+    paste0(" AND \"projectid\" = '", pid_safe, "'")
+  } else {
+    sprintf(
+      " AND \"%s\" IN (SELECT \"plotnumber\" FROM \"Env\" WHERE \"projectid\" = '%s')",
+      cfg$env_fk,
+      pid_safe
+    )
+  }
+}
+
+.sync_get_local_rows <- function(con, cfg, project_id = NULL, max_rows = NULL) {
+  if (!DBI::dbExistsTable(con, cfg$local)) return(data.frame())
+  fields <- tryCatch(DBI::dbListFields(con, cfg$local), error = function(e) character(0))
+  if (!("local_modified_utc" %in% fields)) return(data.frame())
+
+  limit_sql <- if (!is.null(max_rows) && is.finite(max_rows)) {
+    paste(" LIMIT", as.integer(max_rows))
+  } else {
+    ""
+  }
+
+  tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        'SELECT * FROM "%s" WHERE local_modified_utc IS NOT NULL%s%s',
+        cfg$local,
+        .sync_project_filter_sql(cfg, project_id),
+        limit_sql
+      )
+    ),
+    error = function(e) data.frame()
+  )
+}
+
+.sync_get_core_lookup <- function(con, cfg, pk_values) {
+  pk_values <- unique(as.character(pk_values %||% character(0)))
+  pk_values <- pk_values[nzchar(pk_values)]
+  if (!sync_cloud_connected(con) || length(pk_values) == 0) return(list())
+
+  placeholders <- paste(rep("?", length(pk_values)), collapse = ", ")
+  rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        'SELECT * FROM master.core.%s WHERE CAST("%s" AS TEXT) IN (%s)',
+        cfg$pg,
+        cfg$pk,
+        placeholders
+      ),
+      as.list(pk_values)
+    ),
+    error = function(e) data.frame()
+  )
+  .sync_make_lookup(rows, cfg$pk)
+}
+
+.sync_get_baseline_lookup <- function(con, cfg, project_id, pk_values) {
+  pk_values <- unique(as.character(pk_values %||% character(0)))
+  pk_values <- pk_values[nzchar(pk_values)]
+  if (is.null(project_id) || !nzchar(as.character(project_id)) || length(pk_values) == 0) return(list())
+
+  rows <- tryCatch(
+    project_read_baseline_rows(con, project_id, cfg$local, cfg$pk, pk_values),
+    error = function(e) data.frame()
+  )
+  .sync_make_lookup(rows, cfg$pk)
+}
+
+.sync_delete_ledger_rows <- function(con, cfg, project_id = NULL) {
+  sync_ensure_local_tables(con)
+  sql <- paste0(
+    "SELECT * FROM sync_local_deletes WHERE table_pg = ?",
+    if (!is.null(project_id) && nzchar(as.character(project_id))) " AND project_id = ?" else "",
+    " ORDER BY deleted_utc DESC"
+  )
+  params <- list(cfg$pg)
+  if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    params <- c(params, list(as.character(project_id)))
+  }
+  tryCatch(
+    DBI::dbGetQuery(con, sql, params),
+    error = function(e) data.frame()
+  )
+}
+
+.sync_change_ledger_rows <- function(con, cfg, project_id = NULL) {
+  sync_ensure_local_tables(con)
+  sql <- paste0(
+    "SELECT * FROM sync_local_changes WHERE table_pg = ?",
+    if (!is.null(project_id) && nzchar(as.character(project_id))) " AND project_id = ?" else "",
+    " ORDER BY updated_utc DESC"
+  )
+  params <- list(cfg$pg)
+  if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    params <- c(params, list(as.character(project_id)))
+  }
+  tryCatch(DBI::dbGetQuery(con, sql, params), error = function(e) data.frame())
+}
+
+sync_record_local_change <- function(con,
+                                     table_name,
+                                     pk_value,
+                                     project_id = NULL,
+                                     change_type = c("insert", "update"),
+                                     prior_payload = NULL) {
+  change_type <- match.arg(change_type)
+  cfg <- sync_get_table_config(table_name, key = "pg")
+  if (is.null(cfg)) cfg <- sync_get_table_config(table_name, key = "local")
+  if (is.null(cfg)) stop("Unsupported sync table: ", table_name)
+
+  sync_ensure_local_tables(con)
+  pk_value <- as.character(pk_value %||% "")
+  if (!nzchar(pk_value)) stop("pk_value is required.")
+
+  existing <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT * FROM sync_local_changes WHERE table_pg = ? AND pk_value = ? AND COALESCE(project_id, '') = COALESCE(?, '') ORDER BY updated_utc DESC LIMIT 1",
+      list(cfg$pg, pk_value, if (is.null(project_id)) NA_character_ else as.character(project_id))
+    ),
+    error = function(e) data.frame()
+  )
+
+  effective_type <- change_type
+  if (nrow(existing) > 0 && identical(existing$change_type[[1]], "insert") && identical(change_type, "update")) {
+    effective_type <- "insert"
+  }
+
+  existing_payload <- if (nrow(existing) > 0) existing$prior_payload[[1]] else NULL
+  payload_json <- if (!is.null(existing_payload) && nzchar(as.character(existing_payload))) {
+    existing_payload
+  } else {
+    .sync_payload_from_row(prior_payload)
+  }
+
+  DBI::dbExecute(
+    con,
+    "DELETE FROM sync_local_changes WHERE table_pg = ? AND pk_value = ? AND COALESCE(project_id, '') = COALESCE(?, '')",
+    list(cfg$pg, pk_value, if (is.null(project_id)) NA_character_ else as.character(project_id))
+  )
+
+  DBI::dbExecute(
+    con,
+    paste(
+      "INSERT INTO sync_local_changes",
+      "(table_pg, local_table, pk_name, pk_value, project_id, change_type, prior_payload, updated_utc)",
+      "VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+    ),
+    list(
+      cfg$pg,
+      cfg$local,
+      cfg$pk,
+      pk_value,
+      if (is.null(project_id) || !nzchar(as.character(project_id))) NA_character_ else as.character(project_id),
+      effective_type,
+      payload_json
+    )
+  )
+
+  invisible(effective_type)
+}
+
+sync_clear_local_change <- function(con, table_name, pk_value, project_id = NULL) {
+  cfg <- sync_get_table_config(table_name, key = "pg")
+  if (is.null(cfg)) cfg <- sync_get_table_config(table_name, key = "local")
+  if (is.null(cfg)) stop("Unsupported sync table: ", table_name)
+
+  sync_ensure_local_tables(con)
+  DBI::dbExecute(
+    con,
+    "DELETE FROM sync_local_changes WHERE table_pg = ? AND pk_value = ? AND COALESCE(project_id, '') = COALESCE(?, '')",
+    list(cfg$pg, as.character(pk_value), if (is.null(project_id)) NA_character_ else as.character(project_id))
+  )
+  invisible(TRUE)
+}
+
+.sync_classify_local_change <- function(local_row, baseline_row = NULL, core_row = NULL) {
+  if (.sync_has_row_version_field(local_row)) {
+    local_rv <- .sync_extract_row_version(local_row)
+    return(if (is.na(local_rv)) "insert" else "update")
+  }
+  if (!is.null(baseline_row) || !is.null(core_row)) {
+    return("update")
+  }
+  "insert"
+}
+
+sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 50L) {
+  sync_ensure_local_tables(con)
+
+  local_rows <- .sync_get_local_rows(
+    con,
+    cfg,
+    project_id = project_id,
+    max_rows = if (is.null(max_rows) || !is.finite(max_rows)) NULL else max_rows
+  )
+  local_pk_field <- .sync_find_field(names(local_rows), cfg$pk)
+  local_pk_values <- if (nrow(local_rows) > 0 && !is.na(local_pk_field)) {
+    as.character(local_rows[[local_pk_field]])
+  } else {
+    character(0)
+  }
+  local_pk_counts <- if (length(local_pk_values) > 0) table(local_pk_values) else integer(0)
+
+  delete_rows <- .sync_delete_ledger_rows(con, cfg, project_id = project_id)
+  explicit_rows <- .sync_change_ledger_rows(con, cfg, project_id = project_id)
+  delete_pk_values <- if (nrow(delete_rows) > 0) as.character(delete_rows$pk_value) else character(0)
+  explicit_pk_values <- if (nrow(explicit_rows) > 0) as.character(explicit_rows$pk_value) else character(0)
+  pk_values <- unique(c(local_pk_values, delete_pk_values, explicit_pk_values))
+
+  core_lookup <- .sync_get_core_lookup(con, cfg, pk_values)
+  baseline_lookup <- .sync_get_baseline_lookup(con, cfg, project_id, pk_values)
+  explicit_lookup <- if (nrow(explicit_rows) > 0) {
+    split(explicit_rows, explicit_rows$pk_value)
+  } else {
+    list()
+  }
+  seen_pk <- character(0)
+
+  out <- list()
+
+  if (nrow(local_rows) > 0) {
+    for (i in seq_len(nrow(local_rows))) {
+      row <- as.list(local_rows[i, , drop = FALSE])
+      pk_value <- as.character(.sync_get_row_value(row, cfg$pk, default = ""))
+      if (!nzchar(pk_value) || pk_value %in% seen_pk) {
+        next
+      }
+      seen_pk <- c(seen_pk, pk_value)
+      baseline_row <- baseline_lookup[[pk_value]]
+      core_row <- core_lookup[[pk_value]]
+      explicit_row <- explicit_lookup[[pk_value]]
+      explicit_type <- if (!is.null(explicit_row) && nrow(explicit_row) > 0) as.character(explicit_row$change_type[[1]]) else NULL
+      explicit_prior <- if (!is.null(explicit_row) && nrow(explicit_row) > 0) .sync_payload_to_row(explicit_row$prior_payload[[1]]) else NULL
+      before_row <- explicit_prior %||% core_row %||% baseline_row
+      inferred_type <- explicit_type %||% .sync_classify_local_change(row, baseline_row = baseline_row, core_row = core_row)
+      if (identical(inferred_type, "insert") && is.null(explicit_type) && is.null(before_row)) {
+        duplicate_count <- if (length(local_pk_counts) > 0 && pk_value %in% names(local_pk_counts)) as.integer(local_pk_counts[[pk_value]]) else 0L
+        if (duplicate_count > 1L) {
+          inferred_type <- "update"
+        }
+      }
+
+      row$local_modified_utc <- NULL
+
+      out[[length(out) + 1L]] <- list(
+        table_pg = cfg$pg,
+        pk_value = pk_value,
+        change_type = inferred_type,
+        local_data = row,
+        core_data = before_row,
+        baseline_data = baseline_row,
+        delete_data = NULL
+      )
+    }
+  }
+
+  if (nrow(delete_rows) > 0) {
+    for (i in seq_len(nrow(delete_rows))) {
+      row <- delete_rows[i, , drop = FALSE]
+      pk_value <- as.character(row$pk_value[[1]])
+      if (!nzchar(pk_value) || pk_value %in% seen_pk) {
+        next
+      }
+      seen_pk <- c(seen_pk, pk_value)
+      baseline_row <- baseline_lookup[[pk_value]]
+      core_row <- core_lookup[[pk_value]]
+      delete_data <- .sync_payload_to_row(row$deleted_payload[[1]])
+
+      if (!isTRUE(row$baseline_exists[[1]]) && !isTRUE(row$core_exists[[1]]) && is.null(baseline_row) && is.null(core_row)) {
+        next
+      }
+
+      out[[length(out) + 1L]] <- list(
+        table_pg = cfg$pg,
+        pk_value = pk_value,
+        change_type = "delete",
+        local_data = NULL,
+        core_data = core_row %||% baseline_row %||% delete_data,
+        baseline_data = baseline_row,
+        delete_data = delete_data
+      )
+    }
+  }
+
+  if (!is.null(max_rows) && is.finite(max_rows) && length(out) > max_rows) {
+    out <- out[seq_len(max_rows)]
+  }
+
+  out
+}
+
+sync_get_pending_summary <- function(con, project_id = NULL) {
+  by_table <- list()
+  total <- c(insert = 0L, update = 0L, delete = 0L, total = 0L)
+
+  for (cfg in SYNC_TABLE_CONFIG) {
+    records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf)
+    counts <- c(
+      insert = sum(vapply(records, function(record) identical(record$change_type, "insert"), logical(1))),
+      update = sum(vapply(records, function(record) identical(record$change_type, "update"), logical(1))),
+      delete = sum(vapply(records, function(record) identical(record$change_type, "delete"), logical(1)))
+    )
+    counts <- c(counts, total = sum(counts))
+    by_table[[cfg$pg]] <- counts
+    total <- total + counts
+  }
+
+  list(by_table = by_table, total = total)
+}
+
+sync_get_pending_total <- function(con, project_id = NULL) {
+  sync_get_pending_summary(con, project_id = project_id)$total[["total"]]
+}
+
+sync_record_delete <- function(con, cfg, pk_value, project_id = NULL, payload = NULL) {
+  sync_ensure_local_tables(con)
+  pk_value <- as.character(pk_value %||% "")
+  if (!nzchar(pk_value)) stop("pk_value is required.")
+
+  if (is.null(payload)) {
+    current <- tryCatch(
+      DBI::dbGetQuery(
+        con,
+        sprintf('SELECT * FROM "%s" WHERE CAST("%s" AS TEXT) = ? LIMIT 1', cfg$local, cfg$pk),
+        list(pk_value)
+      ),
+      error = function(e) data.frame()
+    )
+    if (nrow(current) > 0) {
+      payload <- as.list(current[1, , drop = FALSE])
+      payload$local_modified_utc <- NULL
+    }
+  }
+
+  baseline_exists <- FALSE
+  if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    baseline_exists <- length(.sync_get_baseline_lookup(con, cfg, project_id, pk_value)) > 0
+  }
+  core_exists <- length(.sync_get_core_lookup(con, cfg, pk_value)) > 0
+
+  DBI::dbExecute(
+    con,
+    "DELETE FROM sync_local_deletes WHERE table_pg = ? AND pk_value = ? AND COALESCE(project_id, '') = COALESCE(?, '')",
+    list(cfg$pg, pk_value, if (is.null(project_id)) NA_character_ else as.character(project_id))
+  )
+
+  DBI::dbExecute(
+    con,
+    paste(
+      "INSERT INTO sync_local_deletes",
+      "(table_pg, local_table, pk_name, pk_value, project_id, deleted_payload, baseline_exists, core_exists, deleted_utc)",
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+    ),
+    list(
+      cfg$pg,
+      cfg$local,
+      cfg$pk,
+      pk_value,
+      if (is.null(project_id) || !nzchar(as.character(project_id))) NA_character_ else as.character(project_id),
+      .sync_payload_from_row(payload),
+      isTRUE(baseline_exists),
+      isTRUE(core_exists)
+    )
+  )
+
+  invisible(list(baseline_exists = baseline_exists, core_exists = core_exists))
+}
+
+sync_delete_local_row <- function(con, table_name, pk_value, project_id = NULL) {
+  cfg <- sync_get_table_config(table_name, key = "pg")
+  if (is.null(cfg)) cfg <- sync_get_table_config(table_name, key = "local")
+  if (is.null(cfg)) stop("Unsupported sync table: ", table_name)
+
+  pk_value <- as.character(pk_value %||% "")
+  if (!nzchar(pk_value)) stop("pk_value is required.")
+
+  current <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf('SELECT * FROM "%s" WHERE CAST("%s" AS TEXT) = ? LIMIT 1', cfg$local, cfg$pk),
+      list(pk_value)
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(current) == 0) {
+    return(invisible(FALSE))
+  }
+
+  sync_record_delete(
+    con,
+    cfg,
+    pk_value = pk_value,
+    project_id = project_id,
+    payload = as.list(current[1, , drop = FALSE])
+  )
+  sync_clear_local_change(con, cfg$pg, pk_value = pk_value, project_id = project_id)
+
+  DBI::dbExecute(
+    con,
+    sprintf('DELETE FROM "%s" WHERE CAST("%s" AS TEXT) = ?', cfg$local, cfg$pk),
+    list(pk_value)
+  )
+
+  invisible(TRUE)
+}
+
+.sync_restore_row <- function(con, cfg, row_data, clear_local_modified = TRUE) {
+  if (is.null(row_data) || length(row_data) == 0) stop("Row payload is required.")
+  table_fields <- tryCatch(DBI::dbListFields(con, cfg$local), error = function(e) character(0))
+  if (length(table_fields) == 0) stop("Table not available: ", cfg$local)
+
+  row_names <- names(row_data)
+  keep_idx <- match(tolower(table_fields), tolower(row_names), nomatch = 0L)
+  keep_idx <- keep_idx[keep_idx > 0L]
+  if (length(keep_idx) == 0) stop("No shared columns available for restore.")
+
+  payload_names <- row_names[keep_idx]
+  payload_values <- lapply(payload_names, function(name) row_data[[name]])
+  names(payload_values) <- payload_names
+
+  lmu_field <- .sync_find_field(table_fields, "local_modified_utc")
+  if (!is.na(lmu_field) && isTRUE(clear_local_modified)) {
+    payload_values[[lmu_field]] <- NA
+  }
+
+  pk_field <- .sync_find_field(table_fields, cfg$pk)
+  pk_value <- .sync_get_row_value(row_data, cfg$pk)
+  if (is.null(pk_value)) stop("Restore payload is missing primary key.")
+
+  DBI::dbExecute(
+    con,
+    sprintf('DELETE FROM "%s" WHERE CAST("%s" AS TEXT) = ?', cfg$local, pk_field),
+    list(as.character(pk_value[[1]]))
+  )
+
+  columns <- names(payload_values)
+  placeholders <- paste(rep("?", length(columns)), collapse = ", ")
+  sql <- sprintf(
+    'INSERT INTO "%s" (%s) VALUES (%s)',
+    cfg$local,
+    paste(sprintf('"%s"', columns), collapse = ", "),
+    placeholders
+  )
+  DBI::dbExecute(con, sql, unname(payload_values))
+  invisible(TRUE)
+}
+
+sync_revert_pending_change <- function(con, table_name, pk_value, project_id = NULL) {
+  cfg <- sync_get_table_config(table_name, key = "pg")
+  if (is.null(cfg)) cfg <- sync_get_table_config(table_name, key = "local")
+  if (is.null(cfg)) stop("Unsupported sync table: ", table_name)
+
+  pk_value <- as.character(pk_value %||% "")
+  if (!nzchar(pk_value)) stop("pk_value is required.")
+
+  delete_rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      paste0(
+        "SELECT * FROM sync_local_deletes WHERE table_pg = ? AND pk_value = ?",
+        if (!is.null(project_id) && nzchar(as.character(project_id))) " AND project_id = ?" else "",
+        " ORDER BY deleted_utc DESC LIMIT 1"
+      ),
+      if (!is.null(project_id) && nzchar(as.character(project_id))) {
+        list(cfg$pg, pk_value, as.character(project_id))
+      } else {
+        list(cfg$pg, pk_value)
+      }
+    ),
+    error = function(e) data.frame()
+  )
+
+  if (nrow(delete_rows) > 0) {
+    baseline_row <- if (!is.null(project_id) && nzchar(as.character(project_id))) {
+      .sync_get_baseline_lookup(con, cfg, project_id, pk_value)[[pk_value]]
+    } else {
+      NULL
+    }
+    restore_row <- baseline_row %||% .sync_payload_to_row(delete_rows$deleted_payload[[1]])
+    if (is.null(restore_row)) {
+      stop("No baseline or tombstone payload available to restore the deleted row.")
+    }
+
+    .sync_restore_row(con, cfg, restore_row, clear_local_modified = TRUE)
+    DBI::dbExecute(
+      con,
+      "DELETE FROM sync_local_deletes WHERE table_pg = ? AND pk_value = ? AND COALESCE(project_id, '') = COALESCE(?, '')",
+      list(cfg$pg, pk_value, if (is.null(project_id)) NA_character_ else as.character(project_id))
+    )
+    sync_clear_local_change(con, cfg$pg, pk_value = pk_value, project_id = project_id)
+    return(list(ok = TRUE, change_type = "delete", message = sprintf("Restored deleted %s row %s.", cfg$local, pk_value)))
+  }
+
+  local_rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf('SELECT * FROM "%s" WHERE CAST("%s" AS TEXT) = ? AND local_modified_utc IS NOT NULL LIMIT 1', cfg$local, cfg$pk),
+      list(pk_value)
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(local_rows) == 0) {
+    stop("No pending local change found for this record.")
+  }
+
+  local_row <- as.list(local_rows[1, , drop = FALSE])
+  local_row$local_modified_utc <- NULL
+  explicit_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT * FROM sync_local_changes WHERE table_pg = ? AND pk_value = ? AND COALESCE(project_id, '') = COALESCE(?, '') ORDER BY updated_utc DESC LIMIT 1",
+      list(cfg$pg, pk_value, if (is.null(project_id)) NA_character_ else as.character(project_id))
+    ),
+    error = function(e) data.frame()
+  )
+  explicit_type <- if (nrow(explicit_row) > 0) as.character(explicit_row$change_type[[1]]) else NULL
+  explicit_prior <- if (nrow(explicit_row) > 0) .sync_payload_to_row(explicit_row$prior_payload[[1]]) else NULL
+  baseline_row <- if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    .sync_get_baseline_lookup(con, cfg, project_id, pk_value)[[pk_value]]
+  } else {
+    NULL
+  }
+  core_row <- .sync_get_core_lookup(con, cfg, pk_value)[[pk_value]]
+  change_type <- explicit_type %||% .sync_classify_local_change(local_row, baseline_row = baseline_row, core_row = core_row)
+
+  if (identical(change_type, "insert")) {
+    DBI::dbExecute(
+      con,
+      sprintf('DELETE FROM "%s" WHERE CAST("%s" AS TEXT) = ?', cfg$local, cfg$pk),
+      list(pk_value)
+    )
+    sync_clear_local_change(con, cfg$pg, pk_value = pk_value, project_id = project_id)
+    return(list(ok = TRUE, change_type = "insert", message = sprintf("Removed pending %s insert %s.", cfg$local, pk_value)))
+  }
+
+  restore_row <- explicit_prior %||% baseline_row %||% core_row
+  if (is.null(restore_row)) {
+    stop("No baseline or core row available to restore this update.")
+  }
+
+  .sync_restore_row(con, cfg, restore_row, clear_local_modified = TRUE)
+  sync_clear_local_change(con, cfg$pg, pk_value = pk_value, project_id = project_id)
+  list(ok = TRUE, change_type = "update", message = sprintf("Reverted pending %s update %s.", cfg$local, pk_value))
 }
 
 
@@ -156,71 +817,40 @@ sync_ensure_local_tables <- function(con) {
   shared_cols <- .get_shared_columns(con, cfg$local, cfg$pg)
   if (length(shared_cols) == 0) return(0L)
 
-  pk       <- cfg$pk
-  tmp_name <- paste0("tmp_push_", cfg$pg)
-  DBI::dbExecute(con, paste0("DROP TABLE IF EXISTS ", tmp_name))
+  records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf)
+  if (length(records) == 0) return(0L)
 
-  # Sanitize project_id: only allow alphanumeric and simple separators
-  pid_safe <- gsub("[^A-Za-z0-9_-]", "", as.character(project_id))
+  insert_sql <- sprintf(
+    'INSERT INTO master.staging.%s (%s) VALUES (%s)',
+    cfg$pg,
+    paste(
+      c('"merge_request_id"', '"changeType"', '"baseRowVersion"', '"modifiedBy"', sprintf('"%s"', shared_cols)),
+      collapse = ", "
+    ),
+    paste(rep("?", 4 + length(shared_cols)), collapse = ", ")
+  )
 
-  # Build project scoping filter (project_id from auth session, sanitized)
-  proj_filter <- if (cfg$project_scope == "direct") {
-    paste0('l."projectid" = ', "'", pid_safe, "'")
-  } else {
-    paste0(
-      'l."', cfg$env_fk, '" IN ',
-      '(SELECT "plotnumber" FROM "Env" WHERE "projectid" = ', "'", pid_safe, "')"
+  staged <- 0L
+  for (record in records) {
+    payload <- record$local_data %||% record$baseline_data %||% record$core_data %||% record$delete_data %||% list()
+    payload_pk_field <- .sync_find_field(names(payload), cfg$pk)
+    if (is.na(payload_pk_field)) {
+      payload[[cfg$pk]] <- record$pk_value
+    }
+    values <- c(
+      list(
+        as.integer(mr_id),
+        switch(record$change_type, insert = "I", update = "U", delete = "D", "U"),
+        if (is.na(.sync_extract_row_version(record$core_data %||% record$baseline_data %||% record$delete_data))) NA_integer_ else .sync_extract_row_version(record$core_data %||% record$baseline_data %||% record$delete_data),
+        as.character(submitter)
+      ),
+      lapply(shared_cols, function(col) .sync_get_row_value(payload, col, default = NA))
     )
+    DBI::dbExecute(con, insert_sql, values)
+    staged <- staged + 1L
   }
 
-  col_select <- paste(sprintf('l."%s"', shared_cols), collapse = ", ")
-
-  DBI::dbExecute(con, sprintf(
-    'CREATE TEMP TABLE %s AS
-     SELECT %s,
-            CAST(c."rowVersion" AS INTEGER) AS _base_row_version,
-            CASE WHEN CAST(c."%s" AS TEXT) IS NULL THEN \'I\' ELSE \'U\' END AS _changetype
-     FROM "%s" l
-     LEFT JOIN master.core.%s c
-       ON CAST(c."%s" AS TEXT) = CAST(l."%s" AS TEXT)
-     WHERE l.local_modified_utc IS NOT NULL
-       AND %s',
-    tmp_name, col_select,
-    pk,
-    cfg$local, cfg$pg,
-    pk, pk,
-    proj_filter
-  ))
-
-  n <- tryCatch(
-    as.integer(DBI::dbGetQuery(con, sprintf("SELECT COUNT(*) AS n FROM %s", tmp_name))$n[1]),
-    error = function(e) 0L
-  )
-  if (n == 0L) return(0L)
-
-  staging_col_list <- paste(
-    c('"merge_request_id"', '"changeType"', '"baseRowVersion"', '"modifiedBy"',
-      sprintf('"%s"', shared_cols)),
-    collapse = ", "
-  )
-  # Build select list: literal mr_id via DBI param, submitter as sanitized literal
-  sub_safe <- gsub("'", "", as.character(submitter))
-  select_col_list <- paste(
-    c("?", "_changetype", "_base_row_version",
-      paste0("'", sub_safe, "'"),
-      sprintf('"%s"', shared_cols)),
-    collapse = ", "
-  )
-
-  DBI::dbExecute(
-    con,
-    sprintf(
-      "INSERT INTO master.staging.%s (%s) SELECT %s FROM %s",
-      cfg$pg, staging_col_list, select_col_list, tmp_name
-    ),
-    list(as.integer(mr_id))
-  )
-  n
+  staged
 }
 
 #' Push all local changes for a project to master.staging, creating a merge request.
@@ -321,50 +951,22 @@ sync_get_local_changes <- function(con, project_id = NULL) {
   out <- list()
 
   for (cfg in SYNC_TABLE_CONFIG) {
-    if (!DBI::dbExistsTable(con, cfg$local)) {
-      out[[cfg$pg]] <- data.frame(table_pg = character(0), change_type = character(0))
+    records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf)
+    if (length(records) == 0) {
+      out[[cfg$pg]] <- data.frame(
+        table_pg = character(0),
+        pk_value = character(0),
+        change_type = character(0),
+        stringsAsFactors = FALSE
+      )
       next
     }
-    fields  <- tryCatch(DBI::dbListFields(con, cfg$local), error = function(e) character(0))
-    has_lmu <- "local_modified_utc" %in% fields
-    if (!has_lmu) {
-      out[[cfg$pg]] <- data.frame(table_pg = character(0), change_type = character(0))
-      next
-    }
 
-    pid_safe <- if (!is.null(project_id) && nzchar(as.character(project_id)))
-      gsub("[^A-Za-z0-9_-]", "", as.character(project_id)) else NULL
-
-    if (cfg$project_scope == "direct") {
-      pid_clause <- if (!is.null(pid_safe))
-        paste0(' AND "projectid" = \'', pid_safe, '\'') else ""
-
-      has_rv <- "rowversion" %in% tolower(fields)
-      ct_expr <- if (has_rv)
-        "CASE WHEN \"rowVersion\" IS NULL THEN 'insert' ELSE 'update' END"
-      else
-        "'insert'"
-
-      sql <- sprintf(
-        "SELECT '%s' AS table_pg, %s AS change_type FROM \"%s\" WHERE local_modified_utc IS NOT NULL%s",
-        cfg$pg, ct_expr, cfg$local, pid_clause
-      )
-    } else {
-      pid_clause <- if (!is.null(pid_safe))
-        sprintf(
-          ' AND "%s" IN (SELECT "plotnumber" FROM "Env" WHERE "projectid" = \'%s\')',
-          cfg$env_fk, pid_safe
-        ) else ""
-
-      sql <- sprintf(
-        "SELECT '%s' AS table_pg, 'update' AS change_type FROM \"%s\" WHERE local_modified_utc IS NOT NULL%s",
-        cfg$pg, cfg$local, pid_clause
-      )
-    }
-
-    out[[cfg$pg]] <- tryCatch(
-      DBI::dbGetQuery(con, sql),
-      error = function(e) data.frame(table_pg = character(0), change_type = character(0))
+    out[[cfg$pg]] <- data.frame(
+      table_pg = rep(cfg$pg, length(records)),
+      pk_value = vapply(records, function(record) as.character(record$pk_value %||% ""), character(1)),
+      change_type = vapply(records, function(record) as.character(record$change_type %||% ""), character(1)),
+      stringsAsFactors = FALSE
     )
   }
   out
@@ -387,88 +989,7 @@ sync_get_local_changes <- function(con, project_id = NULL) {
 #' @param max_rows   Integer. Safety cap; default 50L.
 #' @return List of records, each: list(pk_value, change_type, local_data, core_data).
 sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) {
-  if (!DBI::dbExistsTable(con, cfg$local)) return(list())
-
-  fields <- tryCatch(DBI::dbListFields(con, cfg$local), error = function(e) character(0))
-  if (!"local_modified_utc" %in% fields) return(list())
-
-  pk       <- cfg$pk
-  pid_safe <- if (!is.null(project_id) && nzchar(as.character(project_id)))
-    gsub("[^A-Za-z0-9_-]", "", as.character(project_id)) else NULL
-
-  # Build project filter (same logic as sync_get_local_changes)
-  proj_filter <- if (!is.null(pid_safe)) {
-    if (cfg$project_scope == "direct") {
-      paste0(' AND "projectid" = \'', pid_safe, '\'')
-    } else {
-      sprintf(
-        ' AND "%s" IN (SELECT "plotnumber" FROM "Env" WHERE "projectid" = \'%s\')',
-        cfg$env_fk, pid_safe
-      )
-    }
-  } else ""
-
-  local_rows <- tryCatch(
-    DBI::dbGetQuery(
-      con,
-      sprintf(
-        'SELECT * FROM "%s" WHERE local_modified_utc IS NOT NULL%s LIMIT %d',
-        cfg$local, proj_filter, as.integer(max_rows)
-      )
-    ),
-    error = function(e) data.frame()
-  )
-  if (nrow(local_rows) == 0) return(list())
-
-  # Fetch matching core rows (only when cloud is connected)
-  pk_values <- as.character(local_rows[[pk]])
-  pk_placeholders <- paste(rep("?", length(pk_values)), collapse = ", ")
-
-  core_rows <- if (sync_cloud_connected(con) && length(pk_values) > 0) {
-    tryCatch(
-      DBI::dbGetQuery(
-        con,
-        sprintf(
-          'SELECT * FROM master.core.%s WHERE CAST("%s" AS TEXT) IN (%s)',
-          cfg$pg, pk, pk_placeholders
-        ),
-        as.list(pk_values)
-      ),
-      error = function(e) data.frame()
-    )
-  } else {
-    data.frame()
-  }
-
-  # Build lookup: pk_value (character) -> core row as list
-  core_lookup <- if (nrow(core_rows) > 0) {
-    setNames(
-      lapply(seq_len(nrow(core_rows)), function(i) as.list(core_rows[i, , drop = FALSE])),
-      as.character(core_rows[[pk]])
-    )
-  } else {
-    list()
-  }
-
-  # Build per-row detail records
-  lapply(seq_len(nrow(local_rows)), function(i) {
-    row       <- local_rows[i, , drop = FALSE]
-    pk_val    <- as.character(row[[pk]])
-    core_data <- core_lookup[[pk_val]]
-
-    change_type <- if (is.null(core_data)) "insert" else "update"
-
-    # Strip internal metadata from local_data
-    local_list <- as.list(row)
-    local_list[["local_modified_utc"]] <- NULL
-
-    list(
-      pk_value    = pk_val,
-      change_type = change_type,
-      local_data  = local_list,
-      core_data   = core_data
-    )
-  })
+  sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = max_rows)
 }
 
 
@@ -642,6 +1163,29 @@ sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) 
   DBI::dbExecute(
     con,
     sprintf(
+      "DELETE FROM master.core.%s c
+       USING master.staging.%s s
+       LEFT JOIN master.admin.merge_conflicts mc
+         ON  mc.merge_request_id = s.merge_request_id
+         AND mc.table_name       = '%s'
+         AND mc.record_id        = CAST(s.\"%s\" AS TEXT)
+       WHERE s.merge_request_id = ?
+         AND s.\"changeType\" = 'D'
+         AND (mc.id IS NULL OR mc.resolution IN ('keep_staged', 'dismiss'))
+         AND CAST(c.\"%s\" AS TEXT) = CAST(s.\"%s\" AS TEXT)",
+      tbl,
+      tbl,
+      tbl,
+      pk,
+      pk,
+      pk
+    ),
+    list(as.integer(mr_id))
+  )
+
+  DBI::dbExecute(
+    con,
+    sprintf(
       "INSERT INTO master.core.%s (%s)
        SELECT %s
        FROM master.staging.%s s
@@ -650,6 +1194,7 @@ sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) 
          AND mc.table_name       = '%s'
          AND mc.record_id        = CAST(s.\"%s\" AS TEXT)
        WHERE s.merge_request_id = ?
+         AND COALESCE(s.\"changeType\", 'U') <> 'D'
          AND (mc.id IS NULL OR mc.resolution IN ('keep_staged', 'dismiss'))
        ON CONFLICT (\"%s\") DO UPDATE SET %s",
       tbl, col_list,
