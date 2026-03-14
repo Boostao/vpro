@@ -71,6 +71,10 @@ source("R/mod_veg_sample.R")
 source("R/mod_site_env.R")
 source("R/mod_su_table.R")
 source("R/mod_fs882_6x4_reimagined_ui.R")
+source("R/mod_fs1333.R")
+source("R/mod_project_metadata.R")
+source("R/mod_combine_species.R")
+source("R/mod_herbarium.R")
 source("R/mod_export.R")
 source("R/mod_reporting.R")
 source("R/mod_import.R")
@@ -84,6 +88,7 @@ source("R/mod_merge.R")
 source("R/mod_becweb_map.R")
 source("R/mod_whatsnew.R")
 source("R/mod_data_entry_context.R")
+source("R/mod_nav_launcher.R")
 
 # Note: The actual 'SysState' object is initialized in server.R 
 # because it must be reactive and unique to the session.

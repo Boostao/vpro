@@ -1342,9 +1342,22 @@ server <- function(input, output, session) {
   # Also passing con to avoid multiple connections
   mod_veg_sample_server("veg", state, con)
   
-  # FS882-6x4XL destination module (wrapper over existing site/env implementation)
-  mod_fs882_6x4xl_server("fs882_6x4xl", state, con)
+  # FS882 destination module
+  mod_fs882_server("fs882", state, con)
   
+  # FS1333 destination module
+  mod_fs1333_server("fs1333", state, con)
+
+  # Project Metadata destination module
+  mod_project_metadata_server("project_metadata", state, con)
+  mod_project_metadata_server("project_metadata_data", state, con)
+
+  # Combine Species destination module (USysLumpMaster ribbon target)
+  mod_combine_species_server("combine_species", state, con)
+
+  # Herbarium destination module (frmHerbarium ribbon target)
+  mod_herbarium_server("herbarium", state, con)
+
   # Export Module
   mod_export_server("export", state, con)
 
@@ -1398,4 +1411,112 @@ server <- function(input, output, session) {
   
   # BEC Web Map Module (public-facing, no auth requirement)
   mod_becweb_map_server("becmap", con = con, auth_level = "public")
+
+  # Nav launchers: wire remaining Access-style menu entries to active modules/actions.
+  mod_nav_launcher_server(
+    "launch_project_new",
+    open_main_tab = "Vegetation",
+    click_id = "project-btn_new",
+    run_notification = "Opened project creation action from sidebar controls."
+  )
+  mod_nav_launcher_server(
+    "launch_project_save_as",
+    open_main_tab = "Vegetation",
+    click_id = "project-btn_save",
+    run_notification = "Opened project save action from sidebar controls."
+  )
+
+  for (launcher_id in c(
+    "launch_colour_theme",
+    "launch_user_setup",
+    "launch_reference_colour_theme",
+    "launch_reference_user_setup"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "Auth")
+  }
+
+  for (launcher_id in c(
+    "launch_user_log",
+    "launch_project_merge",
+    "launch_reference_attach_species_table",
+    "launch_reference_attach_code_list_table",
+    "launch_reference_site_environment_codes",
+    "launch_reference_species_name_codes",
+    "launch_reference_directories",
+    "launch_help_service_packs"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "Administration")
+  }
+
+  for (launcher_id in c(
+    "launch_project_export_splinter",
+    "launch_project_metadata_export",
+    "launch_export_to_r",
+    "launch_export_to_turboveg",
+    "launch_export_user_species_list"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "Export")
+  }
+
+  for (launcher_id in c(
+    "launch_project_metadata_import",
+    "launch_import_vpro_64_project",
+    "launch_import_venus_5_0",
+    "launch_data_turboveg"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "Import")
+  }
+
+  for (launcher_id in c(
+    "launch_su_table_new",
+    "launch_su_table_save_as",
+    "launch_su_table_from_query",
+    "launch_su_table_from_form_filter",
+    "launch_su_table_from_environment",
+    "launch_su_table_compare_assignments",
+    "launch_su_table_list_units_with_plots",
+    "launch_su_table_write_bec_master"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "SU Table")
+  }
+
+  for (launcher_id in c(
+    "launch_hierarchy_new",
+    "launch_hierarchy_save_as",
+    "launch_hierarchy_merge",
+    "launch_hierarchy_diagram"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "Hierarchy")
+  }
+
+  for (launcher_id in c(
+    "launch_project_compare",
+    "launch_report_long_vegetation",
+    "launch_report_summary_vegetation",
+    "launch_report_long_environment",
+    "launch_report_summary_environment",
+    "launch_report_subzone_matrix_of_units",
+    "launch_report_hierarchy_diagram",
+    "launch_report_print_plot_label",
+    "launch_report_create_plot_locations_file",
+    "launch_report_show_plot_locations_google_earth"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "Reports")
+  }
+
+  mod_nav_launcher_server(
+    "launch_validate_data",
+    open_main_tab = "Reports",
+    open_nested_tab_id = "report-reporting_tabs",
+    open_nested_value = "Diagnostics"
+  )
+
+  mod_nav_launcher_server(
+    "launch_help_vpro_help",
+    open_main_tab = "Reports",
+    click_id = "btn_whatsnew",
+    run_notification = "Opened What\'s New / help dialog."
+  )
+  mod_nav_launcher_server("launch_help_set_all_to_sample", open_main_tab = "Vegetation")
+  mod_nav_launcher_server("launch_help_about_vpro", open_main_tab = "Auth")
 }

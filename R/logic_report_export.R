@@ -10,6 +10,14 @@ sanitize_sheet_names <- function(names_vec) {
 build_short_veg_view <- function(summary, constancy_format, display_mode, show_common) {
   if (nrow(summary) == 0) return(data.frame())
 
+  ensure_cols <- function(df, cols) {
+    missing <- setdiff(cols, names(df))
+    if (length(missing) > 0) {
+      for (col_name in missing) df[[col_name]] <- NA
+    }
+    df
+  }
+
   if (constancy_format) {
     view <- data.frame(
       Group = summary$group_label,
@@ -35,6 +43,7 @@ build_short_veg_view <- function(summary, constancy_format, display_mode, show_c
   }
 
   if (!is.null(show_common) && tolower(show_common) != "none") {
+    view <- ensure_cols(view, c("Group", "Species", "Constancy", "Display", "Presence", "MeanCover"))
     if (constancy_format) {
       view <- cbind(view[, c("Group", "Species")], Common = summary$common_label, view[, "Constancy", drop = FALSE])
     } else if (display_mode != "standard") {
@@ -337,7 +346,7 @@ build_excel_report_data <- function(con, template_name, params) {
       if (nrow(veg_labeled) > 0) {
         summary$common_key <- ifelse(is.na(summary$common_label), "", summary$common_label)
         veg_labeled$common_key <- ifelse(is.na(veg_labeled$common_label), "", veg_labeled$common_label)
-        summary_keep <- summary[, c(
+        summary_keep_cols <- c(
           "group_label",
           "species_label",
           "common_key",
@@ -346,7 +355,12 @@ build_excel_report_data <- function(con, template_name, params) {
           "mean_cover",
           "display_value",
           "common_label"
-        )]
+        )
+        missing_summary_keep <- setdiff(summary_keep_cols, names(summary))
+        if (length(missing_summary_keep) > 0) {
+          for (col_name in missing_summary_keep) summary[[col_name]] <- NA
+        }
+        summary_keep <- summary[, summary_keep_cols, drop = FALSE]
         veg_labeled <- dplyr::inner_join(
           veg_labeled,
           summary_keep[, c("group_label", "species_label", "common_key")],
@@ -379,7 +393,7 @@ build_excel_report_data <- function(con, template_name, params) {
       report_table <- data.frame()
       if (nrow(summary) > 0) {
         summary$common_key <- ifelse(is.na(summary$common_label), "", summary$common_label)
-        summary_keep <- summary[, c(
+        summary_keep_cols <- c(
           "group_label",
           "species_label",
           "common_key",
@@ -388,7 +402,12 @@ build_excel_report_data <- function(con, template_name, params) {
           "mean_cover",
           "display_value",
           "common_label"
-        )]
+        )
+        missing_summary_keep <- setdiff(summary_keep_cols, names(summary))
+        if (length(missing_summary_keep) > 0) {
+          for (col_name in missing_summary_keep) summary[[col_name]] <- NA
+        }
+        summary_keep <- summary[, summary_keep_cols, drop = FALSE]
         if (nrow(veg_wide) > 0) {
           report_table <- dplyr::left_join(
             summary_keep,
@@ -548,6 +567,7 @@ build_excel_report_data <- function(con, template_name, params) {
       names(long_names)[names(long_names) == "siteserieslongname"] <- "long_name"
       long_names$name_key <- as.character(long_names$name_key)
       hier$Name <- as.character(hier$Name)
+      if (!"long_name" %in% names(long_names)) long_names$long_name <- NA_character_
       hier <- dplyr::left_join(hier, long_names[, c("name_key", "long_name")], by = c("Name" = "name_key"))
     }
 

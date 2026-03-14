@@ -885,3 +885,11 @@ mod_fs882_6x4_ui <- function(id) {
 mod_fs882_6x4_server <- function(id, state, con) {
   mod_fs882_6x4_reimagined_server(id, state, con)
 }
+
+mod_fs882_ui <- function(id) {
+  mod_fs882_6x4_reimagined_ui(id)
+}
+
+mod_fs882_server <- function(id, state, con) {
+  mod_fs882_6x4_reimagined_server(id, state, con)
+}

@@ -5,7 +5,29 @@ if (!"bcgov" %in% bslib::bootswatch_themes()) {
   source("theme/add_bcgov_bootswatch_to_bslib.R")
 }
 
-npt<-function(i=NULL,l,t,v=t){nav_panel(tooltip(span(if(!is.null(i)){icon(i)},l),t),value=v)}
+npt <- function(icon=NULL, label, tip, value, mod=NULL) {
+  nav_panel(
+    title = tooltip(span(if(!is.null(icon)){shiny::icon(icon)},label),tip),
+    value = value,
+    mod
+  )
+}
+
+nlt <- function(icon=NULL, label, tip, value) {
+  nav_item(
+    tags$a(
+      href = "#",
+      role = "button",
+      class = "dropdown-item",
+      title = tip,
+      onclick = sprintf(
+        "Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); return false;",
+        value
+      ),
+      tooltip(span(if(!is.null(icon)){shiny::icon(icon)},label),tip)
+    )
+  )
+}
 
 ui <- page_navbar(
   id = "main_tabs",
@@ -45,118 +67,437 @@ ui <- page_navbar(
   ),
   # Main Tabs
 
-
-
-  # Placeholder for future UI refactoring
+# Forms ----
   nav_menu("Forms",
     "Data Entry",
-    npt("rectangle-list", "FS882 Data Forms", "This is the data form that most closely resembles the FS882 field forms.","fs882"),
-    npt("campground", "Enter/Edit SIVI Data", "SIVI and FS882 share a common data structure, but this form most closely resembles FS1333","fs1333"),
+    npt(
+      icon = "rectangle-list",
+      label = "FS882 Data Forms",
+      tip = "This is the data form that most closely resembles the FS882 field forms.",
+      value = "fs882",
+      mod = mod_fs882_ui("fs882")
+    ),
+    npt(
+      icon = "campground",
+      label = "Enter/Edit SIVI Data",
+      tip = "SIVI and FS882 share a common data structure, but this form most closely resembles FS1333",
+      value = "fs1333",
+      mod = mod_fs1333_ui("fs1333")
+    ),
     "---",
     "Others",
-    npt("table-cells", "Metadata", "Add/edit metadata","metadata"),
-    npt("link", "Combine Species", "Here you can manage your combined (lumped) species tables.","combine_species"),
-    npt("leaf", "Herbarium", "Have some herbarium data you want to manage?  Click here.","herbarium"),
-    npt("palette", "Colour-theme", "In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species.","colour_theme"),
-    npt("user-gear", "User setup", "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)","user_setup"),
-    npt("clock-rotate-left", "User log", "A record of when you (or someone else) opens and closes VPro.  Nothing spectacular, but useful just the same.","user_log")
+    npt(
+      icon = "table-cells",
+      label = "Metadata",
+      tip = "Add/edit metadata",
+      value = "metadata",
+      mod = mod_project_metadata_ui("project_metadata")
+    ),
+    npt(
+      icon = "link",
+      label = "Combine Species",
+      tip = "Here you can manage your combined (lumped) species tables.",
+      value = "combine_species",
+      mod = mod_combine_species_ui("combine_species")
+    ),
+    npt(
+      icon = "leaf",
+      label = "Herbarium",
+      tip = "Have some herbarium data you want to manage?  Click here.",
+      value = "herbarium",
+      mod = mod_herbarium_ui("herbarium")
+    ),
+    npt(
+      icon = "palette",
+      label = "Colour-theme",
+      tip = "In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species.",
+      value = "colour_theme",
+      mod = mod_nav_launcher_ui("launch_colour_theme", "Colour-theme", "Open existing references/tools for theme-related tasks.")
+    ),
+    npt(
+      icon = "user-gear",
+      label = "User setup",
+      tip = "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)",
+      value = "user_setup",
+      mod = mod_nav_launcher_ui("launch_user_setup", "User setup", "Open setup-related forms and run setup actions.")
+    ),
+    npt(
+      icon = "clock-rotate-left",
+      label = "User log",
+      tip = "A record of when you (or someone else) opens and closes VPro.  Nothing spectacular, but useful just the same.",
+      value = "user_log",
+      mod = mod_nav_launcher_ui("launch_user_log", "User log", "Open audit and diagnostic views tied to user activity.")
+    )
   ),
+# Data ----
   nav_menu("Data",
     "Project",
-    npt("folder-plus", "New Project", "Create a new project.  A project stores your environment, vegetation and soil data.","project_new"),
-    npt("floppy-disk", "Save As...", "Save the current project to a new or existing database using a different name.","project_save_as"),
-    npt("box-archive", "Backup Current Project", "This tool creates a copy of the current project adding the prefix \"BAK\" to the project name.","project_backup"),
-    npt("share-nodes", "Export Splinter Project", "A splinter project is the portion of the current project that has matching plots in the current SU table.","project_export_splinter"),
-    npt("diagram-project", "Merge Projects", "Combine the plots of two projects.  Remember to backup your data before performing these types of functions.","project_merge"),
-    npt("not-equal", "Compare Two Projects", "This tool compares site, soil, and vegetation data plot-by-plot and field-by-field, then produces an Excel report.","project_compare"),
-    npt("table-cells", "Project Metadata", "Add/edit project metadata here.  It is suggested that you maintain project metadata for each of your projects.","project_metadata"),
-    npt("file-export", "Export Project Metadata", "Use this tool to export your metadata to a database for distribution.","project_metadata_export"),
-    npt("file-import", "Import Project Metadata", "Import project metadata into your current metadata table.  Remember that the Project ID field must be unique.","project_metadata_import"),
+    npt(
+      icon = "folder-plus",
+      label = "New Project",
+      tip = "Create a new project.  A project stores your environment, vegetation and soil data.",
+      value = "project_new",
+      mod = mod_nav_launcher_ui("launch_project_new", "New Project", "Create a new project using the existing project controls in the sidebar.")
+    ),
+    npt(
+      icon = "floppy-disk",
+      label = "Save As...",
+      tip = "Save the current project to a new or existing database using a different name.",
+      value = "project_save_as",
+      mod = mod_nav_launcher_ui("launch_project_save_as", "Save Project As", "Save the active project into a new database path.")
+    ),
+    npt(
+      icon = "share-nodes",
+      label = "Export Splinter Project",
+      tip = "A splinter project is the portion of the current project that has matching plots in the current SU table.",
+      value = "project_export_splinter",
+      mod = mod_nav_launcher_ui("launch_project_export_splinter", "Export Splinter Project", "Open export tools and run project-level exports.")
+    ),
+    npt(
+      icon = "diagram-project",
+      label = "Merge Projects",
+      tip = "Combine the plots of two projects.  Remember to backup your data before performing these types of functions.",
+      value = "project_merge",
+      mod = mod_nav_launcher_ui("launch_project_merge", "Merge Projects", "Open project merge/review workflows.")
+    ),
+    npt(
+      icon = "not-equal",
+      label = "Compare Two Projects",
+      tip = "This tool compares site, soil, and vegetation data plot-by-plot and field-by-field, then produces an Excel report.",
+      value = "project_compare",
+      mod = mod_nav_launcher_ui("launch_project_compare", "Compare Two Projects", "Open reporting tools for cross-project checks.")
+    ),
+    npt(
+      icon = "table-cells",
+      label = "Project Metadata",
+      tip = "Add/edit project metadata here.  It is suggested that you maintain project metadata for each of your projects.",
+      value = "project_metadata",
+      mod = mod_project_metadata_ui("project_metadata_data")
+    ),
+    npt(
+      icon = "file-export",
+      label = "Export Project Metadata",
+      tip = "Use this tool to export your metadata to a database for distribution.",
+      value = "project_metadata_export",
+      mod = mod_nav_launcher_ui("launch_project_metadata_export", "Export Project Metadata", "Open export/reporting tools for metadata distribution.")
+    ),
+    npt(
+      icon = "file-import",
+      label = "Import Project Metadata",
+      tip = "Import project metadata into your current metadata table.  Remember that the Project ID field must be unique.",
+      value = "project_metadata_import",
+      mod = mod_nav_launcher_ui("launch_project_metadata_import", "Import Project Metadata", "Open import tools for metadata tables.")
+    ),
     "---",
     "Site Unit",
-    npt("table", "New Site Unit Table", "A site unit table is used to assign plots to groups.  It also functions as a filter limiting the number of active project plots.","su_table_new"),
-    npt("floppy-disk", "Save As...", "Save the current site unit table to a new or existing database using a different name.","su_table_save_as"),
-    npt("box-archive", "Backup The Current Site Unit Table", "Adds the prefix \"BAK\" to the site unit table name and saves it to a new database.","su_table_backup"),
-    npt("scissors", "SU Table From Breaks", "Create an SU table from site units found below breakpoints in the current hierarchy.","su_table_from_breaks"),
-    npt("filter", "SU Table From Filter Query", "Uses a filter query to select plots from the current project and save them as a site unit table.  Unit assignments from current SU table are optional.","su_table_from_query"),
-    npt("sliders", "SU Table From Form Filter", "Using a Microsoft Access form filter, you can generate a SU table based on the selected plots.","su_table_from_form_filter"),
-    npt("wand-magic", "Create Site Units From Environment Fields", "Uses concatenation to build unit names from environment field data.  The result is a new SU table.","su_table_from_environment"),
-    npt("arrows-left-right", "Compare Plot Assignments", "Compare plot assignments between two site unit tables and generate an Excel report of the comparison.","su_table_compare_assignments"),
-    npt("list-ul", "List Site Units With Plots", "Generates a list of current site units, their long names, number of plots, and a list of plot numbers.","su_table_list_units_with_plots"),
-    npt("pen-to-square", "Write BEC Master into SU Table", "Copies the currently assigned BEC Master unit into the current Site Unit table replacing current unit assignments except where there does not exist a BEC Master unit assignment.","su_table_write_bec_master"),
+    npt(
+      icon = "table",
+      label = "New Site Unit Table",
+      tip = "A site unit table is used to assign plots to groups.  It also functions as a filter limiting the number of active project plots.",
+      value = "su_table_new",
+      mod = mod_nav_launcher_ui("launch_su_table_new", "New Site Unit Table", "Open the Site Unit table tools.")
+    ),
+    npt(
+      icon = "floppy-disk",
+      label = "Save As...",
+      tip = "Save the current site unit table to a new or existing database using a different name.",
+      value = "su_table_save_as",
+      mod = mod_nav_launcher_ui("launch_su_table_save_as", "Save Site Unit Table", "Open the Site Unit table tools and save/export workflows.")
+    ),
+    npt(
+      icon = "filter",
+      label = "SU Table From Filter Query",
+      tip = "Uses a filter query to select plots from the current project and save them as a site unit table.  Unit assignments from current SU table are optional.",
+      value = "su_table_from_query",
+      mod = mod_nav_launcher_ui("launch_su_table_from_query", "SU Table From Filter Query", "Open SU tools and filter-driven assignment workflows.")
+    ),
+    npt(
+      icon = "sliders",
+      label = "SU Table From Form Filter",
+      tip = "Using a Microsoft Access form filter, you can generate a SU table based on the selected plots.",
+      value = "su_table_from_form_filter",
+      mod = mod_nav_launcher_ui("launch_su_table_from_form_filter", "SU Table From Form Filter", "Open SU tools and form-filter workflows.")
+    ),
+    npt(
+      icon = "wand-magic",
+      label = "Create Site Units From Environment Fields",
+      tip = "Uses concatenation to build unit names from environment field data.  The result is a new SU table.",
+      value = "su_table_from_environment",
+      mod = mod_nav_launcher_ui("launch_su_table_from_environment", "Create Site Units From Environment Fields", "Open SU tools and environment-driven unit creation workflows.")
+    ),
+    npt(
+      icon = "arrows-left-right",
+      label = "Compare Plot Assignments",
+      tip = "Compare plot assignments between two site unit tables and generate an Excel report of the comparison.",
+      value = "su_table_compare_assignments",
+      mod = mod_nav_launcher_ui("launch_su_table_compare_assignments", "Compare Plot Assignments", "Open SU table comparison tools.")
+    ),
+    npt(
+      icon = "list-ul",
+      label = "List Site Units With Plots",
+      tip = "Generates a list of current site units, their long names, number of plots, and a list of plot numbers.",
+      value = "su_table_list_units_with_plots",
+      mod = mod_nav_launcher_ui("launch_su_table_list_units_with_plots", "List Site Units With Plots", "Open SU tools and listing reports.")
+    ),
+    npt(
+      icon = "pen-to-square",
+      label = "Write BEC Master into SU Table",
+      tip = "Copies the currently assigned BEC Master unit into the current Site Unit table replacing current unit assignments except where there does not exist a BEC Master unit assignment.",
+      value = "su_table_write_bec_master",
+      mod = mod_nav_launcher_ui("launch_su_table_write_bec_master", "Write BEC Master into SU Table", "Open SU tools and BEC writeback workflows.")
+    ),
     "---",
     "Hierarchy",
-    npt("sitemap", "New Hierarchy Table", "A hierarchy table is a hierarchical construct of classification levels.  Use this function to create a new hierarchy table in a new or existing database.","hierarchy_new"),
-    npt("floppy-disk", "Save As...", "Save the current hierarchy table to a new or existing database using a different name.","hierarchy_save_as"),
-    npt("box-archive", "Backup Current Hierarchy Table", "Adds the prefix \"BAK\" to the current hierarchy table name and saves it to a new database.","hierarchy_backup"),
-    npt("code-branch", "Save Hierarchy Under Breaks", "Save the portion(s) of the current hierarchy that fall under breakpoints.","hierarchy_save_under_breaks"),
-    npt("diagram-project", "Merge Hierarchies", "Please backup first.  Hierarchies can be complex tables so there's a lot than can go wrong.  That said, use this tool to combine two hierarchies.","hierarchy_merge"),
-    npt("diagram-project", "Hierarchy Diagram", "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.","hierarchy_diagram"),
+    npt(
+      icon = "sitemap",
+      label = "New Hierarchy Table",
+      tip = "A hierarchy table is a hierarchical construct of classification levels.  Use this function to create a new hierarchy table in a new or existing database.",
+      value = "hierarchy_new",
+      mod = mod_nav_launcher_ui("launch_hierarchy_new", "New Hierarchy Table", "Open hierarchy management tools.")
+    ),
+    npt(
+      icon = "floppy-disk",
+      label = "Save As...",
+      tip = "Save the current hierarchy table to a new or existing database using a different name.",
+      value = "hierarchy_save_as",
+      mod = mod_nav_launcher_ui("launch_hierarchy_save_as", "Save Hierarchy Table", "Open hierarchy tools and save/export workflows.")
+    ),
+    npt(
+      icon = "diagram-project",
+      label = "Merge Hierarchies",
+      tip = "Please backup first.  Hierarchies can be complex tables so there's a lot than can go wrong.  That said, use this tool to combine two hierarchies.",
+      value = "hierarchy_merge",
+      mod = mod_nav_launcher_ui("launch_hierarchy_merge", "Merge Hierarchies", "Open hierarchy merge and review workflows.")
+    ),
+    npt(
+      icon = "diagram-project",
+      label = "Hierarchy Diagram",
+      tip = "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.",
+      value = "hierarchy_diagram",
+      mod = mod_nav_launcher_ui("launch_hierarchy_diagram", "Hierarchy Diagram", "Open hierarchy diagram/report workflows.")
+    ),
     "---",
     "Import",
-    npt("database", "VPro 15 Project", "Import a VPro 15 project.","import_vpro_15_project"),
-    npt("database", "VPro 13 Project", "Import a VPro 13 project.","import_vpro_13_project"),
-    npt("mobile-screen-button", "FileMaker Go", "Import FileMaker Go data.","import_filemaker_go"),
-    npt("table", "VPro User Site Units", "Import a VPro user site units table.","import_vpro_user_site_units"),
-    npt("seedling", "VPro User Species List", "Import a VPro user species list.","import_vpro_user_species_list"),
-    npt("book", "VPro Master Species List", "Import the VPro master species list.","import_vpro_master_species_list"),
-    npt("table-list", "VPro Master List Table", "Import the VPro master list table.","import_vpro_master_list_table"),
-    npt("globe", "VENUS 4.2", "Import VENUS 4.2 data.","import_venus_4_2"),
-    npt("globe", "VENUS 5.0", "Import VENUS 5.0 data.","import_venus_5_0"),
+    npt(
+      icon = "database",
+      label = "VPro 64 Project",
+      tip = "Import a VPro 64 project.",
+      value = "import_vpro_64_project",
+      mod = mod_nav_launcher_ui("launch_import_vpro_64_project", "Import VPro 64 Project", "Open import module for VPro64 data migration.")
+    ),
+    npt(
+      icon = "globe",
+      label = "VENUS 5.0",
+      tip = "Import VENUS 5.0 data.",
+      value = "import_venus_5_0",
+      mod = mod_nav_launcher_ui("launch_import_venus_5_0", "Import VENUS 5.0", "Open import module for VENUS data.")
+    ),
+    npt(
+      icon = "file-code",
+      label = "TurboVeg",
+      tip = "Import TurboVeg data.",
+      value = "data_turboveg",
+      mod = mod_nav_launcher_ui("launch_data_turboveg", "Import TurboVeg", "Open import module for TurboVeg data.")
+    ),
     "---",
     "Export",
-    npt("database", "VPro 15 Project", "Export the current project as a VPro 15 project.","export_vpro_15_project"),
-    npt("database", "VPro 13 Project", "Export the current project as a VPro 13 project.","export_vpro_13_project"),
-    npt("table-columns", "PC-ORD Compact Veg Form", "Export the PC-ORD compact vegetation form.","export_pc_ord_compact_veg_form"),
-    npt("table-cells-large", "PC-ORD Environment Matrix", "Export the PC-ORD environment matrix.","export_pc_ord_environment_matrix"),
-    npt("file-code", "Export to R", "Export the current dataset for use in R.","export_to_r"),
-    npt("seedling", "User Species List", "Export the current user species list.","export_user_species_list"),
-    npt("table", "User Site Units", "Export the current user site units.","export_user_site_units"),
-    npt("file-csv", "Export Level Units CSV", "Export level units to CSV.","export_level_units_csv"),
+    npt(
+      icon = "file-code",
+      label = "R (rds)",
+      tip = "Export the current dataset for use in R.",
+      value = "export_to_r",
+      mod = mod_nav_launcher_ui("launch_export_to_r", "Export to R", "Open export module for R-ready data exports.")
+    ),
+    npt(
+      icon = "file-code",
+      label = "TurboVeg",
+      tip = "Export the current dataset for use in TurboVeg.",
+      value = "export_to_turboveg",
+      mod = mod_nav_launcher_ui("launch_export_to_turboveg", "Export to TurboVeg", "Open export module for TurboVeg exports.")
+    ),
+    npt(
+      icon = "seedling",
+      label = "User Species List",
+      tip = "Export the current user species list.",
+      value = "export_user_species_list",
+      mod = mod_nav_launcher_ui("launch_export_user_species_list", "Export User Species List", "Open export module for species list outputs.")
+    ),
     "---",
     "Validate",
-    npt("clipboard-check", "Validate Data", "Here's an assortment of tools to validate and fix some common problems","validate_data")
+    npt(
+      icon = "clipboard-check",
+      label = "Validate Data",
+      tip = "Here's an assortment of tools to validate and fix some common problems",
+      value = "validate_data",
+      mod = mod_nav_launcher_ui("launch_validate_data", "Validate Data", "Open reporting diagnostics and validation tools.")
+    )
   ),
+# Reports ----
   nav_menu("Reports",
     "Vegetation",
-    npt("table-list", "Long Vegetation", "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.","report_long_vegetation"),
-    npt("chart-column", "Summary Vegetation", "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.","report_summary_vegetation"),
-    npt("leaf", "Species Attributes Report", "Summarizes species attributes by site unit or hierarchy breakpoint.","report_species_attributes"),
+    npt(
+      icon = "table-list",
+      label = "Long Vegetation",
+      tip = "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.",
+      value = "report_long_vegetation",
+      mod = mod_nav_launcher_ui("launch_report_long_vegetation", "Long Vegetation Report", "Open reporting module and run long vegetation outputs.")
+    ),
+    npt(
+      icon = "chart-column",
+      label = "Summary Vegetation",
+      tip = "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.",
+      value = "report_summary_vegetation",
+      mod = mod_nav_launcher_ui("launch_report_summary_vegetation", "Summary Vegetation Report", "Open reporting module and run summary vegetation outputs.")
+    ),
     "---",
     "Environment",
-    npt("table-list", "Long Environment", "Creates an Excel report where site unit groups of plots are placed on individual sheets.","report_long_environment"),
-    npt("chart-column", "Summary Environment", "A summary of plots in each site unit is generated for the project.  Frequency for the qualitative values and mean or median values of the quantitative values are displayed.","report_summary_environment"),
-    npt("table-columns", "Combination Vegtation/Environment", "A user configurable combination of environment and vegetation data is reported for each plot.","report_combination_vegetation_environment"),
+    npt(
+      icon = "table-list",
+      label = "Long Environment",
+      tip = "Creates an Excel report where site unit groups of plots are placed on individual sheets.",
+      value = "report_long_environment",
+      mod = mod_nav_launcher_ui("launch_report_long_environment", "Long Environment Report", "Open reporting module and run long environment outputs.")
+    ),
+    npt(
+      icon = "chart-column",
+      label = "Summary Environment",
+      tip = "A summary of plots in each site unit is generated for the project.  Frequency for the qualitative values and mean or median values of the quantitative values are displayed.",
+      value = "report_summary_environment",
+      mod = mod_nav_launcher_ui("launch_report_summary_environment", "Summary Environment Report", "Open reporting module and run summary environment outputs.")
+    ),
     "---",
     "Others",
-    npt("triangle-exclamation", "PC-ORD Break Report", "A list of break codes generated by the last export of PC-ORD data.","report_pc_ord_breaks"),
-    npt("table-cells-large", "Subzone Matrix of Units", "A matrix is generated based on the current site unit table and the master site unit list.","report_subzone_matrix_of_units"),
-    npt("diagram-project", "Hierarchy Diagram", "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.","report_hierarchy_diagram"),
-    npt("tag", "Print a Plot Label", "Print a physical label to affix to your plot card.","report_print_plot_label"),
-    npt("file-lines", "Create Plot Locations File", "Prints a plot list that includes zone, subzone, site series, longitude, latitude and elevation.","report_create_plot_locations_file"),
-    npt("earth-americas", "Show Plot Locations in Google Earth", "Locate your plots using Google Earth (requires Google Earth installation)","report_show_plot_locations_google_earth")
+    npt(
+      icon = "table-cells-large",
+      label = "Subzone Matrix of Units",
+      tip = "A matrix is generated based on the current site unit table and the master site unit list.",
+      value = "report_subzone_matrix_of_units",
+      mod = mod_nav_launcher_ui("launch_report_subzone_matrix_of_units", "Subzone Matrix of Units", "Open reporting module and run subzone matrix reports.")
+    ),
+    npt(
+      icon = "diagram-project",
+      label = "Hierarchy Diagram",
+      tip = "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.",
+      value = "report_hierarchy_diagram",
+      mod = mod_nav_launcher_ui("launch_report_hierarchy_diagram", "Hierarchy Diagram Report", "Open hierarchy/reporting workflows for hierarchy diagrams.")
+    ),
+    npt(
+      icon = "tag",
+      label = "Print a Plot Label",
+      tip = "Print a physical label to affix to your plot card.",
+      value = "report_print_plot_label",
+      mod = mod_nav_launcher_ui("launch_report_print_plot_label", "Print a Plot Label", "Open reporting module and run plot-label outputs.")
+    ),
+    npt(
+      icon = "file-lines",
+      label = "Create Plot Locations File",
+      tip = "Prints a plot list that includes zone, subzone, site series, longitude, latitude and elevation.",
+      value = "report_create_plot_locations_file",
+      mod = mod_nav_launcher_ui("launch_report_create_plot_locations_file", "Create Plot Locations File", "Open reporting module and run location file outputs.")
+    ),
+    npt(
+      icon = "earth-americas",
+      label = "Show Plot Locations in Google Earth",
+      tip = "Locate your plots using Google Earth (requires Google Earth installation)",
+      value = "report_show_plot_locations_google_earth",
+      mod = mod_nav_launcher_ui("launch_report_show_plot_locations_google_earth", "Show Plot Locations in Google Earth", "Open map/reporting workflows for Google Earth output.")
+    )
   ),
+# References ----
   nav_menu("References",
     "Library Tables",
-    npt("list-check", "Site and Environment Codes", "This tool allows the user to modify the drop-down lists in the data forms.  Please do not make any changes to these lists if you are working with BEC data!","reference_site_environment_codes"),
-    npt("book-open", "Species Name and Codes Table", "Forms, reports, and import/export tools use this table to standardize data input and translate codes into scientific and common names.","reference_species_name_codes"),
+    npt(
+      icon = "list-check",
+      label = "Site and Environment Codes",
+      tip = "This tool allows the user to modify the drop-down lists in the data forms.  Please do not make any changes to these lists if you are working with BEC data!",
+      value = "reference_site_environment_codes",
+      mod = mod_nav_launcher_ui("launch_reference_site_environment_codes", "Site and Environment Codes", "Open the Site & Environment module for code-driven data context.")
+    ),
+    npt(
+      icon = "book-open",
+      label = "Species Name and Codes Table",
+      tip = "Forms, reports, and import/export tools use this table to standardize data input and translate codes into scientific and common names.",
+      value = "reference_species_name_codes",
+      mod = mod_nav_launcher_ui("launch_reference_species_name_codes", "Species Name and Codes Table", "Open species/code references used by forms and reports.")
+    ),
     "---",
     "User Setup",
-    npt("link", "Attach species table", "You can attach a different USysAllSpecs table if you wish.  We will assume you understand the implications involved.  When in doubt ask Will MacKenzie!","reference_attach_species_table"),
-    npt("paperclip", "Attach code list table", "VPro uses codes to store many of the data items.  These codes and their descriptions are stored in an attached table named USysTableOfLists.  Click to start the procedure to attach a different table.","reference_attach_code_list_table"),
-    npt("palette", "Colour-theme", "In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species.","reference_colour_theme"),
-    npt("user-gear", "User setup", "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)","reference_user_setup"),
-    npt("folder-tree", "Directories", "Setup directory locations for files related to Google Earth, R, and plot photos.","reference_directories")
+    npt(
+      icon = "link",
+      label = "Attach species table",
+      tip = "You can attach a different USysAllSpecs table if you wish.  We will assume you understand the implications involved.  When in doubt ask Will MacKenzie!",
+      value = "reference_attach_species_table",
+      mod = mod_nav_launcher_ui("launch_reference_attach_species_table", "Attach Species Table", "Open reference setup for species table attachment workflows.")
+    ),
+    npt(
+      icon = "paperclip",
+      label = "Attach code list table",
+      tip = "VPro uses codes to store many of the data items.  These codes and their descriptions are stored in an attached table named USysTableOfLists.  Click to start the procedure to attach a different table.",
+      value = "reference_attach_code_list_table",
+      mod = mod_nav_launcher_ui("launch_reference_attach_code_list_table", "Attach Code List Table", "Open reference setup for list-table attachment workflows.")
+    ),
+    npt(
+      icon = "palette",
+      label = "Colour-theme",
+      tip = "In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species.",
+      value = "reference_colour_theme",
+      mod = mod_nav_launcher_ui("launch_reference_colour_theme", "Reference Colour-theme", "Open reference colour-theme setup.")
+    ),
+    npt(
+      icon = "user-gear",
+      label = "User setup",
+      tip = "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)",
+      value = "reference_user_setup",
+      mod = mod_nav_launcher_ui("launch_reference_user_setup", "Reference User setup", "Open user setup and reference preferences.")
+    ),
+    npt(
+      icon = "folder-tree",
+      label = "Directories",
+      tip = "Setup directory locations for files related to Google Earth, R, and plot photos.",
+      value = "reference_directories",
+      mod = mod_nav_launcher_ui("launch_reference_directories", "Directories", "Open directory and integration path setup.")
+    )
   ),
+# Help ----
   nav_menu("Help",
     "Help",
-    npt("circle-question", "VPro Help", "Documents and Web links.","help_vpro_help"),
-    npt("boxes-stacked", "VPro Service Packs", "Information on the VPro service packs installed on this machine.","help_service_packs"),
-    npt("rotate-left", "Set all to Sample", "Problems with the menu?  Can't change projects?  Getting an error message?  Try this.","help_set_all_to_sample"),
-    npt("rectangle-xmark", "Close all forms", "Suspect you may have a hidden form that is causing you problems?  Click this and your worries are over.","help_close_all_forms"),
-    npt("newspaper", "What's New", "See a list of the latest changes to VPro.","help_whats_new"),
-    npt("circle-info", "About VPro", "Some basic information about your copy of VPro.","help_about_vpro")
+    npt(
+      icon = "circle-question",
+      label = "VPro Help",
+      tip = "Documents and Web links.",
+      value = "help_vpro_help",
+      mod = mod_nav_launcher_ui("launch_help_vpro_help", "VPro Help", "Open help resources and documentation links.")
+    ),
+    npt(
+      icon = "boxes-stacked",
+      label = "VPro Service Packs",
+      tip = "Information on the VPro service packs installed on this machine.",
+      value = "help_service_packs",
+      mod = mod_nav_launcher_ui("launch_help_service_packs", "VPro Service Packs", "Open service pack and version information.")
+    ),
+    npt(
+      icon = "rotate-left",
+      label = "Set all to Sample",
+      tip = "Problems with the menu?  Can't change projects?  Getting an error message?  Try this.",
+      value = "help_set_all_to_sample",
+      mod = mod_nav_launcher_ui("launch_help_set_all_to_sample", "Set all to Sample", "Run reset-style helper actions for local troubleshooting.")
+    ),
+    nlt(
+      icon = "newspaper",
+      label = "What's New",
+      tip = "See a list of the latest changes to VPro.",
+      value = "btn_whatsnew"
+    ),
+    npt(
+      icon = "circle-info",
+      label = "About VPro",
+      tip = "Some basic information about your copy of VPro.",
+      value = "help_about_vpro",
+      mod = mod_nav_launcher_ui("launch_help_about_vpro", "About VPro", "Open application version and environment information.")
+    )
   ),
+
+  # STOP processing here
   
   nav_menu(tagList(icon("cubes"), "Modules"),
     nav_panel(tagList(icon("leaf"), "Vegetation"), value = "Vegetation",

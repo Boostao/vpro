@@ -95,6 +95,12 @@ function initializeVproUi() {
     var scrollIntoView = !!(message && message.scroll);
     setHierarchyActiveNode(nodeId, scrollIntoView);
   });
+  
+  Shiny.addCustomMessageHandler('vpro-print-window', function () {
+    window.setTimeout(function () {
+      window.print();
+    }, 50);
+  });
 
   function elementFromEventTarget(target) {
     if (!target) return null;

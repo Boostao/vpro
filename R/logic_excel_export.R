@@ -274,8 +274,15 @@ get_vegetation_data_for_excel <- function(con, project_ids = NULL, layers = c("1
   df$ScientificName <- ifelse(is.na(df$scientificname), df$species, df$scientificname)
   df$CommonName <- ifelse(is.na(df$commonname), "", df$commonname)
   
-  # Select and order columns for Excel
-  df <- df[, c("plotnumber", "mylayer", "species", "ScientificName", "CommonName", "cover_num")]
+  # Select and order columns for Excel; tolerate source schema drift.
+  export_cols <- c("plotnumber", "mylayer", "species", "ScientificName", "CommonName", "cover_num")
+  missing_cols <- setdiff(export_cols, names(df))
+  if (length(missing_cols) > 0) {
+    for (col_name in missing_cols) {
+      df[[col_name]] <- NA
+    }
+  }
+  df <- df[, export_cols, drop = FALSE]
   colnames(df) <- c("Plot", "Layer", "Code", "Scientific Name", "Common Name", "Cover %")
   
   df[order(df$Plot, df$Layer, df$`Scientific Name`), ]

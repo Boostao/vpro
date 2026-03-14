@@ -550,12 +550,20 @@ mod_becweb_map_server <- function(id, con = NULL, auth_level = "public") {
           return(NULL)
         }
         
-        # Prepare export (exclude internal columns)
-        export_data <- cache$filtered_plots[, c(
+        # Prepare export with a stable column contract; tolerate missing upstream fields.
+        export_cols <- c(
           "plot_id", "project_name", "date", "latitude", "longitude",
           "bec_zone", "bec_subzone", "bec_site_series", "data_quality",
           "num_species", "dominant_spp"
-        )]
+        )
+        export_data <- cache$filtered_plots
+        missing_cols <- setdiff(export_cols, names(export_data))
+        if (length(missing_cols) > 0) {
+          for (col_name in missing_cols) {
+            export_data[[col_name]] <- NA
+          }
+        }
+        export_data <- export_data[, export_cols, drop = FALSE]
         
         write.csv(export_data, file, row.names = FALSE)
         

@@ -332,7 +332,12 @@ identify_removed_plots <- function(con,
     reasons[1]
   }, character(1))
   
-  removed_df[, c("PlotNumber", "RemovedBy", "Site", "Veg", "Soil", "BEC")]
+  out_cols <- c("PlotNumber", "RemovedBy", "Site", "Veg", "Soil", "BEC")
+  missing_cols <- setdiff(out_cols, names(removed_df))
+  if (length(missing_cols) > 0) {
+    for (col_name in missing_cols) removed_df[[col_name]] <- NA
+  }
+  removed_df[, out_cols, drop = FALSE]
 }
 
 #' Get quality control summary statistics
