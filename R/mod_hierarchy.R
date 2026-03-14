@@ -1748,57 +1748,21 @@ mod_hierarchy_server <- function(id, state, con) {
       parent_id <- suppressWarnings(as.integer(input$move_parent))
       if (is.na(parent_id)) parent_id <- NA_integer_
 
-      if (!is.na(parent_id)) {
-        descendants <- get_descendants(rv$data, node_id)
-        if (parent_id == node_id || parent_id %in% descendants) {
-          showNotification("Move blocked: cannot move under self or descendant.", type = "warning")
-          return()
-        }
-      }
-
       tryCatch({
-        update_sql <- "UPDATE Hierarchy SET Parent = ?"
-        update_params <- list(parent_id)
-
-        if (!is.null(rv$data) && "MyOrder" %in% names(rv$data)) {
-          siblings <- get_sibling_order(rv$data, parent_id)
-          if (nrow(siblings) == 0 || all(is.na(suppressWarnings(as.numeric(siblings$MyOrder))))) {
-            order_val <- 1
-          } else {
-            max_order <- suppressWarnings(max(as.numeric(siblings$MyOrder), na.rm = TRUE))
-            order_val <- if (is.finite(max_order)) max_order + 1 else 1
-          }
-          update_sql <- paste0(update_sql, ", MyOrder = ?")
-          update_params <- c(update_params, list(order_val))
-        }
-
-        update_sql <- paste0(update_sql, " WHERE ID = ?")
-        update_params <- c(update_params, list(node_id))
-
-        DBI::dbExecute(con, update_sql, update_params)
-
-        if (!is.null(rv$data) && "Level" %in% names(rv$data)) {
-          current_level <- rv$data$Level[rv$data$ID == node_id][1]
-          parent_level <- if (is.na(parent_id)) -1L else rv$data$Level[rv$data$ID == parent_id][1]
-          if (!is.na(current_level) && !is.na(parent_level)) {
-            delta <- as.integer(parent_level + 1L) - as.integer(current_level)
-            if (delta != 0) {
-              ids <- c(node_id, get_descendants(rv$data, node_id))
-              for (target_id in ids) {
-                old_level <- rv$data$Level[rv$data$ID == target_id][1]
-                new_level <- as.integer(old_level) + delta
-                DBI::dbExecute(
-                  con,
-                  "UPDATE Hierarchy SET Level = ? WHERE ID = ?",
-                  list(new_level, target_id)
-                )
-              }
-            }
-          }
-        }
-        showNotification("Node moved.", type = "message")
+        result <- hierarchy_sidebar_move_node(
+          con = con,
+          node_id = node_id,
+          parent_id = if (is.na(parent_id)) NULL else parent_id,
+          table_name = "Hierarchy"
+        )
         refresh_tree()
         update_move_choices()
+        select_node_by_id(node_id)
+        if (isTRUE(result$changed)) {
+          showNotification("Node moved.", type = "message")
+        } else {
+          showNotification("Node is already under that parent.", type = "message")
+        }
       }, error = function(e) {
         showNotification(paste("Move failed:", e$message), type = "error")
       })

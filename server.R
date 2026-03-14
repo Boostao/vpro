@@ -100,6 +100,8 @@ server <- function(input, output, session) {
   hierarchy_choices <- reactiveVal(character(0))
   site_unit_scope_version <- reactiveVal(0L)
   sidebar_hierarchy_site_unit <- reactiveVal(NULL)
+  sidebar_hierarchy_node_id <- reactiveVal(NULL)
+  sidebar_hierarchy_expanded <- reactiveVal(character(0))
   sidebar_hierarchy_status <- reactiveVal("")
   su_table_refresh_version <- reactiveVal(0L)
 
@@ -135,6 +137,22 @@ server <- function(input, output, session) {
     TRUE
   }
 
+  require_sidebar_hierarchy_write <- function() {
+    if (!is_cloud_connected(con)) {
+      return(TRUE)
+    }
+    if (!auth_is_authenticated(state)) {
+      showNotification("Sign in required.", type = "error")
+      return(FALSE)
+    }
+    allowed <- c("write:project_plots", "write:all", "manage:codes")
+    if (!any(vapply(allowed, function(permission) auth_user_has_permission(state, permission), logical(1)))) {
+      showNotification("Permission required: edit hierarchy", type = "error")
+      return(FALSE)
+    }
+    TRUE
+  }
+
   current_picker_site_unit <- reactive({
     site_unit <- input$picker_site_unit
     if (is.null(site_unit)) {
@@ -146,6 +164,21 @@ server <- function(input, output, session) {
   current_sidebar_site_unit <- reactive({
     normalize_context_value(sidebar_hierarchy_site_unit())
   })
+
+  current_sidebar_hierarchy_id <- reactive({
+    hierarchy_sidebar_normalize_id(sidebar_hierarchy_node_id())
+  })
+
+  hierarchy_sidebar_sort_nodes <- function(nodes) {
+    if (is.null(nodes) || nrow(nodes) == 0) {
+      return(nodes)
+    }
+    if ("MyOrder" %in% names(nodes) && any(is.finite(nodes$MyOrder))) {
+      nodes[order(nodes$MyOrder, tolower(nodes$Name), na.last = TRUE), , drop = FALSE]
+    } else {
+      nodes[order(tolower(nodes$Name)), , drop = FALSE]
+    }
+  }
 
   empty_picker_scope <- function() {
     data.frame(
@@ -203,6 +236,194 @@ server <- function(input, output, session) {
     }
 
     rows[order(tolower(rows$name)), , drop = FALSE]
+  })
+
+  project_hierarchy_nodes <- reactive({
+    state$CurrProject
+    state$HierarchyRefreshVersion
+    hierarchy_sidebar_read_nodes(con, project_id = state$CurrProject)
+  })
+
+  observe({
+    nodes <- project_hierarchy_nodes()
+    selected_id <- current_sidebar_hierarchy_id()
+    expanded_ids <- isolate(sidebar_hierarchy_expanded())
+
+    if (nrow(nodes) == 0) {
+      if (nzchar(selected_id)) {
+        sidebar_hierarchy_node_id(NULL)
+      }
+      if (length(expanded_ids) > 0) {
+        sidebar_hierarchy_expanded(character(0))
+      }
+      return()
+    }
+
+    if (nzchar(selected_id) && !(selected_id %in% nodes$ID)) {
+      sidebar_hierarchy_node_id(NULL)
+    }
+
+    valid_expanded <- intersect(expanded_ids, nodes$ID)
+    if (!identical(valid_expanded, expanded_ids)) {
+      sidebar_hierarchy_expanded(valid_expanded)
+    }
+  })
+
+  build_sidebar_hierarchy_visible_rows <- function(nodes, expanded_ids, parent_id = NA_character_, depth = 0L) {
+    if (is.null(nodes) || nrow(nodes) == 0) {
+      return(data.frame(
+        id = character(0),
+        parent_id = character(0),
+        name = character(0),
+        depth = integer(0),
+        child_count = integer(0),
+        is_expanded = logical(0),
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    branch <- if (is.na(parent_id)) {
+      nodes[is.na(nodes$Parent), , drop = FALSE]
+    } else {
+      nodes[!is.na(nodes$Parent) & nodes$Parent == parent_id, , drop = FALSE]
+    }
+    branch <- hierarchy_sidebar_sort_nodes(branch)
+    if (nrow(branch) == 0) {
+      return(data.frame(
+        id = character(0),
+        parent_id = character(0),
+        name = character(0),
+        depth = integer(0),
+        child_count = integer(0),
+        is_expanded = logical(0),
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    pieces <- lapply(seq_len(nrow(branch)), function(idx) {
+      row <- branch[idx, , drop = FALSE]
+      node_id <- row$ID[[1]]
+      child_count <- sum(!is.na(nodes$Parent) & nodes$Parent == node_id)
+      expanded <- node_id %in% expanded_ids
+
+      children <- if (child_count > 0L && expanded) {
+        build_sidebar_hierarchy_visible_rows(nodes, expanded_ids, parent_id = node_id, depth = depth + 1L)
+      } else {
+        data.frame(
+          id = character(0),
+          parent_id = character(0),
+          name = character(0),
+          depth = integer(0),
+          child_count = integer(0),
+          is_expanded = logical(0),
+          stringsAsFactors = FALSE
+        )
+      }
+
+      rbind(
+        data.frame(
+          id = node_id,
+          parent_id = if (is.na(row$Parent[[1]])) "" else row$Parent[[1]],
+          name = row$Name[[1]],
+          depth = depth,
+          child_count = child_count,
+          is_expanded = expanded,
+          stringsAsFactors = FALSE
+        ),
+        children
+      )
+    })
+
+    do.call(rbind, pieces)
+  }
+
+  sidebar_hierarchy_tree_rows <- reactive({
+    nodes <- project_hierarchy_nodes()
+    expanded_ids <- sidebar_hierarchy_expanded()
+
+    if (nrow(nodes) == 0) {
+      return(data.frame(
+        id = character(0),
+        parent_id = character(0),
+        name = character(0),
+        depth = integer(0),
+        child_count = integer(0),
+        is_expanded = logical(0),
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    build_sidebar_hierarchy_visible_rows(nodes, expanded_ids)
+  })
+
+  selected_sidebar_hierarchy <- reactive({
+    nodes <- project_hierarchy_nodes()
+    selected_id <- current_sidebar_hierarchy_id()
+    root_count <- if (nrow(nodes) == 0) 0L else sum(is.na(nodes$Parent))
+
+    if (!nzchar(selected_id)) {
+      return(list(
+        id = "",
+        name = "Root",
+        parent_id = "",
+        parent_name = "",
+        path = "Root",
+        child_count = root_count,
+        is_root = TRUE
+      ))
+    }
+
+    if (nrow(nodes) == 0) {
+      return(NULL)
+    }
+
+    row <- nodes[nodes$ID == selected_id, , drop = FALSE]
+    if (nrow(row) == 0) {
+      return(list(
+        id = "",
+        name = "Root",
+        parent_id = "",
+        parent_name = "",
+        path = "Root",
+        child_count = root_count,
+        is_root = TRUE
+      ))
+    }
+
+    parent_id <- if (is.na(row$Parent[[1]])) "" else row$Parent[[1]]
+    parent_row <- if (nzchar(parent_id)) nodes[nodes$ID == parent_id, , drop = FALSE] else data.frame()
+    list(
+      id = row$ID[[1]],
+      name = row$Name[[1]],
+      parent_id = if (nzchar(parent_id)) parent_id else "",
+      parent_name = if (nrow(parent_row) == 0) "Root" else parent_row$Name[[1]],
+      path = c("Root", hierarchy_sidebar_get_path_names(nodes, row$ID[[1]])),
+      child_count = sum(!is.na(nodes$Parent) & nodes$Parent == row$ID[[1]]),
+      is_root = FALSE
+    )
+  })
+
+  sidebar_hierarchy_breadcrumbs <- reactive({
+    details <- selected_sidebar_hierarchy()
+    nodes <- project_hierarchy_nodes()
+
+    if (is.null(details) || isTRUE(details$is_root)) {
+      return(data.frame(
+        id = "",
+        label = "Root",
+        is_current = TRUE,
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    path_ids <- hierarchy_sidebar_get_path_ids(nodes, details$id)
+    path_names <- hierarchy_sidebar_get_path_names(nodes, details$id)
+    data.frame(
+      id = c("", path_ids),
+      label = c("Root", path_names),
+      is_current = c(rep(FALSE, length(path_ids)), TRUE),
+      stringsAsFactors = FALSE
+    )
   })
 
   get_site_unit_for_plot <- function(plot_number, project_id = NULL) {
@@ -511,6 +732,119 @@ server <- function(input, output, session) {
     sidebar_hierarchy_status()
   })
 
+  output$sidebar_hierarchy_node_tree <- renderUI({
+    rows <- sidebar_hierarchy_tree_rows()
+    details <- selected_sidebar_hierarchy()
+    nodes <- project_hierarchy_nodes()
+
+    if (is.null(details) && nrow(rows) == 0) {
+      return(div(class = "vpro-hierarchy-empty", "No hierarchy nodes are available for this project."))
+    }
+
+    selected_id <- current_sidebar_hierarchy_id()
+    selected_path_ids <- if (nzchar(selected_id) && nrow(nodes) > 0) {
+      hierarchy_sidebar_get_path_ids(nodes, selected_id)
+    } else {
+      character(0)
+    }
+    tree_rows <- if (nrow(rows) == 0) {
+      div(class = "vpro-hierarchy-empty", "No hierarchy nodes are available for this project.")
+    } else {
+      lapply(seq_len(nrow(rows)), function(idx) {
+        row <- rows[idx, , drop = FALSE]
+        depth_value <- as.integer(row$depth[[1]] %||% 0L)
+        classes <- c(
+          "vpro-hierarchy-tree-node",
+          "vpro-hierarchy-node",
+          "is-hierarchy-node",
+          "vpro-hierarchy-drop-target",
+          "vpro-hierarchy-nav-target"
+        )
+        if (depth_value > 0L) {
+          classes <- c(classes, "has-depth")
+        }
+        classes <- c(classes, if ((depth_value %% 2L) == 0L) "is-depth-even" else "is-depth-odd")
+        if (identical(row$id[[1]], selected_id)) {
+          classes <- c(classes, "is-active")
+        }
+        if (row$id[[1]] %in% selected_path_ids) {
+          classes <- c(classes, "is-selected-path")
+        }
+        if (length(selected_path_ids) > 0 && identical(row$id[[1]], selected_path_ids[[1]])) {
+          classes <- c(classes, "is-path-root")
+        }
+        if (isTRUE(row$is_expanded[[1]])) {
+          classes <- c(classes, "is-expanded")
+        }
+
+        has_children <- isTRUE(row$child_count[[1]] > 0L)
+
+        div(
+          class = paste(unique(classes), collapse = " "),
+          `data-open-node` = row$id[[1]],
+          `data-hierarchy-id` = row$id[[1]],
+          `data-parent-id` = row$id[[1]],
+          `data-depth` = as.character(depth_value),
+          style = sprintf("--hierarchy-depth:%d;", depth_value),
+          tabindex = "0",
+          div(class = "vpro-hierarchy-node-main",
+            div(class = "vpro-hierarchy-tree-node-copy",
+              tags$button(
+                class = paste(
+                  c(
+                    "vpro-hierarchy-toggle",
+                    if (has_children) "has-children" else "is-leaf",
+                    if (isTRUE(row$is_expanded[[1]])) "is-expanded"
+                  ),
+                  collapse = " "
+                ),
+                type = "button",
+                `data-toggle-node` = row$id[[1]],
+                tabindex = "-1",
+                if (!has_children) "" else if (isTRUE(row$is_expanded[[1]])) "-" else "+"
+              ),
+              span(class = "vpro-hierarchy-node-label", row$name[[1]])
+            ),
+            div(class = "vpro-hierarchy-tree-node-actions",
+              div(
+                class = "vpro-hierarchy-drag-handle",
+                `data-drag-node-id` = row$id[[1]],
+                `data-drag-parent-id` = row$parent_id[[1]],
+                draggable = "true",
+                tabindex = "-1",
+                "Move"
+              ),
+              span(class = "vpro-hierarchy-node-count", row$child_count[[1]])
+            )
+          )
+        )
+      })
+    }
+
+    div(
+      class = "vpro-hierarchy-browser vpro-hierarchy-progressive-tree",
+      div(
+        class = "vpro-hierarchy-browser-current is-root vpro-hierarchy-drop-target",
+        `data-parent-id` = "",
+        div(class = "vpro-hierarchy-browser-current-label", "Tree root"),
+        div(class = "vpro-hierarchy-browser-current-name", "Hierarchy"),
+        div(class = "vpro-hierarchy-browser-current-subtitle", "Start at the root and unveil more nodes as needed."),
+        div(class = "vpro-hierarchy-detail-path", if (is.null(details)) "Root" else paste(details$path, collapse = " / "))
+      ),
+      div(class = "vpro-hierarchy-browser-level-header",
+        div(class = "vpro-hierarchy-browser-level-title", "Hierarchy tree"),
+        div(class = "vpro-hierarchy-browser-level-count", sprintf("%d visible node%s", nrow(rows), if (nrow(rows) == 1) "" else "s"))
+      ),
+      div(class = "vpro-hierarchy-browser-list", tree_rows),
+      div(class = "vpro-hierarchy-plot-instruction", if (is.null(details) || isTRUE(details$is_root)) {
+        "Click a node name or its + button to reveal children. Drag a Move handle and drop it on any visible node or on the root card to reassign it."
+      } else {
+        sprintf("Selected: %s. Expand more branches as needed, or drag a Move handle to reassign a visible node.", details$name)
+      }),
+      if (nzchar(sidebar_hierarchy_status())) div(class = "vpro-hierarchy-status", sidebar_hierarchy_status())
+    )
+  })
+
   observe({
     selected_site_unit <- current_sidebar_site_unit()
     current_mode <- sidebar_mode()
@@ -521,6 +855,21 @@ server <- function(input, output, session) {
         list(
           site_unit = selected_site_unit,
           scroll = identical(current_mode, "hierarchy") && nzchar(selected_site_unit)
+        )
+      )
+    }, once = TRUE)
+  })
+
+  observe({
+    selected_id <- current_sidebar_hierarchy_id()
+    current_mode <- sidebar_mode()
+
+    session$onFlushed(function() {
+      session$sendCustomMessage(
+        "hierarchy-sidebar-node-selection",
+        list(
+          node_id = selected_id,
+          scroll = identical(current_mode, "hierarchy_nodes") && nzchar(selected_id)
         )
       )
     }, once = TRUE)
@@ -577,6 +926,27 @@ server <- function(input, output, session) {
             div(class = "vpro-hierarchy-workbench",
               div(class = "vpro-hierarchy-tree-shell", uiOutput("sidebar_hierarchy_tree")),
               div(class = "vpro-hierarchy-plot-panel", uiOutput("sidebar_hierarchy_plots"))
+            )
+          )
+        )
+      ))
+    }
+
+    if (identical(current_mode, "hierarchy_nodes")) {
+      return(tagList(
+        bslib::card(
+          class = "vpro-picker-card vpro-hierarchy-card mb-2",
+          bslib::card_header(
+            div(class = "d-flex justify-content-between align-items-center",
+              div(
+                div(class = "fw-semibold", "Hierarchy Tree View")
+              ),
+              actionButton("btn_hierarchy_back", "Back", class = "btn btn-sm btn-outline-primary")
+            )
+          ),
+          bslib::card_body(
+            div(class = "vpro-hierarchy-workbench vpro-hierarchy-node-workbench",
+              div(class = "vpro-hierarchy-tree-shell vpro-hierarchy-single-shell", uiOutput("sidebar_hierarchy_node_tree"))
             )
           )
         )
@@ -647,6 +1017,53 @@ server <- function(input, output, session) {
     set_pref(con, "Current", "CurrPlotList", site_unit)
   }, ignoreInit = TRUE)
 
+  observeEvent(input$hierarchy_sidebar_select_node, {
+    info <- input$hierarchy_sidebar_select_node
+    raw_node_id <- if (is.list(info)) info$node_id else info
+    node_id <- hierarchy_sidebar_normalize_id(raw_node_id)
+
+    if (is.null(raw_node_id) || identical(raw_node_id, "") || !nzchar(node_id)) {
+      sidebar_hierarchy_node_id(NULL)
+      sidebar_hierarchy_status("Viewing root")
+      return()
+    }
+
+    sidebar_hierarchy_node_id(node_id)
+    nodes <- project_hierarchy_nodes()
+    row <- nodes[nodes$ID == node_id, , drop = FALSE]
+    if (nrow(row) > 0) {
+      sidebar_hierarchy_status(sprintf("Selected %s", row$Name[[1]]))
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$hierarchy_sidebar_toggle_node, {
+    info <- input$hierarchy_sidebar_toggle_node
+    node_id <- hierarchy_sidebar_normalize_id(if (is.list(info)) info$node_id else info)
+    if (!nzchar(node_id)) {
+      return()
+    }
+
+    nodes <- project_hierarchy_nodes()
+    row <- nodes[nodes$ID == node_id, , drop = FALSE]
+    if (nrow(row) == 0) {
+      return()
+    }
+
+    expanded_ids <- isolate(sidebar_hierarchy_expanded())
+    child_count <- sum(!is.na(nodes$Parent) & nodes$Parent == node_id)
+    if (child_count > 0L) {
+      if (node_id %in% expanded_ids) {
+        descendants <- hierarchy_sidebar_get_descendants(nodes, node_id)
+        sidebar_hierarchy_expanded(setdiff(expanded_ids, c(node_id, descendants)))
+      } else {
+        sidebar_hierarchy_expanded(unique(c(expanded_ids, node_id)))
+      }
+    }
+
+    sidebar_hierarchy_node_id(node_id)
+    sidebar_hierarchy_status(sprintf("Selected %s", row$Name[[1]]))
+  }, ignoreInit = TRUE)
+
   observeEvent(input$hierarchy_sidebar_select_plot, {
     info <- input$hierarchy_sidebar_select_plot
     plot_number <- normalize_context_value(if (is.list(info)) info$plot_number else NULL)
@@ -711,6 +1128,57 @@ server <- function(input, output, session) {
     sidebar_hierarchy_status(sprintf("Moved %s from %s to %s.", plot_number, if (nzchar(from_site_unit)) from_site_unit else "(unassigned)", to_site_unit))
     sync_touch_state(state)
     showNotification(sprintf("Moved %s to %s", plot_number, to_site_unit), type = "message")
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$hierarchy_sidebar_move_node, {
+    info <- input$hierarchy_sidebar_move_node
+    node_id <- hierarchy_sidebar_normalize_id(if (is.list(info)) info$node_id else NULL)
+    parent_id <- hierarchy_sidebar_normalize_id(if (is.list(info)) info$parent_id else NULL)
+
+    if (!nzchar(node_id)) {
+      return()
+    }
+    if (!require_sidebar_hierarchy_write()) {
+      return()
+    }
+
+    result <- tryCatch(
+      hierarchy_sidebar_move_node(
+        con = con,
+        node_id = node_id,
+        parent_id = if (nzchar(parent_id)) parent_id else NULL,
+        project_id = state$CurrProject
+      ),
+      error = function(e) e
+    )
+
+    if (inherits(result, "error")) {
+      showNotification(conditionMessage(result), type = "error")
+      sidebar_hierarchy_status(conditionMessage(result))
+      return()
+    }
+
+    sidebar_hierarchy_node_id(result$node_id)
+    state$HierarchyRefreshVersion <- (state$HierarchyRefreshVersion %||% 0L) + 1L
+    sync_touch_state(state)
+
+    if (isTRUE(result$changed)) {
+      updated_nodes <- hierarchy_sidebar_read_nodes(con, project_id = state$CurrProject, table_name = result$table_name)
+      parent_row <- if (!is.na(result$to_parent_id) && nzchar(as.character(result$to_parent_id))) {
+        updated_nodes[updated_nodes$ID == result$to_parent_id, , drop = FALSE]
+      } else {
+        data.frame()
+      }
+      target_label <- if (nrow(parent_row) == 0) {
+        "root"
+      } else {
+        parent_row$Name[[1]]
+      }
+      sidebar_hierarchy_status(sprintf("Moved %s under %s.", result$node_name, target_label))
+      showNotification(sprintf("Moved %s", result$node_name), type = "message")
+    } else {
+      sidebar_hierarchy_status(sprintf("%s is already under that parent.", result$node_name))
+    }
   }, ignoreInit = TRUE)
 
   observeEvent(input$picker_site_unit, {
@@ -824,7 +1292,10 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$btn_nav_hierarchy_tree, {
-    bslib::nav_select("main_tabs", "Hierarchy", session = session)
+    sidebar_hierarchy_expanded(character(0))
+    sidebar_hierarchy_node_id(NULL)
+    sidebar_hierarchy_status("Selected root")
+    sidebar_mode("hierarchy_nodes")
   })
 
   # 6.1 Keyboard Shortcuts

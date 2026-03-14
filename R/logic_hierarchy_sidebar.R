@@ -16,6 +16,319 @@ hierarchy_sidebar_quote <- function(con, identifier) {
   as.character(DBI::dbQuoteIdentifier(con, identifier))
 }
 
+hierarchy_sidebar_resolve_table <- function(con, project_id = NULL, prefer_base = TRUE) {
+  project_id <- hierarchy_sidebar_normalize_key(project_id)
+
+  if (!isTRUE(prefer_base) && nzchar(project_id)) {
+    prefixed <- resolve_prefixed_table(con, project_id, "_Hierarchy")
+    if (!is.null(prefixed) && DBI::dbExistsTable(con, prefixed)) {
+      return(prefixed)
+    }
+  }
+
+  if (DBI::dbExistsTable(con, "Hierarchy")) {
+    return("Hierarchy")
+  }
+
+  if (nzchar(project_id)) {
+    prefixed <- resolve_prefixed_table(con, project_id, "_Hierarchy")
+    if (!is.null(prefixed) && DBI::dbExistsTable(con, prefixed)) {
+      return(prefixed)
+    }
+  }
+
+  tables <- tryCatch(DBI::dbListTables(con), error = function(e) character(0))
+  hierarchy_tables <- tables[grepl("(^Hierarchy$|_Hierarchy$)", tables, ignore.case = TRUE)]
+  if (length(hierarchy_tables) == 0) {
+    return(NA_character_)
+  }
+
+  hierarchy_tables[[1]]
+}
+
+hierarchy_sidebar_hierarchy_columns <- function(con, table_name) {
+  if (!nzchar(table_name) || !DBI::dbExistsTable(con, table_name)) {
+    return(list())
+  }
+
+  fields <- tryCatch(DBI::dbListFields(con, table_name), error = function(e) character(0))
+  list(
+    id = hierarchy_sidebar_match_col(fields, c("ID", "id")),
+    parent = hierarchy_sidebar_match_col(fields, c("Parent", "parent")),
+    name = hierarchy_sidebar_match_col(fields, c("Name", "_name", "name")),
+    level = hierarchy_sidebar_match_col(fields, c("Level", "_level", "level")),
+    myorder = hierarchy_sidebar_match_col(fields, c("MyOrder", "myorder"))
+  )
+}
+
+hierarchy_sidebar_normalize_id <- function(value) {
+  value <- as.character(value %||% "")
+  value[is.na(value)] <- ""
+  trimws(value)
+}
+
+hierarchy_sidebar_read_nodes <- function(con, project_id = NULL, table_name = NULL) {
+  target_table <- hierarchy_sidebar_normalize_key(table_name)
+  if (!nzchar(target_table)) {
+    target_table <- hierarchy_sidebar_resolve_table(con, project_id = project_id)
+  }
+  if (!nzchar(target_table) || is.na(target_table) || !DBI::dbExistsTable(con, target_table)) {
+    return(data.frame(
+      ID = character(0),
+      Name = character(0),
+      Parent = character(0),
+      Level = numeric(0),
+      MyOrder = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  cols <- hierarchy_sidebar_hierarchy_columns(con, target_table)
+  if (any(is.na(c(cols$id, cols$name, cols$parent)) | !nzchar(c(cols$id, cols$name, cols$parent)))) {
+    return(data.frame(
+      ID = character(0),
+      Name = character(0),
+      Parent = character(0),
+      Level = numeric(0),
+      MyOrder = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  select_parts <- c(
+    sprintf("%s AS ID", hierarchy_sidebar_quote(con, cols$id)),
+    sprintf("%s AS Name", hierarchy_sidebar_quote(con, cols$name))
+  )
+  if (!is.na(cols$parent) && nzchar(cols$parent)) {
+    select_parts <- c(select_parts, sprintf("%s AS Parent", hierarchy_sidebar_quote(con, cols$parent)))
+  } else {
+    select_parts <- c(select_parts, "NULL AS Parent")
+  }
+  if (!is.na(cols$level) && nzchar(cols$level)) {
+    select_parts <- c(select_parts, sprintf("%s AS Level", hierarchy_sidebar_quote(con, cols$level)))
+  } else {
+    select_parts <- c(select_parts, "NULL AS Level")
+  }
+  if (!is.na(cols$myorder) && nzchar(cols$myorder)) {
+    select_parts <- c(select_parts, sprintf("%s AS MyOrder", hierarchy_sidebar_quote(con, cols$myorder)))
+  } else {
+    select_parts <- c(select_parts, "NULL AS MyOrder")
+  }
+
+  order_parts <- if (!is.na(cols$myorder) && nzchar(cols$myorder)) {
+    c("Parent NULLS FIRST", "MyOrder NULLS LAST", "Name")
+  } else {
+    c("Parent NULLS FIRST", "Name")
+  }
+
+  sql <- sprintf(
+    "SELECT %s FROM %s ORDER BY %s",
+    paste(select_parts, collapse = ", "),
+    hierarchy_sidebar_quote(con, target_table),
+    paste(order_parts, collapse = ", ")
+  )
+
+  nodes <- tryCatch(DBI::dbGetQuery(con, sql), error = function(e) data.frame())
+  if (nrow(nodes) == 0) {
+    return(data.frame(
+      ID = character(0),
+      Name = character(0),
+      Parent = character(0),
+      Level = numeric(0),
+      MyOrder = numeric(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  nodes$ID <- hierarchy_sidebar_normalize_id(nodes$ID)
+  nodes$Name <- trimws(as.character(nodes$Name %||% ""))
+  nodes$Parent <- hierarchy_sidebar_normalize_id(nodes$Parent)
+  nodes$Parent[!nzchar(nodes$Parent)] <- NA_character_
+  nodes$Level <- suppressWarnings(as.numeric(nodes$Level))
+  nodes$MyOrder <- suppressWarnings(as.numeric(nodes$MyOrder))
+  nodes <- nodes[nzchar(nodes$ID), , drop = FALSE]
+
+  dup_idx <- duplicated(nodes$ID)
+  if (any(dup_idx)) {
+    nodes <- nodes[!dup_idx, , drop = FALSE]
+  }
+
+  nodes
+}
+
+hierarchy_sidebar_get_descendants <- function(df, node_id) {
+  if (is.null(df) || nrow(df) == 0) return(character(0))
+  node_id <- hierarchy_sidebar_normalize_id(node_id)
+  if (!nzchar(node_id)) return(character(0))
+
+  direct <- df$ID[!is.na(df$Parent) & df$Parent == node_id]
+  if (length(direct) == 0) return(character(0))
+
+  descendants <- unlist(lapply(direct, function(child_id) hierarchy_sidebar_get_descendants(df, child_id)), use.names = FALSE)
+  unique(c(direct, descendants))
+}
+
+hierarchy_sidebar_get_path_ids <- function(df, node_id, max_steps = 200L) {
+  if (is.null(df) || nrow(df) == 0) return(character(0))
+  node_id <- hierarchy_sidebar_normalize_id(node_id)
+  if (!nzchar(node_id)) return(character(0))
+
+  ids <- character(0)
+  current_id <- node_id
+  steps <- 0L
+
+  while (nzchar(current_id) && steps < max_steps) {
+    row <- df[df$ID == current_id, , drop = FALSE]
+    if (nrow(row) == 0) break
+    ids <- c(row$ID[[1]], ids)
+    current_id <- hierarchy_sidebar_normalize_id(row$Parent[[1]])
+    steps <- steps + 1L
+  }
+
+  ids
+}
+
+hierarchy_sidebar_get_path_names <- function(df, node_id, max_steps = 200L) {
+  path_ids <- hierarchy_sidebar_get_path_ids(df, node_id, max_steps = max_steps)
+  if (length(path_ids) == 0) return(character(0))
+  vapply(path_ids, function(path_id) {
+    row <- df[df$ID == path_id, , drop = FALSE]
+    if (nrow(row) == 0) "" else row$Name[[1]]
+  }, character(1))
+}
+
+hierarchy_sidebar_move_node <- function(con,
+                                        node_id,
+                                        parent_id = NULL,
+                                        project_id = NULL,
+                                        table_name = NULL) {
+  node_id <- hierarchy_sidebar_normalize_id(node_id)
+  parent_id <- hierarchy_sidebar_normalize_id(parent_id)
+  if (!nzchar(node_id)) {
+    stop("Node id is required.")
+  }
+  if (identical(node_id, parent_id)) {
+    stop("Move blocked: cannot move under self.")
+  }
+
+  target_table <- hierarchy_sidebar_normalize_key(table_name)
+  if (!nzchar(target_table)) {
+    target_table <- hierarchy_sidebar_resolve_table(con, project_id = project_id)
+  }
+  if (!nzchar(target_table) || is.na(target_table) || !DBI::dbExistsTable(con, target_table)) {
+    stop("Hierarchy table is not available.")
+  }
+
+  cols <- hierarchy_sidebar_hierarchy_columns(con, target_table)
+  if (any(is.na(c(cols$id, cols$name, cols$parent)) | !nzchar(c(cols$id, cols$name, cols$parent)))) {
+    stop("Hierarchy table is missing required columns.")
+  }
+
+  nodes <- hierarchy_sidebar_read_nodes(con, project_id = project_id, table_name = target_table)
+  node_row <- nodes[nodes$ID == node_id, , drop = FALSE]
+  if (nrow(node_row) == 0) {
+    stop("Selected node was not found in the hierarchy table.")
+  }
+
+  parent_row <- data.frame()
+  if (nzchar(parent_id)) {
+    parent_row <- nodes[nodes$ID == parent_id, , drop = FALSE]
+    if (nrow(parent_row) == 0) {
+      stop("Target parent was not found in the hierarchy table.")
+    }
+  }
+
+  descendants <- hierarchy_sidebar_get_descendants(nodes, node_id)
+  if (parent_id %in% descendants) {
+    stop("Move blocked: cannot move under a descendant.")
+  }
+
+  from_parent_id <- hierarchy_sidebar_normalize_id(node_row$Parent[[1]])
+  if (identical(from_parent_id, parent_id)) {
+    return(list(
+      ok = TRUE,
+      changed = FALSE,
+      node_id = node_id,
+      node_name = node_row$Name[[1]],
+      from_parent_id = if (nzchar(from_parent_id)) from_parent_id else NA_character_,
+      to_parent_id = if (nzchar(parent_id)) parent_id else NA_character_,
+      table_name = target_table,
+      path = hierarchy_sidebar_get_path_names(nodes, node_id)
+    ))
+  }
+
+  move_ids <- c(node_id, descendants)
+  current_level <- suppressWarnings(as.numeric(node_row$Level[[1]]))
+  parent_level <- if (nrow(parent_row) == 0) -1 else suppressWarnings(as.numeric(parent_row$Level[[1]]))
+  can_update_levels <- !is.na(cols$level) && nzchar(cols$level) && is.finite(current_level) && is.finite(parent_level)
+  level_map <- list()
+  if (isTRUE(can_update_levels)) {
+    delta <- as.integer(parent_level + 1L - current_level)
+    if (!identical(delta, 0L)) {
+      for (target_id in move_ids) {
+        old_level <- suppressWarnings(as.numeric(nodes$Level[nodes$ID == target_id][[1]]))
+        if (is.finite(old_level)) {
+          level_map[[target_id]] <- as.integer(old_level + delta)
+        }
+      }
+    }
+  }
+
+  DBI::dbWithTransaction(con, {
+    set_parts <- sprintf("%s = ?", hierarchy_sidebar_quote(con, cols$parent))
+    params <- list(if (nzchar(parent_id)) parent_id else NULL)
+
+    if (!is.na(cols$myorder) && nzchar(cols$myorder)) {
+      siblings <- nodes[
+        nodes$ID != node_id & (
+          (is.na(nodes$Parent) & !nzchar(parent_id)) |
+            (!is.na(nodes$Parent) & nodes$Parent == parent_id)
+        ),
+        , drop = FALSE
+      ]
+      if (nrow(siblings) == 0 || all(!is.finite(siblings$MyOrder))) {
+        order_val <- 1L
+      } else {
+        order_val <- as.integer(max(siblings$MyOrder[is.finite(siblings$MyOrder)], na.rm = TRUE) + 1L)
+      }
+      set_parts <- c(set_parts, sprintf("%s = ?", hierarchy_sidebar_quote(con, cols$myorder)))
+      params <- c(params, list(order_val))
+    }
+
+    update_sql <- sprintf(
+      "UPDATE %s SET %s WHERE %s = ?",
+      hierarchy_sidebar_quote(con, target_table),
+      paste(set_parts, collapse = ", "),
+      hierarchy_sidebar_quote(con, cols$id)
+    )
+    DBI::dbExecute(con, update_sql, c(params, list(node_id)))
+
+    if (length(level_map) > 0) {
+      level_sql <- sprintf(
+        "UPDATE %s SET %s = ? WHERE %s = ?",
+        hierarchy_sidebar_quote(con, target_table),
+        hierarchy_sidebar_quote(con, cols$level),
+        hierarchy_sidebar_quote(con, cols$id)
+      )
+      for (target_id in names(level_map)) {
+        DBI::dbExecute(con, level_sql, list(level_map[[target_id]], target_id))
+      }
+    }
+  })
+
+  updated_nodes <- hierarchy_sidebar_read_nodes(con, project_id = project_id, table_name = target_table)
+  list(
+    ok = TRUE,
+    changed = TRUE,
+    node_id = node_id,
+    node_name = node_row$Name[[1]],
+    from_parent_id = if (nzchar(from_parent_id)) from_parent_id else NA_character_,
+    to_parent_id = if (nzchar(parent_id)) parent_id else NA_character_,
+    table_name = target_table,
+    path = hierarchy_sidebar_get_path_names(updated_nodes, node_id)
+  )
+}
+
 read_project_site_unit_scope <- function(con, project_id) {
   empty <- data.frame(
     plotnumber = character(0),

@@ -144,6 +144,256 @@
   gap: 0.6rem;
   min-height: 38rem;
 }
+.vpro-hierarchy-node-workbench {
+  min-height: 34rem;
+}
+.vpro-hierarchy-single-shell {
+  padding: 0.55rem;
+}
+.vpro-hierarchy-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.vpro-hierarchy-progressive-tree {
+  min-height: 100%;
+}
+.vpro-hierarchy-single-pane {
+  min-height: 100%;
+}
+.vpro-hierarchy-up-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.34rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid rgba(53, 95, 152, 0.16);
+  background: rgba(255, 255, 255, 0.88);
+  color: #35516f;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+.vpro-hierarchy-up-action:hover {
+  transform: translateY(-1px);
+  border-color: rgba(53, 95, 152, 0.28);
+  box-shadow: 0 10px 18px rgba(33, 69, 109, 0.08);
+}
+.vpro-hierarchy-browser-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.vpro-hierarchy-crumb {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.34rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(53, 95, 152, 0.16);
+  background: rgba(255, 255, 255, 0.88);
+  color: #35516f;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+.vpro-hierarchy-crumb:hover {
+  transform: translateY(-1px);
+  border-color: rgba(53, 95, 152, 0.28);
+  box-shadow: 0 10px 18px rgba(33, 69, 109, 0.08);
+}
+.vpro-hierarchy-crumb.is-current {
+  background: linear-gradient(135deg, #355f98, #4d78b2);
+  border-color: #2b4f7f;
+  color: #ffffff;
+}
+.vpro-hierarchy-browser-current {
+  border-radius: 0.9rem;
+  padding: 0.7rem 0.78rem;
+  background: linear-gradient(135deg, #edf5ff, #f7fbff);
+  border: 1px solid rgba(53, 95, 152, 0.16);
+}
+.vpro-hierarchy-browser-current.vpro-hierarchy-drop-target {
+  cursor: default;
+}
+.vpro-hierarchy-browser-current-topline,
+.vpro-hierarchy-browser-node-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.vpro-hierarchy-browser-current-topline {
+  justify-content: space-between;
+  margin-bottom: 0.22rem;
+}
+.vpro-hierarchy-browser-current.is-root {
+  background: linear-gradient(135deg, #f8fbff, #eef5fd);
+}
+.vpro-hierarchy-browser-current-label,
+.vpro-hierarchy-browser-current-subtitle,
+.vpro-hierarchy-browser-level-count,
+.vpro-hierarchy-browser-node-meta {
+  font-size: 0.74rem;
+  color: #5d7591;
+}
+.vpro-hierarchy-browser-current-name,
+.vpro-hierarchy-browser-level-title {
+  color: #21456d;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.vpro-hierarchy-browser-level-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.vpro-hierarchy-browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.vpro-hierarchy-tree-node {
+  --hierarchy-depth: 0;
+  position: relative;
+  margin-left: calc(var(--hierarchy-depth) * 1rem);
+  width: calc(100% - (var(--hierarchy-depth) * 1rem));
+  max-width: calc(100% - (var(--hierarchy-depth) * 1rem));
+  padding-left: 0;
+  cursor: pointer;
+}
+.vpro-hierarchy-tree-node.has-depth::before {
+  content: none;
+}
+.vpro-hierarchy-tree-node.has-depth::after {
+  content: none;
+}
+.vpro-hierarchy-tree-node.is-depth-even {
+  background: transparent;
+}
+.vpro-hierarchy-tree-node.is-depth-odd {
+  background: transparent;
+}
+.vpro-hierarchy-tree-node[data-depth="2"],
+.vpro-hierarchy-tree-node[data-depth="4"],
+.vpro-hierarchy-tree-node[data-depth="6"] {
+  background: transparent;
+}
+.vpro-hierarchy-tree-node[data-depth="3"],
+.vpro-hierarchy-tree-node[data-depth="5"],
+.vpro-hierarchy-tree-node[data-depth="7"] {
+  background: transparent;
+}
+.vpro-hierarchy-tree-node[data-depth="1"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="2"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="3"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="4"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="5"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="6"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="7"] .vpro-hierarchy-node {
+  box-shadow: inset 0 0 0 1px rgba(90, 123, 164, 0.08);
+}
+.vpro-hierarchy-tree-node[data-depth="1"] .vpro-hierarchy-node {
+  background: linear-gradient(135deg, rgba(248, 251, 255, 0.99), rgba(241, 246, 255, 0.99));
+}
+.vpro-hierarchy-tree-node[data-depth="2"] .vpro-hierarchy-node {
+  background: linear-gradient(135deg, rgba(243, 248, 254, 0.99), rgba(234, 242, 251, 0.99));
+}
+.vpro-hierarchy-tree-node[data-depth="3"] .vpro-hierarchy-node {
+  background: linear-gradient(135deg, rgba(239, 245, 252, 0.99), rgba(229, 238, 249, 0.99));
+}
+.vpro-hierarchy-tree-node[data-depth="4"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="5"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="6"] .vpro-hierarchy-node,
+.vpro-hierarchy-tree-node[data-depth="7"] .vpro-hierarchy-node {
+  background: linear-gradient(135deg, rgba(235, 242, 250, 0.99), rgba(224, 235, 247, 0.99));
+}
+.vpro-hierarchy-browser-node {
+  padding-left: 0.75rem;
+}
+.vpro-hierarchy-browser-node.vpro-hierarchy-nav-target {
+  cursor: pointer;
+}
+.vpro-hierarchy-tree-node-copy,
+.vpro-hierarchy-tree-node-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.vpro-hierarchy-tree-node-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.vpro-hierarchy-tree-node-meta {
+  flex: 0 0 auto;
+  min-width: 1.15rem;
+  color: #5d7591;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.vpro-hierarchy-toggle {
+  flex: 0 0 auto;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(53, 95, 152, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  color: #35516f;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+}
+.vpro-hierarchy-toggle.has-children:hover {
+  transform: translateY(-1px);
+  border-color: rgba(53, 95, 152, 0.28);
+  box-shadow: 0 8px 16px rgba(33, 69, 109, 0.08);
+}
+.vpro-hierarchy-toggle.is-leaf {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
+.vpro-hierarchy-browser-node-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+.vpro-hierarchy-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.65rem;
+  padding: 0.18rem 0.48rem;
+  border-radius: 999px;
+  border: 1px solid rgba(53, 95, 152, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+  color: #35516f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+}
+.vpro-hierarchy-drag-handle:hover {
+  transform: translateY(-1px);
+  border-color: rgba(53, 95, 152, 0.28);
+  box-shadow: 0 8px 16px rgba(33, 69, 109, 0.08);
+}
+.vpro-hierarchy-drag-handle.is-dragging {
+  opacity: 0.5;
+  transform: scale(0.96);
+  box-shadow: none;
+}
 .vpro-hierarchy-tree-shell {
   border: 1px solid rgba(53, 95, 152, 0.12);
   border-radius: 0.9rem;
@@ -161,9 +411,10 @@
 }
 .vpro-hierarchy-node {
   --hierarchy-depth: 0;
+  position: relative;
   display: block;
   border-radius: 0.8rem;
-  padding: 0.5rem 0.7rem 0.5rem calc(0.7rem + (var(--hierarchy-depth) * 0.85rem));
+  padding: 0.5rem 0.7rem;
   color: #35516f;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid transparent;
@@ -174,16 +425,84 @@
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(53, 95, 152, 0.1);
 }
+.vpro-hierarchy-node.is-hierarchy-node {
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(53, 95, 152, 0.12);
+}
+.vpro-hierarchy-node.is-hierarchy-node.is-selected-path {
+  border-color: rgba(67, 108, 159, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(67, 108, 159, 0.08);
+}
+.vpro-hierarchy-node.is-hierarchy-node.is-selected-path::after {
+  content: "";
+  position: absolute;
+  left: 0.22rem;
+  top: 0.34rem;
+  bottom: 0.34rem;
+  width: 0.22rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(72, 120, 178, 0.45), rgba(53, 95, 152, 0.82));
+}
+.vpro-hierarchy-node.is-hierarchy-node.is-path-root::after {
+  background: linear-gradient(180deg, rgba(94, 129, 176, 0.34), rgba(67, 108, 159, 0.62));
+}
 .vpro-hierarchy-node.is-site-unit:hover {
   transform: translateY(-1px);
   border-color: rgba(53, 95, 152, 0.28);
   box-shadow: 0 10px 22px rgba(28, 72, 122, 0.08);
+}
+.vpro-hierarchy-node.is-hierarchy-node:hover {
+  transform: translateY(-1px);
+  border-color: rgba(53, 95, 152, 0.28);
+  box-shadow: 0 10px 22px rgba(28, 72, 122, 0.08);
+}
+.vpro-hierarchy-node.is-hierarchy-node.is-depth-odd:hover {
+  background: linear-gradient(135deg, rgba(240, 246, 255, 0.98), rgba(232, 241, 253, 0.98));
 }
 .vpro-hierarchy-node.is-active {
   background: linear-gradient(135deg, #355f98, #4d78b2);
   border-color: #2b4f7f;
   color: #ffffff;
   box-shadow: 0 14px 28px rgba(35, 76, 122, 0.2);
+}
+.vpro-hierarchy-node.is-active:hover {
+  color: #284c78;
+}
+.vpro-hierarchy-node.is-active:hover .vpro-hierarchy-node-count,
+.vpro-hierarchy-node.is-active:hover .vpro-hierarchy-drag-handle,
+.vpro-hierarchy-node.is-active:hover .vpro-hierarchy-toggle,
+.vpro-hierarchy-node.is-active:hover .vpro-hierarchy-node-label {
+  color: #284c78;
+}
+.vpro-hierarchy-node.is-active:hover .vpro-hierarchy-node-count,
+.vpro-hierarchy-node.is-active:hover .vpro-hierarchy-drag-handle,
+.vpro-hierarchy-node.is-active:hover .vpro-hierarchy-toggle {
+  border-color: rgba(67, 108, 159, 0.3);
+}
+.vpro-hierarchy-node.is-selected-path:not(.is-active) {
+  background: linear-gradient(135deg, rgba(227, 238, 252, 0.98), rgba(214, 230, 248, 0.98));
+}
+.vpro-hierarchy-node.is-selected-path .vpro-hierarchy-node-label {
+  color: #284c78;
+  font-weight: 700;
+}
+.vpro-hierarchy-node.is-selected-path .vpro-hierarchy-node-count,
+.vpro-hierarchy-node.is-selected-path .vpro-hierarchy-drag-handle,
+.vpro-hierarchy-node.is-selected-path .vpro-hierarchy-toggle {
+  border-color: rgba(67, 108, 159, 0.3);
+}
+.vpro-hierarchy-node.is-active .vpro-hierarchy-node-count,
+.vpro-hierarchy-node.is-active .vpro-hierarchy-drag-handle,
+.vpro-hierarchy-node.is-active .vpro-hierarchy-toggle,
+.vpro-hierarchy-node.is-active .vpro-hierarchy-node-label {
+  color: #ffffff;
+}
+.vpro-hierarchy-node.is-active .vpro-hierarchy-node-count,
+.vpro-hierarchy-node.is-active .vpro-hierarchy-drag-handle,
+.vpro-hierarchy-node.is-active .vpro-hierarchy-toggle {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 .vpro-hierarchy-node.is-over {
   border-color: #0f8b6f;
@@ -218,6 +537,30 @@
   background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
 }
+.vpro-hierarchy-node.is-orphan {
+  border-style: dashed;
+}
+.vpro-hierarchy-root-drop-target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.4rem;
+  margin-bottom: 0.2rem;
+  border: 1px dashed rgba(53, 95, 152, 0.34);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: #35516f;
+  transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+.vpro-hierarchy-root-drop-target.is-over {
+  border-color: #0f8b6f;
+  background: linear-gradient(135deg, rgba(224, 255, 247, 0.98), rgba(205, 244, 233, 0.98));
+  box-shadow: 0 0 0 2px rgba(15, 139, 111, 0.12);
+}
+.vpro-hierarchy-root-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+}
 .vpro-hierarchy-plot-panel {
   border: 1px solid rgba(53, 95, 152, 0.12);
   border-radius: 0.95rem;
@@ -225,8 +568,50 @@
   min-height: 10rem;
   flex: 0 0 auto;
 }
+.vpro-hierarchy-detail-panel {
+  min-height: 9.25rem;
+}
 .vpro-hierarchy-plot-shell {
   padding: 0.7rem 0.8rem 0.8rem;
+}
+.vpro-hierarchy-detail-shell {
+  padding: 0.75rem 0.8rem 0.85rem;
+}
+.vpro-hierarchy-detail-header,
+.vpro-hierarchy-detail-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.vpro-hierarchy-detail-header {
+  margin-bottom: 0.35rem;
+}
+.vpro-hierarchy-detail-row {
+  margin-top: 0.2rem;
+}
+.vpro-hierarchy-detail-id,
+.vpro-hierarchy-detail-label,
+.vpro-hierarchy-detail-value,
+.vpro-hierarchy-detail-path {
+  font-size: 0.76rem;
+}
+.vpro-hierarchy-detail-id,
+.vpro-hierarchy-detail-label {
+  color: #5d7591;
+}
+.vpro-hierarchy-detail-value {
+  color: #21456d;
+  font-weight: 600;
+}
+.vpro-hierarchy-detail-path {
+  margin-top: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #f5f9ff, #edf4fb);
+  color: #35516f;
+  line-height: 1.35;
+  word-break: break-word;
 }
 .vpro-hierarchy-plot-header {
   display: flex;
@@ -309,5 +694,25 @@
   }
   .vpro-hierarchy-node {
     padding-right: 0.55rem;
+  }
+  .vpro-hierarchy-browser-crumbs {
+    gap: 0.3rem;
+  }
+  .vpro-hierarchy-up-action {
+    min-height: 1.85rem;
+    padding: 0.3rem 0.58rem;
+  }
+  .vpro-hierarchy-tree-node {
+    margin-left: calc(var(--hierarchy-depth) * 0.72rem);
+    width: calc(100% - (var(--hierarchy-depth) * 0.72rem));
+    max-width: calc(100% - (var(--hierarchy-depth) * 0.72rem));
+    padding-left: 0;
+  }
+  .vpro-hierarchy-crumb {
+    min-height: 1.85rem;
+    padding: 0.3rem 0.58rem;
+  }
+  .vpro-hierarchy-detail-shell {
+    padding: 0.65rem 0.7rem 0.75rem;
   }
 }
