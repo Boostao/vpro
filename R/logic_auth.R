@@ -1,6 +1,6 @@
 # Authentication helpers
 # Two user types:
-#   guest  — email + full name only; read core/lists, write staging
+#   guest  — email + full name only; local project edit access + staging push access
 #   admin  — email + bcrypt password; full access, can grant admin to others
 
 auth_init_state <- function(state) {
@@ -14,9 +14,20 @@ auth_init_state <- function(state) {
   })
 }
 
-# Derive permissions from app_role (admin gets wildcard, guest gets scoped set)
+# Derive permissions from app_role.
+# Guests can edit the local project and create staged sync payloads, but they do
+# not get admin/publish/master-data permissions.
 .auth_permissions <- function(app_role) {
-  if (identical(app_role, "admin")) c("*") else c("write:staging", "read:core")
+  if (identical(app_role, "admin")) {
+    c("*")
+  } else {
+    c(
+      "read:core",
+      "write:staging",
+      "write:own_plots",
+      "write:project_plots"
+    )
+  }
 }
 
 # Populate reactive state from a user data.frame row

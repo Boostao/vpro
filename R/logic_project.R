@@ -175,6 +175,79 @@ project_baseline_has_tables <- function(con, project_id, required_tables = c("En
   all(vapply(required_tables, function(tbl) DBI::dbExistsTable(bcon, tbl), logical(1)))
 }
 
+project_baseline_file_has_tables <- function(path, required_tables = c("Env", "SU", "Veg")) {
+  if (is.null(path) || !nzchar(as.character(path)) || !file.exists(path)) return(FALSE)
+
+  bcon <- tryCatch(
+    DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(bcon)) return(FALSE)
+  on.exit(try(DBI::dbDisconnect(bcon, shutdown = TRUE), silent = TRUE), add = TRUE)
+
+  all(vapply(required_tables, function(tbl) DBI::dbExistsTable(bcon, tbl), logical(1)))
+}
+
+project_replace_baseline_from_file <- function(con,
+                                               project_id,
+                                               source_path,
+                                               source_file_path = NULL,
+                                               source_kind = "sync_backup_upload",
+                                               required_tables = c("Env", "SU", "Veg")) {
+  if (is.null(project_id) || !nzchar(as.character(project_id %||% ""))) {
+    stop("project_id is required.")
+  }
+  if (is.null(source_path) || !nzchar(as.character(source_path %||% ""))) {
+    stop("source_path is required.")
+  }
+  if (!file.exists(source_path)) {
+    stop("Backup file not found: ", source_path)
+  }
+  if (!project_baseline_file_has_tables(source_path, required_tables = required_tables)) {
+    stop("Selected backup file does not contain the required VPro project tables.")
+  }
+
+  project_ensure_baseline_table(con)
+
+  baseline_path <- project_baseline_path(project_id)
+  if (file.exists(baseline_path)) {
+    unlink(baseline_path, force = TRUE)
+  }
+
+  if (!isTRUE(file.copy(source_path, baseline_path, overwrite = TRUE, copy.mode = TRUE, copy.date = TRUE))) {
+    stop("Failed to register the selected backup file as the project baseline.")
+  }
+
+  file_info <- file.info(baseline_path)
+  file_md5 <- tryCatch(unname(tools::md5sum(baseline_path)[[1]]), error = function(e) NA_character_)
+  recorded_source <- source_file_path %||% source_path
+
+  DBI::dbExecute(
+    con,
+    paste0("DELETE FROM ", PROJECT_BASELINE_TABLE, " WHERE project_id = ?"),
+    list(as.character(project_id))
+  )
+
+  DBI::dbExecute(
+    con,
+    paste0(
+      "INSERT INTO ", PROJECT_BASELINE_TABLE,
+      " (project_id, baseline_path, created_utc, source_file_path, source_kind, file_size_bytes, file_md5)",
+      " VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)"
+    ),
+    list(
+      as.character(project_id),
+      baseline_path,
+      as.character(recorded_source),
+      as.character(source_kind %||% "sync_backup_upload"),
+      if (nrow(file_info) == 0 || is.na(file_info$size[[1]])) NA_integer_ else as.numeric(file_info$size[[1]]),
+      file_md5
+    )
+  )
+
+  project_get_baseline(con, project_id)
+}
+
 .project_find_field <- function(fields, candidates) {
   if (length(fields) == 0 || length(candidates) == 0) return(NA_character_)
   idx <- match(tolower(candidates), tolower(fields), nomatch = 0L)

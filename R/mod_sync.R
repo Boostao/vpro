@@ -37,6 +37,25 @@ mod_sync_ui <- function(id) {
           class = "btn btn-outline-secondary btn-sm"
         )
       ),
+      div(
+        class = "sync-source-panel mb-3",
+        uiOutput(ns("comparison_status")),
+        div(
+          class = "d-flex align-items-end gap-3 flex-wrap",
+          uiOutput(ns("compare_source_ui")),
+          div(
+            style = "min-width: 320px;",
+            fileInput(
+              ns("backup_file"),
+              "Replace current backup file",
+              accept = c(".duckdb"),
+              buttonLabel = "Browse...",
+              placeholder = "No file selected"
+            )
+          )
+        ),
+        uiOutput(ns("sync_status"))
+      ),
 
       # Diff card CSS
       tags$style(HTML("
@@ -61,6 +80,12 @@ mod_sync_ui <- function(id) {
         .sync-section-badge { display: inline-flex; gap: 4px; margin-left: 8px; }
         .sync-section-badge .badge { font-size: 0.72em; font-weight: 600; vertical-align: middle; }
         .sync-diff-actions { margin-left: auto; }
+        .sync-source-panel { border: 1px solid #d7e3ea; background: #f8fbfc; border-radius: 6px; padding: 12px; }
+        .sync-source-summary { margin-bottom: 10px; }
+        .sync-source-badges { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+        .sync-status-banner { margin-top: 10px; margin-bottom: 0; padding: 8px 10px; border-radius: 4px; font-size: 0.9em; }
+        .sync-status-banner.sync-status-ok { background: #edf7ea; color: #24552a; border: 1px solid #bfd9ba; }
+        .sync-status-banner.sync-status-error { background: #fdecea; color: #8a1f11; border: 1px solid #f2c1bc; }
       ")),
 
       # 4 accordion groups ordered by field workflow: Site, Soil, Veg, Project
@@ -121,7 +146,7 @@ mod_sync_ui <- function(id) {
 
     # ── Tab 2: Merge Requests ─────────────────────────────────────────────────
     bslib::nav_panel(
-      title = "Merge Requests",
+      title = tagList("Merge Requests", uiOutput(ns("mr_tab_badge"), inline = TRUE)),
       value = "merge_requests",
 
       div(
@@ -187,10 +212,202 @@ mod_sync_server <- function(id, state, con) {
       rv_refresh(rv_refresh() + 1L)
     }, ignoreInit = TRUE)
 
+    rv_status <- reactiveVal(NULL)
+    rv_last_project <- reactiveVal(NULL)
+    rv_compare_source_preference <- reactiveVal(NULL)
+    rv_delete_merge_request_id <- reactiveVal(NULL)
+    rv_last_auth_cloud_ready <- reactiveVal(FALSE)
+    is_authenticated <- reactive({
+      isTRUE(state$AuthAuthenticated)
+    })
 
     # ── Current project from state ────────────────────────────────────────────
     current_project_id <- reactive({
       state$CurrProject %||% state$PrefProject
+    })
+
+    default_compare_source <- function(project_id) {
+      if (!isTRUE(is_authenticated())) return("backup_file")
+
+      pending_rows <- tryCatch(pending_project_merge_requests(), error = function(e) data.frame())
+      if (!is.null(pending_rows) && nrow(pending_rows) > 0) {
+        return(sync_compare_source_merge_request_value(pending_rows$id[[1]]))
+      }
+
+      info <- sync_resolve_compare_source(con, project_id = project_id, compare_source = "cloud_core")
+      if (isTRUE(info$cloud_available)) "cloud_core" else "backup_file"
+    }
+
+    .merge_request_total_rows <- function(record_counts) {
+      tryCatch({
+        parsed <- jsonlite::fromJSON(record_counts %||% "{}")
+        as.integer(sum(unlist(parsed), na.rm = TRUE))
+      }, error = function(e) 0L)
+    }
+
+    pending_project_merge_requests <- reactive({
+      rv_mr_reload()
+      if (!isTRUE(is_authenticated()) || !sync_cloud_connected(con)) return(data.frame())
+      tryCatch(
+        sync_get_user_pending_merge_requests(
+          con,
+          submitter = state$User %||% "",
+          project_id = current_project_id()
+        ),
+        error = function(e) data.frame()
+      )
+    })
+
+    pending_user_merge_requests <- reactive({
+      rv_mr_reload()
+      if (!isTRUE(is_authenticated()) || !sync_cloud_connected(con)) return(data.frame())
+      tryCatch(
+        sync_get_user_pending_merge_requests(
+          con,
+          submitter = state$User %||% ""
+        ),
+        error = function(e) data.frame()
+      )
+    })
+
+    .flatten_choice_values <- function(choices) {
+      values <- character(0)
+      for (choice in choices) {
+        if (is.list(choice)) {
+          values <- c(values, .flatten_choice_values(choice))
+        } else {
+          values <- c(values, unname(as.character(choice)))
+        }
+      }
+      unique(values[nzchar(values)])
+    }
+
+    compare_source_choices <- reactive({
+      primary_choices <- c("Backup file" = "backup_file")
+      if (isTRUE(is_authenticated())) {
+        primary_choices <- c("Master" = "cloud_core", primary_choices)
+      }
+
+      choices <- list("Compare against" = primary_choices)
+      pending_rows <- pending_project_merge_requests()
+      if (!is.null(pending_rows) && nrow(pending_rows) > 0) {
+        mr_values <- vapply(
+          pending_rows$id,
+          sync_compare_source_merge_request_value,
+          character(1)
+        )
+        mr_labels <- vapply(seq_len(nrow(pending_rows)), function(row_idx) {
+          sprintf(
+            "MR #%s (%s row%s)",
+            pending_rows$id[[row_idx]],
+            .merge_request_total_rows(pending_rows$record_counts[[row_idx]]),
+            if (.merge_request_total_rows(pending_rows$record_counts[[row_idx]]) == 1) "" else "s"
+          )
+        }, character(1))
+        choices[["Pending merge requests"]] <- stats::setNames(mr_values, mr_labels)
+      }
+
+      choices
+    })
+
+    selected_compare_source <- reactive({
+      valid_values <- .flatten_choice_values(compare_source_choices())
+      selected <- sync_normalize_compare_source(
+        rv_compare_source_preference() %||% input$compare_source %||% default_compare_source(current_project_id())
+      )
+      if (!isTRUE(is_authenticated()) && identical(sync_compare_source_parse(selected)$kind, "cloud")) {
+        selected <- SYNC_COMPARE_SOURCE_BACKUP
+      }
+      if (selected %in% valid_values) return(selected)
+
+      fallback <- default_compare_source(current_project_id())
+      if (!isTRUE(is_authenticated()) && identical(sync_compare_source_parse(fallback)$kind, "cloud")) {
+        fallback <- SYNC_COMPARE_SOURCE_BACKUP
+      }
+      if (fallback %in% valid_values) return(fallback)
+
+      if (length(valid_values) > 0) valid_values[[1]] else SYNC_COMPARE_SOURCE_BACKUP
+    })
+
+    compare_source_requested <- reactive({
+      requested <- selected_compare_source()
+      if (!isTRUE(is_authenticated()) && identical(requested, SYNC_COMPARE_SOURCE_CLOUD)) {
+        return(SYNC_COMPARE_SOURCE_BACKUP)
+      }
+      requested
+    })
+
+    output$compare_source_ui <- renderUI({
+      div(
+        style = "min-width: 240px;",
+        selectInput(
+          ns("compare_source"),
+          "Compare local changes against",
+          choices = compare_source_choices(),
+          selected = selected_compare_source()
+        )
+      )
+    })
+
+    clean_text <- function(value) {
+      text <- as.character(value %||% "")
+      if (!length(text) || is.na(text[[1]]) || !nzchar(trimws(text[[1]]))) return(NULL)
+      text[[1]]
+    }
+
+    comparison_context <- reactive({
+      pid <- current_project_id()
+      baseline <- if (!is.null(pid) && nzchar(as.character(pid))) {
+        tryCatch(project_get_baseline(con, pid), error = function(e) NULL)
+      } else {
+        NULL
+      }
+      source_info <- sync_resolve_compare_source(
+        con,
+        project_id = pid,
+        compare_source = compare_source_requested()
+      )
+
+      source_ref <- NULL
+      baseline_path <- NULL
+      if (!is.null(baseline) && nrow(baseline) > 0) {
+        source_ref <- clean_text(baseline$source_file_path[[1]]) %||% clean_text(baseline$baseline_path[[1]])
+        baseline_path <- clean_text(baseline$baseline_path[[1]])
+      }
+
+      list(
+        project_id = pid,
+        baseline = baseline,
+        source_info = source_info,
+        backup_display = if (!is.null(source_ref) && nzchar(as.character(source_ref))) basename(as.character(source_ref)) else NULL,
+        backup_path = baseline_path
+      )
+    })
+
+    observe({
+      pid <- current_project_id() %||% ""
+      auth_key <- if (isTRUE(is_authenticated())) "auth" else "guest"
+      pending_key <- paste(pending_project_merge_requests()$id %||% integer(0), collapse = ",")
+      state_key <- paste(pid, auth_key, pending_key, sep = "::")
+      if (!identical(rv_last_project(), state_key)) {
+        rv_last_project(state_key)
+        if (!selected_compare_source() %in% .flatten_choice_values(compare_source_choices())) {
+          rv_compare_source_preference(default_compare_source(pid))
+        }
+        shinyjs::reset("backup_file")
+      }
+    })
+
+    observe({
+      pid <- current_project_id()
+      auth_cloud_ready <- isTRUE(is_authenticated()) && isTRUE(sync_cloud_connected(con))
+      previously_ready <- isTRUE(rv_last_auth_cloud_ready())
+
+      if (auth_cloud_ready && !previously_ready) {
+        rv_compare_source_preference(default_compare_source(pid))
+      }
+
+      rv_last_auth_cloud_ready(auth_cloud_ready)
     })
 
     output$project_badge <- renderUI({
@@ -200,16 +417,65 @@ mod_sync_server <- function(id, state, con) {
       }
     })
 
-    # ── Detect if any changes exist ───────────────────────────────────────────
-    is_authenticated <- reactive({
-      isTRUE(state$AuthAuthenticated)
+    output$comparison_status <- renderUI({
+      context <- comparison_context()
+      pid <- context$project_id
+      source_info <- context$source_info
+      if (is.null(pid) || !nzchar(as.character(pid))) {
+        return(div(class = "text-muted small sync-source-summary", "Open a project to review sync comparisons."))
+      }
+
+      tags$div(
+        class = "sync-source-summary",
+        div(
+          class = "sync-source-badges",
+          span(class = "badge bg-primary", paste("Project:", pid)),
+          span(class = "badge bg-dark", paste("Using:", source_info$resolved_label)),
+          if (identical(source_info$resolved_kind, "merge_request") && !is.null(source_info$resolved_merge_request_id)) {
+            span(class = "badge text-bg-warning", paste("Pending MR:", source_info$resolved_merge_request_id))
+          },
+          if (!identical(source_info$requested, source_info$resolved)) {
+            span(class = "badge text-bg-warning", paste("Selected:", source_info$requested_label))
+          },
+          if (isTRUE(is_authenticated()) && isTRUE(source_info$cloud_available)) {
+            span(class = "badge text-bg-success", "Master available")
+          } else if (!isTRUE(is_authenticated())) {
+            span(class = "badge text-bg-secondary", "Sign in to use Master")
+          } else {
+            span(class = "badge text-bg-secondary", "Master unavailable")
+          },
+          if (isTRUE(source_info$backup_available)) {
+            span(class = "badge text-bg-info", "Backup registered")
+          } else {
+            span(class = "badge text-bg-secondary", "No backup registered")
+          }
+        ),
+        div(
+          class = "small text-muted",
+          if (!is.null(context$backup_display) && nzchar(context$backup_display)) {
+            paste("Current backup file:", context$backup_display)
+          } else {
+            "Current backup file: none"
+          }
+        ),
+        if (!is.null(source_info$fallback_reason) && nzchar(source_info$fallback_reason)) {
+          div(class = "small text-muted mt-1", source_info$fallback_reason)
+        },
+        if (isTRUE(is_authenticated()) && !isTRUE(source_info$push_allowed) && nzchar(source_info$push_block_reason %||% "")) {
+          div(class = "small text-muted mt-1", source_info$push_block_reason)
+        }
+      )
     })
 
     reactive_summary <- reactive({
       rv_refresh()
       state$SyncVersion
       tryCatch(
-        sync_get_pending_summary(con, project_id = current_project_id()),
+        sync_get_pending_summary(
+          con,
+          project_id = current_project_id(),
+          compare_source = compare_source_requested()
+        ),
         error = function(e) {
           empty_counts <- c(insert = 0L, update = 0L, delete = 0L, total = 0L)
           list(
@@ -226,7 +492,8 @@ mod_sync_server <- function(id, state, con) {
 
     # Disable/enable push button based on changes
     observe({
-      if (has_any_changes() && is_authenticated()) {
+      source_info <- comparison_context()$source_info
+      if (has_any_changes() && is_authenticated() && isTRUE(source_info$push_allowed)) {
         shinyjs::enable("sync_push")
       } else {
         shinyjs::disable("sync_push")
@@ -244,7 +511,11 @@ mod_sync_server <- function(id, state, con) {
       rv_refresh()
       state$SyncVersion  # invalidation signal
       tryCatch(
-        sync_get_local_changes(con, project_id = current_project_id()),
+        sync_get_local_changes(
+          con,
+          project_id = current_project_id(),
+          compare_source = compare_source_requested()
+        ),
         error = function(e) {
           setNames(
             lapply(c("admin","env","su","humus","mineral","other","veg","herbarium","metadata"),
@@ -318,10 +589,11 @@ mod_sync_server <- function(id, state, con) {
       rv_refresh()
       state$SyncVersion
       pid <- current_project_id()
+      selected_source <- compare_source_requested()
       out <- list()
       for (cfg in SYNC_TABLE_CONFIG) {
         out[[cfg$pg]] <- tryCatch(
-          sync_get_change_detail(con, cfg, project_id = pid),
+          sync_get_change_detail(con, cfg, project_id = pid, compare_source = selected_source),
           error = function(e) list()
         )
       }
@@ -360,9 +632,78 @@ mod_sync_server <- function(id, state, con) {
       )
     }
 
-    .set_sync_status <- function(message = NULL, counts = NULL, error = FALSE) {
-      invisible(NULL)
+    .format_counts <- function(counts) {
+      count_parts <- character(0)
+      if (!is.null(counts[["insert"]]) && counts[["insert"]] > 0) {
+        count_parts <- c(count_parts, sprintf("%d insert%s", counts[["insert"]], if (counts[["insert"]] == 1) "" else "s"))
+      }
+      if (!is.null(counts[["update"]]) && counts[["update"]] > 0) {
+        count_parts <- c(count_parts, sprintf("%d update%s", counts[["update"]], if (counts[["update"]] == 1) "" else "s"))
+      }
+      if (!is.null(counts[["delete"]]) && counts[["delete"]] > 0) {
+        count_parts <- c(count_parts, sprintf("%d delete%s", counts[["delete"]], if (counts[["delete"]] == 1) "" else "s"))
+      }
+      if (length(count_parts) == 0) "no records" else paste(count_parts, collapse = ", ")
     }
+
+    .set_sync_status <- function(message = NULL, counts = NULL, error = FALSE) {
+      final_message <- message
+      if (is.null(final_message) && !is.null(counts)) {
+        final_message <- paste("Completed:", .format_counts(counts))
+      }
+      rv_status(list(message = final_message, counts = counts, error = isTRUE(error)))
+      invisible(final_message)
+    }
+
+    output$sync_status <- renderUI({
+      status <- rv_status()
+      if (is.null(status$message) || !nzchar(as.character(status$message))) return(NULL)
+      div(
+        class = paste("sync-status-banner", if (isTRUE(status$error)) "sync-status-error" else "sync-status-ok"),
+        status$message
+      )
+    })
+
+    observeEvent(input$compare_source, {
+      rv_compare_source_preference(sync_normalize_compare_source(input$compare_source))
+      rv_refresh(rv_refresh() + 1L)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$backup_file, {
+      file_info <- input$backup_file
+      pid <- current_project_id()
+
+      if (is.null(file_info) || is.null(file_info$datapath) || !nzchar(file_info$datapath %||% "")) {
+        return()
+      }
+      if (is.null(pid) || !nzchar(as.character(pid))) {
+        .set_sync_status("Open a project before replacing the backup file.", error = TRUE)
+        shinyjs::reset("backup_file")
+        return()
+      }
+      if (!identical(tolower(tools::file_ext(file_info$name %||% "")), "duckdb")) {
+        .set_sync_status("Backup file must be a .duckdb file.", error = TRUE)
+        shinyjs::reset("backup_file")
+        return()
+      }
+
+      tryCatch({
+        project_replace_baseline_from_file(
+          con,
+          project_id = pid,
+          source_path = file_info$datapath,
+          source_file_path = file_info$name,
+          source_kind = "sync_backup_upload"
+        )
+        sync_touch_state(state)
+        rv_refresh(rv_refresh() + 1L)
+        .set_sync_status(sprintf("Registered backup file for project %s: %s", pid, file_info$name), error = FALSE)
+      }, error = function(e) {
+        .set_sync_status(conditionMessage(e), error = TRUE)
+      })
+
+      shinyjs::reset("backup_file")
+    }, ignoreInit = TRUE)
 
     .revert_records <- function(records, label = "changes") {
       if (length(records) == 0) {
@@ -446,7 +787,7 @@ mod_sync_server <- function(id, state, con) {
     .build_diff_card <- function(record, pk) {
       is_insert <- identical(record$change_type, "insert")
       is_delete <- identical(record$change_type, "delete")
-      before_data <- record$core_data %||% record$baseline_data %||% record$delete_data
+      before_data <- record$compare_data %||% record$core_data %||% record$baseline_data %||% record$delete_data
       card_class <- if (is_insert) {
         "sync-diff-card sync-insert"
       } else if (is_delete) {
@@ -465,6 +806,7 @@ mod_sync_server <- function(id, state, con) {
           style = paste0("background:", badge_col, ";color:", badge_txt_col, ";"),
           badge_text
         ),
+        tags$span(class = "badge text-bg-light", record$compare_source_actual_label %||% "Comparison"),
         tags$span(class = "text-muted small text-uppercase", record$table_pg %||% ""),
         tags$span(paste(pk, "=", record$pk_value)),
         div(
@@ -611,6 +953,8 @@ mod_sync_server <- function(id, state, con) {
       pid       <- current_project_id()
       submitter <- state$User %||% "unknown"
       pending_counts <- reactive_summary()$total[c("insert", "update", "delete")]
+      selected_source <- compare_source_requested()
+      selected_source_info <- comparison_context()$source_info
 
       if (!is_authenticated()) {
         .set_sync_status("Sign in required before pushing changes.", error = TRUE)
@@ -620,9 +964,19 @@ mod_sync_server <- function(id, state, con) {
         .set_sync_status("No pending changes to push.", error = TRUE)
         return()
       }
+      if (!isTRUE(selected_source_info$push_allowed)) {
+        .set_sync_status(selected_source_info$push_block_reason %||% "Push is unavailable for the selected comparison source.", error = TRUE)
+        return()
+      }
 
       tryCatch({
-        result <- sync_push(con, project_id = pid, submitter = submitter)
+        result <- sync_push(
+          con,
+          project_id = pid,
+          submitter = submitter,
+          compare_source = selected_source,
+          target_merge_request_id = selected_source_info$resolved_merge_request_id
+        )
 
         sync_touch_state(state)
         rv_refresh(rv_refresh() + 1L)
@@ -637,11 +991,13 @@ mod_sync_server <- function(id, state, con) {
         else
           "no rows"
 
-        msg <- sprintf(
-          "Push submitted \u2014 MR #%s (%s). Awaiting admin review.",
-          mr_id, count_str
-        )
-        .set_sync_status(counts = pending_counts, error = FALSE)
+        msg <- if (isTRUE(result$updated_existing)) {
+          sprintf("Updated MR #%s (%s).", mr_id, count_str)
+        } else {
+          sprintf("Push submitted \u2014 MR #%s (%s). Awaiting admin review.", mr_id, count_str)
+        }
+        rv_compare_source_preference(sync_compare_source_merge_request_value(mr_id))
+        .set_sync_status(message = msg, counts = pending_counts, error = FALSE)
         bslib::nav_select(session$ns("sync_tabs"), selected = "merge_requests")
       }, error = function(e) {
         .set_sync_status(conditionMessage(e), error = TRUE)
@@ -659,6 +1015,19 @@ mod_sync_server <- function(id, state, con) {
         show_approved = !isTRUE(input$hide_approved),
         show_rejected = !isTRUE(input$hide_rejected)
       )
+    })
+
+    output$mr_tab_badge <- renderUI({
+      pending_rows <- pending_user_merge_requests()
+      if (is.null(pending_rows) || nrow(pending_rows) == 0) return(NULL)
+      span(class = "badge text-bg-warning ms-1", nrow(pending_rows))
+    })
+
+    selected_merge_request_row <- reactive({
+      sel <- input$tbl_mrs_rows_selected
+      df <- reactive_mrs()
+      if (is.null(sel) || length(sel) == 0 || nrow(df) == 0 || sel > nrow(df)) return(NULL)
+      df[sel, , drop = FALSE]
     })
 
     output$tbl_mrs <- DT::renderDataTable({
@@ -710,11 +1079,8 @@ mod_sync_server <- function(id, state, con) {
     })
 
     output$mr_detail <- renderUI({
-      sel <- input$tbl_mrs_rows_selected
-      if (is.null(sel) || length(sel) == 0) return(NULL)
-      df  <- reactive_mrs()
-      if (nrow(df) == 0 || sel > nrow(df)) return(NULL)
-      row <- df[sel, , drop = FALSE]
+      row <- selected_merge_request_row()
+      if (is.null(row)) return(NULL)
 
       # Parse record_counts JSON -> per-table display
       counts_list <- tryCatch(
@@ -759,9 +1125,60 @@ mod_sync_server <- function(id, state, con) {
             tags$dd(class = "col-sm-9",
               if (!is.na(notes) && nzchar(notes %||% "")) notes else "—"
             )
-          )
+          ),
+          if ((row$status[1] %||% "") %in% c("pending_review", "rejected")) {
+            div(
+              class = "mt-3",
+              actionButton(
+                ns("mr_delete"),
+                label = tagList(icon("trash"), "Delete merge request"),
+                class = "btn btn-outline-danger btn-sm"
+              )
+            )
+          }
         )
       )
     })
+
+    observeEvent(input$mr_delete, {
+      row <- selected_merge_request_row()
+      if (is.null(row)) return()
+      rv_delete_merge_request_id(as.integer(row$id[[1]]))
+      showModal(modalDialog(
+        title = sprintf("Delete MR #%s", row$id[[1]]),
+        sprintf("This will permanently remove merge request #%s and any staged rows attached to it.", row$id[[1]]),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("mr_delete_confirm"), "Delete", class = "btn btn-danger")
+        )
+      ))
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$mr_delete_confirm, {
+      mr_id <- rv_delete_merge_request_id()
+      if (is.null(mr_id) || is.na(mr_id)) return()
+
+      tryCatch({
+        sync_delete_user_merge_request(con, mr_id, submitter = state$User %||% "")
+        removeModal()
+        rv_delete_merge_request_id(NULL)
+
+        current_source <- compare_source_requested()
+        current_source_parsed <- sync_compare_source_parse(current_source)
+        if (identical(current_source_parsed$kind, "merge_request") && identical(current_source_parsed$merge_request_id, as.integer(mr_id))) {
+          rv_compare_source_preference(default_compare_source(current_project_id()))
+        }
+
+        sync_touch_state(state)
+        rv_refresh(rv_refresh() + 1L)
+        rv_mr_reload(rv_mr_reload() + 1L)
+        .set_sync_status(sprintf("Deleted MR #%s.", mr_id), error = FALSE)
+      }, error = function(e) {
+        removeModal()
+        rv_delete_merge_request_id(NULL)
+        .set_sync_status(conditionMessage(e), error = TRUE)
+      })
+    }, ignoreInit = TRUE)
   })
 }

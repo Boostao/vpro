@@ -43,6 +43,10 @@ SYNC_TABLE_CONFIG <- list(
        project_scope = "direct")
 )
 
+SYNC_COMPARE_SOURCE_CLOUD <- "cloud_core"
+SYNC_COMPARE_SOURCE_BACKUP <- "backup_file"
+SYNC_COMPARE_SOURCE_MERGE_REQUEST_PREFIX <- "merge_request:"
+
 
 # =============================================================================
 # 1. Cloud connectivity
@@ -66,6 +70,336 @@ sync_cloud_connected <- function(con, alias = "master") {
 sync_require_cloud <- function(con, allow_attach = FALSE, alias = "master") {
   if (sync_cloud_connected(con, alias)) return(invisible(TRUE))
   stop("Cloud database '", alias, "' is not attached. Please log in first.")
+}
+
+.sync_get_column_type <- function(con, catalog, schema, table, column) {
+  info <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT data_type",
+        "FROM duckdb_columns()",
+        "WHERE lower(database_name) = lower(?)",
+        "  AND lower(schema_name) = lower(?)",
+        "  AND lower(table_name) = lower(?)",
+        "  AND lower(column_name) = lower(?)",
+        "LIMIT 1"
+      ),
+      params = list(catalog, schema, table, column)
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(info) == 0) return(NA_character_)
+  as.character(info$data_type[[1]])
+}
+
+.sync_connect_master_postgres <- function() {
+  if (!requireNamespace("RPostgres", quietly = TRUE)) return(NULL)
+
+  pg_user <- Sys.getenv("VPRO_PG_APP_USER", "vpro_app")
+  pg_pass <- Sys.getenv("VPRO_PG_APP_PASSWORD", "")
+  pg_host <- Sys.getenv("PGHOST", "localhost")
+  pg_port <- suppressWarnings(as.integer(Sys.getenv("PGPORT", "5433")))
+  pg_db <- Sys.getenv("PGDATABASE", "becmaster")
+
+  if (!nzchar(pg_user) || !nzchar(pg_db) || is.na(pg_port)) return(NULL)
+
+  tryCatch(
+    DBI::dbConnect(
+      RPostgres::Postgres(),
+      host = pg_host,
+      port = pg_port,
+      dbname = pg_db,
+      user = pg_user,
+      password = if (nzchar(pg_pass)) pg_pass else NULL
+    ),
+    error = function(e) NULL
+  )
+}
+
+.sync_update_merge_request_json_direct_pg <- function(mr_id, column_name, json_value, column_type) {
+  pg_con <- .sync_connect_master_postgres()
+  if (is.null(pg_con)) return(FALSE)
+  on.exit(try(DBI::dbDisconnect(pg_con), silent = TRUE), add = TRUE)
+
+  cast_type <- if (grepl("jsonb", column_type %||% "", ignore.case = TRUE)) "jsonb" else "json"
+  sql <- sprintf(
+    "UPDATE admin.merge_requests SET %s = CAST(? AS %s) WHERE id = ?",
+    column_name,
+    cast_type
+  )
+
+  tryCatch({
+    DBI::dbExecute(
+      pg_con,
+      sql,
+      list(as.character(json_value %||% "{}"), as.integer(mr_id))
+    )
+    TRUE
+  }, error = function(e) FALSE)
+}
+
+.sync_update_merge_request_json <- function(con, mr_id, column_name, json_value) {
+  column_type <- .sync_get_column_type(con, "master", "admin", "merge_requests", column_name)
+  if (is.na(column_type) && identical(column_name, "record_counts")) {
+    column_type <- "jsonb"
+  }
+  safe_json <- as.character(json_value %||% "{}")
+  if (!is.na(column_type) && grepl("json", column_type, ignore.case = TRUE)) {
+    if (isTRUE(.sync_update_merge_request_json_direct_pg(mr_id, column_name, safe_json, column_type))) {
+      return(invisible(TRUE))
+    }
+
+    quoted_json <- as.character(DBI::dbQuoteString(con, safe_json))
+    sql <- sprintf(
+      "UPDATE master.admin.merge_requests SET %s = CAST(%s AS JSON) WHERE id = %d",
+      column_name,
+      quoted_json,
+      as.integer(mr_id)
+    )
+    return(DBI::dbExecute(con, sql))
+  }
+
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "UPDATE master.admin.merge_requests SET %s = ? WHERE id = ?",
+      column_name
+    ),
+    list(safe_json, as.integer(mr_id))
+  )
+}
+
+.sync_discard_merge_request <- function(con, mr_id) {
+  .delete_staging(con, mr_id)
+  tryCatch(
+    DBI::dbExecute(
+      con,
+      "DELETE FROM master.admin.merge_requests WHERE id = ?",
+      list(as.integer(mr_id))
+    ),
+    error = function(e) NULL
+  )
+  invisible(TRUE)
+}
+
+.sync_merge_request_stage_counts <- function(con, mr_ids) {
+  mr_ids <- unique(as.integer(stats::na.omit(mr_ids)))
+  if (length(mr_ids) == 0) return(list())
+
+  counts_by_id <- stats::setNames(vector("list", length(mr_ids)), as.character(mr_ids))
+  for (mr_id in mr_ids) {
+    counts_by_id[[as.character(mr_id)]] <- stats::setNames(
+      as.list(rep.int(0L, length(SYNC_TABLE_CONFIG))),
+      vapply(SYNC_TABLE_CONFIG, function(cfg) cfg$pg, character(1))
+    )
+  }
+
+  for (cfg in SYNC_TABLE_CONFIG) {
+    table_counts <- tryCatch(
+      DBI::dbGetQuery(
+        con,
+        sprintf(
+          "SELECT merge_request_id, COUNT(*) AS n FROM master.staging.%s WHERE merge_request_id IN (%s) GROUP BY merge_request_id",
+          cfg$pg,
+          paste(rep("?", length(mr_ids)), collapse = ", ")
+        ),
+        as.list(mr_ids)
+      ),
+      error = function(e) data.frame(merge_request_id = integer(0), n = integer(0))
+    )
+    if (nrow(table_counts) == 0) next
+
+    for (row_idx in seq_len(nrow(table_counts))) {
+      mr_key <- as.character(as.integer(table_counts$merge_request_id[[row_idx]]))
+      counts_by_id[[mr_key]][[cfg$pg]] <- as.integer(table_counts$n[[row_idx]] %||% 0L)
+    }
+  }
+
+  lapply(counts_by_id, function(counts) {
+    as.character(jsonlite::toJSON(counts, auto_unbox = TRUE))
+  })
+}
+
+sync_normalize_compare_source <- function(compare_source = NULL) {
+  value <- tolower(trimws(as.character(compare_source %||% "")))
+  if (!nzchar(value)) return(SYNC_COMPARE_SOURCE_CLOUD)
+  if (startsWith(value, SYNC_COMPARE_SOURCE_MERGE_REQUEST_PREFIX)) {
+    mr_token <- sub(paste0("^", SYNC_COMPARE_SOURCE_MERGE_REQUEST_PREFIX), "", value)
+    if (grepl("^[0-9]+$", mr_token)) {
+      return(paste0(SYNC_COMPARE_SOURCE_MERGE_REQUEST_PREFIX, as.integer(mr_token)))
+    }
+  }
+  if (value %in% c("cloud", "cloud_core", "core")) return(SYNC_COMPARE_SOURCE_CLOUD)
+  if (value %in% c("backup", "backup_file", "baseline")) return(SYNC_COMPARE_SOURCE_BACKUP)
+  SYNC_COMPARE_SOURCE_CLOUD
+}
+
+sync_compare_source_parse <- function(compare_source = NULL) {
+  normalized <- sync_normalize_compare_source(compare_source)
+  if (startsWith(normalized, SYNC_COMPARE_SOURCE_MERGE_REQUEST_PREFIX)) {
+    mr_id <- suppressWarnings(as.integer(sub(paste0("^", SYNC_COMPARE_SOURCE_MERGE_REQUEST_PREFIX), "", normalized)))
+    return(list(
+      raw = normalized,
+      kind = "merge_request",
+      merge_request_id = if (is.na(mr_id)) NULL else mr_id
+    ))
+  }
+
+  list(
+    raw = normalized,
+    kind = if (identical(normalized, SYNC_COMPARE_SOURCE_BACKUP)) "backup" else "cloud",
+    merge_request_id = NULL
+  )
+}
+
+sync_compare_source_merge_request_value <- function(merge_request_id) {
+  paste0(SYNC_COMPARE_SOURCE_MERGE_REQUEST_PREFIX, as.integer(merge_request_id))
+}
+
+sync_compare_source_label <- function(compare_source) {
+  if (is.null(compare_source) || !nzchar(as.character(compare_source))) {
+    return("No comparison source")
+  }
+  parsed <- sync_compare_source_parse(compare_source)
+  if (identical(parsed$kind, "merge_request")) {
+    return(sprintf("Merge request #%s", parsed$merge_request_id %||% "?"))
+  }
+  if (identical(parsed$raw, SYNC_COMPARE_SOURCE_BACKUP)) {
+    "Backup file"
+  } else {
+    "Master"
+  }
+}
+
+.sync_get_merge_request_row <- function(con,
+                                        merge_request_id,
+                                        project_id = NULL,
+                                        submitter = NULL,
+                                        pending_only = FALSE) {
+  if (!sync_cloud_connected(con)) return(NULL)
+
+  sql <- c(
+    "SELECT * FROM master.admin.merge_requests WHERE id = ?"
+  )
+  params <- list(as.integer(merge_request_id))
+  if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    sql <- c(sql, "AND project_id = ?")
+    params <- c(params, list(as.character(project_id)))
+  }
+  if (!is.null(submitter) && nzchar(as.character(submitter))) {
+    sql <- c(sql, "AND submitter_name = ?")
+    params <- c(params, list(as.character(submitter)))
+  }
+  if (isTRUE(pending_only)) {
+    sql <- c(sql, "AND status = 'pending_review'")
+  }
+  sql <- c(sql, "LIMIT 1")
+
+  row <- tryCatch(
+    DBI::dbGetQuery(con, paste(sql, collapse = " "), params),
+    error = function(e) data.frame()
+  )
+  if (nrow(row) == 0) return(NULL)
+  row[1, , drop = FALSE]
+}
+
+sync_resolve_compare_source <- function(con, project_id = NULL, compare_source = NULL) {
+  requested <- sync_normalize_compare_source(compare_source)
+  requested_parsed <- sync_compare_source_parse(requested)
+  cloud_available <- sync_cloud_connected(con)
+  backup_available <- FALSE
+  if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    backup_available <- isTRUE(project_baseline_has_tables(con, project_id))
+  }
+
+  resolved <- requested
+  fallback_reason <- NULL
+  resolved_merge_request_row <- NULL
+  resolved_kind <- requested_parsed$kind
+
+  if (identical(requested_parsed$kind, "merge_request")) {
+    if (!cloud_available) {
+      if (backup_available) {
+        resolved <- SYNC_COMPARE_SOURCE_BACKUP
+        resolved_kind <- "backup"
+        fallback_reason <- "Master is unavailable; pending merge requests cannot be used, so the registered backup file is used instead."
+      } else {
+        resolved <- NULL
+        resolved_kind <- NULL
+        fallback_reason <- "Master is unavailable and the selected pending merge request cannot be used for comparison."
+      }
+    } else {
+      resolved_merge_request_row <- .sync_get_merge_request_row(
+        con,
+        requested_parsed$merge_request_id,
+        project_id = project_id,
+        pending_only = TRUE
+      )
+      if (is.null(resolved_merge_request_row)) {
+        resolved <- SYNC_COMPARE_SOURCE_CLOUD
+        resolved_kind <- "cloud"
+        fallback_reason <- "The selected pending merge request is no longer available for this project; using Master instead."
+      }
+    }
+  } else if (identical(requested, SYNC_COMPARE_SOURCE_CLOUD) && !cloud_available) {
+    if (backup_available) {
+      resolved <- SYNC_COMPARE_SOURCE_BACKUP
+      resolved_kind <- "backup"
+      fallback_reason <- "Master is unavailable; using the registered backup file instead."
+    } else {
+      resolved <- NULL
+      resolved_kind <- NULL
+      fallback_reason <- "Master is unavailable and no backup file is registered for this project."
+    }
+  } else if (identical(requested, SYNC_COMPARE_SOURCE_BACKUP) && !backup_available) {
+    if (cloud_available) {
+      resolved <- SYNC_COMPARE_SOURCE_CLOUD
+      resolved_kind <- "cloud"
+      fallback_reason <- "No valid backup file is registered for this project; using Master instead."
+    } else {
+      resolved <- NULL
+      resolved_kind <- NULL
+      fallback_reason <- "No valid backup file is registered for this project, and Master is unavailable."
+    }
+  }
+
+  if (!is.null(resolved) && identical(resolved_kind, "merge_request") && is.null(resolved_merge_request_row)) {
+    resolved_parsed <- sync_compare_source_parse(resolved)
+    resolved_merge_request_row <- .sync_get_merge_request_row(
+      con,
+      resolved_parsed$merge_request_id,
+      project_id = project_id,
+      pending_only = TRUE
+    )
+  }
+
+  push_allowed <- isTRUE(cloud_available) && !is.null(resolved) && !identical(resolved, SYNC_COMPARE_SOURCE_BACKUP)
+  push_block_reason <- NULL
+  if (!isTRUE(cloud_available)) {
+    push_block_reason <- "Push requires Master to be available."
+  } else if (identical(resolved, SYNC_COMPARE_SOURCE_BACKUP)) {
+    push_block_reason <- "Push is unavailable while comparing against a backup file."
+  } else if (is.null(resolved)) {
+    push_block_reason <- "No valid comparison source is available."
+  }
+
+  list(
+    requested = requested,
+    resolved = resolved,
+    requested_kind = requested_parsed$kind,
+    resolved_kind = resolved_kind,
+    requested_label = sync_compare_source_label(requested),
+    resolved_label = sync_compare_source_label(resolved),
+    requested_merge_request_id = requested_parsed$merge_request_id,
+    resolved_merge_request_id = if (is.null(resolved_merge_request_row)) sync_compare_source_parse(resolved)$merge_request_id else as.integer(resolved_merge_request_row$id[[1]]),
+    resolved_merge_request = resolved_merge_request_row,
+    cloud_available = isTRUE(cloud_available),
+    backup_available = isTRUE(backup_available),
+    fallback_reason = fallback_reason,
+    push_allowed = isTRUE(push_allowed),
+    push_block_reason = push_block_reason
+  )
 }
 
 
@@ -180,6 +514,15 @@ sync_get_table_config <- function(table_name, key = c("pg", "local")) {
   suppressWarnings(as.integer(value[[1]]))
 }
 
+.sync_remove_fields <- function(row, fields) {
+  if (is.null(row) || length(row) == 0) return(row)
+  for (field in fields) {
+    existing <- .sync_find_field(names(row), field)
+    if (!is.na(existing)) row[[existing]] <- NULL
+  }
+  row
+}
+
 .sync_has_row_version_field <- function(row) {
   row_names <- names(row %||% list())
   !is.na(.sync_find_field(row_names, c("rowVersion", "rowversion")))
@@ -271,6 +614,54 @@ sync_get_table_config <- function(table_name, key = c("pg", "local")) {
     error = function(e) data.frame()
   )
   .sync_make_lookup(rows, cfg$pk)
+}
+
+.sync_get_merge_request_lookup <- function(con, cfg, merge_request_id, pk_values) {
+  pk_values <- unique(as.character(pk_values %||% character(0)))
+  pk_values <- pk_values[nzchar(pk_values)]
+  if (!sync_cloud_connected(con) || length(pk_values) == 0 || is.null(merge_request_id)) {
+    return(list(rows = list(), deleted = character(0)))
+  }
+
+  compare_lookup <- .sync_get_core_lookup(con, cfg, pk_values)
+  placeholders <- paste(rep("?", length(pk_values)), collapse = ", ")
+  stage_rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        'SELECT * FROM master.staging.%s WHERE merge_request_id = ? AND CAST("%s" AS TEXT) IN (%s)',
+        cfg$pg,
+        cfg$pk,
+        placeholders
+      ),
+      c(list(as.integer(merge_request_id)), as.list(pk_values))
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(stage_rows) == 0) {
+    return(list(rows = compare_lookup, deleted = character(0)))
+  }
+
+  deleted <- character(0)
+  for (row_idx in seq_len(nrow(stage_rows))) {
+    stage_row <- as.list(stage_rows[row_idx, , drop = FALSE])
+    pk_value <- as.character(.sync_get_row_value(stage_row, cfg$pk, default = ""))
+    if (!nzchar(pk_value)) next
+
+    change_type <- toupper(as.character(.sync_get_row_value(stage_row, "changeType", default = "U")))
+    if (identical(change_type, "D")) {
+      compare_lookup[[pk_value]] <- NULL
+      deleted <- unique(c(deleted, pk_value))
+      next
+    }
+
+    compare_lookup[[pk_value]] <- .sync_remove_fields(stage_row, c(
+      "merge_request_id", "baseRowVersion", "changeType",
+      "rowVersion", "lastModifiedUTC", "modifiedBy"
+    ))
+  }
+
+  list(rows = compare_lookup, deleted = deleted)
 }
 
 .sync_delete_ledger_rows <- function(con, cfg, project_id = NULL) {
@@ -381,19 +772,50 @@ sync_clear_local_change <- function(con, table_name, pk_value, project_id = NULL
   invisible(TRUE)
 }
 
-.sync_classify_local_change <- function(local_row, baseline_row = NULL, core_row = NULL) {
-  if (.sync_has_row_version_field(local_row)) {
-    local_rv <- .sync_extract_row_version(local_row)
-    return(if (is.na(local_rv)) "insert" else "update")
-  }
-  if (!is.null(baseline_row) || !is.null(core_row)) {
+.sync_classify_local_change <- function(local_row, baseline_row = NULL, core_row = NULL, compare_row = NULL) {
+  if (!is.null(compare_row) || !is.null(baseline_row) || !is.null(core_row)) {
     return("update")
   }
   "insert"
 }
 
-sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 50L) {
+.sync_selected_before_row <- function(source_info,
+                                      explicit_prior = NULL,
+                                      core_row = NULL,
+                                      baseline_row = NULL,
+                                      merge_request_row = NULL) {
+  selected_row <- switch(
+    source_info$resolved_kind %||% "cloud",
+    backup = baseline_row,
+    merge_request = merge_request_row,
+    core_row
+  )
+  if (identical(source_info$resolved_kind, "merge_request")) {
+    return(selected_row)
+  }
+  explicit_prior %||% selected_row
+}
+
+.sync_rows_match_on_shared_cols <- function(con, cfg, local_row, compare_row) {
+  if (is.null(local_row) || is.null(compare_row)) return(FALSE)
+  shared_cols <- .get_shared_columns(con, cfg$local, cfg$pg)
+  if (length(shared_cols) == 0) return(FALSE)
+
+  for (field in shared_cols) {
+    local_value <- .sync_get_row_value(local_row, field, default = NA)
+    compare_value <- .sync_get_row_value(compare_row, field, default = NA)
+    local_chr <- if (length(local_value) == 0) NA_character_ else as.character(local_value[[1]])
+    compare_chr <- if (length(compare_value) == 0) NA_character_ else as.character(compare_value[[1]])
+    if (is.na(local_chr) && is.na(compare_chr)) next
+    if (!identical(local_chr, compare_chr)) return(FALSE)
+  }
+
+  TRUE
+}
+
+sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 50L, compare_source = NULL) {
   sync_ensure_local_tables(con)
+  source_info <- sync_resolve_compare_source(con, project_id = project_id, compare_source = compare_source)
 
   local_rows <- .sync_get_local_rows(
     con,
@@ -415,8 +837,13 @@ sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 5
   explicit_pk_values <- if (nrow(explicit_rows) > 0) as.character(explicit_rows$pk_value) else character(0)
   pk_values <- unique(c(local_pk_values, delete_pk_values, explicit_pk_values))
 
-  core_lookup <- .sync_get_core_lookup(con, cfg, pk_values)
-  baseline_lookup <- .sync_get_baseline_lookup(con, cfg, project_id, pk_values)
+  core_lookup <- if (isTRUE(source_info$cloud_available)) .sync_get_core_lookup(con, cfg, pk_values) else list()
+  baseline_lookup <- if (isTRUE(source_info$backup_available)) .sync_get_baseline_lookup(con, cfg, project_id, pk_values) else list()
+  mr_lookup <- if (identical(source_info$resolved_kind, "merge_request") && !is.null(source_info$resolved_merge_request_id)) {
+    .sync_get_merge_request_lookup(con, cfg, source_info$resolved_merge_request_id, pk_values)
+  } else {
+    list(rows = list(), deleted = character(0))
+  }
   explicit_lookup <- if (nrow(explicit_rows) > 0) {
     split(explicit_rows, explicit_rows$pk_value)
   } else {
@@ -436,16 +863,32 @@ sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 5
       seen_pk <- c(seen_pk, pk_value)
       baseline_row <- baseline_lookup[[pk_value]]
       core_row <- core_lookup[[pk_value]]
+      merge_request_row <- mr_lookup$rows[[pk_value]]
       explicit_row <- explicit_lookup[[pk_value]]
       explicit_type <- if (!is.null(explicit_row) && nrow(explicit_row) > 0) as.character(explicit_row$change_type[[1]]) else NULL
       explicit_prior <- if (!is.null(explicit_row) && nrow(explicit_row) > 0) .sync_payload_to_row(explicit_row$prior_payload[[1]]) else NULL
-      before_row <- explicit_prior %||% core_row %||% baseline_row
-      inferred_type <- explicit_type %||% .sync_classify_local_change(row, baseline_row = baseline_row, core_row = core_row)
+      before_row <- .sync_selected_before_row(
+        source_info,
+        explicit_prior = explicit_prior,
+        core_row = core_row,
+        baseline_row = baseline_row,
+        merge_request_row = merge_request_row
+      )
+      inferred_type <- explicit_type %||% .sync_classify_local_change(
+        row,
+        baseline_row = if (identical(source_info$resolved_kind, "backup")) baseline_row else NULL,
+        core_row = if (identical(source_info$resolved_kind, "cloud")) core_row else NULL,
+        compare_row = before_row
+      )
       if (identical(inferred_type, "insert") && is.null(explicit_type) && is.null(before_row)) {
         duplicate_count <- if (length(local_pk_counts) > 0 && pk_value %in% names(local_pk_counts)) as.integer(local_pk_counts[[pk_value]]) else 0L
         if (duplicate_count > 1L) {
           inferred_type <- "update"
         }
+      }
+
+      if (!is.null(before_row) && .sync_rows_match_on_shared_cols(con, cfg, row, before_row)) {
+        next
       }
 
       row$local_modified_utc <- NULL
@@ -455,8 +898,14 @@ sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 5
         pk_value = pk_value,
         change_type = inferred_type,
         local_data = row,
-        core_data = before_row,
+        core_data = core_row,
         baseline_data = baseline_row,
+        compare_data = before_row,
+        compare_source_requested = source_info$requested,
+        compare_source_requested_label = source_info$requested_label,
+        compare_source_actual = source_info$resolved,
+        compare_source_actual_label = source_info$resolved_label,
+        compare_source_fallback_reason = source_info$fallback_reason,
         delete_data = NULL
       )
     }
@@ -472,19 +921,32 @@ sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 5
       seen_pk <- c(seen_pk, pk_value)
       baseline_row <- baseline_lookup[[pk_value]]
       core_row <- core_lookup[[pk_value]]
+      merge_request_row <- mr_lookup$rows[[pk_value]]
       delete_data <- .sync_payload_to_row(row$deleted_payload[[1]])
 
-      if (!isTRUE(row$baseline_exists[[1]]) && !isTRUE(row$core_exists[[1]]) && is.null(baseline_row) && is.null(core_row)) {
-        next
-      }
+      before_row <- .sync_selected_before_row(
+        source_info,
+        explicit_prior = NULL,
+        core_row = core_row,
+        baseline_row = baseline_row,
+        merge_request_row = merge_request_row
+      )
+
+      if (is.null(before_row)) next
 
       out[[length(out) + 1L]] <- list(
         table_pg = cfg$pg,
         pk_value = pk_value,
         change_type = "delete",
         local_data = NULL,
-        core_data = core_row %||% baseline_row %||% delete_data,
+        core_data = core_row,
         baseline_data = baseline_row,
+        compare_data = before_row,
+        compare_source_requested = source_info$requested,
+        compare_source_requested_label = source_info$requested_label,
+        compare_source_actual = source_info$resolved,
+        compare_source_actual_label = source_info$resolved_label,
+        compare_source_fallback_reason = source_info$fallback_reason,
         delete_data = delete_data
       )
     }
@@ -497,12 +959,12 @@ sync_collect_table_changes <- function(con, cfg, project_id = NULL, max_rows = 5
   out
 }
 
-sync_get_pending_summary <- function(con, project_id = NULL) {
+sync_get_pending_summary <- function(con, project_id = NULL, compare_source = NULL) {
   by_table <- list()
   total <- c(insert = 0L, update = 0L, delete = 0L, total = 0L)
 
   for (cfg in SYNC_TABLE_CONFIG) {
-    records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf)
+    records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf, compare_source = compare_source)
     counts <- c(
       insert = sum(vapply(records, function(record) identical(record$change_type, "insert"), logical(1))),
       update = sum(vapply(records, function(record) identical(record$change_type, "update"), logical(1))),
@@ -516,8 +978,8 @@ sync_get_pending_summary <- function(con, project_id = NULL) {
   list(by_table = by_table, total = total)
 }
 
-sync_get_pending_total <- function(con, project_id = NULL) {
-  sync_get_pending_summary(con, project_id = project_id)$total[["total"]]
+sync_get_pending_total <- function(con, project_id = NULL, compare_source = NULL) {
+  sync_get_pending_summary(con, project_id = project_id, compare_source = compare_source)$total[["total"]]
 }
 
 sync_record_delete <- function(con, cfg, pk_value, project_id = NULL, payload = NULL) {
@@ -811,13 +1273,13 @@ sync_revert_pending_change <- function(con, table_name, pk_value, project_id = N
 #' @param submitter  Character. Username / email of the submitter.
 #' @param project_id Character. Project filter.
 #' @return Integer count of rows staged.
-.push_table <- function(con, cfg, mr_id, submitter, project_id) {
+.push_table <- function(con, cfg, mr_id, submitter, project_id, compare_source = NULL) {
   if (!DBI::dbExistsTable(con, cfg$local)) return(0L)
 
   shared_cols <- .get_shared_columns(con, cfg$local, cfg$pg)
   if (length(shared_cols) == 0) return(0L)
 
-  records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf)
+  records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf, compare_source = compare_source)
   if (length(records) == 0) return(0L)
 
   insert_sql <- sprintf(
@@ -861,7 +1323,9 @@ sync_revert_pending_change <- function(con, table_name, pk_value, project_id = N
 #' @return Named list: merge_request_id, counts (named by pg table), total.
 sync_push <- function(con,
                       project_id = NULL,
-                      submitter  = Sys.getenv("USER", "unknown")) {
+                      submitter  = Sys.getenv("USER", "unknown"),
+                      compare_source = NULL,
+                      target_merge_request_id = NULL) {
   sync_require_cloud(con)
   sync_ensure_local_tables(con)
 
@@ -869,71 +1333,91 @@ sync_push <- function(con,
     stop("project_id is required for sync_push.")
   }
 
-  mr_id  <- .create_merge_request(con, project_id, submitter)
-  counts <- list()
+  target_mr_id <- suppressWarnings(as.integer(target_merge_request_id %||% NA))
+  if (length(target_mr_id) == 0) target_mr_id <- NA_integer_
+  editing_existing <- isTRUE(length(target_mr_id) == 1L && !is.na(target_mr_id))
+  mr_id <- if (editing_existing) {
+    .sync_prepare_merge_request_for_restage(con, target_mr_id, project_id, submitter)
+  } else {
+    .create_merge_request(con, project_id, submitter)
+  }
+  effective_compare_source <- if (editing_existing) SYNC_COMPARE_SOURCE_CLOUD else compare_source
+  tryCatch({
+    counts <- list()
 
-  for (cfg in SYNC_TABLE_CONFIG) {
-    n <- tryCatch(
-      .push_table(con, cfg, mr_id, submitter, project_id),
+    for (cfg in SYNC_TABLE_CONFIG) {
+      n <- tryCatch(
+        .push_table(con, cfg, mr_id, submitter, project_id, compare_source = effective_compare_source),
+        error = function(e) {
+          warning(sprintf(".push_table failed for %s: %s", cfg$local, e$message))
+          0L
+        }
+      )
+      counts[[cfg$pg]] <- as.integer(n)
+    }
+
+    counts_json <- tryCatch(
+      as.character(jsonlite::toJSON(counts, auto_unbox = TRUE)),
+      error = function(e) "{}"
+    )
+    tryCatch(
+      .sync_update_merge_request_json(con, mr_id, "record_counts", counts_json),
       error = function(e) {
-        warning(sprintf(".push_table failed for %s: %s", cfg$local, e$message))
-        0L
+        warning(sprintf("record_counts update skipped for merge request %s: %s", mr_id, conditionMessage(e)))
+        NULL
       }
     )
-    counts[[cfg$pg]] <- as.integer(n)
-  }
 
-  counts_json <- tryCatch(
-    as.character(jsonlite::toJSON(counts, auto_unbox = TRUE)),
-    error = function(e) "{}"
-  )
-  DBI::dbExecute(
-    con,
-    "UPDATE master.admin.merge_requests SET record_counts = ? WHERE id = ?",
-    list(counts_json, as.integer(mr_id))
-  )
-
-  # Optional compliance gate
-  if (exists("staging_compliance_checks", mode = "function")) {
-    compliance    <- tryCatch(
-      staging_compliance_checks(con, mr_id, project_id),
-      error = function(e) list(passed = TRUE)
-    )
-    compliance_ok <- isTRUE(compliance$passed)
-    report_json   <- tryCatch(
-      as.character(jsonlite::toJSON(
-        list(summary = compliance$summary_tibble, details = compliance$detail_tibble),
-        auto_unbox = TRUE, na = "null"
-      )),
-      error = function(e) NULL
-    )
-    DBI::dbExecute(
-      con,
-      "UPDATE master.admin.merge_requests
-       SET compliance_passed = ?, compliance_report = ? WHERE id = ?",
-      list(compliance_ok, report_json, as.integer(mr_id))
-    )
-    if (!compliance_ok) {
-      .delete_staging(con, mr_id)
+    # Optional compliance gate
+    if (exists("staging_compliance_checks", mode = "function")) {
+      compliance    <- tryCatch(
+        staging_compliance_checks(con, mr_id, project_id),
+        error = function(e) list(passed = TRUE)
+      )
+      compliance_ok <- isTRUE(compliance$passed)
+      report_json   <- tryCatch(
+        as.character(jsonlite::toJSON(
+          list(summary = compliance$summary_tibble, details = compliance$detail_tibble),
+          auto_unbox = TRUE, na = "null"
+        )),
+        error = function(e) NULL
+      )
       DBI::dbExecute(
         con,
-        "UPDATE master.admin.merge_requests SET status = 'rejected' WHERE id = ?",
-        list(as.integer(mr_id))
+        "UPDATE master.admin.merge_requests
+         SET compliance_passed = ?, compliance_report = ? WHERE id = ?",
+        list(compliance_ok, report_json, as.integer(mr_id))
       )
-      return(list(
-        merge_request_id  = mr_id,
-        counts            = counts,
-        total             = sum(unlist(counts)),
-        compliance_failed = TRUE
-      ))
+      if (!compliance_ok) {
+        .delete_staging(con, mr_id)
+        DBI::dbExecute(
+          con,
+          "UPDATE master.admin.merge_requests SET status = 'rejected' WHERE id = ?",
+          list(as.integer(mr_id))
+        )
+        return(list(
+          merge_request_id  = mr_id,
+          counts            = counts,
+          total             = sum(unlist(counts)),
+          compliance_failed = TRUE
+        ))
+      }
     }
-  }
 
-  list(
-    merge_request_id = mr_id,
-    counts           = counts,
-    total            = sum(unlist(counts))
-  )
+    list(
+      merge_request_id = mr_id,
+      counts           = counts,
+      total            = sum(unlist(counts)),
+      updated_existing = isTRUE(editing_existing)
+    )
+  }, error = function(e) {
+    if (editing_existing) {
+      .delete_staging(con, mr_id)
+    } else {
+      .sync_discard_merge_request(con, mr_id)
+    }
+    stop(e)
+  })
 }
 
 
@@ -947,11 +1431,11 @@ sync_push <- function(con,
 #' @param project_id Optional character/integer filter.
 #' @return Named list keyed by cfg$pg; each element is a data.frame with
 #'   columns table_pg and change_type.
-sync_get_local_changes <- function(con, project_id = NULL) {
+sync_get_local_changes <- function(con, project_id = NULL, compare_source = NULL) {
   out <- list()
 
   for (cfg in SYNC_TABLE_CONFIG) {
-    records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf)
+    records <- sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = Inf, compare_source = compare_source)
     if (length(records) == 0) {
       out[[cfg$pg]] <- data.frame(
         table_pg = character(0),
@@ -988,8 +1472,8 @@ sync_get_local_changes <- function(con, project_id = NULL) {
 #' @param project_id Optional project filter (same semantics as sync_get_local_changes).
 #' @param max_rows   Integer. Safety cap; default 50L.
 #' @return List of records, each: list(pk_value, change_type, local_data, core_data).
-sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) {
-  sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = max_rows)
+sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L, compare_source = NULL) {
+  sync_collect_table_changes(con, cfg, project_id = project_id, max_rows = max_rows, compare_source = compare_source)
 }
 
 
@@ -1027,6 +1511,56 @@ sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) 
   res$id[1]
 }
 
+.sync_prepare_merge_request_for_restage <- function(con, merge_request_id, project_id, submitter) {
+  mr_row <- .sync_get_merge_request_row(
+    con,
+    merge_request_id,
+    project_id = project_id,
+    submitter = submitter,
+    pending_only = TRUE
+  )
+  if (is.null(mr_row)) {
+    stop("Selected merge request is not available for editing.")
+  }
+
+  uid_row <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT id FROM master.admin.users WHERE email = ? LIMIT 1",
+      list(as.character(submitter))
+    ),
+    error = function(e) data.frame(id = integer(0))
+  )
+  submitter_user_id <- if (nrow(uid_row) > 0) as.integer(uid_row$id[1]) else NA_integer_
+
+  .delete_staging(con, merge_request_id)
+  DBI::dbExecute(
+    con,
+    "DELETE FROM master.admin.merge_conflicts WHERE merge_request_id = ?",
+    list(as.integer(merge_request_id))
+  )
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.merge_requests
+     SET project_id = ?,
+         submitter_user_id = ?,
+         submitter_name = ?,
+         submitted_utc = now(),
+         status = 'pending_review',
+         reviewer = NULL,
+         reviewer_user_id = NULL,
+         review_notes = NULL,
+         reviewed_utc = NULL,
+         record_counts = NULL,
+         compliance_passed = NULL,
+         compliance_report = NULL
+     WHERE id = ?",
+    list(as.character(project_id), submitter_user_id, as.character(submitter), as.integer(merge_request_id))
+  )
+
+  as.integer(merge_request_id)
+}
+
 .delete_staging <- function(con, mr_id) {
   for (cfg in SYNC_TABLE_CONFIG) {
     tryCatch(
@@ -1050,6 +1584,39 @@ sync_get_change_detail <- function(con, cfg, project_id = NULL, max_rows = 50L) 
     as.character(jsonlite::toJSON(x, auto_unbox = TRUE, na = "null")),
     error = function(e) "{}"
   )
+}
+
+sync_delete_user_merge_request <- function(con, merge_request_id, submitter) {
+  sync_require_cloud(con)
+
+  mr_row <- .sync_get_merge_request_row(
+    con,
+    merge_request_id,
+    submitter = submitter,
+    pending_only = FALSE
+  )
+  if (is.null(mr_row)) {
+    stop("Merge request not found for the current user.")
+  }
+
+  status_value <- as.character(mr_row$status[[1]] %||% "")
+  if (!status_value %in% c("pending_review", "rejected")) {
+    stop("Only pending or rejected merge requests can be deleted from this list.")
+  }
+
+  .delete_staging(con, merge_request_id)
+  DBI::dbExecute(
+    con,
+    "DELETE FROM master.admin.merge_conflicts WHERE merge_request_id = ?",
+    list(as.integer(merge_request_id))
+  )
+  DBI::dbExecute(
+    con,
+    "DELETE FROM master.admin.merge_requests WHERE id = ? AND submitter_name = ?",
+    list(as.integer(merge_request_id), as.character(submitter))
+  )
+
+  invisible(TRUE)
 }
 
 #' Detect version conflicts for one table in a merge request.
@@ -1695,5 +2262,62 @@ sync_get_user_merge_requests <- function(con, submitter,
   if (!isTRUE(show_rejected)) {
     out <- out[out$status != "rejected", , drop = FALSE]
   }
+
+  needs_counts <- which(is.na(out$record_counts) | !nzchar(trimws(out$record_counts)) | trimws(out$record_counts) == "{}")
+  if (length(needs_counts) > 0) {
+    staged_counts <- .sync_merge_request_stage_counts(con, out$id[needs_counts])
+    for (idx in needs_counts) {
+      mr_key <- as.character(as.integer(out$id[[idx]]))
+      if (!is.null(staged_counts[[mr_key]])) {
+        out$record_counts[[idx]] <- staged_counts[[mr_key]]
+      }
+    }
+  }
+
+  out
+}
+
+sync_get_user_pending_merge_requests <- function(con, submitter, project_id = NULL) {
+  if (!sync_cloud_connected(con)) {
+    return(data.frame(
+      id = integer(0),
+      project_id = character(0),
+      submitted_utc = as.POSIXct(character(0)),
+      status = character(0),
+      record_counts = character(0),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  sql <- c(
+    "SELECT id, project_id, submitted_utc, status, record_counts",
+    "FROM master.admin.merge_requests",
+    "WHERE submitter_name = ?",
+    "AND status = 'pending_review'"
+  )
+  params <- list(as.character(submitter))
+  if (!is.null(project_id) && nzchar(as.character(project_id))) {
+    sql <- c(sql, "AND project_id = ?")
+    params <- c(params, list(as.character(project_id)))
+  }
+  sql <- c(sql, "ORDER BY submitted_utc DESC")
+
+  out <- tryCatch(
+    DBI::dbGetQuery(con, paste(sql, collapse = " "), params),
+    error = function(e) data.frame()
+  )
+  if (nrow(out) == 0) return(out)
+
+  needs_counts <- which(is.na(out$record_counts) | !nzchar(trimws(out$record_counts)) | trimws(out$record_counts) == "{}")
+  if (length(needs_counts) > 0) {
+    staged_counts <- .sync_merge_request_stage_counts(con, out$id[needs_counts])
+    for (idx in needs_counts) {
+      mr_key <- as.character(as.integer(out$id[[idx]]))
+      if (!is.null(staged_counts[[mr_key]])) {
+        out$record_counts[[idx]] <- staged_counts[[mr_key]]
+      }
+    }
+  }
+
   out
 }
