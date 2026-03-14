@@ -303,10 +303,11 @@ server <- function(input, output, session) {
     pieces <- lapply(seq_len(nrow(branch)), function(idx) {
       row <- branch[idx, , drop = FALSE]
       node_id <- row$ID[[1]]
-      child_count <- sum(!is.na(nodes$Parent) & nodes$Parent == node_id)
+      direct_child_count <- sum(!is.na(nodes$Parent) & nodes$Parent == node_id)
+      child_count <- length(hierarchy_sidebar_get_descendants(nodes, node_id))
       expanded <- node_id %in% expanded_ids
 
-      children <- if (child_count > 0L && expanded) {
+      children <- if (direct_child_count > 0L && expanded) {
         build_sidebar_hierarchy_visible_rows(nodes, expanded_ids, parent_id = node_id, depth = depth + 1L)
       } else {
         data.frame(

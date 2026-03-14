@@ -267,11 +267,11 @@ mod_site_env_server <- function(id, sys_state, con) {
     # Reactive Data Store
     rv <- reactiveValues(env = NULL, humus = NULL, mineral = NULL)
 
-    safe_num <- function(value, default = NA_real_) {
+    safe_num <- function(value, default = "") {
         if (is.null(value) || length(value) == 0 || is.na(value)) {
             return(default)
         }
-        as.numeric(value)
+        as.character(as.numeric(value))
     }
 
     safe_chr <- function(value, default = "") {

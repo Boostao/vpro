@@ -96,7 +96,7 @@ mod_project_metadata_ui <- function(id) {
       bslib::layout_columns(
         shiny::selectizeInput(ns("ProjectID"), "Project ID", choices = character(0), selected = NULL),
         shiny::textInput(ns("ProjectTitle"), "Project Title"),
-        shiny::numericInput(ns("StartDate"), "Start Date (Yr.)", value = NA_real_, min = 0, step = 1),
+        shiny::numericInput(ns("StartDate"), "Start Date (Yr.)", value = "", min = 0, step = 1),
         shiny::textInput(ns("EndDate"), "End Date (Yr.)"),
         col_widths = c(3, 5, 2, 2)
       ),
@@ -139,6 +139,13 @@ mod_project_metadata_server <- function(id, state, con) {
     status_text <- shiny::reactiveVal("")
     suppress_project_observer <- shiny::reactiveVal(FALSE)
     current_project_before_edit <- shiny::reactiveVal("")
+
+    blank_numeric_value <- function(value) {
+      if (is.null(value) || length(value) == 0 || is.na(value) || !is.finite(value)) {
+        return("")
+      }
+      as.character(value)
+    }
 
     normalize_text <- function(value) {
       value <- trimws(as.character(value %||% ""))
@@ -236,7 +243,7 @@ mod_project_metadata_server <- function(id, state, con) {
       }
 
       shiny::updateTextInput(session, "ProjectTitle", value = getv("projecttitle"))
-      shiny::updateNumericInput(session, "StartDate", value = suppressWarnings(as.numeric(getv("startdate"))))
+      shiny::updateNumericInput(session, "StartDate", value = blank_numeric_value(suppressWarnings(as.numeric(getv("startdate")))))
       shiny::updateTextInput(session, "EndDate", value = getv("enddate"))
       shiny::updateTextInput(session, "CoordinatingAgency", value = getv("coordinatingagency"))
       shiny::updateTextInput(session, "ProponentFunder", value = getv("proponentfunder"))

@@ -29,7 +29,11 @@ nlt <- function(icon=NULL, label, tip, value) {
   )
 }
 
-ui <- page_navbar(
+ui <- tagList(
+  tags$head(
+    tags$script(src = "vpro-early.js")
+  ),
+  page_navbar(
   id = "main_tabs",
   title = div(
     class = "d-flex align-items-center gap-2 vpro-navbar-title",
@@ -542,5 +546,6 @@ ui <- page_navbar(
   nav_item(mod_auth_status_ui("auth_status")),
   nav_panel(tagList(icon("gear"), "Administration"), value = "Administration",
     mod_admin_ui("admin")
+  )
   )
 )

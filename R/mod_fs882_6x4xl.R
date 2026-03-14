@@ -38,6 +38,13 @@ fs882_coerce_chr <- function(value) {
   if (!nzchar(text)) NA_character_ else text
 }
 
+fs882_blank_numeric_value <- function(value) {
+  if (is.null(value) || length(value) == 0 || is.na(value) || !is.finite(value)) {
+    return("")
+  }
+  as.character(value)
+}
+
 fs882_coerce_soil_value <- function(table_name, col_name, value) {
   numeric_cols <- list(
     Humus = c("upperdepth", "lowerdepth", "humusformph"),
@@ -168,14 +175,14 @@ mod_fs882_6x4xl_ui <- function(id) {
             col_widths = c(6, 3, 3)
           ),
           layout_columns(
-            numericInput(ns("Latitude"), "Latitude", value = NA_real_),
-            numericInput(ns("Longitude"), "Longitude", value = NA_real_),
-            numericInput(ns("Elevation"), "Elevation (m)", value = NA_real_),
-            numericInput(ns("SlopeGradient"), "Slope (%)", value = NA_real_),
+            numericInput(ns("Latitude"), "Latitude", value = ""),
+            numericInput(ns("Longitude"), "Longitude", value = ""),
+            numericInput(ns("Elevation"), "Elevation (m)", value = ""),
+            numericInput(ns("SlopeGradient"), "Slope (%)", value = ""),
             col_widths = c(3, 3, 3, 3)
           ),
           layout_columns(
-            numericInput(ns("Aspect"), "Aspect", value = NA_real_),
+            numericInput(ns("Aspect"), "Aspect", value = ""),
             selectInput(ns("MesoSlopePosition"), "Meso Slope Pos.", choices = NULL),
             selectInput(ns("SurfaceShape"), "Surface Shape", choices = NULL),
             col_widths = c(3, 4, 5)
@@ -286,13 +293,13 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
       updateTextInput(session, "Date", value = env_row$date %||% "")
       updateTextInput(session, "SiteSurveyor", value = env_row$sitesurveyor %||% "")
       updateTextInput(session, "Location", value = env_row$`_location` %||% "")
-      updateNumericInput(session, "Latitude", value = env_row$latitude)
-      updateNumericInput(session, "Longitude", value = env_row$longitude)
+      updateNumericInput(session, "Latitude", value = fs882_blank_numeric_value(env_row$latitude))
+      updateNumericInput(session, "Longitude", value = fs882_blank_numeric_value(env_row$longitude))
       updateTextInput(session, "UTMEasting", value = ifelse(is.na(env_row$utmeasting), "", as.character(env_row$utmeasting)))
       updateTextInput(session, "UTMNorthing", value = ifelse(is.na(env_row$utmnorthing), "", as.character(env_row$utmnorthing)))
-      updateNumericInput(session, "Elevation", value = env_row$elevation)
-      updateNumericInput(session, "SlopeGradient", value = env_row$slopegradient)
-      updateNumericInput(session, "Aspect", value = env_row$aspect)
+      updateNumericInput(session, "Elevation", value = fs882_blank_numeric_value(env_row$elevation))
+      updateNumericInput(session, "SlopeGradient", value = fs882_blank_numeric_value(env_row$slopegradient))
+      updateNumericInput(session, "Aspect", value = fs882_blank_numeric_value(env_row$aspect))
       updateSelectInput(session, "MesoSlopePosition", selected = env_row$mesoslopeposition %||% "")
       updateSelectInput(session, "SurfaceShape", selected = env_row$surfaceshape %||% "")
       updateSelectInput(session, "MoistureRegime", selected = env_row$moistureregime %||% "")
