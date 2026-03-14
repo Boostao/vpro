@@ -1,0 +1,411 @@
+---
+title: "Sync Module Architecture Review"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+---
+
+# Purpose
+
+This note maps the current VPro sync architecture as implemented in the Shiny app.
+It focuses on the field-user push workflow, the admin merge workflow, and the utility functions that connect local state, local DuckDB tables, baseline snapshots, and the attached cloud catalog.
+
+# Scope
+
+Primary files reviewed:
+
+- `global.R`
+- `server.R`
+- `R/db_connections.R`
+- `R/logic_auth.R`
+- `R/logic_project.R`
+- `R/logic_sync.R`
+- `R/mod_sync.R`
+- `R/mod_admin_merge.R`
+- `R/logic_hierarchy_sidebar.R`
+- `R/mod_hierarchy.R`
+- `R/mod_veg_sample.R`
+- `tests/testthat/test-logic_sync.R`
+- `tests/testthat/test_sync_push.R`
+- `tests/testthat/test-mod_sync.R`
+
+# High-Level Architecture
+
+```{mermaid}
+%%{init: {'theme':'default', 'themeVariables': {'primaryColor':'#ffffff', 'primaryTextColor':'#000000', 'primaryBorderColor':'#333333', 'lineColor':'#666666', 'secondBkgColor':'#f5f5f5', 'tertiaryTextColor':'#000000'}}}%%
+flowchart LR
+    subgraph UI[Shiny UI]
+        U1[Main navbar Sync tab]
+        U2[mod_sync UI]
+        U3[Admin Merge Review UI]
+        U4[Feature modules editing data<br/>veg, hierarchy, SU sidebar]
+    end
+
+    subgraph State[Session state]
+        S1[state reactiveValues]
+        S2[SyncVersion invalidation]
+        S3[AuthAuthenticated and User]
+        S4[CurrProject and CurrSU]
+    end
+
+    subgraph Local[Local DuckDB]
+        L1[Business tables<br/>Env, SU, Veg, Admin, Humus, Mineral, Other, Herbarium, Metadata]
+        L2[sync_local_changes ledger]
+        L3[sync_local_deletes ledger]
+        L4[project baseline snapshots]
+    end
+
+    subgraph Engine[Sync backend]
+        E1[sync_collect_table_changes]
+        E2[sync_get_pending_summary and detail]
+        E3[sync_push]
+        E4[merge_request conflict and approval helpers]
+    end
+
+    subgraph Cloud[Attached master catalog]
+        C1[master.admin]
+        C2[master.staging]
+        C3[master.core]
+    end
+
+    U4 -->|mark local_modified_utc and record ledger rows| L1
+    U4 --> L2
+    U4 --> L3
+    U1 --> U2
+    U2 --> E2
+    U2 --> E3
+    U3 --> E4
+    E1 --> L1
+    E1 --> L2
+    E1 --> L3
+    E1 --> L4
+    E1 --> C3
+    E2 --> E1
+    E3 --> C1
+    E3 --> C2
+    E4 --> C1
+    E4 --> C2
+    E4 --> C3
+    S1 --> S2
+    S1 --> S3
+    S1 --> S4
+    U2 --> S1
+    U3 --> S1
+    E2 --> S2
+    E3 --> S2
+```
+
+# Runtime Flow
+
+```{mermaid}
+%%{init: {'theme':'default', 'themeVariables': {'primaryColor':'#ffffff', 'primaryTextColor':'#000000', 'primaryBorderColor':'#333333', 'lineColor':'#666666', 'secondBkgColor':'#f5f5f5', 'tertiaryTextColor':'#000000'}}}%%
+sequenceDiagram
+    participant User
+    participant Feature as Editing module
+    participant Local as Local DuckDB
+    participant SyncUI as mod_sync_server
+    participant Engine as logic_sync
+    participant Auth as mod_auth_server
+    participant Master as master admin staging core
+    participant Admin as mod_admin_merge_server
+
+    User->>Feature: Edit Veg, SU, Env related data
+    Feature->>Local: Update table row and set local_modified_utc
+    Feature->>Engine: sync_record_local_change or sync_delete_local_row when applicable
+    Feature->>SyncUI: sync_touch_state(state)
+    SyncUI->>Engine: sync_get_pending_summary and sync_get_change_detail
+    Engine->>Local: Read dirty rows and sync ledgers
+    Engine->>Local: Read baseline snapshot for project
+    Engine->>Master: Read core rows when cloud is attached
+    Engine-->>SyncUI: Normalized change records
+    SyncUI-->>User: Diff cards, counts, revert actions
+
+    User->>Auth: Sign in
+    Auth->>Master: Attach cloud catalog as master
+
+    User->>SyncUI: Push changes
+    SyncUI->>Engine: sync_push(project_id, submitter)
+    Engine->>Master: Create merge request in admin
+    Engine->>Master: Insert staged rows into staging tables
+    Engine-->>SyncUI: Merge request id and per-table counts
+
+    Admin->>Engine: merge_request_refresh_conflicts
+    Engine->>Master: Compare staging baseRowVersion with core rowVersion
+    Admin->>Engine: merge_request_resolve_conflict or merge_approve_request
+    Engine->>Master: Apply approved rows from staging to core
+    Engine->>Master: Delete staging rows and update merge request status
+```
+
+# Component Map
+
+## 1. App boot and dependency wiring
+
+- `global.R` sources the sync engine, auth helpers, project baseline logic, and both user-facing and admin-facing sync modules.
+- `server.R` creates one persistent local DuckDB connection per Shiny session, calls `sync_ensure_local_tables(con)`, and initializes baseline metadata storage with `project_ensure_baseline_table(con)`.
+- `server.R` also owns global state such as `CurrProject`, `User`, `SyncVersion`, and `SyncTabActivated`.
+
+Implication: sync is not isolated as a service object. It is a cross-cutting concern wired directly into app bootstrap and many modules through the shared `con` and `state` objects.
+
+## 2. Front end: user-facing sync module
+
+`R/mod_sync.R` is the Shiny controller and view for field-user sync.
+
+Responsibilities:
+
+- Render change sections by workflow area: site, soil, vegetation, project.
+- Read pending counts with `sync_get_pending_summary()`.
+- Read detailed records with `sync_get_change_detail()`.
+- Enable or disable push based on local changes plus auth state.
+- Revert single changes or grouped changes with `sync_revert_pending_change()`.
+- Push all current-project changes with `sync_push()`.
+- Show the current user's merge requests with `sync_get_user_merge_requests()`.
+
+Important design detail: the UI is thin on business rules. Most decisions about insert versus update versus delete live in `R/logic_sync.R`.
+
+## 3. Back end: sync engine
+
+`R/logic_sync.R` is the real core of the system.
+
+It provides four main groups of functions.
+
+### Table registry and connectivity
+
+- `SYNC_TABLE_CONFIG` defines the 9 push-eligible tables and how project scoping works.
+- `sync_cloud_connected()` and `sync_require_cloud()` check whether the `master` catalog is attached.
+- `sync_ensure_local_tables()` ensures each local table has `local_modified_utc` and that the two local ledger tables exist.
+
+### Dirty-change modeling and utility functions
+
+These internal helpers normalize payloads and compare versions:
+
+- `.sync_find_field()`
+- `.sync_payload_from_row()` and `.sync_payload_to_row()`
+- `.sync_get_row_value()`
+- `.sync_extract_row_version()` and `.sync_has_row_version_field()`
+- `.sync_make_lookup()`
+- `.sync_project_filter_sql()`
+- `.sync_get_local_rows()`
+- `.sync_get_core_lookup()`
+- `.sync_get_baseline_lookup()`
+
+These are the utility layer that make the generic engine possible.
+
+### Change collection and local revert
+
+This is the most important architectural slice.
+
+- `sync_record_local_change()` writes an explicit ledger row when a module knows it created or updated a record.
+- `sync_record_delete()` and `sync_delete_local_row()` handle tombstones for deletes.
+- `sync_collect_table_changes()` combines three sources of truth:
+  - local dirty rows from the business table itself
+  - explicit change rows from `sync_local_changes`
+  - explicit delete rows from `sync_local_deletes`
+- It enriches those changes using:
+  - baseline snapshots from `project_baselines`
+  - current cloud core rows from `master.core`
+- `sync_revert_pending_change()` uses explicit prior payloads, project baseline rows, or core rows to restore a record.
+
+This is why the module can show useful diffs even when the local table alone is not enough.
+
+### Push, merge request, conflict, and approval pipeline
+
+- `.get_shared_columns()` dynamically intersects local columns and staging columns.
+- `.push_table()` inserts normalized rows into `master.staging.<table>`.
+- `sync_push()` creates the merge request, stages every changed table, and optionally runs compliance checks.
+- `.detect_table_conflicts()` compares staging `baseRowVersion` with core `rowVersion`.
+- `merge_request_refresh_conflicts()`, `merge_request_get_conflicts()`, and `merge_request_resolve_conflict()` support admin conflict handling.
+- `.apply_table()` and `merge_approve_request()` apply staging rows into `master.core` and mark the merge request merged.
+
+Architecturally, the sync engine owns both field-user push behavior and admin merge behavior. That keeps logic centralized, but it also makes `logic_sync.R` large and multi-purpose.
+
+## 4. Baseline snapshots
+
+`R/logic_project.R` provides `project_capture_baseline()`, `project_get_baseline()`, and `project_read_baseline_rows()`.
+
+These baseline snapshots are essential because they give the sync engine a stable "before" view even when:
+
+- the cloud is not attached
+- the local row has been edited multiple times
+- the original value is no longer present in the current local table
+
+The current design is pragmatic: each project baseline is stored as its own DuckDB file under `data/project_baselines/`.
+
+## 5. Auth and cloud attachment
+
+`R/db_connections.R` and `R/mod_auth.R` provide the cloud boundary.
+
+- The app always starts with local DuckDB only.
+- Logging in attaches PostgreSQL through DuckDB as the `master` catalog.
+- Logging out detaches `master`.
+
+That means sync must operate in two modes:
+
+- local-only mode for change tracking and viewing pending changes
+- attached-cloud mode for push, merge request lookup, conflict detection, and merge approval
+
+## 6. Feature modules that feed sync
+
+The sync engine does not automatically watch all writes. Modules must opt in.
+
+Observed examples:
+
+- `R/logic_hierarchy_sidebar.R` updates `SU` and `Env`, sets `local_modified_utc`, and calls `sync_record_local_change()`.
+- `R/mod_hierarchy.R` does the same for insert, update, and delete operations on `SU`.
+- `R/mod_veg_sample.R` sets `local_modified_utc` on `Veg` updates and uses `sync_delete_local_row()` for deletions.
+
+This is a critical design characteristic: dirty tracking is distributed across feature modules.
+
+## 7. Admin merge review
+
+`R/mod_admin_merge.R` is the admin-facing review surface.
+
+It refreshes pending merge requests, shows conflicts, and calls the generic merge APIs in `logic_sync.R`.
+
+However, this module currently appears partially aligned to the older `sample_env`, `sample_su`, and `sample_veg` schema naming, while the active push engine stages generic table names such as `env`, `su`, `veg`, `metadata`, and others.
+
+This is the strongest sign of architectural drift in the current implementation.
+
+# What Works Well
+
+## Strength 1: clear separation between local edits and cloud approval
+
+The system avoids direct writes from field users into core tables. That is a strong operational boundary.
+
+## Strength 2: generic table-driven engine
+
+`SYNC_TABLE_CONFIG` plus shared helper functions make it possible to reuse the same collection, push, revert, and merge logic across multiple tables.
+
+## Strength 3: baseline snapshots improve revert semantics
+
+Using project baselines is more reliable than trying to infer every previous value from only the local working tables.
+
+## Strength 4: sync UI is mostly a projection of backend state
+
+`mod_sync.R` mostly reads and presents derived sync data rather than duplicating business rules.
+
+# Main Risks
+
+## Risk 1: dirty tracking is manual and scattered
+
+The current design depends on each editing module remembering to do some combination of:
+
+- update the business row
+- set `local_modified_utc`
+- call `sync_record_local_change()` or `sync_delete_local_row()`
+- call `sync_touch_state(state)`
+
+If any write path forgets one step, the sync view can become inaccurate.
+
+Maintenance consequence: correctness depends on convention rather than one enforced write abstraction.
+
+## Risk 2: `logic_sync.R` is carrying too many responsibilities
+
+The same file currently owns:
+
+- dirty row discovery
+- payload serialization
+- baseline integration
+- revert logic
+- staging SQL generation
+- conflict detection
+- merge approval
+- schema bootstrap helpers
+
+Maintenance consequence: changes in one area increase regression risk in others, and the file is hard to reason about as a single unit.
+
+## Risk 3: admin merge UI appears schema-drifted
+
+`mod_admin_merge.R` still queries `master.staging.sample_env`, `sample_su`, and `sample_veg`, while the main sync engine operates over generic table names from `SYNC_TABLE_CONFIG`.
+
+Maintenance consequence: the user-facing push path and admin review path may not reflect the same staging model.
+
+## Risk 4: state invalidation is broad and implicit
+
+`SyncVersion` is a coarse invalidation flag. It is easy to use, but it hides which table or project changed.
+
+Maintenance consequence: it simplifies wiring today, but it can make refresh behavior noisy and harder to optimize or debug later.
+
+## Risk 5: test coverage is good for engine internals, lighter for integration seams
+
+The tests cover a fair amount of `logic_sync.R`, especially push, merge, and conflict scenarios. Coverage is weaker for end-to-end feature-module write paths and for UI-admin alignment.
+
+Maintenance consequence: backend logic is somewhat protected, but integration regressions can still slip in.
+
+# Recommended Improvements
+
+## 1. Introduce a single write-through sync API
+
+Create a small service layer for table mutations that always performs:
+
+- database write
+- local dirty mark
+- change-ledger update when needed
+- audit logging
+- sync state invalidation
+
+That would remove repeated sync bookkeeping from modules such as hierarchy and vegetation.
+
+## 2. Split `logic_sync.R` into focused files
+
+Recommended split:
+
+- `R/logic_sync_registry.R`
+- `R/logic_sync_collect.R`
+- `R/logic_sync_revert.R`
+- `R/logic_sync_push.R`
+- `R/logic_sync_merge.R`
+- `R/logic_sync_schema.R`
+
+This is the highest-value maintainability refactor because it reduces cognitive load without changing architecture.
+
+## 3. Make admin merge review use the same registry-driven model
+
+`mod_admin_merge.R` should derive table previews and counts from `SYNC_TABLE_CONFIG` instead of hardcoding `sample_*` tables.
+
+That would eliminate the current drift between the user push surface and the admin merge surface.
+
+## 4. Replace convention-based dirty tracking with reusable helpers
+
+Examples:
+
+- `sync_mark_insert(con, table_name, pk_value, project_id, row_before = NULL)`
+- `sync_mark_update(con, table_name, pk_value, project_id, row_before)`
+- `sync_mark_delete(con, table_name, pk_value, project_id, row_before)`
+
+The feature modules should not need to know which ledger tables exist or when to serialize prior payloads.
+
+## 5. Add integration tests for real feature-module write paths
+
+Useful cases:
+
+- editing vegetation cover triggers a visible pending update
+- moving a plot between site units creates the expected `SU` and `Env` pending changes
+- reverting a pending change truly restores the local row and clears dirty markers
+
+## 6. Tighten schema ownership and naming
+
+Today there is a mix of generic names (`env`, `su`, `veg`) and older sample-oriented names (`sample_env`, `sample_su`, `sample_veg`). Pick one model per workflow and remove the other from active UI code.
+
+## 7. Consider a more explicit state signal than a single `SyncVersion`
+
+For example, store a small event object or per-table counters. This is not urgent, but it would make refresh causes easier to trace once the module grows further.
+
+# Maintenance Outlook
+
+The sync architecture is serviceable and not fundamentally broken. The core design choice is sound: keep local editing independent, stage to cloud, and require admin merge into core.
+
+The main maintenance issue is not the workflow itself. It is that sync bookkeeping is spread across multiple editing modules, while the central sync engine has grown large enough that architectural drift is starting to show at its boundaries.
+
+If the team does nothing, the likely failure mode is not immediate collapse. It is gradual inconsistency: more write paths that partly participate in sync, more UI/backend mismatch, and more difficulty debugging why a row did or did not appear in the pending list.
+
+If the team makes only two improvements, these should be:
+
+1. unify dirty tracking behind a reusable write-through API
+2. align admin merge review with the same registry-driven sync model as the field-user push flow
+
+# Suggested Next Review Blocks
+
+1. Audit every write path for the 9 sync tables and classify it as fully tracked, partially tracked, or not tracked.
+2. Refactor `mod_admin_merge.R` to consume `SYNC_TABLE_CONFIG` and the generic staging tables.
+3. Extract the sync engine into smaller files without changing behavior.
