@@ -5,7 +5,25 @@ if (!"bcgov" %in% bslib::bootswatch_themes()) {
   source("theme/add_bcgov_bootswatch_to_bslib.R")
 }
 
-npt<-function(i=NULL,l,t,v=t){nav_panel(tooltip(span(if(!is.null(i)){icon(i)},l),t),value=v)}
+npt<-function(i=NULL,l,t,v=t){
+  nav_panel(tooltip(span(if(!is.null(i)){icon(i)},l),t),value=v)
+}
+
+nlt <- function(i=NULL,l,t,v=t) {
+  nav_item(
+    tags$a(
+      href = "#",
+      role = "button",
+      class = "dropdown-item",
+      title = t,
+      onclick = sprintf(
+        "Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); return false;",
+        v
+      ),
+      tooltip(span(if(!is.null(i)){icon(i)},l),t)
+    )
+  )
+}
 
 ui <- page_navbar(
   id = "main_tabs",
@@ -45,9 +63,7 @@ ui <- page_navbar(
   ),
   # Main Tabs
 
-
-
-  # Placeholder for future UI refactoring
+# Forms ----
   nav_menu("Forms",
     "Data Entry",
     npt("rectangle-list", "FS882 Data Forms", "This is the data form that most closely resembles the FS882 field forms.","fs882"),
@@ -61,11 +77,11 @@ ui <- page_navbar(
     npt("user-gear", "User setup", "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)","user_setup"),
     npt("clock-rotate-left", "User log", "A record of when you (or someone else) opens and closes VPro.  Nothing spectacular, but useful just the same.","user_log")
   ),
+# Data ----
   nav_menu("Data",
     "Project",
     npt("folder-plus", "New Project", "Create a new project.  A project stores your environment, vegetation and soil data.","project_new"),
     npt("floppy-disk", "Save As...", "Save the current project to a new or existing database using a different name.","project_save_as"),
-    npt("box-archive", "Backup Current Project", "This tool creates a copy of the current project adding the prefix \"BAK\" to the project name.","project_backup"),
     npt("share-nodes", "Export Splinter Project", "A splinter project is the portion of the current project that has matching plots in the current SU table.","project_export_splinter"),
     npt("diagram-project", "Merge Projects", "Combine the plots of two projects.  Remember to backup your data before performing these types of functions.","project_merge"),
     npt("not-equal", "Compare Two Projects", "This tool compares site, soil, and vegetation data plot-by-plot and field-by-field, then produces an Excel report.","project_compare"),
@@ -76,8 +92,6 @@ ui <- page_navbar(
     "Site Unit",
     npt("table", "New Site Unit Table", "A site unit table is used to assign plots to groups.  It also functions as a filter limiting the number of active project plots.","su_table_new"),
     npt("floppy-disk", "Save As...", "Save the current site unit table to a new or existing database using a different name.","su_table_save_as"),
-    npt("box-archive", "Backup The Current Site Unit Table", "Adds the prefix \"BAK\" to the site unit table name and saves it to a new database.","su_table_backup"),
-    npt("scissors", "SU Table From Breaks", "Create an SU table from site units found below breakpoints in the current hierarchy.","su_table_from_breaks"),
     npt("filter", "SU Table From Filter Query", "Uses a filter query to select plots from the current project and save them as a site unit table.  Unit assignments from current SU table are optional.","su_table_from_query"),
     npt("sliders", "SU Table From Form Filter", "Using a Microsoft Access form filter, you can generate a SU table based on the selected plots.","su_table_from_form_filter"),
     npt("wand-magic", "Create Site Units From Environment Fields", "Uses concatenation to build unit names from environment field data.  The result is a new SU table.","su_table_from_environment"),
@@ -88,54 +102,40 @@ ui <- page_navbar(
     "Hierarchy",
     npt("sitemap", "New Hierarchy Table", "A hierarchy table is a hierarchical construct of classification levels.  Use this function to create a new hierarchy table in a new or existing database.","hierarchy_new"),
     npt("floppy-disk", "Save As...", "Save the current hierarchy table to a new or existing database using a different name.","hierarchy_save_as"),
-    npt("box-archive", "Backup Current Hierarchy Table", "Adds the prefix \"BAK\" to the current hierarchy table name and saves it to a new database.","hierarchy_backup"),
-    npt("code-branch", "Save Hierarchy Under Breaks", "Save the portion(s) of the current hierarchy that fall under breakpoints.","hierarchy_save_under_breaks"),
     npt("diagram-project", "Merge Hierarchies", "Please backup first.  Hierarchies can be complex tables so there's a lot than can go wrong.  That said, use this tool to combine two hierarchies.","hierarchy_merge"),
     npt("diagram-project", "Hierarchy Diagram", "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.","hierarchy_diagram"),
     "---",
     "Import",
-    npt("database", "VPro 15 Project", "Import a VPro 15 project.","import_vpro_15_project"),
-    npt("database", "VPro 13 Project", "Import a VPro 13 project.","import_vpro_13_project"),
-    npt("mobile-screen-button", "FileMaker Go", "Import FileMaker Go data.","import_filemaker_go"),
-    npt("table", "VPro User Site Units", "Import a VPro user site units table.","import_vpro_user_site_units"),
-    npt("seedling", "VPro User Species List", "Import a VPro user species list.","import_vpro_user_species_list"),
-    npt("book", "VPro Master Species List", "Import the VPro master species list.","import_vpro_master_species_list"),
-    npt("table-list", "VPro Master List Table", "Import the VPro master list table.","import_vpro_master_list_table"),
-    npt("globe", "VENUS 4.2", "Import VENUS 4.2 data.","import_venus_4_2"),
+    npt("database", "VPro 64 Project", "Import a VPro 64 project.","import_vpro_64_project"),
     npt("globe", "VENUS 5.0", "Import VENUS 5.0 data.","import_venus_5_0"),
+    npt("file-code", "TurboVeg", "Import TurboVeg data.","data_turboveg"),
     "---",
     "Export",
-    npt("database", "VPro 15 Project", "Export the current project as a VPro 15 project.","export_vpro_15_project"),
-    npt("database", "VPro 13 Project", "Export the current project as a VPro 13 project.","export_vpro_13_project"),
-    npt("table-columns", "PC-ORD Compact Veg Form", "Export the PC-ORD compact vegetation form.","export_pc_ord_compact_veg_form"),
-    npt("table-cells-large", "PC-ORD Environment Matrix", "Export the PC-ORD environment matrix.","export_pc_ord_environment_matrix"),
-    npt("file-code", "Export to R", "Export the current dataset for use in R.","export_to_r"),
+    npt("file-code", "R (rds)", "Export the current dataset for use in R.","export_to_r"),
+    npt("file-code", "TurboVeg", "Export the current dataset for use in TurboVeg.","export_to_turboveg"),
     npt("seedling", "User Species List", "Export the current user species list.","export_user_species_list"),
-    npt("table", "User Site Units", "Export the current user site units.","export_user_site_units"),
-    npt("file-csv", "Export Level Units CSV", "Export level units to CSV.","export_level_units_csv"),
     "---",
     "Validate",
     npt("clipboard-check", "Validate Data", "Here's an assortment of tools to validate and fix some common problems","validate_data")
   ),
+# Reports ----
   nav_menu("Reports",
     "Vegetation",
     npt("table-list", "Long Vegetation", "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.","report_long_vegetation"),
     npt("chart-column", "Summary Vegetation", "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.","report_summary_vegetation"),
-    npt("leaf", "Species Attributes Report", "Summarizes species attributes by site unit or hierarchy breakpoint.","report_species_attributes"),
     "---",
     "Environment",
     npt("table-list", "Long Environment", "Creates an Excel report where site unit groups of plots are placed on individual sheets.","report_long_environment"),
     npt("chart-column", "Summary Environment", "A summary of plots in each site unit is generated for the project.  Frequency for the qualitative values and mean or median values of the quantitative values are displayed.","report_summary_environment"),
-    npt("table-columns", "Combination Vegtation/Environment", "A user configurable combination of environment and vegetation data is reported for each plot.","report_combination_vegetation_environment"),
     "---",
     "Others",
-    npt("triangle-exclamation", "PC-ORD Break Report", "A list of break codes generated by the last export of PC-ORD data.","report_pc_ord_breaks"),
     npt("table-cells-large", "Subzone Matrix of Units", "A matrix is generated based on the current site unit table and the master site unit list.","report_subzone_matrix_of_units"),
     npt("diagram-project", "Hierarchy Diagram", "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.","report_hierarchy_diagram"),
     npt("tag", "Print a Plot Label", "Print a physical label to affix to your plot card.","report_print_plot_label"),
     npt("file-lines", "Create Plot Locations File", "Prints a plot list that includes zone, subzone, site series, longitude, latitude and elevation.","report_create_plot_locations_file"),
     npt("earth-americas", "Show Plot Locations in Google Earth", "Locate your plots using Google Earth (requires Google Earth installation)","report_show_plot_locations_google_earth")
   ),
+# References ----
   nav_menu("References",
     "Library Tables",
     npt("list-check", "Site and Environment Codes", "This tool allows the user to modify the drop-down lists in the data forms.  Please do not make any changes to these lists if you are working with BEC data!","reference_site_environment_codes"),
@@ -148,13 +148,13 @@ ui <- page_navbar(
     npt("user-gear", "User setup", "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)","reference_user_setup"),
     npt("folder-tree", "Directories", "Setup directory locations for files related to Google Earth, R, and plot photos.","reference_directories")
   ),
+# Help ----
   nav_menu("Help",
     "Help",
     npt("circle-question", "VPro Help", "Documents and Web links.","help_vpro_help"),
     npt("boxes-stacked", "VPro Service Packs", "Information on the VPro service packs installed on this machine.","help_service_packs"),
     npt("rotate-left", "Set all to Sample", "Problems with the menu?  Can't change projects?  Getting an error message?  Try this.","help_set_all_to_sample"),
-    npt("rectangle-xmark", "Close all forms", "Suspect you may have a hidden form that is causing you problems?  Click this and your worries are over.","help_close_all_forms"),
-    npt("newspaper", "What's New", "See a list of the latest changes to VPro.","help_whats_new"),
+    nlt("newspaper", "What's New", "See a list of the latest changes to VPro.","btn_whatsnew"),
     npt("circle-info", "About VPro", "Some basic information about your copy of VPro.","help_about_vpro")
   ),
   
