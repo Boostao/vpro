@@ -7,9 +7,10 @@ mod_admin_merge_ui <- function(id) {
   ns <- NS(id)
   tagList(
     card(
+      class = "sync-admin-merge-review",
       full_screen = TRUE,
       card_header("Merge Review"),
-      tags$p("Review staged uploads and merge into core datasets."),
+      tags$p("Review staged uploads, resolve conflicts, and merge into core datasets."),
       layout_columns(
         actionButton(ns("merge_refresh"),  "Refresh",        class = "btn-secondary"),
         selectInput( ns("merge_request"),  "Merge request",  choices = NULL),
@@ -76,15 +77,24 @@ mod_admin_merge_server <- function(id, state, con) {
       })
       if (!isTRUE(ready)) return(invisible(FALSE))
 
-      merge_ensure_tables(con)
+      loaded <- tryCatch({
+        merge_ensure_tables(con)
 
-      rv$merge_requests <- DBI::dbGetQuery(con,
-        "SELECT id, project_id, submitter_user_id, submitted_utc, status,
-                env_record_count, su_record_count, veg_record_count,
-                compliance_passed, compliance_report
-         FROM master.admin.merge_requests
-         WHERE status = 'pending_review'
-         ORDER BY submitted_utc DESC")
+        rv$merge_requests <- DBI::dbGetQuery(con,
+          "SELECT id, project_id, submitter_user_id, submitted_utc, status,
+                  env_record_count, su_record_count, veg_record_count,
+                  compliance_passed, compliance_report
+           FROM master.admin.merge_requests
+           WHERE status = 'pending_review'
+           ORDER BY submitted_utc DESC")
+        TRUE
+      }, error = function(e) {
+        rv$status <- paste("Merge review unavailable:", conditionMessage(e))
+        rv$merge_requests <- data.frame()
+        updateSelectInput(session, "merge_request", choices = c("(none)" = ""), selected = "")
+        FALSE
+      })
+      if (!isTRUE(loaded)) return(invisible(FALSE))
 
       choices <- if (is.null(rv$merge_requests) || nrow(rv$merge_requests) == 0) {
         c("(none)" = "")
@@ -100,8 +110,27 @@ mod_admin_merge_server <- function(id, state, con) {
     observeEvent(input$merge_refresh, { refresh_requests() }, ignoreInit = TRUE)
 
     observe({
-      if (is.null(rv$merge_requests)) refresh_requests()
+      if (isTRUE(auth_is_admin(state)) && is.null(rv$merge_requests)) refresh_requests()
     })
+
+    observeEvent(list(state$AuthAuthenticated, state$AuthRole), {
+      if (isTRUE(state$AuthAuthenticated) && identical(state$AuthRole, "admin")) {
+        refresh_requests()
+      } else {
+        rv$status <- ""
+        rv$merge_requests <- NULL
+        rv$counts <- NULL
+        rv$diff_env <- NULL
+        rv$diff_su <- NULL
+        rv$diff_veg <- NULL
+        rv$compliance <- NULL
+        rv$compliance_status <- ""
+        rv$compliance_passed <- NA
+        rv$conflicts <- NULL
+        rv$conflict_status <- ""
+        updateSelectInput(session, "merge_request", choices = c("(none)" = ""), selected = "")
+      }
+    }, ignoreInit = TRUE)
 
     observeEvent(input$merge_request, {
       req(input$merge_request)

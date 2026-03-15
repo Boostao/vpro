@@ -9,22 +9,24 @@
 mod_sync_ui <- function(id) {
   ns <- NS(id)
 
-  bslib::navset_card_tab(
-    id = ns("sync_tabs"),
-
-    # ── Tab 1: Changes ────────────────────────────────────────────────────────
-    bslib::nav_panel(
-      title = "Updates",
-      value = "changes",
-
+  tagList(
+    div(
+      class = "sync-updates-shell mt-1",
       div(
-        class = "sync-updates-shell mt-1",
+        class = "sync-updates-hero mb-3",
         div(
-          class = "sync-updates-hero mb-3",
+          class = "sync-updates-hero-copy",
           div(
-            class = "sync-updates-hero-copy",
-            div(class = "sync-updates-eyebrow", "Sync workspace"),
-            h3(class = "sync-updates-title", "Updates"),
+            class = "sync-updates-hero-top",
+            div(
+              class = "sync-updates-copy-block",
+              div(class = "sync-updates-eyebrow", "Sync workspace"),
+              h3(class = "sync-updates-title", "Updates"),
+              p(
+                class = "sync-updates-lede",
+                "Review local changes, authenticate when needed, and send one clean merge request from the same workspace."
+              )
+            ),
             div(
               class = "sync-updates-actions",
               div(
@@ -55,168 +57,181 @@ mod_sync_ui <- function(id) {
             )
           ),
           div(
-            class = "sync-updates-side",
-            uiOutput(ns("changes_snapshot")),
-            uiOutput(ns("comparison_overview"))
+            id = ns("sync_auth_card_anchor"),
+            class = "sync-auth-shell",
+            tabindex = "-1",
+            mod_auth_ui(ns("auth_embedded"))
           )
-        )
-      ),
-
-      # Diff card CSS
-      tags$style(HTML("
-        .sync-updates-shell { display: flex; flex-direction: column; gap: 12px; }
-        .sync-updates-hero { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr); gap: 16px; align-items: stretch; }
-        .sync-updates-hero-copy { border: 1px solid #d8e2eb; border-radius: 16px; padding: 18px 20px; background: linear-gradient(135deg, #f8fbff 0%%, #eef5fb 100%%); display: flex; flex-direction: column; justify-content: space-between; gap: 18px; min-height: 100%%; }
-        .sync-updates-eyebrow { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7785; margin-bottom: 6px; }
-        .sync-updates-title { margin: 0; font-size: 1.75rem; font-weight: 700; color: #15324b; }
-        .sync-updates-actions { display: grid; gap: 12px; margin-top: 0; }
-        .sync-updates-project { display: flex; align-items: center; }
-        .sync-updates-primary { display: flex; }
-        .sync-updates-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-        .sync-updates-secondary .btn { width: 100%%; }
-        .sync-push-button { width: 100%%; min-height: 50px; font-weight: 700; font-size: 1.05rem; }
-        .sync-updates-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
-        .sync-summary-card, .sync-comparison-card { border: 1px solid #d7e3ea; border-radius: 16px; background: #ffffff; }
-        .sync-summary-card { padding: 16px; height: 100%%; }
-        .sync-summary-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-        .sync-summary-title { font-size: 0.95rem; font-weight: 700; color: #18354d; }
-        .sync-summary-total { font-size: 1.5rem; font-weight: 700; color: #18354d; }
-        .sync-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-        .sync-summary-chip { border-radius: 12px; padding: 10px 12px; background: #f5f8fb; border: 1px solid #e1e8ef; }
-        .sync-summary-chip-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6c7b88; margin-bottom: 4px; white-space: nowrap; }
-        .sync-summary-chip-value { display: block; font-size: 1.05rem; font-weight: 700; color: #1b3145; }
-        .sync-summary-chip.is-insert { background: #edf7ea; border-color: #cfe4ca; }
-        .sync-summary-chip.is-update { background: #fff7de; border-color: #f1dfa2; }
-        .sync-summary-chip.is-delete { background: #fdecea; border-color: #f0c7c2; }
-        .sync-comparison-card { width: 100%%; padding: 14px 16px; text-align: left; height: 100%%; display: flex; align-items: stretch; }
-        .sync-comparison-card .action-label { display: flex; flex-direction: column; justify-content: space-between; width: 100%%; }
-        .sync-comparison-card:hover, .sync-comparison-card:focus { border-color: #9db7cf; background: #fbfdff; }
-        .sync-comparison-label { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7785; margin-bottom: 6px; }
-        .sync-comparison-headline { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #15324b; }
-        .sync-comparison-meta { margin-top: 8px; color: #5f6f7d; font-size: 0.88rem; }
-        .sync-comparison-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
-        .sync-comparison-modal-shell { display: grid; gap: 16px; }
-        .sync-comparison-modal-intro { padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #f6fbff 0%%, #edf4fb 100%%); border: 1px solid #d8e5f0; }
-        .sync-comparison-modal-kicker { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7785; margin-bottom: 6px; font-weight: 700; }
-        .sync-comparison-modal-title { display: block; font-size: 1.2rem; font-weight: 700; color: #16344b; margin-bottom: 6px; }
-        .sync-comparison-modal-note { color: #587083; font-size: 0.92rem; margin: 0; }
-        .sync-comparison-modal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.95fr); gap: 14px; }
-        .sync-comparison-modal-card { border: 1px solid #d8e2eb; border-radius: 16px; background: #ffffff; padding: 16px; }
-        .sync-comparison-modal-card-title { font-size: 0.9rem; font-weight: 700; color: #18354d; margin-bottom: 10px; }
-        .sync-comparison-modal-card-subtitle { color: #687987; font-size: 0.85rem; margin-bottom: 12px; }
-        .sync-source-summary { margin-bottom: 0; }
-        .sync-source-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-        .sync-modal-upload .shiny-input-container { margin-bottom: 0; }
-        .sync-diff-card { border-left: 4px solid #ccc; margin-bottom: 10px; border-radius: 4px; background: #fff; }
-        .sync-diff-card.sync-insert { border-color: #43893e; }
-        .sync-diff-card.sync-update { border-color: #f9ca54; }
-        .sync-diff-card.sync-delete { border-color: #c03b2b; }
-        .sync-diff-header { padding: 7px 12px; font-size: 0.82em; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-        .sync-diff-card.sync-insert .sync-diff-header { background: #edf7ea; }
-        .sync-diff-card.sync-update .sync-diff-header { background: #fef9ec; }
-        .sync-diff-card.sync-delete .sync-diff-header { background: #fdecea; }
-        .sync-diff-body { padding: 4px 0; }
-        .sync-diff-row { display: grid; grid-template-columns: 160px 1fr; font-size: 0.8em; padding: 2px 12px; }
-        .sync-diff-row.changed { grid-template-columns: 160px 1fr auto 1fr; }
-        .sync-diff-row.deleted { grid-template-columns: 160px 1fr; }
-        .sync-diff-field { color: #666; font-family: monospace; }
-        .sync-val-before { font-family: monospace; background: #fff3cd; padding: 1px 4px; border-radius: 2px; }
-        .sync-val-after  { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
-        .sync-val-new    { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
-        .sync-val-delete { font-family: monospace; background: #f8d7da; padding: 1px 4px; border-radius: 2px; }
-        .sync-diff-arrow { color: #888; padding: 0 6px; }
-        .sync-section-badge { display: inline-flex; gap: 4px; margin-left: 8px; }
-        .sync-section-badge .badge { font-size: 0.72em; font-weight: 600; vertical-align: middle; }
-        .sync-diff-actions { margin-left: auto; }
-        @media (max-width: 991.98px) {
-          .sync-updates-hero { grid-template-columns: 1fr; }
-          .sync-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .sync-updates-side { grid-template-columns: 1fr; }
-          .sync-comparison-modal-grid { grid-template-columns: 1fr; }
-        }
-        @media (max-width: 575.98px) {
-          .sync-updates-secondary { grid-template-columns: 1fr; }
-          .sync-summary-grid { grid-template-columns: 1fr; }
-        }
-      ")),
-
-      # 4 accordion groups ordered by field workflow: Site, Soil, Veg, Project
-      bslib::accordion(
-        id = ns("acc_changes"),
-        open = FALSE,
-
-        bslib::accordion_panel(
-          title = div(
-            style = "display:inline-flex;align-items:center;",
-            tagList(icon("map-location-dot"), " Site"),
-            uiOutput(ns("badges_site"), inline = TRUE)
-          ),
-          value = "site",
-          uiOutput(ns("section_actions_site")),
-          uiOutput(ns("cards_admin")),
-          uiOutput(ns("cards_env")),
-          uiOutput(ns("cards_su"))
         ),
-
-        bslib::accordion_panel(
-          title = div(
-            style = "display:inline-flex;align-items:center;",
-            tagList(icon("layer-group"), " Soil"),
-            uiOutput(ns("badges_soil"), inline = TRUE)
-          ),
-          value = "soil",
-          uiOutput(ns("section_actions_soil")),
-          uiOutput(ns("cards_humus")),
-          uiOutput(ns("cards_mineral")),
-          uiOutput(ns("cards_other"))
-        ),
-
-        bslib::accordion_panel(
-          title = div(
-            style = "display:inline-flex;align-items:center;",
-            tagList(icon("leaf"), " Vegetation"),
-            uiOutput(ns("badges_veg"), inline = TRUE)
-          ),
-          value = "veg",
-          uiOutput(ns("section_actions_veg")),
-          uiOutput(ns("cards_veg")),
-          uiOutput(ns("cards_herbarium"))
-        ),
-
-        bslib::accordion_panel(
-          title = div(
-            style = "display:inline-flex;align-items:center;",
-            tagList(icon("folder-open"), " Project"),
-            uiOutput(ns("badges_project"), inline = TRUE)
-          ),
-          value = "project",
-          uiOutput(ns("section_actions_project")),
-          uiOutput(ns("cards_metadata"))
+        div(
+          class = "sync-updates-side",
+          uiOutput(ns("changes_snapshot")),
+          uiOutput(ns("comparison_overview")),
+          uiOutput(ns("merge_request_overview"))
         )
       )
     ),
 
-    # ── Tab 2: Merge Requests ─────────────────────────────────────────────────
-    bslib::nav_panel(
-      title = tagList("Merge Requests", uiOutput(ns("mr_tab_badge"), inline = TRUE)),
-      value = "merge_requests",
-
-      div(
-        class = "d-flex align-items-center gap-3 flex-wrap mb-3 mt-1",
-        checkboxInput(ns("hide_approved"), "Hide approved/merged", value = FALSE),
-        checkboxInput(ns("hide_rejected"), "Hide rejected",        value = FALSE),
-        actionButton(
-          ns("mr_refresh"),
-          label = tagList(icon("rotate"), "Refresh"),
-          class = "btn btn-outline-secondary btn-sm"
-        )
-      ),
-
-      DT::dataTableOutput(ns("tbl_mrs")),
-
-      # Detail panel — revealed on row click
-      uiOutput(ns("mr_detail"))
-    )
+    tags$style(HTML("
+      .sync-updates-shell { display: flex; flex-direction: column; gap: 14px; }
+      .sync-updates-hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.95fr); gap: 16px; align-items: stretch; }
+      .sync-updates-hero-copy { border: 1px solid #d8e2eb; border-radius: 20px; padding: 22px 24px; background: linear-gradient(145deg, #f7fbff 0%%, #edf4fb 58%%, #e8f1f8 100%%); box-shadow: 0 16px 36px rgba(24, 53, 77, 0.08); display: flex; flex-direction: column; gap: 18px; min-height: 100%%; }
+      .sync-updates-hero-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 320px); gap: 18px; align-items: start; }
+      .sync-updates-copy-block { display: grid; gap: 10px; }
+      .sync-updates-eyebrow { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7785; margin-bottom: 6px; }
+      .sync-updates-title { margin: 0; font-size: 1.85rem; font-weight: 700; color: #15324b; }
+      .sync-updates-lede { margin: 0; color: #587083; font-size: 0.96rem; line-height: 1.45; max-width: 34rem; }
+      .sync-updates-actions { display: grid; gap: 12px; margin-top: 0; }
+      .sync-updates-project { display: flex; align-items: center; }
+      .sync-updates-primary { display: flex; }
+      .sync-updates-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .sync-updates-secondary .btn { width: 100%%; }
+      .sync-push-button { width: 100%%; min-height: 52px; font-weight: 700; font-size: 1.05rem; border-radius: 14px; }
+      .sync-updates-side { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; }
+      .sync-auth-shell { border-top: 1px solid rgba(21, 50, 75, 0.09); padding-top: 32px; margin-top: 10px; outline: none; }
+      .sync-auth-shell.is-focused { box-shadow: 0 0 0 3px rgba(0, 100, 180, 0.15); border-radius: 18px; }
+      .sync-auth-panel { border: 1px solid #d7e3ea; border-radius: 18px; background: rgba(255,255,255,0.84); padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); display: grid; gap: 14px; }
+      .sync-auth-panel-ready { background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%%, rgba(245,250,255,0.96) 100%%); }
+      .sync-auth-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+      .sync-auth-header-copy { display: grid; gap: 6px; }
+      .sync-auth-header-badge { display: flex; align-items: start; }
+      .sync-auth-kicker { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7785; }
+      .sync-auth-title { margin: 0; font-size: 1.12rem; font-weight: 700; color: #18354d; }
+      .sync-auth-note { margin: 0; color: #5f7283; font-size: 0.9rem; line-height: 1.45; }
+      .sync-auth-logout-chip { display: inline-flex; align-items: center; justify-content: center; width: 2.3rem; height: 2.3rem; border-radius: 999px; background: #fdecea; color: #c45a53; border: 1px solid #f0c7c2; text-decoration: none; }
+      .sync-auth-logout-chip:hover { background: #fbe2df; color: #b44e47; text-decoration: none; }
+      .sync-auth-form-grid { display: grid; gap: 10px; }
+      .sync-auth-submit { width: 100%%; min-height: 44px; font-weight: 700; border-radius: 12px; }
+      .sync-auth-status-line { min-height: 1.2rem; color: #5d6d7c; font-size: 0.86rem; }
+      .sync-auth-ready-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .sync-auth-ready-stat { border-radius: 12px; border: 1px solid #e0e8ef; background: #f7fafc; padding: 10px 12px; }
+      .sync-auth-ready-stat-head { display: flex; align-items: start; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+      .sync-auth-ready-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6d7c89; margin-bottom: 4px; }
+      .sync-auth-ready-value { display: block; font-size: 0.98rem; font-weight: 700; color: #16344b; word-break: break-word; }
+      .sync-auth-edit-link { color: #6b7a88; text-decoration: none; line-height: 1; }
+      .sync-auth-edit-link:hover { color: #16344b; text-decoration: none; }
+      .sync-auth-inline-editor .form-group, .sync-auth-inline-editor .shiny-input-container { margin-bottom: 0; }
+      .sync-auth-inline-editor input { min-height: 40px; border-radius: 10px; }
+      .sync-auth-inline-actions { display: flex; gap: 8px; margin-top: 8px; }
+      .sync-auth-inline-hint { margin-top: 6px; color: #6a7a88; font-size: 0.8rem; }
+      .sync-auth-role-value { display: flex; align-items: center; min-height: 40px; }
+      .sync-auth-role-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+      .sync-auth-role-btn { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0.4rem 0.8rem; border-radius: 999px; border: 1px solid #d7e3ea; background: #ffffff; color: #17344a; box-shadow: 0 6px 14px rgba(20, 39, 57, 0.05); }
+      .sync-auth-role-btn:hover, .sync-auth-role-btn:focus { background: #f6fbff; border-color: #bfd3e3; color: #16344b; }
+      .sync-auth-admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+      .sync-auth-admin-card { border: 1px solid #d9e3ec; border-radius: 16px; background: #fff; padding: 16px; }
+      .sync-auth-admin-title { margin: 0 0 10px 0; font-size: 0.95rem; font-weight: 700; color: #18354d; }
+      .sync-summary-card, .sync-comparison-card, .sync-merge-summary-card { border: 1px solid #d7e3ea; border-radius: 18px; background: #ffffff; box-shadow: 0 10px 26px rgba(16, 38, 56, 0.06); }
+      .sync-summary-card { padding: 16px; height: 100%%; text-align: left; width: 100%%; transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease; }
+      .sync-summary-card:hover, .sync-summary-card:focus { border-color: #9db7cf; background: #fbfdff; transform: translateY(-1px); box-shadow: 0 14px 30px rgba(24, 53, 77, 0.09); }
+      .sync-summary-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+      .sync-summary-title { font-size: 0.95rem; font-weight: 700; color: #18354d; }
+      .sync-summary-total { font-size: 1.5rem; font-weight: 700; color: #18354d; }
+      .sync-summary-headline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .sync-summary-meta { margin-top: 10px; color: #5f6f7d; font-size: 0.88rem; }
+      .sync-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      .sync-summary-chip { border-radius: 12px; padding: 10px 12px; background: #f5f8fb; border: 1px solid #e1e8ef; }
+      .sync-summary-chip-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6c7b88; margin-bottom: 4px; white-space: nowrap; }
+      .sync-summary-chip-value { display: block; font-size: 1.05rem; font-weight: 700; color: #1b3145; }
+      .sync-summary-chip.is-insert { background: #edf7ea; border-color: #cfe4ca; }
+      .sync-summary-chip.is-update { background: #fff7de; border-color: #f1dfa2; }
+      .sync-summary-chip.is-delete { background: #fdecea; border-color: #f0c7c2; }
+      .sync-comparison-card, .sync-merge-summary-card { width: 100%%; padding: 16px 18px; text-align: left; min-height: 148px; display: flex; align-items: stretch; transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease; }
+      .sync-comparison-card .action-label, .sync-merge-summary-card .action-label { display: flex; flex-direction: column; justify-content: space-between; width: 100%%; }
+      .sync-comparison-card:hover, .sync-comparison-card:focus, .sync-merge-summary-card:hover, .sync-merge-summary-card:focus { border-color: #9db7cf; background: #fbfdff; transform: translateY(-1px); box-shadow: 0 14px 30px rgba(24, 53, 77, 0.09); }
+      .sync-comparison-label, .sync-merge-summary-label, .sync-summary-titleline { display: inline-flex; align-items: center; gap: 8px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7785; margin-bottom: 6px; }
+      .sync-card-label-icon { color: #7a8a98; font-size: 0.82rem; }
+      .sync-comparison-headline, .sync-merge-summary-headline { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #15324b; }
+      .sync-comparison-meta, .sync-merge-summary-meta { margin-top: 8px; color: #5f6f7d; font-size: 0.88rem; }
+      .sync-comparison-badges, .sync-merge-summary-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+      .sync-merge-summary-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+      .sync-merge-summary-stat { border-radius: 12px; padding: 10px 12px; background: #f6f8fb; border: 1px solid #e2e8ef; }
+      .sync-merge-summary-stat-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6c7b88; margin-bottom: 4px; }
+      .sync-merge-summary-stat-value { display: block; font-size: 1rem; font-weight: 700; color: #18354d; }
+      .sync-card-pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 0.35rem 0.72rem; font-size: 0.76rem; font-weight: 700; border: 1px solid transparent; }
+      .sync-card-pill-neutral { background: #f4f7fa; color: #5f7283; border-color: #dde5ec; }
+      .sync-card-pill-info { background: #eef6ff; color: #35698e; border-color: #cfe0ef; }
+      .sync-card-pill-warn { background: #fff5de; color: #8a6a21; border-color: #efdca2; }
+      .sync-status-pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 0.35rem 0.68rem; font-size: 0.76rem; font-weight: 700; border: 1px solid transparent; }
+      .sync-status-pill-ready { background: #e3f7ee; color: #1d7a56; border-color: #bee7d3; }
+      .sync-status-pill-muted { background: #f2f5f8; color: #687987; border-color: #dde5ec; }
+      .sync-merge-panel { display: grid; gap: 16px; }
+      .sync-merge-review-shell { padding-top: 6px; }
+      .sync-merge-toolbar { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+      .sync-merge-toolbar .shiny-input-container { margin-bottom: 0; }
+      .sync-merge-table-wrap { border: 1px solid #dde6ee; border-radius: 16px; padding: 12px; background: linear-gradient(180deg, #ffffff 0%%, #fbfdff 100%%); }
+      .sync-merge-table-wrap .dataTables_wrapper { margin-bottom: 0; }
+      .sync-merge-table-wrap .dataTables_filter input,
+      .sync-merge-table-wrap .dataTables_length select,
+      .sync-admin-merge-review .dataTables_filter input,
+      .sync-admin-merge-review .dataTables_length select { border-radius: 10px; border: 1px solid #d6e0ea; min-height: 38px; }
+      .sync-merge-table-wrap table.dataTable,
+      .sync-admin-merge-review table.dataTable { border-collapse: separate !important; border-spacing: 0; width: 100%% !important; }
+      .sync-merge-table-wrap table.dataTable thead th,
+      .sync-admin-merge-review table.dataTable thead th { background: #eef4f9; color: #17344a; border-bottom: 1px solid #d5e0ea !important; font-weight: 700; padding: 12px 14px; }
+      .sync-merge-table-wrap table.dataTable tbody td,
+      .sync-admin-merge-review table.dataTable tbody td { padding: 12px 14px; border-top: 1px solid #edf2f7; color: #274055; vertical-align: top; }
+      .sync-merge-table-wrap table.dataTable tbody tr:hover,
+      .sync-admin-merge-review table.dataTable tbody tr:hover { background: #f8fbfe; }
+      .sync-merge-table-wrap table.dataTable tbody tr.selected,
+      .sync-admin-merge-review table.dataTable tbody tr.selected { background: #e7f1fb !important; }
+      .sync-merge-table-wrap .dataTables_paginate .paginate_button,
+      .sync-admin-merge-review .dataTables_paginate .paginate_button { border-radius: 999px !important; border: 1px solid #d6e0ea !important; background: #fff !important; color: #17344a !important; margin-left: 4px; }
+      .sync-merge-table-wrap .dataTables_paginate .paginate_button.current,
+      .sync-admin-merge-review .dataTables_paginate .paginate_button.current { background: #17344a !important; color: #fff !important; border-color: #17344a !important; }
+      .sync-merge-table-wrap .dataTables_info,
+      .sync-admin-merge-review .dataTables_info { color: #5c6f80; font-size: 0.85rem; }
+      .sync-merge-detail-card { border: 1px solid #dce6ef; border-radius: 16px; background: linear-gradient(180deg, #ffffff 0%%, #fbfdff 100%%); box-shadow: 0 8px 20px rgba(20, 39, 57, 0.05); }
+      .sync-merge-detail-card .card-title { font-size: 1rem; font-weight: 700; color: #17344a; }
+      .sync-merge-detail-card dt { color: #6a7a88; font-weight: 700; }
+      .sync-merge-detail-card dd { color: #243f55; }
+      .sync-comparison-modal-shell { display: grid; gap: 16px; }
+      .sync-comparison-modal-intro { padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #f6fbff 0%%, #edf4fb 100%%); border: 1px solid #d8e5f0; }
+      .sync-comparison-modal-kicker { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7785; margin-bottom: 6px; font-weight: 700; }
+      .sync-comparison-modal-title { display: block; font-size: 1.2rem; font-weight: 700; color: #16344b; margin-bottom: 6px; }
+      .sync-comparison-modal-note { color: #587083; font-size: 0.92rem; margin: 0; }
+      .sync-comparison-modal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.95fr); gap: 14px; }
+      .sync-comparison-modal-card { border: 1px solid #d8e2eb; border-radius: 16px; background: #ffffff; padding: 16px; }
+      .sync-comparison-modal-card-title { font-size: 0.9rem; font-weight: 700; color: #18354d; margin-bottom: 10px; }
+      .sync-comparison-modal-card-subtitle { color: #687987; font-size: 0.85rem; margin-bottom: 12px; }
+      .sync-source-summary { margin-bottom: 0; }
+      .sync-source-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+      .sync-modal-upload .shiny-input-container { margin-bottom: 0; }
+      .sync-diff-card { border-left: 4px solid #ccc; margin-bottom: 10px; border-radius: 4px; background: #fff; }
+      .sync-diff-card.sync-insert { border-color: #43893e; }
+      .sync-diff-card.sync-update { border-color: #f9ca54; }
+      .sync-diff-card.sync-delete { border-color: #c03b2b; }
+      .sync-diff-header { padding: 7px 12px; font-size: 0.82em; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+      .sync-diff-card.sync-insert .sync-diff-header { background: #edf7ea; }
+      .sync-diff-card.sync-update .sync-diff-header { background: #fef9ec; }
+      .sync-diff-card.sync-delete .sync-diff-header { background: #fdecea; }
+      .sync-diff-body { padding: 4px 0; }
+      .sync-diff-row { display: grid; grid-template-columns: 160px 1fr; font-size: 0.8em; padding: 2px 12px; }
+      .sync-diff-row.changed { grid-template-columns: 160px 1fr auto 1fr; }
+      .sync-diff-row.deleted { grid-template-columns: 160px 1fr; }
+      .sync-diff-field { color: #666; font-family: monospace; }
+      .sync-val-before { font-family: monospace; background: #fff3cd; padding: 1px 4px; border-radius: 2px; }
+      .sync-val-after  { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
+      .sync-val-new    { font-family: monospace; background: #d4edda; padding: 1px 4px; border-radius: 2px; }
+      .sync-val-delete { font-family: monospace; background: #f8d7da; padding: 1px 4px; border-radius: 2px; }
+      .sync-diff-arrow { color: #888; padding: 0 6px; }
+      .sync-section-badge { display: inline-flex; gap: 4px; margin-left: 8px; }
+      .sync-section-badge .badge { font-size: 0.72em; font-weight: 600; vertical-align: middle; }
+      .sync-diff-actions { margin-left: auto; }
+      @media (max-width: 991.98px) {
+        .sync-updates-hero { grid-template-columns: 1fr; }
+        .sync-updates-hero-top { grid-template-columns: 1fr; }
+        .sync-auth-admin-grid { grid-template-columns: 1fr; }
+        .sync-auth-ready-grid { grid-template-columns: 1fr; }
+        .sync-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .sync-comparison-modal-grid { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 575.98px) {
+        .sync-updates-secondary, .sync-merge-summary-stats, .sync-summary-grid, .sync-auth-ready-grid { grid-template-columns: 1fr; }
+        .sync-merge-toolbar { flex-direction: column; align-items: stretch; }
+        .sync-auth-header { flex-direction: column; }
+      }
+    "))
   )
 }
 
@@ -226,6 +241,9 @@ mod_sync_ui <- function(id) {
 mod_sync_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    mod_auth_server("auth_embedded", state, con)
+    mod_admin_merge_server("admin_merge", state, con)
+
     section_groups <- list(
       site = c("admin", "env", "su"),
       soil = c("humus", "mineral", "other"),
@@ -271,6 +289,18 @@ mod_sync_server <- function(id, state, con) {
     is_authenticated <- reactive({
       isTRUE(state$AuthAuthenticated)
     })
+
+    focus_auth_card <- function() {
+      shinyjs::runjs(sprintf(
+        "(function() { var el = document.getElementById('%s'); if (!el) return; el.classList.add('is-focused'); el.scrollIntoView({behavior: 'smooth', block: 'center'}); if (el.focus) { el.focus({preventScroll: true}); } setTimeout(function() { el.classList.remove('is-focused'); }, 1800); })();",
+        ns("sync_auth_card_anchor")
+      ))
+    }
+
+    observeEvent(state$SyncFocusAuthRequest, {
+      req(state$SyncFocusAuthRequest)
+      focus_auth_card()
+    }, ignoreInit = TRUE)
 
     # ── Current project from state ────────────────────────────────────────────
     current_project_id <- reactive({
@@ -461,6 +491,10 @@ mod_sync_server <- function(id, state, con) {
       rv_last_auth_cloud_ready(auth_cloud_ready)
     })
 
+    observe({
+      state$SyncCompareSource <- compare_source_requested()
+    })
+
     output$project_badge <- renderUI({
       pid <- current_project_id()
       if (!is.null(pid) && nzchar(as.character(pid))) {
@@ -470,33 +504,114 @@ mod_sync_server <- function(id, state, con) {
 
     output$changes_snapshot <- renderUI({
       counts <- reactive_summary()$total
-      div(
-        class = "sync-summary-card",
-        div(
-          class = "sync-summary-header",
-          span(class = "sync-summary-title", "Pending updates"),
-          span(class = "sync-summary-total", counts[["total"]] %||% 0L)
-        ),
-        div(
-          class = "sync-summary-grid",
+      actionButton(
+        ns("open_updates_details"),
+        label = tags$span(
+          class = "action-label",
           div(
-            class = "sync-summary-chip is-insert",
-            span(class = "sync-summary-chip-label", "New"),
-            span(class = "sync-summary-chip-value", counts[["insert"]] %||% 0L)
+            class = "sync-summary-header",
+            span(
+              class = "sync-summary-titleline",
+              icon("clipboard-list", class = "sync-card-label-icon"),
+              span(class = "sync-summary-title", "Pending updates")
+            ),
+            span(class = "sync-summary-total", counts[["total"]] %||% 0L)
           ),
           div(
-            class = "sync-summary-chip is-update",
-            span(class = "sync-summary-chip-label", "Updated"),
-            span(class = "sync-summary-chip-value", counts[["update"]] %||% 0L)
+            class = "sync-summary-headline",
+            span(class = "fw-bold text-dark", if ((counts[["total"]] %||% 0L) > 0L) "Review before push" else "No pending edits"),
+            icon("chevron-right")
           ),
+          div(class = "sync-summary-meta", "Open the expanded review to inspect site, soil, vegetation, and project changes in detail."),
           div(
-            class = "sync-summary-chip is-delete",
-            span(class = "sync-summary-chip-label", "Deleted"),
-            span(class = "sync-summary-chip-value", counts[["delete"]] %||% 0L)
+            class = "sync-summary-grid",
+            div(
+              class = "sync-summary-chip is-insert",
+              span(class = "sync-summary-chip-label", "New"),
+              span(class = "sync-summary-chip-value", counts[["insert"]] %||% 0L)
+            ),
+            div(
+              class = "sync-summary-chip is-update",
+              span(class = "sync-summary-chip-label", "Updated"),
+              span(class = "sync-summary-chip-value", counts[["update"]] %||% 0L)
+            ),
+            div(
+              class = "sync-summary-chip is-delete",
+              span(class = "sync-summary-chip-label", "Deleted"),
+              span(class = "sync-summary-chip-value", counts[["delete"]] %||% 0L)
+            )
           )
-        )
+        ),
+        class = "sync-summary-card btn btn-light"
       )
     })
+
+    show_pending_updates_modal <- function() {
+      showModal(modalDialog(
+        title = "Pending updates",
+        div(
+          class = "sync-comparison-modal-shell",
+          div(
+            class = "sync-comparison-modal-intro",
+            span(class = "sync-comparison-modal-kicker", "Change review"),
+            span(class = "sync-comparison-modal-title", "Inspect every pending change before you push"),
+            p(class = "sync-comparison-modal-note", "Review record-level changes by workflow area. You can still revert individual records or full sections from this window.")
+          ),
+          bslib::accordion(
+            id = ns("acc_changes"),
+            open = FALSE,
+            bslib::accordion_panel(
+              title = div(
+                style = "display:inline-flex;align-items:center;",
+                tagList(icon("map-location-dot"), " Site"),
+                uiOutput(ns("badges_site"), inline = TRUE)
+              ),
+              value = "site",
+              uiOutput(ns("section_actions_site")),
+              uiOutput(ns("cards_admin")),
+              uiOutput(ns("cards_env")),
+              uiOutput(ns("cards_su"))
+            ),
+            bslib::accordion_panel(
+              title = div(
+                style = "display:inline-flex;align-items:center;",
+                tagList(icon("layer-group"), " Soil"),
+                uiOutput(ns("badges_soil"), inline = TRUE)
+              ),
+              value = "soil",
+              uiOutput(ns("section_actions_soil")),
+              uiOutput(ns("cards_humus")),
+              uiOutput(ns("cards_mineral")),
+              uiOutput(ns("cards_other"))
+            ),
+            bslib::accordion_panel(
+              title = div(
+                style = "display:inline-flex;align-items:center;",
+                tagList(icon("leaf"), " Vegetation"),
+                uiOutput(ns("badges_veg"), inline = TRUE)
+              ),
+              value = "veg",
+              uiOutput(ns("section_actions_veg")),
+              uiOutput(ns("cards_veg")),
+              uiOutput(ns("cards_herbarium"))
+            ),
+            bslib::accordion_panel(
+              title = div(
+                style = "display:inline-flex;align-items:center;",
+                tagList(icon("folder-open"), " Project"),
+                uiOutput(ns("badges_project"), inline = TRUE)
+              ),
+              value = "project",
+              uiOutput(ns("section_actions_project")),
+              uiOutput(ns("cards_metadata"))
+            )
+          )
+        ),
+        easyClose = TRUE,
+        size = "l",
+        footer = modalButton("Close")
+      ))
+    }
 
     output$comparison_status <- renderUI({
       context <- comparison_context()
@@ -510,25 +625,18 @@ mod_sync_server <- function(id, state, con) {
         class = "sync-source-summary",
         div(
           class = "sync-source-badges",
-          span(class = "badge bg-primary", paste("Project:", pid)),
-          span(class = "badge bg-dark", paste("Using:", source_info$resolved_label)),
+          span(class = "sync-card-pill sync-card-pill-info", paste("Project:", pid)),
+          span(class = "sync-card-pill sync-card-pill-neutral", paste("Using:", source_info$resolved_label)),
           if (identical(source_info$resolved_kind, "merge_request") && !is.null(source_info$resolved_merge_request_id)) {
-            span(class = "badge text-bg-warning", paste("Pending MR:", source_info$resolved_merge_request_id))
+            span(class = "sync-card-pill sync-card-pill-warn", paste("Pending MR:", source_info$resolved_merge_request_id))
           },
           if (!identical(source_info$requested, source_info$resolved)) {
-            span(class = "badge text-bg-warning", paste("Selected:", source_info$requested_label))
-          },
-          if (isTRUE(is_authenticated()) && isTRUE(source_info$cloud_available)) {
-            span(class = "badge text-bg-success", "Master available")
-          } else if (!isTRUE(is_authenticated())) {
-            span(class = "badge text-bg-secondary", "Sign in to use Master")
-          } else {
-            span(class = "badge text-bg-secondary", "Master unavailable")
+            span(class = "sync-card-pill sync-card-pill-neutral", paste("Selected:", source_info$requested_label))
           },
           if (isTRUE(source_info$backup_available)) {
-            span(class = "badge text-bg-info", "Backup registered")
+            span(class = "sync-card-pill sync-card-pill-info", "Backup registered")
           } else {
-            span(class = "badge text-bg-secondary", "No backup registered")
+            span(class = "sync-status-pill sync-status-pill-muted", "No backup registered")
           }
         ),
         div(
@@ -556,7 +664,11 @@ mod_sync_server <- function(id, state, con) {
         ns("open_comparison"),
         label = tags$span(
           class = "d-block",
-          span(class = "sync-comparison-label", "Current comparison baseline"),
+          span(
+            class = "sync-comparison-label",
+            icon("database", class = "sync-card-label-icon"),
+            span("Current comparison baseline")
+          ),
           tags$span(
             class = "sync-comparison-headline",
             tags$span(source_info$resolved_label %||% "Not set"),
@@ -574,22 +686,129 @@ mod_sync_server <- function(id, state, con) {
           ),
           tags$span(
             class = "sync-comparison-badges",
-            span(class = "badge text-bg-light", paste("Selected:", source_info$requested_label %||% source_info$resolved_label)),
-            if (isTRUE(source_info$cloud_available)) {
-              span(class = "badge text-bg-success", "Master ready")
-            } else if (!isTRUE(is_authenticated())) {
-              span(class = "badge text-bg-secondary", "Sign in for Master")
-            } else {
-              span(class = "badge text-bg-secondary", "Master unavailable")
-            },
+            span(class = "sync-card-pill sync-card-pill-neutral", paste("Selected:", source_info$requested_label %||% source_info$resolved_label)),
             if (identical(source_info$resolved_kind, "merge_request") && !is.null(source_info$resolved_merge_request_id)) {
-              span(class = "badge text-bg-warning", paste("MR", source_info$resolved_merge_request_id))
+              span(class = "sync-card-pill sync-card-pill-warn", paste("MR", source_info$resolved_merge_request_id))
             }
           )
         ),
         class = "sync-comparison-card btn btn-light"
       )
     })
+
+    output$merge_request_overview <- renderUI({
+      project_rows <- pending_project_merge_requests()
+      user_rows <- pending_user_merge_requests()
+
+      latest_row <- if (!is.null(project_rows) && nrow(project_rows) > 0) {
+        project_rows[1, , drop = FALSE]
+      } else if (!is.null(user_rows) && nrow(user_rows) > 0) {
+        user_rows[1, , drop = FALSE]
+      } else {
+        NULL
+      }
+
+      latest_title <- if (!is.null(latest_row) && nrow(latest_row) > 0) {
+        sprintf("MR #%s", latest_row$id[[1]])
+      } else if (!isTRUE(is_authenticated())) {
+        "Sign in to review merge requests"
+      } else {
+        "No active merge request"
+      }
+
+      latest_meta <- if (!is.null(latest_row) && nrow(latest_row) > 0) {
+        submitted_text <- latest_row$submitted_utc[[1]]
+        sprintf(
+          "%s for project %s with %s row%s.",
+          as.character(submitted_text %||% "Recently submitted"),
+          latest_row$project_id[[1]] %||% "",
+          .merge_request_total_rows(latest_row$record_counts[[1]]),
+          if (.merge_request_total_rows(latest_row$record_counts[[1]]) == 1) "" else "s"
+        )
+      } else if (!isTRUE(is_authenticated())) {
+        "Merge requests are available after authentication and a successful push to master."
+      } else {
+        "Push local updates to create a merge request, or open this panel to review past submissions."
+      }
+
+      actionButton(
+        ns("open_merge_requests"),
+        label = tags$span(
+          class = "action-label",
+          span(
+            class = "sync-merge-summary-label",
+            icon("code-branch", class = "sync-card-label-icon"),
+            span("Merge requests")
+          ),
+          tags$span(
+            class = "sync-merge-summary-headline",
+            tags$span(latest_title),
+            icon("chevron-down")
+          ),
+          tags$span(class = "sync-merge-summary-meta d-block", latest_meta),
+          tags$span(
+            class = "sync-merge-summary-badges",
+            span(class = "sync-card-pill sync-card-pill-neutral", paste("Project pending:", nrow(project_rows))),
+            span(class = "sync-card-pill sync-card-pill-neutral", paste("My pending:", nrow(user_rows)))
+          ),
+          tags$span(
+            class = "sync-merge-summary-stats",
+            tags$span(
+              class = "sync-merge-summary-stat",
+              span(class = "sync-merge-summary-stat-label", "Current project"),
+              span(class = "sync-merge-summary-stat-value", nrow(project_rows))
+            ),
+            tags$span(
+              class = "sync-merge-summary-stat",
+              span(class = "sync-merge-summary-stat-label", "All pending"),
+              span(class = "sync-merge-summary-stat-value", nrow(user_rows))
+            )
+          )
+        ),
+        class = "sync-merge-summary-card btn btn-light"
+      )
+    })
+
+    show_merge_requests_modal <- function() {
+      showModal(modalDialog(
+        title = "Merge requests",
+        bslib::navset_pill(
+          id = ns("merge_modal_tabs"),
+          bslib::nav_panel(
+            title = "My merge requests",
+            value = "mine",
+            div(
+              class = "sync-merge-panel",
+              div(
+                class = "sync-merge-toolbar",
+                checkboxInput(ns("hide_approved"), "Hide approved/merged", value = isTRUE(input$hide_approved)),
+                checkboxInput(ns("hide_rejected"), "Hide rejected", value = isTRUE(input$hide_rejected)),
+                actionButton(
+                  ns("mr_refresh"),
+                  label = tagList(icon("rotate"), "Refresh"),
+                  class = "btn btn-outline-secondary btn-sm"
+                )
+              ),
+              div(class = "sync-merge-table-wrap", DT::dataTableOutput(ns("tbl_mrs"))),
+              uiOutput(ns("mr_detail"))
+            )
+          ),
+          if (isTRUE(auth_is_admin(state))) {
+            bslib::nav_panel(
+              title = "Review queue",
+              value = "review",
+              div(
+                class = "sync-merge-panel sync-merge-review-shell",
+                mod_admin_merge_ui(ns("admin_merge"))
+              )
+            )
+          }
+        ),
+        easyClose = TRUE,
+        size = "l",
+        footer = modalButton("Close")
+      ))
+    }
 
     reactive_summary <- reactive({
       rv_refresh()
@@ -683,6 +902,14 @@ mod_sync_server <- function(id, state, con) {
         size = "l",
         footer = modalButton("Close")
       ))
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$open_updates_details, {
+      show_pending_updates_modal()
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$open_merge_requests, {
+      show_merge_requests_modal()
     }, ignoreInit = TRUE)
 
 
@@ -1134,9 +1361,8 @@ mod_sync_server <- function(id, state, con) {
       selected_source_info <- comparison_context()$source_info
 
       if (!is_authenticated()) {
-        state$PostAuthMainTab <- "Sync"
-        bslib::nav_select("main_tabs", selected = "Auth", session = session$rootScope())
-        .set_sync_status("Sign in to push changes. You will return to Sync after authentication.", error = FALSE)
+        state$SyncFocusAuthRequest <- as.numeric(Sys.time())
+        .set_sync_status("Sign in within Sync to push changes.", error = FALSE)
         return()
       }
       if (!has_any_changes()) {
@@ -1177,7 +1403,7 @@ mod_sync_server <- function(id, state, con) {
         }
         rv_compare_source_preference(sync_compare_source_merge_request_value(mr_id))
         .set_sync_status(message = msg, counts = pending_counts, error = FALSE)
-        bslib::nav_select(session$ns("sync_tabs"), selected = "merge_requests")
+        show_merge_requests_modal()
       }, error = function(e) {
         .set_sync_status(conditionMessage(e), error = TRUE)
       })

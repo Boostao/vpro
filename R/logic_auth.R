@@ -7,6 +7,7 @@ auth_init_state <- function(state) {
   shiny::isolate({
     if (is.null(state$AuthAuthenticated)) state$AuthAuthenticated <- FALSE
     if (is.null(state$AuthUser))          state$AuthUser          <- NULL
+    if (is.null(state$AuthFullName))      state$AuthFullName      <- NULL
     if (is.null(state$AuthUserId))        state$AuthUserId        <- NULL
     if (is.null(state$AuthRole))          state$AuthRole          <- NULL
     if (is.null(state$AuthPermissions))   state$AuthPermissions   <- character(0)
@@ -35,10 +36,53 @@ auth_init_state <- function(state) {
   role <- user$app_role[1]
   state$AuthAuthenticated <- TRUE
   state$AuthUser          <- user$email[1]
+  state$AuthFullName      <- user$full_name[1] %||% NULL
   state$AuthUserId        <- user$id[1]
   state$AuthRole          <- role
   state$AuthPermissions   <- .auth_permissions(role)
   state$User              <- user$email[1]
+}
+
+auth_update_profile <- function(con, state, email, full_name = NULL) {
+  auth_init_state(state)
+  if (!auth_is_authenticated(state)) {
+    return(list(ok = FALSE, message = "Sign in required"))
+  }
+
+  email <- trimws(as.character(email %||% ""))
+  full_name <- trimws(as.character(full_name %||% ""))
+  if (!nzchar(email) || !grepl("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email, perl = TRUE)) {
+    return(list(ok = FALSE, message = "Please enter a valid email address"))
+  }
+
+  user_id <- shiny::isolate(state$AuthUserId)
+  existing <- DBI::dbGetQuery(
+    con,
+    "SELECT id FROM master.admin.users WHERE lower(email) = lower(?) AND id <> ? LIMIT 1",
+    list(email, user_id)
+  )
+  if (nrow(existing) > 0) {
+    return(list(ok = FALSE, message = "That email is already used by another account"))
+  }
+
+  DBI::dbExecute(
+    con,
+    "UPDATE master.admin.users SET email = ?, full_name = ? WHERE id = ?",
+    list(email, if (nzchar(full_name)) full_name else NA_character_, user_id)
+  )
+
+  user <- DBI::dbGetQuery(
+    con,
+    "SELECT id, email, full_name, app_role, is_active
+     FROM master.admin.users WHERE id = ? LIMIT 1",
+    list(user_id)
+  )
+  if (nrow(user) == 0) {
+    return(list(ok = FALSE, message = "Account could not be reloaded after update"))
+  }
+
+  .auth_set_state(state, user)
+  list(ok = TRUE, message = "Profile updated")
 }
 
 auth_verify_password <- function(stored_hash, password) {
@@ -187,6 +231,7 @@ auth_logout <- function(state) {
   auth_init_state(state)
   state$AuthAuthenticated <- FALSE
   state$AuthUser          <- NULL
+  state$AuthFullName      <- NULL
   state$AuthUserId        <- NULL
   state$AuthRole          <- NULL
   state$AuthPermissions   <- character(0)

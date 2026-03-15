@@ -539,9 +539,6 @@ ui <- tagList(
   nav_panel(uiOutput("nav_sync_label"), value = "Sync",
     mod_sync_ui("sync")
   ),
-  nav_panel(span(class = "vpro-auth-tab-label", tagList(icon("user-shield"), "Auth")), value = "Auth",
-    mod_auth_ui("auth")
-  ),
   nav_item(uiOutput("nav_plot_context")),
   nav_item(mod_auth_status_ui("auth_status")),
   nav_panel(tagList(icon("gear"), "Administration"), value = "Administration",

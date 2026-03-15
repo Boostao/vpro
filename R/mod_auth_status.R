@@ -9,6 +9,60 @@ mod_auth_status_ui <- function(id) {
   uiOutput(ns("auth_widget"))
 }
 
+.auth_role_palette <- function(role) {
+  if (identical(role, "admin")) {
+    list(
+      icon = "shield-fill",
+      background = "#e4f6ff",
+      foreground = "#0c6f90",
+      border = "#bfe3f1"
+    )
+  } else {
+    list(
+      icon = "cloud",
+      background = "#e3f7ee",
+      foreground = "#1d7a56",
+      border = "#bee7d3"
+    )
+  }
+}
+
+auth_role_badge_ui <- function(role, label, input_id = NULL, ns = identity) {
+  palette <- .auth_role_palette(role)
+  badge <- span(
+    class = "badge rounded-pill d-inline-flex align-items-center gap-1",
+    style = paste(
+      "background-color:", palette$background, ";",
+      "color:", palette$foreground, ";",
+      "border: 1px solid", palette$border, ";",
+      "font-weight: 700; font-size: 0.85rem; padding: 0.48rem 0.78rem;"
+    ),
+    bsicons::bs_icon(palette$icon),
+    label
+  )
+
+  if (is.null(input_id)) {
+    return(badge)
+  }
+
+  actionLink(
+    ns(input_id),
+    badge,
+    style = "text-decoration: none;"
+  )
+}
+
+auth_logout_icon_ui <- function(input_id, ns = identity, color = "#5f7283") {
+  actionLink(
+    ns(input_id),
+    bsicons::bs_icon("box-arrow-right"),
+    style = paste(
+      "color:", color, ";",
+      "font-size: 1.05rem; text-decoration: none; line-height: 1;"
+    )
+  )
+}
+
 #' @param id     Module id.
 #' @param state  Reactive values carrying auth state.
 #' @param con    DuckDB connection (cloud may or may not be attached).
@@ -20,13 +74,14 @@ mod_auth_status_server <- function(id, state, con) {
     # Navigation signal — parent observe()s this and calls nav_select()
     nav_dest <- reactiveVal(NULL)
     
-    observeEvent(input$go_auth, { 
-      nav_dest("Auth")
+    observeEvent(input$go_auth, {
+      nav_dest("Sync")
       # Reset to NULL after brief delay so next click is detected
       shinyjs::delay(100, nav_dest(NULL))
     })
 
     observeEvent(input$logout, {
+      if (is_cloud_connected(con)) detach_db(con, "master")
       auth_logout(state)
     })
 
@@ -51,34 +106,16 @@ mod_auth_status_server <- function(id, state, con) {
             style = "text-decoration: none; cursor: pointer;"
           )
       } else if (identical(role, "admin")) {
-        # Admin state: bright cyan with white text
         badge <- div(
           class = "d-inline-flex align-items-center gap-2",
-          span(
-            class = "badge rounded-pill d-inline-flex align-items-center gap-1",
-            style = "background-color: #00d9ff; color: #ffffff; font-weight: 700; font-size: 0.85rem;",
-            bsicons::bs_icon("shield-fill"), user_email
-          ),
-          actionLink(
-            ns("logout"), 
-            bsicons::bs_icon("box-arrow-right"),
-            style = "color: #ffffff; font-size: 1.1rem; text-decoration: none; opacity: 0.9; transition: opacity 0.2s;"
-          )
+          auth_role_badge_ui("admin", user_email, input_id = "go_auth", ns = ns),
+          auth_logout_icon_ui("logout", ns = ns, color = "#0c6f90")
         )
       } else {
-        # Guest state: bright lime green with white text
         badge <- div(
           class = "d-inline-flex align-items-center gap-2",
-          span(
-            class = "badge rounded-pill d-inline-flex align-items-center gap-1",
-            style = "background-color: #2ecc71; color: #ffffff; font-weight: 700; font-size: 0.85rem;",
-            bsicons::bs_icon("cloud"), user_email
-          ),
-          actionLink(
-            ns("logout"), 
-            bsicons::bs_icon("box-arrow-right"),
-            style = "color: #ffffff; font-size: 1.1rem; text-decoration: none; opacity: 0.9; transition: opacity 0.2s;"
-          )
+          auth_role_badge_ui("guest", user_email, input_id = "go_auth", ns = ns),
+          auth_logout_icon_ui("logout", ns = ns, color = "#1d7a56")
         )
       }
 

@@ -620,8 +620,12 @@ server <- function(input, output, session) {
   output$nav_sync_label <- renderUI({
     state$SyncVersion
     project_id <- normalize_context_value(state$CurrProject %||% state$PrefProject)
+    compare_source <- state$SyncCompareSource %||% NULL
     pending_counts <- if (nzchar(project_id)) {
-      tryCatch(sync_get_pending_summary(con, project_id = project_id)$total[c("insert", "update", "delete")], error = function(e) c(insert = 0L, update = 0L, delete = 0L))
+      tryCatch(
+        sync_get_pending_summary(con, project_id = project_id, compare_source = compare_source)$total[c("insert", "update", "delete")],
+        error = function(e) c(insert = 0L, update = 0L, delete = 0L)
+      )
     } else {
       c(insert = 0L, update = 0L, delete = 0L)
     }
@@ -1381,35 +1385,13 @@ server <- function(input, output, session) {
   # Merge Module (standalone tab unwired; Merge Review lives in Admin > Merge Review)
   # mod_merge_server("merge", state, con)
 
-  # Auth Module
-  mod_auth_server("auth", state, con)
-
-  auth_nav_last_state <- reactiveVal(isTRUE(isolate(state$AuthAuthenticated)))
-  observe({
-    auth_now <- isTRUE(state$AuthAuthenticated)
-    auth_prev <- isTRUE(auth_nav_last_state())
-
-    if (auth_now && !auth_prev) {
-      dest <- state$PostAuthMainTab %||% NULL
-      if (!is.null(dest) && nzchar(as.character(dest))) {
-        state$PostAuthMainTab <- NULL
-        bslib::nav_select("main_tabs", selected = as.character(dest), session = session)
-      }
-    }
-
-    if (!auth_now && auth_prev) {
-      state$PostAuthMainTab <- NULL
-    }
-
-    auth_nav_last_state(auth_now)
-  })
-
   # Auth Status Widget
   auth_status_nav_signal <- mod_auth_status_server("auth_status", state, con)
   observe({
     dest <- auth_status_nav_signal()
     if (!is.null(dest)) {
       bslib::nav_select("main_tabs", selected = dest, session = session)
+      state$SyncFocusAuthRequest <- as.numeric(Sys.time())
     }
   })
   

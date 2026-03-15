@@ -11,59 +11,156 @@ mod_auth_server <- function(id, state, con) {
     auth_init_state(state)
     rv <- reactiveValues(
       login_status      = "",
+      profile_msg       = "",
       change_pass_msg   = "",
-      grant_msg         = ""
+      grant_msg         = "",
+      editing_field     = NULL
     )
 
     output$auth_panel <- renderUI({
-      if (auth_is_authenticated(state)) {
-        tagList(
-          p(class = "fw-bold",
-            if (auth_is_admin(state)) "Admin:" else "Guest:",
-            state$AuthUser
-          ),
-          actionButton(ns("auth_logout"), "Sign Out", class = "btn-outline-secondary btn-sm"),
-          if (auth_is_admin(state)) tagList(
-            hr(),
-            card(
-              card_header("Change Password"),
-              passwordInput(ns("old_pass"),  "Current password"),
-              passwordInput(ns("new_pass"),  "New password (min 8 chars)"),
-              passwordInput(ns("new_pass2"), "Confirm new password"),
-              actionButton(ns("change_pass"), "Update Password", class = "btn-warning btn-sm"),
-              textOutput(ns("change_pass_status"))
+      is_authenticated <- isTRUE(state$AuthAuthenticated)
+      is_admin <- is_authenticated && identical(state$AuthRole, "admin")
+
+      if (is_authenticated) {
+        display_name <- trimws(as.character(state$AuthFullName %||% ""))
+        if (!nzchar(display_name)) {
+          display_name <- state$AuthUser %||% "Signed in"
+        }
+
+        name_is_editing <- identical(rv$editing_field, "name")
+        email_is_editing <- identical(rv$editing_field, "email")
+        role_badge <- auth_role_badge_ui(
+          if (is_admin) "admin" else "guest",
+          if (is_admin) "Admin" else "Guest"
+        )
+
+        div(
+          class = "sync-auth-panel sync-auth-panel-ready",
+          div(
+            class = "sync-auth-header",
+            div(
+              class = "sync-auth-header-copy",
+              span(class = "sync-auth-kicker", "Cloud account"),
+              h4(class = "sync-auth-title", display_name),
+              p(
+                class = "sync-auth-note",
+                if (is_admin) {
+                  "Admin access is active. You can push, inspect merge requests, and review the queue from Sync."
+                } else {
+                  "Cloud sync is ready. You can push updates and track your merge requests from this page."
+                }
+              )
             ),
-            card(
-              card_header("Grant Admin Access"),
-              textInput(ns("grant_email"), "User email"),
-              passwordInput(ns("grant_pass"), "Initial password (min 8 chars)"),
-              actionButton(ns("grant_admin"), "Grant Admin", class = "btn-danger btn-sm"),
-              textOutput(ns("grant_status"))
+            div(
+              class = "sync-auth-header-badge",
+              actionLink(
+                ns("auth_logout"),
+                bsicons::bs_icon("box-arrow-right"),
+                class = "sync-auth-logout-chip",
+                `aria-label` = "Log out"
+              )
             )
-          )
+          ),
+          div(
+            class = "sync-auth-ready-grid",
+            div(
+              class = "sync-auth-ready-stat",
+              div(
+                class = "sync-auth-ready-stat-head",
+                span(class = "sync-auth-ready-label", "Name"),
+                if (!name_is_editing) {
+                  actionLink(ns("edit_name"), bsicons::bs_icon("pencil-square"), class = "sync-auth-edit-link")
+                }
+              ),
+              if (name_is_editing) {
+                div(
+                  class = "sync-auth-inline-editor",
+                  textInput(ns("inline_name"), NULL, value = state$AuthFullName %||% ""),
+                  div(
+                    class = "sync-auth-inline-actions",
+                    actionButton(ns("save_name_inline"), label = bsicons::bs_icon("check-lg"), class = "btn btn-sm btn-primary"),
+                    actionButton(ns("cancel_profile_edit"), label = bsicons::bs_icon("x-lg"), class = "btn btn-sm btn-outline-secondary")
+                  )
+                )
+              } else {
+                span(class = "sync-auth-ready-value", display_name)
+              }
+            ),
+            div(
+              class = "sync-auth-ready-stat",
+              div(
+                class = "sync-auth-ready-stat-head",
+                span(class = "sync-auth-ready-label", "Email"),
+                if (!email_is_editing) {
+                  actionLink(ns("edit_email"), bsicons::bs_icon("pencil-square"), class = "sync-auth-edit-link")
+                }
+              ),
+              if (email_is_editing) {
+                div(
+                  class = "sync-auth-inline-editor",
+                  textInput(ns("inline_email"), NULL, value = state$AuthUser %||% ""),
+                  div(class = "sync-auth-inline-hint", "Enter a valid email address."),
+                  div(
+                    class = "sync-auth-inline-actions",
+                    actionButton(ns("save_email_inline"), label = bsicons::bs_icon("check-lg"), class = "btn btn-sm btn-primary"),
+                    actionButton(ns("cancel_profile_edit"), label = bsicons::bs_icon("x-lg"), class = "btn btn-sm btn-outline-secondary")
+                  )
+                )
+              } else {
+                span(class = "sync-auth-ready-value", state$AuthUser %||% "Signed in")
+              }
+            ),
+            div(
+              class = "sync-auth-ready-stat",
+              div(
+                class = "sync-auth-ready-stat-head",
+                span(class = "sync-auth-ready-label", "Role")
+              ),
+              div(class = "sync-auth-role-value", role_badge),
+              if (is_admin) {
+                div(
+                  class = "sync-auth-role-actions",
+                  actionButton(ns("open_password_modal"), tagList(bsicons::bs_icon("key"), "Change password"), class = "btn btn-sm sync-auth-role-btn"),
+                  actionButton(ns("open_access_modal"), tagList(bsicons::bs_icon("person-gear"), "Manage access"), class = "btn btn-sm sync-auth-role-btn")
+                )
+              }
+            )
+          ),
+          div(class = "sync-auth-status-line", textOutput(ns("profile_status"), container = span))
         )
       } else {
-        tagList(
-          p(class = "text-muted small", "Sign in to enable cloud sync"),
-          navset_tab(
+        div(
+          class = "sync-auth-panel",
+          div(
+            class = "sync-auth-header-copy",
+            span(class = "sync-auth-kicker", "Authentication"),
+            h4(class = "sync-auth-title", "Sign in to unlock cloud sync"),
+            p(class = "sync-auth-note", "Guest sign-in is enough to create merge requests. Admin sign-in adds review and management capabilities.")
+          ),
+          bslib::navset_pill(
             id = ns("login_tabs"),
-            nav_panel("Continue as Guest",
-              div(class = "mt-3",
+            bslib::nav_panel(
+              title = "Continue as Guest",
+              value = "guest",
+              div(
+                class = "sync-auth-form-grid mt-3",
                 textInput(ns("guest_email"), "Email"),
-                textInput(ns("guest_name"),  "Full Name",
-                          placeholder = "Optional"),
-                actionButton(ns("guest_login"), "Continue", class = "btn-primary")
+                textInput(ns("guest_name"), "Full Name", placeholder = "Optional"),
+                actionButton(ns("guest_login"), "Continue", class = "btn btn-primary sync-auth-submit")
               )
             ),
-            nav_panel("Admin Sign In",
-              div(class = "mt-3",
+            bslib::nav_panel(
+              title = "Admin Sign In",
+              value = "admin",
+              div(
+                class = "sync-auth-form-grid mt-3",
                 textInput(ns("admin_email"), "Email"),
                 passwordInput(ns("admin_pass"), "Password"),
-                actionButton(ns("admin_login"), "Sign In", class = "btn-primary")
+                actionButton(ns("admin_login"), "Sign In", class = "btn btn-primary sync-auth-submit")
               )
             )
           ),
-          textOutput(ns("login_status"))
+          div(class = "sync-auth-status-line", textOutput(ns("login_status"), container = span))
         )
       }
     })
@@ -139,7 +236,65 @@ mod_auth_server <- function(id, state, con) {
       if (is_cloud_connected(con)) detach_db(con, "master")
       auth_logout(state)
       rv$login_status <- ""
+      rv$profile_msg <- ""
+      rv$change_pass_msg <- ""
+      rv$grant_msg <- ""
+      rv$editing_field <- NULL
     })
+
+    observeEvent(input$edit_name, {
+      rv$profile_msg <- ""
+      rv$editing_field <- "name"
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$edit_email, {
+      rv$profile_msg <- ""
+      rv$editing_field <- "email"
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$cancel_profile_edit, {
+      rv$editing_field <- NULL
+      rv$profile_msg <- ""
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$save_name_inline, {
+      result <- tryCatch(
+        auth_update_profile(con, state, state$AuthUser %||% "", input$inline_name %||% ""),
+        error = function(e) list(ok = FALSE, message = conditionMessage(e))
+      )
+      rv$profile_msg <- result$message %||% ""
+      if (isTRUE(result$ok)) {
+        rv$editing_field <- NULL
+      }
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$save_email_inline, {
+      req(input$inline_email)
+      result <- tryCatch(
+        auth_update_profile(con, state, input$inline_email, state$AuthFullName %||% ""),
+        error = function(e) list(ok = FALSE, message = conditionMessage(e))
+      )
+      rv$profile_msg <- result$message %||% ""
+      if (isTRUE(result$ok)) {
+        rv$editing_field <- NULL
+      }
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$open_password_modal, {
+      rv$change_pass_msg <- ""
+      showModal(modalDialog(
+        title = "Change password",
+        passwordInput(ns("old_pass"), "Current password"),
+        passwordInput(ns("new_pass"), "New password (min 8 chars)"),
+        passwordInput(ns("new_pass2"), "Confirm new password"),
+        div(class = "sync-auth-status-line", textOutput(ns("change_pass_status"), container = span)),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("change_pass"), "Update Password", class = "btn btn-primary")
+        )
+      ))
+    }, ignoreInit = TRUE)
 
     # ---- Change password (admin only) ------------------------------------------
     observeEvent(input$change_pass, {
@@ -153,7 +308,25 @@ mod_auth_server <- function(id, state, con) {
         error = function(e) list(ok = FALSE, message = conditionMessage(e))
       )
       rv$change_pass_msg <- result$message
+      if (isTRUE(result$ok)) {
+        removeModal()
+      }
     })
+
+    observeEvent(input$open_access_modal, {
+      rv$grant_msg <- ""
+      showModal(modalDialog(
+        title = "Grant admin access",
+        textInput(ns("grant_email"), "User email"),
+        passwordInput(ns("grant_pass"), "Initial password (min 8 chars)"),
+        div(class = "sync-auth-status-line", textOutput(ns("grant_status"), container = span)),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("grant_admin"), "Grant Admin", class = "btn btn-primary")
+        )
+      ))
+    }, ignoreInit = TRUE)
 
     # ---- Grant admin -----------------------------------------------------------
     observeEvent(input$grant_admin, {
@@ -163,9 +336,13 @@ mod_auth_server <- function(id, state, con) {
         error = function(e) list(ok = FALSE, message = conditionMessage(e))
       )
       rv$grant_msg <- result$message
+      if (isTRUE(result$ok)) {
+        removeModal()
+      }
     })
 
     output$login_status       <- renderText(rv$login_status)
+    output$profile_status     <- renderText(rv$profile_msg)
     output$change_pass_status <- renderText(rv$change_pass_msg)
     output$grant_status       <- renderText(rv$grant_msg)
   })
