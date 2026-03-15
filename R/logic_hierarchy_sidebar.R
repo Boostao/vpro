@@ -16,6 +16,208 @@ hierarchy_sidebar_quote <- function(con, identifier) {
   as.character(DBI::dbQuoteIdentifier(con, identifier))
 }
 
+hierarchy_sidebar_empty_site_units_table <- function() {
+  "USysProjectSiteUnits"
+}
+
+hierarchy_sidebar_ensure_empty_site_units_table <- function(con) {
+  table_name <- hierarchy_sidebar_empty_site_units_table()
+  DBI::dbExecute(
+    con,
+    paste(
+      "CREATE TABLE IF NOT EXISTS", hierarchy_sidebar_quote(con, table_name), "(",
+      "projectid TEXT NOT NULL,",
+      "siteunit TEXT NOT NULL,",
+      "created_utc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,",
+      "UNIQUE(projectid, siteunit)",
+      ")"
+    )
+  )
+  invisible(table_name)
+}
+
+hierarchy_sidebar_read_empty_site_units <- function(con, project_id) {
+  empty <- data.frame(siteunit = character(0), stringsAsFactors = FALSE)
+  project_id <- hierarchy_sidebar_normalize_key(project_id)
+  table_name <- hierarchy_sidebar_empty_site_units_table()
+
+  if (!nzchar(project_id) || !DBI::dbExistsTable(con, table_name)) {
+    return(empty)
+  }
+
+  rows <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT DISTINCT siteunit FROM %s WHERE projectid = ? AND siteunit IS NOT NULL AND trim(CAST(siteunit AS VARCHAR)) <> '' ORDER BY siteunit",
+        hierarchy_sidebar_quote(con, table_name)
+      ),
+      list(project_id)
+    ),
+    error = function(e) empty
+  )
+
+  if (nrow(rows) == 0) return(empty)
+  rows$siteunit <- trimws(as.character(rows$siteunit))
+  rows[nzchar(rows$siteunit), , drop = FALSE]
+}
+
+hierarchy_sidebar_create_site_unit <- function(con, project_id, site_unit) {
+  project_id <- hierarchy_sidebar_normalize_key(project_id)
+  site_unit <- hierarchy_sidebar_normalize_key(site_unit)
+
+  if (!nzchar(project_id)) stop("Open a project before creating a site unit.")
+  if (!nzchar(site_unit)) stop("Site unit name is required.")
+
+  existing_scope <- read_project_site_unit_scope(con, project_id)
+  existing_site_units <- hierarchy_sidebar_normalize_key(unique(existing_scope$siteunit))
+  if (site_unit %in% existing_site_units) {
+    return(list(ok = TRUE, changed = FALSE, site_unit = site_unit, project_id = project_id))
+  }
+
+  table_name <- hierarchy_sidebar_ensure_empty_site_units_table(con)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "INSERT INTO %s (projectid, siteunit) VALUES (?, ?)",
+      hierarchy_sidebar_quote(con, table_name)
+    ),
+    list(project_id, site_unit)
+  )
+
+  list(ok = TRUE, changed = TRUE, site_unit = site_unit, project_id = project_id)
+}
+
+hierarchy_sidebar_create_plot <- function(con, project_id, plot_number, site_unit = NULL) {
+  project_id <- hierarchy_sidebar_normalize_key(project_id)
+  plot_number <- hierarchy_sidebar_normalize_key(plot_number)
+  site_unit <- hierarchy_sidebar_normalize_key(site_unit)
+
+  if (!nzchar(project_id)) stop("Open a project before creating a plot.")
+  if (!nzchar(plot_number)) stop("Plot number is required.")
+  if (!nzchar(site_unit)) stop("Choose a site unit before creating a plot.")
+  if (!DBI::dbExistsTable(con, "Env")) stop("Env table is not available.")
+  if (!DBI::dbExistsTable(con, "SU")) stop("SU table is not available.")
+
+  env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  su_fields <- tryCatch(DBI::dbListFields(con, "SU"), error = function(e) character(0))
+
+  env_plot_col <- hierarchy_sidebar_match_col(env_fields, c("PlotNumber", "plotnumber"))
+  env_project_col <- hierarchy_sidebar_match_col(env_fields, c("ProjectID", "projectid"))
+  env_modified_col <- hierarchy_sidebar_match_col(env_fields, c("local_modified_utc"))
+  su_plot_col <- hierarchy_sidebar_match_col(su_fields, c("PlotNumber", "plotnumber"))
+  su_site_col <- hierarchy_sidebar_match_col(su_fields, c("SiteUnit", "siteunit"))
+  su_modified_col <- hierarchy_sidebar_match_col(su_fields, c("local_modified_utc"))
+
+  if (any(is.na(c(env_plot_col, env_project_col, su_plot_col, su_site_col)))) {
+    stop("Env or SU table is missing required columns.")
+  }
+
+  env_existing <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT %s AS plotnumber, %s AS projectid FROM %s WHERE %s = ? LIMIT 1",
+        hierarchy_sidebar_quote(con, env_plot_col),
+        hierarchy_sidebar_quote(con, env_project_col),
+        hierarchy_sidebar_quote(con, "Env"),
+        hierarchy_sidebar_quote(con, env_plot_col)
+      ),
+      list(plot_number)
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(env_existing) > 0) {
+    existing_project <- hierarchy_sidebar_normalize_key(env_existing$projectid[[1]])
+    if (identical(existing_project, project_id)) {
+      stop(sprintf("Plot %s already exists in this project.", plot_number))
+    }
+    stop(sprintf("Plot %s already exists in project %s.", plot_number, existing_project))
+  }
+
+  su_existing <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT %s AS plotnumber FROM %s WHERE %s = ? LIMIT 1",
+        hierarchy_sidebar_quote(con, su_plot_col),
+        hierarchy_sidebar_quote(con, "SU"),
+        hierarchy_sidebar_quote(con, su_plot_col)
+      ),
+      list(plot_number)
+    ),
+    error = function(e) data.frame()
+  )
+  if (nrow(su_existing) > 0) {
+    stop(sprintf("Plot %s already exists in the site unit table.", plot_number))
+  }
+
+  DBI::dbWithTransaction(con, {
+    env_insert_cols <- c(hierarchy_sidebar_quote(con, env_plot_col), hierarchy_sidebar_quote(con, env_project_col))
+    env_insert_vals <- c("?", "?")
+    env_params <- list(plot_number, project_id)
+
+    if (!is.na(env_modified_col) && nzchar(env_modified_col)) {
+      env_insert_cols <- c(env_insert_cols, hierarchy_sidebar_quote(con, env_modified_col))
+      env_insert_vals <- c(env_insert_vals, "CURRENT_TIMESTAMP")
+    }
+
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "INSERT INTO %s (%s) VALUES (%s)",
+        hierarchy_sidebar_quote(con, "Env"),
+        paste(env_insert_cols, collapse = ", "),
+        paste(env_insert_vals, collapse = ", ")
+      ),
+      env_params
+    )
+
+    su_insert_cols <- c(hierarchy_sidebar_quote(con, su_plot_col), hierarchy_sidebar_quote(con, su_site_col))
+    su_insert_vals <- c("?", "?")
+    su_params <- list(plot_number, site_unit)
+
+    if (!is.na(su_modified_col) && nzchar(su_modified_col)) {
+      su_insert_cols <- c(su_insert_cols, hierarchy_sidebar_quote(con, su_modified_col))
+      su_insert_vals <- c(su_insert_vals, "CURRENT_TIMESTAMP")
+    }
+
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "INSERT INTO %s (%s) VALUES (%s)",
+        hierarchy_sidebar_quote(con, "SU"),
+        paste(su_insert_cols, collapse = ", "),
+        paste(su_insert_vals, collapse = ", ")
+      ),
+      su_params
+    )
+
+    sync_record_local_change(
+      con,
+      table_name = "env",
+      pk_value = plot_number,
+      project_id = project_id,
+      change_type = "insert"
+    )
+    sync_record_local_change(
+      con,
+      table_name = "su",
+      pk_value = plot_number,
+      project_id = project_id,
+      change_type = "insert"
+    )
+  })
+
+  list(
+    ok = TRUE,
+    changed = TRUE,
+    project_id = project_id,
+    plot_number = plot_number,
+    site_unit = site_unit
+  )
+}
+
 hierarchy_sidebar_resolve_table <- function(con, project_id = NULL, prefer_base = TRUE) {
   project_id <- hierarchy_sidebar_normalize_key(project_id)
 
@@ -338,7 +540,17 @@ read_project_site_unit_scope <- function(con, project_id) {
 
   project_id <- hierarchy_sidebar_normalize_key(project_id)
   if (!nzchar(project_id)) return(empty)
-  if (!DBI::dbExistsTable(con, "Env") || !DBI::dbExistsTable(con, "SU")) return(empty)
+
+  empty_units <- hierarchy_sidebar_read_empty_site_units(con, project_id)
+
+  if (!DBI::dbExistsTable(con, "Env") || !DBI::dbExistsTable(con, "SU")) {
+    if (nrow(empty_units) == 0) return(empty)
+    return(data.frame(
+      plotnumber = rep("", nrow(empty_units)),
+      siteunit = empty_units$siteunit,
+      stringsAsFactors = FALSE
+    ))
+  }
 
   su_fields <- tryCatch(DBI::dbListFields(con, "SU"), error = function(e) character(0))
   env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
@@ -348,7 +560,14 @@ read_project_site_unit_scope <- function(con, project_id) {
   env_plot_col <- hierarchy_sidebar_match_col(env_fields, c("PlotNumber", "plotnumber"))
   env_project_col <- hierarchy_sidebar_match_col(env_fields, c("ProjectID", "projectid"))
 
-  if (any(is.na(c(su_plot_col, su_site_col, env_plot_col, env_project_col)))) return(empty)
+  if (any(is.na(c(su_plot_col, su_site_col, env_plot_col, env_project_col)))) {
+    if (nrow(empty_units) == 0) return(empty)
+    return(data.frame(
+      plotnumber = rep("", nrow(empty_units)),
+      siteunit = empty_units$siteunit,
+      stringsAsFactors = FALSE
+    ))
+  }
 
   sql <- paste(
     "SELECT DISTINCT",
@@ -373,11 +592,28 @@ read_project_site_unit_scope <- function(con, project_id) {
   )
 
   scope <- tryCatch(DBI::dbGetQuery(con, sql, list(project_id)), error = function(e) empty)
-  if (nrow(scope) == 0) return(empty)
+  if (nrow(scope) == 0) {
+    scope <- empty
+  }
 
   scope$plotnumber <- as.character(scope$plotnumber)
   scope$siteunit <- trimws(as.character(scope$siteunit))
-  unique(scope[, c("plotnumber", "siteunit"), drop = FALSE])
+  scope <- unique(scope[, c("plotnumber", "siteunit"), drop = FALSE])
+
+  if (nrow(empty_units) > 0) {
+    scope <- unique(rbind(
+      scope,
+      data.frame(
+        plotnumber = rep("", nrow(empty_units)),
+        siteunit = empty_units$siteunit,
+        stringsAsFactors = FALSE
+      )
+    ))
+  }
+
+  scope <- scope[nzchar(scope$siteunit), , drop = FALSE]
+  if (nrow(scope) == 0) return(empty)
+  scope[order(tolower(scope$siteunit), scope$plotnumber), , drop = FALSE]
 }
 
 hierarchy_sidebar_reassign_plot <- function(con,

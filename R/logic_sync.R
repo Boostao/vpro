@@ -730,6 +730,9 @@ sync_record_local_change <- function(con,
   } else {
     .sync_payload_from_row(prior_payload)
   }
+  if (is.null(payload_json) || !nzchar(as.character(payload_json))) {
+    payload_json <- NA_character_
+  }
 
   DBI::dbExecute(
     con,

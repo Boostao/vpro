@@ -445,6 +445,15 @@
   border-color: rgba(53, 95, 152, 0.28);
   box-shadow: 0 10px 22px rgba(28, 72, 122, 0.08);
 }
+.vpro-hierarchy-node.is-add-action {
+  border-style: dashed;
+  background: linear-gradient(135deg, rgba(244, 249, 255, 0.98), rgba(237, 245, 255, 0.98));
+  border-color: rgba(53, 95, 152, 0.24);
+}
+.vpro-hierarchy-node.is-add-action:hover {
+  border-color: rgba(53, 95, 152, 0.38);
+  box-shadow: 0 10px 22px rgba(28, 72, 122, 0.1);
+}
 .vpro-hierarchy-node.is-hierarchy-node:hover {
   transform: translateY(-1px);
   border-color: rgba(53, 95, 152, 0.28);
@@ -514,6 +523,11 @@
   line-height: 1.2;
   font-weight: 600;
   word-break: break-word;
+}
+.vpro-hierarchy-add-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 .vpro-hierarchy-node-count {
   flex: 0 0 auto;
@@ -653,6 +667,10 @@
   transform: translateY(-1px);
   border-color: rgba(53, 95, 152, 0.3);
   box-shadow: 0 10px 18px rgba(33, 69, 109, 0.08);
+}
+.vpro-hierarchy-plot-chip.is-add-action {
+  border-style: dashed;
+  background: linear-gradient(135deg, #f4f9ff, #edf5ff);
 }
 .vpro-hierarchy-plot-chip.is-current {
   background: linear-gradient(135deg, #355f98, #4d78b2);

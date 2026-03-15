@@ -153,6 +153,9 @@ server <- function(input, output, session) {
     TRUE
   }
 
+  sidebar_add_site_token <- "__vpro_add_site__"
+  sidebar_add_plot_token <- "__vpro_add_plot__"
+
   current_picker_site_unit <- reactive({
     site_unit <- input$picker_site_unit
     if (is.null(site_unit)) {
@@ -196,33 +199,35 @@ server <- function(input, output, session) {
 
   site_unit_tree_rows <- reactive({
     scoped <- project_su_scope()
-    site_units <- unique(scoped$siteunit)
-    if (length(site_units) == 0) {
-      return(data.frame(
-        id = character(0),
-        name = character(0),
-        depth = integer(0),
-        is_site_unit = logical(0),
-        plot_count = integer(0),
+    site_units <- unique(scoped$siteunit[nzchar(scoped$siteunit)])
+    rows <- rbind(
+      data.frame(
+        id = sidebar_add_site_token,
+        name = "Add Site",
+        depth = 0L,
+        is_site_unit = TRUE,
+        plot_count = NA_integer_,
+        is_add_action = TRUE,
         stringsAsFactors = FALSE
-      ))
-    }
-
-    rows <- data.frame(
-      id = site_units,
-      name = site_units,
-      depth = rep(0L, length(site_units)),
-      is_site_unit = rep(TRUE, length(site_units)),
-      plot_count = rep(0L, length(site_units)),
-      stringsAsFactors = FALSE
+      ),
+      data.frame(
+        id = site_units,
+        name = site_units,
+        depth = rep(0L, length(site_units)),
+        is_site_unit = rep(TRUE, length(site_units)),
+        plot_count = rep(0L, length(site_units)),
+        is_add_action = rep(FALSE, length(site_units)),
+        stringsAsFactors = FALSE
+      )
     )
 
     row_keys <- hierarchy_sidebar_normalize_key(rows$name)
     count_map <- integer(0)
-    if (nrow(scoped) > 0) {
+    scoped_with_plots <- scoped[nzchar(scoped$plotnumber), , drop = FALSE]
+    if (nrow(scoped_with_plots) > 0) {
       count_map <- tapply(
-        scoped$plotnumber,
-        hierarchy_sidebar_normalize_key(scoped$siteunit),
+        scoped_with_plots$plotnumber,
+        hierarchy_sidebar_normalize_key(scoped_with_plots$siteunit),
         function(values) length(unique(values))
       )
     }
@@ -235,7 +240,12 @@ server <- function(input, output, session) {
       as.integer(counts)
     }
 
-    rows[order(tolower(rows$name)), , drop = FALSE]
+    rows$plot_count[rows$is_add_action] <- NA_integer_
+
+    add_rows <- rows[rows$is_add_action, , drop = FALSE]
+    regular_rows <- rows[!rows$is_add_action, , drop = FALSE]
+    regular_rows <- regular_rows[order(tolower(regular_rows$name)), , drop = FALSE]
+    rbind(add_rows, regular_rows)
   })
 
   project_hierarchy_nodes <- reactive({
@@ -470,6 +480,7 @@ server <- function(input, output, session) {
     }
 
     rows <- scoped[scoped$siteunit == site_unit, , drop = FALSE]
+    rows <- rows[nzchar(rows$plotnumber), , drop = FALSE]
     rows <- rows[order(rows$plotnumber), , drop = FALSE]
     data.frame(PlotNumber = unique(rows$plotnumber), stringsAsFactors = FALSE)
   })
@@ -652,16 +663,23 @@ server <- function(input, output, session) {
       row_key <- hierarchy_sidebar_normalize_key(row$name[[1]])
       classes <- c("vpro-hierarchy-node")
       attrs <- list(style = sprintf("--hierarchy-depth:%d;", row$depth[[1]] %||% 0L))
+      is_add_action <- isTRUE(row$is_add_action[[1]])
 
       if (isTRUE(row$is_site_unit[[1]])) {
-        classes <- c(classes, "is-site-unit", "vpro-hierarchy-drop-target")
-        attrs[["data-site-unit"]] <- row$name[[1]]
+        classes <- c(classes, "is-site-unit")
+        if (is_add_action) {
+          classes <- c(classes, "is-add-action")
+          attrs[["data-site-unit"]] <- sidebar_add_site_token
+        } else {
+          classes <- c(classes, "vpro-hierarchy-drop-target")
+          attrs[["data-site-unit"]] <- row$name[[1]]
+        }
         attrs[["tabindex"]] <- "0"
       }
-      if (isTRUE(row$plot_count[[1]] > 0L)) {
+      if (!is_add_action && isTRUE(row$plot_count[[1]] > 0L)) {
         classes <- c(classes, "has-plots")
       }
-      if (identical(row_key, selected_key)) {
+      if (!is_add_action && identical(row_key, selected_key)) {
         classes <- c(classes, "is-active")
       }
 
@@ -673,8 +691,16 @@ server <- function(input, output, session) {
           attrs,
           list(
             div(class = "vpro-hierarchy-node-main",
-              span(class = "vpro-hierarchy-node-label", row$name[[1]]),
-              if (isTRUE(row$is_site_unit[[1]])) {
+              if (is_add_action) {
+                span(
+                  class = "vpro-hierarchy-node-label vpro-hierarchy-add-label",
+                  icon("plus"),
+                  span("Add Site")
+                )
+              } else {
+                span(class = "vpro-hierarchy-node-label", row$name[[1]])
+              },
+              if (isTRUE(row$is_site_unit[[1]]) && !is_add_action) {
                 span(class = "vpro-hierarchy-node-count", row$plot_count[[1]])
               }
             )
@@ -694,21 +720,11 @@ server <- function(input, output, session) {
 
     scoped <- project_su_scope()
     plot_rows <- scoped[scoped$siteunit == site_unit, , drop = FALSE]
+    plot_rows <- plot_rows[nzchar(plot_rows$plotnumber), , drop = FALSE]
     plot_ids <- sort(unique(plot_rows$plotnumber))
 
-    if (length(plot_ids) == 0) {
-      return(
-        div(
-          class = "vpro-hierarchy-plot-shell",
-          div(class = "vpro-hierarchy-plot-header",
-            div(class = "vpro-hierarchy-plot-title", site_unit),
-            div(class = "vpro-hierarchy-plot-subtitle", "No plots are currently assigned.")
-          )
-        )
-      )
-    }
-
-    chips <- lapply(plot_ids, function(plot_id) {
+    chips <- c(
+      lapply(plot_ids, function(plot_id) {
       chip_classes <- c("vpro-hierarchy-plot-chip")
       if (identical(normalize_context_value(plot_id), normalize_context_value(state$CurrSU))) {
         chip_classes <- c(chip_classes, "is-current")
@@ -720,13 +736,23 @@ server <- function(input, output, session) {
         `data-site-unit` = site_unit,
         plot_id
       )
-    })
+      }),
+      list(
+        div(
+          class = "vpro-hierarchy-plot-chip is-add-action",
+          `data-plot-number` = sidebar_add_plot_token,
+          `data-site-unit` = site_unit,
+          tabindex = "0",
+          span(class = "vpro-hierarchy-add-label", icon("plus"), span("Add Plot"))
+        )
+      )
+    )
 
     div(
       class = "vpro-hierarchy-plot-shell",
       div(class = "vpro-hierarchy-plot-header",
         div(class = "vpro-hierarchy-plot-title", site_unit),
-        div(class = "vpro-hierarchy-plot-subtitle", sprintf("%d plot%s", length(plot_ids), if (length(plot_ids) == 1) "" else "s"))
+        div(class = "vpro-hierarchy-plot-subtitle", if (length(plot_ids) == 0) "No plots are currently assigned." else sprintf("%d plot%s", length(plot_ids), if (length(plot_ids) == 1) "" else "s"))
       ),
       div(class = "vpro-hierarchy-plot-instruction", "Click a plot to select it or drag it onto another site unit to reassign it."),
       div(class = "vpro-hierarchy-plot-list", chips)
@@ -1016,6 +1042,26 @@ server <- function(input, output, session) {
       return()
     }
 
+    if (identical(site_unit, sidebar_add_site_token)) {
+      if (!require_sidebar_su_write()) {
+        return()
+      }
+
+      showModal(
+        modalDialog(
+          title = "New Site Unit",
+          textInput("hierarchy_new_site_unit_name", "Site Unit name"),
+          div(class = "small text-muted", "The new site unit will appear immediately in the tree, even before any plots are assigned."),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("confirm_new_site_unit", "Create site unit", class = "btn btn-primary")
+          )
+        )
+      )
+      return()
+    }
+
     sidebar_hierarchy_site_unit(site_unit)
     picker_site_unit(site_unit)
     state$PrefSUTable <- site_unit
@@ -1074,6 +1120,30 @@ server <- function(input, output, session) {
     plot_number <- normalize_context_value(if (is.list(info)) info$plot_number else NULL)
     site_unit <- normalize_context_value(if (is.list(info)) info$site_unit else NULL)
     if (!nzchar(plot_number)) {
+      return()
+    }
+
+    if (identical(plot_number, sidebar_add_plot_token)) {
+      if (!require_sidebar_su_write()) {
+        return()
+      }
+      if (!nzchar(site_unit)) {
+        showNotification("Choose a site unit before adding a plot.", type = "warning")
+        return()
+      }
+
+      showModal(
+        modalDialog(
+          title = paste("New Plot for", site_unit),
+          textInput("hierarchy_new_plot_number", "Plot number"),
+          div(class = "small text-muted", "The new plot will be created in the current project and assigned to this site unit."),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("confirm_new_plot", "Create plot", class = "btn btn-primary")
+          )
+        )
+      )
       return()
     }
 
@@ -1282,6 +1352,87 @@ server <- function(input, output, session) {
   observeEvent(input$btn_nav_su_tree, {
     sidebar_mode("hierarchy")
   })
+
+  observeEvent(input$confirm_new_site_unit, {
+    site_unit <- normalize_context_value(input$hierarchy_new_site_unit_name)
+
+    result <- tryCatch(
+      hierarchy_sidebar_create_site_unit(
+        con = con,
+        project_id = state$CurrProject,
+        site_unit = site_unit
+      ),
+      error = function(e) e
+    )
+
+    if (inherits(result, "error")) {
+      showNotification(conditionMessage(result), type = "error")
+      sidebar_hierarchy_status(conditionMessage(result))
+      return()
+    }
+
+    removeModal()
+    refresh_site_unit_scope()
+    refresh_hierarchy_dropdown()
+    refresh_su_table_page()
+    picker_site_unit(result$site_unit)
+    sidebar_hierarchy_site_unit(result$site_unit)
+    state$PrefSUTable <- result$site_unit
+    set_pref(con, "Current", "CurrPlotList", result$site_unit)
+
+    if (isTRUE(result$changed)) {
+      sync_touch_state(state)
+      sidebar_hierarchy_status(sprintf("Created %s.", result$site_unit))
+      showNotification(sprintf("Created %s", result$site_unit), type = "message")
+    } else {
+      sidebar_hierarchy_status(sprintf("%s already exists for this project.", result$site_unit))
+      showNotification(sprintf("%s already exists", result$site_unit), type = "warning")
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$confirm_new_plot, {
+    plot_number <- normalize_context_value(input$hierarchy_new_plot_number)
+    site_unit <- normalize_context_value(current_sidebar_site_unit())
+
+    if (!nzchar(site_unit)) {
+      showNotification("Choose a site unit before adding a plot.", type = "warning")
+      sidebar_hierarchy_status("Choose a site unit before adding a plot.")
+      return()
+    }
+
+    result <- tryCatch(
+      hierarchy_sidebar_create_plot(
+        con = con,
+        project_id = state$CurrProject,
+        plot_number = plot_number,
+        site_unit = site_unit
+      ),
+      error = function(e) e
+    )
+
+    if (inherits(result, "error")) {
+      showNotification(conditionMessage(result), type = "error")
+      sidebar_hierarchy_status(conditionMessage(result))
+      return()
+    }
+
+    removeModal()
+    refresh_site_unit_scope()
+    refresh_su_table_page()
+    picker_site_unit(result$site_unit)
+    sidebar_hierarchy_site_unit(result$site_unit)
+    state$PrefSUTable <- result$site_unit
+    set_pref(con, "Current", "CurrPlotList", result$site_unit)
+    apply_plot_selection(
+      plot_number = result$plot_number,
+      project_id = result$project_id,
+      site_unit = result$site_unit,
+      persist = TRUE
+    )
+    sync_touch_state(state)
+    sidebar_hierarchy_status(sprintf("Created plot %s in %s.", result$plot_number, result$site_unit))
+    showNotification(sprintf("Created plot %s", result$plot_number), type = "message")
+  }, ignoreInit = TRUE)
 
   observeEvent(input$btn_picker_back, {
     sidebar_mode("main")

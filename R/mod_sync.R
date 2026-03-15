@@ -46,12 +46,12 @@ mod_sync_ui <- function(id) {
                 actionButton(
                   ns("sync_revert_all"),
                   label = tagList(icon("rotate-left"), "Revert all"),
-                  class = "btn btn-outline-danger btn-sm"
+                  class = "btn sync-updates-action sync-updates-action-danger"
                 ),
                 actionButton(
                   ns("sync_refresh"),
                   label = tagList(icon("rotate"), "Refresh"),
-                  class = "btn btn-outline-secondary btn-sm"
+                  class = "btn sync-updates-action sync-updates-action-neutral"
                 )
               )
             )
@@ -75,7 +75,7 @@ mod_sync_ui <- function(id) {
     tags$style(HTML("
       .sync-updates-shell { display: flex; flex-direction: column; gap: 14px; }
       .sync-updates-hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.95fr); gap: 16px; align-items: stretch; }
-      .sync-updates-hero-copy { border: 1px solid #d8e2eb; border-radius: 20px; padding: 22px 24px; background: linear-gradient(145deg, #f7fbff 0%%, #edf4fb 58%%, #e8f1f8 100%%); box-shadow: 0 16px 36px rgba(24, 53, 77, 0.08); display: flex; flex-direction: column; gap: 18px; min-height: 100%%; }
+      .sync-updates-hero-copy { border: 1px solid #d8e2eb; border-radius: 20px; padding: 22px 24px; background: #ffffff; box-shadow: 0 16px 36px rgba(24, 53, 77, 0.08); display: flex; flex-direction: column; gap: 18px; min-height: 100%; }
       .sync-updates-hero-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 320px); gap: 18px; align-items: start; }
       .sync-updates-copy-block { display: grid; gap: 10px; }
       .sync-updates-eyebrow { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7785; margin-bottom: 6px; }
@@ -85,13 +85,23 @@ mod_sync_ui <- function(id) {
       .sync-updates-project { display: flex; align-items: center; }
       .sync-updates-primary { display: flex; }
       .sync-updates-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-      .sync-updates-secondary .btn { width: 100%%; }
-      .sync-push-button { width: 100%%; min-height: 52px; font-weight: 700; font-size: 1.05rem; border-radius: 14px; }
+      .sync-updates-secondary .btn { width: 100%; }
+      .sync-push-button { width: 100%; min-height: 52px; font-weight: 700; font-size: 1.05rem; border-radius: 14px; }
+      .sync-updates-action { min-height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; border-width: 1px; box-shadow: 0 10px 22px rgba(20, 39, 57, 0.06); transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease; }
+      .sync-updates-action:hover, .sync-updates-action:focus { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(24, 53, 77, 0.1); }
+      .sync-updates-action .fa, .sync-updates-action .fas, .sync-updates-action .far, .sync-updates-action .fab { font-size: 0.9rem; }
+      .sync-updates-action-neutral { background: rgba(255,255,255,0.95); color: #17344a; border-color: #d4e0ea; }
+      .sync-updates-action-neutral:hover, .sync-updates-action-neutral:focus { background: #f7fbff; color: #16344b; border-color: #aac3d8; }
+      .sync-updates-action-danger { background: linear-gradient(180deg, #fff7f5 0%, #fdeeea 100%); color: #a44942; border-color: #efc8c2; }
+      .sync-updates-action-danger:hover, .sync-updates-action-danger:focus { background: linear-gradient(180deg, #fff1ee 0%, #fce5df 100%); color: #923f39; border-color: #e6b1aa; }
+      .sync-updates-action[disabled], .sync-updates-action.disabled { transform: none; box-shadow: none; opacity: 0.65; }
+      .sync-updates-action-neutral[disabled], .sync-updates-action-neutral.disabled { background: #f4f7fa; border-color: #dbe3ea; color: #8a99a6; }
+      .sync-updates-action-danger[disabled], .sync-updates-action-danger.disabled { background: #fff8f7; border-color: #efd9d4; color: #c08d87; }
       .sync-updates-side { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; }
       .sync-auth-shell { border-top: 1px solid rgba(21, 50, 75, 0.09); padding-top: 32px; margin-top: 10px; outline: none; }
       .sync-auth-shell.is-focused { box-shadow: 0 0 0 3px rgba(0, 100, 180, 0.15); border-radius: 18px; }
       .sync-auth-panel { border: 1px solid #d7e3ea; border-radius: 18px; background: rgba(255,255,255,0.84); padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); display: grid; gap: 14px; }
-      .sync-auth-panel-ready { background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%%, rgba(245,250,255,0.96) 100%%); }
+      .sync-auth-panel-ready { background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(245,250,255,0.96) 100%); }
       .sync-auth-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
       .sync-auth-header-copy { display: grid; gap: 6px; }
       .sync-auth-header-badge { display: flex; align-items: start; }
@@ -101,7 +111,7 @@ mod_sync_ui <- function(id) {
       .sync-auth-logout-chip { display: inline-flex; align-items: center; justify-content: center; width: 2.3rem; height: 2.3rem; border-radius: 999px; background: #fdecea; color: #c45a53; border: 1px solid #f0c7c2; text-decoration: none; }
       .sync-auth-logout-chip:hover { background: #fbe2df; color: #b44e47; text-decoration: none; }
       .sync-auth-form-grid { display: grid; gap: 10px; }
-      .sync-auth-submit { width: 100%%; min-height: 44px; font-weight: 700; border-radius: 12px; }
+      .sync-auth-submit { width: 100%; min-height: 44px; font-weight: 700; border-radius: 12px; }
       .sync-auth-status-line { min-height: 1.2rem; color: #5d6d7c; font-size: 0.86rem; }
       .sync-auth-ready-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
       .sync-auth-ready-stat { border-radius: 12px; border: 1px solid #e0e8ef; background: #f7fafc; padding: 10px 12px; }
@@ -122,7 +132,7 @@ mod_sync_ui <- function(id) {
       .sync-auth-admin-card { border: 1px solid #d9e3ec; border-radius: 16px; background: #fff; padding: 16px; }
       .sync-auth-admin-title { margin: 0 0 10px 0; font-size: 0.95rem; font-weight: 700; color: #18354d; }
       .sync-summary-card, .sync-comparison-card, .sync-merge-summary-card { border: 1px solid #d7e3ea; border-radius: 18px; background: #ffffff; box-shadow: 0 10px 26px rgba(16, 38, 56, 0.06); }
-      .sync-summary-card { padding: 16px; height: 100%%; text-align: left; width: 100%%; transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease; }
+      .sync-summary-card { padding: 16px; height: 100%; text-align: left; width: 100%; transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease; }
       .sync-summary-card:hover, .sync-summary-card:focus { border-color: #9db7cf; background: #fbfdff; transform: translateY(-1px); box-shadow: 0 14px 30px rgba(24, 53, 77, 0.09); }
       .sync-summary-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
       .sync-summary-title { font-size: 0.95rem; font-weight: 700; color: #18354d; }
@@ -136,8 +146,8 @@ mod_sync_ui <- function(id) {
       .sync-summary-chip.is-insert { background: #edf7ea; border-color: #cfe4ca; }
       .sync-summary-chip.is-update { background: #fff7de; border-color: #f1dfa2; }
       .sync-summary-chip.is-delete { background: #fdecea; border-color: #f0c7c2; }
-      .sync-comparison-card, .sync-merge-summary-card { width: 100%%; padding: 16px 18px; text-align: left; min-height: 148px; display: flex; align-items: stretch; transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease; }
-      .sync-comparison-card .action-label, .sync-merge-summary-card .action-label { display: flex; flex-direction: column; justify-content: space-between; width: 100%%; }
+      .sync-comparison-card, .sync-merge-summary-card { width: 100%; padding: 16px 18px; text-align: left; min-height: 148px; display: flex; align-items: stretch; transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease; }
+      .sync-comparison-card .action-label, .sync-merge-summary-card .action-label { display: flex; flex-direction: column; justify-content: space-between; width: 100%; }
       .sync-comparison-card:hover, .sync-comparison-card:focus, .sync-merge-summary-card:hover, .sync-merge-summary-card:focus { border-color: #9db7cf; background: #fbfdff; transform: translateY(-1px); box-shadow: 0 14px 30px rgba(24, 53, 77, 0.09); }
       .sync-comparison-label, .sync-merge-summary-label, .sync-summary-titleline { display: inline-flex; align-items: center; gap: 8px; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7785; margin-bottom: 6px; }
       .sync-card-label-icon { color: #7a8a98; font-size: 0.82rem; }
@@ -159,14 +169,14 @@ mod_sync_ui <- function(id) {
       .sync-merge-review-shell { padding-top: 6px; }
       .sync-merge-toolbar { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
       .sync-merge-toolbar .shiny-input-container { margin-bottom: 0; }
-      .sync-merge-table-wrap { border: 1px solid #dde6ee; border-radius: 16px; padding: 12px; background: linear-gradient(180deg, #ffffff 0%%, #fbfdff 100%%); }
+      .sync-merge-table-wrap { border: 1px solid #dde6ee; border-radius: 16px; padding: 12px; background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); }
       .sync-merge-table-wrap .dataTables_wrapper { margin-bottom: 0; }
       .sync-merge-table-wrap .dataTables_filter input,
       .sync-merge-table-wrap .dataTables_length select,
       .sync-admin-merge-review .dataTables_filter input,
       .sync-admin-merge-review .dataTables_length select { border-radius: 10px; border: 1px solid #d6e0ea; min-height: 38px; }
       .sync-merge-table-wrap table.dataTable,
-      .sync-admin-merge-review table.dataTable { border-collapse: separate !important; border-spacing: 0; width: 100%% !important; }
+      .sync-admin-merge-review table.dataTable { border-collapse: separate !important; border-spacing: 0; width: 100% !important; }
       .sync-merge-table-wrap table.dataTable thead th,
       .sync-admin-merge-review table.dataTable thead th { background: #eef4f9; color: #17344a; border-bottom: 1px solid #d5e0ea !important; font-weight: 700; padding: 12px 14px; }
       .sync-merge-table-wrap table.dataTable tbody td,
@@ -181,12 +191,12 @@ mod_sync_ui <- function(id) {
       .sync-admin-merge-review .dataTables_paginate .paginate_button.current { background: #17344a !important; color: #fff !important; border-color: #17344a !important; }
       .sync-merge-table-wrap .dataTables_info,
       .sync-admin-merge-review .dataTables_info { color: #5c6f80; font-size: 0.85rem; }
-      .sync-merge-detail-card { border: 1px solid #dce6ef; border-radius: 16px; background: linear-gradient(180deg, #ffffff 0%%, #fbfdff 100%%); box-shadow: 0 8px 20px rgba(20, 39, 57, 0.05); }
+      .sync-merge-detail-card { border: 1px solid #dce6ef; border-radius: 16px; background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%); box-shadow: 0 8px 20px rgba(20, 39, 57, 0.05); }
       .sync-merge-detail-card .card-title { font-size: 1rem; font-weight: 700; color: #17344a; }
       .sync-merge-detail-card dt { color: #6a7a88; font-weight: 700; }
       .sync-merge-detail-card dd { color: #243f55; }
       .sync-comparison-modal-shell { display: grid; gap: 16px; }
-      .sync-comparison-modal-intro { padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #f6fbff 0%%, #edf4fb 100%%); border: 1px solid #d8e5f0; }
+      .sync-comparison-modal-intro { padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #f6fbff 0%, #edf4fb 100%); border: 1px solid #d8e5f0; }
       .sync-comparison-modal-kicker { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7785; margin-bottom: 6px; font-weight: 700; }
       .sync-comparison-modal-title { display: block; font-size: 1.2rem; font-weight: 700; color: #16344b; margin-bottom: 6px; }
       .sync-comparison-modal-note { color: #587083; font-size: 0.92rem; margin: 0; }
