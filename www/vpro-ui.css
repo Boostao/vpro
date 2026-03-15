@@ -213,7 +213,7 @@
 .vpro-hierarchy-browser-current {
   border-radius: 0.9rem;
   padding: 0.7rem 0.78rem;
-  background: linear-gradient(135deg, #edf5ff, #f7fbff);
+  background: #ffffff;
   border: 1px solid rgba(53, 95, 152, 0.16);
 }
 .vpro-hierarchy-browser-current.vpro-hierarchy-drop-target {
@@ -230,7 +230,7 @@
   margin-bottom: 0.22rem;
 }
 .vpro-hierarchy-browser-current.is-root {
-  background: linear-gradient(135deg, #f8fbff, #eef5fd);
+  background: #ffffff;
 }
 .vpro-hierarchy-browser-current-label,
 .vpro-hierarchy-browser-current-subtitle,

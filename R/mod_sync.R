@@ -14,51 +14,99 @@ mod_sync_ui <- function(id) {
 
     # ── Tab 1: Changes ────────────────────────────────────────────────────────
     bslib::nav_panel(
-      title = "Changes",
+      title = "Updates",
       value = "changes",
 
-      # Action bar
       div(
-        class = "d-flex align-items-center gap-2 flex-wrap mb-3 mt-1",
-        uiOutput(ns("project_badge")),
-        actionButton(
-          ns("sync_push"),
-            label = tagList(icon("cloud-arrow-up"), "Push changes"),
-            class = "btn btn-primary btn-sm"
-        ),
-        actionButton(
-          ns("sync_revert_all"),
-          label = tagList(icon("rotate-left"), "Revert all"),
-          class = "btn btn-outline-danger btn-sm"
-        ),
-        actionButton(
-          ns("sync_refresh"),
-          label = tagList(icon("rotate"), "Refresh"),
-          class = "btn btn-outline-secondary btn-sm"
-        )
-      ),
-      div(
-        class = "sync-source-panel mb-3",
-        uiOutput(ns("comparison_status")),
+        class = "sync-updates-shell mt-1",
         div(
-          class = "d-flex align-items-end gap-3 flex-wrap",
-          uiOutput(ns("compare_source_ui")),
+          class = "sync-updates-hero mb-3",
           div(
-            style = "min-width: 320px;",
-            fileInput(
-              ns("backup_file"),
-              "Replace current backup file",
-              accept = c(".duckdb"),
-              buttonLabel = "Browse...",
-              placeholder = "No file selected"
+            class = "sync-updates-hero-copy",
+            div(class = "sync-updates-eyebrow", "Sync workspace"),
+            h3(class = "sync-updates-title", "Updates"),
+            div(
+              class = "sync-updates-actions",
+              div(
+                class = "sync-updates-project",
+                uiOutput(ns("project_badge"))
+              ),
+              div(
+                class = "sync-updates-primary",
+                actionButton(
+                  ns("sync_push"),
+                  label = tagList(icon("cloud-arrow-up"), "Push changes"),
+                  class = "btn btn-primary sync-push-button"
+                )
+              ),
+              div(
+                class = "sync-updates-secondary",
+                actionButton(
+                  ns("sync_revert_all"),
+                  label = tagList(icon("rotate-left"), "Revert all"),
+                  class = "btn btn-outline-danger btn-sm"
+                ),
+                actionButton(
+                  ns("sync_refresh"),
+                  label = tagList(icon("rotate"), "Refresh"),
+                  class = "btn btn-outline-secondary btn-sm"
+                )
+              )
             )
+          ),
+          div(
+            class = "sync-updates-side",
+            uiOutput(ns("changes_snapshot")),
+            uiOutput(ns("comparison_overview"))
           )
-        ),
-        uiOutput(ns("sync_status"))
+        )
       ),
 
       # Diff card CSS
       tags$style(HTML("
+        .sync-updates-shell { display: flex; flex-direction: column; gap: 12px; }
+        .sync-updates-hero { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr); gap: 16px; align-items: stretch; }
+        .sync-updates-hero-copy { border: 1px solid #d8e2eb; border-radius: 16px; padding: 18px 20px; background: linear-gradient(135deg, #f8fbff 0%%, #eef5fb 100%%); display: flex; flex-direction: column; justify-content: space-between; gap: 18px; min-height: 100%%; }
+        .sync-updates-eyebrow { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7785; margin-bottom: 6px; }
+        .sync-updates-title { margin: 0; font-size: 1.75rem; font-weight: 700; color: #15324b; }
+        .sync-updates-actions { display: grid; gap: 12px; margin-top: 0; }
+        .sync-updates-project { display: flex; align-items: center; }
+        .sync-updates-primary { display: flex; }
+        .sync-updates-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .sync-updates-secondary .btn { width: 100%%; }
+        .sync-push-button { width: 100%%; min-height: 50px; font-weight: 700; font-size: 1.05rem; }
+        .sync-updates-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+        .sync-summary-card, .sync-comparison-card { border: 1px solid #d7e3ea; border-radius: 16px; background: #ffffff; }
+        .sync-summary-card { padding: 16px; height: 100%%; }
+        .sync-summary-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        .sync-summary-title { font-size: 0.95rem; font-weight: 700; color: #18354d; }
+        .sync-summary-total { font-size: 1.5rem; font-weight: 700; color: #18354d; }
+        .sync-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .sync-summary-chip { border-radius: 12px; padding: 10px 12px; background: #f5f8fb; border: 1px solid #e1e8ef; }
+        .sync-summary-chip-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6c7b88; margin-bottom: 4px; white-space: nowrap; }
+        .sync-summary-chip-value { display: block; font-size: 1.05rem; font-weight: 700; color: #1b3145; }
+        .sync-summary-chip.is-insert { background: #edf7ea; border-color: #cfe4ca; }
+        .sync-summary-chip.is-update { background: #fff7de; border-color: #f1dfa2; }
+        .sync-summary-chip.is-delete { background: #fdecea; border-color: #f0c7c2; }
+        .sync-comparison-card { width: 100%%; padding: 14px 16px; text-align: left; height: 100%%; display: flex; align-items: stretch; }
+        .sync-comparison-card .action-label { display: flex; flex-direction: column; justify-content: space-between; width: 100%%; }
+        .sync-comparison-card:hover, .sync-comparison-card:focus { border-color: #9db7cf; background: #fbfdff; }
+        .sync-comparison-label { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7785; margin-bottom: 6px; }
+        .sync-comparison-headline { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 700; color: #15324b; }
+        .sync-comparison-meta { margin-top: 8px; color: #5f6f7d; font-size: 0.88rem; }
+        .sync-comparison-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        .sync-comparison-modal-shell { display: grid; gap: 16px; }
+        .sync-comparison-modal-intro { padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, #f6fbff 0%%, #edf4fb 100%%); border: 1px solid #d8e5f0; }
+        .sync-comparison-modal-kicker { display: block; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7785; margin-bottom: 6px; font-weight: 700; }
+        .sync-comparison-modal-title { display: block; font-size: 1.2rem; font-weight: 700; color: #16344b; margin-bottom: 6px; }
+        .sync-comparison-modal-note { color: #587083; font-size: 0.92rem; margin: 0; }
+        .sync-comparison-modal-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 0.95fr); gap: 14px; }
+        .sync-comparison-modal-card { border: 1px solid #d8e2eb; border-radius: 16px; background: #ffffff; padding: 16px; }
+        .sync-comparison-modal-card-title { font-size: 0.9rem; font-weight: 700; color: #18354d; margin-bottom: 10px; }
+        .sync-comparison-modal-card-subtitle { color: #687987; font-size: 0.85rem; margin-bottom: 12px; }
+        .sync-source-summary { margin-bottom: 0; }
+        .sync-source-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+        .sync-modal-upload .shiny-input-container { margin-bottom: 0; }
         .sync-diff-card { border-left: 4px solid #ccc; margin-bottom: 10px; border-radius: 4px; background: #fff; }
         .sync-diff-card.sync-insert { border-color: #43893e; }
         .sync-diff-card.sync-update { border-color: #f9ca54; }
@@ -80,12 +128,16 @@ mod_sync_ui <- function(id) {
         .sync-section-badge { display: inline-flex; gap: 4px; margin-left: 8px; }
         .sync-section-badge .badge { font-size: 0.72em; font-weight: 600; vertical-align: middle; }
         .sync-diff-actions { margin-left: auto; }
-        .sync-source-panel { border: 1px solid #d7e3ea; background: #f8fbfc; border-radius: 6px; padding: 12px; }
-        .sync-source-summary { margin-bottom: 10px; }
-        .sync-source-badges { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
-        .sync-status-banner { margin-top: 10px; margin-bottom: 0; padding: 8px 10px; border-radius: 4px; font-size: 0.9em; }
-        .sync-status-banner.sync-status-ok { background: #edf7ea; color: #24552a; border: 1px solid #bfd9ba; }
-        .sync-status-banner.sync-status-error { background: #fdecea; color: #8a1f11; border: 1px solid #f2c1bc; }
+        @media (max-width: 991.98px) {
+          .sync-updates-hero { grid-template-columns: 1fr; }
+          .sync-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .sync-updates-side { grid-template-columns: 1fr; }
+          .sync-comparison-modal-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 575.98px) {
+          .sync-updates-secondary { grid-template-columns: 1fr; }
+          .sync-summary-grid { grid-template-columns: 1fr; }
+        }
       ")),
 
       # 4 accordion groups ordered by field workflow: Site, Soil, Veg, Project
@@ -212,7 +264,6 @@ mod_sync_server <- function(id, state, con) {
       rv_refresh(rv_refresh() + 1L)
     }, ignoreInit = TRUE)
 
-    rv_status <- reactiveVal(NULL)
     rv_last_project <- reactiveVal(NULL)
     rv_compare_source_preference <- reactiveVal(NULL)
     rv_delete_merge_request_id <- reactiveVal(NULL)
@@ -417,6 +468,36 @@ mod_sync_server <- function(id, state, con) {
       }
     })
 
+    output$changes_snapshot <- renderUI({
+      counts <- reactive_summary()$total
+      div(
+        class = "sync-summary-card",
+        div(
+          class = "sync-summary-header",
+          span(class = "sync-summary-title", "Pending updates"),
+          span(class = "sync-summary-total", counts[["total"]] %||% 0L)
+        ),
+        div(
+          class = "sync-summary-grid",
+          div(
+            class = "sync-summary-chip is-insert",
+            span(class = "sync-summary-chip-label", "New"),
+            span(class = "sync-summary-chip-value", counts[["insert"]] %||% 0L)
+          ),
+          div(
+            class = "sync-summary-chip is-update",
+            span(class = "sync-summary-chip-label", "Updated"),
+            span(class = "sync-summary-chip-value", counts[["update"]] %||% 0L)
+          ),
+          div(
+            class = "sync-summary-chip is-delete",
+            span(class = "sync-summary-chip-label", "Deleted"),
+            span(class = "sync-summary-chip-value", counts[["delete"]] %||% 0L)
+          )
+        )
+      )
+    })
+
     output$comparison_status <- renderUI({
       context <- comparison_context()
       pid <- context$project_id
@@ -467,6 +548,49 @@ mod_sync_server <- function(id, state, con) {
       )
     })
 
+    output$comparison_overview <- renderUI({
+      context <- comparison_context()
+      source_info <- context$source_info
+
+      actionButton(
+        ns("open_comparison"),
+        label = tags$span(
+          class = "d-block",
+          span(class = "sync-comparison-label", "Current comparison baseline"),
+          tags$span(
+            class = "sync-comparison-headline",
+            tags$span(source_info$resolved_label %||% "Not set"),
+            icon("chevron-right")
+          ),
+          tags$span(
+            class = "sync-comparison-meta d-block",
+            if (!is.null(context$backup_display) && nzchar(context$backup_display)) {
+              paste("Backup file:", context$backup_display)
+            } else if (isTRUE(source_info$cloud_available)) {
+              "Using the current master comparison."
+            } else {
+              "Choose or replace the comparison source."
+            }
+          ),
+          tags$span(
+            class = "sync-comparison-badges",
+            span(class = "badge text-bg-light", paste("Selected:", source_info$requested_label %||% source_info$resolved_label)),
+            if (isTRUE(source_info$cloud_available)) {
+              span(class = "badge text-bg-success", "Master ready")
+            } else if (!isTRUE(is_authenticated())) {
+              span(class = "badge text-bg-secondary", "Sign in for Master")
+            } else {
+              span(class = "badge text-bg-secondary", "Master unavailable")
+            },
+            if (identical(source_info$resolved_kind, "merge_request") && !is.null(source_info$resolved_merge_request_id)) {
+              span(class = "badge text-bg-warning", paste("MR", source_info$resolved_merge_request_id))
+            }
+          )
+        ),
+        class = "sync-comparison-card btn btn-light"
+      )
+    })
+
     reactive_summary <- reactive({
       rv_refresh()
       state$SyncVersion
@@ -493,7 +617,16 @@ mod_sync_server <- function(id, state, con) {
     # Disable/enable push button based on changes
     observe({
       source_info <- comparison_context()$source_info
-      if (has_any_changes() && is_authenticated() && isTRUE(source_info$push_allowed)) {
+      push_label <- if (!is_authenticated()) {
+        tagList(icon("right-to-bracket"), "Sign in to push changes")
+      } else {
+        tagList(icon("cloud-arrow-up"), "Push changes")
+      }
+      updateActionButton(session, "sync_push", label = push_label)
+
+      if (!is_authenticated()) {
+        shinyjs::enable("sync_push")
+      } else if (has_any_changes() && isTRUE(source_info$push_allowed)) {
         shinyjs::enable("sync_push")
       } else {
         shinyjs::disable("sync_push")
@@ -504,6 +637,53 @@ mod_sync_server <- function(id, state, con) {
         shinyjs::disable("sync_revert_all")
       }
     })
+
+    observeEvent(input$open_comparison, {
+      showModal(modalDialog(
+        title = "Comparison baseline",
+        div(
+          class = "sync-comparison-modal-shell",
+          div(
+            class = "sync-comparison-modal-intro",
+            span(class = "sync-comparison-modal-kicker", "Comparison settings"),
+            span(class = "sync-comparison-modal-title", "Choose the baseline for local updates"),
+            p(
+              class = "sync-comparison-modal-note",
+              "Use Master, a backup file, or a pending merge request as the comparison source. Replace the backup only when you want to change the stored project baseline."
+            )
+          ),
+          div(
+            class = "sync-comparison-modal-grid",
+            div(
+              class = "sync-comparison-modal-card",
+              div(class = "sync-comparison-modal-card-title", "Current selection"),
+              uiOutput(ns("comparison_status"))
+            ),
+            div(
+              class = "sync-comparison-modal-card",
+              div(class = "sync-comparison-modal-card-title", "Choose source"),
+              div(class = "sync-comparison-modal-card-subtitle", "Change what the current project compares against."),
+              uiOutput(ns("compare_source_ui"))
+            )
+          ),
+          div(
+            class = "sync-comparison-modal-card sync-modal-upload",
+            div(class = "sync-comparison-modal-card-title", "Backup file"),
+            div(class = "sync-comparison-modal-card-subtitle", "Upload a .duckdb file to replace the current saved backup baseline for this project."),
+            fileInput(
+              ns("backup_file"),
+              "Replace current backup file",
+              accept = c(".duckdb"),
+              buttonLabel = "Browse...",
+              placeholder = "No file selected"
+            )
+          )
+        ),
+        easyClose = TRUE,
+        size = "l",
+        footer = modalButton("Close")
+      ))
+    }, ignoreInit = TRUE)
 
 
     # ── Local changes reactive ────────────────────────────────────────────────
@@ -651,18 +831,15 @@ mod_sync_server <- function(id, state, con) {
       if (is.null(final_message) && !is.null(counts)) {
         final_message <- paste("Completed:", .format_counts(counts))
       }
-      rv_status(list(message = final_message, counts = counts, error = isTRUE(error)))
+      if (!is.null(final_message) && nzchar(as.character(final_message))) {
+        showNotification(
+          ui = final_message,
+          type = if (isTRUE(error)) "error" else "message",
+          duration = if (isTRUE(error)) NULL else 4
+        )
+      }
       invisible(final_message)
     }
-
-    output$sync_status <- renderUI({
-      status <- rv_status()
-      if (is.null(status$message) || !nzchar(as.character(status$message))) return(NULL)
-      div(
-        class = paste("sync-status-banner", if (isTRUE(status$error)) "sync-status-error" else "sync-status-ok"),
-        status$message
-      )
-    })
 
     observeEvent(input$compare_source, {
       rv_compare_source_preference(sync_normalize_compare_source(input$compare_source))
@@ -957,7 +1134,9 @@ mod_sync_server <- function(id, state, con) {
       selected_source_info <- comparison_context()$source_info
 
       if (!is_authenticated()) {
-        .set_sync_status("Sign in required before pushing changes.", error = TRUE)
+        state$PostAuthMainTab <- "Sync"
+        bslib::nav_select("main_tabs", selected = "Auth", session = session$rootScope())
+        .set_sync_status("Sign in to push changes. You will return to Sync after authentication.", error = FALSE)
         return()
       }
       if (!has_any_changes()) {

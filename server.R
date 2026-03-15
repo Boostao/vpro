@@ -1384,6 +1384,26 @@ server <- function(input, output, session) {
   # Auth Module
   mod_auth_server("auth", state, con)
 
+  auth_nav_last_state <- reactiveVal(isTRUE(isolate(state$AuthAuthenticated)))
+  observe({
+    auth_now <- isTRUE(state$AuthAuthenticated)
+    auth_prev <- isTRUE(auth_nav_last_state())
+
+    if (auth_now && !auth_prev) {
+      dest <- state$PostAuthMainTab %||% NULL
+      if (!is.null(dest) && nzchar(as.character(dest))) {
+        state$PostAuthMainTab <- NULL
+        bslib::nav_select("main_tabs", selected = as.character(dest), session = session)
+      }
+    }
+
+    if (!auth_now && auth_prev) {
+      state$PostAuthMainTab <- NULL
+    }
+
+    auth_nav_last_state(auth_now)
+  })
+
   # Auth Status Widget
   auth_status_nav_signal <- mod_auth_status_server("auth_status", state, con)
   observe({
