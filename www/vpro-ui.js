@@ -56,6 +56,165 @@ function initializeVproUi() {
     if (shouldIgnoreKey(e)) return;
   });
 
+  var panelWidthStorageKey = 'vpro-floating-panel-width';
+
+  function syncNavbarBridge() {
+    var navbar = document.querySelector('.navbar');
+    if (!navbar) return;
+
+    var navbarStyles = window.getComputedStyle(navbar);
+    var navbarRect = navbar.getBoundingClientRect();
+    var rootStyle = document.documentElement.style;
+
+    rootStyle.setProperty('--vpro-navbar-band-height', navbarRect.height + 'px');
+
+    var backgroundImage = navbarStyles.backgroundImage;
+    var backgroundColor = navbarStyles.backgroundColor;
+    if (backgroundImage && backgroundImage !== 'none') {
+      rootStyle.setProperty('--vpro-nav-bridge-color', backgroundImage);
+    } else if (backgroundColor && backgroundColor !== 'rgba(0, 0, 0, 0)') {
+      rootStyle.setProperty('--vpro-nav-bridge-color', backgroundColor);
+    }
+
+    var accentColor = navbarStyles.borderBottomColor;
+    if (accentColor && accentColor !== 'rgba(0, 0, 0, 0)') {
+      rootStyle.setProperty('--vpro-nav-bridge-accent', accentColor);
+    }
+  }
+
+  syncNavbarBridge();
+
+  function parsePixelValue(rawValue) {
+    var trimmedValue = (rawValue || '').trim();
+    if (!trimmedValue) return null;
+
+    if (/^-?\d+(\.\d+)?px$/.test(trimmedValue)) {
+      var pixelValue = parseFloat(trimmedValue);
+      return Number.isFinite(pixelValue) ? pixelValue : null;
+    }
+
+    if (/^-?\d+(\.\d+)?$/.test(trimmedValue)) {
+      var bareValue = parseFloat(trimmedValue);
+      return Number.isFinite(bareValue) ? bareValue : null;
+    }
+
+    var measurementNode = document.createElement('div');
+    measurementNode.style.position = 'absolute';
+    measurementNode.style.visibility = 'hidden';
+    measurementNode.style.pointerEvents = 'none';
+    measurementNode.style.width = trimmedValue;
+    document.body.appendChild(measurementNode);
+    var measuredValue = measurementNode.getBoundingClientRect().width;
+    measurementNode.remove();
+    return Number.isFinite(measuredValue) && measuredValue > 0 ? measuredValue : null;
+  }
+
+  function getPanelBounds() {
+    var rootStyles = window.getComputedStyle(document.documentElement);
+    var minWidth = parsePixelValue(rootStyles.getPropertyValue('--vpro-panel-min-width')) || 280;
+    var maxFromVar = parsePixelValue(rootStyles.getPropertyValue('--vpro-panel-max-width')) || (window.innerWidth - 112);
+    var viewportCap = Math.max(minWidth, window.innerWidth - 112);
+    var maxWidth = Math.max(minWidth, Math.min(maxFromVar, viewportCap));
+    return {
+      min: minWidth,
+      max: maxWidth
+    };
+  }
+
+  function clampPanelWidth(width) {
+    var bounds = getPanelBounds();
+    return Math.min(bounds.max, Math.max(bounds.min, width));
+  }
+
+  function applyFloatingPanelWidth(width, persist) {
+    if (!Number.isFinite(width)) return;
+    var clampedWidth = clampPanelWidth(width);
+    document.documentElement.style.setProperty('--vpro-panel-width', clampedWidth + 'px');
+    if (persist) {
+      try {
+        window.localStorage.setItem(panelWidthStorageKey, String(clampedWidth));
+      } catch (_err) {
+        // Ignore storage failures.
+      }
+    }
+  }
+
+  function restoreFloatingPanelWidth() {
+    try {
+      var storedWidth = parseFloat(window.localStorage.getItem(panelWidthStorageKey) || '');
+      if (Number.isFinite(storedWidth)) {
+        applyFloatingPanelWidth(storedWidth, false);
+      }
+    } catch (_err) {
+      // Ignore storage failures.
+    }
+  }
+
+  restoreFloatingPanelWidth();
+
+  window.addEventListener('resize', function () {
+    var currentValue = parsePixelValue(window.getComputedStyle(document.documentElement).getPropertyValue('--vpro-panel-width'));
+    if (currentValue !== null) {
+      applyFloatingPanelWidth(currentValue, false);
+    }
+
+    syncNavbarBridge();
+  });
+
+  if (window.ResizeObserver) {
+    var navbarBridgeObserver = new window.ResizeObserver(function () {
+      syncNavbarBridge();
+    });
+    var observedNavbar = document.querySelector('.navbar');
+    if (observedNavbar) {
+      navbarBridgeObserver.observe(observedNavbar);
+    }
+  }
+
+  window.requestAnimationFrame(function () {
+    syncNavbarBridge();
+  });
+
+  function startFloatingPanelResize(event) {
+    var resizeHandle = closestFromEventTarget(event.target, '.vpro-floating-panel-resize-handle');
+    if (!resizeHandle) return;
+
+    var panelWrap = resizeHandle.closest('.vpro-floating-panel-wrap');
+    if (!panelWrap) return;
+
+    var startWidth = panelWrap.getBoundingClientRect().width;
+    var startX = event.clientX;
+
+    document.body.classList.add('vpro-shell-is-resizing');
+
+    function stopResize() {
+      document.body.classList.remove('vpro-shell-is-resizing');
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('pointerup', stopResize);
+      window.removeEventListener('mouseup', stopResize);
+      window.removeEventListener('pointercancel', stopResize);
+    }
+
+    function onPointerMove(moveEvent) {
+      var nextWidth = startWidth + (moveEvent.clientX - startX);
+      applyFloatingPanelWidth(nextWidth, true);
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('pointerup', stopResize, { once: true });
+    window.addEventListener('mouseup', stopResize, { once: true });
+    window.addEventListener('pointercancel', stopResize, { once: true });
+    event.preventDefault();
+  }
+
+  document.addEventListener('pointerdown', startFloatingPanelResize);
+
+  document.addEventListener('mousedown', function (event) {
+    startFloatingPanelResize(event);
+  });
+
   var dragPayload = null;
   var draggingSidebarItem = false;
   var hierarchyScrollFrame = null;

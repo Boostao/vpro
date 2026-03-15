@@ -33,6 +33,8 @@ ui <- tagList(
   tags$head(
     tags$script(src = "vpro-early.js")
   ),
+  div(class = "d-none", textInput("sel_su", NULL, value = "")),
+  uiOutput("floating_context_shell"),
   page_navbar(
   id = "main_tabs",
   title = div(
@@ -46,29 +48,9 @@ ui <- tagList(
       tags$link(rel = "stylesheet", type = "text/css", href = "vpro-ui.css"),
       tags$script(src = "vpro-ui.js")
     ),
-    shinyjs::useShinyjs(),
-    tags$div(
-      class = "d-md-none px-2 pb-2",
-      actionButton(
-        "btn_toggle_context",
-        "Context",
-        class = "btn btn-outline-secondary btn-sm w-100"
-      )
-    )
+    shinyjs::useShinyjs()
   ),
-  
-  # Sidebar (VPro-style navigation)
-  sidebar = sidebar(
-    width = 360,
-    title = NULL,
-    id = "context_sidebar",
-    open = "desktop",
-    div(
-      class = "vpro-sidebar",
-      div(class = "d-none", textInput("sel_su", NULL, value = "")),
-      uiOutput("context_sidebar_content")
-    )
-  ),
+
   # Main Tabs
 
 # Forms ----
