@@ -24,6 +24,14 @@ mod_project_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    visible_open_projects <- function() {
+      open_pids <- list_open_projects(con)
+      if ("BEC" %in% open_pids) {
+        return("BEC")
+      }
+      open_pids
+    }
+
     # Reactive: last known file path (NULL = main db, no separate file)
     current_path <- reactiveVal(NULL)
 
@@ -60,12 +68,14 @@ mod_project_server <- function(id, state, con) {
       open_pids <- list_open_projects(con)
       if (length(open_pids) == 0) return()
 
-      # If there's only one project, or the preferred project is in the db, activate it
+      visible_pids <- visible_open_projects()
+
+      # Prefer the real-world deployment project when it is present.
       pref <- shiny::isolate(state$PrefProject)
-      pid_to_activate <- if (!is.null(pref) && nzchar(pref %||% "") && pref %in% open_pids) {
+      pid_to_activate <- if (!is.null(pref) && nzchar(pref %||% "") && pref %in% visible_pids) {
         pref
       } else {
-        open_pids[[1]]
+        visible_pids[[1]]
       }
 
       set_project(state, pid_to_activate, con)
@@ -83,7 +93,7 @@ mod_project_server <- function(id, state, con) {
 
     # ---- Project switcher (visible when multiple projects are open) ----
     output$project_switcher <- renderUI({
-      open_pids <- list_open_projects(con)
+      open_pids <- visible_open_projects()
       pid       <- state$CurrProject
 
       if (length(open_pids) <= 1) {

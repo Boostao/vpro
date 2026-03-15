@@ -95,7 +95,26 @@ server <- function(input, output, session) {
     if (!nzchar(value)) "" else value
   }
 
+  preferred_toolbar_project <- function() {
+    open_projects <- tryCatch(list_open_projects(con), error = function(e) character(0))
+    if ("BEC" %in% open_projects) {
+      return("BEC")
+    }
+
+    current_project <- normalize_context_value(state$CurrProject)
+    if (nzchar(current_project)) {
+      return(current_project)
+    }
+
+    if (length(open_projects) > 0) {
+      return(normalize_context_value(open_projects[[1]]))
+    }
+
+    ""
+  }
+
   sidebar_mode <- reactiveVal("main")
+  shell_expanded <- reactiveVal(FALSE)
   picker_site_unit <- reactiveVal(NULL)
   hierarchy_choices <- reactiveVal(character(0))
   site_unit_scope_version <- reactiveVal(0L)
@@ -119,6 +138,12 @@ server <- function(input, output, session) {
     refresh_site_unit_scope()
     refresh_hierarchy_dropdown()
     refresh_su_table_page()
+  }, ignoreInit = TRUE)
+
+  observeEvent(sidebar_mode(), {
+    if (!identical(sidebar_mode(), "main")) {
+      shell_expanded(TRUE)
+    }
   }, ignoreInit = TRUE)
 
   require_sidebar_su_write <- function() {
@@ -906,8 +931,109 @@ server <- function(input, output, session) {
     }, once = TRUE)
   })
 
+  output$floating_context_shell <- renderUI({
+    current_mode <- sidebar_mode()
+    panel_open <- identical(current_mode, "picker") ||
+      identical(current_mode, "hierarchy") ||
+      identical(current_mode, "hierarchy_nodes")
+    rail_open <- isTRUE(shell_expanded()) || panel_open
+    current_project <- preferred_toolbar_project()
+
+    shell_state_class <- if (panel_open) {
+      "is-panel-open"
+    } else if (rail_open) {
+      "is-rail-open"
+    } else {
+      "is-collapsed"
+    }
+
+    div(
+      class = paste("vpro-floating-shell", shell_state_class),
+      if (!rail_open) {
+        actionButton(
+          "btn_tool_shell_open",
+          label = NULL,
+          icon = icon("screwdriver-wrench"),
+          class = "vpro-shell-cue-button",
+          title = "Open tools"
+        )
+      },
+      if (rail_open) {
+        div(
+          class = "vpro-floating-rail",
+          div(
+            class = "vpro-floating-rail-top",
+            actionButton(
+              "btn_tool_shell_collapse",
+              label = NULL,
+              icon = icon("xmark"),
+              class = "vpro-tool-shell-close",
+              title = "Collapse tools"
+            )
+          ),
+          div(
+            class = "vpro-floating-rail-tools",
+            actionButton(
+              "btn_nav_su_tree",
+              label = NULL,
+              icon = icon("leaf"),
+              class = paste("vpro-tool-rail-button", if (identical(current_mode, "hierarchy")) "is-active"),
+              title = "Site Unit Tree View"
+            ),
+            actionButton(
+              "btn_nav_hierarchy_tree",
+              label = NULL,
+              icon = icon("sitemap"),
+              class = paste("vpro-tool-rail-button", if (identical(current_mode, "hierarchy_nodes")) "is-active"),
+              title = "Hierarchy Tree View"
+            )
+          ),
+          if (nzchar(current_project)) {
+            div(
+              class = "vpro-floating-project-pill",
+              span(class = "vpro-floating-project-label", "Project"),
+              span(class = "vpro-floating-project-value", current_project)
+            )
+          }
+        )
+      },
+      if (panel_open) {
+        div(
+          class = "vpro-floating-panel-wrap",
+          uiOutput("context_sidebar_content"),
+          div(class = "vpro-floating-panel-resize-handle", title = "Drag to resize")
+        )
+      }
+    )
+  })
+
   output$context_sidebar_content <- renderUI({
     current_mode <- sidebar_mode()
+
+    build_context_panel <- function(title, subtitle = NULL, body, panel_class = NULL) {
+      div(
+        class = paste("vpro-floating-panel", panel_class %||% ""),
+        div(
+          class = "vpro-floating-panel-header",
+          div(
+            class = "vpro-floating-panel-copy",
+            div(class = "vpro-floating-panel-kicker", "Workspace Tool"),
+            div(class = "vpro-floating-panel-title", title),
+            if (!is.null(subtitle) && nzchar(subtitle)) {
+              div(class = "vpro-floating-panel-subtitle", subtitle)
+            }
+          ),
+          actionButton(
+            "btn_tool_panel_close",
+            label = NULL,
+            icon = icon("xmark"),
+            class = "vpro-floating-panel-close",
+            title = "Close tool"
+          )
+        ),
+        div(class = "vpro-floating-panel-body", body)
+      )
+    }
 
     if (identical(current_mode, "picker")) {
       site_unit_choices <- unique(project_su_scope()$siteunit)
@@ -916,93 +1042,50 @@ server <- function(input, output, session) {
         selected_site_unit <- ""
       }
 
-      return(tagList(
-        bslib::card(
-          class = "vpro-picker-card mb-2",
-          bslib::card_header(
-            div(class = "d-flex justify-content-between align-items-center",
-              div(
-                div(class = "fw-semibold", "Site Unit Picker"),
-                div(class = "small text-muted", "Choose a Site Unit, then pick a PlotNumber")
-              ),
-              actionButton("btn_picker_back", "Back", class = "btn btn-sm btn-outline-primary")
-            )
+      return(build_context_panel(
+        title = "Site Unit Picker",
+        subtitle = "Choose a site unit, then pick a plot number.",
+        panel_class = "vpro-picker-card",
+        body = tagList(
+          selectInput(
+            "picker_site_unit",
+            "Site Unit",
+            choices = c("(None)" = "", site_unit_choices),
+            selected = selected_site_unit
           ),
-          bslib::card_body(
-            selectInput(
-              "picker_site_unit",
-              "Site Unit",
-              choices = c("(None)" = "", site_unit_choices),
-              selected = selected_site_unit
-            ),
-            div(class = "vpro-picker-table", DT::DTOutput("site_unit_plot_table"))
-          )
+          div(class = "vpro-picker-table", DT::DTOutput("site_unit_plot_table"))
         )
       ))
     }
 
     if (identical(current_mode, "hierarchy")) {
-      return(tagList(
-        bslib::card(
-          class = "vpro-picker-card vpro-hierarchy-card mb-2",
-          bslib::card_header(
-            div(class = "d-flex justify-content-between align-items-center",
-              div(
-                div(class = "fw-semibold", "Site Unit Tree View")
-              ),
-              actionButton("btn_hierarchy_back", "Back", class = "btn btn-sm btn-outline-primary")
-            )
-          ),
-          bslib::card_body(
-            div(class = "vpro-hierarchy-workbench",
-              div(class = "vpro-hierarchy-tree-shell", uiOutput("sidebar_hierarchy_tree")),
-              div(class = "vpro-hierarchy-plot-panel", uiOutput("sidebar_hierarchy_plots"))
-            )
+      return(build_context_panel(
+        title = "Site Unit Tree",
+        subtitle = "Browse site units and plots without leaving the active form.",
+        panel_class = "vpro-picker-card vpro-hierarchy-card",
+        body = tagList(
+          div(class = "vpro-hierarchy-workbench",
+            div(class = "vpro-hierarchy-tree-shell", uiOutput("sidebar_hierarchy_tree")),
+            div(class = "vpro-hierarchy-plot-panel", uiOutput("sidebar_hierarchy_plots"))
           )
         )
       ))
     }
 
     if (identical(current_mode, "hierarchy_nodes")) {
-      return(tagList(
-        bslib::card(
-          class = "vpro-picker-card vpro-hierarchy-card mb-2",
-          bslib::card_header(
-            div(class = "d-flex justify-content-between align-items-center",
-              div(
-                div(class = "fw-semibold", "Hierarchy Tree View")
-              ),
-              actionButton("btn_hierarchy_back", "Back", class = "btn btn-sm btn-outline-primary")
-            )
-          ),
-          bslib::card_body(
-            div(class = "vpro-hierarchy-workbench vpro-hierarchy-node-workbench",
-              div(class = "vpro-hierarchy-tree-shell vpro-hierarchy-single-shell", uiOutput("sidebar_hierarchy_node_tree"))
-            )
+      return(build_context_panel(
+        title = "Hierarchy Tree",
+        subtitle = "Inspect and navigate the active hierarchy structure.",
+        panel_class = "vpro-picker-card vpro-hierarchy-card",
+        body = tagList(
+          div(class = "vpro-hierarchy-workbench vpro-hierarchy-node-workbench",
+            div(class = "vpro-hierarchy-tree-shell vpro-hierarchy-single-shell", uiOutput("sidebar_hierarchy_node_tree"))
           )
         )
       ))
     }
 
-    tagList(
-      mod_project_ui("project"),
-      selectInput(
-        "sel_hierarchy",
-        "Hierarchy:",
-        choices = c("(None)" = "", hierarchy_choices()),
-        selected = normalize_context_value(state$CurrHierarchy)
-      ),
-      div(class = "vpro-section-title", "Data Forms"),
-      actionButton("btn_nav_data_entry", "Data Entry Forms", class = "btn btn-light border w-100 mb-1"),
-      actionButton("btn_nav_two_page", "2-Page Forms", class = "btn btn-light border w-100 mb-1"),
-      actionButton("btn_nav_sivi", "SIVI Form", class = "btn btn-light border w-100 mb-2"),
-      div(class = "vpro-section-title", "Classification"),
-      actionButton("btn_nav_su_tree", "Site Unit Tree View", class = "btn btn-light border w-100 mb-1"),
-      actionButton("btn_nav_su_table", "Site Unit Table", class = "btn btn-light border w-100 mb-1"),
-      actionButton("btn_nav_hierarchy_tree", "Hierarchy Tree View", class = "btn btn-light border w-100 mb-2"),
-      hr(class = "my-2"),
-      actionButton("btn_whatsnew", "What's New", class = "btn btn-outline-primary w-100 mb-2")
-    )
+    NULL
   })
 
   output$site_unit_plot_table <- DT::renderDT({
@@ -1349,7 +1432,22 @@ server <- function(input, output, session) {
     bslib::nav_select("main_tabs", "FS882-6x4XL", session = session)
   })
 
+  observeEvent(input$btn_tool_shell_open, {
+    shell_expanded(TRUE)
+  })
+
+  observeEvent(input$btn_tool_shell_collapse, {
+    shell_expanded(FALSE)
+    sidebar_mode("main")
+  })
+
   observeEvent(input$btn_nav_su_tree, {
+    shell_expanded(TRUE)
+    if (identical(isolate(sidebar_mode()), "hierarchy")) {
+      sidebar_mode("main")
+      return()
+    }
+
     sidebar_mode("hierarchy")
   })
 
@@ -1434,11 +1532,8 @@ server <- function(input, output, session) {
     showNotification(sprintf("Created plot %s", result$plot_number), type = "message")
   }, ignoreInit = TRUE)
 
-  observeEvent(input$btn_picker_back, {
-    sidebar_mode("main")
-  })
-
-  observeEvent(input$btn_hierarchy_back, {
+  observeEvent(input$btn_tool_panel_close, {
+    shell_expanded(TRUE)
     sidebar_mode("main")
   })
 
@@ -1448,6 +1543,12 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$btn_nav_hierarchy_tree, {
+    shell_expanded(TRUE)
+    if (identical(isolate(sidebar_mode()), "hierarchy_nodes")) {
+      sidebar_mode("main")
+      return()
+    }
+
     sidebar_hierarchy_expanded(character(0))
     sidebar_hierarchy_node_id(NULL)
     sidebar_hierarchy_status("Selected root")
@@ -1487,10 +1588,6 @@ server <- function(input, output, session) {
     showNotification("No default New action for this tab.", type = "message")
   })
 
-  observeEvent(input$btn_toggle_context, {
-    bslib::toggle_sidebar("context_sidebar")
-  })
-  
   # 7. Initialize Sub-Modules
   mod_admin_server("admin", state, con)
   
