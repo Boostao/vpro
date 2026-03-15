@@ -17,7 +17,6 @@ The VPRO database contains **15 tables** starting with "Sample_" that form the c
 | **Environment Hub** | Sample_Env | 128 |
 | **Soil** | Sample_Humus, Sample_Mineral, Sample_Other | 75 |
 | **Vegetation** | Sample_Veg, Sample_Herbarium, Sample_SU | 45 |
-| **Profiles & Species** | Sample_Profile, SampleVeg_Profile | 18 |
 | **Lookups** | Sample_Lump, Sample_Theme | 7 |
 | **Audit** | Sample_Audit | 11 |
 | **TOTAL** | 15 tables | **373+ columns** |
@@ -62,7 +61,6 @@ Sample_Metadata (id)
 ```
 Sample_Veg (species)
     ├→ Sample_Herbarium (species)
-    ├→ Sample_Profile (species) → SampleVeg_Profile (species)
     └→ Sample_Theme (sppcode)
 ```
 
@@ -446,13 +444,12 @@ Sample_Theme (sppcode ↔ lumpcode)
 
 ---
 
-### Sample_Profile & SampleVeg_Profile
+### Sample_Profile
 **Purpose:** Species/layer reference profiles
 
 | Table | PK | Columns |
 |-------|----|---------| 
 | Sample_Profile | species | _order, _table, field, _operator, layer, species, criteria, operation, plotcount |
-| SampleVeg_Profile | None | _order, _table, field, _operator, layer, species, criteria, operation, plotcount |
 
 ---
 

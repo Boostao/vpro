@@ -2,26 +2,20 @@
 
 ## Orientation
 Migrate VPro64 from Access to R/Shiny in small, collaborative blocks.
-Do not attempt wholesale parity in one pass.
 
 ## Default Working Mode
 1. Work on one block at a time.
-2. Match Access behavior first, then optimize later.
-3. Keep changes minimal and scoped.
-4. Prefer manual validation for now (tests are optional unless explicitly requested).
-5. Stop after each block with a short summary and next-block suggestion.
+2. Match Access behavior in Shiny paradigms.
 
 ## Block Contract (Use This Every Time)
 For each requested block:
 1. **Access source**: identify exact form/module event(s) in `../VPRO_ACCESS/VPro64_forAI`.
 2. **Expected behavior**: restate only what that block must do.
 3. **Implementation**: edit only necessary files.
-4. **Manual check**: provide quick run/check steps (no test harness by default).
-5. **Handoff**: list what changed and what remains.
+4. **Handoff**: list what changed and what remains.
 
 ## Scope Rules
 - No extra features beyond the block.
-- No broad refactors unless they unblock the block.
 - No design/system rewrites unless requested.
 - Preserve existing naming and UX language from Access captions/status text.
 

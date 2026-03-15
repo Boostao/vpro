@@ -50,13 +50,6 @@
          │  - field, layer      │
          │  - criteria, op      │
          └──────────────────────┘
-                    │
-                    ▼
-         ┌──────────────────────┐
-         │ SampleVeg_Profile    │
-         │ [species + layer]    │
-         │ - operational data   │
-         └──────────────────────┘
 
          ┌──────────────────────┐
          │  Sample_Lump         │  ◄────────┐
@@ -98,7 +91,6 @@
 | **Sample_Metadata** | `id` | BIGINT |
 | **Sample_Hierarchy** | `id` | BIGINT |
 | **Sample_Profile** | `species` | VARCHAR |
-| **SampleVeg_Profile** | None (lookup) | — |
 | **Sample_Lump** | `lumpcode` | VARCHAR |
 | **Sample_Theme** | `sppcode` | VARCHAR |
 | **Sample_Audit** | `id` | BIGINT |
@@ -138,8 +130,6 @@ Sample_Metadata.id
 Sample_Veg.species
     ├→ Sample_Herbarium.species
     └→ Sample_Profile.species
-            ↓
-        SampleVeg_Profile.species
 ```
 
 ### Lookup/reference
@@ -280,7 +270,6 @@ ORDER BY l.lumpcode
 | Sample_Metadata | 3 | id, projectid, startdate |
 | Sample_Hierarchy | 1 | (minimal table) |
 | Sample_Profile | 6 | species, field, layer, criteria, operation, plotcount |
-| SampleVeg_Profile | 9 | Operational profile data |
 | Sample_Lump | 2 | lumpcode, sppcode |
 | Sample_Theme | 2 | sppcode, lumpcode |
 | Sample_Audit | 11 | Complete edit history |
@@ -303,7 +292,7 @@ ORDER BY l.lumpcode
 2. **Use Sample_Metadata.id carefully** — multiple records per id possible
 3. **Check Sample_Audit** when data inconsistencies occur
 4. **Watch for NULL values** — all columns can be null
-5. **Species lookups** — check both Sample_Profile (singular) and SampleVeg_Profile (operational)
+5. **Species lookups** — check both Sample_Profile (singular)
 
 ---
 

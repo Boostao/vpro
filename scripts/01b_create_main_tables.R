@@ -28,7 +28,6 @@ table_mappings <- list(
   list(from = "Sample_SU", to = "SU"),
   list(from = "Sample_Theme", to = "Theme"),
   list(from = "Sample_Veg", to = "Veg"),
-  list(from = "SampleVeg_Profile", to = "Veg_Profile")
 )
 
 for (mapping in table_mappings) {

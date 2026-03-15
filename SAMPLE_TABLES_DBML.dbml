@@ -439,20 +439,6 @@ Table Sample_Profile {
   note: "Reference profiles for species and layers"
 }
 
-Table SampleVeg_Profile {
-  _order bigint
-  _table varchar
-  field varchar
-  _operator varchar
-  layer varchar
-  species varchar
-  criteria bigint
-  operation varchar
-  plotcount bigint
-  
-  note: "Operational vegetation profile data"
-}
-
 // ============================================================================
 // LOOKUP / MAPPING TABLES
 // ============================================================================
@@ -516,7 +502,6 @@ Ref: Sample_Env.projectid < Sample_Metadata.projectid
 // Vegetation/Species relationships
 Ref: Sample_Veg.species < Sample_Herbarium.species
 Ref: Sample_Veg.species < Sample_Profile.species
-Ref: Sample_Profile.species < SampleVeg_Profile.species
 
 // Lookup table relationships
 Ref: Sample_Lump.sppcode < Sample_Theme.sppcode
