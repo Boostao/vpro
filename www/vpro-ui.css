@@ -42,6 +42,14 @@ body {
 html {
   overflow-x: hidden;
 }
+body > #floating_context_shell {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 1030;
+}
 body > #floating_context_shell + .navbar,
 body > #floating_context_shell + .navbar + .html-fill-item {
   margin-left: 0;
@@ -85,8 +93,9 @@ body > #floating_context_shell:has(.vpro-floating-shell.is-panel-open) + .navbar
 }
 body > #floating_context_shell::before {
   content: "";
-  position: fixed;
-  inset: 0 auto auto 0;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 0;
   height: var(--vpro-navbar-band-height);
   background: var(--vpro-nav-bridge-color);
