@@ -101,7 +101,7 @@ mod_sync_ui <- function(id) {
       .sync-auth-shell { border-top: 1px solid rgba(21, 50, 75, 0.09); padding-top: 32px; margin-top: 10px; outline: none; }
       .sync-auth-shell.is-focused { box-shadow: 0 0 0 3px rgba(0, 100, 180, 0.15); border-radius: 18px; }
       .sync-auth-panel { border: 1px solid #d7e3ea; border-radius: 18px; background: rgba(255,255,255,0.84); padding: 18px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.7); display: grid; gap: 14px; }
-      .sync-auth-panel-ready { background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(245,250,255,0.96) 100%); }
+      .sync-auth-panel-ready { background: #ffffff; }
       .sync-auth-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
       .sync-auth-header-copy { display: grid; gap: 6px; }
       .sync-auth-header-badge { display: flex; align-items: start; }
