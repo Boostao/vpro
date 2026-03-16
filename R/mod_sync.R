@@ -75,19 +75,20 @@ mod_sync_ui <- function(id) {
     tags$style(HTML("
       .sync-updates-shell { display: flex; flex-direction: column; gap: 14px; }
       .sync-updates-hero { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(340px, 0.95fr); gap: 16px; align-items: stretch; }
-      .sync-updates-hero-copy { border: 1px solid #d8e2eb; border-radius: 20px; padding: 22px 24px; background: #ffffff; box-shadow: 0 16px 36px rgba(24, 53, 77, 0.08); display: flex; flex-direction: column; gap: 18px; min-height: 100%; }
-      .sync-updates-hero-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(270px, 320px); gap: 18px; align-items: start; }
-      .sync-updates-copy-block { display: grid; gap: 10px; }
+      .sync-updates-hero-copy { border: 1px solid #d8e2eb; border-radius: 20px; padding: 22px 24px; background: #ffffff; box-shadow: 0 16px 36px rgba(24, 53, 77, 0.08); display: flex; flex-direction: column; gap: 18px; min-height: 100%; min-width: 0; }
+      .sync-updates-hero-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 18.5rem); gap: 18px; align-items: start; min-width: 0; }
+      .sync-updates-copy-block { display: grid; gap: 10px; min-width: 0; }
       .sync-updates-eyebrow { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7785; margin-bottom: 6px; }
       .sync-updates-title { margin: 0; font-size: 1.85rem; font-weight: 700; color: #15324b; }
       .sync-updates-lede { margin: 0; color: #587083; font-size: 0.96rem; line-height: 1.45; max-width: 34rem; }
-      .sync-updates-actions { display: grid; gap: 12px; margin-top: 0; }
-      .sync-updates-project { display: flex; align-items: center; }
+      .sync-updates-actions { display: grid; gap: 12px; margin-top: 0; min-width: 0; align-content: start; }
+      .sync-updates-project { display: flex; align-items: center; min-width: 0; }
+      .sync-updates-project > * { min-width: 0; width: 100%; }
       .sync-updates-primary { display: flex; }
       .sync-updates-secondary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
       .sync-updates-secondary .btn { width: 100%; }
       .sync-push-button { width: 100%; min-height: 52px; font-weight: 700; font-size: 1.05rem; border-radius: 14px; }
-      .sync-updates-action { min-height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; border-width: 1px; box-shadow: 0 10px 22px rgba(20, 39, 57, 0.06); transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease; }
+      .sync-updates-action { min-height: 44px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; border-width: 1px; box-shadow: 0 10px 22px rgba(20, 39, 57, 0.06); transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease, color 120ms ease; white-space: normal; text-align: center; line-height: 1.2; }
       .sync-updates-action:hover, .sync-updates-action:focus { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(24, 53, 77, 0.1); }
       .sync-updates-action .fa, .sync-updates-action .fas, .sync-updates-action .far, .sync-updates-action .fab { font-size: 0.9rem; }
       .sync-updates-action-neutral { background: rgba(255,255,255,0.95); color: #17344a; border-color: #d4e0ea; }
@@ -207,6 +208,15 @@ mod_sync_ui <- function(id) {
       .sync-source-summary { margin-bottom: 0; }
       .sync-source-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
       .sync-modal-upload .shiny-input-container { margin-bottom: 0; }
+      @media (max-width: 1400px) {
+        .sync-updates-hero { grid-template-columns: minmax(0, 1fr); }
+      }
+      @media (max-width: 1180px) {
+        .sync-updates-hero-top { grid-template-columns: minmax(0, 1fr); }
+      }
+      @media (max-width: 680px) {
+        .sync-updates-secondary { grid-template-columns: minmax(0, 1fr); }
+      }
       .sync-diff-card { border-left: 4px solid #ccc; margin-bottom: 10px; border-radius: 4px; background: #fff; }
       .sync-diff-card.sync-insert { border-color: #43893e; }
       .sync-diff-card.sync-update { border-color: #f9ca54; }

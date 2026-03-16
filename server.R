@@ -882,14 +882,11 @@ server <- function(input, output, session) {
       div(
         class = "vpro-hierarchy-browser-current is-root vpro-hierarchy-drop-target",
         `data-parent-id` = "",
-        div(class = "vpro-hierarchy-browser-current-label", "Tree root"),
-        div(class = "vpro-hierarchy-browser-current-name", "Hierarchy"),
-        div(class = "vpro-hierarchy-browser-current-subtitle", "Start at the root and unveil more nodes as needed."),
-        div(class = "vpro-hierarchy-detail-path", if (is.null(details)) "Root" else paste(details$path, collapse = " / "))
-      ),
-      div(class = "vpro-hierarchy-browser-level-header",
-        div(class = "vpro-hierarchy-browser-level-title", "Hierarchy tree"),
-        div(class = "vpro-hierarchy-browser-level-count", sprintf("%d visible node%s", nrow(rows), if (nrow(rows) == 1) "" else "s"))
+        div(
+          class = "vpro-hierarchy-browser-current-pathline",
+          span(class = "vpro-hierarchy-browser-current-path-label", "Current path"),
+          div(class = "vpro-hierarchy-detail-path", if (is.null(details)) "Root" else paste(details$path, collapse = " / "))
+        )
       ),
       div(class = "vpro-hierarchy-browser-list", tree_rows),
       div(class = "vpro-hierarchy-plot-instruction", if (is.null(details) || isTRUE(details$is_root)) {
