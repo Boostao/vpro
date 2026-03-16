@@ -1,0 +1,16 @@
+CREATE TABLE "Other" (
+  "PlotNumber" VARCHAR NOT NULL,
+  "DataName" VARCHAR,
+  "DataItem" VARCHAR,
+  "UserItem1" VARCHAR,
+  "UserItem2" VARCHAR,
+  "UserItem3" VARCHAR,
+  "UserFlag1" BOOLEAN,
+  "UserFlag2" BOOLEAN,
+  "UserFlag3" BOOLEAN,
+  "Flag" BOOLEAN,
+  "ID" INTEGER
+);
+
+CREATE UNIQUE INDEX "uidx_Other_ID" ON "Other" ("ID");
+CREATE INDEX "idx_Other_PlotNumber" ON "Other" ("PlotNumber");
