@@ -3,7 +3,7 @@ library(RSQLite)
 library(mdbtoolr)
 library(data.table)
 
-validate <- FALSE # Already validated, might need to validate on mac to make sure it is the same.
+validate <- TRUE # Already validated, might need to validate on mac to make sure it is the same.
 outputdir <- file.path(getwd(), "data/bootstrap/output")
 dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
 
