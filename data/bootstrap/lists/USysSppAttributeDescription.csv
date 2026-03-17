@@ -6,7 +6,7 @@
 0,"OldCode",,,"original code from previous list (Titus 1980), the code of the taxon before becoming a synonym, or the same as NewCode",
 0,"Code",,,"code for species; includes distinctions between ssp. and var.; synonyms are coded with the code of the valid taxa",
 0,"SplCode",,,"code of plants to the species level; no distinction between ssp. or var.",
-0,"TreeCode",,,"three character code from the Official B.C. Tree Code List – Version 4, Research Branch, B.C. Ministry of Forests. Victoria. BC",
+0,"TreeCode",,,"three character code from the Official B.C. Tree Code List â€“ Version 4, Research Branch, B.C. Ministry of Forests. Victoria. BC",
 0,"ScientificName",,"(vascular plants)","based on Titus (1980) (synonym taxa) and Douglas et al. (1998a, 1998b, 1998c, 1999a, 1999b, 2000, 2001a, 2001b, 2002) (native taxa);  additions of taxa were made to be consistent with Cranston et al. (1999)","scientific name of genus, species, subspecies, variety, or family"
 0,"ScientificName",,"(mosses)","species list based on Schofield (1992)","scientific name of genus, species, subspecies, variety, or family"
 0,"ScientificName",,"(mosses)","subspecies and variety list based on Ireland et al. (1987)","scientific name of genus, species, subspecies, variety, or family"
@@ -132,7 +132,7 @@
 1,"Wetland_Ind","Wetlnd-3","3","Indicative  - species that are most commonly associated and best adapted to wetland soils conditions but also occur in moist and very moist upland habitats.  Species is not considered a obligate hydrophyte in the FPC.","wetland and riparian indicator status of species"
 1,"Wetland_Ind","Wetlnd-4","4","Facultative - species that commonly occur in both upland and wetland habitats. May be strongly associated with transitional sites between wetland and upland ecosystems.  Species is not considered to be an obligate hydrophyte in the FPC.","wetland and riparian indicator status of species"
 1,"Wetland_Ind","Wetlnd-5","5","Occasional - species that occur, predominantly, upland but may have scattered occurrences in wetlands or may be prevalent in certain kinds of wetlands.","wetland and riparian indicator status of species"
-1,"Wetland_Ind","Wetlnd-6","6","None – species that are rarely or never found in wetlands.","wetland and riparian indicator status of species"
+1,"Wetland_Ind","Wetlnd-6","6","None â€“ species that are rarely or never found in wetlands.","wetland and riparian indicator status of species"
 1,"Cow_Forage","Cattl-G","G","Good grazing value, grazed readily","Grazing value for cattle"
 1,"Cow_Forage","Cattl-F","F","Fair grazing, grazed fairly readily","Grazing value for cattle"
 1,"Cow_Forage","Cattl-P","P","Poor grazing value, grazed but only slightly","Grazing value for cattle"

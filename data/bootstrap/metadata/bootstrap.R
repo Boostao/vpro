@@ -26,8 +26,8 @@ for (tb in tbs) {
   data_path <- file.path(workdir, sprintf("%s.csv", tb))
   load_csv_into_table(con, tb, data_path)
   if (validate) {
-    test1 <- DBI::dbReadTable(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
-    test2 <- DBI::dbReadTable(con, tb) |> data.table::setDT()
+    test1 <- read_table_preserve_names(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
+    test2 <- read_table_preserve_names(con, tb) |> data.table::setDT()
     comparison <- harmonize_validation_tables(test1, test2)
     test1 <- comparison$test1
     test2 <- comparison$test2

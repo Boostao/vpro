@@ -117,14 +117,14 @@
 "SiteDisturbance",,77.00,"R.m.ec","constructed trail","SiteDisturbance","3",1,,0
 "SiteDisturbance",,78.00,"R.m.it","informal trail","SiteDisturbance","3",1,,0
 "SiteDisturbance",,79.00,"R.m.bt","braided trail sections","SiteDisturbance","3",1,,0
-"SiteDisturbance",,80.00,"R.m.tr","trampling ñ temporary use","SiteDisturbance","3",1,,0
+"SiteDisturbance",,80.00,"R.m.tr","trampling ‚Äì temporary use","SiteDisturbance","3",1,,0
 "SiteDisturbance",,81.00,"R.m.mb","mud bogging/rutting","SiteDisturbance","3",1,,0
 "SiteDisturbance",,82.00,"R.m.wi","winter use trails","SiteDisturbance","3",1,,0
 "SiteDisturbance",,83.00,"R.t","non-motorized trails","SiteDisturbance","3",1,,0
 "SiteDisturbance",,84.00,"R.t.ec","constructed trail","SiteDisturbance","3",1,,0
 "SiteDisturbance",,85.00,"R.t.it","informal trails","SiteDisturbance","3",1,,0
 "SiteDisturbance",,86.00,"R.t.bt","braided trails section","SiteDisturbance","3",1,,0
-"SiteDisturbance",,87.00,"R.t.tr","trampling ñ single use","SiteDisturbance","3",1,,0
+"SiteDisturbance",,87.00,"R.t.tr","trampling ‚Äì single use","SiteDisturbance","3",1,,0
 "SiteDisturbance",,88.00,"R.t.mb","mucking and trail entrenchment","SiteDisturbance","3",1,,0
 "SiteDisturbance",,89.00,"R.t.wi","winter use trails","SiteDisturbance","3",1,,0
 "SiteDisturbance",,90.00,"R.c","camping","SiteDisturbance","3",1,,0
@@ -152,7 +152,7 @@
 "SiteDisturbance",,112.00,"S.p.md","mounding","SiteDisturbance","3",1,,0
 "SiteDisturbance",,113.00,"S.p.ps","patch scarification","SiteDisturbance","3",1,,0
 "SiteDisturbance",,114.00,"S.p.vp","V-plowing","SiteDisturbance","3",1,,0
-"SiteDisturbance",,115.00,"S.p.xx","other (specify under ìNotesî)","SiteDisturbance","3",1,,0
+"SiteDisturbance",,115.00,"S.p.xx","other (specify under ‚ÄúNotes‚Äù)","SiteDisturbance","3",1,,0
 "SiteDisturbance",,116.00,"T","Terrain-related effects","SiteDisturbance","3",1,,0
 "SiteDisturbance",,117.00,"T.a","avalanche","SiteDisturbance","3",1,,0
 "SiteDisturbance",,118.00,"T.d","recent deglaciation","SiteDisturbance","3",1,,0
@@ -1390,7 +1390,7 @@
 "GeoreferenceMethod",,6.00,"1:10k",,"Metadata form",,0,,0
 "GeoreferenceMethod",,7.00,"1:50k",,"Metadata form",,0,,0
 "GeoreferenceMethod",,8.00,"1:250k",,"Metadata form",,0,,0
-"SiteDisturbance",,127.00,"X","Miscellaneous (For other disturbance types, enter ìXî and describe under ìNotes"")","SiteDisturbance","3",1,,0
+"SiteDisturbance",,127.00,"X","Miscellaneous (For other disturbance types, enter ‚ÄúX‚Äù and describe under ‚ÄúNotes"")","SiteDisturbance","3",1,,0
 "SoilTexture",,6.10,"FI","Fibric",,,0,,0
 "MensurationType",,0.00,,"Null","FullCruiseCard",,0,,0
 "MensurationType",,1.00,"Cruise Plot","Cruise Plot","FullCruiseCard",,0,,0

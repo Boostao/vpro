@@ -101,6 +101,10 @@ load_csv_into_table <- function(con, table_name, data_path) {
   DBI::dbAppendTable(con, table_name, df)
 }
 
+read_table_preserve_names <- function(con, table_name) {
+  DBI::dbReadTable(con, table_name, check.names = FALSE)
+}
+
 normalize_text_for_compare <- function(x) {
   if (!inherits(x, "character")) {
     return(x)
@@ -120,20 +124,20 @@ normalize_text_for_compare <- function(x) {
 harmonize_validation_tables <- function(test1, test2) {
   for (nm in names(test1)) {
     if (inherits(test2[[nm]], "blob") && inherits(test1[[nm]], "character")) {
-      test2[, (nm) := vapply(test2[[nm]], function(x) {
+      data.table::set(test2, j = nm, value = vapply(test2[[nm]], function(x) {
         if (is.null(x)) NA_character_ else rawToChar(x)
-      }, character(1))]
+      }, character(1)))
     } else if (!inherits(test2[[nm]], class(test1[[nm]]))) {
       if (inherits(test1[[nm]], "POSIXct")) {
-        test2[, (nm) := mdbtoolr:::.coerce_datetime(test2[[nm]])]
+        data.table::set(test2, j = nm, value = mdbtoolr:::.coerce_datetime(test2[[nm]]))
       } else {
-        test2[, (nm) := as(test2[[nm]], class(test1[[nm]])[1])]
+        data.table::set(test2, j = nm, value = as(test2[[nm]], class(test1[[nm]])[1]))
       }
     }
 
     if (inherits(test1[[nm]], "character") && inherits(test2[[nm]], "character")) {
-      test1[[nm]] <- normalize_text_for_compare(test1[[nm]])
-      test2[[nm]] <- normalize_text_for_compare(test2[[nm]])
+      data.table::set(test1, j = nm, value = normalize_text_for_compare(test1[[nm]]))
+      data.table::set(test2, j = nm, value = normalize_text_for_compare(test2[[nm]]))
     }
   }
 
@@ -150,3 +154,4 @@ source("data/bootstrap/pics/bootstrap.R")
 source("data/bootstrap/messages/bootstrap.R")
 source("data/bootstrap/lists/bootstrap.R")
 source("data/bootstrap/metadata/bootstrap.R")
+source("data/bootstrap/vpro/bootstrap.R")
