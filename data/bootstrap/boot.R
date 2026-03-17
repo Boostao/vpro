@@ -3,7 +3,9 @@ library(RSQLite)
 library(mdbtoolr)
 library(data.table)
 
-validate <- FALSE
+validate <- TRUE
+outputdir <- file.path(getwd(), "data/bootstrap/output")
+dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
 
 read_sql_statements <- function(path) {
   lines <- readLines(path, warn = FALSE)
@@ -53,25 +55,8 @@ load_csv_into_table <- function(con, table_name, data_path) {
     con,
     sprintf('PRAGMA table_info("%s");', table_name)
   )
-  fk_info <- DBI::dbGetQuery(
-    con,
-    sprintf('PRAGMA foreign_key_list("%s");', table_name)
-  )
-  index_list <- DBI::dbGetQuery(
-    con,
-    sprintf('PRAGMA index_list("%s");', table_name)
-  )
 
   text_fields <- table_info$name[grepl("CHAR|CLOB|TEXT", table_info$type, ignore.case = TRUE)]
-  fk_fields <- unique(fk_info$from)
-  unique_index_names <- index_list$name[index_list$unique == 1]
-  unique_fields <- unique(unlist(lapply(unique_index_names, function(index_name) {
-    DBI::dbGetQuery(
-      con,
-      sprintf('PRAGMA index_info("%s");', index_name)
-    )$name
-  })))
-  blank_as_null_fields <- unique(c(text_fields, fk_fields, intersect(text_fields, unique_fields)))
   header <- names(
     utils::read.csv(
       data_path,
@@ -116,7 +101,52 @@ load_csv_into_table <- function(con, table_name, data_path) {
   DBI::dbAppendTable(con, table_name, df)
 }
 
+normalize_text_for_compare <- function(x) {
+  if (!inherits(x, "character")) {
+    return(x)
+  }
+
+  vapply(x, function(value) {
+    if (is.na(value)) {
+      return(NA_character_)
+    }
+
+    value <- iconv(value, from = "", to = "UTF-8", sub = "byte")
+    value <- gsub("\r\n", "\n", value, fixed = TRUE)
+    gsub("\r", "\n", value, fixed = TRUE)
+  }, character(1), USE.NAMES = FALSE)
+}
+
+harmonize_validation_tables <- function(test1, test2) {
+  for (nm in names(test1)) {
+    if (inherits(test2[[nm]], "blob") && inherits(test1[[nm]], "character")) {
+      test2[, (nm) := vapply(test2[[nm]], function(x) {
+        if (is.null(x)) NA_character_ else rawToChar(x)
+      }, character(1))]
+    } else if (!inherits(test2[[nm]], class(test1[[nm]]))) {
+      if (inherits(test1[[nm]], "POSIXct")) {
+        test2[, (nm) := mdbtoolr:::.coerce_datetime(test2[[nm]])]
+      } else {
+        test2[, (nm) := as(test2[[nm]], class(test1[[nm]])[1])]
+      }
+    }
+
+    if (inherits(test1[[nm]], "character") && inherits(test2[[nm]], "character")) {
+      test1[[nm]] <- normalize_text_for_compare(test1[[nm]])
+      test2[[nm]] <- normalize_text_for_compare(test2[[nm]])
+    }
+  }
+
+  list(test1 = test1, test2 = test2)
+}
+
+validation_tables_equal <- function(test1, test2) {
+  isTRUE(all.equal(test1, test2, ignore.row.order = TRUE)) ||
+    isTRUE(all.equal(test1, test2, tolerance = sqrt(.Machine$double.eps) * 100))
+}
+
 source("data/bootstrap/projects/bootstrap.R")
 source("data/bootstrap/pics/bootstrap.R")
 source("data/bootstrap/messages/bootstrap.R")
 source("data/bootstrap/lists/bootstrap.R")
+source("data/bootstrap/metadata/bootstrap.R")

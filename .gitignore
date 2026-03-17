@@ -1,3 +1,4 @@
+*.db
 *.duckdb
 *.duckdb.wal
 .Rhistory

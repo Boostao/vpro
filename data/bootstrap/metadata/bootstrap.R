@@ -1,9 +1,9 @@
-accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VLists.accda")
+accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VMetaData.accda")
 
 # Assuming working directory is the root of the project vpro.git
-workdir <- file.path(getwd(), "data/bootstrap/lists")
+workdir <- file.path(getwd(), "data/bootstrap/metadata")
 
-output <- file.path(outputdir, "VLists.db")
+output <- file.path(outputdir, "VMetaData.db")
 unlink(output, force = TRUE)
 
 con <- DBI::dbConnect(RSQLite::SQLite(), output)
@@ -26,7 +26,6 @@ for (tb in tbs) {
   data_path <- file.path(workdir, sprintf("%s.csv", tb))
   load_csv_into_table(con, tb, data_path)
   if (validate) {
-    # Validate against original Access DB
     test1 <- DBI::dbReadTable(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
     test2 <- DBI::dbReadTable(con, tb) |> data.table::setDT()
     comparison <- harmonize_validation_tables(test1, test2)

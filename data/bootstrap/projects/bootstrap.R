@@ -13,7 +13,7 @@ projects <- list.files(workdir, pattern = "\\.csv$") |>
   sort()
 
 for (p in projects) {
-  output <- file.path(workdir, sprintf("%s.db", p))
+  output <- file.path(outputdir, sprintf("%s.db", p))
   unlink(output, force = TRUE)
 
   con <- DBI::dbConnect(RSQLite::SQLite(), output)
@@ -47,21 +47,10 @@ for (p in projects) {
       # Validate against original Access DB
       test1 <- DBI::dbReadTable(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
       test2 <- DBI::dbReadTable(con, table_name) |> data.table::setDT()
-      for (nm in names(test1)) {
-        if (inherits(test2[[nm]], "blob") && inherits(test1[[nm]], "character")) {
-          test2[, (nm) := vapply(test2[[nm]], function(x) {
-            if (is.null(x)) NA_character_ else rawToChar(x)
-          }, character(1))]
-        } else if (!inherits(test2[[nm]], class(test1[[nm]]))) {
-          if (inherits(test1[[nm]], "POSIXct")) {
-            test2[, (nm) := mdbtoolr:::.coerce_datetime(test2[[nm]])]
-          } else {
-            test2[, (nm) := as(test2[[nm]], class(test1[[nm]])[1])]
-          }
-        }
-      }
-      if (!isTRUE(all.equal(test1, test2, ignore.row.order = TRUE)) &&
-          !isTRUE(all.equal(test1, test2, tolerance = sqrt(.Machine$double.eps) * 100))) {
+      comparison <- harmonize_validation_tables(test1, test2)
+      test1 <- comparison$test1
+      test2 <- comparison$test2
+      if (!validation_tables_equal(test1, test2)) {
         browser()
         stop(sprintf("Data mismatch for table %s in project %s", table_name, p))
       }

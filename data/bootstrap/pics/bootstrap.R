@@ -3,7 +3,7 @@ accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/PlotPictures/VPics.accdb
 # Assuming working directory is the root of the project vpro.git
 workdir <- file.path(getwd(), "data/bootstrap/pics")
 
-output <- file.path(workdir, "VPics.db")
+output <- file.path(outputdir, "VPics.db")
 unlink(output, force = TRUE)
 
 con <- DBI::dbConnect(RSQLite::SQLite(), output)
@@ -29,21 +29,10 @@ for (tb in tbs) {
     # Validate against original Access DB
     test1 <- DBI::dbReadTable(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
     test2 <- DBI::dbReadTable(con, tb) |> data.table::setDT()
-    for (nm in names(test1)) {
-      if (inherits(test2[[nm]], "blob") && inherits(test1[[nm]], "character")) {
-        test2[, (nm) := vapply(test2[[nm]], function(x) {
-          if (is.null(x)) NA_character_ else rawToChar(x)
-        }, character(1))]
-      } else if (!inherits(test2[[nm]], class(test1[[nm]]))) {
-        if (inherits(test1[[nm]], "POSIXct")) {
-          test2[, (nm) := mdbtoolr:::.coerce_datetime(test2[[nm]])]
-        } else {
-          test2[, (nm) := as(test2[[nm]], class(test1[[nm]])[1])]
-        }
-      }
-    }
-    if (!isTRUE(all.equal(test1, test2, ignore.row.order = TRUE)) &&
-        !isTRUE(all.equal(test1, test2, tolerance = sqrt(.Machine$double.eps) * 100))) {
+    comparison <- harmonize_validation_tables(test1, test2)
+    test1 <- comparison$test1
+    test2 <- comparison$test2
+    if (!validation_tables_equal(test1, test2)) {
       browser()
       stop(sprintf("Data mismatch for table %s", tb))
     }
