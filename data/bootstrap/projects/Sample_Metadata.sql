@@ -1,57 +1,58 @@
+-- Access table description: VP07
 CREATE TABLE "Metadata" (
-  "ProjectID" VARCHAR,
-  "StartDate" SMALLINT DEFAULT NULL,
+  "ProjectID" VARCHAR, -- Links to VPRO project id field
+  "StartDate" SMALLINT DEFAULT NULL, -- Added for two-field primary key in metadata
   "EndDate" SMALLINT,
   "ProjectTitle" VARCHAR,
   "CoordinatingAgency" VARCHAR,
-  "ProponentFunder" VARCHAR,
+  "ProponentFunder" VARCHAR, -- Funding agency/University
   "FieldCompanyAgency" VARCHAR,
   "FieldLeader" VARCHAR,
   "FieldDataCollectionTeam" VARCHAR,
-  "ProjectPurpose" VARCHAR,
-  "GeographicStudyArea" VARCHAR,
+  "ProjectPurpose" VARCHAR, -- Purpose of project
+  "GeographicStudyArea" VARCHAR, -- Geographic area of study
   "GeographicStudyRegion" VARCHAR,
   "NumberOfFS882Plots" INTEGER,
   "NumberOfSiteVisits" SMALLINT,
-  "ProjectType" VARCHAR,
+  "ProjectType" VARCHAR, -- BEC, TEM, SIBEC, Other
   "ProjectTypeOther" VARCHAR,
-  "EcosysCollectionStandard" VARCHAR,
+  "EcosysCollectionStandard" VARCHAR, -- 1 = DIEF1980, 2 = DEIF1990, 3 = DTE1998, 4 = Other
   "EcosysCollectionStandardOther" VARCHAR,
-  "VegCoverMethod" VARCHAR,
+  "VegCoverMethod" VARCHAR, -- 1 = Percent, 2 = Braun-Blanquet, 3 = Domin-Krajina, 4 = Other
   "VegCoverMethodOther" VARCHAR,
-  "PlotMethod" VARCHAR,
+  "PlotMethod" VARCHAR, -- 1 = 20x20, 2 = Nested, 3 = 1x1, 4 = Transect, 5 = Frame
   "PlotMethodOther" VARCHAR,
-  "MensurationMethod" VARCHAR,
+  "MensurationMethod" VARCHAR, -- 1 = Fixed, 2 = Prism, 3 = Paired Prism, 4 = Other
   "MensurationMethodOther" VARCHAR,
   "ExtraVegFieldDescription" VARCHAR,
   "DataCustodian" VARCHAR,
   "StorageLocation" VARCHAR,
-  "CollectedSite" SMALLINT,
+  "CollectedSite" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualitySite" VARCHAR,
-  "CollectedVeg" SMALLINT,
+  "CollectedVeg" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualityVeg" VARCHAR,
-  "CollectedSoil" SMALLINT,
+  "CollectedSoil" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualitySoil" VARCHAR,
-  "CollectedTerrain" SMALLINT,
+  "CollectedTerrain" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualityTerrain" VARCHAR,
-  "CollectedMens" SMALLINT,
+  "CollectedMens" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualityMens" VARCHAR,
-  "CollectedCWD" SMALLINT,
+  "CollectedCWD" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualityCWD" VARCHAR,
-  "CollectedWildTree" SMALLINT,
+  "CollectedWildTree" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualityWildTree" VARCHAR,
-  "CollectedSoilChem" SMALLINT,
+  "CollectedSoilChem" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualitySoilChem" VARCHAR,
-  "CollectedWildlifeHabitatAssessment" SMALLINT,
+  "CollectedWildlifeHabitatAssessment" SMALLINT, -- 1 = complete, 2 = partial, 3 = none
   "DataQualityWildlifeHabitatAssessment" VARCHAR,
   "CollectedCompleteOther" VARCHAR,
   "CollectedPartialOther" VARCHAR,
   "CollectedNoneOther" VARCHAR,
-  "GeoRefMethod" VARCHAR,
+  "GeoRefMethod" VARCHAR, -- 1 = GPS, 2 = base correct, 3 = pre2000
   "GeoRefMethodOther" VARCHAR,
-  "Datum" VARCHAR,
+  "Datum" VARCHAR, -- 1 = NAD27, 2 = NAD83
   "DatumOther" VARCHAR,
-  "CoordinateSystem" VARCHAR,
+  "CoordinateSystem" VARCHAR, -- 1 = UTM, 2 = dd.ddd, 3 = dd.mm.mmm, 4 = dd.mm.ss.s
   "CoordinateSystemOther" VARCHAR,
   "AllSpecs" VARCHAR,
   "TableOfLists" VARCHAR,
@@ -81,3 +82,17 @@ CREATE UNIQUE INDEX "uidx_Metadata_ID" ON "Metadata" ("ID");
 CREATE INDEX "idx_Metadata_NumberOfFS882Plots" ON "Metadata" ("NumberOfFS882Plots");
 CREATE INDEX "idx_Metadata_NumberOfSiteVisits" ON "Metadata" ("NumberOfSiteVisits");
 CREATE INDEX "idx_Metadata_ProjectID" ON "Metadata" ("ProjectID");
+
+/*
+Access metadata notes for Metadata:
+- Table Description: VP07
+- StartDate: ValidationRule=Between 1900 And 2500 Or Is Null; ValidationText=Please enter a year between 1900 and 2500.
+- EndDate: ValidationRule=Between 1900 And 2500 Or Is Null; ValidationText=Please enter a year between 1900 and 2500.
+- BAPID: ValidationRule=<=99999; ValidationText=Please enter an integer <= 99,999.
+- Access keeps ProjectID indexed, not unique.
+Potential write constraints to consider later:
+- CHECK(length("ProjectID") <= 20)
+- CHECK("StartDate" BETWEEN 1900 AND 2500 OR "StartDate" IS NULL)
+- CHECK("EndDate" BETWEEN 1900 AND 2500 OR "EndDate" IS NULL)
+- CHECK("BAPID" <= 99999 OR "BAPID" IS NULL)
+*/
