@@ -1,37 +1,37 @@
 -- Access table description: VP06
 CREATE TABLE "Herbarium" (
-  "RecID" INTEGER PRIMARY KEY,
-  "AccessionNumber" VARCHAR,
-  "AccessionDate" TIMESTAMP,
-  "PlotNumber" VARCHAR,
-  "Species" VARCHAR,
+  "RecID" INTEGER PRIMARY KEY, -- Y
+  "AccessionNumber" VARCHAR, -- Y
+  "AccessionDate" TIMESTAMP, -- Y
+  "PlotNumber" VARCHAR, -- Y
+  "Species" VARCHAR, -- Y
   "ScientificNameRich" TEXT,
-  "SpecimenPreviousName" VARCHAR,
-  "Identifier" VARCHAR,
-  "Habitat" TEXT,
-  "CountryOfOrigin" VARCHAR,
-  "ProvinceOfOrigin" VARCHAR,
-  "CollectionNumber" VARCHAR,
-  "LocationDescription" VARCHAR,
-  "Collectors" VARCHAR,
-  "DateOfCollection" TIMESTAMP,
-  "GeneralRemarks" TEXT,
-  "PermanentStorageLocation" VARCHAR,
-  "EntryOperator" VARCHAR,
-  "EntryOperatorDate" TIMESTAMP,
-  "Comments" VARCHAR,
-  "Photo" BLOB,
-  "Flag01" BOOLEAN,
-  "Flag02" BOOLEAN,
-  "LongitudeDegrees" REAL,
-  "LongitudeMinutes" REAL,
-  "LongitudeSeconds" REAL,
-  "LatitudeDegrees" REAL,
-  "LatitudeMinutes" REAL,
-  "LatitudeSeconds" REAL,
-  "DuplicateSentTo" VARCHAR,
-  "OnLoanTo" VARCHAR,
-  "LoanDate" TIMESTAMP,
+  "SpecimenPreviousName" VARCHAR, -- Y
+  "Identifier" VARCHAR, -- Y
+  "Habitat" TEXT, -- Y
+  "CountryOfOrigin" VARCHAR, -- Y
+  "ProvinceOfOrigin" VARCHAR, -- Y
+  "CollectionNumber" VARCHAR, -- Y
+  "LocationDescription" VARCHAR, -- Y
+  "Collectors" VARCHAR, -- Y
+  "DateOfCollection" TIMESTAMP, -- Y
+  "GeneralRemarks" TEXT, -- Y
+  "PermanentStorageLocation" VARCHAR, -- Y
+  "EntryOperator" VARCHAR, -- Y
+  "EntryOperatorDate" TIMESTAMP, -- Y
+  "Comments" VARCHAR, -- Y
+  "Photo" BLOB, -- Y
+  "Flag01" BOOLEAN, -- Y
+  "Flag02" BOOLEAN, -- Y
+  "LongitudeDegrees" REAL, -- Y
+  "LongitudeMinutes" REAL, -- Y
+  "LongitudeSeconds" REAL, -- Y
+  "LatitudeDegrees" REAL, -- Y
+  "LatitudeMinutes" REAL, -- Y
+  "LatitudeSeconds" REAL, -- Y
+  "DuplicateSentTo" VARCHAR, -- Y
+  "OnLoanTo" VARCHAR, -- Y
+  "LoanDate" TIMESTAMP, -- Y
   "Print" BOOLEAN DEFAULT FALSE
 );
 

@@ -1,11 +1,11 @@
 CREATE TABLE "LayerCode" (
-  "LayerCode" TEXT,
+  "LayerCode" TEXT, -- 1 2 3 4 5 6 7 8 9 10 11 12 13
   "Layer1234567" TEXT,
-  "LayerCompact" TEXT,
-  "Layer" TEXT,
+  "LayerCompact" TEXT, -- Apr. 7, 2020 RK
+  "Layer" TEXT, -- A1, A2, A3, B1, B2, C, D
   "LayerText" TEXT,
-  "Strata" TEXT,
-  "StrataNum" INTEGER,
+  "Strata" TEXT, -- A, B, C, D
+  "StrataNum" INTEGER, -- 1, 2, 3, 4
   "Lifeform" TEXT
 );
 

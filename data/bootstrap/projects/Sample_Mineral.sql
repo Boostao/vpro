@@ -12,19 +12,19 @@ CREATE TABLE "Mineral" (
   "PercentCoarseFragsCobbles" SMALLINT,
   "PercentCoarseFragsStones" SMALLINT,
   "PercentCoarseFragsTotal" SMALLINT,
-  "PercentCoarseFragsShape" VARCHAR,
-  "RootsAbundance" VARCHAR,
-  "RootsSize" VARCHAR,
-  "MineralStructureClass" VARCHAR,
-  "MineralStructureKind" VARCHAR,
-  "MineralFormpH" REAL,
-  "MottlesAbundance" VARCHAR,
-  "MottlesSize" VARCHAR,
-  "MottlesContrast" VARCHAR,
-  "ClayFilmsFreq" VARCHAR,
-  "ClayFilmThickness" VARCHAR,
-  "Effervescence" VARCHAR,
-  "Porosity" VARCHAR,
+  "PercentCoarseFragsShape" VARCHAR, -- code
+  "RootsAbundance" VARCHAR, -- code
+  "RootsSize" VARCHAR, -- code
+  "MineralStructureClass" VARCHAR, -- code
+  "MineralStructureKind" VARCHAR, -- code
+  "MineralFormpH" REAL, -- code
+  "MottlesAbundance" VARCHAR, -- code
+  "MottlesSize" VARCHAR, -- code
+  "MottlesContrast" VARCHAR, -- code
+  "ClayFilmsFreq" VARCHAR, -- code
+  "ClayFilmThickness" VARCHAR, -- code
+  "Effervescence" VARCHAR, -- code
+  "Porosity" VARCHAR, -- code
   "Comments" TEXT,
   "Flag" BOOLEAN, -- rk add field
   "ID" INTEGER PRIMARY KEY,

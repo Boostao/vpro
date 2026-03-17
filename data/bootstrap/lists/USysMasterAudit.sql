@@ -1,6 +1,6 @@
 CREATE TABLE "USysMasterAudit" (
   "User" TEXT,
-  "Action" TEXT,
+  "Action" TEXT, -- Move, New, Delete, Change
   "NodeName" TEXT,
   "NodeID" INTEGER,
   "Parent" TEXT,

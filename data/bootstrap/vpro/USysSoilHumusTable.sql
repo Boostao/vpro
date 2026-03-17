@@ -3,17 +3,17 @@ CREATE TABLE "USysSoilHumusTable" (
   "Horizon" VARCHAR, -- Humus horizon code
   "UpperDepth" REAL, -- Depth of upper horizon boundary
   "LowerDepth" REAL, -- Depth of lower horizon boundary
-  "HumusStructureDegree" VARCHAR,
-  "HumusStructureKind" VARCHAR,
-  "MycelAbundance" VARCHAR,
-  "FecalAbundance" VARCHAR,
-  "RootsAbundance" VARCHAR,
-  "RootsSize" VARCHAR,
-  "vonPost" SMALLINT,
-  "HumusFormpH" REAL,
-  "Consistence" VARCHAR,
-  "Character" VARCHAR,
-  "Fauna" VARCHAR,
+  "HumusStructureDegree" VARCHAR, -- code
+  "HumusStructureKind" VARCHAR, -- code
+  "MycelAbundance" VARCHAR, -- code
+  "FecalAbundance" VARCHAR, -- code
+  "RootsAbundance" VARCHAR, -- code
+  "RootsSize" VARCHAR, -- code
+  "vonPost" SMALLINT, -- code
+  "HumusFormpH" REAL, -- code
+  "Consistence" VARCHAR, -- code
+  "Character" VARCHAR, -- code
+  "Fauna" VARCHAR, -- code
   "Comment" TEXT,
   "Flag" BOOLEAN, -- rk add field
   "ID" INTEGER PRIMARY KEY

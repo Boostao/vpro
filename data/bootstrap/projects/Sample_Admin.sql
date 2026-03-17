@@ -1,7 +1,7 @@
 -- Access table description: VP08
 CREATE TABLE "Admin" (
   "Plot" VARCHAR NOT NULL, -- unique plot number (7 char)
-  "StartDate" SMALLINT,
+  "StartDate" SMALLINT, -- Added for two-field primary key in metadata
   "PlotType" VARCHAR, -- 1 ground, 2 visual, 3 note, 4 FS882, 5 other
   "PlotSize" REAL, -- added for VPro 15, metres squared
   "ProvinceStateTerritory" VARCHAR,

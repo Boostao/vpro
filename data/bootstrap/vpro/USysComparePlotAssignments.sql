@@ -1,7 +1,7 @@
 CREATE TABLE "USysComparePlotAssignments" (
   "PlotNumber" TEXT,
-  "SiteUnit1" TEXT,
-  "SiteUnit2" TEXT,
+  "SiteUnit1" TEXT, -- historical
+  "SiteUnit2" TEXT, -- present
   "Change" TEXT,
   "PlantAssoc1" TEXT,
   "PlantAssoc2" TEXT,

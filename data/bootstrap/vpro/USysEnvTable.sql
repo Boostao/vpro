@@ -21,32 +21,32 @@ CREATE TABLE "USysEnvTable" (
   "Zone" VARCHAR, -- Biogeoclimatic zone Linked to standards linst
   "SubZone" VARCHAR, -- Biogeoclimatic subzone/variant. Linked to standards linst
   "SiteSeries" VARCHAR,
-  "SiteModifier1" VARCHAR,
-  "SiteModifier2" VARCHAR,
+  "SiteModifier1" VARCHAR, -- From GIF 2018 addition
+  "SiteModifier2" VARCHAR, -- From GIF 2018 addition
   "TransDistrib" VARCHAR,
-  "RealmClass" VARCHAR,
-  "MapUnit" VARCHAR,
-  "SnowCoverregime" VARCHAR,
-  "MoistureRegime" VARCHAR,
-  "NutrientRegime" VARCHAR,
-  "SuccessionalStatus" VARCHAR,
-  "StructuralStage" VARCHAR,
-  "StructuralStageMod" VARCHAR,
+  "RealmClass" VARCHAR, -- Changed to 5 character
+  "MapUnit" VARCHAR, -- Changed to 30
+  "SnowCoverregime" VARCHAR, -- CHARS
+  "MoistureRegime" VARCHAR, -- code
+  "NutrientRegime" VARCHAR, -- code
+  "SuccessionalStatus" VARCHAR, -- Code
+  "StructuralStage" VARCHAR, -- Code
+  "StructuralStageMod" VARCHAR, -- Code
   "StandAge" SMALLINT,
   "Elevation" SMALLINT,
   "SlopeGradient" REAL, -- In percent
   "Aspect" SMALLINT, -- In degrees (999 = no slope)
-  "MesoSlopePosition" VARCHAR,
-  "SurfaceShape" VARCHAR,
-  "SurfaceTopographyType" VARCHAR,
-  "SurfaceTopographySize" VARCHAR,
-  "WaterSource" VARCHAR,
+  "MesoSlopePosition" VARCHAR, -- Code
+  "SurfaceShape" VARCHAR, -- Code (Change name from Surface topography)
+  "SurfaceTopographyType" VARCHAR, -- code
+  "SurfaceTopographySize" VARCHAR, -- code
+  "WaterSource" VARCHAR, -- Code
   "Photo" VARCHAR, -- Link to photo file
-  "Exposure1" VARCHAR,
-  "Exposure2" VARCHAR,
-  "SiteDisturbance1" VARCHAR,
-  "SiteDisturbance2" VARCHAR,
-  "SiteDisturbance3" VARCHAR,
+  "Exposure1" VARCHAR, -- code
+  "Exposure2" VARCHAR, -- code
+  "SiteDisturbance1" VARCHAR, -- code
+  "SiteDisturbance2" VARCHAR, -- code
+  "SiteDisturbance3" VARCHAR, -- code
   "SubstrateDecWood" REAL,
   "SubstrateBedRock" REAL,
   "SubstrateRocks" REAL,
@@ -55,35 +55,35 @@ CREATE TABLE "USysEnvTable" (
   "SubstrateWater" REAL,
   "SiteNotes" TEXT,
   "SoilSurveyor" VARCHAR,
-  "BedrockGeology1" VARCHAR,
-  "BedrockGeology2" VARCHAR,
-  "BedrockGeology3" VARCHAR,
-  "CoarseFragLith1" VARCHAR,
-  "CoarseFragLith2" VARCHAR,
-  "CoarseFragLith3" VARCHAR,
-  "TerrainTextureSurf" VARCHAR,
-  "SurficialMaterialSurf" VARCHAR,
-  "SurfaceExpSurf" VARCHAR,
-  "GeoMorProSurf" VARCHAR,
-  "TerrainTextureSubSurf" VARCHAR,
-  "SurficialMaterialSubSurf" VARCHAR,
-  "SurfaceExpSubSurf" VARCHAR,
-  "GeoMorProSubSurf" VARCHAR,
-  "FloodingRegimeFreq" VARCHAR,
-  "MoistureRegimeSub" VARCHAR,
-  "FloodingRegimeDur" VARCHAR,
-  "SoilDrainage" VARCHAR,
+  "BedrockGeology1" VARCHAR, -- code
+  "BedrockGeology2" VARCHAR, -- code
+  "BedrockGeology3" VARCHAR, -- code
+  "CoarseFragLith1" VARCHAR, -- code
+  "CoarseFragLith2" VARCHAR, -- code
+  "CoarseFragLith3" VARCHAR, -- code
+  "TerrainTextureSurf" VARCHAR, -- code
+  "SurficialMaterialSurf" VARCHAR, -- code
+  "SurfaceExpSurf" VARCHAR, -- code
+  "GeoMorProSurf" VARCHAR, -- code
+  "TerrainTextureSubSurf" VARCHAR, -- code
+  "SurficialMaterialSubSurf" VARCHAR, -- code
+  "SurfaceExpSubSurf" VARCHAR, -- code
+  "GeoMorProSubSurf" VARCHAR, -- code
+  "FloodingRegimeFreq" VARCHAR, -- code
+  "MoistureRegimeSub" VARCHAR, -- code
+  "FloodingRegimeDur" VARCHAR, -- code
+  "SoilDrainage" VARCHAR, -- code
   "SeepageDepth" SMALLINT,
-  "RootRestrictingType" VARCHAR,
-  "RootRestrictingDepth" SMALLINT,
-  "RootZoneParticleSize" VARCHAR,
+  "RootRestrictingType" VARCHAR, -- code
+  "RootRestrictingDepth" SMALLINT, -- code
+  "RootZoneParticleSize" VARCHAR, -- code
   "RootingDepth" SMALLINT,
-  "SoilClassSubGroup" VARCHAR,
-  "SoilClassGroup" VARCHAR,
-  "HumusForm" VARCHAR,
+  "SoilClassSubGroup" VARCHAR, -- code
+  "SoilClassGroup" VARCHAR, -- code
+  "HumusForm" VARCHAR, -- code
   "HumusFormPhase" VARCHAR,
-  "pHMethodCodeMineral" VARCHAR,
-  "pHMethodCodeOrganic" VARCHAR,
+  "pHMethodCodeMineral" VARCHAR, -- code
+  "pHMethodCodeOrganic" VARCHAR, -- code
   "SoilNotes" TEXT,
   "VegSurveyor" VARCHAR,
   "StrataCoverTree" REAL,
@@ -91,8 +91,8 @@ CREATE TABLE "USysEnvTable" (
   "StrataCoverHerb" REAL,
   "StrataCoverMoss" REAL,
   "VegNotes" TEXT,
-  "HydroGeoSystem" VARCHAR,
-  "HydroGeoSubSystem" VARCHAR,
+  "HydroGeoSystem" VARCHAR, -- code
+  "HydroGeoSubSystem" VARCHAR, -- code
   "SpeciesListComplete" BOOLEAN, -- partial or complete species list
   "Temporary" VARCHAR, -- For users
   "Flag" BOOLEAN,

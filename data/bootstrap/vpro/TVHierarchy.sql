@@ -1,9 +1,9 @@
 CREATE TABLE "TVHierarchy" (
-  "ID" INTEGER PRIMARY KEY,
-  "Name" TEXT NOT NULL,
+  "ID" INTEGER PRIMARY KEY, -- Number automatically assigned to new node
+  "Name" TEXT NOT NULL, -- Node's label
   "LongCommonName" TEXT,
   "LongScientificName" TEXT,
-  "Parent" INTEGER,
+  "Parent" INTEGER, -- Node's parent
   "Level" INTEGER,
   "Tag" TEXT,
   "MyOrder" TEXT,

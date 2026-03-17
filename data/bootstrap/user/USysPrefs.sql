@@ -1,0 +1,25 @@
+-- Access table description: VP03
+CREATE TABLE "USysPrefs" (
+  "Project" TEXT,
+  "PlotList" TEXT,
+  "Hierarchy" TEXT,
+  "StartMenu" INTEGER,
+  "MaxWindows" INTEGER,
+  "FormSet" INTEGER DEFAULT 0,
+  "ScreenResolution" INTEGER,
+  "CalcSI" INTEGER,
+  "ForestRegion" TEXT,
+  "CodePrompts" INTEGER,
+  "FormNav" INTEGER,
+  "FastBoot" INTEGER,
+  "rptLvTitle" TEXT,
+  "rptLvSort" INTEGER,
+  "rptLvShowSppPres" DOUBLE,
+  "rptLvShowSppMC" DOUBLE,
+  "rptLvShowCommon" INTEGER,
+  "rptLvStatMethod" INTEGER,
+  "ExcelVer" REAL,
+  "TableVersion" INTEGER,
+  "PictureDirectory" TEXT,
+  "PictureFormat" TEXT
+);
