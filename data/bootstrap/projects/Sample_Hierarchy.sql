@@ -1,6 +1,6 @@
 -- Access table description: VP04
 CREATE TABLE "Hierarchy" (
-  "ID" INTEGER, -- Number automatically assigned to new node
+  "ID" INTEGER PRIMARY KEY, -- Number automatically assigned to new node
   "Name" VARCHAR NOT NULL, -- Node's label
   "Parent" INTEGER, -- Node's parent
   "Level" SMALLINT,
@@ -16,7 +16,6 @@ CREATE INDEX "idx_Hierarchy_ChildID" ON "Hierarchy" ("ChildID");
 CREATE UNIQUE INDEX "uidx_Hierarchy_Name" ON "Hierarchy" ("Name");
 CREATE INDEX "idx_Hierarchy_Level" ON "Hierarchy" ("Level");
 CREATE INDEX "idx_Hierarchy_Parent" ON "Hierarchy" ("Parent");
-CREATE UNIQUE INDEX "uidx_Hierarchy_PrimaryKey" ON "Hierarchy" ("ID");
 
 /*
 Access metadata notes for Hierarchy:

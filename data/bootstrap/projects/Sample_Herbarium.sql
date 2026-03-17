@@ -1,6 +1,6 @@
 -- Access table description: VP06
 CREATE TABLE "Herbarium" (
-  "RecID" INTEGER,
+  "RecID" INTEGER PRIMARY KEY,
   "AccessionNumber" VARCHAR,
   "AccessionDate" TIMESTAMP,
   "PlotNumber" VARCHAR,
@@ -37,7 +37,6 @@ CREATE TABLE "Herbarium" (
 
 CREATE INDEX "idx_Herbarium_Code" ON "Herbarium" ("Species");
 CREATE INDEX "idx_Herbarium_Identifier" ON "Herbarium" ("Identifier");
-CREATE UNIQUE INDEX "uidx_Herbarium_PrimaryKey" ON "Herbarium" ("RecID");
 
 /*
 Access metadata notes for Herbarium:

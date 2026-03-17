@@ -74,11 +74,10 @@ CREATE TABLE "Metadata" (
   "BAPID" INTEGER,
   "DateLastEdited" TIMESTAMP,
   "Notes" TEXT,
-  "ID" INTEGER
+  "ID" INTEGER PRIMARY KEY
 );
 
 CREATE INDEX "idx_Metadata_BAPID" ON "Metadata" ("BAPID");
-CREATE UNIQUE INDEX "uidx_Metadata_ID" ON "Metadata" ("ID");
 CREATE INDEX "idx_Metadata_NumberOfFS882Plots" ON "Metadata" ("NumberOfFS882Plots");
 CREATE INDEX "idx_Metadata_NumberOfSiteVisits" ON "Metadata" ("NumberOfSiteVisits");
 CREATE INDEX "idx_Metadata_ProjectID" ON "Metadata" ("ProjectID");

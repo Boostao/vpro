@@ -27,11 +27,10 @@ CREATE TABLE "Mineral" (
   "Porosity" VARCHAR,
   "Comments" TEXT,
   "Flag" BOOLEAN, -- rk add field
-  "ID" INTEGER,
+  "ID" INTEGER PRIMARY KEY,
   FOREIGN KEY ("PlotNumber") REFERENCES "Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX "uidx_Mineral_ID" ON "Mineral" ("ID");
 CREATE INDEX "idx_Mineral_PlotNumber" ON "Mineral" ("PlotNumber");
 
 /*

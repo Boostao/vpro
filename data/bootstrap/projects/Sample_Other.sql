@@ -10,11 +10,10 @@ CREATE TABLE "Other" (
   "UserFlag2" BOOLEAN,
   "UserFlag3" BOOLEAN,
   "Flag" BOOLEAN,
-  "ID" INTEGER,
+  "ID" INTEGER PRIMARY KEY,
   FOREIGN KEY ("PlotNumber") REFERENCES "Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX "uidx_Other_ID" ON "Other" ("ID");
 CREATE INDEX "idx_Other_PlotNumber" ON "Other" ("PlotNumber");
 
 /*

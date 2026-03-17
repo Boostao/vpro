@@ -17,11 +17,10 @@ CREATE TABLE "Humus" (
   "Fauna" VARCHAR,
   "Comment" TEXT,
   "Flag" BOOLEAN, -- rk add field
-  "ID" INTEGER,
+  "ID" INTEGER PRIMARY KEY,
   FOREIGN KEY ("PlotNumber") REFERENCES "Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX "uidx_Humus_ID" ON "Humus" ("ID");
 CREATE INDEX "idx_Humus_PlotNumber" ON "Humus" ("PlotNumber");
 
 /*
