@@ -4,6 +4,16 @@
   margin-top: 0;
   margin-bottom: 0;
 }
+.vpro-home-brand {
+  text-decoration: none;
+  cursor: pointer;
+}
+.vpro-home-brand:hover,
+.vpro-home-brand:focus {
+  color: #ffffff;
+  text-decoration: none;
+  opacity: 0.96;
+}
 .navbar .navbar-brand {
   display: flex;
   align-items: center;
