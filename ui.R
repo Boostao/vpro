@@ -38,7 +38,11 @@ ui <- tagList(
   page_navbar(
   id = "main_tabs",
   title = div(
-    class = "d-flex align-items-center gap-2 vpro-navbar-title",
+    role = "button",
+    tabindex = "0",
+    class = "d-flex align-items-center gap-2 vpro-navbar-title vpro-home-brand",
+    onclick = "Shiny.setInputValue('vpro_go_home', Date.now(), {priority: 'event'}); return false;",
+    onkeydown = "if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); Shiny.setInputValue('vpro_go_home', Date.now(), {priority: 'event'}); }",
     icon("seedling"),
     span("VPro", class = "fw-bold")
   ),
@@ -52,6 +56,10 @@ ui <- tagList(
   ),
 
   # Main Tabs
+
+  nav_panel(tagList(icon("house"), "Home"), value = "Home",
+    mod_home_ui("home")
+  ),
 
 # Forms ----
   nav_menu("Forms",

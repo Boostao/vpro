@@ -1614,11 +1614,18 @@ server <- function(input, output, session) {
   # Import Module
   mod_import_server("import", state, con)
 
+  # Home Module
+  mod_home_server("home", state, con)
+
   # Upload Module
   #mod_upload_server("upload", state, con)
 
   # Sync Module
   mod_sync_server("sync", state, con)
+
+  observeEvent(input$vpro_go_home, {
+    bslib::nav_select("main_tabs", selected = "Home", session = session)
+  }, ignoreInit = TRUE)
 
   # Invalidate sync incoming count whenever the Sync tab is activated
   observeEvent(input$main_tabs, {
