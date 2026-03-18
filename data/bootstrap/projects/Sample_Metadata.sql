@@ -1,5 +1,5 @@
 -- Access table description: VP07
-CREATE TABLE "Metadata" (
+CREATE TABLE "Sample_Metadata" (
   "ProjectID" VARCHAR, -- Links to VPRO project id field
   "StartDate" SMALLINT DEFAULT NULL, -- Added for two-field primary key in metadata
   "EndDate" SMALLINT,
@@ -77,13 +77,13 @@ CREATE TABLE "Metadata" (
   "ID" INTEGER PRIMARY KEY
 );
 
-CREATE INDEX "idx_Metadata_BAPID" ON "Metadata" ("BAPID");
-CREATE INDEX "idx_Metadata_NumberOfFS882Plots" ON "Metadata" ("NumberOfFS882Plots");
-CREATE INDEX "idx_Metadata_NumberOfSiteVisits" ON "Metadata" ("NumberOfSiteVisits");
-CREATE INDEX "idx_Metadata_ProjectID" ON "Metadata" ("ProjectID");
+CREATE INDEX "idx_Sample_Metadata_BAPID" ON "Sample_Metadata" ("BAPID");
+CREATE INDEX "idx_Sample_Metadata_NumberOfFS882Plots" ON "Sample_Metadata" ("NumberOfFS882Plots");
+CREATE INDEX "idx_Sample_Metadata_NumberOfSiteVisits" ON "Sample_Metadata" ("NumberOfSiteVisits");
+CREATE INDEX "idx_Sample_Metadata_ProjectID" ON "Sample_Metadata" ("ProjectID");
 
 /*
-Access metadata notes for Metadata:
+Access metadata notes for Sample_Metadata:
 - Table Description: VP07
 - StartDate: ValidationRule=Between 1900 And 2500 Or Is Null; ValidationText=Please enter a year between 1900 and 2500.
 - EndDate: ValidationRule=Between 1900 And 2500 Or Is Null; ValidationText=Please enter a year between 1900 and 2500.

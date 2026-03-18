@@ -1,5 +1,5 @@
 -- Access table description: VP08
-CREATE TABLE "Mineral" (
+CREATE TABLE "Sample_Mineral" (
   "PlotNumber" VARCHAR NOT NULL, -- links to env table
   "Horizon" VARCHAR, -- Mineral horizon designation
   "UpperDepth" REAL, -- Upper depth of horizon (cm)
@@ -28,16 +28,16 @@ CREATE TABLE "Mineral" (
   "Comments" TEXT,
   "Flag" BOOLEAN, -- rk add field
   "ID" INTEGER PRIMARY KEY,
-  FOREIGN KEY ("PlotNumber") REFERENCES "Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
+  FOREIGN KEY ("PlotNumber") REFERENCES "Sample_Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-CREATE INDEX "idx_Mineral_PlotNumber" ON "Mineral" ("PlotNumber");
+CREATE INDEX "idx_Sample_Mineral_PlotNumber" ON "Sample_Mineral" ("PlotNumber");
 
 /*
-Access metadata notes for Mineral:
+Access metadata notes for Sample_Mineral:
 - Table Description: VP08
 - PlotNumber: Field Size=7; Required=Yes; AllowZeroLength=No.
-- Relationship: PlotNumber -> Env(PlotNumber), enforced in Access with ON UPDATE CASCADE and ON DELETE CASCADE.
+- Relationship: PlotNumber -> Sample_Env(PlotNumber), enforced in Access with ON UPDATE CASCADE and ON DELETE CASCADE.
 Potential write constraints to consider later:
 - CHECK(length("PlotNumber") <= 7)
 - CHECK(trim("PlotNumber") <> '')

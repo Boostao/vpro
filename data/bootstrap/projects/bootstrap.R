@@ -40,19 +40,18 @@ for (p in projects) {
 
   for (tb in tbs) {
     data_path <- file.path(workdir, sprintf("%s.csv", tb))
-    table_name <- sub(paste0("^", p, "_"), "", tb)
-    load_csv_into_table(con, table_name, data_path)
+    load_csv_into_table(con, tb, data_path)
 
     if (validate) {
       # Validate against original Access DB
       test1 <- read_table_preserve_names(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
-      test2 <- read_table_preserve_names(con, table_name) |> data.table::setDT()
+      test2 <- read_table_preserve_names(con, tb) |> data.table::setDT()
       comparison <- harmonize_validation_tables(test1, test2)
       test1 <- comparison$test1
       test2 <- comparison$test2
       if (!validation_tables_equal(test1, test2)) {
         browser()
-        stop(sprintf("Data mismatch for table %s in project %s", table_name, p))
+        stop(sprintf("Data mismatch for table %s in project %s", tb, p))
       }
     }
 

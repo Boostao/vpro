@@ -1,67 +1,67 @@
 -- ============================================================
 CREATE VIEW "UsysAuditTrail" AS
 SELECT DISTINCT
-  "Audit".*
-FROM "Audit"
+  "Sample_Audit".*
+FROM "Sample_Audit"
 ORDER BY "EditWhen";
 
 
 -- ============================================================
 CREATE VIEW "UsysEnv" AS
 SELECT DISTINCT
-  "Env".*,
-  "Admin".*
-FROM "Env"
-INNER JOIN "Admin"
-  ON "Env"."PlotNumber" = "Admin"."Plot";
+  "Sample_Env".*,
+  "Sample_Admin".*
+FROM "Sample_Env"
+INNER JOIN "Sample_Admin"
+  ON "Sample_Env"."PlotNumber" = "Sample_Admin"."Plot";
 
 
 -- ============================================================
 CREATE VIEW "Filtered_Env" AS
 SELECT DISTINCT
-  "Env".*,
-  "Admin".*
-FROM "Env"
-INNER JOIN "SU"
-  ON "Env"."PlotNumber" = "SU"."PlotNumber"
-INNER JOIN "Admin"
-  ON "Env"."PlotNumber" = "Admin"."Plot"
-WHERE "SU"."PlotNumber" IS NOT NULL;
+  "Sample_Env".*,
+  "Sample_Admin".*
+FROM "Sample_Env"
+INNER JOIN "Sample_SU"
+  ON "Sample_Env"."PlotNumber" = "Sample_SU"."PlotNumber"
+INNER JOIN "Sample_Admin"
+  ON "Sample_Env"."PlotNumber" = "Sample_Admin"."Plot"
+WHERE "Sample_SU"."PlotNumber" IS NOT NULL;
 
 
 -- ============================================================
 CREATE VIEW "UsysHumus" AS
 SELECT DISTINCT
-  "Humus".*
-FROM "Humus";
+  "Sample_Humus".*
+FROM "Sample_Humus";
 
 
 -- ============================================================
 CREATE VIEW "UsysMetadata" AS
 SELECT DISTINCT
-  "Metadata".*
-FROM "Metadata";
+  "Sample_Metadata".*
+FROM "Sample_Metadata";
 
 
 -- ============================================================
 CREATE VIEW "UsysMineral" AS
 SELECT DISTINCT
-  "Mineral".*
-FROM "Mineral";
+  "Sample_Mineral".*
+FROM "Sample_Mineral";
 
 
 -- ============================================================
 CREATE VIEW "UsysOther" AS
 SELECT DISTINCT
-  "Other".*
-FROM "Other";
+  "Sample_Other".*
+FROM "Sample_Other";
 
 
 -- ============================================================
 CREATE VIEW "UsysVeg" AS
 SELECT DISTINCT
-  "Veg".*
-FROM "Veg";
+  "Sample_Veg".*
+FROM "Sample_Veg";
 
 
 -- ============================================================
@@ -83,7 +83,7 @@ SELECT DISTINCT
   "TotalB",
   "HeightB",
   "Collected"
-FROM "Veg"
+FROM "Sample_Veg"
 WHERE "Cover1" IS NOT NULL
    OR "Cover2" IS NOT NULL
    OR "Cover3" IS NOT NULL
@@ -109,7 +109,7 @@ SELECT DISTINCT
   "Cover5c",
   "TotalB",
   "Collected"
-FROM "Veg"
+FROM "Sample_Veg"
 WHERE "Cover4" IS NOT NULL
    OR "Cover5" IS NOT NULL
    OR "TotalB" IS NOT NULL
@@ -127,7 +127,7 @@ SELECT DISTINCT
   "Cover6",
   "Height6",
   "Collected"
-FROM "Veg"
+FROM "Sample_Veg"
 WHERE "Cover6" IS NOT NULL;
 
 
@@ -141,7 +141,7 @@ SELECT DISTINCT
   "Cover8",
   "Cover9",
   "Collected"
-FROM "Veg"
+FROM "Sample_Veg"
 WHERE "Cover7" IS NOT NULL
    OR "Cover8" IS NOT NULL
    OR "Cover9" IS NOT NULL;
@@ -220,7 +220,7 @@ ORDER BY "PlotNumber", "MyLayer";
 -- ============================================================
 CREATE VIEW "qryHerbarium" AS
 SELECT *
-FROM "Herbarium";
+FROM "Sample_Herbarium";
 
 
 -- ============================================================

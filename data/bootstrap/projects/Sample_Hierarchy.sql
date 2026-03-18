@@ -1,5 +1,5 @@
 -- Access table description: VP04
-CREATE TABLE "Hierarchy" (
+CREATE TABLE "Sample_Hierarchy" (
   "ID" INTEGER PRIMARY KEY, -- Number automatically assigned to new node
   "Name" VARCHAR NOT NULL, -- Node's label
   "Parent" INTEGER, -- Node's parent
@@ -12,13 +12,13 @@ CREATE TABLE "Hierarchy" (
   "Flag" BOOLEAN
 );
 
-CREATE INDEX "idx_Hierarchy_ChildID" ON "Hierarchy" ("ChildID");
-CREATE UNIQUE INDEX "uidx_Hierarchy_Name" ON "Hierarchy" ("Name");
-CREATE INDEX "idx_Hierarchy_Level" ON "Hierarchy" ("Level");
-CREATE INDEX "idx_Hierarchy_Parent" ON "Hierarchy" ("Parent");
+CREATE INDEX "idx_Sample_Hierarchy_ChildID" ON "Sample_Hierarchy" ("ChildID");
+CREATE UNIQUE INDEX "uidx_Sample_Hierarchy_Name" ON "Sample_Hierarchy" ("Name");
+CREATE INDEX "idx_Sample_Hierarchy_Level" ON "Sample_Hierarchy" ("Level");
+CREATE INDEX "idx_Sample_Hierarchy_Parent" ON "Sample_Hierarchy" ("Parent");
 
 /*
-Access metadata notes for Hierarchy:
+Access metadata notes for Sample_Hierarchy:
 - Table Description: VP04
 - ID: Access AutoNumber primary key.
 - Name: Required=Yes; unique in Access.

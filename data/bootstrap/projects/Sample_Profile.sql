@@ -1,5 +1,5 @@
 -- Access table description: VP05-2
-CREATE TABLE "Profile" (
+CREATE TABLE "Sample_Profile" (
   "Order" SMALLINT,
   "Table" VARCHAR,
   "Field" VARCHAR,
@@ -12,7 +12,7 @@ CREATE TABLE "Profile" (
 );
 
 /*
-Access metadata notes for Profile:
+Access metadata notes for Sample_Profile:
 - Table Description: VP05-2
 - Access exported no explicit validation rules or relationships for this table.
 Potential write constraints to consider later:

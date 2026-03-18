@@ -1,5 +1,5 @@
 -- Access table description: VP08
-CREATE TABLE "Env" (
+CREATE TABLE "Sample_Env" (
   "PlotNumber" VARCHAR NOT NULL, -- unique plot number (7 char)
   "FieldNumber" VARCHAR, -- field plot number (50 char)
   "ProjectID" VARCHAR, -- ID for project for link to project metadata table ( changed to 30 char)- name change
@@ -114,12 +114,12 @@ CREATE TABLE "Env" (
   "ActiveLayerDepth" REAL -- CHARS
 );
 
-CREATE INDEX "idx_Env_AirPhotoNum" ON "Env" ("AirPhotoNum");
-CREATE UNIQUE INDEX "uidx_Env_PlotNumber" ON "Env" ("PlotNumber");
-CREATE INDEX "idx_Env_ProjectID" ON "Env" ("ProjectID");
+CREATE INDEX "idx_Sample_Env_AirPhotoNum" ON "Sample_Env" ("AirPhotoNum");
+CREATE UNIQUE INDEX "uidx_Sample_Env_PlotNumber" ON "Sample_Env" ("PlotNumber");
+CREATE INDEX "idx_Sample_Env_ProjectID" ON "Sample_Env" ("ProjectID");
 
 /*
-Access metadata notes for Env:
+Access metadata notes for Sample_Env:
 - Table Description: VP08
 - PlotNumber: Field Size=7; Required=Yes; AllowZeroLength=No.
 - FieldNumber: Field Size=50; AllowZeroLength=No.

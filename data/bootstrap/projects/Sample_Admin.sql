@@ -1,5 +1,5 @@
 -- Access table description: VP08
-CREATE TABLE "Admin" (
+CREATE TABLE "Sample_Admin" (
   "Plot" VARCHAR NOT NULL, -- unique plot number (7 char)
   "StartDate" SMALLINT, -- Added for two-field primary key in metadata
   "PlotType" VARCHAR, -- 1 ground, 2 visual, 3 note, 4 FS882, 5 other
@@ -20,17 +20,17 @@ CREATE TABLE "Admin" (
   "GIS_BGC_VER" SMALLINT, -- Will - Dec. 8, 2017
   "BEC_Use" VARCHAR, -- Will - Oct. 16, 2019
   "StrataCoverTotal" REAL,
-  FOREIGN KEY ("Plot") REFERENCES "Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
+  FOREIGN KEY ("Plot") REFERENCES "Sample_Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX "uidx_Admin_PlotNumber" ON "Admin" ("Plot");
+CREATE UNIQUE INDEX "uidx_Sample_Admin_PlotNumber" ON "Sample_Admin" ("Plot");
 
 /*
-Access metadata notes for Admin:
+Access metadata notes for Sample_Admin:
 - Table Description: VP08
 - Plot: Field Size=255; Required=Yes; AllowZeroLength=No.
 - StartDate: ValidationRule=Between 1900 And 2500; ValidationText=Please enter a year between 1900 and 2500.
-- Relationship: Plot -> Env(PlotNumber), enforced in Access with ON UPDATE CASCADE and ON DELETE CASCADE.
+- Relationship: Plot -> Sample_Env(PlotNumber), enforced in Access with ON UPDATE CASCADE and ON DELETE CASCADE.
 Potential write constraints to consider later:
 - CHECK(length("Plot") <= 255)
 - CHECK(trim("Plot") <> '')

@@ -1,5 +1,5 @@
 -- Access table description: VP08
-CREATE TABLE "Veg" (
+CREATE TABLE "Sample_Veg" (
   "PlotNumber" VARCHAR NOT NULL, -- linked to env table
   "Species" VARCHAR NOT NULL, -- linked to species code library
   "Layer" VARCHAR,
@@ -44,20 +44,20 @@ CREATE TABLE "Veg" (
   "Cultural2" SMALLINT, -- User defined cultural use value code
   "Other1" SMALLINT, -- User defined other value code
   "Other2" SMALLINT, -- User defined other value code
-  FOREIGN KEY ("PlotNumber") REFERENCES "Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
+  FOREIGN KEY ("PlotNumber") REFERENCES "Sample_Env" ("PlotNumber") ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-CREATE INDEX "idx_Veg_ID" ON "Veg" ("ID");
-CREATE INDEX "idx_Veg_PlotNumber" ON "Veg" ("PlotNumber");
-CREATE INDEX "idx_Veg_Species" ON "Veg" ("Species");
+CREATE INDEX "idx_Sample_Veg_ID" ON "Sample_Veg" ("ID");
+CREATE INDEX "idx_Sample_Veg_PlotNumber" ON "Sample_Veg" ("PlotNumber");
+CREATE INDEX "idx_Sample_Veg_Species" ON "Sample_Veg" ("Species");
 
 /*
-Access metadata notes for Veg:
+Access metadata notes for Sample_Veg:
 - Table Description: VP08
 - PlotNumber: Field Size=7; Required=Yes; AllowZeroLength=No.
 - Species: Field Size=8; Required=Yes; AllowZeroLength=No.
 - HeightB: Access stores this as text with AllowZeroLength=Yes.
-- Relationship: PlotNumber -> Env(PlotNumber), enforced in Access with ON UPDATE CASCADE and ON DELETE CASCADE.
+- Relationship: PlotNumber -> Sample_Env(PlotNumber), enforced in Access with ON UPDATE CASCADE and ON DELETE CASCADE.
 Potential write constraints to consider later:
 - CHECK(length("PlotNumber") <= 7)
 - CHECK(trim("PlotNumber") <> '')

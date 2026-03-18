@@ -3,9 +3,7 @@ library(RSQLite)
 library(mdbtoolr)
 library(data.table)
 
-validate <- TRUE # Already validated, might need to validate on mac to make sure it is the same.
-outputdir <- file.path(getwd(), "data/bootstrap/output")
-dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
+validate <- FALSE # Already validated, might need to validate on mac to make sure it is the same.
 
 read_sql_statements <- function(path) {
   lines <- readLines(path, warn = FALSE)
@@ -149,10 +147,15 @@ validation_tables_equal <- function(test1, test2) {
     isTRUE(all.equal(test1, test2, tolerance = sqrt(.Machine$double.eps) * 100))
 }
 
-source("data/bootstrap/projects/bootstrap.R")
+outputdir <- file.path(getwd(), "data/")
+dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
 source("data/bootstrap/pics/bootstrap.R")
 source("data/bootstrap/messages/bootstrap.R")
 source("data/bootstrap/lists/bootstrap.R")
 source("data/bootstrap/metadata/bootstrap.R")
 source("data/bootstrap/vpro/bootstrap.R")
 source("data/bootstrap/user/bootstrap.R")
+
+outputdir <- file.path(getwd(), "data/projects")
+dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
+source("data/bootstrap/projects/bootstrap.R")

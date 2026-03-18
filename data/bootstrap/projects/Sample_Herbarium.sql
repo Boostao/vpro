@@ -1,5 +1,5 @@
 -- Access table description: VP06
-CREATE TABLE "Herbarium" (
+CREATE TABLE "Sample_Herbarium" (
   "RecID" INTEGER PRIMARY KEY, -- Y
   "AccessionNumber" VARCHAR, -- Y
   "AccessionDate" TIMESTAMP, -- Y
@@ -35,11 +35,11 @@ CREATE TABLE "Herbarium" (
   "Print" BOOLEAN DEFAULT FALSE
 );
 
-CREATE INDEX "idx_Herbarium_Code" ON "Herbarium" ("Species");
-CREATE INDEX "idx_Herbarium_Identifier" ON "Herbarium" ("Identifier");
+CREATE INDEX "idx_Sample_Herbarium_Code" ON "Sample_Herbarium" ("Species");
+CREATE INDEX "idx_Sample_Herbarium_Identifier" ON "Sample_Herbarium" ("Identifier");
 
 /*
-Access metadata notes for Herbarium:
+Access metadata notes for Sample_Herbarium:
 - Table Description: VP06
 - RecID: Access AutoNumber primary key.
 - PlotNumber: Field Size=7.
