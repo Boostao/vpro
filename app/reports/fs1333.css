@@ -1,0 +1,263 @@
+/*
+  FS1333 “Filled Form” minimal CSS
+  - Scoped: only applies when the document has body class "fs1333"
+  - Print-friendly: black/white, crisp rules, avoids page breaks inside blocks
+  - No theme/colors introduced (uses currentColor / black)
+*/
+
+/* ---------- Page + print defaults ---------- */
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  body.fs1333 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.fs1333 a[href] {
+    text-decoration: none;
+  }
+
+  body.fs1333 .no-print {
+    display: none !important;
+  }
+
+  body.fs1333 .print-only {
+    display: block !important;
+  }
+}
+
+@media screen {
+  body.fs1333 .print-only {
+    display: none;
+  }
+}
+
+/* ---------- Core layout ---------- */
+body.fs1333 {
+  /* Keep typography close to Quarto theme; only tighten slightly */
+  line-height: 1.15;
+  color: #000;
+  font-size: 11pt;
+}
+
+body.fs1333 main,
+body.fs1333 .content {
+  /* Reduce “report-like” wide margins so it reads like a form */
+  max-width: 8.0in;
+}
+
+body.fs1333 h1,
+body.fs1333 h2,
+body.fs1333 h3,
+body.fs1333 h4 {
+  margin: 0.2rem 0 0.35rem;
+}
+
+/* Make section headers read like a form */
+body.fs1333 h1 {
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  border: 1px solid currentColor;
+  padding: 0.08in 0.10in;
+  margin: 0.10in 0 0.14in;
+}
+
+body.fs1333 h2 {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  border: 1px solid currentColor;
+  padding: 0.06in 0.10in;
+  margin-top: 0.16in;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+/* ---------- Form primitives (use these classes in the QMD) ---------- */
+body.fs1333 .fs-block {
+  border: 1px solid currentColor;
+  padding: 0.14in;
+  margin: 0.12in 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+body.fs1333 .fs-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+body.fs1333 .fs-subtitle {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+body.fs1333 .fs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.12in;
+  align-items: baseline;
+}
+
+body.fs1333 .fs-row > * {
+  min-width: 0;
+}
+
+body.fs1333 .fs-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.08in;
+}
+
+body.fs1333 .fs-label {
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
+body.fs1333 .fs-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* “Write-in line” field */
+body.fs1333 .fs-line {
+  display: inline-block;
+  min-width: 1.6in;
+  border-bottom: 1px solid currentColor;
+  padding: 0 0.06in 0.02in;
+  transform: translateY(-0.02in);
+}
+
+/* Boxed field */
+body.fs1333 .fs-box {
+  display: inline-block;
+  min-width: 1.2in;
+  border: 1px solid currentColor;
+  padding: 0.03in 0.06in;
+}
+
+/* Small check box */
+body.fs1333 .fs-checkbox {
+  display: inline-block;
+  width: 0.16in;
+  height: 0.16in;
+  border: 1px solid currentColor;
+  vertical-align: middle;
+}
+
+body.fs1333 .fs-checkbox.fs-checked {
+  background: currentColor;
+}
+
+/* ---------- Tables as “grid form” ---------- */
+/* Default knitr::kable() output has plain <table>; style it like a form grid. */
+body.fs1333 table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+body.fs1333 table th,
+body.fs1333 table td {
+  border: 1px solid currentColor;
+  padding: 0.06in 0.07in;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+body.fs1333 table th {
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+/* Make the label column slightly narrower (works well for Field/Value tables) */
+body.fs1333 table th:first-child,
+body.fs1333 table td:first-child {
+  width: 35%;
+}
+
+/* Also support optional classed tables */
+body.fs1333 table.fs-table,
+body.fs1333 .fs-table table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+body.fs1333 table.fs-table th,
+body.fs1333 table.fs-table td,
+body.fs1333 .fs-table table th,
+body.fs1333 .fs-table table td {
+  border: 1px solid currentColor;
+  padding: 0.06in 0.07in;
+  vertical-align: top;
+}
+
+body.fs1333 table.fs-table th,
+body.fs1333 .fs-table table th {
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+body.fs1333 .fs-cell-tight {
+  padding: 0.04in 0.05in !important;
+}
+
+body.fs1333 .fs-center {
+  text-align: center;
+}
+
+body.fs1333 .fs-right {
+  text-align: right;
+}
+
+/* Use dotted leaders without introducing gray */
+body.fs1333 .fs-leader {
+  display: inline-block;
+  border-bottom: 1px dotted currentColor;
+  min-width: 1.2in;
+  transform: translateY(-0.02in);
+}
+
+/* ---------- If the filled report uses HTML inputs/areas ---------- */
+body.fs1333 input,
+body.fs1333 textarea,
+body.fs1333 select {
+  font: inherit;
+  color: inherit;
+}
+
+body.fs1333 input[type='text'],
+body.fs1333 input[type='number'],
+body.fs1333 textarea {
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  border-radius: 0;
+  padding: 0 0.05in 0.02in;
+  outline: none;
+}
+
+body.fs1333 textarea {
+  border: 1px solid currentColor;
+  padding: 0.06in;
+}
+
+/* ---------- Utility: avoid breaking important sections ---------- */
+body.fs1333 figure,
+body.fs1333 pre,
+body.fs1333 blockquote,
+body.fs1333 table,
+body.fs1333 .fs-avoid-break {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
