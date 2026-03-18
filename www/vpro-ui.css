@@ -133,10 +133,10 @@ body > #floating_context_shell:has(.vpro-floating-shell.is-panel-open)::before {
   transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
 .vpro-floating-shell.is-collapsed .vpro-shell-cue-button {
-  width: 0.96rem;
-  height: 3.85rem;
-  min-width: 0.96rem;
-  padding-left: 0.08rem;
+  width: 0.5rem;
+  height: 4.55rem;
+  min-width: 0.5rem;
+  padding-left: 0.02rem;
   border-left: 0;
   border-radius: 0 1rem 1rem 0;
   border-color: rgba(9, 47, 89, 0.88);
@@ -148,7 +148,7 @@ body > #floating_context_shell:has(.vpro-floating-shell.is-panel-open)::before {
   content: "›";
   position: absolute;
   top: 50%;
-  right: 0.12rem;
+  right: 0.03rem;
   transform: translateY(-52%);
   color: rgba(255, 255, 255, 0.92);
   font-size: 1.02rem;
@@ -162,12 +162,12 @@ body > #floating_context_shell:has(.vpro-floating-shell.is-panel-open)::before {
 }
 .vpro-floating-shell.is-collapsed .vpro-shell-cue-button:hover,
 .vpro-floating-shell.is-collapsed .vpro-shell-cue-button:focus-visible {
-  width: 1.8rem;
-  min-width: 1.8rem;
+  width: 1.02rem;
+  min-width: 1.02rem;
   border-radius: 0 0.92rem 0.92rem 0;
   border-color: rgba(16, 64, 119, 0.92);
   background: linear-gradient(180deg, #0e497f 0%, #0b3c6c 100%);
-  color: #35516f;
+  color: #ffffff;
   box-shadow: 0 16px 30px rgba(11, 39, 70, 0.28);
 }
 .vpro-floating-shell.is-collapsed .vpro-shell-cue-button:hover::before,
@@ -211,6 +211,7 @@ body > #floating_context_shell:has(.vpro-floating-shell.is-panel-open)::before {
 .vpro-floating-shell.is-collapsed .vpro-shell-cue-button:focus-visible .fa-solid {
   opacity: 1;
   transform: scale(1);
+  color: #ffffff;
 }
 .vpro-floating-rail {
   width: var(--vpro-rail-width);
@@ -1189,14 +1190,14 @@ body > #floating_context_shell:has(.vpro-floating-shell.is-panel-open)::before {
     --vpro-navbar-band-height: 6.15rem;
   }
   .vpro-floating-shell.is-collapsed .vpro-shell-cue-button {
-    width: 0.84rem;
-    min-width: 0.84rem;
-    height: 3.15rem;
+    width: 0.46rem;
+    min-width: 0.46rem;
+    height: 3.75rem;
   }
   .vpro-floating-shell.is-collapsed .vpro-shell-cue-button:hover,
   .vpro-floating-shell.is-collapsed .vpro-shell-cue-button:focus-visible {
-    width: 1.58rem;
-    min-width: 1.58rem;
+    width: 0.94rem;
+    min-width: 0.94rem;
   }
   body > #floating_context_shell + .navbar,
   body > #floating_context_shell + .navbar + .html-fill-item {
