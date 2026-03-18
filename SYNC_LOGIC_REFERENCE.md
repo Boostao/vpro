@@ -115,7 +115,7 @@ sequenceDiagram
 
 When `sync_pull(con, tables = c("env", "su", "veg", "lists"))` is called:
 
-1. **Local lists catalog must be attached** as `lists` (e.g., `ATTACH 'data/vpro_lists.duckdb' AS lists`).
+1. **Local lists catalog must be attached** as `lists` from the canonical SQLite store (for example `ATTACH 'data/VLists.db' AS lists (TYPE SQLITE)`).
 2. For each table in the local `lists` catalog:
    - Look for a matching table in `master.lists.*` (case-insensitive match).
    - If found, **DELETE all rows from local** then **INSERT all rows from master**.
@@ -134,7 +134,7 @@ result$lists
 ### Example
 
 ```r
-con <- connect_local_db()  # opens local DuckDB with lists attached
+con <- connect_local_db()  # opens the runtime DuckDB session with canonical SQLite databases attached
 result <- sync_pull(con, tables = c("env", "su", "veg", "lists"))
 print(result$lists)  # e.g., list(synced_tables = 14L, skipped = character(0))
 ```

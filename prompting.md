@@ -2,23 +2,31 @@
 
 Use these prompts sequentially to guide the migration. Each prompt represents a distinct unit of work.
 
+## Current Database Architecture Note
+
+These prompts were originally written around local DuckDB files as the main store. That is no longer the target local architecture.
+
+- Canonical local storage is now SQLite under `data/`, `data/pics/`, and `data/projects/`.
+- DuckDB should be treated as an in-memory boot-time query layer that attaches those SQLite files.
+- Cross-database compatibility queries such as `MasterSiteUnitList` and `MasterUnitList_Hierarchy` should be recreated at app boot in the in-memory DuckDB session, not stored in the canonical SQLite files.
+
 ## Phase 1: Foundation
 
 ### Prompt 1: Project & Database Initialization
 ```text
 I am migrating VPro64 to R Shiny.
 1. Initialize structure: `app.R`, `global.R`, `R/`, `data/`, `www/`, `reports/`.
-2. Packages: `shiny`, `duckdb`, `dplyr`, `dbplyr`, `bslib`, `DT`, `quarto`, `sf`, `janitor`.
-3. Create `scripts/01_build_database.R` to ingest CSVs into 5 separate DuckDB files:
-   - `data/vpro.duckdb`: From `../VPRO_ACCESS/VPro64_forAI/Tables_Data/` (Main Data).
-   - `data/vpro_lists.duckdb`: From `../VPRO_ACCESS/VLists/Tables_Data/` (Reference Lists).
-   - `data/vpro_metadata.duckdb`: From `../VPRO_ACCESS/VMetaData/Tables_Data/` (Project Meta).
-   - `data/vpro_user.duckdb`: From `../VPRO_ACCESS/VUser/Tables_Data/` (User Prefs).
-   - `data/vpro_messages.duckdb`: From `../VPRO_ACCESS/VMessageBoard/Tables_Data/` (Messages).
-4. Create `scripts/02_create_views.R`:
-   - View `vw_USysAllVeg`: UNION query combining `Cover1`..`Cover10`, `TotalA/B` from `Sample_Veg` into a normalized `(PlotNumber, MyLayer, Species, Cover)` structure.
-   - View `vw_USysEnv`: JOIN `Sample_Env` and `Sample_Admin` on `PlotNumber`.
-   - Run both scripts to prime the DBs.
+2. Packages: `shiny`, `duckdb`, `RSQLite`, `dplyr`, `dbplyr`, `bslib`, `DT`, `quarto`, `sf`, `janitor`.
+3. Treat the migrated SQLite files as canonical local storage:
+   - `data/VPro64.db`
+   - `data/VLists.db`
+   - `data/VMetaData.db`
+   - `data/VUser.db`
+   - `data/VMessageBoard.db`
+   - `data/pics/VPics.db`
+   - `data/projects/*.db` for project tables migrated from `Sample_*`
+4. At app boot, open an in-memory DuckDB connection and attach those SQLite databases under stable aliases.
+5. Create runtime-only compatibility views in the in-memory DuckDB layer for cross-database Access queries such as `MasterSiteUnitList` and `MasterUnitList_Hierarchy`.
 ```
 
 ### Prompt 2: Global State Management
@@ -26,9 +34,9 @@ I am migrating VPro64 to R Shiny.
 Replicate `V7mdlGlobalDeclarations` logic.
 1. In `global.R`:
    - Initialize `SysState` reactiveValues.
-   - Manage DB Connections: Note that we have 5 DBs. Main operations are on `vpro.duckdb`, but we need to `ATTACH 'data/vpro_lists.duckdb' AS lists` etc.
+   - Manage DB Connections: the app should use one in-memory DuckDB connection that attaches the canonical SQLite databases (`VPro64.db`, `VLists.db`, `VMetaData.db`, `VUser.db`, `VMessageBoard.db`, `pics/VPics.db`, plus project DBs from `data/projects/`).
 2. Create `R/logic_state.R` with helper `set_project(id)`.
-   - When project sets, query `USysProjectMetadata` (from `vpro_metadata`) for defaults.
+   - When project sets, query attached metadata/user/list databases through the in-memory DuckDB session.
 ```
 
 ## Phase 2: Core Data Entry
@@ -41,7 +49,7 @@ Create `ui.R` / `server.R` shell.
    - `selectInput("sel_project", ...)` sourced from `USysProjectMetadata`.
    - `selectInput("sel_su", ...)` filtered by project, sourced from `USysSuTable`.
    - TextOutput "Current Context".
-3. Server: Populate choices from DuckDB `USys...` tables.
+3. Server: Populate choices from the in-memory DuckDB session over attached SQLite databases.
 ```
 
 ### Prompt 4: Vegetation Data Module (The Complex Grid)

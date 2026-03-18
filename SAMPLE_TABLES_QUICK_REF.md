@@ -278,7 +278,7 @@ ORDER BY l.lumpcode
 
 ## Data Quality Observations
 
-- All columns allow NULL (no explicit NOT NULL constraints in DuckDB schema)
+- All columns allow NULL (no explicit NOT NULL constraints in the analyzed schema snapshot)
 - No explicit UNIQUE constraints defined (relationships rely on naming convention)
 - Audit table allows complete recovery of previous states
 - No cascading delete relationships defined (orphaned records possible)
@@ -296,4 +296,4 @@ ORDER BY l.lumpcode
 
 ---
 
-Generated from: `/Users/nicolas/Documents/GitHub/vpro/data/vpro.duckdb`
+Generated from an earlier DuckDB schema snapshot during the migration. The current canonical local databases are SQLite files under `data/` and `data/projects/`.

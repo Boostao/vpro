@@ -1,19 +1,26 @@
 # Plan: Project Management Refactor — VPro
 
 ## TL;DR
-Refactor VPro's project system from "tables embedded in vpro.duckdb" to "project-as-file" (each project lives in its own .duckdb file), replacing the confusing sentinel-value dropdown with a clean sidebar UI (label + Open/New/Save buttons). The project selector logic moves into a new Shiny module `mod_project.R`. Business logic moves into a new `R/logic_project.R`. `connect_local_db` is simplified to only manage the app skeleton (lists, metadata, user, messages). Tests are added/updated.
+Refactor VPro's project system from a local canonical DuckDB-file mindset to canonical SQLite project files under `data/projects/`, with an in-memory DuckDB session attaching the selected project and the shared companion SQLite databases. The project selector logic moves into a new Shiny module `mod_project.R`. Business logic moves into a new `R/logic_project.R`. `connect_local_db` should manage the in-memory DuckDB session plus attached SQLite shards. Tests are added/updated.
+
+## Architecture Note
+This prompt predates the SQLite-shard migration. Read every reference to local project `.duckdb` files or `vpro.duckdb` as superseded by the current local plan:
+
+- Canonical project files are SQLite `.db` files under `data/projects/`
+- Shared local companion databases are canonical SQLite `.db` files under `data/`
+- DuckDB is the in-memory composition/query layer, not the persisted source of truth
 
 ---
 
 ## Architecture Decision
 
-**Tables have NO prefix going forward.** The `Sample_` prefix was legacy/old code. Tables in both `vpro.duckdb` and every project `.duckdb` file are named `Env`, `Veg`, `Metadata`, `Humus`, `Mineral`, `SU`, `Admin`, `Audit`, `Herbarium`, `Profile`, `Theme`, `Lump`, `Hierarchy`, `Other`.
+**Tables have NO prefix going forward.** The `Sample_` prefix was legacy/old code. Tables in the runtime DuckDB session and in every project SQLite file are named `Env`, `Veg`, `Metadata`, `Humus`, `Mineral`, `SU`, `Admin`, `Audit`, `Herbarium`, `Profile`, `Theme`, `Lump`, `Hierarchy`, `Other`.
 
 `state$CurrProject` is a **filter value** (the `projectid` column inside rows), not a table name prefix.
 
 ### Data flow
-1. App starts → `vpro.duckdb` open (has `Env`, `Veg`, etc. with rows from all loaded projects — starts empty)
-2. User opens `MyProject.duckdb` → attach file → `INSERT INTO Env SELECT * FROM project_alias.Env` (and all other tables) → `state$CurrProject = projectid` → SU dropdown refreshes
+1. App starts → in-memory DuckDB opens and attaches the canonical shared SQLite databases.
+2. User opens `data/projects/MyProject.db` → attach SQLite file → `INSERT INTO Env SELECT * FROM project_alias.Env` (and all other tables) → `state$CurrProject = projectid` → SU dropdown refreshes
 3. User works → all writes go directly to `Env`, `Veg`, etc. filtered by `projectid`
 4. User saves/closes → `SELECT rows WHERE projectid = ?` written back to project file → `DELETE FROM Env WHERE projectid = ?`
 
@@ -22,7 +29,7 @@ All existing `Sample_Env`, `Sample_Veg`, `Sample_Metadata` etc. references must 
 - ~30+ references in `R/logic_*.R` and `R/mod_*.R`
 - ~20+ references in `tests/testthat/` test files
 - `tests/testthat/helpers.R` schema init
-- `vpro.duckdb` itself (rename tables)
+- canonical project SQLite files and any runtime table-creation helpers that still assume `.duckdb`
 - `01_build_database.R` if it produces `Sample_*` table names from CSV filenames
 
 This is a large mechanical find-replace task and **must land before** the project management module works. It should be a separate block executed first, but it is listed here as Phase 0 for completeness.
@@ -75,7 +82,7 @@ Module exports `project_changed` reactive that `server.R` observes.
 Auto-save on session end: `session$onSessionEnded` triggers `save_project` if project is open + path known.
 
 ### Phase 3 — Simplify `connect_local_db`
-- Remove `VPRO_MAIN_DB` env var (not needed — path is always `data/vpro.duckdb`)
+- Remove `VPRO_MAIN_DB` as a DuckDB-specific concept; if a path override remains, it should point at canonical SQLite files instead.
 - Keep auxiliary attachments unchanged
 - Add comment: main db starts empty of project data; `open_project` loads rows at runtime
 
@@ -124,7 +131,7 @@ Replace `selectInput("sel_project", "Project:", choices = NULL)` with `mod_proje
 - `scripts/01_build_database.R`
 
 ## Decisions
-- Project file format: `.duckdb`
+- Project file format: SQLite `.db`
 - Table naming: no prefix, unprefixed (`Env`, `Veg`, `Metadata`, …)
 - Access import: deferred stub only
 - Required at creation: Project ID + Project Title only

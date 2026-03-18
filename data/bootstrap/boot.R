@@ -147,9 +147,12 @@ validation_tables_equal <- function(test1, test2) {
     isTRUE(all.equal(test1, test2, tolerance = sqrt(.Machine$double.eps) * 100))
 }
 
-outputdir <- file.path(getwd(), "data/")
+outputdir <- file.path(getwd(), "data/pics")
 dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
 source("data/bootstrap/pics/bootstrap.R")
+
+outputdir <- file.path(getwd(), "data/")
+dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
 source("data/bootstrap/messages/bootstrap.R")
 source("data/bootstrap/lists/bootstrap.R")
 source("data/bootstrap/metadata/bootstrap.R")

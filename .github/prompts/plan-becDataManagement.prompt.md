@@ -2,10 +2,14 @@
 
 Rewrite the PG schema from scratch. Audit via generic trigger + `audit.logged_actions` (JSONB, append-only, per the [exaspark article](https://exaspark.medium.com/the-ultimate-guide-to-postgresql-data-change-tracking-c3fa88779572) pattern). Delta sync uses row-level MD5 hashes in a local `_sync_meta` DuckDB table. Lists are pull-only (admin-managed). Name mapping in `R/logic_sync.R`. Each step = one commit + tests.
 
+## Local Storage Note
+
+This plan predates the SQLite-shard migration. For current work, interpret "local DuckDB" as the app's in-memory DuckDB session over attached canonical SQLite databases. Do not treat a persisted local DuckDB file as the canonical local store.
+
 ## Context
 
-- **Source**: VPro64 Access database migrated to R Shiny + DuckDB (local) + PostgreSQL (cloud)
-- **Local DuckDB**: untracked workspace — user edits freely, no audit until push
+- **Source**: VPro64 Access database migrated to R Shiny + canonical local SQLite + PostgreSQL (cloud)
+- **Local runtime DuckDB**: in-memory workspace over attached SQLite databases — user edits flow through the local canonical SQLite layer, no audit until push
 - **PostgreSQL**: source of truth with audit triggers on `core.*` and `lists.*`
 - **User identity**: simple dialog (name + email) at push time — no auth system yet
 - **Dev/Test**: Docker PostgreSQL on `localhost:5433` (`docker-compose.yml`)

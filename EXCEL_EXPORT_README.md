@@ -8,6 +8,12 @@ The Excel export functionality provides professional, Access-report-like exports
 - Auto-sized columns and frozen header rows
 - Data validation and proper formatting
 
+## Runtime Note
+
+The canonical local databases are now SQLite files under `data/` and `data/projects/`.
+
+The target app/runtime model is an in-memory DuckDB connection that attaches those SQLite databases at boot. The export code still expects the same logical tables/views, but backend examples should now be read as SQLite-backed DuckDB sessions rather than persistent local DuckDB files.
+
 ## Installation
 
 ### Required Package
@@ -55,8 +61,11 @@ library(DBI)
 library(duckdb)
 source("R/logic_excel_export.R")
 
-con <- dbConnect(duckdb(), "data/vpro.duckdb")
-dbExecute(con, "ATTACH 'data/vpro_lists.duckdb' AS lists (READ_ONLY)")
+con <- dbConnect(duckdb(), dbdir = ":memory:")
+dbExecute(con, "ATTACH 'data/VPro64.db' AS main (TYPE SQLITE)")
+dbExecute(con, "ATTACH 'data/VLists.db' AS lists (TYPE SQLITE)")
+dbExecute(con, "ATTACH 'data/VMetaData.db' AS metadata (TYPE SQLITE)")
+dbExecute(con, "ATTACH 'data/VUser.db' AS user (TYPE SQLITE)")
 
 # Export vegetation only
 export_vegetation_excel(

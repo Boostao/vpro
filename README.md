@@ -1,11 +1,19 @@
 # VPro64 R Shiny Migration
 
-This project is a migration of the VPro64 Microsoft Access application to R Shiny with a DuckDB backend.
+This project is a migration of the VPro64 Microsoft Access application to R Shiny.
+
+The current local database strategy is:
+
+- Canonical local storage lives in SQLite files under `data/` and `data/projects/`.
+- DuckDB is the planned in-memory runtime query layer used to attach those SQLite databases at app boot.
+- PostgreSQL remains a separate cloud/sync concern and does not replace the local canonical SQLite stores.
+
+See `docs/database-runtime-strategy.md` for the current database architecture note.
 
 ## Structure
 
 - **R/**: Shiny modules and helper functions.
-- **data/**: Database files (`vpro.duckdb`).
+- **data/**: Canonical SQLite companion databases (`VPro64.db`, `VLists.db`, `VMetaData.db`, `VUser.db`, `VMessageBoard.db`, `pics/VPics.db`) and per-project SQLite files in `data/projects/`.
 - **www/**: Static assets (CSS, images).
 - **scripts/**: Migration and maintenance scripts.
 - **global.R**: App initialization and global state.
@@ -16,7 +24,7 @@ This project is a migration of the VPro64 Microsoft Access application to R Shin
 
 **Required packages** (installed via renv):
 - shiny, bslib, DT, rhandsontable, shinyjs, shinyTree
-- duckdb, dplyr, dbplyr
+- duckdb, RSQLite, dplyr, dbplyr
 - quarto (for report generation)
 - testthat (for testing)
 
@@ -29,8 +37,9 @@ This project is a migration of the VPro64 Microsoft Access application to R Shin
 
 ## Usage
 
-1. Run `scripts/01_build_database.R` to populate the DuckDB database (to be created).
-2. Run the application using `shiny::runApp()`.
+1. Treat the SQLite files under `data/` and `data/projects/` as the canonical migrated local databases.
+2. Use `docs/database-runtime-strategy.md` as the reference for the upcoming in-memory DuckDB attachment layer.
+3. Run the application using `shiny::runApp()`.
 
 ### Mobile Context sidebar
 
@@ -46,11 +55,9 @@ On narrow/mobile layouts, the **Context** sidebar (Project/Plot selectors) colla
 
 ## Report Testing
 
-When rendering Quarto reports from the terminal, use an absolute path for `db_path` because Quarto runs from the reports folder. Example:
+When rendering Quarto reports from the terminal, use an absolute path for `db_path` because Quarto runs from the reports folder.
 
-```bash
-Rscript -e "db_path <- normalizePath('data/vpro.duckdb', winslash='/', mustWork=TRUE); quarto::quarto_render('reports/short_veg_hierarchy.qmd', output_format='html', execute_params=list(plot_number='00000', plot_numbers='', site_unit='', project_id='', display_value='presence_mean', constancy_format=FALSE, db_path=db_path, project_root=getwd()))"
-```
+Transitional note: some report code paths in the repo still reference a direct DuckDB file path. Treat those examples as legacy until the report/runtime layer is moved over to the in-memory DuckDB + attached SQLite model described in `docs/database-runtime-strategy.md`.
 
 Or use the helper script:
 
@@ -58,4 +65,4 @@ Or use the helper script:
 scripts/render_report.sh short_veg_hierarchy.qmd --display presence_mean
 ```
 
-If the Shiny app is running and holding the DuckDB write lock, use the in-app report preview (which renders from Parquet exports) or stop the app before rendering from the terminal.
+If the Shiny app is running and holding the active runtime connection, use the in-app report preview (which renders from Parquet exports) or stop the app before rendering from the terminal.

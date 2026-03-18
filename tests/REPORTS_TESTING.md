@@ -167,19 +167,21 @@ test_file("tests/testthat/test-reports-parity.R")
 
 ## Test Data Requirements
 
-Tests use real data from `data/vpro.duckdb` (built via `scripts/01_build_database.R`).
+Tests should now be understood against the canonical SQLite data under `data/` and `data/projects/`, with DuckDB acting as the runtime query layer.
+
+Transitional note: some report test code paths still reference legacy DuckDB fixtures directly and will need follow-up code changes when the report runtime is moved fully to the SQLite-backed in-memory DuckDB model.
 
 **Minimum data needed:**
-- At least one project in vpro_metadata.duckdb
+- At least one project in `data/VMetaData.db`
 - At least one plot with vegetation data (Sample_Veg)
 - At least one plot with environmental data (Sample_Env)
-- Species reference data in vpro_lists.duckdb (SppList)
+- Species reference data in `data/VLists.db` (`SppList`)
 - BEC zone codes (USysZoneList)
 
 **To rebuild test data:**
 ```bash
-Rscript scripts/01_build_database.R
-Rscript scripts/02_create_views.R
+# Canonical SQLite databases are expected under data/ and data/projects/
+# Runtime-only compatibility views are expected to be created at app boot.
 ```
 
 ## Intentional Deviations from Access Reports
@@ -261,10 +263,11 @@ renv::install(c("xml2", "rvest"))
 ```
 
 ### Reports Render but Tests Fail
-**Check:** Database contains test data
+**Check:** Canonical databases contain test data
 ```r
-con <- DBI::dbConnect(duckdb::duckdb(), "data/vpro.duckdb")
-DBI::dbGetQuery(con, "SELECT COUNT(*) FROM Sample_Veg")
+con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+DBI::dbExecute(con, "ATTACH 'data/VPro64.db' AS main (TYPE SQLITE)")
+DBI::dbGetQuery(con, "SELECT COUNT(*) FROM main.Veg")
 DBI::dbDisconnect(con)
 ```
 

@@ -181,7 +181,7 @@ Rscript -e "testthat::test_file('tests/testthat/test-reports-parity.R', filter =
 ```
 ⚠️  24 tests defined (requires quarto/rmarkdown to run)
 📝 Syntax validated (fixed 4 syntax errors)
-🏃 Integration tests run against real data/vpro.duckdb
+🏃 Integration tests run against the local runtime database layer over the migrated canonical databases
 ```
 
 ---
@@ -226,7 +226,7 @@ All critical calculation functions from Access VBA successfully ported and valid
 
 ## ✅ Completed Tasks (2026-02-11)
 
-As **The Tester** agent, I've created a comprehensive test suite for the local DuckDB ↔ cloud PostgreSQL sync conflict resolution workflow.
+As **The Tester** agent, I've created a comprehensive test suite for the local runtime database layer ↔ cloud PostgreSQL sync conflict resolution workflow.
 
 ## 📁 Files Created
 

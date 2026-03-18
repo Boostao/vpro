@@ -1,7 +1,7 @@
 # Plan: Remove config.yml — env vars + auth-driven PG attach
 
 ## TL;DR
-Replace all `config::get()`/`R_CONFIG_ACTIVE` usage with env vars. `connect_local_db()` uses hardcoded defaults + env var overrides for DuckDB paths. `attach_cloud_db()` reads PG host/port/db from env vars; explicit user/pass as arguments. Auth-driven attach/detach (mod_auth.R) stays the same but no longer needs the config package.
+Replace all `config::get()`/`R_CONFIG_ACTIVE` usage with env vars. `connect_local_db()` should target the canonical SQLite file paths and build the in-memory DuckDB attachment layer from them. `attach_cloud_db()` reads PG host/port/db from env vars; explicit user/pass as arguments. Auth-driven attach/detach (mod_auth.R) stays the same but no longer needs the config package.
 
 ---
 
@@ -19,12 +19,13 @@ Replace all `config::get()`/`R_CONFIG_ACTIVE` usage with env vars. `connect_loca
 .pg_database() → Sys.getenv("PGDATABASE",    "becmaster")
 ```
 
-**`connect_local_db()`** — no params; reads DuckDB paths from env vars with hardcoded defaults:
-- `VPRO_MAIN_DB`     → `data/vpro.duckdb`
-- `VPRO_LISTS_DB`    → `data/vpro_lists.duckdb`
-- `VPRO_METADATA_DB` → `data/vpro_metadata.duckdb`
-- `VPRO_USER_DB`     → `data/vpro_user.duckdb`
-- `VPRO_MESSAGES_DB` → `data/vpro_messages.duckdb`
+**`connect_local_db()`** — no params; reads canonical SQLite paths from env vars with hardcoded defaults:
+- `VPRO_MAIN_DB`     → `data/VPro64.db`
+- `VPRO_LISTS_DB`    → `data/VLists.db`
+- `VPRO_METADATA_DB` → `data/VMetaData.db`
+- `VPRO_USER_DB`     → `data/VUser.db`
+- `VPRO_MESSAGES_DB` → `data/VMessageBoard.db`
+- `VPRO_PICS_DB`     → `data/pics/VPics.db`
 
 **`attach_cloud_db(con, pg_user, pg_password = NULL, alias = "master", fail_on_error = TRUE)`**
 — takes explicit credentials; reads host/port/db from env via helpers above.
@@ -140,8 +141,8 @@ PGDATABASE=becmaster
 VPRO_PG_GUEST_USER=vpro_default
 VPRO_PG_ADMIN_USER=vpro_admin
 VPRO_PG_ADMIN_PASSWORD=<your-admin-pg-password>
-# Optional DuckDB overrides (defaults to data/*.duckdb)
-# VPRO_MAIN_DB=data/vpro.duckdb
+# Optional SQLite path overrides
+# VPRO_MAIN_DB=data/VPro64.db
 ```
 
 ### `docker-compose.deploy.yml`
@@ -158,7 +159,7 @@ Replace `R_CONFIG_ACTIVE=${R_CONFIG_ACTIVE:-production}` with proper PG env vars
 
 ## Verification
 1. `source("R/db_connections.R")` without config package — no errors
-2. `connect_local_db()` opens DuckDB in dev (with data/vpro*.duckdb files present)
+2. `connect_local_db()` opens the runtime DuckDB layer in dev with canonical SQLite files present under `data/`, `data/pics/`, and `data/projects/`
 3. `server.R` loads and session starts without config::get error
 4. In test environment: `docker-compose up -d`, set env vars, run `testthat::test_dir("tests/testthat")` — all tests that were passing before still pass
 5. Auth flow: guest login attaches cloud, logout detaches — verify in running app

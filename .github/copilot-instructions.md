@@ -34,6 +34,13 @@ For each requested block:
 - Use safe SQL patterns (validated inputs, parameterized queries where possible).
 - Use `lists.` prefix for attached list/reference tables.
 
+## Database Runtime (Current)
+- Canonical local storage is SQLite, not local DuckDB files.
+- Canonical SQLite files live under `data/`, `data/pics/`, and `data/projects/`.
+- Planned app runtime is an in-memory DuckDB connection with attached SQLite databases.
+- Runtime-only cross-database queries/views belong in the in-memory DuckDB layer, not in the canonical SQLite bootstrap files.
+- Do not propose local `.duckdb` files as the canonical backend unless the user explicitly asks for a historical or superseded plan.
+
 ## Access Form Module Strategy
 - For Access main-menu button migrations, create focused context modules that capture form-open intent and persist selection state.
 - Keep Access form-open semantics in module server logic (for example: set `state$CurrForm`, `state$sysCurrForm`, and `Current/DataFormName` preference).
@@ -43,6 +50,7 @@ For each requested block:
 - App shell: `global.R`, `ui.R`, `server.R`
 - Core logic: `R/logic_state.R`, `R/logic_*.R`
 - Modules: `R/mod_*.R`
+- Canonical local DBs: `data/*.db`, `data/pics/*.db`, `data/projects/*.db`
 - Canonical Access reference: `../VPRO_ACCESS/VPro64_forAI/`
 
 ## Validation Mode (Current)
@@ -53,6 +61,7 @@ For each requested block:
 - Commit per completed block when asked.
 - Stage only relevant files.
 - Do not commit generated `.duckdb` artifacts.
+- Do not replace canonical SQLite storage with generated local `.duckdb` files unless explicitly requested.
 - Keep commit messages scoped (example: `Sidebar: align cmbCurrSU semantics with Access`).
 
 ## Communication Style

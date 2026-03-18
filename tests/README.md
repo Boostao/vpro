@@ -215,8 +215,8 @@ testthat::test_file("tests/testthat/test-db_connections.R",
 ```yaml
 default:
   duckdb:
-    main_db: "data/vpro.duckdb"
-    lists_db: "data/vpro_lists.duckdb"
+    main_db: "data/VPro64.db"
+    lists_db: "data/VLists.db"
   log_level: INFO
 
 development:
@@ -238,6 +238,8 @@ test:
   cloud:
     enabled: true
     attach_on_startup: true  # Auto-ATTACH for tests
+
+Note: the local canonical files are now SQLite `.db` files. Where older test notes refer to DuckDB files, read them as historical guidance pending the runtime connection-layer update.
 
 production:
   postgres:

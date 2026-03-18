@@ -1,6 +1,14 @@
 # Plan: VPro → BECMaster Cloud Sync & Data Management Platform
 
-Migrate the current single-user, file-based VPro Shiny app to a hybrid local/cloud architecture where local DuckDB instances connect to a central **BECMaster PostgreSQL** database via DuckDB's native `postgres` extension (`ATTACH`), with role-based access control, data compliance validation, change-tracked merging, and public RDS data publishing. **A single connection engine (DuckDB)** handles both local and remote data — no `RPostgres`/`pool` needed.
+Migrate the current VPro Shiny app to a hybrid local/cloud architecture where an in-memory DuckDB runtime attaches the canonical local SQLite databases and, when needed, connects to a central **BECMaster PostgreSQL** database via DuckDB's native `postgres` extension (`ATTACH`). Role-based access control, data compliance validation, change-tracked merging, and public RDS data publishing remain in scope. **A single connection engine (DuckDB)** handles both local and remote data — no `RPostgres`/`pool` needed.
+
+## Local Storage Note
+
+This plan should now be read with the current local architecture in mind:
+
+- Canonical local storage is SQLite under `data/`, `data/pics/`, and `data/projects/`
+- DuckDB is the in-memory runtime attachment/query layer
+- Any old references to local `vpro*.duckdb` files as persisted canonical stores are superseded
 
 ## Architecture Overview
 
@@ -8,10 +16,12 @@ Migrate the current single-user, file-based VPro Shiny app to a hybrid local/clo
 ┌─────────────────────────────────────────────────────────┐
 │  Local Machine (field / analyst)                        │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │ DuckDB (in-process)                              │   │
-│  │  ├── local data:  vpro.duckdb (read/write)       │   │
-│  │  ├── local lists: vpro_lists.duckdb (ATTACH)     │   │
-│  │  └── cloud:       ATTACH 'postgres://...'        │   │
+│  │ DuckDB (in-process, in-memory)                  │   │
+│  │  ├── local data:  ATTACH 'data/VPro64.db'       │   │
+│  │  ├── local lists: ATTACH 'data/VLists.db'       │   │
+│  │  ├── local user:  ATTACH 'data/VUser.db'        │   │
+│  │  ├── local meta:  ATTACH 'data/VMetaData.db'    │   │
+│  │  └── cloud:       ATTACH 'postgres://...'       │   │
 │  │                   AS master (TYPE postgres,       │   │
 │  │                   READ_ONLY | READ_WRITE)         │   │
 │  └──────────────────────────────────────────────────┘   │
@@ -49,8 +59,8 @@ Add versioning columns to all `core` and `staging` tables: `row_version INTEGER 
 
 Replace the hardcoded `db_path` in `global.R` with a connection module `R/db_connections.R`:
 
-- Load connection settings from `config.yml` (local DB paths, remote postgres connection string, environment flag)
-- Open local DuckDB connection and `ATTACH` auxiliary local databases (`vpro_lists.duckdb AS lists`)
+- Load connection settings for canonical local SQLite paths plus the remote postgres connection string.
+- Open an in-memory DuckDB connection and `ATTACH` the canonical SQLite databases (`data/VLists.db AS lists`, etc.)
 - **Conditionally `ATTACH` the remote PostgreSQL** when online:
   ```sql
   INSTALL postgres;
