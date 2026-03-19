@@ -1,0 +1,15 @@
+System:
+  Version: 3
+  Build: "Thursday, February 23, 2023"
+  RunOnce: true
+Current:
+  CurrProject: "Sample"
+  CurrHierarchy: "Sample"
+  DataFormName: "FS882-6x4"
+ReportOptions:
+  cmbColourGreater: 5
+  cmbGrayGreater: 65
+  cmbApplyTheme: 1
+  cmbThemeTable: "Sample"
+Audit:
+  AuditStrength: 1

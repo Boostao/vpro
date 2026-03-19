@@ -12,4 +12,3 @@ reports/*
 .DS_Store
 # {shinytest2}: Ignore new debug snapshots for `$expect_values()`
 *_.new.png
-app/config.yml
