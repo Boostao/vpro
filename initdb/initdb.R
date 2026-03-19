@@ -76,6 +76,11 @@ load_csv_into_table <- function(con, table_name, data_path) {
     na.strings = ""
   )
 
+  datetime_fields <- table_info$name[grepl("DATETIME|TIMESTAMP", table_info$type, ignore.case = TRUE)]
+  for (field in intersect(header, datetime_fields)) {
+    df[[field]] <- mdbtoolr:::.coerce_datetime(df[[field]]) |> as.character()
+  }
+
   table_fields <- DBI::dbListFields(con, table_name)
   extra_fields <- setdiff(names(df), table_fields)
 
@@ -147,18 +152,18 @@ validation_tables_equal <- function(test1, test2) {
     isTRUE(all.equal(test1, test2, tolerance = sqrt(.Machine$double.eps) * 100))
 }
 
-outputdir <- file.path(getwd(), "data/pics")
+outputdir <- file.path(getwd(), "app", "data", "pics")
 dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
-source("data/bootstrap/pics/bootstrap.R")
+source("initdb/pics/init.R")
 
-outputdir <- file.path(getwd(), "data/")
+outputdir <- file.path(getwd(), "app", "data")
 dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
-source("data/bootstrap/messages/bootstrap.R")
-source("data/bootstrap/lists/bootstrap.R")
-source("data/bootstrap/metadata/bootstrap.R")
-source("data/bootstrap/vpro/bootstrap.R")
-source("data/bootstrap/user/bootstrap.R")
+source("initdb/messages/init.R")
+source("initdb/lists/init.R")
+source("initdb/metadata/init.R")
+source("initdb/vpro/init.R")
+source("initdb/user/init.R")
 
-outputdir <- file.path(getwd(), "data/projects")
+outputdir <- file.path(getwd(), "app", "data", "projects")
 dir.create(outputdir, recursive = TRUE, showWarnings = FALSE)
-source("data/bootstrap/projects/bootstrap.R")
+source("initdb/projects/init.R")

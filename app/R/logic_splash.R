@@ -1,125 +1,112 @@
-# Logic: Splash / application startup bootstrap
-
-vpro_runtime_paths <- function(root = getwd()) {
-  list(
-    root = normalizePath(root, mustWork = FALSE),
-    vpro64 = normalizePath(file.path(root, "data", "VPro64.db"), mustWork = FALSE)
-  )
-}
-
-vpro_list_runtime_databases <- function(con) {
-  tryCatch({
-    DBI::dbGetQuery(
-      con,
-      "SELECT database_name, type, path FROM duckdb_databases() ORDER BY database_name"
-    )
-  }, error = function(e) {
-    data.frame(
-      database_name = character(0),
-      type = character(0),
-      path = character(0),
-      stringsAsFactors = FALSE
-    )
-  })
-}
-
-vpro_close_runtime <- function(runtime) {
-  con <- NULL
-
-  if (inherits(runtime, "DuckDBConnection")) {
-    con <- runtime
-  } else if (is.list(runtime) && !is.null(runtime$con)) {
-    con <- runtime$con
-  }
-
-  if (is.null(con)) {
-    return(invisible(NULL))
-  }
-
-  tryCatch({
-    DBI::dbDisconnect(con, shutdown = TRUE)
-  }, error = function(e) {
-    invisible(NULL)
-  })
-
-  invisible(NULL)
-}
-
-vpro_init_runtime <- function(root = getwd()) {
-  paths <- vpro_runtime_paths(root)
-
-  if (!file.exists(paths$vpro64)) {
-    stop("Canonical VPro64 database not found: ", paths$vpro64)
-  }
-
-  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-
-  tryCatch({
-    DBI::dbExecute(con, "INSTALL sqlite")
-  }, error = function(e) {
-    log_msg("[logic_splash] sqlite INSTALL skipped: ", conditionMessage(e))
-  })
-
-  tryCatch({
-    DBI::dbExecute(con, "LOAD sqlite")
-  }, error = function(e) {
-    vpro_close_runtime(con)
-    stop("Failed to load DuckDB sqlite extension: ", conditionMessage(e))
-  })
-
-  tryCatch({
-    DBI::dbExecute(
-      con,
-      paste0(
-        "ATTACH ",
-        DBI::dbQuoteString(con, paths$vpro64),
-        " AS vpro (TYPE sqlite)"
+splash <- function() {
+  
+  local({
+  
+    config_file <- "config.yml"
+    NeverRanBefore <- !file.exists(config_file)
+    active <- Sys.getenv("R_CONFIG_ACTIVE", "default")
+  
+    config <- if (file.exists(config_file)) yaml::read_yaml(config_file) else list()
+  
+    config[[active]]$Program$Name <- file.path(getwd(), "app.R")
+  
+    if (is.null(config[[active]]$System$Location)) {
+      config[[active]]$System$Location <- getwd()
+    }
+  
+    IveBeenMoved <- {config[[active]]$System$Location != getwd()}
+    if (IveBeenMoved) {
+      warning("-- VPro here.\n   Looks like I've been moved.\n   I used to live at {'%s'}.\n   It's a little dark in here, but now it looks like I'm at {'%s'}.\n   I'm going to assume that you moved all my sub-directories when you moved me,\n   but just to be sure, please double-check by looking at Directories in User-setup.\n   Thanks, and have a nice day." |> sprintf(config[[active]]$System$Location, getwd()))
+    }
+  
+    if (is.null(config[[active]]$System$RLocation) || IveBeenMoved) {
+      config[[active]]$System$RLocation <- file.path(getwd(), "R")
+    }
+  
+    if (is.null(config[[active]]$System$GELocation) || IveBeenMoved) {
+      config[[active]]$System$GELocation <- file.path(getwd(), "GoogleEarth")
+    }
+  
+    if (is.null(config[[active]]$System$PictureDir) || IveBeenMoved) {
+      config[[active]]$System$PictureDir <- file.path(getwd(), "pics")
+    }
+  
+    if (is.null(config[[active]]$System$MetadataLocation) || IveBeenMoved) {
+      config[[active]]$System$MetadataLocation <- file.path(getwd(), "data", "VMetaData.db")
+    }
+  
+    # Ribbon icon block non applicable
+  
+    table_hash <- function(con, table_name) {
+      table_name <- DBI::Id(strsplit(table_name, "\\.")[[1]])
+      query <- sprintf(
+        "SELECT bit_xor(hash(*columns(*)))::VARCHAR AS table_hash FROM %s;",
+        DBI::dbQuoteIdentifier(con, table_name)
       )
+      result <- DBI::dbGetQuery(con, query)
+      result$table_hash
+    }
+  
+    remoteDB <- DBI::dbConnect(duckdb::duckdb(), file.path(config[[active]]$System$Location, "data", "VLists.db"))
+    USysAllSpecsVer <- table_hash(remoteDB, "USysAllSpecs")
+    USysTableOfListsVer <- table_hash(remoteDB, "USysTableOfLists")
+    DBI::dbDisconnect(remoteDB, shutdown = TRUE)
+    rm(remoteDB)
+  
+    if (!USysAllSpecsVer %in% config[[active]]$Current$USysAllSpecsVer) {
+      config[[active]]$Current$USysAllSpecsVer <- USysAllSpecsVer
+    }
+    if (!USysTableOfListsVer %in% config[[active]]$Current$USysTableOfListsVer) {
+      config[[active]]$Current$USysTableOfListsVer <- USysTableOfListsVer
+    }
+  
+    if (NeverRanBefore) {
+      config[[active]]$Current$User <- Sys.info()[["user"]]
+      config[[active]]$Current$CurrProject <- "Sample"
+      config[[active]]$Current$CurrPlotList <- "None"
+      config[[active]]$Current$CurrHierarchy <- "Sample"
+      config[[active]]$Current$DataFormName <- "FS882-6x4"
+      config[[active]]$System$Version <- 3
+      config[[active]]$System$Build <- format(as.Date("2023/02/23"), "%A, %B %d, %Y")
+      config[[active]]$System$Installed <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+      config[[active]]$ReportOptions$cmbColourGreater <- 5
+      config[[active]]$ReportOptions$cmbGrayGreater <- 65
+      config[[active]]$ReportOptions$cmbApplyTheme <- 1
+      config[[active]]$Audit$AuditStrength <- 1
+      config[[active]]$ReportOptions$cmbThemeTable <- "Sample"
+    } else {
+      # spCheck (V7mdlServicePack)
+      # There is logic to check if an update is available
+      # and inform the user about it.
+      # No actual update is performed.
+      # I'd rather have that under the Help menu <Check for updates> than have it run every time the app starts.
+    }
+  
+    # Log entry into audit table
+    remoteDB <- DBI::dbConnect(duckdb::duckdb(), file.path(config[[active]]$System$Location, "data", "VPro64.db"))
+    DBI::dbAppendTable(remoteDB, "USysUserLog", data.frame(
+      User = Sys.info()[["user"]],
+      InTime = Sys.time(),
+      OutTime = NA,
+      LocalMachine = Sys.info()[["nodename"]]
+    ))
+    MultiUsers <- DBI::dbGetQuery(
+      remoteDB,
+      "SELECT DISTINCT User FROM USysUserLog WHERE User != ? ORDER BY User, InTime;", Sys.info()[["user"]]
     )
-  }, error = function(e) {
-    vpro_close_runtime(con)
-    stop("Failed to attach canonical VPro64.db: ", conditionMessage(e))
-  })
-
-  structure(
-    list(
-      con = con,
-      paths = paths,
-      attached = vpro_list_runtime_databases(con),
-      initialized_at = Sys.time()
-    ),
-    class = "vpro_runtime"
-  )
-}
-
-get_vpro_runtime_connection <- function(runtime = NULL) {
-  if (is.null(runtime) && exists("VPRO_GLOBAL_RUNTIME", inherits = TRUE)) {
-    runtime <- get("VPRO_GLOBAL_RUNTIME", inherits = TRUE)
+    if (nrow(MultiUsers) > 0) {
+      warning(
+        "-- You may not be alone.\n   The following users are currently connected: ",
+        paste0(
+          apply(MultiUsers, 1, function(row) sprintf("%s", row["User"])),
+          collapse = ", "
+        )
+      )
+    }
+    DBI::dbDisconnect(remoteDB, shutdown = TRUE)
+    rm(remoteDB)
+    
+  
   }
 
-  if (is.list(runtime) && !is.null(runtime$con)) {
-    return(runtime$con)
-  }
-
-  NULL
-}
-
-run_splash_init <- function(runtime = NULL) {
-  con <- get_vpro_runtime_connection(runtime)
-
-  if (is.null(con)) {
-    stop("Global VPro runtime is not initialized.")
-  }
-
-  structure(
-    list(
-      application_options = list(
-        perform_name_autocorrect = FALSE
-      ),
-      attached_databases = vpro_list_runtime_databases(con),
-      stop_before = c("LogVProOn", "frmWhatsNew"),
-      handoff_to_server = c("audit_logon", "whats_new")
-    ),
-    class = "vpro_splash_init"
-  )
 }

@@ -38,7 +38,7 @@ For each requested block:
 - Canonical local storage is SQLite, not local DuckDB files.
 - Canonical SQLite files live under `data/`, `data/pics/`, and `data/projects/`.
 - Planned app runtime is an in-memory DuckDB connection with attached SQLite databases.
-- Runtime-only cross-database queries/views belong in the in-memory DuckDB layer, not in the canonical SQLite bootstrap files.
+- Runtime-only cross-database queries/views belong in the in-memory DuckDB layer, not in the canonical SQLite initdb files.
 - Do not propose local `.duckdb` files as the canonical backend unless the user explicitly asks for a historical or superseded plan.
 
 ## Access Form Module Strategy

@@ -1,9 +1,9 @@
-accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VLists.accda")
+accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/PlotPictures/VPics.accdb")
 
 # Assuming working directory is the root of the project vpro.git
-workdir <- file.path(getwd(), "data/bootstrap/lists")
+workdir <- file.path(getwd(), "initdb/pics")
 
-output <- file.path(outputdir, "VLists.db")
+output <- file.path(outputdir, "VPics.db")
 unlink(output, force = TRUE)
 
 con <- DBI::dbConnect(RSQLite::SQLite(), output)

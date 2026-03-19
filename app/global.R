@@ -1,5 +1,6 @@
 library(shiny)
 library(duckdb)
+library(config)
 library(dplyr)
 library(dbplyr)
 library(bslib)

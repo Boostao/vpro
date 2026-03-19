@@ -1,9 +1,11 @@
-accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VPro64.accdb")
+accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VMessageBoard.accda")
 
 # Assuming working directory is the root of the project vpro.git
-workdir <- file.path(getwd(), "data/bootstrap/vpro")
+workdir <- file.path(getwd(), "initdb/messages")
+post_load_sql_path <- file.path(workdir, "post_load.sql")
+trigger_sql_path <- file.path(workdir, "create_trigger_tblMessageBoard_add_to_message_list.sql")
 
-output <- file.path(outputdir, "VPro64.db")
+output <- file.path(outputdir, "VMessageBoard.db")
 unlink(output, force = TRUE)
 
 con <- DBI::dbConnect(RSQLite::SQLite(), output)
@@ -26,6 +28,7 @@ for (tb in tbs) {
   data_path <- file.path(workdir, sprintf("%s.csv", tb))
   load_csv_into_table(con, tb, data_path)
   if (validate) {
+    # Validate against original Access DB
     test1 <- read_table_preserve_names(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
     test2 <- read_table_preserve_names(con, tb) |> data.table::setDT()
     comparison <- harmonize_validation_tables(test1, test2)
@@ -37,5 +40,12 @@ for (tb in tbs) {
     }
   }
 }
+
+for (statement in read_sql_statements(post_load_sql_path)) {
+  DBI::dbExecute(con, statement)
+}
+
+DBI::dbExecute(con, 'DROP TRIGGER IF EXISTS "trg_tblMessageBoard_add_to_message_list";')
+DBI::dbExecute(con, paste(readLines(trigger_sql_path, warn = FALSE), collapse = "\n"))
 
 DBI::dbDisconnect(con)

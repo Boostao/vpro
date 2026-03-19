@@ -1,7 +1,7 @@
 accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VPro64.accdb")
 
 # Assuming working directory is the root of the project vpro.git
-workdir <- file.path(getwd(), "data/bootstrap/projects")
+workdir <- file.path(getwd(), "initdb/projects")
 views_sql_path <- file.path(workdir, "views.sql")
 
 # Listing project prefixes

@@ -1,9 +1,8 @@
-accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VMetaData.accda")
+accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VUser.accda")
 
-# Assuming working directory is the root of the project vpro.git
-workdir <- file.path(getwd(), "data/bootstrap/metadata")
+workdir <- file.path(getwd(), "initdb/user")
 
-output <- file.path(outputdir, "VMetaData.db")
+output <- file.path(outputdir, "VUser.db")
 unlink(output, force = TRUE)
 
 con <- DBI::dbConnect(RSQLite::SQLite(), output)
