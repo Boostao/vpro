@@ -1,0 +1,94 @@
+Interesting coding choice, let me do it and then we can compare styles.
+
+Application.SetOption "Perform Name AutoCorrect", False #No need to care for that in R, not an issue
+
+All of this ignored, don't care if moved, app will be packaged in single deployment artifact with a launcher
+###
+'14 May 2020
+Dim TestCompilation As Boolean, Ref As Reference, IveBeenMoved As Boolean
+Dim OfficeDir As String, SystemDir As String, ctlName As String, ExtDir As String, NewLoc As String
+Dim CommonDir As String
+
+'close all modules so that vpro opens faster
+    CloseAllModules
+
+'set some references if computer is server
+    If Environ$("computername") = "OFFLINE" Then
+        OfficeDir = "E:\Program Files (x86)\Microsoft Office\Office12\"
+        SystemDir = "C:\Windows\System32\"
+        
+        ctlName = OfficeDir & "EXCEL.exe"
+        If Not ReferenceFromFile(ctlName) Then
+            MsgBox "Reference to " & ctlName & " not created successfully."
+        End If
+        
+        ctlName = SystemDir & "MSCOMCTL.OCX"
+        If Not ReferenceFromFile(ctlName) Then
+            MsgBox "Reference to " & ctlName & " not created successfully."
+        End If
+        
+        If Not Application.IsCompiled Then
+            Call SysCmd(504, 16483)
+        End If
+            
+    Else
+        'do normal stuff
+        OfficeDir = Application.SysCmd(acSysCmdAccessDir)
+        CommonDir = "C:\Program Files (x86)\Common Files\microsoft shared\"
+        SystemDir = GetSystemDir()
+    End If
+    
+    Debug.Print SystemDir
+    Debug.Print OfficeDir
+    Debug.Print CommonDir
+    Debug.Print "Access version: " & Application.SysCmd(acSysCmdAccessVer)
+
+'compile if not compiled
+    If Not Application.IsCompiled Then
+        Call SysCmd(504, 16483)
+    End If
+
+'set program name in registry
+    clsVProReg.FullProgramName = CurrentDb.Name
+    CurrentDb.Properties("AppIcon").Value = CurrentProject.path & "\VPro19.ico"
+
+'set location of vpro in registy
+    If clsVProReg.Location = "" Then
+        clsVProReg.Location = Left(CurrentDb.Name, Len(CurrentDb.Name) - Len(Dir(CurrentDb.Name)))
+    End If
+
+'if vpro has moved then freak out
+    If clsVProReg.Location <> Left(CurrentDb.Name, Len(CurrentDb.Name) - Len(Dir(CurrentDb.Name))) Then
+        IveBeenMoved = True
+        'NewLoc = Left(CurrentDb.Name, Len(CurrentDb.Name) - (Len(Dir(CurrentDb.Name)) + 11))
+        NewLoc = Left(CurrentDb.Name, Len(CurrentDb.Name) - Len(Dir(CurrentDb.Name)))
+        MsgBox "VPro here.  Looks like I've been moved.  I used to live at " & clsVProReg.Location & ". It's a little dark in here, but now it looks like I'm at " & NewLoc & ".  I'm going to assume that you moved all my sub-directories when you moved me, but just to be sure, please double-check by looking at Directories in User-setup.  Thanks, and have a nice day.", vbInformation, "VPro"
+        clsVProReg.Location = Left(CurrentDb.Name, Len(CurrentDb.Name) - Len(Dir(CurrentDb.Name)))
+        UnAttachSupportTables
+        AttachSupportTables
+        SetappIcon
+    End If
+
+'reset location of vpro support in registry
+    If clsVProReg.RLocation = "" Or IveBeenMoved Then
+        clsVProReg.RLocation = clsVProReg.Location & "R\"
+    End If
+    
+    If clsVProReg.GELocation = "" Or IveBeenMoved Then
+        clsVProReg.GELocation = clsVProReg.Location & "GoogleEarth\"
+    End If
+    
+    If clsVProReg.PictureDir = "" Or IveBeenMoved Then
+        clsVProReg.PictureDir = clsVProReg.Location & "PlotPictures\"
+    End If
+    
+    If clsVProReg.MetadataLocation = "" Or IveBeenMoved Then
+        clsVProReg.MetadataLocation = clsVProReg.Location & "VMetaData.accda"
+    End If
+    
+    If clsVProReg.RibbonPicLocation = "" Or IveBeenMoved Then
+        clsVProReg.RibbonPicLocation = clsVProReg.Location & "Ribbon\Icons\"
+    End If
+###
+
+Now some thing we need to track
