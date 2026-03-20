@@ -1,0 +1,818 @@
+# Excel Export Logic with Styled Formatting
+# Provides Access-report-like experience in Excel with formatted tables, headers, and conditional formatting
+
+#' Export Vegetation Data to Styled Excel Workbook
+#'
+#' @param con Database connection
+#' @param output_path Path to save .xlsx file
+#' @param options List with export options:
+#'   - project_ids: Character vector of project IDs to filter (NULL = all)
+#'   - layers: Character vector of layers to include (default: 1-7)
+#'   - apply_lumping: Boolean, apply species synonym consolidation
+#'   - separate_sheets: Boolean, create separate sheet per layer (default TRUE)
+#'   - include_metadata: Boolean, add metadata sheet
+#'   - conditional_formatting: Boolean, apply conditional formatting (default TRUE)
+#' @return Invisibly returns TRUE on success
+export_vegetation_excel <- function(con, output_path, options = list()) {
+  if (!requireNamespace("openxlsx", quietly = TRUE)) {
+    stop("openxlsx package is required for Excel export. Install with: install.packages('openxlsx')")
+  }
+  
+  # Default options
+  opts <- list(
+    project_ids = NULL,
+    layers = c("1", "2", "3", "4", "5", "6", "7"),
+    apply_lumping = FALSE,
+    separate_sheets = TRUE,
+    include_metadata = TRUE,
+    conditional_formatting = TRUE
+  )
+  opts[names(options)] <- options
+  
+  # Create workbook
+  wb <- openxlsx::createWorkbook()
+  
+  # Get data
+  veg_data <- get_vegetation_data_for_excel(con, opts$project_ids, opts$layers, opts$apply_lumping)
+  
+  if (nrow(veg_data) == 0) {
+    warning("No vegetation data found for export")
+    return(invisible(FALSE))
+  }
+  
+  # Export by layer (separate sheets) or combined
+  if (opts$separate_sheets) {
+    layers_present <- unique(veg_data$Layer)
+    layer_names <- c("1" = "VegA_Trees1", "2" = "VegA_Trees2", "3" = "VegA_Trees3",
+                     "4" = "VegB_Shrub1", "5" = "VegB_Shrub2", 
+                     "6" = "VegC_Herbs", "7" = "VegD_Moss")
+    
+    for (layer in layers_present) {
+      layer_data <- veg_data[veg_data$Layer == layer, ]
+      sheet_name <- layer_names[layer]
+      if (is.na(sheet_name)) sheet_name <- paste0("Layer_", layer)
+      
+      add_vegetation_sheet(wb, sheet_name, layer_data, opts$conditional_formatting)
+    }
+  } else {
+    add_vegetation_sheet(wb, "Vegetation", veg_data, opts$conditional_formatting)
+  }
+  
+  # Add metadata sheet if requested
+  if (opts$include_metadata && !is.null(opts$project_ids)) {
+    add_metadata_sheet(wb, con, opts$project_ids)
+  }
+  
+  # Add instructions/data dictionary
+  add_instructions_sheet(wb)
+  
+  # Save workbook
+  openxlsx::saveWorkbook(wb, output_path, overwrite = TRUE)
+  
+  invisible(TRUE)
+}
+
+#' Export Environment/Site Data to Styled Excel Workbook
+#'
+#' @param con Database connection
+#' @param output_path Path to save .xlsx file
+#' @param options List with export options (similar to vegetation export)
+#' @return Invisibly returns TRUE on success
+export_environment_excel <- function(con, output_path, options = list()) {
+  if (!requireNamespace("openxlsx", quietly = TRUE)) {
+    stop("openxlsx package is required for Excel export")
+  }
+  
+  opts <- list(
+    project_ids = NULL,
+    include_soil = TRUE,
+    include_metadata = TRUE,
+    conditional_formatting = TRUE
+  )
+  opts[names(options)] <- options
+  
+  wb <- openxlsx::createWorkbook()
+  
+  # Get environment data
+  env_data <- get_environment_data_for_excel(con, opts$project_ids)
+  
+  if (nrow(env_data) > 0) {
+    add_environment_sheet(wb, "Environment", env_data, opts$conditional_formatting)
+  }
+  
+  # Get soil data if requested
+  if (opts$include_soil) {
+    humus_data <- get_soil_humus_data(con, opts$project_ids)
+    mineral_data <- get_soil_mineral_data(con, opts$project_ids)
+    
+    if (nrow(humus_data) > 0) {
+      add_soil_sheet(wb, "Soil_Humus", humus_data, "humus", opts$conditional_formatting)
+    }
+    if (nrow(mineral_data) > 0) {
+      add_soil_sheet(wb, "Soil_Mineral", mineral_data, "mineral", opts$conditional_formatting)
+    }
+  }
+  
+  # Add metadata
+  if (opts$include_metadata && !is.null(opts$project_ids)) {
+    add_metadata_sheet(wb, con, opts$project_ids)
+  }
+  
+  add_instructions_sheet(wb)
+  
+  openxlsx::saveWorkbook(wb, output_path, overwrite = TRUE)
+  invisible(TRUE)
+}
+
+#' Export Combined Dataset (Vegetation + Environment + Metadata)
+#'
+#' @param con Database connection
+#' @param output_path Path to save .xlsx file
+#' @param options List with export options
+#' @return Invisibly returns TRUE on success
+export_combined_excel <- function(con, output_path, options = list()) {
+  if (!requireNamespace("openxlsx", quietly = TRUE)) {
+    stop("openxlsx package is required for Excel export")
+  }
+  
+  opts <- list(
+    project_ids = NULL,
+    layers = c("1", "2", "3", "4", "5", "6", "7"),
+    apply_lumping = FALSE,
+    include_soil = TRUE,
+    conditional_formatting = TRUE
+  )
+  opts[names(options)] <- options
+  
+  wb <- openxlsx::createWorkbook()
+  
+  # Vegetation sheets (by layer)
+  veg_data <- get_vegetation_data_for_excel(con, opts$project_ids, opts$layers, opts$apply_lumping)
+  if (nrow(veg_data) > 0) {
+    layers_present <- unique(veg_data$Layer)
+    layer_names <- c("1" = "VegA_Trees1", "2" = "VegA_Trees2", "3" = "VegA_Trees3",
+                     "4" = "VegB_Shrub1", "5" = "VegB_Shrub2", 
+                     "6" = "VegC_Herbs", "7" = "VegD_Moss")
+    
+    for (layer in layers_present) {
+      layer_data <- veg_data[veg_data$Layer == layer, ]
+      sheet_name <- layer_names[layer]
+      if (is.na(sheet_name)) sheet_name <- paste0("Layer_", layer)
+      add_vegetation_sheet(wb, sheet_name, layer_data, opts$conditional_formatting)
+    }
+  }
+  
+  # Environment sheet
+  env_data <- get_environment_data_for_excel(con, opts$project_ids)
+  if (nrow(env_data) > 0) {
+    add_environment_sheet(wb, "Environment", env_data, opts$conditional_formatting)
+  }
+  
+  # Soil sheets
+  if (opts$include_soil) {
+    humus_data <- get_soil_humus_data(con, opts$project_ids)
+    mineral_data <- get_soil_mineral_data(con, opts$project_ids)
+    
+    if (nrow(humus_data) > 0) {
+      add_soil_sheet(wb, "Soil_Humus", humus_data, "humus", opts$conditional_formatting)
+    }
+    if (nrow(mineral_data) > 0) {
+      add_soil_sheet(wb, "Soil_Mineral", mineral_data, "mineral", opts$conditional_formatting)
+    }
+  }
+  
+  # Metadata
+  if (!is.null(opts$project_ids)) {
+    add_metadata_sheet(wb, con, opts$project_ids)
+  }
+  
+  add_instructions_sheet(wb)
+  
+  openxlsx::saveWorkbook(wb, output_path, overwrite = TRUE)
+  invisible(TRUE)
+}
+
+resolve_export_field <- function(fields, target) {
+  idx <- which(tolower(fields) == tolower(target))
+  if (length(idx) == 0) {
+    return(NULL)
+  }
+  fields[[idx[[1]]]]
+}
+
+resolve_vegetation_export_source <- function(con) {
+  candidates <- list(
+    list(
+      table = "vw_USysAllVeg",
+      plot = "PlotNumber",
+      layer = "MyLayer",
+      species = "Species",
+      cover = "Cover",
+      project = NULL
+    ),
+    list(
+      table = "USysV2Veg",
+      plot = "Plotnumber",
+      layer = "Layer",
+      species = "Species",
+      cover = "Cover",
+      project = "ProjectID"
+    )
+  )
+
+  for (candidate in candidates) {
+    if (!DBI::dbExistsTable(con, candidate$table)) {
+      next
+    }
+
+    fields <- tryCatch(DBI::dbListFields(con, candidate$table), error = function(e) character(0))
+    if (!length(fields)) {
+      next
+    }
+
+    plot_col <- resolve_export_field(fields, candidate$plot)
+    layer_col <- resolve_export_field(fields, candidate$layer)
+    species_col <- resolve_export_field(fields, candidate$species)
+    cover_col <- resolve_export_field(fields, candidate$cover)
+    project_col <- if (is.null(candidate$project)) NULL else resolve_export_field(fields, candidate$project)
+
+    if (all(vapply(list(plot_col, layer_col, species_col, cover_col), function(x) !is.null(x), logical(1)))) {
+      return(list(
+        table = candidate$table,
+        plot = plot_col,
+        layer = layer_col,
+        species = species_col,
+        cover = cover_col,
+        project = project_col
+      ))
+    }
+  }
+
+  stop("No supported vegetation export source is available. Expected vw_USysAllVeg or USysV2Veg.")
+}
+
+fetch_vegetation_export_rows <- function(con, project_ids = NULL, layers = c("1", "2", "3", "4", "5", "6", "7")) {
+  source_info <- resolve_vegetation_export_source(con)
+
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  qstring <- function(values) paste(as.character(DBI::dbQuoteString(con, as.character(values))), collapse = ", ")
+  qualify <- function(alias, column_name) paste0(alias, ".", qident(column_name))
+
+  from_clause <- paste(qident(source_info$table), "v")
+  where_clauses <- character(0)
+  where_clauses <- c(where_clauses, sprintf("%s IN (%s)", qualify("v", source_info$layer), qstring(layers)))
+
+  if (!is.null(project_ids) && length(project_ids) > 0) {
+    if (!is.null(source_info$project)) {
+      where_clauses <- c(where_clauses, sprintf("%s IN (%s)", qualify("v", source_info$project), qstring(project_ids)))
+    } else {
+      env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+      env_plot_col <- resolve_export_field(env_fields, "PlotNumber")
+      env_project_col <- resolve_export_field(env_fields, "ProjectID")
+      if (is.null(env_plot_col) || is.null(env_project_col)) {
+        stop("Project-filtered export requires Env with PlotNumber and ProjectID columns.")
+      }
+      from_clause <- paste(
+        from_clause,
+        "JOIN",
+        qident("Env"),
+        "e ON",
+        sprintf("%s = %s", qualify("v", source_info$plot), qualify("e", env_plot_col))
+      )
+      where_clauses <- c(where_clauses, sprintf("%s IN (%s)", qualify("e", env_project_col), qstring(project_ids)))
+    }
+  }
+
+  sql <- paste(
+    "SELECT",
+    sprintf("%s AS PlotNumber,", qualify("v", source_info$plot)),
+    sprintf("%s AS MyLayer,", qualify("v", source_info$layer)),
+    sprintf("%s AS Species,", qualify("v", source_info$species)),
+    sprintf("%s AS Cover", qualify("v", source_info$cover)),
+    "FROM",
+    from_clause,
+    if (length(where_clauses) > 0) paste("WHERE", paste(where_clauses, collapse = " AND ")) else ""
+  )
+
+  DBI::dbGetQuery(con, sql)
+}
+
+#' Get Vegetation Data Formatted for Excel Export
+#' @keywords internal
+get_vegetation_data_for_excel <- function(con, project_ids = NULL, layers = c("1", "2", "3", "4", "5", "6", "7"), apply_lumping = FALSE) {
+  df <- fetch_vegetation_export_rows(con, project_ids = project_ids, layers = layers)
+  
+  if (nrow(df) == 0) return(df)
+
+  # Normalize column names for compatibility with lumping logic
+  names(df) <- tolower(names(df))
+  
+  # Convert cover to numeric (handle text codes)
+  cover_chr <- trimws(as.character(df$cover))
+  cover_num <- suppressWarnings(as.numeric(cover_chr))
+  cover_num[cover_chr == ""] <- NA_real_
+  cover_num[is.na(cover_num) & nzchar(cover_chr)] <- 0.1  # '+' or 'r' codes
+  df$cover_num <- cover_num
+  
+  # Apply lumping if requested
+  if (apply_lumping) {
+    if (!exists("apply_lumping", mode = "function")) {
+      stop("apply_lumping() not found. Source R/logic_lumping.R before using apply_lumping = TRUE.")
+    }
+    df <- apply_lumping(
+      con,
+      df,
+      group_cols = c("plotnumber", "mylayer"),
+      measure_cols = c("cover_num")
+    )
+  }
+  
+  # Join species names
+  meta_table <- NULL
+  has_lists_specs <- tryCatch({
+    DBI::dbGetQuery(
+      con,
+      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_catalog = 'lists' AND table_name = 'USysAllSpecs'"
+    )$n > 0
+  }, error = function(e) FALSE)
+
+  if (isTRUE(has_lists_specs)) {
+    meta_table <- "VLists.USysAllSpecs"
+  } else if (DBI::dbExistsTable(con, "USysAllSpecs")) {
+    meta_table <- "USysAllSpecs"
+  } else if (DBI::dbExistsTable(con, "SppList")) {
+    meta_table <- "SppList"
+  }
+
+  spp <- data.frame(code = character(), scientificname = character(), commonname = character())
+  if (!is.null(meta_table) && identical(meta_table, "SppList")) {
+    spp <- DBI::dbGetQuery(con, "SELECT code, scientificname, '' AS commonname FROM SppList")
+  } else if (!is.null(meta_table)) {
+    spp <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT code AS code, scientificname AS scientificname, COALESCE(common_name_pb, englishname, combinedenglishname, '') AS commonname FROM %s",
+        meta_table
+      )
+    )
+  }
+
+  if (nrow(spp) > 0 && "code" %in% names(spp)) {
+    spp <- spp[!duplicated(spp$code), , drop = FALSE]
+  }
+  
+  df <- merge(df, spp, by.x = "species", by.y = "code", all.x = TRUE)
+  df$ScientificName <- ifelse(is.na(df$scientificname), df$species, df$scientificname)
+  df$CommonName <- ifelse(is.na(df$commonname), "", df$commonname)
+  
+  # Select and order columns for Excel; tolerate source schema drift.
+  export_cols <- c("plotnumber", "mylayer", "species", "ScientificName", "CommonName", "cover_num")
+  missing_cols <- setdiff(export_cols, names(df))
+  if (length(missing_cols) > 0) {
+    for (col_name in missing_cols) {
+      df[[col_name]] <- NA
+    }
+  }
+  df <- df[, export_cols, drop = FALSE]
+  colnames(df) <- c("Plot", "Layer", "Code", "Scientific Name", "Common Name", "Cover %")
+  
+  df[order(df$Plot, df$Layer, df$`Scientific Name`), ]
+}
+
+#' Get Environment Data Formatted for Excel Export
+#' @keywords internal
+get_environment_data_for_excel <- function(con, project_ids = NULL) {
+  fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  if (!length(fields)) {
+    return(data.frame())
+  }
+
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  pick_expr <- function(candidates, alias, table_alias = NULL) {
+    if (!is.character(candidates)) {
+      candidates <- as.character(candidates)
+    }
+    actual <- NULL
+    for (candidate in candidates) {
+      actual <- resolve_export_field(fields, candidate)
+      if (!is.null(actual)) {
+        break
+      }
+    }
+    if (is.null(actual)) {
+      return(sprintf("NULL AS %s", qident(alias)))
+    }
+    prefix <- if (is.null(table_alias)) "" else paste0(table_alias, ".")
+    sprintf("%s%s AS %s", prefix, qident(actual), qident(alias))
+  }
+
+  project_col <- resolve_export_field(fields, "ProjectID")
+  plot_col <- resolve_export_field(fields, "PlotNumber")
+
+  select_exprs <- c(
+    pick_expr("PlotNumber", "Plot"),
+    pick_expr("ProjectID", "Project"),
+    pick_expr(c("_location", "Location"), "Location"),
+    pick_expr("Date", "Date"),
+    pick_expr("SiteSurveyor", "Surveyor"),
+    pick_expr("Latitude", "Latitude"),
+    pick_expr("Longitude", "Longitude"),
+    pick_expr("Elevation", "Elevation"),
+    pick_expr("SlopeGradient", "Slope"),
+    pick_expr("Aspect", "Aspect"),
+    pick_expr(c("_zone", "Zone"), "Zone"),
+    pick_expr("SubZone", "Subzone"),
+    pick_expr("SiteSeries", "Site Series"),
+    pick_expr("MoistureRegime", "Moisture"),
+    pick_expr("NutrientRegime", "Nutrient"),
+    pick_expr("SiteNotes", "Notes")
+  )
+
+  query <- paste("SELECT", paste(select_exprs, collapse = ",\n    "), "FROM Env")
+
+  if (!is.null(project_ids) && length(project_ids) > 0 && !is.null(project_col)) {
+    projs_sql <- paste(as.character(DBI::dbQuoteString(con, as.character(project_ids))), collapse = ", ")
+    query <- paste0(query, sprintf(" WHERE %s IN (%s)", qident(project_col), projs_sql))
+  }
+
+  order_exprs <- character(0)
+  if (!is.null(project_col)) {
+    order_exprs <- c(order_exprs, qident(project_col))
+  }
+  if (!is.null(plot_col)) {
+    order_exprs <- c(order_exprs, qident(plot_col))
+  }
+  if (length(order_exprs) > 0) {
+    query <- paste(query, "ORDER BY", paste(order_exprs, collapse = ", "))
+  }
+
+  DBI::dbGetQuery(con, query)
+}
+
+#' Get Soil Humus Data
+#' @keywords internal
+get_soil_humus_data <- function(con, project_ids = NULL) {
+  humus_fields <- tryCatch(DBI::dbListFields(con, "Humus"), error = function(e) character(0))
+  if (!length(humus_fields)) {
+    return(data.frame())
+  }
+
+  env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  pick_expr <- function(fields, candidates, alias, table_alias) {
+    if (!is.character(candidates)) {
+      candidates <- as.character(candidates)
+    }
+    actual <- NULL
+    for (candidate in candidates) {
+      actual <- resolve_export_field(fields, candidate)
+      if (!is.null(actual)) {
+        break
+      }
+    }
+    if (is.null(actual)) {
+      return(sprintf("NULL AS %s", qident(alias)))
+    }
+    sprintf("%s.%s AS %s", table_alias, qident(actual), qident(alias))
+  }
+
+  humus_plot_col <- resolve_export_field(humus_fields, "PlotNumber")
+  humus_upper_col <- resolve_export_field(humus_fields, "UpperDepth")
+  env_plot_col <- resolve_export_field(env_fields, "PlotNumber")
+  env_project_col <- resolve_export_field(env_fields, "ProjectID")
+
+  select_exprs <- c(
+    pick_expr(humus_fields, "PlotNumber", "Plot", "h"),
+    pick_expr(humus_fields, "Horizon", "Horizon", "h"),
+    pick_expr(humus_fields, "UpperDepth", "Upper Depth (cm)", "h"),
+    pick_expr(humus_fields, "LowerDepth", "Lower Depth (cm)", "h"),
+    pick_expr(humus_fields, c("HumusFormpH", "Humusformph", "HumusFormBH", "HumusFormbh"), "Humus Form pH", "h"),
+    pick_expr(humus_fields, "vonPost", "von Post", "h"),
+    pick_expr(humus_fields, c("Comment", "Comments", "_comment"), "Comment", "h")
+  )
+
+  query <- paste("SELECT", paste(select_exprs, collapse = ",\n    "), "FROM Humus h")
+
+  if (!is.null(project_ids) && length(project_ids) > 0 && !is.null(humus_plot_col) && !is.null(env_plot_col) && !is.null(env_project_col)) {
+    projs_sql <- paste(as.character(DBI::dbQuoteString(con, as.character(project_ids))), collapse = ", ")
+    query <- paste0(
+      query,
+      sprintf(" JOIN Env e ON h.%s = e.%s WHERE e.%s IN (%s)", qident(humus_plot_col), qident(env_plot_col), qident(env_project_col), projs_sql)
+    )
+  }
+
+  order_exprs <- character(0)
+  if (!is.null(humus_plot_col)) {
+    order_exprs <- c(order_exprs, sprintf("h.%s", qident(humus_plot_col)))
+  }
+  if (!is.null(humus_upper_col)) {
+    order_exprs <- c(order_exprs, sprintf("h.%s", qident(humus_upper_col)))
+  }
+  if (length(order_exprs) > 0) {
+    query <- paste(query, "ORDER BY", paste(order_exprs, collapse = ", "))
+  }
+
+  tryCatch(DBI::dbGetQuery(con, query), error = function(e) data.frame())
+}
+
+#' Get Soil Mineral Data
+#' @keywords internal
+get_soil_mineral_data <- function(con, project_ids = NULL) {
+  mineral_fields <- tryCatch(DBI::dbListFields(con, "Mineral"), error = function(e) character(0))
+  if (!length(mineral_fields)) {
+    return(data.frame())
+  }
+
+  env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  pick_expr <- function(fields, candidates, alias, table_alias) {
+    if (!is.character(candidates)) {
+      candidates <- as.character(candidates)
+    }
+    actual <- NULL
+    for (candidate in candidates) {
+      actual <- resolve_export_field(fields, candidate)
+      if (!is.null(actual)) {
+        break
+      }
+    }
+    if (is.null(actual)) {
+      return(sprintf("NULL AS %s", qident(alias)))
+    }
+    sprintf("%s.%s AS %s", table_alias, qident(actual), qident(alias))
+  }
+
+  mineral_plot_col <- resolve_export_field(mineral_fields, "PlotNumber")
+  mineral_upper_col <- resolve_export_field(mineral_fields, "UpperDepth")
+  env_plot_col <- resolve_export_field(env_fields, "PlotNumber")
+  env_project_col <- resolve_export_field(env_fields, "ProjectID")
+
+  select_exprs <- c(
+    pick_expr(mineral_fields, "PlotNumber", "Plot", "m"),
+    pick_expr(mineral_fields, "Horizon", "Horizon", "m"),
+    pick_expr(mineral_fields, "UpperDepth", "Upper Depth (cm)", "m"),
+    pick_expr(mineral_fields, "LowerDepth", "Lower Depth (cm)", "m"),
+    pick_expr(mineral_fields, "Texture", "Texture", "m"),
+    pick_expr(mineral_fields, c("PercentCoarseFragsTotal", "percentcoarsefragstotal"), "Coarse Frags %", "m"),
+    pick_expr(mineral_fields, c("MineralFormpH", "MineralFormPH", "MineralFormBH", "mineralformbh"), "pH", "m"),
+    pick_expr(mineral_fields, c("Comments", "Comment", "_comments"), "Comment", "m")
+  )
+
+  query <- paste("SELECT", paste(select_exprs, collapse = ",\n    "), "FROM Mineral m")
+
+  if (!is.null(project_ids) && length(project_ids) > 0 && !is.null(mineral_plot_col) && !is.null(env_plot_col) && !is.null(env_project_col)) {
+    projs_sql <- paste(as.character(DBI::dbQuoteString(con, as.character(project_ids))), collapse = ", ")
+    query <- paste0(
+      query,
+      sprintf(" JOIN Env e ON m.%s = e.%s WHERE e.%s IN (%s)", qident(mineral_plot_col), qident(env_plot_col), qident(env_project_col), projs_sql)
+    )
+  }
+
+  order_exprs <- character(0)
+  if (!is.null(mineral_plot_col)) {
+    order_exprs <- c(order_exprs, sprintf("m.%s", qident(mineral_plot_col)))
+  }
+  if (!is.null(mineral_upper_col)) {
+    order_exprs <- c(order_exprs, sprintf("m.%s", qident(mineral_upper_col)))
+  }
+  if (length(order_exprs) > 0) {
+    query <- paste(query, "ORDER BY", paste(order_exprs, collapse = ", "))
+  }
+
+  tryCatch(DBI::dbGetQuery(con, query), error = function(e) data.frame())
+}
+
+#' Add Vegetation Sheet with Styling
+#' @keywords internal
+add_vegetation_sheet <- function(wb, sheet_name, data, apply_formatting = TRUE) {
+  
+  openxlsx::addWorksheet(wb, sheet_name)
+  
+  # Write data
+  openxlsx::writeData(wb, sheet_name, data, startRow = 1, startCol = 1)
+  
+  if (apply_formatting && nrow(data) > 0) {
+    apply_excel_styles(wb, sheet_name, data, "vegetation")
+  }
+  
+  # Freeze header row
+  openxlsx::freezePane(wb, sheet_name, firstRow = TRUE)
+  
+  # Auto-filter
+  openxlsx::addFilter(wb, sheet_name, row = 1, cols = 1:ncol(data))
+}
+
+#' Add Environment Sheet with Styling
+#' @keywords internal
+add_environment_sheet <- function(wb, sheet_name, data, apply_formatting = TRUE) {
+  
+  openxlsx::addWorksheet(wb, sheet_name)
+  openxlsx::writeData(wb, sheet_name, data, startRow = 1, startCol = 1)
+  
+  if (apply_formatting && nrow(data) > 0) {
+    apply_excel_styles(wb, sheet_name, data, "environment")
+  }
+  
+  openxlsx::freezePane(wb, sheet_name, firstRow = TRUE)
+  openxlsx::addFilter(wb, sheet_name, row = 1, cols = 1:ncol(data))
+}
+
+#' Add Soil Sheet with Styling
+#' @keywords internal
+add_soil_sheet <- function(wb, sheet_name, data, soil_type = "humus", apply_formatting = TRUE) {
+  
+  openxlsx::addWorksheet(wb, sheet_name)
+  openxlsx::writeData(wb, sheet_name, data, startRow = 1, startCol = 1)
+  
+  if (apply_formatting && nrow(data) > 0) {
+    apply_excel_styles(wb, sheet_name, data, "soil")
+  }
+  
+  openxlsx::freezePane(wb, sheet_name, firstRow = TRUE)
+  openxlsx::addFilter(wb, sheet_name, row = 1, cols = 1:ncol(data))
+}
+
+#' Add Metadata Sheet
+#' @keywords internal
+add_metadata_sheet <- function(wb, con, project_ids) {
+  
+  projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
+  query <- sprintf("SELECT 
+    projectid AS 'Project ID',
+    projecttitle AS 'Project Title',
+    fieldleader AS 'Project Lead',
+    coordinatingagency AS Organisation,
+    projectpurpose AS Purpose,
+    NULL AS Status,
+    startdate AS 'Start Date',
+    enddate AS 'End Date'
+  FROM Metadata
+  WHERE projectid IN (%s)", projs_sql)
+  
+  meta <- DBI::dbGetQuery(con, query)
+  
+  if (nrow(meta) > 0) {
+    openxlsx::addWorksheet(wb, "Project_Metadata")
+    openxlsx::writeData(wb, "Project_Metadata", meta, startRow = 1, startCol = 1)
+    apply_excel_styles(wb, "Project_Metadata", meta, "metadata")
+    openxlsx::freezePane(wb, "Project_Metadata", firstRow = TRUE)
+  }
+}
+
+#' Add Instructions/Data Dictionary Sheet
+#' @keywords internal
+add_instructions_sheet <- function(wb) {
+  
+  instructions <- data.frame(
+    Section = c(
+      "Overview",
+      "Vegetation Sheets",
+      "Environment Sheet",
+      "Soil Sheets",
+      "Data Codes",
+      "Cover Values",
+      "Contact"
+    ),
+    Description = c(
+      "This workbook contains field data from VPRO (Vegetation Resources Inventory). Data is organized by sheet type.",
+      "VegA/B/C/D sheets contain species observations by layer (A=Trees, B=Shrubs, C=Herbs, D=Moss). Cover values are numeric (0-100%).",
+      "Environment sheet contains plot-level site characteristics: location, BEC zone, slope, aspect, etc.",
+      "Soil_Humus and Soil_Mineral sheets contain soil profile descriptions by horizon.",
+      "Species codes follow BC standard nomenclature. See SppList for full names.",
+      "Cover: 0-100 = percent cover. Special codes: '+' = trace (<1%), 'r' = rare, 'P' = present.",
+      "For questions about this data, contact the project lead listed in Project_Metadata sheet."
+    )
+  )
+  
+  openxlsx::addWorksheet(wb, "Instructions")
+  openxlsx::writeData(wb, "Instructions", instructions, startRow = 1, startCol = 1)
+  
+  # Style instructions
+  header_style <- openxlsx::createStyle(
+    fgFill = "#4472C4",
+    halign = "center",
+    textDecoration = "bold",
+    fontColour = "#FFFFFF",
+    fontSize = 12
+  )
+  openxlsx::addStyle(wb, "Instructions", header_style, rows = 1, cols = 1:2, gridExpand = TRUE)
+  
+  # Set column widths
+  openxlsx::setColWidths(wb, "Instructions", cols = 1, widths = 20)
+  openxlsx::setColWidths(wb, "Instructions", cols = 2, widths = 80)
+  
+  openxlsx::freezePane(wb, "Instructions", firstRow = TRUE)
+}
+
+#' Apply Excel Styles to a Sheet
+#'
+#' @param workbook openxlsx workbook object
+#' @param sheet_name Name of the sheet to style
+#' @param data The data frame written to the sheet
+#' @param table_type Type of table: "vegetation", "environment", "soil", "metadata"
+#' @return NULL (modifies workbook in place)
+apply_excel_styles <- function(workbook, sheet_name, data, table_type = "vegetation") {
+  
+  n_rows <- nrow(data)
+  n_cols <- ncol(data)
+  
+  # Header Style (Access-like blue header)
+  header_style <- openxlsx::createStyle(
+    fgFill = "#4472C4",
+    halign = "center",
+    textDecoration = "bold",
+    fontColour = "#FFFFFF",
+    fontSize = 11,
+    border = "TopBottomLeftRight",
+    borderColour = "#FFFFFF"
+  )
+  
+  openxlsx::addStyle(workbook, sheet_name, header_style, rows = 1, cols = 1:n_cols, gridExpand = TRUE)
+  
+  # Alternating row colors (light gray every other row)
+  if (n_rows > 1) {
+    even_row_style <- openxlsx::createStyle(fgFill = "#F2F2F2")
+    even_rows <- seq(2, n_rows + 1, by = 2)
+    if (length(even_rows) > 0) {
+      openxlsx::addStyle(workbook, sheet_name, even_row_style, rows = even_rows, cols = 1:n_cols, gridExpand = TRUE, stack = TRUE)
+    }
+  }
+  
+  # Set column widths based on table type
+  if (table_type == "vegetation") {
+    widths <- c(12, 6, 10, 25, 25, 8)  # Plot, Layer, Code, Sci Name, Common Name, Cover
+    for (i in seq_along(widths)) {
+      if (i <= n_cols) {
+        openxlsx::setColWidths(workbook, sheet_name, cols = i, widths = widths[i])
+      }
+    }
+    
+    # Conditional formatting for cover values (if Cover % column exists)
+    cover_col <- which(colnames(data) == "Cover %")
+    if (length(cover_col) > 0 && n_rows > 0) {
+      # High cover (>75%) = green
+      high_cover_style <- openxlsx::createStyle(fgFill = "#C6EFCE")
+      openxlsx::conditionalFormatting(
+        workbook, sheet_name,
+        cols = cover_col,
+        rows = 2:(n_rows + 1),
+        rule = ">75",
+        style = high_cover_style
+      )
+      
+      # Missing cover = yellow
+      missing_style <- openxlsx::createStyle(fgFill = "#FFF2CC")
+      openxlsx::conditionalFormatting(
+        workbook, sheet_name,
+        cols = cover_col,
+        rows = 2:(n_rows + 1),
+        type = "blanks",
+        style = missing_style
+      )
+    }
+    
+  } else if (table_type == "environment") {
+    # Auto-size most columns, set specific widths for key fields
+    openxlsx::setColWidths(workbook, sheet_name, cols = 1:n_cols, widths = "auto")
+    
+    # Override specific columns
+    col_names <- colnames(data)
+    if ("Plot" %in% col_names) {
+      openxlsx::setColWidths(workbook, sheet_name, cols = which(col_names == "Plot"), widths = 12)
+    }
+    if ("Location" %in% col_names) {
+      openxlsx::setColWidths(workbook, sheet_name, cols = which(col_names == "Location"), widths = 25)
+    }
+    if ("Notes" %in% col_names) {
+      openxlsx::setColWidths(workbook, sheet_name, cols = which(col_names == "Notes"), widths = 40)
+    }
+    
+  } else if (table_type == "soil") {
+    openxlsx::setColWidths(workbook, sheet_name, cols = 1:n_cols, widths = "auto")
+    
+  } else {  # metadata or other
+    openxlsx::setColWidths(workbook, sheet_name, cols = 1:n_cols, widths = "auto")
+  }
+  
+  # Number formatting
+  if (table_type == "vegetation") {
+    cover_col <- which(colnames(data) == "Cover %")
+    if (length(cover_col) > 0) {
+      num_style <- openxlsx::createStyle(numFmt = "0.00")
+      openxlsx::addStyle(workbook, sheet_name, num_style, rows = 2:(n_rows + 1), cols = cover_col, gridExpand = TRUE, stack = TRUE)
+    }
+  }
+  
+  if (table_type %in% c("environment", "soil")) {
+    # Format numeric columns to 2 decimal places
+    numeric_cols <- sapply(data, is.numeric)
+    if (any(numeric_cols)) {
+      num_style <- openxlsx::createStyle(numFmt = "0.00")
+      for (col_idx in which(numeric_cols)) {
+        openxlsx::addStyle(workbook, sheet_name, num_style, rows = 2:(n_rows + 1), cols = col_idx, gridExpand = TRUE, stack = TRUE)
+      }
+    }
+  }
+  
+  invisible(NULL)
+}

@@ -1,0 +1,708 @@
+---
+title: "Site Unit Report"
+format:
+  html:
+    theme: journal
+    toc: true
+params:
+  plot_number: "00000"
+  plot_numbers: ""
+  site_unit: ""
+  project_id: ""
+  report_title: "Site Unit Report"
+  display_value: "presence_mean"
+  constancy_format: false
+  apply_lumping: false
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
+  project_root: ""
+  db_path: "../data/vpro.duckdb"
+  parquet_dir: ""
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+library(knitr)
+
+utils_candidates <- c(
+  file.path(dirname(tryCatch(knitr::current_input(dir = TRUE), error = function(e) "")), "_vpro_report_utils.R"),
+  file.path(Sys.getenv("QUARTO_PROJECT_DIR", unset = ""), "reports", "_vpro_report_utils.R"),
+  file.path(getwd(), "reports", "_vpro_report_utils.R")
+)
+utils_candidates <- utils_candidates[nzchar(utils_candidates)]
+utils_path <- utils_candidates[file.exists(utils_candidates)][1]
+if (!nzchar(utils_path)) stop("Unable to locate reports/_vpro_report_utils.R")
+source(utils_path)
+
+options(knitr.table.format = "html")
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_path <- db_candidate
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
+root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
+  Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
+  getwd(),
+  file.path(getwd(), ".."),
+  file.path(getwd(), "../..")
+)
+root_candidates <- unique(root_candidates[nzchar(root_candidates)])
+root_dir <- NA_character_
+for (candidate in root_candidates) {
+  candidate <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+  if (file.exists(file.path(candidate, "R", "logic_reports_veg.R"))) {
+    root_dir <- candidate
+    break
+  }
+}
+if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
+source(file.path(root_dir, "R", "logic_reports_veg.R"))
+
+parquet_dir <- params$parquet_dir
+if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
+  con <- dbConnect(duckdb(), dbdir = ":memory:")
+  dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
+  tbls <- c("Sample_Env", "Sample_SU", "Sample_Humus", "Sample_Mineral", "vw_USysAllVeg", "LayerCode")
+  for (tbl in tbls) {
+    file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
+    file_path <- file.path(parquet_dir, file_name)
+    if (file.exists(file_path)) {
+      dbExecute(
+        con,
+        sprintf("CREATE TABLE %s AS SELECT * FROM read_parquet('%s')", tbl, gsub("'", "''", file_path))
+      )
+    }
+  }
+  list_files <- c(
+    "lists_MasterSiteUnitList.parquet" = "VLists.MasterSiteUnitList",
+    "lists_USysAllSpecs.parquet" = "VLists.USysAllSpecs",
+    "lists_LifeformCodes.parquet" = "VLists.LifeformCodes"
+  )
+  for (file_name in names(list_files)) {
+    file_path <- file.path(parquet_dir, file_name)
+    if (file.exists(file_path)) {
+      dbExecute(
+        con,
+        sprintf("CREATE TABLE %s AS SELECT * FROM read_parquet('%s')", list_files[[file_name]], gsub("'", "''", file_path))
+      )
+    }
+  }
+} else {
+  con <- vpro_duckdb_connect(db_path, root_dir = root_dir, read_only = TRUE, attach_lists = TRUE)
+}
+
+aspect_to_text <- function(value_in) {
+  if (is.na(value_in)) return(NA_character_)
+  if (value_in >= 11.25 && value_in < 33.75) return("NNE")
+  if (value_in >= 33.75 && value_in < 56.25) return("NE")
+  if (value_in >= 56.25 && value_in < 78.75) return("ENE")
+  if (value_in >= 78.75 && value_in < 101.25) return("E")
+  if (value_in >= 101.25 && value_in < 123.75) return("ESE")
+  if (value_in >= 123.75 && value_in < 146.25) return("SE")
+  if (value_in >= 146.25 && value_in < 168.75) return("SSE")
+  if (value_in >= 168.75 && value_in < 191.25) return("S")
+  if (value_in >= 191.25 && value_in < 213.75) return("SSW")
+  if (value_in >= 213.75 && value_in < 236.25) return("SW")
+  if (value_in >= 236.25 && value_in < 258.75) return("WSW")
+  if (value_in >= 258.75 && value_in < 281.25) return("W")
+  if (value_in >= 281.25 && value_in < 303.75) return("WNW")
+  if (value_in >= 303.75 && value_in < 326.25) return("NW")
+  if (value_in >= 326.25 && value_in < 348.75) return("NNW")
+  if (value_in >= 348.75 && value_in <= 360) return("N")
+  if (value_in >= 0 && value_in < 11.25) return("N")
+  if (value_in == 999) return("Level")
+  "???"
+}
+
+smr_class_code <- function(code) {
+  switch(
+    as.character(code),
+    "0" = "VX",
+    "1" = "X",
+    "2" = "SX",
+    "3" = "SM",
+    "4" = "M",
+    "5" = "SHG",
+    "6" = "HG",
+    "7" = "SHD",
+    "8" = "HD",
+    ""
+  )
+}
+
+lifeform_code_to_desc <- function(code) {
+  switch(
+    as.character(code),
+    "0" = "Genus-level and mixed",
+    "1" = "Coniferous Tree",
+    "2" = "Deciduous Tree",
+    "3" = "Evergreen Shrub",
+    "4" = "Deciduous Shrub",
+    "5" = "Ferns or Fern-ally",
+    "6" = "Graminoid",
+    "7" = "Forb",
+    "8" = "Parasite or Saprophyte",
+    "9" = "Moss",
+    "10" = "Liverwort",
+    "11" = "Lichen",
+    "12" = "Dwarf woody plant",
+    "13" = "Macroalgae",
+    ""
+  )
+}
+
+format_class_summary <- function(values, label_fn = NULL) {
+  vals <- values[!is.na(values) & nzchar(trimws(as.character(values)))]
+  if (length(vals) == 0) return(NA_character_)
+  vals <- as.character(vals)
+  if (!is.null(label_fn)) {
+    vals <- vapply(vals, label_fn, character(1))
+  }
+  counts <- sort(table(vals))
+  parts <- paste0(names(counts), "(", as.integer(counts), ")")
+  parts <- paste(parts, collapse = "  ")
+  nulls <- sum(is.na(values) | !nzchar(trimws(as.character(values))))
+  if (nulls > 0) {
+    parts <- paste0(parts, "  (Null ", nulls, ")")
+  }
+  trimws(parts)
+}
+
+format_numeric_summary <- function(values, digits = 1) {
+  vals <- suppressWarnings(as.numeric(values))
+  vals <- vals[!is.na(vals)]
+  if (length(vals) == 0) return(NA_character_)
+  min_val <- round(min(vals), digits)
+  avg_val <- round(mean(vals), digits)
+  max_val <- round(max(vals), digits)
+  parts <- paste0(min_val, "---", avg_val, "---", max_val)
+  nulls <- sum(is.na(values) | !nzchar(trimws(as.character(values))))
+  if (nulls > 0) {
+    parts <- paste0(parts, "  (Null ", nulls, ")")
+  }
+  parts
+}
+
+apply_theme <- isTRUE(params$apply_theme)
+colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
+gray_greater <- suppressWarnings(as.numeric(params$gray_greater))
+
+style_report_table <- function(df, columns = NULL) {
+  if (!apply_theme || nrow(df) == 0) return(df)
+  style_numeric <- function(vec) {
+    labels <- as.character(vec)
+    vapply(seq_along(labels), function(i) {
+      label <- labels[[i]]
+      if (!nzchar(label)) return("")
+      num <- suppressWarnings(as.numeric(label))
+      if (is.na(num)) return(label)
+      bg <- ""
+      if (!is.na(gray_greater) && num >= gray_greater) {
+        bg <- "#e6e6e6"
+      } else if (!is.na(colour_greater) && num >= colour_greater) {
+        bg <- "#f9e27d"
+      }
+      if (nzchar(bg)) cell_spec(label, background = bg) else label
+    }, character(1))
+  }
+  target_cols <- columns
+  if (is.null(target_cols) || length(target_cols) == 0) {
+    target_cols <- names(df)[vapply(df, is.numeric, logical(1))]
+  }
+  target_cols <- intersect(target_cols, names(df))
+  for (col_name in target_cols) {
+    df[[col_name]] <- style_numeric(df[[col_name]])
+  }
+  df
+}
+```
+
+```{r load-data, include=FALSE}
+plots <- parse_plot_numbers(params$plot_number, params$plot_numbers)
+plots <- plots[nzchar(plots)]
+
+if (length(plots) == 0 && nzchar(trimws(params$site_unit)) && DBI::dbExistsTable(con, "Sample_SU")) {
+  su_df <- DBI::dbGetQuery(
+    con,
+    "SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?",
+    list(trimws(params$site_unit))
+  )
+  plots <- unique(as.character(su_df$PlotNumber))
+}
+
+if (length(plots) == 0 && nzchar(trimws(params$project_id)) && DBI::dbExistsTable(con, "Sample_Env")) {
+  env_df <- DBI::dbGetQuery(
+    con,
+    "SELECT PlotNumber FROM Sample_Env WHERE ProjectID = ?",
+    list(trimws(params$project_id))
+  )
+  plots <- unique(as.character(env_df$PlotNumber))
+}
+
+plots <- plots[nzchar(plots)]
+
+env_data <- data.frame()
+su_data <- data.frame()
+humus_data <- data.frame()
+mineral_data <- data.frame()
+
+if (length(plots) > 0 && DBI::dbExistsTable(con, "Sample_Env")) {
+  plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
+  env_sql <- sprintf("SELECT * FROM Sample_Env WHERE PlotNumber IN (%s)", plot_sql)
+  env_data <- DBI::dbGetQuery(con, env_sql)
+}
+
+if (DBI::dbExistsTable(con, "Sample_SU")) {
+  if (length(plots) > 0) {
+    plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
+    su_sql <- sprintf("SELECT PlotNumber, SiteUnit FROM Sample_SU WHERE PlotNumber IN (%s)", plot_sql)
+    su_data <- DBI::dbGetQuery(con, su_sql)
+  } else if (nzchar(trimws(params$site_unit))) {
+    su_data <- DBI::dbGetQuery(
+      con,
+      "SELECT PlotNumber, SiteUnit FROM Sample_SU WHERE SiteUnit = ?",
+      list(trimws(params$site_unit))
+    )
+  }
+}
+
+if (nrow(env_data) == 0 && nzchar(trimws(params$site_unit)) && DBI::dbExistsTable(con, "Sample_Env")) {
+  env_data <- DBI::dbGetQuery(
+    con,
+    "SELECT * FROM Sample_Env WHERE PlotNumber IN (SELECT PlotNumber FROM Sample_SU WHERE SiteUnit = ?)",
+    list(trimws(params$site_unit))
+  )
+}
+
+if (length(plots) > 0 && DBI::dbExistsTable(con, "Sample_Humus")) {
+  plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
+  humus_sql <- sprintf("SELECT * FROM Sample_Humus WHERE PlotNumber IN (%s)", plot_sql)
+  humus_data <- DBI::dbGetQuery(con, humus_sql)
+}
+
+if (length(plots) > 0 && DBI::dbExistsTable(con, "Sample_Mineral")) {
+  plot_sql <- paste(DBI::dbQuoteString(con, plots), collapse = ", ")
+  mineral_sql <- sprintf("SELECT * FROM Sample_Mineral WHERE PlotNumber IN (%s)", plot_sql)
+  mineral_data <- DBI::dbGetQuery(con, mineral_sql)
+}
+
+if (nrow(su_data) == 0 && nrow(env_data) > 0 && DBI::dbExistsTable(con, "Sample_SU")) {
+  plot_col <- vpro_first_existing_col(env_data, c("PlotNumber", "plotnumber"))
+  if (!is.na(plot_col)) {
+    env_plots <- unique(as.character(env_data[[plot_col]]))
+    plot_sql <- vpro_sql_in_list(con, env_plots)
+    if (!is.null(plot_sql)) {
+      su_sql <- sprintf("SELECT PlotNumber, SiteUnit FROM Sample_SU WHERE PlotNumber IN (%s)", plot_sql)
+      su_data <- DBI::dbGetQuery(con, su_sql)
+    }
+  }
+}
+
+if (nrow(env_data) > 0) {
+  names(env_data) <- tolower(names(env_data))
+}
+if (nrow(su_data) > 0) {
+  names(su_data) <- tolower(names(su_data))
+}
+if (nrow(humus_data) > 0) {
+  names(humus_data) <- tolower(names(humus_data))
+}
+if (nrow(mineral_data) > 0) {
+  names(mineral_data) <- tolower(names(mineral_data))
+}
+
+site_units <- character()
+if (nzchar(trimws(params$site_unit))) {
+  site_units <- trimws(params$site_unit)
+} else if (nrow(su_data) > 0) {
+  site_units <- unique(as.character(su_data$siteunit))
+} else if (nrow(env_data) > 0 && "siteunit" %in% names(env_data)) {
+  site_units <- unique(as.character(env_data$siteunit))
+}
+
+site_units <- site_units[nzchar(site_units)]
+active_site_unit <- if (length(site_units) > 0) site_units[1] else ""
+
+site_unit_overview <- data.frame()
+if (length(site_units) > 0 && nrow(su_data) > 0) {
+  overview <- su_data %>%
+    mutate(plotnumber = as.character(plotnumber), siteunit = as.character(siteunit)) %>%
+    group_by(siteunit) %>%
+    summarize(n_plots = dplyr::n_distinct(plotnumber), .groups = "drop")
+  if (DBI::dbExistsTable(con, "VLists.MasterSiteUnitList")) {
+    site_meta <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList")
+    names(site_meta) <- tolower(names(site_meta))
+    site_meta$siteseries <- as.character(site_meta$siteseries)
+    overview <- overview %>%
+      left_join(site_meta, by = c("siteunit" = "siteseries"))
+  }
+  if (!"siteserieslongname" %in% names(overview)) {
+    overview$siteserieslongname <- ""
+  }
+  site_unit_overview <- overview %>%
+    arrange(siteunit) %>%
+    mutate(siteserieslongname = ifelse(is.na(siteserieslongname), "", siteserieslongname))
+}
+
+env_active <- env_data
+if (nrow(env_active) > 0 && nzchar(active_site_unit)) {
+  if ("plotnumber" %in% names(env_active) && nrow(su_data) > 0) {
+    env_active <- env_active %>%
+      left_join(su_data[, c("plotnumber", "siteunit")], by = "plotnumber")
+  }
+  if ("siteunit" %in% names(env_active)) {
+    env_active <- env_active[env_active$siteunit == active_site_unit, , drop = FALSE]
+  }
+}
+
+plots_in_unit <- 0
+plot_list <- character()
+if (nrow(su_data) > 0 && nzchar(active_site_unit)) {
+  plot_list <- unique(as.character(su_data$plotnumber[su_data$siteunit == active_site_unit]))
+  plots_in_unit <- length(plot_list)
+}
+
+humus_ph_plot <- data.frame()
+mineral_ph_plot <- data.frame()
+if (length(plot_list) > 0 && nrow(humus_data) > 0 && all(c("plotnumber", "humusformph") %in% names(humus_data))) {
+  humus_ph_plot <- humus_data %>%
+    filter(plotnumber %in% plot_list) %>%
+    group_by(plotnumber) %>%
+    summarize(ph_value = mean(as.numeric(humusformph), na.rm = TRUE), .groups = "drop")
+}
+if (length(plot_list) > 0 && nrow(mineral_data) > 0 && all(c("plotnumber", "mineralformph") %in% names(mineral_data))) {
+  mineral_ph_plot <- mineral_data %>%
+    filter(plotnumber %in% plot_list) %>%
+    group_by(plotnumber) %>%
+    summarize(ph_value = mean(as.numeric(mineralformph), na.rm = TRUE), .groups = "drop")
+}
+
+veg <- load_veg_report_data(
+  con,
+  plot_numbers = plot_list,
+  site_unit = active_site_unit,
+  project_id = trimws(params$project_id),
+  apply_lumping = FALSE
+)
+
+lifeform_labels <- data.frame()
+if (DBI::dbExistsTable(con, "VLists.LifeformCodes")) {
+  lifeform_labels <- DBI::dbGetQuery(con, "SELECT Lifeform, LifeformDescription FROM VLists.LifeformCodes")
+  names(lifeform_labels) <- tolower(names(lifeform_labels))
+}
+
+dbDisconnect(con, shutdown = TRUE)
+```
+
+# `r params$report_title`
+
+```{r site-unit-list, echo=FALSE}
+if (nrow(site_unit_overview) > 0) {
+  display_df <- site_unit_overview %>%
+    transmute(
+      `Site Unit` = siteunit,
+      `#Plots` = n_plots,
+      `Long Name` = siteserieslongname
+    )
+  display_df <- style_report_table(display_df, columns = c("#Plots"))
+  kbl(display_df, escape = !apply_theme) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No site units found for the selection.")
+}
+```
+
+```{r site-unit-note, echo=FALSE}
+if (length(site_units) > 1) {
+  cat(paste0("Showing summary for site unit ", active_site_unit, "."))
+}
+```
+
+## Site Unit: `r if (nzchar(active_site_unit)) active_site_unit else "N/A"`
+
+**Plots:** `r if (plots_in_unit > 0) paste(plot_list, collapse = ", ") else "N/A"`
+
+```{r summaries, echo=FALSE}
+summary_rows <- list()
+
+add_summary <- function(label, value) {
+  if (!is.null(value) && nzchar(trimws(as.character(value)))) {
+    summary_rows[[length(summary_rows) + 1]] <<- data.frame(Metric = label, Summary = value, stringsAsFactors = FALSE)
+  }
+}
+
+if (nrow(env_active) > 0) {
+  cols <- names(env_active)
+  env_col <- function(...) {
+    candidates <- tolower(c(...))
+    hit <- candidates[candidates %in% cols]
+    if (length(hit) > 0) return(env_active[[hit[1]]])
+    NULL
+  }
+  exposure1 <- env_col("exposure1")
+  if (!is.null(exposure1)) {
+    add_summary("Exposure 1", format_class_summary(exposure1))
+  }
+  exposure2 <- env_col("exposure2")
+  if (!is.null(exposure2)) {
+    add_summary("Exposure 2", format_class_summary(exposure2))
+  }
+  disturbance1 <- env_col("sitedisturbance1")
+  if (!is.null(disturbance1)) {
+    add_summary("Site Disturbance 1", format_class_summary(disturbance1))
+  }
+  disturbance2 <- env_col("sitedisturbance2")
+  if (!is.null(disturbance2)) {
+    add_summary("Site Disturbance 2", format_class_summary(disturbance2))
+  }
+  disturbance3 <- env_col("sitedisturbance3")
+  if (!is.null(disturbance3)) {
+    add_summary("Site Disturbance 3", format_class_summary(disturbance3))
+  }
+  aspect_vals <- env_col("aspect")
+  if (!is.null(aspect_vals)) {
+    aspect_vals <- suppressWarnings(as.numeric(aspect_vals))
+    add_summary("Aspect", format_class_summary(aspect_vals, aspect_to_text))
+  }
+  conductivity_vals <- env_col("conductivity")
+  if (!is.null(conductivity_vals)) {
+    add_summary("Conductivity", format_numeric_summary(conductivity_vals, digits = 0))
+  }
+  humus_ph <- env_col("humusph")
+  if (!is.null(humus_ph)) {
+    add_summary("Humus pH", format_numeric_summary(humus_ph, digits = 1))
+  } else if (nrow(humus_ph_plot) > 0) {
+    add_summary("Humus pH", format_numeric_summary(humus_ph_plot$ph_value, digits = 1))
+  }
+  mineral_ph <- env_col("mineralph")
+  if (!is.null(mineral_ph)) {
+    add_summary("Mineral pH", format_numeric_summary(mineral_ph, digits = 1))
+  } else if (nrow(mineral_ph_plot) > 0) {
+    add_summary("Mineral pH", format_numeric_summary(mineral_ph_plot$ph_value, digits = 1))
+  }
+  structural_stage <- env_col("structuralstage")
+  if (!is.null(structural_stage)) {
+    add_summary("Structural Stage", format_class_summary(structural_stage))
+  }
+  successional_status <- env_col("successionalstatus")
+  if (!is.null(successional_status)) {
+    add_summary("Successional Status", format_class_summary(successional_status))
+  }
+  zone_vals <- env_col("zone", "_zone")
+  subzone_vals <- env_col("subzone")
+  if (!is.null(zone_vals) && !is.null(subzone_vals)) {
+    bgc_unit <- paste0(zone_vals, subzone_vals)
+    add_summary("BGC Unit", format_class_summary(bgc_unit))
+  }
+  if (!is.null(zone_vals)) {
+    add_summary("BGC Zone", format_class_summary(zone_vals))
+  }
+  smr_vals <- env_col("moistureregime")
+  if (!is.null(smr_vals)) {
+    add_summary("SMR", format_class_summary(smr_vals, smr_class_code))
+  }
+  snr_vals <- env_col("nutrientregime")
+  if (!is.null(snr_vals)) {
+    add_summary("SNR", format_class_summary(snr_vals))
+  }
+  soil_drainage <- env_col("soildrainage")
+  if (!is.null(soil_drainage)) {
+    add_summary("Soil Drainage", format_class_summary(soil_drainage))
+  }
+  surface_topography <- env_col("surfacetopographytype")
+  if (!is.null(surface_topography)) {
+    add_summary("Surface Topography", format_class_summary(surface_topography))
+  }
+  meso_slope <- env_col("mesoslopeposition")
+  if (!is.null(meso_slope)) {
+    add_summary("Meso Slope Position", format_class_summary(meso_slope))
+  }
+  surficial_material <- env_col("surficialmaterialsurf")
+  if (!is.null(surficial_material)) {
+    add_summary("Surficial Material (Surface)", format_class_summary(surficial_material))
+  }
+  root_zone_particle <- env_col("rootzoneparticlesize")
+  if (!is.null(root_zone_particle)) {
+    add_summary("Root Zone Particle Size", format_class_summary(root_zone_particle))
+  }
+  root_restricting <- env_col("rootrestrictingtype")
+  if (!is.null(root_restricting)) {
+    add_summary("Root Restricting Type", format_class_summary(root_restricting))
+  }
+  hydro_geo <- env_col("hydrogeosystem")
+  if (!is.null(hydro_geo)) {
+    add_summary("Hydro Geo System", format_class_summary(hydro_geo))
+  }
+  hydro_geo_sub <- env_col("hydrogeosubsystem")
+  if (!is.null(hydro_geo_sub)) {
+    add_summary("Hydro Geo Subsystem", format_class_summary(hydro_geo_sub))
+  }
+  humus_form <- env_col("humusform")
+  if (!is.null(humus_form)) {
+    add_summary("Humus Form", format_class_summary(humus_form))
+  }
+  soil_class_group <- env_col("soilclassgroup")
+  if (!is.null(soil_class_group)) {
+    add_summary("Soil Great Group", format_class_summary(soil_class_group))
+  }
+  bedrock1 <- env_col("bedrockgeology1")
+  if (!is.null(bedrock1)) {
+    add_summary("Bedrock Geology 1", format_class_summary(bedrock1))
+  }
+  bedrock2 <- env_col("bedrockgeology2")
+  if (!is.null(bedrock2)) {
+    add_summary("Bedrock Geology 2", format_class_summary(bedrock2))
+  }
+  bedrock3 <- env_col("bedrockgeology3")
+  if (!is.null(bedrock3)) {
+    add_summary("Bedrock Geology 3", format_class_summary(bedrock3))
+  }
+  seepage_depth <- env_col("seepagedepth")
+  if (!is.null(seepage_depth)) {
+    add_summary("Seepage Depth", format_numeric_summary(seepage_depth, digits = 1))
+  }
+  slope_vals <- env_col("slopegradient")
+  if (!is.null(slope_vals)) {
+    add_summary("Slope Gradient", format_numeric_summary(slope_vals, digits = 0))
+  }
+  elevation_vals <- env_col("elevation")
+  if (!is.null(elevation_vals)) {
+    add_summary("Elevation", format_numeric_summary(elevation_vals, digits = 0))
+  }
+  stand_age <- env_col("standage")
+  if (!is.null(stand_age)) {
+    add_summary("Stand Age", format_numeric_summary(stand_age, digits = 0))
+  }
+}
+
+if (length(summary_rows) > 0) {
+  summary_df <- do.call(rbind, summary_rows)
+  summary_df <- style_report_table(summary_df)
+  kbl(summary_df, escape = !apply_theme) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No environment summaries available.")
+}
+```
+
+## Lifeform Cover Summary
+
+```{r lifeform-summary, echo=FALSE}
+if (plots_in_unit > 0 && nrow(veg) > 0 && "species_lifeform" %in% names(veg)) {
+  veg_lf <- veg %>%
+    mutate(species_lifeform = as.character(species_lifeform)) %>%
+    group_by(plotnumber, species_lifeform) %>%
+    summarize(cover = sum(cover_num, na.rm = TRUE), .groups = "drop")
+
+  lf_summary <- veg_lf %>%
+    group_by(species_lifeform) %>%
+    summarize(
+      plots_with_cover = sum(cover > 0),
+      min_cover = ifelse(plots_with_cover >= plots_in_unit, min(cover), 0),
+      avg_cover = sum(cover) / plots_in_unit,
+      max_cover = max(cover),
+      .groups = "drop"
+    )
+
+  lf_summary$lifeform_desc <- lifeform_code_to_desc(lf_summary$species_lifeform)
+  if (nrow(lifeform_labels) > 0) {
+    lf_summary <- lf_summary %>%
+      left_join(lifeform_labels, by = c("species_lifeform" = "lifeform"))
+    lf_summary$lifeform_desc <- ifelse(
+      nzchar(lf_summary$lifeformdescription),
+      lf_summary$lifeformdescription,
+      lf_summary$lifeform_desc
+    )
+  }
+
+  lf_summary <- lf_summary %>%
+    arrange(species_lifeform) %>%
+    transmute(
+      Lifeform = ifelse(nzchar(lifeform_desc), lifeform_desc, species_lifeform),
+      Min = round(min_cover, 1),
+      Avg = round(avg_cover, 1),
+      Max = round(max_cover, 1)
+    )
+
+  lf_summary <- style_report_table(lf_summary, columns = c("Min", "Avg", "Max"))
+  kbl(lf_summary, escape = !apply_theme) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+} else {
+  cat("No lifeform cover data available.")
+}
+```
+
+## Strata Cover Summary
+
+```{r strata-summary, echo=FALSE}
+if (nrow(env_active) > 0) {
+  strata_map <- c(
+    "Tree" = "stratacovertree",
+    "Shrub" = "stratacovershrub",
+    "Herb" = "stratacoverherb",
+    "Moss" = "stratacovermoss"
+  )
+  strata_cols <- names(strata_map)[strata_map %in% names(env_active)]
+  if (length(strata_cols) > 0) {
+    strata_rows <- lapply(strata_cols, function(label) {
+      col_name <- strata_map[[label]]
+      data.frame(
+        Strata = label,
+        Summary = format_numeric_summary(env_active[[col_name]], digits = 1),
+        stringsAsFactors = FALSE
+      )
+    })
+    strata_df <- do.call(rbind, strata_rows)
+    strata_df <- style_report_table(strata_df)
+    kbl(strata_df, escape = !apply_theme) %>%
+      kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+  } else {
+    cat("No strata cover fields found.")
+  }
+} else {
+  cat("No strata cover data available.")
+}
+```
+
+## Ground Cover Summary
+
+```{r ground-cover, echo=FALSE}
+if (nrow(env_active) > 0) {
+  ground_map <- c(
+    "Substrate Decayed Wood" = "substratedecwood",
+    "Substrate Bedrock" = "substratebedrock",
+    "Substrate Rocks" = "substraterocks",
+    "Substrate Mineral Soil" = "substratemineralsoil",
+    "Substrate Organic Matter" = "substrateorganicmatter",
+    "Substrate Water" = "substratewater"
+  )
+  ground_cols <- names(ground_map)[ground_map %in% names(env_active)]
+  if (length(ground_cols) > 0) {
+    gc_rows <- lapply(ground_cols, function(label) {
+      col_name <- ground_map[[label]]
+      data.frame(
+        Metric = label,
+        Summary = format_numeric_summary(env_active[[col_name]], digits = 1),
+        stringsAsFactors = FALSE
+      )
+    })
+    gc_df <- do.call(rbind, gc_rows)
+    gc_df <- style_report_table(gc_df)
+    kbl(gc_df, escape = !apply_theme) %>%
+      kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+  } else {
+    cat("No ground cover fields found.")
+  }
+} else {
+  cat("No ground cover data available.")
+}
+```

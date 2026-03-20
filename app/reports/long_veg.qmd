@@ -1,0 +1,499 @@
+---
+title: "Long Vegetation Table"
+format:
+  html:
+    theme: journal
+params:
+  plot_number: "R3027"
+  plot_numbers: ""
+  site_unit: ""
+  project_id: ""
+  group_by: "layer"
+  order_by: "presence"
+  presence_min: 0
+  cover_min: 0
+  value_limit: 0
+  avg_type: "by_n_plots"        # "by_n_plots" (Access: By n Plots) | "characteristic" (Access: Characteristic)
+  show_common: "none"            # "none" | "english" | "code" | "attribute"
+  show_field: ""                 # species attribute column when show_common="attribute": "RedBlueList" | "Wetland_Ind" | "WeedStatus"
+  apply_lumping: false
+  unit_groups: "site_unit"       # "site_unit" | "selected_fields" | "none"
+  constancy_format: false
+  display_value: "standard"
+  colour_greater: 5
+  gray_greater: 65
+  apply_theme: true
+  space_between_groups: false    # insert blank row between group sections
+  create_summary: false          # append a summary section after the main table
+  use_spp_codes_only: false      # collapse subspecies/variants to species code
+  constant_spp_list: false       # fix species list across all unit groups
+  screen_report: true            # skip heavy print-page formatting (faster)
+  enforce_qc: false              # gate on data quality thresholds below
+  site_quality_min: ""           # minimum site plot quality (PlotQualitySite lookup value)
+  veg_quality_min: ""            # minimum veg plot quality
+  soil_quality_min: ""           # minimum soil plot quality
+  site_quality_include_null: true
+  veg_quality_include_null: true
+  soil_quality_include_null: true
+  report_title: "Long Vegetation Report"
+  project_root: ""
+  db_path: "../data/vpro.duckdb"
+  parquet_dir: ""
+---
+
+```{r setup, include=FALSE}
+library(duckdb)
+library(dplyr)
+library(knitr)
+
+options(knitr.table.format = "html")
+has_kableExtra <- requireNamespace("kableExtra", quietly = TRUE)
+if (has_kableExtra) {
+  kbl <- kableExtra::kbl
+  kable_styling <- kableExtra::kable_styling
+  cell_spec <- kableExtra::cell_spec
+} else {
+  kbl <- function(x, ...) knitr::kable(x, ...)
+  kable_styling <- function(x, ...) x
+  cell_spec <- function(x, ...) x
+}
+project_root <- params$project_root
+db_root <- ""
+db_path <- params$db_path
+if (!is.null(db_path) && nzchar(trimws(db_path))) {
+  db_candidate <- tryCatch(normalizePath(db_path, winslash = "/", mustWork = FALSE), error = function(e) "")
+  if (nzchar(db_candidate)) {
+    db_root <- dirname(dirname(db_candidate))
+  }
+}
+root_candidates <- c(
+  if (!is.null(project_root)) project_root else "",
+  db_root,
+  Sys.getenv("QUARTO_PROJECT_DIR", unset = ""),
+  getwd(),
+  file.path(getwd(), ".."),
+  file.path(getwd(), "../..")
+)
+root_candidates <- unique(root_candidates[nzchar(root_candidates)])
+root_dir <- NA_character_
+for (candidate in root_candidates) {
+  candidate <- normalizePath(candidate, winslash = "/", mustWork = FALSE)
+  if (file.exists(file.path(candidate, "R", "logic_lumping.R"))) {
+    root_dir <- candidate
+    break
+  }
+}
+if (is.na(root_dir)) stop("Unable to locate project root for report helpers.")
+source(file.path(root_dir, "R", "logic_lumping.R"))
+source(file.path(root_dir, "R", "logic_reports_veg.R"))
+parquet_dir <- params$parquet_dir
+if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
+  con <- dbConnect(duckdb(), dbdir = ":memory:")
+  dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
+  tbls <- c("vw_USysAllVeg", "Sample_SU", "Sample_Lump", "LayerCode", "Sample_Admin", "vw_USysEnv")
+  for (tbl in tbls) {
+    file_name <- paste0(gsub("[^A-Za-z0-9_]", "_", tbl), ".parquet")
+    file_path <- file.path(parquet_dir, file_name)
+    if (file.exists(file_path)) {
+      dbExecute(
+        con,
+        sprintf("CREATE TABLE %s AS SELECT * FROM read_parquet('%s')", tbl, gsub("'", "''", file_path))
+      )
+    }
+  }
+  list_file <- file.path(parquet_dir, "lists_USysAllSpecs.parquet")
+  if (file.exists(list_file)) {
+    dbExecute(
+      con,
+      sprintf("CREATE TABLE VLists.USysAllSpecs AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
+    )
+  }
+} else {
+  con <- dbConnect(duckdb(), params$db_path, read_only = TRUE)
+  lists_db <- file.path(root_dir, "data", "vpro_lists.duckdb")
+  if (file.exists(lists_db)) {
+    lists_db_norm <- normalizePath(lists_db, winslash = "/", mustWork = TRUE)
+    dbExecute(con, sprintf("ATTACH '%s' AS lists", gsub("'", "''", lists_db_norm)))
+  }
+}
+```
+
+```{r load-data, include=FALSE}
+plot_number  <- if (is.null(params$plot_number))  "" else as.character(params$plot_number)
+plot_numbers <- if (is.null(params$plot_numbers)) "" else as.character(params$plot_numbers)
+plots <- parse_plot_numbers(plot_number, plot_numbers)
+
+# ---------------------------------------------------------------------------
+# unit_groups: 1/site_unit = use site-unit table; 2/selected_fields = manual
+# selection; 3/none = no grouping filter beyond plot_numbers/plot_number.
+# For "site_unit" the plots are already resolved by load_veg_report_data via
+# the site_unit param; for "none" we pass plots as-is.
+# ---------------------------------------------------------------------------
+unit_groups_val <- tolower(trimws(as.character(params$unit_groups)))
+
+veg <- load_veg_report_data(
+  con,
+  plot_numbers    = plots,
+  site_unit       = if (unit_groups_val == "site_unit") trimws(params$site_unit) else "",
+  project_id      = trimws(params$project_id),
+  apply_lumping   = isTRUE(params$apply_lumping)
+)
+
+# ---------------------------------------------------------------------------
+# use_spp_codes_only: collapse subspecies / variety suffixes to the base 8-char
+# species code (mirrors Access optCombineVariants / LVUseSppCodesOnly).
+# E.g. "ABIELASL1" → "ABIELASL".
+# ---------------------------------------------------------------------------
+if (isTRUE(params$use_spp_codes_only) && nrow(veg) > 0) {
+  veg$species <- substr(veg$species, 1, 8)
+  # Re-aggregate cover within plot after collapsing codes
+  veg <- veg |>
+    dplyr::group_by(plotnumber, mylayer, species) |>
+    dplyr::summarise(
+      cover_num   = sum(cover_num,   na.rm = TRUE),
+      present_num = as.integer(sum(present_num, na.rm = TRUE) > 0),
+      dplyr::across(dplyr::where(is.character) & !dplyr::any_of(c("plotnumber","mylayer","species","cover")),
+                    dplyr::first),
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(
+      present = present_num > 0,
+      cover   = as.character(cover_num)
+    )
+}
+
+# ---------------------------------------------------------------------------
+# Data quality filtering (mirrors Access optEnforceQC / SitePlotQuality etc.)
+# Quality columns are in vw_USysEnv (Sample_Env INNER JOIN Sample_Admin):
+#   siteplotquality, vegplotquality, soilplotquality.
+# Lookup values from USysTableOfLists 'DataQuality':
+#   Poor (1) < Fair (2) < Good (3) < Excellent (4).
+# If the view or columns are absent the filter is skipped silently.
+# ---------------------------------------------------------------------------
+if (isTRUE(params$enforce_qc) && nrow(veg) > 0) {
+  has_view <- tryCatch(DBI::dbExistsTable(con, "vw_USysEnv"), error = function(e) FALSE)
+  if (has_view) {
+    admin_df <- tryCatch(
+      DBI::dbGetQuery(con,
+        "SELECT plotnumber, siteplotquality, vegplotquality, soilplotquality
+         FROM vw_USysEnv"),
+      error = function(e) NULL
+    )
+    if (!is.null(admin_df) && nrow(admin_df) > 0) {
+      admin_df$plotnumber <- as.character(admin_df$plotnumber)
+
+      # Ordered quality levels matching USysTableOfLists 'DataQuality'
+      quality_levels <- c("Poor", "Fair", "Good", "Excellent")
+
+      # Helper: retain plots meeting the minimum quality threshold
+      filter_quality <- function(plots_keep, env, col, min_val, include_null) {
+        if (!col %in% names(env) || !nzchar(trimws(as.character(min_val)))) return(plots_keep)
+        min_str <- trimws(as.character(min_val))
+        col_vals <- env[[col]]
+        min_idx <- match(min_str, quality_levels)
+        if (is.na(min_idx)) {
+          # fallback: alphabetic comparison if value not in ordered list
+          keep_rows <- env$plotnumber[
+            (is.na(col_vals) & isTRUE(include_null)) |
+            (!is.na(col_vals) & col_vals >= min_str)
+          ]
+        } else {
+          val_idx <- match(col_vals, quality_levels)
+          keep_rows <- env$plotnumber[
+            (is.na(val_idx) & isTRUE(include_null)) |
+            (!is.na(val_idx) & val_idx >= min_idx)
+          ]
+        }
+        intersect(plots_keep, unique(keep_rows))
+      }
+
+      all_plots  <- unique(veg$plotnumber)
+      plots_keep <- all_plots
+      plots_keep <- filter_quality(plots_keep, admin_df, "siteplotquality",
+                                   params$site_quality_min,
+                                   isTRUE(params$site_quality_include_null))
+      plots_keep <- filter_quality(plots_keep, admin_df, "vegplotquality",
+                                   params$veg_quality_min,
+                                   isTRUE(params$veg_quality_include_null))
+      plots_keep <- filter_quality(plots_keep, admin_df, "soilplotquality",
+                                   params$soil_quality_min,
+                                   isTRUE(params$soil_quality_include_null))
+      veg <- veg[veg$plotnumber %in% plots_keep, , drop = FALSE]
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# show_common resolution: map Access integer enum to logic_reports_veg string.
+# Access: 0=none, 1=english, 2=8char code, 4=species attribute field.
+# QMD param: "none" | "english" | "code" | "attribute".
+# When show_common="attribute", show_field names the column (e.g. "Wetland_Ind").
+# ---------------------------------------------------------------------------
+show_common_val <- tolower(trimws(as.character(params$show_common)))
+# Normalise numeric legacy values passed as strings
+show_common_val <- switch(show_common_val,
+  "0" = "none", "1" = "english", "2" = "code", "4" = "attribute",
+  show_common_val
+)
+
+# avg_type resolution: map Access enum to logic function values.
+# Access: "by_n_plots"/"10" → denominator = all plots (mean incl. 0-cover plots)
+#         "characteristic"/"20" → denominator = only plots where species present
+avg_type_val <- tolower(trimws(as.character(params$avg_type)))
+avg_type_val <- switch(avg_type_val,
+  "10" = "by_n_plots",
+  "20" = "characteristic",
+  "mean" = "by_n_plots",   # legacy default maps to By n Plots
+  avg_type_val
+)
+
+# ---------------------------------------------------------------------------
+# summarize_veg_report uses avg_type: "sum_per_plot" ≡ by_n_plots,
+#   and default (mean of present-only rows) ≡ characteristic.
+# Map our enum to what the function currently accepts.
+# ---------------------------------------------------------------------------
+avg_type_fn <- if (avg_type_val == "by_n_plots") "sum_per_plot" else "mean"
+
+summary <- summarize_veg_report(
+  veg,
+  group_by      = if (isTRUE(params$constancy_format)) "lifeform" else params$group_by,
+  order_by      = params$order_by,
+  presence_min  = params$presence_min,
+  cover_min     = params$cover_min,
+  value_limit   = params$value_limit,
+  avg_type      = avg_type_fn,
+  show_common   = show_common_val,
+  display_value = params$display_value
+)
+
+# ---------------------------------------------------------------------------
+# constant_spp_list: when TRUE the species list shown is fixed to the union of
+# all species across all unit groups — every group shows every species (absent
+# ones will have NA cover).  Achieved by cross-joining the full species list
+# back to each group after summarization.
+# ---------------------------------------------------------------------------
+if (isTRUE(params$constant_spp_list) && nrow(summary) > 0) {
+  all_species <- unique(summary[, c("species_label", "common_label")])
+  all_groups  <- unique(summary$group_label)
+  full_grid   <- merge(
+    data.frame(group_label = all_groups, stringsAsFactors = FALSE),
+    all_species,
+    all = TRUE
+  )
+  summary <- dplyr::left_join(
+    full_grid, summary,
+    by = c("group_label", "species_label", "common_label")
+  )
+  # Fill zeros for absent species
+  summary$plots_present   <- tidyr::replace_na(summary$plots_present,   0)
+  summary$presence_ratio  <- tidyr::replace_na(summary$presence_ratio,  0)
+  summary$presence_pct    <- tidyr::replace_na(summary$presence_pct,    0)
+  summary$mean_cover      <- tidyr::replace_na(summary$mean_cover,      0)
+}
+
+veg_labeled <- label_veg_records(veg, params$group_by, show_common_val)
+
+# For show_common="attribute": attach the requested species attribute column.
+if (show_common_val == "attribute" && nzchar(trimws(as.character(params$show_field)))) {
+  attr_col <- trimws(as.character(params$show_field))
+  if (attr_col %in% names(veg_labeled)) {
+    veg_labeled$common_label <- as.character(veg_labeled[[attr_col]])
+    summary$common_label     <- NA_character_  # will be re-joined below
+  }
+}
+
+if (nrow(veg_labeled) > 0) {
+  summary$common_key    <- ifelse(is.na(summary$common_label),    "", summary$common_label)
+  veg_labeled$common_key <- ifelse(is.na(veg_labeled$common_label), "", veg_labeled$common_label)
+  summary_keep <- summary[, c(
+    "group_label", "species_label", "common_key",
+    "presence_ratio", "presence_pct", "mean_cover",
+    "display_value", "common_label"
+  )]
+  veg_labeled <- dplyr::inner_join(
+    veg_labeled,
+    summary_keep[, c("group_label", "species_label", "common_key")],
+    by = c("group_label", "species_label", "common_key")
+  )
+}
+
+veg_pivot <- data.frame()
+if (nrow(veg_labeled) > 0) {
+  veg_pivot <- veg_labeled %>%
+    dplyr::group_by(group_label, species_label, common_key, plotnumber) %>%
+    dplyr::summarise(cover = sum(cover_num, na.rm = TRUE), .groups = "drop")
+}
+
+veg_wide <- data.frame()
+if (nrow(veg_pivot) > 0) {
+  veg_wide <- reshape(
+    veg_pivot,
+    idvar     = c("group_label", "species_label", "common_key"),
+    timevar   = "plotnumber",
+    direction = "wide"
+  )
+  plot_cols_raw <- grep("^cover\\.", names(veg_wide), value = TRUE)
+  if (length(plot_cols_raw) > 0) {
+    plot_cols <- sub("^cover\\.", "", plot_cols_raw)
+    names(veg_wide)[match(plot_cols_raw, names(veg_wide))] <- plot_cols
+  }
+}
+
+report_table <- data.frame()
+if (nrow(summary) > 0) {
+  summary$common_key <- ifelse(is.na(summary$common_label), "", summary$common_label)
+  summary_keep <- summary[, c(
+    "group_label", "species_label", "common_key",
+    "presence_ratio", "presence_pct", "mean_cover",
+    "display_value", "common_label"
+  )]
+  if (nrow(veg_wide) > 0) {
+    report_table <- dplyr::left_join(
+      summary_keep, veg_wide,
+      by = c("group_label", "species_label", "common_key")
+    )
+  } else {
+    report_table <- summary_keep
+  }
+}
+
+dbDisconnect(con, shutdown = TRUE)
+```
+
+# `r params$report_title`
+
+`r if (isTRUE(params$apply_lumping)) "Lumping applied" else ""`
+
+# Plot: `r params$plot_number`
+
+```{r veg-table, echo=FALSE, results='asis'}
+if (nrow(report_table) > 0) {
+  plot_cols <- setdiff(
+    names(report_table),
+    c("group_label", "species_label", "common_key", "presence_ratio",
+      "mean_cover", "common_label")
+  )
+  plot_cols <- plot_cols[order(plot_cols)]
+
+  constancy_format <- isTRUE(params$constancy_format)
+  display_mode <- if (!is.null(params$display_value) && nzchar(params$display_value)) {
+    tolower(params$display_value)
+  } else {
+    "standard"
+  }
+
+  # Build the display data frame
+  view <- data.frame(
+    Group   = report_table$group_label,
+    Species = report_table$species_label,
+    stringsAsFactors = FALSE
+  )
+  if (show_common_val != "none") {
+    view$Common <- report_table$common_label
+  }
+  if (constancy_format) {
+    view$Constancy <- round(report_table$presence_pct, 1)
+  } else if (display_mode != "standard") {
+    view$Display <- report_table$display_value
+  } else {
+    view$Presence  <- round(report_table$presence_ratio * 100, 1)
+    view$MeanCover <- round(report_table$mean_cover, 1)
+  }
+
+  if (length(plot_cols) > 0) {
+    plot_data <- report_table[, plot_cols, drop = FALSE]
+    plot_data <- as.data.frame(lapply(plot_data, function(col) {
+      if (is.numeric(col)) return(ifelse(is.na(col), "", round(col, 1)))
+      num <- suppressWarnings(as.numeric(col))
+      ifelse(is.na(num), ifelse(is.na(col), "", as.character(col)), round(num, 1))
+    }), stringsAsFactors = FALSE)
+    names(plot_data) <- plot_cols
+    view <- cbind(view, plot_data)
+  }
+
+  # Colour theming
+  apply_theme    <- isTRUE(params$apply_theme)
+  colour_greater <- suppressWarnings(as.numeric(params$colour_greater))
+  gray_greater   <- suppressWarnings(as.numeric(params$gray_greater))
+
+  if (apply_theme && nrow(view) > 0) {
+    num_cols <- names(view)[vapply(view, is.numeric, logical(1))]
+    if (length(num_cols) > 0) {
+      style_numeric <- function(vec) {
+        num    <- suppressWarnings(as.numeric(vec))
+        labels <- ifelse(is.na(num), "", as.character(vec))
+        vapply(seq_along(num), function(i) {
+          value <- num[[i]]; label <- labels[[i]]
+          if (is.na(value) || !nzchar(label)) return("")
+          bg <- ""
+          if (!is.na(gray_greater)   && value >= gray_greater)   bg <- "#e6e6e6"
+          else if (!is.na(colour_greater) && value >= colour_greater) bg <- "#f9e27d"
+          if (nzchar(bg)) cell_spec(label, background = bg) else label
+        }, character(1))
+      }
+      for (col_name in num_cols) view[[col_name]] <- style_numeric(view[[col_name]])
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # space_between_groups: insert a blank spacer row at each group boundary.
+  # ---------------------------------------------------------------------------
+  if (isTRUE(params$space_between_groups) && nrow(view) > 1) {
+    grp_col <- view$Group
+    breaks  <- which(c(FALSE, grp_col[-1] != grp_col[-length(grp_col)]))
+    if (length(breaks) > 0) {
+      blank_row <- as.data.frame(
+        lapply(view, function(col) if (is.numeric(col)) NA_real_ else ""),
+        stringsAsFactors = FALSE
+      )
+      # Insert blank rows from bottom to top so indices remain valid
+      for (b in rev(breaks)) {
+        view <- rbind(view[seq_len(b - 1), ], blank_row, view[b:nrow(view), ])
+      }
+    }
+  }
+
+  tbl <- kbl(view, align = "l", escape = !apply_theme) %>%
+    kable_styling(
+      bootstrap_options = if (!isTRUE(params$screen_report))
+        c("striped", "hover", "condensed", "bordered")
+      else
+        c("striped", "hover", "condensed"),
+      full_width = FALSE
+    )
+  tbl
+
+} else {
+  cat("No vegetation data found.")
+}
+```
+
+```{r summary-section, echo=FALSE, results='asis', eval=isTRUE(params$create_summary)}
+# ---------------------------------------------------------------------------
+# create_summary: append a plot-count / species-count summary table after the
+# main table (mirrors Access optCreateSummary / LVReportSummary).
+# ---------------------------------------------------------------------------
+if (nrow(report_table) > 0) {
+  cat("\n\n## Summary\n\n")
+  n_plots   <- length(unique(veg$plotnumber))
+  n_species <- length(unique(report_table$species_label))
+  n_groups  <- length(unique(report_table$group_label))
+
+  summ_df <- data.frame(
+    Metric = c("Plots included", "Species / taxa", "Groups"),
+    Value  = c(n_plots, n_species, n_groups),
+    stringsAsFactors = FALSE
+  )
+
+  # Per-group species counts
+  group_counts <- report_table |>
+    dplyr::group_by(Group = group_label) |>
+    dplyr::summarise(`Species count` = dplyr::n_distinct(species_label), .groups = "drop")
+
+  kbl(summ_df, align = "l") %>%
+    kable_styling(bootstrap_options = c("condensed"), full_width = FALSE)
+  cat("\n\n")
+  kbl(group_counts, align = "l") %>%
+    kable_styling(bootstrap_options = c("condensed"), full_width = FALSE)
+}
+```

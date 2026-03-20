@@ -4,7 +4,7 @@
 library(duckdb)
 
 # Output directory
-pub_dir <- "data/published"
+pub_dir <- "app/data/published"
 if (!dir.exists(pub_dir)) {
   dir.create(pub_dir, recursive = TRUE)
 }

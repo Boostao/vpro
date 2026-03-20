@@ -36,6 +36,16 @@ log_msg <- function(...) {
   cat(file=stderr(), paste0(..., "\n"))
 }
 
+source("R/logic_splash.R")
+
+if (exists("VPRO_GLOBAL_RUNTIME", inherits = FALSE)) {
+  vpro_close_runtime(VPRO_GLOBAL_RUNTIME)
+}
+
+VPRO_GLOBAL_RUNTIME <- vpro_init_runtime()
+VPRO_SPLASH_STATE <- run_splash_init(VPRO_GLOBAL_RUNTIME)
+db_path <- VPRO_GLOBAL_RUNTIME$paths$vpro64
+
 # Module Imports
 source("R/logic_state.R") # Global State Logic
 source("R/logic_lumping.R") # Lumping Logic
