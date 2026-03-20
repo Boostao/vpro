@@ -1,210 +1,246 @@
-# Tests for logic_project.R
+# Tests for logic_project.R under the SQLite-per-project runtime.
 
-source(here::here("R", "logic_state.R"))
-source(here::here("R", "db_connections.R"))
-source(here::here("R", "logic_project.R"))
+source(here::here("app", "R", "logic", "00.db.R"))
+source(here::here("app", "R", "logic", "db_connections.R"))
+source(here::here("app", "R", "logic", "01.state.R"))
+source(here::here("app", "R", "logic", "logic_state.R"))
+source(here::here("app", "R", "logic", "logic_project.R"))
 
-# Helper: create an in-memory DuckDB with the main table set
-make_main_con <- function() {
-  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  DBI::dbExecute(con, "CREATE TABLE Metadata (projectid TEXT PRIMARY KEY, projecttitle TEXT, projectname TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Env (id INTEGER, plotnumber TEXT, projectid TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Veg (id INTEGER, plotnumber TEXT, projectid TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE SU  (id INTEGER, plotnumber TEXT, projectid TEXT)")
-  con
+make_runtime_root <- function() {
+  root <- tempfile("vpro_runtime_")
+  dir.create(root, recursive = TRUE)
+  dir.create(file.path(root, "data", "projects"), recursive = TRUE)
+  file.copy(
+    here::here("app", "data", "projects", "Sample.db"),
+    file.path(root, "data", "projects", "Sample.db"),
+    overwrite = TRUE
+  )
+
+  yaml::write_yaml(
+    list(
+      Current = list(CurrProject = "Sample", CurrVegProfile = "Sample"),
+      System = list(Location = root)
+    ),
+    file.path(root, "config.yml")
+  )
+
+  root
 }
 
-# Helper: write a minimal project .duckdb file
-make_project_file <- function(project_id, plots = c("P1", "P2")) {
-  path <- tempfile(fileext = ".duckdb")
-  src  <- DBI::dbConnect(duckdb::duckdb(), path)
-  on.exit(DBI::dbDisconnect(src, shutdown = TRUE), add = TRUE)
-  DBI::dbExecute(src, "CREATE TABLE Metadata (projectid TEXT PRIMARY KEY, projecttitle TEXT)")
-  DBI::dbExecute(src, "CREATE TABLE Env (id INTEGER, plotnumber TEXT, projectid TEXT)")
-  DBI::dbExecute(src, "CREATE TABLE Veg (id INTEGER, plotnumber TEXT, projectid TEXT)")
-  DBI::dbExecute(src, "INSERT INTO Metadata VALUES (?, ?)", list(project_id, paste0(project_id, " Title")))
-  for (i in seq_along(plots)) {
-    DBI::dbExecute(src, "INSERT INTO Env VALUES (?, ?, ?)", list(i, plots[[i]], project_id))
+make_project_file <- function(root, project_id, plots = c("P1", "P2")) {
+  path <- file.path(root, "imports", paste0(project_id, ".db"))
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  con <- db_con()
+  on.exit(try(DBI::dbDisconnect(con, shutdown = TRUE), silent = TRUE), add = TRUE)
+
+  DBI::dbExecute(
+    con,
+    paste0("ATTACH ", DBI::dbQuoteString(con, path), " AS ", DBI::dbQuoteIdentifier(con, project_id), " (TYPE sqlite)")
+  )
+
+  quoted <- function(table_name) {
+    DBI::dbQuoteIdentifier(con, DBI::Id(project_id, paste0(project_id, "_", table_name)))
   }
+
+  DBI::dbExecute(con, paste0("CREATE TABLE ", quoted("Metadata"), " (ProjectID TEXT, ProjectTitle TEXT)"))
+  DBI::dbExecute(con, paste0("CREATE TABLE ", quoted("Env"), " (PlotNumber TEXT, ProjectID TEXT)"))
+  DBI::dbExecute(con, paste0("CREATE TABLE ", quoted("Veg"), " (PlotNumber TEXT, Species TEXT, Layer TEXT)"))
+  DBI::dbExecute(con, paste0("CREATE TABLE ", quoted("Audit"), " (Project TEXT, User TEXT, \"Table\" TEXT, EditWhen TIMESTAMP)"))
+  DBI::dbExecute(con, paste0("CREATE TABLE ", quoted("SU"), " (PlotNumber TEXT, SiteUnit TEXT)"))
+  DBI::dbExecute(con, paste0("CREATE TABLE ", quoted("Hierarchy"), " (ID INTEGER, Parent INTEGER, Name TEXT, Level TEXT, MyOrder INTEGER)"))
+
+  DBI::dbExecute(
+    con,
+    paste0("INSERT INTO ", quoted("Metadata"), " (ProjectID, ProjectTitle) VALUES (?, ?)"),
+    list(project_id, paste0(project_id, " Title"))
+  )
+  for (i in seq_along(plots)) {
+    DBI::dbExecute(
+      con,
+      paste0("INSERT INTO ", quoted("Env"), " (PlotNumber, ProjectID) VALUES (?, ?)"),
+      list(plots[[i]], project_id)
+    )
+    DBI::dbExecute(
+      con,
+      paste0("INSERT INTO ", quoted("SU"), " (PlotNumber, SiteUnit) VALUES (?, ?)"),
+      list(plots[[i]], paste0("SU-", i))
+    )
+    DBI::dbExecute(
+      con,
+      paste0("INSERT INTO ", quoted("Veg"), " (PlotNumber, Species, Layer) VALUES (?, ?, ? )"),
+      list(plots[[i]], paste0("SPP", i), "A")
+    )
+  }
+  DBI::dbExecute(
+    con,
+    paste0("INSERT INTO ", quoted("Hierarchy"), " (ID, Parent, Name, Level, MyOrder) VALUES (1, NULL, ?, 'site', 1)"),
+    list(project_id)
+  )
+
   path
 }
 
-# ============================================================
+test_that("list_open_projects returns attached project aliases", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
-test_that("list_open_projects returns empty when Metadata missing", {
-  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  expect_equal(list_open_projects(con), character(0))
+  path_a <- make_project_file(root, "ProjA")
+  path_b <- make_project_file(root, "ProjB")
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
+
+  open_project(con, path_a)
+  open_project(con, path_b)
+
+  expect_setequal(list_open_projects(con), c("ProjA", "ProjB"))
 })
 
-test_that("list_open_projects returns distinct projectids", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+test_that("list_projects_in_file discovers project prefixes from sqlite files", {
+  root <- make_runtime_root()
+  path <- make_project_file(root, "AlpineBC", plots = c("AP1", "AP2"))
 
-  DBI::dbExecute(con, "INSERT INTO Metadata (projectid) VALUES ('A'), ('B')")
-  out <- list_open_projects(con)
-  expect_setequal(out, c("A", "B"))
+  expect_equal(list_projects_in_file(path), "AlpineBC")
 })
 
-test_that("project_exists returns FALSE when not present", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  expect_false(project_exists(con, "X"))
-})
+test_that("open_project attaches project sqlite database", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
-test_that("project_exists returns TRUE after new_project", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  new_project(con, "BCGov2025", "BCGov 2025 Alpine")
-  expect_true(project_exists(con, "BCGov2025"))
-})
-
-test_that("new_project errors on duplicate", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  new_project(con, "Dup", "Duplicate Project")
-  expect_error(new_project(con, "Dup", "Duplicate Again"), "already exists")
-})
-
-test_that("new_project errors on blank id or title", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  expect_error(new_project(con, "", "Title"), "required")
-  expect_error(new_project(con, "MyID", ""), "required")
-})
-
-test_that("open_project loads rows into main tables", {
-  path <- make_project_file("AlpineBC", plots = c("AP1", "AP2"))
-
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  path <- make_project_file(root, "AttachMe", plots = c("AP1", "AP2"))
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
 
   pid <- open_project(con, path)
-  expect_equal(pid, "AlpineBC")
-
-  env_rows <- DBI::dbGetQuery(con, "SELECT plotnumber FROM Env WHERE projectid = 'AlpineBC' ORDER BY plotnumber")
-  expect_equal(env_rows$plotnumber, c("AP1", "AP2"))
-
-  meta_rows <- DBI::dbGetQuery(con, "SELECT projectid FROM Metadata WHERE projectid = 'AlpineBC'")
-  expect_equal(meta_rows$projectid[[1]], "AlpineBC")
+  expect_equal(pid, "AttachMe")
+  expect_true(DBI::dbExistsTable(con, db_id("Metadata", "AttachMe", prj = TRUE)))
+  expect_true(DBI::dbExistsTable(con, db_id("Env", "AttachMe", prj = TRUE)))
 })
 
-test_that("open_project errors on missing file", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  expect_error(open_project(con, "/nonexistent/foo.duckdb"), "not found")
+test_that("save_project copies the canonical project database", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
+
+  path <- make_project_file(root, "SavedProj")
+  file.copy(path, project_db_path("SavedProj"), overwrite = TRUE)
+
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
+  open_project(con, project_db_path("SavedProj"))
+
+  dest <- tempfile(fileext = ".db")
+  save_project(con, "SavedProj", dest)
+
+  expect_equal(list_projects_in_file(dest), "SavedProj")
 })
 
-test_that("close_project removes rows from all tables", {
-  path <- make_project_file("CloseMe", plots = c("CP1"))
-  con  <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+test_that("close_project detaches the project database", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
+  path <- make_project_file(root, "CloseMe")
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
   open_project(con, path)
-  n_before <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM Env WHERE projectid = 'CloseMe'")$n[[1]]
-  expect_equal(n_before, 1L)
 
+  expect_true("CloseMe" %in% list_open_projects(con))
   close_project(con, "CloseMe")
-  n_after <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM Env WHERE projectid = 'CloseMe'")$n[[1]]
-  expect_equal(n_after, 0L)
+  expect_false("CloseMe" %in% list_open_projects(con))
 })
 
-test_that("save_project writes rows to file", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+test_that("new_project creates a canonical project sqlite db and metadata row", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
-  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('Saved', 'Saved Project')")
-  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'SP1', 'Saved')")
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
 
-  dest <- tempfile(fileext = ".duckdb")
-  save_project(con, "Saved", dest)
+  new_project(con, "BCGov2025", "BCGov 2025 Alpine")
 
-  verify <- DBI::dbConnect(duckdb::duckdb(), dest)
-  on.exit(DBI::dbDisconnect(verify, shutdown = TRUE), add = TRUE)
-  rows <- DBI::dbGetQuery(verify, "SELECT plotnumber FROM Env WHERE projectid = 'Saved'")
-  expect_equal(rows$plotnumber[[1]], "SP1")
+  expect_true(file.exists(project_db_path("BCGov2025")))
+  expect_true("BCGov2025" %in% list_open_projects(con))
+
+  meta <- DBI::dbGetQuery(
+    con,
+    paste0("SELECT ProjectID, ProjectTitle FROM ", DBI::dbQuoteIdentifier(con, db_id("Metadata", "BCGov2025", prj = TRUE)))
+  )
+  expect_equal(meta$ProjectID[[1]], "BCGov2025")
+  expect_equal(meta$ProjectTitle[[1]], "BCGov 2025 Alpine")
 })
 
-test_that("project_capture_baseline writes baseline metadata and file", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+test_that("project_capture_baseline stores a canonical .db baseline copy", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
-  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('BaseProj', 'Baseline Project')")
-  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'BP1', 'BaseProj')")
+  path <- make_project_file(root, "BaseProj", plots = c("BP1"))
+  file.copy(path, project_db_path("BaseProj"), overwrite = TRUE)
+
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
+  open_project(con, project_db_path("BaseProj"))
 
   baseline <- project_capture_baseline(con, "BaseProj", source_kind = "test")
 
-  expect_false(is.null(baseline))
+  expect_equal(tools::file_ext(baseline$baseline_path[[1]]), "db")
   expect_true(file.exists(baseline$baseline_path[[1]]))
-  expect_equal(baseline$project_id[[1]], "BaseProj")
-  expect_equal(baseline$source_kind[[1]], "test")
+  expect_true(project_baseline_has_tables(con, "BaseProj"))
 })
 
-test_that("project_read_baseline_rows returns baseline table rows", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+test_that("project_read_baseline_rows reads prefixed tables from .db baselines", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
-  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('ReadBase', 'Read Baseline')")
-  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'RB1', 'ReadBase')")
+  path <- make_project_file(root, "ReadBase", plots = c("RB1"))
+  file.copy(path, project_db_path("ReadBase"), overwrite = TRUE)
+
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
+  open_project(con, project_db_path("ReadBase"))
   project_capture_baseline(con, "ReadBase", source_kind = "test")
 
-  rows <- project_read_baseline_rows(con, "ReadBase", "Env", "plotnumber", "RB1")
-  expect_equal(rows$plotnumber[[1]], "RB1")
-  expect_equal(rows$projectid[[1]], "ReadBase")
+  rows <- project_read_baseline_rows(con, "ReadBase", "Env", "PlotNumber", "RB1")
+  expect_equal(rows$PlotNumber[[1]], "RB1")
+  expect_equal(rows$ProjectID[[1]], "ReadBase")
 })
 
-test_that("save_project includes via-env SU rows without projectid column", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+test_that("project_replace_baseline_from_file accepts canonical .db backups", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
-  DBI::dbExecute(con, "DROP TABLE SU")
-  DBI::dbExecute(con, "CREATE TABLE SU (plotnumber TEXT, siteunit TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('Scoped', 'Scoped Project')")
-  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'SC1', 'Scoped')")
-  DBI::dbExecute(con, "INSERT INTO SU (plotnumber, siteunit) VALUES ('SC1', 'BWBSwk 1/06')")
+  backup_path <- make_project_file(root, "ReplaceMe", plots = c("RP1"))
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
 
-  dest <- tempfile(fileext = ".duckdb")
-  save_project(con, "Scoped", dest)
-
-  verify <- DBI::dbConnect(duckdb::duckdb(), dest, read_only = TRUE)
-  on.exit(DBI::dbDisconnect(verify, shutdown = TRUE), add = TRUE)
-  rows <- DBI::dbGetQuery(verify, "SELECT plotnumber, siteunit FROM SU")
-  expect_equal(rows$plotnumber[[1]], "SC1")
-  expect_equal(rows$siteunit[[1]], "BWBSwk 1/06")
+  baseline <- project_replace_baseline_from_file(con, "ReplaceMe", backup_path, source_kind = "sync_backup_upload")
+  expect_true(file.exists(baseline$baseline_path[[1]]))
+  expect_true(project_baseline_has_tables(con, "ReplaceMe"))
 })
 
-test_that("project baseline captures via-env SU rows", {
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+test_that("set_project updates config-backed current project and refreshes context views", {
+  root <- make_runtime_root()
+  old_wd <- setwd(root)
+  on.exit(setwd(old_wd), add = TRUE)
 
-  DBI::dbExecute(con, "DROP TABLE SU")
-  DBI::dbExecute(con, "CREATE TABLE SU (plotnumber TEXT, siteunit TEXT)")
-  DBI::dbExecute(con, "INSERT INTO Metadata (projectid, projecttitle) VALUES ('BaseSU', 'Baseline SU Project')")
-  DBI::dbExecute(con, "INSERT INTO Env (id, plotnumber, projectid) VALUES (1, 'BS1', 'BaseSU')")
-  DBI::dbExecute(con, "INSERT INTO SU (plotnumber, siteunit) VALUES ('BS1', 'BWBSwk 1/06')")
+  path <- make_project_file(root, "SwitchMe", plots = c("SW1"))
+  con <- db_con()
+  on.exit(try(db_close(con), silent = TRUE), add = TRUE)
+  open_project(con, path)
 
-  project_capture_baseline(con, "BaseSU", source_kind = "test", force = TRUE)
-  rows <- project_read_baseline_rows(con, "BaseSU", "SU", "plotnumber", "BS1")
+  state <- init_sys_state()
+  set_project(state, "SwitchMe", con)
 
-  expect_equal(rows$plotnumber[[1]], "BS1")
-  expect_equal(rows$siteunit[[1]], "BWBSwk 1/06")
-})
+  expect_equal(get_current_setting("CurrProject", default = NULL), "SwitchMe")
+  expect_equal(shiny::isolate(state$CurrProject), "SwitchMe")
 
-test_that("multiple projects coexist in main tables", {
-  path1 <- make_project_file("ProjA", plots = c("A1", "A2"))
-  path2 <- make_project_file("ProjB", plots = c("B1"))
-
-  con <- make_main_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-
-  open_project(con, path1)
-  open_project(con, path2)
-
-  all_pids <- sort(list_open_projects(con))
-  expect_setequal(all_pids, c("ProjA", "ProjB"))
-
-  a_rows <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM Env WHERE projectid = 'ProjA'")$n[[1]]
-  b_rows <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM Env WHERE projectid = 'ProjB'")$n[[1]]
-  expect_equal(a_rows, 2L)
-  expect_equal(b_rows, 1L)
+  env_rows <- DBI::dbGetQuery(con, "SELECT ProjectID, PlotNumber FROM Env")
+  expect_equal(env_rows$ProjectID[[1]], "SwitchMe")
+  expect_equal(env_rows$PlotNumber[[1]], "SW1")
 })

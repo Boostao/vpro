@@ -102,6 +102,7 @@ mod_fs1333_ui <- function(id) {
 mod_fs1333_server <- function(id, state, con) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    root_session <- session$rootScope()
 
     project_id_source <- shiny::reactiveVal(1L)
     status_text <- shiny::reactiveVal("")
@@ -179,7 +180,7 @@ mod_fs1333_server <- function(id, state, con) {
 
       if (identical(source_mode, 2L)) {
         sql_candidates <- c(
-          "SELECT projectid, projecttitle FROM lists.UsysMetadata",
+          "SELECT projectid, projecttitle FROM VLists.UsysMetadata",
           "SELECT projectid, projecttitle FROM UsysMetadata",
           "SELECT projectid, projecttitle FROM ProjectMetaData",
           "SELECT projectid, projecttitle FROM ProjectMetadata"
@@ -232,7 +233,7 @@ mod_fs1333_server <- function(id, state, con) {
     load_current_context <- function() {
       state$CurrForm <- "frmSIVIsite"
       state$sysCurrForm <- "frmSIVIsite"
-      set_pref(con, "Current", "DataFormName", "frmSIVIsite")
+      set_current_setting("DataFormName", "frmSIVIsite")
 
       plot_number <- normalize_text(state$CurrSU)
       if (!nzchar(plot_number)) {
@@ -269,7 +270,7 @@ mod_fs1333_server <- function(id, state, con) {
 
     # Form_Load parity: initialize source mode from remembered session value.
     observeEvent(TRUE, {
-      source_pref <- suppressWarnings(as.integer(get_pref(con, "Current", "FS1333ProjectIdSource", default = "1")))
+      source_pref <- suppressWarnings(as.integer(get_current_setting("FS1333ProjectIdSource", default = "1")))
       if (is.na(source_pref) || !(source_pref %in% c(1L, 2L))) {
         source_pref <- 1L
       }
@@ -285,7 +286,7 @@ mod_fs1333_server <- function(id, state, con) {
         source_mode <- 1L
       }
       project_id_source(source_mode)
-      set_pref(con, "Current", "FS1333ProjectIdSource", as.character(source_mode))
+      set_current_setting("FS1333ProjectIdSource", as.character(source_mode))
       load_project_id_choices()
     }, ignoreInit = TRUE)
 
@@ -334,7 +335,7 @@ mod_fs1333_server <- function(id, state, con) {
 
     observeEvent(input$btnClose2, {
       return_tab <- state$DataEntryReturnTab %||% "Vegetation"
-      bslib::nav_select("main_tabs", return_tab, session = session$parent)
+      bslib::nav_select("main_tabs", return_tab, session = root_session)
     })
 
     mod_fs882_6x4xl_server("fs882_inner", state, con)

@@ -58,14 +58,14 @@ check_required_fields <- function(con, project_id = NULL) {
 }
 
 check_species_fk <- function(con, project_id = NULL) {
-  if (length(get_table_fields(con, "Veg")) == 0 || length(get_table_fields(con, "lists.SppList")) == 0) {
+  if (length(get_table_fields(con, "Veg")) == 0 || length(get_table_fields(con, "VLists.SppList")) == 0) {
     return(data.frame())
   }
 
   veg_fields <- get_table_fields(con, "Veg")
   if (!has_cols(veg_fields, c("plotnumber", "species"))) return(data.frame())
 
-  spp_fields <- get_table_fields(con, "lists.SppList")
+  spp_fields <- get_table_fields(con, "VLists.SppList")
   code_col <- if ("code" %in% spp_fields) {
     "code"
   } else if ("spp_code" %in% spp_fields) {
@@ -89,7 +89,7 @@ check_species_fk <- function(con, project_id = NULL) {
   veg <- veg[!is.na(veg$species) & veg$species != "", , drop = FALSE]
   if (nrow(veg) == 0) return(data.frame())
 
-  spp <- DBI::dbGetQuery(con, sprintf("SELECT %s AS code FROM lists.SppList", code_col))
+  spp <- DBI::dbGetQuery(con, sprintf("SELECT %s AS code FROM VLists.SppList", code_col))
   valid <- unique(spp$code)
   missing <- veg[!(veg$species %in% valid), , drop = FALSE]
   if (nrow(missing) == 0) return(data.frame())
@@ -105,7 +105,7 @@ check_species_fk <- function(con, project_id = NULL) {
 }
 
 check_zone_fk <- function(con, project_id = NULL) {
-  if (length(get_table_fields(con, "Env")) == 0 || length(get_table_fields(con, "lists.USysZoneList")) == 0) {
+  if (length(get_table_fields(con, "Env")) == 0 || length(get_table_fields(con, "VLists.USysZoneList")) == 0) {
     return(data.frame())
   }
 
@@ -122,13 +122,13 @@ check_zone_fk <- function(con, project_id = NULL) {
   env <- DBI::dbGetQuery(con, sql, params)
   if (nrow(env) == 0) return(data.frame())
 
-  zone_fields <- get_table_fields(con, "lists.USysZoneList")
+  zone_fields <- get_table_fields(con, "VLists.USysZoneList")
   zone_col <- if ("zone_code" %in% zone_fields) "zone_code" else if ("zone" %in% zone_fields) "zone" else NULL
   subzone_col <- if ("subzone" %in% zone_fields) "subzone" else NULL
 
   if (is.null(zone_col)) return(data.frame())
 
-  zone_sql <- sprintf("SELECT DISTINCT %s AS zone_code%s FROM lists.USysZoneList", zone_col,
+  zone_sql <- sprintf("SELECT DISTINCT %s AS zone_code%s FROM VLists.USysZoneList", zone_col,
                       if (!is.null(subzone_col)) paste0(", ", subzone_col, " AS subzone") else "")
   zones <- DBI::dbGetQuery(con, zone_sql)
   valid_zones <- unique(zones$zone_code)
@@ -471,11 +471,11 @@ check_cover_codes <- function(con, project_id = NULL) {
 }
 
 check_table_list_values <- function(con, project_id = NULL) {
-  if (length(get_table_fields(con, "lists.USysTableOfLists")) == 0 || length(get_table_fields(con, "Env")) == 0) {
+  if (length(get_table_fields(con, "VLists.USysTableOfLists")) == 0 || length(get_table_fields(con, "Env")) == 0) {
     return(data.frame())
   }
 
-  list_fields <- get_table_fields(con, "lists.USysTableOfLists")
+  list_fields <- get_table_fields(con, "VLists.USysTableOfLists")
   listname_col <- if ("listname" %in% list_fields) "listname" else if ("ListName" %in% list_fields) "ListName" else NULL
   item_col <- if ("item" %in% list_fields) "item" else if ("Item" %in% list_fields) "Item" else NULL
 
@@ -486,7 +486,7 @@ check_table_list_values <- function(con, project_id = NULL) {
   project_col <- if ("projectid" %in% env_fields) "projectid" else if ("ProjectID" %in% env_fields) "ProjectID" else NULL
   if (is.null(plot_col)) return(data.frame())
 
-  list_names <- DBI::dbGetQuery(con, sprintf("SELECT DISTINCT %s AS listname FROM lists.USysTableOfLists", listname_col))$listname
+  list_names <- DBI::dbGetQuery(con, sprintf("SELECT DISTINCT %s AS listname FROM VLists.USysTableOfLists", listname_col))$listname
   list_names <- list_names[!is.na(list_names) & nzchar(trimws(list_names))]
   if (length(list_names) == 0) return(data.frame())
 
@@ -515,7 +515,7 @@ check_table_list_values <- function(con, project_id = NULL) {
   list_lookup <- setNames(matched_lists, present_cols)
   for (col_name in present_cols) {
     list_name <- list_lookup[[col_name]]
-    list_sql <- sprintf("SELECT %s AS item FROM lists.USysTableOfLists WHERE %s = ?", item_col, listname_col)
+    list_sql <- sprintf("SELECT %s AS item FROM VLists.USysTableOfLists WHERE %s = ?", item_col, listname_col)
     list_items <- DBI::dbGetQuery(con, list_sql, list(list_name))
     valid <- unique(list_items$item)
 

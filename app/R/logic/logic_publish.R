@@ -69,7 +69,7 @@ publish_read_project_metadata <- function(con, project_id, is_public = TRUE, des
             "CASE WHEN ispublic = 'True' THEN TRUE ELSE FALSE END AS is_public_raw,",
             "beczone AS primary_bec_zone,",
             "description AS description_raw",
-            "FROM metadata.tbl_Projects WHERE projectid = ? LIMIT 1"
+            "FROM VMetaData.tbl_Projects WHERE projectid = ? LIMIT 1"
           ),
           list(project_id)
         ),
@@ -442,12 +442,12 @@ publish_project_dataset <- function(project_id,
 
   close_when_done <- FALSE
   if (is.null(con)) {
-    source(publish_resolve_path("R/db_connections.R"), local = TRUE)
-    con <- connect_local_db()
+    source(publish_resolve_path("R/logic/01.state.R"), local = TRUE)
+    con <- init_state()
     close_when_done <- TRUE
   }
   on.exit({
-    if (isTRUE(close_when_done)) close_db(con)
+    if (isTRUE(close_when_done)) db_close(con)
   }, add = TRUE)
 
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)

@@ -65,7 +65,7 @@ combine_species_lump_column_map <- function(con, table_name) {
 }
 
 combine_species_species_fields <- function(con) {
-  schema <- tryCatch(DBI::dbGetQuery(con, "PRAGMA table_info('lists.USysAllSpecs')"), error = function(e) data.frame())
+  schema <- tryCatch(DBI::dbGetQuery(con, "PRAGMA table_info('VLists.USysAllSpecs')"), error = function(e) data.frame())
   if (!nrow(schema)) {
     return(c("code", "scientificname", "englishname"))
   }
@@ -248,6 +248,8 @@ mod_combine_species_ui <- function(id) {
 
 mod_combine_species_server <- function(id, state, con) {
   shiny::moduleServer(id, function(input, output, session) {
+    root_session <- session$rootScope()
+
     rv <- shiny::reactiveValues(
       lump_table = "",
       colmap = NULL,
@@ -329,7 +331,7 @@ mod_combine_species_server <- function(id, state, con) {
     }
 
     curr_lump_pref <- function() {
-      normalize_text(get_pref(con, "Current", "CurrLump", default = "None"))
+      normalize_text(get_current_setting("CurrLump", default = "None"))
     }
 
     refresh_lump_choices <- function(selected = NULL) {
@@ -369,7 +371,7 @@ mod_combine_species_server <- function(id, state, con) {
 
       sql <- paste(
         "SELECT DISTINCT", qident(field_name), "AS value",
-        "FROM lists.USysAllSpecs",
+        "FROM VLists.USysAllSpecs",
         "WHERE code IS NOT NULL AND COALESCE(CodeType, '') <> 'S' AND", qident(field_name), "IS NOT NULL",
         "ORDER BY 1 LIMIT 500"
       )
@@ -400,7 +402,7 @@ mod_combine_species_server <- function(id, state, con) {
       quoted_field <- DBI::dbQuoteIdentifier(con, field_name)
       sql <- paste(
         "SELECT code, scientificname, englishname",
-        "FROM lists.USysAllSpecs",
+        "FROM VLists.USysAllSpecs",
         "WHERE code IS NOT NULL AND COALESCE(CodeType, '') <> 'S'"
       )
       params <- list()
@@ -463,11 +465,11 @@ mod_combine_species_server <- function(id, state, con) {
     observeEvent(TRUE, {
       state$CurrForm <- "USysLumpMaster"
       state$sysCurrForm <- "USysLumpMaster"
-      set_pref(con, "Current", "DataFormName", "USysLumpMaster")
+      set_current_setting("DataFormName", "USysLumpMaster")
 
       refresh_species_fields()
       refresh_criteria_choices(default_value = "ABIE*")
-      pref_lump <- normalize_text(get_pref(con, "Current", "CurrLump", default = "None"))
+      pref_lump <- normalize_text(get_current_setting("CurrLump", default = "None"))
       refresh_lump_choices(selected = if (nzchar(pref_lump)) pref_lump else "None")
       bump_species_tick()
       if (nzchar(rv$lump_table)) {
@@ -536,7 +538,7 @@ mod_combine_species_server <- function(id, state, con) {
         return()
       }
 
-      set_pref(con, "Current", "CurrLump", selected)
+      set_current_setting("CurrLump", selected)
       rv$lump_table <- combine_species_resolve_lump_table(con, selected)
       rv$colmap <- combine_species_lump_column_map(con, rv$lump_table)
       bump_lump_tick()
@@ -805,7 +807,7 @@ mod_combine_species_server <- function(id, state, con) {
       }
 
       refresh_lump_choices(selected = new_table)
-      set_pref(con, "Current", "CurrLump", new_table)
+      set_current_setting("CurrLump", new_table)
       state$LumpingTable <- new_table
       state$sysLumpingTable <- new_table
       bump_lump_tick()
@@ -842,7 +844,7 @@ mod_combine_species_server <- function(id, state, con) {
     })
 
     observeEvent(input$btnClose, {
-      bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+      bslib::nav_select("main_tabs", "Vegetation", session = root_session)
     })
   })
 }

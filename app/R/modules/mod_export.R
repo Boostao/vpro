@@ -417,7 +417,14 @@ mod_export_server <- function(id, sys_state, con) {
         # Load projects
         projs <- dbGetQuery(con, "SELECT projectid, projecttitle FROM Metadata ORDER BY projectid")
         if (nrow(projs) > 0) {
-            proj_choices <- setNames(projs$projectid, paste(projs$projectid, "-", projs$projecttitle))
+        names(projs) <- tolower(names(projs))
+        project_ids <- as.character(projs$projectid %||% character(0))
+        project_titles <- as.character(projs$projecttitle %||% rep("", length(project_ids)))
+        if (length(project_titles) < length(project_ids)) {
+          project_titles <- c(project_titles, rep("", length(project_ids) - length(project_titles)))
+        }
+        project_labels <- trimws(ifelse(nzchar(project_titles), paste(project_ids, "-", project_titles), project_ids))
+        proj_choices <- stats::setNames(project_ids, project_labels)
             updateSelectInput(session, "export_proj", choices = proj_choices)
             updateSelectInput(session, "venus_proj", choices = c("All Projects" = "", proj_choices))
         }
@@ -426,55 +433,62 @@ mod_export_server <- function(id, sys_state, con) {
     # -- Data Generation Helper --
     get_export_data <- function() {
         req(input$export_layers)
-        
-        # 1. Base Query
-        # Using vw_USysAllVeg which is (PlotNumber, MyLayer, Species, Cover)
-        
-        # Filter layers
-        layers_sql <- paste(paste0("'", input$export_layers, "'"), collapse=", ")
-        query_veg <- sprintf("SELECT PlotNumber, MyLayer, Species, Cover FROM vw_USysAllVeg WHERE MyLayer IN (%s)", layers_sql)
-        
-        # Filter Project
-        if (!is.null(input$export_proj) && length(input$export_proj) > 0) {
-            # Filter by project requires joining Env/Admin to find which project a plot belongs to?
-            # Or Metadata?
-            # Env contains 'projectid'
-            projs_sql <- paste(paste0("'", input$export_proj, "'"), collapse=", ")
-            query_veg <- sprintf("SELECT v.* FROM vw_USysAllVeg v 
-                                  JOIN Env e ON v.PlotNumber = e.plotnumber 
-                                  WHERE v.MyLayer IN (%s) AND e.projectid IN (%s)", 
-                                  layers_sql, projs_sql)
+
+        normalize_names <- function(df) {
+          names(df) <- tolower(names(df))
+          df
+        }
+
+        expect_columns <- function(df, required, source_name) {
+          missing_cols <- setdiff(required, names(df))
+          if (length(missing_cols) > 0) {
+            stop(sprintf(
+              "%s is missing required columns: %s",
+              source_name,
+              paste(missing_cols, collapse = ", ")
+            ))
+          }
+          df
         }
         
-        df_veg <- dbGetQuery(con, query_veg)
+        df_veg <- fetch_vegetation_export_rows(
+          con,
+          project_ids = input$export_proj,
+          layers = input$export_layers
+        )
+        df_veg <- normalize_names(df_veg)
         
         if (nrow(df_veg) == 0) return(NULL)
+        df_veg <- expect_columns(df_veg, c("plotnumber", "mylayer", "species", "cover"), "vw_USysAllVeg export")
         
         # 1.5. Convert Cover to Numeric BEFORE Lumping
         # We need sum cover during lumping, so we must convert first.
-        cover_chr <- trimws(as.character(df_veg$Cover))
+        cover_chr <- trimws(as.character(df_veg$cover))
         cover_num <- suppressWarnings(as.numeric(cover_chr))
         cover_num[cover_chr == ""] <- NA_real_
         cover_num[is.na(cover_num) & nzchar(cover_chr)] <- 0.1
-        df_veg$CoverNum <- cover_num
+        df_veg$covernum <- cover_num
         
         # 1.6. Apply Lumping (If selected)
         if (input$export_lump) {
             # Logic: We consolidate Species rows for the same Plot + Layer
             # This handles both 'Synonym Replacement' and 'Merging'
             df_veg <- apply_lumping(con, df_veg, 
-                                    group_cols = c("PlotNumber", "MyLayer"), 
-                                    measure_cols = c("CoverNum"))
+                      group_cols = c("plotnumber", "mylayer"), 
+                      measure_cols = c("covernum"))
+          df_veg <- normalize_names(df_veg)
         }
 
+        df_veg <- expect_columns(df_veg, c("plotnumber", "mylayer", "species", "covernum"), "lumped vegetation export")
+
         # 2. Pivot to Wide
-        df_veg$ColName <- paste0(df_veg$species, "_", df_veg$MyLayer)
+        df_veg$colname <- paste0(df_veg$species, "_", df_veg$mylayer)
         
         # Pivot
         library(tidyr)
         df_wide <- df_veg %>%
-            select(PlotNumber, ColName, CoverNum) %>%
-            pivot_wider(names_from = ColName, values_from = CoverNum, values_fill = 0)
+          dplyr::select(plotnumber, colname, covernum) %>%
+          pivot_wider(names_from = colname, values_from = covernum, values_fill = 0)
             
         # 3. Get Env Data
         query_env <- "SELECT plotnumber, projectid, _location, date, latitude, longitude, elevation, slopegradient, aspect, sitenotes FROM Env"
@@ -483,10 +497,11 @@ mod_export_server <- function(id, sys_state, con) {
              query_env <- sprintf("%s WHERE projectid IN (%s)", query_env, projs_sql)
         }
         
-        df_env <- dbGetQuery(con, query_env)
+        df_env <- normalize_names(dbGetQuery(con, query_env))
+        df_env <- expect_columns(df_env, c("plotnumber", "projectid"), "Env export")
         
         # Join
-        df_final <- right_join(df_env, df_wide, by = c("plotnumber" = "PlotNumber"))
+        df_final <- dplyr::right_join(df_env, df_wide, by = "plotnumber")
         
         return(df_final)
     }

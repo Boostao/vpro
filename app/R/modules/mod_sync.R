@@ -908,11 +908,11 @@ mod_sync_server <- function(id, state, con) {
           div(
             class = "sync-comparison-modal-card sync-modal-upload",
             div(class = "sync-comparison-modal-card-title", "Backup file"),
-            div(class = "sync-comparison-modal-card-subtitle", "Upload a .duckdb file to replace the current saved backup baseline for this project."),
+            div(class = "sync-comparison-modal-card-subtitle", "Upload a canonical .db project backup, or a legacy .duckdb backup, to replace the saved comparison baseline for this project."),
             fileInput(
               ns("backup_file"),
               "Replace current backup file",
-              accept = c(".duckdb"),
+              accept = c(".db", ".duckdb"),
               buttonLabel = "Browse...",
               placeholder = "No file selected"
             )
@@ -1105,8 +1105,9 @@ mod_sync_server <- function(id, state, con) {
         shinyjs::reset("backup_file")
         return()
       }
-      if (!identical(tolower(tools::file_ext(file_info$name %||% "")), "duckdb")) {
-        .set_sync_status("Backup file must be a .duckdb file.", error = TRUE)
+      file_ext <- tolower(tools::file_ext(file_info$name %||% ""))
+      if (!(file_ext %in% c("db", "duckdb"))) {
+        .set_sync_status("Backup file must be a .db project database or a legacy .duckdb backup.", error = TRUE)
         shinyjs::reset("backup_file")
         return()
       }

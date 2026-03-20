@@ -345,7 +345,7 @@ build_flat_hierarchy <- function(con,
   
   # Join long names if requested
   if (include_long_names) {
-    # Check if lists.MasterSiteUnitList exists using SQL query
+    # Check if VLists.MasterSiteUnitList exists using SQL query
     table_exists <- tryCatch({
       DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM information_schema.tables 
                             WHERE table_schema = 'lists' AND table_name = 'MasterSiteUnitList'")$n > 0
@@ -354,7 +354,7 @@ build_flat_hierarchy <- function(con,
     if (table_exists) {
       long_names <- DBI::dbGetQuery(
         con,
-        "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList"
+        "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList"
       )
       names(long_names) <- c("Name", "LongName")
       hier <- dplyr::left_join(hier, long_names, by = "Name")

@@ -83,9 +83,9 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
     }
   }
   list_files <- c(
-    "lists_MasterSiteUnitList.parquet" = "lists.MasterSiteUnitList",
-    "lists_USysAllSpecs.parquet" = "lists.USysAllSpecs",
-    "lists_LifeformCodes.parquet" = "lists.LifeformCodes"
+    "lists_MasterSiteUnitList.parquet" = "VLists.MasterSiteUnitList",
+    "lists_USysAllSpecs.parquet" = "VLists.USysAllSpecs",
+    "lists_LifeformCodes.parquet" = "VLists.LifeformCodes"
   )
   for (file_name in names(list_files)) {
     file_path <- file.path(parquet_dir, file_name)
@@ -338,8 +338,8 @@ if (length(site_units) > 0 && nrow(su_data) > 0) {
     mutate(plotnumber = as.character(plotnumber), siteunit = as.character(siteunit)) %>%
     group_by(siteunit) %>%
     summarize(n_plots = dplyr::n_distinct(plotnumber), .groups = "drop")
-  if (DBI::dbExistsTable(con, "lists.MasterSiteUnitList")) {
-    site_meta <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList")
+  if (DBI::dbExistsTable(con, "VLists.MasterSiteUnitList")) {
+    site_meta <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList")
     names(site_meta) <- tolower(names(site_meta))
     site_meta$siteseries <- as.character(site_meta$siteseries)
     overview <- overview %>%
@@ -395,8 +395,8 @@ veg <- load_veg_report_data(
 )
 
 lifeform_labels <- data.frame()
-if (DBI::dbExistsTable(con, "lists.LifeformCodes")) {
-  lifeform_labels <- DBI::dbGetQuery(con, "SELECT Lifeform, LifeformDescription FROM lists.LifeformCodes")
+if (DBI::dbExistsTable(con, "VLists.LifeformCodes")) {
+  lifeform_labels <- DBI::dbGetQuery(con, "SELECT Lifeform, LifeformDescription FROM VLists.LifeformCodes")
   names(lifeform_labels) <- tolower(names(lifeform_labels))
 }
 

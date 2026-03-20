@@ -67,7 +67,7 @@ build_quality_filter <- function(con,
   get_quality_order <- function(quality_text) {
     if (is.na(quality_text) || !nzchar(trimws(quality_text))) return(NA_integer_)
     
-    sql <- "SELECT ItemOrder FROM lists.USysTableOfLists 
+    sql <- "SELECT ItemOrder FROM VLists.USysTableOfLists 
             WHERE ListName = 'dataquality' AND Item = ?"
     result <- DBI::dbGetQuery(con, sql, list(quality_text))
     if (nrow(result) == 0) return(NA_integer_)
@@ -214,11 +214,11 @@ filter_plots_by_quality <- function(con,
     SELECT DISTINCT su.PlotNumber, su.SiteUnit
     FROM %s
     INNER JOIN Env env ON su.PlotNumber = env.PlotNumber
-    LEFT JOIN lists.USysTableOfLists site_q 
+    LEFT JOIN VLists.USysTableOfLists site_q 
       ON env.SitePlotQuality = site_q.Item AND site_q.ListName = 'dataquality'
-    LEFT JOIN lists.USysTableOfLists veg_q 
+    LEFT JOIN VLists.USysTableOfLists veg_q 
       ON env.VegPlotQuality = veg_q.Item AND veg_q.ListName = 'dataquality'
-    LEFT JOIN lists.USysTableOfLists soil_q 
+    LEFT JOIN VLists.USysTableOfLists soil_q 
       ON env.SoilPlotQuality = soil_q.Item AND soil_q.ListName = 'dataquality'
     WHERE (%s)
       AND ((site_q.ItemOrder >= %d)%s (site_q.ItemOrder IS NULL))

@@ -13,7 +13,7 @@ open_fs882_destination_context <- function(state,
     state$CurrSU <- pref_plot
     state$sysCurrSU <- pref_plot
   }
-  set_pref(con, "Current", "DataFormName", form_name)
+  set_current_setting("DataFormName", form_name)
 }
 
 fs882_coerce_numeric <- function(value) {
@@ -61,7 +61,7 @@ fs882_coerce_soil_value <- function(table_name, col_name, value) {
 fs882_list_choices <- function(con, list_name) {
   sql <- paste(
     "SELECT item, itemdescription",
-    "FROM lists.USysTableOfLists",
+    "FROM VLists.USysTableOfLists",
     "WHERE lower(listname) = lower(?)",
     "ORDER BY itemorder, item"
   )
@@ -226,6 +226,7 @@ mod_fs882_6x4xl_ui <- function(id) {
 mod_fs882_6x4xl_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    root_session <- session$rootScope()
 
     rv <- reactiveValues(
       veg = data.frame(),
@@ -334,7 +335,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
       rv$mineral <- mineral_df
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_pref(con, "Current", "CurrPlotNumber", plot_id)
+      set_current_setting("CurrPlotNumber", plot_id)
     }
 
     observeEvent(state$CurrSU, {
@@ -374,7 +375,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
         fs882_upsert_env_header(con, fields)
         state$CurrSU <- plot_id
         state$sysCurrSU <- plot_id
-        set_pref(con, "Current", "CurrPlotNumber", plot_id)
+        set_current_setting("CurrPlotNumber", plot_id)
         showNotification("FS882 header saved.", type = "message")
       }, error = function(e) {
         showNotification(paste("Save failed:", conditionMessage(e)), type = "error")
@@ -600,7 +601,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
       return_tab <- state$DataEntryReturnTab %||% "Vegetation"
       state$CurrForm <- "frmMainMenuFloat"
       state$sysCurrForm <- "frmMainMenuFloat"
-      bslib::nav_select("main_tabs", return_tab, session = session$parent)
+      bslib::nav_select("main_tabs", return_tab, session = root_session)
     })
   })
 }

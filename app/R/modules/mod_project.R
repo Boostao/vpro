@@ -3,7 +3,7 @@
 
 # Default data folder path used to pre-populate the Open dialog and auto-restore
 .default_db_path <- function() {
-  normalizePath(file.path(getwd(), "data", "vpro.duckdb"), mustWork = FALSE)
+  normalizePath(file.path(getwd(), "data", "projects", paste0(get_current_setting("CurrProject", default = "Sample"), ".db")), mustWork = FALSE)
 }
 
 mod_project_ui <- function(id) {
@@ -25,11 +25,11 @@ mod_project_server <- function(id, state, con) {
     ns <- session$ns
 
     visible_open_projects <- function() {
-      open_pids <- list_open_projects(con)
-      if ("BEC" %in% open_pids) {
+      available_pids <- list_project_storage_ids()
+      if ("BEC" %in% available_pids) {
         return("BEC")
       }
-      open_pids
+      available_pids
     }
 
     # Reactive: last known file path (NULL = main db, no separate file)
@@ -65,17 +65,19 @@ mod_project_server <- function(id, state, con) {
 
     # ---- Startup: auto-restore project from main db ----
     observe({
-      open_pids <- list_open_projects(con)
-      if (length(open_pids) == 0) return()
-
-      visible_pids <- visible_open_projects()
+      available_pids <- visible_open_projects()
+      if (length(available_pids) == 0) return()
 
       # Prefer the real-world deployment project when it is present.
       pref <- shiny::isolate(state$PrefProject)
-      pid_to_activate <- if (!is.null(pref) && nzchar(pref %||% "") && pref %in% visible_pids) {
+      pid_to_activate <- if (!is.null(pref) && nzchar(pref %||% "") && pref %in% available_pids) {
         pref
       } else {
-        visible_pids[[1]]
+        available_pids[[1]]
+      }
+
+      if (!project_attached(con, pid_to_activate) && file.exists(project_db_path(pid_to_activate))) {
+        open_project(con, project_db_path(pid_to_activate), project_id = pid_to_activate)
       }
 
       set_project(state, pid_to_activate, con)
@@ -118,8 +120,11 @@ mod_project_server <- function(id, state, con) {
     observeEvent(input$sel_active_project, {
       pid <- input$sel_active_project
       if (!is.null(pid) && nzchar(pid) && !identical(pid, isolate(state$CurrProject))) {
+        if (!project_attached(con, pid)) {
+          open_project(con, project_db_path(pid), project_id = pid)
+        }
         set_project(state, pid, con)
-        set_pref(con, "Current", "CurrProject", pid)
+        set_current_setting("CurrProject", pid)
         ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_activate")
         project_changed(project_changed() + 1L)
       }
@@ -139,7 +144,7 @@ mod_project_server <- function(id, state, con) {
       default_path <- current_path() %||% .default_db_path()
       showModal(modalDialog(
         title = "Open Project File",
-        textInput(ns("open_path"), "Project file path (.duckdb)", value = default_path),
+        textInput(ns("open_path"), "Project database path (.db)", value = default_path),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("open_confirm"), "Open", class = "btn-primary")
@@ -185,7 +190,6 @@ mod_project_server <- function(id, state, con) {
           pid <- open_project(con, path)
           current_path(path)
           set_project(state, pid, con)
-          set_pref(con, "Current", "CurrProject", pid)
           ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
           removeModal()
           project_changed(project_changed() + 1L)
@@ -209,10 +213,9 @@ mod_project_server <- function(id, state, con) {
         return()
       }
       tryCatch({
-        open_project(con, path)  # loads ALL projects from file into main db
+        open_project(con, path, project_id = pid)
         current_path(path)
         set_project(state, pid, con)
-        set_pref(con, "Current", "CurrProject", pid)
         ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
         .pending_open_path(NULL)
         removeModal()
@@ -246,8 +249,8 @@ mod_project_server <- function(id, state, con) {
       }
       tryCatch({
         new_project(con, pid, title)
+        current_path(project_db_path(pid))
         set_project(state, pid, con)
-        set_pref(con, "Current", "CurrProject", pid)
         ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_new")
         removeModal()
         project_changed(project_changed() + 1L)
@@ -266,7 +269,7 @@ mod_project_server <- function(id, state, con) {
       }
       showModal(modalDialog(
         title = "Save Project",
-        textInput(ns("save_path"), "Save to file (.duckdb)", value = current_path() %||% ""),
+        textInput(ns("save_path"), "Save copy to file (.db)", value = current_path() %||% project_db_path(pid)),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("save_confirm"), "Save", class = "btn-primary")
@@ -318,7 +321,7 @@ mod_project_server <- function(id, state, con) {
         state$sysCurrProject <- NULL
         state$CurrSU         <- NULL
         state$sysCurrSU      <- NULL
-        set_pref(con, "Current", "CurrProject", "")
+        set_current_setting("CurrProject", NULL)
         removeModal()
         project_changed(project_changed() + 1L)
         showNotification(paste0("Closed project '", pid, "'."), type = "message")

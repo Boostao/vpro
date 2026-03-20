@@ -34,8 +34,8 @@ init_bcgov_static_resources()
 server <- function(input, output, session) {
   
   # 1. Database Connection
-  # Using a persistent connection for simplicity (DuckDB single user mode)
-  con <- connect_local_db()
+  # Bootstrap the runtime from config-backed attached SQLite databases.
+  con <- init_state()
   sync_ensure_local_tables(con)
   project_ensure_baseline_table(con)
 
@@ -55,14 +55,13 @@ server <- function(input, output, session) {
   # Startup messaging (What's New)
   mod_whatsnew_server("whatsnew", con, open_trigger = reactive(input$btn_whatsnew))
 
-  # Preferences (SaveSetting/GetSetting analog)
-  seed_default_preferences(con)
-  pref_project <- get_pref(con, "Current", "CurrProject", default = NULL)
-  pref_su_table <- get_pref(con, "Current", "CurrPlotList", default = "None")
-  pref_plot <- get_pref(con, "Current", "CurrPlotNumber", default = NULL)
-  pref_hierarchy <- get_pref(con, "Current", "CurrHierarchy", default = NULL)
-  pref_form <- get_pref(con, "Current", "DataFormName", default = NULL)
-  pref_user <- get_pref(con, "User", "UserName", default = Sys.getenv("USER", "Unknown"))
+  # Current context is config-backed; report/message preferences remain in the helper table.
+  pref_project <- get_current_setting("CurrProject", default = NULL)
+  pref_su_table <- get_current_setting("CurrPlotList", default = NULL)
+  pref_plot <- get_current_setting("CurrPlotNumber", default = NULL)
+  pref_hierarchy <- get_current_setting("CurrHierarchy", default = NULL)
+  pref_form <- get_current_setting("DataFormName", default = NULL)
+  pref_user <- normalize_current_value(config()$Current$User %||% Sys.getenv("USER", "Unknown")) %||% Sys.getenv("USER", "Unknown")
 
   # Dev mode overrides (temporary)
   if (isTRUE(exists("VPRO_DEV_MODE") && VPRO_DEV_MODE)) {
@@ -511,9 +510,14 @@ server <- function(input, output, session) {
   })
 
   refresh_hierarchy_dropdown <- function() {
-    hier_values <- sort(unique(project_su_scope()$siteunit))
+    project_id <- normalize_context_value(state$CurrProject)
+    stored_ids <- list_project_storage_ids()
+    hier_values <- unique(c("", stored_ids))
+    if (nzchar(project_id) && project_id %in% hier_values) {
+      hier_values <- c("", project_id, setdiff(hier_values, c("", project_id)))
+    }
 
-    hierarchy_choices(hier_values[nzchar(hier_values)])
+    hierarchy_choices(hier_values)
     invisible(hier_values)
   }
 
@@ -527,7 +531,7 @@ server <- function(input, output, session) {
       set_project(state, project_id, con)
       state$PrefProject <- project_id
       if (persist) {
-        set_pref(con, "Current", "CurrProject", project_id)
+        set_current_setting("CurrProject", project_id)
       }
       refresh_hierarchy_dropdown()
     }
@@ -536,7 +540,7 @@ server <- function(input, output, session) {
       set_su(state, NULL)
       state$PrefPlot <- NULL
       if (persist) {
-        set_pref(con, "Current", "CurrPlotNumber", "")
+        set_current_setting("CurrPlotNumber", NULL)
       }
       shiny::freezeReactiveValue(input, "sel_su")
       updateTextInput(session, "sel_su", value = "")
@@ -555,12 +559,12 @@ server <- function(input, output, session) {
     if (nzchar(site_unit)) {
       state$PrefSUTable <- site_unit
       if (persist) {
-        set_pref(con, "Current", "CurrPlotList", site_unit)
+        set_current_setting("CurrPlotList", site_unit)
       }
     }
 
     if (persist) {
-      set_pref(con, "Current", "CurrPlotNumber", plot_number)
+      set_current_setting("CurrPlotNumber", plot_number)
     }
 
     shiny::freezeReactiveValue(input, "sel_su")
@@ -1112,7 +1116,7 @@ server <- function(input, output, session) {
       sidebar_hierarchy_site_unit(if (nzchar(site_unit)) site_unit else NULL)
     }
     state$PrefSUTable <- if (nzchar(site_unit)) site_unit else NULL
-    set_pref(con, "Current", "CurrPlotList", site_unit)
+    set_current_setting("CurrPlotList", if (nzchar(site_unit)) site_unit else NULL)
   }, ignoreNULL = FALSE)
 
   observeEvent(input$hierarchy_sidebar_select_site_unit, {
@@ -1145,7 +1149,7 @@ server <- function(input, output, session) {
     sidebar_hierarchy_site_unit(site_unit)
     picker_site_unit(site_unit)
     state$PrefSUTable <- site_unit
-    set_pref(con, "Current", "CurrPlotList", site_unit)
+    set_current_setting("CurrPlotList", site_unit)
   }, ignoreInit = TRUE)
 
   observeEvent(input$hierarchy_sidebar_select_node, {
@@ -1274,7 +1278,7 @@ server <- function(input, output, session) {
     picker_site_unit(to_site_unit)
     sidebar_hierarchy_site_unit(to_site_unit)
     state$PrefSUTable <- to_site_unit
-    set_pref(con, "Current", "CurrPlotList", to_site_unit)
+    set_current_setting("CurrPlotList", to_site_unit)
 
     if (identical(normalize_context_value(state$CurrSU), plot_number)) {
       apply_plot_selection(plot_number = plot_number, site_unit = to_site_unit, persist = TRUE)
@@ -1377,18 +1381,29 @@ server <- function(input, output, session) {
 
   # 5b. Handle Hierarchy selection
   observeEvent(input$sel_hierarchy, {
-    hier <- input$sel_hierarchy %||% ""
+    hier <- normalize_context_value(input$sel_hierarchy)
     if (!nzchar(hier)) {
       state$CurrHierarchy <- NULL
       state$sysCurrHierarchy <- NULL
       state$PrefHierarchy <- NULL
-      set_pref(con, "Current", "CurrHierarchy", "")
+      set_current_setting("CurrHierarchy", NULL)
     } else {
+      if (!project_attached(con, hier)) {
+        hier_path <- project_db_path(hier)
+        if (!file.exists(hier_path)) {
+          showNotification(sprintf("Hierarchy database not found: %s", basename(hier_path)), type = "error")
+          return()
+        }
+        project_attach_file(con, hier_path, hier)
+      }
+
       state$CurrHierarchy <- hier
       state$sysCurrHierarchy <- hier
       state$PrefHierarchy <- hier
-      set_pref(con, "Current", "CurrHierarchy", hier)
+      set_current_setting("CurrHierarchy", hier)
     }
+
+    refresh_current_context_views(con)
   })
 
   observeEvent(input$btn_nav_data_entry, {
@@ -1473,7 +1488,7 @@ server <- function(input, output, session) {
     picker_site_unit(result$site_unit)
     sidebar_hierarchy_site_unit(result$site_unit)
     state$PrefSUTable <- result$site_unit
-    set_pref(con, "Current", "CurrPlotList", result$site_unit)
+    set_current_setting("CurrPlotList", result$site_unit)
 
     if (isTRUE(result$changed)) {
       sync_touch_state(state)
@@ -1517,7 +1532,7 @@ server <- function(input, output, session) {
     picker_site_unit(result$site_unit)
     sidebar_hierarchy_site_unit(result$site_unit)
     state$PrefSUTable <- result$site_unit
-    set_pref(con, "Current", "CurrPlotList", result$site_unit)
+    set_current_setting("CurrPlotList", result$site_unit)
     apply_plot_selection(
       plot_number = result$plot_number,
       project_id = result$project_id,

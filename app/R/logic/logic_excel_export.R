@@ -192,24 +192,115 @@ export_combined_excel <- function(con, output_path, options = list()) {
   invisible(TRUE)
 }
 
+resolve_export_field <- function(fields, target) {
+  idx <- which(tolower(fields) == tolower(target))
+  if (length(idx) == 0) {
+    return(NULL)
+  }
+  fields[[idx[[1]]]]
+}
+
+resolve_vegetation_export_source <- function(con) {
+  candidates <- list(
+    list(
+      table = "vw_USysAllVeg",
+      plot = "PlotNumber",
+      layer = "MyLayer",
+      species = "Species",
+      cover = "Cover",
+      project = NULL
+    ),
+    list(
+      table = "USysV2Veg",
+      plot = "Plotnumber",
+      layer = "Layer",
+      species = "Species",
+      cover = "Cover",
+      project = "ProjectID"
+    )
+  )
+
+  for (candidate in candidates) {
+    if (!DBI::dbExistsTable(con, candidate$table)) {
+      next
+    }
+
+    fields <- tryCatch(DBI::dbListFields(con, candidate$table), error = function(e) character(0))
+    if (!length(fields)) {
+      next
+    }
+
+    plot_col <- resolve_export_field(fields, candidate$plot)
+    layer_col <- resolve_export_field(fields, candidate$layer)
+    species_col <- resolve_export_field(fields, candidate$species)
+    cover_col <- resolve_export_field(fields, candidate$cover)
+    project_col <- if (is.null(candidate$project)) NULL else resolve_export_field(fields, candidate$project)
+
+    if (all(vapply(list(plot_col, layer_col, species_col, cover_col), function(x) !is.null(x), logical(1)))) {
+      return(list(
+        table = candidate$table,
+        plot = plot_col,
+        layer = layer_col,
+        species = species_col,
+        cover = cover_col,
+        project = project_col
+      ))
+    }
+  }
+
+  stop("No supported vegetation export source is available. Expected vw_USysAllVeg or USysV2Veg.")
+}
+
+fetch_vegetation_export_rows <- function(con, project_ids = NULL, layers = c("1", "2", "3", "4", "5", "6", "7")) {
+  source_info <- resolve_vegetation_export_source(con)
+
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  qstring <- function(values) paste(as.character(DBI::dbQuoteString(con, as.character(values))), collapse = ", ")
+  qualify <- function(alias, column_name) paste0(alias, ".", qident(column_name))
+
+  from_clause <- paste(qident(source_info$table), "v")
+  where_clauses <- character(0)
+  where_clauses <- c(where_clauses, sprintf("%s IN (%s)", qualify("v", source_info$layer), qstring(layers)))
+
+  if (!is.null(project_ids) && length(project_ids) > 0) {
+    if (!is.null(source_info$project)) {
+      where_clauses <- c(where_clauses, sprintf("%s IN (%s)", qualify("v", source_info$project), qstring(project_ids)))
+    } else {
+      env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+      env_plot_col <- resolve_export_field(env_fields, "PlotNumber")
+      env_project_col <- resolve_export_field(env_fields, "ProjectID")
+      if (is.null(env_plot_col) || is.null(env_project_col)) {
+        stop("Project-filtered export requires Env with PlotNumber and ProjectID columns.")
+      }
+      from_clause <- paste(
+        from_clause,
+        "JOIN",
+        qident("Env"),
+        "e ON",
+        sprintf("%s = %s", qualify("v", source_info$plot), qualify("e", env_plot_col))
+      )
+      where_clauses <- c(where_clauses, sprintf("%s IN (%s)", qualify("e", env_project_col), qstring(project_ids)))
+    }
+  }
+
+  sql <- paste(
+    "SELECT",
+    sprintf("%s AS PlotNumber,", qualify("v", source_info$plot)),
+    sprintf("%s AS MyLayer,", qualify("v", source_info$layer)),
+    sprintf("%s AS Species,", qualify("v", source_info$species)),
+    sprintf("%s AS Cover", qualify("v", source_info$cover)),
+    "FROM",
+    from_clause,
+    if (length(where_clauses) > 0) paste("WHERE", paste(where_clauses, collapse = " AND ")) else ""
+  )
+
+  DBI::dbGetQuery(con, sql)
+}
+
 #' Get Vegetation Data Formatted for Excel Export
 #' @keywords internal
 get_vegetation_data_for_excel <- function(con, project_ids = NULL, layers = c("1", "2", "3", "4", "5", "6", "7"), apply_lumping = FALSE) {
-  
-  # Build query
-  layers_sql <- paste(paste0("'", layers, "'"), collapse = ", ")
-  query <- sprintf("SELECT PlotNumber, MyLayer, Species, Cover FROM vw_USysAllVeg WHERE MyLayer IN (%s)", layers_sql)
-  
-  # Filter by project if specified
-  if (!is.null(project_ids) && length(project_ids) > 0) {
-    projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
-    query <- sprintf("SELECT v.* FROM vw_USysAllVeg v 
-                      JOIN Env e ON v.PlotNumber = e.plotnumber 
-                      WHERE v.MyLayer IN (%s) AND e.projectid IN (%s)", 
-                     layers_sql, projs_sql)
-  }
-  
-  df <- DBI::dbGetQuery(con, query)
+  df <- fetch_vegetation_export_rows(con, project_ids = project_ids, layers = layers)
   
   if (nrow(df) == 0) return(df)
 
@@ -246,7 +337,7 @@ get_vegetation_data_for_excel <- function(con, project_ids = NULL, layers = c("1
   }, error = function(e) FALSE)
 
   if (isTRUE(has_lists_specs)) {
-    meta_table <- "lists.USysAllSpecs"
+    meta_table <- "VLists.USysAllSpecs"
   } else if (DBI::dbExistsTable(con, "USysAllSpecs")) {
     meta_table <- "USysAllSpecs"
   } else if (DBI::dbExistsTable(con, "SppList")) {
@@ -291,94 +382,204 @@ get_vegetation_data_for_excel <- function(con, project_ids = NULL, layers = c("1
 #' Get Environment Data Formatted for Excel Export
 #' @keywords internal
 get_environment_data_for_excel <- function(con, project_ids = NULL) {
-  
-  # Key environment fields
-  query <- "SELECT 
-    plotnumber AS Plot,
-    projectid AS Project,
-    _location AS Location,
-    date AS Date,
-    sitesurveyor AS Surveyor,
-    latitude AS Latitude,
-    longitude AS Longitude,
-    elevation AS Elevation,
-    slopegradient AS Slope,
-    aspect AS Aspect,
-    _zone AS Zone,
-    subzone AS Subzone,
-    siteseries AS \"Site Series\",
-    moistureregime AS Moisture,
-    nutrientregime AS Nutrient,
-    sitenotes AS Notes
-  FROM Env"
-  
-  if (!is.null(project_ids) && length(project_ids) > 0) {
-    projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
-    query <- paste0(query, sprintf(" WHERE projectid IN (%s)", projs_sql))
+  fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  if (!length(fields)) {
+    return(data.frame())
   }
-  
-  query <- paste(query, "ORDER BY projectid, plotnumber")
-  
+
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  pick_expr <- function(candidates, alias, table_alias = NULL) {
+    if (!is.character(candidates)) {
+      candidates <- as.character(candidates)
+    }
+    actual <- NULL
+    for (candidate in candidates) {
+      actual <- resolve_export_field(fields, candidate)
+      if (!is.null(actual)) {
+        break
+      }
+    }
+    if (is.null(actual)) {
+      return(sprintf("NULL AS %s", qident(alias)))
+    }
+    prefix <- if (is.null(table_alias)) "" else paste0(table_alias, ".")
+    sprintf("%s%s AS %s", prefix, qident(actual), qident(alias))
+  }
+
+  project_col <- resolve_export_field(fields, "ProjectID")
+  plot_col <- resolve_export_field(fields, "PlotNumber")
+
+  select_exprs <- c(
+    pick_expr("PlotNumber", "Plot"),
+    pick_expr("ProjectID", "Project"),
+    pick_expr(c("_location", "Location"), "Location"),
+    pick_expr("Date", "Date"),
+    pick_expr("SiteSurveyor", "Surveyor"),
+    pick_expr("Latitude", "Latitude"),
+    pick_expr("Longitude", "Longitude"),
+    pick_expr("Elevation", "Elevation"),
+    pick_expr("SlopeGradient", "Slope"),
+    pick_expr("Aspect", "Aspect"),
+    pick_expr(c("_zone", "Zone"), "Zone"),
+    pick_expr("SubZone", "Subzone"),
+    pick_expr("SiteSeries", "Site Series"),
+    pick_expr("MoistureRegime", "Moisture"),
+    pick_expr("NutrientRegime", "Nutrient"),
+    pick_expr("SiteNotes", "Notes")
+  )
+
+  query <- paste("SELECT", paste(select_exprs, collapse = ",\n    "), "FROM Env")
+
+  if (!is.null(project_ids) && length(project_ids) > 0 && !is.null(project_col)) {
+    projs_sql <- paste(as.character(DBI::dbQuoteString(con, as.character(project_ids))), collapse = ", ")
+    query <- paste0(query, sprintf(" WHERE %s IN (%s)", qident(project_col), projs_sql))
+  }
+
+  order_exprs <- character(0)
+  if (!is.null(project_col)) {
+    order_exprs <- c(order_exprs, qident(project_col))
+  }
+  if (!is.null(plot_col)) {
+    order_exprs <- c(order_exprs, qident(plot_col))
+  }
+  if (length(order_exprs) > 0) {
+    query <- paste(query, "ORDER BY", paste(order_exprs, collapse = ", "))
+  }
+
   DBI::dbGetQuery(con, query)
 }
 
 #' Get Soil Humus Data
 #' @keywords internal
 get_soil_humus_data <- function(con, project_ids = NULL) {
-  
-  query <- "SELECT 
-    h.plotnumber AS Plot,
-    h.horizon AS Horizon,
-    h.upperdepth AS 'Upper Depth (cm)',
-    h.lowerdepth AS 'Lower Depth (cm)',
-    h.humusformbh AS 'Humus Form pH',
-    h.vonpost AS 'von Post',
-    h.comment AS Comment
-  FROM Humus h"
-  
-  if (!is.null(project_ids) && length(project_ids) > 0) {
-    projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
-    query <- paste0(query, sprintf(" 
-      JOIN Env e ON h.plotnumber = e.plotnumber
-      WHERE e.projectid IN (%s)", projs_sql))
+  humus_fields <- tryCatch(DBI::dbListFields(con, "Humus"), error = function(e) character(0))
+  if (!length(humus_fields)) {
+    return(data.frame())
   }
-  
-  query <- paste(query, "ORDER BY h.plotnumber, h.upperdepth")
-  
-  tryCatch(
-    DBI::dbGetQuery(con, query),
-    error = function(e) data.frame()  # Table may not exist
+
+  env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  pick_expr <- function(fields, candidates, alias, table_alias) {
+    if (!is.character(candidates)) {
+      candidates <- as.character(candidates)
+    }
+    actual <- NULL
+    for (candidate in candidates) {
+      actual <- resolve_export_field(fields, candidate)
+      if (!is.null(actual)) {
+        break
+      }
+    }
+    if (is.null(actual)) {
+      return(sprintf("NULL AS %s", qident(alias)))
+    }
+    sprintf("%s.%s AS %s", table_alias, qident(actual), qident(alias))
+  }
+
+  humus_plot_col <- resolve_export_field(humus_fields, "PlotNumber")
+  humus_upper_col <- resolve_export_field(humus_fields, "UpperDepth")
+  env_plot_col <- resolve_export_field(env_fields, "PlotNumber")
+  env_project_col <- resolve_export_field(env_fields, "ProjectID")
+
+  select_exprs <- c(
+    pick_expr(humus_fields, "PlotNumber", "Plot", "h"),
+    pick_expr(humus_fields, "Horizon", "Horizon", "h"),
+    pick_expr(humus_fields, "UpperDepth", "Upper Depth (cm)", "h"),
+    pick_expr(humus_fields, "LowerDepth", "Lower Depth (cm)", "h"),
+    pick_expr(humus_fields, c("HumusFormpH", "Humusformph", "HumusFormBH", "HumusFormbh"), "Humus Form pH", "h"),
+    pick_expr(humus_fields, "vonPost", "von Post", "h"),
+    pick_expr(humus_fields, c("Comment", "Comments", "_comment"), "Comment", "h")
   )
+
+  query <- paste("SELECT", paste(select_exprs, collapse = ",\n    "), "FROM Humus h")
+
+  if (!is.null(project_ids) && length(project_ids) > 0 && !is.null(humus_plot_col) && !is.null(env_plot_col) && !is.null(env_project_col)) {
+    projs_sql <- paste(as.character(DBI::dbQuoteString(con, as.character(project_ids))), collapse = ", ")
+    query <- paste0(
+      query,
+      sprintf(" JOIN Env e ON h.%s = e.%s WHERE e.%s IN (%s)", qident(humus_plot_col), qident(env_plot_col), qident(env_project_col), projs_sql)
+    )
+  }
+
+  order_exprs <- character(0)
+  if (!is.null(humus_plot_col)) {
+    order_exprs <- c(order_exprs, sprintf("h.%s", qident(humus_plot_col)))
+  }
+  if (!is.null(humus_upper_col)) {
+    order_exprs <- c(order_exprs, sprintf("h.%s", qident(humus_upper_col)))
+  }
+  if (length(order_exprs) > 0) {
+    query <- paste(query, "ORDER BY", paste(order_exprs, collapse = ", "))
+  }
+
+  tryCatch(DBI::dbGetQuery(con, query), error = function(e) data.frame())
 }
 
 #' Get Soil Mineral Data
 #' @keywords internal
 get_soil_mineral_data <- function(con, project_ids = NULL) {
-  
-  query <- "SELECT 
-    m.plotnumber AS Plot,
-    m.horizon AS Horizon,
-    m.upperdepth AS 'Upper Depth (cm)',
-    m.lowerdepth AS 'Lower Depth (cm)',
-    m.texture AS Texture,
-    m.percentcoarsefragstotal AS 'Coarse Frags %',
-    m.mineralformbh AS 'pH',
-    m.comments AS Comment
-  FROM Mineral m"
-  
-  if (!is.null(project_ids) && length(project_ids) > 0) {
-    projs_sql <- paste(paste0("'", project_ids, "'"), collapse = ", ")
-    query <- paste0(query, sprintf(" 
-      JOIN Env e ON m.plotnumber = e.plotnumber
-      WHERE e.projectid IN (%s)", projs_sql))
+  mineral_fields <- tryCatch(DBI::dbListFields(con, "Mineral"), error = function(e) character(0))
+  if (!length(mineral_fields)) {
+    return(data.frame())
   }
-  
-  query <- paste(query, "ORDER BY m.plotnumber, m.upperdepth")
-  
-  tryCatch(
-    DBI::dbGetQuery(con, query),
-    error = function(e) data.frame()
+
+  env_fields <- tryCatch(DBI::dbListFields(con, "Env"), error = function(e) character(0))
+  qident <- function(name) as.character(DBI::dbQuoteIdentifier(con, name))
+  pick_expr <- function(fields, candidates, alias, table_alias) {
+    if (!is.character(candidates)) {
+      candidates <- as.character(candidates)
+    }
+    actual <- NULL
+    for (candidate in candidates) {
+      actual <- resolve_export_field(fields, candidate)
+      if (!is.null(actual)) {
+        break
+      }
+    }
+    if (is.null(actual)) {
+      return(sprintf("NULL AS %s", qident(alias)))
+    }
+    sprintf("%s.%s AS %s", table_alias, qident(actual), qident(alias))
+  }
+
+  mineral_plot_col <- resolve_export_field(mineral_fields, "PlotNumber")
+  mineral_upper_col <- resolve_export_field(mineral_fields, "UpperDepth")
+  env_plot_col <- resolve_export_field(env_fields, "PlotNumber")
+  env_project_col <- resolve_export_field(env_fields, "ProjectID")
+
+  select_exprs <- c(
+    pick_expr(mineral_fields, "PlotNumber", "Plot", "m"),
+    pick_expr(mineral_fields, "Horizon", "Horizon", "m"),
+    pick_expr(mineral_fields, "UpperDepth", "Upper Depth (cm)", "m"),
+    pick_expr(mineral_fields, "LowerDepth", "Lower Depth (cm)", "m"),
+    pick_expr(mineral_fields, "Texture", "Texture", "m"),
+    pick_expr(mineral_fields, c("PercentCoarseFragsTotal", "percentcoarsefragstotal"), "Coarse Frags %", "m"),
+    pick_expr(mineral_fields, c("MineralFormpH", "MineralFormPH", "MineralFormBH", "mineralformbh"), "pH", "m"),
+    pick_expr(mineral_fields, c("Comments", "Comment", "_comments"), "Comment", "m")
   )
+
+  query <- paste("SELECT", paste(select_exprs, collapse = ",\n    "), "FROM Mineral m")
+
+  if (!is.null(project_ids) && length(project_ids) > 0 && !is.null(mineral_plot_col) && !is.null(env_plot_col) && !is.null(env_project_col)) {
+    projs_sql <- paste(as.character(DBI::dbQuoteString(con, as.character(project_ids))), collapse = ", ")
+    query <- paste0(
+      query,
+      sprintf(" JOIN Env e ON m.%s = e.%s WHERE e.%s IN (%s)", qident(mineral_plot_col), qident(env_plot_col), qident(env_project_col), projs_sql)
+    )
+  }
+
+  order_exprs <- character(0)
+  if (!is.null(mineral_plot_col)) {
+    order_exprs <- c(order_exprs, sprintf("m.%s", qident(mineral_plot_col)))
+  }
+  if (!is.null(mineral_upper_col)) {
+    order_exprs <- c(order_exprs, sprintf("m.%s", qident(mineral_upper_col)))
+  }
+  if (length(order_exprs) > 0) {
+    query <- paste(query, "ORDER BY", paste(order_exprs, collapse = ", "))
+  }
+
+  tryCatch(DBI::dbGetQuery(con, query), error = function(e) data.frame())
 }
 
 #' Add Vegetation Sheet with Styling

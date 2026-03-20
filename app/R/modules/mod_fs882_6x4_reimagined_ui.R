@@ -368,7 +368,7 @@ if (!exists("open_fs882_destination_context", mode = "function")) {
       state$CurrSU <- pref_plot
       state$sysCurrSU <- pref_plot
     }
-    set_pref(con, "Current", "DataFormName", form_name)
+    set_current_setting("DataFormName", form_name)
   }
 }
 
@@ -435,7 +435,7 @@ fs882_reimagined_col <- function(fields, target_name) {
 fs882_reimagined_list_choices <- function(con, list_name) {
   sql <- paste(
     "SELECT item, itemdescription",
-    "FROM lists.USysTableOfLists",
+    "FROM VLists.USysTableOfLists",
     "WHERE lower(listname) = lower(?)",
     "ORDER BY itemorder, item"
   )
@@ -537,6 +537,8 @@ fs882_reimagined_upsert_env <- function(con, table_name, field_values) {
 
 mod_fs882_6x4_reimagined_server <- function(id, state, con) {
   shiny::moduleServer(id, function(input, output, session) {
+    root_session <- session$rootScope()
+
     rv <- shiny::reactiveValues(
       current_plot = NULL,
       veg_a = data.frame(),
@@ -558,8 +560,8 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
     current_plot_from_state <- shiny::reactive({
       state_plot <- trimws(as.character(state$CurrSU %||% ""))
       pref_plot <- trimws(as.character(state$PrefPlot %||% ""))
-      pref_curr_su <- trimws(as.character(get_pref(con, "Current", "CurrSU", default = "") %||% ""))
-      pref_curr_plot <- trimws(as.character(get_pref(con, "Current", "CurrPlot", default = "") %||% ""))
+      pref_curr_su <- trimws(as.character(get_current_setting("CurrSU", default = "") %||% ""))
+      pref_curr_plot <- trimws(as.character(get_current_setting("CurrPlotNumber", default = "") %||% ""))
 
       candidates <- c(state_plot, pref_plot, pref_curr_su, pref_curr_plot)
       candidates <- candidates[nzchar(candidates)]
@@ -718,7 +720,7 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
       rv$current_plot <- plot_id
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_pref(con, "Current", "CurrSU", plot_id)
+      set_current_setting("CurrPlotNumber", plot_id)
 
       load_plot_header(plot_id)
       load_subforms(plot_id)
@@ -733,7 +735,7 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
       rv$current_plot <- plot_id
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_pref(con, "Current", "CurrSU", plot_id)
+      set_current_setting("CurrPlotNumber", plot_id)
       load_plot_header(plot_id)
       load_subforms(plot_id)
       shiny::showNotification(paste("Loaded plot", plot_id), type = "message")
@@ -782,7 +784,7 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
       rv$current_plot <- plot_id
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_pref(con, "Current", "CurrSU", plot_id)
+      set_current_setting("CurrPlotNumber", plot_id)
 
       shiny::showNotification("FS882 site record saved.", type = "message")
       load_subforms(plot_id)
@@ -802,7 +804,7 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
 
     observeEvent(input$btnG2MainMenu, {
       target_tab <- state$DataEntryReturnTab %||% "Vegetation"
-      bslib::nav_select("main_tabs", target_tab, session = session$parent)
+      bslib::nav_select("main_tabs", target_tab, session = root_session)
     })
 
     observeEvent(input$btnAudit, {

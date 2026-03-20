@@ -1,6 +1,6 @@
 # Database Connection Factory for VPro
-# Handles local DuckDB + optional cloud PostgreSQL attachment
-# Connection settings come from environment variables; no config.yml required.
+# Legacy local DuckDB helper plus cloud PostgreSQL attachment utilities.
+# Runtime bootstrap now comes from init_state() in R/logic/01.state.R.
 
 # Internal helpers — read standard PG env vars with app defaults
 .pg_host     <- function() Sys.getenv("PGHOST",     "localhost")
@@ -9,9 +9,8 @@
 
 #' Connect to Local DuckDB Instance
 #'
-#' Opens the main local DuckDB database and attaches auxiliary databases
-#' (lists, metadata, user, messages).  Paths are read from env vars with
-#' hardcoded defaults so the function requires no arguments.
+#' Legacy helper for the older local DuckDB runtime.
+#' Opens the main local DuckDB database and attaches auxiliary databases.
 #'
 #' @return DBI connection object pointing to local DuckDB
 #'
@@ -280,7 +279,7 @@ close_db <- function(con) {
 #' @examples
 #' \dontrun{
 #'   con <- connect_local_db()
-#'   query_db(con, "SELECT COUNT(*) FROM lists.spplist")
+#'   query_db(con, "SELECT COUNT(*) FROM VLists.spplist")
 #' }
 #'
 #' @export

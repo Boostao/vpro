@@ -42,7 +42,7 @@ mod_admin_codes_server <- function(id, state, con) {
 
     observe({
       tryCatch({
-        lists <- dbGetQuery(con, "SELECT DISTINCT listname FROM lists.USysTableOfLists ORDER BY listname")
+        lists <- dbGetQuery(con, "SELECT DISTINCT listname FROM VLists.USysTableOfLists ORDER BY listname")
         updateSelectInput(session, "code_list_select", choices = lists$listname)
       }, error = function(e) {
         print(e)
@@ -52,7 +52,7 @@ mod_admin_codes_server <- function(id, state, con) {
     observeEvent(input$code_list_select, {
       req(input$code_list_select)
       df <- dbGetQuery(con,
-        "SELECT item, itemdescription, itemorder FROM lists.USysTableOfLists WHERE listname = ? ORDER BY itemorder",
+        "SELECT item, itemdescription, itemorder FROM VLists.USysTableOfLists WHERE listname = ? ORDER BY itemorder",
         list(input$code_list_select))
       rv_codes$data <- df
       output$code_list_header <- renderText(paste("List:", input$code_list_select))
@@ -92,14 +92,14 @@ mod_admin_codes_server <- function(id, state, con) {
       if (!require_permission(c("manage:codes", "write:all"), "Permission required: manage codes")) return()
       lname    <- input$code_list_select
       old_rows <- dbGetQuery(con,
-        "SELECT item, itemdescription, itemorder FROM lists.USysTableOfLists WHERE listname = ?",
+        "SELECT item, itemdescription, itemorder FROM VLists.USysTableOfLists WHERE listname = ?",
         list(lname))
       dbBegin(con)
       tryCatch({
-        dbExecute(con, "DELETE FROM lists.USysTableOfLists WHERE listname = ?", list(lname))
+        dbExecute(con, "DELETE FROM VLists.USysTableOfLists WHERE listname = ?", list(lname))
         to_save           <- rv_codes$data
         to_save$listname  <- lname
-        sql <- "INSERT INTO lists.USysTableOfLists (listname, item, itemdescription, itemorder) VALUES (?, ?, ?, ?)"
+        sql <- "INSERT INTO VLists.USysTableOfLists (listname, item, itemdescription, itemorder) VALUES (?, ?, ?, ?)"
         for (i in seq_len(nrow(to_save))) {
           dbExecute(con, sql,
             list(to_save$listname[i], to_save$item[i], to_save$itemdescription[i], as.numeric(to_save$itemorder[i])))
@@ -116,21 +116,21 @@ mod_admin_codes_server <- function(id, state, con) {
 
           for (item_key in removed_items) {
             row <- old_map[[item_key]][1, , drop = FALSE]
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "item",            row$item,            NA)
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemdescription", row$itemdescription, NA)
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemorder",       row$itemorder,       NA)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "item",            row$item,            NA)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "itemdescription", row$itemdescription, NA)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "itemorder",       row$itemorder,       NA)
           }
           for (item_key in added_items) {
             row <- new_map[[item_key]][1, , drop = FALSE]
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "item",            NA, row$item)
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemdescription", NA, row$itemdescription)
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemorder",       NA, row$itemorder)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "item",            NA, row$item)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "itemdescription", NA, row$itemdescription)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "itemorder",       NA, row$itemorder)
           }
           for (item_key in common_items) {
             old_row <- old_map[[item_key]][1, , drop = FALSE]
             new_row <- new_map[[item_key]][1, , drop = FALSE]
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemdescription", old_row$itemdescription, new_row$itemdescription)
-            log_audit_change(con, NA, "Admin", lname, "lists.USysTableOfLists", "itemorder",       old_row$itemorder,       new_row$itemorder)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "itemdescription", old_row$itemdescription, new_row$itemdescription)
+            log_audit_change(con, NA, "Admin", lname, "VLists.USysTableOfLists", "itemorder",       old_row$itemorder,       new_row$itemorder)
           }
         }
       }, error = function(e) {

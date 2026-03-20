@@ -84,7 +84,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   if (file.exists(list_file)) {
     dbExecute(
       con,
-      sprintf("CREATE TABLE lists.USysAllSpecs AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
+      sprintf("CREATE TABLE VLists.USysAllSpecs AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
     )
   }
 } else {
@@ -126,8 +126,8 @@ if (nzchar(trimws(params$site_unit))) {
 lifeform_col <- if (!is.null(veg$species_lifeform)) "species_lifeform" else if (!is.null(veg$layer_lifeform)) "layer_lifeform" else NULL
 
 attr_table <- NULL
-if (DBI::dbExistsTable(con, "lists.USysSppAttributes")) {
-  attr_table <- "lists.USysSppAttributes"
+if (DBI::dbExistsTable(con, "VLists.USysSppAttributes")) {
+  attr_table <- "VLists.USysSppAttributes"
 } else if (DBI::dbExistsTable(con, "USysSppAttributes")) {
   attr_table <- "USysSppAttributes"
 }
@@ -147,8 +147,8 @@ if (!is.null(attr_table)) {
 }
 
 lifeform_codes <- NULL
-if (DBI::dbExistsTable(con, "lists.LifeformCodes")) {
-  lifeform_codes <- DBI::dbGetQuery(con, "SELECT * FROM lists.LifeformCodes")
+if (DBI::dbExistsTable(con, "VLists.LifeformCodes")) {
+  lifeform_codes <- DBI::dbGetQuery(con, "SELECT * FROM VLists.LifeformCodes")
 } else if (DBI::dbExistsTable(con, "LifeformCodes")) {
   lifeform_codes <- DBI::dbGetQuery(con, "SELECT * FROM LifeformCodes")
 }

@@ -72,7 +72,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   if (file.exists(list_file)) {
     dbExecute(
       con,
-      sprintf("CREATE TABLE lists.USysAllSpecs AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
+      sprintf("CREATE TABLE VLists.USysAllSpecs AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
     )
   }
 } else {

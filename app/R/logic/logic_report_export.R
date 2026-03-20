@@ -516,8 +516,8 @@ build_excel_report_data <- function(con, template_name, params) {
     }
 
     unit_names <- data.frame()
-    if (DBI::dbExistsTable(con, "lists.MasterSiteUnitList")) {
-      unit_names <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList")
+    if (DBI::dbExistsTable(con, "VLists.MasterSiteUnitList")) {
+      unit_names <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList")
     }
 
     env <- normalize_env_export(env)
@@ -552,7 +552,7 @@ build_excel_report_data <- function(con, template_name, params) {
     if (DBI::dbExistsTable(con, c("lists", "MasterSiteUnitList"))) {
       long_names <- DBI::dbGetQuery(
         con,
-        "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList"
+        "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList"
       )
     }
     hier <- normalize_hier_export(hier)
@@ -612,8 +612,8 @@ build_excel_report_data <- function(con, template_name, params) {
     }
 
     unit_names <- data.frame()
-    if (DBI::dbExistsTable(con, "lists.MasterSiteUnitList")) {
-      unit_names <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList")
+    if (DBI::dbExistsTable(con, "VLists.MasterSiteUnitList")) {
+      unit_names <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList")
     }
 
     env <- normalize_env_long_export(env)

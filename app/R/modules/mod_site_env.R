@@ -869,7 +869,7 @@ mod_site_env_server <- function(id, sys_state, con) {
         # Using shared connection `con` which already has 'lists' attached.
         
         # Note: Columns are lowercased in the DB
-        df <- dbGetQuery(con, "SELECT item, itemdescription FROM lists.USysTableOfLists WHERE listname = ? ORDER BY itemorder", list(list_name))
+        df <- dbGetQuery(con, "SELECT item, itemdescription FROM VLists.USysTableOfLists WHERE listname = ? ORDER BY itemorder", list(list_name))
         if(nrow(df) > 0) {
             # Create named vector: "Description" = "Code" (or just Code if no desc)
             # Access logic usually shows Description but stores Code (Item)

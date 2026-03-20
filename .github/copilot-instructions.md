@@ -1,21 +1,23 @@
-# GitHub Copilot Agent Instructions — VPRO (Block-by-Block)
+# GitHub Copilot Agent Instructions — VPRO
 
 ## Orientation
-Migrate VPro64 from Access to R/Shiny in small, collaborative blocks.
+Migrate VPro64 from Access to R/Shiny with Access-accurate behavior and complete requested work autonomously unless the user explicitly narrows scope.
 
 ## Default Working Mode
-1. Work on one block at a time.
+1. Continue implementation until the requested task is complete or a real blocker is reached.
 2. Match Access behavior in Shiny paradigms.
+3. Use incremental validation during execution, but do not stop at intermediate slices unless the user asks to pause.
 
-## Block Contract (Use This Every Time)
-For each requested block:
-1. **Access source**: identify exact form/module event(s) in `../VPRO_ACCESS/VPro64_forAI`.
-2. **Expected behavior**: restate only what that block must do.
-3. **Implementation**: edit only necessary files.
-4. **Handoff**: list what changed and what remains.
+## Execution Contract
+For each requested task:
+1. **Access source**: identify exact form/module event(s) in `../VPRO_ACCESS/VPro64_forAI` when Access parity is relevant.
+2. **Expected behavior**: restate only what the requested work must do.
+3. **Implementation**: edit only necessary files, but continue through connected runtime/test fixes needed to complete the task.
+4. **Validation**: run the smallest meaningful verification needed to confirm the work.
+5. **Handoff**: list what changed and what remains only when the requested task is actually complete or explicitly blocked.
 
 ## Scope Rules
-- No extra features beyond the block.
+- No extra features beyond the requested scope.
 - No design/system rewrites unless requested.
 - Preserve existing naming and UX language from Access captions/status text.
 
@@ -58,7 +60,7 @@ For each requested block:
 - Run tests only when explicitly requested.
 
 ## Git / Commit Discipline
-- Commit per completed block when asked.
+- Commit scoped changes when asked.
 - Stage only relevant files.
 - Do not commit generated `.duckdb` artifacts.
 - Do not replace canonical SQLite storage with generated local `.duckdb` files unless explicitly requested.
@@ -70,7 +72,7 @@ For each requested block:
 - If ambiguity exists, ask for one precise clarification and continue.
 
 ## Immediate Priority
-Deliver Access-accurate workflows incrementally, block by block, with fast feedback.
+Deliver Access-accurate workflows end-to-end with fast feedback, using intermediate validation without prematurely stopping implementation.
 
 ## Form migration execution (mandatory)
 
@@ -88,14 +90,14 @@ Use both skills in this order:
 During migration, preserve generated skill artifacts under `/tmp` and do not delete them during the active migration session.
 
 Default location:
-- `/tmp/vpro_parity/<block_id>/`
+- `/tmp/vpro_parity/<work_id>/`
 
 Expected retained artifacts (at minimum):
 - `FORM_IMPL_SPEC_<form>.md`
 - `ui_<form>.R`
-- block parity notes/checklist (for example `PARITY_CHECKLIST_<block_id>.md`)
+- parity notes/checklist (for example `PARITY_CHECKLIST_<work_id>.md`)
 
-If a skill writes outputs under `../VPRO_ACCESS/.../Forms/`, copy the artifacts to `/tmp/vpro_parity/<block_id>/` immediately and keep that `/tmp` copy as canonical migration evidence for the block.
+If a skill writes outputs under `../VPRO_ACCESS/.../Forms/`, copy the artifacts to `/tmp/vpro_parity/<work_id>/` immediately and keep that `/tmp` copy as canonical migration evidence for the task.
 
 Do not parse whole Access form exports upfront as a primary discovery method.
 
@@ -114,8 +116,8 @@ Completion requirements:
 - Report deferred dependencies with placeholders and actionable hookup notes
 
 Strict parity completion gates:
-- Do not mark a block complete unless targeted Access controls/events for that block are mapped to runtime behavior or explicitly deferred.
-- Do not mark a block complete based only on startup or save/load smoke.
+- Do not mark a task complete unless the targeted Access controls/events for the requested scope are mapped to runtime behavior or explicitly deferred.
+- Do not mark a task complete based only on startup or save/load smoke when deeper runtime behavior was in scope.
 - Include a control/event parity checklist in handoff with `implemented | deferred | missing` status per item.
 
 Do not claim feature parity unless event mapping, dependency tracing, and source bindings are implemented or explicitly deferred with placeholders.

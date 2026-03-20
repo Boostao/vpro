@@ -6,7 +6,7 @@ notifications_messages_available <- function(con) {
   }, error = function(e) character(0))
   if (!"messages" %in% attached) return(FALSE)
   tryCatch({
-    DBI::dbExistsTable(con, "messages.tblMessageBoard")
+    DBI::dbExistsTable(con, "VMessageBoard.tblMessageBoard")
   }, error = function(e) FALSE)
 }
 
@@ -21,7 +21,7 @@ notifications_post_message <- function(con,
   if (!notifications_messages_available(con)) return(invisible(FALSE))
   DBI::dbExecute(
     con,
-    "INSERT INTO messages.tblMessageBoard (topictype, topicdate, audience, _from, title, message)
+    "INSERT INTO VMessageBoard.tblMessageBoard (topictype, topicdate, audience, _from, title, message)
      VALUES (?, ?, ?, ?, ?, ?)",
     list(as.character(topictype), as.Date(topicdate), as.character(audience), as.character(from), as.character(title), as.character(message))
   )

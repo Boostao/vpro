@@ -836,6 +836,8 @@ mod_hierarchy_ui <- function(id) {
 
 mod_hierarchy_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
+    root_session <- session$rootScope()
+
     rv <- reactiveValues(
       data = NULL,
       clipboard = NULL,
@@ -1528,7 +1530,7 @@ mod_hierarchy_server <- function(id, state, con) {
         } else {
           updateSelectInput(session$parent, "sel_project", selected = as.character(project_id))
           updateSelectInput(session$parent, "sel_su", selected = as.character(plot_number))
-          bslib::nav_select("main_tabs", "FS882-6x4XL", session = session$parent)
+          bslib::nav_select("main_tabs", "FS882-6x4XL", session = root_session)
         }
       }
       showNotification(paste("Jumped to plot", plot_number), type = "message")
@@ -1564,7 +1566,7 @@ mod_hierarchy_server <- function(id, state, con) {
           )
         } else {
           updateSelectInput(session$parent, "sel_su", selected = as.character(plots[1]))
-          bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+          bslib::nav_select("main_tabs", "Vegetation", session = root_session)
         }
       }
       showNotification("Opened vegetation for selected plot.", type = "message")

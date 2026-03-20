@@ -67,9 +67,9 @@ mod_reporting_server <- function(id, sys_state, con) {
 
     report_prefs_loaded <- reactiveVal(FALSE)
     report_pref_defaults <- list(
-      colour_greater = get_pref(con, "ReportOptions", "cmbColourGreater", default = 5L),
-      gray_greater = get_pref(con, "ReportOptions", "cmbGrayGreater", default = 65L),
-      apply_theme = get_pref(con, "ReportOptions", "cmbApplyTheme", default = 1L)
+      colour_greater = get_config_setting("ReportOptions", "cmbColourGreater", default = 5L),
+      gray_greater = get_config_setting("ReportOptions", "cmbGrayGreater", default = 65L),
+      apply_theme = get_config_setting("ReportOptions", "cmbApplyTheme", default = 1L)
     )
     report_pref_defaults$apply_theme <- isTRUE(as.logical(report_pref_defaults$apply_theme))
 
@@ -83,15 +83,15 @@ mod_reporting_server <- function(id, sys_state, con) {
     })
 
     observeEvent(input$opt_colour_greater, {
-      set_pref(con, "ReportOptions", "cmbColourGreater", input$opt_colour_greater)
+      set_config_setting("ReportOptions", "cmbColourGreater", input$opt_colour_greater)
     }, ignoreInit = TRUE)
 
     observeEvent(input$opt_gray_greater, {
-      set_pref(con, "ReportOptions", "cmbGrayGreater", input$opt_gray_greater)
+      set_config_setting("ReportOptions", "cmbGrayGreater", input$opt_gray_greater)
     }, ignoreInit = TRUE)
 
     observeEvent(input$opt_apply_theme, {
-      set_pref(con, "ReportOptions", "cmbApplyTheme", as.integer(isTRUE(input$opt_apply_theme)))
+      set_config_setting("ReportOptions", "cmbApplyTheme", as.integer(isTRUE(input$opt_apply_theme)))
     }, ignoreInit = TRUE)
 
     export_tables_to_parquet <- function(tables) {
@@ -123,22 +123,22 @@ mod_reporting_server <- function(id, sys_state, con) {
     get_report_exports <- function(template_name) {
       exports <- list(
         "site_summary.qmd" = c("Env", "SU", "vw_USysAllVeg", "Humus", "Mineral"),
-        "short_veg.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "short_veg.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "VLists.USysAllSpecs"),
         "long_veg.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode",
-                           "lists.USysAllSpecs", "Admin", "vw_USysEnv"),
+               "VLists.USysAllSpecs", "Admin", "vw_USysEnv"),
         "env_summary.qmd" = c("Env", "SU"),
-        "long_env.qmd" = c("Env", "SU", "lists.MasterSiteUnitList"),
-        "short_veg_env.qmd" = c("vw_USysAllVeg", "Env", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
-        "lifeform.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "long_env.qmd" = c("Env", "SU", "VLists.MasterSiteUnitList"),
+        "short_veg_env.qmd" = c("vw_USysAllVeg", "Env", "SU", "Lump", "LayerCode", "VLists.USysAllSpecs"),
+        "lifeform.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "VLists.USysAllSpecs"),
         "flat_hierarchy.qmd" = c("Hierarchy"),
-        "hierarchy.qmd" = c("Hierarchy", "lists.MasterSiteUnitList"),
-        "short_veg_hierarchy.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
-        "short_veg_order_hierarchy.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "lists.USysAllSpecs"),
+        "hierarchy.qmd" = c("Hierarchy", "VLists.MasterSiteUnitList"),
+        "short_veg_hierarchy.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "VLists.USysAllSpecs"),
+        "short_veg_order_hierarchy.qmd" = c("vw_USysAllVeg", "SU", "Lump", "LayerCode", "VLists.USysAllSpecs"),
         "veg_layer_a.qmd" = c("Veg", "SU", "Env"),
         "veg_layer_c.qmd" = c("Veg", "SU", "Env"),
         "veg_layer_d.qmd" = c("Veg", "SU", "Env"),
         "bec_labels.qmd" = c("Env", "SU"),
-        "quality_control.qmd" = c("SU", "Admin", "Env", "Veg", "lists.USysTableOfLists")
+        "quality_control.qmd" = c("SU", "Admin", "Env", "Veg", "VLists.USysTableOfLists")
       )
       exports[[template_name]]
     }
@@ -510,10 +510,10 @@ mod_reporting_server <- function(id, sys_state, con) {
       if (input$report_template != "quality_control.qmd") return(NULL)
 
       dq_choices <- c("All" = "")
-      if (!is.null(con) && DBI::dbExistsTable(con, "lists.USysTableOfLists")) {
+      if (!is.null(con) && DBI::dbExistsTable(con, "VLists.USysTableOfLists")) {
         dq <- DBI::dbGetQuery(
           con,
-          "SELECT Item, ItemOrder FROM lists.USysTableOfLists WHERE lower(ListName) = 'dataquality' ORDER BY ItemOrder"
+          "SELECT Item, ItemOrder FROM VLists.USysTableOfLists WHERE lower(ListName) = 'dataquality' ORDER BY ItemOrder"
         )
         if (nrow(dq) > 0) {
           dq_choices <- c("All" = "", stats::setNames(dq$Item, dq$Item))

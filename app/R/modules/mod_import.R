@@ -17,8 +17,8 @@ mod_import_ui <- function(id) {
         col_widths = c(6, 6)
       ),
       tags$hr(),
-      tags$h5("Import from Access (Windows only)"),
-      tags$p("Windows only: install the Microsoft Access ODBC driver. macOS/Linux users should export to CSV/ZIP first."),
+      tags$h5("Import from Access"),
+      tags$p("Imports an Access project into a canonical SQLite project database under data/projects using mdbtoolr."),
       layout_columns(
         fileInput(ns("access_file"), "Access .mdb/.accdb", accept = c(".mdb", ".accdb")),
         textInput(ns("access_project_id"), "New Project ID (optional)", value = ""),
@@ -55,7 +55,7 @@ import_suffix_map <- function() {
     audit = "Audit",
     su = "SU",
     hierarchy = "Hierarchy",
-    spplist = "lists.SppList"
+    spplist = "VLists.SppList"
   )
 }
 
@@ -195,19 +195,6 @@ apply_project_override <- function(data, target_fields, project_id) {
   data
 }
 
-project_exists <- function(con, project_id) {
-  if (is.null(project_id) || !nzchar(project_id)) return(FALSE)
-  if (DBI::dbExistsTable(con, "Metadata")) {
-    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Metadata WHERE ProjectID = ? LIMIT 1", list(project_id))
-    if (nrow(res) > 0) return(TRUE)
-  }
-  if (DBI::dbExistsTable(con, "Env")) {
-    res <- DBI::dbGetQuery(con, "SELECT 1 FROM Env WHERE ProjectID = ? LIMIT 1", list(project_id))
-    if (nrow(res) > 0) return(TRUE)
-  }
-  FALSE
-}
-
 delete_project_rows <- function(con, table, project_id) {
   fields <- tryCatch(import_get_table_fields(con, table), error = function(e) character(0))
   if (length(fields) == 0) return(list(status = "No fields", deleted = 0L))
@@ -275,36 +262,16 @@ mod_import_server <- function(id, state, con) {
       updateSelectInput(session, "target_table", choices = c("(none)" = "", tables))
     })
 
-    is_windows_access <- function() {
-      .Platform$OS.type == "windows"
-    }
-
     is_legacy_access_project <- function(project_name) {
       if (is.null(project_name) || !nzchar(project_name)) return(FALSE)
       grepl("^vpro\\d+$", tolower(project_name))
     }
 
-    get_access_driver <- function() {
-      if (!requireNamespace("odbc", quietly = TRUE)) return(NULL)
-      drivers <- tryCatch(odbc::odbcListDrivers(), error = function(e) NULL)
-      if (is.null(drivers) || nrow(drivers) == 0) return(NULL)
-      name_col <- names(drivers)[1]
-      candidates <- drivers[[name_col]]
-      access <- candidates[grepl("Access", candidates, ignore.case = TRUE)]
-      if (length(access) == 0) return(NULL)
-      access[[1]]
-    }
-
     connect_access_db <- function(path) {
-      driver <- get_access_driver()
-      if (is.null(driver)) {
-        stop("Microsoft Access ODBC driver not found.")
+      if (!requireNamespace("mdbtoolr", quietly = TRUE)) {
+        stop("Package 'mdbtoolr' is required for Access import.")
       }
-      db_path <- normalizePath(path, winslash = "\\", mustWork = TRUE)
-      DBI::dbConnect(
-        odbc::odbc(),
-        .connection_string = paste0("Driver={", driver, "};DBQ=", db_path, ";")
-      )
+      DBI::dbConnect(mdbtoolr::mdb(), normalizePath(path, mustWork = TRUE))
     }
 
     list_access_projects <- function(table_names) {
@@ -534,18 +501,6 @@ mod_import_server <- function(id, state, con) {
               ifelse(nzchar(rv$zip_meta$project_id), paste0(" [", rv$zip_meta$project_id, "]"), ""),
               " <- ", rv$zip_meta$file
             ),
-            paste0(
-              rv$zip_meta$table,
-              ifelse(nzchar(rv$zip_meta$project_id), paste0(" [", rv$zip_meta$project_id, "]"), ""),
-              " <- ", rv$zip_meta$file, " (", rv$zip_meta$status, ")"
-            )
-          )
-          choices <- setNames(rv$zip_map$id, choice_labels)
-          selectable <- rv$zip_meta$table %in% tables
-          updateCheckboxGroupInput(
-            session,
-            "zip_tables",
-            choices = choices,
             selected = rv$zip_map$id[selectable]
           )
 
@@ -645,8 +600,6 @@ mod_import_server <- function(id, state, con) {
 
     access_ready <- reactive({
       if (is.null(input$access_file) || is.null(input$access_file$name)) return(FALSE)
-      if (!is_windows_access()) return(FALSE)
-      if (is.null(get_access_driver())) return(FALSE)
       if (is.null(input$access_project) || !nzchar(input$access_project)) return(FALSE)
       if (is_legacy_access_project(input$access_project) && !nzchar(trimws(input$access_project_id))) return(FALSE)
       TRUE
@@ -678,15 +631,9 @@ mod_import_server <- function(id, state, con) {
       rv$access_projects <- NULL
       rv$access_tables <- NULL
 
-      if (!is_windows_access()) {
-        rv$access_status <- "Access import is supported on Windows only."
-        updateSelectInput(session, "access_project", choices = c("(windows only)" = ""), selected = "")
-        return()
-      }
-
-      if (is.null(get_access_driver())) {
-        rv$access_status <- "Microsoft Access ODBC driver not found. Install the Access Database Engine."
-        updateSelectInput(session, "access_project", choices = c("(driver missing)" = ""), selected = "")
+      if (!requireNamespace("mdbtoolr", quietly = TRUE)) {
+        rv$access_status <- "Access import requires the mdbtoolr package."
+        updateSelectInput(session, "access_project", choices = c("(mdbtoolr missing)" = ""), selected = "")
         return()
       }
 
@@ -731,19 +678,7 @@ mod_import_server <- function(id, state, con) {
       req(input$access_file)
       req(input$access_project)
 
-      if (!is_windows_access() || is.null(get_access_driver())) {
-        rv$access_status <- "Access import requires Windows and the Access ODBC driver."
-        return()
-      }
-
-      con_access <- NULL
-      on.exit({
-        if (!is.null(con_access)) DBI::dbDisconnect(con_access)
-      }, add = TRUE)
-
       tryCatch({
-        con_access <- connect_access_db(input$access_file$datapath)
-        tables_access <- DBI::dbListTables(con_access)
         project_name <- input$access_project
         project_override <- trimws(input$access_project_id)
         if (!nzchar(project_override)) project_override <- project_name
@@ -757,114 +692,36 @@ mod_import_server <- function(id, state, con) {
           rv$access_status <- paste("Import blocked: project already exists:", project_override)
           return()
         }
+        imported <- project_import_access_project(
+          con = con,
+          access_path = input$access_file$datapath,
+          source_project_id = project_name,
+          target_project_id = project_override,
+          overwrite = isTRUE(replace_ready())
+        )
 
-        import_plan <- list()
-        for (suffix in names(access_suffix_map())) {
-          access_table <- paste0(project_name, "_", access_suffix_map()[[suffix]])
-          match_idx <- which(tolower(tables_access) == tolower(access_table))
-          if (length(match_idx) == 0) next
-          import_plan[[length(import_plan) + 1]] <- list(
-            access_table = tables_access[[match_idx[[1]]]],
-            target_table = import_suffix_map()[[suffix]]
-          )
-        }
-
-        if (length(import_plan) == 0) {
-          rv$access_status <- "No matching project tables found to import."
-          return()
-        }
-
-        use_compliance <- any(vapply(import_plan, function(x) is_compliance_table(x$target_table), logical(1)))
-        commit_ok <- TRUE
-        if (use_compliance) {
-          commit_ok <- FALSE
-          DBI::dbBegin(con)
-          on.exit({
-            if (!commit_ok) {
-              try(DBI::dbRollback(con), silent = TRUE)
-            }
-          }, add = TRUE)
-        }
-
-        results_status <- list()
-        imported_payloads <- list()
-
-        if (project_exists(con, project_override) && isTRUE(replace_ready())) {
-          for (entry in import_plan) {
-            delete_project_rows(con, entry$target_table, project_override)
-          }
-        }
-        for (entry in import_plan) {
-          data <- tryCatch(DBI::dbReadTable(con_access, entry$access_table), error = function(e) NULL)
-          if (is.null(data)) {
-            results_status[[length(results_status) + 1]] <- data.frame(
-              table = entry$target_table,
-              rows = 0,
-              status = "Read error",
-              project_id = project_override,
-              stringsAsFactors = FALSE
-            )
-            next
-          }
-
-          target_fields <- import_get_table_fields(con, entry$target_table)
-          allow_missing <- c("projectid")
-          aligned <- align_import_columns(data, target_fields, allow_missing = allow_missing)
-          missing_cols <- aligned$missing
-          extra_cols <- aligned$extra
-          if (length(missing_cols) > 0 || length(extra_cols) > 0) {
-            results_status[[length(results_status) + 1]] <- data.frame(
-              table = entry$target_table,
-              rows = nrow(data),
-              status = "Column mismatch",
-              project_id = project_override,
-              stringsAsFactors = FALSE
-            )
-            next
-          }
-
-          import_data <- apply_project_override(aligned$data, target_fields, project_override)
-          tryCatch({
-            import_append_table(con, entry$target_table, import_data)
-            imported_payloads[[entry$target_table]] <- import_data
-            results_status[[length(results_status) + 1]] <- data.frame(
-              table = entry$target_table,
-              rows = nrow(import_data),
+        imported_tables <- imported$tables %||% list()
+        rv$access_results <- if (length(imported_tables) > 0) {
+          do.call(rbind, lapply(names(imported_tables), function(table_name) {
+            data.frame(
+              table = table_name,
+              rows = as.integer(imported_tables[[table_name]] %||% 0L),
               status = "Imported",
-              project_id = project_override,
+              project_id = imported$project_id,
               stringsAsFactors = FALSE
             )
-          }, error = function(e) {
-            results_status[[length(results_status) + 1]] <- data.frame(
-              table = entry$target_table,
-              rows = nrow(import_data),
-              status = paste("Import error:", e$message),
-              project_id = project_override,
-              stringsAsFactors = FALSE
-            )
-          })
+          }))
+        } else {
+          data.frame()
         }
 
-        rv$access_results <- if (length(results_status) > 0) do.call(rbind, results_status) else data.frame()
-
-        if (use_compliance) {
-          rv$compliance <- run_compliance_for_projects(project_override)
-          if (!isTRUE(rv$compliance$passed)) {
-            rv$access_results$status <- "Rolled back (compliance failed)"
-            rv$access_status <- "Import blocked: compliance checks failed"
-            return()
-          }
-          DBI::dbCommit(con)
-          commit_ok <- TRUE
-        }
-
-        for (entry in import_plan) {
-          if (is_compliance_table(entry$target_table) && !is.null(imported_payloads[[entry$target_table]])) {
-            log_audit_rows(con, project_override, "Import", entry$target_table, imported_payloads[[entry$target_table]])
-          }
-        }
-
-        rv$access_status <- paste("Imported", sum(rv$access_results$status == "Imported"), "tables from Access project", project_name)
+            # Removed project_exists function
+        rv$access_status <- paste(
+          "Imported",
+          length(imported_tables),
+          "tables into canonical project database",
+          basename(imported$path)
+        )
       }, error = function(e) {
         rv$access_status <- paste("Access import error:", e$message)
       })

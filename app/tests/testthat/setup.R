@@ -18,7 +18,7 @@ library(duckdb)
 library(fs)
 
 # Source connection factory
-source(here::here("R", "db_connections.R"))
+source(here::here("app", "R", "logic", "db_connections.R"))
 
 # Global test fixtures
 test_con <- NULL  # Will hold test DuckDB connection

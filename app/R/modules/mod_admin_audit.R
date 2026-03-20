@@ -48,7 +48,7 @@ mod_admin_audit_server <- function(id, state, con) {
       }
       table_col_sql <- quote_ident(table_col)
       sql <- sprintf(
-        "SELECT DISTINCT %s AS table_name FROM user_db.main.USysAuditTrail ORDER BY %s",
+        "SELECT DISTINCT %s AS table_name FROM VUser.main.USysAuditTrail ORDER BY %s",
         table_col_sql, table_col_sql)
       tables  <- dbGetQuery(con, sql)
       choices <- c("All" = "", setNames(tables$table_name, tables$table_name))

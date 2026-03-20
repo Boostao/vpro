@@ -35,22 +35,15 @@ VPRO_DEV_DEFAULT_PLOTNUMBER <- "9624781"
 # For Shiny, usually we want a persistent connection or a pool.
 # Since duckdb allows concurrent reads, we can open one read-only connection for the app lifetime if needed,
 # or open/close per request. We'll use a simple approach: open in server.
-db_path <- file.path(getwd(), "data/vpro.duckdb")
+app_db_path <- file.path(getwd(), "data/vpro.duckdb")
 
 # Simple logging
 log_msg <- function(...) {
   cat(file=stderr(), paste0(..., "\n"))
 }
 
-source("R/logic_splash.R")
-
-if (exists("VPRO_GLOBAL_RUNTIME", inherits = FALSE)) {
-  vpro_close_runtime(VPRO_GLOBAL_RUNTIME)
-}
-
-VPRO_GLOBAL_RUNTIME <- vpro_init_runtime()
-VPRO_SPLASH_STATE <- run_splash_init(VPRO_GLOBAL_RUNTIME)
-db_path <- VPRO_GLOBAL_RUNTIME$paths$vpro64
+# Runtime bootstrapping is handled per session in server.R.
+app_db_path <- file.path(getwd(), "data", "VPro64.db")
 
 # Module Imports
 source("R/logic/logic_state.R") # Global State Logic

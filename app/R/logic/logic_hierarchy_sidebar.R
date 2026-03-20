@@ -221,10 +221,14 @@ hierarchy_sidebar_create_plot <- function(con, project_id, plot_number, site_uni
 hierarchy_sidebar_resolve_table <- function(con, project_id = NULL, prefer_base = TRUE) {
   project_id <- hierarchy_sidebar_normalize_key(project_id)
 
-  if (!isTRUE(prefer_base) && nzchar(project_id)) {
-    prefixed <- resolve_prefixed_table(con, project_id, "_Hierarchy")
-    if (!is.null(prefixed) && DBI::dbExistsTable(con, prefixed)) {
-      return(prefixed)
+  project_table_id <- NULL
+  if (nzchar(project_id)) {
+    project_table_id <- db_id("Hierarchy", project_id, prj = TRUE)
+  }
+
+  if (!isTRUE(prefer_base) && !is.null(project_table_id)) {
+    if (DBI::dbExistsTable(con, project_table_id)) {
+      return(project_table_id)
     }
   }
 
@@ -232,10 +236,9 @@ hierarchy_sidebar_resolve_table <- function(con, project_id = NULL, prefer_base 
     return("Hierarchy")
   }
 
-  if (nzchar(project_id)) {
-    prefixed <- resolve_prefixed_table(con, project_id, "_Hierarchy")
-    if (!is.null(prefixed) && DBI::dbExistsTable(con, prefixed)) {
-      return(prefixed)
+  if (!is.null(project_table_id)) {
+    if (DBI::dbExistsTable(con, project_table_id)) {
+      return(project_table_id)
     }
   }
 

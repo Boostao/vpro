@@ -74,7 +74,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   if (file.exists(list_file)) {
     dbExecute(
       con,
-      sprintf("CREATE TABLE lists.MasterSiteUnitList AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
+      sprintf("CREATE TABLE VLists.MasterSiteUnitList AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
     )
   }
 } else {
@@ -90,10 +90,10 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
 ```{r load-data, include=FALSE}
 hier <- dbGetQuery(con, "SELECT * FROM Sample_Hierarchy")
 long_names <- data.frame()
-if (DBI::dbExistsTable(con, "lists.MasterSiteUnitList")) {
+if (DBI::dbExistsTable(con, "VLists.MasterSiteUnitList")) {
   long_names <- dbGetQuery(
     con,
-    "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList"
+    "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList"
   )
 }
 normalize_hier_cols <- function(df) {

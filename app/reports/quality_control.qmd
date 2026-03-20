@@ -105,7 +105,7 @@ if (!is.null(parquet_dir) && nzchar(trimws(parquet_dir))) {
   if (file.exists(list_file)) {
     dbExecute(
       con,
-      sprintf("CREATE TABLE lists.USysTableOfLists AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
+      sprintf("CREATE TABLE VLists.USysTableOfLists AS SELECT * FROM read_parquet('%s')", gsub("'", "''", list_file))
     )
   }
 } else {
@@ -120,7 +120,7 @@ enforce_filter <- isTRUE(params$enforce_filter)
 dq_list <- dbGetQuery(
   con,
   "SELECT Item, ItemOrder
-   FROM lists.USysTableOfLists
+  FROM VLists.USysTableOfLists
    WHERE lower(ListName) = 'dataquality'"
 )
 dq_map <- setNames(dq_list$ItemOrder, dq_list$Item)
@@ -241,8 +241,8 @@ range_issues <- env_df[
 
 species_issues <- data.frame()
 if (DBI::dbExistsTable(con, "Sample_Veg")) {
-  spp_table <- if (DBI::dbExistsTable(con, "lists.SppList")) {
-    "lists.SppList"
+  spp_table <- if (DBI::dbExistsTable(con, "VLists.SppList")) {
+    "VLists.SppList"
   } else if (DBI::dbExistsTable(con, "SppList")) {
     "SppList"
   } else if (DBI::dbExistsTable(con, "vpro.SppList")) {

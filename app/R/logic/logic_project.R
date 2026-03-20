@@ -1,6 +1,6 @@
 # Logic: Project Management
-# Project-as-file model: each project lives in its own .duckdb file.
-# The main vpro.duckdb holds all open project rows with projectid as a filter column.
+# Canonical project storage is one SQLite database per project under data/projects.
+# Open projects are represented by attached SQLite databases whose alias matches the project id.
 
 PROJECT_TABLES <- c(
   "Env", "Veg", "Metadata", "Admin", "Humus", "Mineral",
@@ -22,6 +22,330 @@ PROJECT_TABLE_SCOPE <- list(
 )
 
 PROJECT_BASELINE_TABLE <- "project_baselines"
+PROJECT_TEMPLATE_ID <- "Sample"
+
+project_storage_dir <- function() {
+  cfg <- tryCatch(config(), error = function(e) list(System = list(Location = getwd())))
+  base_dir <- cfg$System$Location %||% getwd()
+  dir_path <- file.path(base_dir, "data", "projects")
+  dir.create(dir_path, recursive = TRUE, showWarnings = FALSE)
+  normalizePath(dir_path, mustWork = FALSE)
+}
+
+project_db_path <- function(project_id) {
+  safe_id <- trimws(as.character(project_id %||% ""))
+  if (!nzchar(safe_id)) {
+    stop("project_id is required.")
+  }
+  file.path(project_storage_dir(), paste0(safe_id, ".db"))
+}
+
+list_project_storage_ids <- function() {
+  storage_dir <- project_storage_dir()
+  if (!dir.exists(storage_dir)) {
+    return(character(0))
+  }
+
+  files <- list.files(storage_dir, pattern = "\\.db$", full.names = FALSE)
+  ids <- tools::file_path_sans_ext(files)
+  sort(unique(ids[nzchar(ids)]))
+}
+
+project_table_id <- function(project_id, table_name) {
+  db_id(table_name, project_id, prj = TRUE)
+}
+
+project_attached <- function(con, project_id) {
+  project_id %in% list_attached_dbs(con)
+}
+
+project_file_is_sqlite <- function(path) {
+  tolower(tools::file_ext(path %||% "")) %in% c("db", "sqlite", "sqlite3")
+}
+
+project_file_connect <- function(path) {
+  if (!file.exists(path)) {
+    stop("Project file not found: ", path)
+  }
+
+  if (project_file_is_sqlite(path)) {
+    con <- db_con()
+    alias <- "projectfile"
+    DBI::dbExecute(
+      con,
+      paste0("ATTACH ", DBI::dbQuoteString(con, path), " AS ", DBI::dbQuoteIdentifier(con, alias), " (TYPE sqlite)")
+    )
+    list(con = con, alias = alias, is_sqlite = TRUE)
+  } else {
+    con <- DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE)
+    list(con = con, alias = NULL, is_sqlite = FALSE)
+  }
+}
+
+project_file_disconnect <- function(handle) {
+  if (is.null(handle) || is.null(handle$con)) {
+    return(invisible(NULL))
+  }
+  try(DBI::dbDisconnect(handle$con, shutdown = TRUE), silent = TRUE)
+  invisible(NULL)
+}
+
+project_file_table_names <- function(path) {
+  handle <- tryCatch(project_file_connect(path), error = function(e) NULL)
+  if (is.null(handle)) {
+    return(character(0))
+  }
+  on.exit(project_file_disconnect(handle), add = TRUE)
+
+  if (isTRUE(handle$is_sqlite)) {
+    DBI::dbGetQuery(
+      handle$con,
+      "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND internal = FALSE ORDER BY table_name",
+      list(handle$alias)
+    )$table_name
+  } else {
+    tryCatch(DBI::dbListTables(handle$con), error = function(e) character(0))
+  }
+}
+
+project_file_resolve_table <- function(path, table_name, project_id = NULL) {
+  tables <- project_file_table_names(path)
+  if (length(tables) == 0) {
+    return(NA_character_)
+  }
+
+  candidates <- character(0)
+  if (!is.null(project_id) && nzchar(as.character(project_id %||% ""))) {
+    candidates <- c(candidates, paste0(project_id, "_", table_name))
+  }
+  candidates <- c(candidates, table_name)
+
+  for (candidate in candidates) {
+    idx <- match(tolower(candidate), tolower(tables), nomatch = 0L)
+    if (idx > 0L) {
+      return(tables[[idx]])
+    }
+  }
+
+  NA_character_
+}
+
+project_file_prefixes <- function(path) {
+  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
+    return(character(0))
+  }
+  if (!file.exists(path)) {
+    return(character(0))
+  }
+
+  tables <- project_file_table_names(path)
+
+  prefixes <- character(0)
+  for (suffix in c("_Metadata", "_Env")) {
+    matches <- tables[endsWith(tables, suffix)]
+    if (length(matches) > 0) {
+      prefixes <- c(prefixes, sub(paste0(suffix, "$"), "", matches))
+    }
+  }
+
+  sort(unique(prefixes[nzchar(prefixes)]))
+}
+
+project_import_align_columns <- function(data, target_fields, project_id = NULL) {
+  if (is.null(target_fields) || length(target_fields) == 0) {
+    return(data)
+  }
+
+  data_names <- names(data)
+  target_lower <- tolower(target_fields)
+  data_lower <- tolower(data_names)
+  data_out <- data.frame(matrix(nrow = nrow(data), ncol = 0), stringsAsFactors = FALSE)
+
+  for (idx in seq_along(target_fields)) {
+    field_name <- target_fields[[idx]]
+    match_idx <- match(target_lower[[idx]], data_lower, nomatch = 0L)
+    if (match_idx > 0L) {
+      data_out[[field_name]] <- data[[match_idx]]
+    } else {
+      data_out[[field_name]] <- rep(NA, nrow(data))
+    }
+  }
+
+  if (!is.null(project_id) && nzchar(as.character(project_id %||% ""))) {
+    project_cols <- target_fields[target_lower %in% c("projectid", "project_id")]
+    for (field_name in project_cols) {
+      data_out[[field_name]] <- rep(as.character(project_id), nrow(data_out))
+    }
+  }
+
+  data_out
+}
+
+project_access_source_tables <- function(access_path, source_project_id) {
+  if (!requireNamespace("mdbtoolr", quietly = TRUE)) {
+    stop("Package 'mdbtoolr' is required for Access project import.")
+  }
+
+  source_project_id <- trimws(as.character(source_project_id %||% ""))
+  if (!nzchar(source_project_id)) {
+    stop("source_project_id is required.")
+  }
+
+  access_con <- DBI::dbConnect(mdbtoolr::mdb(), access_path)
+  on.exit(try(DBI::dbDisconnect(access_con), silent = TRUE), add = TRUE)
+
+  table_names <- tryCatch(DBI::dbListTables(access_con), error = function(e) character(0))
+  source_tables <- list()
+  for (table_name in PROJECT_TABLES) {
+    candidate <- paste0(source_project_id, "_", table_name)
+    match_idx <- match(tolower(candidate), tolower(table_names), nomatch = 0L)
+    if (match_idx > 0L) {
+      source_tables[[table_name]] <- table_names[[match_idx]]
+    }
+  }
+
+  source_tables
+}
+
+project_import_access_project <- function(con, access_path, source_project_id, target_project_id = source_project_id, overwrite = FALSE) {
+  if (!requireNamespace("mdbtoolr", quietly = TRUE)) {
+    stop("Package 'mdbtoolr' is required for Access project import.")
+  }
+  if (!is.character(access_path) || length(access_path) != 1L || is.na(access_path) || !nzchar(access_path)) {
+    stop("access_path is required.")
+  }
+  if (!file.exists(access_path)) {
+    stop("Access project file not found: ", access_path)
+  }
+
+  source_project_id <- trimws(as.character(source_project_id %||% ""))
+  target_project_id <- trimws(as.character(target_project_id %||% ""))
+  if (!is_valid_project_prefix(source_project_id) || !is_valid_project_prefix(target_project_id)) {
+    stop("Access import requires valid project ids using letters, numbers, and underscores.")
+  }
+
+  source_tables <- project_access_source_tables(access_path, source_project_id)
+  if (length(source_tables) == 0) {
+    stop("No matching project tables found in Access file for prefix: ", source_project_id)
+  }
+
+  target_path <- project_db_path(target_project_id)
+  if (file.exists(target_path)) {
+    if (!isTRUE(overwrite)) {
+      stop("Project database already exists: ", target_path)
+    }
+    if (project_attached(con, target_project_id)) {
+      detach_db(con, target_project_id)
+    }
+    unlink(target_path)
+  }
+
+  project_clone_template(con, target_project_id)
+  if (!project_attached(con, target_project_id)) {
+    project_attach_file(con, target_path, target_project_id)
+  }
+
+  access_con <- DBI::dbConnect(mdbtoolr::mdb(), access_path)
+  on.exit(try(DBI::dbDisconnect(access_con), silent = TRUE), add = TRUE)
+
+  imported <- list()
+  for (table_name in names(source_tables)) {
+    source_table <- source_tables[[table_name]]
+    target_id <- project_table_id(target_project_id, table_name)
+    if (!DBI::dbExistsTable(con, target_id)) {
+      next
+    }
+
+    source_data <- tryCatch(DBI::dbReadTable(access_con, source_table, check.names = FALSE), error = function(e) NULL)
+    if (is.null(source_data)) {
+      stop("Failed to read Access table: ", source_table)
+    }
+
+    target_fields <- DBI::dbListFields(con, target_id)
+    import_data <- project_import_align_columns(source_data, target_fields, project_id = target_project_id)
+    if (nrow(import_data) > 0) {
+      DBI::dbAppendTable(con, target_id, import_data)
+    }
+    imported[[table_name]] <- nrow(import_data)
+  }
+
+  list(
+    project_id = target_project_id,
+    path = target_path,
+    tables = imported
+  )
+}
+
+project_attach_file <- function(con, path, project_id) {
+  if (project_attached(con, project_id)) {
+    return(invisible(project_id))
+  }
+
+  DBI::dbExecute(
+    con,
+    paste0("ATTACH ", DBI::dbQuoteString(con, path), " AS ", DBI::dbQuoteIdentifier(con, project_id), " (TYPE sqlite)")
+  )
+
+  if (!DBI::dbExistsTable(con, project_table_id(project_id, "Metadata"))) {
+    detach_db(con, project_id)
+    stop("Attached project database is missing the expected metadata table for project ", project_id)
+  }
+
+  invisible(project_id)
+}
+
+project_clone_template <- function(con, project_id, template_id = PROJECT_TEMPLATE_ID) {
+  template_path <- project_db_path(template_id)
+  target_path <- project_db_path(project_id)
+
+  if (!file.exists(template_path)) {
+    stop("Project template database not found: ", template_path)
+  }
+  if (file.exists(target_path)) {
+    stop("Project database already exists: ", target_path)
+  }
+
+  template_alias <- "project_template"
+  if (template_alias %in% list_attached_dbs(con)) {
+    detach_db(con, template_alias)
+  }
+
+  DBI::dbExecute(
+    con,
+    paste0("ATTACH ", DBI::dbQuoteString(con, template_path), " AS ", DBI::dbQuoteIdentifier(con, template_alias), " (TYPE sqlite)")
+  )
+  on.exit(try(detach_db(con, template_alias), silent = TRUE), add = TRUE)
+
+  if (project_attached(con, project_id)) {
+    detach_db(con, project_id)
+  }
+  DBI::dbExecute(
+    con,
+    paste0("ATTACH ", DBI::dbQuoteString(con, target_path), " AS ", DBI::dbQuoteIdentifier(con, project_id), " (TYPE sqlite)")
+  )
+
+  template_tables <- DBI::dbGetQuery(
+    con,
+    "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND internal = FALSE ORDER BY table_name",
+    list(template_alias)
+  )$table_name
+
+  template_tables <- template_tables[startsWith(template_tables, paste0(template_id, "_"))]
+  for (template_tbl in template_tables) {
+    suffix <- sub(paste0("^", template_id, "_"), "", template_tbl)
+    target_tbl <- paste0(project_id, "_", suffix)
+    DBI::dbExecute(
+      con,
+      paste0(
+        "CREATE TABLE ", DBI::dbQuoteIdentifier(con, DBI::Id(project_id, target_tbl)),
+        " AS SELECT * FROM ", DBI::dbQuoteIdentifier(con, DBI::Id(template_alias, template_tbl)),
+        " WHERE 1 = 0"
+      )
+    )
+  }
+
+  invisible(target_path)
+}
 
 project_baseline_dir <- function() {
   dir_path <- file.path(getwd(), "data", "project_baselines")
@@ -31,7 +355,7 @@ project_baseline_dir <- function() {
 
 project_baseline_path <- function(project_id) {
   safe_id <- gsub("[^A-Za-z0-9_-]", "_", as.character(project_id %||% ""))
-  file.path(project_baseline_dir(), paste0(safe_id, "_baseline.duckdb"))
+  file.path(project_baseline_dir(), paste0(safe_id, "_baseline.db"))
 }
 
 project_ensure_baseline_table <- function(con) {
@@ -91,8 +415,7 @@ project_capture_baseline <- function(con,
   save_project(
     con,
     project_id = project_id,
-    path = baseline_path,
-    alias = paste0("tmp_save_baseline_", gsub("[^A-Za-z0-9]", "_", project_id))
+    path = baseline_path
   )
 
   file_info <- file.info(baseline_path)
@@ -131,27 +454,30 @@ project_read_baseline_rows <- function(con, project_id, table_name, pk_name, pk_
   baseline_path <- baseline$baseline_path[[1]]
   if (is.null(baseline_path) || !file.exists(baseline_path)) return(data.frame())
 
-  bcon <- tryCatch(
-    DBI::dbConnect(duckdb::duckdb(), baseline_path, read_only = TRUE),
-    error = function(e) NULL
-  )
-  if (is.null(bcon)) return(data.frame())
-  on.exit(try(DBI::dbDisconnect(bcon, shutdown = TRUE), silent = TRUE), add = TRUE)
+  resolved_table <- project_file_resolve_table(baseline_path, table_name, project_id = project_id)
+  if (is.na(resolved_table)) return(data.frame())
 
-  if (!DBI::dbExistsTable(bcon, table_name)) return(data.frame())
-  fields <- tryCatch(DBI::dbListFields(bcon, table_name), error = function(e) character(0))
+  handle <- tryCatch(project_file_connect(baseline_path), error = function(e) NULL)
+  if (is.null(handle)) return(data.frame())
+  on.exit(project_file_disconnect(handle), add = TRUE)
+
+  bcon <- handle$con
+  table_id <- if (isTRUE(handle$is_sqlite)) DBI::Id(handle$alias, resolved_table) else resolved_table
+
+  if (!DBI::dbExistsTable(bcon, table_id)) return(data.frame())
+  fields <- tryCatch(DBI::dbListFields(bcon, table_id), error = function(e) character(0))
   pk_field <- .project_find_field(fields, pk_name)
   if (is.na(pk_field)) return(data.frame())
 
   if (is.null(pk_values) || length(pk_values) == 0) {
-    return(DBI::dbGetQuery(bcon, paste0("SELECT * FROM ", DBI::dbQuoteIdentifier(bcon, table_name))))
+    return(DBI::dbReadTable(bcon, table_id))
   }
 
   placeholders <- paste(rep("?", length(pk_values)), collapse = ", ")
   DBI::dbGetQuery(
     bcon,
     paste0(
-      "SELECT * FROM ", DBI::dbQuoteIdentifier(bcon, table_name),
+      "SELECT * FROM ", DBI::dbQuoteIdentifier(bcon, table_id),
       " WHERE CAST(", DBI::dbQuoteIdentifier(bcon, pk_field), " AS TEXT) IN (", placeholders, ")"
     ),
     as.list(as.character(pk_values))
@@ -165,27 +491,15 @@ project_baseline_has_tables <- function(con, project_id, required_tables = c("En
   baseline_path <- baseline$baseline_path[[1]]
   if (is.null(baseline_path) || !file.exists(baseline_path)) return(FALSE)
 
-  bcon <- tryCatch(
-    DBI::dbConnect(duckdb::duckdb(), baseline_path, read_only = TRUE),
-    error = function(e) NULL
-  )
-  if (is.null(bcon)) return(FALSE)
-  on.exit(try(DBI::dbDisconnect(bcon, shutdown = TRUE), silent = TRUE), add = TRUE)
-
-  all(vapply(required_tables, function(tbl) DBI::dbExistsTable(bcon, tbl), logical(1)))
+  all(vapply(required_tables, function(tbl) !is.na(project_file_resolve_table(baseline_path, tbl, project_id = project_id)), logical(1)))
 }
 
 project_baseline_file_has_tables <- function(path, required_tables = c("Env", "SU", "Veg")) {
   if (is.null(path) || !nzchar(as.character(path)) || !file.exists(path)) return(FALSE)
 
-  bcon <- tryCatch(
-    DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE),
-    error = function(e) NULL
-  )
-  if (is.null(bcon)) return(FALSE)
-  on.exit(try(DBI::dbDisconnect(bcon, shutdown = TRUE), silent = TRUE), add = TRUE)
-
-  all(vapply(required_tables, function(tbl) DBI::dbExistsTable(bcon, tbl), logical(1)))
+  prefixes <- project_file_prefixes(path)
+  project_id <- if (length(prefixes) == 1) prefixes[[1]] else NULL
+  all(vapply(required_tables, function(tbl) !is.na(project_file_resolve_table(path, tbl, project_id = project_id)), logical(1)))
 }
 
 project_replace_baseline_from_file <- function(con,
@@ -305,30 +619,24 @@ project_replace_baseline_from_file <- function(con,
   }
 }
 
-#' List all open project IDs
-#'
-#' Returns distinct projectid values present in the Metadata table.
-#'
-#' @param con DBI connection
-#' @return Character vector of project IDs
 list_open_projects <- function(con) {
-  if (!DBI::dbExistsTable(con, "Metadata")) return(character(0))
-  tryCatch({
-    res <- DBI::dbGetQuery(con, "SELECT DISTINCT projectid FROM Metadata ORDER BY projectid")
-    as.character(res$projectid)
-  }, error = function(e) character(0))
+  attached <- setdiff(
+    list_attached_dbs(con),
+    c("memory", "system", "temp", "VLists", "VMetaData", "VUser", "VMessageBoard", "VPics")
+  )
+
+  projects <- attached[vapply(
+    attached,
+    function(project_id) {
+      tryCatch(DBI::dbExistsTable(con, project_table_id(project_id, "Metadata")), error = function(e) FALSE)
+    },
+    logical(1)
+  )]
+
+  sort(unique(projects))
 }
 
-#' Open a project from a .duckdb file
-#'
-#' Attaches the project file, detects the projectid from Env or Metadata,
-#' INSERTs all rows into the main tables, then detaches.
-#'
-#' @param con DBI connection (main vpro.duckdb)
-#' @param path Character. Path to project .duckdb file.
-#' @param alias Character. Temporary attach alias.
-#' @return Character. The projectid loaded.
-open_project <- function(con, path, alias = "tmp_open_project") {
+open_project <- function(con, path, project_id = NULL) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
     stop("Project file path is required.")
   }
@@ -336,128 +644,49 @@ open_project <- function(con, path, alias = "tmp_open_project") {
     stop("Project file not found: ", path)
   }
 
-  attached <- list_attached_dbs(con)
-  if (alias %in% attached) detach_db(con, alias)
-
-  DBI::dbExecute(con, paste0("ATTACH ", DBI::dbQuoteString(con, path), " AS ", DBI::dbQuoteIdentifier(con, alias)))
-  on.exit(try(detach_db(con, alias), silent = TRUE), add = TRUE)
-
-  # Detect projectid from Metadata or Env in the source file
-  project_id <- tryCatch({
-    src_tables <- DBI::dbGetQuery(
-      con,
-      "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND schema_name = 'main' AND internal = FALSE",
-      list(alias)
-    )$table_name
-
-    pid <- NULL
-    for (tbl in c("Metadata", "Env")) {
-      if (tbl %in% src_tables) {
-        fields <- tolower(DBI::dbListFields(con, DBI::Id(database = alias, schema = "main", table = tbl)))
-        if ("projectid" %in% fields) {
-          res <- DBI::dbGetQuery(
-            con,
-            paste0("SELECT DISTINCT projectid FROM ", DBI::dbQuoteIdentifier(con, alias), ".main.", DBI::dbQuoteIdentifier(con, tbl), " LIMIT 1")
-          )
-          if (nrow(res) > 0 && !is.na(res$projectid[[1]])) {
-            pid <- as.character(res$projectid[[1]])
-            break
-          }
-        }
-      }
+  project_ids <- list_projects_in_file(path)
+  if (length(project_ids) == 0) {
+    stop("Could not detect project tables from project file: ", path)
+  }
+  if (is.null(project_id)) {
+    if (length(project_ids) > 1) {
+      stop("Project file contains multiple project prefixes. Specify which project to open.")
     }
-    pid
-  }, error = function(e) NULL)
-
-  if (is.null(project_id) || !nzchar(project_id)) {
-    stop("Could not detect projectid from project file: ", path)
+    project_id <- project_ids[[1]]
+  }
+  if (!(project_id %in% project_ids)) {
+    stop("Project ", project_id, " was not found in file: ", path)
   }
 
-  # INSERT all available PROJECT_TABLES rows into main
-  src_tables <- DBI::dbGetQuery(
-    con,
-    "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND schema_name = 'main' AND internal = FALSE",
-    list(alias)
-  )$table_name
-
-  for (tbl in PROJECT_TABLES) {
-    if (!(tbl %in% src_tables)) next
-    if (!DBI::dbExistsTable(con, tbl)) next
-
-    main_cols <- tolower(DBI::dbListFields(con, tbl))
-    src_cols  <- tolower(DBI::dbListFields(con, DBI::Id(database = alias, schema = "main", table = tbl)))
-    common    <- intersect(main_cols, src_cols)
-    if (length(common) == 0) next
-
-    col_list <- paste(
-      sapply(common, function(c) DBI::dbQuoteIdentifier(con, c)),
-      collapse = ", "
-    )
-    DBI::dbExecute(con, paste0(
-      "INSERT INTO ", DBI::dbQuoteIdentifier(con, tbl),
-      " (", col_list, ") ",
-      "SELECT ", col_list,
-      " FROM ", DBI::dbQuoteIdentifier(con, alias), ".main.", DBI::dbQuoteIdentifier(con, tbl)
-    ))
-  }
+  project_attach_file(con, path, project_id)
 
   project_id
 }
 
-#' Save a project to a .duckdb file
-#'
-#' Creates (or overwrites) a project file and writes all rows for project_id.
-#'
-#' @param con DBI connection (main vpro.duckdb)
-#' @param project_id Character. Project to save.
-#' @param path Character. Destination .duckdb file path.
-#' @param alias Character. Temporary attach alias.
-save_project <- function(con, project_id, path, alias = "tmp_save_project") {
+save_project <- function(con, project_id, path) {
   if (is.null(project_id) || !nzchar(project_id)) stop("project_id is required.")
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
     stop("Project file path is required.")
   }
 
-  attached <- list_attached_dbs(con)
-  if (alias %in% attached) detach_db(con, alias)
+  source_path <- project_db_path(project_id)
+  if (!file.exists(source_path)) {
+    stop("Project database not found: ", source_path)
+  }
 
-  DBI::dbExecute(con, paste0("ATTACH ", DBI::dbQuoteString(con, path), " AS ", DBI::dbQuoteIdentifier(con, alias)))
-  on.exit(try(detach_db(con, alias), silent = TRUE), add = TRUE)
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  if (normalizePath(source_path, mustWork = TRUE) == normalizePath(path, mustWork = FALSE)) {
+    return(invisible(path))
+  }
 
-  for (tbl in PROJECT_TABLES) {
-    if (!DBI::dbExistsTable(con, tbl)) next
-
-    cols      <- DBI::dbListFields(con, tbl)
-    # Create table in project file if needed (schema copy)
-    DBI::dbExecute(con, paste0(
-      "CREATE TABLE IF NOT EXISTS ", DBI::dbQuoteIdentifier(con, alias), ".main.", DBI::dbQuoteIdentifier(con, tbl),
-      " AS SELECT * FROM ", DBI::dbQuoteIdentifier(con, tbl), " WHERE 1=0"
-    ))
-
-    col_list <- paste(
-      sapply(cols, function(c) DBI::dbQuoteIdentifier(con, c)),
-      collapse = ", "
-    )
-    where <- .project_where_clause(con, tbl, project_id)
-    DBI::dbExecute(con, paste0(
-      "INSERT INTO ", DBI::dbQuoteIdentifier(con, alias), ".main.", DBI::dbQuoteIdentifier(con, tbl),
-      " (", col_list, ") ",
-      "SELECT ", col_list,
-      " FROM ", DBI::dbQuoteIdentifier(con, tbl),
-      where$sql
-    ), where$params)
+  ok <- file.copy(source_path, path, overwrite = TRUE, copy.mode = TRUE, copy.date = TRUE)
+  if (!isTRUE(ok)) {
+    stop("Failed to save project database to ", path)
   }
 
   invisible(path)
 }
 
-#' Close a project (optionally saving first)
-#'
-#' Removes all rows for project_id from all PROJECT_TABLES in main.
-#'
-#' @param con DBI connection
-#' @param project_id Character
-#' @param path Character or NULL. If provided, save_project is called first.
 close_project <- function(con, project_id, path = NULL) {
   if (is.null(project_id) || !nzchar(project_id)) stop("project_id is required.")
 
@@ -465,28 +694,13 @@ close_project <- function(con, project_id, path = NULL) {
     save_project(con, project_id, path)
   }
 
-  for (tbl in PROJECT_TABLES) {
-    if (!DBI::dbExistsTable(con, tbl)) next
-    where <- .project_where_clause(con, tbl, project_id)
-    if (!nzchar(where$sql)) next
-    DBI::dbExecute(
-      con,
-      paste0("DELETE FROM ", DBI::dbQuoteIdentifier(con, tbl), where$sql),
-      where$params
-    )
+  if (project_attached(con, project_id)) {
+    detach_db(con, project_id)
   }
 
   invisible(project_id)
 }
 
-#' Create a new project
-#'
-#' Inserts a row into Metadata for the new project.
-#'
-#' @param con DBI connection
-#' @param project_id Character. Must be unique.
-#' @param project_title Character. Human-readable name.
-#' @return Invisible project_id
 new_project <- function(con, project_id, project_title) {
   if (is.null(project_id) || !nzchar(trimws(project_id))) stop("project_id is required.")
   if (is.null(project_title) || !nzchar(trimws(project_title))) stop("project_title is required.")
@@ -498,61 +712,47 @@ new_project <- function(con, project_id, project_title) {
     stop("Project '", project_id, "' already exists.")
   }
 
-  if (!DBI::dbExistsTable(con, "Metadata")) {
-    stop("Metadata table not found. Cannot create project.")
+  project_clone_template(con, project_id)
+  if (!project_attached(con, project_id)) {
+    project_attach_file(con, project_db_path(project_id), project_id)
   }
 
-  meta_cols <- tolower(DBI::dbListFields(con, "Metadata"))
+  meta_id <- project_table_id(project_id, "Metadata")
+  meta_cols <- tolower(DBI::dbListFields(con, meta_id))
   title_col <- if ("projecttitle" %in% meta_cols) "projecttitle" else if ("projectname" %in% meta_cols) "projectname" else NULL
 
-  if (!is.null(title_col)) {
-    DBI::dbExecute(con,
-      paste0("INSERT INTO Metadata (projectid, ", DBI::dbQuoteIdentifier(con, title_col), ") VALUES (?, ?)"),
-      list(project_id, project_title)
+  field_names <- c("projectid", if (!is.null(title_col)) title_col)
+  field_sql <- paste(DBI::dbQuoteIdentifier(con, field_names), collapse = ", ")
+  values_sql <- paste(rep("?", length(field_names)), collapse = ", ")
+  params <- c(list(project_id), if (!is.null(title_col)) list(project_title))
+
+  DBI::dbExecute(
+    con,
+    paste0(
+      "INSERT INTO ", DBI::dbQuoteIdentifier(con, meta_id),
+      " (", field_sql, ") VALUES (", values_sql, ")"
+    ),
+    params
+  )
+
+  env_id <- project_table_id(project_id, "Env")
+  if (DBI::dbExistsTable(con, env_id) && "projectid" %in% tolower(DBI::dbListFields(con, env_id))) {
+    DBI::dbExecute(
+      con,
+      paste0(
+        "UPDATE ", DBI::dbQuoteIdentifier(con, env_id),
+        " SET ", DBI::dbQuoteIdentifier(con, "ProjectID"), " = ?",
+        " WHERE ", DBI::dbQuoteIdentifier(con, "ProjectID"), " IS NULL"
+      ),
+      list(project_id)
     )
-  } else {
-    DBI::dbExecute(con, "INSERT INTO Metadata (projectid) VALUES (?)", list(project_id))
   }
 
   invisible(project_id)
 }
 
-#' List project IDs available in an external .duckdb file
-#'
-#' Opens a read-only connection to the file and returns distinct projectid
-#' values.  Use this to detect multiple projects before calling open_project().
-#' Do NOT pass the main vpro.duckdb path — use list_open_projects(con) for that.
-#'
-#' @param path Character. Path to an external project .duckdb file.
-#' @return Character vector of project IDs, or character(0) if none found.
 list_projects_in_file <- function(path) {
-  if (!is.character(path) || !nzchar(path %||% "")) return(character(0))
-  if (!file.exists(path)) return(character(0))
-
-  con <- tryCatch(
-    DBI::dbConnect(duckdb::duckdb(), path, read_only = TRUE),
-    error = function(e) NULL
-  )
-  if (is.null(con)) return(character(0))
-  on.exit(try(DBI::dbDisconnect(con, shutdown = TRUE), silent = TRUE), add = TRUE)
-
-  for (tbl in c("Metadata", "Env")) {
-    if (!DBI::dbExistsTable(con, tbl)) next
-    fields <- tryCatch(tolower(DBI::dbListFields(con, tbl)), error = function(e) character(0))
-    if (!("projectid" %in% fields)) next
-    res <- tryCatch(
-      DBI::dbGetQuery(
-        con,
-        paste0("SELECT DISTINCT projectid FROM ", DBI::dbQuoteIdentifier(con, tbl),
-               " WHERE projectid IS NOT NULL ORDER BY projectid")
-      ),
-      error = function(e) data.frame(projectid = character(0))
-    )
-    pids <- as.character(res$projectid)
-    pids <- pids[!is.na(pids) & nzchar(pids)]
-    if (length(pids) > 0) return(pids)
-  }
-  character(0)
+  project_file_prefixes(path)
 }
 
 #' Check if a project exists in Metadata
@@ -561,9 +761,9 @@ list_projects_in_file <- function(path) {
 #' @param project_id Character
 #' @return Logical
 project_exists <- function(con, project_id) {
-  if (!DBI::dbExistsTable(con, "Metadata")) return(FALSE)
-  tryCatch({
-    res <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM Metadata WHERE projectid = ?", list(project_id))
-    res$n[[1]] > 0
-  }, error = function(e) FALSE)
+  if (is.null(project_id) || !nzchar(project_id %||% "")) {
+    return(FALSE)
+  }
+
+  project_attached(con, project_id) || file.exists(project_db_path(project_id))
 }

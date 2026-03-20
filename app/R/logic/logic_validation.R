@@ -82,7 +82,7 @@ validate_veg_row <- function(row, con, reference_source = "postgres") {
   
   # Validate species_code against reference data (required)
   if (!is.null(row$species_code) && !is.na(row$species_code)) {
-    spp_table <- if (reference_source == "postgres") "lists.spplist" else "SppList"
+    spp_table <- if (reference_source == "postgres") "VLists.spplist" else "SppList"
     spp_col <- "spp_code"
     
     tryCatch({
@@ -103,7 +103,7 @@ validate_veg_row <- function(row, con, reference_source = "postgres") {
   
   # Validate layer_code if provided
   if (!is.null(row$layer_code) && !is.na(row$layer_code) && nchar(trimws(row$layer_code)) > 0) {
-    layer_table <- if (reference_source == "postgres") "lists.layercode" else "LayerCode"
+    layer_table <- if (reference_source == "postgres") "VLists.layercode" else "LayerCode"
     layer_col <- "layer_code"
     
     tryCatch({
@@ -340,7 +340,7 @@ validate_su_row <- function(row, con, reference_source = "postgres") {
   
   # Validate bec_zone if provided
   if (!is.null(row$bec_zone) && !is.na(row$bec_zone) && nchar(trimws(row$bec_zone)) > 0) {
-    zone_table <- if (reference_source == "postgres") "lists.usyszonelist" else "USysZoneList"
+    zone_table <- if (reference_source == "postgres") "VLists.usyszonelist" else "USysZoneList"
     zone_col <- "zone_code"
     
     tryCatch({
@@ -362,7 +362,7 @@ validate_su_row <- function(row, con, reference_source = "postgres") {
       !is.null(row$bec_subzone) && !is.na(row$bec_subzone) &&
       nchar(trimws(row$bec_zone)) > 0 && nchar(trimws(row$bec_subzone)) > 0) {
     
-    subzone_table <- if (reference_source == "postgres") "lists.usyssubzonelist" else "USysSubZoneList"
+    subzone_table <- if (reference_source == "postgres") "VLists.usyssubzonelist" else "USysSubZoneList"
     
     tryCatch({
       subzone_exists <- DBI::dbGetQuery(con, sprintf(

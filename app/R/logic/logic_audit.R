@@ -1,6 +1,6 @@
 # Audit trail helpers
 
-audit_table_name <- "user_db.main.USysAuditTrail"
+audit_table_name <- "VUser.main.USysAuditTrail"
 
 list_duckdb_tables <- function(con) {
   tryCatch(
@@ -99,8 +99,8 @@ is_text_like_type <- function(data_type) {
 
 audit_table_candidates <- function() {
   c(
-    "user_db.main.USysAuditTrail",
-    "lists.main.USysAuditTrail",
+    "VUser.main.USysAuditTrail",
+    "VLists.main.USysAuditTrail",
     "vpro.main.USysAudit",
     "vpro.main.Audit"
   )
@@ -202,7 +202,7 @@ ensure_audit_table <- function(con) {
 
   tryCatch({
     DBI::dbExecute(con, "
-      CREATE TABLE IF NOT EXISTS user_db.main.USysAuditTrail (
+      CREATE TABLE IF NOT EXISTS VUser.main.USysAuditTrail (
         project TEXT,
         _user TEXT,
         plotnumber TEXT,
@@ -526,12 +526,12 @@ log_audit_rows <- function(con, project_id, user, table_name, rows, fields = NUL
   logged
 }
 
-master_audit_table_name <- "lists.main.USysMasterAudit"
+master_audit_table_name <- "VLists.main.USysMasterAudit"
 
 master_audit_table_candidates <- function() {
   c(
-    "lists.main.USysMasterAudit",
-    "user_db.main.USysMasterAudit"
+    "VLists.main.USysMasterAudit",
+    "VUser.main.USysMasterAudit"
   )
 }
 
@@ -564,7 +564,7 @@ ensure_master_audit_table <- function(con) {
 
   tryCatch({
     DBI::dbExecute(con, "
-      CREATE TABLE IF NOT EXISTS lists.main.USysMasterAudit (
+      CREATE TABLE IF NOT EXISTS VLists.main.USysMasterAudit (
         _user TEXT,
         _action TEXT,
         nodename TEXT,

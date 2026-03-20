@@ -183,14 +183,14 @@ load_veg_report_data <- function(con,
   }
 
   meta_table <- NULL
-  # Check for lists.USysAllSpecs using SQL query
+  # Check for VLists.USysAllSpecs using SQL query
   table_exists <- tryCatch({
     DBI::dbGetQuery(con, "SELECT COUNT(*) as n FROM information_schema.tables 
                           WHERE table_schema = 'lists' AND table_name = 'USysAllSpecs'")$n > 0
   }, error = function(e) FALSE)
   
   if (table_exists) {
-    meta_table <- "lists.USysAllSpecs"
+    meta_table <- "VLists.USysAllSpecs"
   } else if (DBI::dbExistsTable(con, "USysAllSpecs")) {
     meta_table <- "USysAllSpecs"
   }

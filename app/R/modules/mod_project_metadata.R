@@ -1,9 +1,9 @@
 project_metadata_detect_table <- function(con) {
   candidates <- c(
     "Metadata",
-    "metadata.Metadata",
-    "user_db.ProjectMetaData",
-    "user_db.ProjectMetadata",
+    "VMetaData.Metadata",
+    "VUser.ProjectMetaData",
+    "VUser.ProjectMetadata",
     "ProjectMetadata",
     "USysProjectMetadata"
   )
@@ -25,7 +25,7 @@ project_metadata_list_choices <- function(con, list_name) {
   sql_candidates <- c(
     paste(
       "SELECT item, itemdescription",
-      "FROM lists.USysTableOfLists",
+      "FROM VLists.USysTableOfLists",
       "WHERE lower(listname) = lower(?)",
       "ORDER BY itemorder, item"
     ),
@@ -58,8 +58,8 @@ project_metadata_list_choices <- function(con, list_name) {
 }
 
 project_metadata_default_table_of_lists <- function(con) {
-  if (DBI::dbExistsTable(con, "lists.USysTableOfLists")) {
-    return("lists.USysTableOfLists")
+  if (DBI::dbExistsTable(con, "VLists.USysTableOfLists")) {
+    return("VLists.USysTableOfLists")
   }
   if (DBI::dbExistsTable(con, "USysTableOfLists")) {
     return("USysTableOfLists")
@@ -68,8 +68,8 @@ project_metadata_default_table_of_lists <- function(con) {
 }
 
 project_metadata_default_all_specs <- function(con) {
-  if (DBI::dbExistsTable(con, "lists.USysAllSpecs")) {
-    return("lists.USysAllSpecs")
+  if (DBI::dbExistsTable(con, "VLists.USysAllSpecs")) {
+    return("VLists.USysAllSpecs")
   }
   if (DBI::dbExistsTable(con, "USysAllSpecs")) {
     return("USysAllSpecs")
@@ -135,6 +135,8 @@ mod_project_metadata_ui <- function(id) {
 
 mod_project_metadata_server <- function(id, state, con) {
   shiny::moduleServer(id, function(input, output, session) {
+    root_session <- session$rootScope()
+
     table_name <- project_metadata_detect_table(con)
     status_text <- shiny::reactiveVal("")
     suppress_project_observer <- shiny::reactiveVal(FALSE)
@@ -295,7 +297,7 @@ mod_project_metadata_server <- function(id, state, con) {
 
       state$CurrForm <- "frmProjectMetaData"
       state$sysCurrForm <- "frmProjectMetaData"
-      set_pref(con, "Current", "DataFormName", "frmProjectMetaData")
+      set_current_setting("DataFormName", "frmProjectMetaData")
 
       default_project <- normalize_text(state$CurrProject %||% state$PrefProject)
       suppress_project_observer(TRUE)
@@ -389,7 +391,7 @@ mod_project_metadata_server <- function(id, state, con) {
     })
 
     observeEvent(input$btnClose, {
-      bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+      bslib::nav_select("main_tabs", "Vegetation", session = root_session)
     })
   })
 }

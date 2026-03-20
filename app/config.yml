@@ -7,13 +7,15 @@ Current:
   CoordMethod: 1
   CurrProject: Sample
   CurrVegProfile: Sample
-  DataFormName: FS882-6x4
+  DataFormName: frmHerbarium
   DataFormNumber: '1'
   ProjectIdSource: 2
   ProjectPath: VPro64
   User: bruno
   USysAllSpecsVer: '337298056559816831'
   USysTableOfListsVer: '3064119365220602774'
+  CurrPlotNumber: '9624781'
+  CurrHerbarium: Sample
 Diagnostic:
   Name: Diagnostic10
 Export:

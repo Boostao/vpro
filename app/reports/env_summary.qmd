@@ -117,8 +117,8 @@ if (DBI::dbExistsTable(con, "Sample_SU")) {
 }
 
 unit_names <- data.frame()
-if (DBI::dbExistsTable(con, "lists.MasterSiteUnitList")) {
-  unit_names <- dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM lists.MasterSiteUnitList")
+if (DBI::dbExistsTable(con, "VLists.MasterSiteUnitList")) {
+  unit_names <- dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM VLists.MasterSiteUnitList")
 }
 
 normalize_env_cols <- function(df) {

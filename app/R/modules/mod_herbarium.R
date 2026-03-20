@@ -1,12 +1,40 @@
-herbarium_list_tables <- function(con) {
-  tables <- tryCatch(DBI::dbListTables(con), error = function(e) character(0))
-  if (!length(tables)) {
-    return(character(0))
+herbarium_target_table <- function(prefix) {
+  paste0(prefix, "_Herbarium")
+}
+
+herbarium_table_id <- function(prefix) {
+  DBI::Id(prefix, herbarium_target_table(prefix))
+}
+
+herbarium_table_exists <- function(con, prefix) {
+  prefix <- trimws(as.character(prefix %||% ""))
+  if (!nzchar(prefix) || !(prefix %in% list_attached_dbs(con))) {
+    return(FALSE)
   }
 
-  herb <- tables[grepl("(?i)_herbarium$", tables, perl = TRUE)]
-  plain <- tables[tolower(tables) == "herbarium"]
-  unique(c(plain, herb))
+  table_name <- herbarium_target_table(prefix)
+  result <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT COUNT(*) AS n",
+        "FROM duckdb_tables()",
+        "WHERE internal = FALSE AND database_name = ? AND lower(table_name) = lower(?)"
+      ),
+      list(prefix, table_name)
+    ),
+    error = function(e) data.frame(n = 0)
+  )
+
+  isTRUE(result$n[[1]] > 0)
+}
+
+herbarium_list_tables <- function(con) {
+  bases <- herbarium_existing_bases(con)
+  if (!length(bases)) {
+    return(character(0))
+  }
+  unique(vapply(bases, herbarium_target_table, character(1)))
 }
 
 herbarium_table_to_base <- function(table_name) {
@@ -18,8 +46,8 @@ herbarium_table_to_base <- function(table_name) {
 }
 
 herbarium_existing_bases <- function(con) {
-  tables <- herbarium_list_tables(con)
-  bases <- unique(vapply(tables, herbarium_table_to_base, character(1)))
+  bases <- list_attached_dbs(con)
+  bases <- bases[vapply(bases, function(prefix) herbarium_table_exists(con, prefix), logical(1))]
   sort(bases[nzchar(bases) & !grepl("(?i)^usys", bases, perl = TRUE)])
 }
 
@@ -29,28 +57,132 @@ herbarium_resolve_table <- function(con, selection) {
     return("")
   }
 
-  tables <- tryCatch(DBI::dbListTables(con), error = function(e) character(0))
-  if (!length(tables)) {
-    return("")
-  }
-
-  candidates <- unique(c(pick, paste0(pick, "_Herbarium")))
-  for (candidate in candidates) {
-    hit <- tables[tolower(tables) == tolower(candidate)]
-    if (length(hit) > 0) {
-      return(hit[[1]])
-    }
+  base <- herbarium_table_to_base(pick)
+  if (herbarium_table_exists(con, base)) {
+    return(herbarium_target_table(base))
   }
 
   ""
 }
 
+herbarium_attach_source_db <- function(con, db_path, alias) {
+  if (alias %in% list_attached_dbs(con)) {
+    detach_db(con, alias)
+  }
+
+  statement <- if (project_file_is_sqlite(db_path)) {
+    paste0(
+      "ATTACH ", DBI::dbQuoteString(con, db_path),
+      " AS ", DBI::dbQuoteIdentifier(con, alias),
+      " (TYPE sqlite)"
+    )
+  } else {
+    paste0(
+      "ATTACH ", DBI::dbQuoteString(con, db_path),
+      " AS ", DBI::dbQuoteIdentifier(con, alias)
+    )
+  }
+
+  DBI::dbExecute(con, statement)
+  invisible(alias)
+}
+
+herbarium_source_table <- function(con, db_name, prefix) {
+  table_name <- herbarium_target_table(prefix)
+  result <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT table_name",
+        "FROM duckdb_tables()",
+        "WHERE internal = FALSE AND database_name = ? AND lower(table_name) = lower(?)",
+        "LIMIT 1"
+      ),
+      list(db_name, table_name)
+    ),
+    error = function(e) data.frame(table_name = character(0))
+  )
+
+  result$table_name[[1]] %||% ""
+}
+
+herbarium_import_table <- function(con, source_path, source_prefix, target_prefix = source_prefix, replace_existing = FALSE, copy_rows = TRUE, source_alias = "tmp_attach_herbarium") {
+  if (!is_valid_project_prefix(source_prefix) || !is_valid_project_prefix(target_prefix)) {
+    stop("Invalid herbarium prefix.")
+  }
+  if (!is.character(source_path) || length(source_path) != 1L || is.na(source_path) || !nzchar(source_path)) {
+    stop("Database path is required.")
+  }
+  if (!file.exists(source_path)) {
+    stop("Database file does not exist: ", source_path)
+  }
+
+  herbarium_attach_source_db(con, source_path, source_alias)
+  on.exit(try(detach_db(con, source_alias), silent = TRUE), add = TRUE)
+
+  source_table <- herbarium_source_table(con, source_alias, source_prefix)
+  if (!nzchar(source_table)) {
+    stop("Source herbarium table not found in attached DB: ", herbarium_target_table(source_prefix))
+  }
+
+  if (project_attached(con, target_prefix)) {
+    detach_db(con, target_prefix)
+  }
+
+  target_path <- project_db_path(target_prefix)
+  if (file.exists(target_path)) {
+    if (!isTRUE(replace_existing)) {
+      stop("Target herbarium database already exists: ", target_path)
+    }
+    unlink(target_path)
+  }
+
+  DBI::dbExecute(
+    con,
+    paste0(
+      "ATTACH ", DBI::dbQuoteString(con, target_path),
+      " AS ", DBI::dbQuoteIdentifier(con, target_prefix),
+      " (TYPE sqlite)"
+    )
+  )
+
+  target_table <- herbarium_target_table(target_prefix)
+  DBI::dbExecute(
+    con,
+    paste0(
+      "CREATE TABLE ", DBI::dbQuoteIdentifier(con, DBI::Id(target_prefix, target_table)),
+      " AS SELECT * FROM ", DBI::dbQuoteIdentifier(con, DBI::Id(source_alias, source_table)),
+      if (isTRUE(copy_rows)) "" else " WHERE 1 = 0"
+    )
+  )
+
+  invisible(target_table)
+}
+
+herbarium_unattach_table <- function(con, prefix, protected_prefixes = c("Sample")) {
+  if (!is_valid_project_prefix(prefix)) {
+    stop("Invalid herbarium prefix.")
+  }
+  if (tolower(prefix) %in% tolower(protected_prefixes)) {
+    stop("Cannot unattach protected prefix: ", prefix)
+  }
+  if (!project_attached(con, prefix)) {
+    return(invisible(NULL))
+  }
+
+  detach_db(con, prefix)
+  invisible(herbarium_target_table(prefix))
+}
+
 herbarium_read_records <- function(con, table_name) {
-  if (!nzchar(table_name) || !DBI::dbExistsTable(con, table_name)) {
+  table_base <- herbarium_table_to_base(table_name)
+  table_id <- herbarium_table_id(table_base)
+
+  if (!nzchar(table_base) || !herbarium_table_exists(con, table_base)) {
     return(data.frame(stringsAsFactors = FALSE))
   }
 
-  fields <- tolower(tryCatch(DBI::dbListFields(con, table_name), error = function(e) character(0)))
+  fields <- tolower(tryCatch(DBI::dbListFields(con, table_id), error = function(e) character(0)))
   if (!length(fields)) {
     return(data.frame(stringsAsFactors = FALSE))
   }
@@ -66,7 +198,7 @@ herbarium_read_records <- function(con, table_name) {
   cols <- intersect(preferred, fields)
   sql <- paste(
     "SELECT", paste(cols, collapse = ", "),
-    "FROM", as.character(DBI::dbQuoteIdentifier(con, table_name)),
+    "FROM", as.character(DBI::dbQuoteIdentifier(con, table_id)),
     "ORDER BY recid"
   )
   tryCatch(DBI::dbGetQuery(con, sql), error = function(e) data.frame(stringsAsFactors = FALSE))
@@ -93,8 +225,8 @@ herbarium_species_lookup <- function(con, code_value) {
     ""
   }
 
-  spp_tbl <- match_table(c("lists.USysAllSpecs", "USysAllSpecs", "SppList", "SppListUnique"))
-  att_tbl <- match_table(c("lists.USysSppAttributes", "USysSppAttributes", "USysSppAttributeSummary", "lists.USysSppAttributeSummary"))
+  spp_tbl <- match_table(c("VLists.USysAllSpecs", "USysAllSpecs", "SppList", "SppListUnique"))
+  att_tbl <- match_table(c("VLists.USysSppAttributes", "USysSppAttributes", "USysSppAttributeSummary", "VLists.USysSppAttributeSummary"))
 
   family <- ""
   common <- ""
@@ -252,6 +384,8 @@ mod_herbarium_ui <- function(id) {
 
 mod_herbarium_server <- function(id, state, con) {
   shiny::moduleServer(id, function(input, output, session) {
+    root_session <- session$rootScope()
+
     rv <- shiny::reactiveValues(
       herb_table = "",
       status = "",
@@ -365,9 +499,9 @@ mod_herbarium_server <- function(id, state, con) {
     observeEvent(TRUE, {
       state$CurrForm <- "frmHerbarium"
       state$sysCurrForm <- "frmHerbarium"
-      set_pref(con, "Current", "DataFormName", "frmHerbarium")
+      set_current_setting("DataFormName", "frmHerbarium")
 
-      pref <- nz(get_pref(con, "Current", "CurrHerbarium", default = "Sample"))
+      pref <- nz(get_current_setting("CurrHerbarium", default = "Sample"))
       refresh_herbarium_choices(pref)
       set_status("Loaded Herbarium (frmHerbarium).")
     }, once = TRUE)
@@ -377,7 +511,7 @@ mod_herbarium_server <- function(id, state, con) {
 
       if (selected %in% c("--------------------------------------", "Attach", "Unattach", "New")) {
         rv$requested_special <- selected
-        prev <- nz(get_pref(con, "Current", "CurrHerbarium", default = current_herbarium_base()))
+        prev <- nz(get_current_setting("CurrHerbarium", default = current_herbarium_base()))
         if (nzchar(prev)) {
           shiny::updateSelectInput(session, "HerbariumList", selected = prev)
         }
@@ -385,7 +519,7 @@ mod_herbarium_server <- function(id, state, con) {
         if (identical(selected, "Attach")) {
           shiny::showModal(shiny::modalDialog(
             title = "Attach Herbarium Table",
-            shiny::textInput(session$ns("attach_db_path"), "Source DuckDB Path", value = ""),
+            shiny::textInput(session$ns("attach_db_path"), "Source DB Path", value = ""),
             shiny::textInput(session$ns("attach_prefix"), "Herbarium Prefix", value = ""),
             shiny::checkboxInput(session$ns("attach_replace_existing"), "Replace existing table when present", value = FALSE),
             easyClose = TRUE,
@@ -431,7 +565,7 @@ mod_herbarium_server <- function(id, state, con) {
         return()
       }
 
-      set_pref(con, "Current", "CurrHerbarium", selected)
+      set_current_setting("CurrHerbarium", selected)
       state$CurrHerbarium <- selected
       rv$herb_table <- herbarium_resolve_table(con, selected)
       rv$loaded <- herbarium_read_records(con, rv$herb_table)
@@ -444,13 +578,14 @@ mod_herbarium_server <- function(id, state, con) {
       replace_existing <- isTRUE(input$attach_replace_existing)
 
       ok <- tryCatch({
-        attach_prefixed_table(
+        herbarium_import_table(
           con = con,
-          db_path = db_path,
-          prefix = prefix,
-          suffix = "_Herbarium",
+          source_path = db_path,
+          source_prefix = prefix,
+          target_prefix = prefix,
           replace_existing = replace_existing,
-          alias = "tmp_attach_herbarium"
+          copy_rows = TRUE,
+          source_alias = "tmp_attach_herbarium"
         )
         TRUE
       }, error = function(e) {
@@ -464,7 +599,7 @@ mod_herbarium_server <- function(id, state, con) {
       }
 
       refresh_herbarium_choices(prefix)
-      set_pref(con, "Current", "CurrHerbarium", prefix)
+      set_current_setting("CurrHerbarium", prefix)
       state$CurrHerbarium <- prefix
       set_status(sprintf("Attached herbarium table: %s_Herbarium", prefix))
     })
@@ -475,12 +610,14 @@ mod_herbarium_server <- function(id, state, con) {
       overwrite <- isTRUE(input$new_overwrite)
 
       ok <- tryCatch({
-        create_prefixed_table_from_template(
+        herbarium_import_table(
           con = con,
-          prefix = prefix,
-          suffix = "_Herbarium",
-          template_prefix = if (nzchar(template_prefix)) template_prefix else "Sample",
-          overwrite = overwrite
+          source_path = project_db_path(if (nzchar(template_prefix)) template_prefix else "Sample"),
+          source_prefix = if (nzchar(template_prefix)) template_prefix else "Sample",
+          target_prefix = prefix,
+          replace_existing = overwrite,
+          copy_rows = FALSE,
+          source_alias = "tmp_create_herbarium"
         )
         TRUE
       }, error = function(e) {
@@ -494,7 +631,7 @@ mod_herbarium_server <- function(id, state, con) {
       }
 
       refresh_herbarium_choices(prefix)
-      set_pref(con, "Current", "CurrHerbarium", prefix)
+      set_current_setting("CurrHerbarium", prefix)
       state$CurrHerbarium <- prefix
       set_status(sprintf("Created herbarium table: %s_Herbarium", prefix))
     })
@@ -503,12 +640,7 @@ mod_herbarium_server <- function(id, state, con) {
       prefix <- nz(input$unattach_prefix)
 
       removed <- tryCatch({
-        unattach_prefixed_table(
-          con = con,
-          prefix = prefix,
-          suffix = "_Herbarium",
-          protected_prefixes = c("Sample")
-        )
+        herbarium_unattach_table(con = con, prefix = prefix, protected_prefixes = c("Sample"))
       }, error = function(e) {
         set_status(sprintf("Unattach failed: %s", e$message))
         NULL
@@ -523,7 +655,7 @@ mod_herbarium_server <- function(id, state, con) {
       fallback <- if ("Sample" %in% bases) "Sample" else if (length(bases)) bases[[1]] else ""
       refresh_herbarium_choices(fallback)
       if (nzchar(fallback)) {
-        set_pref(con, "Current", "CurrHerbarium", fallback)
+        set_current_setting("CurrHerbarium", fallback)
         state$CurrHerbarium <- fallback
       }
       set_status(sprintf("Unattached herbarium table: %s", removed %||% paste0(prefix, "_Herbarium")))
@@ -723,7 +855,7 @@ mod_herbarium_server <- function(id, state, con) {
     })
 
     observeEvent(input$btnClose, {
-      bslib::nav_select("main_tabs", "Vegetation", session = session$parent)
+      bslib::nav_select("main_tabs", "Vegetation", session = root_session)
     })
   })
 }

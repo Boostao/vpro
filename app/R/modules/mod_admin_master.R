@@ -73,8 +73,8 @@ mod_admin_master_server <- function(id, state, con) {
 
     get_master_table <- function() {
       candidates <- c(
-        "lists.MasterSiteUnitList",
-        "lists.USysMasterSiteUnitList",
+        "VLists.MasterSiteUnitList",
+        "VLists.USysMasterSiteUnitList",
         "MasterSiteUnitList",
         "USysMasterSiteUnitList"
       )

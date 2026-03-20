@@ -13,7 +13,7 @@
 #'
 #' Checks environmental field codes against USysTableOfLists
 #'
-#' @param con DBI connection with access to lists.USysTableOfLists
+#' @param con DBI connection with access to VLists.USysTableOfLists
 #' @param env_df Data frame with environmental data to validate
 #' @param project_id Project ID for identification (optional)
 #' @return Data frame with PlotNumber, FieldName, InvalidValue, ExpectedList columns
@@ -48,7 +48,7 @@ validate_env_data <- function(con, env_df, project_id = NULL) {
       ListName,
       FieldUsedIn,
       ValidateLoops
-    FROM lists.USysTableOfLists
+    FROM VLists.USysTableOfLists
     WHERE Validate = 'Yes'
   "
   
@@ -61,7 +61,7 @@ validate_env_data <- function(con, env_df, project_id = NULL) {
           ListName,
           FieldUsedIn,
           0 as ValidateLoops
-        FROM lists.USysTableOfLists
+        FROM VLists.USysTableOfLists
         WHERE FieldUsedIn IS NOT NULL AND FieldUsedIn != ''
       ")
     }
@@ -105,7 +105,7 @@ validate_env_data <- function(con, env_df, project_id = NULL) {
     # Get valid items for this list
     valid_items <- DBI::dbGetQuery(
       con,
-      "SELECT Item FROM lists.USysTableOfLists WHERE ListName = ?",
+      "SELECT Item FROM VLists.USysTableOfLists WHERE ListName = ?",
       list(list_name)
     )
     
@@ -215,7 +215,7 @@ validate_veg_codes <- function(con, veg_df) {
   }, error = function(e) FALSE)
   
   if (table_exists) {
-    specs <- DBI::dbGetQuery(con, "SELECT Code FROM lists.USysAllSpecs")
+    specs <- DBI::dbGetQuery(con, "SELECT Code FROM VLists.USysAllSpecs")
     valid_species <- unique(as.character(specs$Code))
   } else if (DBI::dbExistsTable(con, "USysAllSpecs")) {
     specs <- DBI::dbGetQuery(con, "SELECT Code FROM USysAllSpecs")
@@ -228,7 +228,7 @@ validate_veg_codes <- function(con, veg_df) {
     }, error = function(e) FALSE)
     
     if (table_exists_spp) {
-      specs <- DBI::dbGetQuery(con, "SELECT Code FROM lists.SppList")
+      specs <- DBI::dbGetQuery(con, "SELECT Code FROM VLists.SppList")
       valid_species <- unique(as.character(specs$Code))
     } else if (DBI::dbExistsTable(con, "SppList")) {
       specs <- DBI::dbGetQuery(con, "SELECT Code FROM SppList")
