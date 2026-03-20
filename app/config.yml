@@ -5,50 +5,52 @@ CHARS:
 Current:
   AssignedSuSource: 1
   CoordMethod: 1
-  CurrProject: "Sample"
-  CurrVegProfile: "Sample"
-  DataFormName: "FS882-6x4"
-  DataFormNumber: "1"
+  CurrProject: Sample
+  CurrVegProfile: Sample
+  DataFormName: FS882-6x4
+  DataFormNumber: '1'
   ProjectIdSource: 2
-  ProjectPath: "VPro64"
-  User: "Admin"
+  ProjectPath: VPro64
+  User: bruno
+  USysAllSpecsVer: '337298056559816831'
+  USysTableOfListsVer: '3064119365220602774'
 Diagnostic:
-  Name: "Diagnostic10"
+  Name: Diagnostic10
 Export:
   rExportUnits: 1
   rVegBy: 1
 Hierarchy:
   HierarchyBreaksOnRoots: 0
 Message:
-  DontShowDataQualityMessage: false
-  ShowWhatsNew: true
+  DontShowDataQualityMessage: no
+  ShowWhatsNew: yes
 PictureOptions:
   PictureLibrary: 0
 Program:
-  Name: "VPro64"
+  Name: /home/bruno/Work/Active project/will_vpro/app/app.R
 ReportOptions:
   DataQualityFilterBECUse: 1
-  DataQualityFilterBECUseLV: "True"
-  DataQualityFilterEnforce: false
-  DataQualityFilterEnforceLV: false
-  DataQualityFilterSite: "Poor"
-  DataQualityFilterSiteLV: "Poor"
-  DataQualityFilterSiteNull: true
-  DataQualityFilterSiteNullLV: true
-  DataQualityFilterSoil: "Poor"
-  DataQualityFilterSoilLV: "Poor"
-  DataQualityFilterSoilNull: "True"
-  DataQualityFilterSoilNullLV: "True"
-  DataQualityFilterVeg: "Poor"
-  DataQualityFilterVegLV: "Poor"
-  DataQualityFilterVegNull: "True"
-  DataQualityFilterVegNullLV: "True"
-  GoogleEarthDescField: "PlotRepresenting"
-  GoogleEarthPlaceName: "VPro Plot Locations"
-  HDReportTitle: "Report Title"
+  DataQualityFilterBECUseLV: 'True'
+  DataQualityFilterEnforce: no
+  DataQualityFilterEnforceLV: no
+  DataQualityFilterSite: Poor
+  DataQualityFilterSiteLV: Poor
+  DataQualityFilterSiteNull: yes
+  DataQualityFilterSiteNullLV: yes
+  DataQualityFilterSoil: Poor
+  DataQualityFilterSoilLV: Poor
+  DataQualityFilterSoilNull: 'True'
+  DataQualityFilterSoilNullLV: 'True'
+  DataQualityFilterVeg: Poor
+  DataQualityFilterVegLV: Poor
+  DataQualityFilterVegNull: 'True'
+  DataQualityFilterVegNullLV: 'True'
+  GoogleEarthDescField: PlotRepresenting
+  GoogleEarthPlaceName: VPro Plot Locations
+  HDReportTitle: Report Title
   HDShowQuestionableUnits: 0
   HDShowTentativeUnits: 0
-  LEReportTitle: "Long Evironment Report"
+  LEReportTitle: Long Evironment Report
   LVAvgType: 10
   LVConstantSppList: -1
   LVCoverGreaterThan: 0
@@ -57,7 +59,7 @@ ReportOptions:
   LVPresenceGreaterThan: 0
   LVQuickReport: -1
   LVReportSummary: -1
-  LVReportTitle: "Long Vegetation Report"
+  LVReportTitle: Long Vegetation Report
   LVShowEnglishName: 1
   LVSpaceBetweenGroups: 0
   LVUnitGroups: 1
@@ -80,7 +82,7 @@ ReportOptions:
   SVGroupBy: 1
   SVIncludeEnvFields: 0
   SVReportSummary: -1
-  SVReportTitle: "Short veg report title"
+  SVReportTitle: Short veg report title
   SVReportUnits: 1
   SVShowClass: 1
   SVShowEnglishName: 0
@@ -99,18 +101,24 @@ ReportOptions:
   cmbApplyTheme: 1
   cmbColourGreater: 5
   cmbGrayGreater: 65
-  cmbThemeTable: "Sample"
+  cmbThemeTable: Sample
 SumVeg:
   optLifeformSummary: 0
   optSiteUnitType: 1
 System:
-  Build: "Thursday, February 23, 2023"
-  GEProgram: "C:\Program Files\Google\Google Earth\client\googleearth.exe"
-  RDataIn: "Three column"
-  RExeLocation: "C:\Program Files\R\R-*\bin\R.exe"
-  RunOnce: true
+  Build: Thursday, February 23, 2023
+  GEProgram: C:/Program Files/Google/Google Earth/client/googleearth.exe
+  RDataIn: Three column
+  RExeLocation: C:/Program Files/R/R-*/bin/R.exe
+  RunOnce: no
   Version: 3
-  Website: "http://www.vuser.ca/VPro19/"
+  Website: http://www.vuser.ca/VPro19/
+  Location: /home/bruno/Work/Active project/will_vpro/app
+  RLocation: /home/bruno/Work/Active project/will_vpro/app/R
+  GELocation: /home/bruno/Work/Active project/will_vpro/app/GoogleEarth
+  PictureDir: /home/bruno/Work/Active project/will_vpro/app/pics
+  MetadataLocation: /home/bruno/Work/Active project/will_vpro/app/data/VMetaData.db
+  Installed: 2026-03-20 10:03:57
 UpdateOptions:
   DoUpdateCheck: 0
   DoUpdateCheckInterval: 15
