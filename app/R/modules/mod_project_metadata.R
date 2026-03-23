@@ -297,7 +297,7 @@ mod_project_metadata_server <- function(id, state, con) {
 
       state$CurrForm <- "frmProjectMetaData"
       state$sysCurrForm <- "frmProjectMetaData"
-      set_current_setting("DataFormName", "frmProjectMetaData")
+      config("Current", "DataFormName", "frmProjectMetaData")
 
       default_project <- normalize_text(state$CurrProject %||% state$PrefProject)
       suppress_project_observer(TRUE)

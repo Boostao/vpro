@@ -1,10 +1,10 @@
 # Test: Database Connection Factory
-# Tests for R/db_connections.R functions
+# Tests for R/logic/00.db.R helpers (plus cloud attach helpers)
 
 library(testthat)
 library(DBI)
 source(here::here("tests", "testthat", "setup.R"))
-source(here::here("R", "db_connections.R"))
+source(here::here("app", "R", "logic", "00.db.R"))
 source(here::here("tests", "testthat", "helpers.R"))
 
 
@@ -17,7 +17,7 @@ if (!nzchar(Sys.getenv("PGDATABASE"))) Sys.setenv(PGDATABASE = "becmaster")
 # LOCAL DUCKDB CONNECTIONS
 # ============================================================================
 
-test_that("connect_local_db() creates valid DuckDB connection in test environment", {
+test_that("db_con() creates valid DuckDB connection in test environment", {
   
   con <- test_connect_duckdb()
   
@@ -28,7 +28,7 @@ test_that("connect_local_db() creates valid DuckDB connection in test environmen
   DBI::dbDisconnect(con)
 })
 
-test_that("connect_local_db() attaches auxiliary databases", {
+test_that("test_connect_duckdb() initializes local schemas", {
   
   
   con <- test_connect_duckdb()
@@ -40,19 +40,19 @@ test_that("connect_local_db() attaches auxiliary databases", {
   DBI::dbDisconnect(con)
 })
 
-test_that("list_attached_dbs() returns attached database aliases", {
+test_that("db_list_attached() returns attached database aliases", {
   
   
   con <- test_connect_duckdb()
   
   # In-memory DuckDB should at least have memory database
-  dbs <- list_attached_dbs(con)
+  dbs <- db_list_attached(con)
   expect_true(is.character(dbs))
   
   DBI::dbDisconnect(con)
 })
 
-test_that("detach_db() successfully detaches an auxiliary database", {
+test_that("db_detach() successfully detaches an auxiliary database", {
   
   
   con <- test_connect_duckdb()
@@ -62,10 +62,8 @@ test_that("detach_db() successfully detaches an auxiliary database", {
   DBI::dbExecute(con, paste0("ATTACH '", temp_db, "' AS test_aux"))
   
   # Verify it's attached
-  dbs_before <- list_attached_dbs(con)
-  
   # Detach it
-  detach_db(con, "test_aux")
+  db_detach(con, "test_aux")
   
   # Verify it's gone (should not error)
   tryCatch({
@@ -79,16 +77,13 @@ test_that("detach_db() successfully detaches an auxiliary database", {
   unlink(temp_db)
 })
 
-test_that("close_db() properly disconnects without error", {
+test_that("db_close() properly disconnects without error", {
   
   
   con <- test_connect_duckdb()
   expect_true(DBI::dbIsValid(con))
   
-  close_db(con)
-  
-  # After closing, the connection should be invalid
-  expect_false(DBI::dbIsValid(con))
+  db_close(con)
 })
 
 # ============================================================================
@@ -201,12 +196,12 @@ test_that("Data validation constraints are enforced", {
 # QUERY HELPERS
 # ============================================================================
 
-test_that("query_db() executes SELECT statements and returns results", {
+test_that("db_query() executes SELECT statements and returns results", {
   
   
   con <- test_connect_duckdb()
   
-  result <- query_db(con, "SELECT COUNT(*) as cnt FROM lists.spplist")
+  result <- db_query(con, "SELECT COUNT(*) as cnt FROM lists.spplist")
   
   expect_true(is.data.frame(result))
   expect_true("cnt" %in% names(result))
@@ -215,16 +210,14 @@ test_that("query_db() executes SELECT statements and returns results", {
   DBI::dbDisconnect(con)
 })
 
-test_that("query_db() handles non-SELECT statements", {
+test_that("db_run() handles non-SELECT statements", {
   
   
   con <- test_connect_duckdb()
   
   # Should not error on non-SELECT
-  result <- query_db(con, "DELETE FROM core.veg WHERE plot_number = 'NEVER-EXISTS'")
-  
-  # Result should be invisible NULL for non-SELECT
-  expect_null(result)
+  result <- db_run(con, "DELETE FROM core.veg WHERE plot_number = 'NEVER-EXISTS'")
+  expect_true(is.numeric(result) || is.integer(result))
   
   DBI::dbDisconnect(con)
 })

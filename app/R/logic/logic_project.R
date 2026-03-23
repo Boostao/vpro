@@ -56,7 +56,7 @@ project_table_id <- function(project_id, table_name) {
 }
 
 project_attached <- function(con, project_id) {
-  project_id %in% list_attached_dbs(con)
+  project_id %in% db_list_attached(con)
 }
 
 project_file_is_sqlite <- function(path) {
@@ -235,7 +235,7 @@ project_import_access_project <- function(con, access_path, source_project_id, t
       stop("Project database already exists: ", target_path)
     }
     if (project_attached(con, target_project_id)) {
-      detach_db(con, target_project_id)
+      db_detach(con, target_project_id)
     }
     unlink(target_path)
   }
@@ -287,7 +287,7 @@ project_attach_file <- function(con, path, project_id) {
   )
 
   if (!DBI::dbExistsTable(con, project_table_id(project_id, "Metadata"))) {
-    detach_db(con, project_id)
+    db_detach(con, project_id)
     stop("Attached project database is missing the expected metadata table for project ", project_id)
   }
 
@@ -306,18 +306,18 @@ project_clone_template <- function(con, project_id, template_id = PROJECT_TEMPLA
   }
 
   template_alias <- "project_template"
-  if (template_alias %in% list_attached_dbs(con)) {
-    detach_db(con, template_alias)
+  if (template_alias %in% db_list_attached(con)) {
+    db_detach(con, template_alias)
   }
 
   DBI::dbExecute(
     con,
     paste0("ATTACH ", DBI::dbQuoteString(con, template_path), " AS ", DBI::dbQuoteIdentifier(con, template_alias), " (TYPE sqlite)")
   )
-  on.exit(try(detach_db(con, template_alias), silent = TRUE), add = TRUE)
+  on.exit(try(db_detach(con, template_alias), silent = TRUE), add = TRUE)
 
   if (project_attached(con, project_id)) {
-    detach_db(con, project_id)
+    db_detach(con, project_id)
   }
   DBI::dbExecute(
     con,
@@ -621,7 +621,7 @@ project_replace_baseline_from_file <- function(con,
 
 list_open_projects <- function(con) {
   attached <- setdiff(
-    list_attached_dbs(con),
+    db_list_attached(con),
     c("memory", "system", "temp", "VLists", "VMetaData", "VUser", "VMessageBoard", "VPics")
   )
 
@@ -695,7 +695,7 @@ close_project <- function(con, project_id, path = NULL) {
   }
 
   if (project_attached(con, project_id)) {
-    detach_db(con, project_id)
+    db_detach(con, project_id)
   }
 
   invisible(project_id)

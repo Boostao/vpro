@@ -3,7 +3,7 @@
 
 # Default data folder path used to pre-populate the Open dialog and auto-restore
 .default_db_path <- function() {
-  normalizePath(file.path(getwd(), "data", "projects", paste0(get_current_setting("CurrProject", default = "Sample"), ".db")), mustWork = FALSE)
+  normalizePath(file.path(getwd(), "data", "projects", paste0((config("Current", "CurrProject") %||% "Sample"), ".db")), mustWork = FALSE)
 }
 
 mod_project_ui <- function(id) {
@@ -124,7 +124,7 @@ mod_project_server <- function(id, state, con) {
           open_project(con, project_db_path(pid), project_id = pid)
         }
         set_project(state, pid, con)
-        set_current_setting("CurrProject", pid)
+        config("Current", "CurrProject", pid)
         ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_activate")
         project_changed(project_changed() + 1L)
       }
@@ -321,7 +321,7 @@ mod_project_server <- function(id, state, con) {
         state$sysCurrProject <- NULL
         state$CurrSU         <- NULL
         state$sysCurrSU      <- NULL
-        set_current_setting("CurrProject", NULL)
+        config("Current", "CurrProject", NULL)
         removeModal()
         project_changed(project_changed() + 1L)
         showNotification(paste0("Closed project '", pid, "'."), type = "message")

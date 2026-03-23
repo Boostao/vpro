@@ -67,9 +67,9 @@ mod_reporting_server <- function(id, sys_state, con) {
 
     report_prefs_loaded <- reactiveVal(FALSE)
     report_pref_defaults <- list(
-      colour_greater = get_config_setting("ReportOptions", "cmbColourGreater", default = 5L),
-      gray_greater = get_config_setting("ReportOptions", "cmbGrayGreater", default = 65L),
-      apply_theme = get_config_setting("ReportOptions", "cmbApplyTheme", default = 1L)
+      colour_greater = (config("ReportOptions", "cmbColourGreater") %||% 5L),
+      gray_greater = (config("ReportOptions", "cmbGrayGreater") %||% 65L),
+      apply_theme = (config("ReportOptions", "cmbApplyTheme") %||% 1L)
     )
     report_pref_defaults$apply_theme <- isTRUE(as.logical(report_pref_defaults$apply_theme))
 
@@ -83,15 +83,15 @@ mod_reporting_server <- function(id, sys_state, con) {
     })
 
     observeEvent(input$opt_colour_greater, {
-      set_config_setting("ReportOptions", "cmbColourGreater", input$opt_colour_greater)
+      config("ReportOptions", "cmbColourGreater", input$opt_colour_greater)
     }, ignoreInit = TRUE)
 
     observeEvent(input$opt_gray_greater, {
-      set_config_setting("ReportOptions", "cmbGrayGreater", input$opt_gray_greater)
+      config("ReportOptions", "cmbGrayGreater", input$opt_gray_greater)
     }, ignoreInit = TRUE)
 
     observeEvent(input$opt_apply_theme, {
-      set_config_setting("ReportOptions", "cmbApplyTheme", as.integer(isTRUE(input$opt_apply_theme)))
+      config("ReportOptions", "cmbApplyTheme", as.integer(isTRUE(input$opt_apply_theme)))
     }, ignoreInit = TRUE)
 
     export_tables_to_parquet <- function(tables) {

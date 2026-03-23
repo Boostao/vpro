@@ -11,15 +11,17 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
     if (is.null(d_save)) d_save <- NA
     if (!is.na(d_save)) d_save <- as.character(d_save)
 
+    env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+
     sql <- paste(
-        "UPDATE Env SET",
+        "UPDATE", env_table_sql, "SET",
         "_location=?, date=?, sitesurveyor=?, latitude=?, longitude=?,",
         "utmeasting=?, utmnorthing=?, elevation=?, slopegradient=?, aspect=?,",
         "mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=?",
         "WHERE plotnumber=?"
     )
 
-    existing <- DBI::dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
+    existing <- DBI::dbGetQuery(con, paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ?"), list(plot_id))
 
     res <- DBI::dbExecute(con, sql, list(
         fields$`_location`,
@@ -42,7 +44,7 @@ save_site_env_header <- function(con, plot_id, fields, project_id = NULL, user =
 
     if (res == 0) {
         sql_ins <- paste(
-            "INSERT INTO Env (plotnumber, _location, date, sitesurveyor, latitude,",
+            "INSERT INTO", env_table_sql, "(plotnumber, _location, date, sitesurveyor, latitude,",
             "longitude, utmeasting, utmnorthing, elevation, slopegradient, aspect,",
             "mesoslopeposition, surfaceshape, moistureregime, nutrientregime, sitenotes)",
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -120,7 +122,9 @@ coerce_soil_value <- function(table, col_name, value) {
 }
 
 save_soil_cell <- function(con, table, record_id, col_name, value) {
-    sql <- sprintf("UPDATE %s SET %s = ? WHERE id = ?", table, col_name)
+    table_id <- db_id(table, config("Current", "CurrProject"), prj = TRUE)
+    table_sql <- as.character(DBI::dbQuoteIdentifier(con, table_id))
+    sql <- sprintf("UPDATE %s SET %s = ? WHERE id = ?", table_sql, col_name)
     DBI::dbExecute(con, sql, list(value, record_id))
 }
 
@@ -289,9 +293,13 @@ mod_site_env_server <- function(id, sys_state, con) {
         
         # con provided by moduleServer arguments
         
-        rv$env <- dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
-        rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(plot_id))
-        rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(plot_id))
+        env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+        humus_table_sql <- as.character(db_tb(con, "Humus", config("Current", "CurrProject"), prj = TRUE))
+        mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
+
+        rv$env <- dbGetQuery(con, paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ?"), list(plot_id))
+        rv$humus <- dbGetQuery(con, paste("SELECT * FROM", humus_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(plot_id))
+        rv$mineral <- dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(plot_id))
         
         # Populate Inputs
         if(nrow(rv$env) > 0) {
@@ -395,7 +403,8 @@ mod_site_env_server <- function(id, sys_state, con) {
                 showNotification("Header updated successfully.", type = "message")
             }
 
-            rv$env <- dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
+            env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+            rv$env <- dbGetQuery(con, paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ?"), list(plot_id))
         }, error = function(e) {
             showNotification(paste("Error saving header:", e$message), type="error")
         })
@@ -662,10 +671,11 @@ mod_site_env_server <- function(id, sys_state, con) {
         if (!require_plot_write()) return()
         plot_id <- as.character(sys_state$CurrSU)
         
-        sql <- "UPDATE Env SET standage=?, sv_standheight=?, structuralstage=? WHERE plotnumber=?"
+        env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+        sql <- paste("UPDATE", env_table_sql, "SET standage=?, sv_standheight=?, structuralstage=? WHERE plotnumber=?")
         
         tryCatch({
-            before_row <- dbGetQuery(con, "SELECT standage, sv_standheight, structuralstage FROM Env WHERE plotnumber = ?", list(plot_id))
+            before_row <- dbGetQuery(con, paste("SELECT standage, sv_standheight, structuralstage FROM", env_table_sql, "WHERE plotnumber = ?"), list(plot_id))
             res <- dbExecute(con, sql, list(
                 input$men_age,
                 input$men_hgt,
@@ -806,10 +816,12 @@ mod_site_env_server <- function(id, sys_state, con) {
         }
 
         if (table == "Humus") {
-            rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
+            humus_table_sql <- as.character(db_tb(con, "Humus", config("Current", "CurrProject"), prj = TRUE))
+            rv$humus <- dbGetQuery(con, paste("SELECT * FROM", humus_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(sys_state$CurrSU))
         }
         if (table == "Mineral") {
-            rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(sys_state$CurrSU))
+            mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
+            rv$mineral <- dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(sys_state$CurrSU))
         }
     }
 
@@ -985,8 +997,10 @@ mod_site_env_server <- function(id, sys_state, con) {
         # Using shared connection `con`
         
         if (mode == "new") {
+            table_id <- db_id(table, config("Current", "CurrProject"), prj = TRUE)
+            table_sql <- as.character(DBI::dbQuoteIdentifier(con, table_id))
             # Generate ID safely
-            max_res <- dbGetQuery(con, sprintf("SELECT MAX(id) as m FROM %s", table))
+            max_res <- dbGetQuery(con, sprintf("SELECT MAX(id) as m FROM %s", table_sql))
             max_id <- if(is.na(max_res[[1]])) 0 else max_res[[1]]
             new_id <- max_id + 1
             fields$id <- new_id
@@ -994,7 +1008,7 @@ mod_site_env_server <- function(id, sys_state, con) {
             # Construct INSERT
             cols <- names(fields)
             placeholders <- paste(rep("?", length(cols)), collapse=", ")
-            sql <- sprintf("INSERT INTO %s (%s) VALUES (%s)", table, paste(cols, collapse=", "), placeholders)
+            sql <- sprintf("INSERT INTO %s (%s) VALUES (%s)", table_sql, paste(cols, collapse=", "), placeholders)
             values <- unname(fields)
             # Ensure values list is flat and lacks NULLs (replace with explicit NA if needed)
             
@@ -1014,11 +1028,19 @@ mod_site_env_server <- function(id, sys_state, con) {
                     )
                 }
                 # Refresh Data
-                if(table == "Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
-                if(table == "Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
+                if(table == "Humus") {
+                    humus_table_sql <- as.character(db_tb(con, "Humus", config("Current", "CurrProject"), prj = TRUE))
+                    rv$humus <- dbGetQuery(con, paste("SELECT * FROM", humus_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(fields$plotnumber))
+                }
+                if(table == "Mineral") {
+                    mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
+                    rv$mineral <- dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(fields$plotnumber))
+                }
             }, error = function(e) { showNotification(paste("Insert Error:", e$message), type="error") })
             
         } else {
+            table_id <- db_id(table, config("Current", "CurrProject"), prj = TRUE)
+            table_sql <- as.character(DBI::dbQuoteIdentifier(con, table_id))
             # Construct UPDATE
             # fields contains all data, but we filter out plotnumber usually? No, update it too for safety or ignore.
             # We exclude 'id' from fields list passed in, we use 'id' arg.
@@ -1027,11 +1049,11 @@ mod_site_env_server <- function(id, sys_state, con) {
             update_fields <- fields[names(fields) != "plotnumber"]
             
             set_clause <- paste(names(update_fields), "= ?", collapse=", ")
-            sql <- sprintf("UPDATE %s SET %s WHERE id = ?", table, set_clause)
+            sql <- sprintf("UPDATE %s SET %s WHERE id = ?", table_sql, set_clause)
             values <- c(unname(update_fields), id)
             
             tryCatch({
-                before_row <- dbGetQuery(con, sprintf("SELECT * FROM %s WHERE id = ?", table), list(id))
+                before_row <- dbGetQuery(con, sprintf("SELECT * FROM %s WHERE id = ?", table_sql), list(id))
                 dbExecute(con, sql, values)
                 showNotification("Record updated.", type="message")
                 if (nrow(before_row) > 0) {
@@ -1051,8 +1073,14 @@ mod_site_env_server <- function(id, sys_state, con) {
                     )
                 }
                 # Refresh Data
-                if(table == "Humus") rv$humus <- dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
-                if(table == "Mineral") rv$mineral <- dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(fields$plotnumber))
+                if(table == "Humus") {
+                    humus_table_sql <- as.character(db_tb(con, "Humus", config("Current", "CurrProject"), prj = TRUE))
+                    rv$humus <- dbGetQuery(con, paste("SELECT * FROM", humus_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(fields$plotnumber))
+                }
+                if(table == "Mineral") {
+                    mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
+                    rv$mineral <- dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(fields$plotnumber))
+                }
             }, error = function(e) { showNotification(paste("Update Error:", e$message), type="error") })
         }
     }

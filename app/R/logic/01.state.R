@@ -1,169 +1,49 @@
-# Note : Tested caching the config but platform so fast and yaml so tiny that reading
-# it every time is not a problem.
-config <- function(section = NULL, key = NULL, setting, conf = "config.yml") {
-  cfg <- yaml::read_yaml(conf, readLines.warn = FALSE)
-
-  if (!missing(setting)) {
-    if (is.null(section) || is.null(key)) {
-      stop("Both section and key are required when writing config values.")
-    }
-    if (is.null(cfg[[section]])) {
-      cfg[[section]] <- list()
-    }
-    cfg[[section]][[key]] <- setting
-    yaml::write_yaml(cfg, conf)
-  }
-
-  invisible(cfg)
-}
-
-normalize_current_value <- function(value) {
-  if (is.null(value) || length(value) == 0) {
-    return(NULL)
-  }
-
-  value <- value[[1]]
-  if (is.null(value) || isTRUE(is.na(value))) {
-    return(NULL)
-  }
-
-  value <- trimws(as.character(value))
-  if (!nzchar(value) || identical(tolower(value), "none")) {
-    return(NULL)
-  }
-
-  value
-}
-
-get_current_setting <- function(key, default = NULL, conf = "config.yml") {
-  value <- config(conf = conf)$Current[[key]]
-  value <- normalize_current_value(value)
-  if (is.null(value)) default else value
-}
-
-set_current_setting <- function(key, value, conf = "config.yml") {
-  value <- normalize_current_value(value)
-  config("Current", key, value, conf = conf)
-  invisible(value)
-}
-
-get_config_setting <- function(section, key, default = NULL, conf = "config.yml") {
-  value <- config(conf = conf)[[section]][[key]]
-  if (is.null(value)) default else value
-}
-
-set_config_setting <- function(section, key, value, conf = "config.yml") {
-  config(section, key, value, conf = conf)
-  invisible(value)
-}
-
-create_context_view <- function(con, view_name, db_name, source_table = view_name, required = FALSE) {
-  db_name <- normalize_current_value(db_name)
-  if (is.null(db_name)) {
-    if (isTRUE(required)) {
-      stop(sprintf("A database selection is required for %s.", view_name))
-    }
-    return(invisible(FALSE))
-  }
-
-  source_id <- db_id(source_table, db_name, prj = TRUE)
-  source_exists <- tryCatch(DBI::dbExistsTable(con, source_id), error = function(e) FALSE)
-  if (!isTRUE(source_exists)) {
-    if (isTRUE(required)) {
-      stop(sprintf("Required table %s is not available in attached database %s.", paste0(db_name, "_", source_table), db_name))
-    }
-    return(invisible(FALSE))
-  }
-
-  DBI::dbExecute(
-    con,
-    paste0(
-      "CREATE OR REPLACE TEMP VIEW ", DBI::dbQuoteIdentifier(con, view_name),
-      " AS SELECT * FROM ", DBI::dbQuoteIdentifier(con, source_id)
-    )
-  )
-
-  invisible(TRUE)
-}
-
-refresh_current_context_views <- function(con, conf = "config.yml") {
-  current <- config(conf = conf)$Current
-  current_project <- normalize_current_value(current$CurrProject)
-  current_hierarchy <- normalize_current_value(current$CurrHierarchy)
-
-  if (is.null(current_project)) {
-    stop("Current project is required to bootstrap runtime views.")
-  }
-
-  # Project tables live in the current project database and remain prefixed.
-  required_project_views <- c("Env", "Metadata", "Audit", "SU")
-  optional_project_views <- c("Admin", "Humus", "Mineral", "Veg", "Other")
-
-  for (view_name in required_project_views) {
-    create_context_view(con, view_name, current_project, required = TRUE)
-  }
-  for (view_name in optional_project_views) {
-    create_context_view(con, view_name, current_project, required = FALSE)
-  }
-
-  create_context_view(
-    con,
-    "Hierarchy",
-    db_name = if (is.null(current_hierarchy)) current_project else current_hierarchy,
-    required = TRUE
-  )
-
-  invisible(TRUE)
-}
-
 # Initialize state config and return db connection
 init_state <- function() {
   
   local({
   
-    config("Program", "Name", file.path(getwd(), "app.R"))
-  
-    if (is.null(config()$System$Location)) {
+    if (is.null(config("System", "Location"))) {
       config("System", "Location", getwd())
     }
   
-    IveBeenMoved <- {config()$System$Location != getwd()}
+    IveBeenMoved <- {config("System", "Location") != getwd()}
     if (IveBeenMoved) {
-      warning("-- VPro here.\n   Looks like I've been moved.\n   I used to live at {'%s'}.\n   It's a little dark in here, but now it looks like I'm at {'%s'}.\n   I'm going to assume that you moved all my sub-directories when you moved me,\n   but just to be sure, please double-check by looking at Directories in User-setup.\n   Thanks, and have a nice day." |> sprintf(config()$System$Location, getwd()))
+      warning("VPro here.\nLooks like I've been moved.\nI used to live at {'%s'}.\nIt's a little dark in here, but now it looks like I'm at {'%s'}.\nI'm going to assume that you moved all my sub-directories when you moved me,\n   but just to be sure, please double-check by looking at Directories in User-setup.\nThanks, and have a nice day." |> sprintf(config("System", "Location"), getwd()))
     }
   
-    if (is.null(config()$System$RLocation) || IveBeenMoved) {
-      config("System", "RLocation", file.path(config()$System$Location , "R"))
+    if (is.null(config("System", "RLocation")) || IveBeenMoved) {
+      config("System", "RLocation", file.path(config("System", "Location") , "R"))
     }
   
-    if (is.null(config()$System$GELocation) || IveBeenMoved) {
-      config("System", "GELocation", file.path(config()$System$Location , "GoogleEarth"))
+    if (is.null(config("System", "GELocation")) || IveBeenMoved) {
+      config("System", "GELocation", file.path(config("System", "Location") , "GoogleEarth"))
     }
   
-    if (is.null(config()$System$PictureDir) || IveBeenMoved) {
-      config("System", "PictureDir", file.path(config()$System$Location , "pics"))
+    if (is.null(config("System", "PictureDir")) || IveBeenMoved) {
+      config("System", "PictureDir", file.path(config("System", "Location") , "pics"))
     }
   
-    if (is.null(config()$System$MetadataLocation) || IveBeenMoved) {
-      config("System", "MetadataLocation", file.path(config()$System$Location, "data", "VMetaData.db"))
+    if (is.null(config("System", "MetadataLocation")) || IveBeenMoved) {
+      config("System", "MetadataLocation", file.path(config("System", "Location"), "data", "VMetaData.db"))
     }
   
     # Ribbon icon block non applicable
 
     # Check table hash for changes
-    remoteDB <- db_con(file.path(config()$System$Location, "data", "VLists.db"))
+    remoteDB <- db_con(file.path(config("System", "Location"), "data", "VLists.db"))
     USysAllSpecsVer <- db_hash(remoteDB, "USysAllSpecs")
     USysTableOfListsVer <- db_hash(remoteDB, "USysTableOfLists")
     db_close(remoteDB)
   
-    if (!USysAllSpecsVer %in% config()$Current$USysAllSpecsVer) {
+    if (!USysAllSpecsVer %in% config("Current", "USysAllSpecsVer")) {
       config("Current", "USysAllSpecsVer", USysAllSpecsVer)
     }
-    if (!USysTableOfListsVer %in% config()$Current$USysTableOfListsVer) {
+    if (!USysTableOfListsVer %in% config("Current", "USysTableOfListsVer")) {
       config("Current", "USysTableOfListsVer", USysTableOfListsVer)
     }
   
-    if (config()$System$RunOnce == TRUE) {
+    if (config("System", "RunOnce") == TRUE) {
       config("Current", "User", Sys.info()[["user"]])
       config("System", "Installed", format(Sys.time(), "%Y-%m-%d %H:%M:%S"))
       config("System", "RunOnce", FALSE)
@@ -176,30 +56,30 @@ init_state <- function() {
     }
   
     # Log entry into audit table
-    currentDB <- db_con(file.path(config()$System$Location, "data", "VPro64.db"))
-
-    current_project_path <- db_path(config()$System$Location, "projects", db = config()$Current$CurrProject)
-    if (length(current_project_path) == 0 || !file.exists(current_project_path)) {
-      stop(sprintf("Current project database is missing: %s", normalize_current_value(config()$Current$CurrProject) %||% "<NULL>"))
-    }
+    currentDB <- db_con(db_path(db = "VPro64"))
 
     # CompareRegToCurrent can be skipped entirely since the project ATTACH is done on the fly
     # Toolbars can be ignored
     # Attach all relevant dbs
-    to_attach <- c(db_path(config()$System$Location, "projects", db = c(
-      config()$Current$CurrProject, # Env, Humus, Audit, Mineral, Veg, Other, Metadata, Admin
-      config()$Current$CurrHerbarium, # Herbarium
-      config()$Current$CurrHierarchy, # Hierarchy
-      config()$Current$CurrLump, # Lump
-      config()$Current$CurrPlotList, # SU
-      config()$Current$CurrPlotListBak, # SU (backup)
-      config()$Current$CurrVegProfile, # Profile
-      config()$Current$cmbThemeTable # Theme
-    )),
-    db_path(config()$System$Location, db = c("VUser", "VLists", "VMetaData", "VMessageBoard", file.path("pics", "VPics" ))))
+    to_attach <- c(
+      db_path(
+        "projects",
+        db = c(
+          config("Current", "CurrProject"), # Env, Humus, Audit, Mineral, Veg, Other, Metadata, Admin
+          config("Current", "CurrHerbarium"), # Herbarium
+          config("Current", "CurrHierarchy"), # Hierarchy
+          config("Current", "CurrLump"), # Lump
+          config("Current", "CurrPlotlist"), # SU
+          config("Current", "CurrPlotlistBak"), # SU (backup)
+          config("Current", "CurrVegProfile"), # Profile
+          config("Current", "cmbThemeTable") # Theme
+        )
+      ),
+      db_path(db = c("VUser", "VLists", "VMetaData", "VMessageBoard")),
+      db_path("pics", db = "VPics")
+    )
 
     db_attach(currentDB, to_attach)
-    refresh_current_context_views(currentDB)
 
     # Rename fields fix
     db_rename_fix01(currentDB)
@@ -223,12 +103,23 @@ init_state <- function() {
     }
 
     # Log entry into user log table
-    db_insert(currentDB, "USysUserLog", User = Sys.info()[["user"]], InTime = Sys.time(), OutTime = NA, LocalMachine = Sys.info()[["nodename"]])
+    db_insert(
+      currentDB,
+      "USysUserLog",
+      User = Sys.info()[["user"]],
+      InTime = Sys.time(),
+      OutTime = NA,
+      LocalMachine = Sys.info()[["nodename"]]
+    )
 
     # Insert Audit trace in project
-    db_insert(currentDB, "Audit", db = config()$Current$CurrProject, prj = TRUE,
-      Project = config()$Current$CurrProject,
-      User = config()$Current$User,
+    db_insert(
+      currentDB,
+      "Audit",
+      db = config("Current", "CurrProject"),
+      prj = TRUE,
+      Project = config("Current", "CurrProject"),
+      User = config("Current", "User"),
       Table = "On",
       EditWhen = Sys.time()
     )

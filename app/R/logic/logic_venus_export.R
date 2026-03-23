@@ -413,7 +413,21 @@ get_project_metadata <- function(con, project_id) {
     ))
   }
   
-  sql <- "SELECT projectid, projecttitle, projectdescription FROM Metadata WHERE projectid = ?"
+  project_db <- config("Current", "CurrProject")
+  metadata_table_id <- if (!is.null(project_db) && nzchar(trimws(as.character(project_db)))) db_id("Metadata", project_db, prj = TRUE) else NULL
+  metadata_exists <- !is.null(metadata_table_id) && isTRUE(tryCatch(DBI::dbExistsTable(con, metadata_table_id), error = function(e) FALSE))
+  if (!metadata_exists) {
+    return(data.frame(
+      projectid = project_id,
+      projecttitle = paste("Project", project_id),
+      projectdescription = "",
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  metadata_table_sql <- as.character(DBI::dbQuoteIdentifier(con, metadata_table_id))
+
+  sql <- paste("SELECT projectid, projecttitle, projectdescription FROM", metadata_table_sql, "WHERE projectid = ?")
   result <- DBI::dbGetQuery(con, sql, list(project_id))
   
   if (nrow(result) == 0) {
@@ -437,7 +451,8 @@ get_project_metadata <- function(con, project_id) {
 get_plot_data <- function(con, project_id, opts) {
   
   # Base query
-  sql <- "SELECT * FROM Env WHERE 1=1"
+  env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+  sql <- paste("SELECT * FROM", env_table_sql, "WHERE 1=1")
   params <- list()
   
   # Filter by project
@@ -525,12 +540,18 @@ get_vegetation_for_plot <- function(con, plot_number, opts) {
 get_soil_data_for_plot <- function(con, plot_number) {
   
   # Get humus horizons
-  sql_humus <- "SELECT * FROM Humus WHERE PlotNumber = ? ORDER BY UpperDepth"
-  humus <- DBI::dbGetQuery(con, sql_humus, list(plot_number))
+  humus_table_id <- db_id("Humus", config("Current", "CurrProject"), prj = TRUE)
+  humus_exists <- isTRUE(tryCatch(DBI::dbExistsTable(con, humus_table_id), error = function(e) FALSE))
+  humus_table_sql <- if (humus_exists) as.character(DBI::dbQuoteIdentifier(con, humus_table_id)) else NULL
+  sql_humus <- if (is.null(humus_table_sql)) NULL else paste("SELECT * FROM", humus_table_sql, "WHERE PlotNumber = ? ORDER BY UpperDepth")
+  humus <- if (is.null(sql_humus)) data.frame() else DBI::dbGetQuery(con, sql_humus, list(plot_number))
   
   # Get mineral horizons
-  sql_mineral <- "SELECT * FROM Mineral WHERE PlotNumber = ? ORDER BY UpperDepth"
-  mineral <- DBI::dbGetQuery(con, sql_mineral, list(plot_number))
+  mineral_table_id <- db_id("Mineral", config("Current", "CurrProject"), prj = TRUE)
+  mineral_exists <- isTRUE(tryCatch(DBI::dbExistsTable(con, mineral_table_id), error = function(e) FALSE))
+  mineral_table_sql <- if (mineral_exists) as.character(DBI::dbQuoteIdentifier(con, mineral_table_id)) else NULL
+  sql_mineral <- if (is.null(mineral_table_sql)) NULL else paste("SELECT * FROM", mineral_table_sql, "WHERE PlotNumber = ? ORDER BY UpperDepth")
+  mineral <- if (is.null(sql_mineral)) data.frame() else DBI::dbGetQuery(con, sql_mineral, list(plot_number))
   
   list(
     humus = humus,

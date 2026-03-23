@@ -8,7 +8,7 @@ herbarium_table_id <- function(prefix) {
 
 herbarium_table_exists <- function(con, prefix) {
   prefix <- trimws(as.character(prefix %||% ""))
-  if (!nzchar(prefix) || !(prefix %in% list_attached_dbs(con))) {
+  if (!nzchar(prefix) || !(prefix %in% db_list_attached(con))) {
     return(FALSE)
   }
 
@@ -46,7 +46,7 @@ herbarium_table_to_base <- function(table_name) {
 }
 
 herbarium_existing_bases <- function(con) {
-  bases <- list_attached_dbs(con)
+  bases <- db_list_attached(con)
   bases <- bases[vapply(bases, function(prefix) herbarium_table_exists(con, prefix), logical(1))]
   sort(bases[nzchar(bases) & !grepl("(?i)^usys", bases, perl = TRUE)])
 }
@@ -66,8 +66,8 @@ herbarium_resolve_table <- function(con, selection) {
 }
 
 herbarium_attach_source_db <- function(con, db_path, alias) {
-  if (alias %in% list_attached_dbs(con)) {
-    detach_db(con, alias)
+  if (alias %in% db_list_attached(con)) {
+    db_detach(con, alias)
   }
 
   statement <- if (project_file_is_sqlite(db_path)) {
@@ -118,7 +118,7 @@ herbarium_import_table <- function(con, source_path, source_prefix, target_prefi
   }
 
   herbarium_attach_source_db(con, source_path, source_alias)
-  on.exit(try(detach_db(con, source_alias), silent = TRUE), add = TRUE)
+  on.exit(try(db_detach(con, source_alias), silent = TRUE), add = TRUE)
 
   source_table <- herbarium_source_table(con, source_alias, source_prefix)
   if (!nzchar(source_table)) {
@@ -126,7 +126,7 @@ herbarium_import_table <- function(con, source_path, source_prefix, target_prefi
   }
 
   if (project_attached(con, target_prefix)) {
-    detach_db(con, target_prefix)
+    db_detach(con, target_prefix)
   }
 
   target_path <- project_db_path(target_prefix)
@@ -170,7 +170,7 @@ herbarium_unattach_table <- function(con, prefix, protected_prefixes = c("Sample
     return(invisible(NULL))
   }
 
-  detach_db(con, prefix)
+  db_detach(con, prefix)
   invisible(herbarium_target_table(prefix))
 }
 
@@ -499,9 +499,9 @@ mod_herbarium_server <- function(id, state, con) {
     observeEvent(TRUE, {
       state$CurrForm <- "frmHerbarium"
       state$sysCurrForm <- "frmHerbarium"
-      set_current_setting("DataFormName", "frmHerbarium")
+      config("Current", "DataFormName", "frmHerbarium")
 
-      pref <- nz(get_current_setting("CurrHerbarium", default = "Sample"))
+      pref <- nz((config("Current", "CurrHerbarium") %||% "Sample"))
       refresh_herbarium_choices(pref)
       set_status("Loaded Herbarium (frmHerbarium).")
     }, once = TRUE)
@@ -511,7 +511,7 @@ mod_herbarium_server <- function(id, state, con) {
 
       if (selected %in% c("--------------------------------------", "Attach", "Unattach", "New")) {
         rv$requested_special <- selected
-        prev <- nz(get_current_setting("CurrHerbarium", default = current_herbarium_base()))
+        prev <- nz((config("Current", "CurrHerbarium") %||% current_herbarium_base()))
         if (nzchar(prev)) {
           shiny::updateSelectInput(session, "HerbariumList", selected = prev)
         }
@@ -565,7 +565,7 @@ mod_herbarium_server <- function(id, state, con) {
         return()
       }
 
-      set_current_setting("CurrHerbarium", selected)
+      config("Current", "CurrHerbarium", selected)
       state$CurrHerbarium <- selected
       rv$herb_table <- herbarium_resolve_table(con, selected)
       rv$loaded <- herbarium_read_records(con, rv$herb_table)
@@ -599,7 +599,7 @@ mod_herbarium_server <- function(id, state, con) {
       }
 
       refresh_herbarium_choices(prefix)
-      set_current_setting("CurrHerbarium", prefix)
+      config("Current", "CurrHerbarium", prefix)
       state$CurrHerbarium <- prefix
       set_status(sprintf("Attached herbarium table: %s_Herbarium", prefix))
     })
@@ -631,7 +631,7 @@ mod_herbarium_server <- function(id, state, con) {
       }
 
       refresh_herbarium_choices(prefix)
-      set_current_setting("CurrHerbarium", prefix)
+      config("Current", "CurrHerbarium", prefix)
       state$CurrHerbarium <- prefix
       set_status(sprintf("Created herbarium table: %s_Herbarium", prefix))
     })
@@ -655,7 +655,7 @@ mod_herbarium_server <- function(id, state, con) {
       fallback <- if ("Sample" %in% bases) "Sample" else if (length(bases)) bases[[1]] else ""
       refresh_herbarium_choices(fallback)
       if (nzchar(fallback)) {
-        set_current_setting("CurrHerbarium", fallback)
+        config("Current", "CurrHerbarium", fallback)
         state$CurrHerbarium <- fallback
       }
       set_status(sprintf("Unattached herbarium table: %s", removed %||% paste0(prefix, "_Herbarium")))

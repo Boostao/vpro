@@ -54,7 +54,6 @@ source("R/logic/logic_diagnostic.R") # Diagnostic helpers
 source("R/logic/logic_auth.R") # Auth + RBAC helpers
 source("R/logic/logic_coord_tools.R") # Coordinate conversion tools
 source("R/logic/logic_climr.R") # ClimR climate data integration
-source("R/logic/db_connections.R") # Connection helpers + %||%
 source("R/logic/logic_project.R") # Project file management
 source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helpers
 source("R/logic/logic_sync.R") # Sync engine (stub)

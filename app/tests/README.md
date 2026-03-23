@@ -94,12 +94,13 @@ docker-compose down -v
 - DuckDB local database paths
 - Cloud attachment flags
 
-**R/db_connections.R**
-- `connect_local_db()` — Opens local DuckDB + attaches auxiliary DBs
+**R/logic/00.db.R**
+- `db_con()` — Opens a DuckDB connection
+- `db_attach()` — Attaches local SQLite databases
 - `attach_cloud_db()` — Attaches PostgreSQL via DuckDB's postgres extension
 - `is_cloud_connected()` — Tests cloud connectivity
-- `query_db()` — Wrapper for safe SQL execution
-- Helper functions for manage attachments
+- `db_query()` / `db_run()` — Query and execute wrappers
+- `db_list_attached()` / `db_detach()` — Manage attached catalogs
 
 **tests/testthat/setup.R**
 - Initializes test environment before test suite runs
@@ -144,7 +145,7 @@ docker-compose down -v
 ## Test Categories
 
 ### Local DuckDB Tests (Always Run)
-- `test-db_connections.R::connect_local_db() creates valid connection`
+- `test-db_connections.R::db_con() creates valid connection`
 - `test-db_connections.R::test schema initializes with required tables`
 - `test-db_connections.R::insert_test_plot() creates valid records`
 
@@ -203,7 +204,7 @@ Rscript -e "testthat::test_file('tests/shinytest2/test-conflicts.R')"
 ### Running Only Local Tests
 ```r
 testthat::test_file("tests/testthat/test-db_connections.R",
-                    filter = "connect_local_db|schema initializes|insert_test_plot")
+                    filter = "db_con|schema initializes|insert_test_plot")
 ```
 
 ---
@@ -413,7 +414,7 @@ setup_fixture <- function(con, fixture_name) {
 | `docker-compose.yml` | PostgreSQL 15 test container definition |
 | `scripts/00_schema_becmaster_test.sql` | BECMaster schema + seed data (25+ tables) |
 | `config.yml` | Environment-specific configuration |
-| `R/db_connections.R` | DuckDB + PostgreSQL connection factory (150+ lines) |
+| `R/logic/00.db.R` | Local + cloud database helper functions |
 | `tests/testthat/setup.R` | Test environment initialization |
 | `tests/testthat/helpers.R` | Reusable test utilities (250+ lines) |
 | `tests/testthat/test-db_connections.R` | 20+ integration tests |
@@ -432,10 +433,10 @@ setup_fixture <- function(con, fixture_name) {
 2. **Open R/RStudio**:
    ```r
    setwd("/Users/nicolas/Documents/GitHub/vpro")
-   source("R/db_connections.R")
+  source("R/logic/00.db.R")
    
    # Test local connection
-   con <- connect_local_db(environment = "development")
+  con <- db_con("data/vpro.duckdb")
    DBI::dbListTables(con)
    
    # Test cloud attachment (if postgres running)

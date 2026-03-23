@@ -41,7 +41,7 @@ test_that("publish_project_dataset writes BEC Map contract files (RDS/CSV) and r
   skip_if_not_installed("duckdb")
   skip_if_not_installed("DBI")
 
-  source(here::here("R", "db_connections.R"), local = TRUE)
+  source(here::here("app", "R", "logic", "00.db.R"), local = TRUE)
   source(here::here("R", "logic_compliance.R"), local = TRUE)
   source(here::here("R", "logic_publish.R"), local = TRUE)
 
@@ -112,7 +112,7 @@ test_that("validate_for_publishing flags missing/zero coordinates", {
   skip_if_not_installed("duckdb")
   skip_if_not_installed("DBI")
 
-  source(here::here("R", "db_connections.R"), local = TRUE)
+  source(here::here("app", "R", "logic", "00.db.R"), local = TRUE)
   source(here::here("R", "logic_compliance.R"), local = TRUE)
   source(here::here("R", "logic_publish.R"), local = TRUE)
 
@@ -131,12 +131,12 @@ test_that("publish_project_dataset can write XLSX via existing exporter (optiona
   skip_if_not_installed("openxlsx")
   skip_if_not(file.exists("data/vpro.duckdb"), "Local DuckDB file not present")
 
-  source(here::here("R", "db_connections.R"), local = TRUE)
+  source(here::here("app", "R", "logic", "00.db.R"), local = TRUE)
   source(here::here("R", "logic_compliance.R"), local = TRUE)
   source(here::here("R", "logic_publish.R"), local = TRUE)
 
-  con <- connect_local_db()
-  on.exit(close_db(con), add = TRUE)
+  con <- db_con("data/vpro.duckdb")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   # Find a publishable project id with valid coordinates
   pid <- tryCatch({

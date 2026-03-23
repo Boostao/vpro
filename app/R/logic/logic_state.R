@@ -22,49 +22,8 @@ SW_SHOW <- 1
 #' @return A reactiveValues object with default fields
 init_sys_state <- function() {
   shiny::reactiveValues(
-    # Core Context
-    CurrProject = NULL,      # Current Project ID (String)
-    CurrSU = NULL,           # Current Plot/SiteUnit (String)
-    CurrHierarchy = NULL,    # Classification Hierarchy Context
-    CurrPicture = NULL,
-    CurrForm = NULL,
+    # VBA global declarations
     CurrFormLoc = list(left = 0L, top = 0L, right = 0L, bottom = 0L),
-    CurrProjectName = NULL,
-    
-    # Settings
-    LumpingTable = NULL,     # Active Lumping Table ID
-    User = Sys.getenv("USER", "Unknown"),
-    FileTitle = NULL,
-    CancelEvent = 0L,
-    UnattachObject = NULL,
-    SaveTo = 0L,
-    PlotNumber = NULL,
-    PicturePlotNumber = NULL,
-    System = NULL,
-    OptShowClassValue = 0L,
-    NewSpp = NULL,
-    RemoteProject = NULL,
-    RemoteDB = NULL,
-    BreakSU = NULL,
-    OldUnit = NULL,
-    LumpMsg = NULL,
-    ShowVegValue = NA_real_,
-    CreateReportSummary = FALSE,
-    HierarchyType = NULL,
-    IncludeDiagnostic = FALSE,
-    VENUSProject = NULL,
-    SaveFilter2 = 0L,
-    IncludeExisting = 0L,
-    PickTable = NULL,
-    ComboTable = NULL,
-    PickItem = NULL,
-    StopCode = FALSE,
-    SelectedItems = list(),
-    ExportProject = NULL,
-    DoEvent = FALSE,
-    HierarchyLongName = NULL,
-
-    # Access-style aliases for compatibility with VBA naming
     sysFileTitle = NULL,
     sysCancelEvent = 0L,
     sysUnattachObject = NULL,
@@ -100,9 +59,16 @@ init_sys_state <- function() {
     sysExportProject = NULL,
     sysDoEvent = FALSE,
     sysHierarchyLongName = NULL,
-    
-    # Metadata Cache (loaded when Project changes)
-    ProjectMetadata = NULL
+
+    # Additional module-level VBA globals discovered outside V7mdlGlobalDeclarations.
+    sysSpeciesTestNext = 0L,
+    sysSpeciesToChange = NULL,
+    sysActiveForm = NULL,
+    BreakUnit = NULL,
+    sysApply2AllPlots = FALSE,
+    SuErr = NULL,
+    MyQuartXl = NULL,
+    tmpFuncResults = NULL
   )
 }
 
@@ -121,7 +87,7 @@ is_valid_project_prefix <- function(prefix) {
 set_project <- function(state, project_id, con) {
   shiny::req(project_id)
 
-  set_current_setting("CurrProject", project_id)
+  config("Current", "CurrProject", project_id)
   
   # Update State
   state$CurrProject <- project_id
@@ -129,9 +95,6 @@ set_project <- function(state, project_id, con) {
   state$CurrProjectName <- project_id
 
   project_metadata_id <- tryCatch(db_id("Metadata", project_id, prj = TRUE), error = function(e) NULL)
-  if (!is.null(project_metadata_id) && isTRUE(tryCatch(DBI::dbExistsTable(con, project_metadata_id), error = function(e) FALSE))) {
-    refresh_current_context_views(con)
-  }
   
   meta <- tryCatch(DBI::dbReadTable(con, project_metadata_id, check.names = FALSE), error = function(e) data.frame())
   if (nrow(meta) > 0) {

@@ -118,19 +118,18 @@ mod_fs1333_server <- function(id, state, con) {
         return(data.frame())
       }
 
-      sql <- "SELECT * FROM Env WHERE plotnumber = ? LIMIT 1"
+      env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+      sql <- paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ? LIMIT 1")
       tryCatch(DBI::dbGetQuery(con, sql, list(plot_number)), error = function(e) data.frame())
     }
 
     env_has_column <- function(column_name) {
-      out <- tryCatch(
-        DBI::dbGetQuery(con, "PRAGMA table_info('Env')"),
-        error = function(e) data.frame()
-      )
-      if (!nrow(out) || !"name" %in% names(out)) {
+      env_table_id <- db_id("Env", config("Current", "CurrProject"), prj = TRUE)
+      out <- tryCatch(DBI::dbListFields(con, env_table_id), error = function(e) character(0))
+      if (!length(out)) {
         return(FALSE)
       }
-      tolower(column_name) %in% tolower(out$name)
+      tolower(column_name) %in% tolower(out)
     }
 
     update_env_column <- function(plot_number, column_name, value) {
@@ -143,7 +142,8 @@ mod_fs1333_server <- function(id, state, con) {
       }
 
       # Column names are internal constants validated from PRAGMA table info above.
-      sql <- sprintf("UPDATE Env SET %s = ? WHERE plotnumber = ?", column_name)
+      env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+      sql <- sprintf("UPDATE %s SET %s = ? WHERE plotnumber = ?", env_table_sql, column_name)
       n_updated <- tryCatch(
         DBI::dbExecute(con, sql, list(value, plot_number)),
         error = function(e) 0L
@@ -233,7 +233,7 @@ mod_fs1333_server <- function(id, state, con) {
     load_current_context <- function() {
       state$CurrForm <- "frmSIVIsite"
       state$sysCurrForm <- "frmSIVIsite"
-      set_current_setting("DataFormName", "frmSIVIsite")
+      config("Current", "DataFormName", "frmSIVIsite")
 
       plot_number <- normalize_text(state$CurrSU)
       if (!nzchar(plot_number)) {
@@ -270,7 +270,7 @@ mod_fs1333_server <- function(id, state, con) {
 
     # Form_Load parity: initialize source mode from remembered session value.
     observeEvent(TRUE, {
-      source_pref <- suppressWarnings(as.integer(get_current_setting("FS1333ProjectIdSource", default = "1")))
+      source_pref <- suppressWarnings(as.integer((config("Current", "FS1333ProjectIdSource") %||% "1")))
       if (is.na(source_pref) || !(source_pref %in% c(1L, 2L))) {
         source_pref <- 1L
       }
@@ -286,7 +286,7 @@ mod_fs1333_server <- function(id, state, con) {
         source_mode <- 1L
       }
       project_id_source(source_mode)
-      set_current_setting("FS1333ProjectIdSource", as.character(source_mode))
+      config("Current", "FS1333ProjectIdSource", as.character(source_mode))
       load_project_id_choices()
     }, ignoreInit = TRUE)
 

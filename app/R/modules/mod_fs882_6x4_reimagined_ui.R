@@ -368,7 +368,7 @@ if (!exists("open_fs882_destination_context", mode = "function")) {
       state$CurrSU <- pref_plot
       state$sysCurrSU <- pref_plot
     }
-    set_current_setting("DataFormName", form_name)
+    config("Current", "DataFormName", form_name)
   }
 }
 
@@ -560,10 +560,8 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
     current_plot_from_state <- shiny::reactive({
       state_plot <- trimws(as.character(state$CurrSU %||% ""))
       pref_plot <- trimws(as.character(state$PrefPlot %||% ""))
-      pref_curr_su <- trimws(as.character(get_current_setting("CurrSU", default = "") %||% ""))
-      pref_curr_plot <- trimws(as.character(get_current_setting("CurrPlotNumber", default = "") %||% ""))
 
-      candidates <- c(state_plot, pref_plot, pref_curr_su, pref_curr_plot)
+      candidates <- c(state_plot, pref_plot)
       candidates <- candidates[nzchar(candidates)]
       if (!length(candidates)) return(NULL)
       candidates[[1]]
@@ -720,7 +718,6 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
       rv$current_plot <- plot_id
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_current_setting("CurrPlotNumber", plot_id)
 
       load_plot_header(plot_id)
       load_subforms(plot_id)
@@ -735,7 +732,6 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
       rv$current_plot <- plot_id
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_current_setting("CurrPlotNumber", plot_id)
       load_plot_header(plot_id)
       load_subforms(plot_id)
       shiny::showNotification(paste("Loaded plot", plot_id), type = "message")
@@ -784,7 +780,6 @@ mod_fs882_6x4_reimagined_server <- function(id, state, con) {
       rv$current_plot <- plot_id
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_current_setting("CurrPlotNumber", plot_id)
 
       shiny::showNotification("FS882 site record saved.", type = "message")
       load_subforms(plot_id)

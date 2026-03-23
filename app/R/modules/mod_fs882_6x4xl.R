@@ -13,7 +13,7 @@ open_fs882_destination_context <- function(state,
     state$CurrSU <- pref_plot
     state$sysCurrSU <- pref_plot
   }
-  set_current_setting("DataFormName", form_name)
+  config("Current", "DataFormName", form_name)
 }
 
 fs882_coerce_numeric <- function(value) {
@@ -76,8 +76,10 @@ fs882_list_choices <- function(con, list_name) {
 }
 
 fs882_upsert_env_header <- function(con, fields) {
+  env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+
   update_sql <- paste(
-    "UPDATE Env SET",
+    "UPDATE", env_table_sql, "SET",
     "fieldnumber=?, date=?, sitesurveyor=?, _location=?, latitude=?, longitude=?,",
     "utmeasting=?, utmnorthing=?, elevation=?, slopegradient=?, aspect=?,",
     "mesoslopeposition=?, surfaceshape=?, moistureregime=?, nutrientregime=?, sitenotes=?",
@@ -109,7 +111,7 @@ fs882_upsert_env_header <- function(con, fields) {
   }
 
   insert_sql <- paste(
-    "INSERT INTO Env (",
+    "INSERT INTO", env_table_sql, "(",
     "plotnumber, fieldnumber, date, sitesurveyor, _location, latitude, longitude,",
     "utmeasting, utmnorthing, elevation, slopegradient, aspect,",
     "mesoslopeposition, surfaceshape, moistureregime, nutrientregime, sitenotes",
@@ -265,7 +267,8 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
       plot_id <- trimws(as.character(plot_id))
       rv$current_plot <- plot_id
 
-      env_df <- DBI::dbGetQuery(con, "SELECT * FROM Env WHERE plotnumber = ?", list(plot_id))
+      env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+      env_df <- DBI::dbGetQuery(con, paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ?"), list(plot_id))
       if (nrow(env_df) == 0) {
         env_df <- data.frame(
           plotnumber = plot_id,
@@ -313,29 +316,22 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
           "SELECT id, plotnumber, species, layer,",
           "cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8, cover9,",
           "totala, totalb, collected",
-          "FROM Veg WHERE plotnumber = ? ORDER BY species, id"
+          "FROM", as.character(db_tb(con, "Veg", config("Current", "CurrProject"), prj = TRUE)), "WHERE plotnumber = ? ORDER BY species, id"
         ),
         list(plot_id)
       )
 
-      humus_df <- DBI::dbGetQuery(
-        con,
-        "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon",
-        list(plot_id)
-      )
+      humus_table_sql <- as.character(db_tb(con, "Humus", config("Current", "CurrProject"), prj = TRUE))
+      humus_df <- DBI::dbGetQuery(con, paste("SELECT * FROM", humus_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(plot_id))
 
-      mineral_df <- DBI::dbGetQuery(
-        con,
-        "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon",
-        list(plot_id)
-      )
+      mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
+      mineral_df <- DBI::dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(plot_id))
 
       rv$veg <- veg_df
       rv$humus <- humus_df
       rv$mineral <- mineral_df
       state$CurrSU <- plot_id
       state$sysCurrSU <- plot_id
-      set_current_setting("CurrPlotNumber", plot_id)
     }
 
     observeEvent(state$CurrSU, {
@@ -375,7 +371,6 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
         fs882_upsert_env_header(con, fields)
         state$CurrSU <- plot_id
         state$sysCurrSU <- plot_id
-        set_current_setting("CurrPlotNumber", plot_id)
         showNotification("FS882 header saved.", type = "message")
       }, error = function(e) {
         showNotification(paste("Save failed:", conditionMessage(e)), type = "error")
@@ -439,15 +434,19 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
 
           record_id <- current$id[row_idx]
           typed_val <- fs882_coerce_soil_value(table_name, col_name, new_val)
-          sql <- sprintf("UPDATE %s SET %s = ? WHERE id = ?", table_name, col_name)
+          table_id <- db_id(table_name, config("Current", "CurrProject"), prj = TRUE)
+          table_sql <- as.character(DBI::dbQuoteIdentifier(con, table_id))
+          sql <- sprintf("UPDATE %s SET %s = ? WHERE id = ?", table_sql, col_name)
           DBI::dbExecute(con, sql, list(typed_val, record_id))
         }
       }
 
       if (identical(table_name, "Humus")) {
-        rv$humus <- DBI::dbGetQuery(con, "SELECT * FROM Humus WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
+        humus_table_sql <- as.character(db_tb(con, "Humus", config("Current", "CurrProject"), prj = TRUE))
+        rv$humus <- DBI::dbGetQuery(con, paste("SELECT * FROM", humus_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(state$CurrSU))
       } else {
-        rv$mineral <- DBI::dbGetQuery(con, "SELECT * FROM Mineral WHERE plotnumber = ? ORDER BY horizon", list(state$CurrSU))
+        mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
+        rv$mineral <- DBI::dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(state$CurrSU))
       }
     }
 
@@ -518,8 +517,9 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
       req(plot_id)
 
       veg_df <- rv$veg
+      veg_table_sql <- as.character(db_tb(con, "Veg", config("Current", "CurrProject"), prj = TRUE))
       if (!nrow(veg_df)) {
-        DBI::dbExecute(con, "DELETE FROM Veg WHERE plotnumber = ?", list(plot_id))
+        DBI::dbExecute(con, paste("DELETE FROM", veg_table_sql, "WHERE plotnumber = ?"), list(plot_id))
         showNotification("Vegetation saved (no rows).", type = "message")
         return()
       }
@@ -538,7 +538,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
         DBI::dbExecute(con, "BEGIN TRANSACTION")
         on.exit(DBI::dbExecute(con, "ROLLBACK"), add = TRUE)
 
-        existing_max <- DBI::dbGetQuery(con, "SELECT COALESCE(MAX(id), 0) AS max_id FROM Veg")$max_id[[1]]
+        existing_max <- DBI::dbGetQuery(con, paste("SELECT COALESCE(MAX(id), 0) AS max_id FROM", veg_table_sql))$max_id[[1]]
         next_id <- as.integer(existing_max)
 
         for (row_idx in seq_len(nrow(veg_df))) {
@@ -548,10 +548,10 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
           }
         }
 
-        DBI::dbExecute(con, "DELETE FROM Veg WHERE plotnumber = ?", list(plot_id))
+        DBI::dbExecute(con, paste("DELETE FROM", veg_table_sql, "WHERE plotnumber = ?"), list(plot_id))
 
         insert_sql <- paste(
-          "INSERT INTO Veg (",
+          "INSERT INTO", veg_table_sql, "(",
           "id, plotnumber, species, layer,",
           "cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8, cover9,",
           "totala, totalb, collected",
@@ -587,7 +587,7 @@ mod_fs882_6x4xl_server <- function(id, state, con) {
             "SELECT id, plotnumber, species, layer,",
             "cover1, cover2, cover3, cover4, cover5, cover6, cover7, cover8, cover9,",
             "totala, totalb, collected",
-            "FROM Veg WHERE plotnumber = ? ORDER BY species, id"
+            "FROM", veg_table_sql, "WHERE plotnumber = ? ORDER BY species, id"
           ),
           list(plot_id)
         )

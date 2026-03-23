@@ -82,7 +82,7 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
     }
 
     show_whatsnew_modal <- function(force = FALSE) {
-      show_pref <- isTRUE(get_config_setting("Message", "ShowWhatsNew", default = TRUE))
+      show_pref <- isTRUE((config("Message", "ShowWhatsNew") %||% TRUE))
       rows <- fetch_whatsnew_rows()
       rv$rows <- rows
 
@@ -241,7 +241,7 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
     })
 
     observeEvent(input$show_on_startup, {
-      set_config_setting("Message", "ShowWhatsNew", isTRUE(input$show_on_startup))
+      config("Message", "ShowWhatsNew", isTRUE(input$show_on_startup))
     }, ignoreInit = TRUE)
 
     session$onFlushed(function() {

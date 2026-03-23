@@ -237,7 +237,7 @@ test_that("set_project updates config-backed current project and refreshes conte
   state <- init_sys_state()
   set_project(state, "SwitchMe", con)
 
-  expect_equal(get_current_setting("CurrProject", default = NULL), "SwitchMe")
+  expect_equal((config("Current", "CurrProject") %||% NULL), "SwitchMe")
   expect_equal(shiny::isolate(state$CurrProject), "SwitchMe")
 
   env_rows <- DBI::dbGetQuery(con, "SELECT ProjectID, PlotNumber FROM Env")
