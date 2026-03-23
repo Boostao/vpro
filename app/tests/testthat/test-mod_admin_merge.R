@@ -24,7 +24,7 @@ setup_merge_db_admin <- function() {
 
 testthat::test_that("merge_ensure_tables creates all required tables", {
   con <- setup_merge_db_admin()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # DBI::dbExistsTable does not handle 3-part dotted names in DuckDB.
   # Use duckdb_tables() which supports catalog/schema/table filtering.
@@ -59,7 +59,7 @@ testthat::test_that("merge_ensure_tables creates all required tables", {
 
 testthat::test_that("merge_ensure_tables is idempotent (call twice, no error)", {
   con <- setup_merge_db_admin()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   testthat::expect_no_error(merge_ensure_tables(con))
 })
@@ -70,7 +70,7 @@ testthat::test_that("merge_ensure_tables is idempotent (call twice, no error)", 
 
 testthat::test_that("merge_request_unresolved_conflict_count returns 0 for fresh request", {
   con <- setup_merge_db_admin()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO master.admin.merge_requests
@@ -87,7 +87,7 @@ testthat::test_that("merge_request_unresolved_conflict_count returns 0 for fresh
 
 testthat::test_that("merge_request_resolve_conflict sets resolution correctly", {
   con <- setup_merge_db_admin()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO master.admin.merge_requests
@@ -117,7 +117,7 @@ testthat::test_that("merge_request_resolve_conflict sets resolution correctly", 
 
 testthat::test_that("unresolved count increments and decrements correctly after resolve", {
   con <- setup_merge_db_admin()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO master.admin.merge_requests

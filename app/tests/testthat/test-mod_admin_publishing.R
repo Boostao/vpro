@@ -47,7 +47,7 @@ testthat::test_that("publish_rds creates output files for a project", {
   skip_if_not_installed("duckdb")
 
   con <- make_minimal_db()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO USysProjectMetadata VALUES
@@ -84,7 +84,7 @@ testthat::test_that("publish_project_dataset errors when no formats requested", 
   skip_if_not_installed("duckdb")
 
   con <- make_minimal_db()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO USysProjectMetadata VALUES
@@ -116,7 +116,7 @@ testthat::test_that("registry CSV is created and readable after publish", {
   skip_if_not_installed("duckdb")
 
   con <- make_minimal_db()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO USysProjectMetadata VALUES

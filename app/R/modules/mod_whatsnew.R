@@ -1,96 +1,35 @@
 mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    rv <- reactiveValues(rows = NULL, table_ref = NULL)
-
-    find_whatsnew_table <- function() {
-      tables <- tryCatch(
-        DBI::dbGetQuery(
-          con,
-          "SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE lower(table_name) = lower('tblWhatsNew')"
-        ),
-        error = function(e) data.frame()
+    rv <- reactiveValues(
+      rows = data.frame(
+        Date = character(0),
+        Change = as.POSIXct(character(0)),
+        Viewed = logical(0),
+        stringsAsFactors = FALSE
       )
-
-      if (nrow(tables) == 0) {
-        return(NULL)
-      }
-
-      preferred <- which(tolower(tables$database_name) == "vpro")[1]
-      idx <- if (is.na(preferred)) 1 else preferred
-
-      sprintf(
-        "%s.%s.%s",
-        tables$database_name[[idx]],
-        tables$schema_name[[idx]],
-        tables$table_name[[idx]]
-      )
-    }
-
-    ensure_whatsnew_table <- function() {
-      table_ref <- find_whatsnew_table()
-      if (!is.null(table_ref)) {
-        return(table_ref)
-      }
-
-      DBI::dbExecute(
-        con,
-        paste(
-          "CREATE TABLE IF NOT EXISTS tblWhatsNew (",
-          '"Date" TIMESTAMP,',
-          '"Change" TEXT,',
-          '"Viewed" BOOLEAN DEFAULT FALSE',
-          ")"
-        )
-      )
-
-      find_whatsnew_table()
-    }
+    )
 
     fetch_whatsnew_rows <- function() {
-      table_ref <- ensure_whatsnew_table()
-      rv$table_ref <- table_ref
-
-      if (is.null(table_ref)) {
-        return(data.frame())
-      }
-
-      DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT rowid AS row_id, ",
-          "COALESCE(",
-          "TRY_CAST(\"Date\" AS TIMESTAMP), ",
-          "TRY_STRPTIME(CAST(\"Date\" AS VARCHAR), '%m/%d/%Y %H:%M:%S'), ",
-          "TRY_STRPTIME(CAST(\"Date\" AS VARCHAR), '%m/%d/%Y'), ",
-          "TRY_STRPTIME(CAST(\"Date\" AS VARCHAR), '%Y-%m-%d %H:%M:%S'), ",
-          "TRY_STRPTIME(CAST(\"Date\" AS VARCHAR), '%Y-%m-%d')",
-          ") AS change_date, ",
-          "CAST(\"Change\" AS VARCHAR) AS change_text, ",
-          "COALESCE(CAST(\"Viewed\" AS BOOLEAN), FALSE) AS viewed ",
-          "FROM ", table_ref, " ",
-          "ORDER BY change_date DESC NULLS LAST, row_id DESC"
-        )
-      )
+      db_query(con, paste(
+        "SELECT rowid AS row_id,",
+        "Date,",
+        "Change,",
+        "CAST(Viewed AS BOOLEAN) AS Viewed",
+        "FROM tblWhatsNew",
+        "ORDER BY Date DESC NULLS LAST, row_id DESC"
+      ))
     }
 
     has_unviewed_rows <- function(rows) {
-      if (is.null(rows) || nrow(rows) == 0) {
-        return(FALSE)
-      }
-      any(!rows$viewed)
+      if (!nrow(rows)) return(FALSE)
+      any(!rows$Viewed)
     }
 
     show_whatsnew_modal <- function(force = FALSE) {
-      show_pref <- isTRUE((config("Message", "ShowWhatsNew") %||% TRUE))
-      rows <- fetch_whatsnew_rows()
-      rv$rows <- rows
+      rows <- rv$rows <- fetch_whatsnew_rows()
 
-      if (nrow(rows) == 0) {
-        return(invisible(NULL))
-      }
-
-      if (!force && (!show_pref || !has_unviewed_rows(rows))) {
+      if (!force && (!config("Message", "ShowWhatsNew") || !has_unviewed_rows(rows))) {
         return(invisible(NULL))
       }
 
@@ -106,8 +45,9 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
           DT::DTOutput(ns("whatsnew_table")),
           checkboxInput(
             ns("show_on_startup"),
+            width = "100%",
             "If there are unviewed changes, show this form when VPro starts",
-            value = show_pref
+            value = config("Message", "ShowWhatsNew")
           ),
           footer = tagList(
             actionButton(ns("mark_all_viewed"), "Mark all as viewed", class = "btn-primary"),
@@ -119,35 +59,15 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
 
     format_rows_for_display <- reactive({
       rows <- rv$rows
-      if (is.null(rows) || nrow(rows) == 0) {
-        return(data.frame(
-          Date = character(0),
-          Change = character(0),
-          Viewed = character(0),
-          stringsAsFactors = FALSE
-        ))
-      }
-
-      viewed_buttons <- vapply(
-        seq_len(nrow(rows)),
-        function(idx) {
-          row_id <- rows$row_id[[idx]]
-          viewed <- isTRUE(rows$viewed[[idx]])
-          label <- if (viewed) "☑ Viewed" else "☐ Mark viewed"
-          state <- if (viewed) "1" else "0"
-          sprintf(
-            "<button type='button' class='btn btn-link p-0 whatsnew-toggle' data-rowid='%s' data-viewed='%s'>%s</button>",
-            row_id,
-            state,
-            label
-          )
-        },
-        character(1)
+      viewed_buttons <- sprintf(
+        "<button type='button' class='btn btn-link p-0 whatsnew-toggle' data-rowid='%s' data-viewed='%s'>%s</button>",
+        rows$row_id,
+        c("0", "1")[rows$Viewed + 1],
+        c("☐ Mark viewed", "☑ Viewed")[rows$Viewed + 1]
       )
-
       data.frame(
-        Date = ifelse(is.na(rows$change_date), "", as.character(rows$change_date)),
-        Change = rows$change_text %||% "",
+        Date = as.character(rows$Date),
+        Change = rows$Change,
         Viewed = viewed_buttons,
         stringsAsFactors = FALSE
       )
@@ -188,65 +108,34 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
     }, server = FALSE)
 
     update_viewed_row <- function(row_id, viewed_value) {
-      req(!is.null(rv$table_ref))
-
-      tryCatch({
-        DBI::dbExecute(
-          con,
-          paste0('UPDATE ', rv$table_ref, ' SET "Viewed" = ? WHERE rowid = ?'),
-          params = list(isTRUE(viewed_value), as.integer(row_id))
-        )
-
-        rows <- rv$rows
-        if (!is.null(rows) && nrow(rows) > 0) {
-          idx <- which(rows$row_id == as.integer(row_id))
-          if (length(idx) == 1) {
-            rows$viewed[[idx]] <- isTRUE(viewed_value)
-            rv$rows <- rows
-          }
-        }
-      }, error = function(e) {
-        showNotification(
-          paste("Unable to update Viewed flag:", conditionMessage(e)),
-          type = "error"
-        )
-      })
+      db_run(con,
+        'UPDATE tblWhatsNew SET "Viewed" = ? WHERE rowid = ?',
+        params = list(isTRUE(viewed_value), as.integer(row_id))
+      )
+      rows <- rv$rows
+      idx <- which(rows$row_id == as.integer(row_id))
+      rows$Viewed[[idx]] <- isTRUE(viewed_value)
+      rv$rows <- rows
     }
 
     observeEvent(input$toggle_viewed, {
       info <- input$toggle_viewed
-      req(!is.null(info$rowid), !is.null(info$viewed))
       update_viewed_row(info$rowid, !isTRUE(info$viewed))
     })
 
     observeEvent(input$mark_all_viewed, {
       rows <- rv$rows
-      req(!is.null(rows), nrow(rows) > 0)
-
-      tryCatch({
-        DBI::dbExecute(
-          con,
-          paste0('UPDATE ', rv$table_ref, ' SET "Viewed" = TRUE WHERE COALESCE(CAST("Viewed" AS BOOLEAN), FALSE) = FALSE')
-        )
-
-        rows$viewed <- rep(TRUE, nrow(rows))
-        rv$rows <- rows
-        showNotification("All updates marked as viewed.", type = "message")
-      }, error = function(e) {
-        showNotification(
-          paste("Unable to mark all as viewed:", conditionMessage(e)),
-          type = "error"
-        )
-      })
+      db_run(con, 'UPDATE tblWhatsNew SET "Viewed" = TRUE;')
+      rows$Viewed <- TRUE
+      rv$rows <- rows
+      showNotification("All updates marked as viewed.", type = "message")
     })
 
     observeEvent(input$show_on_startup, {
-      config("Message", "ShowWhatsNew", isTRUE(input$show_on_startup))
+      config("Message", "ShowWhatsNew", input$show_on_startup)
     }, ignoreInit = TRUE)
 
-    session$onFlushed(function() {
-      show_whatsnew_modal(force = FALSE)
-    }, once = TRUE)
+    session$onFlushed(function() { show_whatsnew_modal() }, once = TRUE)
 
     if (!is.null(open_trigger)) {
       observeEvent(open_trigger(), {

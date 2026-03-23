@@ -400,7 +400,7 @@ if (DBI::dbExistsTable(con, "VLists.LifeformCodes")) {
   names(lifeform_labels) <- tolower(names(lifeform_labels))
 }
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 # `r params$report_title`

@@ -32,7 +32,7 @@ new_app_driver <- function(name, height, width, ...) {
 # Helper: Direct DB query to verify state
 verify_db_state <- function(query, expected_rows = NULL, description = "DB check") {
   con <- dbConnect(duckdb(), "data/vpro.duckdb")
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   result <- tryCatch({
     dbGetQuery(con, query)
@@ -51,7 +51,7 @@ verify_db_state <- function(query, expected_rows = NULL, description = "DB check
 
   project_plot_scope <- function(project_id) {
     con <- dbConnect(duckdb(), "data/vpro.duckdb")
-    on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+    on.exit(dbDisconnect(con), add = TRUE)
 
     tryCatch(
       dbGetQuery(
@@ -76,7 +76,7 @@ verify_db_state <- function(query, expected_rows = NULL, description = "DB check
 # Helper: Clean up test data
 cleanup_test_plot <- function(plot_number) {
   con <- dbConnect(duckdb(), "data/vpro.duckdb")
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   tryCatch({
     dbExecute(con, sprintf("DELETE FROM Sample_Veg WHERE PlotNumber = '%s'", plot_number))
@@ -90,7 +90,7 @@ cleanup_test_plot <- function(plot_number) {
 # Helper: Create test plot in DB
 create_test_plot <- function(plot_number, project_id) {
   con <- dbConnect(duckdb(), "data/vpro.duckdb")
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   # Create SiteUnit record
   tryCatch({

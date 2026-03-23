@@ -164,7 +164,7 @@ normalize_env_cols <- function(df) {
 
 env <- normalize_env_cols(env)
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 # `r params$report_title`

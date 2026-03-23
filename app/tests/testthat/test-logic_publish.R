@@ -46,7 +46,7 @@ test_that("publish_project_dataset writes BEC Map contract files (RDS/CSV) and r
   source(here::here("R", "logic_publish.R"), local = TRUE)
 
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Env (plotnumber TEXT, projectid TEXT, date_sampled DATE, latitude DOUBLE, longitude DOUBLE, bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)")
   DBI::dbExecute(con, "CREATE TABLE SU (plotnumber TEXT, dataquality TEXT)")
@@ -117,7 +117,7 @@ test_that("validate_for_publishing flags missing/zero coordinates", {
   source(here::here("R", "logic_publish.R"), local = TRUE)
 
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Env (plotnumber TEXT, projectid TEXT, latitude DOUBLE, longitude DOUBLE)")
   DBI::dbExecute(con, "INSERT INTO Env VALUES ('PLOT-001', 'P2', 0, NULL)")
@@ -136,7 +136,7 @@ test_that("publish_project_dataset can write XLSX via existing exporter (optiona
   source(here::here("R", "logic_publish.R"), local = TRUE)
 
   con <- db_con("data/vpro.duckdb")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # Find a publishable project id with valid coordinates
   pid <- tryCatch({

@@ -124,7 +124,7 @@ normalize_raw_cols <- function(df) {
 
 veg <- normalize_raw_cols(veg)
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 
 hier_col <- NULL
 for (candidate in c("Hierarchy", "HierarchyName", "hierarchy", "Hierarchy_Path", "HierarchyPath")) {

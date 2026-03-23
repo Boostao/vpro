@@ -6,7 +6,7 @@ source(here::here("R", "logic_lumping.R"))
 
 test_that("apply_lumping returns input when Lump missing", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   df <- data.frame(
     plotnumber = c("P1", "P1"),
@@ -24,7 +24,7 @@ test_that("apply_lumping returns input when Lump missing", {
 
 test_that("apply_lumping replaces and aggregates lumped species", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "
     CREATE TABLE Lump (

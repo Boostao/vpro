@@ -124,7 +124,7 @@ saveRDS(meta_data, meta_path)
 cat("  Saved:", meta_path, "\n")
 
 # Close connection
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 
 cat("\n✅ Dataset published successfully!\n")
 cat("Files created in", pub_dir, ":\n")

@@ -76,7 +76,7 @@ test_that("mod_site_env loads inputs and saves header", {
   testthat::skip_if_not_installed("DT")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_site_env_tables(con)
 
   save_site_env_header(

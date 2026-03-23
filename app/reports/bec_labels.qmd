@@ -171,7 +171,7 @@ if (nrow(labels) > 0) {
     )
 }
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 # `r params$report_title`

@@ -252,7 +252,7 @@ test_that("export_venus_xml creates valid XML file", {
   expect_equal(xml_attr(doc, "version"), "5.0")
   
   # Clean up
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -283,7 +283,7 @@ test_that("VENUS XML contains correct header information", {
   source_sys <- xml_text(xml_find_first(header, "//SourceSystem"))
   expect_equal(source_sys, "VPro R/Shiny")
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -314,7 +314,7 @@ test_that("VENUS XML contains correct plot structure", {
   date <- xml_text(xml_find_first(plot1, ".//Date"))
   expect_equal(date, "2024-06-15")
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -349,7 +349,7 @@ test_that("VENUS XML includes location data", {
   elevation <- xml_text(xml_find_first(plot1, ".//Elevation"))
   expect_equal(elevation, "850")
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -380,7 +380,7 @@ test_that("VENUS XML includes site classification", {
   nutrient <- xml_text(xml_find_first(plot1, ".//NutrientRegime"))
   expect_equal(nutrient, "C")
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -425,7 +425,7 @@ test_that("VENUS XML includes vegetation data", {
   tshe_cover <- xml_text(xml_find_first(tshe, "./Cover"))
   expect_equal(tshe_cover, "40")
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -457,7 +457,7 @@ test_that("VENUS XML includes environment data", {
   decwood <- xml_text(xml_find_first(env, ".//DecayedWood"))
   expect_true(nzchar(decwood))
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -504,7 +504,7 @@ test_that("VENUS XML includes soil horizon data", {
   texture <- xml_text(xml_find_first(mhz1, "./Texture"))
   expect_equal(texture, "SL")
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -527,7 +527,7 @@ test_that("coords_required option filters plots correctly", {
   plot3 <- xml_find_first(doc2, "//Plot[@id='P003']")
   expect_true(inherits(plot3, "xml_missing"))
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(c(tmp_file1, tmp_file2))
 })
 
@@ -551,7 +551,7 @@ test_that("include_draft option filters plots correctly", {
   ))
   expect_equal(result2$plot_count, 3)
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(c(tmp_file1, tmp_file2))
 })
 
@@ -589,7 +589,7 @@ test_that("apply_lumping option consolidates species", {
   vaccinium <- xml_find_first(plot1_lumped, ".//Species[@code='VACCINIUM']")
   expect_s3_class(vaccinium, "xml_node")
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(c(tmp_file1, tmp_file2))
 })
 
@@ -622,7 +622,7 @@ test_that("date range filtering works correctly", {
   ))
   expect_equal(result3$plot_count, 2)
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(c(tmp_file1, tmp_file2, tmp_file3))
 })
 
@@ -637,7 +637,7 @@ test_that("export handles missing project gracefully", {
   expect_true(result$success)
   expect_equal(result$plot_count, 0)
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -652,7 +652,7 @@ test_that("export handles NULL project ID", {
   expect_true(result$success)
   expect_gte(result$plot_count, 3)
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   unlink(tmp_file)
 })
 
@@ -689,5 +689,5 @@ test_that("export returns error on failure", {
   expect_false(result$success)
   expect_true(!is.null(result$error))
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
 })

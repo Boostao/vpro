@@ -129,7 +129,7 @@ normalize_veg_cols <- function(df) {
 
 veg <- normalize_veg_cols(veg)
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 
 layer_col <- if ("LayerCode" %in% names(veg)) "LayerCode" else if ("MyLayer" %in% names(veg)) "MyLayer" else NULL
 ```

@@ -23,7 +23,7 @@ test_that("export_vegetation_excel creates valid workbook with correct structure
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -61,7 +61,7 @@ test_that("export_vegetation_excel with lumping applies species consolidation", 
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -92,7 +92,7 @@ test_that("export_environment_excel creates environment and soil sheets", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -122,7 +122,7 @@ test_that("export_combined_excel creates multi-sheet workbook", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -153,7 +153,7 @@ test_that("workbook has proper styling applied", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -187,7 +187,7 @@ test_that("excel export handles empty data gracefully", {
   
   # Create in-memory database with no data
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Create minimal schema
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
@@ -214,7 +214,7 @@ test_that("project filtering works correctly", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Get list of projects
   projects <- DBI::dbGetQuery(con, "SELECT DISTINCT projectid FROM Metadata LIMIT 1")
@@ -258,7 +258,7 @@ test_that("data type formatting is correct for numeric columns", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -290,7 +290,7 @@ test_that("performance - large dataset exports in reasonable time", {
   skip("Performance test - run manually when needed")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -323,7 +323,7 @@ test_that("instructions sheet is created with proper content", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -356,7 +356,7 @@ test_that("conditional formatting can be disabled", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -383,7 +383,7 @@ test_that("column widths are set appropriately", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -412,7 +412,7 @@ test_that("layer names are correctly mapped to sheet names", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   temp_file <- tempfile(fileext = ".xlsx")
   on.exit(unlink(temp_file), add = TRUE)
@@ -442,7 +442,7 @@ test_that("exported data matches database query results", {
   skip_if_not(file.exists(here::here("data", "vpro.duckdb")), "Main database not found")
   
   con <- connect_vpro_duckdb_for_tests()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Get expected row count from database
   query <- "SELECT COUNT(*) as n FROM vw_USysAllVeg WHERE MyLayer = '1'"

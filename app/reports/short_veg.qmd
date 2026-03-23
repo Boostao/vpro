@@ -102,7 +102,7 @@ summary <- summarize_veg_report(
   display_value = params$display_value
 )
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 # `r params$report_title`

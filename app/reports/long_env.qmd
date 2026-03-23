@@ -256,7 +256,7 @@ if (nrow(env) > 0) {
   env <- env[, intersect(desired, names(env)), drop = FALSE]
 }
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 # `r params$report_title`

@@ -22,7 +22,7 @@ setup_projects_db <- function() {
 
 testthat::test_that("insert new project - row exists", {
   con <- setup_projects_db()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
@@ -36,7 +36,7 @@ testthat::test_that("insert new project - row exists", {
 
 testthat::test_that("update project title - reflected in query", {
   con <- setup_projects_db()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
@@ -52,7 +52,7 @@ testthat::test_that("update project title - reflected in query", {
 
 testthat::test_that("delete project - row gone", {
   con <- setup_projects_db()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
@@ -69,7 +69,7 @@ testthat::test_that("delete project - row gone", {
 
 testthat::test_that("duplicate project ID - error handled gracefully", {
   con <- setup_projects_db()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)

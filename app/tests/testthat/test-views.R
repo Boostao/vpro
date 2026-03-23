@@ -10,7 +10,7 @@ test_that("core views exist and are queryable", {
   }
 
   con <- dbConnect(duckdb::duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
 
   expect_true(DBI::dbExistsTable(con, "vw_USysAllVeg"))
   expect_true(DBI::dbExistsTable(con, "vw_USysEnv"))

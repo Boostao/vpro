@@ -50,7 +50,7 @@ test_that("diagnostic_from_matrix returns table", {
 
 test_that("build_diagnostic_matrix returns matrix", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
   DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (plotnumber TEXT, species_code TEXT, cover_value TEXT, projectid TEXT)")
@@ -69,7 +69,7 @@ test_that("build_diagnostic_matrix returns matrix", {
 
 test_that("build_diagnostic_matrix filters by project via Env", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
   DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")

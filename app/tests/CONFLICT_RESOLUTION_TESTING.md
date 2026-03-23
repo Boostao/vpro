@@ -379,7 +379,7 @@ test_that("...", {
 
 **Cause**: Database connection not properly closed/reopened.
 
-**Solution**: Always use `on.exit(dbDisconnect(con, shutdown = TRUE))` pattern.
+**Solution**: Always use `on.exit(dbDisconnect(con))` pattern.
 
 ### Skipped Tests Not Running
 

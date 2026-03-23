@@ -121,7 +121,7 @@ cutoff_level <- params$cutoff_level
 if (!is.null(cutoff_level) && !is.na(cutoff_level) && ("Level" %in% names(hier))) {
   hier <- hier[hier$Level <= cutoff_level, , drop = FALSE]
 }
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 
 if (nrow(long_names) > 0) {
   names(long_names) <- tolower(names(long_names))

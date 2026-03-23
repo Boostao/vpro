@@ -24,9 +24,7 @@ db_con <- function(db = ":memory:") {
 }
 
 db_close <- function(con) {
-  DBI::dbDisconnect(con, shutdown = TRUE)
-  # I want to rm the object passed to con from the parent frame
-  rm(list = deparse(substitute(con)), envir = parent.frame())
+  DBI::dbDisconnect(con)
 }
 
 db_id <- function(tb, db = NULL, prj = FALSE) {
@@ -181,4 +179,21 @@ db_rename_fix01 <- function(con) {
     db_rename(con, "USysAllSpecs", "EnglishName", "CombinedEnglishName", "VLists")
     db_rename(con, "USysAllSpecs", "JustEnglishName", "EnglishName", "VLists")
   }
+}
+
+db_masterunitlist_views <- function(con) {
+  # Have to be temporary
+  # https://sqlite.org/forum/forumpost/e29aa9a425b2c157
+  db <- c("VLists", "VUser")
+  tb <- c("MasterSiteUnitList", "UserSiteUnitList")
+  sql <- sprintf("CREATE OR REPLACE TEMPORARY VIEW USys%s AS SELECT * FROM %s.%s;", tb, db, tb)
+  lapply(sql, db_run, con = con)
+  tb <- c("MasterSiteUnitList", "MasterUnitList_Hierarchy")
+  sql <- paste("CREATE OR REPLACE TEMPORARY VIEW", tb, "AS ",
+    "SELECT * FROM UsysMasterSiteUnitList",
+    "UNION ALL",
+    "SELECT * FROM UsysUserSiteUnitList;"
+  )
+  lapply(sql, db_run, con = con)
+  return()
 }

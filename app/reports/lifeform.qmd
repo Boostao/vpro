@@ -157,7 +157,7 @@ if (!is.null(lifeform_codes)) {
   names(lifeform_codes) <- tolower(names(lifeform_codes))
 }
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 # `r params$report_title`

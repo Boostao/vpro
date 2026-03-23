@@ -112,7 +112,7 @@ source(here::here("R", "logic_sync.R"))
 
 testthat::test_that("sync_get_local_changes: empty tables → zero-row data.frames", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   result <- sync_get_local_changes(con)
   testthat::expect_true(is.list(result))
@@ -124,7 +124,7 @@ testthat::test_that("sync_get_local_changes: empty tables → zero-row data.fram
 
 testthat::test_that("sync_get_local_changes: insert rows appear with change_type = 'insert'", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # Insert = local_modified_utc IS NOT NULL, master_row_version IS NULL
   DBI::dbExecute(con,
@@ -138,7 +138,7 @@ testthat::test_that("sync_get_local_changes: insert rows appear with change_type
 
 testthat::test_that("sync_get_local_changes: update rows appear with change_type = 'update'", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # Update = local_modified_utc IS NOT NULL, master_row_version IS NOT NULL
   DBI::dbExecute(con,
@@ -152,7 +152,7 @@ testthat::test_that("sync_get_local_changes: update rows appear with change_type
 
 testthat::test_that("sync_get_local_changes: rows with no dirty flag are excluded", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # Clean row (local_modified_utc IS NULL)
   DBI::dbExecute(con,
@@ -165,7 +165,7 @@ testthat::test_that("sync_get_local_changes: rows with no dirty flag are exclude
 
 testthat::test_that("sync_get_local_changes: project_id filter works", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con,
     "INSERT INTO Env (PlotNumber, ProjectID, local_modified_utc) VALUES
@@ -180,7 +180,7 @@ testthat::test_that("sync_get_local_changes: project_id filter works", {
 
 testthat::test_that("sync_get_local_changes: SU and Veg dirty rows appear", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "INSERT INTO SU (PlotNumber, local_modified_utc) VALUES ('P1', now())")
   DBI::dbExecute(con, "INSERT INTO Veg (PlotNumber, Species, Layer, local_modified_utc) VALUES ('P1', 'ABIES', 'A', now())")
@@ -197,7 +197,7 @@ testthat::test_that("sync_get_local_changes: SU and Veg dirty rows appear", {
 
 testthat::test_that("sync_count_incoming: no cloud → available = FALSE, all counts 0", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   result <- sync_count_incoming(con)
   testthat::expect_false(result$available)
@@ -210,7 +210,7 @@ testthat::test_that("sync_count_incoming: with mock master → counts rows since
   con  <- .mk_local_con()
   path <- .mk_master_con(con)
   on.exit({
-    DBI::dbDisconnect(con, shutdown = TRUE)
+    DBI::dbDisconnect(con)
     try(unlink(path), silent = TRUE)
   }, add = TRUE)
 
@@ -230,7 +230,7 @@ testthat::test_that("sync_count_incoming: watermark skips already-pulled rows", 
   con  <- .mk_local_con()
   path <- .mk_master_con(con)
   on.exit({
-    DBI::dbDisconnect(con, shutdown = TRUE)
+    DBI::dbDisconnect(con)
     try(unlink(path), silent = TRUE)
   }, add = TRUE)
 
@@ -257,7 +257,7 @@ testthat::test_that("sync_count_incoming: watermark skips already-pulled rows", 
 
 testthat::test_that("sync_get_user_merge_requests: no cloud → empty data.frame", {
   con <- .mk_local_con()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   result <- sync_get_user_merge_requests(con, "alice@test.local")
   testthat::expect_equal(nrow(result), 0L)
@@ -268,7 +268,7 @@ testthat::test_that("sync_get_user_merge_requests: filters by submitter_name", {
   con  <- .mk_local_con()
   path <- .mk_master_con(con)
   on.exit({
-    DBI::dbDisconnect(con, shutdown = TRUE)
+    DBI::dbDisconnect(con)
     try(unlink(path), silent = TRUE)
   }, add = TRUE)
 
@@ -288,7 +288,7 @@ testthat::test_that("sync_get_user_merge_requests: show_approved = FALSE hides m
   con  <- .mk_local_con()
   path <- .mk_master_con(con)
   on.exit({
-    DBI::dbDisconnect(con, shutdown = TRUE)
+    DBI::dbDisconnect(con)
     try(unlink(path), silent = TRUE)
   }, add = TRUE)
 
@@ -307,7 +307,7 @@ testthat::test_that("sync_get_user_merge_requests: show_rejected = FALSE hides r
   con  <- .mk_local_con()
   path <- .mk_master_con(con)
   on.exit({
-    DBI::dbDisconnect(con, shutdown = TRUE)
+    DBI::dbDisconnect(con)
     try(unlink(path), silent = TRUE)
   }, add = TRUE)
 
@@ -326,7 +326,7 @@ testthat::test_that("sync_get_user_merge_requests: both filters false → only p
   con  <- .mk_local_con()
   path <- .mk_master_con(con)
   on.exit({
-    DBI::dbDisconnect(con, shutdown = TRUE)
+    DBI::dbDisconnect(con)
     try(unlink(path), silent = TRUE)
   }, add = TRUE)
 

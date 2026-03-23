@@ -161,7 +161,7 @@ seed_reference_data <- function(con) {
 
 test_that("Required fields: null values are flagged", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Insert record with NULL plotnumber
@@ -177,7 +177,7 @@ test_that("Required fields: null values are flagged", {
 
 test_that("Required fields: empty strings are flagged", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Insert records with empty strings
@@ -198,7 +198,7 @@ test_that("Required fields: empty strings are flagged", {
 
 test_that("Required fields: all four required fields", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Completely empty required fields
@@ -214,7 +214,7 @@ test_that("Required fields: all four required fields", {
 
 test_that("Required fields: whitespace-only strings treated as empty", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Whitespace should not pass (current implementation checks == "")
@@ -235,7 +235,7 @@ test_that("Required fields: whitespace-only strings treated as empty", {
 
 test_that("Species FK: invalid species code flagged", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -250,7 +250,7 @@ test_that("Species FK: invalid species code flagged", {
 
 test_that("Species FK: case sensitivity", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Test lowercase version of valid code (ABGR exists, but not abgr)
@@ -266,7 +266,7 @@ test_that("Species FK: case sensitivity", {
 
 test_that("Species FK: NULL species is skipped (not an FK violation)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -281,7 +281,7 @@ test_that("Species FK: NULL species is skipped (not an FK violation)", {
 
 test_that("Zone FK: invalid zone code", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -296,7 +296,7 @@ test_that("Zone FK: invalid zone code", {
 
 test_that("Zone FK: invalid subzone code", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -311,7 +311,7 @@ test_that("Zone FK: invalid subzone code", {
 
 test_that("Zone FK: valid zone but invalid zone/subzone combination", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # CWH exists with vm2, but not with mk1
@@ -327,7 +327,7 @@ test_that("Zone FK: valid zone but invalid zone/subzone combination", {
 
 test_that("List FK: invalid value for table-driven list", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -346,7 +346,7 @@ test_that("List FK: invalid value for table-driven list", {
 
 test_that("Latitude: exact boundaries are valid", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Valid: 48 and 60 (inclusive boundaries)
@@ -365,7 +365,7 @@ test_that("Latitude: exact boundaries are valid", {
 
 test_that("Latitude: just outside boundaries are invalid", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Invalid: 47.9999 and 60.0001
@@ -385,7 +385,7 @@ test_that("Latitude: just outside boundaries are invalid", {
 
 test_that("Longitude: exact boundaries are valid", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Valid: -140 and -114 (inclusive)
@@ -404,7 +404,7 @@ test_that("Longitude: exact boundaries are valid", {
 
 test_that("Longitude: outside boundaries are invalid", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -423,7 +423,7 @@ test_that("Longitude: outside boundaries are invalid", {
 
 test_that("Elevation: boundaries 0-4000", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Valid: 0, 4000
@@ -456,7 +456,7 @@ test_that("Elevation: boundaries 0-4000", {
 
 test_that("Slope: boundaries 0-100", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Valid: 0, 100
@@ -489,7 +489,7 @@ test_that("Slope: boundaries 0-100", {
 
 test_that("Aspect: boundaries 0-360", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Valid: 0, 360
@@ -522,7 +522,7 @@ test_that("Aspect: boundaries 0-360", {
 
 test_that("Cover: boundaries 0-100", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Valid: 0, 100
@@ -559,7 +559,7 @@ test_that("Cover: boundaries 0-100", {
 
 test_that("Cover codes: valid text codes (+, r, P) are allowed", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -581,7 +581,7 @@ test_that("Cover codes: valid text codes (+, r, P) are allowed", {
 
 test_that("Cover codes: case-insensitive text codes", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Test uppercase variants
@@ -601,7 +601,7 @@ test_that("Cover codes: case-insensitive text codes", {
 
 test_that("Cover codes: invalid codes flagged", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -620,7 +620,7 @@ test_that("Cover codes: invalid codes flagged", {
 
 test_that("Cover codes: numeric strings are not cover codes (parsed as numbers)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # "25" should be parsed as numeric, not a code
@@ -635,7 +635,7 @@ test_that("Cover codes: numeric strings are not cover codes (parsed as numbers)"
 
 test_that("Cover codes: whitespace handling", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Codes with whitespace
@@ -659,7 +659,7 @@ test_that("Cover codes: whitespace handling", {
 
 test_that("Non-negative: all depth fields at boundary (0)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -674,7 +674,7 @@ test_that("Non-negative: all depth fields at boundary (0)", {
 
 test_that("Non-negative: negative values flagged", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -690,7 +690,7 @@ test_that("Non-negative: negative values flagged", {
 
 test_that("Non-negative: NULL values are allowed (not a non-negative violation)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -709,7 +709,7 @@ test_that("Non-negative: NULL values are allowed (not a non-negative violation)"
 
 test_that("Duplicate plots: same PlotNumber in same project", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -728,7 +728,7 @@ test_that("Duplicate plots: same PlotNumber in same project", {
 
 test_that("Duplicate plots: same PlotNumber in different projects is OK", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -749,7 +749,7 @@ test_that("Duplicate plots: same PlotNumber in different projects is OK", {
 
 test_that("Duplicate plots: triple duplicates", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -771,7 +771,7 @@ test_that("Duplicate plots: triple duplicates", {
 
 test_that("Duplicate veg: same PlotNumber+Species+Layer", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -790,7 +790,7 @@ test_that("Duplicate veg: same PlotNumber+Species+Layer", {
 
 test_that("Duplicate veg: same species in different layers is OK", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -812,7 +812,7 @@ test_that("Duplicate veg: same species in different layers is OK", {
 
 test_that("Cascading: one record with multiple violations", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Plot with multiple issues:
@@ -845,7 +845,7 @@ test_that("Cascading: one record with multiple violations", {
 
 test_that("Cascading: all rules violated in one dataset", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Create violations for every rule type
@@ -947,7 +947,7 @@ test_that("Cascading: all rules violated in one dataset", {
 
 test_that("Compliance summary: aggregates by rule type", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Create multiple violations of the same rule
@@ -973,7 +973,7 @@ test_that("Compliance summary: aggregates by rule type", {
 
 test_that("Compliance summary: empty when no violations", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Insert fully valid record
@@ -999,7 +999,7 @@ test_that("Compliance summary: empty when no violations", {
 
 test_that("Compliance detail: includes plot numbers", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   DBI::dbExecute(con, "
@@ -1020,7 +1020,7 @@ test_that("Performance: 1000 records with mixed violations", {
   skip_on_cran()  # Long-running test
   
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Insert 1000 records with varying compliance.
@@ -1052,7 +1052,7 @@ test_that("Performance: 1000 records with mixed violations", {
 
 test_that("Performance: correctly filters by project_id", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Insert violations in two projects
@@ -1081,7 +1081,7 @@ test_that("Performance: correctly filters by project_id", {
 
 test_that("Integration: BC forestry plot passes all checks", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Realistic BC Interior Cedar-Hemlock plot
@@ -1128,7 +1128,7 @@ test_that("Integration: BC forestry plot passes all checks", {
 
 test_that("Integration: edge of BC boundary coordinates", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Northern BC (near Yukon border)
@@ -1157,7 +1157,7 @@ test_that("Integration: edge of BC boundary coordinates", {
 
 test_that("Integration: cover codes in realistic context", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Mix of numeric covers and text codes (typical field data)
@@ -1194,7 +1194,7 @@ test_that("Integration: cover codes in realistic context", {
 
 test_that("Cover sum: total >100% per layer flagged as warning", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Layer A with combined cover >100% (common overshooting in field data)
@@ -1215,7 +1215,7 @@ test_that("Cover sum: total >100% per layer flagged as warning", {
 
 test_that("Date validation: future survey dates flagged", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Add survey_date column if schema supports it
@@ -1236,7 +1236,7 @@ test_that("Date validation: future survey dates flagged", {
 
 test_that("Date validation: NULL survey date allowed (unknown date)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   result <- tryCatch({
@@ -1255,7 +1255,7 @@ test_that("Date validation: NULL survey date allowed (unknown date)", {
 
 test_that("Hierarchical consistency: parent-child plot relationships", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Note: Hierarchical validation requires SampleUnit_Hierarchy table
@@ -1266,7 +1266,7 @@ test_that("Hierarchical consistency: parent-child plot relationships", {
 
 test_that("Coordinate consistency: DMS vs DD format detection", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Mixed coordinate formats could indicate data entry errors
@@ -1285,7 +1285,7 @@ test_that("Coordinate consistency: DMS vs DD format detection", {
 
 test_that("Stress: Maximum string lengths (255 chars)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Very long plot number (Access limit: 255 chars for TEXT)
@@ -1302,7 +1302,7 @@ test_that("Stress: Maximum string lengths (255 chars)", {
 
 test_that("Stress: Unicode and special characters in text fields", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Unicode, accents, quotes, backslashes
@@ -1327,7 +1327,7 @@ test_that("Stress: Unicode and special characters in text fields", {
 
 test_that("Stress: Whitespace variations (tabs, newlines, mixed)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Tabs and extra spaces in plotnumber
@@ -1346,7 +1346,7 @@ test_that("Stress: Whitespace variations (tabs, newlines, mixed)", {
 
 test_that("Stress: All fields at NULL (minimal record)", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Only required fields populated, all optional NULL
@@ -1377,7 +1377,7 @@ test_that("Stress: 10000 vegetation entries validate in <3 seconds", {
   skip_on_cran()  # Skip slow test on CRAN
   
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Insert 1000 plots with 10 veg records each = 10000 veg entries
@@ -1411,7 +1411,7 @@ test_that("Stress: 10000 vegetation entries validate in <3 seconds", {
 
 test_that("Stress: Mixed valid and invalid across all rules", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_full_compliance_schema(con)
   
   # Create records violating every rule type

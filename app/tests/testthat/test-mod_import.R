@@ -73,7 +73,7 @@ test_that("mod_import imports CSV into target table", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_tables(con)
 
   temp_dir <- tempfile("vpro_import_")
@@ -108,7 +108,7 @@ test_that("mod_import maps project-suffixed CSV and fills projectid", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_env_table(con)
 
   temp_dir <- tempfile("vpro_import_project_")
@@ -151,7 +151,7 @@ test_that("mod_import can replace existing project data", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_env_table(con)
 
   DBI::dbExecute(con, "INSERT INTO Env VALUES ('OLD', 'PRJ', 'ICH', 'wk', 55, -120, 100, 10, 180)")
@@ -195,7 +195,7 @@ test_that("mod_import handles ZIP files and imports selected tables", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_tables(con)
 
   temp_dir <- tempfile("vpro_import_zip_")
@@ -233,7 +233,7 @@ test_that("mod_import supports ZIP imports with multiple project IDs", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_env_table(con)
 
   temp_dir <- tempfile("vpro_import_zip_projects_")
@@ -294,7 +294,7 @@ test_that("mod_import blocks CSV import when compliance fails", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_env_table(con)
 
   temp_dir <- tempfile("vpro_import_compliance_")
@@ -338,7 +338,7 @@ test_that("mod_import blocks CSV import when validation fails", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_tables(con)
 
   temp_dir <- tempfile("vpro_import_validation_")
@@ -366,7 +366,7 @@ test_that("mod_import updates validation when target table changes", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_tables(con)
 
   DBI::dbExecute(con, "CREATE TABLE Other_Table (a TEXT)")
@@ -394,7 +394,7 @@ test_that("mod_import imports CSV into schema-qualified list table", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_lists_table(con)
 
   temp_dir <- tempfile("vpro_import_lists_")
@@ -428,7 +428,7 @@ test_that("mod_import resolves list table names in ZIP imports", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_lists_table(con)
 
   temp_dir <- tempfile("vpro_import_lists_zip_")
@@ -468,7 +468,7 @@ test_that("mod_import rolls back ZIP imports on compliance failure", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_tables(con)
   setup_import_env_table(con)
 
@@ -516,7 +516,7 @@ test_that("mod_import blocks ZIP import when validation fails", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_tables(con)
 
   temp_dir <- tempfile("vpro_import_zip_validation_")
@@ -549,7 +549,7 @@ test_that("mod_import rolls back ZIP imports on veg compliance failure", {
   testthat::skip_if_not_installed("shiny")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_import_tables(con)
   setup_import_veg_table(con)
 

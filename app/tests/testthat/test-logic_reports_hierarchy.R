@@ -46,7 +46,7 @@ setup_hierarchy_db <- function() {
 
 test_that("build_hierarchy_path constructs correct paths", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: BuildListInXl() logic in V7mdlReportsHierarchyDiagram.txt
   
@@ -69,7 +69,7 @@ test_that("build_hierarchy_path constructs correct paths", {
 
 test_that("walk_hierarchy_down returns all descendants", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: WalkTheTreeDown() in V7mdlReportsHierarchyDiagram.txt
   
@@ -86,7 +86,7 @@ test_that("walk_hierarchy_down returns all descendants", {
 
 test_that("walk_hierarchy_down respects max_level", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Walk with max_level = 1 - should only get immediate children
   descendants <- walk_hierarchy_down(con, parent_id = 1, max_level = 1)
@@ -130,7 +130,7 @@ test_that("format_hierarchy_indented with level prefix", {
 
 test_that("order_hierarchy_tree returns tree order", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: ControlHierarchyOrder() in V7mdlReportsShortVegHierarchy.txt
   
@@ -155,7 +155,7 @@ test_that("order_hierarchy_tree returns tree order", {
 
 test_that("order_hierarchy_tree respects cutoff_level", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Only include levels 1 and 2
   ordered <- order_hierarchy_tree(con, cutoff_level = 2)
@@ -187,7 +187,7 @@ test_that("add_hierarchy_order_columns sets correct min/max", {
 
 test_that("get_hierarchy_level_stats returns correct counts", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   stats <- get_hierarchy_level_stats(con)
   
@@ -199,7 +199,7 @@ test_that("get_hierarchy_level_stats returns correct counts", {
 
 test_that("build_flat_hierarchy creates complete flat list", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Create lists schema and MasterSiteUnitList
   dbExecute(con, "CREATE SCHEMA lists")
@@ -231,7 +231,7 @@ test_that("build_flat_hierarchy creates complete flat list", {
 
 test_that("check_hierarchy_circular_refs detects cycles", {
   con <- dbConnect(duckdb(), dbdir = ":memory:")
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Create hierarchy with circular reference
   dbExecute(con, "
@@ -258,7 +258,7 @@ test_that("check_hierarchy_circular_refs detects cycles", {
 
 test_that("check_hierarchy_circular_refs handles valid hierarchy", {
   con <- setup_hierarchy_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   circular <- check_hierarchy_circular_refs(con)
   

@@ -90,7 +90,7 @@ test_that("quality_to_order maps quality text correctly", {
 
 test_that("filter_plots_by_quality filters correctly with all criteria", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: QC() in V7mdlReportsQualityControl.txt
   
@@ -117,7 +117,7 @@ test_that("filter_plots_by_quality filters correctly with all criteria", {
 
 test_that("filter_plots_by_quality respects null handling", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Don't allow NULLs - should exclude plot 00004
   result <- filter_plots_by_quality(
@@ -137,7 +137,7 @@ test_that("filter_plots_by_quality respects null handling", {
 
 test_that("filter_plots_by_quality with enforce_filter=FALSE returns all plots", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: If DataQualityFilterEnforce = False logic
   
@@ -154,7 +154,7 @@ test_that("filter_plots_by_quality with enforce_filter=FALSE returns all plots",
 
 test_that("identify_removed_plots correctly identifies removal reasons", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: FillRemovedBy() in V7mdlReportsQualityControl.txt
   
@@ -188,7 +188,7 @@ test_that("identify_removed_plots correctly identifies removal reasons", {
 
 test_that("get_quality_summary returns correct counts", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   summary <- get_quality_summary(con)
   
@@ -199,7 +199,7 @@ test_that("get_quality_summary returns correct counts", {
 
 test_that("filter_plots_by_quality handles site_unit filter", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   result <- filter_plots_by_quality(
     con,
@@ -218,7 +218,7 @@ test_that("filter_plots_by_quality handles site_unit filter", {
 
 test_that("filter_plots_by_quality handles plot_list parameter", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   result <- filter_plots_by_quality(
     con,
@@ -238,7 +238,7 @@ test_that("filter_plots_by_quality handles plot_list parameter", {
 
 test_that("build_quality_filter constructs correct SQL fragments", {
   con <- setup_test_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   qc <- build_quality_filter(
     con,

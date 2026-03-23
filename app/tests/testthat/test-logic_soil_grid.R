@@ -45,7 +45,7 @@ setup_soil_tables <- function(con) {
 
 test_that("save_soil_cell updates numeric and text values", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_soil_tables(con)
 
   save_soil_cell(con, "Humus", 1, "upperdepth", coerce_soil_value("Humus", "upperdepth", "12.5"))

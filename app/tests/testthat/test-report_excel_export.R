@@ -7,7 +7,7 @@ test_that("Excel export writes workbook for short veg report", {
   skip_if_not_installed("writexl")
 
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "
     CREATE TABLE vw_USysAllVeg (
@@ -66,7 +66,7 @@ test_that("Excel export splits long environment by site unit", {
   skip_if_not_installed("writexl")
 
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "
     CREATE TABLE Env (

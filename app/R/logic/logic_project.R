@@ -86,7 +86,7 @@ project_file_disconnect <- function(handle) {
   if (is.null(handle) || is.null(handle$con)) {
     return(invisible(NULL))
   }
-  try(DBI::dbDisconnect(handle$con, shutdown = TRUE), silent = TRUE)
+  try(DBI::dbDisconnect(handle$con), silent = TRUE)
   invisible(NULL)
 }
 

@@ -47,7 +47,7 @@ test_that("descendants and subtree selection", {
 
 test_that("insert_subtree remaps ids and parents", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER)")
   DBI::dbExecute(con, "INSERT INTO Hierarchy (ID, Name, Parent) VALUES (1, 'Root', NULL)")
@@ -78,7 +78,7 @@ test_that("insert_subtree remaps ids and parents", {
 
 test_that("insert_subtree preserves tag when available", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER, Tag TEXT)")
   DBI::dbExecute(con, "INSERT INTO Hierarchy (ID, Name, Parent) VALUES (1, 'Root', NULL)")
@@ -155,7 +155,7 @@ test_that("get_subtree_names returns unique names", {
 
 test_that("get_plots_for_site_unit returns plots", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
   DBI::dbExecute(con, "INSERT INTO SU VALUES ('P1', 'SU1')")
@@ -205,7 +205,7 @@ test_that("filter_duplicate_subtrees drops duplicate parents and descendants", {
 
 test_that("insert_rekeyed_hierarchy remaps parents", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER)")
   DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, 'Root', NULL)")
@@ -228,7 +228,7 @@ test_that("insert_rekeyed_hierarchy remaps parents", {
 
 test_that("insert_rekeyed_hierarchy preserves tag when available", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Tag TEXT)")
   DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, 'Root', NULL, NULL)")
@@ -274,7 +274,7 @@ test_that("get_lowest_tilde_ids identifies lowest tilde nodes", {
 
 test_that("set_lowest_tilde_levels sets level to 11", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE USysLowestBreakpoints_Hierarchy (ID INTEGER, Level INTEGER)")
   DBI::dbExecute(con, "INSERT INTO USysLowestBreakpoints_Hierarchy VALUES (1, 2)")
@@ -289,7 +289,7 @@ test_that("set_lowest_tilde_levels sets level to 11", {
 
 test_that("create_lowest_breakpoints_table builds lowest tilde subtrees", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Name TEXT, Parent INTEGER, Level INTEGER)")
   DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, 'Root', NULL, 1)")
@@ -310,7 +310,7 @@ test_that("create_lowest_breakpoints_table builds lowest tilde subtrees", {
 
 test_that("sync helpers copy values between env and su", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, UserSiteUnit TEXT, BECSiteUnit TEXT)")
   DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
@@ -338,7 +338,7 @@ test_that("sync helpers copy values between env and su", {
 
 test_that("build_su_from_env builds filtered rows", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, Zone TEXT, SubZone TEXT, UserSiteUnit TEXT)")
   DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
@@ -360,7 +360,7 @@ test_that("build_su_from_env builds filtered rows", {
 
 test_that("build_su_from_env_filter respects column filters", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, Zone TEXT, UserSiteUnit TEXT)")
   DBI::dbExecute(con, "CREATE TABLE SU (PlotNumber TEXT, SiteUnit TEXT)")
@@ -376,7 +376,7 @@ test_that("build_su_from_env_filter respects column filters", {
 
 test_that("get_master_site_units filters by level", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE SCHEMA lists")
   DBI::dbExecute(con, "CREATE TABLE lists.MasterSiteUnitList (SiteSeries TEXT, SiteSeriesLongName TEXT, Level INTEGER)")
@@ -392,7 +392,7 @@ test_that("get_master_site_units filters by level", {
 
 test_that("get_user_site_units returns user list rows", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE SCHEMA user")
   DBI::dbExecute(
@@ -423,7 +423,7 @@ test_that("find_orphan_nodes identifies missing parents", {
 
 test_that("fix_orphan_nodes resets missing parents", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Hierarchy (ID INTEGER, Parent INTEGER)")
   DBI::dbExecute(con, "INSERT INTO Hierarchy VALUES (1, NULL)")

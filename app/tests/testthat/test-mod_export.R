@@ -25,7 +25,7 @@ test_that("build_venus_xml_doc filters by project", {
   testthat::skip_if_not_installed("xml2")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_export_tables(con)
 
   doc <- build_venus_xml_doc(
@@ -118,7 +118,7 @@ test_that("build_venus_xml_doc exports all when project_ids empty", {
   testthat::skip_if_not_installed("xml2")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_export_tables(con)
 
   doc <- build_venus_xml_doc(con, project_ids = character(0), tables = c("Env"))
@@ -140,7 +140,7 @@ test_that("build_venus_xml_doc uses optional table prefix", {
   testthat::skip_if_not_installed("xml2")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_export_tables(con)
 
   doc <- build_venus_xml_doc(con, project_ids = "PRJ1", tables = c("Env"), table_prefix = "MyExport")
@@ -156,7 +156,7 @@ test_that("build_venus_xml_doc prefixes per project when exporting multiple", {
   testthat::skip_if_not_installed("xml2")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_export_tables(con)
 
   doc <- build_venus_xml_doc(
@@ -179,7 +179,7 @@ test_that("build_venus_xml_doc uses project ids when no prefix provided", {
   testthat::skip_if_not_installed("xml2")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_export_tables(con)
 
   doc <- build_venus_xml_doc(

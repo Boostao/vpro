@@ -60,7 +60,7 @@ select_plot <- function(app, plot_id = NULL) {
   }
 
   con <- dbConnect(duckdb(), "data/vpro.duckdb")
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
 
   scope <- tryCatch(
     dbGetQuery(
@@ -131,7 +131,7 @@ is_hot_editable <- function(app, output_id) {
 # Helper: Direct DB query to verify state
 verify_db_state <- function(query, expected_rows = NULL, description = "DB check") {
   con <- dbConnect(duckdb(), "data/vpro.duckdb")
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   result <- tryCatch({
     dbGetQuery(con, query)

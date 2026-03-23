@@ -91,7 +91,7 @@ export_combined_excel(
   )
 )
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 ## Excel Template

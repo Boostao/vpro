@@ -213,7 +213,7 @@ test_that("build_env_summary_by_su returns complete summary", {
   skip_if_not_installed("duckdb")
   
   con <- dbConnect(duckdb(), dbdir = ":memory:")
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Create test tables
   dbExecute(con, "

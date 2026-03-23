@@ -32,7 +32,7 @@ make_project_file <- function(root, project_id, plots = c("P1", "P2")) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
 
   con <- db_con()
-  on.exit(try(DBI::dbDisconnect(con, shutdown = TRUE), silent = TRUE), add = TRUE)
+  on.exit(try(DBI::dbDisconnect(con), silent = TRUE), add = TRUE)
 
   DBI::dbExecute(
     con,

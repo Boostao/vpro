@@ -26,7 +26,7 @@ setup_audit_env <- function(con) {
 
 test_that("log_audit_change writes entries", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_audit_env(con)
 
   log_audit_change(con, "PRJ", "tester", "P1", "Env", "latitude", 50, 51)
@@ -42,7 +42,7 @@ test_that("log_audit_change writes entries", {
 
 test_that("log_audit_diff logs multiple field changes", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_audit_env(con)
 
   old_row <- data.frame(latitude = 50, longitude = -120, stringsAsFactors = FALSE)
@@ -58,7 +58,7 @@ test_that("log_audit_diff logs multiple field changes", {
 
 test_that("log_audit_rows logs insert values", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_audit_env(con)
 
   rows <- data.frame(
@@ -78,7 +78,7 @@ test_that("log_audit_rows logs insert values", {
 
 test_that("log_audit_change resolves project from plot", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_audit_env(con)
 
   DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")
@@ -93,7 +93,7 @@ test_that("log_audit_change resolves project from plot", {
 
 test_that("log_master_audit writes master audit entries", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_audit_env(con)
 
   log_master_audit(con, "tester", "Delete", "UnitA", 10, "Name", "UnitA", "UnitB", parent = "Root")
@@ -107,7 +107,7 @@ test_that("log_master_audit writes master audit entries", {
 
 test_that("fetch_master_audit_entries filters entries", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_audit_env(con)
 
   ensure_master_audit_table(con)
@@ -121,7 +121,7 @@ test_that("fetch_master_audit_entries filters entries", {
 
 test_that("resolve_project_id_for_plot finds project", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")
   DBI::dbExecute(con, "INSERT INTO Env VALUES (?, ?)", list("P1", "PRJ1"))
@@ -132,7 +132,7 @@ test_that("resolve_project_id_for_plot finds project", {
 
 test_that("resolve_project_id_for_plot falls back when missing", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Env (PlotNumber TEXT, ProjectID TEXT)")
 

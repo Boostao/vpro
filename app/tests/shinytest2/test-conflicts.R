@@ -33,7 +33,7 @@ source(file.path(repo_root, "R", "mod_merge.R"))
 create_master_fixture <- function() {
   master_path <- tempfile("vpro_master_", fileext = ".duckdb")
   con <- DBI::dbConnect(duckdb::duckdb(), master_path)
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS core")
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS staging")
@@ -149,7 +149,7 @@ attach_master <- function(con_local, master_path) {
 
 seed_merge_request_with_env_conflict <- function(master_path) {
   con <- DBI::dbConnect(duckdb::duckdb(), master_path)
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE SEQUENCE IF NOT EXISTS admin.merge_requests_id_seq")
   DBI::dbExecute(
@@ -204,7 +204,7 @@ test_that("merge_request_refresh_conflicts detects env optimistic concurrency co
   mr_id <- seed_merge_request_with_env_conflict(master_path)
 
   con_local <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  on.exit(DBI::dbDisconnect(con_local, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con_local), add = TRUE)
   attach_master(con_local, master_path)
 
   merge_ensure_tables(con_local)
@@ -237,7 +237,7 @@ test_that("Merge Review UI can resolve a detected conflict", {
       mod_merge_server("merge", state = state, con = con)
 
       session$onSessionEnded(function() {
-        DBI::dbDisconnect(con, shutdown = TRUE)
+        DBI::dbDisconnect(con)
       })
     }
   )
@@ -254,7 +254,7 @@ test_that("Merge Review UI can resolve a detected conflict", {
   driver$wait_for_idle()
 
   con_check <- DBI::dbConnect(duckdb::duckdb(), master_path)
-  on.exit(DBI::dbDisconnect(con_check, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con_check), add = TRUE)
 
   pre <- DBI::dbGetQuery(
     con_check,
@@ -359,14 +359,14 @@ setup_sync_environment <- function() {
     message("Sync setup note: ", conditionMessage(e))
   })
   
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
 }
 
 # Clean up sync infrastructure
 cleanup_sync_environment <- function() {
   db_path <- if (file.exists("data/vpro.duckdb")) "data/vpro.duckdb" else ":memory:"
   con <- dbConnect(duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   tryCatch({
     dbExecute(con, "DELETE FROM sync_conflicts")
@@ -385,7 +385,7 @@ create_test_conflict <- function(plot_number,
                                   field_name = "SiteNotes") {
   db_path <- if (file.exists("data/vpro.duckdb")) "data/vpro.duckdb" else ":memory:"
   con <- dbConnect(duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   # Build conflict details JSON
   details <- sprintf(
@@ -453,7 +453,7 @@ create_conflict_scenario <- function(n_conflicts = 5) {
       list("Sample_Env", "CONF-005", "TEST", details_multi)
     )
     conflict_ids[5] <- dbGetQuery(con, "SELECT MAX(id) AS id FROM sync_conflicts")$id[1]
-    dbDisconnect(con, shutdown = TRUE)
+    dbDisconnect(con)
   }
   
   return(conflict_ids)
@@ -463,7 +463,7 @@ create_conflict_scenario <- function(n_conflicts = 5) {
 count_conflicts <- function(project_id = NULL) {
   db_path <- if (file.exists("data/vpro.duckdb")) "data/vpro.duckdb" else ":memory:"
   con <- dbConnect(duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   if (is.null(project_id)) {
     result <- dbGetQuery(con, "SELECT COUNT(*) AS n FROM sync_conflicts")
@@ -481,7 +481,7 @@ count_conflicts <- function(project_id = NULL) {
 verify_conflict_resolved <- function(conflict_id) {
   db_path <- if (file.exists("data/vpro.duckdb")) "data/vpro.duckdb" else ":memory:"
   con <- dbConnect(duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   result <- dbGetQuery(con, 
     "SELECT COUNT(*) AS n FROM sync_conflicts WHERE id = ?",
@@ -495,7 +495,7 @@ verify_conflict_resolved <- function(conflict_id) {
 create_plot_for_conflict_test <- function(plot_number, project_id = "TEST") {
   db_path <- if (file.exists("data/vpro.duckdb")) "data/vpro.duckdb" else ":memory:"
   con <- dbConnect(duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   # Create SiteUnit
   tryCatch({
@@ -527,7 +527,7 @@ test_that("sync infrastructure tables are created correctly", {
   
   db_path <- if (file.exists("data/vpro.duckdb")) "data/vpro.duckdb" else ":memory:"
   con <- dbConnect(duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   # Verify sync_state table exists
   tables <- dbListTables(con)
@@ -921,7 +921,7 @@ test_that("conflict on deleted record shows special UI", {
     list("Sample_Env", "DEL-001", "TEST", details)
   )
   conflict_id <- dbGetQuery(con, "SELECT MAX(id) AS id FROM sync_conflicts")$id[1]
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   
   app <- AppDriver$new(name = "conflict-deletion", timeout = 20000)
   on.exit(app$stop(), add = TRUE)
@@ -965,7 +965,7 @@ test_that("UUID collision conflict is detected", {
      VALUES (?, ?, ?, ?)",
     list("Sample_Env", "NEW-001", "TEST", details)
   )
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   
   # Test that UI shows special warning and suggests renaming
   # Full implementation would test UUID-based resolution
@@ -987,7 +987,7 @@ test_that("sync cancellation preserves local data", {
   initial_data <- dbGetQuery(con, 
     "SELECT * FROM Sample_Env WHERE PlotNumber = 'CANCEL-001'"
   )
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   
   app <- AppDriver$new(name = "sync-cancel", timeout = 20000)
   on.exit(app$stop(), add = TRUE)
@@ -1008,7 +1008,7 @@ test_that("sync cancellation preserves local data", {
   final_data <- dbGetQuery(con, 
     "SELECT * FROM Sample_Env WHERE PlotNumber = 'CANCEL-001'"
   )
-  dbDisconnect(con, shutdown = TRUE)
+  dbDisconnect(con)
   
   expect_equal(initial_data, final_data,
                info = "Cancellation should not modify local data")

@@ -74,7 +74,7 @@ setup_veg_tables <- function(con) {
 
 test_that("get_vegetation_data returns empty data frame for blank site unit", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   result <- get_vegetation_data(con, "")
   expect_equal(nrow(result), 0)
@@ -82,7 +82,7 @@ test_that("get_vegetation_data returns empty data frame for blank site unit", {
 
 test_that("get_vegetation_data joins lookup tables and coalesces names", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_veg_tables(con)
 
   result <- get_vegetation_data(con, "SU-1")

@@ -27,7 +27,7 @@ test_that("set_current_setting stores and normalizes current values", {
 
 test_that("get_pref returns defaults when missing for non-current settings", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS user")
 
   expect_equal(get_pref(con, "ReportOptions", "cmbColourGreater", default = 5L), 5L)
@@ -36,7 +36,7 @@ test_that("get_pref returns defaults when missing for non-current settings", {
 
 test_that("set_pref stores and get_pref retrieves non-current values", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS user")
 
   set_pref(con, "ReportOptions", "cmbColourGreater", 10)
@@ -46,7 +46,7 @@ test_that("set_pref stores and get_pref retrieves non-current values", {
 
 test_that("get_pref coerces values to requested type", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS user")
 
   set_pref(con, "ReportOptions", "cmbApplyTheme", 1)

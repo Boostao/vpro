@@ -38,7 +38,7 @@ safe_get_value <- function(app, input = NULL, output = NULL, export = NULL) {
 # Helper: Direct DB query to verify state
 verify_db_state <- function(query, expected_rows = NULL, description = "DB check", db_path = "data/vpro.duckdb") {
   con <- dbConnect(duckdb(), db_path)
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
   
   result <- tryCatch({
     dbGetQuery(con, query)
@@ -109,7 +109,7 @@ select_plot <- function(app, plot_id = NULL) {
   }
 
   con <- dbConnect(duckdb(), "data/vpro.duckdb")
-  on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(dbDisconnect(con), add = TRUE)
 
   scope <- tryCatch(
     dbGetQuery(

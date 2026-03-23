@@ -269,7 +269,7 @@ if (DBI::dbExistsTable(con, "Sample_Veg")) {
   }
 }
 
-dbDisconnect(con, shutdown = TRUE)
+dbDisconnect(con)
 ```
 
 # `r params$report_title`

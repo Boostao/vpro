@@ -105,7 +105,7 @@ make_display_labels <- function(labels, ids, max_chars = 26) {
 fetch_hierarchy <- function(db_path) {
   db_info <- connect_hierarchy_db(db_path)
   on.exit({
-    try(DBI::dbDisconnect(db_info$con, shutdown = TRUE), silent = TRUE)
+    try(DBI::dbDisconnect(db_info$con), silent = TRUE)
   }, add = TRUE)
 
   if (!DBI::dbExistsTable(db_info$con, "Hierarchy")) {

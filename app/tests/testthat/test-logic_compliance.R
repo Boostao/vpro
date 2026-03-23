@@ -75,7 +75,7 @@ setup_compliance_tables <- function(con) {
 
 test_that("run_compliance_checks returns rule summaries", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_compliance_tables(con)
 
   result <- run_compliance_checks(con)
@@ -99,7 +99,7 @@ test_that("run_compliance_checks returns rule summaries", {
 
 test_that("required fields flag missing values", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_compliance_tables(con)
 
   DBI::dbExecute(

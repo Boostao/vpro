@@ -7,7 +7,7 @@ new_app_driver <- function(name, height, width, ...) {
 
 select_plot <- function(app, project_id) {
   con <- DBI::dbConnect(duckdb::duckdb(), "data/vpro.duckdb")
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   scope <- tryCatch(
     DBI::dbGetQuery(

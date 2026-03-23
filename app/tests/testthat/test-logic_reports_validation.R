@@ -134,7 +134,7 @@ setup_validation_db <- function() {
 
 test_that("validate_env_data detects invalid codes", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: ValidateEnvData() in V7mdlReportsValidateEnvData.txt
   
@@ -156,7 +156,7 @@ test_that("validate_env_data detects invalid codes", {
 
 test_that("validate_env_data handles looped fields (Exposure1, Exposure2)", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: ValidateLoops logic in ValidateEnvData()
   
@@ -171,7 +171,7 @@ test_that("validate_env_data handles looped fields (Exposure1, Exposure2)", {
 
 test_that("validate_env_data ignores NULL values", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Plot 002 has NULL Exposure2 - should not be an error
   env <- dbGetQuery(con, "SELECT * FROM Env")
@@ -183,7 +183,7 @@ test_that("validate_env_data ignores NULL values", {
 
 test_that("validate_veg_codes detects invalid species codes", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # VBA source: Similar pattern to V7mdlReportsValidateVegCodes.txt
   
@@ -203,7 +203,7 @@ test_that("validate_veg_codes detects invalid species codes", {
 
 test_that("validate_veg_codes excludes synonym codes (CodeType = 'S')", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # SYNONYM1 has CodeType = 'S' so it's in the reference list
   # but should still be flagged (it will be in valid_species, so it won't error)
@@ -220,7 +220,7 @@ test_that("validate_veg_codes excludes synonym codes (CodeType = 'S')", {
 
 test_that("check_orphaned_veg_records finds orphans", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Add a veg record for plot that doesn't exist in Env
   dbExecute(con, "
@@ -236,7 +236,7 @@ test_that("check_orphaned_veg_records finds orphans", {
 
 test_that("check_orphaned_env_records finds orphans", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Add an env record for plot that doesn't exist in SU
   dbExecute(con, "
@@ -252,7 +252,7 @@ test_that("check_orphaned_env_records finds orphans", {
 
 test_that("generate_validation_report returns comprehensive results", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   report <- generate_validation_report(con, project_id = "TEST")
   
@@ -274,7 +274,7 @@ test_that("generate_validation_report returns comprehensive results", {
 
 test_that("check_duplicate_plots finds duplicates", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Add duplicate plot
   dbExecute(con, "
@@ -323,7 +323,7 @@ test_that("validate_plot_number_format accepts valid formats", {
 
 test_that("validate_env_data handles empty data", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   empty_env <- data.frame(
     PlotNumber = character(),
@@ -338,7 +338,7 @@ test_that("validate_env_data handles empty data", {
 
 test_that("validate_veg_codes handles missing columns gracefully", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   # Data without required columns
   bad_veg <- data.frame(
@@ -356,7 +356,7 @@ test_that("validate_veg_codes handles missing columns gracefully", {
 
 test_that("generate_validation_report filters by site_unit", {
   con <- setup_validation_db()
-  on.exit(dbDisconnect(con, shutdown = TRUE))
+  on.exit(dbDisconnect(con))
   
   report <- generate_validation_report(con, site_unit = "SU1")
   

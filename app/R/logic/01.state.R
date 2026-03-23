@@ -81,8 +81,9 @@ init_state <- function() {
 
     db_attach(currentDB, to_attach)
 
-    # Rename fields fix
+    # Rename fields fix & Create metaviews
     db_rename_fix01(currentDB)
+    db_masterunitlist_views(currentDB)
 
     # Check for other users in audit table
     MultiUsers <- db_query(currentDB, "

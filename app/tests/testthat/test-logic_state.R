@@ -36,7 +36,7 @@ test_that("init_sys_state includes VBA globals and aliases", {
 
 test_that("set_project sets project and metadata with aliases", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_test_metadata(con)
 
   state <- init_sys_state()
@@ -66,7 +66,7 @@ test_that("set_su updates plot number and aliases", {
 
 test_that("create_project_table_set clones Sample_* schema", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Sample_Env (PlotNumber TEXT, ProjectID TEXT)")
   DBI::dbExecute(con, "CREATE TABLE Sample_Metadata (ProjectID TEXT, ProjectName TEXT)")
@@ -82,7 +82,7 @@ test_that("create_project_table_set clones Sample_* schema", {
 
 test_that("unattach_project_table_set drops non-protected project tables", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Alpha_Env (PlotNumber TEXT)")
   DBI::dbExecute(con, "CREATE TABLE Alpha_SU (PlotNumber TEXT)")
@@ -99,10 +99,10 @@ test_that("attach_project_table_set copies prefixed tables from source duckdb", 
   DBI::dbExecute(src, "CREATE TABLE Alpha_Env (PlotNumber TEXT)")
   DBI::dbExecute(src, "INSERT INTO Alpha_Env VALUES ('P1')")
   DBI::dbExecute(src, "CREATE TABLE Ignore_Env (PlotNumber TEXT)")
-  DBI::dbDisconnect(src, shutdown = TRUE)
+  DBI::dbDisconnect(src)
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   copied <- attach_project_table_set(con, src_path, "Alpha", replace_existing = FALSE)
   expect_true("Alpha_Env" %in% copied)
@@ -115,7 +115,7 @@ test_that("attach_project_table_set copies prefixed tables from source duckdb", 
 
 test_that("create_prefixed_table_from_template clones a single suffixed table", {
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   DBI::dbExecute(con, "CREATE TABLE Sample_SU (PlotNumber TEXT, ProjectID TEXT)")
   create_prefixed_table_from_template(con, "Beta", "_SU", template_prefix = "Sample")
@@ -130,10 +130,10 @@ test_that("attach_prefixed_table and unattach_prefixed_table manage a single tab
   src <- DBI::dbConnect(duckdb::duckdb(), src_path)
   DBI::dbExecute(src, "CREATE TABLE Beta_SU (PlotNumber TEXT)")
   DBI::dbExecute(src, "INSERT INTO Beta_SU VALUES ('SU1')")
-  DBI::dbDisconnect(src, shutdown = TRUE)
+  DBI::dbDisconnect(src)
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   attach_prefixed_table(con, src_path, "Beta", "_SU")
   expect_true(DBI::dbExistsTable(con, "Beta_SU"))

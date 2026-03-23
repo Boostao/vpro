@@ -38,7 +38,7 @@ test_that("mod_veg_sample preserves cover codes as text", {
   testthat::skip_if_not_installed("rhandsontable")
 
   con <- test_connect_duckdb()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
   setup_veg_sample_tables(con)
 
   save_veg_cell(con, 1, "cover1", "+")
