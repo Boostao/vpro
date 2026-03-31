@@ -11,6 +11,21 @@ server <- function(input, output, session) {
 
   mod_whatsnew_server("whatsnew", con, open_trigger = reactive(input$btn_whatsnew))
 
+  # Minimal reactive state for module communication
+  state <- reactiveValues(
+    CurrSU       = config("Current", "CurrSU"),
+    sysCurrSU    = NULL,
+    CurrForm     = config("Current", "DataFormName"),
+    sysCurrForm  = config("Current", "DataFormName"),
+    CurrProject  = config("Current", "CurrProject"),
+    PrefPlot     = NULL,
+    PrefProject  = config("Current", "CurrProject"),
+    PrefSUTable  = config("Current", "CurrPlotlist"),
+    User         = config("Current", "User")
+  )
+
+  mod_fs882_6x4_server("fs882_6x4", state, con)
+  mod_fs882_8x6xl_server("fs882_8x6xl", state, con)
 
   # sync_ensure_local_tables(con)
   # project_ensure_baseline_table(con)
@@ -1568,18 +1583,30 @@ server <- function(input, output, session) {
   # # FS882 destination module
   # mod_fs882_server("fs882", state, con)
   
-  # # FS1333 destination module
-  # mod_fs1333_server("fs1333", state, con)
+  # FS1333 destination module (SIVI form)
+  mod_fs1333_server("fs1333", state, con)
 
-  # # Project Metadata destination module
-  # mod_project_metadata_server("project_metadata", state, con)
-  # mod_project_metadata_server("project_metadata_data", state, con)
+  # Project Metadata destination module
+  mod_project_metadata_server("project_metadata", state, con)
+  mod_project_metadata_server("project_metadata_data", state, con)
 
-  # # Combine Species destination module (USysLumpMaster ribbon target)
-  # mod_combine_species_server("combine_species", state, con)
+  # Combine Species destination module (USysLumpMaster ribbon target)
+  mod_combine_species_server("combine_species", state, con)
 
-  # # Herbarium destination module (frmHerbarium ribbon target)
-  # mod_herbarium_server("herbarium", state, con)
+  # Herbarium destination module (frmHerbarium ribbon target)
+  mod_herbarium_server("herbarium", state, con)
+
+  # Colour-theme destination module (frmColourMaster parity)
+  mod_colour_theme_server("colour_theme", state, con)
+
+  # User setup destination module (frmRunOnce parity)
+  mod_user_setup_server("user_setup", state, con)
+
+  # User log destination module (USysfrmUserLog parity)
+  mod_user_log_server("user_log", state, con)
+
+  # Reporting Module
+  mod_reporting_server("report", state, con)
 
   # # Export Module
   # mod_export_server("export", state, con)
@@ -1717,20 +1744,20 @@ server <- function(input, output, session) {
   #   mod_nav_launcher_server(launcher_id, open_main_tab = "Hierarchy")
   # }
 
-  # for (launcher_id in c(
-  #   "launch_project_compare",
-  #   "launch_report_long_vegetation",
-  #   "launch_report_summary_vegetation",
-  #   "launch_report_long_environment",
-  #   "launch_report_summary_environment",
-  #   "launch_report_subzone_matrix_of_units",
-  #   "launch_report_hierarchy_diagram",
-  #   "launch_report_print_plot_label",
-  #   "launch_report_create_plot_locations_file",
-  #   "launch_report_show_plot_locations_google_earth"
-  # )) {
-  #   mod_nav_launcher_server(launcher_id, open_main_tab = "Reports")
-  # }
+  for (launcher_id in c(
+    "launch_project_compare",
+    "launch_report_long_vegetation",
+    "launch_report_summary_vegetation",
+    "launch_report_long_environment",
+    "launch_report_summary_environment",
+    "launch_report_subzone_matrix_of_units",
+    "launch_report_hierarchy_diagram",
+    "launch_report_print_plot_label",
+    "launch_report_create_plot_locations_file",
+    "launch_report_show_plot_locations_google_earth"
+  )) {
+    mod_nav_launcher_server(launcher_id, open_main_tab = "Reports")
+  }
 
   # mod_nav_launcher_server(
   #   "launch_validate_data",

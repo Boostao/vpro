@@ -113,14 +113,13 @@ Completion requirements:
 - Do not treat redirect-only changes as complete when destination implementation is requested
 - Do not treat analysis-only output as complete
 - Do not report success when no workspace files changed
-- Report deferred dependencies with placeholders and actionable hookup notes
+- Do not defer, recursively implement, find solution and search for details to move forward.
 
 Strict parity completion gates:
-- Do not mark a task complete unless the targeted Access controls/events for the requested scope are mapped to runtime behavior or explicitly deferred.
 - Do not mark a task complete based only on startup or save/load smoke when deeper runtime behavior was in scope.
-- Include a control/event parity checklist in handoff with `implemented | deferred | missing` status per item.
+- Include a control/event parity checklist in handoff with `implemented | missing` status per item.
 
-Do not claim feature parity unless event mapping, dependency tracing, and source bindings are implemented or explicitly deferred with placeholders.
+Do not claim feature parity unless event mapping, dependency tracing, and source bindings are implemented.
 
 ## Missing dependency handling (mandatory)
 

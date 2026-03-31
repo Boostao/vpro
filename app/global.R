@@ -15,9 +15,24 @@ library(quarto)
 # Logic imports
 source("R/logic/00.db.R") # Database helper functions
 source("R/logic/01.state.R") # State management functions
+source("R/logic/logic_google_earth.R") # KML generation (Google Earth export)
+source("R/logic/logic_su_table_tools.R") # SU table tools (SU↔Env sync)
+source("R/logic/logic_record_nav.R") # Record navigation + audit trail
 
 # Module Imports
 source("R/modules/mod_whatsnew.R")
+source("R/modules/mod_project_metadata.R")
+source("R/modules/mod_images.R")
+source("R/modules/mod_plot_profiling.R")
+source("R/modules/mod_fs882_6x4.R")
+source("R/modules/mod_fs882_8x6xl.R")
+source("R/modules/mod_fs1333.R")
+source("R/modules/mod_combine_species.R")
+source("R/modules/mod_herbarium.R")
+source("R/modules/mod_colour_theme.R")
+source("R/modules/mod_user_setup.R")
+source("R/modules/mod_user_log.R")
+source("R/modules/mod_reporting.R")
 
 # To refactor below ---
 
@@ -81,7 +96,6 @@ source("R/modules/mod_whatsnew.R")
 # source("R/modules/mod_veg_sample.R")
 # source("R/modules/mod_site_env.R")
 # source("R/modules/mod_su_table.R")
-# source("R/modules/mod_fs882_6x4_reimagined_ui.R")
 # source("R/modules/mod_fs1333.R")
 # source("R/modules/mod_project_metadata.R")
 # source("R/modules/mod_combine_species.R")
@@ -99,7 +113,7 @@ source("R/modules/mod_whatsnew.R")
 
 # source("R/modules/mod_becweb_map.R")
 # source("R/modules/mod_data_entry_context.R")
-# source("R/modules/mod_nav_launcher.R")
+source("R/modules/mod_nav_launcher.R")
 
 # # Note: The actual 'SysState' object is initialized in server.R 
 # # because it must be reactive and unique to the session.

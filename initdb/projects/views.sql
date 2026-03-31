@@ -13,7 +13,8 @@ SELECT DISTINCT
   "Sample_Admin".*
 FROM "Sample_Env"
 INNER JOIN "Sample_Admin"
-  ON "Sample_Env"."PlotNumber" = "Sample_Admin"."Plot";
+  ON "Sample_Env"."PlotNumber" = "Sample_Admin"."Plot"
+ORDER BY "UsysEnv"."PlotNumber";
 
 
 -- ============================================================

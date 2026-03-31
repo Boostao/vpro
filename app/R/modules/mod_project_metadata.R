@@ -1,7 +1,18 @@
-project_metadata_detect_table <- function(con) {
+project_metadata_detect_table <- function(con, project = NULL) {
+  candidates <- c()
+
+  # Highest priority: project-specific Metadata table (e.g. Sample_Metadata in Sample.db)
+  if (!is.null(project) && nzchar(trimws(project))) {
+    proj_tbl <- tryCatch(
+      as.character(db_tb(con, "Metadata", project, prj = TRUE)),
+      error = function(e) NULL
+    )
+    if (!is.null(proj_tbl)) candidates <- c(candidates, proj_tbl)
+  }
+
   candidates <- c(
-    "Metadata",
-    "VMetaData.Metadata",
+    candidates,
+    "VMetaData.ProjectMetadata",
     "VUser.ProjectMetaData",
     "VUser.ProjectMetadata",
     "ProjectMetadata",
@@ -80,67 +91,251 @@ project_metadata_default_all_specs <- function(con) {
 mod_project_metadata_ui <- function(id) {
   ns <- shiny::NS(id)
 
-  bslib::card(
-    full_screen = TRUE,
-    bslib::card_header(
-      shiny::tags$div(
-        class = "d-flex justify-content-between align-items-center flex-wrap gap-2",
-        shiny::tags$div(
-          shiny::tags$div(class = "fw-semibold", "Project Metadata"),
-          shiny::tags$div(class = "small text-muted", "Access parity block: frmProjectMetaData")
+  # Helper: compact "collected" select + quality text per data type
+  cg <- function(field_suffix, lbl) {
+    shiny::tags$div(
+      class = "text-center",
+      shiny::tags$small(class = "fw-semibold d-block mb-1", lbl),
+      shiny::selectInput(ns(paste0("Collected", field_suffix)), NULL,
+        choices = c("\u2014" = "", "Complete" = 1, "Partial" = 2, "None" = 3),
+        selected = "", width = "85px"
+      ),
+      shiny::textInput(ns(paste0("DataQuality", field_suffix)), NULL,
+        placeholder = "Quality", width = "85px"
+      )
+    )
+  }
+
+  # Helper: labelled layer description row
+  lr <- function(lbl, field, ph) {
+    shiny::tags$div(
+      class = "d-flex align-items-center gap-2 mb-1",
+      shiny::tags$div(class = "fw-semibold text-muted text-end",
+        style = "width:2.2rem; min-width:2.2rem; font-size:0.8rem;", lbl),
+      shiny::textInput(ns(field), NULL, placeholder = ph, width = "100%")
+    )
+  }
+
+  shiny::tags$div(
+    class = "vpro-form-sm",
+    # Navigation bar (Access frmProjectMetaData record nav bar parity)
+    shiny::tags$div(
+      class = "d-flex align-items-center gap-1 mb-1",
+      shiny::actionButton(ns("btnMetaNavFirst"), NULL, icon = shiny::icon("backward-step"),
+        class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::actionButton(ns("btnMetaNavPrev"), NULL, icon = shiny::icon("caret-left"),
+        class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::tags$span(
+        class = "small text-muted mx-1", style = "min-width: 56px; text-align: center;",
+        shiny::textOutput(ns("navRecordPos"), inline = TRUE)
+      ),
+      shiny::actionButton(ns("btnMetaNavNext"), NULL, icon = shiny::icon("caret-right"),
+        class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::actionButton(ns("btnMetaNavLast"), NULL, icon = shiny::icon("forward-step"),
+        class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::tags$span(class = "vr mx-1"),
+      shiny::tags$span(class = "small text-muted",
+        shiny::textOutput(ns("status"), inline = TRUE))
+    ),
+
+    # === Main 2-column layout: fields (left) | DATA COLLECTED (right) ===
+    bslib::layout_columns(
+      col_widths = c(8, 4),
+      gap = "0.6rem",
+
+      # ----- LEFT: primary fields -----
+      shiny::tagList(
+        # Row: Project ID | BAPID.EP# | Start Date (Yr.) | End Date (Yr.)
+        bslib::layout_columns(
+          shiny::selectizeInput(ns("ProjectID"), "Project ID",
+            choices = character(0), selected = NULL),
+          shiny::textInput(ns("BAPID"), "BAPID.EP#"),
+          shiny::numericInput(ns("StartDate"), "Start Date (Yr.)",
+            value = NA, min = 0, step = 1),
+          shiny::textInput(ns("EndDate"), "End Date (Yr.)"),
+          col_widths = c(4, 4, 2, 2)
         ),
-        shiny::actionButton(ns("btnClose"), "Close", class = "btn btn-outline-danger btn-sm")
+        # Row: Project Title
+        shiny::textInput(ns("ProjectTitle"), "Project Title", width = "100%"),
+        # Row: Project Type | Other
+        bslib::layout_columns(
+          shiny::selectInput(ns("cmbProjectType"), "Project Type",
+            choices = c("(None)" = "", "BEC", "TEM", "SIBEC", "Other")),
+          shiny::textInput(ns("ProjectTypeOther"), "Other"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Collection Standard | Other
+        bslib::layout_columns(
+          shiny::selectInput(ns("cmbEcosysCollectionStandard"),
+            "Collection Standard", choices = character(0)),
+          shiny::textInput(ns("EcosysCollectionStandardOther"), "Other"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Coordinating Agency | Proponent/Funder
+        bslib::layout_columns(
+          shiny::textInput(ns("CoordinatingAgency"), "Coordinating Agency"),
+          shiny::textInput(ns("ProponentFunder"), "Proponent/Funder"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Field Company/Agency | Field Leader
+        bslib::layout_columns(
+          shiny::textInput(ns("FieldCompanyAgency"), "Field Company/Agency"),
+          shiny::textInput(ns("FieldLeader"), "Field Leader"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Field Data Collection Team
+        shiny::textInput(ns("FieldDataCollectionTeam"),
+          "Field Data Collection Team", width = "100%"),
+        # Row: Purpose of Project
+        shiny::textInput(ns("ProjectPurpose"), "Purpose of Project",
+          width = "100%"),
+        # Row: Geographic Study Area | Region/District
+        bslib::layout_columns(
+          shiny::textInput(ns("GeographicStudyArea"), "Geographic Study Area"),
+          shiny::textInput(ns("GeographicStudyRegion"), "Region/District"),
+          col_widths = c(7, 5)
+        ),
+        # Row: No. of FS882 Plots | No. of Site Visits
+        bslib::layout_columns(
+          shiny::numericInput(ns("NumberOfFS882Plots"),
+            "No. of Project FS882 Plots", value = NA),
+          shiny::numericInput(ns("NumberOfSiteVisits"),
+            "No. of Site Visits", value = NA),
+          col_widths = c(6, 6)
+        ),
+        # Row: Veg Cover Method | Other
+        bslib::layout_columns(
+          shiny::selectInput(ns("cmbVegCoverMethod"), "Veg Cover Method",
+            choices = character(0)),
+          shiny::textInput(ns("VegCoverMethodOther"), "Other"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Plot Method/Size | Other
+        bslib::layout_columns(
+          shiny::selectInput(ns("cmbPlotMethod"), "Plot Method/Size",
+            choices = character(0)),
+          shiny::textInput(ns("PlotMethodOther"), "Other"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Mensuration Method | Other
+        bslib::layout_columns(
+          shiny::selectInput(ns("cmbMensurationMethod"), "Mensuration Method",
+            choices = character(0)),
+          shiny::textInput(ns("MensurationMethodOther"), "Other"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Extra Vegetation Field Description
+        shiny::textInput(ns("ExtraVegFieldDescription"),
+          "Extra Vegetation Field Description", width = "100%"),
+        # Row: Data Custodian | Storage Location
+        bslib::layout_columns(
+          shiny::textInput(ns("DataCustodian"), "Data Custodian"),
+          shiny::textInput(ns("StorageLocation"), "Storage Location"),
+          col_widths = c(6, 6)
+        ),
+        # Row: Georeference Method | Coordinate System | Datum
+        bslib::layout_columns(
+          shiny::selectInput(ns("cmbGeoRefMethod"), "Georeference Method",
+            choices = character(0)),
+          shiny::selectInput(ns("cmbCoordinateSystem"), "Coordinate System",
+            choices = character(0)),
+          shiny::selectInput(ns("cmbDatum"), "Datum", choices = character(0)),
+          col_widths = c(4, 4, 4)
+        ),
+        # Row: Species table | Table Of Lists (+ attach buttons)
+        bslib::layout_columns(
+          shiny::tags$div(
+            shiny::textInput(ns("AllSpecs"), "Species table", width = "100%"),
+            shiny::actionButton(ns("btnAttachUSysAllSpecs"), "...",
+              class = "btn btn-outline-secondary btn-sm")
+          ),
+          shiny::tags$div(
+            shiny::textInput(ns("TableOfLists"), "Table Of Lists",
+              width = "100%"),
+            shiny::actionButton(ns("btnAttachUSysTableOfLists"), "...",
+              class = "btn btn-outline-secondary btn-sm")
+          ),
+          col_widths = c(6, 6)
+        )
+      ),
+
+      # ----- RIGHT: FS882 DATA COLLECTED -----
+      shiny::tags$div(
+        shiny::tags$h6(class = "fw-semibold mb-2 text-uppercase small",
+          "FS882 Data Collected"),
+        shiny::tags$p(class = "text-muted small mb-2",
+          "Select Complete / Partial / None per data type:"),
+        shiny::tags$div(
+          class = "d-flex flex-wrap gap-2",
+          cg("Site", "Site"),
+          cg("Veg", "Veg"),
+          cg("Soil", "Soil"),
+          cg("Terrain", "Terrain"),
+          cg("Mens", "Mens."),
+          cg("CWD", "CWD"),
+          cg("WildTree", "Wld Tree"),
+          cg("SoilChem", "Soil Chem"),
+          cg("WildlifeHabitatAssessment", "WHA")
+        ),
+        shiny::tags$hr(class = "my-2"),
+        shiny::tags$small(class = "fw-semibold d-block mb-1", "Other (describe):"),
+        shiny::textInput(ns("CollectedCompleteOther"), NULL,
+          placeholder = "Complete", width = "100%"),
+        shiny::textInput(ns("CollectedPartialOther"), NULL,
+          placeholder = "Partial", width = "100%"),
+        shiny::textInput(ns("CollectedNoneOther"), NULL,
+          placeholder = "None", width = "100%")
       )
     ),
-    bslib::card_body(
-      bslib::layout_columns(
-        shiny::selectizeInput(ns("ProjectID"), "Project ID", choices = character(0), selected = NULL),
-        shiny::textInput(ns("ProjectTitle"), "Project Title"),
-        shiny::numericInput(ns("StartDate"), "Start Date (Yr.)", value = "", min = 0, step = 1),
-        shiny::textInput(ns("EndDate"), "End Date (Yr.)"),
-        col_widths = c(3, 5, 2, 2)
+
+    # === Layer Descriptions ===
+    shiny::tags$hr(class = "my-2"),
+    shiny::tags$h6(class = "fw-semibold mb-2", "Layer Descriptions"),
+    bslib::layout_columns(
+      col_widths = c(6, 6),
+      shiny::tagList(
+        lr("A1",  "CoverA1Description",  "Total of all tree layers (>10m)"),
+        lr("A2",  "CoverA2Description",  "Dominant trees"),
+        lr("A3",  "CoverA3Description",  "Main canopy"),
+        lr("A",   "CoverADescription",   "Trees > 10m but below main canopy"),
+        lr("B1",  "CoverB1Description",  "Total of all shrub layers"),
+        lr("B2",  "CoverB2Description",  "Tall shrubs between 2 and 10 m tall"),
+        lr("B3",  "CoverB2aDescription", "Low shrubs < 2 m tall"),
+        lr("B4",  "CoverB2bDescription", ""),
+        lr("B5",  "CoverB2cDescription", "")
       ),
-      bslib::layout_columns(
-        shiny::textInput(ns("CoordinatingAgency"), "Coordinating Agency"),
-        shiny::textInput(ns("ProponentFunder"), "Proponent/Funder"),
-        shiny::textInput(ns("FieldCompanyAgency"), "Field Company/Agency"),
-        shiny::textInput(ns("GeographicStudyArea"), "Geographic Study Area"),
-        col_widths = c(3, 3, 3, 3)
-      ),
-      bslib::layout_columns(
-        shiny::selectInput(ns("cmbEcosysCollectionStandard"), "Collection Standard", choices = character(0)),
-        shiny::selectInput(ns("cmbVegCoverMethod"), "Veg Cover Method", choices = character(0)),
-        shiny::selectInput(ns("cmbPlotMethod"), "Plot Method/Size", choices = character(0)),
-        shiny::selectInput(ns("cmbGeoRefMethod"), "Georeference Method", choices = character(0)),
-        col_widths = c(3, 3, 3, 3)
-      ),
-      bslib::layout_columns(
-        shiny::selectInput(ns("cmbDatum"), "Datum", choices = character(0)),
-        shiny::selectInput(ns("cmbCoordinateSystem"), "Coordinate System", choices = character(0)),
-        shiny::textInput(ns("AllSpecs"), "Species table"),
-        shiny::textInput(ns("TableOfLists"), "Table Of Lists"),
-        col_widths = c(3, 3, 3, 3)
-      ),
-      shiny::textAreaInput(ns("Notes"), "Notes", width = "100%", height = "90px"),
-      shiny::tags$div(
-        class = "d-flex align-items-center gap-2 flex-wrap",
-        shiny::actionButton(ns("btnSave"), "Save", class = "btn btn-primary btn-sm"),
-        shiny::actionButton(ns("btnAttachUSysAllSpecs"), "Attach USysAllSpecs", class = "btn btn-outline-secondary btn-sm"),
-        shiny::actionButton(ns("btnAttachUSysTableOfLists"), "Attach USysTableOfLists", class = "btn btn-outline-secondary btn-sm"),
-        shiny::textOutput(ns("status"), container = shiny::span)
+      shiny::tagList(
+        lr("B",   "CoverBDescription",   "Total of all shrub layers"),
+        lr("C",   "CoverCDescription",   "Herbaceous species and dwarf shrubs"),
+        lr("D",   "CoverDDescription",   "Mosses, lichens, liverworts and seedlings"),
+        lr("Do",  "Cover8Description",   "Epixyls - species on downed wood"),
+        lr("De",  "Cover9Description",   "Epiliths - species on rock"),
+        lr("Ep",  "Cover10Description",  "Epiphytes - species on trees")
       )
+    ),
+
+    # === Notes ===
+    shiny::textAreaInput(ns("Notes"), "Notes", width = "100%", height = "80px"),
+
+    # === Footer: Save + status ===
+    shiny::tags$div(
+      class = "d-flex align-items-center gap-2 flex-wrap mt-2",
+      shiny::actionButton(ns("btnSave"), "Save", class = "btn btn-primary btn-sm"),
+      shiny::textOutput(ns("status2"), container = shiny::span)
     )
   )
 }
 
-mod_project_metadata_server <- function(id, state, con) {
+mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plot_project_id = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     root_session <- session$rootScope()
 
-    table_name <- project_metadata_detect_table(con)
+    table_name <- project_metadata_detect_table(con, project = config("Current", "CurrProject"))
     status_text <- shiny::reactiveVal("")
     suppress_project_observer <- shiny::reactiveVal(FALSE)
     current_project_before_edit <- shiny::reactiveVal("")
+    meta_recordset <- shiny::reactiveVal(character(0))
+    meta_record_index <- shiny::reactiveVal(0L)
 
     blank_numeric_value <- function(value) {
       if (is.null(value) || length(value) == 0 || is.na(value) || !is.finite(value)) {
@@ -164,6 +359,22 @@ mod_project_metadata_server <- function(id, state, con) {
       rows <- tryCatch(DBI::dbGetQuery(con, sql), error = function(e) data.frame(projectid = character(0)))
       choices <- unique(as.character(rows$projectid %||% character(0)))
       choices <- choices[nzchar(choices)]
+
+      # Ensure the current project appears in the list so it can be selected (new record case)
+      if (!is.null(selected) && nzchar(selected) && !selected %in% choices) {
+        choices <- sort(c(choices, selected))
+      }
+
+      # Update navigation recordset and set current index
+      meta_recordset(choices)
+      if (!is.null(selected) && nzchar(selected)) {
+        idx <- match(selected, choices)
+        meta_record_index(if (!is.na(idx)) idx else 0L)
+      } else if (length(choices) > 0L) {
+        meta_record_index(1L)
+      } else {
+        meta_record_index(0L)
+      }
 
       shiny::updateSelectizeInput(
         session,
@@ -243,23 +454,78 @@ mod_project_metadata_server <- function(id, state, con) {
         value <- row[[col]][[1]]
         if (is.null(value) || length(value) == 0 || is.na(value)) "" else as.character(value)
       }
+      getn <- function(col) {
+        v <- suppressWarnings(as.numeric(getv(col)))
+        if (is.na(v)) NA else v
+      }
 
+      # Primary fields
+      shiny::updateTextInput(session, "BAPID", value = getv("bapid"))
       shiny::updateTextInput(session, "ProjectTitle", value = getv("projecttitle"))
-      shiny::updateNumericInput(session, "StartDate", value = blank_numeric_value(suppressWarnings(as.numeric(getv("startdate")))))
+      shiny::updateNumericInput(session, "StartDate", value = getn("startdate"))
       shiny::updateTextInput(session, "EndDate", value = getv("enddate"))
+      shiny::updateSelectInput(session, "cmbProjectType", selected = getv("projecttype"))
+      shiny::updateTextInput(session, "ProjectTypeOther", value = getv("projecttypeother"))
+      shiny::updateSelectInput(session, "cmbEcosysCollectionStandard", selected = getv("ecosyscollectionstandard"))
+      shiny::updateTextInput(session, "EcosysCollectionStandardOther", value = getv("ecoscollectionstandardother"))
       shiny::updateTextInput(session, "CoordinatingAgency", value = getv("coordinatingagency"))
       shiny::updateTextInput(session, "ProponentFunder", value = getv("proponentfunder"))
       shiny::updateTextInput(session, "FieldCompanyAgency", value = getv("fieldcompanyagency"))
+      shiny::updateTextInput(session, "FieldLeader", value = getv("fieldleader"))
+      shiny::updateTextInput(session, "FieldDataCollectionTeam", value = getv("fielddatacollectionteam"))
+      shiny::updateTextInput(session, "ProjectPurpose", value = getv("projectpurpose"))
       shiny::updateTextInput(session, "GeographicStudyArea", value = getv("geographicstudyarea"))
-      shiny::updateSelectInput(session, "cmbEcosysCollectionStandard", selected = getv("ecosyscollectionstandard"))
+      shiny::updateTextInput(session, "GeographicStudyRegion", value = getv("geographicstudyregion"))
+      shiny::updateNumericInput(session, "NumberOfFS882Plots", value = getn("numberoffs882plots"))
+      shiny::updateNumericInput(session, "NumberOfSiteVisits", value = getn("numberofsitevisits"))
       shiny::updateSelectInput(session, "cmbVegCoverMethod", selected = getv("vegcovermethod"))
+      shiny::updateTextInput(session, "VegCoverMethodOther", value = getv("vegcovermethodother"))
       shiny::updateSelectInput(session, "cmbPlotMethod", selected = getv("plotmethod"))
+      shiny::updateTextInput(session, "PlotMethodOther", value = getv("plotmethodother"))
+      shiny::updateSelectInput(session, "cmbMensurationMethod", selected = getv("mensurationmethod"))
+      shiny::updateTextInput(session, "MensurationMethodOther", value = getv("mensurationmethodother"))
+      shiny::updateTextInput(session, "ExtraVegFieldDescription", value = getv("extravegfielddescription"))
+      shiny::updateTextInput(session, "DataCustodian", value = getv("datacustodian"))
+      shiny::updateTextInput(session, "StorageLocation", value = getv("storagelocation"))
       shiny::updateSelectInput(session, "cmbGeoRefMethod", selected = getv("georefmethod"))
-      shiny::updateSelectInput(session, "cmbDatum", selected = getv("datum"))
       shiny::updateSelectInput(session, "cmbCoordinateSystem", selected = getv("coordinatesystem"))
+      shiny::updateSelectInput(session, "cmbDatum", selected = getv("datum"))
       shiny::updateTextInput(session, "AllSpecs", value = getv("allspecs"))
       shiny::updateTextInput(session, "TableOfLists", value = getv("tableoflists"))
       shiny::updateTextAreaInput(session, "Notes", value = getv("notes"))
+
+      # FS882 DATA COLLECTED
+      for (suf in c("Site","Veg","Soil","Terrain","Mens","CWD","WildTree","SoilChem")) {
+        shiny::updateSelectInput(session, paste0("Collected", suf),
+          selected = getv(tolower(paste0("collected", suf))))
+        shiny::updateTextInput(session, paste0("DataQuality", suf),
+          value = getv(tolower(paste0("dataquality", suf))))
+      }
+      shiny::updateSelectInput(session, "CollectedWildlifeHabitatAssessment",
+        selected = getv("collectedwildlifehabitatassessment"))
+      shiny::updateTextInput(session, "DataQualityWildlifeHabitatAssessment",
+        value = getv("dataqualitywildlifehabitatassessment"))
+      shiny::updateTextInput(session, "CollectedCompleteOther", value = getv("collectedcompleteother"))
+      shiny::updateTextInput(session, "CollectedPartialOther", value = getv("collectedpartialother"))
+      shiny::updateTextInput(session, "CollectedNoneOther", value = getv("collectednoneother"))
+
+      # Layer descriptions
+      shiny::updateTextInput(session, "CoverA1Description", value = getv("covera1description"))
+      shiny::updateTextInput(session, "CoverA2Description", value = getv("covera2description"))
+      shiny::updateTextInput(session, "CoverA3Description", value = getv("covera3description"))
+      shiny::updateTextInput(session, "CoverADescription",  value = getv("coveradescription"))
+      shiny::updateTextInput(session, "CoverB1Description", value = getv("coverb1description"))
+      shiny::updateTextInput(session, "CoverB2Description", value = getv("coverb2description"))
+      shiny::updateTextInput(session, "CoverB2aDescription", value = getv("coverb2adescription"))
+      shiny::updateTextInput(session, "CoverB2bDescription", value = getv("coverb2bdescription"))
+      shiny::updateTextInput(session, "CoverB2cDescription", value = getv("coverb2cdescription"))
+      shiny::updateTextInput(session, "CoverBDescription",  value = getv("covebdescription"))
+      shiny::updateTextInput(session, "CoverCDescription",  value = getv("covercdescription"))
+      shiny::updateTextInput(session, "CoverDDescription",  value = getv("coverddescription"))
+      shiny::updateTextInput(session, "Cover8Description",  value = getv("cover8description"))
+      shiny::updateTextInput(session, "Cover9Description",  value = getv("cover9description"))
+      shiny::updateTextInput(session, "Cover10Description", value = getv("cover10description"))
+
       invisible(NULL)
     }
 
@@ -278,7 +544,8 @@ mod_project_metadata_server <- function(id, state, con) {
       status_text("Collection standard defaults applied.")
     }
 
-    output$status <- shiny::renderText(status_text())
+    output$status  <- shiny::renderText(status_text())
+    output$status2 <- shiny::renderText(status_text())
 
     observe({
       shiny::updateSelectInput(session, "cmbEcosysCollectionStandard", choices = c("(None)" = "", project_metadata_list_choices(con, "EcosysCollectionStandard")))
@@ -287,9 +554,13 @@ mod_project_metadata_server <- function(id, state, con) {
       shiny::updateSelectInput(session, "cmbGeoRefMethod", choices = c("(None)" = "", project_metadata_list_choices(con, "GeoreferenceMethod")))
       shiny::updateSelectInput(session, "cmbDatum", choices = c("(None)" = "", project_metadata_list_choices(con, "Datum")))
       shiny::updateSelectInput(session, "cmbCoordinateSystem", choices = c("(None)" = "", project_metadata_list_choices(con, "CoordSystem")))
+      shiny::updateSelectInput(session, "cmbMensurationMethod", choices = c("(None)" = "", project_metadata_list_choices(con, "MensurationMethod")))
     })
 
-    observeEvent(TRUE, {
+    # Use open_trigger if provided (fires when modal is opened) so update*Input
+    # calls land on existing DOM nodes; fall back to TRUE for standalone usage.
+    open_ev <- if (!is.null(open_trigger)) open_trigger else shiny::reactiveVal(1L)
+    observeEvent(open_ev(), {
       if (!nzchar(table_name)) {
         status_text("Metadata table not found.")
         return()
@@ -299,7 +570,11 @@ mod_project_metadata_server <- function(id, state, con) {
       state$sysCurrForm <- "frmProjectMetaData"
       config("Current", "DataFormName", "frmProjectMetaData")
 
-      default_project <- normalize_text(state$CurrProject %||% state$PrefProject)
+      default_project <- if (!is.null(plot_project_id) && nzchar(plot_project_id())) {
+        normalize_text(plot_project_id())
+      } else {
+        normalize_text(state$CurrProject %||% state$PrefProject)
+      }
       suppress_project_observer(TRUE)
       load_project_choices(selected = default_project)
       suppress_project_observer(FALSE)
@@ -308,7 +583,7 @@ mod_project_metadata_server <- function(id, state, con) {
         load_row_into_inputs(default_project)
       }
       status_text(sprintf("Loaded from %s", table_name))
-    }, once = TRUE)
+    }, ignoreInit = !is.null(open_trigger))
 
     observeEvent(input$ProjectID, {
       if (isTRUE(suppress_project_observer())) {
@@ -318,6 +593,8 @@ mod_project_metadata_server <- function(id, state, con) {
       if (!nzchar(project_id)) {
         return()
       }
+      idx <- match(project_id, meta_recordset())
+      if (!is.na(idx)) meta_record_index(idx)
       current_project_before_edit(project_id)
       load_row_into_inputs(project_id)
     }, ignoreInit = TRUE)
@@ -352,23 +629,88 @@ mod_project_metadata_server <- function(id, state, con) {
 
     observeEvent(input$btnSave, {
       project_id <- normalize_text(input$ProjectID)
+
+      ni <- function(x) {
+        v <- suppressWarnings(as.integer(x))
+        if (is.null(v) || is.na(v)) NA_integer_ else v
+      }
+      nc <- function(x) {
+        v <- suppressWarnings(as.integer(x))
+        if (is.null(v) || is.na(v)) NA_integer_ else v
+      }
+
       fields <- list(
+        bapid = normalize_text(input$BAPID),
         projecttitle = normalize_text(input$ProjectTitle),
-        startdate = suppressWarnings(as.integer(input$StartDate)),
+        startdate = ni(input$StartDate),
         enddate = normalize_text(input$EndDate),
+        projecttype = normalize_text(input$cmbProjectType),
+        projecttypeother = normalize_text(input$ProjectTypeOther),
+        ecosyscollectionstandard = normalize_text(input$cmbEcosysCollectionStandard),
+        ecoscollectionstandardother = normalize_text(input$EcosysCollectionStandardOther),
         coordinatingagency = normalize_text(input$CoordinatingAgency),
         proponentfunder = normalize_text(input$ProponentFunder),
         fieldcompanyagency = normalize_text(input$FieldCompanyAgency),
+        fieldleader = normalize_text(input$FieldLeader),
+        fielddatacollectionteam = normalize_text(input$FieldDataCollectionTeam),
+        projectpurpose = normalize_text(input$ProjectPurpose),
         geographicstudyarea = normalize_text(input$GeographicStudyArea),
-        ecosyscollectionstandard = normalize_text(input$cmbEcosysCollectionStandard),
+        geographicstudyregion = normalize_text(input$GeographicStudyRegion),
+        numberoffs882plots = ni(input$NumberOfFS882Plots),
+        numberofsitevisits = ni(input$NumberOfSiteVisits),
         vegcovermethod = normalize_text(input$cmbVegCoverMethod),
+        vegcovermethodother = normalize_text(input$VegCoverMethodOther),
         plotmethod = normalize_text(input$cmbPlotMethod),
+        plotmethodother = normalize_text(input$PlotMethodOther),
+        mensurationmethod = normalize_text(input$cmbMensurationMethod),
+        mensurationmethodother = normalize_text(input$MensurationMethodOther),
+        extravegfielddescription = normalize_text(input$ExtraVegFieldDescription),
+        datacustodian = normalize_text(input$DataCustodian),
+        storagelocation = normalize_text(input$StorageLocation),
         georefmethod = normalize_text(input$cmbGeoRefMethod),
-        datum = normalize_text(input$cmbDatum),
         coordinatesystem = normalize_text(input$cmbCoordinateSystem),
+        datum = normalize_text(input$cmbDatum),
         allspecs = normalize_text(input$AllSpecs),
         tableoflists = normalize_text(input$TableOfLists),
-        notes = normalize_text(input$Notes)
+        notes = normalize_text(input$Notes),
+        # FS882 DATA COLLECTED
+        collectedsite = nc(input$CollectedSite),
+        collectedveg = nc(input$CollectedVeg),
+        collectedsoil = nc(input$CollectedSoil),
+        collectedterrain = nc(input$CollectedTerrain),
+        collectedmens = nc(input$CollectedMens),
+        collectedcwd = nc(input$CollectedCWD),
+        collectedwildtree = nc(input$CollectedWildTree),
+        collectedsoilchem = nc(input$CollectedSoilChem),
+        collectedwildlifehabitatassessment = nc(input$CollectedWildlifeHabitatAssessment),
+        dataqualitysite = normalize_text(input$DataQualitySite),
+        dataqualityveg = normalize_text(input$DataQualityVeg),
+        dataqualitysoil = normalize_text(input$DataQualitySoil),
+        dataqualityterrain = normalize_text(input$DataQualityTerrain),
+        dataqualitymens = normalize_text(input$DataQualityMens),
+        dataqualitycwd = normalize_text(input$DataQualityCWD),
+        dataqualitywildtree = normalize_text(input$DataQualityWildTree),
+        dataqualitysoilchem = normalize_text(input$DataQualitySoilChem),
+        dataqualitywildlifehabitatassessment = normalize_text(input$DataQualityWildlifeHabitatAssessment),
+        collectedcompleteother = normalize_text(input$CollectedCompleteOther),
+        collectedpartialother = normalize_text(input$CollectedPartialOther),
+        collectednoneother = normalize_text(input$CollectedNoneOther),
+        # Layer descriptions
+        covera1description = normalize_text(input$CoverA1Description),
+        covera2description = normalize_text(input$CoverA2Description),
+        covera3description = normalize_text(input$CoverA3Description),
+        coveradescription = normalize_text(input$CoverADescription),
+        coverb1description = normalize_text(input$CoverB1Description),
+        coverb2description = normalize_text(input$CoverB2Description),
+        coverb2adescription = normalize_text(input$CoverB2aDescription),
+        coverb2bdescription = normalize_text(input$CoverB2bDescription),
+        coverb2cdescription = normalize_text(input$CoverB2cDescription),
+        coverbdescription = normalize_text(input$CoverBDescription),
+        covercdescription = normalize_text(input$CoverCDescription),
+        coverddescription = normalize_text(input$CoverDDescription),
+        cover8description = normalize_text(input$Cover8Description),
+        cover9description = normalize_text(input$Cover9Description),
+        cover10description = normalize_text(input$Cover10Description)
       )
 
       result <- write_project_row(project_id, fields)
@@ -390,8 +732,49 @@ mod_project_metadata_server <- function(id, state, con) {
       status_text("Attach USysTableOfLists hookup deferred.")
     })
 
-    observeEvent(input$btnClose, {
-      bslib::nav_select("main_tabs", "Vegetation", session = root_session)
+    # -- Record navigation (Access frmProjectMetaData nav bar parity) --
+    meta_navigate_to <- function(project_id) {
+      idx <- match(project_id, meta_recordset())
+      if (!is.na(idx)) meta_record_index(idx)
+      suppress_project_observer(TRUE)
+      shiny::updateSelectizeInput(session, "ProjectID", selected = project_id)
+      suppress_project_observer(FALSE)
+      current_project_before_edit(project_id)
+      load_row_into_inputs(project_id)
+      status_text(sprintf("Record %d of %d", meta_record_index(), length(meta_recordset())))
+    }
+
+    observeEvent(input$btnMetaNavFirst, {
+      rs <- meta_recordset()
+      if (!length(rs)) return()
+      meta_navigate_to(rs[1])
+    })
+
+    observeEvent(input$btnMetaNavPrev, {
+      rs <- meta_recordset()
+      idx <- meta_record_index()
+      if (!length(rs) || idx <= 1L) return()
+      meta_navigate_to(rs[idx - 1L])
+    })
+
+    observeEvent(input$btnMetaNavNext, {
+      rs <- meta_recordset()
+      idx <- meta_record_index()
+      n <- length(rs)
+      if (!n || idx >= n) return()
+      meta_navigate_to(rs[idx + 1L])
+    })
+
+    observeEvent(input$btnMetaNavLast, {
+      rs <- meta_recordset()
+      if (!length(rs)) return()
+      meta_navigate_to(rs[length(rs)])
+    })
+
+    output$navRecordPos <- shiny::renderText({
+      idx <- meta_record_index()
+      n <- length(meta_recordset())
+      if (!n) "" else sprintf("%d of %d", idx, n)
     })
   })
 }

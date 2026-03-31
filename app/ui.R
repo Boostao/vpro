@@ -60,67 +60,74 @@ ui <- tagList(
   # ),
 
 # Forms ----
-#   nav_menu("Forms",
-#     "Data Entry",
-#     npt(
-#       icon = "rectangle-list",
-#       label = "FS882 Data Forms",
-#       tip = "This is the data form that most closely resembles the FS882 field forms.",
-#       value = "fs882",
-#       mod = mod_fs882_ui("fs882")
-#     ),
-#     npt(
-#       icon = "campground",
-#       label = "Enter/Edit SIVI Data",
-#       tip = "SIVI and FS882 share a common data structure, but this form most closely resembles FS1333",
-#       value = "fs1333",
-#       mod = mod_fs1333_ui("fs1333")
-#     ),
-#     "---",
-#     "Others",
-#     npt(
-#       icon = "table-cells",
-#       label = "Metadata",
-#       tip = "Add/edit metadata",
-#       value = "metadata",
-#       mod = mod_project_metadata_ui("project_metadata")
-#     ),
-#     npt(
-#       icon = "link",
-#       label = "Combine Species",
-#       tip = "Here you can manage your combined (lumped) species tables.",
-#       value = "combine_species",
-#       mod = mod_combine_species_ui("combine_species")
-#     ),
-#     npt(
-#       icon = "leaf",
-#       label = "Herbarium",
-#       tip = "Have some herbarium data you want to manage?  Click here.",
-#       value = "herbarium",
-#       mod = mod_herbarium_ui("herbarium")
-#     ),
-#     npt(
-#       icon = "palette",
-#       label = "Colour-theme",
-#       tip = "In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species.",
-#       value = "colour_theme",
-#       mod = mod_nav_launcher_ui("launch_colour_theme", "Colour-theme", "Open existing references/tools for theme-related tasks.")
-#     ),
-#     npt(
-#       icon = "user-gear",
-#       label = "User setup",
-#       tip = "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)",
-#       value = "user_setup",
-#       mod = mod_nav_launcher_ui("launch_user_setup", "User setup", "Open setup-related forms and run setup actions.")
-#     ),
-#     npt(
-#       icon = "clock-rotate-left",
-#       label = "User log",
-#       tip = "A record of when you (or someone else) opens and closes VPro.  Nothing spectacular, but useful just the same.",
-#       value = "user_log",
-#       mod = mod_nav_launcher_ui("launch_user_log", "User log", "Open audit and diagnostic views tied to user activity.")
-#     )
-#   ),
+  nav_menu("Forms",
+    "Data Entry",
+    npt(
+      icon = "rectangle-list",
+      label = "FS882 Data Forms (6x4)",
+      tip = "This is the data form that most closely resembles the FS882 field forms.",
+      value = "fs882_6x4",
+      mod = mod_fs882_6x4_ui("fs882_6x4")
+    ),
+    npt(
+      icon = "mountain",
+      label = "FS882 Data Forms (8x6)",
+      tip = "8-column variant of the FS882 field form.",
+      value = "fs882_8x6xl",
+      mod = mod_fs882_8x6xl_ui("fs882_8x6xl")
+    ),
+    npt(
+      icon = "campground",
+      label = "Enter/Edit SIVI Data",
+      tip = "SIVI and FS882 share a common data structure, but this form most closely resembles FS1333",
+      value = "fs1333",
+      mod = mod_fs1333_ui("fs1333")
+    ),
+    "---",
+    "Others",
+    npt(
+      icon = "table-cells",
+      label = "Metadata",
+      tip = "Add/edit metadata",
+      value = "metadata",
+      mod = mod_project_metadata_ui("project_metadata")
+    ),
+    npt(
+      icon = "link",
+      label = "Combine Species",
+      tip = "Here you can manage your combined (lumped) species tables.",
+      value = "combine_species",
+      mod = mod_combine_species_ui("combine_species")
+    ),
+    npt(
+      icon = "leaf",
+      label = "Herbarium",
+      tip = "Have some herbarium data you want to manage?  Click here.",
+      value = "herbarium",
+      mod = mod_herbarium_ui("herbarium")
+    ),
+    npt(
+      icon = "palette",
+      label = "Colour-theme",
+      tip = "In VPro, some of the output is thematic.  Here you can manage your theme colours and relate them to specific species.",
+      value = "colour_theme",
+      mod = mod_colour_theme_ui("colour_theme")
+    ),
+    npt(
+      icon = "user-gear",
+      label = "User setup",
+      tip = "Revenue Canada on your tail?  Click here to change your name.  (We all know that VPro is the first place they will look for you)",
+      value = "user_setup",
+      mod = mod_user_setup_ui("user_setup")
+    ),
+    npt(
+      icon = "clock-rotate-left",
+      label = "User log",
+      tip = "A record of when you (or someone else) opens and closes VPro.  Nothing spectacular, but useful just the same.",
+      value = "user_log",
+      mod = mod_user_log_ui("user_log")
+    )
+  ),
 # # Data ----
 #   nav_menu("Data",
 #     "Project",
@@ -325,76 +332,76 @@ ui <- tagList(
 #     )
 #   ),
 # # Reports ----
-#   nav_menu("Reports",
-#     "Vegetation",
-#     npt(
-#       icon = "table-list",
-#       label = "Long Vegetation",
-#       tip = "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.",
-#       value = "report_long_vegetation",
-#       mod = mod_nav_launcher_ui("launch_report_long_vegetation", "Long Vegetation Report", "Open reporting module and run long vegetation outputs.")
-#     ),
-#     npt(
-#       icon = "chart-column",
-#       label = "Summary Vegetation",
-#       tip = "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.",
-#       value = "report_summary_vegetation",
-#       mod = mod_nav_launcher_ui("launch_report_summary_vegetation", "Summary Vegetation Report", "Open reporting module and run summary vegetation outputs.")
-#     ),
-#     "---",
-#     "Environment",
-#     npt(
-#       icon = "table-list",
-#       label = "Long Environment",
-#       tip = "Creates an Excel report where site unit groups of plots are placed on individual sheets.",
-#       value = "report_long_environment",
-#       mod = mod_nav_launcher_ui("launch_report_long_environment", "Long Environment Report", "Open reporting module and run long environment outputs.")
-#     ),
-#     npt(
-#       icon = "chart-column",
-#       label = "Summary Environment",
-#       tip = "A summary of plots in each site unit is generated for the project.  Frequency for the qualitative values and mean or median values of the quantitative values are displayed.",
-#       value = "report_summary_environment",
-#       mod = mod_nav_launcher_ui("launch_report_summary_environment", "Summary Environment Report", "Open reporting module and run summary environment outputs.")
-#     ),
-#     "---",
-#     "Others",
-#     npt(
-#       icon = "table-cells-large",
-#       label = "Subzone Matrix of Units",
-#       tip = "A matrix is generated based on the current site unit table and the master site unit list.",
-#       value = "report_subzone_matrix_of_units",
-#       mod = mod_nav_launcher_ui("launch_report_subzone_matrix_of_units", "Subzone Matrix of Units", "Open reporting module and run subzone matrix reports.")
-#     ),
-#     npt(
-#       icon = "diagram-project",
-#       label = "Hierarchy Diagram",
-#       tip = "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.",
-#       value = "report_hierarchy_diagram",
-#       mod = mod_nav_launcher_ui("launch_report_hierarchy_diagram", "Hierarchy Diagram Report", "Open hierarchy/reporting workflows for hierarchy diagrams.")
-#     ),
-#     npt(
-#       icon = "tag",
-#       label = "Print a Plot Label",
-#       tip = "Print a physical label to affix to your plot card.",
-#       value = "report_print_plot_label",
-#       mod = mod_nav_launcher_ui("launch_report_print_plot_label", "Print a Plot Label", "Open reporting module and run plot-label outputs.")
-#     ),
-#     npt(
-#       icon = "file-lines",
-#       label = "Create Plot Locations File",
-#       tip = "Prints a plot list that includes zone, subzone, site series, longitude, latitude and elevation.",
-#       value = "report_create_plot_locations_file",
-#       mod = mod_nav_launcher_ui("launch_report_create_plot_locations_file", "Create Plot Locations File", "Open reporting module and run location file outputs.")
-#     ),
-#     npt(
-#       icon = "earth-americas",
-#       label = "Show Plot Locations in Google Earth",
-#       tip = "Locate your plots using Google Earth (requires Google Earth installation)",
-#       value = "report_show_plot_locations_google_earth",
-#       mod = mod_nav_launcher_ui("launch_report_show_plot_locations_google_earth", "Show Plot Locations in Google Earth", "Open map/reporting workflows for Google Earth output.")
-#     )
-#   ),
+  nav_menu("Reports",
+    "Vegetation",
+    npt(
+      icon = "table-list",
+      label = "Long Vegetation",
+      tip = "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.",
+      value = "report_long_vegetation",
+      mod = mod_nav_launcher_ui("launch_report_long_vegetation", "Long Vegetation Report", "Open reporting module and run long vegetation outputs.")
+    ),
+    npt(
+      icon = "chart-column",
+      label = "Summary Vegetation",
+      tip = "Creates an Excel report where, optionally, unit groups of plots are placed on individual sheets.",
+      value = "report_summary_vegetation",
+      mod = mod_nav_launcher_ui("launch_report_summary_vegetation", "Summary Vegetation Report", "Open reporting module and run summary vegetation outputs.")
+    ),
+    "---",
+    "Environment",
+    npt(
+      icon = "table-list",
+      label = "Long Environment",
+      tip = "Creates an Excel report where site unit groups of plots are placed on individual sheets.",
+      value = "report_long_environment",
+      mod = mod_nav_launcher_ui("launch_report_long_environment", "Long Environment Report", "Open reporting module and run long environment outputs.")
+    ),
+    npt(
+      icon = "chart-column",
+      label = "Summary Environment",
+      tip = "A summary of plots in each site unit is generated for the project.  Frequency for the qualitative values and mean or median values of the quantitative values are displayed.",
+      value = "report_summary_environment",
+      mod = mod_nav_launcher_ui("launch_report_summary_environment", "Summary Environment Report", "Open reporting module and run summary environment outputs.")
+    ),
+    "---",
+    "Others",
+    npt(
+      icon = "table-cells-large",
+      label = "Subzone Matrix of Units",
+      tip = "A matrix is generated based on the current site unit table and the master site unit list.",
+      value = "report_subzone_matrix_of_units",
+      mod = mod_nav_launcher_ui("launch_report_subzone_matrix_of_units", "Subzone Matrix of Units", "Open reporting module and run subzone matrix reports.")
+    ),
+    npt(
+      icon = "diagram-project",
+      label = "Hierarchy Diagram",
+      tip = "Creates a diagram of the current hierarchy in Excel.  Includes a feature to help isolate orphaned hierarchy members.",
+      value = "report_hierarchy_diagram",
+      mod = mod_nav_launcher_ui("launch_report_hierarchy_diagram", "Hierarchy Diagram Report", "Open hierarchy/reporting workflows for hierarchy diagrams.")
+    ),
+    npt(
+      icon = "tag",
+      label = "Print a Plot Label",
+      tip = "Print a physical label to affix to your plot card.",
+      value = "report_print_plot_label",
+      mod = mod_nav_launcher_ui("launch_report_print_plot_label", "Print a Plot Label", "Open reporting module and run plot-label outputs.")
+    ),
+    npt(
+      icon = "file-lines",
+      label = "Create Plot Locations File",
+      tip = "Prints a plot list that includes zone, subzone, site series, longitude, latitude and elevation.",
+      value = "report_create_plot_locations_file",
+      mod = mod_nav_launcher_ui("launch_report_create_plot_locations_file", "Create Plot Locations File", "Open reporting module and run location file outputs.")
+    ),
+    npt(
+      icon = "earth-americas",
+      label = "Show Plot Locations in Google Earth",
+      tip = "Locate your plots using Google Earth (requires Google Earth installation)",
+      value = "report_show_plot_locations_google_earth",
+      mod = mod_nav_launcher_ui("launch_report_show_plot_locations_google_earth", "Show Plot Locations in Google Earth", "Open map/reporting workflows for Google Earth output.")
+    )
+  ),
 # # References ----
 #   nav_menu("References",
 #     "Library Tables",
@@ -487,7 +494,10 @@ ui <- tagList(
     #   value = "help_about_vpro",
     #   mod = mod_nav_launcher_ui("launch_help_about_vpro", "About VPro", "Open application version and environment information.")
     # )
-  ) #,
+  ),
+
+  # Hidden Reports destination panel (report launchers nav_select to "Reports")
+  nav_panel_hidden("Reports", mod_reporting_ui("report"))
 
   # STOP processing here
   
@@ -495,9 +505,9 @@ ui <- tagList(
   #   nav_panel(tagList(icon("leaf"), "Vegetation"), value = "Vegetation",
   #     mod_veg_sample_ui("veg")
   #   ),
-  #   nav_panel(tagList(icon("mountain"), "FS882-6x4XL"), value = "FS882-6x4XL",
-  #     mod_fs882_6x4xl_ui("fs882_6x4xl")
-  #   ),
+    #   nav_panel(tagList(icon("mountain"), "FS882-8x6XL"), value = "FS882-8x6XL",
+    #     mod_fs882_8x6xl_ui("fs882_8x6xl")
+    #   ),
   #   nav_panel(tagList(icon("file-export"), "Export"), value = "Export",
   #     mod_export_ui("export")
   #   ),
