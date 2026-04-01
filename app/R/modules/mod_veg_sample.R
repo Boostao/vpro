@@ -133,12 +133,12 @@ mod_veg_sample_server <- function(id, sys_state, con) {
 
     require_plot_write <- function() {
       if (!auth_is_authenticated(sys_state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       allowed <- c("write:own_plots", "write:project_plots", "write:all")
       if (!any(vapply(allowed, function(p) auth_user_has_permission(sys_state, p), logical(1)))) {
-        showNotification("Permission required: write plots", type = "error")
+        show_toast(toast("Permission required: write plots", type = "danger"))
         return(FALSE)
       }
       TRUE
@@ -210,7 +210,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
               total_a
             )
           }, error = function(e) {
-            showNotification(paste("Error updating totala:", e$message), type = "error")
+            show_toast(toast(paste("Error updating totala:", e$message), type = "danger"))
           })
         }
 
@@ -229,7 +229,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
               total_b
             )
           }, error = function(e) {
-            showNotification(paste("Error updating totalb:", e$message), type = "error")
+            show_toast(toast(paste("Error updating totalb:", e$message), type = "danger"))
           })
         }
       }
@@ -254,7 +254,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
           )
           sync_touch_state(sys_state)
         }, error = function(e) {
-          showNotification(paste("Error updating DB:", e$message), type = "error")
+          show_toast(toast(paste("Error updating DB:", e$message), type = "danger"))
         })
 
         if (col_name %in% c("cover1", "cover2", "cover3", "cover4", "cover5")) {
@@ -303,7 +303,7 @@ mod_veg_sample_server <- function(id, sys_state, con) {
         # Usually duplicates are allowed if they are different layers, but here we have one row per species (wide).
         # We should check if species already in rv$data
         if (new_species %in% rv$data$species) {
-            showNotification("Species already exists in this plot.", type="warning")
+            show_toast(toast("Species already exists in this plot.", type="warning"))
             return()
         }
         
@@ -332,10 +332,10 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             # Refresh
             rv$data <- dbGetQuery(con, "SELECT * FROM Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
               sync_touch_state(sys_state)
-            showNotification(paste("Added:", new_species), type="message")
+            show_toast(toast(paste("Added:", new_species), type = "success"))
             
         }, error = function(e) {
-            showNotification(paste("Error adding species:", e$message), type="error")
+            show_toast(toast(paste("Error adding species:", e$message), type = "danger"))
         })
     })
 
@@ -400,10 +400,10 @@ mod_veg_sample_server <- function(id, sys_state, con) {
             plot_id <- as.character(sys_state$CurrSU)
             rv$data <- dbGetQuery(con, "SELECT * FROM Veg WHERE plotnumber = ? ORDER BY species", list(plot_id))
             sync_touch_state(sys_state)
-            showNotification("Species deleted.", type="message")
+            show_toast(toast("Species deleted.", type = "success"))
             
         }, error = function(e) {
-            showNotification(paste("Delete Error:", e$message), type="error")
+            show_toast(toast(paste("Delete Error:", e$message), type = "danger"))
         })
     })
 

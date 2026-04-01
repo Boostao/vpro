@@ -28,11 +28,11 @@ mod_admin_codes_server <- function(id, state, con) {
 
     require_permission <- function(permissions, message) {
       if (!auth_is_authenticated(state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       if (!any(vapply(permissions, function(p) auth_user_has_permission(state, p), logical(1)))) {
-        showNotification(message, type = "error")
+        show_toast(toast(message, type = "danger"))
         return(FALSE)
       }
       TRUE
@@ -105,7 +105,7 @@ mod_admin_codes_server <- function(id, state, con) {
             list(to_save$listname[i], to_save$item[i], to_save$itemdescription[i], as.numeric(to_save$itemorder[i])))
         }
         dbCommit(con)
-        showNotification("List saved successfully.", type = "message")
+        show_toast(toast("List saved successfully.", type = "success"))
 
         if (nrow(to_save) > 0 || nrow(old_rows) > 0) {
           old_map       <- if (nrow(old_rows) > 0) split(old_rows, old_rows$item) else list()
@@ -135,7 +135,7 @@ mod_admin_codes_server <- function(id, state, con) {
         }
       }, error = function(e) {
         dbRollback(con)
-        showNotification(paste("Save failed:", e$message), type = "error")
+        show_toast(toast(paste("Save failed:", e$message), type = "danger"))
       })
     })
   })

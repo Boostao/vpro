@@ -859,12 +859,12 @@ mod_hierarchy_server <- function(id, state, con) {
 
     require_hierarchy_write <- function() {
       if (!auth_is_authenticated(state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       allowed <- c("write:project_plots", "write:all", "manage:codes")
       if (!any(vapply(allowed, function(p) auth_user_has_permission(state, p), logical(1)))) {
-        showNotification("Permission required: edit hierarchy", type = "error")
+        show_toast(toast("Permission required: edit hierarchy", type = "danger"))
         return(FALSE)
       }
       TRUE
@@ -872,12 +872,12 @@ mod_hierarchy_server <- function(id, state, con) {
 
     require_su_write <- function() {
       if (!auth_is_authenticated(state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       allowed <- c("write:project_plots", "write:all", "manage:codes")
       if (!any(vapply(allowed, function(p) auth_user_has_permission(state, p), logical(1)))) {
-        showNotification("Permission required: edit site units", type = "error")
+        show_toast(toast("Permission required: edit site units", type = "danger"))
         return(FALSE)
       }
       TRUE
@@ -1230,7 +1230,7 @@ mod_hierarchy_server <- function(id, state, con) {
       refresh_tree()
 
       if (!is.null(rv$data) && name_val %in% rv$data$Name) {
-        showNotification("Name already exists.", type = "warning")
+        show_toast(toast("Name already exists.", type = "warning"))
         return()
       }
 
@@ -1278,11 +1278,11 @@ mod_hierarchy_server <- function(id, state, con) {
         placeholders <- paste(rep("?", length(columns)), collapse = ", ")
         sql <- sprintf("INSERT INTO Hierarchy (%s) VALUES (%s)", paste(columns, collapse = ", "), placeholders)
         DBI::dbExecute(con, sql, values)
-        showNotification("Node added.", type = "message")
+        show_toast(toast("Node added.", type = "success"))
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Add failed:", e$message), type = "error")
+        show_toast(toast(paste("Add failed:", e$message), type = "danger"))
       })
     })
 
@@ -1297,7 +1297,7 @@ mod_hierarchy_server <- function(id, state, con) {
       if (!is.null(rv$data)) {
         existing <- rv$data$Name[rv$data$ID != node_id]
         if (name_val %in% existing) {
-          showNotification("Name already exists.", type = "warning")
+          show_toast(toast("Name already exists.", type = "warning"))
           return()
         }
       }
@@ -1308,11 +1308,11 @@ mod_hierarchy_server <- function(id, state, con) {
           "UPDATE Hierarchy SET Name = ? WHERE ID = ?",
           list(name_val, node_id)
         )
-        showNotification("Node renamed.", type = "message")
+        show_toast(toast("Node renamed.", type = "success"))
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Rename failed:", e$message), type = "error")
+        show_toast(toast(paste("Rename failed:", e$message), type = "danger"))
       })
     })
 
@@ -1323,7 +1323,7 @@ mod_hierarchy_server <- function(id, state, con) {
       req(node_id)
 
       if (!hierarchy_has_column(con, "Tag")) {
-        showNotification("Tag column not available for this hierarchy.", type = "warning")
+        show_toast(toast("Tag column not available for this hierarchy.", type = "warning"))
         return()
       }
 
@@ -1336,11 +1336,11 @@ mod_hierarchy_server <- function(id, state, con) {
           "UPDATE Hierarchy SET Tag = ? WHERE ID = ?",
           list(tag_val, node_id)
         )
-        showNotification("Tag updated.", type = "message")
+        show_toast(toast("Tag updated.", type = "success"))
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Tag update failed:", e$message), type = "error")
+        show_toast(toast(paste("Tag update failed:", e$message), type = "danger"))
       })
     })
 
@@ -1352,17 +1352,17 @@ mod_hierarchy_server <- function(id, state, con) {
 
       child_count <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS cnt FROM Hierarchy WHERE Parent = ?", list(node_id))
       if (!is.null(child_count$cnt[1]) && child_count$cnt[1] > 0) {
-        showNotification("Delete blocked: node has children.", type = "warning")
+        show_toast(toast("Delete blocked: node has children.", type = "warning"))
         return()
       }
 
       tryCatch({
         DBI::dbExecute(con, "DELETE FROM Hierarchy WHERE ID = ?", list(node_id))
-        showNotification("Node deleted.", type = "message")
+        show_toast(toast("Node deleted.", type = "success"))
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Delete failed:", e$message), type = "error")
+        show_toast(toast(paste("Delete failed:", e$message), type = "danger"))
       })
     })
 
@@ -1379,11 +1379,11 @@ mod_hierarchy_server <- function(id, state, con) {
 
       tryCatch({
         DBI::dbExecute(con, sql, as.list(all_ids))
-        showNotification(paste("Deleted", length(all_ids), "nodes."), type = "message")
+        show_toast(toast(paste("Deleted", length(all_ids), "nodes."), type = "success"))
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Delete failed:", e$message), type = "error")
+        show_toast(toast(paste("Delete failed:", e$message), type = "danger"))
       })
     })
 
@@ -1392,14 +1392,14 @@ mod_hierarchy_server <- function(id, state, con) {
       tryCatch({
         count <- fix_orphan_nodes(con)
         if (count > 0) {
-          showNotification(paste("Reattached", count, "orphans."), type = "message")
+          show_toast(toast(paste("Reattached", count, "orphans."), type = "success"))
         } else {
-          showNotification("No orphans found.", type = "message")
+          show_toast(toast("No orphans found.", type = "success"))
         }
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Fix failed:", e$message), type = "error")
+        show_toast(toast(paste("Fix failed:", e$message), type = "danger"))
       })
     })
 
@@ -1407,7 +1407,7 @@ mod_hierarchy_server <- function(id, state, con) {
       if (!require_hierarchy_write()) return()
       req(rv$data)
       if (!DBI::dbExistsTable(con, "Hierarchy")) {
-        showNotification("Hierarchy table not available.", type = "warning")
+        show_toast(toast("Hierarchy table not available.", type = "warning"))
         return()
       }
 
@@ -1434,9 +1434,9 @@ mod_hierarchy_server <- function(id, state, con) {
         rv$clip_mode <- "clipped"
         refresh_tree()
         update_move_choices()
-        showNotification("Clipped hierarchy view created.", type = "message")
+        show_toast(toast("Clipped hierarchy view created.", type = "success"))
       }, error = function(e) {
-        showNotification(paste("Clip failed:", e$message), type = "error")
+        show_toast(toast(paste("Clip failed:", e$message), type = "danger"))
       })
     })
 
@@ -1452,9 +1452,9 @@ mod_hierarchy_server <- function(id, state, con) {
         rv$clip_mode <- "below_breaks"
         refresh_tree()
         update_move_choices()
-        showNotification("Lowest breakpoints view created.", type = "message")
+        show_toast(toast("Lowest breakpoints view created.", type = "success"))
       }, error = function(e) {
-        showNotification(paste("Below breaks failed:", e$message), type = "error")
+        show_toast(toast(paste("Below breaks failed:", e$message), type = "danger"))
       })
     })
 
@@ -1466,7 +1466,7 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$clip_mode <- "original"
       refresh_tree()
       update_move_choices()
-      showNotification("Showing original hierarchy.", type = "message")
+      show_toast(toast("Showing original hierarchy.", type = "success"))
     })
 
     observeEvent(input$hier_view_user_list, {
@@ -1485,13 +1485,13 @@ mod_hierarchy_server <- function(id, state, con) {
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       if (is.na(node_id)) {
-        showNotification("Select a hierarchy node first.", type = "warning")
+        show_toast(toast("Select a hierarchy node first.", type = "warning"))
         return()
       }
 
       node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
       if (nrow(node_row) == 0) {
-        showNotification("Selected node not found.", type = "warning")
+        show_toast(toast("Selected node not found.", type = "warning"))
         return()
       }
 
@@ -1501,7 +1501,7 @@ mod_hierarchy_server <- function(id, state, con) {
 
       plots <- get_plots_for_site_unit(con, node_row$Name[1])
       if (length(plots) == 0) {
-        showNotification("No plots linked to this site unit.", type = "message")
+        show_toast(toast("No plots linked to this site unit.", type = "success"))
         bslib::nav_select("hier_tabs", "SU Table", session = session)
         return()
       }
@@ -1533,7 +1533,7 @@ mod_hierarchy_server <- function(id, state, con) {
           bslib::nav_select("main_tabs", "FS882-6x4XL", session = root_session)
         }
       }
-      showNotification(paste("Jumped to plot", plot_number), type = "message")
+      show_toast(toast(paste("Jumped to plot", plot_number), type = "success"))
     })
 
     observeEvent(input$hier_view_veg, {
@@ -1541,19 +1541,19 @@ mod_hierarchy_server <- function(id, state, con) {
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       if (is.na(node_id)) {
-        showNotification("Select a hierarchy node first.", type = "warning")
+        show_toast(toast("Select a hierarchy node first.", type = "warning"))
         return()
       }
 
       node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
       if (nrow(node_row) == 0) {
-        showNotification("Selected node not found.", type = "warning")
+        show_toast(toast("Selected node not found.", type = "warning"))
         return()
       }
 
       plots <- get_plots_for_site_unit(con, node_row$Name[1])
       if (length(plots) == 0) {
-        showNotification("No plots linked to this site unit.", type = "message")
+        show_toast(toast("No plots linked to this site unit.", type = "success"))
         return()
       }
 
@@ -1569,7 +1569,7 @@ mod_hierarchy_server <- function(id, state, con) {
           bslib::nav_select("main_tabs", "Vegetation", session = root_session)
         }
       }
-      showNotification("Opened vegetation for selected plot.", type = "message")
+      show_toast(toast("Opened vegetation for selected plot.", type = "success"))
     })
 
     observeEvent(input$hier_view_current_su, {
@@ -1577,13 +1577,13 @@ mod_hierarchy_server <- function(id, state, con) {
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       if (is.na(node_id)) {
-        showNotification("Select a hierarchy node first.", type = "warning")
+        show_toast(toast("Select a hierarchy node first.", type = "warning"))
         return()
       }
 
       node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
       if (nrow(node_row) == 0) {
-        showNotification("Selected node not found.", type = "warning")
+        show_toast(toast("Selected node not found.", type = "warning"))
         return()
       }
 
@@ -1605,13 +1605,13 @@ mod_hierarchy_server <- function(id, state, con) {
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       if (is.na(node_id)) {
-        showNotification("Select a hierarchy node first.", type = "warning")
+        show_toast(toast("Select a hierarchy node first.", type = "warning"))
         return()
       }
 
       site_units <- get_subtree_names(rv$data, node_id)
       if (length(site_units) == 0) {
-        showNotification("No site units found under this node.", type = "message")
+        show_toast(toast("No site units found under this node.", type = "success"))
         return()
       }
 
@@ -1626,13 +1626,13 @@ mod_hierarchy_server <- function(id, state, con) {
       selected <- shinyTree::get_selected(input$hier_tree)
       node_id <- parse_hierarchy_id(selected)
       if (is.na(node_id)) {
-        showNotification("Select a hierarchy node first.", type = "warning")
+        show_toast(toast("Select a hierarchy node first.", type = "warning"))
         return()
       }
 
       node_row <- rv$data[rv$data$ID == node_id, , drop = FALSE]
       if (nrow(node_row) == 0) {
-        showNotification("Selected node not found.", type = "warning")
+        show_toast(toast("Selected node not found.", type = "warning"))
         return()
       }
 
@@ -1649,7 +1649,7 @@ mod_hierarchy_server <- function(id, state, con) {
 
       refresh_tree()
       rv$clipboard <- get_subtree(rv$data, node_id)
-      showNotification(paste("Copied", nrow(rv$clipboard), "nodes."), type = "message")
+      show_toast(toast(paste("Copied", nrow(rv$clipboard), "nodes."), type = "success"))
     })
 
     observeEvent(input$hier_paste, {
@@ -1667,11 +1667,11 @@ mod_hierarchy_server <- function(id, state, con) {
 
       tryCatch({
         count <- insert_subtree(con, rv$clipboard, parent_id, parent_level)
-        showNotification(paste("Pasted", count, "nodes."), type = "message")
+        show_toast(toast(paste("Pasted", count, "nodes."), type = "success"))
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Paste failed:", e$message), type = "error")
+        show_toast(toast(paste("Paste failed:", e$message), type = "danger"))
       })
     })
 
@@ -1682,23 +1682,23 @@ mod_hierarchy_server <- function(id, state, con) {
       if (!nzchar(table)) return()
 
       if (!DBI::dbExistsTable(con, table)) {
-        showNotification("Merge table not found.", type = "error")
+        show_toast(toast("Merge table not found.", type = "danger"))
         return()
       }
 
       merge_fields <- DBI::dbListFields(con, table)
       if (!("Name" %in% merge_fields)) {
-        showNotification("Merge table is missing Name column.", type = "error")
+        show_toast(toast("Merge table is missing Name column.", type = "danger"))
         return()
       }
       merge_cols <- intersect(c("ID", "Name", "Parent", "Level", "Tag", "MyOrder"), merge_fields)
       if (length(merge_cols) == 0) {
-        showNotification("Merge table is missing required fields.", type = "error")
+        show_toast(toast("Merge table is missing required fields.", type = "danger"))
         return()
       }
       source <- DBI::dbGetQuery(con, sprintf("SELECT %s FROM %s", paste(merge_cols, collapse = ", "), table))
       if (nrow(source) == 0) {
-        showNotification("Merge table has no rows.", type = "warning")
+        show_toast(toast("Merge table has no rows.", type = "warning"))
         return()
       }
 
@@ -1713,30 +1713,30 @@ mod_hierarchy_server <- function(id, state, con) {
         if (identical(conflict_mode, "skip")) {
           filtered <- filter_duplicate_subtrees(source, unique(existing$Name))
           if (filtered$dropped > 0) {
-            showNotification(paste("Skipped", filtered$dropped, "nodes in duplicate subtrees."), type = "warning")
+            show_toast(toast(paste("Skipped", filtered$dropped, "nodes in duplicate subtrees."), type = "warning"))
           }
         } else {
           filtered <- resolve_duplicate_names(source, unique(existing$Name), conflict_mode, prefix, suffix)
           if (filtered$renamed > 0) {
-            showNotification(paste("Renamed", filtered$renamed, "duplicate names."), type = "message")
+            show_toast(toast(paste("Renamed", filtered$renamed, "duplicate names."), type = "success"))
           }
         }
         if (nrow(filtered$data) == 0) {
-          showNotification("No new nodes to merge.", type = "message")
+          show_toast(toast("No new nodes to merge.", type = "success"))
           return()
         }
       }
 
       tryCatch({
         result <- insert_rekeyed_hierarchy(con, filtered$data, -1L)
-        showNotification(paste("Merged", result$count, "nodes."), type = "message")
+        show_toast(toast(paste("Merged", result$count, "nodes."), type = "success"))
         if (result$missing_parents > 0) {
-          showNotification(paste("Reattached", result$missing_parents, "orphaned nodes to root."), type = "warning")
+          show_toast(toast(paste("Reattached", result$missing_parents, "orphaned nodes to root."), type = "warning"))
         }
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Merge failed:", e$message), type = "error")
+        show_toast(toast(paste("Merge failed:", e$message), type = "danger"))
       })
     })
 
@@ -1761,12 +1761,12 @@ mod_hierarchy_server <- function(id, state, con) {
         update_move_choices()
         select_node_by_id(node_id)
         if (isTRUE(result$changed)) {
-          showNotification("Node moved.", type = "message")
+          show_toast(toast("Node moved.", type = "success"))
         } else {
-          showNotification("Node is already under that parent.", type = "message")
+          show_toast(toast("Node is already under that parent.", type = "success"))
         }
       }, error = function(e) {
-        showNotification(paste("Move failed:", e$message), type = "error")
+        show_toast(toast(paste("Move failed:", e$message), type = "danger"))
       })
     })
 
@@ -1774,7 +1774,7 @@ mod_hierarchy_server <- function(id, state, con) {
       if (!require_hierarchy_write()) return()
       direction <- match.arg(direction)
       if (is.null(rv$data) || !("MyOrder" %in% names(rv$data))) {
-        showNotification("Ordering not available for this hierarchy.", type = "warning")
+        show_toast(toast("Ordering not available for this hierarchy.", type = "warning"))
         return()
       }
 
@@ -1802,18 +1802,18 @@ mod_hierarchy_server <- function(id, state, con) {
       swap_order <- suppressWarnings(as.numeric(siblings$MyOrder[swap_idx]))
 
       if (is.na(current_order) || is.na(swap_order)) {
-        showNotification("Ordering values missing. Refresh or re-add nodes.", type = "warning")
+        show_toast(toast("Ordering values missing. Refresh or re-add nodes.", type = "warning"))
         return()
       }
 
       tryCatch({
         DBI::dbExecute(con, "UPDATE Hierarchy SET MyOrder = ? WHERE ID = ?", list(swap_order, current_id))
         DBI::dbExecute(con, "UPDATE Hierarchy SET MyOrder = ? WHERE ID = ?", list(current_order, swap_id))
-        showNotification("Order updated.", type = "message")
+        show_toast(toast("Order updated.", type = "success"))
         refresh_tree()
         update_move_choices()
       }, error = function(e) {
-        showNotification(paste("Order change failed:", e$message), type = "error")
+        show_toast(toast(paste("Order change failed:", e$message), type = "danger"))
       })
     }
 
@@ -1872,7 +1872,7 @@ mod_hierarchy_server <- function(id, state, con) {
         rv$find_matches <- integer(0)
         rv$find_index <- 0L
         rv$find_query <- query
-        showNotification("No matching node found.", type = "warning")
+        show_toast(toast("No matching node found.", type = "warning"))
         return()
       }
 
@@ -1881,13 +1881,13 @@ mod_hierarchy_server <- function(id, state, con) {
       rv$find_query <- query
 
       if (select_node_by_id(rv$find_matches[rv$find_index])) {
-        showNotification("Node selected.", type = "message")
+        show_toast(toast("Node selected.", type = "success"))
       }
     }
 
     move_find <- function(step) {
       if (length(rv$find_matches) == 0) {
-        showNotification("Use Find first.", type = "message")
+        show_toast(toast("Use Find first.", type = "success"))
         return()
       }
       total <- length(rv$find_matches)
@@ -1925,7 +1925,7 @@ mod_hierarchy_server <- function(id, state, con) {
     observeEvent(input$su_add, {
       if (!require_su_write()) return()
       if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) {
-        showNotification("Switch to plot view to edit.", type = "warning")
+        show_toast(toast("Switch to plot view to edit.", type = "warning"))
         return()
       }
       if (is.null(rv$su)) rv$su <- load_su()
@@ -1935,7 +1935,7 @@ mod_hierarchy_server <- function(id, state, con) {
     observeEvent(input$su_delete, {
       if (!require_su_write()) return()
       if (identical(rv$su_mode, "units") || identical(rv$su_mode, "master") || identical(rv$su_mode, "user")) {
-        showNotification("Switch to plot view to edit.", type = "warning")
+        show_toast(toast("Switch to plot view to edit.", type = "warning"))
         return()
       }
       req(rv$su)
@@ -1986,7 +1986,7 @@ mod_hierarchy_server <- function(id, state, con) {
       old_keys <- old_df$PlotNumber[old_df$PlotNumber != ""]
 
       if (any(duplicated(new_keys))) {
-        showNotification("Duplicate PlotNumber detected. Fix duplicates before saving.", type = "warning")
+        show_toast(toast("Duplicate PlotNumber detected. Fix duplicates before saving.", type = "warning"))
         return()
       }
 

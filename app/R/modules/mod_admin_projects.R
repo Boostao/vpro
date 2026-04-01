@@ -37,11 +37,11 @@ mod_admin_projects_server <- function(id, state, con) {
 
     require_permission <- function(permissions, message) {
       if (!auth_is_authenticated(state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       if (!any(vapply(permissions, function(p) auth_user_has_permission(state, p), logical(1)))) {
-        showNotification(message, type = "error")
+        show_toast(toast(message, type = "danger"))
         return(FALSE)
       }
       TRUE
@@ -108,7 +108,7 @@ mod_admin_projects_server <- function(id, state, con) {
                            existing[1, , drop = FALSE], new_row,
                            fields = c("projecttitle", "coordinatingagency", "startdate", "enddate", "notes"))
           }
-          showNotification("Project Updated", type = "message")
+          show_toast(toast("Project Updated", type = "success"))
         } else {
           dbExecute(con,
             "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes) VALUES (?, ?, ?, ?, ?, ?)",
@@ -118,11 +118,11 @@ mod_admin_projects_server <- function(id, state, con) {
           log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "startdate",          NA, input$proj_start)
           log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate",            NA, input$proj_end)
           log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes",              NA, input$proj_notes)
-          showNotification("Project Created", type = "message")
+          show_toast(toast("Project Created", type = "success"))
         }
         update_proj_list(selected_id = input$proj_id)
       }, error = function(e) {
-        showNotification(paste("Error:", e$message), type = "error")
+        show_toast(toast(paste("Error:", e$message), type = "danger"))
       })
     })
 
@@ -139,11 +139,11 @@ mod_admin_projects_server <- function(id, state, con) {
           log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate",            existing$enddate[1],            NA)
           log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes",              existing$notes[1],              NA)
         }
-        showNotification("Project Deleted", type = "warning")
+        show_toast(toast("Project Deleted", type = "warning"))
         updateTextInput(session, "proj_id", value = "")
         update_proj_list()
       }, error = function(e) {
-        showNotification(paste("Error:", e$message), type = "error")
+        show_toast(toast(paste("Error:", e$message), type = "danger"))
       })
     })
   })

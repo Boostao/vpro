@@ -1079,11 +1079,10 @@ mod_sync_server <- function(id, state, con) {
         final_message <- paste("Completed:", .format_counts(counts))
       }
       if (!is.null(final_message) && nzchar(as.character(final_message))) {
-        showNotification(
-          ui = final_message,
-          type = if (isTRUE(error)) "error" else "message",
-          duration = if (isTRUE(error)) NULL else 4
-        )
+        show_toast(toast(final_message,
+          type = if (isTRUE(error)) "danger" else "success",
+          duration_s = if (isTRUE(error)) NA else 4
+        ))
       }
       invisible(final_message)
     }

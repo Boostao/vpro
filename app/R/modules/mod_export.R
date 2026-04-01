@@ -624,22 +624,22 @@ mod_export_server <- function(id, sys_state, con) {
           result <- export_venus_xml(con, project_id, file, opts)
           
           if (result$success) {
-            showNotification(
+            show_toast(toast(
               sprintf("VENUS XML exported successfully: %d plots, %d bytes", 
                       result$plot_count, result$file_size),
-              type = "message",
-              duration = 5
-            )
+              type = "success",
+              duration_s = 5
+            ))
             log_export_action("venus_xml", result$plot_count)
           } else {
             stop(result$error)
           }
         }, error = function(e) {
-          showNotification(
+          show_toast(toast(
             paste("VENUS export failed:", e$message),
-            type = "error",
-            duration = 10
-          )
+            type = "danger",
+            duration_s = 10
+          ))
           log_export_action("venus_xml", NA_integer_, status = "failed", error_message = e$message)
           # Write an error message to the file so download still works
           writeLines(paste("Error:", e$message), file)
@@ -701,20 +701,20 @@ mod_export_server <- function(id, sys_state, con) {
             }
             
             log_export_action("xlsx", NA_integer_)
-            showNotification(
+            show_toast(toast(
               paste0("Excel export complete: ", size_kb, " KB, ", n_sheets, " sheets"),
-              type = "message",
-              duration = 5
-            )
+              type = "success",
+              duration_s = 5
+            ))
           }
           
         }, error = function(e) {
           log_export_action("xlsx", NA_integer_, status = "failed", error_message = e$message)
-          showNotification(
+          show_toast(toast(
             paste("Excel export failed:", e$message),
-            type = "error",
-            duration = 10
-          )
+            type = "danger",
+            duration_s = 10
+          ))
           stop(e)
         })
       }

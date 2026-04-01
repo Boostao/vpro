@@ -120,7 +120,7 @@ mod_user_setup_server <- function(id, state, con) {
       config("System", "AuditStrength", audit_val)
 
       status_text(sprintf("Setup saved for user '%s'.", user_name))
-      shiny::showNotification("Setup saved.", type = "message")
+      show_toast(toast("Setup saved.", type = "success"))
     })
 
     # ---- Cancel button (Access btnCancel_Click -> DoCmd.Close) ----

@@ -108,7 +108,7 @@ mod_images_server <- function(id, sys_state, con) {
         pts <- pts[!is.na(pts$latitude_num) & !is.na(pts$longitude_num), , drop = FALSE]
         
         if (nrow(pts) == 0) {
-          showNotification("No valid coordinates found in this project.", type = "error")
+          show_toast(toast("No valid coordinates found in this project.", type = "danger"))
           return(NULL)
         }
         

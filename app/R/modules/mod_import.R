@@ -246,12 +246,12 @@ mod_import_server <- function(id, state, con) {
 
     require_import_permission <- function() {
       if (!auth_is_authenticated(state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       allowed <- c("write:all", "manage:imports")
       if (!any(vapply(allowed, function(p) auth_user_has_permission(state, p), logical(1)))) {
-        showNotification("Permission required: import data", type = "error")
+        show_toast(toast("Permission required: import data", type = "danger"))
         return(FALSE)
       }
       TRUE

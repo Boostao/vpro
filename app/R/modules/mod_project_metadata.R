@@ -723,12 +723,12 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
     })
 
     observeEvent(input$btnAttachUSysAllSpecs, {
-      shiny::showNotification("Attach USysAllSpecs hookup deferred for this block.", type = "message")
+      show_toast(toast("Attach USysAllSpecs hookup deferred for this block.", type = "success"))
       status_text("Attach USysAllSpecs hookup deferred.")
     })
 
     observeEvent(input$btnAttachUSysTableOfLists, {
-      shiny::showNotification("Attach USysTableOfLists hookup deferred for this block.", type = "message")
+      show_toast(toast("Attach USysTableOfLists hookup deferred for this block.", type = "success"))
       status_text("Attach USysTableOfLists hookup deferred.")
     })
 

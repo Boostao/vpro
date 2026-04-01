@@ -355,12 +355,12 @@ mod_site_env_server <- function(id, sys_state, con) {
 
     require_plot_write <- function() {
         if (!auth_is_authenticated(sys_state)) {
-            showNotification("Sign in required.", type = "error")
+            show_toast(toast("Sign in required.", type = "danger"))
             return(FALSE)
         }
         allowed <- c("write:own_plots", "write:project_plots", "write:all")
         if (!any(vapply(allowed, function(p) auth_user_has_permission(sys_state, p), logical(1)))) {
-            showNotification("Permission required: write plots", type = "error")
+            show_toast(toast("Permission required: write plots", type = "danger"))
             return(FALSE)
         }
         TRUE
@@ -398,15 +398,15 @@ mod_site_env_server <- function(id, sys_state, con) {
             )
 
             if (result == "inserted") {
-                showNotification("Header created successfully.", type = "message")
+                show_toast(toast("Header created successfully.", type = "success"))
             } else {
-                showNotification("Header updated successfully.", type = "message")
+                show_toast(toast("Header updated successfully.", type = "success"))
             }
 
             env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
             rv$env <- dbGetQuery(con, paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ?"), list(plot_id))
         }, error = function(e) {
-            showNotification(paste("Error saving header:", e$message), type="error")
+            show_toast(toast(paste("Error saving header:", e$message), type = "danger"))
         })
     })
 
@@ -420,12 +420,12 @@ mod_site_env_server <- function(id, sys_state, con) {
             lat_check <- validate_latitude(lat, strict = FALSE)
             if (lat_check$valid) {
                 updateNumericInput(session, "env_lat", value = lat)
-                showNotification("Latitude updated from DMS.", type = "message", duration = 2)
+                show_toast(toast("Latitude updated from DMS.", type = "success", duration_s = 2))
             } else {
-                showNotification(paste("Latitude validation:", lat_check$message), type = "warning")
+                show_toast(toast(paste("Latitude validation:", lat_check$message), type = "warning"))
             }
         } else if (nzchar(trimws(safe_chr(input$env_lat_dms)))) {
-            showNotification("Invalid latitude DMS format. Use: DD MM SS.S N/S", type = "error")
+            show_toast(toast("Invalid latitude DMS format. Use: DD MM SS.S N/S", type = "danger"))
         }
 
         # Validate and apply longitude
@@ -433,12 +433,12 @@ mod_site_env_server <- function(id, sys_state, con) {
             lon_check <- validate_longitude(lon, strict = FALSE)
             if (lon_check$valid) {
                 updateNumericInput(session, "env_long", value = lon)
-                showNotification("Longitude updated from DMS.", type = "message", duration = 2)
+                show_toast(toast("Longitude updated from DMS.", type = "success", duration_s = 2))
             } else {
-                showNotification(paste("Longitude validation:", lon_check$message), type = "warning")
+                show_toast(toast(paste("Longitude validation:", lon_check$message), type = "warning"))
             }
         } else if (nzchar(trimws(safe_chr(input$env_long_dms)))) {
-            showNotification("Invalid longitude DMS format. Use: DD MM SS.S E/W", type = "error")
+            show_toast(toast("Invalid longitude DMS format. Use: DD MM SS.S E/W", type = "danger"))
         }
     })
 
@@ -451,7 +451,7 @@ mod_site_env_server <- function(id, sys_state, con) {
         updateTextInput(session, "env_long_dms", value = lon_dms)
         
         if (nzchar(lat_dms) || nzchar(lon_dms)) {
-            showNotification("DMS fields updated from decimal degrees.", type = "message", duration = 2)
+            show_toast(toast("DMS fields updated from decimal degrees.", type = "success", duration_s = 2))
         }
     })
 
@@ -472,12 +472,12 @@ mod_site_env_server <- function(id, sys_state, con) {
         lon <- input$env_long
         
         if (is.null(lat) || is.null(lon) || is.na(lat) || is.na(lon)) {
-            showNotification("Please enter valid latitude and longitude first.", type = "warning")
+            show_toast(toast("Please enter valid latitude and longitude first.", type = "warning"))
             return()
         }
         
         if (lat == 0 && lon == 0) {
-            showNotification("Coordinates appear to be default values (0, 0). Please enter actual coordinates.", type = "warning")
+            show_toast(toast("Coordinates appear to be default values (0, 0). Please enter actual coordinates.", type = "warning"))
             return()
         }
         
@@ -486,16 +486,16 @@ mod_site_env_server <- function(id, sys_state, con) {
         lon_check <- validate_longitude(lon, strict = FALSE)
         
         if (!lat_check$valid || !lon_check$valid) {
-            showNotification(
+            show_toast(toast(
                 paste("Invalid coordinates:", lat_check$message, lon_check$message), 
-                type = "error"
-            )
+                type = "danger"
+            ))
             return()
         }
         
         # Show loading notification
-        showNotification("Fetching climate data from ClimR...", id = "climr_fetch", 
-                       type = "message", duration = NULL)
+        show_toast(toast("Fetching climate data from ClimR...", id = "climr_fetch", 
+                       type = "success", duration_s = NA))
         
         # Fetch climate data
         climate <- get_climate_data(
@@ -506,11 +506,11 @@ mod_site_env_server <- function(id, sys_state, con) {
         )
         
         if (is.null(climate)) {
-            removeNotification("climr_fetch")
-            showNotification(
+            hide_toast("climr_fetch")
+            show_toast(toast(
                 "Failed to fetch climate data. ClimR may not be installed or coordinates are outside BC.", 
-                type = "error"
-            )
+                type = "danger"
+            ))
             return()
         }
         
@@ -533,19 +533,19 @@ mod_site_env_server <- function(id, sys_state, con) {
             silent = TRUE
         )
         
-        removeNotification("climr_fetch")
+        hide_toast("climr_fetch")
         
         if (save_result) {
-            showNotification(
+            show_toast(toast(
                 "Climate data fetched and saved successfully!", 
-                type = "default",
-                duration = 3
-            )
+                type = NULL,
+                duration_s = 3
+            ))
         } else {
-            showNotification(
+            show_toast(toast(
                 "Climate data fetched but not saved to database.", 
                 type = "warning"
-            )
+            ))
         }
     })
     
@@ -684,7 +684,7 @@ mod_site_env_server <- function(id, sys_state, con) {
             ))
             
             if (res == 0) {
-                showNotification("Record does not exist to update mensuration.", type="error")
+                show_toast(toast("Record does not exist to update mensuration.", type = "danger"))
             } else {
                 if (nrow(before_row) > 0) {
                     after_row <- data.frame(
@@ -704,10 +704,10 @@ mod_site_env_server <- function(id, sys_state, con) {
                         fields = c("standage", "sv_standheight", "structuralstage")
                     )
                 }
-                showNotification("Mensuration updated.", type="message")
+                show_toast(toast("Mensuration updated.", type = "success"))
             }
         }, error = function(e) {
-            showNotification(paste("Error saving mensuration:", e$message), type="error")
+            show_toast(toast(paste("Error saving mensuration:", e$message), type = "danger"))
         })
     })
 
@@ -810,7 +810,7 @@ mod_site_env_server <- function(id, sys_state, con) {
                         typed_val
                     )
                 }, error = function(e) {
-                    showNotification(paste("Update Error:", e$message), type = "error")
+                    show_toast(toast(paste("Update Error:", e$message), type = "danger"))
                 })
             }
         }
@@ -1014,7 +1014,7 @@ mod_site_env_server <- function(id, sys_state, con) {
             
             tryCatch({
                 dbExecute(con, sql, values)
-                showNotification("Record added.", type="message")
+                show_toast(toast("Record added.", type = "success"))
                 for (field_name in setdiff(names(fields), "id")) {
                     log_audit_change(
                         con,
@@ -1036,7 +1036,7 @@ mod_site_env_server <- function(id, sys_state, con) {
                     mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
                     rv$mineral <- dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(fields$plotnumber))
                 }
-            }, error = function(e) { showNotification(paste("Insert Error:", e$message), type="error") })
+            }, error = function(e) { show_toast(toast(paste("Insert Error:", e$message), type = "danger")) })
             
         } else {
             table_id <- db_id(table, config("Current", "CurrProject"), prj = TRUE)
@@ -1055,7 +1055,7 @@ mod_site_env_server <- function(id, sys_state, con) {
             tryCatch({
                 before_row <- dbGetQuery(con, sprintf("SELECT * FROM %s WHERE id = ?", table_sql), list(id))
                 dbExecute(con, sql, values)
-                showNotification("Record updated.", type="message")
+                show_toast(toast("Record updated.", type = "success"))
                 if (nrow(before_row) > 0) {
                     after_row <- before_row
                     for (field_name in names(update_fields)) {
@@ -1081,7 +1081,7 @@ mod_site_env_server <- function(id, sys_state, con) {
                     mineral_table_sql <- as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
                     rv$mineral <- dbGetQuery(con, paste("SELECT * FROM", mineral_table_sql, "WHERE plotnumber = ? ORDER BY horizon"), list(fields$plotnumber))
                 }
-            }, error = function(e) { showNotification(paste("Update Error:", e$message), type="error") })
+            }, error = function(e) { show_toast(toast(paste("Update Error:", e$message), type = "danger")) })
         }
     }
     

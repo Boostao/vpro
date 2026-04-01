@@ -60,7 +60,7 @@ mod_nav_launcher_server <- function(
         session$sendCustomMessage("vpro-nav-launcher-click", list(id = click_id))
       }
       if (!is.null(run_notification) && nzchar(run_notification)) {
-        showNotification(run_notification, type = "message")
+        show_toast(toast(run_notification, type = "success"))
       }
     }, ignoreInit = TRUE)
 

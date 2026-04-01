@@ -66,11 +66,11 @@ mod_admin_publishing_server <- function(id, state, con) {
 
     require_permission <- function(permission) {
       if (!auth_is_authenticated(state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       if (!auth_user_has_permission(state, permission)) {
-        showNotification(paste("Permission required:", permission), type = "error")
+        show_toast(toast(paste("Permission required:", permission), type = "danger"))
         return(FALSE)
       }
       TRUE
@@ -144,12 +144,12 @@ mod_admin_publishing_server <- function(id, state, con) {
       if (!nzchar(out_dir)) out_dir <- "data/published"
       project_ids <- input$publish_projects %||% character(0)
       if (length(project_ids) == 0) {
-        showNotification("Select one or more projects to publish.", type = "warning")
+        show_toast(toast("Select one or more projects to publish.", type = "warning"))
         return()
       }
       formats <- input$publish_formats %||% character(0)
       if (length(formats) == 0) {
-        showNotification("Select at least one output format.", type = "warning")
+        show_toast(toast("Select at least one output format.", type = "warning"))
         return()
       }
       tryCatch({
@@ -168,11 +168,11 @@ mod_admin_publishing_server <- function(id, state, con) {
         } else {
           publish_status(paste("Published", length(results), "projects"))
         }
-        showNotification("Project dataset published.", type = "message")
+        show_toast(toast("Project dataset published.", type = "success"))
         refresh_publish_snapshots()
       }, error = function(e) {
         publish_status("")
-        showNotification(paste("Publish failed:", e$message), type = "error")
+        show_toast(toast(paste("Publish failed:", e$message), type = "danger"))
       })
     })
 

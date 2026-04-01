@@ -59,11 +59,11 @@ mod_admin_master_server <- function(id, state, con) {
 
     require_permission <- function(permissions, message) {
       if (!auth_is_authenticated(state)) {
-        showNotification("Sign in required.", type = "error")
+        show_toast(toast("Sign in required.", type = "danger"))
         return(FALSE)
       }
       if (!any(vapply(permissions, function(p) auth_user_has_permission(state, p), logical(1)))) {
-        showNotification(message, type = "error")
+        show_toast(toast(message, type = "danger"))
         return(FALSE)
       }
       TRUE
@@ -215,7 +215,7 @@ mod_admin_master_server <- function(id, state, con) {
           dbExecute(con, sql, as.list(to_save[i, cols, drop = FALSE]))
         }
         dbCommit(con)
-        showNotification("Master list saved.", type = "message")
+        show_toast(toast("Master list saved.", type = "success"))
 
         if (nrow(to_save) > 0 || nrow(old_rows) > 0) {
           key_col      <- if ("ID" %in% cols) "ID" else "SiteSeries"
@@ -248,7 +248,7 @@ mod_admin_master_server <- function(id, state, con) {
         load_master_table(level = trimws(input$master_level))
       }, error = function(e) {
         dbRollback(con)
-        showNotification(paste("Save failed:", e$message), type = "error")
+        show_toast(toast(paste("Save failed:", e$message), type = "danger"))
       })
     })
 

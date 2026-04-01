@@ -54,10 +54,10 @@ mod_project_server <- function(id, state, con) {
           force = force_refresh
         ),
         error = function(e) {
-          showNotification(
+          show_toast(toast(
             paste0("Baseline capture failed for project '", project_id, "': ", conditionMessage(e)),
             type = "warning"
-          )
+          ))
           NULL
         }
       )
@@ -159,11 +159,11 @@ mod_project_server <- function(id, state, con) {
     observeEvent(input$open_confirm, {
       path <- trimws(input$open_path %||% "")
       if (!nzchar(path)) {
-        showNotification("File path is required.", type = "error")
+        show_toast(toast("File path is required.", type = "danger"))
         return()
       }
       if (!file.exists(path)) {
-        showNotification(paste0("File not found: ", path), type = "error")
+        show_toast(toast(paste0("File not found: ", path), type = "danger"))
         return()
       }
 
@@ -193,9 +193,9 @@ mod_project_server <- function(id, state, con) {
           ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
           removeModal()
           project_changed(project_changed() + 1L)
-          showNotification(paste0("Opened project: ", pid), type = "message")
+          show_toast(toast(paste0("Opened project: ", pid), type = "success"))
         }, error = function(e) {
-          showNotification(conditionMessage(e), type = "error")
+          show_toast(toast(conditionMessage(e), type = "danger"))
         })
       }
     })
@@ -205,11 +205,11 @@ mod_project_server <- function(id, state, con) {
       path <- .pending_open_path()
       pid  <- input$open_pick_pid
       if (is.null(path) || !nzchar(path %||% "")) {
-        showNotification("No pending file path.", type = "error")
+        show_toast(toast("No pending file path.", type = "danger"))
         return()
       }
       if (is.null(pid) || !nzchar(pid %||% "")) {
-        showNotification("No project selected.", type = "error")
+        show_toast(toast("No project selected.", type = "danger"))
         return()
       }
       tryCatch({
@@ -220,9 +220,9 @@ mod_project_server <- function(id, state, con) {
         .pending_open_path(NULL)
         removeModal()
         project_changed(project_changed() + 1L)
-        showNotification(paste0("Opened project: ", pid), type = "message")
+        show_toast(toast(paste0("Opened project: ", pid), type = "success"))
       }, error = function(e) {
-        showNotification(conditionMessage(e), type = "error")
+        show_toast(toast(conditionMessage(e), type = "danger"))
       })
     })
 
@@ -244,7 +244,7 @@ mod_project_server <- function(id, state, con) {
       pid   <- trimws(input$new_id    %||% "")
       title <- trimws(input$new_title %||% "")
       if (!nzchar(pid) || !nzchar(title)) {
-        showNotification("Project ID and Title are both required.", type = "error")
+        show_toast(toast("Project ID and Title are both required.", type = "danger"))
         return()
       }
       tryCatch({
@@ -254,9 +254,9 @@ mod_project_server <- function(id, state, con) {
         ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_new")
         removeModal()
         project_changed(project_changed() + 1L)
-        showNotification(paste0("Created project: ", pid), type = "message")
+        show_toast(toast(paste0("Created project: ", pid), type = "success"))
       }, error = function(e) {
-        showNotification(conditionMessage(e), type = "error")
+        show_toast(toast(conditionMessage(e), type = "danger"))
       })
     })
 
@@ -264,7 +264,7 @@ mod_project_server <- function(id, state, con) {
     observeEvent(input$btn_save, {
       pid <- isolate(state$CurrProject)
       if (is.null(pid) || !nzchar(pid %||% "")) {
-        showNotification("No project is currently open.", type = "warning")
+        show_toast(toast("No project is currently open.", type = "warning"))
         return()
       }
       showModal(modalDialog(
@@ -282,16 +282,16 @@ mod_project_server <- function(id, state, con) {
       pid  <- isolate(state$CurrProject)
       path <- trimws(input$save_path %||% "")
       if (!nzchar(path)) {
-        showNotification("File path is required.", type = "error")
+        show_toast(toast("File path is required.", type = "danger"))
         return()
       }
       tryCatch({
         save_project(con, pid, path)
         current_path(path)
         removeModal()
-        showNotification(paste0("Saved project '", pid, "' to ", path), type = "message")
+        show_toast(toast(paste0("Saved project '", pid, "' to ", path), type = "success"))
       }, error = function(e) {
-        showNotification(conditionMessage(e), type = "error")
+        show_toast(toast(conditionMessage(e), type = "danger"))
       })
     })
 
@@ -324,9 +324,9 @@ mod_project_server <- function(id, state, con) {
         config("Current", "CurrProject", NULL)
         removeModal()
         project_changed(project_changed() + 1L)
-        showNotification(paste0("Closed project '", pid, "'."), type = "message")
+        show_toast(toast(paste0("Closed project '", pid, "'."), type = "success"))
       }, error = function(e) {
-        showNotification(conditionMessage(e), type = "error")
+        show_toast(toast(conditionMessage(e), type = "danger"))
       })
     })
 

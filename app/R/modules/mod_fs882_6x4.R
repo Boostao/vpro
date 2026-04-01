@@ -788,7 +788,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
         } else if (src == 3L) {
           plotlist <- config("Current", "CurrPlotlist")
           if (is.null(plotlist) || plotlist == "None") {
-            showNotification("Select an SU table first.", type = "warning")
+            show_toast(toast("Select an SU table first.", type = "warning"))
             c("---" = "")
           } else {
             su_tbl <- as.character(db_tb(con, "SU", plotlist, prj = TRUE))
@@ -1189,7 +1189,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
         rv$dirty <- FALSE
         invisible(TRUE)
       }, error = function(e) {
-        showNotification(paste("Auto-save failed:", conditionMessage(e)), type = "error")
+        show_toast(toast(paste("Auto-save failed:", conditionMessage(e)), type = "danger"))
         invisible(FALSE)
       })
     }
@@ -1263,11 +1263,11 @@ mod_fs882_6x4_server <- function(id, state, con) {
     observeEvent(input$btnConfirmNewRecord, {
       new_id <- trimws(input$new_plot_number %||% "")
       if (!nzchar(new_id)) {
-        showNotification("Plot Number is required.", type = "error")
+        show_toast(toast("Plot Number is required.", type = "danger"))
         return()
       }
       if (new_id %in% rv$recordset) {
-        showNotification("Plot already exists, navigating to it.", type = "warning")
+        show_toast(toast("Plot already exists, navigating to it.", type = "warning"))
         removeModal()
         navigate_to(new_id)
         return()
@@ -1284,9 +1284,9 @@ mod_fs882_6x4_server <- function(id, state, con) {
           server = FALSE)
         removeModal()
         navigate_to(new_id)
-        showNotification(paste("Created plot", new_id), type = "message")
+        show_toast(toast(paste("Created plot", new_id), type = "success"))
       }, error = function(e) {
-        showNotification(paste("Create failed:", conditionMessage(e)), type = "error")
+        show_toast(toast(paste("Create failed:", conditionMessage(e)), type = "danger"))
       })
     })
 
@@ -1345,7 +1345,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
     observeEvent(input$btnSaveRecord, {
       plot_id <- trimws(input$PlotNumber %||% rv$current_plot %||% "")
       if (!nzchar(plot_id)) {
-        showNotification("Plot Number is required to save.", type = "error")
+        show_toast(toast("Plot Number is required to save.", type = "danger"))
         return()
       }
 
@@ -1423,10 +1423,10 @@ mod_fs882_6x4_server <- function(id, state, con) {
 
         rv$dirty <- FALSE
         state$CurrSU <- plot_id
-        showNotification("FS882 record saved.", type = "message")
+        show_toast(toast("FS882 record saved.", type = "success"))
         load_plot(plot_id)
       }, error = function(e) {
-        showNotification(paste("Save failed:", conditionMessage(e)), type = "error")
+        show_toast(toast(paste("Save failed:", conditionMessage(e)), type = "danger"))
       })
     })
 
@@ -1444,7 +1444,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
     observeEvent(input$btnCopyToUserSU, {
       bec_val <- input$BECSiteUnit
       if (is.null(bec_val) || !nzchar(bec_val)) {
-        showNotification("No BEC Master unit to copy.", type = "warning")
+        show_toast(toast("No BEC Master unit to copy.", type = "warning"))
         return()
       }
       updateSelectInput(session, "UserSiteUnit", selected = bec_val)
@@ -1463,23 +1463,23 @@ mod_fs882_6x4_server <- function(id, state, con) {
     observeEvent(input$btnCheckSppCodes, {
       plot_id <- rv$current_plot
       if (is.null(plot_id) || !nzchar(plot_id %||% "")) {
-        showNotification("No current plot loaded.", type = "warning")
+        show_toast(toast("No current plot loaded.", type = "warning"))
         return()
       }
       # Access calls CheckSpeciesCodes from V7mdlSpellCheckSppCodes module;
       # full species-validation dialog is deferred. Show a stub notification.
-      showNotification("Check Spp Codes: species validation deferred (hookup pending).",
-        type = "message", duration = 5)
+      show_toast(toast("Check Spp Codes: species validation deferred (hookup pending).",
+        type = "success", duration_s = 5))
     })
 
     # -- Allow <0.1% Entry toggle (Access btnAllowSmallEntry) --
     # Controls whether sub-1% cover values (0.01-0.09) are accepted in veg grids.
     observeEvent(input$btnAllowSmallEntry, {
       rv$allow_small_entry <- !rv$allow_small_entry
-      showNotification(
+      show_toast(toast(
         if (rv$allow_small_entry) "Allow <0.1% entry ON" else "Allow <0.1% entry OFF",
-        type = "message"
-      )
+        type = "success"
+      ))
     })
 
     # -- Add Species (Access USysAddSpp dialog) --
@@ -1504,7 +1504,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
       layer <- input$new_spp_layer %||% "C"
       plot_id <- rv$current_plot
       if (!nzchar(spp) || is.null(plot_id)) {
-        showNotification("Species code and current plot are required.", type = "warning")
+        show_toast(toast("Species code and current plot are required.", type = "warning"))
         return()
       }
       tryCatch({
@@ -1514,9 +1514,9 @@ mod_fs882_6x4_server <- function(id, state, con) {
         ), params = list(plot_id, spp, layer))
         removeModal()
         load_plot(plot_id)
-        showNotification(paste("Added", spp, "to layer", layer), type = "message")
+        show_toast(toast(paste("Added", spp, "to layer", layer), type = "success"))
       }, error = function(e) {
-        showNotification(paste("Add species failed:", conditionMessage(e)), type = "error")
+        show_toast(toast(paste("Add species failed:", conditionMessage(e)), type = "danger"))
       })
     })
 
@@ -1556,12 +1556,12 @@ mod_fs882_6x4_server <- function(id, state, con) {
       content = function(file) {
         plot_id <- rv$current_plot
         if (is.null(plot_id) || !nzchar(plot_id)) {
-          showNotification("No current plot to export.", type = "warning")
+          show_toast(toast("No current plot to export.", type = "warning"))
           return()
         }
         kml <- generate_single_plot_kml(con, plot_id)
         if (is.null(kml)) {
-          showNotification("Plot has no coordinates - cannot export to KML.", type = "warning")
+          show_toast(toast("Plot has no coordinates - cannot export to KML.", type = "warning"))
           writeLines("", file)
           return()
         }
@@ -1590,7 +1590,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
     observeEvent(input$btnConfirmSuIntoEnv, {
       removeModal()
       result <- su_su_into_env(con)
-      showNotification(result$message, type = if (result$ok) "message" else "error")
+      show_toast(toast(result$message, type = if (result$ok) "success" else "danger"))
       if (result$ok) load_plot(rv$current_plot)
     })
 
@@ -1621,7 +1621,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
           )
         ))
       } else {
-        showNotification(result$message, type = if (result$ok) "message" else "error")
+        show_toast(toast(result$message, type = if (result$ok) "success" else "danger"))
       }
     })
 
@@ -1630,10 +1630,10 @@ mod_fs882_6x4_server <- function(id, state, con) {
       result <- su_env_into_su(con)
       if (nrow(result$new_units)) {
         su_add_user_units(con, result$new_units)
-        showNotification(
+        show_toast(toast(
           paste0(nrow(result$new_units), " units added to personal list."),
-          type = "message"
-        )
+          type = "success"
+        ))
       }
     })
 
@@ -1645,7 +1645,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
         error = function(e) character(0)
       )
       if (!length(all_plots)) {
-        showNotification("No plots in current project.", type = "warning")
+        show_toast(toast("No plots in current project.", type = "warning"))
         return()
       }
       showModal(modalDialog(
@@ -1678,7 +1678,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
       new_name <- trimws(input$create_su_name %||% "")
       result <- su_create_from_filter(con, all_plots, action, new_name)
       removeModal()
-      showNotification(result$message, type = if (result$ok) "message" else "error")
+      show_toast(toast(result$message, type = if (result$ok) "success" else "danger"))
     })
 
     observeEvent(input$btnVegProfiling, {
@@ -1694,7 +1694,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
     observeEvent(input$btnRestoreAudit, {
       selected_rows <- input$dt_audit_rows_selected
       if (is.null(selected_rows) || !length(selected_rows)) {
-        showNotification("Select audit records to restore first.", type = "warning")
+        show_toast(toast("Select audit records to restore first.", type = "warning"))
         return()
       }
       showModal(modalDialog(
@@ -1775,10 +1775,10 @@ mod_fs882_6x4_server <- function(id, state, con) {
         }
       }
 
-      showNotification(
+      show_toast(toast(
         paste0(n_restored, " field(s) restored."),
-        type = if (n_restored > 0) "message" else "warning"
-      )
+        type = if (n_restored > 0) "success" else "warning"
+      ))
       # Reload plot and audit
       load_plot(rv$current_plot)
     })

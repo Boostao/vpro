@@ -399,11 +399,11 @@ mod_becweb_map_server <- function(id, con = NULL, auth_level = "public") {
       
       # Limit to 5000 plots
       if (nrow(filtered) > 5000) {
-        showNotification(
+        show_toast(toast(
           paste("Too many results (", nrow(filtered), "). Showing first 5000. Please refine filters."),
           type = "warning",
-          duration = 10
-        )
+          duration_s = 10
+        ))
         filtered <- filtered[1:5000, ]
       }
       
@@ -546,7 +546,7 @@ mod_becweb_map_server <- function(id, con = NULL, auth_level = "public") {
         req(cache$filtered_plots)
         
         if (nrow(cache$filtered_plots) == 0) {
-          showNotification("No data to export.", type = "error")
+          show_toast(toast("No data to export.", type = "danger"))
           return(NULL)
         }
         
@@ -567,10 +567,10 @@ mod_becweb_map_server <- function(id, con = NULL, auth_level = "public") {
         
         write.csv(export_data, file, row.names = FALSE)
         
-        showNotification(
+        show_toast(toast(
           paste("Exported", nrow(export_data), "plots to CSV."),
-          type = "message"
-        )
+          type = "success"
+        ))
       }
     )
     

@@ -136,7 +136,7 @@ mod_plot_profiling_server <- function(id, state, con) {
     observeEvent(input$btnRunProfile, {
       hot_data <- rhandsontable::hot_to_r(input$hot_profile)
       if (is.null(hot_data) || !nrow(hot_data)) {
-        showNotification("Add profile criteria first.", type = "warning")
+        show_toast(toast("Add profile criteria first.", type = "warning"))
         return()
       }
       rv$criteria <- hot_data
@@ -162,7 +162,7 @@ mod_plot_profiling_server <- function(id, state, con) {
         # Validate operator
         valid_ops <- c(">=", ">", "=", "<=", "<", "<>", "Like")
         if (!op_str %in% valid_ops) {
-          showNotification(paste("Row", i, ": invalid operator", op_str), type = "warning")
+          show_toast(toast(paste("Row", i, ": invalid operator", op_str), type = "warning"))
           next
         }
 
@@ -173,7 +173,7 @@ mod_plot_profiling_server <- function(id, state, con) {
             profile_env_step(con, env_tbl, field, op_str, val)
           }
         }, error = function(e) {
-          showNotification(paste("Row", i, "error:", conditionMessage(e)), type = "error")
+          show_toast(toast(paste("Row", i, "error:", conditionMessage(e)), type = "danger"))
           character(0)
         })
 
@@ -192,7 +192,7 @@ mod_plot_profiling_server <- function(id, state, con) {
       }
 
       rv$result_plots <- if (is.null(matched)) character(0) else matched
-      showNotification(paste(length(rv$result_plots), "plots matched."), type = "message")
+      show_toast(toast(paste(length(rv$result_plots), "plots matched."), type = "success"))
     })
 
     # Results grid
@@ -212,7 +212,7 @@ mod_plot_profiling_server <- function(id, state, con) {
     observeEvent(input$btnApplyFilter, {
       plots <- rv$result_plots
       if (!length(plots)) {
-        showNotification("Run the profile first to get matching plots.", type = "warning")
+        show_toast(toast("Run the profile first to get matching plots.", type = "warning"))
         return()
       }
       showModal(modalDialog(
@@ -239,7 +239,7 @@ mod_plot_profiling_server <- function(id, state, con) {
       new_name <- trimws(input$filter_new_name %||% "")
       result <- su_create_from_filter(con, rv$result_plots, action, new_name)
       removeModal()
-      showNotification(result$message, type = if (result$ok) "message" else "error")
+      show_toast(toast(result$message, type = if (result$ok) "success" else "danger"))
     })
 
     invisible(NULL)

@@ -128,7 +128,7 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
       db_run(con, 'UPDATE tblWhatsNew SET "Viewed" = TRUE;')
       rows$Viewed <- TRUE
       rv$rows <- rows
-      showNotification("All updates marked as viewed.", type = "message")
+      show_toast(toast("All updates marked as viewed.", type = "success"))
     })
 
     observeEvent(input$show_on_startup, {

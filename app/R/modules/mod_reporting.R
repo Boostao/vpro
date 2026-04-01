@@ -191,7 +191,7 @@ mod_reporting_server <- function(id, sys_state, con) {
       if (identical(input$report_format, "xlsx") && !excel_available) {
         shinyjs::disable("dl_report")
         if (!isTRUE(excel_warned())) {
-          showNotification("Excel export requires the writexl package. Install it to enable downloads.", type = "warning")
+          show_toast(toast("Excel export requires the writexl package. Install it to enable downloads.", type = "warning"))
           excel_warned(TRUE)
         }
       } else {
@@ -738,7 +738,7 @@ mod_reporting_server <- function(id, sys_state, con) {
       }
 
       if (identical(input$report_template, "long_env.qmd")) {
-        showNotification("HTML preview is disabled for Long Environment; use Excel export.", type = "warning")
+        show_toast(toast("HTML preview is disabled for Long Environment; use Excel export.", type = "warning"))
         return()
       }
 
@@ -757,14 +757,14 @@ mod_reporting_server <- function(id, sys_state, con) {
 
       qmd_path <- file.path(getwd(), "reports", input$report_template)
       if (!file.exists(qmd_path)) {
-        showNotification("Report template not found!", type = "error")
+        show_toast(toast("Report template not found!", type = "danger"))
         return()
       }
 
       tmp_qmd <- file.path(tmp_dir, basename(input$report_template))
       file.copy(qmd_path, tmp_qmd, overwrite = TRUE)
-      notif_id <- showNotification("Generating preview...", duration = NULL, closeButton = FALSE)
-      on.exit(removeNotification(notif_id), add = TRUE)
+      notif_id <- show_toast(toast("Generating preview...", duration_s = NA, closable = FALSE))
+      on.exit(hide_toast(notif_id), add = TRUE)
 
       tryCatch({
         export_tables <- get_report_exports(input$report_template)
@@ -789,10 +789,10 @@ mod_reporting_server <- function(id, sys_state, con) {
           report_file(out_generated)
           set_report_url(out_generated)
         } else {
-          showNotification("Preview generation failed - check R console for Quarto errors.", type = "error")
+          show_toast(toast("Preview generation failed - check R console for Quarto errors.", type = "danger"))
         }
       }, error = function(e) {
-        showNotification(paste("Preview error:", conditionMessage(e)), type = "error")
+        show_toast(toast(paste("Preview error:", conditionMessage(e)), type = "danger"))
       })
     }, ignoreInit = TRUE)
 
@@ -815,7 +815,7 @@ mod_reporting_server <- function(id, sys_state, con) {
     observeEvent(input$open_report, {
       target_url <- report_url()
       if (is.null(target_url) || !nzchar(target_url)) {
-        showNotification("No report generated yet.", type = "warning")
+        show_toast(toast("No report generated yet.", type = "warning"))
         return()
       }
       shinyjs::runjs(paste0("window.open(", js_quote(target_url), ", '_blank');"))
@@ -880,8 +880,8 @@ mod_reporting_server <- function(id, sys_state, con) {
         }, add = TRUE)
         
         # Show Notification
-        id <- showNotification("Generating Quarto Report...", duration = NULL, closeButton = FALSE)
-        on.exit(removeNotification(id), add = TRUE)
+        id <- show_toast(toast("Generating Quarto Report...", duration_s = NA, closable = FALSE))
+        on.exit(hide_toast(id), add = TRUE)
         
         # Paths
         qmd_path <- file.path(getwd(), "reports", input$report_template)
@@ -889,7 +889,7 @@ mod_reporting_server <- function(id, sys_state, con) {
         
         # Validation
         if (!file.exists(qmd_path)) {
-            showNotification("Report template not found!", type = "error")
+            show_toast(toast("Report template not found!", type = "danger"))
             return(NULL)
         }
         
@@ -902,7 +902,7 @@ mod_reporting_server <- function(id, sys_state, con) {
 
         if (out_format == "xlsx") {
           if (!excel_available) {
-            showNotification("Excel export requires the writexl package.", type = "error")
+            show_toast(toast("Excel export requires the writexl package.", type = "danger"))
             return()
           }
           params <- build_report_params(input$report_template)
@@ -911,7 +911,7 @@ mod_reporting_server <- function(id, sys_state, con) {
             report_file(NULL)
             report_url(NULL)
           }, error = function(e) {
-            showNotification(paste("Excel export failed:", e$message), type = "error")
+            show_toast(toast(paste("Excel export failed:", e$message), type = "danger"))
           })
           return()
         }
@@ -943,7 +943,7 @@ mod_reporting_server <- function(id, sys_state, con) {
           set_report_url(out_generated)
           file.copy(out_generated, file)
         } else {
-            showNotification("Report generation failed.", type = "error")
+            show_toast(toast("Report generation failed.", type = "danger"))
         }
       }
     )
