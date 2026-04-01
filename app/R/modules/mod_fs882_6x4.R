@@ -142,9 +142,9 @@ mod_fs882_6x4_ui <- function(id) {
         class = "d-flex flex-wrap gap-1 align-items-center",
         # -- Record navigator (Access record bar parity) --
         actionButton(ns("btnNavFirst"), NULL,
-          icon = icon("backward-step"), class = "btn btn-outline-secondary btn-sm px-1"),
+          icon = icon("backward-step"), class = "btn btn-primary btn-sm px-1"),
         actionButton(ns("btnNavPrev"), NULL,
-          icon = icon("caret-left"), class = "btn btn-outline-secondary btn-sm px-1"),
+          icon = icon("caret-left"), class = "btn btn-primary btn-sm px-1"),
         div(
           class = "d-flex flex-column align-items-center",
           style = "min-width: 160px;",
@@ -154,11 +154,11 @@ mod_fs882_6x4_ui <- function(id) {
           tags$small(class = "text-body-secondary", textOutput(ns("navRecordCount"), inline = TRUE))
         ),
         actionButton(ns("btnNavNext"), NULL,
-          icon = icon("caret-right"), class = "btn btn-outline-secondary btn-sm px-1"),
+          icon = icon("caret-right"), class = "btn btn-primary btn-sm px-1"),
         actionButton(ns("btnNavLast"), NULL,
-          icon = icon("forward-step"), class = "btn btn-outline-secondary btn-sm px-1"),
+          icon = icon("forward-step"), class = "btn btn-primary btn-sm px-1"),
         actionButton(ns("btnNavNew"), NULL,
-          icon = icon("plus"), class = "btn btn-outline-success btn-sm px-1",
+          icon = icon("plus"), class = "btn btn-primary btn-sm px-1",
           title = "New record"),
         tags$div(class = "vr mx-1"),
         # -- Search (Access Find behaviour) --
@@ -166,17 +166,17 @@ mod_fs882_6x4_ui <- function(id) {
           class = "input-group input-group-sm", style = "width: 180px;",
           tags$input(type = "text", class = "form-control form-control-sm",
             id = ns("navSearchBox"), placeholder = "Search..."),
-          tags$button(class = "btn btn-outline-secondary btn-sm", type = "button",
+          tags$button(class = "btn btn-primary btn-sm", type = "button",
             id = ns("btnNavSearch"), icon("magnifying-glass"))
         ),
         tags$div(class = "vr mx-1"),
         # -- Tool buttons --
-        actionButton(ns("btnAudit"), "Audit", class = "btn btn-outline-secondary btn-sm"),
-        actionButton(ns("btnSuIntoEnv"), "SU Into Env", class = "btn btn-outline-secondary btn-sm"),
-        actionButton(ns("btnEnvIntoSu"), "Env Into SU", class = "btn btn-outline-secondary btn-sm"),
-        actionButton(ns("btnCreateSuFromFilter"), "Create SU From Filter", class = "btn btn-outline-secondary btn-sm"),
+        actionButton(ns("btnAudit"), "Audit", class = "btn btn-primary btn-sm"),
+        actionButton(ns("btnSuIntoEnv"), "SU Into Env", class = "btn btn-primary btn-sm"),
+        actionButton(ns("btnEnvIntoSu"), "Env Into SU", class = "btn btn-primary btn-sm"),
+        actionButton(ns("btnCreateSuFromFilter"), "Create SU From Filter", class = "btn btn-primary btn-sm"),
         tags$div(class = "vr mx-1"),
-        actionButton(ns("btnVegProfiling"), "Plot Profiling", class = "btn btn-outline-secondary btn-sm"),
+        actionButton(ns("btnVegProfiling"), "Plot Profiling", class = "btn btn-primary btn-sm"),
         tags$div(class = "vr mx-1"),
         # -- Save / Lock --
         checkboxInput(ns("optLockData"), "Lock data", value = FALSE, width = "auto"),
@@ -254,8 +254,8 @@ mod_fs882_6x4_ui <- function(id) {
             ),
             div(
               class = "d-flex flex-wrap gap-2 mt-2",
-              actionButton(ns("btnCopyToUserSU"), "Copy to Working Unit", class = "btn btn-outline-primary btn-sm"),
-              actionButton(ns("btnLoadMetadata"), "Edit Metadata", class = "btn btn-outline-primary btn-sm")
+              actionButton(ns("btnCopyToUserSU"), "Copy to Working Unit", class = "btn btn-primary btn-sm"),
+              actionButton(ns("btnLoadMetadata"), "Edit Metadata", class = "btn btn-primary btn-sm")
             )
           )
         ),
@@ -406,8 +406,8 @@ mod_fs882_6x4_ui <- function(id) {
               uiOutput(ns("site_picture")),
               div(
                 class = "d-flex flex-wrap gap-2 mt-2",
-                actionButton(ns("btnManagePictures"), "Pictures", class = "btn btn-outline-primary btn-sm"),
-                downloadButton(ns("dlGoogleEarth"), "Google Earth", class = "btn btn-outline-secondary btn-sm")
+                actionButton(ns("btnManagePictures"), "Pictures", class = "btn btn-primary btn-sm"),
+                downloadButton(ns("dlGoogleEarth"), "Google Earth", class = "btn btn-primary btn-sm")
               )
             )
           ),
@@ -434,10 +434,10 @@ mod_fs882_6x4_ui <- function(id) {
           textInput(ns("StrataCoverMoss"), "D"),
           div(
             class = "d-flex flex-wrap gap-1 align-items-end",
-            actionButton(ns("btnAddSpp"), "Add Spp", class = "btn btn-outline-primary btn-sm"),
-            actionButton(ns("btnCoverAndHeight"), "Cover & Height", class = "btn btn-outline-secondary btn-sm"),
-            actionButton(ns("btnAllowSmallEntry"), "Allow <0.1% Entry", class = "btn btn-outline-secondary btn-sm"),
-            actionButton(ns("btnCheckSppCodes"), "Check Spp Codes", class = "btn btn-outline-secondary btn-sm")
+            actionButton(ns("btnAddSpp"), "Add Spp", class = "btn btn-primary btn-sm"),
+            actionButton(ns("btnCoverAndHeight"), "Cover & Height", class = "btn btn-primary btn-sm"),
+            actionButton(ns("btnAllowSmallEntry"), "Allow <0.1% Entry", class = "btn btn-primary btn-sm"),
+            actionButton(ns("btnCheckSppCodes"), "Check Spp Codes", class = "btn btn-primary btn-sm")
           )
         ),
         layout_columns(
@@ -578,7 +578,7 @@ mod_fs882_6x4_ui <- function(id) {
             selected = as_text(config("Audit", "AuditStrength")),
             inline = TRUE
           ),
-          actionButton(ns("btnRestoreAudit"), "Restore selected", class = "btn btn-outline-secondary btn-sm")
+          actionButton(ns("btnRestoreAudit"), "Restore selected", class = "btn btn-primary btn-sm")
         ),
         card(
           card_header("Audit Trail"),
