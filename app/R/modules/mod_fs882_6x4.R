@@ -124,6 +124,19 @@ admin_tb <- function(con) {
   as.character(db_tb(con, "Sample_Admin", proj, prj = FALSE))
 }
 
+# -- inline UI helper --
+# Usage: inline_label(textInput, ns("StartDate"), label = "Yr.")
+inline_label <- function(fn, inputId, label, ...) {
+  div(
+    style = paste0("display: flex; align-items: center; gap: 4px;"),
+    tags$label(label, `for` = inputId, class = "control-label"),
+    div(
+      style = "flex: 1;",
+      fn(inputId = inputId, label = NULL, width = "100%", ...)
+    )
+  )
+}
+
 # ============================================================
 # UI
 # ============================================================
@@ -138,27 +151,22 @@ mod_fs882_6x4_ui <- function(id) {
     card_header(
       class = "d-flex flex-wrap align-items-center justify-content-between gap-2",
       uiOutput(ns("caption")),
+      h6(class = "mb-0", "Based on the 2015 Ecosystem Field Form (FS882)"),
       div(
         class = "d-flex flex-wrap gap-1 align-items-center",
         # -- Record navigator (Access record bar parity) --
         actionButton(ns("btnNavFirst"), NULL,
-          icon = icon("backward-step"), class = "btn btn-primary btn-sm px-1"),
+          icon = icon("backward-step"), class = "btn btn-outline-primary btn-sm px-2"),
         actionButton(ns("btnNavPrev"), NULL,
-          icon = icon("caret-left"), class = "btn btn-primary btn-sm px-1"),
-        div(
-          class = "d-flex flex-column align-items-center",
-          style = "min-width: 160px;",
-          selectizeInput(ns("navPlotPicker"), NULL, choices = NULL,
-            width = "160px",
-            options = list(placeholder = "Plot...")),
-          tags$small(class = "text-body-secondary", textOutput(ns("navRecordCount"), inline = TRUE))
-        ),
+          icon = icon("caret-left"), class = "btn btn-outline-primary btn-sm px-2"),
+        selectizeInput(ns("navPlotPicker"), NULL, choices = NULL, width = "100px", options = list(placeholder = "Plot...")),
+        tags$small(class = "text-body-secondary", textOutput(ns("navRecordCount"), inline = TRUE)),
         actionButton(ns("btnNavNext"), NULL,
-          icon = icon("caret-right"), class = "btn btn-primary btn-sm px-1"),
+          icon = icon("caret-right"), class = "btn btn-outline-primary btn-sm px-2"),
         actionButton(ns("btnNavLast"), NULL,
-          icon = icon("forward-step"), class = "btn btn-primary btn-sm px-1"),
+          icon = icon("forward-step"), class = "btn btn-outline-primary btn-sm px-2"),
         actionButton(ns("btnNavNew"), NULL,
-          icon = icon("plus"), class = "btn btn-primary btn-sm px-1",
+          icon = icon("plus"), class = "btn btn-outline-primary btn-sm px-2",
           title = "New record"),
         tags$div(class = "vr mx-1"),
         # -- Search (Access Find behaviour) --
@@ -166,28 +174,23 @@ mod_fs882_6x4_ui <- function(id) {
           class = "input-group input-group-sm", style = "width: 180px;",
           tags$input(type = "text", class = "form-control form-control-sm",
             id = ns("navSearchBox"), placeholder = "Search..."),
-          tags$button(class = "btn btn-primary btn-sm", type = "button",
+          tags$button(class = "btn btn-outline-primary btn-sm", type = "button",
             id = ns("btnNavSearch"), icon("magnifying-glass"))
         ),
         tags$div(class = "vr mx-1"),
         # -- Tool buttons --
-        actionButton(ns("btnAudit"), "Audit", class = "btn btn-primary btn-sm"),
-        actionButton(ns("btnSuIntoEnv"), "SU Into Env", class = "btn btn-primary btn-sm"),
-        actionButton(ns("btnEnvIntoSu"), "Env Into SU", class = "btn btn-primary btn-sm"),
-        actionButton(ns("btnCreateSuFromFilter"), "Create SU From Filter", class = "btn btn-primary btn-sm"),
+        actionButton(ns("btnAudit"), "Audit", class = "btn btn-outline-primary btn-sm"),
+        actionButton(ns("btnSuIntoEnv"), "SU Into Env", class = "btn btn-outline-primary btn-sm"),
+        actionButton(ns("btnEnvIntoSu"), "Env Into SU", class = "btn btn-outline-primary btn-sm"),
+        actionButton(ns("btnCreateSuFromFilter"), "Create SU From Filter", class = "btn btn-outline-primary btn-sm"),
         tags$div(class = "vr mx-1"),
-        actionButton(ns("btnVegProfiling"), "Plot Profiling", class = "btn btn-primary btn-sm"),
+        actionButton(ns("btnVegProfiling"), "Plot Profiling", class = "btn btn-outline-primary btn-sm"),
         tags$div(class = "vr mx-1"),
         # -- Save / Lock --
         checkboxInput(ns("optLockData"), "Lock data", value = FALSE, width = "auto"),
-        actionButton(ns("btnSaveRecord"), "Save", class = "btn btn-primary btn-sm")
+        actionButton(ns("btnSaveRecord"), "Save", class = "btn-success btn-sm")
       )
     ),
-
-    # Disable bslib fill-shrink inside tab panes so form fields use natural height
-    tags$style(HTML("
-      .tab-pane .html-fill-item { flex: 0 0 auto !important; }
-    ")),
 
     # JS bridge: wire raw-HTML search box + button into Shiny inputs
     tags$script(HTML(sprintf("
@@ -210,360 +213,400 @@ mod_fs882_6x4_ui <- function(id) {
     ", ns("")))),
 
     # -- Tabs --
-    tags$div(class = "vpro-form-sm",
     navset_card_tab(
       id = ns("tabPages"),
 
       # ---- Site tab ----
       nav_panel("Site", class = "p-2",
         layout_columns(
-          col_widths = c(3, 2, 2, 2, 3),
-          class = "mb-3",
-          textInput(ns("PlotNumber"), "Plot Number"),
-          textInput(ns("FieldNumber"), "Field No."),
-          textInput(ns("Date"), "Date"),
-          textInput(ns("StartDate"), "Yr."),
-          textInput(ns("SiteSurveyor"), "Surveyor")
-        ),
-
-        layout_columns(
-          col_widths = c(5, 4, 3),
-          class = "mb-3 align-items-end",
-          selectInput(ns("ProjectID"), "Project ID", choices = NULL),
-          div(),
-          radioButtons(ns("optProjectID"), "Project Source",
-            choices = c("Env" = "1", "Master" = "2"),
-            selected = as_text(config("Current", "ProjectIDSource") %||% "1"),
-            inline = TRUE
-          )
-        ),
-
-        card(
-          class = "mb-3",
-          card_header("Unit Assignment"),
-          card_body(
-            layout_columns(
-              col_widths = c(4, 4, 4),
-              selectInput(ns("BECSiteUnit"), "BEC Master", choices = NULL),
-              selectInput(ns("UserSiteUnit"), "Working Unit", choices = NULL),
-              radioButtons(ns("optAssignedSuSource"), "Assigned SU Source",
-                choices = c("Env" = "1", "Master" = "2", "SU Tbl" = "3"),
-                selected = as_text(config("Current", "AssignedSuSource")),
-                inline = TRUE
+          col_widths = c(9, 3),
+          layout_columns(
+            col_widths = c(3, 3, 6, 12, 12, 3, 9, 12, 12),
+            # BEC Master (3)
+            card(
+              card_header("BEC Master"),
+              layout_columns(
+                col_widths = c(12, 12),
+                selectInput(ns("BECSiteUnit"), label = NULL, choices = NULL),
+                actionButton(ns("btnCopyToUserSU"), "Copy to Working Unit", class = "btn btn-primary btn-sm")
               )
             ),
-            div(
-              class = "d-flex flex-wrap gap-2 mt-2",
-              actionButton(ns("btnCopyToUserSU"), "Copy to Working Unit", class = "btn btn-primary btn-sm"),
-              actionButton(ns("btnLoadMetadata"), "Edit Metadata", class = "btn btn-primary btn-sm")
-            )
-          )
-        ),
-
-        card(
-          class = "mb-3",
-          card_header("Location"),
-          card_body(
-            textAreaInput(ns("Location"), "General Location", width = "100%", rows = 2),
-            layout_columns(
-              col_widths = c(4, 2, 2, 2, 2),
-              selectInput(ns("FSRegionDistrict"), "Forest Region/Dist.", choices = NULL),
-              textInput(ns("NtsMapSheet"), "Map Sheet"),
-              textInput(ns("UTMZone"), "UTM Zone"),
-              textInput(ns("UTMEasting"), "Easting"),
-              textInput(ns("UTMNorthing"), "Northing")
-            ),
-            layout_columns(
-              col_widths = c(2, 2, 2, 6),
-              textInput(ns("LocationAccuracy"), "Accur. (m)"),
-              textInput(ns("XCoord"), "X Co-ord."),
-              textInput(ns("YCoord"), "Y Co-ord"),
-              div()
-            ),
-            layout_columns(
-              col_widths = c(2, 3, 3, 4),
-              textInput(ns("AirPhotoNum"), "Air Photo No."),
-              div(),
-              textInput(ns("Photo"), "Photo"),
-              radioButtons(ns("optCoordMethod"), "Coordinate Display",
-                choices = c("D.d" = "0", "DM.m" = "1", "DMS.s" = "2"),
-                selected = as_text(config("Current", "CoordMethod")),
-                inline = TRUE
+            # Working Unit (3)
+            card(
+              card_header("Working Unit"),
+              card_body(
+                layout_columns(
+                  col_widths = c(12, 12),
+                  class = "mb-2",
+                  selectInput(ns("UserSiteUnit"), label = NULL, choices = NULL),
+                  radioButtons(ns("optAssignedSuSource"), label = NULL,
+                    choices = c("Env" = "1", "Master" = "2", "SU Tbl" = "3"),
+                    selected = as_text(config("Current", "AssignedSuSource")),
+                    inline = TRUE
+                  )
+                )
               )
             ),
-            # Decimal degrees row
-            uiOutput(ns("coord_dd_row")),
-            # DM row
-            uiOutput(ns("coord_dm_row")),
-            # DMS row
-            uiOutput(ns("coord_dms_row"))
-          )
-        ),
-
-        card(
-          class = "mb-3",
-          card_header("Site Information"),
-          card_body(
-            layout_columns(
-              col_widths = c(3, 3, 2, 2, 2),
-              selectInput(ns("Ecosection"), "Ecosection", choices = NULL),
-              textInput(ns("PlotRepresenting"), "Plot Representing"),
-              selectInput(ns("Zone"), "Zone", choices = NULL),
-              selectInput(ns("SubZone"), "Subzone", choices = NULL),
-              selectInput(ns("SiteSeries"), "Site Series", choices = NULL)
-            ),
-            layout_columns(
-              col_widths = c(3, 3, 3, 3),
-              selectInput(ns("RealmClass"), "Realm/Class", choices = NULL),
-              selectInput(ns("TransDistrib"), "Transition/Distrib.", choices = NULL),
-              textInput(ns("MapUnit"), "Map Unit"),
-              selectInput(ns("SuccessionalStatus"), "Successional Status", choices = NULL)
-            ),
-            layout_columns(
-              col_widths = c(3, 3, 3, 3),
-              selectInput(ns("MoistureRegime"), "Moisture Regime", choices = NULL),
-              selectInput(ns("NutrientRegime"), "Nutrient Regime", choices = NULL),
-              selectInput(ns("StructuralStage"), "Structural Stage", choices = NULL),
-              textInput(ns("StandAge"), "Stand Age")
-            ),
-            layout_columns(
-              col_widths = c(2, 2, 2, 3, 3),
-              textInput(ns("Elevation"), "Elevation (m)"),
-              textInput(ns("SlopeGradient"), "Slope (%)"),
-              textInput(ns("Aspect"), "Aspect"),
-              selectInput(ns("MesoSlopePosition"), "Meso Slope Pos.", choices = NULL),
-              selectInput(ns("SurfaceShape"), "Surface Shape", choices = NULL)
-            ),
-            layout_columns(
-              col_widths = c(4, 4, 4),
-              selectInput(ns("SurfaceTopographyType"), "Microtop. type", choices = NULL),
-              selectInput(ns("SurfaceTopographySize"), "Microtop. size", choices = NULL),
-              div()
-            )
-          )
-        ),
-
-        card(
-          class = "mb-3",
-          card_header("Quality / Disturbance / Exposure"),
-          card_body(
-            # Data Quality — Access: "Data Quality" label + Site/Veg/Soil
-            div(class = "d-flex align-items-end gap-3 mb-2",
-              tags$span(class = "fw-semibold text-nowrap form-label-sm",
-                style = "width:7rem;padding-bottom:.35rem;", "Data Quality"),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("SitePlotQuality"), "Site", choices = NULL, width = "100%")),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("VegPlotQuality"), "Veg", choices = NULL, width = "100%")),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("SoilPlotQuality"), "Soil", choices = NULL, width = "100%"))
-            ),
-            # Exposure Type — Access: "Exposure Type" label + Exposure1/Exposure2
-            div(class = "d-flex align-items-end gap-3 mb-2",
-              tags$span(class = "fw-semibold text-nowrap form-label-sm",
-                style = "width:7rem;padding-bottom:.35rem;", "Exposure Type"),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("Exposure1"), NULL, choices = NULL, width = "100%")),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("Exposure2"), NULL, choices = NULL, width = "100%"))
-            ),
-            # Site Disturbance — Access: "Site Disturbance" label + 3 dropdowns
-            div(class = "d-flex align-items-end gap-3",
-              tags$span(class = "fw-semibold text-nowrap form-label-sm",
-                style = "width:7rem;padding-bottom:.35rem;", "Site Disturbance"),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("SiteDisturbance1"), NULL, choices = NULL, width = "100%")),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("SiteDisturbance2"), NULL, choices = NULL, width = "100%")),
-              div(style = "flex:0 0 auto;width:7.5rem;",
-                selectInput(ns("SiteDisturbance3"), NULL, choices = NULL, width = "100%"))
-            )
-          )
-        ),
-
-        card(
-          class = "mb-3",
-          card_header("Substrate"),
-          card_body(
-            layout_columns(
-              col_widths = c(2, 2, 2, 2, 2, 2),
-              textInput(ns("SubstrateOrganicMatter"), "Org. Matter"),
-              textInput(ns("SubstrateDecWood"), "Dec. Wood"),
-              textInput(ns("SubstrateBedRock"), "Bedrock"),
-              textInput(ns("SubstrateRocks"), "Rocks"),
-              textInput(ns("SubstrateMineralSoil"), "Mineral Soil"),
-              textInput(ns("SubstrateWater"), "Water")
-            )
-          )
-        ),
-
-        layout_columns(
-          col_widths = c(4, 8),
-          class = "mb-3",
-          card(
-            card_header("Site Diagram / Picture"),
-            card_body(
-              uiOutput(ns("site_picture")),
-              div(
-                class = "d-flex flex-wrap gap-2 mt-2",
-                actionButton(ns("btnManagePictures"), "Pictures", class = "btn btn-primary btn-sm"),
-                downloadButton(ns("dlGoogleEarth"), "Google Earth", class = "btn btn-primary btn-sm")
+            # ProjectID (5)
+            card(
+              card_header("Project"),
+              card_body(
+                layout_columns(
+                  class = "mb-0",
+                  col_widths = c(9, 3, 6, 6),
+                  inline_label(selectInput, ns("ProjectID"), label = "Project ID", choices = NULL),
+                  inline_label(textInput, ns("StartDate"), label = "Yr."),
+                  radioButtons(
+                    ns("optProjectID"),
+                    label = NULL,
+                    choices = c("Env" = "1", "Master" = "2"),
+                    selected = as_text(config("Current", "ProjectIDSource") %||% "1"),
+                    inline = TRUE
+                  ),
+                  actionButton(ns("btnLoadMetadata"), "Edit Project Metadata", class = "btn btn-primary btn-sm")
+                )
               )
-            )
+            ),
+            # Location (12)
+            card(
+              card_header("Location"),
+              card_body(
+                layout_columns(
+                  col_widths = c(12, 3, 3, 1, 2, 2, 1, 2, 1, 1, 7, 1),
+                  textAreaInput(ns("Location"), "General Location", rows = 2),
+                  selectInput(ns("FSRegionDistrict"), "Forest Region/Dist.", choices = NULL),
+                  textInput(ns("NtsMapSheet"), "Map Sheet"),
+                  textInput(ns("UTMZone"), "UTM Zone"),
+                  textInput(ns("UTMEasting"), "Easting"),
+                  textInput(ns("UTMNorthing"), "Northing"),
+                  textInput(ns("LocationAccuracy"), "Accur. (m)"),
+                  textInput(ns("AirPhotoNum"), "Air Photo No."),
+                  textInput(ns("XCoord"), "X Co-ord."),
+                  textInput(ns("YCoord"), "Y Co-ord"),
+                  layout_columns(
+                    gap = "0.06rem",
+                    col_widths = c(12, 12),
+                    inline_label(
+                      radioButtons,
+                      ns("optCoordMethod"),
+                      label = "Coordinate Method",
+                      choices = c("D.d" = "0", "DM.m" = "1", "DMS.s" = "2"),
+                      selected = as_text(config("Current", "CoordMethod")),
+                      inline = TRUE
+                    ),
+                    uiOutput(ns("coord_row"))
+                  ),
+                  selectInput(ns("Ecosection"), "Ecosection", choices = NULL)
+                )
+              )
+            ),
+            # Site Information (12)
+            card(
+              card_header("Site Information"),
+              card_body(
+                layout_columns(
+                  # Row 1: Plot Representing (12)
+                  # Row 2: BEC Unit Zone+Sub (3) | SiteSeries (2) | RealmClass (2) | TransDistrib (3) | MapUnit (2)
+                  # Row 3: MoistureRegime (3) | NutrientRegime (2) | SuccessionalStatus (2) | StructuralStage (3) | StandAge (2)
+                  # Row 4: Elevation (2) | Slope (1) | Aspect (1) | MesoSlopePos (2) | SurfaceShape (2) | MicrotopType (2) | MicrotopSize (2)
+                  col_widths = c(12, 3, 2, 2, 3, 2, 3, 2, 2, 3, 2, 2, 1, 1, 2, 2, 2, 2),
+                  # Row 1
+                  textAreaInput(ns("PlotRepresenting"), "Plot Representing", width = "100%", rows = 2),
+                  # Row 2
+                  div(class = "shiny-input-container",
+                    tags$label("Biogeoclimatic Unit", class = "control-label"),
+                    layout_columns(
+                      gap = "0.1rem",
+                      col_widths = c(7, 5),
+                      selectInput(ns("Zone"), label = NULL, choices = NULL),
+                      selectInput(ns("SubZone"), label = NULL, choices = NULL)
+                    )
+                  ),
+                  selectInput(ns("SiteSeries"), "Site Series", choices = NULL),
+                  selectInput(ns("RealmClass"), "Realm/Class", choices = NULL),
+                  selectInput(ns("TransDistrib"), "Transition/Distrib.", choices = NULL),
+                  textInput(ns("MapUnit"), "Map Unit"),
+                  # Row 3
+                  selectInput(ns("MoistureRegime"), "Moisture Regime", choices = NULL),
+                  selectInput(ns("NutrientRegime"), "Nutrient Regime", choices = NULL),
+                  selectInput(ns("SuccessionalStatus"), "Successional Status", choices = NULL),
+                  selectInput(ns("StructuralStage"), "Structural Stage", choices = NULL),
+                  textInput(ns("StandAge"), "Stand Age"),
+                  # Row 4
+                  textInput(ns("Elevation"), "Elevation (m)"),
+                  textInput(ns("SlopeGradient"), "Slope (%)"),
+                  textInput(ns("Aspect"), "Aspect"),
+                  selectInput(ns("MesoSlopePosition"), "Meso Slope Pos.", choices = NULL),
+                  selectInput(ns("SurfaceShape"), "Surface Shape", choices = NULL),
+                  selectInput(ns("SurfaceTopographyType"), "Microtop. type", choices = NULL),
+                  selectInput(ns("SurfaceTopographySize"), "Microtop. size", choices = NULL)
+                )
+              )
+            ),
+            # Data Quality (3)
+            card(
+              card_header("Data Quality"),
+              card_body(
+                layout_columns(
+                  col_widths = c(2, 10, 2, 10, 2, 10),
+                  tags$label("Site", class = "control-label"),
+                  selectInput(ns("SitePlotQuality"), label = NULL, choices = NULL),
+                  tags$label("Veg", class = "control-label"),
+                  selectInput(ns("VegPlotQuality"), label = NULL, choices = NULL),
+                  tags$label("Soil", class = "control-label"),
+                  selectInput(ns("SoilPlotQuality"), label = NULL, choices = NULL)
+                )
+              )
+            ),
+            # Substrate % (9)
+            card(
+              card_header("Substrate %"),
+              card_body(
+                layout_columns(
+                  col_widths = c(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3),
+                  tags$label("Org. Matter", class = "control-label"),
+                  textInput(ns("SubstrateOrganicMatter"), label = NULL),
+                  tags$label("Rocks", class = "control-label"),
+                  textInput(ns("SubstrateRocks"), label = NULL),
+                  tags$label("Dec. Wood", class = "control-label"),
+                  textInput(ns("SubstrateDecWood"), label = NULL),
+                  tags$label("Mineral Soil", class = "control-label"),
+                  textInput(ns("SubstrateMineralSoil"), label = NULL),
+                  tags$label("Bedrock", class = "control-label"),
+                  textInput(ns("SubstrateBedRock"), label = NULL),
+                  tags$label("Water", class = "control-label"),
+                  textInput(ns("SubstrateWater"), label = NULL)
+                )
+              )
+            ),
+            # Field Notes (12)
+            card(
+              card_header("Field Notes"),
+              card_body(
+                textAreaInput(ns("SiteNotes"), NULL, width = "100%", rows = 3)
+              )
+            ),
+            # Office Notes (12)
+            card(
+              card_header("Office Notes"),
+              card_body(
+                textAreaInput(ns("OfficeNotes"), NULL, width = "100%", rows = 3)
+              )
+            ),
           ),
-          card(
-            card_header("Notes"),
-            card_body(
-              textAreaInput(ns("SiteNotes"), "Field Notes", width = "100%", rows = 4),
-              textAreaInput(ns("OfficeNotes"), "Office Notes", width = "100%", rows = 3)
-            )
+          layout_columns(
+            col_widths = c(7, 5, 7, 5, 12, 12, 7, 5, 12, 12),
+            # Row 1
+            dateInput(ns("Date"), "Date"),
+            textInput(ns("PlotNumber"), "Plot Number"),
+            # Row 2
+            textInput(ns("SiteSurveyor"), "Surveyor"),
+            textInput(ns("FieldNumber"), "Field No."),
+            # Row 3: Site Diagram / Picture (full width)
+            card(
+              card_header("Site Diagram / Picture"),
+              card_body(
+                uiOutput(ns("site_picture")),
+                div(
+                  class = "d-flex flex-wrap gap-2 mt-2",
+                  actionButton(ns("btnManagePictures"), "Picture Manager", class = "btn btn-primary btn-sm")
+                )
+              )
+            ),
+            # Row 4: Photo
+            textInput(ns("Photo"), "Photo"),
+            # Row 5: Site Disturbance (7) | Exposure Type (5)
+            div(class = "shiny-input-container",
+              tags$label("Site Disturbance", class = "control-label"),
+              layout_columns(
+                gap = "0.1rem",
+                col_widths = c(4, 4, 4),
+                selectInput(ns("SiteDisturbance1"), label = NULL, choices = NULL),
+                selectInput(ns("SiteDisturbance2"), label = NULL, choices = NULL),
+                selectInput(ns("SiteDisturbance3"), label = NULL, choices = NULL)
+              )
+            ),
+            div(class = "shiny-input-container",
+              tags$label("Exposure Type", class = "control-label"),
+              layout_columns(
+                gap = "0.1rem",
+                col_widths = c(6, 6),
+                selectInput(ns("Exposure1"), label = NULL, choices = NULL),
+                selectInput(ns("Exposure2"), label = NULL, choices = NULL)
+              )
+            ),
+            # Row 6: Entered By
+            textInput(ns("EnteredBy"), "Entered by", width = "100%"),
+            # Row 7: Updated From Cards
+            checkboxInput(ns("UpdatedFromCards"), "Updated From Cards", value = FALSE)
           )
         )
       ),
 
       # ---- Vegetation tab ----
       nav_panel("Vegetation", class = "p-2",
+        # Header bar: Spp.Complete | % Cover label | cover inputs | Surveyor | Find Plot + plot#
         layout_columns(
-          col_widths = c(2, 2, 1, 1, 1, 1, 4),
-          class = "mb-3 align-items-end",
-          textOutput(ns("VegPlotNumber")),
+          col_widths = c(2, 1, 1, 1, 1, 1, 3, 2),
+          class = "mb-2 align-items-end",
+          checkboxInput(ns("SpeciesListComplete"), "Spp. List Complete?", value = FALSE),
+          tags$div(class = "fw-semibold text-center", style = "padding-bottom:.35rem;", HTML("%<br>Cover")),
+          textInput(ns("StrataCoverTree"),  "Tree(A)"),
+          textInput(ns("StrataCoverShrub"), "Shrub(B)"),
+          textInput(ns("StrataCoverHerb"),  "Herb(C)"),
+          textInput(ns("StrataCoverMoss"),  "Moss/Lichen(D)"),
           textInput(ns("VegSurveyor"), "Surveyor"),
-          textInput(ns("StrataCoverTree"), "A"),
-          textInput(ns("StrataCoverShrub"), "B"),
-          textInput(ns("StrataCoverHerb"), "C"),
-          textInput(ns("StrataCoverMoss"), "D"),
           div(
-            class = "d-flex flex-wrap gap-1 align-items-end",
-            actionButton(ns("btnAddSpp"), "Add Spp", class = "btn btn-primary btn-sm"),
-            actionButton(ns("btnCoverAndHeight"), "Cover & Height", class = "btn btn-primary btn-sm"),
-            actionButton(ns("btnAllowSmallEntry"), "Allow <0.1% Entry", class = "btn btn-primary btn-sm"),
-            actionButton(ns("btnCheckSppCodes"), "Check Spp Codes", class = "btn btn-primary btn-sm")
+            class = "d-flex gap-2 align-items-end",
+            actionButton(ns("btnFindPlot"), "Find Plot", class = "btn btn-outline-primary btn-sm"),
+            tags$div(class = "fw-semibold", textOutput(ns("VegPlotNumber"), inline = TRUE))
           )
         ),
+        # Three species tables
         layout_columns(
           col_widths = c(5, 3, 4),
+          class = "mb-2",
           card(
-            card_header("Tree & Shrub (A/B)"),
             card_body(DT::DTOutput(ns("dt_veg_a")))
           ),
           card(
-            card_header("Herb (C)"),
             card_body(DT::DTOutput(ns("dt_veg_c")))
           ),
           card(
-            card_header("Moss / Lichen (D)"),
             card_body(DT::DTOutput(ns("dt_veg_d")))
           )
         ),
-        layout_columns(
-          col_widths = c(3, 9),
-          checkboxInput(ns("SpeciesListComplete"), "Spp. List Complete?", value = FALSE),
-          textAreaInput(ns("VegNotes"), "Notes", width = "100%", rows = 3)
+        # Vegetation Notes
+        textAreaInput(ns("VegNotes"), "Vegetation Notes", width = "100%", rows = 3),
+        # Bottom action buttons
+        div(
+          class = "d-flex flex-wrap gap-2 mt-1",
+          actionButton(ns("btnCheckSppCodes"),   "Check Spp Codes",    class = "btn btn-primary btn-sm"),
+          actionButton(ns("btnAddSpp"),           "Add Species",         class = "btn btn-primary btn-sm"),
+          actionButton(ns("btnCoverAndHeight"),   "Cover & Height",      class = "btn btn-primary btn-sm"),
+          actionButton(ns("btnAllowSmallEntry"),  "Allow <0.1% Entry",   class = "btn btn-primary btn-sm")
         )
       ),
 
       # ---- Veg Other tab (Access USysVegOther subform) ----
       nav_panel("Veg Other", class = "p-2",
-        card(
-          card_header("Vegetation Other Attributes"),
-          card_body(DT::DTOutput(ns("dt_veg_other")))
+        layout_columns(
+          col_widths = c(10, 2),
+          card(
+            card_body(DT::DTOutput(ns("dt_veg_other")))
+          ),
+          card(
+            card_header("Column Legend"),
+            card_body(
+              tags$p(tags$b("LL"), " = Arboreal Lichen loading code"),
+              tags$p(tags$b("AF"), " = Available Forage Code"),
+              tags$p(tags$b("DC"), " = Distribution Code"),
+              tags$p(tags$b("UT"), " = Utilization Code"),
+              tags$p(tags$b("VI"), " = Vigour Code"),
+              tags$p(tags$b("PV"), " = Phenology Code - Vegetative"),
+              tags$p(tags$b("PG"), " = Phenology Code - Generative"),
+              tags$p(tags$b("FFA"), " = Fruit/Flower abundance code")
+            )
+          )
         )
       ),
 
       # ---- Soil / Terrain tab ----
       nav_panel("Soil / Terrain", class = "p-2",
         card(
-          class = "mb-3",
-          card_header("Soil Header"),
+          class = "mb-2",
           card_body(
-            # Row 1: Surveyor + Bedrock Geology x3 + Coarse Frag Lith x3
+            class = "py-2",
+            # --- GEOLOGY: Bedrock Type x3 | Coarse Frag. Lith. x3 | Surveyor ---
             layout_columns(
-              col_widths = c(3, 3, 3, 3),
-              textInput(ns("SoilSurveyor"), "Surveyor(s)"),
-              selectInput(ns("BedrockGeology1"), "Bedrock Type 1", choices = NULL),
-              selectInput(ns("BedrockGeology2"), "Bedrock Type 2", choices = NULL),
-              selectInput(ns("BedrockGeology3"), "Bedrock Type 3", choices = NULL)
+              col_widths = c(4, 4, 4),
+              div(
+                tags$label("Bedrock Type", class = "form-label fw-semibold"),
+                layout_columns(
+                  col_widths = c(4, 4, 4),
+                  selectInput(ns("BedrockGeology1"), NULL, choices = NULL),
+                  selectInput(ns("BedrockGeology2"), NULL, choices = NULL),
+                  selectInput(ns("BedrockGeology3"), NULL, choices = NULL)
+                )
+              ),
+              div(
+                tags$label("Coarse Frag. Lith.", class = "form-label fw-semibold"),
+                layout_columns(
+                  col_widths = c(4, 4, 4),
+                  selectInput(ns("CoarseFragLith1"), NULL, choices = NULL),
+                  selectInput(ns("CoarseFragLith2"), NULL, choices = NULL),
+                  selectInput(ns("CoarseFragLith3"), NULL, choices = NULL)
+                )
+              ),
+              textInput(ns("SoilSurveyor"), "SURVEYOR(S)")
             ),
+            # --- TERRAIN: Surface row ---
             layout_columns(
               col_widths = c(3, 3, 3, 3),
+              selectInput(ns("TerrainTextureSurf"),       "Surface Texture 1",      choices = NULL),
+              selectInput(ns("SurficialMaterialSurf"),    "Surficial Material 1",   choices = NULL),
+              selectInput(ns("SurfaceExpSurf"),           "Surface Expression 1",   choices = NULL),
+              selectInput(ns("GeoMorProSurf"),            "Geomorph. Process 1",    choices = NULL)
+            ),
+            # --- TERRAIN: Sub-surface row ---
+            layout_columns(
+              col_widths = c(3, 3, 3, 3),
+              selectInput(ns("TerrainTextureSubSurf"),    "Surface Texture 2",      choices = NULL),
+              selectInput(ns("SurficialMaterialSubSurf"), "Surficial Material 2",   choices = NULL),
+              selectInput(ns("SurfaceExpSubSurf"),        "Surface Expression 2",   choices = NULL),
+              selectInput(ns("GeoMorProSubSurf"),         "Geomorph. Process 2",    choices = NULL)
+            ),
+            # --- SOIL CLASSIFICATION + HUMUS FORM + HYDROGEO ---
+            layout_columns(
+              col_widths = c(2, 2, 2, 1, 1, 2, 2),
+              selectInput(ns("SoilClassSubGroup"),  "Soil Subgroup",    choices = NULL),
+              selectInput(ns("SoilClassGroup"),     "Great Group",      choices = NULL),
+              selectInput(ns("HumusForm"),          "Humus Form",       choices = NULL),
+              selectInput(ns("HumusFormPhase"),     "Phase",            choices = NULL),
+              textInput(ns("HumusThickness"),       "Thickness (cm)"),
+              selectInput(ns("HydroGeoSystem"),     "Hydrogeo. Sys.",   choices = NULL),
+              selectInput(ns("HydroGeoSubSystem"),  "Subsys.",          choices = NULL)
+            ),
+            # --- ROOTING + ROOT RESTRICTING + WATER SOURCE + DRAINAGE ---
+            layout_columns(
+              col_widths = c(2, 2, 2, 3, 3),
+              textInput(ns("RootingDepth"),         "Rooting Depth (cm)"),
+              selectInput(ns("RootRestrictingType"),"Root Rest. Type",  choices = NULL),
               div(),
-              selectInput(ns("CoarseFragLith1"), "Coarse Frag. Lith. 1", choices = NULL),
-              selectInput(ns("CoarseFragLith2"), "Coarse Frag. Lith. 2", choices = NULL),
-              selectInput(ns("CoarseFragLith3"), "Coarse Frag. Lith. 3", choices = NULL)
+              selectInput(ns("WaterSource"),        "Water Source",     choices = NULL),
+              selectInput(ns("SoilDrainage"),       "Drainage Class",   choices = NULL)
             ),
-            # Row 2: Classification + Humus
-            layout_columns(
-              col_widths = c(3, 3, 2, 2, 2),
-              selectInput(ns("SoilClassSubGroup"), "Soil Subgroup", choices = NULL),
-              selectInput(ns("SoilClassGroup"), "Great Group", choices = NULL),
-              selectInput(ns("HumusForm"), "Humus Form", choices = NULL),
-              selectInput(ns("HumusFormPhase"), "Phase", choices = NULL),
-              textInput(ns("HumusThickness"), "Thickness (cm)")
-            ),
-            # Row 3: Drainage + Rooting + Seepage + Flooding
+            # --- R.Z. PARTICLE SIZE + LAYER DEPTH + SEEPAGE + FLOODING ---
             layout_columns(
               col_widths = c(2, 2, 2, 2, 2, 2),
-              selectInput(ns("SoilDrainage"), "Drainage", choices = NULL),
-              textInput(ns("RootingDepth"), "Rooting Depth (cm)"),
-              selectInput(ns("RootRestrictingType"), "Root Rest. Type", choices = NULL),
-              textInput(ns("RootRestrictingDepth"), "Root Rest. Depth (cm)"),
-              selectInput(ns("RootZoneParticleSize"), "R.Z. Particle Size", choices = NULL),
-              textInput(ns("SeepageDepth"), "Seepage (cm)")
-            ),
-            layout_columns(
-              col_widths = c(3, 3, 3, 3),
-              selectInput(ns("WaterSource"), "Water Source", choices = NULL),
-              selectInput(ns("HydroGeoSystem"), "Hydrogeo System", choices = NULL),
-              selectInput(ns("HydroGeoSubSystem"), "Hydrogeo Subsystem", choices = NULL),
-              div(
-                selectInput(ns("FloodingRegimeFreq"), "Flood Freq.", choices = NULL),
-                selectInput(ns("FloodingRegimeDur"), "Flood Duration", choices = NULL)
-              )
+              selectInput(ns("RootZoneParticleSize"),  "R.Z. Particle Size",  choices = NULL),
+              textInput(ns("RootRestrictingDepth"),    "Layer Depth (cm)"),
+              textInput(ns("SeepageDepth"),            "Seepage (cm)"),
+              selectInput(ns("FloodingRegimeFreq"),    "Flood Freq.",         choices = NULL),
+              selectInput(ns("FloodingRegimeDur"),     "Duration",            choices = NULL),
+              div()
             )
           )
         ),
+        # --- ORGANIC HORIZONS / LAYERS ---
         card(
-          class = "mb-3",
-          card_header("Terrain"),
-          card_body(
-            # Surface terrain
-            layout_columns(
-              col_widths = c(3, 3, 3, 3),
-              selectInput(ns("TerrainTextureSurf"), "Surface Texture", choices = NULL),
-              selectInput(ns("SurficialMaterialSurf"), "Surficial Material", choices = NULL),
-              selectInput(ns("SurfaceExpSurf"), "Surface Expression", choices = NULL),
-              selectInput(ns("GeoMorProSurf"), "Geomorph. Process", choices = NULL)
-            ),
-            # Sub-surface terrain
-            tags$small(class = "text-body-secondary mt-1 d-block", "Sub-surface"),
-            layout_columns(
-              col_widths = c(3, 3, 3, 3),
-              selectInput(ns("TerrainTextureSubSurf"), "SubSurf Texture", choices = NULL),
-              selectInput(ns("SurficialMaterialSubSurf"), "SubSurf Material", choices = NULL),
-              selectInput(ns("SurfaceExpSubSurf"), "SubSurf Expression", choices = NULL),
-              selectInput(ns("GeoMorProSubSurf"), "SubSurf Geomorph.", choices = NULL)
-            )
-          )
+          class = "mb-2",
+          card_header("Organic Horizons / Layers"),
+          card_body(rhandsontable::rHandsontableOutput(ns("hot_humus")))
         ),
-        layout_columns(
-          col_widths = c(6, 6),
-          class = "mb-3",
-          card(
-            card_header("Organic Horizons (Humus)"),
-            card_body(rhandsontable::rHandsontableOutput(ns("hot_humus")))
-          ),
-          card(
-            card_header("Mineral Horizons"),
-            card_body(rhandsontable::rHandsontableOutput(ns("hot_mineral")))
-          )
+        # --- MINERAL HORIZONS / LAYERS ---
+        card(
+          class = "mb-2",
+          card_header("Mineral Horizons / Layers"),
+          card_body(rhandsontable::rHandsontableOutput(ns("hot_mineral")))
         ),
-        textAreaInput(ns("SoilNotes"), "Notes", width = "100%", rows = 3)
+        textAreaInput(ns("SoilNotes"), "Soil Notes", width = "100%", rows = 3)
       ),
 
-      # ---- Other tab ----
+      # ---- Other tab (Access: User Defined Data subform) ----
       nav_panel("Other", class = "p-2",
         card(
-          card_header("Other Data"),
+          card_header("User Defined Data"),
           card_body(DT::DTOutput(ns("dt_other")))
         )
       ),
@@ -581,13 +624,11 @@ mod_fs882_6x4_ui <- function(id) {
           actionButton(ns("btnRestoreAudit"), "Restore selected", class = "btn btn-primary btn-sm")
         ),
         card(
-          card_header("Audit Trail"),
+          card_header("AUDIT"),
           card_body(DT::DTOutput(ns("dt_audit")))
         )
       )
-    ),
-
-  )
+    )
   ) # end vpro-form-sm wrapper
 }
 
@@ -686,46 +727,37 @@ mod_fs882_6x4_server <- function(id, state, con) {
 
     # -- Caption reflects Access Form_Open: "Project: X / SU Table: Y" --
     output$caption <- renderUI({
-      project  <- config("Current", "CurrProject")  %||% "None"
-      su_table <- config("Current", "CurrPlotlist") %||% "None"
+      project  <- state$CurrProject %||% "None"
+      su_table <- state$PrefSUTable %||% "None"
       tags$div(
         tags$h6(class = "mb-0", sprintf("Project: %s / SU Table: %s", project, su_table)),
-        tags$small(class = "text-body-secondary", paste("Plot:", rv$current_plot %||% "\u2014"))
       )
     })
 
     # Method: 0 = D.d, 1 = DM.m, 2 = DMS.s
-    output$coord_dd_row <- renderUI({
-      req(input$optCoordMethod == "0")
-      layout_columns(
-        col_widths = c(4, 4, 4),
-        textInput(ns("Latitude"), "Latitude"),
-        textInput(ns("Longitude"), "Longitude"),
-        div()
-      )
-    })
-
-    output$coord_dm_row <- renderUI({
-      req(input$optCoordMethod == "1")
-      layout_columns(
-        col_widths = c(3, 3, 3, 3),
-        textInput(ns("LatD2"), "Lat D"),
-        textInput(ns("LatMD"), "Lat M.m"),
-        textInput(ns("LonD2"), "Lon D"),
-        textInput(ns("LonMD"), "Lon M.m")
-      )
-    })
-
-    output$coord_dms_row <- renderUI({
-      req(input$optCoordMethod == "2")
-      layout_columns(
-        col_widths = c(2, 2, 2, 2, 2, 2),
-        textInput(ns("LatD"), "Lat D"),
-        textInput(ns("LatM"), "Lat M"),
-        textInput(ns("LatS"), "Lat S"),
-        textInput(ns("LonD"), "Lon D"),
-        textInput(ns("LonM"), "Lon M"),
-        textInput(ns("LonS"), "Lon S")
+    output$coord_row <- renderUI({
+      switch(input$optCoordMethod,
+        "0" = layout_columns(
+          col_widths = c(6,6),
+          inline_label(textInput, ns("Latitude"), "Latitude"),
+          inline_label(textInput, ns("Longitude"), "Longitude")
+        ),
+        "1" = layout_columns(
+          col_widths = c(3, 3, 3, 3),
+          inline_label(textInput, ns("LatD2"), "Lat D"),
+          inline_label(textInput, ns("LatMD"), "Lat M.m"),
+          inline_label(textInput, ns("LonD2"), "Lon D"),
+          inline_label(textInput, ns("LonMD"), "Lon M.m")
+        ),
+        "2" = layout_columns(
+          col_widths = c(2, 2, 2, 2, 2, 2),
+          inline_label(textInput, ns("LatD"), "Lat D"),
+          inline_label(textInput, ns("LatM"), "Lat M"),
+          inline_label(textInput, ns("LatS"), "Lat S"),
+          inline_label(textInput, ns("LonD"), "Lon D"),
+          inline_label(textInput, ns("LonM"), "Lon M"),
+          inline_label(textInput, ns("LonS"), "Lon S")
+        )
       )
     })
 

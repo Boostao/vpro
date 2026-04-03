@@ -73,7 +73,7 @@ source("R/modules/mod_reporting.R")
 # source("R/logic/logic_coord_tools.R") # Coordinate conversion tools
 # source("R/logic/logic_climr.R") # ClimR climate data integration
 # source("R/logic/logic_project.R") # Project file management
-# source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helpers
+source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helpers
 # source("R/logic/logic_sync.R") # Sync engine (stub)
 # source("R/logic/logic_publish.R") # Publish pipeline (stub)
 # source("R/logic/logic_reports_veg.R") # Veg report helpers

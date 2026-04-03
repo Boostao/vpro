@@ -86,9 +86,10 @@ bcgov_theme <- function(action = c("install","remove")) {
 
 }
 
-# if (!"bcgov" %in% bslib::bootswatch_themes()) {
-#   bcgov_theme("install")
-# }
+if (!"bcgov" %in% bslib::bootswatch_themes()) {
+  bcgov_theme("install")
+}
 
+# bcgov_theme("remove");bcgov_theme("install")
 # unlink("theme/lib", recursive = TRUE)
 # unlink("theme/fonts", recursive = TRUE)

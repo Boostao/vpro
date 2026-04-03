@@ -28,8 +28,6 @@ ui <- tagList(
   tags$head(
     tags$script(src = "vpro-early.js")
   ),
-  div(class = "d-none", textInput("sel_su", NULL, value = "")),
-  uiOutput("floating_context_shell"),
   page_navbar(
   id = "main_tabs",
   title = div(
@@ -47,7 +45,9 @@ ui <- tagList(
       tags$link(rel = "stylesheet", type = "text/css", href = "vpro-ui.css"),
       tags$script(src = "vpro-ui.js")
     ),
-    shinyjs::useShinyjs()
+    shinyjs::useShinyjs(),
+    div(class = "d-none", textInput("sel_su", NULL, value = "")),
+    uiOutput("floating_context_shell"),
   ),
 
   # Main Tabs
@@ -497,7 +497,7 @@ ui <- tagList(
   ),
 
   # Hidden Reports destination panel (report launchers nav_select to "Reports")
-  nav_panel_hidden("Reports", mod_reporting_ui("report"))
+  # nav_panel_hidden("Reports", mod_reporting_ui("report"))
 
   # STOP processing here
   

@@ -1606,7 +1606,7 @@ server <- function(input, output, session) {
   mod_user_log_server("user_log", state, con)
 
   # Reporting Module
-  mod_reporting_server("report", state, con)
+  # mod_reporting_server("report", state, con)
 
   # # Export Module
   # mod_export_server("export", state, con)
@@ -1744,20 +1744,20 @@ server <- function(input, output, session) {
   #   mod_nav_launcher_server(launcher_id, open_main_tab = "Hierarchy")
   # }
 
-  for (launcher_id in c(
-    "launch_project_compare",
-    "launch_report_long_vegetation",
-    "launch_report_summary_vegetation",
-    "launch_report_long_environment",
-    "launch_report_summary_environment",
-    "launch_report_subzone_matrix_of_units",
-    "launch_report_hierarchy_diagram",
-    "launch_report_print_plot_label",
-    "launch_report_create_plot_locations_file",
-    "launch_report_show_plot_locations_google_earth"
-  )) {
-    mod_nav_launcher_server(launcher_id, open_main_tab = "Reports")
-  }
+  # for (launcher_id in c(
+  #   "launch_project_compare",
+  #   "launch_report_long_vegetation",
+  #   "launch_report_summary_vegetation",
+  #   "launch_report_long_environment",
+  #   "launch_report_summary_environment",
+  #   "launch_report_subzone_matrix_of_units",
+  #   "launch_report_hierarchy_diagram",
+  #   "launch_report_print_plot_label",
+  #   "launch_report_create_plot_locations_file",
+  #   "launch_report_show_plot_locations_google_earth"
+  # )) {
+  #   mod_nav_launcher_server(launcher_id, open_main_tab = "Reports")
+  # }
 
   # mod_nav_launcher_server(
   #   "launch_validate_data",

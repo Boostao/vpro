@@ -156,8 +156,8 @@ a.btn {
 
 // Add spacing around content (use p-* to override)
 main {
-    padding-bottom: 40px;
-    padding-top: 20px;
+    padding-bottom: 8px;
+    padding-top: 4px;
 }
 
 
@@ -257,7 +257,7 @@ $web-font-path: "font.css" !default;
 // Fallback for non-gap contexts
 .form-group,
 .shiny-input-container {
-  margin-bottom: 0.15rem !important;
+  margin-bottom: 0rem !important;
 }
 
 // --- Fieldset / card compact ---
@@ -271,21 +271,21 @@ fieldset {
   }
 }
 
+// --- No wrap on labels ---
+.control-label {
+  white-space: nowrap;
+}
+
 // --- Tab content padding ---
 .tab-content > .tab-pane {
   padding-top: 0.35rem;
 }
 
-// --- Keep navbar links comfortably padded ---
-.navbar-nav .nav-link {
-  padding: 0.4rem 0.8rem !important;
-}
-
 // --- Card header info-blue background ---
 .card > .card-header {
-  background-color: #96c0e6;
+  background-color: color-mix(in oklab, #96c0e6, white 75%);
   color: #1a3a5c;
-  border-bottom-color: darken(#96c0e6, 10%);
+  border-bottom-color: color-mix(in oklab, #96c0e6, black 10%);
 }
 
 // --- Compact DT (DataTables) output ---
@@ -329,14 +329,6 @@ fieldset {
   padding-top: 0.15rem !important;
 }
 
-// --- Tighter bslib layout gaps ---
-.bslib-gap-spacing {
-  gap: 4px !important;
-}
-.bslib-mb-spacing {
-  margin-bottom: 4px !important;
-}
-.bslib-grid.bslib-mb-spacing {
-  gap: 4px !important;
-  margin-bottom: 4px !important;
-}
+// --- Card overflow ---
+.card { overflow: visible !important; }
+.card-body { overflow: visible !important; }
