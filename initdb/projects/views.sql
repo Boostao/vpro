@@ -14,7 +14,7 @@ SELECT DISTINCT
 FROM "Sample_Env"
 INNER JOIN "Sample_Admin"
   ON "Sample_Env"."PlotNumber" = "Sample_Admin"."Plot"
-ORDER BY "UsysEnv"."PlotNumber";
+ORDER BY "Sample_Env"."PlotNumber";
 
 
 -- ============================================================

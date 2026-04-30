@@ -260,6 +260,11 @@ $web-font-path: "font.css" !default;
   margin-bottom: 0rem !important;
 }
 
+// --- No wrap on labels ---
+.shiny-input-container .control-label {
+  white-space: nowrap;
+}
+
 // --- Fieldset / card compact ---
 fieldset {
   margin-bottom: 0.35rem;
@@ -269,11 +274,6 @@ fieldset {
     padding: 0 0.25rem;
     margin-bottom: 0.15rem;
   }
-}
-
-// --- No wrap on labels ---
-.control-label {
-  white-space: nowrap;
 }
 
 // --- Tab content padding ---

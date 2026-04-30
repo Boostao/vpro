@@ -6,9 +6,15 @@
 config_init <- function(conf = Sys.getenv("VPRO_CONFIG_FILE", "config.yml")) {
   cfg <- yaml::read_yaml(conf, readLines.warn = FALSE)
   function(section, key, value) {
-    if (missing(section)) return(cfg)
-    if (missing(key)) return(cfg[[section]])
-    if (missing(value)) return(cfg[[section]][[key]])
+    if (missing(section)) {
+      return(cfg)
+    }
+    if (missing(key)) {
+      return(cfg[[section]])
+    }
+    if (missing(value)) {
+      return(cfg[[section]][[key]])
+    }
     cfg[[section]][[key]] <<- value
     yaml::write_yaml(cfg, conf)
     invisible(cfg[[section]][[key]])
@@ -20,7 +26,14 @@ config <- config_init()
 #### --- Local Database helpers ---
 
 db_con <- function(db = ":memory:") {
-  DBI::dbConnect(duckdb::duckdb(), db)
+  con <- DBI::dbConnect(duckdb::duckdb(), db)
+  # Check if sqlite_scanner extension is installed, if not install and load it. This is required for attaching sqlite databases.
+  res <- DBI::dbGetQuery(con, "SELECT installed FROM duckdb_extensions() WHERE extension_name IN ('sqlite_scanner');")
+  if (isFALSE(res$installed)) {
+    DBI::dbExecute(con, "INSTALL sqlite_scanner;")
+    DBI::dbExecute(con, "LOAD sqlite_scanner;")
+  }
+  con
 }
 
 db_close <- function(con) {
@@ -71,7 +84,12 @@ db_attach <- function(con, db) {
   atta_db <- db_list_attached(con)
   # Attach databases
   for (d in exist_d) {
-    if ({d |> basename() |> tools::file_path_sans_ext()} %in% atta_db) {
+    if (
+      {
+        d |> basename() |> tools::file_path_sans_ext()
+      } %in%
+        atta_db
+    ) {
       next
     }
     DBI::dbExecute(con, sprintf("ATTACH %s (TYPE sqlite);", DBI::dbQuoteLiteral(con, d)))
@@ -117,12 +135,15 @@ db_fields <- function(con, tb, db = NULL, prj = FALSE) {
 .pg_database <- function() Sys.getenv("PGDATABASE", "becmaster")
 
 is_cloud_connected <- function(con, alias = "master") {
-  tryCatch({
-    db_query(con, paste0("SELECT 1 FROM ", alias, ".information_schema.tables LIMIT 1"))
-    TRUE
-  }, error = function(e) {
-    FALSE
-  })
+  tryCatch(
+    {
+      db_query(con, paste0("SELECT 1 FROM ", alias, ".information_schema.tables LIMIT 1"))
+      TRUE
+    },
+    error = function(e) {
+      FALSE
+    }
+  )
 }
 
 attach_cloud_db <- function(con, pg_user, pg_password = NULL, alias = "master", fail_on_error = TRUE) {
@@ -143,24 +164,32 @@ attach_cloud_db <- function(con, pg_user, pg_password = NULL, alias = "master", 
 
   message("[db] Attaching PostgreSQL as '", alias, "' (user: ", pg_user, ")")
 
-  tryCatch({
-    db_run(con, "INSTALL postgres")
-    db_run(con, "LOAD postgres")
-  }, error = function(e) {
-    warning("postgres extension install/load may have failed: ", e$message)
-  })
+  tryCatch(
+    {
+      db_run(con, "INSTALL postgres")
+      db_run(con, "LOAD postgres")
+    },
+    error = function(e) {
+      warning("postgres extension install/load may have failed: ", e$message)
+    }
+  )
 
   attach_sql <- paste0("ATTACH '", conn_string, "' AS ", alias, " (TYPE postgres)")
 
-  tryCatch({
-    db_run(con, attach_sql)
-    message("[db] PostgreSQL attached successfully as '", alias, "'")
-  }, error = function(e) {
-    msg <- paste0("Failed to attach PostgreSQL as '", pg_user, "': ", e$message)
-    if (isTRUE(fail_on_error)) stop(msg)
-    warning(msg)
-    return(invisible(NULL))
-  })
+  tryCatch(
+    {
+      db_run(con, attach_sql)
+      message("[db] PostgreSQL attached successfully as '", alias, "'")
+    },
+    error = function(e) {
+      msg <- paste0("Failed to attach PostgreSQL as '", pg_user, "': ", e$message)
+      if (isTRUE(fail_on_error)) {
+        stop(msg)
+      }
+      warning(msg)
+      return(invisible(NULL))
+    }
+  )
 
   invisible(NULL)
 }
@@ -168,7 +197,9 @@ attach_cloud_db <- function(con, pg_user, pg_password = NULL, alias = "master", 
 attach_cloud <- function(con, alias = "master", fail_on_error = TRUE) {
   pg_user <- Sys.getenv("VPRO_PG_APP_USER", "vpro_app")
   pg_pass <- Sys.getenv("VPRO_PG_APP_PASSWORD", "")
-  if (!nzchar(pg_pass)) stop("VPRO_PG_APP_PASSWORD env var is not set")
+  if (!nzchar(pg_pass)) {
+    stop("VPRO_PG_APP_PASSWORD env var is not set")
+  }
   attach_cloud_db(con, pg_user = pg_user, pg_password = pg_pass, alias = alias, fail_on_error = fail_on_error)
 }
 
@@ -189,11 +220,7 @@ db_masterunitlist_views <- function(con) {
   sql <- sprintf("CREATE OR REPLACE TEMPORARY VIEW USys%s AS SELECT * FROM %s.%s;", tb, db, tb)
   lapply(sql, db_run, con = con)
   tb <- c("MasterSiteUnitList", "MasterUnitList_Hierarchy")
-  sql <- paste("CREATE OR REPLACE TEMPORARY VIEW", tb, "AS ",
-    "SELECT * FROM UsysMasterSiteUnitList",
-    "UNION ALL",
-    "SELECT * FROM UsysUserSiteUnitList;"
-  )
+  sql <- paste("CREATE OR REPLACE TEMPORARY VIEW", tb, "AS ", "SELECT * FROM UsysMasterSiteUnitList", "UNION ALL", "SELECT * FROM UsysUserSiteUnitList;")
   lapply(sql, db_run, con = con)
   return()
 }
