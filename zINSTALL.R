@@ -21,5 +21,5 @@ source("./initdb/initdb.R")
 
 # Create default config file if it doesn't exist
 if (!file.exists(Sys.getenv("VPRO_CONFIG_FILE", "./app/config.yml"))) {
-  file.copy(".app/config.init.yml", Sys.getenv("VPRO_CONFIG_FILE", "./app/config.yml"))  
+  file.copy("./app/config.init.yml", Sys.getenv("VPRO_CONFIG_FILE", "./app/config.yml"))
 }

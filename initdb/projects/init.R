@@ -3,6 +3,8 @@ accdb_path <- file.path(getwd(), "../VPRO_ACCESS/VPro64/VPro64.accdb")
 # Assuming working directory is the root of the project vpro.git
 workdir <- file.path(getwd(), "initdb/projects")
 views_sql_path <- file.path(workdir, "views.sql")
+meta_sql_path <- file.path(workdir, "_table_metadata.sql")
+meta_csv_path <- file.path(workdir, "_table_metadata.csv")
 
 # Listing project prefixes
 projects <- list.files(workdir, pattern = "\\.csv$") |>
@@ -10,7 +12,8 @@ projects <- list.files(workdir, pattern = "\\.csv$") |>
   strsplit(split = "_") |>
   vapply(`[`, 1, FUN.VALUE = character(1)) |>
   unique() |>
-  sort()
+  sort() |>
+  setdiff("")
 
 for (p in projects) {
   output <- file.path(outputdir, sprintf("%s.db", p))
@@ -44,7 +47,7 @@ for (p in projects) {
 
     if (validate) {
       # Validate against original Access DB
-      test1 <- read_table_preserve_names(DBI::dbConnect(mdbtoolr::mdb(), accdb_path), tb) |> data.table::setDT()
+      test1 <- read_table_preserve_names(DBI::dbConnect(mdbr::mdb(), accdb_path), tb) |> data.table::setDT()
       test2 <- read_table_preserve_names(con, tb) |> data.table::setDT()
       comparison <- harmonize_validation_tables(test1, test2)
       test1 <- comparison$test1
@@ -54,11 +57,16 @@ for (p in projects) {
         stop(sprintf("Data mismatch for table %s in project %s", tb, p))
       }
     }
-
   }
 
   for (statement in read_sql_statements(views_sql_path)) {
     DBI::dbExecute(con, statement)
+  }
+
+  for (statement in read_sql_statements(meta_sql_path)) {
+    DBI::dbExecute(con, statement)
+    load_csv_into_table(con, "_table_metadata", meta_csv_path)
+    DBI::dbExecute(con, "DELETE FROM _table_metadata WHERE table_name NOT LIKE ?;", params = list(sprintf("%s_%%", p)))
   }
 
   DBI::dbDisconnect(con)

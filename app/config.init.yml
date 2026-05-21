@@ -6,6 +6,7 @@ Current:
   AssignedSuSource: 1
   CoordMethod: 1
   CurrProject: "Sample"
+  CurrHierarchy: "Sample"
   CurrVegProfile: "Sample"
   DataFormName: "FS882-6x4"
   DataFormNumber: "1"

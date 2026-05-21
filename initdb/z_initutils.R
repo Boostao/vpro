@@ -1,6 +1,6 @@
 library(DBI)
 library(RSQLite)
-library(mdbtoolr)
+library(mdbr)
 library(data.table)
 
 validate <- FALSE # Already validated, might need to validate on mac to make sure it is the same.
@@ -78,7 +78,7 @@ load_csv_into_table <- function(con, table_name, data_path) {
 
   datetime_fields <- table_info$name[grepl("DATETIME|TIMESTAMP", table_info$type, ignore.case = TRUE)]
   for (field in intersect(header, datetime_fields)) {
-    df[[field]] <- mdbtoolr:::.coerce_datetime(df[[field]]) |> as.character()
+    df[[field]] <- mdbr:::.coerce_datetime(df[[field]]) |> as.character()
   }
 
   table_fields <- DBI::dbListFields(con, table_name)
@@ -113,26 +113,39 @@ normalize_text_for_compare <- function(x) {
     return(x)
   }
 
-  vapply(x, function(value) {
-    if (is.na(value)) {
-      return(NA_character_)
-    }
+  vapply(
+    x,
+    function(value) {
+      if (is.na(value)) {
+        return(NA_character_)
+      }
 
-    value <- iconv(value, from = "", to = "UTF-8", sub = "byte")
-    value <- gsub("\r\n", "\n", value, fixed = TRUE)
-    gsub("\r", "\n", value, fixed = TRUE)
-  }, character(1), USE.NAMES = FALSE)
+      value <- iconv(value, from = "", to = "UTF-8", sub = "byte")
+      value <- gsub("\r\n", "\n", value, fixed = TRUE)
+      gsub("\r", "\n", value, fixed = TRUE)
+    },
+    character(1),
+    USE.NAMES = FALSE
+  )
 }
 
 harmonize_validation_tables <- function(test1, test2) {
   for (nm in names(test1)) {
     if (inherits(test2[[nm]], "blob") && inherits(test1[[nm]], "character")) {
-      data.table::set(test2, j = nm, value = vapply(test2[[nm]], function(x) {
-        if (is.null(x)) NA_character_ else rawToChar(x)
-      }, character(1)))
+      data.table::set(
+        test2,
+        j = nm,
+        value = vapply(
+          test2[[nm]],
+          function(x) {
+            if (is.null(x)) NA_character_ else rawToChar(x)
+          },
+          character(1)
+        )
+      )
     } else if (!inherits(test2[[nm]], class(test1[[nm]]))) {
       if (inherits(test1[[nm]], "POSIXct")) {
-        data.table::set(test2, j = nm, value = mdbtoolr:::.coerce_datetime(test2[[nm]]))
+        data.table::set(test2, j = nm, value = mdbr:::.coerce_datetime(test2[[nm]]))
       } else {
         data.table::set(test2, j = nm, value = as(test2[[nm]], class(test1[[nm]])[1]))
       }

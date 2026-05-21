@@ -24,7 +24,7 @@
 .navbar .nav-link:has(.vpro-auth-tab-label) {
   display: none !important;
 }
-:root {
+/* :root {
   --vpro-shell-left: 1rem;
   --vpro-cue-left: 0.35rem;
   --vpro-shell-top: 4rem;
@@ -1290,4 +1290,4 @@ body > #floating_context_shell:has(.vpro-floating-shell.is-panel-open)::before {
   .vpro-hierarchy-detail-shell {
     padding: 0.65rem 0.7rem 0.75rem;
   }
-}
+} */

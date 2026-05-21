@@ -21,9 +21,34 @@ config_init <- function(conf = Sys.getenv("VPRO_CONFIG_FILE", "config.yml")) {
   }
 }
 
+# Config used to replace values that were stored in Windows registry in VPro64.
+# Still stored in yaml config file but accessed through config() function.
 config <- config_init()
+# Global environment to store runtime state values that were declared
+# mainly in V7mdlGlobalDeclarations.
+global <- new.env(parent = emptyenv())
 
 #### --- Local Database helpers ---
+
+# List of project tables
+db_project_tables <- c(
+  "Admin",
+  "Audit",
+  "Env",
+  "Herbarium",
+  "Hierarchy",
+  "Humus",
+  "Lump",
+  "Metadata",
+  "Mineral",
+  "Other",
+  "Profile",
+  "SU",
+  "Theme",
+  "Veg"
+)
+
+db_sys_dbs <- c()
 
 db_con <- function(db = ":memory:") {
   con <- DBI::dbConnect(duckdb::duckdb(), db)
@@ -72,7 +97,7 @@ db_list_attached <- function(con) {
 db_attach <- function(con, db) {
   # Check if databases files exist before trying to attach them, error handling if they don't exist
   exist_d <- db[file.exists(db)]
-  miss_d <- setdiff(db, db)
+  miss_d <- setdiff(db, exist_d)
   if (length(miss_d) > 0) {
     stop(
       "Missing databases detected.\nThe following databases were expected but not found: [",
@@ -205,6 +230,17 @@ attach_cloud <- function(con, alias = "master", fail_on_error = TRUE) {
 
 #### --- VPro64 task functions ---
 
+db_convert_access_to_sqlite <- function(path) {
+  # Create a temporary file for the converted database
+  tmp_sqlite <- tempfile(fileext = ".db")
+  on.exit(unlink(tmp_sqlite), add = TRUE)
+
+  access_con <- DBI::dbConnect(mdbr::mdb(), path)
+  on.exit(try(DBI::dbDisconnect(access_con), silent = TRUE), add = TRUE)
+
+  tmp_sqlite
+}
+
 db_rename_fix01 <- function(con) {
   if ("JustEnglishName" %in% db_fields(con, "USysAllSpecs", "VLists")) {
     db_rename(con, "USysAllSpecs", "EnglishName", "CombinedEnglishName", "VLists")
@@ -223,4 +259,417 @@ db_masterunitlist_views <- function(con) {
   sql <- paste("CREATE OR REPLACE TEMPORARY VIEW", tb, "AS ", "SELECT * FROM UsysMasterSiteUnitList", "UNION ALL", "SELECT * FROM UsysUserSiteUnitList;")
   lapply(sql, db_run, con = con)
   return()
+}
+
+db_log_in <- function(con, session) {
+  # Log entry into user log table
+  db_insert(
+    currentDB,
+    "USysUserLog",
+    User = Sys.info()[["user"]],
+    InTime = Sys.time(),
+    OutTime = NA,
+    LocalMachine = Sys.info()[["nodename"]]
+  )
+}
+
+db_log_vpro <- function(con, session, state = c("On", "Off")) {
+  state <- match.arg(state)
+  # Insert Audit trace in project
+  db_insert(
+    currentDB,
+    "Audit",
+    db = config("Current", "CurrProject"),
+    prj = TRUE,
+    Project = config("Current", "CurrProject"),
+    User = config("Current", "User"),
+    Table = state,
+    EditWhen = Sys.time()
+  )
+}
+
+db_log_project <- function(con, session, state = c("Open", "Close")) {
+  state <- match.arg(state)
+  # Insert Audit trace in project
+  db_insert(
+    con,
+    "Audit",
+    db = config("Current", "CurrProject"),
+    prj = TRUE,
+    Project = config("Current", "CurrProject"),
+    User = config("Current", "User"),
+    Table = state,
+    EditWhen = Sys.time()
+  )
+
+  if (state == "Open") {
+    PVersion <- ProjectVersion(con)
+    ASVersion <- AllSpecsVersion(con)
+    if (PVersion != ASVersion) {
+      db_insert(
+        con,
+        "Audit",
+        db = config("Current", "CurrProject"),
+        prj = TRUE,
+        Project = config("Current", "CurrProject"),
+        User = config("Current", "User"),
+        Table = "USysAllSpecs",
+        EditWhen = Sys.time(),
+        AfterEdit = ASVersion,
+        BeforeEdit = PVersion
+      )
+      bslib::show_toast(
+        session = session,
+        bslib::toast(
+          header = "VPro",
+          paste0(
+            "FYI: the previous version of USysAllSpecs for project '",
+            config("Current", "CurrProject"),
+            "' was '",
+            PVersion,
+            "' and is now '",
+            ASVersion,
+            "'."
+          ),
+          type = "info",
+        )
+      )
+    }
+    PVersion = ProjectVersionTableOfLists()
+    ASVersion = TableOfListsVersion()
+    if (PVersion != ASVersion) {
+      db_insert(
+        con,
+        "Audit",
+        db = config("Current", "CurrProject"),
+        prj = TRUE,
+        Project = config("Current", "CurrProject"),
+        User = config("Current", "User"),
+        Table = "USysTableOfLists",
+        EditWhen = Sys.time(),
+        AfterEdit = ASVersion,
+        BeforeEdit = PVersion
+      )
+      bslib::show_toast(
+        session = session,
+        bslib::toast(
+          header = "VPro",
+          paste0(
+            "FYI: the previous version of USysTableOfLists for project '",
+            config("Current", "CurrProject"),
+            "' was '",
+            PVersion,
+            "' and is now '",
+            ASVersion,
+            "'."
+          ),
+          type = "info",
+        )
+      )
+    }
+  }
+}
+
+from_audit_Version <- function(con, table) {
+  res <- db_query(
+    con,
+    sprintf(
+      "SELECT %s
+       FROM %s WHERE %s=?
+       ORDER BY EditWhen DESC LIMIT 1;",
+      paste0(DBI::dbQuoteIdentifier(con, c("Table", "EditWhen", "AfterEdit")), collapse = ", "),
+      db_tb(con, "Audit", config("Current", "CurrProject"), prj = TRUE),
+      DBI::dbQuoteIdentifier(con, "Table")
+    ),
+    params = list(table)
+  )
+
+  if (nrow(res) == 0) {
+    return("Unknown")
+  }
+
+  if (is.na(res$AfterEdit) || res$AfterEdit == "") {
+    return("Unknown")
+  } else {
+    return(res$AfterEdit)
+  }
+}
+
+from_metadata_Version <- function(con, table, schema = "VLists") {
+  res <- db_query(
+    con,
+    sprintf(
+      "SELECT description
+       FROM %s._table_metadata
+       WHERE table_name = ?;",
+      DBI::dbQuoteIdentifier(con, schema)
+    ),
+    params = list(table)
+  )
+
+  if (nrow(res) == 0 || is.na(res$description) || res$description == "") {
+    return("Unknown")
+  } else {
+    return(res$description)
+  }
+}
+
+ProjectVersion <- function(con) {
+  from_audit_Version(con, "USysAllSpecs")
+}
+
+AllSpecsVersion <- function(con) {
+  from_metadata_Version(con, "USysAllSpecs")
+}
+
+ProjectVersionTableOfLists <- function(con) {
+  from_audit_Version(con, "USysTableOfLists")
+}
+
+TableOfListsVersion <- function(con) {
+  from_metadata_Version(con, "USysTableOfLists")
+}
+
+GetVProTableVersion <- function(project, table, con) {
+  from_metadata_Version(con, table, project)
+}
+
+AttachProject <- function(MyDB, session) {
+  global$sysSelectedItems <- list()
+  global$sysPickTable <- "None"
+  GetFileName("Select database to attach", session, "application/vnd.sqlite3", on_file = function(path) {
+    if (!is.null(path) && nzchar(path)) {
+      tryCatch(
+        {
+          RemoteDB <- db_con(path)
+          ProjectList <- tryCatch(
+            BuildProjectPickList(RemoteDB, MyDB),
+            finally = try(db_close(RemoteDB), silent = TRUE)
+          )
+          if (length(ProjectList) == 0) {
+            bslib::show_toast(
+              session = session,
+              bslib::toast(
+                header = config("Program", "Name"),
+                "No projects found or one with the same name may already be attached.",
+                type = "warning"
+              )
+            )
+            return()
+          }
+          USysPickTable(
+            session,
+            pick_list = ProjectList,
+            on_select = function(selected) {
+              for (MyProject in selected) {
+                AttachProjectTables(MyProject, path, MyDB, session)
+              }
+              global$sysSelectedItems <- NULL
+            }
+          )
+        },
+        error = function(e) {
+          bslib::show_toast(
+            session = session,
+            bslib::toast(
+              header = config("Program", "Name"),
+              paste("Failed to attach project database:", conditionMessage(e)),
+              type = "danger"
+            )
+          )
+        }
+      )
+    }
+  })
+}
+
+# Attach a single project's tables from a remote SQLite file into the main DuckDB connection.
+# Access equivalent: AttachProjectTables (DoCmd.TransferDatabase acLink per table)
+AttachProjectTables <- function(project, path, con, session) {
+  RemoteDB <- db_con(path)
+  TableVersion <- GetVProTableVersion(project, sprintf("%s_Env", project), RemoteDB)
+  if (TableVersion == "VP05") {} else if (TableVersion == "VP06") {} else if (TableVersion == "VP07") {} else if (TableVersion != "VP08") {
+    bslib::show_toast(
+      session = session,
+      bslib::toast(
+        header = config("Program", "Name"),
+        "This isn't a VPro 19 project.  Please convert to the current version.",
+        type = "info"
+      )
+    )
+    return()
+  }
+
+  tryCatch(
+    {
+      db_attach(con, path)
+      bslib::show_toast(
+        session = session,
+        bslib::toast(
+          header = config("Program", "Name"),
+          paste0("Project '", project, "' attached."),
+          type = "success"
+        )
+      )
+    },
+    error = function(e) {
+      bslib::show_toast(
+        session = session,
+        bslib::toast(
+          header = config("Program", "Name"),
+          paste0("Failed to attach '", project, "': ", conditionMessage(e)),
+          type = "danger"
+        )
+      )
+    }
+  )
+}
+
+GetFileName <- function(title, session, accept = NULL, on_file = NULL) {
+  accepted <- c(accept, "application/octet-stream")
+  dismiss <- function() {
+    obs_file$destroy()
+    obs_exit$destroy()
+  }
+  obs_file <- shiny::observeEvent(
+    session$input$getfilename_input,
+    {
+      dismiss()
+      shiny::removeModal(session)
+      file <- session$input$getfilename_input
+      if (!is.null(file)) {
+        if (!is.null(on_file)) on_file(file$datapath)
+      }
+    },
+    domain = session,
+    once = TRUE,
+    ignoreNULL = TRUE,
+    ignoreInit = TRUE
+  )
+  obs_exit <- shiny::observeEvent(
+    session$input$picktable_exit,
+    {
+      dismiss()
+      shiny::removeModal(session)
+    },
+    domain = session,
+    once = TRUE,
+    ignoreNULL = TRUE,
+    ignoreInit = TRUE
+  )
+  shiny::showModal(
+    session = session,
+    shiny::modalDialog(
+      title = title,
+      shiny::fileInput("getfilename_input", "Choose file", accept = accepted, multiple = FALSE),
+      easyClose = FALSE,
+      footer = shiny::actionButton("picktable_exit", icon = shiny::icon("sign-out"), class = "btn btn-default btn-sm")
+    )
+  )
+}
+
+BuildProjectPickList <- function(RemoteDB, LocalDB) {
+  strTestTables <- db_query(RemoteDB, "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_Env';")$name
+  strList <- strTestTables[!TestForTableInVPro(LocalDB, strTestTables)]
+  res <- character()
+  if (length(strList) > 0) {
+    res <- substr(strList, 1, nchar(strList) - nchar("_Env"))
+  }
+  res
+}
+
+TestForTableInVPro <- function(MyDB, TableName) {
+  res <- db_query(MyDB, "SELECT name FROM sqlite_master WHERE type='table' AND name=?;", params = list(TableName))
+  TableName %in% res$name
+}
+
+USysPickTable <- function(session, pick_list = character(), on_select = NULL) {
+  dismiss <- function() {
+    obs_pick$destroy()
+    obs_help$destroy()
+    obs_exit$destroy()
+  }
+  obs_pick <- shiny::observeEvent(
+    session$input$picktable_attach,
+    {
+      selected <- session$input$picktable_list
+      if (is.null(selected) || length(selected) == 0) {
+        bslib::show_toast(
+          session = session,
+          bslib::toast("Select an item first.", type = "warning")
+        )
+        return()
+      }
+      dismiss()
+      shiny::removeModal(session)
+      global$sysSelectedItems <- selected
+      if (!is.null(on_select)) on_select(selected)
+    },
+    domain = session,
+    ignoreNULL = TRUE,
+    ignoreInit = TRUE
+  )
+  obs_help <- shiny::observeEvent(
+    session$input$picktable_help,
+    {
+      bslib::show_toast(
+        session = session,
+        bslib::toast(
+          "VPro hides items of the same name that are already attached. Try unattaching the item first.",
+          type = "info"
+        )
+      )
+    },
+    domain = session,
+    ignoreNULL = TRUE,
+    ignoreInit = TRUE
+  )
+  obs_exit <- shiny::observeEvent(
+    session$input$picktable_exit,
+    {
+      dismiss()
+      shiny::removeModal(session)
+      global$sysSelectedItems <- NULL
+    },
+    domain = session,
+    once = TRUE,
+    ignoreNULL = TRUE,
+    ignoreInit = TRUE
+  )
+  shiny::showModal(
+    session = session,
+    shiny::modalDialog(
+      title = "Pick Attachment(s)",
+      shiny::selectInput(
+        "picktable_list",
+        label = NULL,
+        choices = pick_list,
+        multiple = TRUE,
+        size = 8,
+        selectize = FALSE
+      ),
+      shiny::tags$small(
+        shiny::actionLink("picktable_help", "Don't see an item you expect to see?")
+      ),
+      easyClose = FALSE,
+      footer = bslib::layout_columns(
+        shiny::actionButton("picktable_attach", "Attach", class = "btn btn-primary btn-sm"),
+        shiny::actionButton("picktable_exit", icon = shiny::icon("sign-out"), class = "btn btn-default btn-sm")
+      )
+    )
+  )
+}
+
+PickProjects <- function(session, pick_list = character(), on_select = NULL) {
+  USysPickTable(session, pick_list, on_select)
+}
+
+LogProjectOut <- function(con, session) {
+  # Log project close in audit
+  db_log_project(con, session, "Close")
+}
+
+LogProjectIn <- function(con, session) {
+  # Log project open in audit
+  db_log_project(con, session, "Open")
 }

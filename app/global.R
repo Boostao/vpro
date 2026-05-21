@@ -12,6 +12,8 @@ library(leaflet)
 library(sf)
 library(quarto)
 
+options(shiny.maxRequestSize = 4 * 1024^3) # 4GB max upload size, adjust as needed
+
 # Logic imports
 source("R/logic/00.db.R") # Database helper functions
 source("R/logic/01.state.R") # State management functions
@@ -21,6 +23,7 @@ source("R/logic/logic_record_nav.R") # Record navigation + audit trail
 
 # Module Imports
 source("R/modules/mod_whatsnew.R")
+source("R/modules/mod_sidebar.R")
 source("R/modules/mod_project_metadata.R")
 source("R/modules/mod_images.R")
 source("R/modules/mod_plot_profiling.R")
@@ -47,7 +50,6 @@ source("R/modules/mod_reporting.R")
 # VPRO_DEV_DEFAULT_PROJECT <- "BEC"
 # VPRO_DEV_DEFAULT_PLOTNUMBER <- "9624781"
 
-
 # # Database Connection
 # # Using a function to get a fresh connection or manage a pool object
 # # For Shiny, usually we want a persistent connection or a pool.
@@ -73,7 +75,7 @@ source("R/modules/mod_reporting.R")
 # source("R/logic/logic_coord_tools.R") # Coordinate conversion tools
 # source("R/logic/logic_climr.R") # ClimR climate data integration
 # source("R/logic/logic_project.R") # Project file management
-source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helpers
+# source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helpers
 # source("R/logic/logic_sync.R") # Sync engine (stub)
 # source("R/logic/logic_publish.R") # Publish pipeline (stub)
 # source("R/logic/logic_reports_veg.R") # Veg report helpers
@@ -103,7 +105,7 @@ source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helper
 # source("R/modules/mod_export.R")
 # source("R/modules/mod_reporting.R")
 # source("R/modules/mod_import.R")
-# source("R/modules/mod_home.R")
+source("R/modules/mod_home.R")
 # source("R/modules/mod_auth.R")
 # source("R/modules/mod_auth_status.R")
 # source("R/modules/mod_sync.R")
@@ -115,6 +117,5 @@ source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helper
 # source("R/modules/mod_data_entry_context.R")
 source("R/modules/mod_nav_launcher.R")
 
-# # Note: The actual 'SysState' object is initialized in server.R 
+# # Note: The actual 'SysState' object is initialized in server.R
 # # because it must be reactive and unique to the session.
-

@@ -1,27 +1,32 @@
 # Server Logic Code
 # Manages Global State and Module Initializations
 server <- function(input, output, session) {
-  
   # 1. Database Connection
   # Bootstrap the runtime from config-backed attached SQLite databases.
   con <- init_state()
+  db_log_in(con)
+  db_log_vpro(con, state = "On")
+
   onSessionEnded(function() {
+    db_log_vpro(con, state = "Off")
     db_close(con)
   })
+
+  mod_sidebar_server("sidebar", con)
 
   mod_whatsnew_server("whatsnew", con, open_trigger = reactive(input$btn_whatsnew))
 
   # Minimal reactive state for module communication
   state <- reactiveValues(
-    CurrSU       = config("Current", "CurrSU"),
-    sysCurrSU    = NULL,
-    CurrForm     = config("Current", "DataFormName"),
-    sysCurrForm  = config("Current", "DataFormName"),
-    CurrProject  = config("Current", "CurrProject"),
-    PrefPlot     = NULL,
-    PrefProject  = config("Current", "CurrProject"),
-    PrefSUTable  = config("Current", "CurrPlotlist"),
-    User         = config("Current", "User")
+    CurrSU = config("Current", "CurrSU"),
+    sysCurrSU = NULL,
+    CurrForm = config("Current", "DataFormName"),
+    sysCurrForm = config("Current", "DataFormName"),
+    CurrProject = config("Current", "CurrProject"),
+    PrefPlot = NULL,
+    PrefProject = config("Current", "CurrProject"),
+    PrefSUTable = config("Current", "CurrPlotlist"),
+    User = config("Current", "User")
   )
 
   mod_fs882_6x4_server("fs882_6x4", state, con)
@@ -39,7 +44,7 @@ server <- function(input, output, session) {
   #   if (is_cloud_connected(con)) db_detach(con, "master")
   #   dbDisconnect(con)
   # })
-  
+
   # # 2. Global State
   # state <- init_sys_state()
 
@@ -1347,7 +1352,7 @@ server <- function(input, output, session) {
   # # 3. Project module (replaces old sel_project sentinel dropdown)
   # project_mod <- mod_project_server("project", state, con)
 
-  # # Refresh picker scope + hierarchy when project changes
+  # # # Refresh picker scope + hierarchy when project changes
   # observe({
   #   project_mod$project_changed()
   #   refresh_hierarchy_dropdown()
@@ -1575,14 +1580,14 @@ server <- function(input, output, session) {
 
   # # 7. Initialize Sub-Modules
   # mod_admin_server("admin", state, con)
-  
+
   # # For Veg, we pass the state directly as it needs plot context
   # # Also passing con to avoid multiple connections
   # mod_veg_sample_server("veg", state, con)
-  
+
   # # FS882 destination module
   # mod_fs882_server("fs882", state, con)
-  
+
   # FS1333 destination module (SIVI form)
   mod_fs1333_server("fs1333", state, con)
 
@@ -1615,7 +1620,7 @@ server <- function(input, output, session) {
   # mod_import_server("import", state, con)
 
   # # Home Module
-  # mod_home_server("home", state, con)
+  mod_home_server("home", state, con)
 
   # # Upload Module
   # #mod_upload_server("upload", state, con)
@@ -1623,9 +1628,13 @@ server <- function(input, output, session) {
   # # Sync Module
   # mod_sync_server("sync", state, con)
 
-  # observeEvent(input$vpro_go_home, {
-  #   bslib::nav_select("main_tabs", selected = "Home", session = session)
-  # }, ignoreInit = TRUE)
+  observeEvent(
+    input$vpro_go_home,
+    {
+      bslib::nav_select("main_tabs", selected = "Home", session = session)
+    },
+    ignoreInit = TRUE
+  )
 
   # # Invalidate sync incoming count whenever the Sync tab is activated
   # observeEvent(input$main_tabs, {
@@ -1646,10 +1655,10 @@ server <- function(input, output, session) {
   #     state$SyncFocusAuthRequest <- as.numeric(Sys.time())
   #   }
   # })
-  
+
   # # Images & Maps Module
   # mod_images_server("imgs", state, con)
-  
+
   # # Reporting Module
   # mod_reporting_server("report", state, con)
 
@@ -1663,7 +1672,7 @@ server <- function(input, output, session) {
 
   # # Hierarchy Module
   # mod_hierarchy_server("hier", state, con)
-  
+
   # # BEC Web Map Module (public-facing, no auth requirement)
   # mod_becweb_map_server("becmap", con = con, auth_level = "public")
 
