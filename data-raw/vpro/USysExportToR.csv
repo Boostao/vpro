@@ -1,0 +1,17 @@
+"FieldName","FieldType","Report"
+"Ecosection","Categorical",1
+"Longitude","Quantitative",0
+"Latitude","Quantitative",0
+"Zone","Categorical",0
+"SubZone","Categorical",0
+"SiteSeries","Categorical",0
+"MoistureRegime","Categorical",1
+"NutrientRegime","Categorical",1
+"SuccessionalStatus","Categorical",1
+"StructuralStage","Categorical",1
+"StandAge","Quantitative",0
+"Elevation","Quantitative",1
+"SlopeGradient","Quantitative",0
+"Aspect","Quantitative",0
+"MesoSlopePosition","Categorical",0
+"SurfaceShape","Categorical",0

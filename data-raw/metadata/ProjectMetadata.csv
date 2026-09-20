@@ -1,0 +1,9 @@
+"ProjectID","ProjectTitle","CoordinatingAgency","ProponentFunder","FieldCompanyAgency","FieldLeader","FieldDataCollectionTeam","ProjectPurpose","GeographicStudyArea","GeographicStudyRegion","GeographicStudyDistrict","StartDate","EndDate","NumberOfFS882Plots","NumberOfSiteVisits","CollectedSite","CollectedVeg","CollectedSoil","CollectedTerrain","CollectedMens","CollectedCWD","CollectedWildTree","CollectedSoilChem","CollectedOther","CollectedCompleteOtherName","CollectedPartialOtherName","CollectedNoneOtherName","GeoRefMethod","Map","Datum","CoordinateSystem","EcosysCollectionStandard","EcosysCollectionStandardOtherName","VegCoverMethod","VegCoverMethodOtherName","MensurationMethod","MensurationMethodOtherName","ExtraVegFieldDescription","PlotMethod","DataCustodian","StorageLocation","Notes"
+"BEC","Plots collected for development of the Classification",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"Monitoring","Plots established for repeated measurements",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"PEM","Plots collected for a Predictive Ecosystem Map project",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"Research","Plots established as part of research trials",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"SIBEC","Plots for Site Index by Site Series or Grow & Yield",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"TEM","Plots collected for a Terrestrial Ecosystem Map project",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"Thesis","Plots collected for academic research",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+"VRI","Vegetation Resources Inventory or Forest Cover",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,

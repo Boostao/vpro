@@ -1,0 +1,6 @@
+"PlotQualityVegetationCode","PlotQualityVegetationdescription","PlotQualitySoilsCode","PlotQualitySoilsdescription","DatumCode","Datumdescription","CoordinateSystemCode","CoordinateSystemdescription","GeoReferenceMethodCode","GeoReferenceMethoddescription","FieldCollectionStdsCode","FieldCollectionStdsdescription","VegCoverClassTypeCode","VegCoverClassTypedescription","ExtraVegFieldTypeCode","ExtraVegFieldTypedescription"
+"1","Excellent","1","Excellent","NAD27","North American Datum of 1927","UTM","Universal Transverse Mercator",,,,,"2","class 2",,
+"2","Good","2","Good","NAD83","North American Datum of 1983","Lat/Long","Latitude/Longitude",,,,,"3","class 3",,
+"3","Fair","3","Fair",,"Null",,"Null",,,,,"4","class 4",,
+"4","Poor","4","Poor",,,,,,,,,,"Null",,
+,"Null",,"Null",,,,,,,,,"1","class 1",,

@@ -1,0 +1,6 @@
+^vpro\.Rproj$
+^\.Rproj\.user$
+data-raw
+scripts
+tests
+air.toml
