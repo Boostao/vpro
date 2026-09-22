@@ -307,13 +307,13 @@ vpro_plot_renumber_count <- function(con, relation, key, plot_number) {
   )$n[[1L]]
 }
 
-vpro_plot_renumber_sus <- function(context, con, project_path) {
+vpro_plot_transaction_sus <- function(context, con, project_path, alias_prefix) {
   if (length(context$sus) == 0L) {
     return(list())
   }
   paths <- unique(vapply(context$sus, `[[`, character(1), "path"))
   paths <- paths[paths != project_path]
-  aliases <- stats::setNames(paste0("vpro_renumber_su_", seq_along(paths)), paths)
+  aliases <- stats::setNames(paste0(alias_prefix, seq_along(paths)), paths)
   for (path in paths) {
     DBI::dbExecute(
       con,
@@ -377,7 +377,7 @@ vpro_plot_renumber <- function(context, plot_number, new_plot_number) {
   )
   keys <- c(Env = "PlotNumber", Admin = "Plot", Audit = "PlotNumber", Veg = "PlotNumber", Humus = "PlotNumber", Mineral = "PlotNumber", Other = "PlotNumber")
   relations <- lapply(tables, function(table) vpro_plot_renumber_relation(con, "main", table))
-  sus <- vpro_plot_renumber_sus(context, con, record$path)
+  sus <- vpro_plot_transaction_sus(context, con, record$path, "vpro_renumber_su_")
 
   DBI::dbExecute(con, "BEGIN IMMEDIATE")
   committed <- FALSE
@@ -516,6 +516,138 @@ vpro_plot_renumber <- function(context, plot_number, new_plot_number) {
     su_rows = su_counts,
     env = renamed$env,
     admin = renamed$admin
+  ))
+}
+
+#' Delete one plot from the active VPRO project
+#'
+#' Deletes the canonical Env row in one immediate SQLite transaction. Enforced
+#' relationships cascade deletion to Admin, Audit, vegetation, humus, mineral,
+#' and Other rows. Every SU currently attached to the context is cleaned in the
+#' same transaction, including attached SUs stored in other SQLite files.
+#' Unattached SU files cannot be discovered and are not changed.
+#'
+#' This follows the observed Access project-family cascade, including deletion
+#' of the plot's audit history and creation of no replacement audit event. It
+#' intentionally corrects Access's stale-SU behavior. Active project, SU,
+#' hierarchy, and configuration selections remain unchanged.
+#'
+#' @param context A VPRO project context with an active project.
+#' @param plot_number Existing plot identifier.
+#'
+#' @return A list containing the deleted identifier, project-row counts, and
+#'   attached-SU row counts, invisibly.
+#' @export
+vpro_plot_delete <- function(context, plot_number) {
+  record <- vpro_plot_active(context)
+  plot_number <- vpro_plot_number(plot_number)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), record$path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbExecute(con, "PRAGMA foreign_keys = ON")
+  DBI::dbExecute(con, "PRAGMA busy_timeout = 5000")
+  tables <- stats::setNames(
+    lapply(
+      c("Env", "Admin", "Audit", "Veg", "Humus", "Mineral", "Other"),
+      function(suffix) vpro_project_table(record$project, suffix)
+    ),
+    c("Env", "Admin", "Audit", "Veg", "Humus", "Mineral", "Other")
+  )
+  keys <- c(Env = "PlotNumber", Admin = "Plot", Audit = "PlotNumber", Veg = "PlotNumber", Humus = "PlotNumber", Mineral = "PlotNumber", Other = "PlotNumber")
+  relations <- lapply(tables, function(table) vpro_plot_renumber_relation(con, "main", table))
+  sus <- vpro_plot_transaction_sus(context, con, record$path, "vpro_delete_su_")
+
+  DBI::dbExecute(con, "BEGIN IMMEDIATE")
+  committed <- FALSE
+  on.exit(if (!committed && DBI::dbIsValid(con)) DBI::dbRollback(con), add = TRUE)
+
+  project_counts <- vapply(
+    names(relations),
+    function(kind) vpro_plot_renumber_count(con, relations[[kind]], keys[[kind]], plot_number),
+    integer(1)
+  )
+  if (project_counts[["Env"]] == 0L && project_counts[["Admin"]] == 0L) {
+    stop("VPRO plot does not exist in the active project: ", plot_number, call. = FALSE)
+  }
+  if (project_counts[["Env"]] != 1L || project_counts[["Admin"]] != 1L) {
+    stop("VPRO plot must have exactly one Env row and one Admin row: ", plot_number, call. = FALSE)
+  }
+  su_counts <- lapply(sus, function(su) {
+    list(
+      su = su$su,
+      path = su$path,
+      table = su$table,
+      rows = vpro_plot_renumber_count(con, su$relation, "PlotNumber", plot_number)
+    )
+  })
+
+  DBI::dbExecute(
+    con,
+    paste(
+      "DELETE FROM",
+      relations$Env,
+      "WHERE",
+      DBI::dbQuoteIdentifier(con, "PlotNumber"),
+      "= ?"
+    ),
+    params = list(plot_number)
+  )
+
+  for (index in seq_along(sus)) {
+    if (su_counts[[index]]$rows == 0L) {
+      next
+    }
+    changed <- DBI::dbExecute(
+      con,
+      paste(
+        "DELETE FROM",
+        sus[[index]]$relation,
+        "WHERE",
+        DBI::dbQuoteIdentifier(con, "PlotNumber"),
+        "= ?"
+      ),
+      params = list(plot_number)
+    )
+    if (changed != su_counts[[index]]$rows) {
+      stop("VPRO plot deletion did not remove every matching row from attached SU: ", sus[[index]]$su, call. = FALSE)
+    }
+  }
+
+  project_after <- vapply(
+    names(relations),
+    function(kind) vpro_plot_renumber_count(con, relations[[kind]], keys[[kind]], plot_number),
+    integer(1)
+  )
+  if (any(project_after != 0L)) {
+    stop("VPRO plot deletion did not remove the complete project row family.", call. = FALSE)
+  }
+  for (index in seq_along(sus)) {
+    if (vpro_plot_renumber_count(con, sus[[index]]$relation, "PlotNumber", plot_number) != 0L) {
+      stop("VPRO plot deletion left matching rows in attached SU: ", sus[[index]]$su, call. = FALSE)
+    }
+  }
+  violations <- DBI::dbGetQuery(con, "PRAGMA foreign_key_check")
+  if (nrow(violations) > 0L) {
+    stop("VPRO plot deletion produced a foreign-key violation.", call. = FALSE)
+  }
+
+  DBI::dbCommit(con)
+  committed <- TRUE
+
+  if (length(sus) > 0L) {
+    for (su in sus) {
+      refreshed <- vpro_su_diagnostics(context, context$sus[[su$su]])
+      context$sus[[su$su]]$diagnostics <- refreshed
+      if (!is.null(context$active_su) && identical(context$active_su$su, su$su)) {
+        context$active_su <- context$sus[[su$su]]
+      }
+    }
+  }
+
+  invisible(list(
+    plot_number = plot_number,
+    project_rows = project_counts,
+    su_rows = su_counts
   ))
 }
 

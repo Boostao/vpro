@@ -6,6 +6,7 @@ Package-native plot-domain CRUD is implemented in `R/plot-crud.R`, `R/plot-child
 
 - `vpro_plot_create()` validates initial values and transactionally creates one paired Env/Admin plot without audit or child rows;
 - `vpro_plot_renumber()` transactionally changes one plot key across the canonical project family and every SU attached to the context;
+- `vpro_plot_delete()` transactionally removes one complete plot family and its membership from every SU attached to the context;
 - `vpro_plot_get()` reads one active project's paired Env and Admin rows;
 - `vpro_plot_audit_list()` reads that plot's canonical audit history without modifying it and exposes complete one-row event selections with SQLite `audit_rowid` locators;
 - `vpro_plot_audit_restore()` transactionally restores one audited field from its recorded `BeforeEdit` value, preserving the audit event by default;
@@ -20,7 +21,7 @@ Package-native plot-domain CRUD is implemented in `R/plot-crud.R`, `R/plot-child
 
 The APIs are independent of Shiny and require an explicit active project context. They read and write canonical SQLite base tables, not DuckDB compatibility views. Committed writes are immediately visible through the active compatibility views.
 
-Plot deletion and multi-event audit selection are intentionally outside the implemented milestone.
+Multi-event audit selection is intentionally outside the implemented milestone.
 
 ## Canonical Access evidence
 
@@ -58,6 +59,8 @@ This intentionally replaces Access's focus-sensitive behavior. The package alway
 `vpro_plot_renumber()` requires an active VP08 project, one complete source Env/Admin pair, and an unused target key. It acquires an immediate transaction and updates the canonical Env key once; SQLite's enforced relationships cascade the key to Admin, Audit, Veg, Humus, Mineral, and Other. The operation verifies that every source count moved unchanged and that no foreign-key violations remain. It writes no new audit event, matching the Windows oracle.
 
 Every SU currently attached to the explicit project context participates in the same transaction. Same-file and external SQLite SU tables are preflighted for target collisions, updated explicitly, and verified before commit. This intentionally corrects `FS882-8x6XL.PlotNumber_AfterUpdate`: its active-SU update code is unreachable after an unconditional `Exit Sub`, leaving legacy SU membership stale. Unattached SU files cannot be discovered and are not modified. Active SU filtering remains selected, and committed membership is immediately visible through `USysEnv`.
+
+`vpro_plot_delete()` requires an active VP08 project and exactly one Env/Admin pair. It deletes the canonical Env row in an immediate transaction and relies on enforced relationships to remove Admin, Audit, Veg, Humus, Mineral, and Other rows. This includes deletion of the plot's complete audit history and creates no replacement audit event, matching both the bound-form and DAO Windows probes. Matching membership rows are removed explicitly from every same-file or external SU attached to the context in the same transaction; an external-SU failure rolls back the project cascade. Unattached SU files cannot be discovered. Project, active-SU, hierarchy, and configuration selections remain unchanged, while SU diagnostics are refreshed after commit.
 
 `vpro_plot_get()` requires an active VP08 project and exactly one matching Env row and Admin row. It reads directly from the active project's SQLite file and returns the rows separately to avoid ambiguous duplicate column names from the joined query.
 
@@ -104,7 +107,5 @@ Audit timestamps are stored in UTC. Access used local `Now()` values without tim
 Plot keys remain immutable in ordinary update APIs. `vpro_plot_renumber()` is the separate reviewed operation for coordinated key changes. It follows Access's enforced project-table cascades and no-audit behavior while updating all explicitly attached SUs rather than reproducing the legacy form's unreachable handler.
 
 ## Deferred CRUD slices
-
-Plot deletion remains deferred because its cascade, confirmation, audit-retention, and active-state contracts have not been observed.
 
 Multi-event restoration and UI selection remain deferred. The package deliberately does not reproduce Access's broken Admin target resolution, legacy skipping of vegetation cover fields, or implicit empty-vegetation cleanup. Each package call restores one explicitly selected event and one existing field; callers may compose higher-level review workflows only after choosing their own ordering and failure policy.

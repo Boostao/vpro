@@ -3758,7 +3758,6 @@
 ,,,,,,,,"Forms",,"object::Forms::FS882-6x4",,,"FS882-6x4","Forms/FS882-6x4.txt",,,"FS882-6x4","object",,"general","ui","unmapped","","initial deterministic inventory"
 ,,,,,,,,"Forms",,"object::Forms::FS882-6x4XL",,,"FS882-6x4XL","Forms/FS882-6x4XL.txt",,,"FS882-6x4XL","object",,"general","ui","unmapped","","initial deterministic inventory"
 ,,,,,,,,"Forms",,"object::Forms::FS882-6x4XL-CHARS",,,"FS882-6x4XL-CHARS","Forms/FS882-6x4XL-CHARS.txt",,,"FS882-6x4XL-CHARS","object",,"general","ui","unmapped","","initial deterministic inventory"
-,,,,,,,,"Forms",,"object::Forms::FS882-8x6XL",,,"FS882-8x6XL","Forms/FS882-8x6XL.txt",,,"FS882-8x6XL","object",,"general","ui","unmapped","","initial deterministic inventory"
 ,,,,,,,,"Forms",,"object::Forms::FS882-8x6XL-CHARS",,,"FS882-8x6XL-CHARS","Forms/FS882-8x6XL-CHARS.txt",,,"FS882-8x6XL-CHARS","object",,"general","ui","unmapped","","initial deterministic inventory"
 ,,,,,,,,"Forms",,"object::Forms::SoilHumus",,,"SoilHumus","Forms/SoilHumus.txt",,,"SoilHumus","object",,"general","ui","unmapped","","initial deterministic inventory"
 ,,,,,,,,"Forms",,"object::Forms::SoilHumusXL",,,"SoilHumusXL","Forms/SoilHumusXL.txt",,,"SoilHumusXL","object",,"general","ui","unmapped","","initial deterministic inventory"

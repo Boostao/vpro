@@ -9,7 +9,7 @@ These observations were collected on 2026-09-22 through `ssh win11vm` with Micro
 
 Temporary VBA modules were imported only into disposable copies. They opened the original bound forms and used their original event procedures. Production Access files were not modified.
 
-Reusable successful probe sources are `data-raw/oracle/inventory.ps1`, `data-raw/oracle/modOracleProbe.bas`, `data-raw/oracle/run-vba-probe.ps1`, `data-raw/oracle/modPlotCreateProbe.bas`, `data-raw/oracle/run-plot-create-probe.ps1`, and `data-raw/oracle/restore-sql-probe.ps1`. They are migration evidence and are not package runtime code.
+Reusable successful probe sources are `data-raw/oracle/inventory.ps1`, `data-raw/oracle/modOracleProbe.bas`, `data-raw/oracle/run-vba-probe.ps1`, `data-raw/oracle/modPlotCreateProbe.bas`, `data-raw/oracle/run-plot-create-probe.ps1`, `data-raw/oracle/modPlotDeleteProbe.bas`, `data-raw/oracle/run-plot-delete-probe.ps1`, and `data-raw/oracle/restore-sql-probe.ps1`. They are migration evidence and are not package runtime code.
 
 ## Plot creation
 
@@ -38,6 +38,16 @@ Changing the same source to an existing plot failed with Access error 3399, `Can
 The package should preserve the observed project-family cascade and no-audit behavior, but intentionally correct the stale SU membership defect. A package-native renumber operation should update every SU attached to the explicit context, including external SQLite files, in the same immediate SQLite transaction. It should reject source inconsistencies, existing or orphan target rows, and attached-SU source/target collisions before mutation. Unattached SU files cannot be discovered and remain outside the operation's scope.
 
 Reproducible probe sources are `modPlotRenumberProbe.bas` and `run-plot-renumber-probe.ps1`; retained successful evidence is in `plot-renumber-dao-success.json` and `plot-renumber-dao-collision.json`. Every result records identical source-before, source-after, and initial-copy SHA-256 values. An attempted automated bound-form run encountered an Access modal and was abandoned without retaining evidence; the source handlers and DAO behavior establish the production contract without relying on that incomplete run.
+
+## Plot deletion
+
+`FS882-8x6XL` has no delete-specific event procedures or delete button. It permits deletions from its joined `USysEnv` record source through Access's standard bound-form delete command. A disposable form probe selected plot `108050`, suppressed only the standard confirmation UI, and invoked `acCmdDeleteRecord`; a separate DAO probe deleted the same Env row directly.
+
+Both paths produced the same cascade: one Env row, one Admin row, 112 Audit rows, 43 Veg rows, one Humus row, three Mineral rows, and one Other row were removed. No replacement audit event was created. The matching `Sample_SU` row remained because its relationship is unenforced. `CurrProject`, `CurrPlotlist`, and `CurrHierarchy` were unchanged.
+
+The package preserves the observed complete project-family cascade, including deletion of historical audit rows and no new audit event. It intentionally corrects stale SU membership by deleting every matching row from each SU attached to the explicit context in the same transaction. Unattached SU files cannot be discovered, and hierarchy definitions and active selections are not changed.
+
+Reproducible probe sources are `modPlotDeleteProbe.bas` and `run-plot-delete-probe.ps1`; retained evidence is in `plot-delete-form-success.json` and `plot-delete-dao-success.json`. Every result records identical source-before, source-after, and initial-copy SHA-256 values.
 
 ## Child creation and deletion
 

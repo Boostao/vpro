@@ -1,6 +1,6 @@
 # vpro 0.0.0.9000
 
-* Plot-domain CRUD now transactionally creates and renumbers paired Env/Admin plots, creates/reads/updates/deletes `_Humus`, `_Mineral`, `_Other`, and vegetation child rows, and supports guarded audit restoration. Plot renumbering preserves project-family cascades and updates every SU attached to the context without adding an audit event.
+* Plot-domain CRUD now transactionally creates, renumbers, and deletes paired Env/Admin plots, creates/reads/updates/deletes `_Humus`, `_Mineral`, `_Other`, and vegetation child rows, and supports guarded audit restoration. Plot renumbering preserves project-family cascades and updates every SU attached to the context without adding an audit event; plot deletion removes the complete project row family and matching rows from every attached SU.
 * Hierarchy lifecycle APIs now inspect, attach, activate, deactivate, recover, safely detach, and transactionally save independent hierarchy tables with non-destructive tree diagnostics.
 * SU lifecycle APIs now inspect, attach, activate, deactivate, recover, safely detach, and transactionally save independent site-unit tables while preserving shared SQLite attachments. Explicit master metadata, permission callbacks, and provenance-bearing working copies replace Access name matching and its embedded password.
 * Project lifecycle APIs now inspect and attach VP08 SQLite projects, activate coordinator-scoped compatibility views, guard detach operations, and transactionally save a project under a new name.
