@@ -1,5 +1,7 @@
 # vpro 0.0.0.9000
 
+* `vpro_presence_class()`, `vpro_presence_class_numeric()`, `vpro_prominence_class()`, `vpro_goldstream_class()`, and `vpro_significance_class()` provide vectorized Access-compatible report classifications; `vpro_round_minimum()` and `vpro_cap_percent()` provide stable numeric rounding and capping helpers.
+* `vpro_coordinate_decimal()`, `vpro_coordinate_dms()`, and `vpro_coordinate_dm()` provide vectorized package-native coordinate conversion while preserving the original Access sign and missing-component conventions.
 * Plot-domain CRUD now transactionally creates, renumbers, and deletes paired Env/Admin plots, creates/reads/updates/deletes `_Humus`, `_Mineral`, `_Other`, and vegetation child rows, and supports guarded audit restoration. Plot renumbering preserves project-family cascades and updates every SU attached to the context without adding an audit event; plot deletion removes the complete project row family and matching rows from every attached SU.
 * Hierarchy lifecycle APIs now inspect, attach, activate, deactivate, recover, safely detach, and transactionally save independent hierarchy tables with non-destructive tree diagnostics.
 * SU lifecycle APIs now inspect, attach, activate, deactivate, recover, safely detach, and transactionally save independent site-unit tables while preserving shared SQLite attachments. Explicit master metadata, permission callbacks, and provenance-bearing working copies replace Access name matching and its embedded password.
