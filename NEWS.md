@@ -1,5 +1,9 @@
 # vpro 0.0.0.9000
 
+* `vpro_project_convert_succession()`, `vpro_project_succession_status()`, and `vpro_project_recover_succession()` add explicit, backed-up, transactional SQLite succession conversion and conservative partial-state recovery (V7mdlSuccession.Convert2Succession).
+
+* `vpro_project_is_successional()` detects the `SuccessionYear` field on a project's SQLite vegetation table without modifying the project (V7mdlSuccession.SuccessionProject).
+
 * `vpro_validate_vegetation_codes()` finds active-project vegetation species absent from the VPRO master list, optionally preserving the active-SU scope used by Access, and returns deterministic structured findings instead of opening Excel.
 * `vpro_project_compare_schema()` compares the eight core tables of a SQLite project with the bundled VP08 template or a caller-supplied template and returns missing-field, declared-type, and declared-size differences as structured data.
 * `vpro_presence_class()`, `vpro_presence_class_numeric()`, `vpro_prominence_class()`, `vpro_goldstream_class()`, and `vpro_significance_class()` provide vectorized Access-compatible report classifications; `vpro_round_minimum()` and `vpro_cap_percent()` provide stable numeric rounding and capping helpers.

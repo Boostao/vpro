@@ -2,6 +2,17 @@ Option Compare Database
 Option Explicit
 
 Private mOutput As String
+Private mPlot As String
+
+Private Sub DumpAudit(ByVal Phase As String)
+    Dim rs As DAO.Recordset
+    Set rs = CurrentDb.OpenRecordset("SELECT a.[Table], a.EditField, a.ID, a.BeforeEdit, a.AfterEdit, v.ID AS MatchingVegID FROM Sample_Audit AS a LEFT JOIN zOracle_Veg AS v ON a.PlotNumber=v.PlotNumber AND a.ID=v.ID WHERE a.[User]='zOracleVegAudit' AND a.PlotNumber='" & Replace(mPlot, "'", "''") & "' ORDER BY a.ID", dbOpenSnapshot)
+    Do Until rs.EOF
+        LogResult Phase, "Audit", rs.Fields(0).Value & ":" & rs.Fields(1).Value & ":" & rs.Fields(2).Value & ":" & Nz(rs.Fields(3).Value, "<NULL>") & ":" & Nz(rs.Fields(4).Value, "<NULL>") & ":" & Nz(rs.Fields(5).Value, "<NO VEG MATCH>")
+        rs.MoveNext
+    Loop
+    rs.Close
+End Sub
 
 Private Sub LogResult(ByVal Phase As String, ByVal Key As String, ByVal Value As Variant)
     Dim n As Integer
@@ -77,11 +88,18 @@ Public Function RunVegOptimizeFullOracle(ByVal OutputPath As String, ByVal DoRun
     On Error GoTo OracleError
     DoCmd.CopyObject , "zOracle_Veg", acTable, "USysVegTable"
     DumpSchema "Scratch", "zOracle_Veg"
+    mPlot = "108050"
+    If CountRows("SELECT Count(*) FROM Sample_Env WHERE PlotNumber='108050'") <> 1 Then Err.Raise vbObjectError + 512, , "Fixture plot unavailable"
     db.Execute "INSERT INTO zOracle_Veg (PlotNumber, Species, ID, Layer, Cover1, Collected, Flag, Cultural1) VALUES ('108050', 'ORCVEG', 101, '1', 1, 'Y', True, 11)", dbFailOnError
     db.Execute "INSERT INTO zOracle_Veg (PlotNumber, Species, ID, Layer, Cover4, Collected, Flag, Cultural1) VALUES ('108050', 'ORCVEG', 202, '4', 4, 'N', False, 22)", dbFailOnError
     db.Execute "INSERT INTO zOracle_Veg (PlotNumber, Species, ID, Layer, Cover8, Collected, Cultural1) VALUES ('108050', 'ORCSOLO', 303, '8', 8, 'N', 33)", dbFailOnError
+    db.Execute "INSERT INTO Sample_Audit ([Project], [User], PlotNumber, [Table], EditField, EditWhen, BeforeEdit, AfterEdit, ID) VALUES ('Sample', 'zOracleVegAudit', '108050', '_Veg', 'Cover1', Now(), '0', '1', 101)", dbFailOnError
+    db.Execute "INSERT INTO Sample_Audit ([Project], [User], PlotNumber, [Table], EditField, EditWhen, BeforeEdit, AfterEdit, ID) VALUES ('Sample', 'zOracleVegAudit', '108050', '_Veg', 'Cover4', Now(), '0', '4', 202)", dbFailOnError
+    db.Execute "INSERT INTO Sample_Audit ([Project], [User], PlotNumber, [Table], EditField, EditWhen, BeforeEdit, AfterEdit, ID) VALUES ('Sample', 'zOracleVegAudit', '108050', '_Veg', 'Cover8', Now(), '0', '8', 303)", dbFailOnError
     LogResult "Before", "Rows", CountRows("SELECT Count(*) FROM zOracle_Veg")
+    LogResult "Before", "AuditCount", CountRows("SELECT Count(*) FROM Sample_Audit WHERE [User]='zOracleVegAudit'")
     DumpRows "Before"
+    DumpAudit "Before"
     oldSql = db.QueryDefs("USysAllVeg").SQL
     newSql = Replace(oldSql, "UsysVeg", "zOracle_Veg", , , vbTextCompare)
     db.QueryDefs("USysAllVeg").SQL = newSql
@@ -92,6 +110,8 @@ Public Function RunVegOptimizeFullOracle(ByVal OutputPath As String, ByVal DoRun
     LogResult "Optimize", "Returned", True
     LogResult "After", "Rows", CountRows("SELECT Count(*) FROM zOracle_Veg")
     DumpRows "After"
+    LogResult "After", "AuditCount", CountRows("SELECT Count(*) FROM Sample_Audit WHERE [User]='zOracleVegAudit'")
+    DumpAudit "After"
     LogResult "After", "OriginalSampleRows", CountRows("SELECT Count(*) FROM Sample_Veg")
     LogResult "After", "TemporaryTableExists", CBool(CountRows("SELECT Count(*) FROM MSysObjects WHERE Name='xxxtblTempVeg' AND Type=1") > 0)
     LogResult "After", "TemporaryQueryExists", CBool(CountRows("SELECT Count(*) FROM MSysObjects WHERE Name='xxxqryTempVeg' AND Type=5") > 0)
