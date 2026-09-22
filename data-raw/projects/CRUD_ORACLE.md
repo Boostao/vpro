@@ -9,7 +9,35 @@ These observations were collected on 2026-09-22 through `ssh win11vm` with Micro
 
 Temporary VBA modules were imported only into disposable copies. They opened the original bound forms and used their original event procedures. Production Access files were not modified.
 
-Reusable successful probe sources are `data-raw/oracle/inventory.ps1`, `data-raw/oracle/modOracleProbe.bas`, `data-raw/oracle/run-vba-probe.ps1`, and `data-raw/oracle/restore-sql-probe.ps1`. They are migration evidence and are not package runtime code.
+Reusable successful probe sources are `data-raw/oracle/inventory.ps1`, `data-raw/oracle/modOracleProbe.bas`, `data-raw/oracle/run-vba-probe.ps1`, `data-raw/oracle/modPlotCreateProbe.bas`, `data-raw/oracle/run-plot-create-probe.ps1`, and `data-raw/oracle/restore-sql-probe.ps1`. They are migration evidence and are not package runtime code.
+
+## Plot creation
+
+The plot-creation probe opened the original `FS882-8x6XL` bound form on separate disposable copies. Its record source was `USysEnv`, an inner join from `Sample_Env.PlotNumber` to `Sample_Admin.Plot`; the form reported `AllowAdditions=True` and `DataEntry=False`. Each probe entered an explicit seven-character plot number. No form or table mechanism generated the plot number.
+
+Directly committing only `PlotNumber` inserted one `Sample_Env` row but no `Sample_Admin` row. The new row was therefore absent from the joined `USysEnv` query immediately after commit. Populating an additional Env field such as `Location` produced the same orphan Env result. Populating tested Admin-bound controls (`PlotType` and `OfficeNotes`) before direct commit caused Access's bound join-form engine to insert both rows.
+
+The normal focus-driven path is materially different. Moving focus from the newly entered `PlotNumber` to `Location` invoked `PlotNumber_LostFocus`. That handler briefly assigned the current year to Admin-bound `StartDate`, cleared it back to null, and saved. Dirtying the Admin side this way caused Access to create both Env and Admin rows even though `StartDate` ended null. The later explicit Admin repair block remained unreachable after `GoTo MyExit`.
+
+At audit strength 2, direct commits produced no audit rows. The focus-driven path produced seven spurious `_Env` records for unbound checkbox control names `Check235`, `Check237`, `Check369`, `Check371`, `Check373`, `Check550`, and `Check552`; every `BeforeEdit` and `AfterEdit` value was null. These rows do not represent meaningful persisted field changes and should not be reproduced by a package API.
+
+Creation created no vegetation, humus, mineral, or other child rows. The Env table defaulted `SV_FloodPlain` to false; tested `ProjectID`, `Date`, and Admin `StartDate` remained null. A dirty new record containing `PlotNumber` and `Location` was fully discarded by `acCmdUndo`, leaving no Env, Admin, Audit, or child rows.
+
+A package-native plot-create operation should require an explicit caller-supplied plot number and transactionally insert exactly one Env row and one Admin row. It should apply canonical SQLite defaults, create no children, omit the meaningless Access checkbox audit rows, and leave no effects if validation or insertion fails. Optional initial Env/Admin values should be validated before the transaction. Plot deletion remains a separate unresolved lifecycle operation.
+
+Reproducible results are retained in `plot-create-key-only.json`, `plot-create-env-only.json`, `plot-create-admin-only.json`, `plot-create-both-tables.json`, `plot-create-leave-key.json`, and `plot-create-cancel-dirty.json`. Every result records identical source-before, source-after, and initial-copy SHA-256 values.
+
+## Plot-number renumbering
+
+`FS882-8x6XL.PlotNumber_GotFocus` stores the original key, and the form contains intended confirmation and active-SU update code in `PlotNumber_BeforeUpdate` and `PlotNumber_AfterUpdate`. Both handlers begin with unconditional `Exit Sub`, however, so all confirmation, duplicate-specific messaging, and SU-update logic is unreachable in the observed version.
+
+A disposable DAO probe changed `Sample_Env.PlotNumber` from `108050` to an unused key. Access's enforced update cascades moved the matching Admin row, 112 Audit rows, 43 Veg rows, one Humus row, three Mineral rows, and one Other row. It emitted no new audit record. The `Sample_SU` row remained under the old key because the SU relationship is not enforced and the intended form handler never executes.
+
+Changing the same source to an existing plot failed with Access error 3399, `Cannot perform cascading operation. It would result in a duplicate key in table ''.` The complete old and target families remained unchanged.
+
+The package should preserve the observed project-family cascade and no-audit behavior, but intentionally correct the stale SU membership defect. A package-native renumber operation should update every SU attached to the explicit context, including external SQLite files, in the same immediate SQLite transaction. It should reject source inconsistencies, existing or orphan target rows, and attached-SU source/target collisions before mutation. Unattached SU files cannot be discovered and remain outside the operation's scope.
+
+Reproducible probe sources are `modPlotRenumberProbe.bas` and `run-plot-renumber-probe.ps1`; retained successful evidence is in `plot-renumber-dao-success.json` and `plot-renumber-dao-collision.json`. Every result records identical source-before, source-after, and initial-copy SHA-256 values. An attempted automated bound-form run encountered an Access modal and was abandoned without retaining evidence; the source handlers and DAO behavior establish the production contract without relying on that incomplete run.
 
 ## Child creation and deletion
 

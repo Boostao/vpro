@@ -4,8 +4,11 @@
 
 Package-native plot-domain CRUD is implemented in `R/plot-crud.R`, `R/plot-child.R`, `R/plot-other.R`, `R/plot-soil.R`, and `R/plot-vegetation.R`:
 
+- `vpro_plot_create()` validates initial values and transactionally creates one paired Env/Admin plot without audit or child rows;
+- `vpro_plot_renumber()` transactionally changes one plot key across the canonical project family and every SU attached to the context;
 - `vpro_plot_get()` reads one active project's paired Env and Admin rows;
-- `vpro_plot_audit_list()` reads that plot's canonical audit history without modifying it;
+- `vpro_plot_audit_list()` reads that plot's canonical audit history without modifying it and exposes complete one-row event selections with SQLite `audit_rowid` locators;
+- `vpro_plot_audit_restore()` transactionally restores one audited field from its recorded `BeforeEdit` value, preserving the audit event by default;
 - `vpro_plot_update()` validates requested fields, updates Env and Admin in one SQLite transaction, and writes field-level Audit rows in the same transaction;
 - `vpro_plot_other_list()` reads one plot's `_Other` child rows;
 - `vpro_plot_other_update()` updates one existing `_Other` row and writes child-ID audit records in the same transaction;
@@ -17,7 +20,7 @@ Package-native plot-domain CRUD is implemented in `R/plot-crud.R`, `R/plot-child
 
 The APIs are independent of Shiny and require an explicit active project context. They read and write canonical SQLite base tables, not DuckDB compatibility views. Committed writes are immediately visible through the active compatibility views.
 
-Plot creation, plot-number changes, plot deletion, audit selection, and audit restoration are intentionally outside this milestone.
+Plot deletion and multi-event audit selection are intentionally outside the implemented milestone.
 
 ## Canonical Access evidence
 
@@ -48,9 +51,21 @@ For FS882 forms, `TableName()` records `_Env`. Because Access edits Env and Admi
 
 ## Package-native behavior
 
+`vpro_plot_create()` requires an active VP08 project, an explicit unused plot number, and optional named Env/Admin values. It validates fields and SQLite types before mutation, applies the existing protected-Admin authorization policy, acquires an immediate SQLite write transaction, and then checks and inserts Env followed by Admin. Concurrent creators therefore serialize before collision detection. Existing complete pairs receive a collision error; legacy Env-only or Admin-only rows receive a distinct integrity error and are never repaired implicitly. Omitted columns retain SQLite defaults such as false `SV_FloodPlain`. Creation returns the stored pair, writes no audit or child rows, and does not change active SU, hierarchy, or configuration state. Under an active SU, the new base plot remains accessible through `vpro_plot_get()` but is absent from the filtered `USysEnv` view until separately added to that SU.
+
+This intentionally replaces Access's focus-sensitive behavior. The package always creates a valid pair rather than allowing key-only or Env-only orphan rows, and it omits the seven null-to-null checkbox audit rows emitted by the normal `FS882-8x6XL` focus path.
+
+`vpro_plot_renumber()` requires an active VP08 project, one complete source Env/Admin pair, and an unused target key. It acquires an immediate transaction and updates the canonical Env key once; SQLite's enforced relationships cascade the key to Admin, Audit, Veg, Humus, Mineral, and Other. The operation verifies that every source count moved unchanged and that no foreign-key violations remain. It writes no new audit event, matching the Windows oracle.
+
+Every SU currently attached to the explicit project context participates in the same transaction. Same-file and external SQLite SU tables are preflighted for target collisions, updated explicitly, and verified before commit. This intentionally corrects `FS882-8x6XL.PlotNumber_AfterUpdate`: its active-SU update code is unreachable after an unconditional `Exit Sub`, leaving legacy SU membership stale. Unattached SU files cannot be discovered and are not modified. Active SU filtering remains selected, and committed membership is immediately visible through `USysEnv`.
+
 `vpro_plot_get()` requires an active VP08 project and exactly one matching Env row and Admin row. It reads directly from the active project's SQLite file and returns the rows separately to avoid ambiguous duplicate column names from the joined query.
 
-`vpro_plot_audit_list()` requires an existing plot in the active project, reads its rows directly from the canonical `_Audit` table, and returns all columns—including `Restore`, `Flag`, and `ID`—without mutation. It follows `USysAuditTrail` by sorting chronologically on `EditWhen`; audit ID and SQLite row order make timestamp ties deterministic. Explicit project and plot predicates replace the saved `USysAudit` form's Access function call and hard-coded design-time plot value.
+`vpro_plot_audit_list()` requires an existing plot in the active project, reads its rows directly from the canonical `_Audit` table, and returns all columns—including `Restore`, `Flag`, and child `ID`—without mutation. It also returns `audit_rowid`, the SQLite row identifier used to select one event from a specific database file. It follows `USysAuditTrail` by sorting chronologically on `EditWhen`; child ID and SQLite row order make timestamp ties deterministic. Explicit project and plot predicates replace the saved `USysAudit` form's Access function call and hard-coded design-time plot value.
+
+`vpro_plot_audit_restore()` applies a bounded correction to Access's defective restoration path. It accepts one complete row selected from `vpro_plot_audit_list()`, looks it up by `audit_rowid` and active project/plot, and verifies the full event contents before mutation because SQLite row IDs alone are not durable identities. It resolves `_Env` fields against both physical Env and Admin schemas and requires exactly one schema match. `_Other`, `_Humus`, `_Mineral`, and `_Veg` targets require a nonmissing signed 32-bit child ID and exactly one `(PlotNumber, ID)` row. Key fields and unsupported suffixes are rejected. Recorded text is converted according to the target SQLite declaration and validated through the normal plot write rules.
+
+Before mutation, the target's current stored value must equal the audit event's `AfterEdit` value. This optimistic guard prevents restoration of an older event from overwriting later work. Exactly one existing field is restored to `BeforeEdit` in a SQLite transaction. The source audit event is retained by default; `delete_audit = TRUE` deletes it in the same transaction, so a deletion failure rolls back the field change. Protected Admin fields retain `update_protected_plot_field` authorization. Restoration does not create missing child rows, append a second audit event, or delete vegetation rows that become sparse. Unlike the legacy routine, vegetation cover fields are eligible because they are ordinary typed fields under this one-field contract.
 
 `vpro_plot_update()`:
 
@@ -86,10 +101,10 @@ The package requires a stable user identity instead of reading Access registry s
 
 Audit timestamps are stored in UTC. Access used local `Now()` values without timezone metadata.
 
-Plot keys are immutable in this API. Access's bound-form behavior includes a `PlotNumber_AfterUpdate` event, but plot-number cascade and audit semantics require a separate reviewed operation.
+Plot keys remain immutable in ordinary update APIs. `vpro_plot_renumber()` is the separate reviewed operation for coordinated key changes. It follows Access's enforced project-table cascades and no-audit behavior while updating all explicitly attached SUs rather than reproducing the legacy form's unreachable handler.
 
 ## Deferred CRUD slices
 
-Plot creation, plot-number changes, and plot deletion remain deferred because their multi-table cascade, authorization, and audit contracts have not been observed.
+Plot deletion remains deferred because its cascade, confirmation, audit-retention, and active-state contracts have not been observed.
 
-Audit restoration remains deferred by design after oracle review. Access records Admin edits through joined FS882 forms as `_Env`, but `RestoreTo()` opens the physical Env table, where Admin fields do not exist; an `_Admin` suffix has no SQL branch. The package must not reproduce this defect. A future restore API should resolve an `_Env` audit field against the physical Env and Admin schemas, require exactly one match, restore transactionally, preserve audit rows by default, and explicitly handle child rows, skipped vegetation cover fields, and empty-vegetation cleanup.
+Multi-event restoration and UI selection remain deferred. The package deliberately does not reproduce Access's broken Admin target resolution, legacy skipping of vegetation cover fields, or implicit empty-vegetation cleanup. Each package call restores one explicitly selected event and one existing field; callers may compose higher-level review workflows only after choosing their own ordering and failure policy.
