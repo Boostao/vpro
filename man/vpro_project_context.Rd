@@ -7,6 +7,7 @@
 vpro_project_context(
   con = NULL,
   config = NULL,
+  authorize = NULL,
   install_extensions = getOption("vpro.install_extensions", FALSE)
 )
 }
@@ -15,8 +16,12 @@ vpro_project_context(
 the context creates and owns a new coordinator.}
 
 \item{config}{Optional accessor created by \code{\link[=config_init]{config_init()}}. Activating a
-project writes \code{CurrProject}, \code{CurrPlotlist}, \code{ProjectPath}, and \code{SUPath}
-through it.}
+project writes \code{CurrProject}, \code{CurrPlotlist}, \code{ProjectPath}, and \code{SUPath};
+hierarchy lifecycle operations write \code{CurrHierarchy} and \code{HierarchyPath}.}
+
+\item{authorize}{Optional permission callback called as
+\code{authorize(permission, resource)}. Domain operations default to denying
+restricted actions when it is absent.}
 
 \item{install_extensions}{Passed to \code{\link[=vpro_db_connect]{vpro_db_connect()}} when \code{con} is absent.}
 }

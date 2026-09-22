@@ -8,6 +8,7 @@ Current:
   CurrPlotlist: "None"
   CurrProject: "Sample"
   CurrHierarchy: "Sample"
+  HierarchyPath: ""
   CurrVegProfile: "Sample"
   DataFormName: "FS882-6x4"
   DataFormNumber: "1"

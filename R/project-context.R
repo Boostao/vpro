@@ -71,8 +71,11 @@ vpro_project_inspect <- function(path, project) {
 #' @param con Optional connection created by [vpro_db_connect()]. When omitted,
 #'   the context creates and owns a new coordinator.
 #' @param config Optional accessor created by [config_init()]. Activating a
-#'   project writes `CurrProject`, `CurrPlotlist`, `ProjectPath`, and `SUPath`
-#'   through it.
+#'   project writes `CurrProject`, `CurrPlotlist`, `ProjectPath`, and `SUPath`;
+#'   hierarchy lifecycle operations write `CurrHierarchy` and `HierarchyPath`.
+#' @param authorize Optional permission callback called as
+#'   `authorize(permission, resource)`. Domain operations default to denying
+#'   restricted actions when it is absent.
 #' @param install_extensions Passed to [vpro_db_connect()] when `con` is absent.
 #'
 #' @return A mutable object of class `vpro_project_context`.
@@ -80,6 +83,7 @@ vpro_project_inspect <- function(path, project) {
 vpro_project_context <- function(
   con = NULL,
   config = NULL,
+  authorize = NULL,
   install_extensions = getOption("vpro.install_extensions", FALSE)
 ) {
   owns_connection <- is.null(con)
@@ -92,16 +96,22 @@ vpro_project_context <- function(
   if (!is.null(config) && !is.function(config)) {
     stop("`config` must be NULL or an accessor created by `config_init()`.", call. = FALSE)
   }
+  if (!is.null(authorize) && !is.function(authorize)) {
+    stop("`authorize` must be NULL or a permission callback.", call. = FALSE)
+  }
 
   context <- new.env(parent = emptyenv())
   context$con <- con
   context$config <- config
+  context$authorize <- authorize
   context$owns_connection <- owns_connection
   context$databases <- list()
   context$projects <- list()
   context$sus <- list()
+  context$hierarchies <- list()
   context$active <- NULL
   context$active_su <- NULL
+  context$active_hierarchy <- NULL
   class(context) <- "vpro_project_context"
   context
 }
@@ -433,6 +443,12 @@ vpro_project_recover <- function(
   }
   configured_su <- context$config("Current", "CurrPlotlist")
   configured_su_path <- context$config("Current", "SUPath")
+  configured_hierarchy <- context$config("Current", "CurrHierarchy")
+  configured_hierarchy_path <- context$config("Current", "HierarchyPath")
+  if (identical(configured_hierarchy, "Sample") &&
+    (is.null(configured_hierarchy_path) || !nzchar(configured_hierarchy_path))) {
+    configured_hierarchy_path <- sample_path
+  }
 
   activate <- function(candidate_project, candidate_path) {
     vpro_project_attach(context, candidate_path, candidate_project)
@@ -452,11 +468,17 @@ vpro_project_recover <- function(
       su = configured_su,
       path = configured_su_path
     )
+    hierarchy <- vpro_hierarchy_recover(
+      context,
+      hierarchy = configured_hierarchy,
+      path = configured_hierarchy_path
+    )
     return(invisible(list(
       active = record,
       fallback = FALSE,
       primary_error = NULL,
-      su = su
+      su = su,
+      hierarchy = hierarchy
     )))
   }
   if (project %in% names(context$projects) && (is.null(context$active) || !identical(context$active$project, project))) {
@@ -483,11 +505,21 @@ vpro_project_recover <- function(
     su = configured_su,
     path = configured_su_path
   )
+  if (identical(configured_hierarchy, "Sample") &&
+    (is.null(configured_hierarchy_path) || !nzchar(configured_hierarchy_path))) {
+    configured_hierarchy_path <- sample_path
+  }
+  hierarchy <- vpro_hierarchy_recover(
+    context,
+    hierarchy = configured_hierarchy,
+    path = configured_hierarchy_path
+  )
   invisible(list(
     active = fallback,
     fallback = TRUE,
     primary_error = primary_error,
-    su = su
+    su = su,
+    hierarchy = hierarchy
   ))
 }
 

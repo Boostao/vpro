@@ -10,10 +10,3 @@
 ^scripts$
 ^air\.toml$
 ^inst/app/\.RData$
-^tests/smoke-test-reports\.R$
-^tests/shinytest2$
-^tests/COMPLIANCE_TESTING\.md$
-^tests/CONFLICT_RESOLUTION_TESTING\.md$
-^tests/README\.md$
-^tests/REPORTS_TESTING\.md$
-^tests/TEST_IMPLEMENTATION_SUMMARY\.md$

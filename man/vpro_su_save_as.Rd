@@ -4,7 +4,15 @@
 \alias{vpro_su_save_as}
 \title{Save an attached VPRO site-unit table under a new name}
 \usage{
-vpro_su_save_as(context, su, path, new_su)
+vpro_su_save_as(
+  context,
+  su,
+  path,
+  new_su,
+  kind = c("auto", "ordinary", "working", "master"),
+  authorize = NULL,
+  created_by = NULL
+)
 }
 \arguments{
 \item{context}{A VPRO project context.}
@@ -14,11 +22,21 @@ vpro_su_save_as(context, su, path, new_su)
 \item{path}{Target SQLite database path.}
 
 \item{new_su}{Target SU name without the \verb{_SU} suffix.}
+
+\item{kind}{Target policy kind: \code{"auto"} creates a working copy from a master
+and otherwise an ordinary SU; \code{"ordinary"} and \code{"working"} may be selected
+explicitly; \code{"master"} requires authorization.}
+
+\item{authorize}{Optional function called as \code{authorize("create_master_su", inspection)} when \code{kind = "master"}.}
+
+\item{created_by}{Optional stable caller identity recorded as provenance.}
 }
 \value{
 The normalized target path, invisibly.
 }
 \description{
 The SU table, rows, explicit indexes, and translated table metadata are copied
-transactionally. The copy is neither attached nor activated.
+transactionally. The copy is neither attached nor activated. A master source
+always produces a working copy with explicit provenance; creating another
+master requires \code{create_master_su} authorization.
 }

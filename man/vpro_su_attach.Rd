@@ -4,7 +4,7 @@
 \alias{vpro_su_attach}
 \title{Attach a VPRO site-unit table}
 \usage{
-vpro_su_attach(context, path, su)
+vpro_su_attach(context, path, su, authorize = NULL)
 }
 \arguments{
 \item{context}{A VPRO project context.}
@@ -12,6 +12,9 @@ vpro_su_attach(context, path, su)
 \item{path}{Path to the SQLite database containing the SU.}
 
 \item{su}{SU name without the \verb{_SU} suffix.}
+
+\item{authorize}{Optional function called as \code{authorize("attach_master_su", inspection)} for an SU explicitly marked as master. It must return \code{TRUE} to
+permit direct master attachment.}
 }
 \value{
 SU attachment metadata, invisibly.

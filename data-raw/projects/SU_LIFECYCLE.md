@@ -10,8 +10,8 @@ ownership, project activation clears SU state, and project recovery attempts
 optional SU recovery without sacrificing an already recovered project.
 
 Integration coverage is in `tests/testthat/test-su-context.R`, including the
-bundled `Sample_SU` table. Master-copy authorization and hierarchy lifecycle
-remain separate unresolved policy areas.
+bundled `Sample_SU` table and explicit master/working-copy policy. Hierarchy
+lifecycle is implemented separately in `R/hierarchy-context.R`.
 
 ## Scope and evidence
 
@@ -63,6 +63,29 @@ name containing `master`; they may create a working copy instead.
 A disposable DAO probe confirmed that an attached SU is a link to the remote
 table. Deleting the local TableDef removed only the link: the remote table and
 all 51 Sample rows remained unchanged.
+
+### Master authorization and working copies
+
+`V7mdlAttachSU.IsMasterAttacher` authorizes direct attachment by matching
+`clsVProReg.UserName` against `USysUserRestrictions.UserName`; its `Tag` field is
+not consulted. Unauthorized users cannot directly attach an SU whose name
+contains `master`, but `MakeMasterCopy` offers to create a separate SU in the
+source database. The original remains unchanged. The Access routine also embeds
+`Del` as a password that permits `master` in a new name.
+
+The package does not retain substring classification, a hard-coded password, or
+a built-in username allow-list. Master status is explicit in `_vpro_su_policy`,
+and restricted operations call a permission callback supplied to
+`vpro_project_context()` or directly to the operation. The permissions are
+`manage_master_su`, `attach_master_su`, and `create_master_su`. Missing policy
+metadata means `ordinary`, preserving compatibility with migrated VP04 tables.
+
+`vpro_su_create_working_copy()` reads an explicitly marked master directly,
+copies its schema, rows, indexes, and translated version metadata, and records
+`working` provenance with source path, source table, UTC creation time, and an
+optional stable caller identity. It neither attaches nor activates the master or
+the copy. There is no inferred synchronization or merge-back path because none
+was found in the Access evidence.
 
 ### Activation
 
@@ -124,8 +147,10 @@ The future public API should provide these operations independently of Shiny:
 | Activate | Require an active project and an attached valid SU. Validate before changing views or configuration. Atomically replace `USysEnv` with an SU-filtered temporary view and retain direct access to the unfiltered project relation. Persist SU name and normalized path only after success. |
 | Deactivate | Restore the active project's unfiltered `USysEnv`; set `CurrPlotlist` to `None`; clear the persisted SU path. Keep the SU attached. |
 | Detach | Refuse to detach the active SU. Remove only its coordinator registration/attachment and never modify the SQLite source. Return `FALSE` if absent. |
-| Save as | Transactionally copy one SU table, rows, indexes, and `_table_metadata` record to `<new_name>_SU`. Reject all target collisions and `Sample`. Do not attach or activate the result. |
-| Recover | After project recovery, optionally restore an SU only when both its persisted name and path are present and valid. SU recovery failure must leave the recovered project active and unfiltered, with current SU reset to `None`. |
+| Save as | Transactionally copy one SU table, rows, indexes, `_table_metadata`, and policy metadata to `<new_name>_SU`. A master source defaults to a provenance-bearing working copy; creating another master requires authorization. Reject all target collisions and `Sample`. Do not attach or activate the result. |
+| Mark master | Persist explicit master status only after `manage_master_su` authorization. Never infer it from the name. |
+| Create working copy | Copy an explicitly marked master without attaching or mutating it; record source provenance and leave both source and result inactive. |
+| Recover | After project recovery, optionally restore an SU only when both its persisted name and path are present and valid. SU recovery failure must leave the recovered project active and unfiltered, with current SU reset to `None`. Master recovery uses the context authorization callback. |
 
 ### Context and attachment ownership
 

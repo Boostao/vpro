@@ -17,4 +17,12 @@ reports/*
 *_.new.png
 inst/app/config.yml
 .Rproj.user
-_TO_CLASSIFY
+_TO_CLASSIFY/*
+!_TO_CLASSIFY/tests/
+!_TO_CLASSIFY/tests/**
+!_TO_CLASSIFY/shinytest2/
+!_TO_CLASSIFY/shinytest2/**
+!_TO_CLASSIFY/inst-app-runtime/
+!_TO_CLASSIFY/inst-app-runtime/**
+_TO_CLASSIFY/inst-app-runtime/
+_TO_CLASSIFY/tests/testthat/data/

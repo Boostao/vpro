@@ -73,12 +73,12 @@ create_su_project_fixture <- function(path, project = "Alpha") {
   invisible(path)
 }
 
-local_su_context <- function(config = NULL) {
+local_su_context <- function(config = NULL, authorize = NULL) {
   con <- tryCatch(vpro_db_connect(), error = identity)
   if (inherits(con, "error")) {
     testthat::skip(conditionMessage(con))
   }
-  context <- vpro_project_context(con = con, config = config)
+  context <- vpro_project_context(con = con, config = config, authorize = authorize)
   withr::defer(vpro_db_disconnect(context$con), envir = parent.frame())
   context
 }
@@ -100,6 +100,68 @@ test_that("SU inspection validates fields, metadata, and indexes", {
   expect_identical(inspection$compatible, TRUE)
   expect_identical(inspection$unique_plot_index, TRUE)
   expect_identical(inspection$site_unit_index, TRUE)
+})
+
+test_that("master SU policy is explicit and direct attachment is authorized", {
+  path <- tempfile(fileext = ".db")
+  create_su_fixture(path, su = "Reference", rows = data.frame(PlotNumber = "P1", SiteUnit = "A"))
+  deny <- function(permission, inspection) FALSE
+  allow <- function(permission, inspection) identical(permission, "manage_master_su")
+
+  expect_snapshot(error = TRUE, vpro_su_mark_master(path, "Reference", deny))
+  marked <- vpro_su_mark_master(path, "Reference", allow, created_by = "test-user")
+  expect_identical(marked$kind, "master")
+  expect_identical(marked$policy$created_by, "test-user")
+
+  context <- local_su_context()
+  expect_snapshot(error = TRUE, vpro_su_attach(context, path, "Reference"))
+  authorized_context <- local_su_context(
+    config = NULL,
+    authorize = function(permission, inspection) identical(permission, "attach_master_su")
+  )
+  attached <- vpro_su_attach(authorized_context, path, "Reference")
+  expect_identical(attached$kind, "master")
+})
+
+test_that("master working copies preserve data and provenance without attachment", {
+  source_path <- tempfile(fileext = ".db")
+  create_su_fixture(
+    source_path,
+    su = "Reference",
+    unique_plot = TRUE,
+    rows = data.frame(PlotNumber = c("P1", "P2"), SiteUnit = c("A", "B"))
+  )
+  vpro_su_mark_master(
+    source_path,
+    "Reference",
+    authorize = function(permission, inspection) TRUE,
+    created_by = "steward"
+  )
+  context <- local_su_context()
+
+  vpro_su_create_working_copy(
+    context,
+    source_path,
+    "Reference",
+    source_path,
+    "AnalystCopy",
+    created_by = "analyst"
+  )
+  copy <- vpro_su_inspect(source_path, "AnalystCopy")
+  target <- DBI::dbConnect(RSQLite::SQLite(), source_path)
+  withr::defer(DBI::dbDisconnect(target))
+
+  expect_identical(copy$kind, "working")
+  expect_identical(copy$policy$source_path, normalizePath(source_path))
+  expect_identical(copy$policy$source_table, "Reference_SU")
+  expect_identical(copy$policy$created_by, "analyst")
+  expect_identical(DBI::dbGetQuery(target, 'SELECT COUNT(*) AS n FROM "AnalystCopy_SU"')$n, 2L)
+  expect_snapshot(
+    error = TRUE,
+    vpro_su_create_working_copy(context, source_path, "AnalystCopy", source_path, "SecondCopy")
+  )
+  expect_false("Reference" %in% names(context$sus))
+  expect_null(context$active_su)
 })
 
 test_that("SU activation filters the project and returns diagnostics", {
@@ -170,8 +232,13 @@ test_that("SU save-as preserves rows, indexes, and metadata without changing sta
   expect_identical(inspection$unique_plot_index, TRUE)
   expect_identical(inspection$site_unit_index, TRUE)
   expect_identical(DBI::dbGetQuery(target, 'SELECT COUNT(*) AS n FROM "Copy_SU"')$n, 2L)
+  expect_identical(inspection$kind, "ordinary")
   expect_null(context$active_su)
   expect_snapshot(error = TRUE, vpro_su_save_as(context, "Subset", target_path, "Copy"))
+  expect_snapshot(
+    error = TRUE,
+    vpro_su_save_as(context, "Subset", tempfile(fileext = ".db"), "NewMaster", kind = "master")
+  )
 })
 
 test_that("bundled Sample SU activates the canonical subset", {

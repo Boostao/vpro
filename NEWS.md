@@ -1,6 +1,8 @@
 # vpro 0.0.0.9000
 
-* SU lifecycle APIs now inspect, attach, activate, deactivate, recover, safely detach, and transactionally save independent site-unit tables while preserving shared SQLite attachments.
+* Environmental plot CRUD now reads paired active-project Env/Admin rows and applies validated field updates with Access-compatible audit-strength rules in one SQLite transaction.
+* Hierarchy lifecycle APIs now inspect, attach, activate, deactivate, recover, safely detach, and transactionally save independent hierarchy tables with non-destructive tree diagnostics.
+* SU lifecycle APIs now inspect, attach, activate, deactivate, recover, safely detach, and transactionally save independent site-unit tables while preserving shared SQLite attachments. Explicit master metadata, permission callbacks, and provenance-bearing working copies replace Access name matching and its embedded password.
 * Project lifecycle APIs now inspect and attach VP08 SQLite projects, activate coordinator-scoped compatibility views, guard detach operations, and transactionally save a project under a new name.
 * `vpro_project_recover()` restores the configured current project at startup and falls back to an explicit Sample database when recovery fails.
 * `run_vpro()` now launches the packaged application explicitly; attaching the package no longer starts Shiny or modifies the installed `bslib` package.

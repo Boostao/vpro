@@ -27,6 +27,36 @@ vpro_su_text_type <- function(type) {
   grepl("CHAR|CLOB|TEXT", toupper(type))
 }
 
+vpro_su_policy <- function(con, table) {
+  default <- list(kind = "ordinary", source_path = NA_character_, source_table = NA_character_, created_at = NA_character_, created_by = NA_character_)
+  if (!DBI::dbExistsTable(con, "_vpro_su_policy")) {
+    return(default)
+  }
+  policy <- DBI::dbGetQuery(
+    con,
+    "SELECT kind, source_path, source_table, created_at, created_by FROM _vpro_su_policy WHERE table_name = ?",
+    params = list(table)
+  )
+  if (nrow(policy) != 1L || !policy$kind[[1]] %in% c("ordinary", "master", "working")) {
+    return(default)
+  }
+  as.list(policy[1, , drop = FALSE])
+}
+
+vpro_su_authorized <- function(authorize, permission, inspection) {
+  is.function(authorize) && isTRUE(authorize(permission, inspection))
+}
+
+vpro_su_authorizer <- function(context, authorize = NULL) {
+  if (is.function(authorize)) {
+    return(authorize)
+  }
+  if (is.function(context$authorize)) {
+    return(context$authorize)
+  }
+  NULL
+}
+
 #' Inspect a VPRO site-unit table
 #'
 #' An SU is an independent `<name>_SU` SQLite table with text `PlotNumber` and
@@ -78,11 +108,14 @@ vpro_su_inspect <- function(path, su) {
     }
   }
 
+  policy <- vpro_su_policy(con, table)
   list(
     path = path,
     su = su,
     table = table,
     version = vpro_su_metadata(con, table),
+    kind = policy$kind,
+    policy = policy,
     compatible = compatible,
     fields = fields,
     indexes = indexes,
@@ -104,16 +137,26 @@ vpro_su_alias <- function(su) {
 #' @param context A VPRO project context.
 #' @param path Path to the SQLite database containing the SU.
 #' @param su SU name without the `_SU` suffix.
+#' @param authorize Optional function called as `authorize("attach_master_su",
+#'   inspection)` for an SU explicitly marked as master. It must return `TRUE` to
+#'   permit direct master attachment.
 #'
 #' @return SU attachment metadata, invisibly.
 #' @export
-vpro_su_attach <- function(context, path, su) {
+vpro_su_attach <- function(context, path, su, authorize = NULL) {
   vpro_project_assert_context(context)
   inspection <- vpro_su_inspect(path, su)
+  authorize <- vpro_su_authorizer(context, authorize)
   if (!isTRUE(inspection$compatible)) {
     stop(
       "VPRO SU table must contain text PlotNumber and SiteUnit fields: ",
       inspection$table,
+      call. = FALSE
+    )
+  }
+  if (identical(inspection$kind, "master") && !vpro_su_authorized(authorize, "attach_master_su", inspection)) {
+    stop(
+      "Direct attachment of a master VPRO SU requires `attach_master_su` authorization; create a working copy instead.",
       call. = FALSE
     )
   }
@@ -137,6 +180,8 @@ vpro_su_attach <- function(context, path, su) {
     path = inspection$path,
     alias = alias,
     version = inspection$version,
+    kind = inspection$kind,
+    policy = inspection$policy,
     unique_plot_index = inspection$unique_plot_index,
     site_unit_index = inspection$site_unit_index
   )
@@ -307,16 +352,32 @@ vpro_su_detach <- function(context, su) {
 #' Save an attached VPRO site-unit table under a new name
 #'
 #' The SU table, rows, explicit indexes, and translated table metadata are copied
-#' transactionally. The copy is neither attached nor activated.
+#' transactionally. The copy is neither attached nor activated. A master source
+#' always produces a working copy with explicit provenance; creating another
+#' master requires `create_master_su` authorization.
 #'
 #' @param context A VPRO project context.
 #' @param su Attached source SU name.
 #' @param path Target SQLite database path.
 #' @param new_su Target SU name without the `_SU` suffix.
+#' @param kind Target policy kind: `"auto"` creates a working copy from a master
+#'   and otherwise an ordinary SU; `"ordinary"` and `"working"` may be selected
+#'   explicitly; `"master"` requires authorization.
+#' @param authorize Optional function called as `authorize("create_master_su",
+#'   inspection)` when `kind = "master"`.
+#' @param created_by Optional stable caller identity recorded as provenance.
 #'
 #' @return The normalized target path, invisibly.
 #' @export
-vpro_su_save_as <- function(context, su, path, new_su) {
+vpro_su_save_as <- function(
+  context,
+  su,
+  path,
+  new_su,
+  kind = c("auto", "ordinary", "working", "master"),
+  authorize = NULL,
+  created_by = NULL
+) {
   vpro_project_assert_context(context)
   su <- vpro_su_name(su)
   new_su <- vpro_su_name(new_su)
@@ -327,17 +388,36 @@ vpro_su_save_as <- function(context, su, path, new_su) {
   if (is.null(record)) {
     stop("VPRO SU is not attached: ", su, call. = FALSE)
   }
+  kind <- match.arg(kind)
+  authorize <- vpro_su_authorizer(context, authorize)
+  target_kind <- if (identical(record$kind, "master") && !identical(kind, "master")) {
+    "working"
+  } else if (identical(kind, "auto")) {
+    "ordinary"
+  } else {
+    kind
+  }
+  if (identical(target_kind, "master") && !vpro_su_authorized(authorize, "create_master_su", record)) {
+    stop("Creating a master VPRO SU requires `create_master_su` authorization.", call. = FALSE)
+  }
+  if (!is.null(created_by) && (length(created_by) != 1L || is.na(created_by))) {
+    stop("`created_by` must be NULL or one non-missing character value.", call. = FALSE)
+  }
 
   path <- normalizePath(path, mustWork = FALSE)
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   source <- DBI::dbConnect(RSQLite::SQLite(), record$path)
   on.exit(if (DBI::dbIsValid(source)) DBI::dbDisconnect(source), add = TRUE)
-  DBI::dbExecute(source, "ATTACH DATABASE ? AS target", params = list(path))
+  same_database <- identical(path, record$path)
+  target_schema <- if (same_database) "main" else "target"
+  if (!same_database) {
+    DBI::dbExecute(source, "ATTACH DATABASE ? AS target", params = list(path))
+  }
   source_table <- record$table
   target_table <- vpro_su_table(new_su)
   collision <- DBI::dbGetQuery(
     source,
-    "SELECT name FROM target.sqlite_master WHERE name = ?",
+    paste0("SELECT name FROM ", target_schema, ".sqlite_master WHERE name = ?"),
     params = list(target_table)
   )$name
   if (length(collision) > 0L) {
@@ -352,14 +432,14 @@ vpro_su_save_as <- function(context, su, path, new_su) {
     )$sql[[1]]
     schema <- sub(
       paste0('^CREATE TABLE ["`]?', source_table, '["`]?'),
-      paste0('CREATE TABLE target."', target_table, '"'),
+      paste0('CREATE TABLE ', target_schema, '."', target_table, '"'),
       schema
     )
     DBI::dbExecute(source, schema)
     DBI::dbExecute(
       source,
       paste(
-        "INSERT INTO target.",
+        "INSERT INTO ", target_schema, ".",
         DBI::dbQuoteIdentifier(source, target_table),
         "SELECT * FROM main.",
         DBI::dbQuoteIdentifier(source, source_table)
@@ -376,7 +456,7 @@ vpro_su_save_as <- function(context, su, path, new_su) {
       sql <- gsub(source_table, target_table, indexes$sql[[index]], fixed = TRUE)
       sql <- sub(
         paste0('^CREATE (UNIQUE )?INDEX ["`]?', target_index, '["`]?'),
-        paste0('CREATE \\1INDEX target."', target_index, '"'),
+        paste0('CREATE \\1INDEX ', target_schema, '."', target_index, '"'),
         sql
       )
       DBI::dbExecute(source, sql)
@@ -384,7 +464,7 @@ vpro_su_save_as <- function(context, su, path, new_su) {
 
     DBI::dbExecute(
       source,
-      "CREATE TABLE IF NOT EXISTS target._table_metadata (table_name TEXT PRIMARY KEY, description TEXT)"
+      paste0("CREATE TABLE IF NOT EXISTS ", target_schema, "._table_metadata (table_name TEXT PRIMARY KEY, description TEXT)")
     )
     if (DBI::dbExistsTable(source, "_table_metadata")) {
       metadata <- DBI::dbGetQuery(
@@ -395,13 +475,129 @@ vpro_su_save_as <- function(context, su, path, new_su) {
       if (nrow(metadata) == 1L) {
         DBI::dbExecute(
           source,
-          "INSERT INTO target._table_metadata VALUES (?, ?)",
+          paste0("INSERT INTO ", target_schema, "._table_metadata VALUES (?, ?)"),
           params = list(target_table, metadata$description[[1]])
         )
       }
     }
+
+    DBI::dbExecute(
+      source,
+      paste(
+        "CREATE TABLE IF NOT EXISTS ", target_schema, "._vpro_su_policy (",
+        "table_name TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('ordinary', 'master', 'working')),",
+        "source_path TEXT, source_table TEXT, created_at TEXT NOT NULL, created_by TEXT)"
+      )
+    )
+    DBI::dbExecute(
+      source,
+      paste0("INSERT INTO ", target_schema, "._vpro_su_policy VALUES (?, ?, ?, ?, ?, ?)"),
+      params = list(
+        target_table,
+        target_kind,
+        if (identical(target_kind, "working")) record$path else NA_character_,
+        if (identical(target_kind, "working")) record$table else NA_character_,
+        format(Sys.time(), tz = "UTC", usetz = TRUE),
+        if (is.null(created_by)) NA_character_ else as.character(created_by)
+      )
+    )
   })
   invisible(path)
+}
+
+#' Mark a VPRO site-unit table as a master
+#'
+#' Master status is explicit package metadata. This avoids Access's ambiguous
+#' substring test and requires a caller-supplied authorization decision.
+#'
+#' @param path Path to the SQLite database containing the SU.
+#' @param su SU name without the `_SU` suffix.
+#' @param authorize Function called as `authorize("manage_master_su", inspection)`.
+#' @param created_by Optional stable caller identity recorded in policy metadata.
+#'
+#' @return Updated SU inspection metadata, invisibly.
+#' @export
+vpro_su_mark_master <- function(path, su, authorize, created_by = NULL) {
+  inspection <- vpro_su_inspect(path, su)
+  if (!vpro_su_authorized(authorize, "manage_master_su", inspection)) {
+    stop("Marking a master VPRO SU requires `manage_master_su` authorization.", call. = FALSE)
+  }
+  if (!is.null(created_by) && (length(created_by) != 1L || is.na(created_by))) {
+    stop("`created_by` must be NULL or one non-missing character value.", call. = FALSE)
+  }
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), inspection$path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  DBI::dbWithTransaction(con, {
+    DBI::dbExecute(
+      con,
+      paste(
+        "CREATE TABLE IF NOT EXISTS _vpro_su_policy (",
+        "table_name TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('ordinary', 'master', 'working')),",
+        "source_path TEXT, source_table TEXT, created_at TEXT NOT NULL, created_by TEXT)"
+      )
+    )
+    DBI::dbExecute(
+      con,
+      paste(
+        "INSERT INTO _vpro_su_policy VALUES (?, 'master', NULL, NULL, ?, ?)",
+        "ON CONFLICT(table_name) DO UPDATE SET kind = 'master', source_path = NULL,",
+        "source_table = NULL, created_at = excluded.created_at, created_by = excluded.created_by"
+      ),
+      params = list(
+        inspection$table,
+        format(Sys.time(), tz = "UTC", usetz = TRUE),
+        if (is.null(created_by)) NA_character_ else as.character(created_by)
+      )
+    )
+  })
+  invisible(vpro_su_inspect(inspection$path, inspection$su))
+}
+
+#' Create an ordinary working copy of a master VPRO site-unit table
+#'
+#' This is the package-native translation of `V7mdlAttachSU.MakeMasterCopy`.
+#' The master is read directly from SQLite and is never attached to the project
+#' context, activated, or modified. The copy records explicit source provenance.
+#'
+#' @param context A VPRO project context.
+#' @param path Path to the SQLite database containing the master SU.
+#' @param su Master SU name without the `_SU` suffix.
+#' @param target_path Target SQLite database path.
+#' @param new_su Working-copy name without the `_SU` suffix.
+#' @param created_by Optional stable caller identity recorded as provenance.
+#'
+#' @return The normalized target path, invisibly.
+#' @export
+vpro_su_create_working_copy <- function(context, path, su, target_path, new_su, created_by = NULL) {
+  vpro_project_assert_context(context)
+  inspection <- vpro_su_inspect(path, su)
+  if (!identical(inspection$kind, "master")) {
+    stop("A VPRO working copy can only be created from an SU explicitly marked as master.", call. = FALSE)
+  }
+
+  copy_context <- new.env(parent = emptyenv())
+  copy_context$con <- context$con
+  copy_context$sus <- stats::setNames(
+    list(list(
+      su = inspection$su,
+      table = inspection$table,
+      path = inspection$path,
+      version = inspection$version,
+      kind = inspection$kind,
+      policy = inspection$policy
+    )),
+    inspection$su
+  )
+  class(copy_context) <- "vpro_project_context"
+  vpro_su_save_as(
+    copy_context,
+    inspection$su,
+    target_path,
+    new_su,
+    kind = "working",
+    created_by = created_by
+  )
 }
 
 #' Recover the configured VPRO site-unit table
