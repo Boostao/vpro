@@ -4,7 +4,9 @@ source(here::here("R", "logic_compliance.R"))
 
 setup_compliance_tables <- function(con) {
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Env (
       plotnumber TEXT,
       projectid TEXT,
@@ -19,21 +21,30 @@ setup_compliance_tables <- function(con) {
       aspect DOUBLE,
       rootingdepth DOUBLE
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Veg (
       plotnumber TEXT,
       species TEXT,
       projectid TEXT,
       cover TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS lists.SppList (
       code TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE VIEW vw_USysAllVeg AS
     SELECT plotnumber,
            species AS species_code,
@@ -41,15 +52,19 @@ setup_compliance_tables <- function(con) {
           cover AS cover_value,
            projectid
     FROM Veg
-  ")
+  "
+  )
 
   DBI::dbExecute(con, "DROP TABLE IF EXISTS lists.USysZoneList")
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE lists.USysZoneList (
       zone_code TEXT,
       subzone TEXT
     )
-  ")
+  "
+  )
 
   DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 62, -150, 5000, 'BAD', 'BAD', 150, 400, -5)")
   DBI::dbExecute(con, "INSERT INTO Env VALUES ('P1', 'PRJ', 'BAD', 'BAD', 55, -120, 100, 'BAD', 'OK', 10, 180, 10)")

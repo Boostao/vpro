@@ -12,9 +12,9 @@ mod_project_ui <- function(id) {
     uiOutput(ns("project_switcher")),
     div(
       class = "d-flex gap-1 mb-1",
-      actionButton(ns("btn_open"),  "Open",  class = "btn btn-sm btn-outline-primary flex-fill"),
-      actionButton(ns("btn_new"),   "New",   class = "btn btn-sm btn-outline-success flex-fill"),
-      actionButton(ns("btn_save"),  "Save",  class = "btn btn-sm btn-outline-secondary flex-fill")
+      actionButton(ns("btn_open"), "Open", class = "btn btn-sm btn-outline-primary flex-fill"),
+      actionButton(ns("btn_new"), "New", class = "btn btn-sm btn-outline-success flex-fill"),
+      actionButton(ns("btn_save"), "Save", class = "btn btn-sm btn-outline-secondary flex-fill")
     ),
     uiOutput(ns("close_ui"))
   )
@@ -39,7 +39,9 @@ mod_project_server <- function(id, state, con) {
     project_changed <- reactiveVal(0L)
 
     ensure_project_baseline <- function(project_id, source_file_path = NULL, source_kind = "project_open") {
-      if (is.null(project_id) || !nzchar(project_id %||% "")) return(invisible(NULL))
+      if (is.null(project_id) || !nzchar(project_id %||% "")) {
+        return(invisible(NULL))
+      }
       force_refresh <- FALSE
       if (!isTRUE(project_baseline_has_tables(con, project_id))) {
         pending_total <- tryCatch(sync_get_pending_total(con, project_id = project_id), error = function(e) 0L)
@@ -66,7 +68,9 @@ mod_project_server <- function(id, state, con) {
     # ---- Startup: auto-restore project from main db ----
     observe({
       available_pids <- visible_open_projects()
-      if (length(available_pids) == 0) return()
+      if (length(available_pids) == 0) {
+        return()
+      }
 
       # Prefer the real-world deployment project when it is present.
       pref <- shiny::isolate(state$PrefProject)
@@ -82,21 +86,22 @@ mod_project_server <- function(id, state, con) {
 
       set_project(state, pid_to_activate, con)
       ensure_project_baseline(pid_to_activate, source_file_path = current_path(), source_kind = "project_activate")
-      
+
       # Restore preferred plot/SU after project activation (set_project clears it)
       pref_plot <- shiny::isolate(state$PrefPlot)
       if (!is.null(pref_plot) && nzchar(pref_plot %||% "")) {
         state$CurrSU <- pref_plot
         state$sysCurrSU <- pref_plot
       }
-      
+
       project_changed(project_changed() + 1L)
-    }) |> bindEvent(session$clientData$url_hostname, once = TRUE, ignoreNULL = FALSE)
+    }) |>
+      bindEvent(session$clientData$url_hostname, once = TRUE, ignoreNULL = FALSE)
 
     # ---- Project switcher (visible when multiple projects are open) ----
     output$project_switcher <- renderUI({
       open_pids <- visible_open_projects()
-      pid       <- state$CurrProject
+      pid <- state$CurrProject
 
       if (length(open_pids) <= 1) {
         # Single project: just show the label
@@ -134,8 +139,7 @@ mod_project_server <- function(id, state, con) {
     output$close_ui <- renderUI({
       pid <- state$CurrProject
       if (!is.null(pid) && nzchar(pid %||% "")) {
-        actionButton(ns("btn_close"), "Close project",
-                     class = "btn btn-sm btn-outline-danger w-100 mb-1")
+        actionButton(ns("btn_close"), "Close project", class = "btn btn-sm btn-outline-danger w-100 mb-1")
       }
     })
 
@@ -186,24 +190,27 @@ mod_project_server <- function(id, state, con) {
         ))
       } else {
         # Single project (or unknown — let open_project detect)
-        tryCatch({
-          pid <- open_project(con, path)
-          current_path(path)
-          set_project(state, pid, con)
-          ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
-          removeModal()
-          project_changed(project_changed() + 1L)
-          show_toast(toast(paste0("Opened project: ", pid), type = "success"))
-        }, error = function(e) {
-          show_toast(toast(conditionMessage(e), type = "danger"))
-        })
+        tryCatch(
+          {
+            pid <- open_project(con, path)
+            current_path(path)
+            set_project(state, pid, con)
+            ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
+            removeModal()
+            project_changed(project_changed() + 1L)
+            show_toast(toast(paste0("Opened project: ", pid), type = "success"))
+          },
+          error = function(e) {
+            show_toast(toast(conditionMessage(e), type = "danger"))
+          }
+        )
       }
     })
 
     # Confirm project selection after multi-project file open
     observeEvent(input$open_pick_confirm, {
       path <- .pending_open_path()
-      pid  <- input$open_pick_pid
+      pid <- input$open_pick_pid
       if (is.null(path) || !nzchar(path %||% "")) {
         show_toast(toast("No pending file path.", type = "danger"))
         return()
@@ -212,25 +219,28 @@ mod_project_server <- function(id, state, con) {
         show_toast(toast("No project selected.", type = "danger"))
         return()
       }
-      tryCatch({
-        open_project(con, path, project_id = pid)
-        current_path(path)
-        set_project(state, pid, con)
-        ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
-        .pending_open_path(NULL)
-        removeModal()
-        project_changed(project_changed() + 1L)
-        show_toast(toast(paste0("Opened project: ", pid), type = "success"))
-      }, error = function(e) {
-        show_toast(toast(conditionMessage(e), type = "danger"))
-      })
+      tryCatch(
+        {
+          open_project(con, path, project_id = pid)
+          current_path(path)
+          set_project(state, pid, con)
+          ensure_project_baseline(pid, source_file_path = path, source_kind = "project_open")
+          .pending_open_path(NULL)
+          removeModal()
+          project_changed(project_changed() + 1L)
+          show_toast(toast(paste0("Opened project: ", pid), type = "success"))
+        },
+        error = function(e) {
+          show_toast(toast(conditionMessage(e), type = "danger"))
+        }
+      )
     })
 
     # ---- New ----
     observeEvent(input$btn_new, {
       showModal(modalDialog(
         title = "New Project",
-        textInput(ns("new_id"),    "Project ID (required)",    value = ""),
+        textInput(ns("new_id"), "Project ID (required)", value = ""),
         textInput(ns("new_title"), "Project Title (required)", value = ""),
         footer = tagList(
           modalButton("Cancel"),
@@ -241,23 +251,26 @@ mod_project_server <- function(id, state, con) {
     })
 
     observeEvent(input$new_confirm, {
-      pid   <- trimws(input$new_id    %||% "")
+      pid <- trimws(input$new_id %||% "")
       title <- trimws(input$new_title %||% "")
       if (!nzchar(pid) || !nzchar(title)) {
         show_toast(toast("Project ID and Title are both required.", type = "danger"))
         return()
       }
-      tryCatch({
-        new_project(con, pid, title)
-        current_path(project_db_path(pid))
-        set_project(state, pid, con)
-        ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_new")
-        removeModal()
-        project_changed(project_changed() + 1L)
-        show_toast(toast(paste0("Created project: ", pid), type = "success"))
-      }, error = function(e) {
-        show_toast(toast(conditionMessage(e), type = "danger"))
-      })
+      tryCatch(
+        {
+          new_project(con, pid, title)
+          current_path(project_db_path(pid))
+          set_project(state, pid, con)
+          ensure_project_baseline(pid, source_file_path = current_path(), source_kind = "project_new")
+          removeModal()
+          project_changed(project_changed() + 1L)
+          show_toast(toast(paste0("Created project: ", pid), type = "success"))
+        },
+        error = function(e) {
+          show_toast(toast(conditionMessage(e), type = "danger"))
+        }
+      )
     })
 
     # ---- Save ----
@@ -279,31 +292,37 @@ mod_project_server <- function(id, state, con) {
     })
 
     observeEvent(input$save_confirm, {
-      pid  <- isolate(state$CurrProject)
+      pid <- isolate(state$CurrProject)
       path <- trimws(input$save_path %||% "")
       if (!nzchar(path)) {
         show_toast(toast("File path is required.", type = "danger"))
         return()
       }
-      tryCatch({
-        save_project(con, pid, path)
-        current_path(path)
-        removeModal()
-        show_toast(toast(paste0("Saved project '", pid, "' to ", path), type = "success"))
-      }, error = function(e) {
-        show_toast(toast(conditionMessage(e), type = "danger"))
-      })
+      tryCatch(
+        {
+          save_project(con, pid, path)
+          current_path(path)
+          removeModal()
+          show_toast(toast(paste0("Saved project '", pid, "' to ", path), type = "success"))
+        },
+        error = function(e) {
+          show_toast(toast(conditionMessage(e), type = "danger"))
+        }
+      )
     })
 
     # ---- Close ----
     observeEvent(input$btn_close, {
       pid <- isolate(state$CurrProject)
-      if (is.null(pid) || !nzchar(pid %||% "")) return()
+      if (is.null(pid) || !nzchar(pid %||% "")) {
+        return()
+      }
       showModal(modalDialog(
         title = "Close Project",
         p(paste0("Close project '", pid, "'?")),
-        if (!is.null(current_path()))
-          p(class = "text-muted small", paste0("Will save to: ", current_path())),
+        if (!is.null(current_path())) {
+          p(class = "text-muted small", paste0("Will save to: ", current_path()))
+        },
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns("close_confirm"), "Close", class = "btn-danger")
@@ -313,26 +332,29 @@ mod_project_server <- function(id, state, con) {
     })
 
     observeEvent(input$close_confirm, {
-      pid  <- isolate(state$CurrProject)
+      pid <- isolate(state$CurrProject)
       path <- isolate(current_path())
-      tryCatch({
-        close_project(con, pid, path)
-        state$CurrProject    <- NULL
-        state$sysCurrProject <- NULL
-        state$CurrSU         <- NULL
-        state$sysCurrSU      <- NULL
-        config("Current", "CurrProject", NULL)
-        removeModal()
-        project_changed(project_changed() + 1L)
-        show_toast(toast(paste0("Closed project '", pid, "'."), type = "success"))
-      }, error = function(e) {
-        show_toast(toast(conditionMessage(e), type = "danger"))
-      })
+      tryCatch(
+        {
+          close_project(con, pid, path)
+          state$CurrProject <- NULL
+          state$sysCurrProject <- NULL
+          state$CurrSU <- NULL
+          state$sysCurrSU <- NULL
+          config("Current", "CurrProject", NULL)
+          removeModal()
+          project_changed(project_changed() + 1L)
+          show_toast(toast(paste0("Closed project '", pid, "'."), type = "success"))
+        },
+        error = function(e) {
+          show_toast(toast(conditionMessage(e), type = "danger"))
+        }
+      )
     })
 
     # ---- Auto-save on session end ----
     session$onSessionEnded(function() {
-      pid  <- isolate(state$CurrProject)
+      pid <- isolate(state$CurrProject)
       path <- isolate(current_path())
       if (!is.null(pid) && nzchar(pid %||% "") && !is.null(path) && nzchar(path %||% "")) {
         try(save_project(con, pid, path), silent = TRUE)

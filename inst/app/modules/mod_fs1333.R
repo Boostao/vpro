@@ -1,25 +1,11 @@
 fs1333_plot_type_to_option <- function(value) {
   value <- trimws(as.character(value %||% ""))
-  switch(tolower(value),
-    "ground" = 1L,
-    "visual" = 2L,
-    "note" = 3L,
-    "fs882" = 4L,
-    "other" = 5L,
-    NA_integer_
-  )
+  switch(tolower(value), "ground" = 1L, "visual" = 2L, "note" = 3L, "fs882" = 4L, "other" = 5L, NA_integer_)
 }
 
 fs1333_option_to_plot_type <- function(value) {
   value <- suppressWarnings(as.integer(value))
-  switch(as.character(value %||% NA_integer_),
-    "1" = "Ground",
-    "2" = "Visual",
-    "3" = "Note",
-    "4" = "FS882",
-    "5" = "Other",
-    NA_character_
-  )
+  switch(as.character(value %||% NA_integer_), "1" = "Ground", "2" = "Visual", "3" = "Note", "4" = "FS882", "5" = "Other", NA_character_)
 }
 
 fs1333_species_complete_to_option <- function(value) {
@@ -71,7 +57,10 @@ mod_fs1333_ui <- function(id) {
           inline = TRUE
         ),
         shiny::selectizeInput(
-          ns("ProjectID"), "Project ID", choices = character(0), selected = NULL,
+          ns("ProjectID"),
+          "Project ID",
+          choices = character(0),
+          selected = NULL,
           options = list(create = TRUE, placeholder = "Select or type new...")
         ),
         shiny::selectInput(
@@ -273,53 +262,73 @@ mod_fs1333_server <- function(id, state, con) {
     output$status <- shiny::renderText(status_text())
 
     # Form_Load parity: initialize source mode from remembered session value.
-    observeEvent(TRUE, {
-      source_pref <- suppressWarnings(as.integer((config("Current", "FS1333ProjectIdSource") %||% "1")))
-      if (is.na(source_pref) || !(source_pref %in% c(1L, 2L))) {
-        source_pref <- 1L
-      }
-      project_id_source(source_pref)
-      shiny::updateRadioButtons(session, "optProjectID", selected = as.character(source_pref))
-      load_project_id_choices()
-      load_current_context()
-    }, once = TRUE)
+    observeEvent(
+      TRUE,
+      {
+        source_pref <- suppressWarnings(as.integer((config("Current", "FS1333ProjectIdSource") %||% "1")))
+        if (is.na(source_pref) || !(source_pref %in% c(1L, 2L))) {
+          source_pref <- 1L
+        }
+        project_id_source(source_pref)
+        shiny::updateRadioButtons(session, "optProjectID", selected = as.character(source_pref))
+        load_project_id_choices()
+        load_current_context()
+      },
+      once = TRUE
+    )
 
-    observeEvent(input$optProjectID, {
-      source_mode <- suppressWarnings(as.integer(input$optProjectID %||% "1"))
-      if (is.na(source_mode) || !(source_mode %in% c(1L, 2L))) {
-        source_mode <- 1L
-      }
-      project_id_source(source_mode)
-      config("Current", "FS1333ProjectIdSource", as.character(source_mode))
-      load_project_id_choices()
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$optProjectID,
+      {
+        source_mode <- suppressWarnings(as.integer(input$optProjectID %||% "1"))
+        if (is.na(source_mode) || !(source_mode %in% c(1L, 2L))) {
+          source_mode <- 1L
+        }
+        project_id_source(source_mode)
+        config("Current", "FS1333ProjectIdSource", as.character(source_mode))
+        load_project_id_choices()
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(list(state$CurrProject, state$CurrSU), {
-      load_project_id_choices()
-      load_current_context()
-    }, ignoreInit = TRUE)
+    observeEvent(
+      list(state$CurrProject, state$CurrSU),
+      {
+        load_project_id_choices()
+        load_current_context()
+      },
+      ignoreInit = TRUE
+    )
 
     # ProjectID AfterUpdate + NotInList is handled in the combined observer below (near end of module)
 
-    observeEvent(input$optPlotType, {
-      value <- fs1333_option_to_plot_type(input$optPlotType)
-      result <- update_env_column(state$CurrSU, "plottype", value)
-      if (isTRUE(result$ok)) {
-        status_text("Plot type updated")
-      } else {
-        status_text(result$reason)
-      }
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$optPlotType,
+      {
+        value <- fs1333_option_to_plot_type(input$optPlotType)
+        result <- update_env_column(state$CurrSU, "plottype", value)
+        if (isTRUE(result$ok)) {
+          status_text("Plot type updated")
+        } else {
+          status_text(result$reason)
+        }
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$optSpeciesListComplete, {
-      value <- fs1333_option_to_species_complete(input$optSpeciesListComplete)
-      result <- update_env_column(state$CurrSU, "specieslistcomplete", value)
-      if (isTRUE(result$ok)) {
-        status_text("Species list status updated")
-      } else {
-        status_text(result$reason)
-      }
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$optSpeciesListComplete,
+      {
+        value <- fs1333_option_to_species_complete(input$optSpeciesListComplete)
+        result <- update_env_column(state$CurrSU, "specieslistcomplete", value)
+        if (isTRUE(result$ok)) {
+          status_text("Species list status updated")
+        } else {
+          status_text(result$reason)
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     # ---- btnEditMetadata_Click parity (frmSIVIsite → frmProjectMetaData) ----
     # Opens metadata module, finds matching ProjectID row.
@@ -363,7 +372,8 @@ mod_fs1333_server <- function(id, state, con) {
           shiny::tags$p(
             sprintf(
               "Meta data record does not exist for project ID %s.  Add?  To add a new meta data record with project ID %s click Yes.",
-              project_id, project_id
+              project_id,
+              project_id
             )
           ),
           footer = shiny::tagList(
@@ -421,7 +431,9 @@ mod_fs1333_server <- function(id, state, con) {
         pid_col <- "ProjectID"
         meta_cols <- tryCatch(DBI::dbListFields(con, meta_table), error = function(e) character(0))
         pid_hit <- meta_cols[tolower(meta_cols) == "projectid"]
-        if (length(pid_hit) > 0) pid_col <- pid_hit[[1]]
+        if (length(pid_hit) > 0) {
+          pid_col <- pid_hit[[1]]
+        }
         insert_df <- data.frame(x = project_id, stringsAsFactors = FALSE)
         names(insert_df) <- pid_col
         tryCatch(
@@ -444,22 +456,28 @@ mod_fs1333_server <- function(id, state, con) {
     # in the known choices, trigger the edit-metadata flow (same as Access NotInList
     # calling btnEditMetadata_Click).
     known_project_ids <- shiny::reactiveVal(character(0))
-    observeEvent(input$ProjectID, {
-      value <- normalize_text(input$ProjectID)
-      if (!nzchar(value)) return()
-      known <- known_project_ids()
-      if (length(known) > 0 && !(value %in% known)) {
-        # New value not in list — Access NotInList parity
-        open_metadata_for_project(value)
-      }
-      # Still update the env column regardless
-      result <- update_env_column(state$CurrSU, "projectid", value)
-      if (isTRUE(result$ok)) {
-        status_text(sprintf("Project ID set to %s", value))
-      } else {
-        status_text(result$reason)
-      }
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$ProjectID,
+      {
+        value <- normalize_text(input$ProjectID)
+        if (!nzchar(value)) {
+          return()
+        }
+        known <- known_project_ids()
+        if (length(known) > 0 && !(value %in% known)) {
+          # New value not in list — Access NotInList parity
+          open_metadata_for_project(value)
+        }
+        # Still update the env column regardless
+        result <- update_env_column(state$CurrSU, "projectid", value)
+        if (isTRUE(result$ok)) {
+          status_text(sprintf("Project ID set to %s", value))
+        } else {
+          status_text(result$reason)
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$btnClose2, {
       return_tab <- state$DataEntryReturnTab %||% "Vegetation"

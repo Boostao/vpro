@@ -3,14 +3,19 @@
 source(here::here("R", "logic_audit.R"))
 
 setup_audit_env <- function(con) {
-  attached <- tryCatch({
-    DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
-  }, error = function(e) character(0))
+  attached <- tryCatch(
+    {
+      DBI::dbGetQuery(con, "SELECT database_name FROM duckdb_databases()")$database_name
+    },
+    error = function(e) character(0)
+  )
   if (!("user_db" %in% attached)) {
     audit_db <- tempfile("audit_db_", fileext = ".duckdb")
     DBI::dbExecute(con, sprintf("ATTACH '%s' AS user_db", gsub("'", "''", audit_db)))
   }
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS user_db.main.USysAuditTrail (
       Project TEXT,
       \"User\" TEXT,
@@ -21,7 +26,8 @@ setup_audit_env <- function(con) {
       BeforeEdit TEXT,
       AfterEdit TEXT
     )
-  ")
+  "
+  )
 }
 
 test_that("log_audit_change writes entries", {

@@ -19,27 +19,35 @@ source(here::here("R", "logic_sync.R"))
 #' Caller must disconnect and unlink the file.
 .make_master <- function() {
   path <- tempfile(fileext = ".duckdb")
-  mc   <- DBI::dbConnect(duckdb::duckdb(), path)
+  mc <- DBI::dbConnect(duckdb::duckdb(), path)
 
   DBI::dbExecute(mc, "CREATE SCHEMA admin")
   DBI::dbExecute(mc, "CREATE SCHEMA core")
   DBI::dbExecute(mc, "CREATE SCHEMA staging")
 
   # admin.users
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE admin.users (
       id    INTEGER PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       full_name TEXT
     )
-  ")
-  DBI::dbExecute(mc, "
+  "
+  )
+  DBI::dbExecute(
+    mc,
+    "
     INSERT INTO admin.users VALUES (1, 'test@example.com', 'Test User')
-  ")
+  "
+  )
 
   # admin.merge_requests  (record_counts as VARCHAR for DuckDB compat)
   DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mr_id_seq START 1")
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE admin.merge_requests (
       id                INTEGER PRIMARY KEY DEFAULT nextval('admin.mr_id_seq'),
       project_id        TEXT NOT NULL,
@@ -55,11 +63,14 @@ source(here::here("R", "logic_sync.R"))
       compliance_passed BOOLEAN,
       compliance_report TEXT
     )
-  ")
+  "
+  )
 
   # admin.merge_conflicts  (record_id TEXT, UNIQUE on 3 cols)
   DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mc_id_seq START 1")
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE admin.merge_conflicts (
       id               INTEGER PRIMARY KEY DEFAULT nextval('admin.mc_id_seq'),
       merge_request_id INTEGER NOT NULL,
@@ -72,11 +83,14 @@ source(here::here("R", "logic_sync.R"))
       created_utc      TIMESTAMPTZ DEFAULT now(),
       UNIQUE (merge_request_id, table_name, record_id)
     )
-  ")
+  "
+  )
 
   # admin.merge_history
   DBI::dbExecute(mc, "CREATE SEQUENCE IF NOT EXISTS admin.mh_id_seq START 1")
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE admin.merge_history (
       id                     INTEGER PRIMARY KEY DEFAULT nextval('admin.mh_id_seq'),
       merge_request_id       INTEGER NOT NULL,
@@ -85,10 +99,13 @@ source(here::here("R", "logic_sync.R"))
       record_count           INTEGER,
       merge_summary          VARCHAR
     )
-  ")
+  "
+  )
 
   # core.env (lowercase columns)
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE core.env (
       plotnumber  TEXT PRIMARY KEY,
       fieldnumber TEXT,
@@ -103,10 +120,13 @@ source(here::here("R", "logic_sync.R"))
       \"lastModifiedUTC\"  TIMESTAMPTZ DEFAULT now(),
       \"modifiedBy\"       TEXT
     )
-  ")
+  "
+  )
 
   # staging.env (composite PK: merge_request_id + plotnumber)
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE staging.env (
       merge_request_id  INTEGER NOT NULL,
       plotnumber        TEXT NOT NULL,
@@ -125,10 +145,13 @@ source(here::here("R", "logic_sync.R"))
       \"modifiedBy\"       TEXT,
       PRIMARY KEY (merge_request_id, plotnumber)
     )
-  ")
+  "
+  )
 
   # core.veg (id PK)
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE core.veg (
       id           BIGINT PRIMARY KEY,
       plotnumber   TEXT,
@@ -139,10 +162,13 @@ source(here::here("R", "logic_sync.R"))
       \"lastModifiedUTC\" TIMESTAMPTZ DEFAULT now(),
       \"modifiedBy\"      TEXT
     )
-  ")
+  "
+  )
 
   # staging.veg (composite PK: merge_request_id + id)
-  DBI::dbExecute(mc, "
+  DBI::dbExecute(
+    mc,
+    "
     CREATE TABLE staging.veg (
       merge_request_id INTEGER NOT NULL,
       id               BIGINT NOT NULL,
@@ -157,7 +183,8 @@ source(here::here("R", "logic_sync.R"))
       \"modifiedBy\"      TEXT,
       PRIMARY KEY (merge_request_id, id)
     )
-  ")
+  "
+  )
 
   list(con = mc, path = path)
 }
@@ -166,7 +193,9 @@ source(here::here("R", "logic_sync.R"))
 .make_local <- function() {
   lc <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
 
-  DBI::dbExecute(lc, "
+  DBI::dbExecute(
+    lc,
+    "
     CREATE TABLE Env (
       plotnumber   TEXT PRIMARY KEY,
       fieldnumber  TEXT,
@@ -179,9 +208,12 @@ source(here::here("R", "logic_sync.R"))
       sitenotes    TEXT,
       local_modified_utc TIMESTAMPTZ
     )
-  ")
+  "
+  )
 
-  DBI::dbExecute(lc, "
+  DBI::dbExecute(
+    lc,
+    "
     CREATE TABLE Veg (
       id         BIGINT PRIMARY KEY,
       plotnumber TEXT,
@@ -190,7 +222,8 @@ source(here::here("R", "logic_sync.R"))
       cover1     DOUBLE,
       local_modified_utc TIMESTAMPTZ
     )
-  ")
+  "
+  )
 
   lc
 }
@@ -216,11 +249,14 @@ test_that("sync_cloud_connected returns FALSE when master not attached", {
 })
 
 test_that("sync_cloud_connected returns TRUE when master is attached", {
-  m  <- .make_master()
-  on.exit({
-    DBI::dbDisconnect(m$con)
-    try(unlink(m$path), silent = TRUE)
-  }, add = TRUE)
+  m <- .make_master()
+  on.exit(
+    {
+      DBI::dbDisconnect(m$con)
+      try(unlink(m$path), silent = TRUE)
+    },
+    add = TRUE
+  )
 
   lc <- .make_local()
   on.exit(DBI::dbDisconnect(lc), add = TRUE)
@@ -251,11 +287,14 @@ test_that("sync_ensure_local_tables adds local_modified_utc to Env and Veg", {
 })
 
 test_that(".get_shared_columns returns intersection excluding metadata", {
-  m  <- .make_master()
-  on.exit({
-    DBI::dbDisconnect(m$con)
-    try(unlink(m$path), silent = TRUE)
-  }, add = TRUE)
+  m <- .make_master()
+  on.exit(
+    {
+      DBI::dbDisconnect(m$con)
+      try(unlink(m$path), silent = TRUE)
+    },
+    add = TRUE
+  )
 
   lc <- .make_local()
   on.exit(DBI::dbDisconnect(lc), add = TRUE)
@@ -263,10 +302,10 @@ test_that(".get_shared_columns returns intersection excluding metadata", {
 
   cols <- .get_shared_columns(lc, "Env", "env")
   expect_true("plotnumber" %in% cols)
-  expect_true("projectid"  %in% cols)
+  expect_true("projectid" %in% cols)
   expect_false("local_modified_utc" %in% cols)
-  expect_false("merge_request_id"   %in% cols)
-  expect_false("baserowversion"     %in% cols)
+  expect_false("merge_request_id" %in% cols)
+  expect_false("baserowversion" %in% cols)
 })
 
 # =============================================================================
@@ -286,8 +325,7 @@ test_that("sync_get_change_detail: returns empty list when table does not exist"
   lc <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(lc), add = TRUE)
 
-  cfg <- list(local = "NonExistent", pg = "nonexistent", pk = "id",
-              project_scope = "direct")
+  cfg <- list(local = "NonExistent", pg = "nonexistent", pk = "id", project_scope = "direct")
   result <- sync_get_change_detail(lc, cfg)
   expect_equal(length(result), 0L)
 })
@@ -296,7 +334,8 @@ test_that("sync_get_change_detail: dirty Env row without cloud → insert record
   lc <- .make_local()
   on.exit(DBI::dbDisconnect(lc), add = TRUE)
 
-  DBI::dbExecute(lc,
+  DBI::dbExecute(
+    lc,
     "INSERT INTO Env (plotnumber, fieldnumber, projectid, local_modified_utc)
      VALUES ('P1', 'F1', 'PROJ1', now())"
   )
@@ -314,12 +353,13 @@ test_that("sync_get_change_detail: dirty Env row without cloud → insert record
 })
 
 test_that("sync_get_change_detail: dirty Env with matching core row → update record", {
-  m  <- .make_master()
+  m <- .make_master()
   master_path <- m$path
   on.exit(try(unlink(master_path), silent = TRUE), add = TRUE)
 
   # Add core row and checkpoint so lc can see it via ATTACH, then close master
-  DBI::dbExecute(m$con,
+  DBI::dbExecute(
+    m$con,
     "INSERT INTO core.env (plotnumber, fieldnumber, projectid, latitude)
      VALUES ('P1', 'F1', 'PROJ1', 49.5)"
   )
@@ -332,7 +372,8 @@ test_that("sync_get_change_detail: dirty Env with matching core row → update r
   DBI::dbExecute(lc, sprintf("ATTACH '%s' AS master (READ_ONLY)", master_path))
 
   # Add dirty local row with same PK
-  DBI::dbExecute(lc,
+  DBI::dbExecute(
+    lc,
     "INSERT INTO Env (plotnumber, fieldnumber, projectid, latitude, local_modified_utc)
      VALUES ('P1', 'F1', 'PROJ1', 49.9, now())"
   )
@@ -352,7 +393,8 @@ test_that("sync_get_change_detail: project_id filter excludes other projects", {
   lc <- .make_local()
   on.exit(DBI::dbDisconnect(lc), add = TRUE)
 
-  DBI::dbExecute(lc,
+  DBI::dbExecute(
+    lc,
     "INSERT INTO Env (plotnumber, projectid, local_modified_utc) VALUES
      ('P1', 'PROJ1', now()),
      ('P2', 'PROJ2', now())"
@@ -370,10 +412,13 @@ test_that("sync_get_change_detail: max_rows cap is respected", {
   on.exit(DBI::dbDisconnect(lc), add = TRUE)
 
   for (i in seq_len(10)) {
-    DBI::dbExecute(lc, sprintf(
-      "INSERT INTO Env (plotnumber, projectid, local_modified_utc) VALUES ('P%d', 'PROJ1', now())",
-      i
-    ))
+    DBI::dbExecute(
+      lc,
+      sprintf(
+        "INSERT INTO Env (plotnumber, projectid, local_modified_utc) VALUES ('P%d', 'PROJ1', now())",
+        i
+      )
+    )
   }
 
   cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "env")]]
@@ -386,12 +431,8 @@ test_that("sync_get_change_detail: Veg row (via_env scope) classified as insert 
   lc <- .make_local()
   on.exit(DBI::dbDisconnect(lc), add = TRUE)
 
-  DBI::dbExecute(lc,
-    "INSERT INTO Env (plotnumber, projectid) VALUES ('P1', 'PROJ1')"
-  )
-  DBI::dbExecute(lc,
-    "INSERT INTO Veg (id, plotnumber, species, local_modified_utc) VALUES (1, 'P1', 'ACER', now())"
-  )
+  DBI::dbExecute(lc, "INSERT INTO Env (plotnumber, projectid) VALUES ('P1', 'PROJ1')")
+  DBI::dbExecute(lc, "INSERT INTO Veg (id, plotnumber, species, local_modified_utc) VALUES (1, 'P1', 'ACER', now())")
 
   cfg <- SYNC_TABLE_CONFIG[[which(sapply(SYNC_TABLE_CONFIG, `[[`, "pg") == "veg")]]
   result <- sync_get_change_detail(lc, cfg, project_id = "PROJ1")

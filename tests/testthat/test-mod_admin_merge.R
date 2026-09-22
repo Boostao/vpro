@@ -8,7 +8,7 @@ source(here::here("R", "logic_sync.R"))
 # merge_ensure_tables and the new mod_admin_merge sub-module.
 
 setup_merge_db_admin <- function() {
-  con         <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
+  con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   master_path <- tempfile(pattern = "master_adm_", fileext = ".duckdb")
   DBI::dbExecute(con, sprintf("ATTACH '%s' AS master", gsub("'", "''", master_path)))
 
@@ -29,24 +29,30 @@ testthat::test_that("merge_ensure_tables creates all required tables", {
   # DBI::dbExistsTable does not handle 3-part dotted names in DuckDB.
   # Use duckdb_tables() which supports catalog/schema/table filtering.
   table_exists <- function(con, catalog, schema, table) {
-    q <- DBI::dbGetQuery(con,
-      sprintf("SELECT count(*) AS n FROM duckdb_tables()
+    q <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT count(*) AS n FROM duckdb_tables()
                WHERE database_name = '%s'
                  AND schema_name   = '%s'
                  AND table_name    = '%s'",
-              catalog, tolower(schema), tolower(table)))
+        catalog,
+        tolower(schema),
+        tolower(table)
+      )
+    )
     isTRUE(q$n[1] > 0)
   }
 
   required <- list(
-    c("master", "admin",   "merge_requests"),
-    c("master", "admin",   "merge_conflicts"),
+    c("master", "admin", "merge_requests"),
+    c("master", "admin", "merge_conflicts"),
     c("master", "staging", "sample_env"),
     c("master", "staging", "sample_su"),
     c("master", "staging", "sample_veg"),
-    c("master", "core",    "sample_env"),
-    c("master", "core",    "sample_su"),
-    c("master", "core",    "sample_veg")
+    c("master", "core", "sample_env"),
+    c("master", "core", "sample_su"),
+    c("master", "core", "sample_veg")
   )
 
   for (parts in required) {
@@ -72,10 +78,12 @@ testthat::test_that("merge_request_unresolved_conflict_count returns 0 for fresh
   con <- setup_merge_db_admin()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO master.admin.merge_requests
        (id, project_id, submitter_user_id, compliance_passed)
-     VALUES (10, 'PRJ', 'user1', TRUE)")
+     VALUES (10, 'PRJ', 'user1', TRUE)"
+  )
 
   count <- merge_request_unresolved_conflict_count(con, 10L)
   testthat::expect_equal(count, 0L)
@@ -89,20 +97,23 @@ testthat::test_that("merge_request_resolve_conflict sets resolution correctly", 
   con <- setup_merge_db_admin()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO master.admin.merge_requests
        (id, project_id, submitter_user_id, compliance_passed)
-     VALUES (20, 'PRJ', 'user1', TRUE)")
+     VALUES (20, 'PRJ', 'user1', TRUE)"
+  )
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO master.admin.merge_conflicts
        (id, merge_request_id, table_name, record_id, details)
-     VALUES (1, 20, 'sample_env', 'PLOT-001', '{}')")
+     VALUES (1, 20, 'sample_env', 'PLOT-001', '{}')"
+  )
 
   merge_request_resolve_conflict(con, 1L, "keep_staged", actor = "reviewer")
 
-  resolution <- DBI::dbGetQuery(con,
-    "SELECT resolution FROM master.admin.merge_conflicts WHERE id = 1")$resolution[1]
+  resolution <- DBI::dbGetQuery(con, "SELECT resolution FROM master.admin.merge_conflicts WHERE id = 1")$resolution[1]
   testthat::expect_equal(resolution, "keep_staged")
 })
 
@@ -119,36 +130,46 @@ testthat::test_that("unresolved count increments and decrements correctly after 
   con <- setup_merge_db_admin()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO master.admin.merge_requests
        (id, project_id, submitter_user_id, compliance_passed)
-     VALUES (40, 'PRJ', 'user1', TRUE)")
+     VALUES (40, 'PRJ', 'user1', TRUE)"
+  )
 
   # Insert two conflicts with NULL resolution
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO master.admin.merge_conflicts
        (id, merge_request_id, table_name, record_id, details)
      VALUES (201, 40, 'sample_env', 'PLOT-A', '{}'),
-            (202, 40, 'sample_env', 'PLOT-B', '{}')")
+            (202, 40, 'sample_env', 'PLOT-B', '{}')"
+  )
 
-  before <- DBI::dbGetQuery(con,
+  before <- DBI::dbGetQuery(
+    con,
     "SELECT COUNT(*) AS n FROM master.admin.merge_conflicts
-     WHERE merge_request_id = 40 AND resolution IS NULL")$n[1]
+     WHERE merge_request_id = 40 AND resolution IS NULL"
+  )$n[1]
   testthat::expect_equal(as.integer(before), 2L)
 
   # Resolve one
   merge_request_resolve_conflict(con, 201L, "keep_staged", actor = "reviewer")
 
-  after <- DBI::dbGetQuery(con,
+  after <- DBI::dbGetQuery(
+    con,
     "SELECT COUNT(*) AS n FROM master.admin.merge_conflicts
-     WHERE merge_request_id = 40 AND resolution IS NULL")$n[1]
+     WHERE merge_request_id = 40 AND resolution IS NULL"
+  )$n[1]
   testthat::expect_equal(as.integer(after), 1L)
 
   # Resolve the second
   merge_request_resolve_conflict(con, 202L, "dismiss", actor = "reviewer")
 
-  final <- DBI::dbGetQuery(con,
+  final <- DBI::dbGetQuery(
+    con,
     "SELECT COUNT(*) AS n FROM master.admin.merge_conflicts
-     WHERE merge_request_id = 40 AND resolution IS NULL")$n[1]
+     WHERE merge_request_id = 40 AND resolution IS NULL"
+  )$n[1]
   testthat::expect_equal(as.integer(final), 0L)
 })

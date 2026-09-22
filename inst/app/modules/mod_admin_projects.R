@@ -19,14 +19,12 @@ mod_admin_projects_ui <- function(id) {
         textInput(ns("proj_title"), "Project Title"),
         textInput(ns("proj_coord"), "Coordinating Agency"),
         layout_column_wrap(
-          width = 1/2,
+          width = 1 / 2,
           textInput(ns("proj_start"), "Start Date (Text)"),
           textInput(ns("proj_end"), "End Date (Text)")
         ),
         textAreaInput(ns("proj_notes"), "Notes", rows = 5),
-        div(class = "d-flex justify-content-end",
-            actionButton(ns("proj_save"), "Save Project", class = "btn-primary btn-lg")
-        )
+        div(class = "d-flex justify-content-end", actionButton(ns("proj_save"), "Save Project", class = "btn-primary btn-lg"))
       )
     )
   )
@@ -34,7 +32,6 @@ mod_admin_projects_ui <- function(id) {
 
 mod_admin_projects_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
-
     require_permission <- function(permissions, message) {
       if (!auth_is_authenticated(state)) {
         show_toast(toast("Sign in required.", type = "danger"))
@@ -58,21 +55,25 @@ mod_admin_projects_server <- function(id, state, con) {
 
     update_proj_list()
 
-    observeEvent(input$proj_select, {
-      req(input$proj_select)
-      pid <- input$proj_select
-      data <- dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = ?", list(pid))
-      if (nrow(data) > 0) {
-        updateTextInput(session, "proj_id", value = data$projectid)
-        shinyjs::disable("proj_id")
-        updateTextInput(session, "proj_title", value = data$projecttitle)
-        updateTextInput(session, "proj_coord", value = data$coordinatingagency)
-        updateTextInput(session, "proj_start", value = data$startdate)
-        updateTextInput(session, "proj_end", value = data$enddate)
-        updateTextAreaInput(session, "proj_notes", value = data$notes)
-        output$proj_form_header <- renderText(paste("Editing:", data$projecttitle))
-      }
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$proj_select,
+      {
+        req(input$proj_select)
+        pid <- input$proj_select
+        data <- dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = ?", list(pid))
+        if (nrow(data) > 0) {
+          updateTextInput(session, "proj_id", value = data$projectid)
+          shinyjs::disable("proj_id")
+          updateTextInput(session, "proj_title", value = data$projecttitle)
+          updateTextInput(session, "proj_coord", value = data$coordinatingagency)
+          updateTextInput(session, "proj_start", value = data$startdate)
+          updateTextInput(session, "proj_end", value = data$enddate)
+          updateTextAreaInput(session, "proj_notes", value = data$notes)
+          output$proj_form_header <- renderText(paste("Editing:", data$projecttitle))
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$proj_new, {
       shinyjs::enable("proj_id")
@@ -87,64 +88,85 @@ mod_admin_projects_server <- function(id, state, con) {
 
     observeEvent(input$proj_save, {
       req(input$proj_id)
-      if (!require_permission(c("write:all", "manage:projects"), "Permission required: manage projects")) return()
-      exists   <- dbGetQuery(con, "SELECT 1 FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
+      if (!require_permission(c("write:all", "manage:projects"), "Permission required: manage projects")) {
+        return()
+      }
+      exists <- dbGetQuery(con, "SELECT 1 FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
       existing <- dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
-      tryCatch({
-        if (nrow(exists) > 0) {
-          dbExecute(con,
-            "UPDATE USysProjectMetadata SET projecttitle=?, coordinatingagency=?, startdate=?, enddate=?, notes=? WHERE projectid=?",
-            list(input$proj_title, input$proj_coord, input$proj_start, input$proj_end, input$proj_notes, input$proj_id))
-          if (nrow(existing) > 0) {
-            new_row <- data.frame(
-              projecttitle       = input$proj_title,
-              coordinatingagency = input$proj_coord,
-              startdate          = input$proj_start,
-              enddate            = input$proj_end,
-              notes              = input$proj_notes,
-              stringsAsFactors   = FALSE
+      tryCatch(
+        {
+          if (nrow(exists) > 0) {
+            dbExecute(
+              con,
+              "UPDATE USysProjectMetadata SET projecttitle=?, coordinatingagency=?, startdate=?, enddate=?, notes=? WHERE projectid=?",
+              list(input$proj_title, input$proj_coord, input$proj_start, input$proj_end, input$proj_notes, input$proj_id)
             )
-            log_audit_diff(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata",
-                           existing[1, , drop = FALSE], new_row,
-                           fields = c("projecttitle", "coordinatingagency", "startdate", "enddate", "notes"))
+            if (nrow(existing) > 0) {
+              new_row <- data.frame(
+                projecttitle = input$proj_title,
+                coordinatingagency = input$proj_coord,
+                startdate = input$proj_start,
+                enddate = input$proj_end,
+                notes = input$proj_notes,
+                stringsAsFactors = FALSE
+              )
+              log_audit_diff(
+                con,
+                input$proj_id,
+                "Admin",
+                input$proj_id,
+                "USysProjectMetadata",
+                existing[1, , drop = FALSE],
+                new_row,
+                fields = c("projecttitle", "coordinatingagency", "startdate", "enddate", "notes")
+              )
+            }
+            show_toast(toast("Project Updated", type = "success"))
+          } else {
+            dbExecute(
+              con,
+              "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes) VALUES (?, ?, ?, ?, ?, ?)",
+              list(input$proj_id, input$proj_title, input$proj_coord, input$proj_start, input$proj_end, input$proj_notes)
+            )
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "projecttitle", NA, input$proj_title)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "coordinatingagency", NA, input$proj_coord)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "startdate", NA, input$proj_start)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate", NA, input$proj_end)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes", NA, input$proj_notes)
+            show_toast(toast("Project Created", type = "success"))
           }
-          show_toast(toast("Project Updated", type = "success"))
-        } else {
-          dbExecute(con,
-            "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes) VALUES (?, ?, ?, ?, ?, ?)",
-            list(input$proj_id, input$proj_title, input$proj_coord, input$proj_start, input$proj_end, input$proj_notes))
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "projecttitle",       NA, input$proj_title)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "coordinatingagency", NA, input$proj_coord)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "startdate",          NA, input$proj_start)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate",            NA, input$proj_end)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes",              NA, input$proj_notes)
-          show_toast(toast("Project Created", type = "success"))
+          update_proj_list(selected_id = input$proj_id)
+        },
+        error = function(e) {
+          show_toast(toast(paste("Error:", e$message), type = "danger"))
         }
-        update_proj_list(selected_id = input$proj_id)
-      }, error = function(e) {
-        show_toast(toast(paste("Error:", e$message), type = "danger"))
-      })
+      )
     })
 
     observeEvent(input$proj_del, {
       req(input$proj_id)
-      if (!require_permission(c("write:all", "manage:projects"), "Permission required: manage projects")) return()
+      if (!require_permission(c("write:all", "manage:projects"), "Permission required: manage projects")) {
+        return()
+      }
       existing <- dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
-      tryCatch({
-        dbExecute(con, "DELETE FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
-        if (nrow(existing) > 0) {
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "projecttitle",       existing$projecttitle[1],       NA)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "coordinatingagency", existing$coordinatingagency[1], NA)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "startdate",          existing$startdate[1],          NA)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate",            existing$enddate[1],            NA)
-          log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes",              existing$notes[1],              NA)
+      tryCatch(
+        {
+          dbExecute(con, "DELETE FROM USysProjectMetadata WHERE projectid = ?", list(input$proj_id))
+          if (nrow(existing) > 0) {
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "projecttitle", existing$projecttitle[1], NA)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "coordinatingagency", existing$coordinatingagency[1], NA)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "startdate", existing$startdate[1], NA)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "enddate", existing$enddate[1], NA)
+            log_audit_change(con, input$proj_id, "Admin", input$proj_id, "USysProjectMetadata", "notes", existing$notes[1], NA)
+          }
+          show_toast(toast("Project Deleted", type = "warning"))
+          updateTextInput(session, "proj_id", value = "")
+          update_proj_list()
+        },
+        error = function(e) {
+          show_toast(toast(paste("Error:", e$message), type = "danger"))
         }
-        show_toast(toast("Project Deleted", type = "warning"))
-        updateTextInput(session, "proj_id", value = "")
-        update_proj_list()
-      }, error = function(e) {
-        show_toast(toast(paste("Error:", e$message), type = "danger"))
-      })
+      )
     })
   })
 }

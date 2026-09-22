@@ -1,4 +1,7 @@
 *.db
+!inst/extdata/*.db
+!inst/extdata/projects/*.db
+!inst/extdata/pics/*.db
 *.duckdb
 *.duckdb.wal
 .Rhistory

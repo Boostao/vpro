@@ -48,7 +48,10 @@ test_that("publish_project_dataset writes BEC Map contract files (RDS/CSV) and r
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con, "CREATE TABLE Env (plotnumber TEXT, projectid TEXT, date_sampled DATE, latitude DOUBLE, longitude DOUBLE, bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)")
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE Env (plotnumber TEXT, projectid TEXT, date_sampled DATE, latitude DOUBLE, longitude DOUBLE, bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)"
+  )
   DBI::dbExecute(con, "CREATE TABLE SU (plotnumber TEXT, dataquality TEXT)")
   DBI::dbExecute(con, "CREATE TABLE USysProjectMetadata (projectid TEXT, projecttitle TEXT, ispublic TEXT, beczone TEXT, description TEXT)")
   DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (plotnumber TEXT, projectid TEXT, code TEXT, layer TEXT, cover TEXT)")
@@ -139,19 +142,22 @@ test_that("publish_project_dataset can write XLSX via existing exporter (optiona
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # Find a publishable project id with valid coordinates
-  pid <- tryCatch({
-    res <- DBI::dbGetQuery(
-      con,
-      paste(
-        "SELECT projectid AS project_id",
-        "FROM Env",
-        "WHERE latitude IS NOT NULL AND longitude IS NOT NULL",
-        "AND latitude <> 0 AND longitude <> 0",
-        "LIMIT 1"
+  pid <- tryCatch(
+    {
+      res <- DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT projectid AS project_id",
+          "FROM Env",
+          "WHERE latitude IS NOT NULL AND longitude IS NOT NULL",
+          "AND latitude <> 0 AND longitude <> 0",
+          "LIMIT 1"
+        )
       )
-    )
-    if (nrow(res) == 0) NA_character_ else as.character(res$project_id[1])
-  }, error = function(e) NA_character_)
+      if (nrow(res) == 0) NA_character_ else as.character(res$project_id[1])
+    },
+    error = function(e) NA_character_
+  )
 
   skip_if(is.na(pid), "No publishable project with coordinates in local DB")
 

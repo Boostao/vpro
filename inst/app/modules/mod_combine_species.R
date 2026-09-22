@@ -125,7 +125,10 @@ mod_combine_species_ui <- function(id) {
               shiny::actionButton(ns("btnRefreshTree"), "Refresh", class = "btn btn-outline-secondary btn-sm")
             )
           ),
-          shiny::tags$div(style = "height: 260px; overflow:auto; border: 1px solid #d9d9d9; border-radius: 4px; padding: 6px;", shinyTree::shinyTree(ns("lump_tree"), dragAndDrop = TRUE)),
+          shiny::tags$div(
+            style = "height: 260px; overflow:auto; border: 1px solid #d9d9d9; border-radius: 4px; padding: 6px;",
+            shinyTree::shinyTree(ns("lump_tree"), dragAndDrop = TRUE)
+          ),
           shiny::tags$div(
             id = ns("lump_tree_menu"),
             class = "vpro-lump-menu",
@@ -135,7 +138,8 @@ mod_combine_species_ui <- function(id) {
             shiny::tags$button(type = "button", class = "btn btn-sm btn-light w-100 text-start", `data-action` = "set_no", "Set All To No")
           ),
           shiny::tags$style(sprintf("#%s{display:none;} .vpro-lump-menu button{border:none;} .vpro-lump-menu button:hover{background:#f3f7ff;}", ns("selectedSpeciesCodes"))),
-          shiny::tags$script(shiny::HTML(sprintf("(function(){
+          shiny::tags$script(shiny::HTML(sprintf(
+            "(function(){
             var treeId = '%s';
             var menuId = '%s';
             var dragId = '%s';
@@ -228,7 +232,15 @@ mod_combine_species_ui <- function(id) {
 
             var obs = new MutationObserver(function(){ bindTreeEvents(); bindDragSource(); });
             obs.observe(document.body, { childList: true, subtree: true });
-          })();", ns("lump_tree"), ns("lump_tree_menu"), ns("species_drag_payload"), ns("selectedSpeciesCodes"), ns("lump_tree_context"), ns("lump_tree_dblclick"), ns("lump_tree_drop")))),
+          })();",
+            ns("lump_tree"),
+            ns("lump_tree_menu"),
+            ns("species_drag_payload"),
+            ns("selectedSpeciesCodes"),
+            ns("lump_tree_context"),
+            ns("lump_tree_dblclick"),
+            ns("lump_tree_drop")
+          ))),
           bslib::layout_columns(
             shiny::textInput(ns("new_lump_code"), "Lump Code"),
             shiny::actionButton(ns("btnAddMapping"), "Add Selected Species", class = "btn btn-success"),
@@ -370,9 +382,13 @@ mod_combine_species_server <- function(id, state, con) {
       }
 
       sql <- paste(
-        "SELECT DISTINCT", qident(field_name), "AS value",
+        "SELECT DISTINCT",
+        qident(field_name),
+        "AS value",
         "FROM VLists.USysAllSpecs",
-        "WHERE code IS NOT NULL AND COALESCE(CodeType, '') <> 'S' AND", qident(field_name), "IS NOT NULL",
+        "WHERE code IS NOT NULL AND COALESCE(CodeType, '') <> 'S' AND",
+        qident(field_name),
+        "IS NOT NULL",
         "ORDER BY 1 LIMIT 500"
       )
       values <- tryCatch(DBI::dbGetQuery(con, sql)$value, error = function(e) character(0))
@@ -426,7 +442,9 @@ mod_combine_species_server <- function(id, state, con) {
       }
 
       sql <- paste(sql, "ORDER BY code LIMIT 400")
-      tryCatch(DBI::dbGetQuery(con, sql, params), error = function(e) data.frame(code = character(0), scientificname = character(0), englishname = character(0), stringsAsFactors = FALSE))
+      tryCatch(DBI::dbGetQuery(con, sql, params), error = function(e) {
+        data.frame(code = character(0), scientificname = character(0), englishname = character(0), stringsAsFactors = FALSE)
+      })
     })
 
     lump_rows <- shiny::reactive({
@@ -434,8 +452,10 @@ mod_combine_species_server <- function(id, state, con) {
       rv$lump_tick
       sql <- paste(
         "SELECT",
-        qident(rv$colmap$lump), "AS lumpcode,",
-        qident(rv$colmap$spp), "AS sppcode"
+        qident(rv$colmap$lump),
+        "AS lumpcode,",
+        qident(rv$colmap$spp),
+        "AS sppcode"
       )
       if (nzchar(rv$colmap$use)) {
         sql <- paste(sql, ",", qident(rv$colmap$use), "AS in_use")
@@ -451,108 +471,140 @@ mod_combine_species_server <- function(id, state, con) {
     })
 
     output$lump_table <- DT::renderDT({
-      rows <- if (nzchar(rv$lump_table) && !is.null(rv$colmap)) lump_rows() else data.frame(lumpcode = character(0), sppcode = character(0), in_use = integer(0), stringsAsFactors = FALSE)
+      rows <- if (nzchar(rv$lump_table) && !is.null(rv$colmap)) {
+        lump_rows()
+      } else {
+        data.frame(lumpcode = character(0), sppcode = character(0), in_use = integer(0), stringsAsFactors = FALSE)
+      }
       DT::datatable(rows, rownames = FALSE, selection = "multiple", options = list(pageLength = 10, scrollX = TRUE))
     })
 
     output$lump_tree <- shinyTree::renderTree({
-      rows <- if (nzchar(rv$lump_table) && !is.null(rv$colmap)) lump_rows() else data.frame(lumpcode = character(0), sppcode = character(0), in_use = integer(0), stringsAsFactors = FALSE)
+      rows <- if (nzchar(rv$lump_table) && !is.null(rv$colmap)) {
+        lump_rows()
+      } else {
+        data.frame(lumpcode = character(0), sppcode = character(0), in_use = integer(0), stringsAsFactors = FALSE)
+      }
       build_lump_tree(rows)
     })
 
     output$status <- shiny::renderText(rv$status)
 
-    observeEvent(TRUE, {
-      state$CurrForm <- "USysLumpMaster"
-      state$sysCurrForm <- "USysLumpMaster"
-      config("Current", "DataFormName", "USysLumpMaster")
+    observeEvent(
+      TRUE,
+      {
+        state$CurrForm <- "USysLumpMaster"
+        state$sysCurrForm <- "USysLumpMaster"
+        config("Current", "DataFormName", "USysLumpMaster")
 
-      refresh_species_fields()
-      refresh_criteria_choices(default_value = "ABIE*")
-      pref_lump <- normalize_text((config("Current", "CurrLump") %||% "None"))
-      refresh_lump_choices(selected = if (nzchar(pref_lump)) pref_lump else "None")
-      bump_species_tick()
-      if (nzchar(rv$lump_table)) {
-        state$LumpingTable <- rv$lump_table
-        state$sysLumpingTable <- rv$lump_table
-      }
-      set_status("Loaded Combine Species (USysLumpMaster).")
-    }, once = TRUE)
+        refresh_species_fields()
+        refresh_criteria_choices(default_value = "ABIE*")
+        pref_lump <- normalize_text((config("Current", "CurrLump") %||% "None"))
+        refresh_lump_choices(selected = if (nzchar(pref_lump)) pref_lump else "None")
+        bump_species_tick()
+        if (nzchar(rv$lump_table)) {
+          state$LumpingTable <- rv$lump_table
+          state$sysLumpingTable <- rv$lump_table
+        }
+        set_status("Loaded Combine Species (USysLumpMaster).")
+      },
+      once = TRUE
+    )
 
     observeEvent(input$btnLoadList, {
       bump_species_tick()
       set_status("Species list reloaded.")
     })
 
-    observeEvent(input$species_table_rows_selected, {
-      rows <- species_rows()
-      idx <- input$species_table_rows_selected %||% integer(0)
-      codes <- if (length(idx)) unique(as.character(rows$code[idx])) else character(0)
-      shiny::updateTextInput(session, "selectedSpeciesCodes", value = paste(codes, collapse = ","))
-    }, ignoreInit = FALSE)
+    observeEvent(
+      input$species_table_rows_selected,
+      {
+        rows <- species_rows()
+        idx <- input$species_table_rows_selected %||% integer(0)
+        codes <- if (length(idx)) unique(as.character(rows$code[idx])) else character(0)
+        shiny::updateTextInput(session, "selectedSpeciesCodes", value = paste(codes, collapse = ","))
+      },
+      ignoreInit = FALSE
+    )
 
-    observeEvent(input$FieldName, {
-      refresh_criteria_choices(selected_value = NULL)
-      bump_species_tick()
-      set_status("Field changed; criteria list refreshed.")
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$FieldName,
+      {
+        refresh_criteria_choices(selected_value = NULL)
+        bump_species_tick()
+        set_status("Field changed; criteria list refreshed.")
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$cmbCriteria, {
-      bump_species_tick()
-      set_status("Criteria updated; species list reloaded.")
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$cmbCriteria,
+      {
+        bump_species_tick()
+        set_status("Criteria updated; species list reloaded.")
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$SppPattern, {
-      bump_species_tick()
-      set_status("Pattern updated; species list reloaded.")
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$SppPattern,
+      {
+        bump_species_tick()
+        set_status("Pattern updated; species list reloaded.")
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$cmbLump, {
-      selected <- normalize_text(input$cmbLump)
+    observeEvent(
+      input$cmbLump,
+      {
+        selected <- normalize_text(input$cmbLump)
 
-      if (identical(selected, "--------------------------------------")) {
-        prev <- curr_lump_pref()
-        shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
-        set_status("Separator selected; restored previous lump table.")
-        return()
-      }
+        if (identical(selected, "--------------------------------------")) {
+          prev <- curr_lump_pref()
+          shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
+          set_status("Separator selected; restored previous lump table.")
+          return()
+        }
 
-      if (identical(selected, "Attach")) {
-        prev <- curr_lump_pref()
-        shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
-        set_status("Attach is not yet wired in Shiny; selection restored.")
-        return()
-      }
+        if (identical(selected, "Attach")) {
+          prev <- curr_lump_pref()
+          shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
+          set_status("Attach is not yet wired in Shiny; selection restored.")
+          return()
+        }
 
-      if (identical(selected, "Unattach")) {
-        prev <- curr_lump_pref()
-        shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
-        set_status("Unattach is not yet wired in Shiny; selection restored.")
-        return()
-      }
+        if (identical(selected, "Unattach")) {
+          prev <- curr_lump_pref()
+          shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
+          set_status("Unattach is not yet wired in Shiny; selection restored.")
+          return()
+        }
 
-      if (identical(selected, "New")) {
-        prev <- curr_lump_pref()
-        shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
-        set_status("Use Save As... to create a new lump table.")
-        return()
-      }
+        if (identical(selected, "New")) {
+          prev <- curr_lump_pref()
+          shiny::updateSelectInput(session, "cmbLump", selected = if (nzchar(prev)) prev else "None")
+          set_status("Use Save As... to create a new lump table.")
+          return()
+        }
 
-      config("Current", "CurrLump", selected)
-      rv$lump_table <- combine_species_resolve_lump_table(con, selected)
-      rv$colmap <- combine_species_lump_column_map(con, rv$lump_table)
-      bump_lump_tick()
+        config("Current", "CurrLump", selected)
+        rv$lump_table <- combine_species_resolve_lump_table(con, selected)
+        rv$colmap <- combine_species_lump_column_map(con, rv$lump_table)
+        bump_lump_tick()
 
-      if (!nzchar(rv$lump_table)) {
-        state$LumpingTable <- "None_Lump"
-        state$sysLumpingTable <- "None_Lump"
-        set_status("No lump table selected.")
-      } else {
-        state$LumpingTable <- rv$lump_table
-        state$sysLumpingTable <- rv$lump_table
-        set_status(sprintf("Using lump table: %s", rv$lump_table))
-      }
-    }, ignoreInit = TRUE)
+        if (!nzchar(rv$lump_table)) {
+          state$LumpingTable <- "None_Lump"
+          state$sysLumpingTable <- "None_Lump"
+          set_status("No lump table selected.")
+        } else {
+          state$LumpingTable <- rv$lump_table
+          state$sysLumpingTable <- rv$lump_table
+          set_status(sprintf("Using lump table: %s", rv$lump_table))
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$btnRefreshTree, {
       bump_lump_tick()
@@ -567,29 +619,49 @@ mod_combine_species_server <- function(id, state, con) {
       }
       req(nzchar(rv$lump_table), rv$colmap, nzchar(rv$colmap$use))
 
-      current <- tryCatch(DBI::dbGetQuery(
-        con,
-        paste(
-          "SELECT", qident(rv$colmap$use), "AS in_use FROM", qident(rv$lump_table),
-          "WHERE", qident(rv$colmap$lump), "= ? AND", qident(rv$colmap$spp), "= ? LIMIT 1"
+      current <- tryCatch(
+        DBI::dbGetQuery(
+          con,
+          paste(
+            "SELECT",
+            qident(rv$colmap$use),
+            "AS in_use FROM",
+            qident(rv$lump_table),
+            "WHERE",
+            qident(rv$colmap$lump),
+            "= ? AND",
+            qident(rv$colmap$spp),
+            "= ? LIMIT 1"
+          ),
+          list(meta$lump, meta$spp)
         ),
-        list(meta$lump, meta$spp)
-      ), error = function(e) data.frame(in_use = integer(0), stringsAsFactors = FALSE))
+        error = function(e) data.frame(in_use = integer(0), stringsAsFactors = FALSE)
+      )
 
       if (!nrow(current)) {
         return()
       }
 
       new_val <- ifelse(as.integer(current$in_use[[1]]) == 1L, 0L, 1L)
-      tryCatch(DBI::dbExecute(
-        con,
-        paste(
-          "UPDATE", qident(rv$lump_table),
-          "SET", qident(rv$colmap$use), "= ?",
-          "WHERE", qident(rv$colmap$lump), "= ? AND", qident(rv$colmap$spp), "= ?"
+      tryCatch(
+        DBI::dbExecute(
+          con,
+          paste(
+            "UPDATE",
+            qident(rv$lump_table),
+            "SET",
+            qident(rv$colmap$use),
+            "= ?",
+            "WHERE",
+            qident(rv$colmap$lump),
+            "= ? AND",
+            qident(rv$colmap$spp),
+            "= ?"
+          ),
+          list(new_val, meta$lump, meta$spp)
         ),
-        list(new_val, meta$lump, meta$spp)
-      ), error = function(e) NULL)
+        error = function(e) NULL
+      )
 
       bump_lump_tick()
       set_status(sprintf("Toggled %s in lump %s.", meta$spp, meta$lump))
@@ -602,26 +674,46 @@ mod_combine_species_server <- function(id, state, con) {
       req(nzchar(rv$lump_table), rv$colmap)
 
       if (identical(action, "toggle") && identical(meta$type, "spp") && nzchar(rv$colmap$use)) {
-        current <- tryCatch(DBI::dbGetQuery(
-          con,
-          paste(
-            "SELECT", qident(rv$colmap$use), "AS in_use FROM", qident(rv$lump_table),
-            "WHERE", qident(rv$colmap$lump), "= ? AND", qident(rv$colmap$spp), "= ? LIMIT 1"
+        current <- tryCatch(
+          DBI::dbGetQuery(
+            con,
+            paste(
+              "SELECT",
+              qident(rv$colmap$use),
+              "AS in_use FROM",
+              qident(rv$lump_table),
+              "WHERE",
+              qident(rv$colmap$lump),
+              "= ? AND",
+              qident(rv$colmap$spp),
+              "= ? LIMIT 1"
+            ),
+            list(meta$lump, meta$spp)
           ),
-          list(meta$lump, meta$spp)
-        ), error = function(e) data.frame(in_use = integer(0), stringsAsFactors = FALSE))
+          error = function(e) data.frame(in_use = integer(0), stringsAsFactors = FALSE)
+        )
 
         if (nrow(current)) {
           new_val <- ifelse(as.integer(current$in_use[[1]]) == 1L, 0L, 1L)
-          tryCatch(DBI::dbExecute(
-            con,
-            paste(
-              "UPDATE", qident(rv$lump_table),
-              "SET", qident(rv$colmap$use), "= ?",
-              "WHERE", qident(rv$colmap$lump), "= ? AND", qident(rv$colmap$spp), "= ?"
+          tryCatch(
+            DBI::dbExecute(
+              con,
+              paste(
+                "UPDATE",
+                qident(rv$lump_table),
+                "SET",
+                qident(rv$colmap$use),
+                "= ?",
+                "WHERE",
+                qident(rv$colmap$lump),
+                "= ? AND",
+                qident(rv$colmap$spp),
+                "= ?"
+              ),
+              list(new_val, meta$lump, meta$spp)
             ),
-            list(new_val, meta$lump, meta$spp)
-          ), error = function(e) NULL)
+            error = function(e) NULL
+          )
           bump_lump_tick()
           set_status(sprintf("Toggled %s in lump %s.", meta$spp, meta$lump))
         }
@@ -630,15 +722,23 @@ mod_combine_species_server <- function(id, state, con) {
 
       if (identical(meta$type, "lump") && action %in% c("set_yes", "set_no") && nzchar(rv$colmap$use)) {
         new_val <- if (identical(action, "set_yes")) 1L else 0L
-        tryCatch(DBI::dbExecute(
-          con,
-          paste(
-            "UPDATE", qident(rv$lump_table),
-            "SET", qident(rv$colmap$use), "= ?",
-            "WHERE", qident(rv$colmap$lump), "= ?"
+        tryCatch(
+          DBI::dbExecute(
+            con,
+            paste(
+              "UPDATE",
+              qident(rv$lump_table),
+              "SET",
+              qident(rv$colmap$use),
+              "= ?",
+              "WHERE",
+              qident(rv$colmap$lump),
+              "= ?"
+            ),
+            list(new_val, meta$lump)
           ),
-          list(new_val, meta$lump)
-        ), error = function(e) NULL)
+          error = function(e) NULL
+        )
         bump_lump_tick()
         set_status(sprintf("Set all species in %s to %s.", meta$lump, ifelse(new_val == 1L, "Yes", "No")))
       }
@@ -649,7 +749,13 @@ mod_combine_species_server <- function(id, state, con) {
       meta <- parse_tree_id(payload$id %||% "")
       req(nzchar(rv$lump_table), rv$colmap)
 
-      target_lump <- if (identical(meta$type, "lump")) meta$lump else if (identical(meta$type, "spp")) meta$lump else ""
+      target_lump <- if (identical(meta$type, "lump")) {
+        meta$lump
+      } else if (identical(meta$type, "spp")) {
+        meta$lump
+      } else {
+        ""
+      }
       if (!nzchar(target_lump)) {
         set_status("Drop target must be a lump node.")
         return()
@@ -664,14 +770,22 @@ mod_combine_species_server <- function(id, state, con) {
       }
 
       for (code in codes) {
-        exists_row <- tryCatch(DBI::dbGetQuery(
-          con,
-          paste(
-            "SELECT 1 AS hit FROM", qident(rv$lump_table),
-            "WHERE", qident(rv$colmap$lump), "= ? AND", qident(rv$colmap$spp), "= ? LIMIT 1"
+        exists_row <- tryCatch(
+          DBI::dbGetQuery(
+            con,
+            paste(
+              "SELECT 1 AS hit FROM",
+              qident(rv$lump_table),
+              "WHERE",
+              qident(rv$colmap$lump),
+              "= ? AND",
+              qident(rv$colmap$spp),
+              "= ? LIMIT 1"
+            ),
+            list(target_lump, code)
           ),
-          list(target_lump, code)
-        ), error = function(e) data.frame(hit = integer(0), stringsAsFactors = FALSE))
+          error = function(e) data.frame(hit = integer(0), stringsAsFactors = FALSE)
+        )
 
         if (nrow(exists_row)) {
           next
@@ -684,15 +798,23 @@ mod_combine_species_server <- function(id, state, con) {
           vals <- c(vals, list(1L))
         }
 
-        tryCatch(DBI::dbExecute(
-          con,
-          paste(
-            "INSERT INTO", qident(rv$lump_table),
-            "(", paste(vapply(cols, qident, character(1)), collapse = ", "), ")",
-            "VALUES (", paste(rep("?", length(cols)), collapse = ", "), ")"
+        tryCatch(
+          DBI::dbExecute(
+            con,
+            paste(
+              "INSERT INTO",
+              qident(rv$lump_table),
+              "(",
+              paste(vapply(cols, qident, character(1)), collapse = ", "),
+              ")",
+              "VALUES (",
+              paste(rep("?", length(cols)), collapse = ", "),
+              ")"
+            ),
+            vals
           ),
-          vals
-        ), error = function(e) NULL)
+          error = function(e) NULL
+        )
       }
 
       bump_lump_tick()
@@ -724,9 +846,14 @@ mod_combine_species_server <- function(id, state, con) {
         }
 
         sql <- paste(
-          "INSERT INTO", qident(rv$lump_table),
-          "(", paste(vapply(cols, qident, character(1)), collapse = ", "), ")",
-          "VALUES (", paste(rep("?", length(cols)), collapse = ", "), ")"
+          "INSERT INTO",
+          qident(rv$lump_table),
+          "(",
+          paste(vapply(cols, qident, character(1)), collapse = ", "),
+          ")",
+          "VALUES (",
+          paste(rep("?", length(cols)), collapse = ", "),
+          ")"
         )
         tryCatch(DBI::dbExecute(con, sql, vals), error = function(e) NULL)
       }
@@ -748,9 +875,16 @@ mod_combine_species_server <- function(id, state, con) {
         row <- rows[i, , drop = FALSE]
         new_val <- ifelse(as.integer(row$in_use[[1]]) == 1L, 0L, 1L)
         sql <- paste(
-          "UPDATE", qident(rv$lump_table),
-          "SET", qident(rv$colmap$use), "= ?",
-          "WHERE", qident(rv$colmap$lump), "= ? AND", qident(rv$colmap$spp), "= ?"
+          "UPDATE",
+          qident(rv$lump_table),
+          "SET",
+          qident(rv$colmap$use),
+          "= ?",
+          "WHERE",
+          qident(rv$colmap$lump),
+          "= ? AND",
+          qident(rv$colmap$spp),
+          "= ?"
         )
         tryCatch(DBI::dbExecute(con, sql, list(new_val, row$lumpcode[[1]], row$sppcode[[1]])), error = function(e) NULL)
       }
@@ -771,8 +905,13 @@ mod_combine_species_server <- function(id, state, con) {
       for (i in idx) {
         row <- rows[i, , drop = FALSE]
         sql <- paste(
-          "DELETE FROM", qident(rv$lump_table),
-          "WHERE", qident(rv$colmap$lump), "= ? AND", qident(rv$colmap$spp), "= ?"
+          "DELETE FROM",
+          qident(rv$lump_table),
+          "WHERE",
+          qident(rv$colmap$lump),
+          "= ? AND",
+          qident(rv$colmap$spp),
+          "= ?"
         )
         tryCatch(DBI::dbExecute(con, sql, list(row$lumpcode[[1]], row$sppcode[[1]])), error = function(e) NULL)
       }
@@ -796,10 +935,13 @@ mod_combine_species_server <- function(id, state, con) {
 
       source_table <- if (nzchar(rv$lump_table)) rv$lump_table else "Lump"
       sql <- paste("CREATE TABLE", qident(new_table), "AS SELECT * FROM", qident(source_table))
-      ok <- tryCatch({
-        DBI::dbExecute(con, sql)
-        TRUE
-      }, error = function(e) FALSE)
+      ok <- tryCatch(
+        {
+          DBI::dbExecute(con, sql)
+          TRUE
+        },
+        error = function(e) FALSE
+      )
 
       if (!ok) {
         set_status(sprintf("Save As failed for %s.", new_table))

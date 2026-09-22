@@ -11,11 +11,21 @@ source(here::here("R", "logic_auth.R"))
 
 # Ensure docker-compose PG env vars are set when running this file in isolation
 # (setup.R sets these when running via devtools::test(), but not test_file())
-if (!nzchar(Sys.getenv("PGPORT")))              Sys.setenv(PGPORT              = "5433")
-if (!nzchar(Sys.getenv("PGHOST")))              Sys.setenv(PGHOST              = "localhost")
-if (!nzchar(Sys.getenv("PGDATABASE")))          Sys.setenv(PGDATABASE          = "becmaster")
-if (!nzchar(Sys.getenv("VPRO_PG_APP_PASSWORD"))) Sys.setenv(VPRO_PG_APP_PASSWORD = "testpass")
-if (!nzchar(Sys.getenv("VPRO_PG_APP_USER")))    Sys.setenv(VPRO_PG_APP_USER    = "vpro_app")
+if (!nzchar(Sys.getenv("PGPORT"))) {
+  Sys.setenv(PGPORT = "5433")
+}
+if (!nzchar(Sys.getenv("PGHOST"))) {
+  Sys.setenv(PGHOST = "localhost")
+}
+if (!nzchar(Sys.getenv("PGDATABASE"))) {
+  Sys.setenv(PGDATABASE = "becmaster")
+}
+if (!nzchar(Sys.getenv("VPRO_PG_APP_PASSWORD"))) {
+  Sys.setenv(VPRO_PG_APP_PASSWORD = "testpass")
+}
+if (!nzchar(Sys.getenv("VPRO_PG_APP_USER"))) {
+  Sys.setenv(VPRO_PG_APP_USER = "vpro_app")
+}
 
 # Both guest and admin test connections use the single vpro_app role.
 get_auth_test_con <- function() {
@@ -38,7 +48,8 @@ testthat::test_that("auth_login authenticates admin by email and password", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'admin@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'Test Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("secret"))
@@ -61,7 +72,8 @@ testthat::test_that("auth_login rejects wrong password", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'admin@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'Test Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("correct"))
@@ -79,7 +91,8 @@ testthat::test_that("auth_login rejects guest accounts", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'guest@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, is_active)
      VALUES ('guest@test.local', 'A Guest', 'guest', TRUE)"
   )
@@ -136,7 +149,8 @@ testthat::test_that("auth_guest_login finds and logs in existing guest", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'returning@guest.com'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (id, email, full_name, app_role, is_active)
      VALUES (10, 'returning@guest.com', 'Bob Jones', 'guest', TRUE)"
   )
@@ -173,7 +187,8 @@ testthat::test_that("auth_guest_login redirects admin email to admin sign-in", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'admin@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'An Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("pw"))
@@ -193,7 +208,8 @@ testthat::test_that("auth_change_password updates password for admin", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'admin@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("oldpass1"))
@@ -211,7 +227,8 @@ testthat::test_that("auth_change_password fails with wrong current password", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'admin@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("correct123"))
@@ -227,7 +244,8 @@ testthat::test_that("auth_change_password rejects short new password", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'admin@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("correct123"))
@@ -242,7 +260,8 @@ testthat::test_that("auth_change_password fails for non-admin", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'guest@test.com'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, is_active)
      VALUES ('guest@test.com', 'Guest', 'guest', TRUE)"
   )
@@ -261,12 +280,14 @@ testthat::test_that("auth_grant_admin promotes guest to admin", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email IN ('superadmin@test.local', 'newadmin@test.local')")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('superadmin@test.local', 'Super', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("adminpass1"))
   )
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, is_active)
      VALUES ('newadmin@test.local', 'New Admin', 'guest', TRUE)"
   )
@@ -283,7 +304,8 @@ testthat::test_that("auth_grant_admin fails for non-admin caller", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'guest@test.com'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, is_active)
      VALUES ('guest@test.com', 'Guest', 'guest', TRUE)"
   )
@@ -300,7 +322,8 @@ testthat::test_that("auth_grant_admin fails if target not found", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email = 'admin@test.local'")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("adminpass1"))
@@ -317,12 +340,14 @@ testthat::test_that("auth_grant_admin fails if target is already admin", {
   con_admin <- get_auth_test_con_admin()
   on.exit(DBI::dbDisconnect(con_admin), add = TRUE)
   DBI::dbExecute(con_admin, "DELETE FROM master.admin.users WHERE email IN ('admin@test.local', 'other@test.local')")
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('admin@test.local', 'Admin', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("adminpass1"))
   )
-  DBI::dbExecute(con_admin,
+  DBI::dbExecute(
+    con_admin,
     "INSERT INTO master.admin.users (email, full_name, app_role, password_hash, is_active)
      VALUES ('other@test.local', 'Other', 'admin', ?, TRUE)",
     list(bcrypt::hashpw("other123"))
@@ -340,9 +365,9 @@ testthat::test_that("auth_logout clears all state", {
   state <- shiny::reactiveValues()
   auth_init_state(state)
   state$AuthAuthenticated <- TRUE
-  state$AuthUser          <- "someone@test.com"
-  state$AuthRole          <- "admin"
-  state$AuthPermissions   <- c("*")
+  state$AuthUser <- "someone@test.com"
+  state$AuthRole <- "admin"
+  state$AuthPermissions <- c("*")
 
   auth_logout(state)
 
@@ -358,7 +383,7 @@ testthat::test_that("auth_user_has_permission respects wildcard for admin", {
   state <- shiny::reactiveValues()
   auth_init_state(state)
   state$AuthAuthenticated <- TRUE
-  state$AuthPermissions   <- c("*")
+  state$AuthPermissions <- c("*")
 
   testthat::expect_true(auth_user_has_permission(state, "publish_rds"))
   testthat::expect_true(auth_user_has_permission(state, "view_download_logs"))
@@ -368,8 +393,8 @@ testthat::test_that("auth_user_has_permission restricts guest to scoped permissi
   state <- shiny::reactiveValues()
   auth_init_state(state)
   state$AuthAuthenticated <- TRUE
-  state$AuthRole          <- "guest"
-  state$AuthPermissions   <- c("write:staging", "read:core")
+  state$AuthRole <- "guest"
+  state$AuthPermissions <- c("write:staging", "read:core")
 
   testthat::expect_true(auth_user_has_permission(state, "write:staging"))
   testthat::expect_true(auth_user_has_permission(state, "read:core"))
@@ -397,4 +422,3 @@ testthat::test_that("auth_init_state does not overwrite existing SyncVersion", {
   shiny::isolate(auth_init_state(state))
   testthat::expect_equal(shiny::isolate(state$SyncVersion), 5L)
 })
-

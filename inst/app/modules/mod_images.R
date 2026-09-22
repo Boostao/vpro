@@ -1,4 +1,3 @@
-
 # Module: Images & Maps
 # Displays associated images and allows KML generation
 
@@ -7,15 +6,15 @@ mod_images_ui <- function(id) {
   tagList(
     layout_columns(
       col_widths = c(8, 4),
-      
+
       # Column 1: Image Gallery
       card(
         card_header("Site Images"),
         card_body(
-            uiOutput(ns("gallery_ui"))
+          uiOutput(ns("gallery_ui"))
         )
       ),
-      
+
       # Column 2: Maps & KML
       card(
         card_header("Location & Export"),
@@ -33,48 +32,45 @@ mod_images_ui <- function(id) {
 
 mod_images_server <- function(id, sys_state, con) {
   moduleServer(id, function(input, output, session) {
-    
     # 1. Image Gallery
     output$gallery_ui <- renderUI({
       req(sys_state$CurrSU)
-      
+
       # Query Images
       # Assuming 'blob' contains Base64 encoded image or raw binary
       # We cast to string just in case
       imgs <- dbGetQuery(con, "SELECT filename, caption, blob FROM USysPictureBlob WHERE plotorunit = ?", list(sys_state$CurrSU))
-      
+
       if (nrow(imgs) == 0) {
-        return(div(class="text-muted p-3", "No images found for this plot."))
+        return(div(class = "text-muted p-3", "No images found for this plot."))
       }
-      
+
       # Generate Cards for each image
       image_cards <- lapply(1:nrow(imgs), function(i) {
         row <- imgs[i, ]
-        
+
         # Check if blob is valid (simple check)
         # If it's a very short string, it might be a path or an error.
         src_str <- ""
         if (!is.na(row$blob) && nchar(row$blob) > 100) {
-            # Assume Base64 JPEG
-            # In VPro, typically these are JPEGs.
-            src_str <- paste0("data:image/jpeg;base64,", row$blob)
+          # Assume Base64 JPEG
+          # In VPro, typically these are JPEGs.
+          src_str <- paste0("data:image/jpeg;base64,", row$blob)
         } else {
-            # Placeholder
-            src_str <- "" 
+          # Placeholder
+          src_str <- ""
         }
-        
-        div(class = "card mb-3",
-            if(src_str != "") img(src = src_str, class = "card-img-top", style="max-height: 400px; object-fit: contain;") else div("Invalid Image Data"),
-            div(class = "card-body",
-                h6(class = "card-title", row$filename),
-                p(class = "card-text", row$caption)
-            )
+
+        div(
+          class = "card mb-3",
+          if (src_str != "") img(src = src_str, class = "card-img-top", style = "max-height: 400px; object-fit: contain;") else div("Invalid Image Data"),
+          div(class = "card-body", h6(class = "card-title", row$filename), p(class = "card-text", row$caption))
         )
       })
-      
+
       do.call(tagList, image_cards)
     })
-    
+
     # 2. Location Debug
     output$loc_debug <- renderText({
       req(sys_state$CurrSU)
@@ -83,14 +79,12 @@ mod_images_server <- function(id, sys_state, con) {
       if (nrow(loc) > 0) {
         lat <- suppressWarnings(as.numeric(loc$latitude[1]))
         lon <- suppressWarnings(as.numeric(loc$longitude[1]))
-        paste("Current Plot Location:\n",
-              "Lat:", lat, "Long:", lon, "\n",
-              "UTM:", loc$utmzone, loc$utmeasting, "E", loc$utmnorthing, "N")
+        paste("Current Plot Location:\n", "Lat:", lat, "Long:", lon, "\n", "UTM:", loc$utmzone, loc$utmeasting, "E", loc$utmnorthing, "N")
       } else {
         "No location data."
       }
     })
-    
+
     # 3. KML Export
     output$dl_kml <- downloadHandler(
       filename = function() {
@@ -98,7 +92,7 @@ mod_images_server <- function(id, sys_state, con) {
       },
       content = function(file) {
         req(sys_state$CurrProject)
-        
+
         # 1. Fetch Data
         env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
         sql <- paste("SELECT plotnumber, latitude, longitude, _location FROM", env_table_sql, "WHERE projectid = ? AND latitude IS NOT NULL AND longitude IS NOT NULL")
@@ -106,12 +100,12 @@ mod_images_server <- function(id, sys_state, con) {
         pts$latitude_num <- suppressWarnings(as.numeric(pts$latitude))
         pts$longitude_num <- suppressWarnings(as.numeric(pts$longitude))
         pts <- pts[!is.na(pts$latitude_num) & !is.na(pts$longitude_num), , drop = FALSE]
-        
+
         if (nrow(pts) == 0) {
           show_toast(toast("No valid coordinates found in this project.", type = "danger"))
           return(NULL)
         }
-        
+
         # 2. Generate KML Content
         # Header
         kml <- c(
@@ -120,14 +114,14 @@ mod_images_server <- function(id, sys_state, con) {
           '<Document>',
           paste0('<name>Project ', sys_state$CurrProject, '</name>')
         )
-        
+
         # Placemarks
         for (i in 1:nrow(pts)) {
           pname <- pts$plotnumber[i]
           pdesc <- pts[["_location"]][i]
-          lat   <- pts$latitude_num[i]
-          lon   <- pts$longitude_num[i]
-          
+          lat <- pts$latitude_num[i]
+          lon <- pts$longitude_num[i]
+
           pm <- c(
             '<Placemark>',
             paste0('  <name>', pname, '</name>'),
@@ -139,14 +133,13 @@ mod_images_server <- function(id, sys_state, con) {
           )
           kml <- c(kml, pm)
         }
-        
+
         # Footer
         kml <- c(kml, '</Document>', '</kml>')
-        
+
         # 3. Write File
         writeLines(kml, file)
       }
     )
-    
   })
 }

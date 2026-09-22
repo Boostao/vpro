@@ -9,14 +9,17 @@ test_that("Excel export writes workbook for short veg report", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE vw_USysAllVeg (
       PlotNumber TEXT,
       MyLayer TEXT,
       Species TEXT,
       Cover TEXT
     )
-  ")
+  "
+  )
 
   DBI::dbExecute(
     con,
@@ -68,7 +71,9 @@ test_that("Excel export splits long environment by site unit", {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Env (
       PlotNumber TEXT,
       SitePlotQuality TEXT,
@@ -76,13 +81,17 @@ test_that("Excel export splits long environment by site unit", {
       SubZone TEXT,
       Elevation DOUBLE
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE SU (
       PlotNumber TEXT,
       SiteUnit TEXT
     )
-  ")
+  "
+  )
 
   DBI::dbExecute(
     con,

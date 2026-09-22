@@ -4,7 +4,9 @@ source(here::here("R", "logic_state.R"))
 source(here::here("R", "mod_veg_sample.R"))
 
 setup_veg_sample_tables <- function(con) {
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Veg (
       id INTEGER,
       plotnumber TEXT,
@@ -14,13 +16,17 @@ setup_veg_sample_tables <- function(con) {
       totala DOUBLE,
       heighta DOUBLE
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE SppList (
       code TEXT,
       scientificname TEXT
     )
-  ")
+  "
+  )
 
   DBI::dbExecute(
     con,

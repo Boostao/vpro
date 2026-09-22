@@ -26,13 +26,16 @@ test_that("apply_lumping replaces and aggregates lumped species", {
   con <- test_connect_duckdb()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Lump (
       sppcode TEXT,
       lumpcode TEXT,
       _use INTEGER
     )
-  ")
+  "
+  )
   DBI::dbExecute(
     con,
     "INSERT INTO Lump (sppcode, lumpcode, _use) VALUES (?, ?, ?)",

@@ -10,7 +10,9 @@ setup_import_tables <- function(con) {
 }
 
 setup_import_env_table <- function(con) {
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Env (
       plotnumber TEXT,
       projectid TEXT,
@@ -22,18 +24,22 @@ setup_import_env_table <- function(con) {
       slopegradient DOUBLE,
       aspect DOUBLE
     )
-  ")
+  "
+  )
 }
 
 setup_import_veg_table <- function(con) {
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Veg (
       plotnumber TEXT,
       species TEXT,
       projectid TEXT,
       cover TEXT
     )
-  ")
+  "
+  )
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
 
   table_ref <- DBI::Id(schema = "lists", table = "SppList")
@@ -42,8 +48,16 @@ setup_import_veg_table <- function(con) {
   }
 
   fields <- DBI::dbListFields(con, table_ref)
-  code_col <- if ("code" %in% fields) "code" else if ("spp_code" %in% fields) "spp_code" else NULL
-  if (is.null(code_col)) return()
+  code_col <- if ("code" %in% fields) {
+    "code"
+  } else if ("spp_code" %in% fields) {
+    "spp_code"
+  } else {
+    NULL
+  }
+  if (is.null(code_col)) {
+    return()
+  }
 
   DBI::dbExecute(con, sprintf("DELETE FROM lists.SppList"))
   DBI::dbExecute(con, sprintf("INSERT INTO lists.SppList (%s) VALUES ('OK')", code_col))

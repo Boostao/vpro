@@ -5,7 +5,9 @@ source(here::here("R", "logic_audit.R"))
 source(here::here("R", "mod_site_env.R"))
 
 setup_site_env_tables <- function(con) {
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Env (
       plotnumber TEXT PRIMARY KEY,
       _location TEXT,
@@ -27,8 +29,11 @@ setup_site_env_tables <- function(con) {
       sv_standheight DOUBLE,
       structuralstage TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Humus (
       id INTEGER,
       plotnumber TEXT,
@@ -40,8 +45,11 @@ setup_site_env_tables <- function(con) {
       humusformph DOUBLE,
       _comment TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Mineral (
       id INTEGER,
       plotnumber TEXT,
@@ -54,15 +62,19 @@ setup_site_env_tables <- function(con) {
       colour TEXT,
       _comments TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE lists.USysTableOfLists (
       listname TEXT,
       item TEXT,
       itemdescription TEXT,
       itemorder INTEGER
     )
-  ")
+  "
+  )
 
   DBI::dbExecute(
     con,

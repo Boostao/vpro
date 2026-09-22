@@ -11,18 +11,23 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
     )
 
     fetch_whatsnew_rows <- function() {
-      db_query(con, paste(
-        "SELECT rowid AS row_id,",
-        "Date,",
-        "Change,",
-        "CAST(Viewed AS BOOLEAN) AS Viewed",
-        "FROM tblWhatsNew",
-        "ORDER BY Date DESC NULLS LAST, row_id DESC"
-      ))
+      db_query(
+        con,
+        paste(
+          "SELECT rowid AS row_id,",
+          "Date,",
+          "Change,",
+          "CAST(Viewed AS BOOLEAN) AS Viewed",
+          "FROM tblWhatsNew",
+          "ORDER BY Date DESC NULLS LAST, row_id DESC"
+        )
+      )
     }
 
     has_unviewed_rows <- function(rows) {
-      if (!nrow(rows)) return(FALSE)
+      if (!nrow(rows)) {
+        return(FALSE)
+      }
       any(!rows$Viewed)
     }
 
@@ -73,45 +78,45 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
       )
     })
 
-    output$whatsnew_table <- DT::renderDT({
-      DT::datatable(
-        format_rows_for_display(),
-        rownames = FALSE,
-        escape = FALSE,
-        options = list(
-          dom = "t",
-          ordering = FALSE,
-          paging = FALSE,
-          searching = FALSE,
-          info = FALSE,
-          autoWidth = TRUE,
-          scrollY = "320px",
-          scrollCollapse = TRUE,
-          columnDefs = list(
-            list(width = "165px", targets = 0),
-            list(width = "130px", targets = 2),
-            list(className = "dt-left", targets = c(0, 1, 2))
-          )
-        ),
-        callback = DT::JS(
-          sprintf(
-            "table.on('click', '.whatsnew-toggle', function() {
+    output$whatsnew_table <- DT::renderDT(
+      {
+        DT::datatable(
+          format_rows_for_display(),
+          rownames = FALSE,
+          escape = FALSE,
+          options = list(
+            dom = "t",
+            ordering = FALSE,
+            paging = FALSE,
+            searching = FALSE,
+            info = FALSE,
+            autoWidth = TRUE,
+            scrollY = "320px",
+            scrollCollapse = TRUE,
+            columnDefs = list(
+              list(width = "165px", targets = 0),
+              list(width = "130px", targets = 2),
+              list(className = "dt-left", targets = c(0, 1, 2))
+            )
+          ),
+          callback = DT::JS(
+            sprintf(
+              "table.on('click', '.whatsnew-toggle', function() {
                var btn = $(this);
                var rowid = parseInt(btn.data('rowid'), 10);
                var viewed = btn.data('viewed') === 1 || btn.data('viewed') === '1';
                Shiny.setInputValue('%s', {rowid: rowid, viewed: viewed}, {priority: 'event'});
              });",
-            ns("toggle_viewed")
+              ns("toggle_viewed")
+            )
           )
         )
-      )
-    }, server = FALSE)
+      },
+      server = FALSE
+    )
 
     update_viewed_row <- function(row_id, viewed_value) {
-      db_run(con,
-        'UPDATE tblWhatsNew SET "Viewed" = ? WHERE rowid = ?',
-        params = list(isTRUE(viewed_value), as.integer(row_id))
-      )
+      db_run(con, 'UPDATE tblWhatsNew SET "Viewed" = ? WHERE rowid = ?', params = list(isTRUE(viewed_value), as.integer(row_id)))
       rows <- rv$rows
       idx <- which(rows$row_id == as.integer(row_id))
       rows$Viewed[[idx]] <- isTRUE(viewed_value)
@@ -131,16 +136,29 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
       show_toast(toast("All updates marked as viewed.", type = "success"))
     })
 
-    observeEvent(input$show_on_startup, {
-      config("Message", "ShowWhatsNew", input$show_on_startup)
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$show_on_startup,
+      {
+        config("Message", "ShowWhatsNew", input$show_on_startup)
+      },
+      ignoreInit = TRUE
+    )
 
-    session$onFlushed(function() { show_whatsnew_modal() }, once = TRUE)
+    session$onFlushed(
+      function() {
+        show_whatsnew_modal()
+      },
+      once = TRUE
+    )
 
     if (!is.null(open_trigger)) {
-      observeEvent(open_trigger(), {
-        show_whatsnew_modal(force = TRUE)
-      }, ignoreInit = TRUE)
+      observeEvent(
+        open_trigger(),
+        {
+          show_whatsnew_modal(force = TRUE)
+        },
+        ignoreInit = TRUE
+      )
     }
 
     invisible(NULL)

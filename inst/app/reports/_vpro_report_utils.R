@@ -156,7 +156,9 @@ vpro_project_root <- function(project_root_param = "") {
 
   for (candidate in candidates) {
     root <- tryCatch(normalizePath(candidate, winslash = "/", mustWork = FALSE), error = function(e) "")
-    if (!nzchar(root) || !dir.exists(root)) next
+    if (!nzchar(root) || !dir.exists(root)) {
+      next
+    }
     if (dir.exists(file.path(root, "R")) && file.exists(file.path(root, "config.yml"))) {
       return(root)
     }
@@ -166,7 +168,9 @@ vpro_project_root <- function(project_root_param = "") {
 }
 
 vpro_resolve_path <- function(path, root_dir) {
-  if (!vpro_is_nonempty_string(path)) return(NA_character_)
+  if (!vpro_is_nonempty_string(path)) {
+    return(NA_character_)
+  }
   if (grepl("^/|^[A-Za-z]:[/\\\\]", path)) {
     return(tryCatch(normalizePath(path, winslash = "/", mustWork = FALSE), error = function(e) path))
   }
@@ -174,10 +178,14 @@ vpro_resolve_path <- function(path, root_dir) {
 }
 
 vpro_resolve_existing_path <- function(path, base_dirs) {
-  if (!vpro_is_nonempty_string(path)) return(NA_character_)
+  if (!vpro_is_nonempty_string(path)) {
+    return(NA_character_)
+  }
   if (grepl("^/|^[A-Za-z]:[/\\\\]", path)) {
     resolved <- tryCatch(normalizePath(path, winslash = "/", mustWork = FALSE), error = function(e) path)
-    if (file.exists(resolved)) return(resolved)
+    if (file.exists(resolved)) {
+      return(resolved)
+    }
     return(resolved)
   }
 
@@ -254,7 +262,9 @@ vpro_duckdb_connect <- function(db_path, root_dir, read_only = TRUE, attach_list
 }
 
 vpro_first_existing_col <- function(df, candidates) {
-  if (is.null(df) || nrow(df) == 0) return(NA_character_)
+  if (is.null(df) || nrow(df) == 0) {
+    return(NA_character_)
+  }
   cols <- names(df)
   for (cand in candidates) {
     idx <- which(tolower(cols) == tolower(cand))
@@ -264,8 +274,12 @@ vpro_first_existing_col <- function(df, candidates) {
 }
 
 vpro_ensure_col <- function(df, target, candidates) {
-  if (is.null(df) || nrow(df) == 0) return(df)
-  if (target %in% names(df)) return(df)
+  if (is.null(df) || nrow(df) == 0) {
+    return(df)
+  }
+  if (target %in% names(df)) {
+    return(df)
+  }
   src <- vpro_first_existing_col(df, candidates)
   if (!is.na(src)) {
     df[[target]] <- df[[src]]
@@ -274,10 +288,13 @@ vpro_ensure_col <- function(df, target, candidates) {
 }
 
 vpro_sql_in_list <- function(con, values) {
-  if (length(values) == 0) return(NULL)
+  if (length(values) == 0) {
+    return(NULL)
+  }
   values <- as.character(values)
   values <- values[!is.na(values) & nzchar(trimws(values))]
-  if (length(values) == 0) return(NULL)
+  if (length(values) == 0) {
+    return(NULL)
+  }
   paste(DBI::dbQuoteString(con, values), collapse = ", ")
 }
-

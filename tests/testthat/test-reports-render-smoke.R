@@ -19,7 +19,7 @@ test_that("All Quarto reports render without error using demo data", {
   if (!nzchar(Sys.which("quarto"))) {
     skip("Quarto CLI ('quarto') not available on PATH")
   }
-  
+
   # Setup paths relative to tests/testthat
   # We use absolute paths to avoid ambiguity during rendering
   db_path <- normalizePath(file.path("..", "..", "data", "vpro.duckdb"), winslash = "/", mustWork = TRUE)
@@ -63,7 +63,7 @@ test_that("All Quarto reports render without error using demo data", {
   old_wd <- getwd()
   setwd(project_root)
   on.exit(setwd(old_wd), add = TRUE)
-  
+
   # Standard test parameters matching common report requirements in mod_reporting.R
   # Using demo data found in vpro.duckdb (project 'hju', plot '00337')
   params <- list(
@@ -82,13 +82,13 @@ test_that("All Quarto reports render without error using demo data", {
     project_root = project_root,
     parquet_dir = "" # Use DB by default if empty
   )
-  
+
   # List all .qmd files in reports/
   qmd_files <- list.files(report_dir, pattern = "\\.qmd$", full.names = TRUE)
-  
+
   # Verify we found the reports (expecting ~15+)
   expect_gt(length(qmd_files), 10, label = "Number of report templates found")
-  
+
   # Create a temporary directory for output to keep workspace clean.
   # Note: Quarto CLI `--output-dir` is input/project-relative, so we create
   # a temp directory under reports/ and clean it up on exit.
@@ -101,26 +101,34 @@ test_that("All Quarto reports render without error using demo data", {
   # which breaks reports expecting character params. Instead, write a small
   # YAML file and pass it via `--execute-params`.
   param_to_yaml_scalar <- function(x) {
-    if (is.null(x)) return("null")
-    if (is.logical(x)) return(tolower(as.character(x)))
-    if (is.numeric(x)) return(as.character(x))
+    if (is.null(x)) {
+      return("null")
+    }
+    if (is.logical(x)) {
+      return(tolower(as.character(x)))
+    }
+    if (is.numeric(x)) {
+      return(as.character(x))
+    }
     yaml_single_quote <- function(s) {
       s <- gsub("'", "''", as.character(s), fixed = TRUE)
       paste0("'", s, "'")
     }
-    if (length(x) > 1) return(yaml_single_quote(paste(as.character(x), collapse = ",")))
+    if (length(x) > 1) {
+      return(yaml_single_quote(paste(as.character(x), collapse = ",")))
+    }
     yaml_single_quote(x)
   }
 
   render_out_dir_arg <- basename(render_out_dir)
-  
+
   for (qmd_path in qmd_files) {
     report_name <- basename(qmd_path)
     qmd_cli_path <- file.path("reports", report_name)
-    
+
     # Define output file path
     output_filename <- paste0(tools::file_path_sans_ext(report_name), "_smoke_test.html")
-    
+
     params_file <- tempfile("quarto_params_", fileext = ".yml")
     on.exit(unlink(params_file), add = TRUE)
     params_lines <- vapply(
@@ -173,32 +181,40 @@ test_that("All Quarto reports render without error using demo data", {
     } else {
       err <- attr(exit_status, "error")
       msg <- paste0(
-        "quarto CLI failed (exit ", exit_status, ")",
+        "quarto CLI failed (exit ",
+        exit_status,
+        ")",
         if (!is.null(err) && nzchar(err)) paste0(": ", err) else "",
         if (nzchar(excerpt)) paste0("\n--- quarto output (tail) ---\n", excerpt) else ""
       )
       list(success = FALSE, error = msg)
     }
-    
+
     if (!results$success) {
       cat(sprintf("\n   FAIL: %s\n   Error: %s\n", report_name, results$error))
     } else {
       cat(sprintf("\n   PASS: %s\n", report_name))
     }
-    
+
     expect_true(results$success, label = sprintf("Report %s render status", report_name))
 
     # Cleanup within the temp output directory (output + any *_files assets)
     generated_html <- file.path(render_out_dir, output_filename)
-    if (file.exists(generated_html)) unlink(generated_html)
+    if (file.exists(generated_html)) {
+      unlink(generated_html)
+    }
 
     generated_files_dir <- file.path(render_out_dir, paste0(tools::file_path_sans_ext(report_name), "_files"))
-    if (dir.exists(generated_files_dir)) unlink(generated_files_dir, recursive = TRUE)
+    if (dir.exists(generated_files_dir)) {
+      unlink(generated_files_dir, recursive = TRUE)
+    }
 
     # Defensive cleanup: if Quarto falls back to writing beside the .qmd,
     # remove smoke-only artifacts from reports/ as well.
     stray_html <- file.path(report_dir, output_filename)
-    if (file.exists(stray_html)) unlink(stray_html)
+    if (file.exists(stray_html)) {
+      unlink(stray_html)
+    }
 
     stray_files_dir <- file.path(report_dir, paste0(tools::file_path_sans_ext(output_filename), "_files"))
     if (dir.exists(stray_files_dir)) unlink(stray_files_dir, recursive = TRUE)

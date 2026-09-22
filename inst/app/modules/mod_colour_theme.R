@@ -49,9 +49,14 @@ mod_colour_theme_server <- function(id, state, con) {
       if (length(match_hit) == 0) {
         status_text(sprintf("Theme table '%s' not found in current project.", table_name))
         theme_data(data.frame(
-          LumpCode = character(), SppCode = character(), ScientificName = character(),
-          ColourCode = integer(), PatternCode = integer(), FontColour = integer(),
-          Use = integer(), stringsAsFactors = FALSE
+          LumpCode = character(),
+          SppCode = character(),
+          ScientificName = character(),
+          ColourCode = integer(),
+          PatternCode = integer(),
+          FontColour = integer(),
+          Use = integer(),
+          stringsAsFactors = FALSE
         ))
         return(invisible(NULL))
       }
@@ -67,13 +72,29 @@ mod_colour_theme_server <- function(id, state, con) {
       status_text(sprintf("Loaded %d theme rows from %s.", nrow(df), match_hit[[1]]))
     }
 
-    observeEvent(TRUE, { load_theme() }, once = TRUE)
-    observeEvent(input$btnRefresh, { load_theme() })
-    observeEvent(state$CurrProject, { load_theme() }, ignoreInit = TRUE)
+    observeEvent(
+      TRUE,
+      {
+        load_theme()
+      },
+      once = TRUE
+    )
+    observeEvent(input$btnRefresh, {
+      load_theme()
+    })
+    observeEvent(
+      state$CurrProject,
+      {
+        load_theme()
+      },
+      ignoreInit = TRUE
+    )
 
     output$theme_table <- rhandsontable::renderRHandsontable({
       df <- theme_data()
-      if (!nrow(df)) return(NULL)
+      if (!nrow(df)) {
+        return(NULL)
+      }
       rhandsontable::rhandsontable(df, stretchH = "all", rowHeaders = FALSE) |>
         rhandsontable::hot_col("LumpCode", readOnly = TRUE) |>
         rhandsontable::hot_col("SppCode", readOnly = TRUE) |>
@@ -96,13 +117,16 @@ mod_colour_theme_server <- function(id, state, con) {
         return()
       }
       quoted <- as.character(DBI::dbQuoteIdentifier(con, match_hit[[1]]))
-      tryCatch({
-        DBI::dbExecute(con, paste("DELETE FROM", quoted))
-        DBI::dbAppendTable(con, match_hit[[1]], df)
-        status_text(sprintf("Saved %d rows to %s.", nrow(df), match_hit[[1]]))
-      }, error = function(e) {
-        status_text(paste("Save error:", conditionMessage(e)))
-      })
+      tryCatch(
+        {
+          DBI::dbExecute(con, paste("DELETE FROM", quoted))
+          DBI::dbAppendTable(con, match_hit[[1]], df)
+          status_text(sprintf("Saved %d rows to %s.", nrow(df), match_hit[[1]]))
+        },
+        error = function(e) {
+          status_text(paste("Save error:", conditionMessage(e)))
+        }
+      )
     })
 
     output$status <- shiny::renderText(status_text())

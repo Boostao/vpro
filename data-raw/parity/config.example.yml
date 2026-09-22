@@ -1,0 +1,13 @@
+# Documentation-only example. The base-R runner accepts CLI flags (no YAML package).
+source_root: /absolute/path/to/VPro64_forAI
+target_root: /absolute/path/to/vpro
+output_root: data-raw/parity/generated
+families:
+  - Forms
+  - Modules
+  - Queries
+  - Reports
+  - Macros
+  - Tables_Def
+  - Relationships
+  - Tables_Design

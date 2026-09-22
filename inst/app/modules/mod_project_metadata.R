@@ -20,10 +20,13 @@ project_metadata_detect_table <- function(con, project = NULL) {
   )
 
   for (table_name in candidates) {
-    ok <- tryCatch({
-      DBI::dbGetQuery(con, paste("SELECT * FROM", table_name, "LIMIT 1"))
-      TRUE
-    }, error = function(e) FALSE)
+    ok <- tryCatch(
+      {
+        DBI::dbGetQuery(con, paste("SELECT * FROM", table_name, "LIMIT 1"))
+        TRUE
+      },
+      error = function(e) FALSE
+    )
     if (isTRUE(ok)) {
       return(table_name)
     }
@@ -96,13 +99,8 @@ mod_project_metadata_ui <- function(id) {
     shiny::tags$div(
       class = "text-center",
       shiny::tags$small(class = "fw-semibold d-block mb-1", lbl),
-      shiny::selectInput(ns(paste0("Collected", field_suffix)), NULL,
-        choices = c("\u2014" = "", "Complete" = 1, "Partial" = 2, "None" = 3),
-        selected = "", width = "85px"
-      ),
-      shiny::textInput(ns(paste0("DataQuality", field_suffix)), NULL,
-        placeholder = "Quality", width = "85px"
-      )
+      shiny::selectInput(ns(paste0("Collected", field_suffix)), NULL, choices = c("\u2014" = "", "Complete" = 1, "Partial" = 2, "None" = 3), selected = "", width = "85px"),
+      shiny::textInput(ns(paste0("DataQuality", field_suffix)), NULL, placeholder = "Quality", width = "85px")
     )
   }
 
@@ -110,8 +108,7 @@ mod_project_metadata_ui <- function(id) {
   lr <- function(lbl, field, ph) {
     shiny::tags$div(
       class = "d-flex align-items-center gap-2 mb-1",
-      shiny::tags$div(class = "fw-semibold text-muted text-end",
-        style = "width:2.2rem; min-width:2.2rem; font-size:0.8rem;", lbl),
+      shiny::tags$div(class = "fw-semibold text-muted text-end", style = "width:2.2rem; min-width:2.2rem; font-size:0.8rem;", lbl),
       shiny::textInput(ns(field), NULL, placeholder = ph, width = "100%")
     )
   }
@@ -121,21 +118,17 @@ mod_project_metadata_ui <- function(id) {
     # Navigation bar (Access frmProjectMetaData record nav bar parity)
     shiny::tags$div(
       class = "d-flex align-items-center gap-1 mb-1",
-      shiny::actionButton(ns("btnMetaNavFirst"), NULL, icon = shiny::icon("backward-step"),
-        class = "btn btn-outline-secondary btn-sm px-1"),
-      shiny::actionButton(ns("btnMetaNavPrev"), NULL, icon = shiny::icon("caret-left"),
-        class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::actionButton(ns("btnMetaNavFirst"), NULL, icon = shiny::icon("backward-step"), class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::actionButton(ns("btnMetaNavPrev"), NULL, icon = shiny::icon("caret-left"), class = "btn btn-outline-secondary btn-sm px-1"),
       shiny::tags$span(
-        class = "small text-muted mx-1", style = "min-width: 56px; text-align: center;",
+        class = "small text-muted mx-1",
+        style = "min-width: 56px; text-align: center;",
         shiny::textOutput(ns("navRecordPos"), inline = TRUE)
       ),
-      shiny::actionButton(ns("btnMetaNavNext"), NULL, icon = shiny::icon("caret-right"),
-        class = "btn btn-outline-secondary btn-sm px-1"),
-      shiny::actionButton(ns("btnMetaNavLast"), NULL, icon = shiny::icon("forward-step"),
-        class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::actionButton(ns("btnMetaNavNext"), NULL, icon = shiny::icon("caret-right"), class = "btn btn-outline-secondary btn-sm px-1"),
+      shiny::actionButton(ns("btnMetaNavLast"), NULL, icon = shiny::icon("forward-step"), class = "btn btn-outline-secondary btn-sm px-1"),
       shiny::tags$span(class = "vr mx-1"),
-      shiny::tags$span(class = "small text-muted",
-        shiny::textOutput(ns("status"), inline = TRUE))
+      shiny::tags$span(class = "small text-muted", shiny::textOutput(ns("status"), inline = TRUE))
     ),
 
     # === Main 2-column layout: fields (left) | DATA COLLECTED (right) ===
@@ -147,11 +140,9 @@ mod_project_metadata_ui <- function(id) {
       shiny::tagList(
         # Row: Project ID | BAPID.EP# | Start Date (Yr.) | End Date (Yr.)
         bslib::layout_columns(
-          shiny::selectizeInput(ns("ProjectID"), "Project ID",
-            choices = character(0), selected = NULL),
+          shiny::selectizeInput(ns("ProjectID"), "Project ID", choices = character(0), selected = NULL),
           shiny::textInput(ns("BAPID"), "BAPID.EP#"),
-          shiny::numericInput(ns("StartDate"), "Start Date (Yr.)",
-            value = NA, min = 0, step = 1),
+          shiny::numericInput(ns("StartDate"), "Start Date (Yr.)", value = NA, min = 0, step = 1),
           shiny::textInput(ns("EndDate"), "End Date (Yr.)"),
           col_widths = c(4, 4, 2, 2)
         ),
@@ -159,15 +150,13 @@ mod_project_metadata_ui <- function(id) {
         shiny::textInput(ns("ProjectTitle"), "Project Title", width = "100%"),
         # Row: Project Type | Other
         bslib::layout_columns(
-          shiny::selectInput(ns("cmbProjectType"), "Project Type",
-            choices = c("(None)" = "", "BEC", "TEM", "SIBEC", "Other")),
+          shiny::selectInput(ns("cmbProjectType"), "Project Type", choices = c("(None)" = "", "BEC", "TEM", "SIBEC", "Other")),
           shiny::textInput(ns("ProjectTypeOther"), "Other"),
           col_widths = c(6, 6)
         ),
         # Row: Collection Standard | Other
         bslib::layout_columns(
-          shiny::selectInput(ns("cmbEcosysCollectionStandard"),
-            "Collection Standard", choices = character(0)),
+          shiny::selectInput(ns("cmbEcosysCollectionStandard"), "Collection Standard", choices = character(0)),
           shiny::textInput(ns("EcosysCollectionStandardOther"), "Other"),
           col_widths = c(6, 6)
         ),
@@ -184,11 +173,9 @@ mod_project_metadata_ui <- function(id) {
           col_widths = c(6, 6)
         ),
         # Row: Field Data Collection Team
-        shiny::textInput(ns("FieldDataCollectionTeam"),
-          "Field Data Collection Team", width = "100%"),
+        shiny::textInput(ns("FieldDataCollectionTeam"), "Field Data Collection Team", width = "100%"),
         # Row: Purpose of Project
-        shiny::textInput(ns("ProjectPurpose"), "Purpose of Project",
-          width = "100%"),
+        shiny::textInput(ns("ProjectPurpose"), "Purpose of Project", width = "100%"),
         # Row: Geographic Study Area | Region/District
         bslib::layout_columns(
           shiny::textInput(ns("GeographicStudyArea"), "Geographic Study Area"),
@@ -197,36 +184,30 @@ mod_project_metadata_ui <- function(id) {
         ),
         # Row: No. of FS882 Plots | No. of Site Visits
         bslib::layout_columns(
-          shiny::numericInput(ns("NumberOfFS882Plots"),
-            "No. of Project FS882 Plots", value = NA),
-          shiny::numericInput(ns("NumberOfSiteVisits"),
-            "No. of Site Visits", value = NA),
+          shiny::numericInput(ns("NumberOfFS882Plots"), "No. of Project FS882 Plots", value = NA),
+          shiny::numericInput(ns("NumberOfSiteVisits"), "No. of Site Visits", value = NA),
           col_widths = c(6, 6)
         ),
         # Row: Veg Cover Method | Other
         bslib::layout_columns(
-          shiny::selectInput(ns("cmbVegCoverMethod"), "Veg Cover Method",
-            choices = character(0)),
+          shiny::selectInput(ns("cmbVegCoverMethod"), "Veg Cover Method", choices = character(0)),
           shiny::textInput(ns("VegCoverMethodOther"), "Other"),
           col_widths = c(6, 6)
         ),
         # Row: Plot Method/Size | Other
         bslib::layout_columns(
-          shiny::selectInput(ns("cmbPlotMethod"), "Plot Method/Size",
-            choices = character(0)),
+          shiny::selectInput(ns("cmbPlotMethod"), "Plot Method/Size", choices = character(0)),
           shiny::textInput(ns("PlotMethodOther"), "Other"),
           col_widths = c(6, 6)
         ),
         # Row: Mensuration Method | Other
         bslib::layout_columns(
-          shiny::selectInput(ns("cmbMensurationMethod"), "Mensuration Method",
-            choices = character(0)),
+          shiny::selectInput(ns("cmbMensurationMethod"), "Mensuration Method", choices = character(0)),
           shiny::textInput(ns("MensurationMethodOther"), "Other"),
           col_widths = c(6, 6)
         ),
         # Row: Extra Vegetation Field Description
-        shiny::textInput(ns("ExtraVegFieldDescription"),
-          "Extra Vegetation Field Description", width = "100%"),
+        shiny::textInput(ns("ExtraVegFieldDescription"), "Extra Vegetation Field Description", width = "100%"),
         # Row: Data Custodian | Storage Location
         bslib::layout_columns(
           shiny::textInput(ns("DataCustodian"), "Data Custodian"),
@@ -235,10 +216,8 @@ mod_project_metadata_ui <- function(id) {
         ),
         # Row: Georeference Method | Coordinate System | Datum
         bslib::layout_columns(
-          shiny::selectInput(ns("cmbGeoRefMethod"), "Georeference Method",
-            choices = character(0)),
-          shiny::selectInput(ns("cmbCoordinateSystem"), "Coordinate System",
-            choices = character(0)),
+          shiny::selectInput(ns("cmbGeoRefMethod"), "Georeference Method", choices = character(0)),
+          shiny::selectInput(ns("cmbCoordinateSystem"), "Coordinate System", choices = character(0)),
           shiny::selectInput(ns("cmbDatum"), "Datum", choices = character(0)),
           col_widths = c(4, 4, 4)
         ),
@@ -246,14 +225,11 @@ mod_project_metadata_ui <- function(id) {
         bslib::layout_columns(
           shiny::tags$div(
             shiny::textInput(ns("AllSpecs"), "Species table", width = "100%"),
-            shiny::actionButton(ns("btnAttachUSysAllSpecs"), "...",
-              class = "btn btn-outline-secondary btn-sm")
+            shiny::actionButton(ns("btnAttachUSysAllSpecs"), "...", class = "btn btn-outline-secondary btn-sm")
           ),
           shiny::tags$div(
-            shiny::textInput(ns("TableOfLists"), "Table Of Lists",
-              width = "100%"),
-            shiny::actionButton(ns("btnAttachUSysTableOfLists"), "...",
-              class = "btn btn-outline-secondary btn-sm")
+            shiny::textInput(ns("TableOfLists"), "Table Of Lists", width = "100%"),
+            shiny::actionButton(ns("btnAttachUSysTableOfLists"), "...", class = "btn btn-outline-secondary btn-sm")
           ),
           col_widths = c(6, 6)
         )
@@ -261,10 +237,8 @@ mod_project_metadata_ui <- function(id) {
 
       # ----- RIGHT: FS882 DATA COLLECTED -----
       shiny::tags$div(
-        shiny::tags$h6(class = "fw-semibold mb-2 text-uppercase small",
-          "FS882 Data Collected"),
-        shiny::tags$p(class = "text-muted small mb-2",
-          "Select Complete / Partial / None per data type:"),
+        shiny::tags$h6(class = "fw-semibold mb-2 text-uppercase small", "FS882 Data Collected"),
+        shiny::tags$p(class = "text-muted small mb-2", "Select Complete / Partial / None per data type:"),
         shiny::tags$div(
           class = "d-flex flex-wrap gap-2",
           cg("Site", "Site"),
@@ -279,12 +253,9 @@ mod_project_metadata_ui <- function(id) {
         ),
         shiny::tags$hr(class = "my-2"),
         shiny::tags$small(class = "fw-semibold d-block mb-1", "Other (describe):"),
-        shiny::textInput(ns("CollectedCompleteOther"), NULL,
-          placeholder = "Complete", width = "100%"),
-        shiny::textInput(ns("CollectedPartialOther"), NULL,
-          placeholder = "Partial", width = "100%"),
-        shiny::textInput(ns("CollectedNoneOther"), NULL,
-          placeholder = "None", width = "100%")
+        shiny::textInput(ns("CollectedCompleteOther"), NULL, placeholder = "Complete", width = "100%"),
+        shiny::textInput(ns("CollectedPartialOther"), NULL, placeholder = "Partial", width = "100%"),
+        shiny::textInput(ns("CollectedNoneOther"), NULL, placeholder = "None", width = "100%")
       )
     ),
 
@@ -294,23 +265,23 @@ mod_project_metadata_ui <- function(id) {
     bslib::layout_columns(
       col_widths = c(6, 6),
       shiny::tagList(
-        lr("A1",  "CoverA1Description",  "Total of all tree layers (>10m)"),
-        lr("A2",  "CoverA2Description",  "Dominant trees"),
-        lr("A3",  "CoverA3Description",  "Main canopy"),
-        lr("A",   "CoverADescription",   "Trees > 10m but below main canopy"),
-        lr("B1",  "CoverB1Description",  "Total of all shrub layers"),
-        lr("B2",  "CoverB2Description",  "Tall shrubs between 2 and 10 m tall"),
-        lr("B3",  "CoverB2aDescription", "Low shrubs < 2 m tall"),
-        lr("B4",  "CoverB2bDescription", ""),
-        lr("B5",  "CoverB2cDescription", "")
+        lr("A1", "CoverA1Description", "Total of all tree layers (>10m)"),
+        lr("A2", "CoverA2Description", "Dominant trees"),
+        lr("A3", "CoverA3Description", "Main canopy"),
+        lr("A", "CoverADescription", "Trees > 10m but below main canopy"),
+        lr("B1", "CoverB1Description", "Total of all shrub layers"),
+        lr("B2", "CoverB2Description", "Tall shrubs between 2 and 10 m tall"),
+        lr("B3", "CoverB2aDescription", "Low shrubs < 2 m tall"),
+        lr("B4", "CoverB2bDescription", ""),
+        lr("B5", "CoverB2cDescription", "")
       ),
       shiny::tagList(
-        lr("B",   "CoverBDescription",   "Total of all shrub layers"),
-        lr("C",   "CoverCDescription",   "Herbaceous species and dwarf shrubs"),
-        lr("D",   "CoverDDescription",   "Mosses, lichens, liverworts and seedlings"),
-        lr("Do",  "Cover8Description",   "Epixyls - species on downed wood"),
-        lr("De",  "Cover9Description",   "Epiliths - species on rock"),
-        lr("Ep",  "Cover10Description",  "Epiphytes - species on trees")
+        lr("B", "CoverBDescription", "Total of all shrub layers"),
+        lr("C", "CoverCDescription", "Herbaceous species and dwarf shrubs"),
+        lr("D", "CoverDDescription", "Mosses, lichens, liverworts and seedlings"),
+        lr("Do", "Cover8Description", "Epixyls - species on downed wood"),
+        lr("De", "Cover9Description", "Epiliths - species on rock"),
+        lr("Ep", "Cover10Description", "Epiphytes - species on trees")
       )
     ),
 
@@ -450,7 +421,9 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
 
       names(row) <- tolower(names(row))
       getv <- function(col) {
-        if (!col %in% names(row)) return("")
+        if (!col %in% names(row)) {
+          return("")
+        }
         value <- row[[col]][[1]]
         if (is.null(value) || length(value) == 0 || is.na(value)) "" else as.character(value)
       }
@@ -495,16 +468,12 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
       shiny::updateTextAreaInput(session, "Notes", value = getv("notes"))
 
       # FS882 DATA COLLECTED
-      for (suf in c("Site","Veg","Soil","Terrain","Mens","CWD","WildTree","SoilChem")) {
-        shiny::updateSelectInput(session, paste0("Collected", suf),
-          selected = getv(tolower(paste0("collected", suf))))
-        shiny::updateTextInput(session, paste0("DataQuality", suf),
-          value = getv(tolower(paste0("dataquality", suf))))
+      for (suf in c("Site", "Veg", "Soil", "Terrain", "Mens", "CWD", "WildTree", "SoilChem")) {
+        shiny::updateSelectInput(session, paste0("Collected", suf), selected = getv(tolower(paste0("collected", suf))))
+        shiny::updateTextInput(session, paste0("DataQuality", suf), value = getv(tolower(paste0("dataquality", suf))))
       }
-      shiny::updateSelectInput(session, "CollectedWildlifeHabitatAssessment",
-        selected = getv("collectedwildlifehabitatassessment"))
-      shiny::updateTextInput(session, "DataQualityWildlifeHabitatAssessment",
-        value = getv("dataqualitywildlifehabitatassessment"))
+      shiny::updateSelectInput(session, "CollectedWildlifeHabitatAssessment", selected = getv("collectedwildlifehabitatassessment"))
+      shiny::updateTextInput(session, "DataQualityWildlifeHabitatAssessment", value = getv("dataqualitywildlifehabitatassessment"))
       shiny::updateTextInput(session, "CollectedCompleteOther", value = getv("collectedcompleteother"))
       shiny::updateTextInput(session, "CollectedPartialOther", value = getv("collectedpartialother"))
       shiny::updateTextInput(session, "CollectedNoneOther", value = getv("collectednoneother"))
@@ -513,17 +482,17 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
       shiny::updateTextInput(session, "CoverA1Description", value = getv("covera1description"))
       shiny::updateTextInput(session, "CoverA2Description", value = getv("covera2description"))
       shiny::updateTextInput(session, "CoverA3Description", value = getv("covera3description"))
-      shiny::updateTextInput(session, "CoverADescription",  value = getv("coveradescription"))
+      shiny::updateTextInput(session, "CoverADescription", value = getv("coveradescription"))
       shiny::updateTextInput(session, "CoverB1Description", value = getv("coverb1description"))
       shiny::updateTextInput(session, "CoverB2Description", value = getv("coverb2description"))
       shiny::updateTextInput(session, "CoverB2aDescription", value = getv("coverb2adescription"))
       shiny::updateTextInput(session, "CoverB2bDescription", value = getv("coverb2bdescription"))
       shiny::updateTextInput(session, "CoverB2cDescription", value = getv("coverb2cdescription"))
-      shiny::updateTextInput(session, "CoverBDescription",  value = getv("covebdescription"))
-      shiny::updateTextInput(session, "CoverCDescription",  value = getv("covercdescription"))
-      shiny::updateTextInput(session, "CoverDDescription",  value = getv("coverddescription"))
-      shiny::updateTextInput(session, "Cover8Description",  value = getv("cover8description"))
-      shiny::updateTextInput(session, "Cover9Description",  value = getv("cover9description"))
+      shiny::updateTextInput(session, "CoverBDescription", value = getv("covebdescription"))
+      shiny::updateTextInput(session, "CoverCDescription", value = getv("covercdescription"))
+      shiny::updateTextInput(session, "CoverDDescription", value = getv("coverddescription"))
+      shiny::updateTextInput(session, "Cover8Description", value = getv("cover8description"))
+      shiny::updateTextInput(session, "Cover9Description", value = getv("cover9description"))
       shiny::updateTextInput(session, "Cover10Description", value = getv("cover10description"))
 
       invisible(NULL)
@@ -544,7 +513,7 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
       status_text("Collection standard defaults applied.")
     }
 
-    output$status  <- shiny::renderText(status_text())
+    output$status <- shiny::renderText(status_text())
     output$status2 <- shiny::renderText(status_text())
 
     observe({
@@ -560,72 +529,90 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
     # Use open_trigger if provided (fires when modal is opened) so update*Input
     # calls land on existing DOM nodes; fall back to TRUE for standalone usage.
     open_ev <- if (!is.null(open_trigger)) open_trigger else shiny::reactiveVal(1L)
-    observeEvent(open_ev(), {
-      if (!nzchar(table_name)) {
-        status_text("Metadata table not found.")
-        return()
-      }
+    observeEvent(
+      open_ev(),
+      {
+        if (!nzchar(table_name)) {
+          status_text("Metadata table not found.")
+          return()
+        }
 
-      state$CurrForm <- "frmProjectMetaData"
-      state$sysCurrForm <- "frmProjectMetaData"
-      config("Current", "DataFormName", "frmProjectMetaData")
+        state$CurrForm <- "frmProjectMetaData"
+        state$sysCurrForm <- "frmProjectMetaData"
+        config("Current", "DataFormName", "frmProjectMetaData")
 
-      default_project <- if (!is.null(plot_project_id) && nzchar(plot_project_id())) {
-        normalize_text(plot_project_id())
-      } else {
-        normalize_text(state$CurrProject %||% state$PrefProject)
-      }
-      suppress_project_observer(TRUE)
-      load_project_choices(selected = default_project)
-      suppress_project_observer(FALSE)
-      if (nzchar(default_project)) {
-        current_project_before_edit(default_project)
-        load_row_into_inputs(default_project)
-      }
-      status_text(sprintf("Loaded from %s", table_name))
-    }, ignoreInit = !is.null(open_trigger))
+        default_project <- if (!is.null(plot_project_id) && nzchar(plot_project_id())) {
+          normalize_text(plot_project_id())
+        } else {
+          normalize_text(state$CurrProject %||% state$PrefProject)
+        }
+        suppress_project_observer(TRUE)
+        load_project_choices(selected = default_project)
+        suppress_project_observer(FALSE)
+        if (nzchar(default_project)) {
+          current_project_before_edit(default_project)
+          load_row_into_inputs(default_project)
+        }
+        status_text(sprintf("Loaded from %s", table_name))
+      },
+      ignoreInit = !is.null(open_trigger)
+    )
 
-    observeEvent(input$ProjectID, {
-      if (isTRUE(suppress_project_observer())) {
-        return()
-      }
-      project_id <- normalize_text(input$ProjectID)
-      if (!nzchar(project_id)) {
-        return()
-      }
-      idx <- match(project_id, meta_recordset())
-      if (!is.na(idx)) meta_record_index(idx)
-      current_project_before_edit(project_id)
-      load_row_into_inputs(project_id)
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$ProjectID,
+      {
+        if (isTRUE(suppress_project_observer())) {
+          return()
+        }
+        project_id <- normalize_text(input$ProjectID)
+        if (!nzchar(project_id)) {
+          return()
+        }
+        idx <- match(project_id, meta_recordset())
+        if (!is.na(idx)) {
+          meta_record_index(idx)
+        }
+        current_project_before_edit(project_id)
+        load_row_into_inputs(project_id)
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$cmbEcosysCollectionStandard, {
-      value <- normalize_text(input$cmbEcosysCollectionStandard)
-      if (!nzchar(value)) {
-        return()
-      }
+    observeEvent(
+      input$cmbEcosysCollectionStandard,
+      {
+        value <- normalize_text(input$cmbEcosysCollectionStandard)
+        if (!nzchar(value)) {
+          return()
+        }
 
-      should_prompt <- startsWith(value, "DEIF") || startsWith(value, "DTE") || identical(value, "LMH25")
-      if (!should_prompt) {
-        return()
-      }
+        should_prompt <- startsWith(value, "DEIF") || startsWith(value, "DTE") || identical(value, "LMH25")
+        if (!should_prompt) {
+          return()
+        }
 
-      shiny::showModal(
-        shiny::modalDialog(
-          title = "VPro",
-          "VPro can populate some of these fields based on the selected collection standard. Proceed?",
-          footer = shiny::tagList(
-            shiny::modalButton("No"),
-            shiny::actionButton(session$ns("confirm_standard_defaults"), "Yes", class = "btn btn-primary")
+        shiny::showModal(
+          shiny::modalDialog(
+            title = "VPro",
+            "VPro can populate some of these fields based on the selected collection standard. Proceed?",
+            footer = shiny::tagList(
+              shiny::modalButton("No"),
+              shiny::actionButton(session$ns("confirm_standard_defaults"), "Yes", class = "btn btn-primary")
+            )
           )
         )
-      )
-    }, ignoreInit = TRUE)
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$confirm_standard_defaults, {
-      shiny::removeModal()
-      apply_standard_defaults()
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$confirm_standard_defaults,
+      {
+        shiny::removeModal()
+        apply_standard_defaults()
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$btnSave, {
       project_id <- normalize_text(input$ProjectID)
@@ -735,7 +722,9 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
     # -- Record navigation (Access frmProjectMetaData nav bar parity) --
     meta_navigate_to <- function(project_id) {
       idx <- match(project_id, meta_recordset())
-      if (!is.na(idx)) meta_record_index(idx)
+      if (!is.na(idx)) {
+        meta_record_index(idx)
+      }
       suppress_project_observer(TRUE)
       shiny::updateSelectizeInput(session, "ProjectID", selected = project_id)
       suppress_project_observer(FALSE)
@@ -746,14 +735,18 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
 
     observeEvent(input$btnMetaNavFirst, {
       rs <- meta_recordset()
-      if (!length(rs)) return()
+      if (!length(rs)) {
+        return()
+      }
       meta_navigate_to(rs[1])
     })
 
     observeEvent(input$btnMetaNavPrev, {
       rs <- meta_recordset()
       idx <- meta_record_index()
-      if (!length(rs) || idx <= 1L) return()
+      if (!length(rs) || idx <= 1L) {
+        return()
+      }
       meta_navigate_to(rs[idx - 1L])
     })
 
@@ -761,13 +754,17 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
       rs <- meta_recordset()
       idx <- meta_record_index()
       n <- length(rs)
-      if (!n || idx >= n) return()
+      if (!n || idx >= n) {
+        return()
+      }
       meta_navigate_to(rs[idx + 1L])
     })
 
     observeEvent(input$btnMetaNavLast, {
       rs <- meta_recordset()
-      if (!length(rs)) return()
+      if (!length(rs)) {
+        return()
+      }
       meta_navigate_to(rs[length(rs)])
     })
 

@@ -1,34 +1,8 @@
-#### --- Config management ---
-
-# Note : Tested caching the config but platform so fast and yaml so tiny that reading
-# it every time is not a problem. Settled on in memory plus write on changes should
-# reduce read I/O. Will not support hot reload of config, restart the app.
-config_init <- function(conf = file.path(rappdirs::user_config_dir("vpro"), "config.yml")) {
-  cfg <- yaml::read_yaml(conf, readLines.warn = FALSE)
-  function(section, key, value) {
-    if (missing(section)) {
-      return(cfg)
-    }
-    if (missing(key)) {
-      return(cfg[[section]])
-    }
-    if (missing(value)) {
-      return(cfg[[section]][[key]])
-    }
-    cfg[[section]][[key]] <<- value
-    yaml::write_yaml(cfg, conf)
-    invisible(cfg[[section]][[key]])
-  }
-}
-
-# Config used to replace values that were stored in Windows registry in VPro64.
-# Still stored in yaml config file but accessed through config() function.
-config <- config_init()
-# Global environment to store runtime state values that were declared
-# mainly in V7mdlGlobalDeclarations.
-global <- new.env(parent = emptyenv())
-
 #### --- Local Database helpers ---
+
+# Temporary compatibility state for untranslated Shiny code. New package APIs
+# pass state explicitly instead of reproducing V7mdlGlobalDeclarations globals.
+global <- new.env(parent = emptyenv())
 
 # List of project tables
 db_project_tables <- c(
@@ -264,7 +238,7 @@ db_masterunitlist_views <- function(con) {
 db_log_in <- function(con, session) {
   # Log entry into user log table
   db_insert(
-    currentDB,
+    con,
     "USysUserLog",
     User = Sys.info()[["user"]],
     InTime = Sys.time(),
@@ -277,7 +251,7 @@ db_log_vpro <- function(con, session, state = c("On", "Off")) {
   state <- match.arg(state)
   # Insert Audit trace in project
   db_insert(
-    currentDB,
+    con,
     "Audit",
     db = config("Current", "CurrProject"),
     prj = TRUE,
@@ -335,8 +309,8 @@ db_log_project <- function(con, session, state = c("Open", "Close")) {
         )
       )
     }
-    PVersion = ProjectVersionTableOfLists()
-    ASVersion = TableOfListsVersion()
+    PVersion <- ProjectVersionTableOfLists()
+    ASVersion <- TableOfListsVersion()
     if (PVersion != ASVersion) {
       db_insert(
         con,

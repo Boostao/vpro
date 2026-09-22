@@ -22,7 +22,8 @@ mod_user_setup_ui <- function(id) {
       bslib::navset_tab(
         id = ns("setup_tabs"),
         # ---- General tab (Access Page1) ----
-        bslib::nav_panel("General",
+        bslib::nav_panel(
+          "General",
           shiny::tags$p(
             class = "text-muted small",
             "Please enter a user name. The user name will be used to log audit records."
@@ -55,7 +56,8 @@ mod_user_setup_ui <- function(id) {
           )
         ),
         # ---- Registry tab (Access "Registry" page) ----
-        bslib::nav_panel("Registry",
+        bslib::nav_panel(
+          "Registry",
           shiny::tags$p(class = "text-muted small", "Audit Strength:"),
           shiny::selectInput(
             ns("txtAuditStrength"),
@@ -76,12 +78,16 @@ mod_user_setup_server <- function(id, state, con) {
     status_text <- shiny::reactiveVal("")
 
     # ---- Form_Load parity ----
-    observeEvent(TRUE, {
-      user <- config("Current", "User") %||% Sys.info()[["user"]] %||% ""
-      shiny::updateTextInput(session, "UserName", value = user)
-      audit <- config("System", "AuditStrength") %||% "1"
-      shiny::updateSelectInput(session, "txtAuditStrength", selected = as.character(audit))
-    }, once = TRUE)
+    observeEvent(
+      TRUE,
+      {
+        user <- config("Current", "User") %||% Sys.info()[["user"]] %||% ""
+        shiny::updateTextInput(session, "UserName", value = user)
+        audit <- config("System", "AuditStrength") %||% "1"
+        shiny::updateSelectInput(session, "txtAuditStrength", selected = as.character(audit))
+      },
+      once = TRUE
+    )
 
     output$txtProject <- shiny::renderText({
       state$CurrProject %||% config("Current", "CurrProject") %||% "Sample"

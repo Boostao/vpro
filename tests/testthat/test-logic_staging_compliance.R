@@ -10,7 +10,9 @@ setup_staging_compliance_db <- function() {
   DBI::dbExecute(con, "CREATE SCHEMA master.staging")
   DBI::dbExecute(con, "CREATE SCHEMA lists")
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE master.staging.sample_env (
       plot_number TEXT,
       project_id TEXT,
@@ -19,9 +21,12 @@ setup_staging_compliance_db <- function() {
       elevation_m DOUBLE,
       merge_request_id INTEGER
     )
-  ")
+  "
+  )
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE master.staging.sample_veg (
       plot_number TEXT,
       project_id TEXT,
@@ -29,13 +34,17 @@ setup_staging_compliance_db <- function() {
       layer_code TEXT,
       merge_request_id INTEGER
     )
-  ")
+  "
+  )
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE lists.SppList (
       spp_code TEXT
     )
-  ")
+  "
+  )
 
   con
 }
@@ -46,17 +55,23 @@ testthat::test_that("staging compliance passes for valid data", {
 
   DBI::dbExecute(con, "INSERT INTO lists.SppList (spp_code) VALUES ('AB')")
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     INSERT INTO master.staging.sample_env
       (plot_number, project_id, latitude, longitude, elevation_m, merge_request_id)
     VALUES ('P-1', 'PRJ', 52.1, -118.5, 500, 1)
-  ")
+  "
+  )
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     INSERT INTO master.staging.sample_veg
       (plot_number, project_id, species_code, layer_code, merge_request_id)
     VALUES ('P-1', 'PRJ', 'AB', 'T', 1)
-  ")
+  "
+  )
 
   result <- staging_compliance_checks(con, 1, "PRJ")
   testthat::expect_true(isTRUE(result$passed))
@@ -68,17 +83,23 @@ testthat::test_that("staging compliance flags invalid species", {
 
   DBI::dbExecute(con, "INSERT INTO lists.SppList (spp_code) VALUES ('AB')")
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     INSERT INTO master.staging.sample_env
       (plot_number, project_id, latitude, longitude, elevation_m, merge_request_id)
     VALUES ('P-2', 'PRJ', 52.1, -118.5, 500, 2)
-  ")
+  "
+  )
 
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     INSERT INTO master.staging.sample_veg
       (plot_number, project_id, species_code, layer_code, merge_request_id)
     VALUES ('P-2', 'PRJ', 'ZZ', 'T', 2)
-  ")
+  "
+  )
 
   result <- staging_compliance_checks(con, 2, "PRJ")
   testthat::expect_false(isTRUE(result$passed))

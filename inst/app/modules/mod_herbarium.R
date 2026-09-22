@@ -72,14 +72,18 @@ herbarium_attach_source_db <- function(con, db_path, alias) {
 
   statement <- if (project_file_is_sqlite(db_path)) {
     paste0(
-      "ATTACH ", DBI::dbQuoteString(con, db_path),
-      " AS ", DBI::dbQuoteIdentifier(con, alias),
+      "ATTACH ",
+      DBI::dbQuoteString(con, db_path),
+      " AS ",
+      DBI::dbQuoteIdentifier(con, alias),
       " (TYPE sqlite)"
     )
   } else {
     paste0(
-      "ATTACH ", DBI::dbQuoteString(con, db_path),
-      " AS ", DBI::dbQuoteIdentifier(con, alias)
+      "ATTACH ",
+      DBI::dbQuoteString(con, db_path),
+      " AS ",
+      DBI::dbQuoteIdentifier(con, alias)
     )
   }
 
@@ -106,7 +110,15 @@ herbarium_source_table <- function(con, db_name, prefix) {
   result$table_name[[1]] %||% ""
 }
 
-herbarium_import_table <- function(con, source_path, source_prefix, target_prefix = source_prefix, replace_existing = FALSE, copy_rows = TRUE, source_alias = "tmp_attach_herbarium") {
+herbarium_import_table <- function(
+  con,
+  source_path,
+  source_prefix,
+  target_prefix = source_prefix,
+  replace_existing = FALSE,
+  copy_rows = TRUE,
+  source_alias = "tmp_attach_herbarium"
+) {
   if (!is_valid_project_prefix(source_prefix) || !is_valid_project_prefix(target_prefix)) {
     stop("Invalid herbarium prefix.")
   }
@@ -140,8 +152,10 @@ herbarium_import_table <- function(con, source_path, source_prefix, target_prefi
   DBI::dbExecute(
     con,
     paste0(
-      "ATTACH ", DBI::dbQuoteString(con, target_path),
-      " AS ", DBI::dbQuoteIdentifier(con, target_prefix),
+      "ATTACH ",
+      DBI::dbQuoteString(con, target_path),
+      " AS ",
+      DBI::dbQuoteIdentifier(con, target_prefix),
       " (TYPE sqlite)"
     )
   )
@@ -150,8 +164,10 @@ herbarium_import_table <- function(con, source_path, source_prefix, target_prefi
   DBI::dbExecute(
     con,
     paste0(
-      "CREATE TABLE ", DBI::dbQuoteIdentifier(con, DBI::Id(target_prefix, target_table)),
-      " AS SELECT * FROM ", DBI::dbQuoteIdentifier(con, DBI::Id(source_alias, source_table)),
+      "CREATE TABLE ",
+      DBI::dbQuoteIdentifier(con, DBI::Id(target_prefix, target_table)),
+      " AS SELECT * FROM ",
+      DBI::dbQuoteIdentifier(con, DBI::Id(source_alias, source_table)),
       if (isTRUE(copy_rows)) "" else " WHERE 1 = 0"
     )
   )
@@ -188,17 +204,38 @@ herbarium_read_records <- function(con, table_name) {
   }
 
   preferred <- c(
-    "recid", "plotnumber", "species", "scientificnamerich", "_comments", "print",
-    "habitat", "locationdescription", "specimenpreviousname", "collectors",
-    "collectionnumber", "dateofcollection", "identifier", "flag01",
-    "accessionnumber", "accessiondate", "permanentstoragelocation", "duplicatesentto",
-    "generalremarks", "onloanto", "loandate", "provinceoforigin", "countryoforigin",
-    "entryoperator", "entryoperatordate"
+    "recid",
+    "plotnumber",
+    "species",
+    "scientificnamerich",
+    "_comments",
+    "print",
+    "habitat",
+    "locationdescription",
+    "specimenpreviousname",
+    "collectors",
+    "collectionnumber",
+    "dateofcollection",
+    "identifier",
+    "flag01",
+    "accessionnumber",
+    "accessiondate",
+    "permanentstoragelocation",
+    "duplicatesentto",
+    "generalremarks",
+    "onloanto",
+    "loandate",
+    "provinceoforigin",
+    "countryoforigin",
+    "entryoperator",
+    "entryoperatordate"
   )
   cols <- intersect(preferred, fields)
   sql <- paste(
-    "SELECT", paste(cols, collapse = ", "),
-    "FROM", as.character(DBI::dbQuoteIdentifier(con, table_id)),
+    "SELECT",
+    paste(cols, collapse = ", "),
+    "FROM",
+    as.character(DBI::dbQuoteIdentifier(con, table_id)),
     "ORDER BY recid"
   )
   tryCatch(DBI::dbGetQuery(con, sql), error = function(e) data.frame(stringsAsFactors = FALSE))
@@ -237,25 +274,57 @@ herbarium_species_lookup <- function(con, code_value) {
     fields <- tolower(tryCatch(DBI::dbListFields(con, spp_tbl), error = function(e) character(0)))
     has <- function(x) x %in% fields
 
-    code_col <- if (has("code")) "code" else if (has("species")) "species" else ""
-    sci_col <- if (has("scientificname")) "scientificname" else if (has("scientificnamerich")) "scientificnamerich" else ""
+    code_col <- if (has("code")) {
+      "code"
+    } else if (has("species")) {
+      "species"
+    } else {
+      ""
+    }
+    sci_col <- if (has("scientificname")) {
+      "scientificname"
+    } else if (has("scientificnamerich")) {
+      "scientificnamerich"
+    } else {
+      ""
+    }
     auth_col <- if (has("authority")) "authority" else ""
     fam_col <- if (has("familycode")) "familycode" else ""
-    eng_col <- if (has("englishname")) "englishname" else if (has("commonname")) "commonname" else ""
+    eng_col <- if (has("englishname")) {
+      "englishname"
+    } else if (has("commonname")) {
+      "commonname"
+    } else {
+      ""
+    }
     type_col <- if (has("codetype")) "codetype" else ""
 
     if (nzchar(code_col)) {
       select_cols <- c(code_col)
-      if (nzchar(fam_col)) select_cols <- c(select_cols, fam_col)
-      if (nzchar(eng_col)) select_cols <- c(select_cols, eng_col)
-      if (nzchar(sci_col)) select_cols <- c(select_cols, sci_col)
-      if (nzchar(auth_col)) select_cols <- c(select_cols, auth_col)
-      if (nzchar(type_col)) select_cols <- c(select_cols, type_col)
+      if (nzchar(fam_col)) {
+        select_cols <- c(select_cols, fam_col)
+      }
+      if (nzchar(eng_col)) {
+        select_cols <- c(select_cols, eng_col)
+      }
+      if (nzchar(sci_col)) {
+        select_cols <- c(select_cols, sci_col)
+      }
+      if (nzchar(auth_col)) {
+        select_cols <- c(select_cols, auth_col)
+      }
+      if (nzchar(type_col)) {
+        select_cols <- c(select_cols, type_col)
+      }
 
       sql <- paste(
-        "SELECT", paste(unique(select_cols), collapse = ", "),
-        "FROM", as.character(DBI::dbQuoteIdentifier(con, spp_tbl)),
-        "WHERE", code_col, "= ?",
+        "SELECT",
+        paste(unique(select_cols), collapse = ", "),
+        "FROM",
+        as.character(DBI::dbQuoteIdentifier(con, spp_tbl)),
+        "WHERE",
+        code_col,
+        "= ?",
         if (nzchar(type_col)) "AND COALESCE(codetype,'') <> 'S'" else "",
         "LIMIT 1"
       )
@@ -265,7 +334,9 @@ herbarium_species_lookup <- function(con, code_value) {
         nms <- tolower(names(row))
         val <- function(col) {
           idx <- which(nms == col)
-          if (!length(idx)) return("")
+          if (!length(idx)) {
+            return("")
+          }
           as.character(row[[idx[[1]]]][[1]] %||% "")
         }
         family <- if (nzchar(fam_col)) val(fam_col) else ""
@@ -281,7 +352,8 @@ herbarium_species_lookup <- function(con, code_value) {
     fields <- tolower(tryCatch(DBI::dbListFields(con, att_tbl), error = function(e) character(0)))
     if ("code" %in% fields && "redbluelist" %in% fields) {
       sql <- paste(
-        "SELECT redbluelist FROM", as.character(DBI::dbQuoteIdentifier(con, att_tbl)),
+        "SELECT redbluelist FROM",
+        as.character(DBI::dbQuoteIdentifier(con, att_tbl)),
         "WHERE code = ? LIMIT 1"
       )
       row <- tryCatch(DBI::dbGetQuery(con, sql, list(code_value)), error = function(e) data.frame())
@@ -491,107 +563,130 @@ mod_herbarium_server <- function(id, state, con) {
       updateTextInput(session, "EntryOperatorDate", value = rv_val("entryoperatordate"))
 
       info <- herbarium_species_lookup(con, nz(input$Code))
-      if (nzchar(info$familycode)) updateTextInput(session, "FamilyCode", value = info$familycode)
-      if (nzchar(info$commonname)) updateTextInput(session, "CommonName", value = info$commonname)
+      if (nzchar(info$familycode)) {
+        updateTextInput(session, "FamilyCode", value = info$familycode)
+      }
+      if (nzchar(info$commonname)) {
+        updateTextInput(session, "CommonName", value = info$commonname)
+      }
       if (nzchar(info$redbluelist)) updateTextInput(session, "RedBlueList", value = info$redbluelist)
     }
 
-    observeEvent(TRUE, {
-      state$CurrForm <- "frmHerbarium"
-      state$sysCurrForm <- "frmHerbarium"
-      config("Current", "DataFormName", "frmHerbarium")
+    observeEvent(
+      TRUE,
+      {
+        state$CurrForm <- "frmHerbarium"
+        state$sysCurrForm <- "frmHerbarium"
+        config("Current", "DataFormName", "frmHerbarium")
 
-      pref <- nz((config("Current", "CurrHerbarium") %||% "Sample"))
-      refresh_herbarium_choices(pref)
-      set_status("Loaded Herbarium (frmHerbarium).")
-    }, once = TRUE)
+        pref <- nz((config("Current", "CurrHerbarium") %||% "Sample"))
+        refresh_herbarium_choices(pref)
+        set_status("Loaded Herbarium (frmHerbarium).")
+      },
+      once = TRUE
+    )
 
-    observeEvent(input$HerbariumList, {
-      selected <- nz(input$HerbariumList)
+    observeEvent(
+      input$HerbariumList,
+      {
+        selected <- nz(input$HerbariumList)
 
-      if (selected %in% c("--------------------------------------", "Attach", "Unattach", "New")) {
-        rv$requested_special <- selected
-        prev <- nz((config("Current", "CurrHerbarium") %||% current_herbarium_base()))
-        if (nzchar(prev)) {
-          shiny::updateSelectInput(session, "HerbariumList", selected = prev)
-        }
+        if (selected %in% c("--------------------------------------", "Attach", "Unattach", "New")) {
+          rv$requested_special <- selected
+          prev <- nz((config("Current", "CurrHerbarium") %||% current_herbarium_base()))
+          if (nzchar(prev)) {
+            shiny::updateSelectInput(session, "HerbariumList", selected = prev)
+          }
 
-        if (identical(selected, "Attach")) {
-          shiny::showModal(shiny::modalDialog(
-            title = "Attach Herbarium Table",
-            shiny::textInput(session$ns("attach_db_path"), "Source DB Path", value = ""),
-            shiny::textInput(session$ns("attach_prefix"), "Herbarium Prefix", value = ""),
-            shiny::checkboxInput(session$ns("attach_replace_existing"), "Replace existing table when present", value = FALSE),
-            easyClose = TRUE,
-            footer = shiny::tagList(
-              shiny::modalButton("Cancel"),
-              shiny::actionButton(session$ns("btn_confirm_attach_herbarium"), "Attach", class = "btn btn-primary")
-            )
-          ))
-        } else if (identical(selected, "Unattach")) {
-          choices <- herbarium_existing_bases(con)
-          choices <- choices[!tolower(choices) %in% c("sample")]
-          if (!length(choices)) {
-            set_status("No detachable herbarium tables found.")
-          } else {
+          if (identical(selected, "Attach")) {
             shiny::showModal(shiny::modalDialog(
-              title = "Unattach Herbarium Table",
-              shiny::selectInput(session$ns("unattach_prefix"), "Select Herbarium Prefix", choices = choices, selected = choices[[1]]),
+              title = "Attach Herbarium Table",
+              shiny::textInput(session$ns("attach_db_path"), "Source DB Path", value = ""),
+              shiny::textInput(session$ns("attach_prefix"), "Herbarium Prefix", value = ""),
+              shiny::checkboxInput(session$ns("attach_replace_existing"), "Replace existing table when present", value = FALSE),
               easyClose = TRUE,
               footer = shiny::tagList(
                 shiny::modalButton("Cancel"),
-                shiny::actionButton(session$ns("btn_confirm_unattach_herbarium"), "Unattach", class = "btn btn-danger")
+                shiny::actionButton(session$ns("btn_confirm_attach_herbarium"), "Attach", class = "btn btn-primary")
               )
             ))
+          } else if (identical(selected, "Unattach")) {
+            choices <- herbarium_existing_bases(con)
+            choices <- choices[!tolower(choices) %in% c("sample")]
+            if (!length(choices)) {
+              set_status("No detachable herbarium tables found.")
+            } else {
+              shiny::showModal(shiny::modalDialog(
+                title = "Unattach Herbarium Table",
+                shiny::selectInput(session$ns("unattach_prefix"), "Select Herbarium Prefix", choices = choices, selected = choices[[1]]),
+                easyClose = TRUE,
+                footer = shiny::tagList(
+                  shiny::modalButton("Cancel"),
+                  shiny::actionButton(session$ns("btn_confirm_unattach_herbarium"), "Unattach", class = "btn btn-danger")
+                )
+              ))
+            }
+          } else if (identical(selected, "New")) {
+            bases <- herbarium_existing_bases(con)
+            current_base <- current_herbarium_base()
+            default_template <- if (nzchar(current_base) && current_base %in% bases) {
+              current_base
+            } else if ("Sample" %in% bases) {
+              "Sample"
+            } else if (length(bases)) {
+              bases[[1]]
+            } else {
+              "Sample"
+            }
+            shiny::showModal(shiny::modalDialog(
+              title = "Create Herbarium Table",
+              shiny::textInput(session$ns("new_prefix"), "New Herbarium Prefix", value = ""),
+              shiny::selectInput(session$ns("new_template_prefix"), "Template Prefix", choices = unique(c(default_template, bases)), selected = default_template),
+              shiny::checkboxInput(session$ns("new_overwrite"), "Overwrite if exists", value = FALSE),
+              easyClose = TRUE,
+              footer = shiny::tagList(
+                shiny::modalButton("Cancel"),
+                shiny::actionButton(session$ns("btn_confirm_create_herbarium"), "Create", class = "btn btn-primary")
+              )
+            ))
+          } else {
+            set_status("Separator selected; keeping current herbarium table.")
           }
-        } else if (identical(selected, "New")) {
-          bases <- herbarium_existing_bases(con)
-          current_base <- current_herbarium_base()
-          default_template <- if (nzchar(current_base) && current_base %in% bases) current_base else if ("Sample" %in% bases) "Sample" else if (length(bases)) bases[[1]] else "Sample"
-          shiny::showModal(shiny::modalDialog(
-            title = "Create Herbarium Table",
-            shiny::textInput(session$ns("new_prefix"), "New Herbarium Prefix", value = ""),
-            shiny::selectInput(session$ns("new_template_prefix"), "Template Prefix", choices = unique(c(default_template, bases)), selected = default_template),
-            shiny::checkboxInput(session$ns("new_overwrite"), "Overwrite if exists", value = FALSE),
-            easyClose = TRUE,
-            footer = shiny::tagList(
-              shiny::modalButton("Cancel"),
-              shiny::actionButton(session$ns("btn_confirm_create_herbarium"), "Create", class = "btn btn-primary")
-            )
-          ))
-        } else {
-          set_status("Separator selected; keeping current herbarium table.")
+          return()
         }
-        return()
-      }
 
-      config("Current", "CurrHerbarium", selected)
-      state$CurrHerbarium <- selected
-      rv$herb_table <- herbarium_resolve_table(con, selected)
-      rv$loaded <- herbarium_read_records(con, rv$herb_table)
-      set_status(sprintf("Using herbarium table: %s", rv$herb_table))
-    }, ignoreInit = TRUE)
+        config("Current", "CurrHerbarium", selected)
+        state$CurrHerbarium <- selected
+        rv$herb_table <- herbarium_resolve_table(con, selected)
+        rv$loaded <- herbarium_read_records(con, rv$herb_table)
+        set_status(sprintf("Using herbarium table: %s", rv$herb_table))
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$btn_confirm_attach_herbarium, {
       db_path <- nz(input$attach_db_path)
       prefix <- nz(input$attach_prefix)
       replace_existing <- isTRUE(input$attach_replace_existing)
 
-      ok <- tryCatch({
-        herbarium_import_table(
-          con = con,
-          source_path = db_path,
-          source_prefix = prefix,
-          target_prefix = prefix,
-          replace_existing = replace_existing,
-          copy_rows = TRUE,
-          source_alias = "tmp_attach_herbarium"
-        )
-        TRUE
-      }, error = function(e) {
-        set_status(sprintf("Attach failed: %s", e$message))
-        FALSE
-      })
+      ok <- tryCatch(
+        {
+          herbarium_import_table(
+            con = con,
+            source_path = db_path,
+            source_prefix = prefix,
+            target_prefix = prefix,
+            replace_existing = replace_existing,
+            copy_rows = TRUE,
+            source_alias = "tmp_attach_herbarium"
+          )
+          TRUE
+        },
+        error = function(e) {
+          set_status(sprintf("Attach failed: %s", e$message))
+          FALSE
+        }
+      )
 
       shiny::removeModal()
       if (!ok) {
@@ -609,21 +704,24 @@ mod_herbarium_server <- function(id, state, con) {
       template_prefix <- nz(input$new_template_prefix)
       overwrite <- isTRUE(input$new_overwrite)
 
-      ok <- tryCatch({
-        herbarium_import_table(
-          con = con,
-          source_path = project_db_path(if (nzchar(template_prefix)) template_prefix else "Sample"),
-          source_prefix = if (nzchar(template_prefix)) template_prefix else "Sample",
-          target_prefix = prefix,
-          replace_existing = overwrite,
-          copy_rows = FALSE,
-          source_alias = "tmp_create_herbarium"
-        )
-        TRUE
-      }, error = function(e) {
-        set_status(sprintf("Create failed: %s", e$message))
-        FALSE
-      })
+      ok <- tryCatch(
+        {
+          herbarium_import_table(
+            con = con,
+            source_path = project_db_path(if (nzchar(template_prefix)) template_prefix else "Sample"),
+            source_prefix = if (nzchar(template_prefix)) template_prefix else "Sample",
+            target_prefix = prefix,
+            replace_existing = overwrite,
+            copy_rows = FALSE,
+            source_alias = "tmp_create_herbarium"
+          )
+          TRUE
+        },
+        error = function(e) {
+          set_status(sprintf("Create failed: %s", e$message))
+          FALSE
+        }
+      )
 
       shiny::removeModal()
       if (!ok) {
@@ -639,12 +737,15 @@ mod_herbarium_server <- function(id, state, con) {
     observeEvent(input$btn_confirm_unattach_herbarium, {
       prefix <- nz(input$unattach_prefix)
 
-      removed <- tryCatch({
-        herbarium_unattach_table(con = con, prefix = prefix, protected_prefixes = c("Sample"))
-      }, error = function(e) {
-        set_status(sprintf("Unattach failed: %s", e$message))
-        NULL
-      })
+      removed <- tryCatch(
+        {
+          herbarium_unattach_table(con = con, prefix = prefix, protected_prefixes = c("Sample"))
+        },
+        error = function(e) {
+          set_status(sprintf("Unattach failed: %s", e$message))
+          NULL
+        }
+      )
 
       shiny::removeModal()
       if (is.null(removed)) {
@@ -652,7 +753,13 @@ mod_herbarium_server <- function(id, state, con) {
       }
 
       bases <- herbarium_existing_bases(con)
-      fallback <- if ("Sample" %in% bases) "Sample" else if (length(bases)) bases[[1]] else ""
+      fallback <- if ("Sample" %in% bases) {
+        "Sample"
+      } else if (length(bases)) {
+        bases[[1]]
+      } else {
+        ""
+      }
       refresh_herbarium_choices(fallback)
       if (nzchar(fallback)) {
         config("Current", "CurrHerbarium", fallback)
@@ -661,16 +768,24 @@ mod_herbarium_server <- function(id, state, con) {
       set_status(sprintf("Unattached herbarium table: %s", removed %||% paste0(prefix, "_Herbarium")))
     })
 
-    observeEvent(input$herb_table_rows_selected, {
-      load_selected_record()
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$herb_table_rows_selected,
+      {
+        load_selected_record()
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$Code, {
-      info <- herbarium_species_lookup(con, nz(input$Code))
-      updateTextInput(session, "FamilyCode", value = nz(info$familycode))
-      updateTextInput(session, "CommonName", value = nz(info$commonname))
-      updateTextInput(session, "RedBlueList", value = nz(info$redbluelist))
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$Code,
+      {
+        info <- herbarium_species_lookup(con, nz(input$Code))
+        updateTextInput(session, "FamilyCode", value = nz(info$familycode))
+        updateTextInput(session, "CommonName", value = nz(info$commonname))
+        updateTextInput(session, "RedBlueList", value = nz(info$redbluelist))
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$btnGetScientific, {
       info <- herbarium_species_lookup(con, nz(input$Code))
@@ -748,15 +863,20 @@ mod_herbarium_server <- function(id, state, con) {
 
       set_clause <- paste(sprintf("%s = ?", vapply(names(fields), qident, character(1))), collapse = ", ")
       sql <- paste(
-        "UPDATE", qident(rv$herb_table),
-        "SET", set_clause,
+        "UPDATE",
+        qident(rv$herb_table),
+        "SET",
+        set_clause,
         "WHERE recid = ?"
       )
 
-      ok <- tryCatch({
-        DBI::dbExecute(con, sql, c(unname(fields), list(recid)))
-        TRUE
-      }, error = function(e) FALSE)
+      ok <- tryCatch(
+        {
+          DBI::dbExecute(con, sql, c(unname(fields), list(recid)))
+          TRUE
+        },
+        error = function(e) FALSE
+      )
 
       if (!ok) {
         set_status("Save failed for herbarium record.")
@@ -807,7 +927,8 @@ mod_herbarium_server <- function(id, state, con) {
           con,
           paste(
             "SELECT recid, plotnumber, species, scientificnamerich, collectionnumber, dateofcollection, collectors, locationdescription",
-            "FROM", qident(rv$herb_table),
+            "FROM",
+            qident(rv$herb_table),
             "WHERE COALESCE(print, FALSE) = TRUE",
             "ORDER BY recid"
           )

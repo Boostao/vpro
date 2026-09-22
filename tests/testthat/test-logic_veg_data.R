@@ -5,32 +5,44 @@ library(dplyr)
 source(here::here("R", "logic_veg_data.R"))
 
 setup_veg_tables <- function(con) {
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE SU (
       siteunit TEXT,
       plotnumber TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE vw_Veg_Long (
       plotnumber TEXT,
       species_code TEXT,
       layer TEXT,
       cover_value TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE SppList (
       code TEXT,
       scientificname TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE LayerCode (
       layer1234567 TEXT,
       layertext TEXT
     )
-  ")
+  "
+  )
 
   DBI::dbExecute(
     con,

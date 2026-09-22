@@ -4,7 +4,8 @@ mod_su_table_ui <- function(id) {
     full_screen = TRUE,
     class = "h-100",
     bslib::card_header(
-      div(class = "d-flex justify-content-between align-items-center gap-3",
+      div(
+        class = "d-flex justify-content-between align-items-center gap-3",
         div(
           div(class = "fw-semibold", "Site Unit Table"),
           div(class = "small text-muted", "Live SU rows for the current project. Use this page to verify drag-based plot reassignment.")
@@ -93,12 +94,14 @@ mod_su_table_server <- function(id, state, con, refresh_trigger = reactive(NULL)
 
       out <- tryCatch(
         DBI::dbGetQuery(con, sql, as.list(plot_ids)),
-        error = function(e) data.frame(
-          PlotNumber = character(0),
-          SiteUnit = character(0),
-          LocalModifiedUTC = character(0),
-          stringsAsFactors = FALSE
-        )
+        error = function(e) {
+          data.frame(
+            PlotNumber = character(0),
+            SiteUnit = character(0),
+            LocalModifiedUTC = character(0),
+            stringsAsFactors = FALSE
+          )
+        }
       )
 
       out$PlotNumber <- as.character(out$PlotNumber)

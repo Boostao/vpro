@@ -3,7 +3,9 @@
 source(here::here("R", "mod_site_env.R"))
 
 setup_soil_tables <- function(con) {
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Humus (
       id INTEGER,
       plotnumber TEXT,
@@ -15,8 +17,11 @@ setup_soil_tables <- function(con) {
       humusformph DOUBLE,
       _comment TEXT
     )
-  ")
-  DBI::dbExecute(con, "
+  "
+  )
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE Mineral (
       id INTEGER,
       plotnumber TEXT,
@@ -29,7 +34,8 @@ setup_soil_tables <- function(con) {
       colour TEXT,
       _comments TEXT
     )
-  ")
+  "
+  )
 
   DBI::dbExecute(
     con,

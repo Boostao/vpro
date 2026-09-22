@@ -18,24 +18,27 @@ source(here::here("tests", "testthat", "test-logic_sync.R"))
 
 # ── helper: fully wired test environment ─────────────────────────────────────
 .make_env <- function() {
-  m  <- .make_master()
+  m <- .make_master()
   lc <- .make_local()
   .attach_master(lc, m$path)
 
   # Seed one dirty Env row in local
-  DBI::dbExecute(lc, "
+  DBI::dbExecute(
+    lc,
+    "
     INSERT INTO Env (plotnumber, fieldnumber, projectid, latitude,
                      longitude, elevation, local_modified_utc)
     VALUES ('P001', 'F001', 'PROJ1', 49.1, -121.5, 800, now())
-  ")
+  "
+  )
 
   list(local = lc, master_con = m$con, master_path = m$path)
 }
 
 .teardown_env <- function(e) {
-  try(DBI::dbDisconnect(e$local),      silent = TRUE)
+  try(DBI::dbDisconnect(e$local), silent = TRUE)
   try(DBI::dbDisconnect(e$master_con), silent = TRUE)
-  try(unlink(e$master_path),           silent = TRUE)
+  try(unlink(e$master_path), silent = TRUE)
 }
 
 
@@ -89,14 +92,13 @@ test_that("merge_approve_request moves staging rows to core and sets status merg
   on.exit(.teardown_env(e), add = TRUE)
 
   result <- sync_push(e$local, project_id = "PROJ1", submitter = "test@example.com")
-  mr_id  <- result$merge_request_id
+  mr_id <- result$merge_request_id
 
   # Core.env is empty before approval
   pre <- DBI::dbGetQuery(e$local, "SELECT COUNT(*) AS n FROM master.core.env")
   expect_equal(pre$n[1], 0L)
 
-  merge_approve_request(e$local, mr_id, reviewer = "admin@example.com",
-                        review_notes = "LGTM")
+  merge_approve_request(e$local, mr_id, reviewer = "admin@example.com", review_notes = "LGTM")
 
   # Core.env now has the row
   post <- DBI::dbGetQuery(e$local, "SELECT * FROM master.core.env")
@@ -131,14 +133,17 @@ test_that("merge_request_refresh_conflicts detects rowVersion conflicts", {
 
   # First push
   result <- sync_push(e$local, project_id = "PROJ1", submitter = "test@example.com")
-  mr_id  <- result$merge_request_id
+  mr_id <- result$merge_request_id
 
   # Manually insert a core.env row with baseRowVersion lower than staged
   # (simulates: someone else updated the row after this user's push)
-  DBI::dbExecute(e$local, "
+  DBI::dbExecute(
+    e$local,
+    "
     INSERT INTO master.core.env (plotnumber, projectid, \"rowVersion\")
     VALUES ('P001', 'PROJ1', 5)
-  ")
+  "
+  )
 
   # Staged row has baseRowVersion = NULL (new row), so no conflict from rowVersion
   # To trigger conflict: set baseRowVersion on staging row to 1, then bump core
@@ -171,13 +176,16 @@ test_that("keep_staged resolution allows row to be applied to core", {
   on.exit(.teardown_env(e), add = TRUE)
 
   result <- sync_push(e$local, project_id = "PROJ1", submitter = "test@example.com")
-  mr_id  <- result$merge_request_id
+  mr_id <- result$merge_request_id
 
   # Seed core + force conflict (same as Test 3)
-  DBI::dbExecute(e$local, "
+  DBI::dbExecute(
+    e$local,
+    "
     INSERT INTO master.core.env (plotnumber, projectid, \"rowVersion\")
     VALUES ('P001', 'PROJ1', 5)
-  ")
+  "
+  )
   DBI::dbExecute(
     e$local,
     "UPDATE master.staging.env SET \"baseRowVersion\" = 1 WHERE merge_request_id = ?",
@@ -186,8 +194,7 @@ test_that("keep_staged resolution allows row to be applied to core", {
   merge_request_refresh_conflicts(e$local, mr_id)
 
   conflict_id <- merge_request_get_conflicts(e$local, mr_id)$id[1]
-  merge_request_resolve_conflict(e$local, conflict_id, "keep_staged",
-                                 actor = "admin@example.com")
+  merge_request_resolve_conflict(e$local, conflict_id, "keep_staged", actor = "admin@example.com")
 
   # Now approve — no unresolved conflicts remain
   expect_silent(
@@ -209,13 +216,16 @@ test_that("keep_core resolution excludes staged row from approval", {
   on.exit(.teardown_env(e), add = TRUE)
 
   result <- sync_push(e$local, project_id = "PROJ1", submitter = "test@example.com")
-  mr_id  <- result$merge_request_id
+  mr_id <- result$merge_request_id
 
   # Seed core with a different elevation
-  DBI::dbExecute(e$local, "
+  DBI::dbExecute(
+    e$local,
+    "
     INSERT INTO master.core.env (plotnumber, projectid, elevation, \"rowVersion\")
     VALUES ('P001', 'PROJ1', 999, 5)
-  ")
+  "
+  )
   DBI::dbExecute(
     e$local,
     "UPDATE master.staging.env SET \"baseRowVersion\" = 1 WHERE merge_request_id = ?",
@@ -224,8 +234,7 @@ test_that("keep_core resolution excludes staged row from approval", {
   merge_request_refresh_conflicts(e$local, mr_id)
 
   conflict_id <- merge_request_get_conflicts(e$local, mr_id)$id[1]
-  merge_request_resolve_conflict(e$local, conflict_id, "keep_core",
-                                 actor = "admin@example.com")
+  merge_request_resolve_conflict(e$local, conflict_id, "keep_core", actor = "admin@example.com")
 
   expect_silent(
     merge_approve_request(e$local, mr_id, reviewer = "admin@example.com")

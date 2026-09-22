@@ -10,11 +10,11 @@ mod_auth_server <- function(id, state, con) {
     ns <- session$ns
     auth_init_state(state)
     rv <- reactiveValues(
-      login_status      = "",
-      profile_msg       = "",
-      change_pass_msg   = "",
-      grant_msg         = "",
-      editing_field     = NULL
+      login_status = "",
+      profile_msg = "",
+      change_pass_msg = "",
+      grant_msg = "",
+      editing_field = NULL
     )
 
     output$auth_panel <- renderUI({
@@ -173,13 +173,16 @@ mod_auth_server <- function(id, state, con) {
       req(input$guest_email)
 
       if (!is_cloud_connected(con)) {
-        attached <- tryCatch({
-          attach_cloud(con, fail_on_error = TRUE)
-          TRUE
-        }, error = function(e) {
-          rv$login_status <- paste("Cannot connect to cloud database:", conditionMessage(e))
-          FALSE
-        })
+        attached <- tryCatch(
+          {
+            attach_cloud(con, fail_on_error = TRUE)
+            TRUE
+          },
+          error = function(e) {
+            rv$login_status <- paste("Cannot connect to cloud database:", conditionMessage(e))
+            FALSE
+          }
+        )
         if (!isTRUE(attached)) return()
       }
 
@@ -203,13 +206,16 @@ mod_auth_server <- function(id, state, con) {
       req(input$admin_email, input$admin_pass)
 
       if (!is_cloud_connected(con)) {
-        attached <- tryCatch({
-          attach_cloud(con, fail_on_error = TRUE)
-          TRUE
-        }, error = function(e) {
-          rv$login_status <- paste("Cannot connect to cloud database:", conditionMessage(e))
-          FALSE
-        })
+        attached <- tryCatch(
+          {
+            attach_cloud(con, fail_on_error = TRUE)
+            TRUE
+          },
+          error = function(e) {
+            rv$login_status <- paste("Cannot connect to cloud database:", conditionMessage(e))
+            FALSE
+          }
+        )
         if (!isTRUE(attached)) return()
       }
 
@@ -233,7 +239,9 @@ mod_auth_server <- function(id, state, con) {
 
     # ---- Logout ----------------------------------------------------------------
     observeEvent(input$auth_logout, {
-      if (is_cloud_connected(con)) db_detach(con, "master")
+      if (is_cloud_connected(con)) {
+        db_detach(con, "master")
+      }
       auth_logout(state)
       rv$login_status <- ""
       rv$profile_msg <- ""
@@ -242,59 +250,83 @@ mod_auth_server <- function(id, state, con) {
       rv$editing_field <- NULL
     })
 
-    observeEvent(input$edit_name, {
-      rv$profile_msg <- ""
-      rv$editing_field <- "name"
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$edit_name,
+      {
+        rv$profile_msg <- ""
+        rv$editing_field <- "name"
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$edit_email, {
-      rv$profile_msg <- ""
-      rv$editing_field <- "email"
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$edit_email,
+      {
+        rv$profile_msg <- ""
+        rv$editing_field <- "email"
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$cancel_profile_edit, {
-      rv$editing_field <- NULL
-      rv$profile_msg <- ""
-    }, ignoreInit = TRUE)
-
-    observeEvent(input$save_name_inline, {
-      result <- tryCatch(
-        auth_update_profile(con, state, state$AuthUser %||% "", input$inline_name %||% ""),
-        error = function(e) list(ok = FALSE, message = conditionMessage(e))
-      )
-      rv$profile_msg <- result$message %||% ""
-      if (isTRUE(result$ok)) {
+    observeEvent(
+      input$cancel_profile_edit,
+      {
         rv$editing_field <- NULL
-      }
-    }, ignoreInit = TRUE)
+        rv$profile_msg <- ""
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$save_email_inline, {
-      req(input$inline_email)
-      result <- tryCatch(
-        auth_update_profile(con, state, input$inline_email, state$AuthFullName %||% ""),
-        error = function(e) list(ok = FALSE, message = conditionMessage(e))
-      )
-      rv$profile_msg <- result$message %||% ""
-      if (isTRUE(result$ok)) {
-        rv$editing_field <- NULL
-      }
-    }, ignoreInit = TRUE)
-
-    observeEvent(input$open_password_modal, {
-      rv$change_pass_msg <- ""
-      showModal(modalDialog(
-        title = "Change password",
-        passwordInput(ns("old_pass"), "Current password"),
-        passwordInput(ns("new_pass"), "New password (min 8 chars)"),
-        passwordInput(ns("new_pass2"), "Confirm new password"),
-        div(class = "sync-auth-status-line", textOutput(ns("change_pass_status"), container = span)),
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("change_pass"), "Update Password", class = "btn btn-primary")
+    observeEvent(
+      input$save_name_inline,
+      {
+        result <- tryCatch(
+          auth_update_profile(con, state, state$AuthUser %||% "", input$inline_name %||% ""),
+          error = function(e) list(ok = FALSE, message = conditionMessage(e))
         )
-      ))
-    }, ignoreInit = TRUE)
+        rv$profile_msg <- result$message %||% ""
+        if (isTRUE(result$ok)) {
+          rv$editing_field <- NULL
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$save_email_inline,
+      {
+        req(input$inline_email)
+        result <- tryCatch(
+          auth_update_profile(con, state, input$inline_email, state$AuthFullName %||% ""),
+          error = function(e) list(ok = FALSE, message = conditionMessage(e))
+        )
+        rv$profile_msg <- result$message %||% ""
+        if (isTRUE(result$ok)) {
+          rv$editing_field <- NULL
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$open_password_modal,
+      {
+        rv$change_pass_msg <- ""
+        showModal(modalDialog(
+          title = "Change password",
+          passwordInput(ns("old_pass"), "Current password"),
+          passwordInput(ns("new_pass"), "New password (min 8 chars)"),
+          passwordInput(ns("new_pass2"), "Confirm new password"),
+          div(class = "sync-auth-status-line", textOutput(ns("change_pass_status"), container = span)),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(ns("change_pass"), "Update Password", class = "btn btn-primary")
+          )
+        ))
+      },
+      ignoreInit = TRUE
+    )
 
     # ---- Change password (admin only) ------------------------------------------
     observeEvent(input$change_pass, {
@@ -313,20 +345,24 @@ mod_auth_server <- function(id, state, con) {
       }
     })
 
-    observeEvent(input$open_access_modal, {
-      rv$grant_msg <- ""
-      showModal(modalDialog(
-        title = "Grant admin access",
-        textInput(ns("grant_email"), "User email"),
-        passwordInput(ns("grant_pass"), "Initial password (min 8 chars)"),
-        div(class = "sync-auth-status-line", textOutput(ns("grant_status"), container = span)),
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("grant_admin"), "Grant Admin", class = "btn btn-primary")
-        )
-      ))
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$open_access_modal,
+      {
+        rv$grant_msg <- ""
+        showModal(modalDialog(
+          title = "Grant admin access",
+          textInput(ns("grant_email"), "User email"),
+          passwordInput(ns("grant_pass"), "Initial password (min 8 chars)"),
+          div(class = "sync-auth-status-line", textOutput(ns("grant_status"), container = span)),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(ns("grant_admin"), "Grant Admin", class = "btn btn-primary")
+          )
+        ))
+      },
+      ignoreInit = TRUE
+    )
 
     # ---- Grant admin -----------------------------------------------------------
     observeEvent(input$grant_admin, {
@@ -341,9 +377,9 @@ mod_auth_server <- function(id, state, con) {
       }
     })
 
-    output$login_status       <- renderText(rv$login_status)
-    output$profile_status     <- renderText(rv$profile_msg)
+    output$login_status <- renderText(rv$login_status)
+    output$profile_status <- renderText(rv$profile_msg)
     output$change_pass_status <- renderText(rv$change_pass_msg)
-    output$grant_status       <- renderText(rv$grant_msg)
+    output$grant_status <- renderText(rv$grant_msg)
   })
 }

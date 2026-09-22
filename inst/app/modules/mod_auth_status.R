@@ -32,9 +32,15 @@ auth_role_badge_ui <- function(role, label, input_id = NULL, ns = identity) {
   badge <- span(
     class = "badge rounded-pill d-inline-flex align-items-center gap-1",
     style = paste(
-      "background-color:", palette$background, ";",
-      "color:", palette$foreground, ";",
-      "border: 1px solid", palette$border, ";",
+      "background-color:",
+      palette$background,
+      ";",
+      "color:",
+      palette$foreground,
+      ";",
+      "border: 1px solid",
+      palette$border,
+      ";",
       "font-weight: 700; font-size: 0.85rem; padding: 0.48rem 0.78rem;"
     ),
     bsicons::bs_icon(palette$icon),
@@ -57,7 +63,9 @@ auth_logout_icon_ui <- function(input_id, ns = identity, color = "#5f7283") {
     ns(input_id),
     bsicons::bs_icon("box-arrow-right"),
     style = paste(
-      "color:", color, ";",
+      "color:",
+      color,
+      ";",
       "font-size: 1.05rem; text-decoration: none; line-height: 1;"
     )
   )
@@ -73,7 +81,7 @@ mod_auth_status_server <- function(id, state, con) {
 
     # Navigation signal — parent observe()s this and calls nav_select()
     nav_dest <- reactiveVal(NULL)
-    
+
     observeEvent(input$go_auth, {
       nav_dest("Sync")
       # Reset to NULL after brief delay so next click is detected
@@ -81,14 +89,16 @@ mod_auth_status_server <- function(id, state, con) {
     })
 
     observeEvent(input$logout, {
-      if (is_cloud_connected(con)) db_detach(con, "master")
+      if (is_cloud_connected(con)) {
+        db_detach(con, "master")
+      }
       auth_logout(state)
     })
 
     output$auth_widget <- renderUI({
       # Reactive dependencies — re-renders automatically when any changes
-      auth_ok    <- isTRUE(state$AuthAuthenticated)
-      role       <- state$AuthRole
+      auth_ok <- isTRUE(state$AuthAuthenticated)
+      role <- state$AuthRole
       user_email <- state$AuthUser
 
       online <- is_cloud_connected(con)
@@ -96,15 +106,16 @@ mod_auth_status_server <- function(id, state, con) {
       # ---- Badge (3 states) ----
       if (!auth_ok) {
         # Offline state: bright gold (#fcba19) with dark text for excellent contrast on #036
-          badge <- actionLink(
-            ns("go_auth"),
-            span(
-              class = "badge rounded-pill d-inline-flex align-items-center gap-1",
-              style = "background-color: #ffffff; color: #1a1a1a; font-weight: 700; font-size: 0.85rem; border: 1px solid #ccc;",
-              bsicons::bs_icon("wifi-off"), "Sign In"
-            ),
-            style = "text-decoration: none; cursor: pointer;"
-          )
+        badge <- actionLink(
+          ns("go_auth"),
+          span(
+            class = "badge rounded-pill d-inline-flex align-items-center gap-1",
+            style = "background-color: #ffffff; color: #1a1a1a; font-weight: 700; font-size: 0.85rem; border: 1px solid #ccc;",
+            bsicons::bs_icon("wifi-off"),
+            "Sign In"
+          ),
+          style = "text-decoration: none; cursor: pointer;"
+        )
       } else if (identical(role, "admin")) {
         badge <- div(
           class = "d-inline-flex align-items-center gap-2",

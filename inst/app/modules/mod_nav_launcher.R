@@ -44,25 +44,32 @@ mod_nav_launcher_server <- function(
   moduleServer(id, function(input, output, session) {
     root_session <- session$rootScope()
 
-    observeEvent(input$open, {
-      if (!is.null(open_main_tab) && nzchar(open_main_tab)) {
-        bslib::nav_select("main_tabs", selected = open_main_tab, session = root_session)
-      }
+    observeEvent(
+      input$open,
+      {
+        if (!is.null(open_main_tab) && nzchar(open_main_tab)) {
+          bslib::nav_select("main_tabs", selected = open_main_tab, session = root_session)
+        }
 
-      if (!is.null(open_nested_tab_id) && nzchar(open_nested_tab_id) &&
-          !is.null(open_nested_value) && nzchar(open_nested_value)) {
-        bslib::nav_select(open_nested_tab_id, selected = open_nested_value, session = root_session)
-      }
-    }, ignoreInit = TRUE)
+        if (!is.null(open_nested_tab_id) && nzchar(open_nested_tab_id) && !is.null(open_nested_value) && nzchar(open_nested_value)) {
+          bslib::nav_select(open_nested_tab_id, selected = open_nested_value, session = root_session)
+        }
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$run, {
-      if (!is.null(click_id) && nzchar(click_id)) {
-        session$sendCustomMessage("vpro-nav-launcher-click", list(id = click_id))
-      }
-      if (!is.null(run_notification) && nzchar(run_notification)) {
-        show_toast(toast(run_notification, type = "success"))
-      }
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$run,
+      {
+        if (!is.null(click_id) && nzchar(click_id)) {
+          session$sendCustomMessage("vpro-nav-launcher-click", list(id = click_id))
+        }
+        if (!is.null(run_notification) && nzchar(run_notification)) {
+          show_toast(toast(run_notification, type = "success"))
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     # Hide the secondary action button when there is nothing to run.
     observe({

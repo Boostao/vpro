@@ -5,6 +5,7 @@ CHARS:
 Current:
   AssignedSuSource: 1
   CoordMethod: 1
+  CurrPlotlist: "None"
   CurrProject: "Sample"
   CurrHierarchy: "Sample"
   CurrVegProfile: "Sample"
@@ -12,6 +13,7 @@ Current:
   DataFormNumber: "1"
   ProjectIdSource: 2
   ProjectPath: "VPro64"
+  SUPath: ""
   User: "Admin"
 Diagnostic:
   Name: "Diagnostic10"

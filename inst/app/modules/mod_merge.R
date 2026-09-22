@@ -59,17 +59,22 @@ mod_merge_server <- function(id, state, con) {
 
     refresh_requests <- function() {
       rv$status <- ""
-      ready <- tryCatch({
-        sync_require_cloud(con, allow_attach = TRUE)
-        TRUE
-      }, error = function(e) {
-        rv$status <- paste("Cloud unavailable:", e$message)
-        rv$merge_requests <- data.frame()
-        shiny::updateSelectInput(session, "merge_request", choices = c("(none)" = ""), selected = "")
-        FALSE
-      })
+      ready <- tryCatch(
+        {
+          sync_require_cloud(con, allow_attach = TRUE)
+          TRUE
+        },
+        error = function(e) {
+          rv$status <- paste("Cloud unavailable:", e$message)
+          rv$merge_requests <- data.frame()
+          shiny::updateSelectInput(session, "merge_request", choices = c("(none)" = ""), selected = "")
+          FALSE
+        }
+      )
 
-      if (!isTRUE(ready)) return(invisible(FALSE))
+      if (!isTRUE(ready)) {
+        return(invisible(FALSE))
+      }
 
       merge_ensure_tables(con)
 
@@ -93,9 +98,13 @@ mod_merge_server <- function(id, state, con) {
       invisible(TRUE)
     }
 
-    shiny::observeEvent(input$merge_refresh, {
-      refresh_requests()
-    }, ignoreInit = TRUE)
+    shiny::observeEvent(
+      input$merge_refresh,
+      {
+        refresh_requests()
+      },
+      ignoreInit = TRUE
+    )
 
     shiny::observe({
       if (is.null(rv$merge_requests)) {
@@ -105,7 +114,9 @@ mod_merge_server <- function(id, state, con) {
 
     shiny::observeEvent(input$merge_request, {
       shiny::req(input$merge_request)
-      if (!nzchar(input$merge_request)) return()
+      if (!nzchar(input$merge_request)) {
+        return()
+      }
 
       mr_id <- as.integer(input$merge_request)
       mr_row <- rv$merge_requests[rv$merge_requests$id == mr_id, , drop = FALSE]
@@ -146,18 +157,21 @@ mod_merge_server <- function(id, state, con) {
       # Conflicts (optimistic concurrency based on base_row_version)
       rv$conflict_status <- ""
       rv$conflicts <- NULL
-      tryCatch({
-        merge_request_refresh_conflicts(con, mr_id)
-        rv$conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
-        if (nrow(rv$conflicts) == 0) {
-          rv$conflict_status <- "No conflicts."
-        } else {
-          rv$conflict_status <- paste(nrow(rv$conflicts), "conflict(s) need resolution.")
+      tryCatch(
+        {
+          merge_request_refresh_conflicts(con, mr_id)
+          rv$conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
+          if (nrow(rv$conflicts) == 0) {
+            rv$conflict_status <- "No conflicts."
+          } else {
+            rv$conflict_status <- paste(nrow(rv$conflicts), "conflict(s) need resolution.")
+          }
+        },
+        error = function(e) {
+          rv$conflict_status <- paste("Conflict refresh failed:", e$message)
+          rv$conflicts <- data.frame()
         }
-      }, error = function(e) {
-        rv$conflict_status <- paste("Conflict refresh failed:", e$message)
-        rv$conflicts <- data.frame()
-      })
+      )
 
       rv$diff_env <- DBI::dbGetQuery(
         con,
@@ -233,94 +247,126 @@ mod_merge_server <- function(id, state, con) {
 
     shiny::observeEvent(input$merge_approve, {
       shiny::req(input$merge_request)
-      if (!nzchar(input$merge_request)) return()
+      if (!nzchar(input$merge_request)) {
+        return()
+      }
       if (isFALSE(rv$compliance_passed)) {
         rv$status <- "Merge blocked: compliance failed."
         return()
       }
       sync_require_cloud(con, allow_attach = TRUE)
       auth_init_state(state)
-      tryCatch({
-        auth_require_permission(state, "approve:merge_requests")
-      }, error = function(e) {
-        rv$status <- e$message
-        return()
-      })
+      tryCatch(
+        {
+          auth_require_permission(state, "approve:merge_requests")
+        },
+        error = function(e) {
+          rv$status <- e$message
+          return()
+        }
+      )
       mr_id <- as.integer(input$merge_request)
 
       # Block merge if unresolved conflicts exist.
-      tryCatch({
-        merge_request_refresh_conflicts(con, mr_id)
-        unresolved <- merge_request_unresolved_conflict_count(con, mr_id)
-        if (unresolved > 0) {
-          rv$status <- paste("Merge blocked:", unresolved, "unresolved conflict(s). Resolve conflicts first.")
-          rv$conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
-          rv$conflict_status <- rv$status
+      tryCatch(
+        {
+          merge_request_refresh_conflicts(con, mr_id)
+          unresolved <- merge_request_unresolved_conflict_count(con, mr_id)
+          if (unresolved > 0) {
+            rv$status <- paste("Merge blocked:", unresolved, "unresolved conflict(s). Resolve conflicts first.")
+            rv$conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
+            rv$conflict_status <- rv$status
+            return()
+          }
+        },
+        error = function(e) {
+          rv$status <- paste("Conflict check failed:", e$message)
           return()
         }
-      }, error = function(e) {
-        rv$status <- paste("Conflict check failed:", e$message)
-        return()
-      })
+      )
 
       reviewer <- Sys.getenv("USER", "unknown")
-      tryCatch({
-        merge_approve_request(con, mr_id, reviewer, input$merge_notes)
-        rv$status <- paste("Merged request", mr_id)
-        refresh_requests()
-      }, error = function(e) {
-        rv$status <- paste("Merge failed:", e$message)
-      })
+      tryCatch(
+        {
+          merge_approve_request(con, mr_id, reviewer, input$merge_notes)
+          rv$status <- paste("Merged request", mr_id)
+          refresh_requests()
+        },
+        error = function(e) {
+          rv$status <- paste("Merge failed:", e$message)
+        }
+      )
     })
 
     shiny::observeEvent(input$merge_reject, {
       shiny::req(input$merge_request)
-      if (!nzchar(input$merge_request)) return()
+      if (!nzchar(input$merge_request)) {
+        return()
+      }
       sync_require_cloud(con, allow_attach = TRUE)
       auth_init_state(state)
-      tryCatch({
-        auth_require_permission(state, "approve:merge_requests")
-      }, error = function(e) {
-        rv$status <- e$message
-        return()
-      })
+      tryCatch(
+        {
+          auth_require_permission(state, "approve:merge_requests")
+        },
+        error = function(e) {
+          rv$status <- e$message
+          return()
+        }
+      )
       mr_id <- as.integer(input$merge_request)
       reviewer <- Sys.getenv("USER", "unknown")
-      tryCatch({
-        merge_reject_request(con, mr_id, reviewer, input$merge_notes)
-        rv$status <- paste("Rejected request", mr_id)
-        refresh_requests()
-      }, error = function(e) {
-        rv$status <- paste("Reject failed:", e$message)
-      })
+      tryCatch(
+        {
+          merge_reject_request(con, mr_id, reviewer, input$merge_notes)
+          rv$status <- paste("Rejected request", mr_id)
+          refresh_requests()
+        },
+        error = function(e) {
+          rv$status <- paste("Reject failed:", e$message)
+        }
+      )
     })
 
-    shiny::observeEvent(input$merge_conflicts_refresh, {
-      shiny::req(input$merge_request)
-      if (!nzchar(input$merge_request)) return()
-      mr_id <- as.integer(input$merge_request)
-      tryCatch({
-        merge_request_refresh_conflicts(con, mr_id)
-        rv$conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
-        if (nrow(rv$conflicts) == 0) {
-          rv$conflict_status <- "No conflicts."
-        } else {
-          rv$conflict_status <- paste(nrow(rv$conflicts), "conflict(s) need resolution.")
+    shiny::observeEvent(
+      input$merge_conflicts_refresh,
+      {
+        shiny::req(input$merge_request)
+        if (!nzchar(input$merge_request)) {
+          return()
         }
-      }, error = function(e) {
-        rv$conflict_status <- paste("Conflict refresh failed:", e$message)
-      })
-    }, ignoreInit = TRUE)
+        mr_id <- as.integer(input$merge_request)
+        tryCatch(
+          {
+            merge_request_refresh_conflicts(con, mr_id)
+            rv$conflicts <- merge_request_get_conflicts(con, mr_id, unresolved_only = TRUE)
+            if (nrow(rv$conflicts) == 0) {
+              rv$conflict_status <- "No conflicts."
+            } else {
+              rv$conflict_status <- paste(nrow(rv$conflicts), "conflict(s) need resolution.")
+            }
+          },
+          error = function(e) {
+            rv$conflict_status <- paste("Conflict refresh failed:", e$message)
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
 
     resolve_selected_conflict <- function(resolution) {
       shiny::req(input$merge_request)
-      if (!nzchar(input$merge_request)) return(invisible(FALSE))
+      if (!nzchar(input$merge_request)) {
+        return(invisible(FALSE))
+      }
       if (is.null(input$merge_conflicts_rows_selected) || length(input$merge_conflicts_rows_selected) == 0) {
         rv$conflict_status <- "Select a conflict row first."
         return(invisible(FALSE))
       }
       row_idx <- input$merge_conflicts_rows_selected[1]
-      if (is.null(rv$conflicts) || nrow(rv$conflicts) < row_idx) return(invisible(FALSE))
+      if (is.null(rv$conflicts) || nrow(rv$conflicts) < row_idx) {
+        return(invisible(FALSE))
+      }
       conflict_id <- rv$conflicts$id[row_idx]
       actor <- Sys.getenv("USER", "unknown")
       merge_request_resolve_conflict(con, conflict_id, resolution, actor = actor)
@@ -334,17 +380,29 @@ mod_merge_server <- function(id, state, con) {
       invisible(TRUE)
     }
 
-    shiny::observeEvent(input$merge_conflict_keep_staged, {
-      resolve_selected_conflict("keep_staged")
-    }, ignoreInit = TRUE)
+    shiny::observeEvent(
+      input$merge_conflict_keep_staged,
+      {
+        resolve_selected_conflict("keep_staged")
+      },
+      ignoreInit = TRUE
+    )
 
-    shiny::observeEvent(input$merge_conflict_keep_core, {
-      resolve_selected_conflict("keep_core")
-    }, ignoreInit = TRUE)
+    shiny::observeEvent(
+      input$merge_conflict_keep_core,
+      {
+        resolve_selected_conflict("keep_core")
+      },
+      ignoreInit = TRUE
+    )
 
-    shiny::observeEvent(input$merge_conflict_dismiss, {
-      resolve_selected_conflict("dismiss")
-    }, ignoreInit = TRUE)
+    shiny::observeEvent(
+      input$merge_conflict_dismiss,
+      {
+        resolve_selected_conflict("dismiss")
+      },
+      ignoreInit = TRUE
+    )
 
     output$merge_status <- shiny::renderText({
       if (nzchar(rv$status)) rv$status else "No pending merge requests."
@@ -359,24 +417,35 @@ mod_merge_server <- function(id, state, con) {
     })
 
     output$merge_compliance <- DT::renderDT({
-      if (is.null(rv$compliance) || nrow(rv$compliance) == 0) return(NULL)
+      if (is.null(rv$compliance) || nrow(rv$compliance) == 0) {
+        return(NULL)
+      }
       DT::datatable(rv$compliance, rownames = FALSE, options = list(pageLength = 6, scrollX = TRUE))
     })
 
     output$merge_summary_row <- shiny::renderText({
       shiny::req(rv$merge_requests, input$merge_request)
-      if (!nzchar(input$merge_request)) return("")
+      if (!nzchar(input$merge_request)) {
+        return("")
+      }
       mr_id <- as.integer(input$merge_request)
       mr_row <- rv$merge_requests[rv$merge_requests$id == mr_id, , drop = FALSE]
-      if (nrow(mr_row) == 0) return("")
+      if (nrow(mr_row) == 0) {
+        return("")
+      }
       submitted <- mr_row$submitted_utc[1]
       submitted_text <- if (!is.null(submitted) && nzchar(as.character(submitted))) as.character(submitted) else ""
       paste(
-        "Project:", mr_row$project_id[1],
-        "| Submitter:", mr_row$submitter_user_id[1],
-        "| Submitted:", submitted_text,
-        "| Env:", mr_row$env_record_count[1],
-        "| Veg:", mr_row$veg_record_count[1]
+        "Project:",
+        mr_row$project_id[1],
+        "| Submitter:",
+        mr_row$submitter_user_id[1],
+        "| Submitted:",
+        submitted_text,
+        "| Env:",
+        mr_row$env_record_count[1],
+        "| Veg:",
+        mr_row$veg_record_count[1]
       )
     })
 
@@ -405,25 +474,33 @@ mod_merge_server <- function(id, state, con) {
 
     output$merge_env_preview <- DT::renderDT({
       shiny::req(rv$diff_env)
-      if (nrow(rv$diff_env) == 0) return(NULL)
+      if (nrow(rv$diff_env) == 0) {
+        return(NULL)
+      }
       DT::datatable(rv$diff_env, rownames = FALSE, options = list(pageLength = 6, scrollX = TRUE))
     })
 
     output$merge_su_preview <- DT::renderDT({
       shiny::req(rv$diff_su)
-      if (nrow(rv$diff_su) == 0) return(NULL)
+      if (nrow(rv$diff_su) == 0) {
+        return(NULL)
+      }
       DT::datatable(rv$diff_su, rownames = FALSE, options = list(pageLength = 6, scrollX = TRUE))
     })
 
     output$merge_veg_preview <- DT::renderDT({
       shiny::req(rv$diff_veg)
-      if (nrow(rv$diff_veg) == 0) return(NULL)
+      if (nrow(rv$diff_veg) == 0) {
+        return(NULL)
+      }
       DT::datatable(rv$diff_veg, rownames = FALSE, options = list(pageLength = 6, scrollX = TRUE))
     })
 
     output$merge_conflicts <- DT::renderDT({
       shiny::req(rv$conflicts)
-      if (is.null(rv$conflicts) || nrow(rv$conflicts) == 0) return(NULL)
+      if (is.null(rv$conflicts) || nrow(rv$conflicts) == 0) {
+        return(NULL)
+      }
       DT::datatable(
         rv$conflicts,
         rownames = FALSE,

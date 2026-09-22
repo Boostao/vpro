@@ -7,7 +7,9 @@ source(here::here("R", "db_connections.R"))
 
 setup_projects_db <- function() {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE USysProjectMetadata (
       projectid          TEXT PRIMARY KEY,
       projecttitle       TEXT,
@@ -16,7 +18,8 @@ setup_projects_db <- function() {
       enddate            TEXT,
       notes              TEXT
     )
-  ")
+  "
+  )
   con
 }
 
@@ -24,10 +27,12 @@ testthat::test_that("insert new project - row exists", {
   con <- setup_projects_db()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
      VALUES (?, ?, ?, ?, ?, ?)",
-    list("PROJ-001", "Test Project", "BC Gov", "2025-01-01", "2026-12-31", "Notes"))
+    list("PROJ-001", "Test Project", "BC Gov", "2025-01-01", "2026-12-31", "Notes")
+  )
 
   rows <- DBI::dbGetQuery(con, "SELECT * FROM USysProjectMetadata WHERE projectid = 'PROJ-001'")
   testthat::expect_equal(nrow(rows), 1)
@@ -38,13 +43,13 @@ testthat::test_that("update project title - reflected in query", {
   con <- setup_projects_db()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
-     VALUES ('P2', 'Original Title', 'Org', '', '', '')")
+     VALUES ('P2', 'Original Title', 'Org', '', '', '')"
+  )
 
-  DBI::dbExecute(con,
-    "UPDATE USysProjectMetadata SET projecttitle = ? WHERE projectid = ?",
-    list("Updated Title", "P2"))
+  DBI::dbExecute(con, "UPDATE USysProjectMetadata SET projecttitle = ? WHERE projectid = ?", list("Updated Title", "P2"))
 
   title <- DBI::dbGetQuery(con, "SELECT projecttitle FROM USysProjectMetadata WHERE projectid = 'P2'")$projecttitle[1]
   testthat::expect_equal(title, "Updated Title")
@@ -54,9 +59,11 @@ testthat::test_that("delete project - row gone", {
   con <- setup_projects_db()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
-     VALUES ('P3', 'To Delete', '', '', '', '')")
+     VALUES ('P3', 'To Delete', '', '', '', '')"
+  )
 
   before <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM USysProjectMetadata WHERE projectid = 'P3'")$n[1]
   testthat::expect_equal(before, 1L)
@@ -71,14 +78,18 @@ testthat::test_that("duplicate project ID - error handled gracefully", {
   con <- setup_projects_db()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
-     VALUES ('DUP', 'First', '', '', '', '')")
+     VALUES ('DUP', 'First', '', '', '', '')"
+  )
 
   testthat::expect_error(
-    DBI::dbExecute(con,
+    DBI::dbExecute(
+      con,
       "INSERT INTO USysProjectMetadata (projectid, projecttitle, coordinatingagency, startdate, enddate, notes)
-       VALUES ('DUP', 'Second', '', '', '', '')"),
+       VALUES ('DUP', 'Second', '', '', '', '')"
+    ),
     regexp = NULL
   )
 

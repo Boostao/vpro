@@ -9,13 +9,13 @@
 #'
 test_connect_duckdb <- function() {
   message("[test-helpers] Creating DuckDB test connection")
-  
+
   # Use in-memory DuckDB for fast tests (no persistence needed)
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
-  
+
   # Initialize schema by running SQL statements
   initialize_test_schema(con)
-  
+
   return(con)
 }
 
@@ -27,12 +27,14 @@ test_connect_duckdb <- function() {
 #'
 initialize_test_schema <- function(con) {
   message("[test-helpers] Initializing test schema")
-  
+
   # ==================== LISTS SCHEMA ====================
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS lists")
-  
+
   # lists.spplist
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS lists.spplist (
       id INTEGER PRIMARY KEY,
       \"sppCode\" TEXT UNIQUE NOT NULL,
@@ -40,30 +42,39 @@ initialize_test_schema <- function(con) {
       \"sppScientific\" TEXT,
       \"isActive\" BOOLEAN DEFAULT TRUE
     )
-  ")
-  
+  "
+  )
+
   # lists.layercode
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS lists.layercode (
       id INTEGER PRIMARY KEY,
       \"layerCode\" TEXT UNIQUE NOT NULL,
       \"layerName\" TEXT NOT NULL,
       \"sortOrder\" INTEGER
     )
-  ")
-  
+  "
+  )
+
   # lists.usyszonelist
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS lists.usyszonelist (
       id INTEGER PRIMARY KEY,
       \"zoneCode\" TEXT UNIQUE NOT NULL,
       \"zoneName\" TEXT NOT NULL,
       province TEXT
     )
-  ")
-  
+  "
+  )
+
   # lists.usyssubzonelist
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS lists.usyssubzonelist (
       id INTEGER PRIMARY KEY,
       \"zoneCode\" TEXT NOT NULL,
@@ -71,10 +82,13 @@ initialize_test_schema <- function(con) {
       \"subzoneName\" TEXT NOT NULL,
       UNIQUE(\"zoneCode\", \"subzoneCode\")
     )
-  ")
-  
+  "
+  )
+
   # lists.usystableoflists
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS lists.usystableoflists (
       id INTEGER PRIMARY KEY,
       \"listID\" TEXT NOT NULL,
@@ -83,23 +97,29 @@ initialize_test_schema <- function(con) {
       \"itemSort\" INTEGER,
       UNIQUE(\"listID\", \"itemCode\")
     )
-  ")
-  
+  "
+  )
+
   # lists.usyssppattributes
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS lists.usyssppattributes (
       id INTEGER PRIMARY KEY,
       \"sppCode\" TEXT UNIQUE NOT NULL,
       \"treeShrubHerb\" TEXT,
       \"nativeIntroduced\" TEXT
     )
-  ")
-  
+  "
+  )
+
   # ==================== CORE SCHEMA ====================
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS core")
-  
+
   # core.env
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS core.env (
       id INTEGER PRIMARY KEY,
       \"PlotNumber\" TEXT NOT NULL UNIQUE,
@@ -114,10 +134,13 @@ initialize_test_schema <- function(con) {
       \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
       \"modifiedBy\" TEXT
     )
-  ")
-  
+  "
+  )
+
   # core.veg
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS core.veg (
       id INTEGER PRIMARY KEY,
       \"PlotNumber\" TEXT NOT NULL,
@@ -168,10 +191,13 @@ initialize_test_schema <- function(con) {
       \"modifiedBy\" TEXT NOT NULL,
       UNIQUE(\"PlotNumber\", \"SpeciesCode\", \"LayerCode\")
     )
-  ")
-  
+  "
+  )
+
   # core.su
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS core.su (
       id INTEGER PRIMARY KEY,
       \"PlotNumber\" TEXT NOT NULL UNIQUE,
@@ -180,13 +206,16 @@ initialize_test_schema <- function(con) {
       \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
       \"modifiedBy\" TEXT
     )
-  ")
-  
+  "
+  )
+
   # ==================== STAGING SCHEMA ====================
   DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS staging")
-  
+
   # staging.env
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS staging.env (
       id INTEGER PRIMARY KEY,
       \"mergeRequestID\" INTEGER NOT NULL,
@@ -204,10 +233,13 @@ initialize_test_schema <- function(con) {
       \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
       \"modifiedBy\" TEXT
     )
-  ")
-  
+  "
+  )
+
   # staging.veg
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS staging.veg (
       id INTEGER PRIMARY KEY,
       \"mergeRequestID\" INTEGER NOT NULL,
@@ -260,10 +292,13 @@ initialize_test_schema <- function(con) {
       \"lastModifiedUTC\" TIMESTAMPTZ DEFAULT now(),
       \"modifiedBy\" TEXT NOT NULL
     )
-  ")
-  
+  "
+  )
+
   # staging.su
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS staging.su (
       id INTEGER PRIMARY KEY,
       \"mergeRequestID\" INTEGER NOT NULL,
@@ -275,8 +310,9 @@ initialize_test_schema <- function(con) {
       \"lastModifiedUTC\" TIMESTAMPTZ NOT NULL DEFAULT now(),
       \"modifiedBy\" TEXT
     )
-  ")
-  
+  "
+  )
+
   # Seed minimal reference data
   seed_test_reference_data(con)
 }
@@ -289,33 +325,43 @@ initialize_test_schema <- function(con) {
 #'
 seed_test_reference_data <- function(con) {
   message("[test-helpers] Seeding reference data")
-  
+
   # Only seed minimal test data - don't overwrite table structures
   # Insert species
-  tryCatch({
-    DBI::dbExecute(con,
-      "INSERT INTO lists.spplist (\"sppCode\", \"sppName\", \"sppScientific\", \"isActive\")
+  tryCatch(
+    {
+      DBI::dbExecute(
+        con,
+        "INSERT INTO lists.spplist (\"sppCode\", \"sppName\", \"sppScientific\", \"isActive\")
        VALUES ('AB', 'Abies lasiocarpa', 'Subalpine Fir', TRUE),
               ('FD', 'Pseudotsuga menziesii', 'Douglas-fir', TRUE),
               ('HW', 'Tsuga heterophylla', 'Western Hemlock', TRUE),
               ('YC', 'Thuja plicata', 'Western Redcedar', TRUE),
-              ('AT', 'Athyrium filix-femina', 'Lady Fern', TRUE)")
-  }, error = function(e) {
-    message("[test-helpers] Note: Could not seed spplist (may already exist)")
-  })
-  
+              ('AT', 'Athyrium filix-femina', 'Lady Fern', TRUE)"
+      )
+    },
+    error = function(e) {
+      message("[test-helpers] Note: Could not seed spplist (may already exist)")
+    }
+  )
+
   # Insert zones
-  tryCatch({
-    DBI::dbExecute(con,
-      "INSERT INTO lists.usyszonelist (\"zoneCode\", \"zoneName\", province)
+  tryCatch(
+    {
+      DBI::dbExecute(
+        con,
+        "INSERT INTO lists.usyszonelist (\"zoneCode\", \"zoneName\", province)
        VALUES ('CDF', 'Coastal Douglas-fir', 'BC'),
               ('ICH', 'Interior Cedar-Hemlock', 'BC'),
               ('IDF', 'Interior Douglas-fir', 'BC'),
               ('MH', 'Mountain Hemlock', 'BC'),
-              ('SBPS', 'Sub-Boreal Pine-Spruce', 'BC')")
-  }, error = function(e) {
-    message("[test-helpers] Note: Could not seed usyszonelist (may already exist)")
-  })
+              ('SBPS', 'Sub-Boreal Pine-Spruce', 'BC')"
+      )
+    },
+    error = function(e) {
+      message("[test-helpers] Note: Could not seed usyszonelist (may already exist)")
+    }
+  )
 }
 
 #' Check if PostgreSQL is Available
@@ -325,20 +371,23 @@ seed_test_reference_data <- function(con) {
 #' @return Logical. TRUE if PostgreSQL is available
 #'
 pg_available <- function() {
-  tryCatch({
-    con <- DBI::dbConnect(
-      RPostgres::Postgres(),
-      host     = Sys.getenv("PGHOST",     "localhost"),
-      port     = as.integer(Sys.getenv("PGPORT", "5433")),
-      user     = "vpro_app",
-      password = "testpass",
-      dbname   = Sys.getenv("PGDATABASE", "becmaster")
-    )
-    DBI::dbDisconnect(con)
-    return(TRUE)
-  }, error = function(e) {
-    return(FALSE)
-  })
+  tryCatch(
+    {
+      con <- DBI::dbConnect(
+        RPostgres::Postgres(),
+        host = Sys.getenv("PGHOST", "localhost"),
+        port = as.integer(Sys.getenv("PGPORT", "5433")),
+        user = "vpro_app",
+        password = "testpass",
+        dbname = Sys.getenv("PGDATABASE", "becmaster")
+      )
+      DBI::dbDisconnect(con)
+      return(TRUE)
+    },
+    error = function(e) {
+      return(FALSE)
+    }
+  )
 }
 
 #' Get Test PostgreSQL Connection
@@ -351,11 +400,11 @@ pg_available <- function() {
 get_test_pg_connection <- function() {
   con <- DBI::dbConnect(
     RPostgres::Postgres(),
-    host     = Sys.getenv("PGHOST",     "localhost"),
-    port     = as.integer(Sys.getenv("PGPORT", "5433")),
-    user     = "vpro_app",
+    host = Sys.getenv("PGHOST", "localhost"),
+    port = as.integer(Sys.getenv("PGPORT", "5433")),
+    user = "vpro_app",
     password = "testpass",
-    dbname   = Sys.getenv("PGDATABASE", "becmaster")
+    dbname = Sys.getenv("PGDATABASE", "becmaster")
   )
   return(con)
 }
@@ -370,13 +419,12 @@ get_test_pg_connection <- function() {
 #' @return DBI connection object (if available)
 #'
 test_connect_postgres <- function(skip_if_unavailable = TRUE) {
-  
   if (skip_if_unavailable && !pg_available()) {
     testthat::skip("PostgreSQL not available. Start with: docker-compose up -d")
   }
-  
+
   message("[test-helpers] Creating PostgreSQL test connection")
-  
+
   return(get_test_pg_connection())
 }
 
@@ -388,14 +436,17 @@ test_connect_postgres <- function(skip_if_unavailable = TRUE) {
 #'
 reset_test_db <- function(con) {
   message("[test-helpers] Resetting test database")
-  
+
   # Truncate data tables (keep reference data)
-  tryCatch({
-    DBI::dbExecute(con, "TRUNCATE TABLE core.veg")
-    DBI::dbExecute(con, "TRUNCATE TABLE core.env")
-  }, error = function(e) {
-    warning("Could not truncate tables: ", e$message)
-  })
+  tryCatch(
+    {
+      DBI::dbExecute(con, "TRUNCATE TABLE core.veg")
+      DBI::dbExecute(con, "TRUNCATE TABLE core.env")
+    },
+    error = function(e) {
+      warning("Could not truncate tables: ", e$message)
+    }
+  )
 }
 
 #' Insert Test Plot Data
@@ -409,14 +460,9 @@ reset_test_db <- function(con) {
 #' @param project_id Integer. Project identifier.
 #' @param modified_by Character. User making the change.
 #'
-insert_test_plot <- function(con, plot_number = "TEST-001", 
-                             species = c("AB", "FD"),
-                             cover_percents = c(25, 50),
-                             project_id = 1,
-                             modified_by = "test_user") {
-  
+insert_test_plot <- function(con, plot_number = "TEST-001", species = c("AB", "FD"), cover_percents = c(25, 50), project_id = 1, modified_by = "test_user") {
   message("[test-helpers] Inserting test plot: ", plot_number)
-  
+
   # Insert environment record
   env_df <- data.frame(
     plot_number = plot_number,
@@ -428,9 +474,9 @@ insert_test_plot <- function(con, plot_number = "TEST-001",
     surveyor_name = "Test Surveyor",
     modified_by = modified_by
   )
-  
+
   DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "env"), env_df)
-  
+
   # Insert vegetation records
   veg_df <- data.frame(
     plot_number = rep(plot_number, length(species)),
@@ -440,9 +486,9 @@ insert_test_plot <- function(con, plot_number = "TEST-001",
     project_id = project_id,
     modified_by = modified_by
   )
-  
+
   DBI::dbAppendTable(con, DBI::Id(schema = "core", table = "veg"), veg_df)
-  
+
   message("[test-helpers] Inserted ", nrow(veg_df), " vegetation records")
 }
 
@@ -457,12 +503,11 @@ insert_test_plot <- function(con, plot_number = "TEST-001",
 #'
 expect_query_result <- function(con, sql, expected_rows = NULL, label = "query") {
   result <- DBI::dbGetQuery(con, sql)
-  
+
   if (!is.null(expected_rows)) {
-    testthat::expect_equal(nrow(result), expected_rows, 
-                          label = paste0(label, " row count"))
+    testthat::expect_equal(nrow(result), expected_rows, label = paste0(label, " row count"))
   }
-  
+
   return(result)
 }
 

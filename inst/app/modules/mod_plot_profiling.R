@@ -34,10 +34,7 @@ mod_plot_profiling_ui <- function(id) {
             actionButton(ns("btnRunProfile"), "Run Profile", class = "btn btn-primary btn-sm"),
             actionButton(ns("btnApplyFilter"), "Apply to SU Table", class = "btn btn-outline-success btn-sm")
           ),
-          div(class = "mb-2",
-            textOutput(ns("lblTotalPlots")),
-            textOutput(ns("lblFilteredPlots"))
-          ),
+          div(class = "mb-2", textOutput(ns("lblTotalPlots")), textOutput(ns("lblFilteredPlots"))),
           DT::DTOutput(ns("dt_results"))
         )
       )
@@ -68,40 +65,49 @@ mod_plot_profiling_server <- function(id, state, con) {
     observe({
       if (!nrow(rv$criteria)) {
         rv$criteria <- data.frame(
-          Table = "Veg", Field = "Species", Operator = ">=",
-          Layer = "Any", Species = "", Value = "1",
+          Table = "Veg",
+          Field = "Species",
+          Operator = ">=",
+          Layer = "Any",
+          Species = "",
+          Value = "1",
           Operation = "Add Plots",
           stringsAsFactors = FALSE
         )
       }
-    }) |> bindEvent(TRUE, once = TRUE)
+    }) |>
+      bindEvent(TRUE, once = TRUE)
 
     output$hot_profile <- rhandsontable::renderRHandsontable({
       df <- rv$criteria
       hot <- rhandsontable::rhandsontable(df, rowHeaders = FALSE, stretchH = "all")
-      hot <- rhandsontable::hot_col(hot, "Table",
-        type = "dropdown", source = c("Veg", "Env"))
-      hot <- rhandsontable::hot_col(hot, "Field",
-        type = "dropdown", source = c("Species", "Cover", "Zone", "SubZone",
-          "MoistureRegime", "NutrientRegime", "Elevation", "Aspect",
-          "SlopeGradient", "StructuralStage", "Ecosection"))
-      hot <- rhandsontable::hot_col(hot, "Operator",
-        type = "dropdown", source = c(">=", ">", "=", "<=", "<", "<>", "Like"))
-      hot <- rhandsontable::hot_col(hot, "Layer",
-        type = "dropdown", source = c("Any", "All", "SumAll", "A1", "A2", "A3",
-          "B1", "B2", "C", "D"))
-      hot <- rhandsontable::hot_col(hot, "Operation",
-        type = "dropdown", source = c("Add Plots", "Remove Plots"))
+      hot <- rhandsontable::hot_col(hot, "Table", type = "dropdown", source = c("Veg", "Env"))
+      hot <- rhandsontable::hot_col(
+        hot,
+        "Field",
+        type = "dropdown",
+        source = c("Species", "Cover", "Zone", "SubZone", "MoistureRegime", "NutrientRegime", "Elevation", "Aspect", "SlopeGradient", "StructuralStage", "Ecosection")
+      )
+      hot <- rhandsontable::hot_col(hot, "Operator", type = "dropdown", source = c(">=", ">", "=", "<=", "<", "<>", "Like"))
+      hot <- rhandsontable::hot_col(hot, "Layer", type = "dropdown", source = c("Any", "All", "SumAll", "A1", "A2", "A3", "B1", "B2", "C", "D"))
+      hot <- rhandsontable::hot_col(hot, "Operation", type = "dropdown", source = c("Add Plots", "Remove Plots"))
       hot
     })
 
     observeEvent(input$btnAddRow, {
-      rv$criteria <- rbind(rv$criteria, data.frame(
-        Table = "Veg", Field = "Species", Operator = ">=",
-        Layer = "Any", Species = "", Value = "1",
-        Operation = "Add Plots",
-        stringsAsFactors = FALSE
-      ))
+      rv$criteria <- rbind(
+        rv$criteria,
+        data.frame(
+          Table = "Veg",
+          Field = "Species",
+          Operator = ">=",
+          Layer = "Any",
+          Species = "",
+          Value = "1",
+          Operation = "Add Plots",
+          stringsAsFactors = FALSE
+        )
+      )
     })
 
     observeEvent(input$btnRemoveRow, {
@@ -111,9 +117,14 @@ mod_plot_profiling_server <- function(id, state, con) {
 
     observeEvent(input$btnClearAll, {
       rv$criteria <- data.frame(
-        Table = character(0), Field = character(0), Operator = character(0),
-        Layer = character(0), Species = character(0), Value = character(0),
-        Operation = character(0), stringsAsFactors = FALSE
+        Table = character(0),
+        Field = character(0),
+        Operator = character(0),
+        Layer = character(0),
+        Species = character(0),
+        Value = character(0),
+        Operation = character(0),
+        stringsAsFactors = FALSE
       )
       rv$result_plots <- character(0)
     })
@@ -145,19 +156,21 @@ mod_plot_profiling_server <- function(id, state, con) {
       env_tbl <- as.character(db_tb(con, "Env", project, prj = TRUE))
       veg_tbl <- as.character(db_tb(con, "Veg", project, prj = TRUE))
 
-      matched <- NULL  # NULL = not yet filtered; character(0) = empty
+      matched <- NULL # NULL = not yet filtered; character(0) = empty
 
       for (i in seq_len(nrow(hot_data))) {
         row <- hot_data[i, ]
-        tbl_type  <- trimws(row$Table)
-        field     <- trimws(row$Field)
-        op_str    <- trimws(row$Operator)
-        layer     <- trimws(row$Layer)
-        spp       <- trimws(row$Species)
-        val       <- trimws(row$Value)
+        tbl_type <- trimws(row$Table)
+        field <- trimws(row$Field)
+        op_str <- trimws(row$Operator)
+        layer <- trimws(row$Layer)
+        spp <- trimws(row$Species)
+        val <- trimws(row$Value)
         operation <- trimws(row$Operation)
 
-        if (!nzchar(val) && !nzchar(spp)) next
+        if (!nzchar(val) && !nzchar(spp)) {
+          next
+        }
 
         # Validate operator
         valid_ops <- c(">=", ">", "=", "<=", "<", "<>", "Like")
@@ -166,16 +179,19 @@ mod_plot_profiling_server <- function(id, state, con) {
           next
         }
 
-        step_plots <- tryCatch({
-          if (tbl_type == "Veg") {
-            profile_veg_step(con, env_tbl, veg_tbl, spp, layer, op_str, val)
-          } else {
-            profile_env_step(con, env_tbl, field, op_str, val)
+        step_plots <- tryCatch(
+          {
+            if (tbl_type == "Veg") {
+              profile_veg_step(con, env_tbl, veg_tbl, spp, layer, op_str, val)
+            } else {
+              profile_env_step(con, env_tbl, field, op_str, val)
+            }
+          },
+          error = function(e) {
+            show_toast(toast(paste("Row", i, "error:", conditionMessage(e)), type = "danger"))
+            character(0)
           }
-        }, error = function(e) {
-          show_toast(toast(paste("Row", i, "error:", conditionMessage(e)), type = "danger"))
-          character(0)
-        })
+        )
 
         if (operation == "Add Plots") {
           if (is.null(matched)) {
@@ -203,7 +219,8 @@ mod_plot_profiling_server <- function(id, state, con) {
       }
       DT::datatable(
         data.frame(PlotNumber = plots, stringsAsFactors = FALSE),
-        rownames = FALSE, selection = "multiple",
+        rownames = FALSE,
+        selection = "multiple",
         options = list(pageLength = 50, dom = "tp")
       )
     })
@@ -217,10 +234,10 @@ mod_plot_profiling_server <- function(id, state, con) {
       }
       showModal(modalDialog(
         title = "Create SU From Filter",
-        radioButtons(ns("filter_action"), "Action",
-          choices = c("Create new SU table" = "create",
-                      "Modify current SU table" = "modify",
-                      "Append to current SU table" = "append"),
+        radioButtons(
+          ns("filter_action"),
+          "Action",
+          choices = c("Create new SU table" = "create", "Modify current SU table" = "modify", "Append to current SU table" = "append"),
           selected = "create"
         ),
         conditionalPanel(
@@ -255,8 +272,7 @@ profile_veg_step <- function(con, env_tbl, veg_tbl, spp, layer, op, val) {
     "COALESCE(cover1,0) + COALESCE(cover2,0) + COALESCE(cover3,0) + COALESCE(cover4,0) + COALESCE(cover5,0) + COALESCE(cover6,0) + COALESCE(cover7,0)"
   } else if (layer %in% c("A1", "A2", "A3", "B1", "B2", "C", "D")) {
     # Map layer to cover column
-    layer_map <- c(A1 = "cover1", A2 = "cover2", A3 = "cover3",
-                   B1 = "cover4", B2 = "cover5", C = "cover6", D = "cover7")
+    layer_map <- c(A1 = "cover1", A2 = "cover2", A3 = "cover3", B1 = "cover4", B2 = "cover5", C = "cover6", D = "cover7")
     col_name <- layer_map[layer]
     if (is.na(col_name)) "COALESCE(cover1,0)" else paste0("COALESCE(", col_name, ",0)")
   } else {
@@ -280,9 +296,14 @@ profile_veg_step <- function(con, env_tbl, veg_tbl, spp, layer, op, val) {
   where_clause <- if (length(where_parts)) paste("AND", paste(where_parts, collapse = " AND ")) else ""
 
   sql <- paste0(
-    "SELECT DISTINCT e.plotnumber FROM ", env_tbl, " e ",
-    "INNER JOIN ", veg_tbl, " v ON e.plotnumber = v.plotnumber ",
-    "WHERE 1=1 ", where_clause
+    "SELECT DISTINCT e.plotnumber FROM ",
+    env_tbl,
+    " e ",
+    "INNER JOIN ",
+    veg_tbl,
+    " v ON e.plotnumber = v.plotnumber ",
+    "WHERE 1=1 ",
+    where_clause
   )
   rows <- db_query(con, sql, params = params)
   as.character(rows$plotnumber)
@@ -292,10 +313,24 @@ profile_veg_step <- function(con, env_tbl, veg_tbl, spp, layer, op, val) {
 profile_env_step <- function(con, env_tbl, field, op, val) {
   # For Env fields, compare field value to criteria
   # Sanitise field name — only allow known column names
-  safe_fields <- c("zone", "subzone", "siteseries", "moistureregime", "nutrientregime",
-    "elevation", "aspect", "slopegradient", "structuralstage", "ecosection",
-    "mesoslopeposition", "surfaceshape", "successionalstatus", "standage",
-    "becsiteunit", "usersiteunit")
+  safe_fields <- c(
+    "zone",
+    "subzone",
+    "siteseries",
+    "moistureregime",
+    "nutrientregime",
+    "elevation",
+    "aspect",
+    "slopegradient",
+    "structuralstage",
+    "ecosection",
+    "mesoslopeposition",
+    "surfaceshape",
+    "successionalstatus",
+    "standage",
+    "becsiteunit",
+    "usersiteunit"
+  )
   field_lower <- tolower(field)
   if (!field_lower %in% safe_fields) {
     return(character(0))
@@ -305,20 +340,33 @@ profile_env_step <- function(con, env_tbl, field, op, val) {
   numeric_val <- suppressWarnings(as.numeric(val))
   if (op == "Like") {
     sql <- paste0(
-      "SELECT DISTINCT plotnumber FROM ", env_tbl,
-      " WHERE LOWER(CAST(", field_lower, " AS TEXT)) LIKE LOWER(?)"
+      "SELECT DISTINCT plotnumber FROM ",
+      env_tbl,
+      " WHERE LOWER(CAST(",
+      field_lower,
+      " AS TEXT)) LIKE LOWER(?)"
     )
     rows <- db_query(con, sql, params = list(paste0("%", val, "%")))
   } else if (!is.na(numeric_val)) {
     sql <- paste0(
-      "SELECT DISTINCT plotnumber FROM ", env_tbl,
-      " WHERE CAST(", field_lower, " AS DOUBLE) ", op, " ?"
+      "SELECT DISTINCT plotnumber FROM ",
+      env_tbl,
+      " WHERE CAST(",
+      field_lower,
+      " AS DOUBLE) ",
+      op,
+      " ?"
     )
     rows <- db_query(con, sql, params = list(numeric_val))
   } else {
     sql <- paste0(
-      "SELECT DISTINCT plotnumber FROM ", env_tbl,
-      " WHERE LOWER(CAST(", field_lower, " AS TEXT)) ", op, " LOWER(?)"
+      "SELECT DISTINCT plotnumber FROM ",
+      env_tbl,
+      " WHERE LOWER(CAST(",
+      field_lower,
+      " AS TEXT)) ",
+      op,
+      " LOWER(?)"
     )
     rows <- db_query(con, sql, params = list(val))
   }

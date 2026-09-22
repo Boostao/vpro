@@ -16,9 +16,11 @@ mod_user_log_ui <- function(id) {
         shiny::tags$div(
           class = "d-flex gap-2 align-items-center",
           shiny::radioButtons(
-            ns("optShow"), NULL,
+            ns("optShow"),
+            NULL,
             choices = c("Show Current" = "current", "Show All" = "all"),
-            selected = "current", inline = TRUE
+            selected = "current",
+            inline = TRUE
           ),
           shiny::actionButton(ns("btnCloseForm"), "Close", class = "btn btn-outline-secondary btn-sm")
         )
@@ -53,9 +55,7 @@ mod_user_log_server <- function(id, state, con) {
           sql2 <- gsub('"USysUserLog"', 'VPro64."USysUserLog"', sql, fixed = TRUE)
           tryCatch(DBI::dbGetQuery(con, sql2), error = function(e2) {
             status_text(paste("Could not load user log:", conditionMessage(e2)))
-            data.frame(User = character(), InTime = character(),
-                       OutTime = character(), LocalMachine = character(),
-                       stringsAsFactors = FALSE)
+            data.frame(User = character(), InTime = character(), OutTime = character(), LocalMachine = character(), stringsAsFactors = FALSE)
           })
         }
       )

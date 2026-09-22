@@ -3,12 +3,15 @@
 source(here::here("R", "logic_state.R"))
 
 setup_test_metadata <- function(con) {
-  DBI::dbExecute(con, "
+  DBI::dbExecute(
+    con,
+    "
     CREATE TABLE IF NOT EXISTS Metadata (
       ProjectID TEXT PRIMARY KEY,
       ProjectName TEXT
     )
-  ")
+  "
+  )
   DBI::dbExecute(con, "DELETE FROM Metadata")
   DBI::dbExecute(
     con,

@@ -1,19 +1,18 @@
 testthat::context("mod_admin_publishing")
 
 source(here::here("R", "db_connections.R"), local = TRUE)
-source(here::here("R", "logic_auth.R"),     local = TRUE)
-source(here::here("R", "logic_publish.R"),  local = TRUE)
+source(here::here("R", "logic_auth.R"), local = TRUE)
+source(here::here("R", "logic_publish.R"), local = TRUE)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-make_state <- function(authenticated = TRUE,
-                       permissions  = character(0)) {
+make_state <- function(authenticated = TRUE, permissions = character(0)) {
   e <- new.env(parent = emptyenv())
   e$AuthAuthenticated <- authenticated
-  e$AuthRole          <- if (authenticated && "*" %in% permissions) "admin" else "user"
-  e$AuthPermissions   <- permissions
+  e$AuthRole <- if (authenticated && "*" %in% permissions) "admin" else "user"
+  e$AuthPermissions <- permissions
   # shiny::isolate won't error in non-Shiny context but state is plain env, so
   # override isolate() to be a plain identity in this test context.
   e
@@ -22,19 +21,34 @@ make_state <- function(authenticated = TRUE,
 make_minimal_db <- function() {
   con <- DBI::dbConnect(duckdb::duckdb(), ":memory:")
 
-  DBI::dbExecute(con, "CREATE TABLE USysProjectMetadata (
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE USysProjectMetadata (
     projectid TEXT, projecttitle TEXT, ispublic TEXT,
-    beczone TEXT, description TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Env (
+    beczone TEXT, description TEXT)"
+  )
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE Env (
     plotnumber TEXT, projectid TEXT, date_sampled DATE,
     latitude DOUBLE, longitude DOUBLE,
-    bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE SU (
-    plotnumber TEXT, dataquality TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE vw_USysAllVeg (
-    plotnumber TEXT, projectid TEXT, code TEXT, layer TEXT, cover TEXT)")
-  DBI::dbExecute(con, "CREATE TABLE Lump (
-    sppcode TEXT, lumpcode TEXT, _use INTEGER)")
+    bec_zone TEXT, bec_subzone TEXT, bec_site_series TEXT, _location TEXT)"
+  )
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE SU (
+    plotnumber TEXT, dataquality TEXT)"
+  )
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE vw_USysAllVeg (
+    plotnumber TEXT, projectid TEXT, code TEXT, layer TEXT, cover TEXT)"
+  )
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE Lump (
+    sppcode TEXT, lumpcode TEXT, _use INTEGER)"
+  )
 
   con
 }
@@ -49,29 +63,31 @@ testthat::test_that("publish_rds creates output files for a project", {
   con <- make_minimal_db()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO USysProjectMetadata VALUES
-       ('P1', 'Project One', 'True', 'IDF', 'Test')")
-  DBI::dbExecute(con,
+       ('P1', 'Project One', 'True', 'IDF', 'Test')"
+  )
+  DBI::dbExecute(
+    con,
     "INSERT INTO Env VALUES
        ('PLOT-001', 'P1', DATE '2024-06-01', 49.123, -120.765,
-        'IDF', 'xh', '01', 'Test area')")
-  DBI::dbExecute(con,
-    "INSERT INTO SU VALUES ('PLOT-001', 'Good')")
-  DBI::dbExecute(con,
-    "INSERT INTO vw_USysAllVeg VALUES ('PLOT-001', 'P1', 'FD', 'A', '50')")
+        'IDF', 'xh', '01', 'Test area')"
+  )
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('PLOT-001', 'Good')")
+  DBI::dbExecute(con, "INSERT INTO vw_USysAllVeg VALUES ('PLOT-001', 'P1', 'FD', 'A', '50')")
 
   out_dir <- tempfile("pub_rds_")
   dir.create(out_dir, recursive = TRUE)
   on.exit(unlink(out_dir, recursive = TRUE), add = TRUE)
 
   res <- publish_project_dataset(
-    project_id  = "P1",
-    output_dir  = out_dir,
-    formats     = c("rds"),
-    con         = con,
-    overwrite   = TRUE,
-    is_public   = TRUE
+    project_id = "P1",
+    output_dir = out_dir,
+    formats = c("rds"),
+    con = con,
+    overwrite = TRUE,
+    is_public = TRUE
   )
 
   testthat::expect_equal(res$project_id, "P1")
@@ -86,15 +102,18 @@ testthat::test_that("publish_project_dataset errors when no formats requested", 
   con <- make_minimal_db()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO USysProjectMetadata VALUES
-       ('P2', 'Project Two', 'True', 'IDF', 'Test')")
-  DBI::dbExecute(con,
+       ('P2', 'Project Two', 'True', 'IDF', 'Test')"
+  )
+  DBI::dbExecute(
+    con,
     "INSERT INTO Env VALUES
        ('PLOT-002', 'P2', DATE '2024-06-01', 49.5, -120.5,
-        'IDF', 'xh', '01', 'Area')")
-  DBI::dbExecute(con,
-    "INSERT INTO SU VALUES ('PLOT-002', 'Good')")
+        'IDF', 'xh', '01', 'Area')"
+  )
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('PLOT-002', 'Good')")
 
   out_dir <- tempfile("pub_empty_")
   dir.create(out_dir, recursive = TRUE)
@@ -104,10 +123,10 @@ testthat::test_that("publish_project_dataset errors when no formats requested", 
     publish_project_dataset(
       project_id = "P2",
       output_dir = out_dir,
-      formats    = character(0),
-      con        = con,
-      overwrite  = TRUE,
-      is_public  = TRUE
+      formats = character(0),
+      con = con,
+      overwrite = TRUE,
+      is_public = TRUE
     )
   )
 })
@@ -118,15 +137,18 @@ testthat::test_that("registry CSV is created and readable after publish", {
   con <- make_minimal_db()
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  DBI::dbExecute(con,
+  DBI::dbExecute(
+    con,
     "INSERT INTO USysProjectMetadata VALUES
-       ('P3', 'Project Three', 'True', 'IDF', 'Test')")
-  DBI::dbExecute(con,
+       ('P3', 'Project Three', 'True', 'IDF', 'Test')"
+  )
+  DBI::dbExecute(
+    con,
     "INSERT INTO Env VALUES
        ('PLOT-003', 'P3', DATE '2024-07-01', 50.0, -121.0,
-        'IDF', 'xh', '01', 'Area')")
-  DBI::dbExecute(con,
-    "INSERT INTO SU VALUES ('PLOT-003', 'Good')")
+        'IDF', 'xh', '01', 'Area')"
+  )
+  DBI::dbExecute(con, "INSERT INTO SU VALUES ('PLOT-003', 'Good')")
 
   out_dir <- tempfile("pub_reg_")
   dir.create(out_dir, recursive = TRUE)
@@ -135,10 +157,10 @@ testthat::test_that("registry CSV is created and readable after publish", {
   publish_project_dataset(
     project_id = "P3",
     output_dir = out_dir,
-    formats    = c("rds", "csv"),
-    con        = con,
-    overwrite  = TRUE,
-    is_public  = TRUE
+    formats = c("rds", "csv"),
+    con = con,
+    overwrite = TRUE,
+    is_public = TRUE
   )
 
   reg_path <- file.path(out_dir, "publication_registry.csv")

@@ -74,7 +74,7 @@ init_state <- function() {
       config("Current", "cmbThemeTable") # Theme
     ) |>
       unique() |>
-      na.omit()
+      stats::na.omit()
 
     # Attach all relevant dbs
     to_attach <- c(

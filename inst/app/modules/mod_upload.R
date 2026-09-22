@@ -87,7 +87,6 @@ mod_upload_server <- function(id, state, con) {
       )
     }
 
-
     observeEvent(input$upload_analyze, {
       req(input$upload_file)
 
@@ -138,7 +137,9 @@ mod_upload_server <- function(id, state, con) {
             next
           }
           data <- tryCatch(utils::read.csv(path, nrows = 50, stringsAsFactors = FALSE), error = function(e) NULL)
-          if (is.null(data)) next
+          if (is.null(data)) {
+            next
+          }
           meta[[length(meta) + 1]] <- build_validation(data, table_name, basename(path))
         }
 
@@ -177,12 +178,15 @@ mod_upload_server <- function(id, state, con) {
       req(input$upload_file)
       req(rv$validation)
       auth_init_state(state)
-      tryCatch({
-        auth_require_permission(state, "create:merge_requests")
-      }, error = function(e) {
-        rv$status <- e$message
-        return()
-      })
+      tryCatch(
+        {
+          auth_require_permission(state, "create:merge_requests")
+        },
+        error = function(e) {
+          rv$status <- e$message
+          return()
+        }
+      )
       sync_require_cloud(con, allow_attach = TRUE)
 
       if (!nzchar(input$upload_project)) {
@@ -235,7 +239,9 @@ mod_upload_server <- function(id, state, con) {
         }
         for (id in selected) {
           entry <- rv$zip_map[rv$zip_map$id == id, , drop = FALSE]
-          if (nrow(entry) == 0) next
+          if (nrow(entry) == 0) {
+            next
+          }
           data <- utils::read.csv(entry$path[1], stringsAsFactors = FALSE)
           results[[entry$table[1]]] <- stage_one(entry$table[1], data)
         }
@@ -304,7 +310,9 @@ mod_upload_server <- function(id, state, con) {
 
     output$upload_compliance_status <- renderText({
       result <- rv$compliance
-      if (is.null(result)) return("")
+      if (is.null(result)) {
+        return("")
+      }
       issue_count <- if (!is.null(result$detail_tibble)) nrow(result$detail_tibble) else 0
       if (isTRUE(result$passed)) "Compliance passed" else paste("Compliance issues:", issue_count)
     })
@@ -321,7 +329,9 @@ mod_upload_server <- function(id, state, con) {
 
     output$upload_compliance <- DT::renderDT({
       req(rv$compliance)
-      if (is.null(rv$compliance$detail_tibble) || nrow(rv$compliance$detail_tibble) == 0) return(NULL)
+      if (is.null(rv$compliance$detail_tibble) || nrow(rv$compliance$detail_tibble) == 0) {
+        return(NULL)
+      }
       DT::datatable(rv$compliance$detail_tibble, rownames = FALSE, options = list(pageLength = 6, scrollX = TRUE))
     })
   })
