@@ -1,5 +1,7 @@
 # vpro 0.0.0.9000
 
+* `vpro_validate_vegetation_codes()` finds active-project vegetation species absent from the VPRO master list, optionally preserving the active-SU scope used by Access, and returns deterministic structured findings instead of opening Excel.
+* `vpro_project_compare_schema()` compares the eight core tables of a SQLite project with the bundled VP08 template or a caller-supplied template and returns missing-field, declared-type, and declared-size differences as structured data.
 * `vpro_presence_class()`, `vpro_presence_class_numeric()`, `vpro_prominence_class()`, `vpro_goldstream_class()`, and `vpro_significance_class()` provide vectorized Access-compatible report classifications; `vpro_round_minimum()` and `vpro_cap_percent()` provide stable numeric rounding and capping helpers.
 * `vpro_coordinate_decimal()`, `vpro_coordinate_dms()`, and `vpro_coordinate_dm()` provide vectorized package-native coordinate conversion while preserving the original Access sign and missing-component conventions.
 * Plot-domain CRUD now transactionally creates, renumbers, and deletes paired Env/Admin plots, creates/reads/updates/deletes `_Humus`, `_Mineral`, `_Other`, and vegetation child rows, and supports guarded audit restoration. Plot renumbering preserves project-family cascades and updates every SU attached to the context without adding an audit event; plot deletion removes the complete project row family and matching rows from every attached SU.
