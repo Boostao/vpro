@@ -14,6 +14,22 @@
       Error:
       ! VPRO plot does not exist in the active project: Missing
 
+# plot audit history validates active and existing plots
+
+    Code
+      vpro_plot_audit_list(context, "1976071")
+    Condition
+      Error:
+      ! A VPRO project must be active before plot data can be accessed.
+
+---
+
+    Code
+      vpro_plot_audit_list(context, "Missing")
+    Condition
+      Error:
+      ! VPRO plot does not exist in the active project: Missing
+
 # plot update validates fields and rolls back the entire request
 
     Code

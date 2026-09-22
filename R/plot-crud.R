@@ -176,6 +176,45 @@ vpro_plot_get <- function(context, plot_number) {
   list(env = env, admin = admin)
 }
 
+#' List audit history for one plot in the active VPRO project
+#'
+#' Reads the canonical audit rows corresponding to Access's `USysAuditTrail`
+#' history view. Rows are restricted to the active project and requested plot and
+#' ordered chronologically by `EditWhen`, with audit ID and SQLite row order used
+#' to make timestamp ties deterministic. This operation does not modify audit
+#' selection fields or other project state.
+#'
+#' @param context A VPRO project context with an active project.
+#' @param plot_number Plot identifier.
+#'
+#' @return A data frame containing the plot's audit rows in chronological order.
+#' @export
+vpro_plot_audit_list <- function(context, plot_number) {
+  record <- vpro_plot_active(context)
+  plot_number <- vpro_plot_number(plot_number)
+  vpro_plot_get(context, plot_number)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), record$path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  table <- vpro_project_table(record$project, "Audit")
+  sql <- paste(
+    "SELECT * FROM",
+    DBI::dbQuoteIdentifier(con, table),
+    "WHERE",
+    DBI::dbQuoteIdentifier(con, "Project"),
+    "= ? AND",
+    DBI::dbQuoteIdentifier(con, "PlotNumber"),
+    "= ? ORDER BY",
+    DBI::dbQuoteIdentifier(con, "EditWhen"),
+    ", CASE WHEN",
+    DBI::dbQuoteIdentifier(con, "ID"),
+    "IS NULL THEN 1 ELSE 0 END,",
+    DBI::dbQuoteIdentifier(con, "ID"),
+    ", rowid"
+  )
+  DBI::dbGetQuery(con, sql, params = list(record$project, plot_number))
+}
+
 #' Update one plot in the active VPRO project
 #'
 #' Updates environmental and administrative fields in one SQLite transaction and

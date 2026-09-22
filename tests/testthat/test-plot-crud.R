@@ -84,6 +84,104 @@ test_that("plot updates Env and Admin atomically and audit populated changes", {
   expect_identical(visible$OfficeNotes, "Second note")
 })
 
+test_that("plot audit history is filtered, ordered, and read-only", {
+  path <- local_sample_copy()
+  context <- local_plot_context(path)
+  plot_number <- sample_plot_number(context)
+  other_plot <- DBI::dbGetQuery(
+    context$con,
+    'SELECT "PlotNumber" FROM USysEnv ORDER BY "PlotNumber" LIMIT 1 OFFSET 1'
+  )$PlotNumber[[1]]
+  audit_table <- vpro:::vpro_project_table("Sample", "Audit")
+  audit_con <- DBI::dbConnect(RSQLite::SQLite(), path)
+  withr::defer(DBI::dbDisconnect(audit_con))
+  DBI::dbExecute(
+    audit_con,
+    paste(
+      "DELETE FROM",
+      DBI::dbQuoteIdentifier(audit_con, audit_table),
+      "WHERE Project = ? AND PlotNumber = ?"
+    ),
+    params = list("Sample", plot_number)
+  )
+  expect_identical(nrow(vpro_plot_audit_list(context, plot_number)), 0L)
+  before_count <- DBI::dbGetQuery(
+    audit_con,
+    paste("SELECT COUNT(*) AS n FROM", DBI::dbQuoteIdentifier(audit_con, audit_table))
+  )$n[[1]]
+  rows <- data.frame(
+    Project = c("Sample", "Sample", "Sample", "Other"),
+    User = rep("history-user", 4L),
+    PlotNumber = c(plot_number, plot_number, other_plot, plot_number),
+    Table = rep("_Env", 4L),
+    EditField = c("Location", "Elevation", "Location", "Location"),
+    EditWhen = c(
+      "2026-09-22 12:00:02 UTC",
+      "2026-09-22 12:00:01 UTC",
+      "2026-09-22 12:00:00 UTC",
+      "2026-09-22 11:59:59 UTC"
+    ),
+    BeforeEdit = rep("before", 4L),
+    AfterEdit = rep("after", 4L),
+    Restore = c(1L, 0L, 0L, 0L),
+    Flag = c(1L, 0L, 0L, 0L),
+    ID = c(102L, 101L, 100L, 99L),
+    stringsAsFactors = FALSE
+  )
+  DBI::dbAppendTable(audit_con, audit_table, rows)
+
+  result <- vpro_plot_audit_list(context, plot_number)
+
+  added <- result[result$User == "history-user", , drop = FALSE]
+  expect_identical(added$ID, c(101L, 102L))
+  expect_identical(added$Restore, c(0L, 1L))
+  expect_identical(added$Flag, c(0L, 1L))
+  expect_identical(
+    DBI::dbGetQuery(
+      audit_con,
+      paste("SELECT COUNT(*) AS n FROM", DBI::dbQuoteIdentifier(audit_con, audit_table))
+    )$n[[1]],
+    before_count + 4L
+  )
+})
+
+test_that("plot audit history includes transactional plot updates", {
+  path <- local_sample_copy()
+  context <- local_plot_context(path)
+  plot_number <- sample_plot_number(context)
+
+  vpro_plot_update(
+    context,
+    plot_number,
+    env = list(Location = "Audit history value"),
+    user = "history-user",
+    audit_strength = 2
+  )
+  result <- vpro_plot_audit_list(context, plot_number)
+  added <- result[result$User == "history-user", , drop = FALSE]
+
+  expect_identical(added$Project, "Sample")
+  expect_identical(added$PlotNumber, plot_number)
+  expect_identical(added$Table, "_Env")
+  expect_identical(added$EditField, "Location")
+  expect_identical(added$AfterEdit, "Audit history value")
+})
+
+test_that("plot audit history validates active and existing plots", {
+  path <- local_sample_copy()
+  con <- tryCatch(vpro_db_connect(), error = identity)
+  if (inherits(con, "error")) {
+    skip(conditionMessage(con))
+  }
+  context <- vpro_project_context(con = con)
+  withr::defer(vpro_db_disconnect(context$con))
+
+  expect_snapshot(error = TRUE, vpro_plot_audit_list(context, "1976071"))
+  vpro_project_attach(context, path, "Sample")
+  vpro_project_activate(context, "Sample")
+  expect_snapshot(error = TRUE, vpro_plot_audit_list(context, "Missing"))
+})
+
 test_that("plot audit strength follows Access field-change semantics", {
   path <- local_sample_copy()
   context <- local_plot_context(path)
