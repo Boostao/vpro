@@ -1,5 +1,11 @@
 # vpro 0.0.0.9000
 
+* `vpro_report_location()` returns plots with both coordinates from the active project or SU, applying the legacy longitude sign change without Excel automation (V7mdlReportLocation.ReportLocation).
+
+* `vpro_terrain_combine()` concatenates three terrain-code components, ignoring missing values and returning a missing result for empty codes (V7mdlTerrain.CombineTerrain).
+* `vpro_terrain_inspect_schema()` reports eight terrain field widths as matching, undersized, oversized, unknown, non-text, or missing without altering SQLite projects (V7mdlTerrain.TestTerrainFieldSize and SetTerrainFieldSize).
+* `vpro_terrain_split()` extracts terrain-code components, treating `FG` as one surficial-material component for Venus export compatibility (V7mdlTerrain.SplitTerrain).
+
 * `vpro_project_convert_succession()`, `vpro_project_succession_status()`, and `vpro_project_recover_succession()` add explicit, backed-up, transactional SQLite succession conversion and conservative partial-state recovery (V7mdlSuccession.Convert2Succession).
 
 * `vpro_project_is_successional()` detects the `SuccessionYear` field on a project's SQLite vegetation table without modifying the project (V7mdlSuccession.SuccessionProject).

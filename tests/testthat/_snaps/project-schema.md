@@ -29,3 +29,4 @@
     Condition
       Error:
       ! VPRO template table does not exist: Absent_Admin
+

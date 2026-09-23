@@ -1,3 +1,11 @@
+# plot deletion cascades the complete project family and attached SUs
+
+    Code
+      vpro_plot_get(context, source)
+    Condition
+      Error:
+      ! VPRO plot does not exist in the active project: 108050
+
 # plot deletion rejects missing and incomplete plot pairs
 
     Code
