@@ -1,5 +1,7 @@
 # vpro 0.0.0.9000
 
+* `vpro_report_short_veg_layers()` returns read-only, SU-scoped per-plot vegetation layer data using a versioned bundled layer/strata mapping and opt-in quality filtering; it does not resolve species metadata conflicts or compute a short-vegetation summary.
+
 * `vpro_report_long_environment()` returns bounded, read-only active-SU long-environment data with physical membership, Env/Admin absence statuses, duplicate-membership and unit-name diagnostics, ordered Access projection metadata, and an explicit reference-list path. A standalone, render-tested HTML template uses this API without altering existing environment reports or UI.
 
 * Added a standalone, render-tested Quick Summary HTML template using an explicit VP08 SQLite project and the package data API; audited the existing app QMDs for retired helpers and obsolete DuckDB/Parquet paths without migrating them.

@@ -13,7 +13,7 @@ The inventory currently has **72 pending rows in 35 normalized-code groups**. It
 | `ANEMRIC` | 2 | 2 |
 | `CAMPHIP` | 2 | 2 |
 
-The four corresponding candidate rows remain pending; these counts do not choose between them.
+The four corresponding candidate rows remain pending; these counts do not choose between them. `SHORT_VEG_TAXONOMY_EVIDENCE.md` records external-source findings and a recommendation for ANEMRIC, but it is not a signed expert decision or a reviewed override.
 
 ## Reproducible build and source validation
 
