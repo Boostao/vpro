@@ -1,5 +1,11 @@
 # vpro 0.0.0.9000
 
+* `vpro_access_archive()` now preserves the character type of empty date columns during SQLite round-trip verification (Access archive).
+
+* `vpro_diagnostic_classify()` calculates diagnostic labels from ordered, already-formatted site-unit codes without creating report queries or writing tables (V7mdlDiagnostic.Diagnostic calculation).
+* `vpro_export_code()` marks missing six-column R-export codes with periods without changing blank or whitespace-only codes (V7mdlExportToR2.NullToPeriod).
+* `vpro_profile_max_cover()` calculates a zero-bounded maximum across ten vegetation cover columns without modifying plot-profile state (V7mdlPlotProfiling.MadMax).
+
 * `vpro_access_inspect()` and `vpro_access_archive()` inventory and archive local Access tables and their translated descriptions without changing the source; `vpro_access_promote_vp08()` separately promotes a verified eight-table VP08 family. Historical versions and schema drift remain archive-only until reviewed mappings exist.
 
 * `vpro_project_create()` creates an empty VP08 project from bundled schemas and records the new-project event and reference-list versions atomically (V7mdlCreateTables.CreateTableSet and V7mdlAudit.LogNewProject).

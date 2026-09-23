@@ -1,3 +1,12 @@
+test_that("empty Access date columns retain their SQLite text type", {
+  empty <- as.POSIXct(character(), tz = "UTC")
+  expect_identical(vpro_access_normalize_column(empty), character())
+  expect_identical(
+    vpro_access_normalize_column(as.POSIXct(c(NA, "2026-09-23 12:34:56"), tz = "UTC")),
+    c(NA_character_, "2026-09-23 12:34:56.000000")
+  )
+})
+
 test_that("Access archive preserves tables and descriptions without altering source", {
   source <- system.file("extdata", "projects", "Sample.db", package = "vpro")
   access <- normalizePath(file.path(testthat::test_path("..", "..", ".."), "VPRO_ACCESS", "VPro64", "VPro64.accdb"), mustWork = FALSE)

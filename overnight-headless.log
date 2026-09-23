@@ -1,0 +1,6 @@
+Shell environment resolution skipped: TTY detected (terminal launch)
+[WARN] [ai-config] /home/bruno/.posit/ai/providers.json (user) at modelTiers: Validation errors: Unrecognized root key: "modelTiers".
+[session-id: 90bf7afe-c6e1-4552-bc7e-f1e1e3a119bc]
+2026-09-23T03:27:24.359Z [positassistant-headless:WARN] [lmstudio] API fetch failed: Unable to connect. Is the computer able to access the url?, using fallback
+2026-09-23T03:27:24.360Z [positassistant-headless:WARN] [ollama] API fetch failed: Unable to connect. Is the computer able to access the url?, using fallback
+Error: No models available. Please check your provider configuration.

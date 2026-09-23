@@ -87,7 +87,10 @@ vpro_access_column_type <- function(column) {
 
 vpro_access_normalize_column <- function(column) {
   if (inherits(column, "POSIXt")) {
-    return(ifelse(is.na(column), NA_character_, format(column, "%Y-%m-%d %H:%M:%OS6", tz = "UTC")))
+    result <- rep(NA_character_, length(column))
+    present <- !is.na(column)
+    result[present] <- format(column[present], "%Y-%m-%d %H:%M:%OS6", tz = "UTC")
+    return(result)
   }
   if (inherits(column, "Date")) {
     return(as.character(column))
