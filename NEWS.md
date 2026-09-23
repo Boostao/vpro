@@ -1,5 +1,19 @@
 # vpro 0.0.0.9000
 
+* `vpro_access_inspect()` and `vpro_access_archive()` inventory and archive local Access tables and their translated descriptions without changing the source; `vpro_access_promote_vp08()` separately promotes a verified eight-table VP08 family. Historical versions and schema drift remain archive-only until reviewed mappings exist.
+
+* `vpro_project_create()` creates an empty VP08 project from bundled schemas and records the new-project event and reference-list versions atomically (V7mdlCreateTables.CreateTableSet and V7mdlAudit.LogNewProject).
+* Bundled `VLists.db` now includes translated Access table descriptions in `_table_metadata`, and its conversion script preserves them.
+* `vpro_project_save_as()` creates target indexes before copying project rows so foreign keys remain valid for newly created VP08 projects.
+
+* `db_log_project()` now records Open/Close and reference-version changes atomically, fixes the missing connection on TableOfLists lookups, and notifies the UI only after successful audit writes (V7mdlAudit.LogProjectIn and LogProjectOut).
+
+* `vpro_assigned_site_units()` lists project, active-SU, and master-list site-unit choices without returning SQL text or requiring UI state (V7mdlTableOfLists.AssignedSiteUnitList).
+
+* `vpro_project_reference_versions()` reads the active project's recorded species and table-of-lists versions without global configuration or writes, and flags latest-timestamp ties as ambiguous (V7mdlAllSpecsTools.ProjectVersion and V7mdlTableOfLists.ProjectVersionTableOfLists).
+
+* `vpro_validate_su_hierarchy()` returns unmatched active SU site units and unmatched level-11 hierarchy names without changing source tables or opening Excel (V7mdlReportValidation.Report4SuUnitsWoHierarchyUnits and Report4HierarchyUnitsWoSuUnits).
+
 * `vpro_report_location()` returns plots with both coordinates from the active project or SU, applying the legacy longitude sign change without Excel automation (V7mdlReportLocation.ReportLocation).
 
 * `vpro_terrain_combine()` concatenates three terrain-code components, ignoring missing values and returning a missing result for empty codes (V7mdlTerrain.CombineTerrain).

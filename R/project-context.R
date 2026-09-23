@@ -445,8 +445,10 @@ vpro_project_recover <- function(
   configured_su_path <- context$config("Current", "SUPath")
   configured_hierarchy <- context$config("Current", "CurrHierarchy")
   configured_hierarchy_path <- context$config("Current", "HierarchyPath")
-  if (identical(configured_hierarchy, "Sample") &&
-    (is.null(configured_hierarchy_path) || !nzchar(configured_hierarchy_path))) {
+  if (
+    identical(configured_hierarchy, "Sample") &&
+      (is.null(configured_hierarchy_path) || !nzchar(configured_hierarchy_path))
+  ) {
     configured_hierarchy_path <- sample_path
   }
 
@@ -505,8 +507,10 @@ vpro_project_recover <- function(
     su = configured_su,
     path = configured_su_path
   )
-  if (identical(configured_hierarchy, "Sample") &&
-    (is.null(configured_hierarchy_path) || !nzchar(configured_hierarchy_path))) {
+  if (
+    identical(configured_hierarchy, "Sample") &&
+      (is.null(configured_hierarchy_path) || !nzchar(configured_hierarchy_path))
+  ) {
     configured_hierarchy_path <- sample_path
   }
   hierarchy <- vpro_hierarchy_recover(
@@ -643,15 +647,6 @@ vpro_project_save_as <- function(context, project, path, new_project) {
         sql
       )
       DBI::dbExecute(source, sql)
-      DBI::dbExecute(
-        source,
-        paste(
-          "INSERT INTO target.",
-          DBI::dbQuoteIdentifier(source, target_tables[[index]]),
-          "SELECT * FROM main.",
-          DBI::dbQuoteIdentifier(source, source_tables[[index]])
-        )
-      )
     }
 
     indexes <- DBI::dbGetQuery(
@@ -672,6 +667,18 @@ vpro_project_save_as <- function(context, project, path, new_project) {
         sql
       )
       DBI::dbExecute(source, sql)
+    }
+
+    for (index in seq_along(source_tables)) {
+      DBI::dbExecute(
+        source,
+        paste(
+          "INSERT INTO target.",
+          DBI::dbQuoteIdentifier(source, target_tables[[index]]),
+          "SELECT * FROM main.",
+          DBI::dbQuoteIdentifier(source, source_tables[[index]])
+        )
+      )
     }
 
     DBI::dbExecute(

@@ -22,10 +22,10 @@ for (tb in tbs) {
   }
 }
 
-for (tb in setdiff(tbs, "_table_metadata")) {
+for (tb in tbs) {
   data_path <- file.path(workdir, sprintf("%s.csv", tb))
   load_csv_into_table(con, tb, data_path)
-  if (validate) {
+  if (validate && tb != "_table_metadata") {
     # Validate against original Access DB
     test1 <- read_table_preserve_names(DBI::dbConnect(mdbr::mdb(), accdb_path), tb) |> data.table::setDT()
     test2 <- read_table_preserve_names(con, tb) |> data.table::setDT()

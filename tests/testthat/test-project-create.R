@@ -1,0 +1,76 @@
+test_that("blank creation copies schema and bootstraps three audit events", {
+  root <- withr::local_tempdir()
+  path <- file.path(root, "new.db")
+  created <- vpro_project_create(path, "Fresh", "tester")
+  expect_identical(created, normalizePath(path))
+  inspection <- vpro_project_inspect(path, "Fresh")
+  expect_identical(inspection$compatible, TRUE)
+  sqlite <- DBI::dbConnect(RSQLite::SQLite(), path)
+  withr::defer(DBI::dbDisconnect(sqlite))
+  for (suffix in setdiff(.vpro_core_project_suffixes, "Audit")) {
+    expect_identical(DBI::dbGetQuery(sqlite, paste('SELECT COUNT(*) AS n FROM', DBI::dbQuoteIdentifier(sqlite, paste0('Fresh_', suffix))))$n[[1L]], 0L)
+  }
+  audit <- DBI::dbGetQuery(sqlite, 'SELECT "Project", "User", "Table", "BeforeEdit", "AfterEdit", "EditWhen" FROM "Fresh_Audit" ORDER BY rowid')
+  expect_identical(audit$Table, c("NewProject", "USysAllSpecs", "USysTableOfLists"))
+  expect_identical(audit$Project, rep("Fresh", 3L))
+  expect_identical(audit$User, rep("tester", 3L))
+  expect_identical(audit$BeforeEdit, rep(NA_character_, 3L))
+  expect_identical(audit$AfterEdit, c(NA_character_, "01 Feb. 2023", "01 Feb. 2023"))
+  expect_identical(length(unique(audit$EditWhen)), 1L)
+  expect_identical(DBI::dbGetQuery(sqlite, 'PRAGMA foreign_key_list("Fresh_Admin")')$table, "Fresh_Env")
+  expect_identical(DBI::dbGetQuery(sqlite, "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' AND tbl_name = 'Fresh_Env' AND sql IS NOT NULL")$n[[1L]] > 0L, TRUE)
+  coordinator <- tryCatch(vpro_db_connect(), error = identity)
+  if (inherits(coordinator, "error")) {
+    skip(conditionMessage(coordinator))
+  }
+  withr::defer(vpro_db_disconnect(coordinator))
+  context <- vpro_project_context(con = coordinator)
+  vpro_project_attach(context, path, "Fresh")
+  vpro_project_activate(context, "Fresh")
+  expect_identical(context$active$project, "Fresh")
+  clone <- file.path(root, "clone.db")
+  vpro_project_save_as(context, "Fresh", clone, "Clone")
+  copied <- DBI::dbConnect(RSQLite::SQLite(), clone)
+  withr::defer(DBI::dbDisconnect(copied))
+  expect_identical(DBI::dbGetQuery(copied, 'SELECT "Table" FROM "Clone_Audit" ORDER BY rowid')$Table, audit$Table)
+  expect_identical(DBI::dbGetQuery(copied, 'SELECT "Project" FROM "Clone_Audit" ORDER BY rowid')$Project, audit$Project)
+})
+
+test_that("creation respects existing families and unknown reference descriptions", {
+  root <- withr::local_tempdir()
+  path <- file.path(root, "shared.db")
+  reference_path <- file.path(root, "lists.db")
+  con <- DBI::dbConnect(RSQLite::SQLite(), reference_path)
+  DBI::dbExecute(con, 'CREATE TABLE "USysAllSpecs" ("Code" TEXT)')
+  DBI::dbExecute(con, 'CREATE TABLE "USysTableOfLists" ("ListName" TEXT)')
+  DBI::dbDisconnect(con)
+  vpro_project_create(path, "First", "tester", reference_path)
+  vpro_project_create(path, "Second", "tester", reference_path)
+  sqlite <- DBI::dbConnect(RSQLite::SQLite(), path)
+  withr::defer(DBI::dbDisconnect(sqlite))
+  expect_identical(DBI::dbGetQuery(sqlite, 'SELECT "AfterEdit" FROM "Second_Audit" WHERE "Table" != \'NewProject\' ORDER BY rowid')$AfterEdit, rep("Unknown", 2L))
+  before <- tools::md5sum(path)
+  expect_snapshot(error = TRUE, vpro_project_create(path, "Second", "tester", reference_path))
+  expect_snapshot(error = TRUE, vpro_project_create(path, "Sample", "tester", reference_path))
+  expect_identical(unname(tools::md5sum(path)), unname(before))
+})
+
+test_that("bootstrap failure rolls back tables and metadata in existing database", {
+  root <- withr::local_tempdir()
+  path <- file.path(root, "existing.db")
+  sqlite <- DBI::dbConnect(RSQLite::SQLite(), path)
+  DBI::dbExecute(sqlite, 'CREATE TABLE "_table_metadata" (table_name TEXT PRIMARY KEY, description TEXT)')
+  DBI::dbExecute(
+    sqlite,
+    paste(
+      'CREATE TRIGGER reject_metadata BEFORE INSERT ON "_table_metadata"',
+      "WHEN NEW.table_name = 'Failed_Env' BEGIN SELECT RAISE(ABORT, 'blocked'); END"
+    )
+  )
+  DBI::dbDisconnect(sqlite)
+  expect_snapshot(error = TRUE, vpro_project_create(path, "Failed", "tester"))
+  sqlite <- DBI::dbConnect(RSQLite::SQLite(), path)
+  withr::defer(DBI::dbDisconnect(sqlite))
+  expect_identical(DBI::dbGetQuery(sqlite, "SELECT name FROM sqlite_master WHERE name LIKE 'Failed_%'")$name, character())
+  expect_identical(DBI::dbGetQuery(sqlite, 'SELECT COUNT(*) AS n FROM _table_metadata')$n[[1L]], 0L)
+})

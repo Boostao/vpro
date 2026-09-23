@@ -264,84 +264,67 @@ db_log_vpro <- function(con, session, state = c("On", "Off")) {
 
 db_log_project <- function(con, session, state = c("Open", "Close")) {
   state <- match.arg(state)
-  # Insert Audit trace in project
-  db_insert(
+  project <- vpro_project_name(config("Current", "CurrProject"))
+  user <- config("Current", "User")
+  attached <- DBI::dbGetQuery(
     con,
-    "Audit",
-    db = config("Current", "CurrProject"),
-    prj = TRUE,
-    Project = config("Current", "CurrProject"),
-    User = config("Current", "User"),
-    Table = state,
-    EditWhen = Sys.time()
+    "SELECT path FROM duckdb_databases() WHERE database_name = ?",
+    params = list(project)
   )
-
-  if (state == "Open") {
-    PVersion <- ProjectVersion(con)
-    ASVersion <- AllSpecsVersion(con)
-    if (PVersion != ASVersion) {
-      db_insert(
-        con,
-        "Audit",
-        db = config("Current", "CurrProject"),
-        prj = TRUE,
-        Project = config("Current", "CurrProject"),
-        User = config("Current", "User"),
-        Table = "USysAllSpecs",
-        EditWhen = Sys.time(),
-        AfterEdit = ASVersion,
-        BeforeEdit = PVersion
+  if (nrow(attached) != 1L || is.na(attached$path[[1L]]) || !file.exists(attached$path[[1L]])) {
+    stop("The current VPRO project must be attached as a SQLite database: ", project, call. = FALSE)
+  }
+  reference_versions <- if (state == "Open") {
+    c(USysAllSpecs = AllSpecsVersion(con), USysTableOfLists = TableOfListsVersion(con))
+  } else {
+    character()
+  }
+  sqlite <- DBI::dbConnect(RSQLite::SQLite(), attached$path[[1L]])
+  on.exit(DBI::dbDisconnect(sqlite), add = TRUE)
+  audit <- DBI::dbQuoteIdentifier(sqlite, vpro_project_table(project, "Audit"))
+  versions_changed <- list()
+  DBI::dbWithTransaction(sqlite, {
+    DBI::dbExecute(
+      sqlite,
+      paste("INSERT INTO", audit, '("Project", "User", "Table", "EditWhen") VALUES (?, ?, ?, ?)'),
+      params = list(project, user, state, format(Sys.time(), "%Y-%m-%d %H:%M:%OS6", tz = "UTC"))
+    )
+    for (table in names(reference_versions)) {
+      previous <- DBI::dbGetQuery(
+        sqlite,
+        paste('SELECT "AfterEdit" FROM', audit, 'WHERE "Table" = ? ORDER BY "EditWhen" DESC LIMIT 1'),
+        params = list(table)
       )
-      bslib::show_toast(
-        session = session,
-        bslib::toast(
-          header = "VPro",
-          paste0(
-            "FYI: the previous version of USysAllSpecs for project '",
-            config("Current", "CurrProject"),
-            "' was '",
-            PVersion,
-            "' and is now '",
-            ASVersion,
-            "'."
-          ),
-          type = "info",
+      old <- if (nrow(previous) == 0L || is.na(previous$AfterEdit[[1L]]) || previous$AfterEdit[[1L]] == "") {
+        "Unknown"
+      } else {
+        previous$AfterEdit[[1L]]
+      }
+      current <- reference_versions[[table]]
+      if (!identical(old, current)) {
+        DBI::dbExecute(
+          sqlite,
+          paste("INSERT INTO", audit, '("Project", "User", "Table", "EditWhen", "BeforeEdit", "AfterEdit") VALUES (?, ?, ?, ?, ?, ?)'),
+          params = list(project, user, table, format(Sys.time(), "%Y-%m-%d %H:%M:%OS6", tz = "UTC"), old, current)
         )
-      )
+        versions_changed[[table]] <- c(old, current)
+      }
     }
-    PVersion <- ProjectVersionTableOfLists()
-    ASVersion <- TableOfListsVersion()
-    if (PVersion != ASVersion) {
-      db_insert(
-        con,
-        "Audit",
-        db = config("Current", "CurrProject"),
-        prj = TRUE,
-        Project = config("Current", "CurrProject"),
-        User = config("Current", "User"),
-        Table = "USysTableOfLists",
-        EditWhen = Sys.time(),
-        AfterEdit = ASVersion,
-        BeforeEdit = PVersion
-      )
+  })
+  if (!is.null(session)) {
+    for (table in names(versions_changed)) {
+      values <- versions_changed[[table]]
       bslib::show_toast(
         session = session,
         bslib::toast(
           header = "VPro",
-          paste0(
-            "FYI: the previous version of USysTableOfLists for project '",
-            config("Current", "CurrProject"),
-            "' was '",
-            PVersion,
-            "' and is now '",
-            ASVersion,
-            "'."
-          ),
-          type = "info",
+          paste0("FYI: the previous version of ", table, " for project '", project, "' was '", values[[1L]], "' and is now '", values[[2L]], "'."),
+          type = "info"
         )
       )
     }
   }
+  invisible(NULL)
 }
 
 from_audit_Version <- function(con, table) {
