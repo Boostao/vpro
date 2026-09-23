@@ -1,0 +1,45 @@
+Package: vpro
+Title: Manage and Classify Ecological Vegetation Plot Data
+Version: 0.0.0.9000
+Date: 2026-09-22
+Authors@R: c(
+    person("Will", "MacKenzie", , "Will.MacKenzie@GEMS1.gov.bc.ca", role = c("cre", "aut")),
+    person("Bruno", "Tremblay", , "bruno@boostao.ca", role = c("aut"),
+           comment = c(ORCID = "0000-0002-2945-356X")),
+    person("Russell", "Klassen", , "russk@workbc.ca", role = "aut"),
+    person(, "Province of British Columbia", role = c("cph", "fnd"))
+  )
+Description: Provides tools for managing, analysing, and classifying
+    ecological vegetation plot data and hierarchical classifications.
+    VPro (Vegetation Processor) was originally developed as a Microsoft
+    Access application by the British Columbia Ministry of Forests to
+    support the Biogeoclimatic Ecosystem Classification (BEC) program.
+License: Apache License (== 2)
+Depends:
+    R (>= 4.1.0)
+Imports:
+    bslib,
+    DBI,
+    dbplyr,
+    dplyr,
+    DT,
+    duckdb,
+    leaflet,
+    mdbr (>= 0.3.2),
+    quarto,
+    rappdirs,
+    rhandsontable,
+    RSQLite,
+    sf,
+    shiny,
+    shinyjs,
+    shinyTree,
+    yaml
+Suggests:
+    roxygen2,
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.0.0

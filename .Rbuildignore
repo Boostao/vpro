@@ -1,0 +1,12 @@
+^vpro\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^\.posit$
+^\.vscode$
+^_TO_CLASSIFY$
+^bob\.sh$
+^AGENTS\.md$
+^data-raw$
+^scripts$
+^air\.toml$
+^inst/app/\.RData$

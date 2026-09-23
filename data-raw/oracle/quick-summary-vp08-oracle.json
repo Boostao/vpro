@@ -1,0 +1,24 @@
+{
+  "oracle_root": "C:\\Users\\sshadmin\\AppData\\Local\\Temp\\vpro-quick-summary-20260923-090740-091",
+  "source_sha256_before": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "source_sha256_after": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "initial_copy_sha256": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "copy_hash_after": "locked at shutdown",
+  "env_has_assigned_site_unit": false,
+  "admin_has_user_site_unit": true,
+  "all_veg_query_exists": true,
+  "legacy_dqy_source_vpro97_mdb_exists_in_copy": false,
+  "original_select_status": "failed",
+  "original_select_error": "Too few parameters. Expected 1.",
+  "inner_join_rewrite_status": "opened",
+  "inner_join_rewrite_rows": 2026,
+  "left_join_rewrite_status": "opened",
+  "left_join_rewrite_rows": 2026,
+  "inner_join_rewrite_sample": [
+    {"PlotNumber": "00337", "AssignedSiteUnit": "BG  xh 1 /03", "MyLayer": "7", "Species": "mymoss", "Cover": 20},
+    {"PlotNumber": "00337", "AssignedSiteUnit": "BG  xh 1 /03", "MyLayer": "7", "Species": "PINUCON", "Cover": 5},
+    {"PlotNumber": "00337", "AssignedSiteUnit": "BG  xh 1 /03", "MyLayer": "7", "Species": "ABIEBALD", "Cover": 10},
+    {"PlotNumber": "00337", "AssignedSiteUnit": "BG  xh 1 /03", "MyLayer": "6", "Species": "myherb", "Cover": 10},
+    {"PlotNumber": "00337", "AssignedSiteUnit": "BG  xh 1 /03", "MyLayer": "6", "Species": "ASTER", "Cover": 5}
+  ]
+}

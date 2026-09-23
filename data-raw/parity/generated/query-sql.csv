@@ -1,0 +1,105 @@
+"id","path","source_object","sql"
+"query_sql::Filtered_Env","Queries/Filtered_Env.txt","Filtered_Env","SELECT DISTINCTROW [Sample_Env].*, [Sample_Admin].*
+FROM (Sample_Env INNER JOIN Sample_SU ON [Sample_Env].PlotNumber = [Sample_SU].PlotNumber) INNER JOIN Sample_Admin ON [Sample_Env].PlotNumber = [Sample_Admin].Plot
+WHERE ((([Sample_SU].PlotNumber) Is Not Null));
+"
+"query_sql::MasterSiteUnitList","Queries/MasterSiteUnitList.txt","MasterSiteUnitList","SELECT *
+FROM USysMasterSiteUnitList;
+UNION SELECT *
+FROM USysUserSiteUnitList;
+"
+"query_sql::MasterUnitList_Hierarchy","Queries/MasterUnitList_Hierarchy.txt","MasterUnitList_Hierarchy","SELECT *
+FROM USysMasterSiteUnitList;
+UNION SELECT *
+FROM USysUserSiteUnitList;
+"
+"query_sql::qryHerbarium","Queries/qryHerbarium.txt","qryHerbarium","SELECT *
+FROM Sample_Herbarium;
+"
+"query_sql::qryHerbariumReportData","Queries/qryHerbariumReportData.txt","qryHerbariumReportData",""
+"query_sql::Query1","Queries/Query1.txt","Query1",""
+"query_sql::USysAllSpecies","Queries/USysAllSpecies.txt","USysAllSpecies","SELECT Code, ScientificName, LifeForm, EnglishName, Codetype
+FROM USysAllSpecs
+Where CodeType <> 's';
+UNION SELECT Code, ScientificName, LifeForm, EnglishName, CodeType
+FROM USysUserSpp
+Where CodeType <> 's';
+"
+"query_sql::USysAllVeg","Queries/USysAllVeg.txt","USysAllVeg","SELECT PlotNumber, \ AS MyLayer, Species, Cover1 as Cover
+FROM UsysVeg
+WHERE (((Cover1) Is Not Null));
+union SELECT PlotNumber, \ AS MyLayer, Species, Cover2
+FROM UsysVeg
+WHERE (((Cover2) Is Not Null));
+union SELECT PlotNumber, \ AS MyLayer, Species, Cover3
+FROM UsysVeg
+WHERE (((Cover3) Is Not Null));
+union SELECT PlotNumber, \ AS MyLayer, Species, Cover4
+FROM UsysVeg
+WHERE (((Cover4) Is Not Null));
+union SELECT PlotNumber, \ AS MyLayer, Species, Cover5
+FROM UsysVeg
+WHERE (((Cover5) Is Not Null));
+union SELECT PlotNumber, \ AS MyLayer, Species, Cover5a
+FROM UsysVeg
+WHERE (((Cover5a) Is Not Null));
+union SELECT PlotNumber, \ AS MyLayer, Species, Cover5b
+FROM UsysVeg
+WHERE (((Cover5b) Is Not Null));
+union SELECT PlotNumber, \ AS MyLayer, Species, Cover5c
+FROM UsysVeg
+WHERE (((Cover5c) Is Not Null));
+union SELECT PlotNumber, \\t Null));
+UNION SELECT PlotNumber, \ AS MyLayer, Species, Cover7
+FROM UsysVeg
+WHERE (((Cover7) Is Not Null))
+UNION SELECT PlotNumber, \ AS MyLayer, Species, TotalA
+FROM UsysVeg
+WHERE (((TotalA) Is Not Null))
+UNION SELECT PlotNumber, \ AS MyLayer, Species, TotalB
+FROM UsysVeg
+WHERE (((TotalB) Is Not Null))
+ORDER BY mylayer;
+"
+"query_sql::UsysAuditTrail","Queries/UsysAuditTrail.txt","UsysAuditTrail","SELECT DISTINCTROW [Sample_Audit].*
+FROM Sample_Audit
+ORDER BY EditWhen;
+"
+"query_sql::UsysEnv","Queries/UsysEnv.txt","UsysEnv","SELECT DISTINCTROW [Sample_Env].*, [Sample_Admin].*
+FROM Sample_Env INNER JOIN Sample_Admin ON [Sample_Env].PlotNumber = [Sample_Admin].Plot;
+"
+"query_sql::UsysHumus","Queries/UsysHumus.txt","UsysHumus","SELECT DISTINCTROW [Sample_Humus].*
+FROM Sample_Humus;
+"
+"query_sql::UsysMetadata","Queries/UsysMetadata.txt","UsysMetadata","SELECT DISTINCTROW [Sample_Metadata].*
+FROM Sample_Metadata;
+"
+"query_sql::UsysMineral","Queries/UsysMineral.txt","UsysMineral","SELECT DISTINCTROW [Sample_Mineral].*
+FROM Sample_Mineral;
+"
+"query_sql::UsysOther","Queries/UsysOther.txt","UsysOther","SELECT DISTINCTROW [Sample_Other].*
+FROM Sample_Other;
+"
+"query_sql::USysTVeg","Queries/USysTVeg.txt","USysTVeg","SELECT PlotNumber, '1' AS MyLayer, Species, Cover1 as Cover FROM UsysVeg WHERE (((Cover1) Is Not Null)); union SELECT PlotNumber, '2' AS MyLayer, Species, Cover2 FROM UsysVeg WHERE (((Cover2) Is Not Null)); union SELECT PlotNumber, '3' AS MyLayer, Species, Cover3 FROM UsysVeg WHERE (((Cover3) Is Not Null)); union SELECT PlotNumber, '4' AS MyLayer, Species, Cover4 FROM UsysVeg WHERE (((Cover4) Is Not Null)); union SELECT PlotNumber, '5' AS MyLayer, Species, Cover5 FROM UsysVeg WHERE (((Cover5) Is Not Null)); union SELECT PlotNumber, '6' AS MyLayer, Species, Cover6 FROM UsysVeg WHERE (((Cover6) Is Not Null)); UNION SELECT PlotNumber, '7' AS MyLayer, Species, Cover7 FROM UsysVeg WHERE (((Cover7) Is Not Null)); union SELECT PlotNumber, 'A' AS MyLayer, Species, TotalA FROM UsysVeg WHERE (((TotalA) Is Not Null)); UNION SELECT PlotNumber, 'B' AS MyLayer, Species, TotalB FROM UsysVeg WHERE (((TotalB) Is Not Null))
+ORDER BY PlotNumber, MyLayer;
+"
+"query_sql::UsysVeg","Queries/UsysVeg.txt","UsysVeg","SELECT DISTINCTROW [Sample_Veg].*
+FROM Sample_Veg;
+"
+"query_sql::USysVegA","Queries/USysVegA.txt","USysVegA","SELECT DISTINCTROW ID, PlotNumber, Species, Cover1, Cover2, Cover3, TotalA, HeightA, Cover4, Cover5, Cover5a, Cover5b, Cover5c, TotalB, HeightB, Collected
+FROM Sample_Veg
+WHERE ((([Cover1]) Is Not Null)) OR ((([Cover2]) Is Not Null)) OR ((([Cover3]) Is Not Null)) OR ((([TotalA]) Is Not Null)) OR ((([Cover4]) Is Not Null)) OR ((([Cover5]) Is Not Null)) OR ((([TotalB]) Is Not Null)) OR (((Cover5a) Is Not Null)) OR (((Cover5b) Is Not Null)) OR (((Cover5c) Is Not Null));
+"
+"query_sql::USysVegB","Queries/USysVegB.txt","USysVegB","SELECT DISTINCTROW ID, PlotNumber, Species, Cover4, Cover5, Cover5a, Cover5b, Cover5c, TotalB, Collected
+FROM Sample_Veg
+WHERE ((([Cover4]) Is Not Null)) OR ((([Cover5]) Is Not Null)) OR ((([TotalB]) Is Not Null)) OR (((Cover5a) Is Not Null)) OR (((Cover5b) Is Not Null)) OR (((Cover5c) Is Not Null));
+"
+"query_sql::USysVegC","Queries/USysVegC.txt","USysVegC","SELECT DISTINCTROW ID, PlotNumber, Species, Cover6, Height6, Collected
+FROM Sample_Veg
+WHERE ((Cover6 Is Not Null));
+"
+"query_sql::USysVegD","Queries/USysVegD.txt","USysVegD","SELECT DISTINCTROW ID, PlotNumber, Species, Cover7, Cover8, Cover9, Collected
+FROM Sample_Veg
+WHERE (((Cover7) Is Not Null)) OR (((Cover8) Is Not Null)) OR (((Cover9) Is Not Null));
+"
+"query_sql::USysVegOther","Queries/USysVegOther.txt","USysVegOther",""

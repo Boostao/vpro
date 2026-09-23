@@ -1,0 +1,27 @@
+Setup	Backend	C:\Users\sshadmin\AppData\Local\Temp\vpro-succession-20260922-181358-759\OracleProject.accdb
+Setup	VegConnection	;DATABASE=C:\Users\sshadmin\AppData\Local\Temp\vpro-succession-20260922-181358-759\OracleProject.accdb
+Setup	OriginalSampleVegRows	1633
+Before	CurrProject	<UNSET>
+Before	ProjectPath	<UNSET>
+Before	VegRows	1633
+Before	EnvRows	52
+Before	SuccessionYear	<ABSENT>
+Before	SuccessionPlot	<ABSENT>
+Before	VegIdentity	1633:-2143555711:2144819739
+Activate	CurrProject	Oracle
+Activate	CurrProjectFunction	Oracle
+Activate	PrecheckSuccessional	False
+Convert	Stage	reactivate
+Convert	CapturedError	
+After	CurrProject	Oracle
+After	ProjectPath	C:\Users\sshadmin\AppData\Local\Temp\vpro-succession-20260922-181358-759\OracleProject.accdb
+After	VegRows	1633
+After	EnvRows	52
+After	SuccessionYear	type=3;size=2;default=;required=False
+After	SuccessionPlot	type=1;size=1;default=;required=False
+After	VegIdentity	1633:-2143555711:2144819739
+After	YearCount	2021:1633
+After	NullPlotFlags	0
+After	PlotFlagCount	False:52
+After	SuccessionView	True
+After	OriginalSampleVegRows	1633

@@ -1,0 +1,7 @@
+# Read-only project and SU integrity validation
+
+`vpro_validate_project_integrity(context, use_active_su = TRUE)` translates the diagnostic queries in `V7mdlReportValidation.One2ManyCheck`, `SuRecordsWoEnvRecords`, and `PlotRecordsWoVegRecords` (canonical SaveAsText module, lines 165–329 and 1870–1926).
+
+The result has three data frames. `orphan_children` reports distinct non-null plot numbers in Humus, Other, Mineral, Veg (labeled Vegetation), and Audit with no matching project Env row, always over the whole project. `orphan_su` reports distinct `(PlotNumber, SiteUnit)` pairs in the active SU without a matching Env row; unlike the existing activation summary, it retains null and blank plot numbers. It is empty if no SU is active. `plots_without_vegetation` reports distinct Env plot numbers lacking any Veg row, limited to the active SU by an inner join unless `use_active_su = FALSE`; without an active SU it checks the whole project. Blank strings are not silently removed. Results are deterministically ordered.
+
+The API reads canonical tables through an explicit context and returns data instead of opening Excel, showing message boxes, or returning a presence-only Boolean. It does not alter SU selection, project state, attachments, or SQLite files. In particular, `FixOne2ManyCheck` deletes unmatched child rows in Access and is deliberately **not** implemented as part of this diagnostic slice. SU activation's existing `orphan_plot_rows` count excludes blank/null plots; this report retains them to match the Access diagnostic query.

@@ -1,4 +1,7 @@
 *.db
+!inst/extdata/*.db
+!inst/extdata/projects/*.db
+!inst/extdata/pics/*.db
 *.duckdb
 *.duckdb.wal
 .Rhistory
@@ -12,4 +15,14 @@ reports/*
 .DS_Store
 # {shinytest2}: Ignore new debug snapshots for `$expect_values()`
 *_.new.png
-app/config.yml
+inst/app/config.yml
+.Rproj.user
+_TO_CLASSIFY/*
+!_TO_CLASSIFY/tests/
+!_TO_CLASSIFY/tests/**
+!_TO_CLASSIFY/shinytest2/
+!_TO_CLASSIFY/shinytest2/**
+!_TO_CLASSIFY/inst-app-runtime/
+!_TO_CLASSIFY/inst-app-runtime/**
+_TO_CLASSIFY/inst-app-runtime/
+_TO_CLASSIFY/tests/testthat/data/
