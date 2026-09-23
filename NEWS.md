@@ -1,5 +1,18 @@
 # vpro 0.0.0.9000
 
+* `vpro_report_long_environment()` returns bounded, read-only active-SU long-environment data with physical membership, Env/Admin absence statuses, duplicate-membership and unit-name diagnostics, ordered Access projection metadata, and an explicit reference-list path. A standalone, render-tested HTML template uses this API without altering existing environment reports or UI.
+
+* Added a standalone, render-tested Quick Summary HTML template using an explicit VP08 SQLite project and the package data API; audited the existing app QMDs for retired helpers and obsolete DuckDB/Parquet paths without migrating them.
+
+* `vpro_report_environment()` returns all active `USysEnv` columns for project or active-SU scope, with optional exact plot-number filtering and no source writes (EnvReport data scope only; active-view duplicate elimination is preserved).
+
+* `vpro_report_quick_summary()` returns project-wide VP08 Quick Summary data with an explicit Env–Admin left join and maps Admin `UserSiteUnit` to the historical `AssignedSiteUnit` output; DQY and Excel output remain outside scope.
+
+* `vpro_report_all_veg()` returns project-wide `USysAllVeg` layer rows using the saved Access query's distinct-union scope; it does not implement Quick Summary export or infer an `AssignedSiteUnit` replacement.
+
+* `vpro_access_archive()` now streams Access tables in bounded row batches using mdbr 0.3.2 and verifies SQLite batches; VP08 promotion verifies manifests and values without whole-table reads.
+* `vpro_report_quick_veg()` returns active-SU vegetation cover rows for layers 1–9 without creating the Access QuickVeg scratch table (V7mdlReportsCommonCode.QuickVegRecords row selection).
+
 * `vpro_access_archive()` now preserves the character type of empty date columns during SQLite round-trip verification (Access archive).
 
 * `vpro_diagnostic_classify()` calculates diagnostic labels from ordered, already-formatted site-unit codes without creating report queries or writing tables (V7mdlDiagnostic.Diagnostic calculation).

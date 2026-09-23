@@ -8,6 +8,11 @@
 - Package loading must not launch Shiny or modify another installed package. Use `run_vpro()` explicitly.
 - New domain APIs must be callable without a Shiny session and pass connections/context explicitly.
 
+## Subagents
+
+- Run executeCode using subagents.
+- Aggressive use of subagents to avoid overloading the main context.
+
 ## Canonical migration evidence
 
 - Access SaveAsText root: `../VPRO_ACCESS/VPro64_forAI` (case-sensitive).

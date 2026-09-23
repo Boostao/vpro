@@ -19,13 +19,14 @@ test_that("Access archive preserves tables and descriptions without altering sou
   expect_identical(dry$tables$description[match("Sample_Env", dry$tables$table_name)], "VP08")
   expect_identical(dry$links, character())
   archive_path <- file.path(root, "archive.db")
-  receipt <- vpro_access_archive(copy, archive_path, max_rows_per_table = 2000L)
+  receipt <- vpro_access_archive(copy, archive_path, batch_rows = 37L)
   expect_identical(receipt$archive_path, normalizePath(archive_path))
   expect_identical(unname(tools::md5sum(copy)), unname(before))
   sqlite <- DBI::dbConnect(RSQLite::SQLite(), archive_path)
   withr::defer(DBI::dbDisconnect(sqlite))
   expect_identical(DBI::dbGetQuery(sqlite, 'SELECT description FROM _table_metadata WHERE table_name = \'Sample_Env\'')$description, "VP08")
-  expect_identical(nrow(DBI::dbReadTable(sqlite, "Sample_Veg")), 1633L)
+  expect_identical(DBI::dbGetQuery(sqlite, 'SELECT COUNT(*) AS n FROM "Sample_Veg"')$n[[1L]], 1633L)
+  expect_identical(receipt$tables$fingerprint[match("Sample_Veg", receipt$tables$table_name)], vpro_access_fingerprint_stream(sqlite, "Sample_Veg"))
   expect_identical(DBI::dbGetQuery(sqlite, 'PRAGMA integrity_check')[[1L]][[1L]], "ok")
   expect_identical(DBI::dbGetQuery(sqlite, 'SELECT source_md5 FROM _vpro_access_source')$source_md5, unname(before))
   expect_identical(DBI::dbGetQuery(sqlite, 'SELECT COUNT(*) AS n FROM _vpro_access_columns WHERE table_name = \'Sample_Env\'')$n[[1L]], 112L)
@@ -41,16 +42,20 @@ test_that("Access archive preserves tables and descriptions without altering sou
   oversized_table <- file.path(root, "oversized-table.db")
   expect_error(
     vpro_access_archive(copy, oversized_table, max_rows_per_table = 2000L, max_table_bytes = 0),
-    "exceeds the materialized table size limit"
+    "exceeds the materialized batch size limit"
   )
   expect_false(file.exists(oversized_table))
   for (arg in list(list(max_source_bytes = NA_real_), list(max_table_bytes = Inf), list(max_table_bytes = -1))) {
     expect_error(
       do.call(vpro_access_archive, c(list(copy, file.path(root, "invalid-limit.db")), arg)),
-      "nonnegative finite byte count"
+      "nonnegative byte count"
     )
   }
   expect_false(file.exists(file.path(root, "invalid-limit.db")))
+  for (batch_rows in c(0, -1, 1.5, Inf, NA_real_)) {
+    expect_error(vpro_access_archive(copy, file.path(root, "invalid-batch.db"), batch_rows = batch_rows), "positive whole number")
+  }
+  expect_false(file.exists(file.path(root, "invalid-batch.db")))
 })
 
 test_that("older Access families remain archives rather than VP08 projects", {

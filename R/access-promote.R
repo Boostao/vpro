@@ -52,8 +52,8 @@ vpro_access_promote_vp08 <- function(
       stop("VP08 field names/order differ from the canonical template: ", tables[[i]], call. = FALSE)
     }
     row <- manifest[manifest$table_name == tables[[i]], , drop = FALSE]
-    data <- DBI::dbReadTable(archive, tables[[i]], check.names = FALSE)
-    if (nrow(row) != 1L || nrow(data) != row$source_rows[[1L]] || !identical(vpro_access_fingerprint(data), row$fingerprint[[1L]])) {
+    count <- DBI::dbGetQuery(archive, paste("SELECT COUNT(*) AS n FROM", DBI::dbQuoteIdentifier(archive, tables[[i]])))$n[[1L]]
+    if (nrow(row) != 1L || count != row$source_rows[[1L]] || !identical(vpro_access_fingerprint_stream(archive, tables[[i]]), row$fingerprint[[1L]])) {
       stop("Archive manifest does not match project table: ", tables[[i]], call. = FALSE)
     }
   }
@@ -101,15 +101,18 @@ vpro_access_promote_vp08 <- function(
       params = as.list(tables)
     )
     for (table in tables) {
-      original <- DBI::dbReadTable(archive, table, check.names = FALSE)
-      copied <- DBI::dbGetQuery(model, paste('SELECT * FROM target.', DBI::dbQuoteIdentifier(model, table)))
-      if (nrow(original) > 0L) {
-        columns <- paste(DBI::dbQuoteIdentifier(model, names(original)), collapse = ", ")
-        original <- DBI::dbGetQuery(model, paste('SELECT * FROM imported.', DBI::dbQuoteIdentifier(model, table), 'ORDER BY', columns))
-        copied <- DBI::dbGetQuery(model, paste('SELECT * FROM target.', DBI::dbQuoteIdentifier(model, table), 'ORDER BY', columns))
-      }
-      if (!isTRUE(all.equal(original, copied, check.attributes = FALSE))) {
-        stop("VP08 promotion changed field values: ", table, call. = FALSE)
+      quoted <- DBI::dbQuoteIdentifier(model, table)
+      offset <- 0
+      fields <- DBI::dbListFields(archive, table)
+      order_by <- paste(DBI::dbQuoteIdentifier(model, fields), collapse = ", ")
+      repeat {
+        original <- DBI::dbGetQuery(model, paste('SELECT * FROM imported.', quoted, 'ORDER BY', order_by, 'LIMIT 1000 OFFSET ?'), params = list(offset))
+        copied <- DBI::dbGetQuery(model, paste('SELECT * FROM target.', quoted, 'ORDER BY', order_by, 'LIMIT 1000 OFFSET ?'), params = list(offset))
+        if (!isTRUE(all.equal(original, copied, check.attributes = FALSE))) {
+          stop("VP08 promotion changed field values: ", table, call. = FALSE)
+        }
+        if (nrow(original) < 1000L) break
+        offset <- offset + nrow(original)
       }
     }
     if (nrow(DBI::dbGetQuery(model, 'PRAGMA target.foreign_key_check')) != 0L) {

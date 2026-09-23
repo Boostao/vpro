@@ -25,7 +25,7 @@ Imports:
     DT,
     duckdb,
     leaflet,
-    mdbr,
+    mdbr (>= 0.3.2),
     quarto,
     rappdirs,
     rhandsontable,

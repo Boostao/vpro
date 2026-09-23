@@ -1,0 +1,44 @@
+---
+title: "Quick Summary"
+format:
+  html:
+    toc: false
+execute:
+  echo: false
+  warning: false
+params:
+  project_path: ""
+  project: ""
+---
+
+```{r}
+#| label: setup
+#| include: false
+if (!requireNamespace("vpro", quietly = TRUE)) {
+  stop("The vpro package must be installed to render this report.")
+}
+if (!is.character(params$project_path) || length(params$project_path) != 1L ||
+    is.na(params$project_path) || !nzchar(params$project_path)) {
+  stop("Supply an explicit SQLite project_path.")
+}
+if (!is.character(params$project) || length(params$project) != 1L ||
+    is.na(params$project) || !nzchar(params$project)) {
+  stop("Supply an explicit VP08 project prefix.")
+}
+
+rows <- local({
+  context <- vpro::vpro_project_context()
+  on.exit(vpro::vpro_project_close(context), add = TRUE)
+  vpro::vpro_project_attach(context, params$project_path, params$project)
+  vpro::vpro_project_activate(context, params$project)
+  vpro::vpro_report_quick_summary(context)
+})
+```
+
+Project: `r params$project`. Rows: `r nrow(rows)`.
+
+```{r}
+#| label: tbl-quick-summary
+#| tbl-cap: "Project-wide vegetation cover rows and user-assigned site units"
+knitr::kable(rows, format = "html", row.names = FALSE, escape = TRUE)
+```

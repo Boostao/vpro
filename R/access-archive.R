@@ -101,37 +101,56 @@ vpro_access_normalize_column <- function(column) {
   column
 }
 
-vpro_access_fingerprint <- function(data) {
-  # Serialize a complete, typed table: unlike concatenated cells, nulls and
-  # delimiters cannot collide. Comparison is diagnostic, not cryptographic.
-  bytes <- serialize(data, NULL, version = 3L)
+vpro_access_fingerprint_stream <- function(con, table, batch_rows = 1000L) {
   path <- tempfile("vpro-fingerprint-")
   on.exit(unlink(path), add = TRUE)
-  writeBin(bytes, path)
+  output <- file(path, "wb")
+  on.exit(try(close(output), silent = TRUE), add = TRUE)
+  result <- DBI::dbSendQuery(con, paste("SELECT * FROM", DBI::dbQuoteIdentifier(con, table), "ORDER BY rowid"))
+  on.exit(if (DBI::dbIsValid(result)) DBI::dbClearResult(result), add = TRUE)
+  repeat {
+    chunk <- DBI::dbFetch(result, n = batch_rows)
+    # Include the zero-row prototype so empty tables still bind field names and types.
+    writeBin(serialize(chunk, NULL, version = 3L), output)
+    if (nrow(chunk) < batch_rows) break
+  }
+  close(output)
   unname(tools::md5sum(path))
 }
 
-vpro_access_archive_table <- function(source, target, table, expected_rows, max_table_bytes) {
+vpro_access_archive_table <- function(source, target, table, expected_rows, max_table_bytes, batch_rows) {
+  cursor <- mdbr::mdb_stream_table(source, table)
+  on.exit(DBI::dbClearResult(cursor), add = TRUE)
+  prototype <- DBI::dbFetch(cursor, n = 0L)
+  if (anyDuplicated(names(prototype)) || length(names(prototype)) == 0L) {
+    stop("Access table has duplicate or missing field names: ", table, call. = FALSE)
+  }
+  types <- vapply(prototype, vpro_access_column_type, character(1))
+  columns <- paste(paste(DBI::dbQuoteIdentifier(target, names(prototype)), types), collapse = ", ")
   quoted <- DBI::dbQuoteIdentifier(target, table)
-  data <- DBI::dbReadTable(source, table, check.names = FALSE)
-  if (as.numeric(utils::object.size(data)) > max_table_bytes) {
-    stop("Access table exceeds the materialized table size limit: ", table, call. = FALSE)
-  }
-  if (nrow(data) != expected_rows || anyDuplicated(names(data)) || length(names(data)) == 0L) {
-    stop("Access table row count or field names changed during extraction: ", table, call. = FALSE)
-  }
-  types <- vapply(data, vpro_access_column_type, character(1))
-  data[] <- lapply(data, vpro_access_normalize_column)
-  columns <- paste(paste(DBI::dbQuoteIdentifier(target, names(data)), types), collapse = ", ")
   DBI::dbExecute(target, paste("CREATE TABLE", quoted, paste0("(", columns, ")")))
-  if (nrow(data) > 0L) {
+  rows <- 0
+  repeat {
+    data <- DBI::dbFetch(cursor, n = batch_rows)
+    if (as.numeric(utils::object.size(data)) > max_table_bytes) {
+      stop("Access batch exceeds the materialized batch size limit: ", table, call. = FALSE)
+    }
+    if (!identical(names(data), names(prototype)) || rows + nrow(data) > expected_rows) {
+      stop("Access table row count or field names changed during extraction: ", table, call. = FALSE)
+    }
+    if (nrow(data) == 0L) break
+    data[] <- lapply(data, vpro_access_normalize_column)
     DBI::dbAppendTable(target, table, data)
+    stored <- DBI::dbGetQuery(target, paste("SELECT * FROM", quoted, "WHERE rowid > ? ORDER BY rowid LIMIT ?"), params = list(rows, nrow(data)))
+    if (!identical(names(stored), names(data)) || nrow(stored) != nrow(data) || !isTRUE(all.equal(stored, data, check.attributes = FALSE))) {
+      stop("Access table values did not round-trip through SQLite: ", table, call. = FALSE)
+    }
+    rows <- rows + nrow(data)
   }
-  stored <- DBI::dbReadTable(target, table, check.names = FALSE)
-  if (!identical(names(stored), names(data)) || nrow(stored) != nrow(data) || !isTRUE(all.equal(stored, data, check.attributes = FALSE))) {
-    stop("Access table values did not round-trip through SQLite: ", table, call. = FALSE)
+  if (rows != expected_rows) {
+    stop("Access table row count changed during extraction: ", table, call. = FALSE)
   }
-  vpro_access_fingerprint(stored)
+  vpro_access_fingerprint_stream(target, table)
 }
 
 #' Archive all readable local Access tables to SQLite
@@ -139,26 +158,28 @@ vpro_access_archive_table <- function(source, target, table, expected_rows, max_
 #' Creates a new archival SQLite database; it does not perform historical
 #' upgrades or label a family as VP08. Preserves fields, nulls, data rows and
 #' translated Access table descriptions in `_table_metadata`; a separate
-#' `_vpro_access_manifest` records counts and data fingerprints. Linked tables
-#' are recorded but never followed. `mdbr` currently materializes complete
-#' tables: these limits reject large sources and materialized tables but cannot
-#' bound peak memory during a read. No existing output or Access source is
-#' modified; on failure staging is removed.
+#' `_vpro_access_manifest` records counts and chunked data fingerprints. Linked
+#' tables are recorded but never followed. Extraction and verification hold
+#' bounded batches; no existing output or Access source is modified, and staging is
+#' removed on failure.
 #'
 #' @param source_path Explicit Access `.mdb` or `.accdb` source file.
 #' @param output_path Unused SQLite destination in an existing directory.
-#' @param max_rows_per_table Maximum rows allowed for each in-memory table read.
-#' @param max_source_bytes Maximum Access source file size, checked before reading.
-#' @param max_table_bytes Maximum size of a materialized R table, checked after
-#'   extraction and before copying into SQLite. Neither byte limit caps peak memory.
+#' @param max_rows_per_table Optional maximum rows in each source table; `Inf`
+#'   (the default) permits large tables.
+#' @param max_source_bytes Optional maximum Access source size; `Inf` by default.
+#' @param max_table_bytes Maximum R size of each extracted batch, checked after
+#'   fetching and before copying into SQLite; cannot cap allocation within `mdbr`.
+#' @param batch_rows Positive number of rows fetched per batch.
 #' @return An invisible inventory with archive path, table results and links.
 #' @export
 vpro_access_archive <- function(
   source_path,
   output_path,
-  max_rows_per_table = 100000L,
-  max_source_bytes = 1e9,
-  max_table_bytes = 2e8
+  max_rows_per_table = Inf,
+  max_source_bytes = Inf,
+  max_table_bytes = 2e8,
+  batch_rows = 1000L
 ) {
   source_path <- vpro_access_source(source_path)
   output_path <- vpro_access_output(output_path, source_path)
@@ -166,17 +187,19 @@ vpro_access_archive <- function(
     !is.numeric(max_rows_per_table) ||
       length(max_rows_per_table) != 1L ||
       is.na(max_rows_per_table) ||
-      !is.finite(max_rows_per_table) ||
       max_rows_per_table < 0 ||
       max_rows_per_table != floor(max_rows_per_table)
   ) {
-    stop("`max_rows_per_table` must be a nonnegative whole number.", call. = FALSE)
+    stop("`max_rows_per_table` must be a nonnegative whole number or Inf.", call. = FALSE)
+  }
+  if (!is.numeric(batch_rows) || length(batch_rows) != 1L || is.na(batch_rows) || !is.finite(batch_rows) || batch_rows < 1 || batch_rows != floor(batch_rows) || batch_rows > .Machine$integer.max) {
+    stop("`batch_rows` must be a positive whole number within the integer range.", call. = FALSE)
   }
   byte_limits <- list(max_source_bytes = max_source_bytes, max_table_bytes = max_table_bytes)
   for (limit in names(byte_limits)) {
     value <- byte_limits[[limit]]
-    if (!is.numeric(value) || length(value) != 1L || is.na(value) || !is.finite(value) || value < 0) {
-      stop("`", limit, "` must be a nonnegative finite byte count.", call. = FALSE)
+    if (!is.numeric(value) || length(value) != 1L || is.na(value) || value < 0 || (limit == "max_table_bytes" && !is.finite(value))) {
+      stop("`", limit, "` must be a nonnegative byte count", if (limit == "max_table_bytes") " with a finite value." else " or Inf.", call. = FALSE)
     }
   }
   source_bytes <- file.info(source_path)$size
@@ -190,6 +213,9 @@ vpro_access_archive <- function(
   }
   stage <- tempfile("vpro-access-", tmpdir = dirname(output_path), fileext = ".db")
   on.exit(unlink(stage), add = TRUE)
+  if (utils::packageVersion("mdbr") < "0.3.2") {
+    stop("VPRO Access archival requires mdbr 0.3.2 or later for streaming.", call. = FALSE)
+  }
   source <- DBI::dbConnect(mdbr::mdb(), source_path)
   on.exit(DBI::dbDisconnect(source), add = TRUE)
   target <- DBI::dbConnect(RSQLite::SQLite(), stage)
@@ -198,7 +224,7 @@ vpro_access_archive <- function(
   DBI::dbWithTransaction(target, {
     for (i in seq_len(nrow(inventory$tables))) {
       hashes[[i]] <- vpro_access_archive_table(
-        source, target, inventory$tables$table_name[[i]], inventory$tables$rows[[i]], max_table_bytes
+        source, target, inventory$tables$table_name[[i]], inventory$tables$rows[[i]], max_table_bytes, as.integer(batch_rows)
       )
     }
     DBI::dbExecute(target, 'CREATE TABLE "_table_metadata" (table_name TEXT PRIMARY KEY, description TEXT)')

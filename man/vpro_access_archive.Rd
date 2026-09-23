@@ -7,9 +7,10 @@
 vpro_access_archive(
   source_path,
   output_path,
-  max_rows_per_table = 100000L,
-  max_source_bytes = 1e+09,
-  max_table_bytes = 2e+08
+  max_rows_per_table = Inf,
+  max_source_bytes = Inf,
+  max_table_bytes = 2e+08,
+  batch_rows = 1000L
 )
 }
 \arguments{
@@ -17,12 +18,15 @@ vpro_access_archive(
 
 \item{output_path}{Unused SQLite destination in an existing directory.}
 
-\item{max_rows_per_table}{Maximum rows allowed for each in-memory table read.}
+\item{max_rows_per_table}{Optional maximum rows in each source table; \code{Inf}
+(the default) permits large tables.}
 
-\item{max_source_bytes}{Maximum Access source file size, checked before reading.}
+\item{max_source_bytes}{Optional maximum Access source size; \code{Inf} by default.}
 
-\item{max_table_bytes}{Maximum size of a materialized R table, checked after
-extraction and before copying into SQLite. Neither byte limit caps peak memory.}
+\item{max_table_bytes}{Maximum R size of each extracted batch, checked after
+fetching and before copying into SQLite; cannot cap allocation within \code{mdbr}.}
+
+\item{batch_rows}{Positive number of rows fetched per batch.}
 }
 \value{
 An invisible inventory with archive path, table results and links.
@@ -31,9 +35,8 @@ An invisible inventory with archive path, table results and links.
 Creates a new archival SQLite database; it does not perform historical
 upgrades or label a family as VP08. Preserves fields, nulls, data rows and
 translated Access table descriptions in \verb{_table_metadata}; a separate
-\verb{_vpro_access_manifest} records counts and data fingerprints. Linked tables
-are recorded but never followed. \code{mdbr} currently materializes complete
-tables: these limits reject large sources and materialized tables but cannot
-bound peak memory during a read. No existing output or Access source is
-modified; on failure staging is removed.
+\verb{_vpro_access_manifest} records counts and chunked data fingerprints. Linked
+tables are recorded but never followed. Extraction and verification hold
+bounded batches; no existing output or Access source is modified, and staging is
+removed on failure.
 }

@@ -1,0 +1,131 @@
+---
+title: "Long environment"
+format: html
+params:
+  project_path: ""
+  project: ""
+  su_path: ""
+  su: ""
+  reference_path: ""
+---
+
+::: {.callout-note}
+This report was generated using AI under general human direction. At the time of generation, the contents have not been comprehensively reviewed by a human analyst.
+
+<!--
+To indicate human review: Delete the line above about contents not being reviewed, and replace this comment with:
+The contents have been reviewed and validated by [Your Name], [Your Role] on [Date].
+-->
+:::
+
+```{r}
+#| label: load-packages
+#| include: false
+if (!requireNamespace("vpro", quietly = TRUE)) {
+  stop("The vpro package must be installed to render this report.")
+}
+if (!requireNamespace("knitr", quietly = TRUE)) {
+  stop("The knitr package must be installed to render this report.")
+}
+```
+
+```{r}
+#| label: load-data
+#| include: false
+required <- c("project_path", "project", "su_path", "su")
+for (key in required) {
+  value <- params[[key]]
+  if (!is.character(value) || length(value) != 1L || is.na(value) || !nzchar(trimws(value))) {
+    stop("Supply an explicit ", key, ".")
+  }
+}
+reference_path <- params$reference_path
+if (!is.character(reference_path) || length(reference_path) != 1L || is.na(reference_path)) {
+  stop("reference_path must be a single character string (empty for bundled VLists.db).")
+}
+report <- local({
+  context <- vpro::vpro_project_context()
+  on.exit(vpro::vpro_project_close(context), add = TRUE)
+  vpro::vpro_project_attach(context, params$project_path, params$project)
+  vpro::vpro_project_activate(context, params$project)
+  vpro::vpro_su_attach(context, params$su_path, params$su)
+  vpro::vpro_su_activate(context, params$su)
+  if (nzchar(reference_path)) {
+    vpro::vpro_report_long_environment(context, reference_path = reference_path)
+  } else {
+    vpro::vpro_report_long_environment(context)
+  }
+})
+
+escape_html <- function(value) {
+  value <- as.character(value)
+  value <- gsub("&", "&amp;", value, fixed = TRUE)
+  value <- gsub("<", "&lt;", value, fixed = TRUE)
+  value <- gsub(">", "&gt;", value, fixed = TRUE)
+  value <- gsub('"', "&quot;", value, fixed = TRUE)
+  value
+}
+
+status_label <- function(status) {
+  switch(status,
+    ok = "OK", missing_env = "Missing Env", missing_admin = "Missing Admin",
+    missing_unit_name = "Missing unit name", conflicting_unit_names = "Conflicting unit names",
+    status
+  )
+}
+```
+
+Project: `r params$project`. Site-unit table: `r params$su`.
+
+```{r}
+#| label: render-units
+#| echo: false
+#| results: asis
+if (nrow(report$units) == 0L) {
+  cat("No eligible site-unit memberships.\n")
+} else {
+  for (i in seq_len(nrow(report$units))) {
+    unit <- report$units[i, , drop = FALSE]
+    unit_code <- unit$SiteUnit[[1L]]
+    heading <- if (nzchar(unit_code)) unit_code else "(blank site-unit code)"
+    cat("\n## Site unit: ", escape_html(heading), "\n\n", sep = "")
+    cat("**Unit title:** ", escape_html(unit$title[[1L]]), "\n\n", sep = "")
+    if (unit$name_status[[1L]] != "ok") {
+      cat("**Unit-name status:** ", status_label(unit$name_status[[1L]]), "\n\n", sep = "")
+    }
+    candidates <- report$names$candidate_names[[i]]
+    if (unit$name_status[[1L]] == "conflicting_unit_names") {
+      cat("**Conflicting candidate names:** ",
+        paste(escape_html(candidates), collapse = "; "), "\n\n", sep = "")
+    }
+
+    plots <- report$plots[report$plots$SiteUnit == unit_code, , drop = FALSE]
+    labels <- plots$PlotNumber
+    labels[!nzchar(labels)] <- "(blank plot number)"
+    if (anyDuplicated(labels)) stop("Plot headers are not unique within site unit: ", unit_code)
+    values <- list(
+      `Membership plot number` = plots$PlotNumber,
+      `Plot status` = vapply(plots$status, status_label, character(1)),
+      `Membership rows` = plots$duplicate_membership_count
+    )
+    for (j in seq_len(nrow(report$fields))) {
+      field <- report$fields[j, , drop = FALSE]
+      if (field$heading[[1L]]) {
+        values[[field$label[[1L]]]] <- rep("", nrow(plots))
+      } else {
+        values[[field$label[[1L]]]] <- plots[[field$label[[1L]]]]
+      }
+    }
+    table <- data.frame(Field = names(values), stringsAsFactors = FALSE, check.names = FALSE)
+    for (j in seq_along(labels)) {
+      table[[labels[[j]]]] <- vapply(values, function(column) {
+        value <- column[[j]]
+        if (is.na(value)) "" else as.character(value)
+      }, character(1))
+    }
+    cat('<div class="table-responsive" role="region" aria-label="Environmental fields by plot" tabindex="0">\n')
+    cat(knitr::kable(table, format = "html", row.names = FALSE, escape = TRUE), "\n")
+    cat("</div>\n\n")
+  }
+}
+```
