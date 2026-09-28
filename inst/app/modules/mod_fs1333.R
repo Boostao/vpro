@@ -110,13 +110,13 @@ mod_fs1333_server <- function(id, state, con) {
         return(data.frame())
       }
 
-      env_table_sql <- as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
+      env_table_sql <- as.character(app_project_table_sql(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
       sql <- paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ? LIMIT 1")
       tryCatch(DBI::dbGetQuery(con, sql, list(plot_number)), error = function(e) data.frame())
     }
 
     env_has_column <- function(column_name) {
-      env_table_id <- db_id("Env", app_config_get("Current", "CurrProject"), prj = TRUE)
+      env_table_id <- app_project_table_id(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE)
       out <- tryCatch(DBI::dbListFields(con, env_table_id), error = function(e) character(0))
       if (!length(out)) {
         return(FALSE)
@@ -134,7 +134,7 @@ mod_fs1333_server <- function(id, state, con) {
       }
 
       # Column names are internal constants validated from PRAGMA table info above.
-      env_table_sql <- as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
+      env_table_sql <- as.character(app_project_table_sql(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
       sql <- sprintf("UPDATE %s SET %s = ? WHERE plotnumber = ?", env_table_sql, column_name)
       n_updated <- tryCatch(
         DBI::dbExecute(con, sql, list(value, plot_number)),

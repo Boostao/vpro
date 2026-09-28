@@ -53,6 +53,36 @@ vpro_plot_other_list <- function(context, plot_number) {
   DBI::dbGetQuery(con, sql, params = list(plot_number))
 }
 
+#' Read one Other record from the active VPRO project
+#'
+#' Reads one `_Other` row by plot and signed 32-bit ID. As with vegetation,
+#' legacy Access data can contain duplicate IDs within a plot, so the operation
+#' requires exactly one matching row and fails safely when the identity is
+#' ambiguous.
+#'
+#' @inheritParams vpro_plot_other_list
+#' @param id Existing `_Other` child-row ID.
+#'
+#' @return A one-row data frame.
+#' @export
+vpro_plot_other_get <- function(context, plot_number, id) {
+  record <- vpro_plot_active(context)
+  plot_number <- vpro_plot_number(plot_number)
+  id <- vpro_plot_other_id(id)
+  vpro_plot_get(context, plot_number)
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), record$path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  row <- vpro_plot_other_row(
+    con,
+    vpro_project_table(record$project, "Other"),
+    plot_number,
+    id
+  )
+  vpro_plot_child_assert_row(row, "Other", plot_number, id)
+  row
+}
+
 #' Create one Other record in the active VPRO project
 #'
 #' Creates a canonical `_Other` child row with a collision-checked signed

@@ -95,13 +95,6 @@ ui <- tagList(
         mod = mod_fs882_6x4_ui("fs882_6x4")
       ),
       npt(
-        icon = "mountain",
-        label = "FS882 Data Forms (8x6)",
-        tip = "8-column variant of the FS882 field form.",
-        value = "fs882_8x6xl",
-        mod = mod_fs882_8x6xl_ui("fs882_8x6xl")
-      ),
-      npt(
         icon = "campground",
         label = "Enter/Edit SIVI Data",
         tip = "SIVI and FS882 share a common data structure, but this form most closely resembles FS1333",

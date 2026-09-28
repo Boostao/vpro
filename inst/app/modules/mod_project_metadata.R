@@ -4,7 +4,7 @@ project_metadata_detect_table <- function(con, project = NULL) {
   # Highest priority: project-specific Metadata table (e.g. Sample_Metadata in Sample.db)
   if (!is.null(project) && nzchar(trimws(project))) {
     proj_tbl <- tryCatch(
-      as.character(db_tb(con, "Metadata", project, prj = TRUE)),
+      as.character(app_project_table_sql(con, "Metadata", project, prj = TRUE)),
       error = function(e) NULL
     )
     if (!is.null(proj_tbl)) candidates <- c(candidates, proj_tbl)

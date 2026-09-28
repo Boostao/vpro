@@ -193,7 +193,7 @@ mod_auth_server <- function(id, state, con) {
       )
 
       if (!isTRUE(result$ok)) {
-        db_detach(con, "master")
+        vpro::vpro_db_detach(con, "master")
       }
       rv$login_status <- result$message %||% ""
     })
@@ -229,7 +229,7 @@ mod_auth_server <- function(id, state, con) {
       )
 
       if (!isTRUE(result$ok)) {
-        db_detach(con, "master")
+        vpro::vpro_db_detach(con, "master")
         rv$login_status <- result$message %||% "Authentication failed"
         return()
       }
@@ -240,7 +240,7 @@ mod_auth_server <- function(id, state, con) {
     # ---- Logout ----------------------------------------------------------------
     observeEvent(input$auth_logout, {
       if (is_cloud_connected(con)) {
-        db_detach(con, "master")
+        vpro::vpro_db_detach(con, "master")
       }
       auth_logout(state)
       rv$login_status <- ""

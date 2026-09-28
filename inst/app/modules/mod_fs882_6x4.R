@@ -1,54 +1,157 @@
 # FS882-6x4 Ecosystem Field Form Module
 # Migrated from Access FS882-6x4XL form
 
-# -- Coordinate helpers (port of V7mdlCoordTools) --
+# Plot-wide editor helpers. Only controls backed by canonical Env/Admin columns
+# participate; child grids and their navigation remain separate.
+fs882_plot_fields <- c(
+  "FieldNumber", "Date", "SiteSurveyor", "Location", "FSRegionDistrict",
+  "NtsMapSheet", "UTMZone", "UTMEasting", "UTMNorthing", "LocationAccuracy",
+  "AirPhotoNum", "XCoord", "YCoord", "Ecosection", "PlotRepresenting",
+  "Zone", "SubZone", "SiteSeries", "RealmClass", "TransDistrib", "MapUnit",
+  "MoistureRegime", "NutrientRegime", "SuccessionalStatus", "StructuralStage",
+  "StandAge", "Elevation", "SlopeGradient", "Aspect", "MesoSlopePosition",
+  "SurfaceShape", "SurfaceTopographyType", "SurfaceTopographySize",
+  "SubstrateOrganicMatter", "SubstrateRocks", "SubstrateDecWood",
+  "SubstrateMineralSoil", "SubstrateBedRock", "SubstrateWater", "SiteNotes",
+  "OfficeNotes", "Photo", "SiteDisturbance1", "SiteDisturbance2",
+  "SiteDisturbance3", "Exposure1", "Exposure2", "EnteredBy",
+  "UpdatedFromCards", "SpeciesListComplete", "StrataCoverTree",
+  "StrataCoverShrub", "StrataCoverHerb", "StrataCoverMoss", "VegSurveyor",
+  "VegNotes", "BedrockGeology1", "BedrockGeology2", "BedrockGeology3",
+  "CoarseFragLith1", "CoarseFragLith2", "CoarseFragLith3", "SoilSurveyor",
+  "TerrainTextureSurf", "SurficialMaterialSurf", "SurfaceExpSurf",
+  "GeoMorProSurf", "TerrainTextureSubSurf", "SurficialMaterialSubSurf",
+  "SurfaceExpSubSurf", "GeoMorProSubSurf", "SoilClassSubGroup",
+  "SoilClassGroup", "HumusForm", "HumusFormPhase", "HumusThickness",
+  "HydroGeoSystem", "HydroGeoSubSystem", "RootingDepth",
+  "RootZoneParticleSize", "RootRestrictingType", "WaterSource",
+  "SoilDrainage", "RootRestrictingDepth", "SeepageDepth",
+  "FloodingRegimeFreq", "FloodingRegimeDur", "SoilNotes", "BECSiteUnit",
+  "UserSiteUnit", "SitePlotQuality", "VegPlotQuality", "SoilPlotQuality",
+  "ProjectID", "StartDate", "Latitude", "Longitude"
+)
+fs882_plot_boolean <- c("UpdatedFromCards", "SpeciesListComplete")
 
-coord_dms <- function(decimal) {
-  if (is.null(decimal) || is.na(decimal)) {
-    return(list(d = NA, m = NA, s = NA))
-  }
-  val <- abs(as.numeric(decimal))
-  d <- floor(val)
-  remainder <- val - d
-  m <- floor(remainder * 60)
-  s <- (remainder * 60 - m) * 60
-  list(d = d, m = m, s = round(s, 2))
+fs882_field_map <- function(plot) {
+  columns <- lapply(plot[c("env", "admin")], names)
+  lapply(fs882_plot_fields, function(id) {
+    hits <- lapply(columns, function(x) x[tolower(x) == tolower(id)])
+    if (sum(lengths(hits)) != 1L) return(NULL)
+    kind <- names(hits)[lengths(hits) == 1L]
+    list(table = kind, column = hits[[kind]])
+  }) |> stats::setNames(fs882_plot_fields)
 }
 
-coord_dm <- function(decimal) {
-  if (is.null(decimal) || is.na(decimal)) {
-    return(list(d = NA, m = NA))
+fs882_field_value <- function(value, type, field) {
+  if (field %in% fs882_plot_boolean) {
+    if (length(value) != 1L || is.na(value)) stop("Invalid boolean for ", field, call. = FALSE)
+    if (!is.logical(value)) stop("Invalid boolean for ", field, call. = FALSE)
+    return(value)
   }
-  val <- abs(as.numeric(decimal))
-  d <- floor(val)
-  m <- (val - d) * 60
-  list(d = d, m = round(m, 4))
+  if (inherits(value, "Date")) value <- format(value, "%Y-%m-%d")
+  text <- trimws(as.character(value %||% ""))
+  if (length(text) != 1L || is.na(text)) stop("Invalid value for ", field, call. = FALSE)
+  if (!nzchar(text)) {
+    if (grepl("INT|REAL|FLOA|DOUB|NUM", toupper(type))) return(NA_real_)
+    return(NA_character_)
+  }
+  if (grepl("INT|REAL|FLOA|DOUB|NUM", toupper(type))) {
+    number <- suppressWarnings(as.numeric(text))
+    if (!is.finite(number) || (grepl("INT", toupper(type)) && number != floor(number)))
+      stop("Invalid numeric value for ", field, ": ", text, call. = FALSE)
+    return(number)
+  }
+  if (grepl("DATE|TIME", toupper(type))) {
+    parsed <- suppressWarnings(as.Date(text, format = "%Y-%m-%d"))
+    if (is.na(parsed) || format(parsed, "%Y-%m-%d") != text ||
+        !grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", text))
+      stop("Invalid date for ", field, ": use YYYY-MM-DD.", call. = FALSE)
+  }
+  text
 }
 
-dms_to_dd <- function(d, m, s) {
-  d <- as.numeric(d %||% 0)
-  m <- as.numeric(m %||% 0)
-  s <- as.numeric(s %||% 0)
-  if (any(is.na(c(d, m, s)))) {
-    return(NA_real_)
-  }
-  d + m / 60 + s / 3600
+fs882_same_value <- function(before, after, id) {
+  if (id == "Date" && !is.na(before)) before <- as.character(as.Date(before))
+  if (id %in% fs882_plot_boolean && !is.na(before)) before <- as.logical(before)
+  (is.na(before) && is.na(after)) || isTRUE(all.equal(before, after, check.attributes = FALSE))
 }
 
-dm_to_dd <- function(d, m) {
-  d <- as.numeric(d %||% 0)
-  m <- as.numeric(m %||% 0)
-  if (any(is.na(c(d, m)))) {
-    return(NA_real_)
+fs882_field_changes <- function(draft, baseline, mapping, types) {
+  changed <- list(env = list(), admin = list())
+  for (id in names(draft)) {
+    target <- mapping[[id]]
+    if (is.null(target)) stop("No Env/Admin mapping for: ", id, call. = FALSE)
+    if (is.null(types[[target$table]][[target$column]]))
+      stop("No declared type for: ", id, call. = FALSE)
+    before <- baseline[[target$table]][[target$column]][[1L]]
+    after <- fs882_field_value(draft[[id]], types[[target$table]][[target$column]], id)
+    if (!fs882_same_value(before, after, id)) {
+      changed[[target$table]][[target$column]] <- after
+    }
   }
-  d + m / 60
+  changed
+}
+
+fs882_saved_fields <- function(touched, draft, latest, mapping, types) {
+  touched[vapply(touched, function(id) {
+    target <- mapping[[id]]
+    if (is.null(target) || is.null(draft[[id]])) return(FALSE)
+    actual <- latest[[target$table]][[target$column]][[1L]]
+    intended <- tryCatch(fs882_field_value(draft[[id]], types[[target$table]][[target$column]], id),
+                         error = function(e) e)
+    !inherits(intended, "error") && fs882_same_value(actual, intended, id)
+  }, logical(1))]
+}
+
+fs882_project_matches <- function(context, project, path, state_project) {
+  identical(project, context$active$project) && identical(path, context$active$path) &&
+    identical(project, state_project)
+}
+
+fs882_coord_parts <- function(method) {
+  if (method == "1") list(Latitude = c("LatD2", "LatMD"), Longitude = c("LonD2", "LonMD"))
+  else list(Latitude = c("LatD", "LatM", "LatS"), Longitude = c("LonD", "LonM", "LonS"))
+}
+
+fs882_coord_result <- function(parts) {
+  tryCatch(list(value = do.call(fs882_compose_coord, parts), error = NULL),
+           error = function(e) list(value = NULL, error = conditionMessage(e)))
+}
+
+# The coordinate API composes positive components; apply a signed-degree
+# convention here: a negative degree means west/south, minutes stay positive.
+fs882_compose_coord <- function(degrees, minutes, seconds = 0) {
+  if ((is.null(degrees) || !nzchar(trimws(as.character(degrees)))) &&
+      (is.null(minutes) || !nzchar(trimws(as.character(minutes)))) &&
+      (identical(seconds, 0) || is.null(seconds) || !nzchar(trimws(as.character(seconds))))) return(NA_real_)
+  parse <- function(x) {
+    if (is.null(x) || !nzchar(trimws(as.character(x)))) return(NA_real_)
+    number <- suppressWarnings(as.numeric(x))
+    if (!is.finite(number)) stop("Invalid coordinate component: ", x, call. = FALSE)
+    number
+  }
+  d <- parse(degrees); m <- parse(minutes); s <- parse(seconds)
+  if (is.na(d) && is.na(m) && is.na(s)) return(NA_real_)
+  if (!is.finite(d) || (!is.na(m) && (m < 0 || m >= 60)) ||
+      (!is.na(s) && (s < 0 || s >= 60)))
+    stop("Invalid coordinate components (minutes and seconds must be in [0, 60)).", call. = FALSE)
+  sign <- if (d < 0 || grepl("^-", trimws(as.character(degrees)))) -1 else 1
+  sign * vpro::vpro_coordinate_decimal(abs(d), m, s)
+}
+
+fs882_decompose_coord <- function(value, method) {
+  if (is.na(value)) return(if (method == "1") c("", "") else c("", "", ""))
+  parts <- if (method == "1") vpro::vpro_coordinate_dm(value)[1, ] else vpro::vpro_coordinate_dms(value)[1, ]
+  parts$degrees <- parts$degrees * if (value < 0) -1 else 1
+  if (value < 0 && parts$degrees == 0) parts$degrees <- "-0"
+  as.character(unlist(parts))
 }
 
 # -- Dropdown loader --
 
 list_choices <- function(con, list_name) {
   rows <- tryCatch(
-    db_query(
+    DBI::dbGetQuery(
       con,
       paste(
         "SELECT item, itemdescription",
@@ -116,37 +219,37 @@ num_display <- function(value) {
 # -- Env table SQL helpers --
 
 env_tb <- function(con) {
-  as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 veg_tb <- function(con) {
-  as.character(db_tb(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 humus_tb <- function(con) {
-  as.character(db_tb(con, "Humus", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Humus", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 mineral_tb <- function(con) {
-  as.character(db_tb(con, "Mineral", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Mineral", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 audit_tb <- function(con) {
-  as.character(db_tb(con, "Audit", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Audit", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 other_tb <- function(con) {
-  as.character(db_tb(con, "Other", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Other", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 veg_other_tb <- function(con) {
-  as.character(db_tb(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 admin_tb <- function(con) {
   # Sample_Admin table (not prefixed, shares schema with project db)
   proj <- app_config_get("Current", "CurrProject")
-  as.character(db_tb(con, "Sample_Admin", proj, prj = FALSE))
+  as.character(app_project_table_sql(con, "Sample_Admin", proj, prj = FALSE))
 }
 
 # -- inline UI helper --
@@ -206,6 +309,7 @@ mod_fs882_6x4_ui <- function(id) {
         tags$div(class = "vr mx-1"),
         # -- Save / Lock --
         checkboxInput(ns("optLockData"), "Lock data", value = FALSE, width = "auto"),
+        actionButton(ns("btnDiscardRecord"), "Discard", class = "btn btn-outline-secondary btn-sm"),
         actionButton(ns("btnSaveRecord"), "Save", class = "btn-bcgold btn-sm")
       )
     ),
@@ -232,6 +336,14 @@ mod_fs882_6x4_ui <- function(id) {
     ",
       ns("")
     ))),
+
+    tags$script(HTML(sprintf("$(document).on('shown.bs.modal', '#shiny-modal', function() { if (!$(this).find('.sidebar-project-dialog').length) Shiny.setInputValue('%1$sfs882_modal_shown', Date.now(), {priority: 'event'}); }); $(document).on('hidden.bs.modal', '#shiny-modal', function() { if (!$(this).find('.sidebar-project-dialog').length) Shiny.setInputValue('%1$sfs882_modal_closed', Date.now(), {priority: 'event'}); });", ns("")))),
+    tags$style(HTML(".fs882-changed { box-shadow: inset 3px 0 #bd9b48; }")),
+    tags$script(HTML("Shiny.addCustomMessageHandler('fs882-dirty', function(msg) {
+      $('[id]').filter(function() { return this.id.indexOf(msg.ns) === 0; })
+        .closest('.shiny-input-container').removeClass('fs882-changed');
+      msg.ids.forEach(function(id) { $('#' + msg.ns + id).closest('.shiny-input-container').addClass('fs882-changed'); });
+    });")),
 
     # -- Tabs --
     navset_card_tab(
@@ -424,7 +536,7 @@ mod_fs882_6x4_ui <- function(id) {
             col_widths = c(7, 5, 7, 5, 12, 7, 5, 12, 12),
             # Row 1
             dateInput(ns("Date"), "Date"),
-            textInput(ns("PlotNumber"), "Plot Number"),
+            textInput(ns("PlotNumber"), "Plot Number", placeholder = "Use New to create / separate renumber action"),
             # Row 2
             textInput(ns("SiteSurveyor"), "Surveyor"),
             textInput(ns("FieldNumber"), "Field No."),
@@ -512,6 +624,9 @@ mod_fs882_6x4_ui <- function(id) {
             card_body(DT::DTOutput(ns("dt_veg_d")))
           )
         ),
+        div(class = "d-flex gap-2 mb-2",
+            actionButton(ns("veg_edit"), "Edit selected species", class = "btn btn-outline-primary btn-sm"),
+            actionButton(ns("veg_delete"), "Delete selected species", class = "btn btn-outline-danger btn-sm")),
         # Vegetation Notes
         textAreaInput(ns("VegNotes"), "Vegetation Notes", width = "100%", rows = 3),
         # Bottom action buttons
@@ -531,7 +646,11 @@ mod_fs882_6x4_ui <- function(id) {
         layout_columns(
           col_widths = c(10, 2),
           card(
-            card_body(DT::DTOutput(ns("dt_veg_other")))
+            card_body(tagList(DT::DTOutput(ns("dt_veg_other")),
+              div(class = "d-flex gap-2 mt-2",
+                  actionButton(ns("veg_other_add"), "Add", class = "btn btn-primary btn-sm"),
+                  actionButton(ns("veg_other_edit"), "Edit selected", class = "btn btn-outline-primary btn-sm"),
+                  actionButton(ns("veg_other_delete"), "Delete selected", class = "btn btn-outline-danger btn-sm"))))
           ),
           card(
             card_header("Column Legend"),
@@ -639,13 +758,19 @@ mod_fs882_6x4_ui <- function(id) {
         card(
           class = "mb-2",
           card_header("Organic Horizons / Layers"),
-          card_body(rhandsontable::rHandsontableOutput(ns("hot_humus")))
+          card_body(tagList(DT::DTOutput(ns("hot_humus")),
+            div(class = "d-flex gap-2 mt-2", actionButton(ns("humus_add"), "Add", class = "btn btn-sm btn-primary"),
+              actionButton(ns("humus_edit"), "Edit selected", class = "btn btn-sm btn-outline-primary"),
+              actionButton(ns("humus_delete"), "Delete selected", class = "btn btn-sm btn-outline-danger"))))
         ),
         # --- MINERAL HORIZONS / LAYERS ---
         card(
           class = "mb-2",
           card_header("Mineral Horizons / Layers"),
-          card_body(rhandsontable::rHandsontableOutput(ns("hot_mineral")))
+          card_body(tagList(DT::DTOutput(ns("hot_mineral")),
+            div(class = "d-flex gap-2 mt-2", actionButton(ns("mineral_add"), "Add", class = "btn btn-sm btn-primary"),
+              actionButton(ns("mineral_edit"), "Edit selected", class = "btn btn-sm btn-outline-primary"),
+              actionButton(ns("mineral_delete"), "Delete selected", class = "btn btn-sm btn-outline-danger"))))
         ),
         # --- SOIL NOTES ---
         card(
@@ -671,37 +796,12 @@ mod_fs882_6x4_ui <- function(id) {
               textOutput(ns("txtOtherNav"), inline = TRUE),
               actionButton(ns("btnOtherNext"), "\u25ba", class = "btn btn-sm btn-outline-secondary"),
               actionButton(ns("btnOtherNew"), "New", class = "btn btn-sm btn-outline-primary"),
-              actionButton(ns("btnOtherDelete"), "Delete", class = "btn btn-sm btn-outline-danger")
+              actionButton(ns("btnOtherDelete"), "Delete", class = "btn btn-sm btn-outline-danger"),
+              actionButton(ns("btnOtherSave"), "Save", class = "btn btn-sm btn-primary"),
+              actionButton(ns("btnOtherDiscard"), "Discard", class = "btn btn-sm btn-outline-secondary")
             )
           ),
-          card_body(
-            # Row 1: DataName (5 cols) | DataItem (7 cols)
-            layout_columns(
-              col_widths = c(1, 5, 1, 5, 1, 11, 1, 11, 1, 11, 1, 11),
-              tags$label("Data Name", class = "control-label"),
-              textAreaInput(ns("DataName"), label = NULL, width = "100%", rows = 2),
-              tags$label("Data Item", class = "control-label"),
-              textAreaInput(ns("DataItem"), label = NULL, width = "100%", rows = 2),
-              # UserItem1 — label left (2), textarea right (10)
-              tags$label("User Item1", class = "control-label pt-1"),
-              textAreaInput(ns("UserItem1"), label = NULL, width = "100%", rows = 6),
-              # UserItem2
-              tags$label("User Item2", class = "control-label pt-1"),
-              textAreaInput(ns("UserItem2"), label = NULL, width = "100%", rows = 6),
-              # UserItem3
-              tags$label("User Item3", class = "control-label pt-1"),
-              textAreaInput(ns("UserItem3"), label = NULL, width = "100%", rows = 6),
-              # Flags row
-              NULL,
-              layout_columns(
-                col_widths = c(1, 1, 1, 9),
-                checkboxInput(ns("UserFlag1"), "User Flag"),
-                checkboxInput(ns("UserFlag2"), "User Flag"),
-                checkboxInput(ns("UserFlag3"), "User Flag"),
-                NULL
-              )
-            )
-          )
+          card_body(tagList(DT::DTOutput(ns("dt_other")), uiOutput(ns("other_editor"))))
         )
       ),
 
@@ -734,7 +834,7 @@ mod_fs882_6x4_ui <- function(id) {
 # Server
 # ============================================================
 
-mod_fs882_6x4_server <- function(id, state, con) {
+mod_fs882_6x4_server <- function(id, state, con, context) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     root_session <- session$rootScope()
@@ -745,26 +845,14 @@ mod_fs882_6x4_server <- function(id, state, con) {
     # Current plot's ProjectID passed to metadata module on each open
     metadata_plot_project_id <- shiny::reactiveVal("")
 
-    # BECSiteUnit
-    {
-      BECSiteUnit_rows <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM USysMasterSiteUnitList WHERE Level=11 ORDER BY SiteSeries;")
-      updateSelectizeInput(
-        session,
-        ns("BECSiteUnit"),
-        choices = BECSiteUnit_rows,
-        options = list(
-          valueField = "SiteSeries",
-          render = I(
-            '{
-              option: function(item, escape) {
-                return "<div><strong>" + escape(item.SiteSeries) + "</strong> (" +
-                       escape(item.SiteSeriesLongName) +
-                       ")</div>";
-              }
-            }'
-          )
-        )
-      )
+    bec_choices <- tryCatch({
+      rows <- DBI::dbGetQuery(con, "SELECT SiteSeries, SiteSeriesLongName FROM USysMasterSiteUnitList WHERE Level=11 ORDER BY SiteSeries")
+      stats::setNames(as.character(rows$SiteSeries), paste0(rows$SiteSeries, " - ", rows$SiteSeriesLongName))
+    }, error = function(e) character())
+    update_bec <- function(selected) {
+      choices <- c(setNames("", ""), bec_choices)
+      if (nzchar(selected) && !selected %in% choices) choices <- c(choices, stats::setNames(selected, selected))
+      updateSelectizeInput(session, "BECSiteUnit", choices = choices, selected = selected, server = TRUE)
     }
 
     dyn_choices <- local({
@@ -851,6 +939,17 @@ mod_fs882_6x4_server <- function(id, state, con) {
       search_last_plot = NULL
     )
 
+    # Bootstrap's modal close event also covers Cancel buttons and the X button.
+    # Keep confirmation state in sync with dialogs dismissed without a server action.
+    modal_open <- shiny::reactiveVal(FALSE)
+    observeEvent(input$fs882_modal_shown, { modal_open(TRUE) })
+    observeEvent(input$fs882_modal_closed, {
+      modal_open(FALSE)
+      child_modal(NULL)
+      delete_target(NULL)
+      other_delete_id(NULL)
+    })
+
     # -- Caption reflects Access Form_Open: "Project: X / SU Table: Y" --
     output$caption <- renderUI({
       project <- state$CurrProject %||% "None"
@@ -863,7 +962,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
     # Method: 0 = D.d, 1 = DM.m, 2 = DMS.s
     output$coord_row <- renderUI({
       switch(
-        input$optCoordMethod,
+        coord_method(),
         "0" = layout_columns(
           col_widths = c(6, 6),
           inline_label(textInput, ns("Latitude"), "Latitude"),
@@ -888,15 +987,16 @@ mod_fs882_6x4_server <- function(id, state, con) {
       )
     })
 
-    # -- Load ProjectID choices from ProjectMetaData (once at init) --
+    # -- Refresh metadata choices when the active project changes. --
     observe({
+      state$CurrProject
       proj_choices <- tryCatch(
         {
-          rows <- db_query(
+          rows <- DBI::dbGetQuery(
             con,
             paste(
               "SELECT ProjectID, ProjectTitle FROM",
-              as.character(db_tb(con, "Metadata", app_config_get("Current", "CurrProject"), prj = TRUE)),
+              as.character(app_project_table_sql(con, "Metadata", app_config_get("Current", "CurrProject"), prj = TRUE)),
               "ORDER BY ProjectID"
             )
           )
@@ -910,9 +1010,11 @@ mod_fs882_6x4_server <- function(id, state, con) {
         },
         error = function(e) c("---" = "")
       )
-      updateSelectInput(session, "ProjectID", choices = proj_choices)
+      selected <- if (project_matches()) as_text(draft()[["ProjectID"]] %||% input$ProjectID) else ""
+      if (nzchar(selected) && !selected %in% proj_choices) proj_choices <- c(proj_choices, stats::setNames(selected, selected))
+      updateSelectInput(session, "ProjectID", choices = proj_choices, selected = selected)
     }) |>
-      bindEvent(TRUE, once = TRUE)
+      bindEvent(state$CurrProject, ignoreInit = FALSE)
 
     output$site_picture <- renderUI({
       tags$div(
@@ -938,7 +1040,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
       choices <- tryCatch(
         {
           if (src == 1L) {
-            rows <- db_query(
+            rows <- DBI::dbGetQuery(
               con,
               paste(
                 "SELECT DISTINCT UserSiteUnit FROM",
@@ -948,7 +1050,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
             )
             c(setNames("", ""), stats::setNames(rows$UserSiteUnit, rows$UserSiteUnit))
           } else if (src == 2L) {
-            rows <- db_query(
+            rows <- DBI::dbGetQuery(
               con,
               paste(
                 "SELECT SiteSeries, SiteSeriesLongName",
@@ -964,8 +1066,8 @@ mod_fs882_6x4_server <- function(id, state, con) {
               show_toast(toast("Select an SU table first.", type = "warning"))
               c("---" = "")
             } else {
-              su_tbl <- as.character(db_tb(con, "SU", plotlist, prj = TRUE))
-              rows <- db_query(
+              su_tbl <- as.character(app_project_table_sql(con, "SU", plotlist, prj = TRUE))
+              rows <- DBI::dbGetQuery(
                 con,
                 paste(
                   "SELECT DISTINCT SiteUnit FROM",
@@ -981,9 +1083,11 @@ mod_fs882_6x4_server <- function(id, state, con) {
         },
         error = function(e) c("---" = "")
       )
-      updateSelectInput(session, "UserSiteUnit", choices = choices)
+      selected <- if (project_matches()) as_text(draft()[["UserSiteUnit"]] %||% input$UserSiteUnit) else ""
+      if (nzchar(selected) && !selected %in% choices) choices <- c(choices, selected)
+      updateSelectInput(session, "UserSiteUnit", choices = choices, selected = selected)
     }) |>
-      bindEvent(input$optAssignedSuSource, ignoreInit = FALSE)
+      bindEvent(list(input$optAssignedSuSource, rv$current_plot, state$CurrProject), ignoreInit = FALSE)
 
     # -- SubZone depends on Zone (Access SubZone_GotFocus -> SubZoneList) --
     observe({
@@ -992,7 +1096,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
         return()
       }
       rows <- tryCatch(
-        db_query(
+        DBI::dbGetQuery(
           con,
           paste(
             "SELECT DISTINCT item FROM VLists.USysTableOfLists",
@@ -1005,9 +1109,11 @@ mod_fs882_6x4_server <- function(id, state, con) {
         error = function(e) data.frame()
       )
       choices <- if (nrow(rows)) c(setNames("", ""), stats::setNames(rows$item, rows$item)) else c("---" = "")
-      updateSelectInput(session, "SubZone", choices = choices, selected = as_text(rv$env_row$subzone))
+      selected <- if (project_matches()) as_text(draft()[["SubZone"]] %||% input$SubZone) else ""
+      if (nzchar(selected) && !selected %in% choices) choices <- c(choices, selected)
+      updateSelectInput(session, "SubZone", choices = choices, selected = selected)
     }) |>
-      bindEvent(input$Zone, ignoreInit = TRUE)
+      bindEvent(list(input$Zone, rv$current_plot), ignoreInit = TRUE)
 
     # -- SiteSeries depends on Zone + SubZone --
     observe({
@@ -1018,7 +1124,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
       }
       filter_val <- paste0(zone, subzone)
       rows <- tryCatch(
-        db_query(
+        DBI::dbGetQuery(
           con,
           paste(
             "SELECT DISTINCT SiteSeriesNo, siteseries",
@@ -1036,266 +1142,243 @@ mod_fs882_6x4_server <- function(id, state, con) {
       } else {
         choices <- c("---" = "")
       }
-      updateSelectInput(session, "SiteSeries", choices = choices, selected = as_text(rv$env_row$siteseries))
+      selected <- if (project_matches()) as_text(draft()[["SiteSeries"]] %||% input$SiteSeries) else ""
+      if (nzchar(selected) && !selected %in% choices) choices <- c(choices, selected)
+      updateSelectInput(session, "SiteSeries", choices = choices, selected = selected)
     }) |>
-      bindEvent(input$SubZone, ignoreInit = TRUE)
+      bindEvent(list(input$Zone, input$SubZone, rv$current_plot), ignoreInit = TRUE)
 
-    # -- Load plot data --
-    load_plot <- function(plot_id) {
+    # -- Child lists are canonical project rows, never the attached display views. --
+    refresh_vegetation <- function(plot_id) {
+      rows <- vpro::vpro_plot_vegetation_list(context, plot_id)
+      names(rows) <- tolower(names(rows))
+      covers <- intersect(c("cover1", "cover2", "cover3", "cover4", "cover5", "totala", "totalb"), names(rows))
+      a <- if (length(covers)) rowSums(!is.na(rows[, covers, drop = FALSE])) > 0 else rep(FALSE, nrow(rows))
+      c <- if ("cover6" %in% names(rows)) !is.na(rows$cover6) else rep(FALSE, nrow(rows))
+      dcols <- intersect(c("cover7", "cover8", "cover9"), names(rows))
+      d <- if (length(dcols)) rowSums(!is.na(rows[, dcols, drop = FALSE])) > 0 else rep(FALSE, nrow(rows))
+      # Rows with no cover yet must remain visible and editable.
+      layer <- if ("layer" %in% names(rows)) toupper(as.character(rows$layer)) else rep("", nrow(rows))
+      c <- c | (!a & !d & layer == "C")
+      d <- d | (!a & !c & layer == "D")
+      rv$veg_a <- rows[a | !(a | c | d), , drop = FALSE]
+      rv$veg_c <- rows[c & !a, , drop = FALSE]
+      rv$veg_d <- rows[d & !a & !c, , drop = FALSE]
+      rv$veg_other <- rows
+      selected_veg(NULL)
+    }
+    refresh_child <- function(kind, plot_id = rv$current_plot) {
+      rows <- switch(kind,
+        humus = vpro::vpro_plot_humus_list(context, plot_id),
+        mineral = vpro::vpro_plot_mineral_list(context, plot_id),
+        other = vpro::vpro_plot_other_list(context, plot_id),
+        veg = return(refresh_vegetation(plot_id)))
+      names(rows) <- tolower(names(rows))
+      rv[[kind]] <- rows
+    }
+    load_plot <- function(plot_id, plot = vpro::vpro_plot_get(context, plot_id)) {
       if (is.null(plot_id) || !nzchar(trimws(plot_id))) {
         return()
       }
       plot_id <- trimws(plot_id)
       rv$current_plot <- plot_id
 
-      # Env header: JOIN Sample_Env + Sample_Admin (mirrors Access UsysEnv view)
-      env <- tryCatch(
-        {
-          sql <- paste(
-            "SELECT e.*, a.BECSiteUnit, a.UserSiteUnit, a.SitePlotQuality,",
-            "a.VegPlotQuality, a.SoilPlotQuality, a.OfficeNotes",
-            "FROM",
-            env_tb(con),
-            "e",
-            "LEFT JOIN",
-            admin_tb(con),
-            "a ON e.PlotNumber = a.Plot",
-            "WHERE e.PlotNumber = ?"
-          )
-          db_query(con, sql, params = list(plot_id))
-        },
-        error = function(e) {
-          # Fallback: env only (Admin table may not exist yet)
-          db_query(con, paste("SELECT * FROM", env_tb(con), "WHERE plotnumber = ?"), params = list(plot_id))
-        }
-      )
-      if (nrow(env)) {
-        row <- env[1, , drop = FALSE]
-        rv$env_row <- row
-        populate_env_fields(row)
-      } else {
-        rv$env_row <- NULL
-        updateTextInput(session, "PlotNumber", value = plot_id)
-      }
+      # Canonical pair; failures do not reset the draft or change the picker.
+      rv$env_row <- plot$env
+      baseline(plot)
+      populate_env_fields(plot)
 
-      # Vegetation: query directly from Sample_Veg (veg_a) and views (veg_c, veg_d)
-      #   Access SubVegA = Cover Only (A1,A2,A3,A,B1,B2,B); SubVegAht = Cover+Height
-      #   USysVegA view lacks Height1-5 per-layer heights → query Sample_Veg directly
-      {
-        proj <- app_config_get("Current", "CurrProject")
-        veg_raw_tbl <- as.character(db_tb(con, "Veg", proj, prj = TRUE))
-        veg_c_tbl <- as.character(db_tb(con, "USysVegC", proj, prj = FALSE))
-        veg_d_tbl <- as.character(db_tb(con, "USysVegD", proj, prj = FALSE))
-        rv$veg_a <- tryCatch(
-          db_query(
-            con,
-            paste(
-              "SELECT Species, Cover1, Height1, Cover2, Height2, Cover3, Height3,",
-              "TotalA, Cover4, Height4, Cover5, Height5, TotalB, Collected",
-              "FROM",
-              veg_raw_tbl,
-              "WHERE PlotNumber = ? AND (",
-              "Cover1 IS NOT NULL OR Cover2 IS NOT NULL OR Cover3 IS NOT NULL",
-              "OR TotalA IS NOT NULL OR Cover4 IS NOT NULL OR Cover5 IS NOT NULL",
-              "OR TotalB IS NOT NULL)",
-              "ORDER BY Species"
-            ),
-            params = list(plot_id)
-          ),
-          error = function(e) data.frame()
-        )
-        rv$veg_c <- tryCatch(
-          db_query(con, paste("SELECT * FROM", veg_c_tbl, "WHERE plotnumber = ? ORDER BY species"), params = list(plot_id)),
-          error = function(e) data.frame()
-        )
-        rv$veg_d <- tryCatch(
-          db_query(con, paste("SELECT * FROM", veg_d_tbl, "WHERE plotnumber = ? ORDER BY species"), params = list(plot_id)),
-          error = function(e) data.frame()
-        )
-      }
+      # Child grids refresh independently of the plot-wide draft.
+      refresh_vegetation(plot_id)
 
-      # Soil
-      rv$humus <- tryCatch(
-        db_query(con, paste("SELECT * FROM", humus_tb(con), "WHERE plotnumber = ? ORDER BY horizon, upperdepth"), params = list(plot_id)),
-        error = function(e) data.frame()
-      )
-      rv$mineral <- tryCatch(
-        db_query(con, paste("SELECT * FROM", mineral_tb(con), "WHERE plotnumber = ? ORDER BY horizon, upperdepth"), params = list(plot_id)),
-        error = function(e) data.frame()
-      )
-
-      # Audit
-      rv$audit <- tryCatch(
-        db_query(con, paste("SELECT * FROM", audit_tb(con), "WHERE plotnumber = ? ORDER BY EditWhen DESC"), params = list(plot_id)),
-        error = function(e) data.frame()
-      )
-
-      # Other
-      rv$other <- tryCatch(
-        db_query(con, paste("SELECT * FROM", other_tb(con), "WHERE plotnumber = ?"), params = list(plot_id)),
-        error = function(e) data.frame()
-      )
-
-      # Veg Other (USysVegOther columns from Veg table)
-      veg_other_cols <- c("PlotNumber", "Species", "LL", "AF", "DC", "UT", "VI", "PV", "PG", "FFA", "Cultural1", "Cultural2", "Other1", "Other2")
-      rv$veg_other <- tryCatch(
-        {
-          sql <- paste(
-            "SELECT",
-            paste(paste0('"', veg_other_cols, '"'), collapse = ", "),
-            "FROM",
-            veg_other_tb(con),
-            "WHERE plotnumber = ? ORDER BY Species"
-          )
-          db_query(con, sql, params = list(plot_id))
-        },
-        error = function(e) data.frame()
-      )
+      for (kind in c("humus", "mineral", "other")) refresh_child(kind, plot_id)
+      rv$audit <- vpro::vpro_plot_audit_list(context, plot_id)
+      other_index(1L)
+      other_values(NULL)
+      other_dirty(FALSE)
     }
 
-    populate_env_fields <- function(row) {
-      col <- function(nm) {
-        idx <- match(tolower(nm), tolower(names(row)))
-        if (is.na(idx)) NA else row[[idx]][[1]]
-      }
-      updateTextInput(session, "PlotNumber", value = as_text(col("plotnumber")))
-      updateTextInput(session, "FieldNumber", value = as_text(col("fieldnumber")))
-      updateTextInput(session, "Date", value = as_text(col("date")))
-      date_val <- as_text(col("date"))
-      updateTextInput(session, "StartDate", value = if (nzchar(date_val)) substr(date_val, 1, 4) else "")
-      updateTextInput(session, "VegSurveyor", value = as_text(col("vegsurveyor")))
-      updateTextInput(session, "SoilSurveyor", value = as_text(col("soilsurveyor")))
-      updateTextInput(session, "RootingDepth", value = num_display(col("rootingdepth")))
-      updateTextInput(session, "RootRestrictingDepth", value = num_display(col("rootrestrictingdepth")))
-      updateTextInput(session, "SeepageDepth", value = num_display(col("seepagedepth")))
-      updateTextInput(session, "HumusThickness", value = num_display(col("humusthickness")))
-      updateTextInput(session, "XCoord", value = num_display(col("xcoord")))
-      updateTextInput(session, "YCoord", value = num_display(col("ycoord")))
-      updateCheckboxInput(session, "SpeciesListComplete", value = isTRUE(as.logical(col("specieslistcomplete"))))
-      updateTextInput(session, "StrataCoverTree", value = num_display(col("StrataCoverTree")))
-      updateTextInput(session, "StrataCoverShrub", value = num_display(col("StrataCoverShrub")))
-      updateTextInput(session, "StrataCoverHerb", value = num_display(col("StrataCoverHerb")))
-      updateTextInput(session, "StrataCoverMoss", value = num_display(col("StrataCoverMoss")))
-      updateTextAreaInput(session, "VegNotes", value = as_text(col("vegnotes")))
-      updateTextAreaInput(session, "SoilNotes", value = as_text(col("soilnotes")))
-
-      # Substrate
-      updateTextInput(session, "SubstrateOrganicMatter", value = num_display(col("substrateorganicmatter")))
-      updateTextInput(session, "SubstrateDecWood", value = num_display(col("substratedecwood")))
-      updateTextInput(session, "SubstrateBedRock", value = num_display(col("substratebedrock")))
-      updateTextInput(session, "SubstrateRocks", value = num_display(col("substraterocks")))
-      updateTextInput(session, "SubstrateMineralSoil", value = num_display(col("substratemineralsoil")))
-      updateTextInput(session, "SubstrateWater", value = num_display(col("substratewater")))
-
-      # Selects: set choices+selected atomically from dyn_choices cache
-      # (avoids timing issue where separate choices/selected updates conflict)
-      for (sel in names(dyn_choices)) {
-        val <- as_text(col(tolower(sel)))
-        updateSelectInput(session, sel, choices = dyn_choices[[sel]], selected = val)
-      }
-
-      # BEC master unit: load full master list so all options are available
-      bec_val <- as_text(col("becsiteunit"))
-      bec_choices <- tryCatch(
-        {
-          rows <- db_query(
-            con,
-            paste(
-              "SELECT SiteSeries, SiteSeriesLongName FROM USysMasterSiteUnitList",
-              "WHERE Level = 11 ORDER BY SiteSeries"
-            )
-          )
-          names(rows) <- tolower(names(rows))
-          labels <- ifelse(is.na(rows$unitlongname) | !nzchar(trimws(rows$unitlongname)), rows$name, paste0(rows$name, " - ", rows$unitlongname))
-          c(setNames("", ""), stats::setNames(rows$name, labels))
-        },
-        error = function(e) {
-          if (nzchar(bec_val)) c(setNames("", ""), setNames(bec_val, bec_val)) else c("---" = "")
-        }
-      )
-      updateSelectInput(session, "BECSiteUnit", choices = bec_choices, selected = bec_val)
-
-      # ProjectID: update selected value (choices already loaded at init)
-      updateSelectInput(session, "ProjectID", selected = as_text(col("projectid")))
-
-      # Selects: set choices+selected atomically from dyn_choices cache
-      # (avoids timing issue where separate choices/selected updates conflict)
-      for (sel in names(dyn_choices)) {
-        val <- as_text(col(tolower(sel)))
-        updateSelectInput(session, sel, choices = dyn_choices[[sel]], selected = val)
-      }
-
-      # BEC master unit: always include current value in choices so it shows
-      bec_val <- as_text(col("becsiteunit"))
-      if (nzchar(bec_val)) {
-        updateSelectInput(session, "BECSiteUnit", choices = c(setNames("", ""), setNames(bec_val, bec_val)), selected = bec_val)
-      }
-      # Working Unit: update choices from admin if src=1, then select
-      user_su <- as_text(col("usersiteunit"))
-      updateSelectInput(session, "UserSiteUnit", selected = user_su)
-
-      # Coordinates - populate based on current method
-      lat <- as.numeric(col("latitude"))
-      lon <- as.numeric(col("longitude"))
-      method <- input$optCoordMethod %||% "0"
-      set_coord_fields(lat, lon, method)
+    # Programmatic updates are queued by Shiny. Keep a per-field pending value
+    # until the client acknowledges it; a user edit after that is never swallowed.
+    pending <- new.env(parent = emptyenv())
+    baseline <- shiny::reactiveVal(NULL)
+    touched <- shiny::reactiveVal(character())
+    draft <- shiny::reactiveVal(list())
+    types <- shiny::reactiveVal(NULL)
+    mapping <- shiny::reactiveVal(NULL)
+    coord_method <- shiny::reactiveVal("0")
+    coord_errors <- shiny::reactiveVal(list())
+    draft_project <- shiny::reactiveVal(NULL)
+    draft_path <- shiny::reactiveVal(NULL)
+    coords <- shiny::reactiveVal(c(Latitude = NA_real_, Longitude = NA_real_))
+    loading <- shiny::reactiveVal(FALSE)
+    track <- function(id, value) {
+      assign(id, value, envir = pending)
+      invisible(value)
     }
-
+    field_types <- function(plot) {
+      db <- DBI::dbConnect(RSQLite::SQLite(), context$active$path)
+      on.exit(DBI::dbDisconnect(db))
+      lapply(c(env = "Env", admin = "Admin"), function(kind) {
+        table <- paste0(context$active$project, "_", kind)
+        info <- DBI::dbGetQuery(db, paste0("PRAGMA table_info(", DBI::dbQuoteString(db, table), ")"))
+        stats::setNames(info$type, info$name)
+      })
+    }
+    display_value <- function(value, id) {
+      if (id %in% fs882_plot_boolean) return(isTRUE(as.logical(value)))
+      if (id == "Date") return(if (length(value) == 0L || is.na(value)) as.Date(NA) else as.Date(value))
+      if (length(value) == 0L || is.na(value)) return("")
+      as.character(value)
+    }
+    set_field <- function(id, value) {
+      track(id, value)
+      if (id %in% fs882_plot_boolean) updateCheckboxInput(session, id, value = value)
+      else if (id == "Date") {
+        if (is.na(value)) session$sendInputMessage(id, list(value = ""))
+        else updateDateInput(session, id, value = value)
+      }
+      else if (id == "BECSiteUnit") update_bec(value)
+      else if (id %in% c(names(dyn_choices), "UserSiteUnit", "ProjectID")) {
+        if (id %in% names(dyn_choices)) {
+          choices <- dyn_choices[[id]]
+          if (nzchar(value) && !value %in% choices) choices <- c(choices, value)
+          updateSelectInput(session, id, choices = choices, selected = value)
+        } else updateSelectInput(session, id, selected = value)
+      } else if (id %in% c("Location", "PlotRepresenting", "SiteNotes", "OfficeNotes", "VegNotes", "SoilNotes"))
+        updateTextAreaInput(session, id, value = value)
+      else updateTextInput(session, id, value = value)
+    }
     set_coord_fields <- function(lat, lon, method) {
       if (method == "0") {
-        updateTextInput(session, "Latitude", value = num_display(lat))
-        updateTextInput(session, "Longitude", value = num_display(lon))
-      } else if (method == "1") {
-        lat_dm <- coord_dm(lat)
-        lon_dm <- coord_dm(lon)
-        updateTextInput(session, "LatD2", value = num_display(lat_dm$d))
-        updateTextInput(session, "LatMD", value = num_display(lat_dm$m))
-        updateTextInput(session, "LonD2", value = num_display(lon_dm$d))
-        updateTextInput(session, "LonMD", value = num_display(lon_dm$m))
+        values <- list(Latitude = if (is.na(lat)) "" else as.character(lat),
+                       Longitude = if (is.na(lon)) "" else as.character(lon))
       } else {
-        lat_dms <- coord_dms(lat)
-        lon_dms <- coord_dms(lon)
-        updateTextInput(session, "LatD", value = num_display(lat_dms$d))
-        updateTextInput(session, "LatM", value = num_display(lat_dms$m))
-        updateTextInput(session, "LatS", value = num_display(lat_dms$s))
-        updateTextInput(session, "LonD", value = num_display(lon_dms$d))
-        updateTextInput(session, "LonM", value = num_display(lon_dms$m))
-        updateTextInput(session, "LonS", value = num_display(lon_dms$s))
+        lat_parts <- fs882_decompose_coord(lat, method)
+        lon_parts <- fs882_decompose_coord(lon, method)
+        ids <- if (method == "1") c("LatD2", "LatMD", "LonD2", "LonMD") else c("LatD", "LatM", "LatS", "LonD", "LonM", "LonS")
+        values <- stats::setNames(as.list(c(lat_parts, lon_parts)), ids)
       }
+      for (id in names(values)) set_field(id, values[[id]])
+    }
+    populate_env_fields <- function(plot) {
+      loading(TRUE)
+      on.exit(loading(FALSE))
+      map <- fs882_field_map(plot)
+      mapping(map)
+      types(field_types(plot))
+      missing <- names(map)[vapply(map, is.null, logical(1))]
+      if (length(missing)) show_toast(toast(paste("Unmapped plot fields (not saveable):", paste(missing, collapse = ", ")), type = "warning"))
+      coord_errors(list())
+      for (id in ls(pending, all.names = TRUE)) rm(list = id, envir = pending)
+      draft_project(context$active$project)
+      draft_path(context$active$path)
+      values <- list()
+      for (id in names(map)) {
+        target <- map[[id]]
+        if (is.null(target)) next
+        value <- display_value(plot[[target$table]][[target$column]][[1L]], id)
+        values[[id]] <- value
+        if (!id %in% c("Latitude", "Longitude")) set_field(id, value)
+      }
+      draft(values)
+      touched(character())
+      set_field("PlotNumber", rv$current_plot)
+      shinyjs::disable("PlotNumber")
+      coords(c(Latitude = as.numeric(plot$env$Latitude[[1L]]), Longitude = as.numeric(plot$env$Longitude[[1L]])))
+      set_coord_fields(coords()[["Latitude"]], coords()[["Longitude"]], coord_method())
     }
 
-    # -- Coord method switch: recalculate from stored lat/lon --
-    observeEvent(
-      input$optCoordMethod,
-      {
-        app_config_set("Current", "CoordMethod", input$optCoordMethod)
-        row <- rv$env_row
-        if (!is.null(row)) {
-          lat_col <- match("latitude", tolower(names(row)))
-          lon_col <- match("longitude", tolower(names(row)))
-          lat <- if (!is.na(lat_col)) as.numeric(row[[lat_col]]) else NA_real_
-          lon <- if (!is.na(lon_col)) as.numeric(row[[lon_col]]) else NA_real_
-          set_coord_fields(lat, lon, input$optCoordMethod)
+    # Preserve latest user input independently of reactive load and server updates.
+    for (field_id in fs882_plot_fields) local({
+      id <- field_id
+      observeEvent(input[[id]], {
+        value <- input[[id]]
+        if (exists(id, envir = pending, inherits = FALSE)) {
+          expected <- get(id, envir = pending)
+          if (identical(as.character(value), as.character(expected))) {
+            rm(list = id, envir = pending)
+            return()
+          }
+          rm(list = id, envir = pending)
         }
-      },
-      ignoreInit = TRUE
-    )
-
-    # -- Read current lat/lon from whichever coord method is active --
-    current_lat_lon <- function() {
+        if (is.null(baseline()) || loading()) return()
+        d <- draft(); d[[id]] <- value; draft(d)
+        touched(union(touched(), id))
+        if (id %in% c("Latitude", "Longitude")) {
+          result <- tryCatch(fs882_field_value(value, "REAL", id), error = function(e) e)
+          errors <- coord_errors()
+          if (inherits(result, "error")) errors[[id]] <- conditionMessage(result)
+          else {
+            errors[[id]] <- NULL
+            xy <- coords(); xy[[id]] <- result; coords(xy)
+          }
+          coord_errors(errors)
+        }
+      }, ignoreInit = TRUE)
+    })
+    component_ids <- c("LatD2", "LatMD", "LonD2", "LonMD", "LatD", "LatM", "LatS", "LonD", "LonM", "LonS")
+    for (field_id in component_ids) local({
+      id <- field_id
+      observeEvent(input[[id]], {
+        value <- input[[id]]
+        if (exists(id, envir = pending, inherits = FALSE)) {
+          expected <- get(id, envir = pending)
+          rm(list = id, envir = pending)
+          if (identical(as.character(value), as.character(expected))) return()
+        }
+        if (is.null(baseline()) || loading()) return()
+        d <- draft(); d[[id]] <- value
+        method <- coord_method()
+        if (method == "0") return()
+        pairs <- fs882_coord_parts(method)
+        if (id %in% unlist(pairs)) {
+          axis <- names(pairs)[vapply(pairs, function(x) id %in% x, logical(1))]
+          parts <- lapply(pairs[[axis]], function(x) d[[x]] %||% input[[x]])
+          result <- fs882_coord_result(parts)
+          errors <- coord_errors(); errors[[axis]] <- result$error; coord_errors(errors)
+          if (is.null(result$error)) {
+            xy <- coords(); xy[[axis]] <- result$value; coords(xy)
+            d[[axis]] <- result$value
+          }
+          draft(d)
+          touched(union(touched(), axis))
+        }
+      }, ignoreInit = TRUE)
+    })
+    observeEvent(input$optCoordMethod, {
       method <- input$optCoordMethod %||% "0"
-      if (method == "0") {
-        lat <- as_num(input$Latitude)
-        lon <- as_num(input$Longitude)
-      } else if (method == "1") {
-        lat <- dm_to_dd(input$LatD2, input$LatMD)
-        lon <- dm_to_dd(input$LonD2, input$LonMD)
-      } else {
-        lat <- dms_to_dd(input$LatD, input$LatM, input$LatS)
-        lon <- dms_to_dd(input$LonD, input$LonM, input$LonS)
+      if (identical(method, coord_method())) return()
+      # Do not tear down component controls containing invalid input.
+      if (length(coord_errors())) {
+        show_toast(toast("Correct or discard invalid coordinates before changing method.", type = "warning"))
+        updateRadioButtons(session, "optCoordMethod", selected = coord_method())
+        return()
       }
-      list(lat = lat, lon = lon)
-    }
+      xy <- coords()
+      if (!is.null(baseline()) && coord_method() != "0") {
+        ids <- fs882_coord_parts(coord_method())
+        d <- draft(); errors <- list()
+        for (axis in names(ids)) {
+          # Untouched, just-rendered components may not yet have reached Shiny.
+          if (!axis %in% touched()) next
+          parts <- lapply(ids[[axis]], function(x) d[[x]] %||% input[[x]])
+          result <- fs882_coord_result(parts)
+          if (!is.null(result$error)) errors[[axis]] <- result$error
+          else { xy[[axis]] <- result$value; d[[axis]] <- result$value }
+        }
+        if (length(errors)) {
+          coord_errors(errors)
+          show_toast(toast("Invalid coordinates: correct or discard before changing method.", type = "danger"))
+          updateRadioButtons(session, "optCoordMethod", selected = coord_method())
+          return()
+        }
+        draft(d); coords(xy)
+      }
+      coord_method(method)
+      app_config_set("Current", "CoordMethod", method)
+      if (!is.null(baseline())) session$onFlushed(function() set_coord_fields(xy[["Latitude"]], xy[["Longitude"]], method), once = TRUE)
+    }, ignoreInit = FALSE)
 
     # ============================================================
     # Record Navigator Wiring
@@ -1308,248 +1391,201 @@ mod_fs882_6x4_server <- function(id, state, con) {
       if (n == 0) "0 of 0" else paste(idx, "of", n)
     })
 
-    # -- Initialise recordset (once, on module startup) --
-    observe({
-      rs <- refresh_recordset(con)
+    refresh_picker <- function(selected = rv$current_plot) {
+      rs <- vpro::vpro_plot_list(context)
       rv$recordset <- rs
-      updateSelectizeInput(session, "navPlotPicker", choices = if (length(rs)) stats::setNames(rs, rs) else character(0), server = FALSE)
-    }) |>
-      bindEvent(TRUE, once = TRUE)
-
-    # -- Helper: save current record if dirty (detects changes on demand) --
-    save_current_if_dirty <- function() {
-      plot_id <- rv$current_plot
-      if (is.null(plot_id) || !nzchar(plot_id)) {
-        return(invisible(FALSE))
-      }
-
-      fields <- collect_env_fields(input, current_lat_lon)
-      dirty_fields <- detect_dirty_fields(fields, rv$env_row)
-      if (!length(dirty_fields)) {
-        return(invisible(FALSE))
-      }
-
-      tbl <- env_tb(con)
-      atbl <- admin_tb(con)
-
-      admin_field_names <- c("becsiteunit", "usersiteunit", "siteplotquality", "vegplotquality", "soilplotquality", "officenotes")
-      env_fields <- fields[!names(fields) %in% admin_field_names]
-      admin_fields <- fields[names(fields) %in% admin_field_names]
-
-      tryCatch(
-        {
-          q_col <- function(nm) paste0('"', nm, '"')
-          # TIMESTAMP columns in SQLite cannot use bind params (DuckDB infers TIMESTAMP
-          # type and SQLite::BindValue rejects it). Inject as sanitized SQL literals.
-          ts_cols <- c("date")
-          sanitize_ts <- function(v) {
-            paste0("'", gsub("[^0-9: -]", "", as.character(v)), "'")
-          }
-
-          param_env_nms <- setdiff(setdiff(names(env_fields), "plotnumber"), ts_cols)
-          ts_env_nms <- intersect(names(env_fields), ts_cols)
-
-          set_parts <- c(
-            vapply(param_env_nms, function(nm) paste0(q_col(nm), " = ?"), character(1)),
-            vapply(
-              ts_env_nms,
-              function(nm) {
-                paste0(q_col(nm), " = ", sanitize_ts(env_fields[[nm]]))
-              },
-              character(1)
-            )
-          )
-
-          # --- Update Sample_Env ---
-          set_pairs <- paste(set_parts, collapse = ", ")
-          update_sql <- paste("UPDATE", tbl, "SET", set_pairs, "WHERE plotnumber = ?")
-          update_params <- c(unname(env_fields[param_env_nms]), list(plot_id))
-          n <- db_run(con, update_sql, params = update_params)
-
-          if (n == 0) {
-            ins_cols <- names(env_fields)
-            ins_val_sql <- vapply(
-              ins_cols,
-              function(nm) {
-                if (nm %in% ts_cols) sanitize_ts(env_fields[[nm]]) else "?"
-              },
-              character(1)
-            )
-            insert_sql <- paste("INSERT INTO", tbl, "(", paste(vapply(ins_cols, q_col, character(1)), collapse = ", "), ") VALUES (", paste(ins_val_sql, collapse = ", "), ")")
-            insert_params <- unname(env_fields[setdiff(ins_cols, ts_cols)])
-            db_run(con, insert_sql, params = insert_params)
-          }
-
-          # --- Update Sample_Admin ---
-          if (length(admin_fields) > 0) {
-            admin_set <- paste(
-              vapply(
-                names(admin_fields),
-                function(nm) {
-                  paste0(q_col(nm), " = ?")
-                },
-                character(1)
-              ),
-              collapse = ", "
-            )
-            na <- db_run(con, paste("UPDATE", atbl, "SET", admin_set, "WHERE Plot = ?"), params = c(unname(admin_fields), list(plot_id)))
-            if (na == 0) {
-              a_all <- c(list(Plot = plot_id), admin_fields)
-              a_cols <- paste(vapply(names(a_all), q_col, character(1)), collapse = ", ")
-              a_ph <- paste(rep("?", length(a_all)), collapse = ", ")
-              db_run(con, paste("INSERT INTO", atbl, "(", a_cols, ") VALUES (", a_ph, ")"), params = unname(a_all))
-            }
-          }
-
-          # Per-field audit trail (Access AuditTrail Me)
-          write_audit_trail(con, fields, rv$env_row, plot_id)
-
-          rv$dirty <- FALSE
-          invisible(TRUE)
-        },
-        error = function(e) {
-          show_toast(toast(paste("Auto-save failed:", conditionMessage(e)), type = "danger"))
-          invisible(FALSE)
-        }
-      )
+      index <- if (is.null(selected) || !length(selected)) NA_integer_ else match(selected, rs)
+      rv$record_index <- if (length(index) != 1L || is.na(index)) 0L else index
+      updateSelectizeInput(session, "navPlotPicker", choices = stats::setNames(rs, rs),
+                           selected = selected %||% "", server = FALSE)
     }
+    observeEvent(TRUE, {
+      tryCatch({
+        refresh_picker()
+        if (length(rv$recordset)) navigate_to(rv$recordset[[1L]])
+      }, error = function(e) show_toast(toast(conditionMessage(e), type = "danger")))
+    }, once = TRUE)
 
-    # -- Helper: navigate to a specific plot_id --
+    # Never silently drop touched fields lacking a canonical mapping.
+    changes <- function() fs882_field_changes(draft()[intersect(names(draft()), touched())], baseline(), mapping(), types())
+    dirty_ids <- function() {
+      if (is.null(baseline())) return(character())
+      ids <- touched()
+      d <- draft(); m <- mapping()
+      ids[vapply(ids, function(id) {
+        target <- m[[id]]
+        if (is.null(target) || is.null(d[[id]])) return(TRUE)
+        before <- baseline()[[target$table]][[target$column]][[1L]]
+        after <- tryCatch(fs882_field_value(d[[id]], types()[[target$table]][[target$column]], id), error = function(e) e)
+        inherits(after, "error") || !fs882_same_value(before, after, id)
+      }, logical(1))]
+    }
+    project_matches <- function() fs882_project_matches(context, draft_project(), draft_path(), state$CurrProject)
+    observeEvent(state$CurrProject, {
+      if (is.null(draft_project()) || project_matches()) return()
+      show_toast(toast("Project changed: old plot draft is unavailable here. No plot writes will be made; return to the original project or discard.", type = "danger"))
+    }, ignoreInit = TRUE)
+    observe({
+      ids <- dirty_ids()
+      session$sendCustomMessage("fs882-dirty", list(ns = ns(""), ids = ids))
+    })
+    save_draft <- function() {
+      if (!project_matches() || is.null(rv$current_plot) || is.null(baseline()) ||
+          !identical(as.character(baseline()$env$PlotNumber[[1L]]), rv$current_plot)) {
+        show_toast(toast("Plot/project identity changed. Discard this draft; no write attempted.", type = "danger"))
+        return(FALSE)
+      }
+      if (length(coord_errors())) {
+        show_toast(toast(paste("Invalid coordinates:", paste(names(coord_errors()), unlist(coord_errors()), collapse = "; ")), type = "danger"))
+        return(FALSE)
+      }
+      if (!length(dirty_ids())) return(TRUE)
+      unmapped <- touched()[vapply(touched(), function(id) is.null(mapping()[[id]]), logical(1))]
+      if (length(unmapped)) {
+        show_toast(toast(paste("Unmapped edited fields:", paste(unmapped, collapse = ", ")), type = "danger"))
+        return(FALSE)
+      }
+      if (isTRUE(input$optLockData)) {
+        show_toast(toast("Unlock the plot before saving.", type = "warning"))
+        return(FALSE)
+      }
+      tryCatch({
+        changed <- changes()
+        if (!project_matches()) stop("Project changed before save; no write attempted.")
+        if (length(changed$env) + length(changed$admin))
+          vpro::vpro_plot_update(context, rv$current_plot, env = changed$env, admin = changed$admin,
+                                 user = state$User)
+        # Keep untouched and unsaved controls intact. Never clear a dirty field
+        # merely because another field was written to the same table.
+        latest <- vpro::vpro_plot_get(context, rv$current_plot)
+        if (!project_matches() || !identical(as.character(latest$env$PlotNumber[[1L]]), rv$current_plot))
+          stop("Plot/project changed during save; draft retained.")
+        saved <- fs882_saved_fields(touched(), draft(), latest, mapping(), types())
+        baseline(latest)
+        d <- draft()
+        for (id in saved) {
+          target <- mapping()[[id]]
+          d[[id]] <- display_value(latest[[target$table]][[target$column]][[1L]], id)
+        }
+        draft(d)
+        touched(setdiff(touched(), saved))
+        if (length(dirty_ids())) {
+          show_toast(toast(paste("Fields not confirmed saved:", paste(dirty_ids(), collapse = ", ")), type = "danger"))
+          return(FALSE)
+        }
+        show_toast(toast("FS882 record saved.", type = "success"))
+        TRUE
+      }, error = function(e) {
+        show_toast(toast(paste("Save failed:", conditionMessage(e)), type = "danger"))
+        FALSE
+      })
+    }
     navigate_to <- function(plot_id) {
-      if (is.null(plot_id) || !nzchar(plot_id)) {
-        return()
+      if (isTRUE(other_dirty()) || !is.null(child_modal()) || !is.null(delete_target()) || !is.null(other_delete_id())) {
+        show_toast(toast("Save or Discard Other changes and close child actions before changing plots.", type = "warning"))
+        updateSelectizeInput(session, "navPlotPicker", selected = rv$current_plot %||% "")
+        return(invisible(FALSE))
       }
-      idx <- match(plot_id, rv$recordset)
-      if (is.na(idx)) {
-        return()
+      if (!is.null(draft_project()) && !project_matches()) {
+        show_toast(toast("Project changed: discard the old draft before loading a plot.", type = "danger"))
+        return(invisible(FALSE))
       }
-
-      rv$record_index <- idx
+      if (is.null(plot_id) || !plot_id %in% rv$recordset) return(invisible(FALSE))
+      plot <- tryCatch(vpro::vpro_plot_get(context, plot_id), error = function(e) e)
+      if (inherits(plot, "error")) {
+        show_toast(toast(conditionMessage(plot), type = "danger"))
+        updateSelectizeInput(session, "navPlotPicker", selected = rv$current_plot %||% "")
+        return(invisible(FALSE))
+      }
       rv$current_plot <- plot_id
-      # Sync the selectize without retriggering the observer
+      rv$record_index <- match(plot_id, rv$recordset)
       updateSelectizeInput(session, "navPlotPicker", selected = plot_id)
-      load_plot(plot_id)
-      rv$dirty <- FALSE
-      # Sync state for other modules
+      load_plot(plot_id, plot)
       state$CurrSU <- plot_id
+      invisible(TRUE)
     }
-
-    # -- Nav buttons --
-    observeEvent(input$btnNavFirst, {
-      if (!length(rv$recordset)) {
+    pending_navigation <- shiny::reactiveVal(NULL)
+    request_navigation <- function(target) {
+      if (isTRUE(other_dirty()) || !is.null(child_modal()) || !is.null(delete_target()) || !is.null(other_delete_id())) {
+        show_toast(toast("Save or Discard Other changes and close child actions before changing plots.", type = "warning"))
+        updateSelectizeInput(session, "navPlotPicker", selected = rv$current_plot %||% "")
         return()
       }
-      save_current_if_dirty()
-      navigate_to(rv$recordset[1])
-    })
-
-    observeEvent(input$btnNavPrev, {
-      if (!length(rv$recordset) || rv$record_index <= 1L) {
+      if (!project_matches()) {
+        show_toast(toast("Project changed: discard the old plot draft first.", type = "danger"))
+        updateSelectizeInput(session, "navPlotPicker", selected = rv$current_plot)
         return()
       }
-      save_current_if_dirty()
-      navigate_to(rv$recordset[rv$record_index - 1L])
-    })
-
-    observeEvent(input$btnNavNext, {
-      n <- length(rv$recordset)
-      if (!n || rv$record_index >= n) {
+      if (identical(target, rv$current_plot)) return()
+      if (!length(dirty_ids()) && !length(coord_errors())) {
+        if (identical(target, "<new>")) show_new() else navigate_to(target)
         return()
       }
-      save_current_if_dirty()
-      navigate_to(rv$recordset[rv$record_index + 1L])
-    })
-
-    observeEvent(input$btnNavLast, {
-      n <- length(rv$recordset)
-      if (!n) {
+      pending_navigation(target)
+      if (!identical(target, "<new>")) updateSelectizeInput(session, "navPlotPicker", selected = rv$current_plot)
+      showModal(modalDialog(title = "Unsaved plot changes", "Save changes before leaving this plot?",
+        footer = tagList(actionButton(ns("navSave"), "Save", class = "btn-primary"),
+                         actionButton(ns("navDiscard"), "Discard"),
+                         actionButton(ns("navStay"), "Stay")), easyClose = FALSE))
+    }
+    complete_navigation <- function() {
+      target <- pending_navigation()
+      if (is.null(target) || isTRUE(other_dirty()) || !is.null(child_modal())) {
+        show_toast(toast("Close the child editor and save or discard Other changes first.", type = "warning"))
         return()
       }
-      save_current_if_dirty()
-      navigate_to(rv$recordset[n])
+      pending_navigation(NULL); removeModal()
+      if (identical(target, "<new>")) show_new() else navigate_to(target)
+    }
+    observeEvent(input$navSave, {
+      if (save_draft() && !length(dirty_ids()) && !length(coord_errors())) complete_navigation()
+      else show_toast(toast("Unsaved plot fields remain; navigation blocked.", type = "warning"))
     })
-
-    # -- Selectize picker change (user selects a plot directly) --
-    observeEvent(
-      input$navPlotPicker,
-      {
-        picked <- input$navPlotPicker
-        if (is.null(picked) || !nzchar(picked)) {
-          return()
-        }
-        # Avoid re-entry when navigate_to() sets the selectize
-        if (identical(picked, rv$current_plot)) {
-          return()
-        }
-        save_current_if_dirty()
-        navigate_to(picked)
-      },
-      ignoreInit = TRUE
-    )
-
-    # -- New record --
-    observeEvent(input$btnNavNew, {
-      save_current_if_dirty()
-      showModal(modalDialog(
-        title = "New Record",
-        textInput(ns("new_plot_number"), "Plot Number"),
-        footer = tagList(
-          actionButton(ns("btnConfirmNewRecord"), "Create", class = "btn-primary"),
-          modalButton("Cancel")
-        )
-      ))
+    observeEvent(input$navDiscard, {
+      if (!project_matches()) {
+        pending_navigation(NULL); removeModal()
+        show_toast(toast("Project changed; old draft not written. Use Discard to reload the active project.", type = "warning"))
+      } else complete_navigation()
     })
-
+    observeEvent(input$navStay, { pending_navigation(NULL); removeModal(); updateSelectizeInput(session, "navPlotPicker", selected = rv$current_plot) })
+    observeEvent(input$btnNavFirst, { if (length(rv$recordset)) request_navigation(rv$recordset[[1L]]) })
+    observeEvent(input$btnNavLast, { if (length(rv$recordset)) request_navigation(tail(rv$recordset, 1L)) })
+    observeEvent(input$btnNavPrev, { if (rv$record_index > 1L) request_navigation(rv$recordset[[rv$record_index - 1L]]) })
+    observeEvent(input$btnNavNext, { if (rv$record_index < length(rv$recordset)) request_navigation(rv$recordset[[rv$record_index + 1L]]) })
+    observeEvent(input$navPlotPicker, {
+      if (!identical(input$navPlotPicker, rv$current_plot) && input$navPlotPicker %in% rv$recordset)
+        request_navigation(input$navPlotPicker)
+    }, ignoreInit = TRUE)
+    show_new <- function() showModal(modalDialog(title = "New Record",
+      textInput(ns("new_plot_number"), "Plot Number"),
+      footer = tagList(actionButton(ns("btnConfirmNewRecord"), "Create", class = "btn-primary"), modalButton("Cancel"))))
+    observeEvent(input$btnNavNew, { request_navigation("<new>") })
     observeEvent(input$btnConfirmNewRecord, {
-      new_id <- trimws(input$new_plot_number %||% "")
-      if (!nzchar(new_id)) {
-        show_toast(toast("Plot Number is required.", type = "danger"))
+      if (!project_matches() || length(dirty_ids()) || length(coord_errors())) {
+        show_toast(toast("Discard or save the current plot in its original project before creating another.", type = "danger"))
         return()
       }
-      if (new_id %in% rv$recordset) {
-        show_toast(toast("Plot already exists, navigating to it.", type = "warning"))
+      new_id <- trimws(input$new_plot_number %||% "")
+      tryCatch({
+        vpro::vpro_plot_create(context, new_id)
+        refresh_picker(new_id)
         removeModal()
         navigate_to(new_id)
+        show_toast(toast(paste("Created plot", new_id), type = "success"))
+      }, error = function(e) show_toast(toast(paste("Create failed:", conditionMessage(e)), type = "danger")))
+    })
+    observeEvent(input$nav_search_trigger, {
+      query <- trimws(input$nav_search_trigger$query %||% "")
+      if (!nzchar(query)) return()
+      hits <- rv$recordset[grepl(query, rv$recordset, fixed = TRUE, ignore.case = TRUE)]
+      if (!length(hits)) {
+        show_toast(toast("No matching plot number.", type = "warning"))
         return()
       }
-      # Insert minimal row
-      tbl <- env_tb(con)
-      tryCatch(
-        {
-          db_run(con, paste("INSERT INTO", tbl, "(plotnumber) VALUES (?)"), params = list(new_id))
-          # Refresh recordset and navigate
-          rv$recordset <- refresh_recordset(con)
-          updateSelectizeInput(session, "navPlotPicker", choices = stats::setNames(rv$recordset, rv$recordset), server = FALSE)
-          removeModal()
-          navigate_to(new_id)
-          show_toast(toast(paste("Created plot", new_id), type = "success"))
-        },
-        error = function(e) {
-          show_toast(toast(paste("Create failed:", conditionMessage(e)), type = "danger"))
-        }
-      )
+      idx <- match(rv$current_plot, hits)
+      target <- hits[[if (is.na(idx) || idx == length(hits)) 1L else idx + 1L]]
+      request_navigation(target)
     })
-
-    # -- Search (Access Find behaviour: Enter = next match) --
-    observeEvent(
-      input$nav_search_trigger,
-      {
-        info <- input$nav_search_trigger
-        query <- info$query
-        if (is.null(query) || !nzchar(trimws(query))) {
-          return()
-        }
-        hit <- search_across_fields(con, rv$recordset, query, rv$search_last_plot)
-        updateSelectizeInput(session, "navPlotPicker", choices = if (length(rs)) stats::setNames(rs, rs) else character(0), server = FALSE)
-
-        if (plot_id %in% rs) {
-          navigate_to(plot_id)
-        } else if (length(rs)) {
-          navigate_to(rs[1])
-        }
-      },
-      ignoreInit = FALSE
-    )
 
     # -- Lock data toggle (Access optLockData) --
     observeEvent(
@@ -1648,117 +1684,33 @@ mod_fs882_6x4_server <- function(id, state, con) {
           toggle_fn(fid)
         }
         # Also toggle save button
+        shinyjs::disable("PlotNumber") # immutable key: never silently renumber
         if (locked) shinyjs::disable("btnSaveRecord") else shinyjs::enable("btnSaveRecord")
       },
       ignoreInit = TRUE
     )
 
-    # -- Save (Access btnSaveRecord + Form_BeforeUpdate audit trail) --
-    observeEvent(input$btnSaveRecord, {
-      plot_id <- trimws(input$PlotNumber %||% rv$current_plot %||% "")
-      if (!nzchar(plot_id)) {
-        show_toast(toast("Plot Number is required to save.", type = "danger"))
+    observeEvent(input$btnSaveRecord, { save_draft() })
+    observeEvent(input$btnDiscardRecord, {
+      if (isTRUE(other_dirty()) || !is.null(child_modal()) || !is.null(delete_target()) || !is.null(other_delete_id())) {
+        show_toast(toast("Save or Discard Other changes and close child actions first.", type = "warning"))
         return()
       }
-
-      fields <- collect_env_fields(input, current_lat_lon)
-      tbl <- env_tb(con)
-      atbl <- admin_tb(con)
-
-      # Fields that live in Sample_Admin (not Sample_Env)
-      admin_field_names <- c("becsiteunit", "usersiteunit", "siteplotquality", "vegplotquality", "soilplotquality", "officenotes")
-      env_fields <- fields[!names(fields) %in% admin_field_names]
-      admin_fields <- fields[names(fields) %in% admin_field_names]
-
-      tryCatch(
-        {
-          q_col <- function(nm) paste0('"', nm, '"')
-          # TIMESTAMP columns: inject as sanitized SQL literals (DuckDB-SQLite TIMESTAMP bind workaround)
-          ts_cols <- c("date")
-          sanitize_ts <- function(v) {
-            paste0("'", gsub("[^0-9: -]", "", as.character(v)), "'")
-          }
-
-          param_env_nms <- setdiff(setdiff(names(env_fields), "plotnumber"), ts_cols)
-          ts_env_nms <- intersect(names(env_fields), ts_cols)
-
-          set_parts <- c(
-            vapply(param_env_nms, function(nm) paste0(q_col(nm), " = ?"), character(1)),
-            vapply(
-              ts_env_nms,
-              function(nm) {
-                paste0(q_col(nm), " = ", sanitize_ts(env_fields[[nm]]))
-              },
-              character(1)
-            )
-          )
-
-          # --- Update Sample_Env ---
-          set_pairs <- paste(set_parts, collapse = ", ")
-          update_sql <- paste("UPDATE", tbl, "SET", set_pairs, "WHERE plotnumber = ?")
-          update_params <- c(unname(env_fields[param_env_nms]), list(plot_id))
-          n <- db_run(con, update_sql, params = update_params)
-
-          if (n == 0) {
-            ins_cols <- names(env_fields)
-            ins_val_sql <- vapply(
-              ins_cols,
-              function(nm) {
-                if (nm %in% ts_cols) sanitize_ts(env_fields[[nm]]) else "?"
-              },
-              character(1)
-            )
-            insert_sql <- paste("INSERT INTO", tbl, "(", paste(vapply(ins_cols, q_col, character(1)), collapse = ", "), ") VALUES (", paste(ins_val_sql, collapse = ", "), ")")
-            insert_params <- unname(env_fields[setdiff(ins_cols, ts_cols)])
-            db_run(con, insert_sql, params = insert_params)
-          }
-
-          # --- Update Sample_Admin ---
-          if (length(admin_fields) > 0) {
-            admin_set <- paste(
-              vapply(
-                names(admin_fields),
-                function(nm) {
-                  paste0(q_col(nm), " = ?")
-                },
-                character(1)
-              ),
-              collapse = ", "
-            )
-            admin_upd_sql <
-              # -- Project source changed (Access optProjectID_AfterUpdate) --
-              observeEvent(
-                input$optProjectID,
-                {
-                  app_config_set("Current", "ProjectIdSource", input$optProjectID)
-                },
-                ignoreInit = TRUE
-              ) -
-                paste("UPDATE", atbl, "SET", admin_set, "WHERE Plot = ?")
-            admin_upd_params <- c(unname(admin_fields), list(plot_id))
-            na <- db_run(con, admin_upd_sql, params = admin_upd_params)
-            if (na == 0) {
-              # No admin row yet - insert with Plot key
-              a_all <- c(list(Plot = plot_id), admin_fields)
-              a_cols <- paste(vapply(names(a_all), q_col, character(1)), collapse = ", ")
-              a_ph <- paste(rep("?", length(a_all)), collapse = ", ")
-              db_run(con, paste("INSERT INTO", atbl, "(", a_cols, ") VALUES (", a_ph, ")"), params = unname(a_all))
-            }
-          }
-
-          # Per-field audit trail (Access AuditTrail Me)
-          write_audit_trail(con, fields, rv$env_row, plot_id)
-
-          rv$dirty <- FALSE
-          state$CurrSU <- plot_id
-          show_toast(toast("FS882 record saved.", type = "success"))
-          load_plot(plot_id)
-        },
-        error = function(e) {
-          show_toast(toast(paste("Save failed:", conditionMessage(e)), type = "danger"))
-        }
-      )
+      pending_navigation(NULL); removeModal()
+      if (!project_matches()) {
+        show_toast(toast("Discarding the draft from the previous project without writing it.", type = "warning"))
+        # Explicit discard only: never use the stale recordset with a new project.
+        baseline(NULL); draft(list()); touched(character()); coord_errors(list())
+        draft_project(NULL); draft_path(NULL); rv$current_plot <- NULL
+        tryCatch({
+          refresh_picker(NULL)
+          if (length(rv$recordset)) navigate_to(rv$recordset[[1L]])
+        }, error = function(e) show_toast(toast(conditionMessage(e), type = "danger")))
+      } else if (!is.null(rv$current_plot)) navigate_to(rv$current_plot)
     })
+    observeEvent(input$optProjectID, {
+      app_config_set("Current", "ProjectIdSource", input$optProjectID)
+    }, ignoreInit = TRUE)
 
     # -- SU source changed (Access optAssignedSuSource_AfterUpdate saves record) --
     observeEvent(
@@ -1785,7 +1737,14 @@ mod_fs882_6x4_server <- function(id, state, con) {
         show_toast(toast("No BEC Master unit to copy.", type = "warning"))
         return()
       }
-      updateSelectInput(session, "UserSiteUnit", selected = bec_val)
+      if (!project_matches() || is.null(baseline())) {
+        show_toast(toast("Project changed; discard the old draft first.", type = "danger"))
+        return()
+      }
+      d <- draft(); d[["UserSiteUnit"]] <- bec_val; draft(d)
+      touched(union(touched(), "UserSiteUnit"))
+      updateSelectInput(session, "UserSiteUnit", choices = c(setNames("", ""), stats::setNames(bec_val, bec_val)), selected = bec_val)
+      track("UserSiteUnit", bec_val)
     })
 
     # -- Cover & Height toggle --
@@ -1817,49 +1776,8 @@ mod_fs882_6x4_server <- function(id, state, con) {
       ))
     })
 
-    # -- Add Species (Access USysAddSpp dialog) --
-    observeEvent(input$btnAddSpp, {
-      showModal(modalDialog(
-        title = "Add Species",
-        easyClose = TRUE,
-        size = "l",
-        textInput(ns("new_spp_code"), "Species Code"),
-        selectInput(ns("new_spp_layer"), "Layer", choices = c("A1", "A2", "A3", "B1", "B2", "C", "D")),
-        footer = tagList(
-          actionButton(ns("btnConfirmAddSpp"), "Add", class = "btn-primary"),
-          modalButton("Cancel")
-        )
-      ))
-    })
-
-    observeEvent(input$btnConfirmAddSpp, {
-      spp <- trimws(input$new_spp_code %||% "")
-      layer <- input$new_spp_layer %||% "C"
-      plot_id <- rv$current_plot
-      if (!nzchar(spp) || is.null(plot_id)) {
-        show_toast(toast("Species code and current plot are required.", type = "warning"))
-        return()
-      }
-      tryCatch(
-        {
-          db_run(
-            con,
-            paste(
-              "INSERT INTO",
-              veg_tb(con),
-              "(plotnumber, species, layer) VALUES (?, ?, ?)"
-            ),
-            params = list(plot_id, spp, layer)
-          )
-          removeModal()
-          load_plot(plot_id)
-          show_toast(toast(paste("Added", spp, "to layer", layer), type = "success"))
-        },
-        error = function(e) {
-          show_toast(toast(paste("Add species failed:", conditionMessage(e)), type = "danger"))
-        }
-      )
-    })
+    # Species creation uses the same buffered child editor as the other grids.
+    observeEvent(input$btnAddSpp, { open_child("veg") })
 
     # -- Edit Metadata (Access btnLoadMetadata -> frmProjectMetaData) --
     observeEvent(input$btnLoadMetadata, {
@@ -1980,7 +1898,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
       # Collect plot numbers from current form view (all loaded env plots)
       env_tbl <- env_tb(con)
       all_plots <- tryCatch(
-        db_query(con, paste("SELECT plotnumber FROM", env_tbl, "ORDER BY plotnumber"))$plotnumber,
+        DBI::dbGetQuery(con, paste("SELECT plotnumber FROM", env_tbl, "ORDER BY plotnumber"))$plotnumber,
         error = function(e) character(0)
       )
       if (!length(all_plots)) {
@@ -2010,7 +1928,7 @@ mod_fs882_6x4_server <- function(id, state, con) {
     observeEvent(input$btnConfirmCreateSu, {
       env_tbl <- env_tb(con)
       all_plots <- tryCatch(
-        db_query(con, paste("SELECT plotnumber FROM", env_tbl))$plotnumber,
+        DBI::dbGetQuery(con, paste("SELECT plotnumber FROM", env_tbl))$plotnumber,
         error = function(e) character(0)
       )
       action <- input$create_su_action
@@ -2031,14 +1949,15 @@ mod_fs882_6x4_server <- function(id, state, con) {
     })
 
     observeEvent(input$btnRestoreAudit, {
+      if (!child_ready()) return()
       selected_rows <- input$dt_audit_rows_selected
-      if (is.null(selected_rows) || !length(selected_rows)) {
-        show_toast(toast("Select audit records to restore first.", type = "warning"))
+      if (length(selected_rows) != 1L || selected_rows < 1L || selected_rows > nrow(rv$audit)) {
+        show_toast(toast("Select exactly one audit record to restore.", type = "warning"))
         return()
       }
       showModal(modalDialog(
-        title = "Restore Audit Records",
-        paste0(length(selected_rows), " record(s) selected. ", "Restore field values to their before-edit state?"),
+        title = "Restore Audit Record",
+        "Restore this field to its before-edit value?",
         radioButtons(ns("optRemoveAfterRestore"), "After restoring:", choices = c("Keep audit records" = "keep", "Remove audit records" = "remove"), selected = "keep"),
         footer = tagList(
           actionButton(ns("btnConfirmRestore"), "Restore", class = "btn-primary"),
@@ -2048,94 +1967,182 @@ mod_fs882_6x4_server <- function(id, state, con) {
     })
 
     observeEvent(input$btnConfirmRestore, {
-      removeModal()
+      if (!child_ready() || !other_guard()) return()
       selected <- input$dt_audit_rows_selected
-      if (is.null(selected) || !length(selected)) {
-        return()
+      if (length(selected) != 1L || selected < 1L || selected > nrow(rv$audit)) return()
+      tryCatch({
+        vpro::vpro_plot_audit_restore(context, rv$current_plot,
+          rv$audit[selected, , drop = FALSE],
+          delete_audit = identical(input$optRemoveAfterRestore, "remove"))
+        load_plot(rv$current_plot, vpro::vpro_plot_get(context, rv$current_plot))
+        removeModal()
+        show_toast(toast("Audit record restored.", type = "success"))
+      }, error = function(e) show_toast(toast(conditionMessage(e), type = "danger")))
+    })
+
+    # Child actions never reload the Env/Admin draft. A dirty plot must be
+    # explicitly saved or discarded with the plot controls before child writes.
+    child_ready <- function() {
+      if (is.null(rv$current_plot) || !nzchar(rv$current_plot)) {
+        show_toast(toast("Load a plot first.", type = "warning")); return(FALSE)
       }
-      audit_df <- rv$audit
-      if (!nrow(audit_df)) {
-        return()
+      if (!project_matches()) {
+        show_toast(toast("Project changed: discard the old plot draft first.", type = "danger"))
+        return(FALSE)
       }
-      remove_after <- identical(input$optRemoveAfterRestore, "remove")
-
-      project <- app_config_get("Current", "CurrProject")
-      n_restored <- 0
-
-      for (idx in selected) {
-        if (idx > nrow(audit_df)) {
-          next
-        }
-        rec <- audit_df[idx, , drop = FALSE]
-        names(rec) <- tolower(names(rec))
-
-        tbl_suffix <- rec$table[[1]]
-        edit_field <- rec$editfield[[1]]
-        before_val <- rec$beforeedit[[1]]
-        plot_num <- rec$plotnumber[[1]]
-        rec_id <- rec$id[[1]]
-
-        # Skip Cover fields and key fields (Access parity)
-        if (is.null(edit_field) || is.na(edit_field)) {
-          next
-        }
-        if (grepl("^cover", tolower(edit_field))) {
-          next
-        }
-        if (tolower(edit_field) %in% c("id", "plotnumber")) {
-          next
-        }
-
-        # Determine target table
-        target_tbl <- paste0(project, tbl_suffix)
-
-        # Build WHERE clause
-        where <- if (grepl("_Env$", tbl_suffix)) {
-          list(sql = paste("WHERE plotnumber = ?"), params = list(plot_num))
-        } else {
-          list(sql = paste("WHERE plotnumber = ? AND id = ?"), params = list(plot_num, rec_id))
-        }
-
-        tryCatch(
-          {
-            update_sql <- paste0(
-              "UPDATE ",
-              target_tbl,
-              " SET ",
-              edit_field,
-              " = ? ",
-              where$sql
-            )
-            db_run(con, update_sql, params = c(list(before_val), where$params))
-            n_restored <- n_restored + 1
-          },
-          error = function(e) NULL
-        )
-
-        # Optionally remove audit record
-        if (remove_after) {
-          audit_tbl <- audit_tb(con)
-          tryCatch(
-            db_run(
-              con,
-              paste0(
-                "DELETE FROM ",
-                audit_tbl,
-                " WHERE plotnumber = ? AND editfield = ? AND editwhen = ?"
-              ),
-              params = list(plot_num, edit_field, rec$editwhen[[1]])
-            ),
-            error = function(e) NULL
-          )
-        }
+      if (length(dirty_ids()) || length(coord_errors())) {
+        show_toast(toast("Unsaved plot changes: Save or Discard the plot first.", type = "warning"))
+        return(FALSE)
       }
-
-      show_toast(toast(
-        paste0(n_restored, " field(s) restored."),
-        type = if (n_restored > 0) "success" else "warning"
-      ))
-      # Reload plot and audit
-      load_plot(rv$current_plot)
+      TRUE
+    }
+    child_api <- list(
+      veg = list(get = vpro::vpro_plot_vegetation_get, list = vpro::vpro_plot_vegetation_list,
+                 create = vpro::vpro_plot_vegetation_create, update = vpro::vpro_plot_vegetation_update,
+                 delete = vpro::vpro_plot_vegetation_delete),
+      humus = list(get = vpro::vpro_plot_humus_get, list = vpro::vpro_plot_humus_list,
+                   create = vpro::vpro_plot_humus_create, update = vpro::vpro_plot_humus_update,
+                   delete = vpro::vpro_plot_humus_delete),
+      mineral = list(get = vpro::vpro_plot_mineral_get, list = vpro::vpro_plot_mineral_list,
+                     create = vpro::vpro_plot_mineral_create, update = vpro::vpro_plot_mineral_update,
+                     delete = vpro::vpro_plot_mineral_delete),
+      other = list(get = vpro::vpro_plot_other_get, list = vpro::vpro_plot_other_list,
+                   create = vpro::vpro_plot_other_create, update = vpro::vpro_plot_other_update,
+                   delete = vpro::vpro_plot_other_delete))
+    child_error <- function(e) show_toast(toast(conditionMessage(e), type = "danger"))
+    child_done <- function(kind) {
+      refresh_child(kind)
+      rv$audit <- vpro::vpro_plot_audit_list(context, rv$current_plot)
+    }
+    selected_veg <- shiny::reactiveVal(NULL)
+    for (grid_name in c("a", "c", "d")) local({
+      g <- grid_name
+      observeEvent(input[[paste0("dt_veg_", g, "_rows_selected")]], {
+        idx <- input[[paste0("dt_veg_", g, "_rows_selected")]]
+        rows <- rv[[paste0("veg_", g)]]
+        if (length(idx) == 1L && idx >= 1L && idx <= nrow(rows))
+          selected_veg(list(plot = rv$current_plot, id = rows$id[[idx]]))
+      })
+    })
+    child_selection <- function(kind) {
+      if (kind == "veg") {
+        selected <- selected_veg()
+        if (!is.null(selected) && identical(selected$plot, rv$current_plot)) return(selected$id)
+      } else {
+        grid <- switch(kind, humus = "hot_humus", mineral = "hot_mineral", other = "dt_veg_other")
+        idx <- input[[paste0(grid, "_rows_selected")]]
+        rows <- if (kind == "other") rv$veg_other else rv[[kind]]
+        if (length(idx) == 1L && idx >= 1L && idx <= nrow(rows)) return(rows$id[[idx]])
+      }
+      show_toast(toast("Select one row first.", type = "warning"))
+      NULL
+    }
+    child_modal <- shiny::reactiveVal(NULL)
+    # Only approved canonical columns enter a child write. ID is never editable.
+    child_columns <- function(kind, rows) {
+      columns <- switch(kind,
+        veg = c("Species", "Layer", "Cover1", "Height1", "Cover2", "Height2",
+                "Cover3", "Height3", "TotalA", "HeightA", "Cover4", "Height4",
+                "Cover5", "Height5", "Cover5a", "Height5a", "Cover5b", "Height5b",
+                "Cover5c", "Height5c", "TotalB", "HeightB", "Cover6", "Height6",
+                "Cover7", "Cover8", "Cover9", "Cover10", "Collected"),
+        veg_other = c("Species", "LL", "AF", "DC", "UT", "VI", "PV", "PG", "FFA",
+                      "Cultural1", "Cultural2", "Other1", "Other2"),
+        humus = c("Horizon", "UpperDepth", "LowerDepth", "HumusStructureDegree",
+                  "HumusStructureKind", "HumusFormpH", "Comment"),
+        mineral = c("Horizon", "UpperDepth", "LowerDepth", "Texture",
+                    "PercentCoarseFragsTotal", "MineralStructureClass", "Colour", "Comments"))
+      indices <- match(tolower(columns), tolower(names(rows)))
+      columns[!is.na(indices)]
+    }
+    open_child <- function(kind, id = NULL) {
+      if (!child_ready()) return()
+      api_kind <- if (kind == "veg_other") "veg" else kind
+      tryCatch({
+        rows <- child_api[[api_kind]]$list(context, rv$current_plot)
+        columns <- child_columns(kind, rows)
+        if (!length(columns)) stop("No editable columns available for this child table.")
+        row <- if (is.null(id)) NULL else child_api[[api_kind]]$get(context, rv$current_plot, id)
+        if (!is.null(row)) names(row) <- tolower(names(row))
+        child_modal(list(kind = kind, id = id, plot = rv$current_plot, columns = columns,
+                         row = row, schema = rows))
+        controls <- lapply(columns, function(col) {
+          value <- if (is.null(row)) NA else row[[tolower(col)]][[1L]]
+          textInput(ns(paste0("child_", col)), col,
+                    value = if (is.na(value)) "" else as.character(value))
+        })
+        showModal(modalDialog(title = paste(if (is.null(id)) "Add" else "Edit", kind),
+          div(style = "max-height: 60vh; overflow-y: auto;", controls), size = "l",
+          easyClose = FALSE,
+          footer = tagList(actionButton(ns("child_save"), "Save", class = "btn-primary"),
+                           actionButton(ns("child_cancel"), "Cancel"))))
+      }, error = child_error)
+    }
+    observeEvent(input$child_cancel, { child_modal(NULL); removeModal() })
+    observeEvent(input$child_save, {
+      info <- child_modal()
+      if (is.null(info) || !identical(info$plot, rv$current_plot) || !child_ready()) return()
+      tryCatch({
+        values <- list()
+        for (col in info$columns) {
+          text <- trimws(input[[paste0("child_", col)]] %||% "")
+          source <- info$schema[[col]]
+          value <- if (!nzchar(text)) NA else if (is.numeric(source)) {
+            number <- suppressWarnings(as.numeric(text))
+            if (!is.finite(number) || (is.integer(source) && number != floor(number)))
+              stop("Invalid number for ", col)
+            number
+          } else text
+          before <- if (is.null(info$id)) NULL else info$row[[tolower(col)]][[1L]]
+          same <- !is.null(before) && ((is.na(value) && is.na(before)) ||
+            isTRUE(all.equal(value, before, check.attributes = FALSE)))
+          if ((is.null(info$id) && !is.na(value)) || (!is.null(info$id) && !same))
+            values[[col]] <- value
+        }
+        if (is.null(info$id) && info$kind %in% c("veg", "veg_other") &&
+            (is.null(values$Species) || is.na(values$Species))) stop("Species code is required.")
+        if (is.null(info$id) && !length(values)) stop("Enter at least one field.")
+        if (length(values)) {
+          api_kind <- if (info$kind == "veg_other") "veg" else info$kind
+          api <- child_api[[api_kind]]
+          if (is.null(info$id)) api$create(context, info$plot, values)
+          else api$update(context, info$plot, info$id, values)
+          child_done(api_kind)
+        }
+        child_modal(NULL); removeModal()
+      }, error = child_error)
+    })
+    for (kind in c("humus", "mineral", "veg_other", "veg")) local({
+      k <- kind
+      add_id <- if (k == "veg") "btnAddSpp" else paste0(k, "_add")
+      if (k != "veg") observeEvent(input[[add_id]], { open_child(k) })
+      observeEvent(input[[paste0(k, "_edit")]], {
+        id <- child_selection(if (k == "veg_other") "other" else k)
+        if (!is.null(id)) open_child(k, id)
+      })
+      observeEvent(input[[paste0(k, "_delete")]], {
+        if (!child_ready()) return()
+        id <- child_selection(if (k == "veg_other") "other" else k)
+        if (is.null(id)) return()
+        # Resolve ambiguous legacy IDs before presenting a destructive action.
+        api_kind <- if (k == "veg_other") "veg" else k
+        tryCatch({
+          child_api[[api_kind]]$get(context, rv$current_plot, id)
+          delete_target(list(kind = api_kind, id = id, plot = rv$current_plot))
+          showModal(modalDialog(title = "Delete child row?", "This cannot be undone.",
+            footer = tagList(actionButton(ns("child_delete_confirm"), "Delete", class = "btn-danger"),
+                             modalButton("Cancel"))))
+        }, error = child_error)
+      })
+    })
+    delete_target <- shiny::reactiveVal(NULL)
+    observeEvent(input$child_delete_confirm, {
+      target <- delete_target(); delete_target(NULL)
+      if (is.null(target) || !identical(target$plot, rv$current_plot) || !child_ready()) return()
+      tryCatch({
+        child_api[[target$kind]]$delete(context, target$plot, target$id)
+        child_done(target$kind); removeModal()
+      }, error = child_error)
     })
 
     # -- Vegetation grids --
@@ -2208,7 +2215,6 @@ mod_fs882_6x4_server <- function(id, state, con) {
             colnames = labels,
             rownames = FALSE,
             selection = "single",
-            editable = list(target = "cell", disable = list(columns = c(0))),
             options = list(
               pageLength = 25,
               scrollX = FALSE,
@@ -2236,22 +2242,14 @@ mod_fs882_6x4_server <- function(id, state, con) {
     mineral_cols <- c("horizon", "upperdepth", "lowerdepth", "texture", "percentcoarsefragstotal", "mineralstructureclass", "colour", "_comments")
 
     render_soil_hot <- function(data_reactive, cols) {
-      rhandsontable::renderRHandsontable({
+      DT::renderDT({
         df <- data_reactive()
-        if (!nrow(df)) {
-          return(rhandsontable::rhandsontable(data.frame()))
-        }
         valid <- intersect(cols, names(df))
-        if (!length(valid)) {
-          return(rhandsontable::rhandsontable(data.frame()))
-        }
-        rhandsontable::rhandsontable(
-          df[, valid, drop = FALSE],
-          rowHeaders = FALSE,
-          useTypes = TRUE,
-          stretchH = "all"
-        )
-      })
+        if (!nrow(df)) df <- data.frame(Message = "No horizon records")
+        else df <- df[, valid, drop = FALSE]
+        DT::datatable(df, rownames = FALSE, selection = "single",
+                      options = list(dom = "t", ordering = FALSE, scrollX = TRUE))
+      }, server = FALSE)
     }
 
     output$hot_humus <- render_soil_hot(reactive(rv$humus), humus_cols)
@@ -2267,8 +2265,8 @@ mod_fs882_6x4_server <- function(id, state, con) {
     output$dt_veg_other <- DT::renderDT(
       {
         df <- if (nrow(rv$veg_other)) {
-          # Drop PlotNumber column from display (redundant)
-          display <- rv$veg_other[, setdiff(names(rv$veg_other), "PlotNumber"), drop = FALSE]
+          # One row per canonical Veg ID, including species without Other codes.
+          display <- rv$veg_other[, intersect(c("species", "ll", "af", "dc", "ut", "vi", "pv", "pg", "ffa", "cultural1", "cultural2", "other1", "other2"), names(rv$veg_other)), drop = FALSE]
           display
         } else {
           data.frame(Message = "No Veg Other records")
@@ -2277,12 +2275,206 @@ mod_fs882_6x4_server <- function(id, state, con) {
           df,
           rownames = FALSE,
           selection = "single",
-          editable = list(target = "cell", disable = list(columns = 0)),
           options = list(pageLength = 20, scrollX = TRUE, dom = "t")
         )
       },
       server = FALSE
     )
+
+    # Other detail editor: inputs are local until Save. Navigation never loses
+    # uncommitted detail text; Discard explicitly reloads the selected row.
+    other_index <- shiny::reactiveVal(1L)
+    other_epoch <- shiny::reactiveVal(0L)
+    other_values <- shiny::reactiveVal(NULL)
+    other_dirty <- shiny::reactiveVal(FALSE)
+    other_ready <- shiny::reactiveVal(FALSE)
+    other_fields <- c("DataName", "DataItem", "UserItem1", "UserItem2", "UserItem3",
+                      "UserFlag1", "UserFlag2", "UserFlag3")
+    output$txtOtherNav <- renderText({
+      n <- nrow(rv$other)
+      paste(min(other_index(), n + 1L), "of", n + 1L)
+    })
+    output$other_editor <- renderUI({
+      if (is.null(rv$current_plot)) return(tags$p("Load a plot first."))
+      other_epoch()
+      idx <- other_index()
+      row <- if (idx <= nrow(rv$other)) rv$other[idx, , drop = FALSE] else NULL
+      # Ensure editing an existing row has unambiguous identity before enabling inputs.
+      if (!is.null(row)) {
+        row <- tryCatch(vpro::vpro_plot_other_get(context, rv$current_plot, row$id[[1L]]),
+                        error = function(e) e)
+        if (inherits(row, "error")) return(tags$p(class = "text-danger", conditionMessage(row)))
+      }
+      other_values(row)
+      other_ready(FALSE)
+      tagList(lapply(other_fields, function(field) {
+        value <- if (is.null(row)) NA else row[[field]][[1L]]
+        if (grepl("^UserFlag", field))
+          checkboxInput(ns(paste0("other_", field)), field, value = !is.na(value) && as.logical(value))
+        else textAreaInput(ns(paste0("other_", field)), field,
+                           value = if (is.na(value)) "" else as.character(value), rows = 2)
+      }))
+    })
+    # Suppress Shiny's initial input binding until it matches the loaded row.
+    observe({
+      row <- other_values()
+      if (is.null(rv$current_plot)) return()
+      vals <- lapply(other_fields, function(field) input[[paste0("other_", field)]])
+      if (any(vapply(vals, is.null, logical(1)))) return()
+      old <- lapply(other_fields, function(field) {
+        if (grepl("^UserFlag", field)) {
+          if (is.null(row)) FALSE else isTRUE(as.logical(row[[field]][[1L]]))
+        } else if (is.null(row) || is.na(row[[field]][[1L]])) ""
+        else as.character(row[[field]][[1L]])
+      })
+      if (!isTRUE(other_ready())) {
+        # renderUI replaces inputs asynchronously. Ignore the previous row's
+        # bindings until the new controls report the loaded baseline.
+        if (identical(vals, old)) other_ready(TRUE)
+        return()
+      }
+      other_dirty(!identical(vals, old))
+    })
+    other_guard <- function() {
+      if (!child_ready()) return(FALSE)
+      if (isTRUE(other_dirty())) {
+        show_toast(toast("Unsaved Other changes: Save or Discard first.", type = "warning"))
+        return(FALSE)
+      }
+      TRUE
+    }
+    observeEvent(input$btnOtherPrev, {
+      if (other_guard() && other_index() > 1L) other_index(other_index() - 1L)
+    })
+    observeEvent(input$btnOtherNext, {
+      if (other_guard() && other_index() <= nrow(rv$other)) other_index(other_index() + 1L)
+    })
+    observeEvent(input$btnOtherNew, {
+      if (other_guard()) other_index(nrow(rv$other) + 1L)
+    })
+    observeEvent(input$dt_other_rows_selected, {
+      idx <- input$dt_other_rows_selected
+      if (length(idx) == 1L && idx <= nrow(rv$other) && other_guard()) other_index(idx)
+    })
+    observeEvent(input$btnOtherDiscard, {
+      if (!child_ready()) return()
+      other_dirty(FALSE)
+      other_values(NULL)
+      other_epoch(other_epoch() + 1L)
+    })
+    save_other <- function() {
+      if (!isTRUE(other_dirty())) return(TRUE)
+      if (!child_ready() || !project_matches()) return(FALSE)
+      tryCatch({
+        idx <- other_index()
+        row <- other_values()
+        values <- list()
+        for (field in other_fields) {
+          value <- input[[paste0("other_", field)]]
+          if (is.null(value)) stop("Other editor is not ready.")
+          if (!grepl("^UserFlag", field)) value <- if (nzchar(trimws(value))) value else NA_character_
+          before <- if (is.null(row)) NULL else row[[field]][[1L]]
+          if (!is.null(row) && grepl("^UserFlag", field)) before <- isTRUE(as.logical(before))
+          if (!is.null(row) && !grepl("^UserFlag", field) && is.na(before)) before <- NA_character_
+          same <- !is.null(before) && ((length(value) == 1L && is.na(value) && is.na(before)) ||
+            isTRUE(all.equal(value, before, check.attributes = FALSE)))
+          if (is.null(row) || !same) values[[field]] <- value
+        }
+        if (is.null(row)) {
+          created <- vpro::vpro_plot_other_create(context, rv$current_plot, values)
+          new_id <- created$other$ID[[1L]]
+        } else {
+          new_id <- row$ID[[1L]]
+          if (length(values)) vpro::vpro_plot_other_update(context, rv$current_plot, new_id, values)
+        }
+        child_done("other")
+        other_index(match(new_id, rv$other$id))
+        other_values(NULL)
+        other_dirty(FALSE)
+        other_epoch(other_epoch() + 1L)
+        TRUE
+      }, error = function(e) { child_error(e); FALSE })
+    }
+    observeEvent(input$btnOtherSave, { save_other() })
+    other_delete_id <- shiny::reactiveVal(NULL)
+    observeEvent(input$btnOtherDelete, {
+      if (!other_guard()) return()
+      row <- other_values()
+      if (is.null(row)) return()
+      tryCatch({
+        vpro::vpro_plot_other_get(context, rv$current_plot, row$ID[[1L]])
+        other_delete_id(list(id = row$ID[[1L]], plot = rv$current_plot))
+        showModal(modalDialog(title = "Delete Other row?", "This cannot be undone.",
+          footer = tagList(actionButton(ns("other_delete_confirm"), "Delete", class = "btn-danger"),
+                           modalButton("Cancel"))))
+      }, error = child_error)
+    })
+    observeEvent(input$other_delete_confirm, {
+      target <- other_delete_id(); other_delete_id(NULL)
+      if (is.null(target) || !identical(rv$current_plot, target$plot) || !other_guard()) return()
+      tryCatch({
+        vpro::vpro_plot_other_delete(context, target$plot, target$id)
+        child_done("other"); other_index(min(other_index(), nrow(rv$other) + 1L))
+        other_epoch(other_epoch() + 1L)
+        removeModal()
+      }, error = child_error)
+    })
+
+    # Called by the sidebar before any project mutation. These functions run in
+    # the same session, so the draft is saved while its original project is active.
+    switch_status <- function() {
+      if (isTRUE(modal_open()) || !is.null(child_modal()) || !is.null(delete_target()) ||
+          !is.null(other_delete_id()) || !is.null(pending_navigation()))
+        return(list(blocked = TRUE, dirty = FALSE))
+      list(blocked = FALSE, dirty = length(dirty_ids()) > 0L ||
+             length(coord_errors()) > 0L || isTRUE(other_dirty()))
+    }
+    switch_save <- function() {
+      if (!project_matches() && (!is.null(baseline()) || isTRUE(other_dirty()))) return(FALSE)
+      if (length(dirty_ids()) || length(coord_errors())) {
+        if (!save_draft()) return(FALSE)
+      }
+      # Other writes use their own canonical CRUD API, not the plot-wide draft.
+      if (isTRUE(other_dirty()) && !save_other()) return(FALSE)
+      !isTRUE(switch_status()$dirty)
+    }
+    switch_discard <- function() {
+      if (!is.null(baseline()) && !project_matches()) return(FALSE)
+      if (isTRUE(other_dirty())) {
+        other_dirty(FALSE)
+        other_values(NULL)
+        other_epoch(other_epoch() + 1L)
+      }
+      if (!is.null(rv$current_plot) && (length(dirty_ids()) || length(coord_errors()))) {
+        populate_env_fields(vpro::vpro_plot_get(context, rv$current_plot))
+      }
+      TRUE
+    }
+    switch_reset <- function() {
+      baseline(NULL); draft(list()); touched(character()); coord_errors(list())
+      draft_project(NULL); draft_path(NULL)
+      other_values(NULL); other_dirty(FALSE); other_index(1L)
+      other_epoch(other_epoch() + 1L)
+      child_modal(NULL); delete_target(NULL); other_delete_id(NULL)
+      pending_navigation(NULL); selected_veg(NULL)
+      rv$current_plot <- NULL; rv$env_row <- NULL
+      for (kind in c("veg_a", "veg_c", "veg_d", "veg_other", "humus", "mineral", "other", "audit"))
+        rv[[kind]] <- data.frame()
+      state$CurrSU <- NULL
+      refresh_picker(NULL)
+      if (length(rv$recordset)) navigate_to(rv$recordset[[1L]])
+      else {
+        updateSelectizeInput(session, "navPlotPicker", selected = "")
+        set_field("PlotNumber", "")
+        for (id in setdiff(fs882_plot_fields, c("Latitude", "Longitude"))) {
+          value <- if (id %in% fs882_plot_boolean) FALSE else if (id == "Date") as.Date(NA) else ""
+          set_field(id, value)
+        }
+        coords(c(Latitude = NA_real_, Longitude = NA_real_))
+        set_coord_fields(NA_real_, NA_real_, coord_method())
+      }
+      invisible(NULL)
+    }
 
     # -- Audit grid --
     output$dt_audit <- DT::renderDT({
@@ -2290,6 +2482,6 @@ mod_fs882_6x4_server <- function(id, state, con) {
       DT::datatable(df, rownames = FALSE, selection = "multiple", options = list(pageLength = 20, scrollX = TRUE, dom = "tp"))
     })
 
-    invisible(NULL)
+    list(status = switch_status, save = switch_save, discard = switch_discard, reset = switch_reset)
   })
 }

@@ -678,6 +678,32 @@ vpro_plot_get <- function(context, plot_number) {
   list(env = env, admin = admin)
 }
 
+#' List plot numbers in the active VPRO project
+#'
+#' Reads plot identifiers from the active project's canonical Env table, ordered
+#' by `PlotNumber`. Unlike `vpro_plot_get()`, this does not require a matching
+#' Admin row, so incomplete legacy Env/Admin pairs remain visible for diagnosis.
+#'
+#' @param context A VPRO project context with an active project.
+#'
+#' @return A character vector of plot identifiers.
+#' @export
+vpro_plot_list <- function(context) {
+  record <- vpro_plot_active(context)
+  con <- DBI::dbConnect(RSQLite::SQLite(), record$path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  table <- vpro_project_table(record$project, "Env")
+  sql <- paste(
+    "SELECT",
+    DBI::dbQuoteIdentifier(con, "PlotNumber"),
+    "FROM",
+    DBI::dbQuoteIdentifier(con, table),
+    "ORDER BY",
+    DBI::dbQuoteIdentifier(con, "PlotNumber")
+  )
+  DBI::dbGetQuery(con, sql)$PlotNumber
+}
+
 #' List audit history for one plot in the active VPRO project
 #'
 #' Reads the canonical audit rows corresponding to Access's `USysAuditTrail`

@@ -75,6 +75,41 @@ app_config_set <- function(section, key, value, session = shiny::getDefaultReact
   accessor(section, key, value)
 }
 
+app_project_table_id <- function(con, tb, db = NULL, prj = FALSE) {
+  if (!is.character(tb) || length(tb) != 1L || is.na(tb) || !nzchar(tb)) {
+    stop("`tb` must be one non-empty table name.", call. = FALSE)
+  }
+  if (!isTRUE(prj)) {
+    return(DBI::Id(table = tb))
+  }
+  if (!is.character(db) || length(db) != 1L || is.na(db) || !nzchar(db)) {
+    stop("`db` must be one non-empty project name when `prj` is TRUE.", call. = FALSE)
+  }
+
+  physical_table <- paste0(db, "_", tb)
+  managed_alias <- paste0("vpro_project_", tolower(db))
+  databases <- DBI::dbGetQuery(con, "SELECT database_name, path FROM duckdb_databases()")
+  tables <- DBI::dbGetQuery(
+    con,
+    "SELECT database_name FROM duckdb_tables() WHERE lower(table_name) = lower(?)",
+    params = list(physical_table)
+  )
+  candidates <- merge(tables, databases, by = "database_name")
+  aliases <- unique(candidates$database_name[!is.na(candidates$path)])
+  if (managed_alias %in% aliases) {
+    alias <- managed_alias
+  } else if (length(aliases) == 1L) {
+    alias <- aliases[[1L]]
+  } else {
+    stop("Cannot uniquely resolve attached project table: ", physical_table, call. = FALSE)
+  }
+  DBI::Id(schema = alias, table = physical_table)
+}
+
+app_project_table_sql <- function(con, tb, db = NULL, prj = FALSE) {
+  DBI::dbQuoteIdentifier(con, app_project_table_id(con, tb, db, prj))
+}
+
 # Module Imports
 source("modules/mod_whatsnew.R", local = TRUE)
 source("modules/mod_sidebar.R", local = TRUE)
@@ -82,7 +117,6 @@ source("modules/mod_project_metadata.R", local = TRUE)
 source("modules/mod_images.R", local = TRUE)
 source("modules/mod_plot_profiling.R", local = TRUE)
 source("modules/mod_fs882_6x4.R", local = TRUE)
-source("modules/mod_fs882_8x6xl.R", local = TRUE)
 source("modules/mod_fs1333.R", local = TRUE)
 source("modules/mod_combine_species.R", local = TRUE)
 source("modules/mod_herbarium.R", local = TRUE)

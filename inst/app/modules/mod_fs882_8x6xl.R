@@ -49,7 +49,7 @@ dm_to_dd <- function(d, m) {
 
 list_choices <- function(con, list_name) {
   rows <- tryCatch(
-    db_query(
+    DBI::dbGetQuery(
       con,
       paste(
         "SELECT item, itemdescription",
@@ -117,37 +117,37 @@ num_display <- function(value) {
 # -- Env table SQL helpers --
 
 env_tb <- function(con) {
-  as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 veg_tb <- function(con) {
-  as.character(db_tb(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 humus_tb <- function(con) {
-  as.character(db_tb(con, "Humus", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Humus", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 mineral_tb <- function(con) {
-  as.character(db_tb(con, "Mineral", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Mineral", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 audit_tb <- function(con) {
-  as.character(db_tb(con, "Audit", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Audit", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 other_tb <- function(con) {
-  as.character(db_tb(con, "Other", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Other", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 veg_other_tb <- function(con) {
-  as.character(db_tb(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
+  as.character(app_project_table_sql(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 admin_tb <- function(con) {
   # Sample_Admin table (not prefixed, shares schema with project db)
   proj <- app_config_get("Current", "CurrProject")
-  as.character(db_tb(con, "Sample_Admin", proj, prj = FALSE))
+  as.character(app_project_table_sql(con, "Sample_Admin", proj, prj = FALSE))
 }
 
 # ============================================================
@@ -773,11 +773,11 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
     observe({
       proj_choices <- tryCatch(
         {
-          rows <- db_query(
+          rows <- DBI::dbGetQuery(
             con,
             paste(
               "SELECT ProjectID, ProjectTitle FROM",
-              as.character(db_tb(con, "Metadata", app_config_get("Current", "CurrProject"), prj = TRUE)),
+              as.character(app_project_table_sql(con, "Metadata", app_config_get("Current", "CurrProject"), prj = TRUE)),
               "ORDER BY ProjectID"
             )
           )
@@ -819,7 +819,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       choices <- tryCatch(
         {
           if (src == 1L) {
-            rows <- db_query(
+            rows <- DBI::dbGetQuery(
               con,
               paste(
                 "SELECT DISTINCT UserSiteUnit FROM",
@@ -829,7 +829,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
             )
             c(setNames("", ""), stats::setNames(rows$UserSiteUnit, rows$UserSiteUnit))
           } else if (src == 2L) {
-            rows <- db_query(
+            rows <- DBI::dbGetQuery(
               con,
               paste(
                 "SELECT SiteSeries, SiteSeriesLongName",
@@ -845,8 +845,8 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
               show_toast(toast("Select an SU table first.", type = "warning"))
               c("---" = "")
             } else {
-              su_tbl <- as.character(db_tb(con, "SU", plotlist, prj = TRUE))
-              rows <- db_query(
+              su_tbl <- as.character(app_project_table_sql(con, "SU", plotlist, prj = TRUE))
+              rows <- DBI::dbGetQuery(
                 con,
                 paste(
                   "SELECT DISTINCT SiteUnit FROM",
@@ -873,7 +873,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
         return()
       }
       rows <- tryCatch(
-        db_query(
+        DBI::dbGetQuery(
           con,
           paste(
             "SELECT DISTINCT item FROM VLists.USysTableOfLists",
@@ -899,7 +899,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       }
       filter_val <- paste0(zone, subzone)
       rows <- tryCatch(
-        db_query(
+        DBI::dbGetQuery(
           con,
           paste(
             "SELECT DISTINCT SiteSeriesNo, siteseries",
@@ -943,11 +943,11 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
             "a ON e.PlotNumber = a.Plot",
             "WHERE e.PlotNumber = ?"
           )
-          db_query(con, sql, params = list(plot_id))
+          DBI::dbGetQuery(con, sql, params = list(plot_id))
         },
         error = function(e) {
           # Fallback: env only (Admin table may not exist yet)
-          db_query(con, paste("SELECT * FROM", env_tb(con), "WHERE plotnumber = ?"), params = list(plot_id))
+          DBI::dbGetQuery(con, paste("SELECT * FROM", env_tb(con), "WHERE plotnumber = ?"), params = list(plot_id))
         }
       )
       if (nrow(env)) {
@@ -964,11 +964,11 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       #   USysVegA view lacks Height1-5 per-layer heights → query Sample_Veg directly
       {
         proj <- app_config_get("Current", "CurrProject")
-        veg_raw_tbl <- as.character(db_tb(con, "Veg", proj, prj = TRUE))
-        veg_c_tbl <- as.character(db_tb(con, "USysVegC", proj, prj = FALSE))
-        veg_d_tbl <- as.character(db_tb(con, "USysVegD", proj, prj = FALSE))
+        veg_raw_tbl <- as.character(app_project_table_sql(con, "Veg", proj, prj = TRUE))
+        veg_c_tbl <- as.character(app_project_table_sql(con, "USysVegC", proj, prj = FALSE))
+        veg_d_tbl <- as.character(app_project_table_sql(con, "USysVegD", proj, prj = FALSE))
         rv$veg_a <- tryCatch(
-          db_query(
+          DBI::dbGetQuery(
             con,
             paste(
               "SELECT Species, Cover1, Height1, Cover2, Height2, Cover3, Height3,",
@@ -986,34 +986,34 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
           error = function(e) data.frame()
         )
         rv$veg_c <- tryCatch(
-          db_query(con, paste("SELECT * FROM", veg_c_tbl, "WHERE plotnumber = ? ORDER BY species"), params = list(plot_id)),
+          DBI::dbGetQuery(con, paste("SELECT * FROM", veg_c_tbl, "WHERE plotnumber = ? ORDER BY species"), params = list(plot_id)),
           error = function(e) data.frame()
         )
         rv$veg_d <- tryCatch(
-          db_query(con, paste("SELECT * FROM", veg_d_tbl, "WHERE plotnumber = ? ORDER BY species"), params = list(plot_id)),
+          DBI::dbGetQuery(con, paste("SELECT * FROM", veg_d_tbl, "WHERE plotnumber = ? ORDER BY species"), params = list(plot_id)),
           error = function(e) data.frame()
         )
       }
 
       # Soil
       rv$humus <- tryCatch(
-        db_query(con, paste("SELECT * FROM", humus_tb(con), "WHERE plotnumber = ? ORDER BY horizon, upperdepth"), params = list(plot_id)),
+        DBI::dbGetQuery(con, paste("SELECT * FROM", humus_tb(con), "WHERE plotnumber = ? ORDER BY horizon, upperdepth"), params = list(plot_id)),
         error = function(e) data.frame()
       )
       rv$mineral <- tryCatch(
-        db_query(con, paste("SELECT * FROM", mineral_tb(con), "WHERE plotnumber = ? ORDER BY horizon, upperdepth"), params = list(plot_id)),
+        DBI::dbGetQuery(con, paste("SELECT * FROM", mineral_tb(con), "WHERE plotnumber = ? ORDER BY horizon, upperdepth"), params = list(plot_id)),
         error = function(e) data.frame()
       )
 
       # Audit
       rv$audit <- tryCatch(
-        db_query(con, paste("SELECT * FROM", audit_tb(con), "WHERE plotnumber = ? ORDER BY EditWhen DESC"), params = list(plot_id)),
+        DBI::dbGetQuery(con, paste("SELECT * FROM", audit_tb(con), "WHERE plotnumber = ? ORDER BY EditWhen DESC"), params = list(plot_id)),
         error = function(e) data.frame()
       )
 
       # Other
       rv$other <- tryCatch(
-        db_query(con, paste("SELECT * FROM", other_tb(con), "WHERE plotnumber = ?"), params = list(plot_id)),
+        DBI::dbGetQuery(con, paste("SELECT * FROM", other_tb(con), "WHERE plotnumber = ?"), params = list(plot_id)),
         error = function(e) data.frame()
       )
 
@@ -1028,7 +1028,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
             veg_other_tb(con),
             "WHERE plotnumber = ? ORDER BY Species"
           )
-          db_query(con, sql, params = list(plot_id))
+          DBI::dbGetQuery(con, sql, params = list(plot_id))
         },
         error = function(e) data.frame()
       )
@@ -1079,7 +1079,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       bec_val <- as_text(col("becsiteunit"))
       bec_choices <- tryCatch(
         {
-          rows <- db_query(
+          rows <- DBI::dbGetQuery(
             con,
             paste(
               "SELECT Name, UnitLongName FROM VLists.USysMasterSiteUnitList",
@@ -1245,7 +1245,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
           set_pairs <- paste(set_parts, collapse = ", ")
           update_sql <- paste("UPDATE", tbl, "SET", set_pairs, "WHERE plotnumber = ?")
           update_params <- c(unname(env_fields[param_env_nms]), list(plot_id))
-          n <- db_run(con, update_sql, params = update_params)
+          n <- DBI::dbExecute(con, update_sql, params = update_params)
 
           if (n == 0) {
             ins_cols <- names(env_fields)
@@ -1258,7 +1258,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
             )
             insert_sql <- paste("INSERT INTO", tbl, "(", paste(vapply(ins_cols, q_col, character(1)), collapse = ", "), ") VALUES (", paste(ins_val_sql, collapse = ", "), ")")
             insert_params <- unname(env_fields[setdiff(ins_cols, ts_cols)])
-            db_run(con, insert_sql, params = insert_params)
+            DBI::dbExecute(con, insert_sql, params = insert_params)
           }
 
           # --- Update Sample_Admin ---
@@ -1273,12 +1273,12 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
               ),
               collapse = ", "
             )
-            na <- db_run(con, paste("UPDATE", atbl, "SET", admin_set, "WHERE Plot = ?"), params = c(unname(admin_fields), list(plot_id)))
+            na <- DBI::dbExecute(con, paste("UPDATE", atbl, "SET", admin_set, "WHERE Plot = ?"), params = c(unname(admin_fields), list(plot_id)))
             if (na == 0) {
               a_all <- c(list(Plot = plot_id), admin_fields)
               a_cols <- paste(vapply(names(a_all), q_col, character(1)), collapse = ", ")
               a_ph <- paste(rep("?", length(a_all)), collapse = ", ")
-              db_run(con, paste("INSERT INTO", atbl, "(", a_cols, ") VALUES (", a_ph, ")"), params = unname(a_all))
+              DBI::dbExecute(con, paste("INSERT INTO", atbl, "(", a_cols, ") VALUES (", a_ph, ")"), params = unname(a_all))
             }
           }
 
@@ -1397,7 +1397,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       tbl <- env_tb(con)
       tryCatch(
         {
-          db_run(con, paste("INSERT INTO", tbl, "(plotnumber) VALUES (?)"), params = list(new_id))
+          DBI::dbExecute(con, paste("INSERT INTO", tbl, "(plotnumber) VALUES (?)"), params = list(new_id))
           # Refresh recordset and navigate
           rv$recordset <- refresh_recordset(con)
           updateSelectizeInput(session, "navPlotPicker", choices = stats::setNames(rv$recordset, rv$recordset), server = FALSE)
@@ -1578,7 +1578,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
           set_pairs <- paste(set_parts, collapse = ", ")
           update_sql <- paste("UPDATE", tbl, "SET", set_pairs, "WHERE plotnumber = ?")
           update_params <- c(unname(env_fields[param_env_nms]), list(plot_id))
-          n <- db_run(con, update_sql, params = update_params)
+          n <- DBI::dbExecute(con, update_sql, params = update_params)
 
           if (n == 0) {
             ins_cols <- names(env_fields)
@@ -1591,7 +1591,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
             )
             insert_sql <- paste("INSERT INTO", tbl, "(", paste(vapply(ins_cols, q_col, character(1)), collapse = ", "), ") VALUES (", paste(ins_val_sql, collapse = ", "), ")")
             insert_params <- unname(env_fields[setdiff(ins_cols, ts_cols)])
-            db_run(con, insert_sql, params = insert_params)
+            DBI::dbExecute(con, insert_sql, params = insert_params)
           }
 
           # --- Update Sample_Admin ---
@@ -1617,13 +1617,13 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
               ) -
                 paste("UPDATE", atbl, "SET", admin_set, "WHERE Plot = ?")
             admin_upd_params <- c(unname(admin_fields), list(plot_id))
-            na <- db_run(con, admin_upd_sql, params = admin_upd_params)
+            na <- DBI::dbExecute(con, admin_upd_sql, params = admin_upd_params)
             if (na == 0) {
               # No admin row yet - insert with Plot key
               a_all <- c(list(Plot = plot_id), admin_fields)
               a_cols <- paste(vapply(names(a_all), q_col, character(1)), collapse = ", ")
               a_ph <- paste(rep("?", length(a_all)), collapse = ", ")
-              db_run(con, paste("INSERT INTO", atbl, "(", a_cols, ") VALUES (", a_ph, ")"), params = unname(a_all))
+              DBI::dbExecute(con, paste("INSERT INTO", atbl, "(", a_cols, ") VALUES (", a_ph, ")"), params = unname(a_all))
             }
           }
 
@@ -1723,7 +1723,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       }
       tryCatch(
         {
-          db_run(
+          DBI::dbExecute(
             con,
             paste(
               "INSERT INTO",
@@ -1861,7 +1861,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       # Collect plot numbers from current form view (all loaded env plots)
       env_tbl <- env_tb(con)
       all_plots <- tryCatch(
-        db_query(con, paste("SELECT plotnumber FROM", env_tbl, "ORDER BY plotnumber"))$plotnumber,
+        DBI::dbGetQuery(con, paste("SELECT plotnumber FROM", env_tbl, "ORDER BY plotnumber"))$plotnumber,
         error = function(e) character(0)
       )
       if (!length(all_plots)) {
@@ -1891,7 +1891,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
     observeEvent(input$btnConfirmCreateSu, {
       env_tbl <- env_tb(con)
       all_plots <- tryCatch(
-        db_query(con, paste("SELECT plotnumber FROM", env_tbl))$plotnumber,
+        DBI::dbGetQuery(con, paste("SELECT plotnumber FROM", env_tbl))$plotnumber,
         error = function(e) character(0)
       )
       action <- input$create_su_action
@@ -1987,7 +1987,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
               " = ? ",
               where$sql
             )
-            db_run(con, update_sql, params = c(list(before_val), where$params))
+            DBI::dbExecute(con, update_sql, params = c(list(before_val), where$params))
             n_restored <- n_restored + 1
           },
           error = function(e) NULL
@@ -1997,7 +1997,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
         if (remove_after) {
           audit_tbl <- audit_tb(con)
           tryCatch(
-            db_run(
+            DBI::dbExecute(
               con,
               paste0(
                 "DELETE FROM ",

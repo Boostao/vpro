@@ -131,9 +131,9 @@ mod_plot_profiling_server <- function(id, state, con) {
 
     # Total plots in project
     output$lblTotalPlots <- renderText({
-      env_tbl <- as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
+      env_tbl <- as.character(app_project_table_sql(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
       n <- tryCatch(
-        db_query(con, paste("SELECT COUNT(*) AS n FROM", env_tbl))$n[1],
+        DBI::dbGetQuery(con, paste("SELECT COUNT(*) AS n FROM", env_tbl))$n[1],
         error = function(e) 0
       )
       paste("Project plots:", n)
@@ -153,8 +153,8 @@ mod_plot_profiling_server <- function(id, state, con) {
       rv$criteria <- hot_data
 
       project <- app_config_get("Current", "CurrProject")
-      env_tbl <- as.character(db_tb(con, "Env", project, prj = TRUE))
-      veg_tbl <- as.character(db_tb(con, "Veg", project, prj = TRUE))
+      env_tbl <- as.character(app_project_table_sql(con, "Env", project, prj = TRUE))
+      veg_tbl <- as.character(app_project_table_sql(con, "Veg", project, prj = TRUE))
 
       matched <- NULL # NULL = not yet filtered; character(0) = empty
 
@@ -305,7 +305,7 @@ profile_veg_step <- function(con, env_tbl, veg_tbl, spp, layer, op, val) {
     "WHERE 1=1 ",
     where_clause
   )
-  rows <- db_query(con, sql, params = params)
+  rows <- DBI::dbGetQuery(con, sql, params = params)
   as.character(rows$plotnumber)
 }
 
@@ -346,7 +346,7 @@ profile_env_step <- function(con, env_tbl, field, op, val) {
       field_lower,
       " AS TEXT)) LIKE LOWER(?)"
     )
-    rows <- db_query(con, sql, params = list(paste0("%", val, "%")))
+    rows <- DBI::dbGetQuery(con, sql, params = list(paste0("%", val, "%")))
   } else if (!is.na(numeric_val)) {
     sql <- paste0(
       "SELECT DISTINCT plotnumber FROM ",
@@ -357,7 +357,7 @@ profile_env_step <- function(con, env_tbl, field, op, val) {
       op,
       " ?"
     )
-    rows <- db_query(con, sql, params = list(numeric_val))
+    rows <- DBI::dbGetQuery(con, sql, params = list(numeric_val))
   } else {
     sql <- paste0(
       "SELECT DISTINCT plotnumber FROM ",
@@ -368,7 +368,7 @@ profile_env_step <- function(con, env_tbl, field, op, val) {
       op,
       " LOWER(?)"
     )
-    rows <- db_query(con, sql, params = list(val))
+    rows <- DBI::dbGetQuery(con, sql, params = list(val))
   }
   as.character(rows$plotnumber)
 }

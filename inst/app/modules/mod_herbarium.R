@@ -8,7 +8,7 @@ herbarium_table_id <- function(prefix) {
 
 herbarium_table_exists <- function(con, prefix) {
   prefix <- trimws(as.character(prefix %||% ""))
-  if (!nzchar(prefix) || !(prefix %in% db_list_attached(con))) {
+  if (!nzchar(prefix) || !(prefix %in% vpro::vpro_db_list(con))) {
     return(FALSE)
   }
 
@@ -46,7 +46,7 @@ herbarium_table_to_base <- function(table_name) {
 }
 
 herbarium_existing_bases <- function(con) {
-  bases <- db_list_attached(con)
+  bases <- vpro::vpro_db_list(con)
   bases <- bases[vapply(bases, function(prefix) herbarium_table_exists(con, prefix), logical(1))]
   sort(bases[nzchar(bases) & !grepl("(?i)^usys", bases, perl = TRUE)])
 }
@@ -65,9 +65,25 @@ herbarium_resolve_table <- function(con, selection) {
   ""
 }
 
+herbarium_unique_source_alias <- function(con, alias) {
+  alias <- trimws(as.character(alias %||% "tmp_attach_herbarium"))
+  if (!nzchar(alias)) {
+    alias <- "tmp_attach_herbarium"
+  }
+
+  attached <- vpro::vpro_db_list(con)
+  candidate <- alias
+  index <- 0L
+  while (candidate %in% attached) {
+    index <- index + 1L
+    candidate <- paste0(alias, "_", index)
+  }
+  candidate
+}
+
 herbarium_attach_source_db <- function(con, db_path, alias) {
-  if (alias %in% db_list_attached(con)) {
-    db_detach(con, alias)
+  if (alias %in% vpro::vpro_db_list(con)) {
+    stop("Source database alias is already attached: ", alias)
   }
 
   statement <- if (project_file_is_sqlite(db_path)) {
@@ -129,16 +145,17 @@ herbarium_import_table <- function(
     stop("Database file does not exist: ", source_path)
   }
 
+  source_alias <- herbarium_unique_source_alias(con, source_alias)
   herbarium_attach_source_db(con, source_path, source_alias)
-  on.exit(try(db_detach(con, source_alias), silent = TRUE), add = TRUE)
+  on.exit(try(vpro::vpro_db_detach(con, source_alias), silent = TRUE), add = TRUE)
 
   source_table <- herbarium_source_table(con, source_alias, source_prefix)
   if (!nzchar(source_table)) {
     stop("Source herbarium table not found in attached DB: ", herbarium_target_table(source_prefix))
   }
 
-  if (project_attached(con, target_prefix)) {
-    db_detach(con, target_prefix)
+  if (target_prefix %in% vpro::vpro_db_list(con)) {
+    stop("Target herbarium alias is already attached: ", target_prefix)
   }
 
   target_path <- project_db_path(target_prefix)
@@ -186,7 +203,7 @@ herbarium_unattach_table <- function(con, prefix, protected_prefixes = c("Sample
     return(invisible(NULL))
   }
 
-  db_detach(con, prefix)
+  vpro::vpro_db_detach(con, prefix)
   invisible(herbarium_target_table(prefix))
 }
 

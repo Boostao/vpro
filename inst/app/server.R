@@ -58,9 +58,8 @@ server <- function(input, output, session) {
     User = accessor("Current", "User")
   )
 
-  mod_sidebar_server("sidebar", context, state, user)
-  mod_fs882_6x4_server("fs882_6x4", state, con)
-  mod_fs882_8x6xl_server("fs882_8x6xl", state, con)
+  fs882 <- mod_fs882_6x4_server("fs882_6x4", state, con, context)
+  mod_sidebar_server("sidebar", context, state, user, fs882 = fs882)
 
   # sync_ensure_local_tables(con)
   # project_ensure_baseline_table(con)
@@ -71,7 +70,7 @@ server <- function(input, output, session) {
 
   # # Ensure clean disconnect when session ends
   # onSessionEnded(function() {
-  #   if (is_cloud_connected(con)) db_detach(con, "master")
+  #   if (is_cloud_connected(con)) vpro::vpro_db_detach(con, "master")
   #   dbDisconnect(con)
   # })
 
@@ -499,11 +498,11 @@ server <- function(input, output, session) {
   #     return(hit[[1]])
   #   }
 
-  #   env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
-  #   su_table_sql <- as.character(db_tb(con, "SU", (config("Current", "CurrPlotlist") %||% config("Current", "CurrProject")), prj = TRUE))
+  #   env_table_sql <- as.character(app_project_table_sql(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
+  #   su_table_sql <- as.character(app_project_table_sql(con, "SU", (app_config_get("Current", "CurrPlotlist") %||% app_config_get("Current", "CurrProject")), prj = TRUE))
 
   #   res <- tryCatch(
-  #     db_query(
+  #     DBI::dbGetQuery(
   #       con,
   #       paste(
   #         "SELECT s.siteunit",

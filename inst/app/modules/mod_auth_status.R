@@ -90,7 +90,7 @@ mod_auth_status_server <- function(id, state, con) {
 
     observeEvent(input$logout, {
       if (is_cloud_connected(con)) {
-        db_detach(con, "master")
+        vpro::vpro_db_detach(con, "master")
       }
       auth_logout(state)
     })
