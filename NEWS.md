@@ -1,5 +1,7 @@
 # vpro 0.0.0.9000
 
+* `vpro_config_cleanup()` and `vpro_data_cleanup()` now prompt y/n/c for each file, retaining skipped files and allowing cancellation; a later launch restores missing bundled defaults.
+
 * `vpro_whats_new_list()`, `vpro_whats_new_set_viewed()`, and `vpro_whats_new_mark_all_viewed()` move What's New message storage into headless VPro64 SQLite APIs; the existing app modal uses them with the session context.
 
 * The sidebar now opens copied SQLite projects or verified VP08 Access files through one guided file picker, with archived originals and explicit refusal of unsupported historical versions; project selection uses session-owned context APIs instead of legacy startup state.
