@@ -68,9 +68,9 @@ mod_reporting_server <- function(id, sys_state, con) {
 
     report_prefs_loaded <- reactiveVal(FALSE)
     report_pref_defaults <- list(
-      colour_greater = (config("ReportOptions", "cmbColourGreater") %||% 5L),
-      gray_greater = (config("ReportOptions", "cmbGrayGreater") %||% 65L),
-      apply_theme = (config("ReportOptions", "cmbApplyTheme") %||% 1L)
+      colour_greater = (app_config_get("ReportOptions", "cmbColourGreater") %||% 5L),
+      gray_greater = (app_config_get("ReportOptions", "cmbGrayGreater") %||% 65L),
+      apply_theme = (app_config_get("ReportOptions", "cmbApplyTheme") %||% 1L)
     )
     report_pref_defaults$apply_theme <- isTRUE(as.logical(report_pref_defaults$apply_theme))
 
@@ -90,7 +90,7 @@ mod_reporting_server <- function(id, sys_state, con) {
     observeEvent(
       input$opt_colour_greater,
       {
-        config("ReportOptions", "cmbColourGreater", input$opt_colour_greater)
+        app_config_set("ReportOptions", "cmbColourGreater", input$opt_colour_greater)
       },
       ignoreInit = TRUE
     )
@@ -98,7 +98,7 @@ mod_reporting_server <- function(id, sys_state, con) {
     observeEvent(
       input$opt_gray_greater,
       {
-        config("ReportOptions", "cmbGrayGreater", input$opt_gray_greater)
+        app_config_set("ReportOptions", "cmbGrayGreater", input$opt_gray_greater)
       },
       ignoreInit = TRUE
     )
@@ -106,7 +106,7 @@ mod_reporting_server <- function(id, sys_state, con) {
     observeEvent(
       input$opt_apply_theme,
       {
-        config("ReportOptions", "cmbApplyTheme", as.integer(isTRUE(input$opt_apply_theme)))
+        app_config_set("ReportOptions", "cmbApplyTheme", as.integer(isTRUE(input$opt_apply_theme)))
       },
       ignoreInit = TRUE
     )

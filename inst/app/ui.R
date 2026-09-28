@@ -55,7 +55,7 @@ ui <- tagList(
       icon("seedling"),
       span("VPro", class = "fw-bold")
     ),
-    theme = bs_theme(version = 5, bootswatch = "bcgov"),
+    theme = vpro::vpro_bcgov_theme(),
     header = tagList(
       tags$head(
         tags$link(rel = "stylesheet", type = "text/css", href = "vpro-ui.css") #,

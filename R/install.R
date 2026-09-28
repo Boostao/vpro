@@ -17,6 +17,9 @@ vpro_config_install <- function(path = vpro_config_file(), overwrite = FALSE) {
   if (!file.copy(source, path, overwrite = isTRUE(overwrite))) {
     stop("Could not install the default VPRO configuration: ", path, call. = FALSE)
   }
+  # Access ProjectPath names the selected backend file, not the data root.
+  config <- config_init(path, create = FALSE)
+  config("Current", "ProjectPath", vpro_db_path("Sample", "projects"))
   invisible(path)
 }
 

@@ -42,7 +42,7 @@ mod_colour_theme_server <- function(id, state, con) {
     theme_data <- shiny::reactiveVal(data.frame())
 
     load_theme <- function() {
-      current_project <- trimws(state$CurrProject %||% config("Current", "CurrProject") %||% "Sample")
+      current_project <- trimws(state$CurrProject %||% app_config_get("Current", "CurrProject") %||% "Sample")
       table_name <- paste0(current_project, "_Theme")
       tables <- tryCatch(DBI::dbListTables(con), error = function(e) character(0))
       match_hit <- tables[tolower(tables) == tolower(table_name)]
@@ -108,7 +108,7 @@ mod_colour_theme_server <- function(id, state, con) {
         return()
       }
       df <- rhandsontable::hot_to_r(hot)
-      current_project <- trimws(state$CurrProject %||% config("Current", "CurrProject") %||% "Sample")
+      current_project <- trimws(state$CurrProject %||% app_config_get("Current", "CurrProject") %||% "Sample")
       table_name <- paste0(current_project, "_Theme")
       tables <- tryCatch(DBI::dbListTables(con), error = function(e) character(0))
       match_hit <- tables[tolower(tables) == tolower(table_name)]

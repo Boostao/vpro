@@ -15,7 +15,8 @@ vpro_sqlite_extension <- function(con, install = FALSE) {
   if (!isTRUE(status$installed[[1]]) && !isTRUE(install)) {
     stop(
       "DuckDB's sqlite_scanner extension is not installed. ",
-      "Call `vpro_db_connect(install_extensions = TRUE)` once while online.",
+      "Connect while online to install it, or run `vpro_db_install_sqlite()` before going offline. ",
+      "Use the same DuckDB version and extension cache.",
       call. = FALSE
     )
   }
@@ -26,6 +27,28 @@ vpro_sqlite_extension <- function(con, install = FALSE) {
     DBI::dbExecute(con, "LOAD sqlite_scanner")
   }
   invisible(con)
+}
+
+#' Provision DuckDB's SQLite extension while online
+#'
+#' Installs `sqlite_scanner` in DuckDB's extension cache, then loads it to
+#' verify the installation. Run this explicitly on each machine (and again
+#' after a DuckDB version or cache-location change) before working offline.
+#' Package loading does not download extensions; `run_vpro()` installs the
+#' extension if it is missing and the machine is online.
+#'
+#' @return `TRUE`, invisibly, when the extension is available.
+#' @export
+vpro_db_install_sqlite <- function() {
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  tryCatch(
+    vpro_sqlite_extension(con, install = TRUE),
+    error = function(e) {
+      stop("Could not install DuckDB's SQLite extension. Check the network ", "and retry before going offline: ", conditionMessage(e), call. = FALSE)
+    }
+  )
+  invisible(TRUE)
 }
 
 #' Open a VPRO database coordinator
@@ -104,6 +127,14 @@ vpro_db_attach <- function(con, paths) {
   for (index in seq_along(paths)) {
     alias <- aliases[[index]]
     if (alias %in% attached) {
+      existing <- DBI::dbGetQuery(
+        con,
+        "SELECT path FROM duckdb_databases() WHERE database_name = ?",
+        params = list(alias)
+      )$path
+      if (length(existing) != 1L || is.na(existing) || !identical(normalizePath(existing, mustWork = FALSE), paths[[index]])) {
+        stop("VPRO database alias already refers to a different path: ", alias, call. = FALSE)
+      }
       next
     }
     statement <- paste(

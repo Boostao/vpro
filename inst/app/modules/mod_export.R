@@ -280,7 +280,7 @@ build_venus_xml_doc <- function(con, project_ids = character(0), tables = NULL, 
     tables <- c("Env", "Veg", "Humus", "Mineral", "Other", "Audit")
   }
 
-  project_db <- config("Current", "CurrProject")
+  project_db <- app_config_get("Current", "CurrProject")
   env_table_id <- if (!is.null(project_db) && nzchar(trimws(as.character(project_db)))) db_id("Env", project_db, prj = TRUE) else NULL
   env_table_exists <- !is.null(env_table_id) && isTRUE(tryCatch(DBI::dbExistsTable(con, env_table_id), error = function(e) FALSE))
   env_table_sql <- if (env_table_exists) as.character(DBI::dbQuoteIdentifier(con, env_table_id)) else NULL
@@ -715,7 +715,7 @@ mod_export_server <- function(id, sys_state, con) {
         pivot_wider(names_from = colname, values_from = covernum, values_fill = 0)
 
       # 3. Get Env Data
-      env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+      env_table_sql <- as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
       query_env <- paste("SELECT plotnumber, projectid, _location, date, latitude, longitude, elevation, slopegradient, aspect, sitenotes FROM", env_table_sql)
       if (!is.null(input$export_proj) && length(input$export_proj) > 0) {
         projs_sql <- paste(paste0("'", input$export_proj, "'"), collapse = ", ")

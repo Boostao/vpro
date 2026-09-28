@@ -301,7 +301,7 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
   shiny::moduleServer(id, function(input, output, session) {
     root_session <- session$rootScope()
 
-    table_name <- project_metadata_detect_table(con, project = config("Current", "CurrProject"))
+    table_name <- project_metadata_detect_table(con, project = app_config_get("Current", "CurrProject"))
     status_text <- shiny::reactiveVal("")
     suppress_project_observer <- shiny::reactiveVal(FALSE)
     current_project_before_edit <- shiny::reactiveVal("")
@@ -539,7 +539,7 @@ mod_project_metadata_server <- function(id, state, con, open_trigger = NULL, plo
 
         state$CurrForm <- "frmProjectMetaData"
         state$sysCurrForm <- "frmProjectMetaData"
-        config("Current", "DataFormName", "frmProjectMetaData")
+        app_config_set("Current", "DataFormName", "frmProjectMetaData")
 
         default_project <- if (!is.null(plot_project_id) && nzchar(plot_project_id())) {
           normalize_text(plot_project_id())

@@ -21,4 +21,12 @@ test_that("vpro_install initializes both storage roots", {
   installed <- vpro_install()
   expect_true(dir.exists(installed$data_dir))
   expect_true(file.exists(installed$config_file))
+  accessor <- config_init(installed$config_file)
+  expect_identical(
+    accessor("Current", "ProjectPath"),
+    vpro_db_path("Sample", "projects")
+  )
+  accessor("Current", "ProjectPath", "user-project.db")
+  vpro_install()
+  expect_identical(config_init(installed$config_file)("Current", "ProjectPath"), "user-project.db")
 })

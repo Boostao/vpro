@@ -110,13 +110,13 @@ mod_fs1333_server <- function(id, state, con) {
         return(data.frame())
       }
 
-      env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+      env_table_sql <- as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
       sql <- paste("SELECT * FROM", env_table_sql, "WHERE plotnumber = ? LIMIT 1")
       tryCatch(DBI::dbGetQuery(con, sql, list(plot_number)), error = function(e) data.frame())
     }
 
     env_has_column <- function(column_name) {
-      env_table_id <- db_id("Env", config("Current", "CurrProject"), prj = TRUE)
+      env_table_id <- db_id("Env", app_config_get("Current", "CurrProject"), prj = TRUE)
       out <- tryCatch(DBI::dbListFields(con, env_table_id), error = function(e) character(0))
       if (!length(out)) {
         return(FALSE)
@@ -134,7 +134,7 @@ mod_fs1333_server <- function(id, state, con) {
       }
 
       # Column names are internal constants validated from PRAGMA table info above.
-      env_table_sql <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+      env_table_sql <- as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
       sql <- sprintf("UPDATE %s SET %s = ? WHERE plotnumber = ?", env_table_sql, column_name)
       n_updated <- tryCatch(
         DBI::dbExecute(con, sql, list(value, plot_number)),
@@ -226,7 +226,7 @@ mod_fs1333_server <- function(id, state, con) {
     load_current_context <- function() {
       state$CurrForm <- "frmSIVIsite"
       state$sysCurrForm <- "frmSIVIsite"
-      config("Current", "DataFormName", "frmSIVIsite")
+      app_config_set("Current", "DataFormName", "frmSIVIsite")
 
       plot_number <- normalize_text(state$CurrSU)
       if (!nzchar(plot_number)) {
@@ -265,7 +265,7 @@ mod_fs1333_server <- function(id, state, con) {
     observeEvent(
       TRUE,
       {
-        source_pref <- suppressWarnings(as.integer((config("Current", "FS1333ProjectIdSource") %||% "1")))
+        source_pref <- suppressWarnings(as.integer((app_config_get("Current", "ProjectIdSource") %||% "1")))
         if (is.na(source_pref) || !(source_pref %in% c(1L, 2L))) {
           source_pref <- 1L
         }
@@ -285,7 +285,7 @@ mod_fs1333_server <- function(id, state, con) {
           source_mode <- 1L
         }
         project_id_source(source_mode)
-        config("Current", "FS1333ProjectIdSource", as.character(source_mode))
+        app_config_set("Current", "ProjectIdSource", as.character(source_mode))
         load_project_id_choices()
       },
       ignoreInit = TRUE
@@ -339,7 +339,7 @@ mod_fs1333_server <- function(id, state, con) {
         status_text("No Project ID selected.")
         return(invisible(NULL))
       }
-      current_project <- normalize_text(state$CurrProject %||% config("Current", "CurrProject"))
+      current_project <- normalize_text(state$CurrProject %||% app_config_get("Current", "CurrProject"))
       if (!nzchar(current_project)) {
         status_text("No project loaded.")
         return(invisible(NULL))
@@ -393,7 +393,7 @@ mod_fs1333_server <- function(id, state, con) {
     observeEvent(input$btnMetaAddYes, {
       shiny::removeModal()
       project_id <- normalize_text(input$ProjectID)
-      current_project <- normalize_text(state$CurrProject %||% config("Current", "CurrProject"))
+      current_project <- normalize_text(state$CurrProject %||% app_config_get("Current", "CurrProject"))
       if (!nzchar(project_id) || !nzchar(current_project)) {
         status_text("Cannot add metadata — missing project context.")
         return()

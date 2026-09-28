@@ -14,4 +14,7 @@ The value returned by \code{\link[shiny:runApp]{shiny::runApp()}}.
 }
 \description{
 User storage is initialized before the packaged application is launched.
+The first online launch installs DuckDB's SQLite extension if absent;
+subsequent launches use the cached extension and work offline. If offline
+before the extension is cached, startup fails with setup guidance.
 }

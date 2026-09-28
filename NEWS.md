@@ -1,5 +1,15 @@
 # vpro 0.0.0.9000
 
+* `vpro_whats_new_list()`, `vpro_whats_new_set_viewed()`, and `vpro_whats_new_mark_all_viewed()` move What's New message storage into headless VPro64 SQLite APIs; the existing app modal uses them with the session context.
+
+* The sidebar now opens copied SQLite projects or verified VP08 Access files through one guided file picker, with archived originals and explicit refusal of unsupported historical versions; project selection uses session-owned context APIs instead of legacy startup state.
+* `vpro_project_file_families()` and `vpro_project_open_file()` discover and safely import project files into managed storage without altering the selected source.
+
+* `run_vpro()` installs DuckDB's SQLite extension on first online launch if absent; subsequent launches use the cache offline, with an actionable error if installation fails.
+* `vpro_db_install_sqlite()` explicitly provisions the SQLite extension without doing so during package load.
+* `vpro_startup()` restores the project, SU, and hierarchy, attaches system databases, and creates temporary reference views without mutating reference files.
+* `vpro_session_login()`, `vpro_session_logout()`, and `vpro_project_log_lifecycle()` provide headless session and audit logging using explicit context and user identity; the app owns the session lifecycle.
+
 * `vpro_report_short_veg_layers()` returns read-only, SU-scoped per-plot vegetation layer data using a versioned bundled layer/strata mapping and opt-in quality filtering; it does not resolve species metadata conflicts or compute a short-vegetation summary.
 
 * `vpro_report_long_environment()` returns bounded, read-only active-SU long-environment data with physical membership, Env/Admin absence statuses, duplicate-membership and unit-name diagnostics, ordered Access projection metadata, and an explicit reference-list path. A standalone, render-tested HTML template uses this API without altering existing environment reports or UI.

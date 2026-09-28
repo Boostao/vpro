@@ -4,7 +4,7 @@
 #   explanatory labels, Continue + Cancel buttons.
 # Tab 2 (Registry): AuditStrength setting.
 # On Continue: saves user name and initial registry prefs via SaveSetting.
-# In Shiny we persist the same values through the config() helper (USysPrefs / yaml).
+# In Shiny we persist the same values through the app configuration adapter (USysPrefs / yaml).
 
 mod_user_setup_ui <- function(id) {
   ns <- shiny::NS(id)
@@ -81,22 +81,22 @@ mod_user_setup_server <- function(id, state, con) {
     observeEvent(
       TRUE,
       {
-        user <- config("Current", "User") %||% Sys.info()[["user"]] %||% ""
+        user <- app_config_get("Current", "User") %||% Sys.info()[["user"]] %||% ""
         shiny::updateTextInput(session, "UserName", value = user)
-        audit <- config("System", "AuditStrength") %||% "1"
+        audit <- app_config_get("Audit", "AuditStrength") %||% "1"
         shiny::updateSelectInput(session, "txtAuditStrength", selected = as.character(audit))
       },
       once = TRUE
     )
 
     output$txtProject <- shiny::renderText({
-      state$CurrProject %||% config("Current", "CurrProject") %||% "Sample"
+      state$CurrProject %||% app_config_get("Current", "CurrProject") %||% "Sample"
     })
     output$txtSU <- shiny::renderText({
-      config("Current", "CurrPlotList") %||% "None"
+      app_config_get("Current", "CurrPlotlist") %||% "None"
     })
     output$txtHierarchy <- shiny::renderText({
-      config("Current", "CurrHierarchy") %||% "Sample"
+      app_config_get("Current", "CurrHierarchy") %||% "Sample"
     })
 
     # ---- Continue button (Access btnContinue_Click) ----
@@ -107,23 +107,23 @@ mod_user_setup_server <- function(id, state, con) {
         return()
       }
       # Save user name
-      config("Current", "User", user_name)
+      app_config_set("Current", "User", user_name)
       # Ensure default registry entries exist (Access SaveSetting parity)
-      if (is.null(config("Current", "CurrProject")) || !nzchar(config("Current", "CurrProject"))) {
-        config("Current", "CurrProject", "Sample")
+      if (is.null(app_config_get("Current", "CurrProject")) || !nzchar(app_config_get("Current", "CurrProject"))) {
+        app_config_set("Current", "CurrProject", "Sample")
       }
-      if (is.null(config("Current", "CurrPlotList")) || !nzchar(config("Current", "CurrPlotList"))) {
-        config("Current", "CurrPlotList", "None")
+      if (is.null(app_config_get("Current", "CurrPlotlist")) || !nzchar(app_config_get("Current", "CurrPlotlist"))) {
+        app_config_set("Current", "CurrPlotlist", "None")
       }
-      if (is.null(config("Current", "CurrHierarchy")) || !nchar(config("Current", "CurrHierarchy"))) {
-        config("Current", "CurrHierarchy", "Sample")
+      if (is.null(app_config_get("Current", "CurrHierarchy")) || !nchar(app_config_get("Current", "CurrHierarchy"))) {
+        app_config_set("Current", "CurrHierarchy", "Sample")
       }
-      if (is.null(config("Current", "DataFormName")) || !nchar(config("Current", "DataFormName"))) {
-        config("Current", "DataFormName", "FS882-6x4")
+      if (is.null(app_config_get("Current", "DataFormName")) || !nchar(app_config_get("Current", "DataFormName"))) {
+        app_config_set("Current", "DataFormName", "FS882-6x4")
       }
       # Audit strength
       audit_val <- input$txtAuditStrength %||% "1"
-      config("System", "AuditStrength", audit_val)
+      app_config_set("Audit", "AuditStrength", audit_val)
 
       status_text(sprintf("Setup saved for user '%s'.", user_name))
       show_toast(toast("Setup saved.", type = "success"))

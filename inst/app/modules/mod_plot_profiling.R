@@ -131,7 +131,7 @@ mod_plot_profiling_server <- function(id, state, con) {
 
     # Total plots in project
     output$lblTotalPlots <- renderText({
-      env_tbl <- as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+      env_tbl <- as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
       n <- tryCatch(
         db_query(con, paste("SELECT COUNT(*) AS n FROM", env_tbl))$n[1],
         error = function(e) 0
@@ -152,7 +152,7 @@ mod_plot_profiling_server <- function(id, state, con) {
       }
       rv$criteria <- hot_data
 
-      project <- config("Current", "CurrProject")
+      project <- app_config_get("Current", "CurrProject")
       env_tbl <- as.character(db_tb(con, "Env", project, prj = TRUE))
       veg_tbl <- as.character(db_tb(con, "Veg", project, prj = TRUE))
 

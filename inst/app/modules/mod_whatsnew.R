@@ -1,28 +1,15 @@
-mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
+mod_whatsnew_server <- function(id, context, open_trigger = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     rv <- reactiveValues(
       rows = data.frame(
+        row_id = integer(0),
         Date = character(0),
-        Change = as.POSIXct(character(0)),
+        Change = character(0),
         Viewed = logical(0),
         stringsAsFactors = FALSE
       )
     )
-
-    fetch_whatsnew_rows <- function() {
-      db_query(
-        con,
-        paste(
-          "SELECT rowid AS row_id,",
-          "Date,",
-          "Change,",
-          "CAST(Viewed AS BOOLEAN) AS Viewed",
-          "FROM tblWhatsNew",
-          "ORDER BY Date DESC NULLS LAST, row_id DESC"
-        )
-      )
-    }
 
     has_unviewed_rows <- function(rows) {
       if (!nrow(rows)) {
@@ -32,9 +19,9 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
     }
 
     show_whatsnew_modal <- function(force = FALSE) {
-      rows <- rv$rows <- fetch_whatsnew_rows()
+      rows <- rv$rows <- vpro::vpro_whats_new_list(context)
 
-      if (!force && (!config("Message", "ShowWhatsNew") || !has_unviewed_rows(rows))) {
+      if (!force && (!app_config_get("Message", "ShowWhatsNew") || !has_unviewed_rows(rows))) {
         return(invisible(NULL))
       }
 
@@ -52,7 +39,7 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
             ns("show_on_startup"),
             width = "100%",
             "If there are unviewed changes, show this form when VPro starts",
-            value = config("Message", "ShowWhatsNew")
+            value = app_config_get("Message", "ShowWhatsNew")
           ),
           footer = tagList(
             actionButton(ns("mark_all_viewed"), "Mark all as viewed", class = "btn-primary"),
@@ -116,11 +103,8 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
     )
 
     update_viewed_row <- function(row_id, viewed_value) {
-      db_run(con, 'UPDATE tblWhatsNew SET "Viewed" = ? WHERE rowid = ?', params = list(isTRUE(viewed_value), as.integer(row_id)))
-      rows <- rv$rows
-      idx <- which(rows$row_id == as.integer(row_id))
-      rows$Viewed[[idx]] <- isTRUE(viewed_value)
-      rv$rows <- rows
+      vpro::vpro_whats_new_set_viewed(context, row_id, viewed_value)
+      rv$rows <- vpro::vpro_whats_new_list(context)
     }
 
     observeEvent(input$toggle_viewed, {
@@ -129,17 +113,15 @@ mod_whatsnew_server <- function(id, con, open_trigger = NULL) {
     })
 
     observeEvent(input$mark_all_viewed, {
-      rows <- rv$rows
-      db_run(con, 'UPDATE tblWhatsNew SET "Viewed" = TRUE;')
-      rows$Viewed <- TRUE
-      rv$rows <- rows
-      show_toast(toast("All updates marked as viewed.", type = "success"))
+      vpro::vpro_whats_new_mark_all_viewed(context)
+      rv$rows <- vpro::vpro_whats_new_list(context)
+      show_toast(toast("All updates marked as viewed.", type = "success"), session = session)
     })
 
     observeEvent(
       input$show_on_startup,
       {
-        config("Message", "ShowWhatsNew", input$show_on_startup)
+        app_config_set("Message", "ShowWhatsNew", input$show_on_startup)
       },
       ignoreInit = TRUE
     )

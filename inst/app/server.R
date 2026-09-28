@@ -1,34 +1,64 @@
 # Server Logic Code
 # Manages Global State and Module Initializations
 server <- function(input, output, session) {
-  # 1. Database Connection
-  # Bootstrap the runtime from config-backed attached SQLite databases.
-  con <- init_state()
-  db_log_in(con)
-  db_log_vpro(con, state = "On")
-
-  onSessionEnded(function() {
-    db_log_vpro(con, state = "Off")
-    db_close(con)
+  # Recover a fresh coordinator and project context for this session.
+  accessor <- vpro::config_init(file.path(vpro::vpro_config_dir(), "config.yml"))
+  startup <- vpro::vpro_startup(config = accessor)
+  context <- startup$context
+  con <- context$con
+  user <- accessor("Current", "User")
+  login <- NULL
+  started <- FALSE
+  on.exit(
+    {
+      if (!started) {
+        if (!is.null(login)) {
+          try(vpro::vpro_session_logout(context, login), silent = TRUE)
+        }
+        vpro::vpro_project_close(context)
+      }
+    },
+    add = TRUE
+  )
+  login <- vpro::vpro_session_login(context, user)
+  vpro::vpro_project_log_lifecycle(context, user, "On")
+  changed <- vpro::vpro_project_log_lifecycle(context, user, "Open")
+  session$onSessionEnded(function() {
+    on.exit(vpro::vpro_project_close(context), add = TRUE)
+    on.exit(try(vpro::vpro_session_logout(context, login), silent = TRUE), add = TRUE)
+    for (event in c("Close", "Off")) {
+      try(vpro::vpro_project_log_lifecycle(context, user, event), silent = TRUE)
+    }
   })
+  started <- TRUE
+  for (index in seq_len(nrow(changed))) {
+    bslib::show_toast(
+      session = session,
+      bslib::toast(
+        header = "VPro",
+        paste0(changed$Table[[index]], " changed from '", changed$Before[[index]], "' to '", changed$After[[index]], "'."),
+        type = "info"
+      )
+    )
+  }
 
-  mod_sidebar_server("sidebar", con)
 
-  mod_whatsnew_server("whatsnew", con, open_trigger = reactive(input$btn_whatsnew))
+  mod_whatsnew_server("whatsnew", context, open_trigger = reactive(input$btn_whatsnew))
 
   # Minimal reactive state for module communication
   state <- reactiveValues(
-    CurrSU = config("Current", "CurrSU"),
+    CurrSU = NULL,
     sysCurrSU = NULL,
-    CurrForm = config("Current", "DataFormName"),
-    sysCurrForm = config("Current", "DataFormName"),
-    CurrProject = config("Current", "CurrProject"),
+    CurrForm = accessor("Current", "DataFormName"),
+    sysCurrForm = accessor("Current", "DataFormName"),
+    CurrProject = startup$recovery$active$project,
     PrefPlot = NULL,
-    PrefProject = config("Current", "CurrProject"),
-    PrefSUTable = config("Current", "CurrPlotlist"),
-    User = config("Current", "User")
+    PrefProject = startup$recovery$active$project,
+    PrefSUTable = accessor("Current", "CurrPlotlist"),
+    User = accessor("Current", "User")
   )
 
+  mod_sidebar_server("sidebar", context, state, user)
   mod_fs882_6x4_server("fs882_6x4", state, con)
   mod_fs882_8x6xl_server("fs882_8x6xl", state, con)
 

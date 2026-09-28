@@ -30,6 +30,7 @@ Imports:
     rappdirs,
     rhandsontable,
     RSQLite,
+    sass,
     sf,
     shiny,
     shinyjs,

@@ -1,3 +1,4 @@
+library(vpro)
 library(shiny)
 library(duckdb)
 library(yaml)
@@ -14,28 +15,81 @@ library(quarto)
 
 options(shiny.maxRequestSize = 4 * 1024^3) # 4GB max upload size, adjust as needed
 
-# Logic imports
-source("R/logic/00.db.R") # Database helper functions
-source("R/logic/01.state.R") # State management functions
-source("R/logic/logic_google_earth.R") # KML generation (Google Earth export)
-source("R/logic/logic_su_table_tools.R") # SU table tools (SU↔Env sync)
-source("R/logic/logic_record_nav.R") # Record navigation + audit trail
+# Use a fresh file-backed accessor to avoid the package compatibility cache.
+# Per-session UI selections without a canonical config key stay session-local.
+.app_session_config_defaults <- list(
+  Current = list(
+    CurrHerbarium = "None",
+    CurrLump = "None"
+  )
+)
+
+app_config_session_state <- function(session = shiny::getDefaultReactiveDomain()) {
+  if (is.null(session)) {
+    return(NULL)
+  }
+
+  state <- session$userData$app_config_state
+  if (is.null(state)) {
+    state <- new.env(parent = emptyenv())
+    session$userData$app_config_state <- state
+  }
+  state
+}
+
+app_config_session_default <- function(section, key) {
+  section_defaults <- .app_session_config_defaults[[section]]
+  if (is.null(section_defaults) || !(key %in% names(section_defaults))) {
+    return(NULL)
+  }
+  section_defaults[[key]]
+}
+
+app_config_get <- function(section, key, session = shiny::getDefaultReactiveDomain()) {
+  session_default <- app_config_session_default(section, key)
+  if (!is.null(session_default)) {
+    state <- app_config_session_state(session)
+    state_key <- paste(section, key, sep = "\r")
+    if (!is.null(state) && exists(state_key, envir = state, inherits = FALSE)) {
+      return(get(state_key, envir = state, inherits = FALSE))
+    }
+    return(session_default)
+  }
+
+  accessor <- vpro::config_init(create = TRUE)
+  accessor(section, key)
+}
+
+app_config_set <- function(section, key, value, session = shiny::getDefaultReactiveDomain()) {
+  session_default <- app_config_session_default(section, key)
+  if (!is.null(session_default)) {
+    state <- app_config_session_state(session)
+    if (is.null(state)) {
+      stop("Session-local app configuration requires an active Shiny session.", call. = FALSE)
+    }
+    assign(paste(section, key, sep = "\r"), value, envir = state)
+    return(invisible(value))
+  }
+
+  accessor <- vpro::config_init(create = TRUE)
+  accessor(section, key, value)
+}
 
 # Module Imports
-source("R/modules/mod_whatsnew.R")
-source("R/modules/mod_sidebar.R")
-source("R/modules/mod_project_metadata.R")
-source("R/modules/mod_images.R")
-source("R/modules/mod_plot_profiling.R")
-source("R/modules/mod_fs882_6x4.R")
-source("R/modules/mod_fs882_8x6xl.R")
-source("R/modules/mod_fs1333.R")
-source("R/modules/mod_combine_species.R")
-source("R/modules/mod_herbarium.R")
-source("R/modules/mod_colour_theme.R")
-source("R/modules/mod_user_setup.R")
-source("R/modules/mod_user_log.R")
-source("R/modules/mod_reporting.R")
+source("modules/mod_whatsnew.R", local = TRUE)
+source("modules/mod_sidebar.R", local = TRUE)
+source("modules/mod_project_metadata.R", local = TRUE)
+source("modules/mod_images.R", local = TRUE)
+source("modules/mod_plot_profiling.R", local = TRUE)
+source("modules/mod_fs882_6x4.R", local = TRUE)
+source("modules/mod_fs882_8x6xl.R", local = TRUE)
+source("modules/mod_fs1333.R", local = TRUE)
+source("modules/mod_combine_species.R", local = TRUE)
+source("modules/mod_herbarium.R", local = TRUE)
+source("modules/mod_colour_theme.R", local = TRUE)
+source("modules/mod_user_setup.R", local = TRUE)
+source("modules/mod_user_log.R", local = TRUE)
+source("modules/mod_reporting.R", local = TRUE)
 
 # To refactor below ---
 
@@ -66,56 +120,56 @@ source("R/modules/mod_reporting.R")
 # app_db_path <- file.path(getwd(), "data", "VPro64.db")
 
 # # Module Imports
-# source("R/logic/logic_state.R") # Global State Logic
-# source("R/logic/logic_lumping.R") # Lumping Logic
-# source("R/logic/logic_compliance.R") # Compliance checks
-# source("R/logic/logic_audit.R") # Audit trail
-# source("R/logic/logic_diagnostic.R") # Diagnostic helpers
-# source("R/logic/logic_auth.R") # Auth + RBAC helpers
-# source("R/logic/logic_coord_tools.R") # Coordinate conversion tools
-# source("R/logic/logic_climr.R") # ClimR climate data integration
-# source("R/logic/logic_project.R") # Project file management
-# source("R/logic/logic_hierarchy_sidebar.R") # Sidebar hierarchy workbench helpers
-# source("R/logic/logic_sync.R") # Sync engine (stub)
-# source("R/logic/logic_publish.R") # Publish pipeline (stub)
-# source("R/logic/logic_reports_veg.R") # Veg report helpers
-# source("R/logic/logic_reports_qc.R") # Quality control filtering
-# source("R/logic/logic_reports_hierarchy.R") # Hierarchy tree formatting
-# source("R/logic/logic_reports_env.R") # Environmental statistics
-# source("R/logic/logic_reports_validation.R") # Data validation
-# source("R/logic/logic_report_export.R") # Excel report export helpers
-# source("R/logic/logic_excel_export.R") # Excel export with styled formatting
-# source("R/logic/logic_venus_export.R") # VENUS XML export
-# source("R/modules/mod_project.R") # Project management (Open/New/Save/Close)
-# source("R/modules/mod_admin_projects.R")
-# source("R/modules/mod_admin_codes.R")
-# source("R/modules/mod_admin_master.R")
-# source("R/modules/mod_admin_audit.R")
-# source("R/modules/mod_admin_merge.R")
-# source("R/modules/mod_admin_publishing.R")
-# source("R/modules/mod_admin.R")
-# source("R/modules/mod_images.R")
-# source("R/modules/mod_veg_sample.R")
-# source("R/modules/mod_site_env.R")
-# source("R/modules/mod_su_table.R")
-# source("R/modules/mod_fs1333.R")
-# source("R/modules/mod_project_metadata.R")
-# source("R/modules/mod_combine_species.R")
-# source("R/modules/mod_herbarium.R")
-# source("R/modules/mod_export.R")
-# source("R/modules/mod_reporting.R")
-# source("R/modules/mod_import.R")
-source("R/modules/mod_home.R")
-# source("R/modules/mod_auth.R")
-# source("R/modules/mod_auth_status.R")
-# source("R/modules/mod_sync.R")
-# source("R/modules/mod_hierarchy.R")
-# source("R/modules/mod_upload.R")
-# source("R/modules/mod_merge.R")
+# source("R/logic/logic_state.R", local = TRUE) # Global State Logic
+# source("R/logic/logic_lumping.R", local = TRUE) # Lumping Logic
+# source("R/logic/logic_compliance.R", local = TRUE) # Compliance checks
+# source("R/logic/logic_audit.R", local = TRUE) # Audit trail
+# source("R/logic/logic_diagnostic.R", local = TRUE) # Diagnostic helpers
+# source("R/logic/logic_auth.R", local = TRUE) # Auth + RBAC helpers
+# source("R/logic/logic_coord_tools.R", local = TRUE) # Coordinate conversion tools
+# source("R/logic/logic_climr.R", local = TRUE) # ClimR climate data integration
+# source("R/logic/logic_project.R", local = TRUE) # Project file management
+# source("R/logic/logic_hierarchy_sidebar.R", local = TRUE) # Sidebar hierarchy workbench helpers
+# source("R/logic/logic_sync.R", local = TRUE) # Sync engine (stub)
+# source("R/logic/logic_publish.R", local = TRUE) # Publish pipeline (stub)
+# source("R/logic/logic_reports_veg.R", local = TRUE) # Veg report helpers
+# source("R/logic/logic_reports_qc.R", local = TRUE) # Quality control filtering
+# source("R/logic/logic_reports_hierarchy.R", local = TRUE) # Hierarchy tree formatting
+# source("R/logic/logic_reports_env.R", local = TRUE) # Environmental statistics
+# source("R/logic/logic_reports_validation.R", local = TRUE) # Data validation
+# source("R/logic/logic_report_export.R", local = TRUE) # Excel report export helpers
+# source("R/logic/logic_excel_export.R", local = TRUE) # Excel export with styled formatting
+# source("R/logic/logic_venus_export.R", local = TRUE) # VENUS XML export
+# source("modules/mod_project.R", local = TRUE) # Project management (Open/New/Save/Close)
+# source("modules/mod_admin_projects.R", local = TRUE)
+# source("modules/mod_admin_codes.R", local = TRUE)
+# source("modules/mod_admin_master.R", local = TRUE)
+# source("modules/mod_admin_audit.R", local = TRUE)
+# source("modules/mod_admin_merge.R", local = TRUE)
+# source("modules/mod_admin_publishing.R", local = TRUE)
+# source("modules/mod_admin.R", local = TRUE)
+# source("modules/mod_images.R", local = TRUE)
+# source("modules/mod_veg_sample.R", local = TRUE)
+# source("modules/mod_site_env.R", local = TRUE)
+# source("modules/mod_su_table.R", local = TRUE)
+# source("modules/mod_fs1333.R", local = TRUE)
+# source("modules/mod_project_metadata.R", local = TRUE)
+# source("modules/mod_combine_species.R", local = TRUE)
+# source("modules/mod_herbarium.R", local = TRUE)
+# source("modules/mod_export.R", local = TRUE)
+# source("modules/mod_reporting.R", local = TRUE)
+# source("modules/mod_import.R", local = TRUE)
+source("modules/mod_home.R", local = TRUE)
+# source("modules/mod_auth.R", local = TRUE)
+# source("modules/mod_auth_status.R", local = TRUE)
+# source("modules/mod_sync.R", local = TRUE)
+# source("modules/mod_hierarchy.R", local = TRUE)
+# source("modules/mod_upload.R", local = TRUE)
+# source("modules/mod_merge.R", local = TRUE)
 
-# source("R/modules/mod_becweb_map.R")
-# source("R/modules/mod_data_entry_context.R")
-source("R/modules/mod_nav_launcher.R")
+# source("modules/mod_becweb_map.R", local = TRUE)
+# source("modules/mod_data_entry_context.R", local = TRUE)
+source("modules/mod_nav_launcher.R", local = TRUE)
 
 # # Note: The actual 'SysState' object is initialized in server.R
 # # because it must be reactive and unique to the session.

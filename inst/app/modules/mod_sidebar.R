@@ -1,10 +1,12 @@
 mod_sidebar_ui <- function(id) {
   ns <- NS(id)
-
   tagList(
     card(
       card_header("Data Sources"),
       selectizeInput(ns("cmbCurrProject"), "Project:", choices = NULL),
+      actionButton(ns("btnOpenProject"), "Open project", class = "btn btn-primary btn-sm"),
+      actionButton(ns("btnNewProject"), "New project", class = "btn btn-sm"),
+      actionButton(ns("btnCloseProject"), "Close inactive project", class = "btn btn-sm"),
       selectizeInput(ns("cmbCurrSU"), "Site Unit:", choices = NULL),
       selectizeInput(ns("cmbCurrHierarchy"), "Hierarchy:", choices = NULL)
     ),
@@ -23,137 +25,171 @@ mod_sidebar_ui <- function(id) {
   )
 }
 
-mod_sidebar_server <- function(id, con) {
+mod_sidebar_server <- function(id, context, state, user) {
   moduleServer(id, function(input, output, session) {
     root_session <- session$rootScope()
+    selected_file <- reactiveVal(NULL)
+    selected_families <- reactiveVal(NULL)
+    opening <- reactiveVal(FALSE)
 
-    # Combinaison of db attached in 01.state.R except project db
-    actions <- c("Attach", "New", "Unattach")
-
-    db_choices <- function() {
-      proj_db <- setdiff(db_query(con, "SHOW databases;")$database_name, db_sys_dbs) |> sort()
-
-      Filter(
-        length,
-        list(
-          Actions = setNames(actions, actions),
-          Sources = setNames(proj_db, proj_db)
-        )
-      )
+    refresh_projects <- function() {
+      projects <- sort(names(context$projects))
+      updateSelectizeInput(session, "cmbCurrProject", choices = projects, selected = context$active$project)
+      updateSelectizeInput(session, "cmbCurrSU", choices = c("None", sort(names(context$sus))), selected = context$active_su$su %||% "None")
+      updateSelectizeInput(session, "cmbCurrHierarchy", choices = c("None", sort(names(context$hierarchies))), selected = context$active_hierarchy$hierarchy %||% "None")
     }
+    refresh_projects()
 
-    update_selectors <- function() {
-      proj_choices <- db_choices()
-      updateSelectizeInput(
-        session,
-        "cmbCurrProject",
-        choices = proj_choices,
-        selected = config("Current", "CurrProject")
-      )
-      updateSelectizeInput(
-        session,
-        "cmbCurrHierarchy",
-        choices = proj_choices,
-        selected = config("Current", "CurrHierarchy")
-      )
-      # Handling None as NULL
-      proj_choices$Actions <- c(proj_choices$Actions, "None" = "None")
-      updateSelectizeInput(
-        session,
-        "cmbCurrSU",
-        choices = proj_choices,
-        selected = config("Current", "CurrPlotlist") %||% "None"
-      )
+    notify_error <- function(error) {
+      showNotification(conditionMessage(error), type = "error", duration = NULL)
     }
-
-    update_selectors()
-
-    # Select Case Me.cmbCurrProject
-    #     Case "--------------------------------------"
-    #     Case "Attach"
-    #         AttachProject
-    #     Case "Unattach"
-    #         UnattachProject
-    #     Case "New"
-    #         CreateTableSet
-    #         Me.cmbCurrHierarchy.SetFocus
-    #         Me.cmbCurrProject.SetFocus
-    #     Case Else
-    #         LogProjectOut
-    #         SetCurrentProject Me.cmbCurrProject
-    #         UpdateDataForms
-    #         LogProjectIn
-    # End Select
-    #     cmbCurrProject_GotFocus
-    #     Me.cmbCurrProject = clsVProReg.CurrProject
-    #     Me.cmbCurrSU = clsVProReg.CurrPlotlist
+    switch_project <- function(project) {
+      previous <- context$active$project
+      if (identical(previous, project)) {
+        return(invisible(NULL))
+      }
+      vpro::vpro_project_log_lifecycle(context, user, "Close")
+      vpro::vpro_project_log_lifecycle(context, user, "Off")
+      vpro::vpro_project_activate(context, project)
+      state$CurrProject <- project
+      state$PrefProject <- project
+      state$PrefSUTable <- "None"
+      vpro::vpro_project_log_lifecycle(context, user, "On")
+      vpro::vpro_project_log_lifecycle(context, user, "Open")
+      refresh_projects()
+    }
 
     observeEvent(
       input$cmbCurrProject,
       {
-        # No change
-        if (input$cmbCurrProject == config("Current", "CurrProject")) {
+        if (identical(input$cmbCurrProject, context$active$project)) {
           return()
         }
-        # Action selected
-        if (input$cmbCurrProject %in% actions) {
-          if (input$cmbCurrProject == "Attach") {
-            # TODO: Write implementation
-            AttachProject(con, session)
-          } else if (input$cmbCurrProject == "Unattach") {
-            # TODO: Write implementation
-            UnattachProject(con, session)
-          } else if (input$cmbCurrProject == "New") {
-            # TODO: Write implementation
-            CreateTableSet(con, session)
-            # TODO: Write implementation
-            # focus1
-            # focus2
-          }
-          # Different project selected
-        } else {
-          LogProjectOut(con, session)
-          # TODO: Write implementation
-          SetCurrentProject(input$cmbCurrProject)
-          # TODO: Write implementation
-          UpdateDataForms(con, session)
-          LogProjectIn(con, session)
-        }
-        # TODO: Write implementation
-        # focus1
-        updateSelectizeInput(session, "cmbCurrProject", selected = config("Current", "CurrProject"))
-        updateSelectizeInput(session, "cmbCurrSU", selected = config("Current", "CurrPlotlist"))
+        tryCatch(switch_project(input$cmbCurrProject), error = function(e) {
+          notify_error(e)
+          refresh_projects()
+        })
       },
       ignoreInit = TRUE
     )
 
-    observeEvent(input$cmbCurrSU, {}, ignoreInit = TRUE)
-    observeEvent(input$cmbCurrHierarchy, {}, ignoreInit = TRUE)
+    observeEvent(input$btnOpenProject, {
+      selected_file(NULL)
+      selected_families(NULL)
+      showModal(modalDialog(
+        title = "Open a VPRO project",
+        p("Choose a VPRO database (.db) or older Access file (.mdb or .accdb). VPRO will keep your original unchanged and save a copy for you."),
+        fileInput(session$ns("projectFile"), "Project file", accept = c(".db", ".sqlite", ".sqlite3", ".mdb", ".accdb")),
+        uiOutput(session$ns("projectFamily")),
+        footer = tagList(modalButton("Cancel"), actionButton(session$ns("confirmOpen"), "Open project", class = "btn-primary")),
+        easyClose = FALSE
+      ))
+    })
+    observeEvent(input$projectFile, {
+      selected_file(input$projectFile$datapath)
+      selected_families(tryCatch(vpro::vpro_project_file_families(input$projectFile$datapath, input$projectFile$name), error = function(e) {
+        notify_error(e)
+        NULL
+      }))
+    })
+    output$projectFamily <- renderUI({
+      families <- selected_families()
+      if (is.null(families)) {
+        return(NULL)
+      }
+      if (!nrow(families)) {
+        return(p("No VPRO project was found in this file."))
+      }
+      labels <- paste0(families$project, " (", ifelse(is.na(families$version), "unknown version", families$version), ifelse(families$compatible, ")", "; cannot open yet)"))
+      selectInput(session$ns("projectName"), "Project in this file", choices = stats::setNames(families$project, labels))
+    })
+    observeEvent(input$confirmOpen, {
+      req(selected_file(), input$projectName)
+      if (opening()) {
+        return()
+      }
+      opening(TRUE)
+      on.exit(opening(FALSE), add = TRUE)
+      tryCatch(
+        {
+          project <- input$projectName
+          vpro::vpro_project_open_file(context, selected_file(), project, file_name = input$projectFile$name)
+          switch_project(project)
+          removeModal()
+          showNotification(paste("Opened", project), type = "message")
+        },
+        error = function(e) notify_error(e)
+      )
+    })
 
-    # Data Forms Navigation
+    observeEvent(input$btnNewProject, {
+      showModal(modalDialog(
+        title = "New project",
+        textInput(session$ns("newProjectName"), "Project name"),
+        p("Use letters, numbers, and underscores; begin with a letter."),
+        footer = tagList(modalButton("Cancel"), actionButton(session$ns("confirmNew"), "Create project", class = "btn-primary"))
+      ))
+    })
+    observeEvent(input$confirmNew, {
+      req(input$newProjectName)
+      tryCatch(
+        {
+          project <- input$newProjectName
+          if (project %in% names(context$projects)) {
+            stop("This project is already open.")
+          }
+          path <- vpro::vpro_db_path(project, "projects")
+          if (file.exists(path)) {
+            stop("A saved project with that name already exists; choose another name.")
+          }
+          vpro::vpro_project_create(path, project, user)
+          vpro::vpro_project_attach(context, path, project)
+          switch_project(project)
+          removeModal()
+        },
+        error = function(e) notify_error(e)
+      )
+    })
+    observeEvent(input$btnCloseProject, {
+      choices <- setdiff(names(context$projects), context$active$project)
+      if (!length(choices)) {
+        showNotification("Only the active project is open. Select another project before closing it.", type = "message")
+      } else {
+        showModal(modalDialog(
+          title = "Close a project",
+          selectInput(session$ns("closeProjectName"), "Inactive project", choices = choices),
+          p("Closing a project does not delete its saved database."),
+          footer = tagList(modalButton("Cancel"), actionButton(session$ns("confirmClose"), "Close project"))
+        ))
+      }
+    })
+    observeEvent(input$confirmClose, {
+      tryCatch(
+        {
+          vpro::vpro_project_detach(context, input$closeProjectName)
+          removeModal()
+          refresh_projects()
+        },
+        error = function(e) notify_error(e)
+      )
+    })
+
     observeEvent(input$btnOpenFS882a, {
-      config("Current", "DataFormName", "FS882-6x4XL")
+      app_config_set("Current", "DataFormName", "FS882-6x4XL")
       bslib::nav_select("main_tabs", selected = "fs882_6x4", session = root_session)
     })
-
     observeEvent(input$btnOpenFS882b, {
-      config("Current", "DataFormName", "FS882-8x6XL")
+      app_config_set("Current", "DataFormName", "FS882-8x6XL")
       bslib::nav_select("main_tabs", selected = "fs882_8x6", session = root_session)
     })
-
     observeEvent(input$btnOpenSIVIForm, {
       bslib::nav_select("main_tabs", selected = "fs1333", session = root_session)
     })
-
-    # Classification Navigation
     observeEvent(input$btnOpenSUForm, {
       global$sysStopCode <- FALSE
     })
-
     observeEvent(input$btnOpenSiteUnitTable, {})
-
     observeEvent(input$btnOpenHierarchyForm, {})
-
     invisible(NULL)
   })
 }

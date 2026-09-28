@@ -343,7 +343,7 @@ mod_combine_species_server <- function(id, state, con) {
     }
 
     curr_lump_pref <- function() {
-      normalize_text((config("Current", "CurrLump") %||% "None"))
+      normalize_text((app_config_get("Current", "CurrLump") %||% "None"))
     }
 
     refresh_lump_choices <- function(selected = NULL) {
@@ -495,11 +495,11 @@ mod_combine_species_server <- function(id, state, con) {
       {
         state$CurrForm <- "USysLumpMaster"
         state$sysCurrForm <- "USysLumpMaster"
-        config("Current", "DataFormName", "USysLumpMaster")
+        app_config_set("Current", "DataFormName", "USysLumpMaster")
 
         refresh_species_fields()
         refresh_criteria_choices(default_value = "ABIE*")
-        pref_lump <- normalize_text((config("Current", "CurrLump") %||% "None"))
+        pref_lump <- normalize_text((app_config_get("Current", "CurrLump") %||% "None"))
         refresh_lump_choices(selected = if (nzchar(pref_lump)) pref_lump else "None")
         bump_species_tick()
         if (nzchar(rv$lump_table)) {
@@ -588,7 +588,7 @@ mod_combine_species_server <- function(id, state, con) {
           return()
         }
 
-        config("Current", "CurrLump", selected)
+        app_config_set("Current", "CurrLump", selected)
         rv$lump_table <- combine_species_resolve_lump_table(con, selected)
         rv$colmap <- combine_species_lump_column_map(con, rv$lump_table)
         bump_lump_tick()
@@ -949,7 +949,7 @@ mod_combine_species_server <- function(id, state, con) {
       }
 
       refresh_lump_choices(selected = new_table)
-      config("Current", "CurrLump", new_table)
+      app_config_set("Current", "CurrLump", new_table)
       state$LumpingTable <- new_table
       state$sysLumpingTable <- new_table
       bump_lump_tick()

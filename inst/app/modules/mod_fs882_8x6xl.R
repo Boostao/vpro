@@ -117,36 +117,36 @@ num_display <- function(value) {
 # -- Env table SQL helpers --
 
 env_tb <- function(con) {
-  as.character(db_tb(con, "Env", config("Current", "CurrProject"), prj = TRUE))
+  as.character(db_tb(con, "Env", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 veg_tb <- function(con) {
-  as.character(db_tb(con, "Veg", config("Current", "CurrProject"), prj = TRUE))
+  as.character(db_tb(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 humus_tb <- function(con) {
-  as.character(db_tb(con, "Humus", config("Current", "CurrProject"), prj = TRUE))
+  as.character(db_tb(con, "Humus", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 mineral_tb <- function(con) {
-  as.character(db_tb(con, "Mineral", config("Current", "CurrProject"), prj = TRUE))
+  as.character(db_tb(con, "Mineral", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 audit_tb <- function(con) {
-  as.character(db_tb(con, "Audit", config("Current", "CurrProject"), prj = TRUE))
+  as.character(db_tb(con, "Audit", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 other_tb <- function(con) {
-  as.character(db_tb(con, "Other", config("Current", "CurrProject"), prj = TRUE))
+  as.character(db_tb(con, "Other", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 veg_other_tb <- function(con) {
-  as.character(db_tb(con, "Veg", config("Current", "CurrProject"), prj = TRUE))
+  as.character(db_tb(con, "Veg", app_config_get("Current", "CurrProject"), prj = TRUE))
 }
 
 admin_tb <- function(con) {
   # Sample_Admin table (not prefixed, shares schema with project db)
-  proj <- config("Current", "CurrProject")
+  proj <- app_config_get("Current", "CurrProject")
   as.character(db_tb(con, "Sample_Admin", proj, prj = FALSE))
 }
 
@@ -260,7 +260,7 @@ mod_fs882_8x6xl_ui <- function(id) {
               ns("optProjectID"),
               "Project Source",
               choices = c("Env" = "1", "Master" = "2"),
-              selected = as_text(config("Current", "ProjectIDSource") %||% "1"),
+              selected = as_text(app_config_get("Current", "ProjectIdSource") %||% "1"),
               inline = TRUE
             )
           ),
@@ -277,7 +277,7 @@ mod_fs882_8x6xl_ui <- function(id) {
                   ns("optAssignedSuSource"),
                   "Assigned SU Source",
                   choices = c("Env" = "1", "Master" = "2", "SU Tbl" = "3"),
-                  selected = as_text(config("Current", "AssignedSuSource")),
+                  selected = as_text(app_config_get("Current", "AssignedSuSource")),
                   inline = TRUE
                 )
               ),
@@ -318,7 +318,7 @@ mod_fs882_8x6xl_ui <- function(id) {
                   ns("optCoordMethod"),
                   "Coordinate Display",
                   choices = c("D.d" = "0", "DM.m" = "1", "DMS.s" = "2"),
-                  selected = as_text(config("Current", "CoordMethod")),
+                  selected = as_text(app_config_get("Current", "CoordMethod")),
                   inline = TRUE
                 )
               ),
@@ -610,7 +610,7 @@ mod_fs882_8x6xl_ui <- function(id) {
               ns("optAuditStrength"),
               "Audit Strength",
               choices = c("Edit" = "1", "Edit & Add" = "2", "Edit, Add, & Delete" = "3"),
-              selected = as_text(config("Audit", "AuditStrength")),
+              selected = as_text(app_config_get("Audit", "AuditStrength")),
               inline = TRUE
             ),
             actionButton(ns("btnRestoreAudit"), "Restore selected", class = "btn btn-outline-secondary btn-sm")
@@ -726,8 +726,8 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
 
     # -- Caption reflects Access Form_Open: "Project: X / SU Table: Y" --
     output$caption <- renderUI({
-      project <- config("Current", "CurrProject") %||% "None"
-      su_table <- config("Current", "CurrPlotlist") %||% "None"
+      project <- app_config_get("Current", "CurrProject") %||% "None"
+      su_table <- app_config_get("Current", "CurrPlotlist") %||% "None"
       tags$div(
         tags$h6(class = "mb-0", sprintf("Project: %s / SU Table: %s", project, su_table)),
         tags$small(class = "text-body-secondary", paste("Plot:", rv$current_plot %||% "\u2014"))
@@ -777,7 +777,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
             con,
             paste(
               "SELECT ProjectID, ProjectTitle FROM",
-              as.character(db_tb(con, "Metadata", config("Current", "CurrProject"), prj = TRUE)),
+              as.character(db_tb(con, "Metadata", app_config_get("Current", "CurrProject"), prj = TRUE)),
               "ORDER BY ProjectID"
             )
           )
@@ -840,7 +840,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
             labels <- ifelse(is.na(rows$SiteSeriesLongName), rows$SiteSeries, paste0(rows$SiteSeries, " - ", rows$SiteSeriesLongName))
             c(setNames("", ""), stats::setNames(rows$SiteSeries, labels))
           } else if (src == 3L) {
-            plotlist <- config("Current", "CurrPlotlist")
+            plotlist <- app_config_get("Current", "CurrPlotlist")
             if (is.null(plotlist) || plotlist == "None") {
               show_toast(toast("Select an SU table first.", type = "warning"))
               c("---" = "")
@@ -963,7 +963,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       #   Access SubVegA = Cover Only (A1,A2,A3,A,B1,B2,B); SubVegAht = Cover+Height
       #   USysVegA view lacks Height1-5 per-layer heights → query Sample_Veg directly
       {
-        proj <- config("Current", "CurrProject")
+        proj <- app_config_get("Current", "CurrProject")
         veg_raw_tbl <- as.character(db_tb(con, "Veg", proj, prj = TRUE))
         veg_c_tbl <- as.character(db_tb(con, "USysVegC", proj, prj = FALSE))
         veg_d_tbl <- as.character(db_tb(con, "USysVegD", proj, prj = FALSE))
@@ -1149,7 +1149,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
     observeEvent(
       input$optCoordMethod,
       {
-        config("Current", "CoordMethod", input$optCoordMethod)
+        app_config_set("Current", "CoordMethod", input$optCoordMethod)
         row <- rv$env_row
         if (!is.null(row)) {
           lat_col <- match("latitude", tolower(names(row)))
@@ -1611,7 +1611,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
               observeEvent(
                 input$optProjectID,
                 {
-                  config("Current", "ProjectIDSource", input$optProjectID)
+                  app_config_set("Current", "ProjectIdSource", input$optProjectID)
                 },
                 ignoreInit = TRUE
               ) -
@@ -1645,7 +1645,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
     observeEvent(
       input$optAssignedSuSource,
       {
-        config("Current", "AssignedSuSource", input$optAssignedSuSource)
+        app_config_set("Current", "AssignedSuSource", input$optAssignedSuSource)
       },
       ignoreInit = TRUE
     )
@@ -1654,7 +1654,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
     observeEvent(
       input$optAuditStrength,
       {
-        config("Audit", "AuditStrength", input$optAuditStrength)
+        app_config_set("Audit", "AuditStrength", input$optAuditStrength)
       },
       ignoreInit = TRUE
     )
@@ -1940,7 +1940,7 @@ mod_fs882_8x6xl_server <- function(id, state, con) {
       }
       remove_after <- identical(input$optRemoveAfterRestore, "remove")
 
-      project <- config("Current", "CurrProject")
+      project <- app_config_get("Current", "CurrProject")
       n_restored <- 0
 
       for (idx in selected) {
