@@ -92,6 +92,22 @@ test_that("FS882 starts, navigates, and saves a plot in an isolated Sample copy"
     }
   )
 
+  # The FS1333 route embeds FS882 and must pass its project context through.
+  received <- new.env(parent = emptyenv())
+  fs882_server <- app_env$mod_fs882_6x4_server
+  app_env$mod_fs882_6x4_server <- function(id, state, con, context) {
+    received$context <- context
+    fs882_server(id, state, con, context)
+  }
+  shiny::testServer(
+    app_env$mod_fs1333_server,
+    args = list(state = state, con = con, context = context),
+    {
+      session$flushReact()
+    }
+  )
+  expect_identical(received$context, context)
+
   # Assert the canonical packaged database was never opened for writing.
   source_db <- DBI::dbConnect(RSQLite::SQLite(), sample_source)
   withr::defer(DBI::dbDisconnect(source_db))

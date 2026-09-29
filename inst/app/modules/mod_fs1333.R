@@ -91,7 +91,7 @@ mod_fs1333_ui <- function(id) {
   )
 }
 
-mod_fs1333_server <- function(id, state, con) {
+mod_fs1333_server <- function(id, state, con, context) {
   shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
     root_session <- session$rootScope()
@@ -249,7 +249,7 @@ mod_fs1333_server <- function(id, state, con) {
 
       project_value <- normalize_text(read_col("projectid"))
       if (nzchar(project_value)) {
-        shiny::updateSelectizeInput(session, "ProjectID", selected = project_value, server = TRUE)
+        shiny::updateSelectInput(session, "ProjectID", selected = project_value)
       }
 
       plot_type_opt <- fs1333_plot_type_to_option(read_col("plottype"))
@@ -484,6 +484,6 @@ mod_fs1333_server <- function(id, state, con) {
       bslib::nav_select("main_tabs", return_tab, session = root_session)
     })
 
-    mod_fs882_6x4_server("fs882_inner", state, con)
+    mod_fs882_6x4_server("fs882_inner", state, con, context)
   })
 }

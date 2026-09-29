@@ -1618,7 +1618,7 @@ server <- function(input, output, session) {
   # mod_fs882_server("fs882", state, con)
 
   # FS1333 destination module (SIVI form)
-  mod_fs1333_server("fs1333", state, con)
+  mod_fs1333_server("fs1333", state, con, context)
 
   # Project Metadata destination module
   mod_project_metadata_server("project_metadata", state, con)
