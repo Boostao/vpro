@@ -1,0 +1,88 @@
+---
+title: "Community Ecology, Fuzzy Noise Clustering, and VPro Round-Trip"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Community Ecology, Fuzzy Noise Clustering, and VPro Round-Trip}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Building `vegan`-Ready Community Matrices
+
+`vpro_matrix()` converts scoped `VP08` vegetation data directly into a dense `matrix` (or sparse `Matrix::dgCMatrix`) with literal `PlotNumber` row names and a 1-to-1 row-aligned `attr(mat, "env")` tibble:
+
+```{r}
+library(vpro)
+
+con <- vpro_sample()
+mat <- vpro_matrix(
+  con,
+  value = "cover",
+  strata = "total",
+  lump = TRUE,
+  transform = "sqrt",
+  drop_rare = 2,
+  exclude_modifiers = TRUE
+)
+dim(mat)
+mat[1:5, 1:6]
+```
+
+Because `attr(mat, "env")` is aligned row-for-row with `rownames(mat)`, `vegan` ordination and PERMANOVA pipelines work without manual join boilerplate:
+
+```{r}
+if (requireNamespace("vegan", quietly = TRUE)) {
+  env_aligned <- attr(mat, "env")
+  dist_bray <- vegan::vegdist(mat, method = "bray")
+  perm <- vegan::adonis2(dist_bray ~ Elevation, data = env_aligned, permutations = 99, na.action = na.omit)
+  print(perm)
+}
+```
+
+## Fuzzy Noise Clustering (`vegclust`) and Indicator Species
+
+BEC classification workflows frequently use fuzzy noise clustering (`method = "vegclust_nc"`) so transitional or disturbed plots are isolated in a noise class rather than distorting core site-series centroids:
+
+```{r}
+cl <- vpro_cluster(
+  con,
+  method = "vegclust_nc",
+  transform = "sqrt",
+  k = 4,
+  m = 1.25,
+  dnoise = 0.75,
+  unit_prefix = "CL"
+)
+cl$summary
+head(cl$memberships)
+```
+
+Compute indicator species fidelity and specificity across the resulting candidate clusters with `vpro_indicators()`:
+
+```{r}
+ind <- vpro_indicators(con, clusters = cl, permutations = 49)
+head(ind, 10)
+```
+
+## Atomic Round-Trip Write-Back to `VPro` (`vpro_wails`)
+
+Once candidate clusters are reviewed in R, `vpro_write_candidate_su()` writes `<Name>_ClusterCandidate_SU` atomically (`BEGIN IMMEDIATE`) with `_table_metadata ('VP04')`, `<Project>_Audit`, and `__VPRO_RSidecarHistory` provenance so the candidate classification appears immediately in `vpro_wails`:
+
+```{r}
+# Demonstrate on a disposable WAL copy of Sample.db
+work_db <- tempfile("sample-roundtrip-", fileext = ".db")
+file.copy(con$project_path, work_db)
+
+ws_work <- vpro_connect(work_db)
+ws_cand <- vpro_write_candidate_su(ws_work, cl, name = "Sample_Noise4")
+vpro_list_su(ws_cand)
+
+unlink(c(work_db, paste0(work_db, "-wal"), paste0(work_db, "-shm")))
+```

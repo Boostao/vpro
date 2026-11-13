@@ -1,3 +1,12 @@
+# vpro 2.0.0
+
+* Rebuilt `vpro` as a lean, headless companion R SDK (`R >= 4.4.0`, `< 150 ms` load time) to the `vpro_wails` desktop application, removing all legacy Shiny/widget UI dependencies.
+* Added live cross-OS `vpro_wails` workspace discovery (`vpro_connect()`, `vpro_sample()`, `vpro_status()`, `vpro_standards()`, `vpro_data_dir()`, `vpro_config_dir()`), synced 2026 `BECdb v13` and `BCPlantTaxonomy v19` reference models, and added streaming `.accdb`/`.mdb` (`VP05`--`VP08`) to `VP08` SQLite conversion (`vpro_import_access()`).
+* Added tidy `VP08` readers (`vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_hierarchy()`, `vpro_taxonomy()`, `vpro_bec_units()`) preserving literal character `PlotNumber`s, Access `-1/0` booleans, IEEE-754 `float32` cover narrowing, `99%` per-layer lumped cover caps, and `LMH25 (2023)` soil horizon ordering.
+* Added community matrix construction (`vpro_matrix()` with `attr(m, "env")`), `vegan`/`vegclust` clustering (`vpro_cluster()`, `vpro_indicators()`), NAD83 spatial `sf` & multi-layer GeoPackage export (`vpro_sf()`, `vpro_export_gpkg()`), and `LMH25 (2023)` + picklist QA (`vpro_check_lmh25()`, `vpro_validate()`).
+* Added vectorised BEC diagnostic synthesis (`vpro_diagnostics()`, `vpro_pairwise()`, `vpro_outliers()`, `vpro_profile()`, `vpro_summary_veg()`, `vpro_summary_env()`, `vpro_export_xlsx()`).
+* Added shared `__VPRO_PlotClimate` (`CoordElevHash`) `climr` + offline BGC lapse normals (`vpro_climate()`), Ministry `CMD -> aSMR` modelling (`vpro_asmr()`), dual `9 x 5` edatopic grids (`vpro_edatopic_grid()`, `plot_edatope()`), guarded `BEGIN IMMEDIATE` write-back (`vpro_write_candidate_su()`, `vpro_write_su()`, `vpro_write_lump()`), B.C. Government Quarto guides (`vpro_render_guide()`), and the `vpro_sidecar_exec()` JSON bridge.
+
 # vpro 0.0.0.9000
 
 * `vpro_config_cleanup()` and `vpro_data_cleanup()` now prompt y/n/c for each file, retaining skipped files and allowing cancellation; a later launch restores missing bundled defaults.

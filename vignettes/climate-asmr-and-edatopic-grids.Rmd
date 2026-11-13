@@ -1,0 +1,64 @@
+---
+title: "Climate Normals, Ministry aSMR, Edatopic Grids, and Quarto Guides"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Climate Normals, Ministry aSMR, Edatopic Grids, and Quarto Guides}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5
+)
+```
+
+## Shared `__VPRO_PlotClimate` Cache and `CoordElevHash`
+
+`vpro` and `vpro_wails` share the exact same `__VPRO_PlotClimate` SQLite table and 16-byte SHA-256 `CoordElevHash` key (`lat|lon|elev|ref_period`). Plots downscaled in R via `climr` (or evaluated with the offline BGC lapse fallback when working offline) are immediate cache hits in `vpro_wails` and vice-versa:
+
+```{r}
+library(vpro)
+
+con <- vpro_sample()
+vpro_coord_elev_hash(lat = 54.25, lon = -126.75, elev = 650, ref_period = "1961_1990")
+
+clim <- vpro_climate(con, ref_period = "1961_1990", cache = FALSE, force_offline = TRUE)
+head(clim[, c("PlotNumber", "BGC", "Elevation", "MAT", "MAP", "MSP", "CMD", "PAS")])
+```
+
+## Ministry `CMD -> aSMR` Water-Balance Transfer Function
+
+`vpro_asmr()` applies the Ministry water-balance rules (`aSMR_Rules_HalfStep.csv`): 5-month summer moist surplus (`PPT_05..09 >= 90 mm`), dormant-season recharge deficit (`350 - (PPT_at + PPT_wt)`), steep (`> 35%`) warm SW (`1.25x`) and cool N (`0.85x`) aspect adjustments, and shedding/receiving `rSMR` step transforms:
+
+```{r}
+asmr_df <- vpro_asmr(con, ref_period = "1961_1990", cache = FALSE, force_offline = TRUE)
+head(asmr_df[, c("PlotNumber", "SiteUnit", "rSMR", "rSNR", "CMD", "CMD_site", "aSMR")])
+```
+
+## Dual Relative and Actual `9 x 5` Edatopic Grids
+
+`vpro_edatopic_grid(mode = "dual")` computes paired Relative (`rSMR x rSNR`) and Actual (`aSMR x rSNR`) `9 x 5` grids along with species prominence tiers, rendered with B.C. Government `#003366` / `#FCBA19` styling via `plot_edatope()`:
+
+```{r}
+ed <- vpro_edatopic_grid(con, mode = "dual", force_offline = TRUE)
+ed
+
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  plot_edatope(ed)
+}
+```
+
+## Publishing Self-Contained Quarto BEC Field Guides
+
+`vpro_render_guide()` compiles standalone HTML or PDF site-unit guides, BGC subzone synopses, vegetation summary books, and QC audit reports with embedded `BC Sans` typography, dual edatopic SVGs, and 8-sector aspect roses:
+
+```{r}
+out_guide <- tempfile("unit-guide-", fileext = ".html")
+art <- vpro_render_guide(con, type = "single_unit", output_file = out_guide, force_offline = TRUE)
+art
+unlink(out_guide)
+```

@@ -1,0 +1,72 @@
+---
+title: "Live Workspace Connection, Tidy Extraction, and LMH25 QA"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Live Workspace Connection, Tidy Extraction, and LMH25 QA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Working Alongside `VPro` (`vpro_wails`)
+
+`vpro` is designed for dual-screen work alongside the desktop `VPro` (`vpro_wails`) application. While `VPro` holds your active SQLite WAL project open for FS882 plot-card review and spatial mapping, `vpro` opens read-only (`SQLITE_RO`, `query_only = ON`, `busy_timeout = 5000`) connections to the exact same workspace directory without locking conflicts.
+
+```{r}
+library(vpro)
+
+# Check 2026 BECdb v13 + BCPlantTaxonomy v19 SHA-256 provenance
+std <- vpro_standards()
+std$verified
+std$sources[, c("version", "archive_name")]
+```
+
+In a live desktop session, calling `vpro_connect()` with zero arguments reads `config.yml` from `vpro_config_dir()` and connects to your active project, site-unit (`*_SU`), hierarchy (`*_Hierarchy`), and lump (`*_Lump`) tables in `vpro_data_dir()`. For reproducible examples and automated pipelines, `vpro_sample()` opens the bundled `VP08` `Sample` project:
+
+```{r}
+con <- vpro_sample()
+con
+vpro_list_su(con)
+vpro_list_lumps(con)
+```
+
+## Tidy Environment, Vegetation, and `LMH25 (2023)` Soil Readers
+
+Plot identifiers (`PlotNumber`) are strictly preserved as 7-character text strings (keeping leading zeroes such as `"00337"`), and legacy Microsoft Access `-1/0` integers are normalized to R `logical` vectors:
+
+```{r}
+env <- vpro_env(con, scope = "project")
+head(env[, c("PlotNumber", "SiteUnit", "Zone", "SubZone", "MoistureRegime", "NutrientRegime", "Elevation", "Flag")])
+```
+
+`vpro_veg()` resolves `BCPlantTaxonomy v19` synonyms (`OldCode -> Code`), folds active `*_Lump` mappings with VPro's per-layer `99%` cover cap, and aggregates cover across `raw`, `abcd`, `lifeform`, or `total` strata:
+
+```{r}
+veg_abcd <- vpro_veg(con, strata = "abcd", lump = TRUE, exclude_modifiers = TRUE)
+head(veg_abcd)
+```
+
+`vpro_soil()` extracts humus and mineral horizons ordered according to *Land Management Handbook 25* (`LMH25`, 2023): upland organic horizons (`L`, `F`, `H`) are ordered upward from mineral contact (`UpperDepth DESC`), whereas wetland organic (`Of`, `Om`, `Oh`) and mineral (`A`, `B`, `C`, `R`, `W`) horizons are ordered downward (`UpperDepth ASC`):
+
+```{r}
+soil <- vpro_soil(con)
+head(soil$humus[, c("PlotNumber", "Horizon", "UpperDepth", "LowerDepth", "vonPost", "HorizonRegime")])
+```
+
+## Standards and `LMH25 (2023)` Quality Control Validation
+
+Before running multivariate classification or publishing unit summaries, run `vpro_check_lmh25()` and `vpro_validate()` to catch substrate sum discrepancies, inverted horizon depths, `vonPost` scale mismatches, and unlisted environment or species codes:
+
+```{r}
+lmh <- vpro_check_lmh25(con)
+lmh$summary
+
+qa <- vpro_validate(con)
+head(qa$issues, 8)
+```
