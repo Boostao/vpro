@@ -1,7 +1,7 @@
 Package: vpro
-Title: Manage and Classify Ecological Vegetation Plot Data
-Version: 0.0.0.9000
-Date: 2026-09-22
+Title: Quantitative Ecology and Companion SDK for VPro
+Version: 2.0.0
+Date: 2026-11-12
 Authors@R: c(
     person("Will", "MacKenzie", , "Will.MacKenzie@GEMS1.gov.bc.ca", role = c("cre", "aut")),
     person("Bruno", "Tremblay", , "bruno@boostao.ca", role = c("aut"),
@@ -9,37 +9,49 @@ Authors@R: c(
     person("Russell", "Klassen", , "russk@workbc.ca", role = "aut"),
     person(, "Province of British Columbia", role = c("cph", "fnd"))
   )
-Description: Provides tools for managing, analysing, and classifying
-    ecological vegetation plot data and hierarchical classifications.
-    VPro (Vegetation Processor) was originally developed as a Microsoft
-    Access application by the British Columbia Ministry of Forests to
-    support the Biogeoclimatic Ecosystem Classification (BEC) program.
+Description: Programmatic R companion SDK and quantitative ecology engine for
+    VPro (VENUS -- Vegetation and Environment NexUS -- Professional) and the
+    British Columbia Ministry of Forests Biogeoclimatic Ecosystem
+    Classification (BEC) program. Provides concurrent SQLite WAL read access
+    alongside the desktop VPro application, tidy vegetation and soil
+    extraction, BCPlantTaxonomy v19 and BECdb v13 harmonization, community
+    matrices, multivariate clustering, spatial GeoPackage export, LMH25 (2023)
+    pedological validation, climr climate normals and Ministry actual soil
+    moisture regime (aSMR) modelling, dual edatopic grids, BEC diagnostic
+    synthesis, guarded candidate site-unit write-back, and Quarto BEC guides.
 License: Apache License (== 2)
 Depends:
-    R (>= 4.1.0)
+    R (>= 4.4.0)
 Imports:
-    bslib,
+    cli,
+    data.table,
     DBI,
-    dbplyr,
-    dplyr,
-    DT,
-    duckdb,
-    leaflet,
-    mdbr (>= 0.3.2),
-    quarto,
-    rappdirs,
-    rhandsontable,
+    jsonlite,
+    rlang,
     RSQLite,
-    sass,
-    sf,
-    shiny,
-    shinyjs,
-    shinyTree,
+    tibble,
     yaml
 Suggests:
+    climr,
+    cluster,
+    duckdb,
+    ggplot2,
+    indicspecies,
+    knitr,
+    labdsv,
+    Matrix,
+    mdbr (>= 0.3.2),
+    pkgdown,
+    quarto,
+    rmarkdown,
     roxygen2,
+    sf,
+    terra,
     testthat (>= 3.0.0),
-    withr
+    vegan,
+    vegclust,
+    withr,
+    writexl
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

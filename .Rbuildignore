@@ -8,4 +8,6 @@
 ^inst/doc-oracles$
 ^scripts$
 ^air\.toml$
-^inst/app/\.RData$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
