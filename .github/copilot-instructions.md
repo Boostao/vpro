@@ -1,129 +1,26 @@
-# GitHub Copilot Agent Instructions — VPRO
+# GitHub Copilot Instructions — `vpro` (Headless R Companion SDK)
 
-## Orientation
-Migrate VPro64 from Access to R/Shiny with Access-accurate behavior and complete requested work autonomously unless the user explicitly narrows scope.
+**Read [`AGENTS.md`](../AGENTS.md) first.** `AGENTS.md` is the single authoritative architectural, domain, and workflow contract for this repository.
 
-## Default Working Mode
-1. Continue implementation until the requested task is complete or a real blocker is reached.
-2. Match Access behavior in Shiny paradigms.
-3. Use incremental validation during execution, but do not stop at intermediate slices unless the user asks to pause.
+## Core Rules Summary
 
-## Execution Contract
-For each requested task:
-1. **Access source**: identify exact form/module event(s) in `../VPRO_ACCESS/VPro64_forAI` when Access parity is relevant.
-2. **Expected behavior**: restate only what the requested work must do.
-3. **Implementation**: edit only necessary files, but continue through connected runtime/test fixes needed to complete the task.
-4. **Validation**: run the smallest meaningful verification needed to confirm the work.
-5. **Handoff**: list what changed and what remains only when the requested task is actually complete or explicitly blocked.
+1. **Headless R Companion SDK Only (`R >= 4.4.0`):**
+   - `vpro` is the programmatic R SDK & scientific analytics companion to the official **`vpro_wails`** desktop application (`/home/bruno/Work/vpro_wails`, Wails v3 + Go + Svelte 5 + SQLite WAL) for the B.C. Ministry of Forests **BEC Program**.
+   - **Zero Shiny / Widget UI:** `shiny`, `bslib`, `DT`, `rhandsontable`, `shinyTree`, `shinyjs`, `sass`, `leaflet`, and `rappdirs` are **forbidden** in `Imports`. Desktop forms, CRUD UI, and interactive WebGPU maps live exclusively in `vpro_wails`.
+   - R owns tidy `VP08` SQLite extraction, standards/QC validation, `vegan`/`vegclust`/`indicspecies`/`labdsv` community matrices, `sf`/`terra` spatial analysis, `bcgov/climr` + `CMD -> aSMR` edatopic modelling, BEC differential/diagnostic synthesis, guarded opt-in `*_ClusterCandidate_SU` / `*_SU` / `*_Lump` / `__VPRO_PlotClimate` write-back, and Quarto BEC reporting.
 
-## Scope Rules
-- No extra features beyond the requested scope.
-- No design/system rewrites unless requested.
-- Preserve existing naming and UX language from Access captions/status text.
+2. **Exact `vpro_wails` Directory & SQLite WAL Coexistence:**
+   - `vpro_data_dir()` and `vpro_config_dir()` must match `/home/bruno/Work/vpro_wails/internal/sqlutil/sqlutil_foundation.go` byte-for-byte (`VPRO_DATA_DIR` / `getOption("vpro.data_dir")` and `VPRO_CONFIG_DIR` / `getOption("vpro.config_dir")` overrides first; never `rappdirs`'s doubled `vpro/vpro` on Windows).
+   - Default to read-only `RSQLite` connections (`SQLITE_RO` or `busy_timeout = 5000`, `synchronous = NORMAL`, `query_only = ON`) so R never blocks a live `vpro_wails` WAL session.
+   - Opt-in write-back uses `BEGIN IMMEDIATE`, refuses `Master*` and `USys*` tables, requires `confirm_overwrite = TRUE` before replacing existing `*_SU`/`*_Lump` tables, and appends `<Project>_Audit` + `__VPRO_*` provenance atomically.
 
-## Access-Parity Rules
-- `../VPRO_ACCESS/` is read-only canonical reference.
-- Port semantics, not just labels.
-- Mirror event intent:
-  - Access `GotFocus`/`Click` list refresh behavior
-  - Access `Change`/`AfterUpdate` side effects
-  - Access special options (`Attach`, `New`, `Unattach`, `None`, separators)
-- Handle Access-to-R null differences explicitly (`Nz` vs `NA`/`NULL`).
+3. **Non-Negotiable `VP08` & BEC Domain Invariants (Details in `AGENTS.md` §3 & `inst/doc-oracles/`):**
+   - Preserve the 7-DB SQLite family (`<Project>.db`, `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`) and `_table_metadata` (`'VP08'`).
+   - `PlotNumber` is **always** literal `character` (`typeof(PlotNumber) = 'text'`, preserving leading zeroes like `'00337'`).
+   - Access `BOOLEAN`: `-1L` = `TRUE`, `0L` = `FALSE` on disk $\leftrightarrow$ R `logical` in memory.
+   - Narrow cover to IEEE-754 `float32` before `< 100`, cap lumped (`*_Lump`) per-layer cover at `99%`, apply ACE 15-significant-digit half-away rounding where calibrated, respect `VLists.USysAllSpecs.Lifeform` (`INT32`) vs `VUser.USysUserSpp.LifeForm` (`INT16`), and order `LMH25 (2023)` soil horizons (`L/F/H` `UpperDepth > LowerDepth` `DESC`; `Of/Om/Oh` & `A/B/C/R/W` `UpperDepth < LowerDepth` `ASC`).
 
-## Technical Standards
-- Shiny modules use `mod_<name>_ui(id)` and `mod_<name>_server(id, state, con)`.
-- Business logic goes in `R/logic_*.R`; UI wiring stays in `mod_*` or `server.R`.
-- Use safe SQL patterns (validated inputs, parameterized queries where possible).
-- Use `lists.` prefix for attached list/reference tables.
-
-## Database Runtime (Current)
-- Canonical local storage is SQLite, not local DuckDB files.
-- Canonical SQLite files live under `data/`, `data/pics/`, and `data/projects/`.
-- Planned app runtime is an in-memory DuckDB connection with attached SQLite databases.
-- Runtime-only cross-database queries/views belong in the in-memory DuckDB layer, not in the canonical SQLite initdb files.
-- Do not propose local `.duckdb` files as the canonical backend unless the user explicitly asks for a historical or superseded plan.
-
-## Access Form Module Strategy
-- For Access main-menu button migrations, create focused context modules that capture form-open intent and persist selection state.
-- Keep Access form-open semantics in module server logic (for example: set `state$CurrForm`, `state$sysCurrForm`, and `Current/DataFormName` preference).
-- Reuse existing destination tabs/modules for rendering whenever possible; add placeholders only for unresolved Access-only dependencies.
-
-## Project Map (Minimal)
-- App shell: `global.R`, `ui.R`, `server.R`
-- Core logic: `R/logic_state.R`, `R/logic_*.R`
-- Modules: `R/mod_*.R`
-- Canonical local DBs: `data/*.db`, `data/pics/*.db`, `data/projects/*.db`
-- Canonical Access reference: `../VPRO_ACCESS/VPro64_forAI/`
-
-## Validation Mode (Current)
-- Default: source/load smoke + manual in-app verification.
-- Run tests only when explicitly requested.
-
-## Git / Commit Discipline
-- Commit scoped changes when asked.
-- Stage only relevant files.
-- Do not commit generated `.duckdb` artifacts.
-- Do not replace canonical SQLite storage with generated local `.duckdb` files unless explicitly requested.
-- Keep commit messages scoped (example: `Sidebar: align cmbCurrSU semantics with Access`).
-
-## Communication Style
-- Be concise and implementation-first.
-- Call out assumptions and mismatches quickly.
-- If ambiguity exists, ask for one precise clarification and continue.
-
-## Immediate Priority
-Deliver Access-accurate workflows end-to-end with fast feedback, using intermediate validation without prematurely stopping implementation.
-
-## Form migration execution (mandatory)
-
-When the user asks to migrate, port, adapt, reimplement, or modernize an Access form (UI + behavior), execute the migration directly in the primary agent.
-
-Default mode for migration requests is **strict parity**, not MVP. Do not silently downgrade to MVP unless the user explicitly requests MVP/minimal scope.
-
-Use both skills in this order:
-1. `access-form-impl-spec` for behavior/architecture contract (`FORM_IMPL_SPEC_<form>.md`)
-2. `access-form-to-shiny-ui` for generated layout scaffold/reference (`ui_<form>.R`)
-3. Targeted raw form lookups by line-range from spec trace tables
-
-## Skill artifact retention (mandatory)
-
-During migration, preserve generated skill artifacts under `/tmp` and do not delete them during the active migration session.
-
-Default location:
-- `/tmp/vpro_parity/<work_id>/`
-
-Expected retained artifacts (at minimum):
-- `FORM_IMPL_SPEC_<form>.md`
-- `ui_<form>.R`
-- parity notes/checklist (for example `PARITY_CHECKLIST_<work_id>.md`)
-
-If a skill writes outputs under `../VPRO_ACCESS/.../Forms/`, copy the artifacts to `/tmp/vpro_parity/<work_id>/` immediately and keep that `/tmp` copy as canonical migration evidence for the task.
-
-Do not parse whole Access form exports upfront as a primary discovery method.
-
-Required migration inputs:
-- Target form path(s) in `../VPRO_ACCESS/VPro64_forAI/Forms/`
-- If a launcher/menu opens another form, include both launcher and destination form paths
-- Target framework and execution environment (default to Shiny if unspecified)
-- Constraints (minimal/MVP, design system, deployment/runtime)
-- Explicit navigation contract in app runtime (trigger control + destination tab/module/form id)
-
-Completion requirements:
-- Apply concrete runtime code changes in app files (`R/mod_*`, `R/logic_*`, `ui.R`, `server.R`, `global.R`) for destination-form behavior
-- Do not treat redirect-only changes as complete when destination implementation is requested
-- Do not treat analysis-only output as complete
-- Do not report success when no workspace files changed
-- Do not defer, recursively implement, find solution and search for details to move forward.
-
-Strict parity completion gates:
-- Do not mark a task complete based only on startup or save/load smoke when deeper runtime behavior was in scope.
-- Include a control/event parity checklist in handoff with `implemented | missing` status per item.
-
-Do not claim feature parity unless event mapping, dependency tracing, and source bindings are implemented.
-
-## Missing dependency handling (mandatory)
-
-If dependencies cannot be wired end-to-end:
-- Add non-breaking placeholders/stubs in implementation.
-- Clearly report unresolved hooks and expected integration points.
-- Provide actionable next steps for completing hookup.
+4. **Sibling Asset Discovery & Verification Gates (Details in `AGENTS.md` §4–§5):**
+   - Pass explicit absolute paths when searching sibling directories (`/home/bruno/Work/vpro_wails/`, `/home/bruno/Work/VPRO_ACCESS/okf/00_index.md`, `/home/bruno/Work/MoF-Skeena-Research/`, `/home/bruno/Work/bcgov_ref/`, `/home/bruno/Work/VPRO_ACCESS_1/VPro64/BECMaster_fixing.accdb` [read-only], `/home/bruno/Work/spatial_assets/`).
+   - Validate package changes with `Rscript -e "roxygen2::roxygenise()"`, `Rscript -e "testthat::test_local(stop_on_failure = TRUE)"`, and tarball check `R CMD build . && R CMD check --no-manual vpro_*.tar.gz` (`0 errors | 0 warnings | 0 notes`).
+   - Isolate parallel subagents in `/home/bruno/Work/vpro.worktrees/waveN-<track>` with strictly disjoint `R/<domain>_*.R` and `tests/testthat/test-<domain>_*.R` files, regenerating `NAMESPACE` and `man/` only on `master` at wave merge gates.

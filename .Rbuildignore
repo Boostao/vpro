@@ -3,10 +3,9 @@
 ^\.github$
 ^\.posit$
 ^\.vscode$
-^_TO_CLASSIFY$
-^bob\.sh$
 ^AGENTS\.md$
 ^data-raw$
+^inst/doc-oracles$
 ^scripts$
 ^air\.toml$
 ^inst/app/\.RData$
