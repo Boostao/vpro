@@ -1,0 +1,85 @@
+---
+title: "BEC Vegetation Synthesis Summary Book"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    theme: none
+    minimal: true
+    css: bcgov.css
+  pdf:
+    toc: true
+params:
+  payload_json: "guide_payload.json"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup, include=FALSE}
+library(jsonlite)
+library(knitr)
+
+payload <- jsonlite::fromJSON(params$payload_json, simplifyVector = FALSE)
+esc_html <- function(x) {
+  if (is.null(x) || length(x) == 0L || is.na(x)) return("")
+  s <- as.character(x)
+  s <- gsub("&", "&amp;", s, fixed = TRUE)
+  s <- gsub("<", "&lt;", s, fixed = TRUE)
+  s <- gsub(">", "&gt;", s, fixed = TRUE)
+  s <- gsub('"', "&quot;", s, fixed = TRUE)
+  s
+}
+```
+
+## Project Synthesis Overview
+
+```{r meta_line, results='asis'}
+cat(sprintf(
+  "<p><strong>Project:</strong> %s &nbsp;|&nbsp; <strong>Classified Plots:</strong> %d &nbsp;|&nbsp; <strong>Site Units:</strong> %d</p>\n",
+  esc_html(payload$project),
+  as.integer(payload$plotCount),
+  as.integer(length(payload$unitSummaries))
+))
+```
+
+## Site Unit Environmental Summary
+
+```{r unit_env}
+if (!is.null(payload$unitSummaries) && length(payload$unitSummaries) > 0L) {
+  u_rows <- lapply(payload$unitSummaries, function(u) {
+    data.frame(
+      `Site Unit` = as.character(u$siteUnit),
+      Plots = as.integer(u$nPlots),
+      `Mean Elev (m)` = as.numeric(u$meanElev),
+      `Modal rSMR` = as.character(u$modalSmr),
+      `Modal rSNR` = as.character(u$modalSnr),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+  })
+  knitr::kable(do.call(rbind, u_rows))
+}
+```
+
+## Characteristic Vegetation Table
+
+```{r veg_book}
+if (!is.null(payload$vegetationTable) && length(payload$vegetationTable) > 0L) {
+  veg_rows <- lapply(payload$vegetationTable, function(r) {
+    data.frame(
+      Strata = as.character(r$layer),
+      Code = as.character(r$species),
+      `Scientific Name` = as.character(r$scientificName),
+      `English Name` = as.character(r$englishName),
+      `Presence Class` = as.character(r$constancyClass),
+      `Constancy (%)` = round(as.numeric(r$constancyPct), 1),
+      `Mean Cover (%)` = round(as.numeric(r$meanCover), 1),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+  })
+  knitr::kable(do.call(rbind, veg_rows))
+}
+```
