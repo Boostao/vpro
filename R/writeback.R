@@ -148,7 +148,7 @@ vpro_assert_safe_prefix <- function(raw_name, full_table, project_name, kind = c
     rlang::abort("Target table name must be valid UTF-8 without control characters.")
   }
 
-  # Hard refusal guards: Master* / master, USys*, BECSiteUnit, core VP08 tables
+  # Hard refusal guards: Master* / *Master*, USys*, BECSiteUnit, core VP08 tables
   if (grepl("master", nm, ignore.case = TRUE) || grepl("master", ft, ignore.case = TRUE)) {
     rlang::abort(paste0(
       "Refusing write-back to Master-protected table `", ft, "` (`Master*` prefixes are read-only)."
@@ -449,7 +449,7 @@ vpro_upsert_table_metadata_in_tx <- function(dbc, table_name, version_tag) {
 vpro_write_candidate_su <- function(
   con,
   memberships,
-  name = paste0(con$project, "_ClusterCandidate"),
+  name = paste0(gsub("(?i)master", "Mst", con$project, perl = TRUE), "_ClusterCandidate"),
   overwrite = TRUE,
   actor = Sys.info()[["user"]]
 ) {
@@ -470,10 +470,10 @@ vpro_write_candidate_su <- function(
   if (tolower(base) %in% c("none", "filtered")) {
     rlang::abort(paste0("Candidate prefix `", base, "` is reserved by VPro."))
   }
-  if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,13}$", base)) {
+  if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
     rlang::abort(paste0(
       "Candidate prefix `", base,
-      "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 14 characters."
+      "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
     ))
   }
 

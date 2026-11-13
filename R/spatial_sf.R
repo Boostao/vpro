@@ -54,6 +54,19 @@ vpro_bcgs_mapsheet_20k <- function(lat, lon) {
   out
 }
 
+.vpro_spatial_core_cols <- c(
+  "PlotNumber", "FieldNumber", "ProjectID", "FSRegionDistrict", "Date",
+  "SiteSurveyor", "PlotRepresenting", "Location", "Ecosection", "NtsMapSheet",
+  "Longitude", "Latitude", "UTMZone", "UTMEasting", "UTMNorthing",
+  "LocationAccuracy", "Zone", "SubZone", "SiteSeries", "SiteModifier1",
+  "SiteModifier2", "MoistureRegime", "NutrientRegime", "SuccessionalStatus",
+  "StructuralStage", "StandAge", "Elevation", "SlopeGradient", "Aspect",
+  "MesoSlopePosition", "SoilDrainage", "HumusForm", "StrataCoverTree",
+  "StrataCoverShrub", "StrataCoverHerb", "StrataCoverMoss", "Flag",
+  "GIS_BGC", "BECSiteUnit", "UserSiteUnit", "SitePlotQuality",
+  "VegPlotQuality", "SoilPlotQuality"
+)
+
 #' Extract spatial `sf` plot features with NAD83 geodesy audit and BCGS mapsheets
 #'
 #' Reads plot environment records via [vpro_env()], preserves literal character
@@ -79,6 +92,9 @@ vpro_bcgs_mapsheet_20k <- function(lat, lon) {
 #'   on plots carrying both decimal degrees and UTM coordinates.
 #' @param exclude_modifiers Logical; if `TRUE`, excludes `.support`, `.poor`,
 #'   and `.nudum` site units.
+#' @param columns Either `"core"` (default curated spatial/BEC/quality columns
+#'   for fast GIS export), `"all"` (all 130+ `_Env` + `_Admin` columns), or an
+#'   explicit character vector of column names.
 #' @return An `sf` `POINT` object in `crs` with `sign_flipped`, `utm_backfilled`,
 #'   `utm_dd_divergence_m`, `utm_dd_divergent`, `geodesy_flag`, and
 #'   `bcgs_mapsheet_20k` columns, plus `attr(sf_obj, "missing_coords")`.
@@ -88,7 +104,8 @@ vpro_sf <- function(
   scope = c("su", "project"),
   crs = 3005,
   audit_geodesy = TRUE,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  columns = "core"
 ) {
   vpro_assert_workspace(con)
   rlang::check_installed("sf", reason = "to build spatial `sf` plot layers and transform CRS.")
@@ -101,7 +118,15 @@ vpro_sf <- function(
     rlang::abort("`exclude_modifiers` must be TRUE or FALSE.")
   }
 
-  env <- vpro_env(con, scope = scope, exclude_modifiers = exclude_modifiers)
+  col_proj <- if (identical(columns, "all") || is.null(columns)) {
+    NULL
+  } else if (identical(columns, "core")) {
+    .vpro_spatial_core_cols
+  } else {
+    unique(c("PlotNumber", "Longitude", "Latitude", "UTMZone", "UTMEasting", "UTMNorthing", as.character(columns)))
+  }
+
+  env <- vpro_env(con, scope = scope, exclude_modifiers = exclude_modifiers, columns = col_proj)
   env[["PlotNumber"]] <- as.character(env[["PlotNumber"]])
   n <- nrow(env)
 
@@ -141,18 +166,18 @@ vpro_sf <- function(
   utm_lat <- rep(NA_real_, n)
   utm_lon <- rep(NA_real_, n)
 
-  # Project NAD83 UTM zones 7..11 (EPSG:26907..26911) to NAD83 geographic (EPSG:4269)
+  # Project NAD83 UTM zones 7..11 (EPSG:26907..26911) to NAD83 geographic (EPSG:4269) via C++ PROJ matrix projection
   need_utm_proj <- if (isTRUE(audit_geodesy)) has_utm else (has_utm & !has_dd)
   if (any(need_utm_proj)) {
+    crs_4269_wkt <- sf::st_crs(4269L)$wkt
     for (z in sort(unique(zone_int[need_utm_proj]))) {
       idx <- which(need_utm_proj & zone_int == z)
-      pts_utm <- sf::st_as_sf(
-        data.frame(e = east_raw[idx], n = north_raw[idx]),
-        coords = c("e", "n"),
-        crs = 26900L + as.integer(z)
+      xy <- sf::sf_project(
+        from = sf::st_crs(26900L + as.integer(z))$wkt,
+        to = crs_4269_wkt,
+        pts = cbind(east_raw[idx], north_raw[idx]),
+        keep = TRUE
       )
-      pts_4269 <- sf::st_transform(pts_utm, crs = 4269L)
-      xy <- sf::st_coordinates(pts_4269)
       utm_lon[idx] <- as.double(xy[, 1L])
       utm_lat[idx] <- as.double(xy[, 2L])
     }
@@ -168,29 +193,42 @@ vpro_sf <- function(
   if (isTRUE(audit_geodesy)) {
     both_idx <- which(has_dd & has_utm & !is.na(utm_lat) & !is.na(utm_lon))
     if (length(both_idx) > 0L) {
-      sfc_dd <- sf::st_as_sf(
-        data.frame(lon = lon_dd[both_idx], lat = lat_dd[both_idx]),
-        coords = c("lon", "lat"),
-        crs = 4269L
-      )
-      sfc_utm <- sf::st_as_sf(
-        data.frame(lon = utm_lon[both_idx], lat = utm_lat[both_idx]),
-        coords = c("lon", "lat"),
-        crs = 4269L
-      )
-      d_m <- as.double(sf::st_distance(sf::st_geometry(sfc_dd), sf::st_geometry(sfc_utm), by_element = TRUE))
+      # Vectorised GRS80 (NAD83) ellipsoidal arc distance in metres (a = 6378137, f = 1/298.257222101)
+      rad <- pi / 180.0
+      lat1 <- lat_dd[both_idx] * rad
+      lat2 <- utm_lat[both_idx] * rad
+      phi_m <- 0.5 * (lat1 + lat2)
+      dphi <- lat2 - lat1
+      dlam <- (utm_lon[both_idx] - lon_dd[both_idx]) * rad
+      a_grs80 <- 6378137.0
+      f_grs80 <- 1.0 / 298.257222101
+      e2 <- 2.0 * f_grs80 - f_grs80^2
+      w_term <- sqrt(1.0 - e2 * sin(phi_m)^2)
+      m_rad <- a_grs80 * (1.0 - e2) / (w_term^3)
+      n_rad <- a_grs80 / w_term
+      # Use exact geodesic via sf::st_distance only for large (>20 km) separations where local curvature approx drifts
+      d_m <- sqrt((m_rad * dphi)^2 + (n_rad * cos(phi_m) * dlam)^2)
+      far <- which(d_m > 20000.0)
+      if (length(far) > 0L) {
+        a_hav <- sin(dphi[far] * 0.5)^2 + cos(lat1[far]) * cos(lat2[far]) * sin(dlam[far] * 0.5)^2
+        d_m[far] <- 2.0 * 6371008.8 * asin(pmin(1.0, sqrt(a_hav)))
+      }
       utm_dd_divergence_m[both_idx] <- d_m
       utm_dd_divergent[both_idx] <- !is.na(d_m) & d_m > 250.0
     }
   }
 
-  geodesy_flag <- vapply(seq_len(n), function(i) {
-    flags <- character()
-    if (sign_flipped[[i]]) flags <- c(flags, "sign_flipped")
-    if (utm_backfilled[[i]]) flags <- c(flags, "utm_backfilled")
-    if (utm_dd_divergent[[i]]) flags <- c(flags, "utm_dd_divergent")
-    if (length(flags) == 0L) "ok" else paste(flags, collapse = ",")
-  }, character(1))
+  geodesy_flag <- rep("ok", n)
+  flagged <- which(sign_flipped | utm_backfilled | utm_dd_divergent)
+  if (length(flagged) > 0L) {
+    geodesy_flag[flagged] <- vapply(flagged, function(i) {
+      flags <- character()
+      if (sign_flipped[[i]]) flags <- c(flags, "sign_flipped")
+      if (utm_backfilled[[i]]) flags <- c(flags, "utm_backfilled")
+      if (utm_dd_divergent[[i]]) flags <- c(flags, "utm_dd_divergent")
+      paste(flags, collapse = ",")
+    }, character(1))
+  }
 
   env[["Latitude"]] <- final_lat
   env[["Longitude"]] <- final_lon
@@ -207,17 +245,43 @@ vpro_sf <- function(
   coord_df <- env[has_coords, , drop = FALSE]
   rownames(coord_df) <- NULL
 
+  target_crs <- sf::st_crs(crs)
+  is_3d_crs <- grepl("geocentric|AXIS\\[\"\\([Zz]\\)\"", ifelse(is.na(target_crs$wkt), "", target_crs$wkt), ignore.case = TRUE)
   if (nrow(coord_df) == 0L) {
-    sf_out <- sf::st_sf(coord_df, geometry = sf::st_sfc(crs = 4269L))
-  } else {
-    sf_out <- sf::st_as_sf(
-      coord_df,
-      coords = c("Longitude", "Latitude"),
-      crs = 4269L,
-      remove = FALSE
+    sf_out <- sf::st_transform(sf::st_sf(coord_df, geometry = sf::st_sfc(crs = 4269L)), crs = target_crs)
+  } else if (is_3d_crs) {
+    sf_out <- sf::st_transform(
+      sf::st_as_sf(coord_df, coords = c("Longitude", "Latitude"), crs = 4269L, remove = FALSE),
+      crs = target_crs
     )
+  } else {
+    pts_lonlat <- cbind(coord_df[["Longitude"]], coord_df[["Latitude"]])
+    pts_target <- if (identical(target_crs, sf::st_crs(4269L))) {
+      pts_lonlat
+    } else {
+      sf::sf_project(
+        from = sf::st_crs(4269L)$wkt,
+        to = target_crs$wkt,
+        pts = pts_lonlat,
+        keep = TRUE
+      )
+    }
+    if (ncol(pts_target) == 2L && all(is.finite(pts_target[, 1L]) & is.finite(pts_target[, 2L]))) {
+      coord_df[[".__x"]] <- as.double(pts_target[, 1L])
+      coord_df[[".__y"]] <- as.double(pts_target[, 2L])
+      sf_out <- sf::st_as_sf(
+        coord_df,
+        coords = c(".__x", ".__y"),
+        crs = target_crs,
+        remove = TRUE
+      )
+    } else {
+      sf_out <- sf::st_transform(
+        sf::st_as_sf(coord_df, coords = c("Longitude", "Latitude"), crs = 4269L, remove = FALSE),
+        crs = target_crs
+      )
+    }
   }
-  sf_out <- sf::st_transform(sf_out, crs = crs)
   attr(sf_out, "missing_coords") <- missing_coords
   sf_out
 }

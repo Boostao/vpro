@@ -394,14 +394,17 @@ vpro_import_access <- function(
       u16_len <- vpro_utf16_len(plots)
       bad <- is.na(plots) | !nzchar(trimws(plots)) | is.na(u16_len) | u16_len > 7L
       dup <- logical(length(plots))
-      for (k in seq_along(plots)) {
-        if (!bad[[k]]) {
-          pk <- plots[[k]]
-          if (exists(pk, envir = valid_plots, inherits = FALSE)) {
-            dup[[k]] <- TRUE
-          } else {
-            assign(pk, TRUE, envir = valid_plots)
-          }
+      good_idx <- which(!bad)
+      if (length(good_idx) > 0L) {
+        g_plots <- plots[good_idx]
+        already <- vapply(unique(g_plots), function(pk) exists(pk, envir = valid_plots, inherits = FALSE), logical(1))
+        already_set <- names(already)[already]
+        in_prev <- g_plots %in% already_set
+        in_chunk_dup <- duplicated(g_plots)
+        is_d <- in_prev | in_chunk_dup
+        dup[good_idx[is_d]] <- TRUE
+        for (pk in unique(g_plots[!is_d])) {
+          assign(pk, TRUE, envir = valid_plots)
         }
       }
       if (any(bad)) {
@@ -431,13 +434,15 @@ vpro_import_access <- function(
     }
     DBI::dbClearResult(cur)
 
+    valid_plot_vec <- ls(valid_plots, all.names = TRUE)
+
     # 2. Stream remaining core tables
     stream_child <- function(suffix, plot_col = "PlotNumber", req_env = TRUE, dedupe = FALSE, bool_cols = "Flag") {
       src_tbl <- find_src(suffix, required = (suffix != "Metadata" && suffix != "Admin") || ver == "VP08")
       if (is.null(src_tbl)) return(invisible(NULL))
       dst_tbl <- paste0(dst_prj, "_", suffix)
       dst_fields <- DBI::dbListFields(sq_con, dst_tbl)
-      seen_local <- if (dedupe) new.env(hash = TRUE, parent = emptyenv()) else NULL
+      seen_vec <- character()
       c_cur <- mdbr::mdb_stream_table(mdb_con, src_tbl)
       on.exit(if (DBI::dbIsValid(c_cur)) DBI::dbClearResult(c_cur), add = TRUE)
       off <- 0L
@@ -452,7 +457,7 @@ vpro_import_access <- function(
           px <- match(tolower(plot_col), tolower(names(ch)))
           pvals <- if (!is.na(px)) as.character(ch[[px]]) else rep(NA_character_, nrow(ch))
           if (req_env) {
-            orph <- is.na(pvals) | !vapply(pvals, function(pk) !is.na(pk) && nzchar(pk) && exists(pk, envir = valid_plots, inherits = FALSE), logical(1))
+            orph <- is.na(pvals) | !nzchar(pvals) | !(pvals %in% valid_plot_vec)
             if (any(orph)) {
               quarantined_orphans <<- quarantined_orphans + sum(orph)
               log_quarantine(src_tbl, r_ids[orph], pvals[orph], "orphan_missing_env_plot", ch[orph, , drop = FALSE])
@@ -460,18 +465,16 @@ vpro_import_access <- function(
             }
           }
           if (dedupe && any(keep)) {
-            for (k in which(keep)) {
-              pk <- pvals[[k]]
-              if (!is.na(pk) && nzchar(pk)) {
-                if (exists(pk, envir = seen_local, inherits = FALSE)) {
-                  quarantined_malformed <<- quarantined_malformed + 1L
-                  log_quarantine(src_tbl, r_ids[[k]], pk, "duplicate_plot_key", ch[k, , drop = FALSE])
-                  keep[[k]] <- FALSE
-                } else {
-                  assign(pk, TRUE, envir = seen_local)
-                }
-              }
+            k_idx <- which(keep)
+            kp <- pvals[k_idx]
+            is_dup <- (kp %in% seen_vec) | duplicated(kp)
+            if (any(is_dup)) {
+              d_rows <- k_idx[is_dup]
+              quarantined_malformed <<- quarantined_malformed + length(d_rows)
+              log_quarantine(src_tbl, r_ids[d_rows], pvals[d_rows], "duplicate_plot_key", ch[d_rows, , drop = FALSE])
+              keep[d_rows] <- FALSE
             }
+            seen_vec <- unique(c(seen_vec, kp[!is_dup]))
           }
         }
         if (identical(suffix, "Veg") && any(keep)) {

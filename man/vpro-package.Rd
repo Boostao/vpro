@@ -8,6 +8,15 @@
 \description{
 Programmatic R companion SDK and quantitative ecology engine for VPro (VENUS -- Vegetation and Environment NexUS -- Professional) and the British Columbia Ministry of Forests Biogeoclimatic Ecosystem Classification (BEC) program. Provides concurrent SQLite WAL read access alongside the desktop VPro application, tidy vegetation and soil extraction, BCPlantTaxonomy v19 and BECdb v13 harmonization, community matrices, multivariate clustering, spatial GeoPackage export, LMH25 (2023) pedological validation, climr climate normals and Ministry actual soil moisture regime (aSMR) modelling, dual edatopic grids, BEC diagnostic synthesis, guarded candidate site-unit write-back, and Quarto BEC guides.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://bcgov.github.io/vpro/}
+  \item \url{https://github.com/boostao/vpro}
+  \item Report bugs at \url{https://github.com/boostao/vpro/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Will MacKenzie \email{Will.MacKenzie@GEMS1.gov.bc.ca}
 

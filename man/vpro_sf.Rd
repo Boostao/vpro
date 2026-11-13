@@ -9,7 +9,8 @@ vpro_sf(
   scope = c("su", "project"),
   crs = 3005,
   audit_geodesy = TRUE,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  columns = "core"
 )
 }
 \arguments{
@@ -26,6 +27,10 @@ on plots carrying both decimal degrees and UTM coordinates.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE}, excludes \code{.support}, \code{.poor},
 and \code{.nudum} site units.}
+
+\item{columns}{Either \code{"core"} (default curated spatial/BEC/quality columns
+for fast GIS export), \code{"all"} (all 130+ \verb{_Env} + \verb{_Admin} columns), or an
+explicit character vector of column names.}
 }
 \value{
 An \code{sf} \code{POINT} object in \code{crs} with \code{sign_flipped}, \code{utm_backfilled},

@@ -165,21 +165,25 @@ vpro_round_ace <- function(x, digits = 2L) {
 }
 
 vpro_utf16_len <- function(x) {
-  chr <- as.character(x)
+  chr <- enc2utf8(as.character(x))
   out <- rep(NA_integer_, length(chr))
-  ok <- !is.na(chr)
-  if (any(ok)) {
-    out[ok] <- vapply(chr[ok], function(s) {
-      if (!validUTF8(enc2utf8(s))) {
-        return(NA_integer_)
-      }
-      cp <- utf8ToInt(enc2utf8(s))
-      if (any(cp >= 0xD800L & cp <= 0xDFFFL)) {
-        return(NA_integer_)
-      }
+  ok <- !is.na(chr) & validUTF8(chr)
+  if (!any(ok)) return(out)
+  sub_c <- chr[ok]
+  nb <- nchar(sub_c, type = "bytes", allowNA = TRUE)
+  nc <- nchar(sub_c, type = "chars", allowNA = TRUE)
+  is_ascii <- !is.na(nb) & !is.na(nc) & (nb == nc)
+  res <- rep(NA_integer_, length(sub_c))
+  res[is_ascii] <- nb[is_ascii]
+  non_ascii <- which(!is_ascii & !is.na(nc))
+  if (length(non_ascii) > 0L) {
+    res[non_ascii] <- vapply(sub_c[non_ascii], function(s) {
+      cp <- utf8ToInt(s)
+      if (any(cp >= 0xD800L & cp <= 0xDFFFL)) return(NA_integer_)
       as.integer(sum(ifelse(cp > 0xFFFFL, 2L, 1L)))
     }, integer(1))
   }
+  out[ok] <- res
   out
 }
 

@@ -139,7 +139,7 @@ vpro_filter_plots <- function(
         bec_expr, ' AS "BEC_Use", ',
         'CASE WHEN admin."Plot" IS NOT NULL THEN 1 ELSE 0 END AS "has_admin" ',
         'FROM ', env_q, ' AS env LEFT JOIN ', adm_q,
-        ' AS admin ON typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB) ',
+        ' AS admin ON env."PlotNumber" = admin."Plot" AND typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB) ',
         'WHERE typeof(env."PlotNumber") = \'text\''
       )
     )
@@ -167,7 +167,7 @@ vpro_filter_plots <- function(
         bec_expr, ' AS "BEC_Use", ',
         'CASE WHEN admin."Plot" IS NOT NULL THEN 1 ELSE 0 END AS "has_admin" ',
         'FROM ', env_q, ' AS env LEFT JOIN ', adm_q,
-        ' AS admin ON typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB) ',
+        ' AS admin ON env."PlotNumber" = admin."Plot" AND typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB) ',
         'WHERE typeof(env."PlotNumber") = \'text\' ORDER BY env."PlotNumber"'
       )
     )
@@ -263,6 +263,9 @@ vpro_filter_plots <- function(
 #'   or a named list of arguments passed to [vpro_filter_plots()].
 #' @param exclude_modifiers Logical; if `TRUE`, excludes `.support`, `.poor`, and
 #'   `.nudum` site units.
+#' @param columns Optional character vector of `_Env`/`_Admin` column names to
+#'   project from SQLite (`PlotNumber` is always retained). Defaults to `NULL`
+#'   (all columns).
 #' @return A tibble of plot environment records.
 #' @export
 vpro_env <- function(
@@ -270,7 +273,8 @@ vpro_env <- function(
   scope = c("su", "project"),
   include_admin = TRUE,
   filter_quality = NULL,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  columns = NULL
 ) {
   vpro_assert_workspace(con)
   scope <- match.arg(scope)
@@ -281,6 +285,10 @@ vpro_env <- function(
   env_tbl <- paste0(con$project, "_Env")
   adm_tbl <- paste0(con$project, "_Admin")
   env_fields <- DBI::dbListFields(dbc, env_tbl)
+  if (!is.null(columns)) {
+    req_cols <- unique(c("PlotNumber", as.character(columns)))
+    env_fields <- env_fields[tolower(env_fields) %in% tolower(req_cols)]
+  }
   env_select <- vapply(env_fields, function(f) {
     qf <- vpro_quote_ident(f)
     if (identical(f, "PlotNumber")) {
@@ -294,23 +302,58 @@ vpro_env <- function(
   adm_select <- character()
   if (isTRUE(include_admin) && DBI::dbExistsTable(dbc, adm_tbl)) {
     adm_fields <- setdiff(DBI::dbListFields(dbc, adm_tbl), c("Plot", env_fields))
-    adm_select <- vapply(adm_fields, function(f) {
-      qf <- vpro_quote_ident(f)
-      paste0("admin.", qf, " AS ", qf)
-    }, character(1))
-    join_sql <- paste0(
-      " LEFT JOIN ", vpro_quote_ident(adm_tbl),
-      ' AS admin ON typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB)'
-    )
+    if (!is.null(columns)) {
+      adm_fields <- adm_fields[tolower(adm_fields) %in% tolower(as.character(columns))]
+    }
+    if (length(adm_fields) > 0L) {
+      adm_select <- vapply(adm_fields, function(f) {
+        qf <- vpro_quote_ident(f)
+        paste0("admin.", qf, " AS ", qf)
+      }, character(1))
+      join_sql <- paste0(
+        " LEFT JOIN ", vpro_quote_ident(adm_tbl),
+        ' AS admin ON env."PlotNumber" = admin."Plot" AND typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB)'
+      )
+    }
   }
 
-  sql <- paste0(
-    "SELECT ", paste(c(env_select, adm_select), collapse = ", "),
-    " FROM ", vpro_quote_ident(env_tbl), " AS env",
-    join_sql,
-    ' WHERE typeof(env."PlotNumber") = \'text\' ORDER BY env."PlotNumber"'
-  )
-  df <- DBI::dbGetQuery(dbc, sql)
+  su_scoped <- identical(scope, "su") && !is.null(con$su)
+  su_df <- vpro_site_units(con, exclude_modifiers = if (su_scoped) exclude_modifiers else FALSE)
+
+  if (su_scoped) {
+    u_plots <- unique(su_df$PlotNumber)
+    if (length(u_plots) == 0L) {
+      df <- DBI::dbGetQuery(
+        dbc,
+        paste0("SELECT ", paste(c(env_select, adm_select), collapse = ", "), " FROM ", vpro_quote_ident(env_tbl), " AS env", join_sql, " WHERE 1 = 0")
+      )
+    } else {
+      chunks <- split(u_plots, ceiling(seq_along(u_plots) / 450L))
+      parts <- lapply(chunks, function(ch) {
+        ph_txt <- paste(rep("?", length(ch)), collapse = ",")
+        ph_blb <- paste(rep("CAST(? AS BLOB)", length(ch)), collapse = ",")
+        q <- paste0(
+          "SELECT ", paste(c(env_select, adm_select), collapse = ", "),
+          " FROM ", vpro_quote_ident(env_tbl), " AS env", join_sql,
+          ' WHERE typeof(env."PlotNumber") = \'text\' AND env."PlotNumber" IN (', ph_txt,
+          ') AND CAST(env."PlotNumber" AS BLOB) IN (', ph_blb, ')'
+        )
+        DBI::dbGetQuery(dbc, q, params = as.list(c(ch, ch)))
+      })
+      df <- do.call(rbind, parts)
+    }
+  } else {
+    sql <- paste0(
+      "SELECT ", paste(c(env_select, adm_select), collapse = ", "),
+      " FROM ", vpro_quote_ident(env_tbl), " AS env",
+      join_sql,
+      ' WHERE typeof(env."PlotNumber") = \'text\''
+    )
+    df <- DBI::dbGetQuery(dbc, sql)
+    if (nrow(df) > 1L) {
+      df <- df[order(as.character(df$PlotNumber), method = "radix"), , drop = FALSE]
+    }
+  }
   df$PlotNumber <- as.character(df$PlotNumber)
 
   # Normalize Access booleans -> R logical
@@ -319,14 +362,12 @@ vpro_env <- function(
   }
 
   # Attach SiteUnit and apply scope
-  if (identical(scope, "su") && !is.null(con$su)) {
-    su_df <- vpro_site_units(con, exclude_modifiers = exclude_modifiers)
+  if (su_scoped) {
     keep_ix <- match(su_df$PlotNumber, df$PlotNumber)
     valid <- !is.na(keep_ix)
     df <- df[keep_ix[valid], , drop = FALSE]
     df$SiteUnit <- su_df$SiteUnit[valid]
   } else {
-    su_df <- vpro_site_units(con, exclude_modifiers = FALSE)
     su_map <- stats::setNames(su_df$SiteUnit, su_df$PlotNumber)
     df$SiteUnit <- unname(su_map[df$PlotNumber])
     if (isTRUE(exclude_modifiers)) {
@@ -364,14 +405,18 @@ vpro_query_scoped_plots <- function(dbc, table_sql, plot_vec, select_cols = "*",
     if (length(plot_vec) == 0L) {
       return(DBI::dbGetQuery(dbc, paste0("SELECT ", select_cols, " FROM ", table_sql, " WHERE 1 = 0")))
     }
-    chunks <- split(unique(as.character(plot_vec)), ceiling(seq_along(unique(plot_vec)) / 800L))
+    chunks <- split(unique(as.character(plot_vec)), ceiling(seq_along(unique(plot_vec)) / 450L))
     parts <- lapply(chunks, function(ch) {
-      ph <- paste(rep("CAST(? AS BLOB)", length(ch)), collapse = ",")
-      w <- paste0('WHERE typeof("PlotNumber") = \'text\' AND CAST("PlotNumber" AS BLOB) IN (', ph, ")")
+      ph_txt <- paste(rep("?", length(ch)), collapse = ",")
+      ph_blb <- paste(rep("CAST(? AS BLOB)", length(ch)), collapse = ",")
+      w <- paste0(
+        'WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" IN (', ph_txt,
+        ') AND CAST("PlotNumber" AS BLOB) IN (', ph_blb, ")"
+      )
       if (!is.null(where_extra) && nzchar(where_extra)) {
         w <- paste(w, "AND", where_extra)
       }
-      DBI::dbGetQuery(dbc, paste("SELECT", select_cols, "FROM", table_sql, w), params = as.list(ch))
+      DBI::dbGetQuery(dbc, paste("SELECT", select_cols, "FROM", table_sql, w), params = as.list(c(ch, ch)))
     })
     return(do.call(rbind, parts))
   }

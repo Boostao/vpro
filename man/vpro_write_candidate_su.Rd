@@ -7,7 +7,7 @@
 vpro_write_candidate_su(
   con,
   memberships,
-  name = paste0(con$project, "_ClusterCandidate"),
+  name = paste0(gsub("(?i)master", "Mst", con$project, perl = TRUE), "_ClusterCandidate"),
   overwrite = TRUE,
   actor = Sys.info()[["user"]]
 )

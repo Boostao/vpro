@@ -9,7 +9,8 @@ vpro_env(
   scope = c("su", "project"),
   include_admin = TRUE,
   filter_quality = NULL,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  columns = NULL
 )
 }
 \arguments{
@@ -26,6 +27,10 @@ or a named list of arguments passed to \code{\link[=vpro_filter_plots]{vpro_filt
 
 \item{exclude_modifiers}{Logical; if \code{TRUE}, excludes \code{.support}, \code{.poor}, and
 \code{.nudum} site units.}
+
+\item{columns}{Optional character vector of \verb{_Env}/\verb{_Admin} column names to
+project from SQLite (\code{PlotNumber} is always retained). Defaults to \code{NULL}
+(all columns).}
 }
 \value{
 A tibble of plot environment records.
