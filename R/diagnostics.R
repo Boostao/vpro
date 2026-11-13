@@ -370,7 +370,7 @@
   layer_parts <- lapply(seq_along(present_cols), function(idx) {
     cc <- present_cols[[idx]]
     vals <- dt[[cc]]
-    ok <- !is.na(vals) & vals > 0
+    ok <- !is.na(vals) & vals >= 0
     if (!any(ok)) return(NULL)
     data.table::data.table(
       PlotNumber = dt[["PlotNumber"]][ok],

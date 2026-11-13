@@ -522,7 +522,7 @@ as_tibble.vpro_summary_env <- function(x, ...) {
 #' Export BEC synthesis tables to a multi-sheet `.xlsx` workbook
 #'
 #' Writes a [vpro_diagnostics()], [vpro_pairwise()], [vpro_outliers()],
-#' [vpro_profile_result()], [vpro_summary_veg()], [vpro_summary_env()], named
+#' [vpro_profile()], [vpro_summary_veg()], [vpro_summary_env()], named
 #' list of data frames, or single data frame to an `.xlsx` workbook via
 #' `writexl::write_xlsx()`.
 #'

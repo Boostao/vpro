@@ -247,7 +247,9 @@ vpro_go_round <- function(x) {
   ok <- !is.na(x) & is.finite(x)
   if (any(ok)) {
     v <- as.double(x[ok])
-    r <- ifelse(v >= 0.0, floor(v + 0.5), ceiling(v - 0.5))
+    av <- abs(v)
+    fl <- floor(av)
+    r <- ifelse((av - fl) >= 0.5, fl + 1.0, fl) * ifelse(v < 0.0, -1.0, 1.0)
     r[r == 0.0] <- 0.0
     out[ok] <- r
   }
@@ -930,16 +932,25 @@ vpro_climate <- function(
   n_hits <- sum(is_hit)
   n_misses <- sum(!is_hit)
 
-  # Index already-cached normals by CoordElevHash so co-located plots reuse normals
-  hash_lookup <- existing_period[!duplicated(existing_period$CoordElevHash), , drop = FALSE]
+  # Index already-cached climr normals by CoordElevHash so co-located plots reuse pure coordinate normals;
+  # fallback bgc_lapse_model rows depend on plot BGC, so evaluate per-(CoordElevHash, BGC)
+  climr_cached <- existing_period[existing_period$Source != "bgc_lapse_model", , drop = FALSE]
+  hash_lookup <- climr_cached[!duplicated(climr_cached$CoordElevHash), , drop = FALSE]
 
   miss_idx <- which(!is_hit)
-  need_compute_hashes <- setdiff(unique(hashes[miss_idx]), hash_lookup$CoordElevHash)
+  miss_keys <- ifelse(
+    hashes[miss_idx] %in% hash_lookup$CoordElevHash,
+    hashes[miss_idx],
+    paste0(hashes[miss_idx], "::", toupper(bgc_chr[miss_idx]))
+  )
+  need_keys <- setdiff(unique(miss_keys), hash_lookup$CoordElevHash)
+  hash_lookup$.lookup_key <- hash_lookup$CoordElevHash
 
-  if (length(need_compute_hashes) > 0L) {
-    first_pt_ix <- match(need_compute_hashes, hashes)
+  if (length(need_keys) > 0L) {
+    first_miss_pos <- match(need_keys, miss_keys)
+    first_pt_ix <- miss_idx[first_miss_pos]
     pts_df <- data.frame(
-      CoordElevHash = need_compute_hashes,
+      CoordElevHash = hashes[first_pt_ix],
       lat = vpro_go_round(lat_v[first_pt_ix] * 1e5) / 1e5,
       lon = vpro_go_round(lon_v[first_pt_ix] * 1e5) / 1e5,
       elev = vpro_go_round(elev_v[first_pt_ix] * 1e1) / 1e1,
@@ -950,7 +961,12 @@ vpro_climate <- function(
 
     computed <- NULL
     if (!isTRUE(force_offline) && vpro_climr_has_local_rasters()) {
-      computed <- vpro_downscale_climr_points(pts_df, ref_period = ref_period)
+      # Deduplicate pure coordinate points for climr downscaling
+      uniq_h <- !duplicated(pts_df$CoordElevHash)
+      dl_res <- vpro_downscale_climr_points(pts_df[uniq_h, , drop = FALSE], ref_period = ref_period)
+      if (!is.null(dl_res)) {
+        computed <- dl_res[match(pts_df$CoordElevHash, dl_res$CoordElevHash), , drop = FALSE]
+      }
     }
     if (is.null(computed)) {
       if (!isTRUE(allow_fallback)) {
@@ -965,6 +981,7 @@ vpro_climate <- function(
     computed$RefPeriod <- rep(ref_period, nrow(computed))
     computed$ComputedAt <- rep(now_iso, nrow(computed))
     computed <- computed[, .vpro_plot_climate_cols, drop = FALSE]
+    computed$.lookup_key <- need_keys
     hash_lookup <- rbind(hash_lookup, computed)
   }
 
@@ -980,7 +997,7 @@ vpro_climate <- function(
   }
   if (n_misses > 0L) {
     now_iso <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-    hl_ix <- match(hashes[miss_idx], hash_lookup$CoordElevHash)
+    hl_ix <- match(miss_keys, hash_lookup$.lookup_key)
     miss_tbl <- hash_lookup[hl_ix, .vpro_plot_climate_cols, drop = FALSE]
     miss_tbl$PlotNumber <- sub_env$PlotNumber[miss_idx]
     miss_tbl$CoordElevHash <- hashes[miss_idx]
@@ -1219,6 +1236,7 @@ vpro_asmr <- function(
       SiteUnit = character(),
       Zone = character(),
       SubZone = character(),
+      SiteSeries = character(),
       BGC = character(),
       MoistureRegime = character(),
       NutrientRegime = character(),
@@ -1299,11 +1317,13 @@ vpro_asmr <- function(
     aspect = aspect_v
   )
 
+  ss_chr <- if ("SiteSeries" %in% names(env_df)) as.character(env_df$SiteSeries) else rep(NA_character_, n)
   out <- tibble::tibble(
     PlotNumber = as.character(env_df$PlotNumber),
     SiteUnit = as.character(env_df$SiteUnit),
     Zone = zone_chr,
     SubZone = subz_chr,
+    SiteSeries = ss_chr,
     BGC = bgc_v,
     MoistureRegime = mr_chr,
     NutrientRegime = nr_chr,

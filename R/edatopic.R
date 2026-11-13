@@ -329,9 +329,10 @@ vpro_edatopic_grid <- function(
     if (isTRUE(exclude_modifiers) && nrow(asmr_df) > 0L) {
       asmr_df <- asmr_df[!vpro_is_modifier_unit(asmr_df$SiteUnit), , drop = FALSE]
     }
+    ss_asmr <- if ("SiteSeries" %in% names(asmr_df)) asmr_df$SiteSeries else rep(NA_character_, nrow(asmr_df))
     plots_df <- tibble::tibble(
       PlotNumber = as.character(asmr_df$PlotNumber),
-      SiteUnit = vpro_effective_site_unit(asmr_df$SiteUnit, asmr_df$BGC),
+      SiteUnit = vpro_effective_site_unit(asmr_df$SiteUnit, asmr_df$BGC, ss_asmr),
       BGC = asmr_df$BGC,
       rSMR = asmr_df$rSMR,
       rSNR = asmr_df$rSNR,
@@ -708,7 +709,7 @@ plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL) {
         size = 2.5,
         fontface = "bold",
         fill = "#FFFFFF",
-        label.size = 0.25,
+        linewidth = 0.25,
         show.legend = FALSE
       ) +
       ggplot2::scale_colour_manual(name = "Site Unit", values = pal)

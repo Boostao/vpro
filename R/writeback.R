@@ -341,7 +341,7 @@ vpro_append_project_audit_in_tx <- function(
     params = list(audit_cand)
   )
   if (nrow(found) == 0L) {
-    return(invisible(FALSE))
+    rlang::abort(paste0("Required project audit table `", audit_cand, "` does not exist; aborting write-back."))
   }
   actual_audit <- as.character(found$name[[1L]])
   q_audit <- vpro_quote_ident(actual_audit)
@@ -610,10 +610,9 @@ vpro_write_su <- function(
     q_idx <- vpro_quote_ident(paste0("idx_", actual_tbl, "_SiteUnit"))
 
     if (!is.null(existing)) {
-      DBI::dbExecute(dbc, paste0("DELETE FROM main.", q_tbl))
-    } else {
-      DBI::dbExecute(dbc, paste0("CREATE TABLE main.", q_tbl, ' ("PlotNumber" VARCHAR, "SiteUnit" VARCHAR)'))
+      DBI::dbExecute(dbc, paste0("DROP TABLE IF EXISTS main.", q_tbl))
     }
+    DBI::dbExecute(dbc, paste0("CREATE TABLE main.", q_tbl, ' ("PlotNumber" VARCHAR, "SiteUnit" VARCHAR)'))
     DBI::dbExecute(dbc, paste0("CREATE UNIQUE INDEX IF NOT EXISTS main.", q_uidx, " ON ", q_tbl, ' ("PlotNumber")'))
     DBI::dbExecute(dbc, paste0("CREATE INDEX IF NOT EXISTS main.", q_idx, " ON ", q_tbl, ' ("SiteUnit")'))
     vpro_upsert_table_metadata_in_tx(dbc, actual_tbl, "VP04")
@@ -782,13 +781,12 @@ vpro_write_lump <- function(
     q_uidx <- vpro_quote_ident(paste0("uidx_", actual_base, "_Lump_SppCode"))
 
     if (!is.null(existing)) {
-      DBI::dbExecute(dbc, paste0("DELETE FROM main.", q_tbl))
-    } else {
-      DBI::dbExecute(
-        dbc,
-        paste0("CREATE TABLE main.", q_tbl, ' ("LumpCode" VARCHAR(50), "SppCode" VARCHAR(8) UNIQUE, "Use" BOOLEAN)')
-      )
+      DBI::dbExecute(dbc, paste0("DROP TABLE IF EXISTS main.", q_tbl))
     }
+    DBI::dbExecute(
+      dbc,
+      paste0("CREATE TABLE main.", q_tbl, ' ("LumpCode" VARCHAR(50), "SppCode" VARCHAR(8) UNIQUE, "Use" BOOLEAN)')
+    )
     DBI::dbExecute(dbc, paste0("CREATE INDEX IF NOT EXISTS main.", q_idx, " ON ", q_tbl, ' ("LumpCode")'))
     DBI::dbExecute(dbc, paste0("CREATE UNIQUE INDEX IF NOT EXISTS main.", q_uidx, " ON ", q_tbl, ' ("SppCode")'))
     vpro_upsert_table_metadata_in_tx(dbc, actual_tbl, "VP05")

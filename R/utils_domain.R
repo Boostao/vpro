@@ -61,9 +61,12 @@ vpro_sqlite_rw_immediate <- function(path) {
     normalizePath(path, winslash = "/", mustWork = TRUE),
     flags = RSQLite::SQLITE_RW
   )
+  ok <- FALSE
+  on.exit(if (!ok && DBI::dbIsValid(con)) DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, "PRAGMA busy_timeout = 5000")
   DBI::dbExecute(con, "PRAGMA synchronous = NORMAL")
   DBI::dbExecute(con, "PRAGMA foreign_keys = ON")
+  ok <- TRUE
   con
 }
 

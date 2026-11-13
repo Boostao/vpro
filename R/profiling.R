@@ -366,10 +366,10 @@ print.vpro_rule <- function(x, ...) {
   plot_cov <- stats::setNames(rep(NA_real_, length(universe_plots)), universe_plots)
 
   if (nrow(dt) > 0L && length(sel_cols) > 0L) {
-    # Collapse lumped/multiple rows per plot by summing each cover column first
+    # Collapse lumped/multiple rows per plot by summing each cover column with VPro's 99% lumped cap
     sum_na <- function(x) {
       ok <- x[!is.na(x)]
-      if (length(ok) == 0L) NA_real_ else sum(ok)
+      if (length(ok) == 0L) NA_real_ else if (length(ok) == 1L) ok else min(sum(ok), 99.0)
     }
     by_plot <- dt[, lapply(.SD, sum_na), by = "PlotNumber", .SDcols = sel_cols]
 
