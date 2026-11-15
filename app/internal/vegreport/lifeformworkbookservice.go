@@ -45,27 +45,33 @@ func ReadLifeformWorkbookInput(c *vprocore.ContextService, ctx context.Context, 
 }
 
 func readLifeformWorkbookSource(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, contextID string) (lifeformWorkbookInput, error) {
-	if owner.Selection.SU == "None" || owner.Selection.SU == "USysSuTableDynamic" {
-		return lifeformWorkbookInput{}, errors.New("Lifeform workbook requires a selected normal SU; hierarchy/dynamic-break scope is unavailable")
+	if owner.Selection.SU == "None" {
+		return lifeformWorkbookInput{}, errors.New("Lifeform workbook requires a selected normal SU or USysSuTableDynamic; None scope is unavailable")
+	}
+	suTable, err := resolveLifeformAndAttributeSU(ctx, owner, tx, "Lifeform workbook", "", false)
+	if err != nil {
+		return lifeformWorkbookInput{}, err
 	}
 	tables := make([]vprocore.ProjectMetadataTable, 5)
-	for i, source := range []struct{ role, table string }{
-		{"project", owner.Selection.Project + "_Veg"},
-		{"su", owner.Selection.SU + "_SU"},
-		{"VLists", "USysAllSpecs"},
-		{"VPro64", "LifeformCodes"},
-		{"VLists", "USysSppAttributes"},
+	tables[1] = suTable
+	for _, item := range []struct {
+		idx         int
+		role, table string
+	}{
+		{0, "project", owner.Selection.Project + "_Veg"},
+		{2, "VLists", "USysAllSpecs"},
+		{3, "VPro64", "LifeformCodes"},
+		{4, "VLists", "USysSppAttributes"},
 	} {
 		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(source.role)+
-			`.sqlite_master WHERE type='table' AND name COLLATE BINARY=?`, source.table).Scan(&count); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(item.role)+
+			`.sqlite_master WHERE type='table' AND name COLLATE BINARY=?`, item.table).Scan(&count); err != nil {
 			return lifeformWorkbookInput{}, err
 		}
 		if count != 1 {
-			return lifeformWorkbookInput{}, fmt.Errorf("Lifeform workbook requires original physical table %s.%s", source.role, source.table)
+			return lifeformWorkbookInput{}, fmt.Errorf("Lifeform workbook requires original physical table %s.%s", item.role, item.table)
 		}
-		var err error
-		tables[i], err = vprocore.ReadSQLiteStorageRows(ctx, tx, source.role, source.table, "", nil, "")
+		tables[item.idx], err = vprocore.ReadSQLiteStorageRows(ctx, tx, item.role, item.table, "", nil, "")
 		if err != nil {
 			return lifeformWorkbookInput{}, err
 		}

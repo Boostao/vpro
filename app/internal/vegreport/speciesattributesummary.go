@@ -68,8 +68,8 @@ func planSpeciesAttributeSummary(ctx context.Context, project, suName string, ve
 	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
-	if suName == "None" || suName == "USysSuTableDynamic" {
-		return fail(errors.New("species attribute summary requires a selected normal SU; hierarchy/dynamic-break scope is unavailable"))
+	if suName == "None" {
+		return fail(errors.New("species attribute summary requires a selected normal SU or USysSuTableDynamic; None scope is unavailable"))
 	}
 	vc, err := vprocore.SiteUnitTransferColumns(veg, "PlotNumber", "Species")
 	if err != nil {
@@ -242,6 +242,16 @@ func NewSpeciesAttributeSummaryService(contexts *vprocore.ContextService) (*Spec
 }
 
 func (s *SpeciesAttributeSummaryService) Preview(ctx context.Context, contextID string) (SpeciesAttributeSummaryPreview, error) {
+	return s.previewConfigured(ctx, contextID, "", false)
+}
+
+// PreviewWithHierarchyBreakpoints resolves Species Attribute Summary using '~' hierarchy
+// breakpoints ('lowest' or 'highest') against the active SU or dynamic source.
+func (s *SpeciesAttributeSummaryService) PreviewWithHierarchyBreakpoints(ctx context.Context, contextID, breakpointPolicy string) (SpeciesAttributeSummaryPreview, error) {
+	return s.previewConfigured(ctx, contextID, breakpointPolicy, true)
+}
+
+func (s *SpeciesAttributeSummaryService) previewConfigured(ctx context.Context, contextID, breakpointPolicy string, forceHierarchy bool) (SpeciesAttributeSummaryPreview, error) {
 	if ctx == nil {
 		return SpeciesAttributeSummaryPreview{}, errors.New("species attribute summary requires a context")
 	}
@@ -256,13 +266,16 @@ func (s *SpeciesAttributeSummaryService) Preview(ctx context.Context, contextID 
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (SpeciesAttributeSummaryPreview, error) {
 		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, s.snapshot, func(owner *vprocore.SqliteContext, tx *sql.Tx) (SpeciesAttributeSummaryPreview, error) {
-			if owner.Selection.SU == "None" || owner.Selection.SU == "USysSuTableDynamic" {
-				return SpeciesAttributeSummaryPreview{}, errors.New("species attribute summary requires a selected normal SU; hierarchy/dynamic-break scope is unavailable")
+			if owner.Selection.SU == "None" {
+				return SpeciesAttributeSummaryPreview{}, errors.New("species attribute summary requires a selected normal SU or USysSuTableDynamic; None scope is unavailable")
 			}
-			tables := make([]vprocore.ProjectMetadataTable, 3)
+			suTable, err := resolveLifeformAndAttributeSU(ctx, owner, tx, "species attribute summary", breakpointPolicy, forceHierarchy)
+			if err != nil {
+				return SpeciesAttributeSummaryPreview{}, err
+			}
+			tables := make([]vprocore.ProjectMetadataTable, 2)
 			for i, source := range []struct{ role, table string }{
 				{"project", owner.Selection.Project + "_Veg"},
-				{"su", owner.Selection.SU + "_SU"},
 				{"VLists", "USysSppAttributes"},
 			} {
 				var count int
@@ -273,13 +286,12 @@ func (s *SpeciesAttributeSummaryService) Preview(ctx context.Context, contextID 
 				if count != 1 {
 					return SpeciesAttributeSummaryPreview{}, fmt.Errorf("species attribute summary requires original physical table %s.%s", source.role, source.table)
 				}
-				var err error
 				tables[i], err = vprocore.ReadSQLiteStorageRows(ctx, tx, source.role, source.table, "", nil, "")
 				if err != nil {
 					return SpeciesAttributeSummaryPreview{}, err
 				}
 			}
-			report, err := planSpeciesAttributeSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], tables[1], tables[2])
+			report, err := planSpeciesAttributeSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], suTable, tables[1])
 			if err != nil {
 				return SpeciesAttributeSummaryPreview{}, err
 			}

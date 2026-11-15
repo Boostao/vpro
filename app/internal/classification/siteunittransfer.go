@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -144,22 +145,91 @@ func ValidateEnvironmentSiteUnitOwner(c *vprocore.SqliteContext) error {
 	return nil
 }
 
-func readEnvironmentSiteUnitReview(ctx context.Context, tx *sql.Tx, c *vprocore.SqliteContext, contextID string) (EnvironmentSiteUnitReview, error) {
-	if err := ValidateEnvironmentSiteUnitOwner(c); err != nil {
+// ValidateWritableSiteUnitTransferOwner permits writing Env -> SU updates to either the
+// project DB or an explicitly selected writable external SU .db file, while blocking
+// None, master/USys tables, and V* support databases.
+func ValidateWritableSiteUnitTransferOwner(c *vprocore.SqliteContext) error {
+	if c == nil || c.Conn == nil {
+		return errors.New("classification context is closed")
+	}
+	if err := c.ValidateMetadataWriterFiles(); err != nil {
+		return err
+	}
+	suName := strings.TrimSpace(c.Selection.SU)
+	if suName == "" || strings.EqualFold(suName, "None") {
+		return errors.New("environment/SU transfer requires an explicitly selected SU table")
+	}
+	lowerSU := strings.ToLower(suName)
+	if lowerSU == "master" ||
+		strings.HasPrefix(lowerSU, "master_") ||
+		strings.HasSuffix(lowerSU, "_master") ||
+		strings.EqualFold(suName, "MasterSiteUnitList") ||
+		strings.HasPrefix(lowerSU, "usys") {
+		return fmt.Errorf("SU table %q is a protected master or system table; writes are prohibited", suName+"_SU")
+	}
+	suInfo := c.AttachmentInfo["su"]
+	if suInfo == nil || strings.TrimSpace(c.Attachments["su"]) == "" {
+		return errors.New("active SU database is not attached")
+	}
+	curInfo, err := os.Stat(c.Attachments["su"])
+	if err != nil {
+		return fmt.Errorf("active SU database is unavailable: %w", err)
+	}
+	if !os.SameFile(suInfo, curInfo) {
+		return errors.New("active SU database file identity changed; no transfer applied")
+	}
+	for role, info := range c.AttachmentInfo {
+		if strings.HasPrefix(role, "V") && info != nil && os.SameFile(suInfo, info) {
+			return fmt.Errorf("SU database aliases protected support database %s; writes are prohibited", role)
+		}
+	}
+	suTable := suName + "_SU"
+	for _, row := range c.Descriptions["su"] {
+		if tName, ok := row["table_name"].(string); ok && strings.EqualFold(tName, suTable) {
+			if desc, ok := row["description"].(string); ok && strings.Contains(strings.ToLower(desc), "master") {
+				return fmt.Errorf("SU table %s is marked as master in _table_metadata; writes are prohibited", suTable)
+			}
+		}
+	}
+	return nil
+}
+
+func withSiteUnitTransferWriter(ctx context.Context, c *vprocore.SqliteContext, operation func(conn *sql.Conn, projectAlias string) error) error {
+	return c.WithSelectedFileWriter(ctx, "su", func() error {
+		return ValidateWritableSiteUnitTransferOwner(c)
+	}, func(conn *sql.Conn) error {
+		projectAlias := "main"
+		if !os.SameFile(c.AttachmentInfo["project"], c.AttachmentInfo["su"]) {
+			if _, err := conn.ExecContext(ctx, `ATTACH DATABASE ? AS "projectsrc"`, sqlutil.SqliteFileURI(c.Attachments["project"], "ro")); err != nil {
+				return fmt.Errorf("environment/SU transfer project source attachment unavailable: %w", err)
+			}
+			projectAlias = "projectsrc"
+		}
+		return operation(conn, projectAlias)
+	})
+}
+
+func readEnvironmentSiteUnitReview(ctx context.Context, tx *sql.Tx, c *vprocore.SqliteContext, contextID, projectAlias string) (EnvironmentSiteUnitReview, error) {
+	if err := ValidateWritableSiteUnitTransferOwner(c); err != nil {
 		return EnvironmentSiteUnitReview{}, err
 	}
+	targetPath := c.Selection.SUPath
+	if strings.TrimSpace(targetPath) == "" {
+		targetPath = c.Selection.ProjectPath
+	}
 	review := EnvironmentSiteUnitReview{ContextID: contextID, Project: c.Selection.Project,
-		SU: c.Selection.SU, Path: c.Selection.ProjectPath}
+		SU: c.Selection.SU, Path: targetPath}
 	for _, item := range []struct {
-		name string
-		dest *vprocore.ProjectMetadataTable
-	}{{review.Project + "_Env", &review.Env}, {review.Project + "_Admin", &review.Admin}, {review.SU + "_SU", &review.Target}} {
+		alias, name string
+		dest        *vprocore.ProjectMetadataTable
+	}{{projectAlias, review.Project + "_Env", &review.Env}, {projectAlias, review.Project + "_Admin", &review.Admin}, {"main", review.SU + "_SU", &review.Target}} {
 		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name COLLATE BINARY=?`, item.name).
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(item.alias)+
+			`.sqlite_master WHERE type='table' AND name COLLATE BINARY=?`, item.name).
 			Scan(&count); err != nil || count != 1 {
 			return EnvironmentSiteUnitReview{}, errors.Join(err, errors.New("environment/SU transfer requires original physical tables, not substituted views"))
 		}
-		table, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "main", item.name, "", nil, "")
+		table, err := vprocore.ReadSQLiteStorageRows(ctx, tx, item.alias, item.name, "", nil, "")
 		if err != nil {
 			return EnvironmentSiteUnitReview{}, err
 		}
@@ -196,13 +266,13 @@ func ReviewEnvironmentSiteUnits(s *vprocore.ContextService, ctx context.Context,
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (EnvironmentSiteUnitReview, error) {
 		c := plots.Projects.Sqlite
 		var review EnvironmentSiteUnitReview
-		err := c.WithMetadataWriter(ctx, func(conn *sql.Conn) (resultErr error) {
+		err := withSiteUnitTransferWriter(ctx, c, func(conn *sql.Conn, projectAlias string) (resultErr error) {
 			tx, err := conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 			if err != nil {
 				return err
 			}
 			defer func() { resultErr = errors.Join(resultErr, tx.Rollback()) }()
-			review, err = readEnvironmentSiteUnitReview(ctx, tx, c, contextID)
+			review, err = readEnvironmentSiteUnitReview(ctx, tx, c, contextID, projectAlias)
 			return err
 		})
 		return review, err
@@ -217,7 +287,7 @@ func TransferEnvironmentSiteUnits(s *vprocore.ContextService, ctx context.Contex
 		c := plots.Projects.Sqlite
 		result := &EnvironmentSiteUnitResult{}
 		committed := false
-		err := c.WithMetadataWriter(ctx, func(conn *sql.Conn) (resultErr error) {
+		err := withSiteUnitTransferWriter(ctx, c, func(conn *sql.Conn, projectAlias string) (resultErr error) {
 			tx, err := conn.BeginTx(ctx, nil)
 			if err != nil {
 				return err
@@ -227,7 +297,7 @@ func TransferEnvironmentSiteUnits(s *vprocore.ContextService, ctx context.Contex
 					resultErr = errors.Join(resultErr, err)
 				}
 			}()
-			fresh, err := readEnvironmentSiteUnitReview(ctx, tx, c, contextID)
+			fresh, err := readEnvironmentSiteUnitReview(ctx, tx, c, contextID, projectAlias)
 			if err != nil {
 				return err
 			}
@@ -296,7 +366,7 @@ func TransferEnvironmentSiteUnits(s *vprocore.ContextService, ctx context.Contex
 			if id, err := strconv.ParseInt(result.HistoryID, 10, 64); err != nil || id < 1 {
 				return errors.Join(err, errors.New("environment/SU transfer could not seal a positive exact history identity"))
 			}
-			if err := ValidateEnvironmentSiteUnitOwner(c); err != nil {
+			if err := ValidateWritableSiteUnitTransferOwner(c); err != nil {
 				return err
 			}
 			if err := tx.Commit(); err != nil {

@@ -113,9 +113,7 @@ func decodeVegetationWorkbookLayout(values vprocore.ConfigValues) (vegetationWor
 	if err != nil {
 		return fail(err)
 	}
-	if combine {
-		return fail(errors.New("Long Vegetation combined variants/lumping remain unavailable; retained preference was not reset"))
-	}
+	_ = combine
 	var layout vegetationWorkbookLayout
 	for _, field := range []struct {
 		key   string
@@ -134,8 +132,8 @@ func decodeVegetationWorkbookLayout(values vprocore.ConfigValues) (vegetationWor
 
 func (s *vegetationWorkbookService) readSource(ctx context.Context, plots *vprocore.PlotService, tx *sql.Tx, contextID, scope, createdDate string) (vegetationWorkbookSource, error) {
 	fail := func(err error) (vegetationWorkbookSource, error) { return vegetationWorkbookSource{}, err }
-	if scope != "unlumped" {
-		return fail(errors.New("Long Vegetation workbook requires explicit unlumped scope; no inferred current lump selection"))
+	if _, err := resolveLongVegetationWorkbookScope(scope); err != nil {
+		return fail(err)
 	}
 	date, err := time.Parse("2006-01-02", createdDate)
 	if err != nil || date.Format("2006-01-02") != createdDate || date.Year() < 100 {
@@ -147,6 +145,9 @@ func (s *vegetationWorkbookService) readSource(ctx context.Context, plots *vproc
 	}
 	options, err := DecodeOwnedLongVegetationOptions(s.contexts, ctx, plots, tx, values)
 	if err != nil {
+		return fail(err)
+	}
+	if err := decodeLongVegetationLumpOptions(values, &options, scope); err != nil {
 		return fail(err)
 	}
 	if err := CheckLongVegetationGrouping(s.contexts, options); err != nil {
@@ -161,6 +162,7 @@ func (s *vegetationWorkbookService) readSource(ctx context.Context, plots *vproc
 	if err != nil {
 		return fail(err)
 	}
+	options.resolvedLumpTable = source.LumpTable
 	report, err := longVegetationTransport(ctx, source.Report)
 	if err != nil {
 		return fail(err)
@@ -203,6 +205,7 @@ func (s *vegetationWorkbookService) readSource(ctx context.Context, plots *vproc
 				return fail(err)
 			}
 		}
+		summary.LumpRows = source.LumpRows
 		layout.Summary = &summary
 		source.Tables = append(source.Tables, env, descriptions)
 	}

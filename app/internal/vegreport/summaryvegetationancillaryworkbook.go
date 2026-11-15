@@ -178,9 +178,13 @@ func prepareSummaryVegetationAncillaryWorkbook(ctx context.Context,
 				return err
 			}
 		}
+		lumpCellValue := "None_Lump"
+		if preview.LumpTable != "" {
+			lumpCellValue = preview.LumpTable
+		}
 		texts := []struct{ address, value string }{
 			{"A1", input.Source.Input.Title}, {"A2", "Date created: " + plan.CreatedAt},
-			{"B4", preview.Project}, {"B5", preview.SU + "_SU"}, {"B6", "None_Lump"}, {"B7", groupLabel},
+			{"B4", preview.Project}, {"B5", preview.SU + "_SU"}, {"B6", lumpCellValue}, {"B7", groupLabel},
 			{"B8", "Species"}, {"B12", average}, {"D4", "Short name"}, {"E4", "Units"}, {"F4", "Long name"},
 			{"H4", "Plotnumber"}, {"I4", "Site Unit"},
 		}

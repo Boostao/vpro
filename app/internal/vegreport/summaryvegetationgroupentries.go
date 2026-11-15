@@ -32,8 +32,8 @@ func prepareSummaryVegetationGroupedEntriesWithInteger(ctx context.Context, prep
 	if grouping != 12 && grouping != 13 && grouping != 14 {
 		return fail(errors.New("summary vegetation grouped entries require GroupAndOrder12,13 or14"))
 	}
-	if prepared.Project == "" || prepared.SU == "" || prepared.SU == "None" {
-		return fail(errors.New("summary vegetation grouped entries require an explicit normal SU/project"))
+	if prepared.Project == "" || prepared.SU == "" {
+		return fail(errors.New("summary vegetation grouped entries require an explicit SU/project"))
 	}
 	for _, identity := range []struct {
 		name  string

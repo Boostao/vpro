@@ -249,9 +249,6 @@ func ReadSummaryVegetationQualityPreferences(s *vprocore.DesktopConfig, ctx cont
 
 func CompareAndSetSummaryVegetationQualityPreferences(s *vprocore.DesktopConfig, ctx context.Context,
 	expected, proposed summaryVegetationQualityPreferenceValues) (vprocore.ReportPreferenceUpdate, error) {
-	if expected.Enforce != proposed.Enforce {
-		return vprocore.ReportPreferenceUpdate{}, errors.New("Summary Vegetation quality enforcement invokes mutating source Form_Load; changes remain unavailable")
-	}
 	changes := summaryVegetationQualityPreferenceChanges(expected, proposed)
 	for _, change := range changes {
 		if text, ok := change.Proposed.(string); ok && change.Expected != change.Proposed &&

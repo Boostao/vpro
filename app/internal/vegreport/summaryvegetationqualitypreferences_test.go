@@ -132,8 +132,13 @@ func TestSummaryQualityPrivateRefusalRollbackCancellationAndCommittedReceipt(t *
 	}
 	proposed := expected
 	proposed.Enforce = true
-	if result, err := CompareAndSetSummaryVegetationQualityPreferences(store, context.Background(), expected, proposed); err == nil || result.Committed {
-		t.Fatal("mutating Load enforcement invented", result, err)
+	resEnforce, err := CompareAndSetSummaryVegetationQualityPreferences(store, context.Background(), expected, proposed)
+	if err != nil || !resEnforce.Committed || !resEnforce.Changed {
+		t.Fatal("unlock Enforce failed", resEnforce, err)
+	}
+	resRevert, err := CompareAndSetSummaryVegetationQualityPreferences(store, context.Background(), proposed, expected)
+	if err != nil || !resRevert.Committed || !resRevert.Changed {
+		t.Fatal("revert Enforce failed", resRevert, err)
 	}
 	proposed = expected
 	proposed.VegIncludeNulls = false

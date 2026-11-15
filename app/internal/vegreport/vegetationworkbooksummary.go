@@ -23,6 +23,7 @@ type vegetationWorkbookSummary struct {
 	VersionStatus      string
 	VersionDefinitions vprocore.ProjectMetadataTable
 	Memberships        []vegetationWorkbookMembership
+	LumpRows           []longVegetationLumpRow `json:"lumpRows,omitempty"`
 }
 
 type vegetationWorkbookMembership struct {
@@ -163,7 +164,7 @@ func writeVegetationWorkbookSummary(ctx context.Context, book *excelize.File, pr
 	}
 	header := vegetationWorkbookSummaryHeader{summary.CreatedDate, summary.EnvironmentRows, summary.SpeciesVersion,
 		summary.VersionStatus, summary.VersionDefinitions}
-	return writeVegetationWorkbookSummaryData(ctx, book, preview, header, summary.SelectedPlotRows, rows)
+	return writeVegetationWorkbookSummaryData(ctx, book, preview, header, summary.SelectedPlotRows, rows, summary.LumpRows)
 }
 
 func writeVegetationProjectWorkbookSummary(ctx context.Context, book *excelize.File, preview LongVegetationPreview, summary vegetationProjectWorkbookSummary) error {
@@ -178,14 +179,14 @@ func writeVegetationProjectWorkbookSummary(ctx context.Context, book *excelize.F
 	if count != summary.SourcePlotRows {
 		return errors.New("project summary non-NULL plot count differs from its original tuples")
 	}
-	if err := writeVegetationWorkbookSummaryData(ctx, book, preview, summary.Header, summary.SourcePlotRows, rows); err != nil {
+	if err := writeVegetationWorkbookSummaryData(ctx, book, preview, summary.Header, summary.SourcePlotRows, rows, summary.LumpRows); err != nil {
 		return err
 	}
 	return book.SetCellStr("ReportSummary", "D3", "Original project report tuples (desktop adaptation)")
 }
 
 func writeVegetationWorkbookSummaryData(ctx context.Context, book *excelize.File, preview LongVegetationPreview,
-	header vegetationWorkbookSummaryHeader, plotRows int, rows []vegetationWorkbookSummaryRow) error {
+	header vegetationWorkbookSummaryHeader, plotRows int, rows []vegetationWorkbookSummaryRow, lumpRows []longVegetationLumpRow) error {
 	const sheet = "ReportSummary"
 	if _, err := book.NewSheet(sheet); err != nil {
 		return err
@@ -218,11 +219,15 @@ func writeVegetationWorkbookSummaryData(ctx context.Context, book *excelize.File
 	}
 	group := map[string]string{"layer": "Layer", "strata": "Strata", "lifeform": "Lifeform", "none": "None"}[settings.Grouping]
 	order := map[string]string{"species": "Species", "presence": "Presence"}[settings.Order]
+	lumpTable := settings.LumpTable
+	if lumpTable == "" {
+		lumpTable = "None_Lump"
+	}
 	for _, entry := range []struct{ address, value string }{
 		{"A1", preview.Report.Title}, {"A2", "Date created: " + header.CreatedDate},
 		{"A4", "Vegetation table:"}, {"B4", preview.Report.Project + "_Env"},
 		{"A5", "Site unit table:"}, {"B5", unitTable},
-		{"A6", "Lumping table:"}, {"B6", "None_Lump"},
+		{"A6", "Lumping table:"}, {"B6", lumpTable},
 		{"A7", "Data grouped by:"}, {"B7", group}, {"A8", "Data ordered by:"}, {"B8", order},
 		{"A9", "Presence > than:"}, {"A10", "Mean cover > than:"},
 		{"A11", "Number of plots in database"}, {"A12", "Number of plots in site unit table"},
@@ -260,6 +265,21 @@ func writeVegetationWorkbookSummaryData(ctx context.Context, book *excelize.File
 			return err
 		}
 		if err := setIdentity("E"+address, member.SiteUnit); err != nil {
+			return err
+		}
+	}
+	for index, lumpRow := range lumpRows {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		rowAddr := strconv.Itoa(index + 15)
+		if err := setText("A"+rowAddr, lumpRow.LumpCode); err != nil {
+			return err
+		}
+		if err := setText("B"+rowAddr, lumpRow.SppCode); err != nil {
+			return err
+		}
+		if err := book.SetCellInt(sheet, "C"+rowAddr, int64(lumpRow.Use)); err != nil {
 			return err
 		}
 	}

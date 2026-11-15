@@ -118,7 +118,7 @@ func TestSiteUnitSummaryWorkbookServiceStrictRequestsAndRetainedScope(t *testing
 		}
 	}
 	for _, changes := range []map[string]any{
-		{"SESuType": 2}, {"SESuType": 3}, {"SEOrderBy": 2}, {"SEIncludeSppSummary": 1},
+		{"SEOrderBy": 2}, {"SEIncludeSppSummary": 1},
 		{"SEOrderBy": "1"}, {"SEIncludeSppSummary": nil},
 	} {
 		scoped, scopeState := summaryWorkbookServiceFixture(t, false)

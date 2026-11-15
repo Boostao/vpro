@@ -44,37 +44,58 @@ func (options *SummaryVegetationWorkbookAncillaryOptions) UnmarshalJSON(data []b
 }
 
 type SummaryVegetationWorkbookOptions struct {
-	Title           string                                     `json:"title"`
-	Average         int                                        `json:"average"`
-	Display         int                                        `json:"display"`
-	ShowClass       int                                        `json:"showClass"`
-	IncludeEnv      bool                                       `json:"includeEnv"`
-	Ancillary       *SummaryVegetationWorkbookAncillaryOptions `json:"ancillary,omitempty"`
-	References      *SummaryVegetationReferenceOptions         `json:"references,omitempty"`
-	GroupAndOrder   *int                                       `json:"groupAndOrder,omitempty"`
-	Constancy       bool                                       `json:"constancy,omitempty"`
-	UnanimousCommon bool                                       `json:"unanimousCommon,omitempty"`
+	Title                     string                                     `json:"title"`
+	Average                   int                                        `json:"average"`
+	Display                   int                                        `json:"display"`
+	ShowClass                 int                                        `json:"showClass"`
+	IncludeEnv                bool                                       `json:"includeEnv"`
+	Ancillary                 *SummaryVegetationWorkbookAncillaryOptions `json:"ancillary,omitempty"`
+	References                *SummaryVegetationReferenceOptions         `json:"references,omitempty"`
+	GroupAndOrder             *int                                       `json:"groupAndOrder,omitempty"`
+	Constancy                 bool                                       `json:"constancy,omitempty"`
+	UnanimousCommon           bool                                       `json:"unanimousCommon,omitempty"`
+	UnitScope                 string                                     `json:"unitScope,omitempty"`
+	UnitField                 string                                     `json:"unitField,omitempty"`
+	HierarchyHeader           *bool                                      `json:"hierarchyHeader,omitempty"`
+	BreakpointPolicy          string                                     `json:"breakpointPolicy,omitempty"`
+	CombineVariants           *bool                                      `json:"combineVariants,omitempty"`
+	LumpTable                 string                                     `json:"lumpTable,omitempty"`
+	ValueLimit                *float64                                   `json:"valueLimit,omitempty"`
+	IncludeGoldstreamMetadata bool                                       `json:"includeGoldstreamMetadata,omitempty"`
 }
 
 func (options *SummaryVegetationWorkbookOptions) UnmarshalJSON(data []byte) error {
 	var raw struct {
-		Title           *string                                    `json:"title"`
-		Average         *int                                       `json:"average"`
-		Display         *int                                       `json:"display"`
-		ShowClass       *int                                       `json:"showClass"`
-		IncludeEnv      *bool                                      `json:"includeEnv"`
-		Ancillary       *SummaryVegetationWorkbookAncillaryOptions `json:"ancillary"`
-		References      *SummaryVegetationReferenceOptions         `json:"references"`
-		GroupAndOrder   *int                                       `json:"groupAndOrder"`
-		Constancy       *bool                                      `json:"constancy"`
-		UnanimousCommon *bool                                      `json:"unanimousCommon"`
+		Title                     *string                                    `json:"title"`
+		Average                   *int                                       `json:"average"`
+		Display                   *int                                       `json:"display"`
+		ShowClass                 *int                                       `json:"showClass"`
+		IncludeEnv                *bool                                      `json:"includeEnv"`
+		Ancillary                 *SummaryVegetationWorkbookAncillaryOptions `json:"ancillary"`
+		References                *SummaryVegetationReferenceOptions         `json:"references"`
+		GroupAndOrder             *int                                       `json:"groupAndOrder"`
+		Constancy                 *bool                                      `json:"constancy"`
+		UnanimousCommon           *bool                                      `json:"unanimousCommon"`
+		UnitScope                 *string                                    `json:"unitScope"`
+		UnitField                 *string                                    `json:"unitField"`
+		HierarchyHeader           *bool                                      `json:"hierarchyHeader"`
+		BreakpointPolicy          *string                                    `json:"breakpointPolicy"`
+		CombineVariants           *bool                                      `json:"combineVariants"`
+		LumpTable                 *string                                    `json:"lumpTable"`
+		ValueLimit                *float64                                   `json:"valueLimit"`
+		IncludeGoldstreamMetadata *bool                                      `json:"includeGoldstreamMetadata"`
+	}
+	optionalKeys := []string{
+		"ancillary", "references", "groupAndOrder", "constancy", "unanimousCommon",
+		"unitScope", "unitField", "hierarchyHeader", "breakpointPolicy",
+		"combineVariants", "lumpTable", "valueLimit", "includeGoldstreamMetadata",
 	}
 	properties, err := sourceform.SourceChildJSONObject(data, "Summary draft workbook options",
-		[]string{"title", "average", "display", "showClass", "includeEnv"}, []string{"ancillary", "references", "groupAndOrder", "constancy", "unanimousCommon"})
+		[]string{"title", "average", "display", "showClass", "includeEnv"}, optionalKeys)
 	if err != nil {
 		return err
 	}
-	if err := sourceform.SourceChildJSONNonNull(properties, "Summary draft workbook options", "ancillary", "references", "groupAndOrder", "constancy", "unanimousCommon"); err != nil {
+	if err := sourceform.SourceChildJSONNonNull(properties, "Summary draft workbook options", optionalKeys...); err != nil {
 		return err
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -89,9 +110,25 @@ func (options *SummaryVegetationWorkbookOptions) UnmarshalJSON(data []byte) erro
 	if raw.UnanimousCommon != nil && !*raw.UnanimousCommon {
 		return errors.New("Summary unanimous common-name selection must be true when present; omit it for ordinary inspection")
 	}
-	parsed := SummaryVegetationWorkbookOptions{Title: *raw.Title, Average: *raw.Average, Display: *raw.Display,
+	parsed := SummaryVegetationWorkbookOptions{
+		Title: *raw.Title, Average: *raw.Average, Display: *raw.Display,
 		ShowClass: *raw.ShowClass, IncludeEnv: *raw.IncludeEnv, Ancillary: raw.Ancillary, References: raw.References,
-		GroupAndOrder: raw.GroupAndOrder, Constancy: raw.Constancy != nil, UnanimousCommon: raw.UnanimousCommon != nil}
+		GroupAndOrder: raw.GroupAndOrder, Constancy: raw.Constancy != nil, UnanimousCommon: raw.UnanimousCommon != nil,
+		HierarchyHeader: raw.HierarchyHeader, CombineVariants: raw.CombineVariants, ValueLimit: raw.ValueLimit,
+		IncludeGoldstreamMetadata: raw.IncludeGoldstreamMetadata != nil && *raw.IncludeGoldstreamMetadata,
+	}
+	if raw.UnitScope != nil {
+		parsed.UnitScope = *raw.UnitScope
+	}
+	if raw.UnitField != nil {
+		parsed.UnitField = *raw.UnitField
+	}
+	if raw.BreakpointPolicy != nil {
+		parsed.BreakpointPolicy = *raw.BreakpointPolicy
+	}
+	if raw.LumpTable != nil {
+		parsed.LumpTable = *raw.LumpTable
+	}
 	if err := validateSummaryWorkbookInspectionOptions(parsed); err != nil {
 		return err
 	}
@@ -168,11 +205,12 @@ type summaryVegetationWorkbookSourcePath struct {
 }
 
 type summaryVegetationWorkbookSource struct {
-	Input       summaryVegetationWorkbookInput
-	Raw         summaryVegetationSnapshotPreview
-	Environment summaryEnvironmentalPhysicalInput
-	Paths       []summaryVegetationWorkbookSourcePath
-	Ancillary   *summaryVegetationWorkbookAncillarySource `json:"Ancillary,omitempty"`
+	Input         summaryVegetationWorkbookInput
+	Raw           summaryVegetationSnapshotPreview
+	Environment   summaryEnvironmentalPhysicalInput
+	Paths         []summaryVegetationWorkbookSourcePath
+	Ancillary     *summaryVegetationWorkbookAncillarySource `json:"Ancillary,omitempty"`
+	QualityPolicy *summaryVegetationQualityPreferenceValues `json:"-"`
 }
 
 type summaryVegetationWorkbookAncillarySource struct {
@@ -238,8 +276,24 @@ func readSummaryVegetationWorkbookSource(ctx context.Context, service *SummaryVe
 	} else if options.UnanimousCommon {
 		mode = summaryVegetationGroupedUnanimousCommon
 	}
-	raw, err := environment.report.readSnapshotWithReferenceMode(ctx, contextID, plots, owner, tx,
-		options.Average, options.Display, calculationClass, grouping, options.References, mode)
+	cfgReq := SummaryVegetationConfiguredRequest{
+		UnitScope:                 options.UnitScope,
+		UnitField:                 options.UnitField,
+		HierarchyHeader:           options.HierarchyHeader,
+		BreakpointPolicy:          options.BreakpointPolicy,
+		CombineVariants:           options.CombineVariants,
+		IncludeGoldstreamMetadata: options.IncludeGoldstreamMetadata,
+	}
+	if options.LumpTable != "" {
+		lt := options.LumpTable
+		cfgReq.LumpTable = &lt
+	}
+	var valueLimit float64
+	if options.ValueLimit != nil {
+		valueLimit = *options.ValueLimit
+	}
+	raw, err := environment.report.readSnapshotConfigured(ctx, contextID, plots, owner, tx,
+		options.Average, options.Display, calculationClass, grouping, options.References, mode, cfgReq, nil, valueLimit)
 	if err != nil {
 		return fail(err)
 	}

@@ -13,8 +13,10 @@ import (
 )
 
 type longVegetationReportSource struct {
-	Report vegetationLayerReport
-	Tables []vprocore.ProjectMetadataTable
+	Report    vegetationLayerReport
+	Tables    []vprocore.ProjectMetadataTable
+	LumpTable string
+	LumpRows  []longVegetationLumpRow
 }
 
 func readLongVegetationReportSource(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, options longVegetationOptions) (longVegetationReportSource, error) {
@@ -111,6 +113,13 @@ func readLongVegetationReportSource(ctx context.Context, owner *vprocore.SqliteC
 	if personalIndex >= 0 {
 		personal = tables[personalIndex]
 	}
+	lumpPlan, err := loadLongVegetationLumpPlan(ctx, tx, tables[2], options.LumpTable, options.CombineVariants)
+	if err != nil {
+		return fail(err)
+	}
+	options.resolvedLumpTable = lumpPlan.TableLabel
+	options.lumpMap = lumpPlan.ActiveMap
+	options.lumpRows = lumpPlan.Rows
 	report, err := planLongVegetationPreparedSource(ctx, prepared, tables[2], personal, tables[3], options)
 	if err != nil {
 		return fail(err)
@@ -128,7 +137,7 @@ func readLongVegetationReportSource(ctx context.Context, owner *vprocore.SqliteC
 	if err := addLongVegetationUnitNames(ctx, &report, tables[4]); err != nil {
 		return fail(err)
 	}
-	return longVegetationReportSource{report, tables}, nil
+	return longVegetationReportSource{Report: report, Tables: tables, LumpTable: lumpPlan.TableLabel, LumpRows: lumpPlan.Rows}, nil
 }
 
 func planLongVegetationPreparedSource(ctx context.Context, prepared VegetationReportPreparation,

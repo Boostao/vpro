@@ -249,7 +249,15 @@ func planLongVegetationLayers(ctx context.Context, prepared VegetationReportPrep
 			diagnose(code, plot, count)
 		}
 	}
-	for _, observation := range prepared.Observations {
+	observations := prepared.Observations
+	if len(options.lumpMap) > 0 {
+		lumped, err := applyLumpToObservations(ctx, observations, options.lumpMap)
+		if err != nil {
+			return fail(err)
+		}
+		observations = lumped
+	}
+	for _, observation := range observations {
 		if err := ctx.Err(); err != nil {
 			return fail(err)
 		}

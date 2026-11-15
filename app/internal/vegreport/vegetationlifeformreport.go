@@ -203,6 +203,13 @@ func planLongVegetationLifeforms(ctx context.Context, prepared VegetationReportP
 	if err != nil {
 		return fail(err)
 	}
+	if len(options.lumpMap) > 0 {
+		lumped, lumpErr := applyLumpToLifeformObservations(ctx, inserted.Observations, options.lumpMap)
+		if lumpErr != nil {
+			return fail(lumpErr)
+		}
+		inserted.Observations = lumped
+	}
 	mc, err := reportcore.VegetationLifeformReferenceSchema(ctx, master)
 	if err != nil {
 		return fail(err)
@@ -291,7 +298,9 @@ func planLongVegetationLifeforms(ctx context.Context, prepared VegetationReportP
 			}
 		}
 	}
-	report, err := planLongVegetationLayers(ctx, bridge, bridgeMaster, bridgeLayers, options)
+	bridgeOptions := options
+	bridgeOptions.lumpMap = nil
+	report, err := planLongVegetationLayers(ctx, bridge, bridgeMaster, bridgeLayers, bridgeOptions)
 	if err != nil {
 		return fail(err)
 	}

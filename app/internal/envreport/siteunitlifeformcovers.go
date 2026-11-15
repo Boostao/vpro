@@ -216,7 +216,7 @@ func siteUnitSummaryLifeformPreview(ctx context.Context, input siteUnitQuickVege
 	}
 	result.Report.Fields = fields
 	result.Report.Units = append([]SiteUnitSummaryUnit{}, result.Report.Units...)
-	result.Report.QuerySource = "selected-su-filtered-env-admin-quickveg-lifeform"
+	result.Report.QuerySource = result.Report.QuerySource + "-quickveg-lifeform"
 	for i, unit := range result.Report.Units {
 		if err := ctx.Err(); err != nil {
 			return fail(err)
@@ -254,6 +254,7 @@ type siteUnitQuickVegetationInput struct {
 	References  reportcore.VegetationLifeformReferences
 	Lifeform    []siteUnitLifeformCoverUnit
 	Tables      []vprocore.ProjectMetadataTable
+	LayerCode   vprocore.ProjectMetadataTable
 }
 
 func ReadSiteUnitQuickVegetationInput(s *vprocore.ContextService, ctx context.Context, contextID string, method int,
@@ -275,17 +276,31 @@ func ReadSiteUnitQuickVegetationInput(s *vprocore.ContextService, ctx context.Co
 	}
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (siteUnitQuickVegetationInput, error) {
 		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, hooks, func(owner *vprocore.SqliteContext, tx *sql.Tx) (siteUnitQuickVegetationInput, error) {
-			return readSiteUnitQuickVegetationSource(ctx, owner, tx, contextID, method)
+			unitType, err := readSiteUnitSummaryUnitType(ctx, plots.Projects.Preferences)
+			if err != nil {
+				return siteUnitQuickVegetationInput{}, err
+			}
+			return readSiteUnitQuickVegetationSourceWithScope(ctx, owner, tx, contextID, method, unitType)
 		})
 	})
 }
 
+func readSiteUnitLayerCodeTable(ctx context.Context, tx *sql.Tx) (vprocore.ProjectMetadataTable, error) {
+	table, err := vprocore.ReadPhysicalLocationTable(ctx, tx, "VLists", "LayerCode")
+	if err == nil {
+		return table, nil
+	}
+	return vprocore.ReadPhysicalLocationTable(ctx, tx, "VPro64", "LayerCode")
+}
+
 func readSiteUnitQuickVegetationSource(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
 	contextID string, method int) (siteUnitQuickVegetationInput, error) {
-	if owner.Selection.SU == "USysSuTableDynamic" {
-		return siteUnitQuickVegetationInput{}, errors.New("Summary QuickVeg hierarchy/dynamic-break scope is unavailable")
-	}
-	environment, err := readSiteUnitSummaryWorkbookSource(ctx, owner, tx, contextID, method)
+	return readSiteUnitQuickVegetationSourceWithScope(ctx, owner, tx, contextID, method, 1)
+}
+
+func readSiteUnitQuickVegetationSourceWithScope(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
+	contextID string, method, unitType int) (siteUnitQuickVegetationInput, error) {
+	environment, err := readSiteUnitSummaryWorkbookSourceWithScope(ctx, owner, tx, contextID, method, unitType)
 	if err != nil {
 		return siteUnitQuickVegetationInput{}, err
 	}
@@ -300,6 +315,10 @@ func readSiteUnitQuickVegetationSource(ctx context.Context, owner *vprocore.Sqli
 		}
 		tables = append(tables, table)
 	}
+	layerCode, err := readSiteUnitLayerCodeTable(ctx, tx)
+	if err != nil {
+		return siteUnitQuickVegetationInput{}, err
+	}
 	quick, err := reportcore.PrepareSiteUnitQuickVegetation(ctx, owner.Selection.Project, owner.Selection.SU, 2, tables[4], tables[2])
 	if err != nil {
 		return siteUnitQuickVegetationInput{}, err
@@ -309,7 +328,7 @@ func readSiteUnitQuickVegetationSource(ctx context.Context, owner *vprocore.Sqli
 		return siteUnitQuickVegetationInput{}, err
 	}
 	input := siteUnitQuickVegetationInput{
-		Environment: environment.Preview, Quick: quick, References: references, Tables: tables,
+		Environment: environment.Preview, Quick: quick, References: references, Tables: tables, LayerCode: layerCode,
 	}
 	input.Lifeform, err = planSiteUnitLifeformCovers(ctx, input)
 	if err != nil {

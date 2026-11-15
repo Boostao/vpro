@@ -25,6 +25,8 @@ type LongVegetationSettings struct {
 	Quality              *LongVegetationQualitySettings `json:"quality"`
 	UnitGrouping         string                         `json:"unitGrouping,omitempty"`
 	UnitFields           []string                       `json:"unitFields,omitempty"`
+	CombineVariants      bool                           `json:"combineVariants,omitempty"`
+	LumpTable            string                         `json:"lumpTable,omitempty"`
 }
 
 type LongVegetationQualityCriterion struct {
@@ -143,11 +145,18 @@ func loadLongVegetationOptions(plots *vprocore.PlotService) (longVegetationOptio
 }
 
 func vegetationSettings(options longVegetationOptions) LongVegetationSettings {
+	lumpTable := options.resolvedLumpTable
+	if lumpTable == "" && options.CombineVariants {
+		lumpTable = "CombinedSpp_Lump"
+	} else if lumpTable == "" {
+		lumpTable = options.LumpTable
+	}
 	settings := LongVegetationSettings{
 		Title: options.Title, Average: options.Average, ConstantSpeciesList: options.ConstantSpeciesList,
 		PresenceGreaterThan: options.PresenceGreaterThan, MeanCoverGreaterThan: options.MeanCoverGreaterThan,
 		Order: options.Order, ShowEnglishName: options.ShowEnglishName, ShowSpeciesCode: options.ShowSpeciesCode,
 		SelectedField: options.SelectedField,
+		CombineVariants: options.CombineVariants, LumpTable: lumpTable,
 	}
 	settings.Grouping = "layer"
 	if options.NoneUnits {
@@ -228,6 +237,7 @@ func PreviewLongVegetation(s *vprocore.ContextService, ctx context.Context, cont
 			if err != nil {
 				return LongVegetationPreview{}, err
 			}
+			options.resolvedLumpTable = source.LumpTable
 			transport, err := longVegetationTransport(ctx, source.Report)
 			if err != nil {
 				return LongVegetationPreview{}, err

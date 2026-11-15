@@ -68,8 +68,8 @@ func planLifeformSummary(ctx context.Context, project, suName string, veg, su, s
 	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
-	if suName == "USysSuTableDynamic" {
-		return fail(errors.New("Lifeform Summary hierarchy/dynamic-break scope is unavailable"))
+	if suName == "None" {
+		return fail(errors.New("Lifeform Summary requires an SU table or dynamic hierarchy breakpoints"))
 	}
 	coverNames := []string{"PlotNumber", "Species"}
 	for i := 1; i <= 10; i++ {
@@ -371,7 +371,104 @@ func NewLifeformSummaryService(contexts *vprocore.ContextService) (*LifeformSumm
 	return &LifeformSummaryService{contexts: contexts}, nil
 }
 
+// resolveLifeformAndAttributeSU reads the physical SU table (or Env UserSiteUnit/BECSiteUnit/SiteSeries fallback
+// for USysSuTableDynamic) and, when forceHierarchy or USysSuTableDynamic is active, rolls SiteUnit assignments
+// up to matching '~' hierarchy breakpoint nodes.
+func resolveLifeformAndAttributeSU(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx, label, breakpointPolicy string, forceHierarchy bool) (vprocore.ProjectMetadataTable, error) {
+	hasPhysicalTable := func(role, name string) (bool, error) {
+		var kind string
+		err := tx.QueryRowContext(ctx, `SELECT type FROM `+vprocore.QuoteHeaderIdentifier(role)+
+			`.sqlite_master WHERE name COLLATE BINARY=? LIMIT 1`, name).Scan(&kind)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if kind != "table" {
+			return false, fmt.Errorf("%s requires original physical table %s.%s", label, role, name)
+		}
+		return true, nil
+	}
+
+	readRequiredTable := func(role, name string) (vprocore.ProjectMetadataTable, error) {
+		ok, err := hasPhysicalTable(role, name)
+		if err != nil {
+			return vprocore.ProjectMetadataTable{}, err
+		}
+		if !ok {
+			return vprocore.ProjectMetadataTable{}, fmt.Errorf("%s requires original physical table %s.%s", label, role, name)
+		}
+		return vprocore.ReadSQLiteStorageRows(ctx, tx, role, name, "", nil, "")
+	}
+
+	useHierarchy := forceHierarchy || owner.Selection.SU == "USysSuTableDynamic"
+	var suTable vprocore.ProjectMetadataTable
+	var err error
+	if owner.Selection.SU == "USysSuTableDynamic" {
+		loaded := false
+		for _, role := range []string{"su", "project"} {
+			if _, attached := owner.Attachments[role]; !attached {
+				continue
+			}
+			ok, tErr := hasPhysicalTable(role, "USysSuTableDynamic_SU")
+			if tErr != nil {
+				return vprocore.ProjectMetadataTable{}, tErr
+			}
+			if ok {
+				suTable, err = vprocore.ReadSQLiteStorageRows(ctx, tx, role, "USysSuTableDynamic_SU", "", nil, "")
+				if err != nil {
+					return vprocore.ProjectMetadataTable{}, err
+				}
+				loaded = true
+				break
+			}
+		}
+		if !loaded {
+			env, eErr := readRequiredTable("project", owner.Selection.Project+"_Env")
+			if eErr != nil {
+				return vprocore.ProjectMetadataTable{}, eErr
+			}
+			suTable, err = buildDynamicHierarchySourceSUTable(ctx, env)
+			if err != nil {
+				return vprocore.ProjectMetadataTable{}, err
+			}
+		}
+	} else {
+		suTable, err = readRequiredTable("su", owner.Selection.SU+"_SU")
+		if err != nil {
+			return vprocore.ProjectMetadataTable{}, err
+		}
+	}
+
+	if useHierarchy {
+		nodes, hErr := loadHierarchyNodesFromTx(ctx, tx, owner.Selection.Hierarchy)
+		if hErr != nil {
+			return vprocore.ProjectMetadataTable{}, hErr
+		}
+		rolled, _, rErr := resolveHierarchyBreakpointsOnSU(suTable, nodes, HierarchyBreakpointOptions{
+			BreakpointPolicy: breakpointPolicy,
+			StripTildePrefix: true,
+		})
+		if rErr != nil {
+			return vprocore.ProjectMetadataTable{}, rErr
+		}
+		suTable = rolled
+	}
+	return suTable, nil
+}
+
 func (s *LifeformSummaryService) Preview(ctx context.Context, contextID string) (LifeformSummaryPreview, error) {
+	return s.previewConfigured(ctx, contextID, "", false)
+}
+
+// PreviewWithHierarchyBreakpoints resolves Lifeform Summary using '~' hierarchy
+// breakpoints ('lowest' or 'highest') against the active SU or dynamic source.
+func (s *LifeformSummaryService) PreviewWithHierarchyBreakpoints(ctx context.Context, contextID, breakpointPolicy string) (LifeformSummaryPreview, error) {
+	return s.previewConfigured(ctx, contextID, breakpointPolicy, true)
+}
+
+func (s *LifeformSummaryService) previewConfigured(ctx context.Context, contextID, breakpointPolicy string, forceHierarchy bool) (LifeformSummaryPreview, error) {
 	if ctx == nil {
 		return LifeformSummaryPreview{}, errors.New("Lifeform Summary requires a context")
 	}
@@ -386,13 +483,16 @@ func (s *LifeformSummaryService) Preview(ctx context.Context, contextID string) 
 	}
 	return vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (LifeformSummaryPreview, error) {
 		return vprocore.WithOwnedPreferenceSnapshot(ctx, plots, s.snapshot, func(owner *vprocore.SqliteContext, tx *sql.Tx) (LifeformSummaryPreview, error) {
-			if owner.Selection.SU == "None" || owner.Selection.SU == "USysSuTableDynamic" {
-				return LifeformSummaryPreview{}, errors.New("Lifeform Summary requires a selected normal SU; hierarchy/dynamic-break scope is unavailable")
+			if owner.Selection.SU == "None" {
+				return LifeformSummaryPreview{}, errors.New("Lifeform Summary requires a selected normal SU or USysSuTableDynamic; None scope is unavailable")
 			}
-			tables := make([]vprocore.ProjectMetadataTable, 4)
+			suTable, err := resolveLifeformAndAttributeSU(ctx, owner, tx, "Lifeform Summary", breakpointPolicy, forceHierarchy)
+			if err != nil {
+				return LifeformSummaryPreview{}, err
+			}
+			tables := make([]vprocore.ProjectMetadataTable, 3)
 			for i, source := range []struct{ role, table string }{
 				{"project", owner.Selection.Project + "_Veg"},
-				{"su", owner.Selection.SU + "_SU"},
 				{"VLists", "USysAllSpecs"},
 				{"VPro64", "LifeformCodes"},
 			} {
@@ -404,13 +504,12 @@ func (s *LifeformSummaryService) Preview(ctx context.Context, contextID string) 
 				if count != 1 {
 					return LifeformSummaryPreview{}, fmt.Errorf("Lifeform Summary requires original physical table %s.%s", source.role, source.table)
 				}
-				var err error
 				tables[i], err = vprocore.ReadSQLiteStorageRows(ctx, tx, source.role, source.table, "", nil, "")
 				if err != nil {
 					return LifeformSummaryPreview{}, err
 				}
 			}
-			report, err := planLifeformSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], tables[1], tables[2], tables[3])
+			report, err := planLifeformSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], suTable, tables[1], tables[2])
 			if err != nil {
 				return LifeformSummaryPreview{}, err
 			}

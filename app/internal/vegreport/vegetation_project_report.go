@@ -119,6 +119,7 @@ type vegetationProjectWorkbookSummary struct {
 	SourceKind     string
 	SourcePlotRows int
 	ProjectTuples  []vprocore.LongVegetationProjectUnit
+	LumpRows       []longVegetationLumpRow `json:"lumpRows,omitempty"`
 }
 
 func prepareVegetationProjectWorkbookSummary(ctx context.Context, createdDate string,

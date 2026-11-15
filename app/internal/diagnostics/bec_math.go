@@ -356,19 +356,19 @@ func ClassifySpeciesDiagnostic(orderedUnits []OrderedUnitCode) (DiagnosticClassi
 func normalizePairwiseParams(in PairwiseParams) PairwiseParams {
 	out := in
 	if out.MinConstancy <= 0 {
-		out.MinConstancy = 50.0
+		out.MinConstancy = 60.0
 	}
 	if out.NoiseConstancy <= 0 {
 		out.NoiseConstancy = 10.0
 	}
 	if out.MinPlots <= 0 {
-		out.MinPlots = 1
+		out.MinPlots = 2
 	}
 	if out.MinDiff <= 0 {
-		out.MinDiff = 0.1
+		out.MinDiff = 0.5
 	}
 	if out.MinDD <= 0 {
-		out.MinDD = 0.35
+		out.MinDD = 0.5
 	}
 	if out.MinorCover <= 0 {
 		out.MinorCover = 1.0
@@ -751,6 +751,10 @@ func ComputePairwiseAnalysis(
 			becSimMat[i][j] = becMean
 			becSimMat[j][i] = becMean
 
+			if !elig1 || !elig2 {
+				continue
+			}
+
 			comparisons = append(comparisons, PairwiseUnitComparison{
 				Unit1:               u1,
 				Unit2:               u2,
@@ -795,6 +799,18 @@ func ComputePairwiseAnalysis(
 	return matrixRows, comparisons
 }
 
+const defaultOutlierThreshold = 0.45
+
+func normalizeOutlierThreshold(threshold float64) float64 {
+	if threshold <= 0 {
+		return defaultOutlierThreshold
+	}
+	if threshold > 1 {
+		return 1.0
+	}
+	return threshold
+}
+
 // ComputeOutlierQueue evaluates every classified plot against its Leave-One-Out (LOO) assigned SiteUnit
 // centroid and its nearest rival SiteUnit centroid, sorting descending by RivalSimilarity - OwnSimilarity.
 func ComputeOutlierQueue(
@@ -804,6 +820,19 @@ func ComputeOutlierQueue(
 	unitTotalSums map[string]float64,
 	unitPlotCounts map[string]int,
 ) []OutlierPlotCandidate {
+	return ComputeOutlierQueueWithThreshold(units, plots, unitCoverSums, unitTotalSums, unitPlotCounts, defaultOutlierThreshold)
+}
+
+// ComputeOutlierQueueWithThreshold evaluates classified plots with an explicit own-similarity threshold (default 0.45 matching R vpro_outliers).
+func ComputeOutlierQueueWithThreshold(
+	units []string,
+	plots []classifiedPlotRecord,
+	unitCoverSums map[string]map[string]float64,
+	unitTotalSums map[string]float64,
+	unitPlotCounts map[string]int,
+	threshold float64,
+) []OutlierPlotCandidate {
+	normThreshold := normalizeOutlierThreshold(threshold)
 	if len(plots) == 0 {
 		return []OutlierPlotCandidate{}
 	}
@@ -951,6 +980,7 @@ func ComputeOutlierQueue(
 			DeltaSimilarity:    RoundACE15(delta, 4),
 			DeltaSimilarityPct: RoundACE15(delta*100.0, 1),
 			Misplaced:          rivalUnit != "" && delta > 0,
+			BelowThreshold:     !singleton && ownSim < normThreshold,
 			MoistureRegime:     p.moistureRegime,
 			NutrientRegime:     p.nutrientRegime,
 			Zone:               p.zone,

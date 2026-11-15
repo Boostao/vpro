@@ -40,10 +40,11 @@ type SummaryVegetationRow struct {
 }
 
 type SummaryVegetationUnit struct {
-	Code          string   `json:"code"`
-	NumPlots      int      `json:"numPlots"`
-	MembershipIDs []string `json:"membershipIds"`
-	RawVegRowIDs  []string `json:"rawVegRowIds"`
+	Code            string   `json:"code"`
+	HierarchyHeader *string  `json:"hierarchyHeader,omitempty"`
+	NumPlots        int      `json:"numPlots"`
+	MembershipIDs   []string `json:"membershipIds"`
+	RawVegRowIDs    []string `json:"rawVegRowIds"`
 }
 
 type SummaryVegetationField struct {
@@ -53,24 +54,33 @@ type SummaryVegetationField struct {
 }
 
 type SummaryVegetationPreview struct {
-	ContextID     string                                  `json:"contextId"`
-	Project       string                                  `json:"project"`
-	ProjectPath   string                                  `json:"projectPath"`
-	SU            string                                  `json:"su"`
-	SUPath        string                                  `json:"suPath"`
-	Average       int                                     `json:"average"`
-	Display       int                                     `json:"display"`
-	ShowClass     int                                     `json:"showClass,omitempty"`
-	GroupAndOrder int                                     `json:"groupAndOrder,omitempty"`
-	GroupField    *SummaryVegetationField                 `json:"groupField,omitempty"`
-	OrderField    *SummaryVegetationField                 `json:"orderField,omitempty"`
-	Source        string                                  `json:"source"`
-	Ordering      string                                  `json:"ordering"`
-	Memberships   []reportcore.VegetationReportMembership `json:"memberships"`
-	Units         []SummaryVegetationUnit                 `json:"units"`
-	Columns       []string                                `json:"columns"`
-	Rows          []SummaryVegetationRow                  `json:"rows"`
-	References    *SummaryVegetationReferenceReview       `json:"references,omitempty"`
+	ContextID              string                                  `json:"contextId"`
+	Project                string                                  `json:"project"`
+	ProjectPath            string                                  `json:"projectPath"`
+	SU                     string                                  `json:"su"`
+	SUPath                 string                                  `json:"suPath"`
+	Average                int                                     `json:"average"`
+	Display                int                                     `json:"display"`
+	ShowClass              int                                     `json:"showClass,omitempty"`
+	GroupAndOrder          int                                     `json:"groupAndOrder,omitempty"`
+	GroupField             *SummaryVegetationField                 `json:"groupField,omitempty"`
+	OrderField             *SummaryVegetationField                 `json:"orderField,omitempty"`
+	Source                 string                                  `json:"source"`
+	Ordering               string                                  `json:"ordering"`
+	Memberships            []reportcore.VegetationReportMembership `json:"memberships"`
+	Units                  []SummaryVegetationUnit                 `json:"units"`
+	Columns                []string                                `json:"columns"`
+	Rows                   []SummaryVegetationRow                  `json:"rows"`
+	References             *SummaryVegetationReferenceReview       `json:"references,omitempty"`
+	Quality                *SummaryVegetationQualityFilterResult   `json:"quality,omitempty"`
+	UnitScope              string                                  `json:"unitScope,omitempty"`
+	UnitField              string                                  `json:"unitField,omitempty"`
+	HierarchyHeaderEnabled bool                                    `json:"hierarchyHeaderEnabled,omitempty"`
+	CombineVariants        bool                                    `json:"combineVariants,omitempty"`
+	LumpTable              string                                  `json:"lumpTable,omitempty"`
+	ValueLimit             float64                                 `json:"valueLimit,omitempty"`
+	Goldstream             *SummaryVegetationGoldstreamMetadata    `json:"goldstream,omitempty"`
+	AppliedPreferences     *SummaryVegetationAppliedPreferences    `json:"appliedPreferences,omitempty"`
 }
 
 type SummaryVegetationService struct {
@@ -167,6 +177,14 @@ const summaryVegetationUnanimousCommonOrdering = "literal-null-first-group-speci
 func (s *SummaryVegetationService) readSnapshotWithReferenceMode(ctx context.Context, contextID string, plots *vprocore.PlotService,
 	owner *vprocore.SqliteContext, tx *sql.Tx, average, display, showClass, groupAndOrder int,
 	options *SummaryVegetationReferenceOptions, mode summaryVegetationGroupedMode) (summaryVegetationSnapshotPreview, error) {
+	return s.readSnapshotConfigured(ctx, contextID, plots, owner, tx,
+		average, display, showClass, groupAndOrder, options, mode, SummaryVegetationConfiguredRequest{}, nil, 0)
+}
+
+func (s *SummaryVegetationService) readSnapshotConfigured(ctx context.Context, contextID string, plots *vprocore.PlotService,
+	owner *vprocore.SqliteContext, tx *sql.Tx, average, display, showClass, groupAndOrder int,
+	options *SummaryVegetationReferenceOptions, mode summaryVegetationGroupedMode,
+	req SummaryVegetationConfiguredRequest, saved *SummaryVegetationAppliedPreferences, valueLimit float64) (summaryVegetationSnapshotPreview, error) {
 	fail := func(err error) (summaryVegetationSnapshotPreview, error) {
 		return summaryVegetationSnapshotPreview{}, err
 	}
@@ -192,72 +210,228 @@ func (s *SummaryVegetationService) readSnapshotWithReferenceMode(ctx context.Con
 	if err != nil {
 		return fail(err)
 	}
-	if quality.Enforce {
-		return fail(errors.New("Summary Vegetation quality enforcement is saved but qualified preview is unavailable; no unfiltered report returned"))
+	effectiveScope, err := resolveEffectiveSummaryScope(req.UnitScope, owner.Selection.SU)
+	if err != nil {
+		return fail(err)
 	}
-	if owner.Selection.SU == "None" || owner.Selection.SU == "USysSuTableDynamic" {
-		return fail(errors.New("Summary Vegetation requires a selected normal SU; hierarchy/dynamic-break scope is unavailable"))
+
+	// Read passive presentation state for SVSubSppAsSpp, CurrLump, SVShowHierarchyHeader, SVUnitField.
+	basePrefs, _ := readSummarySavedPresentationState(ctx, plots.Projects.Preferences, owner.Selection.SU)
+	effectiveUnitField := strings.TrimSpace(req.UnitField)
+	if effectiveUnitField == "" {
+		effectiveUnitField = basePrefs.UnitField
 	}
-	tables := make([]vprocore.ProjectMetadataTable, 5)
-	sources := []struct{ role, table string }{
-		{"project", owner.Selection.Project + "_Veg"},
-		{"su", owner.Selection.SU + "_SU"},
-		{"VLists", "USysAllSpecs"},
-		{"VUser", "USysUserSpp"},
-		{"VPro64", "LayerCode"},
+	effectiveCombineVariants := basePrefs.CombineVariants
+	if req.CombineVariants != nil {
+		effectiveCombineVariants = *req.CombineVariants
 	}
-	for _, idx := range []int{1, 2, 3, 4, 0} {
-		source := sources[idx]
+	effectiveLumpTable := basePrefs.LumpTable
+	if req.LumpTable != nil {
+		trimmed := strings.TrimSpace(*req.LumpTable)
+		if strings.EqualFold(trimmed, "None") || strings.EqualFold(trimmed, "None_Lump") {
+			effectiveLumpTable = ""
+		} else {
+			effectiveLumpTable = trimmed
+		}
+	}
+	effectiveHierarchyHeader := basePrefs.HierarchyHeader
+	if req.HierarchyHeader != nil {
+		effectiveHierarchyHeader = *req.HierarchyHeader
+	}
+	if effectiveScope == "hierarchy" && (owner.Selection.Hierarchy == "" || owner.Selection.Hierarchy == "None") {
+		return fail(errors.New("Summary Vegetation requires an active Hierarchy table for hierarchy/dynamic-break scope"))
+	}
+
+	hasTable := func(role, table string) (bool, error) {
 		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(source.role)+
-			`.sqlite_master WHERE type='table' AND name COLLATE BINARY=?`, source.table).Scan(&count); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(role)+
+			`.sqlite_master WHERE type='table' AND name COLLATE BINARY=?`, table).Scan(&count); err != nil {
+			return false, err
+		}
+		return count == 1, nil
+	}
+	readTable := func(role, table string) (vprocore.ProjectMetadataTable, error) {
+		ok, err := hasTable(role, table)
+		if err != nil {
+			return vprocore.ProjectMetadataTable{}, err
+		}
+		if !ok {
+			return vprocore.ProjectMetadataTable{}, fmt.Errorf("Summary Vegetation requires original physical table %s.%s", role, table)
+		}
+		return vprocore.ReadSQLiteStorageRows(ctx, tx, role, table, "", nil, "")
+	}
+
+	tables := make([]vprocore.ProjectMetadataTable, 5)
+	for _, item := range []struct {
+		idx         int
+		role, table string
+	}{
+		{2, "VLists", "USysAllSpecs"},
+		{3, "VUser", "USysUserSpp"},
+		{4, "VPro64", "LayerCode"},
+	} {
+		tbl, err := readTable(item.role, item.table)
+		if err != nil {
 			return fail(err)
 		}
-		if count != 1 {
-			return fail(fmt.Errorf("Summary Vegetation requires original physical table %s.%s", source.role, source.table))
+		tables[item.idx] = tbl
+	}
+
+	var cachedEnv *vprocore.ProjectMetadataTable
+	loadEnv := func() (vprocore.ProjectMetadataTable, error) {
+		if cachedEnv != nil {
+			return *cachedEnv, nil
 		}
-		var suPlotFilter []string
-		if idx == 0 {
-			var totalVegRows int
-			_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(source.role)+`.`+vprocore.QuoteHeaderIdentifier(source.table)).Scan(&totalVegRows)
-			if totalVegRows > 50000 && len(tables[1].Rows) > 0 && len(tables[1].Rows) <= 900 {
-				plotColIdx := -1
-				for cIdx, col := range tables[1].Columns {
-					if strings.EqualFold(col.Name, "PlotNumber") {
-						plotColIdx = cIdx
-						break
-					}
-				}
-				if plotColIdx >= 0 {
-					seen := make(map[string]struct{}, len(tables[1].Rows))
-					allText := true
-					for _, r := range tables[1].Rows {
-						cell := r.Cells[plotColIdx]
-						if cell.Storage != "text" || cell.Text == nil {
-							allText = false
-							break
-						}
-						if _, ok := seen[*cell.Text]; !ok {
-							seen[*cell.Text] = struct{}{}
-							suPlotFilter = append(suPlotFilter, *cell.Text)
-						}
-					}
-					if !allText {
-						suPlotFilter = nil
+		env, err := readTable("project", owner.Selection.Project+"_Env")
+		if err != nil {
+			return vprocore.ProjectMetadataTable{}, err
+		}
+		cachedEnv = &env
+		return env, nil
+	}
+
+	switch effectiveScope {
+	case "none":
+		env, err := loadEnv()
+		if err != nil {
+			return fail(err)
+		}
+		tables[1], err = buildWholeProjectSUTable(ctx, env)
+		if err != nil {
+			return fail(err)
+		}
+	case "field":
+		env, err := loadEnv()
+		if err != nil {
+			return fail(err)
+		}
+		tables[1], err = buildFieldDerivedSUTable(ctx, env, effectiveUnitField)
+		if err != nil {
+			return fail(err)
+		}
+	case "hierarchy":
+		if owner.Selection.SU == "" || owner.Selection.SU == "None" || owner.Selection.SU == "USysSuTableDynamic" {
+			dynExists := false
+			if owner.Selection.SU == "USysSuTableDynamic" {
+				if _, ok := owner.Attachments["su"]; ok {
+					var err error
+					dynExists, err = hasTable("su", "USysSuTableDynamic_SU")
+					if err != nil {
+						return fail(err)
 					}
 				}
 			}
-		}
-		var err error
-		if len(suPlotFilter) > 0 {
-			tables[idx], err = vprocore.ReadSQLiteStorageRowsIn(ctx, tx, source.role, source.table, "PlotNumber", suPlotFilter, "")
+			if dynExists {
+				tables[1], err = readTable("su", "USysSuTableDynamic_SU")
+			} else {
+				env, eErr := loadEnv()
+				if eErr != nil {
+					return fail(eErr)
+				}
+				tables[1], err = buildDynamicHierarchySourceSUTable(ctx, env)
+			}
 		} else {
-			tables[idx], err = vprocore.ReadSQLiteStorageRows(ctx, tx, source.role, source.table, "", nil, "")
+			tables[1], err = readTable("su", owner.Selection.SU+"_SU")
 		}
 		if err != nil {
 			return fail(err)
 		}
+	default:
+		tables[1], err = readTable("su", owner.Selection.SU+"_SU")
+		if err != nil {
+			return fail(err)
+		}
 	}
+
+	var qualityResult *SummaryVegetationQualityFilterResult
+	if quality.Enforce {
+		env, err := loadEnv()
+		if err != nil {
+			return fail(err)
+		}
+		admin, err := readTable("project", owner.Selection.Project+"_Admin")
+		if err != nil {
+			return fail(err)
+		}
+		lists, err := readTable("VLists", "USysTableOfLists")
+		if err != nil {
+			return fail(err)
+		}
+		filteredSU, qRes, err := filterSummaryVegetationQuality(ctx, tables[1], env, admin, lists, quality)
+		if err != nil {
+			return fail(err)
+		}
+		tables[1] = filteredSU
+		qualityResult = qRes
+	}
+
+	if effectiveScope == "hierarchy" {
+		nodes, err := loadHierarchyNodesFromTx(ctx, tx, owner.Selection.Hierarchy)
+		if err != nil {
+			return fail(err)
+		}
+		rolledSU, _, err := resolveHierarchyBreakpointsOnSU(tables[1], nodes, HierarchyBreakpointOptions{
+			BreakpointPolicy: req.BreakpointPolicy,
+			StripTildePrefix: true,
+		})
+		if err != nil {
+			return fail(err)
+		}
+		tables[1] = rolledSU
+	}
+
+	vegTableName := owner.Selection.Project + "_Veg"
+	vegOK, err := hasTable("project", vegTableName)
+	if err != nil {
+		return fail(err)
+	}
+	if !vegOK {
+		return fail(fmt.Errorf("Summary Vegetation requires original physical table %s.%s", "project", vegTableName))
+	}
+	var suPlotFilter []string
+	var totalVegRows int
+	_ = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM "project".`+vprocore.QuoteHeaderIdentifier(vegTableName)).Scan(&totalVegRows)
+	if totalVegRows > 50000 && len(tables[1].Rows) > 0 && len(tables[1].Rows) <= 900 {
+		plotColIdx := -1
+		for cIdx, col := range tables[1].Columns {
+			if strings.EqualFold(col.Name, "PlotNumber") {
+				plotColIdx = cIdx
+				break
+			}
+		}
+		if plotColIdx >= 0 {
+			seen := make(map[string]struct{}, len(tables[1].Rows))
+			allText := true
+			for _, r := range tables[1].Rows {
+				cell := r.Cells[plotColIdx]
+				if cell.Storage != "text" || cell.Text == nil {
+					allText = false
+					break
+				}
+				if _, ok := seen[*cell.Text]; !ok {
+					seen[*cell.Text] = struct{}{}
+					suPlotFilter = append(suPlotFilter, *cell.Text)
+				}
+			}
+			if !allText {
+				suPlotFilter = nil
+			}
+		}
+	}
+	if len(suPlotFilter) > 0 {
+		tables[0], err = vprocore.ReadSQLiteStorageRowsIn(ctx, tx, "project", vegTableName, "PlotNumber", suPlotFilter, "")
+	} else {
+		tables[0], err = vprocore.ReadSQLiteStorageRows(ctx, tx, "project", vegTableName, "", nil, "")
+	}
+	if err != nil {
+		return fail(err)
+	}
+
+	effectiveVeg, appliedLumpLabel, _, err := applySummaryVegetationLumpAndVariants(ctx, tx, tables[0], tables[2], effectiveLumpTable, effectiveCombineVariants)
+	if err != nil {
+		return fail(err)
+	}
+	tables[0] = effectiveVeg
 	var report summaryVegetationLayerReport
 	var grouped summaryVegetationGroupedReport
 	var descriptions *vprocore.ProjectMetadataTable
@@ -390,10 +564,43 @@ func (s *SummaryVegetationService) readSnapshotWithReferenceMode(ctx context.Con
 		}
 		result.Rows = append(result.Rows, transport)
 	}
+	if valueLimit > 0 {
+		result.Rows = filterSummaryRowsByValueLimit(result.Rows, valueLimit)
+		result.ValueLimit = valueLimit
+	}
+	if qualityResult != nil {
+		result.Quality = qualityResult
+	}
+	if effectiveCombineVariants {
+		result.CombineVariants = true
+	}
+	if appliedLumpLabel != "" {
+		result.LumpTable = appliedLumpLabel
+	}
+	if effectiveScope != "su" {
+		result.UnitScope = effectiveScope
+		if effectiveScope == "field" {
+			result.UnitField = effectiveUnitField
+		}
+	}
+	if effectiveHierarchyHeader {
+		if err := populateSummaryHierarchyHeaders(ctx, tx, owner.Selection.Hierarchy, &result); err != nil {
+			return fail(err)
+		}
+	}
+	if req.IncludeGoldstreamMetadata && display == 5 {
+		result.Goldstream = buildSummaryGoldstreamMetadata(result)
+	}
+	if saved != nil {
+		copied := *saved
+		if appliedLumpLabel != "" {
+			copied.LumpTable = appliedLumpLabel
+		}
+		result.AppliedPreferences = &copied
+	}
 	if err := ctx.Err(); err != nil {
 		return fail(err)
 	}
 	return summaryVegetationSnapshotPreview{Preview: result, SU: tables[1], Veg: tables[0], Master: tables[2],
 		Personal: tables[3], Layers: tables[4], Descriptions: descriptions}, nil
-
 }

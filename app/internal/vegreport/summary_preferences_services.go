@@ -338,9 +338,6 @@ func (s *SummaryVegetationPresentationPreferencesService) GetSummaryVegetationPr
 func (s *SummaryVegetationPresentationPreferencesService) SaveSummaryVegetationPresentationPreferences(ctx context.Context, contextID, requestJSON string) *SummaryVegetationPresentationPreferencesOutcome {
 	out := SummaryVegetationPresentationPreferencesOutcome(vprocore.SaveOwnedReportPreferences(ctx, s.helper(), contextID, requestJSON, "Summary Vegetation presentation", nil,
 		func(plots *vprocore.PlotService, request SummaryVegetationPresentationPreferencesRequest) (vprocore.ReportPreferenceUpdate, error) {
-			if request.Expected.HierarchyHeader != request.Proposed.HierarchyHeader {
-				return vprocore.ReportPreferenceUpdate{}, errors.New("Summary Vegetation hierarchy-header editing requires unavailable hierarchy report scope; unchanged historical settings are retained")
-			}
 			return CompareAndSetSummaryVegetationPresentationPreferences(plots.Projects.Preferences, ctx,
 				summaryVegetationPresentationPreferenceValues(request.Expected), summaryVegetationPresentationPreferenceValues(request.Proposed),
 				request.ConstancyApplied)

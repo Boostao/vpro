@@ -286,6 +286,13 @@ func readLongVegetationProjectSource(ctx context.Context, owner *vprocore.Sqlite
 	if personalIndex >= 0 {
 		personal = tables[personalIndex]
 	}
+	lumpPlan, err := loadLongVegetationLumpPlan(ctx, tx, tables[2], options.LumpTable, options.CombineVariants)
+	if err != nil {
+		return longVegetationReportSource{}, err
+	}
+	options.resolvedLumpTable = lumpPlan.TableLabel
+	options.lumpMap = lumpPlan.ActiveMap
+	options.lumpRows = lumpPlan.Rows
 	report, err := planLongVegetationPreparedSource(ctx, prepared, tables[2], personal, tables[3], options)
 	if err != nil {
 		return longVegetationReportSource{}, err
@@ -299,5 +306,5 @@ func readLongVegetationProjectSource(ctx context.Context, owner *vprocore.Sqlite
 	if err := addLongVegetationUnitNames(ctx, &report, tables[4]); err != nil {
 		return longVegetationReportSource{}, err
 	}
-	return longVegetationReportSource{report, tables}, nil
+	return longVegetationReportSource{Report: report, Tables: tables, LumpTable: lumpPlan.TableLabel, LumpRows: lumpPlan.Rows}, nil
 }

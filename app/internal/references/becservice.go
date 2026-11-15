@@ -13,6 +13,7 @@ import (
 	"github.com/boostao/vpro/app/resources"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -252,12 +253,26 @@ func (s *BECService) ListBECSiteSeries(ctx context.Context, zone, subZone *strin
 		return nil, errors.New("BEC catalogue is closed")
 	}
 	result := []BECSiteSeries{}
-	if zone == nil || subZone == nil {
-		return result, nil
+	query := `SELECT ` + BecSeriesColumns + ` FROM BECSiteSeries`
+	var clauses []string
+	var args []any
+	if zone != nil {
+		clauses = append(clauses, `Zone = ? COLLATE NOCASE`)
+		args = append(args, *zone)
 	}
-	rows, err := s.Db.QueryContext(ctx, `SELECT `+BecSeriesColumns+` FROM BECSiteSeries
- WHERE Zone = ? COLLATE NOCASE AND SubZone = ? COLLATE NOCASE
- ORDER BY SiteSeries COLLATE NOCASE, SiteSeries, CAST(RowID AS INTEGER)`, *zone, *subZone)
+	if subZone != nil {
+		clauses = append(clauses, `SubZone = ? COLLATE NOCASE`)
+		args = append(args, *subZone)
+	}
+	if len(clauses) > 0 {
+		query += ` WHERE ` + strings.Join(clauses, ` AND `)
+	}
+	if zone != nil && subZone != nil {
+		query += ` ORDER BY SiteSeries COLLATE NOCASE, SiteSeries, CAST(RowID AS INTEGER)`
+	} else {
+		query += ` ORDER BY Zone COLLATE NOCASE, Zone, SubZone COLLATE NOCASE, SubZone, SiteSeries COLLATE NOCASE, SiteSeries, CAST(RowID AS INTEGER)`
+	}
+	rows, err := s.Db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -277,4 +292,35 @@ func (s *BECService) ListBECSiteSeries(ctx context.Context, zone, subZone *strin
 		return nil, err
 	}
 	return result, nil
+}
+
+// SearchBECSiteSeries filters BECSiteSeries by optional zone, subZone, search query, and limit.
+func (s *BECService) SearchBECSiteSeries(ctx context.Context, zone, subZone *string, query string, limit int) ([]BECSiteSeries, error) {
+	rows, err := s.ListBECSiteSeries(ctx, zone, subZone)
+	if err != nil {
+		return nil, err
+	}
+	needle := strings.ToLower(strings.TrimSpace(query))
+	if needle == "" {
+		if limit > 0 && len(rows) > limit {
+			return rows[:limit], nil
+		}
+		return rows, nil
+	}
+	matched := make([]BECSiteSeries, 0, len(rows))
+	for _, row := range rows {
+		parts := []string{}
+		for _, ptr := range []*string{row.MergedBGC, row.SSCode, row.SiteSeries, row.Name, row.Description, row.PlantAssociation, row.Alliance, row.Zone, row.SubZone} {
+			if ptr != nil {
+				parts = append(parts, *ptr)
+			}
+		}
+		if strings.Contains(strings.ToLower(strings.Join(parts, " ")), needle) {
+			matched = append(matched, row)
+			if limit > 0 && len(matched) >= limit {
+				break
+			}
+		}
+	}
+	return matched, nil
 }

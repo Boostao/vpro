@@ -304,7 +304,7 @@ func TestSourceProfileCompilerRejectsUnobservedAmbiguousAndUnverifiedRules(t *te
 		{"Table": "Veg "}, {"Table": "Other"}, {"Operator": ">="}, {"Operator": "= 1 OR 1=1"},
 		{"Field": "Species; DROP TABLE USysVeg"}, {"Layer": "SumD"}, {"Species": "T\u00e9"},
 		{"Criteria": "NaN"}, {"Criteria": "1e999"}, {"Criteria": "1; DELETE FROM Sample_Env"},
-		{"Operation": "Add plots "}, {"Table": "Lump", "Field": "LumpCode", "Operator": "="},
+		{"Operation": "Add plots "},
 		{"Table": "Env", "Field": "Unobserved"}, {"Table": "Env", "Field": "Date"},
 		{"Table": "Env", "Field": "Code", "Operator": "Like", "Criteria": "[ABC]*"},
 		{"Table": "Env", "Field": "Code", "Operator": "Like", "Criteria": "#"},
@@ -344,6 +344,7 @@ func TestSourceProfileCompilerRejectsUnobservedAmbiguousAndUnverifiedRules(t *te
 	}
 	for _, fields := range []map[string]string{
 		nil, {"Table": "veg", "Layer": "sumB", "Operation": "common plots"},
+		{"Table": "Lump", "Field": "LumpCode", "Operator": "="},
 		{"Criteria": "NULL"}, {"Table": "Env", "Field": "Date", "Criteria": "Null"},
 		{"Table": "Env", "Field": "Code", "Criteria": "O'Brien"},
 		{"Table": "Env", "Field": "Code", "Operator": "Like", "Criteria": "A*?"},

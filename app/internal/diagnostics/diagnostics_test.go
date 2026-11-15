@@ -430,6 +430,7 @@ func TestComputeSynthesisSnapshotLumpingExclusionsOutliersAndEdatopic(t *testing
 		UnitSource:               "su",
 		LumpTable:                "CombineTest",
 		ExcludeStandardModifiers: true,
+		Pairwise:                 PairwiseParams{MinPlots: 1},
 	})
 	if err != nil {
 		t.Fatalf("ComputeSynthesisSnapshot failed: %v", err)
