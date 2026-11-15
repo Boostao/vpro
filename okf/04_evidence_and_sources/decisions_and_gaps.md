@@ -6,7 +6,7 @@
 
 ## 1. Purpose & Governance Rule
 
-Per forensic engineering discipline, **no missing specification has been hallucinated** in this knowledge repository. Every conflict between the executed contract (`RE26OCF433`), Will MacKenzie's ink-coded triage (`VPro2.0_Functions to remove-retain-modify`), client correspondence (`VproMailExchange` `0001`–`0106`), `LMH25` field manuals (`2015` vs. `2023`), legacy `VPro64.accdb`, and the current codebases (`vpro` and `vpro_wails`) is cataloged below with concrete decision options for client sign-off.
+Per forensic engineering discipline, **no missing specification has been hallucinated** in this knowledge repository. Every conflict between the executed contract (`RE26OCF433`), Will MacKenzie's ink-coded triage (`VPro2.0_Functions to remove-retain-modify`), client correspondence (`VproMailExchange` `0001`–`0106`), `LMH25` field manuals (`2015` vs. `2023`), legacy `VPro64.accdb`, and the unified `Boostao/vpro` codebase (`app/` and `r/`) is cataloged below with concrete decision options for client sign-off.
 
 ```mermaid
 flowchart LR
@@ -53,7 +53,7 @@ flowchart LR
   * **Release Matrix Shipped (`v2.0.1`, `56d4062`, `6848960`):** GitHub Actions `Build and Release` and `Deploy GitHub Pages` publish verified Windows (`amd64`/`arm64` static NSIS `.exe` + `.zip` with zero non-inbox PE DLL imports), macOS Universal (`VPro.app` `.dmg` + `.zip`), and Linux (`amd64`/`arm64` `.AppImage`, `.deb`, `.tar.gz`) packages, with all validated features default-ON (`config.yml` `release_channel: stable`).
   * **Code Signing Policy:** Phase 1 builds ship unsigned (`"unsignedNotice": true`) with static `release-manifest.json` + `SHA256SUMS.txt` verification; client (`BC Gov / MoF`) to confirm whether to fund OV/EV Authenticode & Apple Developer ID certificates for Phase 2 rollout.
   * **Product Naming & Branding:** Branded as **`VPro`** (*VENUS — Vegetation and Environment NexUS — Professional*) under the **BC Government Design System** (`BC Sans`, `#003366` BC Navy, `#FCBA19` Gold accent) for the **B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program**.
-  * **Bundled 2026 `BECWeb` Master Standards (`6873e74`):** Compiled via `cmd/standards2026` from **`BECdb_v13_2026.zip`** (`2026-05-28`, `8,900` `USysSiteSeriesNames`, `6,067` `MasterSiteUnitList`) and **`BCPlantTaxa2025_access.zip`** (`2026-02-09`, Version 19 `USysAllSpecs`, `16,728` rows) + `LMH25 (2023)` (`1,566` `USysTableOfLists` rows).
+  * **Bundled 2026 `BECWeb` Master Standards (`6873e74`):** Compiled via `app/cmd/standards2026` from **`BECdb_v13_2026.zip`** (`2026-05-28`, `8,900` `USysSiteSeriesNames`, `6,067` `MasterSiteUnitList`) and **`BCPlantTaxa2025_access.zip`** (`2026-02-09`, Version 19 `USysAllSpecs`, `16,728` rows) + `LMH25 (2023)` (`1,566` `USysTableOfLists` rows).
 
 ---
 
@@ -69,7 +69,7 @@ flowchart LR
 * **Status:** **Engineered Dual-Format Solution (`266921e`); Ready for Client UAT Confirmation**
 * **Evidence & Resolution:**
   * `RE26OCF433` Schedule A `2.iv.(4)` & `VPro2.0_Functions` (`PDF pp. 8–9` `P033, P038`) require both **TurboVeg export and import** (`VproMailExchange` `0031`–`0034`).
-  * `vpro_wails` `v2.0.1` (`internal/interchange/turboveg_sqlite.go` & `turboveg_xml.go`) implements **both** official **31-table `TurboVeg 3` SQLite** import/export (Delphi `TDateTime` + WKT `POINT` + GUIDs) **and** universal **`Plot_package` XML** import/export (natively supported by TurboVeg 2, TurboVeg 3, and JUICE)—covering both modern and legacy phytosociological workflows without dBase `.dbf` truncation.
+  * `app/` `v2.0.1` (`app/internal/interchange/turboveg_sqlite.go` & `turboveg_xml.go`) implements **both** official **31-table `TurboVeg 3` SQLite** import/export (Delphi `TDateTime` + WKT `POINT` + GUIDs) **and** universal **`Plot_package` XML** import/export (natively supported by TurboVeg 2, TurboVeg 3, and JUICE)—covering both modern and legacy phytosociological workflows without dBase `.dbf` truncation.
 * **Client Confirmation Item:** Confirm during UAT that `TurboVeg 3` `.sqlite` + `Plot_package` `.xml` satisfies all MoF/JUICE collaborator workflows without requiring legacy dBase III+ `.dbf` writers.
 
 ---

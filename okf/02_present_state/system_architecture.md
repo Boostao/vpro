@@ -1,15 +1,15 @@
-# Present State System Architecture (`vpro_wails` & `vpro`)
+# Present State System Architecture (`Boostao/vpro`: `app/` & `r/`)
 
-> **Navigation:** [Master Index](../00_index.md) | **Present State:** [Domain Model](./domain_model.md) · [Core Workflows](./core_workflows.md) · `System Architecture` · [Capability Matrix](./capability_matrix.md) · [Data Dictionary](./data_dictionary.md) | **Related:** [Legacy Architecture](../01_history_and_evolution/legacy_architecture.md) · [Target Stack Recommendation](../03_future_architecture/target_stack_recommendation.md)
+> **Navigation:** [Master Index](../00_index.md) | **Present State:** [Domain Model](./domain_model.md) · [Core Workflows](./core_workflows.md) · `System Architecture` · [Capability Matrix](./capability_matrix.md) · [Data Dictionary](./data_dictionary.md) · [Oracles](./oracles/DIAGNOSTIC_CLASSIFICATION.md) | **Playbooks:** [Desktop Engineering](../05_engineering_and_agents/desktop_app_engineering.md) · [R SDK Engineering](../05_engineering_and_agents/r_sdk_engineering.md)
 
 ---
 
-## 1. Dual-Track Ecosystem Topology
+## 1. Unified Monorepo Dual-Track Topology (`Boostao/vpro`)
 
-Following the October–November 2026 architectural realignment and multi-wave qualification (`VproMailExchange` `0017`, `2026-10-02`; `archive/oct2026-parity-ledgers/CLIENT_SCOPE.md`), VPro's production codebase operates as **two complementary, schema-compatible tracks** sharing an identical 7-database SQLite (`WAL` mode) family and `config.yml` contract:
+Following the October–November 2026 architectural qualification and November 2026 monorepo unification (`VproMailExchange` `0017`, `2026-10-02`; `archive/oct2026-parity-ledgers/CLIENT_SCOPE.md`; `98e214df`), VPro's production codebase lives in the unified **`Boostao/vpro`** monorepo as **two complementary, schema-compatible tracks** sharing an identical 7-database SQLite (`WAL` mode) family, `config.yml`, and PostgreSQL `BECMaster` contract:
 
-1. **Primary Interactive Desktop Track — `boostao/vpro_wails` (`v2.0.1` @ `266921e`):** Cross-platform desktop workstation built on **Go `1.25.0`** (CI built with Go `1.26`), **Wails v3 (`v3.0.0-beta.26`)**, **Svelte 5 (`^5.46.4`, Runes mode)**, **MapLibre GL JS (`^6.18.0`) + `deck.gl` (`^9.4.1`) / `luma.gl` WebGPU + `pmtiles` (`^4.5.0`)**, **Tailwind CSS v4 (`^4.3.3`)**, **CGO SQLite (`github.com/mattn/go-sqlite3` `v1.14.52`, `-tags sqliteonly` default)**, and an embedded C amalgamation of **`mdbtools` `1.0.1` (`libmdb`)** compiled across `windows`, `linux`, and `darwin` (`go.mod:1-15`, `frontend/package.json:63-91`, `internal/accessreader/reader.go:1-16`).
-2. **Headless R Statistical & Companion SDK Track — `boostao/vpro` (`v2.0.0` @ `fae33d2`):** Clean-slate companion R package (`21` `R/*.R` files, `R >= 4.4.0`, zero-note `R CMD check`, qualified on 71,567-plot `BECMaster`) executing concurrent read-only SQLite WAL queries alongside the running desktop app via `RSQLite`/`data.table`/optional `duckdb`, providing community matrices, multivariate BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedon validation, `climr` normals & Ministry `aSMR` modelling, dual edatopic grids, BEC diagnostics, guarded candidate `*_SU` write-back, and Quarto BEC ecosystem guides (`../vpro/DESCRIPTION:1-45`).
+1. **Primary Interactive Desktop Track — `app/` (`github.com/boostao/vpro/app`, `v2.0.1`):** Cross-platform desktop workstation built on **Go `1.25.0`** (CI built with Go `1.26`), **Wails v3 (`v3.0.0-beta.26`)**, **Svelte 5 (`^5.46.4`, Runes mode)**, **MapLibre GL JS (`^6.18.0`) + `deck.gl` (`^9.4.1`) / `luma.gl` WebGPU + `pmtiles` (`^4.5.0`)**, **Tailwind CSS v4 (`^4.3.3`)**, **CGO SQLite (`github.com/mattn/go-sqlite3` `v1.14.52`, `-tags sqliteonly` default)**, **`pgx/v5`** (`app/internal/cloudsync`), and an embedded C amalgamation of **`mdbtools` `1.0.1` (`libmdb`)** compiled across `windows`, `linux`, and `darwin` (`app/go.mod:1-15`, `app/frontend/package.json:63-91`, `app/internal/accessreader/reader.go:1-16`).
+2. **Headless R Statistical & Companion SDK Track — `r/` (`vpro` `v2.0.0` + Wave 6 Cloud `BECMaster`):** Clean-slate companion R package (`25` `r/R/*.R` files, `R >= 4.4.0`, zero Shiny/widgets, zero-note `R CMD check`, qualified on 71,567-plot `BECMaster`) executing concurrent read-only SQLite WAL queries alongside `app/` via `RSQLite`/`data.table`/optional `duckdb`, providing community matrices, multivariate BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedon validation, `climr` normals & Ministry `aSMR` modelling, dual edatopic grids, BEC diagnostics, guarded candidate `*_SU` write-back, PostgreSQL `BECMaster` cloud sync/staging/snapshots (`r/R/cloud_*.R`), and Quarto BEC ecosystem guides (`r/DESCRIPTION:1-45`).
 
 ```mermaid
 flowchart TB
@@ -20,18 +20,18 @@ flowchart TB
         MDB["Legacy MS Access (.mdb / .accdb) & VENUS 5.0<br/>VP05, VP06, VP07, VP08 + 545 MB BECMaster"]
     end
 
-    subgraph Desktop["Primary Desktop App: boostao/vpro_wails v2.0.1 (4-Layer Go DAG + Wails v3)"]
-        UI["Svelte 5 Runes Frontend (Vite 8 + Tailwind v4)<br/>24 Views · 118 Components · MapLibre v6 + WebGPU · F1 Help"]
+    subgraph Desktop["Primary Desktop App: app/ (github.com/boostao/vpro/app · 4-Layer Go DAG + Wails v3)"]
+        UI["Svelte 5 Runes Frontend (app/frontend · Vite 8 + Tailwind v4)<br/>24 Views · 118 Components · MapLibre v6 + WebGPU · F1 Help"]
         IPC["Wails v3 Typed IPC Bridge (-ts -i)<br/>Strictly 12 Domain Services + Close Nonce Handshake"]
-        CTX["Dual-Connection SQLiteContext (internal/vprocore)<br/>1) Pinned :memory: RO Coordinator (beginReadSnapshot)<br/>2) Lazy rw+WAL c.projectDB Writer (FK=ON, busy_timeout=5000)"]
+        CTX["Dual-Connection SQLiteContext (app/internal/vprocore)<br/>1) Pinned :memory: RO Coordinator (beginReadSnapshot)<br/>2) Lazy rw+WAL c.projectDB Writer (FK=ON, busy_timeout=5000)"]
         CAT["2026 Embedded SHA-256 Read-Model Catalogues<br/>BECdb v13, BCPlantTaxonomy v19, LMH25 (2023), bc-overview.pmtiles"]
-        CGO["internal/accessreader + accessimport (Win/Linux/macOS)<br/>Vendored libmdb 1.0.1 + Orphan Quarantine"]
-        EXP["Interchange & Exporters (internal/interchange)<br/>TurboVeg 3 SQLite+XML, .gpkg, .rds, .xlsx, .pdf, .kml, .zip"]
+        CGO["app/internal/accessreader + accessimport (Win/Linux/macOS)<br/>Vendored libmdb 1.0.1 + Orphan Quarantine"]
+        EXP["Interchange & Cloud Sync (app/internal/interchange + cloudsync)<br/>TurboVeg 3 SQLite+XML, .gpkg, .rds, .xlsx, .pdf, .kml, PG BECMaster"]
     end
 
-    subgraph HeadlessR["Headless R Companion SDK & Sidecar: boostao/vpro v2.0.0"]
-        RSIDE["internal/rsidecar Out-of-Process Rscript Bridge"]
-        RAPI["vpro 2.0.0 R SDK (R >= 4.4 + RSQLite WAL / DuckDB)<br/>climr -> aSMR, vegclust, Dual Edatopic Grids & Quarto Guides"]
+    subgraph HeadlessR["Headless R Companion SDK & Sidecar: r/ (vpro v2.0.0)"]
+        RSIDE["app/internal/rsidecar Out-of-Process Rscript Bridge"]
+        RAPI["r/ — vpro R SDK (R >= 4.4 + RSQLite WAL / DuckDB / RPostgres)<br/>climr -> aSMR, vegclust, Dual Edatopic Grids, Cloud Sync & Quarto"]
     end
 
     UI <-->|"JSON IPC ($state.snapshot)"| IPC
@@ -52,30 +52,31 @@ flowchart TB
 
 ---
 
-## 2. Verified Technology Stack (`vpro_wails` `v2.0.1`)
+## 2. Verified Technology Stack (`Boostao/vpro` — `app/` `v2.0.1`)
 
 | Architectural Layer | Component / Module | Exact Version | Source Evidence |
 |---|---|---|---|
-| **Backend Language** | Go (`github.com/boostao/vpro-wails`, `CGO_ENABLED=1`, `-tags sqliteonly` default) | `go 1.25.0` (`1.26` in CI) | `go.mod:1-3`, `.github/workflows/release.yml:52` |
-| **Desktop Shell & IPC** | Wails v3 (`github.com/wailsapp/wails/v3` + `@wailsio/runtime`, `wails3 generate bindings -ts -i`) | `v3.0.0-beta.26` | `go.mod:10`, `frontend/package.json:74` |
-| **Primary SQL Engine** | CGO SQLite3 (`github.com/mattn/go-sqlite3`, `PRAGMA journal_mode = WAL`) | `v1.14.52` | `go.mod:9`, `internal/vprocore/sqlitecontext.go` |
-| **Optional Analytical Engine** | CGO DuckDB (`github.com/duckdb/duckdb-go/v2`, omitted in standard `-tags sqliteonly` desktop builds) | `v2.10505.0` | `go.mod:6`, `build/windows/Taskfile.yml` |
+| **Backend Language** | Go (`github.com/boostao/vpro/app`, `CGO_ENABLED=1`, `-tags sqliteonly` default) | `go 1.25.0` (`1.26` in CI) | `app/go.mod:1-3`, `.github/workflows/release.yml` |
+| **Desktop Shell & IPC** | Wails v3 (`github.com/wailsapp/wails/v3` + `@wailsio/runtime`, `wails3 generate bindings -ts -i`) | `v3.0.0-beta.26` | `app/go.mod:10`, `app/frontend/package.json:74` |
+| **Primary SQL Engine** | CGO SQLite3 (`github.com/mattn/go-sqlite3`, `PRAGMA journal_mode = WAL`) | `v1.14.52` | `app/go.mod:9`, `app/internal/vprocore/sqlitecontext.go` |
+| **Cloud `BECMaster` Driver** | Pure-Go PostgreSQL (`github.com/jackc/pgx/v5`, `pgxpool`, `CopyFrom`, `Batch`) | `v5` | `app/go.mod`, `app/internal/cloudsync/` |
+| **Optional Analytical Engine** | CGO DuckDB (`github.com/duckdb/duckdb-go/v2`, omitted in standard `-tags sqliteonly` desktop builds) | `v2.10505.0` | `app/go.mod:6`, `app/build/windows/Taskfile.yml` |
 | **Access Binary Reader** | Internal CGO `accessreader` wrapping vendored `mdbtools` (`libmdb`) on `linux \|\| windows \|\| darwin` | `1.0.1` (`-fvisibility=hidden`, Win `-static`) | `internal/accessreader/reader.go:1-16` |
-| **Windows Native Shell/COM** | `github.com/go-ole/go-ole` (`IFileDialog` / `IShellItem` COM syscalls, balanced STA) | `v1.3.0` | `go.mod:7`, `internal/pictures/` |
-| **Document & Interchange** | `excelize/v2` (`.xlsx`), `go-pdf/fpdf` + `LiberationSans` (`.pdf`), `golang.org/x/text`, `gopkg.in/yaml.v3` | `v2.10.1`, `v0.9.0`, `v0.39.0`, `v3.0.1` | `go.mod:8,11,14,15`, `resources/fonts/` |
-| **Frontend & 3D GIS** | Svelte 5 (`^5.46.4`), `maplibre-gl` (`^6.18.0`), `@deck.gl/*` (`^9.4.1`), `@luma.gl/webgpu` (`^9.4.2`), `pmtiles` (`^4.5.0`) | Svelte 5 + MapLibre 6.18 | `frontend/package.json` |
-| **CSS, Fonts & Icons** | Tailwind CSS v4 (`@tailwindcss/vite`), `@lucide/svelte`, IBM Plex Sans & Mono (`BC Sans` WOFF2 in `site/`) | `^4.3.3`, `^1.48.0`, `^5.3.0` | `frontend/package.json`, `site/fonts/` |
-| **Bundler & Test Suites** | Vite 8 (`^8.0.5`), `svelte-check` (`^4.4.8`), Node 22 single-pass `frontend/scripts/run-tests.mjs` (`190` `.test.cjs` suites in `frontend/tests/`), Go test (`*_test.go`) | `^8.0.5` / Node `22` | `frontend/package.json`, `frontend/scripts/run-tests.mjs` |
+| **Windows Native Shell/COM** | `github.com/go-ole/go-ole` (`IFileDialog` / `IShellItem` COM syscalls, balanced STA) | `v1.3.0` | `app/go.mod:7`, `app/internal/pictures/` |
+| **Document & Interchange** | `excelize/v2` (`.xlsx`), `go-pdf/fpdf` + `LiberationSans` (`.pdf`), `golang.org/x/text`, `gopkg.in/yaml.v3` | `v2.10.1`, `v0.9.0`, `v0.39.0`, `v3.0.1` | `app/go.mod`, `app/resources/fonts/` |
+| **Frontend & 3D GIS** | Svelte 5 (`^5.46.4`), `maplibre-gl` (`^6.18.0`), `@deck.gl/*` (`^9.4.1`), `@luma.gl/webgpu` (`^9.4.2`), `pmtiles` (`^4.5.0`) | Svelte 5 + MapLibre 6.18 | `app/frontend/package.json` |
+| **CSS, Fonts & Icons** | Tailwind CSS v4 (`@tailwindcss/vite`), `@lucide/svelte`, IBM Plex Sans & Mono (`BC Sans` WOFF2 in `site/`) | `^4.3.3`, `^1.48.0`, `^5.3.0` | `app/frontend/package.json`, `site/fonts/` |
+| **Bundler & Test Suites** | Vite 8 (`^8.0.5`), `svelte-check` (`^4.4.8`), Node 22 single-pass `app/frontend/scripts/run-tests.mjs` (`.test.cjs` suites in `app/frontend/tests/`), Go test (`*_test.go`) | `^8.0.5` / Node `22` | `app/frontend/package.json`, `app/frontend/scripts/run-tests.mjs` |
 
 ---
 
 ## 3. Backend Go 4-Layer Acyclic Architecture (`431` Production `.go` Files)
 
 ### 3.1 Startup Lifecycle, Non-Destructive Recovery & Guarded Window Close
-Unlike legacy `VPro64.accdb`—which silently resets or crashes when linked `.accdb` paths move (`VPro64_forAI/Modules/V7mdlSplash.txt:70-137`)—`vpro_wails/main.go` (`240` LOC) enforces deterministic startup, build-tier (`dev` | `alpha` | `release`), and shutdown contracts:
+Unlike legacy `VPro64.accdb`—which silently resets or crashes when linked `.accdb` paths move (`VPro64_forAI/Modules/V7mdlSplash.txt:70-137`)—`app/main.go` enforces deterministic startup, build-tier (`dev` | `alpha` | `release`), and shutdown contracts:
 
-1. **Startup & Recovery Mode (`main.go:96-186`, `internal/lifecycle/startupservice.go`, `internal/lifecycle/buildinfo.go`):** Resolves `%APPDATA%\vpro\config.yml` and `%LOCALAPPDATA%\vpro\`, verifies SHA-256 hashes of all 5 support databases (`databasefamily.go:19-61`) and 8 embedded reference `.db` catalogues, and opens `SQLiteProjectService`. If `config.yml` or a configured external `.db` fails validation, `StartupService` enters non-destructive recovery mode so the user can relocate `.db` paths or materialize `Sample.db` **without overwriting `config.yml` without backup**.
-2. **Cryptographic Nonce Window-Close Handshake (`closeservice.go:15-133`, `main.go:70-76,207-235`):** Prevents data loss from dirty forms or in-flight workbook publications when the OS window close button is clicked:
+1. **Startup & Recovery Mode (`app/main.go`, `app/internal/lifecycle/startupservice.go`, `app/internal/lifecycle/buildinfo.go`):** Resolves `%APPDATA%\vpro\config.yml` and `%LOCALAPPDATA%\vpro\`, verifies SHA-256 hashes of all 5 support databases (`databasefamily.go`) and 8 embedded reference `.db` catalogues, and opens `SQLiteProjectService`. If `config.yml` or a configured external `.db` fails validation, `StartupService` enters non-destructive recovery mode so the user can relocate `.db` paths or materialize `Sample.db` **without overwriting `config.yml` without backup**.
+2. **Cryptographic Nonce Window-Close Handshake (`app/internal/lifecycle/closeservice.go`, `app/main.go`):** Prevents data loss from dirty forms or in-flight workbook publications when the OS window close button is clicked:
 
 ```mermaid
 sequenceDiagram
@@ -105,8 +106,8 @@ sequenceDiagram
     end
 ```
 
-### 3.2 Dual-Connection `sqliteContext` & Stale-Tab Isolation (`sqlitecontext.go`)
-Legacy Access rewrote shared `QueryDefs` on disk (`SetCurrentProject`), making multi-window/multi-user operation unsafe. `vpro_wails` replaces this with an isolated dual-connection design (`vpro_wails/sqlitecontext.go:56-444`, `vpro_wails/sqliteprojectservice.go:108-159`):
+### 3.2 Dual-Connection `sqliteContext` & Stale-Tab Isolation (`app/internal/vprocore/sqlitecontext.go`)
+Legacy Access rewrote shared `QueryDefs` on disk (`SetCurrentProject`), making multi-window/multi-user operation unsafe. `app/` replaces this with an isolated dual-connection design (`app/internal/vprocore/sqlitecontext.go`, `sqliteprojectservice.go`):
 
 * **Connection 1 — Pinned `:memory:` Read Coordinator (`MaxOpenConns(1)`):**
   * Attaches `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, active `<Project>.db`, and optional `<SU>.db`, `<Hierarchy>.db`, `<Profile>.db` using SQLite URI **`mode=ro`**, verifying `os.SameFile` before and after `ATTACH DATABASE` to prevent TOCTOU path swapping (`sqlitecontext.go:95-248`).
@@ -117,17 +118,17 @@ Legacy Access rewrote shared `QueryDefs` on disk (`SetCurrentProject`), making m
 * **128-Bit `contextID` Epoch Fencing (`contextservice.go:70-100`):** Every project/SU/hierarchy switch mints a new 128-bit hex `contextID`. Every mutation and scoped query checks the caller's `contextID`, deterministically rejecting late IPC calls from stale UI views.
 
 ### 3.3 4-Layer Acyclic Package Decomposition & 12 Registered Wails Services
-Wave 1C–1D consolidated the earlier 86 flat root Wails services into a strict **4-layer acyclic `internal/*` DAG** enforced by automated architectural tests (`internal/integration/architecture_dag_test.go`), registering **strictly 12 cohesive domain services** in `main.go:187-200` (`domainservices_*.go`):
+Wave 1C–1D consolidated the earlier 86 flat root Wails services into a strict **4-layer acyclic `app/internal/*` DAG** enforced by automated architectural tests (`app/internal/integration/architecture_dag_test.go`), registering **strictly 12 cohesive domain services** in `app/main.go` (`app/domainservices_*.go`):
 
-* **Layer 0 — Embedded Assets & Foundations:** `resources` (`resources/embed.go` exporting embedded `embed.FS` / `[]byte` assets + `RepoRoot()`), `internal/sqlutil`, `internal/accessreader` (`linux || windows || darwin`), `internal/accessimport`, `internal/accessinventory`, `internal/accesslayout`, `internal/accesscompare`, `internal/fs882layout`, `internal/listcatalog`, `internal/reports/subzonematrix`.
+* **Layer 0 — Embedded Assets & Foundations:** `app/resources` (`resources/embed.go` exporting embedded `embed.FS` / `[]byte` assets + `RepoRoot()`), `internal/sqlutil`, `internal/accessreader` (`linux || windows || darwin`), `internal/accessimport`, `internal/accessinventory`, `internal/accesslayout`, `internal/accesscompare`, `internal/fs882layout`, `internal/listcatalog`, `internal/reports/subzonematrix`.
 * **Layer 1 — Core Context, Reference Catalogues & Shared Engines:** `internal/references` (`BECService`, `ReferenceService`, `Site/Soil/Parent/Geology/Region/Quality` code services), `internal/vprocore` (`SQLiteContext` with `beginReadSnapshot`, `DesktopConfig`, `report_preferences_handler.go`, 7-DB `DatabaseFamily` seeding `VPics.db` on cold boot, `ProjectService`, `ContextService`, `PlotService`), `internal/sourceform`, `internal/reports/reportcore`.
 * **Layer 2 — Independent Domain Packages (zero sibling imports):** `internal/lifecycle`, `internal/plotentry`, `internal/sivi`, `internal/twopage`, `internal/datasheet`, `internal/classification`, `internal/lumping`, `internal/diagnostics`, `internal/lmh25rules`, `internal/projectops`, `internal/rsidecar`, `internal/validation`, `internal/vegreport`, `internal/envreport`, `internal/spatial`, `internal/pictures`, `internal/interchange`, `internal/cloudsync` (plus cross-domain `internal/integration`).
-* **Layer 3 — Thin Wails Host (`package main` — 12 Bound Services):**
+* **Layer 3 — Thin Wails Host (`package main` in `app/` — 12 Bound Services):**
 
-| # | Registered Wails Service (`main.go:187-200`) | Backing Domain Package(s) & Core Responsibilities |
+| # | Registered Wails Service (`app/main.go`) | Backing Domain Package(s) & Core Responsibilities |
 |---:|---|---|
 | `1` | **`LifecycleService`** | Startup activation/recovery hints, cryptographic close nonce (`CloseService`), `USysUserLog` review |
-| `2` | **`ContextService`** | Active `Project`/`SU`/`Hierarchy` switching, 128-bit `contextID` fencing, `New/SaveAs/Splinter/Compare/Merge` (`internal/projectops`), scoped plot lookup |
+| `2` | **`ContextService`** | Active `Project`/`SU`/`Hierarchy` switching, 128-bit `contextID` fencing, `New/SaveAs/Splinter/Compare/Merge` (`internal/projectops`), scoped plot lookup, 19 `cloudsync` RPCs |
 | `3` | **`PlotEntryService`** | 6-tab FS882, Two-Page (`internal/twopage`), FS1333 SIVI (`internal/sivi`), inline CHARS toggle, `LMH25` live pedon/edatopic diagnostics (`internal/lmh25rules`), `ProjectMetadata` presets & auto-derivation |
 | `4` | **`DatasheetService`** | Universal editable spreadsheet grid (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_SU`), global search, TSV paste (`internal/datasheet`) |
 | `5` | **`ClassificationService`** | Dual-pane `SU`/`Hierarchy` tree explorer, `Env <-> SU` sync, Plot Profiling, `Combine Species` (`*_Lump` + `LumpSpec`), reactive BEC Diagnostics (`internal/diagnostics`), R Sidecar (`internal/rsidecar`) |
@@ -140,7 +141,7 @@ Wave 1C–1D consolidated the earlier 86 flat root Wails services into a strict 
 | `12` | **`HelpService`** | Offline `F1` `LMH25 (2023)` contextual help (`resources/help_bundle.json`), 4 guided tours, shortcuts, `What's New`, safe `Reset Workspace to Sample`, `About & Standards Stamps` |
 
 ### 3.4 Native Access `.mdb`/`.accdb` CGO Ingestion Pipeline (`accessreader` & `accessimport`)
-`vpro_wails` eliminates runtime dependence on Microsoft Access, Windows ACE/Jet ODBC drivers, or PowerShell COM by embedding a cross-platform fork of **MDB Tools `1.0.1` (`libmdb`)** compiled directly via CGO (`internal/accessreader/reader.go:1-40`):
+`app/` eliminates runtime dependence on Microsoft Access, Windows ACE/Jet ODBC drivers, or PowerShell COM by embedding a cross-platform fork of **MDB Tools `1.0.1` (`libmdb`)** compiled directly via CGO (`app/internal/accessreader/reader.go:1-40`):
 
 ```mermaid
 flowchart LR
@@ -199,4 +200,4 @@ flowchart TD
 ```
 
 ### 4.3 Graduated Release-Channel Configuration (`config.yml`)
-Wave 1A (`c4cbd1a`) graduated all validated desktop workflows to **default-ON** in standard `-tags sqliteonly` builds, replacing the historical 79 `VITE_*` / 62 `VPRO_*` demo environment flags (`archive/oct2026-parity-ledgers/`) with a clean `release_channel: stable | experimental` setting in `config.yml` and pruning client-retired `CHARS` standalone forms and `PC-ORD Break Report` menus. Offline extraction tools under `cmd/` (`cmd/standards2026`, `cmd/accessinventory`, `cmd/fs882layout`, `cmd/*codefixture`) compile 2026 `BECWeb` standards and Access twip geometry into deterministic embedded assets under `resources/`.
+Wave 1A (`c4cbd1a`) graduated all validated desktop workflows to **default-ON** in standard `-tags sqliteonly` builds, replacing the historical 79 `VITE_*` / 62 `VPRO_*` demo environment flags (`archive/oct2026-parity-ledgers/`) with a clean `release_channel: stable | experimental` setting in `config.yml` and pruning client-retired `CHARS` standalone forms and `PC-ORD Break Report` menus. Offline extraction tools under `app/cmd/` (`cmd/standards2026`, `cmd/accessinventory`, `cmd/fs882layout`, `cmd/*codefixture`) compile 2026 `BECWeb` standards and Access twip geometry into deterministic embedded assets under `app/resources/`.
