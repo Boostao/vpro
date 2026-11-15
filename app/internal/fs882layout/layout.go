@@ -12,8 +12,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/accessinventory"
-	"github.com/boostao/vpro-wails/internal/accesslayout"
+	"github.com/boostao/vpro/app/internal/accessinventory"
+	"github.com/boostao/vpro/app/internal/accesslayout"
 )
 
 type Value = accessinventory.Value

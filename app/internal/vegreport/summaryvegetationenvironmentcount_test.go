@@ -1,7 +1,7 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 import (

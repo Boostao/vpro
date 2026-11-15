@@ -319,7 +319,7 @@ test('index.html embeds inline SVG data-URI favicon and LMH25 2023 help bundle i
   assert.match(indexHtml, /<link\s+rel="icon"\s+type="image\/svg\+xml"\s+href="data:image\/svg\+xml,/);
 
   const docsFields = JSON.parse(
-    readFileSync(path.join(__dirname, '..', '..', 'docs-src', 'lmh25_fields.json'), 'utf8')
+    readFileSync(path.join(__dirname, '..', '..', '..', 'docs-src', 'lmh25_fields.json'), 'utf8')
   );
   const bundle = JSON.parse(
     readFileSync(path.join(__dirname, '..', '..', 'resources', 'help_bundle.json'), 'utf8')

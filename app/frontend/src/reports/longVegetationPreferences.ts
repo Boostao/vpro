@@ -1,4 +1,4 @@
-import type { LongVegetationPreferencesReview } from '../../bindings/github.com/boostao/vpro-wails';
+import type { LongVegetationPreferencesReview } from '../../bindings/github.com/boostao/vpro/app';
 import type { GoogleEarthScope } from '../spatial/googleEarthReview';
 import {
   ReportTitlePreferencesSession, reportTitlePreferencesRegistry, validateReportTitlePreferences,

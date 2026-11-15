@@ -30,7 +30,7 @@ const native = {
   QualityService: noNative, SiteCodeService: noNative, RegionCodeService: noNative,
   CoordinateMode: { CoordinateModeDD: 'dd', CoordinateModeDM: 'dm', CoordinateModeDMS: 'dms' }
 };
-const dependencies = { ...modules, '../bindings/github.com/boostao/vpro-wails': native };
+const dependencies = { ...modules, '../bindings/github.com/boostao/vpro/app': native };
 for (const name of ['BECFields', 'CoordinateFields', 'WorkingUnitFields', 'QualityFields', 'SubstrateFields', 'SiteCodeFields', 'RegionCodeFields']) {
   dependencies[`./${name}.svelte`] = { default: serverComponent(
     read(`${name}.svelte`), `${name}.svelte`, dependencies) };

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { ImportExportService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { coreTableSuffixes, validateProjectTableCSVReview, type ValidatedProjectTableCSVReview } from './projectTableCSV';
   import { reportCellText } from '../reports/longEnvironmentReport';

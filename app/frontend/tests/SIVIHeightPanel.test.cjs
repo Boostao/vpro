@@ -7,7 +7,7 @@ const { serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 const { review } = require('./siviSourceFixture.cjs');
 const source = readFileSync(srcPath('SIVIHeightPanel.svelte'), 'utf8');
 const Panel = serverComponent(source, 'SIVIHeightPanel.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {
+  '../bindings/github.com/boostao/vpro/app': {
     AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' },
   },
   './projectMetadataEditor': { metadataCellText: cell =>

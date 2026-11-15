@@ -1,4 +1,4 @@
-import type { LongVegetationPreview, LongVegetationProjectUnit, LongVegetationSettings, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { LongVegetationPreview, LongVegetationProjectUnit, LongVegetationSettings, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import type { ValidatedLongVegetationPreview } from './longVegetationReport';
 import { validateQualitySelection, validateSettings, validateVegetationRows } from './longVegetationReport';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';

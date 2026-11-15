@@ -1,4 +1,4 @@
-import type { VegetationDeletionReview } from '../../bindings/github.com/boostao/vpro-wails';
+import type { VegetationDeletionReview } from '../../bindings/github.com/boostao/vpro/app';
 
 export function validateDeletionReview(review: VegetationDeletionReview, form: string, id: number, species: string): VegetationDeletionReview {
   if (!Number.isInteger(id) || id < -2147483648 || id > 2147483647 ||

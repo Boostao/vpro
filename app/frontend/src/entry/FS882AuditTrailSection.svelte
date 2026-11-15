@@ -2,7 +2,7 @@
   import {
     AuditRestoreAction,
     type OrdinaryAuditReadEntry,
-  } from '../../bindings/github.com/boostao/vpro-wails';
+  } from '../../bindings/github.com/boostao/vpro/app';
   import AuditRestore, { auditRestoreReason } from './AuditRestore.svelte';
   import type { FS882ChildCapabilities } from './fs882FormHelpers';
 

@@ -2,7 +2,7 @@ import type {
   LongVegetationProjectOptions, LongVegetationProjectPreview, LongVegetationProjectUnitOutcome,
   LongVegetationProjectUnitPreferences, LongVegetationProjectWorkbookReview, LongVegetationSettings,
   VegetationWorkbookOutcome,
-} from '../../bindings/github.com/boostao/vpro-wails';
+} from '../../bindings/github.com/boostao/vpro/app';
 import type { ProjectReportOwner, ValidatedProjectPreview } from './longVegetationProjectReport';
 import { projectReportOwnedScope } from './longVegetationProjectReport';
 import type { CurrentProjectScope, ReportSourceScope } from './longVegetationProjectScope';

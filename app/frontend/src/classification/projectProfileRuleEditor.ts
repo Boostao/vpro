@@ -1,5 +1,5 @@
 import type { ProjectMetadataCell, ProjectMetadataEditorField, ProjectMetadataRow, ProjectPlotProfileEdit, ProjectPlotProfileChoices,
-  ProjectPlotProfileCreation, ProjectPlotProfileDeletion } from '../../bindings/github.com/boostao/vpro-wails';
+  ProjectPlotProfileCreation, ProjectPlotProfileDeletion } from '../../bindings/github.com/boostao/vpro/app';
 import { equalCell, metadataCellText, parseMetadataCell, type MetadataDraftCell } from '../admin/projectMetadataEditor';
 import { profileCellLabel, type ValidatedProjectPlotProfileReview, type ProfileReviewTable } from './projectPlotProfileReview';
 

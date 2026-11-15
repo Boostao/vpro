@@ -225,7 +225,7 @@ test('cancel/owner invalidation discards late PDF review, malformed backend revi
 test('PDF export renders distinct portable workflow and retains disabled physical print claims', () => {
   const component = serverComponent(readFileSync(srcPath('PlotLabelPreview.svelte'), 'utf8'),
     'PlotLabelPreview.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': {},
+      '../bindings/github.com/boostao/vpro/app': {},
       './scopedPlotLookup': lookup, './plotLabelPreview': labels,
       './plotLabelRegional': regional, './plotLabelPDFExport': pdf,
     });

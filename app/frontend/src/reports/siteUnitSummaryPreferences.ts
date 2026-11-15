@@ -1,4 +1,4 @@
-import type { SiteUnitSummaryOptions, SiteUnitSummaryPreferencesOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SiteUnitSummaryOptions, SiteUnitSummaryPreferencesOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { validateSiteUnitSummaryOptions } from './siteUnitSummary';

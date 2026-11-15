@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/projectops"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/projectops"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestLifecyclePrefixRewriteAuditOwnershipAndWALMergeDigest(t *testing.T) {

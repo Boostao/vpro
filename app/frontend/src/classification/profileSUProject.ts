@@ -1,4 +1,4 @@
-import type { ProfileSUProjectReview, ProfileSUCreated, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProfileSUProjectReview, ProfileSUCreated, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
 import { validateProfileSUReview, validateProfileSUCreated, type ReviewedProfileSU } from './profileSU';
 import { validateTable, type ProfileReviewTable } from './projectPlotProfileReview';
 

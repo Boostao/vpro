@@ -1,4 +1,4 @@
-import type { VegetationReadAvailability, VegRecord } from '../../bindings/github.com/boostao/vpro-wails';
+import type { VegetationReadAvailability, VegRecord } from '../../bindings/github.com/boostao/vpro/app';
 
 export function vegetationReadAvailability(result: VegetationReadAvailability | null): { records: VegRecord[]; reason: string | null } {
   if (!result || typeof result.available !== 'boolean' || typeof result.reason !== 'string' ||

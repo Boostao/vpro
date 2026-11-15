@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app';
 import { equalCell } from '../admin/projectMetadataEditor';
 import { wellFormedUTF16 } from './qualityEditor';
 import { siviDateTimestampError } from './siviDateTimestamp';

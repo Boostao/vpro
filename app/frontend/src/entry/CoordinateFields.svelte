@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack, type Snippet } from 'svelte';
-  import { SpatialService, CoordinateMode, type FS882Header } from '../../bindings/github.com/boostao/vpro-wails';
+  import { SpatialService, CoordinateMode, type FS882Header } from '../../bindings/github.com/boostao/vpro/app';
   import type { PaperControl } from './paperLayout';
   import { CoordinateEditor, coordinateSession, rememberCoordinateSession, coordinateBusy, coordinateControls, coordinateOptions,
     type CoordinateDisplayMode, type CoordinateAxis } from './coordinateEditor';

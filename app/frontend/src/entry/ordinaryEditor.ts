@@ -1,4 +1,4 @@
-import type { FS882Header } from '../../bindings/github.com/boostao/vpro-wails';
+import type { FS882Header } from '../../bindings/github.com/boostao/vpro/app';
 import { wellFormedUTF16 } from './qualityEditor';
 import { finiteSingleValue } from './numericEditor';
 

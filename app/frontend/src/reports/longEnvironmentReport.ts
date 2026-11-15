@@ -1,4 +1,4 @@
-import type { LongEnvironmentPreview, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { LongEnvironmentPreview, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { completeCell } from '../admin/projectMetadataRestore';
 import { validateReportUnitNames } from './reportUnitNames';
 

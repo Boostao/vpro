@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/interchange"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/interchange"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestProjectRDSExportVerifiedWithNativeRscript(t *testing.T) {

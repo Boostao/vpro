@@ -215,7 +215,7 @@ test('actual combined Svelte output pairs all 14/17 live controls with visible l
   const { render } = await import('svelte/server');
   const component = serverComponent(readFileSync(srcPath('SIVICombinedPanel.svelte'), 'utf8'),
     'SIVICombinedPanel.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
+      '../bindings/github.com/boostao/vpro/app': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
       './projectMetadataEditor': metadata, './siviCoverEditor': cover, './siviCombinedEditor': editor,
     });
   for (const extended of [false, true]) {
@@ -502,7 +502,7 @@ test('each real child panel renders retained feedback once even when originals a
   }]);
   for (const name of ['SIVICoverPanel', 'SIVIHeightPanel', 'SIVICombinedPanel']) {
     const component = serverComponent(readFileSync(srcPath(name + '.svelte'), 'utf8'), name + '.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
+      '../bindings/github.com/boostao/vpro/app': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
       './projectMetadataEditor': metadata, './siviCoverEditor': cover, './siviHeightEditor': height, './siviCombinedEditor': editor,
     });
     for (const review of [source, null]) {

@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/accessreader"
-	"github.com/boostao/vpro-wails/internal/listcatalog"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/accessreader"
+	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	_ "github.com/mattn/go-sqlite3"
 )
 

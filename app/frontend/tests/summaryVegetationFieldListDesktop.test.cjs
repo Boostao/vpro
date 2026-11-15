@@ -29,7 +29,7 @@ const bindings = { VegetationReportService: {
 } };
 const adapter = execute(fs.readFileSync(srcPath('summaryVegetationFieldListDesktop.ts'), 'utf8'),
   { './summaryVegetationFieldList': client, './summaryVegetationFieldListSessions': registry,
-    '../bindings/github.com/boostao/vpro-wails': bindings });
+    '../bindings/github.com/boostao/vpro/app': bindings });
 function deferred() {
   let resolve, reject, cancellations = 0;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -89,7 +89,7 @@ function report(value, { presentation = null, preferences = null, quality = null
     subscribe: callback => { callback(); return () => {}; }, cancel() {}, edit() {} };
   const changes = [];
   const dependencies = {
-    '../bindings/github.com/boostao/vpro-wails': {},
+    '../bindings/github.com/boostao/vpro/app': {},
     './readRequests': { ReadRequests: class { track(promise) { return promise; } cancelAll() {} } },
     './summaryVegetation': { summaryVegetationSession: () => preview },
     './summaryVegetationPreferenceSessions': { summaryVegetationPreferenceSession: preferences ? () => preferences : null },

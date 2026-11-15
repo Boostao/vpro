@@ -10,7 +10,7 @@ function registry(_environment = {}, overrides = {}) {
   const calls = [];
   const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
   const dependencies = {
-    '../bindings/github.com/boostao/vpro-wails': { PlotEntryService: {
+    '../bindings/github.com/boostao/vpro/app': { PlotEntryService: {
       GetTwoPageSoilOriginal: overrides.GetTwoPageSoilOriginal ?? overrides.GetOriginal ?? ((...args) => { calls.push(['read', ...args]); return Promise.resolve(original()); }),
       SaveTwoPageSoil: overrides.SaveTwoPageSoil ?? overrides.Save ?? ((...args) => { calls.push(['save', ...args]); return Promise.resolve(wire()); }),
       CreateTwoPageSoilHorizon: overrides.CreateTwoPageSoilHorizon ?? overrides.CreateHorizon,

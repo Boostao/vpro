@@ -1,7 +1,7 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 import (
@@ -21,7 +21,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/resources"
 	"gopkg.in/yaml.v3"
 )
 

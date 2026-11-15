@@ -304,7 +304,7 @@ for(const [label,presentationWire,expected] of [
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(presentationWire)});`);
   assert.notEqual(source,original);
   const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{
-    '../bindings/github.com/boostao/vpro-wails':{ContextService:{}},
+    '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,
     './longVegetationPreferences':{},'./longVegetationStatisticsPreferences':{},
     './longVegetationSwitchPreferences':{},'./LongVegetationSwitchPreferences.svelte':{default(){}},
@@ -516,7 +516,7 @@ test('shared unit names preserve empty/NULL/duplicate candidates and reject inve
   assert.throws(()=>names.validateReportUnitNames({...unassigned,nameCandidates:[{rowId:'1',value:cell(null)}]},true));
 });
 test('vegetation bindings are cancellable and report UI is independently default-off and draft-safe',()=>{
-  const bindings=readFileSync(path.join(__dirname,'..','bindings','github.com','boostao','vpro-wails','vegetationreportservice.ts'),'utf8');
+  const bindings=readFileSync(path.join(__dirname,'..','bindings','github.com','boostao','vpro','app','vegetationreportservice.ts'),'utf8');
   for (const name of ['GetLongVegetationOptions','PreviewLongVegetation']) {
     assert.match(bindings,new RegExp(`export function ${name}\\(`));
     assert.match(bindings,new RegExp(`${name}\\([^)]*\\): \\$CancellablePromise<`));
@@ -551,7 +551,7 @@ test('vegetation bindings are cancellable and report UI is independently default
 test('vegetation report uses responsive labelled read-only settings, separate names and literal nullable statistics',()=>{
   const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
   const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{
-    '../bindings/github.com/boostao/vpro-wails':{ContextService:{}},
+    '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
     './longVegetationSwitchPreferences':{}, './LongVegetationSwitchPreferences.svelte':{default(){}},
@@ -589,7 +589,7 @@ test('quality presentation retains literal criteria, NULL ranks versus missing j
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
   const component=serverComponent(buildSource(source),'LongVegetationReport.svelte',{
-    '../bindings/github.com/boostao/vpro-wails':{ContextService:{}},
+    '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
     './longVegetationSwitchPreferences':{}, './LongVegetationSwitchPreferences.svelte':{default(){}},
@@ -635,7 +635,7 @@ test('selected scalar presentation shows literal list/matched headings and nativ
         `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
     assert.notEqual(source,original);
     const component=serverComponent(buildSource(source,false,false,false,true),'LongVegetationReport.svelte',{
-      '../bindings/github.com/boostao/vpro-wails':{ContextService:{}},
+      '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
       './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,
       './longVegetationPreferences':{},'./longVegetationStatisticsPreferences':{},
       './longVegetationSwitchPreferences':{}, './LongVegetationSwitchPreferences.svelte':{default(){}},
@@ -670,7 +670,7 @@ test('lifeform presentation labels typed group and source-specific conversion in
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
   const component=serverComponent(buildSource(source,true),'LongVegetationReport.svelte',{
-    '../bindings/github.com/boostao/vpro-wails':{ContextService:{}},
+    '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
     './longVegetationSwitchPreferences':{}, './LongVegetationSwitchPreferences.svelte':{default(){}},
@@ -700,7 +700,7 @@ test('Strata presentation labels original totals fallback cap and independent ch
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
   const component=serverComponent(buildSource(source,false,true),'LongVegetationReport.svelte',{
-    '../bindings/github.com/boostao/vpro-wails':{ContextService:{}},
+    '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
     './longVegetationSwitchPreferences':{}, './LongVegetationSwitchPreferences.svelte':{default(){}},
@@ -736,7 +736,7 @@ test('supplementary Code metadata is explicit nullable text and independently ga
   ]) {
     const invalid=structuredClone(value);mutate(invalid);assert.throws(()=>validate(invalid));
   }
-  const bindingsRoot=path.join(__dirname,'..','bindings','github.com','boostao','vpro-wails');
+  const bindingsRoot=path.join(__dirname,'..','bindings','github.com','boostao','vpro','app');
   const bindings=[
     readFileSync(path.join(bindingsRoot,'models.ts'),'utf8'),
     readFileSync(path.join(bindingsRoot,'internal','vegreport','models.ts'),'utf8'),
@@ -752,7 +752,7 @@ test('Code presentation preserves source caption but labels literal list/matched
     .replace('let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);',
       `let preview = $state.raw<ValidatedLongVegetationPreview | null>(${JSON.stringify(value)});`);
   const component=serverComponent(buildSource(source,false,false,true),'LongVegetationReport.svelte',{
-    '../bindings/github.com/boostao/vpro-wails':{ContextService:{}},
+    '../bindings/github.com/boostao/vpro/app':{ContextService:{}},
     './longEnvironmentReport':environment,'./longVegetationReport':report,'./vegetationWorkbook':workbook,'./longVegetationPreferences':{},
     './longVegetationStatisticsPreferences':{},
     './longVegetationSwitchPreferences':{}, './LongVegetationSwitchPreferences.svelte':{default(){}},

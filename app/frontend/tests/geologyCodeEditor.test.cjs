@@ -94,7 +94,7 @@ test('Actual Bedrock component renders only its three source slots with default 
   function renderEditor() {
     const Component = serverComponent(read('GeologyCodeFields.svelte'),
       'GeologyCodeFields.svelte', {
-        '../bindings/github.com/boostao/vpro-wails': { GeologyCodeService: {
+        '../bindings/github.com/boostao/vpro/app': { GeologyCodeService: {
           ListBedrockChoices() { throw new Error('SSR must not call native bindings'); }
         } },
         './qualityEditor': { QualityLookup: class { snapshot() { return ready; } dispose() {} } },

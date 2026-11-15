@@ -1,4 +1,4 @@
-import type { PlotLabelPDFExportReview, PlotLabelPDFExportOutcome, PlotLabelPDFAttemptOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { PlotLabelPDFExportReview, PlotLabelPDFExportOutcome, PlotLabelPDFAttemptOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
 import { validatePlotLabelRegionalPreview } from './plotLabelRegional';
 import { wellFormedUTF16 } from '../entry/qualityEditor';

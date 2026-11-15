@@ -1,5 +1,5 @@
 import { finiteSingleValue } from './numericEditor';
-import type { VegetationNumberUpdate } from '../../bindings/github.com/boostao/vpro-wails';
+import type { VegetationNumberUpdate } from '../../bindings/github.com/boostao/vpro/app';
 export { singleMaximum } from './numericEditor';
 
 export const heightFields = ['cover1', 'cover2', 'cover3', 'totalA', 'cover4', 'cover5', 'totalB',

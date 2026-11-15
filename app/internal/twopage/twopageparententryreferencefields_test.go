@@ -1,14 +1,14 @@
 package twopage
 
 import (
-	"github.com/boostao/vpro-wails/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform"
 )
 
 import (
 	"reflect"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/fs882layout"
 )
 
 func TestTwoPageEntryReferenceSourceRejectsCountPreservingSubstitutions(t *testing.T) {

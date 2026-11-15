@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { AuditRestoreAction, type ProjectMetadataRestoreHistory, type ProjectMetadataRestoreReview } from '../../bindings/github.com/boostao/vpro-wails';
+  import { AuditRestoreAction, type ProjectMetadataRestoreHistory, type ProjectMetadataRestoreReview } from '../../bindings/github.com/boostao/vpro/app';
   import type { bindContextPlots } from '../shared/contextPlots';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import { ReadRequests } from '../shared/readRequests';

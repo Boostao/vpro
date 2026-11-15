@@ -1,5 +1,5 @@
 import source from '../../../resources/fs1333-sivi-layout.json';
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { ordinaryField, ordinaryNumberValue, ordinaryTextError } from './ordinaryEditor';
 import { coordinateDecimalValue } from './coordinateEditor';
 import { siviDateTimestampError } from './siviDateTimestamp';

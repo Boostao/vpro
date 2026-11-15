@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { VegetationReportService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
   import { summaryVegetationReferenceGroupingAvailable, summaryVegetationUnanimousCommonAvailable, type SummaryVegetationOwner } from './summaryVegetation';
   import { summaryEnvironmentalLifeformEnabled } from './summaryVegetationEnvironmentalDesktop';
   import { summaryVegetationWorkbookSession, sameSummaryWorkbookOptions,

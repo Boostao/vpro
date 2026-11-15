@@ -1,8 +1,8 @@
 package interchange
 
 import (
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 import (
@@ -20,8 +20,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/internal/accessimport"
-	"github.com/boostao/vpro-wails/internal/accessreader"
+	"github.com/boostao/vpro/app/internal/accessimport"
+	"github.com/boostao/vpro/app/internal/accessreader"
 )
 
 type AccessImportTableSummary struct {

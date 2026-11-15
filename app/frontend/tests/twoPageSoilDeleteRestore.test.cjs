@@ -76,7 +76,7 @@ test('TwoPageSoilPanel SSR renders guarded Delete and Deleted horizons actions w
       './projectMetadataEditor': metadata,
     });
     const Component = serverComponent(read('TwoPageSoilPanel.svelte'), 'TwoPageSoilPanel.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': {
+      '../bindings/github.com/boostao/vpro/app': {
         PlotEntryService: { GetTwoPageSoilReferences() { throw new Error('unexpected'); } },
       },
       './twoPageSoilReferences': soilReferences,

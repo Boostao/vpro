@@ -85,7 +85,7 @@ test('held grouped class validation cannot assign after Cancel and newer None di
 test('compiled class and None grouped panels retain source controls without enabling CDbl-composite branches', async () => {
   const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
   const panel = serverComponent(component, 'SummaryVegetationReport.svelte', {
-    './summaryVegetation': report, '../bindings/github.com/boostao/vpro-wails': { VegetationReportService: {} },
+    './summaryVegetation': report, '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
   });
   const session = report.summaryVegetationSession(owner);
   for (const group of [12, 13, 14]) {

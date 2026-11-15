@@ -13,7 +13,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/listcatalog"
 	_ "github.com/mattn/go-sqlite3"
 )
 

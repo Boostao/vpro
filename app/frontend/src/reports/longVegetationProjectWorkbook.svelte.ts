@@ -1,6 +1,6 @@
 import type {
   LongVegetationProjectWorkbookReview, LongVegetationReportScope, VegetationWorkbookOutcome,
-} from '../../bindings/github.com/boostao/vpro-wails';
+} from '../../bindings/github.com/boostao/vpro/app';
 import type { ProjectReportOwner } from './longVegetationProjectReport';
 import { projectReportOwnedScope, validateProjectUnitTuples } from './longVegetationProjectReport';
 import type { CurrentProjectScope } from './longVegetationProjectScope';

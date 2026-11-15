@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/listcatalog"
 )
 
 func fixture(t *testing.T) ([]byte, []byte) {

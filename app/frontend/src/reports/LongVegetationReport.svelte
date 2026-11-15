@@ -18,7 +18,7 @@
 
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { VegetationReportService, type LongVegetationSettings, type ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+  import { VegetationReportService, type LongVegetationSettings, type ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { reportCellText } from './longEnvironmentReport';
   import { requireLongVegetationGrouping, validateLongVegetationOptions, validateLongVegetationPreview, type ValidatedLongVegetationPreview } from './longVegetationReport';

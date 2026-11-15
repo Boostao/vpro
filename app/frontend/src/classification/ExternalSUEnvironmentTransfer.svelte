@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { ClassificationService } from '../../bindings/github.com/boostao/vpro-wails';
-  import type { ExternalSUEnvironmentReview, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+  import { ClassificationService } from '../../bindings/github.com/boostao/vpro/app';
+  import type { ExternalSUEnvironmentReview, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
   import { externalSUEnvironmentSession, validateExternalSUEnvironmentReview } from './externalSUEnvironment';
   import { ReadRequests } from '../shared/readRequests';
   import type { EditorCloseState } from '../shell/closeLifecycle';

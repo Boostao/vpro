@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { SpatialService, type GoogleEarthKMLReview, type GoogleEarthKMLExportReview } from '../../bindings/github.com/boostao/vpro-wails';
+  import { SpatialService, type GoogleEarthKMLReview, type GoogleEarthKMLExportReview } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { reportCellText } from '../reports/longEnvironmentReport';
   import { validateGoogleEarthFields, validateGoogleEarthReview, type ValidatedGoogleEarthFields, type ValidatedGoogleEarthReview } from './googleEarthReview';

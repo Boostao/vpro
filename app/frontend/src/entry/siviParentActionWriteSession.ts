@@ -1,4 +1,4 @@
-import type { SIVIParentActionWrite } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SIVIParentActionWrite } from '../../bindings/github.com/boostao/vpro/app';
 import type { SIVIParentColumn, SIVIParentDrafts, SIVIParentOriginal } from './siviParentEditor';
 import { siviParentProposal } from './siviParentEditor';
 import type { SIVIParentOwner } from './siviParentTransport';

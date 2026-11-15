@@ -5,7 +5,7 @@
     HumusRecord,
     MineralRecord,
     SoilSuggestion,
-  } from '../../bindings/github.com/boostao/vpro-wails';
+  } from '../../bindings/github.com/boostao/vpro/app';
   import DrainageFields from './DrainageFields.svelte';
   import GeologyCodeFields from './GeologyCodeFields.svelte';
   import OrdinaryFields from './OrdinaryFields.svelte';

@@ -12,10 +12,10 @@ const (
 )
 
 // Linker-injectable build identity variables:
-//   -X github.com/boostao/vpro-wails/internal/lifecycle.appVersion=2.1.0-alpha.1
-//   -X github.com/boostao/vpro-wails/internal/lifecycle.buildMode=alpha
-//   -X github.com/boostao/vpro-wails/internal/lifecycle.gitCommit=30e86f6
-//   -X github.com/boostao/vpro-wails/internal/lifecycle.buildDate=2026-11-14T16:30:00Z
+//   -X github.com/boostao/vpro/app/internal/lifecycle.appVersion=2.1.0-alpha.1
+//   -X github.com/boostao/vpro/app/internal/lifecycle.buildMode=alpha
+//   -X github.com/boostao/vpro/app/internal/lifecycle.gitCommit=30e86f6
+//   -X github.com/boostao/vpro/app/internal/lifecycle.buildDate=2026-11-14T16:30:00Z
 var (
 	appVersion = ""
 	buildMode  = ""

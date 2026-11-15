@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell, SIVIProjectAssignmentWrite, SIVIProjectSelection } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell, SIVIProjectAssignmentWrite, SIVIProjectSelection } from '../../bindings/github.com/boostao/vpro/app';
 import type { SIVIParentOriginal } from './siviParentEditor';
 import type { EditorCloseState } from '../shell/closeLifecycle';
 import { equalCell } from '../admin/projectMetadataEditor';

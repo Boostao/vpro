@@ -1,5 +1,5 @@
 import { ClassificationService, ContextService, ValidationService, type ProjectPlotProfileRunRequest, type FS882Header, type VegRecord, type HumusRecord, type MineralRecord,
-  type OtherRecord, type OtherRecordUpdate, type SoilRecordUpdate, type VegetationAttributeUpdate, type CollectedRecordUpdate, type VegetationSpeciesLookup, type VegetationSpeciesUpdate, type VegetationNumberUpdate, type VegetationDeletionRequest, type VegetationCreationRequest, type PersonalSpeciesDefinitionRequest, type SpeciesCodeCheckUpdate, type HeightRecordUpdate, type AuditRestoreAction } from '../../bindings/github.com/boostao/vpro-wails';
+  type OtherRecord, type OtherRecordUpdate, type SoilRecordUpdate, type VegetationAttributeUpdate, type CollectedRecordUpdate, type VegetationSpeciesLookup, type VegetationSpeciesUpdate, type VegetationNumberUpdate, type VegetationDeletionRequest, type VegetationCreationRequest, type PersonalSpeciesDefinitionRequest, type SpeciesCodeCheckUpdate, type HeightRecordUpdate, type AuditRestoreAction } from '../../bindings/github.com/boostao/vpro/app';
 
 export function bindContextPlots(contextId: string, port = ContextService, presencePort = ClassificationService, validationPort = ValidationService) {
   if (!contextId) throw new Error('An editor requires a loaded project context identity.');

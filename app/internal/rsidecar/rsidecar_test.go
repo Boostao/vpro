@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/boostao/vpro-wails/internal/rsidecar"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/rsidecar"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestLayer2ImportPurity(t *testing.T) {
@@ -26,12 +26,12 @@ func TestLayer2ImportPurity(t *testing.T) {
 		t.Fatalf("read internal/rsidecar: %v", err)
 	}
 	allowedInternal := map[string]bool{
-		"github.com/boostao/vpro-wails/resources":              true,
-		"github.com/boostao/vpro-wails/internal/sqlutil":       true,
-		"github.com/boostao/vpro-wails/internal/references":    true,
-		"github.com/boostao/vpro-wails/internal/vprocore":      true,
-		"github.com/boostao/vpro-wails/internal/vprocore/vprotest": true,
-		"github.com/boostao/vpro-wails/internal/rsidecar":      true,
+		"github.com/boostao/vpro/app/resources":              true,
+		"github.com/boostao/vpro/app/internal/sqlutil":       true,
+		"github.com/boostao/vpro/app/internal/references":    true,
+		"github.com/boostao/vpro/app/internal/vprocore":      true,
+		"github.com/boostao/vpro/app/internal/vprocore/vprotest": true,
+		"github.com/boostao/vpro/app/internal/rsidecar":      true,
 	}
 	fset := token.NewFileSet()
 	for _, entry := range entries {
@@ -44,7 +44,7 @@ func TestLayer2ImportPurity(t *testing.T) {
 		}
 		for _, imp := range f.Imports {
 			pkgPath := strings.Trim(imp.Path.Value, `"`)
-			if strings.HasPrefix(pkgPath, "github.com/boostao/vpro-wails/") && !allowedInternal[pkgPath] {
+			if strings.HasPrefix(pkgPath, "github.com/boostao/vpro/app/") && !allowedInternal[pkgPath] {
 				t.Fatalf("Layer-2 violation in %s: forbidden import %q", entry.Name(), pkgPath)
 			}
 		}

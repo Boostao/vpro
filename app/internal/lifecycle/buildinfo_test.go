@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func TestResolveBuildInfoTiers(t *testing.T) {

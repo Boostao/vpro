@@ -5,14 +5,14 @@ import (
 	"errors"
 	"log"
 
-	classificationpkg "github.com/boostao/vpro-wails/internal/classification"
-	"github.com/boostao/vpro-wails/internal/lmh25rules"
-	"github.com/boostao/vpro-wails/internal/plotentry"
-	referencespkg "github.com/boostao/vpro-wails/internal/references"
-	sivipkg "github.com/boostao/vpro-wails/internal/sivi"
-	sourceformpkg "github.com/boostao/vpro-wails/internal/sourceform"
-	twopagepkg "github.com/boostao/vpro-wails/internal/twopage"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
+	classificationpkg "github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/lmh25rules"
+	"github.com/boostao/vpro/app/internal/plotentry"
+	referencespkg "github.com/boostao/vpro/app/internal/references"
+	sivipkg "github.com/boostao/vpro/app/internal/sivi"
+	sourceformpkg "github.com/boostao/vpro/app/internal/sourceform"
+	twopagepkg "github.com/boostao/vpro/app/internal/twopage"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type referenceCatalogBundle struct {

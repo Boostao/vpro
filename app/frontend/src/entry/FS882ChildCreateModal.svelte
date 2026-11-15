@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X } from '@lucide/svelte';
-  import type { SpeciesItem, VegetationDeletionReview } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { SpeciesItem, VegetationDeletionReview } from '../../bindings/github.com/boostao/vpro/app';
   import NewChild from './NewChild.svelte';
   import PersonalSpeciesFields from './PersonalSpeciesFields.svelte';
   import { controlLabel } from './formPresentation';

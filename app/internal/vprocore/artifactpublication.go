@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 // A private preparation kernel, not a project lease or desktop export API.

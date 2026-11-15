@@ -220,7 +220,7 @@ test('lost acknowledgements, refresh failures and disposed late reads remain exp
 });
 test('identity panel has one labelled physical field, NULL choice and honest audit-free restoration guidance', () => {
   const component = serverComponent(readFileSync(srcPath('SIVIIdentityPanel.svelte'), 'utf8'), 'SIVIIdentityPanel.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
+    '../bindings/github.com/boostao/vpro/app': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
     './projectMetadataEditor': metadata, './siviIdentityEditor': editor,
   });
   const { render } = require('svelte/server');

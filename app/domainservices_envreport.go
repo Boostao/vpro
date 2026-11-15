@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	envreportpkg "github.com/boostao/vpro-wails/internal/envreport"
-	rsidecarpkg "github.com/boostao/vpro-wails/internal/rsidecar"
+	envreportpkg "github.com/boostao/vpro/app/internal/envreport"
+	rsidecarpkg "github.com/boostao/vpro/app/internal/rsidecar"
 )
 
 type RPackageStatus = rsidecarpkg.RPackageStatus

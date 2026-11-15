@@ -1,10 +1,10 @@
 package twopage
 
 import (
-	referencespkg "github.com/boostao/vpro-wails/internal/references"
-	"github.com/boostao/vpro-wails/internal/sourceform"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	referencespkg "github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 import (
@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/listcatalog"
 )
 
 type TwoPageEntryReferenceReaders struct {

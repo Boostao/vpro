@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/listcatalog"
 )
 
 func TestSoilFixtureDeterministicNonoverwritingAndPinned(t *testing.T) {

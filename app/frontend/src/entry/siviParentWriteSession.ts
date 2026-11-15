@@ -1,4 +1,4 @@
-import type { AuditRestoreAction, SIVIParentDirectWrite } from '../../bindings/github.com/boostao/vpro-wails';
+import type { AuditRestoreAction, SIVIParentDirectWrite } from '../../bindings/github.com/boostao/vpro/app';
 import type { EditorCloseState } from '../shell/closeLifecycle';
 import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { siviParentOriginalFromWire, type SIVIParentOwner } from './siviParentTransport';

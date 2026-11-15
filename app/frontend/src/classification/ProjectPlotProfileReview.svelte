@@ -5,7 +5,7 @@
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import ProfileRuleInputs from './ProfileRuleInputs.svelte';
   import { validateSpeciesPresencePreview, type SpeciesPresencePreview } from './projectProfileSpeciesPresence';
-  import type { ProjectPlotProfileRunRequest, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { ProjectPlotProfileRunRequest, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
   import { profileEditableFields, profileRuleValue, profileRuleOptions, stageProfileRule, profileRulesDirty,
     profileRuleErrors, profileRuleEditRequest, validateProfileChoices, beginProfileRuleCreation, stageProfileRuleCreation,
     profileCreationValue, profileCreationOptions, profileCreationErrors, profileRuleCreationRequest, profileRuleDeletionRequest,

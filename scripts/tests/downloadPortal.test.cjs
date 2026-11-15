@@ -9,7 +9,7 @@ const portal = import('../../site/src/downloads.mjs');
 const siteBuilder = import('../../site/build.mjs');
 const portalDocs = import('../../site/src/portal-docs.mjs');
 
-const url = (name, tag = 'v2.0.0') => `https://github.com/Boostao/vpro_wails/releases/download/${tag}/${name}`;
+const url = (name, tag = 'v2.0.0') => `https://github.com/Boostao/vpro/releases/download/${tag}/${name}`;
 const response = payload => ({ ok: true, status: 200, json: async () => payload });
 
 function shaFor(seed) {
@@ -47,10 +47,10 @@ function channelReleaseFixture(links, {
 function manifestFixture(links, { includePreview = false, stableNull = false } = {}) {
   return {
     schemaVersion: 1,
-    repository: 'Boostao/vpro_wails',
+    repository: 'Boostao/vpro',
     defaultChannel: 'stable',
     channels: {
-      stable: stableNull ? null : channelReleaseFixture(links, { tag: 'v2.0.0', version: '2.0.0', prerelease: false }),
+      stable: stableNull ? null : channelReleaseFixture(links, { tag: 'v2.0.0', version: 'v2.0.0'.slice(1), prerelease: false }),
       preview: includePreview
         ? channelReleaseFixture(links, { tag: 'v2.1.0-rc.1', version: '2.1.0-rc.1', prerelease: true })
         : null,
@@ -222,7 +222,7 @@ test('architecture hints override emulated Windows UA; redacted/blocked hints pr
 
 test('exact asset names prevent AMD64/ARM64 and executable/installer confusion in either response order', async () => {
   const { assetLinks, reviewManifest, reviewRelease } = await portal;
-  assert.equal(Object.keys(assetLinks).length, 15);
+  assert.equal(Object.keys(assetLinks).length, 16);
   for (const reversed of [false, true]) {
     const legacy = releaseFixture(assetLinks);
     if (reversed) legacy.assets.reverse();
@@ -238,6 +238,12 @@ test('exact asset names prevent AMD64/ARM64 and executable/installer confusion i
     }
     assert.notEqual(reviewed.channels.stable.links['dl-win-x64-installer'], reviewed.channels.stable.links['dl-win-arm64-installer']);
   }
+
+  // Historical desktop-only release (e.g. v2.0.1 without vpro-r-sdk.tar.gz) leaves dl-r-sdk gracefully null.
+  const desktopOnlyLinks = Object.fromEntries(Object.entries(assetLinks).filter(([id]) => id !== 'dl-r-sdk'));
+  const desktopOnlyReviewed = reviewManifest(manifestFixture(desktopOnlyLinks));
+  assert.equal(desktopOnlyReviewed.channels.stable.links['dl-r-sdk'], null);
+  assert.equal(desktopOnlyReviewed.channels.stable.links['dl-win-x64-installer'], url('vpro-windows-amd64-installer.exe', 'v2.0.0'));
 });
 
 test('portal names match the production release validator, including its checksum filename', async () => {
@@ -256,11 +262,12 @@ test('malformed duplicate and unsafe static manifest or asset metadata refuses c
   for (const bad of [
     null,
     {},
-    { schemaVersion: 2, repository: 'Boostao/vpro_wails', defaultChannel: 'stable', channels: { stable: null } },
+    { schemaVersion: 2, repository: 'Boostao/vpro', defaultChannel: 'stable', channels: { stable: null } },
     { schemaVersion: 1, repository: 'Someone/other', defaultChannel: 'stable', channels: { stable: null } },
-    { schemaVersion: 1, repository: 'Boostao/vpro_wails', defaultChannel: 'nightly', channels: { stable: null } },
-    { schemaVersion: 1, repository: 'Boostao/vpro_wails', defaultChannel: 'stable', channels: {} },
-    { schemaVersion: 1, repository: 'Boostao/vpro_wails', defaultChannel: 'stable', channels: { stable: null, nightly: null } },
+    { schemaVersion: 1, repository: 'Boostao/vpro_wails', defaultChannel: 'stable', channels: { stable: null } },
+    { schemaVersion: 1, repository: 'Boostao/vpro', defaultChannel: 'nightly', channels: { stable: null } },
+    { schemaVersion: 1, repository: 'Boostao/vpro', defaultChannel: 'stable', channels: {} },
+    { schemaVersion: 1, repository: 'Boostao/vpro', defaultChannel: 'stable', channels: { stable: null, nightly: null } },
     { ...manifestFixture(assetLinks), extraKey: true },
   ]) {
     assert.throws(() => reviewManifest(bad));
@@ -305,7 +312,7 @@ test('malformed duplicate and unsafe static manifest or asset metadata refuses c
     undefined,
     'javascript:alert(1)',
     'https://example.com/package.exe',
-    'https://user:pass@github.com/Boostao/vpro_wails/releases/download/v2.0.0/' + assetLinks['dl-win-x64-installer'],
+    'https://user:pass@github.com/Boostao/vpro/releases/download/v2.0.0/' + assetLinks['dl-win-x64-installer'],
     url(assetLinks['dl-win-x64-installer']) + '?redirect=evil',
     url(assetLinks['dl-win-x64-installer']) + '#fragment',
     url(assetLinks['dl-win-x64-installer']).replace('/v2.0.0/', '/v0.9.0/'),
@@ -499,7 +506,7 @@ test('BC Gov Design System build outputs self-hosted fonts, searchable LMH25 doc
   const dua = JSON.parse(readFileSync(path.join(repoRoot, 'docs-src', 'data_use_agreement.json'), 'utf8'));
   const whatsNew = JSON.parse(readFileSync(path.join(repoRoot, 'docs-src', 'whats_new.json'), 'utf8'));
   const shortcuts = JSON.parse(readFileSync(path.join(repoRoot, 'docs-src', 'shortcuts.json'), 'utf8'));
-  const provenance = JSON.parse(readFileSync(path.join(repoRoot, 'resources', 'standards-2026-provenance.json'), 'utf8'));
+  const provenance = JSON.parse(readFileSync(path.join(repoRoot, 'app', 'resources', 'standards-2026-provenance.json'), 'utf8'));
 
   for (const guide of guides) assert.ok(distHtml.includes(`id="doc-${guide.id}"`), `Missing guide #doc-${guide.id}`);
   for (const field of lmh25.fields) assert.ok(distHtml.includes(`id="field-${field.id}"`), `Missing field #field-${field.id}`);

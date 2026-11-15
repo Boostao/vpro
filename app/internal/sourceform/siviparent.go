@@ -1,7 +1,7 @@
 package sourceform
 
 import (
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 import (
@@ -14,8 +14,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/internal/fs882layout"
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var siviParentLayoutJSON = resources.FS1333SIVILayoutJSON

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"sync"
 
-	cloudsyncpkg "github.com/boostao/vpro-wails/internal/cloudsync"
-	lifecyclepkg "github.com/boostao/vpro-wails/internal/lifecycle"
-	spatialpkg "github.com/boostao/vpro-wails/internal/spatial"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
+	cloudsyncpkg "github.com/boostao/vpro/app/internal/cloudsync"
+	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
+	spatialpkg "github.com/boostao/vpro/app/internal/spatial"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type runtimeShutdownTracker struct {

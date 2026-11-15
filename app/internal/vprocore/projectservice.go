@@ -1,7 +1,7 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 import (
@@ -20,7 +20,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/resources"
 	_ "github.com/mattn/go-sqlite3"
 )
 

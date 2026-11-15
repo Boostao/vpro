@@ -165,7 +165,7 @@ function panel(session, preferencesEnabled = true) {
   return serverComponent(component, 'SummaryVegetationReport.svelte', {
     './summaryVegetation': summary,
     './summaryVegetationPreferenceSessions': { summaryVegetationPreferenceSession: preferencesEnabled ? () => session : null },
-    '../bindings/github.com/boostao/vpro-wails': {},
+    '../bindings/github.com/boostao/vpro/app': {},
   });
 }
 test('compiled saved-option panel has one live source control per field and no render-time mutation', async () => {

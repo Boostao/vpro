@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/boostao/vpro-wails/internal/accessreader"
+	"github.com/boostao/vpro/app/internal/accessreader"
 )
 
 type specsRow struct {

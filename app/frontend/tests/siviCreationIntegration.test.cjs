@@ -98,7 +98,7 @@ test('creation unconditionally registers in actual root/main and binds only owne
   const calls = [];
   class Session { constructor(owner, port) { this.owner = owner; this.port = port; } }
   const cache = loadTypeScript('siviCreationSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': { PlotEntryService: {
+    '../bindings/github.com/boostao/vpro/app': { PlotEntryService: {
       GetSIVICreationReferences: (...args) => calls.push(['references', ...args]),
       CreateSIVIVegetation: (...args) => calls.push(['create', ...args]),
       LookupSIVICreationReceipt: (...args) => calls.push(['lookup', ...args]),

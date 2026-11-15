@@ -1,4 +1,4 @@
-import type { SIVIParentJoinReview, SIVIProjectChoices } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SIVIParentJoinReview, SIVIProjectChoices } from '../../bindings/github.com/boostao/vpro/app';
 import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { siviMetadataTableFromWire, type SIVIParentOwner } from './siviParentTransport';
 

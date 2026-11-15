@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	classificationpkg "github.com/boostao/vpro-wails/internal/classification"
-	diagnosticspkg "github.com/boostao/vpro-wails/internal/diagnostics"
-	referencespkg "github.com/boostao/vpro-wails/internal/references"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
+	classificationpkg "github.com/boostao/vpro/app/internal/classification"
+	diagnosticspkg "github.com/boostao/vpro/app/internal/diagnostics"
+	referencespkg "github.com/boostao/vpro/app/internal/references"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type CreateSUTableRequest = classificationpkg.CreateSUTableRequest

@@ -189,7 +189,7 @@ test('picture source slot is independently gated and participates in root pendin
 test('picture panel renders honest read-only guidance and cancellation-aware controls without write actions', () => {
   const source = readFileSync(srcPath('PicturePanel.svelte'), 'utf8');
   const component = serverComponent(source, 'PicturePanel.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {} }, './pictureRead': picture,
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {} }, './pictureRead': picture,
     './projectMetadataEditor': metadata,
     './pictureLifecycleEditor': require('./pictureLifecycleTestHelpers.cjs').editor,
     './pictureLifecycleSessions': { pictureLifecycleSession: () => undefined },
@@ -224,7 +224,7 @@ test('actual complete-entry picture child reuses owned readonly child policy onl
   assert.ok(snippet);
   const captured = [];
   const panel = serverComponent(readFileSync(srcPath('PicturePanel.svelte'), 'utf8'), 'PicturePanel.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {} }, './pictureRead': picture,
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {} }, './pictureRead': picture,
     './projectMetadataEditor': metadata,
     './pictureLifecycleEditor': require('./pictureLifecycleTestHelpers.cjs').editor,
     './pictureLifecycleSessions': { pictureLifecycleSession: () => { throw new Error('No lifecycle authority'); } },
@@ -426,7 +426,7 @@ test('standalone manager navigation shares root transition/close ownership', () 
 
 test('manager server render retains source caption, literal parent and separate directory guidance', () => {
   const panel = serverComponent(readFileSync(srcPath('PicturePanel.svelte'), 'utf8'), 'PicturePanel.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {} }, './pictureRead': picture,
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {} }, './pictureRead': picture,
     './projectMetadataEditor': metadata,
     './pictureLifecycleEditor': require('./pictureLifecycleTestHelpers.cjs').editor,
     './pictureLifecycleSessions': { pictureLifecycleSession: () => undefined },

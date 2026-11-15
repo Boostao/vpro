@@ -1,7 +1,7 @@
 import type {
   ProjectMetadataCell, SIVIParentCellEdit, SIVIProjectSelection, TwoPageEntryCodeAcknowledgement,
   TwoPageEntryFieldPolicy, TwoPageEntryReferenceFilters, TwoPageEntryReferenceSnapshot, TwoPageParentEntryWrite,
-} from '../../bindings/github.com/boostao/vpro-wails';
+} from '../../bindings/github.com/boostao/vpro/app';
 import type { SIVIParentOriginal } from './siviParentEditor';
 import { equalCell } from '../admin/projectMetadataEditor';
 import { siviMetadataTableFromWire, sourceParentOriginalFromWire, type SIVIParentOwner } from './siviParentTransport';

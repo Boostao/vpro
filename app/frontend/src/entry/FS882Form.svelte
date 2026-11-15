@@ -14,7 +14,7 @@
     type SpeciesItem,
     type VegetationDeletionReview,
     type ProjectPlotProfileFilterRequest
-  } from '../../bindings/github.com/boostao/vpro-wails';
+  } from '../../bindings/github.com/boostao/vpro/app';
   import { Lock, Unlock, Save, RotateCcw, AlertTriangle, Check } from '@lucide/svelte';
   import HeaderEditor from './HeaderEditor.svelte';
   import SourcePage from './SourcePage.svelte';

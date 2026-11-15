@@ -230,7 +230,7 @@ tasks:
       DETECTED_GIT_SHA:
         sh: 'git rev-parse --short=12 HEAD 2>/dev/null || true'
       EFFECTIVE_COMMIT: '{{if .GIT_COMMIT}}{{.GIT_COMMIT}}{{else if .GITHUB_SHA}}{{.GITHUB_SHA}}{{else}}{{.DETECTED_GIT_SHA}}{{end}}'
-      VERSION_LDFLAGS: '-X github.com/boostao/vpro-wails/internal/lifecycle.appVersion={{.EFFECTIVE_VERSION}}{{if .BUILD_MODE}} -X github.com/boostao/vpro-wails/internal/lifecycle.buildMode={{.BUILD_MODE}}{{end}}{{if .EFFECTIVE_COMMIT}} -X github.com/boostao/vpro-wails/internal/lifecycle.gitCommit={{.EFFECTIVE_COMMIT}}{{end}}'
+      VERSION_LDFLAGS: '-X github.com/boostao/vpro/app/internal/lifecycle.appVersion={{.EFFECTIVE_VERSION}}{{if .BUILD_MODE}} -X github.com/boostao/vpro/app/internal/lifecycle.buildMode={{.BUILD_MODE}}{{end}}{{if .EFFECTIVE_COMMIT}} -X github.com/boostao/vpro/app/internal/lifecycle.gitCommit={{.EFFECTIVE_COMMIT}}{{end}}'
       BUILD_FLAGS: '-tags server{{if eq .DEV "true"}}{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}},{{.EFFECTIVE_TAGS}} -buildvcs=false -gcflags=all="-l" -ldflags="{{.VERSION_LDFLAGS}}"{{else}},production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}},{{.EFFECTIVE_TAGS}} -trimpath -buildvcs=false -ldflags="-w -s {{.VERSION_LDFLAGS}}"{{end}}'
     env:
       CGO_ENABLED: '{{.CGO_ENABLED | default "1"}}'

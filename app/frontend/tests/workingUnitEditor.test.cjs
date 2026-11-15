@@ -100,7 +100,7 @@ test('Actual source Master input overrides source Locked only under its loaded p
   for (const allowed of [true, false]) {
     const Component = serverComponent(source, 'WorkingUnitFields.svelte', {
       './workingUnitEditor': helpers, './masterBECEditor': masterHelpers,
-      '../bindings/github.com/boostao/vpro-wails': { WorkingUnitService: {} }
+      '../bindings/github.com/boostao/vpro/app': { WorkingUnitService: {} }
     });
     const fixture = `<script>import Fields from './Fields.svelte';let draft={userSiteUnit:null,becSiteUnit:'old'};</script>
       <Fields bind:draft original={{userSiteUnit:null,becSiteUnit:'old'}} controls={[{controlId:'master',controlName:'BECSiteUnit',enabled:true,locked:true}]}

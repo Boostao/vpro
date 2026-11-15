@@ -40,7 +40,7 @@ const row = (rowId, item, description = null) => ({ rowId, cells: [
   cell('integer', '-1'), cell('null'), cell('integer', '0'),
 ] });
 const child = () => serverComponent(source('LongVegetationQualityMinimumPreferences.svelte'), 'LongVegetationQualityMinimumPreferences.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationQualityMinimumPreferences': prefs,
+  '../bindings/github.com/boostao/vpro/app': {}, './longVegetationQualityMinimumPreferences': prefs,
 });
 
 test('strict-Go wire and full definitions detach from real Svelte proxies without cloning a proxy', async () => {
@@ -219,7 +219,7 @@ test('actual report retains minimum validation on remount and gates root and sib
   const session = prefs.longVegetationQualityMinimumPreferencesSession(owner);
   session.apply(review(undefined, owner)); session.editMinimum('vegMinimum', '\ud800');
   const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationPreferences': {},
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
     './longVegetationGroupPreferences': {}, './LongVegetationGroupPreferences.svelte': { default() {} },

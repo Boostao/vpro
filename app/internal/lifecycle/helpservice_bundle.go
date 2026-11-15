@@ -12,8 +12,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var helpBundleJSON = resources.HelpBundleJSON

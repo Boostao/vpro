@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import type { ProjectMetadataCreate, ProjectMetadataEditorField, ProjectMetadataReview } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { ProjectMetadataCreate, ProjectMetadataEditorField, ProjectMetadataReview } from '../../bindings/github.com/boostao/vpro/app';
   import type { bindContextPlots } from '../shared/contextPlots';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import { ReadRequests } from '../shared/readRequests';
@@ -194,7 +194,7 @@
     if (busy || dirty || errors.length || committedFailure) { error = 'Save or Undo metadata drafts, or reload the committed refresh before closing; invalid raw entries and recovery cannot be discarded implicitly.'; return; }
     onclosed();
   }
-  function summary(row: import('../../bindings/github.com/boostao/vpro-wails').ProjectMetadataRow, master = false) {
+  function summary(row: import('../../bindings/github.com/boostao/vpro/app').ProjectMetadataRow, master = false) {
     const index = (master ? review?.masterTemplates : review?.projectRecords)?.columns?.findIndex(column => column.name === 'ProjectTitle') ?? -1;
     const value = row.cells?.[index];
     return value?.storage === 'null' ? 'NULL title' : value?.text === '' ? 'Empty title' : value ? metadataCellText(value) : 'Unavailable title';

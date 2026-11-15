@@ -99,7 +99,7 @@ test('grouped yielded validation Cancel/remount/retry rejects stale response and
 test('compiled grouped panel uses source captions, numeric Order and explicitly unavailable source failure branch', async () => {
   const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
   const panel = serverComponent(component, 'SummaryVegetationReport.svelte', {
-    './summaryVegetation': report, '../bindings/github.com/boostao/vpro-wails': { VegetationReportService: {} },
+    './summaryVegetation': report, '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
   });
   const session = report.summaryVegetationSession(owner);
   for (const value of wire.filter(value => value.average === 1)) {

@@ -70,7 +70,7 @@ test('real Go nullable ordinary wire stays readable but explicitly unavailable t
   assert.match(reason(row({ editWhen: null })), /NULL audit date.*unavailable/);
   assert.equal(reason(row({ user: '', editWhen: '' })), null);
   const component = serverComponent(source, 'AuditRestore.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { AuditRestoreAction: { AuditRestoreCancel: 0, AuditRestoreRetain: 1, AuditRestorePrune: 2 } },
+    '../bindings/github.com/boostao/vpro/app': { AuditRestoreAction: { AuditRestoreCancel: 0, AuditRestoreRetain: 1, AuditRestorePrune: 2 } },
   });
   const html = render(component, { props: {
     entries, project: 'Sample', plot: '108050', capabilities: caps, enabled: true,

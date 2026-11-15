@@ -1,4 +1,4 @@
-import type { SIVIVegetationProjection } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SIVIVegetationProjection } from '../../bindings/github.com/boostao/vpro/app';
 import { SIVIChildWriteSession, type SIVIChildWritePort, type SIVIChildWriteView } from './siviChildWriteSession';
 import { siviProjectionFromWire } from './siviHeightSession';
 import {

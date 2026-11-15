@@ -1,4 +1,4 @@
-import type { LifeformWorkbookReview, LifeformWorkbookOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { LifeformWorkbookReview, LifeformWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import {
   validateLifeformSummary, lifeformShape as shape, lifeformText as text,
   type LifeformSummaryOwner, type LifeformSummaryPreview,

@@ -1,7 +1,7 @@
 import { heightField, heightValue, type HeightCell, type HeightField } from './heightEditor';
 import { wellFormedUTF16 } from './qualityEditor';
 import { resolveSpeciesDecision, speciesEventError, type SpeciesChoices, type SpeciesDecision, type SpeciesDecisionKind } from './vegetationSpeciesEditor';
-import type { VegetationCreationRequest, VegetationSpeciesOption } from '../../bindings/github.com/boostao/vpro-wails';
+import type { VegetationCreationRequest, VegetationSpeciesOption } from '../../bindings/github.com/boostao/vpro/app';
 
 export interface VegetationCreationDraft {
   editorKey: string;

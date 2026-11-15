@@ -1,4 +1,4 @@
-import type { ProjectTableCSVReview, TableCSVManifest } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectTableCSVReview, TableCSVManifest } from '../../bindings/github.com/boostao/vpro/app';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 

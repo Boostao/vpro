@@ -11,8 +11,8 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	"github.com/boostao/vpro-wails/internal/reports/reportcore"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 // ResolveDiagnosticWorkbookSheets validates Excel worksheet names (31 UTF-16 units, XML safety)

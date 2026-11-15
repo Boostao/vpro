@@ -216,7 +216,7 @@ const source = read('SoilCodeFields.svelte');
 function component(_enabled, views = ready()) {
   return serverComponent(source,
     'SoilCodeFields.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': { SoilCodeService: {
+      '../bindings/github.com/boostao/vpro/app': { SoilCodeService: {
         ListGreatGroupChoices() { throw new Error('SSR must not call bindings'); },
         ListSubgroupChoices() { throw new Error('SSR must not call bindings'); }
       } },

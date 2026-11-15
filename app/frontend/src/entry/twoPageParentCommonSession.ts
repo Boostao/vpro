@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { parseSIVIParentInput, type SIVIParentInput, type SIVIParentOriginal } from './siviParentEditor';
 import { twoPageParentSource, validateTwoPageParentOriginal, type TwoPageParentForm } from './twoPageParentSession';
 import { sourceParentOriginalFromWire, type SIVIParentOwner } from './siviParentTransport';

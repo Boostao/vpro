@@ -3,10 +3,11 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { assetLinks, releasesURL, reviewManifest } from './src/downloads.mjs';
+import { assetLinks, releasesURL, repository, reviewManifest } from './src/downloads.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = path.resolve(__dirname, '..');
+const repoURL = `https://github.com/${repository}`;
 
 const REQUIRED_FONTS = Object.freeze([
   'BCSans-Regular.woff2',
@@ -336,13 +337,14 @@ export function renderPortalHtml({
       </a>
       <nav class="bcgov-nav" aria-label="Primary navigation">
         <a href="#downloads">Downloads</a>
+        <a href="./r/">R Companion SDK</a>
         <a href="#migration">Migrating from VPro 64</a>
         <a href="#installation">Checksum &amp; Setup</a>
         <a href="#documentation">User Guide &amp; LMH25</a>
         <a href="#data-use-agreement">Data Use Agreement</a>
         <a href="#changelog">Release History</a>
         <a href="https://www.for.gov.bc.ca/hre/becweb/" target="_blank" rel="noopener noreferrer">BECWeb</a>
-        <a href="https://github.com/Boostao/vpro_wails" target="_blank" rel="noopener noreferrer">${ICONS.github} GitHub</a>
+        <a href="${escapeHtml(repoURL)}" target="_blank" rel="noopener noreferrer">${ICONS.github} GitHub</a>
       </nav>
     </div>
   </header>
@@ -533,6 +535,29 @@ export function renderPortalHtml({
                 ${renderAssetRow('dl-linux-arm64-deb', 'Debian / Ubuntu (.deb)')}
                 ${renderAssetRow('dl-linux-arm64-tar', 'Binary Tarball (.tar.gz)')}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="card-r-sdk" class="card" style="margin-top: 1.25rem;">
+          <div>
+            <h3>
+              ${ICONS.book}
+              <span>Companion R SDK (<code>vpro</code>)</span>
+              <span class="os-tag">R &gt;= 4.4.0 · Headless</span>
+            </h3>
+            <p>Scriptable R companion package sharing identical <code>VP08</code> SQLite WAL readers, <code>BECdb v13</code> / <code>BCPlantTaxonomy v19</code> / <code>LMH25</code> standards, <code>V7mdlDiagnostic</code> BEC synthesis, climate/aSMR edatopic grids, Quarto guides, and PostgreSQL <code>BECMaster</code> staging workflows.</p>
+            <div class="arch-heading">Install from GitHub Subdirectory (<code>r/</code>)</div>
+            <pre class="code-block mono" style="margin: 0.5rem 0 0.9rem; padding: 0.65rem 0.85rem; background: #F2F2F2; border-left: 3px solid #003366; overflow-x: auto;"><code>pak::pak("${escapeHtml(repository)}/r")
+# or: remotes::install_github("${escapeHtml(repository)}", subdir = "r")</code></pre>
+            <div class="arch-heading">Release Source Tarball &amp; Reference Documentation</div>
+            <div class="asset-list">
+              ${renderAssetRow('dl-r-sdk', 'R Source Package (vpro-r-sdk.tar.gz)')}
+            </div>
+            <div class="doc-meta-badges" style="margin-top: 0.75rem;">
+              <a href="./r/">Open R SDK Reference &amp; Vignettes (/r/)</a>
+              <a href="./r/articles/index.html">Workflow Vignettes</a>
+              <a href="./r/reference/index.html">Function Reference</a>
             </div>
           </div>
         </div>
@@ -733,10 +758,11 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
       </div>
       <div class="footer-links">
         <a href="https://www.for.gov.bc.ca/hre/becweb/" target="_blank" rel="noopener noreferrer">BECWeb Home</a>
+        <a href="./r/">R Companion SDK</a>
         <a href="#data-use-agreement">Data Use Agreement</a>
         <a href="#documentation">LMH25 (2023) Reference</a>
-        <a href="https://github.com/Boostao/vpro_wails" target="_blank" rel="noopener noreferrer">Source Repository</a>
-        <a href="https://github.com/Boostao/vpro_wails/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a>
+        <a href="${escapeHtml(repoURL)}" target="_blank" rel="noopener noreferrer">Source Repository</a>
+        <a href="${escapeHtml(repoURL)}/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a>
       </div>
     </div>
   </footer>
@@ -811,7 +837,7 @@ export function buildSite({
   const whatsNew = JSON.parse(fs.readFileSync(path.join(docsSrcDir, 'whats_new.json'), 'utf8'));
   const shortcuts = JSON.parse(fs.readFileSync(path.join(docsSrcDir, 'shortcuts.json'), 'utf8'));
   const dataUseAgreement = JSON.parse(fs.readFileSync(path.join(docsSrcDir, 'data_use_agreement.json'), 'utf8'));
-  const provenance = JSON.parse(fs.readFileSync(path.join(repoRoot, 'resources', 'standards-2026-provenance.json'), 'utf8'));
+  const provenance = JSON.parse(fs.readFileSync(path.join(repoRoot, 'app', 'resources', 'standards-2026-provenance.json'), 'utf8'));
   const manifest = manifestOverride ?? JSON.parse(fs.readFileSync(path.join(siteDir, 'release-manifest.json'), 'utf8'));
 
   const css = fs.readFileSync(path.join(siteDir, 'src', 'styles.css'), 'utf8');
@@ -849,7 +875,7 @@ export function buildSite({
 
   const faviconSrc = fs.existsSync(path.join(siteDir, 'favicon.ico'))
     ? path.join(siteDir, 'favicon.ico')
-    : path.join(repoRoot, 'frontend', 'public', 'favicon.ico');
+    : path.join(repoRoot, 'app', 'frontend', 'public', 'favicon.ico');
   if (!fs.existsSync(faviconSrc)) {
     throw new Error(`Missing required favicon.ico: ${faviconSrc}`);
   }

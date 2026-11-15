@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack, type Snippet } from 'svelte';
-  import type { FS882Header } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { FS882Header } from '../../bindings/github.com/boostao/vpro/app';
   import type { PaperControl } from './paperLayout';
   import FieldGuidance from './FieldGuidance.svelte';
   import { substrateKey, substrateLabels, stageSubstrate, substrateErrors, substrateValidation,

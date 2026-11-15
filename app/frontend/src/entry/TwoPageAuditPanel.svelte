@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { PlotEntryService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { sourceAuditFields, twoPageAuditFromWire, twoPageAuditLabel, type TwoPageAuditOwner, type TwoPageAuditReview } from './twoPageAudit';
 

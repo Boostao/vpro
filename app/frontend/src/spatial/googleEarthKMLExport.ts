@@ -1,4 +1,4 @@
-import type { GoogleEarthKMLExportReview, GoogleEarthKMLExportOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { GoogleEarthKMLExportReview, GoogleEarthKMLExportOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { ownedScope, type GoogleEarthScope } from './googleEarthReview';
 import { validateGoogleEarthKMLReview } from './googleEarthKMLReview';
 import { wellFormedUTF16 } from '../entry/qualityEditor';

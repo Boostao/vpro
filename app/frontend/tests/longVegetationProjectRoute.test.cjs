@@ -45,7 +45,7 @@ function renderReport(value,environment={},overrides={}) {
     subscribe(listener){listener();return ()=>{};}
   }
   const dependencies={
-    '../bindings/github.com/boostao/vpro-wails':{},
+    '../bindings/github.com/boostao/vpro/app':{},
     './longVegetationProjectWorkspaces':{projectReportWorkspace:physicalOwner=>{
       assert.deepEqual(JSON.parse(JSON.stringify(physicalOwner)),value.physicalOwner);
       return value.workspace;
@@ -239,9 +239,9 @@ test('ordinary Unit and selected-field controls inherit pending project scope ho
       './longVegetationSelectedUnitSelection':{createSelectedUnitSelectionRegistry:()=>()=>selection},
     };
     dependencies['./LongVegetationUnitPreferences.svelte']={default:serverComponent(unitSource,
-      'LongVegetationUnitPreferences.svelte',{'../bindings/github.com/boostao/vpro-wails':{},...dependencies})};
+      'LongVegetationUnitPreferences.svelte',{'../bindings/github.com/boostao/vpro/app':{},...dependencies})};
     dependencies['./LongVegetationSelectedUnitSelection.svelte']={default:serverComponent(selectionSource,
-      'LongVegetationSelectedUnitSelection.svelte',{'../bindings/github.com/boostao/vpro-wails':{}})};
+      'LongVegetationSelectedUnitSelection.svelte',{'../bindings/github.com/boostao/vpro/app':{}})};
     const {body}=renderReport(value,{},dependencies);
     const button=attribute=>{
       const matches=body.match(new RegExp(`<button\\b[^>]*${attribute}[^>]*>`,'g'))??[];

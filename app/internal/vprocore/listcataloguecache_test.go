@@ -1,8 +1,8 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro-wails/internal/references"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 import (
@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"context"
-	"github.com/boostao/vpro-wails/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/listcatalog"
 )
 
 func TestCatalogueCacheWarmAllListsAvoidHashesScansAndCloneMetadata(t *testing.T) {

@@ -201,7 +201,7 @@ test('retained completed result survives remount without another dispatch or los
 test('desktop environmental module enables lifeform/numeric/base flags and dispatches lifeform preview service', async () => {
   const calls = [];
   const module = execute(fs.readFileSync(srcPath('summaryVegetationEnvironmentalDesktop.ts'), 'utf8'), {
-    '../bindings/github.com/boostao/vpro-wails': {
+    '../bindings/github.com/boostao/vpro/app': {
       VegetationReportService: {
         PreviewSummaryVegetationEnvironmental: () => { throw new Error('legacy fallback forbidden'); },
         PreviewSummaryVegetationEnvironmentalNumeric: () => { throw new Error('numeric fallback forbidden'); },

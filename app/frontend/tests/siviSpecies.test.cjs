@@ -161,7 +161,7 @@ test('Species panel remount renders one associated field per physical row with e
   const { render } = require('svelte/server');
   const Panel = serverComponent(readFileSync(srcPath('SIVISpeciesPanel.svelte'), 'utf8'),
     'SIVISpeciesPanel.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': {
+      '../bindings/github.com/boostao/vpro/app': {
         AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' },
       },
       './projectMetadataEditor': metadata, './siviSpeciesEditor': editor, './vegetationSpeciesEditor': species,

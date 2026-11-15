@@ -20,7 +20,7 @@ const outcome = (owner = scope, committed = true, errorMessage = '') => ({ conte
 const ready = (owner = scope) => { const session = new prefs.LongVegetationThresholdPreferencesSession(owner); session.apply(review(undefined, owner)); return session; };
 const source = name => readFileSync(srcPath(name), 'utf8');
 const child = () => serverComponent(source('LongVegetationThresholdPreferences.svelte'), 'LongVegetationThresholdPreferences.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationThresholdPreferences': prefs,
+  '../bindings/github.com/boostao/vpro/app': {}, './longVegetationThresholdPreferences': prefs,
 });
 
 test('strict-Go threshold wire detaches actual Svelte proxies before transport', async () => {
@@ -124,7 +124,7 @@ test('actual parent/child composition renders thresholds and propagates retained
   const session = prefs.longVegetationThresholdPreferencesSession(owner); session.apply(review(undefined, owner));
   session.editThreshold('presenceGreaterThan', '');
   const component = serverComponent(source('LongVegetationReport.svelte'), 'LongVegetationReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationPreferences': {}, './longVegetationStatisticsPreferences': {},
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {}, './longVegetationStatisticsPreferences': {},
     './longVegetationSwitchPreferences': {}, './LongVegetationSwitchPreferences.svelte': { default() {} },
     './longVegetationThresholdPreferences': prefs, './LongVegetationThresholdPreferences.svelte': { default: child() },
     './longVegetationQualityNullPreferences': {}, './LongVegetationQualityNullPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': {}, './LongVegetationGroupPreferences.svelte': { default() {} },

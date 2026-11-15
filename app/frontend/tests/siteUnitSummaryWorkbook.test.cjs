@@ -260,7 +260,7 @@ test('actual server-rendered panel exposes label and explicit remount unknown al
   const owned = { ...owner, contextId: 'unknown-remount' };
   const Panel = serverComponent(source().replace('structuredClone(owner)', '({ ...owner })'),
     'SiteUnitSummaryWorkbookPanel.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': { EnvironmentReportService: {} },
+      '../bindings/github.com/boostao/vpro/app': { EnvironmentReportService: {} },
       './siteUnitSummaryWorkbook': workbook,
       './siteUnitSummaryExtendedWorkbook': {},
       './longEnvironmentReport': {},

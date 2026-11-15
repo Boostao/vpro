@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 var delphiEpochUTC = time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)

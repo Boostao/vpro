@@ -1,4 +1,4 @@
-import type { PictureMetadataWriteResult } from '../../bindings/github.com/boostao/vpro-wails';
+import type { PictureMetadataWriteResult } from '../../bindings/github.com/boostao/vpro/app';
 import type { EditorCloseState } from '../shell/closeLifecycle';
 import { ReadRequests, type CancellableRead } from '../shared/readRequests';
 import { equalCell } from '../admin/projectMetadataEditor';

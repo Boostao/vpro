@@ -1,4 +1,4 @@
-import type { ExternalSUEnvironmentReview, ExternalSUEnvironmentOutcome, ExternalSUEnvironmentAttemptOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ExternalSUEnvironmentReview, ExternalSUEnvironmentOutcome, ExternalSUEnvironmentAttemptOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { validateSiteUnitEnvironmentReview, validateSiteUnitEnvironmentResult } from './siteUnitEnvironment';
 import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
 import { wellFormedUTF16 } from '../entry/qualityEditor';

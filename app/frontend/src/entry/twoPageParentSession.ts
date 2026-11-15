@@ -1,6 +1,6 @@
 import normal from '../../../resources/fs882-two-page-layout.json';
 import chars from '../../../resources/fs882-two-page-chars-layout.json';
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { validateSourceParentPhysical, type SIVIParentOriginal } from './siviParentEditor';
 import { sourceParentOriginalFromWire, type SIVIParentOwner } from './siviParentTransport';
 import { SIVIParentScopedWriteSession, type SIVIParentWritePort } from './siviParentWriteSession';

@@ -276,7 +276,7 @@ test('Actual drainage component owns only its strict source slot and retains exp
   assert.doesNotMatch(source, /type="checkbox"|rememberAcknowledgement|maxlength=/);
   const Component = serverComponent(source, 'DrainageFields.svelte', {
     './drainageEditor': drainage, './qualityEditor': quality,
-    '../bindings/github.com/boostao/vpro-wails': { PlotEntryService: {} }
+    '../bindings/github.com/boostao/vpro/app': { PlotEntryService: {} }
   });
   const fixture = `<script>import Drainage from './Drainage.svelte';let draft={soilDrainage:'legacy-long'};</script>
     <label>Drainage class

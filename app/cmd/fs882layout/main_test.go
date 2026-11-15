@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/fs882layout"
 )
 
 func TestExplicitArgumentsAndSourceGuard(t *testing.T) {

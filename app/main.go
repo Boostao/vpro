@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	lifecyclepkg "github.com/boostao/vpro-wails/internal/lifecycle"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/resources"
+	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )

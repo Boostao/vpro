@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { ContextService, ImportExportService } from '../../bindings/github.com/boostao/vpro-wails';
-  import type { PlotLabelPDFExportReview, PlotLabelPDFExportOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+  import { ContextService, ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
+  import type { PlotLabelPDFExportReview, PlotLabelPDFExportOutcome } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { plotLookupInputError } from '../shared/scopedPlotLookup';
   import { plotLabelFromHeader, type PlotLabelPreview } from './plotLabelPreview';

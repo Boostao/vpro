@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell, VegetationWorkbookReview, VegetationWorkbookOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell, VegetationWorkbookReview, VegetationWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { validateLongVegetationPreview, type ValidatedLongVegetationPreview } from './longVegetationReport';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { lifeformShape as shape, lifeformText as text, lifeformCount as count, type LifeformSummaryOwner } from './lifeformSummary';

@@ -1,4 +1,4 @@
-import type { ProjectMetadataTable } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataTable } from '../../bindings/github.com/boostao/vpro/app';
 import { lifeformShape } from './lifeformSummary';
 import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { completeMetadataCellFromWire } from '../entry/siviMetadataWire';

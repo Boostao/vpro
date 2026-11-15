@@ -5,7 +5,7 @@ import type {
   MineralRecord,
   OtherRecord,
   VegRecord,
-} from '../../bindings/github.com/boostao/vpro-wails';
+} from '../../bindings/github.com/boostao/vpro/app';
 
 export type FS882ChildKind = 'Veg' | 'Humus' | 'Mineral' | 'Other';
 

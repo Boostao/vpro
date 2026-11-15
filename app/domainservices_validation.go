@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	projectopspkg "github.com/boostao/vpro-wails/internal/projectops"
-	validationpkg "github.com/boostao/vpro-wails/internal/validation"
+	projectopspkg "github.com/boostao/vpro/app/internal/projectops"
+	validationpkg "github.com/boostao/vpro/app/internal/validation"
 )
 
 type ValidationService struct {

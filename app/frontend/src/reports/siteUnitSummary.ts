@@ -1,4 +1,4 @@
-import type { SiteUnitSummaryOptions, SiteUnitSummaryPreview, SiteUnitSummaryReport, SiteUnitSummaryUnit } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SiteUnitSummaryOptions, SiteUnitSummaryPreview, SiteUnitSummaryReport, SiteUnitSummaryUnit } from '../../bindings/github.com/boostao/vpro/app';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { validateReportUnitNames } from './reportUnitNames';
 

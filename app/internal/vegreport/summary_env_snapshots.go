@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func summaryEnvironmentalLifeformArgument(argument vprocore.ProjectMetadataCell) (string, error) {

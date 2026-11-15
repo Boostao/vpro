@@ -1,7 +1,7 @@
 package references
 
 import (
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 import (
@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/boostao/vpro-wails/internal/listcatalog"
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/internal/listcatalog"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var ParentCodeDatabase = resources.ParentCodesDB

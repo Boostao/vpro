@@ -1,4 +1,4 @@
-import { PlotEntryService } from '../../bindings/github.com/boostao/vpro-wails';
+import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
 import { TwoPageVegetationSession } from './twoPageVegetationSession';
 import type { TwoPageVegetationOwner } from './twoPageVegetationWire';
 import { notifyTwoPageVegetationActivity, subscribeTwoPageVegetationActivity, twoPageVegetationActivity, twoPageVegetationEntries, twoPageVegetationOwnerKey, type TwoPageVegetationActivity } from './twoPageVegetationActivity';

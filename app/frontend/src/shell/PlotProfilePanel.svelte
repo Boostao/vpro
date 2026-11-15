@@ -7,7 +7,7 @@
     type PlotProfileSourceInfo,
     type PlotSummary,
     type ProjectPlotProfileFilterRequest,
-  } from '../../bindings/github.com/boostao/vpro-wails';
+  } from '../../bindings/github.com/boostao/vpro/app';
   import { projectState } from '../shared/state';
   import type { ReadRequests } from '../shared/readRequests';
   import {

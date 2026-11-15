@@ -134,7 +134,7 @@ test('actual field handlers cancel stale reads and distinguish operation holds f
 });
 test('actual field panel associates one live source control with its label and literal suggestions/physical types', () => {
   const component = serverComponent(source('LongVegetationSelectedFieldPreferences.svelte'), 'LongVegetationSelectedFieldPreferences.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationSelectedFieldPreferences': prefs,
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationSelectedFieldPreferences': prefs,
   });
   const html = render(component, { props: { contextId: scope.contextId, preferences: ready(), onReadBusyChange() {} } }).body;
   assert.match(html, /for="long-vegetation-selected-field"/);
@@ -151,10 +151,10 @@ test('actual root remount retains field errors and gates every report operation'
   session.apply({ ...review(), ...owner }); session.editField('new\0field');
   const reportSource = source('LongVegetationReport.svelte');
   const child = serverComponent(source('LongVegetationSelectedFieldPreferences.svelte'), 'LongVegetationSelectedFieldPreferences.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationSelectedFieldPreferences': prefs,
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationSelectedFieldPreferences': prefs,
   });
   const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationPreferences': {},
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './LongVegetationSwitchPreferences.svelte': { default() {} }, './longVegetationThresholdPreferences': {},
     './LongVegetationThresholdPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': {},

@@ -1,4 +1,4 @@
-import type { TableCSVArchiveReview, TableCSVArchiveOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { TableCSVArchiveReview, TableCSVArchiveOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { coreTableSuffixes, validateProjectTableCSVReview, type ValidatedProjectTableCSVReview } from './projectTableCSV';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { Dialogs } from '@wailsio/runtime';

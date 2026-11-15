@@ -1,6 +1,6 @@
 import { finiteSingleValue } from './numericEditor';
 import { wellFormedUTF16 } from './qualityEditor';
-import type { SoilRecordUpdate } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SoilRecordUpdate } from '../../bindings/github.com/boostao/vpro/app';
 
 export type SoilKind = 'Humus' | 'Mineral';
 export interface SoilField {

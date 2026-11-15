@@ -1,7 +1,7 @@
 package references
 
 import (
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 import (
@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/listcatalog"
 )
 
 type QualityProvenance struct {

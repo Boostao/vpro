@@ -9,11 +9,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/boostao/vpro-wails/internal/fs882layout"
-	"github.com/boostao/vpro-wails/internal/sourceform"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/resources"
 )
 
 var twoPageParentLayoutJSON = resources.FS882TwoPageLayoutJSON

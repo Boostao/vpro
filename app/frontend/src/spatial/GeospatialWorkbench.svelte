@@ -22,7 +22,7 @@
     type SpatialAttributeSuggestion,
     type SpatialBatchAuditReport,
     type SpatialWorkbenchPayload,
-  } from '../../bindings/github.com/boostao/vpro-wails';
+  } from '../../bindings/github.com/boostao/vpro/app';
 
   type SpatialPlotQARow = NonNullable<SpatialBatchAuditReport['rows']>[number];
   import {

@@ -1,5 +1,5 @@
 import { wellFormedUTF16 } from './qualityEditor';
-import type { VegetationSpeciesAlias, VegetationSpeciesOption, VegetationSpeciesUpdate } from '../../bindings/github.com/boostao/vpro-wails';
+import type { VegetationSpeciesAlias, VegetationSpeciesOption, VegetationSpeciesUpdate } from '../../bindings/github.com/boostao/vpro/app';
 
 export const speciesForms = ['SubVegAXL_BC', 'SubVegAXL', 'SubVegCXL', 'SubVegDXL', 'SubVegAhtXL', 'SubVegChtXL'] as const;
 export type SpeciesDecisionKind = 'replace' | 'keep' | 'user';

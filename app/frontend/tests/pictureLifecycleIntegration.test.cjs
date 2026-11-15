@@ -28,7 +28,7 @@ function session(port = {}) {
 }
 function registry(services) {
   return loadTypeScript('pictureLifecycleSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': services,
+    '../bindings/github.com/boostao/vpro/app': services,
     './pictureLifecycleSession': sessionModule,
   });
 }

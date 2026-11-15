@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
 )
 
 var pow10Uint64 = [20]uint64{

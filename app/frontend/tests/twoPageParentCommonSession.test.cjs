@@ -154,7 +154,7 @@ function headerComponents() {
     './substrateEditor': loadTypeScript('substrateEditor.ts', { './numericEditor': loadTypeScript('numericEditor.ts') }),
     './siteCodeEditor': loadTypeScript('siteCodeEditor.ts', { './referenceCodeEditor': reference }),
     './regionCodeEditor': loadTypeScript('regionCodeEditor.ts', { './referenceCodeEditor': reference }),
-    '../bindings/github.com/boostao/vpro-wails': {
+    '../bindings/github.com/boostao/vpro/app': {
       CoordinateMode: { CoordinateModeDD: 'dd', CoordinateModeDM: 'dm', CoordinateModeDMS: 'dms' },
     },
   };
@@ -168,7 +168,7 @@ function headerComponents() {
     './SourcePage.svelte': { default: SourcePage }, './twoPageEntryProjection': projection,
     './coordinateEditor': coordinates,
   });
-  const bindingsRoot = path.join(__dirname, '..', 'bindings', 'github.com', 'boostao', 'vpro-wails');
+  const bindingsRoot = path.join(__dirname, '..', 'bindings', 'github.com', 'boostao', 'vpro', 'app');
   const model = [
     readFileSync(path.join(bindingsRoot, 'models.ts'), 'utf8'),
     readFileSync(path.join(bindingsRoot, 'internal', 'vprocore', 'models.ts'), 'utf8'),

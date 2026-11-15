@@ -1,7 +1,7 @@
 import { aCoverSourceNotice } from './heightEditor';
 import { completeCell } from '../admin/projectMetadataRestore';
 import { equalCell, metadataCellText } from '../admin/projectMetadataEditor';
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import type { SIVIProjection, SIVIRow } from './siviHeightEditor';
 
 export interface SIVIChildSourceEdit {

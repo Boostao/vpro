@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app';
 import { completeMetadataCellFromWire } from './siviParentTransport';
 import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { wellFormedUTF16 } from './qualityEditor';

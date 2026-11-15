@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type CoordinateMode string

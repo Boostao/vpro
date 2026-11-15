@@ -1,12 +1,12 @@
 package integration
 
 import (
-	referencespkg "github.com/boostao/vpro-wails/internal/references"
-	"github.com/boostao/vpro-wails/internal/sourceform"
-	"github.com/boostao/vpro-wails/internal/sourceform/sftest"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	referencespkg "github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (

@@ -76,7 +76,7 @@ test('actual manager derived session creation does not notify reactive root obse
   const ts = require('typescript');
   const rootBusy = client.state(false);
   const registry = loadTypeScript('pictureCreationSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {} },
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {} },
     './pictureCreationSession': sessionModule,
   });
   let notifications = 0;
@@ -111,7 +111,7 @@ test('actual binding adapter retains per-parent sessions and root barriers throu
   const calls = [], pending = new Promise(resolve => finishChoose = resolve);
   const request = editor.pictureCreationRequest(selection(), owner, requestId);
   const registry = loadTypeScript('pictureCreationSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {
       ChooseCreationImage(...args) { calls.push(['choose', ...args]); return pending; },
       CreatePicture(token, json) { calls.push(['create', token, JSON.parse(json)]); return operation(receipt(request)); },
       AcknowledgeCreationReceipt(token) { calls.push(['ack', token]); return operation(); },
@@ -235,7 +235,7 @@ test('retained chooser and unknown writes block actual root close/context/naviga
   let finishChoose;
   const calls = [];
   const registry = loadTypeScript('pictureCreationSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {
       ChooseCreationImage: () => new Promise(resolve => finishChoose = resolve),
       CreatePicture: () => { calls.push('create'); return operation(Promise.reject(new Error('Lost write delivery'))); },
       LookupCreationReceipt: json => { calls.push('lookup'); return operation(receipt(JSON.parse(json))); },
@@ -336,7 +336,7 @@ test('verified release unlocks a recovered unattempted selection without dispatc
 test('enabled Add with backend creation disabled retains the refusal until owned readonly recovery proves no selection', async () => {
   const calls = [];
   const registry = loadTypeScript('pictureCreationSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {
       ChooseCreationImage: () => { calls.push('choose'); return operation(Promise.reject(new Error('picture creation writing is disabled in this session'))); },
       RecoverCreationSelection: () => { calls.push('recover'); return operation(null); },
       CreatePicture: () => { throw new Error('Disabled selection recovery cannot Create'); },

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight, RefreshCw } from '@lucide/svelte';
-  import type { HierarchyNode, PlotPage, PlotSummary } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { HierarchyNode, PlotPage, PlotSummary } from '../../bindings/github.com/boostao/vpro/app';
   import { projectState } from '../shared/state';
 
   let {

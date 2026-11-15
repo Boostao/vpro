@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	lifecyclepkg "github.com/boostao/vpro-wails/internal/lifecycle"
+	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
 )
 
 func TestNativeWindowsOptions(t *testing.T) {

@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import { Database } from '@lucide/svelte';
-  import { ContextService, LifecycleService, type StartupState, type ContextSelection, type HierarchyNode, type PlotPage, type PlotSummary, type ProjectPlotProfileFilterRequest } from '../bindings/github.com/boostao/vpro-wails';
+  import { ContextService, LifecycleService, type StartupState, type ContextSelection, type HierarchyNode, type PlotPage, type PlotSummary, type ProjectPlotProfileFilterRequest } from '../bindings/github.com/boostao/vpro/app';
   import { projectState } from './shared/state';
   import Navigation from './shell/Navigation.svelte';
   import HomeWorkspaceHub from './shell/HomeWorkspaceHub.svelte';

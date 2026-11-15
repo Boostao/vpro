@@ -27,7 +27,7 @@ const ready = (owner = scope) => {
 };
 const source = name => readFileSync(srcPath(name), 'utf8');
 const child = () => serverComponent(source('LongVegetationSwitchPreferences.svelte'), 'LongVegetationSwitchPreferences.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationSwitchPreferences': prefs,
+  '../bindings/github.com/boostao/vpro/app': {}, './longVegetationSwitchPreferences': prefs,
 });
 
 test('strict-Go boolean wire detaches actual Svelte proxies and transports exactly four scalar choices', async () => {
@@ -157,7 +157,7 @@ test('actual report composition renders switches and propagates retained draft b
   const session = prefs.longVegetationSwitchPreferencesSession(owner); session.apply(review(undefined, owner));
   session.editSwitch('reportSummary', null);
   const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationPreferences': {},
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': prefs,
     './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
     './longVegetationQualityNullPreferences': {}, './LongVegetationQualityNullPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': {}, './LongVegetationGroupPreferences.svelte': { default() {} },

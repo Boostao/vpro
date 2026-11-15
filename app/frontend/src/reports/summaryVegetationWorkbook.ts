@@ -1,5 +1,5 @@
 import type { SummaryVegetationWorkbookOptions as GeneratedSummaryWorkbookOptions, SummaryVegetationWorkbookAncillaryReview,
-  SummaryVegetationWorkbookReportSummary, VegetationWorkbookOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+  SummaryVegetationWorkbookReportSummary, VegetationWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { lifeformShape as shape } from './lifeformSummary';
 import { workbookText, workbookWorksheetName, workbookFoldedName } from './lifeformWorkbook';
 import { summaryVegetationOptionError, summaryVegetationReferenceGroupingAvailable, summaryVegetationUnanimousCommonAvailable, validateSummaryVegetationAsync,

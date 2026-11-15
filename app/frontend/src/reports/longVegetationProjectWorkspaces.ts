@@ -1,4 +1,4 @@
-import { VegetationReportService } from '../../bindings/github.com/boostao/vpro-wails';
+import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
 import { ReadRequests } from '../shared/readRequests';
 import { createProjectReportWorkspaceRegistry, type ProjectWorkspacePort } from './longVegetationProjectWorkspace.svelte';
 import type { ProjectReportOwner } from './longVegetationProjectReport';

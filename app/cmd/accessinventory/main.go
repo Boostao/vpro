@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/accessinventory"
+	"github.com/boostao/vpro/app/internal/accessinventory"
 )
 
 func main() {

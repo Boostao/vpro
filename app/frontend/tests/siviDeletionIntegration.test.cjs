@@ -58,7 +58,7 @@ test('cached deletion/restoration ownership binds all eight actual methods witho
   const service = Object.fromEntries(Object.entries(methodMap).map(([method, label]) => [method, (...args) => calls.push([label, ...args])]));
   class Session { constructor(owner, port) { this.owner = owner; this.port = port; } }
   const cache = loadTypeScript('siviDeletionSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': { PlotEntryService: service },
+    '../bindings/github.com/boostao/vpro/app': { PlotEntryService: service },
     './siviDeletionSession': { SIVIDeletionSession: Session },
     './siviDeletionRestorationSession': { SIVIDeletionRestorationSession: Session },
   });

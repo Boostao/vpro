@@ -185,7 +185,7 @@ test('rendered title has one labelled two-row textarea control', () => {
   session.apply(review(saved));
   const component = serverComponent(source,
     'LongEnvironmentReport.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': { EnvironmentReportService: {} },
+      '../bindings/github.com/boostao/vpro/app': { EnvironmentReportService: {} },
       './longEnvironmentPreferences': { longEnvironmentPreferencesSession: () => session },
       './longEnvironmentReport': { reportTitleError: () => null },
       './environmentWorkbook': { environmentWorkbookPublicationSession: () => ({

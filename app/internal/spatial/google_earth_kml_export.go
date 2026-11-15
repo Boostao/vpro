@@ -13,8 +13,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func publishGoogleEarthKML(ctx context.Context, requested, title string, points []googleEarthKMLPoint) (vprocore.ArtifactPublication, error) {

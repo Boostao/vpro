@@ -186,7 +186,7 @@ test('no-op full cycles never call the writer; unknown receipts block replay unt
 test('actual Collected panel preserves source groups with one labelled live cycle per shared physical field', async () => {
   const { render } = await import('svelte/server');
   const component = serverComponent(readFileSync(srcPath('SIVICollectedPanel.svelte'), 'utf8'), 'SIVICollectedPanel.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
+    '../bindings/github.com/boostao/vpro/app': { AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' } },
     './projectMetadataEditor': metadata, './siviCollectedEditor': editor,
   });
   const { owner } = fixture();

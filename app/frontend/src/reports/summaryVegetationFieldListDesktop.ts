@@ -1,4 +1,4 @@
-import { VegetationReportService } from '../../bindings/github.com/boostao/vpro-wails';
+import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
 import { fieldListJSON, fieldListOwner, validateFieldListReview, type FieldListOwner, type FieldListRead,
   type FieldListReview, type SummaryVegetationFieldListSession } from './summaryVegetationFieldList';
 import { fieldListRegistry } from './summaryVegetationFieldListSessions';

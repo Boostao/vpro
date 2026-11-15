@@ -23,7 +23,7 @@ const ready = (unitGroups=1,backend=true,client=true) => {
 };
 const source = name => readFileSync(srcPath(name),'utf8');
 const child = () => serverComponent(source('LongVegetationUnitPreferences.svelte'),'LongVegetationUnitPreferences.svelte',{
-  '../bindings/github.com/boostao/vpro-wails':{}, './longVegetationUnitPreferences':prefs
+  '../bindings/github.com/boostao/vpro/app':{}, './longVegetationUnitPreferences':prefs
 });
 
 test('production unit wire projects actual reactive proxies and sends exact expected/proposed source integers',async()=>{
@@ -159,7 +159,7 @@ test('actual parent unit registry retains invalid drafts across remount and reac
   }
   const component=serverComponent(source('LongVegetationReport.svelte'),
     'LongVegetationReport.svelte',{
-      '../bindings/github.com/boostao/vpro-wails':{},
+      '../bindings/github.com/boostao/vpro/app':{},
       './longVegetationUnitPreferences':{createLongVegetationUnitPreferencesRegistry(){created++;return registry}},
       './LongVegetationUnitPreferences.svelte':{default:child()},
       './longVegetationSelectedUnitSelection':{},'./LongVegetationSelectedUnitSelection.svelte':{default(){}},

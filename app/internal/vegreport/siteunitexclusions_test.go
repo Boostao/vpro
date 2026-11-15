@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestMatchSiteUnitExclusionModesAndDefaults(t *testing.T) {

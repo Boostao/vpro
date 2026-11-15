@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	picturespkg "github.com/boostao/vpro-wails/internal/pictures"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
+	picturespkg "github.com/boostao/vpro/app/internal/pictures"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type PictureService struct {

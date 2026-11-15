@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	lifecyclepkg "github.com/boostao/vpro-wails/internal/lifecycle"
-	sqlutilpkg "github.com/boostao/vpro-wails/internal/sqlutil"
+	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
+	sqlutilpkg "github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 

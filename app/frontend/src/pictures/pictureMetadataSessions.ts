@@ -1,4 +1,4 @@
-import { PictureService } from '../../bindings/github.com/boostao/vpro-wails';
+import { PictureService } from '../../bindings/github.com/boostao/vpro/app';
 import { PictureMetadataSession } from './pictureMetadataSession';
 import type { PictureOwner } from './pictureRead';
 

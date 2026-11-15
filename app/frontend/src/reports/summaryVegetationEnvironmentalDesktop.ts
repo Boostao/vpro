@@ -1,4 +1,4 @@
-import { VegetationReportService } from '../../bindings/github.com/boostao/vpro-wails';
+import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
 import { summaryEnvironmentalLifeformRegistry, type SummaryEnvironmentalPort } from './summaryVegetationEnvironmental';
 
 export const summaryEnvironmentalEnabled = true;

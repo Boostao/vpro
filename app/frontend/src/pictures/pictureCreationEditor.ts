@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { pictureMetadataFromWire, type PictureOwner, type PictureReview } from './pictureRead';
 import { equalCell } from '../admin/projectMetadataEditor';
 import { wellFormedUTF16 } from '../entry/qualityEditor';

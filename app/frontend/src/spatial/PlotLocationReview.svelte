@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { SpatialService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { SpatialService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { validatePlotLocationReview, type ValidatedPlotLocationReview } from './plotLocationReview';
   import { reportCellText } from '../reports/longEnvironmentReport';

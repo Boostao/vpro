@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack, type Snippet } from 'svelte';
-  import { PlotEntryService, AuditRestoreAction, type ListItem } from '../../bindings/github.com/boostao/vpro-wails';
+  import { PlotEntryService, AuditRestoreAction, type ListItem } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import TwoPageParentCommonFields from './TwoPageParentCommonFields.svelte';

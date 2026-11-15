@@ -211,7 +211,7 @@ test('compiled SSR consumes callbacks, literal table/group captions and portable
   source = source.replace('let workbook = $state.raw<MatrixWorkbookReview | null>(null);',
     `let workbook = $state.raw<MatrixWorkbookReview | null>(${JSON.stringify(fixture().review)});`);
   const component = serverComponent(source, 'SubzoneMatrixReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { EnvironmentReportService: {} },
+    '../bindings/github.com/boostao/vpro/app': { EnvironmentReportService: {} },
     './subzoneMatrixReport': { ...matrix, matrixPublicationSession: () => new matrix.MatrixPublicationSession(owner) },
   });
   const { render } = await import(pathToFileURL(require.resolve('svelte/server')).href);

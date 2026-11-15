@@ -214,7 +214,7 @@ function componentHarness({ enabled = true, service = {}, mod = moduleFor(), csv
   const destroy = [], changes = [], reads = { tracked: 0, cancelled: 0 };
   const dependencies = {
     svelte: { onDestroy: callback => destroy.push(callback) },
-    '../bindings/github.com/boostao/vpro-wails': { ImportExportService: service },
+    '../bindings/github.com/boostao/vpro/app': { ImportExportService: service },
     './readRequests': { ReadRequests: class { track(value) { reads.tracked++; return value; } cancelAll() { reads.cancelled++; } } },
     './projectTableCSV': csvModule, './longEnvironmentReport': { reportCellText: String }, './tableCSVArchiveExport': mod,
   };
@@ -399,7 +399,7 @@ test('UI literal opt-in, labels, receipts above fields and existing app native/n
   const { render } = await import('svelte/server');
   const mod = moduleFor();
   const component = serverComponent(componentSource, 'ProjectTableCSVReview.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './projectTableCSV': csv,
+    '../bindings/github.com/boostao/vpro/app': {}, './projectTableCSV': csv,
     './longEnvironmentReport': { reportCellText: String }, './tableCSVArchiveExport': mod,
   });
   const html = render(component, { props: { ...owner, onBusyChange() {} } }).body;

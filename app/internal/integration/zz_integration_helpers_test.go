@@ -1,15 +1,15 @@
 package integration
 
 import (
-	"github.com/boostao/vpro-wails/internal/classification"
-	"github.com/boostao/vpro-wails/internal/datasheet"
-	"github.com/boostao/vpro-wails/internal/references"
-	"github.com/boostao/vpro-wails/internal/sourceform"
-	"github.com/boostao/vpro-wails/internal/sourceform/sftest"
-	"github.com/boostao/vpro-wails/internal/spatial"
-	"github.com/boostao/vpro-wails/internal/twopage"
-	"github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/datasheet"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sourceform/sftest"
+	"github.com/boostao/vpro/app/internal/spatial"
+	"github.com/boostao/vpro/app/internal/twopage"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (

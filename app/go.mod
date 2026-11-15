@@ -1,4 +1,4 @@
-module github.com/boostao/vpro-wails
+module github.com/boostao/vpro/app
 
 go 1.25.0
 

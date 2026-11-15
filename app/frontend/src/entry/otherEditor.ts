@@ -1,5 +1,5 @@
 import { wellFormedUTF16 } from './qualityEditor';
-import type { OtherRecordUpdate } from '../../bindings/github.com/boostao/vpro-wails';
+import type { OtherRecordUpdate } from '../../bindings/github.com/boostao/vpro/app';
 
 export const otherFields = [
   { key: 'dataName', column: 'DataName', kind: 'text', maximum: 50 },

@@ -23,7 +23,7 @@ const ready = (enforce = false, unitGroups = 2) => {
   session.apply(review(enforce, unitGroups)); return session;
 };
 const panel = () => serverComponent(source('LongVegetationEnforcementPreferences.svelte'), 'LongVegetationEnforcementPreferences.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {},
+  '../bindings/github.com/boostao/vpro/app': {},
 });
 
 test('strict production-Go enforcement wire detaches actual client proxy pairs and printers', async () => {
@@ -147,7 +147,7 @@ test('actual report retains enforcement draft barriers across remounts', () => {
   session.apply({ ...review(), ...owner }); session.editEnforce(null);
   const reportSource = source('LongVegetationReport.svelte');
   const dependencies = {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longEnvironmentReport': {}, './longVegetationReport': {},
+    '../bindings/github.com/boostao/vpro/app': {}, './longEnvironmentReport': {}, './longVegetationReport': {},
     './longVegetationEnforcementPreferences': { createLongVegetationEnforcementPreferencesRegistry: () => registry },
     './LongVegetationEnforcementPreferences.svelte': { default: panel() },
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },

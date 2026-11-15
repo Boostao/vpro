@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/lmh25rules"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/lmh25rules"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func strPtr(s string) *string     { return &s }

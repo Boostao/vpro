@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { VegetationReportService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { longVegetationNamingChoices, type LongVegetationNamingPreferencesSession } from './longVegetationNamingPreferences';
 

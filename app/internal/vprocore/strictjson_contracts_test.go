@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func TestVProCoreStrictJSONDuplicateKeysAndTrailingTokensWhilePreservingCalibratedContracts(t *testing.T) {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import { PlotEntryService, type ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+  import { PlotEntryService, type ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
   import SoilReferenceChoices from './SoilReferenceChoices.svelte';
   import { SoilReferenceLookup, type SoilReferenceView } from './twoPageSoilReferences';
   import { twoPageSoilSession, twoPageSoilWritingEnabled, twoPageSoilCreationEnabled } from './twoPageSoilSessions';

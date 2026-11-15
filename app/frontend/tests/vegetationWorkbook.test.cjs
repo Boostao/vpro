@@ -355,7 +355,7 @@ test('SSR remount shows persistent unknown alert and explicit acknowledgement wi
   await workbook.vegetationWorkbookPublicationSession(owned, true).publish(input, destination, async () => null);
   const component = serverComponent(source(),
     'LongVegetationReport.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': { VegetationReportService: {} },
+      '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
       './longEnvironmentReport': environment, './longVegetationReport': report, './vegetationWorkbook': workbook, './longVegetationPreferences': {},
       './longVegetationStatisticsPreferences': {},
       './longVegetationSwitchPreferences': {},

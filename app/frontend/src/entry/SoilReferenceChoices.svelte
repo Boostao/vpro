@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
   import type { SoilReferenceField } from './twoPageSoilReferences';
   import { metadataCellText } from '../admin/projectMetadataEditor';
 

@@ -14,8 +14,8 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func workspaceScratchDir(tb testing.TB) string {

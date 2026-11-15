@@ -22,7 +22,7 @@ const ready = (groupBy = 1, availability = all, frontend = client) => {
 };
 const source = name => readFileSync(srcPath(name), 'utf8');
 const child = () => serverComponent(source('LongVegetationGroupPreferences.svelte'), 'LongVegetationGroupPreferences.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationQualityNullPreferences': {}, './LongVegetationQualityNullPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': prefs,
+  '../bindings/github.com/boostao/vpro/app': {}, './longVegetationQualityNullPreferences': {}, './LongVegetationQualityNullPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': prefs,
   './longVegetationQualityMinimumPreferences': {}, './LongVegetationQualityMinimumPreferences.svelte': { default() {} },
   './longVegetationNamingPreferences': {}, './LongVegetationNamingPreferences.svelte': { default() {} },
   './longVegetationSelectedFieldPreferences': {}, './LongVegetationSelectedFieldPreferences.svelte': { default() {} },
@@ -142,7 +142,7 @@ test('actual parent module retains grouping validation across remount without re
   }
   const component = serverComponent(source('LongVegetationReport.svelte'),
     'LongVegetationReport.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': {},
+      '../bindings/github.com/boostao/vpro/app': {},
       './longVegetationQualityNullPreferences': {}, './LongVegetationQualityNullPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': { createLongVegetationGroupPreferencesRegistry() { created++; return registry; } },
       './longVegetationQualityMinimumPreferences': {}, './LongVegetationQualityMinimumPreferences.svelte': { default() {} },
       './longVegetationNamingPreferences': {}, './LongVegetationNamingPreferences.svelte': { default() {} },

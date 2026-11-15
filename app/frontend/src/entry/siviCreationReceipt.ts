@@ -1,4 +1,4 @@
-import type { SIVICreationResult, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SIVICreationResult, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import defaults from '../../../resources/sivi-new-row-defaults.json';
 import { equalCell } from '../admin/projectMetadataEditor';
 import { wellFormedUTF16 } from './qualityEditor';

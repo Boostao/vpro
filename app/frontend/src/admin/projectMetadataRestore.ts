@@ -1,4 +1,4 @@
-import type { AuditRestoreAction, AuditRestoreResult, ProjectMetadataCell, ProjectMetadataRestore, ProjectMetadataRestoreHistory, ProjectMetadataRestoreReview } from '../../bindings/github.com/boostao/vpro-wails';
+import type { AuditRestoreAction, AuditRestoreResult, ProjectMetadataCell, ProjectMetadataRestore, ProjectMetadataRestoreHistory, ProjectMetadataRestoreReview } from '../../bindings/github.com/boostao/vpro/app';
 import { beginMetadataDraft, equalCell } from './projectMetadataEditor';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 

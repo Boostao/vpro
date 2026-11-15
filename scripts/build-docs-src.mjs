@@ -9,7 +9,7 @@ const outDir = path.join(repoRoot, 'docs-src');
 fs.mkdirSync(outDir, { recursive: true });
 
 const provenance = JSON.parse(
-  fs.readFileSync(path.join(repoRoot, 'resources', 'standards-2026-provenance.json'), 'utf8')
+  fs.readFileSync(path.join(repoRoot, 'app', 'resources', 'standards-2026-provenance.json'), 'utf8')
 );
 
 const lmh25Fields = [
@@ -703,5 +703,5 @@ fs.writeFileSync(path.join(outDir, 'tours.json'), JSON.stringify(tours, null, 2)
 fs.writeFileSync(path.join(outDir, 'shortcuts.json'), JSON.stringify(shortcuts, null, 2) + '\n');
 fs.writeFileSync(path.join(outDir, 'whats_new.json'), JSON.stringify(whatsNew, null, 2) + '\n');
 fs.writeFileSync(path.join(outDir, 'data_use_agreement.json'), JSON.stringify(dataUseAgreement, null, 2) + '\n');
-fs.writeFileSync(path.join(repoRoot, 'resources', 'help_bundle.json'), JSON.stringify(bundle, null, 2) + '\n');
-console.log(`Compiled docs-src/ (${lmh25Fields.length} LMH25 fields, ${decisionKeys.length} keys, ${guides.length} guides, ${tours.length} tours) -> resources/help_bundle.json`);
+fs.writeFileSync(path.join(repoRoot, 'app', 'resources', 'help_bundle.json'), JSON.stringify(bundle, null, 2) + '\n');
+console.log(`Compiled docs-src/ (${lmh25Fields.length} LMH25 fields, ${decisionKeys.length} keys, ${guides.length} guides, ${tours.length} tours) -> app/resources/help_bundle.json`);

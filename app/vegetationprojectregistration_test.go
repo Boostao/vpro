@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	vegreportpkg "github.com/boostao/vpro-wails/internal/vegreport"
+	vegreportpkg "github.com/boostao/vpro/app/internal/vegreport"
 )
 
 func TestProjectRegistrationUnconditionalDefaultOn(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	vegreportpkg "github.com/boostao/vpro-wails/internal/vegreport"
+	vegreportpkg "github.com/boostao/vpro/app/internal/vegreport"
 )
 
 type SiteUnitExclusionRule = vegreportpkg.SiteUnitExclusionRule

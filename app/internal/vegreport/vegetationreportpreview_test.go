@@ -1,8 +1,8 @@
 package vegreport
 
 import (
-	"github.com/boostao/vpro-wails/internal/reports/reportcore"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (

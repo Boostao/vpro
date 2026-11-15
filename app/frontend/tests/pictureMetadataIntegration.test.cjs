@@ -79,7 +79,7 @@ test('remounted picture panel exposes retained correction and recovery before it
     './pictureMetadataEditor': editor,
   });
   const panel = serverComponent(source('PicturePanel.svelte'), 'PicturePanel.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { PictureService: {} },
+    '../bindings/github.com/boostao/vpro/app': { PictureService: {} },
     './readRequests': { ReadRequests: class { cancelAll() {} } },
     './pictureRead': picture, './PictureMetadataEditor.svelte': { default: metadataEditor },
     './projectMetadataEditor': metadata,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { ClassificationService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { ClassificationService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { twoPageProfilingFromWire, twoPageProfilingCellLabel, twoPageProfilingRowFields,
     type TwoPageProfilingOwner, type TwoPageProfilingView } from './twoPageProfiling';

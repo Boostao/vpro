@@ -1,5 +1,5 @@
 import { wellFormedUTF16 } from './qualityEditor';
-import type { SpeciesCodeCheckOption, SpeciesCodeCheckReview, SpeciesCodeCheckRow, SpeciesCodeCheckUpdate } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SpeciesCodeCheckOption, SpeciesCodeCheckReview, SpeciesCodeCheckRow, SpeciesCodeCheckUpdate } from '../../bindings/github.com/boostao/vpro/app';
 
 export interface CodeCheckCell {
   row: SpeciesCodeCheckRow;

@@ -258,7 +258,7 @@ test('complete original disclosure renders only its local50-Description page whi
     .replace('let originalsOpen = $state(false)', 'let originalsOpen = $state(untrack(() => initialOpen))')
     .replace('let descriptionOffset = $state(0)', 'let descriptionOffset = $state(untrack(() => initialOffset))');
   const Panel = serverComponent(source, 'TwoPageProfilingPanel.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { ClassificationService: {} },
+    '../bindings/github.com/boostao/vpro/app': { ClassificationService: {} },
     './twoPageProfiling': api,
   });
   const markup = (open, offset) => render(Panel, { props: { ...owner, form: 'FS882-8x6XL',

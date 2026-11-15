@@ -15,7 +15,7 @@ const row = (listName, note) => ({
 function component() {
   return serverComponent(source,
     'SoilCodeReference.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': {
+      '../bindings/github.com/boostao/vpro/app': {
         SoilCodeService: {
           ListGreatGroupChoices: () => { throw new Error('SSR must not invoke native methods'); },
           ListSubgroupChoices: () => { throw new Error('SSR must not invoke native methods'); }

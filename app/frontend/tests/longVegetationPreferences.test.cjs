@@ -142,7 +142,7 @@ test('title presentation has one visible labelled control and retained safety', 
   session.apply(review('First\r\nSecond', owner)); session.edit('invalid\0draft');
   const component = serverComponent(source,
     'LongVegetationReport.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': {},
+      '../bindings/github.com/boostao/vpro/app': {},
       './longVegetationPreferences': prefs,
       './longVegetationStatisticsPreferences': {},
       './longVegetationSwitchPreferences': {},

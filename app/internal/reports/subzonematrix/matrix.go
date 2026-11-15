@@ -7,7 +7,7 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/internal/accesscompare"
+	"github.com/boostao/vpro/app/internal/accesscompare"
 )
 
 const (

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	datasheetpkg "github.com/boostao/vpro-wails/internal/datasheet"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
+	datasheetpkg "github.com/boostao/vpro/app/internal/datasheet"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type DatasheetColumnMeta = datasheetpkg.DatasheetColumnMeta

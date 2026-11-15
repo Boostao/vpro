@@ -1,4 +1,4 @@
-import type { ProjectMetadataTable } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataTable } from '../../bindings/github.com/boostao/vpro/app';
 import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
 import { lifeformShape } from './lifeformSummary';
 import { wellFormedUTF16 } from '../entry/qualityEditor';

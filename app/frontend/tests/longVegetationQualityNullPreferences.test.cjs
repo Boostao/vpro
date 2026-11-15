@@ -25,7 +25,7 @@ const ready = (owner = scope) => {
 };
 const source = name => readFileSync(srcPath(name), 'utf8');
 const child = () => serverComponent(source('LongVegetationQualityNullPreferences.svelte'), 'LongVegetationQualityNullPreferences.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationQualityNullPreferences': prefs,
+  '../bindings/github.com/boostao/vpro/app': {}, './longVegetationQualityNullPreferences': prefs,
 });
 
 test('strict-Go quality wire transports three booleans detached from actual Svelte proxies', async () => {
@@ -148,7 +148,7 @@ test('actual report retains errors across remount and propagates barriers', () =
   const session = prefs.longVegetationQualityNullPreferencesSession(owner); session.apply(review(undefined, owner));
   session.editNullFlag('vegIncludeNulls', null);
   const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationPreferences': {},
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
     './longVegetationGroupPreferences': {}, './LongVegetationGroupPreferences.svelte': { default() {} },

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	lifecyclepkg "github.com/boostao/vpro-wails/internal/lifecycle"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
+	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type HelpService struct {

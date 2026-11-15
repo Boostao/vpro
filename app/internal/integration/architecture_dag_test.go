@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/spatial"
-	"github.com/boostao/vpro-wails/internal/vprocore"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/internal/spatial"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,7 +24,7 @@ type goListPackage struct {
 }
 
 func TestFourLayerAcyclicArchitectureZeroLayer2SiblingImports(t *testing.T) {
-	const modulePrefix = "github.com/boostao/vpro-wails/"
+	const modulePrefix = "github.com/boostao/vpro/app/"
 
 	// All Layer-2 domain packages (covering the 12 domain service packages plus sub-domain Layer-2 packages).
 	// None of these packages may import any sibling Layer-2 package across Imports, TestImports, or XTestImports.

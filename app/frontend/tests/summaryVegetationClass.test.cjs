@@ -94,7 +94,7 @@ test('class validation Cancel then newer Show request cannot accept stale numeri
 test('compiled class panel retains Show labels and source-enabled but ignored Show on cover mode', async () => {
   const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
   const panel = serverComponent(component, 'SummaryVegetationReport.svelte', {
-    './summaryVegetation': report, '../bindings/github.com/boostao/vpro-wails': { VegetationReportService: {} },
+    './summaryVegetation': report, '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
   });
   const session = report.summaryVegetationSession(owner);
   session.edit(1, 4, 20);

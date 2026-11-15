@@ -16,8 +16,8 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/boostao/vpro-wails/internal/accessreader"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/accessreader"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 type becSourceCol struct {

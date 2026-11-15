@@ -1,4 +1,4 @@
-import type { SiteUnitSummaryWorkbookReview, SiteUnitSummaryWorkbookOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SiteUnitSummaryWorkbookReview, SiteUnitSummaryWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import type { GoogleEarthScope } from '../spatial/googleEarthReview';
 import { validateSiteUnitSummary, summaryLifeformCaptions, type SiteUnitSummaryMode, type ValidatedSiteUnitSummary } from './siteUnitSummary';
 import { completeCell } from '../admin/projectMetadataRestore';

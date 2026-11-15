@@ -8,7 +8,7 @@
     type AccessProjectImportResult,
     type ContextSelection,
     type ProjectInfo,
-  } from '../../bindings/github.com/boostao/vpro-wails';
+  } from '../../bindings/github.com/boostao/vpro/app';
   import { projectState } from '../shared/state';
 
   let {

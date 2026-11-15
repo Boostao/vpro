@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
-  import type { VegRecord } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { VegRecord } from '../../bindings/github.com/boostao/vpro/app';
 
   let {
     vegList,

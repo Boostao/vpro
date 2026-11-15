@@ -1,4 +1,4 @@
-import type { SiteUnitEnvironmentReview, SiteUnitEnvironmentTransfer, SiteUnitEnvironmentResult } from '../../bindings/github.com/boostao/vpro-wails';
+import type { SiteUnitEnvironmentReview, SiteUnitEnvironmentTransfer, SiteUnitEnvironmentResult } from '../../bindings/github.com/boostao/vpro/app';
 import { transferColumns } from './environmentSUTransfer';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { equalCell } from '../admin/projectMetadataEditor';

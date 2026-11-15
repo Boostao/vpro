@@ -121,7 +121,7 @@ test('Parent component renders exactly its source slots and metadata distinction
       './formPresentation': presentationHelpers().presentation
     });
     const Component = serverComponent(source, 'ParentCodeFields.svelte', {
-      '../bindings/github.com/boostao/vpro-wails': { ParentCodeService: { ListChoices() { throw Error('No native calls in SSR'); } } },
+      '../bindings/github.com/boostao/vpro/app': { ParentCodeService: { ListChoices() { throw Error('No native calls in SSR'); } } },
       './qualityEditor': { QualityLookup: class {
         constructor(fetch, publish, list) { this.list = list; }
         snapshot() { return views()[this.list]; } dispose() {}

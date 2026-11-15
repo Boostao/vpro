@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { OrdinaryAuditReadEntry } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { OrdinaryAuditReadEntry } from '../../bindings/github.com/boostao/vpro/app';
 
   const adminColumns = new Set(['officenotes', 'startdate', 'becsiteunit', 'enteredby', 'siteplotquality', 'soilplotquality', 'usersiteunit', 'vegplotquality', 'humusthickness', 'updatedfromcards']);
   const headerAliases: Record<string, string> = {
@@ -51,7 +51,7 @@
 </script>
 
 <script lang="ts">
-  import { AuditRestoreAction } from '../../bindings/github.com/boostao/vpro-wails';
+  import { AuditRestoreAction } from '../../bindings/github.com/boostao/vpro/app';
   let { entries, project, plot, capabilities, enabled, disabled, gateReason, revision, onrestore }: {
     entries: OrdinaryAuditReadEntry[]; project: string; plot: string; capabilities: AuditCapabilities;
     enabled: boolean; disabled: boolean; gateReason: string; revision: number;

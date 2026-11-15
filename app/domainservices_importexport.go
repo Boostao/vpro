@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/boostao/vpro-wails/internal/interchange"
-	"github.com/boostao/vpro-wails/internal/lumping"
+	"github.com/boostao/vpro/app/internal/interchange"
+	"github.com/boostao/vpro/app/internal/lumping"
 )
 
 type ImportExportService struct {

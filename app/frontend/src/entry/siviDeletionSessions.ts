@@ -1,4 +1,4 @@
-import { PlotEntryService } from '../../bindings/github.com/boostao/vpro-wails';
+import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
 import { SIVIDeletionSession } from './siviDeletionSession';
 import { SIVIDeletionRestorationSession } from './siviDeletionRestorationSession';
 import type { SIVISpeciesOwner } from './siviSpeciesEditor';

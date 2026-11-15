@@ -16,7 +16,7 @@ const owner = { contextId, project, plot, form };
 const enabled = {};
 function registry(_environment = {}, overrides = {}) {
   const calls = [], dependencies = {
-    '../bindings/github.com/boostao/vpro-wails': { PlotEntryService: {
+    '../bindings/github.com/boostao/vpro/app': { PlotEntryService: {
       GetTwoPageVegetationOriginal: overrides.GetTwoPageVegetationOriginal ?? overrides.GetOriginal ?? ((...args) => { calls.push(['read', ...args]); return Promise.resolve(client.proxy(sample().history.Request.original)); }),
       SaveTwoPageVegetation: overrides.SaveTwoPageVegetation ?? overrides.Save ?? ((...args) => { calls.push(['save', ...args]); return Promise.resolve(client.proxy(sample())); }),
       RecoverTwoPageVegetationOutcome: overrides.RecoverTwoPageVegetationOutcome ?? overrides.RecoverOutcome ?? ((...args) => { calls.push(['outcome', ...args]); return Promise.resolve(client.proxy(structuredClone(outcomes[3]))); }),

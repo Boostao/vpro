@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { PlotEntryService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
   import { CatalogueLookup } from './catalogueLookup';
 
   let { disabled = false }: { disabled?: boolean } = $props();

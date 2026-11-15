@@ -1,8 +1,8 @@
 package plotentry
 
 import (
-	"github.com/boostao/vpro-wails/internal/references"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (

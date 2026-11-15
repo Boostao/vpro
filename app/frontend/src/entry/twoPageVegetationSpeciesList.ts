@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import type { VegetationReferences, VegetationReferenceTable } from './twoPageVegetationReferences';
 import type { TwoPageVegetationDraft } from './twoPageVegetationEditor';
 import { equalVegetationCell, vegetationNullCell, vegetationSourceCell,

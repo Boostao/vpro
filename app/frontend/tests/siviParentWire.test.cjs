@@ -7,7 +7,7 @@ const path = process.env.VPRO_SIVI_PARENT_WIRE_RECEIPT;
 if (!path) throw new Error('Set VPRO_SIVI_PARENT_WIRE_RECEIPT to a successful verbose TestSIVIParentOriginalWireRoundTrip receipt.');
 const raw = readFileSync(path);
 const receipt = raw.toString(raw[0] === 0xff && raw[1] === 0xfe ? 'utf16le' : 'utf8');
-assert.match(receipt, /^ok\s+github.com\/boostao\/vpro-wails\s+[0-9.]+s\s*$/m);
+assert.match(receipt, /^ok\s+github\.com\/boostao\/(?:vpro\/app|vpro-wails)\s+[0-9.]+s\s*$/m);
 assert.doesNotMatch(receipt, /^FAIL/m);
 function emitted(name) {
   const matches = [...receipt.matchAll(new RegExp(`SIVI_PARENT_WIRE_${name}:([A-Za-z0-9+/=]+)`, 'g'))];

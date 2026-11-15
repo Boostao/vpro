@@ -1,4 +1,4 @@
-import type { AuditEntry, ProjectMetadataColumn, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { AuditEntry, ProjectMetadataColumn, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { equalCell } from '../admin/projectMetadataEditor';
 import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { wellFormedUTF16 } from './qualityEditor';

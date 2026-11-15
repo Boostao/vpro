@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { PaperControl } from './paperLayout';
-  import type { ListItem } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { ListItem } from '../../bindings/github.com/boostao/vpro/app';
   import { metadataCellText } from '../admin/projectMetadataEditor';
   import { twoPageParentCommonCell, twoPageParentCommonDirty, twoPageParentCommonFields,
     type TwoPageParentCommonColumn, type TwoPageParentCommonInput,

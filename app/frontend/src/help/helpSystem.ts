@@ -1,5 +1,5 @@
 import { Call } from '@wailsio/runtime';
-import type { ProjectState } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectState } from '../../bindings/github.com/boostao/vpro/app';
 
 export type HelpDrawerTab = 'inspector' | 'keys' | 'guides';
 export type HelpMenuAction = 'guide' | 'tours' | 'shortcuts' | 'whats-new' | 'reset-sample' | 'about';

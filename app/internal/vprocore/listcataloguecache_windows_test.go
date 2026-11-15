@@ -1,7 +1,7 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro-wails/internal/references"
+	"github.com/boostao/vpro/app/internal/references"
 )
 
 import (

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { LifecycleService, type StartupRecoveryRequest, type StartupState } from '../../bindings/github.com/boostao/vpro-wails';
+  import { LifecycleService, type StartupRecoveryRequest, type StartupState } from '../../bindings/github.com/boostao/vpro/app';
 
   let {
     startupFailure,

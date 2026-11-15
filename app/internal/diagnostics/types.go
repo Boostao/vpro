@@ -1,6 +1,6 @@
 package diagnostics
 
-import "github.com/boostao/vpro-wails/internal/sqlutil"
+import "github.com/boostao/vpro/app/internal/sqlutil"
 
 // SMRRows defines the canonical 9 BEC Relative Soil Moisture Regime rows (0 = Very Xeric .. 8 = Hydric).
 var SMRRows = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8"}

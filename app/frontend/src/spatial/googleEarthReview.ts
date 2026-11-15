@@ -1,4 +1,4 @@
-import type { GoogleEarthDescriptionFields, GoogleEarthReview, GoogleEarthReviewRow, EnvironmentReportField, ProjectMetadataColumn, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { GoogleEarthDescriptionFields, GoogleEarthReview, GoogleEarthReviewRow, EnvironmentReportField, ProjectMetadataColumn, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { exactLongitudeNegation } from './plotLocationReview';

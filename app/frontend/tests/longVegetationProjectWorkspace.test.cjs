@@ -342,7 +342,7 @@ function sdkRegistry(bindings) {
     compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
   }).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,require(name) {
-    if(name.includes('bindings/github.com/boostao/vpro-wails')) return bindings;
+    if(name.includes('bindings/github.com/boostao/vpro/app')) return bindings;
     if(name.endsWith('/readRequests')) return reads;
     if(name==='./longVegetationProjectWorkspace.svelte') return workspaceModule;
     throw new Error(`Unexpected registry dependency ${name}`);

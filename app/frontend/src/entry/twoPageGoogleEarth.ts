@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import type { TwoPageParentForm } from './twoPageParentSession';
 import { siviMetadataTableFromWire } from './siviParentTransport';
 import { wellFormedUTF16 } from './qualityEditor';

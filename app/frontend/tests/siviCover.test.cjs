@@ -476,7 +476,7 @@ test('panel compiles without warnings and renders one visible associated cover c
   const filename = 'SIVICoverPanel.svelte';
   const source = readFileSync(srcPath(filename), 'utf8');
   const component = serverComponent(source, filename, {
-    '../bindings/github.com/boostao/vpro-wails': {
+    '../bindings/github.com/boostao/vpro/app': {
       AuditRestoreAction: { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' },
     },
     './siviCoverEditor': editor, './projectMetadataEditor': metadata,

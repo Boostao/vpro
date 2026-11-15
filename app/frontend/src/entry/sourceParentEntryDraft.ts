@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { metadataCellText, equalCell } from '../admin/projectMetadataEditor';
 import { wellFormedUTF16 } from './qualityEditor';
 import { ordinaryTextError, sourceParentBooleanNullError } from './ordinaryEditor';

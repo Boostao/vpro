@@ -1,7 +1,7 @@
 import type {
   SiteUnitSummaryExtendedWorkbookOptions, SiteUnitSummaryExtendedWorkbookReview,
   SiteUnitSummaryWorkbookOutcome,
-} from '../../bindings/github.com/boostao/vpro-wails';
+} from '../../bindings/github.com/boostao/vpro/app';
 import type { GoogleEarthScope } from '../spatial/googleEarthReview';
 import { ownedScope } from '../spatial/googleEarthReview';
 import { lifeformShape as shape } from './lifeformSummary';

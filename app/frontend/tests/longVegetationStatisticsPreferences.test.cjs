@@ -138,7 +138,7 @@ test('statistics preferences render live labelled choices and correction while b
   const owner = { ...scope, contextId: 'statistics-render-true' };
   const session = prefs.longVegetationStatisticsPreferencesSession(owner); session.apply(review(undefined, owner)); session.editAverage('');
   const component = serverComponent(source, 'LongVegetationReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationPreferences': titles,
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': titles,
     './longVegetationStatisticsPreferences': prefs, './longEnvironmentReport': {}, './longVegetationReport': {},
     './longVegetationSwitchPreferences': {},
     './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },

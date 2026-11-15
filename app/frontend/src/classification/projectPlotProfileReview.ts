@@ -1,5 +1,5 @@
 import type { ProjectMetadataCell, ProjectMetadataColumn, ProjectMetadataTable, ProjectPlotProfileReview, ProjectPlotProfileResult,
-  ProjectPlotProfileFilterRequest, ProjectPlotProfileNavigation, PlotSummary, PlotPage, PlotProfileSourceInfo } from '../../bindings/github.com/boostao/vpro-wails';
+  ProjectPlotProfileFilterRequest, ProjectPlotProfileNavigation, PlotSummary, PlotPage, PlotProfileSourceInfo } from '../../bindings/github.com/boostao/vpro/app';
 import { metadataCellText } from '../admin/projectMetadataEditor';
 
 export const plotProfileFields = ['Order', 'Table', 'Field', 'Operator', 'Layer', 'Species', 'Criteria', 'Operation', 'PlotCount'] as const;

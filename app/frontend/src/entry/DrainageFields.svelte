@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack, type Snippet } from 'svelte';
-  import { PlotEntryService, type FS882Header } from '../../bindings/github.com/boostao/vpro-wails';
+  import { PlotEntryService, type FS882Header } from '../../bindings/github.com/boostao/vpro/app';
   import { CatalogueLookup } from './catalogueLookup';
   import type { PaperControl } from './paperLayout';
   import FieldGuidance from './FieldGuidance.svelte';

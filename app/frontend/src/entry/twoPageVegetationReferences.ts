@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app';
 import type { TwoPageVegetationOwner } from './twoPageVegetationWire';
 import { completeMetadataCellFromWire } from './siviMetadataWire';
 import { exactSigned64 } from '../admin/projectMetadataRestore';

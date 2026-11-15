@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/internal/sourceform"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/sourceform"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 func twoPageChildWriterSelectedParent(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, plot, child string) error {

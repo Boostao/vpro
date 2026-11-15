@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/accessinventory"
+	"github.com/boostao/vpro/app/internal/accessinventory"
 )
 
 func fixture(t *testing.T) string {

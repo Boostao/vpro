@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import type { LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences } from '../../bindings/github.com/boostao/vpro/app';
   import type { ProjectUnitPreferencesSession, ProjectUnitSaveRequest } from './longVegetationProjectUnitSession';
 
   let { preferences, fetchPreferences, savePreferences, cancelReads, onChange, operationHeld = false, mutationHeld = false }: {

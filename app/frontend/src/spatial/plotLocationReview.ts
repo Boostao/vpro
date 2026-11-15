@@ -1,4 +1,4 @@
-import type { EnvironmentReportField, PlotLocationReview, PlotLocationReport, PlotLocationRow, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { EnvironmentReportField, PlotLocationReview, PlotLocationReport, PlotLocationRow, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 
 export const plotLocationFieldDefinitions = [

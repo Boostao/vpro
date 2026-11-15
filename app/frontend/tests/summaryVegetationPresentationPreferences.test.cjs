@@ -476,7 +476,7 @@ test('production report wires one presentation pane, peer mutation holds and exp
     'SummaryVegetationReport.svelte', {
       './summaryVegetation': report,
       './summaryVegetationPresentationPreferenceSessions': { summaryVegetationPresentationPreferenceSession: () => presentation },
-      '../bindings/github.com/boostao/vpro-wails': {},
+      '../bindings/github.com/boostao/vpro/app': {},
     });
   const html = render(Panel, { props: { ...owner, onBusyChange() {} } }).body;
   assert.equal(html.split('data-summary-presentation-preferences').length - 1, 1);

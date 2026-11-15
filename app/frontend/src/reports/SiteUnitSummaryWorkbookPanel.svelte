@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
   import type { GoogleEarthScope } from '../spatial/googleEarthReview';
   import { ReadRequests } from '../shared/readRequests';
   import {

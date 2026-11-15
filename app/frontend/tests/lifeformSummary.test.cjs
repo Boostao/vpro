@@ -125,7 +125,7 @@ test('lifeform read-only catalogue descriptions preserve numeric labels and NULL
     .replace("let previewKey = $state('');",
       `let previewKey = $state(${JSON.stringify(JSON.stringify([owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath]))});`);
   const component = serverComponent(source, 'LifeformSummary.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { VegetationReportService: {} },
+    '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
     './LifeformWorkbookPanel.svelte': { default() {} },
     './lifeformSummary': summary,
     './speciesAttributeSummary': loadTypeScript('speciesAttributeSummary.ts', { './lifeformSummary': summary })

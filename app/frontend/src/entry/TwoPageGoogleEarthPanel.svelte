@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { SpatialService } from '../../bindings/github.com/boostao/vpro-wails';
+  import { SpatialService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { googleEarthXMLText } from '../spatial/googleEarthKMLReview';
   import { metadataCellText } from '../admin/projectMetadataEditor';

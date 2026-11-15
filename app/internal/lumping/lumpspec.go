@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const PresetBECProvincialCorrelation2026 = "BEC_Provincial_Correlation_2026"

@@ -1,4 +1,4 @@
-import type { LongVegetationProjectFieldDefinitions, LongVegetationReportScope } from '../../bindings/github.com/boostao/vpro-wails';
+import type { LongVegetationProjectFieldDefinitions, LongVegetationReportScope } from '../../bindings/github.com/boostao/vpro/app';
 import type { ProjectReportOwner } from './longVegetationProjectReport';
 import { projectReportOwnedScope } from './longVegetationProjectReport';
 import type { ReportSourceScope, ValidatedReportScope } from './longVegetationProjectScope';

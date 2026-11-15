@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { FS882Header, ListItem } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { FS882Header, ListItem } from '../../bindings/github.com/boostao/vpro/app';
   import { paperPage, type PaperControl } from './paperLayout';
   import { controlLabel, presentationGroups, wideControl } from './formPresentation';
   import CoordinateFields from './CoordinateFields.svelte';

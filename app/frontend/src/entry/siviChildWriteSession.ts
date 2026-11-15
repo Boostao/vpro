@@ -1,4 +1,4 @@
-import type { AuditRestoreAction, AuditRestoreResult, SIVIVegetationProjection } from '../../bindings/github.com/boostao/vpro-wails';
+import type { AuditRestoreAction, AuditRestoreResult, SIVIVegetationProjection } from '../../bindings/github.com/boostao/vpro/app';
 import type { EditorCloseState } from '../shell/closeLifecycle';
 import { exactSigned64 } from '../admin/projectMetadataRestore';
 import { siviHeightPresentation, type SIVIProjection } from './siviHeightEditor';

@@ -81,7 +81,7 @@ function owned(source = complete(), port = {}) {
   });
 }
 const dependencies = session => ({
-  '../bindings/github.com/boostao/vpro-wails': { PlotEntryService: {
+  '../bindings/github.com/boostao/vpro/app': { PlotEntryService: {
     GetTwoPageSoilReferences() { throw new Error('Unexpected source reference read'); },
   } },
   './twoPageSoilReferences': soilReferences,

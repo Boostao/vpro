@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 // FlatGeobufMagicV3 is the canonical 8-byte OGC FlatGeobuf v3.0.1 signature: "fgb\x03fgb\x01".

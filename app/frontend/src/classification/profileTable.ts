@@ -1,4 +1,4 @@
-import type { PlotProfileTableReview, PlotProfileFileCreated } from '../../bindings/github.com/boostao/vpro-wails';
+import type { PlotProfileTableReview, PlotProfileFileCreated } from '../../bindings/github.com/boostao/vpro/app';
 import { validateProfileFileReview, validateProfileFileCreated, type ReviewedProfileFile } from './profileFile';
 import { validateProjectPlotProfileReview, type ValidatedProjectPlotProfileReview } from './projectPlotProfileReview';
 

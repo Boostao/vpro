@@ -7,7 +7,7 @@
   import { vegetationAttributeField, type VegetationAttributeDrafts } from './vegetationAttributeEditor';
   import type { CollectedDrafts } from './collectedEditor';
   import type { SpeciesDrafts, SpeciesLists } from './vegetationSpeciesEditor';
-  import type { SoilSuggestion } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { SoilSuggestion } from '../../bindings/github.com/boostao/vpro/app';
   type Row = { id: number; values: Record<string, string | number | boolean | null | undefined> };
   let { name, rows, disabled = true, deleteDisabled = false, revision = 0, onedit, ondelete, onstage, drafts = {}, onotherstage, otherDrafts = {}, onsoilstage, soilDrafts = {}, soilSuggestions = [], onattributestage, attributeDrafts = {}, attributeSuggestions = [], oncollectedstage, collectedDrafts = {}, collectedDisabled = true, onspeciesstage, speciesDrafts = {}, speciesLists = {}, speciesDisabled = true }: {
     name: string; rows: Row[]; disabled?: boolean; revision?: number;

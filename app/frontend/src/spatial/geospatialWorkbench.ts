@@ -1,7 +1,7 @@
 import type {
   PMTilesManifest,
   SpatialWorkbenchPayload,
-} from '../../bindings/github.com/boostao/vpro-wails';
+} from '../../bindings/github.com/boostao/vpro/app';
 
 export type SpatialGeoArrowColumns = SpatialWorkbenchPayload['geoArrow'];
 

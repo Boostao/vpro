@@ -1,5 +1,5 @@
 import type { SiteUnitSpeciesListPreview, SiteUnitSpeciesListRequest, SiteUnitSpeciesListUnit,
-  SiteUnitSpeciesListGroup, SiteUnitSpeciesListRow } from '../../bindings/github.com/boostao/vpro-wails';
+  SiteUnitSpeciesListGroup, SiteUnitSpeciesListRow } from '../../bindings/github.com/boostao/vpro/app';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
 import { validateSiteUnitSummary, summaryLifeformCaptions, type SiteUnitSummaryMode, type ValidatedSiteUnitSummary } from './siteUnitSummary';

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { EnvironmentReportService, type LongEnvironmentPreview } from '../../bindings/github.com/boostao/vpro-wails';
+  import { EnvironmentReportService, type LongEnvironmentPreview } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { reportTitleError, reportCellText, validateLongEnvironmentPreview } from './longEnvironmentReport';
   import { longEnvironmentPreferencesSession } from './longEnvironmentPreferences';

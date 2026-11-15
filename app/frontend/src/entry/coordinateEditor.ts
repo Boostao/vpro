@@ -1,4 +1,4 @@
-import type { CoordinateParts } from '../../bindings/github.com/boostao/vpro-wails';
+import type { CoordinateParts } from '../../bindings/github.com/boostao/vpro/app';
 
 import type { CoordinateDisplayMode } from './paperLayout';
 export type { CoordinateDisplayMode } from './paperLayout';

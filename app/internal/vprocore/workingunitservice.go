@@ -1,8 +1,8 @@
 package vprocore
 
 import (
-	"github.com/boostao/vpro-wails/internal/references"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 import (
@@ -11,7 +11,7 @@ import (
 
 	"errors"
 	"fmt"
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/resources"
 	"os"
 	"path/filepath"
 	"strconv"

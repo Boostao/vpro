@@ -1,7 +1,7 @@
 package integration
 
 import (
-	"github.com/boostao/vpro-wails/internal/spatial"
+	"github.com/boostao/vpro/app/internal/spatial"
 )
 
 import (

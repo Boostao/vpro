@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/resources"
 )
 
 const (

@@ -15,14 +15,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/boostao/vpro-wails/internal/classification"
-	"github.com/boostao/vpro-wails/internal/datasheet"
-	"github.com/boostao/vpro-wails/internal/diagnostics"
-	"github.com/boostao/vpro-wails/internal/interchange"
-	"github.com/boostao/vpro-wails/internal/spatial"
-	"github.com/boostao/vpro-wails/internal/vegreport"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/internal/classification"
+	"github.com/boostao/vpro/app/internal/datasheet"
+	"github.com/boostao/vpro/app/internal/diagnostics"
+	"github.com/boostao/vpro/app/internal/interchange"
+	"github.com/boostao/vpro/app/internal/spatial"
+	"github.com/boostao/vpro/app/internal/vegreport"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/resources"
 	"github.com/xuri/excelize/v2"
 )
 

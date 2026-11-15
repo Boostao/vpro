@@ -1,5 +1,5 @@
 import { finiteSingleValue } from './numericEditor';
-import type { VegetationAttributeUpdate } from '../../bindings/github.com/boostao/vpro-wails';
+import type { VegetationAttributeUpdate } from '../../bindings/github.com/boostao/vpro/app';
 
 export interface VegetationAttributeField { key: string; column: string; long?: boolean; group?: string }
 export const vegetationAttributeFields: readonly VegetationAttributeField[] = [

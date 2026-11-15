@@ -1,4 +1,4 @@
-import type { EnvironmentReportName, LongVegetationDiagnostic, LongVegetationOptions, LongVegetationPlot, LongVegetationPreview, LongVegetationQualityOccurrence, LongVegetationQualityReference, LongVegetationQualitySelection, LongVegetationReport, LongVegetationRow, LongVegetationSelectedUnitOccurrence, LongVegetationSettings, LongVegetationUnit, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { EnvironmentReportName, LongVegetationDiagnostic, LongVegetationOptions, LongVegetationPlot, LongVegetationPreview, LongVegetationQualityOccurrence, LongVegetationQualityReference, LongVegetationQualitySelection, LongVegetationReport, LongVegetationRow, LongVegetationSelectedUnitOccurrence, LongVegetationSettings, LongVegetationUnit, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { reportTitleError } from './longEnvironmentReport';
 import { wellFormedUTF16 } from '../entry/qualityEditor';

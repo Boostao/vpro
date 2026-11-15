@@ -3,7 +3,7 @@ package datasheet
 import (
 	"os"
 
-	"github.com/boostao/vpro-wails/resources"
+	"github.com/boostao/vpro/app/resources"
 )
 
 func init() {

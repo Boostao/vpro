@@ -1,8 +1,8 @@
 package integration
 
 import (
-	"github.com/boostao/vpro-wails/internal/references"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/references"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (
@@ -17,7 +17,7 @@ import (
 	"testing"
 
 	"context"
-	"github.com/boostao/vpro-wails/internal/listcatalog"
+	"github.com/boostao/vpro/app/internal/listcatalog"
 )
 
 func TestSoilCatalogueAll1010CellsAndExact13FieldShape(t *testing.T) {

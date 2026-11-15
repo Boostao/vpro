@@ -185,7 +185,7 @@ test('card-independent retained receipt and readonly recovery controls survive s
   const source = readFileSync(srcPath('ExternalSUEnvironmentTransfer.svelte'), 'utf8');
   const component = serverComponent(source, 'ExternalSUEnvironmentTransfer.svelte', {
     './externalSUEnvironment': external,
-    '../bindings/github.com/boostao/vpro-wails': { ClassificationService: {} },
+    '../bindings/github.com/boostao/vpro/app': { ClassificationService: {} },
   });
   let body = render(component, { props: { ...scope, onclosed() {} } }).body;
   assert.match(body, /Recover transfer outcome readonly/); assert.match(body, new RegExp(wire.request.requestId));

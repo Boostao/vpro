@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/fs882layout"
-	"github.com/boostao/vpro-wails/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/fs882layout"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestFS1333PackagedAggregateHeightsAndChildLinksRemainUnmapped(t *testing.T) {

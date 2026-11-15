@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AuditRestoreAction } from '../../bindings/github.com/boostao/vpro-wails';
+  import { AuditRestoreAction } from '../../bindings/github.com/boostao/vpro/app';
   import { metadataCellText } from '../admin/projectMetadataEditor';
   import { siviIdentityDirty, siviIdentityEditable, siviIdentityErrors, siviIdentityRows } from './siviIdentityEditor';
   import type { SIVIIdentityView } from './siviIdentitySession';

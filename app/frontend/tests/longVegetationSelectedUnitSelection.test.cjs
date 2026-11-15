@@ -139,7 +139,7 @@ test('selector source grouping uses responsive Field List/Selected List and expl
   const session=await ready();session.edit(['Zone']);
   const source=readFileSync(srcPath('LongVegetationSelectedUnitSelection.svelte'),'utf8');
   const component=serverComponent(source,'LongVegetationSelectedUnitSelection.svelte',{
-    '../bindings/github.com/boostao/vpro-wails':{},'./longVegetationSelectedUnitSelection':selection
+    '../bindings/github.com/boostao/vpro/app':{},'./longVegetationSelectedUnitSelection':selection
   });
   const body=render(component,{props:{contextId:owner.contextId,selection:session,onChange(){}}}).body;
   assert.match(body,/Field List/);assert.match(body,/Selected List/);assert.match(body,/Build SU List/);
@@ -183,12 +183,12 @@ test('actual report module retains selector draft safety across remount with ind
     const registry=selection.createSelectedUnitSelectionRegistry(),session=registry(owner);
     await session.load(async()=>review());session.edit(['absent']);
     const child=serverComponent(readFileSync(srcPath('LongVegetationSelectedUnitSelection.svelte'),'utf8'),
-      'LongVegetationSelectedUnitSelection.svelte',{'../bindings/github.com/boostao/vpro-wails':{}});
+      'LongVegetationSelectedUnitSelection.svelte',{'../bindings/github.com/boostao/vpro/app':{}});
     class Publication {view(){return {busy:false,blocked:false,error:'',outcome:null,requestedDestination:''}} subscribe(){return ()=>{}}}
     let created=0;
     const source=readFileSync(srcPath('LongVegetationReport.svelte'),'utf8');
     const component=serverComponent(source,'LongVegetationReport.svelte',{
-      '../bindings/github.com/boostao/vpro-wails':{},
+      '../bindings/github.com/boostao/vpro/app':{},
       './longVegetationSelectedUnitSelection':{createSelectedUnitSelectionRegistry(){created++;return registry}},
       './LongVegetationSelectedUnitSelection.svelte':{default:child},
       './longVegetationUnitPreferences':{},'./LongVegetationUnitPreferences.svelte':{default(){}},

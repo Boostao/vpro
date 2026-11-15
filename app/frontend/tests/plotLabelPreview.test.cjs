@@ -153,7 +153,7 @@ test('saved-label failed reads or date rendering assign no partial card and reta
 test('saved-label server render and navigation remain independently default-off/read-only', () => {
   const source = readFileSync(srcPath('PlotLabelPreview.svelte'), 'utf8');
   const component = serverComponent(source, 'PlotLabelPreview.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': { ContextService: {} },
+    '../bindings/github.com/boostao/vpro/app': { ContextService: {} },
     './scopedPlotLookup': lookup, './plotLabelPreview': labels, './plotLabelRegional': regional,
     './plotLabelPDFExport': {},
   });

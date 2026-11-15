@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/boostao/vpro-wails/internal/accesslayout"
+	"github.com/boostao/vpro/app/internal/accesslayout"
 )
 
 type Inventory struct {

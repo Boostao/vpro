@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { OtherRecord, SoilSuggestion } from '../../bindings/github.com/boostao/vpro-wails';
+  import type { OtherRecord, SoilSuggestion } from '../../bindings/github.com/boostao/vpro/app';
   import SourceChild from './SourceChild.svelte';
   import SourcePage from './SourcePage.svelte';
   import { embeddedForm } from './paperLayout';

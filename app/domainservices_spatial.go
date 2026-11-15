@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	spatialpkg "github.com/boostao/vpro-wails/internal/spatial"
-	vprocorepkg "github.com/boostao/vpro-wails/internal/vprocore"
+	spatialpkg "github.com/boostao/vpro/app/internal/spatial"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type PMTilesArchiveStatus = spatialpkg.PMTilesArchiveStatus

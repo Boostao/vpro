@@ -1,4 +1,4 @@
-import type { EnvironmentWorkbookReview, EnvironmentWorkbookOutcome } from '../../bindings/github.com/boostao/vpro-wails';
+import type { EnvironmentWorkbookReview, EnvironmentWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { validateLongEnvironmentPreview } from './longEnvironmentReport';
 import { lifeformShape as shape, lifeformText as text, type LifeformSummaryOwner } from './lifeformSummary';
 import { PublicationSession } from '../shared/publicationSession';

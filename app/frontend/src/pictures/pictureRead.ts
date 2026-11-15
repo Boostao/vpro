@@ -1,4 +1,4 @@
-import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro-wails';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import { siviMetadataTableFromWire } from '../entry/siviMetadataWire';
 import { metadataCellText } from '../admin/projectMetadataEditor';
 

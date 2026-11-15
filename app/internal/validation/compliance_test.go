@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boostao/vpro-wails/internal/sqlutil"
-	"github.com/boostao/vpro-wails/internal/validation"
-	"github.com/boostao/vpro-wails/internal/vprocore/vprotest"
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/validation"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 func TestRunComplianceValidationAndQuarantineOrphanRecords(t *testing.T) {

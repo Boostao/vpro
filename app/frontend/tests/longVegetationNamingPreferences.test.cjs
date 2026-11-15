@@ -26,7 +26,7 @@ const ready = (mode = 1, field = wire.review.values.selectedField, code = true, 
   session.apply(review(mode, field, code)); return session;
 };
 const child = () => serverComponent(source('LongVegetationNamingPreferences.svelte'), 'LongVegetationNamingPreferences.svelte', {
-  '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationNamingPreferences': prefs,
+  '../bindings/github.com/boostao/vpro/app': {}, './longVegetationNamingPreferences': prefs,
 });
 
 test('strict-Go naming wire detaches actual reactive proxies and transports primitive paired values', async () => {
@@ -162,7 +162,7 @@ test('actual report remount retains naming draft errors and root close barriers'
   const session = registry(owner); session.apply(review(1, 'old field', true, owner)); session.editMode('');
   const reportSource = source('LongVegetationReport.svelte');
   const component = serverComponent(reportSource, 'LongVegetationReport.svelte', {
-    '../bindings/github.com/boostao/vpro-wails': {}, './longVegetationPreferences': {},
+    '../bindings/github.com/boostao/vpro/app': {}, './longVegetationPreferences': {},
     './longVegetationStatisticsPreferences': {}, './longVegetationSwitchPreferences': {},
     './LongVegetationSwitchPreferences.svelte': { default() {} }, './longVegetationThresholdPreferences': {},
     './LongVegetationThresholdPreferences.svelte': { default() {} }, './longVegetationGroupPreferences': {},

@@ -252,7 +252,7 @@ test('owner cache uses actual four generated SDK methods, survives remount and i
     LookupSIVICreationUndoReceipt(...args) { calls.push(['LookupReceipt', ...args]); return read(result(review(), JSON.parse(args[1]), true)); },
   };
   const cache = loadTypeScript('siviCreationUndoSessions.ts', {
-    '../bindings/github.com/boostao/vpro-wails': { PlotEntryService: sdk },
+    '../bindings/github.com/boostao/vpro/app': { PlotEntryService: sdk },
     './siviCreationUndoSession': sessions,
   }).siviCreationUndoSession;
   const mutable = copy(owner), session = cache(mutable); mutable.plot = 'Changed';
