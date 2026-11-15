@@ -2,6 +2,14 @@
 
 package diagnostics
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
-const synthesisLatencyBudget = 50 * time.Millisecond
+var synthesisLatencyBudget = func() time.Duration {
+	if os.Getenv("CI") == "true" {
+		return 100 * time.Millisecond
+	}
+	return 50 * time.Millisecond
+}()

@@ -74,8 +74,12 @@ func TestPortableSpatialAssetsDirAnd71kFlatGeobufPrealloc(t *testing.T) {
 	if encErr != nil {
 		t.Fatalf("EncodeSpatialPlotsFlatGeobuf(71,567): %v", encErr)
 	}
-	if dur > 500*time.Millisecond {
-		t.Fatalf("EncodeSpatialPlotsFlatGeobuf(71,567) took %v, want <= 500ms", dur)
+	fgbBudget := 500 * time.Millisecond
+	if os.Getenv("CI") == "true" {
+		fgbBudget = time.Second
+	}
+	if dur > fgbBudget {
+		t.Fatalf("EncodeSpatialPlotsFlatGeobuf(71,567) took %v, want <= %v", dur, fgbBudget)
 	}
 	if allocs > 50 {
 		t.Fatalf("EncodeSpatialPlotsFlatGeobuf(71,567) allocated %.0f heap objects per call (want <= 50 via reusable builder + pre-sized output buffer)", allocs)

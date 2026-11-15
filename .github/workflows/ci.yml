@@ -189,7 +189,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t pkgs < <(go list -tags sqliteonly ./... | grep -v '/internal/rsidecar$')
-          go test -tags sqliteonly -p 2 -timeout 20m "${pkgs[@]}"
+          go test -tags sqliteonly -timeout 20m "${pkgs[@]}"
       - name: Verify native Linux desktop binary build
         working-directory: app
         run: task linux:build EXTRA_TAGS=sqliteonly

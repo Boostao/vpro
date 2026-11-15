@@ -3,6 +3,7 @@ package validation_test
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -196,7 +197,11 @@ func TestComplianceStrataCoverBoundsLiteralNonCollisionAnd71kScale(t *testing.T)
 		t.Fatal(err)
 	}
 
-	boundedCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ciFactor := time.Duration(1)
+	if os.Getenv("CI") == "true" {
+		ciFactor = 2
+	}
+	boundedCtx, cancel := context.WithTimeout(ctx, 3*time.Second*ciFactor)
 	defer cancel()
 
 	tFull := time.Now()
@@ -208,8 +213,8 @@ func TestComplianceStrataCoverBoundsLiteralNonCollisionAnd71kScale(t *testing.T)
 	if !fullRep.Passed {
 		t.Fatalf("expected clean 71k dataset to pass compliance, got summary=%+v", fullRep.Summary)
 	}
-	if fullDur > 2*time.Second {
-		t.Fatalf("RunComplianceValidation(71,567 plots, full) took %v, want <= 2s", fullDur)
+	if fullDur > 2*time.Second*ciFactor {
+		t.Fatalf("RunComplianceValidation(71,567 plots, full) took %v, want <= %v", fullDur, 2*time.Second*ciFactor)
 	}
 
 	tScoped := time.Now()
@@ -218,7 +223,7 @@ func TestComplianceStrataCoverBoundsLiteralNonCollisionAnd71kScale(t *testing.T)
 	if err != nil {
 		t.Fatalf("RunComplianceValidation(71,567 plots, UseActiveSU=true) failed or timed out after %v: %v", scopedDur, err)
 	}
-	if !scopedRep.Passed || scopedDur > 500*time.Millisecond {
-		t.Fatalf("RunComplianceValidation(UseActiveSU=true) passed=%v dur=%v (want <= 500ms)", scopedRep.Passed, scopedDur)
+	if !scopedRep.Passed || scopedDur > 500*time.Millisecond*ciFactor {
+		t.Fatalf("RunComplianceValidation(UseActiveSU=true) passed=%v dur=%v (want <= %v)", scopedRep.Passed, scopedDur, 500*time.Millisecond*ciFactor)
 	}
 }

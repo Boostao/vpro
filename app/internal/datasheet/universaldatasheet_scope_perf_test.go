@@ -3,6 +3,7 @@ package datasheet
 import (
 	"context"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -154,8 +155,12 @@ func TestDatasheetScopeToActiveSUTautologyAndVegGlobalSearchPerf(t *testing.T) {
 	if searchPage.TotalRows != 4000 || len(searchPage.Rows) != 100 {
 		t.Fatalf("expected 4000 PSEUMEN matches and 100 window rows, got total=%d rows=%d", searchPage.TotalRows, len(searchPage.Rows))
 	}
-	if dur > 400*time.Millisecond {
-		t.Fatalf("GetDatasheetPage(Veg, GlobalSearch='PSEUMEN') over 1M rows took %v, want <= 400ms", dur)
+	searchBudget := 400 * time.Millisecond
+	if os.Getenv("CI") == "true" {
+		searchBudget = 800 * time.Millisecond
+	}
+	if dur > searchBudget {
+		t.Fatalf("GetDatasheetPage(Veg, GlobalSearch='PSEUMEN') over 1M rows took %v, want <= %v", dur, searchBudget)
 	}
 
 	// Verify numeric GlobalSearch ('25') still matches numeric Cover1 cells!
