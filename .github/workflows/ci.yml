@@ -71,6 +71,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Verify Go, Wails v3, WebGPU, and workflow dependency lockstep
+        run: python3 scripts/check-dep-lockstep.py
       - name: Compile docs-src and verify zero help_bundle drift
         run: |
           set -euo pipefail

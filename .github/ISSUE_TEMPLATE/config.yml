@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: VPro Official Downloads & Documentation Portal
+    url: https://boostao.github.io/vpro/
+    about: Download official installers, inspect SHA-256 checksums, and browse offline-parity field manuals.
+  - name: Headless vpro R Companion SDK Reference
+    url: https://boostao.github.io/vpro/r/
+    about: Function reference, scientific vignettes, and Quarto BEC guide documentation.

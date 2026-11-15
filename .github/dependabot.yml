@@ -1,0 +1,71 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Vancouver"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "ci"
+
+  - package-ecosystem: "gomod"
+    directory: "/app"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Vancouver"
+    ignore:
+      # Coupled across app/go.mod, app/frontend/package.json (@wailsio/runtime),
+      # and CI/release workflows (wails3 CLI). Upgrade via scripts/check-dep-lockstep.py.
+      - dependency-name: "github.com/wailsapp/wails/v3"
+      # CGO native bindings with strict cross-OS static/MinGW toolchain pinning
+      # (see scripts/release.py WINDOWS_TOOLCHAINS). Upgrade manually with full release dry-run.
+      - dependency-name: "github.com/duckdb/duckdb-go/v2"
+      - dependency-name: "github.com/mattn/go-sqlite3"
+    groups:
+      go-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    labels:
+      - "dependencies"
+      - "go"
+
+  - package-ecosystem: "npm"
+    directory: "/app/frontend"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/Vancouver"
+    ignore:
+      # Must match github.com/wailsapp/wails/v3 in app/go.mod (enforced by check-dep-lockstep.py).
+      - dependency-name: "@wailsio/runtime"
+    groups:
+      geospatial-webgpu:
+        patterns:
+          - "@deck.gl/*"
+          - "@luma.gl/*"
+          - "maplibre-gl"
+          - "pmtiles"
+      frontend-toolchain:
+        patterns:
+          - "svelte"
+          - "svelte-check"
+          - "@sveltejs/*"
+          - "@tsconfig/svelte"
+          - "vite"
+          - "tailwindcss"
+          - "@tailwindcss/*"
+          - "typescript"
+    labels:
+      - "dependencies"
+      - "frontend"

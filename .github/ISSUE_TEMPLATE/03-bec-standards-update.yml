@@ -1,0 +1,25 @@
+name: Annual BEC Standards Update
+description: Track ingestion of a new BECdb, BCPlantTaxonomy, or LMH25 provincial reference release.
+title: "[Standards Update] "
+labels: ["standards", "maintenance"]
+body:
+  - type: input
+    id: standards_versions
+    attributes:
+      label: Target Standards Versions
+      placeholder: "e.g., BECdb v14 (2027), BCPlantTaxonomy v20 (2027)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: checklist
+    attributes:
+      label: Ingestion & Verification Checklist
+      value: |
+        - [ ] Obtain official `.accdb`/`.zip` source archives and verify SHA-256 hashes
+        - [ ] Run `app/cmd/standards2026` (or successor generator) to rebuild `app/resources/` read-models & `VLists.db`
+        - [ ] Sync `r/data-raw/lists/`, `r/inst/extdata/VLists.db.gz`, and `app/resources/standards-2026-provenance.json`
+        - [ ] Run Desktop Go suite, R `R CMD check --as-cran`, and `node site/build.mjs` to confirm portal provenance match
+        - [ ] Verify Cloud `BECMaster` `standards.library_releases` migration compatibility
+    validations:
+      required: true

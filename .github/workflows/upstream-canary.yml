@@ -1,0 +1,125 @@
+name: Upstream & Cross-OS Canary
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-canary
+  cancel-in-progress: true
+
+jobs:
+  security-audit:
+    name: Dependency Lockstep & Vulnerability Audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: app/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - name: Verify Go, Wails v3, WebGPU, and workflow dependency lockstep
+        run: python3 scripts/check-dep-lockstep.py
+      - name: Install GTK4 & WebKitGTK headers for CGO govulncheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev pkg-config build-essential
+      - name: Run govulncheck on Desktop Go backend
+        working-directory: app
+        env:
+          CGO_ENABLED: '1'
+        run: |
+          set -euo pipefail
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" -tags sqliteonly ./...
+      - name: Run npm production dependency audit
+        working-directory: app/frontend
+        run: npm ci && npm audit --omit=dev --audit-level=high
+
+  r-upstream-suggests-canary:
+    name: R SDK Upstream Suggests Canary (climr / CRAN)
+    runs-on: ubuntu-24.04
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: 'yes'
+      _R_CHECK_FORCE_SUGGESTS_: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: any::rcmdcheck, bcgov/climr, local::.
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          working-directory: r
+          args: 'c("--no-manual", "--as-cran")'
+          error-on: '"warning"'
+
+  cross-os-desktop-compile-smoke:
+    name: Cross-OS Desktop Compile Smoke (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-amd64
+            runner: windows-2022
+            os: windows
+          - name: macos-universal-host
+            runner: macos-15-intel
+            os: macos
+    env:
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: app/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - name: Build production frontend bundle
+        working-directory: app/frontend
+        run: npm ci && npm run build
+      - name: Install Windows pinned CGO toolchain
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          RELEASE_ARCH: amd64
+        run: ./scripts/release-windows.ps1
+      - name: Compile Windows CGO desktop binary
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          GOARCH: amd64
+        run: |
+          Push-Location app
+          go build -tags sqliteonly -o $env:RUNNER_TEMP\VPro-smoke.exe .
+          if ($LASTEXITCODE -ne 0) { throw "Windows desktop compile smoke failed" }
+          Pop-Location
+      - name: Compile macOS CGO desktop binary
+        if: matrix.os == 'macos'
+        run: |
+          set -euo pipefail
+          (cd app && go build -tags sqliteonly -o "$RUNNER_TEMP/VPro-smoke" .)

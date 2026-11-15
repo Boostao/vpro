@@ -1,0 +1,66 @@
+name: Field Entry / VPro 64 Parity Bug
+description: Report a bug in VPro 2.0 Desktop data entry, project operations, reports, or divergence from Access VPro 64.
+title: "[Desktop Parity] "
+labels: ["bug", "desktop", "vpro64-parity"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue with **VPro 2.0 Desktop**. Please avoid uploading private landowner coordinates or sensitive rare-plant locations.
+
+  - type: dropdown
+    id: subsystem
+    attributes:
+      label: App Area / View
+      options:
+        - FS882 Multi-Tab / Two-Page Entry
+        - SIVI / FS1333 Entry
+        - Universal Datasheet Grid
+        - SU & Hierarchy Explorer / Plot Profiling / Combine Species
+        - Project Admin (New, Save As, Splinter, Compare, 3-Way Merge, OptimizeVeg)
+        - Validation / LMH25 Rules / Species Code Check
+        - Access (.accdb/.mdb) Import or Scientific Interchange (TurboVeg 3, VENUS 5, RDS, GPKG, KML)
+        - Vegetation / Environment / Subzone Reports (.xlsx / Label PDF)
+        - 3D MapLibre Geospatial Workbench
+        - BEC Diagnostic & Pairwise Synthesis
+        - Cloud BECMaster Sync
+        - Help Drawer / Guided Tours / UI Layout
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os_platform
+    attributes:
+      label: Operating System & Display
+      options:
+        - Windows 11 (Desktop / Laptop)
+        - Windows 11 (Field Toughbook / Tablet)
+        - macOS (Universal App)
+        - Linux (AppImage / deb)
+        - Browser / Server Mode
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: VPro Version / Diagnostic Stamp (from Help -> About)
+      placeholder: "e.g., v2.0.1 (commit ...), Windows amd64, VLists SHA-256 ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: What happened vs. Expected behavior (or VPro 64 behavior)
+      description: Cite the exact PlotNumber (if reproducible on Sample.db), table/field name, or VPro 64 form/report behavior.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: data_safety
+    attributes:
+      label: Data Safety & Reproducibility
+      options:
+        - label: This occurred on a copy of Sample.db or synthetic test data
+        - label: This caused unexpected data mutation, save rejection, or audit mismatch

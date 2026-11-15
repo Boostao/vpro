@@ -1,0 +1,48 @@
+name: Scientific Math / R SDK Issue
+description: Report a numerical mismatch, LMH25/BEC oracle divergence, or R Companion SDK (`vpro`) defect.
+title: "[R SDK / Science] "
+labels: ["bug", "r-sdk", "science"]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Scientific Subsystem
+      options:
+        - Workspace & Concurrent SQLite WAL Reader
+        - Vegetation / Soil / Env Extraction & VP08 Calibration
+        - Community Matrices & Multivariate Clustering (vegan / vegclust / indicspecies)
+        - BEC Diagnostic Fidelity (d / dd / cd / c / ic) & Pairwise Similarity
+        - Climate Normals (climr), aSMR & Edatopic Grids
+        - LMH25 (2023) Pedological Validation & Standards (BECdb v13 / BCPlantTaxonomy v19)
+        - PostgreSQL BECMaster Cloud Sync / Staging / Snapshots
+        - Quarto BEC Guides & R Sidecar Bridge
+    validations:
+      required: true
+
+  - type: textarea
+    id: reprex
+    attributes:
+      label: Minimal Reproducible R Example (ideally using `vpro::vpro_sample()`)
+      render: r
+      placeholder: |
+        library(vpro)
+        ctx <- vpro_sample()
+        # paste minimal failing call and actual vs expected output
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_oracle
+    attributes:
+      label: Expected Value / Reference Oracle
+      description: Cite LMH25 (2023) page/rule, Diagnostic10.xla cell, or Desktop App result if comparing Go vs R.
+    validations:
+      required: true
+
+  - type: textarea
+    id: session_info
+    attributes:
+      label: R `sessionInfo()` & OS
+      render: text
+    validations:
+      required: false

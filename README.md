@@ -12,7 +12,7 @@ Unified cross-platform **Biogeoclimatic Ecosystem Classification (BEC)** plot, c
 
 `Boostao/vpro` pairs a zero-Access-runtime native desktop workstation with a programmatic R analytics & stewardship SDK over a shared **7-database SQLite (`VP08`, `WAL` mode) + `config.yml` + PostgreSQL/PostGIS `BECMaster`** contract:
 
-1. **VPro 2.0 Desktop Workstation ([`app/`](./app/))** — Built with **Go `1.25+`**, **Wails v3**, **Svelte 5**, **MapLibre GL JS v6 + WebGPU + offline `PMTiles`**, **CGO SQLite (`WAL`)**, **`pgx/v5`**, and vendored **`libmdb` (`mdbtools` 1.0.1)** across Windows (`x64`/`arm64`), macOS Universal (`VPro.app`), and Linux (`x64`/`arm64`). Delivers paper-faithful FS882, Two-Page, and FS1333 (SIVI) editors (with inline CHARS shrub-layer toggle), Universal Datasheet Grid, Dual-Pane `SU`/`Hierarchy` Tree Explorer, 3-Way Project Merge, streaming `545 MB` (`71,567`-plot) `BECMaster` `.accdb` import, reactive BEC Diagnostics, R Sidecar (`climr -> aSMR`, `vegclust`, Quarto), Cloud `BECMaster` sync, 100% offline `F1` `LMH25 (2023)` contextual help, and complete interchange (`VENUS 5.0`, **TurboVeg 3 31-table SQLite & `Plot_package` XML**, OGC `GeoPackage`, R `.rds`, Long/Wide CSV, KML, Label PDF).
+1. **VPro 2.0 Desktop Workstation ([`app/`](./app/))** — Built with **Go `1.27+`**, **Wails v3**, **Svelte 5**, **MapLibre GL JS v6 + WebGPU + offline `PMTiles`**, **CGO SQLite (`WAL`)**, **`pgx/v5`**, and vendored **`libmdb` (`mdbtools` 1.0.1)** across Windows (`x64`/`arm64`), macOS Universal (`VPro.app`), and Linux (`x64`/`arm64`). Delivers paper-faithful FS882, Two-Page, and FS1333 (SIVI) editors (with inline CHARS shrub-layer toggle), Universal Datasheet Grid, Dual-Pane `SU`/`Hierarchy` Tree Explorer, 3-Way Project Merge, streaming `545 MB` (`71,567`-plot) `BECMaster` `.accdb` import, reactive BEC Diagnostics, R Sidecar (`climr -> aSMR`, `vegclust`, Quarto), Cloud `BECMaster` sync, 100% offline `F1` `LMH25 (2023)` contextual help, and complete interchange (`VENUS 5.0`, **TurboVeg 3 31-table SQLite & `Plot_package` XML**, OGC `GeoPackage`, R `.rds`, Long/Wide CSV, KML, Label PDF).
 2. **Headless `vpro` R Companion SDK ([`r/`](./r/), `R >= 4.4.0`)** — Pure programmatic R package (**zero Shiny/widget dependencies**) providing concurrent read-only SQLite WAL access alongside an open Desktop session, 2026 `BCPlantTaxonomy v19` (`16,728` taxa) & `BECdb v13` (`8,900` site series) harmonization, `vegan`/`vegclust`/`indicspecies`/`labdsv` community matrices & noise clustering, `sf` GeoPackage workflows, `bcgov/climr` normals & Ministry `CMD -> aSMR` dual edatopic grids, BEC differential fidelity (`d`, `dd`, `cd`, `c`, `ic`), guarded `BEGIN IMMEDIATE` candidate `*_SU` write-back, PostgreSQL `BECMaster` staging/3-way-merge/snapshots, and reproducible BC Gov Quarto ecosystem guides.
 
 ---
@@ -84,7 +84,7 @@ diag <- vpro_diagnostics(ctx)
 ## Developer Build & Validation Quickstart
 
 ### Prerequisites
-- **Desktop (`app/`):** Go `1.25+` (`CGO_ENABLED=1`), Node `22.12+`, `wails3` (`v3.0.0-beta.26`), plus GTK4/WebKitGTK 6.0 dev packages on Linux or MinGW/LLVM-MinGW + `makensis` on Windows.
+- **Desktop (`app/`):** Go `1.27+` (`CGO_ENABLED=1`), Node `24+`, `wails3` (`v3.1.0`), plus GTK4/WebKitGTK 6.0 dev packages on Linux or MinGW/LLVM-MinGW + `makensis` on Windows.
 - **R Companion SDK (`r/`):** R `>= 4.4.0` (`Rscript`), `quarto` CLI (optional), and `air` formatter (optional).
 
 ```bash
@@ -101,10 +101,17 @@ diag <- vpro_diagnostics(ctx)
 (cd r && Rscript -e "testthat::test_local(stop_on_failure = TRUE)")
 (cd r && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)
 
-# --- Offline Help Bundle, Release Portal & Packaging Checks ---
+# --- Dependency Lockstep, Offline Help Bundle, Release Portal & Packaging Checks ---
+python3 scripts/check-dep-lockstep.py
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
 ```
+
+## Governance, Roadmap & Security
+
+- **[Product Roadmap](./ROADMAP.md)** — Multi-horizon trajectory (`v2.0` hardening $\rightarrow$ Provincial Cloud `BECMaster` / `BECWeb 2.0` $\rightarrow$ Field Tablet PWA, Card OCR & `VTrees`/CWD/WHA).
+- **[Contributing & Release Runbook](./CONTRIBUTING.md)** — 4-tier dependency update policy, annual `BECdb`/`BCPlantTaxonomy` standards ingestion, 5-tier testing pyramid, and BC field-season release cadence.
+- **[Security & Ecological Data Custody](./SECURITY.md)** — Vulnerability reporting, PostgreSQL TLS/RBAC guarantees, and local-first `VP08` data protection.
 
 ## License
 

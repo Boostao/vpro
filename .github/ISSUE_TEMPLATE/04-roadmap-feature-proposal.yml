@@ -1,0 +1,41 @@
+name: Feature / Roadmap Proposal
+description: Propose a new capability or enhancement aligned with the VPro Product Roadmap.
+title: "[Roadmap] "
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: persona
+    attributes:
+      label: Primary Beneficiary
+      options:
+        - Field Crew / Data-Entry Technician
+        - BEC Regional Ecologist / Project Lead
+        - Provincial Custodian / Cloud BECMaster Admin
+        - Quantitative / Climate Scientist (R SDK)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: horizon
+    attributes:
+      label: Target Roadmap Horizon
+      options:
+        - Horizon 1 — Desktop & R SDK Hardening (v2.0)
+        - Horizon 2 — Provincial Cloud BECMaster & BECWeb 2.0 (v2.1–v2.2)
+        - Horizon 3 — Offline Field PWA, Card HTR/OCR & Companion Modules (VTrees/CWD/WHA)
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem_and_outcome
+    attributes:
+      label: Problem Statement & Proposed Behavior
+      description: Explain the ecological or operational workflow gap and what done looks like.
+    validations:
+      required: true
+
+  - type: textarea
+    id: invariants
+    attributes:
+      label: VP08 / Data Integrity Impact
+      description: Note whether this touches database schemas, Access export/import, or Desktop <-> R parity.
