@@ -455,8 +455,15 @@ test('UserSetupModal (S6.12), Navigation graduation, PlotsBrowserPanel (S1.1/S3.
   assert.match(appSrc, /onApplyHumusThickness=\{/);
   assert.match(appSrc, /onApplyKeyedSMR=\{/);
   assert.match(appSrc, /onApplyKeyedSNR=\{/);
-  assert.match(appSrc, /onRulesChange=\{/);
-  assert.match(appSrc, /onSummaryPreview=\{/);
-  assert.match(appSrc, /vpro:site-unit-exclusion-update/);
+  assert.doesNotMatch(appSrc, /<SiteUnitExclusionFilter/);
+  assert.doesNotMatch(appSrc, /vpro:site-unit-exclusion-update/);
+  assert.match(
+    appSrc,
+    /<SummaryVegetationReport[\s\S]*hierarchy=\{\$projectState\.activeHierarchy \?\? 'None'\}[\s\S]*onExclusionBusyChange=\{\(value\) => \{ secondaryPanelBusy = value; \}\}/
+  );
+  assert.match(
+    appSrc,
+    /<LongVegetationReport[\s\S]*hierarchy=\{\$projectState\.activeHierarchy \?\? 'None'\}/
+  );
   assert.match(appSrc, /import\('\.\/shell\/UserSetupModal\.svelte'\)/);
 });

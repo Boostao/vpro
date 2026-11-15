@@ -73,10 +73,26 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     onOpenPictureManager?: (plotNumber: string) => void;
     onDiagnosticsContextChange?: (state: DiagnosticsDraftContext) => void;
   };
-  type SummaryExclusionState = {
-    rules: unknown[];
-    useHierarchyBreakpoints: boolean;
-    breakpointOptions: unknown;
+  type LongVegetationWave3Props = {
+    contextId: string;
+    project: string;
+    projectPath: string;
+    su: string;
+    suPath: string;
+    hierarchy?: string;
+    operationHeld?: boolean;
+    onBusyChange: (busy: boolean) => void;
+  };
+  type SummaryVegetationWave3Props = {
+    contextId: string;
+    project: string;
+    projectPath: string;
+    su: string;
+    suPath: string;
+    hierarchy?: string;
+    operationHeld?: boolean;
+    onBusyChange: (busy: boolean) => void;
+    onExclusionBusyChange?: (busy: boolean) => void;
   };
 
   let editorPlotNumber = $state<string | undefined>(undefined);
@@ -85,8 +101,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     editorEntryForm === 'sivi' ? 'SIVI / FS1333' : editorEntryForm === 'fs882-twopage' ? 'FS882 (2-Page)' : 'FS882'
   );
   let diagnosticsDraft = $state.raw<DiagnosticsDraftContext | null>(null);
-  let summaryExclusionState = $state.raw<SummaryExclusionState | null>(null);
-  let summaryExclusionPreview = $state.raw<unknown>(null);
   const siviStandaloneEnabled = true;
   let offset = $state(0), busy = $state(false), error = $state('');
   let request = 0, hierarchyRequest = 0, stateRequest = 0;
@@ -891,50 +905,27 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {:catch loadError}<p class="error" role="alert">Long Environment Report could not load: {String(loadError)}</p>{/await}
       {:else if view === 'long-vegetation' && $projectState}
         {#if error}<p class="error" role="alert">{error}</p>{/if}
-        {#await import('./reports/LongVegetationReport.svelte')}
+        {#await (import('./reports/LongVegetationReport.svelte') as unknown as Promise<{ default: Component<LongVegetationWave3Props> }>)}
           <p role="status" class="p-4 text-sm">Loading Long Vegetation Report...</p>
         {:then { default: LongVegetationReport }}
           {#key $projectState.contextId}<LongVegetationReport contextId={$projectState.contextId ?? ''} project={$projectState.activeProject}
             projectPath={$projectState.projectPath ?? ''} su={$projectState.activeSU} suPath={$projectState.suPath ?? ''}
+            hierarchy={$projectState.activeHierarchy ?? 'None'}
             operationHeld={busy || transitionWorking || pendingTransition !== null || !!closeRequest}
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Long Vegetation Report could not load: {String(loadError)}</p>{/await}
       {:else if view === 'summary-vegetation' && $projectState}
         {#if error}<p class="error" role="alert">{error}</p>{/if}
-        {#await import('./reports/SummaryVegetationReport.svelte')}
+        {#await (import('./reports/SummaryVegetationReport.svelte') as unknown as Promise<{ default: Component<SummaryVegetationWave3Props> }>)}
           <p role="status" class="p-4 text-sm">Loading Summary Vegetation Report...</p>
         {:then { default: SummaryVegetationReport }}
           {#key $projectState.contextId}
             <SummaryVegetationReport contextId={$projectState.contextId ?? ''} project={$projectState.activeProject}
               projectPath={$projectState.projectPath ?? ''} su={$projectState.activeSU} suPath={$projectState.suPath ?? ''}
+              hierarchy={$projectState.activeHierarchy ?? 'None'}
               operationHeld={busy || transitionWorking || pendingTransition !== null || !!closeRequest}
-              onBusyChange={(value) => { localEditorBusy = value; }} />
-            {#await import('./classification/SiteUnitExclusionFilter.svelte') then { default: SiteUnitExclusionFilter }}
-              <div class="px-3 pb-4"><SiteUnitExclusionFilter contextId={$projectState.contextId ?? ''} su={$projectState.activeSU}
-                hierarchy={$projectState.activeHierarchy} reportMode="summary" onBusyChange={(value) => { secondaryPanelBusy = value; }}
-                onRulesChange={(rules, useHierarchyBreakpoints, breakpointOptions) => {
-                  summaryExclusionState = { rules, useHierarchyBreakpoints, breakpointOptions };
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('vpro:site-unit-exclusion-update', {
-                      detail: { reportMode: 'summary', rules, useHierarchyBreakpoints, breakpointOptions, preview: summaryExclusionPreview }
-                    }));
-                  }
-                }}
-                onSummaryPreview={(result) => {
-                  summaryExclusionPreview = result;
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('vpro:site-unit-exclusion-update', {
-                      detail: {
-                        reportMode: 'summary',
-                        rules: summaryExclusionState?.rules ?? [],
-                        useHierarchyBreakpoints: summaryExclusionState?.useHierarchyBreakpoints ?? false,
-                        breakpointOptions: summaryExclusionState?.breakpointOptions ?? null,
-                        preview: result,
-                      }
-                    }));
-                  }
-                }} /></div>
-            {/await}
+              onBusyChange={(value) => { localEditorBusy = value; }}
+              onExclusionBusyChange={(value) => { secondaryPanelBusy = value; }} />
           {/key}
         {:catch loadError}<p class="error" role="alert">Summary Vegetation Report could not load: {String(loadError)}</p>{/await}
       {:else if view === 'lifeform-summary' && $projectState}
