@@ -303,7 +303,7 @@ test('production Summary pane unlocks enforced preview and holds sibling saves d
       './summaryVegetation': report,
       './summaryVegetationQualityPreferenceSessions': { summaryVegetationQualityPreferenceSession: () => qualitySession },
       '../bindings/github.com/boostao/vpro/app': {},
-      '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
       '../classification/siteUnitExclusionFilter': {},
     });
   const html = render(Panel, { props: { ...owner, onBusyChange() {} } }).body;

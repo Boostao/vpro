@@ -363,7 +363,7 @@ test('consumed outer Summary takes only loaded presentation Constancy intent and
         '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
         './summaryVegetationPresentationPreferenceSessions': { summaryVegetationPresentationPreferenceSession: () => presentation },
         './SummaryVegetationWorkbookPanel.svelte': { default: (_payload, props) => { calls.push(props); } },
-        '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+        '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
         '../classification/siteUnitExclusionFilter': {},
       });
     const html = require('svelte/server').render(component, { props: { ...owner, onBusyChange() {} } }).body;
@@ -1420,7 +1420,7 @@ test('consumed outer Summary rendering forwards Group By selections to the exist
         './summaryVegetation': vegetation,
         '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
         './SummaryVegetationWorkbookPanel.svelte': { default: (_payload, props) => { calls.push(props); } },
-        '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+        '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
         '../classification/siteUnitExclusionFilter': {},
       });
     const html = require('svelte/server').render(component, { props: { ...owner, onBusyChange() {} } }).body;

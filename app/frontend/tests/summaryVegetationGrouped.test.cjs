@@ -100,7 +100,7 @@ test('compiled grouped panel uses source captions, numeric Order and explicitly 
   const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
   const panel = serverComponent(component, 'SummaryVegetationReport.svelte', {
     './summaryVegetation': report, '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
-    '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} }, '../classification/siteUnitExclusionFilter': {},
+    '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} }, '../classification/siteUnitExclusionFilter': {},
   });
   const session = report.summaryVegetationSession(owner);
   for (const value of wire.filter(value => value.average === 1)) {

@@ -2304,7 +2304,7 @@
         <SiteUnitExclusionFilter
           contextId={effectiveContextId}
           su={suTree?.su || su}
-          hierarchy={hierarchyView?.hierarchy || hierarchy}
+          hierarchy={hierarchyView?.hierarchy || (hierarchy && hierarchy !== 'None' ? hierarchy : '') || 'None'}
           reportMode="summary"
           onBusyChange={val => (exclusionBusy = val)}
         />

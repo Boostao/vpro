@@ -166,7 +166,7 @@ function panel(session, preferencesEnabled = true) {
     './summaryVegetation': summary,
     './summaryVegetationPreferenceSessions': { summaryVegetationPreferenceSession: preferencesEnabled ? () => session : null },
     '../bindings/github.com/boostao/vpro/app': {},
-    '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+    '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
     '../classification/siteUnitExclusionFilter': {},
   });
 }

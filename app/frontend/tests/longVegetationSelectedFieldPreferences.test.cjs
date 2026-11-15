@@ -166,7 +166,7 @@ test('actual root remount retains field errors and gates every report operation'
     './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
     './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-    '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+    '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
     './LongVegetationSelectedFieldPreferences.svelte': { default: child }, './longEnvironmentReport': {}, './longVegetationReport': {},
     './vegetationWorkbook': {
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),

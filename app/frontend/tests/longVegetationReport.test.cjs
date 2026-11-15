@@ -317,7 +317,7 @@ for(const [label,presentationWire,expected] of [
     './longVegetationEnforcementPreferences':{},'./LongVegetationEnforcementPreferences.svelte':{default(){}},
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
     './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-    '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+    '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
   });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
@@ -564,7 +564,7 @@ test('vegetation report uses responsive labelled read-only settings, separate na
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
   });
   const result=render(component,{props:{
     contextId:'owned',project:'Sample',projectPath:'C:\\quoted <project>.db',
@@ -603,7 +603,7 @@ test('quality presentation retains literal criteria, NULL ranks versus missing j
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
   });
   const result=render(component,{props:{
     contextId:'owned',project:'Sample',projectPath:'C:\\project.db',su:'Selected',
@@ -651,7 +651,7 @@ test('selected scalar presentation shows literal list/matched headings and nativ
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
     });
     const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
       su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
@@ -686,7 +686,7 @@ test('lifeform presentation labels typed group and source-specific conversion in
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
   });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
@@ -717,7 +717,7 @@ test('Strata presentation labels original totals fallback cap and independent ch
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
   });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});
@@ -770,7 +770,7 @@ test('Code presentation preserves source caption but labels literal list/matched
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
   });
   const result=render(component,{props:{contextId:'owned',project:'Sample',projectPath:'C:\\project.db',
     su:'Selected',suPath:'C:\\external.db',onBusyChange:()=>{}}});

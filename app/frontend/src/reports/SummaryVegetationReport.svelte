@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import { ImportExportService, VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
+  import { projectState } from '../shared/state';
   import SiteUnitExclusionFilter from '../classification/SiteUnitExclusionFilter.svelte';
   import { summaryVegetationSession, type SummaryVegetationPort } from './summaryVegetation';
   import { summaryVegetationPreferenceSession } from './summaryVegetationPreferenceSessions';
@@ -16,10 +17,17 @@
   import { summaryEnvironmentalDesktop, summaryEnvironmentalEnabled, summaryEnvironmentalNumericEnabled, summaryEnvironmentalLifeformEnabled, summaryEnvironmentalPort } from './summaryVegetationEnvironmentalDesktop';
   import type { SummaryEnvironmentalSession, SummaryEnvironmentalNumericSession, SummaryEnvironmentalLifeformSession } from './summaryVegetationEnvironmental';
 
-  let { contextId, project, projectPath, su, suPath, operationHeld: operationHeldProp = false, onBusyChange }: {
+  let { contextId, project, projectPath, su, suPath, hierarchy = '', operationHeld: operationHeldProp = false, onBusyChange, onExclusionBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
-    operationHeld?: boolean; onBusyChange: (busy: boolean) => void;
+    hierarchy?: string; operationHeld?: boolean; onBusyChange: (busy: boolean) => void;
+    onExclusionBusyChange?: (value: boolean) => void;
   } = $props();
+
+  const effectiveHierarchy = $derived(
+    (hierarchy && hierarchy !== 'None' ? hierarchy : '') ||
+    ($projectState?.activeHierarchy && $projectState.activeHierarchy !== 'None' ? $projectState.activeHierarchy : '') ||
+    'None'
+  );
   const enabled = true;
   const groupedWorkbookEnabled = true;
   const reads = new ReadRequests();
@@ -464,8 +472,9 @@
       qualityMutationHeld || qualityUnavailable || presentationMutationHeld || presentationInvalid}
     onBusyChange={(held) => { workbookHeld = held; reportBusy(); }} />
   <div class="exclusion-section">
-    <SiteUnitExclusionFilter contextId={contextId} su={su} reportMode="summary"
+    <SiteUnitExclusionFilter contextId={contextId} su={su} hierarchy={effectiveHierarchy} reportMode="summary"
       average={viewState.average} display={viewState.display} showClass={viewState.showClass} groupAndOrder={viewState.groupAndOrder}
+      onBusyChange={onExclusionBusyChange}
       onSummaryPreview={result => {
         exclusionSummaryText = `${result.exclusions.retainedUnits?.length ?? 0} units retained (${result.exclusions.excludedUnits?.length ?? 0} excluded; ${result.exclusions.retainedPlots}/${result.exclusions.totalPlotsBefore} plots)`;
         void session.applyExternalPreview(result.preview, port);

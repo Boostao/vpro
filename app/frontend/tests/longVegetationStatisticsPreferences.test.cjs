@@ -149,7 +149,7 @@ test('statistics preferences render live labelled choices and correction while b
     './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
     './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
-    '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
+    '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
     './LongVegetationSwitchPreferences.svelte': { default() {} },
     './vegetationWorkbook': {
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),

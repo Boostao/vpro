@@ -240,3 +240,129 @@ test('Wave 3 functional wiring spans Classification, Reports, Diagnostics, Spati
   assert.equal(rSidecar.usesDissimilarity('BETA_FLEXIBLE'), true);
   assert.equal(rSidecar.usesHierarchicalLinkage('PAM'), false);
 });
+
+test('SummaryVegetationReport and LongVegetationReport forward live active hierarchy and exclusion busy hook to SiteUnitExclusionFilter (#48)', () => {
+  const exclLogic = loadTypeScript('classification/siteUnitExclusionFilter.ts', {
+    '@wailsio/runtime': { Call: { ByName: () => Promise.resolve(null) } },
+  });
+  const RealExclusionFilter = serverComponent(
+    readFileSync(srcPath('classification/SiteUnitExclusionFilter.svelte'), 'utf8'),
+    'SiteUnitExclusionFilter.svelte',
+    {
+      './siteUnitExclusionFilter': exclLogic,
+      '../shared/readRequests': { ReadRequests: class { cancelAll() {} } },
+    }
+  );
+
+  let activeHierarchyState = { activeHierarchy: 'StoreHier' };
+  const storeStub = {
+    projectState: {
+      subscribe(fn) {
+        fn(activeHierarchyState);
+        return () => {};
+      },
+    },
+  };
+
+  // 1. SummaryVegetationReport with store activeHierarchy + explicit prop override + onExclusionBusyChange
+  const lifeform = loadTypeScript('lifeformSummary.ts');
+  const summaryMod = loadTypeScript('summaryVegetation.ts', { './lifeformSummary': lifeform }, { setTimeout });
+  const sumOwner = {
+    contextId: 'ctx-s59',
+    project: 'Sample',
+    projectPath: '/tmp/Sample.db',
+    su: 'Working',
+    suPath: '/tmp/Sample.db',
+  };
+  const SumComp = serverComponent(
+    readFileSync(srcPath('reports/SummaryVegetationReport.svelte'), 'utf8'),
+    'SummaryVegetationReport.svelte',
+    {
+      './summaryVegetation': summaryMod,
+      '../bindings/github.com/boostao/vpro/app': mockBindings,
+      '../shared/state': storeStub,
+      '../classification/SiteUnitExclusionFilter.svelte': { default: RealExclusionFilter },
+      '../classification/siteUnitExclusionFilter': exclLogic,
+    }
+  );
+
+  const sumFromStore = render(SumComp, {
+    props: { ...sumOwner, onBusyChange: () => {}, onExclusionBusyChange: () => {} },
+  }).body;
+  assert.match(sumFromStore, /\(Active Hierarchy:\s*<strong>StoreHier<\/strong>\)/);
+  assert.doesNotMatch(sumFromStore, /Select an active Hierarchy in the sidebar to enable/);
+
+  const sumExplicitProp = render(SumComp, {
+    props: { ...sumOwner, hierarchy: 'PropHier', onBusyChange: () => {}, onExclusionBusyChange: () => {} },
+  }).body;
+  assert.match(sumExplicitProp, /\(Active Hierarchy:\s*<strong>PropHier<\/strong>\)/);
+
+  // Verify SummaryVegetationReport source wires onExclusionBusyChange cleanly to SiteUnitExclusionFilter
+  const sumSrc = readFileSync(srcPath('reports/SummaryVegetationReport.svelte'), 'utf8');
+  assert.match(sumSrc, /onExclusionBusyChange\?\s*:\s*\(value:\s*boolean\)\s*=>\s*void/);
+  assert.match(sumSrc, /onBusyChange=\{onExclusionBusyChange\}/);
+
+  // 2. LongVegetationReport forwards $projectState.activeHierarchy and explicit hierarchy prop instead of ""
+  class PubStub {
+    view() { return { busy: false, blocked: false, error: '', outcome: null, requestedDestination: '' }; }
+    subscribe(fn) { fn(); return () => {}; }
+  }
+  const longWorkspace = {
+    view: () => ({
+      scope: { scope: sumOwner, definitions: [], fields: [], dirty: false, draftError: '', error: '', busy: false, authorityUnknown: false, outputReady: false, closeBlocked: false },
+      units: { saved: { unitGroups: 2 }, draft: { unitGroups: '2' }, initialized: true, busy: false, blocked: false, authorityUnknown: false, error: '', draftError: '', readError: '', readBusy: false, readReady: true, saveReady: true, closeBlocked: false, projectReceipts: [], scope: sumOwner },
+      publication: { busy: false, blocked: false, error: '', outcome: null, requestedDestination: '' },
+      readBusy: false, error: '', settings: null, preview: null, workbookReview: null,
+      projectActive: true, outputReady: false, scopeOperationHeld: false, scopeMutationHeld: false,
+      unitOperationHeld: false, unitMutationHeld: false, closeBlocked: false, sourceRevalidationRequired: false,
+    }),
+    subscribe(fn) { fn(); return () => {}; },
+    selection: { view: () => ({ scope: sumOwner, definitions: [], fields: [], dirty: false, draftError: '', error: '', busy: false, authorityUnknown: false, outputReady: false, closeBlocked: false }), subscribe(fn) { fn(); return () => {}; }, cancel() {} },
+    units: { projectView: () => ({ saved: { unitGroups: 2 }, draft: { unitGroups: '2' }, initialized: true, busy: false, blocked: false, authorityUnknown: false, error: '', draftError: '', readError: '', readBusy: false, readReady: true, saveReady: true, closeBlocked: false, projectReceipts: [], scope: sumOwner }), subscribe(fn) { fn(); return () => {}; }, cancelRead() {} },
+    workbook: { acknowledge() {} },
+    cancelScopeReads() {}, cancelUnitReads() {}, cancelReportRead() {}, invalidate() {},
+    fetchUnitPreferences() {}, saveUnitPreferences() {},
+    loadOptions: async () => {}, showPreview: async () => {}, reviewWorkbook: async () => {}, publishWorkbook: async () => {},
+  };
+  const LongComp = serverComponent(
+    readFileSync(srcPath('reports/LongVegetationReport.svelte'), 'utf8'),
+    'LongVegetationReport.svelte',
+    {
+      '../bindings/github.com/boostao/vpro/app': mockBindings,
+      './longVegetationProjectWorkspaces': { projectReportWorkspace: () => longWorkspace },
+      './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
+      '../shared/state': storeStub,
+      '../classification/SiteUnitExclusionFilter.svelte': { default: RealExclusionFilter },
+      '../classification/siteUnitExclusionFilter': exclLogic,
+      './longVegetationGroupPreferences': {}, './LongVegetationGroupPreferences.svelte': { default() {} },
+      './longVegetationNamingPreferences': {}, './LongVegetationNamingPreferences.svelte': { default() {} },
+      './longVegetationSelectedFieldPreferences': {}, './LongVegetationSelectedFieldPreferences.svelte': { default() {} },
+      './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
+      './longVegetationQualityNullPreferences': {}, './LongVegetationQualityNullPreferences.svelte': { default() {} },
+      './longVegetationQualityMinimumPreferences': {}, './LongVegetationQualityMinimumPreferences.svelte': { default() {} },
+      './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
+      './longVegetationPreferences': {}, './longVegetationStatisticsPreferences': {},
+      './longVegetationSwitchPreferences': {}, './LongVegetationSwitchPreferences.svelte': { default() {} },
+      './longVegetationThresholdPreferences': {}, './LongVegetationThresholdPreferences.svelte': { default() {} },
+      './longVegetationReport': {},
+      './longEnvironmentReport': { reportCellText: () => '' },
+      './vegetationWorkbook': { VegetationWorkbookPublicationSession: PubStub, vegetationWorkbookPublicationSession: () => new PubStub() },
+    }
+  );
+
+  const longFromStore = render(LongComp, {
+    props: { ...sumOwner, onBusyChange: () => {} },
+  }).body;
+  assert.match(longFromStore, /\(Active Hierarchy:\s*<strong>StoreHier<\/strong>\)/);
+  assert.doesNotMatch(longFromStore, /Select an active Hierarchy in the sidebar to enable/);
+
+  const longExplicitProp = render(LongComp, {
+    props: { ...sumOwner, hierarchy: 'LongPropHier', onBusyChange: () => {} },
+  }).body;
+  assert.match(longExplicitProp, /\(Active Hierarchy:\s*<strong>LongPropHier<\/strong>\)/);
+
+  // 3. Verify ClassificationExplorer keeps ../shared/state free and preserves hierarchy || 'None' fallback
+  const ceSrc = readFileSync(srcPath('classification/ClassificationExplorer.svelte'), 'utf8');
+  assert.doesNotMatch(ceSrc, /shared\/state/);
+  assert.match(ceSrc, /hierarchy=\{hierarchyView\?\.hierarchy\s*\|\|\s*\(hierarchy\s*&&\s*hierarchy\s*!==\s*'None'\s*\?\s*hierarchy\s*:\s*''\)\s*\|\|\s*'None'\}/);
+});

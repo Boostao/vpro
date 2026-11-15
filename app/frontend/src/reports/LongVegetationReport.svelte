@@ -20,6 +20,7 @@
   import { onMount, onDestroy, untrack } from 'svelte';
   import { ImportExportService, VegetationReportService, type ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import type { LongVegetationSettings } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
+  import { projectState } from '../shared/state';
   import { ReadRequests } from '../shared/readRequests';
   import SiteUnitExclusionFilter from '../classification/SiteUnitExclusionFilter.svelte';
   import { createDefaultBreakpointOptions, type HierarchyBreakpointOptions, type SiteUnitExclusionRule, type SiteUnitExclusionSummary } from '../classification/siteUnitExclusionFilter';
@@ -46,11 +47,18 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   import LongVegetationProjectUnitPreferences from './LongVegetationProjectUnitPreferences.svelte';
   import { projectReportWorkspace } from './longVegetationProjectWorkspaces';
 
-  let { contextId, project, projectPath, su, suPath, operationHeld = false, onBusyChange }: {
+  let { contextId, project, projectPath, su, suPath, hierarchy = '', operationHeld = false, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
+    hierarchy?: string;
     operationHeld?: boolean;
     onBusyChange: (busy: boolean) => void;
   } = $props();
+
+  const effectiveHierarchy = $derived(
+    (hierarchy && hierarchy !== 'None' ? hierarchy : '') ||
+    ($projectState?.activeHierarchy && $projectState.activeHierarchy !== 'None' ? $projectState.activeHierarchy : '') ||
+    'None'
+  );
   let settings = $state.raw<LongVegetationSettings | null>(null);
   let busy = $state(false);
   let error = $state('');
@@ -835,7 +843,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     <SiteUnitExclusionFilter
       {contextId}
       {su}
-      hierarchy=""
+      hierarchy={effectiveHierarchy}
       reportMode="long"
       onRulesChange={(nextRules, nextUseBP, nextBPOpts) => {
         exclusionRules = nextRules.map(rule => ({ ...rule }));

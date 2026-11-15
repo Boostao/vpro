@@ -53,7 +53,7 @@ test('compiled panel renders retained production result with labels and immutabl
   const panel = serverComponent(component, 'SummaryVegetationReport.svelte', {
     './summaryVegetation': summary,
     '../bindings/github.com/boostao/vpro/app': { VegetationReportService: { PreviewSummaryVegetation() { throw new Error('Rendering must not replay a read'); } } },
-    '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+    '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
     '../classification/siteUnitExclusionFilter': {},
   });
   const held = [];
