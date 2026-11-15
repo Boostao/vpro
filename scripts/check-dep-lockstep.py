@@ -14,6 +14,55 @@ STOCK_WAILS_APPICON_SHA256 = (
     "985eb536bb829188b6fc3cb65d8130b4743ff773fa5ed170c0955c317cb98739"
 )
 
+STOCK_WAILS_WINDOWS_ICO_SHA256 = (
+    "ce3eb2bc9f464e659b12746da912ffa8e0383ae2cbcce1c057b20d8dc8043dd2"
+)
+
+STOCK_BRAND_SHA256_GUARD: tuple[tuple[str, str, str], ...] = (
+    (
+        "app/build/windows/icon.ico",
+        STOCK_WAILS_WINDOWS_ICO_SHA256,
+        "app/build/windows/icon.ico still matches the stock Wails 'W' icon",
+    ),
+    (
+        "app/frontend/public/favicon.ico",
+        STOCK_WAILS_WINDOWS_ICO_SHA256,
+        "app/frontend/public/favicon.ico still matches the stock Wails 'W' icon",
+    ),
+    (
+        "site/favicon.ico",
+        STOCK_WAILS_WINDOWS_ICO_SHA256,
+        "site/favicon.ico still matches the stock Wails 'W' icon",
+    ),
+    (
+        "app/build/darwin/dmg-background.png",
+        "5f07c1d4eafd111b76316b7d25ab50906848cf468d6862b1b101c20a89a920df",
+        "app/build/darwin/dmg-background.png still matches the stock Wails red-dragon banner",
+    ),
+    (
+        "app/build/darwin/dmg-file-icon.png",
+        "4e04ec7f61f6ffabd86a581b43a6c0768c28a81c84c7704d054d010e3af0731a",
+        "app/build/darwin/dmg-file-icon.png still matches the stock Wails red-dragon icon",
+    ),
+    (
+        "app/build/darwin/dmg-file-icon.icns",
+        "cc1162fd1d662437e5aa50b99fc5b2aea164cf5b9f8390f492e2508e7bd2bf60",
+        "app/build/darwin/dmg-file-icon.icns still matches the stock Wails red-dragon icon",
+    ),
+    (
+        "app/build/darwin/Assets.car",
+        "48e5c620766a4fe70274c57fa43c74f39b9c2e20f3c3976adc415e768e01e635",
+        "app/build/darwin/Assets.car still matches the stock Wails asset catalog",
+    ),
+)
+
+FORBIDDEN_BRAND_FILES: tuple[tuple[str, str], ...] = (
+    ("app/build/appicon.icon/Assets/wails_icon_vector.svg", "Stock Wails SVG still present"),
+    ("app/frontend/public/svelte.svg", "Stock Vite/Svelte SVG still present"),
+    ("app/frontend/public/wails.png", "Stock Wails template PNG still present"),
+    ("app/frontend/public/style.css", "Unused template stylesheet still present"),
+)
+
 
 def parse_go_mod(text: str) -> dict[str, str]:
     """Extract Go toolchain version and required module versions from go.mod."""
@@ -141,16 +190,24 @@ def check_lockstep(repo_root: Path, *, strict_brand: bool = False) -> list[str]:
         appicon = repo_root / "app" / "build" / "appicon.png"
         if not appicon.is_file():
             errors.append("Missing app/build/appicon.png")
-        else:
-            digest = hashlib.sha256(appicon.read_bytes()).hexdigest()
-            if digest == STOCK_WAILS_APPICON_SHA256:
-                errors.append("app/build/appicon.png still matches the stock Wails 'W' logo")
-        stock_svg = repo_root / "app" / "build" / "appicon.icon" / "Assets" / "wails_icon_vector.svg"
-        if stock_svg.exists():
-            errors.append(f"Stock Wails SVG still present: {stock_svg.relative_to(repo_root)}")
-        svelte_svg = repo_root / "app" / "frontend" / "public" / "svelte.svg"
-        if svelte_svg.exists():
-            errors.append(f"Stock Vite/Svelte SVG still present: {svelte_svg.relative_to(repo_root)}")
+        elif hashlib.sha256(appicon.read_bytes()).hexdigest() == STOCK_WAILS_APPICON_SHA256:
+            errors.append("app/build/appicon.png still matches the stock Wails 'W' logo")
+
+        for rel_path, stock_sha, message in STOCK_BRAND_SHA256_GUARD:
+            asset = repo_root / rel_path
+            if asset.is_file() and hashlib.sha256(asset.read_bytes()).hexdigest() == stock_sha:
+                errors.append(message)
+
+        assets_car = repo_root / "app" / "build" / "darwin" / "Assets.car"
+        if assets_car.is_file():
+            car_bytes = assets_car.read_bytes()
+            if b"wails_icon_vector" in car_bytes or b"\x00wails\x00" in car_bytes.lower():
+                errors.append("app/build/darwin/Assets.car contains stock Wails layer symbols")
+
+        for rel_path, prefix in FORBIDDEN_BRAND_FILES:
+            target = repo_root / rel_path
+            if target.exists():
+                errors.append(f"{prefix}: {rel_path}")
 
     return errors
 

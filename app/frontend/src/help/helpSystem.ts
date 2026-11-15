@@ -543,19 +543,19 @@ export interface CoverComparisonBlock {
 }
 
 function generateDeterministicPatches(percent: number): CoverPatchRect[] {
-  // 100 x 100 coordinate frame = 100 m2 (10 m x 10 m plot).
-  // Total patch area in SVG units^2 equals percent * 100 (within visual precision).
+  // 100 x 100 coordinate frame = 100 m2 (10 m x 10 m plot; 10,000 SVG units^2 total).
+  // Every plate uses pairwise-disjoint rectangles whose exact union area equals percent * 100.
   switch (percent) {
     case 0.1:
-      return [{ x: 47, y: 47, w: 3.2, h: 3.2 }];
+      return [{ x: 48.4, y: 48.4, w: 3.2, h: 3.125 }];
     case 1:
       return [
         { x: 14, y: 18, w: 4, h: 4 },
-        { x: 68, y: 22, w: 3.5, h: 3.5 },
-        { x: 38, y: 44, w: 4.5, h: 4.5 },
-        { x: 76, y: 64, w: 4, h: 4 },
-        { x: 22, y: 74, w: 4, h: 4 },
-        { x: 54, y: 80, w: 3.2, h: 3.2 },
+        { x: 68, y: 20, w: 4, h: 3 },
+        { x: 38, y: 44, w: 5, h: 4 },
+        { x: 74, y: 62, w: 4.5, h: 4 },
+        { x: 20, y: 72, w: 4, h: 4 },
+        { x: 52, y: 80, w: 4.5, h: 4 },
       ];
     case 5:
       return [
@@ -568,41 +568,41 @@ function generateDeterministicPatches(percent: number): CoverPatchRect[] {
       ];
     case 10:
       return [
-        { x: 8, y: 8, w: 14, h: 14 },
-        { x: 46, y: 10, w: 12, h: 12 },
-        { x: 76, y: 16, w: 12, h: 12 },
-        { x: 24, y: 38, w: 15, h: 14 },
-        { x: 62, y: 44, w: 13, h: 13 },
-        { x: 12, y: 68, w: 13, h: 12 },
-        { x: 46, y: 72, w: 12, h: 11 },
+        { x: 8, y: 8, w: 13, h: 13 },
+        { x: 46, y: 10, w: 12, h: 11 },
+        { x: 76, y: 16, w: 12, h: 11 },
+        { x: 24, y: 38, w: 14, h: 13 },
+        { x: 62, y: 44, w: 13, h: 12 },
+        { x: 12, y: 68, w: 11, h: 11 },
+        { x: 48, y: 74, w: 12, h: 9 },
       ];
     case 25:
       return [
-        { x: 6, y: 6, w: 24, h: 22 },
-        { x: 44, y: 8, w: 20, h: 18 },
-        { x: 72, y: 14, w: 20, h: 20 },
-        { x: 18, y: 38, w: 26, h: 22 },
-        { x: 56, y: 44, w: 24, h: 20 },
-        { x: 8, y: 70, w: 22, h: 18 },
-        { x: 48, y: 72, w: 18, h: 15 },
+        { x: 6, y: 6, w: 22, h: 20 },
+        { x: 42, y: 8, w: 18, h: 16 },
+        { x: 70, y: 12, w: 20, h: 18 },
+        { x: 16, y: 36, w: 24, h: 20 },
+        { x: 54, y: 42, w: 22, h: 18 },
+        { x: 8, y: 68, w: 20, h: 16 },
+        { x: 46, y: 70, w: 18, h: 12 },
       ];
     case 50:
       return [
-        { x: 4, y: 4, w: 34, h: 30 },
-        { x: 44, y: 6, w: 26, h: 26 },
-        { x: 74, y: 8, w: 22, h: 32 },
-        { x: 8, y: 40, w: 30, h: 28 },
-        { x: 44, y: 38, w: 32, h: 28 },
-        { x: 6, y: 72, w: 36, h: 22 },
-        { x: 52, y: 70, w: 40, h: 24 },
+        { x: 4, y: 4, w: 30, h: 28 },
+        { x: 42, y: 6, w: 24, h: 24 },
+        { x: 72, y: 8, w: 23, h: 28 },
+        { x: 8, y: 38, w: 28, h: 26 },
+        { x: 44, y: 38, w: 28, h: 25 },
+        { x: 6, y: 69, w: 34, h: 21 },
+        { x: 48, y: 68, w: 38, h: 21 },
       ];
     case 75:
       return [
-        { x: 2, y: 2, w: 46, h: 44 },
-        { x: 52, y: 2, w: 46, h: 38 },
-        { x: 2, y: 50, w: 42, h: 48 },
-        { x: 48, y: 44, w: 50, h: 32 },
-        { x: 56, y: 78, w: 40, h: 20 },
+        { x: 2, y: 2, w: 45, h: 42 },
+        { x: 52, y: 2, w: 46, h: 36 },
+        { x: 2, y: 48, w: 40, h: 48 },
+        { x: 49, y: 42, w: 48, h: 28 },
+        { x: 49, y: 74, w: 46, h: 15 },
       ];
     default:
       return [];

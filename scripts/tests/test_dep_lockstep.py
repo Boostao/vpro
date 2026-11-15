@@ -2,9 +2,9 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
-import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 
 def load_module():
@@ -78,24 +78,53 @@ class DepLockstepTests(unittest.TestCase):
             errs = MOD.check_lockstep(root)
             self.assertTrue(any("@deck.gl/* major.minor lockstep mismatch" in e for e in errs), errs)
 
+    def test_real_repo_passes_strict_brand(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        self.assertEqual(MOD.check_lockstep(repo_root, strict_brand=True), [])
+
     def test_strict_brand_detects_stock_wails_and_passes_custom(self):
         with tempfile.TemporaryDirectory() as td:
             root = make_fixture_repo(Path(td))
             (root / "app" / "build" / "appicon.icon" / "Assets").mkdir(parents=True)
+            (root / "app" / "build" / "windows").mkdir(parents=True)
+            (root / "app" / "build" / "darwin").mkdir(parents=True)
             (root / "app" / "frontend" / "public").mkdir(parents=True)
-            real_icon = Path(__file__).resolve().parents[2] / "app" / "build" / "appicon.png"
-            shutil.copy2(real_icon, root / "app" / "build" / "appicon.png")
+
+            synthetic_stock = b"synthetic-stock-wails-w-png"
+            synthetic_sha = hashlib.sha256(synthetic_stock).hexdigest()
+            (root / "app" / "build" / "appicon.png").write_bytes(synthetic_stock)
             (root / "app" / "build" / "appicon.icon" / "Assets" / "wails_icon_vector.svg").write_text("<svg/>")
             (root / "app" / "frontend" / "public" / "svelte.svg").write_text("<svg/>")
+            (root / "app" / "frontend" / "public" / "wails.png").write_bytes(b"png")
+            (root / "app" / "frontend" / "public" / "style.css").write_text("body{}")
 
-            errs = MOD.check_lockstep(root, strict_brand=True)
-            self.assertEqual(len(errs), 3, errs)
+            synthetic_ico = b"synthetic-stock-wails-ico"
+            synthetic_ico_sha = hashlib.sha256(synthetic_ico).hexdigest()
+            (root / "app" / "build" / "windows" / "icon.ico").write_bytes(synthetic_ico)
 
-            # Replace icon and delete stock SVGs -> should pass
-            (root / "app" / "build" / "appicon.png").write_bytes(b"custom-bcgov-vpro-png")
-            (root / "app" / "build" / "appicon.icon" / "Assets" / "wails_icon_vector.svg").unlink()
-            (root / "app" / "frontend" / "public" / "svelte.svg").unlink()
-            self.assertEqual(MOD.check_lockstep(root, strict_brand=True), [])
+            synthetic_car = b"BOMStore\x00wails\x00data"
+            (root / "app" / "build" / "darwin" / "Assets.car").write_bytes(synthetic_car)
+
+            guarded = (
+                ("app/build/windows/icon.ico", synthetic_ico_sha, "app/build/windows/icon.ico stock"),
+            )
+            with mock.patch.object(MOD, "STOCK_WAILS_APPICON_SHA256", synthetic_sha), \
+                 mock.patch.object(MOD, "STOCK_BRAND_SHA256_GUARD", guarded):
+                errs = MOD.check_lockstep(root, strict_brand=True)
+                self.assertEqual(len(errs), 7, errs)
+
+                # Replace with custom branded assets and remove template clutter -> should pass
+                (root / "app" / "build" / "appicon.png").write_bytes(b"custom-bcgov-vpro-png")
+                (root / "app" / "build" / "windows" / "icon.ico").write_bytes(b"custom-bcgov-vpro-ico")
+                (root / "app" / "build" / "darwin" / "Assets.car").unlink()
+                for dead in (
+                    root / "app" / "build" / "appicon.icon" / "Assets" / "wails_icon_vector.svg",
+                    root / "app" / "frontend" / "public" / "svelte.svg",
+                    root / "app" / "frontend" / "public" / "wails.png",
+                    root / "app" / "frontend" / "public" / "style.css",
+                ):
+                    dead.unlink()
+                self.assertEqual(MOD.check_lockstep(root, strict_brand=True), [])
 
 
 if __name__ == "__main__":

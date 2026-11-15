@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bec-shield-fill" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#2E8540"/>
+      <stop offset="56%" stop-color="#1E5128"/>
+      <stop offset="100%" stop-color="#13381B"/>
+    </linearGradient>
+    <linearGradient id="bc-gold-stroke" x1="25%" y1="0%" x2="75%" y2="100%">
+      <stop offset="0%" stop-color="#FFD452"/>
+      <stop offset="50%" stop-color="#FCBA19"/>
+      <stop offset="100%" stop-color="#D99B00"/>
+    </linearGradient>
+  </defs>
+
+  <g id="vpro-shield-conifer">
+    <path d="M 512 162
+             L 216 286
+             V 512
+             C 216 681 342 827 512 864
+             C 682 827 808 681 808 512
+             V 286
+             Z"
+          fill="url(#bec-shield-fill)"
+          stroke="url(#bc-gold-stroke)"
+          stroke-width="24"
+          stroke-linejoin="round"/>
+    <path d="M 512 190
+             L 242 303
+             V 510
+             C 242 664 358 799 512 834
+             C 666 799 782 664 782 510
+             V 303
+             Z"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="3"
+          stroke-opacity="0.16"/>
+    <path d="M 488 614 L 536 614 L 542 754 Q 512 764 482 754 Z" fill="#FCBA19"/>
+    <path d="M 512 454 L 698 654 Q 512 618 326 654 Z" fill="#FFFFFF"/>
+    <path d="M 512 344 L 656 518 Q 512 488 368 518 Z" fill="#FFFFFF"/>
+    <path d="M 512 244 L 614 396 Q 512 372 410 396 Z" fill="#FFFFFF"/>
+  </g>
+</svg>

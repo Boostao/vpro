@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="36 36 952 952" width="1024" height="1024" role="img" aria-label="VPro Biogeoclimatic Ecosystem Classification Emblem">
+  <defs>
+    <!-- BC Gov Navy squircle plate gradient (#003366 primary to deep #001E3D) -->
+    <linearGradient id="bc-navy-plate" x1="16%" y1="6%" x2="84%" y2="96%">
+      <stop offset="0%" stop-color="#0B437A"/>
+      <stop offset="52%" stop-color="#003366"/>
+      <stop offset="100%" stop-color="#001D3A"/>
+    </linearGradient>
+
+    <!-- #38598A subtle upper sheen for depth & dark-surface separation -->
+    <radialGradient id="navy-sheen" cx="35%" cy="22%" r="65%">
+      <stop offset="0%" stop-color="#38598A" stop-opacity="0.58"/>
+      <stop offset="65%" stop-color="#38598A" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#001D3A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- BEC Forest Shield gradient matching VPro R crest (#2E8540 -> #1E5128 -> #13381B) -->
+    <linearGradient id="bec-shield-fill" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#2E8540"/>
+      <stop offset="56%" stop-color="#1E5128"/>
+      <stop offset="100%" stop-color="#13381B"/>
+    </linearGradient>
+
+    <!-- BC Gov Gold (#FCBA19) rich metallic edge -->
+    <linearGradient id="bc-gold-stroke" x1="25%" y1="0%" x2="75%" y2="100%">
+      <stop offset="0%" stop-color="#FFD452"/>
+      <stop offset="50%" stop-color="#FCBA19"/>
+      <stop offset="100%" stop-color="#D99B00"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer rounded squircle container (896x896 inside 1024x1024 with 64px safe margin) -->
+  <rect x="64" y="64" width="896" height="896" rx="196" ry="196"
+        fill="url(#bc-navy-plate)" stroke="#38598A" stroke-width="14"/>
+  <rect x="71" y="71" width="882" height="882" rx="189" ry="189"
+        fill="url(#navy-sheen)"/>
+
+  <!-- Subtle inner gold pinstripe frame -->
+  <rect x="100" y="100" width="824" height="824" rx="162" ry="162"
+        fill="none" stroke="#FCBA19" stroke-width="4" stroke-opacity="0.32"/>
+
+  <!-- VPro Shield + Conifer Emblem centered around (512, 513) -->
+  <g id="vpro-shield-conifer">
+    <!-- Heraldic shield -->
+    <path d="M 512 162
+             L 216 286
+             V 512
+             C 216 681 342 827 512 864
+             C 682 827 808 681 808 512
+             V 286
+             Z"
+          fill="url(#bec-shield-fill)"
+          stroke="url(#bc-gold-stroke)"
+          stroke-width="24"
+          stroke-linejoin="round"/>
+
+    <!-- Inner shield highlight hairline (#38598A / light mint edge for micro crispness) -->
+    <path d="M 512 190
+             L 242 303
+             V 510
+             C 242 664 358 799 512 834
+             C 666 799 782 664 782 510
+             V 303
+             Z"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="3"
+          stroke-opacity="0.16"/>
+
+    <!-- Gold conifer trunk (#FCBA19) -->
+    <path d="M 488 614 L 536 614 L 542 754 Q 512 764 482 754 Z"
+          fill="#FCBA19"/>
+
+    <!-- Three-tier white conifer crown (#FFFFFF) -->
+    <!-- Base bough -->
+    <path d="M 512 454 L 698 654 Q 512 618 326 654 Z" fill="#FFFFFF"/>
+    <!-- Middle bough -->
+    <path d="M 512 344 L 656 518 Q 512 488 368 518 Z" fill="#FFFFFF"/>
+    <!-- Top crown -->
+    <path d="M 512 244 L 614 396 Q 512 372 410 396 Z" fill="#FFFFFF"/>
+  </g>
+</svg>
