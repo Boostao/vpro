@@ -22,7 +22,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/resources"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 var DesktopDefaults = resources.ConfigInitYML

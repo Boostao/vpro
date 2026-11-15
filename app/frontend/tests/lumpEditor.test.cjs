@@ -6,16 +6,16 @@ const { render } = require('svelte/server');
 const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const calls = [];
-const mockRuntime = {
-  Call: {
-    ByName: (name, ...args) => {
-      calls.push([name, ...args]);
+const mockBindings = {
+  ImportExportService: new Proxy({}, {
+    get: (_, method) => (...args) => {
+      calls.push([`main.ImportExportService.${String(method)}`, ...args]);
       return Promise.resolve(null);
     },
-  },
+  }),
 };
 
-const lump = loadTypeScript('lumpEditor.ts', { '@wailsio/runtime': mockRuntime });
+const lump = loadTypeScript('lumpEditor.ts', { '../../bindings/github.com/boostao/vpro/app': mockBindings });
 
 const fromVM = (v) => JSON.parse(JSON.stringify(v));
 

@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import { wellFormedUTF16 } from './qualityEditor';
+import { ContextService } from '../../bindings/github.com/boostao/vpro/app';
 
 export const SIVI_PLOT_TYPES = ['Ground', 'Visual', 'Note', 'Other'] as const;
 export type SIVIPlotType = (typeof SIVI_PLOT_TYPES)[number];
@@ -71,9 +71,9 @@ export interface SIVIParentCreatePort {
 }
 
 export const defaultSIVIParentCreatePort: SIVIParentCreatePort = {
-  createPlot: (contextId, req) => Call.ByName('main.ContextService.CreateSIVIPlot', contextId, req),
-  undoCreatePlot: (contextId, req) => Call.ByName('main.ContextService.UndoCreateSIVIPlot', contextId, req),
-  listCreatedPlots: contextId => Call.ByName('main.ContextService.ListCreatedSIVIPlots', contextId),
+  createPlot: (contextId, req) => (ContextService.CreateSIVIPlot(contextId, req) as never),
+  undoCreatePlot: (contextId, req) => (ContextService.UndoCreateSIVIPlot(contextId, req) as never),
+  listCreatedPlots: contextId => (ContextService.ListCreatedSIVIPlots(contextId) as never),
 };
 
 export function validateSIVIFieldUTF16(label: string, value: string | undefined, maxUnits: number, required = false): string | null {

@@ -26,8 +26,8 @@ jobs:
       rsidecar: ${{ steps.filter.outputs.rsidecar }}
       website: ${{ steps.filter.outputs.website }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -64,13 +64,13 @@ jobs:
     if: github.event_name == 'push' || needs.changes.outputs.portal == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
-      - uses: actions/setup-node@v4
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Compile docs-src and verify zero help_bundle drift
         run: |
           set -euo pipefail
@@ -92,10 +92,10 @@ jobs:
       run:
         working-directory: app/frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: app/frontend/package-lock.json
       - name: Install dependencies
@@ -137,13 +137,13 @@ jobs:
       VPRO_PG_ADMIN_USER: 'vpro_custodian'
       VPRO_PG_ADMIN_PASSWORD: 'ci_custodian_pw_2026'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install GTK4, WebKitGTK 6.0, and PostgreSQL client headers
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libgtk-4-dev libwebkitgtk-6.0-dev pkg-config build-essential postgresql-client
+            libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev pkg-config build-essential postgresql-client
       - name: Bootstrap distinct PostgreSQL contributor and custodian roles
         env:
           PGPASSWORD: ci_pg_superuser_pw
@@ -156,16 +156,16 @@ jobs:
           GRANT CONNECT, TEMPORARY ON DATABASE becmaster_ci TO vpro_contrib;
           CREATE EXTENSION IF NOT EXISTS pgcrypto;
           SQL
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27.4'
           cache-dependency-path: app/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: app/frontend/package-lock.json
-      - uses: arduino/setup-task@v2
+      - uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -174,11 +174,17 @@ jobs:
           CGO_ENABLED: '0'
         run: |
           set -euo pipefail
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Build frontend assets for Go embed
         working-directory: app/frontend
         run: npm ci && npm run build
+      - name: Verify Wails v3 TypeScript bindings have zero drift
+        working-directory: app
+        run: |
+          set -euo pipefail
+          wails3 generate bindings -f '-tags sqliteonly' -ts -i
+          git diff --exit-code -- frontend/bindings
       - name: Run race detector on concurrent services, WAL core, and live PostgreSQL RBAC/RLS
         working-directory: app
         run: go test -tags sqliteonly -race . ./internal/cloudsync/... ./internal/lifecycle/... ./internal/sqlutil/... ./internal/vprocore/... ./internal/diagnostics/...
@@ -231,7 +237,7 @@ jobs:
       VPRO_PG_ADMIN_USER: 'vpro_custodian'
       VPRO_PG_ADMIN_PASSWORD: 'ci_custodian_pw_2026'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Bootstrap PostgreSQL roles for Wave 6 Cloud BECMaster tests
         env:
           PGPASSWORD: ci_pg_superuser_pw
@@ -335,7 +341,7 @@ jobs:
       R_KEEP_PKG_SOURCE: 'yes'
       _R_CHECK_FORCE_SUGGESTS_: 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: quarto-dev/quarto-actions/setup@v2
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -360,15 +366,15 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       CGO_ENABLED: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install GTK4 and WebKitGTK 6.0 dev headers
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev pkg-config build-essential
-      - uses: actions/setup-go@v5
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev pkg-config build-essential
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27.4'
           cache-dependency-path: app/go.sum
       - uses: quarto-dev/quarto-actions/setup@v2
       - uses: r-lib/actions/setup-r@v2
@@ -393,10 +399,10 @@ jobs:
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
       - uses: quarto-dev/quarto-actions/setup@v2
       - uses: r-lib/actions/setup-r@v2
         with:

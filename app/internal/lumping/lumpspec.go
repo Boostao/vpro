@@ -46,9 +46,9 @@ type LumpSpecPreview struct {
 }
 
 type LumpMaterializeResult struct {
-	Table        LumpTableSummary  `json:"table"`
-	RowsWritten  int               `json:"rowsWritten"`
-	Impact       LumpImpactPreview `json:"impact"`
+	Table       LumpTableSummary  `json:"table"`
+	RowsWritten int               `json:"rowsWritten"`
+	Impact      LumpImpactPreview `json:"impact"`
 }
 
 func ListLumpPresets() []LumpPresetInfo {

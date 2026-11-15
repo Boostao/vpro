@@ -1,4 +1,4 @@
-import { Call } from '@wailsio/runtime';
+import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
 
 export type DiagnosticSeverity = 'info' | 'warning' | 'error';
 
@@ -58,9 +58,9 @@ export interface LMH25DiagnosticsPort {
 
 export const defaultLMH25DiagnosticsPort: LMH25DiagnosticsPort = {
   evaluatePlotDiagnostics: (header, humus, mineral) =>
-    Call.ByName('main.PlotEntryService.EvaluatePlotDiagnostics', header, humus, mineral),
+    (PlotEntryService.EvaluatePlotDiagnostics(header as never, humus as never, mineral as never) as never),
   evaluateStoredPlotDiagnostics: (contextID, plotNumber) =>
-    Call.ByName('main.PlotEntryService.EvaluateStoredPlotDiagnostics', contextID, plotNumber),
+    (PlotEntryService.EvaluateStoredPlotDiagnostics(contextID, plotNumber) as never),
 };
 
 export function substrateProgressPercent(sum: number | null): number {

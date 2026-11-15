@@ -703,4 +703,3 @@ func TestTurboVegSynonymMultiplicityAndDelphiDateTimeEdgeCases(t *testing.T) {
 		t.Fatal("expected malformed UTF-8 in SQLite source to be rejected")
 	}
 }
-

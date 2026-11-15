@@ -113,7 +113,7 @@ func TestTwoPageSourceAuditGuardsAndCorrection(t *testing.T) {
 				"schema":    `ALTER TABLE Sample_Audit RENAME COLUMN AfterEdit TO Unavailable`,
 				"view":      `ALTER TABLE Sample_Audit RENAME TO Archived_Audit; CREATE VIEW Sample_Audit AS SELECT * FROM Archived_Audit`,
 				"hidden":    `ALTER TABLE Sample_Audit ADD COLUMN Hidden TEXT GENERATED ALWAYS AS ('hidden') VIRTUAL`,
-				"shadow":    `ALTER TABLE Sample_Audit ADD COLUMN rowid TEXT`,
+				"shadow":    `ALTER TABLE Sample_Audit RENAME TO Sample_Audit_orig; CREATE TABLE Sample_Audit AS SELECT *, 'x' AS rowid FROM Sample_Audit_orig`,
 			}[failure]
 			if _, err := db.Exec(sqlText); err != nil {
 				t.Fatal(err)

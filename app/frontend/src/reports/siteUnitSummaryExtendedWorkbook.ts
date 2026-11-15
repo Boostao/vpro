@@ -1,7 +1,5 @@
-import type {
-  SiteUnitSummaryExtendedWorkbookOptions, SiteUnitSummaryExtendedWorkbookReview,
-  SiteUnitSummaryWorkbookOutcome,
-} from '../../bindings/github.com/boostao/vpro/app';
+import type { SiteUnitSummaryExtendedWorkbookReview, SiteUnitSummaryWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
+import type { SiteUnitSummaryExtendedWorkbookOptions } from '../../bindings/github.com/boostao/vpro/app/internal/envreport/models';
 import type { GoogleEarthScope } from '../spatial/googleEarthReview';
 import { ownedScope } from '../spatial/googleEarthReview';
 import { lifeformShape as shape } from './lifeformSummary';

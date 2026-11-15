@@ -1,8 +1,5 @@
-import type {
-  LongVegetationProjectFieldDefinitions, LongVegetationProjectOptions, LongVegetationProjectPreview,
-  LongVegetationProjectUnit, LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences,
-  LongVegetationReportScope,
-} from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationProjectFieldDefinitions, LongVegetationProjectOptions, LongVegetationProjectPreview, LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences, LongVegetationReportScope } from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationProjectUnit } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import type { ProjectReportOwner, ProjectReportSource, ValidatedProjectPreview } from './longVegetationProjectReport';
 import { projectReportOwnedScope, validateLongVegetationProjectPreview, validateProjectReportSettings,
   validateProjectUnitTuples } from './longVegetationProjectReport';

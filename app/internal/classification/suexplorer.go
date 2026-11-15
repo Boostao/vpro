@@ -119,24 +119,24 @@ type PlotInspectorSpecies struct {
 }
 
 type PlotInspectorSummary struct {
-	ContextID       string                 `json:"contextId"`
-	PlotNumber      string                 `json:"plotNumber"`
-	FieldNumber     string                 `json:"fieldNumber"`
-	ProjectID       string                 `json:"projectId"`
-	Zone            string                 `json:"zone"`
-	SubZone         string                 `json:"subZone"`
-	SiteSeries      string                 `json:"siteSeries"`
-	UserSiteUnit    string                 `json:"userSiteUnit"`
-	BECSiteUnit     string                 `json:"becSiteUnit"`
-	CurrentSUUnit   string                 `json:"currentSuUnit"`
-	MoistureRegime  string                 `json:"moistureRegime"`
-	NutrientRegime  string                 `json:"nutrientRegime"`
-	Elevation       *int64                 `json:"elevation"`
-	Slope           string                 `json:"slope"`
-	Aspect          *int64                 `json:"aspect"`
-	Latitude        *float64               `json:"latitude"`
-	Longitude       *float64               `json:"longitude"`
-	TopSpecies      []PlotInspectorSpecies `json:"topSpecies"`
+	ContextID      string                 `json:"contextId"`
+	PlotNumber     string                 `json:"plotNumber"`
+	FieldNumber    string                 `json:"fieldNumber"`
+	ProjectID      string                 `json:"projectId"`
+	Zone           string                 `json:"zone"`
+	SubZone        string                 `json:"subZone"`
+	SiteSeries     string                 `json:"siteSeries"`
+	UserSiteUnit   string                 `json:"userSiteUnit"`
+	BECSiteUnit    string                 `json:"becSiteUnit"`
+	CurrentSUUnit  string                 `json:"currentSuUnit"`
+	MoistureRegime string                 `json:"moistureRegime"`
+	NutrientRegime string                 `json:"nutrientRegime"`
+	Elevation      *int64                 `json:"elevation"`
+	Slope          string                 `json:"slope"`
+	Aspect         *int64                 `json:"aspect"`
+	Latitude       *float64               `json:"latitude"`
+	Longitude      *float64               `json:"longitude"`
+	TopSpecies     []PlotInspectorSpecies `json:"topSpecies"`
 }
 
 type BECUnitPickerRequest struct {
@@ -1736,10 +1736,10 @@ func UndoSUAssignment(ctx context.Context, contexts *vprocore.ContextService, co
 			}
 
 			undoReceipt, err := json.Marshal(struct {
-				Kind      string                  `json:"kind"`
-				UndoneID  string                  `json:"undoneId"`
-				SU        string                  `json:"su"`
-				Deltas    []suPlotAssignmentDelta `json:"deltas"`
+				Kind     string                  `json:"kind"`
+				UndoneID string                  `json:"undoneId"`
+				SU       string                  `json:"su"`
+				Deltas   []suPlotAssignmentDelta `json:"deltas"`
 			}{"su_plot_assignment_undo", strconv.FormatInt(targetID, 10), suName, reverseDeltas})
 			if err != nil {
 				return err

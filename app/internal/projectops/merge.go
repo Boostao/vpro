@@ -57,19 +57,19 @@ type MergePlotPreview struct {
 }
 
 type ThreeWayMergePreview struct {
-	SourcePath       string             `json:"sourcePath"`
-	SourceProject    string             `json:"sourceProject"`
-	TargetPath       string             `json:"targetPath"`
-	TargetProject    string             `json:"targetProject"`
-	BasePath         string             `json:"basePath,omitempty"`
-	BaseProject      string             `json:"baseProject,omitempty"`
-	PreviewDigest    string             `json:"previewDigest"`
-	AddedCount       int                `json:"addedCount"`
-	IdenticalCount   int                `json:"identicalCount"`
-	FastForwardCount int                `json:"fastForwardCount"`
-	ConflictCount    int                `json:"conflictCount"`
-	TargetOnlyCount  int                `json:"targetOnlyCount"`
-	Plots            []MergePlotPreview `json:"plots"`
+	SourcePath       string              `json:"sourcePath"`
+	SourceProject    string              `json:"sourceProject"`
+	TargetPath       string              `json:"targetPath"`
+	TargetProject    string              `json:"targetProject"`
+	BasePath         string              `json:"basePath,omitempty"`
+	BaseProject      string              `json:"baseProject,omitempty"`
+	PreviewDigest    string              `json:"previewDigest"`
+	AddedCount       int                 `json:"addedCount"`
+	IdenticalCount   int                 `json:"identicalCount"`
+	FastForwardCount int                 `json:"fastForwardCount"`
+	ConflictCount    int                 `json:"conflictCount"`
+	TargetOnlyCount  int                 `json:"targetOnlyCount"`
+	Plots            []MergePlotPreview  `json:"plots"`
 	Conflicts        []MergeConflictItem `json:"conflicts"`
 }
 

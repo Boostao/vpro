@@ -1,6 +1,6 @@
-import { Call } from '@wailsio/runtime';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { validateProjectNameInput, parseLiteralTokenList } from './projectAdminWorkbench';
+import { ContextService } from '../../bindings/github.com/boostao/vpro/app';
 
 export { validateProjectNameInput, parseLiteralTokenList };
 
@@ -407,25 +407,25 @@ export interface CloudSyncPort {
 }
 
 export const defaultCloudSyncPort: CloudSyncPort = {
-  getCloudSyncConfigStatus: () => Call.ByName('main.ContextService.GetCloudSyncConfigStatus'),
-  configureCloudSyncSession: req => Call.ByName('main.ContextService.ConfigureCloudSyncSession', req),
-  testCloudConnection: () => Call.ByName('main.ContextService.TestCloudConnection'),
-  bootstrapCloudSchemas: () => Call.ByName('main.ContextService.BootstrapCloudSchemas'),
-  publishStandardsToCloud: (contextId, req) => Call.ByName('main.ContextService.PublishStandardsToCloud', contextId, req),
-  seedBECMasterBaseline: req => Call.ByName('main.ContextService.SeedBECMasterBaseline', req),
-  pullCloudStandards: contextId => Call.ByName('main.ContextService.PullCloudStandards', contextId),
-  previewBECMasterSubset: filter => Call.ByName('main.ContextService.PreviewBECMasterSubset', filter),
-  pullBECMasterSubset: (contextId, req) => Call.ByName('main.ContextService.PullBECMasterSubset', contextId, req),
-  previewStagingSubmission: (contextId, useActiveSu) => Call.ByName('main.ContextService.PreviewStagingSubmission', contextId, useActiveSu),
-  submitProjectToStaging: (contextId, req) => Call.ByName('main.ContextService.SubmitProjectToStaging', contextId, req),
-  listStagingSubmissions: filter => Call.ByName('main.ContextService.ListStagingSubmissions', filter),
-  getStagingSubmissionDetail: submissionId => Call.ByName('main.ContextService.GetStagingSubmissionDetail', submissionId),
-  previewStagingToMasterMerge: req => Call.ByName('main.ContextService.PreviewStagingToMasterMerge', req),
-  executeStagingToMasterMerge: req => Call.ByName('main.ContextService.ExecuteStagingToMasterMerge', req),
-  rejectStagingSubmission: req => Call.ByName('main.ContextService.RejectStagingSubmission', req),
-  createBECMasterSnapshot: (contextId, req) => Call.ByName('main.ContextService.CreateBECMasterSnapshot', contextId, req),
-  listBECMasterSnapshots: () => Call.ByName('main.ContextService.ListBECMasterSnapshots'),
-  listBECMasterDownloadLog: limit => Call.ByName('main.ContextService.ListBECMasterDownloadLog', limit),
+  getCloudSyncConfigStatus: () => (ContextService.GetCloudSyncConfigStatus() as never),
+  configureCloudSyncSession: req => (ContextService.ConfigureCloudSyncSession(req) as never),
+  testCloudConnection: () => (ContextService.TestCloudConnection() as never),
+  bootstrapCloudSchemas: () => (ContextService.BootstrapCloudSchemas() as never),
+  publishStandardsToCloud: (contextId, req) => (ContextService.PublishStandardsToCloud(contextId, req) as never),
+  seedBECMasterBaseline: req => (ContextService.SeedBECMasterBaseline(req) as never),
+  pullCloudStandards: contextId => (ContextService.PullCloudStandards(contextId) as never),
+  previewBECMasterSubset: filter => (ContextService.PreviewBECMasterSubset(filter) as never),
+  pullBECMasterSubset: (contextId, req) => (ContextService.PullBECMasterSubset(contextId, req) as never),
+  previewStagingSubmission: (contextId, useActiveSu) => (ContextService.PreviewStagingSubmission(contextId, useActiveSu) as never),
+  submitProjectToStaging: (contextId, req) => (ContextService.SubmitProjectToStaging(contextId, req) as never),
+  listStagingSubmissions: filter => (ContextService.ListStagingSubmissions(filter) as never),
+  getStagingSubmissionDetail: submissionId => (ContextService.GetStagingSubmissionDetail(submissionId) as never),
+  previewStagingToMasterMerge: req => (ContextService.PreviewStagingToMasterMerge(req) as never),
+  executeStagingToMasterMerge: req => (ContextService.ExecuteStagingToMasterMerge(req) as never),
+  rejectStagingSubmission: req => (ContextService.RejectStagingSubmission(req) as never),
+  createBECMasterSnapshot: (contextId, req) => (ContextService.CreateBECMasterSnapshot(contextId, req) as never),
+  listBECMasterSnapshots: () => (ContextService.ListBECMasterSnapshots() as never),
+  listBECMasterDownloadLog: limit => (ContextService.ListBECMasterDownloadLog(limit) as never),
 };
 
 export interface SubsetFilterDraftInput {

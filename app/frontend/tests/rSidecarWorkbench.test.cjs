@@ -11,17 +11,17 @@ const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelper
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 
 const wailsCalls = [];
-const mockWailsRuntime = {
-  Call: {
-    ByName(methodName, ...args) {
-      wailsCalls.push({ methodName, args });
+const mockBindings = {
+  EnvironmentReportService: new Proxy({}, {
+    get: (_, method) => (...args) => {
+      wailsCalls.push({ methodName: `main.EnvironmentReportService.${String(method)}`, args });
       return Promise.resolve({ ok: true });
     },
-  },
+  }),
 };
 
 const wb = loadTypeScript('rSidecarWorkbench.ts', {
-  '@wailsio/runtime': mockWailsRuntime,
+  '../../bindings/github.com/boostao/vpro/app': mockBindings,
   './qualityEditor': quality,
 });
 

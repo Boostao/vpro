@@ -4,7 +4,7 @@
 
 ## 1. Go Module, 4-Layer DAG & 12 Wails Services
 
-- **Go Module:** `github.com/boostao/vpro/app` (`app/go.mod`, Go `1.25+`, `CGO_ENABLED=1`, `-tags sqliteonly` canonical profile).
+- **Go Module:** `github.com/boostao/vpro/app` (`app/go.mod`, Go `1.27+`, `CGO_ENABLED=1`, `-tags sqliteonly` canonical profile).
 - **4-Layer Acyclic DAG (`internal/integration/architecture_dag_test.go`):**
   - **Layer 0 (Assets & Foundations):** `resources` (`resources/embed.go`), `internal/sqlutil`, `internal/accessreader` (vendored `libmdb` `1.0.1` across `linux || windows || darwin`, Linux `-fvisibility=hidden` isolating `fakeglib` from GTK4, Windows `-static` zero non-inbox PE DLLs), `internal/accessimport`, `internal/accessinventory`, `internal/accesslayout`, `internal/accesscompare`, `internal/fs882layout`, `internal/listcatalog`, `internal/reports/subzonematrix`.
   - **Layer 1 (Core & Catalogues):** `internal/references`, `internal/vprocore` (`SQLiteContext`, `DesktopConfig`, `DatabaseFamily`, `ProjectService`, `ContextService`, `PlotService` + `vprotest`), `internal/sourceform` (+ `sftest`), `internal/reports/reportcore`.

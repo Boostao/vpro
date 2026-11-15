@@ -1,4 +1,5 @@
-import type { ProjectMetadataCell, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import source from '../../../resources/fs1333-sivi-layout.json';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { equalCell, metadataCellText } from '../admin/projectMetadataEditor';

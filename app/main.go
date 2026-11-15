@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	lifecyclepkg "github.com/boostao/vpro/app/internal/lifecycle"
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
@@ -97,6 +98,7 @@ func main() {
 	pictures := &PictureService{}
 	helpService := &HelpService{}
 	runtimeTracker := &runtimeShutdownTracker{attributor: initialAttributor, extraDirs: spatialExtraDirs}
+	lifecycleService.onShutdown = func() { runtimeTracker.shutdown(refs, cloudSyncManager) }
 
 	activateRuntime := func() (StartupState, error) {
 		active, err := openActiveProjectContext(dataDir, configDir, refs, cloudSyncManager)
@@ -200,6 +202,7 @@ func main() {
 		application.NewService(helpService),
 	}
 
+	var window *application.WebviewWindow
 	app = application.New(application.Options{
 		Name:        "VPro",
 		Description: "VENUS (Vegetation and Environment NexUS) Professional — B.C. Ministry of Forests, Research Branch (BEC Program)",
@@ -207,13 +210,27 @@ func main() {
 		Windows:     windows,
 		ShouldQuit:  closeService.ShouldQuit,
 		OnShutdown:  func() { runtimeTracker.shutdown(refs, cloudSyncManager) },
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "ca.bc.gov.for.bec.vpro",
+			OnSecondInstanceLaunch: func(_ application.SecondInstanceData) {
+				if window != nil {
+					window.Show()
+					window.Focus()
+				}
+			},
+		},
+		Server: application.ServerOptions{
+			ReadTimeout:             5 * time.Minute,
+			WriteTimeout:            15 * time.Minute,
+			WebSocketOriginPatterns: parseWebSocketOriginPatterns(os.Getenv("VPRO_SERVER_WS_ORIGINS")),
+		},
 		Assets: application.AssetOptions{
 			Handler: NewDynamicPMTilesAssetHandler(application.AssetFileServerFS(assets), dataDir, runtimeTracker.currentExtraDirs),
 		},
 		Mac: application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})
 
-	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "main", Title: "VPro", Width: 1400, Height: 900, MinWidth: 560, MinHeight: 520,
 		BackgroundColour: application.NewRGB(247, 249, 247), URL: "/",
 	})
@@ -237,4 +254,17 @@ func main() {
 	if err = app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func parseWebSocketOriginPatterns(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }

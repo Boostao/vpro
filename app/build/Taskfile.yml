@@ -221,7 +221,7 @@ tasks:
             ref: .OBFUSCATED
     preconditions:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
-        msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
+        msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.18.0 (requires Go 1.27+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
     cmds:
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}"'
     vars:
@@ -261,7 +261,7 @@ tasks:
         docker build
         --build-arg CGO_ENABLED={{.CGO_ENABLED | default "1"}}
         --build-arg EXTRA_TAGS={{.EXTRA_TAGS | default "sqliteonly"}}
-        --build-arg GO_IMAGE={{.GO_IMAGE | default "golang:1.26-trixie"}}
+        --build-arg GO_IMAGE={{.GO_IMAGE | default "golang:1.27.4-trixie"}}
         --build-arg RUNTIME_IMAGE={{.RUNTIME_IMAGE | default "debian:trixie-slim"}}
         -t {{.TAG | default (printf "%s:latest" .APP_NAME)}}
         -f build/docker/Dockerfile.server .

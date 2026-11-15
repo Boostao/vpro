@@ -23,14 +23,14 @@ const (
 	CRSEPSG3005 = "EPSG:3005"
 
 	// GRS80 ellipsoid & BC Albers (EPSG:3005) parameters
-	grs80SemiMajor   = 6378137.0
-	grs80InvFlat     = 298.257222101
-	bcAlbersPhi1Deg  = 50.0
-	bcAlbersPhi2Deg  = 58.5
-	bcAlbersPhi0Deg  = 45.0
-	bcAlbersLam0Deg  = -126.0
-	bcAlbersFalseE   = 1000000.0
-	bcAlbersFalseN   = 0.0
+	grs80SemiMajor  = 6378137.0
+	grs80InvFlat    = 298.257222101
+	bcAlbersPhi1Deg = 50.0
+	bcAlbersPhi2Deg = 58.5
+	bcAlbersPhi0Deg = 45.0
+	bcAlbersLam0Deg = -126.0
+	bcAlbersFalseE  = 1000000.0
+	bcAlbersFalseN  = 0.0
 )
 
 var (
@@ -145,7 +145,7 @@ func EncodeGeoPackagePoint(srsID int32, x, y float64) []byte {
 	binary.LittleEndian.PutUint64(buf[16:24], math.Float64bits(x))
 	binary.LittleEndian.PutUint64(buf[24:32], math.Float64bits(y))
 	binary.LittleEndian.PutUint64(buf[32:40], math.Float64bits(y))
-	buf[40] = 0x01 // WKB little-endian
+	buf[40] = 0x01                               // WKB little-endian
 	binary.LittleEndian.PutUint32(buf[41:45], 1) // wkbPoint = 1
 	binary.LittleEndian.PutUint64(buf[45:53], math.Float64bits(x))
 	binary.LittleEndian.PutUint64(buf[53:61], math.Float64bits(y))
@@ -201,8 +201,8 @@ func DecodeGeoPackagePoint(blob []byte) (srsID int32, x, y float64, err error) {
 }
 
 const (
-	wktWGS84 = `GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]`
-	wktNAD83 = `GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]`
+	wktWGS84    = `GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]`
+	wktNAD83    = `GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]`
 	wktBCAlbers = `PROJCS["NAD83 / BC Albers",GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Albers_Conic_Equal_Area"],PARAMETER["standard_parallel_1",50],PARAMETER["standard_parallel_2",58.5],PARAMETER["latitude_of_center",45],PARAMETER["longitude_of_center",-126],PARAMETER["false_easting",1000000],PARAMETER["false_northing",0],UNIT["metre",1]]`
 )
 

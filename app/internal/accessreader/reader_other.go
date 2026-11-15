@@ -13,7 +13,7 @@ type Reader struct {
 	Quarantined []QuarantinedRow
 }
 
-func (reader *Reader) EnableRowQuarantine()  {}
+func (reader *Reader) EnableRowQuarantine()   {}
 func (reader *Reader) EstimatedRowCount() int { return 0 }
 
 func Open(path string) (*DB, error) {
@@ -36,9 +36,9 @@ func (db *DB) Scan(table string) (*Reader, error) {
 	return nil, errUnsupportedPlatform
 }
 
-func (reader *Reader) Next() bool { return false }
-func (reader *Reader) Row() Row   { return nil }
-func (reader *Reader) Err() error { return errUnsupportedPlatform }
+func (reader *Reader) Next() bool   { return false }
+func (reader *Reader) Row() Row     { return nil }
+func (reader *Reader) Err() error   { return errUnsupportedPlatform }
 func (reader *Reader) Close() error { return nil }
 
 func (db *DB) ReadAll(table string) ([]Column, []Row, error) {

@@ -391,10 +391,7 @@ func renderLongVegetationWorkbook(ctx context.Context, preview LongVegetationPre
 			}
 			outputRow++
 		}
-		if err := book.SetColWidth(name, "A", lastColumn, 14); err != nil {
-			return result, err
-		}
-		if err := book.SetColWidth(name, "B", "B", 42); err != nil {
+		if err := book.AutoFitColWidth(name, "A:"+lastColumn); err != nil {
 			return result, err
 		}
 		firstPlot, err := excelize.CoordinatesToCellName(firstPlotColumn, 5)

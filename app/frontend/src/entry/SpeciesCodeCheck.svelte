@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import type { SpeciesCodeCheckOption, SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro/app';
+  import type { SpeciesCodeCheckOption } from '../../bindings/github.com/boostao/vpro/app';
+import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro/app/internal/validation/models';
   import type { bindContextPlots } from '../shared/contextPlots';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import { ReadRequests } from '../shared/readRequests';

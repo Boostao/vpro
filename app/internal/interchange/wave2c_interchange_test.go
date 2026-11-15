@@ -456,7 +456,7 @@ cat("TV3_EXTERNAL_SMOKE_OK\n")
 			t.Fatal(err)
 		}
 		var zeroCov float64
-		if err := db.QueryRow(`SELECT Cover6 FROM `+check.proj+`_Veg WHERE typeof(PlotNumber)='text' AND CAST(PlotNumber AS BLOB)=CAST('00337' AS BLOB) AND Species='ABIE_RK'`).Scan(&zeroCov); err != nil || zeroCov != 0 {
+		if err := db.QueryRow(`SELECT Cover6 FROM ` + check.proj + `_Veg WHERE typeof(PlotNumber)='text' AND CAST(PlotNumber AS BLOB)=CAST('00337' AS BLOB) AND Species='ABIE_RK'`).Scan(&zeroCov); err != nil || zeroCov != 0 {
 			db.Close()
 			t.Fatalf("verify %s presence-only zero-cover row (00337 / ABIE_RK): cov=%v err=%v", check.proj, zeroCov, err)
 		}
@@ -491,7 +491,7 @@ cat("TV3_EXTERNAL_SMOKE_OK\n")
 			t.Fatalf("verify %s ALECTOR cover10: %v", check.proj, err)
 		}
 		var pinuCov float64
-		if err := db.QueryRow(`SELECT Cover1 FROM `+check.proj+`_Veg WHERE PlotNumber='108050' AND Species='PINUCON1'`).Scan(&pinuCov); err != nil || math.Abs(pinuCov-12.0) > 1e-4 {
+		if err := db.QueryRow(`SELECT Cover1 FROM ` + check.proj + `_Veg WHERE PlotNumber='108050' AND Species='PINUCON1'`).Scan(&pinuCov); err != nil || math.Abs(pinuCov-12.0) > 1e-4 {
 			db.Close()
 			t.Fatalf("%s 8-char PINUCON1 round-trip failed: cov=%v err=%v", check.proj, pinuCov, err)
 		}

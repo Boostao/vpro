@@ -420,8 +420,8 @@ func TestSIVIParentDirectWriterPhysicalSUAndAuditSchema(t *testing.T) {
 			`ALTER TABLE Report_SU DROP COLUMN ExtraGenerated`},
 		{`ALTER TABLE Sample_Audit ADD COLUMN ExtraGenerated TEXT GENERATED ALWAYS AS ('x') VIRTUAL`,
 			`ALTER TABLE Sample_Audit DROP COLUMN ExtraGenerated`},
-		{`ALTER TABLE Sample_Env ADD COLUMN "_rowid_" TEXT`,
-			`ALTER TABLE Sample_Env DROP COLUMN "_rowid_"`},
+		{`ALTER TABLE Sample_Env RENAME TO Sample_Env_orig; CREATE TABLE Sample_Env AS SELECT *, 'x' AS "_rowid_" FROM Sample_Env_orig`,
+			`DROP TABLE Sample_Env; ALTER TABLE Sample_Env_orig RENAME TO Sample_Env`},
 		{`DROP INDEX uidx_Sample_Admin_PlotNumber; INSERT INTO Sample_Admin SELECT * FROM Sample_Admin WHERE Plot='108050'`,
 			`DELETE FROM Sample_Admin WHERE rowid=(SELECT MAX(rowid) FROM Sample_Admin WHERE Plot='108050');
 			CREATE UNIQUE INDEX uidx_Sample_Admin_PlotNumber ON Sample_Admin(Plot)`},

@@ -489,4 +489,3 @@ func TestLegacyAuditImportSynthesizesMissingProjectColumn(t *testing.T) {
 		t.Fatalf("expected computed Project='ComputedVP06', got %q (err=%v)", gotProj, err)
 	}
 }
-

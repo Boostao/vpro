@@ -8,9 +8,9 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
-func strPtr(s string) *string     { return &s }
-func fltPtr(f float64) *float64   { return &f }
-func intPtr(i int) *int           { return &i }
+func strPtr(s string) *string   { return &s }
+func fltPtr(f float64) *float64 { return &f }
+func intPtr(i int) *int         { return &i }
 
 func hasIssue(issues []lmh25rules.DiagnosticIssue, code string) bool {
 	for _, iss := range issues {
@@ -82,8 +82,8 @@ func TestHorizonDirectionalSignAndVonPostTable223(t *testing.T) {
 		NutrientRegime: strPtr("E"), // Deliberately wrong field SNR=E on fibric Of bog (Keyed=A-B -> divergence >= 3!)
 	}
 	humus := []vprocore.HumusRecord{
-		{ID: 1, PlotNumber: "WET01", Horizon: strPtr("L"), UpperDepth: fltPtr(0.0), LowerDepth: fltPtr(5.0)},                     // wrong sign for L
-		{ID: 2, PlotNumber: "WET01", Horizon: strPtr("Of1"), UpperDepth: fltPtr(0.0), LowerDepth: fltPtr(30.0), VonPost: intPtr(6)}, // Of must be 1..4!
+		{ID: 1, PlotNumber: "WET01", Horizon: strPtr("L"), UpperDepth: fltPtr(0.0), LowerDepth: fltPtr(5.0)},                         // wrong sign for L
+		{ID: 2, PlotNumber: "WET01", Horizon: strPtr("Of1"), UpperDepth: fltPtr(0.0), LowerDepth: fltPtr(30.0), VonPost: intPtr(6)},  // Of must be 1..4!
 		{ID: 3, PlotNumber: "WET01", Horizon: strPtr("Om1"), UpperDepth: fltPtr(30.0), LowerDepth: fltPtr(60.0), VonPost: intPtr(2)}, // Om must be 5..6!
 		{ID: 4, PlotNumber: "WET01", Horizon: strPtr("Oh1"), UpperDepth: fltPtr(80.0), LowerDepth: fltPtr(50.0), VonPost: intPtr(5)}, // wrong sign + Oh must be 7..10!
 	}
@@ -200,4 +200,3 @@ func TestACE15SigDigitCalibratedDecimalRounding(t *testing.T) {
 		t.Fatalf("expected SubstrateSum(35.855) == 35.86, got %v", diag.SubstrateSum)
 	}
 }
-

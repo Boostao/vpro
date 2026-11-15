@@ -35,7 +35,7 @@ func TestHelpBundleLookupAndOfflineSearch(t *testing.T) {
 		bundle.LMH25Edition != "LMH25 (2023)" ||
 		len(bundle.Fields) < 15 ||
 		len(bundle.DecisionKeys) != 3 ||
-		len(bundle.Guides) != 5 ||
+		len(bundle.Guides) != 6 ||
 		len(bundle.Tours) != 4 ||
 		len(bundle.Shortcuts) < 7 ||
 		len(bundle.WhatsNew) < 2 ||
@@ -74,9 +74,9 @@ func TestHelpBundleLookupAndOfflineSearch(t *testing.T) {
 
 	// Alias, prefix, column, and decision-key lookups
 	cases := []struct {
-		input      string
-		wantID     string
-		wantKeyID  string
+		input     string
+		wantID    string
+		wantKeyID string
 	}{
 		{"humus.upper_depth", "humus.upper_lower_depth", ""},
 		{"humus.upper", "humus.upper_lower_depth", ""},

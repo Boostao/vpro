@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
+import { ContextService, ValidationService } from '../../bindings/github.com/boostao/vpro/app';
 
 export const PROJECT_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
@@ -321,16 +321,16 @@ export interface ProjectAdminPort {
 }
 
 export const defaultProjectAdminPort: ProjectAdminPort = {
-  createNewProject: (contextId, req) => Call.ByName('main.ContextService.CreateNewProject', contextId, req),
-  saveProjectAs: (contextId, req) => Call.ByName('main.ContextService.SaveProjectAs', contextId, req),
-  exportSplinterProject: (contextId, req) => Call.ByName('main.ContextService.ExportSplinterProject', contextId, req),
-  compareProjects: (contextId, req) => Call.ByName('main.ContextService.CompareProjects', contextId, req),
-  runComplianceValidation: (contextId, opts) => Call.ByName('main.ValidationService.RunComplianceValidation', contextId, opts),
-  quarantineOrphanRecords: (contextId, req) => Call.ByName('main.ValidationService.QuarantineOrphanRecords', contextId, req),
-  previewOptimizeVeg: (contextId, opts) => Call.ByName('main.ValidationService.PreviewOptimizeVeg', contextId, opts),
-  applyOptimizeVeg: (contextId, req) => Call.ByName('main.ValidationService.ApplyOptimizeVeg', contextId, req),
-  previewThreeWayMerge: (contextId, req) => Call.ByName('main.ValidationService.PreviewThreeWayMerge', contextId, req),
-  executeThreeWayMerge: (contextId, req) => Call.ByName('main.ValidationService.ExecuteThreeWayMerge', contextId, req),
+  createNewProject: (contextId, req) => (ContextService.CreateNewProject(contextId, req) as never),
+  saveProjectAs: (contextId, req) => (ContextService.SaveProjectAs(contextId, req) as never),
+  exportSplinterProject: (contextId, req) => (ContextService.ExportSplinterProject(contextId, req) as never),
+  compareProjects: (contextId, req) => (ContextService.CompareProjects(contextId, req) as never),
+  runComplianceValidation: (contextId, opts) => (ValidationService.RunComplianceValidation(contextId, opts) as never),
+  quarantineOrphanRecords: (contextId, req) => (ValidationService.QuarantineOrphanRecords(contextId, req) as never),
+  previewOptimizeVeg: (contextId, opts) => (ValidationService.PreviewOptimizeVeg(contextId, opts) as never),
+  applyOptimizeVeg: (contextId, req) => (ValidationService.ApplyOptimizeVeg(contextId, req) as never),
+  previewThreeWayMerge: (contextId, req) => (ValidationService.PreviewThreeWayMerge(contextId, req) as never),
+  executeThreeWayMerge: (contextId, req) => (ValidationService.ExecuteThreeWayMerge(contextId, req) as never),
 };
 
 export function validateProjectNameInput(raw: string): string | null {

@@ -55,21 +55,21 @@ R_METADATA = ("r/DESCRIPTION",)
 WINDOWS_TOOLCHAINS = {
     # DuckDB's supported amd64 prebuilt archives require GNU libstdc++/pthread.
     "amd64": {
-        "name": "gcc-14.2.0-ucrt",
+        "name": "gcc-16.2.0-ucrt",
         "url": "https://github.com/brechtsanders/winlibs_mingw/releases/download/"
-               "14.2.0posix-12.0.0-ucrt-r3/"
-               "winlibs-x86_64-posix-seh-gcc-14.2.0-mingw-w64ucrt-12.0.0-r3.zip",
-        "sha256": "88868d745b807f083a117ff69348d8bc021ad7389aa503379dbed1866efcaeb9",
+               "16.2.0posix-23.1.3-14.0.0-ucrt-r3/"
+               "winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r3.zip",
+        "sha256": "3c69305081e4a647144339a936244fcf7d3d9e558319e1ad7be2cd2886d4b6a1",
         "directory": "mingw64",
         "cc": "gcc.exe",
         "cxx": "g++.exe",
     },
     "arm64": {
-        "name": "llvm-mingw-20250709-ucrt-x86_64",
-        "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20250709/"
-               "llvm-mingw-20250709-ucrt-x86_64.zip",
-        "sha256": "82babcd6aae4dc3606e8e0471d816989c384b4bf86a139f184a8b4a1b2c2758d",
-        "directory": "llvm-mingw-20250709-ucrt-x86_64",
+        "name": "llvm-mingw-20261104-ucrt-x86_64",
+        "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20261104/"
+               "llvm-mingw-20261104-ucrt-x86_64.zip",
+        "sha256": "552191b5754c49a5a20723276a6fc56541ea1922c4c50b7b669022333fc1b40f",
+        "directory": "llvm-mingw-20261104-ucrt-x86_64",
         "cc": "aarch64-w64-mingw32-clang.exe",
         "cxx": "aarch64-w64-mingw32-clang++.exe",
     },
@@ -188,10 +188,12 @@ def prepare_metadata(root, *, target="app", scope=None):
             changes[path] = replace_once(path.read_text(encoding="utf-8"), pattern, replacement)
         path = root / "app/build/windows/info.json"
         info = json.loads(path.read_text(encoding="utf-8"))
-        require("file_version" in info["fixed"] and "ProductVersion" in info["info"]["0000"],
+        require("file_version" in info["fixed"] and "ProductVersion" in info["info"]["0409"],
                 "Missing Windows version metadata")
         info["fixed"]["file_version"] = numeric
-        info["info"]["0000"]["ProductVersion"] = full
+        info["fixed"]["product_version"] = numeric
+        info["info"]["0409"]["ProductVersion"] = full
+        info["info"]["0409"]["FileVersion"] = numeric
         changes[path] = json.dumps(info, ensure_ascii=False, indent=2) + "\n"
         path = root / "app/build/darwin/Info.plist"
         info = plistlib.loads(path.read_bytes(), fmt=plistlib.FMT_XML)

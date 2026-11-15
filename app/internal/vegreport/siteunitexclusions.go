@@ -44,12 +44,12 @@ type RetainedSiteUnitInfo struct {
 }
 
 type SiteUnitExclusionSummary struct {
-	AppliedRules       []SiteUnitExclusionRule `json:"appliedRules"`
-	TotalPlotsBefore   int                     `json:"totalPlotsBefore"`
-	RetainedPlots      int                     `json:"retainedPlots"`
-	ExcludedPlots      int                     `json:"excludedPlots"`
-	RetainedUnits      []RetainedSiteUnitInfo  `json:"retainedUnits"`
-	ExcludedUnits      []ExcludedSiteUnitInfo  `json:"excludedUnits"`
+	AppliedRules     []SiteUnitExclusionRule `json:"appliedRules"`
+	TotalPlotsBefore int                     `json:"totalPlotsBefore"`
+	RetainedPlots    int                     `json:"retainedPlots"`
+	ExcludedPlots    int                     `json:"excludedPlots"`
+	RetainedUnits    []RetainedSiteUnitInfo  `json:"retainedUnits"`
+	ExcludedUnits    []ExcludedSiteUnitInfo  `json:"excludedUnits"`
 }
 
 type HierarchyBreakpointOptions struct {
@@ -64,12 +64,12 @@ func (r *HierarchyBreakpointOptions) UnmarshalJSON(data []byte) error {
 }
 
 type HierarchyBreakpointUnitMapping struct {
-	OriginalUnit   string `json:"originalUnit"`
-	EffectiveUnit  string `json:"effectiveUnit"`
-	RolledUp       bool   `json:"rolledUp"`
-	MatchedInTree  bool   `json:"matchedInTree"`
-	Excluded       bool   `json:"excluded"`
-	PlotCount      int    `json:"plotCount"`
+	OriginalUnit  string `json:"originalUnit"`
+	EffectiveUnit string `json:"effectiveUnit"`
+	RolledUp      bool   `json:"rolledUp"`
+	MatchedInTree bool   `json:"matchedInTree"`
+	Excluded      bool   `json:"excluded"`
+	PlotCount     int    `json:"plotCount"`
 }
 
 type HierarchyBreakpointBucket struct {

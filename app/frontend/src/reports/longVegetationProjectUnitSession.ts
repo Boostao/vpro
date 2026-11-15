@@ -1,7 +1,5 @@
-import type {
-  LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences, LongVegetationReportScope,
-  LongVegetationUnitPreferenceValues,
-} from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences, LongVegetationReportScope } from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationUnitPreferenceValues } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
 import type { ProjectReportOwner } from './longVegetationProjectReport';
 import { projectReportOwnedScope } from './longVegetationProjectReport';
 import type { CurrentProjectScope } from './longVegetationProjectScope';

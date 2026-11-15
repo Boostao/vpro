@@ -1,4 +1,5 @@
-import type { ProfileSUReview, ProfileSUCreated, ProfileSUPlot, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProfileSUReview, ProfileSUCreated, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProfileSUPlot } from '../../bindings/github.com/boostao/vpro/app/internal/classification/models';
 import { validateTable, validateProfileRunResult } from './projectPlotProfileReview';
 
 export type ReviewedProfileSU = Omit<ProfileSUReview, 'plots'> & { plots: ProfileSUPlot[] };

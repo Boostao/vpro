@@ -17,7 +17,7 @@ To avoid context bloat while preserving 100% of engineering invariants, instruct
 
 ## 2. Monorepo Directory Layout
 
-- **`app/`** — **VPro 2.0 Desktop Workstation** (`module github.com/boostao/vpro/app`): Go `1.25+` (`CGO_ENABLED=1`), Wails v3 (`v3.0.0-beta.26`), Svelte 5, MapLibre GL JS v6 + WebGPU + offline `PMTiles`, SQLite `VP08` (`WAL`), vendored C `libmdb` (`mdbtools 1.0.1`), `pgx/v5` Cloud `BECMaster` sync, and native `.xlsx`/`.gpkg`/TurboVeg 3 SQLite+XML/`.rds` interchange.
+- **`app/`** — **VPro 2.0 Desktop Workstation** (`module github.com/boostao/vpro/app`): Go `1.27+` (`CGO_ENABLED=1`), Wails v3 (`v3.1.0`), Svelte 5, MapLibre GL JS v6 + WebGPU + offline `PMTiles`, SQLite `VP08` (`WAL`), vendored C `libmdb` (`mdbtools 1.0.1`), `pgx/v5` Cloud `BECMaster` sync, and native `.xlsx`/`.gpkg`/TurboVeg 3 SQLite+XML/`.rds` interchange.
 - **`r/`** — **Headless `vpro` R Companion SDK** (`R >= 4.4.0`, **zero Shiny/widgets**): WAL-safe `RSQLite`/`duckdb` readers, 2026 `BCPlantTaxonomy v19` & `BECdb v13` harmonization, `vegan`/`vegclust`/`indicspecies` phytosociology, `sf` GeoPackage, `bcgov/climr` $\rightarrow$ Ministry `aSMR` edatopic grids, BEC diagnostics, PostgreSQL `BECMaster` cloud sync/snapshots, and Quarto BEC guides.
 - **`okf/`** — **Operational Knowledge Framework**: authoritative specifications across `01_history_and_evolution/`, `02_present_state/` (incl. `oracles/`), `03_future_architecture/`, `04_evidence_and_sources/`, and `05_engineering_and_agents/`.
 - **`docs-src/`** — Single-source JSON authoring (`lmh25_fields.json`, `guides.json`, `tours.json`, `shortcuts.json`, `whats_new.json`, `data_use_agreement.json`) compiled into `app/resources/help_bundle.json`.

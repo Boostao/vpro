@@ -77,16 +77,16 @@ type DendrogramGeometry struct {
 
 // ClusteringRequest configures out-of-process BEC_R vegan / vegclust multivariate clustering.
 type ClusteringRequest struct {
-	Method               string   `json:"method"`          // "NC" (vegclust Noise Clustering, default) | "KM" | "FCM" | "HCLUST"
-	Distance             string   `json:"distance"`        // "bray" (default) | "chord" | "jaccard"
-	Linkage              string   `json:"linkage"`         // "ward.D2" (default) | "average" | "complete"
-	Transform            string   `json:"transform"`       // "sqrt" (default) | "log1p" | "chord" | "hellinger" | "raw"
-	K                    int      `json:"k"`               // Target cluster count (default 3)
-	Fuzziness            float64  `json:"fuzziness"`       // vegclust m > 1.0 (default 1.25)
-	DNoise               float64  `json:"dnoise"`          // vegclust noise distance (default 0.75)
-	CutHeight            float64  `json:"cutHeight"`       // Optional hierarchical cut height
-	ApplyLump            bool     `json:"applyLump"`       // Fold <Name>_Lump (Use != 0) species codes
-	LumpName             string   `json:"lumpName"`        // Optional explicit Lump prefix (defaults to active project)
+	Method               string   `json:"method"`    // "NC" (vegclust Noise Clustering, default) | "KM" | "FCM" | "HCLUST"
+	Distance             string   `json:"distance"`  // "bray" (default) | "chord" | "jaccard"
+	Linkage              string   `json:"linkage"`   // "ward.D2" (default) | "average" | "complete"
+	Transform            string   `json:"transform"` // "sqrt" (default) | "log1p" | "chord" | "hellinger" | "raw"
+	K                    int      `json:"k"`         // Target cluster count (default 3)
+	Fuzziness            float64  `json:"fuzziness"` // vegclust m > 1.0 (default 1.25)
+	DNoise               float64  `json:"dnoise"`    // vegclust noise distance (default 0.75)
+	CutHeight            float64  `json:"cutHeight"` // Optional hierarchical cut height
+	ApplyLump            bool     `json:"applyLump"` // Fold <Name>_Lump (Use != 0) species codes
+	LumpName             string   `json:"lumpName"`  // Optional explicit Lump prefix (defaults to active project)
 	UseActiveSU          bool     `json:"useActiveSu"`
 	BGCFilter            string   `json:"bgcFilter"`
 	PlotNumbers          []string `json:"plotNumbers,omitempty"`

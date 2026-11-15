@@ -16,7 +16,7 @@ import (
 	"sync"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func writeConfigFixture(t *testing.T, dir, name, value string) []byte {

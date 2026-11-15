@@ -43,7 +43,7 @@ tasks:
       - task: common:generate:icons
     preconditions:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
-        msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
+        msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.18.0 (requires Go 1.27+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
     cmds:
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"'
     vars:
@@ -61,9 +61,9 @@ tasks:
       GOOS: darwin
       CGO_ENABLED: 1
       GOARCH: '{{.ARCH | default ARCH}}'
-      CGO_CFLAGS: "-mmacosx-version-min=12.0"
-      CGO_LDFLAGS: "-mmacosx-version-min=12.0"
-      MACOSX_DEPLOYMENT_TARGET: "12.0"
+      CGO_CFLAGS: "-mmacosx-version-min=13.0"
+      CGO_LDFLAGS: "-mmacosx-version-min=13.0"
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
 
   build:docker:
     summary: Cross-compiles for macOS using Docker (for Linux/Windows hosts)
@@ -187,6 +187,8 @@ tasks:
   create:app:bundle:
     summary: Creates an `.app` bundle
     cmds:
+      - wails3 tool prepare-macos-output --dir "{{.BIN_DIR}}"
+      - rm -rf "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
       - cp build/darwin/icons.icns "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
@@ -202,7 +204,9 @@ tasks:
     summary: Ad-hoc signs the app bundle (macOS only)
     internal: true
     cmds:
+      - xattr -cr "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - codesign --force --deep --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+      - codesign --verify --deep --strict "{{.BIN_DIR}}/{{.APP_NAME}}.app"
 
   codesign:skip:
     summary: Skips codesigning when cross-compiling

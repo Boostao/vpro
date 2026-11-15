@@ -40,10 +40,10 @@ jobs:
       build_mode: ${{ steps.version.outputs.build_mode }}
       scope: ${{ steps.version.outputs.scope }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - name: Validate release version
         id: version
         env:
@@ -66,20 +66,20 @@ jobs:
       RELEASE_ARCH: ${{ matrix.arch }}
       CGO_ENABLED: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
-      - uses: actions/setup-go@v5
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27.4'
           cache-dependency-path: app/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: app/frontend/package-lock.json
-      - uses: arduino/setup-task@v2
+      - uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -96,7 +96,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Install pinned architecture-compatible cgo toolchain
         shell: pwsh
@@ -118,7 +118,7 @@ jobs:
           if ($taskExit -ne 0) { throw "Windows build/NSIS packaging failed" }
           python scripts/release.py package windows
           if ($LASTEXITCODE -ne 0) { throw "Windows artifact validation failed" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-${{ matrix.arch }}
           path: app/dist-artifacts/*
@@ -133,27 +133,27 @@ jobs:
       RELEASE_BUILD_MODE: ${{ needs.validate.outputs.build_mode }}
       CGO_ENABLED: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
-      - uses: actions/setup-go@v5
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27.4'
           cache-dependency-path: app/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: app/frontend/package-lock.json
-      - uses: arduino/setup-task@v2
+      - uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Wails CLI
         run: |
           set -euo pipefail
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Prepare CI-only version metadata
         run: python scripts/release.py metadata
@@ -167,7 +167,7 @@ jobs:
           python scripts/release.py cpu app/bin/VPro.app/Contents/MacOS/VPro --format macho --arch universal
           (cd app && task darwin:create:dmg)
           python scripts/release.py package macos
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-universal
           path: app/dist-artifacts/*
@@ -197,20 +197,20 @@ jobs:
       GIT_COMMITTER_NAME: VPro
       GIT_COMMITTER_EMAIL: noreply@github.com
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
-      - uses: actions/setup-go@v5
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27.4'
           cache-dependency-path: app/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: app/frontend/package-lock.json
-      - uses: arduino/setup-task@v2
+      - uses: arduino/setup-task@v3
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -219,11 +219,11 @@ jobs:
           set -euo pipefail
           test "$(go env GOHOSTARCH)" = "$RELEASE_ARCH"
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev pkg-config build-essential file patchelf desktop-file-utils squashfs-tools
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev libx11-dev pkg-config build-essential file patchelf desktop-file-utils squashfs-tools
       - name: Install Wails CLI
         run: |
           set -euo pipefail
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Prepare CI-only version metadata
         run: python scripts/release.py metadata
@@ -235,7 +235,7 @@ jobs:
           set -euo pipefail
           (cd app && task linux:create:appimage linux:create:deb "ARCH=$RELEASE_ARCH" EXTRA_TAGS=sqliteonly "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
           python scripts/release.py package linux
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
           path: app/dist-artifacts/*
@@ -251,10 +251,10 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       _R_CHECK_FORCE_SUGGESTS_: 'false'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - uses: quarto-dev/quarto-actions/setup@v2
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -272,7 +272,7 @@ jobs:
           R CMD check --no-manual "r/vpro_${RELEASE_NUMERIC}.tar.gz"
           rm -rf vpro.Rcheck
           python scripts/release.py package r --scope "$RELEASE_SCOPE"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: r-sdk
           path: r/dist-artifacts/*
@@ -292,11 +292,11 @@ jobs:
       RELEASE_PRERELEASE: ${{ inputs.prerelease }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
-      - uses: actions/download-artifact@v4
+          python-version: '3.13'
+      - uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true
@@ -337,7 +337,7 @@ jobs:
             gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-downloaded
             python scripts/release.py verify release-downloaded --manifest release-assets/SHA256SUMS.txt --release-manifest release-assets/release-manifest.json
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: inputs.draft != true && needs.validate.outputs.scope == 'full'
         with:
           name: release-manifest
@@ -363,13 +363,13 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
-      - uses: actions/setup-node@v4
+          python-version: '3.13'
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
       - uses: quarto-dev/quarto-actions/setup@v2
       - uses: r-lib/actions/setup-r@v2
         with:
@@ -379,7 +379,7 @@ jobs:
         with:
           working-directory: r
           extra-packages: bcgov/climr, local::.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         if: needs.validate.outputs.scope == 'full'
         with:
           name: release-manifest
@@ -399,11 +399,11 @@ jobs:
           test -s site/dist/r/index.html
           test -s site/dist/r/logo.svg
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: 'site/dist'
       - name: Deploy updated release portal to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

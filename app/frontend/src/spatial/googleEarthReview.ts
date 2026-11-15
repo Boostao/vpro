@@ -1,4 +1,6 @@
-import type { GoogleEarthDescriptionFields, GoogleEarthReview, GoogleEarthReviewRow, EnvironmentReportField, ProjectMetadataColumn, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+import type { GoogleEarthDescriptionFields, GoogleEarthReview, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+import type { GoogleEarthReviewRow } from '../../bindings/github.com/boostao/vpro/app/internal/spatial/models';
+import type { EnvironmentReportField, ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { exactLongitudeNegation } from './plotLocationReview';

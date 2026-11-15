@@ -165,18 +165,18 @@ func (r *SubmitStagingRequest) UnmarshalJSON(data []byte) error {
 
 // SubmitStagingResult confirms atomic staging upload into PostgreSQL.
 type SubmitStagingResult struct {
-	SubmissionID      string `json:"submissionId"`
-	ProjectName       string `json:"projectName"`
-	ProjectID         string `json:"projectId"`
-	SubmittedBy       string `json:"submittedBy"`
-	DBRole            string `json:"dbRole"`
-	Status            string `json:"status"`
-	PlotCount         int    `json:"plotCount"`
-	VegRowCount       int    `json:"vegRowCount"`
-	UserSpeciesCount  int    `json:"userSpeciesCount"`
-	SourceDBSHA256    string `json:"sourceDbSha256"`
-	CompliancePassed  bool   `json:"compliancePassed"`
-	SubmittedAt       string `json:"submittedAt"`
+	SubmissionID     string `json:"submissionId"`
+	ProjectName      string `json:"projectName"`
+	ProjectID        string `json:"projectId"`
+	SubmittedBy      string `json:"submittedBy"`
+	DBRole           string `json:"dbRole"`
+	Status           string `json:"status"`
+	PlotCount        int    `json:"plotCount"`
+	VegRowCount      int    `json:"vegRowCount"`
+	UserSpeciesCount int    `json:"userSpeciesCount"`
+	SourceDBSHA256   string `json:"sourceDbSha256"`
+	CompliancePassed bool   `json:"compliancePassed"`
+	SubmittedAt      string `json:"submittedAt"`
 }
 
 func validateSplinterProjectName(raw string) (string, error) {

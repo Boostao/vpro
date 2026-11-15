@@ -2312,8 +2312,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 6,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "8b6961f95054c7ec481f952671c3cb7803b866942c46a90b33b9603b7ced56e5",
-    "bytes": 15564
+    "workbookSHA256": "a50c50be70389816fac455e3a8f91fe1ba2416b55895c2edede114555a840d79",
+    "bytes": 16281
   },
   "lifeformClass": {
     "preview": {
@@ -4629,8 +4629,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 6,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "530471be1b1ae71ec29bda880ecbfff200a055f69b20cf621679c39846b69ec9",
-    "bytes": 15626
+    "workbookSHA256": "5702f32b894fba7c0265fbc1d1805722c363e70377c4a3681a163b5037c6df42",
+    "bytes": 16202
   },
   "lifeformDistribution": {
     "preview": {
@@ -13247,8 +13247,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 36,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "ed8f0c19dd56a1596b7847dcb824d52bb7ee83d5a9d73a24d96e411b3acb909d",
-    "bytes": 22278
+    "workbookSHA256": "f3856e6cd34f6837f992d953311d5e2779dff2b0928312041203b9a5c8177891",
+    "bytes": 23536
   },
   "lifeformEnvironment": {
     "preview": {
@@ -21865,8 +21865,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 36,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "5cfd87f984b7b654fb4340c31f668b2224f6f659d89e264d35da2c9775cd1a55",
-    "bytes": 22225
+    "workbookSHA256": "f023f08006208464a8b2159757aa76fcd86da00ae01af33d5394d2d139b5e877",
+    "bytes": 23593
   },
   "none": {
     "preview": {
@@ -23807,8 +23807,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 6,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "649703241a8ff5b28700b543f49725b5166579f6108bf75041d262aa0b980b74",
-    "bytes": 15054
+    "workbookSHA256": "0259e2837f4aaab3007fc9906fc7afad771c1634e37acb248322b37d29c9bea0",
+    "bytes": 15522
   },
   "noneClass": {
     "preview": {
@@ -25750,8 +25750,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 6,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "cebfd6e0d6d772f78c94c02aacbb456b750b05bd27fc90ae5cc5b111b1108b46",
-    "bytes": 15008
+    "workbookSHA256": "8078feff3d6aad1da6a01c8ae513ac8c40346843167f80509ef8c60490ac2633",
+    "bytes": 15422
   },
   "noneDistribution": {
     "preview": {
@@ -33620,8 +33620,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 36,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "a462b61b8db425bf0e8df5365488b2d19a95a40d50c56d1276b9cdbba30f4090",
-    "bytes": 21720
+    "workbookSHA256": "3f2262252cbbb31262435b51f613f05375bb0af9b94b50588e1bedd0a178a4c3",
+    "bytes": 22921
   },
   "nonePresence": {
     "preview": {
@@ -41040,7 +41040,7 @@
     "sheet": "Sample",
     "firstVegetationRow": 36,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "1d48dc71e49985ce1d902c6ebc4712025fa5de5e89120db2cc33e1ffb29c633f",
-    "bytes": 21461
+    "workbookSHA256": "97660e31b01b33a067d98069c86d6edf23c9b849fc2940becb46f37eada18feb",
+    "bytes": 22641
   }
 }

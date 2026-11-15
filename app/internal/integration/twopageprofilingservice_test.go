@@ -258,12 +258,12 @@ func TestTwoPageProfilingSourceSchemaTextAndCorrection(t *testing.T) {
 		`UPDATE _table_metadata SET description=CAST(X'FF' AS TEXT) WHERE rowid=4`,
 		`UPDATE _table_metadata SET table_name=X'4142' WHERE rowid=4`,
 		`ALTER TABLE Sample_Profile RENAME COLUMN Species TO Missing`,
-		`ALTER TABLE Sample_Profile ADD COLUMN rowid`,
+		`ALTER TABLE Sample_Profile RENAME TO Sample_Profile_orig; CREATE TABLE Sample_Profile AS SELECT *, 99 AS rowid FROM Sample_Profile_orig`,
 		`ALTER TABLE Sample_Profile ADD COLUMN Derived GENERATED ALWAYS AS ("Order"+1) VIRTUAL`,
 		`ALTER TABLE Sample_Profile RENAME TO Original; CREATE VIEW Sample_Profile AS SELECT * FROM Original`,
 		`DROP TABLE Sample_Profile;CREATE TABLE Sample_Profile("Order" PRIMARY KEY,"Table","Field","Operator","Layer","Species","Criteria","Operation","PlotCount") WITHOUT ROWID`,
 		`ALTER TABLE _table_metadata RENAME COLUMN description TO Missing`,
-		`ALTER TABLE _table_metadata ADD COLUMN rowid`,
+		`ALTER TABLE _table_metadata RENAME TO _table_metadata_orig; CREATE TABLE _table_metadata AS SELECT *, 99 AS rowid FROM _table_metadata_orig`,
 		`ALTER TABLE _table_metadata RENAME TO Original; CREATE VIEW _table_metadata AS SELECT * FROM Original`,
 	} {
 		t.Run(mutation, func(t *testing.T) {

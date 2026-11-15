@@ -236,7 +236,8 @@ func TestSummaryVegetationFieldListSchemaAndCancellationRefusals(t *testing.T) {
 		"missing":   `CREATE TABLE VPro64.USysShortVegSummaryFieldList("Order" INTEGER)`,
 		"extra":     summaryFieldListTestSchema + `; ALTER TABLE VPro64.USysShortVegSummaryFieldList ADD COLUMN Extra TEXT`,
 		"generated": summaryFieldListTestSchema + `; ALTER TABLE VPro64.USysShortVegSummaryFieldList ADD COLUMN Extra AS (1)`,
-		"rowid":     summaryFieldListTestSchema + `; ALTER TABLE VPro64.USysShortVegSummaryFieldList ADD COLUMN RoWiD INTEGER`,
+		"rowid": `CREATE TABLE VPro64.USysShortVegSummaryFieldList("Order" INTEGER,
+			Source TEXT, Label TEXT, Item TEXT, Report INTEGER, FunctionName TEXT, FieldNumber TEXT, RoWiD INTEGER)`,
 		"without-rowid": `CREATE TABLE VPro64.USysShortVegSummaryFieldList("Order" INTEGER PRIMARY KEY,
 			Source TEXT, Label TEXT, Item TEXT, Report INTEGER, FunctionName TEXT, FieldNumber TEXT) WITHOUT ROWID`,
 	} {

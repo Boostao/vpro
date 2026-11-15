@@ -1,4 +1,5 @@
-import type { ProjectMetadataCell, TwoPageEntryFieldPolicy } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+import type { TwoPageEntryFieldPolicy } from '../../bindings/github.com/boostao/vpro/app/internal/twopage/models';
 import { ordinaryNumberValue } from './ordinaryEditor';
 import { coordinateDecimalValue } from './coordinateEditor';
 import { parseSourceParentEntryValue, sourceParentEntryNull,

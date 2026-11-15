@@ -13,22 +13,22 @@ const read = name => readFileSync(srcPath(name), 'utf8');
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 
 const wailsCalls = [];
-const mockWailsRuntime = {
-  Call: {
-    ByName(methodName, ...args) {
-      wailsCalls.push({ methodName, args });
+const bindingsStub = new Proxy({}, {
+  get: (_t, service) => new Proxy({}, {
+    get: (_s, method) => (...args) => {
+      wailsCalls.push({ methodName: `main.${String(service)}.${String(method)}`, args });
       return Promise.resolve({ ok: true });
     },
-  },
-};
+  }),
+});
 
 const projectAdmin = loadTypeScript('projectAdminWorkbench.ts', {
-  '@wailsio/runtime': mockWailsRuntime,
+  '../../bindings/github.com/boostao/vpro/app': bindingsStub,
   './qualityEditor': quality,
 });
 
 const cloudSync = loadTypeScript('cloudSyncWorkbench.ts', {
-  '@wailsio/runtime': mockWailsRuntime,
+  '../../bindings/github.com/boostao/vpro/app': bindingsStub,
   './qualityEditor': quality,
   './projectAdminWorkbench': projectAdmin,
 });

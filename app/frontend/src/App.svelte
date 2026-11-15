@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
   import { Events } from '@wailsio/runtime';
+  import { VproCloseRequest } from '../bindings/events';
   import { Database } from '@lucide/svelte';
-  import { ContextService, LifecycleService, type StartupState, type ContextSelection, type HierarchyNode, type PlotPage, type PlotSummary, type ProjectPlotProfileFilterRequest } from '../bindings/github.com/boostao/vpro/app';
+  import { ContextService, LifecycleService, type StartupState, type HierarchyNode, type PlotPage, type ProjectPlotProfileFilterRequest } from '../bindings/github.com/boostao/vpro/app';
+import type { ContextSelection, PlotSummary } from '../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from './shared/state';
   import Navigation from './shell/Navigation.svelte';
   import HomeWorkspaceHub from './shell/HomeWorkspaceHub.svelte';
@@ -575,7 +577,7 @@
   }
 
   onMount(() => {
-    const stopCloseEvents = Events.On('vpro:close-request', (event) => {
+    const stopCloseEvents = Events.On(VproCloseRequest, (event) => {
       const requestId: unknown = event.data;
       if (typeof requestId !== 'string' || !requestId) { error = 'Invalid native window close request; VPRO remains open.'; return; }
       void handleCloseRequest(requestId);

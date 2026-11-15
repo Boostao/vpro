@@ -76,11 +76,11 @@
 
   async function resolveSoilDeleteRestorePort(): Promise<SoilDeleteRestorePort> {
     if (soilDeleteRestorePort) return soilDeleteRestorePort;
-    const runtime = await import('@wailsio/runtime');
+    const { ContextService } = await import('../../bindings/github.com/boostao/vpro/app');
     return {
-      deleteHorizon: (cid, req) => runtime.Call.ByName('main.ContextService.DeleteTwoPageSoilHorizon', cid, req),
-      restoreHorizon: (cid, req) => runtime.Call.ByName('main.ContextService.RestoreTwoPageSoilHorizon', cid, req),
-      listDeletedHorizons: (cid, p, f) => runtime.Call.ByName('main.ContextService.ListTwoPageSoilDeletedHorizons', cid, p, f),
+      deleteHorizon: (cid, req) => (ContextService.DeleteTwoPageSoilHorizon(cid, req) as never),
+      restoreHorizon: (cid, req) => (ContextService.RestoreTwoPageSoilHorizon(cid, req) as never),
+      listDeletedHorizons: (cid, p, f) => (ContextService.ListTwoPageSoilDeletedHorizons(cid, p, f) as never),
     };
   }
 
@@ -180,7 +180,7 @@
   $effect(() => {
     const owner = { contextId, project, plot, form };
     const lookup = new SoilReferenceLookup(owner,
-      owner => PlotEntryService.GetTwoPageSoilReferences(owner.contextId, owner.plot, owner.form),
+      owner => (PlotEntryService.GetTwoPageSoilReferences(owner.contextId, owner.plot, owner.form) as never),
       next => { referenceView = next; });
     untrack(() => { referenceLookup = lookup; referenceView = lookup.snapshot(); });
     return () => lookup.dispose();

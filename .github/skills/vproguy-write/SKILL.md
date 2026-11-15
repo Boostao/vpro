@@ -1,11 +1,9 @@
 ---
-name: "vproguy-write"
+name: vproguy-write
 description: "Draft or revise headless vpro R roxygen2 documentation, vignettes, Quarto BEC unit guides, NEWS.md release notes, or ecological and SQLite WAL data-safety warnings in VPro's field-first voice."
+disable-model-invocation: true
 argument-hint: "Describe the function, vignette, Quarto BEC unit guide, release note, or ecological warning to draft or revise."
-agent: "vproguy"
-tools: [read, search]
 ---
-
 # Write Headless `vpro` R Documentation in VPro Voice
 
 Use the `vproguy` agent to draft or revise documentation for the headless `vpro` R Companion SDK & Scientific Analytics Package (`r/` in `Boostao/vpro`).

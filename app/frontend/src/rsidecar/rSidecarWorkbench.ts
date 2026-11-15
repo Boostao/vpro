@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
+import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
 
 export const CANDIDATE_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,13}$/;
 export const SU_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
@@ -305,22 +305,22 @@ export interface RSidecarBackendPort {
 
 export const defaultRSidecarPort: RSidecarBackendPort = {
   detectRRuntime() {
-    return Call.ByName('main.EnvironmentReportService.DetectRRuntime');
+    return (EnvironmentReportService.DetectRRuntime() as never);
   },
   getCachedPlotClimate(contextId: string, refPeriod: string) {
-    return Call.ByName('main.EnvironmentReportService.GetCachedPlotClimate', contextId, refPeriod);
+    return (EnvironmentReportService.GetCachedPlotClimate(contextId, refPeriod) as never);
   },
   computePlotClimateAndDualEdatopic(contextId: string, request: ClimateEdatopicRequest) {
-    return Call.ByName('main.EnvironmentReportService.ComputePlotClimateAndDualEdatopic', contextId, request);
+    return (EnvironmentReportService.ComputePlotClimateAndDualEdatopic(contextId, request as never) as never);
   },
   runMultivariateClustering(contextId: string, request: ClusteringRequest) {
-    return Call.ByName('main.EnvironmentReportService.RunMultivariateClustering', contextId, request);
+    return (EnvironmentReportService.RunMultivariateClustering(contextId, request as never) as never);
   },
   promoteClusterCandidateToSU(contextId: string, request: PromoteCandidateSURequest) {
-    return Call.ByName('main.EnvironmentReportService.PromoteClusterCandidateToSU', contextId, request);
+    return (EnvironmentReportService.PromoteClusterCandidateToSU(contextId, request) as never);
   },
   renderQuartoGuide(contextId: string, request: QuartoGuideRequest) {
-    return Call.ByName('main.EnvironmentReportService.RenderQuartoGuide', contextId, request);
+    return (EnvironmentReportService.RenderQuartoGuide(contextId, request as never) as never);
   },
 };
 

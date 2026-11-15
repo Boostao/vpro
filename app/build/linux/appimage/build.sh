@@ -47,7 +47,7 @@ fi
 
 WEBKIT_EXEC_REL=""
 WEBKIT_BUNDLE_REL=""
-for helper in WebKitWebProcess WebKitNetworkProcess "${INJECTED_BUNDLE_NAME}"; do
+for helper in WebKitWebProcess WebKitNetworkProcess WebKitGPUProcess "${INJECTED_BUNDLE_NAME}"; do
     found_path="$(find /usr/lib /usr/lib64 /usr/libexec -type f -name "${helper}" 2>/dev/null | head -n 1 || true)"
     if [[ -n "${found_path}" ]]; then
         rel_dir="${found_path#/}"
@@ -61,6 +61,12 @@ for helper in WebKitWebProcess WebKitNetworkProcess "${INJECTED_BUNDLE_NAME}"; d
         fi
     fi
 done
+# Relocate libwebkitgtk-6.0.so.4 alongside helper processes when present on Debian/Ubuntu/Fedora.
+webkit_lib_path="$(find /usr/lib /usr/lib64 -maxdepth 3 -type f -name 'libwebkitgtk-6.0.so.4*' 2>/dev/null | head -n 1 || true)"
+if [[ -n "${webkit_lib_path}" ]]; then
+    mkdir -p "${APP_DIR}/usr/lib"
+    cp -a "$(dirname "${webkit_lib_path}")/libwebkitgtk-6.0.so.4"* "${APP_DIR}/usr/lib/" 2>/dev/null || true
+fi
 
 if [[ -d /usr/share/glib-2.0/schemas ]] && command -v glib-compile-schemas >/dev/null 2>&1; then
     mkdir -p "${APP_DIR}/usr/share/glib-2.0/schemas"

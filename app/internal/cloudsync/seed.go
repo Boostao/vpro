@@ -39,15 +39,15 @@ func (r *PublishStandardsRequest) UnmarshalJSON(data []byte) error {
 
 // PublishStandardsResult summarizes published reference library counts and digests.
 type PublishStandardsResult struct {
-	ReleaseID         string         `json:"releaseId"`
-	BECVersion        string         `json:"becVersion"`
-	TaxonomyVersion   string         `json:"taxonomyVersion"`
-	VListsSHA256      string         `json:"vlistsSha256"`
-	BECDBSHA256       string         `json:"becDbSha256"`
-	VMetaDataSHA256   string         `json:"vmetaDataSha256"`
-	TableCounts       map[string]int `json:"tableCounts"`
-	ElapsedMs         int64          `json:"elapsedMs"`
-	PublishedAt       string         `json:"publishedAt"`
+	ReleaseID       string         `json:"releaseId"`
+	BECVersion      string         `json:"becVersion"`
+	TaxonomyVersion string         `json:"taxonomyVersion"`
+	VListsSHA256    string         `json:"vlistsSha256"`
+	BECDBSHA256     string         `json:"becDbSha256"`
+	VMetaDataSHA256 string         `json:"vmetaDataSha256"`
+	TableCounts     map[string]int `json:"tableCounts"`
+	ElapsedMs       int64          `json:"elapsedMs"`
+	PublishedAt     string         `json:"publishedAt"`
 }
 
 // SeedBaselineRequest configures streaming VP08 SQLite -> PostgreSQL becmaster.* baseline seeding.
@@ -387,10 +387,10 @@ func (m *Manager) PublishStandardsToCloud(ctx context.Context, s *vprocore.Conte
 
 	counts := make(map[string]int, 6)
 	type copyJob struct {
-		db        *sql.DB
-		srcTable  string
-		pgTable   string
-		cols      []ColumnSpec
+		db       *sql.DB
+		srcTable string
+		pgTable  string
+		cols     []ColumnSpec
 	}
 	jobs := []copyJob{
 		{vlistsSQLite, "USysAllSpecs", "usys_all_specs", StandardsUSysAllSpecsColumns},

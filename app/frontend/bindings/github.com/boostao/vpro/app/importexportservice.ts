@@ -20,6 +20,13 @@ export function ChooseAccessDatabaseFile(contextID: string): $CancellablePromise
     return $Call.ByID(2808944134, contextID);
 }
 
+/**
+ * ChooseTableCSVArchiveFile opens a native OS save-file dialog for the project table CSV ZIP archive.
+ */
+export function ChooseTableCSVArchiveFile(): $CancellablePromise<string> {
+    return $Call.ByID(859535005);
+}
+
 export function CreateLumpTable(contextID: string, name: string): $CancellablePromise<lumping$0.LumpTableSummary> {
     return $Call.ByID(3850841348, contextID, name);
 }

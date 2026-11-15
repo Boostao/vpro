@@ -34,8 +34,17 @@ func TestSIVIParentPhysicalSchemaPreflight(t *testing.T) {
 						t.Error(err)
 					}
 				})
-				if _, err := db.Exec("ALTER TABLE " + vprocore.QuoteHeaderIdentifier(table) + " ADD COLUMN " +
-					vprocore.QuoteHeaderIdentifier(column) + " INTEGER GENERATED ALWAYS AS (99) VIRTUAL"); err != nil {
+				quoted := vprocore.QuoteHeaderIdentifier(table)
+				orig := vprocore.QuoteHeaderIdentifier(table + "_orig")
+				isGenerated := column != "rowid" && column != "_rowid_" && column != "oid"
+				addSQL := "ALTER TABLE " + quoted + " RENAME TO " + orig +
+					"; CREATE TABLE " + quoted + " AS SELECT *, 99 AS " + vprocore.QuoteHeaderIdentifier(column) + " FROM " + orig
+				restoreSQL := "DROP TABLE " + quoted + "; ALTER TABLE " + orig + " RENAME TO " + quoted
+				if isGenerated {
+					addSQL = "ALTER TABLE " + quoted + " ADD COLUMN " + vprocore.QuoteHeaderIdentifier(column) + " INTEGER GENERATED ALWAYS AS (99) VIRTUAL"
+					restoreSQL = "ALTER TABLE " + quoted + " DROP COLUMN " + vprocore.QuoteHeaderIdentifier(column)
+				}
+				if _, err := db.Exec(addSQL); err != nil {
 					t.Fatal(err)
 				}
 				files := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
@@ -46,7 +55,7 @@ func TestSIVIParentPhysicalSchemaPreflight(t *testing.T) {
 					t.Fatalf("generated schema returned action proposal: result=%t error=%v", got != nil, err)
 				}
 				vprotest.AssertProfileSUFiles(t, service, files)
-				if _, err := db.Exec("ALTER TABLE " + vprocore.QuoteHeaderIdentifier(table) + " DROP COLUMN " + vprocore.QuoteHeaderIdentifier(column)); err != nil {
+				if _, err := db.Exec(restoreSQL); err != nil {
 					t.Fatal(err)
 				}
 				retry, err := sourceform.ReadSIVIParent(service, context.Background(), state.ContextID, "108050")

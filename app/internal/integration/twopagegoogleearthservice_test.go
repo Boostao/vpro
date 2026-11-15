@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 const twoPageGoogleEarthRequest = `{"descriptionField":"PlotRepresenting","title":"A & B"}`
@@ -295,7 +295,7 @@ func TestTwoPageGoogleEarthRefusesInvalidPhysicalSourceAndRetries(t *testing.T) 
 		"other-text":     `UPDATE Sample_Env SET Location=CAST(X'FF' AS TEXT) WHERE PlotNumber='108050'`,
 		"numeric-desc":   `UPDATE Sample_Env SET PlotRepresenting=X'00FF' WHERE PlotNumber='108050'`,
 		"missing-field":  `DROP VIEW qryHerbariumReportData; ALTER TABLE Sample_Env RENAME COLUMN Longitude TO Unsupported`,
-		"rowid-shadow":   `ALTER TABLE Sample_Env ADD COLUMN rowid TEXT`,
+		"rowid-shadow":   `ALTER TABLE Sample_Env RENAME TO Sample_Env_orig; CREATE TABLE Sample_Env AS SELECT *, 'x' AS rowid FROM Sample_Env_orig`,
 		"hidden-column":  `ALTER TABLE Sample_Env ADD COLUMN Hidden TEXT GENERATED ALWAYS AS ('hidden') VIRTUAL`,
 		"missing-admin":  `DELETE FROM Sample_Admin WHERE Plot='108050'`,
 		"duplicate-env":  `ALTER TABLE Sample_Env RENAME TO Archived_Env; CREATE TABLE Sample_Env AS SELECT * FROM Archived_Env; INSERT INTO Sample_Env SELECT * FROM Archived_Env WHERE PlotNumber='108050'`,

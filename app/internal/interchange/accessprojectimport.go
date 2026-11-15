@@ -612,8 +612,10 @@ type accessReaderAdapter struct {
 	*accessreader.Reader
 }
 
-func (a accessReaderAdapter) ColumnsList() []accessreader.Column            { return a.Reader.Columns }
-func (a accessReaderAdapter) QuarantinedRows() []accessreader.QuarantinedRow { return a.Reader.Quarantined }
+func (a accessReaderAdapter) ColumnsList() []accessreader.Column { return a.Reader.Columns }
+func (a accessReaderAdapter) QuarantinedRows() []accessreader.QuarantinedRow {
+	return a.Reader.Quarantined
+}
 
 func streamAccessTableIntoSQLite(
 	ctx context.Context,
@@ -1712,4 +1714,3 @@ func seedImportedChildIdentities(ctx context.Context, tx *sql.Tx, sourceProject,
 	}
 	return nil
 }
-

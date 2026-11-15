@@ -1,4 +1,4 @@
-import { Call } from '@wailsio/runtime';
+import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
 
 export interface LumpTableSummary {
   name: string;
@@ -105,33 +105,33 @@ export interface LumpEditorPort {
 
 export const defaultLumpEditorPort: LumpEditorPort = {
   discoverLumpTables: (contextID, externalPaths) =>
-    Call.ByName('main.ImportExportService.DiscoverLumpTables', contextID, externalPaths),
+    (ImportExportService.DiscoverLumpTables(contextID, externalPaths) as never),
   createLumpTable: (contextID, name) =>
-    Call.ByName('main.ImportExportService.CreateLumpTable', contextID, name),
+    (ImportExportService.CreateLumpTable(contextID, name) as never),
   saveAsLumpTable: (contextID, sourceTable, sourceDBPath, targetName) =>
-    Call.ByName('main.ImportExportService.SaveAsLumpTable', contextID, sourceTable, sourceDBPath, targetName),
+    (ImportExportService.SaveAsLumpTable(contextID, sourceTable, sourceDBPath, targetName) as never),
   deleteLumpTable: (contextID, name) =>
-    Call.ByName('main.ImportExportService.DeleteLumpTable', contextID, name),
+    (ImportExportService.DeleteLumpTable(contextID, name) as never),
   getLumpTableRows: (contextID, tableName, dbPath) =>
-    Call.ByName('main.ImportExportService.GetLumpTableRows', contextID, tableName, dbPath),
+    (ImportExportService.GetLumpTableRows(contextID, tableName, dbPath) as never),
   upsertLumpRow: (contextID, tableName, input) =>
-    Call.ByName('main.ImportExportService.UpsertLumpRow', contextID, tableName, input),
+    (ImportExportService.UpsertLumpRow(contextID, tableName, input) as never),
   updateLumpRow: (contextID, tableName, existingSppCode, input) =>
-    Call.ByName('main.ImportExportService.UpdateLumpRow', contextID, tableName, existingSppCode, input),
+    (ImportExportService.UpdateLumpRow(contextID, tableName, existingSppCode, input) as never),
   deleteLumpRow: (contextID, tableName, sppCode) =>
-    Call.ByName('main.ImportExportService.DeleteLumpRow', contextID, tableName, sppCode),
+    (ImportExportService.DeleteLumpRow(contextID, tableName, sppCode) as never),
   toggleLumpRow: (contextID, tableName, sppCode, use) =>
-    Call.ByName('main.ImportExportService.ToggleLumpRow', contextID, tableName, sppCode, use),
+    (ImportExportService.ToggleLumpRow(contextID, tableName, sppCode, use) as never),
   setAllLumpRowsUse: (contextID, tableName, use) =>
-    Call.ByName('main.ImportExportService.SetAllLumpRowsUse', contextID, tableName, use),
+    (ImportExportService.SetAllLumpRowsUse(contextID, tableName, use) as never),
   previewLumpImpact: (contextID, tableName, dbPath) =>
-    Call.ByName('main.ImportExportService.PreviewLumpImpact', contextID, tableName, dbPath),
+    (ImportExportService.PreviewLumpImpact(contextID, tableName, dbPath) as never),
   listLumpPresets: () =>
-    Call.ByName('main.ImportExportService.ListLumpPresets'),
+    (ImportExportService.ListLumpPresets() as never),
   previewLumpSpec: (contextID, spec) =>
-    Call.ByName('main.ImportExportService.PreviewLumpSpec', contextID, spec),
+    (ImportExportService.PreviewLumpSpec(contextID, spec) as never),
   materializeLumpSpec: (contextID, targetName, spec, replaceExisting) =>
-    Call.ByName('main.ImportExportService.MaterializeLumpSpec', contextID, targetName, spec, replaceExisting),
+    (ImportExportService.MaterializeLumpSpec(contextID, targetName, spec, replaceExisting) as never),
 };
 
 const LUMP_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;

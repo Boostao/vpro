@@ -137,4 +137,3 @@ func TestVProCoreStrictJSONDuplicateKeysAndTrailingTokensWhilePreservingCalibrat
 		t.Fatalf("FS882Header mutated pre-populated pointer on type error: %q / %q", *preH.SitePlotQuality, keepQual)
 	}
 }
-

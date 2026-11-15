@@ -200,17 +200,17 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(amd64["cxx"], "g++.exe")
         self.assertEqual(amd64["directory"], "mingw64")
         self.assertEqual(amd64["sha256"],
-                         "88868d745b807f083a117ff69348d8bc021ad7389aa503379dbed1866efcaeb9")
+                         "3c69305081e4a647144339a936244fcf7d3d9e558319e1ad7be2cd2886d4b6a1")
         self.assertEqual(amd64["url"],
                          "https://github.com/brechtsanders/winlibs_mingw/releases/download/"
-                         "14.2.0posix-12.0.0-ucrt-r3/"
-                         "winlibs-x86_64-posix-seh-gcc-14.2.0-mingw-w64ucrt-12.0.0-r3.zip")
+                         "16.2.0posix-23.1.3-14.0.0-ucrt-r3/"
+                         "winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r3.zip")
         arm64 = release.windows_toolchain("arm64")
         self.assertEqual(arm64["cc"], "aarch64-w64-mingw32-clang.exe")
         self.assertEqual(arm64["cxx"], "aarch64-w64-mingw32-clang++.exe")
-        self.assertEqual(arm64["directory"], "llvm-mingw-20250709-ucrt-x86_64")
+        self.assertEqual(arm64["directory"], "llvm-mingw-20261104-ucrt-x86_64")
         self.assertEqual(arm64["sha256"],
-                         "82babcd6aae4dc3606e8e0471d816989c384b4bf86a139f184a8b4a1b2c2758d")
+                         "552191b5754c49a5a20723276a6fc56541ea1922c4c50b7b669022333fc1b40f")
         for arch in ("386", "AMD64", "", "arm64;bad"):
             with self.subTest(arch=arch), self.assertRaises(ValueError):
                 release.windows_toolchain(arch)
@@ -401,7 +401,9 @@ class ReleaseTests(unittest.TestCase):
                       (self.root / "app/build/windows/nsis/wails_tools.nsh").read_text(encoding="utf-8"))
         info = json.loads((self.root / "app/build/windows/info.json").read_text(encoding="utf-8"))
         self.assertEqual(info["fixed"]["file_version"], "2.3.4")
-        self.assertEqual(info["info"]["0000"]["ProductVersion"], "2.3.4-rc.1+build.7")
+        self.assertEqual(info["fixed"]["product_version"], "2.3.4")
+        self.assertEqual(info["info"]["0409"]["ProductVersion"], "2.3.4-rc.1+build.7")
+        self.assertEqual(info["info"]["0409"]["FileVersion"], "2.3.4")
         info = plistlib.loads((self.root / "app/build/darwin/Info.plist").read_bytes())
         self.assertEqual(info["CFBundleVersion"], "2.3.4")
         self.assertEqual(info["CFBundleShortVersionString"], "2.3.4")
@@ -854,8 +856,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("darwin:package:dmg", workflow)
         self.assertNotIn("macos-14", workflow)
         self.assertIn("runs-on: macos-15-intel", workflow)
-        self.assertNotIn("go-version: '1.25'", workflow)
-        self.assertEqual(workflow.count("go-version: '1.26'"), 3)
+        self.assertNotIn("go-version: '1.26'", workflow)
+        self.assertEqual(workflow.count("go-version: '1.27.4'"), 3)
         self.assertIn("task darwin:package:universal", workflow)
         self.assertIn("task darwin:create:dmg", workflow)
         self.assertIn("runner: ubuntu-24.04-arm", workflow)
@@ -874,17 +876,17 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("scope:", workflow)
         self.assertIn("pkgdown::build_site()", workflow)
         self.assertIn("name: github-pages", workflow)
-        self.assertIn("actions/configure-pages@v5", workflow)
+        self.assertIn("actions/configure-pages@v6", workflow)
         pages = (ROOT / ".github/workflows/pages.yml").read_text()
         self.assertNotIn("enablement: true", pages)
         self.assertNotIn("path: 'docs'", pages)
-        self.assertIn("node-version: '22'", pages)
+        self.assertIn("node-version: '24'", pages)
         self.assertIn("python scripts/release.py sync-release-manifest", pages)
         self.assertIn("node scripts/build-docs-src.mjs && node site/build.mjs", pages)
         self.assertIn("pkgdown::build_site()", pages)
         self.assertIn("path: 'site/dist'", pages)
         ci = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertIn("dorny/paths-filter@v3", ci)
+        self.assertIn("dorny/paths-filter@v4", ci)
         self.assertIn("postgres:16", ci)
         self.assertIn("rsidecar-integration:", ci)
 

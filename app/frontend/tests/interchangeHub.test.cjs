@@ -6,16 +6,16 @@ const { render } = require('svelte/server');
 const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const calls = [];
-const mockRuntime = {
-  Call: {
-    ByName: (name, ...args) => {
-      calls.push([name, ...args]);
+const mockBindings = {
+  ImportExportService: new Proxy({}, {
+    get: (_, method) => (...args) => {
+      calls.push([`main.ImportExportService.${String(method)}`, ...args]);
       return Promise.resolve(null);
     },
-  },
+  }),
 };
 
-const hub = loadTypeScript('interchangeHub.ts', { '@wailsio/runtime': mockRuntime });
+const hub = loadTypeScript('interchangeHub.ts', { '../../bindings/github.com/boostao/vpro/app': mockBindings });
 
 test('validateTargetProjectName rejects None, Sample, master, and non-identifiers', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(hub.validateTargetProjectName('SkeenaImport_2026'))), {

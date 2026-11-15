@@ -17,7 +17,8 @@ function storage() {
 }
 function moduleFor(store = storage(), picker = async () => '') {
   return loadTypeScript('tableCSVArchiveExport.ts', {
-    './qualityEditor': quality, './projectTableCSV': csv, '@wailsio/runtime': { Dialogs: { SaveFile: picker } },
+    './qualityEditor': quality, './projectTableCSV': csv,
+    '../../bindings/github.com/boostao/vpro/app': { ImportExportService: { ChooseTableCSVArchiveFile: picker } },
   }, { localStorage: store });
 }
 const archive = moduleFor();
@@ -200,11 +201,10 @@ test('optional native picker cancellation/errors preserve destination and hold b
   assert.equal(session.view().receipts.length, 0); assert.equal(busy, false);
   const canonical = 'C:\\fixture\\Selected.zip';
   assert.equal(await session.chooseDestination(destination, async () => canonical), canonical);
-  let options;
-  const mod = moduleFor(storage(), async value => { options = value; return ''; });
+  let called = false;
+  const mod = moduleFor(storage(), async () => { called = true; return ''; });
   assert.equal(await mod.chooseTableCSVArchiveFile(), '');
-  assert.equal(options.Title, 'Select project table CSV archive destination');
-  assert.equal(options.Filename, 'project-tables.zip'); assert.equal(options.Filters[0].Pattern, '*.zip');
+  assert.equal(called, true);
 });
 
 const componentSource = readFileSync(srcPath('ProjectTableCSVReview.svelte'), 'utf8');

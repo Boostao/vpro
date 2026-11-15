@@ -1,4 +1,5 @@
-import type { ProjectMetadataCell, VegetationSpeciesAlias, VegetationSpeciesOption } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataCell, VegetationSpeciesOption } from '../../bindings/github.com/boostao/vpro/app';
+import type { VegetationSpeciesAlias } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { equalCell } from '../admin/projectMetadataEditor';
 import { wellFormedUTF16 } from './qualityEditor';

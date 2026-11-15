@@ -13,7 +13,7 @@ import (
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/boostao/vpro/app/resources"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 type goListPackage struct {

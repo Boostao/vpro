@@ -235,7 +235,11 @@ func TestTwoPageSoilOriginalRejectsHiddenOrShadowedPhysicalColumns(t *testing.T)
 	} {
 		t.Run(column, func(t *testing.T) {
 			service, state, db := vprotest.TwoPageSoilReadFixture(t, false, "TEXT")
-			if _, err := db.Exec(`ALTER TABLE Sample_Humus ADD COLUMN ` + column); err != nil {
+			ddl := `ALTER TABLE Sample_Humus ADD COLUMN ` + column
+			if !strings.HasPrefix(column, "Generated ") {
+				ddl = `ALTER TABLE Sample_Humus RENAME TO Sample_Humus_orig; CREATE TABLE Sample_Humus AS SELECT *, 'x' AS ` + strings.Fields(column)[0] + ` FROM Sample_Humus_orig`
+			}
+			if _, err := db.Exec(ddl); err != nil {
 				t.Fatal(err)
 			}
 			if got, err := ReadTwoPageSoilOriginal(service, context.Background(), state.ContextID, "108050", "SoilHumusXL"); err == nil || got != nil ||

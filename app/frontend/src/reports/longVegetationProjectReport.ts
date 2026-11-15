@@ -1,4 +1,6 @@
-import type { LongVegetationPreview, LongVegetationProjectUnit, LongVegetationSettings, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationPreview, ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationSettings } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
+import type { LongVegetationProjectUnit } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import type { ValidatedLongVegetationPreview } from './longVegetationReport';
 import { validateQualitySelection, validateSettings, validateVegetationRows } from './longVegetationReport';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';

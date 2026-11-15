@@ -175,7 +175,7 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
 
 ### Prerequisites
 - **Node `22.12+` & npm** on `PATH`.
-- **Go `1.25+` (`CGO_ENABLED=1`)** plus `~/go/bin` (`wails3` `v3.0.0-beta.26`, `task`, `nfpm`) and `~/.local/bin` (`pmtiles`, `tippecanoe`).
+- **Go `1.27+` (`CGO_ENABLED=1`)** plus `~/go/bin` (`wails3` `v3.1.0`, `task`, `nfpm`) and `~/.local/bin` (`pmtiles`, `tippecanoe`).
 - **CGO Compilers & WebView Dev Libraries:** Linux `gcc` + GTK4 & WebKitGTK 6.0 dev packages (GTK3 & WebKitGTK 4.1 for legacy `gtk3` build tag); Windows `x86_64-w64-mingw32-gcc` / LLVM-MinGW + `makensis`.
 - **Optional Sidecar Runtime:** `Rscript` (`R >= 4.4.0` with `vpro` and `climr`), `quarto`, and `gh` CLI.
 

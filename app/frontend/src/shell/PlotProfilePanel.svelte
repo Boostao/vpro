@@ -1,13 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import {
-    ContextService,
-    type PlotPage,
-    type PlotProfileSource,
-    type PlotProfileSourceInfo,
-    type PlotSummary,
-    type ProjectPlotProfileFilterRequest,
-  } from '../../bindings/github.com/boostao/vpro/app';
+  import { ContextService, type PlotPage, type PlotProfileSource, type PlotProfileSourceInfo, type ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
+import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from '../shared/state';
   import type { ReadRequests } from '../shared/readRequests';
   import {

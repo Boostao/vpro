@@ -1220,13 +1220,13 @@ func computeSnapshotInReadTx(
 			totCov := unitCoverSums[u][sp]
 
 			cell := SynthesisUnitSpeciesCell{
-				SiteUnit:            u,
-				PresentPlots:        nPres,
-				PlotCount:           nPlots,
-				PresencePctText:     "",
-				MeanCoverAllText:    "",
+				SiteUnit:             u,
+				PresentPlots:         nPres,
+				PlotCount:            nPlots,
+				PresencePctText:      "",
+				MeanCoverAllText:     "",
 				MeanCoverPresentText: "",
-				CellDiagnosticCodes: []string{},
+				CellDiagnosticCodes:  []string{},
 			}
 
 			if nPlots > 0 && nPres > 0 {

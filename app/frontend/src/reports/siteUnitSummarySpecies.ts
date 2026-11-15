@@ -1,5 +1,5 @@
-import type { SiteUnitSpeciesListPreview, SiteUnitSpeciesListRequest, SiteUnitSpeciesListUnit,
-  SiteUnitSpeciesListGroup, SiteUnitSpeciesListRow } from '../../bindings/github.com/boostao/vpro/app';
+import type { SiteUnitSpeciesListPreview, SiteUnitSpeciesListRequest } from '../../bindings/github.com/boostao/vpro/app';
+import type { SiteUnitSpeciesListUnit, SiteUnitSpeciesListGroup, SiteUnitSpeciesListRow } from '../../bindings/github.com/boostao/vpro/app/internal/envreport/models';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { ownedScope, type GoogleEarthScope } from '../spatial/googleEarthReview';
 import { validateSiteUnitSummary, summaryLifeformCaptions, type SiteUnitSummaryMode, type ValidatedSiteUnitSummary } from './siteUnitSummary';

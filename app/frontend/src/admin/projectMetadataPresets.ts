@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
+import { ContextService } from '../../bindings/github.com/boostao/vpro/app';
 
 export interface ProjectMetadataPreset {
   id: string;
@@ -55,9 +55,9 @@ export interface ProjectMetadataAutomationPort {
 }
 
 export const defaultProjectMetadataAutomationPort: ProjectMetadataAutomationPort = {
-  listPresets: () => Call.ByName('main.ContextService.ListProjectMetadataPresets'),
-  deriveFromPlots: (contextId, projectId) => Call.ByName('main.ContextService.DeriveProjectMetadataFromPlots', contextId, projectId),
-  applyAutomation: (contextId, req) => Call.ByName('main.ContextService.ApplyProjectMetadataAutomation', contextId, req),
+  listPresets: () => (ContextService.ListProjectMetadataPresets() as never),
+  deriveFromPlots: (contextId, projectId) => (ContextService.DeriveProjectMetadataFromPlots(contextId, projectId) as never),
+  applyAutomation: (contextId, req) => (ContextService.ApplyProjectMetadataAutomation(contextId, req) as never),
 };
 
 export const COVER_DESCRIPTION_ORDER: readonly string[] = [

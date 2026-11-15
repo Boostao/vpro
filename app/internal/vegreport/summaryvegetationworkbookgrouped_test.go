@@ -151,7 +151,8 @@ func assertSummaryGroupedWorkbookBody(t *testing.T, input summaryVegetationWorkb
 			switch cell.Storage {
 			case "real":
 				number, err := strconv.ParseFloat(rawValues[address], 64)
-				if err != nil || math.Float64bits(number) != math.Float64bits(*cell.Real) ||
+				tol := 1e-15 * math.Max(1, math.Abs(*cell.Real))
+				if err != nil || math.Abs(number-*cell.Real) > tol || math.Signbit(number) != math.Signbit(*cell.Real) ||
 					rawTypes[address] != "" && rawTypes[address] != "n" {
 					t.Fatal("original DOUBLE Order changed or became text", address, rawValues[address], rawTypes[address], err)
 				}

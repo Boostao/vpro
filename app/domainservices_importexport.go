@@ -6,6 +6,7 @@ import (
 
 	"github.com/boostao/vpro/app/internal/interchange"
 	"github.com/boostao/vpro/app/internal/lumping"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
 type ImportExportService struct {
@@ -48,6 +49,18 @@ func (s *ImportExportService) ChooseAccessDatabaseFile(ctx context.Context, cont
 		return "", errors.New("import/export context is unavailable")
 	}
 	return s.contexts.ChooseAccessDatabaseFile(ctx, contextID)
+}
+
+// ChooseTableCSVArchiveFile opens a native OS save-file dialog for the project table CSV ZIP archive.
+func (s *ImportExportService) ChooseTableCSVArchiveFile(ctx context.Context) (string, error) {
+	return vprocorepkg.ChooseNativeSaveFile(
+		ctx,
+		"Select project table CSV archive destination",
+		"project-tables.zip",
+		"zip",
+		"Project table CSV archive (.zip)",
+		"*.zip",
+	)
 }
 
 func (s *ImportExportService) InspectAccessDatabase(ctx context.Context, contextID, sourcePath string) (AccessDatabaseInspection, error) {

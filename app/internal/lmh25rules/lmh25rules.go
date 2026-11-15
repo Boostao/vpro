@@ -21,15 +21,15 @@ const (
 )
 
 type DiagnosticIssue struct {
-	Code       string             `json:"code"`
-	Severity   DiagnosticSeverity `json:"severity"`
-	Category   string             `json:"category"`
-	Field      string             `json:"field,omitempty"`
-	HorizonID  *int64             `json:"horizonId,omitempty"`
-	Horizon    string             `json:"horizon,omitempty"`
-	Message    string             `json:"message"`
-	Suggested  string             `json:"suggested,omitempty"`
-	LMH25Ref   string             `json:"lmh25Ref"`
+	Code      string             `json:"code"`
+	Severity  DiagnosticSeverity `json:"severity"`
+	Category  string             `json:"category"`
+	Field     string             `json:"field,omitempty"`
+	HorizonID *int64             `json:"horizonId,omitempty"`
+	Horizon   string             `json:"horizon,omitempty"`
+	Message   string             `json:"message"`
+	Suggested string             `json:"suggested,omitempty"`
+	LMH25Ref  string             `json:"lmh25Ref"`
 }
 
 type KeyTraceStep struct {
@@ -40,29 +40,29 @@ type KeyTraceStep struct {
 }
 
 type PlotDiagnosticsResult struct {
-	PlotNumber             string             `json:"plotNumber"`
-	DerivedHumusThickness  *float64           `json:"derivedHumusThickness"`
-	HeaderHumusThickness   *float64           `json:"headerHumusThickness"`
-	HumusThicknessDiff     *float64           `json:"humusThicknessDiff"`
-	SubstratePopulated     int                `json:"substratePopulated"`
-	SubstrateSum           *float64           `json:"substrateSum"`
-	SubstrateValid         bool               `json:"substrateValid"`
-	IsOrganicSoilOrder     bool               `json:"isOrganicSoilOrder"`
-	KeyedSMR               string             `json:"keyedSmr"`
-	KeyedSMRClass          *int               `json:"keyedSmrClass"`
-	FieldSMR               string             `json:"fieldSmr"`
-	FieldSMRClass          *int               `json:"fieldSmrClass"`
-	SMRDivergence          *int               `json:"smrDivergence"`
-	SMRDivergent           bool               `json:"smrDivergent"`
-	SMRTrace               []KeyTraceStep     `json:"smrTrace"`
-	KeyedSNR               string             `json:"keyedSnr"`
-	KeyedSNRClass          *int               `json:"keyedSnrClass"`
-	FieldSNR               string             `json:"fieldSnr"`
-	FieldSNRClass          *int               `json:"fieldSnrClass"`
-	SNRDivergence          *int               `json:"snrDivergence"`
-	SNRDivergent           bool               `json:"snrDivergent"`
-	SNRTrace               []KeyTraceStep     `json:"snrTrace"`
-	Issues                 []DiagnosticIssue  `json:"issues"`
+	PlotNumber            string            `json:"plotNumber"`
+	DerivedHumusThickness *float64          `json:"derivedHumusThickness"`
+	HeaderHumusThickness  *float64          `json:"headerHumusThickness"`
+	HumusThicknessDiff    *float64          `json:"humusThicknessDiff"`
+	SubstratePopulated    int               `json:"substratePopulated"`
+	SubstrateSum          *float64          `json:"substrateSum"`
+	SubstrateValid        bool              `json:"substrateValid"`
+	IsOrganicSoilOrder    bool              `json:"isOrganicSoilOrder"`
+	KeyedSMR              string            `json:"keyedSmr"`
+	KeyedSMRClass         *int              `json:"keyedSmrClass"`
+	FieldSMR              string            `json:"fieldSmr"`
+	FieldSMRClass         *int              `json:"fieldSmrClass"`
+	SMRDivergence         *int              `json:"smrDivergence"`
+	SMRDivergent          bool              `json:"smrDivergent"`
+	SMRTrace              []KeyTraceStep    `json:"smrTrace"`
+	KeyedSNR              string            `json:"keyedSnr"`
+	KeyedSNRClass         *int              `json:"keyedSnrClass"`
+	FieldSNR              string            `json:"fieldSnr"`
+	FieldSNRClass         *int              `json:"fieldSnrClass"`
+	SNRDivergence         *int              `json:"snrDivergence"`
+	SNRDivergent          bool              `json:"snrDivergent"`
+	SNRTrace              []KeyTraceStep    `json:"snrTrace"`
+	Issues                []DiagnosticIssue `json:"issues"`
 }
 
 func roundACE2(val float64) float64 {

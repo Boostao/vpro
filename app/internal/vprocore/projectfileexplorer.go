@@ -51,6 +51,15 @@ func chooseNativeOpenFileWithFilters(ctx context.Context, title string, filters 
 	return selected, nil
 }
 
+// ChooseNativeSaveFile opens a native OS save-file dialog (backed by go-ole IFileDialog on Windows).
+func ChooseNativeSaveFile(ctx context.Context, title, defaultFileName, defaultExt, displayName, pattern string) (string, error) {
+	var filters []nativeFileFilter
+	if strings.TrimSpace(pattern) != "" {
+		filters = []nativeFileFilter{{DisplayName: displayName, Pattern: pattern}}
+	}
+	return chooseNativeSaveFileWithFilters(ctx, title, defaultFileName, defaultExt, filters)
+}
+
 func chooseNativeSaveFileWithFilters(ctx context.Context, title, defaultFileName, defaultExt string, filters []nativeFileFilter) (string, error) {
 	app, window, err := PictureNativeChooserOwner(ctx)
 	if err != nil {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack, type Snippet } from 'svelte';
-  import { AuditRestoreAction, PlotEntryService, type SIVIParentSharedReference } from '../../bindings/github.com/boostao/vpro/app';
+  import { AuditRestoreAction, PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
+import type { SIVIParentSharedReference } from '../../bindings/github.com/boostao/vpro/app/internal/sourceform/models';
   import { ReadRequests } from '../shared/readRequests';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import type { TwoPageParentForm } from './twoPageParentSession';

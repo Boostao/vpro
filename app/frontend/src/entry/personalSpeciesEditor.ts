@@ -1,7 +1,8 @@
 import { wellFormedUTF16 } from './qualityEditor';
 import { speciesEventError, type SpeciesCell, type SpeciesChoices } from './vegetationSpeciesEditor';
 import type { VegetationCreationDraft } from './vegetationCreationEditor';
-import type { PersonalSpeciesDefinitionRequest, SpeciesCodeCheckRow, VegetationSpeciesOption } from '../../bindings/github.com/boostao/vpro/app';
+import type { PersonalSpeciesDefinitionRequest, VegetationSpeciesOption } from '../../bindings/github.com/boostao/vpro/app';
+import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro/app/internal/validation/models';
 
 export const personalLifeforms = [
   [1, 'Coniferous trees - TREE/SHRUB/SEEDLINGS'], [2, 'Broad-leaved trees - TREE/SHRUB/SEEDLINGS'],

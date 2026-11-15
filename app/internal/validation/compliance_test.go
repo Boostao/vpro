@@ -222,4 +222,3 @@ func TestDuplicateVegSpeciesMixedIntegerAndTextPlotNumberPrefilter(t *testing.T)
 			matched, rep.DuplicateVegFindings)
 	}
 }
-

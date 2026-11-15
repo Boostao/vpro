@@ -1,4 +1,5 @@
-import type { ProjectMetadataChange, ProjectMetadataEditorField } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataEditorField } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataChange } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import sourcePolicy from '../../../resources/picture-metadata-policy.json';
 import { equalCell, metadataCellText, parseMetadataCell, type MetadataDraftCell } from '../admin/projectMetadataEditor';
 import { pictureMetadataFromWire, type PictureOwner, type PictureReview } from './pictureRead';

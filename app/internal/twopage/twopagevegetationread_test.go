@@ -221,7 +221,11 @@ func TestTwoPageVegetationOriginalPhysicalIdentityRefusals(t *testing.T) {
 	for _, column := range []string{`rowid TEXT`, `_rowid_ INTEGER`, `oid TEXT`, `Generated TEXT GENERATED ALWAYS AS ('source drift') VIRTUAL`} {
 		t.Run(column, func(t *testing.T) {
 			service, state, db := twoPageVegetationReadFixture(t, false, "TEXT")
-			if _, err := db.Exec(`ALTER TABLE Sample_Veg ADD COLUMN ` + column); err != nil {
+			ddl := `ALTER TABLE Sample_Veg ADD COLUMN ` + column
+			if !strings.HasPrefix(column, "Generated ") {
+				ddl = `ALTER TABLE Sample_Veg RENAME TO Sample_Veg_orig; CREATE TABLE Sample_Veg AS SELECT *, 'x' AS ` + strings.Fields(column)[0] + ` FROM Sample_Veg_orig`
+			}
+			if _, err := db.Exec(ddl); err != nil {
 				t.Fatal(err)
 			}
 			if got, err := ReadTwoPageVegetationOriginal(service, context.Background(), state.ContextID, "108050", "SubVegCXL"); err == nil || got != nil || !strings.Contains(err.Error(), "ordinary columns") {

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -234,6 +235,7 @@ func TestCloseService_ConcurrentRequestsAndConfirmation(t *testing.T) {
 }
 
 func TestCloseService_CancelConfirmationRace(t *testing.T) {
+	vprotest.AssertNoGoroutineLeak(t)
 	for i := 0; i < 32; i++ {
 		s, _, closed := closeFixture(t)
 		if err := s.requestClose(); err != nil {

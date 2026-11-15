@@ -58,7 +58,7 @@ test('form refuses save-and-close on invalid, locked, loading or incomplete chil
 });
 test('root retrieves missed events, flushes focused edits, cancels busy close and awaits save before approval', () => {
   const source = read('App.svelte');
-  assert.match(source, /Events\.On\('vpro:close-request'/);
+  assert.match(source, /Events\.On\(VproCloseRequest/);
   assert.match(source, /LifecycleService\.GetPendingCloseRequest\(\)/);
   assert.match(source, /document\.activeElement\.blur\(\)/);
   assert.match(source, /await tick\(\)/);

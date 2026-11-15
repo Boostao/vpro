@@ -20,7 +20,7 @@ func TestCreateSIVIPlotAndUndoCreateSIVIPlot(t *testing.T) {
 		{PlotNumber: "", PlotType: "Ground"},
 		{PlotNumber: "12345678", PlotType: "Ground"},
 		{PlotNumber: "\U0001D538\U0001D538\U0001D538\U0001D538", PlotType: "Ground"}, // 4 astral chars = 8 UTF-16 code units (> 7!)
-		{PlotNumber: "SV001", PlotType: "FS882"},     // Invalid SIVI PlotType
+		{PlotNumber: "SV001", PlotType: "FS882"},                                     // Invalid SIVI PlotType
 	} {
 		if _, err := sivi.CreateSIVIPlot(svc, ctx, state.ContextID, bad); err == nil {
 			t.Fatalf("expected invalid SIVI plot request %+v to fail", bad)
@@ -192,4 +192,3 @@ func TestUndoCreateSIVIPlotToleratesForwardFieldsInStoredHistory(t *testing.T) {
 		t.Fatalf("UndoCreateSIVIPlot lost AddedToSU / failed to remove SU row due to strict request decoder on history row: %+v", undone)
 	}
 }
-

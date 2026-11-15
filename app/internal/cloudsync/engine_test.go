@@ -80,6 +80,7 @@ func TestLiveStandardsPublishUnderThreeSecondsAndContributorPullSync(t *testing.
 		t.Fatalf("BootstrapSchemas: %v", err)
 	}
 
+	vprotest.AssertNoGoroutineLeak(t)
 	svc, state := vprotest.ContextServiceFixture(t)
 
 	// Warm custodian pool so we measure pure streaming PublishStandardsToCloud time

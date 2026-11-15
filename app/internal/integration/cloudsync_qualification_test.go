@@ -463,9 +463,9 @@ func TestCloudSyncBECMaster71kQualificationAndThreeWayCustodianMerge(t *testing.
 
 	// Selectively accept Env.SiteNotes + added Veg row MYQASPP on targetEditPlot while KEEPING target on custodian-protected Admin.BECSiteUnit and other historical fields!
 	fieldResolutions := map[string]string{
-		targetEditPlot + "::Env::SiteNotes":        cloudsync.MergeResolutionAcceptSource,
+		targetEditPlot + "::Env::SiteNotes":               cloudsync.MergeResolutionAcceptSource,
 		targetEditPlot + "::Veg::Species=MYQASPP|Layer=6": cloudsync.MergeResolutionAcceptSource,
-		targetEditPlot + "::Admin::BECSiteUnit":    cloudsync.MergeResolutionKeepTarget,
+		targetEditPlot + "::Admin::BECSiteUnit":           cloudsync.MergeResolutionKeepTarget,
 	}
 
 	mergeRes, err := mgr.ExecuteStagingToMasterMerge(ctx, cloudsync.StagingMergeExecuteRequest{

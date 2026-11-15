@@ -1,14 +1,8 @@
 <script lang="ts">
   import { FolderOpen } from '@lucide/svelte';
-  import {
-    ContextService,
-    ImportExportService,
-    type AccessDatabaseInspection,
-    type AccessProjectCandidate,
-    type AccessProjectImportResult,
-    type ContextSelection,
-    type ProjectInfo,
-  } from '../../bindings/github.com/boostao/vpro/app';
+  import { ContextService, ImportExportService, type AccessDatabaseInspection, type AccessProjectImportResult } from '../../bindings/github.com/boostao/vpro/app';
+import type { AccessProjectCandidate } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
+import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from '../shared/state';
 
   let {

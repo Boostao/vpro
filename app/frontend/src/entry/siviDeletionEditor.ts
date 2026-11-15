@@ -1,4 +1,4 @@
-import type { ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataColumn } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import defaults from '../../../resources/sivi-new-row-defaults.json';
 import { wellFormedUTF16 } from './qualityEditor';
 import { siviMetadataTableFromWire } from './siviMetadataWire';

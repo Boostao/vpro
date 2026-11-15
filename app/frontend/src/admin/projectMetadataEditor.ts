@@ -1,7 +1,8 @@
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import standardDefaults from '../../../resources/project-metadata-standard.json';
 import templateMapping from '../../../resources/project-metadata-template.json';
-import type { ProjectMetadataCell, ProjectMetadataCreate, ProjectMetadataTemplateCreate, ProjectMetadataEdit, ProjectMetadataEditorField, ProjectMetadataReview, ProjectMetadataRow } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataCell, ProjectMetadataCreate, ProjectMetadataTemplateCreate, ProjectMetadataEditorField, ProjectMetadataRow } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataEdit, ProjectMetadataReview } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 
 export interface MetadataDraftCell {
   raw: string;

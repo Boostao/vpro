@@ -1,4 +1,5 @@
-import type { GoogleEarthPreferencesReview, GoogleEarthPreferencesOutcome, GoogleEarthPreferenceValues } from '../../bindings/github.com/boostao/vpro/app';
+import type { GoogleEarthPreferencesReview, GoogleEarthPreferencesOutcome } from '../../bindings/github.com/boostao/vpro/app';
+import type { GoogleEarthPreferenceValues } from '../../bindings/github.com/boostao/vpro/app/internal/spatial/models';
 import { ownedScope, type GoogleEarthScope } from './googleEarthReview';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { googleEarthXMLText } from './googleEarthKMLReview';

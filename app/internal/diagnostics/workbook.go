@@ -418,8 +418,7 @@ func encodeDiagnosticWorkbookBytes(
 		curRow++
 	}
 
-	_ = f.SetColWidth(diagSheet, "A", "B", 14)
-	_ = f.SetColWidth(diagSheet, "C", "C", 26)
+	_ = f.AutoFitColWidth(diagSheet, "A:C")
 	if topLeft, err := excelize.CoordinatesToCellName(baseCols+1, 6); err == nil {
 		_ = f.SetPanes(diagSheet, &excelize.Panes{
 			Freeze:      true,
@@ -514,7 +513,7 @@ func encodeDiagnosticWorkbookBytes(
 			}
 		}
 	}
-	_ = f.SetColWidth(simSheet, "A", "L", 16)
+	_ = f.AutoFitColWidth(simSheet, "A:L")
 
 	// =========================================================================
 	// SHEET 3: Candidate Misplaced Plots (Outlier Queue) Sheet
@@ -568,7 +567,7 @@ func encodeDiagnosticWorkbookBytes(
 			_ = styleRangeChecked(f, outSheet, 1, r, len(outHeaders), r, warnRowStyle)
 		}
 	}
-	_ = f.SetColWidth(outSheet, "A", "N", 16)
+	_ = f.AutoFitColWidth(outSheet, "A:N")
 
 	// =========================================================================
 	// SHEET 4: Edatopic Grid (rSMR 0..8 x rSNR A..F) Counts & Prominence Sheet
@@ -641,10 +640,10 @@ func encodeDiagnosticWorkbookBytes(
 			if _, err := writeEdatopicBlock(uTab, 2, uGrid); err != nil {
 				return nil, err
 			}
-			_ = f.SetColWidth(uTab, "A", "G", 15)
+			_ = f.AutoFitColWidth(uTab, "A:G")
 		}
 	}
-	_ = f.SetColWidth(edaSheet, "A", "G", 15)
+	_ = f.AutoFitColWidth(edaSheet, "A:G")
 
 	var buf bytes.Buffer
 	if _, err := f.WriteTo(&buf); err != nil {

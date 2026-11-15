@@ -1,8 +1,5 @@
-import type {
-  LongVegetationProjectOptions, LongVegetationProjectPreview, LongVegetationProjectUnitOutcome,
-  LongVegetationProjectUnitPreferences, LongVegetationProjectWorkbookReview, LongVegetationSettings,
-  VegetationWorkbookOutcome,
-} from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationProjectOptions, LongVegetationProjectPreview, LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences, LongVegetationProjectWorkbookReview, VegetationWorkbookOutcome } from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationSettings } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
 import type { ProjectReportOwner, ValidatedProjectPreview } from './longVegetationProjectReport';
 import { projectReportOwnedScope } from './longVegetationProjectReport';
 import type { CurrentProjectScope, ReportSourceScope } from './longVegetationProjectScope';

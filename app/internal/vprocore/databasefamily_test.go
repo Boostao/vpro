@@ -204,4 +204,3 @@ func TestEnsureDefaultPictureLibraryCanonical5ColumnSchema(t *testing.T) {
 		t.Fatal("EnsureDefaultPictureLibrary mutated existing VPics.db on subsequent call")
 	}
 }
-

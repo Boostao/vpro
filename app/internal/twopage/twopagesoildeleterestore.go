@@ -155,18 +155,18 @@ func unmarshalAnyTwoPageSoilHistory(raw string) (twoPageSoilHistory, error) {
 			Horizon   *string              `json:"horizon,omitempty"`
 		}
 		var envelope struct {
-			Request            plainReq                     `json:"Request"`
+			Request            plainReq                      `json:"Request"`
 			Committed          vprocore.ProjectMetadataTable `json:"Committed"`
-			Actor              string                       `json:"Actor"`
-			AuditStrength      int                          `json:"AuditStrength"`
-			EditWhen           string                       `json:"EditWhen"`
-			Audits             []vprocore.AuditEntry        `json:"Audits"`
-			CreatedRowID       *string                      `json:"CreatedRowID,omitempty"`
-			Action             string                       `json:"Action,omitempty"`
-			DeletedID          *int64                       `json:"DeletedID,omitempty"`
-			DeletedRow         *vprocore.ProjectMetadataRow `json:"DeletedRow,omitempty"`
-			RestoreOfRequestID *string                      `json:"RestoreOfRequestID,omitempty"`
-			RestoredRowID      *string                      `json:"RestoredRowID,omitempty"`
+			Actor              string                        `json:"Actor"`
+			AuditStrength      int                           `json:"AuditStrength"`
+			EditWhen           string                        `json:"EditWhen"`
+			Audits             []vprocore.AuditEntry         `json:"Audits"`
+			CreatedRowID       *string                       `json:"CreatedRowID,omitempty"`
+			Action             string                        `json:"Action,omitempty"`
+			DeletedID          *int64                        `json:"DeletedID,omitempty"`
+			DeletedRow         *vprocore.ProjectMetadataRow  `json:"DeletedRow,omitempty"`
+			RestoreOfRequestID *string                       `json:"RestoreOfRequestID,omitempty"`
+			RestoredRowID      *string                       `json:"RestoredRowID,omitempty"`
 		}
 		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
 			return twoPageSoilHistory{}, err

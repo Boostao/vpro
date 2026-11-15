@@ -179,15 +179,15 @@ type DatasheetFindReplaceItem struct {
 }
 
 type DatasheetFindReplacePreview struct {
-	ContextID       string                     `json:"contextId"`
-	TableKey        string                     `json:"tableKey"`
-	TableName       string                     `json:"tableName"`
-	Column          string                     `json:"column"`
-	MatchedRows     int                        `json:"matchedRows"`
-	ValidCount      int                        `json:"validCount"`
-	InvalidCount    int                        `json:"invalidCount"`
-	Items           []DatasheetFindReplaceItem `json:"items"`
-	Truncated       bool                       `json:"truncated"`
+	ContextID    string                     `json:"contextId"`
+	TableKey     string                     `json:"tableKey"`
+	TableName    string                     `json:"tableName"`
+	Column       string                     `json:"column"`
+	MatchedRows  int                        `json:"matchedRows"`
+	ValidCount   int                        `json:"validCount"`
+	InvalidCount int                        `json:"invalidCount"`
+	Items        []DatasheetFindReplaceItem `json:"items"`
+	Truncated    bool                       `json:"truncated"`
 }
 
 type resolvedDatasheetTarget struct {

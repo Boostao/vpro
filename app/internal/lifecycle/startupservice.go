@@ -12,7 +12,7 @@ import (
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 type StartupState struct {
@@ -64,12 +64,12 @@ func (r *StartupRecoveryRequest) UnmarshalJSON(data []byte) error {
 }
 
 type StartupService struct {
-	mu      sync.RWMutex
-	State   StartupState                       `json:"-" yaml:"-"`
-	DataDir string                             `json:"-" yaml:"-"`
-	Now     func() time.Time                   `json:"-" yaml:"-"`
-	Chooser func(context.Context) (string, error) `json:"-" yaml:"-"`
-	Activate func() (StartupState, error)      `json:"-" yaml:"-"`
+	mu       sync.RWMutex
+	State    StartupState                          `json:"-" yaml:"-"`
+	DataDir  string                                `json:"-" yaml:"-"`
+	Now      func() time.Time                      `json:"-" yaml:"-"`
+	Chooser  func(context.Context) (string, error) `json:"-" yaml:"-"`
+	Activate func() (StartupState, error)          `json:"-" yaml:"-"`
 }
 
 func (s *StartupService) now() time.Time {

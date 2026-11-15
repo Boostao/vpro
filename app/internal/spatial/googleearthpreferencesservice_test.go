@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func preferenceRequest(t *testing.T, expected, proposed GoogleEarthPreferenceValues) string {

@@ -480,8 +480,8 @@
       ],
       "skippedUnits": [],
       "approvalHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "workbookSHA256": "bacdd0633560fc4d08738faf6196e4d865ccd6a77a9adf6b2249f9f0097a8db2",
-      "bytes": 9738
+      "workbookSHA256": "0ef313c36c473f8d8fca49e0dbd9a64943da1b9c94bb340c9421da879e1d0342",
+      "bytes": 9877
     },
     "readRequest": {
       "revision": "3",
@@ -500,7 +500,7 @@
       "status": "published",
       "requestedDestination": "C:\\output\\literal # 'é'.xlsx",
       "path": "C:\\output\\literal # 'é'.xlsx",
-      "sha256": "bacdd0633560fc4d08738faf6196e4d865ccd6a77a9adf6b2249f9f0097a8db2",
+      "sha256": "0ef313c36c473f8d8fca49e0dbd9a64943da1b9c94bb340c9421da879e1d0342",
       "errorMessage": ""
     }
   },
@@ -801,8 +801,8 @@
       ],
       "skippedUnits": [],
       "approvalHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "workbookSHA256": "601478cfe6fc6b52137a284ae57c7850fb6e99cd69e63d923afba1285ffbaed4",
-      "bytes": 8900
+      "workbookSHA256": "9016c7b83a64fdf7b0344cc64bf523857f707f5fe0fc4fa59107b91927acf114",
+      "bytes": 9039
     },
     "readRequest": {
       "revision": "3",
@@ -821,7 +821,7 @@
       "status": "published",
       "requestedDestination": "C:\\output\\literal # 'é'.xlsx",
       "path": "C:\\output\\literal # 'é'.xlsx",
-      "sha256": "601478cfe6fc6b52137a284ae57c7850fb6e99cd69e63d923afba1285ffbaed4",
+      "sha256": "9016c7b83a64fdf7b0344cc64bf523857f707f5fe0fc4fa59107b91927acf114",
       "errorMessage": ""
     }
   },
@@ -1571,8 +1571,8 @@
       ],
       "skippedUnits": [],
       "approvalHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-      "workbookSHA256": "75a06c8bb13bf93d4ef537cfe344ab248af3ec3c78bcc5594b88d0f62bc6f714",
-      "bytes": 9284
+      "workbookSHA256": "b09d3ceb8f99d2828019bd2c0886944516ef06a4e7d187ff040d4964554556cd",
+      "bytes": 9450
     },
     "readRequest": {
       "revision": "3",
@@ -1591,7 +1591,7 @@
       "status": "published",
       "requestedDestination": "C:\\output\\literal # 'é'.xlsx",
       "path": "C:\\output\\literal # 'é'.xlsx",
-      "sha256": "75a06c8bb13bf93d4ef537cfe344ab248af3ec3c78bcc5594b88d0f62bc6f714",
+      "sha256": "b09d3ceb8f99d2828019bd2c0886944516ef06a4e7d187ff040d4964554556cd",
       "errorMessage": ""
     }
   }

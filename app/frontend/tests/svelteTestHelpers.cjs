@@ -110,7 +110,7 @@ function serverComponent(source, filename, dependencies = {}, _environment = {})
   assert.equal(compiled.warnings.length, 0);
   const module = { exports: {} };
   const code = ts.transpileModule(compiled.js.code, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: false }
   }).outputText;
   vm.runInNewContext(code, {
     module, exports: module.exports, structuredClone,
@@ -263,6 +263,12 @@ function loadTypeScript(filename, dependencies = {}, globals = {}) {
         }),
       });
     }
+    if (canon.endsWith('bindings/github.com/boostao/vpro/app')) {
+      return new Proxy({}, { get: () => new Proxy({}, { get: () => async () => null }) });
+    }
+    if (canon.endsWith('bindings/events')) {
+      return { VproCloseRequest: 'vpro:close-request' };
+    }
     throw new Error(`Unexpected TypeScript dependency ${rawName}`);
   } });
   return module.exports;
@@ -291,7 +297,7 @@ function componentFunctions(filename, names, values) {
   const code = selected.map(node => node.getText(ast)).join('\n') +
     `\nthis.actions = {${names.join(',')}};`;
   vm.runInContext(ts.transpileModule(code, { compilerOptions: {
-    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022
+    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, alwaysStrict: false
   } }).outputText, context);
   return context;
 }

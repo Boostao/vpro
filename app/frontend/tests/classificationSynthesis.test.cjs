@@ -6,17 +6,17 @@ const { render } = require('svelte/server');
 const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const calls = [];
-const wailsStub = {
-  Call: {
-    ByName: (...args) => {
-      calls.push(args);
+const bindingsStub = new Proxy({}, {
+  get: (_t, service) => new Proxy({}, {
+    get: (_s, method) => (...args) => {
+      calls.push([`main.${String(service)}.${String(method)}`, ...args]);
       return Promise.resolve(null);
     },
-  },
-};
+  }),
+});
 
 const syn = loadTypeScript('classificationSynthesis.ts', {
-  '@wailsio/runtime': wailsStub,
+  '../../bindings/github.com/boostao/vpro/app': bindingsStub,
 });
 
 const plain = value => JSON.parse(JSON.stringify(value));

@@ -1,4 +1,4 @@
-import type { EnvironmentReportName } from '../../bindings/github.com/boostao/vpro/app';
+import type { EnvironmentReportName } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 
 type ReportNames = {

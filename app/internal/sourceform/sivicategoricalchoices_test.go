@@ -202,7 +202,7 @@ func TestSIVICategoricalOwnedUnavailableSourcesAndRetry(t *testing.T) {
 				"view": `ALTER TABLE USysTableOfLists RENAME TO ArchiveLists;
 					CREATE VIEW USysTableOfLists AS SELECT * FROM ArchiveLists`,
 				"missing-column": `ALTER TABLE USysTableOfLists RENAME COLUMN Item TO RenamedItem`,
-				"shadow-rowid":   `ALTER TABLE USysTableOfLists ADD COLUMN oid INTEGER`,
+				"shadow-rowid":   `ALTER TABLE USysTableOfLists RENAME TO USysTableOfLists_orig; CREATE TABLE USysTableOfLists AS SELECT *, 99 AS oid FROM USysTableOfLists_orig`,
 				"identifier-recase": `ALTER TABLE USysTableOfLists RENAME TO ArchiveLists;
 					ALTER TABLE ArchiveLists RENAME TO usystableoflists`,
 			}
@@ -303,7 +303,14 @@ func TestSIVICategoricalGeneratedSchemaRejectsBeforeReadAndRetries(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.Exec("ALTER TABLE USysTableOfLists ADD COLUMN " + vprocore.QuoteHeaderIdentifier(column) + " INTEGER GENERATED ALWAYS AS (42) VIRTUAL"); err != nil {
+			isGenerated := column != "rowid" && column != "_rowid_" && column != "oid"
+			addSQL := "ALTER TABLE USysTableOfLists RENAME TO USysTableOfLists_orig; CREATE TABLE USysTableOfLists AS SELECT *, 42 AS " + vprocore.QuoteHeaderIdentifier(column) + " FROM USysTableOfLists_orig"
+			restoreSQL := "DROP TABLE USysTableOfLists; ALTER TABLE USysTableOfLists_orig RENAME TO USysTableOfLists"
+			if isGenerated {
+				addSQL = "ALTER TABLE USysTableOfLists ADD COLUMN " + vprocore.QuoteHeaderIdentifier(column) + " INTEGER GENERATED ALWAYS AS (42) VIRTUAL"
+				restoreSQL = "ALTER TABLE USysTableOfLists DROP COLUMN " + vprocore.QuoteHeaderIdentifier(column)
+			}
+			if _, err := db.Exec(addSQL); err != nil {
 				t.Fatal(err)
 			}
 			files := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
@@ -312,7 +319,7 @@ func TestSIVICategoricalGeneratedSchemaRejectsBeforeReadAndRetries(t *testing.T)
 				t.Fatal("generated/hidden schema escaped the pre-read guard", got, err)
 			}
 			vprotest.AssertProfileSUFiles(t, service, files)
-			if _, err := db.Exec("ALTER TABLE USysTableOfLists DROP COLUMN " + vprocore.QuoteHeaderIdentifier(column)); err != nil {
+			if _, err := db.Exec(restoreSQL); err != nil {
 				t.Fatal(err)
 			}
 			files = vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)

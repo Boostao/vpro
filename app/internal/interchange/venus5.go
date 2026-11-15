@@ -1512,4 +1512,3 @@ func resolveIncomingVenusLayer(layerCode string) (coverCol, heightCol string) {
 		return "Cover6", "Height6"
 	}
 }
-

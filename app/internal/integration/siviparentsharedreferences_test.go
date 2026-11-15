@@ -418,7 +418,8 @@ func TestSIVIParentSharedRawReferenceSchemaGuards(t *testing.T) {
 	}
 	defer db.Close()
 	for _, mutation := range []struct{ change, restore string }{
-		{`ALTER TABLE USysTableOfLists ADD COLUMN rowid INTEGER`, `ALTER TABLE USysTableOfLists DROP COLUMN rowid`},
+		{`ALTER TABLE USysTableOfLists RENAME TO USysTableOfLists_orig; CREATE TABLE USysTableOfLists AS SELECT *, 99 AS rowid FROM USysTableOfLists_orig`,
+			`DROP TABLE USysTableOfLists; ALTER TABLE USysTableOfLists_orig RENAME TO USysTableOfLists`},
 		{`ALTER TABLE USysTableOfLists RENAME COLUMN Flag TO Flags`, `ALTER TABLE USysTableOfLists RENAME COLUMN Flags TO Flag`},
 		{`ALTER TABLE USysTableOfLists RENAME TO MissingDefinitions`, `ALTER TABLE MissingDefinitions RENAME TO USysTableOfLists`},
 	} {

@@ -7,17 +7,17 @@ const { render } = require('svelte/server');
 const { loadTypeScript, serverComponent, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
 
 const rpcCalls = [];
-const mockWailsRuntime = {
-  Call: {
-    ByName(methodName, ...args) {
-      rpcCalls.push({ methodName, args });
+const bindingsStub = new Proxy({}, {
+  get: (_t, service) => new Proxy({}, {
+    get: (_s, method) => (...args) => {
+      rpcCalls.push({ methodName: `main.${String(service)}.${String(method)}`, args });
       return Promise.resolve({ ok: true });
     },
-  },
-};
+  }),
+});
 
 const help = loadTypeScript('helpSystem.ts', {
-  '@wailsio/runtime': mockWailsRuntime,
+  '../../bindings/github.com/boostao/vpro/app': bindingsStub,
 });
 
 const helpBundleFixture = JSON.parse(

@@ -1,4 +1,5 @@
-import type { LongVegetationSelectedUnitField, LongVegetationSelectedUnitSelection } from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationSelectedUnitSelection } from '../../bindings/github.com/boostao/vpro/app';
+import type { LongVegetationSelectedUnitField } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
 import type { GoogleEarthScope } from '../spatial/googleEarthReview';
 import { ownedScope } from '../spatial/googleEarthReview';
 import { wellFormedUTF16 } from '../entry/qualityEditor';

@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import type { ProjectState } from '../../bindings/github.com/boostao/vpro/app';
+import { HelpService } from '../../bindings/github.com/boostao/vpro/app';
 
 export type HelpDrawerTab = 'inspector' | 'keys' | 'guides';
 export type HelpMenuAction = 'guide' | 'tours' | 'shortcuts' | 'whats-new' | 'reset-sample' | 'about';
@@ -201,25 +201,25 @@ export interface HelpBackendPort {
 
 export const defaultHelpPort: HelpBackendPort = {
   getHelpBundle() {
-    return Call.ByName('main.HelpService.GetHelpBundle');
+    return (HelpService.GetHelpBundle() as never);
   },
   lookupHelpTopic(helpId: string) {
-    return Call.ByName('main.HelpService.LookupHelpTopic', helpId);
+    return (HelpService.LookupHelpTopic(helpId) as never);
   },
   searchHelp(query: string) {
-    return Call.ByName('main.HelpService.SearchHelp', query);
+    return (HelpService.SearchHelp(query) as never);
   },
   getWhatsNewStatus() {
-    return Call.ByName('main.HelpService.GetWhatsNewStatus');
+    return (HelpService.GetWhatsNewStatus() as never);
   },
   acknowledgeWhatsNew(version: string) {
-    return Call.ByName('main.HelpService.AcknowledgeWhatsNew', version);
+    return (HelpService.AcknowledgeWhatsNew(version) as never);
   },
   getAboutInfo() {
-    return Call.ByName('main.HelpService.GetAboutInfo');
+    return (HelpService.GetAboutInfo() as never);
   },
   resetWorkspaceToSample(contextId: string) {
-    return Call.ByName('main.HelpService.ResetWorkspaceToSample', contextId);
+    return (HelpService.ResetWorkspaceToSample(contextId) as never);
   },
 };
 

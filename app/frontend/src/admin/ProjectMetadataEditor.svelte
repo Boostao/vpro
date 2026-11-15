@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import type { ProjectMetadataCreate, ProjectMetadataEditorField, ProjectMetadataReview } from '../../bindings/github.com/boostao/vpro/app';
+  import type { ProjectMetadataCreate, ProjectMetadataEditorField } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import type { bindContextPlots } from '../shared/contextPlots';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import { ReadRequests } from '../shared/readRequests';

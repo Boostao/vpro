@@ -26,12 +26,12 @@ func TestLayer2ImportPurity(t *testing.T) {
 		t.Fatalf("read internal/rsidecar: %v", err)
 	}
 	allowedInternal := map[string]bool{
-		"github.com/boostao/vpro/app/resources":              true,
-		"github.com/boostao/vpro/app/internal/sqlutil":       true,
-		"github.com/boostao/vpro/app/internal/references":    true,
-		"github.com/boostao/vpro/app/internal/vprocore":      true,
+		"github.com/boostao/vpro/app/resources":                  true,
+		"github.com/boostao/vpro/app/internal/sqlutil":           true,
+		"github.com/boostao/vpro/app/internal/references":        true,
+		"github.com/boostao/vpro/app/internal/vprocore":          true,
 		"github.com/boostao/vpro/app/internal/vprocore/vprotest": true,
-		"github.com/boostao/vpro/app/internal/rsidecar":      true,
+		"github.com/boostao/vpro/app/internal/rsidecar":          true,
 	}
 	fset := token.NewFileSet()
 	for _, entry := range entries {

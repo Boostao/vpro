@@ -91,5 +91,22 @@
         "body": "Import and export VENUS 5.0 XML, TurboVeg 3 (.sqlite + XML), OGC GeoPackage (.gpkg in EPSG:3005 BC Albers or EPSG:4326), Long/Wide CSV matrices, and native R version-2 .rds lists."
       }
     ]
+  },
+  {
+    "id": "cloud-becmaster-sync",
+    "slug": "cloud-becmaster-sync",
+    "category": "Cloud BECMaster Sync",
+    "title": "PostgreSQL Cloud BECMaster Sync & Enterprise TLS Root CAs",
+    "summary": "3-schema (becmaster, staging, standards) synchronization, Custodian 3-way merge, and SSL_CERT_FILE / SSL_CERT_DIR enterprise CA configuration on Windows and macOS.",
+    "sections": [
+      {
+        "heading": "Enterprise Root CAs (SSL_CERT_FILE & SSL_CERT_DIR)",
+        "body": "Non-loopback Cloud BECMaster PostgreSQL connections enforce TLS. On Windows and macOS (in addition to Linux), Go 1.27 honors SSL_CERT_FILE (PEM bundle path) and SSL_CERT_DIR (certificate directory) alongside the OS trust store so BC Gov enterprise or custom root CAs can be trusted without modifying system keychains."
+      },
+      {
+        "heading": "Pre-Upload Compliance & Custodian 3-Way Merge",
+        "body": "Staging uploads pass RunComplianceValidation before writing to staging, and Custodian merges execute under SERIALIZABLE isolation with SHA-256 hash-chained becmaster.audit provenance."
+      }
+    ]
   }
 ]

@@ -38,15 +38,15 @@ func (r *PairwiseParams) UnmarshalJSON(data []byte) error {
 
 // SynthesisOptions configures ComputeSynthesisSnapshot.
 type SynthesisOptions struct {
-	UnitSource               string         `json:"unitSource,omitempty"`               // "auto" (default) | "su" | "user_site_unit"
-	LumpTable                string         `json:"lumpTable,omitempty"`                // optional <Name> or <Name>_Lump
-	LumpDBPath               string         `json:"lumpDbPath,omitempty"`               // optional external SQLite DB path for LumpTable
-	ExcludeStandardModifiers bool           `json:"excludeStandardModifiers"`           // exclude .support, .poor, .nudum
-	ExcludePatterns          []string       `json:"excludePatterns,omitempty"`          // optional extra unit exclusion patterns
-	SignificanceBasis        string         `json:"significanceBasis,omitempty"`        // "all_plots" (default) | "present_plots"
-	UnitOrder                []string       `json:"unitOrder,omitempty"`                // optional explicit unit column order
-	MinMaxPresencePct        float64        `json:"minMaxPresencePct,omitempty"`        // optional display threshold (0 keeps all)
-	Pairwise                 PairwiseParams `json:"pairwise,omitempty"`                 // optional BEC do_pairwise overrides
+	UnitSource               string         `json:"unitSource,omitempty"`        // "auto" (default) | "su" | "user_site_unit"
+	LumpTable                string         `json:"lumpTable,omitempty"`         // optional <Name> or <Name>_Lump
+	LumpDBPath               string         `json:"lumpDbPath,omitempty"`        // optional external SQLite DB path for LumpTable
+	ExcludeStandardModifiers bool           `json:"excludeStandardModifiers"`    // exclude .support, .poor, .nudum
+	ExcludePatterns          []string       `json:"excludePatterns,omitempty"`   // optional extra unit exclusion patterns
+	SignificanceBasis        string         `json:"significanceBasis,omitempty"` // "all_plots" (default) | "present_plots"
+	UnitOrder                []string       `json:"unitOrder,omitempty"`         // optional explicit unit column order
+	MinMaxPresencePct        float64        `json:"minMaxPresencePct,omitempty"` // optional display threshold (0 keeps all)
+	Pairwise                 PairwiseParams `json:"pairwise,omitempty"`          // optional BEC do_pairwise overrides
 }
 
 func (r *SynthesisOptions) UnmarshalJSON(data []byte) error {
@@ -221,8 +221,8 @@ type OutlierPlotCandidate struct {
 
 // EdatopicCell represents one (rSMR, rSNR) cell in a 9 x 6 Relative Edatopic Grid.
 type EdatopicCell struct {
-	SMR         string   `json:"smr"`        // "0".."8"
-	SNR         string   `json:"snr"`        // "A".."F"
+	SMR         string   `json:"smr"` // "0".."8"
+	SNR         string   `json:"snr"` // "A".."F"
 	PlotCount   int      `json:"plotCount"`
 	UnitPct     float64  `json:"unitPct"`    // % of all plots in unit (0..100)
 	Prominence  float64  `json:"prominence"` // % of edatopically-attributed plots in unit (0..100)

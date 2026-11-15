@@ -157,17 +157,16 @@ func prepareLongEnvironmentWorkbook(ctx context.Context, report reportcore.Envir
 				}
 			}
 		}
-		if err := book.SetColWidth(name, "A", "A", 32); err != nil {
-			return result, err
-		}
 		if len(unit.Plots) != 0 {
 			last, err := excelize.ColumnNumberToName(len(unit.Plots) + 1)
 			if err != nil {
 				return result, err
 			}
-			if err := book.SetColWidth(name, "B", last, 14); err != nil {
+			if err := book.AutoFitColWidth(name, "A:"+last); err != nil {
 				return result, err
 			}
+		} else if err := book.AutoFitColWidth(name, "A"); err != nil {
+			return result, err
 		}
 		if err := book.SetPanes(name, &excelize.Panes{Freeze: true, XSplit: 1, YSplit: 5, TopLeftCell: "B6", ActivePane: "bottomRight"}); err != nil {
 			return result, err

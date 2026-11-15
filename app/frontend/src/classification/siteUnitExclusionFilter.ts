@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import type { CancellableRead } from '../shared/readRequests';
+import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
 
 export const DEFAULT_SITE_UNIT_EXCLUSIONS: readonly string[] = [
   '.support',
@@ -144,25 +144,16 @@ export interface SiteUnitExclusionBackendPort {
 
 export const defaultSiteUnitExclusionPort: SiteUnitExclusionBackendPort = {
   previewExclusions: (contextId, request) =>
-    Call.ByName('main.VegetationReportService.PreviewSiteUnitExclusions', contextId, request),
+    (VegetationReportService.PreviewSiteUnitExclusions(contextId, request) as never),
   resolveHierarchyBreakpoints: (contextId, request) =>
-    Call.ByName(
-      'main.VegetationReportService.ResolveHierarchyBreakpointUnits',
-      contextId,
-      request
-    ),
+    (VegetationReportService.ResolveHierarchyBreakpointUnits(contextId,
+      request) as never),
   previewSummaryWithExclusions: (contextId, request) =>
-    Call.ByName(
-      'main.VegetationReportService.PreviewSummaryVegetationWithExclusions',
-      contextId,
-      request
-    ),
+    (VegetationReportService.PreviewSummaryVegetationWithExclusions(contextId,
+      request) as never),
   previewLongWithExclusions: (contextId, request) =>
-    Call.ByName(
-      'main.VegetationReportService.PreviewLongVegetationWithExclusions',
-      contextId,
-      request
-    ),
+    (VegetationReportService.PreviewLongVegetationWithExclusions(contextId,
+      request) as never),
 };
 
 export function createDefaultSiteUnitExclusionRules(): SiteUnitExclusionRule[] {

@@ -7339,8 +7339,8 @@
     "sheet": "Sample",
     "firstVegetationRow": 36,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "7433a92c2fa9394c59e515de3e33159d0ab36f52b8b8fe750a24e1cd29892b9d",
-    "bytes": 12229
+    "workbookSHA256": "8bfafae9f4e917745e437dc139dcb88a8e02cfc646f5ef93b52f2dbe447ce059",
+    "bytes": 12829
   },
   "vegetation": {
     "preview": {
@@ -9014,7 +9014,7 @@
     "sheet": "Sample",
     "firstVegetationRow": 6,
     "approvalHash": "0000000000000000000000000000000000000000000000000000000000000000",
-    "workbookSHA256": "ee08736d288771f0b42c691e1642d94ae6418bdf27ae5c14530d6565d82b16ea",
-    "bytes": 8612
+    "workbookSHA256": "2710bc1253270117c544ed6551f7c0a2685ed1a9fe04345d20439c9848752df7",
+    "bytes": 8722
   }
 }

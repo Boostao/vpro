@@ -6,16 +6,16 @@ const { render } = require('svelte/server');
 const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const calls = [];
-const mockRuntime = {
-  Call: {
-    ByName: (name, ...args) => {
-      calls.push([name, ...args]);
+const bindingsStub = new Proxy({}, {
+  get: (_t, service) => new Proxy({}, {
+    get: (_s, method) => (...args) => {
+      calls.push([`main.${String(service)}.${String(method)}`, ...args]);
       return Promise.resolve(null);
     },
-  },
-};
+  }),
+});
 
-const diag = loadTypeScript('lmh25Diagnostics.ts', { '@wailsio/runtime': mockRuntime });
+const diag = loadTypeScript('lmh25Diagnostics.ts', { '../../bindings/github.com/boostao/vpro/app': bindingsStub });
 
 function sampleDiagWire(overrides = {}) {
   return {

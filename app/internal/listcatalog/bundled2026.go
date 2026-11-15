@@ -62,7 +62,7 @@ func ParentBundledProfile2026() Profile {
 	}
 }
 
-func strPtr(v string) *string    { return &v }
+func strPtr(v string) *string     { return &v }
 func floatPtr(v float64) *float64 { return &v }
 func boolPtr(v bool) *bool        { return &v }
 

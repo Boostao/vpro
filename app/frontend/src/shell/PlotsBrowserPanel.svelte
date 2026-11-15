@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight, RefreshCw } from '@lucide/svelte';
-  import type { HierarchyNode, PlotPage, PlotSummary } from '../../bindings/github.com/boostao/vpro/app';
+  import type { HierarchyNode, PlotPage } from '../../bindings/github.com/boostao/vpro/app';
+import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from '../shared/state';
 
   let {

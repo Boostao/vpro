@@ -53,16 +53,16 @@ type ResolvedCredentials struct {
 // SessionConfigRequest updates in-memory-only role selection and optional session credential overrides.
 // Never persisted to config.yml or disk.
 type SessionConfigRequest struct {
-	RoleMode        string `json:"roleMode"`
-	ClearOverrides  bool   `json:"clearOverrides,omitempty"`
-	Host            string `json:"host,omitempty"`
-	Port            int    `json:"port,omitempty"`
-	Database        string `json:"database,omitempty"`
-	SSLMode         string `json:"sslMode,omitempty"`
-	User            string `json:"user,omitempty"`
-	Password        string `json:"password,omitempty"`
-	AdminUser       string `json:"adminUser,omitempty"`
-	AdminPassword   string `json:"adminPassword,omitempty"`
+	RoleMode       string `json:"roleMode"`
+	ClearOverrides bool   `json:"clearOverrides,omitempty"`
+	Host           string `json:"host,omitempty"`
+	Port           int    `json:"port,omitempty"`
+	Database       string `json:"database,omitempty"`
+	SSLMode        string `json:"sslMode,omitempty"`
+	User           string `json:"user,omitempty"`
+	Password       string `json:"password,omitempty"`
+	AdminUser      string `json:"adminUser,omitempty"`
+	AdminPassword  string `json:"adminPassword,omitempty"`
 }
 
 func (r *SessionConfigRequest) UnmarshalJSON(data []byte) error {
@@ -190,15 +190,15 @@ func wrapRedactedError(prefix string, err error, creds *ResolvedCredentials) err
 
 // Manager manages offline-safe PostgreSQL credentials, role mode selection, and connection pools.
 type Manager struct {
-	mu         sync.RWMutex
-	envLookup  EnvLookup
-	configDir  string
-	roleMode   string
-	overrides  sessionOverrides
-	userPool   *pgxpool.Pool
-	userKey    string
-	adminPool  *pgxpool.Pool
-	adminKey   string
+	mu        sync.RWMutex
+	envLookup EnvLookup
+	configDir string
+	roleMode  string
+	overrides sessionOverrides
+	userPool  *pgxpool.Pool
+	userKey   string
+	adminPool *pgxpool.Pool
+	adminKey  string
 }
 
 func NewManager(configDir string, envLookup EnvLookup) *Manager {

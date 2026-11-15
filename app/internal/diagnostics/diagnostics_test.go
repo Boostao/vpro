@@ -940,4 +940,3 @@ func TestSynthesisCaseDistinctNOCASEBatchesScopedUnassignedAndLiveWALCache(t *te
 		t.Fatalf("stale support cache after VUser WAL mutation: got LongName=%q, want 'Live WAL Upper Unit Name'", gotUpperLongName)
 	}
 }
-

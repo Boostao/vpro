@@ -1,4 +1,4 @@
-import { Call } from '@wailsio/runtime';
+import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
 
 export interface VenusProjectCandidate {
   projectId: string;
@@ -222,27 +222,27 @@ export interface InterchangeHubPort {
 
 export const defaultInterchangeHubPort: InterchangeHubPort = {
   inspectVenusSource: (contextID, sourcePath) =>
-    Call.ByName('main.ImportExportService.InspectVenusSource', contextID, sourcePath),
+    (ImportExportService.InspectVenusSource(contextID, sourcePath) as never),
   importVenusProject: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ImportVenusProject', contextID, request),
+    (ImportExportService.ImportVenusProject(contextID, request) as never),
   exportTurboVeg: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ExportTurboVeg', contextID, request),
+    (ImportExportService.ExportTurboVeg(contextID, request) as never),
   importTurboVeg: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ImportTurboVeg', contextID, request),
+    (ImportExportService.ImportTurboVeg(contextID, request) as never),
   exportUserSpeciesList: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ExportUserSpeciesList', contextID, request),
+    (ImportExportService.ExportUserSpeciesList(contextID, request) as never),
   previewUserSpeciesImport: (contextID, request) =>
-    Call.ByName('main.ImportExportService.PreviewUserSpeciesImport', contextID, request),
+    (ImportExportService.PreviewUserSpeciesImport(contextID, request as never) as never),
   importUserSpeciesList: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ImportUserSpeciesList', contextID, request),
+    (ImportExportService.ImportUserSpeciesList(contextID, request as never) as never),
   exportLongTidyCSV: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ExportLongTidyCSV', contextID, request),
+    (ImportExportService.ExportLongTidyCSV(contextID, request) as never),
   exportWideMatrixCSV: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ExportWideMatrixCSV', contextID, request),
+    (ImportExportService.ExportWideMatrixCSV(contextID, request) as never),
   exportProjectRDS: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ExportProjectRDS', contextID, request),
+    (ImportExportService.ExportProjectRDS(contextID, request) as never),
   exportGeoPackage: (contextID, request) =>
-    Call.ByName('main.ImportExportService.ExportGeoPackage', contextID, request),
+    (ImportExportService.ExportGeoPackage(contextID, request) as never),
 };
 
 const PROJECT_IDENT_RE = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;

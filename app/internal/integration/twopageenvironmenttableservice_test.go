@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func TestTwoPageEnvironmentTableTargetsPairsAndCompleteOriginals(t *testing.T) {

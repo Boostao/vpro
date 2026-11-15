@@ -192,7 +192,7 @@ func TestTwoPageSoilWriteRollbackRefusalsAndRetry(t *testing.T) {
 		"replaced original":    `DELETE FROM Sample_Humus WHERE rowid=-7; INSERT INTO Sample_Humus(rowid,ID,PlotNumber,Horizon) VALUES(-7,0,'108050','replacement')`,
 		"complete peer drift":  `UPDATE Sample_Humus SET Unmapped=X'F0' WHERE rowid=2`,
 		"parent schema":        `ALTER TABLE Sample_Admin ADD COLUMN Generated TEXT GENERATED ALWAYS AS ('drift') VIRTUAL`,
-		"soil identity shadow": `ALTER TABLE Sample_Humus ADD COLUMN oid TEXT`,
+		"soil identity shadow": `ALTER TABLE Sample_Humus RENAME TO Sample_Humus_orig; CREATE TABLE Sample_Humus AS SELECT *, 'x' AS oid FROM Sample_Humus_orig`,
 		"trigger side effect":  `CREATE TRIGGER SoilDrift AFTER UPDATE ON Sample_Humus BEGIN UPDATE Sample_Humus SET Unmapped=X'F0' WHERE rowid=2; END`,
 		"trigger audit error":  `CREATE TRIGGER SoilAuditFailure BEFORE INSERT ON Sample_Audit BEGIN SELECT RAISE(ABORT,'planned soil audit failure'); END`,
 		"history failure": `CREATE TABLE "__VPRO_TwoPageSoilHistory"(RequestID TEXT NOT NULL PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL);

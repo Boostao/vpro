@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import type { CancellableRead } from '../shared/readRequests';
+import { ClassificationService } from '../../bindings/github.com/boostao/vpro/app';
 
 export const EDATOPIC_SMR_ROWS = ['0', '1', '2', '3', '4', '5', '6', '7', '8'] as const;
 export const EDATOPIC_SNR_COLS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
@@ -349,15 +349,15 @@ export interface SynthesisBackendPort {
 
 export const defaultSynthesisBackendPort: SynthesisBackendPort = {
   listSynthesisLumpTables: contextId =>
-    Call.ByName('main.ClassificationService.ListSynthesisLumpTables', contextId),
+    (ClassificationService.ListSynthesisLumpTables(contextId) as never),
   computeSynthesisSnapshot: (contextId, opts) =>
-    Call.ByName('main.ClassificationService.ComputeSynthesisSnapshot', contextId, opts),
+    (ClassificationService.ComputeSynthesisSnapshot(contextId, opts) as never),
   reassignSynthesisPlotUnit: (contextId, req) =>
-    Call.ByName('main.ClassificationService.ReassignSynthesisPlotUnit', contextId, req),
+    (ClassificationService.ReassignSynthesisPlotUnit(contextId, req) as never),
   undoSynthesisReassignment: (contextId, req) =>
-    Call.ByName('main.ClassificationService.UndoSynthesisReassignment', contextId, req),
+    (ClassificationService.UndoSynthesisReassignment(contextId, req) as never),
   exportDiagnosticWorkbook: (contextId, req) =>
-    Call.ByName('main.ClassificationService.ExportDiagnosticWorkbook', contextId, req),
+    (ClassificationService.ExportDiagnosticWorkbook(contextId, req) as never),
 };
 
 export function createDefaultSynthesisOptions(): SynthesisOptions {

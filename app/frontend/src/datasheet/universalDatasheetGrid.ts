@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import type { CancellableRead } from '../shared/readRequests';
+import { DatasheetService } from '../../bindings/github.com/boostao/vpro/app';
 
 export type DatasheetTableKey =
   | 'Env'
@@ -171,13 +171,13 @@ export interface DatasheetBackendPort {
 
 export const defaultDatasheetBackendPort: DatasheetBackendPort = {
   listTables: (contextId: string) =>
-    Call.ByName('main.DatasheetService.ListDatasheetTables', contextId),
+    (DatasheetService.ListDatasheetTables(contextId) as never),
   getPage: (contextId: string, request: DatasheetPageRequest) =>
-    Call.ByName('main.DatasheetService.GetDatasheetPage', contextId, request),
+    (DatasheetService.GetDatasheetPage(contextId, request) as never),
   previewFindReplace: (contextId: string, request: DatasheetFindReplaceRequest) =>
-    Call.ByName('main.DatasheetService.PreviewDatasheetFindReplace', contextId, request),
+    (DatasheetService.PreviewDatasheetFindReplace(contextId, request) as never),
   applyEdits: (contextId: string, request: DatasheetEditRequest) =>
-    Call.ByName('main.DatasheetService.ApplyDatasheetEdits', contextId, request),
+    (DatasheetService.ApplyDatasheetEdits(contextId, request as never) as never),
 };
 
 export interface VirtualWindowSlice {

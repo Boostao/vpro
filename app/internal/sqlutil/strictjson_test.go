@@ -285,4 +285,3 @@ func TestDecodeStrictJSONDeepAtomicityEmbeddedResolutionAndDynamicMaps(t *testin
 		t.Fatal("dynamic map[string]any accepted exact duplicate nested keys")
 	}
 }
-

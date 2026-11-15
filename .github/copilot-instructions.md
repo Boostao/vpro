@@ -9,7 +9,7 @@
 ## Core Monorepo Guardrails
 
 1. **Strict Subsystem Boundaries (`app/` + `r/` + `okf/`):**
-   - **`app/` (`module github.com/boostao/vpro/app`):** Owns all interactive UI (Wails v3 + Go `1.25+` + Svelte 5 + MapLibre GL JS v6/WebGPU + SQLite WAL + vendored C `libmdb`). Preserve the 4-layer acyclic `app/internal/*` DAG (zero sibling imports in Layer 2), strictly **12** registered Wails services in `app/main.go`, `-ts -i` TypeScript interface binding generation (`wails3 generate bindings -ts -i`), and `$state.snapshot(...)` proxy detachment before IPC.
+   - **`app/` (`module github.com/boostao/vpro/app`):** Owns all interactive UI (Wails v3 + Go `1.26+` + Svelte 5 + MapLibre GL JS v6/WebGPU + SQLite WAL + vendored C `libmdb`). Preserve the 4-layer acyclic `app/internal/*` DAG (zero sibling imports in Layer 2), strictly **12** registered Wails services in `app/main.go`, `-ts -i` TypeScript interface binding generation (`wails3 generate bindings -ts -i`), and `$state.snapshot(...)` proxy detachment before IPC.
    - **`r/` (Package `vpro`, `R >= 4.4.0`):** Strictly **headless** scientific analytics & stewardship SDK (`shiny`, `bslib`, `DT`, `rhandsontable`, `shinyTree`, `shinyjs`, `sass`, `leaflet`, and `rappdirs` are **forbidden** in `r/DESCRIPTION`). Default to `RSQLite::SQLITE_RO` / `query_only = ON` so R never blocks a live `app/` WAL session.
    - **`docs-src/`, `site/`, `scripts/`:** Single-source offline `F1` `LMH25 (2023)` help bundle (`scripts/build-docs-src.mjs` $\rightarrow$ `app/resources/help_bundle.json`) and BC Gov Design System static-manifest download portal (`site/build.mjs` $\rightarrow$ `site/dist`). Historical files in `archive/oct2026-parity-ledgers/` never govern scope or feature flags.
 

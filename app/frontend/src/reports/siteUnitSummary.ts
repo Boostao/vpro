@@ -1,4 +1,5 @@
-import type { SiteUnitSummaryOptions, SiteUnitSummaryPreview, SiteUnitSummaryReport, SiteUnitSummaryUnit } from '../../bindings/github.com/boostao/vpro/app';
+import type { SiteUnitSummaryOptions, SiteUnitSummaryPreview } from '../../bindings/github.com/boostao/vpro/app';
+import type { SiteUnitSummaryReport, SiteUnitSummaryUnit } from '../../bindings/github.com/boostao/vpro/app/internal/envreport/models';
 import { completeCell, exactSigned64 } from '../admin/projectMetadataRestore';
 import { validateReportUnitNames } from './reportUnitNames';
 

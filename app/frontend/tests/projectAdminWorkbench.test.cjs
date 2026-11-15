@@ -10,17 +10,19 @@ const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelper
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 
 const wailsCalls = [];
-const mockWailsRuntime = {
-  Call: {
-    ByName(methodName, ...args) {
-      wailsCalls.push({ methodName, args });
-      return Promise.resolve({ ok: true });
-    },
+const makeMockService = (svc) => new Proxy({}, {
+  get: (_, method) => (...args) => {
+    wailsCalls.push({ methodName: `main.${svc}.${String(method)}`, args });
+    return Promise.resolve({ ok: true });
   },
+});
+const mockBindings = {
+  ContextService: makeMockService('ContextService'),
+  ValidationService: makeMockService('ValidationService'),
 };
 
 const workbench = loadTypeScript('projectAdminWorkbench.ts', {
-  '@wailsio/runtime': mockWailsRuntime,
+  '../../bindings/github.com/boostao/vpro/app': mockBindings,
   './qualityEditor': quality,
 });
 

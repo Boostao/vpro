@@ -10,15 +10,16 @@ const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelper
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 
 const wailsCalls = [];
-const siviCreate = loadTypeScript('siviParentCreate.ts', {
-  '@wailsio/runtime': {
-    Call: {
-      ByName(methodName, ...args) {
-        wailsCalls.push({ methodName, args });
-        return Promise.resolve([]);
-      },
+const bindingsStub = new Proxy({}, {
+  get: (_t, service) => new Proxy({}, {
+    get: (_s, method) => (...args) => {
+      wailsCalls.push({ methodName: `main.${String(service)}.${String(method)}`, args });
+      return Promise.resolve([]);
     },
-  },
+  }),
+});
+const siviCreate = loadTypeScript('siviParentCreate.ts', {
+  '../../bindings/github.com/boostao/vpro/app': bindingsStub,
   './qualityEditor': quality,
 });
 

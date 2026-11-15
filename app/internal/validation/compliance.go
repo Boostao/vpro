@@ -79,15 +79,15 @@ type TaxonomyComplianceFinding struct {
 }
 
 type ComplianceSummaryCounts struct {
-	EnvCodeErrors         int `json:"envCodeErrors"`
-	BoundsErrors          int `json:"boundsErrors"`
-	EnvAdminMismatches    int `json:"envAdminMismatches"`
-	OrphanChildRows       int `json:"orphanChildRows"`
+	EnvCodeErrors          int `json:"envCodeErrors"`
+	BoundsErrors           int `json:"boundsErrors"`
+	EnvAdminMismatches     int `json:"envAdminMismatches"`
+	OrphanChildRows        int `json:"orphanChildRows"`
 	DuplicateSpeciesSplits int `json:"duplicateSpeciesSplits"`
-	UnlistedSpecies       int `json:"unlistedSpecies"`
-	SynonymSpecies        int `json:"synonymSpecies"`
-	UserSpecies           int `json:"userSpecies"`
-	PlotsWithoutVeg       int `json:"plotsWithoutVeg"`
+	UnlistedSpecies        int `json:"unlistedSpecies"`
+	SynonymSpecies         int `json:"synonymSpecies"`
+	UserSpecies            int `json:"userSpecies"`
+	PlotsWithoutVeg        int `json:"plotsWithoutVeg"`
 }
 
 type ComplianceValidationReport struct {

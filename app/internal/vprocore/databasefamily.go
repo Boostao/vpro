@@ -325,5 +325,3 @@ func ReplaceActiveVListsCatalogue(ctx context.Context, s *ContextService, expect
 	s.ProjectReportScopes.Mu.Unlock()
 	return state, nil
 }
-
-

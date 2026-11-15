@@ -251,7 +251,8 @@ func TestTwoPageVegetationSpeciesReferencesPhysicalSchemaRefusals(t *testing.T) 
 				case "missing-column":
 					query = `ALTER TABLE ` + table + ` RENAME COLUMN ScientificName TO WrongName`
 				case "rowid", "_rowid_", "oid":
-					query = `ALTER TABLE ` + table + ` ADD COLUMN ` + vprocore.QuoteHeaderIdentifier(drift) + ` INTEGER`
+					orig := vprocore.QuoteHeaderIdentifier(strings.Trim(table, `"`) + "_orig")
+					query = `ALTER TABLE ` + table + ` RENAME TO ` + orig + `; CREATE TABLE ` + table + ` AS SELECT *, 99 AS ` + vprocore.QuoteHeaderIdentifier(drift) + ` FROM ` + orig
 				case "generated":
 					query = `ALTER TABLE ` + table + ` ADD COLUMN Synthetic TEXT GENERATED ALWAYS AS ('fake') VIRTUAL`
 				}

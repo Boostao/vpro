@@ -1,4 +1,4 @@
-import type { ScopedPlotLookupResult } from '../../bindings/github.com/boostao/vpro/app';
+import type { ScopedPlotLookupResult } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 
 export function plotLookupInputError(value: string): string | null {

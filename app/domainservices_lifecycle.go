@@ -99,9 +99,19 @@ func newStartupServiceWithInitialActivation(dataDir, configDir string, activate 
 }
 
 type LifecycleService struct {
-	startup *lifecyclepkg.StartupService
-	close   *lifecyclepkg.CloseService
-	userLog *lifecyclepkg.UserLogService
+	startup    *lifecyclepkg.StartupService
+	close      *lifecyclepkg.CloseService
+	userLog    *lifecyclepkg.UserLogService
+	onShutdown func()
+}
+
+// ServiceShutdown implements application.ServiceShutdown so Wails v3 cleanly
+// tears down tracked SQLite, PMTiles, and cloud-sync resources on exit.
+func (s *LifecycleService) ServiceShutdown() error {
+	if s != nil && s.onShutdown != nil {
+		s.onShutdown()
+	}
+	return nil
 }
 
 func NewLifecycleService(startup *lifecyclepkg.StartupService, closeSvc *lifecyclepkg.CloseService, userLog *lifecyclepkg.UserLogService) *LifecycleService {

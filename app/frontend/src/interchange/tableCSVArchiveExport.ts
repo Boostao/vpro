@@ -1,11 +1,9 @@
-import type { TableCSVArchiveReview, TableCSVArchiveOutcome } from '../../bindings/github.com/boostao/vpro/app';
+import { ImportExportService, type TableCSVArchiveReview, type TableCSVArchiveOutcome } from '../../bindings/github.com/boostao/vpro/app';
 import { coreTableSuffixes, validateProjectTableCSVReview, type ValidatedProjectTableCSVReview } from './projectTableCSV';
 import { wellFormedUTF16 } from '../entry/qualityEditor';
-import { Dialogs } from '@wailsio/runtime';
 
 export function chooseTableCSVArchiveFile(): Promise<string> {
-  return Dialogs.SaveFile({ Title: 'Select project table CSV archive destination',
-    Filename: 'project-tables.zip', Filters: [{ DisplayName: 'Project table CSV archive (.zip)', Pattern: '*.zip' }] });
+  return ImportExportService.ChooseTableCSVArchiveFile();
 }
 
 export interface TableCSVArchiveOwner { contextId: string; project: string; projectPath: string }

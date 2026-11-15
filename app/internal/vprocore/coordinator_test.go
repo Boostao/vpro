@@ -1,14 +1,27 @@
 package vprocore
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOfflineDuckDBSQLiteCoordinator(t *testing.T) {
+	t.Cleanup(func() {
+		runtime.GC()
+		time.Sleep(10 * time.Millisecond)
+		if prof := pprof.Lookup("goroutineleak"); prof != nil && prof.Count() > 0 {
+			var buf bytes.Buffer
+			_ = prof.WriteTo(&buf, 2)
+			t.Fatalf("detected %d leaked goroutine(s):\n%s", prof.Count(), buf.String())
+		}
+	})
 	root := filepath.Join(t.TempDir(), "data'with-quote")
 	if _, err := NewProjectService(root); err != nil {
 		t.Fatal(err)

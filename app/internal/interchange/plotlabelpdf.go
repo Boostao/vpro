@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/go-pdf/fpdf"
+	"codeberg.org/go-pdf/fpdf"
 	"golang.org/x/image/font/sfnt"
 )
 

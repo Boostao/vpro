@@ -1,5 +1,5 @@
-import { Call } from '@wailsio/runtime';
 import type { CancellableRead } from '../shared/readRequests';
+import { ClassificationService } from '../../bindings/github.com/boostao/vpro/app';
 
 export type ExplorerMode = 'su_tree' | 'hierarchy_tree' | 'hierarchy_flat';
 
@@ -346,37 +346,37 @@ export interface ClassificationBackendPort {
 
 export const defaultClassificationBackendPort: ClassificationBackendPort = {
   createSUTable: (contextId, req) =>
-    Call.ByName('main.ClassificationService.CreateSUTable', contextId, req),
+    (ClassificationService.CreateSUTable(contextId, req) as never),
   saveSUTableAs: (contextId, req) =>
-    Call.ByName('main.ClassificationService.SaveSUTableAs', contextId, req),
+    (ClassificationService.SaveSUTableAs(contextId, req) as never),
   getSUPlotTree: (contextId, filterText) =>
-    Call.ByName('main.ClassificationService.GetSUPlotTree', contextId, filterText),
+    (ClassificationService.GetSUPlotTree(contextId, filterText) as never),
   getPlotInspectorSummary: (contextId, plotNumber) =>
-    Call.ByName('main.ClassificationService.GetPlotInspectorSummary', contextId, plotNumber),
+    (ClassificationService.GetPlotInspectorSummary(contextId, plotNumber) as never),
   searchBECUnitPicker: (contextId, req) =>
-    Call.ByName('main.ClassificationService.SearchBECUnitPicker', contextId, req),
+    (ClassificationService.SearchBECUnitPicker(contextId, req) as never),
   assignPlotsToSiteUnit: (contextId, req) =>
-    Call.ByName('main.ClassificationService.AssignPlotsToSiteUnit', contextId, req),
+    (ClassificationService.AssignPlotsToSiteUnit(contextId, req) as never),
   undoSUAssignment: (contextId, historyId) =>
-    Call.ByName('main.ClassificationService.UndoSUAssignment', contextId, historyId),
+    (ClassificationService.UndoSUAssignment(contextId, historyId) as never),
   createSUFromEnvFields: (contextId, req) =>
-    Call.ByName('main.ClassificationService.CreateSUFromEnvFields', contextId, req),
+    (ClassificationService.CreateSUFromEnvFields(contextId, req) as never),
   getHierarchyExplorer: contextId =>
-    Call.ByName('main.ClassificationService.GetHierarchyExplorer', contextId),
+    (ClassificationService.GetHierarchyExplorer(contextId) as never),
   createHierarchyTable: (contextId, req) =>
-    Call.ByName('main.ClassificationService.CreateHierarchyTable', contextId, req),
+    (ClassificationService.CreateHierarchyTable(contextId, req) as never),
   addHierarchyNode: (contextId, req) =>
-    Call.ByName('main.ClassificationService.AddHierarchyNode', contextId, req),
+    (ClassificationService.AddHierarchyNode(contextId, req) as never),
   renameHierarchyNode: (contextId, req) =>
-    Call.ByName('main.ClassificationService.RenameHierarchyNode', contextId, req),
+    (ClassificationService.RenameHierarchyNode(contextId, req) as never),
   reparentHierarchyNode: (contextId, req) =>
-    Call.ByName('main.ClassificationService.ReparentHierarchyNode', contextId, req),
+    (ClassificationService.ReparentHierarchyNode(contextId, req) as never),
   toggleHierarchyBreakpoint: (contextId, nodeId) =>
-    Call.ByName('main.ClassificationService.ToggleHierarchyBreakpoint', contextId, nodeId),
+    (ClassificationService.ToggleHierarchyBreakpoint(contextId, nodeId) as never),
   deleteHierarchyNode: (contextId, req) =>
-    Call.ByName('main.ClassificationService.DeleteHierarchyNode', contextId, req),
+    (ClassificationService.DeleteHierarchyNode(contextId, req) as never),
   saveFlatHierarchyRows: (contextId, req) =>
-    Call.ByName('main.ClassificationService.SaveFlatHierarchyRows', contextId, req),
+    (ClassificationService.SaveFlatHierarchyRows(contextId, req) as never),
 };
 
 const BEC_UNIT_MASK_REGEX = /^[A-Z]{2,4}[a-z]{1,3}[0-9a-z]{0,3}\/[A-Za-z0-9.\-]{1,12}$/;

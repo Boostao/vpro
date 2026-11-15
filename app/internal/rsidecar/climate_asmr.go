@@ -112,24 +112,24 @@ type EdatopicGridMatrix struct {
 
 // DualUnitEdatopicSummary pairs Relative (rSMR x rSNR) and Actual (aSMR x rSNR) grids for a BGC or SiteUnit.
 type DualUnitEdatopicSummary struct {
-	GroupKey      string             `json:"groupKey"`
-	BGC           string             `json:"bgc"`
-	SiteUnit      string             `json:"siteUnit"`
-	PlotCount     int                `json:"plotCount"`
-	MeanMAT       float64            `json:"meanMat"`
-	MeanMAP       float64            `json:"meanMap"`
-	MeanCMD       float64            `json:"meanCmd"`
-	MeanASMR      *float64           `json:"meanAsmr,omitempty"`
-	MeanShift     *float64           `json:"meanShift,omitempty"` // mean(aSMR - rSMR)
-	RelativeGrid  EdatopicGridMatrix `json:"relativeGrid"`
-	ActualGrid    EdatopicGridMatrix `json:"actualGrid"`
+	GroupKey     string             `json:"groupKey"`
+	BGC          string             `json:"bgc"`
+	SiteUnit     string             `json:"siteUnit"`
+	PlotCount    int                `json:"plotCount"`
+	MeanMAT      float64            `json:"meanMat"`
+	MeanMAP      float64            `json:"meanMap"`
+	MeanCMD      float64            `json:"meanCmd"`
+	MeanASMR     *float64           `json:"meanAsmr,omitempty"`
+	MeanShift    *float64           `json:"meanShift,omitempty"` // mean(aSMR - rSMR)
+	RelativeGrid EdatopicGridMatrix `json:"relativeGrid"`
+	ActualGrid   EdatopicGridMatrix `json:"actualGrid"`
 }
 
 // ClimateEdatopicRequest configures batch __VPRO_PlotClimate caching and CMD -> aSMR dual edatopic computation.
 type ClimateEdatopicRequest struct {
-	RefPeriod         string   `json:"refPeriod"`   // "1961_1990" (default) | "1991_2020"
-	GroupBy           string   `json:"groupBy"`     // "bgc" | "site_unit" (default "site_unit" when SU active else "bgc")
-	BGCFilter         string   `json:"bgcFilter"`   // Optional BGC filter
+	RefPeriod         string   `json:"refPeriod"` // "1961_1990" (default) | "1991_2020"
+	GroupBy           string   `json:"groupBy"`   // "bgc" | "site_unit" (default "site_unit" when SU active else "bgc")
+	BGCFilter         string   `json:"bgcFilter"` // Optional BGC filter
 	SiteUnitFilter    string   `json:"siteUnitFilter"`
 	UseActiveSU       bool     `json:"useActiveSu"`
 	PlotNumbers       []string `json:"plotNumbers,omitempty"`
