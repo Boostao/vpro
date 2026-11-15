@@ -47,11 +47,11 @@ func siviCombinedFixtureEdits(heights []sourceform.SiviHeightEdit, extended bool
 	}
 	row := heights[0].RowID
 	return []sourceform.SiviHeightEdit{
-		{row, form, "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(100)},
-		{row, form, "Cover1", vprotest.SiviReal(0), vprocore.ProjectMetadataCell{Storage: "null"}},
-		{row, form, "HeightB", vprotest.MetadataText("before"), vprotest.MetadataText("")},
-		{row, "SubVegC-SIVI", "Cover6", vprotest.SiviReal(0), vprocore.ProjectMetadataCell{Storage: "null"}},
-		{row, "SubVegC-SIVI", "Height6", vprotest.SiviReal(-3), vprotest.SiviReal(100)},
+		{RowID: row, Form: form, Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(100)},
+		{RowID: row, Form: form, Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprocore.ProjectMetadataCell{Storage: "null"}},
+		{RowID: row, Form: form, Column: "HeightB", Expected: vprotest.MetadataText("before"), Value: vprotest.MetadataText("")},
+		{RowID: row, Form: "SubVegC-SIVI", Column: "Cover6", Expected: vprotest.SiviReal(0), Value: vprocore.ProjectMetadataCell{Storage: "null"}},
+		{RowID: row, Form: "SubVegC-SIVI", Column: "Height6", Expected: vprotest.SiviReal(-3), Value: vprotest.SiviReal(100)},
 	}
 }
 
@@ -221,9 +221,9 @@ func TestSIVICombinedServiceAuditStrengthsAndNullableHeightB(t *testing.T) {
 			contexts, state, db, original, heights := sftest.SiviWriteFixture(t, strength%2 == 0, strength)
 			service := siviCombinedServiceFixture(t, contexts)
 			edits := []sourceform.SiviHeightEdit{
-				{heights[0].RowID, "SubVegA-SIVI_BC", "HeightB", vprotest.MetadataText("before"), vprocore.ProjectMetadataCell{Storage: "null"}},
-				{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)},
-				{heights[0].RowID, "SubVegC-SIVI", "Height6", vprotest.SiviReal(-3), vprotest.SiviReal(100)},
+				{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "HeightB", Expected: vprotest.MetadataText("before"), Value: vprocore.ProjectMetadataCell{Storage: "null"}},
+				{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)},
+				{RowID: heights[0].RowID, Form: "SubVegC-SIVI", Column: "Height6", Expected: vprotest.SiviReal(-3), Value: vprotest.SiviReal(100)},
 			}
 			saved, err := service.SaveReviewed(context.Background(), state.ContextID, "108050", false, siviCombinedRequestJSON(t, original, edits))
 			if err != nil || saved == nil || saved.ChangedCells != 3 {
@@ -292,8 +292,8 @@ func TestSIVICombinedServiceAtomicRollbackCollisionNoopAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	noops := []sourceform.SiviHeightEdit{
-		{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(100), vprotest.SiviReal(100)},
-		{heights[0].RowID, "SubVegA-SIVI_BC", "HeightB", vprotest.MetadataText(strings.Repeat("x", 256)), vprotest.MetadataText(strings.Repeat("x", 256))},
+		{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(100), Value: vprotest.SiviReal(100)},
+		{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "HeightB", Expected: vprotest.MetadataText(strings.Repeat("x", 256)), Value: vprotest.MetadataText(strings.Repeat("x", 256))},
 	}
 	before = vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	result, err := service.SaveReviewed(context.Background(), state.ContextID, "108050", false, siviCombinedRequestJSON(t, historical, noops))

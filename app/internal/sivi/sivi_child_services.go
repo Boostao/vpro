@@ -55,7 +55,7 @@ func collectedSIVIDrafts(ctx context.Context, edits []SIVICollectedEdit) ([]sour
 				return nil, fmt.Errorf("SIVI Collected derived value: %w", err)
 			}
 		}
-		drafts[i] = sourceform.SiviHeightEdit{edit.RowID, edit.Form, "Collected", vprocore.CloneSiteUnitCell(edit.Expected), value}
+		drafts[i] = sourceform.SiviHeightEdit{RowID: edit.RowID, Form: edit.Form, Column: "Collected", Expected: vprocore.CloneSiteUnitCell(edit.Expected), Value: value}
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -303,7 +303,7 @@ func (s *SIVICombinedService) SaveReviewed(ctx context.Context, contextID, plot 
 	}
 	edits := make([]sourceform.SiviHeightEdit, len(request.Edits))
 	for i, edit := range request.Edits {
-		edits[i] = sourceform.SiviHeightEdit{edit.RowID, edit.Form, edit.Column, edit.Expected, edit.Value}
+		edits[i] = sourceform.SiviHeightEdit{RowID: edit.RowID, Form: edit.Form, Column: edit.Column, Expected: edit.Expected, Value: edit.Value}
 	}
 	if err := validateSIVINewCoverEdits(edits); err != nil {
 		return nil, err
@@ -415,7 +415,7 @@ func (s *SIVICoverService) SaveReviewed(ctx context.Context, contextID, plot str
 	}
 	edits := make([]sourceform.SiviHeightEdit, len(request.Edits))
 	for i, edit := range request.Edits {
-		edits[i] = sourceform.SiviHeightEdit{edit.RowID, edit.Form, edit.Column, edit.Expected, edit.Value}
+		edits[i] = sourceform.SiviHeightEdit{RowID: edit.RowID, Form: edit.Form, Column: edit.Column, Expected: edit.Expected, Value: edit.Value}
 	}
 	if err := validateSIVINewCoverEdits(edits); err != nil {
 		return nil, err

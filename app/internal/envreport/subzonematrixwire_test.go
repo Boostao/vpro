@@ -1,6 +1,7 @@
 package envreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -11,7 +12,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -86,7 +86,7 @@ func TestSubzoneMatrixDesktopWire(t *testing.T) {
 	}
 	_ = encoded
 	path := filepath.Join("frontend", "tests", "fixtures", "subzoneMatrixWire.json")
-	persisted, err := os.ReadFile(path)
+	persisted, err := sqlutil.ReadWireFixture(path)
 	if err != nil {
 		t.Fatal(err)
 	}

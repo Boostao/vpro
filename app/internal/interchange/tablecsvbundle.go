@@ -56,7 +56,7 @@ func encodeTableCSVBundleMembers(ctx context.Context, csv, manifest []byte) ([]b
 		if err != nil {
 			return nil, fmt.Errorf("table CSV bundle member %s: %w", member.name, err)
 		}
-		if _, err := io.Copy(destination, tableCSVBundleReader{ctx, bytes.NewReader(member.data)}); err != nil {
+		if _, err := io.Copy(destination, tableCSVBundleReader{Ctx: ctx, Source: bytes.NewReader(member.data)}); err != nil {
 			return nil, fmt.Errorf("table CSV bundle member %s: %w", member.name, err)
 		}
 	}
@@ -138,7 +138,7 @@ func decodeTableCSVBundleMembers(ctx context.Context, encoded []byte, byteBudget
 			return zero, fmt.Errorf("table CSV bundle member %s open: %w", name, err)
 		}
 		// File.Open bounds Store reads to the declared size and verifies CRC at EOF.
-		data, readErr := io.ReadAll(tableCSVBundleReader{ctx, source})
+		data, readErr := io.ReadAll(tableCSVBundleReader{Ctx: ctx, Source: source})
 		closeErr := source.Close()
 		if readErr != nil {
 			return zero, fmt.Errorf("table CSV bundle member %s read: %w", name, readErr)
