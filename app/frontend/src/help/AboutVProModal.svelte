@@ -154,7 +154,7 @@
           {#if about.buildMode === 'alpha'}
             <section
               data-about-alpha-callout
-              class="space-y-1.5 rounded border border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-amber-50/60 p-3 text-xs text-[#313132]"
+              class="space-y-1.5 rounded border border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-[#FEF6E0] p-3 text-xs text-[#313132]"
             >
               <div class="font-bold text-[#003366]">Alpha Preview — Client Evaluation Build (v{about.appVersion})</div>
               <p class="leading-relaxed">
@@ -162,11 +162,11 @@
                 Keep backup copies of archival project files before running bulk imports or merges, and report classification or
                 workflow issues via
                 <a
-                  href="https://github.com/Boostao/vpro_wails/issues"
+                  href="https://github.com/Boostao/vpro/issues"
                   target="_blank"
                   rel="noreferrer"
-                  class="font-semibold text-[#003366] underline"
-                >github.com/Boostao/vpro_wails/issues</a>.
+                  class="font-semibold text-[#1A5A96] underline"
+                >github.com/Boostao/vpro/issues</a>.
               </p>
             </section>
           {/if}
@@ -208,7 +208,7 @@
               <div class="rounded border border-slate-200 bg-white p-3">
                 <div class="flex items-center justify-between gap-2">
                   <span class="font-semibold text-[#003366]">BECdb Master Classification</span>
-                  <span class="rounded bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-[#2E8540]">
+                  <span class="rounded bg-[#EBF5ED] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#2E8540]">
                     {about.libraryStamps.becVersion}
                   </span>
                 </div>
@@ -221,7 +221,7 @@
               <div class="rounded border border-slate-200 bg-white p-3">
                 <div class="flex items-center justify-between gap-2">
                   <span class="font-semibold text-[#003366]">B.C. Master Plant Taxonomy (USysAllSpecs)</span>
-                  <span class="rounded bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-[#2E8540]">
+                  <span class="rounded bg-[#EBF5ED] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#2E8540]">
                     {about.libraryStamps.taxonomyVersion}
                   </span>
                 </div>
@@ -234,7 +234,7 @@
               <div class="rounded border border-slate-200 bg-white p-3">
                 <div class="flex items-center justify-between gap-2">
                   <span class="font-semibold text-[#003366]">Field Manual Specification</span>
-                  <span class="rounded bg-emerald-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-[#2E8540]">
+                  <span class="rounded bg-[#EBF5ED] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#2E8540]">
                     {about.libraryStamps.lmh25Edition}
                   </span>
                 </div>

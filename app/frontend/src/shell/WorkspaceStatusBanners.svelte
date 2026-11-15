@@ -72,9 +72,9 @@
     </section>
   {/if}
   {#if resetSampleNotice}
-    <div role="status" data-reset-sample-notice class="mb-4 flex items-center justify-between gap-2 rounded border border-[#2E8540] bg-emerald-50 px-3.5 py-2 text-xs text-[#1E5128]">
+    <div role="status" data-reset-sample-notice class="mb-4 flex items-center justify-between gap-2 rounded border border-[#2E8540] bg-[#EBF5ED] px-3.5 py-2 text-xs text-[#1E5128]">
       <span>{resetSampleNotice}</span>
-      <button type="button" class="rounded border border-emerald-700/30 bg-white px-2 py-0.5 text-[11px]" onclick={ondismissresetnotice}>Dismiss</button>
+      <button type="button" class="rounded border border-[#2E8540]/40 bg-white px-2 py-0.5 text-[11px] text-[#1E5128] hover:bg-[#F2F2F2]" onclick={ondismissresetnotice}>Dismiss</button>
     </div>
   {/if}
   {#if diagnostics.length > 0}

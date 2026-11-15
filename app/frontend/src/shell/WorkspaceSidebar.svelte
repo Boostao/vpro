@@ -256,8 +256,8 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
       <FolderOpen size={16} strokeWidth={1.8} />
     </button>
   </div>
-  {#if revealMessage}<p role="status" class="px-3 py-1 text-xs text-emerald-800 break-words">{revealMessage}</p>{/if}
-  {#if revealError}<p role="alert" class="px-3 py-1 text-xs text-red-800 break-words">{revealError}</p>{/if}
+  {#if revealMessage}<p role="status" class="px-3 py-1 text-xs text-[#1E5128] break-words">{revealMessage}</p>{/if}
+  {#if revealError}<p role="alert" class="px-3 py-1 text-xs text-[#D8292F] break-words">{revealError}</p>{/if}
   <nav aria-label="Project list">
     {#each $projectState?.projects ?? [] as project ((project.path ?? project.file) + project.name)}
       <button class:active={project.name === $projectState?.activeProject && project.path === $projectState?.projectPath} disabled={!project.compatible || busy || editorBusy || companionPanelBusy || transitionWorking} title={project.compatible ? project.path : `${project.version} is not a complete VP08 project`} onclick={() => chooseProject(project)}>
@@ -291,8 +291,8 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
       <summary>Attach external SQLite project</summary>
       <form onsubmit={attachExternalProject}>
         <button type="button" id="browse-external-sqlite" disabled={busy || editorBusy || companionPanelBusy || transitionWorking || !$projectState?.contextId} onclick={() => void browseExternalSQLiteProject()}>Browse SQLite .db file…</button>
-        {#if externalPickMessage}<p role="status" class="text-emerald-800 break-words">{externalPickMessage}</p>{/if}
-        {#if externalPickError}<p role="alert" class="text-red-800 break-words">{externalPickError}</p>{/if}
+        {#if externalPickMessage}<p role="status" class="text-[#1E5128] break-words">{externalPickMessage}</p>{/if}
+        {#if externalPickError}<p role="alert" class="text-[#D8292F] break-words">{externalPickError}</p>{/if}
         {#if externalDiscoveredProjects.length > 1}
           <label for="external-project-select">DISCOVERED PROJECTS IN FILE</label>
           <select id="external-project-select" value={externalProject} onchange={(e) => { externalProject = (e.currentTarget as HTMLSelectElement).value; }} disabled={busy || editorBusy || companionPanelBusy || transitionWorking}>
@@ -346,11 +346,25 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
             {accessWorking ? 'Converting & importing…' : 'Convert & import to VPRO DB'}
           </button>
         {/if}
-        {#if accessError}<p role="alert" class="text-red-800 break-words">{accessError}</p>{/if}
+        {#if accessError}<p role="alert" class="text-[#D8292F] break-words">{accessError}</p>{/if}
         {#if accessResult}
-          <p role="status" class="text-emerald-800 break-words">
-            Imported {accessResult.targetProject} ({accessResult.plotCount} plots, {accessResult.conversionMode}) into {accessResult.destinationPath}.
-          </p>
+          {@const overflowQuarantined = (accessResult as { quarantinedOverflowRows?: number }).quarantinedOverflowRows ?? 0}
+          <div role="status" class="grid gap-1 text-xs text-[#1E5128] break-words">
+            <p class="m-0">
+              Imported {accessResult.targetProject} ({accessResult.plotCount} plots, {accessResult.conversionMode}) into {accessResult.destinationPath}.
+            </p>
+            {#if (accessResult.quarantinedMalformedRows ?? 0) > 0 || (accessResult.quarantinedOrphanRows ?? 0) > 0 || overflowQuarantined > 0}
+              <p
+                role="alert"
+                data-access-quarantine-summary
+                class="m-0 rounded border border-[#FCBA19] bg-[#FEF6E0] px-2 py-1 text-[11px] font-medium text-[#313132]"
+              >
+                Access import quarantined rows into <code class="font-mono">__VPRO_ImportQuarantine</code>:
+                {accessResult.quarantinedMalformedRows ?? 0} malformed,
+                {accessResult.quarantinedOrphanRows ?? 0} orphan{overflowQuarantined > 0 ? `, ${overflowQuarantined} overflow` : ''}.
+              </p>
+            {/if}
+          </div>
         {/if}
       </form>
     </details>

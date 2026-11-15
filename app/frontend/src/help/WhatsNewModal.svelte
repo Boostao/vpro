@@ -156,7 +156,7 @@
             {#each status.entries as entry, index (entry.version)}
               <article
                 data-whats-new-version={entry.version}
-                class="space-y-2 rounded border p-3.5 {isEntryUnread(index) ? 'border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-amber-50/20' : 'border-slate-200 bg-white'}"
+                class="space-y-2 rounded border p-3.5 {isEntryUnread(index) ? 'border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-[#FEF6E0]' : 'border-slate-200 bg-white'}"
               >
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <div class="flex items-center gap-2">

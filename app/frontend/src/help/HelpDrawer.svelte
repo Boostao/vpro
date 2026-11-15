@@ -513,7 +513,7 @@
                   </div>
 
                   {#if keyEval.completed && keyEval.conclusion}
-                    <div role="status" data-decision-key-conclusion class="rounded border border-[#2E8540] bg-emerald-50 p-3 text-[#1E5128]">
+                    <div role="status" data-decision-key-conclusion class="rounded border border-[#2E8540] bg-[#EBF5ED] p-3 text-[#1E5128]">
                       <div class="flex items-center gap-1.5 text-[11px] font-bold uppercase">
                         <CheckCircle2 size={14} /> Key Determination Reached
                       </div>

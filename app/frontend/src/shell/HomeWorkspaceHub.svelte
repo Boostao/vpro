@@ -130,7 +130,7 @@
     <section
       data-home-tier-banner="alpha"
       aria-label="Alpha Preview Evaluation Notice"
-      class="rounded border border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-amber-50/60 p-3.5 text-xs text-[#313132]"
+      class="rounded border border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-[#FEF6E0] p-3.5 text-xs text-[#313132]"
     >
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2 font-bold text-[#003366]">
@@ -138,10 +138,10 @@
           <span>VPro Alpha Preview{appVersion ? ` (v${appVersion})` : ''} — B.C. Ministry of Forests BEC Evaluation</span>
         </div>
         <a
-          href="https://github.com/Boostao/vpro_wails/issues"
+          href="https://github.com/Boostao/vpro/issues"
           target="_blank"
           rel="noreferrer"
-          class="rounded border border-[#003366] bg-white px-2.5 py-1 font-semibold text-[#003366] hover:bg-slate-50"
+          class="rounded border border-[#003366] bg-white px-2.5 py-1 font-semibold text-[#1A5A96] hover:bg-[#EBF1F6]"
         >
           Report Feedback / Issue
         </a>

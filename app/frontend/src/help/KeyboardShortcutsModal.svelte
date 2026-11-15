@@ -120,7 +120,7 @@
           </div>
         {/if}
 
-        <div class="flex items-center justify-between border-t border-slate-200 pt-3 text-[11px] text-slate-600">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-[11px] text-slate-600">
           <span>Tip: Press <kbd class="rounded border border-slate-300 bg-[#F2F2F2] px-1.5 py-0.5 font-mono">F1</kbd> inside any FS882, Two-Page, Soil, or SIVI field to inspect its LMH25 rule.</span>
           <button
             type="button"

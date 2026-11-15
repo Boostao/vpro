@@ -9,7 +9,7 @@
     error: string;
     onrespond: (decision: CloseDecision) => Promise<void>;
     purpose?: 'close' | 'context';
-    editorLabel?: 'FS882' | 'SIVI / FS1333';
+    editorLabel?: 'FS882' | 'FS882 (2-Page)' | 'SIVI / FS1333';
   } = $props();
   let dialog: HTMLDialogElement;
 
@@ -35,13 +35,13 @@
 </dialog>
 
 <style>
-  dialog { max-width: 38rem; padding: 1.5rem; border: 1px solid #a8a29e; border-radius: 0.5rem; }
-  dialog::backdrop { background: #0007; }
-  h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.6rem; }
+  dialog { max-width: 38rem; padding: 1.5rem; border: 1px solid #D8D8D8; border-top: 3px solid #FCBA19; border-radius: 0.5rem; color: #313132; }
+  dialog::backdrop { background: rgba(0, 34, 68, 0.45); }
+  h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.6rem; color: #003366; }
   p { margin: 0.5rem 0; }
   .actions { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1rem; }
-  button { padding: 0.45rem 0.7rem; border: 1px solid #a8a29e; border-radius: 0.3rem; background: #fff; }
+  button { padding: 0.45rem 0.7rem; border: 1px solid #9F9F9F; border-radius: 0.3rem; background: #fff; color: #313132; }
   button:disabled { opacity: 0.5; }
-  button:focus-visible { outline: 3px solid #047857; outline-offset: 2px; }
-  [role="alert"] { color: #991b1b; }
+  button:focus-visible { outline: 3px solid #FCBA19; outline-offset: 2px; }
+  [role="alert"] { color: #D8292F; }
 </style>

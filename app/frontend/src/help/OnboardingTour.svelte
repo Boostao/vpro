@@ -6,6 +6,7 @@
   let {
     open = false,
     initialTourId = null,
+    initialTours = [],
     activeProject = 'Sample',
     helpPort = defaultHelpPort,
     onnavigateview,
@@ -15,6 +16,7 @@
   }: {
     open?: boolean;
     initialTourId?: string | null;
+    initialTours?: HelpTour[];
     activeProject?: string;
     helpPort?: HelpBackendPort;
     onnavigateview: (viewName: string) => void;
@@ -23,15 +25,25 @@
     onclose: () => void;
   } = $props();
 
-  let tours = $state.raw<HelpTour[]>([]);
+  let tours = $state.raw<HelpTour[]>(untrack(() => initialTours));
   let activeTourId = $state<string | null>(untrack(() => initialTourId));
   let stepIndex = $state(0);
   let targetRect = $state<{ top: number; left: number; width: number; height: number } | null>(null);
+  let targetWaiting = $state(false);
+  let viewportWidth = $state(typeof window !== 'undefined' ? window.innerWidth : 1280);
+  let viewportHeight = $state(typeof window !== 'undefined' ? window.innerHeight : 800);
   let loading = $state(false);
   let error = $state('');
   let completedTourTitle = $state('');
 
   let loadGen = 0;
+  let trackGen = 0;
+  let observedEl: Element | null = null;
+  let mutationObserver: MutationObserver | null = null;
+  let resizeObserver: ResizeObserver | null = null;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let rafId = 0;
+  let trackingActive = false;
 
   $effect(() => {
     const requestedTour = initialTourId;
@@ -45,11 +57,199 @@
   });
 
   $effect(() => {
-    if (!open) return;
+    if (!open) {
+      untrack(() => stopTargetTracking());
+      return;
+    }
     untrack(() => {
+      syncViewport();
       void loadTours();
     });
   });
+
+  function syncViewport() {
+    if (typeof window === 'undefined') return;
+    viewportWidth = window.innerWidth;
+    viewportHeight = window.innerHeight;
+  }
+
+  function stopTargetTracking() {
+    trackingActive = false;
+    observedEl = null;
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+      mutationObserver = null;
+    }
+    if (resizeObserver) {
+      resizeObserver.disconnect();
+      resizeObserver = null;
+    }
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    if (rafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('scroll', handleViewportMutation, true);
+      window.removeEventListener('resize', handleViewportMutation);
+    }
+  }
+
+  function handleViewportMutation() {
+    syncViewport();
+    const step = activeTour?.steps[stepIndex];
+    if (!open || !step) return;
+    if (rafId && typeof cancelAnimationFrame === 'function') return;
+    const schedule = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (cb: () => void) => setTimeout(cb, 16) as unknown as number;
+    rafId = schedule(() => {
+      rafId = 0;
+      const current = activeTour?.steps[stepIndex];
+      if (!open || !current) return;
+      measureResolvedElement(current.target, false);
+    });
+  }
+
+  function openAncestorDetails(el: Element): boolean {
+    let changed = false;
+    let node: Element | null = el;
+    while (node) {
+      if (node.tagName === 'DETAILS' && !(node as HTMLDetailsElement).open) {
+        (node as HTMLDetailsElement).open = true;
+        changed = true;
+      }
+      node = node.parentElement;
+    }
+    return changed;
+  }
+
+  function measureResolvedElement(selector: string, allowScroll: boolean): boolean {
+    if (typeof document === 'undefined' || !selector) {
+      targetRect = null;
+      return false;
+    }
+    try {
+      const el = document.querySelector(selector);
+      if (!el || typeof el.getBoundingClientRect !== 'function') {
+        targetRect = null;
+        return false;
+      }
+      const openedDetails = openAncestorDetails(el);
+      if (el.closest?.('#project-context')) {
+        onensurecontextopen?.();
+      }
+      if (observedEl !== el) {
+        observedEl = el;
+        if (resizeObserver) {
+          resizeObserver.disconnect();
+        } else if (typeof ResizeObserver === 'function') {
+          resizeObserver = new ResizeObserver(() => handleViewportMutation());
+        }
+        resizeObserver?.observe(el);
+      }
+      if (allowScroll && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      }
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || openedDetails) {
+        if (rect.width <= 0 || rect.height <= 0) {
+          targetRect = null;
+          return false;
+        }
+      }
+      const vw = typeof window !== 'undefined' ? window.innerWidth : viewportWidth;
+      const vh = typeof window !== 'undefined' ? window.innerHeight : viewportHeight;
+      const left = Math.max(4, rect.left - 4);
+      const right = Math.min(vw - 4, rect.right + 4);
+      const top = Math.max(4, rect.top - 4);
+      const maxH = Math.max(24, vh - top - 4);
+      targetRect = {
+        top,
+        left,
+        width: Math.max(24, right - left),
+        height: Math.min(rect.height + 8, maxH),
+      };
+      targetWaiting = false;
+      return true;
+    } catch {
+      targetRect = null;
+      return false;
+    }
+  }
+
+  function beginTargetObservation(selector: string, expectedGen: number) {
+    stopTargetTracking();
+    if (typeof document === 'undefined' || !selector) return;
+
+    trackingActive = true;
+    let scrolledOnce = false;
+    let attempts = 0;
+    const maxAttempts = 50; // ~4s bounded retry loop for lazy {@await import} views
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('scroll', handleViewportMutation, { capture: true, passive: true });
+      window.addEventListener('resize', handleViewportMutation, { passive: true });
+    }
+
+    const probe = () => {
+      if (!trackingActive || expectedGen !== trackGen || !open) return;
+      const resolved = measureResolvedElement(selector, !scrolledOnce);
+      if (resolved) {
+        scrolledOnce = true;
+        targetWaiting = false;
+        // Re-sample once on the next animation frame after smooth scroll / details open settles
+        if (attempts < 2 && typeof requestAnimationFrame === 'function') {
+          attempts++;
+          requestAnimationFrame(() => {
+            if (trackingActive && expectedGen === trackGen && open) {
+              measureResolvedElement(selector, false);
+            }
+          });
+        }
+        return;
+      }
+      attempts++;
+      if (attempts >= maxAttempts) {
+        targetWaiting = false;
+        if (mutationObserver) {
+          mutationObserver.disconnect();
+          mutationObserver = null;
+        }
+        return;
+      }
+      targetWaiting = true;
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(probe);
+        } else {
+          probe();
+        }
+      }, 80);
+    };
+
+    if (typeof MutationObserver === 'function' && document.body) {
+      mutationObserver = new MutationObserver(() => {
+        if (!trackingActive || expectedGen !== trackGen || !open) return;
+        const hit = measureResolvedElement(selector, !scrolledOnce);
+        if (hit) {
+          scrolledOnce = true;
+          targetWaiting = false;
+          if (retryTimer !== null) {
+            clearTimeout(retryTimer);
+            retryTimer = null;
+          }
+        }
+      });
+      mutationObserver.observe(document.body, { childList: true, subtree: true, attributes: true });
+    }
+
+    probe();
+  }
 
   async function loadTours() {
     if (tours.length > 0) {
@@ -80,47 +280,91 @@
   const activeTour = $derived(tours.find((t) => t.id === activeTourId) ?? null);
   const activeStep = $derived(activeTour ? activeTour.steps[stepIndex] ?? null : null);
 
+  function boxesOverlap(
+    a: { top: number; left: number; width: number; height: number },
+    b: { top: number; left: number; width: number; height: number },
+    pad = 8
+  ): boolean {
+    return !(
+      a.left + a.width + pad <= b.left ||
+      b.left + b.width + pad <= a.left ||
+      a.top + a.height + pad <= b.top ||
+      b.top + b.height + pad <= a.top
+    );
+  }
+
+  const dialogLayout = $derived.by(() => {
+    const margin = viewportWidth < 640 ? 12 : 20;
+    const cardHeightEst = 270;
+    if (viewportWidth < 640) {
+      const targetBottom = targetRect ? targetRect.top + targetRect.height : 0;
+      const topFlip = !!targetRect && targetRect.top > viewportHeight * 0.45 && targetBottom > viewportHeight - cardHeightEst;
+      return {
+        placement: topFlip ? 'mobile-top' : 'mobile-bottom',
+        style: topFlip
+          ? `top:${margin}px;bottom:auto;left:${margin}px;right:${margin}px;width:auto;max-width:calc(100vw - ${margin * 2}px);`
+          : `bottom:${margin}px;top:auto;left:${margin}px;right:${margin}px;width:auto;max-width:calc(100vw - ${margin * 2}px);`,
+      };
+    }
+
+    const cardW = Math.min(448, Math.max(280, viewportWidth - margin * 2));
+    const candidates: Array<{
+      name: string;
+      box: { top: number; left: number; width: number; height: number };
+      style: string;
+    }> = [
+      {
+        name: 'bottom-right',
+        box: { top: viewportHeight - margin - cardHeightEst, left: viewportWidth - margin - cardW, width: cardW, height: cardHeightEst },
+        style: `right:${margin}px;bottom:${margin}px;left:auto;top:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+      },
+      {
+        name: 'top-right',
+        box: { top: margin + 56, left: viewportWidth - margin - cardW, width: cardW, height: cardHeightEst },
+        style: `right:${margin}px;top:${margin + 56}px;left:auto;bottom:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+      },
+      {
+        name: 'bottom-left',
+        box: { top: viewportHeight - margin - cardHeightEst, left: margin, width: cardW, height: cardHeightEst },
+        style: `left:${margin}px;bottom:${margin}px;right:auto;top:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+      },
+      {
+        name: 'top-left',
+        box: { top: margin + 56, left: margin, width: cardW, height: cardHeightEst },
+        style: `left:${margin}px;top:${margin + 56}px;right:auto;bottom:auto;width:${cardW}px;max-width:calc(100vw - ${margin * 2}px);`,
+      },
+    ];
+
+    if (targetRect) {
+      const clear = candidates.find((c) => !boxesOverlap(c.box, targetRect!));
+      if (clear) {
+        return { placement: clear.name, style: clear.style };
+      }
+    }
+    return { placement: candidates[0].name, style: candidates[0].style };
+  });
+
   async function syncActiveStepSideEffects() {
+    const stepGen = ++trackGen;
     const step = activeTour?.steps[stepIndex];
     if (!step) {
+      stopTargetTracking();
       targetRect = null;
+      targetWaiting = false;
       return;
     }
-    if (step.target === '#project-context') {
+    syncViewport();
+    targetRect = null;
+    targetWaiting = true;
+    if (step.target === '#project-context' || step.target.includes('project-context')) {
       onensurecontextopen?.();
     }
     if (step.view) {
       onnavigateview(step.view);
     }
     await tick();
-    measureSpotlightTarget(step.target);
-  }
-
-  function measureSpotlightTarget(selector: string) {
-    if (typeof document === 'undefined' || !selector) {
-      targetRect = null;
-      return;
-    }
-    try {
-      const el = document.querySelector(selector);
-      if (!el || typeof el.getBoundingClientRect !== 'function') {
-        targetRect = null;
-        return;
-      }
-      const rect = el.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) {
-        targetRect = null;
-        return;
-      }
-      targetRect = {
-        top: Math.max(4, rect.top - 4),
-        left: Math.max(4, rect.left - 4),
-        width: rect.width + 8,
-        height: rect.height + 8,
-      };
-    } catch {
-      targetRect = null;
-    }
+    if (stepGen !== trackGen || !open) return;
+    beginTargetObservation(step.target, stepGen);
   }
 
   async function startTour(tourId: string) {
@@ -142,17 +386,21 @@
       stepIndex += 1;
       await syncActiveStepSideEffects();
     } else {
+      stopTargetTracking();
       completedTourTitle = activeTour.title;
       activeTourId = null;
       stepIndex = 0;
       targetRect = null;
+      targetWaiting = false;
     }
   }
 
   function returnToCatalog() {
+    stopTargetTracking();
     activeTourId = null;
     stepIndex = 0;
     targetRect = null;
+    targetWaiting = false;
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -165,6 +413,8 @@
 
   onDestroy(() => {
     loadGen++;
+    trackGen++;
+    stopTargetTracking();
   });
 </script>
 
@@ -186,11 +436,13 @@
       aria-modal="false"
       aria-labelledby="onboarding-tour-step-title"
       data-onboarding-tour-active={activeTour.id}
-      class="fixed right-5 bottom-5 z-50 w-full max-w-md rounded border border-slate-300 border-t-[4px] border-t-[#FCBA19] bg-white text-[#313132] shadow-2xl"
+      data-tour-placement={dialogLayout.placement}
+      class="fixed z-50 max-sm:inset-x-3 max-sm:bottom-3 rounded border border-[#D8D8D8] border-t-[4px] border-t-[#FCBA19] bg-white text-[#313132] shadow-2xl"
+      style={dialogLayout.style}
     >
       <header class="flex items-center justify-between gap-2 bg-[#003366] px-4 py-2.5 text-white">
         <div class="min-w-0">
-          <div class="font-mono text-[11px] text-[#FCBA19]">
+          <div class="truncate font-mono text-[11px] text-[#FCBA19]">
             {activeTour.title} · Step {stepIndex + 1} of {activeTour.steps.length}
           </div>
         </div>
@@ -198,7 +450,7 @@
           type="button"
           aria-label="Dismiss Guided Tour"
           data-tour-dismiss
-          class="rounded p-1 text-white/90 hover:bg-white/15"
+          class="rounded p-1 text-white/90 hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-[#FCBA19]"
           onclick={onclose}
         >
           <X size={15} />
@@ -213,19 +465,25 @@
       </div>
 
       <div class="space-y-3 p-4 text-xs">
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 id="onboarding-tour-step-title" class="text-sm font-bold text-[#003366]">{activeStep.title}</h3>
-          <span class="rounded bg-[#F2F2F2] px-2 py-0.5 font-mono text-[10px] text-slate-700">
+          <span class="rounded bg-[#F2F2F2] px-2 py-0.5 font-mono text-[10px] text-[#474543]">
             View: {activeStep.view}
           </span>
         </div>
 
         <p class="leading-relaxed text-[#313132]">{activeStep.body}</p>
 
-        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3">
+        {#if targetWaiting && !targetRect}
+          <p role="status" data-tour-target-waiting class="font-mono text-[11px] text-[#1A5A96]">
+            Synchronizing highlight target in view…
+          </p>
+        {/if}
+
+        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-[#D8D8D8] pt-3">
           <button
             type="button"
-            class="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-[#003366] hover:bg-[#F2F2F2]"
+            class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1.5 text-xs font-medium text-[#003366] hover:bg-[#F2F2F2]"
             onclick={returnToCatalog}
           >
             All 4 Tours
@@ -236,7 +494,7 @@
               type="button"
               data-tour-back
               disabled={stepIndex === 0}
-              class="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#313132] hover:bg-[#F2F2F2] disabled:opacity-45"
+              class="inline-flex items-center gap-1 rounded border border-[#D8D8D8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#313132] hover:bg-[#F2F2F2] disabled:opacity-45"
               onclick={() => void previousStep()}
             >
               <ChevronLeft size={14} /> Back
@@ -259,16 +517,16 @@
     </div>
 
   {:else}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" data-onboarding-tour-catalog>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-4" data-onboarding-tour-catalog>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="onboarding-catalog-title"
-        class="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-slate-300 bg-white text-[#313132] shadow-2xl"
+        class="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-[#D8D8D8] bg-white text-[#313132] shadow-2xl"
       >
         <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-3.5 text-white">
           <div class="flex items-center gap-2.5">
-            <Compass size={18} class="text-[#FCBA19]" />
+            <Compass size={18} class="shrink-0 text-[#FCBA19]" />
             <div>
               <div class="font-mono text-[11px] uppercase tracking-wider text-[#FCBA19]">
                 Coming from VPro 64 · Non-Destructive Walkthroughs
@@ -290,16 +548,16 @@
 
         <div class="space-y-4 overflow-y-auto p-5 text-xs">
           {#if error}
-            <p role="alert" class="rounded border border-[#D8292F] bg-red-50 p-2.5 text-[#D8292F]">{error}</p>
+            <p role="alert" class="rounded border border-[#D8292F] bg-[#FBEAEA] p-2.5 text-[#D8292F]">{error}</p>
           {/if}
           {#if completedTourTitle}
-            <div role="status" class="flex items-center gap-2 rounded border border-[#2E8540] bg-emerald-50 p-3 text-[#1E5128]">
+            <div role="status" class="flex items-center gap-2 rounded border border-[#2E8540] bg-[#EBF5ED] p-3 text-[#1E5128]">
               <CheckCircle2 size={16} />
               <span>Completed <strong>{completedTourTitle}</strong>. Choose another walkthrough below or close to continue working.</span>
             </div>
           {/if}
 
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 bg-[#F2F2F2] p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-3">
             <div class="flex items-center gap-2">
               <ShieldCheck size={16} class="shrink-0 text-[#2E8540]" />
               <span>
@@ -311,7 +569,7 @@
               <button
                 type="button"
                 data-tour-switch-sample
-                class="inline-flex items-center gap-1 rounded border border-[#003366] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#003366] hover:bg-slate-50"
+                class="inline-flex items-center gap-1 rounded border border-[#003366] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#003366] hover:bg-[#EBF1F6]"
                 onclick={() => void onresetsample()}
               >
                 <RotateCcw size={12} /> Switch to Sample.db
@@ -320,23 +578,23 @@
           </div>
 
           {#if loading}
-            <p role="status" class="text-slate-600">Loading guided tour definitions...</p>
+            <p role="status" class="text-[#474543]">Loading guided tour definitions...</p>
           {:else}
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {#each tours as tour (tour.id)}
                 <article
                   data-tour-card={tour.id}
-                  class="flex flex-col justify-between rounded border border-slate-300 border-t-[3px] border-t-[#003366] bg-white p-3.5"
+                  class="flex flex-col justify-between rounded border border-[#D8D8D8] border-t-[3px] border-t-[#003366] bg-white p-3.5"
                 >
                   <div class="space-y-1.5">
                     <div class="flex items-center justify-between gap-2">
                       <span class="rounded bg-[#F2F2F2] px-2 py-0.5 font-mono text-[11px] font-semibold text-[#003366]">
                         {tour.duration}
                       </span>
-                      <span class="font-mono text-[11px] text-slate-500">{tour.steps.length} steps</span>
+                      <span class="font-mono text-[11px] text-[#474543]">{tour.steps.length} steps</span>
                     </div>
                     <h3 class="text-sm font-bold text-[#003366]">{tour.title}</h3>
-                    <p class="text-xs leading-relaxed text-slate-700">{tour.description}</p>
+                    <p class="text-xs leading-relaxed text-[#474543]">{tour.description}</p>
                   </div>
 
                   <button

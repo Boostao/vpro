@@ -336,10 +336,11 @@ export function mapColumnToHelpId(
   return null;
 }
 
-export function defaultHelpTopicForView(view: string, entryForm: 'fs882' | 'sivi' = 'fs882'): string {
-  if (view === 'fs882' && entryForm === 'sivi') return 'sivi.plot_type';
+export function defaultHelpTopicForView(view: string, entryForm: 'fs882' | 'sivi' | 'fs882-twopage' = 'fs882'): string {
+  if ((view === 'fs882' || view === 'fs882-twopage') && entryForm === 'sivi') return 'sivi.plot_type';
   switch (view) {
     case 'fs882':
+    case 'fs882-twopage':
       return 'site.moisture_regime';
     case 'datasheet':
       return 'veg.covers';
@@ -374,7 +375,7 @@ export interface HelpInspectableElement {
 export function resolveContextualHelpTarget(
   activeElement: HelpInspectableElement | null | undefined,
   view: string,
-  entryForm: 'fs882' | 'sivi' = 'fs882'
+  entryForm: 'fs882' | 'sivi' | 'fs882-twopage' = 'fs882'
 ): string {
   if (activeElement && typeof activeElement.closest === 'function') {
     const directHolder = activeElement.closest('[data-help-id]');

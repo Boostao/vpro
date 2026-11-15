@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, onDestroy, tick, type Component } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import { VproCloseRequest } from '../bindings/events';
   import { Database } from '@lucide/svelte';
@@ -45,9 +45,48 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   let selected = $state<PlotSummary | null>(null);
   let profileNavigation = $state<ProfileNavigation | null>(null);
   const profileIndex = $derived(profileNavigation?.plots.findIndex(plot => plot.plotNumber === editorPlotNumber) ?? -1);
+  type DiagnosticsDraftContext = {
+    header: Record<string, unknown> | null;
+    humus: Record<string, unknown>[];
+    mineral: Record<string, unknown>[];
+  };
+  type FS882EditorHandle = {
+    getCloseState: () => EditorCloseState;
+    saveForClose: () => Promise<boolean>;
+    canOpenProjectMetadata: () => boolean;
+    openProjectMetadata: () => void;
+    canOpenMetadataInPlace?: () => boolean;
+    applyDiagnosticHumusThickness?: (value: number) => void;
+    applyDiagnosticSMR?: (smrCode: string) => void;
+    applyDiagnosticSNR?: (snrCode: string) => void;
+  };
+  type FS882FormWave3Props = {
+    plotNumber?: string;
+    contextId?: string;
+    entryForm?: 'fs882' | 'sivi' | 'fs882-twopage';
+    onSaved?: (plotNumber: string) => Promise<void> | void;
+    onClosed?: () => void;
+    onBusyChange?: (busy: boolean) => void;
+    onProfileNavigation?: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void> | void;
+    onProfileSUReview?: (proposal: ProjectPlotProfileFilterRequest, origin: string) => Promise<void> | void;
+    onFindPlot?: () => void;
+    onOpenPictureManager?: (plotNumber: string) => void;
+    onDiagnosticsContextChange?: (state: DiagnosticsDraftContext) => void;
+  };
+  type SummaryExclusionState = {
+    rules: unknown[];
+    useHierarchyBreakpoints: boolean;
+    breakpointOptions: unknown;
+  };
+
   let editorPlotNumber = $state<string | undefined>(undefined);
-  let editorEntryForm = $state<'fs882' | 'sivi'>('fs882');
-  const editorLabel = $derived(editorEntryForm === 'sivi' ? 'SIVI / FS1333' : 'FS882');
+  let editorEntryForm = $state<'fs882' | 'sivi' | 'fs882-twopage'>('fs882');
+  const editorLabel = $derived<'FS882' | 'FS882 (2-Page)' | 'SIVI / FS1333'>(
+    editorEntryForm === 'sivi' ? 'SIVI / FS1333' : editorEntryForm === 'fs882-twopage' ? 'FS882 (2-Page)' : 'FS882'
+  );
+  let diagnosticsDraft = $state.raw<DiagnosticsDraftContext | null>(null);
+  let summaryExclusionState = $state.raw<SummaryExclusionState | null>(null);
+  let summaryExclusionPreview = $state.raw<unknown>(null);
   const siviStandaloneEnabled = true;
   let offset = $state(0), busy = $state(false), error = $state('');
   let request = 0, hierarchyRequest = 0, stateRequest = 0;
@@ -64,6 +103,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   let helpDrawerOpen = $state(false), helpDrawerTopicId = $state('site.plot_number'), helpDrawerTab = $state<HelpDrawerTab>('inspector');
   let tourOpen = $state(false), tourInitialId = $state<string | null>(null);
   let shortcutsModalOpen = $state(false), whatsNewModalOpen = $state(false), aboutModalOpen = $state(false);
+  let userSetupOpen = $state(false);
   let resetSampleConfirmOpen = $state(false), resetSampleNotice = $state('');
   let whatsNewStatus = $state.raw<WhatsNewStatus | null>(null), whatsNewPromptDismissed = $state(false);
   let pictureManagerPlot = $state(''), plotLabelNumber = $state(''), contextExpanded = $state(false);
@@ -204,18 +244,14 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       if (session.held() && view === 'home') view = 'summary-vegetation';
     });
   });
-  let editor: {
-    getCloseState: () => EditorCloseState; saveForClose: () => Promise<boolean>;
-    canOpenProjectMetadata: () => boolean; openProjectMetadata: () => void;
-    canOpenMetadataInPlace?: () => boolean;
-  } | undefined = $state();
+  let editor: FS882EditorHandle | undefined = $state();
   let fs882ModuleLoaded = $state(false);
   const editorInitializing = $derived(view === 'fs882' && !editor && fs882ModuleLoaded);
 
-  async function loadFS882Editor() {
+  async function loadFS882Editor(): Promise<{ default: Component<FS882FormWave3Props, FS882EditorHandle> }> {
     const module = await import('./entry/FS882Form.svelte');
     fs882ModuleLoaded = true;
-    return module;
+    return module as unknown as { default: Component<FS882FormWave3Props, FS882EditorHandle> };
   }
 
   let closeRequest = $state(''), closeWorking = $state(false), closeError = $state('');
@@ -315,12 +351,25 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     finally { transitionWorking = false; }
   }
 
-  function navigate(next: typeof view) {
-    if (next === view && next !== 'project-admin') return;
+  function navigate(next: typeof view | 'fs882-twopage') {
+    if (next === 'fs882-twopage' && view === 'fs882' && editorEntryForm === 'fs882-twopage') return;
+    if (next === 'fs882' && view === 'fs882' && editorEntryForm === 'fs882') return;
+    if (next === view && next !== 'project-admin' && next !== 'fs882') return;
     void requestTransition(async () => {
       error = '';
       if (next === 'project-admin') { projectAdminTab = 'lifecycle'; projectAdminTabNonce++; }
-      if (next === 'fs882') { editorPlotNumber = selected?.plotNumber; editorEntryForm = 'fs882'; }
+      if (next === 'fs882-twopage') {
+        editorPlotNumber = selected?.plotNumber;
+        editorEntryForm = 'fs882-twopage';
+        diagnosticsDraft = null;
+        view = 'fs882';
+        return;
+      }
+      if (next === 'fs882') {
+        editorPlotNumber = selected?.plotNumber;
+        editorEntryForm = 'fs882';
+        diagnosticsDraft = null;
+      }
       if (next === 'picture-manager') pictureManagerPlot = selected?.plotNumber ?? '';
       if (next === 'plot-label-preview') plotLabelNumber = (view === 'fs882' ? editorPlotNumber : selected?.plotNumber) ?? '';
       view = next;
@@ -334,7 +383,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     const plot = selected.plotNumber;
     await requestTransition(async () => {
       if (selected?.plotNumber !== plot) throw new Error('Selected plot changed before opening SIVI; no owner replaced.');
-      editorPlotNumber = plot; editorEntryForm = 'sivi'; view = 'fs882'; error = '';
+      editorPlotNumber = plot; editorEntryForm = 'sivi'; diagnosticsDraft = null; view = 'fs882'; error = '';
     });
   }
 
@@ -427,7 +476,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         await tick();
         const current = await lookupPlot(proposal.plot.plotNumber, contextId);
         if (JSON.stringify(current) !== JSON.stringify(proposal)) throw new Error('Found plot summary changed since review; find again before opening.');
-        editorPlotNumber = current.plot.plotNumber; view = 'fs882'; selected = null;
+        editorPlotNumber = current.plot.plotNumber; diagnosticsDraft = null; view = 'fs882'; selected = null;
         plotFindOpen = false; plotFindResult = null; error = '';
       } catch (cause) {
         plotFindError = `Navigation failed; current editor and filters retained: ${String(cause)}`;
@@ -446,7 +495,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         await tick();
         const next = await resolveNavigation(source.proposal, contextId);
         if (!next.plots.some(plot => plot.plotNumber === target)) throw new Error('Reviewed navigation target is no longer available.');
-        profileNavigation = next; editorPlotNumber = target; view = 'fs882'; error = '';
+        profileNavigation = next; editorPlotNumber = target; diagnosticsDraft = null; view = 'fs882'; error = '';
       } finally { busy = false; }
     });
   }
@@ -512,7 +561,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     try {
       const state = await ContextService.SwitchContext(contextId, selection);
       request++; projectState.set(state); profileNavigation = null; plotProfilePanel?.clearCachedSources();
-      page = null; selected = null; hierarchyNodes = []; editorPlotNumber = undefined; view = next;
+      page = null; selected = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; view = next;
       await loadPlots(0);
       if (next === 'hierarchy') {
         try { await loadHierarchy(); }
@@ -522,7 +571,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   }
 
   async function handleAccessActivated() {
-    profileNavigation = null; plotProfilePanel?.resetAllReviews(); editorPlotNumber = undefined; view = 'plots';
+    profileNavigation = null; plotProfilePanel?.resetAllReviews(); editorPlotNumber = undefined; diagnosticsDraft = null; view = 'plots';
     await loadPlots(0);
   }
 
@@ -538,7 +587,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     const action = classifyGlobalHelpShortcut(event, activeEl);
     if (action === 'f1') { event.preventDefault(); openContextualHelp(); return; }
     if (action === 'shortcuts') { event.preventDefault(); shortcutsModalOpen = !shortcutsModalOpen; return; }
-    if (event.key === 'Escape' && helpDrawerOpen && !shortcutsModalOpen && !whatsNewModalOpen && !aboutModalOpen && !tourOpen && !resetSampleConfirmOpen && !closeRequest && !pendingTransition) {
+    if (event.key === 'Escape' && helpDrawerOpen && !shortcutsModalOpen && !whatsNewModalOpen && !aboutModalOpen && !tourOpen && !resetSampleConfirmOpen && !userSetupOpen && !closeRequest && !pendingTransition) {
       event.preventDefault(); helpDrawerOpen = false;
     }
   }
@@ -567,7 +616,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       try {
         const nextState = await defaultHelpPort.resetWorkspaceToSample(contextId);
         cancelAllReads(); projectState.set(nextState); profileNavigation = null; plotProfilePanel?.clearCachedSources();
-        selected = null; page = null; hierarchyNodes = []; editorPlotNumber = undefined; resetSampleConfirmOpen = false; view = 'plots';
+        selected = null; page = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; resetSampleConfirmOpen = false; view = 'plots';
         resetSampleNotice = 'Workspace reset to pristine Sample.db (Project: Sample, SU: Sample, Hierarchy: Sample). User project .db files were preserved.';
         await loadPlots(0);
         try { await loadHierarchy(); }
@@ -595,16 +644,39 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
 <div class="app-shell">
   <header class="topbar">
     <div class="brand">
-      <span class="brand-symbol" aria-hidden="true">V</span><span>VPro</span>
+      <span class="brand-symbol" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="36 36 952 952" width="28" height="28" focusable="false">
+          <defs>
+            <linearGradient id="vpro-topbar-navy" x1="16%" y1="6%" x2="84%" y2="96%">
+              <stop offset="0%" stop-color="#0B437A"/>
+              <stop offset="52%" stop-color="#003366"/>
+              <stop offset="100%" stop-color="#001D3A"/>
+            </linearGradient>
+            <linearGradient id="vpro-topbar-shield" x1="50%" y1="0%" x2="50%" y2="100%">
+              <stop offset="0%" stop-color="#2E8540"/>
+              <stop offset="56%" stop-color="#1E5128"/>
+              <stop offset="100%" stop-color="#13381B"/>
+            </linearGradient>
+          </defs>
+          <rect x="64" y="64" width="896" height="896" rx="196" ry="196" fill="url(#vpro-topbar-navy)" stroke="#38598A" stroke-width="16"/>
+          <path d="M512 162L216 286V512C216 681 342 827 512 864C682 827 808 681 808 512V286Z" fill="url(#vpro-topbar-shield)" stroke="#FCBA19" stroke-width="28" stroke-linejoin="round"/>
+          <path d="M488 614H536L542 754Q512 764 482 754Z" fill="#FCBA19"/>
+          <path d="M512 454L698 654Q512 618 326 654Z" fill="#FFFFFF"/>
+          <path d="M512 344L656 518Q512 488 368 518Z" fill="#FFFFFF"/>
+          <path d="M512 244L614 396Q512 372 410 396Z" fill="#FFFFFF"/>
+        </svg>
+      </span>
+      <span>VPro</span>
       <WorkspaceStatusBanners region="badge" {buildMode} {appVersion} {shortBuildCommit} {releaseChannel}
         startupFailed={startupFailure !== null} onopenabout={() => { aboutModalOpen = true; }} />
     </div>
     <button class="context-toggle" type="button" disabled={startupFailure !== null} aria-expanded={contextExpanded} aria-controls="project-context" onclick={() => contextExpanded = !contextExpanded}>Projects &amp; context</button>
-    {#if !startupFailure}<Navigation {view} onnavigate={navigate}
+    {#if !startupFailure}<Navigation {view} activeEntryForm={editorEntryForm} onnavigate={navigate}
       siviAvailable={siviStandaloneEnabled && !!selected && !!$projectState?.contextId} onopensivi={() => void openSIVI()}
       newSiviAvailable={!!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking} onopennewsivi={() => { newSiviModalOpen = true; }}
       metadataAvailable={view === 'fs882' && !!$projectState?.contextId && !!editor?.canOpenProjectMetadata()} onopenmetadata={() => void openProjectMetadata()}
       onopencloudsync={() => { void requestTransition(async () => { projectAdminTab = 'cloudsync'; projectAdminTabNonce++; view = 'project-admin'; error = ''; }); }}
+      onopenusersetup={() => { userSetupOpen = true; }}
       whatsNewUnreadCount={whatsNewStatus?.unreadCount ?? 0} resetSampleAvailable={!!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking}
       {releaseChannel} onhelpaction={handleHelpMenuAction} />{/if}
     <div class="topbar-context"><Database size={16} strokeWidth={1.8} /><span>{$projectState?.activeProject ?? 'No project'}</span></div>
@@ -626,7 +698,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       {:else if view === 'home'}
         <div class="content-heading"><div><div class="eyebrow">VPro</div><h1>Home</h1></div></div>
         {#if startupBackupNotice}
-          <div role="status" data-startup-backup-notice class="mb-3 p-2.5 border rounded bg-emerald-50 text-emerald-900 text-xs flex items-center justify-between gap-2">
+          <div role="status" data-startup-backup-notice class="mb-3 p-2.5 border border-[#2E8540] rounded bg-[#EBF5ED] text-[#1E5128] text-xs flex items-center justify-between gap-2">
             <span>{startupBackupNotice}</span>
             <button type="button" class="underline text-xs" onclick={() => { startupBackupNotice = ''; }}>Dismiss</button>
           </div>
@@ -650,7 +722,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
                 <button type="button" class="px-3 py-1 border rounded disabled:opacity-50" disabled={busy || transitionWorking || pendingTransition !== null}
                   onclick={() => { plotFindOpen = false; plotFindResult = null; plotFindError = ''; }}>Dismiss find</button>
               </form>
-              {#if plotFindError}<p role="alert" class="mt-2 text-red-800">{plotFindError}</p>{/if}
+              {#if plotFindError}<p role="alert" class="mt-2 text-[#D8292F]">{plotFindError}</p>{/if}
               {#if plotFindResult}
                 <p role="status" class="mt-2">Found literal plot {JSON.stringify(plotFindResult.plot.plotNumber)} in the current recordset.</p>
                 <button type="button" class="mt-2 px-3 py-1 border rounded disabled:opacity-50"
@@ -670,7 +742,15 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           <FS882Form bind:this={editor} plotNumber={editorPlotNumber} contextId={$projectState?.contextId ?? ''} entryForm={editorEntryForm}
             onSaved={async (p) => { editorPlotNumber = p; await loadPlots(offset); }} onClosed={() => navigate('plots')}
             onBusyChange={(busy) => { localEditorBusy = busy; }} onProfileNavigation={applyProfileNavigation}
-            onProfileSUReview={reviewProfileSU} onFindPlot={plotFindEnabled ? () => { plotFindOpen = true; } : undefined} />
+            onProfileSUReview={reviewProfileSU} onFindPlot={plotFindEnabled ? () => { plotFindOpen = true; } : undefined}
+            onOpenPictureManager={(p) => {
+              void requestTransition(async () => {
+                pictureManagerPlot = p || editorPlotNumber || '';
+                view = 'picture-manager';
+                error = '';
+              });
+            }}
+            onDiagnosticsContextChange={(ctx) => { diagnosticsDraft = ctx; }} />
           {:catch error}
             <p class="error" role="alert" data-entry-load-error="fs882">{editorLabel} editor could not load: {String(error)}</p>
           {/await}
@@ -685,7 +765,18 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           error={closeRequest ? closeError : transitionError} onrespond={closeRequest ? respondToClose : respondToTransition} />
         {#if editorPlotNumber && $projectState?.contextId}
           {#await import('./diagnostics/LMH25DiagnosticsBar.svelte') then { default: LMH25DiagnosticsBar }}
-            <div class="px-2 pb-2"><LMH25DiagnosticsBar contextId={$projectState.contextId} plotNumber={editorPlotNumber} /></div>
+            <div class="px-2 pb-2">
+              <LMH25DiagnosticsBar
+                contextId={$projectState.contextId}
+                plotNumber={editorPlotNumber}
+                header={diagnosticsDraft?.header ?? null}
+                humus={diagnosticsDraft?.humus ?? []}
+                mineral={diagnosticsDraft?.mineral ?? []}
+                onApplyHumusThickness={(v) => editor?.applyDiagnosticHumusThickness?.(v)}
+                onApplyKeyedSMR={(v) => editor?.applyDiagnosticSMR?.(v)}
+                onApplyKeyedSNR={(v) => editor?.applyDiagnosticSNR?.(v)}
+              />
+            </div>
           {/await}
         {/if}
       {:else if view === 'datasheet' && $projectState}
@@ -820,7 +911,29 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
               onBusyChange={(value) => { localEditorBusy = value; }} />
             {#await import('./classification/SiteUnitExclusionFilter.svelte') then { default: SiteUnitExclusionFilter }}
               <div class="px-3 pb-4"><SiteUnitExclusionFilter contextId={$projectState.contextId ?? ''} su={$projectState.activeSU}
-                hierarchy={$projectState.activeHierarchy} reportMode="summary" onBusyChange={(value) => { secondaryPanelBusy = value; }} /></div>
+                hierarchy={$projectState.activeHierarchy} reportMode="summary" onBusyChange={(value) => { secondaryPanelBusy = value; }}
+                onRulesChange={(rules, useHierarchyBreakpoints, breakpointOptions) => {
+                  summaryExclusionState = { rules, useHierarchyBreakpoints, breakpointOptions };
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('vpro:site-unit-exclusion-update', {
+                      detail: { reportMode: 'summary', rules, useHierarchyBreakpoints, breakpointOptions, preview: summaryExclusionPreview }
+                    }));
+                  }
+                }}
+                onSummaryPreview={(result) => {
+                  summaryExclusionPreview = result;
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('vpro:site-unit-exclusion-update', {
+                      detail: {
+                        reportMode: 'summary',
+                        rules: summaryExclusionState?.rules ?? [],
+                        useHierarchyBreakpoints: summaryExclusionState?.useHierarchyBreakpoints ?? false,
+                        breakpointOptions: summaryExclusionState?.breakpointOptions ?? null,
+                        preview: result,
+                      }
+                    }));
+                  }
+                }} /></div>
             {/await}
           {/key}
         {:catch loadError}<p class="error" role="alert">Summary Vegetation Report could not load: {String(loadError)}</p>{/await}
@@ -894,12 +1007,13 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             hierarchyPath={$projectState.hierarchyPath ?? ''} onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Subzone Matrix Report could not load: {String(loadError)}</p>{/await}
       {:else}
-        <PlotsBrowserPanel region="main" {view} {busy} {error} {page} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled} onrefresh={refresh} onloadpage={loadPlots} />
+        <PlotsBrowserPanel region="main" {view} {busy} {error} {page} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled}
+          onrefresh={refresh} onloadpage={loadPlots} onopenexplorer={() => navigate('classification-explorer')} />
       {/if}
     </main>
 
     <PlotsBrowserPanel region="detail" {view} {busy} bind:selected {siviStandaloneEnabled} {editorBusy} {transitionWorking} {pendingTransition}
-      onopenfs882={() => navigate('fs882')} onopensivi={() => void openSIVI()} />
+      onopenfs882={() => navigate('fs882')} onopentwopage={() => navigate('fs882-twopage')} onopensivi={() => void openSIVI()} />
     {#if newSiviModalOpen && $projectState?.contextId}
       {#await import('./entry/SIVIParentCreateModal.svelte') then { default: SIVIParentCreateModal }}
         <SIVIParentCreateModal contextId={$projectState.contextId} activeProject={$projectState.activeProject} activeSu={$projectState.activeSU}
@@ -940,6 +1054,21 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   {#if aboutModalOpen && !startupFailure}
     {#await import('./help/AboutVProModal.svelte') then { default: AboutVProModal }}
       <AboutVProModal open={aboutModalOpen} onclose={() => { aboutModalOpen = false; }} />
+    {/await}
+  {/if}
+  {#if userSetupOpen && !startupFailure}
+    {#await import('./shell/UserSetupModal.svelte') then { default: UserSetupModal }}
+      <UserSetupModal open={userSetupOpen} contextId={$projectState?.contextId ?? ''}
+        activeProject={$projectState?.activeProject ?? 'None'}
+        onSaved={async () => {
+          if (!editorBusy && !companionPanelBusy && !workbenchDirtyLabel) {
+            await refresh();
+          } else {
+            const nextState = await stateReads.track(ContextService.GetState());
+            projectState.set(nextState);
+          }
+        }}
+        onclose={() => { userSetupOpen = false; }} />
     {/await}
   {/if}
 </div>

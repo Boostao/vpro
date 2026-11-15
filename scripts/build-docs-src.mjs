@@ -609,8 +609,8 @@ const tours = [
     description: 'Explore the left Session Context bar (replacing legacy Data Centre) and see how .accdb/.mdb projects import into SQLite WAL.',
     steps: [
       { target: '#project-context', view: 'home', title: 'Persistent Session Context Bar', body: 'Replaces the floating VPro 64 Data Centre. Your active Project, Site Unit (*_SU), Hierarchy, and Lump tables stay visible and cryptographically scoped.' },
-      { target: '[data-nav-group="Project"]', view: 'project-admin', title: 'Project Admin & Access .accdb/.mdb Import', body: 'Create projects, run 3-way merges, OptimizeVeg, or import legacy Access VP05–VP08 databases with full FK orphan quarantine.' },
-      { target: '[data-nav-group="Interchange"]', view: 'interchange-hub', title: 'Open Scientific Interchange Hub', body: 'Exchange data cleanly with VENUS 5.0 XML, TurboVeg 3, GeoPackage (BC Albers EPSG:3005), CSV matrices, and R .rds.' }
+      { target: '[data-tour="project-admin-root"]', view: 'project-admin', title: 'Project Admin & Access .accdb/.mdb Import', body: 'Create projects, run 3-way merges, OptimizeVeg, or import legacy Access VP05–VP08 databases with full FK orphan quarantine.' },
+      { target: '[data-tour="interchange-hub-root"]', view: 'interchange-hub', title: 'Open Scientific Interchange Hub', body: 'Exchange data cleanly with VENUS 5.0 XML, TurboVeg 3, GeoPackage (BC Albers EPSG:3005), CSV matrices, and R .rds.' }
     ]
   },
   {
@@ -619,8 +619,8 @@ const tours = [
     duration: '90 sec',
     description: 'Navigate FS882, Two-Page, SIVI, LMH25 live rules, CHARS shrub layer toggle, and the virtualized 9-table Datasheet Grid.',
     steps: [
-      { target: 'main', view: 'fs882', title: 'FS882 Ecological Field Card', body: 'Enter Site, Soil, and Vegetation strata with Enter-key subgrid navigation, IEEE-754 SINGLE cover calibration, and F1 contextual LMH25 help on any field.' },
-      { target: 'main', view: 'datasheet', title: 'Virtualized 9-Table Datasheet Grid', body: 'Inspect and batch-edit _Env, _Veg, _Humus, _Mineral, _Audit, and *_SU with TSV clipboard paste and atomic audit trail.' }
+      { target: '[data-tour="fs882-form-root"]', view: 'fs882', title: 'FS882 Ecological Field Card', body: 'Enter Site, Soil, and Vegetation strata with Enter-key subgrid navigation, IEEE-754 SINGLE cover calibration, and F1 contextual LMH25 help on any field.' },
+      { target: '[data-tour="datasheet-grid-root"]', view: 'datasheet', title: 'Virtualized 9-Table Datasheet Grid', body: 'Inspect and batch-edit _Env, _Veg, _Humus, _Mineral, _Audit, and *_SU with TSV clipboard paste and atomic audit trail.' }
     ]
   },
   {
@@ -629,8 +629,8 @@ const tours = [
     duration: '90 sec',
     description: 'Manage Site Unit (*_SU) assignments, 12-level Hierarchies with ~ breakpoints, and versioned *_Lump species recipes.',
     steps: [
-      { target: 'main', view: 'classification-explorer', title: 'Dual-Pane SU & Hierarchy Explorer', body: 'Assign plots across Site Units, synchronize SU <-> Env, and organize 12-level classification trees with ~ report breakpoints.' },
-      { target: 'main', view: 'lump-editor', title: 'Taxon Lumping (*_Lump) & Recipes', body: 'Build repeatable species lumping tables for regional synthesis without mutating raw field plot codes.' }
+      { target: '[data-tour="classification-explorer-root"]', view: 'classification-explorer', title: 'Dual-Pane SU & Hierarchy Explorer', body: 'Assign plots across Site Units, synchronize SU <-> Env, and organize 12-level classification trees with ~ report breakpoints.' },
+      { target: '[data-tour="lump-editor-root"]', view: 'lump-editor', title: 'Taxon Lumping (*_Lump) & Recipes', body: 'Build repeatable species lumping tables for regional synthesis without mutating raw field plot codes.' }
     ]
   },
   {
@@ -639,9 +639,9 @@ const tours = [
     duration: '90 sec',
     description: 'Audit BGC v13 plot coordinates on the 3D MapLibre/WebGPU globe, run live BEC Differential Synthesis, and export .xlsx / Quarto guides.',
     steps: [
-      { target: 'main', view: 'geospatial-map', title: '3D MapLibre + WebGPU Geospatial Workbench', body: 'Stream provincial BGC v13 & Ecosection PMTiles offline, run Point-in-Polygon spatial QA, and lasso plots directly into *_SU units.' },
-      { target: 'main', view: 'diagnostic-synthesis', title: 'Reactive BEC Differential & Pairwise Synthesis', body: 'Inspect Presence Class, Differential Value (d1–d3, dd1–dd4), and Cramér similarity with < 10 ms live plot reassignment and 4-sheet .xlsx export.' },
-      { target: 'main', view: 'r-sidecar', title: 'R Sidecar: climr aSMR, Clustering & Quarto Guides', body: 'Downscale climate normals into __VPRO_PlotClimate, compare rSMR vs. aSMR grids, run vegan/vegclust candidate clustering, and publish Quarto unit guides.' }
+      { target: '[data-tour="geospatial-workbench-root"]', view: 'geospatial-map', title: '3D MapLibre + WebGPU Geospatial Workbench', body: 'Stream provincial BGC v13 & Ecosection PMTiles offline, run Point-in-Polygon spatial QA, and lasso plots directly into *_SU units.' },
+      { target: '[data-tour="diagnostic-synthesis-root"]', view: 'diagnostic-synthesis', title: 'Reactive BEC Differential & Pairwise Synthesis', body: 'Inspect Presence Class, Differential Value (d1–d3, dd1–dd4), and Cramér similarity with < 10 ms live plot reassignment and 4-sheet .xlsx export.' },
+      { target: '[data-tour="r-sidecar-root"]', view: 'r-sidecar', title: 'R Sidecar: climr aSMR, Clustering & Quarto Guides', body: 'Downscale climate normals into __VPRO_PlotClimate, compare rSMR vs. aSMR grids, run vegan/vegclust candidate clustering, and publish Quarto unit guides.' }
     ]
   }
 ];

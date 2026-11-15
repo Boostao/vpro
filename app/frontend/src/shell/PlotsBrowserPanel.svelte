@@ -21,7 +21,9 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onrefresh = () => {},
     onloadpage = () => {},
     onopenfs882 = () => {},
+    onopentwopage = () => {},
     onopensivi = () => {},
+    onopenexplorer = () => {},
   }: {
     region?: 'main' | 'detail';
     view?: string;
@@ -39,7 +41,9 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onrefresh?: () => void;
     onloadpage?: (nextOffset: number) => void;
     onopenfs882?: () => void;
+    onopentwopage?: () => void;
     onopensivi?: () => void;
+    onopenexplorer?: () => void;
   } = $props();
 </script>
 
@@ -54,19 +58,28 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
         <dt>Subzone</dt><dd>{selected.subZone ?? '—'}</dd>
         <dt>Site series</dt><dd>{selected.siteSeries ?? '—'}</dd>
       </dl>
-      <div class="mt-4 pt-3 border-t border-stone-200">
+      <div class="mt-4 pt-3 border-t border-[#D8D8D8]">
         <button
           type="button"
-          class="w-full py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-semibold"
+          class="w-full py-1.5 px-3 bg-[#003366] hover:bg-[#002244] text-white rounded text-xs font-semibold"
           onclick={onopenfs882}
         >
           Open in FS882 Editor
+        </button>
+        <button
+          type="button"
+          data-twopage-open
+          class="mt-2 w-full py-1.5 px-3 border border-[#003366] bg-white hover:bg-[#EBF1F6] text-[#003366] rounded text-xs font-semibold"
+          disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
+          onclick={onopentwopage}
+        >
+          Open Two-Page (FS882-8x6XL)
         </button>
         {#if siviStandaloneEnabled}
           <button
             type="button"
             data-sivi-standalone-open
-            class="mt-2 w-full py-1.5 px-3 border rounded text-xs font-semibold"
+            class="mt-2 w-full py-1.5 px-3 border border-[#D8D8D8] bg-white hover:bg-[#F2F2F2] text-[#313132] rounded text-xs font-semibold"
             disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
             onclick={onopensivi}
           >Open SIVI / FS1333</button>
@@ -77,7 +90,17 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
 {:else if view === 'hierarchy'}
   <div class="content-heading">
     <div><div class="eyebrow">{$projectState?.hierarchyFile ?? 'HIERARCHY'}</div><h1>Hierarchy</h1></div>
-    <button class="icon-button" title="Refresh hierarchy" aria-label="Refresh hierarchy" disabled={busy} onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button>
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        data-open-classification-explorer
+        class="rounded border border-[#003366] bg-white px-3 py-1.5 text-xs font-semibold text-[#003366] hover:bg-[#EBF1F6]"
+        onclick={onopenexplorer}
+      >
+        Open SU &amp; Hierarchy Explorer
+      </button>
+      <button class="icon-button" title="Refresh hierarchy" aria-label="Refresh hierarchy" disabled={busy} onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button>
+    </div>
   </div>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <div class="table-bar"><span>{hierarchyNodes.length} units</span><span>{$projectState?.activeHierarchy ?? 'None'}</span></div>

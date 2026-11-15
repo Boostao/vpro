@@ -1,18 +1,20 @@
 <script lang="ts">
   import { BookOpen, ChartColumn, ChevronDown, ClipboardList, Compass, FileText, Globe, HelpCircle, History, House, Info, Keyboard, Leaf, Link, List, Network, Newspaper, Palette, RotateCcw, Table, TableProperties, Tag, Tent, UserCog } from '@lucide/svelte';
 
-  type View = 'home' | 'plots' | 'geospatial-map' | 'diagnostic-synthesis' | 'r-sidecar' | 'hierarchy' | 'fs882' | 'datasheet' | 'classification-explorer' | 'project-admin' | 'lump-editor' | 'interchange-hub' | 'long-environment' | 'summary-environment' | 'long-vegetation' | 'summary-vegetation' | 'lifeform-summary' | 'subzone-matrix' | 'table-csv' | 'user-log' | 'plot-locations' | 'google-earth-review' | 'picture-manager' | 'plot-label-preview';
+  type View = 'home' | 'plots' | 'geospatial-map' | 'diagnostic-synthesis' | 'r-sidecar' | 'hierarchy' | 'fs882' | 'fs882-twopage' | 'datasheet' | 'classification-explorer' | 'project-admin' | 'lump-editor' | 'interchange-hub' | 'long-environment' | 'summary-environment' | 'long-vegetation' | 'summary-vegetation' | 'lifeform-summary' | 'subzone-matrix' | 'table-csv' | 'user-log' | 'plot-locations' | 'google-earth-review' | 'picture-manager' | 'plot-label-preview';
   type HelpMenuAction = 'guide' | 'tours' | 'shortcuts' | 'whats-new' | 'reset-sample' | 'about';
-  type Item = { name: string; icon: typeof House; view?: View; action?: 'sivi' | 'new-sivi' | 'metadata' | 'cloud-sync'; helpAction?: HelpMenuAction; deferredPhase2?: boolean };
+  type Item = { name: string; icon: typeof House; view?: View; action?: 'sivi' | 'new-sivi' | 'metadata' | 'cloud-sync' | 'user-setup'; helpAction?: HelpMenuAction; deferredPhase2?: boolean };
   type Menu = { label: string; icon: typeof House; groups: { label: string; items: Item[] }[] };
-  let { view, onnavigate, siviAvailable = false, onopensivi, newSiviAvailable = false, onopennewsivi,
-    metadataAvailable = false, onopenmetadata, onopencloudsync, onhelpaction, whatsNewUnreadCount = 0, resetSampleAvailable = true,
+  let { view, onnavigate, activeEntryForm = 'fs882', siviAvailable = false, onopensivi, newSiviAvailable = false, onopennewsivi,
+    metadataAvailable = false, onopenmetadata, onopencloudsync, onopenusersetup, onhelpaction, whatsNewUnreadCount = 0, resetSampleAvailable = true,
     releaseChannel = 'stable' }: {
     view: View; onnavigate: (view: View) => void;
+    activeEntryForm?: 'fs882' | 'sivi' | 'fs882-twopage';
     siviAvailable?: boolean; onopensivi?: () => void;
     newSiviAvailable?: boolean; onopennewsivi?: () => void;
     metadataAvailable?: boolean; onopenmetadata?: () => void;
     onopencloudsync?: () => void;
+    onopenusersetup?: () => void;
     onhelpaction?: (action: HelpMenuAction) => void;
     whatsNewUnreadCount?: number;
     resetSampleAvailable?: boolean;
@@ -27,6 +29,7 @@
     { label: 'Forms', icon: ClipboardList, groups: [
       { label: 'Data Entry', items: [
         { name: 'FS882 Data Forms (6x4)', icon: ClipboardList, view: 'fs882' },
+        { name: 'Two-Page Entry (FS882-8x6XL)', icon: ClipboardList, view: 'fs882-twopage' },
         { name: 'Enter/Edit SIVI Data', icon: Tent, action: 'sivi' },
         { name: 'New SIVI / FS1333 Plot', icon: Tent, action: 'new-sivi' },
         { name: 'Universal Datasheet Grid', icon: TableProperties, view: 'datasheet' }
@@ -41,17 +44,17 @@
         { name: 'Combine Species', icon: Link, view: 'lump-editor' },
         { name: 'Plot Pictures', icon: FileText, view: 'picture-manager' },
         { name: 'User log', icon: History, view: 'user-log' },
+        { name: 'User setup', icon: UserCog, action: 'user-setup' },
         ...(showDeferredPhase2 ? [
           { name: 'Herbarium (Phase 2 Deferred)', icon: Leaf, deferredPhase2: true },
           { name: 'Colour-theme (Phase 2 Deferred)', icon: Palette, deferredPhase2: true },
-          { name: 'User setup (Phase 2 Deferred)', icon: UserCog, deferredPhase2: true },
         ] : []),
       ] }
     ] },
     { label: 'Reports', icon: ChartColumn, groups: [
       { label: 'Vegetation', items: [
         { name: 'Long Vegetation', icon: TableProperties, view: 'long-vegetation' },
-        { name: 'Lifeform Summary', icon: Leaf, view: 'lifeform-summary' },
+        { name: 'Lifeform & Species Attribute Summaries', icon: Leaf, view: 'lifeform-summary' },
         { name: 'Summary Vegetation', icon: ChartColumn, view: 'summary-vegetation' }
       ] },
       { label: 'Environment', items: [
@@ -128,6 +131,7 @@
     if (item.action === 'new-sivi') return newSiviAvailable && !!onopennewsivi;
     if (item.action === 'metadata') return metadataAvailable && !!onopenmetadata;
     if (item.action === 'cloud-sync') return true;
+    if (item.action === 'user-setup') return true;
     if (item.helpAction === 'reset-sample') return resetSampleAvailable;
     if (item.helpAction) return true;
     return !!item.view;
@@ -150,6 +154,11 @@
         onopencloudsync();
       } else {
         navigate('project-admin');
+      }
+    } else if (item.action === 'user-setup') {
+      closeMenu(true);
+      if (typeof onopenusersetup === 'function') {
+        onopenusersetup();
       }
     } else if (item.helpAction) {
       closeMenu(true);
@@ -175,7 +184,7 @@
   {#each menus as menu (menu.label)}
     <details class="nav-menu" data-nav-group={menu.label} open={openMenu === menu.label}>
       <summary
-        class:current={menu.groups.some(group => group.items.some(item => item.view === view))}
+        class:current={menu.groups.some(group => group.items.some(item => item.view === view || (item.view === 'fs882-twopage' && view === 'fs882')))}
         onclick={(event) => {
           event.preventDefault();
           openMenu = openMenu === menu.label ? null : menu.label;
@@ -195,9 +204,17 @@
             {#each group.items as item (item.name)}
               <button
                 disabled={!itemEnabled(item)}
-                class:current={item.view === view}
+                class:current={item.view === 'fs882-twopage'
+                  ? (view === 'fs882' && activeEntryForm === 'fs882-twopage')
+                  : item.view === 'fs882'
+                    ? (view === 'fs882' && activeEntryForm !== 'fs882-twopage')
+                    : item.view === view}
                 data-help-menu-item={item.helpAction}
-                aria-current={item.view === view ? 'page' : undefined}
+                aria-current={(item.view === 'fs882-twopage'
+                  ? (view === 'fs882' && activeEntryForm === 'fs882-twopage')
+                  : item.view === 'fs882'
+                    ? (view === 'fs882' && activeEntryForm !== 'fs882-twopage')
+                    : item.view === view) ? 'page' : undefined}
                 title={item.action === 'sivi'
                   ? itemEnabled(item) ? 'SIVI / FS1333 editor for the selected plot. Existing draft and close guards apply.'
                     : 'Select a plot to open SIVI / FS1333 data entry.'

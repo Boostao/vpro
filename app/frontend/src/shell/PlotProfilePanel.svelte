@@ -394,8 +394,8 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
         <input id="profile-su-path" class="px-2 py-1 border rounded min-w-0" bind:value={suPath} disabled={busy || transitionWorking || pendingTransition !== null || suCommitted} />
       </label>
     </div>
-    {#if suError}<p role="alert" class="mt-2 text-red-800">{suError}</p>{/if}
-    {#if suSuccess}<p role="status" class="mt-2 text-emerald-800">{suSuccess}</p>{/if}
+    {#if suError}<p role="alert" class="mt-2 text-[#D8292F]">{suError}</p>{/if}
+    {#if suSuccess}<p role="status" class="mt-2 text-[#1E5128]">{suSuccess}</p>{/if}
     <div class="mt-3 overflow-x-auto">
       <table class="w-full text-sm"><thead><tr><th class="text-left">Plot number</th><th class="text-left">SiteUnit</th></tr></thead>
         <tbody>{#each suReview.plots.slice(0, 25) as plot}<tr><td>{plot.plotNumber}</td><td>{plot.siteUnit === null ? 'NULL (no value)' : plot.siteUnit === '' ? 'Empty text' : plot.siteUnit}</td></tr>{/each}</tbody>
@@ -423,7 +423,7 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
             <input id="profile-su-project-name" class="px-2 py-1 border rounded min-w-0" bind:value={suProjectName}
               disabled={busy || transitionWorking || pendingTransition !== null || suProjectCommitted} />
           </label>
-          {#if suProjectSuccess}<p role="status" class="mt-2 text-emerald-800 break-words">{suProjectSuccess}</p>{/if}
+          {#if suProjectSuccess}<p role="status" class="mt-2 text-[#1E5128] break-words">{suProjectSuccess}</p>{/if}
           <div class="mt-3 flex flex-wrap gap-2">
             <button type="button" class="px-3 py-2 border rounded disabled:opacity-50"
               disabled={busy || editorBusy || transitionWorking || pendingTransition !== null || suProjectCommitted || !suProjectName || suProjectContext !== $projectState?.contextId}
@@ -451,7 +451,7 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
       <button type="button" class="px-3 py-1 border rounded disabled:opacity-50" disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
         onclick={() => void choosePlotProfile({ name: 'None', path: '' }, $projectState?.contextId ?? '')}>Select no profile</button>
     </div>
-    {#if profileSourceError}<p role="alert" class="mt-2 text-red-800">{profileSourceError}</p>{/if}
+    {#if profileSourceError}<p role="alert" class="mt-2 text-[#D8292F]">{profileSourceError}</p>{/if}
     <ul class="mt-2 space-y-2">
       {#each profileSources as info}
         <li class="flex flex-wrap items-center gap-2">
@@ -481,7 +481,7 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
             onclick={() => { profileWriteReview = null; profileWriteError = ''; }}>Dismiss ownership review</button>
         </section>
       {/if}
-      {#if profileWriteError}<p role="alert" class="mt-2 text-red-800">{profileWriteError}</p>{/if}
+      {#if profileWriteError}<p role="alert" class="mt-2 text-[#D8292F]">{profileWriteError}</p>{/if}
     {/if}
     <p class="mt-2 text-sm">Profile rules are independent of project/SU selection. External and other-table profiles are read-only unless explicitly authorized for this session.</p>
     {#if profileFileCreationEnabled}
@@ -500,7 +500,7 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
               <input id="profile-file-path" class="px-2 py-1 border rounded min-w-0" bind:value={profileFilePath} disabled={busy || transitionWorking || pendingTransition !== null || profileFileCommitted} />
             </label>
           </div>
-          {#if profileFileSuccess}<p role="status" class="mt-2 text-emerald-800 break-words">{profileFileSuccess}</p>{/if}
+          {#if profileFileSuccess}<p role="status" class="mt-2 text-[#1E5128] break-words">{profileFileSuccess}</p>{/if}
           <div class="mt-3 flex flex-wrap gap-2">
             <button type="button" class="px-3 py-2 border rounded disabled:opacity-50"
               disabled={busy || editorBusy || transitionWorking || pendingTransition !== null || profileFileCommitted || !profileFileName || !profileFilePath || profileFileContext !== $projectState.contextId}
@@ -526,7 +526,7 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
             <input id="profile-table-name" class="px-2 py-1 border rounded min-w-0" bind:value={profileTableName}
               disabled={busy || transitionWorking || pendingTransition !== null || profileTableCommitted} />
           </label>
-          {#if profileTableSuccess}<p role="status" class="mt-2 text-emerald-800 break-words">{profileTableSuccess}</p>{/if}
+          {#if profileTableSuccess}<p role="status" class="mt-2 text-[#1E5128] break-words">{profileTableSuccess}</p>{/if}
           <div class="mt-3 flex flex-wrap gap-2">
             <button type="button" class="px-3 py-2 border rounded disabled:opacity-50"
               disabled={busy || editorBusy || transitionWorking || pendingTransition !== null || profileTableCommitted || !profileTableName || profileTableContext !== $projectState.contextId}

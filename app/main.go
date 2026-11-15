@@ -232,7 +232,7 @@ func main() {
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name: "main", Title: "VPro", Width: 1400, Height: 900, MinWidth: 560, MinHeight: 520,
-		BackgroundColour: application.NewRGB(247, 249, 247), URL: "/",
+		BackgroundColour: application.NewRGB(242, 242, 242), URL: "/",
 	})
 	var layoutOnce sync.Once
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(_ *application.WindowEvent) {
