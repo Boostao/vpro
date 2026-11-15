@@ -69,13 +69,13 @@
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
 #' @param min_plots Minimum number of plots required for a unit to enter pairwise
-#'   comparison (default `1L`, matching Go `SynthesisOptions`).
-#' @param min_constancy Minimum constancy percentage (`[0, 100]`, default `50`)
+#'   comparison (default `2L`, matching the canonical BEC standard and Go `SynthesisOptions`).
+#' @param min_constancy Minimum constancy percentage (`[0, 100]`, default `60`)
 #'   required in at least one unit for diagnostic-potential scoring.
 #' @param noise_constancy Constancy threshold (`[0, 100]`, default `10`) below
 #'   which noisy unit-species occurrences are ignored in differential scoring.
-#' @param min_diff Minimum constancy differential points (default `0.1`).
-#' @param min_dd Minimum dominant-differential points (default `0.35`).
+#' @param min_diff Minimum constancy differential points (default `0.5`).
+#' @param min_dd Minimum dominant-differential points (default `0.5`).
 #' @param cover_precedence Stratum cover precedence (`"sublayer_sum"` default,
 #'   or `"strata_totals"`).
 #' @return An S3 object of class `vpro_pairwise` with `$pairs` tibble,
@@ -85,11 +85,11 @@ vpro_pairwise <- function(
   ws,
   lump = TRUE,
   exclude_modifiers = TRUE,
-  min_plots = 1L,
-  min_constancy = 50,
+  min_plots = 2L,
+  min_constancy = 60,
   noise_constancy = 10,
-  min_diff = 0.1,
-  min_dd = 0.35,
+  min_diff = 0.5,
+  min_dd = 0.5,
   cover_precedence = c("sublayer_sum", "strata_totals")
 ) {
   vpro_assert_workspace(ws)

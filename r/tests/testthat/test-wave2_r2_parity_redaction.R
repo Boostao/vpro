@@ -60,14 +60,14 @@ test_that("1B.3 & 1B.5 & 1B.6 & 1B.7: validation bounds, case-insensitive specie
     c(NA_integer_, 1L, 1L, 3L, 5L, NA_integer_, NA_integer_)
   )
 
-  # 1B.6: pairwise & outliers defaults match Go SynthesisOptions
+  # 1B.6: pairwise & outliers defaults match canonical BEC standard / Go SynthesisOptions
   expect_identical(formals(vpro_pairwise)$lump, TRUE)
   expect_identical(formals(vpro_pairwise)$exclude_modifiers, TRUE)
-  expect_identical(formals(vpro_pairwise)$min_plots, 1L)
-  expect_identical(formals(vpro_pairwise)$min_constancy, 50)
+  expect_identical(formals(vpro_pairwise)$min_plots, 2L)
+  expect_identical(formals(vpro_pairwise)$min_constancy, 60)
   expect_identical(formals(vpro_pairwise)$noise_constancy, 10)
-  expect_identical(formals(vpro_pairwise)$min_diff, 0.1)
-  expect_identical(formals(vpro_pairwise)$min_dd, 0.35)
+  expect_identical(formals(vpro_pairwise)$min_diff, 0.5)
+  expect_identical(formals(vpro_pairwise)$min_dd, 0.5)
   expect_identical(eval(formals(vpro_pairwise)$cover_precedence), c("sublayer_sum", "strata_totals"))
 
   expect_identical(formals(vpro_outliers)$lump, TRUE)
@@ -78,9 +78,11 @@ test_that("1B.3 & 1B.5 & 1B.6 & 1B.7: validation bounds, case-insensitive specie
   expect_identical(eval(formals(vpro_outliers)$cover_precedence), c("sublayer_sum", "strata_totals"))
 
   pw <- vpro_pairwise(ws)
+  pw_all <- vpro_pairwise(ws, min_plots = 1L)
   ol <- vpro_outliers(ws)
   expect_s3_class(pw, "vpro_pairwise")
-  expect_gt(nrow(pw$pairs), 0L)
+  expect_identical(nrow(pw$pairs), 36L)
+  expect_identical(nrow(pw_all$pairs), 55L)
   expect_s3_class(ol, "vpro_outliers")
   expect_gt(nrow(ol$outliers), 0L)
 
