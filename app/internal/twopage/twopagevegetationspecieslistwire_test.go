@@ -1,16 +1,19 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
+)
+
+import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestTwoPageSpeciesListClientSharedActualReceipts(t *testing.T) {
 	path := filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationSpeciesListReceipts.json")
-	raw, err := os.ReadFile(path)
+	raw, err := sqlutil.ReadWireFixture(path)
 	if err != nil {
 		t.Fatal(err)
 	}

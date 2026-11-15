@@ -1,6 +1,7 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
@@ -8,14 +9,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestTwoPageVegetationReferencesStrictGoClientWire(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationReferenceWire.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationReferenceWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

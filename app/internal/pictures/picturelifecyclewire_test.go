@@ -1,19 +1,19 @@
 package pictures
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestPictureLifecycleClientFixtureStrictGoRoundTrip(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "pictureLifecycleWire.json"))
+	data, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "pictureLifecycleWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -9,14 +10,13 @@ import (
 	"context"
 	"encoding/json"
 	"math"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestTwoPageVegetationClientSharedActualReceipts(t *testing.T) {
 	path := filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationReceipts.json")
-	raw, err := os.ReadFile(path)
+	raw, err := sqlutil.ReadWireFixture(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestTwoPageVegetationClientSharedActualReceipts(t *testing.T) {
 }
 
 func TestTwoPageVegetationClientSharedOutcomeWire(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationReceipts.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationReceipts.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestTwoPageVegetationClientSharedOutcomeWire(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err = os.ReadFile(outcomePath)
+	raw, err = sqlutil.ReadWireFixture(outcomePath)
 	if err != nil {
 		t.Fatal(err)
 	}

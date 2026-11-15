@@ -79,8 +79,8 @@ func WriteTwoPageEntryWithLifecycle(s *vprocore.ContextService, ctx context.Cont
 			}
 			entryPlan = make([]sourceform.SiviParentScalarEdit, 0, len(assignments))
 			for _, assignment := range assignments {
-				entryPlan = append(entryPlan, sourceform.SiviParentScalarEdit{assignment.ContextID, assignment.Table, assignment.RowID,
-					assignment.Column, vprocore.CloneSiteUnitCell(assignment.Before), vprocore.CloneSiteUnitCell(assignment.After)})
+				entryPlan = append(entryPlan, sourceform.SiviParentScalarEdit{ContextID: assignment.ContextID, Table: assignment.Table, RowID: assignment.RowID,
+					Column: assignment.Column, Expected: vprocore.CloneSiteUnitCell(assignment.Before), Value: vprocore.CloneSiteUnitCell(assignment.After)})
 			}
 			return assignments, nil
 		},

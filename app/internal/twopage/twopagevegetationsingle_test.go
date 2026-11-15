@@ -1,6 +1,7 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -12,7 +13,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -21,7 +21,7 @@ import (
 )
 
 func TestTwoPageVegetationSingleCalibrationTypedAssignments(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationSingle.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationSingle.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,23 +22,23 @@ func TestSIVICombinedPlanningPresentationsGroupsAndAssignmentOrder(t *testing.T)
 			form = "SubVegA-SIVI"
 		}
 		edits := []sourceform.SiviHeightEdit{
-			{"1", form, "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(100)},
-			{"6", "SubVegD-SIVI", "Cover9", vprotest.SiviReal(0), vprotest.SiviReal(9)},
-			{"1", form, "HeightB", vprotest.MetadataText(""), vprocore.ProjectMetadataCell{Storage: "null"}},
-			{"4", "SubVegC-SIVI", "Cover6", vprotest.SiviReal(0), vprotest.SiviReal(6)},
-			{"4", "SubVegC-SIVI", "Height6", vprotest.SiviReal(-3), vprotest.SiviReal(100)},
-			{"1", form, "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(1)},
+			{RowID: "1", Form: form, Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(100)},
+			{RowID: "6", Form: "SubVegD-SIVI", Column: "Cover9", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(9)},
+			{RowID: "1", Form: form, Column: "HeightB", Expected: vprotest.MetadataText(""), Value: vprocore.ProjectMetadataCell{Storage: "null"}},
+			{RowID: "4", Form: "SubVegC-SIVI", Column: "Cover6", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(6)},
+			{RowID: "4", Form: "SubVegC-SIVI", Column: "Height6", Expected: vprotest.SiviReal(-3), Value: vprotest.SiviReal(100)},
+			{RowID: "1", Form: form, Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(1)},
 		}
 		for _, column := range []string{"Cover2", "Cover3", "TotalA", "Cover4", "Cover5", "TotalB"} {
-			edits = append(edits, sourceform.SiviHeightEdit{"1", form, column, vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.SiviReal(2)})
+			edits = append(edits, sourceform.SiviHeightEdit{RowID: "1", Form: form, Column: column, Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.SiviReal(2)})
 		}
 		for _, column := range []string{"Cover7", "Cover8"} {
-			edits = append(edits, sourceform.SiviHeightEdit{"6", "SubVegD-SIVI", column, vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.SiviReal(2)})
+			edits = append(edits, sourceform.SiviHeightEdit{RowID: "6", Form: "SubVegD-SIVI", Column: column, Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.SiviReal(2)})
 		}
 		if extended {
-			edits = append(edits, sourceform.SiviHeightEdit{"2", form, "Cover5a", vprotest.SiviReal(-1), vprotest.SiviReal(5)})
+			edits = append(edits, sourceform.SiviHeightEdit{RowID: "2", Form: form, Column: "Cover5a", Expected: vprotest.SiviReal(-1), Value: vprotest.SiviReal(5)})
 			for _, column := range []string{"Cover5b", "Cover5c"} {
-				edits = append(edits, sourceform.SiviHeightEdit{"1", form, column, vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.SiviReal(2)})
+				edits = append(edits, sourceform.SiviHeightEdit{RowID: "1", Form: form, Column: column, Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.SiviReal(2)})
 			}
 		}
 		source := vprotest.SiviProjectionFixture()
@@ -64,25 +64,25 @@ func TestSIVICombinedPlanningPresentationsGroupsAndAssignmentOrder(t *testing.T)
 }
 
 func TestSIVICombinedPlanningRejectsWrongFormsRowsDomainsAndDuplicates(t *testing.T) {
-	valid := sourceform.SiviHeightEdit{"1", "SubVegA-SIVI_BC", "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(100)}
-	cover := sourceform.SiviHeightEdit{"1", valid.Form, "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	valid := sourceform.SiviHeightEdit{RowID: "1", Form: "SubVegA-SIVI_BC", Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(100)}
+	cover := sourceform.SiviHeightEdit{RowID: "1", Form: valid.Form, Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	for _, invalid := range []sourceform.SiviHeightEdit{
-		{"1", "SubVegA-SIVI", "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(3)},
-		{"1", "SubVegA-SIVI", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)},
-		{"3", valid.Form, "HeightA", vprotest.SiviReal(5), vprotest.SiviReal(3)},
-		{"5", "SubVegC-SIVI", "Height6", vprotest.SiviReal(3), vprotest.SiviReal(4)},
-		{"8", valid.Form, "Cover1", vprotest.SiviReal(4), vprotest.SiviReal(3)},
-		{"9", valid.Form, "Cover1", vprotest.SiviReal(4), vprotest.SiviReal(3)},
-		{"01", valid.Form, "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(3)},
-		{"1", "SubVegC-SIVI", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)},
-		{"6", "SubVegD-SIVI", "Height6", vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.SiviReal(3)},
-		{"1", valid.Form, "Cover5a", vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.SiviReal(3)},
-		{"1", valid.Form, "Species", vprotest.MetadataText("S"), vprotest.MetadataText("NEW")},
-		{"1", valid.Form, "Collected", vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.MetadataText("C")},
-		{"1", valid.Form, "ID", vprotest.MetadataInteger("0"), vprotest.MetadataInteger("1")},
-		{"1", valid.Form, "PlotNumber", vprotest.MetadataText("P"), vprotest.MetadataText("Q")},
-		{"1", valid.Form, "HeightA", vprotest.SiviReal(4), vprotest.SiviReal(3)},
-		{"1", valid.Form, "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(100)},
+		{RowID: "1", Form: "SubVegA-SIVI", Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(3)},
+		{RowID: "1", Form: "SubVegA-SIVI", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)},
+		{RowID: "3", Form: valid.Form, Column: "HeightA", Expected: vprotest.SiviReal(5), Value: vprotest.SiviReal(3)},
+		{RowID: "5", Form: "SubVegC-SIVI", Column: "Height6", Expected: vprotest.SiviReal(3), Value: vprotest.SiviReal(4)},
+		{RowID: "8", Form: valid.Form, Column: "Cover1", Expected: vprotest.SiviReal(4), Value: vprotest.SiviReal(3)},
+		{RowID: "9", Form: valid.Form, Column: "Cover1", Expected: vprotest.SiviReal(4), Value: vprotest.SiviReal(3)},
+		{RowID: "01", Form: valid.Form, Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(3)},
+		{RowID: "1", Form: "SubVegC-SIVI", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)},
+		{RowID: "6", Form: "SubVegD-SIVI", Column: "Height6", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.SiviReal(3)},
+		{RowID: "1", Form: valid.Form, Column: "Cover5a", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.SiviReal(3)},
+		{RowID: "1", Form: valid.Form, Column: "Species", Expected: vprotest.MetadataText("S"), Value: vprotest.MetadataText("NEW")},
+		{RowID: "1", Form: valid.Form, Column: "Collected", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.MetadataText("C")},
+		{RowID: "1", Form: valid.Form, Column: "ID", Expected: vprotest.MetadataInteger("0"), Value: vprotest.MetadataInteger("1")},
+		{RowID: "1", Form: valid.Form, Column: "PlotNumber", Expected: vprotest.MetadataText("P"), Value: vprotest.MetadataText("Q")},
+		{RowID: "1", Form: valid.Form, Column: "HeightA", Expected: vprotest.SiviReal(4), Value: vprotest.SiviReal(3)},
+		{RowID: "1", Form: valid.Form, Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(100)},
 		valid, cover,
 	} {
 		got, err := planSIVICombinedEdits(context.Background(), "P", false, vprotest.SiviProjectionFixture(), []sourceform.SiviHeightEdit{valid, cover, invalid})
@@ -96,10 +96,10 @@ func TestSIVICombinedPlanningRejectsWrongFormsRowsDomainsAndDuplicates(t *testin
 }
 
 func TestSIVICombinedPlanningSingleDomainAndNoopOrdering(t *testing.T) {
-	height := sourceform.SiviHeightEdit{"1", "SubVegA-SIVI_BC", "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(100)}
-	cover := sourceform.SiviHeightEdit{"1", height.Form, "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	height := sourceform.SiviHeightEdit{RowID: "1", Form: "SubVegA-SIVI_BC", Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(100)}
+	cover := sourceform.SiviHeightEdit{RowID: "1", Form: height.Form, Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	for _, edits := range [][]sourceform.SiviHeightEdit{{height}, {cover}, {
-		{"1", height.Form, "HeightB", vprotest.MetadataText(""), vprotest.MetadataText("")}, cover, height,
+		{RowID: "1", Form: height.Form, Column: "HeightB", Expected: vprotest.MetadataText(""), Value: vprotest.MetadataText("")}, cover, height,
 	}} {
 		got, err := planSIVICombinedEdits(context.Background(), "P", false, vprotest.SiviProjectionFixture(), edits)
 		if err != nil {
@@ -123,13 +123,13 @@ func TestSIVICombinedPlanningSingleDomainAndNoopOrdering(t *testing.T) {
 }
 
 func TestSIVICombinedPlanningHeightBPhysicalBoundsAndHistoricalNoops(t *testing.T) {
-	cover := sourceform.SiviHeightEdit{"1", "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	cover := sourceform.SiviHeightEdit{RowID: "1", Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	for _, value := range []vprocore.ProjectMetadataCell{
 		{Storage: "null"}, vprotest.MetadataText(""), vprotest.MetadataText("  literal  "),
 		vprotest.MetadataText(strings.Repeat("x", 255)), vprotest.MetadataText(strings.Repeat("🌲", 127) + "x"),
 	} {
 		got, err := planSIVICombinedEdits(context.Background(), "P", false, vprotest.SiviProjectionFixture(), []sourceform.SiviHeightEdit{
-			{"2", cover.Form, "HeightB", vprotest.MetadataText("  historical words  "), value}, cover,
+			{RowID: "2", Form: cover.Form, Column: "HeightB", Expected: vprotest.MetadataText("  historical words  "), Value: value}, cover,
 		})
 		if err != nil || len(got) != 2 || !reflect.DeepEqual(got[0].After, value) {
 			t.Fatal("valid HeightB was constrained/coerced", got, err)
@@ -140,7 +140,7 @@ func TestSIVICombinedPlanningHeightBPhysicalBoundsAndHistoricalNoops(t *testing.
 		vprotest.MetadataText("\xff"), vprotest.MetadataInteger("1"), vprotest.SiviReal(1),
 	} {
 		got, err := planSIVICombinedEdits(context.Background(), "P", false, vprotest.SiviProjectionFixture(), []sourceform.SiviHeightEdit{
-			cover, {"1", cover.Form, "HeightB", vprotest.MetadataText(""), value},
+			cover, {RowID: "1", Form: cover.Form, Column: "HeightB", Expected: vprotest.MetadataText(""), Value: value},
 		})
 		if err == nil || got != nil {
 			t.Fatal("invalid HeightB leaked cover assignment", got, err)
@@ -155,10 +155,10 @@ func TestSIVICombinedPlanningHeightBPhysicalBoundsAndHistoricalNoops(t *testing.
 		source.Rows[0].Cells[3], source.Rows[0].Cells[7], source.Rows[0].Cells[14] = old, old, old
 		source.Rows[0].Cells[4] = vprotest.SiviReal(0)
 		edits := []sourceform.SiviHeightEdit{
-			{"1", cover.Form, "HeightA", old, old},
-			{"1", cover.Form, "Cover2", vprotest.SiviReal(0), vprotest.SiviReal(3)},
-			{"1", cover.Form, "Cover1", old, old},
-			{"1", cover.Form, "HeightB", old, old},
+			{RowID: "1", Form: cover.Form, Column: "HeightA", Expected: old, Value: old},
+			{RowID: "1", Form: cover.Form, Column: "Cover2", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)},
+			{RowID: "1", Form: cover.Form, Column: "Cover1", Expected: old, Value: old},
+			{RowID: "1", Form: cover.Form, Column: "HeightB", Expected: old, Value: old},
 		}
 		got, err := planSIVICombinedEdits(context.Background(), "P", false, source, edits)
 		if err != nil || len(got) != 1 || got[0].Column != "Cover2" {
@@ -173,8 +173,8 @@ func TestSIVICombinedPlanningHeightBPhysicalBoundsAndHistoricalNoops(t *testing.
 
 func TestSIVICombinedPlanningCancellationDiscardsMergedPlan(t *testing.T) {
 	edits := []sourceform.SiviHeightEdit{
-		{"1", "SubVegA-SIVI_BC", "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(100)},
-		{"1", "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)},
+		{RowID: "1", Form: "SubVegA-SIVI_BC", Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(100)},
+		{RowID: "1", Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)},
 	}
 	complete := false
 	for remaining := 0; remaining < 300; remaining++ {

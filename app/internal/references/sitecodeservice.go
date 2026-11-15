@@ -37,10 +37,6 @@ func NewSiteCodeService(dataDir string) (*SiteCodeService, error) {
 	return &SiteCodeService{Path: target, provenance: provenance, Cache: cache}, nil
 }
 
-func checkSiteCodeChecksum(path string, provenance listcatalog.Provenance) error {
-	return sqlutil.CheckListCatalogueChecksum(path, provenance, "site code")
-}
-
 func (s *SiteCodeService) Close() error {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()

@@ -1,6 +1,7 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -8,7 +9,6 @@ import (
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -127,7 +127,7 @@ func TestOrdinaryAuditReadProductionWire(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "ordinaryAuditWire.json"))
+	fixture, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "ordinaryAuditWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

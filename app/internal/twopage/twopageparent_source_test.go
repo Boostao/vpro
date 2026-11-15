@@ -79,7 +79,7 @@ func TestTwoPageParentRawProjectionPairsAndCloneSafety(t *testing.T) {
 		if got.Form != form || got.Query != "USysEnv" || got.Membership != "literal-binary-inner-pairs" ||
 			len(got.Bindings) != expected || len(got.Rows) != 4 ||
 			!reflect.DeepEqual(got.EnvColumns, env.Columns) || !reflect.DeepEqual(got.AdminColumns, admin.Columns) ||
-			!reflect.DeepEqual(got.Rows[0], sourceform.SiviParentRow{env.Rows[0], admin.Rows[0]}) {
+			!reflect.DeepEqual(got.Rows[0], sourceform.SiviParentRow{Env: env.Rows[0], Admin: admin.Rows[0]}) {
 			t.Fatal("physical raw provenance or duplicate-pair shape changed", got)
 		}
 		*got.Rows[0].Env.Cells[0].Text = "mutated"
