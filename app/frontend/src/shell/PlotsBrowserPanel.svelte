@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, RefreshCw } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, RefreshCw, X } from '@lucide/svelte';
   import type { HierarchyNode, PlotPage } from '../../bindings/github.com/boostao/vpro/app';
 import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from '../shared/state';
@@ -24,6 +24,8 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onopentwopage = () => {},
     onopensivi = () => {},
     onopenexplorer = () => {},
+    oncollapseinspector = () => {},
+    onselectplot = () => {},
   }: {
     region?: 'main' | 'detail';
     view?: string;
@@ -44,24 +46,38 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onopentwopage?: () => void;
     onopensivi?: () => void;
     onopenexplorer?: () => void;
+    oncollapseinspector?: () => void;
+    onselectplot?: (plot: PlotSummary) => void;
   } = $props();
 </script>
 
 {#if region === 'detail'}
   {#if selected && view === 'plots'}
     <aside class="detail" aria-label="Selected plot">
-      <div class="eyebrow">SELECTED PLOT</div><h2>{selected.plotNumber}</h2>
+      <div class="detail-header-row">
+        <div class="eyebrow">SELECTED PLOT</div>
+        <button
+          type="button"
+          class="icon-button"
+          title="Collapse inspector"
+          aria-label="Collapse inspector"
+          onclick={oncollapseinspector}
+        >
+          <X size={15} />
+        </button>
+      </div>
+      <h2 class="tabular-nums">{selected.plotNumber}</h2>
       <dl>
-        <dt>Field number</dt><dd>{selected.fieldNumber ?? '—'}</dd>
+        <dt>Field number</dt><dd class="tabular-nums">{selected.fieldNumber ?? '—'}</dd>
         <dt>Representing</dt><dd>{selected.plotRepresenting ?? '—'}</dd>
         <dt>Zone</dt><dd>{selected.zone ?? '—'}</dd>
         <dt>Subzone</dt><dd>{selected.subZone ?? '—'}</dd>
-        <dt>Site series</dt><dd>{selected.siteSeries ?? '—'}</dd>
+        <dt>Site series</dt><dd class="tabular-nums">{selected.siteSeries ?? '—'}</dd>
       </dl>
-      <div class="mt-4 pt-3 border-t border-[#D8D8D8]">
+      <div class="mt-4 pt-3 border-t border-slate-200">
         <button
           type="button"
-          class="w-full py-1.5 px-3 bg-[#003366] hover:bg-[#002244] text-white rounded text-xs font-semibold"
+          class="w-full py-2 px-3 bg-[#1E5128] hover:bg-[#153B1D] text-white rounded text-xs font-semibold"
           onclick={onopenfs882}
         >
           Open in FS882 Editor
@@ -69,7 +85,7 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
         <button
           type="button"
           data-twopage-open
-          class="mt-2 w-full py-1.5 px-3 border border-[#003366] bg-white hover:bg-[#EBF1F6] text-[#003366] rounded text-xs font-semibold"
+          class="mt-2 w-full py-2 px-3 border border-[#003366] bg-white hover:bg-[#EBF1F8] text-[#003366] rounded text-xs font-semibold"
           disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
           onclick={onopentwopage}
         >
@@ -79,12 +95,37 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
           <button
             type="button"
             data-sivi-standalone-open
-            class="mt-2 w-full py-1.5 px-3 border border-[#D8D8D8] bg-white hover:bg-[#F2F2F2] text-[#313132] rounded text-xs font-semibold"
+            class="mt-2 w-full py-2 px-3 border border-[#003366] text-[#003366] hover:bg-[#EBF1F8] rounded text-xs font-semibold"
             disabled={busy || editorBusy || transitionWorking || pendingTransition !== null}
             onclick={onopensivi}
           >Open SIVI / FS1333</button>
         {/if}
       </div>
+    </aside>
+  {:else if view === 'home' || view === 'plots'}
+    <aside class="detail" aria-label="Workspace inspector">
+      <div class="detail-header-row">
+        <div class="eyebrow">WORKSPACE INSPECTOR</div>
+        <button
+          type="button"
+          class="icon-button"
+          title="Collapse inspector"
+          aria-label="Collapse inspector"
+          onclick={oncollapseinspector}
+        >
+          <X size={15} />
+        </button>
+      </div>
+      <h2>{$projectState?.activeProject ?? 'No project'}</h2>
+      <dl>
+        <dt>Active Site Unit</dt><dd>{$projectState?.activeSU ?? 'None'}</dd>
+        <dt>Active Hierarchy</dt><dd>{$projectState?.activeHierarchy ?? 'None'}</dd>
+        <dt>Plot Profile</dt><dd>{$projectState?.plotProfile?.source?.name ?? 'None'}</dd>
+        <dt>Plots in Scope</dt><dd class="tabular-nums">{page?.total ?? 0}</dd>
+      </dl>
+      <p class="mt-4 text-xs text-slate-600 leading-relaxed">
+        Select a plot row to inspect BEC attributes, or press <kbd class="px-1 py-0.5 rounded border border-slate-300 bg-slate-50 font-mono text-[11px]">Ctrl+K</kbd> to jump directly to any plot, report, or LMH25 topic.
+      </p>
     </aside>
   {/if}
 {:else if view === 'hierarchy'}
@@ -129,9 +170,9 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
       <tbody>
         {#each page?.plots ?? [] as plot (plot.plotNumber)}
           <tr class:selected={selected?.plotNumber === plot.plotNumber}>
-            <td><button class="plot-link" onclick={() => selected = plot}>{plot.plotNumber}</button></td>
-            <td>{plot.fieldNumber ?? '—'}</td><td>{plot.plotRepresenting ?? '—'}</td>
-            <td>{plot.zone ?? '—'}</td><td>{plot.subZone ?? '—'}</td><td>{plot.siteSeries ?? '—'}</td>
+            <td><button class="plot-link tabular-nums" onclick={() => { selected = plot; onselectplot(plot); }}>{plot.plotNumber}</button></td>
+            <td class="tabular-nums">{plot.fieldNumber ?? '—'}</td><td>{plot.plotRepresenting ?? '—'}</td>
+            <td>{plot.zone ?? '—'}</td><td>{plot.subZone ?? '—'}</td><td class="tabular-nums">{plot.siteSeries ?? '—'}</td>
           </tr>
         {:else}
           <tr><td colspan="6" class="empty-row">{busy ? 'Loading plots...' : 'No plots in this project.'}</td></tr>
@@ -140,7 +181,7 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     </table>
   </div>
   <div class="table-footer">
-    <span>{page?.total ? `${offset + 1}–${Math.min(offset + pageSize, page.total)} of ${page.total}` : '0 of 0'}</span>
+    <span class="tabular-nums">{page?.total ? `${offset + 1}–${Math.min(offset + pageSize, page.total)} of ${page.total}` : '0 of 0'}</span>
     <div class="page-controls">
       <button class="icon-button" title="Previous page" aria-label="Previous page" disabled={busy || offset === 0} onclick={() => onloadpage(Math.max(0, offset - pageSize))}><ChevronLeft size={18} /></button>
       <button class="icon-button" title="Next page" aria-label="Next page" disabled={busy || offset + pageSize >= (page?.total ?? 0)} onclick={() => onloadpage(offset + pageSize)}><ChevronRight size={18} /></button>

@@ -4,6 +4,7 @@
 import type { AccessProjectCandidate } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
 import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from '../shared/state';
+  import { notifications } from './notificationService.svelte';
 
   let {
     busy,
@@ -195,6 +196,13 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
     } catch (cause) {
       accessInspection = null;
       accessError = `Access inspection failed: ${String(cause)}`;
+      notifications.push({
+        severity: 'error',
+        category: 'background',
+        source: 'Access Import',
+        title: 'Access inspection failed',
+        message: String(cause),
+      });
     } finally {
       accessWorking = false;
     }
@@ -233,6 +241,13 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
           activateOnSuccess,
         });
         accessResult = result;
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'Access Import',
+          title: `Imported ${result.targetProject} (${result.plotCount} plots)`,
+          message: `Saved to ${result.destinationPath}`,
+        });
         if (result.state) {
           projectState.set(result.state);
         }
@@ -241,6 +256,13 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
         }
       } catch (cause) {
         accessError = `Import failed: ${String(cause)}`;
+        notifications.push({
+          severity: 'error',
+          category: 'background',
+          source: 'Access Import',
+          title: 'Access project import failed',
+          message: String(cause),
+        });
         throw cause;
       } finally {
         accessWorking = false;

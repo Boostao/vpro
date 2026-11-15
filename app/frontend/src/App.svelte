@@ -2,11 +2,16 @@
   import { onMount, onDestroy, tick, type Component } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import { VproCloseRequest } from '../bindings/events';
-  import { Database } from '@lucide/svelte';
+  import { Bell, ChevronLeft, ChevronRight, Database, PanelRight, Search } from '@lucide/svelte';
   import { ContextService, LifecycleService, type StartupState, type HierarchyNode, type PlotPage, type ProjectPlotProfileFilterRequest } from '../bindings/github.com/boostao/vpro/app';
 import type { ContextSelection, PlotSummary } from '../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from './shared/state';
   import Navigation from './shell/Navigation.svelte';
+  import CommandPalette from './shell/CommandPalette.svelte';
+  import NotificationHost from './shell/NotificationHost.svelte';
+  import NotificationDrawer from './shell/NotificationDrawer.svelte';
+  import { notifications, type NotificationStateSnapshot } from './shell/notificationService.svelte';
+  import type { BuildCommandPaletteInput, CommandPaletteAction } from './shell/commandPalette';
   import HomeWorkspaceHub from './shell/HomeWorkspaceHub.svelte';
   import StartupRecoveryPanel from './shell/StartupRecoveryPanel.svelte';
   import WorkspaceSidebar from './shell/WorkspaceSidebar.svelte';
@@ -107,6 +112,28 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   let resetSampleConfirmOpen = $state(false), resetSampleNotice = $state('');
   let whatsNewStatus = $state.raw<WhatsNewStatus | null>(null), whatsNewPromptDismissed = $state(false);
   let pictureManagerPlot = $state(''), plotLabelNumber = $state(''), contextExpanded = $state(false);
+  let inspectorExpanded = $state(false);
+  let isNarrowViewport = $state(false);
+  let commandPaletteOpen = $state(false);
+  let notificationDrawerOpen = $state(false);
+  let notifSnapshot = $state<NotificationStateSnapshot>(notifications.getSnapshot());
+  $effect(() => {
+    return notifications.subscribe((next) => {
+      notifSnapshot = next;
+    });
+  });
+  const CONTEXT_EXPANDED_STORAGE_KEY = 'vpro.shell.contextExpanded';
+  function toggleContextSidebar() {
+    const next = !contextExpanded;
+    contextExpanded = next;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(CONTEXT_EXPANDED_STORAGE_KEY, String(next));
+      }
+    } catch {
+      // Ignore storage failures in restricted contexts
+    }
+  }
   let localEditorBusy = $state(false), matrixPublicationBusy = $state(false), pictureCreationBusy = $state(false);
   let pictureLifecycleBusy = $state(false), twoPageSoilBusy = $state(false), twoPageVegetationBusy = $state(false);
   let externalSUEnvironmentBusy = $state(false), projectReportBusy = $state(false), summaryPreferenceBusy = $state(false);
@@ -567,6 +594,18 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         try { await loadHierarchy(); }
         catch (cause) { error = `Context changed, but hierarchy refresh failed: ${String(cause)}`; }
       }
+      if (typeof window !== 'undefined' && window.innerWidth < 1200) {
+        contextExpanded = false;
+      }
+    } catch (cause) {
+      notifications.push({
+        severity: 'error',
+        category: 'general',
+        source: 'Context Switch',
+        title: 'Context switch failed',
+        message: String(cause),
+      });
+      throw cause;
     } finally { busy = false; }
   }
 
@@ -583,11 +622,16 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
 
   function handleGlobalHelpKeydown(event: KeyboardEvent) {
     if (startupFailure !== null) return;
+    if ((event.ctrlKey || event.metaKey) && typeof event.key === 'string' && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      commandPaletteOpen = !commandPaletteOpen;
+      return;
+    }
     const activeEl = typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
     const action = classifyGlobalHelpShortcut(event, activeEl);
     if (action === 'f1') { event.preventDefault(); openContextualHelp(); return; }
     if (action === 'shortcuts') { event.preventDefault(); shortcutsModalOpen = !shortcutsModalOpen; return; }
-    if (event.key === 'Escape' && helpDrawerOpen && !shortcutsModalOpen && !whatsNewModalOpen && !aboutModalOpen && !tourOpen && !resetSampleConfirmOpen && !userSetupOpen && !closeRequest && !pendingTransition) {
+    if (event.key === 'Escape' && helpDrawerOpen && !commandPaletteOpen && !notificationDrawerOpen && !shortcutsModalOpen && !whatsNewModalOpen && !aboutModalOpen && !tourOpen && !resetSampleConfirmOpen && !userSetupOpen && !closeRequest && !pendingTransition) {
       event.preventDefault(); helpDrawerOpen = false;
     }
   }
@@ -618,6 +662,13 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         cancelAllReads(); projectState.set(nextState); profileNavigation = null; plotProfilePanel?.clearCachedSources();
         selected = null; page = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; resetSampleConfirmOpen = false; view = 'plots';
         resetSampleNotice = 'Workspace reset to pristine Sample.db (Project: Sample, SU: Sample, Hierarchy: Sample). User project .db files were preserved.';
+        notifications.push({
+          severity: 'success',
+          category: 'general',
+          source: 'Workspace',
+          title: 'Workspace reset to Sample.db',
+          message: 'User project .db files were preserved.',
+        });
         await loadPlots(0);
         try { await loadHierarchy(); }
         catch (cause) { error = `Sample workspace activated, but hierarchy refresh failed: ${String(cause)}`; }
@@ -625,7 +676,229 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     }, ownedDiscardOnSample);
   }
 
+  const loadedPlotRows = $derived<PlotSummary[]>(
+    (page as (PlotPage & { rows?: PlotSummary[] }) | null)?.plots ??
+      (page as { rows?: PlotSummary[] } | null)?.rows ??
+      []
+  );
+  const currentContextPlotNumber = $derived(
+    (view === 'fs882' ? editorPlotNumber : selected?.plotNumber) ?? selected?.plotNumber ?? ''
+  );
+  const currentContextPlotIndex = $derived(
+    currentContextPlotNumber
+      ? loadedPlotRows.findIndex((p) => p.plotNumber === currentContextPlotNumber)
+      : -1
+  );
+  const canStepPrevPlot = $derived(
+    loadedPlotRows.length > 0 &&
+      !busy &&
+      !editorBusy &&
+      !companionPanelBusy &&
+      !transitionWorking &&
+      currentContextPlotIndex > 0
+  );
+  const canStepNextPlot = $derived(
+    loadedPlotRows.length > 0 &&
+      !busy &&
+      !editorBusy &&
+      !companionPanelBusy &&
+      !transitionWorking &&
+      (currentContextPlotIndex === -1
+        ? loadedPlotRows.length > 0
+        : currentContextPlotIndex < loadedPlotRows.length - 1)
+  );
+  const sessionStatusKind = $derived<'busy' | 'dirty' | 'ready'>(
+    busy || editorBusy || companionPanelBusy || transitionWorking
+      ? 'busy'
+      : (closeState?.unsaved ?? false) || Boolean(workbenchDirtyLabel)
+        ? 'dirty'
+        : 'ready'
+  );
+  const sessionStatusLabel = $derived(
+    sessionStatusKind === 'busy'
+      ? 'Busy'
+      : sessionStatusKind === 'dirty'
+        ? 'Unsaved Draft'
+        : 'Ready'
+  );
+  const showInspectorToggle = $derived(view === 'home' || view === 'plots');
+  const showInspectorRail = $derived(
+    !startupFailure && showInspectorToggle && inspectorExpanded
+  );
+  const commandCatalogInput = $derived<BuildCommandPaletteInput>({
+    plots: loadedPlotRows.map((p) => ({
+      plotNumber: p.plotNumber,
+      siteUnit: p.siteSeries,
+      zone: p.zone,
+      subZone: p.subZone,
+      location: p.plotRepresenting,
+    })),
+    projects: ($projectState?.projects ?? []).map((p) => ({
+      name: p.name,
+      path: p.path,
+      file: p.file,
+      version: p.version,
+      compatible: p.compatible,
+      active: p.name === $projectState?.activeProject && p.path === $projectState?.projectPath,
+    })),
+    sus: ($projectState?.sus ?? []).map((s, index) => ({
+      index,
+      name: s.name,
+      path: s.path,
+      kind: s.kind,
+      compatible: s.compatible,
+      active: s.name === $projectState?.activeSU && s.path === $projectState?.suPath,
+    })),
+    selectedPlotNumber: currentContextPlotNumber || null,
+    activeSU: $projectState?.activeSU ?? 'None',
+    metadataAvailable: view === 'fs882' && !!$projectState?.contextId && !!editor?.canOpenProjectMetadata(),
+    siviAvailable: siviStandaloneEnabled,
+    newSiviAvailable: !!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking,
+  });
+
+  function stepContextPlot(delta: -1 | 1) {
+    if (loadedPlotRows.length === 0) return;
+    const targetIdx =
+      currentContextPlotIndex === -1
+        ? delta > 0
+          ? 0
+          : -1
+        : currentContextPlotIndex + delta;
+    const target = loadedPlotRows[targetIdx];
+    if (!target) return;
+    if (view === 'fs882') {
+      void requestTransition(async () => {
+        selected = target;
+        editorPlotNumber = target.plotNumber;
+        error = '';
+      });
+      return;
+    }
+    selected = target;
+    if (!isNarrowViewport && view === 'plots') {
+      inspectorExpanded = true;
+    }
+  }
+
+  function handleCommandPaletteSelect(action: CommandPaletteAction) {
+    if (action.kind === 'open-plot-fs882' || action.kind === 'open-plot-twopage') {
+      void requestTransition(async () => {
+        const found = loadedPlotRows.find((p) => p.plotNumber === action.plotNumber) ?? null;
+        if (found) selected = found;
+        editorPlotNumber = action.plotNumber;
+        editorEntryForm = action.kind === 'open-plot-twopage' ? 'fs882-twopage' : 'fs882';
+        view = 'fs882';
+        error = '';
+      });
+      return;
+    }
+    if (action.kind === 'open-plot-sivi') {
+      if (!siviStandaloneEnabled) {
+        error = 'Standalone SIVI requires its independent entry gate, parent review and a selected owned plot.';
+        return;
+      }
+      void requestTransition(async () => {
+        const found = loadedPlotRows.find((p) => p.plotNumber === action.plotNumber) ?? null;
+        if (found) selected = found;
+        editorPlotNumber = action.plotNumber;
+        editorEntryForm = 'sivi';
+        view = 'fs882';
+        error = '';
+      });
+      return;
+    }
+    if (action.kind === 'switch-project') {
+      const targetProj = $projectState?.projects?.[action.projectIndex];
+      if (targetProj) {
+        void requestTransition(async (contextId) => {
+          const current = $projectState;
+          if (!current) return;
+          await switchContext(contextId, {
+            project: targetProj.name,
+            projectPath: targetProj.path ?? '',
+            su: 'None',
+            suPath: '',
+            hierarchy: current.activeHierarchy ?? 'None',
+            hierarchyPath: current.hierarchyPath ?? '',
+          }, 'plots');
+        });
+      }
+      return;
+    }
+    if (action.kind === 'switch-su') {
+      void requestTransition(async (contextId) => {
+        const current = $projectState;
+        if (!current) return;
+        const chosen = action.suIndex >= 0 ? current.sus?.[action.suIndex] : undefined;
+        await switchContext(contextId, {
+          project: current.activeProject,
+          projectPath: current.projectPath ?? '',
+          su: chosen?.name ?? 'None',
+          suPath: chosen?.path ?? '',
+          hierarchy: current.activeHierarchy ?? 'None',
+          hierarchyPath: current.hierarchyPath ?? '',
+        }, 'plots');
+      });
+      return;
+    }
+    if (action.kind === 'navigate-view') {
+      navigate(action.view as typeof view | 'fs882-twopage');
+      return;
+    }
+    if (action.kind === 'new-sivi') {
+      if ($projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking) {
+        newSiviModalOpen = true;
+      }
+      return;
+    }
+    if (action.kind === 'open-metadata') {
+      void openProjectMetadata();
+      return;
+    }
+    if (action.kind === 'help-topic') {
+      openContextualHelp(action.topicId, action.tab ?? 'inspector');
+      return;
+    }
+    if (action.kind === 'help-action') {
+      handleHelpMenuAction(action.action);
+    }
+  }
+
   onMount(() => {
+    const syncViewport = () => {
+      if (typeof window === 'undefined') return;
+      const narrow = window.innerWidth < 1200;
+      const wasNarrow = isNarrowViewport;
+      isNarrowViewport = narrow;
+      if (narrow && !wasNarrow) {
+        contextExpanded = false;
+        inspectorExpanded = false;
+      } else if (!narrow && wasNarrow) {
+        try {
+          const saved = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(CONTEXT_EXPANDED_STORAGE_KEY) : null;
+          contextExpanded = saved === 'false' ? false : true;
+        } catch {
+          contextExpanded = true;
+        }
+      }
+    };
+    if (typeof window !== 'undefined') {
+      const initialNarrow = window.innerWidth < 1200;
+      isNarrowViewport = initialNarrow;
+      if (initialNarrow) {
+        contextExpanded = false;
+        inspectorExpanded = false;
+      } else {
+        try {
+          const saved = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(CONTEXT_EXPANDED_STORAGE_KEY) : null;
+          contextExpanded = saved === null ? true : saved === 'true';
+        } catch {
+          contextExpanded = true;
+        }
+        inspectorExpanded = true;
+      }
+      window.addEventListener('resize', syncViewport);
+    }
     const stopCloseEvents = Events.On(VproCloseRequest, (event) => {
       const requestId: unknown = event.data;
       if (typeof requestId !== 'string' || !requestId) { error = 'Invalid native window close request; VPRO remains open.'; return; }
@@ -635,7 +908,13 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       .catch((cause) => { error = `Window close handler could not initialise: ${String(cause)}`; });
     void defaultHelpPort.getWhatsNewStatus().then((st) => { whatsNewStatus = st; }).catch(() => {});
     void refresh();
-    return () => { request++; stopCloseEvents(); };
+    return () => {
+      request++;
+      stopCloseEvents();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', syncViewport);
+      }
+    };
   });
 </script>
 
@@ -670,7 +949,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       <WorkspaceStatusBanners region="badge" {buildMode} {appVersion} {shortBuildCommit} {releaseChannel}
         startupFailed={startupFailure !== null} onopenabout={() => { aboutModalOpen = true; }} />
     </div>
-    <button class="context-toggle" type="button" disabled={startupFailure !== null} aria-expanded={contextExpanded} aria-controls="project-context" onclick={() => contextExpanded = !contextExpanded}>Projects &amp; context</button>
+    <button class="context-toggle" type="button" disabled={startupFailure !== null} aria-expanded={contextExpanded} aria-controls="project-context" onclick={toggleContextSidebar}>Projects &amp; context</button>
     {#if !startupFailure}<Navigation {view} activeEntryForm={editorEntryForm} onnavigate={navigate}
       siviAvailable={siviStandaloneEnabled && !!selected && !!$projectState?.contextId} onopensivi={() => void openSIVI()}
       newSiviAvailable={!!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking} onopennewsivi={() => { newSiviModalOpen = true; }}
@@ -679,10 +958,134 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       onopenusersetup={() => { userSetupOpen = true; }}
       whatsNewUnreadCount={whatsNewStatus?.unreadCount ?? 0} resetSampleAvailable={!!$projectState?.contextId && !busy && !editorBusy && !companionPanelBusy && !transitionWorking}
       {releaseChannel} onhelpaction={handleHelpMenuAction} />{/if}
-    <div class="topbar-context"><Database size={16} strokeWidth={1.8} /><span>{$projectState?.activeProject ?? 'No project'}</span></div>
+    <div class="topbar-actions">
+      <button
+        type="button"
+        class="cmd-trigger"
+        disabled={startupFailure !== null}
+        aria-label="Open Quick-Jump Command Palette (Ctrl+K)"
+        title="Quick-Jump Command Palette (Ctrl+K)"
+        data-command-palette-trigger
+        onclick={() => { commandPaletteOpen = true; }}
+      >
+        <Search size={14} aria-hidden="true" />
+        <span class="cmd-trigger-label">Quick Jump</span>
+        <kbd>Ctrl+K</kbd>
+      </button>
+
+      <button
+        type="button"
+        class="notif-bell"
+        disabled={startupFailure !== null}
+        aria-label={`Notification Center${notifSnapshot.unreadCount > 0 ? ` (${notifSnapshot.unreadCount} unread)` : ''}`}
+        title="Open Notification Center"
+        data-notification-bell
+        onclick={() => { notificationDrawerOpen = !notificationDrawerOpen; }}
+      >
+        <Bell size={16} aria-hidden="true" />
+        {#if notifSnapshot.unreadCount > 0}
+          <span
+            class="notif-badge tabular-nums notif-badge-{notifSnapshot.badgeSeverity === 'none' ? 'info' : notifSnapshot.badgeSeverity}"
+            data-notification-badge={notifSnapshot.badgeSeverity}
+          >
+            {notifSnapshot.unreadCount > 99 ? '99+' : notifSnapshot.unreadCount}
+          </span>
+        {/if}
+      </button>
+
+      <div class="topbar-context">
+        <Database size={15} strokeWidth={1.8} aria-hidden="true" />
+        <span>{$projectState?.activeProject ?? 'No project'}</span>
+      </div>
+    </div>
   </header>
 
-  <div class="workspace" class:context-collapsed={!contextExpanded || startupFailure !== null}>
+  {#if !startupFailure}
+    <div class="context-strip" role="region" aria-label="Active workspace context and quick actions" data-context-strip>
+      <div class="context-strip-chips">
+        <span class="ctx-chip" data-context-chip="project">
+          <span class="ctx-chip-label">Project</span>
+          <span class="ctx-chip-value">{$projectState?.activeProject ?? 'None'}</span>
+        </span>
+        <span class="ctx-chip" data-context-chip="su">
+          <span class="ctx-chip-label">SU</span>
+          <span class="ctx-chip-value">{$projectState?.activeSU ?? 'None'}</span>
+        </span>
+        <span class="ctx-chip" data-context-chip="hierarchy">
+          <span class="ctx-chip-label">Hierarchy</span>
+          <span class="ctx-chip-value">{$projectState?.activeHierarchy ?? 'None'}</span>
+        </span>
+
+        <div class="ctx-plot-stepper" role="group" aria-label="Plot navigation">
+          <span class="ctx-chip-label">Plot</span>
+          <span class="ctx-plot-badge tabular-nums" data-context-plot-badge>
+            {currentContextPlotNumber || 'None'}
+          </span>
+          <button
+            type="button"
+            class="ctx-step-btn"
+            title="Previous plot in loaded page"
+            aria-label="Previous plot"
+            disabled={!canStepPrevPlot}
+            onclick={() => stepContextPlot(-1)}
+          >
+            <ChevronLeft size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="ctx-step-btn"
+            title="Next plot in loaded page"
+            aria-label="Next plot"
+            disabled={!canStepNextPlot}
+            onclick={() => stepContextPlot(1)}
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      <div class="context-strip-actions">
+        <span
+          class="ctx-status-pill ctx-status-{sessionStatusKind}"
+          role="status"
+          data-session-status={sessionStatusKind}
+        >
+          {sessionStatusLabel}
+        </span>
+
+        {#if showInspectorToggle}
+          <button
+            type="button"
+            class="ctx-inspector-toggle"
+            aria-expanded={inspectorExpanded}
+            data-inspector-toggle
+            onclick={() => { inspectorExpanded = !inspectorExpanded; }}
+          >
+            <PanelRight size={14} aria-hidden="true" />
+            <span>Inspector</span>
+          </button>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
+  <div
+    class="workspace"
+    class:context-collapsed={!contextExpanded || startupFailure !== null}
+    class:inspector-collapsed={!showInspectorRail}
+  >
+    {#if !startupFailure && isNarrowViewport && (contextExpanded || showInspectorRail)}
+      <button
+        type="button"
+        class="drawer-backdrop"
+        aria-label="Close side drawer"
+        data-drawer-backdrop
+        onclick={() => {
+          contextExpanded = false;
+          inspectorExpanded = false;
+        }}
+      ></button>
+    {/if}
     <WorkspaceSidebar {busy} {editorBusy} {companionPanelBusy} {transitionWorking} {requestTransition} {switchContext} onAccessActivated={handleAccessActivated} />
 
     <main class="content">
@@ -1008,12 +1411,16 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {:catch loadError}<p class="error" role="alert">Subzone Matrix Report could not load: {String(loadError)}</p>{/await}
       {:else}
         <PlotsBrowserPanel region="main" {view} {busy} {error} {page} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled}
-          onrefresh={refresh} onloadpage={loadPlots} onopenexplorer={() => navigate('classification-explorer')} />
+          onrefresh={refresh} onloadpage={loadPlots} onopenexplorer={() => navigate('classification-explorer')}
+          onselectplot={() => { inspectorExpanded = true; }} />
       {/if}
     </main>
 
-    <PlotsBrowserPanel region="detail" {view} {busy} bind:selected {siviStandaloneEnabled} {editorBusy} {transitionWorking} {pendingTransition}
-      onopenfs882={() => navigate('fs882')} onopentwopage={() => navigate('fs882-twopage')} onopensivi={() => void openSIVI()} />
+    {#if showInspectorRail}
+      <PlotsBrowserPanel region="detail" {view} {busy} {page} bind:selected {siviStandaloneEnabled} {editorBusy} {transitionWorking} {pendingTransition}
+        onopenfs882={() => navigate('fs882')} onopentwopage={() => navigate('fs882-twopage')} onopensivi={() => void openSIVI()}
+        oncollapseinspector={() => { inspectorExpanded = false; }} />
+    {/if}
     {#if newSiviModalOpen && $projectState?.contextId}
       {#await import('./entry/SIVIParentCreateModal.svelte') then { default: SIVIParentCreateModal }}
         <SIVIParentCreateModal contextId={$projectState.contextId} activeProject={$projectState.activeProject} activeSu={$projectState.activeSU}
@@ -1071,4 +1478,19 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         onclose={() => { userSetupOpen = false; }} />
     {/await}
   {/if}
+
+  {#if !startupFailure}
+    <CommandPalette
+      open={commandPaletteOpen}
+      catalogInput={commandCatalogInput}
+      onselect={handleCommandPaletteSelect}
+      onclose={() => { commandPaletteOpen = false; }}
+    />
+    <NotificationDrawer
+      open={notificationDrawerOpen}
+      controller={notifications}
+      onclose={() => { notificationDrawerOpen = false; }}
+    />
+  {/if}
+  <NotificationHost controller={notifications} />
 </div>

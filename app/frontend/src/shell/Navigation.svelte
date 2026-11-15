@@ -230,6 +230,11 @@
                 onclick={() => activate(item)}
               >
                 <item.icon size={16} aria-hidden="true" />
+                {#if item.action === 'sivi' && !itemEnabled(item)}
+                  <span class="nav-item-hint">Select plot</span>
+                {:else if item.action === 'metadata' && !itemEnabled(item)}
+                  <span class="nav-item-hint">Open clean plot</span>
+                {/if}
                 <span>{item.name}{item.helpAction === 'whats-new' && whatsNewUnreadCount > 0 ? ` (${whatsNewUnreadCount} new)` : ''}</span>
               </button>
             {/each}

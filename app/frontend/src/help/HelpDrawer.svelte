@@ -216,7 +216,7 @@
 
 {#if open}
   <div
-    class="fixed top-0 right-0 bottom-0 z-40 flex w-full max-w-[32rem] flex-col border-l border-slate-300 bg-white text-[#313132] shadow-2xl"
+    class="fixed top-0 right-0 bottom-0 z-50 flex w-full max-w-[min(32rem,100vw)] flex-col border-l border-slate-300 bg-white text-[#313132] shadow-2xl"
     role="complementary"
     aria-label="VPro Help and LMH25 Reference"
     data-help-drawer

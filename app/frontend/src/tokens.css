@@ -1,0 +1,114 @@
+/* Canonical BC Government Digital Design System + BEC Ecological Token Contract (WCAG 2.1 AA+) */
+
+@font-face {
+  font-family: "BC Sans";
+  src: url("/fonts/BCSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BC Sans";
+  src: url("/fonts/BCSans-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BC Sans";
+  src: url("/fonts/BCSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BC Sans";
+  src: url("/fonts/BCSans-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  /* Brand & Authority Chrome (BC Government Standard) */
+  --vpro-navy: #003366;
+  --vpro-navy-dark: #002244;
+  --vpro-navy-hover: #0a4480;
+  --vpro-navy-tint: #ebf1f8;
+  --vpro-gold: #fcba19;
+  --vpro-gold-muted: #e3a812;
+  --vpro-gold-surface: #fef7e3;
+
+  /* BEC Ecological Domain Accents */
+  --vpro-forest: #1e5128;
+  --vpro-forest-dark: #153b1d;
+  --vpro-forest-surface: #e9f1eb;
+  --vpro-forest-border: #b7cfc0;
+
+  /* Surfaces, Canvas & Ink (WCAG 2.1 AA+ Contrast Verified) */
+  --vpro-surface: #ffffff;
+  --vpro-surface-subtle: #f8fafb;
+  --vpro-canvas: #f2f4f6;
+  --vpro-rail: #eaeff3;
+  --vpro-ink: #313132;
+  --vpro-ink-secondary: #4b5563;
+  --vpro-ink-muted: #5f6b7a;
+  --vpro-border: #d1d5db;
+  --vpro-border-strong: #9ca3af;
+  --vpro-focus-ring: #1a5a96;
+
+  /* Semantic Status & LMH25 Advisory Palette */
+  --vpro-info: #1a5a96;
+  --vpro-info-bg: #ebf3fa;
+  --vpro-info-border: #9ec3e6;
+  --vpro-success: #2e8540;
+  --vpro-success-ink: #1b5e29;
+  --vpro-success-bg: #ebf5ed;
+  --vpro-success-border: #96cfa2;
+  --vpro-warning: #9a6700;
+  --vpro-warning-ink: #704b00;
+  --vpro-warning-bg: #fef6e0;
+  --vpro-warning-border: #d99b26;
+  --vpro-error: #d8292f;
+  --vpro-error-ink: #a61b20;
+  --vpro-error-bg: #fbeaea;
+  --vpro-error-border: #e59ba0;
+
+  /* Typography & Geometry */
+  --vpro-font-sans: "BC Sans", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --vpro-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --vpro-radius-xs: 3px;
+  --vpro-radius-sm: 4px;
+  --vpro-radius-md: 6px;
+  --vpro-radius-lg: 8px;
+  --vpro-shadow-sm: 0 1px 2px rgba(0, 34, 68, 0.06);
+  --vpro-shadow-md: 0 6px 18px rgba(0, 34, 68, 0.12);
+  --vpro-shadow-lg: 0 14px 34px rgba(0, 34, 68, 0.2);
+
+  /* Cross-Artifact Aliases (Release Portal & Quarto Parity) */
+  --bcgov-navy: var(--vpro-navy);
+  --bcgov-navy-dark: var(--vpro-navy-dark);
+  --bcgov-navy-tint: var(--vpro-navy-tint);
+  --bcgov-gold: var(--vpro-gold);
+  --bcgov-surface: var(--vpro-surface);
+  --bcgov-neutral: var(--vpro-canvas);
+  --bcgov-border: var(--vpro-border);
+  --bcgov-border-strong: var(--vpro-border-strong);
+  --bcgov-text: var(--vpro-ink);
+  --bcgov-text-secondary: var(--vpro-ink-secondary);
+  --bcgov-link: var(--vpro-info);
+  --bcgov-verified: var(--vpro-success);
+  --bcgov-verified-bg: var(--vpro-success-bg);
+  --bcgov-advisory-bg: var(--vpro-warning-bg);
+  --bcgov-alert: var(--vpro-error);
+  --bcgov-alert-bg: var(--vpro-error-bg);
+  --bcgov-bec-forest: var(--vpro-forest);
+  --bcgov-bec-forest-bg: var(--vpro-forest-surface);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

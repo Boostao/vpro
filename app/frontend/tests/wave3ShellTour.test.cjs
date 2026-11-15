@@ -35,7 +35,9 @@ test('Unified BC Gov tokens, offline fonts, Surface background, and zero Forest 
   const mainTs = readFileSync(path.join(SRC_DIR, 'main.ts'), 'utf8');
   assert.doesNotMatch(mainTs, /@fontsource\//);
 
-  const css = readFileSync(path.join(SRC_DIR, 'vpro.css'), 'utf8');
+  const tokensCss = readFileSync(path.join(SRC_DIR, 'tokens.css'), 'utf8');
+  const vproCss = readFileSync(path.join(SRC_DIR, 'vpro.css'), 'utf8');
+  const css = `${tokensCss}\n${vproCss}`;
   assert.match(css, /font-family:\s*"BC Sans"/);
   assert.match(css, /url\("\/fonts\/BCSans-Regular\.woff2"\)/);
   assert.match(css, /url\("\/fonts\/BCSans-Bold\.woff2"\)/);
@@ -45,24 +47,25 @@ test('Unified BC Gov tokens, offline fonts, Surface background, and zero Forest 
   assert.match(css, /url\("\/fonts\/ibm-plex-mono-latin-400-normal\.woff2"\)/);
   assert.match(css, /url\("\/fonts\/ibm-plex-mono-latin-500-normal\.woff2"\)/);
   assert.match(css, /url\("\/fonts\/ibm-plex-mono-latin-600-normal\.woff2"\)/);
-  assert.match(css, /--font-sans:\s*"BC Sans",\s*sans-serif/);
-  assert.match(css, /--font-mono:\s*"IBM Plex Mono",\s*monospace/);
+  assert.match(css, /--font-sans:\s*"BC Sans"/);
+  assert.match(css, /--font-mono:\s*"IBM Plex Mono"/);
 
   for (const token of [
-    '--bcgov-navy: #003366',
-    '--bcgov-navy-dark: #002244',
-    '--bcgov-gold: #FCBA19',
-    '--bcgov-surface: #FFFFFF',
-    '--bcgov-neutral: #F2F2F2',
-    '--bcgov-border: #D8D8D8',
-    '--bcgov-text: #313132',
-    '--bcgov-text-secondary: #474543',
-    '--bcgov-link: #1A5A96',
-    '--bcgov-verified: #2E8540',
-    '--bcgov-alert: #D8292F',
-    '--bcgov-bec-forest: #1E5128',
+    '--vpro-navy: #003366',
+    '--vpro-navy-dark: #002244',
+    '--vpro-gold: #fcba19',
+    '--vpro-surface: #ffffff',
+    '--vpro-canvas: #f2f4f6',
+    '--vpro-border: #d1d5db',
+    '--vpro-ink: #313132',
+    '--vpro-info: #1a5a96',
+    '--vpro-success: #2e8540',
+    '--vpro-error: #d8292f',
+    '--vpro-forest: #1e5128',
+    '--bcgov-navy:',
+    '--bcgov-gold:',
   ]) {
-    assert.ok(css.includes(token), `vpro.css must declare canonical BC Gov token "${token}"`);
+    assert.ok(css.includes(token), `tokens.css/vpro.css must declare canonical BC Gov token "${token}"`);
   }
 
   // Responsive table & dropdown positioning fixes (1C)
@@ -411,6 +414,9 @@ test('UserSetupModal (S6.12), Navigation graduation, PlotsBrowserPanel (S1.1/S3.
   const sidebarHtml = render(
     serverComponent(sidebarSrc, 'WorkspaceSidebar.svelte', {
       '@lucide/svelte': iconsProxy,
+      './notificationService.svelte': loadTypeScript('shell/notificationService.svelte.ts', {
+        'svelte/store': require('svelte/store'),
+      }),
       '../shared/state': {
         projectState: {
           subscribe: (fn) => {
