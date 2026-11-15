@@ -10,7 +10,19 @@ vpro_first_nonempty <- function(...) {
   ""
 }
 
+vpro_clean_posix_path <- function(p) {
+  out <- gsub("\\\\", "/", p)
+  out <- gsub("/+", "/", out)
+  if (nchar(out) > 1L) {
+    out <- sub("/+$", "", out)
+  }
+  out
+}
+
 vpro_abs_path <- function(p) {
+  if (.Platform$OS.type == "windows" && grepl("^/[^/\\\\]", p)) {
+    return(vpro_clean_posix_path(p))
+  }
   is_abs <- grepl("^(/|[A-Za-z]:[/\\\\]|\\\\\\\\)", p)
   if (!is_abs && !startsWith(p, "~")) {
     p <- file.path(getwd(), p)
