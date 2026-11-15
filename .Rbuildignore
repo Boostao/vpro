@@ -1,5 +1,7 @@
 ^vpro\.Rproj$
 ^\.Rproj\.user$
+^\.Renviron$
+^\.env
 ^\.github$
 ^\.posit$
 ^\.vscode$

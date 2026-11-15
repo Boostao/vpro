@@ -130,7 +130,7 @@ vpro_status <- function(data_dir = vpro_data_dir(), config_dir = vpro_config_dir
   standards <- vpro_standards(if (!is.na(ws_vlists)) ws_vlists else NULL)
 
   ecosystem_pkgs <- c(
-    "DBI", "RSQLite", "data.table", "tibble", "vegan", "vegclust",
+    "DBI", "RSQLite", "RPostgres", "data.table", "tibble", "vegan", "vegclust",
     "indicspecies", "labdsv", "sf", "terra", "climr", "duckdb",
     "mdbr", "ggplot2", "quarto", "writexl"
   )

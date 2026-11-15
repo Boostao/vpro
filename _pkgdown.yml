@@ -29,6 +29,8 @@ navbar:
         href: articles/bec-diagnostics-and-synthesis.html
       - text: Climate Normals, aSMR, and Edatopic Grids
         href: articles/climate-asmr-and-edatopic-grids.html
+      - text: Cloud BECMaster Governance, Merge, and Snapshots
+        href: articles/cloud-becmaster-governance-and-sync.html
 
 reference:
 - title: Workspace, Standards, and Access Interchange
@@ -108,6 +110,34 @@ reference:
   - vpro_write_candidate_su
   - vpro_write_su
   - vpro_write_lump
+
+- title: Cloud BECMaster Governance, Staging Merge, and RDS Snapshots
+  desc: Role-based PostgreSQL BECMaster queries, contributor staging, custodian 3-way SERIALIZABLE merges, audit hash-chain verification, and portable RDS snapshots.
+  contents:
+  - vpro_has_pg_credentials
+  - vpro_master_connect
+  - vpro_master_disconnect
+  - vpro_master_status
+  - vpro_master_bootstrap
+  - vpro_master_env
+  - vpro_master_veg
+  - vpro_master_soil
+  - vpro_master_audit
+  - vpro_master_verify_audit
+  - vpro_master_standards
+  - vpro_master_workspace
+  - vpro_master_pull
+  - vpro_standards_sync
+  - vpro_staging_submit
+  - vpro_staging_list
+  - vpro_staging_inspect
+  - vpro_staging_diff
+  - vpro_staging_merge
+  - vpro_staging_reject
+  - vpro_publish_snapshot
+  - vpro_list_snapshots
+  - vpro_write_rds_snapshot
+  - vpro_read_rds_project
 
 - title: Quarto BEC Field Guides, Sidecar Bridge, and Calibrated Math
   desc: B.C. Government Quarto guide publication, vpro_wails sidecar JSON bridge, and calibrated Access/BEC domain helpers.

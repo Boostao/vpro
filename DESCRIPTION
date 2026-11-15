@@ -18,7 +18,9 @@ Description: Programmatic R companion SDK and quantitative ecology engine for
     matrices, multivariate clustering, spatial GeoPackage export, LMH25 (2023)
     pedological validation, climr climate normals and Ministry actual soil
     moisture regime (aSMR) modelling, dual edatopic grids, BEC diagnostic
-    synthesis, guarded candidate site-unit write-back, and Quarto BEC guides.
+    synthesis, guarded candidate site-unit write-back, PostgreSQL BECMaster
+    cloud queries, contributor staging, custodian three-way merges, compact RDS
+    snapshots, and Quarto BEC guides.
 License: Apache License (== 2)
 URL: https://bcgov.github.io/vpro/, https://github.com/boostao/vpro
 BugReports: https://github.com/boostao/vpro/issues
@@ -47,6 +49,7 @@ Suggests:
     quarto,
     rmarkdown,
     roxygen2,
+    RPostgres,
     sf,
     terra,
     testthat (>= 3.0.0),

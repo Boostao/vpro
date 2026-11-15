@@ -6,6 +6,10 @@
 *.duckdb.wal
 .Rhistory
 .RData
+.Renviron
+.env
+.env.*
+!.env.example
 renv/*
 .Rprofile
 reports/*

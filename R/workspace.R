@@ -409,6 +409,8 @@ vpro_connect <- function(
         project_path <- imp$target_db
         project_name <- imp$target_project
         source_kind <- "access_import"
+      } else if (identical(ext, "rds")) {
+        return(vpro_read_rds_project(req, su = su, lump = lump))
       } else {
         project_path <- normalizePath(req, winslash = "/", mustWork = TRUE)
         source_kind <- "file"
@@ -517,6 +519,12 @@ vpro_sample <- function(
 }
 
 vpro_assert_workspace <- function(con) {
+  if (inherits(con, "vpro_pg_conn")) {
+    rlang::abort(c(
+      "`con` is a PostgreSQL `vpro_pg_conn` handle, not a local `vpro_workspace`.",
+      "i" = "Use `vpro_master_env(con, ...)` / `vpro_master_veg(con, ...)` for direct cloud tibbles, or wrap a filtered cloud subset with `vpro_master_workspace(con, ...)` / `vpro_master_pull(con, ...)`."
+    ))
+  }
   if (!inherits(con, "vpro_workspace") || !is.list(con) ||
       is.null(con$project_path) || !file.exists(con$project_path)) {
     rlang::abort("`con` must be a valid `vpro_workspace` created by `vpro_connect()` or `vpro_sample()`.")
