@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -10,7 +11,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -69,7 +69,7 @@ func assertSummaryWorkbookClientWire(t *testing.T, name string, wire map[string]
 		t.Fatal("strict production workbook review DTO round trip differs", name, err)
 	}
 	file := filepath.Join("frontend", "tests", "fixtures", name)
-	expected, err := os.ReadFile(file)
+	expected, err := sqlutil.ReadWireFixture(file)
 	if err != nil || !bytes.Equal(expected, raw) {
 		t.Fatal("portable strict-Go workbook wire differs", name, err)
 	}

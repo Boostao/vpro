@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -8,7 +9,6 @@ import (
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -65,7 +65,7 @@ func TestSummaryEnvironmentalClientWireFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join("frontend", "tests", "fixtures", "summaryVegetationEnvironmentalWire.json")
-	actual, err := os.ReadFile(path)
+	actual, err := sqlutil.ReadWireFixture(path)
 	if err != nil || !bytes.Equal(actual, append(encoded, '\n')) {
 		t.Fatal("production fixture differs", err)
 	}

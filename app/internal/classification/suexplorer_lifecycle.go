@@ -1,0 +1,562 @@
+package classification
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+)
+
+const (
+	suCreationHistoryTable = "__VPRO_SUCreationHistory"
+	suCreationHistorySQL   = `CREATE TABLE "__VPRO_SUCreationHistory"(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL)`
+)
+
+type CreateSUTableRequest struct {
+	Name                    string `json:"name"`
+	Destination             string `json:"destination"` // "project" (default) | "new_file"
+	FilePath                string `json:"filePath"`
+	PopulateAllProjectPlots bool   `json:"populateAllProjectPlots"`
+	SeedFromUserSiteUnit    bool   `json:"seedFromUserSiteUnit"`
+	Activate                bool   `json:"activate"`
+}
+
+func (r *CreateSUTableRequest) UnmarshalJSON(data []byte) error {
+	type plain CreateSUTableRequest
+	return sqlutil.DecodeStrictJSON(data, (*plain)(r))
+}
+
+type SaveSUTableAsRequest struct {
+	SourceSU    string `json:"sourceSu"` // defaults to active SU when empty
+	NewName     string `json:"newName"`
+	Destination string `json:"destination"` // "project" (default) | "new_file"
+	FilePath    string `json:"filePath"`
+	Activate    bool   `json:"activate"`
+}
+
+func (r *SaveSUTableAsRequest) UnmarshalJSON(data []byte) error {
+	type plain SaveSUTableAsRequest
+	return sqlutil.DecodeStrictJSON(data, (*plain)(r))
+}
+
+type SUTableLifecycleResult struct {
+	ContextID string                 `json:"contextId"`
+	Name      string                 `json:"name"`
+	TableName string                 `json:"tableName"`
+	FilePath  string                 `json:"filePath"`
+	PlotCount int                    `json:"plotCount"`
+	Activated bool                   `json:"activated"`
+	NewState  *vprocore.ProjectState `json:"newState,omitempty"`
+}
+
+func validateClassificationObjectName(rawName, label string) (string, error) {
+	trimmed := strings.TrimSpace(rawName)
+	if !utf8.ValidString(trimmed) || !vprocore.ProjectNamePattern.MatchString(trimmed) {
+		return "", fmt.Errorf("%s name %q is invalid; use letters, digits, hyphens, or underscores", label, rawName)
+	}
+	if strings.EqualFold(trimmed, "None") || strings.EqualFold(trimmed, "Sample") || strings.EqualFold(trimmed, "USysSuTableDynamic") {
+		return "", fmt.Errorf("%s name %q is reserved and cannot be created or overwritten", label, trimmed)
+	}
+	return trimmed, nil
+}
+
+func createSUTableObjectsInTx(ctx context.Context, tx *sql.Tx, suName string) error {
+	tableName := suName + "_SU"
+	var collision int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM main.sqlite_master WHERE name = ? COLLATE NOCASE`, tableName).Scan(&collision); err != nil {
+		return err
+	}
+	if collision != 0 {
+		return fmt.Errorf("table %s already exists in target database", tableName)
+	}
+	qTable := vprocore.QuoteHeaderIdentifier(tableName)
+	qUniq := vprocore.QuoteHeaderIdentifier("uidx_" + tableName + "_PlotNumber")
+	qIdx := vprocore.QuoteHeaderIdentifier("idx_" + tableName + "_SiteUnit")
+
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE main.`+qTable+` ("PlotNumber" VARCHAR, "SiteUnit" VARCHAR)`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE UNIQUE INDEX main.`+qUniq+` ON `+qTable+` ("PlotNumber")`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE INDEX main.`+qIdx+` ON `+qTable+` ("SiteUnit")`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS main._table_metadata (table_name TEXT PRIMARY KEY, description TEXT)`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO main._table_metadata (table_name, description) VALUES (?, 'VP04')`, tableName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, contextID string, request CreateSUTableRequest) (*SUTableLifecycleResult, error) {
+	if ctx == nil {
+		return nil, errors.New("SU creation requires a request context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if contexts == nil {
+		return nil, errors.New("classification context service is unavailable")
+	}
+	suName, err := validateClassificationObjectName(request.Name, "SU")
+	if err != nil {
+		return nil, err
+	}
+	dest := strings.ToLower(strings.TrimSpace(request.Destination))
+	if dest == "" {
+		if strings.TrimSpace(request.FilePath) != "" {
+			dest = "new_file"
+		} else {
+			dest = "project"
+		}
+	}
+	if dest != "project" && dest != "new_file" {
+		return nil, fmt.Errorf("unsupported SU destination %q; expected 'project' or 'new_file'", request.Destination)
+	}
+
+	var out *SUTableLifecycleResult
+	var targetPath string
+	var currentSelection vprocore.DesktopSelection
+
+	_, err = vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+		owner := plots.Projects.Sqlite
+		currentSelection = owner.Selection
+		project := owner.Selection.Project
+
+		type seedPlot struct {
+			plot string
+			unit *string
+		}
+		var seeds []seedPlot
+
+		if request.PopulateAllProjectPlots {
+			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+				return struct{}{}, err
+			}
+			tx, snapErr := owner.BeginReadSnapshot(ctx)
+			if snapErr != nil {
+				owner.Mu.Unlock()
+				return struct{}{}, snapErr
+			}
+			adminUnits := map[string]string{}
+			if request.SeedFromUserSiteUnit {
+				aRows, aErr := tx.QueryContext(ctx,
+					`SELECT CAST("Plot" AS BLOB), CAST("UserSiteUnit" AS TEXT)
+					 FROM "project".`+vprocore.QuoteHeaderIdentifier(project+"_Admin")+`
+					 WHERE typeof("Plot")='text' AND "UserSiteUnit" IS NOT NULL`)
+				if aErr != nil {
+					_ = tx.Rollback()
+					owner.Mu.Unlock()
+					return struct{}{}, aErr
+				}
+				for aRows.Next() {
+					var rawPlot []byte
+					var u sql.NullString
+					if sErr := aRows.Scan(&rawPlot, &u); sErr != nil {
+						aRows.Close()
+						_ = tx.Rollback()
+						owner.Mu.Unlock()
+						return struct{}{}, sErr
+					}
+					key := string(rawPlot)
+					if _, exists := adminUnits[key]; !exists && u.Valid {
+						adminUnits[key] = u.String
+					}
+				}
+				if aErr := errors.Join(aRows.Err(), aRows.Close()); aErr != nil {
+					_ = tx.Rollback()
+					owner.Mu.Unlock()
+					return struct{}{}, aErr
+				}
+			}
+
+			rows, qErr := tx.QueryContext(ctx,
+				`SELECT CAST(env."PlotNumber" AS BLOB), CAST(env."PlotNumber" AS TEXT)
+				 FROM "project".`+vprocore.QuoteHeaderIdentifier(project+"_Env")+` AS env
+				 WHERE typeof(env."PlotNumber")='text' AND TRIM(env."PlotNumber") <> ''
+				 ORDER BY env."PlotNumber" COLLATE NOCASE ASC, env.rowid ASC`)
+			if qErr != nil {
+				_ = tx.Rollback()
+				owner.Mu.Unlock()
+				return struct{}{}, qErr
+			}
+			seen := map[string]bool{}
+			for rows.Next() {
+				var rawPlot []byte
+				var p string
+				if sErr := rows.Scan(&rawPlot, &p); sErr != nil {
+					rows.Close()
+					_ = tx.Rollback()
+					owner.Mu.Unlock()
+					return struct{}{}, sErr
+				}
+				rawKey := string(rawPlot)
+				if seen[rawKey] || len(utf16.Encode([]rune(p))) > 7 {
+					continue
+				}
+				seen[rawKey] = true
+				var unitPtr *string
+				if request.SeedFromUserSiteUnit {
+					if uStr, ok := adminUnits[rawKey]; ok && strings.TrimSpace(uStr) != "" && len(utf16.Encode([]rune(uStr))) <= 255 {
+						val := uStr
+						unitPtr = &val
+					}
+				}
+				seeds = append(seeds, seedPlot{plot: p, unit: unitPtr})
+			}
+			rowsErr := rows.Err()
+			rows.Close()
+			_ = tx.Rollback()
+			owner.Mu.Unlock()
+			if rowsErr != nil {
+				return struct{}{}, rowsErr
+			}
+		}
+
+		tableName := suName + "_SU"
+		proposalBytes, err := json.Marshal(request)
+		if err != nil {
+			return struct{}{}, err
+		}
+
+		if dest == "project" {
+			targetPath = owner.Selection.ProjectPath
+			err = owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (txErr error) {
+				tx, bErr := conn.BeginTx(ctx, nil)
+				if bErr != nil {
+					return bErr
+				}
+				defer func() {
+					if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
+						txErr = errors.Join(txErr, rb)
+					}
+				}()
+				if err := createSUTableObjectsInTx(ctx, tx, suName); err != nil {
+					return err
+				}
+				qTable := vprocore.QuoteHeaderIdentifier(tableName)
+				if len(seeds) > 0 {
+					stmt, pErr := tx.PrepareContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber","SiteUnit") VALUES (?,?)`)
+					if pErr != nil {
+						return pErr
+					}
+					defer stmt.Close()
+					for _, s := range seeds {
+						if _, err := stmt.ExecContext(ctx, s.plot, s.unit); err != nil {
+							return err
+						}
+					}
+				}
+				if err := vprocore.AppendTechnicalProvenance(ctx, tx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU table creation"); err != nil {
+					return err
+				}
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return tx.Commit()
+			})
+			if err != nil {
+				return struct{}{}, err
+			}
+		} else {
+			freshPath, _, fErr := vprocore.FreshSQLiteDestination(request.FilePath, "SU")
+			if fErr != nil {
+				return struct{}{}, fErr
+			}
+			targetPath = freshPath
+			committed := false
+			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(freshPath, "rwc")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
+			if oErr != nil {
+				return struct{}{}, oErr
+			}
+			defer func() {
+				_ = db.Close()
+				if !committed {
+					_ = os.Remove(freshPath)
+				}
+			}()
+			db.SetMaxOpenConns(1)
+			tx, bErr := db.BeginTx(ctx, nil)
+			if bErr != nil {
+				return struct{}{}, bErr
+			}
+			if err := createSUTableObjectsInTx(ctx, tx, suName); err != nil {
+				_ = tx.Rollback()
+				return struct{}{}, err
+			}
+			qTable := vprocore.QuoteHeaderIdentifier(tableName)
+			if len(seeds) > 0 {
+				stmt, pErr := tx.PrepareContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber","SiteUnit") VALUES (?,?)`)
+				if pErr != nil {
+					_ = tx.Rollback()
+					return struct{}{}, pErr
+				}
+				for _, s := range seeds {
+					if _, err := stmt.ExecContext(ctx, s.plot, s.unit); err != nil {
+						_ = stmt.Close()
+						_ = tx.Rollback()
+						return struct{}{}, err
+					}
+				}
+				_ = stmt.Close()
+			}
+			if err := vprocore.AppendTechnicalProvenance(ctx, tx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU file creation"); err != nil {
+				_ = tx.Rollback()
+				return struct{}{}, err
+			}
+			if err := tx.Commit(); err != nil {
+				return struct{}{}, err
+			}
+			committed = true
+		}
+
+		out = &SUTableLifecycleResult{
+			ContextID: contextID,
+			Name:      suName,
+			TableName: tableName,
+			FilePath:  targetPath,
+			PlotCount: len(seeds),
+		}
+		return struct{}{}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if request.Activate {
+		nextState, swErr := contexts.SwitchContext(contextID, vprocore.ContextSelection{
+			Project:       currentSelection.Project,
+			ProjectPath:   currentSelection.ProjectPath,
+			SU:            suName,
+			SUPath:        targetPath,
+			Hierarchy:     currentSelection.Hierarchy,
+			HierarchyPath: currentSelection.HierarchyPath,
+		})
+		if swErr != nil {
+			return nil, swErr
+		}
+		out.Activated = true
+		out.ContextID = nextState.ContextID
+		out.NewState = &nextState
+	}
+	return out, nil
+}
+
+func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, contextID string, request SaveSUTableAsRequest) (*SUTableLifecycleResult, error) {
+	if ctx == nil {
+		return nil, errors.New("SU save-as requires a request context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if contexts == nil {
+		return nil, errors.New("classification context service is unavailable")
+	}
+	newName, err := validateClassificationObjectName(request.NewName, "SU")
+	if err != nil {
+		return nil, err
+	}
+	dest := strings.ToLower(strings.TrimSpace(request.Destination))
+	if dest == "" {
+		if strings.TrimSpace(request.FilePath) != "" {
+			dest = "new_file"
+		} else {
+			dest = "project"
+		}
+	}
+	if dest != "project" && dest != "new_file" {
+		return nil, fmt.Errorf("unsupported SU save-as destination %q", request.Destination)
+	}
+
+	var out *SUTableLifecycleResult
+	var targetPath string
+	var currentSelection vprocore.DesktopSelection
+
+	_, err = vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+		owner := plots.Projects.Sqlite
+		currentSelection = owner.Selection
+		srcName := strings.TrimSpace(request.SourceSU)
+		if srcName == "" {
+			srcName = owner.Selection.SU
+		}
+		if srcName == "" || srcName == "None" {
+			return struct{}{}, errors.New("an active or explicit source SU table is required for Save As")
+		}
+
+		type suRowPair struct {
+			plot *string
+			unit *string
+		}
+		var copiedRows []suRowPair
+
+		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+			return struct{}{}, err
+		}
+		tx, snapErr := owner.BeginReadSnapshot(ctx)
+		if snapErr != nil {
+			owner.Mu.Unlock()
+			return struct{}{}, snapErr
+		}
+		role := "su"
+		if !strings.EqualFold(srcName, owner.Selection.SU) {
+			role = "project"
+		}
+		srcTable := srcName + "_SU"
+		rows, qErr := tx.QueryContext(ctx,
+			`SELECT CAST("PlotNumber" AS TEXT), CAST("SiteUnit" AS TEXT) FROM `+
+				vprocore.QuoteHeaderIdentifier(role)+`.`+vprocore.QuoteHeaderIdentifier(srcTable)+` ORDER BY rowid ASC`)
+		if qErr != nil {
+			_ = tx.Rollback()
+			owner.Mu.Unlock()
+			return struct{}{}, fmt.Errorf("read source SU %s: %w", srcTable, qErr)
+		}
+		for rows.Next() {
+			var p, u sql.NullString
+			if sErr := rows.Scan(&p, &u); sErr != nil {
+				rows.Close()
+				_ = tx.Rollback()
+				owner.Mu.Unlock()
+				return struct{}{}, sErr
+			}
+			var pp, up *string
+			if p.Valid {
+				v := p.String
+				pp = &v
+			}
+			if u.Valid {
+				v := u.String
+				up = &v
+			}
+			copiedRows = append(copiedRows, suRowPair{plot: pp, unit: up})
+		}
+		rowsErr := rows.Err()
+		rows.Close()
+		_ = tx.Rollback()
+		owner.Mu.Unlock()
+		if rowsErr != nil {
+			return struct{}{}, rowsErr
+		}
+
+		targetTable := newName + "_SU"
+		proposalBytes, err := json.Marshal(request)
+		if err != nil {
+			return struct{}{}, err
+		}
+
+		if dest == "project" {
+			targetPath = owner.Selection.ProjectPath
+			err = owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (txErr error) {
+				wtx, bErr := conn.BeginTx(ctx, nil)
+				if bErr != nil {
+					return bErr
+				}
+				defer func() {
+					if rb := wtx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
+						txErr = errors.Join(txErr, rb)
+					}
+				}()
+				if err := createSUTableObjectsInTx(ctx, wtx, newName); err != nil {
+					return err
+				}
+				qTarget := vprocore.QuoteHeaderIdentifier(targetTable)
+				for _, r := range copiedRows {
+					if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, r.plot, r.unit); err != nil {
+						return err
+					}
+				}
+				if err := vprocore.AppendTechnicalProvenance(ctx, wtx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU save-as"); err != nil {
+					return err
+				}
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return wtx.Commit()
+			})
+			if err != nil {
+				return struct{}{}, err
+			}
+		} else {
+			freshPath, _, fErr := vprocore.FreshSQLiteDestination(request.FilePath, "SU")
+			if fErr != nil {
+				return struct{}{}, fErr
+			}
+			targetPath = freshPath
+			committed := false
+			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(freshPath, "rwc")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
+			if oErr != nil {
+				return struct{}{}, oErr
+			}
+			defer func() {
+				_ = db.Close()
+				if !committed {
+					_ = os.Remove(freshPath)
+				}
+			}()
+			db.SetMaxOpenConns(1)
+			wtx, bErr := db.BeginTx(ctx, nil)
+			if bErr != nil {
+				return struct{}{}, bErr
+			}
+			if err := createSUTableObjectsInTx(ctx, wtx, newName); err != nil {
+				_ = wtx.Rollback()
+				return struct{}{}, err
+			}
+			qTarget := vprocore.QuoteHeaderIdentifier(targetTable)
+			for _, r := range copiedRows {
+				if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, r.plot, r.unit); err != nil {
+					_ = wtx.Rollback()
+					return struct{}{}, err
+				}
+			}
+			if err := vprocore.AppendTechnicalProvenance(ctx, wtx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU file save-as"); err != nil {
+				_ = wtx.Rollback()
+				return struct{}{}, err
+			}
+			if err := wtx.Commit(); err != nil {
+				return struct{}{}, err
+			}
+			committed = true
+		}
+
+		out = &SUTableLifecycleResult{
+			ContextID: contextID,
+			Name:      newName,
+			TableName: targetTable,
+			FilePath:  targetPath,
+			PlotCount: len(copiedRows),
+		}
+		return struct{}{}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if request.Activate {
+		nextState, swErr := contexts.SwitchContext(contextID, vprocore.ContextSelection{
+			Project:       currentSelection.Project,
+			ProjectPath:   currentSelection.ProjectPath,
+			SU:            newName,
+			SUPath:        targetPath,
+			Hierarchy:     currentSelection.Hierarchy,
+			HierarchyPath: currentSelection.HierarchyPath,
+		})
+		if swErr != nil {
+			return nil, swErr
+		}
+		out.Activated = true
+		out.ContextID = nextState.ContextID
+		out.NewState = &nextState
+	}
+	return out, nil
+}

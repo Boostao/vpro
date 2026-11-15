@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -8,7 +9,6 @@ import (
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -20,7 +20,7 @@ func TestLongVegetationUnitPreferencesStrictSharedClientWire(t *testing.T) {
 		Request LongVegetationUnitPreferencesRequest `json:"request"`
 		Outcome LongVegetationUnitPreferencesOutcome `json:"outcome"`
 	}
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "longVegetationUnitWire.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "longVegetationUnitWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

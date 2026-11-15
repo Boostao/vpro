@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -238,7 +239,7 @@ func TestSummaryVegetationPreferencesFacadeProductionWire(t *testing.T) {
 	if err := vprocore.DecodeStrictRequiredJSON(raw, &reopened, "Summary preference wire", "review", "request", "outcome"); err != nil || !reflect.DeepEqual(wire, reopened) {
 		t.Fatal("strict actual Go round-trip differs", err)
 	}
-	expectedBytes, err := os.ReadFile("frontend/tests/fixtures/summaryVegetationPreferencesWire.json")
+	expectedBytes, err := sqlutil.ReadWireFixture("frontend/tests/fixtures/summaryVegetationPreferencesWire.json")
 	if err != nil {
 		t.Fatal(err)
 	}

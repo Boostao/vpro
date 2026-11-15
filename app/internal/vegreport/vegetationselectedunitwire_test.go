@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -9,14 +10,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestSelectedUnitStrictClientWireMatchesPreparedKernel(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "longVegetationSelectedUnitsWire.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "longVegetationSelectedUnitsWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestSelectedUnitStrictClientWireMatchesPreparedKernel(t *testing.T) {
 			{RowID: "22", Cells: []vprocore.ProjectMetadataCell{vprotest.MetadataText("P1")}},
 		},
 	}
-	selectionRaw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "longVegetationSelectedUnitSelectionWire.json"))
+	selectionRaw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "longVegetationSelectedUnitSelectionWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
