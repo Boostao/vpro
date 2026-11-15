@@ -515,3 +515,16 @@ func (s *PlotService) UpdateOtherRecord(r OtherRecord) error {
 func (s *PlotService) DeleteOtherRecord(plotNumber string, id int64) error {
 	return s.saveChild("Other", OtherRecord{PlotNumber: plotNumber, ID: id}, ChildDelete)
 }
+
+// A queued switch must not leave a cancelled transport waiting on its lease.
+
+func (s *PlotService) OperationContext() context.Context {
+	if s.requestContext != nil {
+		return s.requestContext
+	}
+	return context.Background()
+}
+
+func (s *PlotService) ReadDB(db *sql.DB) sqlutil.HeaderDB {
+	return sqlutil.ContextPlotDB{Db: db, Ctx: s.OperationContext()}
+}

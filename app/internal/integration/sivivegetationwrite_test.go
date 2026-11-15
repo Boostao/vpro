@@ -239,7 +239,7 @@ func TestSIVIOwnedHeightUnchangedHistoricalDraftIsWriteFree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edits = []sourceform.SiviHeightEdit{{edits[0].RowID, "SubVegA-SIVI_BC", "HeightB", vprotest.MetadataText(historical), vprotest.MetadataText(historical)}}
+	edits = []sourceform.SiviHeightEdit{{RowID: edits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "HeightB", Expected: vprotest.MetadataText(historical), Value: vprotest.MetadataText(historical)}}
 	before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	result, err := sourceform.WriteSIVIHeights(service, context.Background(), state.ContextID, "108050", false, original, edits)
 	if err != nil || result == nil || result.ChangedCells != 0 || result.HistoryID != "" {

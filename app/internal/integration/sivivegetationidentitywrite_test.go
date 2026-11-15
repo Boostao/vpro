@@ -29,7 +29,7 @@ func TestSIVIIdentityOwnedSaveUnauditedAtEveryStrengthAndTypedRestoration(t *tes
 			}
 			audit := vprotest.HeightTableSnapshot(t, db, "Sample_Audit")
 			veg := vprotest.HeightTableSnapshot(t, db, "Sample_Veg")
-			edits := []sourceform.SiviHeightEdit{{rowID, "SubVegC-SIVI", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-2147483648")}}
+			edits := []sourceform.SiviHeightEdit{{RowID: rowID, Form: "SubVegC-SIVI", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-2147483648")}}
 			result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original, edits)
 			if err != nil || result == nil || result.ChangedCells != 1 || result.HistoryID == "" {
 				t.Fatal("private identity save failed", result, err)
@@ -83,7 +83,7 @@ func TestSIVIIdentityOwnedNULLAndHistoricalDuplicateRestoration(t *testing.T) {
 		}
 		veg := vprotest.HeightTableSnapshot(t, db, "Sample_Veg")
 		result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original,
-			[]sourceform.SiviHeightEdit{{rowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), target}})
+			[]sourceform.SiviHeightEdit{{RowID: rowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: target}})
 		if err != nil || result == nil {
 			t.Fatal("physical identity editor inherited ambiguous application-ID targeting", result, err)
 		}
@@ -101,7 +101,7 @@ func TestSIVIIdentityOwnedNULLAndHistoricalDuplicateRestoration(t *testing.T) {
 func TestSIVIIdentityOwnedRejectsStaleCollisionReservationAndCancelledRequests(t *testing.T) {
 	service, state, db, original, heightEdits := sftest.SiviWriteFixture(t, false, 3)
 	rowID := heightEdits[0].RowID
-	valid := sourceform.SiviHeightEdit{rowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("2147483647")}
+	valid := sourceform.SiviHeightEdit{RowID: rowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("2147483647")}
 	// Both aliases are reserved, including an ID belonging only to a deleted row.
 	if _, err := db.Exec(`INSERT INTO Sample_Audit("Table",ID) VALUES('_vEg',2147483647),('SAMPLE_VEG',-2147483648)`); err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestSIVIIdentityOwnedNoopHasNoLedgerHistoryOrAudit(t *testing.T) {
 	service, state, _, original, heightEdits := sftest.SiviWriteFixture(t, false, 3)
 	before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original,
-		[]sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("10000001")}})
+		[]sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("10000001")}})
 	if err != nil || result == nil || result.ChangedCells != 0 || result.HistoryID != "" {
 		t.Fatal("unchanged identity created a mutation-shaped result", result, err)
 	}
@@ -168,7 +168,7 @@ func TestSIVIIdentityOwnedRollsBackTriggerDriftAndRetries(t *testing.T) {
 			t.Fatal(err)
 		}
 		before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
-		edits := []sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-1")}}
+		edits := []sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-1")}}
 		if result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original, edits); err == nil || result != nil {
 			t.Fatal("trigger escaped the complete unaudited plan", result, err)
 		}
@@ -190,7 +190,7 @@ func TestSIVIIdentityOwnedRestorationRefusesPeerOccupancyAndFullRowDrift(t *test
 	} {
 		service, state, db, original, heightEdits := sftest.SiviWriteFixture(t, false, 3)
 		result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original,
-			[]sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-1")}})
+			[]sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-1")}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -208,7 +208,7 @@ func TestSIVIIdentityOwnedRestorationRefusesPeerOccupancyAndFullRowDrift(t *test
 func TestSIVIIdentityOwnedHistoryStrictTransportAndCancellation(t *testing.T) {
 	service, state, db, original, heightEdits := sftest.SiviWriteFixture(t, false, 3)
 	result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original,
-		[]sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-1")}})
+		[]sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-1")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestSIVIIdentityOwnedHistoryStrictTransportAndCancellation(t *testing.T) {
 
 func TestSIVIIdentityOwnedReservationsCannotBeReassignedAfterRestore(t *testing.T) {
 	service, state, db, original, heightEdits := sftest.SiviWriteFixture(t, false, 3)
-	edits := []sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("1")}}
+	edits := []sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("1")}}
 	result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original, edits)
 	if err != nil {
 		t.Fatal(err)
@@ -278,7 +278,7 @@ func TestSIVIIdentityOwnedReservationsCannotBeReassignedAfterRestore(t *testing.
 
 func TestSIVIIdentityOwnedBlockedWriteAndRestorationCancellationRetry(t *testing.T) {
 	service, state, db, original, heightEdits := sftest.SiviWriteFixture(t, false, 3)
-	edits := []sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-1")}}
+	edits := []sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-1")}}
 	var historyID string
 	for _, restoring := range []bool{false, true} {
 		conn, err := db.Conn(context.Background())
@@ -336,7 +336,7 @@ func TestSIVIIdentityOwnedOriginalNULLAndExtendedSourceRoundTrip(t *testing.T) {
 	}
 	veg := vprotest.HeightTableSnapshot(t, db, "Sample_Veg")
 	result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", true, original,
-		[]sourceform.SiviHeightEdit{{rowID, "SubVegA-SIVI", "ID", vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.MetadataInteger("0")}})
+		[]sourceform.SiviHeightEdit{{RowID: rowID, Form: "SubVegA-SIVI", Column: "ID", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.MetadataInteger("0")}})
 	if err != nil || result == nil || result.HistoryID == "" {
 		t.Fatal("nullable source ID required an invented old identity", result, err)
 	}
@@ -361,7 +361,7 @@ func TestSIVIIdentityOwnedLateHistoryFailureAndLedgerTriggerRollBack(t *testing.
 		}
 		before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 		if result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original,
-			[]sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-1")}}); err == nil || result != nil {
+			[]sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-1")}}); err == nil || result != nil {
 			t.Fatal("late history/ledger failure escaped rollback", result, err)
 		}
 		vprotest.AssertProfileSUFiles(t, service, before)
@@ -391,8 +391,8 @@ func TestSIVIIdentityOwnedMixedBatchAndUnaffectedAuditedHistory(t *testing.T) {
 	veg := vprotest.HeightTableSnapshot(t, db, "Sample_Veg")
 	heightHistory := vprotest.HeightTableSnapshot(t, db, sourceform.SiviHeightHistoryTable)
 	result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original, []sourceform.SiviHeightEdit{
-		{rowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-1")},
-		{second, "SubVegD-SIVI", "ID", vprotest.MetadataInteger("10000002"), vprocore.ProjectMetadataCell{Storage: "null"}},
+		{RowID: rowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-1")},
+		{RowID: second, Form: "SubVegD-SIVI", Column: "ID", Expected: vprotest.MetadataInteger("10000002"), Value: vprocore.ProjectMetadataCell{Storage: "null"}},
 	})
 	if err != nil || result == nil || result.ChangedCells != 2 {
 		t.Fatal("mixed nullable/integer identities were not atomic", result, err)
@@ -430,7 +430,7 @@ func TestSIVIIdentityOwnedRestorationRejectsChangedOrReplacedDuplicatePeer(t *te
 			t.Fatal(err)
 		}
 		result, err := sourceform.WriteSIVIIdentities(service, context.Background(), state.ContextID, "108050", false, original,
-			[]sourceform.SiviHeightEdit{{heightEdits[0].RowID, "SubVegA-SIVI_BC", "ID", vprotest.MetadataInteger("10000001"), vprotest.MetadataInteger("-1")}})
+			[]sourceform.SiviHeightEdit{{RowID: heightEdits[0].RowID, Form: "SubVegA-SIVI_BC", Column: "ID", Expected: vprotest.MetadataInteger("10000001"), Value: vprotest.MetadataInteger("-1")}})
 		if err != nil {
 			t.Fatal(err)
 		}

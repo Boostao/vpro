@@ -43,6 +43,12 @@ type SiviParentHistory struct {
 	EntryPlan           []SiviParentScalarEdit        `json:",omitempty"`
 }
 
+type SourceParentEntryLifecycle struct {
+	Prepare  func(*vprocore.PlotService, *sql.Conn) (func(), error) `json:"-" yaml:"-"`
+	Verify   func(*vprocore.PlotService, *sql.Tx) error             `json:"-" yaml:"-"`
+	Decorate func(*SiviParentHistory)                               `json:"-" yaml:"-"`
+}
+
 type SiviParentWriteHooks struct {
 	Authorize func(*vprocore.PlotService) error                                                                              `json:"-" yaml:"-"`
 	Read      func(context.Context, *sql.Tx, *vprocore.SqliteContext, string, string, string) (*SiviParentProjection, error) `json:"-" yaml:"-"`

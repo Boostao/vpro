@@ -30,8 +30,8 @@ func TestSIVIOwnedCoverWritesAuditStrengthsAndRestoresDisappearedRows(t *testing
 			defer vprotest.AssertProfileSUFiles(t, service, protected)
 			rowID := heights[0].RowID
 			edits := []sourceform.SiviHeightEdit{
-				{rowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)},
-				{rowID, "SubVegC-SIVI", "Cover6", vprotest.SiviReal(0), vprocore.ProjectMetadataCell{Storage: "null"}},
+				{RowID: rowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)},
+				{RowID: rowID, Form: "SubVegC-SIVI", Column: "Cover6", Expected: vprotest.SiviReal(0), Value: vprocore.ProjectMetadataCell{Storage: "null"}},
 			}
 			if strength == 3 {
 				edits[0].Value = vprocore.ProjectMetadataCell{Storage: "null"}
@@ -103,11 +103,11 @@ func TestSIVIOwnedCoverWritesAuditStrengthsAndRestoresDisappearedRows(t *testing
 
 func TestSIVIOwnedCoverRejectsInvalidBatchCollisionTriggerAndRetries(t *testing.T) {
 	service, state, db, original, heights := sftest.SiviWriteFixture(t, false, 3)
-	valid := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	valid := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	for _, invalid := range []sourceform.SiviHeightEdit{
-		{valid.RowID, valid.Form, valid.Column, valid.Expected, vprotest.SiviReal(100)},
-		{valid.RowID, valid.Form, "Cover5a", vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.SiviReal(3)},
+		{RowID: valid.RowID, Form: valid.Form, Column: valid.Column, Expected: valid.Expected, Value: vprotest.SiviReal(100)},
+		{RowID: valid.RowID, Form: valid.Form, Column: "Cover5a", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.SiviReal(3)},
 		heights[0],
 		valid,
 	} {
@@ -159,7 +159,7 @@ func TestSIVIOwnedCoverRejectsInvalidBatchCollisionTriggerAndRetries(t *testing.
 
 func TestSIVIOwnedCoverRestorationRejectsDriftAuditTamperingAndTrigger(t *testing.T) {
 	service, state, db, original, heights := sftest.SiviWriteFixture(t, false, 3)
-	edit := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	edit := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	saved, err := sourceform.WriteSIVICovers(service, context.Background(), state.ContextID, "108050", false, original, []sourceform.SiviHeightEdit{edit})
 	if err != nil {
 		t.Fatal(err)
@@ -207,7 +207,7 @@ func TestSIVIOwnedCoverRestorationRejectsDriftAuditTamperingAndTrigger(t *testin
 
 func TestSIVIOwnedCoverAndHeightRestorationPoliciesRemainIsolated(t *testing.T) {
 	service, state, db, original, heights := sftest.SiviWriteFixture(t, false, 3)
-	edit := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	edit := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	saved, err := sourceform.WriteSIVICovers(service, context.Background(), state.ContextID, "108050", false, original, []sourceform.SiviHeightEdit{edit})
 	if err != nil {
 		t.Fatal(err)
@@ -250,7 +250,7 @@ func TestSIVIOwnedCoverAndHeightRestorationPoliciesRemainIsolated(t *testing.T) 
 
 func TestSIVIOwnedCoverRejectsChangedFileOwnership(t *testing.T) {
 	service, state, _, original, heights := sftest.SiviWriteFixture(t, true, 3)
-	edit := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	edit := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	owner := service.Projects.Sqlite
 	before := vprotest.DatabaseBytes(t, owner.Attachments)
 	reference := owner.Attachments["VLists"]
@@ -276,7 +276,7 @@ func TestSIVIOwnedCoverRejectsChangedFileOwnership(t *testing.T) {
 
 func TestSIVIOwnedCoverBlockedCancellationAndRetry(t *testing.T) {
 	service, state, db, original, heights := sftest.SiviWriteFixture(t, true, 3)
-	edit := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	edit := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	conn, err := db.Conn(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -318,14 +318,14 @@ func TestSIVIOwnedCoverHistoricalNoopAndExtendedRestoration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	noop := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI", "Cover1", vprotest.SiviReal(125), vprotest.SiviReal(125)}
+	noop := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI", Column: "Cover1", Expected: vprotest.SiviReal(125), Value: vprotest.SiviReal(125)}
 	before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 	if saved, err := sourceform.WriteSIVICovers(service, context.Background(), state.ContextID, "108050", true, original, []sourceform.SiviHeightEdit{noop}); err != nil ||
 		saved == nil || saved.ChangedCells != 0 || saved.HistoryID != "" {
 		t.Fatal("unchanged historical cover produced writes/history", saved, err)
 	}
 	vprotest.AssertProfileSUFiles(t, service, before)
-	edit := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI", "Cover5a", vprotest.SiviReal(-1), vprotest.SiviReal(3)}
+	edit := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI", Column: "Cover5a", Expected: vprotest.SiviReal(-1), Value: vprotest.SiviReal(3)}
 	saved, err := sourceform.WriteSIVICovers(service, context.Background(), state.ContextID, "108050", true, original, []sourceform.SiviHeightEdit{noop, edit})
 	if err != nil || saved == nil || saved.ChangedCells != 1 {
 		t.Fatal("extended cover could not save alongside historical no-op", saved, err)

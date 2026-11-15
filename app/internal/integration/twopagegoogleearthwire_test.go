@@ -2,12 +2,12 @@ package integration
 
 import (
 	"github.com/boostao/vpro/app/internal/spatial"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -56,7 +56,7 @@ func TestTwoPageGoogleEarthProductionWireFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join("frontend", "tests", "fixtures", "twoPageGoogleEarthWire.json")
-	fixture, err := os.ReadFile(path)
+	fixture, err := sqlutil.ReadWireFixture(path)
 	if err != nil {
 		t.Fatal(err)
 	}
