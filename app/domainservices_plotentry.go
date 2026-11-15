@@ -15,6 +15,14 @@ import (
 	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
 )
 
+type CreateTwoPageVegetationRequest = twopagepkg.CreateTwoPageVegetationRequest
+type CreateTwoPageVegetationResult = twopagepkg.CreateTwoPageVegetationResult
+type DeleteTwoPageVegetationRequest = twopagepkg.DeleteTwoPageVegetationRequest
+type DeleteTwoPageVegetationResult = twopagepkg.DeleteTwoPageVegetationResult
+type DeletedTwoPageVegetationEntry = twopagepkg.DeletedTwoPageVegetationEntry
+type RestoreTwoPageVegetationRequest = twopagepkg.RestoreTwoPageVegetationRequest
+type RestoreTwoPageVegetationResult = twopagepkg.RestoreTwoPageVegetationResult
+
 type referenceCatalogBundle struct {
 	references     *referencespkg.ReferenceService
 	bec            *referencespkg.BECService
@@ -269,6 +277,13 @@ func (s *PlotEntryService) CanEditMasterBEC() bool {
 		return false
 	}
 	return s.plots.CanEditMasterBEC()
+}
+
+func (s *PlotEntryService) UserAccreditationStatus(ctx context.Context) (UserAccreditation, error) {
+	if s == nil || s.plots == nil {
+		return UserAccreditation{}, errors.New("plot service is unavailable")
+	}
+	return s.plots.UserAccreditationStatus(ctx)
 }
 
 func (s *PlotEntryService) CreatePlot(h FS882Header) error {
@@ -940,11 +955,53 @@ func (s *PlotEntryService) SaveTwoPageVegetationSpeciesList(ctx context.Context,
 	return s.twoPageVegetationSpeciesList.Save(ctx, contextID, requestJSON)
 }
 
+func (s *PlotEntryService) CreateTwoPageVegetationRow(ctx context.Context, contextID string, request CreateTwoPageVegetationRequest) (CreateTwoPageVegetationResult, error) {
+	if s == nil || s.twoPageVegetation == nil {
+		return CreateTwoPageVegetationResult{}, errors.New("two-page vegetation service is unavailable")
+	}
+	return s.twoPageVegetation.CreateRow(ctx, contextID, request)
+}
+
+func (s *PlotEntryService) DeleteTwoPageVegetationRow(ctx context.Context, contextID string, request DeleteTwoPageVegetationRequest) (DeleteTwoPageVegetationResult, error) {
+	if s == nil || s.twoPageVegetation == nil {
+		return DeleteTwoPageVegetationResult{}, errors.New("two-page vegetation service is unavailable")
+	}
+	return s.twoPageVegetation.DeleteRow(ctx, contextID, request)
+}
+
+func (s *PlotEntryService) RestoreTwoPageVegetationRow(ctx context.Context, contextID string, request RestoreTwoPageVegetationRequest) (RestoreTwoPageVegetationResult, error) {
+	if s == nil || s.twoPageVegetation == nil {
+		return RestoreTwoPageVegetationResult{}, errors.New("two-page vegetation service is unavailable")
+	}
+	return s.twoPageVegetation.RestoreRow(ctx, contextID, request)
+}
+
+func (s *PlotEntryService) ListTwoPageVegetationDeletedRows(ctx context.Context, contextID, plot, form string) ([]DeletedTwoPageVegetationEntry, error) {
+	if s == nil || s.twoPageVegetation == nil {
+		return nil, errors.New("two-page vegetation service is unavailable")
+	}
+	return s.twoPageVegetation.ListDeletedRows(ctx, contextID, plot, form)
+}
+
 func (s *PlotEntryService) GetTwoPageSourceAuditOriginal(ctx context.Context, contextID, plot, form string) (*TwoPageSourceAuditOriginal, error) {
 	if s == nil || s.twoPageSourceAudit == nil {
 		return nil, errors.New("two-page source audit service is unavailable")
 	}
 	return s.twoPageSourceAudit.GetOriginal(ctx, contextID, plot, form)
+}
+
+func (s *PlotEntryService) SetTwoPageSourceAuditRestoreSelection(ctx context.Context, contextID, plot, form string, rowIDs []string) error {
+	if s == nil || s.twoPageSourceAudit == nil {
+		return errors.New("two-page source audit service is unavailable")
+	}
+	return s.twoPageSourceAudit.SetRestoreSelection(ctx, contextID, plot, form, rowIDs)
+}
+
+func (s *PlotEntryService) RestoreSelectedTwoPageSourceAudit(ctx context.Context, contextID, plot, form string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	if s == nil || s.twoPageSourceAudit == nil {
+		return nil, errors.New("two-page source audit service is unavailable")
+	}
+	return s.twoPageSourceAudit.RestoreSelected(ctx, contextID, plot, form, rowIDs, vprocorepkg.AuditRestoreAction(action))
 }
 
 func (s *PlotEntryService) GetTwoPageProjectMetadataReview(ctx context.Context, contextID, plot string, offset, limit int) (*TwoPageProjectMetadataReview, error) {

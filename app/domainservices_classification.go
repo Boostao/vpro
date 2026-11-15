@@ -30,6 +30,7 @@ type FlatHierarchyRow = classificationpkg.FlatHierarchyRow
 type HierarchyDiagnostics = classificationpkg.HierarchyDiagnostics
 type HierarchyExplorerView = classificationpkg.HierarchyExplorerView
 type CreateHierarchyTableRequest = classificationpkg.CreateHierarchyTableRequest
+type SaveHierarchyTableAsRequest = classificationpkg.SaveHierarchyTableAsRequest
 type HierarchyTableLifecycleResult = classificationpkg.HierarchyTableLifecycleResult
 type HierarchyAddNodeRequest = classificationpkg.HierarchyAddNodeRequest
 type HierarchyRenameNodeRequest = classificationpkg.HierarchyRenameNodeRequest
@@ -37,6 +38,11 @@ type HierarchyReparentNodeRequest = classificationpkg.HierarchyReparentNodeReque
 type HierarchyDeleteNodeRequest = classificationpkg.HierarchyDeleteNodeRequest
 type HierarchyMutationResult = classificationpkg.HierarchyMutationResult
 type SaveFlatHierarchyRequest = classificationpkg.SaveFlatHierarchyRequest
+type UserSiteUnitEntry = classificationpkg.UserSiteUnitEntry
+type UpsertUserSiteUnitRequest = classificationpkg.UpsertUserSiteUnitRequest
+type DeleteUserSiteUnitRequest = classificationpkg.DeleteUserSiteUnitRequest
+type UserSiteUnitImportResult = classificationpkg.UserSiteUnitImportResult
+type ProfileLumpChoice = classificationpkg.ProfileLumpChoice
 
 type SynthesisLumpTableOption = diagnosticspkg.SynthesisLumpTableOption
 type SynthesisOptions = diagnosticspkg.SynthesisOptions
@@ -124,6 +130,13 @@ func (s *ClassificationService) ListBECSiteSeries(ctx context.Context, zone, sub
 		return nil, errors.New("BEC catalogue service is unavailable")
 	}
 	return s.bec.ListBECSiteSeries(ctx, zone, subZone)
+}
+
+func (s *ClassificationService) SearchBECSiteSeries(ctx context.Context, zone, subZone *string, query string, limit int) ([]BECSiteSeries, error) {
+	if s == nil || s.bec == nil {
+		return nil, errors.New("BEC catalogue service is unavailable")
+	}
+	return s.bec.SearchBECSiteSeries(ctx, zone, subZone, query, limit)
 }
 
 func (s *ClassificationService) GetWorkingUnitMode() (WorkingUnitModeState, error) {
@@ -287,6 +300,20 @@ func (s *ClassificationService) ReviewProjectPlotProfileLump(ctx context.Context
 	return s.contexts.ReviewProjectPlotProfileLump(ctx, contextID)
 }
 
+func (s *ClassificationService) ListProjectPlotProfileLumpTables(ctx context.Context, contextID string) ([]ProfileLumpChoice, error) {
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("classification context is unavailable")
+	}
+	return classificationpkg.ListProjectPlotProfileLumpTables(unwrapContextService(s.contexts), ctx, contextID)
+}
+
+func (s *ClassificationService) ReviewProjectPlotProfileLumpTable(ctx context.Context, contextID, location string) (ProjectMetadataTable, error) {
+	if s == nil || s.contexts == nil {
+		return ProjectMetadataTable{}, errors.New("classification context is unavailable")
+	}
+	return classificationpkg.ReviewProjectPlotProfileLumpTable(unwrapContextService(s.contexts), ctx, contextID, location)
+}
+
 func (s *ClassificationService) RunProjectPlotProfile(ctx context.Context, contextID string, request ProjectPlotProfileRunRequest) (ProjectPlotProfileResult, error) {
 	if s == nil || s.contexts == nil {
 		return ProjectPlotProfileResult{}, errors.New("classification context is unavailable")
@@ -427,6 +454,13 @@ func (s *ClassificationService) CreateHierarchyTable(ctx context.Context, contex
 	return classificationpkg.CreateHierarchyTable(ctx, unwrapContextService(s.contexts), contextID, request)
 }
 
+func (s *ClassificationService) SaveHierarchyTableAs(ctx context.Context, contextID string, request SaveHierarchyTableAsRequest) (*HierarchyTableLifecycleResult, error) {
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("classification context is unavailable")
+	}
+	return classificationpkg.SaveHierarchyTableAs(ctx, unwrapContextService(s.contexts), contextID, request)
+}
+
 func (s *ClassificationService) AddHierarchyNode(ctx context.Context, contextID string, request HierarchyAddNodeRequest) (*HierarchyMutationResult, error) {
 	if s == nil || s.contexts == nil {
 		return nil, errors.New("classification context is unavailable")
@@ -502,4 +536,39 @@ func (s *ClassificationService) ExportDiagnosticWorkbook(ctx context.Context, co
 		return nil, errors.New("classification context is unavailable")
 	}
 	return diagnosticspkg.ExportDiagnosticWorkbook(ctx, unwrapContextService(s.contexts), contextID, request)
+}
+
+func (s *ClassificationService) ListUserSiteUnitList(ctx context.Context, contextID string) ([]UserSiteUnitEntry, error) {
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("classification context is unavailable")
+	}
+	return classificationpkg.ListUserSiteUnitList(ctx, unwrapContextService(s.contexts), contextID)
+}
+
+func (s *ClassificationService) SaveUserSiteUnitEntry(ctx context.Context, contextID string, request UpsertUserSiteUnitRequest) (*UserSiteUnitEntry, error) {
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("classification context is unavailable")
+	}
+	return classificationpkg.SaveUserSiteUnitEntry(ctx, unwrapContextService(s.contexts), contextID, request)
+}
+
+func (s *ClassificationService) DeleteUserSiteUnitEntry(ctx context.Context, contextID string, request DeleteUserSiteUnitRequest) error {
+	if s == nil || s.contexts == nil {
+		return errors.New("classification context is unavailable")
+	}
+	return classificationpkg.DeleteUserSiteUnitEntry(ctx, unwrapContextService(s.contexts), contextID, request)
+}
+
+func (s *ClassificationService) ExportUserSiteUnitListCSV(ctx context.Context, contextID string) (string, error) {
+	if s == nil || s.contexts == nil {
+		return "", errors.New("classification context is unavailable")
+	}
+	return classificationpkg.ExportUserSiteUnitListCSV(ctx, unwrapContextService(s.contexts), contextID)
+}
+
+func (s *ClassificationService) ImportUserSiteUnitListCSV(ctx context.Context, contextID, csvText string, overwriteExisting bool) (*UserSiteUnitImportResult, error) {
+	if s == nil || s.contexts == nil {
+		return nil, errors.New("classification context is unavailable")
+	}
+	return classificationpkg.ImportUserSiteUnitListCSV(ctx, unwrapContextService(s.contexts), contextID, csvText, overwriteExisting)
 }

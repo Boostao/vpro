@@ -92,7 +92,7 @@ export interface ClusterUnitSummary {
  */
 export interface ClusteringRequest {
     /**
-     * "NC" (vegclust Noise Clustering, default) | "KM" | "FCM" | "HCLUST"
+     * "NC" (vegclust Noise Clustering, default) | "KM" | "FCM" | "HCLUST" | "BETA_FLEXIBLE" | "PAM"
      */
     "method": string;
 
@@ -125,6 +125,11 @@ export interface ClusteringRequest {
      * vegclust noise distance (default 0.75)
      */
     "dnoise": number;
+
+    /**
+     * Lance-Williams flexible-beta parameter in (-1.0, 1.0) (default -0.25)
+     */
+    "beta"?: number | null;
 
     /**
      * Optional hierarchical cut height

@@ -19,6 +19,8 @@ export type {
     SiteUnitSummaryExtendedWorkbookOptions,
     SiteUnitSummaryExtendedWorkbookReview,
     SiteUnitSummaryField,
+    SiteUnitSummaryFullPreferenceValues,
+    SiteUnitSummaryFullPreferences,
     SiteUnitSummaryMembership,
     SiteUnitSummaryOptions,
     SiteUnitSummaryPlot,

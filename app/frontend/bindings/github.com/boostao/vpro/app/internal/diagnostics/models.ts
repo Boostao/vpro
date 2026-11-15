@@ -138,6 +138,11 @@ export interface OutlierPlotCandidate {
     "misplaced": boolean;
 
     /**
+     * !SingletonUnit && OwnSimilarity < OutlierThreshold
+     */
+    "belowThreshold": boolean;
+
+    /**
      * top ceil(5%) of sorted outlier queue
      */
     "top5PercentAnomaly": boolean;
@@ -204,7 +209,9 @@ export interface PairwiseMatrixRow {
 }
 
 /**
- * PairwiseParams configures BEC pairwise differential potential & comparison (porting _do_pairwise.R).
+ * PairwiseParams configures BEC pairwise differential potential & comparison (porting r/R/pairwise_outliers.R vpro_pairwise).
+ * Zero-valued fields resolve to canonical R-aligned defaults:
+ * MinConstancy=60, NoiseConstancy=10, MinPlots=2, MinDiff=0.5, MinDD=0.5, MinorCover=1.0, DominantCover=7.0.
  */
 export interface PairwiseParams {
     "minConstancy"?: number;
@@ -307,6 +314,11 @@ export interface SynthesisOptions {
     "significanceBasis"?: string;
 
     /**
+     * "sublayer_sum" (default, Access MakeDiagnosticData) | "strata_totals" (BuildStrataTable TotalA/TotalB-first)
+     */
+    "coverPrecedence"?: string;
+
+    /**
      * optional explicit unit column order
      */
     "unitOrder"?: string[] | null;
@@ -315,6 +327,11 @@ export interface SynthesisOptions {
      * optional display threshold (0 keeps all)
      */
     "minMaxPresencePct"?: number;
+
+    /**
+     * LOO own-similarity review threshold in (0, 1]; default 0.45 matching R vpro_outliers
+     */
+    "outlierThreshold"?: number;
 
     /**
      * optional BEC do_pairwise overrides

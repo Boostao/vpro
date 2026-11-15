@@ -21,6 +21,10 @@ type DatasheetEditResult = datasheetpkg.DatasheetEditResult
 type DatasheetFindReplaceRequest = datasheetpkg.DatasheetFindReplaceRequest
 type DatasheetFindReplaceItem = datasheetpkg.DatasheetFindReplaceItem
 type DatasheetFindReplacePreview = datasheetpkg.DatasheetFindReplacePreview
+type DatasheetInsertChildRowRequest = datasheetpkg.DatasheetInsertChildRowRequest
+type DatasheetInsertChildRowResult = datasheetpkg.DatasheetInsertChildRowResult
+type DatasheetDeleteChildRowRequest = datasheetpkg.DatasheetDeleteChildRowRequest
+type DatasheetDeleteChildRowResult = datasheetpkg.DatasheetDeleteChildRowResult
 
 type DatasheetService struct {
 	contexts         *vprocorepkg.ContextService
@@ -95,6 +99,14 @@ func (s *DatasheetService) ListDatasheetTables(ctx context.Context, contextID st
 	return datasheetpkg.ListDatasheetTables(ctx, contexts, contextID)
 }
 
+func (s *DatasheetService) ListDatasheetAllTables(ctx context.Context, contextID string) ([]DatasheetTableInfo, error) {
+	contexts, err := s.datasheetContext()
+	if err != nil {
+		return nil, err
+	}
+	return datasheetpkg.ListDatasheetAllTables(ctx, contexts, contextID)
+}
+
 func (s *DatasheetService) GetDatasheetPage(ctx context.Context, contextID string, request DatasheetPageRequest) (*DatasheetPage, error) {
 	contexts, err := s.datasheetContext()
 	if err != nil {
@@ -117,4 +129,20 @@ func (s *DatasheetService) ApplyDatasheetEdits(ctx context.Context, contextID st
 		return nil, err
 	}
 	return datasheetpkg.ApplyDatasheetEdits(ctx, contexts, contextID, request)
+}
+
+func (s *DatasheetService) InsertDatasheetChildRow(ctx context.Context, contextID string, request DatasheetInsertChildRowRequest) (*DatasheetInsertChildRowResult, error) {
+	contexts, err := s.datasheetContext()
+	if err != nil {
+		return nil, err
+	}
+	return datasheetpkg.InsertDatasheetChildRow(ctx, contexts, contextID, request)
+}
+
+func (s *DatasheetService) DeleteDatasheetChildRow(ctx context.Context, contextID string, request DatasheetDeleteChildRowRequest) (*DatasheetDeleteChildRowResult, error) {
+	contexts, err := s.datasheetContext()
+	if err != nil {
+		return nil, err
+	}
+	return datasheetpkg.DeleteDatasheetChildRow(ctx, contexts, contextID, request)
 }

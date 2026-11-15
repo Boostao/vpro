@@ -228,6 +228,10 @@ export function GetState(): $CancellablePromise<$models.ProjectState> {
     return $Call.ByID(1033432855);
 }
 
+export function GetUserSetup(contextID: string): $CancellablePromise<$models.UserAccreditation> {
+    return $Call.ByID(1759595142, contextID);
+}
+
 export function GetVegetationReadAvailability(contextID: string, plot: string): $CancellablePromise<vprocore$0.VegetationReadAvailability | null> {
     return $Call.ByID(2293660121, contextID, plot);
 }
@@ -590,6 +594,10 @@ export function SetPlotProfileEditing(p1: string, p2: $models.PlotProfileWriteRe
 
 export function SetSIVIProjectIDSource(p1: string, p2: number, p3: number): $CancellablePromise<$models.SIVIProjectChoices | null> {
     return $Call.ByID(3729314756, p1, p2, p3);
+}
+
+export function SetUserName(contextID: string, user: string): $CancellablePromise<$models.UserAccreditation> {
+    return $Call.ByID(3552813818, contextID, user);
 }
 
 export function SubmitProjectToStaging(contextID: string, req: cloudsync$0.SubmitStagingRequest): $CancellablePromise<cloudsync$0.SubmitStagingResult> {

@@ -253,6 +253,7 @@ func TestTwoPageGoogleEarthCoordinateBoundariesAndIntegerStorage(t *testing.T) {
 		integer             bool
 	}{
 		{"zero-north", "-0,90,0", 0.0, 90.0, false},
+		{"negative-west", "-123.25,53.5,0", -123.25, 53.5, false},
 		{"west-south", "-180,-90,0", 180.0, -90.0, false},
 		{"integer-west-north", "-180,90,0", int64(180), int64(90), true},
 	} {
@@ -288,7 +289,6 @@ func TestTwoPageGoogleEarthRefusesInvalidPhysicalSourceAndRetries(t *testing.T) 
 		"null-latitude":  `UPDATE Sample_Env SET Latitude=NULL WHERE PlotNumber='108050'`,
 		"longitude-text": `UPDATE Sample_Env SET Longitude='not numeric' WHERE PlotNumber='108050'`,
 		"latitude-text":  `UPDATE Sample_Env SET Latitude='not numeric' WHERE PlotNumber='108050'`,
-		"negative-west":  `UPDATE Sample_Env SET Longitude=-123.25 WHERE PlotNumber='108050'`,
 		"west-range":     `UPDATE Sample_Env SET Longitude=181 WHERE PlotNumber='108050'`,
 		"latitude-range": `UPDATE Sample_Env SET Latitude=91 WHERE PlotNumber='108050'`,
 		"description":    `UPDATE Sample_Env SET PlotRepresenting=CAST(X'FF' AS TEXT) WHERE PlotNumber='108050'`,

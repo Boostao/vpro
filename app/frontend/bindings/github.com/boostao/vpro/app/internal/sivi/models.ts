@@ -13,7 +13,7 @@ export interface CreateSIVIPlotRequest {
     "plotNumber": string;
 
     /**
-     * "Ground" | "Visual" | "Note" | "Other"
+     * "Ground" | "Visual" | "Note" | "FS882" | "Other"
      */
     "plotType": string;
     "projectId"?: string;

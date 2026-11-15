@@ -252,6 +252,14 @@ export interface TurboVegImportRequest {
     "targetProject": string;
     "destinationPath"?: string;
     "activateOnSuccess": boolean;
+
+    /**
+     * ResolveVProCodeSynonyms maps explicit incoming vpro_code UDF/JSON entries that match
+     * a USysAllSpecs Codetype='S' synonym (OldCode) onto their canonical USysAllSpecs.Code.
+     * When false (default), explicit vpro_code values are preserved verbatim while adopting
+     * matched synonym Lifeform metadata.
+     */
+    "resolveVProCodeSynonyms"?: boolean;
 }
 
 export enum UserSpeciesCollisionPolicy {

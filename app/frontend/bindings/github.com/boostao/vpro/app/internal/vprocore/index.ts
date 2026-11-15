@@ -55,6 +55,7 @@ export type {
     SoilRecordUpdate,
     SoilTextUpdate,
     SqliteSchemaObject,
+    UserAccreditation,
     VegRecord,
     VegetationCreationRequest,
     VegetationNumberUpdate,

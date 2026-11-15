@@ -29,6 +29,8 @@ type PromoteCandidateSUResult = rsidecarpkg.PromoteCandidateSUResult
 type QuartoVegSummaryRow = rsidecarpkg.QuartoVegSummaryRow
 type QuartoGuideRequest = rsidecarpkg.QuartoGuideRequest
 type QuartoGuideResult = rsidecarpkg.QuartoGuideResult
+type SiteUnitSummaryFullPreferenceValues = envreportpkg.SiteUnitSummaryFullPreferenceValues
+type SiteUnitSummaryFullPreferences = envreportpkg.SiteUnitSummaryFullPreferences
 
 type EnvironmentReportService struct {
 	contexts                        *ContextService
@@ -160,6 +162,20 @@ func (s *EnvironmentReportService) SaveSiteUnitSummaryPreferences(ctx context.Co
 		return &SiteUnitSummaryPreferencesOutcome{ContextID: contextID, ErrorMessage: "site unit summary preferences service is unavailable"}
 	}
 	return s.siteUnitSummaryPreferences.SaveSiteUnitSummaryPreferences(ctx, contextID, requestJSON)
+}
+
+func (s *EnvironmentReportService) GetFullSiteUnitSummaryPreferences(ctx context.Context, contextID string) (*SiteUnitSummaryFullPreferences, error) {
+	if s == nil || s.siteUnitSummaryPreferences == nil {
+		return nil, errors.New("site unit summary preferences service is unavailable")
+	}
+	return s.siteUnitSummaryPreferences.GetFullSiteUnitSummaryPreferences(ctx, contextID)
+}
+
+func (s *EnvironmentReportService) SaveFullSiteUnitSummaryPreferences(ctx context.Context, contextID, requestJSON string) *SiteUnitSummaryPreferencesOutcome {
+	if s == nil || s.siteUnitSummaryPreferences == nil {
+		return &SiteUnitSummaryPreferencesOutcome{ContextID: contextID, ErrorMessage: "site unit summary preferences service is unavailable"}
+	}
+	return s.siteUnitSummaryPreferences.SaveFullSiteUnitSummaryPreferences(ctx, contextID, requestJSON)
 }
 
 func (s *EnvironmentReportService) GetSiteUnitSummaryWorkbookReview(ctx context.Context, contextID, requestJSON string) (*SiteUnitSummaryWorkbookReview, error) {

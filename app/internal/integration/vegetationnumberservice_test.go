@@ -30,7 +30,7 @@ func TestVegetationNumbersSourceFieldsAtomicRollbackAndHistoricalOmission(t *tes
 				t.Fatal(err)
 			}
 			if err := s.UpdateVegetationNumbers("CHILD1", []vprocore.VegetationNumberUpdate{
-				makeUpdate(0, form, property, stored, number(-1.234567890123)),
+				makeUpdate(0, form, property, stored, number(1.234567890123)),
 			}); err != nil {
 				t.Fatalf("%s.%s: %v", form, property, err)
 			}
@@ -41,15 +41,16 @@ func TestVegetationNumbersSourceFieldsAtomicRollbackAndHistoricalOmission(t *tes
 	}
 	before := vprotest.SubstrateSnapshot(t, db)
 	for _, update := range []vprocore.VegetationNumberUpdate{
-		makeUpdate(0, "SubVegCXL", "cover1", number(-1.234567890123), number(2)),
-		makeUpdate(0, "SubVegDXL", "height6", number(-1.234567890123), number(2)),
-		makeUpdate(0, "SubVegAXL_BC", "cover5a", number(-1.234567890123), number(2)),
+		makeUpdate(0, "SubVegCXL", "cover1", number(1.234567890123), number(2)),
+		makeUpdate(0, "SubVegDXL", "height6", number(1.234567890123), number(2)),
+		makeUpdate(0, "SubVegAXL_BC", "cover5a", number(1.234567890123), number(2)),
 		makeUpdate(-10, "SubVegCXL", "cover6", nil, number(0)),
 		makeUpdate(-10, "SubVegDXL", "cover7", nil, number(0)),
 		makeUpdate(-10, "SubVegAhtXL", "height1", nil, number(0)),
 		makeUpdate(0, "SubVegAXL_BC", "cover1", number(0), number(2)),
-		makeUpdate(0, "SubVegDXL", "cover7", number(-1.234567890123), number(100)),
-		makeUpdate(0, "SubVegAhtXL", "height1", number(-1.234567890123), number(math.Inf(1))),
+		makeUpdate(0, "SubVegDXL", "cover7", number(1.234567890123), number(-0.5)),
+		makeUpdate(0, "SubVegDXL", "cover7", number(1.234567890123), number(100)),
+		makeUpdate(0, "SubVegAhtXL", "height1", number(1.234567890123), number(math.Inf(1))),
 		makeUpdate(2147483648, "SubVegAXL_BC", "cover1", nil, number(2)),
 	} {
 		if err := s.UpdateVegetationNumbers("CHILD1", []vprocore.VegetationNumberUpdate{update}); err == nil {
@@ -57,8 +58,8 @@ func TestVegetationNumbersSourceFieldsAtomicRollbackAndHistoricalOmission(t *tes
 		}
 		vprotest.AssertSubstrateSnapshot(t, db, before)
 	}
-	first := makeUpdate(0, "SubVegAXL_BC", "cover1", number(-1.234567890123), number(99.999))
-	second := makeUpdate(-9, "SubVegDXL", "cover9", nil, number(-3.5))
+	first := makeUpdate(0, "SubVegAXL_BC", "cover1", number(1.234567890123), number(99.999))
+	second := makeUpdate(-9, "SubVegDXL", "cover9", nil, number(3.5))
 	if _, err := db.Exec(`CREATE TRIGGER fail_number_audit BEFORE INSERT ON Sample_Audit WHEN NEW.ID=-9
 		BEGIN SELECT RAISE(ABORT,'injected numeric audit failure'); END`); err != nil {
 		t.Fatal(err)
@@ -78,10 +79,24 @@ func TestVegetationNumbersSourceFieldsAtomicRollbackAndHistoricalOmission(t *tes
 		t.Fatal("duplicate identities accepted")
 	}
 	vprotest.AssertSubstrateSnapshot(t, db, before)
-	if _, err := db.Exec(`UPDATE Sample_Veg SET Cover8=120 WHERE ID=-9;
+	if _, err := db.Exec(`UPDATE Sample_Veg SET Cover8=120,Cover9=-3.5 WHERE ID=-9;
 		CREATE TRIGGER prevent_historical_number BEFORE UPDATE OF Cover8 ON Sample_Veg
 		WHEN OLD.ID=-9 BEGIN SELECT RAISE(ABORT,'historical field reassigned'); END`); err != nil {
 		t.Fatal(err)
+	}
+	if err := s.UpdateVegetationNumbers("CHILD1", []vprocore.VegetationNumberUpdate{
+		{ID: -9, Values: map[string]*float64{"cover8": number(120), "cover9": number(-3.5)},
+			Expected: map[string]*float64{"cover8": number(120), "cover9": number(-3.5)},
+			Forms:    map[string]string{"cover8": "SubVegDXL", "cover9": "SubVegDXL"}},
+	}); err != nil {
+		t.Fatal("historical negative cover preservation failed:", err)
+	}
+	if err := s.UpdateVegetationNumbers("CHILD1", []vprocore.VegetationNumberUpdate{
+		{ID: -9, Values: map[string]*float64{"cover8": number(120), "cover9": number(-2.5)},
+			Expected: map[string]*float64{"cover8": number(120), "cover9": number(-3.5)},
+			Forms:    map[string]string{"cover8": "SubVegDXL", "cover9": "SubVegDXL"}},
+	}); err == nil {
+		t.Fatal("accepted changing historical negative cover to new negative cover")
 	}
 	if err := s.UpdateVegetationNumbers("CHILD1", []vprocore.VegetationNumberUpdate{
 		{ID: -9, Values: map[string]*float64{"cover8": number(120), "cover9": nil},

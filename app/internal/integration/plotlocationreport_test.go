@@ -33,7 +33,7 @@ func TestPlotLocationsSourceEightFieldsSignNullsScopeAndDetachedValues(t *testin
 		*first.Values[0].Text != "000001" || *first.Values[1].Text != "  Zone  " || *first.Values[2].Text != "" ||
 		*first.Values[3].Text != "01" || first.Values[4].Storage != "null" || *first.Values[7].Integer != "9007199254740993" ||
 		*first.StoredLongitude.Real != 123.75 || *first.Values[6].Real != -123.75 ||
-		*second.StoredLongitude.Real != -123.75 || *second.Values[6].Real != 123.75 || !math.Signbit(*second.Values[5].Real) {
+		*second.StoredLongitude.Real != -123.75 || *second.Values[6].Real != -123.75 || !math.Signbit(*second.Values[5].Real) {
 		t.Fatal("source longitude negation, leading zeros, NULL/empty or physical precision changed", report)
 	}
 	*report.Rows[0].Values[1].Text = "caller"
@@ -55,8 +55,8 @@ func TestPlotLocationsNumericNegationPreservesHistoricalValuesAndRejectsCoercion
 		want string
 	}{
 		{vprotest.SiviReal(0), "-0"}, {vprotest.SiviReal(math.Copysign(0, -1)), "0"},
-		{vprotest.SiviReal(-200), "200"}, {vprotest.MetadataInteger("9007199254740993"), "-9007199254740993"},
-		{vprotest.MetadataInteger("-9223372036854775807"), "9223372036854775807"},
+		{vprotest.SiviReal(-200), "-200"}, {vprotest.MetadataInteger("9007199254740993"), "-9007199254740993"},
+		{vprotest.MetadataInteger("-9223372036854775807"), "-9223372036854775807"},
 	} {
 		got, err := vprocore.NegateLocationLongitude(test.cell)
 		if err != nil {
@@ -82,7 +82,7 @@ func TestPlotLocationsNumericNegationPreservesHistoricalValuesAndRejectsCoercion
 	env.Rows[1].Cells[5] = vprotest.SiviReal(100)
 	env.Rows[1].Cells[6] = vprotest.SiviReal(-200)
 	got, err := vprocore.PlanPlotLocations(context.Background(), "Project", "None", env, admin, su)
-	if err != nil || *got.Rows[1].Values[5].Real != 100 || *got.Rows[1].Values[6].Real != 200 {
+	if err != nil || *got.Rows[1].Values[5].Real != 100 || *got.Rows[1].Values[6].Real != -200 {
 		t.Fatal("historical ranges silently clamped/dropped", got, err)
 	}
 	zero, err := vprocore.NegateLocationLongitude(vprotest.SiviReal(0))

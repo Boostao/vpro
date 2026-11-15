@@ -64,7 +64,7 @@ func TestExtendedShrubsOnlyMembershipAtomicAuditRollbackAndIndependentTotals(t *
 	}
 	number := func(value float64) *float64 { return &value }
 	update := vprocore.VegetationNumberUpdate{ID: 0,
-		Values:   map[string]*float64{"cover5a": number(-1.234567890123), "cover5b": number(120), "cover5c": number(99.999)},
+		Values:   map[string]*float64{"cover5a": number(1.234567890123), "cover5b": number(120), "cover5c": number(99.999)},
 		Expected: map[string]*float64{"cover5a": number(0), "cover5b": number(120), "cover5c": nil},
 		Forms:    map[string]string{"cover5a": "SubVegAXL", "cover5b": "SubVegAXL", "cover5c": "SubVegAXL"}}
 	before := vprotest.SubstrateSnapshot(t, db)
@@ -81,7 +81,7 @@ func TestExtendedShrubsOnlyMembershipAtomicAuditRollbackAndIndependentTotals(t *
 	var a, b, c float64
 	var total any
 	if err := db.QueryRow("SELECT Cover5a,Cover5b,Cover5c,TotalB FROM Sample_Veg WHERE ID=0").Scan(&a, &b, &c, &total); err != nil ||
-		a != -1.234567890123 || b != 120 || c != 99.999 || total != nil || vprotest.AuditCount(t, db, "CHILD1") != 2 {
+		a != 1.234567890123 || b != 120 || c != 99.999 || total != nil || vprotest.AuditCount(t, db, "CHILD1") != 2 {
 		t.Fatal("precision, independent total, historical value or exact audits changed", a, b, c, total, err)
 	}
 	for _, form := range []string{"SubVegAXL_BC", "SubVegAXL"} {
@@ -97,6 +97,7 @@ func TestExtendedShrubsOnlyMembershipAtomicAuditRollbackAndIndependentTotals(t *
 	before = vprotest.SubstrateSnapshot(t, db)
 	for _, request := range []vprocore.VegetationNumberUpdate{
 		{ID: -9, Values: map[string]*float64{"cover5a": number(0)}, Expected: map[string]*float64{"cover5a": nil}, Forms: map[string]string{"cover5a": "SubVegAXL"}},
+		{ID: 0, Values: map[string]*float64{"cover5a": number(-1.234567890123)}, Expected: map[string]*float64{"cover5a": number(1.234567890123)}, Forms: map[string]string{"cover5a": "SubVegAXL"}},
 		{ID: 0, Values: map[string]*float64{"cover5c": number(100)}, Expected: map[string]*float64{"cover5c": number(99.999)}, Forms: map[string]string{"cover5c": "SubVegAXL"}},
 		{ID: 0, Values: map[string]*float64{"cover5c": nil}, Expected: map[string]*float64{"cover5c": number(99.999)}, Forms: map[string]string{"cover5c": "SubVegAhtXL"}},
 	} {

@@ -149,6 +149,7 @@ func SetPlotProfileEditing(s *vprocore.ContextService, ctx context.Context, expe
 	if err := ValidateProfileWriterFiles(owner); err != nil {
 		return vprocore.ProjectState{}, err
 	}
+	owner.TransferUserLogSession(candidate)
 	s.Projects.PublishSQLiteSelection(candidate, id)
 	published = true
 	if err := owner.Close(); err != nil {

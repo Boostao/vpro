@@ -8,6 +8,34 @@ import * as sourceform$0 from "../sourceform/models.js";
 // @ts-ignore: Unused imports
 import * as vprocore$0 from "../vprocore/models.js";
 
+export interface CreateTwoPageVegetationRequest {
+    "requestId"?: string;
+    "plotNumber": string;
+    "form": string;
+    "species": string;
+    "layer"?: string | null;
+    "collected"?: string | null;
+    "decision"?: string;
+    "entered"?: string | null;
+    "selected"?: string | null;
+    "covers": { [_ in string]?: number | null } | null;
+}
+
+export interface CreateTwoPageVegetationResult {
+    "requestId": string;
+    "contextId": string;
+    "project": string;
+    "plotNumber": string;
+    "form": string;
+    "rowId": string;
+    "id": number;
+    "species": string;
+    "reservedInLedger": boolean;
+    "auditRowCount": number;
+    "editWhen": string;
+    "replayed": boolean;
+}
+
 export interface DeleteTwoPageSoilHorizonRequest {
     "requestId"?: string;
     "plotNumber": string;
@@ -31,6 +59,28 @@ export interface DeleteTwoPageSoilHorizonResult {
     "replayed": boolean;
 }
 
+export interface DeleteTwoPageVegetationRequest {
+    "requestId"?: string;
+    "plotNumber": string;
+    "form": string;
+    "id": number;
+    "rowId"?: string;
+}
+
+export interface DeleteTwoPageVegetationResult {
+    "requestId": string;
+    "contextId": string;
+    "project": string;
+    "plotNumber": string;
+    "form": string;
+    "deletedId": number;
+    "species": string;
+    "reservedInLedger": boolean;
+    "auditRowCount": number;
+    "editWhen": string;
+    "replayed": boolean;
+}
+
 export interface DeletedTwoPageSoilHorizonEntry {
     "deleteRequestId": string;
     "plotNumber": string;
@@ -40,6 +90,18 @@ export interface DeletedTwoPageSoilHorizonEntry {
     "horizon": string;
     "upperDepth"?: number | null;
     "lowerDepth"?: number | null;
+    "deletedBy": string;
+    "deletedAt": string;
+    "restored": boolean;
+}
+
+export interface DeletedTwoPageVegetationEntry {
+    "deleteRequestId": string;
+    "plotNumber": string;
+    "form": string;
+    "deletedId": number;
+    "species": string;
+    "layer": string;
     "deletedBy": string;
     "deletedAt": string;
     "restored": boolean;
@@ -63,6 +125,28 @@ export interface RestoreTwoPageSoilHorizonResult {
     "restoredId": number;
     "restoredRowId": string;
     "horizon": string;
+    "auditRowCount": number;
+    "editWhen": string;
+    "replayed": boolean;
+}
+
+export interface RestoreTwoPageVegetationRequest {
+    "requestId"?: string;
+    "plotNumber": string;
+    "form": string;
+    "deleteRequestId": string;
+}
+
+export interface RestoreTwoPageVegetationResult {
+    "requestId": string;
+    "deleteRequestId": string;
+    "contextId": string;
+    "project": string;
+    "plotNumber": string;
+    "form": string;
+    "restoredId": number;
+    "restoredRowId": string;
+    "species": string;
     "auditRowCount": number;
     "editWhen": string;
     "replayed": boolean;

@@ -148,6 +148,7 @@ export interface CreateSnapshotRequest {
     "exportFormat"?: string;
     "destinationPath"?: string;
     "zoneFilter"?: string;
+    "includeSensitiveCoordinates"?: boolean;
 }
 
 /**
@@ -239,6 +240,7 @@ export interface PullSubsetRequest {
     "targetProject": string;
     "destinationPath"?: string;
     "activateOnSuccess": boolean;
+    "maskSensitiveCoordinates"?: boolean;
 }
 
 /**
@@ -254,6 +256,7 @@ export interface PullSubsetResult {
     "mineralCount": number;
     "otherCount": number;
     "metadataCount": number;
+    "maskedSensitivePlots"?: number;
     "downloadLogId": number;
     "activated": boolean;
     "state"?: vprocore$0.ProjectState | null;
@@ -347,6 +350,7 @@ export interface SnapshotRecord {
     "manifestSha256": string;
     "notes"?: string;
     "exportedPath"?: string;
+    "maskedSensitivePlots"?: number;
 }
 
 /**
@@ -536,6 +540,8 @@ export interface SubsetFilter {
 export interface SubsetPreview {
     "matchingPlots": number;
     "matchingVeg": number;
+    "sensitivePlots"?: number;
+    "coordinatesMasked"?: boolean;
     "samplePlots": string[] | null;
     "zoneBreakdown": { [_ in string]?: number } | null;
 }

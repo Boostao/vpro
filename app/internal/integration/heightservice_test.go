@@ -155,8 +155,11 @@ func TestHeight_ValidationAndHistoricalValues(t *testing.T) {
 		if err := s.UpdateHeightRecords("CHILD1", []vprocore.HeightRecordUpdate{heightUpdate(1, field, vprotest.HeightFloat(20), vprotest.HeightFloat(100))}); err == nil {
 			t.Fatal("accepted cover/total100")
 		}
+		if err := s.UpdateHeightRecords("CHILD1", []vprocore.HeightRecordUpdate{heightUpdate(1, field, vprotest.HeightFloat(20), vprotest.HeightFloat(-99.75))}); err == nil {
+			t.Fatal("accepted negative new cover/total")
+		}
 	}
-	for _, value := range []float64{-99.75, 0, 99.99} {
+	for _, value := range []float64{0, 99.99} {
 		before := vprotest.StoredHeight(t, db, "CHILD1", 1, "Cover1")
 		if err := s.UpdateHeightRecords("CHILD1", []vprocore.HeightRecordUpdate{heightUpdate(1, "cover1", before, vprotest.HeightFloat(value))}); err != nil {
 			t.Fatal(err)
@@ -179,6 +182,19 @@ func TestHeight_ValidationAndHistoricalValues(t *testing.T) {
 		if err := s.UpdateHeightRecords("CHILD1", []vprocore.HeightRecordUpdate{heightUpdate(1, field, before, nil)}); err != nil {
 			t.Fatalf("cannot clear historical out-of-range %s: %v", field, err)
 		}
+	}
+	if _, err := db.Exec(`UPDATE Sample_Veg SET Cover1=-5 WHERE PlotNumber='CHILD1' AND ID=1`); err != nil {
+		t.Fatal(err)
+	}
+	negBefore := vprotest.StoredHeight(t, db, "CHILD1", 1, "Cover1")
+	if err := s.UpdateHeightRecords("CHILD1", []vprocore.HeightRecordUpdate{heightUpdate(1, "cover1", negBefore, negBefore)}); err != nil {
+		t.Fatalf("cannot preserve historical negative cover1: %v", err)
+	}
+	if err := s.UpdateHeightRecords("CHILD1", []vprocore.HeightRecordUpdate{heightUpdate(1, "cover1", negBefore, vprotest.HeightFloat(-1))}); err == nil {
+		t.Fatal("accepted changing historical negative cover1 to new negative value")
+	}
+	if err := s.UpdateHeightRecords("CHILD1", []vprocore.HeightRecordUpdate{heightUpdate(1, "cover1", negBefore, nil)}); err != nil {
+		t.Fatalf("cannot clear historical negative cover1: %v", err)
 	}
 }
 

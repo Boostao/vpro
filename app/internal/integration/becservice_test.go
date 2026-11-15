@@ -114,13 +114,34 @@ func TestBECFrozenCatalogueAndLookups(t *testing.T) {
 			t.Fatalf("literal/no-match subzones %q: %#v %v", code, rows, err)
 		}
 	}
+	allSeries, err := s.ListBECSiteSeries(context.Background(), nil, nil)
+	if err != nil || len(allSeries) != status.SiteSeriesRows {
+		t.Fatalf("unfiltered site series: got %d want %d, err=%v", len(allSeries), status.SiteSeriesRows, err)
+	}
+	subZoneOnly, err := s.ListBECSiteSeries(context.Background(), nil, vprotest.BecString("xh1"))
+	if err != nil || len(subZoneOnly) < len(series) {
+		t.Fatalf("subzone-only site series: got %d (<%d) err=%v", len(subZoneOnly), len(series), err)
+	}
+	for _, row := range subZoneOnly {
+		if row.SubZone == nil || !strings.EqualFold(*row.SubZone, "xh1") {
+			t.Fatalf("subzone-only filter leaked %#v", row)
+		}
+	}
+	zoneOnly, err := s.ListBECSiteSeries(context.Background(), vprotest.BecString("BG"), nil)
+	if err != nil || len(zoneOnly) < len(series) {
+		t.Fatalf("zone-only site series: got %d (<%d) err=%v", len(zoneOnly), len(series), err)
+	}
+	for _, row := range zoneOnly {
+		if row.Zone == nil || !strings.EqualFold(*row.Zone, "BG") {
+			t.Fatalf("zone-only filter leaked %#v", row)
+		}
+	}
 	for _, pair := range [][2]*string{
-		{nil, nil}, {nil, vprotest.BecString("xh1")}, {vprotest.BecString("BG"), nil},
 		{vprotest.BecString("ZZ"), vprotest.BecString("xh1")}, {vprotest.BecString("BG"), vprotest.BecString("O'Q")}, {vprotest.BecString("All"), vprotest.BecString("xh1")},
 	} {
 		rows, err := s.ListBECSiteSeries(context.Background(), pair[0], pair[1])
 		if err != nil || len(rows) != 0 || rows == nil {
-			t.Fatalf("NULL/no-match series: %#v %v", rows, err)
+			t.Fatalf("no-match series: %#v %v", rows, err)
 		}
 	}
 	for _, code := range []string{"", "ABCDE"} {

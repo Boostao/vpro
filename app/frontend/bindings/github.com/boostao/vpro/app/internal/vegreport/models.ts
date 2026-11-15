@@ -506,6 +506,8 @@ export interface LongVegetationSettings {
     "quality": LongVegetationQualitySettings | null;
     "unitGrouping"?: string;
     "unitFields"?: string[] | null;
+    "combineVariants"?: boolean;
+    "lumpTable"?: string;
 }
 
 export interface LongVegetationStatisticsPreferenceValues {
@@ -697,6 +699,28 @@ export interface SpeciesAttributeUnit {
     "rows": SpeciesAttributeCount[] | null;
 }
 
+/**
+ * SummaryVegetationAppliedPreferences captures presentation preferences synced across preview and workbook.
+ */
+export interface SummaryVegetationAppliedPreferences {
+    "title": string;
+    "showCommon": boolean;
+    "showGuide": boolean;
+    "hierarchyHeader": boolean;
+    "includeEnv": boolean;
+    "createSummary": boolean;
+    "combineVariants": boolean;
+    "constancy": boolean;
+    "groupBy": number;
+    "average": number;
+    "display": number;
+    "showClass": number;
+    "valueLimit": number;
+    "lumpTable": string;
+    "unitScope": string;
+    "unitField"?: string;
+}
+
 export interface SummaryVegetationEnvironmentalLifeformPreview {
     "vegetation": SummaryVegetationPreview;
     "fieldList": vprocore$0.ProjectMetadataTable;
@@ -805,6 +829,37 @@ export interface SummaryVegetationFieldListSelection {
     "selected": string[] | null;
 }
 
+/**
+ * SummaryVegetationGoldstreamCell records parsed Goldstream score and class values
+ * for a single species-group x site-unit cell when Display=5 is evaluated.
+ */
+export interface SummaryVegetationGoldstreamCell {
+    "unit": string;
+    "score"?: number | null;
+    "class"?: number | null;
+}
+
+/**
+ * SummaryVegetationGoldstreamMetadata exposes the Goldstream scoring formula,
+ * class boundaries, and per-cell score/class breakdown alongside formatted cells.
+ */
+export interface SummaryVegetationGoldstreamMetadata {
+    "formula": string;
+    "showClass": number;
+    "classThresholds": number[] | null;
+    "classLabels": number[] | null;
+    "rows": SummaryVegetationGoldstreamRow[] | null;
+}
+
+/**
+ * SummaryVegetationGoldstreamRow captures Goldstream score/class metadata per species row.
+ */
+export interface SummaryVegetationGoldstreamRow {
+    "layer"?: string;
+    "species": string;
+    "cells": SummaryVegetationGoldstreamCell[] | null;
+}
+
 export interface SummaryVegetationPreferenceValues {
     "groupBy": number;
     "average": number;
@@ -881,6 +936,27 @@ export interface SummaryVegetationPreview {
     "columns": string[] | null;
     "rows": SummaryVegetationRow[] | null;
     "references"?: SummaryVegetationReferenceReview | null;
+    "quality"?: SummaryVegetationQualityFilterResult | null;
+    "unitScope"?: string;
+    "unitField"?: string;
+    "hierarchyHeaderEnabled"?: boolean;
+    "combineVariants"?: boolean;
+    "lumpTable"?: string;
+    "valueLimit"?: number;
+    "goldstream"?: SummaryVegetationGoldstreamMetadata | null;
+    "appliedPreferences"?: SummaryVegetationAppliedPreferences | null;
+}
+
+/**
+ * SummaryVegetationQualityFilterResult summarizes QC + BEC_Use plot filtering on a Summary Vegetation preview.
+ */
+export interface SummaryVegetationQualityFilterResult {
+    "enforced": boolean;
+    "totalBefore": number;
+    "retained": number;
+    "removedCount": number;
+    "removed": SummaryVegetationQualityRemovedPlot[] | null;
+    "thresholds": SummaryVegetationQualityThresholds;
 }
 
 export interface SummaryVegetationQualityPreferenceValues {
@@ -912,6 +988,35 @@ export interface SummaryVegetationQualityPreferencesReview {
     "source": string;
     "qualityDefinitions": vprocore$0.ProjectMetadataTable;
     "becDefinitions": vprocore$0.ProjectMetadataTable;
+}
+
+/**
+ * SummaryVegetationQualityRemovedPlot records an SU membership excluded by DataQuality + BEC_Use QC filtering.
+ */
+export interface SummaryVegetationQualityRemovedPlot {
+    "rowId": string;
+    "plotNumber": string;
+    "siteUnit": string;
+    "sitePlotQuality"?: string | null;
+    "vegPlotQuality"?: string | null;
+    "soilPlotQuality"?: string | null;
+    "becUse"?: string | null;
+    "removedBy": string;
+    "failedCriteria": string[] | null;
+}
+
+/**
+ * SummaryVegetationQualityThresholds records resolved QC thresholds used when DataQualityFilterEnforce is enabled.
+ */
+export interface SummaryVegetationQualityThresholds {
+    "siteMinimum": string;
+    "vegMinimum": string;
+    "soilMinimum": string;
+    "becMinimum": string;
+    "siteIncludeNulls": boolean;
+    "vegIncludeNulls": boolean;
+    "soilIncludeNulls": boolean;
+    "becIncludeNulls": boolean;
 }
 
 export interface SummaryVegetationReferenceOptions {
@@ -947,6 +1052,7 @@ export interface SummaryVegetationRow {
 
 export interface SummaryVegetationUnit {
     "code": string;
+    "hierarchyHeader"?: string | null;
     "numPlots": number;
     "membershipIds": string[] | null;
     "rawVegRowIds": string[] | null;
@@ -991,6 +1097,14 @@ export interface SummaryVegetationWorkbookOptions {
     "groupAndOrder"?: number | null;
     "constancy"?: boolean;
     "unanimousCommon"?: boolean;
+    "unitScope"?: string;
+    "unitField"?: string;
+    "hierarchyHeader"?: boolean | null;
+    "breakpointPolicy"?: string;
+    "combineVariants"?: boolean | null;
+    "lumpTable"?: string;
+    "valueLimit"?: number | null;
+    "includeGoldstreamMetadata"?: boolean;
 }
 
 export interface SummaryVegetationWorkbookReportSummary {

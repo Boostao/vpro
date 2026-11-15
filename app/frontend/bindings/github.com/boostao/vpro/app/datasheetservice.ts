@@ -13,6 +13,10 @@ export function ApplyDatasheetEdits(contextID: string, request: $models.Datashee
     return $Call.ByID(126167658, contextID, request);
 }
 
+export function DeleteDatasheetChildRow(contextID: string, request: $models.DatasheetDeleteChildRowRequest): $CancellablePromise<$models.DatasheetDeleteChildRowResult | null> {
+    return $Call.ByID(3868649598, contextID, request);
+}
+
 export function GetDatasheetPage(contextID: string, request: $models.DatasheetPageRequest): $CancellablePromise<$models.DatasheetPage | null> {
     return $Call.ByID(437576142, contextID, request);
 }
@@ -23,6 +27,14 @@ export function GetEnvironmentTableReview(contextID: string, plot: string, offse
 
 export function GetVegetationTableReview(contextID: string, plot: string, form: string, offset: number, limit: number): $CancellablePromise<$models.TwoPageVegetationTableReview | null> {
     return $Call.ByID(3108625530, contextID, plot, form, offset, limit);
+}
+
+export function InsertDatasheetChildRow(contextID: string, request: $models.DatasheetInsertChildRowRequest): $CancellablePromise<$models.DatasheetInsertChildRowResult | null> {
+    return $Call.ByID(3111196604, contextID, request);
+}
+
+export function ListDatasheetAllTables(contextID: string): $CancellablePromise<$models.DatasheetTableInfo[] | null> {
+    return $Call.ByID(22113113, contextID);
 }
 
 export function ListDatasheetTables(contextID: string): $CancellablePromise<$models.DatasheetTableInfo[] | null> {

@@ -46,7 +46,7 @@ func TestHeight_VegWritePathsRejectNewInvalidNumerics(t *testing.T) {
 			for property := range vprocore.HeightProperties {
 				invalid := []float64{math.NaN(), math.Inf(1), math.Inf(-1), 3.5e38, -3.5e38}
 				if property[:1] != "h" {
-					invalid = append(invalid, 100, 125)
+					invalid = append(invalid, -0.5, 100, 125)
 				}
 				for _, number := range invalid {
 					record := baseline
@@ -138,22 +138,29 @@ func TestHeight_VegSharedBoundaryPreservesPrecisionAndHistoricalFields(t *testin
 	}
 	record := loadHeightVeg(t, s)
 	record.Cover1 = vprotest.HeightFloat(99.99)
-	record.TotalA = vprotest.HeightFloat(-125)
+	record.TotalA = vprotest.HeightFloat(12.5)
 	record.Height1 = vprotest.HeightFloat(1.234567890123)
 	record.Height2 = vprotest.HeightFloat(-math.MaxFloat32)
 	record.Height3 = vprotest.HeightFloat(math.Copysign(0, -1))
-	// Physical Single bounds do not introduce the height grid's <100 rule here.
-	// An unchanged historical overflow is omitted, not reassigned or repaired.
-	record.Cover7 = vprotest.HeightFloat(1000)
+	// Cover fields on Veg writes enforce the shared >= 0 and < 100 rule for new/edited
+	// values, while unchanged historical overflows like Cover10=1e40 are preserved.
+	record.Cover7 = vprotest.HeightFloat(88.75)
 	if err := s.UpdateVegRecord(record); err != nil {
 		t.Fatal(err)
 	}
 	for field, want := range map[string]float64{
-		"Cover1": 99.99, "TotalA": -125, "Height1": 1.234567890123,
-		"Height2": -math.MaxFloat32, "Height3": 0, "Cover7": 1000, "Cover10": 1e40,
+		"Cover1": 99.99, "TotalA": 12.5, "Height1": 1.234567890123,
+		"Height2": -math.MaxFloat32, "Height3": 0, "Cover7": 88.75, "Cover10": 1e40,
 	} {
 		if got := vprotest.StoredHeight(t, db, "CHILD1", 0, field); got == nil || *got != want {
 			t.Fatalf("%s precision/domain changed", field)
+		}
+	}
+	for _, invalidCover7 := range []float64{-0.5, 100, 1000} {
+		bad := loadHeightVeg(t, s)
+		bad.Cover7 = vprotest.HeightFloat(invalidCover7)
+		if err := s.UpdateVegRecord(bad); err == nil {
+			t.Fatalf("accepted invalid new Cover7=%v", invalidCover7)
 		}
 	}
 	if _, err := db.Exec(`CREATE TRIGGER fail_normal_height_audit BEFORE INSERT ON Sample_Audit

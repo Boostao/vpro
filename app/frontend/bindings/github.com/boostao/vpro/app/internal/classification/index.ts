@@ -10,6 +10,7 @@ export type {
     CreateSUFromEnvFieldsRequest,
     CreateSUFromEnvFieldsResult,
     CreateSUTableRequest,
+    DeleteUserSiteUnitRequest,
     EnvironmentSiteUnitChange,
     EnvironmentSiteUnitResult,
     EnvironmentSiteUnitReview,
@@ -35,6 +36,7 @@ export type {
     PlotProfileTableCreation,
     PlotProfileTableReview,
     PlotProfileWriteRequest,
+    ProfileLumpChoice,
     ProfileSUCreated,
     ProfileSUCreation,
     ProfileSUPlot,
@@ -67,11 +69,15 @@ export type {
     SUTableLifecycleResult,
     SUUnitBucket,
     SaveFlatHierarchyRequest,
+    SaveHierarchyTableAsRequest,
     SaveSUTableAsRequest,
     SiteUnitEnvironmentChange,
     SiteUnitEnvironmentResult,
     SiteUnitEnvironmentReview,
     SiteUnitEnvironmentTransfer,
     TwoPageProfilingReview,
-    TwoPageProjectMetadataReview
+    TwoPageProjectMetadataReview,
+    UpsertUserSiteUnitRequest,
+    UserSiteUnitEntry,
+    UserSiteUnitImportResult
 } from "./models.js";

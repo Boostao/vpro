@@ -33,6 +33,10 @@ export function CreateTwoPageSoilHorizon(contextID: string, requestJSON: string)
     return $Call.ByID(611935501, contextID, requestJSON);
 }
 
+export function CreateTwoPageVegetationRow(contextID: string, request: $models.CreateTwoPageVegetationRequest): $CancellablePromise<$models.CreateTwoPageVegetationResult> {
+    return $Call.ByID(1953507147, contextID, request);
+}
+
 export function DeleteHumusRecord(plotNumber: string, id: number): $CancellablePromise<void> {
     return $Call.ByID(2829223874, plotNumber, id);
 }
@@ -51,6 +55,10 @@ export function DeleteReviewedVegetation(plot: string, request: $models.Vegetati
 
 export function DeleteSIVIVegetation(contextID: string, requestJSON: string): $CancellablePromise<$models.SIVIDeletionResult | null> {
     return $Call.ByID(3953627302, contextID, requestJSON);
+}
+
+export function DeleteTwoPageVegetationRow(contextID: string, request: $models.DeleteTwoPageVegetationRequest): $CancellablePromise<$models.DeleteTwoPageVegetationResult> {
+    return $Call.ByID(3322965976, contextID, request);
 }
 
 export function DeleteVegRecord(plotNumber: string, id: number): $CancellablePromise<void> {
@@ -237,6 +245,10 @@ export function ListSubgroupChoices(): $CancellablePromise<$models.SoilCodeChoic
     return $Call.ByID(1400643311);
 }
 
+export function ListTwoPageVegetationDeletedRows(contextID: string, plot: string, form: string): $CancellablePromise<$models.DeletedTwoPageVegetationEntry[] | null> {
+    return $Call.ByID(2510960803, contextID, plot, form);
+}
+
 export function ListVegRecords(plotNumber: string): $CancellablePromise<$models.VegRecord[] | null> {
     return $Call.ByID(3050744688, plotNumber);
 }
@@ -329,6 +341,10 @@ export function RestoreSelectedAuditRecords(plotNumber: string, rowIDs: string[]
     return $Call.ByID(3783805364, plotNumber, rowIDs, action);
 }
 
+export function RestoreSelectedTwoPageSourceAudit(contextID: string, plot: string, form: string, rowIDs: string[] | null, action: $models.AuditRestoreAction): $CancellablePromise<$models.AuditRestoreResult | null> {
+    return $Call.ByID(3406217080, contextID, plot, form, rowIDs, action);
+}
+
 export function RestoreTwoPageParentCommon(contextID: string, plot: string, form: string, historyID: string, action: $models.AuditRestoreAction): $CancellablePromise<$models.AuditRestoreResult | null> {
     return $Call.ByID(3769491354, contextID, plot, form, historyID, action);
 }
@@ -339,6 +355,10 @@ export function RestoreTwoPageParentEntry(contextID: string, plot: string, form:
 
 export function RestoreTwoPageParentExtra(contextID: string, plot: string, form: string, historyID: string, action: $models.AuditRestoreAction): $CancellablePromise<$models.AuditRestoreResult | null> {
     return $Call.ByID(3418363751, contextID, plot, form, historyID, action);
+}
+
+export function RestoreTwoPageVegetationRow(contextID: string, request: $models.RestoreTwoPageVegetationRequest): $CancellablePromise<$models.RestoreTwoPageVegetationResult> {
+    return $Call.ByID(2417071617, contextID, request);
 }
 
 export function ReviewSIVICreationUndo(contextID: string, plot: string, historyID: string): $CancellablePromise<$models.SIVICreationUndoReview | null> {
@@ -433,6 +453,10 @@ export function SetCurrentUser(user: string): $CancellablePromise<void> {
     return $Call.ByID(3955686378, user);
 }
 
+export function SetTwoPageSourceAuditRestoreSelection(contextID: string, plot: string, form: string, rowIDs: string[] | null): $CancellablePromise<void> {
+    return $Call.ByID(496735223, contextID, plot, form, rowIDs);
+}
+
 export function UndoSIVICreation(contextID: string, requestJSON: string): $CancellablePromise<$models.SIVICreationUndoResult | null> {
     return $Call.ByID(1501653662, contextID, requestJSON);
 }
@@ -483,4 +507,8 @@ export function UpdateVegetationNumbers(plot: string, updates: $models.Vegetatio
 
 export function UpdateVegetationSpecies(plot: string, updates: $models.VegetationSpeciesUpdate[] | null): $CancellablePromise<void> {
     return $Call.ByID(3655448605, plot, updates);
+}
+
+export function UserAccreditationStatus(): $CancellablePromise<$models.UserAccreditation> {
+    return $Call.ByID(3233384801);
 }

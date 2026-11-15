@@ -131,6 +131,14 @@ export type CreateSUFromEnvFieldsResult = classification$0.CreateSUFromEnvFields
 
 export type CreateSUTableRequest = classification$0.CreateSUTableRequest;
 
+export type CreateTwoPageVegetationRequest = twopage$0.CreateTwoPageVegetationRequest;
+
+export type CreateTwoPageVegetationResult = twopage$0.CreateTwoPageVegetationResult;
+
+export type DatasheetDeleteChildRowRequest = datasheet$0.DatasheetDeleteChildRowRequest;
+
+export type DatasheetDeleteChildRowResult = datasheet$0.DatasheetDeleteChildRowResult;
+
 export type DatasheetEditRequest = datasheet$0.DatasheetEditRequest;
 
 export type DatasheetEditResult = datasheet$0.DatasheetEditResult;
@@ -139,11 +147,23 @@ export type DatasheetFindReplacePreview = datasheet$0.DatasheetFindReplacePrevie
 
 export type DatasheetFindReplaceRequest = datasheet$0.DatasheetFindReplaceRequest;
 
+export type DatasheetInsertChildRowRequest = datasheet$0.DatasheetInsertChildRowRequest;
+
+export type DatasheetInsertChildRowResult = datasheet$0.DatasheetInsertChildRowResult;
+
 export type DatasheetPage = datasheet$0.DatasheetPage;
 
 export type DatasheetPageRequest = datasheet$0.DatasheetPageRequest;
 
 export type DatasheetTableInfo = datasheet$0.DatasheetTableInfo;
+
+export type DeleteTwoPageVegetationRequest = twopage$0.DeleteTwoPageVegetationRequest;
+
+export type DeleteTwoPageVegetationResult = twopage$0.DeleteTwoPageVegetationResult;
+
+export type DeleteUserSiteUnitRequest = classification$0.DeleteUserSiteUnitRequest;
+
+export type DeletedTwoPageVegetationEntry = twopage$0.DeletedTwoPageVegetationEntry;
 
 export type EnvironmentSiteUnitResult = classification$0.EnvironmentSiteUnitResult;
 
@@ -375,6 +395,8 @@ export type PlotProfileWriteRequest = classification$0.PlotProfileWriteRequest;
 
 export type PlotQualityChoice = references$0.PlotQualityChoice;
 
+export type ProfileLumpChoice = classification$0.ProfileLumpChoice;
+
 export type ProfileSUCreated = classification$0.ProfileSUCreated;
 
 export type ProfileSUCreation = classification$0.ProfileSUCreation;
@@ -443,6 +465,10 @@ export type ReassignSynthesisPlotResult = diagnostics$0.ReassignSynthesisPlotRes
 
 export type RegionCodeChoice = references$0.RegionCodeChoice;
 
+export type RestoreTwoPageVegetationRequest = twopage$0.RestoreTwoPageVegetationRequest;
+
+export type RestoreTwoPageVegetationResult = twopage$0.RestoreTwoPageVegetationResult;
+
 export type SIVICoverWriteResult = sivi$0.SIVICoverWriteResult;
 
 export type SIVICreationResult = sivi$0.SIVICreationResult;
@@ -501,6 +527,8 @@ export type SUTableLifecycleResult = classification$0.SUTableLifecycleResult;
 
 export type SaveFlatHierarchyRequest = classification$0.SaveFlatHierarchyRequest;
 
+export type SaveHierarchyTableAsRequest = classification$0.SaveHierarchyTableAsRequest;
+
 export type SaveSUTableAsRequest = classification$0.SaveSUTableAsRequest;
 
 export type SiteCodeChoice = references$0.SiteCodeChoice;
@@ -520,6 +548,8 @@ export type SiteUnitSpeciesListPreview = envreport$0.SiteUnitSpeciesListPreview;
 export type SiteUnitSpeciesListRequest = envreport$0.SiteUnitSpeciesListRequest;
 
 export type SiteUnitSummaryExtendedWorkbookReview = envreport$0.SiteUnitSummaryExtendedWorkbookReview;
+
+export type SiteUnitSummaryFullPreferences = envreport$0.SiteUnitSummaryFullPreferences;
 
 export type SiteUnitSummaryOptions = envreport$0.SiteUnitSummaryOptions;
 
@@ -653,7 +683,15 @@ export type TwoPageVegetationWriteResult = twopage$0.TwoPageVegetationWriteResul
 
 export type UndoSynthesisReassignmentRequest = diagnostics$0.UndoSynthesisReassignmentRequest;
 
+export type UpsertUserSiteUnitRequest = classification$0.UpsertUserSiteUnitRequest;
+
+export type UserAccreditation = vprocore$0.UserAccreditation;
+
 export type UserLogReview = lifecycle$0.UserLogReview;
+
+export type UserSiteUnitEntry = classification$0.UserSiteUnitEntry;
+
+export type UserSiteUnitImportResult = classification$0.UserSiteUnitImportResult;
 
 export type VegRecord = vprocore$0.VegRecord;
 

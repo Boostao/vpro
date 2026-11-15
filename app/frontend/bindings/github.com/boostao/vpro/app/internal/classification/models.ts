@@ -133,6 +133,10 @@ export interface CreateSUTableRequest {
     "activate": boolean;
 }
 
+export interface DeleteUserSiteUnitRequest {
+    "id": number;
+}
+
 export interface EnvironmentSiteUnitChange {
     "plotNumber": string;
     "envRowId": string;
@@ -352,6 +356,13 @@ export interface PlotProfileWriteRequest {
     "confirmed": boolean;
 }
 
+export interface ProfileLumpChoice {
+    "role": string;
+    "table": string;
+    "location": string;
+    "rowCount": number;
+}
+
 export interface ProfileSUCreated {
     "name": string;
     "path": string;
@@ -512,6 +523,8 @@ export interface ProjectPlotProfileRunRequest {
     "originalRules": vprocore$0.ProjectMetadataTable;
     "projectLump": vprocore$0.ProjectMetadataTable | null;
     "subvarieties": boolean;
+    "startWithAllPlots"?: boolean;
+    "lumpTable"?: string;
 }
 
 export interface ProjectPlotProfileStep {
@@ -598,6 +611,21 @@ export interface SUUnitBucket {
 
 export interface SaveFlatHierarchyRequest {
     "rows": FlatHierarchyRow[] | null;
+}
+
+export interface SaveHierarchyTableAsRequest {
+    /**
+     * defaults to active Hierarchy when empty
+     */
+    "sourceHierarchy": string;
+    "newName": string;
+
+    /**
+     * "project" (default) | "new_file"
+     */
+    "destination": string;
+    "filePath": string;
+    "activate": boolean;
 }
 
 export interface SaveSUTableAsRequest {
@@ -690,4 +718,28 @@ export interface TwoPageProjectMetadataReview {
     "totalRows": number;
     "matchingPolicy": string;
     "generalLocaleVerified": boolean;
+}
+
+export interface UpsertUserSiteUnitRequest {
+    "id"?: number | null;
+    "siteSeries": string;
+    "siteSeriesLongName": string;
+    "siteSeriesScientificName": string;
+    "level"?: number | null;
+}
+
+export interface UserSiteUnitEntry {
+    "id": number;
+    "siteSeries": string;
+    "siteSeriesLongName": string;
+    "siteSeriesScientificName": string;
+    "level": number;
+}
+
+export interface UserSiteUnitImportResult {
+    "inserted": number;
+    "updated": number;
+    "skipped": number;
+    "total": number;
+    "entries": UserSiteUnitEntry[] | null;
 }

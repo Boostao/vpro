@@ -28,6 +28,23 @@ export interface DatasheetColumnMeta {
     "isBoolean": boolean;
 }
 
+export interface DatasheetDeleteChildRowRequest {
+    "tableKey": string;
+    "rowId": string;
+    "expectedPlotNumber"?: string;
+    "expectedId"?: number | null;
+}
+
+export interface DatasheetDeleteChildRowResult {
+    "contextId": string;
+    "tableKey": string;
+    "tableName": string;
+    "plotNumber": string;
+    "rowId": string;
+    "deletedId": number;
+    "auditRows": number;
+}
+
 export interface DatasheetEditRequest {
     "tableKey": string;
     "edits": DatasheetCellEdit[] | null;
@@ -89,6 +106,22 @@ export interface DatasheetFindReplaceRequest {
     "maxPreview": number;
 }
 
+export interface DatasheetInsertChildRowRequest {
+    "tableKey": string;
+    "plotNumber": string;
+    "cells": { [_ in string]?: vprocore$0.ProjectMetadataCell } | null;
+}
+
+export interface DatasheetInsertChildRowResult {
+    "contextId": string;
+    "tableKey": string;
+    "tableName": string;
+    "plotNumber": string;
+    "rowId": string;
+    "id": number;
+    "auditRows": number;
+}
+
 export interface DatasheetPage {
     "contextId": string;
     "project": string;
@@ -104,6 +137,7 @@ export interface DatasheetPage {
     "limit": number;
     "totalRows": number;
     "canEditMaster": boolean;
+    "readOnly": boolean;
     "scopeToActiveSU": boolean;
 }
 
@@ -140,6 +174,7 @@ export interface DatasheetTableInfo {
     "available": boolean;
     "unavailableReason"?: string;
     "editable": boolean;
+    "readOnly": boolean;
     "rowCount": number;
     "columns": DatasheetColumnMeta[] | null;
 }

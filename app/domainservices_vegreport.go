@@ -148,6 +148,20 @@ func (s *VegetationReportService) PreviewSummaryVegetationGroupedDisplay(ctx con
 	return s.summary.PreviewGroupedDisplay(ctx, contextID, average, groupAndOrder, display, showClass)
 }
 
+func (s *VegetationReportService) PreviewSummaryVegetationWithPreferences(ctx context.Context, contextID string) (SummaryVegetationPreview, error) {
+	if s == nil || s.summary == nil {
+		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
+	}
+	return s.summary.PreviewWithPreferences(ctx, contextID)
+}
+
+func (s *VegetationReportService) PreviewSummaryVegetationConfigured(ctx context.Context, contextID, requestJSON string) (SummaryVegetationPreview, error) {
+	if s == nil || s.summary == nil {
+		return SummaryVegetationPreview{}, errors.New("summary vegetation service is unavailable")
+	}
+	return s.summary.PreviewConfigured(ctx, contextID, requestJSON)
+}
+
 func (s *VegetationReportService) PreviewSummaryVegetationEnvironmental(ctx context.Context, contextID string, average, display, showClass int) (*SummaryVegetationEnvironmentalPreview, error) {
 	if s == nil || s.summaryEnvironment == nil {
 		return nil, errors.New("summary vegetation environmental service is unavailable")
@@ -174,6 +188,13 @@ func (s *VegetationReportService) GetSummaryVegetationWorkbookReview(ctx context
 		return nil, errors.New("summary vegetation workbook service is unavailable")
 	}
 	return s.summaryWorkbook.GetReview(ctx, contextID, requestJSON)
+}
+
+func (s *VegetationReportService) GetSummaryVegetationWorkbookReviewFromPreferences(ctx context.Context, contextID string) (*SummaryVegetationWorkbookReview, error) {
+	if s == nil || s.summaryWorkbook == nil {
+		return nil, errors.New("summary vegetation workbook service is unavailable")
+	}
+	return s.summaryWorkbook.GetReviewFromPreferences(ctx, contextID)
 }
 
 func (s *VegetationReportService) ExportReviewedSummaryVegetationWorkbook(ctx context.Context, contextID, requestJSON string) (*VegetationWorkbookOutcome, error) {
@@ -542,6 +563,13 @@ func (s *VegetationReportService) PreviewLifeformSummary(ctx context.Context, co
 	return s.lifeformSummary.Preview(ctx, contextID)
 }
 
+func (s *VegetationReportService) PreviewLifeformSummaryWithHierarchyBreakpoints(ctx context.Context, contextID, breakpointPolicy string) (LifeformSummaryPreview, error) {
+	if s == nil || s.lifeformSummary == nil {
+		return LifeformSummaryPreview{}, errors.New("lifeform summary service is unavailable")
+	}
+	return s.lifeformSummary.PreviewWithHierarchyBreakpoints(ctx, contextID, breakpointPolicy)
+}
+
 func (s *VegetationReportService) GetLifeformWorkbookReview(ctx context.Context, contextID, requestJSON string) (*LifeformWorkbookReview, error) {
 	if s == nil || s.lifeformWorkbook == nil {
 		return nil, errors.New("lifeform workbook service is unavailable")
@@ -561,6 +589,13 @@ func (s *VegetationReportService) PreviewSpeciesAttributeSummary(ctx context.Con
 		return SpeciesAttributeSummaryPreview{}, errors.New("species attribute summary service is unavailable")
 	}
 	return s.speciesAttributeSummary.Preview(ctx, contextID)
+}
+
+func (s *VegetationReportService) PreviewSpeciesAttributeSummaryWithHierarchyBreakpoints(ctx context.Context, contextID, breakpointPolicy string) (SpeciesAttributeSummaryPreview, error) {
+	if s == nil || s.speciesAttributeSummary == nil {
+		return SpeciesAttributeSummaryPreview{}, errors.New("species attribute summary service is unavailable")
+	}
+	return s.speciesAttributeSummary.PreviewWithHierarchyBreakpoints(ctx, contextID, breakpointPolicy)
 }
 
 // SiteUnit Exclusion Filters (.support, .poor, .nudum) & Dynamic Hierarchy Breakpoint (~) delegates

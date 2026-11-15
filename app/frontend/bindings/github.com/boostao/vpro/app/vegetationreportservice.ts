@@ -137,12 +137,20 @@ export function GetSummaryVegetationWorkbookReview(contextID: string, requestJSO
     return $Call.ByID(1277987547, contextID, requestJSON);
 }
 
+export function GetSummaryVegetationWorkbookReviewFromPreferences(contextID: string): $CancellablePromise<$models.SummaryVegetationWorkbookReview | null> {
+    return $Call.ByID(3068306155, contextID);
+}
+
 export function GetVegetationWorkbookReview(contextID: string, requestJSON: string): $CancellablePromise<$models.VegetationWorkbookReview | null> {
     return $Call.ByID(269359313, contextID, requestJSON);
 }
 
 export function PreviewLifeformSummary(contextID: string): $CancellablePromise<$models.LifeformSummaryPreview> {
     return $Call.ByID(55503347, contextID);
+}
+
+export function PreviewLifeformSummaryWithHierarchyBreakpoints(contextID: string, breakpointPolicy: string): $CancellablePromise<$models.LifeformSummaryPreview> {
+    return $Call.ByID(2695616694, contextID, breakpointPolicy);
 }
 
 export function PreviewLongVegetation(contextID: string): $CancellablePromise<$models.LongVegetationPreview> {
@@ -165,12 +173,20 @@ export function PreviewSpeciesAttributeSummary(contextID: string): $CancellableP
     return $Call.ByID(2912521101, contextID);
 }
 
+export function PreviewSpeciesAttributeSummaryWithHierarchyBreakpoints(contextID: string, breakpointPolicy: string): $CancellablePromise<$models.SpeciesAttributeSummaryPreview> {
+    return $Call.ByID(500258680, contextID, breakpointPolicy);
+}
+
 export function PreviewSummaryVegetation(contextID: string, average: number, display: number): $CancellablePromise<$models.SummaryVegetationPreview> {
     return $Call.ByID(1059153739, contextID, average, display);
 }
 
 export function PreviewSummaryVegetationClass(contextID: string, average: number, display: number, showClass: number): $CancellablePromise<$models.SummaryVegetationPreview> {
     return $Call.ByID(1717432317, contextID, average, display, showClass);
+}
+
+export function PreviewSummaryVegetationConfigured(contextID: string, requestJSON: string): $CancellablePromise<$models.SummaryVegetationPreview> {
+    return $Call.ByID(1911115219, contextID, requestJSON);
 }
 
 export function PreviewSummaryVegetationEnvironmental(contextID: string, average: number, display: number, showClass: number): $CancellablePromise<$models.SummaryVegetationEnvironmentalPreview | null> {
@@ -195,6 +211,10 @@ export function PreviewSummaryVegetationGroupedDisplay(contextID: string, averag
 
 export function PreviewSummaryVegetationWithExclusions(contextID: string, request: $models.SummaryVegetationExclusionRequest): $CancellablePromise<$models.SummaryVegetationExclusionPreview | null> {
     return $Call.ByID(1022565410, contextID, request);
+}
+
+export function PreviewSummaryVegetationWithPreferences(contextID: string): $CancellablePromise<$models.SummaryVegetationPreview> {
+    return $Call.ByID(3499409663, contextID);
 }
 
 export function ResolveHierarchyBreakpointUnits(contextID: string, request: $models.HierarchyBreakpointRequest): $CancellablePromise<$models.HierarchyBreakpointResolution | null> {

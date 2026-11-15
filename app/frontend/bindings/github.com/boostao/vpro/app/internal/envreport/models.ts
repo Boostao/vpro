@@ -133,6 +133,29 @@ export interface SiteUnitSummaryField {
     "kind": string;
 }
 
+/**
+ * SiteUnitSummaryFullPreferenceValues captures all 8 ReportOptions.SE* preferences cleanly without legacy YAML leftovers.
+ */
+export interface SiteUnitSummaryFullPreferenceValues {
+    "method": number;
+    "siteUnitType": number;
+    "includeSpecies": number;
+    "orderBy": number;
+    "coverCalculation": number;
+    "andOr": number;
+    "presenceGreaterThan": number;
+    "coverGreaterThan": number;
+}
+
+export interface SiteUnitSummaryFullPreferences {
+    "contextId": string;
+    "project": string;
+    "projectPath": string;
+    "su": string;
+    "suPath": string;
+    "values": SiteUnitSummaryFullPreferenceValues;
+}
+
 export interface SiteUnitSummaryMembership {
     "rowId": string;
     "plotNumber": vprocore$0.ProjectMetadataCell;
@@ -217,6 +240,10 @@ export interface SiteUnitSummaryWorkbookScope {
     "siteUnitType": number;
     "orderBy": number;
     "includeSpecies": number;
+    "coverCalculation": number;
+    "andOr": number;
+    "presenceGreaterThan": number;
+    "coverGreaterThan": number;
 }
 
 export interface SubzoneMatrixPreview {

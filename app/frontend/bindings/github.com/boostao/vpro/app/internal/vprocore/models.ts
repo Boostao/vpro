@@ -510,6 +510,17 @@ export interface SqliteSchemaObject {
 }
 
 /**
+ * UserAccreditation describes the active user's BEC master and USysUserRestrictions status.
+ */
+export interface UserAccreditation {
+    "userName": string;
+    "accredited": boolean;
+    "masterBecAllowed": boolean;
+    "inUserRestrictions": boolean;
+    "canEditBecSiteUnit": boolean;
+}
+
+/**
  * VegRecord represents a vegetation entry (Layer A-D).
  */
 export interface VegRecord {

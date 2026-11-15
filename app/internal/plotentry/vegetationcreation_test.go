@@ -25,7 +25,7 @@ func TestSourceVegetationCreationRollbackAllocationAndNoGuessedValues(t *testing
 		BEGIN SELECT RAISE(ABORT,'injected source creation audit failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	zero, negative, height, tooLarge := 0.0, -3.125, -7.123456789, 100.0
+	zero, positive, negative, height, tooLarge := 0.0, 3.125, -3.125, -7.123456789, 100.0
 	before := vprotest.SubstrateSnapshot(t, db)
 	for _, request := range []vprocore.VegetationCreationRequest{
 		{Form: "wrong", Species: "A", Values: map[string]*float64{"cover1": &zero}},
@@ -51,7 +51,7 @@ func TestSourceVegetationCreationRollbackAllocationAndNoGuessedValues(t *testing
 	if _, err := db.Exec(`DROP TRIGGER fail_creation_audit`); err != nil {
 		t.Fatal(err)
 	}
-	request := vprocore.VegetationCreationRequest{Form: "SubVegAXL_BC", Species: "A", Values: map[string]*float64{"cover1": &negative}}
+	request := vprocore.VegetationCreationRequest{Form: "SubVegAXL_BC", Species: "A", Values: map[string]*float64{"cover1": &positive}}
 	for _, assignment := range []string{`Species='D'`, `Cover1=4`} {
 		if _, err := db.Exec(`CREATE TRIGGER change_planned_creation AFTER INSERT ON Sample_Veg
 			WHEN NEW.ID>0 BEGIN UPDATE Sample_Veg SET ` + assignment + ` WHERE rowid=NEW.rowid; END`); err != nil {
@@ -71,7 +71,7 @@ func TestSourceVegetationCreationRollbackAllocationAndNoGuessedValues(t *testing
 	}
 	var layer, otherCover, recordedCover any
 	if err := db.QueryRow(`SELECT Layer,Cover2,Cover1 FROM Sample_Veg WHERE ID=?`, id).Scan(&layer, &otherCover, &recordedCover); err != nil ||
-		layer != nil || otherCover != nil || recordedCover != negative {
+		layer != nil || otherCover != nil || recordedCover != positive {
 		t.Fatal("creation guessed Layer/covers or changed precision:", layer, otherCover, recordedCover, err)
 	}
 	if vprotest.AuditCount(t, db, "CHILD1") != 2 {
@@ -121,7 +121,11 @@ func TestSourceVegetationCreationCanonicalFamilyAndScopedContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	service.Plots.SetAuditStrength(3)
-	number := -6.875
+	negative := -6.875
+	if _, err := service.CreateSourceVegetation(state.ContextID, "NEW1", vprocore.VegetationCreationRequest{Form: "SubVegAXL_BC", Species: *options[0].Code, Values: map[string]*float64{"cover2": &negative}}); err == nil {
+		t.Fatal("accepted negative new cover2 creation")
+	}
+	number := 6.875
 	request := vprocore.VegetationCreationRequest{Form: "SubVegAXL_BC", Species: *options[0].Code, Values: map[string]*float64{"cover2": &number}}
 	id, err := service.CreateSourceVegetation(state.ContextID, "NEW1", request)
 	if err != nil || id <= 0 || id > math.MaxInt32 {

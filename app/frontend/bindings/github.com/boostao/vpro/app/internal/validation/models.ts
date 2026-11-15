@@ -123,6 +123,7 @@ export interface SpeciesCodeCheckRow {
     "plotNumber": string;
     "code": string | null;
     "status": string;
+    "suggestedCode"?: string | null;
 }
 
 export interface SpeciesCodeCheckUpdate {

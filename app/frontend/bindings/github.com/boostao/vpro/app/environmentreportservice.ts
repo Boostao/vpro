@@ -41,6 +41,10 @@ export function GetEnvironmentWorkbookReview(contextID: string, requestJSON: str
     return $Call.ByID(1081471371, contextID, requestJSON);
 }
 
+export function GetFullSiteUnitSummaryPreferences(contextID: string): $CancellablePromise<$models.SiteUnitSummaryFullPreferences | null> {
+    return $Call.ByID(498692508, contextID);
+}
+
 export function GetLongEnvironmentOptions(contextID: string): $CancellablePromise<$models.LongEnvironmentOptions> {
     return $Call.ByID(2395879097, contextID);
 }
@@ -99,6 +103,10 @@ export function RenderQuartoGuide(contextID: string, request: $models.QuartoGuid
 
 export function RunMultivariateClustering(contextID: string, request: $models.ClusteringRequest): $CancellablePromise<$models.ClusteringResult | null> {
     return $Call.ByID(81138482, contextID, request);
+}
+
+export function SaveFullSiteUnitSummaryPreferences(contextID: string, requestJSON: string): $CancellablePromise<$models.SiteUnitSummaryPreferencesOutcome | null> {
+    return $Call.ByID(1101129053, contextID, requestJSON);
 }
 
 export function SaveLongEnvironmentPreferences(contextID: string, requestJSON: string): $CancellablePromise<$models.LongEnvironmentPreferencesOutcome | null> {

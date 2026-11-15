@@ -53,8 +53,16 @@ export function DeleteProjectPlotProfileRule(contextID: string, request: $models
     return $Call.ByID(1689031355, contextID, request);
 }
 
+export function DeleteUserSiteUnitEntry(contextID: string, request: $models.DeleteUserSiteUnitRequest): $CancellablePromise<void> {
+    return $Call.ByID(1159553400, contextID, request);
+}
+
 export function ExportDiagnosticWorkbook(contextID: string, request: $models.ExportDiagnosticWorkbookRequest): $CancellablePromise<$models.ExportDiagnosticWorkbookResult | null> {
     return $Call.ByID(3261844204, contextID, request);
+}
+
+export function ExportUserSiteUnitListCSV(contextID: string): $CancellablePromise<string> {
+    return $Call.ByID(2954180867, contextID);
 }
 
 export function GetBECCatalogueStatus(): $CancellablePromise<$models.BECCatalogueStatus> {
@@ -97,6 +105,10 @@ export function GetWorkingUnitMode(): $CancellablePromise<$models.WorkingUnitMod
     return $Call.ByID(1741437159);
 }
 
+export function ImportUserSiteUnitListCSV(contextID: string, csvText: string, overwriteExisting: boolean): $CancellablePromise<$models.UserSiteUnitImportResult | null> {
+    return $Call.ByID(3392951386, contextID, csvText, overwriteExisting);
+}
+
 export function ListBECSiteSeries(zone: string | null, subZone: string | null): $CancellablePromise<$models.BECSiteSeries[] | null> {
     return $Call.ByID(3499250131, zone, subZone);
 }
@@ -117,8 +129,16 @@ export function ListProjectPlotProfileChoices(contextID: string): $CancellablePr
     return $Call.ByID(3927908438, contextID);
 }
 
+export function ListProjectPlotProfileLumpTables(contextID: string): $CancellablePromise<$models.ProfileLumpChoice[] | null> {
+    return $Call.ByID(906728021, contextID);
+}
+
 export function ListSynthesisLumpTables(contextID: string): $CancellablePromise<$models.SynthesisLumpTableOption[] | null> {
     return $Call.ByID(626775006, contextID);
+}
+
+export function ListUserSiteUnitList(contextID: string): $CancellablePromise<$models.UserSiteUnitEntry[] | null> {
+    return $Call.ByID(2260036011, contextID);
 }
 
 export function PreviewSpeciesPresence(contextID: string, requestJSON: string): $CancellablePromise<$models.ProjectProfileSpeciesPresencePreview | null> {
@@ -165,6 +185,10 @@ export function ReviewProjectPlotProfileLump(contextID: string): $CancellablePro
     return $Call.ByID(2510702352, contextID);
 }
 
+export function ReviewProjectPlotProfileLumpTable(contextID: string, location: string): $CancellablePromise<$models.ProjectMetadataTable> {
+    return $Call.ByID(1165155732, contextID, location);
+}
+
 export function ReviewProjectPlotProfileSU(contextID: string, filter: $models.ProjectPlotProfileFilterRequest): $CancellablePromise<$models.ProfileSUReview> {
     return $Call.ByID(4003256674, contextID, filter);
 }
@@ -185,6 +209,10 @@ export function SaveFlatHierarchyRows(contextID: string, request: $models.SaveFl
     return $Call.ByID(872848259, contextID, request);
 }
 
+export function SaveHierarchyTableAs(contextID: string, request: $models.SaveHierarchyTableAsRequest): $CancellablePromise<$models.HierarchyTableLifecycleResult | null> {
+    return $Call.ByID(2080500769, contextID, request);
+}
+
 export function SaveProjectPlotProfile(contextID: string, request: $models.ProjectPlotProfileEdit): $CancellablePromise<void> {
     return $Call.ByID(3380239779, contextID, request);
 }
@@ -199,6 +227,14 @@ export function SaveProjectPlotProfileSUInProject(contextID: string, request: $m
 
 export function SaveSUTableAs(contextID: string, request: $models.SaveSUTableAsRequest): $CancellablePromise<$models.SUTableLifecycleResult | null> {
     return $Call.ByID(4186824244, contextID, request);
+}
+
+export function SaveUserSiteUnitEntry(contextID: string, request: $models.UpsertUserSiteUnitRequest): $CancellablePromise<$models.UserSiteUnitEntry | null> {
+    return $Call.ByID(3288352650, contextID, request);
+}
+
+export function SearchBECSiteSeries(zone: string | null, subZone: string | null, query: string, limit: number): $CancellablePromise<$models.BECSiteSeries[] | null> {
+    return $Call.ByID(4206077923, zone, subZone, query, limit);
 }
 
 export function SearchBECUnitPicker(contextID: string, request: $models.BECUnitPickerRequest): $CancellablePromise<$models.BECUnitPickerChoice[] | null> {

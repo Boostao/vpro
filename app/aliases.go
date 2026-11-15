@@ -385,6 +385,7 @@ type TwoPageVegetationTableColumn = datasheetpkg.TwoPageVegetationTableColumn
 type TwoPageVegetationTableReview = datasheetpkg.TwoPageVegetationTableReview
 type TwoPageVegetationTableRow = datasheetpkg.TwoPageVegetationTableRow
 type TwoPageVegetationWriteResult = twopagepkg.TwoPageVegetationWriteResult
+type UserAccreditation = vprocorepkg.UserAccreditation
 type UserLogReview = lifecyclepkg.UserLogReview
 type VegRecord = vprocorepkg.VegRecord
 type VegetationAttributeUpdate = plotentrypkg.VegetationAttributeUpdate

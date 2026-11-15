@@ -197,6 +197,20 @@ func (s *ContextService) CanEditMasterBEC(ctx context.Context, contextID string)
 	return s.core.CanEditMasterBEC(ctx, contextID)
 }
 
+func (s *ContextService) GetUserSetup(ctx context.Context, contextID string) (UserAccreditation, error) {
+	if s == nil || s.core == nil {
+		return UserAccreditation{}, errors.New("project context is unavailable")
+	}
+	return s.core.GetUserSetup(ctx, contextID)
+}
+
+func (s *ContextService) SetUserName(ctx context.Context, contextID, user string) (UserAccreditation, error) {
+	if s == nil || s.core == nil {
+		return UserAccreditation{}, errors.New("project context is unavailable")
+	}
+	return s.core.SetUserName(ctx, contextID, user)
+}
+
 func (s *ContextService) GetChildCapabilities(ctx context.Context, contextID, kind string) (map[string]bool, error) {
 	if s == nil || s.core == nil {
 		return nil, errors.New("project context is unavailable")

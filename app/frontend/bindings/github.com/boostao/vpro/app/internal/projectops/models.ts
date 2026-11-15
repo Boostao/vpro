@@ -8,6 +8,7 @@ import * as vprocore$0 from "../vprocore/models.js";
 export interface ApplyOptimizeVegRequest {
     "plotNumbers"?: string[] | null;
     "expectedDigest"?: string;
+    "custodianAuditOverride"?: boolean;
 }
 
 export interface ApplyProjectMetadataAutomationRequest {
@@ -31,6 +32,7 @@ export interface CompareProjectsRequest {
     "sourceProject"?: string;
     "targetPath": string;
     "targetProject"?: string;
+    "caseInsensitiveText"?: boolean;
 }
 
 export interface CompareProjectsResult {
@@ -43,8 +45,10 @@ export interface CompareProjectsResult {
     "removedCount": number;
     "identicalCount": number;
     "modifiedCount": number;
+    "metadataDiffCount"?: number;
     "plots": PlotDiff[] | null;
     "fieldDiffs": FieldDiff[] | null;
+    "metadataDiffs"?: FieldDiff[] | null;
 }
 
 export interface DerivedProjectMetadata {
@@ -108,7 +112,7 @@ export interface MergeConflictItem {
     "targetVal": string | null;
 
     /**
-     * "FastForward" | "Conflict" | "TargetModifiedOnly"
+     * "FastForward" | "Conflict" | "TargetModifiedOnly" | "SourceDelete"
      */
     "kind": string;
 
@@ -122,7 +126,7 @@ export interface MergePlotPreview {
     "plotNumber": string;
 
     /**
-     * "Added" | "Identical" | "FastForward" | "Conflict" | "TargetOnly"
+     * "Added" | "Identical" | "FastForward" | "Conflict" | "TargetOnly" | "SourceDelete"
      */
     "category": string;
     "items": MergeConflictItem[] | null;
@@ -140,10 +144,37 @@ export interface NewProjectRequest {
 export interface NewProjectResult {
     "projectName": string;
     "projectId": string;
+    "projectIdDerived"?: boolean;
+    "projectIdNotice"?: string;
     "destinationPath": string;
     "destinationSha256": string;
     "activated": boolean;
     "state"?: vprocore$0.ProjectState | null;
+}
+
+export interface OptimizeVegAuditRef {
+    "plotNumber": string;
+    "species": string;
+    "retiredId": number;
+    "table": string;
+    "editField": string;
+    "editWhen": string;
+}
+
+export interface OptimizeVegConflict {
+    "plotNumber": string;
+    "species": string;
+    "field": string;
+    "reason": string;
+    "values"?: string[] | null;
+    "sourceIds"?: number[] | null;
+    "overrideable"?: boolean;
+}
+
+export interface OptimizeVegFieldDiff {
+    "field": string;
+    "proposed"?: string | null;
+    "before"?: { [_ in `${number}`]?: string | null } | null;
 }
 
 export interface OptimizeVegGroup {
@@ -152,15 +183,22 @@ export interface OptimizeVegGroup {
     "sourceRowCount": number;
     "survivorId": number;
     "retiredIds": number[] | null;
+    "oldToSurvivorIdMap"?: { [_ in `${number}`]?: number } | null;
     "hasOverlappingLayerCovers": boolean;
     "cappedCoverColumns": string[] | null;
     "mergedCovers": { [_ in string]?: number } | null;
     "mergedHeights": { [_ in string]?: number } | null;
     "mergedHeightB"?: string | null;
+    "fieldDiffs"?: OptimizeVegFieldDiff[] | null;
+    "conflicts"?: OptimizeVegConflict[] | null;
+    "auditReferences"?: OptimizeVegAuditRef[] | null;
+    "blocked"?: boolean;
+    "blockedReasons"?: string[] | null;
 }
 
 export interface OptimizeVegOptions {
     "plotNumbers"?: string[] | null;
+    "custodianAuditOverride"?: boolean;
 }
 
 export interface OptimizeVegPreview {
@@ -171,7 +209,12 @@ export interface OptimizeVegPreview {
     "duplicateSpeciesCount": number;
     "overlappingGroupCount": number;
     "cappedCoverCount": number;
+    "blockedGroupCount": number;
+    "hasBlockingConflicts": boolean;
     "previewDigest": string;
+    "oldToSurvivorIdMap"?: { [_ in `${number}`]?: number } | null;
+    "conflicts"?: OptimizeVegConflict[] | null;
+    "auditReferences"?: OptimizeVegAuditRef[] | null;
     "groups": OptimizeVegGroup[] | null;
 }
 
@@ -182,6 +225,7 @@ export interface OptimizeVegResult {
     "consolidatedGroups": number;
     "deletedRows": number;
     "reservedDeletedIds": number[] | null;
+    "oldToSurvivorIdMap"?: { [_ in `${number}`]?: number } | null;
     "auditRowsWritten": number;
     "groups": OptimizeVegGroup[] | null;
 }
@@ -205,6 +249,12 @@ export interface ProjectMetadataPreset {
     "vegCoverMethod": string;
     "plotMethod": string;
     "datum": string;
+    "coordinatingAgency": string;
+    "proponentFunder": string;
+    "fieldCompanyAgency": string;
+    "geographicStudyArea": string;
+    "geoRefMethod": string;
+    "coordinateSystem": string;
     "coverDescriptions": { [_ in string]?: string } | null;
 }
 
@@ -236,6 +286,7 @@ export interface ThreeWayMergeExecuteRequest {
     "defaultConflictResolution"?: string;
     "plotResolutions"?: { [_ in string]?: string } | null;
     "fieldResolutions"?: { [_ in string]?: string } | null;
+    "caseInsensitiveText"?: boolean;
 }
 
 export interface ThreeWayMergePreview {
@@ -251,8 +302,11 @@ export interface ThreeWayMergePreview {
     "fastForwardCount": number;
     "conflictCount": number;
     "targetOnlyCount": number;
+    "sourceDeleteCount": number;
+    "metadataConflictCount"?: number;
     "plots": MergePlotPreview[] | null;
     "conflicts": MergeConflictItem[] | null;
+    "metadataItems"?: MergeConflictItem[] | null;
 }
 
 export interface ThreeWayMergePreviewRequest {
@@ -262,6 +316,7 @@ export interface ThreeWayMergePreviewRequest {
     "targetProject"?: string;
     "basePath"?: string;
     "baseProject"?: string;
+    "caseInsensitiveText"?: boolean;
 }
 
 export interface ThreeWayMergeResult {
@@ -271,6 +326,7 @@ export interface ThreeWayMergeResult {
     "addedPlots": number;
     "updatedPlots": number;
     "skippedPlots": number;
+    "deletedPlots"?: number;
     "allocatedChildIds": number[] | null;
     "reservedDeletedIds": number[] | null;
     "auditRowsWritten": number;
