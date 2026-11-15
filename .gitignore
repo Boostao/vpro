@@ -1,19 +1,20 @@
 .task
 bin
 /dist-artifacts/
+/app/dist-artifacts/
 /site/dist/
-frontend/dist
-frontend/dist-*/
-frontend/node_modules
-build/linux/appimage/build
-build/linux/appimage/VPro
-build/linux/appimage/VPro.png
-build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+app/frontend/dist
+app/frontend/dist-*/
+app/frontend/node_modules
+app/build/linux/appimage/build
+app/build/linux/appimage/VPro
+app/build/linux/appimage/VPro.png
+app/build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # Mobile generated (per-machine; overlays hold absolute paths)
-build/ios/xcode/overlay.json
-build/ios/xcode/gen/
-build/android/overlay.json
-build/android/gen/
+app/build/ios/xcode/overlay.json
+app/build/ios/xcode/gen/
+app/build/android/overlay.json
+app/build/android/gen/
 
 # Local runtime data and credentials; keep resources/Sample.db as a fixture.
 /data/
@@ -53,11 +54,17 @@ __pycache__/
 *.mde
 *.laccdb
 *.ldb
-# Keep resources/*.db, sealed fixture inputs and generated Wails bindings tracked:
+# Keep app/resources/*.db, sealed fixture inputs and generated Wails bindings tracked:
 # they are needed for application builds and reproducible tests.
 .env
 .env.*
 !.env.example
+.Rhistory
+.RData
+.Renviron
+.Rproj.user
+vpro.Rcheck/
+vpro_*.tar.gz
 *.db-wal
 *.db-shm
 *.duckdb
@@ -66,4 +73,7 @@ __pycache__/
 *.pfx
 *.p12
 .DS_Store
-Thumbs.db/vpro-wails
+Thumbs.db
+/vpro-wails
+/app/vpro-wails
+/app/vpro

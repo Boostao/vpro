@@ -1,4 +1,4 @@
-export const repository = 'Boostao/vpro_wails';
+export const repository = 'Boostao/vpro';
 export const releasesURL = `https://github.com/${repository}/releases`;
 export const manifestPath = './release-manifest.json';
 
@@ -17,6 +17,7 @@ export const assetLinks = Object.freeze({
   'dl-linux-arm64-appimage': 'vpro-linux-arm64.AppImage',
   'dl-linux-arm64-deb': 'vpro-linux-arm64.deb',
   'dl-linux-arm64-tar': 'vpro-linux-arm64.tar.gz',
+  'dl-r-sdk': 'vpro-r-sdk.tar.gz',
   'dl-checksums': 'SHA256SUMS.txt',
 });
 
@@ -180,8 +181,9 @@ function downloadURL(value, name, tag) {
     throw new Error(`Release asset ${name} has a malformed download URL.`);
   }
   const segments = url.pathname.split('/');
+  const expectedPrefix = `/${repository.toLowerCase()}/releases/download/`;
   if (url.origin !== 'https://github.com' || url.username || url.password || url.search || url.hash ||
-      !url.pathname.toLowerCase().startsWith('/boostao/vpro_wails/releases/download/') ||
+      !url.pathname.toLowerCase().startsWith(expectedPrefix) ||
       segments.length !== 7 || segments[6] !== name ||
       decodeURIComponent(segments[5]) !== tag) {
     throw new Error(`Release asset ${name} has an unexpected download URL.`);

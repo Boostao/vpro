@@ -1,0 +1,3935 @@
+=== FULL TABLE DESIGN DOCUMENTATION ===
+Database: C:\Users\BrunoTremblay\Work\VPRO_ACCESS\VPro64\VUser.accda
+Exported: 3/17/2026 2:03:18 PM
+================================================================================
+
+TABLE: OldUserSiteUnitList
+  Record Count: 3
+  Table Description: VP05
+--------------------------------------------------------------------------------
+FIELD: ID
+  ----------------------------------------------------------------------
+  Data Type:          AutoNumber
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      GenUniqueID()
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         Increment
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: ID
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: ShortName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: ShortName
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: Name
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Unique Short name for Unit
+  Text Align:         General
+  New Values:         -
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       3180
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: Name
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: UnitLongName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Current site association name, site series phase name (if applicable)
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       3804
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: UnitLongName
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: PlantAssoc
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             [Green]
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Plant association name; sub-association name
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       3210
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: PlantAssoc
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: Parent
+  ----------------------------------------------------------------------
+  Data Type:          Number (Long)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            Parent
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Node's parent
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       2850
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: Parent
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Combo Box
+  RowSourceType: Table/Query
+  RowSource: UserSiteUnitList
+  BoundColumn: 1
+  ColumnCount: 2
+  ColumnHeads: True
+  ColumnWidths: 1440;2880
+  ListRows: 8
+  ListWidth: 0twip
+  LimitToList: True
+  AllowMultipleValues: False
+  AllowValueListEdits: False
+  AggregateType: -1
+  ShowOnlyRowSourceValues: False
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: Level
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: Level
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: Date
+  ----------------------------------------------------------------------
+  Data Type:          Date/Time
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: Date
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  IMEMode: 0
+  IMESentenceMode: 3
+  AggregateType: -1
+  ShowDatePicker: 1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: Source
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: Source
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: Locked
+  ----------------------------------------------------------------------
+  Data Type:          Yes/No
+  Field Size:         -
+  Format:             Yes/No
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: Locked
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Check Box
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: nPlots
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 10
+  SourceField: nPlots
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: SeralCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 11
+  SourceField: SeralCode
+  SourceTable: OldUserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: ProjectMetaData
+  Record Count: 1
+--------------------------------------------------------------------------------
+FIELD: ProjectID
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Links to VPRO project id field
+  Text Align:         General
+  New Values:         -
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: ProjectID
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: ProponentFunder
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Funding agency/University
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: ProponentFunder
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: FieldDataCollection
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Company/Individual coordinating field work
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: FieldDataCollection
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: PlotQualityVegetation
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        General plot quality for project - vegetation
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: PlotQualityVegetation
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: PlotQualitySoils
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        General plot quality for project - env.
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: PlotQualitySoils
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: ProjectPurpose
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Purpose of project
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: ProjectPurpose
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: StudyArea
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Geographic area of study
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: StudyArea
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: Datum
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        NAD 27/NAD83
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: Datum
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: CoordinateSystemCollected
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        UTM, Lat/Long
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: CoordinateSystemCollected
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: GeoreferenceMethod
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Codes
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: GeoreferenceMethod
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: FieldCollectionStds
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Collection standards reference
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 10
+  SourceField: FieldCollectionStds
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: VegCoverClassType
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 11
+  SourceField: VegCoverClassType
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: ExtraVegFieldType
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 12
+  SourceField: ExtraVegFieldType
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: CardStorageLocation
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 13
+  SourceField: CardStorageLocation
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: Notes
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  Yes
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 14
+  SourceField: Notes
+  SourceTable: ProjectMetaData
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: ProjectMetaDataCodes
+  Record Count: 5
+--------------------------------------------------------------------------------
+FIELD: PlotQualityVegetationCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: PlotQualityVegetationCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: PlotQualityVegetationdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: PlotQualityVegetationdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: PlotQualitySoilsCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: PlotQualitySoilsCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: PlotQualitySoilsdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: PlotQualitySoilsdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: DatumCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: DatumCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: Datumdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: Datumdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: CoordinateSystemCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: CoordinateSystemCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: CoordinateSystemdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: CoordinateSystemdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: GeoReferenceMethodCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: GeoReferenceMethodCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: GeoReferenceMethoddescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: GeoReferenceMethoddescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: FieldCollectionStdsCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 10
+  SourceField: FieldCollectionStdsCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: FieldCollectionStdsdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 11
+  SourceField: FieldCollectionStdsdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: VegCoverClassTypeCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      Null
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 12
+  SourceField: VegCoverClassTypeCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: VegCoverClassTypedescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 13
+  SourceField: VegCoverClassTypedescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: ExtraVegFieldTypeCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 14
+  SourceField: ExtraVegFieldTypeCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+FIELD: ExtraVegFieldTypedescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 15
+  SourceField: ExtraVegFieldTypedescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: UserSiteUnitList
+  Record Count: 5
+--------------------------------------------------------------------------------
+FIELD: ID
+  ----------------------------------------------------------------------
+  Data Type:          AutoNumber
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      GenUniqueID()
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         Increment
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: ID
+  SourceTable: UserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: SiteSeries
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  Yes
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       2835
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: SiteSeries
+  SourceTable: UserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: SiteSeriesLongName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         120
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  Yes
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       4665
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: SiteSeriesLongName
+  SourceTable: UserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: SiteSeriesScientificName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  Yes
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       7155
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: SiteSeriesScientificName
+  SourceTable: UserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+FIELD: Level
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      11
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: Level
+  SourceTable: UserSiteUnitList
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  AggregateType: -1
+  ResultType: 0
+  CurrencyLCID: 0
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: USysAddIns
+  Record Count: 5
+  Table Description: VP03
+--------------------------------------------------------------------------------
+FIELD: PropertyName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       1
+  Column Width:       2130
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: PropertyName
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val1
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       3060
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: Val1
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val2
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1800
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: Val2
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val3
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       615
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: Val3
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val4
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       480
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: Val4
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val5
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       480
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: Val5
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val6
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       480
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: Val6
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val7
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       480
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: Val7
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val8
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       480
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: Val8
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  AllowBlanks: False
+----------------------------------------------------------------------
+
+FIELD: Val9
+  ----------------------------------------------------------------------
+  Data Type:          Long Binary (OLE)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       720
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: Val9
+  SourceTable: USysAddIns
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: USysAuditTrail
+  Record Count: 1
+  Table Description: VP05
+--------------------------------------------------------------------------------
+FIELD: Project
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: Project
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: User
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: User
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: PlotNumber
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         7
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: PlotNumber
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: Table
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: Table
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: EditField
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         100
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: EditField
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: EditWhen
+  ----------------------------------------------------------------------
+  Data Type:          Date/Time
+  Field Size:         -
+  Format:             mmm". "d", "yyyy",  "hh:nnam/pm
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: EditWhen
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  IMEMode: 0
+  IMESentenceMode: 3
+----------------------------------------------------------------------
+
+FIELD: BeforeEdit
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: BeforeEdit
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: AfterEdit
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: AfterEdit
+  SourceTable: USysAuditTrail
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: USysComboColourTheme
+  Record Count: 26
+  Table Description: VP05
+--------------------------------------------------------------------------------
+FIELD: LumpCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         8
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: LumpCode
+  SourceTable: USysComboColourTheme
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: SppCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         8
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1395
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: SppCode
+  SourceTable: USysComboColourTheme
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: List Box
+  RowSourceType: Table/Query
+  RowSource: SELECT USysAllSpecs.Code, USysAllSpecs.LatinName, USysAllSpecs.CommonName FROM USysAllSpecs;
+  BoundColumn: 1
+  ColumnCount: 3
+  ColumnHeads: True
+  ColumnWidths: 1152;2160;2160
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: ScientificName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: ScientificName
+  SourceTable: USysComboColourTheme
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: ColourCode
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: ColourCode
+  SourceTable: USysComboColourTheme
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: PatternCode
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: PatternCode
+  SourceTable: USysComboColourTheme
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: FontColour
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: FontColour
+  SourceTable: USysComboColourTheme
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: Use
+  ----------------------------------------------------------------------
+  Data Type:          Yes/No
+  Field Size:         -
+  Format:             Yes/No
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: Use
+  SourceTable: USysComboColourTheme
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Check Box
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: USysPrefs
+  Record Count: 1
+  Table Description: VP03
+--------------------------------------------------------------------------------
+FIELD: Project
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1230
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: Project
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: PlotList
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1005
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: PlotList
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: Hierarchy
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1740
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: Hierarchy
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: StartMenu
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       975
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: StartMenu
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: MaxWindows
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1215
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: MaxWindows
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: FormSet
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      0
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: FormSet
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: ScreenResolution
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1605
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: ScreenResolution
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: CalcSI
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       660
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: CalcSI
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: ForestRegion
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1230
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: ForestRegion
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: CodePrompts
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     0
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1215
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 10
+  SourceField: CodePrompts
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: FormNav
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     0
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       855
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 11
+  SourceField: FormNav
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: FastBoot
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 12
+  SourceField: FastBoot
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: rptLvTitle
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 13
+  SourceField: rptLvTitle
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: rptLvSort
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     0
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 14
+  SourceField: rptLvSort
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: rptLvShowSppPres
+  ----------------------------------------------------------------------
+  Data Type:          Number (Double)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 15
+  SourceField: rptLvShowSppPres
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: rptLvShowSppMC
+  ----------------------------------------------------------------------
+  Data Type:          Number (Double)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 16
+  SourceField: rptLvShowSppMC
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: rptLvShowCommon
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 17
+  SourceField: rptLvShowCommon
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: rptLvStatMethod
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 18
+  SourceField: rptLvStatMethod
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: ExcelVer
+  ----------------------------------------------------------------------
+  Data Type:          Number (Single)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     0
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 19
+  SourceField: ExcelVer
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: TableVersion
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 20
+  SourceField: TableVersion
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: PictureDirectory
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         200
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 21
+  SourceField: PictureDirectory
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: PictureFormat
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 22
+  SourceField: PictureFormat
+  SourceTable: USysPrefs
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: USysRegInfo
+  Table Description: VP03
+--------------------------------------------------------------------------------
+FIELD: Subkey
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      No
+  Column Order:       0
+  Column Width:       Default
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: Subkey
+  SourceTable: USysRegInfo
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: Type
+  ----------------------------------------------------------------------
+  Data Type:          Number (Long)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      No
+  Column Order:       0
+  Column Width:       Default
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: Type
+  SourceTable: USysRegInfo
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: ValName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      No
+  Column Order:       0
+  Column Width:       Default
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: ValName
+  SourceTable: USysRegInfo
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: Value
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      No
+  Column Order:       0
+  Column Width:       Default
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: Value
+  SourceTable: USysRegInfo
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: USysSiteUnitAll
+  Table Description: VP03
+--------------------------------------------------------------------------------
+FIELD: SiteUnit
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       780
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: SiteUnit
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: GroupShortName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1545
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: GroupShortName
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: GroupLongName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       3255
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: GroupLongName
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: Zone
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         9
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       540
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: Zone
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: Subzone
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         9
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       840
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: Subzone
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: PlotVariant
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1035
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: PlotVariant
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: Phase
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       630
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: Phase
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: SiteSeries
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         7
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       960
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: SiteSeries
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: SeralCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       975
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: SeralCode
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: RegionCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         11
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       1140
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: RegionCode
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: SiteType
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         100
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       2565
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 10
+  SourceField: SiteType
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: Unique
+  ----------------------------------------------------------------------
+  Data Type:          AutoNumber
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         Increment
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 11
+  SourceField: Unique
+  SourceTable: USysSiteUnitAll
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: USysUserSpp
+  Record Count: 6
+  Table Description: VP05
+--------------------------------------------------------------------------------
+FIELD: Code
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         8
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           Yes
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: Code
+  SourceTable: USysUserSpp
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: ScientificName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: ScientificName
+  SourceTable: USysUserSpp
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: LifeForm
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     0
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: LifeForm
+  SourceTable: USysUserSpp
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: EnglishName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: EnglishName
+  SourceTable: USysUserSpp
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+----------------------------------------------------------------------
+
+FIELD: Report
+  ----------------------------------------------------------------------
+  Data Type:          Number (Single)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     0
+  Input Mask:         -
+  Caption:            -
+  Default Value:      1
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: Report
+  SourceTable: USysUserSpp
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+----------------------------------------------------------------------
+
+FIELD: SppNumber
+  ----------------------------------------------------------------------
+  Data Type:          AutoNumber
+  Field Size:         -
+  Format:             \9000
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         Increment
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: SppNumber
+  SourceTable: USysUserSpp
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+----------------------------------------------------------------------
+
+FIELD: Codetype
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: Codetype
+  SourceTable: USysUserSpp
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+----------------------------------------------------------------------
+
+================================================================================
+

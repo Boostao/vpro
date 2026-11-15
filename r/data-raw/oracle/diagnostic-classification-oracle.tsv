@@ -1,0 +1,38 @@
+phase	species	unit	value
+input	D_CD	UnitB	5 - 5
+input	D_CD	UnitA	1 - 1
+input	D_CD	UnitC	<NULL>
+input	D_C	UnitB	5 - +
+input	D_C	UnitA	1 - +
+input	D_C	UnitC	<NULL>
+input	DD_TIE	UnitB	5 - 8
+input	DD_TIE	UnitA	5 - 1
+input	DD_TIE	UnitC	<NULL>
+input	CONSTANT	UnitB	5 - 4
+input	CONSTANT	UnitA	4 - 4
+input	CONSTANT	UnitC	<NULL>
+input	DD	UnitB	2 - 7
+input	DD	UnitA	2 - 1
+input	DD	UnitC	<NULL>
+input	D	UnitB	3 - 4
+input	D	UnitA	1 - 1
+input	D	UnitC	<NULL>
+input	NONE	UnitB	1 - +
+input	NONE	UnitA	1 - 1
+input	NONE	UnitC	<NULL>
+input	ALL_NULL	UnitB	<NULL>
+input	ALL_NULL	UnitA	<NULL>
+input	ALL_NULL	UnitC	<NULL>
+input	NULL_FIRST	UnitB	<NULL>
+input	NULL_FIRST	UnitA	5 - 9
+input	NULL_FIRST	UnitC	3 - 8
+input	IC_CHECK	UnitB	2 - +
+input	IC_CHECK	UnitA	1 - +
+input	IC_CHECK	UnitC	1 - +
+diagnosis	CONSTANT	UnitB	c
+diagnosis	D	UnitB	d
+diagnosis	D_C	UnitB	d, c
+diagnosis	D_CD	UnitB	d, cd
+diagnosis	DD	UnitB	dd
+diagnosis	DD_TIE	UnitB	dd
+diagnosis	NULL_FIRST	UnitA	d, cd

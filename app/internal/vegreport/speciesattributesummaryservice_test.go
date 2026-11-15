@@ -1,0 +1,153 @@
+package vegreport
+
+import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
+	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
+)
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"errors"
+	"os"
+	"reflect"
+	"testing"
+	"time"
+)
+
+func enabledAttributeSummary(t *testing.T, contexts *vprocore.ContextService) *SpeciesAttributeSummaryService {
+	t.Helper()
+	service, err := NewSpeciesAttributeSummaryService(contexts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return service
+}
+
+func TestSpeciesAttributeSummaryServiceOwnedZeroWrites(t *testing.T) {
+	unowned, err := NewSpeciesAttributeSummaryService(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := unowned.Preview(context.Background(), "owned"); err == nil {
+		t.Fatal("unavailable service published")
+	}
+	for _, external := range []bool{false, true} {
+		contexts, state := vprotest.ReportServiceFixture(t, external)
+		service := enabledAttributeSummary(t, contexts)
+		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
+		config, err := os.ReadFile(contexts.Projects.Preferences.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		preview, err := service.Preview(context.Background(), state.ContextID)
+		if err != nil || preview.ContextID != state.ContextID || preview.ProjectPath != state.ProjectPath ||
+			preview.SUPath != state.SUPath || len(preview.Report.Units) != 3 || len(preview.Report.Definitions) != 6 {
+			t.Fatal("owned raw-attribute preview differs", preview, err)
+		}
+		again, err := service.Preview(context.Background(), state.ContextID)
+		if err != nil || !reflect.DeepEqual(preview, again) {
+			t.Fatal("repeated snapshot differs", err)
+		}
+		vprotest.AssertProfileSUFiles(t, contexts, before)
+		after, err := os.ReadFile(contexts.Projects.Preferences.Path)
+		if err != nil || !bytes.Equal(config, after) {
+			t.Fatal("read changed retained settings", err)
+		}
+	}
+}
+
+func TestSpeciesAttributeSummaryServiceCancellationOwnershipAndSnapshotRefusal(t *testing.T) {
+	contexts, state := vprotest.ReportServiceFixture(t, true)
+	service := enabledAttributeSummary(t, contexts)
+	owner := contexts.Projects.Sqlite
+	owner.Mu.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	preview, err := service.Preview(ctx, state.ContextID)
+	cancel()
+	owner.Mu.Unlock()
+	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(preview, SpeciesAttributeSummaryPreview{}) {
+		t.Fatal("cancelled lease published", preview, err)
+	}
+	if _, err := service.Preview(context.Background(), state.ContextID); err != nil {
+		t.Fatal("cancelled lease blocked retry", err)
+	}
+	service.snapshot.CommitRead = func(*sql.Tx) error { return errors.New("read completion failed") }
+	if preview, err := service.Preview(context.Background(), state.ContextID); err == nil ||
+		!reflect.DeepEqual(preview, SpeciesAttributeSummaryPreview{}) {
+		t.Fatal("failed completion published", preview, err)
+	}
+	service.snapshot.CommitRead = nil
+	service.snapshot.RollbackRead = func(*sql.Tx) error { return errors.New("read cleanup failed") }
+	if preview, err := service.Preview(context.Background(), state.ContextID); err == nil ||
+		!reflect.DeepEqual(preview, SpeciesAttributeSummaryPreview{}) {
+		t.Fatal("failed cleanup published", preview, err)
+	}
+	service.snapshot.RollbackRead = nil
+	late, cancelLate := context.WithCancel(context.Background())
+	service.snapshot.CommitRead = func(*sql.Tx) error { cancelLate(); return nil }
+	if preview, err := service.Preview(late, state.ContextID); !errors.Is(err, context.Canceled) ||
+		!reflect.DeepEqual(preview, SpeciesAttributeSummaryPreview{}) {
+		t.Fatal("late cancellation published", preview, err)
+	}
+	service.snapshot.CommitRead = nil
+	original := owner.AttachmentInfo["su"]
+	owner.AttachmentInfo["su"] = owner.AttachmentInfo["project"]
+	if _, err := service.Preview(context.Background(), state.ContextID); err == nil {
+		t.Fatal("changed ownership published")
+	}
+
+	owner.AttachmentInfo["su"] = original
+	next, err := contexts.SwitchContext(state.ContextID, vprotest.ContextSelection(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Preview(context.Background(), state.ContextID); err == nil {
+		t.Fatal("stale context published")
+	}
+	if _, err := service.Preview(context.Background(), next.ContextID); err != nil {
+		t.Fatal("fresh context retry failed", err)
+	}
+	if _, err := service.Preview(nil, next.ContextID); err == nil {
+		t.Fatal("nil context published")
+	}
+}
+
+func TestSpeciesAttributeSummaryServicePhysicalSchemaAndBorrowedLifetime(t *testing.T) {
+	contexts, state := vprotest.ReportServiceFixture(t, false)
+	service := enabledAttributeSummary(t, contexts)
+	mutate := func(role, statement string) {
+		t.Helper()
+		db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(contexts.Projects.Sqlite.Attachments[role], "rw"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = db.Exec(statement)
+		if err = errors.Join(err, db.Close()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mutate("VPro64", `DROP TABLE LayerCode; DROP TABLE LifeformCodes`)
+	if _, err := service.Preview(context.Background(), state.ContextID); err != nil {
+		t.Fatal("attribute query borrowed cover/Lifeform dependencies", err)
+	}
+	mutate("VLists", `ALTER TABLE USysSppAttributes RENAME COLUMN Wetland_Ind TO UnavailableField`)
+	before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
+	preview, err := service.Preview(context.Background(), state.ContextID)
+	if err == nil || !reflect.DeepEqual(preview, SpeciesAttributeSummaryPreview{}) {
+		t.Fatal("incomplete source table published", preview, err)
+	}
+	vprotest.AssertProfileSUFiles(t, contexts, before)
+	mutate("VLists", `ALTER TABLE USysSppAttributes RENAME COLUMN UnavailableField TO Wetland_Ind`)
+	if _, err := service.Preview(context.Background(), state.ContextID); err != nil {
+		t.Fatal("restored schema could not retry", err)
+	}
+	if err := contexts.Projects.Sqlite.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Preview(context.Background(), state.ContextID); err == nil {
+		t.Fatal("closed borrowed owner published")
+	}
+}

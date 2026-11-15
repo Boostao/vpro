@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1390" width="1200" height="1390" role="img" aria-labelledby="vpro-hex-title vpro-hex-desc">
+  <title id="vpro-hex-title">vpro — R Companion SDK for VPro &amp; BEC</title>
+  <desc id="vpro-hex-desc">Hexagonal R package sticker in British Columbia Government Navy and Gold featuring a 9x5 BEC edatopic grid motif and the VPro Shield and Conifer Tree crest.</desc>
+  <defs>
+    <linearGradient id="hexGoldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD452"/>
+      <stop offset="50%" stop-color="#FCBA19"/>
+      <stop offset="100%" stop-color="#D8960C"/>
+    </linearGradient>
+    <linearGradient id="hexNavyBg" x1="18%" y1="6%" x2="82%" y2="94%">
+      <stop offset="0%" stop-color="#003E7A"/>
+      <stop offset="48%" stop-color="#003366"/>
+      <stop offset="100%" stop-color="#001D3D"/>
+    </linearGradient>
+    <linearGradient id="shieldForest" x1="20%" y1="10%" x2="80%" y2="92%">
+      <stop offset="0%" stop-color="#2E8540"/>
+      <stop offset="62%" stop-color="#1E5128"/>
+      <stop offset="100%" stop-color="#13381B"/>
+    </linearGradient>
+    <radialGradient id="crestGlow" cx="50%" cy="38%" r="48%">
+      <stop offset="0%" stop-color="#38598A" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#002244" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="textVignette" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#001B38" stop-opacity="0"/>
+      <stop offset="32%" stop-color="#001B38" stop-opacity="0.48"/>
+      <stop offset="100%" stop-color="#00162E" stop-opacity="0.62"/>
+    </linearGradient>
+    <clipPath id="innerHexClip">
+      <polygon points="600,69 1142,382 1142,1008 600,1321 58,1008 58,382"/>
+    </clipPath>
+  </defs>
+
+  <!-- Outer BC Gold (#FCBA19) Hexagon Frame -->
+  <polygon points="600,25 1180,360 1180,1030 600,1365 20,1030 20,360" fill="url(#hexGoldRim)"/>
+
+  <!-- Inner BC Navy (#003366 -> #001D3D) Hexagon Interior -->
+  <polygon points="600,69 1142,382 1142,1008 600,1321 58,1008 58,382" fill="url(#hexNavyBg)"/>
+
+  <!-- Clipped Interior Motif: Radial Glow + 9x5 BEC Edatopic Grid (SNR A-E x SMR 0-8) -->
+  <g clip-path="url(#innerHexClip)">
+    <circle cx="600" cy="510" r="520" fill="url(#crestGlow)"/>
+
+    <!-- 9x5 BEC Edatopic Grid Background Motif (x: 225..975, step 150; y: 155..1145, step 110) -->
+    <g stroke="#6C99C6" stroke-opacity="0.16" stroke-width="3" fill="none">
+      <!-- Zonal Mesic / Medium highlight cell (Col C = 3, SMR 4 = row 5) -->
+      <rect x="525" y="595" width="150" height="110" fill="#2E8540" fill-opacity="0.18" stroke="#FCBA19" stroke-opacity="0.24" stroke-width="3"/>
+      <rect x="225" y="155" width="750" height="990" rx="6"/>
+      <!-- Vertical SNR dividers (A | B | C | D | E) -->
+      <line x1="375" y1="155" x2="375" y2="1145"/>
+      <line x1="525" y1="155" x2="525" y2="1145"/>
+      <line x1="675" y1="155" x2="675" y2="1145"/>
+      <line x1="825" y1="155" x2="825" y2="1145"/>
+      <!-- Horizontal SMR dividers (0..8) -->
+      <line x1="225" y1="265" x2="975" y2="265"/>
+      <line x1="225" y1="375" x2="975" y2="375"/>
+      <line x1="225" y1="485" x2="975" y2="485"/>
+      <line x1="225" y1="595" x2="975" y2="595"/>
+      <line x1="225" y1="705" x2="975" y2="705"/>
+      <line x1="225" y1="815" x2="975" y2="815"/>
+      <line x1="225" y1="925" x2="975" y2="925"/>
+      <line x1="225" y1="1035" x2="975" y2="1035"/>
+    </g>
+
+    <!-- Smooth gradient vignette for crisp typographic contrast -->
+    <rect x="58" y="730" width="1084" height="600" fill="url(#textVignette)"/>
+  </g>
+
+  <!-- Inner Hairline Gold Accent Polygon -->
+  <polygon points="600,90 1124,392 1124,998 600,1300 76,998 76,392"
+           fill="none" stroke="#FCBA19" stroke-opacity="0.34" stroke-width="3"/>
+
+  <!-- Centered VPro Shield + Conifer Tree Emblem (exact ICONS.crest geometry scaled 23x around x=600, y=492) -->
+  <g transform="translate(324, 198) scale(23)">
+    <path d="M12 2L4 5.5v6c0 5.25 3.4 9.85 8 11 4.6-1.15 8-5.75 8-11v-6L12 2z"
+          fill="url(#shieldForest)"
+          stroke="#FCBA19"
+          stroke-width="1.25"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <path d="M12 3.35L5.25 6.3v5.15c0 4.35 2.82 8.22 6.75 9.35 3.93-1.13 6.75-5 6.75-9.35V6.3L12 3.35z"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-opacity="0.22"
+          stroke-width="0.32"
+          stroke-linejoin="round"/>
+    <path d="M12 6.8v10.6"
+          fill="none"
+          stroke="#FCBA19"
+          stroke-width="1.35"
+          stroke-linecap="round"/>
+    <path d="M8.5 11.5L12 8l3.5 3.5"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="1.55"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <path d="M7.5 15L12 11l4.5 4"
+          fill="none"
+          stroke="#FFFFFF"
+          stroke-width="1.55"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
+
+  <!-- Package Title: vpro -->
+  <text x="600" y="968"
+        text-anchor="middle"
+        fill="#FFFFFF"
+        font-family="'BC Sans', 'IBM Plex Sans', 'Liberation Sans', 'DejaVu Sans', system-ui, -apple-system, sans-serif"
+        font-size="224"
+        font-weight="700"
+        letter-spacing="4">vpro</text>
+
+  <!-- Gold Divider Rule + Org-Agnostic Bottom Tag: BEC · VP08 -->
+  <line x1="336" y1="1040" x2="864" y2="1040" stroke="#FCBA19" stroke-opacity="0.65" stroke-width="4" stroke-linecap="round"/>
+  <text x="600" y="1116"
+        text-anchor="middle"
+        fill="#FCBA19"
+        font-family="'BC Sans', 'IBM Plex Sans', 'Liberation Sans', 'DejaVu Sans', system-ui, -apple-system, sans-serif"
+        font-size="52"
+        font-weight="700"
+        letter-spacing="9">BEC &#183; VP08</text>
+</svg>

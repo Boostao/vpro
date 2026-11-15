@@ -1,7 +1,13 @@
-resources/*fixture*.json -text
-build/linux/** text eol=lf
-frontend/bindings/** text eol=lf
+app/resources/*fixture*.json -text
+app/build/linux/** text eol=lf
+app/frontend/bindings/** text eol=lf
 *.ts text eol=lf
 *.svelte text eol=lf
 *.mjs text eol=lf
 *.cjs text eol=lf
+*.R text eol=lf
+*.Rmd text eol=lf
+*.qmd text eol=lf
+r/DESCRIPTION text eol=lf
+r/NAMESPACE text eol=lf
+r/NEWS.md text eol=lf

@@ -1,0 +1,95 @@
+Database: C:\Users\BrunoTremblay\Work\VPRO_ACCESS\VPro64\VPro64.accdb
+Exported: 3/16/2026 9:37:12 AM
+Note: Join Type is the DEFAULT join used in new queries (INNER unless LEFT/RIGHT set)
+------------------------------------------------------------
+
+Relationship: EnvAdmin
+  Primary Table ? Field: Env (PlotNumber)
+  Foreign Table ? Field: Admin (Plot)
+  Cardinality:    One-to-One
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       Yes
+  Cascade Update: Yes
+  Cascade Delete: Yes
+------------------------------------------------------------
+
+Relationship: EnvAudit
+  Primary Table ? Field: Env (PlotNumber)
+  Foreign Table ? Field: Audit (PlotNumber)
+  Cardinality:    One-to-Many
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       Yes
+  Cascade Update: Yes
+  Cascade Delete: Yes
+------------------------------------------------------------
+
+Relationship: EnvHumus
+  Primary Table ? Field: Env (PlotNumber)
+  Foreign Table ? Field: Humus (PlotNumber)
+  Cardinality:    One-to-Many
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       Yes
+  Cascade Update: Yes
+  Cascade Delete: Yes
+------------------------------------------------------------
+
+Relationship: EnvMineral
+  Primary Table ? Field: Env (PlotNumber)
+  Foreign Table ? Field: Mineral (PlotNumber)
+  Cardinality:    One-to-Many
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       Yes
+  Cascade Update: Yes
+  Cascade Delete: Yes
+------------------------------------------------------------
+
+Relationship: EnvOther
+  Primary Table ? Field: Env (PlotNumber)
+  Foreign Table ? Field: Other (PlotNumber)
+  Cardinality:    One-to-Many
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       Yes
+  Cascade Update: Yes
+  Cascade Delete: Yes
+------------------------------------------------------------
+
+Relationship: EnvVeg
+  Primary Table ? Field: Env (PlotNumber)
+  Foreign Table ? Field: Veg (PlotNumber)
+  Cardinality:    One-to-Many
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       Yes
+  Cascade Update: Yes
+  Cascade Delete: Yes
+------------------------------------------------------------
+
+Relationship: HierarchySU
+  Primary Table ? Field: Hierarchy (Name)
+  Foreign Table ? Field: SU (SiteUnit)
+  Cardinality:    One-to-Many
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       No (no RI)
+  Cascade Update: No
+  Cascade Delete: No
+------------------------------------------------------------
+
+Relationship: LumpVeg
+  Primary Table ? Field: Lump (SppCode)
+  Foreign Table ? Field: Veg (Species)
+  Cardinality:    One-to-Many
+  Default Join:   RIGHT JOIN (include all from foreign)
+  Enforced:       No (no RI)
+  Cascade Update: No
+  Cascade Delete: No
+------------------------------------------------------------
+
+Relationship: SUEnv
+  Primary Table ? Field: SU (PlotNumber)
+  Foreign Table ? Field: Env (PlotNumber)
+  Cardinality:    One-to-One
+  Default Join:   INNER JOIN (only matches)
+  Enforced:       No (no RI)
+  Cascade Update: No
+  Cascade Delete: No
+------------------------------------------------------------
+

@@ -1,0 +1,27 @@
+.navbar {
+  background-color: #003366 !important;
+  border-bottom: 4px solid #FCBA19;
+  box-shadow: 0 2px 6px rgba(0, 26, 51, 0.16);
+}
+
+.navbar .nav-link[href="https://boostao.github.io/vpro/"] {
+  font-weight: 600;
+  color: #FCBA19 !important;
+}
+
+.navbar .nav-link[href="https://boostao.github.io/vpro/"]:hover {
+  color: #FFFFFF !important;
+  text-decoration: underline;
+}
+
+h1, h2, h3, .page-header h1 {
+  color: #003366;
+}
+
+a {
+  color: #1A5A96;
+}
+
+footer {
+  border-top: 2px solid #D9E1E8;
+}

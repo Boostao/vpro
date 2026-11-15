@@ -6,7 +6,7 @@
 
 ## 1. Database Family Topology
 
-Both legacy **VPro 64** (`VPro64.accdb` + `.accda` add-ins) and the modernized **`vpro` (R)** / **`vpro_wails` (Go/Wails)** implementations organize persistent data into a **multi-database family** separating mutable plot projects from provincial reference libraries and personal user extensions (`VPro64/VPro64.accdb`, `vpro/R/startup.R:18-60`, `vpro_wails/databasefamily.go:19-61`, `vpro_wails/sqlitecontext.go:95-248`):
+Both legacy **VPro 64** (`VPro64.accdb` + `.accda` add-ins) and the modernized **`Boostao/vpro`** implementations (`r/` R SDK and `app/` Go/Wails Desktop) organize persistent data into a **multi-database family** separating mutable plot projects from provincial reference libraries and personal user extensions (`VPro64/VPro64.accdb`, `r/R/workspace.R`, `app/internal/vprocore/databasefamily.go`, `app/internal/vprocore/sqlitecontext.go`):
 
 | Logical Database | Legacy Access Artifact | Canonical SQLite Artifact (`vpro` / `vpro_wails`) | Core Tables Contained | Ownership & Mutability |
 |---|---|---|---|---|
@@ -188,7 +188,7 @@ erDiagram
 
 ## 3. Core Project Entities (`VP08` 8-Table Canonical Specification)
 
-Every valid `VP08` project (in `VPro64.accdb`, `BECMaster_fixing.accdb`, `vpro/data-raw/projects/Sample_*.sql`, and `vpro_wails/sqlitecontext.go:332-360`) consists of **eight required tables** sharing a `<Project>_` prefix, tagged via Access `TableDef.Properties("Description")` or SQLite `_table_metadata (table_name TEXT PRIMARY KEY, description TEXT)`.
+Every valid `VP08` project (in `VPro64.accdb`, `BECMaster_fixing.accdb`, `r/data-raw/projects/Sample_*.sql`, and `app/internal/vprocore/sqlitecontext.go:332-360`) consists of **eight required tables** sharing a `<Project>_` prefix, tagged via Access `TableDef.Properties("Description")` or SQLite `_table_metadata (table_name TEXT PRIMARY KEY, description TEXT)`.
 
 ### 3.1 `<Project>_Env` — Plot Site, Location, Soil Summary, SIVI & CHARS (`112 Columns`, Tag `VP08`)
 Verified identically across `VPro64.accdb :: Sample_Env`, `BECMaster_fixing.accdb` (71,567 rows), `vpro/data-raw/projects/Sample_Env.sql:2-121`, and `vpro_wails/projectcreationddl.go`:

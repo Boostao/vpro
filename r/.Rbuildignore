@@ -1,0 +1,14 @@
+^vpro\.Rproj$
+^\.Rproj\.user$
+^\.Renviron$
+^\.env
+^\.github$
+^\.posit$
+^\.vscode$
+^AGENTS\.md$
+^data-raw$
+^scripts$
+^air\.toml$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

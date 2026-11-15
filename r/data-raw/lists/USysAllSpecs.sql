@@ -1,0 +1,30 @@
+CREATE TABLE "USysAllSpecs" (
+  "YearOfChange" TEXT,
+  "ChangeDescription" TEXT,
+  "APCFamily" TEXT,
+  "FamilyCode" TEXT,
+  "OldCode" TEXT,
+  "Code" TEXT,
+  "SplCode" TEXT,
+  "TreeCode" TEXT,
+  "ScientificName" TEXT,
+  "Lifeform" INTEGER,
+  "Authority" TEXT,
+  "EnglishName_Old" TEXT,
+  "EnglishName" TEXT,
+  "common_name_pb" TEXT,
+  "Notes_on_names" TEXT,
+  "ShortenedGuideName" TEXT,
+  "Native" TEXT,
+  "Codetype" TEXT,
+  "Province" TEXT,
+  "ID" INTEGER,
+  "TaxonLevel" TEXT,
+  "IsAttribute" BOOLEAN,
+  "Report" INTEGER,
+  "SplCode_calc" TEXT,
+  "Codelength" INTEGER,
+  "CombinedEnglishName" TEXT
+);
+
+

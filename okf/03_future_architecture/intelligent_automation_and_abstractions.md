@@ -8,7 +8,7 @@
 
 Legacy VPro 64 forced ecologists and field technicians to execute multi-step manual choreography across MS Access forms, standalone validation dialogs, Excel `.xla` macros (`Diagnostic10.xla`), Google Earth, and external R scripts.
 
-This document specifies **seven concrete, evidence-backed automations and higher-level abstractions** designed directly for implementation in **`boostao/vpro_wails`** (Go `1.25` + Svelte `5` + SQLite) and **`boostao/vpro` / `BEC_R`**. Every automation **suggests or previews non-destructively first**, preserving user control and recording accepted writes through `<Project>_Audit`.
+This document specifies **seven concrete, evidence-backed automations and higher-level abstractions** designed directly for implementation in the unified **`Boostao/vpro`** monorepo (`app/` Go `1.25` + Svelte `5` + SQLite and `r/` headless `vpro` / `BEC_R`). Every automation **suggests or previews non-destructively first**, preserving user control and recording accepted writes through `<Project>_Audit`.
 
 ```mermaid
 flowchart TB
@@ -141,16 +141,16 @@ sequenceDiagram
 
 ---
 
-## 9. Implementation Status & Production Package Mapping (`v2.0.1`)
+## 9. Implementation Status & Production Package Mapping (`Boostao/vpro` `v2.0.1`)
 
-All seven automations are **implemented and verified** across `boostao/vpro_wails` (`v2.0.1`) and `boostao/vpro` (`v2.0.0`):
+All seven automations are **implemented and verified** across `Boostao/vpro` (`app/` `v2.0.1` and `r/` `v2.0.0`):
 
-| ID | Automation / Abstraction | Primary User Persona | Production Implementation (`vpro_wails` / `vpro`) | Status (`2026-11-13`) |
+| ID | Automation / Abstraction | Primary User Persona | Production Implementation (`app/` / `r/`) | Status (`2026-11-14`) |
 |---|---|---|---|---|
-| **`Auto-2`** | `LMH25 (2023)` Pedon, Substrate, `HumusThickness` & `rSMR/rSNR` Live Checks | Field Crew & Ecologist | `internal/lmh25rules/`, `PlotEntryService`, `lmh25Diagnostics.test.cjs` | **Delivered** (`d29eb01`, `824c831`) |
-| **`Auto-6`** | Auto-Derived `ProjectMetadata` + Standards Presets (`Sched A 3.c.ii`) | Field Crew & Custodian | `internal/projectops/`, `ProjectMetadataEditor.svelte`, `projectMetadataPresets.test.cjs` | **Delivered** (`c864381`) |
-| **`Auto-1`** | `NAD83` `UTM <-> DD` Projection + `.pmtiles` BGC/Admin/DEM Auto-Stamp | Field Crew & Ecologist | `internal/spatial/`, `GeospatialWorkbench.svelte`, `resources/maps/bc-overview.pmtiles` | **Delivered** (`5213c1f`, `2ee02e1`) |
-| **`Auto-4`** | Unified Pre-Flight QA + Safe `OptimizeVeg` + 3-Way Project Diff/Merge | Ecologist & Custodian | `internal/projectops/`, `internal/validation/`, `ProjectAdminWorkbench.svelte` | **Delivered** (`c864381`, `c887dd8`) |
-| **`Auto-5`** | Declarative `LumpSpec` Recipes + Provincial Presets (`Sched A 3.b`) | Ecologist & Researcher | `internal/lumping/`, `LumpEditor.svelte`, `lumpEditor.test.cjs` | **Delivered** (`d29eb01`) |
-| **`Auto-3`** | Reactive In-App Diagnostic Matrix, Outlier Queue & Edatopic Grid | BEC Ecologist | `internal/diagnostics/`, `ClassificationSynthesis.svelte` (`71.5k`-plot qualified) | **Delivered** (`a2cb579`, `2ee02e1`) |
-| **`Auto-7`** | Cached `climr` $\rightarrow$ `aSMR` + `BEC_R` Cluster Assist + Quarto Guides | Ecologist & Climate Scientist | `internal/rsidecar/` + `vpro` `v2.0.0` (`fae33d2`), `RSidecarWorkbench.svelte` | **Delivered** (`c85d014`, `4e39985`) |
+| **`Auto-2`** | `LMH25 (2023)` Pedon, Substrate, `HumusThickness` & `rSMR/rSNR` Live Checks | Field Crew & Ecologist | `app/internal/lmh25rules/`, `PlotEntryService`, `lmh25Diagnostics.test.cjs` | **Delivered** (`d29eb01`, `824c831`) |
+| **`Auto-6`** | Auto-Derived `ProjectMetadata` + Standards Presets (`Sched A 3.c.ii`) | Field Crew & Custodian | `app/internal/projectops/`, `ProjectMetadataEditor.svelte`, `projectMetadataPresets.test.cjs` | **Delivered** (`c864381`) |
+| **`Auto-1`** | `NAD83` `UTM <-> DD` Projection + `.pmtiles` BGC/Admin/DEM Auto-Stamp | Field Crew & Ecologist | `app/internal/spatial/`, `GeospatialWorkbench.svelte`, `app/resources/maps/bc-overview.pmtiles` | **Delivered** (`5213c1f`, `2ee02e1`) |
+| **`Auto-4`** | Unified Pre-Flight QA + Safe `OptimizeVeg` + 3-Way Project Diff/Merge | Ecologist & Custodian | `app/internal/projectops/`, `app/internal/validation/`, `ProjectAdminWorkbench.svelte` | **Delivered** (`c864381`, `c887dd8`) |
+| **`Auto-5`** | Declarative `LumpSpec` Recipes + Provincial Presets (`Sched A 3.b`) | Ecologist & Researcher | `app/internal/lumping/`, `LumpEditor.svelte`, `lumpEditor.test.cjs` | **Delivered** (`d29eb01`) |
+| **`Auto-3`** | Reactive In-App Diagnostic Matrix, Outlier Queue & Edatopic Grid | BEC Ecologist | `app/internal/diagnostics/`, `ClassificationSynthesis.svelte` (`71.5k`-plot qualified) | **Delivered** (`a2cb579`, `2ee02e1`) |
+| **`Auto-7`** | Cached `climr` $\rightarrow$ `aSMR` + `BEC_R` Cluster Assist + Quarto Guides | Ecologist & Climate Scientist | `app/internal/rsidecar/` + `r/` (`vpro` `v2.0.0`), `RSidecarWorkbench.svelte` | **Delivered** (`c85d014`, `4e39985`) |

@@ -1,0 +1,18 @@
+{
+  "permission": {
+    "edit": {
+      "*.R": "allow",
+      "*.md": "allow",
+      "*/DESCRIPTION": "allow"
+    },
+    "bash": {
+      "air *": "allow"
+    },
+    "executeCode": {
+      "*": "allow"
+    },
+    "task": {
+      "general": "allow"
+    }
+  }
+}

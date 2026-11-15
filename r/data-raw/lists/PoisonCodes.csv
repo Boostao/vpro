@@ -1,0 +1,6 @@
+"P_Organism","Human","Livestock","Wildlife"
+"H","H","",""
+"H,L","H","L",""
+"H,L,W","H","L","W"
+"L","","L",""
+"L,W","","L","W"

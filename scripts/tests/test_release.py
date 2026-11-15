@@ -23,13 +23,14 @@ release = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(release)
 
 # Independent ordered release contract, not generated from the implementation.
-EXPECTED = (
+DESKTOP_EXPECTED = (
     "vpro-linux-amd64.AppImage", "vpro-linux-amd64.deb", "vpro-linux-amd64.tar.gz",
     "vpro-linux-arm64.AppImage", "vpro-linux-arm64.deb", "vpro-linux-arm64.tar.gz",
     "vpro-macos-universal.dmg", "vpro-macos-universal.zip",
     "vpro-windows-amd64-installer.exe", "vpro-windows-amd64.exe", "vpro-windows-amd64.zip",
     "vpro-windows-arm64-installer.exe", "vpro-windows-arm64.exe", "vpro-windows-arm64.zip",
 )
+EXPECTED = tuple(sorted((*DESKTOP_EXPECTED, "vpro-r-sdk.tar.gz")))
 
 
 def pe(arch, imports=("KERNEL32.dll", "api-ms-win-crt-runtime-l1-1-0.dll"), delay_imports=()):
@@ -132,29 +133,46 @@ def deb(arch, version="2.3.4"):
     return bytes(data)
 
 
-def bundle_info():
-    return plistlib.dumps({"CFBundleVersion": "2.3.4", "CFBundleShortVersionString": "2.3.4"})
+def bundle_info(numeric="2.3.4"):
+    return plistlib.dumps({"CFBundleVersion": numeric, "CFBundleShortVersionString": numeric})
 
 
-def asset_fixture(directory):
+def r_tarball(numeric="2.3.4"):
+    desc = f"Package: vpro\nTitle: VPro R Companion SDK\nVersion: {numeric}\n".encode("utf-8")
+    return tar_bytes([("vpro/DESCRIPTION", desc), ("vpro/NAMESPACE", b"# roxygen2\n")])
+
+
+def asset_fixture(directory, full_version="2.3.4"):
+    numeric = full_version.split("-", 1)[0].split("+", 1)[0]
+    deb_ver = full_version.replace("-", "~")
     for arch in ("amd64", "arm64"):
         (directory / f"vpro-windows-{arch}.exe").write_bytes(pe(arch))
         (directory / f"vpro-windows-{arch}-installer.exe").write_bytes(b"installer fixture")
         with zipfile.ZipFile(directory / f"vpro-windows-{arch}.zip", "w") as archive:
             archive.writestr("VPro.exe", pe(arch))
         (directory / f"vpro-linux-{arch}.AppImage").write_bytes(elf(arch, True))
-        (directory / f"vpro-linux-{arch}.deb").write_bytes(deb(arch))
+        (directory / f"vpro-linux-{arch}.deb").write_bytes(deb(arch, deb_ver))
         (directory / f"vpro-linux-{arch}.tar.gz").write_bytes(tar_bytes([("VPro", elf(arch))]))
     (directory / "vpro-macos-universal.dmg").write_bytes(b"DMG fixture")
     with zipfile.ZipFile(directory / "vpro-macos-universal.zip", "w") as archive:
         archive.writestr("VPro.app/Contents/MacOS/VPro", universal())
-        archive.writestr("VPro.app/Contents/Info.plist", bundle_info())
+        archive.writestr("VPro.app/Contents/Info.plist", bundle_info(numeric))
+    (directory / "vpro-r-sdk.tar.gz").write_bytes(r_tarball(numeric))
     for group in ("windows-amd64", "windows-arm64", "macos-universal", "linux-amd64", "linux-arm64"):
-        names = [name for name in EXPECTED if name.startswith("vpro-" + group)]
-        witness = {"schema": 1, "group": group, "version": "2.3.4", "commit": "abc123",
+        names = [name for name in DESKTOP_EXPECTED if name.startswith("vpro-" + group)]
+        witness = {"schema": 1, "group": group, "version": full_version, "commit": "abc123",
                    "architectures": ["amd64", "arm64"] if group == "macos-universal" else [group.split("-")[1]],
                    "sha256": {name: hashlib.sha256((directory / name).read_bytes()).hexdigest() for name in names}}
         (directory / f"release-witness-{group}.json").write_text(json.dumps(witness), encoding="utf-8")
+    r_witness = {
+        "schema": 1,
+        "group": "r-sdk",
+        "version": full_version,
+        "commit": "abc123",
+        "architectures": ["source"],
+        "sha256": {"vpro-r-sdk.tar.gz": hashlib.sha256((directory / "vpro-r-sdk.tar.gz").read_bytes()).hexdigest()},
+    }
+    (directory / "release-witness-r-sdk.json").write_text(json.dumps(r_witness), encoding="utf-8")
 
 
 @contextlib.contextmanager
@@ -217,11 +235,11 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("python scripts/release.py cpu $output --format pe --arch $env:RELEASE_ARCH", setup)
 
     def test_windows_static_runtime_linkage_and_pe_import_allowlist(self):
-        access_reader = (ROOT / "internal/accessreader/reader.go").read_text(encoding="utf-8")
+        access_reader = (ROOT / "app/internal/accessreader/reader.go").read_text(encoding="utf-8")
         self.assertIn("#cgo windows LDFLAGS: -static -lm", access_reader)
-        win_taskfile = (ROOT / "build/windows/Taskfile.yml").read_text(encoding="utf-8")
+        win_taskfile = (ROOT / "app/build/windows/Taskfile.yml").read_text(encoding="utf-8")
         self.assertEqual(win_taskfile.count("-extldflags=-static"), 2)
-        cross_docker = (ROOT / "build/docker/Dockerfile.cross").read_text(encoding="utf-8")
+        cross_docker = (ROOT / "app/build/docker/Dockerfile.cross").read_text(encoding="utf-8")
         self.assertIn('-H windowsgui -extldflags=-static', cross_docker)
 
         # Standard inbox Win32 + UCRT API-set DLLs pass on both amd64 and arm64.
@@ -247,15 +265,15 @@ class ReleaseTests(unittest.TestCase):
                     release.cpu(delayed, "pe", "arm64")
 
         # Packaging rejects NSIS payload or standalone EXE leaking libwinpthread-1.dll.
-        (self.root / "bin").mkdir()
-        (self.root / "bin/VPro.exe").write_bytes(
+        (self.root / "app/bin").mkdir(parents=True)
+        (self.root / "app/bin/VPro.exe").write_bytes(
             pe("amd64", imports=("KERNEL32.dll", "libwinpthread-1.dll"))
         )
-        (self.root / "bin/VPro-amd64-installer.exe").write_bytes(b"NSIS")
+        (self.root / "app/bin/VPro-amd64-installer.exe").write_bytes(b"NSIS")
         with patch.dict(os.environ, {"RELEASE_ARCH": "amd64"}):
             with self.assertRaisesRegex(ValueError, "libwinpthread-1.dll"):
                 release.package(self.root, "windows")
-        self.assertEqual(list((self.root / "dist-artifacts").iterdir()), [])
+        self.assertEqual(list((self.root / "app/dist-artifacts").iterdir()), [])
 
         # Corrupted / truncated import directory RVA fails closed.
         corrupted = bytearray(pe("amd64"))
@@ -320,21 +338,21 @@ class ReleaseTests(unittest.TestCase):
 
     def test_taskfiles_inject_build_identity_ldflags_across_platforms(self):
         for rel in (
-            "build/windows/Taskfile.yml",
-            "build/linux/Taskfile.yml",
-            "build/darwin/Taskfile.yml",
-            "build/Taskfile.yml",
+            "app/build/windows/Taskfile.yml",
+            "app/build/linux/Taskfile.yml",
+            "app/build/darwin/Taskfile.yml",
+            "app/build/Taskfile.yml",
         ):
             text = (ROOT / rel).read_text(encoding="utf-8")
             with self.subTest(taskfile=rel):
-                self.assertIn("-X github.com/boostao/vpro-wails/internal/lifecycle.appVersion=", text)
-                self.assertIn("-X github.com/boostao/vpro-wails/internal/lifecycle.buildMode=", text)
-                self.assertIn("-X github.com/boostao/vpro-wails/internal/lifecycle.gitCommit=", text)
-                if rel != "build/Taskfile.yml":
+                self.assertIn("-X github.com/boostao/vpro/app/internal/lifecycle.appVersion=", text)
+                self.assertIn("-X github.com/boostao/vpro/app/internal/lifecycle.buildMode=", text)
+                self.assertIn("-X github.com/boostao/vpro/app/internal/lifecycle.gitCommit=", text)
+                if rel != "app/build/Taskfile.yml":
                     self.assertIn('-e RELEASE_VERSION="{{.EFFECTIVE_VERSION}}"', text)
                     self.assertIn('-e RELEASE_BUILD_MODE="{{.EFFECTIVE_BUILD_MODE}}"', text)
                     self.assertIn('-e GITHUB_SHA="{{.EFFECTIVE_COMMIT}}"', text)
-        cfg = (ROOT / "build/config.yml").read_text(encoding="utf-8")
+        cfg = (ROOT / "app/build/config.yml").read_text(encoding="utf-8")
         self.assertIn('version: "2.0.1"', cfg)
         self.assertNotIn("My Other Data", cfg)
 
@@ -359,15 +377,15 @@ class ReleaseTests(unittest.TestCase):
             release.cpu(universal()[128:192], "macho", "universal")
 
     def test_metadata_is_ci_only_and_versions_reach_all_consumers(self):
-        for name in release.METADATA:
+        for name in (*release.METADATA, *release.R_METADATA):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, path)
-        before = {name: (self.root / name).read_bytes() for name in release.METADATA}
+        before = {name: (self.root / name).read_bytes() for name in (*release.METADATA, *release.R_METADATA)}
         with patch.dict(os.environ, {"CI": "false", "GITHUB_ACTIONS": "false"}):
             with self.assertRaisesRegex(ValueError, "CI-only"):
                 release.prepare_metadata(self.root)
-        self.assertEqual(before, {name: (self.root / name).read_bytes() for name in release.METADATA})
+        self.assertEqual(before, {name: (self.root / name).read_bytes() for name in (*release.METADATA, *release.R_METADATA)})
         with patch.dict(os.environ, {"CI": "true", "GITHUB_ACTIONS": "true",
                                     "GITHUB_WORKSPACE": str(self.root),
                                     "RELEASE_VERSION": "v2.3.4-rc.1+build.7"}), \
@@ -375,18 +393,20 @@ class ReleaseTests(unittest.TestCase):
             release.prepare_metadata(self.root)
             command.assert_called_once_with("git", "diff", "--exit-code", "HEAD", "--",
                                             *release.METADATA, cwd=self.root)
-        self.assertIn('version: "2.3.4"', (self.root / "build/config.yml").read_text())
+            release.prepare_metadata(self.root, target="r")
+        self.assertIn('version: "2.3.4"', (self.root / "app/build/config.yml").read_text())
         self.assertIn('version: "2.3.4-rc.1+build.7"',
-                      (self.root / "build/linux/nfpm/nfpm.yaml").read_text())
+                      (self.root / "app/build/linux/nfpm/nfpm.yaml").read_text())
         self.assertIn('INFO_PRODUCTVERSION "2.3.4"',
-                      (self.root / "build/windows/nsis/wails_tools.nsh").read_text(encoding="utf-8"))
-        info = json.loads((self.root / "build/windows/info.json").read_text(encoding="utf-8"))
+                      (self.root / "app/build/windows/nsis/wails_tools.nsh").read_text(encoding="utf-8"))
+        info = json.loads((self.root / "app/build/windows/info.json").read_text(encoding="utf-8"))
         self.assertEqual(info["fixed"]["file_version"], "2.3.4")
         self.assertEqual(info["info"]["0000"]["ProductVersion"], "2.3.4-rc.1+build.7")
-        info = plistlib.loads((self.root / "build/darwin/Info.plist").read_bytes())
+        info = plistlib.loads((self.root / "app/build/darwin/Info.plist").read_bytes())
         self.assertEqual(info["CFBundleVersion"], "2.3.4")
         self.assertEqual(info["CFBundleShortVersionString"], "2.3.4")
         self.assertEqual(info["CFBundleExecutable"], "VPro")
+        self.assertIn("Version: 2.3.4\n", (self.root / "r/DESCRIPTION").read_text(encoding="utf-8"))
 
     def test_metadata_fails_before_writing_on_drift(self):
         with patch.dict(os.environ, {"CI": "true", "GITHUB_ACTIONS": "true",
@@ -526,9 +546,9 @@ class ReleaseTests(unittest.TestCase):
                 release.remote(path)
 
     def test_windows_inspects_nsis_payload_not_launcher_cpu(self):
-        (self.root / "bin").mkdir()
-        (self.root / "bin/VPro.exe").write_bytes(pe("arm64"))
-        (self.root / "bin/VPro-arm64-installer.exe").write_bytes(b"x86 NSIS launcher")
+        (self.root / "app/bin").mkdir(parents=True)
+        (self.root / "app/bin/VPro.exe").write_bytes(pe("arm64"))
+        (self.root / "app/bin/VPro-arm64-installer.exe").write_bytes(b"x86 NSIS launcher")
 
         def extract(*args, **kwargs):
             self.assertEqual(args[:3], ("7z", "x", "-y"))
@@ -537,25 +557,25 @@ class ReleaseTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"RELEASE_ARCH": "arm64"}), patch.object(release, "run", side_effect=extract):
             release.package(self.root, "windows")
-        self.assertEqual({path.name for path in (self.root / "dist-artifacts").iterdir()},
+        self.assertEqual({path.name for path in (self.root / "app/dist-artifacts").iterdir()},
                          {"vpro-windows-arm64.exe", "vpro-windows-arm64.zip",
                           "vpro-windows-arm64-installer.exe", "release-witness-windows-arm64.json"})
 
     def test_packaging_command_failure_never_creates_witness(self):
-        (self.root / "bin").mkdir()
-        (self.root / "bin/VPro.exe").write_bytes(pe("amd64"))
-        (self.root / "bin/VPro-amd64-installer.exe").write_bytes(b"NSIS")
+        (self.root / "app/bin").mkdir(parents=True)
+        (self.root / "app/bin/VPro.exe").write_bytes(pe("amd64"))
+        (self.root / "app/bin/VPro-amd64-installer.exe").write_bytes(b"NSIS")
         with patch.dict(os.environ, {"RELEASE_ARCH": "amd64"}), \
                 patch.object(release, "run", side_effect=subprocess.CalledProcessError(1, "7z")):
             with self.assertRaises(subprocess.CalledProcessError):
                 release.package(self.root, "windows")
-        self.assertEqual(list((self.root / "dist-artifacts").iterdir()), [])
+        self.assertEqual(list((self.root / "app/dist-artifacts").iterdir()), [])
 
     def test_linux_native_packaging_requires_all_formats_and_extracts_payload(self):
-        (self.root / "bin").mkdir()
-        (self.root / "bin/VPro").write_bytes(elf("arm64"))
-        (self.root / "bin/VPro-aarch64.AppImage").write_bytes(elf("arm64", True))
-        (self.root / "bin/VPro.deb").write_bytes(deb("arm64"))
+        (self.root / "app/bin").mkdir(parents=True)
+        (self.root / "app/bin/VPro").write_bytes(elf("arm64"))
+        (self.root / "app/bin/VPro-aarch64.AppImage").write_bytes(elf("arm64", True))
+        (self.root / "app/bin/VPro.deb").write_bytes(deb("arm64"))
 
         def extract(*args, **kwargs):
             self.assertEqual(args[1], "--appimage-extract")
@@ -566,35 +586,36 @@ class ReleaseTests(unittest.TestCase):
         with patch.dict(os.environ, {"RELEASE_ARCH": "arm64"}), \
                 patch.object(release, "run", side_effect=extract):
             release.package(self.root, "linux")
-        self.assertEqual({path.name for path in (self.root / "dist-artifacts").iterdir()},
+        self.assertEqual({path.name for path in (self.root / "app/dist-artifacts").iterdir()},
                          {"vpro-linux-arm64.AppImage", "vpro-linux-arm64.deb",
                           "vpro-linux-arm64.tar.gz", "release-witness-linux-arm64.json"})
 
     def test_linux_extract_error_is_fatal(self):
-        (self.root / "bin").mkdir()
-        (self.root / "bin/VPro").write_bytes(elf("amd64"))
-        (self.root / "bin/VPro-x86_64.AppImage").write_bytes(elf("amd64", True))
+        (self.root / "app/bin").mkdir(parents=True)
+        (self.root / "app/bin/VPro").write_bytes(elf("amd64"))
+        (self.root / "app/bin/VPro-x86_64.AppImage").write_bytes(elf("amd64", True))
         with patch.dict(os.environ, {"RELEASE_ARCH": "amd64"}), \
                 patch.object(release, "run", side_effect=subprocess.CalledProcessError(1, "AppImage")):
             with self.assertRaises(subprocess.CalledProcessError):
                 release.package(self.root, "linux")
-        self.assertEqual(list((self.root / "dist-artifacts").iterdir()), [])
+        self.assertEqual(list((self.root / "app/dist-artifacts").iterdir()), [])
 
     def test_missing_or_ambiguous_linux_output_is_fatal(self):
-        (self.root / "bin").mkdir()
+        app_root = self.root / "app"
+        (app_root / "bin").mkdir(parents=True)
         with self.assertRaisesRegex(ValueError, "exactly one"):
-            release.unique_output(self.root, ".deb")
+            release.unique_output(app_root, ".deb")
         for name in ("one.deb", "two.deb"):
-            (self.root / "bin" / name).write_bytes(b"x")
+            (app_root / "bin" / name).write_bytes(b"x")
         with self.assertRaisesRegex(ValueError, "exactly one"):
-            release.unique_output(self.root, ".deb")
+            release.unique_output(app_root, ".deb")
 
     def test_mac_dmg_payload_and_detach_even_on_validation_failure(self):
-        bundle = self.root / "bin/VPro.app/Contents"
+        bundle = self.root / "app/bin/VPro.app/Contents"
         (bundle / "MacOS").mkdir(parents=True)
         (bundle / "MacOS/VPro").write_bytes(universal())
         (bundle / "Info.plist").write_bytes(bundle_info())
-        (self.root / "bin/VPro.dmg").write_bytes(b"dmg")
+        (self.root / "app/bin/VPro.dmg").write_bytes(b"dmg")
 
         def mount(*args, **kwargs):
             if args[1] == "attach":
@@ -606,14 +627,14 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "fat Mach-O"):
                 release.package(self.root, "macos")
         self.assertEqual(commands.call_args_list[-1].args[:2], ("hdiutil", "detach"))
-        self.assertEqual(list((self.root / "dist-artifacts").iterdir()), [])
+        self.assertEqual(list((self.root / "app/dist-artifacts").iterdir()), [])
 
     def test_mac_success_validates_both_archives_and_detach_failure_is_fatal(self):
-        bundle = self.root / "bin/VPro.app/Contents"
+        bundle = self.root / "app/bin/VPro.app/Contents"
         (bundle / "MacOS").mkdir(parents=True)
         (bundle / "MacOS/VPro").write_bytes(universal())
         (bundle / "Info.plist").write_bytes(bundle_info())
-        (self.root / "bin/VPro.dmg").write_bytes(b"dmg")
+        (self.root / "app/bin/VPro.dmg").write_bytes(b"dmg")
 
         def tools(*args, **kwargs):
             if args[0:2] == ("hdiutil", "attach"):
@@ -626,12 +647,12 @@ class ReleaseTests(unittest.TestCase):
 
         with patch.object(release, "run", side_effect=tools):
             release.package(self.root, "macos")
-        self.assertEqual({path.name for path in (self.root / "dist-artifacts").iterdir()},
+        self.assertEqual({path.name for path in (self.root / "app/dist-artifacts").iterdir()},
                          {"vpro-macos-universal.dmg", "vpro-macos-universal.zip",
                           "release-witness-macos-universal.json"})
-        for path in (self.root / "dist-artifacts").iterdir():
+        for path in (self.root / "app/dist-artifacts").iterdir():
             path.unlink()
-        (self.root / "dist-artifacts").rmdir()
+        (self.root / "app/dist-artifacts").rmdir()
 
         def detach_failure(*args, **kwargs):
             if args[:2] == ("hdiutil", "detach"):
@@ -641,7 +662,30 @@ class ReleaseTests(unittest.TestCase):
         with patch.object(release, "run", side_effect=detach_failure):
             with self.assertRaises(subprocess.CalledProcessError):
                 release.package(self.root, "macos")
-        self.assertEqual(list((self.root / "dist-artifacts").iterdir()), [])
+        self.assertEqual(list((self.root / "app/dist-artifacts").iterdir()), [])
+
+    def test_r_sdk_packaging_and_r_only_scope(self):
+        (self.root / "r").mkdir(parents=True)
+        (self.root / "r/vpro_2.3.4.tar.gz").write_bytes(r_tarball("2.3.4"))
+        with patch.dict(os.environ, {"RELEASE_VERSION": "r-v2.3.4", "RELEASE_SCOPE": "r-only"}):
+            release.package(self.root, "r", scope="r-only")
+            dist_dir = self.root / "r/dist-artifacts"
+            self.assertEqual(
+                {p.name for p in dist_dir.iterdir()},
+                {"vpro-r-sdk.tar.gz", "release-witness-r-sdk.json"},
+            )
+            with working_directory(dist_dir):
+                release.manifest(dist_dir, scope="r-only")
+            remote_json = self.root / "r-remote.json"
+            remote_json.write_text(json.dumps({
+                "assets": [{"name": "vpro-r-sdk.tar.gz"}, {"name": "SHA256SUMS.txt"}],
+            }))
+            release.remote(remote_json, scope="r-only")
+            downloaded = self.root / "r-downloaded"
+            downloaded.mkdir()
+            for name in ("vpro-r-sdk.tar.gz", "SHA256SUMS.txt"):
+                shutil.copyfile(dist_dir / name, downloaded / name)
+            release.verify(downloaded, dist_dir / "SHA256SUMS.txt", scope="r-only")
 
     def test_release_manifest_generation_channel_merging_and_validation(self):
         asset_fixture(self.root)
@@ -655,7 +699,7 @@ class ReleaseTests(unittest.TestCase):
             root=ROOT,
         )
         self.assertEqual(doc["schemaVersion"], 1)
-        self.assertEqual(doc["repository"], "Boostao/vpro_wails")
+        self.assertEqual(doc["repository"], "Boostao/vpro")
         self.assertEqual(doc["defaultChannel"], "stable")
         self.assertIsNone(doc["channels"]["preview"])
         stable = doc["channels"]["stable"]
@@ -665,7 +709,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIs(stable["unsignedNotice"], True)
         self.assertEqual(
             stable["sha256sumsUrl"],
-            "https://github.com/Boostao/vpro_wails/releases/download/v2.3.4/SHA256SUMS.txt",
+            "https://github.com/Boostao/vpro/releases/download/v2.3.4/SHA256SUMS.txt",
         )
         self.assertIn("BECdb v13", stable["standards"]["becVersion"])
         self.assertIn("BCPlantTaxonomy v19", stable["standards"]["taxonomyVersion"])
@@ -699,25 +743,7 @@ class ReleaseTests(unittest.TestCase):
         rc_dir = self.root / "rc-assets"
         rc_dir.mkdir()
         with patch.dict(os.environ, {"RELEASE_VERSION": "v2.4.0-rc.1", "RELEASE_PRERELEASE": "true"}):
-            for arch in ("amd64", "arm64"):
-                (rc_dir / f"vpro-windows-{arch}.exe").write_bytes(pe(arch))
-                (rc_dir / f"vpro-windows-{arch}-installer.exe").write_bytes(b"rc installer")
-                with zipfile.ZipFile(rc_dir / f"vpro-windows-{arch}.zip", "w") as archive:
-                    archive.writestr("VPro.exe", pe(arch))
-                (rc_dir / f"vpro-linux-{arch}.AppImage").write_bytes(elf(arch, True))
-                (rc_dir / f"vpro-linux-{arch}.deb").write_bytes(deb(arch, "2.4.0~rc.1"))
-                (rc_dir / f"vpro-linux-{arch}.tar.gz").write_bytes(tar_bytes([("VPro", elf(arch))]))
-            (rc_dir / "vpro-macos-universal.dmg").write_bytes(b"rc DMG")
-            with zipfile.ZipFile(rc_dir / "vpro-macos-universal.zip", "w") as archive:
-                archive.writestr("VPro.app/Contents/MacOS/VPro", universal())
-                archive.writestr("VPro.app/Contents/Info.plist",
-                                 plistlib.dumps({"CFBundleVersion": "2.4.0", "CFBundleShortVersionString": "2.4.0"}))
-            for group in ("windows-amd64", "windows-arm64", "macos-universal", "linux-amd64", "linux-arm64"):
-                names = [name for name in EXPECTED if name.startswith("vpro-" + group)]
-                witness = {"schema": 1, "group": group, "version": "2.4.0-rc.1", "commit": "abc123",
-                           "architectures": ["amd64", "arm64"] if group == "macos-universal" else [group.split("-")[1]],
-                           "sha256": {name: hashlib.sha256((rc_dir / name).read_bytes()).hexdigest() for name in names}}
-                (rc_dir / f"release-witness-{group}.json").write_text(json.dumps(witness), encoding="utf-8")
+            asset_fixture(rc_dir, "2.4.0-rc.1")
             with working_directory(rc_dir):
                 release.manifest(rc_dir)
             with self.assertRaisesRegex(ValueError, "cannot publish to stable"):
@@ -756,25 +782,7 @@ class ReleaseTests(unittest.TestCase):
         rc_dir = self.root / "sync-rc"
         rc_dir.mkdir()
         with patch.dict(os.environ, {"RELEASE_VERSION": "v2.4.0-rc.1", "RELEASE_PRERELEASE": "true"}):
-            for arch in ("amd64", "arm64"):
-                (rc_dir / f"vpro-windows-{arch}.exe").write_bytes(pe(arch))
-                (rc_dir / f"vpro-windows-{arch}-installer.exe").write_bytes(b"rc installer")
-                with zipfile.ZipFile(rc_dir / f"vpro-windows-{arch}.zip", "w") as archive:
-                    archive.writestr("VPro.exe", pe(arch))
-                (rc_dir / f"vpro-linux-{arch}.AppImage").write_bytes(elf(arch, True))
-                (rc_dir / f"vpro-linux-{arch}.deb").write_bytes(deb(arch, "2.4.0~rc.1"))
-                (rc_dir / f"vpro-linux-{arch}.tar.gz").write_bytes(tar_bytes([("VPro", elf(arch))]))
-            (rc_dir / "vpro-macos-universal.dmg").write_bytes(b"rc DMG")
-            with zipfile.ZipFile(rc_dir / "vpro-macos-universal.zip", "w") as archive:
-                archive.writestr("VPro.app/Contents/MacOS/VPro", universal())
-                archive.writestr("VPro.app/Contents/Info.plist",
-                                 plistlib.dumps({"CFBundleVersion": "2.4.0", "CFBundleShortVersionString": "2.4.0"}))
-            for group in ("windows-amd64", "windows-arm64", "macos-universal", "linux-amd64", "linux-arm64"):
-                names = [name for name in EXPECTED if name.startswith("vpro-" + group)]
-                witness = {"schema": 1, "group": group, "version": "2.4.0-rc.1", "commit": "abc123",
-                           "architectures": ["amd64", "arm64"] if group == "macos-universal" else [group.split("-")[1]],
-                           "sha256": {name: hashlib.sha256((rc_dir / name).read_bytes()).hexdigest() for name in names}}
-                (rc_dir / f"release-witness-{group}.json").write_text(json.dumps(witness), encoding="utf-8")
+            asset_fixture(rc_dir, "2.4.0-rc.1")
             with working_directory(rc_dir):
                 release.manifest(rc_dir)
             rc_manifest = self.root / "rc-release-manifest.json"
@@ -786,16 +794,30 @@ class ReleaseTests(unittest.TestCase):
             )
 
         complete_assets = [{"name": n} for n in (*EXPECTED, "SHA256SUMS.txt", "release-manifest.json")]
+        desktop_only_assets = [{"name": n} for n in (*DESKTOP_EXPECTED, "SHA256SUMS.txt", "release-manifest.json")]
         releases_feed = self.root / "releases-feed.json"
         releases_feed.write_text(json.dumps([
             {"tag_name": "v9.9.9-draft", "draft": True, "prerelease": False, "assets": complete_assets},
+            {"tag_name": "r-v2.4.1", "draft": False, "prerelease": False, "assets": [{"name": "vpro-r-sdk.tar.gz"}, {"name": "SHA256SUMS.txt"}]},
             {"tag_name": "v2.5.0-incomplete", "draft": False, "prerelease": False, "assets": [{"name": "SHA256SUMS.txt"}]},
             {"tag_name": "v2.4.0-rc.1", "draft": False, "prerelease": True, "assets": complete_assets},
-            {"tag_name": "v2.3.4", "draft": False, "prerelease": False, "assets": complete_assets},
+            {"tag_name": "v2.3.4", "draft": False, "prerelease": False, "assets": desktop_only_assets},
         ]), encoding="utf-8")
 
+        # Simulate historical v2.0.0/v2.0.1 desktop-only manifest from Boostao/vpro_wails without R tarball.
+        legacy_stable_doc = json.loads(stable_manifest.read_text(encoding="utf-8"))
+        legacy_stable_doc["repository"] = "Boostao/vpro_wails"
+        legacy_stable_doc["channels"]["stable"]["sha256sumsUrl"] = (
+            legacy_stable_doc["channels"]["stable"]["sha256sumsUrl"].replace("Boostao/vpro/", "Boostao/vpro_wails/")
+        )
+        legacy_stable_doc["channels"]["stable"]["assets"] = [
+            {**a, "url": a["url"].replace("Boostao/vpro/", "Boostao/vpro_wails/")}
+            for a in legacy_stable_doc["channels"]["stable"]["assets"]
+            if a["name"] != "vpro-r-sdk.tar.gz"
+        ]
+
         manifests_by_tag = {
-            "v2.3.4": stable_manifest.read_text(encoding="utf-8"),
+            "v2.3.4": json.dumps(legacy_stable_doc),
             "v2.4.0-rc.1": rc_manifest.read_text(encoding="utf-8"),
         }
         synced_out = self.root / "synced-release-manifest.json"
@@ -805,7 +827,9 @@ class ReleaseTests(unittest.TestCase):
             releases_json=releases_feed,
             asset_loader=lambda tag, _: manifests_by_tag[tag],
         )
+        self.assertEqual(synced["repository"], "Boostao/vpro")
         self.assertEqual(synced["channels"]["stable"]["tag"], "v2.3.4")
+        self.assertTrue(synced["channels"]["stable"]["sha256sumsUrl"].startswith("https://github.com/Boostao/vpro/"))
         self.assertEqual(synced["channels"]["preview"]["tag"], "v2.4.0-rc.1")
 
         # Empty/draft-only feed clears channels cleanly instead of leaving dead download URLs.
@@ -846,6 +870,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("python scripts/release.py release-manifest release-assets --output release-assets/release-manifest.json", workflow)
         self.assertIn("python scripts/release.py remote release-remote.json --require-release-manifest", workflow)
         self.assertIn("python scripts/release.py verify release-downloaded --manifest release-assets/SHA256SUMS.txt --release-manifest release-assets/release-manifest.json", workflow)
+        self.assertIn("  build-r:", workflow)
+        self.assertIn("scope:", workflow)
+        self.assertIn("pkgdown::build_site()", workflow)
         self.assertIn("name: github-pages", workflow)
         self.assertIn("actions/configure-pages@v5", workflow)
         pages = (ROOT / ".github/workflows/pages.yml").read_text()
@@ -854,7 +881,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("node-version: '22'", pages)
         self.assertIn("python scripts/release.py sync-release-manifest", pages)
         self.assertIn("node scripts/build-docs-src.mjs && node site/build.mjs", pages)
+        self.assertIn("pkgdown::build_site()", pages)
         self.assertIn("path: 'site/dist'", pages)
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("dorny/paths-filter@v3", ci)
+        self.assertIn("postgres:16", ci)
+        self.assertIn("rsidecar-integration:", ci)
 
 
 if __name__ == "__main__":

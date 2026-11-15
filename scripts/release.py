@@ -17,11 +17,15 @@ import tempfile
 import zipfile
 
 
-REPOSITORY = "Boostao/vpro_wails"
+REPOSITORY = os.environ.get("VPRO_REPOSITORY", "Boostao/vpro")
+LEGACY_REPOSITORIES = frozenset({"Boostao/vpro_wails", "boostao/vpro_wails"})
 ARCHES = ("amd64", "arm64")
-GROUPS = ("windows-amd64", "windows-arm64", "macos-universal",
-          "linux-amd64", "linux-arm64")
-ASSETS = {
+R_SDK_GROUP = "r-sdk"
+R_SDK_ASSET = "vpro-r-sdk.tar.gz"
+DESKTOP_GROUPS = ("windows-amd64", "windows-arm64", "macos-universal",
+                  "linux-amd64", "linux-arm64")
+GROUPS = (*DESKTOP_GROUPS, R_SDK_GROUP)
+DESKTOP_ASSETS = {
     **{f"windows-{arch}": tuple(f"vpro-windows-{arch}{suffix}"
                               for suffix in (".exe", ".zip", "-installer.exe"))
        for arch in ARCHES},
@@ -30,7 +34,13 @@ ASSETS = {
                             for suffix in (".AppImage", ".deb", ".tar.gz"))
        for arch in ARCHES},
 }
-REQUIRED = frozenset(name for names in ASSETS.values() for name in names)
+ASSETS = {
+    **DESKTOP_ASSETS,
+    R_SDK_GROUP: (R_SDK_ASSET,),
+}
+DESKTOP_REQUIRED = frozenset(name for names in DESKTOP_ASSETS.values() for name in names)
+REQUIRED = DESKTOP_REQUIRED | {R_SDK_ASSET}
+SCOPES = ("full", "r-only")
 MANIFEST = "SHA256SUMS.txt"
 RELEASE_MANIFEST = "release-manifest.json"
 DEFAULT_STANDARDS = {
@@ -38,9 +48,10 @@ DEFAULT_STANDARDS = {
     "taxonomyVersion": "BCPlantTaxonomy v19 (2026-02-09)",
     "lmh25Edition": "LMH25 (2023)",
 }
-METADATA = ("build/config.yml", "build/windows/info.json",
-            "build/windows/nsis/wails_tools.nsh", "build/darwin/Info.plist",
-            "build/linux/nfpm/nfpm.yaml")
+METADATA = ("app/build/config.yml", "app/build/windows/info.json",
+            "app/build/windows/nsis/wails_tools.nsh", "app/build/darwin/Info.plist",
+            "app/build/linux/nfpm/nfpm.yaml")
+R_METADATA = ("r/DESCRIPTION",)
 WINDOWS_TOOLCHAINS = {
     # DuckDB's supported amd64 prebuilt archives require GNU libstdc++/pthread.
     "amd64": {
@@ -91,8 +102,18 @@ def version(raw):
     return raw.removeprefix("v"), match[1]
 
 
-def release_version():
-    return version(os.environ["RELEASE_VERSION"])
+def release_scope(scope=None):
+    resolved = (scope or os.environ.get("RELEASE_SCOPE") or "full").strip()
+    require(resolved in SCOPES, f"Unsupported release scope: {resolved!r}")
+    return resolved
+
+
+def release_version(scope=None):
+    raw = os.environ["RELEASE_VERSION"]
+    resolved_scope = release_scope(scope)
+    if resolved_scope == "r-only" and isinstance(raw, str) and raw.startswith("r-"):
+        raw = raw.removeprefix("r-")
+    return version(raw)
 
 
 def infer_build_mode(full_version, *, prerelease=False):
@@ -124,9 +145,10 @@ def validate_source_tag(output, tag, commit):
     return "matching"
 
 
-def check_source_tag():
-    full, _ = release_version()
-    tag = f"v{full}"
+def check_source_tag(scope=None):
+    resolved_scope = release_scope(scope)
+    full, _ = release_version(resolved_scope)
+    tag = f"r-v{full}" if resolved_scope == "r-only" else f"v{full}"
     require(os.environ["RELEASE_TAG"] == tag, "Release tag differs from validated version")
     result = subprocess.run(
         ["git", "ls-remote", "--tags", "origin", f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"],
@@ -140,36 +162,50 @@ def replace_once(text, pattern, replacement):
     return result
 
 
-def prepare_metadata(root):
+def prepare_metadata(root, *, target="app", scope=None):
     require(os.environ.get("GITHUB_ACTIONS") == "true" and
             os.environ.get("CI") == "true", "Metadata preparation is CI-only")
     require(root.resolve() == Path(os.environ["GITHUB_WORKSPACE"]).resolve(),
             "Metadata preparation must use the fresh Actions checkout")
-    run("git", "diff", "--exit-code", "HEAD", "--", *METADATA, cwd=root)
-    full, numeric = release_version()
+    require(target in ("app", "r", "all"), f"Unsupported metadata target: {target!r}")
+    full, numeric = release_version(scope)
+    tracked = ()
+    if target in ("app", "all"):
+        tracked += METADATA
+    if target in ("r", "all"):
+        tracked += R_METADATA
+    run("git", "diff", "--exit-code", "HEAD", "--", *tracked, cwd=root)
     changes = {}
-    for relative, pattern, replacement in (
-        ("build/config.yml", r'^  version: "[^"]*" .*$', f'  version: "{numeric}" # CI release version'),
-        ("build/linux/nfpm/nfpm.yaml", r'^version: "[^"]*"$', f'version: "{full}"'),
-        ("build/windows/nsis/wails_tools.nsh",
-         r'^    !define INFO_PRODUCTVERSION "[^"]*"$',
-         f'    !define INFO_PRODUCTVERSION "{numeric}"'),
-    ):
-        path = root / relative
-        changes[path] = replace_once(path.read_text(encoding="utf-8"), pattern, replacement)
-    path = root / "build/windows/info.json"
-    info = json.loads(path.read_text(encoding="utf-8"))
-    require("file_version" in info["fixed"] and "ProductVersion" in info["info"]["0000"],
-            "Missing Windows version metadata")
-    info["fixed"]["file_version"] = numeric
-    info["info"]["0000"]["ProductVersion"] = full
-    changes[path] = json.dumps(info, ensure_ascii=False, indent=2) + "\n"
-    path = root / "build/darwin/Info.plist"
-    info = plistlib.loads(path.read_bytes(), fmt=plistlib.FMT_XML)
-    for key in ("CFBundleVersion", "CFBundleShortVersionString"):
-        require(key in info, f"Missing macOS metadata: {key}")
-        info[key] = numeric
-    changes[path] = plistlib.dumps(info, sort_keys=False).decode("utf-8")
+    if target in ("app", "all"):
+        for relative, pattern, replacement in (
+            ("app/build/config.yml", r'^  version: "[^"]*" .*$', f'  version: "{numeric}" # CI release version'),
+            ("app/build/linux/nfpm/nfpm.yaml", r'^version: "[^"]*"$', f'version: "{full}"'),
+            ("app/build/windows/nsis/wails_tools.nsh",
+             r'^    !define INFO_PRODUCTVERSION "[^"]*"$',
+             f'    !define INFO_PRODUCTVERSION "{numeric}"'),
+        ):
+            path = root / relative
+            changes[path] = replace_once(path.read_text(encoding="utf-8"), pattern, replacement)
+        path = root / "app/build/windows/info.json"
+        info = json.loads(path.read_text(encoding="utf-8"))
+        require("file_version" in info["fixed"] and "ProductVersion" in info["info"]["0000"],
+                "Missing Windows version metadata")
+        info["fixed"]["file_version"] = numeric
+        info["info"]["0000"]["ProductVersion"] = full
+        changes[path] = json.dumps(info, ensure_ascii=False, indent=2) + "\n"
+        path = root / "app/build/darwin/Info.plist"
+        info = plistlib.loads(path.read_bytes(), fmt=plistlib.FMT_XML)
+        for key in ("CFBundleVersion", "CFBundleShortVersionString"):
+            require(key in info, f"Missing macOS metadata: {key}")
+            info[key] = numeric
+        changes[path] = plistlib.dumps(info, sort_keys=False).decode("utf-8")
+    if target in ("r", "all"):
+        desc_path = root / "r/DESCRIPTION"
+        changes[desc_path] = replace_once(
+            desc_path.read_text(encoding="utf-8"),
+            r"^Version:\s*[^\r\n]+$",
+            f"Version: {numeric}",
+        )
     for path, content in changes.items():
         path.write_text(content, encoding="utf-8")
 
@@ -409,25 +445,85 @@ def check_bundle(bundle, numeric):
             "macOS bundle version mismatch")
 
 
-def unique_output(root, suffix):
-    paths = list((root / "bin").glob(f"*{suffix}"))
+def validate_r_sdk(path, full):
+    _, numeric = version(full)
+    require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
+            f"Missing or empty R SDK tarball: {path}")
+    with tarfile.open(path, "r:gz") as archive:
+        members = {m.name: m for m in archive.getmembers()}
+        require("vpro/DESCRIPTION" in members and members["vpro/DESCRIPTION"].isfile(),
+                "R SDK tarball is missing vpro/DESCRIPTION")
+        extracted = archive.extractfile(members["vpro/DESCRIPTION"])
+        require(extracted is not None, "Unable to read vpro/DESCRIPTION from R SDK tarball")
+        desc = extracted.read().decode("utf-8")
+    require(re.search(r"^Package:\s*vpro\s*$", desc, re.MULTILINE) is not None,
+            "R SDK tarball DESCRIPTION has unexpected Package name")
+    require(re.search(rf"^Version:\s*{re.escape(numeric)}\s*$", desc, re.MULTILINE) is not None,
+            f"R SDK tarball DESCRIPTION Version does not match {numeric}")
+
+
+def unique_output(app_root, suffix):
+    paths = list((app_root / "bin").glob(f"*{suffix}"))
     require(len(paths) == 1 and paths[0].is_file() and not paths[0].is_symlink(),
-            f"Expected exactly one bin/*{suffix}, found {len(paths)}")
+            f"Expected exactly one app/bin/*{suffix}, found {len(paths)}")
     return paths[0]
 
 
-def package(root, platform):
-    full, numeric = release_version()
+def expected_architectures(group):
+    if group == R_SDK_GROUP:
+        return ["source"]
+    if group == "macos-universal":
+        return list(ARCHES)
+    return [group.split("-")[1]]
+
+
+def active_release_set(scope=None):
+    resolved_scope = release_scope(scope)
+    if resolved_scope == "r-only":
+        return (R_SDK_GROUP,), frozenset({R_SDK_ASSET})
+    return GROUPS, REQUIRED
+
+
+def package(root, platform, *, scope=None):
+    full, numeric = release_version(scope)
+    if platform == "r":
+        group = R_SDK_GROUP
+        r_root = root / "r"
+        destination = r_root / "dist-artifacts"
+        destination.mkdir(parents=True)
+        candidates = [
+            p for search_dir in (r_root, root)
+            if search_dir.is_dir()
+            for p in search_dir.glob(f"vpro_{numeric}.tar.gz")
+            if p.is_file() and not p.is_symlink()
+        ]
+        unique_candidates = list(dict.fromkeys(p.resolve() for p in candidates))
+        require(len(unique_candidates) == 1,
+                f"Expected exactly one built vpro_{numeric}.tar.gz, found {len(unique_candidates)}")
+        validate_r_sdk(unique_candidates[0], full)
+        shutil.copyfile(unique_candidates[0], destination / R_SDK_ASSET)
+        exact_files(destination, ASSETS[group])
+        validate_portable(destination, group, full)
+        witness = {
+            "schema": 1, "group": group, "version": full, "commit": os.environ["GITHUB_SHA"],
+            "architectures": expected_architectures(group),
+            "sha256": {R_SDK_ASSET: sha256(destination / R_SDK_ASSET)},
+        }
+        (destination / f"release-witness-{group}.json").write_text(
+            json.dumps(witness, sort_keys=True) + "\n", encoding="utf-8")
+        return
+
     arch = "universal" if platform == "macos" else os.environ["RELEASE_ARCH"]
     group = f"{platform}-{arch}"
-    require(group in ASSETS, f"Unsupported release target: {group}")
-    destination = root / "dist-artifacts"
-    destination.mkdir()  # Refuse stale outputs from a previous attempt.
-    binary = root / "bin/VPro"
+    require(group in DESKTOP_ASSETS, f"Unsupported release target: {group}")
+    app_root = root / "app"
+    destination = app_root / "dist-artifacts"
+    destination.mkdir(parents=True)  # Refuse stale outputs from a previous attempt.
+    binary = app_root / "bin/VPro"
     if platform == "windows":
         binary = binary.with_suffix(".exe")
         check_cpu(binary, "pe", arch)
-        installer = root / f"bin/VPro-{arch}-installer.exe"
+        installer = app_root / f"bin/VPro-{arch}-installer.exe"
         require(installer.is_file(), f"Missing exact NSIS output: {installer}")
         # NSIS has an x86 launcher even for ARM64; inspect the installed payload.
         with tempfile.TemporaryDirectory() as temporary:
@@ -442,13 +538,13 @@ def package(root, platform):
         shutil.copyfile(installer, destination / ASSETS[group][2])
     elif platform == "linux":
         check_cpu(binary, "elf", arch)
-        appimage = unique_output(root, ".AppImage")
+        appimage = unique_output(app_root, ".AppImage")
         check_cpu(appimage, "elf", arch)
         require(appimage.read_bytes()[8:11] == b"AI\x02", "Expected type-2 AppImage")
         with tempfile.TemporaryDirectory() as temporary:
             run(str(appimage.resolve()), "--appimage-extract", cwd=temporary)
             check_cpu(Path(temporary) / "squashfs-root/usr/bin/VPro", "elf", arch)
-        deb = unique_output(root, ".deb")
+        deb = unique_output(app_root, ".deb")
         validate_deb(deb, arch, full)
         shutil.copyfile(appimage, destination / ASSETS[group][0])
         (destination / ASSETS[group][0]).chmod(0o755)
@@ -456,9 +552,9 @@ def package(root, platform):
         with tarfile.open(destination / ASSETS[group][2], "w:gz") as archive:
             archive.add(binary, arcname="VPro")
     else:
-        bundle = root / "bin/VPro.app"
+        bundle = app_root / "bin/VPro.app"
         check_bundle(bundle, numeric)
-        dmg = root / "bin/VPro.dmg"
+        dmg = app_root / "bin/VPro.dmg"
         require(dmg.is_file(), "Missing exact DMG output")
         with tempfile.TemporaryDirectory() as temporary:
             mount = Path(temporary) / "mount"
@@ -476,7 +572,7 @@ def package(root, platform):
     validate_portable(destination, group, full)
     witness = {
         "schema": 1, "group": group, "version": full, "commit": os.environ["GITHUB_SHA"],
-        "architectures": list(ARCHES) if arch == "universal" else [arch],
+        "architectures": expected_architectures(group),
         "sha256": {name: sha256(destination / name) for name in ASSETS[group]},
     }
     (destination / f"release-witness-{group}.json").write_text(
@@ -484,7 +580,9 @@ def package(root, platform):
 
 
 def validate_portable(directory, group, full):
-    if group.startswith("windows-"):
+    if group == R_SDK_GROUP:
+        validate_r_sdk(directory / R_SDK_ASSET, full)
+    elif group.startswith("windows-"):
         arch = group.removeprefix("windows-")
         binary = (directory / ASSETS[group][0]).read_bytes()
         cpu(binary, "pe", arch)
@@ -510,44 +608,46 @@ def validate_portable(directory, group, full):
                     "macOS ZIP version mismatch")
 
 
-def manifest(directory):
-    full, _ = release_version()
-    witnesses = {f"release-witness-{group}.json" for group in GROUPS}
-    exact_files(directory, REQUIRED | witnesses)
-    for group in GROUPS:
+def manifest(directory, *, scope=None):
+    full, _ = release_version(scope)
+    active_groups, active_required = active_release_set(scope)
+    witnesses = {f"release-witness-{group}.json" for group in active_groups}
+    exact_files(directory, active_required | witnesses)
+    for group in active_groups:
         witness = json.loads((directory / f"release-witness-{group}.json").read_text(encoding="utf-8"))
         expected = {
             "schema": 1, "group": group, "version": full, "commit": os.environ["GITHUB_SHA"],
-            "architectures": list(ARCHES) if group == "macos-universal" else [group.split("-")[1]],
+            "architectures": expected_architectures(group),
             "sha256": {name: sha256(directory / name) for name in ASSETS[group]},
         }
         require(witness == expected, f"Invalid provenance/CPU witness: {group}")
         validate_portable(directory, group, full)
-    content = "".join(f"{sha256(directory / name)}  {name}\n" for name in sorted(REQUIRED))
+    content = "".join(f"{sha256(directory / name)}  {name}\n" for name in sorted(active_required))
     (directory / MANIFEST).write_text(content, encoding="ascii", newline="\n")
     Path("release-assets.txt").write_text(
-        "".join(f"{directory / name}\n" for name in sorted(REQUIRED | {MANIFEST})),
+        "".join(f"{directory / name}\n" for name in sorted(active_required | {MANIFEST})),
         encoding="utf-8", newline="\n")
 
 
-def parse_manifest(content):
+def parse_manifest(content, *, expected_names=REQUIRED):
     lines = content.splitlines()
-    require(len(lines) == len(REQUIRED), "Checksum manifest has the wrong number of entries")
+    require(len(lines) == len(expected_names), "Checksum manifest has the wrong number of entries")
     entries = {}
     for line in lines:
         match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9._-]+)", line)
         require(match is not None, "Malformed checksum manifest line")
         digest, name = match.groups()
-        require(name in REQUIRED and name not in entries, "Unexpected/duplicate checksum entry")
+        require(name in expected_names and name not in entries, "Unexpected/duplicate checksum entry")
         entries[name] = digest
-    require(set(entries) == REQUIRED, "Incomplete checksum manifest")
+    require(set(entries) == expected_names, "Incomplete checksum manifest")
     return entries
 
 
-def verify(directory, trusted_manifest, *, release_manifest_path=None):
+def verify(directory, trusted_manifest, *, release_manifest_path=None, scope=None):
+    _, active_required = active_release_set(scope)
     content = trusted_manifest.read_text(encoding="ascii")
-    expected = parse_manifest(content)
-    expected_set = REQUIRED | {MANIFEST}
+    expected = parse_manifest(content, expected_names=active_required)
+    expected_set = active_required | {MANIFEST}
     if release_manifest_path is not None:
         expected_set = expected_set | {RELEASE_MANIFEST}
     exact_files(directory, expected_set)
@@ -562,11 +662,12 @@ def verify(directory, trusted_manifest, *, release_manifest_path=None):
         validate_release_manifest(json.loads(trusted_bytes.decode("utf-8")))
 
 
-def remote(path, *, require_release_manifest=False):
+def remote(path, *, require_release_manifest=False, scope=None):
+    _, active_required = active_release_set(scope)
     assets = json.loads(path.read_text(encoding="utf-8"))["assets"]
     names = [asset["name"] for asset in assets]
     require(len(names) == len(set(names)), "Remote release has duplicate asset names")
-    base_expected = REQUIRED | {MANIFEST}
+    base_expected = active_required | {MANIFEST}
     with_portal_manifest = base_expected | {RELEASE_MANIFEST}
     if require_release_manifest:
         require(set(names) == with_portal_manifest,
@@ -577,7 +678,7 @@ def remote(path, *, require_release_manifest=False):
 
 
 def standards_metadata(root=None):
-    base = (root or Path(__file__).resolve().parents[1]) / "resources/standards-2026-provenance.json"
+    base = (root or Path(__file__).resolve().parents[1]) / "app/resources/standards-2026-provenance.json"
     standards = dict(DEFAULT_STANDARDS)
     if base.is_file():
         provenance = json.loads(base.read_text(encoding="utf-8"))
@@ -590,6 +691,52 @@ def standards_metadata(root=None):
                 date_suffix = label.split("(", 1)[1].rstrip(")") if "(" in label else "2026"
                 standards["taxonomyVersion"] = f"BCPlantTaxonomy v19 ({date_suffix})"
     return standards
+
+
+def normalize_legacy_manifest(doc, repository=REPOSITORY):
+    if not isinstance(doc, dict):
+        return doc
+    raw_repo = doc.get("repository")
+    if not isinstance(raw_repo, str) or raw_repo not in LEGACY_REPOSITORIES:
+        return doc
+    legacy_prefixes = tuple(f"https://github.com/{legacy}/releases/download/"
+                            for legacy in LEGACY_REPOSITORIES)
+    canonical_prefix = f"https://github.com/{repository}/releases/download/"
+
+    def rewrite_url(value):
+        if not isinstance(value, str):
+            return value
+        for prefix in legacy_prefixes:
+            if value.startswith(prefix):
+                return canonical_prefix + value[len(prefix):]
+        return value
+
+    normalized = dict(doc)
+    normalized["repository"] = repository
+    channels = doc.get("channels")
+    if isinstance(channels, dict):
+        new_channels = {}
+        for ch_name, entry in channels.items():
+            if isinstance(entry, dict):
+                ch_copy = dict(entry)
+                if "sha256sumsUrl" in ch_copy:
+                    ch_copy["sha256sumsUrl"] = rewrite_url(ch_copy["sha256sumsUrl"])
+                if isinstance(ch_copy.get("assets"), list):
+                    new_assets = []
+                    for asset in ch_copy["assets"]:
+                        if isinstance(asset, dict):
+                            a_copy = dict(asset)
+                            if "url" in a_copy:
+                                a_copy["url"] = rewrite_url(a_copy["url"])
+                            new_assets.append(a_copy)
+                        else:
+                            new_assets.append(asset)
+                    ch_copy["assets"] = new_assets
+                new_channels[ch_name] = ch_copy
+            else:
+                new_channels[ch_name] = entry
+        normalized["channels"] = new_channels
+    return normalized
 
 
 def validate_download_url(url, name, tag, repository=REPOSITORY):
@@ -627,6 +774,8 @@ def validate_channel_entry(entry, channel_name, repository=REPOSITORY):
     assets = entry.get("assets")
     require(isinstance(assets, list) and len(assets) > 0,
             f"Channel {channel_name} assets must be a non-empty list")
+    # Historical desktop-only releases (v2.0.0, v2.0.1) contain DESKTOP_REQUIRED + SHA256SUMS.txt;
+    # unified monorepo releases additionally attach vpro-r-sdk.tar.gz.
     allowed_names = REQUIRED | {MANIFEST}
     seen = set()
     for asset in assets:
@@ -642,17 +791,17 @@ def validate_channel_entry(entry, channel_name, repository=REPOSITORY):
         size_bytes = asset.get("sizeBytes")
         require(type(size_bytes) is int and size_bytes > 0,
                 f"Channel {channel_name} asset {name} has invalid sizeBytes")
-    require(REQUIRED.issubset(seen),
-            f"Channel {channel_name} is missing required release assets")
+    require(DESKTOP_REQUIRED.issubset(seen),
+            f"Channel {channel_name} is missing required desktop release assets")
 
 
-def validate_release_manifest(doc):
+def validate_release_manifest(doc, *, repository=REPOSITORY):
     require(isinstance(doc, dict), "Release manifest must be a JSON object")
     require(set(doc) == {"schemaVersion", "repository", "defaultChannel", "channels"},
             "Unexpected top-level keys in release-manifest.json")
     require(type(doc.get("schemaVersion")) is int and doc["schemaVersion"] == 1,
             "Unsupported release-manifest.json schemaVersion")
-    require(doc.get("repository") == REPOSITORY,
+    require(doc.get("repository") == repository,
             f"Unexpected release-manifest.json repository: {doc.get('repository')!r}")
     require(doc.get("defaultChannel") in ("stable", "preview"),
             "defaultChannel must be 'stable' or 'preview'")
@@ -668,13 +817,15 @@ def validate_release_manifest(doc):
 
 
 def release_manifest(directory, output, *, channel=None, published_at=None,
-                     base_manifest=None, default_channel=None, root=None):
-    full, _ = release_version()
+                     base_manifest=None, default_channel=None, root=None,
+                     repository=REPOSITORY):
+    full, _ = release_version("full")
     tag = f"v{full}"
     manifest_file = directory / MANIFEST
     require(manifest_file.is_file() and not manifest_file.is_symlink() and
             manifest_file.stat().st_size > 0, f"Missing validated {MANIFEST} in {directory}")
-    expected_hashes = parse_manifest(manifest_file.read_text(encoding="ascii"))
+    expected_hashes = parse_manifest(manifest_file.read_text(encoding="ascii"),
+                                     expected_names=REQUIRED)
     for name in REQUIRED:
         asset_path = directory / name
         require(asset_path.is_file() and not asset_path.is_symlink() and
@@ -696,12 +847,16 @@ def release_manifest(directory, output, *, channel=None, published_at=None,
     )
     doc = {
         "schemaVersion": 1,
-        "repository": REPOSITORY,
+        "repository": repository,
         "defaultChannel": "stable",
         "channels": {"stable": None, "preview": None},
     }
     if base_manifest is not None and base_manifest.is_file():
-        existing = validate_release_manifest(json.loads(base_manifest.read_text(encoding="utf-8")))
+        raw_existing = json.loads(base_manifest.read_text(encoding="utf-8"))
+        existing = validate_release_manifest(
+            normalize_legacy_manifest(raw_existing, repository=repository),
+            repository=repository,
+        )
         doc["defaultChannel"] = existing["defaultChannel"]
         doc["channels"]["stable"] = existing["channels"].get("stable")
         doc["channels"]["preview"] = existing["channels"].get("preview")
@@ -715,19 +870,19 @@ def release_manifest(directory, output, *, channel=None, published_at=None,
         "publishedAt": timestamp,
         "prerelease": target_channel == "preview",
         "unsignedNotice": True,
-        "sha256sumsUrl": f"https://github.com/{REPOSITORY}/releases/download/{tag}/{MANIFEST}",
+        "sha256sumsUrl": f"https://github.com/{repository}/releases/download/{tag}/{MANIFEST}",
         "standards": standards_metadata(root),
         "assets": [
             {
                 "name": name,
-                "url": f"https://github.com/{REPOSITORY}/releases/download/{tag}/{name}",
+                "url": f"https://github.com/{repository}/releases/download/{tag}/{name}",
                 "sha256": sha256(directory / name),
                 "sizeBytes": (directory / name).stat().st_size,
             }
             for name in asset_names
         ],
     }
-    validate_release_manifest(doc)
+    validate_release_manifest(doc, repository=repository)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
     return doc
@@ -737,7 +892,11 @@ def sync_release_manifest(output, *, base_manifest=None, releases_json=None,
                           asset_loader=None, repository=REPOSITORY):
     default_channel = "stable"
     if base_manifest is not None and base_manifest.is_file():
-        existing = validate_release_manifest(json.loads(base_manifest.read_text(encoding="utf-8")))
+        raw_existing = json.loads(base_manifest.read_text(encoding="utf-8"))
+        existing = validate_release_manifest(
+            normalize_legacy_manifest(raw_existing, repository=repository),
+            repository=repository,
+        )
         default_channel = existing["defaultChannel"]
     if releases_json is not None:
         releases = json.loads(releases_json.read_text(encoding="utf-8"))
@@ -749,7 +908,8 @@ def sync_release_manifest(output, *, base_manifest=None, releases_json=None,
         releases = json.loads(result.stdout)
     require(isinstance(releases, list), "Expected GitHub releases JSON array")
 
-    required_remote = REQUIRED | {MANIFEST, RELEASE_MANIFEST}
+    # Historical releases (v2.0.0, v2.0.1) carry DESKTOP_REQUIRED; unified releases also carry R_SDK_ASSET.
+    required_remote = DESKTOP_REQUIRED | {MANIFEST, RELEASE_MANIFEST}
     matched = {}
     for rel in releases:
         if not isinstance(rel, dict) or rel.get("draft") is not False:
@@ -762,7 +922,7 @@ def sync_release_manifest(output, *, base_manifest=None, releases_json=None,
             continue
         tag = rel.get("tag_name")
         assets = rel.get("assets")
-        if not isinstance(tag, str) or not tag or not isinstance(assets, list):
+        if not isinstance(tag, str) or not tag.startswith("v") or not isinstance(assets, list):
             continue
         asset_names = {a.get("name") for a in assets if isinstance(a, dict)}
         if not required_remote.issubset(asset_names):
@@ -785,13 +945,14 @@ def sync_release_manifest(output, *, base_manifest=None, releases_json=None,
                 run("gh", "release", "download", tag, "--repo", repository,
                     "--pattern", RELEASE_MANIFEST, "--dir", tmp)
                 raw = (Path(tmp) / RELEASE_MANIFEST).read_text(encoding="utf-8")
-        remote_doc = validate_release_manifest(json.loads(raw))
+        normalized_remote = normalize_legacy_manifest(json.loads(raw), repository=repository)
+        remote_doc = validate_release_manifest(normalized_remote, repository=repository)
         entry = remote_doc["channels"].get(channel_name)
         require(entry is not None and entry.get("tag") == tag,
                 f"Downloaded {RELEASE_MANIFEST} for {tag} is missing matching {channel_name} channel")
         doc["channels"][channel_name] = entry
 
-    validate_release_manifest(doc)
+    validate_release_manifest(doc, repository=repository)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8", newline="\n")
     return doc
@@ -800,13 +961,18 @@ def sync_release_manifest(output, *, base_manifest=None, releases_json=None,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("version")
-    commands.add_parser("source-tag")
-    commands.add_parser("metadata")
+    ver_cmd = commands.add_parser("version")
+    ver_cmd.add_argument("--scope", choices=SCOPES)
+    src_cmd = commands.add_parser("source-tag")
+    src_cmd.add_argument("--scope", choices=SCOPES)
+    meta_cmd = commands.add_parser("metadata")
+    meta_cmd.add_argument("--target", choices=("app", "r", "all"), default="app")
+    meta_cmd.add_argument("--scope", choices=SCOPES)
     toolchain = commands.add_parser("toolchain")
     toolchain.add_argument("--arch", choices=ARCHES, required=True)
     packaging = commands.add_parser("package")
-    packaging.add_argument("platform", choices=("windows", "macos", "linux"))
+    packaging.add_argument("platform", choices=("windows", "macos", "linux", "r"))
+    packaging.add_argument("--scope", choices=SCOPES)
     architecture = commands.add_parser("cpu")
     architecture.add_argument("path", type=Path)
     architecture.add_argument("--format", choices=("pe", "elf", "macho"), required=True)
@@ -825,6 +991,7 @@ def main():
     for command in ("manifest", "remote", "verify"):
         subparser = commands.add_parser(command)
         subparser.add_argument("path", type=Path)
+        subparser.add_argument("--scope", choices=SCOPES)
         if command == "remote":
             subparser.add_argument("--require-release-manifest", action="store_true")
         if command == "verify":
@@ -832,23 +999,27 @@ def main():
             subparser.add_argument("--release-manifest", type=Path)
     args = parser.parse_args()
     if args.command == "version":
-        full, _ = release_version()
+        resolved_scope = release_scope(args.scope)
+        full, numeric = release_version(resolved_scope)
         env_prerelease = os.environ.get("RELEASE_PRERELEASE", "").strip().lower() == "true"
         mode = infer_build_mode(full, prerelease=env_prerelease)
+        tag = f"r-v{full}" if resolved_scope == "r-only" else f"v{full}"
         with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-            output.write(f"version={full}\ntag=v{full}\nbuild_mode={mode}\n")
+            output.write(f"version={full}\ntag={tag}\nbuild_mode={mode}\n")
+            if args.scope is not None or "RELEASE_SCOPE" in os.environ:
+                output.write(f"numeric={numeric}\nscope={resolved_scope}\n")
     elif args.command == "toolchain":
         print(json.dumps(windows_toolchain(args.arch), sort_keys=True))
     elif args.command == "source-tag":
-        check_source_tag()
+        check_source_tag(args.scope)
     elif args.command == "metadata":
-        prepare_metadata(Path.cwd())
+        prepare_metadata(Path.cwd(), target=args.target, scope=args.scope)
     elif args.command == "package":
-        package(Path.cwd(), args.platform)
+        package(Path.cwd(), args.platform, scope=args.scope)
     elif args.command == "cpu":
         check_cpu(args.path, args.format, args.arch)
     elif args.command == "manifest":
-        manifest(args.path)
+        manifest(args.path, scope=args.scope)
     elif args.command == "release-manifest":
         release_manifest(
             args.path,
@@ -865,9 +1036,9 @@ def main():
             releases_json=args.releases_json,
         )
     elif args.command == "remote":
-        remote(args.path, require_release_manifest=args.require_release_manifest)
+        remote(args.path, require_release_manifest=args.require_release_manifest, scope=args.scope)
     else:
-        verify(args.path, args.manifest, release_manifest_path=args.release_manifest)
+        verify(args.path, args.manifest, release_manifest_path=args.release_manifest, scope=args.scope)
 
 
 if __name__ == "__main__":

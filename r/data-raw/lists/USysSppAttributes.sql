@@ -1,0 +1,33 @@
+CREATE TABLE "USysSppAttributes" (
+  "Flag" BOOLEAN DEFAULT FALSE,
+  "Code" TEXT,
+  "Climate" TEXT,
+  "Est_ASMR" TEXT,
+  "Est_SNR" TEXT,
+  "GSM" TEXT,
+  "Codetype" TEXT,
+  "Native" TEXT,
+  "Mult_life" TEXT,
+  "P_Organism" TEXT,
+  "Poison_Humans" TEXT,
+  "Poison_Livestock" TEXT,
+  "Poison_Wildlife" TEXT,
+  "P_Descriptor" TEXT,
+  "P_Mode" TEXT,
+  "P_Toxin" TEXT,
+  "P_Toxicity" TEXT,
+  "P_Season" TEXT,
+  "P_Parts" TEXT,
+  "P_Comments" TEXT,
+  "GBearSpring" TEXT,
+  "GBearSummer" TEXT,
+  "GBearFall" TEXT,
+  "Cow_Forage" TEXT,
+  "WeedStatus" TEXT,
+  "Wetland_Ind" TEXT,
+  "RedBlueList" TEXT,
+  "SRank" TEXT,
+  "ID" INTEGER
+);
+
+

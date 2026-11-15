@@ -3,9 +3,9 @@
 **System:** VPRO — Biogeoclimatic Ecosystem Classification (BEC) Plot & Classification Management Ecosystem  
 **Custodian / Domain Authority:** Province of British Columbia, Ministry of Forests (Will H. MacKenzie, Provincial BEC Research Ecologist)  
 **Legacy Architect (`1997–2023`):** Russell Klassen (`VENUSPro 97` $\rightarrow$ `VPro 64`, `vuser.ca`)  
-**Modernization Engineering (`2026`):** BooSTAO IT Consultancy Ltd. (`boostao/vpro_wails` & `boostao/vpro`, Contract `RE26OCF433`)  
-**Canonical Repository Path:** `okf/` (in-tree inside `boostao/vpro_wails`)  
-**Audit Baseline Date:** `2026-11-13` (`vpro_wails` `v2.0.1` @ `266921e` · `vpro` `v2.0.0` @ `fae33d2`)
+**Modernization Engineering (`2026`):** BooSTAO IT Consultancy Ltd. (`Boostao/vpro` unified monorepo — `app/` Desktop Workstation & `r/` Headless R Companion SDK, Contract `RE26OCF433`)  
+**Canonical Repository Path:** `okf/` (in-tree at root of `Boostao/vpro`)  
+**Audit Baseline Date:** `2026-11-14` (`Boostao/vpro` @ `98e214df` · Desktop `app/` `v2.0.1` · R SDK `r/` `v2.0.0` + Wave 6 Cloud `BECMaster`)
 
 ---
 
@@ -13,12 +13,12 @@
 
 **VPro** (*VENUS — Vegetation and Environment NexUS — Professional*) is British Columbia's foundational ecological informatics platform—analogous to **TurboVeg + JUICE** in European phytosociology—supporting the **Biogeoclimatic Ecosystem Classification (BEC)** program, Terrestrial Ecosystem Mapping (**TEM**), Site Index–BEC (**SIBEC**), Canadian High Arctic Research Station (**CHARS**) surveys, and climate-resilient forestry tools such as **CCISS** (`VProXP_Userguide.pdf` PDF pp. 13–21; `LMH25_2023_web.pdf` PDF pp. 4, 270–272; `RE26OCF433` Schedule A).
 
-Synthesizing forensic evidence across **200 remote distributions on `http://vuser.ca/` (`~1.14 GB`)**, **22 Microsoft Access `.accdb`/`.mdb`/`.accda` binaries** (including the **545 MB `BECMaster_fixing.accdb`** holding **71,567 plots** and **1,651,842 vegetation records**), **127 VBA modules & 108 Access forms**, **106 client emails**, **3 sequential versions of Contract `RE26OCF433` Schedule A**, Will MacKenzie's **20-page ink-coded `VPro2.0_Functions` triage**, **795 pages of `LMH25` & `VProXP` manuals**, **2026 `BECWeb` standards (`BECdb v13` & `BCPlantTaxonomy v19`)**, and **two modern codebases (`boostao/vpro_wails` & `boostao/vpro`)**, this in-tree knowledge framework establishes the definitive Past, Present, and Future technical record of VPro:
+Synthesizing forensic evidence across **200 remote distributions on `http://vuser.ca/` (`~1.14 GB`)**, **22 Microsoft Access `.accdb`/`.mdb`/`.accda` binaries** (including the **545 MB `BECMaster_fixing.accdb`** holding **71,567 plots** and **1,651,842 vegetation records**), **127 VBA modules & 108 Access forms**, **106 client emails**, **3 sequential versions of Contract `RE26OCF433` Schedule A**, Will MacKenzie's **20-page ink-coded `VPro2.0_Functions` triage**, **795 pages of `LMH25` & `VProXP` manuals**, **2026 `BECWeb` standards (`BECdb v13` & `BCPlantTaxonomy v19`)**, and the unified **`Boostao/vpro` monorepo (`app/` Desktop Workstation & `r/` Headless R Companion SDK)**, this in-tree knowledge framework establishes the definitive Past, Present, and Future technical record of VPro:
 
 1. **The Past (`1997–2023`):** Originating as **`VENUSPro 97`** on Access 97 (`OldVPro.docx`), VPro evolved through eight table-schema revisions (`VP01`–`VP08`) culminating in **VPro 64** (`2023-02-23`, `VPro64-23Feb2023.zip`). While its ecological domain model is battle-tested, the Access architecture reached terminal technical debt: 64-bit `Declare PtrSafe` stack/pointer truncation crashes (`V7mdlRibbonPictureBAS.txt:79`), dead 32-bit ActiveX controls (`comctl32.ocx`), non-transactional `DELETE *` SQL, live Excel session hijacking (`<= 250`-column cap), single-user `QueryDef` mutation, 11 confirmed VBA/schema bugs, and Access's hard 2.0 GB file ceiling ([Legacy Architecture](./01_history_and_evolution/legacy_architecture.md)).
-2. **The Present (`2026` — `v2.0.1` Desktop Workstation & `v2.0.0` Companion R SDK):** Under Contract `RE26OCF433`, VPro operates over a **canonical 7-database SQLite (`VP08`, `WAL` mode) + `config.yml` contract** served by two synchronized, production-qualified tracks ([System Architecture](./02_present_state/system_architecture.md)):
-   * **`boostao/vpro_wails` (`v2.0.1` @ `266921e`):** Cross-platform desktop workstation (**Go `1.25+` + Wails `v3.0.0-beta.26` + Svelte `5.46.4` + CGO SQLite `WAL` + vendored C `libmdb` on Windows/macOS/Linux**) organized into a **4-layer acyclic `internal/*` DAG (`12` registered Wails domain services, `24` active views, default-ON `stable` release channel)**. Ships bundled **2026 `BECdb v13` (`8,900` site series), `BCPlantTaxonomy v19` (`16,728` taxa), and `LMH25 (2023)`** catalogues; paper-faithful FS882/2-Page/SIVI editors (with inline CHARS shrub-layer toggle and Red over-builds pruned); **Universal Datasheet Grid**; virtualized **Dual-Pane `SU/Hierarchy` Explorer**; full **Project Lifecycle & 3-Way Merge** (`New`, `SaveAs`, `Splinter`, `Compare`, `Merge`, `OptimizeVeg`, batch `USysTableOfLists` compliance gate, and streaming `545 MB` `BECMaster` import with orphan-row quarantine); **`Combine Species`** (`*_Lump` CRUD + declarative `LumpSpec`); in-app **3D MapLibre GL JS v6 + WebGPU + offline `PMTiles`** geospatial workbench (`Auto-1`); live **`LMH25` pedon/`rSMR`/`rSNR` rules (`Auto-2`)** & auto-derived `ProjectMetadata` (`Auto-6`); reactive **BEC Diagnostic & Pairwise Synthesis (`Auto-3`)**; out-of-process **R Sidecar (`Auto-7`: `climr -> aSMR`, `vegclust`, Quarto HTML/PDF guides)**; complete **Interchange Hub** (`VENUS 5.0`, official **`TurboVeg 3` 31-table SQLite & `Plot_package` XML**, OGC `GeoPackage`, R `.rds`, Long/Wide CSV, `User Species`, KML, Label PDF); **100% offline `F1` `LMH25` help + 4 spotlight tours**; and the **BC Gov Design System static-manifest release portal** ([Capability Matrix](./02_present_state/capability_matrix.md)).
-   * **`boostao/vpro` (`v2.0.0` @ `fae33d2`):** Clean-slate **headless R companion SDK (`21` `R/*.R` files, `R >= 4.4.0`, zero-note `R CMD check`, qualified against 71,567-plot `BECMaster`)** providing concurrent SQLite WAL read access alongside the desktop app, `BCPlantTaxonomy v19` & `BECdb v13` harmonization, community matrices, multivariate BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedological validation, `climr` normals & Ministry `CMD -> aSMR` modelling, dual edatopic grids, BEC diagnostic synthesis, guarded candidate `*_SU` write-back, 4 scientist vignettes, and BC Gov Quarto BEC guides.
+2. **The Present (`2026` — Unified `Boostao/vpro` Monorepo: `app/` Desktop `v2.0.1` & `r/` R SDK `v2.0.0`):** Under Contract `RE26OCF433`, VPro operates inside the unified **`Boostao/vpro`** repository over a **canonical 7-database SQLite (`VP08`, `WAL` mode) + `config.yml` + PostgreSQL `BECMaster` contract** served by two synchronized, production-qualified tracks ([System Architecture](./02_present_state/system_architecture.md)):
+   * **VPro Desktop Workstation — `app/` (`github.com/boostao/vpro/app`, `v2.0.1`):** Cross-platform desktop workstation (**Go `1.25+` + Wails `v3.0.0-beta.26` + Svelte `5.46.4` + CGO SQLite `WAL` + vendored C `libmdb` on Windows/macOS/Linux**) organized into a **4-layer acyclic `app/internal/*` DAG (`12` registered Wails domain services, `24` active views, default-ON `stable` release channel)**. Ships bundled **2026 `BECdb v13` (`8,900` site series), `BCPlantTaxonomy v19` (`16,728` taxa), and `LMH25 (2023)`** catalogues; paper-faithful FS882/2-Page/SIVI editors (with inline CHARS shrub-layer toggle and Red over-builds pruned); **Universal Datasheet Grid**; virtualized **Dual-Pane `SU/Hierarchy` Explorer**; full **Project Lifecycle & 3-Way Merge** (`New`, `SaveAs`, `Splinter`, `Compare`, `Merge`, `OptimizeVeg`, batch `USysTableOfLists` compliance gate, and streaming `545 MB` `BECMaster` import with orphan-row quarantine); **`Combine Species`** (`*_Lump` CRUD + declarative `LumpSpec`); in-app **3D MapLibre GL JS v6 + WebGPU + offline `PMTiles`** geospatial workbench (`Auto-1`); live **`LMH25` pedon/`rSMR`/`rSNR` rules (`Auto-2`)** & auto-derived `ProjectMetadata` (`Auto-6`); reactive **BEC Diagnostic & Pairwise Synthesis (`Auto-3`)**; out-of-process **R Sidecar (`Auto-7`: `climr -> aSMR`, `vegclust`, Quarto HTML/PDF guides)**; PostgreSQL **`BECMaster` Cloud Sync (`app/internal/cloudsync`)**; complete **Interchange Hub** (`VENUS 5.0`, official **`TurboVeg 3` 31-table SQLite & `Plot_package` XML**, OGC `GeoPackage`, R `.rds`, Long/Wide CSV, `User Species`, KML, Label PDF); **100% offline `F1` `LMH25` help + 4 spotlight tours** (`docs-src/`); and the **BC Gov Design System static-manifest release portal** (`site/`) ([Capability Matrix](./02_present_state/capability_matrix.md), [Desktop Engineering Playbook](./05_engineering_and_agents/desktop_app_engineering.md)).
+   * **Headless R Companion SDK — `r/` (`vpro` `v2.0.0`):** Clean-slate **headless R companion SDK (`25` `r/R/*.R` files, `R >= 4.4.0`, zero Shiny/widgets, zero-note `R CMD check`, qualified against 71,567-plot `BECMaster`)** providing concurrent SQLite WAL read access alongside `app/`, `BCPlantTaxonomy v19` & `BECdb v13` harmonization, community matrices, multivariate BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedological validation, `climr` normals & Ministry `CMD -> aSMR` modelling, dual edatopic grids, BEC diagnostic synthesis, guarded candidate `*_SU` write-back, Wave 6 PostgreSQL **`BECMaster` cloud sync/staging/snapshots** (`r/R/cloud_*.R`), 5 scientist vignettes, and BC Gov Quarto BEC guides ([R SDK Engineering Playbook](./05_engineering_and_agents/r_sdk_engineering.md)).
 3. **The Future (`2026–2027` Phase 2 Cloud & Field Roadmap):** Extend the completed local workstation and R SDK into the multi-user **Cloud `BECMaster` PostgreSQL/PostGIS** stewardship tier (IDIR/BCeID OIDC accreditation, staging submission queue, tamper-evident audit ledger, download logging, and public Shiny/Quarto **`BECWeb 2.0`** map & guide portal per `Schedule A 1–2, 6`), add optional enterprise OV/EV Authenticode & Apple Developer ID code signing, deliver offline **Field Tablet PWA + confidence-scored HITL Field Card HTR/OCR** (`Outcome 6`), and evaluate Phase 2 companion modules (`VTrees` Mensuration/Kozak taper, CWD, WHA, Herbarium, Colour-Theme, Hierarchy Diagram) ([Target Stack Recommendation](./03_future_architecture/target_stack_recommendation.md)).
 
 ---
@@ -34,11 +34,11 @@ flowchart TB
         P1 --> P2 --> P3
     end
 
-    subgraph Present["02. PRESENT (2026): Production Desktop v2.0.1 + R SDK v2.0.0"]
-        C1["boostao/vpro_wails v2.0.1 (Go 1.25 · Wails v3 · Svelte 5)<br/>4-Layer DAG · 12 Domain Services · 24 Views · SQLite WAL<br/>Datasheet Grid · Dual-Pane Tree · 3D MapLibre v6 + PMTiles ·<br/>3-Way Merge · Diagnostics · VENUS 5 · TurboVeg 3 SQLite+XML · .gpkg"]
-        C2["boostao/vpro v2.0.0 (Headless R Companion SDK)<br/>Concurrent WAL Reads · BEC Clustering · climr -> aSMR ·<br/>Dual Edatopic Grids · Guarded *_SU Write-Back · Quarto Guides"]
-        C3["Delivery & Onboarding<br/>2026 BECdb v13 + BCPlantTaxa v19 + LMH25 (2023) ·<br/>Offline F1 Help & 4 Tours · BC Gov Portal (Win/macOS/Linux)"]
-        C1 <-->|"Shared 7-DB VP08 WAL + R Sidecar"| C2
+    subgraph Present["02. PRESENT (2026): Unified Boostao/vpro Monorepo (app/ v2.0.1 + r/ v2.0.0)"]
+        C1["app/ — VPro Desktop v2.0.1 (Go 1.25 · Wails v3 · Svelte 5)<br/>4-Layer DAG · 12 Domain Services · 24 Views · SQLite WAL<br/>Datasheet Grid · Dual-Pane Tree · 3D MapLibre v6 + PMTiles ·<br/>3-Way Merge · Cloud Sync · Diagnostics · TurboVeg 3 + .gpkg"]
+        C2["r/ — Headless vpro R SDK v2.0.0 (R >= 4.4 · Zero Shiny)<br/>Concurrent WAL Reads · BEC Clustering · climr -> aSMR ·<br/>Dual Edatopic Grids · Cloud BECMaster · Quarto Guides"]
+        C3["Delivery & Onboarding (docs-src/ · site/)<br/>2026 BECdb v13 + BCPlantTaxa v19 + LMH25 (2023) ·<br/>Offline F1 Help & 4 Tours · BC Gov Portal + /r/ pkgdown"]
+        C1 <-->|"Shared 7-DB VP08 WAL + R Sidecar + PG BECMaster"| C2
         C1 --> C3
     end
 
@@ -62,15 +62,25 @@ flowchart TB
 okf/
 ├── 00_index.md                         # Master manifest, domain taxonomy, and executive summary (this file)
 ├── 01_history_and_evolution/
-│   ├── version_matrix.md               # 1997–2026 release lineage (VENUSPro 97 -> VPro 64 -> vpro_wails)
+│   ├── version_matrix.md               # 1997–2026 release lineage (VENUSPro 97 -> VPro 64 -> Boostao/vpro)
 │   ├── legacy_architecture.md          # Access/DAO/VBA/COM architecture, 22 DBs, x64 bugs & 11 confirmed defects
 │   └── site_archive_manifest.md        # Cryptographic inventory of vuser.ca (35 URLs, 200 files) & local matches
 ├── 02_present_state/
 │   ├── domain_model.md                 # BEC domain invariants, LMH25 (2015 vs 2023) cards & 3 core personas
 │   ├── core_workflows.md               # Session context, Access import, entry, QA, profiling & reporting flows
-│   ├── system_architecture.md          # Go 1.25, Wails v3, dual-conn SQLite, CGO libmdb, Svelte 5 & headless R
-│   ├── capability_matrix.md            # 4-way parity audit: VPro64 vs Client Triage/RE26OCF433 vs vpro vs vpro_wails
-│   └── data_dictionary.md              # VP08 8-table schema, SU/Hierarchy/Lump, VLists, views & __VPRO_* tables
+│   ├── system_architecture.md          # Unified Boostao/vpro: app/ (Go/Wails/Svelte 5) & r/ (headless vpro SDK)
+│   ├── capability_matrix.md            # 4-way parity audit: VPro64 vs Client Triage/RE26OCF433 vs r/ vs app/
+│   ├── data_dictionary.md              # VP08 8-table schema, SU/Hierarchy/Lump, VLists, views & __VPRO_* tables
+│   └── oracles/                        # 9 empirical Access DAO & BEC math/validation oracle specifications
+│       ├── COORDINATE_CONVERSIONS.md
+│       ├── DIAGNOSTIC_CLASSIFICATION.md
+│       ├── ENVIRONMENT_CODE_VALIDATION.md
+│       ├── REPORT_QUALITY_FILTER.md
+│       ├── SHORT_VEG_LAYER_MAPPING_DESIGN.md
+│       ├── SHORT_VEG_LAYER_STRATA_ORACLE.md
+│       ├── VALUE_CONVERSIONS.md
+│       ├── VEGETATION_CODE_VALIDATION.md
+│       └── VEGETATION_OPTIMIZATION_POLICY.md
 ├── 03_future_architecture/
 │   ├── transition_and_adoption.md                  # Zero-friction UX continuity, datasheet grid, tree explorer & rollout plan
 │   ├── next_gen_entry_ocr.md                       # Offline PWA + FS882/FS1333 HTR/OCR lexicon solver & HITL review pipeline
@@ -78,30 +88,36 @@ okf/
 │   ├── target_stack_recommendation.md              # Stack trade-offs, federated Wails + R/Cloud rationale & service consolidation
 │   ├── intelligent_automation_and_abstractions.md  # 7 implementation-ready domain automations (LMH25 keys, live Diagnostics, 3-way merge)
 │   └── documentation_help_and_release_portal.md    # Offline F1 LMH25 help, guided tours & BC Gov Design System release portal
-└── 04_evidence_and_sources/
-    ├── citations_index.md              # Direct mapping to contracts, 106 emails, manuals, vuser.ca & code lines
-    └── decisions_and_gaps.md           # 11 unresolved domain/contract/technical decisions requiring client sign-off
+├── 04_evidence_and_sources/
+│   ├── citations_index.md              # Direct mapping to contracts, 106 emails, manuals, vuser.ca & code lines
+│   └── decisions_and_gaps.md           # 11 unresolved domain/contract/technical decisions requiring client sign-off
+└── 05_engineering_and_agents/
+    ├── desktop_app_engineering.md      # Deep Go/Wails v3/Svelte 5/CGO/COM/SQLite WAL/cloudsync engineering playbook (app/)
+    └── r_sdk_engineering.md            # Deep headless R SDK/SQLite WAL/Access calibration/BECMaster cloud playbook (r/)
 ```
 
 | Module | Document Link | Core Contents & Key Takeaways |
 |---|---|---|
-| **`00`** | **[Master Index](./00_index.md)** | Executive synthesis, BEC domain glossary/taxonomy, and cross-repository navigation. |
+| **`00`** | **[Master Index](./00_index.md)** | Executive synthesis, BEC domain glossary/taxonomy, and cross-monorepo navigation. |
 | **`01.1`** | **[Version Matrix](./01_history_and_evolution/version_matrix.md)** | `VENUSPro 97` discovery, single `2009-06-22` `.accdb` lineage, all 37 `vuser.ca` VPro builds, deprecated vs. persistent features. |
 | **`01.2`** | **[Legacy Architecture](./01_history_and_evolution/legacy_architecture.md)** | Hub-and-spoke `acLink` + rewritten `QueryDefs`, BEC diagnostic math, `VTrees` Kozak taper, x64 `PtrSafe` stack corruption, 11 active bugs. |
 | **`01.3`** | **[Site Archive Manifest](./01_history_and_evolution/site_archive_manifest.md)** | Complete crawl of `http://vuser.ca/` (`120` `/vpro*` + `80` companion files = `200` files, hidden `/vpro/` archive) & SHA-256 local matches. |
 | **`02.1`** | **[Domain Model](./02_present_state/domain_model.md)** | Field Crew, BEC Ecologist/Custodian, and Climate Scientist personas; `LMH25` `2015` vs. `2023` edition diff; 7 domain invariants. |
 | **`02.2`** | **[Core Workflows](./02_present_state/core_workflows.md)** | Mermaid sequence/flow diagrams for Access import, `Enter`-key/datasheet entry, 3-way merge, reactive Diagnostics, 3D GIS, and interchange. |
-| **`02.3`** | **[System Architecture](./02_present_state/system_architecture.md)** | Deep dive into `vpro_wails` (`4`-layer DAG, `12` Wails services, `SQLiteContext` WAL, `libmdb` CGO, Svelte 5, R sidecar) and `vpro` `v2.0.0` SDK. |
-| **`02.4`** | **[Capability Matrix](./02_present_state/capability_matrix.md)** | Exhaustive parity table auditing every VPro 64 ribbon/dialog control against `VPro2.0_Functions` ink marks, `RE26OCF433`, `vpro` `v2.0.0`, and `vpro_wails` `v2.0.1`. |
+| **`02.3`** | **[System Architecture](./02_present_state/system_architecture.md)** | Deep dive into `Boostao/vpro`: `app/` (`4`-layer DAG, `12` Wails services, `SQLiteContext` WAL, `libmdb` CGO, Svelte 5, R sidecar) and `r/` `vpro` SDK. |
+| **`02.4`** | **[Capability Matrix](./02_present_state/capability_matrix.md)** | Exhaustive parity table auditing every VPro 64 ribbon/dialog control against `VPro2.0_Functions` ink marks, `RE26OCF433`, `r/` `v2.0.0`, and `app/` `v2.0.1`. |
 | **`02.5`** | **[Data Dictionary](./02_present_state/data_dictionary.md)** | Complete ER diagram and column-level specification for all 8 `VP08` project tables, 2026 `BECdb v13` / `BCPlantTaxonomy v19` catalogues & `__VPRO_*`. |
+| **`02.6`** | **Empirical Access & BEC Oracles (`02_present_state/oracles/`)** | 9 disposable-VM DAO & domain calibration specs: [Coordinate Conversions](./02_present_state/oracles/COORDINATE_CONVERSIONS.md) · [Diagnostic Classification](./02_present_state/oracles/DIAGNOSTIC_CLASSIFICATION.md) · [Env Code Validation](./02_present_state/oracles/ENVIRONMENT_CODE_VALIDATION.md) · [Report Quality Filter](./02_present_state/oracles/REPORT_QUALITY_FILTER.md) · [Short-Veg Layer Mapping](./02_present_state/oracles/SHORT_VEG_LAYER_MAPPING_DESIGN.md) · [Short-Veg Strata Oracle](./02_present_state/oracles/SHORT_VEG_LAYER_STRATA_ORACLE.md) · [Value Conversions](./02_present_state/oracles/VALUE_CONVERSIONS.md) · [Veg Code Validation](./02_present_state/oracles/VEGETATION_CODE_VALIDATION.md) · [Veg Optimization Policy](./02_present_state/oracles/VEGETATION_OPTIMIZATION_POLICY.md). |
 | **`03.1`** | **[Transition & Adoption](./03_future_architecture/transition_and_adoption.md)** | UX continuity rules (datasheet grid, dual-pane tree, inline CHARS), 545 MB `BECMaster` qualification, and desktop-to-cloud rollout roadmap. |
 | **`03.2`** | **[Next-Gen Entry & OCR](./03_future_architecture/next_gen_entry_ocr.md)** | Forensic clarification of Outcome 6, Rite-in-the-Rain HTR/VLM feasibility, `USysAllSpecs` lexicon solver, horizon/substrate constraints & HITL UI. |
 | **`03.3`** | **[Analytics & Governance](./03_future_architecture/analytics_and_governance.md)** | In-app MapLibre v6 + WebGPU + `PMTiles` GIS, Cloud `BECMaster` Postgres + OIDC RBAC, `GeoPackage`, official `TurboVeg 3` SQLite + XML, `.rds`, and `climr`. |
-| **`03.4`** | **[Target Stack Recommendation](./03_future_architecture/target_stack_recommendation.md)** | Federated Go/Wails/Svelte 5 desktop + headless `vpro` R sidecar + Cloud Postgres/Shiny/Quarto rationale & completed `86 -> 12` service consolidation. |
+| **`03.4`** | **[Target Stack Recommendation](./03_future_architecture/target_stack_recommendation.md)** | Federated Go/Wails/Svelte 5 desktop (`app/`) + headless `vpro` R SDK (`r/`) + Cloud Postgres/Shiny/Quarto rationale & `86 -> 12` service consolidation. |
 | **`03.5`** | **[Automations & Abstractions](./03_future_architecture/intelligent_automation_and_abstractions.md)** | Architecture & implementation record for `Auto-1`..`Auto-7` (`.pmtiles` auto-stamp, `LMH25` rules, live Diagnostics, 3-way merge, `LumpSpec`, metadata, R sidecar). |
-| **`03.6`** | **[Docs, Help & Release Portal](./03_future_architecture/documentation_help_and_release_portal.md)** | Single-source `docs-src/` offline `F1` `LMH25` help, 4 spotlight tours, static `release-manifest.json` BC Gov Design System portal (`v2.0.1`) & signing roadmap. |
-| **`04.1`** | **[Citations Index](./04_evidence_and_sources/citations_index.md)** | Master lookup mapping claims to exact contracts, emails, PDF pages, Access modules/lines, `vuser.ca` SHA-256s, and Go/Svelte/R files. |
+| **`03.6`** | **[Docs, Help & Release Portal](./03_future_architecture/documentation_help_and_release_portal.md)** | Single-source `docs-src/` offline `F1` `LMH25` help, 4 spotlight tours, static `release-manifest.json` BC Gov Design System portal (`site/`) & signing roadmap. |
+| **`04.1`** | **[Citations Index](./04_evidence_and_sources/citations_index.md)** | Master lookup mapping claims to exact contracts, emails, PDF pages, Access modules/lines, `vuser.ca` SHA-256s, and `app/` / `r/` files. |
 | **`04.2`** | **[Decisions & Gaps](./04_evidence_and_sources/decisions_and_gaps.md)** | Updated decision & resolution register (`D-01`–`D-11`) tracking resolved desktop engineering items and remaining client/cloud governance sign-offs. |
+| **`05.1`** | **[Desktop App Engineering Playbook](./05_engineering_and_agents/desktop_app_engineering.md)** | Complete Go `github.com/boostao/vpro/app` 4-layer DAG, 12 Wails services, CGO/GTK/COM/chunked IPC/Excelize/Svelte 5 `$state.snapshot` & `cloudsync` invariants. |
+| **`05.2`** | **[Headless R SDK Engineering Playbook](./05_engineering_and_agents/r_sdk_engineering.md)** | Complete `r/` zero-Shiny boundary, SQLite WAL RO/write-back guards, Access/BEC oracle calibration, Wave 6 Cloud `BECMaster`, `air`, and tarball `R CMD check` gates. |
 
 ---
 
