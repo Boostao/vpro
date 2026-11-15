@@ -568,7 +568,7 @@
 #' Compute BEC differential and diagnostic vegetation synthesis
 #'
 #' Vectorised R counterpart to legacy `V7mdlDiagnostic` (`Diagnostic10.xla`) and
-#' `vpro_wails/internal/diagnostics`. Aggregates plot-level vegetation across
+#' VPro Desktop (`app/internal/diagnostics`). Aggregates plot-level vegetation across
 #' `SiteUnit`s (or `~` tilde `BreakpointUnit`s when `hierarchy_breaks = TRUE`),
 #' applying IEEE-754 `float32` cover narrowing and VPro's `99%` per-layer cap on
 #' lumped taxa, then computes Presence (`I..V` / `1..5`), Domin-Krajina
@@ -842,7 +842,7 @@ vpro_diagnostics <- function(
     cell_bec_mat[s_i, ] <- bec_res$cell_diagnosis
   }
 
-  # Order species matching vpro_wails/internal/diagnostics/engine.go:
+  # Order species matching app/internal/diagnostics/engine.go:
   # diagnostic units first (in ordered_units order), then non-diagnostic, by stratum -> lifeform -> constancy -> cover
   has_diag <- !is.na(diag_unit) & nzchar(diag_unit)
   diag_u_rank <- ifelse(has_diag, match(diag_unit, ordered_units), n_u + 1L)

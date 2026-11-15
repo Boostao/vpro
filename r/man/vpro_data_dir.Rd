@@ -2,7 +2,7 @@
 % Please edit documentation in R/workspace.R
 \name{vpro_data_dir}
 \alias{vpro_data_dir}
-\title{Locate the \code{vpro_wails} user data directory}
+\title{Locate the \code{VPro} desktop user data directory}
 \usage{
 vpro_data_dir()
 }
@@ -10,7 +10,7 @@ vpro_data_dir()
 Normalized path string (\code{/} separators).
 }
 \description{
-Matches \code{UserDataDir()} in \code{vpro_wails} (\code{internal/sqlutil/sqlutil_foundation.go})
+Matches \code{UserDataDir()} in \verb{VPro Desktop} (\code{app/internal/sqlutil/sqlutil_foundation.go})
 byte-for-byte across Windows (\verb{\%LOCALAPPDATA\%/vpro}), macOS
 (\verb{~/Library/Application Support/vpro}), and Linux (\verb{$XDG_DATA_HOME/vpro} or
 \verb{~/.local/share/vpro}), honoring \code{getOption("vpro.data_dir")} and

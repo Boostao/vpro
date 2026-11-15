@@ -6,7 +6,7 @@
 
 ## 1. Historical Deficit Audit & `v2.0.1` Resolution Summary
 
-Cross-examining legacy `VPro64` documentation assets against the October 2026 `vpro_wails` baseline (`51d29cf`) identified two user-facing delivery gaps—**both now remediated in Wave 5 (`2928fd7`, `8182ee7`, `aa99f9e`, `56d4062`)**:
+Cross-examining legacy `VPro64` documentation assets against the October 2026 `VPro Desktop` (`app/`) baseline (`51d29cf`) identified two user-facing delivery gaps—**both now remediated in Wave 5 (`2928fd7`, `8182ee7`, `aa99f9e`, `56d4062`)**:
 
 ### 1.1 Pre-Wave 5 In-App Help Deficit $\rightarrow$ Resolved in `HelpService` (`8182ee7`)
 * **Legacy Baseline (`VPro64`):** Shipped compiled offline HTML Help (`VPro.chm`), **26 task-specific PDF/DOCX guides** (`VPro64/Helpfiles/`), `F12` contextual help (`Macros/AutoKeys.txt`), inline `LMH25` code legends on data-entry tabs (`Veg Other`), `About VPro` (`USysAbout`), and a 48-entry startup `What's New` log (`tblWhatsNew`).
@@ -39,7 +39,7 @@ flowchart LR
         WebOut["Static Public Docs & Release Portal (_site/)<br/>+ Quarto BECWeb 2.0 Hub (Schedule A 6)"]
     end
 
-    subgraph AppUX["vpro_wails Offline Desktop UX (Svelte 5)"]
+    subgraph AppUX["VPro Desktop (app/) Offline UX (Svelte 5)"]
         F1["Contextual F1 Slide-Over Drawer<br/>Auto-jumps to focused FS882/SIVI field's<br/>LMH25 (2023) definition, codes & soil/SMR key"]
         Tours["Interactive Step-by-Step Guided Tours<br/>Non-destructive spotlight walkthroughs on Sample.db"]
         About["Help Menu Suite (Navigation.svelte)<br/>• Searchable User Guide (F1) · Shortcuts (?)<br/>• What's New · About & VLists/BECdb Stamps"]

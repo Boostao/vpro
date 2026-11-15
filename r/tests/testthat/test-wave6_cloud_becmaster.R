@@ -260,7 +260,7 @@ test_that("compact .rds snapshots preserve '00337', Access booleans, float32 cov
   expect_equal(diag_rds$units, diag_sql$units)
   expect_equal(nrow(diag_rds$matrix), nrow(diag_sql$matrix))
 
-  # Verify vpro_wails ExportProjectRDS `veg_long` bundle format also loads cleanly
+  # Verify VPro Desktop ExportProjectRDS `veg_long` bundle format also loads cleanly
   wails_rds <- file.path(tmp_dir, "WailsVegLong.rds")
   saveRDS(
     list(

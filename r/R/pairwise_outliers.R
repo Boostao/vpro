@@ -59,7 +59,7 @@
 #' Compute BEC diagnostic-potential pairwise unit similarity
 #'
 #' Implements the B.C. Ministry of Forests BEC pairwise unit comparison
-#' algorithm (`_do_pairwise.R` and `vpro_wails/internal/diagnostics`), combining
+#' algorithm (`_do_pairwise.R` and VPro Desktop `app/internal/diagnostics`), combining
 #' quantitative Sørensen / Bray-Curtis unit similarity with BEC constancy (`d`)
 #' and abundance (`dd`) differential points and shared diagnostic potential.
 #'

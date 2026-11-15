@@ -8,8 +8,8 @@
 
 Following the October–November 2026 architectural qualification and November 2026 monorepo unification (`VproMailExchange` `0017`, `2026-10-02`; `archive/oct2026-parity-ledgers/CLIENT_SCOPE.md`; `98e214df`), VPro's production codebase lives in the unified **`Boostao/vpro`** monorepo as **two complementary, schema-compatible tracks** sharing an identical 7-database SQLite (`WAL` mode) family, `config.yml`, and PostgreSQL `BECMaster` contract:
 
-1. **Primary Interactive Desktop Track — `app/` (`github.com/boostao/vpro/app`, `v2.0.1`):** Cross-platform desktop workstation built on **Go `1.25.0`** (CI built with Go `1.26`), **Wails v3 (`v3.0.0-beta.26`)**, **Svelte 5 (`^5.46.4`, Runes mode)**, **MapLibre GL JS (`^6.18.0`) + `deck.gl` (`^9.4.1`) / `luma.gl` WebGPU + `pmtiles` (`^4.5.0`)**, **Tailwind CSS v4 (`^4.3.3`)**, **CGO SQLite (`github.com/mattn/go-sqlite3` `v1.14.52`, `-tags sqliteonly` default)**, **`pgx/v5`** (`app/internal/cloudsync`), and an embedded C amalgamation of **`mdbtools` `1.0.1` (`libmdb`)** compiled across `windows`, `linux`, and `darwin` (`app/go.mod:1-15`, `app/frontend/package.json:63-91`, `app/internal/accessreader/reader.go:1-16`).
-2. **Headless R Statistical & Companion SDK Track — `r/` (`vpro` `v2.0.0` + Wave 6 Cloud `BECMaster`):** Clean-slate companion R package (`25` `r/R/*.R` files, `R >= 4.4.0`, zero Shiny/widgets, zero-note `R CMD check`, qualified on 71,567-plot `BECMaster`) executing concurrent read-only SQLite WAL queries alongside `app/` via `RSQLite`/`data.table`/optional `duckdb`, providing community matrices, multivariate BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedon validation, `climr` normals & Ministry `aSMR` modelling, dual edatopic grids, BEC diagnostics, guarded candidate `*_SU` write-back, PostgreSQL `BECMaster` cloud sync/staging/snapshots (`r/R/cloud_*.R`), and Quarto BEC ecosystem guides (`r/DESCRIPTION:1-45`).
+1. **Primary Interactive Desktop Track — `app/` (`github.com/boostao/vpro/app`, `v2.0.1`):** Cross-platform desktop workstation built on **Go `1.27.0`**, **Wails v3 (`v3.1.0`)**, **Svelte 5 (`^5.57.3`, Runes mode)**, **MapLibre GL JS (`^6.18.0`) + `deck.gl` (`^9.4.1`) / `luma.gl` WebGPU + `pmtiles` (`^4.5.0`)**, **Tailwind CSS v4 (`^4.3.5`)**, **CGO SQLite (`github.com/mattn/go-sqlite3` `v1.14.53`, `-tags sqliteonly` default)**, **`pgx/v5` (`v5.13.0`)** (`app/internal/cloudsync`), and an embedded C amalgamation of **`mdbtools` `1.0.1` (`libmdb`)** compiled across `windows`, `linux`, and `darwin` (`app/go.mod`, `app/frontend/package.json`, `app/internal/accessreader/reader.go`).
+2. **Headless R Statistical & Companion SDK Track — `r/` (`vpro` `v2.0.0` + Wave 6 Cloud `BECMaster`):** Clean-slate companion R package (`43` `r/R/*.R` files, `R >= 4.4.0`, zero Shiny/widgets, zero-note `R CMD check`, qualified on 71,567-plot `BECMaster`) executing concurrent read-only SQLite WAL queries alongside `app/` via `RSQLite`/`data.table`/optional `duckdb`, providing community matrices, multivariate BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedon validation, `climr` normals & Ministry `aSMR` modelling, dual edatopic grids, BEC diagnostics, guarded candidate `*_SU` write-back, PostgreSQL `BECMaster` cloud sync/staging/snapshots (`r/R/cloud_*.R`), and Quarto BEC ecosystem guides (`r/DESCRIPTION`).
 
 ```mermaid
 flowchart TB
@@ -56,17 +56,17 @@ flowchart TB
 
 | Architectural Layer | Component / Module | Exact Version | Source Evidence |
 |---|---|---|---|
-| **Backend Language** | Go (`github.com/boostao/vpro/app`, `CGO_ENABLED=1`, `-tags sqliteonly` default) | `go 1.25.0` (`1.26` in CI) | `app/go.mod:1-3`, `.github/workflows/release.yml` |
-| **Desktop Shell & IPC** | Wails v3 (`github.com/wailsapp/wails/v3` + `@wailsio/runtime`, `wails3 generate bindings -ts -i`) | `v3.0.0-beta.26` | `app/go.mod:10`, `app/frontend/package.json:74` |
-| **Primary SQL Engine** | CGO SQLite3 (`github.com/mattn/go-sqlite3`, `PRAGMA journal_mode = WAL`) | `v1.14.52` | `app/go.mod:9`, `app/internal/vprocore/sqlitecontext.go` |
-| **Cloud `BECMaster` Driver** | Pure-Go PostgreSQL (`github.com/jackc/pgx/v5`, `pgxpool`, `CopyFrom`, `Batch`) | `v5` | `app/go.mod`, `app/internal/cloudsync/` |
-| **Optional Analytical Engine** | CGO DuckDB (`github.com/duckdb/duckdb-go/v2`, omitted in standard `-tags sqliteonly` desktop builds) | `v2.10505.0` | `app/go.mod:6`, `app/build/windows/Taskfile.yml` |
+| **Backend Language** | Go (`github.com/boostao/vpro/app`, `CGO_ENABLED=1`, `-tags sqliteonly` default) | `go 1.27.0` | `app/go.mod`, `.github/workflows/release.yml` |
+| **Desktop Shell & IPC** | Wails v3 (`github.com/wailsapp/wails/v3` + `@wailsio/runtime`, `wails3 generate bindings -ts -i`) | `v3.1.0` | `app/go.mod`, `app/frontend/package.json` |
+| **Primary SQL Engine** | CGO SQLite3 (`github.com/mattn/go-sqlite3`, `PRAGMA journal_mode = WAL`) | `v1.14.53` | `app/go.mod`, `app/internal/vprocore/sqlitecontext.go` |
+| **Cloud `BECMaster` Driver** | Pure-Go PostgreSQL (`github.com/jackc/pgx/v5`, `pgxpool`, `CopyFrom`, `Batch`) | `v5.13.0` | `app/go.mod`, `app/internal/cloudsync/` |
+| **Optional Analytical Engine** | CGO DuckDB (`github.com/duckdb/duckdb-go/v2`, omitted in standard `-tags sqliteonly` desktop builds) | `v2.20000.0` | `app/go.mod`, `app/build/windows/Taskfile.yml` |
 | **Access Binary Reader** | Internal CGO `accessreader` wrapping vendored `mdbtools` (`libmdb`) on `linux \|\| windows \|\| darwin` | `1.0.1` (`-fvisibility=hidden`, Win `-static`) | `internal/accessreader/reader.go:1-16` |
-| **Windows Native Shell/COM** | `github.com/go-ole/go-ole` (`IFileDialog` / `IShellItem` COM syscalls, balanced STA) | `v1.3.0` | `app/go.mod:7`, `app/internal/pictures/` |
-| **Document & Interchange** | `excelize/v2` (`.xlsx`), `go-pdf/fpdf` + `LiberationSans` (`.pdf`), `golang.org/x/text`, `gopkg.in/yaml.v3` | `v2.10.1`, `v0.9.0`, `v0.39.0`, `v3.0.1` | `app/go.mod`, `app/resources/fonts/` |
-| **Frontend & 3D GIS** | Svelte 5 (`^5.46.4`), `maplibre-gl` (`^6.18.0`), `@deck.gl/*` (`^9.4.1`), `@luma.gl/webgpu` (`^9.4.2`), `pmtiles` (`^4.5.0`) | Svelte 5 + MapLibre 6.18 | `app/frontend/package.json` |
-| **CSS, Fonts & Icons** | Tailwind CSS v4 (`@tailwindcss/vite`), `@lucide/svelte`, IBM Plex Sans & Mono (`BC Sans` WOFF2 in `site/`) | `^4.3.3`, `^1.48.0`, `^5.3.0` | `app/frontend/package.json`, `site/fonts/` |
-| **Bundler & Test Suites** | Vite 8 (`^8.0.5`), `svelte-check` (`^4.4.8`), Node 22 single-pass `app/frontend/scripts/run-tests.mjs` (`.test.cjs` suites in `app/frontend/tests/`), Go test (`*_test.go`) | `^8.0.5` / Node `22` | `app/frontend/package.json`, `app/frontend/scripts/run-tests.mjs` |
+| **Windows Native Shell/COM** | `github.com/go-ole/go-ole` (`IFileDialog` / `IShellItem` COM syscalls, balanced STA) | `v1.3.0` | `app/go.mod`, `app/internal/pictures/` |
+| **Document & Interchange** | `excelize/v2` (`.xlsx`), `go-pdf/fpdf` + `LiberationSans` (`.pdf`), `golang.org/x/text`, `gopkg.in/yaml.v3` | `v2.11.1`, `v0.12.0`, `v0.39.0`, `v3.0.6` | `app/go.mod`, `app/resources/fonts/` |
+| **Frontend & 3D GIS** | Svelte 5 (`^5.57.3`), `maplibre-gl` (`^6.18.0`), `@deck.gl/*` (`^9.4.1`), `@luma.gl/webgpu` (`^9.4.2`), `pmtiles` (`^4.5.0`) | Svelte 5 + MapLibre 6.18 | `app/frontend/package.json` |
+| **CSS, Fonts & Icons** | Tailwind CSS v4 (`@tailwindcss/vite`), `@lucide/svelte`, BC Sans WOFF2 (`site/`, `app/frontend/src/`) | `^4.3.5`, `^1.73.0` | `app/frontend/package.json`, `site/fonts/` |
+| **Bundler & Test Suites** | Vite 8 (`^8.3.8`), `svelte-check`, Node 22 single-pass `app/frontend/scripts/run-tests.mjs` (`.test.cjs` suites in `app/frontend/tests/`), Go test (`*_test.go`) | `^8.3.8` / Node `22` | `app/frontend/package.json`, `app/frontend/scripts/run-tests.mjs` |
 
 ---
 

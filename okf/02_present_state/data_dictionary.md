@@ -8,9 +8,9 @@
 
 Both legacy **VPro 64** (`VPro64.accdb` + `.accda` add-ins) and the modernized **`Boostao/vpro`** implementations (`r/` R SDK and `app/` Go/Wails Desktop) organize persistent data into a **multi-database family** separating mutable plot projects from provincial reference libraries and personal user extensions (`VPro64/VPro64.accdb`, `r/R/workspace.R`, `app/internal/vprocore/databasefamily.go`, `app/internal/vprocore/sqlitecontext.go`):
 
-| Logical Database | Legacy Access Artifact | Canonical SQLite Artifact (`vpro` / `vpro_wails`) | Core Tables Contained | Ownership & Mutability |
+| Logical Database | Legacy Access Artifact | Canonical SQLite Artifact (`r/` / `app/`) | Core Tables Contained | Ownership & Mutability |
 |---|---|---|---|---|
-| **Active Project** | `<File>.accdb` (`<P>_*` 8 tables + optional tables) | `<Project>.db` (e.g., `projects/Sample.db`, `503,808 B`) | `<P>_Env`, `<P>_Admin`, `<P>_Veg`, `<P>_Humus`, `<P>_Mineral`, `<P>_Other`, `<P>_Audit`, `<P>_Metadata` (+ optional `_SU`, `_Hierarchy`, `_Lump`, `_Profile`, `_Herbarium`, `_Theme`, `_table_metadata`, `__VPRO_*`) | **Read/Write** (`c.projectDB` in `vpro_wails/sqlitecontext.go:56-75`) |
+| **Active Project** | `<File>.accdb` (`<P>_*` 8 tables + optional tables) | `<Project>.db` (e.g., `projects/Sample.db`, `503,808 B`) | `<P>_Env`, `<P>_Admin`, `<P>_Veg`, `<P>_Humus`, `<P>_Mineral`, `<P>_Other`, `<P>_Audit`, `<P>_Metadata` (+ optional `_SU`, `_Hierarchy`, `_Lump`, `_Profile`, `_Herbarium`, `_Theme`, `_table_metadata`, `__VPRO_*`) | **Read/Write** (`c.projectDB` in `app/` `sqlitecontext.go:56-75`) |
 | **Program / System Templates** | `VPro64.accdb` (`29,396,992 B`, `BuildDate = 02/23/23`) | `database-family/VPro64.db` | `USys*Table` DDL templates, `LayerCode`, `LifeformCodes`, `UnitLevelCodes`, `USysShortVegSummaryFieldList`, `USysSubzoneMatrixLabels`, `USysBreakTable`, `USysUserLog`, `tblWhatsNew` | **Read-Only** seed (except `USysUserLog` / receipt tables) |
 | **Provincial Standards Library** | `VLists.accda` (`8,818,688 B`, `01 Feb. 2023`) | `database-family/VLists.db` (`2026` refresh via `cmd/standards2026` + read-model `.db` files in `resources/`) | `USysAllSpecs` (`16,728` rows, `BCPlantTaxonomy v19`), `USysTableOfLists` (`1,566` rows, `LMH25 2023`), `MasterSiteUnitList` (`6,067` rows), `USysSiteSeriesNames` (`8,900` rows, `BECdb v13`), `USysZoneList` (`331` rows), `USysSppAttributes` (`8,262` rows) | **Read-Only** for standard users; governed via `BECMaster` / `BECdb` |
 | **User Workspace Library** | `VUser.accda` (`696,320 B`) | `database-family/VUser.db` | `USysUserSpp` (personal provisional species), `UserSiteUnitList`, `USysSiteUnitAll`, `USysPrefs` | **Read/Write** per local user |
@@ -191,7 +191,7 @@ erDiagram
 Every valid `VP08` project (in `VPro64.accdb`, `BECMaster_fixing.accdb`, `r/data-raw/projects/Sample_*.sql`, and `app/internal/vprocore/sqlitecontext.go:332-360`) consists of **eight required tables** sharing a `<Project>_` prefix, tagged via Access `TableDef.Properties("Description")` or SQLite `_table_metadata (table_name TEXT PRIMARY KEY, description TEXT)`.
 
 ### 3.1 `<Project>_Env` — Plot Site, Location, Soil Summary, SIVI & CHARS (`112 Columns`, Tag `VP08`)
-Verified identically across `VPro64.accdb :: Sample_Env`, `BECMaster_fixing.accdb` (71,567 rows), `vpro/data-raw/projects/Sample_Env.sql:2-121`, and `vpro_wails/projectcreationddl.go`:
+Verified identically across `VPro64.accdb :: Sample_Env`, `BECMaster_fixing.accdb` (71,567 rows), `r/data-raw/projects/Sample_Env.sql:2-121`, and `app/` `projectcreationddl.go`:
 * **Primary Key & Indexes:** `PlotNumber VARCHAR(7) NOT NULL` (`uidx_<P>_Env_PlotNumber`), `idx_<P>_Env_ProjectID` (`ProjectID`), `idx_<P>_Env_AirPhotoNum` (`AirPhotoNum`).
 * **Column Groups (All 112 Columns):**
   1. **Identity & Survey Header (`Cols 0–9`):** `PlotNumber (Text 7, PK)`, `FieldNumber (Text 50)`, `ProjectID (Text 30)`, `FSRegionDistrict (Text 7)`, `Date (DateTime)`, `SiteSurveyor (Text 30)`, `PlotRepresenting (Text 255)`, `Location (Text 255)`, `Ecosection (Text 3)`, `NtsMapSheet (Text 8)`.
@@ -227,7 +227,7 @@ Split out of `<Project>_Env` in `VP08` (`VPro 19/64`) and rejoined 1:1 via `USys
 | `19` | `StrataCoverTotal` | `Single` | Calculated total vegetation cover (protected field) |
 
 ### 3.3 `<Project>_Veg` — Wide Multi-Strata Species Observations (`44 Columns`, Tag `VP08`)
-Stores vertical canopy cover, height, voucher status, and cultural/forage attributes (`VPro64.accdb :: Sample_Veg`; `vpro/data-raw/projects/Sample_Veg.sql:2-53`; `vpro_wails/plotchild.go:23-65`):
+Stores vertical canopy cover, height, voucher status, and cultural/forage attributes (`VPro64.accdb :: Sample_Veg`; `r/data-raw/projects/Sample_Veg.sql:2-53`; `app/` `plotchild.go:23-65`):
 * **Critical Schema Quirks:**
   1. **No Composite Primary Key on `(PlotNumber, Species)` and Non-Unique `ID`:** Dropped after `VP06` because Access subforms (`SubVegA`, `SubVegC`, `SubVegD`) insert separate partial rows when the same species occurs in multiple strata (e.g., *Tsuga heterophylla* in `A2`, `B2`, and `D` seedlings) until consolidated by `OptimizeVeg` (`VPro64_forAI/Modules/V7mdlOptimizeVeg.txt:4-63`). SQLite preserves this exact contract (`vpro/data-raw/projects/Sample_Veg.sql:46-52`).
   2. **`HeightB` Type Anomaly:** Column `22` (`HeightB`) is `VARCHAR(255)` in Access `VP08` and SQLite, whereas `Height1..6` and `HeightA` are `Single` (`Float32`)!
@@ -253,7 +253,7 @@ Stores vertical canopy cover, height, voucher status, and cultural/forage attrib
 | `LL (Int32)`, `AF`, `DC`, `UT`, `VI (Int16)`, `PV (Int32)`, `PG`, `FFA`, `Cultural1..2`, `Other1..2 (Int16)` | **`Veg Other`** (`LMH25` App. 3.1) | Lichen Loading (`0–5`), Available Forage ($\text{g/m}^2$), Distribution (`1–9`), Utilization (`0–5`), Vigour (`0–4`), Phenology Veg/Gen, Fruit/Flower (`0–6`), Cultural/NTQ & custom codes |
 
 ### 3.4 `<Project>_Humus` (`18 Columns`) & `<Project>_Mineral` (`28 Columns`) — Soil Pedon Tables
-* **`<Project>_Humus` (`vpro/data-raw/projects/Sample_Humus.sql:2-24`):** `ID (PK)`, `PlotNumber (FK CASCADE)`, `Horizon (Text 8: L, F, H, Of, Om, Oh, S)`, `UpperDepth (Single)`, `LowerDepth (Single)`, `HumusStructureDegree (Text 1)`, `HumusStructureKind (Text 5)`, `MycelAbundance (Text 1)`, `FecalAbundance (Text 1)`, `RootsAbundance (Text 6)`, `RootsSize (Text 6)`, `vonPost (Int16, 1–10)`, `HumusFormpH (Single)`, `Consistence (Text 2)`, `Character (Text 2)`, `Fauna (Text 4)`, `Comment (Memo)`, `Flag (Boolean)`. Ordered in `vpro`/`vpro_wails` by `UpperDepth DESC, Horizon DESC, ID` to reflect upward measurement from `0 cm` (`vpro/R/plot-soil.R:1-90`).
+* **`<Project>_Humus` (`r/data-raw/projects/Sample_Humus.sql:2-24`):** `ID (PK)`, `PlotNumber (FK CASCADE)`, `Horizon (Text 8: L, F, H, Of, Om, Oh, S)`, `UpperDepth (Single)`, `LowerDepth (Single)`, `HumusStructureDegree (Text 1)`, `HumusStructureKind (Text 5)`, `MycelAbundance (Text 1)`, `FecalAbundance (Text 1)`, `RootsAbundance (Text 6)`, `RootsSize (Text 6)`, `vonPost (Int16, 1–10)`, `HumusFormpH (Single)`, `Consistence (Text 2)`, `Character (Text 2)`, `Fauna (Text 4)`, `Comment (Memo)`, `Flag (Boolean)`. Ordered in `r/` and `app/` by `UpperDepth DESC, Horizon DESC, ID` to reflect upward measurement from `0 cm` (`r/R/plot_soil_hierarchy.R`).
 * **`<Project>_Mineral` (`vpro/data-raw/projects/Sample_Mineral.sql:2-34`):** `ID (PK)`, `PlotNumber (FK CASCADE)`, `Horizon (Text 8: A, B, C, R, W + modifiers)`, `UpperDepth (Single)`, `LowerDepth (Single)`, `PitDepthLimit (Text 1: '+')`, `Colour (Text 14: Munsell)`, `ASP (Int16: 1–8)`, `Texture (Text 4)`, `PercentCoarseFragsGravel`, `PercentCoarseFragsCobbles`, `PercentCoarseFragsStones`, `PercentCoarseFragsTotal` (`Int16 x4`), `PercentCoarseFragsShape (Text 1: R/S/A/T)`, `RootsAbundance (Text 6)`, `RootsSize (Text 6)`, `MineralStructureClass (Text 3)`, `MineralStructureKind (Text 7)`, `MineralFormpH (Single)`, `MottlesAbundance (Text 1)`, `MottlesSize (Text 1)`, `MottlesContrast (Text 1)`, `ClayFilmsFreq (Text 2)`, `ClayFilmThickness (Text 3)`, `Effervescence (Text 2)`, `Porosity (Text 1)`, `Comments (Memo)`, `Flag (Boolean)`. Ordered by `UpperDepth ASC, Horizon ASC, ID`.
 
 ### 3.5 `<Project>_Other` (`11 Columns`), `<Project>_Audit` (`11 Columns`) & `<Project>_Metadata` (`75 Columns`)
@@ -280,12 +280,12 @@ Stores vertical canopy cover, height, voucher status, and cultural/forage attrib
 
 ---
 
-## 5. Modern SQLite Compatibility Views & Durable `__VPRO_*` Provenance Tables (`vpro_wails`)
+## 5. Modern SQLite Compatibility Views & Durable `__VPRO_*` Provenance Tables (`app/`)
 
-To preserve 100% query compatibility with Access's rewritten `QueryDefs` without mutating shared database files on context switches, both `vpro` (in DuckDB `:memory:`, `vpro/R/project-context.R:268-396`) and `vpro_wails` (in pinned SQLite `:memory:`, `vpro_wails/sqlitecontext.go:363-444`) synthesize **temporary session views**:
+To preserve 100% query compatibility with Access's rewritten `QueryDefs` without mutating shared database files on context switches, both `r/` (`vpro`) and `app/` (`VPro Desktop`, in pinned SQLite `:memory:`, `sqlitecontext.go:363-444`) synthesize **temporary session views**:
 * `Filtered_Env`, `USysEnv` (`<P>_Env INNER JOIN <P>_Admin`, restricted by `EXISTS (SELECT 1 FROM <SU>_SU ...)` when an SU is active), `USysVeg`, `USysVegA`, `USysVegB`, `USysVegC`, `USysVegD`, `USysHumus`, `USysMineral`, `USysOther`, `USysAuditTrail`, `USysMetadata`, `MasterSiteUnitList`, `MasterUnitList_Hierarchy`, `USysSU`, and `USysHierarchy`.
 
-Additionally, `vpro_wails` introduces **strict-schema `__VPRO_*` technical tables** inside target `.db` files to prevent Access `GenUniqueID()` deleted-ID collisions and guarantee idempotent recovery if the UI disconnects mid-write (`vpro_wails/plotchild.go:506`, `vpro_wails/twopageparentwrite.go:28-34`, `vpro_wails/siviparentwrite.go:14-15`):
+Additionally, `app/` introduces **strict-schema `__VPRO_*` technical tables** inside target `.db` files to prevent Access `GenUniqueID()` deleted-ID collisions and guarantee idempotent recovery if the UI disconnects mid-write (`plotchild.go:506`, `twopageparentwrite.go:28-34`, `siviparentwrite.go:14-15`):
 
 | `__VPRO_*` Table Family | Host `.db` | Architectural Purpose |
 |---|---|---|
@@ -298,11 +298,11 @@ Additionally, `vpro_wails` introduces **strict-schema `__VPRO_*` technical table
 
 ## 6. Legacy Schema Version Lineage (`VP02`–`VP08` & Companion Schemas)
 
-| Schema Tag | Application Era | Structural Delta & Import Support in `vpro_wails` (`accessprojectimport.go:73-294, 770-833`) |
+| Schema Tag | Application Era | Structural Delta & Import Support in `app/` (`accessprojectimport.go:73-294, 770-833`) |
 |---|---|---|
-| **`VP02`–`VP04`** | VPro 97 / 2000 / 2002 | Pre-XP tables (`USysV2Veg` normalized 4-col veg; `*_SU` & `*_Hierarchy` introduced at `VP04`). **Unsupported** for direct import in `vpro_wails` (`accessprojectimport.go:416-421`). |
-| **`VP05`** | VPro XP / 03 (`TemplateVPro03.mdb`) | `Env` (105 cols, split DMS `LatitudeDegrees/Minutes/Seconds`), `Veg` (62 cols incl. `Dist1..10`, `Vig1..10`, `Extra1..10`), plus integrated `_TreePlot`, `_Trees`, `_CWD`, `_CWDPiling`. **Auto-converted to `VP08`** in `vpro_wails` (`ImportVPro05` parity). |
-| **`VP06`** | VPro 07 / 13 (`TemplateVPro13.accdb`) | ACE `.accdb`; `Env` (105 cols, decimal degrees `Single`), `Veg` (36 cols, composite PK `PlotNumber+Species`); Mensuration moved to `VTrees.accdb`. **Auto-converted to `VP08`** in `vpro_wails` (`ImportVPro06` parity). |
-| **`VP07`** | VPro 15 (`TemplateVPro15.accdb`) | `Env` expanded to 131 cols (SIVI + CHARS fields); `Veg` expanded to 44 cols (CHARS `Cover5a..5c` + `Veg Other`, PK dropped); added 75-col `Metadata`. **Auto-converted to `VP08`** in `vpro_wails` (`ImportVPro07` parity). |
-| **`VP08`** | VPro 19 / 64 (`VPro64.accdb`) | **Canonical 8-table schema:** Split 20 admin/QA/BEC columns into `<P>_Admin`; widened `Latitude`/`Longitude` to `Double`; renamed 14 SIVI columns to `SV_*`. **Direct lossless import** in both `vpro` and `vpro_wails`. |
-| **`VTrees Ver03`** | `VTrees.accdb` (`VPRO_ACCESS_1\VTrees\`) | Companion Mensuration DB: `<P>_TreePlot` (26 cols, composite PK `PlotNumber, SubPlot, MeasurementID`), `<P>_Trees` (41 cols), `tblTaperCoefficients` (74 Kozak rows), `tblTaperGVAF` (189 rows). Not yet in `vpro_wails`. |
+| **`VP02`–`VP04`** | VPro 97 / 2000 / 2002 | Pre-XP tables (`USysV2Veg` normalized 4-col veg; `*_SU` & `*_Hierarchy` introduced at `VP04`). **Unsupported** for direct import in `app/` (`accessprojectimport.go:416-421`). |
+| **`VP05`** | VPro XP / 03 (`TemplateVPro03.mdb`) | `Env` (105 cols, split DMS `LatitudeDegrees/Minutes/Seconds`), `Veg` (62 cols incl. `Dist1..10`, `Vig1..10`, `Extra1..10`), plus integrated `_TreePlot`, `_Trees`, `_CWD`, `_CWDPiling`. **Auto-converted to `VP08`** in `app/` (`ImportVPro05` parity). |
+| **`VP06`** | VPro 07 / 13 (`TemplateVPro13.accdb`) | ACE `.accdb`; `Env` (105 cols, decimal degrees `Single`), `Veg` (36 cols, composite PK `PlotNumber+Species`); Mensuration moved to `VTrees.accdb`. **Auto-converted to `VP08`** in `app/` (`ImportVPro06` parity). |
+| **`VP07`** | VPro 15 (`TemplateVPro15.accdb`) | `Env` expanded to 131 cols (SIVI + CHARS fields); `Veg` expanded to 44 cols (CHARS `Cover5a..5c` + `Veg Other`, PK dropped); added 75-col `Metadata`. **Auto-converted to `VP08`** in `app/` (`ImportVPro07` parity). |
+| **`VP08`** | VPro 19 / 64 (`VPro64.accdb`) | **Canonical 8-table schema:** Split 20 admin/QA/BEC columns into `<P>_Admin`; widened `Latitude`/`Longitude` to `Double`; renamed 14 SIVI columns to `SV_*`. **Direct lossless import** in both `r/` and `app/`. |
+| **`VTrees Ver03`** | `VTrees.accdb` (`VPRO_ACCESS_1\VTrees\`) | Companion Mensuration DB: `<P>_TreePlot` (26 cols, composite PK `PlotNumber, SubPlot, MeasurementID`), `<P>_Trees` (41 cols), `tblTaperCoefficients` (74 Kozak rows), `tblTaperGVAF` (189 rows). Not yet in `app/`. |

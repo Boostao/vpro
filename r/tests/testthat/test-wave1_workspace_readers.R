@@ -13,7 +13,7 @@ test_that("DESCRIPTION enforces zero Shiny/widget bloat and R >= 4.4.0", {
   expect_match(dcf[, "Depends"], "R \\(>= 4\\.4\\.0\\)")
 })
 
-test_that("vpro_data_dir and vpro_config_dir match vpro_wails sqlutil_foundation.go across OSes", {
+test_that("vpro_data_dir and vpro_config_dir match Go app sqlutil_foundation.go across OSes", {
   # Explicit option / env overrides take precedence
   withr::with_options(list(vpro.data_dir = "/tmp/custom-vpro-data", vpro.config_dir = "/tmp/custom-vpro-cfg"), {
     expect_equal(vpro_data_dir(), "/tmp/custom-vpro-data")
@@ -150,8 +150,8 @@ test_that("vpro_connect('Sample') and tidy readers work with leading-zero PlotNu
   expect_true(all(toupper(bec$BGC_Zone) == "CWH"))
 })
 
-test_that("live simulated vpro_wails WAL workspace coexists with active writer and enforces invariants", {
-  sim_root <- tempfile("vpro-wails-sim-")
+test_that("live simulated VPro desktop WAL workspace coexists with active writer and enforces invariants", {
+  sim_root <- tempfile("vpro-desktop-sim-")
   sim_data <- file.path(sim_root, "data")
   sim_cfg <- file.path(sim_root, "config")
   dir.create(file.path(sim_data, "projects"), recursive = TRUE)
@@ -203,7 +203,7 @@ test_that("live simulated vpro_wails WAL workspace coexists with active writer a
     )
   )
 
-  # Write live config.yml matching vpro_wails
+  # Write live config.yml matching VPro desktop
   yaml::write_yaml(
     list(
       Current = list(
@@ -215,7 +215,7 @@ test_that("live simulated vpro_wails WAL workspace coexists with active writer a
     file.path(sim_cfg, "config.yml")
   )
 
-  # Keep wcon open (simulating live vpro_wails WAL connection!) while R connects with 0 args
+  # Keep wcon open (simulating live VPro desktop WAL connection!) while R connects with 0 args
   withr::with_options(list(vpro.data_dir = sim_data, vpro.config_dir = sim_cfg), {
     ws <- vpro_connect()
     expect_equal(ws$project, "Sample")

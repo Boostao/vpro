@@ -39,7 +39,7 @@ navbar:
       - text: VPro Rosetta Stone (Access <-> Go <-> R 2.0)
         href: articles/vpro-rosetta-stone.html
       - text: Live Workspace and Tidy Extraction
-        href: articles/getting-started-with-vpro-wails.html
+        href: articles/getting-started-with-vpro.html
       - text: Community Ecology and Clustering Round-Trip
         href: articles/community-ecology-and-clustering.html
       - text: BEC Diagnostics, Pairwise Similarity, and Synthesis

@@ -12,14 +12,14 @@ A central finding of this forensic audit is the tension between two real-world e
 2. **The Offline Workstation & UX Reality (`VproMailExchange` `0017`, `0035`, `0003`; `archive/oct2026-parity-ledgers/CLIENT_SCOPE.md`):** Field technicians and regional ecologists require a fast, zero-R-setup, offline Windows/macOS/Linux desktop installer (`< 30 MB` binary) with sub-millisecond `Enter`-key cell navigation across 4,500-line FS882 forms, transactional local SQLite files, native OS file dialogs, and direct `.mdb`/`.accdb` binary import—capabilities where browser-hosted R-Shiny suffers latency, single-threaded R event-loop blocking, and fragile local R/Rtools packaging (`vpro` Shiny prototype reset in Sep 2026).
 
 **Core Recommendation:** Formalize a **federated two-tier target stack** inside the unified **`Boostao/vpro`** monorepo (with written contract alignment under `RE26OCF433` renewal) that uses **each runtime strictly where it excels**, bound together by a **single canonical SQLite (`VP08`) + PostgreSQL (`BECMaster`) data contract**:
-* **Tier 1 — Local Desktop Workstation (`app/`, `github.com/boostao/vpro/app`):** **Go `1.25+` + Wails v3 + Svelte 5 + SQLite (`WAL`) + Vendored `libmdb`** for offline entry, datasheet grid editing, classification trees, Access migration, and `.xlsx`/`.kml`/`.pdf`/`.gpkg`/TurboVeg interchange—with an optional local `Rscript` subprocess bridge (`app/internal/rsidecar`) when `R` + `vpro` + `climr` are installed.
+* **Tier 1 — Local Desktop Workstation (`app/`, `github.com/boostao/vpro/app`):** **Go `1.27+` + Wails v3 (`v3.1.0`) + Svelte 5 + SQLite (`WAL`) + Vendored `libmdb`** for offline entry, datasheet grid editing, classification trees, Access migration, and `.xlsx`/`.kml`/`.pdf`/`.gpkg`/TurboVeg interchange—with an optional local `Rscript` subprocess bridge (`app/internal/rsidecar`) when `R` + `vpro` + `climr` are installed.
 * **Tier 2 — Scientific Compute, Cloud Stewardship & Public Web (`r/` `vpro` + `BEC_R` + Cloud):** **Headless `vpro` (`r/`) & `BEC_R` R packages + DuckDB + PostgreSQL/PostGIS (`BECMaster`) + R-Shiny (`BEC_plots_Shiny`) + Quarto (`BECWeb 2.0`)** for multivariate clustering, `climr` edatopic modelling, automated HTML/PDF unit guides, cloud staging review, and public map downloads.
 
 ---
 
 ## 2. Comparative Stack Trade-Off Matrix
 
-| Evaluation Criterion | Option 1: Pure R-Shiny Desktop + Web (`Electron/R-Portable` + `Shiny`) | Option 2: Pure Go/Wails Desktop Only (`vpro_wails` Alone) | **Option 3 (Recommended): Federated Wails Desktop + Headless `vpro`/`BEC_R` + Cloud Postgres/Shiny/Quarto** |
+| Evaluation Criterion | Option 1: Pure R-Shiny Desktop + Web (`Electron/R-Portable` + `Shiny`) | Option 2: Pure Go/Wails Desktop Only (`app/` Alone) | **Option 3 (Recommended): Federated Wails Desktop + Headless `vpro`/`BEC_R` + Cloud Postgres/Shiny/Quarto** |
 |---|---|---|---|
 | **Offline Windows Install Size & Reliability (`Email 0003`)** | Poor (`400–900 MB` bundled R + CRAN binaries; antivirus false positives; slow cold start) | **Excellent** (`~15–25 MB` single NSIS `.exe` using OS WebView2; instant startup) | **Excellent** (`~15–25 MB` core desktop `.exe`; optional R analytics unlocked automatically if R/Posit is present or run in cloud) |
 | **FS882 Keyboard & Datasheet Latency (`Email 0035`)** | Moderate/Poor (Shiny websocket round-trip per cell edit; single-threaded R session blocks during reports) | **Excellent** (In-process Svelte 5 Runes + Go goroutines + local SQLite `< 1 ms` reads) | **Excellent** (Handled natively by Svelte 5 + Go SQLite) |
@@ -35,7 +35,7 @@ A central finding of this forensic audit is the tension between two real-world e
 ```mermaid
 flowchart TB
     subgraph ClientTier["Tier 1: Offline-First Desktop & Field Clients"]
-        WailsApp["VPRO Desktop (Go 1.25 + Wails v3 + Svelte 5)<br/>• Consolidated ~12 Domain Go Services<br/>• FS882 / 2-Page / SIVI + Universal Datasheet Grid<br/>• Virtualized SU & Flat-Hierarchy Tree Explorer<br/>• In-App MapLibre GL JS v6 + WebGPU + Offline PMTiles<br/>• CGO libmdb Access (VP05-VP08) + VENUS 5.0 Importer<br/>• Native Exporters: .xlsx, .gpkg, .kml, .pdf, .csv, TurboVeg"]
+        WailsApp["VPRO Desktop (Go 1.27 + Wails v3.1.0 + Svelte 5)<br/>• Consolidated ~12 Domain Go Services<br/>• FS882 / 2-Page / SIVI + Universal Datasheet Grid<br/>• Virtualized SU & Flat-Hierarchy Tree Explorer<br/>• In-App MapLibre GL JS v6 + WebGPU + Offline PMTiles<br/>• CGO libmdb Access (VP05-VP08) + VENUS 5.0 Importer<br/>• Native Exporters: .xlsx, .gpkg, .kml, .pdf, .csv, TurboVeg"]
         PWA["Optional Offline Field PWA / Tablet Mode<br/>Svelte 5 Entry + MapLibre PMTiles + IndexedDB"]
         LocalDB[("Canonical SQLite Family (.db, WAL Mode)<br/><Project>.db + VLists.db + VUser.db + VPics.db<br/>+ Offline maps/*.pmtiles")]
         LocalR["Optional Local R Sidecar (Rscript / JSON-RPC)<br/>vpro + BEC_R + climr + Quarto CLI"]

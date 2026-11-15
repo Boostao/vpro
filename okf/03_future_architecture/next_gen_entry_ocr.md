@@ -37,13 +37,13 @@ Physical BEC field forms (`LMH25_2023_web.pdf` PDF pp. 10, 47, 102, 120, 200–2
 
 ### 3.1 Deployment Mode Trade-Offs
 
-| Pipeline Stage | Option A: Edge Mobile Capture App (iOS / Android PWA or Native) | Option B: Local Desktop Inference (`vpro_wails` Offline Bundle) | Option C: Governed Cloud VLM API (Ministry Azure / AWS Bedrock) |
+| Pipeline Stage | Option A: Edge Mobile Capture App (iOS / Android PWA or Native) | Option B: Local Desktop Inference (`app/` Offline Bundle) | Option C: Governed Cloud VLM API (Ministry Azure / AWS Bedrock) |
 |---|---|---|---|
 | **Best Role** | **Real-time image capture quality gate** (auto-crop, glare/blur rejection) **OR native digital plot entry** in field camps | **Offline office/camp batch card transcription** without sending crown/Indigenous plot locations to external APIs | **Highest zero-shot HTR accuracy** on messy cursive notes (`SiteNotes`, `Location`, `VegNotes`) when online |
 | **Hardware Target** | Ruggedized field tablet / smartphone (`0` connectivity required) | Standard BC Ministry Windows x64/ARM64 laptop (`CPU` / `DirectML` / `ONNX Runtime`, `8–16 GB` RAM) | Cloud GPU endpoint (`GPT-4o` / `Claude` / `Qwen2.5-VL` / Azure Document Intelligence) |
 | **Privacy & Sovereignty** | 100% local on device | **100% local on workstation** (safe for sensitive Red/Blue listed species & cultural `Cultural1..2` fields) | Requires BC Gov FOIPPA / data-residency compliance & opt-in policy |
 
-**Recommended Architecture:** **Hybrid Edge-Guided Capture + Local-First Desktop Extraction with Optional Cloud VLM Escalation**, feeding a mandatory **Human-in-the-Loop (HITL) Verification Workbench** inside `vpro_wails`.
+**Recommended Architecture:** **Hybrid Edge-Guided Capture + Local-First Desktop Extraction with Optional Cloud VLM Escalation**, feeding a mandatory **Human-in-the-Loop (HITL) Verification Workbench** inside `VPro Desktop` (`app/`).
 
 ### 3.2 Multi-Stage Card Ingestion & Validation Data Flow
 
@@ -96,7 +96,7 @@ Modernizing VPro 64's wide `USysPg1..USysPg3` XML staging concept (`V7mdlImportX
 
 ## 5. Human-in-the-Loop (HITL) Review UX & Offline Digital Companion
 
-### 5.1 Split-Screen Verification Workbench (`vpro_wails`)
+### 5.1 Split-Screen Verification Workbench (`app/` `VPro Desktop`)
 To preserve field-technician speed (`Persona 1`) and ecologist data trust (`Persona 2`):
 * **Confidence Tiering:**
   * **High Confidence (`>= 0.97` + `ConstraintStatus == 'pass'`):** Pre-filled in green; skipped by `Tab`/`Shift+Enter` "Next Uncertain Field" navigation.

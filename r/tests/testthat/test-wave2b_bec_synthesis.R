@@ -127,7 +127,7 @@ build_cwh_synthesis_workspace <- function(scratch_dir) {
   )
 }
 
-test_that("vpro_diagnostics matches vpro_wails test vectors, 99% lump cap, V7mdlDiagnostic, and BEC tiers", {
+test_that("vpro_diagnostics matches Go app test vectors, 99% lump cap, V7mdlDiagnostic, and BEC tiers", {
   scratch <- make_w2b_scratch()
   on.exit(unlink(scratch, recursive = TRUE, force = TRUE), add = TRUE)
 

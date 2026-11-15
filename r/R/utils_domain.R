@@ -24,18 +24,6 @@ vpro_quote_ident <- function(x) {
   paste0('"', gsub('"', '""', as.character(x), fixed = TRUE), '"')
 }
 
-vpro_sqlite_uri <- function(path, mode = c("ro", "rw", "rwc")) {
-  mode <- match.arg(mode)
-  abs_path <- normalizePath(path, winslash = "/", mustWork = (mode == "ro"))
-  enc <- gsub("%", "%25", abs_path, fixed = TRUE)
-  enc <- gsub("?", "%3f", enc, fixed = TRUE)
-  enc <- gsub("#", "%23", enc, fixed = TRUE)
-  if (!startsWith(enc, "/")) {
-    enc <- paste0("/", enc)
-  }
-  paste0("file:", enc, "?mode=", mode)
-}
-
 vpro_sqlite_ro <- function(path) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !file.exists(path)) {
     rlang::abort(paste0("SQLite database does not exist: ", path))
@@ -489,4 +477,54 @@ vpro_bcgov_theme <- function(type = c("ggplot2", "assets"), base_size = 11) {
       panel.border = ggplot2::element_rect(colour = "#D8D8D8", fill = NA, linewidth = 0.5),
       legend.title = ggplot2::element_text(colour = "#003366", face = "bold")
     )
+}
+
+.vpro_register_s3_methods <- function(state_env, pairs) {
+  if (isTRUE(state_env$registered)) {
+    return(invisible(NULL))
+  }
+  pkg_env <- environment(.vpro_register_s3_methods)
+  for (pair in pairs) {
+    gen_pkg <- pair[[1L]]
+    gen_name <- pair[[2L]]
+    cls <- pair[[3L]]
+    fn_name <- paste0(gen_name, ".", cls)
+    if (!exists(fn_name, envir = pkg_env, mode = "function", inherits = FALSE)) {
+      next
+    }
+    gen_env <- asNamespace(gen_pkg)
+    s3_tbl <- gen_env[[".__S3MethodsTable__."]]
+    if (is.environment(s3_tbl) && !exists(fn_name, envir = s3_tbl, inherits = FALSE)) {
+      base::registerS3method(gen_name, cls, get(fn_name, envir = pkg_env), envir = gen_env)
+    }
+  }
+  state_env$registered <- TRUE
+  invisible(NULL)
+}
+
+vpro_query_scoped_plots <- function(dbc, table_sql, plot_vec, select_cols = "*", where_extra = NULL) {
+  if (!is.null(plot_vec)) {
+    if (length(plot_vec) == 0L) {
+      return(DBI::dbGetQuery(dbc, paste0("SELECT ", select_cols, " FROM ", table_sql, " WHERE 1 = 0")))
+    }
+    chunks <- split(unique(as.character(plot_vec)), ceiling(seq_along(unique(plot_vec)) / 450L))
+    parts <- lapply(chunks, function(ch) {
+      ph_txt <- paste(rep("?", length(ch)), collapse = ",")
+      ph_blb <- paste(rep("CAST(? AS BLOB)", length(ch)), collapse = ",")
+      w <- paste0(
+        'WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" IN (', ph_txt,
+        ') AND CAST("PlotNumber" AS BLOB) IN (', ph_blb, ")"
+      )
+      if (!is.null(where_extra) && nzchar(where_extra)) {
+        w <- paste(w, "AND", where_extra)
+      }
+      DBI::dbGetQuery(dbc, paste("SELECT", select_cols, "FROM", table_sql, w), params = as.list(c(ch, ch)))
+    })
+    return(do.call(rbind, parts))
+  }
+  w <- 'WHERE typeof("PlotNumber") = \'text\''
+  if (!is.null(where_extra) && nzchar(where_extra)) {
+    w <- paste(w, "AND", where_extra)
+  }
+  DBI::dbGetQuery(dbc, paste("SELECT", select_cols, "FROM", table_sql, w))
 }
