@@ -77,10 +77,14 @@ test('companionPanelBusy isolates secondary panels and modals from clobbering lo
     /const editorBusy = \$derived\(localEditorBusy \|\| matrixPublicationBusy \|\| pictureCreationBusy \|\| pictureLifecycleBusy \|\| twoPageSoilBusy \|\| twoPageVegetationBusy \|\| externalSUEnvironmentBusy \|\| summaryPreferenceBusy \|\| summaryFieldListBusy \|\| summaryEnvironmentalBusy \|\| projectReportBusy\);/
   );
 
-  // SiteUnitExclusionFilter, ProjectMetadataPresets, and SIVIParentCreateModal must NOT clobber localEditorBusy
-  const exclusionMatch = app.match(/<SiteUnitExclusionFilter[\s\S]*?\/>/);
-  assert.ok(exclusionMatch);
-  assert.doesNotMatch(exclusionMatch[0], /localEditorBusy =/);
+  // SummaryVegetation exclusion filter, ProjectMetadataPresets, and SIVIParentCreateModal must isolate secondaryPanelBusy from localEditorBusy
+  const summaryReportMatch = app.match(/<SummaryVegetationReport[\s\S]*?\/>/);
+  assert.ok(summaryReportMatch);
+  assert.match(summaryReportMatch[0], /onExclusionBusyChange=\{\(value\) => \{ secondaryPanelBusy = value; \}\}/);
+  assert.doesNotMatch(
+    summaryReportMatch[0].match(/onExclusionBusyChange=\{[^}]+\}/)?.[0] ?? '',
+    /localEditorBusy/
+  );
 
   const presetsMatch = app.match(/<ProjectMetadataPresets[\s\S]*?\/>/);
   assert.ok(presetsMatch);
