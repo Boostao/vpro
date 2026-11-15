@@ -1,119 +1,96 @@
-# VPRO 2.0 Engineering & Multi-Agent Instructions (`vpro_wails`)
+# `Boostao/vpro` — Monorepo Engineering & Multi-Agent Router
 
-## 1. Authoritative Specification & Product Direction
+Welcome to **`Boostao/vpro`**, the unified repository for **`VPro` 2.0** (*VENUS — Vegetation and Environment NexUS — Professional*), built for the **B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program** (Contract `RE26OCF433`).
 
-- **Single Source of Truth (In-Tree `./okf/`):** Read `okf/00_index.md` first, together with:
-  - `okf/02_present_state/capability_matrix.md` & `okf/02_present_state/data_dictionary.md`
-  - `okf/03_future_architecture/transition_and_adoption.md`
-  - `okf/03_future_architecture/target_stack_recommendation.md`
-  - `okf/03_future_architecture/analytics_and_governance.md` (In-App MapLibre v6 + WebGPU + `PMTiles`, GeoPackage, TurboVeg 3 + XML, R `.rds`)
-  - `okf/03_future_architecture/intelligent_automation_and_abstractions.md` (`Auto-1`..`Auto-7`)
-  - `okf/03_future_architecture/documentation_help_and_release_portal.md` (Offline `F1` `LMH25` help, guided tours, BC Gov Design System portal)
-  - `okf/04_evidence_and_sources/decisions_and_gaps.md`
-- **Historical Archive Only:** Superseded October 2026 slice-by-slice parity ledgers (`MIGRATION_PLAN.md`, `WINDOWS_HANDOFF.md`, `CLIENT_SCOPE.md`, `FEATURE_CAPABILITIES.md`, `*_CONTRACT.md`) are archived in `archive/oct2026-parity-ledgers/` strictly for historical lookup. **They do NOT govern scope, feature gating, or work organization.**
-- **Feature Graduation & Anti-Drift Rules:**
-  - Validated workflows run **unconditionally default-ON** in standard `-tags sqliteonly` builds (`PRAGMA journal_mode = WAL`). Do **not** introduce `VITE_*` or per-slice `VPRO_*` feature-flag sprawl; use `config.yml` `release_channel: stable | experimental` for user-facing Phase 2 preview controls and `internal/lifecycle/buildinfo.go` (`buildMode: "dev" | "alpha" | "release"`, `-ldflags "-X ..."`) for compile-time build-tier gating (`VPRO_WEBVIEW_DEBUG_PORT` is restricted strictly to `dev` builds).
-  - Follow Will MacKenzie's verified `VPro2.0_Functions` triage (`Red = Remove`, `Orange = Deferred`, `Green/Unmarked = Priority Retain/Modify`): remove Red-marked over-builds (`PC-ORD Break Report` and standalone `CHARS` forms/menus) and expose CHARS (`Cover5a..5c`, `SnowCoverregime`, `ActiveLayerDepth`) via a single `"Show extended shrub layers"` toggle on standard FS882 / 2-Page / SIVI forms.
-  - Preserve the 4-layer acyclic Go architecture and strictly 12 cohesive Wails services in `main.go`, plus the domain-organized `frontend/src/{shell,entry,datasheet,classification,reports,spatial,diagnostics,rsidecar,interchange,admin,pictures,help,shared}/` and `frontend/tests/` layout.
-  - Product identity is **`VPro`** (*VENUS — Vegetation and Environment NexUS — Professional*, **B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program**), never `"My Company"`, `"My Product"`, `"Wails Edition"`, or `vpro-wails.app`.
-  - Release packages are **unsigned for Phase 1** (relying on static `release-manifest.json` + `SHA256SUMS.txt` verification); `VTrees` / standalone Mensuration, CWD, and WHA remain **out of scope** for Phase 1.
+## 1. Authoritative Routing Map (Read Scoped Contracts Before Editing)
 
-### 1.1 Surrounding Workspace & Sibling Asset Map (`~/Work/`)
+To avoid context bloat while preserving 100% of engineering invariants, instructions are layered by subsystem:
 
-**IMPORTANT DISCOVERY RULE:** Workspace `glob` and `grep` tools default solely to `~/Work/vpro_wails`. Always pass explicit absolute `paths` (expand `~` to `/home/$USER`) when inspecting the sibling directories below, and **always include relevant sibling paths in subagent prompts**. Never mutate legacy `.accdb`/`.mdb`/`.zip` source archives (inspect read-only or copy to a temporary directory first):
-
-1. **Authoritative Knowledge Framework (`./okf/` — In-Tree):** `~/Work/vpro_wails/okf/` (kept in-tree with the app; start at `okf/00_index.md`; 17 cross-linked Markdown specs across `01_history_and_evolution/`, `02_present_state/`, `03_future_architecture/`, `04_evidence_and_sources/`).
-2. **Legacy Manuals, Triage, Emails & `VPro64` Exports:** `~/Work/VPRO_ACCESS/`
-   - Field Manuals: `LMH25_2023_web.pdf` (2023 ed.) & `Lmh25_2015.pdf` (2015 ed.), `VProXP_Userguide.pdf`
-   - Client Scope & Triage: `VPro2.0_Functions to remove-retain-modify.pdf` (`.docx`), `_BEC_data_system_fs1a_schedule_of_services_v2 (13).md`, `VproMailExchange/` (106 emails incl. executed contract `RE26OCF433` in `0072`), `SCREENCAPS/` (21 VPro 64 PNGs)
-   - Decompiled Access Forms/VBA/Tables: `VPro64_forAI/`, `VPro64/`, `VLists/`, `VUser/`, `VMetaData/`, `Diagnostic10.xla`
-3. **545 MB Production Scale Dataset (`BECMaster`):** `~/Work/VPRO_ACCESS_1/VPro64/`
-   - `BECMaster_fixing.accdb` (`71,567` plots, `1,651,842` veg rows, `597,277` audit rows, `BECMaster_fixing_edatopic` `57,023` rows, `spatial_overlay_BGCv13_4/8`), `Haida_Gwaii_2019.accdb`, `Manning_TEM_Vpro19.accdb`
-4. **Fresh 2026 Official `BECWeb` Master Standards:** `~/Work/becweb_standards_2025_2026/`
-   - `BECdb_v13_2026.zip` (`BECdb_v13_2026.accdb` `2026-05-28` Version 13 + `Current_BGCunits_v13.csv` + `Current_Unique_SiteUnits_v13.csv`)
-   - `BCPlantTaxa2025_access.zip` (`BCPlantTaxonomy.accdb` `2026-02-09` Version 19 `USysAllSpecs`) + `Species_Readme_Feb_2025_Ver19.docx` + `Tree_codes_2021.docx`
-5. **Staged BC Gov Spatial Layers:** `~/Work/spatial_assets/`
-   - `bc_ecosections_epsg4326.geojson` (`139` polygons), `bc_nr_districts_epsg4326.geojson` (`23` polygons), plus live unauthenticated BC OpenMaps WFS `pub:WHSE_FOREST_VEGETATION.BEC_BIOGEOCLIMATIC_POLY` (`17,870` BGC polygons)
-6. **Cloned MoF & BCGov R / Quarto / Vector-Tile Reference Repos:**
-   - `~/Work/MoF-Skeena-Research/`: `BEC_R_working` (`_functions/*.R`), `BEC_Classification_Analysis`, `BEC_Unit_Reporting` (`unit.report.qmd`), `aSMR-x-rSMR` (`CMD -> aSMR`), `EdatopicGrid_Spp_Distribution`, `BEC_Clean_BECdb`, `BEC_soils_fixing`, `BGC_Postgres`, `CCISS_VectorTiles`
-   - `~/Work/bcgov_ref/`: `BEC_ReportR`, `cciss-docs` (Quarto book reference)
-7. **Sibling Headless R Package & MDB Reader:**
-   - `~/Work/vpro/` (`master` headless R/DuckDB/SQLite package + git commits `68b7d8b` `R/mod_becweb_map.R` / `scripts/publish_dataset.R` and `fde9833` `bcgov/climr`)
-   - `~/Work/go-mdbtools-windows-readiness/` (optional CGO `libmdb` upstream hardening reference; copy it when needed)
+| Scope | Scoped Agent Contract | Deep Engineering Playbook / Specification |
+|---|---|---|
+| **Monorepo Root (`/*`)** | **`AGENTS.md`** *(this file)* · [`.github/copilot-instructions.md`](./.github/copilot-instructions.md) | [`okf/00_index.md`](./okf/00_index.md) · [`okf/04_evidence_and_sources/decisions_and_gaps.md`](./okf/04_evidence_and_sources/decisions_and_gaps.md) |
+| **Desktop Workstation (`app/`)** | **[`app/AGENTS.md`](./app/AGENTS.md)** | **[`okf/05_engineering_and_agents/desktop_app_engineering.md`](./okf/05_engineering_and_agents/desktop_app_engineering.md)** · [`okf/02_present_state/system_architecture.md`](./okf/02_present_state/system_architecture.md) |
+| **Headless R SDK (`r/`)** | **[`r/AGENTS.md`](./r/AGENTS.md)** | **[`okf/05_engineering_and_agents/r_sdk_engineering.md`](./okf/05_engineering_and_agents/r_sdk_engineering.md)** · [`okf/03_future_architecture/analytics_and_governance.md`](./okf/03_future_architecture/analytics_and_governance.md) |
+| **Empirical Access & BEC Oracles** | [`okf/02_present_state/oracles/`](./okf/02_present_state/oracles/) | 9 disposable-VM DAO & BEC math/validation contracts + [`okf/02_present_state/data_dictionary.md`](./okf/02_present_state/data_dictionary.md) |
 
 ---
 
-## 2. Local Linux Toolchain & Build Commands
+## 2. Monorepo Directory Layout
 
-Fedora toolchain (ensure `~/go/bin` and `~/.local/bin` are on `PATH`):
-
-- **Node 22:** `node` and `npm` from the system `PATH`.
-- **Go & CLIs:** `go` plus `~/go/bin` (`wails3` v3.0.0-beta.26, `task`, `nfpm`) and `~/.local/bin` (`pmtiles`, `tippecanoe`).
-- **GitHub & Quarto CLIs:** `gh` and `quarto` on `PATH`.
-- **CGO & Windows x64:** native `gcc`, `x86_64-w64-mingw32-gcc`, and `makensis`; Wails defaults to GTK4 and WebKitGTK 6.0 development packages, with GTK3 and WebKitGTK 4.1 required for the legacy `gtk3` build tag.
-- **R Runtime:** `Rscript` on `PATH` with the headless `vpro` and `climr` packages.
-
-Key commands:
-- **Regenerate Wails TypeScript bindings:** Always pass **`-ts -i`** (`wails3 generate bindings -ts -i`) to preserve interface-style nullable-array contracts (`-ts` alone emits classes and breaks frontend callers).
-- **Default Desktop Tests (SQLite canonical):** `go test -tags sqliteonly ./...`; use `wails3 task linux:build EXTRA_TAGS=sqliteonly` for a native Linux build and `wails3 task windows:build:sqliteonly` for the Windows target when its toolchain is available.
-- **Frontend Validation:** In `frontend/`, run `npm test`, `npm run check`, and `npm run build`.
-- **CGO Rebuild Note:** After changing C headers/sources nested under an amalgamating CGO file (`internal/accessreader`), force a fresh compile with `-a` (`-count=1` alone can reuse cached C objects). For full-repo `-race` runs on Windows, pass `-timeout 45m` (or `-timeout 150m` across all packages).
+- **`app/`** — **VPro 2.0 Desktop Workstation** (`module github.com/boostao/vpro/app`): Go `1.25+` (`CGO_ENABLED=1`), Wails v3 (`v3.0.0-beta.26`), Svelte 5, MapLibre GL JS v6 + WebGPU + offline `PMTiles`, SQLite `VP08` (`WAL`), vendored C `libmdb` (`mdbtools 1.0.1`), `pgx/v5` Cloud `BECMaster` sync, and native `.xlsx`/`.gpkg`/TurboVeg 3 SQLite+XML/`.rds` interchange.
+- **`r/`** — **Headless `vpro` R Companion SDK** (`R >= 4.4.0`, **zero Shiny/widgets**): WAL-safe `RSQLite`/`duckdb` readers, 2026 `BCPlantTaxonomy v19` & `BECdb v13` harmonization, `vegan`/`vegclust`/`indicspecies` phytosociology, `sf` GeoPackage, `bcgov/climr` $\rightarrow$ Ministry `aSMR` edatopic grids, BEC diagnostics, PostgreSQL `BECMaster` cloud sync/snapshots, and Quarto BEC guides.
+- **`okf/`** — **Operational Knowledge Framework**: authoritative specifications across `01_history_and_evolution/`, `02_present_state/` (incl. `oracles/`), `03_future_architecture/`, `04_evidence_and_sources/`, and `05_engineering_and_agents/`.
+- **`docs-src/`** — Single-source JSON authoring (`lmh25_fields.json`, `guides.json`, `tours.json`, `shortcuts.json`, `whats_new.json`, `data_use_agreement.json`) compiled into `app/resources/help_bundle.json`.
+- **`site/`** — BC Government Design System (`BC Sans`, `#003366` BC Navy, `#FCBA19` Gold) static-manifest download & documentation portal (`site/build.mjs` $\rightarrow$ `site/dist`, `site/release-manifest.json`).
+- **`scripts/`** — Help compiler (`build-docs-src.mjs`), release packaging/PE DLL validator (`release.py`, `release-windows.ps1`), and portal/release test suites (`scripts/tests/`).
+- **`archive/`** — Historical October 2026 parity ledgers (`archive/oct2026-parity-ledgers/`); **historical provenance only — never governs scope or feature gating**.
+- **`.github/`** — Unified CI/Pages/Release workflows, Copilot instructions, specialized agents (`vba-analyzer`, `vproguy`), and prompts (`vproguy-write`).
 
 ---
 
-## 3. Multi-Agent Parallel Orchestration & 4-Layer `internal/*` Architecture
+## 3. Shared `VP08`, BEC & Cloud `BECMaster` Domain Invariants
 
-- Track multi-wave execution in the session SQLite `todos` and `todo_deps` tables and continue autonomously across waves until all deliverables are verified.
-- **Parallel Subagents Encouraged with Worktree Isolation:** Fan out independent tracks concurrently using `general-purpose` subagents, giving **each mutating subagent its own isolated `git worktree`** (`../vpro_wails.worktrees/waveN-<track>`) and strictly disjoint file ownership (especially around `frontend/bindings/` and shared root state).
-- Use `task` subagents to run verbose Go/Node/`svelte-check` suites and `code-review` / `rubber-duck` subagents as read-only quality gates before merging each wave into `main`.
-- **4-Layer Acyclic Package Architecture (Zero Sibling Imports in Layer 2; Strictly 12 Registered Wails Services in `main.go`):**
-  - **Layer 0 (Assets & Foundations):** `resources` (`resources/embed.go` exporting all embedded `embed.FS` and `[]byte` assets + `RepoRoot()`/`Path(...)`), `internal/sqlutil`, `internal/accessreader` (with `-fvisibility=hidden` on Linux CGO so vendored `fakeglib` never interposes on GTK), `internal/accessimport`, `internal/accessinventory`, `internal/accesslayout`, `internal/accesscompare`, `internal/fs882layout`, `internal/listcatalog`, `internal/reports/subzonematrix`.
-  - **Layer 1 (Core, Reference Catalogues & Shared Engines):** `internal/references` (`BECService`, `ReferenceService`, `Site/Soil/Parent/Geology/Region/Quality` code services), `internal/vprocore` (`SQLiteContext`, `DesktopConfig`, `DatabaseFamily`, `ProjectService`, `ContextService`, `PlotService` + `internal/vprocore/vprotest`), `internal/sourceform` (+ `internal/sourceform/sftest`), and `internal/reports/reportcore`.
-  - **Layer 2 (Independent Parallel Domain Packages — zero sibling imports):** `internal/lifecycle`, `internal/plotentry`, `internal/sivi`, `internal/twopage`, `internal/datasheet`, `internal/classification`, `internal/validation`, `internal/vegreport`, `internal/envreport`, `internal/spatial`, `internal/pictures`, `internal/interchange`, `internal/cloudsync`, `internal/projectops`, `internal/diagnostics`, `internal/lumping`, `internal/lmh25rules`, `internal/rsidecar` (plus cross-domain `*_test.go` suites in `internal/integration`).
-  - **Layer 3 (Thin Wails Host `package main`):** `main.go`, `native_options.go`, `aliases.go`, and `domainservices_*.go` registering strictly 12 cohesive domain services (`LifecycleService`, `ContextService`, `PlotEntryService`, `DatasheetService`, `ClassificationService`, `ValidationService`, `ImportExportService`, `VegetationReportService`, `EnvironmentReportService`, `SpatialService`, `PictureService`, `HelpService`).
+Both `app/` (Go) and `r/` (R) share one physical data contract and **must never diverge** on these rules:
+
+1. **7-Database SQLite Family (`WAL` Mode) & `_table_metadata` (`'VP08'`):**
+   - `<Project>.db` (8 tables per `<P>_`: `_Env`, `_Admin`, `_Veg`, `_Humus` [`SoilHumus`], `_Mineral` [`SoilMineral`], `_Other`, `_Audit`, `_Metadata`, plus optional `*_SU`, `*_Hierarchy` with `~` breakpoints, `*_Lump`, `*_Profile`, and `__VPRO_*` receipt/cache/identity tables), `VPro64.db`, `VLists.db` (`BCPlantTaxonomy v19`, `BECdb v13`, `LMH25 2023`), `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, and `VPics.db`.
+   - Do not invent `_Env.StartDate` or an `Env -> Metadata` FK (dead legacy VBA). Embedded `app/resources/*.db` read-models never replace `VLists.db` / `VUser.db`.
+2. **Literal Text `PlotNumber` (`Text 7`):**
+   - Always SQLite `TEXT` / Go `string` / R `character` (`typeof(PlotNumber) = 'text'`, `CAST(PlotNumber AS BLOB) = CAST(? AS BLOB)`), preserving leading zeroes (e.g., `'00337'`).
+3. **Access `BOOLEAN`, `float32` Cover Narrowing, `99%` Lump Cap & ACE Rounding:**
+   - Disk SQLite & `_Audit` store `true = -1`, `false = 0`, `NULL` = unset.
+   - Narrow cover inputs to IEEE-754 `float32` *before* `< 100` (`99.999996` passes; `99.999999` narrows to `100` and rejects). Cap summed lumped (`*_Lump`) and fallback `TotalA`/`TotalB` strata covers at `99%` without mutating raw `<Project>_Veg`.
+   - Format `double` to 15 significant decimal digits before half-away rounding (`1.005 -> 1.01`, [`VALUE_CONVERSIONS.md`](./okf/02_present_state/oracles/VALUE_CONVERSIONS.md)).
+4. **`LMH25 (2023)` Soil Horizon Depth Sign & Ordering:**
+   - Upland organic `SoilHumus` (`L`, `F`, `H`) measures **upward** from `0 cm` (`UpperDepth > LowerDepth`, ordered `UpperDepth DESC`); wetland organic (`Of`, `Om`, `Oh`) and `SoilMineral` (`A`, `B`, `C`, `R`, `W`) measure **downward** (`UpperDepth < LowerDepth`, ordered `UpperDepth ASC`).
+5. **Catalogue Asymmetry, UTF-16 Bounds, Atomic Provenance & Cloud `BECMaster`:**
+   - `VLists.USysAllSpecs.Lifeform` is `INT32` vs. `VUser.USysUserSpp.LifeForm` `INT16`; short-veg layer keys join `LayerCode.Layer1234567` (never padded `LayerCode.LayerCode`).
+   - Enforce UTF-16 code-unit limits (`PlotNumber <= 7`, `Species <= 8`, `Horizon <= 8`, `Texture <= 4`, `Colour <= 14`).
+   - Wrap every local write in `BEGIN IMMEDIATE` with `<Project>_Audit` + monotonic `__VPRO_*` child ID reservations (never reusing deleted IDs).
+   - PostgreSQL `BECMaster` sync (`app/internal/cloudsync` & `r/R/cloud_*.R`) operates over 3 isolated schemas (`becmaster`, `staging`, `standards`) with TLS, secret redaction, pre-upload compliance gating, `SERIALIZABLE` Custodian 3-way merge, and SHA-256 hash-chained `becmaster.audit`.
 
 ---
 
-## 4. Preserved Technical & Domain Invariants (Must Not Regress)
+## 4. Identical Cross-OS `vpro_data_dir()` & `vpro_config_dir()` Resolution
 
-1. **Canonical SQLite Family & Context Isolation (`sqlitecontext.go`):**
-   - Preserve the 7-database SQLite family (`<Project>.db`, `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`), `_table_metadata` (`'VP08'`), and `config.yml` (with lossless legacy JSON migration). Embedded reference `.db` files are read-models, not replacements for `VLists.db` / `VUser.db`.
-   - Build SQLite `file:` URIs from resolved absolute paths with proper `net/url` escaping (`#` in raw paths can truncate `mode=ro`!).
-   - On the pinned `:memory:` read coordinator, use caller-owned read snapshot cleanup (`beginReadSnapshot`) so cancelled queries never drop `ATTACH`ed databases or `TEMP` `USys*` views.
-   - Scoped operations already holding the context's operation read lease must reuse it when borrowing pools rather than recursively re-acquiring `RWMutex.RLock` (prevents deadlock behind a queued context switch).
-   - Every context switch mints a new 128-bit `contextID`; reject stale requests deterministically.
-2. **Data Types, Validation & Access Calibration:**
-   - **Mutations + `<Project>_Audit` + `__VPRO_*` Identity Reservations** share a single atomic SQLite transaction (`BEGIN IMMEDIATE`). Never reuse deleted child IDs.
-   - **Access `BOOLEAN`:** Normalize reads explicitly and preserve `true = -1`, `false = 0` in SQLite storage and audit rows.
-   - **IEEE-754 `SINGLE` (`float32`) Cover Narrowing:** Narrow `float64` inputs to `float32` *before* evaluating `<100 Or Is Null` (`99.999996` narrows to `99.99999237060547` and passes; `99.999999` narrows to `100` and rejects).
-   - **ACE Fixed-Decimal Rounding:** Format `DOUBLE` to 15 significant decimal digits before half-away rounding (`1.005 -> 1.01` at 2 decimals; reuse the calibrated decimal formatter in Plot Profiling and reports).
-   - **UTF-16 Bounds & Malformed Text:** Enforce Access field lengths in UTF-16 code units (`PlotNumber <= 7`, `Species <= 8`, `Horizon <= 8`, `Texture <= 4`, `Colour <= 14`). Reject malformed UTF-8 (`CAST(X'FF' AS TEXT)`) and duplicate/raw-surrogate JSON keys prior to Go JSON repair via `sqlutil.ValidateRawJSONWire` / `sqlutil.DecodeStrictJSON`.
-   - **Historical Field Tolerance:** Omit unchanged historical out-of-rule columns on `UPDATE` so legacy plots can be edited without failing on untouched fields.
-   - **Literal Scoped Plot Lookup:** Use `typeof(col)='text'` and `CAST(col AS BLOB)=CAST(? AS BLOB)` so SQLite numeric affinity never coerces leading-zero plot numbers (e.g., `'00337'`).
-   - **Species Lifeform Widths:** `VLists.USysAllSpecs.Lifeform` is `INT32` (`LONG`) while `VUser.USysUserSpp.LifeForm` is `INT16` (`INTEGER`); preserve explicit projection rules and `NotInList` synonym (`OldCode -> Code`) vs. personal species decisions.
-   - **Soil Horizon Ordering & `LMH25` Depth Sign:** Upland `L/F/H` humus horizons measure upward from `0 cm` (`UpperDepth > LowerDepth`, ordered `UpperDepth DESC`); wetland `Of/Om/Oh` and mineral `A/B/C/R/W` measure downward (`UpperDepth < LowerDepth`, ordered `UpperDepth ASC`).
-3. **Frontend Svelte 5, Wails IPC & Excelize Guards:**
-   - Detach Svelte 5 deep-reactive proxies with `$state.snapshot(...)` (or store immutable DTOs in `$state.raw`) before passing to Wails bindings or `structuredClone`.
-   - Draft validation errors must survive tab remounts and block Save/Lock/context-switch/window-close (`CloseService` cryptographic nonce handshake `"vpro:close-request"` $\rightarrow$ `ConfirmClose` / `CancelClose`). Wait for explicit `CancelClose` acknowledgement in lifecycle tests before mutating barriers.
-   - Use `strings.EqualFold` (matching `excelize/v2`) when checking worksheet name collisions, and validate case-folded joined grouping keys *before* threshold filtering in reports.
-   - With `gopkg.in/yaml.v3`, keep `type configValues = map[string]any` as a type alias so nested map assertions stay `map[string]any`.
-- After awaited client-side result validation, recheck the request generation
-  before assigning UI state. Large XML validation must yield so Cancel/remount/
-  close guards can run; test a held validation yield in actual Wails, release it
-  after remount and prove the old result cannot populate the new panel.
-- Frontend mocks must match the production wire, not just their validator.
-  Share a strict-Go round-trip fixture for boundaries such as metadata columns
-  (`declaredType`, not `type`). Go tests can resolve test-only package helpers;
-  also compile production and inspect binding-generation warnings.
-- Large Wails requests use UTF-8 byte chunks; a native fetch guard that examines
-  only string bodies can miss a successful Save. Reassemble chunks by their
-  upload ID and hold the final actual response. If capture was missed, inspect
-  owned physical history/data first and never replay the completed mutation.
-- Native COM wrappers must keep HWND/state outside native interface memory and
-  pass the receiver plus every argument; a compiling public binding can still
-  crash in Release, as go-common-file-dialog v1.2.0 did.
-  Interpret HRESULT as signed32, classify normal Cancel only from Show's
-  ERROR_CANCELLED, and remember that IUnknown.Release returns a reference count,
-  not HRESULT. Balance successful STA initialization after releasing interface/
-  path resources; fake-dialog tests do not replace actual owned native Cancel
-  and literal-selection acceptance.
+Go (`app/internal/sqlutil/sqlutil_foundation.go`: `UserDataDir()`, `UserConfigDir()`) and R (`r/R/workspace.R`: `vpro_data_dir()`, `vpro_config_dir()` — **never `rappdirs`**) resolve workspace paths identically (treating empty `""` env vars as unset):
+
+| Function / Role | Priority 1: Explicit Override | Windows | macOS (`Darwin`) | Linux / Unix |
+|---|---|---|---|---|
+| **Data Dir** (`VLists.db`, `VUser.db`, `projects/`, `maps/`) | R `getOption("vpro.data_dir")`, then `VPRO_DATA_DIR` | `%LOCALAPPDATA%/vpro` *(fallback `%USERPROFILE%/AppData/Local/vpro`)* | `~/Library/Application Support/vpro` | `${XDG_DATA_HOME:-~/.local/share}/vpro` |
+| **Config Dir** (`config.yml`) | R `getOption("vpro.config_dir")`, then `VPRO_CONFIG_DIR` | `%APPDATA%/vpro` | `~/Library/Application Support/vpro` | `${XDG_CONFIG_HOME:-~/.config}/vpro` |
+
+---
+
+## 5. Local Sibling Assets (`/home/bruno/Work/`) & Worktree Isolation
+
+`glob` and `grep` default solely to this repository root. Pass explicit absolute `paths` when inspecting external local reference archives, include them in subagent prompts, and **never mutate `.accdb`/`.mdb`/`.zip` originals**:
+
+- **`/home/bruno/Work/VPRO_ACCESS/`** — `LMH25_2023_web.pdf`, `Lmh25_2015.pdf`, `VProXP_Userguide.pdf`, `VPro2.0_Functions to remove-retain-modify.pdf`, `VproMailExchange/` (`RE26OCF433`), `SCREENCAPS/`, `Diagnostic10.xla`, and decompiled `VPro64_forAI/` (`Modules/`, `Queries/`, `Forms/`, `Tables_Data/`).
+- **`/home/bruno/Work/VPRO_ACCESS_1/VPro64/`** — `BECMaster_fixing.accdb` (`545 MB`, `71,567` plots, `1.65M` veg rows — strictly read-only), `Haida_Gwaii_2019.accdb`, `Manning_TEM_Vpro19.accdb`.
+- **`/home/bruno/Work/becweb_standards_2025_2026/`** — `BECdb_v13_2026.zip` & `BCPlantTaxa2025_access.zip`.
+- **`/home/bruno/Work/spatial_assets/`**, **`/home/bruno/Work/MoF-Skeena-Research/`**, **`/home/bruno/Work/bcgov_ref/`**, and **`/home/bruno/Work/go-mdbtools/`**.
+- **Parallel Multi-Agent Worktree Convention:** Isolate each mutating parallel subagent in `../vpro.worktrees/waveN-<track>` (`/home/bruno/Work/vpro.worktrees/waveN-<track>`) with strictly disjoint file ownership (never concurrently edit `app/frontend/bindings/`, `r/DESCRIPTION`, or generated `r/NAMESPACE` / `r/man/*.Rd`).
+
+---
+
+## 6. Quick Monorepo Validation Matrix
+
+```bash
+# 1. Desktop Frontend (Svelte 5 unit tests, svelte-check & Vite bundle)
+(cd app/frontend && npm test && npm run check && npm run build)
+
+# 2. Desktop Go Backend (SQLite-only canonical desktop profile) & Wails TS bindings
+(cd app && go test -tags sqliteonly ./...)
+(cd app && wails3 generate bindings -ts -i)
+
+# 3. Headless R Companion SDK (air format, roxygen2, testthat & tarball R CMD check: 0E/0W/0N)
+(cd r && air format R tests)
+(cd r && Rscript -e "roxygen2::roxygenise()" && Rscript -e "testthat::test_local(stop_on_failure = TRUE)")
+(cd r && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)
+
+# 4. Root Offline F1 Help Bundle, BC Gov Release Portal & Packaging Scripts
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
+```
+

@@ -1,26 +1,24 @@
-# GitHub Copilot Instructions — `vpro` (Headless R Companion SDK)
+# GitHub Copilot Instructions — `Boostao/vpro` Monorepo
 
-**Read [`AGENTS.md`](../AGENTS.md) first.** `AGENTS.md` is the single authoritative architectural, domain, and workflow contract for this repository.
+**Start at [`AGENTS.md`](../AGENTS.md) first**, then load the scoped contract for the directory you are modifying:
 
-## Core Rules Summary
+- **Desktop Workstation (`app/`):** [`app/AGENTS.md`](../app/AGENTS.md) $\rightarrow$ [`okf/05_engineering_and_agents/desktop_app_engineering.md`](../okf/05_engineering_and_agents/desktop_app_engineering.md)
+- **Headless R Companion SDK (`r/`):** [`r/AGENTS.md`](../r/AGENTS.md) $\rightarrow$ [`okf/05_engineering_and_agents/r_sdk_engineering.md`](../okf/05_engineering_and_agents/r_sdk_engineering.md)
+- **Specifications & Empirical Oracles (`okf/`):** [`okf/00_index.md`](../okf/00_index.md) & [`okf/02_present_state/oracles/`](../okf/02_present_state/oracles/)
 
-1. **Headless R Companion SDK Only (`R >= 4.4.0`):**
-   - `vpro` is the programmatic R SDK & scientific analytics companion to the official **`vpro_wails`** desktop application (`/home/bruno/Work/vpro_wails`, Wails v3 + Go + Svelte 5 + SQLite WAL) for the B.C. Ministry of Forests **BEC Program**.
-   - **Zero Shiny / Widget UI:** `shiny`, `bslib`, `DT`, `rhandsontable`, `shinyTree`, `shinyjs`, `sass`, `leaflet`, and `rappdirs` are **forbidden** in `Imports`. Desktop forms, CRUD UI, and interactive WebGPU maps live exclusively in `vpro_wails`.
-   - R owns tidy `VP08` SQLite extraction, standards/QC validation, `vegan`/`vegclust`/`indicspecies`/`labdsv` community matrices, `sf`/`terra` spatial analysis, `bcgov/climr` + `CMD -> aSMR` edatopic modelling, BEC differential/diagnostic synthesis, guarded opt-in `*_ClusterCandidate_SU` / `*_SU` / `*_Lump` / `__VPRO_PlotClimate` write-back, and Quarto BEC reporting.
+## Core Monorepo Guardrails
 
-2. **Exact `vpro_wails` Directory & SQLite WAL Coexistence:**
-   - `vpro_data_dir()` and `vpro_config_dir()` must match `/home/bruno/Work/vpro_wails/internal/sqlutil/sqlutil_foundation.go` byte-for-byte (`VPRO_DATA_DIR` / `getOption("vpro.data_dir")` and `VPRO_CONFIG_DIR` / `getOption("vpro.config_dir")` overrides first; never `rappdirs`'s doubled `vpro/vpro` on Windows).
-   - Default to read-only `RSQLite` connections (`SQLITE_RO` or `busy_timeout = 5000`, `synchronous = NORMAL`, `query_only = ON`) so R never blocks a live `vpro_wails` WAL session.
-   - Opt-in write-back uses `BEGIN IMMEDIATE`, refuses `Master*` and `USys*` tables, requires `confirm_overwrite = TRUE` before replacing existing `*_SU`/`*_Lump` tables, and appends `<Project>_Audit` + `__VPRO_*` provenance atomically.
+1. **Strict Subsystem Boundaries (`app/` + `r/` + `okf/`):**
+   - **`app/` (`module github.com/boostao/vpro/app`):** Owns all interactive UI (Wails v3 + Go `1.25+` + Svelte 5 + MapLibre GL JS v6/WebGPU + SQLite WAL + vendored C `libmdb`). Preserve the 4-layer acyclic `app/internal/*` DAG (zero sibling imports in Layer 2), strictly **12** registered Wails services in `app/main.go`, `-ts -i` TypeScript interface binding generation (`wails3 generate bindings -ts -i`), and `$state.snapshot(...)` proxy detachment before IPC.
+   - **`r/` (Package `vpro`, `R >= 4.4.0`):** Strictly **headless** scientific analytics & stewardship SDK (`shiny`, `bslib`, `DT`, `rhandsontable`, `shinyTree`, `shinyjs`, `sass`, `leaflet`, and `rappdirs` are **forbidden** in `r/DESCRIPTION`). Default to `RSQLite::SQLITE_RO` / `query_only = ON` so R never blocks a live `app/` WAL session.
+   - **`docs-src/`, `site/`, `scripts/`:** Single-source offline `F1` `LMH25 (2023)` help bundle (`scripts/build-docs-src.mjs` $\rightarrow$ `app/resources/help_bundle.json`) and BC Gov Design System static-manifest download portal (`site/build.mjs` $\rightarrow$ `site/dist`). Historical files in `archive/oct2026-parity-ledgers/` never govern scope or feature flags.
 
-3. **Non-Negotiable `VP08` & BEC Domain Invariants (Details in `AGENTS.md` §3 & `inst/doc-oracles/`):**
-   - Preserve the 7-DB SQLite family (`<Project>.db`, `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`) and `_table_metadata` (`'VP08'`).
-   - `PlotNumber` is **always** literal `character` (`typeof(PlotNumber) = 'text'`, preserving leading zeroes like `'00337'`).
-   - Access `BOOLEAN`: `-1L` = `TRUE`, `0L` = `FALSE` on disk $\leftrightarrow$ R `logical` in memory.
-   - Narrow cover to IEEE-754 `float32` before `< 100`, cap lumped (`*_Lump`) per-layer cover at `99%`, apply ACE 15-significant-digit half-away rounding where calibrated, respect `VLists.USysAllSpecs.Lifeform` (`INT32`) vs `VUser.USysUserSpp.LifeForm` (`INT16`), and order `LMH25 (2023)` soil horizons (`L/F/H` `UpperDepth > LowerDepth` `DESC`; `Of/Om/Oh` & `A/B/C/R/W` `UpperDepth < LowerDepth` `ASC`).
+2. **Shared `VP08`, Workspace & Cloud `BECMaster` Invariants:**
+   - **Workspace Resolution:** `app/internal/sqlutil/sqlutil_foundation.go` (`UserDataDir`, `UserConfigDir`) and `r/R/workspace.R` (`vpro_data_dir`, `vpro_config_dir`) must match byte-for-byte across Windows, macOS, and Linux (`VPRO_DATA_DIR` / `VPRO_CONFIG_DIR` overrides first).
+   - **`VP08` & BEC Math:** Preserve the 7-DB SQLite family (`<Project>.db`, `VPro64.db`, `VLists.db`, `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, `VPics.db`), literal `TEXT`/`character` `PlotNumber` (`'00337'`), Access `BOOLEAN` (`-1` = true, `0` = false), IEEE-754 `float32` cover narrowing before `< 100`, `99%` lumped/fallback strata cover cap, ACE 15-sig-digit rounding (`1.005 -> 1.01`), `INT32` vs `INT16` `Lifeform`, `LayerCode.Layer1234567` short-veg joins, `LMH25 (2023)` horizon depth signs (`L/F/H` upward `UpperDepth DESC`; `Of/Om/Oh` & `A/B/C/R/W` downward `UpperDepth ASC`), and atomic `BEGIN IMMEDIATE` writes with `<Project>_Audit` + monotonic `__VPRO_*` child IDs.
+   - **Cloud `BECMaster`:** `app/internal/cloudsync` and `r/R/cloud_*.R` share the 3-schema (`becmaster`, `staging`, `standards`) PostgreSQL/PostGIS contract with secret redaction, TLS on non-loopback hosts, pre-upload compliance gating, `SERIALIZABLE` Custodian 3-way merge, and SHA-256 hash-chained `becmaster.audit`.
 
-4. **Sibling Asset Discovery & Verification Gates (Details in `AGENTS.md` §4–§5):**
-   - Pass explicit absolute paths when searching sibling directories (`/home/bruno/Work/vpro_wails/`, `/home/bruno/Work/VPRO_ACCESS/okf/00_index.md`, `/home/bruno/Work/MoF-Skeena-Research/`, `/home/bruno/Work/bcgov_ref/`, `/home/bruno/Work/VPRO_ACCESS_1/VPro64/BECMaster_fixing.accdb` [read-only], `/home/bruno/Work/spatial_assets/`).
-   - Validate package changes with `Rscript -e "roxygen2::roxygenise()"`, `Rscript -e "testthat::test_local(stop_on_failure = TRUE)"`, and tarball check `R CMD build . && R CMD check --no-manual vpro_*.tar.gz` (`0 errors | 0 warnings | 0 notes`).
-   - Isolate parallel subagents in `/home/bruno/Work/vpro.worktrees/waveN-<track>` with strictly disjoint `R/<domain>_*.R` and `tests/testthat/test-<domain>_*.R` files, regenerating `NAMESPACE` and `man/` only on `master` at wave merge gates.
+3. **Targeted Validation Gates:**
+   - **Desktop (`app/`):** `(cd app/frontend && npm test && npm run check && npm run build)` and `(cd app && go test -tags sqliteonly ./...)`
+   - **R SDK (`r/`):** `(cd r && air format R tests && Rscript -e "roxygen2::roxygenise()" && Rscript -e "testthat::test_local(stop_on_failure = TRUE)" && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)` (`0 errors | 0 warnings | 0 notes`)
+   - **Portal & Help (`site/`, `scripts/`):** `python3 -m unittest discover -s scripts/tests -p 'test_*.py'` and `node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs`

@@ -21,7 +21,7 @@ flowchart LR
     VP13 --> VP15["VPro 15<br/>(2015–2019)<br/>Access 2016 · VP07 (7 Tbls)<br/>+_Metadata · SIVI · CHARS · QC"]
     VP15 --> VP19["VPro 19 (32-bit)<br/>(2019–2023)<br/>VP08 (8 Tbls: +_Admin)<br/>Double Lat/Lon · BEC Use"]
     VP19 --> VP64["VPro 64 (64-bit)<br/>(Jan–Jun 2023)<br/>Office 365 x64 · PtrSafe<br/>VP08 Final Access Era"]
-    VP64 --> Modern["VPro 2.0 Modernization (2026)<br/>• boostao/vpro (Headless R + DuckDB)<br/>• boostao/vpro_wails (Go + Wails v3 + Svelte 5)"]
+    VP64 --> Modern["VPro 2.0 Unified Monorepo (2026: Boostao/vpro)<br/>• app/ (Go + Wails v3 + Svelte 5 Desktop)<br/>• r/ (Headless vpro R SDK + DuckDB + Cloud Sync)"]
 ```
 
 ---

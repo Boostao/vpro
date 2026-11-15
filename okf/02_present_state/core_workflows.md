@@ -6,7 +6,7 @@
 
 ## 1. End-to-End Ecological Data Lifecycle
 
-From field sampling through provincial `BECMaster` correlation, VPRO orchestrates **five sequential workflow stages** (`VProXP_Userguide.pdf` PDF pp. 36–40, 46–96; `RE26OCF433` Schedule A Items `1`–`5`; `vpro_wails/contextservice.go`, `vpro_wails/FS882Form.svelte`):
+From field sampling through provincial `BECMaster` correlation, VPRO orchestrates **five sequential workflow stages** (`VProXP_Userguide.pdf` PDF pp. 36–40, 46–96; `RE26OCF433` Schedule A Items `1`–`5`; `app/domainservices_context.go`, `app/frontend/src/entry/FS882Form.svelte`):
 
 ```mermaid
 flowchart LR

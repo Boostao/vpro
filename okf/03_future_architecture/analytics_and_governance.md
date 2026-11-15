@@ -10,7 +10,7 @@ Legacy VPro relied on emailing `.accdb` files and hardcoding plaintext passwords
 
 ```mermaid
 flowchart TB
-    subgraph Local["1. Local Workstation (vpro_wails / vpro R)"]
+    subgraph Local["1. Local Workstation (Boostao/vpro: app/ & r/)"]
         LocalProj["Local Staging Project (.db)<br/>+ Personal Species (VUser.db)<br/>+ Project Metadata"]
         Gate["Pre-Upload Compliance Gate (1.i.1)<br/>• USysTableOfLists code check<br/>• USysAllSpecs taxonomy check<br/>• 1:N FK & substrate/horizon bounds"]
     end
@@ -50,10 +50,10 @@ Replace hardcoded VBA usernames with **BC Gov OIDC (`IDIR` / `BCeID`) JWT claims
 * **Unified Audit & Provenance Ledger:** Retain the `VP08` `<Project>_Audit` table for plot-level rollback compatibility while adding server-side append-only PostgreSQL audit partitions (`txid`, `actor_idir`, `source_bundle_sha256`, `before_jsonb`, `after_jsonb`, `prev_hash`) so merges and rollbacks are cryptographically traceable.
 * **Pinned Reference Library Stamps:** Stamp every project's `<Project>_Metadata.AllSpecs` and `TableOfLists` (`Sample_Metadata.sql:56-57`) with semantic library versions (e.g., `PlantSpeciesList_v15_2023-02-01`, `BECdb_v13_2026`), allowing reproducible historical re-runs of `Summary Vegetation` reports even after provincial taxonomy evolves.
 
-### 1.3 Phase 1.5 Delivered Desktop <-> PostgreSQL `BECMaster` Sync Engine (`internal/cloudsync`)
-Implemented across `internal/cloudsync` (`pgx/v5` + `pgxpool` + `pgx.CopyFrom` + `pgx.Batch`), `ContextService` Wails RPCs, and `CloudSyncWorkbench.svelte` (5th tab inside `ProjectAdminWorkbench.svelte`):
-* **3 Isolated Schemas (`schema.go`):** `becmaster` (`env` 112 cols + PostGIS `geom`, `admin` 20 cols, `veg`/`humus`/`mineral`/`other` with `child_identity` + watermark, `metadata` 75 cols, SHA-256 hash-chained `audit` + `merge_ledger`, `snapshots`, `download_log`), `staging` (`submissions` with RLS + `BEFORE INSERT` role/compliance trigger + keyed `VP08` tables), and `standards` (`library_releases` + 2026 `BCPlantTaxonomy v19` & `BECdb v13` catalogues).
-* **Contributor & Custodian Workflows (`contributor.go`, `custodian_merge.go`, `seed.go`):** Offline-first env/`becmaster.env` resolution with strict secret redaction, `< 3 s` standards publish & atomic local `VLists.db` swap, streaming 71,567-plot (`1.65M` veg, `597K` audit) `BECMaster` baseline seeding without OOM, regional subset checkout to WAL `VP08` `.db` + `download_log`, mandatory `RunComplianceValidation` + `UserSpeciesManifest` staging uploads, and `< 300 ms` `pgx.Batch`-pipelined 3-way Custodian merge inside `SERIALIZABLE` PostgreSQL transactions.
+### 1.3 Phase 1.5 / Wave 6 Delivered Desktop & R <-> PostgreSQL `BECMaster` Sync Engines (`app/internal/cloudsync` & `r/R/cloud_*.R`)
+Implemented across `app/internal/cloudsync` (`pgx/v5` + `pgxpool` + `pgx.CopyFrom` + `pgx.Batch`), `ContextService` Wails RPCs, `CloudSyncWorkbench.svelte` (5th tab inside `ProjectAdminWorkbench.svelte`), and the companion R SDK (`r/R/cloud_connect.R`, `cloud_read.R`, `cloud_sync.R`, `cloud_snapshots.R`):
+* **3 Isolated Schemas (`app/internal/cloudsync/schema.go`):** `becmaster` (`env` 112 cols + PostGIS `geom`, `admin` 20 cols, `veg`/`humus`/`mineral`/`other` with `child_identity` + watermark, `metadata` 75 cols, SHA-256 hash-chained `audit` + `merge_ledger`, `snapshots`, `download_log`), `staging` (`submissions` with RLS + `BEFORE INSERT` role/compliance trigger + keyed `VP08` tables), and `standards` (`library_releases` + 2026 `BCPlantTaxonomy v19` & `BECdb v13` catalogues).
+* **Contributor & Custodian Workflows (`contributor.go`, `custodian_merge.go`, `seed.go`, `r/R/cloud_*.R`):** Offline-first env/`becmaster.env` resolution with strict secret redaction, `< 3 s` standards publish & atomic local `VLists.db` swap, streaming 71,567-plot (`1.65M` veg, `597K` audit) `BECMaster` baseline seeding without OOM, regional subset checkout to WAL `VP08` `.db` + `download_log`, mandatory `RunComplianceValidation` + `UserSpeciesManifest` staging uploads, `< 300 ms` `pgx.Batch`-pipelined 3-way Custodian merge inside `SERIALIZABLE` PostgreSQL transactions, and cryptographic SHA-256 audit-chain verification (`vpro_master_verify_audit()`).
 
 ---
 
@@ -124,13 +124,13 @@ Forensic analysis of `VPro64_forAI/Modules/V7mdlTurboVeg.txt` revealed that lega
 * **TurboVeg 3 (`Turboveg3` — Primary Modern Target):** Official **31-table SQLite** single-file database (`https://www.synbiosys.alterra.nl/turboveg3/`), removing dBase 8-character/254-byte limits and avoiding unregistered Turboveg3's 250-plot export cap when VPro writes the SQLite target directly.
 * **TurboVeg 2 / JUICE Compatibility (`Plot_package` XML):** **TurboVeg XML** (`<Plot_package>`) is natively imported and exported by **TurboVeg 2**, **TurboVeg 3**, and **JUICE** without dBase `.dbf` truncation.
 
-**Implemented Dual-Target Adapter (`internal/interchange/turboveg_sqlite.go` & `turboveg_xml.go`, `266921e`):**
+**Implemented Dual-Target Adapter (`app/internal/interchange/turboveg_sqlite.go` & `turboveg_xml.go`, `266921e`):**
 1. Ships **both** official **31-table TurboVeg 3 SQLite** export/import (including calibrated Delphi `TDateTime` `1899-12-30` epoch encoding, WKT `POINT(lon lat)` geometry, GUIDs, header/remarks/abundance tables, and species dictionary crosswalks) **and** universal **TurboVeg `Plot_package` XML** export/import (handling UTF-8 and Windows-1252/ISO-8859-1 encodings plus Braun-Blanquet cover-scale midpoints)—eliminating format lock-in regardless of which version external phytosociologists run.
 2. Maps VPro's 10+ layers cleanly via an explicit layer crosswalk (`1..3/TotalA -> Tree`, `4..5c/TotalB -> Shrub`, `6 -> Herb`, `7..9 -> Moss/Cryptogam`, `10 -> Epiphyte`), preserving exact IEEE-754 `float32` `% Cover` values and transactional `<Project>_Audit` records on import without legacy `MakeJuiceFile`'s lossy integer quantization (`V7mdlTurboVeg.txt:115-130`).
 
 ### 3.2 Native R `.rds` (Long) & Wide/Long CSV Interchange (`Schedule A 1.iii, 2.iv.2–3`, `VPro2.0_Functions` p. 8) — **Delivered in `v2.0.1`**
-* **CSV Long & Wide (`internal/interchange/csvmatrix.go`, `tablecsvbundle.go`):** Provides user-selectable **Long Tidy CSV** (`PlotNumber, SiteUnit, Layer, Species, Cover, Height`) and **Wide Plot-by-Species Matrix CSV** alongside raw 8-table archival Store `.zip` bundles.
-* **R `.rds` (Long Format, `internal/interchange/rdsexport.go`):** Pure-Go R Serialization Format v2/v3 `.rds` writer generating compressed typed `data.frame` bundles (`env`, `admin`, `veg_long`, `humus`, `mineral`, `su`, `metadata`) directly on machines without R installed, complemented by native `vpro` `v2.0.0` R SDK WAL readers.
+* **CSV Long & Wide (`app/internal/interchange/csvmatrix.go`, `tablecsvbundle.go`):** Provides user-selectable **Long Tidy CSV** (`PlotNumber, SiteUnit, Layer, Species, Cover, Height`) and **Wide Plot-by-Species Matrix CSV** alongside raw 8-table archival Store `.zip` bundles.
+* **R `.rds` (Long Format, `app/internal/interchange/rdsexport.go`):** Pure-Go R Serialization Format v2/v3 `.rds` writer generating compressed typed `data.frame` bundles (`env`, `admin`, `veg_long`, `humus`, `mineral`, `su`, `metadata`) directly on machines without R installed, complemented by native `r/` (`vpro` `v2.0.0`) R SDK WAL readers (`vpro_read_rds_project()`).
 
 ---
 

@@ -8,19 +8,19 @@ tools: [read, search]
 
 # Write Headless `vpro` R Documentation in VPro Voice
 
-Use the `vproguy` agent to draft or revise documentation for the headless `vpro` R Companion SDK & Scientific Analytics Package.
+Use the `vproguy` agent to draft or revise documentation for the headless `vpro` R Companion SDK & Scientific Analytics Package (`r/` in `Boostao/vpro`).
 
 Supported output types:
-- `roxygen2` function documentation (`@title`, `@param`, `@return`, `@details`, `@section Ecological & Data-Safety Cautions:`, `@examples`)
-- package vignette or reproducible Quarto / `_targets` workflow tutorial
-- Quarto BEC unit / BGC subzone guide narrative (`inst/reports/*.qmd`)
-- `NEWS.md` release notes
+- `roxygen2` function documentation (`r/R/*.R`: `@title`, `@param`, `@return`, `@details`, `@section Ecological & Data-Safety Cautions:`, `@examples`)
+- package vignette or reproducible Quarto / `_targets` workflow tutorial (`r/vignettes/`)
+- Quarto BEC unit / BGC subzone guide narrative (`r/inst/quarto/*.qmd` & `app/internal/rsidecar/assets/*.qmd`)
+- `r/NEWS.md` release notes
 - R condition / diagnostic warning text (`rlang::abort` / `rlang::warn`)
 
 Before writing:
-1. Inspect relevant domain oracle notes in `inst/doc-oracles/`, `/home/bruno/Work/VPRO_ACCESS/okf/`, and `/home/bruno/Work/MoF-Skeena-Research/`.
+1. Inspect relevant domain oracle notes and references in `okf/00_index.md`, `okf/02_present_state/oracles/`, `app/internal/diagnostics/`, `app/internal/reports/`, `app/internal/rsidecar/assets/`, `r/`, and `/home/bruno/Work/MoF-Skeena-Research/`.
 2. Reuse canonical BEC and VPro terminology (`PlotNumber` text, `VP08`, `*_SU`, `*_Hierarchy` `~` breakpoints, `*_Lump` `99%` cap, `rSMR`/`aSMR`/`rSNR`, Presence `I–V`, Domin-Krajina Significance `+`/`1–9`, `UserSiteUnit` vs `BECSiteUnit`).
-3. State SQLite WAL concurrency and write-back boundaries plainly (read-only by default alongside `vpro_wails`; opt-in `BEGIN IMMEDIATE` write-back only to candidate/working tables with `<Project>_Audit` + `__VPRO_*` provenance, never mutating `Master*` or `USys*` tables).
+3. State SQLite WAL concurrency and write-back boundaries plainly (read-only by default alongside VPro Desktop `app/`; opt-in `BEGIN IMMEDIATE` write-back only to candidate/working tables with `<Project>_Audit` + `__VPRO_*` provenance, never mutating `Master*` or `USys*` tables; governed Cloud `BECMaster` staging/merge via `r/R/cloud_*.R`).
 
 Writing rules:
 - Start from the ecologist's or analyst's scientific task.
