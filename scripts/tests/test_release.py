@@ -870,6 +870,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("python scripts/release.py release-manifest release-assets --output release-assets/release-manifest.json", workflow)
         self.assertIn("python scripts/release.py remote release-remote.json --require-release-manifest", workflow)
         self.assertIn("python scripts/release.py verify release-downloaded --manifest release-assets/SHA256SUMS.txt --release-manifest release-assets/release-manifest.json", workflow)
+        self.assertIn("  build-r:", workflow)
+        self.assertIn("scope:", workflow)
+        self.assertIn("pkgdown::build_site()", workflow)
         self.assertIn("name: github-pages", workflow)
         self.assertIn("actions/configure-pages@v5", workflow)
         pages = (ROOT / ".github/workflows/pages.yml").read_text()
@@ -878,7 +881,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("node-version: '22'", pages)
         self.assertIn("python scripts/release.py sync-release-manifest", pages)
         self.assertIn("node scripts/build-docs-src.mjs && node site/build.mjs", pages)
+        self.assertIn("pkgdown::build_site()", pages)
         self.assertIn("path: 'site/dist'", pages)
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("dorny/paths-filter@v3", ci)
+        self.assertIn("postgres:16", ci)
+        self.assertIn("rsidecar-integration:", ci)
 
 
 if __name__ == "__main__":

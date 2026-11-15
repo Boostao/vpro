@@ -1,4 +1,12 @@
-url: https://bcgov.github.io/vpro/
+url: https://boostao.github.io/vpro/r
+destination: ../site/dist/r
+
+repo:
+  url:
+    home: https://github.com/Boostao/vpro/
+    source: https://github.com/Boostao/vpro/blob/main/r/
+    issue: https://github.com/Boostao/vpro/issues/
+    user: https://github.com/
 
 template:
   bootstrap: 5
@@ -15,9 +23,16 @@ navbar:
   bg: primary
   type: dark
   structure:
-    left:  [intro, reference, articles, news]
-    right: [search]
+    left:  [desktop, intro, reference, articles, news]
+    right: [search, github]
   components:
+    desktop:
+      text: VPro Desktop & Downloads
+      href: https://boostao.github.io/vpro/
+    github:
+      icon: fab fa-github fa-lg
+      href: https://github.com/Boostao/vpro
+      aria-label: GitHub repository
     articles:
       text: Workflows
       menu:

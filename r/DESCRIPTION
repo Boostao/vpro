@@ -22,8 +22,8 @@ Description: Programmatic R companion SDK and quantitative ecology engine for
     cloud queries, contributor staging, custodian three-way merges, compact RDS
     snapshots, and Quarto BEC guides.
 License: Apache License (== 2)
-URL: https://bcgov.github.io/vpro/, https://github.com/boostao/vpro
-BugReports: https://github.com/boostao/vpro/issues
+URL: https://boostao.github.io/vpro/r/, https://boostao.github.io/vpro/, https://github.com/Boostao/vpro
+BugReports: https://github.com/Boostao/vpro/issues
 Depends:
     R (>= 4.4.0)
 Imports:

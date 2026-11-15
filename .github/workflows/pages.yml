@@ -4,12 +4,12 @@ on:
   push:
     branches:
       - main
-      - master
     paths:
       - 'site/**'
       - 'docs-src/**'
-      - 'scripts/build-docs-src.mjs'
-      - 'scripts/release.py'
+      - 'scripts/**'
+      - 'r/**'
+      - 'app/resources/standards-2026-provenance.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -30,6 +30,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-24.04
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -44,6 +46,21 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R package and pkgdown dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: bcgov/climr, local::.
+
       - name: Hydrate release-manifest.json from published GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,6 +68,21 @@ jobs:
 
       - name: Build single-source docs and BC Gov release portal
         run: node scripts/build-docs-src.mjs && node site/build.mjs
+
+      - name: Build pkgdown R Companion SDK documentation into site/dist/r
+        working-directory: r
+        run: Rscript -e "pkgdown::build_site()"
+
+      - name: Verify unified portal and pkgdown outputs
+        run: |
+          set -euo pipefail
+          test -s site/dist/index.html
+          test -s site/dist/r-logo.svg
+          test -s site/dist/r/index.html
+          test -s site/dist/r/logo.svg
+          test -s site/dist/r/favicon.ico
+          grep -q 'href="./r/"' site/dist/index.html
+          grep -q 'VPro Desktop &amp; Downloads' site/dist/r/index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

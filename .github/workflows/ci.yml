@@ -1,0 +1,417 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Detect Changed Subsystems
+    runs-on: ubuntu-24.04
+    outputs:
+      portal: ${{ steps.filter.outputs.portal }}
+      app: ${{ steps.filter.outputs.app }}
+      r: ${{ steps.filter.outputs.r }}
+      rsidecar: ${{ steps.filter.outputs.rsidecar }}
+      website: ${{ steps.filter.outputs.website }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            portal:
+              - 'site/**'
+              - 'docs-src/**'
+              - 'scripts/**'
+              - 'app/resources/standards-2026-provenance.json'
+              - 'app/resources/help_bundle.json'
+              - '.github/workflows/**'
+            app:
+              - 'app/**'
+              - 'docs-src/**'
+              - '.github/workflows/ci.yml'
+            r:
+              - 'r/**'
+              - '.github/workflows/ci.yml'
+            rsidecar:
+              - 'r/**'
+              - 'app/internal/rsidecar/**'
+              - '.github/workflows/ci.yml'
+            website:
+              - 'site/**'
+              - 'docs-src/**'
+              - 'scripts/**'
+              - 'r/**'
+              - 'app/resources/standards-2026-provenance.json'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/pages.yml'
+
+  portal-and-scripts:
+    name: Portal, Docs Bundle & Release Verifier
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.portal == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile docs-src and verify zero help_bundle drift
+        run: |
+          set -euo pipefail
+          node scripts/build-docs-src.mjs
+          git diff --exit-code -- docs-src app/resources/help_bundle.json
+      - name: Build BC Gov portal and run portal & release verifier tests
+        run: |
+          set -euo pipefail
+          node site/build.mjs
+          node --test scripts/tests/downloadPortal.test.cjs
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
+  app-frontend:
+    name: Desktop Frontend (Svelte 5 & TypeScript)
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: app/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run frontend test suites
+        run: npm test
+      - name: Run svelte-check type diagnostics
+        run: npm run check
+      - name: Build production frontend bundle
+        run: npm run build
+
+  app-backend:
+    name: Desktop Backend (Go, CGO, DAG & Live PG16)
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_pg_superuser_pw
+          POSTGRES_DB: becmaster_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d becmaster_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      CGO_ENABLED: '1'
+      VPRO_PG_HOST: '127.0.0.1'
+      VPRO_PG_PORT: '5432'
+      VPRO_PG_DBNAME: 'becmaster_ci'
+      VPRO_PG_SSLMODE: 'disable'
+      VPRO_PG_USER: 'vpro_contrib'
+      VPRO_PG_PASSWORD: 'ci_contrib_pw_2026'
+      VPRO_PG_ADMIN_USER: 'vpro_custodian'
+      VPRO_PG_ADMIN_PASSWORD: 'ci_custodian_pw_2026'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK4, WebKitGTK 6.0, and PostgreSQL client headers
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-4-dev libwebkitgtk-6.0-dev pkg-config build-essential postgresql-client
+      - name: Bootstrap distinct PostgreSQL contributor and custodian roles
+        env:
+          PGPASSWORD: ci_pg_superuser_pw
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -p 5432 -U postgres -d becmaster_ci -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE vpro_contrib LOGIN PASSWORD 'ci_contrib_pw_2026' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE vpro_custodian LOGIN PASSWORD 'ci_custodian_pw_2026' NOSUPERUSER NOCREATEDB CREATEROLE;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE becmaster_ci TO vpro_custodian;
+          GRANT CONNECT, TEMPORARY ON DATABASE becmaster_ci TO vpro_contrib;
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          SQL
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: app/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Wails v3 CLI
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Build frontend assets for Go embed
+        working-directory: app/frontend
+        run: npm ci && npm run build
+      - name: Run Go test suite with race detector and live PostgreSQL RBAC/RLS
+        working-directory: app
+        run: go test -tags sqliteonly -race ./...
+      - name: Verify native Linux desktop binary build
+        working-directory: app
+        run: task linux:build EXTRA_TAGS=sqliteonly
+
+  r-cmd-check-linux:
+    name: R CMD check (${{ matrix.os }}, R ${{ matrix.r }}, Live PG16)
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.r == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04]
+        r: ['release', '4.4']
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_pg_superuser_pw
+          POSTGRES_DB: becmaster_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d becmaster_ci"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: 'yes'
+      _R_CHECK_FORCE_SUGGESTS_: 'false'
+      VPRO_PG_HOST: '127.0.0.1'
+      VPRO_PG_PORT: '5432'
+      VPRO_PG_DBNAME: 'becmaster_ci'
+      VPRO_PG_SSLMODE: 'disable'
+      VPRO_PG_USER: 'vpro_contrib'
+      VPRO_PG_PASSWORD: 'ci_contrib_pw_2026'
+      VPRO_PG_ADMIN_USER: 'vpro_custodian'
+      VPRO_PG_ADMIN_PASSWORD: 'ci_custodian_pw_2026'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap PostgreSQL roles for Wave 6 Cloud BECMaster tests
+        env:
+          PGPASSWORD: ci_pg_superuser_pw
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          psql -h 127.0.0.1 -p 5432 -U postgres -d becmaster_ci -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE vpro_contrib LOGIN PASSWORD 'ci_contrib_pw_2026' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE vpro_custodian LOGIN PASSWORD 'ci_custodian_pw_2026' NOSUPERUSER NOCREATEDB CREATEROLE;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE becmaster_ci TO vpro_custodian;
+          GRANT CONNECT, TEMPORARY ON DATABASE becmaster_ci TO vpro_contrib;
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          SQL
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r }}
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: any::rcmdcheck, bcgov/climr, local::.
+      - name: Seed BECMaster CI schemas, 2026 standards release, and baseline plot
+        working-directory: r
+        run: |
+          Rscript - <<'RSCRIPT'
+          con <- vpro::vpro_master_connect("custodian")
+          on.exit(vpro::vpro_master_disconnect(con), add = TRUE)
+          vpro::vpro_master_bootstrap(con, contributor_role = "vpro_contrib", custodian_role = "vpro_custodian")
+
+          vlists_db <- vpro:::vpro_bundled_db("VLists.db")
+          vlists_sha <- tolower(trimws(unname(as.character(vpro:::vpro_sha256_file(vlists_db)))))
+          gz_path <- system.file("extdata", "VLists.db.gz", package = "vpro")
+          gz_bytes <- readBin(gz_path, what = "raw", n = file.info(gz_path)$size)
+          gz_hex <- paste(as.character(gz_bytes), collapse = "")
+
+          DBI::dbExecute(
+            con$conn,
+            paste(
+              "INSERT INTO standards.library_releases",
+              "(release_id, published_by, bec_version, taxonomy_version, vlists_sha256, is_current, vlists_gzip)",
+              "VALUES ($1, $2, $3, $4, $5, TRUE, decode($6, 'hex'))",
+              "ON CONFLICT (release_id) DO NOTHING"
+            ),
+            params = list(
+              paste0("BECdb_v13_2026__BCPlantTaxa_v19_2025__", substr(vlists_sha, 1L, 12L)),
+              "CI Custodian",
+              "BECdb_v13_2026 (2026-05-28)",
+              "BCPlantTaxa_v19_2025 (2026-02-09)",
+              vlists_sha,
+              gz_hex
+            )
+          )
+
+          DBI::dbExecute(
+            con$conn,
+            paste(
+              'INSERT INTO becmaster.env ("PlotNumber", "ProjectID", "Zone", "SubZone", "SiteSeries",',
+              '"MoistureRegime", "NutrientRegime", "Elevation", "Latitude", "Longitude",',
+              '"SiteNotes", "SpeciesListComplete", "Flag")',
+              "VALUES ('9624781', 'BECM_CI', 'SBS', 'dk', '01', '4', 'C', 720, 54.60, -126.95, 'Baseline CI plot', -1, 0)",
+              'ON CONFLICT ("PlotNumber") DO NOTHING'
+            )
+          )
+          DBI::dbExecute(
+            con$conn,
+            paste(
+              'INSERT INTO becmaster.admin ("Plot", "PlotType", "SitePlotQuality", "VegPlotQuality",',
+              '"SoilPlotQuality", "UpdatedFromCards", "BECSiteUnit", "UserSiteUnit")',
+              "VALUES ('9624781', 'FS882', 'Good', 'Good', 'Good', -1, 'SBSdk/01', 'SBSdk/01')",
+              'ON CONFLICT ("Plot") DO NOTHING'
+            )
+          )
+          DBI::dbExecute(
+            con$conn,
+            paste(
+              'INSERT INTO becmaster.veg ("PlotNumber", "Species", "Layer", "Cover1", "Flag", "ID")',
+              "VALUES ('9624781', 'PINUCON', '1', 42.0, 0, 100001)",
+              'ON CONFLICT ("ID") DO NOTHING'
+            )
+          )
+          RSCRIPT
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          working-directory: r
+          args: 'c("--no-manual", "--as-cran")'
+          error-on: '"warning"'
+
+  r-cmd-check-cross-os:
+    name: R CMD check (${{ matrix.os }}, R ${{ matrix.r }})
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.r == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        r: ['release']
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: 'yes'
+      _R_CHECK_FORCE_SUGGESTS_: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r }}
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: any::rcmdcheck, bcgov/climr, local::.
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          working-directory: r
+          args: 'c("--no-manual", "--as-cran")'
+          error-on: '"warning"'
+
+  rsidecar-integration:
+    name: Go <-> R Sidecar End-to-End Contract
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.rsidecar == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK4 and WebKitGTK 6.0 dev headers
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev pkg-config build-essential
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache-dependency-path: app/go.sum
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: bcgov/climr, local::.
+      - name: Install local ./r companion package
+        run: R CMD INSTALL r
+      - name: Run Go rsidecar integration tests against installed vpro R SDK
+        working-directory: app
+        run: go test -v -tags sqliteonly ./internal/rsidecar/...
+
+  website-dry-run:
+    name: Unified Website Dry-Run (/ + /r/)
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.website == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: bcgov/climr, local::.
+      - name: Build root portal and pkgdown /r/ site
+        run: |
+          set -euo pipefail
+          node scripts/build-docs-src.mjs
+          node site/build.mjs
+          (cd r && Rscript -e "pkgdown::build_site()")
+      - name: Verify unified output assets and bidirectional navigation
+        run: |
+          set -euo pipefail
+          test -s site/dist/index.html
+          test -s site/dist/r-logo.svg
+          test -s site/dist/r/index.html
+          test -s site/dist/r/logo.svg
+          test -s site/dist/r/favicon.ico
+          grep -q 'href="./r/"' site/dist/index.html
+          grep -q 'VPro Desktop &amp; Downloads' site/dist/r/index.html

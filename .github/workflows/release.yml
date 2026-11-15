@@ -4,9 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer, optionally prefixed with v (numeric components <= 65535)'
+        description: 'SemVer, optionally prefixed with v (or r-v when scope is r-only)'
         required: true
         default: 'v2.1.0-alpha.1'
+      scope:
+        description: 'Release scope: full (Desktop + R SDK) or r-only (fast R SDK release tag r-vX.Y.Z)'
+        type: choice
+        options:
+          - full
+          - r-only
+        default: 'full'
       prerelease:
         description: 'Publish as Pre-release'
         type: boolean
@@ -28,8 +35,10 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      numeric: ${{ steps.version.outputs.numeric }}
       tag: ${{ steps.version.outputs.tag }}
       build_mode: ${{ steps.version.outputs.build_mode }}
+      scope: ${{ steps.version.outputs.scope }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,11 +48,13 @@ jobs:
         id: version
         env:
           RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_SCOPE: ${{ inputs.scope }}
           RELEASE_PRERELEASE: ${{ inputs.prerelease }}
         run: python scripts/release.py version
 
   build-windows:
     needs: validate
+    if: needs.validate.outputs.scope == 'full'
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -62,11 +73,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          cache-dependency-path: app/go.sum
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: app/frontend/package-lock.json
       - uses: arduino/setup-task@v2
         with:
           version: 3.x
@@ -92,25 +104,29 @@ jobs:
       - name: Prepare CI-only version metadata
         run: python scripts/release.py metadata
       - name: Install frontend dependencies
-        working-directory: frontend
+        working-directory: app/frontend
         run: npm ci
       - name: Build binary and NSIS installer with cgo
         env:
           GOARCH: ${{ matrix.arch }}
         shell: pwsh
         run: |
+          Push-Location app
           task windows:create:nsis:installer "ARCH=$env:RELEASE_ARCH" CGO_ENABLED=1 EXTRA_TAGS=sqliteonly INSTALL_SCOPE=user "VERSION=$env:RELEASE_VERSION" "BUILD_MODE=$env:RELEASE_BUILD_MODE"
-          if ($LASTEXITCODE -ne 0) { throw "Windows build/NSIS packaging failed" }
+          $taskExit = $LASTEXITCODE
+          Pop-Location
+          if ($taskExit -ne 0) { throw "Windows build/NSIS packaging failed" }
           python scripts/release.py package windows
           if ($LASTEXITCODE -ne 0) { throw "Windows artifact validation failed" }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-${{ matrix.arch }}
-          path: dist-artifacts/*
+          path: app/dist-artifacts/*
           if-no-files-found: error
 
   build-macos:
     needs: validate
+    if: needs.validate.outputs.scope == 'full'
     runs-on: macos-15-intel
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
@@ -124,11 +140,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          cache-dependency-path: app/go.sum
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: app/frontend/package-lock.json
       - uses: arduino/setup-task@v2
         with:
           version: 3.x
@@ -141,23 +158,24 @@ jobs:
       - name: Prepare CI-only version metadata
         run: python scripts/release.py metadata
       - name: Install frontend dependencies
-        working-directory: frontend
+        working-directory: app/frontend
         run: npm ci
       - name: Build universal app and DMG without host rebuild
         run: |
           set -euo pipefail
-          task darwin:package:universal EXTRA_TAGS=sqliteonly "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE"
-          python scripts/release.py cpu bin/VPro.app/Contents/MacOS/VPro --format macho --arch universal
-          task darwin:create:dmg
+          (cd app && task darwin:package:universal EXTRA_TAGS=sqliteonly "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
+          python scripts/release.py cpu app/bin/VPro.app/Contents/MacOS/VPro --format macho --arch universal
+          (cd app && task darwin:create:dmg)
           python scripts/release.py package macos
       - uses: actions/upload-artifact@v4
         with:
           name: macos-universal
-          path: dist-artifacts/*
+          path: app/dist-artifacts/*
           if-no-files-found: error
 
   build-linux:
     needs: validate
+    if: needs.validate.outputs.scope == 'full'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -186,11 +204,12 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          cache-dependency-path: app/go.sum
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: app/frontend/package-lock.json
       - uses: arduino/setup-task@v2
         with:
           version: 3.x
@@ -209,27 +228,66 @@ jobs:
       - name: Prepare CI-only version metadata
         run: python scripts/release.py metadata
       - name: Install frontend dependencies
-        working-directory: frontend
+        working-directory: app/frontend
         run: npm ci
       - name: Build native AppImage and deb
         run: |
           set -euo pipefail
-          task linux:create:appimage linux:create:deb "ARCH=$RELEASE_ARCH" EXTRA_TAGS=sqliteonly "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE"
+          (cd app && task linux:create:appimage linux:create:deb "ARCH=$RELEASE_ARCH" EXTRA_TAGS=sqliteonly "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
           python scripts/release.py package linux
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
-          path: dist-artifacts/*
+          path: app/dist-artifacts/*
+          if-no-files-found: error
+
+  build-r:
+    needs: validate
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      RELEASE_NUMERIC: ${{ needs.validate.outputs.numeric }}
+      RELEASE_SCOPE: ${{ needs.validate.outputs.scope }}
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      _R_CHECK_FORCE_SUGGESTS_: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: bcgov/climr, local::.
+      - name: Stamp R DESCRIPTION version and build checked source tarball
+        run: |
+          set -euo pipefail
+          python scripts/release.py metadata --target r --scope "$RELEASE_SCOPE"
+          (cd r && R CMD build .)
+          R CMD check --no-manual "r/vpro_${RELEASE_NUMERIC}.tar.gz"
+          rm -rf vpro.Rcheck
+          python scripts/release.py package r --scope "$RELEASE_SCOPE"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r-sdk
+          path: r/dist-artifacts/*
           if-no-files-found: error
 
   release:
-    needs: [validate, build-windows, build-macos, build-linux]
+    needs: [validate, build-windows, build-macos, build-linux, build-r]
+    if: ${{ !failure() && !cancelled() && needs.validate.result == 'success' && needs.build-r.result == 'success' && (needs.validate.outputs.scope == 'r-only' || (needs.build-windows.result == 'success' && needs.build-macos.result == 'success' && needs.build-linux.result == 'success')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
       RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+      RELEASE_SCOPE: ${{ needs.validate.outputs.scope }}
       RELEASE_DRAFT: ${{ inputs.draft }}
       RELEASE_PRERELEASE: ${{ inputs.prerelease }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -245,11 +303,15 @@ jobs:
       - name: Require exact assets, architecture witnesses and checksums
         run: |
           set -euo pipefail
-          python scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output base-release-manifest.json
-          python scripts/release.py manifest release-assets
-          python scripts/release.py release-manifest release-assets --output release-assets/release-manifest.json --base-manifest base-release-manifest.json
+          if [ "$RELEASE_SCOPE" = "r-only" ]; then
+            python scripts/release.py manifest release-assets --scope r-only
+          else
+            python scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output base-release-manifest.json
+            python scripts/release.py manifest release-assets
+            python scripts/release.py release-manifest release-assets --output release-assets/release-manifest.json --base-manifest base-release-manifest.json
+          fi
       - name: Refuse an existing tag built from different source
-        run: python scripts/release.py source-tag
+        run: python scripts/release.py source-tag --scope "$RELEASE_SCOPE"
       - name: Create release with every validated asset
         run: |
           set -euo pipefail
@@ -257,24 +319,34 @@ jobs:
           flags=()
           if [ "$RELEASE_DRAFT" = "true" ]; then flags+=(--draft); fi
           if [ "$RELEASE_PRERELEASE" = "true" ] || [[ "${RELEASE_VERSION%%+*}" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" "${assets[@]}" release-assets/release-manifest.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VPro $RELEASE_TAG" --notes "Windows amd64/arm64 EXE, ZIP and NSIS; macOS universal DMG and ZIP; Linux amd64/arm64 AppImage, deb and tar. Verify downloads against SHA256SUMS.txt and release-manifest.json. macOS VPro.app is ad-hoc signed, not notarized." "${flags[@]}"
+          if [ "$RELEASE_SCOPE" = "r-only" ]; then
+            gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "vpro R SDK $RELEASE_TAG" --notes "Checked R companion SDK source package (vpro-r-sdk.tar.gz) and SHA256SUMS.txt." "${flags[@]}"
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" release-assets/release-manifest.json --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "VPro $RELEASE_TAG" --notes "Windows amd64/arm64 EXE, ZIP and NSIS; macOS universal DMG and ZIP; Linux amd64/arm64 AppImage, deb and tar; R Companion SDK source tarball (vpro-r-sdk.tar.gz). Verify downloads against SHA256SUMS.txt and release-manifest.json. macOS VPro.app is ad-hoc signed, not notarized." "${flags[@]}"
+          fi
       - name: Verify remotely attached names and bytes
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets > release-remote.json
-          python scripts/release.py remote release-remote.json --require-release-manifest
-          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-downloaded
-          python scripts/release.py verify release-downloaded --manifest release-assets/SHA256SUMS.txt --release-manifest release-assets/release-manifest.json
+          if [ "$RELEASE_SCOPE" = "r-only" ]; then
+            python scripts/release.py remote release-remote.json --scope r-only
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-downloaded
+            python scripts/release.py verify release-downloaded --manifest release-assets/SHA256SUMS.txt --scope r-only
+          else
+            python scripts/release.py remote release-remote.json --require-release-manifest
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir release-downloaded
+            python scripts/release.py verify release-downloaded --manifest release-assets/SHA256SUMS.txt --release-manifest release-assets/release-manifest.json
+          fi
       - uses: actions/upload-artifact@v4
-        if: inputs.draft != true
+        if: inputs.draft != true && needs.validate.outputs.scope == 'full'
         with:
           name: release-manifest
           path: release-assets/release-manifest.json
           if-no-files-found: error
 
   deploy-pages:
-    needs: [release]
-    if: inputs.draft != true
+    needs: [validate, release]
+    if: ${{ !failure() && !cancelled() && needs.release.result == 'success' && inputs.draft != true }}
     runs-on: ubuntu-24.04
     concurrency:
       group: 'pages'
@@ -286,21 +358,46 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      RELEASE_SCOPE: ${{ needs.validate.outputs.scope }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r
+          extra-packages: bcgov/climr, local::.
       - uses: actions/download-artifact@v4
+        if: needs.validate.outputs.scope == 'full'
         with:
           name: release-manifest
           path: release-manifest
-      - name: Build Pages portal with verified release-manifest.json
+      - name: Build unified Pages portal and pkgdown /r/ site
         run: |
           set -euo pipefail
-          cp release-manifest/release-manifest.json site/release-manifest.json
+          if [ "$RELEASE_SCOPE" = "full" ]; then
+            cp release-manifest/release-manifest.json site/release-manifest.json
+          else
+            python scripts/release.py sync-release-manifest --base-manifest site/release-manifest.json --output site/release-manifest.json
+          fi
           node scripts/build-docs-src.mjs
           node site/build.mjs
+          (cd r && Rscript -e "pkgdown::build_site()")
+          test -s site/dist/index.html
+          test -s site/dist/r/index.html
+          test -s site/dist/r/logo.svg
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact

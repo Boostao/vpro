@@ -1,6 +1,19 @@
-# vpro 2.0: Companion R SDK & Quantitative Ecology Engine for VPro
+# vpro 2.0: Companion R SDK & Quantitative Ecology Engine for VPro <a href="https://boostao.github.io/vpro/r/"><img src="man/figures/logo.svg" align="right" height="138" alt="vpro R Companion SDK" /></a>
 
-`vpro` is the headless R companion package and scientific analytics engine for **`VPro` (`vpro_wails`)** under the British Columbia Ministry of Forests **Biogeoclimatic Ecosystem Classification (BEC)** Program.
+`vpro` is the headless R companion package and scientific analytics engine for **`VPro`** (`app/` in [`Boostao/vpro`](https://github.com/Boostao/vpro)) under the British Columbia Ministry of Forests **Biogeoclimatic Ecosystem Classification (BEC)** Program.
+
+## Installation
+
+```r
+# Recommended via pak (monorepo r/ subdirectory):
+pak::pak("Boostao/vpro/r")
+
+# Or via remotes:
+remotes::install_github("Boostao/vpro", subdir = "r")
+```
+
+- **VPro Desktop Portal & Downloads:** <https://boostao.github.io/vpro/>
+- **R SDK Reference & Vignettes:** <https://boostao.github.io/vpro/r/>
 
 Interactive plot-card data entry, datasheet editing, and 3D MapLibre/WebGPU spatial inspection live in the desktop `VPro` application; `vpro` gives quantitative ecologists and data custodians direct, WAL-safe programmatic access to the local 7-database `VP08` SQLite workspace, portable zero-database `.rds` project snapshots, and the provincial PostgreSQL **`BECMaster`** service (`becmaster`, `staging`, and `standards` schemas) from R, Quarto, and `_targets`.
 

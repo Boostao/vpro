@@ -540,24 +540,29 @@ export function renderPortalHtml({
         </div>
 
         <div id="card-r-sdk" class="card" style="margin-top: 1.25rem;">
-          <div>
-            <h3>
-              ${ICONS.book}
-              <span>Companion R SDK (<code>vpro</code>)</span>
-              <span class="os-tag">R &gt;= 4.4.0 · Headless</span>
-            </h3>
-            <p>Scriptable R companion package sharing identical <code>VP08</code> SQLite WAL readers, <code>BECdb v13</code> / <code>BCPlantTaxonomy v19</code> / <code>LMH25</code> standards, <code>V7mdlDiagnostic</code> BEC synthesis, climate/aSMR edatopic grids, Quarto guides, and PostgreSQL <code>BECMaster</code> staging workflows.</p>
-            <div class="arch-heading">Install from GitHub Subdirectory (<code>r/</code>)</div>
-            <pre class="code-block mono" style="margin: 0.5rem 0 0.9rem; padding: 0.65rem 0.85rem; background: #F2F2F2; border-left: 3px solid #003366; overflow-x: auto;"><code>pak::pak("${escapeHtml(repository)}/r")
+          <div style="display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-start;">
+            <a href="./r/" aria-label="Open vpro R Companion SDK Documentation" style="flex: 0 0 auto;">
+              <img src="./r-logo.svg" width="112" height="130" alt="vpro R Companion SDK Hex Sticker" style="display: block;" />
+            </a>
+            <div style="flex: 1 1 320px;">
+              <h3>
+                ${ICONS.book}
+                <span>Companion R SDK (<code>vpro</code>)</span>
+                <span class="os-tag">R &gt;= 4.4.0 · Headless</span>
+              </h3>
+              <p>Scriptable R companion package sharing identical <code>VP08</code> SQLite WAL readers, <code>BECdb v13</code> / <code>BCPlantTaxonomy v19</code> / <code>LMH25</code> standards, <code>V7mdlDiagnostic</code> BEC synthesis, climate/aSMR edatopic grids, Quarto guides, and PostgreSQL <code>BECMaster</code> staging workflows.</p>
+              <div class="arch-heading">Install from GitHub Subdirectory (<code>r/</code>)</div>
+              <pre class="code-block mono" style="margin: 0.5rem 0 0.9rem; padding: 0.65rem 0.85rem; background: #F2F2F2; border-left: 3px solid #003366; overflow-x: auto;"><code>pak::pak("${escapeHtml(repository)}/r")
 # or: remotes::install_github("${escapeHtml(repository)}", subdir = "r")</code></pre>
-            <div class="arch-heading">Release Source Tarball &amp; Reference Documentation</div>
-            <div class="asset-list">
-              ${renderAssetRow('dl-r-sdk', 'R Source Package (vpro-r-sdk.tar.gz)')}
-            </div>
-            <div class="doc-meta-badges" style="margin-top: 0.75rem;">
-              <a href="./r/">Open R SDK Reference &amp; Vignettes (/r/)</a>
-              <a href="./r/articles/index.html">Workflow Vignettes</a>
-              <a href="./r/reference/index.html">Function Reference</a>
+              <div class="arch-heading">Release Source Tarball &amp; Reference Documentation</div>
+              <div class="asset-list">
+                ${renderAssetRow('dl-r-sdk', 'R Source Package (vpro-r-sdk.tar.gz)')}
+              </div>
+              <div class="doc-meta-badges" style="margin-top: 0.75rem;">
+                <a href="./r/">Open R SDK Reference &amp; Vignettes (/r/)</a>
+                <a href="./r/articles/index.html">Workflow Vignettes</a>
+                <a href="./r/reference/index.html">Function Reference</a>
+              </div>
             </div>
           </div>
         </div>
@@ -880,6 +885,10 @@ export function buildSite({
     throw new Error(`Missing required favicon.ico: ${faviconSrc}`);
   }
   fs.copyFileSync(faviconSrc, path.join(outDir, 'favicon.ico'));
+  const rLogoSrc = path.join(repoRoot, 'r', 'man', 'figures', 'logo.svg');
+  if (fs.existsSync(rLogoSrc)) {
+    fs.copyFileSync(rLogoSrc, path.join(outDir, 'r-logo.svg'));
+  }
 
   fs.writeFileSync(path.join(outDir, 'index.html'), html, 'utf8');
   fs.writeFileSync(path.join(outDir, 'styles.css'), css, 'utf8');
