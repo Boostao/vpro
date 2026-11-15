@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"strconv"
 
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
 	"github.com/boostao/vpro/app/internal/vprocore"
@@ -45,8 +46,8 @@ type siteUnitSpeciesListUnit struct {
 }
 
 func validateSiteUnitSpeciesListOptions(options siteUnitSpeciesListOptions) error {
-	if options.OrderBy != 1 && options.OrderBy != 2 {
-		return errors.New("Summary species-list strata requires the separate physical LayerCode preparation")
+	if options.OrderBy != 1 && options.OrderBy != 2 && options.OrderBy != 3 {
+		return errors.New("Summary species-list requires Layer (1), Lifeform (2), or Strata (3) grouping")
 	}
 	if options.CoverCalculation != 1 && options.CoverCalculation != 2 || options.AndOr != 1 && options.AndOr != 2 {
 		return errors.New("Summary species-list requires explicit all/present cover calculation and AND/OR choices")
@@ -59,6 +60,44 @@ func validateSiteUnitSpeciesListOptions(options siteUnitSpeciesListOptions) erro
 	return nil
 }
 
+type siteUnitLayerStratum struct {
+	num     int
+	caption string
+}
+
+func parseSiteUnitLayerStrata(layerCode vprocore.ProjectMetadataTable) (map[string]siteUnitLayerStratum, map[int]string, error) {
+	if len(layerCode.Columns) == 0 || len(layerCode.Rows) == 0 {
+		return nil, nil, errors.New("Summary species-list strata requires LayerCode rows")
+	}
+	cols, err := vprocore.SiteUnitTransferColumns(layerCode, "Layer1234567", "Strata", "StrataNum")
+	if err != nil {
+		return nil, nil, fmt.Errorf("Summary species-list LayerCode schema: %w", err)
+	}
+	byLayer := make(map[string]siteUnitLayerStratum, len(layerCode.Rows))
+	captions := make(map[int]string)
+	for _, row := range layerCode.Rows {
+		layerKey, okLayer := metadataCellText(row.Cells[cols["Layer1234567"]])
+		strata, okStrata := metadataCellText(row.Cells[cols["Strata"]])
+		numText, okNum := metadataCellText(row.Cells[cols["StrataNum"]])
+		if !okLayer || !okStrata || !okNum {
+			continue
+		}
+		num, err := strconv.Atoi(numText)
+		if err != nil || num < 1 {
+			continue
+		}
+		caption := "Strata " + strata
+		byLayer[layerKey] = siteUnitLayerStratum{num: num, caption: caption}
+		if _, exists := captions[num]; !exists {
+			captions[num] = caption
+		}
+	}
+	if len(byLayer) == 0 {
+		return nil, nil, errors.New("Summary species-list strata requires LayerCode rows")
+	}
+	return byLayer, captions, nil
+}
+
 func planSiteUnitSpeciesList(ctx context.Context, input siteUnitQuickVegetationInput,
 	options siteUnitSpeciesListOptions) ([]siteUnitSpeciesListUnit, error) {
 	if ctx == nil {
@@ -69,6 +108,15 @@ func planSiteUnitSpeciesList(ctx context.Context, input siteUnitQuickVegetationI
 	}
 	if err := validateSiteUnitSpeciesListOptions(options); err != nil {
 		return nil, err
+	}
+	var layerStrata map[string]siteUnitLayerStratum
+	var strataCaptions map[int]string
+	if options.OrderBy == 3 {
+		var err error
+		layerStrata, strataCaptions, err = parseSiteUnitLayerStrata(input.LayerCode)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if input.Quick.Project != input.Environment.Report.Project || input.Quick.SU != input.Environment.Report.SU {
 		return nil, errors.New("Summary species-list preparation and Environment ownership differ")
@@ -184,6 +232,45 @@ func planSiteUnitSpeciesList(ctx context.Context, input siteUnitQuickVegetationI
 					return nil, err
 				}
 			}
+		} else if options.OrderBy == 3 {
+			type stratumKey struct {
+				plot      string
+				species   string
+				strataNum int
+			}
+			type stratumAccum struct {
+				species vprocore.ProjectMetadataCell
+				cover   float64
+			}
+			grouped := map[stratumKey]*stratumAccum{}
+			groupOrder := []stratumKey{}
+			for _, entry := range input.Quick.Entries {
+				if entry.Species.Text == nil || scope[entry.PlotNumber] == 0 {
+					continue
+				}
+				st, ok := layerStrata[strconv.Itoa(entry.Layer)]
+				if !ok {
+					continue
+				}
+				k := stratumKey{plot: entry.PlotNumber, species: *entry.Species.Text, strataNum: st.num}
+				acc := grouped[k]
+				if acc == nil {
+					acc = &stratumAccum{species: entry.Species}
+					grouped[k] = acc
+					groupOrder = append(groupOrder, k)
+				}
+				acc.cover += entry.Cover
+			}
+			for _, k := range groupOrder {
+				acc := grouped[k]
+				cover := acc.cover
+				if cover > 99 {
+					cover = 99
+				}
+				if err := add(k.plot, acc.species, cover, k.strataNum); err != nil {
+					return nil, err
+				}
+			}
 		} else {
 			for _, group := range input.Quick.Groups {
 				if err := add(group.PlotNumber, group.Species, group.MyCover, 0); err != nil {
@@ -241,6 +328,8 @@ func planSiteUnitSpeciesList(ctx context.Context, input siteUnitQuickVegetationI
 				caption := fmt.Sprintf("Layer %d", groupKey.index)
 				if options.OrderBy == 2 {
 					caption = siteUnitLifeformCaptions[groupKey.index]
+				} else if options.OrderBy == 3 {
+					caption = strataCaptions[groupKey.index]
 				}
 				next.Groups = append(next.Groups, siteUnitSpeciesListGroup{groupKey.index, caption, []siteUnitSpeciesListRow{}})
 			}

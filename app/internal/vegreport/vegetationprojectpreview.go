@@ -73,6 +73,9 @@ func decodeProjectReportOptions(config vprocore.ConfigValues, entry vprocore.Veg
 	if err != nil {
 		return longVegetationOptions{}, LongVegetationSettings{}, err
 	}
+	if err := decodeLongVegetationLumpOptions(config, &options, ""); err != nil {
+		return longVegetationOptions{}, LongVegetationSettings{}, err
+	}
 	settings := vegetationSettings(options)
 	if desired == 2 {
 		settings.UnitGrouping = "selected-fields"
@@ -160,13 +163,15 @@ func (s *LongVegetationReportScopeService) PreviewLongVegetationProject(ctx cont
 			if err != nil {
 				return LongVegetationProjectPreview{}, err
 			}
+			settings := review.Options.Settings
+			settings.LumpTable = source.LumpTable
 			report, err := longVegetationProjectTransport(ctx, source.Report, review.Scope.SourceKind)
 			if err != nil {
 				return LongVegetationProjectPreview{}, err
 			}
 			return LongVegetationProjectPreview{Scope: review.Scope, Preview: LongVegetationPreview{
 				ContextID: contextID, ProjectPath: owner.Selection.ProjectPath, SUPath: owner.Selection.SUPath,
-				Settings: review.Options.Settings, Report: report}}, nil
+				Settings: settings, Report: report}}, nil
 		})
 	})
 }

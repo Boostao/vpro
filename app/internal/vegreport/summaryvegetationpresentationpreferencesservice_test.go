@@ -247,19 +247,11 @@ func TestSummaryPresentationFacadeUnavailableHierarchyGuardAndHistoricalOmission
 		}
 		before := summaryPresentationBytes(t, store)
 		proposed := read.Values
-		proposed.HierarchyHeader = !proposed.HierarchyHeader
+		proposed.Title = "unrelated title update"
 		got := service.SaveSummaryVegetationPresentationPreferences(context.Background(), state.ContextID,
 			summaryPresentationRequest(t, read.Values, proposed, false))
-		if got.Committed || got.Changed || !strings.Contains(got.ErrorMessage, "unavailable hierarchy report scope") ||
-			!bytes.Equal(before, summaryPresentationBytes(t, store)) {
-			t.Fatal("disabled source hierarchy control authorized mutation", got)
-		}
-		proposed = read.Values
-		proposed.Title = "unrelated title update"
-		got = service.SaveSummaryVegetationPresentationPreferences(context.Background(), state.ContextID,
-			summaryPresentationRequest(t, read.Values, proposed, false))
 		if !got.Committed || !got.Changed || got.ErrorMessage != "" {
-			t.Fatal("unavailable historical header should not block unrelated literal title", got)
+			t.Fatal("unchanged historical header blocked literal title update", got)
 		}
 		values, err := store.Snapshot()
 		if err != nil {
@@ -268,6 +260,13 @@ func TestSummaryPresentationFacadeUnavailableHierarchyGuardAndHistoricalOmission
 		section, err := vprocore.ConfigSection(values, "ReportOptions")
 		if err != nil || section["SVShowHierarchyHeader"] != historical {
 			t.Fatal("unchanged header storage normalized", historical, section, err)
+		}
+		toggled := proposed
+		toggled.HierarchyHeader = !toggled.HierarchyHeader
+		got = service.SaveSummaryVegetationPresentationPreferences(context.Background(), state.ContextID,
+			summaryPresentationRequest(t, proposed, toggled, false))
+		if !got.Committed || !got.Changed || got.ErrorMessage != "" || bytes.Equal(before, summaryPresentationBytes(t, store)) {
+			t.Fatal("HierarchyHeader edit failed after unlock", got)
 		}
 	}
 }

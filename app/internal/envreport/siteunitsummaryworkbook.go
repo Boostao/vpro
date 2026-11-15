@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -34,13 +35,21 @@ func validateSiteUnitSummaryWorkbookProjection(ctx context.Context, preview Site
 	if err != nil {
 		return nil, err
 	}
-	querySource := string(siteUnitDetailSelectedSU)
+	baseRaw := report.QuerySource
 	if grouping == 2 {
-		querySource = "selected-su-filtered-env-admin-quickveg-lifeform"
+		if !strings.HasSuffix(baseRaw, "-quickveg-lifeform") {
+			return nil, errors.New("Summary Environment workbook requires a complete owned preview, explicit method and exact grouping field schema")
+		}
+		baseRaw = strings.TrimSuffix(baseRaw, "-quickveg-lifeform")
 	}
-	if preview.ContextID == "" || preview.ProjectPath == "" || preview.SUPath == "" ||
-		report.Project == "" || report.SU == "" || report.SU == "None" || report.SU == "USysSuTableDynamic" ||
-		(report.Method != 1 && report.Method != 2) || report.QuerySource != querySource ||
+	baseSource := siteUnitDetailQuerySource(baseRaw)
+	validSource := isKnownSiteUnitDetailQuerySource(baseSource) && baseSource != siteUnitDetailProjectJoin
+	suInvalid := (baseSource == siteUnitDetailSelectedSU && (preview.SUPath == "" || report.SU == "None" || report.SU == "USysSuTableDynamic")) ||
+		(baseSource == siteUnitDetailDynamicSU && (preview.SUPath == "" || report.SU != "USysSuTableDynamic")) ||
+		(siteUnitDetailAllowsUnselectedSU(baseSource) && report.SU != "None" && preview.SUPath == "")
+	if preview.ContextID == "" || preview.ProjectPath == "" || !validSource ||
+		report.Project == "" || report.SU == "" || suInvalid ||
+		(report.Method != 1 && report.Method != 2) ||
 		!reflect.DeepEqual(report.Fields, fields) || len(report.Units) == 0 || len(report.Memberships) == 0 {
 		return nil, errors.New("Summary Environment workbook requires a complete owned normal-SU preview, explicit method and exact grouping field schema")
 	}
@@ -240,12 +249,22 @@ func prepareSiteUnitSummaryWorkbookProjection(ctx context.Context, preview SiteU
 		}
 		labelColumn, valueColumn = "F", "G"
 	}
-	for i, unit := range preview.Report.Units {
+	order := make([]int, len(preview.Report.Units))
+	for i := range order {
+		order[i] = i
+	}
+	sort.Slice(order, func(a, b int) bool {
+		return preview.Report.Units[order[a]].Code < preview.Report.Units[order[b]].Code
+	})
+	orderedSheets := make([]reportcore.VegetationWorkbookSheetInternal, 0, len(sheets))
+	for pos, i := range order {
+		unit := preview.Report.Units[i]
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
 		name := sheets[i].Name
-		if i == 0 {
+		orderedSheets = append(orderedSheets, sheets[i])
+		if pos == 0 {
 			err = book.SetSheetName("Sheet1", name)
 		} else {
 			_, err = book.NewSheet(name)
@@ -335,6 +354,6 @@ func prepareSiteUnitSummaryWorkbookProjection(ctx context.Context, preview SiteU
 	if err := ctx.Err(); err != nil {
 		return result, err
 	}
-	result.Bytes, result.Sheets = bytes.Clone(buffer.Bytes()), sheets
+	result.Bytes, result.Sheets = bytes.Clone(buffer.Bytes()), orderedSheets
 	return result, nil
 }

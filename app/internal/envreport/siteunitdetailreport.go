@@ -102,11 +102,16 @@ func siteUnitSummaryFields() []SiteUnitSummaryField {
 
 func planSiteUnitSummary(ctx context.Context, project, suName string, method, maxJoinedRows int,
 	env, admin, su, master vprocore.ProjectMetadataTable) (SiteUnitSummaryReport, error) {
+	return planSiteUnitSummaryWithSource(ctx, project, suName, siteUnitDetailSelectedSU, method, maxJoinedRows, env, admin, su, master)
+}
+
+func planSiteUnitSummaryWithSource(ctx context.Context, project, suName string, source siteUnitDetailQuerySource, method, maxJoinedRows int,
+	env, admin, su, master vprocore.ProjectMetadataTable) (SiteUnitSummaryReport, error) {
 	fail := func(err error) (SiteUnitSummaryReport, error) { return SiteUnitSummaryReport{}, err }
 	if method != 1 && method != 2 {
 		return fail(errors.New("Summary Environment requires Mean (1) or Interquartile (2)"))
 	}
-	scope, err := prepareSiteUnitDetailScope(ctx, project, suName, siteUnitDetailSelectedSU, maxJoinedRows, env, admin, su)
+	scope, err := prepareSiteUnitDetailScope(ctx, project, suName, source, maxJoinedRows, env, admin, su)
 	if err != nil {
 		return fail(err)
 	}

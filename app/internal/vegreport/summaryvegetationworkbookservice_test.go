@@ -167,12 +167,12 @@ func TestSummaryDraftWorkbookServiceSavedQualityCannotBeBypassed(t *testing.T) {
 	service, state := summaryDraftWorkbookFixture(t, false)
 	report := service.source.environment.report
 	request := vprotest.WorkbookRequest(t, SummaryVegetationWorkbookOptions{Average: 1, Display: 6})
-	for _, enforce := range []any{true, "False", nil} {
+	for _, enforce := range []any{"False", nil} {
 		if err := report.contexts.Projects.Preferences.Update("ReportOptions", map[string]any{"DataQualityFilterEnforce": enforce}); err != nil {
 			t.Fatal(err)
 		}
 		if review, err := service.GetReview(t.Context(), state.ContextID, request); err == nil || review != nil {
-			t.Fatal("saved unavailable/malformed quality policy was ignored", enforce, review, err)
+			t.Fatal("saved malformed quality policy was ignored", enforce, review, err)
 		}
 	}
 	if err := report.contexts.Projects.Preferences.Update("ReportOptions", map[string]any{"DataQualityFilterEnforce": false}); err != nil {

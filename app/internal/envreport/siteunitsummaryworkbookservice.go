@@ -49,21 +49,17 @@ func ReadSiteUnitSummaryWorkbookInput(s *vprocore.ContextService, ctx context.Co
 
 func readSiteUnitSummaryWorkbookSource(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
 	contextID string, method int) (siteUnitSummaryWorkbookInput, error) {
-	if owner.Selection.SU == "None" {
-		return siteUnitSummaryWorkbookInput{}, errors.New("Summary Environment requires an explicitly selected normal SU")
+	return readSiteUnitSummaryWorkbookSourceWithScope(ctx, owner, tx, contextID, method, 1)
+}
+
+func readSiteUnitSummaryWorkbookSourceWithScope(ctx context.Context, owner *vprocore.SqliteContext, tx *sql.Tx,
+	contextID string, method, unitType int) (siteUnitSummaryWorkbookInput, error) {
+	env, admin, su, master, source, err := resolveSiteUnitSummaryScopeTables(ctx, owner, tx, unitType, nil)
+	if err != nil {
+		return siteUnitSummaryWorkbookInput{}, err
 	}
-	tables := make([]vprocore.ProjectMetadataTable, 4)
-	for i, source := range []struct{ role, table string }{
-		{"project", owner.Selection.Project + "_Env"}, {"project", owner.Selection.Project + "_Admin"},
-		{"su", owner.Selection.SU + "_SU"}, {"VLists", "MasterSiteUnitList"},
-	} {
-		table, err := vprocore.ReadPhysicalLocationTable(ctx, tx, source.role, source.table)
-		if err != nil {
-			return siteUnitSummaryWorkbookInput{}, err
-		}
-		tables[i] = table
-	}
-	report, err := planSiteUnitSummary(ctx, owner.Selection.Project, owner.Selection.SU, method, 1000000,
+	tables := []vprocore.ProjectMetadataTable{env, admin, su, master}
+	report, err := planSiteUnitSummaryWithSource(ctx, owner.Selection.Project, owner.Selection.SU, source, method, 1000000,
 		tables[0], tables[1], tables[2], tables[3])
 	if err != nil {
 		return siteUnitSummaryWorkbookInput{}, err
@@ -105,10 +101,14 @@ func (request *siteUnitSummaryWorkbookExportRequest) UnmarshalJSON(data []byte) 
 }
 
 type SiteUnitSummaryWorkbookScope struct {
-	SavedMethod    int `json:"savedMethod"`
-	SiteUnitType   int `json:"siteUnitType"`
-	OrderBy        int `json:"orderBy"`
-	IncludeSpecies int `json:"includeSpecies"`
+	SavedMethod         int `json:"savedMethod"`
+	SiteUnitType        int `json:"siteUnitType"`
+	OrderBy             int `json:"orderBy"`
+	IncludeSpecies      int `json:"includeSpecies"`
+	CoverCalculation    int `json:"coverCalculation"`
+	AndOr               int `json:"andOr"`
+	PresenceGreaterThan int `json:"presenceGreaterThan"`
+	CoverGreaterThan    int `json:"coverGreaterThan"`
 }
 
 type SiteUnitSummaryWorkbookReview struct {
@@ -168,32 +168,22 @@ func readSiteUnitSummaryWorkbookScope(ctx context.Context, config *vprocore.Desk
 }
 
 func readSiteUnitSummaryPublicationScope(ctx context.Context, config *vprocore.DesktopConfig, extended bool) (SiteUnitSummaryWorkbookScope, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &config.Mu); err != nil {
-		return SiteUnitSummaryWorkbookScope{}, err
-	}
-	defer config.Mu.Unlock()
-	values, err := config.ReadLocked()
+	full, err := readSiteUnitSummaryFullPreferenceValues(ctx, config)
 	if err != nil {
 		return SiteUnitSummaryWorkbookScope{}, err
 	}
-	scope := SiteUnitSummaryWorkbookScope{}
-	for _, field := range []struct {
-		key      string
-		min, max int
-		target   *int
-	}{
-		{"SEOptValueMethod", 1, 2, &scope.SavedMethod},
-		{"SESuType", 1, 3, &scope.SiteUnitType},
-		{"SEOrderBy", 1, 3, &scope.OrderBy},
-		{"SEIncludeSppSummary", 0, 1, &scope.IncludeSpecies},
-	} {
-		*field.target, err = vprocore.ConfigInt(values, "ReportOptions", field.key, field.min, field.max)
-		if err != nil {
-			return SiteUnitSummaryWorkbookScope{}, err
-		}
+	scope := SiteUnitSummaryWorkbookScope{
+		SavedMethod:         full.Method,
+		SiteUnitType:        full.SiteUnitType,
+		OrderBy:             full.OrderBy,
+		IncludeSpecies:      full.IncludeSpecies,
+		CoverCalculation:    full.CoverCalculation,
+		AndOr:               full.AndOr,
+		PresenceGreaterThan: full.PresenceGreaterThan,
+		CoverGreaterThan:    full.CoverGreaterThan,
 	}
-	if scope.SiteUnitType != 1 || !extended && (scope.OrderBy == 2 || scope.IncludeSpecies != 0) {
-		return SiteUnitSummaryWorkbookScope{}, errors.New("Saved Summary Environment hierarchy/field-derived/lifeform/species scope is unavailable; no options were reset")
+	if !extended && (scope.OrderBy == 2 || scope.IncludeSpecies != 0) {
+		return SiteUnitSummaryWorkbookScope{}, errors.New("Saved Summary Environment lifeform/species scope requires extended summary workbook; no options were reset")
 	}
 	return scope, ctx.Err()
 }
@@ -204,7 +194,7 @@ func readSiteUnitSummaryWorkbookPublicationSource(ctx context.Context, plots *vp
 	if err != nil {
 		return siteUnitSummaryWorkbookSource{}, err
 	}
-	input, err := readSiteUnitSummaryWorkbookSource(ctx, owner, tx, contextID, method)
+	input, err := readSiteUnitSummaryWorkbookSourceWithScope(ctx, owner, tx, contextID, method, scope.SiteUnitType)
 	if err != nil {
 		return siteUnitSummaryWorkbookSource{}, err
 	}

@@ -149,9 +149,6 @@ func compilePlotProfileRules(table vprocore.ProjectMetadataTable, env []vprocore
 				if !profileASCII(rule.species) {
 					return rule, errors.New("non-ASCII species/lump matching remains unverified")
 				}
-				if rule.table == "Lump" && rule.layer == "Any" && rule.operator == "=" && rule.operation == "Add plots" {
-					return rule, errors.New("source Lump/Any/Add equality also calls defective MadEquals; this combination remains unavailable")
-				}
 			}
 			if strings.EqualFold(raw, "NULL") && profileASCII(raw) && rule.table != "Env" {
 				rule.criterion = nil

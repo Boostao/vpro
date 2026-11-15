@@ -79,12 +79,12 @@ func prepareSummaryVegetationWorkbookWithSheets(ctx context.Context, input summa
 		source, ordering = summaryVegetationUnanimousCommonSource, summaryVegetationUnanimousCommonOrdering
 	}
 	if preview.ContextID == "" || preview.ProjectPath == "" || preview.SUPath == "" || preview.Project == "" ||
-		preview.SU == "" || preview.SU == "None" || preview.SU == "USysSuTableDynamic" ||
+		preview.SU == "" ||
 		preview.Source != source || preview.Ordering != ordering ||
 		!grouped && ((preview.GroupAndOrder != 0 && preview.GroupAndOrder != 11) || preview.GroupField != nil || preview.OrderField != nil) ||
 		len(preview.Units) == 0 || len(preview.Units) > 250 || len(preview.Rows) == 0 || len(preview.Memberships) == 0 ||
 		len(preview.Columns) != len(preview.Units) {
-		return fail(errors.New("Summary workbook requires a complete supported normal-SU preview with aligned units and nonempty vegetation"))
+		return fail(errors.New("Summary workbook requires a complete supported SU preview with aligned units and nonempty vegetation"))
 	}
 	sheet, err := reportcore.EnvironmentWorkbookSheetName(preview.Project, 0)
 	if err != nil {
@@ -150,6 +150,14 @@ func prepareSummaryVegetationWorkbookWithSheets(ctx context.Context, input summa
 	}
 	text(1, 1, input.Title)
 	text(2, 1, caption)
+	if preview.HierarchyHeaderEnabled {
+		text(3, leading, "Hierarchy")
+		for i, unit := range preview.Units {
+			if unit.HierarchyHeader != nil && *unit.HierarchyHeader != "" {
+				text(3, i+leading+1, *unit.HierarchyHeader)
+			}
+		}
+	}
 	if len(preview.Rows) > 32768-first {
 		return fail(errors.New("Summary workbook body exceeds the qualified source Integer row frame"))
 	}

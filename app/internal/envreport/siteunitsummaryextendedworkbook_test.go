@@ -174,7 +174,7 @@ func TestSummaryExtendedWorkbookRefusalCancellationAndRetry(t *testing.T) {
 	}
 	for _, mutate := range []func(*SiteUnitSpeciesListRequest){
 		func(r *SiteUnitSpeciesListRequest) { r.Method = 2 },
-		func(r *SiteUnitSpeciesListRequest) { r.OrderBy = 3 },
+		func(r *SiteUnitSpeciesListRequest) { r.OrderBy = 4 },
 		func(r *SiteUnitSpeciesListRequest) { r.AndOr = 9 },
 		func(r *SiteUnitSpeciesListRequest) { r.CoverGreaterThan = 32768 },
 	} {

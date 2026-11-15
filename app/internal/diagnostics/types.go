@@ -20,7 +20,9 @@ type SynthesisLumpTableOption struct {
 	ActiveCount int    `json:"activeCount"`
 }
 
-// PairwiseParams configures BEC pairwise differential potential & comparison (porting _do_pairwise.R).
+// PairwiseParams configures BEC pairwise differential potential & comparison (porting r/R/pairwise_outliers.R vpro_pairwise).
+// Zero-valued fields resolve to canonical R-aligned defaults:
+// MinConstancy=60, NoiseConstancy=10, MinPlots=2, MinDiff=0.5, MinDD=0.5, MinorCover=1.0, DominantCover=7.0.
 type PairwiseParams struct {
 	MinConstancy   float64 `json:"minConstancy,omitempty"`
 	NoiseConstancy float64 `json:"noiseConstancy,omitempty"`
@@ -44,8 +46,10 @@ type SynthesisOptions struct {
 	ExcludeStandardModifiers bool           `json:"excludeStandardModifiers"`    // exclude .support, .poor, .nudum
 	ExcludePatterns          []string       `json:"excludePatterns,omitempty"`   // optional extra unit exclusion patterns
 	SignificanceBasis        string         `json:"significanceBasis,omitempty"` // "all_plots" (default) | "present_plots"
+	CoverPrecedence          string         `json:"coverPrecedence,omitempty"`   // "sublayer_sum" (default, Access MakeDiagnosticData) | "strata_totals" (BuildStrataTable TotalA/TotalB-first)
 	UnitOrder                []string       `json:"unitOrder,omitempty"`         // optional explicit unit column order
 	MinMaxPresencePct        float64        `json:"minMaxPresencePct,omitempty"` // optional display threshold (0 keeps all)
+	OutlierThreshold         float64        `json:"outlierThreshold,omitempty"`  // LOO own-similarity review threshold in (0, 1]; default 0.45 matching R vpro_outliers
 	Pairwise                 PairwiseParams `json:"pairwise,omitempty"`          // optional BEC do_pairwise overrides
 }
 
@@ -211,6 +215,7 @@ type OutlierPlotCandidate struct {
 	DeltaSimilarity    float64 `json:"deltaSimilarity"`    // RivalSimilarity - OwnSimilarity
 	DeltaSimilarityPct float64 `json:"deltaSimilarityPct"` // (RivalSimilarity - OwnSimilarity) * 100
 	Misplaced          bool    `json:"misplaced"`          // DeltaSimilarity > 0 && NearestRivalUnit != ""
+	BelowThreshold     bool    `json:"belowThreshold"`     // !SingletonUnit && OwnSimilarity < OutlierThreshold
 	Top5PercentAnomaly bool    `json:"top5PercentAnomaly"` // top ceil(5%) of sorted outlier queue
 	MoistureRegime     string  `json:"moistureRegime"`
 	NutrientRegime     string  `json:"nutrientRegime"`

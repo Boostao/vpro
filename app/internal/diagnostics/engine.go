@@ -773,6 +773,16 @@ func computeSnapshotInReadTx(
 	if sigBasis != "all_plots" && sigBasis != "present_plots" {
 		return nil, fmt.Errorf("unsupported significanceBasis %q; expected 'all_plots' or 'present_plots'", opts.SignificanceBasis)
 	}
+	coverPrec := strings.ToLower(strings.TrimSpace(opts.CoverPrecedence))
+	if coverPrec == "" {
+		coverPrec = "sublayer_sum"
+	}
+	if coverPrec != "sublayer_sum" && coverPrec != "strata_totals" {
+		return nil, fmt.Errorf("unsupported coverPrecedence %q; expected 'sublayer_sum' or 'strata_totals'", opts.CoverPrecedence)
+	}
+	if opts.OutlierThreshold < 0 || opts.OutlierThreshold > 1 {
+		return nil, fmt.Errorf("unsupported outlierThreshold %v; expected [0, 1]", opts.OutlierThreshold)
+	}
 
 	requestedSource := strings.ToLower(strings.TrimSpace(opts.UnitSource))
 	if requestedSource == "" {
@@ -1038,31 +1048,75 @@ func computeSnapshotInReadTx(
 					}
 				}
 
-				// Stratum A: use Cover1..Cover3 when any sublayer is populated, else TotalA (SIVI compatibility)
-				hasSubA := false
-				for idx, nf := range []sql.NullFloat64{c1, c2, c3} {
-					if v, valid := narrowNullable(nf); valid {
-						hasSubA = true
-						addLayerCover(pIdx, 1+idx, effCode, v, wasMapped)
-					}
-				}
-				if !hasSubA {
+				if coverPrec == "strata_totals" {
+					// Stratum A (BuildStrataTable): TotalA when populated (>0 emits uncapped; 0 suppresses A),
+					// otherwise sum Cover1..Cover3 with nulls as zero and cap fallback sum at 99.
 					if v, valid := narrowNullable(totA); valid {
-						addLayerCover(pIdx, 101, effCode, v, wasMapped)
+						if v > 0 {
+							addLayerCover(pIdx, 101, effCode, v, wasMapped)
+						}
+					} else {
+						var sumA float64
+						for _, nf := range []sql.NullFloat64{c1, c2, c3} {
+							if v, valid := narrowNullable(nf); valid {
+								sumA += v
+							}
+						}
+						if sumA > 0 {
+							if sumA > 99 {
+								sumA = 99
+							}
+							addLayerCover(pIdx, 101, effCode, sumA, wasMapped)
+						}
 					}
-				}
 
-				// Stratum B: use Cover4..Cover5c when any sublayer is populated, else TotalB (SIVI compatibility)
-				hasSubB := false
-				for idx, nf := range []sql.NullFloat64{c4, c5, c5a, c5b, c5c} {
-					if v, valid := narrowNullable(nf); valid {
-						hasSubB = true
-						addLayerCover(pIdx, 4+idx, effCode, v, wasMapped)
-					}
-				}
-				if !hasSubB {
+					// Stratum B (BuildStrataTable): TotalB when populated (>0 emits uncapped; 0 suppresses B),
+					// otherwise sum Cover4..Cover5c with nulls as zero and cap fallback sum at 99.
 					if v, valid := narrowNullable(totB); valid {
-						addLayerCover(pIdx, 102, effCode, v, wasMapped)
+						if v > 0 {
+							addLayerCover(pIdx, 102, effCode, v, wasMapped)
+						}
+					} else {
+						var sumB float64
+						for _, nf := range []sql.NullFloat64{c4, c5, c5a, c5b, c5c} {
+							if v, valid := narrowNullable(nf); valid {
+								sumB += v
+							}
+						}
+						if sumB > 0 {
+							if sumB > 99 {
+								sumB = 99
+							}
+							addLayerCover(pIdx, 102, effCode, sumB, wasMapped)
+						}
+					}
+				} else {
+					// Stratum A (sublayer_sum / Access MakeDiagnosticData): use Cover1..Cover3 when any sublayer is populated, else TotalA
+					hasSubA := false
+					for idx, nf := range []sql.NullFloat64{c1, c2, c3} {
+						if v, valid := narrowNullable(nf); valid {
+							hasSubA = true
+							addLayerCover(pIdx, 1+idx, effCode, v, wasMapped)
+						}
+					}
+					if !hasSubA {
+						if v, valid := narrowNullable(totA); valid {
+							addLayerCover(pIdx, 101, effCode, v, wasMapped)
+						}
+					}
+
+					// Stratum B (sublayer_sum / Access MakeDiagnosticData): use Cover4..Cover5c when any sublayer is populated, else TotalB
+					hasSubB := false
+					for idx, nf := range []sql.NullFloat64{c4, c5, c5a, c5b, c5c} {
+						if v, valid := narrowNullable(nf); valid {
+							hasSubB = true
+							addLayerCover(pIdx, 4+idx, effCode, v, wasMapped)
+						}
+					}
+					if !hasSubB {
+						if v, valid := narrowNullable(totB); valid {
+							addLayerCover(pIdx, 102, effCode, v, wasMapped)
+						}
 					}
 				}
 
@@ -1412,12 +1466,13 @@ func computeSnapshotInReadTx(
 	)
 
 	// 10. Candidate Misplaced Plots (Leave-One-Out Outlier Queue)
-	outlierQueue := ComputeOutlierQueue(
+	outlierQueue := ComputeOutlierQueueWithThreshold(
 		orderedUnits,
 		classifiedPlots,
 		unitCoverSums,
 		unitTotalSums,
 		unitPlotCounts,
+		opts.OutlierThreshold,
 	)
 
 	// 11. Relative Edatopic Grids (rSMR 0..8 x rSNR A..F)
@@ -1675,16 +1730,8 @@ func ReassignSynthesisPlotUnit(
 			}
 			_ = tx.QueryRowContext(ctx, `SELECT MAX(ID) FROM main.`+vprocore.QuoteHeaderIdentifier(synthesisSUHistoryTable)).Scan(&historyID)
 
-			if vprocore.SameDesktopPath(owner.Selection.ProjectPath, owner.Selection.SUPath) && changed {
-				actor := strings.TrimSpace(plots.CurrentUser)
-				if actor == "" {
-					actor = "VProUser"
-				}
-				qAudit := vprocore.QuoteHeaderIdentifier(owner.Selection.Project + "_Audit")
-				_, _ = tx.ExecContext(ctx,
-					`INSERT INTO main.`+qAudit+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`,
-					owner.Selection.Project, actor, req.PlotNumber, "_SU", "SiteUnit", time.Now().Format("2006-01-02 15:04:05"), beforePtr, afterCopy,
-				)
+			if changed {
+				appendSynthesisSUAuditRow(ctx, tx, owner, plots, req.PlotNumber, beforePtr, afterCopy)
 			}
 
 			if err := validateFiles(); err != nil {
@@ -1922,6 +1969,19 @@ func UndoSynthesisReassignment(
 			}
 			_ = tx.QueryRowContext(ctx, `SELECT MAX(ID) FROM main.`+vprocore.QuoteHeaderIdentifier(synthesisSUHistoryTable)).Scan(&undoHistoryID)
 
+			if !d.ExistedAfter || !d.ExistedBefore || d.AfterSiteUnit != d.BeforeSiteUnit {
+				var undoBeforePtr, undoAfterPtr any
+				if d.ExistedAfter {
+					v := d.AfterSiteUnit
+					undoBeforePtr = v
+				}
+				if d.ExistedBefore {
+					v := d.BeforeSiteUnit
+					undoAfterPtr = v
+				}
+				appendSynthesisSUAuditRow(ctx, tx, owner, plots, d.PlotNumber, undoBeforePtr, undoAfterPtr)
+			}
+
 			if err := validateFiles(); err != nil {
 				return err
 			}
@@ -1962,4 +2022,27 @@ func UndoSynthesisReassignment(
 			Snapshot:       snap,
 		}, nil
 	})
+}
+
+func appendSynthesisSUAuditRow(
+	ctx context.Context,
+	tx *sql.Tx,
+	owner *vprocore.SqliteContext,
+	plots *vprocore.PlotService,
+	plotNumber string,
+	before any,
+	after any,
+) {
+	if !vprocore.SameDesktopPath(owner.Selection.ProjectPath, owner.Selection.SUPath) {
+		return
+	}
+	actor := strings.TrimSpace(plots.CurrentUser)
+	if actor == "" {
+		actor = "VProUser"
+	}
+	qAudit := vprocore.QuoteHeaderIdentifier(owner.Selection.Project + "_Audit")
+	_, _ = tx.ExecContext(ctx,
+		`INSERT INTO main.`+qAudit+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`,
+		owner.Selection.Project, actor, plotNumber, "_SU", "SiteUnit", time.Now().Format("2006-01-02 15:04:05"), before, after,
+	)
 }

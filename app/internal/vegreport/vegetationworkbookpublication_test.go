@@ -140,12 +140,14 @@ func TestLongVegetationWorkbookPublicationStrictGateScopeAndRetainedPreferences(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.GetReview(context.Background(), state.ContextID, `{"scope":"unlumped"}`); err == nil {
-		t.Fatal("combined variants preference silently ignored")
+	combinedReview, err := service.GetReview(context.Background(), state.ContextID, `{"scope":"unlumped"}`)
+	if err != nil || combinedReview == nil || !combinedReview.Preview.Settings.CombineVariants ||
+		combinedReview.Preview.Settings.LumpTable != "CombinedSpp_Lump" {
+		t.Fatal("combined variants preference failed review", combinedReview, err)
 	}
 	after, err := os.ReadFile(service.contexts.Projects.Preferences.Path)
 	if err != nil || !bytes.Equal(before, after) {
-		t.Fatal("unavailable combined preference was reset", err)
+		t.Fatal("combined preference mutated saved config during read", err)
 	}
 }
 

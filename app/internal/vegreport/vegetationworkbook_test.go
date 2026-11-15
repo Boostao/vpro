@@ -225,7 +225,7 @@ func TestLongVegetationWorkbookExplicitSourceLimitsRefusalsAndCancellation(t *te
 		func(p *LongVegetationPreview) { p.Settings.Average = "unknown" },
 		func(p *LongVegetationPreview) { p.Settings.Order = "unknown" },
 		func(p *LongVegetationPreview) { p.Settings.ShowEnglishName, p.Settings.ShowSpeciesCode = true, true },
-		func(p *LongVegetationPreview) { p.Report.Units[0].NumPlots = 251 },
+		func(p *LongVegetationPreview) { p.Report.Units[0].NumPlots = 16001 },
 		func(p *LongVegetationPreview) { p.Report.Units[0].NumPlots = -1 },
 		func(p *LongVegetationPreview) { p.Report.Units[0].Rows = nil },
 		func(p *LongVegetationPreview) { p.Report.Units[1].Code = p.Report.Units[0].Code },

@@ -11,18 +11,28 @@ import (
 	"errors"
 	"fmt"
 	"math"
-
+	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/mattn/go-sqlite3"
 )
 
+type ProfileLumpChoice struct {
+	Role     string `json:"role"`
+	Table    string `json:"table"`
+	Location string `json:"location"`
+	RowCount int    `json:"rowCount"`
+}
+
 type ProjectPlotProfileRunRequest struct {
-	OriginalRules vprocore.ProjectMetadataTable  `json:"originalRules"`
-	ProjectLump   *vprocore.ProjectMetadataTable `json:"projectLump"`
-	Subvarieties  bool                           `json:"subvarieties"`
+	OriginalRules     vprocore.ProjectMetadataTable  `json:"originalRules"`
+	ProjectLump       *vprocore.ProjectMetadataTable `json:"projectLump"`
+	Subvarieties      bool                           `json:"subvarieties"`
+	StartWithAllPlots bool                           `json:"startWithAllPlots,omitempty"`
+	LumpTable         string                         `json:"lumpTable,omitempty"`
 }
 
 func (r *ProjectPlotProfileRunRequest) UnmarshalJSON(data []byte) error {
@@ -49,16 +59,111 @@ type ProjectPlotProfileResult struct {
 
 func ReviewProjectPlotProfileLump(s *vprocore.ContextService, ctx context.Context, contextID string) (vprocore.ProjectMetadataTable, error) {
 	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (vprocore.ProjectMetadataTable, error) {
-		return readProjectProfileLump(ctx, plots.Projects.Sqlite)
+		return readProjectProfileLump(ctx, plots.Projects.Sqlite, "")
 	})
 }
 
-func readProjectProfileLump(ctx context.Context, c *vprocore.SqliteContext) (vprocore.ProjectMetadataTable, error) {
-	table := c.Selection.Project + "_Lump"
-	if err := c.RequireColumns(ctx, "project", table, []string{"LumpCode", "SppCode", "Use"}); err != nil {
-		return vprocore.ProjectMetadataTable{}, fmt.Errorf("explicit project-local lump table unavailable: %w", err)
+// ReviewProjectPlotProfileLumpTable reads an explicitly selected project or attached *_Lump table.
+func ReviewProjectPlotProfileLumpTable(s *vprocore.ContextService, ctx context.Context, contextID, location string) (vprocore.ProjectMetadataTable, error) {
+	if strings.EqualFold(strings.TrimSpace(location), "None") {
+		return vprocore.ProjectMetadataTable{}, errors.New("None lump selection has no stored lump rows to review")
 	}
-	return vprocore.ReadSQLiteStorageRows(ctx, c.Conn, "project", table, "", nil, "")
+	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (vprocore.ProjectMetadataTable, error) {
+		return readProjectProfileLump(ctx, plots.Projects.Sqlite, location)
+	})
+}
+
+// ListProjectPlotProfileLumpTables lists "None" plus every project and attached *_Lump table
+// exposing LumpCode, SppCode, and Use columns.
+func ListProjectPlotProfileLumpTables(s *vprocore.ContextService, ctx context.Context, contextID string) ([]ProfileLumpChoice, error) {
+	return vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) ([]ProfileLumpChoice, error) {
+		c := plots.Projects.Sqlite
+		if err := vprocore.ProfileOwnedFiles(c); err != nil {
+			return nil, err
+		}
+		choices := []ProfileLumpChoice{{Role: "None", Table: "None", Location: "None"}}
+		roles := []string{"project", "su", "hierarchy", "profile", "VPro64", "VLists", "VUser"}
+		seenFiles := map[string]bool{}
+		for _, role := range roles {
+			if c.Attachments[role] == "" {
+				continue
+			}
+			// Deduplicate roles sharing the same underlying SQLite file (e.g. project and su).
+			dup := false
+			if info := c.AttachmentInfo[role]; info != nil {
+				for priorRole := range seenFiles {
+					if priorInfo := c.AttachmentInfo[priorRole]; priorInfo != nil && os.SameFile(info, priorInfo) {
+						dup = true
+						break
+					}
+				}
+			}
+			if dup {
+				continue
+			}
+			seenFiles[role] = true
+			rows, err := c.Conn.QueryContext(ctx,
+				`SELECT name FROM `+vprocore.QuoteHeaderIdentifier(role)+`.sqlite_master WHERE type='table' AND name LIKE '%\_Lump' ESCAPE '\' ORDER BY name COLLATE NOCASE`)
+			if err != nil {
+				continue
+			}
+			var candidates []string
+			for rows.Next() {
+				var name string
+				if err := rows.Scan(&name); err == nil {
+					candidates = append(candidates, name)
+				}
+			}
+			rows.Close()
+			for _, name := range candidates {
+				if err := c.RequireColumns(ctx, role, name, []string{"LumpCode", "SppCode", "Use"}); err != nil {
+					continue
+				}
+				var count int
+				_ = c.Conn.QueryRowContext(ctx,
+					`SELECT COUNT(*) FROM `+vprocore.QuoteHeaderIdentifier(role)+`.`+vprocore.QuoteHeaderIdentifier(name)).Scan(&count)
+				loc := name
+				if role != "project" {
+					loc = role + "." + name
+				}
+				choices = append(choices, ProfileLumpChoice{Role: role, Table: name, Location: loc, RowCount: count})
+			}
+		}
+		return choices, nil
+	})
+}
+
+var allowedProfileLumpRoles = []string{"project", "su", "hierarchy", "profile", "VPro64", "VLists", "VUser"}
+
+func resolveProfileLumpLocation(c *vprocore.SqliteContext, location string) (string, string, error) {
+	trimmed := strings.TrimSpace(location)
+	if trimmed == "" {
+		return "project", c.Selection.Project + "_Lump", nil
+	}
+	role := "project"
+	table := trimmed
+	if dot := strings.IndexByte(trimmed, '.'); dot >= 0 {
+		role = strings.TrimSpace(trimmed[:dot])
+		table = strings.TrimSpace(trimmed[dot+1:])
+	}
+	if !slices.Contains(allowedProfileLumpRoles, role) {
+		return "", "", fmt.Errorf("unsupported lump database role %q", role)
+	}
+	if table == "" || !strings.HasSuffix(table, "_Lump") || strings.ContainsAny(table, "\x00.`\"") {
+		return "", "", fmt.Errorf("invalid lump table name %q", table)
+	}
+	return role, table, nil
+}
+
+func readProjectProfileLump(ctx context.Context, c *vprocore.SqliteContext, location string) (vprocore.ProjectMetadataTable, error) {
+	role, table, err := resolveProfileLumpLocation(c, location)
+	if err != nil {
+		return vprocore.ProjectMetadataTable{}, err
+	}
+	if err := c.RequireColumns(ctx, role, table, []string{"LumpCode", "SppCode", "Use"}); err != nil {
+		return vprocore.ProjectMetadataTable{}, fmt.Errorf("explicit lump table %s.%s unavailable: %w", role, table, err)
+	}
+	return vprocore.ReadSQLiteStorageRows(ctx, c.Conn, role, table, "", nil, "")
 }
 
 func RunProjectPlotProfile(s *vprocore.ContextService, ctx context.Context, contextID string, request ProjectPlotProfileRunRequest) (ProjectPlotProfileResult, error) {
@@ -126,22 +231,41 @@ func RunProjectPlotProfileAfter(s *vprocore.ContextService, ctx context.Context,
 		for _, rule := range rules {
 			needsLump = needsLump || rule.table == "Lump"
 		}
-		if needsLump && request.ProjectLump == nil {
-			return result, errors.New("explicitly review and select the project-local lump table before running Lump rules")
-		}
-		if request.ProjectLump != nil {
-			lump, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "project", job.Selection.Project+"_Lump", "", nil, "")
-			if err != nil {
-				return result, err
+		lumpLocation := strings.TrimSpace(request.LumpTable)
+		lumpNone := strings.EqualFold(lumpLocation, "None")
+		var lumpRelation string
+		if lumpNone {
+			if request.ProjectLump != nil {
+				return result, errors.New("project lump snapshot cannot be supplied when LumpTable is None")
 			}
-			if !reflect.DeepEqual(*request.ProjectLump, lump) {
-				return result, errors.New("project lump definitions/schema changed since review; review again")
+			if needsLump && !request.Subvarieties {
+				return result, errors.New("profile contains Lump rules but LumpTable is None; select a *_Lump table or enable Subvarieties")
 			}
+		} else {
+			lumpRole, lumpName, lErr := resolveProfileLumpLocation(job, lumpLocation)
+			if lErr != nil {
+				return result, lErr
+			}
+			if needsLump && request.ProjectLump == nil {
+				return result, errors.New("explicitly review and select a lump table before running Lump rules")
+			}
+			if request.ProjectLump != nil {
+				if err := job.RequireColumns(ctx, lumpRole, lumpName, []string{"LumpCode", "SppCode", "Use"}); err != nil {
+					return result, fmt.Errorf("selected lump table %s.%s unavailable: %w", lumpRole, lumpName, err)
+				}
+				lump, err := vprocore.ReadSQLiteStorageRows(ctx, tx, lumpRole, lumpName, "", nil, "")
+				if err != nil {
+					return result, err
+				}
+				if !reflect.DeepEqual(*request.ProjectLump, lump) {
+					return result, errors.New("lump definitions/schema changed since review; review again")
+				}
+			}
+			lumpRelation = vprocore.QuoteHeaderIdentifier(lumpRole) + "." + vprocore.QuoteHeaderIdentifier(lumpName)
 		}
-		lumpRelation := `"project".` + vprocore.QuoteHeaderIdentifier(job.Selection.Project+"_Lump")
 		if request.Subvarieties {
-			if request.ProjectLump == nil {
-				return result, errors.New("subvariety combination requires explicit project-lump review; source stale global state is not inherited")
+			if !lumpNone && request.ProjectLump == nil {
+				return result, errors.New("subvariety combination requires explicit lump review unless LumpTable is None")
 			}
 			lumpRelation, err = createProfileCombinedLump(ctx, tx, lumpRelation)
 			if err != nil {
@@ -154,6 +278,11 @@ func RunProjectPlotProfileAfter(s *vprocore.ContextService, ctx context.Context,
 		}
 		if _, err := tx.ExecContext(ctx, `CREATE TEMP TABLE VProProfileRunPlots(PlotNumber TEXT COLLATE BINARY PRIMARY KEY)`); err != nil {
 			return result, err
+		}
+		if request.StartWithAllPlots {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO VProProfileRunPlots SELECT PlotNumber FROM USysEnv`); err != nil {
+				return result, err
+			}
 		}
 		result = ProjectPlotProfileResult{Project: job.Selection.Project, Table: table, SU: job.Selection.SU,
 			TotalPlots: len(scope), PlotNumbers: []string{}, Steps: []ProjectPlotProfileStep{}}
@@ -356,10 +485,13 @@ func createProfileCombinedLump(ctx context.Context, tx *sql.Tx, lump string) (st
 	query := `CREATE TEMP VIEW VProProfileCombinedLump AS
 		SELECT DISTINCT substr(vpro_profile_text(s.Code),1,length(s.Code)-1) AS LumpCode,s.Code AS SppCode
 		FROM "VLists".USysAllSpecs s
-		WHERE substr(vpro_profile_text(s.Code),-1)<'9'
+		WHERE substr(vpro_profile_text(s.Code),-1)<'9'`
+	if lump != "" {
+		query += `
 		AND NOT EXISTS(SELECT 1 FROM ` + lump + ` l WHERE vpro_profile_bool(l."Use")=-1
 			AND vpro_profile_text(l.SppCode) COLLATE NOCASE=vpro_profile_text(s.Code) COLLATE NOCASE)
 		UNION SELECT DISTINCT LumpCode,SppCode FROM ` + lump + ` WHERE vpro_profile_bool("Use")=-1`
+	}
 	if _, err := tx.ExecContext(ctx, query); err != nil {
 		return "", err
 	}

@@ -82,9 +82,9 @@ func TestSiteUnitSummaryWorkbookSourceCellsStylesAndBothMethods(t *testing.T) {
 				t.Fatal(err)
 			}
 			book := openSiteUnitSummaryWorkbook(t, result)
-			if !reflect.DeepEqual(book.GetSheetList(), []string{"U", "NoName1", "_VPRO_Source"}) ||
-				len(result.Sheets) != 2 || !reflect.DeepEqual(result.Sheets[0].Unit, vprotest.MetadataText("U")) ||
-				!reflect.DeepEqual(result.Sheets[1].Unit, vprotest.MetadataText("")) {
+			if !reflect.DeepEqual(book.GetSheetList(), []string{"NoName1", "U", "_VPRO_Source"}) ||
+				len(result.Sheets) != 2 || !reflect.DeepEqual(result.Sheets[0].Unit, vprotest.MetadataText("")) ||
+				!reflect.DeepEqual(result.Sheets[1].Unit, vprotest.MetadataText("U")) {
 				t.Fatal("unit order, typed identity or extra Summary sheet", result.Sheets, book.GetSheetList())
 			}
 			methodText := "Quantitative values summarized as: Min---Mean---Max"
@@ -94,7 +94,7 @@ func TestSiteUnitSummaryWorkbookSourceCellsStylesAndBothMethods(t *testing.T) {
 			rows := []int{7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
 				30, 31, 32, 33, 34, 35, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49}
 			for i, sheet := range result.Sheets {
-				unit := preview.Report.Units[i]
+				unit := preview.Report.Units[len(preview.Report.Units)-1-i]
 				for j, value := range []string{unit.Code, "", "Plots in unit: " + strconv.Itoa(len(unit.Plots)), methodText} {
 					siteUnitSummaryWorkbookCell(t, book, sheet.Name, fmt.Sprintf("A%d", j+1), value)
 				}
@@ -175,7 +175,7 @@ func TestSiteUnitSummaryWorkbookLiteralStringsNamesProvenanceAndDeterminism(t *t
 		t.Fatal(err)
 	}
 	book := openSiteUnitSummaryWorkbook(t, result)
-	if result.Sheets[0].Name != "Z--raw" {
+	if len(result.Sheets) != 2 || result.Sheets[0].Name != "NoName1" || result.Sheets[1].Name != "Z--raw" {
 		t.Fatal("shared checked sheet sanitization differs", result.Sheets)
 	}
 	siteUnitSummaryWorkbookCell(t, book, "Z--raw", "A1", "Z:/raw")
@@ -412,7 +412,7 @@ func TestSiteUnitSummaryWorkbookUTF16BoundaryAndCheckedTruncation(t *testing.T) 
 		t.Fatal(err)
 	}
 	name := strings.Repeat("Z", 29) + "😃"
-	if result.Sheets[0].Name != name {
+	if len(result.Sheets) != 2 || result.Sheets[0].Name != "NoName1" || result.Sheets[1].Name != name {
 		t.Fatal("worksheet name split/changed complete UTF16 pair", result.Sheets)
 	}
 	book := openSiteUnitSummaryWorkbook(t, result)
@@ -448,7 +448,7 @@ func TestSiteUnitSummaryWorkbookOwnedReaderKernelIntegration(t *testing.T) {
 					t.Fatal("owned units omitted or invented", result.Sheets)
 				}
 				for i, sheet := range result.Sheets {
-					unit := input.Preview.Report.Units[i]
+					unit := input.Preview.Report.Units[len(input.Preview.Report.Units)-1-i]
 					if !reflect.DeepEqual(sheet.Unit, vprotest.MetadataText(unit.Code)) {
 						t.Fatal("owned typed identity changed", sheet)
 					}

@@ -188,10 +188,11 @@ func TestSpeciesAttributeSummaryCancellationAndSchemaRefusal(t *testing.T) {
 			t.Fatal("invalid request published", report, err)
 		}
 	}
-	for _, scope := range []string{"None", "USysSuTableDynamic"} {
-		if _, err := planSpeciesAttributeSummary(context.Background(), "P", scope, veg, su, attributes); err == nil {
-			t.Fatal("unavailable scope became normal SU", scope)
-		}
+	if _, err := planSpeciesAttributeSummary(context.Background(), "P", "None", veg, su, attributes); err == nil {
+		t.Fatal("unavailable None scope became normal SU")
+	}
+	if report, err := planSpeciesAttributeSummary(context.Background(), "P", "USysSuTableDynamic", veg, su, attributes); err != nil || len(report.Units) == 0 {
+		t.Fatalf("USysSuTableDynamic planner failed on pre-resolved SU rows: got=%+v err=%v", report, err)
 	}
 	for _, mutate := range []func(*vprocore.ProjectMetadataTable){
 		func(table *vprocore.ProjectMetadataTable) { table.Columns[2].Name = "WrongRank" },

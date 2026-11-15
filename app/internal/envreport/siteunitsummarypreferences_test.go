@@ -89,7 +89,15 @@ func TestSiteUnitSummaryPreferencesOwnedCASNoopCollisionAndRestoration(t *testin
 	if noOp.Committed || noOp.Changed || noOp.ErrorMessage != "" || readErr != nil || !bytes.Equal(rawBefore, rawAfter) {
 		t.Fatal("no-op rewrote preferences", noOp, readErr)
 	}
-	for _, invalid := range []SiteUnitSummaryPreferenceValues{{0, 1}, {3, 1}, {2, 2}, {2, 3}} {
+	for _, validType := range []int{2, 3} {
+		validProposed := SiteUnitSummaryPreferenceValues{proposed.Method, validType}
+		okRes := service.SaveSiteUnitSummaryPreferences(context.Background(), state.ContextID, summaryPreferenceRequest(t, proposed, validProposed))
+		if !okRes.Committed || okRes.ErrorMessage != "" {
+			t.Fatalf("supported siteUnitType=%d rejected: %+v", validType, okRes)
+		}
+		proposed = validProposed
+	}
+	for _, invalid := range []SiteUnitSummaryPreferenceValues{{0, 1}, {3, 1}, {2, 0}, {2, 4}} {
 		result := service.SaveSiteUnitSummaryPreferences(context.Background(), state.ContextID, summaryPreferenceRequest(t, proposed, invalid))
 		if result.Committed || result.ErrorMessage == "" {
 			t.Fatal("unsupported proposed option accepted", invalid, result)
@@ -113,7 +121,7 @@ func TestSiteUnitSummaryPreferencesOwnedCASNoopCollisionAndRestoration(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result := service.SaveSiteUnitSummaryPreferences(context.Background(), next.ContextID, summaryPreferenceRequest(t, expected, proposed)); result.Committed || result.ErrorMessage == "" {
+	if result := service.SaveSiteUnitSummaryPreferences(context.Background(), next.ContextID, summaryPreferenceRequest(t, expected, SiteUnitSummaryPreferenceValues{2, 1})); result.Committed || result.ErrorMessage == "" {
 		t.Fatal("unselected SU saved preference", result)
 	}
 }

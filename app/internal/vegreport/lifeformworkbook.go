@@ -35,7 +35,7 @@ func validateLifeformWorkbook(ctx context.Context, lifeform LifeformSummaryPrevi
 	if lifeform.ContextID == "" || lifeform.ProjectPath == "" || lifeform.SUPath == "" ||
 		lifeform.ContextID != attributes.ContextID || lifeform.ProjectPath != attributes.ProjectPath ||
 		lifeform.SUPath != attributes.SUPath || lf.Project == "" || lf.SU == "" ||
-		lf.Project != at.Project || lf.SU != at.SU || lf.SU == "None" || lf.SU == "USysSuTableDynamic" ||
+		lf.Project != at.Project || lf.SU != at.SU || lf.SU == "None" ||
 		lf.QuerySource != "normal-su-global-entrydat-plot-rejoin" ||
 		lf.Ordering != "physical-catalogue-rowid-and-first-membership" ||
 		at.QuerySource != "normal-su-raw-veg-attribute-join" ||

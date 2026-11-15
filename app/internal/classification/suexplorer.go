@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -27,8 +28,19 @@ const (
 	suAssignmentHistorySQL   = `CREATE TABLE "__VPRO_SUEnvironmentHistory"(ID INTEGER PRIMARY KEY,Created TEXT NOT NULL,Proposal TEXT NOT NULL)`
 )
 
-// BECdb v13 mask pattern: e.g. CWHvm1/01, SBSmk1/05, ESSFwc4/101, BGxh1/00, etc.
-var becUnitMaskPattern = regexp.MustCompile(`^[A-Z]{2,4}[a-z]{1,3}[0-9a-z]{0,3}/[A-Za-z0-9.\-]{1,12}$`)
+// BECdb v13 & MasterSiteUnitList mask pattern (evaluated after stripping BGC spacing), e.g. CWHvm1/01, CWHvh3/Wf51, BWBSmw/102$6B.1.
+var becUnitMaskPattern = regexp.MustCompile(`^[A-Z]{2,4}[a-z]{1,3}[0-9a-z]{0,3}/[A-Za-z0-9.\-$()]{1,14}$`)
+
+func compactBECUnitCode(code string) string {
+	var b strings.Builder
+	b.Grow(len(code))
+	for _, r := range code {
+		if !unicode.IsSpace(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
 
 type CreateSUTableRequest struct {
 	Name                    string `json:"name"`
@@ -703,7 +715,7 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 }
 
 func BECUnitMaskValid(code string) bool {
-	return becUnitMaskPattern.MatchString(strings.TrimSpace(code))
+	return becUnitMaskPattern.MatchString(compactBECUnitCode(code))
 }
 
 func GetSUPlotTree(ctx context.Context, contexts *vprocore.ContextService, contextID, filterText string) (*SUPlotTree, error) {
@@ -839,7 +851,14 @@ func GetSUPlotTree(ctx context.Context, contexts *vprocore.ContextService, conte
 				for uRows.Next() {
 					var code, lname string
 					if err := uRows.Scan(&code, &lname); err == nil && strings.TrimSpace(code) != "" {
-						unitNames[code] = unitCatalogMeta{longName: lname, origin: src.origin}
+						trimmed := strings.TrimSpace(code)
+						meta := unitCatalogMeta{longName: lname, origin: src.origin}
+						unitNames[trimmed] = meta
+						if compact := compactBECUnitCode(trimmed); compact != "" {
+							if _, exists := unitNames[compact]; !exists {
+								unitNames[compact] = meta
+							}
+						}
 					}
 				}
 				uRows.Close()
@@ -943,7 +962,10 @@ func GetSUPlotTree(ctx context.Context, contexts *vprocore.ContextService, conte
 				}
 
 				tree.TotalAssigned++
-				meta := unitNames[unitCode]
+				meta, ok := unitNames[unitCode]
+				if !ok {
+					meta = unitNames[compactBECUnitCode(unitCode)]
+				}
 				if !matchesFilter(baseLeaf, meta.longName) {
 					continue
 				}
@@ -1117,13 +1139,12 @@ func GetPlotInspectorSummary(ctx context.Context, contexts *vprocore.ContextServ
 			}
 		}
 
-		// Aggregate top species covers across A/B/C/D strata with calibrated ACE 15-sig-digit formatting
+		// Aggregate top species covers across A/B/C/D strata with IEEE-754 float32 narrowing + 99% fallback cap
 		vegRows, err := tx.QueryContext(ctx,
 			`SELECT COALESCE(CAST(v."Species" AS TEXT), ''),
-			        COALESCE(v."TotalA", COALESCE(v."Cover1",0)+COALESCE(v."Cover2",0)+COALESCE(v."Cover3",0)),
-			        COALESCE(v."TotalB", COALESCE(v."Cover4",0)+COALESCE(v."Cover5",0)+COALESCE(v."Cover5a",0)+COALESCE(v."Cover5b",0)+COALESCE(v."Cover5c",0)),
-			        COALESCE(v."Cover6", 0),
-			        COALESCE(v."Cover7", 0)+COALESCE(v."Cover8", 0)+COALESCE(v."Cover9", 0)+COALESCE(v."Cover10", 0)
+			        v."TotalA", v."Cover1", v."Cover2", v."Cover3",
+			        v."TotalB", v."Cover4", v."Cover5", v."Cover5a", v."Cover5b", v."Cover5c",
+			        v."Cover6", v."Cover7", v."Cover8", v."Cover9", v."Cover10"
 			 FROM "project".`+vprocore.QuoteHeaderIdentifier(project+"_Veg")+` AS v
 			 WHERE v."PlotNumber" = ? AND typeof(v."PlotNumber")='text' AND CAST(v."PlotNumber" AS BLOB)=CAST(? AS BLOB)`,
 			plotNumber, plotNumber,
@@ -1136,13 +1157,34 @@ func GetPlotInspectorSummary(ctx context.Context, contexts *vprocore.ContextServ
 			a, b, c, d float64
 		}
 		aggMap := map[string]*aggSp{}
+		stratumWithFallback := func(explicit sql.NullFloat64, sublayers ...sql.NullFloat64) float64 {
+			if explicit.Valid {
+				return float64(float32(explicit.Float64))
+			}
+			var sum float32
+			for _, sub := range sublayers {
+				if sub.Valid {
+					sum += float32(sub.Float64)
+				}
+			}
+			if sum > 99 {
+				sum = 99
+			}
+			return float64(sum)
+		}
 		for vegRows.Next() {
 			var sp string
-			var ca, cb, cc, cd float64
-			if err := vegRows.Scan(&sp, &ca, &cb, &cc, &cd); err != nil {
+			var totalA, c1, c2, c3 sql.NullFloat64
+			var totalB, c4, c5, c5a, c5b, c5c sql.NullFloat64
+			var c6, c7, c8, c9, c10 sql.NullFloat64
+			if err := vegRows.Scan(&sp, &totalA, &c1, &c2, &c3, &totalB, &c4, &c5, &c5a, &c5b, &c5c, &c6, &c7, &c8, &c9, &c10); err != nil {
 				vegRows.Close()
 				return nil, err
 			}
+			ca := stratumWithFallback(totalA, c1, c2, c3)
+			cb := stratumWithFallback(totalB, c4, c5, c5a, c5b, c5c)
+			cc := float64(float32(c6.Float64))
+			cd := float64(float32(c7.Float64) + float32(c8.Float64) + float32(c9.Float64) + float32(c10.Float64))
 			upper := strings.ToUpper(strings.TrimSpace(sp))
 			if upper == "" {
 				continue
@@ -1228,10 +1270,11 @@ func GetPlotInspectorSummary(ctx context.Context, contexts *vprocore.ContextServ
 }
 
 func splitZoneSubZoneFromUnitCode(code string) (string, string) {
-	slashIdx := strings.IndexByte(code, '/')
-	prefix := code
+	compact := compactBECUnitCode(code)
+	slashIdx := strings.IndexByte(compact, '/')
+	prefix := compact
 	if slashIdx >= 0 {
-		prefix = code[:slashIdx]
+		prefix = compact[:slashIdx]
 	}
 	i := 0
 	for i < len(prefix) && prefix[i] >= 'A' && prefix[i] <= 'Z' {
@@ -1258,13 +1301,14 @@ func SearchBECUnitPicker(
 		limit = 100
 	}
 	q := strings.ToLower(strings.TrimSpace(request.Query))
+	qCompact := strings.ToLower(compactBECUnitCode(request.Query))
 	zFilter := strings.ToUpper(strings.TrimSpace(request.Zone))
-	szFilter := strings.ToLower(strings.TrimSpace(request.SubZone))
+	szFilter := strings.ToLower(compactBECUnitCode(request.SubZone))
 
 	seen := map[string]bool{}
 	choices := []BECUnitPickerChoice{}
 
-	// 1. Include official BECdb v13 units from BECService when available
+	// 1. Include active BECdb v13 units from BECService when available
 	if bec != nil {
 		var zPtr, szPtr *string
 		if zFilter != "" {
@@ -1272,7 +1316,7 @@ func SearchBECUnitPicker(
 			zPtr = &zCopy
 		}
 		if szFilter != "" {
-			szCopy := strings.TrimSpace(request.SubZone)
+			szCopy := szFilter
 			szPtr = &szCopy
 		}
 		if seriesList, bErr := bec.ListBECSiteSeries(ctx, zPtr, szPtr); bErr == nil {
@@ -1280,13 +1324,27 @@ func SearchBECUnitPicker(
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
-				if item.SSCode == nil || strings.TrimSpace(*item.SSCode) == "" {
+				if item.ExpiredDate != nil && strings.TrimSpace(*item.ExpiredDate) != "" {
 					continue
 				}
-				code := strings.TrimSpace(*item.SSCode)
+				rawCode := ""
+				if item.MergedBGC != nil && strings.TrimSpace(*item.MergedBGC) != "" {
+					rawCode = strings.TrimSpace(*item.MergedBGC)
+				} else if item.Zone != nil && item.SubZone != nil && item.SSCode != nil &&
+					strings.TrimSpace(*item.Zone) != "" && strings.TrimSpace(*item.SSCode) != "" {
+					rawCode = strings.TrimSpace(*item.Zone) + strings.TrimSpace(*item.SubZone) + "/" + strings.TrimSpace(*item.SSCode)
+				} else if item.SSCode != nil {
+					rawCode = strings.TrimSpace(*item.SSCode)
+				}
+				code := compactBECUnitCode(rawCode)
+				if code == "" {
+					continue
+				}
 				lname := ""
-				if item.Name != nil {
-					lname = *item.Name
+				if item.Description != nil && strings.TrimSpace(*item.Description) != "" {
+					lname = strings.TrimSpace(*item.Description)
+				} else if item.Name != nil {
+					lname = strings.TrimSpace(*item.Name)
 				}
 				sci := ""
 				if item.PlantAssociation != nil {
@@ -1309,8 +1367,8 @@ func SearchBECUnitPicker(
 					suballiance = *item.Suballiance
 				}
 				if q != "" {
-					hay := strings.ToLower(code + " " + lname + " " + sci + " " + alliance)
-					if !strings.Contains(hay, q) {
+					hay := strings.ToLower(code + " " + rawCode + " " + lname + " " + sci + " " + alliance)
+					if !strings.Contains(hay, q) && (qCompact == "" || !strings.Contains(hay, qCompact)) {
 						continue
 					}
 				}
@@ -1380,6 +1438,7 @@ func SearchBECUnitPicker(
 					if code == "" {
 						continue
 					}
+					compact := compactBECUnitCode(code)
 					z, sz := splitZoneSubZoneFromUnitCode(code)
 					if zFilter != "" && !strings.EqualFold(z, zFilter) {
 						continue
@@ -1387,10 +1446,13 @@ func SearchBECUnitPicker(
 					if szFilter != "" && !strings.HasPrefix(strings.ToLower(sz), szFilter) {
 						continue
 					}
-					if q != "" && !strings.Contains(strings.ToLower(code+" "+lname+" "+sci), q) {
-						continue
+					if q != "" {
+						hay := strings.ToLower(code + " " + compact + " " + lname + " " + sci)
+						if !strings.Contains(hay, q) && (qCompact == "" || !strings.Contains(hay, qCompact)) {
+							continue
+						}
 					}
-					upper := strings.ToUpper(code)
+					upper := strings.ToUpper(compact)
 					if seen[upper] {
 						continue
 					}

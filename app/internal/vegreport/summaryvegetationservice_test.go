@@ -170,9 +170,9 @@ func TestSummaryVegetationServicePhysicalSchemaAndIndependentScope(t *testing.T)
 	vprotest.MutateContextFixture(t, owner.Attachments["VPro64"], `ALTER TABLE LayerCode RENAME COLUMN LegacyLayer TO Layer`)
 	verify("")
 	owner.Selection.SU = "USysSuTableDynamic"
-	verify("hierarchy/dynamic-break")
+	verify("requires original physical table project.Sample_Env")
 	owner.Selection.SU = "None"
-	verify("selected normal SU")
+	verify("requires original physical table project.Sample_Env")
 	owner.Selection.SU = "Report"
 	verify("")
 	for _, args := range [][2]int{{0, 6}, {3, 6}, {1, 4}, {1, 5}} {

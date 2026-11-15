@@ -26,6 +26,11 @@ type longVegetationOptions struct {
 	SelectedUnitFields    []string
 	LifeformGrouping      bool
 	StrataGrouping        bool
+	CombineVariants       bool
+	LumpTable             string
+	resolvedLumpTable     string
+	lumpMap               map[string]string
+	lumpRows              []longVegetationLumpRow
 	Quality               *[3]vegetationQualityCriterion
 	selectedFieldGrouping *longVegetationSelectedGroupingGuard
 }

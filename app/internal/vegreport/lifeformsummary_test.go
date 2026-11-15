@@ -257,9 +257,12 @@ func TestLifeformSummaryRefusesMissingPhysicalSchemaAndDynamicScope(t *testing.T
 		}
 	}
 	veg, su, spec, catalogue := lifeformFixture()
-	if got, err := planLifeformSummary(context.Background(), "P", "USysSuTableDynamic", veg, su, spec, catalogue); err == nil ||
-		!strings.Contains(err.Error(), "hierarchy/dynamic-break scope is unavailable") ||
+	if got, err := planLifeformSummary(context.Background(), "P", "None", veg, su, spec, catalogue); err == nil ||
+		!strings.Contains(err.Error(), "requires an SU table or dynamic hierarchy breakpoints") ||
 		!reflect.DeepEqual(got, LifeformSummaryReport{}) {
-		t.Fatal("hierarchy scope used normal-SU planner", got, err)
+		t.Fatal("None scope used normal-SU planner", got, err)
+	}
+	if got, err := planLifeformSummary(context.Background(), "P", "USysSuTableDynamic", veg, su, spec, catalogue); err != nil || len(got.Units) == 0 {
+		t.Fatalf("USysSuTableDynamic planner failed on pre-resolved SU rows: got=%+v err=%v", got, err)
 	}
 }

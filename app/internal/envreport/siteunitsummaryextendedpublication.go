@@ -116,7 +116,7 @@ func readSiteUnitSummaryExtendedSource(ctx context.Context, plots *vprocore.Plot
 	if err != nil {
 		return siteUnitSummaryExtendedSource{}, err
 	}
-	input, err := readSiteUnitQuickVegetationSource(ctx, owner, tx, contextID, request.Method)
+	input, err := readSiteUnitQuickVegetationSourceWithScope(ctx, owner, tx, contextID, request.Method, scope.SiteUnitType)
 	if err != nil {
 		return siteUnitSummaryExtendedSource{}, err
 	}

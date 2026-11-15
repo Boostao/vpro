@@ -100,7 +100,7 @@ func TestSummaryExtendedPublicationStrictTransportAndScope(t *testing.T) {
 	for _, malformed := range []string{
 		`{}`, strings.Replace(raw, `"method":1`, `"method":null`, 1),
 		strings.Replace(raw, `"method":1`, `"method":1.5`, 1),
-		strings.Replace(raw, `"orderBy":2`, `"orderBy":3`, 1),
+		strings.Replace(raw, `"orderBy":2`, `"orderBy":4`, 1),
 		strings.Replace(raw, `"includeSpecies":1`, `"includeSpecies":2`, 1),
 		strings.Replace(raw, `"method":1`, `"method":1,"method":1`, 1),
 		strings.Replace(raw, `"method":1`, `"method":1,"extra":"\ud800"`, 1),
@@ -113,11 +113,11 @@ func TestSummaryExtendedPublicationStrictTransportAndScope(t *testing.T) {
 	if value, err := reviewSiteUnitSummaryExtendedWorkbook(nil, service, state.ContextID, raw); err == nil || value != nil {
 		t.Fatal("nil context accepted", err)
 	}
-	if err := service.Projects.Preferences.Update("ReportOptions", map[string]any{"SESuType": 2}); err != nil {
+	if err := service.Projects.Preferences.Update("ReportOptions", map[string]any{"SESuType": 4}); err != nil {
 		t.Fatal(err)
 	}
 	if value, err := reviewSiteUnitSummaryExtendedWorkbook(context.Background(), service, state.ContextID, raw); err == nil || value != nil {
-		t.Fatal("unavailable hierarchy scope was overridden", err)
+		t.Fatal("unavailable invalid SU scope was overridden", err)
 	}
 }
 

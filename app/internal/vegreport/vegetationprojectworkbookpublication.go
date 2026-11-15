@@ -137,8 +137,8 @@ type vegetationProjectWorkbookReadRequest struct {
 }
 
 func validateProjectWorkbookReadRequest(revision, hash, scope string) error {
-	if scope != "unlumped" {
-		return errors.New("project workbook requires explicit unlumped report scope")
+	if _, err := resolveLongVegetationWorkbookScope(scope); err != nil {
+		return err
 	}
 	return validateProjectReadRequest(vegetationProjectReadRequest{Revision: revision, ApprovalHash: hash})
 }
@@ -267,6 +267,9 @@ func (s *LongVegetationProjectWorkbookService) readSource(ctx context.Context, p
 	if err != nil {
 		return fail(err)
 	}
+	if err := decodeLongVegetationLumpOptions(values, &options, request.Scope); err != nil {
+		return fail(err)
+	}
 	fields := owned.Scope.Fields
 	if owned.Scope.SourceKind == vprocore.VegetationProjectAllScope {
 		fields = nil
@@ -275,7 +278,10 @@ func (s *LongVegetationProjectWorkbookService) readSource(ctx context.Context, p
 	if err != nil {
 		return fail(err)
 	}
-	result := vegetationProjectWorkbookSource{Scope: owned.Scope, Report: source.Report, Settings: owned.Options.Settings,
+	settings := owned.Options.Settings
+	settings.CombineVariants = options.CombineVariants
+	settings.LumpTable = source.LumpTable
+	result := vegetationProjectWorkbookSource{Scope: owned.Scope, Report: source.Report, Settings: settings,
 		Layout: layout, Config: values, Tables: source.Tables, ReportScope: request.Scope, CreatedDate: createdDate}
 	if layout.ReportSummary {
 		descriptions, err := vprocore.ReadProfileDescriptions(ctx, tx, "VLists", "USysAllSpecs")
@@ -290,6 +296,7 @@ func (s *LongVegetationProjectWorkbookService) readSource(ctx context.Context, p
 		if err != nil {
 			return fail(err)
 		}
+		summary.LumpRows = source.LumpRows
 		result.Summary = &summary
 		result.Tables = append(result.Tables, descriptions)
 	}

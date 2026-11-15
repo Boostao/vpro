@@ -98,23 +98,8 @@ func (s *SummaryVegetationWorkbookService) authorize(ctx context.Context) error 
 	return nil
 }
 
-func requireSummaryWorkbookUnfilteredScope(ctx context.Context, config *vprocore.DesktopConfig) error {
-	if err := sqlutil.AcquireMutexLease(ctx, &config.Mu); err != nil {
-		return err
-	}
-	defer config.Mu.Unlock()
-	values, err := config.ReadLocked()
-	if err != nil {
-		return err
-	}
-	enforce, err := longVegetationConfigBool(values, "DataQualityFilterEnforce")
-	if err != nil {
-		return err
-	}
-	if enforce {
-		return errors.New("Summary draft workbook quality enforcement is saved but unqualified; no unfiltered workbook returned")
-	}
-	return ctx.Err()
+func readSummaryWorkbookQualityPolicy(ctx context.Context, config *vprocore.DesktopConfig) (summaryVegetationQualityPreferenceValues, error) {
+	return ReadSummaryVegetationQualityPreferences(config, ctx)
 }
 
 func (s *SummaryVegetationWorkbookService) readSource(ctx context.Context, plots *vprocore.PlotService, owner *vprocore.SqliteContext,
@@ -134,7 +119,8 @@ func (s *SummaryVegetationWorkbookService) readSourceAt(ctx context.Context, plo
 	} else if createdAt != "" {
 		return summaryVegetationWorkbookSource{}, errors.New("Summary draft workbook creation time requires explicit ancillary mode")
 	}
-	if err := requireSummaryWorkbookUnfilteredScope(ctx, plots.Projects.Preferences); err != nil {
+	qualityBefore, err := readSummaryWorkbookQualityPolicy(ctx, plots.Projects.Preferences)
+	if err != nil {
 		return summaryVegetationWorkbookSource{}, err
 	}
 	source, err := readSummaryVegetationWorkbookSource(ctx, s.source, plots, owner, tx, contextID, options)
@@ -155,9 +141,14 @@ func (s *SummaryVegetationWorkbookService) readSourceAt(ctx context.Context, plo
 		}
 		source.Ancillary = &additional
 	}
-	if err := requireSummaryWorkbookUnfilteredScope(ctx, plots.Projects.Preferences); err != nil {
+	qualityAfter, err := readSummaryWorkbookQualityPolicy(ctx, plots.Projects.Preferences)
+	if err != nil {
 		return summaryVegetationWorkbookSource{}, err
 	}
+	if qualityBefore != qualityAfter {
+		return summaryVegetationWorkbookSource{}, errors.New("Summary draft workbook saved quality enforcement settings changed mid-read; retry review")
+	}
+	source.QualityPolicy = &qualityAfter
 	return source, nil
 }
 
@@ -227,9 +218,6 @@ func (s *SummaryVegetationWorkbookService) GetReview(ctx context.Context, contex
 			}
 			workbook, err := prepareSummaryWorkbookSource(ctx, source, options)
 			if err != nil {
-				return nil, err
-			}
-			if err := requireSummaryWorkbookUnfilteredScope(ctx, plots.Projects.Preferences); err != nil {
 				return nil, err
 			}
 			approval, err := summaryVegetationWorkbookApproval(source, workbook, options)
@@ -311,6 +299,13 @@ func (s *SummaryVegetationWorkbookService) exportReviewed(ctx context.Context, c
 			return nil, errors.New("Summary draft workbook physical source/scope/options differ; reload review")
 		}
 		validateSource := func() error {
+			actualQuality, err := readSummaryWorkbookQualityPolicy(ctx, plots.Projects.Preferences)
+			if err != nil {
+				return err
+			}
+			if expected.QualityPolicy != nil && actualQuality != *expected.QualityPolicy {
+				return errors.New("Summary draft workbook quality enforcement settings differ from reviewed approval; reload review")
+			}
 			actual, err := read()
 			if err != nil {
 				return err
@@ -348,4 +343,21 @@ func (s *SummaryVegetationWorkbookService) exportReviewed(ctx context.Context, c
 		receipt := vprocore.ArtifactPublicationOutcome(request.Destination, result, publishErr, "Summary draft workbook")
 		return &VegetationWorkbookOutcome{receipt.Status, receipt.RequestedDestination, receipt.Path, receipt.SHA256, receipt.ErrorMessage}, nil
 	})
+}
+
+// GetReviewFromPreferences resolves saved Summary Vegetation presentation, quality, lumping,
+// and unit-scope preferences into workbook options and generates a synchronized workbook review.
+func (s *SummaryVegetationWorkbookService) GetReviewFromPreferences(ctx context.Context, contextID string) (*SummaryVegetationWorkbookReview, error) {
+	if err := s.authorize(ctx); err != nil {
+		return nil, err
+	}
+	opts, err := SummaryVegetationWorkbookOptionsFromPreferences(ctx, s.source.environment.report.contexts, contextID)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(opts)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetReview(ctx, contextID, string(raw))
 }

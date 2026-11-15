@@ -175,7 +175,7 @@ func TestLifeformSummaryServiceSchemaRefusalHierarchyExclusionAndBorrowedLifetim
 	}
 	verifyRead("")
 	owner.Selection.SU = "USysSuTableDynamic"
-	verifyRead("hierarchy/dynamic-break scope is unavailable")
+	verifyRead("report identities require original text/NULL without coercion")
 	owner.Selection.SU = state.ActiveSU
 	verifyRead("")
 	mutate("VPro64", `ALTER TABLE LifeformCodes RENAME COLUMN LifeformTXT TO LegacyLabel`)
@@ -225,5 +225,81 @@ func TestLifeformSummarySampleRepresentativeCounts(t *testing.T) {
 	}
 	if seen != len(expected) {
 		t.Fatal("Sample representative units disappeared", seen)
+	}
+}
+
+func TestLifeformAndAttributeSummaryDynamicHierarchyBreakpoints(t *testing.T) {
+	contexts, state := vprotest.ReportServiceFixture(t, false)
+	owner := contexts.Projects.Sqlite
+	vprotest.MutateContextFixture(t, owner.Attachments["project"], `
+		DELETE FROM `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Veg")+`;
+		INSERT INTO `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Veg")+`(PlotNumber, Species, Cover1) VALUES
+			('P1', 'FD', 20),
+			('P2', 'HW', 30);
+		CREATE TABLE IF NOT EXISTS `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Hierarchy")+`(
+			ID INTEGER PRIMARY KEY, Name TEXT, Parent INTEGER, MyOrder REAL, ChildID INTEGER, StartChild INTEGER, LastChild INTEGER, Flag INTEGER, Tag TEXT
+		);
+		DELETE FROM `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Hierarchy")+`;
+		INSERT INTO `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Hierarchy")+`(ID, Name, Parent, MyOrder) VALUES
+			(1, 'ConiferRoot', 0, 1),
+			(2, '~Subalpine', 1, 1),
+			(3, 'LeafUnitA', 2, 1),
+			(4, 'LeafUnitB', 2, 2);`)
+	vprotest.MutateContextFixture(t, owner.Attachments["VLists"], `
+		DELETE FROM USysAllSpecs;
+		INSERT INTO USysAllSpecs(Code, ScientificName, Lifeform, Codetype) VALUES
+			('FD', 'Pseudotsuga menziesii', 1, 'U'),
+			('HW', 'Tsuga heterophylla', 1, 'U');
+		DELETE FROM USysSppAttributes;
+		INSERT INTO USysSppAttributes(Code, Codetype, SRank, Wetland_Ind, WeedStatus, RedBlueList, Est_ASMR, Climate) VALUES
+			('FD', 'U', 'S5', '4', NULL, NULL, '3', '2'),
+			('HW', 'U', 'S5', '3', NULL, NULL, '4', '2');`)
+	vprotest.MutateContextFixture(t, owner.Attachments["su"], `
+		DELETE FROM Report_SU;
+		INSERT INTO Report_SU VALUES('P1', 'LeafUnitA'), ('P2', 'LeafUnitB');
+		CREATE TABLE IF NOT EXISTS USysSuTableDynamic_SU(PlotNumber TEXT, SiteUnit TEXT);
+		DELETE FROM USysSuTableDynamic_SU;
+		INSERT INTO USysSuTableDynamic_SU VALUES('P1', 'LeafUnitA'), ('P2', 'LeafUnitB');`)
+
+	lfSvc := enabledLifeformService(t, contexts)
+	attrSvc, err := NewSpeciesAttributeSummaryService(contexts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Normal SU with explicit '~' hierarchy breakpoints collapses LeafUnitA + LeafUnitB -> 'Subalpine' (2 plots).
+	lfHier, err := lfSvc.PreviewWithHierarchyBreakpoints(context.Background(), state.ContextID, "lowest")
+	if err != nil || len(lfHier.Report.Units) != 1 || lfHier.Report.Units[0].Code.Text == nil ||
+		*lfHier.Report.Units[0].Code.Text != "Subalpine" || lfHier.Report.Units[0].NPlots != 2 {
+		t.Fatalf("expected Lifeform '~' breakpoint rollup to Subalpine(2), got units=%+v err=%v", lfHier.Report.Units, err)
+	}
+	attrHier, err := attrSvc.PreviewWithHierarchyBreakpoints(context.Background(), state.ContextID, "lowest")
+	if err != nil || len(attrHier.Report.Units) != 1 || attrHier.Report.Units[0].Code.Text == nil ||
+		*attrHier.Report.Units[0].Code.Text != "Subalpine" || attrHier.Report.Units[0].NPlots != 2 {
+		t.Fatalf("expected Species Attribute '~' breakpoint rollup to Subalpine(2), got units=%+v err=%v", attrHier.Report.Units, err)
+	}
+
+	// Switching context SU to USysSuTableDynamic resolves '~' breakpoints in Preview AND LifeformWorkbook.
+	sel := vprotest.ContextSelection(state)
+	sel.SU = "USysSuTableDynamic"
+	dynState, err := contexts.SwitchContext(state.ContextID, sel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lfDyn, err := lfSvc.Preview(context.Background(), dynState.ContextID)
+	if err != nil || len(lfDyn.Report.Units) != 1 || *lfDyn.Report.Units[0].Code.Text != "Subalpine" {
+		t.Fatalf("expected Lifeform USysSuTableDynamic preview -> Subalpine, got units=%+v err=%v", lfDyn.Report.Units, err)
+	}
+	attrDyn, err := attrSvc.Preview(context.Background(), dynState.ContextID)
+	if err != nil || len(attrDyn.Report.Units) != 1 || *attrDyn.Report.Units[0].Code.Text != "Subalpine" {
+		t.Fatalf("expected Species Attribute USysSuTableDynamic preview -> Subalpine, got units=%+v err=%v", attrDyn.Report.Units, err)
+	}
+	wbSvc, err := NewLifeformWorkbookService(contexts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := wbSvc.GetReview(context.Background(), dynState.ContextID, `{"details":[true,true,true,true,true,true]}`)
+	if err != nil || len(review.Sheets) != 1 || review.Sheets[0].Unit.Text == nil || *review.Sheets[0].Unit.Text != "Subalpine" {
+		t.Fatalf("expected LifeformWorkbook USysSuTableDynamic sheet 'Subalpine', got sheets=%+v err=%v", review.Sheets, err)
 	}
 }

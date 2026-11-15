@@ -72,7 +72,7 @@ func TestSummarySpeciesPreviewCancellationRefusalOwnershipAndRetry(t *testing.T)
 	service, state := vprotest.ReportServiceFixture(t, false)
 	request := SiteUnitSpeciesListRequest{1, 1, 1, 1, 0, 0}
 	for _, invalid := range []SiteUnitSpeciesListRequest{
-		{0, 1, 1, 1, 0, 0}, {1, 3, 1, 1, 0, 0}, {1, 1, 0, 1, 0, 0},
+		{0, 1, 1, 1, 0, 0}, {1, 4, 1, 1, 0, 0}, {1, 1, 0, 1, 0, 0},
 		{1, 1, 1, 0, 0, 0}, {1, 1, 1, 1, 0, 32768},
 	} {
 		if got, err := PreviewSiteUnitSummarySpecies(service, context.Background(), state.ContextID, invalid); err == nil || !reflect.DeepEqual(got, SiteUnitSpeciesListPreview{}) {

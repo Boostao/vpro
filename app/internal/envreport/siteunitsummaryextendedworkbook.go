@@ -12,11 +12,11 @@ import (
 
 func siteUnitSummaryWorkbookFields(grouping int) ([]SiteUnitSummaryField, error) {
 	fields := siteUnitSummaryFields()
-	if grouping == 1 {
+	if grouping == 1 || grouping == 3 {
 		return fields, nil
 	}
 	if grouping != 2 {
-		return nil, errors.New("Summary workbook strata requires separate physical LayerCode preparation")
+		return nil, errors.New("Summary workbook grouping requires Layer (1), Lifeform (2), or Strata (3)")
 	}
 	result := append([]SiteUnitSummaryField{}, fields[:23]...)
 	for index, caption := range siteUnitLifeformCaptions {
@@ -117,7 +117,7 @@ func writeSiteUnitSummarySpeciesCells(ctx context.Context, book *excelize.File, 
 		if err := text(sheet, cell, group.Caption); err != nil {
 			return err
 		}
-		if grouping == 2 {
+		if grouping == 2 || grouping == 3 {
 			if err := book.SetCellStyle(sheet, cell, cell, bold); err != nil {
 				return err
 			}

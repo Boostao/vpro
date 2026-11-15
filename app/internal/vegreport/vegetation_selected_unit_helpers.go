@@ -67,7 +67,14 @@ func DecodeOwnedLongVegetationOptions(s *vprocore.ContextService, ctx context.Co
 	}
 
 	if group != 2 {
-		return decodeLongVegetationOptions(values)
+		options, err := decodeLongVegetationOptions(values)
+		if err != nil {
+			return longVegetationOptions{}, err
+		}
+		if err := decodeLongVegetationLumpOptions(values, &options, ""); err != nil {
+			return longVegetationOptions{}, err
+		}
+		return options, nil
 	}
 	fields, err := ApprovedSelectedUnitFields(s, ctx, plots.Projects.ContextID, plots.Projects.Sqlite, tx, values)
 	if err != nil {
@@ -79,6 +86,9 @@ func DecodeOwnedLongVegetationOptions(s *vprocore.ContextService, ctx context.Co
 	}
 	options, err := decodeLongVegetationOptions(ordinary)
 	if err != nil {
+		return longVegetationOptions{}, err
+	}
+	if err := decodeLongVegetationLumpOptions(values, &options, ""); err != nil {
 		return longVegetationOptions{}, err
 	}
 	options.SelectedUnitFields = fields
