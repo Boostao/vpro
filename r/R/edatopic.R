@@ -266,7 +266,7 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
 #' (`EdatopicGrid_Spp_Distribution`) across the standard `9 x 5` BEC edatopic
 #' grid (`SMR` `0..8` rows x `SNR` `A..E` columns).
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param mode Grid synthesis mode: `"dual"` (both Relative and Actual grids),
 #'   `"relative"` (`rSMR x rSNR` only), or `"actual"` (`aSMR x rSNR` only).
 #' @param ref_period Climate normal period (`"1961_1990"` or `"1991_2020"`) used
@@ -285,7 +285,7 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
 #'   and `$project`.
 #' @export
 vpro_edatopic_grid <- function(
-  con,
+  ws,
   mode = c("dual", "relative", "actual"),
   ref_period = "1961_1990",
   min_constancy = 20,
@@ -293,7 +293,7 @@ vpro_edatopic_grid <- function(
   exclude_modifiers = TRUE,
   force_offline = FALSE
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   mode <- match.arg(mode)
   ref_period <- vpro_normalize_ref_period(ref_period)
 
@@ -303,7 +303,7 @@ vpro_edatopic_grid <- function(
   min_const_pct <- if (min_constancy > 0 && min_constancy < 1) min_constancy * 100.0 else as.double(min_constancy)
 
   if (identical(mode, "relative")) {
-    env_df <- vpro_env(con, scope = "su", include_admin = TRUE, exclude_modifiers = exclude_modifiers)
+    env_df <- vpro_env(ws, scope = "su", include_admin = TRUE, exclude_modifiers = exclude_modifiers)
     zone_c <- if ("Zone" %in% names(env_df)) env_df$Zone else rep(NA_character_, nrow(env_df))
     subz_c <- if ("SubZone" %in% names(env_df)) env_df$SubZone else rep(NA_character_, nrow(env_df))
     bgc_c <- gsub("[[:space:]]+", "", paste0(ifelse(is.na(zone_c), "", zone_c), ifelse(is.na(subz_c), "", subz_c)))
@@ -320,10 +320,10 @@ vpro_edatopic_grid <- function(
     )
   } else {
     asmr_df <- vpro_asmr(
-      con,
+      ws,
       scope = "su",
       ref_period = ref_period,
-      cache = !identical(con$source, "sample"),
+      cache = !identical(ws$source, "sample"),
       force_offline = force_offline
     )
     if (isTRUE(exclude_modifiers) && nrow(asmr_df) > 0L) {
@@ -391,7 +391,7 @@ vpro_edatopic_grid <- function(
   }
 
   veg_df <- vpro_veg(
-    con,
+    ws,
     scope = "su",
     lump = lump,
     strata = "total",
@@ -406,8 +406,8 @@ vpro_edatopic_grid <- function(
 
   structure(
     list(
-      project = con$project,
-      su = con$su,
+      project = ws$project,
+      su = ws$su,
       mode = mode,
       ref_period = ref_period,
       min_constancy = min_const_pct,
@@ -488,7 +488,7 @@ vpro_bcgov_unit_palette <- function(n) {
 #'   (uses all grids present in `x`).
 #' @return A `ggplot` object.
 #' @export
-plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL) {
+vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL) {
   rlang::check_installed("ggplot2", reason = "to plot BEC edatopic grids.")
   if (!inherits(x, "vpro_edatope")) {
     rlang::abort("`x` must be a `vpro_edatope` object created by `vpro_edatopic_grid()`.")
@@ -745,9 +745,9 @@ plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL) {
   p
 }
 
-#' @rdname plot_edatope
+#' @rdname vpro_plot_edatope
 #' @param ... Unused additional arguments for S3 `plot()` compatibility.
 #' @export
 plot.vpro_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL, ...) {
-  plot_edatope(x, species = species, units = units, grid_type = grid_type)
+  vpro_plot_edatope(x, species = species, units = units, grid_type = grid_type)
 }

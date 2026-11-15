@@ -5,7 +5,7 @@
 \title{Build a BEC community (\verb{plot x species}) matrix with aligned environment data}
 \usage{
 vpro_matrix(
-  con,
+  ws,
   scope = c("su", "project"),
   value = c("cover", "presence", "goldstream"),
   strata = c("total", "abcd", "raw"),
@@ -13,13 +13,14 @@ vpro_matrix(
   transform = c("none", "sqrt", "log1p", "hellinger", "chord", "wisconsin"),
   drop_rare = 0,
   sparse = FALSE,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  cover_precedence = c("strata_totals", "sublayer_sum")
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or \code{\link[=vpro_sample]{vpro_sample()}}.}
+\item{ws}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}}.}
 
-\item{scope}{Plot scope: \code{"su"} (active \code{con$su} when set, else all project
+\item{scope}{Plot scope: \code{"su"} (active \code{ws$su} when set, else all project
 plots) or \code{"project"} (all \verb{<Project>_Env} plots).}
 
 \item{value}{Cell abundance metric prior to \code{transform}: \code{"cover"}
@@ -29,7 +30,7 @@ plots) or \code{"project"} (all \verb{<Project>_Env} plots).}
 \item{strata}{Taxonomic column resolution: \code{"total"} (\code{Species}), \code{"abcd"}
 (\code{paste0(Species, "_", Strata)}), or \code{"raw"} (\code{paste0(Species, "_", Layer)}).}
 
-\item{lump}{Logical (\code{TRUE} uses active \code{con$lump} with VPro's \verb{99\%} cap),
+\item{lump}{Logical (\code{TRUE} uses active \code{ws$lump} with VPro's \verb{99\%} cap),
 \code{FALSE}, a \verb{*_Lump} table name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 
 \item{transform}{Ecological standardization applied after \code{value}: \code{"none"},
@@ -47,6 +48,12 @@ dense \code{matrix}.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE}, excludes \code{.support}, \code{.poor},
 and \code{.nudum} site units.}
+
+\item{cover_precedence}{Precedence rule passed to \code{\link[=vpro_veg]{vpro_veg()}}:
+\code{"strata_totals"} (default, matching MS Access \code{vpro_veg} where positive
+\code{TotalA}/\code{TotalB} overrides sublayer combinations) or \code{"sublayer_sum"}
+(matching BEC diagnostics where \code{TotalA}/\code{TotalB} is used only when
+sublayers are \code{NA}).}
 }
 \value{
 A \verb{plot x species} numeric \code{matrix} (or \code{Matrix::dgCMatrix} when

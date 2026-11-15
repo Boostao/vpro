@@ -63,40 +63,44 @@
 #' quantitative Sørensen / Bray-Curtis unit similarity with BEC constancy (`d`)
 #' and abundance (`dd`) differential points and shared diagnostic potential.
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param lump Logical (`TRUE` uses active `con$lump`), `FALSE`, a `*_Lump` table
+#' @param ws A `vpro_workspace` handle.
+#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
 #'   name, or a two-column `data.frame(SppCode, LumpCode)`.
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
 #' @param min_plots Minimum number of plots required for a unit to enter pairwise
-#'   comparison (default `2L`).
+#'   comparison (default `2L`, matching the canonical BEC standard and Go `SynthesisOptions`).
 #' @param min_constancy Minimum constancy percentage (`[0, 100]`, default `60`)
 #'   required in at least one unit for diagnostic-potential scoring.
 #' @param noise_constancy Constancy threshold (`[0, 100]`, default `10`) below
 #'   which noisy unit-species occurrences are ignored in differential scoring.
-#' @param min_diff Minimum constancy differential points (`default 0.5`).
-#' @param min_dd Minimum dominant-differential points (`default 0.5`).
+#' @param min_diff Minimum constancy differential points (default `0.5`).
+#' @param min_dd Minimum dominant-differential points (default `0.5`).
+#' @param cover_precedence Stratum cover precedence (`"sublayer_sum"` default,
+#'   or `"strata_totals"`).
 #' @return An S3 object of class `vpro_pairwise` with `$pairs` tibble,
 #'   `$species_diffs` tibble, and `$similarity_matrix` symmetric numeric matrix.
 #' @export
 vpro_pairwise <- function(
-  con,
+  ws,
   lump = TRUE,
   exclude_modifiers = TRUE,
   min_plots = 2L,
   min_constancy = 60,
   noise_constancy = 10,
   min_diff = 0.5,
-  min_dd = 0.5
+  min_dd = 0.5,
+  cover_precedence = c("sublayer_sum", "strata_totals")
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   .vpro_register_wave2b_s3()
+  cover_precedence <- match.arg(cover_precedence)
   min_plots <- as.integer(min_plots)
   if (length(min_plots) != 1L || is.na(min_plots) || min_plots < 1L) {
     rlang::abort("`min_plots` must be a positive integer.")
   }
 
-  scoped <- .vpro_resolve_classified_plots(con, exclude_modifiers = exclude_modifiers)
+  scoped <- .vpro_resolve_classified_plots(ws, exclude_modifiers = exclude_modifiers)
   su_df <- scoped$su
 
   empty_pairs <- tibble::tibble(
@@ -170,8 +174,13 @@ vpro_pairwise <- function(
     ))
   }
 
-  veg_ps <- .vpro_extract_plot_species_veg(con, su_dt[["PlotNumber"]], lump = lump)
-  tax <- vpro_taxonomy(con, include_synonyms = FALSE, include_user = TRUE)
+  veg_ps <- .vpro_extract_plot_species_veg(
+    ws,
+    su_dt[["PlotNumber"]],
+    lump = lump,
+    cover_precedence = cover_precedence
+  )
+  tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
 
   if (nrow(veg_ps) == 0L) {
     pair_rows <- list()
@@ -406,33 +415,43 @@ as_tibble.vpro_pairwise <- function(x, ...) {
 #' closer to a rival unit (`margin < 0`) or fall below `threshold`
 #' (`own_similarity < threshold`), sorted worst-first as a review queue.
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param lump Logical (`TRUE` uses active `con$lump`), `FALSE`, a `*_Lump` table
+#' @param ws A `vpro_workspace` handle.
+#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
 #'   name, or a two-column `data.frame(SppCode, LumpCode)`.
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
 #' @param transform Cover transformation applied before centroid similarity:
-#'   `"sqrt"` (default), `"raw"`, `"log1p"`, `"chord"`, or `"hellinger"`.
+#'   `"none"` (or alias `"raw"`, default matching Go `ComputeOutlierQueue`),
+#'   `"sqrt"`, `"log1p"`, `"chord"`, or `"hellinger"`.
 #' @param threshold Minimum `own_similarity` (`[0, 1]`, default `0.45`) below
 #'   which a plot is flagged for ecological review.
+#' @param keep_singletons Logical; if `TRUE` (default, matching Go
+#'   `ComputeOutlierQueue`), evaluates singleton (`n_unit_plots == 1`) plots with
+#'   `own_similarity = 0.0` against rival unit centroids rather than omitting them.
+#' @param cover_precedence Stratum cover precedence (`"sublayer_sum"` default,
+#'   or `"strata_totals"`).
 #' @return An S3 object of class `vpro_outliers` with `$queue` (all evaluated
 #'   plots sorted worst-first) and `$outliers` (flagged subset).
 #' @export
 vpro_outliers <- function(
-  con,
+  ws,
   lump = TRUE,
   exclude_modifiers = TRUE,
-  transform = "sqrt",
-  threshold = 0.45
+  transform = c("none", "raw", "sqrt", "log1p", "chord", "hellinger"),
+  threshold = 0.45,
+  keep_singletons = TRUE,
+  cover_precedence = c("sublayer_sum", "strata_totals")
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   .vpro_register_wave2b_s3()
-  transform <- match.arg(tolower(as.character(transform)), c("sqrt", "raw", "none", "log1p", "chord", "hellinger"))
+  transform <- match.arg(tolower(as.character(transform[[1L]])), c("none", "raw", "sqrt", "log1p", "chord", "hellinger"))
+  cover_precedence <- match.arg(cover_precedence)
   if (!is.numeric(threshold) || length(threshold) != 1L || is.na(threshold) || threshold < 0 || threshold > 1) {
     rlang::abort("`threshold` must be a single number in [0, 1].")
   }
+  keep_singletons <- isTRUE(keep_singletons)
 
-  scoped <- .vpro_resolve_classified_plots(con, exclude_modifiers = exclude_modifiers)
+  scoped <- .vpro_resolve_classified_plots(ws, exclude_modifiers = exclude_modifiers)
   su_df <- scoped$su
   env_df <- scoped$env
   all_units <- scoped$units
@@ -467,7 +486,8 @@ vpro_outliers <- function(
   uc_dt <- su_dt[, list(n_plots = .N), by = "SiteUnit"]
   n_plots_map <- stats::setNames(as.integer(uc_dt[["n_plots"]]), uc_dt[["SiteUnit"]])
 
-  eval_units <- all_units[n_plots_map[all_units] >= 2L]
+  min_u_plots <- if (keep_singletons) 1L else 2L
+  eval_units <- all_units[n_plots_map[all_units] >= min_u_plots]
   if (length(eval_units) == 0L) {
     return(structure(
       list(queue = empty_q, outliers = empty_q, transform = transform, threshold = threshold),
@@ -476,7 +496,12 @@ vpro_outliers <- function(
   }
 
   all_plots <- su_dt[["PlotNumber"]]
-  veg_ps <- .vpro_extract_plot_species_veg(con, all_plots, lump = lump)
+  veg_ps <- .vpro_extract_plot_species_veg(
+    ws,
+    all_plots,
+    lump = lump,
+    cover_precedence = cover_precedence
+  )
   all_spp <- sort(unique(veg_ps$Species))
 
   # Build Plot x Species cover matrix across all classified plots (so singleton rival units can also act as centroids)
@@ -537,8 +562,12 @@ vpro_outliers <- function(
     n_own <- n_plots_map[[u_own]]
     x_vec <- mat[p_num, ]
 
-    loo_centroid <- pmax((unit_sums[[u_own]] - x_vec) / (n_own - 1.0), 0.0)
-    own_sim[[i]] <- sim_fn(x_vec, loo_centroid)
+    if (n_own <= 1L) {
+      own_sim[[i]] <- 0.0
+    } else {
+      loo_centroid <- pmax((unit_sums[[u_own]] - x_vec) / (n_own - 1.0), 0.0)
+      own_sim[[i]] <- sim_fn(x_vec, loo_centroid)
+    }
 
     rivals <- setdiff(all_units, u_own)
     if (length(rivals) > 0L) {

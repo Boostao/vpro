@@ -4,10 +4,10 @@
 \alias{vpro_duckdb}
 \title{Open an explicit read-only in-memory DuckDB coordinator across workspace SQLite DBs}
 \usage{
-vpro_duckdb(con)
+vpro_duckdb(ws)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 }
 \value{
 A \code{DBI} connection to an in-memory \code{duckdb} instance.

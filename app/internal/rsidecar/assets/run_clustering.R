@@ -20,6 +20,14 @@ if (length(args) < 2L) {
 req_path <- args[[1L]]
 resp_path <- args[[2L]]
 
+if (!nzchar(Sys.getenv("VPRO_SIDECAR_STANDALONE")) &&
+    requireNamespace("vpro", quietly = TRUE) &&
+    exists(".vpro_sidecar_exec", envir = asNamespace("vpro"), inherits = FALSE)) {
+  vpro_exec <- get(".vpro_sidecar_exec", envir = asNamespace("vpro"), inherits = FALSE)
+  vpro_exec("run_clustering", req_path, output_json = resp_path)
+  quit(save = "no", status = 0L)
+}
+
 req <- jsonlite::fromJSON(req_path, simplifyVector = TRUE)
 project_path <- as.character(req$projectPath)
 project_name <- as.character(req$projectName)
@@ -31,6 +39,7 @@ transform_mode <- if (!is.null(req$transform) && nzchar(req$transform)) tolower(
 k_req <- if (!is.null(req$k)) as.integer(req$k) else 3L
 fuzziness_m <- if (!is.null(req$fuzziness)) as.numeric(req$fuzziness) else 1.25
 dnoise_val <- if (!is.null(req$dnoise)) as.numeric(req$dnoise) else 0.75
+beta_val <- if (!is.null(req$beta) && is.finite(as.numeric(req$beta))) as.numeric(req$beta) else -0.25
 cut_height <- if (!is.null(req$cutHeight) && is.finite(as.numeric(req$cutHeight)) && as.numeric(req$cutHeight) > 0) as.numeric(req$cutHeight) else NA_real_
 apply_lump <- isTRUE(req$applyLump)
 lump_table <- if (!is.null(req$lumpTable)) as.character(req$lumpTable) else ""
@@ -64,8 +73,38 @@ if (nrow(veg_dt) == 0L) {
   stop("No vegetation records matched the requested plot scope.", call. = FALSE)
 }
 
-# Optional taxonomic lump folding (<Name>_Lump where Use != 0)
+# Load BCPlantTaxonomy v19 synonym map (OldCode -> Code) & species metadata from VLists.db
+syn_map <- character()
+spp_meta <- new.env(hash = TRUE, parent = emptyenv())
+if (nzchar(vlists_path) && file.exists(vlists_path)) {
+  vcon <- tryCatch(DBI::dbConnect(RSQLite::SQLite(), vlists_path, flags = RSQLite::SQLITE_RO), error = function(e) NULL)
+  if (!is.null(vcon)) {
+    on.exit(DBI::dbDisconnect(vcon), add = TRUE)
+    if (DBI::dbExistsTable(vcon, "USysAllSpecs")) {
+      srows <- DBI::dbGetQuery(vcon,
+        'SELECT UPPER(TRIM(CAST("Code" AS TEXT))) AS Code, UPPER(TRIM(CAST("OldCode" AS TEXT))) AS OldCode, CAST("ScientificName" AS TEXT) AS ScientificName, CAST("EnglishName" AS TEXT) AS EnglishName, COALESCE("Lifeform", 0) AS Lifeform, COALESCE("Codetype",\'U\') AS Codetype FROM "USysAllSpecs"'
+      )
+      syns <- srows[!is.na(srows$OldCode) & nzchar(srows$OldCode) & srows$OldCode != srows$Code & srows$Codetype %in% c("U", "D"), , drop = FALSE]
+      syns <- syns[!duplicated(syns$OldCode), , drop = FALSE]
+      if (nrow(syns) > 0L) {
+        syn_map <- stats::setNames(syns$Code, syns$OldCode)
+      }
+      canon <- srows[srows$Codetype %in% c("U", "D"), , drop = FALSE]
+      canon <- canon[!duplicated(canon$Code), , drop = FALSE]
+      for (i in seq_len(nrow(canon))) {
+        assign(canon$Code[[i]], list(
+          scientificName = ifelse(is.na(canon$ScientificName[[i]]), "", canon$ScientificName[[i]]),
+          englishName = ifelse(is.na(canon$EnglishName[[i]]), "", canon$EnglishName[[i]]),
+          lifeform = as.integer(canon$Lifeform[[i]])
+        ), envir = spp_meta)
+      }
+    }
+  }
+}
+
+# Optional taxonomic lump folding (<Name>_Lump where Use != 0) + USysAllSpecs OldCode -> Code synonyms
 lump_applied_count <- 0L
+lmap <- character()
 if (apply_lump && nzchar(lump_table) && DBI::dbExistsTable(con, lump_table)) {
   lump_df <- DBI::dbGetQuery(con, sprintf(
     'SELECT UPPER(TRIM(CAST("SppCode" AS TEXT))) AS SppCode, UPPER(TRIM(CAST("LumpCode" AS TEXT))) AS LumpCode, COALESCE("Use", 0) AS UseFlag FROM %s',
@@ -73,30 +112,56 @@ if (apply_lump && nzchar(lump_table) && DBI::dbExistsTable(con, lump_table)) {
   ))
   lump_df <- lump_df[lump_df$UseFlag != 0 & nzchar(lump_df$SppCode) & nzchar(lump_df$LumpCode), , drop = FALSE]
   if (nrow(lump_df) > 0L) {
-    lump_map <- stats::setNames(lump_df$LumpCode, lump_df$SppCode)
-    matched_idx <- which(veg_dt$Species %in% names(lump_map))
-    if (length(matched_idx) > 0L) {
-      veg_dt$Species[matched_idx] <- unname(lump_map[veg_dt$Species[matched_idx]])
-      lump_applied_count <- length(matched_idx)
+    lmap <- stats::setNames(lump_df$LumpCode, lump_df$SppCode)
+    if (length(syn_map) > 0L) {
+      syn_spp <- unname(syn_map[names(lmap)])
+      extra <- !is.na(syn_spp) & !(syn_spp %in% names(lmap))
+      if (any(extra)) {
+        extra_map <- stats::setNames(unname(lmap[extra]), syn_spp[extra])
+        extra_map <- extra_map[!duplicated(names(extra_map))]
+        lmap <- c(lmap, extra_map)
+      }
     }
   }
 }
 
-# Combine cover across strata per (PlotNumber, Species) using Jennings-Barkman complement formula: 100 * (1 - prod(1 - p_i))
+if (length(lmap) > 0L) {
+  m1 <- lmap[veg_dt$Species]
+  hit1 <- !is.na(m1)
+  if (any(hit1)) {
+    veg_dt$Species[hit1] <- unname(m1[hit1])
+    lump_applied_count <- sum(hit1)
+  }
+}
+if (length(syn_map) > 0L) {
+  ms <- syn_map[veg_dt$Species]
+  hits <- !is.na(ms)
+  if (any(hits)) veg_dt$Species[hits] <- unname(ms[hits])
+}
+if (length(lmap) > 0L) {
+  m2 <- lmap[veg_dt$Species]
+  hit2 <- !is.na(m2)
+  if (any(hit2)) {
+    veg_dt$Species[hit2] <- unname(m2[hit2])
+    lump_applied_count <- lump_applied_count + sum(hit2)
+  }
+}
+
+# Combine cover across strata per (PlotNumber, Species) using Pielou/Jennings-Barkman complement with 99% cap
 combine_pct <- function(vals) {
-  v <- pmin(pmax(as.numeric(vals), 0.0), 99.9)
+  v <- pmin(pmax(as.numeric(vals), 0.0), 99.0)
   v <- v[is.finite(v) & v > 0.0]
   if (length(v) == 0L) return(0.0)
   100.0 * (1.0 - prod(1.0 - (v / 100.0)))
 }
 
-veg_dt[, tree_cov := ifelse(ta > 0, ta, mapply(function(a, b, c) combine_pct(c(a, b, c)), c1, c2, c3))]
-veg_dt[, shrub_cov := ifelse(tb > 0, tb, mapply(function(a, b, c, d, e) combine_pct(c(a, b, c, d, e)), c4, c5, c5a, c5b, c5c))]
+veg_dt[, tree_cov := ifelse(ta > 0, pmin(ta, 99.0), mapply(function(a, b, c) combine_pct(c(a, b, c)), c1, c2, c3))]
+veg_dt[, shrub_cov := ifelse(tb > 0, pmin(tb, 99.0), mapply(function(a, b, c, d, e) combine_pct(c(a, b, c, d, e)), c4, c5, c5a, c5b, c5c))]
 veg_dt[, row_cov := mapply(function(tr, sh, c6v, c7v, c8v, c9v, c10v) {
   combine_pct(c(tr, sh, c6v, c7v, c8v, c9v, c10v))
 }, tree_cov, shrub_cov, c6, c7, c8, c9, c10)]
 
-veg_agg <- veg_dt[row_cov > 0, .(Cover = combine_pct(row_cov)), by = .(PlotNumber, Species)]
+veg_agg <- veg_dt[row_cov > 0, .(Cover = min(sum(row_cov), 99.0)), by = .(PlotNumber, Species)]
 plots_unique <- sort(unique(veg_agg$PlotNumber))
 spp_unique <- sort(unique(veg_agg$Species))
 
@@ -133,6 +198,14 @@ dist_obj <- if (identical(distance_metric, "chord")) {
 
 hc_method <- if (linkage %in% c("ward.D2", "average", "complete", "single", "mcquitty")) linkage else "ward.D2"
 hc <- stats::hclust(dist_obj, method = hc_method)
+if (identical(method, "BETA_FLEXIBLE") && requireNamespace("cluster", quietly = TRUE)) {
+  if (beta_val <= -1.0 || beta_val >= 1.0) stop("`beta` must be strictly in (-1, 1).", call. = FALSE)
+  alpha <- (1.0 - beta_val) / 2.0
+  ag <- cluster::agnes(dist_obj, diss = TRUE, method = "flexible", par.method = c(alpha, alpha, beta_val, 0.0))
+  hc <- stats::as.hclust(ag)
+  hc$labels <- plots_unique
+  hc_method <- "beta_flexible"
+}
 coph_corr <- suppressWarnings(stats::cor(dist_obj, stats::cophenetic(hc)))
 if (!is.finite(coph_corr)) coph_corr <- 0.0
 
@@ -226,7 +299,7 @@ if (method %in% c("NC", "KM", "FCM")) {
       method = "NC",
       m = max(1.05, fuzziness_m),
       dnoise = max(0.05, dnoise_val),
-      nstart = 5L,
+      nstart = 20L,
       iter.max = 100L
     )
   } else if (identical(vc_method, "FCM")) {
@@ -235,7 +308,7 @@ if (method %in% c("NC", "KM", "FCM")) {
       mobileCenters = k,
       method = "FCM",
       m = max(1.05, fuzziness_m),
-      nstart = 5L,
+      nstart = 20L,
       iter.max = 100L
     )
   } else {
@@ -243,7 +316,7 @@ if (method %in% c("NC", "KM", "FCM")) {
       x = vc_data,
       mobileCenters = k,
       method = "KM",
-      nstart = 5L,
+      nstart = 20L,
       iter.max = 100L
     )
   }
@@ -263,6 +336,11 @@ if (method %in% c("NC", "KM", "FCM")) {
         cluster_labels[[i]] <- paste0(unit_prefix, "_", raw_cl)
       }
     }
+  }
+} else if (identical(method, "PAM") && requireNamespace("cluster", quietly = TRUE)) {
+  pm <- cluster::pam(dist_obj, k = k, diss = TRUE)
+  for (i in seq_along(plots_unique)) {
+    cluster_labels[[i]] <- sprintf("%s_%02d", unit_prefix, as.integer(pm$clustering[[i]]))
   }
 } else {
   grp <- if (is.finite(cut_height)) {
@@ -285,35 +363,29 @@ if (method %in% c("NC", "KM", "FCM")) {
 # Compute silhouette widths across non-noise clusters when >= 2 clusters exist
 sil_widths <- rep(0.0, length(plots_unique))
 mean_sil <- 0.0
-int_codes <- as.integer(factor(cluster_labels))
-if (length(unique(int_codes)) >= 2L && length(unique(int_codes)) < length(plots_unique)) {
+non_noise_idx <- which(!is_noise)
+non_noise_units <- unique(cluster_labels[non_noise_idx])
+if (length(non_noise_units) >= 2L && length(non_noise_idx) > length(non_noise_units)) {
   if (requireNamespace("cluster", quietly = TRUE)) {
-    sil_obj <- tryCatch(cluster::silhouette(int_codes, dist_obj), error = function(e) NULL)
+    sub_codes <- as.integer(factor(cluster_labels[non_noise_idx]))
+    d_full <- as.matrix(dist_obj)
+    sub_dist <- stats::as.dist(d_full[non_noise_idx, non_noise_idx, drop = FALSE])
+    sil_obj <- tryCatch(cluster::silhouette(sub_codes, sub_dist), error = function(e) NULL)
     if (!is.null(sil_obj)) {
       sil_mat <- as.matrix(sil_obj)
-      sil_widths <- round(as.numeric(sil_mat[, "sil_width"]), 4)
-      mean_sil <- round(mean(sil_widths, na.rm = TRUE), 4)
+      sil_widths[non_noise_idx] <- round(as.numeric(sil_mat[, "sil_width"]), 4)
+      mean_sil <- round(mean(sil_widths[non_noise_idx], na.rm = TRUE), 4)
     }
   }
-}
-
-# Attach ScientificName / EnglishName from VLists.db if provided
-spp_meta <- new.env(hash = TRUE, parent = emptyenv())
-if (nzchar(vlists_path) && file.exists(vlists_path)) {
-  vcon <- tryCatch(DBI::dbConnect(RSQLite::SQLite(), vlists_path, flags = RSQLite::SQLITE_RO), error = function(e) NULL)
-  if (!is.null(vcon)) {
-    on.exit(DBI::dbDisconnect(vcon), add = TRUE)
-    if (DBI::dbExistsTable(vcon, "USysAllSpecs")) {
-      srows <- DBI::dbGetQuery(vcon,
-        'SELECT UPPER(TRIM(CAST("Code" AS TEXT))) AS Code, CAST("ScientificName" AS TEXT) AS ScientificName, CAST("EnglishName" AS TEXT) AS EnglishName, COALESCE("Lifeform", 0) AS Lifeform FROM "USysAllSpecs" WHERE COALESCE("Codetype",\'U\') IN (\'U\',\'D\')'
-      )
-      srows <- srows[!duplicated(srows$Code), , drop = FALSE]
-      for (i in seq_len(nrow(srows))) {
-        assign(srows$Code[[i]], list(
-          scientificName = ifelse(is.na(srows$ScientificName[[i]]), "", srows$ScientificName[[i]]),
-          englishName = ifelse(is.na(srows$EnglishName[[i]]), "", srows$EnglishName[[i]]),
-          lifeform = as.integer(srows$Lifeform[[i]])
-        ), envir = spp_meta)
+} else {
+  int_codes <- as.integer(factor(cluster_labels))
+  if (length(unique(int_codes)) >= 2L && length(unique(int_codes)) < length(plots_unique)) {
+    if (requireNamespace("cluster", quietly = TRUE)) {
+      sil_obj <- tryCatch(cluster::silhouette(int_codes, dist_obj), error = function(e) NULL)
+      if (!is.null(sil_obj)) {
+        sil_mat <- as.matrix(sil_obj)
+        sil_widths <- round(as.numeric(sil_mat[, "sil_width"]), 4)
+        mean_sil <- round(mean(sil_widths, na.rm = TRUE), 4)
       }
     }
   }

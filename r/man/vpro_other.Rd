@@ -4,10 +4,10 @@
 \alias{vpro_other}
 \title{Read \verb{<Project>_Other} plot records}
 \usage{
-vpro_other(con, scope = c("su", "project"))
+vpro_other(ws, scope = c("su", "project"))
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{scope}{Either \code{"su"} or \code{"project"}.}
 }

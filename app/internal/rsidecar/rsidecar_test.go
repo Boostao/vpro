@@ -445,6 +445,10 @@ func TestVeganAndVegclustClusteringCandidateSUAndPromotionGuard(t *testing.T) {
 	if len(ncRes.Clusters) == 0 || len(ncRes.Clusters[0].Indicators) == 0 {
 		t.Fatalf("expected non-empty clusters with indicator species, got %+v", ncRes.Clusters)
 	}
+	if ncRes.NoiseCount <= 0 || ncRes.MeanSilhouette < 0.13 || ncRes.MeanSilhouette > 0.16 {
+		t.Fatalf("expected non-zero noise count and CL_Noise-excluded silhouette (~0.1464), got noise=%d sil=%.4f",
+			ncRes.NoiseCount, ncRes.MeanSilhouette)
+	}
 
 	// Prove active Sample_SU was completely untouched
 	afterSampleSU := readSURows("Sample_SU")
@@ -478,6 +482,39 @@ func TestVeganAndVegclustClusteringCandidateSUAndPromotionGuard(t *testing.T) {
 	if len(hcRes.Clusters) != 3 || hcRes.CopheneticCorrelation <= 0 {
 		t.Fatalf("expected 3 hierarchical clusters and positive cophenetic correlation, got k=%d coph=%f",
 			len(hcRes.Clusters), hcRes.CopheneticCorrelation)
+	}
+
+	// 2b. Flexible-Beta (beta = -0.25) and PAM clustering convergence with vpro R SDK
+	betaVal := -0.25
+	bfRes, err := rsidecar.RunMultivariateClustering(ctx, svc, state.ContextID, rsidecar.ClusteringRequest{
+		Method:               "BETA_FLEXIBLE",
+		Distance:             "bray",
+		Transform:            "sqrt",
+		K:                    4,
+		Beta:                 &betaVal,
+		ApplyLump:            true,
+		MaterializeCandidate: false,
+	})
+	if err != nil {
+		t.Fatalf("RunMultivariateClustering (BETA_FLEXIBLE) failed: %v", err)
+	}
+	if bfRes.Method != "BETA_FLEXIBLE" || len(bfRes.Clusters) != 4 {
+		t.Fatalf("expected 4 BETA_FLEXIBLE clusters, got method=%q k=%d", bfRes.Method, len(bfRes.Clusters))
+	}
+
+	pamRes, err := rsidecar.RunMultivariateClustering(ctx, svc, state.ContextID, rsidecar.ClusteringRequest{
+		Method:               "PAM",
+		Distance:             "bray",
+		Transform:            "sqrt",
+		K:                    4,
+		ApplyLump:            true,
+		MaterializeCandidate: false,
+	})
+	if err != nil {
+		t.Fatalf("RunMultivariateClustering (PAM) failed: %v", err)
+	}
+	if pamRes.Method != "PAM" || len(pamRes.Clusters) != 4 {
+		t.Fatalf("expected 4 PAM clusters, got method=%q k=%d", pamRes.Method, len(pamRes.Clusters))
 	}
 
 	// 3. Promote Kootenay_ClusterCandidate_SU -> KootenayFinal_SU and test overwrite confirmation guard
@@ -568,6 +605,7 @@ func TestRealQuartoSingleUnitAndBGCGuidePublicationAndRMarkdownFallback(t *testi
 	for _, tokenStr := range []string{
 		"#003366",
 		"#FCBA19",
+		"BC Sans",
 		"BWBSmw2 / 05",
 		"Relative Edatopic Grid",
 		"Actual Edatopic Grid",

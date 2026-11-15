@@ -4,10 +4,10 @@
 \alias{vpro_taxonomy}
 \title{Read harmonized \verb{BCPlantTaxonomy v19} + user species catalogue}
 \usage{
-vpro_taxonomy(con = NULL, include_synonyms = FALSE, include_user = TRUE)
+vpro_taxonomy(ws = NULL, include_synonyms = FALSE, include_user = TRUE)
 }
 \arguments{
-\item{con}{Optional \code{vpro_workspace} handle. When \code{NULL}, queries the bundled
+\item{ws}{Optional \code{vpro_workspace} handle. When \code{NULL}, queries the bundled
 2026 \code{VLists.db} and \code{VUser.db}.}
 
 \item{include_synonyms}{Logical; if \code{TRUE}, retains \code{Codetype == "S"} rows.}

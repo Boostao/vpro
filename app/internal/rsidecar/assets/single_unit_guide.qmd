@@ -56,19 +56,19 @@ render_edatopic_svg <- function(grid_obj, title_text, is_actual = FALSE) {
 
   parts <- c(
     sprintf('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d" role="img" aria-label="%s">', w, h, w, h, esc_html(title_text)),
-    sprintf('<rect x="0" y="0" width="%d" height="%d" fill="#ffffff" stroke="#cbd5e1" rx="4"/>', w, h),
-    sprintf('<text x="%d" y="18" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#003366">%s</text>', as.integer(w / 2), esc_html(title_text))
+    sprintf('<rect x="0" y="0" width="%d" height="%d" fill="#ffffff" stroke="#D8D8D8" rx="4"/>', w, h),
+    sprintf('<text x="%d" y="18" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="12" font-weight="700" fill="#003366">%s</text>', as.integer(w / 2), esc_html(title_text))
   )
 
   for (ci in seq_along(snrs)) {
     cx <- pad_l + (ci - 1L) * cell_w + (cell_w / 2)
-    parts <- c(parts, sprintf('<text x="%.1f" y="36" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="700" fill="#1e293b">%s</text>', cx, snrs[[ci]]))
+    parts <- c(parts, sprintf('<text x="%.1f" y="36" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="11" font-weight="700" fill="#313132">%s</text>', cx, snrs[[ci]]))
   }
 
   for (ri in seq_along(rows)) {
     ry <- pad_t + (ri - 1L) * cell_h
     r_lbl <- rows[[ri]]
-    parts <- c(parts, sprintf('<text x="%d" y="%.1f" text-anchor="end" font-family="monospace" font-size="10" font-weight="600" fill="#334155">%s</text>', pad_l - 6, ry + (cell_h * 0.68), r_lbl))
+    parts <- c(parts, sprintf('<text x="%d" y="%.1f" text-anchor="end" font-family="monospace" font-size="10" font-weight="600" fill="#313132">%s</text>', pad_l - 6, ry + (cell_h * 0.68), r_lbl))
     for (ci in seq_along(snrs)) {
       cx <- pad_l + (ci - 1L) * cell_w
       key <- paste0(r_lbl, "|", snrs[[ci]])
@@ -76,24 +76,24 @@ render_edatopic_svg <- function(grid_obj, title_text, is_actual = FALSE) {
       if (exists(key, envir = cell_map, inherits = FALSE)) {
         cnt <- as.integer(get(key, envir = cell_map)$count)
       }
-      fill <- "#f8fafc"
-      txt_col <- "#64748b"
+      fill <- "#F2F2F2"
+      txt_col <- "#606060"
       if (cnt > 0L) {
         ratio <- cnt / max_cnt
         if (ratio >= 0.75) {
           fill <- "#003366"
           txt_col <- "#ffffff"
         } else if (ratio >= 0.40) {
-          fill <- "#2563eb"
+          fill <- "#38598A"
           txt_col <- "#ffffff"
         } else {
-          fill <- "#bfdbfe"
-          txt_col <- "#0f172a"
+          fill <- "#dbeafe"
+          txt_col <- "#003366"
         }
       }
-      parts <- c(parts, sprintf('<rect x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="#94a3b8" stroke-width="0.8"/>', cx, ry, cell_w, cell_h, fill))
+      parts <- c(parts, sprintf('<rect x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="#D8D8D8" stroke-width="0.8"/>', cx, ry, cell_w, cell_h, fill))
       if (cnt > 0L) {
-        parts <- c(parts, sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="%s">%d</text>', cx + (cell_w / 2), ry + (cell_h * 0.68), txt_col, cnt))
+        parts <- c(parts, sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="10" font-weight="700" fill="%s">%d</text>', cx + (cell_w / 2), ry + (cell_h * 0.68), txt_col, cnt))
       }
     }
   }
@@ -117,12 +117,12 @@ render_aspect_rose_svg <- function(sectors_list) {
 
   parts <- c(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 245" width="240" height="245" role="img" aria-label="Aspect Rose Diagram">',
-    '<rect x="0" y="0" width="240" height="245" fill="#ffffff" stroke="#cbd5e1" rx="4"/>',
-    '<text x="120" y="18" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#003366">Aspect Rose (8-Sector)</text>',
-    sprintf('<circle cx="%d" cy="%d" r="%.1f" fill="none" stroke="#e2e8f0" stroke-dasharray="3,3"/>', cx, cy, r_max * 0.5),
-    sprintf('<circle cx="%d" cy="%d" r="%d" fill="none" stroke="#cbd5e1"/>', cx, cy, r_max),
-    sprintf('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#e2e8f0"/>', cx - r_max, cy, cx + r_max, cy),
-    sprintf('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#e2e8f0"/>', cx, cy - r_max, cx, cy + r_max)
+    '<rect x="0" y="0" width="240" height="245" fill="#ffffff" stroke="#D8D8D8" rx="4"/>',
+    '<text x="120" y="18" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="12" font-weight="700" fill="#003366">Aspect Rose (8-Sector)</text>',
+    sprintf('<circle cx="%d" cy="%d" r="%.1f" fill="none" stroke="#D8D8D8" stroke-dasharray="3,3"/>', cx, cy, r_max * 0.5),
+    sprintf('<circle cx="%d" cy="%d" r="%d" fill="none" stroke="#D8D8D8"/>', cx, cy, r_max),
+    sprintf('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#D8D8D8"/>', cx - r_max, cy, cx + r_max, cy),
+    sprintf('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#D8D8D8"/>', cx, cy - r_max, cx, cy + r_max)
   )
 
   for (i in seq_len(8L)) {
@@ -143,7 +143,7 @@ render_aspect_rose_svg <- function(sectors_list) {
     am <- ang_deg * pi / 180.0
     lx <- cx + (r_max + 15.0) * cos(am)
     ly <- cy + (r_max + 15.0) * sin(am) + 4.0
-    parts <- c(parts, sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" font-family="sans-serif" font-size="10" font-weight="700" fill="#1e293b">%s (%d)</text>', lx, ly, labels[[i]], counts[[i]]))
+    parts <- c(parts, sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="10" font-weight="700" fill="#313132">%s (%d)</text>', lx, ly, labels[[i]], counts[[i]]))
   }
   parts <- c(parts, "</svg>")
   paste(parts, collapse = "\n")
@@ -152,11 +152,11 @@ render_aspect_rose_svg <- function(sectors_list) {
 render_boxplot_svg <- function(box_obj, title_text, unit_suffix) {
   parts <- c(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 115" width="280" height="115" role="img">',
-    '<rect x="0" y="0" width="280" height="115" fill="#ffffff" stroke="#cbd5e1" rx="4"/>',
-    sprintf('<text x="140" y="18" text-anchor="middle" font-family="sans-serif" font-size="12" font-weight="700" fill="#003366">%s</text>', esc_html(title_text))
+    '<rect x="0" y="0" width="280" height="115" fill="#ffffff" stroke="#D8D8D8" rx="4"/>',
+    sprintf('<text x="140" y="18" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="12" font-weight="700" fill="#003366">%s</text>', esc_html(title_text))
   )
   if (is.null(box_obj) || is.null(box_obj$n) || as.integer(box_obj$n) == 0L) {
-    parts <- c(parts, '<text x="140" y="64" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#64748b">No measured values in scope</text></svg>')
+    parts <- c(parts, '<text x="140" y="64" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="11" fill="#606060">No measured values in scope</text></svg>')
     return(paste(parts, collapse = "\n"))
   }
   mn <- as.numeric(box_obj$min)
@@ -174,12 +174,12 @@ render_boxplot_svg <- function(box_obj, title_text, unit_suffix) {
   x_mx <- scale_x(mx)
 
   parts <- c(parts,
-    sprintf('<line x1="%.1f" y1="56" x2="%.1f" y2="56" stroke="#334155" stroke-width="2"/>', x_mn, x_mx),
-    sprintf('<line x1="%.1f" y1="42" x2="%.1f" y2="70" stroke="#334155" stroke-width="2"/>', x_mn, x_mn),
-    sprintf('<line x1="%.1f" y1="42" x2="%.1f" y2="70" stroke="#334155" stroke-width="2"/>', x_mx, x_mx),
+    sprintf('<line x1="%.1f" y1="56" x2="%.1f" y2="56" stroke="#313132" stroke-width="2"/>', x_mn, x_mx),
+    sprintf('<line x1="%.1f" y1="42" x2="%.1f" y2="70" stroke="#313132" stroke-width="2"/>', x_mn, x_mn),
+    sprintf('<line x1="%.1f" y1="42" x2="%.1f" y2="70" stroke="#313132" stroke-width="2"/>', x_mx, x_mx),
     sprintf('<rect x="%.1f" y="38" width="%.1f" height="36" fill="#dbeafe" stroke="#003366" stroke-width="2"/>', x_q1, max(3.0, x_q3 - x_q1)),
     sprintf('<line x1="%.1f" y1="36" x2="%.1f" y2="76" stroke="#FCBA19" stroke-width="3"/>', x_md, x_md),
-    sprintf('<text x="140" y="98" text-anchor="middle" font-family="monospace" font-size="10" fill="#1e293b">n=%d | Min %.1f%s | Med %.1f%s | Max %.1f%s</text>',
+    sprintf('<text x="140" y="98" text-anchor="middle" font-family="monospace" font-size="10" fill="#313132">n=%d | Min %.1f%s | Med %.1f%s | Max %.1f%s</text>',
             as.integer(box_obj$n), mn, unit_suffix, md, unit_suffix, mx, unit_suffix),
     '</svg>'
   )
@@ -190,11 +190,11 @@ render_boxplot_svg <- function(box_obj, title_text, unit_suffix) {
 ```{=html}
 <style>
   body {
-    font-family: "BCSans", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    color: #0f172a;
+    font-family: "BC Sans", "BCSans", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #313132;
     margin: 0;
     padding: 0;
-    background: #f8fafc;
+    background: #F2F2F2;
   }
   .bcgov-banner {
     background: #003366;
@@ -210,7 +210,7 @@ render_boxplot_svg <- function(box_obj, title_text, unit_suffix) {
   .bcgov-banner .subtitle {
     margin-top: 4px;
     font-size: 13px;
-    color: #e2e8f0;
+    color: #F2F2F2;
   }
   .guide-container {
     max-width: 1120px;
@@ -219,7 +219,7 @@ render_boxplot_svg <- function(box_obj, title_text, unit_suffix) {
   }
   .card {
     background: #ffffff;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 6px;
     padding: 16px 20px;
     margin-bottom: 18px;
@@ -251,10 +251,10 @@ render_boxplot_svg <- function(box_obj, title_text, unit_suffix) {
   }
   table.bec-table td {
     padding: 6px 9px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #D8D8D8;
   }
   table.bec-table tr:nth-child(even) td {
-    background: #f8fafc;
+    background: #F2F2F2;
   }
   .sci-name {
     font-style: italic;
@@ -266,20 +266,20 @@ render_boxplot_svg <- function(box_obj, title_text, unit_suffix) {
     margin-bottom: 14px;
   }
   .kpi-box {
-    background: #f1f5f9;
+    background: #F2F2F2;
     border-left: 4px solid #003366;
     padding: 8px 12px;
     border-radius: 4px;
   }
   .kpi-label {
     font-size: 11px;
-    color: #475569;
+    color: #38598A;
     text-transform: uppercase;
   }
   .kpi-val {
     font-size: 15px;
     font-weight: 700;
-    color: #0f172a;
+    color: #313132;
   }
   @media print {
     body { background: #ffffff; }

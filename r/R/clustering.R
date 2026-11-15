@@ -29,7 +29,7 @@ vpro_with_seed <- function(seed, expr) {
 #' tibble (`PlotNumber`, `SiteUnit`, `Cluster`, `Silhouette`, `MaxMembership`,
 #' `IsNoise`) is ready for review and guarded candidate-SU write-back.
 #'
-#' @param con A `vpro_workspace` handle from [vpro_connect()] or [vpro_sample()].
+#' @param ws A `vpro_workspace` handle from [vpro_connect()].
 #' @param method Clustering algorithm: `"ward.D2"`, `"average"`,
 #'   `"beta_flexible"` (Lance-Williams flexible-beta via [cluster::agnes()]),
 #'   `"pam"` (partitioning around medoids via [cluster::pam()]), `"vegclust_fcm"`
@@ -60,7 +60,7 @@ vpro_with_seed <- function(seed, expr) {
 #'   `matrix`, and `dist`.
 #' @export
 vpro_cluster <- function(
-  con,
+  ws,
   method = c("ward.D2", "average", "beta_flexible", "pam", "vegclust_fcm", "vegclust_nc"),
   distance = "bray",
   transform = "sqrt",
@@ -74,7 +74,7 @@ vpro_cluster <- function(
   seed = 42L,
   ...
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   method <- match.arg(method)
   rlang::check_installed("vegan", reason = "to compute ecological dissimilarity matrices.")
   rlang::check_installed("cluster", reason = "to compute silhouette widths and flexible/PAM clustering.")
@@ -92,7 +92,7 @@ vpro_cluster <- function(
   }
 
   mat_raw <- vpro_matrix(
-    con,
+    ws,
     transform = transform,
     lump = lump,
     exclude_modifiers = exclude_modifiers,
@@ -384,17 +384,31 @@ plot.vpro_clusters <- function(x, type = c("auto", "dendrogram", "ordination"), 
     if (is.null(x$dendrogram)) {
       rlang::abort("`x` has no hierarchical dendrogram; use `type = \"ordination\"`.")
     }
-    graphics::plot(
-      x$dendrogram,
-      main = sprintf("VPro Cluster Dendrogram (%s, %s)", x$method, x$distance),
-      xlab = "PlotNumber",
-      sub = "",
-      ...
+    dots <- list(...)
+    plot_args <- utils::modifyList(
+      list(
+        x = x$dendrogram,
+        main = sprintf("VPro Cluster Dendrogram (%s, %s)", x$method, x$distance),
+        xlab = "PlotNumber",
+        sub = "",
+        col = "#003366",
+        col.main = "#003366",
+        col.lab = "#313132",
+        col.axis = "#313132"
+      ),
+      dots
     )
+    do.call(graphics::plot, plot_args)
   } else {
     coords <- stats::cmdscale(x$dist, k = 2L)
     grp_fac <- factor(x$memberships[["SiteUnit"]])
-    cols <- grDevices::hcl.colors(max(2L, nlevels(grp_fac)), palette = "Dark 3")[as.integer(grp_fac)]
+    bc_pal <- c("#003366", "#FCBA19", "#38598A", "#2E8540", "#D8292F", "#606060", "#4A6F94", "#8B6F00")
+    pal_fn <- if (nlevels(grp_fac) <= length(bc_pal)) {
+      bc_pal[seq_len(nlevels(grp_fac))]
+    } else {
+      grDevices::colorRampPalette(bc_pal)(nlevels(grp_fac))
+    }
+    cols <- pal_fn[as.integer(grp_fac)]
     graphics::plot(
       coords[, 1L],
       coords[, 2L],
@@ -408,7 +422,7 @@ plot.vpro_clusters <- function(x, type = c("auto", "dendrogram", "ordination"), 
     graphics::legend(
       "topright",
       legend = levels(grp_fac),
-      col = grDevices::hcl.colors(max(2L, nlevels(grp_fac)), palette = "Dark 3")[seq_len(nlevels(grp_fac))],
+      col = pal_fn,
       pch = 19L,
       bty = "n",
       cex = 0.85
@@ -424,12 +438,12 @@ plot.vpro_clusters <- function(x, type = c("auto", "dendrogram", "ordination"), 
 #' statistically significant diagnostic/indicator species per classification
 #' unit or unit combination, enriched with `BCPlantTaxonomy v19` `ScientificName`.
 #'
-#' @param con A `vpro_workspace` handle from [vpro_connect()] or [vpro_sample()].
+#' @param ws A `vpro_workspace` handle from [vpro_connect()].
 #' @param clusters Optional grouping specification: `NULL` (uses active
-#'   `SiteUnit` from `con`), a `vpro_clusters` object from [vpro_cluster()]
+#'   `SiteUnit` from `ws`), a `vpro_clusters` object from [vpro_cluster()]
 #'   (excluding `IsNoise` plots), a `data.frame` with `PlotNumber` and
 #'   `SiteUnit` columns, or a character/factor vector of group labels (named by
-#'   `PlotNumber` or matching `rownames(vpro_matrix(con, ...))`).
+#'   `PlotNumber` or matching `rownames(vpro_matrix(ws, ...))`).
 #' @param max_order Maximum site-group combination order for
 #'   [indicspecies::multipatt()] (default `1L` for single-unit indicators).
 #' @param permutations Number of random permutations for significance testing
@@ -442,14 +456,14 @@ plot.vpro_clusters <- function(x, type = c("auto", "dendrogram", "ordination"), 
 #'   `ScientificName`.
 #' @export
 vpro_indicators <- function(
-  con,
+  ws,
   clusters = NULL,
   max_order = 1L,
   permutations = 199L,
   seed = 42L,
   ...
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   has_indicspecies <- requireNamespace("indicspecies", quietly = TRUE)
   if (!has_indicspecies) {
     rlang::check_installed(
@@ -460,7 +474,7 @@ vpro_indicators <- function(
 
   dots <- list(...)
   mat_args <- utils::modifyList(
-    list(con = con, value = "cover", transform = "none", sparse = FALSE),
+    list(ws = ws, value = "cover", transform = "none", sparse = FALSE),
     dots
   )
   mat_args$sparse <- FALSE
@@ -503,7 +517,7 @@ vpro_indicators <- function(
     } else if (length(clusters) == nrow(mat)) {
       as.character(clusters)
     } else {
-      rlang::abort("Unnamed `clusters` vector must match the number of rows in `vpro_matrix(con, ...)`.")
+      rlang::abort("Unnamed `clusters` vector must match the number of rows in `vpro_matrix(ws, ...)`.")
     }
   } else {
     rlang::abort("`clusters` must be NULL, a `vpro_clusters` object, a data.frame, or a group vector.")
@@ -559,7 +573,7 @@ vpro_indicators <- function(
     }
   })
 
-  tax <- vpro_taxonomy(con, include_synonyms = FALSE, include_user = TRUE)
+  tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
   base_code <- sub("_[A-Za-z0-9]+$", "", raw_tbl[["Species"]])
   exact_ix <- match(raw_tbl[["Species"]], tax[["Code"]])
   fallback_ix <- match(base_code, tax[["Code"]])

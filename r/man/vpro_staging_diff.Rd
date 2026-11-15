@@ -4,10 +4,10 @@
 \alias{vpro_staging_diff}
 \title{Compute a custodian 3-way merge preview between \code{staging} and \code{BECMaster}}
 \usage{
-vpro_staging_diff(con, submission_id, base_db = NULL, base_project = NULL)
+vpro_staging_diff(pg, submission_id, base_db = NULL, base_project = NULL)
 }
 \arguments{
-\item{con}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
+\item{pg}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
 \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
 \item{submission_id}{Staging submission UUID string.}

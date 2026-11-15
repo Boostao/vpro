@@ -4,12 +4,12 @@
 \alias{vpro_site_units}
 \title{Read plot-to-SiteUnit assignments (\verb{*_SU})}
 \usage{
-vpro_site_units(con, su = NULL, exclude_modifiers = FALSE)
+vpro_site_units(ws, su = NULL, exclude_modifiers = FALSE)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
-\item{su}{Optional \verb{*_SU} table name override. Defaults to \code{con$su}.}
+\item{su}{Optional \verb{*_SU} table name override. Defaults to \code{ws$su}.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE}, removes \code{.support}, \code{.poor}, and
 \code{.nudum} units.}

@@ -5,7 +5,7 @@
 \title{Filter plots by VPro \code{DataQuality}, lexical \code{BEC_Use}, and modifier rules}
 \usage{
 vpro_filter_plots(
-  con,
+  ws,
   site_min = "Poor",
   veg_min = "Poor",
   soil_min = "Poor",
@@ -19,7 +19,7 @@ vpro_filter_plots(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{site_min, veg_min, soil_min}{Inclusive minimum \code{DataQuality} labels
 (e.g. \code{"Poor"}, \code{"Fair"}, \code{"Good"}, \code{"Excellent"}).}

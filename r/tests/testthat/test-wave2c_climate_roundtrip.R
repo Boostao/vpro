@@ -9,7 +9,7 @@ new_wave2c_scratch_dir <- function(prefix = "w2c") {
 
 clone_sample_wal_workspace <- function(scratch_dir) {
   db_path <- file.path(scratch_dir, "Sample.db")
-  src_ws <- vpro_sample()
+  src_ws <- vpro_connect("Sample")
   file.copy(src_ws$project_path, db_path, overwrite = TRUE)
 
   rw <- DBI::dbConnect(RSQLite::SQLite(), db_path, flags = RSQLite::SQLITE_RW)
@@ -57,22 +57,22 @@ test_that("CoordElevHash and pure-R vectorized SHA-256 match NIST and vpro_wails
   )
 
   # Exact parity with Go sha256.Sum256([]byte("54.78040|-127.17430|520.0|1961_1990"))[:16]
-  h_pos <- vpro_coord_elev_hash(54.7804, 127.1743, 520, ref_period = "1961_1990")
-  h_neg <- vpro_coord_elev_hash(54.7804, -127.1743, 520, ref_period = "1961_1990")
+  h_pos <- vpro:::.vpro_coord_elev_hash(54.7804, 127.1743, 520, ref_period = "1961_1990")
+  h_neg <- vpro:::.vpro_coord_elev_hash(54.7804, -127.1743, 520, ref_period = "1961_1990")
   expect_equal(h_pos, "bc5ff0530174eae75e03932178b77e96")
   expect_equal(h_pos, h_neg)
   expect_equal(nchar(h_pos), 32L)
 
   # Changing ref_period produces a distinct hash; NA inputs yield NA_character_
-  h_9120 <- vpro_coord_elev_hash(54.7804, -127.1743, 520, ref_period = "1991-2020")
+  h_9120 <- vpro:::.vpro_coord_elev_hash(54.7804, -127.1743, 520, ref_period = "1991-2020")
   expect_false(identical(h_pos, h_9120))
-  expect_identical(vpro_coord_elev_hash(NA_real_, -127.1, 500), NA_character_)
+  expect_identical(vpro:::.vpro_coord_elev_hash(NA_real_, -127.1, 500), NA_character_)
 
   # 1,000 vectorized hashes execute in milliseconds without external processes
   lats <- seq(49.0, 59.0, length.out = 1000L)
   lons <- seq(115.0, 135.0, length.out = 1000L)
   elevs <- seq(50.0, 1550.0, length.out = 1000L)
-  h_batch <- vpro_coord_elev_hash(lats, lons, elevs, ref_period = "1961_1990")
+  h_batch <- vpro:::.vpro_coord_elev_hash(lats, lons, elevs, ref_period = "1961_1990")
   expect_length(h_batch, 1000L)
   expect_true(all(grepl("^[0-9a-f]{32}$", h_batch)))
 })
@@ -114,7 +114,7 @@ test_that("vpro_climate, __VPRO_PlotClimate round-trip cache hit, and vpro_asmr 
   expect_equal(hydric$aSMR, 8.0)
 
   # Bundled Sample.db skips auto-writing to package extdata and refuses explicit vpro_cache_climate
-  ws_sample <- vpro_sample()
+  ws_sample <- vpro_connect("Sample")
   clim_sample <- vpro_climate(ws_sample, scope = "su", cache = TRUE, force_offline = TRUE)
   expect_gt(nrow(clim_sample), 30L)
   expect_error(vpro_cache_climate(ws_sample, clim_sample), "read-only installed")
@@ -177,7 +177,7 @@ test_that("vpro_climate, __VPRO_PlotClimate round-trip cache hit, and vpro_asmr 
   expect_true(all(valid_asmr >= 0.0 & valid_asmr <= 8.0))
 })
 
-test_that("vpro_edatopic_grid (dual 9x5) and plot_edatope render unit boxes and species heatmaps", {
+test_that("vpro_edatopic_grid (dual 9x5) and vpro_plot_edatope render unit boxes and species heatmaps", {
   # Register S3 methods during pre-roxygenise pkgload::load_all() worktree runs;
   # once roxygen2::roxygenise() runs on master, NAMESPACE registers them natively.
   if (!exists("print.vpro_edatope", envir = baseenv()$.__S3MethodsTable__., inherits = FALSE)) {
@@ -187,7 +187,7 @@ test_that("vpro_edatopic_grid (dual 9x5) and plot_edatope render unit boxes and 
     registerS3method("as_tibble", "vpro_edatope", vpro:::as_tibble.vpro_edatope, envir = asNamespace("tibble"))
   }
 
-  ws <- vpro_sample()
+  ws <- vpro_connect("Sample")
   ed <- vpro_edatopic_grid(ws, mode = "dual", min_constancy = 20, lump = TRUE, exclude_modifiers = TRUE, force_offline = TRUE)
 
   expect_s3_class(ed, "vpro_edatope")
@@ -213,13 +213,13 @@ test_that("vpro_edatopic_grid (dual 9x5) and plot_edatope render unit boxes and 
   grDevices::pdf(NULL)
   on.exit(grDevices::dev.off(), add = TRUE)
 
-  p_units <- plot_edatope(ed)
+  p_units <- vpro_plot_edatope(ed)
   expect_s3_class(p_units, "ggplot")
   built_units <- ggplot2::ggplot_build(p_units)
   expect_gt(length(built_units$data), 1L)
 
   top_spp <- ed$species$Species[[1L]]
-  p_spp <- plot_edatope(ed, species = top_spp)
+  p_spp <- vpro_plot_edatope(ed, species = top_spp)
   expect_s3_class(p_spp, "ggplot")
   built_spp <- ggplot2::ggplot_build(p_spp)
   expect_gt(length(built_spp$data), 1L)
@@ -245,24 +245,24 @@ test_that("writeback enforces refusal guards, confirmation flags, provenance, le
   )
 
   # 1. Hard database refusal guards (bundled Sample.db and VLists.db)
-  expect_error(vpro_write_candidate_su(vpro_sample(), cand_df), "read-only installed")
+  expect_error(vpro_write_su(vpro_connect("Sample"), cand_df, candidate = TRUE), "read-only installed")
   ws_vlists <- ws
   ws_vlists$project_path <- ws$vlists_path
-  expect_error(vpro_write_candidate_su(ws_vlists, cand_df), "protected VPro system")
+  expect_error(vpro_write_su(ws_vlists, cand_df, candidate = TRUE), "protected VPro system")
 
   # 2. Hard table/prefix refusal guards (Master*, USys*, BECSiteUnit, core VP08, numeric PlotNumber)
-  expect_error(vpro_write_candidate_su(ws, cand_df, name = "Master"), "Master")
-  expect_error(vpro_write_su(ws, cand_df, su_name = "Master_SU", create = TRUE, confirm_overwrite = TRUE), "Master")
-  expect_error(vpro_write_su(ws, cand_df, su_name = "BECMaster_2026", create = TRUE), "Master")
-  expect_error(vpro_write_su(ws, cand_df, su_name = "USysSuTable", create = TRUE, confirm_overwrite = TRUE), "USys")
-  expect_error(vpro_write_su(ws, cand_df, su_name = "BECSiteUnit", create = TRUE, confirm_overwrite = TRUE), "BECSiteUnit")
-  expect_error(vpro_write_su(ws, cand_df, su_name = "Sample_Env", create = TRUE, confirm_overwrite = TRUE), "core VP08")
+  expect_error(vpro_write_su(ws, cand_df, su = "Master", candidate = TRUE), "Master")
+  expect_error(vpro_write_su(ws, cand_df, su = "Master_SU", create = TRUE, overwrite = TRUE), "Master")
+  expect_error(vpro_write_su(ws, cand_df, su = "BECMaster_2026", create = TRUE), "Master")
+  expect_error(vpro_write_su(ws, cand_df, su = "USysSuTable", create = TRUE, overwrite = TRUE), "USys")
+  expect_error(vpro_write_su(ws, cand_df, su = "BECSiteUnit", create = TRUE, overwrite = TRUE), "BECSiteUnit")
+  expect_error(vpro_write_su(ws, cand_df, su = "Sample_Env", create = TRUE, overwrite = TRUE), "core VP08")
   expect_error(
-    vpro_write_candidate_su(ws, data.frame(PlotNumber = c(337, 108050), SiteUnit = c("A", "B"))),
+    vpro_write_su(ws, data.frame(PlotNumber = c(337, 108050), SiteUnit = c("A", "B")), candidate = TRUE),
     "literal `character`"
   )
 
-  # 3. vpro_write_candidate_su works with both data.frame and vpro_clusters S3 objects
+  # 3. vpro_write_su(..., candidate = TRUE) works with both data.frame and vpro_clusters S3 objects
   mock_clusters <- structure(
     list(
       memberships = tibble::tibble(
@@ -272,50 +272,50 @@ test_that("writeback enforces refusal guards, confirmation flags, provenance, le
     ),
     class = "vpro_clusters"
   )
-  ws_cand <- vpro_write_candidate_su(ws, mock_clusters, actor = "ecologist_test")
+  ws_cand <- vpro_write_su(ws, mock_clusters, candidate = TRUE, actor = "ecologist_test")
   expect_equal(ws_cand$su, "Sample_ClusterCandidate_SU")
   su_cand_rows <- vpro_site_units(ws_cand)
   expect_equal(su_cand_rows$PlotNumber, c("00337", "108050", "1976075"))
-  expect_error(vpro_write_candidate_su(ws, cand_df, overwrite = FALSE), "overwrite = TRUE")
+  expect_error(vpro_write_su(ws, cand_df, candidate = TRUE, overwrite = FALSE), "overwrite = TRUE")
 
-  # 4. vpro_write_su enforces create = TRUE and confirm_overwrite = TRUE
-  expect_error(vpro_write_su(ws, cand_df, su_name = "Working2026", create = FALSE), "create = TRUE")
-  ws_work <- vpro_write_su(ws, cand_df, su_name = "Working2026", create = TRUE, actor = "ecologist_test")
+  # 4. vpro_write_su enforces create = TRUE and overwrite = TRUE
+  expect_error(vpro_write_su(ws, cand_df, su = "Working2026", create = FALSE), "create = TRUE")
+  ws_work <- vpro_write_su(ws, cand_df, su = "Working2026", create = TRUE, actor = "ecologist_test")
   expect_equal(ws_work$su, "Working2026_SU")
   expect_error(
-    vpro_write_su(ws, cand_df, su_name = "Working2026_SU", create = TRUE, confirm_overwrite = FALSE),
-    "confirm_overwrite = TRUE"
+    vpro_write_su(ws, cand_df, su = "Working2026_SU", create = TRUE, overwrite = FALSE),
+    "overwrite = TRUE"
   )
   expect_error(
-    vpro_write_su(ws, cand_df, su_name = "Sample_SU", confirm_overwrite = FALSE),
-    "confirm_overwrite = TRUE"
+    vpro_write_su(ws, cand_df, su = "Sample_SU", overwrite = FALSE),
+    "overwrite = TRUE"
   )
   ws_work2 <- vpro_write_su(
     ws,
     tibble::tibble(PlotNumber = c("00337", "108050"), SiteUnit = c("SBSdk/01", "MHun/02")),
-    su_name = "Working2026",
-    confirm_overwrite = TRUE,
+    su = "Working2026",
+    overwrite = TRUE,
     actor = "ecologist_test"
   )
   expect_equal(nrow(vpro_site_units(ws_work2)), 2L)
   expect_true("00337" %in% vpro_site_units(ws_work2)$PlotNumber)
 
-  # 5. vpro_write_lump validates UTF-16 lengths, reserved names, confirm_overwrite, and -1L/0L Access booleans
+  # 5. vpro_write_lump validates UTF-16 lengths, reserved names, overwrite, and -1L/0L Access booleans
   lump_in <- tibble::tibble(
     LumpCode = c("ABIESPP", "SALISPP"),
     SppCode = c("ABIELAS", "SALIBEB"),
     Use = c(TRUE, FALSE)
   )
-  expect_error(vpro_write_lump(ws, lump_in, lump_name = "Master_Lump"), "Master")
-  expect_error(vpro_write_lump(ws, lump_in, lump_name = "USysCustom"), "USys")
-  expect_error(vpro_write_lump(ws, lump_in, lump_name = "CombinedSpp"), "reserved")
-  expect_error(vpro_write_lump(ws, lump_in, lump_name = "Sample_Lump", confirm_overwrite = FALSE), "confirm_overwrite = TRUE")
+  expect_error(vpro_write_lump(ws, lump_in, lump = "Master_Lump"), "Master")
+  expect_error(vpro_write_lump(ws, lump_in, lump = "USysCustom"), "USys")
+  expect_error(vpro_write_lump(ws, lump_in, lump = "CombinedSpp"), "reserved")
+  expect_error(vpro_write_lump(ws, lump_in, lump = "Sample_Lump", overwrite = FALSE), "overwrite = TRUE")
   expect_error(
-    vpro_write_lump(ws, tibble::tibble(LumpCode = "ABIESPP", SppCode = "TOOLONGSPP99", Use = TRUE), lump_name = "BadSpp"),
+    vpro_write_lump(ws, tibble::tibble(LumpCode = "ABIESPP", SppCode = "TOOLONGSPP99", Use = TRUE), lump = "BadSpp"),
     "8 UTF-16"
   )
 
-  ws_lump <- vpro_write_lump(ws, lump_in, lump_name = "Custom2026", create = TRUE, actor = "ecologist_test")
+  ws_lump <- vpro_write_lump(ws, lump_in, lump = "Custom2026", create = TRUE, actor = "ecologist_test")
   expect_equal(ws_lump$lump, "Custom2026_Lump")
   active_lump <- vpro_lump_map(ws_lump, lump = TRUE)
   expect_equal(active_lump$SppCode, "ABIELAS")

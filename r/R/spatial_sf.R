@@ -83,8 +83,8 @@ vpro_bcgs_mapsheet_20k <- function(lat, lon) {
 #' coordinates are excluded from the returned point layer and listed in
 #' `attr(result, "missing_coords")`.
 #'
-#' @param con A `vpro_workspace` handle from [vpro_connect()] or [vpro_sample()].
-#' @param scope Plot scope: `"su"` (active `con$su` when set) or `"project"`.
+#' @param ws A `vpro_workspace` handle from [vpro_connect()].
+#' @param scope Plot scope: `"su"` (active `ws$su` when set) or `"project"`.
 #' @param crs Target coordinate reference system passed to [sf::st_transform()]
 #'   (default `3005` for NAD83 / BC Albers).
 #' @param audit_geodesy Logical; if `TRUE` (default), computes NAD83 ellipsoidal
@@ -100,14 +100,14 @@ vpro_bcgs_mapsheet_20k <- function(lat, lon) {
 #'   `bcgs_mapsheet_20k` columns, plus `attr(sf_obj, "missing_coords")`.
 #' @export
 vpro_sf <- function(
-  con,
+  ws,
   scope = c("su", "project"),
   crs = 3005,
   audit_geodesy = TRUE,
   exclude_modifiers = FALSE,
   columns = "core"
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   rlang::check_installed("sf", reason = "to build spatial `sf` plot layers and transform CRS.")
   scope <- match.arg(scope)
 
@@ -126,7 +126,7 @@ vpro_sf <- function(
     unique(c("PlotNumber", "Longitude", "Latitude", "UTMZone", "UTMEasting", "UTMNorthing", as.character(columns)))
   }
 
-  env <- vpro_env(con, scope = scope, exclude_modifiers = exclude_modifiers, columns = col_proj)
+  env <- vpro_env(ws, scope = scope, exclude_modifiers = exclude_modifiers, columns = col_proj)
   env[["PlotNumber"]] <- as.character(env[["PlotNumber"]])
   n <- nrow(env)
 
@@ -293,7 +293,7 @@ vpro_sf <- function(
 #' `soil_humus`, `soil_mineral`, and `site_units`) preserving literal character
 #' `PlotNumber` keys for instant joins in QGIS, ArcGIS, or [sf::st_read()].
 #'
-#' @param con A `vpro_workspace` handle from [vpro_connect()] or [vpro_sample()].
+#' @param ws A `vpro_workspace` handle from [vpro_connect()].
 #' @param path Destination `.gpkg` file path.
 #' @param crs Target coordinate reference system for the `plots` point layer
 #'   (default `3005` NAD83 / BC Albers).
@@ -303,13 +303,13 @@ vpro_sf <- function(
 #' @return The normalized GeoPackage file path, invisibly.
 #' @export
 vpro_export_gpkg <- function(
-  con,
+  ws,
   path,
   crs = 3005,
   scope = c("su", "project"),
   overwrite = TRUE
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   rlang::check_installed("sf", reason = "to write multi-layer OGC GeoPackage files.")
   scope <- match.arg(scope)
 
@@ -333,12 +333,12 @@ vpro_export_gpkg <- function(
     unlink(c(out_path, paste0(out_path, "-wal"), paste0(out_path, "-shm")))
   }
 
-  plots_sf <- vpro_sf(con, scope = scope, crs = crs)
-  veg_tbl <- vpro_veg(con, scope = scope, strata = "raw", lump = FALSE)
-  soil_bundle <- vpro_soil(con, scope = scope, type = "both")
-  su_tbl <- vpro_site_units(con)
-  if (identical(scope, "su") && !is.null(con$su)) {
-    # vpro_site_units already reflects active con$su
+  plots_sf <- vpro_sf(ws, scope = scope, crs = crs)
+  veg_tbl <- vpro_veg(ws, scope = scope, strata = "raw", lump = FALSE)
+  soil_bundle <- vpro_soil(ws, scope = scope, type = "both")
+  su_tbl <- vpro_site_units(ws)
+  if (identical(scope, "su") && !is.null(ws$su)) {
+    # vpro_site_units already reflects active ws$su
     su_tbl[["PlotNumber"]] <- as.character(su_tbl[["PlotNumber"]])
   }
 

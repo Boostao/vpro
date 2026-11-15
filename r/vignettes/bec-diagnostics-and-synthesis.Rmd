@@ -21,8 +21,8 @@ knitr::opts_chunk$set(
 ```{r}
 library(vpro)
 
-con <- vpro_sample()
-diag_res <- vpro_diagnostics(con, lump = TRUE, exclude_modifiers = TRUE, min_constancy = 40)
+ws <- vpro_connect("Sample")
+diag_res <- vpro_diagnostics(ws, lump = TRUE, exclude_modifiers = TRUE, min_constancy = 40)
 head(diag_res$crosstab, 10)
 ```
 
@@ -31,30 +31,30 @@ head(diag_res$crosstab, 10)
 `vpro_pairwise()` implements the Ministry diagnostic-potential pairwise similarity algorithm (`_do_pairwise.R`), quantifying shared diagnostic potential versus differential separation between every pair of site units:
 
 ```{r}
-pw <- vpro_pairwise(con, min_plots = 3, min_constancy = 50)
+pw <- vpro_pairwise(ws, min_plots = 3, min_constancy = 50)
 head(pw$pairs)
 ```
 
 `vpro_outliers()` computes Leave-One-Out (LOO) unit-centroid similarity per plot and flags plots that sit closer to a rival unit centroid (`margin < 0`):
 
 ```{r}
-out_q <- vpro_outliers(con, threshold = 0.45)
+out_q <- vpro_outliers(ws, threshold = 0.45)
 head(tibble::as_tibble(out_q), 8)
 ```
 
 ## Set-Algebra Plot Profiling (`Add`, `Common`, `Subtract`)
 
-`vpro_profile()` evaluates either stored `*_Profile` tables in a VPro database or tidy R `vpro_rule()` pipelines with step-by-step plot retention counts:
+`vpro_profile()` evaluates either stored `*_Profile` tables in a VPro database or tidy R `vpro_profile_rule()` pipelines with step-by-step plot retention counts:
 
 ```{r}
-prof_stored <- vpro_profile(con, profile_table = "Sample_Profile")
+prof_stored <- vpro_profile(ws, profile_table = "Sample_Profile")
 prof_stored$steps[, c("step", "operation", "description", "matched_n", "retained_n")]
 
 rules <- list(
-  vpro_rule("Env", field = "Elevation", operator = ">=", value = 800, operation = "Add"),
-  vpro_rule("Veg", species = "ABIELAS", layer = "A", operator = ">=", value = 5, operation = "Common")
+  vpro_profile_rule("Env", field = "Elevation", operator = ">=", value = 800, operation = "Add"),
+  vpro_profile_rule("Veg", species = "ABIELAS", layer = "A", operator = ">=", value = 5, operation = "Common")
 )
-prof_custom <- vpro_profile(con, rules = rules)
+prof_custom <- vpro_profile(ws, rules = rules)
 prof_custom$steps
 ```
 
@@ -63,7 +63,7 @@ prof_custom$steps
 Both `vpro_summary_veg()` and `vpro_summary_env()` support dynamic `~` tilde breakpoint rollups from `<Name>_Hierarchy`, and export directly to multi-sheet `.xlsx` workbooks via `vpro_export_xlsx()`:
 
 ```{r}
-veg_sum <- vpro_summary_veg(con, group_by = "strata", min_constancy = 40)
-env_sum <- vpro_summary_env(con)
+veg_sum <- vpro_summary_veg(ws, group_by = "strata", min_constancy = 40)
+env_sum <- vpro_summary_env(ws)
 head(env_sum[, c("SiteUnit", "n_plots", "elevation_mean", "smr_modal", "snr_modal")])
 ```

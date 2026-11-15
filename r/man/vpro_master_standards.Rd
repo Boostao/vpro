@@ -5,13 +5,13 @@
 \title{Read provincial BEC and taxonomy standards tables from PostgreSQL \verb{standards.*}}
 \usage{
 vpro_master_standards(
-  con,
+  pg,
   table = c("releases", "usys_all_specs", "usys_table_of_lists", "bec_site_series",
     "master_site_unit_list", "usys_zone_list", "project_metadata")
 )
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle.}
+\item{pg}{A \code{vpro_pg_conn} handle.}
 
 \item{table}{Standards table to read: \code{"releases"}, \code{"usys_all_specs"},
 \code{"usys_table_of_lists"}, \code{"bec_site_series"}, \code{"master_site_unit_list"},

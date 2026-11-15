@@ -20,7 +20,7 @@ has_live_pg <- nzchar(Sys.getenv("VPRO_PG_HOST")) &&
 
 ## Provincial `BECMaster` Three-Schema Governance
 
-Alongside local 7-database `VP08` SQLite workspaces shared with desktop `VPro` (`vpro_wails`), `vpro` provides headless R access to the provincial PostgreSQL **`BECMaster`** service. Both `vpro` and `vpro_wails` operate on the same three-schema governance boundary:
+Alongside local 7-database `VP08` SQLite workspaces shared with the VPro 2.0 desktop application (`app/`), `vpro` provides headless R access to the provincial PostgreSQL **`BECMaster`** service. Both the R SDK and VPro Desktop operate on the same three-schema governance boundary:
 
 1. **`becmaster.*` (Authoritative Master Plot Archive):** Stores the canonical `VP08` plot tables (`env`, `admin`, `veg`, `humus`, `mineral`, `other`, `metadata`), a tamper-evident SHA-256 hash-chained `audit` log, monotonic non-reused child row identity registries (`child_identity` and `child_identity_watermark`), `merge_ledger`, `snapshots`, and `download_log`.
 2. **`staging.*` (Contributor Submission Queue):** Receives validated project or site-unit (`*_SU`) submissions (`submissions` plus all eight `VP08` staging tables) guarded by PostgreSQL Row-Level Security (RLS) and `BEFORE INSERT` triggers requiring `status = 'pending'` and `compliance_passed = TRUE`.
@@ -33,7 +33,7 @@ Access is separated into two PostgreSQL role tiers:
 
 ### Secret-Redacted Credential Precedence and Offline Checks
 
-`vpro_master_connect()` resolves connection settings using the exact three-tier order shared with `vpro_wails`:
+`vpro_master_connect()` resolves connection settings using the exact three-tier order shared with VPro Desktop (`app/`):
 
 1. Explicit scalar arguments (`host`, `port`, `dbname`, `user`, `password`, `sslmode`, or `url`).
 2. Process environment variables (`VPRO_PG_HOST`, `VPRO_PG_PORT`, `VPRO_PG_DBNAME`, `VPRO_PG_SSLMODE`, plus `VPRO_PG_USER` / `VPRO_PG_PASSWORD` / `VPRO_PG_URL` for `"contributor"`, or `VPRO_PG_ADMIN_USER` / `VPRO_PG_ADMIN_PASSWORD` / `VPRO_PG_ADMIN_URL` for `"custodian"`).
@@ -76,7 +76,7 @@ For analytical workflows that do not require saving a permanent local `.db`, `vp
 - **`vpro_master_veg()`** applies IEEE-754 `float32` cover narrowing, resolves `BCPlantTaxonomy v19` synonyms (`OldCode -> Code`) from `standards.usys_all_specs` (with bundled `VLists.db` fallback), folds optional species lump mappings with VPro's `99%` per-layer cap (`pmin(sum, 99)`), and combines strata via Pielou probabilistic overlap (`combine = "pielou"`) or additive sums (`combine = "sum"`).
 - **`vpro_master_soil()`** orders horizons per *Land Management Handbook 25* (`LMH25`, 2023): upland organic horizons (`L`, `F`, `H`) upward from mineral contact (`UpperDepth DESC`), and wetland organic (`Of`, `Om`, `Oh`) plus mineral (`A`, `B`, `C`, `R`, `W`) horizons downward (`UpperDepth ASC`).
 - **`vpro_master_workspace()`** streams a `REPEATABLE READ READ ONLY` cloud subset into a session-temporary `VP08` SQLite workspace (`unit_col = "BECSiteUnit"`, `"UserSiteUnit"`, or `"SiteSeries"`) that feeds directly into `vpro_diagnostics()`, `vpro_matrix()`, `vpro_cluster()`, `vpro_climate()`, and `vpro_render_guide()`.
-- **`vpro_master_audit()` and `vpro_master_verify_audit()`** inspect and recompute the SHA-256 hash chain across `becmaster.audit` rows to verify ledger integrity from genesis (or across a bounded tail window anchored to its predecessor hash).
+- **`vpro_master_audit(..., verify_chain = TRUE)`** inspects and recomputes the SHA-256 hash chain across `becmaster.audit` rows to verify ledger integrity from genesis (or across a bounded tail window anchored to its predecessor hash).
 
 The chunk below executes live read-only queries when `VPRO_PG_HOST` and contributor credentials are configured in the build environment:
 
@@ -110,7 +110,7 @@ if (nrow(cwh_env) > 0L) {
 }
 
 # Verify cryptographic SHA-256 audit hash chain integrity
-vpro_master_verify_audit(pg_con, limit = 50)$valid
+attr(vpro_master_audit(pg_con, limit = 50, verify_chain = TRUE), "chain_verification")$valid
 
 vpro_master_disconnect(pg_con)
 ```
@@ -126,24 +126,24 @@ bec_series <- vpro_master_standards(pg_con, table = "bec_site_series")
 
 ## Contributor Workflow: Standards Sync, Splinter Checkout, and Staging Submit
 
-Regional classification projects follow a three-step checkout-and-stage workflow that keeps desktop `vpro_wails` editing and R analysis synchronized without direct contributor writes to `becmaster.*`:
+Regional classification projects follow a three-step checkout-and-stage workflow that keeps desktop VPro editing and R analysis synchronized without direct contributor writes to `becmaster.*`:
 
-1. **First, synchronize local reference standards (`vpro_standards_sync()`):** Compares the local `VLists.db` SHA-256 digest against the active `standards.library_releases` (`is_current = TRUE`) snapshot, refuses to overwrite any file with active `-wal`/`-shm` locks, verifies `PRAGMA integrity_check`, and swaps in the updated species and picklist database atomically.
+1. **First, synchronize local reference standards (`vpro_master_standards_sync()`):** Compares the local `VLists.db` SHA-256 digest against the active `standards.library_releases` (`is_current = TRUE`) snapshot, refuses to overwrite any file with active `-wal`/`-shm` locks, verifies `PRAGMA integrity_check`, and swaps in the updated species and picklist database atomically.
 2. **Second, pull a snapshot-consistent regional splinter (`vpro_master_pull()`):** Streams matching `BECMaster` plots inside a `REPEATABLE READ READ ONLY` transaction into a local `VP08` SQLite WAL `.db` (rejecting reserved names such as `"Sample"`, `"None"`, or names containing `"master"`), seeds `<Project>_SU` and `__VPRO_ChildIdentity`, and records a checkout receipt in `becmaster.download_log`.
-3. **Third, validate and stage candidate edits (`vpro_staging_submit()`):** Captures a read-only `VACUUM INTO` snapshot (safe even while `vpro_wails` holds the project open in WAL mode), enforces mandatory pre-flight compliance (`vpro_validate()`, `LMH25 (2023)` pedological rules, Access UTF-16 length limits such as `PlotNumber <= 7` and `Species <= 8`, and IEEE-754 `float32 < 100` cover bounds), packages referenced personal species from `VUser.db` (`USysUserSpp`) alongside `<Project>_Lump` and `*_SU` assignments, and uploads all eight `VP08` tables to `staging.*` in one atomic PostgreSQL transaction.
+3. **Third, validate and stage candidate edits (`vpro_staging_submit()`):** Captures a read-only `VACUUM INTO` snapshot (safe even while VPro Desktop holds the project open in WAL mode), enforces mandatory pre-flight compliance (`vpro_validate()`, `LMH25 (2023)` pedological rules, Access UTF-16 length limits such as `PlotNumber <= 7` and `Species <= 8`, and IEEE-754 `float32 < 100` cover bounds), packages referenced personal species from `VUser.db` (`USysUserSpp`) alongside `<Project>_Lump` and `*_SU` assignments, and uploads all eight `VP08` tables to `staging.*` in one atomic PostgreSQL transaction.
 
 ```{r, eval = FALSE}
 con_contrib <- vpro_master_connect(role = "contributor")
 on.exit(vpro_master_disconnect(con_contrib), add = TRUE)
 
 # 1. Ensure local VLists.db matches active 2026 BECdb v13 / BCPlantTaxonomy v19
-sync_res <- vpro_standards_sync(con_contrib)
+sync_res <- vpro_master_standards_sync(con_contrib)
 
 # 2. Pull a snapshot-consistent regional splinter for desktop + R classification
 splinter <- vpro_master_pull(
   con_contrib,
-  dest_path = file.path(tempdir(), "Skeena_CWHvm_2026.db"),
-  project_name = "Skeena_CWHvm",
+  dest_db = file.path(tempdir(), "Skeena_CWHvm_2026.db"),
+  project = "Skeena_CWHvm",
   zones = "CWH",
   subzones = c("vm1", "vm2")
 )
@@ -225,10 +225,10 @@ merge_res$tail_audit_hash
 
 ## Snapshot Publication and Zero-Database `.rds` Project Bundles
 
-After custodial merges are verified, `vpro_publish_snapshot()` exports a `REPEATABLE READ` consistent release in any combination of compact `.rds`, `VP08` `.db` SQLite, `EPSG:3005` BC Albers `.gpkg` GeoPackage, and `.csv.tar.gz` formats, recording a deterministic `manifest_sha256` in `becmaster.snapshots` (queryable via `vpro_list_snapshots()`):
+After custodial merges are verified, `vpro_master_publish_snapshot()` exports a `REPEATABLE READ` consistent release in any combination of compact `.rds`, `VP08` `.db` SQLite, `EPSG:3005` BC Albers `.gpkg` GeoPackage, and `.csv.tar.gz` formats, recording a deterministic `manifest_sha256` in `becmaster.snapshots` (queryable via `vpro_master_list_snapshots()`):
 
 ```{r, eval = FALSE}
-snap_pub <- vpro_publish_snapshot(
+snap_pub <- vpro_master_publish_snapshot(
   con_cust,
   snapshot_tag = "BECMaster_2026_11",
   out_dir = file.path(tempdir(), "becmaster-release"),
@@ -237,23 +237,23 @@ snap_pub <- vpro_publish_snapshot(
 )
 snap_pub$artifacts
 
-vpro_list_snapshots(con_cust, limit = 10)
+vpro_master_list_snapshots(con_cust, limit = 10)
 ```
 
-### Offline Reproducible Pipelines with `vpro_write_rds_snapshot()` and `vpro_read_rds_project()`
+### Offline Reproducible Pipelines with `vpro_export_rds()` and `vpro_import_rds()`
 
-For reproducible Quarto manuscripts, `_targets` pipelines, CI runners, and offline teaching or peer review, `vpro_write_rds_snapshot()` packages any `vpro_workspace`—all eight `VP08` tables, active `*_SU` site-unit classifications, `*_Lump` species mappings, `BECdb v13` / `BCPlantTaxonomy v19` version tags, and the audit tail hash—into a single `xz`- or `gzip`-compressed `.rds` bundle.
+For reproducible Quarto manuscripts, `_targets` pipelines, CI runners, and offline teaching or peer review, `vpro_export_rds()` packages any `vpro_workspace`—all eight `VP08` tables, active `*_SU` site-unit classifications, `*_Lump` species mappings, `BECdb v13` / `BCPlantTaxonomy v19` version tags, and the audit tail hash—into a single `xz`- or `gzip`-compressed `.rds` bundle.
 
-`vpro_read_rds_project()` opens both `vpro_rds_bundle` files and `vpro_wails` `ExportProjectRDS` bundles (automatically pivoting long-format `veg_long` exports back into the 44-column `VP08` vegetation schema) as a self-cleaning `vpro_workspace` with zero external database dependencies:
+`vpro_import_rds()` opens both `vpro_rds_bundle` files and VPro Desktop (`app/`) `ExportProjectRDS` bundles (automatically pivoting long-format `veg_long` exports back into the 44-column `VP08` vegetation schema) as a self-cleaning `vpro_workspace` with zero external database dependencies:
 
 ```{r}
 # 1. Write a compact xz-compressed RDS snapshot from the bundled VP08 Sample workspace
-ws_sample <- vpro_sample()
+ws_sample <- vpro_connect("Sample")
 rds_file <- tempfile("sample-bec-snapshot-", fileext = ".rds")
 
-snap_meta <- vpro_write_rds_snapshot(
+snap_meta <- vpro_export_rds(
   ws_sample,
-  dest_path = rds_file,
+  path = rds_file,
   snapshot_tag = "Sample_2026_Demo",
   provenance = list(notes = "Portable offline VP08 snapshot for reproducible BEC analysis"),
   compress = "xz"
@@ -261,7 +261,7 @@ snap_meta <- vpro_write_rds_snapshot(
 snap_meta[c("plot_count", "veg_count", "bytes", "sha256")]
 
 # 2. Open the .rds bundle directly as a vpro_workspace
-rds_ws <- vpro_read_rds_project(rds_file)
+rds_ws <- vpro_import_rds(rds_file)
 rds_ws$provenance[c("snapshot_tag", "bec_version", "taxonomy_version", "plot_count")]
 
 # 3. Run standard tidy readers, vegan matrices, and BEC diagnostics out-of-the-box
@@ -282,7 +282,7 @@ unlink(rds_file)
 
 ## Ecological and Data-Safety Summary
 
-- **Read-Only vs. Transactional Boundaries:** `vpro_has_pg_credentials()`, `vpro_master_status()`, `vpro_master_env()`, `vpro_master_veg()`, `vpro_master_soil()`, `vpro_master_standards()`, `vpro_master_audit()`, `vpro_master_verify_audit()`, `vpro_master_workspace()`, `vpro_staging_list()`, `vpro_staging_inspect()`, `vpro_staging_diff()`, `vpro_list_snapshots()`, and `vpro_read_rds_project()` never mutate `becmaster.*` or live user SQLite workspaces. `vpro_master_pull()` and `vpro_standards_sync()` refuse to overwrite local SQLite files when active `-wal` or `-shm` sidecars are present.
+- **Read-Only vs. Transactional Boundaries:** `vpro_has_pg_credentials()`, `vpro_master_status()`, `vpro_master_env()`, `vpro_master_veg()`, `vpro_master_soil()`, `vpro_master_standards()`, `vpro_master_audit()`, `vpro_master_workspace()`, `vpro_staging_list()`, `vpro_staging_inspect()`, `vpro_staging_diff()`, `vpro_master_list_snapshots()`, and `vpro_import_rds()` never mutate `becmaster.*` or live user SQLite workspaces. `vpro_master_pull()` and `vpro_master_standards_sync()` refuse to overwrite local SQLite files when active `-wal` or `-shm` sidecars are present.
 - **Literal Character `PlotNumber`s:** All cloud readers, staging uploads, 3-way diffs, and `.rds` snapshots enforce character `PlotNumber` keys (`<= 7` UTF-16 code units) and reject numeric plot vectors so leading zeroes (such as `"00337"`) can never be stripped.
 - **Cover Narrowing and `99%` Lumped Caps:** Cover values are narrowed to IEEE-754 `float32` (`< 100`) on read, staging pre-flight, and custodian merge; lumped species covers in `vpro_master_veg()` and `vpro_diagnostics()` cap per-layer sums at `99%` without altering raw `becmaster.veg` records.
 - **Custodian Locks and Non-Reused Identities:** `BECSiteUnit`, `BEC_Use`, and `GIS_BGC` remain protected against accidental plot-level overwrites during `vpro_staging_merge()`, `LMH25 (2023)` upland versus wetland horizon depth signs are enforced at commit time, and deleted child `ID`s are permanently reserved in `becmaster.child_identity`.

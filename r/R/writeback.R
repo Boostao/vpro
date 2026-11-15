@@ -427,169 +427,98 @@ vpro_upsert_table_metadata_in_tx <- function(dbc, table_name, version_tag) {
   invisible(TRUE)
 }
 
-#' Materialize a staging `*_ClusterCandidate_SU` table atomically
+#' Write or replace a working `*_SU` or staging `*_ClusterCandidate_SU` table atomically
 #'
-#' Writes cluster or candidate site-unit memberships to
-#' `<Prefix>_ClusterCandidate_SU` inside `con$project_path` using a `BEGIN IMMEDIATE`
-#' WAL transaction, registers `_table_metadata` (`'VP04'`), appends provenance
-#' to `<Project>_Audit` and `__VPRO_RSidecarHistory`, and returns an updated
-#' `vpro_workspace` handle pointing at the candidate SU table.
+#' Persists plot-to-SiteUnit assignments to `<su>_SU` (or, when
+#' `candidate = TRUE`, `<Prefix>_ClusterCandidate_SU`) inside `ws$project_path`
+#' under `BEGIN IMMEDIATE`, strictly refusing `Master*`, `USys*`, `BECSiteUnit`,
+#' and core `VP08` tables. Requires `create = TRUE` when creating a new table
+#' (default `TRUE` when `candidate = TRUE`) and `overwrite = TRUE` when replacing
+#' an existing table.
 #'
-#' @param con A `vpro_workspace` handle referencing a writable user `.db`.
+#' @param ws A `vpro_workspace` handle referencing a writable user `.db`.
 #' @param memberships A `vpro_clusters` object or a `data.frame` containing
 #'   literal character `PlotNumber` and `SiteUnit` (or `Cluster`).
-#' @param name Candidate table prefix or name (defaults to
-#'   `paste0(con$project, "_ClusterCandidate")`).
-#' @param overwrite Logical; if `TRUE` (default), replaces an existing
-#'   `<Prefix>_ClusterCandidate_SU` staging table.
+#' @param su Target working site-unit name (with or without `_SU` suffix). When
+#'   `candidate = TRUE` and `su = NULL`, defaults to
+#'   `paste0(ws$project, "_ClusterCandidate")`.
+#' @param create Logical; must be `TRUE` to create a table that does not yet
+#'   exist (defaults to `FALSE` for working `*_SU` tables and `TRUE` when
+#'   `candidate = TRUE`).
+#' @param overwrite Logical; must be `TRUE` to replace an existing `*_SU` table.
+#' @param candidate Logical; if `TRUE`, writes a staging
+#'   `<Prefix>_ClusterCandidate_SU` table (`MaterializeClusterCandidate` audit)
+#'   instead of a working `*_SU` table.
 #' @param actor Username recorded in `<Project>_Audit`.
-#' @return Invisibly returns an updated `vpro_workspace` with `con$su` switched
-#'   to the newly written `<Prefix>_ClusterCandidate_SU` table.
-#' @export
-vpro_write_candidate_su <- function(
-  con,
-  memberships,
-  name = paste0(gsub("(?i)master", "Mst", con$project, perl = TRUE), "_ClusterCandidate"),
-  overwrite = TRUE,
-  actor = Sys.info()[["user"]]
-) {
-  vpro_assert_workspace(con)
-  vpro_assert_writable_project_db(con$project_path, con = con)
-
-  if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(trimws(name))) {
-    rlang::abort("`name` must be a single non-empty character string.")
-  }
-  raw_nm <- trimws(name)
-  base <- sub("_SU$", "", raw_nm, ignore.case = TRUE)
-  base <- sub("_ClusterCandidate$", "", base, ignore.case = TRUE)
-
-  cand_prefix <- paste0(base, "_ClusterCandidate")
-  target_table <- paste0(cand_prefix, "_SU")
-  vpro_assert_safe_prefix(raw_nm, target_table, con$project, kind = "candidate_su")
-
-  if (tolower(base) %in% c("none", "filtered")) {
-    rlang::abort(paste0("Candidate prefix `", base, "` is reserved by VPro."))
-  }
-  if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
-    rlang::abort(paste0(
-      "Candidate prefix `", base,
-      "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
-    ))
-  }
-
-  clean_df <- vpro_extract_su_memberships(memberships)
-  actor_clean <- vpro_normalize_actor(actor)
-
-  written_table <- vpro_with_immediate_tx(con$project_path, con = con, fn = function(dbc) {
-    existing <- vpro_find_existing_table_ci(dbc, target_table)
-    if (!is.null(existing) && !isTRUE(overwrite)) {
-      rlang::abort(paste0(
-        "Candidate SU table `", existing, "` already exists; set `overwrite = TRUE` to replace it."
-      ))
-    }
-
-    if (!is.null(existing)) {
-      DBI::dbExecute(dbc, paste0("DROP TABLE IF EXISTS main.", vpro_quote_ident(existing)))
-    }
-    q_tbl <- vpro_quote_ident(target_table)
-    q_uidx <- vpro_quote_ident(paste0("uidx_", target_table, "_PlotNumber"))
-    q_idx <- vpro_quote_ident(paste0("idx_", target_table, "_SiteUnit"))
-
-    DBI::dbExecute(dbc, paste0("CREATE TABLE main.", q_tbl, ' ("PlotNumber" VARCHAR, "SiteUnit" VARCHAR)'))
-    DBI::dbExecute(dbc, paste0("CREATE UNIQUE INDEX main.", q_uidx, " ON ", q_tbl, ' ("PlotNumber")'))
-    DBI::dbExecute(dbc, paste0("CREATE INDEX main.", q_idx, " ON ", q_tbl, ' ("SiteUnit")'))
-    vpro_upsert_table_metadata_in_tx(dbc, target_table, "VP04")
-
-    DBI::dbExecute(
-      dbc,
-      paste0("INSERT INTO main.", q_tbl, ' ("PlotNumber", "SiteUnit") VALUES (?, ?)'),
-      params = list(clean_df$PlotNumber, clean_df$SiteUnit)
-    )
-
-    before_desc <- if (is.null(existing)) "created" else "overwritten"
-    vpro_append_project_audit_in_tx(
-      dbc = dbc,
-      project_name = con$project,
-      actor = actor_clean,
-      table_name = target_table,
-      edit_field = "MaterializeClusterCandidate",
-      before_val = before_desc,
-      after_val = sprintf("%d plots", nrow(clean_df))
-    )
-    vpro_append_rsidecar_history_in_tx(
-      dbc = dbc,
-      action = "MaterializeClusterCandidate",
-      details = list(
-        tableName = target_table,
-        rows = nrow(clean_df),
-        overwrote = !is.null(existing),
-        actor = actor_clean
-      )
-    )
-    target_table
-  })
-
-  con_next <- con
-  con_next$su_path <- con$project_path
-  invisible(vpro_use(con_next, su = written_table))
-}
-
-#' Write or replace a working `*_SU` site-unit table atomically
-#'
-#' Persists plot-to-SiteUnit assignments to `<su_name>_SU` inside
-#' `con$project_path` under `BEGIN IMMEDIATE`, strictly refusing `Master*`,
-#' `USys*`, `BECSiteUnit`, and core `VP08` tables. Requires `create = TRUE` when
-#' creating a new `*_SU` table and `confirm_overwrite = TRUE` when replacing an
-#' existing `*_SU` table.
-#'
-#' @param con A `vpro_workspace` handle referencing a writable user `.db`.
-#' @param memberships A `vpro_clusters` object or `data.frame(PlotNumber, SiteUnit)`.
-#' @param su_name Target working site-unit name (with or without `_SU` suffix).
-#' @param create Logical; must be `TRUE` to create a table that does not yet exist.
-#' @param confirm_overwrite Logical; must be `TRUE` to overwrite an existing `*_SU` table.
-#' @param actor Username recorded in `<Project>_Audit`.
-#' @return Invisibly returns an updated `vpro_workspace` with `con$su` switched
+#' @return Invisibly returns an updated `vpro_workspace` with `ws$su` switched
 #'   to the written `*_SU` table.
 #' @export
 vpro_write_su <- function(
-  con,
+  ws,
   memberships,
-  su_name,
+  su = NULL,
   create = FALSE,
-  confirm_overwrite = FALSE,
+  overwrite = FALSE,
+  candidate = FALSE,
   actor = Sys.info()[["user"]]
 ) {
-  vpro_assert_workspace(con)
-  vpro_assert_writable_project_db(con$project_path, con = con)
+  vpro_assert_workspace(ws)
+  vpro_assert_writable_project_db(ws$project_path, con = ws)
 
-  if (!is.character(su_name) || length(su_name) != 1L || is.na(su_name) || !nzchar(trimws(su_name))) {
-    rlang::abort("`su_name` must be a single non-empty character string.")
+  is_candidate <- isTRUE(candidate)
+  if (missing(create) && is_candidate) {
+    create <- TRUE
   }
-  raw_nm <- trimws(su_name)
+  if (is.null(su)) {
+    if (is_candidate) {
+      su <- paste0(gsub("(?i)master", "Mst", ws$project, perl = TRUE), "_ClusterCandidate")
+    } else {
+      rlang::abort("`su` must be a single non-empty character string when `candidate = FALSE`.")
+    }
+  }
+  if (!is.character(su) || length(su) != 1L || is.na(su) || !nzchar(trimws(su))) {
+    rlang::abort("`su` must be a single non-empty character string.")
+  }
+
+  raw_nm <- trimws(su)
   base <- sub("_SU$", "", raw_nm, ignore.case = TRUE)
-  target_table <- paste0(base, "_SU")
-
-  vpro_assert_safe_prefix(raw_nm, target_table, con$project, kind = "su")
-
-  if (tolower(base) %in% c("none", "usyssutabledynamic", "filtered")) {
-    rlang::abort(paste0("Target SU name `", base, "` is reserved by VPro."))
-  }
-  if (grepl("_clustercandidate$", base, ignore.case = TRUE)) {
-    rlang::abort(
-      "Use `vpro_write_candidate_su()` when writing `*_ClusterCandidate_SU` staging tables."
-    )
-  }
-  if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
-    rlang::abort(paste0(
-      "Target SU name `", base,
-      "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
-    ))
+  if (is_candidate) {
+    base <- sub("_ClusterCandidate$", "", base, ignore.case = TRUE)
+    cand_prefix <- paste0(base, "_ClusterCandidate")
+    target_table <- paste0(cand_prefix, "_SU")
+    vpro_assert_safe_prefix(raw_nm, target_table, ws$project, kind = "candidate_su")
+    if (tolower(base) %in% c("none", "filtered")) {
+      rlang::abort(paste0("Candidate prefix `", base, "` is reserved by VPro."))
+    }
+    if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
+      rlang::abort(paste0(
+        "Candidate prefix `", base,
+        "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
+      ))
+    }
+  } else {
+    target_table <- paste0(base, "_SU")
+    vpro_assert_safe_prefix(raw_nm, target_table, ws$project, kind = "su")
+    if (tolower(base) %in% c("none", "usyssutabledynamic", "filtered")) {
+      rlang::abort(paste0("Target SU name `", base, "` is reserved by VPro."))
+    }
+    if (grepl("_clustercandidate$", base, ignore.case = TRUE)) {
+      rlang::abort(
+        "Pass `candidate = TRUE` to `vpro_write_su()` when writing `*_ClusterCandidate_SU` staging tables."
+      )
+    }
+    if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
+      rlang::abort(paste0(
+        "Target SU name `", base,
+        "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
+      ))
+    }
   }
 
   clean_df <- vpro_extract_su_memberships(memberships)
   actor_clean <- vpro_normalize_actor(actor)
 
-  written_table <- vpro_with_immediate_tx(con$project_path, con = con, fn = function(dbc) {
+  written_table <- vpro_with_immediate_tx(ws$project_path, con = ws, fn = function(dbc) {
     existing <- vpro_find_existing_table_ci(dbc, target_table)
     if (is.null(existing) && !isTRUE(create)) {
       rlang::abort(paste0(
@@ -597,10 +526,10 @@ vpro_write_su <- function(
         "` does not exist; set `create = TRUE` to create a new working `*_SU` table."
       ))
     }
-    if (!is.null(existing) && !isTRUE(confirm_overwrite)) {
+    if (!is.null(existing) && !isTRUE(overwrite)) {
       rlang::abort(paste0(
         "Target SU table `", existing,
-        "` already exists; set `confirm_overwrite = TRUE` to confirm replacing it."
+        "` already exists; set `overwrite = TRUE` to replace it."
       ))
     }
 
@@ -624,71 +553,87 @@ vpro_write_su <- function(
     )
 
     before_desc <- if (is.null(existing)) "created" else "overwritten (confirmed)"
+    action_nm <- if (is_candidate) "MaterializeClusterCandidate" else "WriteWorkingSU"
+    after_desc <- if (is_candidate) {
+      sprintf("%d plots", nrow(clean_df))
+    } else {
+      sprintf("%d plots (%d units)", nrow(clean_df), length(unique(clean_df$SiteUnit)))
+    }
     vpro_append_project_audit_in_tx(
       dbc = dbc,
-      project_name = con$project,
+      project_name = ws$project,
       actor = actor_clean,
       table_name = actual_tbl,
-      edit_field = "WriteWorkingSU",
+      edit_field = action_nm,
       before_val = before_desc,
-      after_val = sprintf("%d plots (%d units)", nrow(clean_df), length(unique(clean_df$SiteUnit)))
+      after_val = after_desc
     )
-    vpro_append_rsidecar_history_in_tx(
-      dbc = dbc,
-      action = "WriteWorkingSU",
-      details = list(
+    details_list <- if (is_candidate) {
+      list(
+        tableName = actual_tbl,
+        rows = nrow(clean_df),
+        overwrote = !is.null(existing),
+        actor = actor_clean
+      )
+    } else {
+      list(
         tableName = actual_tbl,
         overwrote = !is.null(existing),
         rows = nrow(clean_df),
         units = length(unique(clean_df$SiteUnit)),
         actor = actor_clean
       )
+    }
+    vpro_append_rsidecar_history_in_tx(
+      dbc = dbc,
+      action = action_nm,
+      details = details_list
     )
     actual_tbl
   })
 
-  con_next <- con
-  con_next$su_path <- con$project_path
-  invisible(vpro_use(con_next, su = written_table))
+  ws_next <- ws
+  ws_next$su_path <- ws$project_path
+  invisible(vpro_use(ws_next, su = written_table))
 }
 
 #' Write or replace a taxonomic lumping (`*_Lump`) table atomically
 #'
 #' Validates `LumpCode` (`<= 50` UTF-16 code units), `SppCode` (`<= 8` UTF-16
 #' code units, unique, distinct from `LumpCode`), and serializes `Use` to Access
-#' integer booleans (`-1L` = `TRUE`, `0L` = `FALSE`). Writes `<lump_name>_Lump`
+#' integer booleans (`-1L` = `TRUE`, `0L` = `FALSE`). Writes `<lump>_Lump`
 #' + `_table_metadata` (`'VP05'`) + `<Project>_Audit` + `__VPRO_RSidecarHistory`
 #' inside a `BEGIN IMMEDIATE` WAL transaction.
 #'
-#' @param con A `vpro_workspace` handle referencing a writable user `.db`.
+#' @param ws A `vpro_workspace` handle referencing a writable user `.db`.
 #' @param lump_df A `data.frame` containing `LumpCode`, `SppCode`, and optional
 #'   `Use` (defaults to `TRUE` when omitted).
-#' @param lump_name Target lump table name (with or without `_Lump` suffix).
+#' @param lump Target lump table name (with or without `_Lump` suffix).
 #' @param create Logical; if `TRUE` (default), allows creating a new `*_Lump` table.
-#' @param confirm_overwrite Logical; must be `TRUE` to replace an existing `*_Lump` table.
+#' @param overwrite Logical; must be `TRUE` to replace an existing `*_Lump` table.
 #' @param actor Username recorded in `<Project>_Audit`.
-#' @return Invisibly returns an updated `vpro_workspace` with `con$lump` switched
+#' @return Invisibly returns an updated `vpro_workspace` with `ws$lump` switched
 #'   to the written `*_Lump` table.
 #' @export
 vpro_write_lump <- function(
-  con,
+  ws,
   lump_df,
-  lump_name,
+  lump,
   create = TRUE,
-  confirm_overwrite = FALSE,
+  overwrite = FALSE,
   actor = Sys.info()[["user"]]
 ) {
-  vpro_assert_workspace(con)
-  vpro_assert_writable_project_db(con$project_path, con = con)
+  vpro_assert_workspace(ws)
+  vpro_assert_writable_project_db(ws$project_path, con = ws)
 
-  if (!is.character(lump_name) || length(lump_name) != 1L || is.na(lump_name) || !nzchar(trimws(lump_name))) {
-    rlang::abort("`lump_name` must be a single non-empty character string.")
+  if (!is.character(lump) || length(lump) != 1L || is.na(lump) || !nzchar(trimws(lump))) {
+    rlang::abort("`lump` must be a single non-empty character string.")
   }
-  raw_nm <- trimws(lump_name)
+  raw_nm <- trimws(lump)
   base <- sub("_Lump$", "", raw_nm, ignore.case = TRUE)
   target_table <- paste0(base, "_Lump")
 
-  vpro_assert_safe_prefix(raw_nm, target_table, con$project, kind = "lump")
+  vpro_assert_safe_prefix(raw_nm, target_table, ws$project, kind = "lump")
 
   if (tolower(base) %in% c("none", "combinedspp", "attribute", "filtered")) {
     rlang::abort(paste0("Lump table name `", base, "` is reserved by VPro."))
@@ -759,7 +704,7 @@ vpro_write_lump <- function(
 
   actor_clean <- vpro_normalize_actor(actor)
 
-  written_table <- vpro_with_immediate_tx(con$project_path, con = con, fn = function(dbc) {
+  written_table <- vpro_with_immediate_tx(ws$project_path, con = ws, fn = function(dbc) {
     existing <- vpro_find_existing_table_ci(dbc, target_table)
     if (is.null(existing) && !isTRUE(create)) {
       rlang::abort(paste0(
@@ -767,10 +712,10 @@ vpro_write_lump <- function(
         "` does not exist; set `create = TRUE` to create it."
       ))
     }
-    if (!is.null(existing) && !isTRUE(confirm_overwrite)) {
+    if (!is.null(existing) && !isTRUE(overwrite)) {
       rlang::abort(paste0(
         "Target lump table `", existing,
-        "` already exists; set `confirm_overwrite = TRUE` to confirm replacing it."
+        "` already exists; set `overwrite = TRUE` to confirm replacing it."
       ))
     }
 
@@ -803,7 +748,7 @@ vpro_write_lump <- function(
     before_desc <- if (is.null(existing)) "created" else "overwritten (confirmed)"
     vpro_append_project_audit_in_tx(
       dbc = dbc,
-      project_name = con$project,
+      project_name = ws$project,
       actor = actor_clean,
       table_name = actual_tbl,
       edit_field = "WriteLumpTable",
@@ -825,7 +770,7 @@ vpro_write_lump <- function(
     actual_tbl
   })
 
-  con_next <- con
-  con_next$lump_path <- con$project_path
-  invisible(vpro_use(con_next, lump = written_table))
+  ws_next <- ws
+  ws_next$lump_path <- ws$project_path
+  invisible(vpro_use(ws_next, lump = written_table))
 }

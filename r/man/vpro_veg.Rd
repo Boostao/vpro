@@ -5,21 +5,22 @@
 \title{Read tidy vegetation records (\verb{_Veg}) with synonym, lump, and strata synthesis}
 \usage{
 vpro_veg(
-  con,
+  ws,
   scope = c("su", "project"),
   lump = TRUE,
   strata = c("raw", "abcd", "lifeform", "total"),
   combine = c("pielou", "sum"),
   resolve_synonyms = TRUE,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  cover_precedence = c("strata_totals", "sublayer_sum")
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
-\item{scope}{Either \code{"su"} (restrict to active \code{con$su} when set) or \code{"project"}.}
+\item{scope}{Either \code{"su"} (restrict to active \code{ws$su} when set) or \code{"project"}.}
 
-\item{lump}{Logical (\code{TRUE} uses active \code{con$lump}), \code{FALSE}, a \verb{*_Lump} table
+\item{lump}{Logical (\code{TRUE} uses active \code{ws$lump}), \code{FALSE}, a \verb{*_Lump} table
 name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 
 \item{strata}{Aggregation level: \code{"raw"} (individual layers \verb{1..10}, \verb{5a..5c},
@@ -32,6 +33,12 @@ complement) or \code{"sum"} (additive sum capped at \verb{99\%}).}
 \code{OldCode -> Code} synonyms before lumping.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE}, drops \code{.support/.poor/.nudum} units.}
+
+\item{cover_precedence}{Stratum cover precedence when combining \code{A}/\code{B}
+sublayers alongside \code{TotalA}/\code{TotalB}: \code{"strata_totals"} (default, matching
+MS Access \code{vpro_veg} where positive \code{TotalA}/\code{TotalB} overrides sublayers)
+or \code{"sublayer_sum"} (matching BEC diagnostics where \code{TotalA}/\code{TotalB} is
+used only when sublayers are \code{NA} / absent).}
 }
 \value{
 A tibble of tidy vegetation observations.

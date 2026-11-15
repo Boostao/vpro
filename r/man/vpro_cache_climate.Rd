@@ -4,10 +4,10 @@
 \alias{vpro_cache_climate}
 \title{Persist plot climate normals to \verb{__VPRO_PlotClimate} atomically}
 \usage{
-vpro_cache_climate(con, climate_df)
+vpro_cache_climate(ws, climate_df)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle referencing a writable user \code{.db}.}
+\item{ws}{A \code{vpro_workspace} handle referencing a writable user \code{.db}.}
 
 \item{climate_df}{Data frame containing \verb{__VPRO_PlotClimate} columns (as
 returned by \code{\link[=vpro_climate]{vpro_climate()}}).}

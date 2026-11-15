@@ -6,9 +6,9 @@
 \usage{
 vpro_import_access(
   path,
-  target_db,
+  dest_db,
   project = NULL,
-  target_project = NULL,
+  dest_project = NULL,
   batch_rows = 5000L,
   overwrite = FALSE
 )
@@ -16,17 +16,17 @@ vpro_import_access(
 \arguments{
 \item{path}{Path to source \code{.accdb} or \code{.mdb} archive.}
 
-\item{target_db}{Destination SQLite \code{.db} path.}
+\item{dest_db}{Destination SQLite \code{.db} path.}
 
 \item{project}{Optional source project prefix inside \code{path} (auto-detected if
 only one project exists).}
 
-\item{target_project}{Optional destination project prefix (defaults to a
+\item{dest_project}{Optional destination project prefix (defaults to a
 sanitized identifier derived from \code{project}).}
 
 \item{batch_rows}{Positive integer batch size for streaming reads.}
 
-\item{overwrite}{Logical; if \code{TRUE}, replaces an existing \code{target_db}.}
+\item{overwrite}{Logical; if \code{TRUE}, replaces an existing \code{dest_db}.}
 }
 \value{
 A list summarizing \code{source_path}, \code{source_project}, \code{source_version},

@@ -5,7 +5,7 @@
 \title{Compute indicator species fidelity (\code{IndVal}) across BEC units or clusters}
 \usage{
 vpro_indicators(
-  con,
+  ws,
   clusters = NULL,
   max_order = 1L,
   permutations = 199L,
@@ -14,13 +14,13 @@ vpro_indicators(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or \code{\link[=vpro_sample]{vpro_sample()}}.}
+\item{ws}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}}.}
 
 \item{clusters}{Optional grouping specification: \code{NULL} (uses active
-\code{SiteUnit} from \code{con}), a \code{vpro_clusters} object from \code{\link[=vpro_cluster]{vpro_cluster()}}
+\code{SiteUnit} from \code{ws}), a \code{vpro_clusters} object from \code{\link[=vpro_cluster]{vpro_cluster()}}
 (excluding \code{IsNoise} plots), a \code{data.frame} with \code{PlotNumber} and
 \code{SiteUnit} columns, or a character/factor vector of group labels (named by
-\code{PlotNumber} or matching \code{rownames(vpro_matrix(con, ...))}).}
+\code{PlotNumber} or matching \code{rownames(vpro_matrix(ws, ...))}).}
 
 \item{max_order}{Maximum site-group combination order for
 \code{\link[indicspecies:multipatt]{indicspecies::multipatt()}} (default \code{1L} for single-unit indicators).}

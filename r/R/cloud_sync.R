@@ -627,8 +627,8 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
 #' `<Project>_Lump` and `*_SU` assignments, and streams all eight `VP08` tables
 #' into `staging.*` inside a single atomic PostgreSQL transaction.
 #'
-#' @param con An active `vpro_pg_conn` connection from [vpro_master_connect()].
-#' @param project Either a `vpro_workspace` handle from [vpro_connect()] or a
+#' @param pg An active `vpro_pg_conn` connection from [vpro_master_connect()].
+#' @param ws Either a `vpro_workspace` handle from [vpro_connect()] or a
 #'   character project name / `.db` file path. The built-in `"Sample"` project
 #'   is rejected.
 #' @param submitter Non-empty character string identifying the submitting
@@ -648,15 +648,15 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
 #'   `submitted_at`.
 #' @export
 vpro_staging_submit <- function(
-  con,
-  project,
+  pg,
+  ws,
   submitter,
   notes = NULL,
   scope = c("project", "su"),
   base_snapshot_tag = NULL,
   custodian_override = FALSE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   scope <- match.arg(scope)
   custodian_override <- vpro_pg_validate_flag(custodian_override, "custodian_override")
 
@@ -667,13 +667,13 @@ vpro_staging_submit <- function(
   notes_clean <- vpro_validate_optional_scalar_chr(notes, "notes")
   base_tag_clean <- vpro_validate_optional_scalar_chr(base_snapshot_tag, "base_snapshot_tag")
 
-  ws <- if (inherits(project, "vpro_workspace")) {
-    project
-  } else if (is.character(project) && length(project) == 1L && !is.na(project) && nzchar(trimws(project))) {
-    vpro_connect(project)
+  ws <- if (inherits(ws, "vpro_workspace")) {
+    ws
+  } else if (is.character(ws) && length(ws) == 1L && !is.na(ws) && nzchar(trimws(ws))) {
+    vpro_connect(ws)
   } else {
     cli::cli_abort(
-      "{.arg project} must be a {.cls vpro_workspace} handle or a single non-empty project name / SQLite path."
+      "{.arg ws} must be a {.cls vpro_workspace} handle or a single non-empty project name / SQLite path."
     )
   }
   vpro_assert_workspace(ws)
@@ -686,7 +686,7 @@ vpro_staging_submit <- function(
   if (identical(scope, "su") &&
       (is.null(ws$su) || !nzchar(trimws(ws$su)) || identical(tolower(trimws(ws$su)), "none"))) {
     cli::cli_abort(
-      "{.code scope = \"su\"} requires an active {.file *_SU} site-unit table on {.arg project}."
+      "{.code scope = \"su\"} requires an active {.file *_SU} site-unit table on {.arg ws}."
     )
   }
 
@@ -726,7 +726,7 @@ vpro_staging_submit <- function(
   total_blocking <- n_val_errors + n_utf16_errors + n_cover_errors
   compliance_passed <- isTRUE(val$passed) && (n_utf16_errors == 0L) && (n_cover_errors == 0L)
 
-  can_override <- isTRUE(custodian_override) && identical(con$role, "custodian")
+  can_override <- isTRUE(custodian_override) && identical(pg$role, "custodian")
   if (!compliance_passed && !can_override) {
     cli::cli_abort(c(
       "Staging submission for project {.val {ws_snap$project}} blocked by pre-flight compliance gate ({total_blocking} blocking error{?s}).",
@@ -782,16 +782,16 @@ vpro_staging_submit <- function(
   tx_meta <- vpro_pg_exec_safe(
     function() {
       out_meta <- NULL
-      DBI::dbWithTransaction(con$conn, {
+      DBI::dbWithTransaction(pg$conn, {
         role_df <- DBI::dbGetQuery(
-          con$conn,
+          pg$conn,
           "SELECT current_user AS db_role, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS now_utc"
         )
         cur_role <- as.character(role_df$db_role[[1L]])
         now_utc <- as.character(role_df$now_utc[[1L]])
 
         DBI::dbExecute(
-          con$conn,
+          pg$conn,
           paste(
             "INSERT INTO staging.submissions (",
             "  submission_id, project_name, project_id, submitted_by, db_role, submitted_at,",
@@ -834,7 +834,7 @@ vpro_staging_submit <- function(
           )
           rownames(df_sub) <- NULL
           DBI::dbAppendTable(
-            con$conn,
+            pg$conn,
             DBI::Id(schema = "staging", table = pg_tbl),
             df_sub
           )
@@ -932,7 +932,7 @@ vpro_format_staging_queue_df <- function(df) {
 #' Queries contributor staging submissions ordered newest-first (`submitted_at DESC`)
 #' with optional parameterized status and submitter filters.
 #'
-#' @param con A `vpro_pg_conn` handle from [vpro_master_connect()].
+#' @param pg A `vpro_pg_conn` handle from [vpro_master_connect()].
 #' @param status Queue status filter: `"pending"` (default), `"approved"`,
 #'   `"rejected"`, `"merged"`, or `NULL` / `"all"` to return all statuses.
 #' @param submitted_by Optional submitter name filter (`submitted_by = $n`).
@@ -941,12 +941,12 @@ vpro_format_staging_queue_df <- function(df) {
 #'   submissions.
 #' @export
 vpro_staging_list <- function(
-  con,
+  pg,
   status = "pending",
   submitted_by = NULL,
   limit = 100L
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   .vpro_register_sync_s3()
   limit_int <- vpro_pg_validate_limit(limit, allow_null = FALSE)
 
@@ -988,7 +988,7 @@ vpro_staging_list <- function(
     " ORDER BY submitted_at DESC LIMIT ", lim_p
   )
 
-  df <- vpro_pg_query(con, sql, params = params, action = "list staging.submissions")
+  df <- vpro_pg_query(pg, sql, params = params, action = "list staging.submissions")
   vpro_format_staging_queue_df(df)
 }
 
@@ -1020,14 +1020,14 @@ print.vpro_staging_queue <- function(x, ...) {
 #' `standards.usys_all_specs` (`"matches_official"` on `UPPER("Code")`,
 #' `"matches_synonym"` on `UPPER("OldCode")`, or `"new_provisional"`).
 #'
-#' @param con A `vpro_pg_conn` handle from [vpro_master_connect()].
+#' @param pg A `vpro_pg_conn` handle from [vpro_master_connect()].
 #' @param submission_id Submission UUID string.
 #' @return A list with `summary` (1-row `vpro_staging_queue` tibble),
 #'   `compliance_report` (parsed list), `user_species` (tibble),
 #'   `provisional_diffs` (tibble), `lump` (tibble), and `su` (tibble).
 #' @export
-vpro_staging_inspect <- function(con, submission_id) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+vpro_staging_inspect <- function(pg, submission_id) {
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   sub_id <- vpro_validate_uuid_arg(submission_id, "submission_id")
 
   sql <- paste0(
@@ -1039,7 +1039,7 @@ vpro_staging_inspect <- function(con, submission_id) {
     "FROM (", .vpro_staging_summary_select_sql, " WHERE submission_id = $1::uuid) AS sub ",
     "INNER JOIN staging.submissions AS s_raw ON s_raw.submission_id::text = sub.submission_id"
   )
-  df <- vpro_pg_query(con, sql, params = list(sub_id), action = "inspect staging submission")
+  df <- vpro_pg_query(pg, sql, params = list(sub_id), action = "inspect staging submission")
   if (nrow(df) == 0L) {
     cli::cli_abort("Staging submission {.val {sub_id}} was not found.")
   }
@@ -1114,7 +1114,7 @@ vpro_staging_inspect <- function(con, submission_id) {
     std_df <- if (length(codes_up) > 0L) {
       tryCatch(
         vpro_pg_query(
-          con,
+          pg,
           paste(
             'SELECT UPPER(TRIM(COALESCE("Code", \'\'))) AS code_up,',
             '       UPPER(TRIM(COALESCE("OldCode", \'\'))) AS old_up,',
@@ -1859,7 +1859,7 @@ vpro_resolve_sqlite_base_db <- function(base_db, base_project = NULL) {
     cli::cli_abort("Base SQLite database does not exist: {.path {resolved}}.")
   }
 
-  disc <- vpro_project_discover(resolved)
+  disc <- .vpro_project_discover(resolved)
   compat <- disc[disc$complete & disc$version == "VP08", , drop = FALSE]
   req_p <- vpro_validate_optional_scalar_chr(base_project, "base_project")
   if (!is.na(req_p)) {
@@ -2022,7 +2022,7 @@ vpro_build_pg_merge_preview_on_conn <- function(conn, sub_id, base_info = NULL, 
 #' and computing a deterministic SHA-256 `preview_digest` for optimistic
 #' concurrency locking in [vpro_staging_merge()].
 #'
-#' @param con A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
+#' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
 #'   [vpro_master_connect()].
 #' @param submission_id Staging submission UUID string.
 #' @param base_db Optional common ancestor `VP08` SQLite `.db` path or
@@ -2033,12 +2033,12 @@ vpro_build_pg_merge_preview_on_conn <- function(conn, sub_id, base_info = NULL, 
 #'   `as_tibble()` methods.
 #' @export
 vpro_staging_diff <- function(
-  con,
+  pg,
   submission_id,
   base_db = NULL,
   base_project = NULL
 ) {
-  vpro_assert_pg_conn(con, require_custodian = TRUE)
+  vpro_assert_pg_conn(pg, require_custodian = TRUE)
   .vpro_register_sync_s3()
   sub_id <- vpro_validate_uuid_arg(submission_id, "submission_id")
   base_info <- vpro_resolve_sqlite_base_db(base_db, base_project)
@@ -2047,7 +2047,7 @@ vpro_staging_diff <- function(
   res <- vpro_pg_exec_safe(
     function() {
       vpro_build_pg_merge_preview_on_conn(
-        conn = con$conn,
+        conn = pg$conn,
         sub_id = sub_id,
         base_info = base_info,
         preloaded_base_tables = base_tables
@@ -2289,10 +2289,10 @@ vpro_reserve_master_child_id <- function(conn, child_table, id_val) {
 #' soil horizon depth signs, allocates non-reused child `ID`s via
 #' `becmaster.child_identity_watermark` + `becmaster.child_identity`, appends
 #' SHA-256 hash-chained rows to `becmaster.audit` (verifiable via
-#' [vpro_master_verify_audit()]), and records provenance in
+#' `vpro_master_audit(pg, verify_chain = TRUE)`), and records provenance in
 #' `becmaster.merge_ledger` and `staging.submissions`.
 #'
-#' @param con A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
+#' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
 #'   [vpro_master_connect()].
 #' @param submission_id Pending staging submission UUID string.
 #' @param default_resolution Fallback resolution for unresolved `Conflict` items:
@@ -2318,7 +2318,7 @@ vpro_reserve_master_child_id <- function(conn, child_table, id_val) {
 #'   `merged_at`.
 #' @export
 vpro_staging_merge <- function(
-  con,
+  pg,
   submission_id,
   default_resolution = c("keep_target", "accept_source"),
   plot_resolutions = NULL,
@@ -2329,7 +2329,7 @@ vpro_staging_merge <- function(
   base_project = NULL,
   actor = NULL
 ) {
-  vpro_assert_pg_conn(con, require_custodian = TRUE)
+  vpro_assert_pg_conn(pg, require_custodian = TRUE)
   sub_id <- vpro_validate_uuid_arg(submission_id, "submission_id")
   default_resolution <- match.arg(default_resolution)
   plot_res <- vpro_validate_merge_resolution_vec(plot_resolutions, "plot_resolutions")
@@ -2372,15 +2372,15 @@ vpro_staging_merge <- function(
   vpro_pg_exec_safe(
     function() {
       tx_committed <- FALSE
-      vpro_pg_begin_isolated_tx(con$conn, "BEGIN ISOLATION LEVEL SERIALIZABLE", "vpro_staging_merge")
+      vpro_pg_begin_isolated_tx(pg$conn, "BEGIN ISOLATION LEVEL SERIALIZABLE", "vpro_staging_merge")
       on.exit({
-        if (!tx_committed && isTRUE(tryCatch(DBI::dbIsValid(con$conn), error = function(e) FALSE))) {
-          tryCatch(DBI::dbExecute(con$conn, "ROLLBACK"), error = function(e) NULL)
+        if (!tx_committed && isTRUE(tryCatch(DBI::dbIsValid(pg$conn), error = function(e) FALSE))) {
+          tryCatch(DBI::dbExecute(pg$conn, "ROLLBACK"), error = function(e) NULL)
         }
       }, add = TRUE)
 
       lock_df <- DBI::dbGetQuery(
-        con$conn,
+        pg$conn,
         paste(
           "SELECT status, current_user AS db_user, source_db_sha256,",
           "       to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS now_edit_str,",
@@ -2407,7 +2407,7 @@ vpro_staging_merge <- function(
       now_iso_str <- as.character(lock_df$now_iso_str[[1L]])
 
       built <- vpro_build_pg_merge_preview_on_conn(
-        conn = con$conn,
+        conn = pg$conn,
         sub_id = sub_id,
         base_info = base_info,
         preloaded_base_tables = preloaded_base
@@ -2492,7 +2492,7 @@ vpro_staging_merge <- function(
           "INSERT INTO becmaster.", vpro_quote_ident(pg_tbl_map[[suffix]]),
           " (", col_csv, ") VALUES (", paste(placeholders, collapse = ", "), ")"
         )
-        DBI::dbExecute(con$conn, ins_sql, params = params)
+        DBI::dbExecute(pg$conn, ins_sql, params = params)
 
         record_audit(plot, suffix, key_col, NA_character_, plot, NA_real_)
         for (i in seq_len(nrow(spec))) {
@@ -2521,7 +2521,7 @@ vpro_staging_merge <- function(
           )
         }
 
-        new_id <- vpro_allocate_master_child_id(con$conn, pg_tbl)
+        new_id <- vpro_allocate_master_child_id(pg$conn, pg_tbl)
         allocated_ids <<- c(allocated_ids, new_id)
 
         placeholders <- character(nrow(spec))
@@ -2546,7 +2546,7 @@ vpro_staging_merge <- function(
           "INSERT INTO becmaster.", vpro_quote_ident(pg_tbl),
           " (", col_csv, ") VALUES (", paste(placeholders, collapse = ", "), ")"
         )
-        DBI::dbExecute(con$conn, ins_sql, params = params)
+        DBI::dbExecute(pg$conn, ins_sql, params = params)
 
         for (i in seq_len(nrow(spec))) {
           cn <- spec$name[[i]]
@@ -2651,7 +2651,7 @@ vpro_staging_merge <- function(
               " SET ", vpro_quote_ident(fld), " = $1::", tolower(c_row$pg_type[[1L]]),
               " WHERE ", vpro_quote_ident(key_col), " = $2"
             )
-            aff <- DBI::dbExecute(con$conn, upd_sql, params = list(param_val, plot))
+            aff <- DBI::dbExecute(pg$conn, upd_sql, params = list(param_val, plot))
             if (!identical(as.integer(aff), 1L)) {
               cli::cli_abort(
                 "Merge update on {suffix}.{fld} for plot {.val {plot}} matched {aff} rows (expected 1)."
@@ -2675,14 +2675,14 @@ vpro_staging_merge <- function(
               if (is.na(tgt_id)) {
                 cli::cli_abort("Target {suffix} row in plot {.val {plot}} lacks an integer ID.")
               }
-              vpro_reserve_master_child_id(con$conn, pg_tbl, tgt_id)
+              vpro_reserve_master_child_id(pg$conn, pg_tbl, tgt_id)
               reserved_deleted_ids <- c(reserved_deleted_ids, as.double(tgt_id))
 
               del_sql <- paste0(
                 "DELETE FROM becmaster.", vpro_quote_ident(pg_tbl),
                 ' WHERE "PlotNumber" = $1 AND "ID" = $2::bigint'
               )
-              aff <- DBI::dbExecute(con$conn, del_sql, params = list(plot, sprintf("%.0f", tgt_id)))
+              aff <- DBI::dbExecute(pg$conn, del_sql, params = list(plot, sprintf("%.0f", tgt_id)))
               if (!identical(as.integer(aff), 1L)) {
                 cli::cli_abort(
                   "Child delete on {suffix} (plot {.val {plot}}, ID {sprintf('%.0f', tgt_id)}) matched {aff} rows."
@@ -2726,7 +2726,7 @@ vpro_staging_merge <- function(
             " SET ", vpro_quote_ident(fld), " = $1::", tolower(c_row$pg_type[[1L]]),
             ' WHERE "PlotNumber" = $2 AND "ID" = $3::bigint'
           )
-          aff <- DBI::dbExecute(con$conn, upd_sql, params = list(param_val, plot, sprintf("%.0f", tgt_id)))
+          aff <- DBI::dbExecute(pg$conn, upd_sql, params = list(param_val, plot, sprintf("%.0f", tgt_id)))
           if (!identical(as.integer(aff), 1L)) {
             cli::cli_abort(
               "Child update on {suffix}.{fld} (plot {.val {plot}}, ID {sprintf('%.0f', tgt_id)}) matched {aff} rows."
@@ -2744,7 +2744,7 @@ vpro_staging_merge <- function(
         if (length(touched_horizons) > 0L) {
           for (th in touched_horizons) {
             hz_df <- DBI::dbGetQuery(
-              con$conn,
+              pg$conn,
               paste0(
                 'SELECT "Horizon", "UpperDepth", "LowerDepth" FROM becmaster.',
                 vpro_quote_ident(pg_tbl_map[[th$suffix]]),
@@ -2776,7 +2776,7 @@ vpro_staging_merge <- function(
         meta_spec <- spec_cache$Metadata
         meta_csv <- paste(vapply(meta_spec$name, vpro_quote_ident, character(1L)), collapse = ", ")
         new_meta <- DBI::dbGetQuery(
-          con$conn,
+          pg$conn,
           paste0(
             "SELECT ", meta_csv, " FROM staging.metadata AS s ",
             "WHERE s.submission_id = $1::uuid ",
@@ -2793,7 +2793,7 @@ vpro_staging_merge <- function(
             ') ON CONFLICT ("ProjectID") DO NOTHING'
           )
           for (mi in seq_len(nrow(new_meta))) {
-            new_m_id <- vpro_allocate_master_child_id(con$conn, "metadata")
+            new_m_id <- vpro_allocate_master_child_id(pg$conn, "metadata")
             m_params <- vector("list", nrow(meta_spec))
             for (ci in seq_len(nrow(meta_spec))) {
               c_row <- meta_spec[ci, , drop = FALSE]
@@ -2804,7 +2804,7 @@ vpro_staging_merge <- function(
                 m_params[[ci]] <- vpro_pg_param_for_spec(c_row, new_meta[[cn]][[mi]])
               }
             }
-            m_aff <- DBI::dbExecute(con$conn, ins_meta_sql, params = m_params)
+            m_aff <- DBI::dbExecute(pg$conn, ins_meta_sql, params = m_params)
             if (identical(as.integer(m_aff), 1L)) {
               record_audit("", "Metadata", "ProjectID", NA_character_, as.character(new_meta$ProjectID[[mi]]), new_m_id)
             }
@@ -2814,7 +2814,7 @@ vpro_staging_merge <- function(
 
       # Append hash-chained audit rows into becmaster.audit
       tail_df <- DBI::dbGetQuery(
-        con$conn,
+        pg$conn,
         "SELECT row_hash FROM becmaster.audit ORDER BY audit_seq DESC LIMIT 1"
       )
       prev_hash <- if (nrow(tail_df) >= 1L && !is.na(tail_df$row_hash[[1L]]) && nzchar(trimws(tail_df$row_hash[[1L]]))) {
@@ -2885,7 +2885,7 @@ vpro_staging_merge <- function(
         )
         rownames(audit_df) <- NULL
         DBI::dbAppendTable(
-          con$conn,
+          pg$conn,
           DBI::Id(schema = "becmaster", table = "audit"),
           audit_df
         )
@@ -2907,7 +2907,7 @@ vpro_staging_merge <- function(
       ))
 
       DBI::dbExecute(
-        con$conn,
+        pg$conn,
         paste(
           "INSERT INTO becmaster.merge_ledger (",
           "  merge_tx_id, submission_id, actor, merged_at, source_sha256,",
@@ -2930,7 +2930,7 @@ vpro_staging_merge <- function(
       )
 
       DBI::dbExecute(
-        con$conn,
+        pg$conn,
         paste(
           "UPDATE staging.submissions",
           "SET status = 'merged',",
@@ -2943,7 +2943,7 @@ vpro_staging_merge <- function(
         params = list(sub_id, actor_eff, now_iso_str, rev_notes_clean, merge_tx_id)
       )
 
-      DBI::dbExecute(con$conn, "COMMIT")
+      DBI::dbExecute(pg$conn, "COMMIT")
       tx_committed <- TRUE
 
       norm_id_vec <- function(v) {
@@ -2975,7 +2975,7 @@ vpro_staging_merge <- function(
 #' Marks a `"pending"` submission in `staging.submissions` as `"rejected"`,
 #' recording `reviewer_notes`, `reviewed_by`, and `reviewed_at`.
 #'
-#' @param con A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
+#' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
 #'   [vpro_master_connect()].
 #' @param submission_id Pending staging submission UUID string.
 #' @param reviewer_notes Non-empty character string explaining why the
@@ -2985,8 +2985,8 @@ vpro_staging_merge <- function(
 #' @return A 1-row `vpro_staging_queue` tibble containing the updated submission
 #'   record.
 #' @export
-vpro_staging_reject <- function(con, submission_id, reviewer_notes, actor = NULL) {
-  vpro_assert_pg_conn(con, require_custodian = TRUE)
+vpro_staging_reject <- function(pg, submission_id, reviewer_notes, actor = NULL) {
+  vpro_assert_pg_conn(pg, require_custodian = TRUE)
   .vpro_register_sync_s3()
   sub_id <- vpro_validate_uuid_arg(submission_id, "submission_id")
 
@@ -2999,7 +2999,7 @@ vpro_staging_reject <- function(con, submission_id, reviewer_notes, actor = NULL
   actor_param <- if (is.na(actor_clean)) "" else actor_clean
 
   aff <- vpro_pg_execute(
-    con,
+    pg,
     paste(
       "UPDATE staging.submissions",
       "SET status = 'rejected',",
@@ -3018,7 +3018,7 @@ vpro_staging_reject <- function(con, submission_id, reviewer_notes, actor = NULL
   }
 
   row_df <- vpro_pg_query(
-    con,
+    pg,
     paste0(.vpro_staging_summary_select_sql, " WHERE submission_id = $1::uuid"),
     params = list(sub_id),
     action = "fetch rejected staging submission"

@@ -4,10 +4,10 @@
 \alias{vpro_staging_inspect}
 \title{Inspect a staging submission's compliance report and provisional species}
 \usage{
-vpro_staging_inspect(con, submission_id)
+vpro_staging_inspect(pg, submission_id)
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle from \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
+\item{pg}{A \code{vpro_pg_conn} handle from \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
 \item{submission_id}{Submission UUID string.}
 }

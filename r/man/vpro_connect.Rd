@@ -2,7 +2,7 @@
 % Please edit documentation in R/workspace.R
 \name{vpro_connect}
 \alias{vpro_connect}
-\title{Connect to a live \code{vpro_wails} workspace, SQLite \code{.db}, or Access archive}
+\title{Connect to a live \code{VPro} workspace, bundled \code{Sample}, SQLite \code{.db}, or Access archive}
 \usage{
 vpro_connect(
   project = NULL,
@@ -14,9 +14,9 @@ vpro_connect(
 )
 }
 \arguments{
-\item{project}{Optional project name, \code{.db} path, directory path, or
-\code{.accdb}/\code{.mdb} path. When \code{NULL}, reads \code{Current$CurrProject} from
-\code{config.yml} or discovers projects in \code{data_dir}.}
+\item{project}{Optional project name, \code{"Sample"}, \code{.db} / \code{.rds} path,
+directory path, or \code{.accdb}/\code{.mdb} path. When \code{NULL}, reads
+\code{Current$CurrProject} from \code{config.yml} or discovers projects in \code{data_dir}.}
 
 \item{su}{Optional site-unit table name (with or without \verb{_SU} suffix), or
 \code{"None"} to disable SU scoping.}
@@ -38,8 +38,10 @@ An S3 object of class \code{vpro_workspace}.
 \description{
 Creates a lightweight, read-only-by-default S3 \code{vpro_workspace} handle.
 Called with zero arguments (\code{vpro_connect()}), auto-discovers the user's
-active \code{vpro_wails} \code{config.yml} and 7-DB SQLite WAL workspace. Also accepts
-an explicit project name in \code{data_dir}, a \code{.db} / \code{.sqlite} file path, a
-directory containing \code{.db} projects, or an \code{.accdb} / \code{.mdb} archive (which
-is non-destructively converted into a session temporary \code{VP08} SQLite file).
+active \code{VPro} \code{config.yml} and 7-DB SQLite WAL workspace. Passing \code{"Sample"}
+(with default \code{data_dir}) opens the bundled read-only 2026 \code{VP08} \code{Sample}
+teaching workspace. Also accepts an explicit project name in \code{data_dir}, a
+\code{.db} / \code{.sqlite} / \code{.rds} file path, a directory containing \code{.db} projects,
+or an \code{.accdb} / \code{.mdb} archive (which is non-destructively converted into a
+session-temporary \code{VP08} SQLite file).
 }

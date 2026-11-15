@@ -4,10 +4,10 @@
 \alias{vpro_master_status}
 \title{Inspect PostgreSQL \code{BECMaster} server health, RBAC privileges, and counts}
 \usage{
-vpro_master_status(con)
+vpro_master_status(pg)
 }
 \arguments{
-\item{con}{An active \code{vpro_pg_conn} connection object.}
+\item{pg}{An active \code{vpro_pg_conn} connection object.}
 }
 \value{
 An S3 object of class \code{vpro_pg_status} with \code{print()} and

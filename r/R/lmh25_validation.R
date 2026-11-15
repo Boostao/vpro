@@ -346,21 +346,16 @@ vpro_infer_lmh25_keys <- function(
 #'    poor drainage, wetland `Of/Om/Oh >= 40 cm` with dry `rSMR <= 4`, and
 #'    `>= 2`-class divergence from Key `9.4` / `9.6` site-soil inference).
 #'
-#' @param con A `vpro_workspace` handle from [vpro_connect()] or [vpro_sample()].
-#' @param scope Plot scope: `"su"` (active `con$su` when set) or `"project"`.
-#' @return An S3 object of class `vpro_lmh25_audit` containing `issues` tibble
-#'   (`PlotNumber`, `rule`, `severity`, `detail`), `summary` tibble, and
-#'   `n_plots_checked`.
-#' @export
-vpro_check_lmh25 <- function(con, scope = c("su", "project")) {
-  vpro_assert_workspace(con)
+#' @keywords internal
+.vpro_check_lmh25 <- function(ws, scope = c("su", "project")) {
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
 
-  env <- vpro_env(con, scope = scope, include_admin = TRUE)
+  env <- vpro_env(ws, scope = scope, include_admin = TRUE)
   env[["PlotNumber"]] <- as.character(env[["PlotNumber"]])
   env <- env[!duplicated(env[["PlotNumber"]]), , drop = FALSE]
 
-  soil <- vpro_soil(con, scope = scope, type = "both")
+  soil <- vpro_soil(ws, scope = scope, type = "both")
   humus <- soil$humus
   mineral <- soil$mineral
 
@@ -765,7 +760,7 @@ vpro_check_lmh25 <- function(con, scope = c("su", "project")) {
 
 #' Print an `LMH25 (2023)` pedological audit summary
 #'
-#' @param x A `vpro_lmh25_audit` object from [vpro_check_lmh25()].
+#' @param x A `vpro_lmh25_audit` object (e.g., `$lmh25` from [vpro_validate()]).
 #' @param ... Unused additional arguments.
 #' @return `x`, invisibly.
 #' @export
@@ -781,7 +776,7 @@ print.vpro_lmh25_audit <- function(x, ...) {
 
 #' Coerce a `vpro_lmh25_audit` result to its issues tibble
 #'
-#' @param x A `vpro_lmh25_audit` object from [vpro_check_lmh25()].
+#' @param x A `vpro_lmh25_audit` object (e.g., `$lmh25` from [vpro_validate()]).
 #' @param ... Unused additional arguments.
 #' @return The `$issues` tibble (`PlotNumber`, `rule`, `severity`, `detail`).
 #' @export
@@ -789,58 +784,276 @@ as_tibble.vpro_lmh25_audit <- function(x, ...) {
   x$issues
 }
 
+.vpro_check_vp08_bounds <- function(dbc, project, su_plots, use_su) {
+  b_tbl <- character()
+  b_plot <- character()
+  b_field <- character()
+  b_val <- character()
+  b_rule <- character()
+
+  add_b <- function(tbl, plot, fld, val, rule) {
+    b_tbl[[length(b_tbl) + 1L]] <<- as.character(tbl)
+    b_plot[[length(b_plot) + 1L]] <<- as.character(plot)
+    b_field[[length(b_field) + 1L]] <<- as.character(fld)
+    b_val[[length(b_val) + 1L]] <<- as.character(val)
+    b_rule[[length(b_rule) + 1L]] <<- as.character(rule)
+  }
+
+  su_filter <- function(df, pcol = "PlotNumber") {
+    if (!use_su || nrow(df) == 0L) return(df)
+    p <- as.character(df[[pcol]])
+    df[!is.na(p) & (p %in% su_plots), , drop = FALSE]
+  }
+
+  # 1. Text UTF-16 code-unit limits (VP08)
+  text_rules <- list(
+    Env = list(plot_col = "PlotNumber", limits = c(
+      PlotNumber = 7L, FieldNumber = 50L, ProjectID = 30L,
+      Zone = 4L, SubZone = 8L, SiteSeries = 5L, Ecosection = 3L, NtsMapSheet = 8L
+    )),
+    Admin = list(plot_col = "Plot", limits = c(Plot = 7L, PlotType = 10L)),
+    Veg = list(plot_col = "PlotNumber", limits = c(
+      PlotNumber = 7L, Species = 8L, Layer = 2L, Collected = 1L
+    )),
+    Humus = list(plot_col = "PlotNumber", limits = c(PlotNumber = 7L, Horizon = 8L)),
+    Mineral = list(plot_col = "PlotNumber", limits = c(
+      PlotNumber = 7L, Horizon = 8L, Texture = 4L, Colour = 14L
+    ))
+  )
+
+  for (sfx in names(text_rules)) {
+    phys_tbl <- paste0(project, "_", sfx)
+    if (!DBI::dbExistsTable(dbc, phys_tbl)) next
+    flds <- DBI::dbListFields(dbc, phys_tbl)
+    spec <- text_rules[[sfx]]
+    pcol <- spec$plot_col
+    check_cols <- names(spec$limits)[names(spec$limits) %in% flds]
+    if (!(pcol %in% flds) || length(check_cols) == 0L) next
+
+    sel_parts <- c(
+      paste0('CAST(', vpro_quote_ident(pcol), ' AS TEXT) AS "__plot__"'),
+      vapply(check_cols, function(cc) {
+        paste0('CAST(', vpro_quote_ident(cc), ' AS TEXT) AS ', vpro_quote_ident(cc))
+      }, character(1))
+    )
+    df <- DBI::dbGetQuery(dbc, paste0("SELECT ", paste(sel_parts, collapse = ", "), " FROM ", vpro_quote_ident(phys_tbl)))
+    df <- su_filter(df, "__plot__")
+    if (nrow(df) == 0L) next
+    pvec <- ifelse(is.na(df[["__plot__"]]), "", as.character(df[["__plot__"]]))
+
+    for (cc in check_cols) {
+      lim <- spec$limits[[cc]]
+      raw_v <- df[[cc]]
+      nn <- !is.na(raw_v)
+      if (!any(nn)) next
+      s_v <- as.character(raw_v[nn])
+      u16 <- vpro_utf16_len(s_v)
+      bad <- is.na(u16) | (u16 > lim)
+      if (any(bad)) {
+        bad_idx <- which(nn)[bad]
+        for (bi in bad_idx) {
+          add_b(
+            sfx,
+            pvec[[bi]],
+            cc,
+            raw_v[[bi]],
+            if (is.na(vpro_utf16_len(as.character(raw_v[[bi]])))) {
+              "Malformed UTF-8 byte sequence"
+            } else {
+              sprintf("Exceeds %d UTF-16 code units", lim)
+            }
+          )
+        }
+      }
+    }
+  }
+
+  # 2. IEEE-754 float32 cover bounds (< 100 and >= 0) across Veg, Env, Admin
+  cover_specs <- list(
+    Veg = list(plot_col = "PlotNumber", cols = c(
+      "Cover1", "Cover2", "Cover3", "TotalA",
+      "Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c", "TotalB",
+      "Cover6", "Cover7", "Cover8", "Cover9", "Cover10"
+    )),
+    Env = list(plot_col = "PlotNumber", cols = c(
+      "StrataCoverTree", "StrataCoverShrub", "StrataCoverHerb", "StrataCoverMoss"
+    )),
+    Admin = list(plot_col = "Plot", cols = c("StrataCoverTotal"))
+  )
+
+  for (sfx in names(cover_specs)) {
+    phys_tbl <- paste0(project, "_", sfx)
+    if (!DBI::dbExistsTable(dbc, phys_tbl)) next
+    flds <- DBI::dbListFields(dbc, phys_tbl)
+    spec <- cover_specs[[sfx]]
+    pcol <- spec$plot_col
+    check_cols <- intersect(spec$cols, flds)
+    if (!(pcol %in% flds) || length(check_cols) == 0L) next
+
+    sel_parts <- c(
+      paste0('CAST(', vpro_quote_ident(pcol), ' AS TEXT) AS "__plot__"'),
+      vapply(check_cols, function(cc) {
+        paste0('CAST(', vpro_quote_ident(cc), ' AS TEXT) AS ', vpro_quote_ident(paste0("__txt_", cc)),
+               ', ', vpro_quote_ident(cc), ' AS ', vpro_quote_ident(cc))
+      }, character(1))
+    )
+    df <- DBI::dbGetQuery(dbc, paste0("SELECT ", paste(sel_parts, collapse = ", "), " FROM ", vpro_quote_ident(phys_tbl)))
+    df <- su_filter(df, "__plot__")
+    if (nrow(df) == 0L) next
+    pvec <- ifelse(is.na(df[["__plot__"]]), "", as.character(df[["__plot__"]]))
+
+    for (cc in check_cols) {
+      raw_v <- df[[cc]]
+      nn <- !is.na(raw_v) & !(is.character(raw_v) & !nzchar(trimws(as.character(raw_v))))
+      if (!any(nn)) next
+      num_v <- suppressWarnings(as.double(raw_v[nn]))
+      f32_v <- vpro_narrow_float32(num_v)
+      bad <- is.na(f32_v) | !is.finite(f32_v) | f32_v < 0 | f32_v >= 100
+      if (any(bad)) {
+        bad_idx <- which(nn)[bad]
+        txt_col <- paste0("__txt_", cc)
+        for (bi in bad_idx) {
+          add_b(sfx, pvec[[bi]], cc, df[[txt_col]][[bi]], "Cover must be a valid single in [0, 100)")
+        }
+      }
+    }
+  }
+
+  # 3. _Env numeric bounds (Latitude, Longitude, Aspect, SlopeGradient)
+  env_tbl <- paste0(project, "_Env")
+  if (DBI::dbExistsTable(dbc, env_tbl)) {
+    eflds <- DBI::dbListFields(dbc, env_tbl)
+    num_want <- intersect(c("Latitude", "Longitude", "Aspect", "SlopeGradient"), eflds)
+    if ("PlotNumber" %in% eflds && length(num_want) > 0L) {
+      sel <- c('CAST("PlotNumber" AS TEXT) AS "__plot__"', vpro_quote_ident(num_want))
+      edf <- DBI::dbGetQuery(dbc, paste0("SELECT ", paste(sel, collapse = ", "), " FROM ", vpro_quote_ident(env_tbl)))
+      edf <- su_filter(edf, "__plot__")
+      if (nrow(edf) > 0L) {
+        pvec <- ifelse(is.na(edf[["__plot__"]]), "", as.character(edf[["__plot__"]]))
+        if ("Latitude" %in% num_want) {
+          lat <- suppressWarnings(as.double(edf[["Latitude"]]))
+          bad <- !is.na(edf[["Latitude"]]) & (is.na(lat) | lat < -90 | lat > 90)
+          for (bi in which(bad)) add_b("Env", pvec[[bi]], "Latitude", edf[["Latitude"]][[bi]], "Latitude must be between -90 and 90")
+        }
+        if ("Longitude" %in% num_want) {
+          lon <- suppressWarnings(as.double(edf[["Longitude"]]))
+          bad <- !is.na(edf[["Longitude"]]) & (is.na(lon) | lon < -180 | lon > 180)
+          for (bi in which(bad)) add_b("Env", pvec[[bi]], "Longitude", edf[["Longitude"]][[bi]], "Longitude must be between -180 and 180")
+        }
+        if ("Aspect" %in% num_want) {
+          asp <- suppressWarnings(as.double(edf[["Aspect"]]))
+          bad <- !is.na(edf[["Aspect"]]) & (is.na(asp) | asp != floor(asp) | (asp != 999 & (asp < 0 | asp > 359)))
+          for (bi in which(bad)) add_b("Env", pvec[[bi]], "Aspect", edf[["Aspect"]][[bi]], "Aspect must be 0..359 or 999 (level)")
+        }
+        if ("SlopeGradient" %in% num_want) {
+          slp <- suppressWarnings(as.double(edf[["SlopeGradient"]]))
+          bad <- !is.na(edf[["SlopeGradient"]]) & (is.na(slp) | slp < 0)
+          for (bi in which(bad)) add_b("Env", pvec[[bi]], "SlopeGradient", edf[["SlopeGradient"]][[bi]], "SlopeGradient must be >= 0")
+        }
+      }
+    }
+  }
+
+  # 4. _Admin StartDate integer bounds (1900..2500)
+  adm_tbl <- paste0(project, "_Admin")
+  if (DBI::dbExistsTable(dbc, adm_tbl)) {
+    aflds <- DBI::dbListFields(dbc, adm_tbl)
+    if (all(c("Plot", "StartDate") %in% aflds)) {
+      adf <- DBI::dbGetQuery(dbc, paste0('SELECT CAST("Plot" AS TEXT) AS "__plot__", typeof("StartDate") AS "__sd_t__", "StartDate" FROM ', vpro_quote_ident(adm_tbl), ' WHERE "StartDate" IS NOT NULL'))
+      adf <- su_filter(adf, "__plot__")
+      if (nrow(adf) > 0L) {
+        pvec <- ifelse(is.na(adf[["__plot__"]]), "", as.character(adf[["__plot__"]]))
+        sd_num <- suppressWarnings(as.double(adf[["StartDate"]]))
+        bad <- adf[["__sd_t__"]] != "integer" | is.na(sd_num) | sd_num < 1900 | sd_num > 2500
+        for (bi in which(bad)) add_b("Admin", pvec[[bi]], "StartDate", adf[["StartDate"]][[bi]], "StartDate must be between 1900 and 2500")
+      }
+    }
+  }
+
+  tibble::tibble(
+    table = b_tbl,
+    PlotNumber = b_plot,
+    field = b_field,
+    value = b_val,
+    rule = b_rule
+  )
+}
+
 #' Run comprehensive VPro workspace standards, referential, and `LMH25` QA
 #'
-#' Combines five canonical VPro validation engines into a single read-only
-#' quality-assurance bundle:
+#' Combines canonical VPro validation engines into a single read-only
+#' quality-assurance bundle, selectable via `checks = c("all", "compliance", "lmh25")`:
 #' 1. **`env_codes`**: `USysTableOfLists` picklist validation (`Validate != 0`,
 #'    expanding positive `ValidateLoops` such as `SiteDisturbance1..3`, calibrated
 #'    to `V7mdlReportsValidateEnvData`).
 #' 2. **`veg_codes`**: `BCPlantTaxonomy v19` (`USysAllSpecs`) + user species
-#'    (`USysUserSpp`) check for unlisted codes and `OldCode -> Code` synonyms
-#'    (calibrated to `V7mdlReportsValidateVegCodes`).
+#'    (`USysUserSpp`) check for unlisted codes, local user codes (`"user"`), and
+#'    case-insensitive `OldCode -> Code` synonyms (`V7mdlReportsValidateVegCodes`).
 #' 3. **`orphans`**: referential integrity across `_Env <-> _Admin`, `_Veg`,
 #'    `_Humus`, `_Mineral`, `_Other`, and active `*_SU`, plus plots without
 #'    vegetation (`V7mdlReportValidation`).
 #' 4. **`duplicates`**: duplicate physical `(PlotNumber, Species)` rows and
 #'    same-layer cover collisions (`V7mdlOptimizeVeg.Check4DuplicatedSpecies`).
-#' 5. **`lmh25`**: pedological and edatopic audit via [vpro_check_lmh25()].
+#' 5. **`bounds`**: VP08 UTF-16 field length limits, IEEE-754 `float32` `< 100%`
+#'    cover bounds, numeric `_Env` / `_Admin` bounds (`Latitude`, `Longitude`,
+#'    `Aspect`, `SlopeGradient`, `StartDate`).
+#' 6. **`lmh25`**: `LMH25 (2023)` pedological & edatopic audit (horizon depth
+#'    directions, contiguity, substrate sums, von Post ranges, Keys `9.4`/`9.6`).
 #'
-#' @param con A `vpro_workspace` handle from [vpro_connect()] or [vpro_sample()].
+#' @param ws A `vpro_workspace` handle from [vpro_connect()].
 #' @param scope Validation scope: `"su"` (restricts plot-scoped checks to active
-#'   `con$su` when set) or `"project"` (validates the entire `<Project>`).
+#'   `ws$su` when set) or `"project"` (validates the entire `<Project>`).
+#' @param checks Which validation engines to execute: `"all"` (default),
+#'   `"compliance"` (VP08 standards/bounds/referential checks only), or `"lmh25"`
+#'   (pedological & edatopic audit only).
 #' @return An S3 object of class `vpro_validation` containing `$issues`,
-#'   `$env_codes`, `$veg_codes`, `$orphans`, `$duplicates`, `$lmh25`,
-#'   `$skipped_definitions`, and `$passed`.
+#'   `$env_codes`, `$veg_codes`, `$orphans`, `$duplicates`, `$bounds`,
+#'   `$lmh25`, `$skipped_definitions`, `$checks`, and `$passed`.
 #' @export
-vpro_validate <- function(con, scope = c("su", "project")) {
-  vpro_assert_workspace(con)
+vpro_validate <- function(
+  ws,
+  scope = c("su", "project"),
+  checks = c("all", "compliance", "lmh25")
+) {
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
-  use_su <- identical(scope, "su") && !is.null(con$su)
+  checks <- match.arg(checks)
+  use_su <- identical(scope, "su") && !is.null(ws$su)
 
-  dbc <- vpro_sqlite_ro(con$project_path)
-  on.exit(DBI::dbDisconnect(dbc), add = TRUE)
+  run_compliance <- checks %in% c("all", "compliance")
+  run_lmh25 <- checks %in% c("all", "lmh25")
 
-  dbc_vlists <- vpro_sqlite_ro(con$vlists_path)
-  on.exit(DBI::dbDisconnect(dbc_vlists), add = TRUE)
+  env_codes_tbl <- tibble::tibble(list_name = character(), field = character(), PlotNumber = character(), value = character())
+  skipped_tbl <- tibble::tibble(list_name = character(), field = character(), reason = character())
+  veg_codes_tbl <- tibble::tibble(PlotNumber = character(), Species = character(), status = character(), suggested_code = character())
+  orphans_tbl <- tibble::tibble(table = character(), PlotNumber = character(), issue = character(), n_rows = integer())
+  duplicates_tbl <- tibble::tibble(PlotNumber = character(), Species = character(), overlapping_layers = character(), n_rows = integer(), same_layer_conflict = logical())
+  bounds_tbl <- tibble::tibble(table = character(), PlotNumber = character(), field = character(), value = character(), rule = character())
 
-  su_df <- if (!is.null(con$su)) vpro_site_units(con, exclude_modifiers = FALSE) else {
-    tibble::tibble(PlotNumber = character(), SiteUnit = character())
-  }
-  su_plots <- unique(as.character(su_df[["PlotNumber"]]))
+  if (run_compliance) {
+    dbc <- vpro_sqlite_ro(ws$project_path)
+    on.exit(DBI::dbDisconnect(dbc), add = TRUE)
 
-  env_tbl <- paste0(con$project, "_Env")
-  adm_tbl <- paste0(con$project, "_Admin")
-  veg_tbl <- paste0(con$project, "_Veg")
-  env_q <- vpro_quote_ident(env_tbl)
-  adm_q <- vpro_quote_ident(adm_tbl)
-  veg_q <- vpro_quote_ident(veg_tbl)
+    dbc_vlists <- vpro_sqlite_ro(ws$vlists_path)
+    on.exit(DBI::dbDisconnect(dbc_vlists), add = TRUE)
 
-  # 1. USysTableOfLists environment code picklist validation
-  env_cols <- DBI::dbListFields(dbc, env_tbl)
-  adm_cols <- if (DBI::dbExistsTable(dbc, adm_tbl)) DBI::dbListFields(dbc, adm_tbl) else character()
-  env_col_map <- stats::setNames(env_cols, tolower(env_cols))
-  adm_col_map <- stats::setNames(adm_cols, tolower(adm_cols))
+    su_df <- if (!is.null(ws$su)) vpro_site_units(ws, exclude_modifiers = FALSE) else {
+      tibble::tibble(PlotNumber = character(), SiteUnit = character())
+    }
+    su_plots <- unique(as.character(su_df[["PlotNumber"]]))
+
+    env_tbl <- paste0(ws$project, "_Env")
+    adm_tbl <- paste0(ws$project, "_Admin")
+    veg_tbl <- paste0(ws$project, "_Veg")
+    env_q <- vpro_quote_ident(env_tbl)
+    adm_q <- vpro_quote_ident(adm_tbl)
+    veg_q <- vpro_quote_ident(veg_tbl)
+
+    # 1. USysTableOfLists environment code picklist validation
+    env_cols <- DBI::dbListFields(dbc, env_tbl)
+    adm_cols <- if (DBI::dbExistsTable(dbc, adm_tbl)) DBI::dbListFields(dbc, adm_tbl) else character()
+    env_col_map <- stats::setNames(env_cols, tolower(env_cols))
+    adm_col_map <- stats::setNames(adm_cols, tolower(adm_cols))
 
   defs <- DBI::dbGetQuery(
     dbc_vlists,
@@ -967,18 +1180,23 @@ vpro_validate <- function(con, scope = c("su", "project")) {
     dbc_vlists,
     'SELECT COALESCE(CAST("Code" AS TEXT), \'\') AS "Code", COALESCE(CAST("OldCode" AS TEXT), \'\') AS "OldCode", COALESCE(LOWER(TRIM(CAST("Codetype" AS TEXT))), \'\') AS "Codetype" FROM "USysAllSpecs"'
   )
-  accepted_low <- unique(tolower(specs_all[["Code"]][nzchar(specs_all[["Code"]]) & specs_all[["Codetype"]] != "s"]))
-  syn_rows <- specs_all[nzchar(specs_all[["OldCode"]]) & nzchar(specs_all[["Code"]]) & tolower(specs_all[["OldCode"]]) != tolower(specs_all[["Code"]]), , drop = FALSE]
+  code_trimmed <- trimws(as.character(specs_all[["Code"]]))
+  old_trimmed <- trimws(as.character(specs_all[["OldCode"]]))
+  accepted_low <- unique(tolower(code_trimmed[nzchar(code_trimmed) & specs_all[["Codetype"]] != "s"]))
+  syn_keep <- nzchar(old_trimmed) & nzchar(code_trimmed) & tolower(old_trimmed) != tolower(code_trimmed)
+  syn_rows <- specs_all[syn_keep, , drop = FALSE]
+  syn_rows[["OldCode"]] <- old_trimmed[syn_keep]
+  syn_rows[["Code"]] <- code_trimmed[syn_keep]
   syn_rows <- syn_rows[!duplicated(tolower(syn_rows[["OldCode"]])), , drop = FALSE]
   syn_map <- stats::setNames(syn_rows[["Code"]], tolower(syn_rows[["OldCode"]]))
 
   user_low <- character()
-  if (file.exists(con$vuser_path)) {
-    dbc_vuser <- vpro_sqlite_ro(con$vuser_path)
+  if (file.exists(ws$vuser_path)) {
+    dbc_vuser <- vpro_sqlite_ro(ws$vuser_path)
     on.exit(DBI::dbDisconnect(dbc_vuser), add = TRUE)
     if (DBI::dbExistsTable(dbc_vuser, "USysUserSpp")) {
       u_df <- DBI::dbGetQuery(dbc_vuser, 'SELECT COALESCE(CAST("Code" AS TEXT), \'\') AS "Code" FROM "USysUserSpp"')
-      user_low <- unique(tolower(u_df[["Code"]][nzchar(u_df[["Code"]])]))
+      user_low <- unique(tolower(trimws(u_df[["Code"]][nzchar(trimws(u_df[["Code"]]))])))
     }
   }
 
@@ -1003,14 +1221,16 @@ vpro_validate <- function(con, scope = c("su", "project")) {
     for (vi in seq_len(nrow(uniq_vs))) {
       p_v <- as.character(uniq_vs[["PlotNumber"]][[vi]])
       s_v <- uniq_vs[["Species"]][[vi]]
-      s_chr <- ifelse(is.na(s_v), "", as.character(s_v))
+      s_chr <- ifelse(is.na(s_v), "", trimws(as.character(s_v)))
       s_low <- tolower(s_chr)
-      if (!nzchar(trimws(s_chr))) {
+      if (!nzchar(s_chr)) {
         vc_plot <- c(vc_plot, p_v); vc_spp <- c(vc_spp, s_chr); vc_status <- c(vc_status, "unlisted"); vc_sugg <- c(vc_sugg, NA_character_)
-      } else if (s_low %in% accepted_low || s_low %in% user_low) {
+      } else if (s_low %in% accepted_low) {
         next
       } else if (s_low %in% names(syn_map)) {
         vc_plot <- c(vc_plot, p_v); vc_spp <- c(vc_spp, s_chr); vc_status <- c(vc_status, "synonym"); vc_sugg <- c(vc_sugg, unname(syn_map[[s_low]]))
+      } else if (s_low %in% user_low) {
+        vc_plot <- c(vc_plot, p_v); vc_spp <- c(vc_spp, s_chr); vc_status <- c(vc_status, "user"); vc_sugg <- c(vc_sugg, NA_character_)
       } else {
         vc_plot <- c(vc_plot, p_v); vc_spp <- c(vc_spp, s_chr); vc_status <- c(vc_status, "unlisted"); vc_sugg <- c(vc_sugg, NA_character_)
       }
@@ -1058,7 +1278,7 @@ vpro_validate <- function(con, scope = c("su", "project")) {
   }
 
   for (sfx in c("Veg", "Humus", "Mineral", "Other")) {
-    ctbl <- paste0(con$project, "_", sfx)
+    ctbl <- paste0(ws$project, "_", sfx)
     if (!DBI::dbExistsTable(dbc, ctbl)) next
     cq <- vpro_quote_ident(ctbl)
     ores <- DBI::dbGetQuery(
@@ -1081,7 +1301,7 @@ vpro_validate <- function(con, scope = c("su", "project")) {
     paste0('SELECT CAST("PlotNumber" AS TEXT) AS "PlotNumber" FROM ', env_q, ' WHERE typeof("PlotNumber") = \'text\' ORDER BY 1')
   )[["PlotNumber"]]
 
-  if (!is.null(con$su) && nrow(su_df) > 0L) {
+  if (!is.null(ws$su) && nrow(su_df) > 0L) {
     su_orph <- setdiff(su_plots, all_env_plots)
     if (length(su_orph) > 0L) {
       for (sp in sort(su_orph)) {
@@ -1194,8 +1414,25 @@ vpro_validate <- function(con, scope = c("su", "project")) {
     }
   }
 
-  # 5. LMH25 pedological & edatopic validation
-  lmh25_res <- vpro_check_lmh25(con, scope = scope)
+    bounds_tbl <- .vpro_check_vp08_bounds(dbc, ws$project, su_plots, use_su)
+    proj_name_lbl <- ws$project
+  } else {
+    proj_name_lbl <- ws$project
+  }
+
+  # 6. LMH25 pedological & edatopic validation
+  lmh25_res <- if (run_lmh25) {
+    .vpro_check_lmh25(ws, scope = scope)
+  } else {
+    structure(
+      list(
+        issues = tibble::tibble(PlotNumber = character(), rule = character(), severity = character(), detail = character()),
+        summary = tibble::tibble(rule = character(), severity = character(), n_issues = integer(), n_plots = integer()),
+        n_plots_checked = 0L
+      ),
+      class = "vpro_lmh25_audit"
+    )
+  }
 
   # Build unified $issues tibble
   parts <- list()
@@ -1210,6 +1447,7 @@ vpro_validate <- function(con, scope = c("su", "project")) {
   }
   if (nrow(veg_codes_tbl) > 0L) {
     is_unl <- veg_codes_tbl[["status"]] == "unlisted"
+    is_usr <- veg_codes_tbl[["status"]] == "user"
     parts[[length(parts) + 1L]] <- tibble::tibble(
       PlotNumber = veg_codes_tbl[["PlotNumber"]],
       category = rep("veg_codes", nrow(veg_codes_tbl)),
@@ -1218,7 +1456,11 @@ vpro_validate <- function(con, scope = c("su", "project")) {
       detail = ifelse(
         is_unl,
         sprintf("Species code '%s' is not in USysAllSpecs or USysUserSpp.", veg_codes_tbl[["Species"]]),
-        sprintf("Species code '%s' is a synonym; accepted code is '%s'.", veg_codes_tbl[["Species"]], veg_codes_tbl[["suggested_code"]])
+        ifelse(
+          is_usr,
+          sprintf("Species code '%s' is defined only in local USysUserSpp.", veg_codes_tbl[["Species"]]),
+          sprintf("Species code '%s' is a synonym; accepted code is '%s'.", veg_codes_tbl[["Species"]], veg_codes_tbl[["suggested_code"]])
+        )
       )
     )
   }
@@ -1231,7 +1473,7 @@ vpro_validate <- function(con, scope = c("su", "project")) {
       severity = ifelse(is_noveg, "warning", "error"),
       detail = ifelse(
         is_noveg,
-        sprintf("Plot %s has no vegetation rows in %s_Veg.", orphans_tbl[["PlotNumber"]], con$project),
+        sprintf("Plot %s has no vegetation rows in %s_Veg.", orphans_tbl[["PlotNumber"]], proj_name_lbl),
         sprintf("Table %s has %s (%d row(s)) for PlotNumber %s.", orphans_tbl[["table"]], orphans_tbl[["issue"]], orphans_tbl[["n_rows"]], orphans_tbl[["PlotNumber"]])
       )
     )
@@ -1247,6 +1489,15 @@ vpro_validate <- function(con, scope = c("su", "project")) {
         sprintf("Species '%s' appears %d times with overlapping cover in layer(s): %s.", duplicates_tbl[["Species"]], duplicates_tbl[["n_rows"]], duplicates_tbl[["overlapping_layers"]]),
         sprintf("Species '%s' is split across %d physical rows without overlapping cover.", duplicates_tbl[["Species"]], duplicates_tbl[["n_rows"]])
       )
+    )
+  }
+  if (nrow(bounds_tbl) > 0L) {
+    parts[[length(parts) + 1L]] <- tibble::tibble(
+      PlotNumber = bounds_tbl[["PlotNumber"]],
+      category = rep("bounds", nrow(bounds_tbl)),
+      rule = paste0("bounds:", bounds_tbl[["field"]]),
+      severity = rep("error", nrow(bounds_tbl)),
+      detail = sprintf("%s.%s value '%s': %s", bounds_tbl[["table"]], bounds_tbl[["field"]], bounds_tbl[["value"]], bounds_tbl[["rule"]])
     )
   }
   if (nrow(lmh25_res$issues) > 0L) {
@@ -1281,8 +1532,10 @@ vpro_validate <- function(con, scope = c("su", "project")) {
       veg_codes = veg_codes_tbl,
       orphans = orphans_tbl,
       duplicates = duplicates_tbl,
+      bounds = bounds_tbl,
       lmh25 = lmh25_res,
-      skipped_definitions = skipped_tbl
+      skipped_definitions = skipped_tbl,
+      checks = checks
     ),
     class = "vpro_validation"
   )
@@ -1297,9 +1550,10 @@ vpro_validate <- function(con, scope = c("su", "project")) {
 print.vpro_validation <- function(x, ...) {
   n_err <- sum(x$issues[["severity"]] == "error")
   n_wrn <- sum(x$issues[["severity"]] == "warning")
+  n_bnd <- if (!is.null(x$bounds)) nrow(x$bounds) else 0L
   b1 <- sprintf("Total issues: %d (%d errors, %d warnings)", nrow(x$issues), n_err, n_wrn)
   b2 <- sprintf("Env picklist errors: %d | Veg code findings: %d", nrow(x$env_codes), nrow(x$veg_codes))
-  b3 <- sprintf("Orphans/no-veg: %d | Duplicate species: %d | LMH25: %d", nrow(x$orphans), nrow(x$duplicates), nrow(x$lmh25$issues))
+  b3 <- sprintf("Orphans/no-veg: %d | Duplicates: %d | Bounds: %d | LMH25: %d", nrow(x$orphans), nrow(x$duplicates), n_bnd, nrow(x$lmh25$issues))
   cli::cli_h3(sprintf("vpro_validation (%s)", if (x$passed) "PASSED" else "FAILED"))
   cli::cli_bullets(c("*" = b1, "*" = b2, "*" = b3))
   invisible(x)

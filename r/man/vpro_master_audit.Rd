@@ -5,7 +5,7 @@
 \title{Query hash-chained audit records from PostgreSQL \code{becmaster.audit}}
 \usage{
 vpro_master_audit(
-  con,
+  pg,
   plots = NULL,
   zones = NULL,
   subzones = NULL,
@@ -16,7 +16,7 @@ vpro_master_audit(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle.}
+\item{pg}{A \code{vpro_pg_conn} handle.}
 
 \item{plots}{Optional character vector of \code{PlotNumber} values.}
 
@@ -31,7 +31,7 @@ vpro_master_audit(
 \item{limit}{Optional positive integer row limit (defaults to \code{1000L}, or
 \code{NULL} for all matching rows).}
 
-\item{verify_chain}{Logical; if \code{TRUE}, runs \code{\link[=vpro_master_verify_audit]{vpro_master_verify_audit()}} and
+\item{verify_chain}{Logical; if \code{TRUE}, verifies the SHA-256 hash chain and
 attaches its report to \code{attr(result, "chain_verification")}.}
 }
 \value{
@@ -41,6 +41,5 @@ A tibble of \code{becmaster.audit} records.
 Retrieves audit trail entries filtered by \code{plots}, \code{zones} / \code{subzones} /
 \code{project_ids} (via \code{becmaster.env}), and/or \code{merge_tx_id}, ordered by
 \verb{audit_seq DESC}. Optionally verifies the cryptographic SHA-256 hash chain
-via \code{\link[=vpro_master_verify_audit]{vpro_master_verify_audit()}} and attaches the result as
-\code{attr(result, "chain_verification")}.
+and attaches the result as \code{attr(result, "chain_verification")}.
 }

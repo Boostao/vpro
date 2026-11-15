@@ -5,7 +5,7 @@
 \title{Materialize a temporary local \code{vpro_workspace} from a PostgreSQL \code{BECMaster} subset}
 \usage{
 vpro_master_workspace(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -17,7 +17,7 @@ vpro_master_workspace(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
+\item{pg}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
 
 \item{zones}{Optional character vector of BEC zone codes (e.g. \code{"CWH"}, \code{"SBS"}).}
 

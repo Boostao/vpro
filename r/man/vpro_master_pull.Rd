@@ -5,9 +5,9 @@
 \title{Pull a snapshot-consistent PostgreSQL \code{BECMaster} subset into a local \code{VP08} SQLite \code{.db}}
 \usage{
 vpro_master_pull(
-  con,
-  dest_path,
-  project_name,
+  pg,
+  dest_db,
+  project,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -19,12 +19,12 @@ vpro_master_pull(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
+\item{pg}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
 
-\item{dest_path}{Destination SQLite \code{.db} file path (\code{.db} is appended if no
+\item{dest_db}{Destination SQLite \code{.db} file path (\code{.db} is appended if no
 file extension is present).}
 
-\item{project_name}{Target \code{VP08} project prefix (must start with an ASCII
+\item{project}{Target \code{VP08} project prefix (must start with an ASCII
 letter, contain only letters, digits, or underscores up to 31 characters,
 and cannot be \code{"None"}, \code{"Sample"}, or contain \code{"master"}).}
 
@@ -40,7 +40,7 @@ and cannot be \code{"None"}, \code{"Sample"}, or contain \code{"master"}).}
 \item{bbox}{Optional spatial bounding box as \code{c(min_lon, min_lat, max_lon, max_lat)}
 in EPSG:4326 or an \code{sf} \code{bbox} object.}
 
-\item{overwrite}{Logical; if \code{TRUE}, replaces an existing \code{dest_path} when no
+\item{overwrite}{Logical; if \code{TRUE}, replaces an existing \code{dest_db} when no
 active \code{-wal}/\code{-shm} sidecar files exist.}
 
 \item{limit}{Optional positive integer row limit.}

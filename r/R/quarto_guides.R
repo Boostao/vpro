@@ -33,7 +33,7 @@ vpro_aspect_rose_sectors <- function(aspects) {
 }
 
 vpro_build_guide_payload <- function(
-  con,
+  ws,
   type = c("single_unit", "bgc_unit", "veg_summary", "qc_audit"),
   unit = NULL,
   bgc = NULL,
@@ -46,8 +46,8 @@ vpro_build_guide_payload <- function(
 ) {
   type <- match.arg(type)
   if (identical(type, "qc_audit")) {
-    val <- vpro_validate(con, scope = if (!is.null(con$su)) "su" else "project")
-    env_df <- vpro_env(con, scope = if (!is.null(con$su)) "su" else "project")
+    val <- vpro_validate(ws, scope = if (!is.null(ws$su)) "su" else "project")
+    env_df <- vpro_env(ws, scope = if (!is.null(ws$su)) "su" else "project")
     iss <- val$issues
     cats <- unique(iss$category)
     cat_list <- lapply(cats, function(ct) {
@@ -71,8 +71,8 @@ vpro_build_guide_payload <- function(
     })
     return(list(
       guideType = type,
-      title = if (!is.null(title) && nzchar(title)) title else paste0("VPro Standards & LMH25 Audit - ", con$project),
-      project = con$project,
+      title = if (!is.null(title) && nzchar(title)) title else paste0("VPro Standards & LMH25 Audit - ", ws$project),
+      project = ws$project,
       targetUnit = "",
       bgcLabel = "",
       plotCount = as.integer(nrow(env_df)),
@@ -84,10 +84,10 @@ vpro_build_guide_payload <- function(
     ))
   }
 
-  env_df <- vpro_env(con, scope = if (!is.null(con$su)) "su" else "project", exclude_modifiers = TRUE)
+  env_df <- vpro_env(ws, scope = if (!is.null(ws$su)) "su" else "project", exclude_modifiers = TRUE)
   asmr_df <- vpro_asmr(
-    con,
-    scope = if (!is.null(con$su)) "su" else "project",
+    ws,
+    scope = if (!is.null(ws$su)) "su" else "project",
     ref_period = ref_period,
     cache = FALSE,
     force_offline = force_offline
@@ -111,7 +111,7 @@ vpro_build_guide_payload <- function(
       target_unit <- avail_units[[1L]]
       env_df <- env_df[!is.na(env_df$SiteUnit) & env_df$SiteUnit == target_unit, , drop = FALSE]
     } else {
-      target_unit <- con$project
+      target_unit <- ws$project
     }
   }
 
@@ -149,8 +149,8 @@ vpro_build_guide_payload <- function(
 
   # Characteristic vegetation summary across kept plots
   veg_abcd <- vpro_veg(
-    con,
-    scope = if (!is.null(con$su)) "su" else "project",
+    ws,
+    scope = if (!is.null(ws$su)) "su" else "project",
     lump = lump,
     strata = "abcd",
     exclude_modifiers = TRUE
@@ -211,13 +211,13 @@ vpro_build_guide_payload <- function(
     type,
     single_unit = paste0("BEC Site Unit Guide: ", target_unit),
     bgc_unit = paste0("BEC Subzone Synopsis: ", bgc_label),
-    veg_summary = paste0("BEC Vegetation Synthesis: ", con$project)
+    veg_summary = paste0("BEC Vegetation Synthesis: ", ws$project)
   )
 
   list(
     guideType = type,
     title = if (!is.null(title) && nzchar(trimws(title))) trimws(title) else default_title,
-    project = con$project,
+    project = ws$project,
     targetUnit = target_unit,
     bgcLabel = bgc_label,
     refPeriod = ref_period,
@@ -241,7 +241,7 @@ vpro_build_guide_payload <- function(
 #' `#003366` Navy / `#FCBA19` Gold accents. Automatically falls back to
 #' `rmarkdown::render()` for HTML output when the `quarto` CLI is unavailable.
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param type Guide template: `"single_unit"`, `"bgc_unit"`, `"veg_summary"`,
 #'   or `"qc_audit"`.
 #' @param unit Optional `SiteUnit` name when `type = "single_unit"`.
@@ -260,7 +260,7 @@ vpro_build_guide_payload <- function(
 #'   `size_bytes`, `sha256`, and `payload`.
 #' @export
 vpro_render_guide <- function(
-  con,
+  ws,
   type = c("single_unit", "bgc_unit", "veg_summary", "qc_audit"),
   unit = NULL,
   bgc = NULL,
@@ -273,7 +273,7 @@ vpro_render_guide <- function(
   lump = TRUE,
   force_offline = FALSE
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   type <- match.arg(type)
   format <- match.arg(format)
 
@@ -292,14 +292,14 @@ vpro_render_guide <- function(
   }
   output_file <- vpro_abs_path(output_file)
   out_ext <- tolower(tools::file_ext(output_file))
-  protected_dbs <- c(con$project_path, con$su_path, con$vlists_path, con$vuser_path, con$vpro64_path, con$vmetadata_path)
+  protected_dbs <- c(ws$project_path, ws$su_path, ws$vlists_path, ws$vuser_path, ws$vpro64_path, ws$vmetadata_path)
   if (out_ext %in% c("db", "sqlite", "sqlite3", "accdb", "mdb") || output_file %in% protected_dbs) {
     rlang::abort(paste0("Refusing to write rendered guide over a database path: ", output_file))
   }
   dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
 
   payload <- vpro_build_guide_payload(
-    con = con,
+    ws = ws,
     type = type,
     unit = unit,
     bgc = bgc,

@@ -4,14 +4,10 @@
 \alias{vpro_soil}
 \title{Read tidy \code{LMH25 (2023)}-ordered soil humus and mineral horizon records}
 \usage{
-vpro_soil(
-  con,
-  scope = c("su", "project"),
-  type = c("both", "humus", "mineral")
-)
+vpro_soil(ws, scope = c("su", "project"), type = c("both", "humus", "mineral"))
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{scope}{Either \code{"su"} or \code{"project"}.}
 

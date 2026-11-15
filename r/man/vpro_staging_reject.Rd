@@ -4,10 +4,10 @@
 \alias{vpro_staging_reject}
 \title{Reject a pending staging submission with custodian review notes}
 \usage{
-vpro_staging_reject(con, submission_id, reviewer_notes, actor = NULL)
+vpro_staging_reject(pg, submission_id, reviewer_notes, actor = NULL)
 }
 \arguments{
-\item{con}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
+\item{pg}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
 \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
 \item{submission_id}{Pending staging submission UUID string.}

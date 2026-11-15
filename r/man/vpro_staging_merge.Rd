@@ -5,7 +5,7 @@
 \title{Execute an atomic \code{SERIALIZABLE} custodian merge from \code{staging} into \code{BECMaster}}
 \usage{
 vpro_staging_merge(
-  con,
+  pg,
   submission_id,
   default_resolution = c("keep_target", "accept_source"),
   plot_resolutions = NULL,
@@ -18,7 +18,7 @@ vpro_staging_merge(
 )
 }
 \arguments{
-\item{con}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
+\item{pg}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
 \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
 \item{submission_id}{Pending staging submission UUID string.}
@@ -63,6 +63,6 @@ validates UTF-16 bounds, IEEE-754 \code{float32 < 100} covers, and \code{LMH25 (
 soil horizon depth signs, allocates non-reused child \code{ID}s via
 \code{becmaster.child_identity_watermark} + \code{becmaster.child_identity}, appends
 SHA-256 hash-chained rows to \code{becmaster.audit} (verifiable via
-\code{\link[=vpro_master_verify_audit]{vpro_master_verify_audit()}}), and records provenance in
+\code{vpro_master_audit(pg, verify_chain = TRUE)}), and records provenance in
 \code{becmaster.merge_ledger} and \code{staging.submissions}.
 }

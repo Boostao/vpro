@@ -20,24 +20,24 @@ vpro_is_modifier_unit <- function(site_unit, include_tentative = FALSE) {
 
 #' Read plot-to-SiteUnit assignments (`*_SU`)
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param su Optional `*_SU` table name override. Defaults to `con$su`.
+#' @param ws A `vpro_workspace` handle.
+#' @param su Optional `*_SU` table name override. Defaults to `ws$su`.
 #' @param exclude_modifiers Logical; if `TRUE`, removes `.support`, `.poor`, and
 #'   `.nudum` units.
 #' @return A tibble with literal character `PlotNumber` and `SiteUnit`.
 #' @export
-vpro_site_units <- function(con, su = NULL, exclude_modifiers = FALSE) {
-  vpro_assert_workspace(con)
+vpro_site_units <- function(ws, su = NULL, exclude_modifiers = FALSE) {
+  vpro_assert_workspace(ws)
   su_tbl <- if (is.null(su)) {
-    con$su
+    ws$su
   } else {
-    tables <- vpro_sqlite_physical_tables(con$su_path)
-    vpro_resolve_table_suffix(tables, su, "SU", default_prefix = con$project)
+    tables <- vpro_sqlite_physical_tables(ws$su_path)
+    vpro_resolve_table_suffix(tables, su, "SU", default_prefix = ws$project)
   }
   if (is.null(su_tbl)) {
     return(tibble::tibble(PlotNumber = character(), SiteUnit = character()))
   }
-  dbc <- vpro_sqlite_ro(con$su_path)
+  dbc <- vpro_sqlite_ro(ws$su_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   df <- DBI::dbGetQuery(
     dbc,
@@ -65,7 +65,7 @@ vpro_site_units <- function(con, su = NULL, exclude_modifiers = FALSE) {
 #' lexical `BEC_Use >= bec_min` when `bec_min` is supplied, and optionally drops
 #' `.support/.poor/.nudum` units.
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param site_min,veg_min,soil_min Inclusive minimum `DataQuality` labels
 #'   (e.g. `"Poor"`, `"Fair"`, `"Good"`, `"Excellent"`).
 #' @param include_site_missing,include_veg_missing,include_soil_missing Whether
@@ -79,7 +79,7 @@ vpro_site_units <- function(con, su = NULL, exclude_modifiers = FALSE) {
 #' @return A list with `selected` tibble, `removed` tibble, and `thresholds`.
 #' @export
 vpro_filter_plots <- function(
-  con,
+  ws,
   site_min = "Poor",
   veg_min = "Poor",
   soil_min = "Poor",
@@ -91,10 +91,10 @@ vpro_filter_plots <- function(
   exclude_modifiers = FALSE,
   scope = c("su", "project")
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
 
-  dbc_vlists <- vpro_sqlite_ro(con$vlists_path)
+  dbc_vlists <- vpro_sqlite_ro(ws$vlists_path)
   on.exit(DBI::dbDisconnect(dbc_vlists), add = TRUE)
   levels <- DBI::dbGetQuery(
     dbc_vlists,
@@ -119,16 +119,16 @@ vpro_filter_plots <- function(
   t_veg <- resolve_thresh(veg_min, "veg_min")
   t_soil <- resolve_thresh(soil_min, "soil_min")
 
-  dbc <- vpro_sqlite_ro(con$project_path)
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
-  env_q <- vpro_quote_ident(paste0(con$project, "_Env"))
-  adm_tbl <- paste0(con$project, "_Admin")
+  env_q <- vpro_quote_ident(paste0(ws$project, "_Env"))
+  adm_tbl <- paste0(ws$project, "_Admin")
   adm_q <- vpro_quote_ident(adm_tbl)
   adm_fields <- DBI::dbListFields(dbc, adm_tbl)
   bec_expr <- if ("BEC_Use" %in% adm_fields) 'CAST(admin."BEC_Use" AS TEXT)' else 'CAST(NULL AS TEXT)'
 
-  if (identical(scope, "su") && !is.null(con$su)) {
-    su_df <- vpro_site_units(con, exclude_modifiers = exclude_modifiers)
+  if (identical(scope, "su") && !is.null(ws$su)) {
+    su_df <- vpro_site_units(ws, exclude_modifiers = exclude_modifiers)
     env_adm <- DBI::dbGetQuery(
       dbc,
       paste0(
@@ -155,7 +155,7 @@ vpro_filter_plots <- function(
       stringsAsFactors = FALSE
     )
   } else {
-    su_df <- vpro_site_units(con, exclude_modifiers = FALSE)
+    su_df <- vpro_site_units(ws, exclude_modifiers = FALSE)
     su_map <- stats::setNames(su_df$SiteUnit, su_df$PlotNumber)
     src <- DBI::dbGetQuery(
       dbc,
@@ -254,8 +254,8 @@ vpro_filter_plots <- function(
 #' Access `-1/0` booleans to R `logical`, and optionally filters by `DataQuality`
 #' and modifier suffixes.
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param scope Either `"su"` (restrict to active `con$su` when set, else all
+#' @param ws A `vpro_workspace` handle.
+#' @param scope Either `"su"` (restrict to active `ws$su` when set, else all
 #'   project plots) or `"project"` (all `_Env` plots with `SiteUnit` left-joined).
 #' @param include_admin Logical; if `TRUE`, joins `_Admin` columns.
 #' @param filter_quality Optional quality filter: `NULL`/`FALSE` (none), `TRUE`
@@ -269,21 +269,21 @@ vpro_filter_plots <- function(
 #' @return A tibble of plot environment records.
 #' @export
 vpro_env <- function(
-  con,
+  ws,
   scope = c("su", "project"),
   include_admin = TRUE,
   filter_quality = NULL,
   exclude_modifiers = FALSE,
   columns = NULL
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
 
-  dbc <- vpro_sqlite_ro(con$project_path)
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
 
-  env_tbl <- paste0(con$project, "_Env")
-  adm_tbl <- paste0(con$project, "_Admin")
+  env_tbl <- paste0(ws$project, "_Env")
+  adm_tbl <- paste0(ws$project, "_Admin")
   env_fields <- DBI::dbListFields(dbc, env_tbl)
   if (!is.null(columns)) {
     req_cols <- unique(c("PlotNumber", as.character(columns)))
@@ -317,8 +317,8 @@ vpro_env <- function(
     }
   }
 
-  su_scoped <- identical(scope, "su") && !is.null(con$su)
-  su_df <- vpro_site_units(con, exclude_modifiers = if (su_scoped) exclude_modifiers else FALSE)
+  su_scoped <- identical(scope, "su") && !is.null(ws$su)
+  su_df <- vpro_site_units(ws, exclude_modifiers = if (su_scoped) exclude_modifiers else FALSE)
 
   if (su_scoped) {
     u_plots <- unique(su_df$PlotNumber)
@@ -378,14 +378,14 @@ vpro_env <- function(
   # Apply optional quality filter
   if (!is.null(filter_quality) && !identical(filter_quality, FALSE)) {
     q_args <- if (isTRUE(filter_quality)) {
-      list(con = con, scope = scope, exclude_modifiers = exclude_modifiers)
+      list(ws = ws, scope = scope, exclude_modifiers = exclude_modifiers)
     } else if (is.character(filter_quality) && length(filter_quality) == 1L) {
       list(
-        con = con, site_min = filter_quality, veg_min = filter_quality,
+        ws = ws, site_min = filter_quality, veg_min = filter_quality,
         soil_min = filter_quality, scope = scope, exclude_modifiers = exclude_modifiers
       )
     } else if (is.list(filter_quality)) {
-      utils::modifyList(list(con = con, scope = scope, exclude_modifiers = exclude_modifiers), filter_quality)
+      utils::modifyList(list(ws = ws, scope = scope, exclude_modifiers = exclude_modifiers), filter_quality)
     } else {
       rlang::abort("`filter_quality` must be NULL, logical, a DataQuality label, or a list of arguments.")
     }
@@ -442,9 +442,9 @@ vpro_query_scoped_plots <- function(dbc, table_sql, plot_vec, select_cols = "*",
 #' \eqn{100 \times (1 - \prod_i (1 - c_i / 100))}; when `combine = "sum"`,
 #' additive sums are capped at `99%` (`abcd`/`lifeform`/`total`).
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param scope Either `"su"` (restrict to active `con$su` when set) or `"project"`.
-#' @param lump Logical (`TRUE` uses active `con$lump`), `FALSE`, a `*_Lump` table
+#' @param ws A `vpro_workspace` handle.
+#' @param scope Either `"su"` (restrict to active `ws$su` when set) or `"project"`.
+#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
 #'   name, or a two-column `data.frame(SppCode, LumpCode)`.
 #' @param strata Aggregation level: `"raw"` (individual layers `1..10`, `5a..5c`,
 #'   `A`, `B`), `"abcd"` (`A`, `B`, `C`, `D`), `"lifeform"`, or `"total"`.
@@ -453,39 +453,46 @@ vpro_query_scoped_plots <- function(dbc, table_sql, plot_vec, select_cols = "*",
 #' @param resolve_synonyms Logical; if `TRUE`, maps `BCPlantTaxonomy v19`
 #'   `OldCode -> Code` synonyms before lumping.
 #' @param exclude_modifiers Logical; if `TRUE`, drops `.support/.poor/.nudum` units.
+#' @param cover_precedence Stratum cover precedence when combining `A`/`B`
+#'   sublayers alongside `TotalA`/`TotalB`: `"strata_totals"` (default, matching
+#'   MS Access `vpro_veg` where positive `TotalA`/`TotalB` overrides sublayers)
+#'   or `"sublayer_sum"` (matching BEC diagnostics where `TotalA`/`TotalB` is
+#'   used only when sublayers are `NA` / absent).
 #' @return A tibble of tidy vegetation observations.
 #' @export
 vpro_veg <- function(
-  con,
+  ws,
   scope = c("su", "project"),
   lump = TRUE,
   strata = c("raw", "abcd", "lifeform", "total"),
   combine = c("pielou", "sum"),
   resolve_synonyms = TRUE,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  cover_precedence = c("strata_totals", "sublayer_sum")
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
   strata <- match.arg(strata)
   combine <- match.arg(combine)
+  cover_precedence <- match.arg(cover_precedence)
 
-  su_raw <- vpro_site_units(con, exclude_modifiers = FALSE)
+  su_raw <- vpro_site_units(ws, exclude_modifiers = FALSE)
   su_df <- if (isTRUE(exclude_modifiers) && nrow(su_raw) > 0L) {
     su_raw[!vpro_is_modifier_unit(su_raw$SiteUnit), , drop = FALSE]
   } else {
     su_raw
   }
-  scoped_plots <- if (identical(scope, "su") && !is.null(con$su)) su_df$PlotNumber else NULL
+  scoped_plots <- if (identical(scope, "su") && !is.null(ws$su)) su_df$PlotNumber else NULL
   modifier_plots <- if (identical(scope, "project") && isTRUE(exclude_modifiers) && nrow(su_raw) > 0L) {
     setdiff(su_raw$PlotNumber[vpro_is_modifier_unit(su_raw$SiteUnit)], su_df$PlotNumber)
   } else {
     character()
   }
 
-  dbc <- vpro_sqlite_ro(con$project_path)
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
 
-  veg_tbl <- paste0(con$project, "_Veg")
+  veg_tbl <- paste0(ws$project, "_Veg")
   veg_fields <- DBI::dbListFields(dbc, veg_tbl)
   layer_defs <- c(
     "1" = "Cover1", "2" = "Cover2", "3" = "Cover3", "A" = "TotalA",
@@ -586,14 +593,22 @@ vpro_veg <- function(
     eff_a <- combine_cols(as.matrix(dt[, sub_a, with = FALSE]))
     if ("TotalA" %in% names(dt)) {
       ta <- dt[["TotalA"]]
-      use_ta <- !is.na(ta) & (ta > 0 | is.na(eff_a))
+      use_ta <- if (identical(cover_precedence, "sublayer_sum")) {
+        !is.na(ta) & is.na(eff_a)
+      } else {
+        !is.na(ta) & (ta > 0 | is.na(eff_a))
+      }
       eff_a[use_ta] <- ta[use_ta]
     }
     sub_b <- intersect(c("Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c"), names(dt))
     eff_b <- combine_cols(as.matrix(dt[, sub_b, with = FALSE]))
     if ("TotalB" %in% names(dt)) {
       tb <- dt[["TotalB"]]
-      use_tb <- !is.na(tb) & (tb > 0 | is.na(eff_b))
+      use_tb <- if (identical(cover_precedence, "sublayer_sum")) {
+        !is.na(tb) & is.na(eff_b)
+      } else {
+        !is.na(tb) & (tb > 0 | is.na(eff_b))
+      }
       eff_b[use_tb] <- tb[use_tb]
     }
     eff_c <- if ("Cover6" %in% names(dt)) dt[["Cover6"]] else rep(NA_real_, nrow(dt))
@@ -610,8 +625,8 @@ vpro_veg <- function(
   # Apply lump both before and after synonym resolution (and expand lump SppCodes
   # across synonyms) so legacy space-coded *_Lump tables (e.g. 'POA PRA2') fold
   # seamlessly alongside 2026 underscore-coded species ('POA_PRA2').
-  lump_tbl <- vpro_lump_map(con, lump = lump)
-  syn_map <- if (isTRUE(resolve_synonyms)) vpro_synonym_map(con) else character()
+  lump_tbl <- vpro_lump_map(ws, lump = lump)
+  syn_map <- if (isTRUE(resolve_synonyms)) vpro_synonym_map(ws) else character()
 
   lmap <- if (nrow(lump_tbl) > 0L) stats::setNames(lump_tbl$LumpCode, lump_tbl$SppCode) else character()
   if (length(lmap) > 0L && length(syn_map) > 0L) {
@@ -657,12 +672,12 @@ vpro_veg <- function(
     "7" = "D", "8" = "D", "9" = "D", "10" = "D"
   )
 
-  tax <- vpro_taxonomy(con, include_synonyms = FALSE, include_user = TRUE)
+  tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
   tax_ix <- function(spp_vec) match(spp_vec, tax$Code)
 
   su_map <- stats::setNames(su_df$SiteUnit, su_df$PlotNumber)
   attach_meta <- function(res_dt) {
-    if (identical(scope, "su") && !is.null(con$su)) {
+    if (identical(scope, "su") && !is.null(ws$su)) {
       # Preserve many-to-many SU plots cleanly if any exist
       su_dt <- data.table::as.data.table(su_df)
       res_dt <- merge(su_dt, res_dt, by = "PlotNumber", all = FALSE, allow.cartesian = TRUE)
@@ -784,25 +799,25 @@ vpro_order_soil_df <- function(df) {
 #' orders horizons per `LMH25 (2023)` (`L/F/H` ordered `UpperDepth DESC`;
 #' `Of/Om/Oh` and `A/B/C/R/W` ordered `UpperDepth ASC`).
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param scope Either `"su"` or `"project"`.
 #' @param type `"both"` (returns S3 `vpro_soil` bundle with `$humus` and
 #'   `$mineral` tibbles), `"humus"`, or `"mineral"`.
 #' @return A tibble (`type = "humus"` or `"mineral"`) or `vpro_soil` list (`type = "both"`).
 #' @export
-vpro_soil <- function(con, scope = c("su", "project"), type = c("both", "humus", "mineral")) {
-  vpro_assert_workspace(con)
+vpro_soil <- function(ws, scope = c("su", "project"), type = c("both", "humus", "mineral")) {
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
   type <- match.arg(type)
 
-  su_df <- vpro_site_units(con)
-  scoped_plots <- if (identical(scope, "su") && !is.null(con$su)) su_df$PlotNumber else NULL
+  su_df <- vpro_site_units(ws)
+  scoped_plots <- if (identical(scope, "su") && !is.null(ws$su)) su_df$PlotNumber else NULL
 
-  dbc <- vpro_sqlite_ro(con$project_path)
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
 
   read_one <- function(suffix) {
-    tbl <- paste0(con$project, "_", suffix)
+    tbl <- paste0(ws$project, "_", suffix)
     flds <- DBI::dbListFields(dbc, tbl)
     sel <- paste(vapply(flds, function(f) {
       if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
@@ -844,17 +859,17 @@ as_tibble.vpro_soil <- function(x, ...) {
 
 #' Read `<Project>_Other` plot records
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param scope Either `"su"` or `"project"`.
 #' @return A tibble of `_Other` records.
 #' @export
-vpro_other <- function(con, scope = c("su", "project")) {
-  vpro_assert_workspace(con)
+vpro_other <- function(ws, scope = c("su", "project")) {
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
-  scoped_plots <- if (identical(scope, "su") && !is.null(con$su)) vpro_site_units(con)$PlotNumber else NULL
-  dbc <- vpro_sqlite_ro(con$project_path)
+  scoped_plots <- if (identical(scope, "su") && !is.null(ws$su)) vpro_site_units(ws)$PlotNumber else NULL
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
-  tbl <- paste0(con$project, "_Other")
+  tbl <- paste0(ws$project, "_Other")
   flds <- DBI::dbListFields(dbc, tbl)
   sel <- paste(vapply(flds, function(f) {
     if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
@@ -869,14 +884,14 @@ vpro_other <- function(con, scope = c("su", "project")) {
 
 #' Read `<Project>_Audit` trail records
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @return A tibble of `_Audit` records with normalized booleans.
 #' @export
-vpro_audit <- function(con) {
-  vpro_assert_workspace(con)
-  dbc <- vpro_sqlite_ro(con$project_path)
+vpro_audit <- function(ws) {
+  vpro_assert_workspace(ws)
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
-  tbl <- paste0(con$project, "_Audit")
+  tbl <- paste0(ws$project, "_Audit")
   flds <- DBI::dbListFields(dbc, tbl)
   sel <- paste(vapply(flds, function(f) {
     if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
@@ -891,14 +906,14 @@ vpro_audit <- function(con) {
 
 #' Read `<Project>_Metadata` records
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @return A tibble of project metadata rows.
 #' @export
-vpro_metadata <- function(con) {
-  vpro_assert_workspace(con)
-  dbc <- vpro_sqlite_ro(con$project_path)
+vpro_metadata <- function(ws) {
+  vpro_assert_workspace(ws)
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
-  tbl <- paste0(con$project, "_Metadata")
+  tbl <- paste0(ws$project, "_Metadata")
   df <- DBI::dbGetQuery(dbc, paste("SELECT * FROM", vpro_quote_ident(tbl)))
   tibble::as_tibble(df)
 }
@@ -1065,21 +1080,21 @@ vpro_table_to_hierarchy <- function(wide_df, level_names = NULL) {
 #' `Path`) and the flat 11-level `paths` tibble (`Formation`..`SiteUnit` +
 #' `BreakpointUnit`).
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param hierarchy Optional `*_Hierarchy` table override (defaults to
-#'   `con$hierarchy`).
+#'   `ws$hierarchy`).
 #' @param as Return shape: `"both"` (S3 `vpro_hierarchy` bundle with `$nodes` and
 #'   `$paths`), `"nodes"`, or `"paths"`.
 #' @return A `vpro_hierarchy` list (`as = "both"`) or tibble (`"nodes"` / `"paths"`).
 #' @export
-vpro_hierarchy <- function(con, hierarchy = NULL, as = c("both", "nodes", "paths")) {
-  vpro_assert_workspace(con)
+vpro_hierarchy <- function(ws, hierarchy = NULL, as = c("both", "nodes", "paths")) {
+  vpro_assert_workspace(ws)
   as <- match.arg(as)
   h_tbl <- if (is.null(hierarchy)) {
-    con$hierarchy
+    ws$hierarchy
   } else {
-    tables <- vpro_sqlite_physical_tables(con$hierarchy_path)
-    vpro_resolve_table_suffix(tables, hierarchy, "Hierarchy", default_prefix = con$project)
+    tables <- vpro_sqlite_physical_tables(ws$hierarchy_path)
+    vpro_resolve_table_suffix(tables, hierarchy, "Hierarchy", default_prefix = ws$project)
   }
   if (is.null(h_tbl)) {
     empty_nodes <- tibble::tibble(
@@ -1093,7 +1108,7 @@ vpro_hierarchy <- function(con, hierarchy = NULL, as = c("both", "nodes", "paths
     return(structure(list(table = NA_character_, nodes = empty_nodes, paths = empty_paths), class = "vpro_hierarchy"))
   }
 
-  dbc <- vpro_sqlite_ro(con$hierarchy_path)
+  dbc <- vpro_sqlite_ro(ws$hierarchy_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   raw <- DBI::dbGetQuery(dbc, paste("SELECT * FROM", vpro_quote_ident(h_tbl)))
   if ("Flag" %in% names(raw)) raw$Flag <- vpro_access_to_logical(raw$Flag)

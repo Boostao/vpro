@@ -5,7 +5,7 @@
 \title{Compute dual Relative (\verb{rSMR x rSNR}) and Actual (\verb{aSMR x rSNR}) 9x5 BEC edatopic grids}
 \usage{
 vpro_edatopic_grid(
-  con,
+  ws,
   mode = c("dual", "relative", "actual"),
   ref_period = "1961_1990",
   min_constancy = 20,
@@ -15,7 +15,7 @@ vpro_edatopic_grid(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{mode}{Grid synthesis mode: \code{"dual"} (both Relative and Actual grids),
 \code{"relative"} (\verb{rSMR x rSNR} only), or \code{"actual"} (\verb{aSMR x rSNR} only).}

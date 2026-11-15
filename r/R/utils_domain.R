@@ -231,38 +231,31 @@ vpro_value_flag <- function(value, argument) {
   value
 }
 
-#' Convert vegetation presence to a Roman-numeral class
+#' Convert vegetation presence to Roman (`"I"`..`"V"`) or numeric (`1L`..`5L`) classes
 #'
-#' Reproduces `V7mdlValueConversions.Presence2Class` (`<= 0.2, 0.4, 0.6, 0.8, > 0.8`
-#' mapping to `"I"` through `"V"`).
+#' Reproduces `V7mdlValueConversions.Presence2Class` (`"roman"`) and
+#' `V7mdlValueConversions.Presence2ClassNval` (`"numeric"`), mapping
+#' proportions in `[0, 1]` at breakpoints `0.2, 0.4, 0.6, 0.8`. Values `< 0`,
+#' `> 1`, or `NA` return `NA`.
 #'
 #' @param presence Numeric vegetation presence expressed as a proportion in `[0, 1]`.
-#' @return A character vector containing classes `"I"` through `"V"` or `NA`.
+#' @param format Output representation: `"roman"` (character `"I"` through `"V"`)
+#'   or `"numeric"` (integer `1L` through `5L`).
+#' @return A character vector (when `format = "roman"`) or integer vector (when
+#'   `format = "numeric"`), with out-of-range values `< 0` or `> 1` mapped to `NA`.
 #' @export
-vpro_presence_class <- function(presence) {
+vpro_presence_class <- function(presence, format = c("roman", "numeric")) {
+  format <- match.arg(format)
   presence <- vpro_value_vector(presence, "presence")
-  result <- rep(NA_character_, length(presence))
   valid <- !is.na(presence) & presence >= 0 & presence <= 1
-  result[valid] <- c("I", "II", "III", "IV", "V")[
-    findInterval(presence[valid], c(0.2, 0.4, 0.6, 0.8), left.open = TRUE) + 1L
-  ]
-  result
-}
-
-#' Convert vegetation presence to a numeric-label class
-#'
-#' Reproduces `V7mdlValueConversions.Presence2ClassNval` (`"1"` through `"5"`).
-#'
-#' @inheritParams vpro_presence_class
-#' @return A character vector containing labels `"1"` through `"5"` or `NA`.
-#' @export
-vpro_presence_class_numeric <- function(presence) {
-  presence <- vpro_value_vector(presence, "presence")
+  idx <- findInterval(presence[valid], c(0.2, 0.4, 0.6, 0.8), left.open = TRUE) + 1L
+  if (identical(format, "numeric")) {
+    result <- rep(NA_integer_, length(presence))
+    result[valid] <- as.integer(idx)
+    return(result)
+  }
   result <- rep(NA_character_, length(presence))
-  valid <- !is.na(presence) & presence >= 0
-  result[valid] <- as.character(
-    findInterval(presence[valid], c(0.2, 0.4, 0.6, 0.8), left.open = TRUE) + 1L
-  )
+  result[valid] <- c("I", "II", "III", "IV", "V")[idx]
   result
 }
 
@@ -342,34 +335,14 @@ vpro_significance_class <- function(significance) {
   result
 }
 
-#' Round values while enforcing a positive minimum
-#'
-#' @param value Numeric vector.
-#' @param digits Single non-negative integer number of decimal places.
-#' @param minimum Single finite numeric lower bound applied to non-missing values.
-#' @return Numeric vector with missing values preserved.
-#' @export
-vpro_round_minimum <- function(value, digits = 2L, minimum = 10^-digits) {
-  value <- vpro_value_vector(value, "value")
-  if (!is.numeric(digits) || length(digits) != 1L || is.na(digits) || !is.finite(digits) || digits < 0 || digits != trunc(digits)) {
-    stop("`digits` must be one nonnegative integer.", call. = FALSE)
-  }
-  if (!is.numeric(minimum) || length(minimum) != 1L || is.na(minimum) || !is.finite(minimum)) {
-    stop("`minimum` must be one finite numeric value.", call. = FALSE)
-  }
-  result <- round(value, digits = as.integer(digits))
-  result[!is.na(result)] <- pmax(result[!is.na(result)], minimum)
-  result
-}
-
 #' Cap percentage-like values at 100
 #'
-#' @param value Numeric vector.
+#' @param x Numeric vector.
 #' @return Numeric vector capped above at `100`.
 #' @export
-vpro_cap_percent <- function(value) {
-  value <- vpro_value_vector(value, "value")
-  pmin(value, 100)
+vpro_cap_percent <- function(x) {
+  x <- vpro_value_vector(x, "x")
+  pmin(x, 100)
 }
 
 #' Classify a species across ordered site-unit codes
@@ -380,7 +353,7 @@ vpro_cap_percent <- function(value) {
 #' @param unit_codes Named character vector in crosstab field order (`"1 - +"` .. `"5 - 9"`).
 #' @return List with `unit` and `diagnosis` (`d`, `dd`, `cd`, `c`, `ic`).
 #' @export
-vpro_diagnostic_classify <- function(unit_codes) {
+vpro_classify_diagnostic_codes <- function(unit_codes) {
   units <- names(unit_codes)
   if (!is.character(unit_codes) || length(unit_codes) == 0L || is.null(units) || anyNA(units) || any(!nzchar(units)) || anyDuplicated(units)) {
     stop("`unit_codes` must be a nonempty named character vector with distinct, nonempty unit names.", call. = FALSE)

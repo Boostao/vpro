@@ -4,14 +4,14 @@
 \alias{vpro_master_disconnect}
 \title{Disconnect a PostgreSQL \code{BECMaster} connection}
 \usage{
-vpro_master_disconnect(con)
+vpro_master_disconnect(pg)
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} connection object (or \code{NULL}).}
+\item{pg}{A \code{vpro_pg_conn} connection object (or \code{NULL}).}
 }
 \value{
 \code{invisible(TRUE)} when an active connection was closed, or
-\code{invisible(FALSE)} when \code{con} was already disconnected.
+\code{invisible(FALSE)} when \code{pg} was already disconnected.
 }
 \description{
 Cleanly closes the underlying \code{PqConnection} when valid. Safe to call inside

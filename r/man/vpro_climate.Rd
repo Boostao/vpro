@@ -5,7 +5,7 @@
 \title{Extract or compute cached plot climate normals (\verb{__VPRO_PlotClimate})}
 \usage{
 vpro_climate(
-  con,
+  ws,
   scope = c("su", "project"),
   ref_period = "1961_1990",
   cache = TRUE,
@@ -14,13 +14,13 @@ vpro_climate(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{scope}{Either \code{"su"} (active SU plots) or \code{"project"} (all \verb{_Env} plots).}
 
 \item{ref_period}{Climate normal period (\code{"1961_1990"} or \code{"1991_2020"}).}
 
-\item{cache}{Logical; if \code{TRUE} (default) and \code{con} points to a writable user
+\item{cache}{Logical; if \code{TRUE} (default) and \code{ws} points to a writable user
 \code{.db} outside the installed \code{vpro} package, persists cache misses via
 \code{\link[=vpro_cache_climate]{vpro_cache_climate()}}.}
 
@@ -35,7 +35,7 @@ A tibble of coordinatized plot climate normals with literal character
 \code{PlotNumber}, site metadata, \code{CoordElevHash}, \code{Source}, and 16 climate variables.
 }
 \description{
-Reads existing \verb{__VPRO_PlotClimate} rows in \code{con$project_path} whose
+Reads existing \verb{__VPRO_PlotClimate} rows in \code{ws$project_path} whose
 \code{CoordElevHash} and \code{RefPeriod} match each plot's current coordinates and
 elevation. For cache misses, uses \code{climr::downscale()} when \code{climr} and local
 cached rasters are available (and \code{!force_offline}), falling back cleanly to

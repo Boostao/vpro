@@ -36,6 +36,8 @@ navbar:
     articles:
       text: Workflows
       menu:
+      - text: VPro Rosetta Stone (Access <-> Go <-> R 2.0)
+        href: articles/vpro-rosetta-stone.html
       - text: Live Workspace and Tidy Extraction
         href: articles/getting-started-with-vpro-wails.html
       - text: Community Ecology and Clustering Round-Trip
@@ -49,10 +51,9 @@ navbar:
 
 reference:
 - title: Workspace, Standards, and Access Interchange
-  desc: Live vpro_wails WAL workspace connection, 2026 BECdb v13 / BCPlantTaxonomy v19 verification, and Access conversion.
+  desc: Live VPro Desktop WAL workspace connection, 2026 BECdb v13 / BCPlantTaxonomy v19 verification, and Access conversion.
   contents:
   - vpro_connect
-  - vpro_sample
   - vpro_use
   - vpro_status
   - vpro_standards
@@ -62,8 +63,6 @@ reference:
   - vpro_list_su
   - vpro_list_hierarchies
   - vpro_list_lumps
-  - vpro_project_discover
-  - vpro_project_validate
   - vpro_project_inspect
   - vpro_duckdb
   - vpro_access_inspect
@@ -89,25 +88,24 @@ reference:
   - vpro_table_to_hierarchy
 
 - title: Community Matrices, Clustering, Spatial GIS, and LMH25 QA
-  desc: vegan/vegclust multivariate workflows, NAD83 spatial GeoPackage export, and LMH25 (2023) pedological checks.
+  desc: vegan/vegclust multivariate workflows, NAD83 spatial GeoPackage export, and unified VP08/LMH25 (2023) QA.
   contents:
   - vpro_matrix
   - vpro_cluster
   - vpro_indicators
   - vpro_sf
   - vpro_export_gpkg
-  - vpro_check_lmh25
   - vpro_validate
 
 - title: BEC Diagnostic Synthesis, Pairwise Similarity, and Profiling
   desc: V7mdlDiagnostic fidelity classes, pairwise unit similarity, LOO outlier detection, plot profiling, and summary tables.
   contents:
   - vpro_diagnostics
-  - vpro_diagnostic_classify
+  - vpro_classify_diagnostic_codes
   - vpro_pairwise
   - vpro_outliers
   - vpro_profile
-  - vpro_rule
+  - vpro_profile_rule
   - vpro_summary_veg
   - vpro_summary_env
   - vpro_export_xlsx
@@ -117,12 +115,10 @@ reference:
   contents:
   - vpro_climate
   - vpro_cache_climate
-  - vpro_coord_elev_hash
   - vpro_asmr
   - vpro_evaluate_asmr
   - vpro_edatopic_grid
-  - plot_edatope
-  - vpro_write_candidate_su
+  - vpro_plot_edatope
   - vpro_write_su
   - vpro_write_lump
 
@@ -138,36 +134,32 @@ reference:
   - vpro_master_veg
   - vpro_master_soil
   - vpro_master_audit
-  - vpro_master_verify_audit
   - vpro_master_standards
   - vpro_master_workspace
   - vpro_master_pull
-  - vpro_standards_sync
+  - vpro_master_standards_sync
   - vpro_staging_submit
   - vpro_staging_list
   - vpro_staging_inspect
   - vpro_staging_diff
   - vpro_staging_merge
   - vpro_staging_reject
-  - vpro_publish_snapshot
-  - vpro_list_snapshots
-  - vpro_write_rds_snapshot
-  - vpro_read_rds_project
+  - vpro_master_publish_snapshot
+  - vpro_master_list_snapshots
+  - vpro_export_rds
+  - vpro_import_rds
 
-- title: Quarto BEC Field Guides, Sidecar Bridge, and Calibrated Math
-  desc: B.C. Government Quarto guide publication, vpro_wails sidecar JSON bridge, and calibrated Access/BEC domain helpers.
+- title: Quarto BEC Field Guides and Calibrated Domain Math
+  desc: B.C. Government Quarto guide publication and calibrated Access/BEC domain helpers.
   contents:
   - vpro_render_guide
-  - vpro_sidecar_exec
   - vpro_bcgov_theme
   - vpro_presence_class
-  - vpro_presence_class_numeric
   - vpro_significance_class
   - vpro_prominence_class
   - vpro_goldstream_class
   - vpro_narrow_float32
   - vpro_round_ace
-  - vpro_round_minimum
   - vpro_cap_percent
   - vpro_access_to_logical
   - vpro_logical_to_access

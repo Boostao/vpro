@@ -4,10 +4,10 @@
 \alias{vpro_metadata}
 \title{Read \verb{<Project>_Metadata} records}
 \usage{
-vpro_metadata(con)
+vpro_metadata(ws)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 }
 \value{
 A tibble of project metadata rows.

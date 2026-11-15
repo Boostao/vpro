@@ -166,7 +166,7 @@ func combineStratumCovers(vals ...float64) float64 {
 		if math.IsNaN(v) || v <= 0 {
 			continue
 		}
-		clamped := math.Min(99.9, v)
+		clamped := math.Min(99.0, v)
 		prod *= (1.0 - clamped/100.0)
 		anyPos = true
 	}

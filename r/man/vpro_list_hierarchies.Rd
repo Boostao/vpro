@@ -4,10 +4,10 @@
 \alias{vpro_list_hierarchies}
 \title{List classification hierarchy (\verb{*_Hierarchy}) tables in a workspace}
 \usage{
-vpro_list_hierarchies(con)
+vpro_list_hierarchies(ws)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 }
 \value{
 A tibble with \code{name}, \code{table}, \code{n_nodes}, and \code{active}.

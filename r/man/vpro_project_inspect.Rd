@@ -2,19 +2,22 @@
 % Please edit documentation in R/workspace.R
 \name{vpro_project_inspect}
 \alias{vpro_project_inspect}
-\title{Inspect a VPro project SQLite database for \code{VP08} compatibility}
+\title{Inspect a VPro project SQLite database for \code{VP08} compatibility and schema completeness}
 \usage{
-vpro_project_inspect(path, project)
+vpro_project_inspect(path, project = NULL)
 }
 \arguments{
 \item{path}{Path to a VPro project SQLite database.}
 
-\item{project}{Project prefix.}
+\item{project}{Optional project prefix inside \code{path}. When \code{NULL}, auto-detects
+the primary project in \code{path}.}
 }
 \value{
 A list with \code{path}, \code{project}, \code{version}, \code{compatible}, and \code{validation}.
 }
 \description{
-Preserves exact return fields (\code{path}, \code{project}, \code{version}, \code{compatible},
-\code{validation}) required by \code{vpro_wails/internal/rsidecar}.
+Validates the required 8-table \code{VP08} family (\verb{_Admin}, \verb{_Audit}, \verb{_Env},
+\verb{_Humus}, \verb{_Metadata}, \verb{_Mineral}, \verb{_Other}, \verb{_Veg}) and \verb{_table_metadata}
+version tag, preserving exact return fields (\code{path}, \code{project}, \code{version},
+\code{compatible}, \code{validation}) required by \code{rsidecar}.
 }
