@@ -1,4 +1,10 @@
+import { Dialogs } from '@wailsio/runtime';
 import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
+
+export interface FileDialogFilter {
+  DisplayName: string;
+  Pattern: string;
+}
 
 export interface VenusProjectCandidate {
   projectId: string;
@@ -65,6 +71,7 @@ export interface TurboVegImportRequest {
   targetProject: string;
   destinationPath?: string;
   activateOnSuccess: boolean;
+  resolveVProCodeSynonyms?: boolean;
 }
 
 export interface TurboVegImportOutcome {
@@ -218,6 +225,8 @@ export interface InterchangeHubPort {
   exportWideMatrixCSV(contextID: string, request: WideMatrixCSVRequest): Promise<CSVExportOutcome>;
   exportProjectRDS(contextID: string, request: RDSExportRequest): Promise<RDSExportOutcome>;
   exportGeoPackage(contextID: string, request: GeoPackageExportRequest): Promise<GeoPackageExportOutcome>;
+  chooseOpenFile?(title: string, filters?: FileDialogFilter[]): Promise<string>;
+  chooseSaveFile?(title: string, defaultFilename: string, filters?: FileDialogFilter[]): Promise<string>;
 }
 
 export const defaultInterchangeHubPort: InterchangeHubPort = {
@@ -243,6 +252,24 @@ export const defaultInterchangeHubPort: InterchangeHubPort = {
     (ImportExportService.ExportProjectRDS(contextID, request) as never),
   exportGeoPackage: (contextID, request) =>
     (ImportExportService.ExportGeoPackage(contextID, request) as never),
+  chooseOpenFile: async (title, filters) => {
+    const selected = await Dialogs.OpenFile({
+      Title: title,
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      AllowsMultipleSelection: false,
+      Filters: filters,
+    });
+    return Array.isArray(selected) ? (selected[0] ?? '') : (selected ?? '');
+  },
+  chooseSaveFile: async (title, defaultFilename, filters) => {
+    const selected = await Dialogs.SaveFile({
+      Title: title,
+      Filename: defaultFilename,
+      Filters: filters,
+    });
+    return selected ?? '';
+  },
 };
 
 const PROJECT_IDENT_RE = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;

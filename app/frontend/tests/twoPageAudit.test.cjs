@@ -71,7 +71,7 @@ async function mountPanel(service) {
   const { onDestroy } = await import(pathToFileURL(path.join(path.dirname(require.resolve('svelte')), 'index-client.js')).href);
   let script = readFileSync(srcPath('TwoPageAuditPanel.svelte'), 'utf8').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
   script = script.replace('form, onBusyChange }:', 'form, onBusyChange, inspect }:');
-  script += '\n$effect(() => inspect({ load, cancel, busy, error, review, current: () => review }));';
+  script += '\n$effect(() => inspect({ load, cancel, busy, restoreBusy, error, statusMsg, selectedIds, toggleRestoreRow, restoreSelected, review, current: () => review }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   assert.equal(compiled.warnings.length, 0);
   const ast = ts.createSourceFile('audit-reader.js', compiled.js.code, ts.ScriptTarget.Latest, true);
@@ -80,10 +80,14 @@ async function mountPanel(service) {
   const reads = loadTypeScript('readRequests.ts', {
     '@wailsio/runtime': { Call: { RuntimeError: class extends Error {} }, CancelledRejectionError: class extends Error {} },
   });
-  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'PlotEntryService',
+  const mount = new Function('$', 'onDestroy', 'untrack', 'ReadRequests', 'AuditRestoreAction', 'PlotEntryService',
     'sourceAuditFields', 'twoPageAuditFromWire', 'twoPageAuditLabel', code + '\nreturn _unknown_;')(
-    runtime, onDestroy, runtime.untrack, reads.ReadRequests, {
+    runtime, onDestroy, runtime.untrack, reads.ReadRequests,
+    { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' },
+    {
       GetTwoPageSourceAuditOriginal: service.GetTwoPageSourceAuditOriginal ?? service.GetOriginal,
+      SetTwoPageSourceAuditRestoreSelection: service.SetTwoPageSourceAuditRestoreSelection ?? (async () => {}),
+      RestoreSelectedTwoPageSourceAudit: service.RestoreSelectedTwoPageSourceAudit ?? (async () => null),
     },
     audit.sourceAuditFields, audit.twoPageAuditFromWire, audit.twoPageAuditLabel);
   const activity = [];
@@ -197,13 +201,14 @@ test('Audit ownership prevents direct parent writes, drafts, source switches and
   assert.ok(context.error);
 });
 
-test('actual source Audit markup preserves labelled readonly cards without restoration or preference controls', () => {
+test('actual source Audit markup preserves labelled cards and wires restore selection and Retain/Prune actions', async () => {
   const source = readFileSync(srcPath('TwoPageAuditPanel.svelte'), 'utf8');
   const scriptEnd = source.indexOf('</script>') + '</script>'.length;
   const component = serverComponent(`<script>
     import { sourceAuditFields, twoPageAuditLabel } from './twoPageAudit';
-    let { owner, review, busy = false, error = '' } = $props();
-    const load = () => {}; const cancel = () => {};
+    let { owner, review, busy = false, restoreBusy = false, error = '', statusMsg = '', selectedIds = ['1'] } = $props();
+    const AuditRestoreAction = { AuditRestoreRetain: 'retain', AuditRestorePrune: 'prune' };
+    const load = () => {}; const cancel = () => {}; const toggleRestoreRow = () => {}; const restoreSelected = () => {};
     </script>${source.slice(scriptEnd)}`, 'SourceAuditCards.svelte', { './twoPageAudit': audit });
   const html = render(component, { props: { owner, review: audit.twoPageAuditFromWire(wire(), owner) } }).body;
   assert.match(html, /VPro Data History/);
@@ -213,6 +218,26 @@ test('actual source Audit markup preserves labelled readonly cards without resto
     assert.ok(html.includes(`data-source-audit-column="${name}"`));
     assert.ok(html.includes(`<dt class="font-medium">${label}</dt>`));
   }
-  assert.doesNotMatch(html, /<(?:input|select|textarea)\b/);
-  assert.equal((html.match(/<button /g) || []).length, 1);
+  assert.match(html, /type="checkbox"/);
+  assert.match(html, /data-audit-restore-retain/);
+  assert.match(html, /data-audit-restore-prune/);
+
+  const selectionCalls = [];
+  const restoreCalls = [];
+  const panel = await mountPanel({
+    GetTwoPageSourceAuditOriginal: () => Promise.resolve(wire()),
+    SetTwoPageSourceAuditRestoreSelection: async (...args) => { selectionCalls.push(args); },
+    RestoreSelectedTwoPageSourceAudit: async (...args) => { restoreCalls.push(args); return { restored: true }; },
+  });
+  try {
+    await panel.actions().load(); panel.flush();
+    assert.deepEqual(panel.actions().selectedIds, ['1']);
+    await panel.actions().toggleRestoreRow('1', false); panel.flush();
+    assert.deepEqual(panel.actions().selectedIds, []);
+    await panel.actions().toggleRestoreRow('1', true); panel.flush();
+    assert.deepEqual(panel.actions().selectedIds, ['1']);
+    assert.deepEqual(selectionCalls[1], [owner.contextId, owner.plot, owner.form, ['1']]);
+    await panel.actions().restoreSelected('retain'); panel.flush();
+    assert.deepEqual(restoreCalls[0], [owner.contextId, owner.plot, owner.form, ['1'], 'retain']);
+  } finally { panel.dispose(); }
 });

@@ -384,11 +384,19 @@ export interface DownloadLogEntry {
   plotCount: number;
 }
 
+export interface AuditChainVerification {
+  verifiedRows: number;
+  valid: boolean;
+  partialWindow: boolean;
+  tailHash: string;
+}
+
 export interface CloudSyncPort {
   getCloudSyncConfigStatus(): Promise<CloudConfigStatus>;
   configureCloudSyncSession(req: SessionConfigRequest): Promise<CloudConfigStatus>;
   testCloudConnection(): Promise<CloudConnectionReport>;
   bootstrapCloudSchemas(): Promise<SchemaBootstrapResult>;
+  verifyBECMasterAuditChain(limit?: number): Promise<AuditChainVerification>;
   publishStandardsToCloud(contextId: string, req: PublishStandardsRequest): Promise<PublishStandardsResult>;
   seedBECMasterBaseline(req: SeedBaselineRequest): Promise<SeedBaselineResult>;
   pullCloudStandards(contextId: string): Promise<PullStandardsResult>;
@@ -411,6 +419,7 @@ export const defaultCloudSyncPort: CloudSyncPort = {
   configureCloudSyncSession: req => (ContextService.ConfigureCloudSyncSession(req) as never),
   testCloudConnection: () => (ContextService.TestCloudConnection() as never),
   bootstrapCloudSchemas: () => (ContextService.BootstrapCloudSchemas() as never),
+  verifyBECMasterAuditChain: (limit = 0) => (ContextService.VerifyBECMasterAuditChain(limit) as never),
   publishStandardsToCloud: (contextId, req) => (ContextService.PublishStandardsToCloud(contextId, req) as never),
   seedBECMasterBaseline: req => (ContextService.SeedBECMasterBaseline(req) as never),
   pullCloudStandards: contextId => (ContextService.PullCloudStandards(contextId) as never),

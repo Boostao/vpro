@@ -190,16 +190,16 @@
 </div>
 
 <style>
-  .source-child { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; background: white; border: 1px solid #d1dcd4; border-radius: 4px; }
+  .source-child { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; background: white; border: 1px solid #D8D8D8; border-radius: 4px; }
   table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .875rem; }
-  th { background: #e9efeb; color: #365c48; text-align: left; font-size: .875rem; font-weight: 600; white-space: normal; }
-  th, td { padding: .5rem; min-width: 7rem; max-width: 18rem; border-bottom: 1px solid #d1dcd4; }
+  th { background: #F2F2F2; color: #003366; text-align: left; font-size: .875rem; font-weight: 600; white-space: normal; }
+  th, td { padding: .5rem; min-width: 7rem; max-width: 18rem; border-bottom: 1px solid #D8D8D8; }
   td { overflow: visible; white-space: normal; }
-  td:focus-within { background: #ecfdf5; }
-  .source-cell { display: block; box-sizing: border-box; width: 100%; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem; font: inherit; line-height: 1.4; overflow-wrap: anywhere; }
-  .source-cell:focus-visible { outline: 2px solid #047857; outline-offset: 2px; }
-  input[type="checkbox"] { width: 1.2rem; min-height: 1.2rem; }
-  .pending { color: #78716c; background: #f5f5f4; }
-  .delete { min-height: 40px; color: #b91c1c; padding: .5rem .75rem; border: 1px solid #d6d3d1; border-radius: 4px; }
-  .empty { padding: 1rem; color: #78716c; }
+  td:focus-within { background: #E6F0FA; }
+  .source-cell { display: block; box-sizing: border-box; width: 100%; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem; color: #313132; font: inherit; line-height: 1.4; overflow-wrap: anywhere; }
+  .source-cell:focus-visible { outline: 2px solid #003366; outline-offset: 2px; }
+  input[type="checkbox"] { width: 1.2rem; min-height: 1.2rem; accent-color: #003366; }
+  .pending { color: #606060; background: #F2F2F2; }
+  .delete { min-height: 40px; color: #D8292F; padding: .5rem .75rem; border: 1px solid #D8D8D8; border-radius: 4px; }
+  .empty { padding: 1rem; color: #606060; }
 </style>

@@ -6,7 +6,7 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import { ReadRequests } from '../shared/readRequests';
   import { beginMetadataDraft, stageMetadata, metadataFieldValue, metadataErrors, metadataDirty, metadataEditRequest,
-    metadataCellText, metadataStandardDecisionRequired, metadataStandardDefaults, populateMetadataStandard, metadataBlankRequest,
+    metadataCellText, metadataStandardDecisionRequired, metadataStandardDefaults, populateMetadataStandard, applyCanonicalStandardDefaults, metadataBlankRequest,
     beginMetadataTemplate, stageMetadataTemplate, metadataTemplateRequest, metadataTemplateFields, type MetadataDraft, type MetadataTemplateDraft } from './projectMetadataEditor';
   import { metadataGroups, metadataLabel } from './projectMetadataPresentation';
   import ProjectMetadataRestore from './ProjectMetadataRestore.svelte';
@@ -166,9 +166,11 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
       error = 'Review the available source defaults before applying them to drafts.'; return;
     }
     try {
-      draft = populateMetadataStandard(draft, available);
+      draft = standardDecision
+        ? populateMetadataStandard(draft, available)
+        : applyCanonicalStandardDefaults(draft, available);
       standardPreview = false; error = null;
-      success = '24 source defaults staged, not saved. Other drafts and raw errors were retained; review before Save.';
+      success = '24 canonical LMH25/NAD83 source defaults staged, not saved. Other drafts and raw errors were retained; review before Save.';
     } catch (cause) { error = `Source-default proposal failed; drafts retained: ${String(cause)}`; }
   }
   async function save() {
@@ -226,6 +228,9 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
         onclick={() => { restorationOpen = true; error = null; success = null; }}>Review typed metadata restoration</button>
     {/if}
     <button type="button" onclick={reload} disabled={busy || dirty}>Reload metadata and references</button>
+    {#if draft}
+      <button type="button" data-metadata-populate-standard disabled={!ready || busy || committedFailure} onclick={() => { standardPreview = true; }}>Populate Standard (LMH25 NAD83)</button>
+    {/if}
     <button type="button" onclick={undo} disabled={busy || committedFailure}>Undo metadata drafts</button>
     <button type="button" onclick={save} disabled={!ready || busy || !draft || !dirty || errors.length > 0 || committedFailure || standardPreview || standardDecision && !draft?.standardPopulation}>Save metadata</button>
     <button type="button" onclick={close} disabled={busy || dirty || errors.length > 0 || committedFailure}>Close metadata review</button>
@@ -313,20 +318,20 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
         Use current field drafts without further source population.</label>
       <button type="button" disabled={!ready || busy || committedFailure} onclick={() => standardPreview = true}>Review 24 source defaults</button>
       {#if draft.standardPopulation === 'populate'}<p>Source defaults were explicitly staged; they remain editable drafts until Save.</p>{/if}
-      {#if standardPreview}
-        <fieldset data-metadata-standard-preview><legend>Confirm replacement of these 24 field drafts</legend>
-          <p>No data has been saved. Apply replaces the listed current drafts, including their raw errors; all other drafts remain unchanged.</p>
-          <dl>{#each Object.entries(metadataStandardDefaults) as [name, value] (name)}
-            {@const field = available.find(field => field.name === name)}
-            <dt>{metadataLabel(name)}</dt><dd>
-              Current: {field ? metadataFieldValue(draft, field).nullValue ? 'NULL' : JSON.stringify(metadataFieldValue(draft, field).raw) : 'Unavailable'};
-              proposed: {JSON.stringify(value)}
-            </dd>
-          {/each}</dl>
-          <button type="button" disabled={!ready || busy || committedFailure} onclick={populateStandard}>Apply 24 source defaults to drafts</button>
-          <button type="button" disabled={busy} onclick={() => standardPreview = false}>Cancel source-default preview</button>
-        </fieldset>
-      {/if}
+    {/if}
+    {#if standardPreview}
+      <fieldset data-metadata-standard-preview><legend>Confirm replacement of these 24 canonical LMH25 (NAD83) field drafts</legend>
+        <p>No data has been saved. Apply replaces the listed current drafts, including their raw errors; all other drafts remain unchanged.</p>
+        <dl>{#each Object.entries(metadataStandardDefaults) as [name, value] (name)}
+          {@const field = available.find(field => field.name === name)}
+          <dt>{metadataLabel(name)}</dt><dd>
+            Current: {field ? metadataFieldValue(draft, field).nullValue ? 'NULL' : JSON.stringify(metadataFieldValue(draft, field).raw) : 'Unavailable'};
+            proposed: {JSON.stringify(value)}
+          </dd>
+        {/each}</dl>
+        <button type="button" disabled={!ready || busy || committedFailure} onclick={populateStandard}>Apply 24 source defaults to drafts</button>
+        <button type="button" disabled={busy} onclick={() => standardPreview = false}>Cancel source-default preview</button>
+      </fieldset>
     {/if}
     {#each metadataGroups as group (group.title)}
       <fieldset><legend>{group.title}</legend><div class="metadata-grid">
@@ -388,23 +393,23 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
 </section>
 
 <style>
-  .metadata-editor { border: 1px solid #cbd5e1; border-radius: .75rem; background: #fff; padding: 1rem; color: #334155; margin: 1rem 0; }
-  h2 { font-size: 1.25rem; font-weight: 600; }
-  fieldset { border: 1px solid #e2e8f0; border-radius: .5rem; margin: 1rem 0; padding: 1rem; min-width: 0; }
-  legend { font-weight: 600; padding: 0 .4rem; }
+  .metadata-editor { border: 1px solid #D8D8D8; border-radius: .75rem; background: #FFFFFF; padding: 1rem; color: #313132; margin: 1rem 0; min-width: 0; }
+  h2 { font-size: 1.25rem; font-weight: 600; color: #003366; }
+  fieldset { border: 1px solid #D8D8D8; border-radius: .5rem; margin: 1rem 0; padding: 1rem; min-width: 0; }
+  legend { font-weight: 600; padding: 0 .4rem; color: #003366; }
   .metadata-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }
   .metadata-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
   .wide { grid-column: 1 / -1; }
-  input:not([type=checkbox]), select, textarea { width: 100%; box-sizing: border-box; min-width: 0; min-height: 2.5rem; padding: .5rem; border: 1px solid #94a3b8; border-radius: .35rem; font: inherit; }
-  input:focus, select:focus, textarea:focus { outline: 2px solid #0f766e; outline-offset: 2px; }
+  input:not([type=checkbox]), select, textarea { width: 100%; box-sizing: border-box; min-width: 0; min-height: 2.5rem; padding: .5rem; border: 1px solid #9F9F9F; border-radius: .35rem; font: inherit; color: #313132; background: #FFFFFF; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid #003366; outline-offset: 2px; }
   .null-control { font-size: .8rem; }
   .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
-  button { padding: .5rem .75rem; border: 1px solid #94a3b8; border-radius: .35rem; margin: .2rem; }
+  button { padding: .5rem .75rem; border: 1px solid #9F9F9F; border-radius: .35rem; margin: .2rem; color: #003366; background: #FFFFFF; font-weight: 600; }
   button:disabled { opacity: .5; cursor: not-allowed; }
-  button[aria-pressed=true] { background: #ccfbf1; }
-  .failure { color: #b91c1c; }
-  .success { color: #047857; }
-  .decision { display: block; background: #fef3c7; padding: .75rem; }
+  button[aria-pressed=true] { background: #E6EEF5; border-color: #003366; }
+  .failure { color: #D8292F; }
+  .success { color: #2E8540; }
+  .decision { display: block; background: #FEF6E0; border-left: 4px solid #FCBA19; padding: .75rem; color: #313132; }
   dl { display: grid; grid-template-columns: minmax(8rem, 1fr) 2fr; gap: .5rem; overflow-wrap: anywhere; }
   dt { font-weight: 600; }
   @media (max-width: 600px) { dl { grid-template-columns: 1fr; } }

@@ -160,7 +160,7 @@
             <button type="button" disabled={publication.busy} onclick={acknowledgePDF}>Acknowledge retained PDF outcome</button>
           {/if}
           <p class="guidance">One portable Letter page, real runtime Arial and fixed source-relative fields, not Access printer/stock alignment.
-            Only calibrated en-US dates and unclipped single-line printable ASCII are supported. Export never overwrites a file or changes saved data.
+            Supports calibrated Windows Long Date locales (including en-US, en-CA, fr-CA) and printable UTF-8 single-line labels. Export never overwrites a file or changes saved data.
             Retained receipts survive remount; unknown attempts are recovered readonly, never replayed. Print All and physical printing remain unavailable.</p>
         </section>
       {/if}
@@ -171,21 +171,21 @@
 
 <style>
   .labels { padding: 1rem; min-width: 0; max-width: 100%; }
-  h1 { font-size: 1.5rem; font-weight: 600; }
+  h1 { font-size: 1.5rem; font-weight: 600; color: #003366; }
   form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
   label { display: grid; gap: .3rem; min-width: 0; flex: 1; }
-  input, button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; }
+  input, button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; color: #313132; background: #FFFFFF; }
   input:disabled, button:disabled { opacity: .5; }
-  .label { border: 1px solid #64748b; padding: 1rem; margin: 1rem 0; display: grid; gap: .5rem; min-width: 0; }
+  .label { border: 1px solid #D8D8D8; background: #FFFFFF; padding: 1rem; margin: 1rem 0; display: grid; gap: .5rem; min-width: 0; border-radius: .25rem; }
   .pdf { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; min-width: 0; }
   .pdf input { width: 100%; box-sizing: border-box; }
-  h2 { font-size: 1.25rem; font-weight: 600; }
+  h2 { font-size: 1.25rem; font-weight: 600; color: #003366; }
   p, dd { white-space: pre-wrap; overflow-wrap: anywhere; }
   .zone { font-family: monospace; }
   footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
   footer span { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
   dl > div { margin: .5rem 0; }
-  dt { font-weight: 600; }
-  .error { color: #991b1b; background: #fef2f2; padding: .5rem; }
-  .guidance { margin-top: 1rem; font-size: .8rem; color: #475569; }
+  dt { font-weight: 600; color: #313132; }
+  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
+  .guidance { margin-top: 1rem; font-size: .8rem; color: #474543; }
 </style>

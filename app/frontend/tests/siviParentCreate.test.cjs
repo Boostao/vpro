@@ -52,9 +52,13 @@ test('validateCreateSIVIPlotDraft enforces PlotNumber <= 7 UTF-16 code units, SI
   );
 
   // Invalid PlotType & malformed surrogate & non-ISO date
-  assert.match(
+  assert.equal(
     siviCreate.validateCreateSIVIPlotDraft({ plotNumber: 'SV01', plotType: 'FS882' }).plotType,
-    /Ground, Visual, Note, or Other/
+    undefined
+  );
+  assert.match(
+    siviCreate.validateCreateSIVIPlotDraft({ plotNumber: 'SV01', plotType: 'BogusType' }).plotType,
+    /Ground, Visual, Note, Other, or FS882/
   );
   assert.match(
     siviCreate.validateCreateSIVIPlotDraft({ plotNumber: 'SV\uD800', plotType: 'Note' }).plotNumber,

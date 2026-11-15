@@ -189,13 +189,13 @@
 {@render children(coordinateInputs)}
 
 <style>
-  .coordinate-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; font-size: .75rem; color: #57534e; }
+  .coordinate-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; font-size: .75rem; color: #606060; }
   .coordinate-toolbar label { display: flex; align-items: center; gap: .25rem; }
-  .coordinate-toolbar select, .coordinate-toolbar button { border: 1px solid #a8a29e; border-radius: 2px; background: white; padding: 0 .25rem; }
-  .coordinate-toolbar [role="alert"] { color: #b91c1c; }
+  .coordinate-toolbar select, .coordinate-toolbar button { border: 1px solid #D8D8D8; border-radius: 2px; background: white; color: #313132; padding: 0 .25rem; }
+  .coordinate-toolbar [role="alert"] { color: #D8292F; }
   .coordinate-inputs { display: contents; }
-  .coordinate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; line-height: 1.4; }
-  .coordinate-control:focus { outline: 2px solid #047857; outline-offset: 1px; }
-  .coordinate-control:read-only { color: #78716c; background: #f5f5f4; }
+  .coordinate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
+  .coordinate-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  .coordinate-control:read-only { color: #606060; background: #F2F2F2; }
   .coordinate-radio { margin: 0; padding: 0; }
 </style>

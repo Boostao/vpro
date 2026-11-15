@@ -15,7 +15,24 @@ const mockBindings = {
   }),
 };
 
-const hub = loadTypeScript('interchangeHub.ts', { '../../bindings/github.com/boostao/vpro/app': mockBindings });
+const dialogCalls = [];
+const mockWailsRuntime = {
+  Dialogs: {
+    OpenFile(opts) {
+      dialogCalls.push(['open', opts]);
+      return Promise.resolve('/tmp/picked-source.sqlite');
+    },
+    SaveFile(opts) {
+      dialogCalls.push(['save', opts]);
+      return Promise.resolve('/tmp/picked-dest.gpkg');
+    },
+  },
+};
+
+const hub = loadTypeScript('interchangeHub.ts', {
+  '../../bindings/github.com/boostao/vpro/app': mockBindings,
+  '@wailsio/runtime': mockWailsRuntime,
+});
 
 test('validateTargetProjectName rejects None, Sample, master, and non-identifiers', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(hub.validateTargetProjectName('SkeenaImport_2026'))), {
@@ -121,8 +138,31 @@ test('InterchangeHub.svelte compiles cleanly, contains zero emojis, and renders 
 
   const Component = serverComponent(source, 'InterchangeHub.svelte', { './interchangeHub': hub });
   const rendered = render(Component, { props: { contextId: 'ctx-hub' } });
+  assert.match(rendered.body, /data-tour="interchange-hub-root"/);
   assert.match(rendered.body, /VENUS 5\.0/);
   assert.match(rendered.body, /TurboVeg 3 \/ XML/);
   assert.match(rendered.body, /User Species List/);
   assert.match(rendered.body, /GeoPackage \(\.gpkg\)/);
+  assert.match(source, /resolveVProCodeSynonyms/);
+  assert.match(source, /45\.\.85 N, -170\.\.-100 W/);
+});
+
+test('defaultInterchangeHubPort wraps @wailsio/runtime native OS pickers and passes resolveVProCodeSynonyms', async () => {
+  dialogCalls.length = 0;
+  calls.length = 0;
+  const openPicked = await hub.defaultInterchangeHubPort.chooseOpenFile('Choose File', [{ DisplayName: 'All', Pattern: '*.*' }]);
+  const savePicked = await hub.defaultInterchangeHubPort.chooseSaveFile('Save File', 'out.gpkg', [{ DisplayName: 'GPKG', Pattern: '*.gpkg' }]);
+  assert.equal(openPicked, '/tmp/picked-source.sqlite');
+  assert.equal(savePicked, '/tmp/picked-dest.gpkg');
+  assert.equal(dialogCalls[0][0], 'open');
+  assert.equal(dialogCalls[1][0], 'save');
+
+  await hub.defaultInterchangeHubPort.importTurboVeg('ctx-tv', {
+    sourcePath: '/a/tv.xml',
+    targetProject: 'TvProj',
+    activateOnSuccess: false,
+    resolveVProCodeSynonyms: true,
+  });
+  assert.equal(calls[0][0], 'main.ImportExportService.ImportTurboVeg');
+  assert.equal(calls[0][2].resolveVProCodeSynonyms, true);
 });

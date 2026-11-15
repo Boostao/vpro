@@ -26,7 +26,7 @@
     { key: NumberKey; label: string; kind: 'number'; step?: string };
 
   type HeaderSlot = { columns: readonly string[]; controls: readonly string[]; input: Snippet<[PaperControl, string]>; labelled: true };
-  let { draft = $bindable(), original, capabilities, disabled, existing, lists, onchange, onerror, onvalidation, onCoordinateBusyChange, onWorkingUnitBusyChange, onQualityBusyChange, onSiteCodeBusyChange, onRegionCodeBusyChange, workingUnitSession, masterAllowed = false, extendedShrubs = false, snowCoverRegime = '', activeLayerDepth = '', snowCoverRegimeError = null, activeLayerDepthError = null, onSnowCoverRegimeChange, onActiveLayerDepthChange, editor, additionalEditor, onMetadata, metadataDisabled = true, pictureEditor, sourcePage, coordinateMode = $bindable<CoordinateDisplayMode>('dd'), children: layoutContent }: {
+  let { draft = $bindable(), original, capabilities, disabled, existing, lists, onchange, onerror, onvalidation, onCoordinateBusyChange, onWorkingUnitBusyChange, onQualityBusyChange, onSiteCodeBusyChange, onRegionCodeBusyChange, workingUnitSession, masterAllowed = false, extendedShrubs = false, snowCoverRegime = '', activeLayerDepth = '', snowCoverRegimeDisabled, activeLayerDepthDisabled, snowCoverRegimeError = null, activeLayerDepthError = null, onSnowCoverRegimeChange, onActiveLayerDepthChange, editor, additionalEditor, onMetadata, metadataDisabled = true, onOpenPictureManager, projectIds = [], pictureEditor, sourcePage, coordinateMode = $bindable<CoordinateDisplayMode>('dd'), children: layoutContent }: {
     draft: FS882Header;
     original: (BECCodes & WorkingUnitCodes & QualityCodes & SubstrateValues & SiteCodes & RegionCodes) | null;
     capabilities: Record<string, boolean | undefined>;
@@ -40,6 +40,8 @@
     extendedShrubs?: boolean;
     snowCoverRegime?: string;
     activeLayerDepth?: string;
+    snowCoverRegimeDisabled?: boolean;
+    activeLayerDepthDisabled?: boolean;
     snowCoverRegimeError?: string | null;
     activeLayerDepthError?: string | null;
     onSnowCoverRegimeChange?: (value: string) => void;
@@ -54,6 +56,8 @@
     additionalEditor?: { columns: readonly string[]; input: Snippet<[PaperControl, string]> };
     onMetadata?: () => void;
     metadataDisabled?: boolean;
+    onOpenPictureManager?: (plotNumber: string) => void;
+    projectIds?: readonly string[];
     pictureEditor?: Snippet;
     sourcePage?: ReturnType<typeof paperPage>;
     coordinateMode?: CoordinateDisplayMode;
@@ -207,6 +211,16 @@
     onvalidation(key, null);
     onchange();
   }
+
+  function attachSuContextMenu(node: HTMLElement) {
+    function onContextMenu(event: MouseEvent) {
+      event.preventDefault();
+      const copyBtn = node.closest('.responsive-form')?.querySelector<HTMLButtonElement>('[data-source-control="btnCoptToWorkingUnit"]');
+      if (copyBtn && !copyBtn.disabled) copyBtn.click();
+    }
+    node.addEventListener('contextmenu', onContextMenu);
+    return { destroy() { node.removeEventListener('contextmenu', onContextMenu); } };
+  }
 </script>
 
 <p class="form-status">Verified workflows are editable. Grey fields and actions remain unavailable.</p>
@@ -239,7 +253,13 @@
         {#if isCoordinateControl(control.controlName)}
           {@render coordinateInputs(control)}
         {:else if isWorkingUnitControl(control.controlName)}
-          {@render workingUnitInputs(control)}
+          {#if control.controlName === 'UserSiteUnit' || control.controlName === 'BECSiteUnit'}
+            <span class="su-context-wrap" use:attachSuContextMenu title="Right-click to copy BEC Master Site Unit to Working Unit">
+              {@render workingUnitInputs(control)}
+            </span>
+          {:else}
+            {@render workingUnitInputs(control)}
+          {/if}
         {:else if becKey(control.column)}
           {@render becInputs(control)}
         {:else if qualityKey(control.column)}
@@ -287,15 +307,30 @@
             </select>
           {:else}
             <input class="paper-control" id={`header-${field.key}`} data-column={control.column} data-source-control={control.controlName} aria-label={field.label}
+              list={field.key === 'projectId' && projectIds.length ? 'header-projectId-options' : undefined}
               value={draft[field.key] ?? ''} disabled={unavailable || capabilities[field.key] !== true}
               data-help-id={headerHelpId(control.column, control.controlName)}
               oninput={(event) => setText(field.key, event.currentTarget.value)} />
+            {#if field.key === 'projectId' && projectIds.length}
+              <datalist id="header-projectId-options">
+                {#each projectIds as pid (pid)}
+                  <option value={pid}></option>
+                {/each}
+              </datalist>
+            {/if}
           {/if}
         {:else if control.type === 'CommandButton' || control.type === 'ToggleButton'}
           {#if control.controlName === 'btnLoadMetadata' && onMetadata}
-            <button class="paper-control" data-source-control={control.controlName} disabled={metadataDisabled} onclick={onMetadata}>{controlLabel(control)}</button>
+            <button type="button" class="paper-control" data-source-control={control.controlName} disabled={metadataDisabled} onclick={onMetadata}>{controlLabel(control)}</button>
+          {:else if control.controlName === 'btnManagePictures' && onOpenPictureManager}
+            <button type="button" class="paper-control" data-source-control={control.controlName}
+              disabled={!draft.plotNumber.trim()}
+              title={draft.plotNumber.trim() ? `Manage pictures for plot ${draft.plotNumber.trim()}` : 'Select or enter a Plot Number first'}
+              onclick={() => { if (draft.plotNumber.trim()) onOpenPictureManager(draft.plotNumber.trim()); }}>{controlLabel(control)}</button>
+          {:else if control.controlName === 'Toggle408' || control.controlName === 'Toggle409'}
+            <button type="button" class="paper-control pending" data-source-control={control.controlName} disabled title="Legacy Access paper-form display toggle (not used in VPro 2.0 web layout)">{controlLabel(control)}</button>
           {:else}
-            <button class="paper-control pending" data-source-control={control.controlName} disabled title="Workflow not yet migrated">{controlLabel(control)}</button>
+            <button type="button" class="paper-control pending" data-source-control={control.controlName} disabled title="Legacy Access paper-form action; use the corresponding VPro 2.0 workflow">{controlLabel(control)}</button>
           {/if}
         {:else if control.type === 'CheckBox' || control.type === 'OptionButton'}
           <input class="paper-control pending" id={inputId(control)} data-column={control.column} data-source-control={control.controlName} type={control.type === 'OptionButton' ? 'radio' : 'checkbox'} checked={stored === true} disabled aria-label={controlLabel(control)} />
@@ -303,10 +338,10 @@
           {#if pictureEditor && control.controlName === 'frmVPics' && control.properties.SourceObject?.value === 'Form.frmVPicsXL'}
             <div class="embedded" data-source-control={control.controlName}>{@render pictureEditor()}</div>
           {:else}
-          <div class="pending embedded" data-source-control={control.controlName} title="Embedded workflow not yet migrated">Pictures: pending</div>
+          <div class="pending embedded" data-source-control={control.controlName} title="Pictures subform is managed via Pictures tab or Picture Manager">Pictures panel</div>
           {/if}
         {:else if control.type === 'TextBox' || control.type === 'ComboBox'}
-          <input class="paper-control pending" id={inputId(control)} data-column={control.column} data-source-control={control.controlName} disabled value={typeof stored === 'string' || typeof stored === 'number' ? stored : ''} placeholder={stored !== undefined ? '' : 'Pending'} title={`${controlLabel(control)}: workflow not yet verified`} aria-label={controlLabel(control)} />
+          <input class="paper-control pending" id={inputId(control)} data-column={control.column} data-source-control={control.controlName} disabled value={typeof stored === 'string' || typeof stored === 'number' ? stored : ''} placeholder={stored !== undefined ? '' : 'Legacy field'} title={`${controlLabel(control)}: read-only legacy Access field`} aria-label={controlLabel(control)} />
         {/if}
 {/snippet}
 {#snippet input(control: PaperControl, _position: string)}
@@ -336,7 +371,7 @@
         <div class="form-field" data-help-id="site.realm_class">
           <label class="field-label" for="header-snowCoverregime">Snow cover regime</label>
           <input class="paper-control" id="header-snowCoverregime" data-column="SnowCoverregime" type="text"
-            value={snowCoverRegime} disabled={disabled || capabilities.snowCoverRegime !== true || !onSnowCoverRegimeChange}
+            value={snowCoverRegime} disabled={(snowCoverRegimeDisabled ?? disabled) || capabilities.snowCoverRegime !== true || !onSnowCoverRegimeChange}
             aria-invalid={snowCoverRegimeError ? 'true' : undefined}
             title={onSnowCoverRegimeChange ? 'SnowCoverregime' : 'Use Complete two-page entry or SIVI parent editor to save SnowCoverregime'}
             data-help-id="site.realm_class"
@@ -346,7 +381,7 @@
         <div class="form-field" data-help-id="site.realm_class">
           <label class="field-label" for="header-activeLayerDepth">Active layer depth (cm)</label>
           <input class="paper-control" id="header-activeLayerDepth" data-column="ActiveLayerDepth" type="text" inputmode="decimal"
-            value={activeLayerDepth} disabled={disabled || capabilities.activeLayerDepth !== true || !onActiveLayerDepthChange}
+            value={activeLayerDepth} disabled={(activeLayerDepthDisabled ?? disabled) || capabilities.activeLayerDepth !== true || !onActiveLayerDepthChange}
             aria-invalid={activeLayerDepthError ? 'true' : undefined}
             title={onActiveLayerDepthChange ? 'ActiveLayerDepth' : 'Use Complete two-page entry or Two-page additional fields to save ActiveLayerDepth'}
             data-help-id="site.realm_class"
@@ -374,9 +409,10 @@
 </WorkingUnitFields>
 
 <style>
-  .paper-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; line-height: 1.4; }
-  .paper-control:focus { outline: 2px solid #047857; outline-offset: 1px; }
-  .paper-control:disabled { color: #78716c; background: #f5f5f4; }
-  .pending { opacity: .65; }
+  .su-context-wrap { display: contents; }
+  .paper-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: #FFFFFF; color: #313132; font: inherit; line-height: 1.4; }
+  .paper-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  .paper-control:disabled { color: #606060; background: #F2F2F2; }
+  .pending { opacity: .75; }
   .embedded { display: flex; align-items: center; justify-content: center; }
 </style>

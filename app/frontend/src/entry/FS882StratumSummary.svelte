@@ -44,21 +44,21 @@
       </div>
     </div>
 
-    <div class="flex justify-between items-center">
-      <h3 class="font-bold text-xs uppercase tracking-wider text-stone-600">Vegetation Entries ({vegList.length})</h3>
+    <div class="flex flex-wrap justify-between items-center gap-2">
+      <h3 class="font-bold text-xs uppercase tracking-wider text-[#003366]">Vegetation Entries ({vegList.length})</h3>
       <button
         type="button"
         onclick={onopenspeciesmodal}
         disabled
-        class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs flex items-center gap-1"
+        class="px-2.5 py-1 bg-[#003366] hover:bg-[#002244] text-white rounded text-xs flex items-center gap-1"
       >
         <Plus size={14} /> Add Species (BC Catalog)
       </button>
     </div>
 
-    <div class="border border-stone-200 rounded overflow-x-auto bg-white">
+    <div class="table-scroll border border-[#D8D8D8] rounded overflow-x-auto bg-white">
       <table class="w-full text-left text-xs">
-        <thead class="bg-stone-100 border-b border-stone-200 text-stone-600 font-semibold">
+        <thead class="bg-[#F2F2F2] border-b border-[#D8D8D8] text-[#003366] font-semibold">
           <tr>
             <th class="p-2">Species</th>
             <th class="p-2">Layer</th>
@@ -73,10 +73,10 @@
             <th class="p-2">Action</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-stone-100">
+        <tbody class="divide-y divide-[#F2F2F2]">
           {#each vegList as row (row.id)}
-            <tr class="hover:bg-stone-50">
-              <td class="p-2 font-mono font-bold text-emerald-950">{row.species}</td>
+            <tr class="hover:bg-[#F2F2F2]">
+              <td class="p-2 font-mono font-bold text-[#003366]">{row.species}</td>
               <td class="p-2"><input type="text" value={row.layer ?? ''} disabled class="w-10 border border-stone-200 rounded px-1 py-0.5 text-xs text-center" /></td>
               <td class="p-2"><input type="number" step="0.1" value={row.cover1 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>
               <td class="p-2"><input type="number" step="0.1" value={row.cover2 ?? ''} disabled class="w-14 border border-stone-200 rounded px-1 py-0.5 text-xs text-right" /></td>

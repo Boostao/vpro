@@ -30,10 +30,10 @@ export function plotLabelFromHeader(value: unknown, requestedPlot: string): Plot
     throw new Error('The saved header is missing source label fields; no blank defaults were inferred.');
   }
   const plot = labelText(value.plotNumber, 'PlotNumber1', 7);
-  const zone = labelText(value.zone, 'Zone', 4);
-  if (plot === null || zone === null) {
-    throw new Error('Source label preparation requires a non-NULL plot and Zone for Len/Space; no NULL padding was inferred.');
+  if (plot === null) {
+    throw new Error('Source label preparation requires a non-NULL plot; no NULL PlotNumber was inferred.');
   }
+  const zone = labelText(value.zone, 'Zone', 4) ?? '';
   const subZone = labelText(value.subZone, 'SubZone', 50);
   const siteSeries = labelText(value.siteSeries, 'SiteSeries', 50);
   const combinedZone = `${zone}${' '.repeat(4 - zone.length)}${subZone ?? ''}/${siteSeries ?? ''}`;

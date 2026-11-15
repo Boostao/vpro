@@ -1,18 +1,33 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
+  import { AuditRestoreAction, PlotEntryService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { sourceAuditFields, twoPageAuditFromWire, twoPageAuditLabel, type TwoPageAuditOwner, type TwoPageAuditReview } from './twoPageAudit';
 
-  let { contextId, project, plot, form, onBusyChange }: TwoPageAuditOwner & {
+  let { onRestored, contextId, project, plot, form, onBusyChange }: TwoPageAuditOwner & {
+    onRestored?: () => void | Promise<void>;
     onBusyChange: (busy: boolean) => void;
   } = $props();
   const owner = untrack(() => ({ contextId, project, plot, form }));
   let review = $state.raw<TwoPageAuditReview | null>(null);
   let busy = $state(false);
+  let restoreBusy = $state(false);
   let error = $state('');
+  let statusMsg = $state('');
+  let selectedIds = $state<string[]>([]);
   let generation = 0;
   const reads = new ReadRequests();
+
+  function initialRestoreIds(loaded: TwoPageAuditReview): string[] {
+    const restoreIdx = loaded.records.columns.findIndex(col => col.name.toLowerCase() === 'restore');
+    if (restoreIdx < 0) return [];
+    return loaded.records.rows
+      .filter(r => {
+        const cell = r.cells[restoreIdx];
+        return cell?.storage === 'integer' && (cell.integer === '-1' || cell.integer === '1');
+      })
+      .map(r => r.rowId);
+  }
 
   function cancel() {
     generation++;
@@ -21,38 +36,106 @@
     onBusyChange(false);
   }
   async function load() {
-    if (busy) return;
+    if (busy || restoreBusy) return;
     cancel();
     const request = generation;
-    review = null; error = ''; busy = true;
+    review = null; error = ''; statusMsg = ''; selectedIds = []; busy = true;
     onBusyChange(true);
     try {
       const value = await reads.track(PlotEntryService.GetTwoPageSourceAuditOriginal(owner.contextId, owner.plot, owner.form));
       if (request !== generation) return;
       review = twoPageAuditFromWire(value, owner);
+      selectedIds = initialRestoreIds(review);
     } catch (cause) {
       if (request === generation) error = `Source audit unavailable; history and data unchanged: ${String(cause)}`;
     } finally {
       if (request === generation) { busy = false; onBusyChange(false); }
     }
   }
+
+  async function toggleRestoreRow(rowId: string, checked: boolean) {
+    if (!review || busy || restoreBusy) return;
+    const prev = [...selectedIds];
+    const next = checked ? [...new Set([...prev, rowId])] : prev.filter(id => id !== rowId);
+    selectedIds = next;
+    restoreBusy = true;
+    error = '';
+    statusMsg = '';
+    onBusyChange(true);
+    try {
+      await PlotEntryService.SetTwoPageSourceAuditRestoreSelection(owner.contextId, owner.plot, owner.form, next);
+      statusMsg = `Updated restore selection (${next.length} row(s) selected).`;
+    } catch (cause) {
+      selectedIds = prev;
+      error = `Restore selection update failed; selection reverted: ${String(cause)}`;
+    } finally {
+      restoreBusy = false;
+      onBusyChange(false);
+    }
+  }
+
+  async function restoreSelected(action: AuditRestoreAction) {
+    if (!review || busy || restoreBusy || selectedIds.length === 0) return;
+    restoreBusy = true;
+    error = '';
+    statusMsg = '';
+    onBusyChange(true);
+    try {
+      const ids = [...selectedIds];
+      const result = await PlotEntryService.RestoreSelectedTwoPageSourceAudit(owner.contextId, owner.plot, owner.form, ids, action);
+      statusMsg = result
+        ? `Restored ${ids.length} selected audit row(s).`
+        : `Restore command finished for ${ids.length} selected audit row(s).`;
+      restoreBusy = false;
+      onBusyChange(false);
+      await load();
+      await onRestored?.();
+    } catch (cause) {
+      error = `Restore selected audit rows failed: ${String(cause)}`;
+      restoreBusy = false;
+      onBusyChange(false);
+    }
+  }
   onDestroy(cancel);
 </script>
 
-<section class="min-w-0 space-y-3 rounded border bg-white p-3" aria-label="VPro Data History"
+<section class="min-w-0 space-y-3 rounded border border-[#D8D8D8] bg-white p-3" aria-label="VPro Data History"
   data-two-page-audit-panel data-source-form="USysAuditXL" data-source-parent-form={owner.form}>
-  <h3 class="font-semibold">VPro Data History</h3>
-  <p class="break-words">Owned project {owner.project}; literal plot {JSON.stringify(owner.plot)}.</p>
-  {#if error}<p role="alert" class="break-words text-red-700">{error}</p>{/if}
+  <h3 class="font-semibold text-[#003366]">VPro Data History</h3>
+  <p class="break-words text-sm text-[#313132]">Owned project {owner.project}; literal plot {JSON.stringify(owner.plot)}.</p>
+  {#if error}<p role="alert" class="break-words text-sm text-[#D8292F]">{error}</p>{/if}
+  {#if statusMsg}<p role="status" class="break-words text-sm text-[#2E8540]">{statusMsg}</p>{/if}
   <div class="flex flex-wrap gap-2">
-    <button type="button" disabled={busy} onclick={load}>Load source audit history</button>
-    {#if busy}<button type="button" onclick={cancel}>Cancel audit read</button><p role="status">Reading owned history...</p>{/if}
+    <button type="button" class="rounded border border-[#003366] bg-[#003366] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+      disabled={busy || restoreBusy} onclick={load}>Load source audit history</button>
+    {#if busy}<button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1 text-xs text-[#313132]" onclick={cancel}>Cancel audit read</button><p role="status">Reading owned history...</p>{/if}
+    {#if review && review.records.rows.length > 0}
+      <button type="button" data-audit-restore-retain
+        class="rounded border border-[#2E8540] bg-[#EBF5ED] px-3 py-1 text-xs font-medium text-[#1F5C2C] disabled:opacity-50"
+        disabled={busy || restoreBusy || selectedIds.length === 0}
+        onclick={() => void restoreSelected(AuditRestoreAction.AuditRestoreRetain)}>
+        Restore selected (Retain history)
+      </button>
+      <button type="button" data-audit-restore-prune
+        class="rounded border border-[#D8292F] bg-[#FCEAEA] px-3 py-1 text-xs font-medium text-[#D8292F] disabled:opacity-50"
+        disabled={busy || restoreBusy || selectedIds.length === 0}
+        onclick={() => void restoreSelected(AuditRestoreAction.AuditRestorePrune)}>
+        Restore selected (Prune history)
+      </button>
+    {/if}
   </div>
   {#if review}
-    <p role="status">{review.records.rows.length} physical audit rows. Ascending SQLite EditWhen storage order; ties retain physical row order.</p>
+    <p role="status" class="text-xs text-[#313132]">{review.records.rows.length} physical audit rows ({selectedIds.length} marked for restore). Ascending SQLite EditWhen storage order; ties retain physical row order.</p>
     {#each review.records.rows as row (row.rowId)}
-      <article class="min-w-0 rounded border p-3" data-source-audit-row={row.rowId} aria-label={`Physical audit row ${row.rowId}`}>
-        <h4 class="break-words font-medium">Physical audit row {row.rowId}</h4>
+      <article class="min-w-0 rounded border border-[#D8D8D8] p-3" data-source-audit-row={row.rowId} aria-label={`Physical audit row ${row.rowId}`}>
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h4 class="break-words font-medium text-[#003366]">Physical audit row {row.rowId}</h4>
+          <label class="flex items-center gap-1.5 text-xs font-medium text-[#313132]">
+            <input type="checkbox" checked={selectedIds.includes(row.rowId)} disabled={busy || restoreBusy}
+              onchange={event => void toggleRestoreRow(row.rowId, event.currentTarget.checked)} />
+            Select for restore
+          </label>
+        </div>
         <dl class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {#each sourceAuditFields as [column, label]}
             <div class="min-w-0" data-source-audit-column={column}>
@@ -63,8 +146,7 @@
       </article>
     {:else}<p>No audit history for this literal plot.</p>{/each}
   {/if}
-  <p class="text-xs text-stone-600">Read-only adaptation of USysAuditXL / UsysAuditTrail.
+  <p class="text-xs text-stone-600">Adaptation of USysAuditXL / UsysAuditTrail.
     NULL, empty text, child identity and stored BOOLEAN values remain distinct.
-    Restore/Flag editing, audit-strength preferences and restoration are unavailable in this source review.
-    Loading or returning never saves the parent, changes history or prunes audits.</p>
+    Use the row checkboxes to persist Restore flags and explicitly choose Retain or Prune restoration.</p>
 </section>

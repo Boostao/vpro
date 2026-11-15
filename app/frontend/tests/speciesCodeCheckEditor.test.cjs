@@ -96,5 +96,9 @@ test('Code-check scope and raw errors remain outside remounted tabs and explicit
   assert.match(component,/matchesCodeCheckPersonalSpeciesSource\(proposed, rows\[0\]\)/);
   assert.match(component,/matchesCodeCheckPersonalSpeciesSource\(proposed, sources\[0\]\)/);
   assert.match(component,/Ignore never creates or deletes temporary LifeForm999/);
+  assert.match(component,/applySuggested/);
+  assert.match(component,/row\.suggestedCode/);
+  assert.match(component,/capped at 99%/);
+  assert.doesNotMatch(component,/(emerald-|#b7cfc0)/i);
   assert.equal(compile(component,{filename:'SpeciesCodeCheck.svelte',generate:'client'}).warnings.length,0);
 });

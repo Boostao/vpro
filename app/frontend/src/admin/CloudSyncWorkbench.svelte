@@ -15,6 +15,7 @@
     type CloudConfigStatus,
     type CloudConnectionReport,
     type SchemaBootstrapResult,
+    type AuditChainVerification,
     type PublishStandardsResult,
     type SeedBaselineResult,
     type PullStandardsResult,
@@ -107,6 +108,8 @@
 
   // 3. Custodian Admin Maintenance, Review, 3-Way Merge & Snapshots state
   let bootstrapResult = $state.raw<SchemaBootstrapResult | null>(null);
+  let auditChainLimit = $state(0);
+  let auditChainResult = $state.raw<AuditChainVerification | null>(null);
 
   let pubReleaseId = $state('');
   let pubBecVersion = $state('13');
@@ -528,6 +531,30 @@
     }
   }
 
+  async function runVerifyAuditChain() {
+    if (busy || operationHeld) {
+      error = 'Wait for the current operation or decision before verifying BECMaster audit hash chain.';
+      return;
+    }
+    const parsedLimit = Number.isInteger(Number(auditChainLimit)) && Number(auditChainLimit) > 0 ? Number(auditChainLimit) : 0;
+    const gen = ++generation;
+    setBusy(true);
+    error = null;
+    statusMessage = null;
+    try {
+      const res = await port.verifyBECMasterAuditChain(parsedLimit);
+      if (gen !== generation) return;
+      auditChainResult = res;
+      statusMessage = res.valid
+        ? `BECMaster audit chain verified across ${res.verifiedRows} row(s) (tail ${res.tailHash ? res.tailHash.slice(0, 16) : 'empty'}).`
+        : `BECMaster audit chain verification FAILED across ${res.verifiedRows} row(s).`;
+    } catch (cause) {
+      if (gen === generation) error = `Verify Audit Chain failed: ${String(cause)}`;
+    } finally {
+      if (gen === generation) setBusy(false);
+    }
+  }
+
   async function runPublishStandards() {
     if (busy || operationHeld) {
       error = 'Wait for the current operation or decision before publishing provincial standards.';
@@ -804,7 +831,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">Cloud BECMaster Sync</span>
           {#if connectionReport?.connected}
-            <span class="rounded bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white" data-cloud-status-badge="connected">
+            <span class="rounded bg-[#2E8540] px-2 py-0.5 text-xs font-semibold text-white" data-cloud-status-badge="connected">
               Connected ({connectionReport.latencyMs} ms)
             </span>
           {:else}
@@ -1239,7 +1266,7 @@
               Project: <span class="font-mono">{stagingPreflight.project}</span> ({stagingPreflight.plotCount} plots, {stagingPreflight.vegRowCount} veg rows)
             </span>
             {#if stagingPreflight.compliancePassed}
-              <span class="rounded bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white" data-preflight-badge="passed">
+              <span class="rounded bg-[#2E8540] px-2 py-0.5 text-xs font-semibold text-white" data-preflight-badge="passed">
                 Compliance Passed (0 Blocking)
               </span>
             {:else}
@@ -1339,7 +1366,7 @@
       </div>
 
       {#if submitStagingResult}
-        <p class="text-xs text-emerald-900">
+        <p class="text-xs font-medium text-[#2E8540]">
           Submission <span class="font-mono font-semibold">{submitStagingResult.submissionId}</span> recorded ({submitStagingResult.status} at {submitStagingResult.submittedAt}).
         </p>
       {/if}
@@ -1381,15 +1408,52 @@
           <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">Custodian Governance Console</p>
           <h3 class="m-0 text-base font-semibold text-white">Schema Bootstrap, 2026 Standards Publishing, Staging 3-Way Merge &amp; Dated Snapshots</h3>
         </div>
-        <button
-          type="button"
-          disabled={busy || operationHeld}
-          class="rounded bg-[#FCBA19] px-3 py-1.5 text-xs font-bold text-[#003366] hover:bg-amber-400 disabled:opacity-50"
-          onclick={runBootstrapSchemas}
-        >
-          Bootstrap / Verify Schemas
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="flex items-center gap-1.5 text-[11px] text-white/90" for="cloud-audit-limit">
+            Audit Limit (0 = all)
+            <input
+              id="cloud-audit-limit"
+              type="number"
+              min="0"
+              class="w-20 rounded border border-white/40 bg-white px-2 py-1 text-xs font-mono text-[#313132]"
+              bind:value={auditChainLimit}
+              disabled={busy || operationHeld}
+            />
+          </label>
+          <button
+            type="button"
+            data-verify-audit-chain
+            disabled={busy || operationHeld}
+            class="rounded border border-[#FCBA19] bg-[#002244] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1A5A96] disabled:opacity-50"
+            onclick={runVerifyAuditChain}
+          >
+            Verify Audit Chain
+          </button>
+          <button
+            type="button"
+            disabled={busy || operationHeld}
+            class="rounded bg-[#FCBA19] px-3 py-1.5 text-xs font-bold text-[#003366] hover:bg-[#FEF6E0] disabled:opacity-50"
+            onclick={runBootstrapSchemas}
+          >
+            Bootstrap / Verify Schemas
+          </button>
+        </div>
       </header>
+
+      {#if auditChainResult}
+        <div
+          role="status"
+          data-audit-chain-banner
+          class={`rounded border-l-4 p-2.5 text-xs ${auditChainResult.valid ? 'border-[#2E8540] bg-[#EBF5ED] text-[#313132]' : 'border-[#D8292F] bg-[#FBEAEA] text-[#D8292F]'}`}
+        >
+          <strong>Audit Hash Chain {auditChainResult.valid ? 'VALID' : 'INVALID'}</strong>:
+          <span class="font-mono font-semibold">{auditChainResult.verifiedRows}</span> row(s) checked
+          {#if auditChainResult.partialWindow}
+            (partial window)
+          {/if}
+          &middot; Tail hash: <span class="font-mono">{auditChainResult.tailHash || 'none'}</span>
+        </div>
+      {/if}
 
       {#if bootstrapResult}
         <div class="rounded border border-slate-200 bg-slate-50 p-2.5 text-xs">
@@ -1563,7 +1627,7 @@
                     <td class="p-2 font-mono">{sub.plotCount} / {sub.vegRowCount}</td>
                     <td class="p-2">
                       {#if sub.compliancePassed}
-                        <span class="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-900">Passed</span>
+                        <span class="rounded bg-[#EBF5ED] px-1.5 py-0.5 font-semibold text-[#2E8540]">Passed</span>
                       {:else}
                         <span class="rounded bg-red-100 px-1.5 py-0.5 font-semibold text-red-900">Failed</span>
                       {/if}
@@ -1813,7 +1877,7 @@
           </div>
 
           {#if mergeExecuteResult}
-            <p class="text-xs text-emerald-900">
+            <p class="text-xs font-medium text-[#2E8540]">
               Committed Merge <span class="font-mono font-bold">{mergeExecuteResult.mergeTxId}</span>: +{mergeExecuteResult.addedPlots} added, {mergeExecuteResult.updatedPlots} updated, {mergeExecuteResult.auditRowsWritten} audit rows (tail hash <span class="font-mono">{mergeExecuteResult.tailAuditHash.slice(0, 16)}</span>).
             </p>
           {/if}

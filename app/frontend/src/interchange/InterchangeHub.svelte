@@ -7,6 +7,7 @@
     validateTargetProjectName,
     validateXMLSnippetChunked,
     type CSVExportOutcome,
+    type FileDialogFilter,
     type GeoPackageExportOutcome,
     type InterchangeHubPort,
     type RDSExportOutcome,
@@ -63,6 +64,7 @@
   let tvImportTarget = $state('');
   let tvImportDestPath = $state('');
   let tvImportActivate = $state(false);
+  let tvResolveSynonyms = $state(false);
   let tvXmlSnippet = $state('');
   let tvXmlSnippetCount = $state<number | null>(null);
   let tvImportOutcome = $state.raw<TurboVegImportOutcome | null>(null);
@@ -106,6 +108,30 @@
   function cancelOperation() {
     generation++;
     setBusy(false);
+  }
+
+  async function pickFilePath(
+    mode: 'open' | 'save',
+    title: string,
+    defaultFilename: string,
+    filters: FileDialogFilter[],
+    assign: (chosen: string) => void
+  ) {
+    if (busy || operationHeld) return;
+    const owner = contextId;
+    error = '';
+    try {
+      const chosen =
+        mode === 'open'
+          ? await (port.chooseOpenFile ?? defaultInterchangeHubPort.chooseOpenFile)?.(title, filters)
+          : await (port.chooseSaveFile ?? defaultInterchangeHubPort.chooseSaveFile)?.(title, defaultFilename, filters);
+      if (owner !== contextId) return;
+      if (typeof chosen === 'string' && chosen.trim()) {
+        assign(chosen.trim());
+      }
+    } catch (cause) {
+      error = String(cause);
+    }
   }
 
   async function inspectVenus() {
@@ -239,6 +265,7 @@
       targetProject: check.normalized,
       destinationPath: tvImportDestPath.trim(),
       activateOnSuccess: tvImportActivate,
+      resolveVProCodeSynonyms: tvResolveSynonyms,
     });
     error = '';
     setBusy(true);
@@ -423,7 +450,7 @@
   onDestroy(cancelOperation);
 </script>
 
-<section class="bcgov-interchange" data-interchange-hub aria-label="VPro Standards and Analytical Interchange Hub">
+<section class="bcgov-interchange" data-tour="interchange-hub-root" data-interchange-hub aria-label="VPro Standards and Analytical Interchange Hub">
   <header class="bcgov-banner">
     <div>
       <p class="eyebrow-gold">STANDARDS, ANALYTICS &amp; GIS INTERCHANGE</p>
@@ -452,7 +479,10 @@
       <div class="form-row">
         <label class="grow">
           <span>VENUS Source File (.mdb, .accdb, or .xml)</span>
-          <input type="text" bind:value={venusSourcePath} placeholder="/path/to/VenusProject.mdb or .xml" disabled={busy || operationHeld} />
+          <div class="input-with-browse">
+            <input type="text" class="grow" bind:value={venusSourcePath} placeholder="/path/to/VenusProject.mdb or .xml" disabled={busy || operationHeld} />
+            <button type="button" class="btn-secondary" data-browse-venus-source disabled={busy || operationHeld} onclick={() => pickFilePath('open', 'Choose VENUS Source File', '', [{ DisplayName: 'VENUS Files (*.mdb, *.accdb, *.xml)', Pattern: '*.mdb;*.accdb;*.xml' }], (p) => { venusSourcePath = p; })}>Browse...</button>
+          </div>
         </label>
         <button type="button" class="btn-secondary" disabled={busy || operationHeld || !contextId} onclick={inspectVenus}>
           Inspect Source
@@ -515,7 +545,10 @@
           </label>
           <label>
             <span>Destination File Path</span>
-            <input type="text" bind:value={tvExportPath} placeholder="/path/to/export.sqlite or .xml" disabled={busy || operationHeld} />
+            <div class="input-with-browse">
+              <input type="text" class="grow" bind:value={tvExportPath} placeholder="/path/to/export.sqlite or .xml" disabled={busy || operationHeld} />
+              <button type="button" class="btn-secondary" data-save-tv-export disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save TurboVeg Export', tvExportFormat === 'xml' ? 'turboveg_export.xml' : 'turboveg_export.sqlite', [{ DisplayName: 'TurboVeg (*.sqlite, *.xml)', Pattern: '*.sqlite;*.xml' }], (p) => { tvExportPath = p; })}>Save As...</button>
+            </div>
           </label>
           <label>
             <span>Optional *_Lump Table</span>
@@ -534,14 +567,16 @@
         {/if}
 
         <h4>Canonical VPro &lt;-&gt; TurboVeg Layer Crosswalk (0..10 + UDF Sublayer Tags)</h4>
-        <table class="compact-table">
-          <thead><tr><th>VPro Columns</th><th>TurboVeg Layer</th><th>Crosswalk &amp; UDF Provenance</th></tr></thead>
-          <tbody>
-            {#each TURBOVEG_LAYER_CROSSWALK as cw (cw.tvGroup)}
-              <tr><td class="mono">{cw.vproLayers}</td><td><strong>{cw.tvGroup}</strong></td><td>{cw.description}</td></tr>
-            {/each}
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="compact-table">
+            <thead><tr><th>VPro Columns</th><th>TurboVeg Layer</th><th>Crosswalk &amp; UDF Provenance</th></tr></thead>
+            <tbody>
+              {#each TURBOVEG_LAYER_CROSSWALK as cw (cw.tvGroup)}
+                <tr><td class="mono">{cw.vproLayers}</td><td><strong>{cw.tvGroup}</strong></td><td>{cw.description}</td></tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="hub-card">
@@ -549,7 +584,10 @@
         <div class="form-stack">
           <label>
             <span>Source TurboVeg File (.sqlite or .xml)</span>
-            <input type="text" bind:value={tvImportPath} placeholder="/path/to/turboveg.sqlite or .xml" disabled={busy || operationHeld} />
+            <div class="input-with-browse">
+              <input type="text" class="grow" bind:value={tvImportPath} placeholder="/path/to/turboveg.sqlite or .xml" disabled={busy || operationHeld} />
+              <button type="button" class="btn-secondary" data-browse-tv-import disabled={busy || operationHeld} onclick={() => pickFilePath('open', 'Choose TurboVeg File', '', [{ DisplayName: 'TurboVeg (*.sqlite, *.xml)', Pattern: '*.sqlite;*.xml' }], (p) => { tvImportPath = p; })}>Browse...</button>
+            </div>
           </label>
           <label>
             <span>Format Override</span>
@@ -565,7 +603,14 @@
           </label>
           <label>
             <span>Destination .db Path (optional)</span>
-            <input type="text" bind:value={tvImportDestPath} placeholder="Defaults to projects/<Target>.db" disabled={busy || operationHeld} />
+            <div class="input-with-browse">
+              <input type="text" class="grow" bind:value={tvImportDestPath} placeholder="Defaults to projects/<Target>.db" disabled={busy || operationHeld} />
+              <button type="button" class="btn-secondary" data-save-tv-dest disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Choose VP08 Project Destination', `${tvImportTarget.trim() || 'project'}.db`, [{ DisplayName: 'VPro SQLite (*.db)', Pattern: '*.db' }], (p) => { tvImportDestPath = p; })}>Save As...</button>
+            </div>
+          </label>
+          <label class="check-inline">
+            <input type="checkbox" bind:checked={tvResolveSynonyms} disabled={busy || operationHeld} />
+            <span>Resolve VPro OldCode synonyms (USysAllSpecs Codetype='S')</span>
           </label>
           <label class="check-inline">
             <input type="checkbox" bind:checked={tvImportActivate} disabled={busy || operationHeld} />
@@ -609,7 +654,10 @@
           </label>
           <label>
             <span>Destination File Path (optional; leave blank for inline copy)</span>
-            <input type="text" bind:value={userSppExportPath} placeholder="/path/to/user_species.json" disabled={busy || operationHeld} />
+            <div class="input-with-browse">
+              <input type="text" class="grow" bind:value={userSppExportPath} placeholder="/path/to/user_species.json" disabled={busy || operationHeld} />
+              <button type="button" class="btn-secondary" data-save-userspp-export disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save User Species List', userSppExportFormat === 'csv' ? 'user_species.csv' : 'user_species.json', [{ DisplayName: 'Species List (*.json, *.csv)', Pattern: '*.json;*.csv' }], (p) => { userSppExportPath = p; })}>Save As...</button>
+            </div>
           </label>
           <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runUserSpeciesExport}>
             Export User Species
@@ -628,7 +676,10 @@
         <div class="form-stack">
           <label>
             <span>Source File Path (.json or .csv, optional if pasting below)</span>
-            <input type="text" bind:value={userSppImportPath} placeholder="/path/to/crew_species.json" disabled={busy || operationHeld} />
+            <div class="input-with-browse">
+              <input type="text" class="grow" bind:value={userSppImportPath} placeholder="/path/to/crew_species.json" disabled={busy || operationHeld} />
+              <button type="button" class="btn-secondary" data-browse-userspp-import disabled={busy || operationHeld} onclick={() => pickFilePath('open', 'Choose User Species File', '', [{ DisplayName: 'Species List (*.json, *.csv)', Pattern: '*.json;*.csv' }], (p) => { userSppImportPath = p; })}>Browse...</button>
+            </div>
           </label>
           <label>
             <span>Or Paste JSON / CSV Payload</span>
@@ -681,6 +732,7 @@
           <h4>Long Tidy CSV (PlotNumber, SiteUnit, Layer, Species, ScientificName, Lifeform, Cover, Height, Collected)</h4>
           <div class="form-row">
             <input type="text" class="grow" bind:value={longCsvDest} placeholder="/path/to/veg_long.csv (optional for preview)" disabled={busy || operationHeld} />
+            <button type="button" class="btn-secondary" data-save-long-csv disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save Long Tidy CSV', 'veg_long.csv', [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }], (p) => { longCsvDest = p; })}>Save As...</button>
             <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runLongCsvExport}>
               Export Long CSV
             </button>
@@ -709,6 +761,7 @@
           </div>
           <div class="form-row">
             <input type="text" class="grow" bind:value={wideCsvDest} placeholder="/path/to/veg_wide_matrix.csv" disabled={busy || operationHeld} />
+            <button type="button" class="btn-secondary" data-save-wide-csv disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save Wide Matrix CSV', 'veg_wide_matrix.csv', [{ DisplayName: 'CSV (*.csv)', Pattern: '*.csv' }], (p) => { wideCsvDest = p; })}>Save As...</button>
             <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runWideCsvExport}>
               Export Wide Matrix CSV
             </button>
@@ -729,7 +782,10 @@
         <div class="form-stack">
           <label>
             <span>Destination .rds Path</span>
-            <input type="text" bind:value={rdsDestPath} placeholder="/path/to/project_snapshot.rds" disabled={busy || operationHeld} />
+            <div class="input-with-browse">
+              <input type="text" class="grow" bind:value={rdsDestPath} placeholder="/path/to/project_snapshot.rds" disabled={busy || operationHeld} />
+              <button type="button" class="btn-secondary" data-save-rds disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save Native R .rds', 'project_snapshot.rds', [{ DisplayName: 'R Data (*.rds)', Pattern: '*.rds' }], (p) => { rdsDestPath = p; })}>Save As...</button>
+            </div>
           </label>
           <button type="button" class="btn-primary" disabled={busy || operationHeld || !contextId} onclick={runRdsExport}>
             Export Native R .rds
@@ -739,14 +795,16 @@
         {#if rdsOutcome}
           <div class="receipt-box success">
             <strong>Exported {rdsOutcome.plotCount} plots ({rdsOutcome.byteSize} bytes) to <code>{rdsOutcome.path}</code></strong>
-            <table class="compact-table">
-              <thead><tr><th>R data.frame</th><th>Rows</th><th>Columns</th></tr></thead>
-              <tbody>
-                {#each rdsOutcome.tables as tbl (tbl.name)}
-                  <tr><td class="mono">{tbl.name}</td><td>{tbl.rowCount}</td><td>{tbl.columnCount}</td></tr>
-                {/each}
-              </tbody>
-            </table>
+            <div class="table-scroll">
+              <table class="compact-table">
+                <thead><tr><th>R data.frame</th><th>Rows</th><th>Columns</th></tr></thead>
+                <tbody>
+                  {#each rdsOutcome.tables as tbl (tbl.name)}
+                    <tr><td class="mono">{tbl.name}</td><td>{tbl.rowCount}</td><td>{tbl.columnCount}</td></tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
           </div>
         {/if}
       </div>
@@ -754,11 +812,14 @@
   {:else}
     <div class="hub-card">
       <h3>OGC GeoPackage 1.3 (.gpkg) Spatial &amp; Relational Exporter</h3>
-      <p class="desc">Writes native SQLite GeoPackage Point features with full untruncated Env + Admin + SiteUnit columns, automatic Western Hemisphere longitude sign normalization, and optional non-spatial relational tables for QGIS and ArcGIS Pro.</p>
+      <p class="desc">Writes native SQLite GeoPackage Point features with full untruncated Env + Admin + SiteUnit columns, automatic Western Hemisphere longitude sign normalization, and optional non-spatial relational tables for QGIS and ArcGIS Pro. Coordinate bounds enforced: BC / Western North America [45..85 N, -170..-100 W] (positive Western longitudes [100..170] are normalized automatically).</p>
       <div class="form-row">
         <label class="grow">
           <span>Destination .gpkg File Path</span>
-          <input type="text" bind:value={gpkgDestPath} placeholder="/path/to/bec_plots.gpkg" disabled={busy || operationHeld} />
+          <div class="input-with-browse">
+            <input type="text" class="grow" bind:value={gpkgDestPath} placeholder="/path/to/bec_plots.gpkg" disabled={busy || operationHeld} />
+            <button type="button" class="btn-secondary" data-save-gpkg disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Save GeoPackage (.gpkg)', 'bec_plots.gpkg', [{ DisplayName: 'GeoPackage (*.gpkg)', Pattern: '*.gpkg' }], (p) => { gpkgDestPath = p; })}>Save As...</button>
+          </div>
         </label>
         <label>
           <span>Coordinate Reference System</span>
@@ -799,33 +860,36 @@
 
 <style>
   .bcgov-interchange { display: grid; gap: 1rem; min-width: 0; }
-  .bcgov-banner { background: #003366; color: #ffffff; border-bottom: 4px solid #fcba19; border-radius: 4px; padding: 1rem 1.25rem; display: grid; gap: 0.75rem; }
-  .bcgov-banner h2 { margin: 0.15rem 0 0; font-size: 1.15rem; color: #ffffff; }
-  .eyebrow-gold { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: #fcba19; font-weight: 700; }
+  .bcgov-banner { background: #003366; color: #FFFFFF; border-bottom: 4px solid #FCBA19; border-radius: 4px; padding: 1rem 1.25rem; display: grid; gap: 0.75rem; min-width: 0; }
+  .bcgov-banner h2 { margin: 0.15rem 0 0; font-size: 1.15rem; color: #FFFFFF; }
+  .eyebrow-gold { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: #FCBA19; font-weight: 700; }
   .hub-tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .hub-tabs button { background: rgba(255, 255, 255, 0.12); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.42rem 0.8rem; font-size: 0.82rem; }
-  .hub-tabs button.active { background: #fcba19; color: #003366; border-color: #fcba19; font-weight: 700; }
-  .hub-tabs button.cancel-btn { background: #991b1b; border-color: #fecaca; margin-left: auto; }
-  .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; }
-  .hub-card { background: #ffffff; border: 1px solid #cbd5e1; border-top: 3px solid #003366; border-radius: 4px; padding: 1rem; display: grid; gap: 0.75rem; align-content: start; }
+  .hub-tabs button { background: rgba(255, 255, 255, 0.12); color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.42rem 0.8rem; font-size: 0.82rem; }
+  .hub-tabs button.active { background: #FCBA19; color: #003366; border-color: #FCBA19; font-weight: 700; }
+  .hub-tabs button.cancel-btn { background: #D8292F; border-color: #FBEAEA; margin-left: auto; }
+  .error { background: #FBEAEA; color: #D8292F; border: 1px solid #D8292F; border-radius: 4px; padding: 0.65rem 0.8rem; margin: 0; font-size: 0.84rem; }
+  .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 1rem; min-width: 0; }
+  .hub-card { background: #FFFFFF; border: 1px solid #D8D8D8; border-top: 3px solid #003366; border-radius: 4px; padding: 1rem; display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
   .hub-card h3 { margin: 0; color: #003366; font-size: 1rem; }
   .hub-card h4 { margin: 0.35rem 0 0.25rem; color: #003366; font-size: 0.86rem; }
-  .desc { margin: 0; color: #475569; font-size: 0.83rem; line-height: 1.45; }
-  .form-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; }
-  .form-stack { display: grid; gap: 0.6rem; }
-  .form-row label, .form-stack label, .field-label-block { display: grid; gap: 0.25rem; font-size: 0.8rem; color: #1e293b; }
-  .grow { flex: 1 1 220px; }
+  .desc { margin: 0; color: #474543; font-size: 0.83rem; line-height: 1.45; }
+  .form-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; min-width: 0; }
+  .form-stack { display: grid; gap: 0.6rem; min-width: 0; }
+  .form-row label, .form-stack label, .field-label-block { display: grid; gap: 0.25rem; font-size: 0.8rem; color: #313132; min-width: 0; }
+  .input-with-browse { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; min-width: 0; }
+  .grow { flex: 1 1 200px; min-width: 0; }
   .check-inline { display: inline-flex !important; flex-direction: row; align-items: center; gap: 0.4rem; padding-bottom: 0.35rem; }
-  input:not([type="checkbox"]), select, textarea { padding: 0.45rem 0.6rem; border: 1px solid #94a3b8; border-radius: 4px; font-size: 0.84rem; font-family: inherit; }
-  textarea { font-family: var(--font-mono, monospace); font-size: 0.78rem; width: 100%; box-sizing: border-box; }
-  .btn-primary { background: #003366; color: #ffffff; border: 1px solid #003366; border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
-  .btn-secondary { background: #ffffff; color: #003366; border: 1px solid #003366; border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
-  .sub-box { border: 1px solid #e2e8f0; border-left: 3px solid #fcba19; padding: 0.65rem; border-radius: 4px; display: grid; gap: 0.5rem; }
-  .receipt-box { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid #003366; padding: 0.65rem 0.8rem; border-radius: 4px; display: grid; gap: 0.35rem; font-size: 0.82rem; }
-  .receipt-box.success { background: #f0fdf4; border-left-color: #166534; }
+  input:not([type="checkbox"]), select, textarea { padding: 0.45rem 0.6rem; border: 1px solid #9F9F9F; border-radius: 4px; font-size: 0.84rem; font-family: inherit; color: #313132; background: #FFFFFF; min-width: 0; max-width: 100%; box-sizing: border-box; }
+  textarea { font-family: var(--font-mono, monospace); font-size: 0.78rem; width: 100%; }
+  .btn-primary { background: #003366; color: #FFFFFF; border: 1px solid #003366; border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
+  .btn-secondary { background: #FFFFFF; color: #003366; border: 1px solid #003366; border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
+  .sub-box { border: 1px solid #D8D8D8; border-left: 3px solid #FCBA19; padding: 0.65rem; border-radius: 4px; display: grid; gap: 0.5rem; min-width: 0; }
+  .receipt-box { background: #F2F2F2; border: 1px solid #D8D8D8; border-left: 4px solid #003366; padding: 0.65rem 0.8rem; border-radius: 4px; display: grid; gap: 0.35rem; font-size: 0.82rem; min-width: 0; overflow-wrap: anywhere; }
+  .receipt-box.success { background: #EBF5ED; border-left-color: #2E8540; }
+  .table-scroll { overflow-x: auto; max-width: 100%; }
   .compact-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.78rem; }
-  .compact-table th, .compact-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #e2e8f0; white-space: normal; }
+  .compact-table th, .compact-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #D8D8D8; white-space: normal; text-align: left; }
   .mono { font-family: var(--font-mono, monospace); }
-  .xml-check-box { font-size: 0.8rem; border-top: 1px solid #e2e8f0; padding-top: 0.5rem; }
-  .ok-text { color: #166534; margin: 0.3rem 0 0; font-weight: 600; }
+  .xml-check-box { font-size: 0.8rem; border-top: 1px solid #D8D8D8; padding-top: 0.5rem; }
+  .ok-text { color: #2E8540; margin: 0.3rem 0 0; font-weight: 600; }
 </style>

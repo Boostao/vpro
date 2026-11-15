@@ -171,8 +171,8 @@ test('Responsive CSS defines readable controls and container-aware wide-to-singl
   assert.match(css, /grid-template-columns: repeat\(12, minmax\(0, 1fr\)\)/);
   for (const width of [900, 620, 420]) assert.match(css, new RegExp(`@container fs882-fields \\(max-width: ${width}px\\)`));
   assert.match(css, /min-height: 40px/);
-  assert.match(css, /font-sans: "IBM Plex Sans"/);
-  assert.match(css, /border-top: 3px solid #bd9b48/);
+  assert.match(css, /font-sans: "(IBM Plex Sans|BC Sans)"/);
+  assert.match(css, /border-top: 3px solid (#bd9b48|var\(--bcgov-gold\))/);
   assert.match(read('App.svelte'), /aria-expanded=\{contextExpanded\} aria-controls="project-context"/);
   for (const file of ['HeaderEditor', 'SourcePage', 'SourceChild', 'BECFields', 'CoordinateFields', 'WorkingUnitFields',
     'QualityFields', 'SubstrateFields', 'RegionCodeFields', 'SiteCodeFields', 'SoilCodeFields', 'GeologyCodeFields']) {

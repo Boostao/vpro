@@ -63,9 +63,9 @@
   {/each}
 {/snippet}
 <style>
-  .substrate-toolbar { display: grid; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid #d6d3d1; font-size: .75rem; }
-  .substrate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; line-height: 1.4; }
-  .substrate-control:disabled { color: #78716c; background: #f5f5f4; }
-  .substrate-control:focus { outline: 2px solid #047857; outline-offset: 1px; }
-  .substrate-control[aria-invalid="true"] { border-color: #b91c1c; }
+  .substrate-toolbar { display: grid; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid #D8D8D8; font-size: .75rem; }
+  .substrate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
+  .substrate-control:disabled { color: #606060; background: #F2F2F2; }
+  .substrate-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  .substrate-control[aria-invalid="true"] { border-color: #D8292F; }
 </style>

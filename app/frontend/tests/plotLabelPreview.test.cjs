@@ -57,7 +57,9 @@ test('label NULL/empty metadata remains distinguishable and concatenation is exp
   assert.equal(result.displayRepresenting, null);
   assert.equal(result.projectId1, '');
   source.zone = null;
-  assert.throws(() => labels.plotLabelFromHeader(source, source.plotNumber), /non-NULL.*Len\/Space/);
+  const nullZone = labels.plotLabelFromHeader(source, source.plotNumber);
+  assert.equal(nullZone.zone1, '    /');
+  assert.throws(() => labels.plotLabelFromHeader({ ...source, plotNumber: null }, '00337'));
 });
 
 test('label source text bounds are exact UTF-16 units without repair or truncation', () => {

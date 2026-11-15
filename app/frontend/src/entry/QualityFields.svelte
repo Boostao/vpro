@@ -116,12 +116,12 @@
   {/each}
 {/snippet}
 <style>
-  .quality-toolbar { display: grid; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid #d6d3d1; font-size: .75rem; }
+  .quality-toolbar { display: grid; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid #D8D8D8; font-size: .75rem; }
   .quality-toolbar ul { margin: 0; padding-left: 1.2rem; }
-  .quality-toolbar button { padding: .2rem .4rem; border: 1px solid #a8a29e; background: white; }
+  .quality-toolbar button { padding: .2rem .4rem; border: 1px solid #D8D8D8; background: white; color: #313132; }
   .quality-toolbar label { display: flex; align-items: center; gap: .35rem; }
-  .quality-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; line-height: 1.4; }
-  .quality-control:disabled { color: #78716c; background: #f5f5f4; }
-  .quality-control:focus { outline: 2px solid #047857; outline-offset: 1px; }
-  .quality-control[aria-invalid="true"] { border-color: #b91c1c; }
+  .quality-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
+  .quality-control:disabled { color: #606060; background: #F2F2F2; }
+  .quality-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  .quality-control[aria-invalid="true"] { border-color: #D8292F; }
 </style>

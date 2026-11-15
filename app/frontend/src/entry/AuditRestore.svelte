@@ -146,14 +146,14 @@
   h3, h2 { font-weight: 700; margin-bottom: 0.5rem; }
   p { margin: 0.4rem 0; }
   .actions { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: center; margin: 0.75rem 0; }
-  button { padding: 0.45rem 0.7rem; border: 1px solid #a8a29e; border-radius: 0.3rem; background: #fff; }
+  button { padding: 0.45rem 0.7rem; border: 1px solid #D8D8D8; border-radius: 0.3rem; background: #FFFFFF; color: #313132; }
   button:disabled { opacity: 0.5; }
-  button:focus-visible, input:focus-visible { outline: 3px solid #047857; outline-offset: 2px; }
+  button:focus-visible, input:focus-visible { outline: 3px solid #003366; outline-offset: 2px; }
   .table-scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
   caption { text-align: left; margin: 0.5rem 0; }
-  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #e7e5e4; vertical-align: top; }
-  th { background: #f5f5f4; }
-  dialog { max-width: 38rem; padding: 1.5rem; border: 1px solid #a8a29e; border-radius: 0.5rem; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #D8D8D8; vertical-align: top; }
+  th { background: #F2F2F2; color: #003366; }
+  dialog { max-width: 38rem; padding: 1.5rem; border: 1px solid #D8D8D8; border-radius: 0.5rem; }
   dialog::backdrop { background: #0007; }
 </style>

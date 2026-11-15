@@ -1,7 +1,7 @@
 import { wellFormedUTF16 } from './qualityEditor';
 import { ContextService } from '../../bindings/github.com/boostao/vpro/app';
 
-export const SIVI_PLOT_TYPES = ['Ground', 'Visual', 'Note', 'Other'] as const;
+export const SIVI_PLOT_TYPES = ['Ground', 'Visual', 'Note', 'Other', 'FS882'] as const;
 export type SIVIPlotType = (typeof SIVI_PLOT_TYPES)[number];
 
 export interface CreateSIVIPlotRequest {
@@ -96,7 +96,7 @@ export function validateCreateSIVIPlotDraft(draft: CreateSIVIPlotRequest): Recor
   if (plotErr) errors.plotNumber = plotErr;
 
   if (!SIVI_PLOT_TYPES.includes(draft.plotType)) {
-    errors.plotType = 'PlotType must be Ground, Visual, Note, or Other.';
+    errors.plotType = 'PlotType must be Ground, Visual, Note, Other, or FS882.';
   }
   for (const [key, label, max] of [
     ['projectId', 'ProjectID', 30],

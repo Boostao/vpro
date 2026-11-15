@@ -183,8 +183,8 @@
       {#if savedPersonalCodes.length}<p role="status">Saved personal definitions: {savedPersonalCodes.join(', ')}. Plot Undo does not remove these user-database records.</p>{/if}
       <span>Species drafts are unsubmitted. Switching tabs or cover/height views never saves them; other editing waits.</span>
       {#each speciesNotices as message}<p class="mt-2 font-medium" role="status">{message}</p>{/each}
-      <div class="flex gap-2 mt-2">
-        <button type="button" class="px-2 py-1 border rounded bg-emerald-700 text-white disabled:opacity-50" disabled={speciesEditingDisabled || speciesInvalid.length > 0} onclick={() => void saveSpeciesDrafts()}>Save species drafts</button>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="px-2 py-1 border border-[#003366] rounded bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50" disabled={speciesEditingDisabled || speciesInvalid.length > 0} onclick={() => void saveSpeciesDrafts()}>Save species drafts</button>
         <button type="button" class="px-2 py-1 border border-stone-300 rounded bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy || personalDraft !== null} onclick={() => void cancelSpeciesDrafts()}>Cancel species drafts</button>
       </div>
       {#each speciesInvalid as message}<p role="alert">{message}</p>{/each}
@@ -258,8 +258,8 @@
     <div class="collected-draft-toolbar mb-3 p-2 border border-amber-300 bg-amber-50 text-xs" aria-label="Collected draft controls">
       <span>Collected drafts are unsubmitted. Switching tabs or cover/height views never saves them; other editing waits.</span>
       {#each collectedNotices as message}<p class="mt-2 font-medium" role="status">{message}</p>{/each}
-      <div class="flex gap-2 mt-2">
-        <button type="button" class="px-2 py-1 border rounded bg-emerald-700 text-white disabled:opacity-50" disabled={collectedEditingDisabled} onclick={() => void saveCollectedDrafts()}>Save Collected drafts</button>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="px-2 py-1 border border-[#003366] rounded bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50" disabled={collectedEditingDisabled} onclick={() => void saveCollectedDrafts()}>Save Collected drafts</button>
         <button type="button" class="px-2 py-1 border border-stone-300 rounded bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => void cancelCollectedDrafts()}>Cancel Collected drafts</button>
       </div>
     </div>
@@ -267,8 +267,8 @@
   {#if attributeUnsaved}
     <div class="attribute-draft-toolbar mb-3 p-2 border border-amber-300 bg-amber-50 text-xs" aria-label="Vegetation attribute draft controls">
       <span>Vegetation attribute drafts are unsubmitted. Switching tabs never saves them; other editing waits.</span>
-      <div class="flex gap-2 mt-2">
-        <button type="button" class="px-2 py-1 border rounded bg-emerald-700 text-white disabled:opacity-50" disabled={attributeEditingDisabled || attributeInvalid.length > 0} onclick={() => void saveAttributeDrafts()}>Save vegetation attributes</button>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="px-2 py-1 border border-[#003366] rounded bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50" disabled={attributeEditingDisabled || attributeInvalid.length > 0} onclick={() => void saveAttributeDrafts()}>Save vegetation attributes</button>
         <button type="button" class="px-2 py-1 border border-stone-300 rounded bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => void cancelAttributeDrafts()}>Cancel vegetation attributes</button>
       </div>
       {#each attributeInvalid as message}<p role="alert">{message}</p>{/each}
@@ -277,8 +277,8 @@
   {#if soilUnsaved}
     <div class="soil-draft-toolbar mb-3 p-2 border border-amber-300 bg-amber-50 text-xs" aria-label="Soil draft controls">
       <span>Humus/Mineral drafts are unsubmitted. Switching tabs never saves them; other editing waits.</span>
-      <div class="flex gap-2 mt-2">
-        <button type="button" class="px-2 py-1 border rounded bg-emerald-700 text-white disabled:opacity-50" disabled={soilEditingDisabled || soilInvalid.length > 0} onclick={() => void saveSoilDrafts()}>Save soil drafts</button>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="px-2 py-1 border border-[#003366] rounded bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50" disabled={soilEditingDisabled || soilInvalid.length > 0} onclick={() => void saveSoilDrafts()}>Save soil drafts</button>
         <button type="button" class="px-2 py-1 border border-stone-300 rounded bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => void cancelSoilDrafts()}>Cancel soil drafts</button>
       </div>
       {#each soilInvalid as message}<p role="alert">{message}</p>{/each}
@@ -287,8 +287,8 @@
   {#if otherUnsaved}
     <div class="other-draft-toolbar mb-3 p-2 border border-amber-300 bg-amber-50 text-xs" aria-label="Other draft controls">
       <span>Other drafts are unsubmitted. Switching tabs never saves them; header and other child editing wait.</span>
-      <div class="flex gap-2 mt-2">
-        <button type="button" class="px-2 py-1 border rounded bg-emerald-700 text-white disabled:opacity-50" disabled={otherEditingDisabled || otherInvalid.length > 0} onclick={() => void saveOtherDrafts()}>Save Other drafts</button>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="px-2 py-1 border border-[#003366] rounded bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50" disabled={otherEditingDisabled || otherInvalid.length > 0} onclick={() => void saveOtherDrafts()}>Save Other drafts</button>
         <button type="button" class="px-2 py-1 border border-stone-300 rounded bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => void cancelOtherDrafts()}>Cancel Other drafts</button>
       </div>
       {#each otherInvalid as message}<p role="alert">{message}</p>{/each}
@@ -383,8 +383,8 @@
     <div class="height-draft-toolbar mb-3 p-2 border border-amber-300 bg-amber-50 text-xs" aria-label="Height draft controls">
       <span>Height/cover drafts are unsubmitted. Switching views never saves them; header and other child editing wait.</span>
       {#each heightNotices as message}<p class="mt-2 font-medium" role="status">{message}</p>{/each}
-      <div class="flex gap-2 mt-2">
-        <button type="button" class="px-2 py-1 border rounded bg-emerald-700 text-white disabled:opacity-50" disabled={heightEditingDisabled || heightInvalid.length > 0} onclick={() => void saveHeightDrafts()}>Save height/cover drafts</button>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="px-2 py-1 border border-[#003366] rounded bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50" disabled={heightEditingDisabled || heightInvalid.length > 0} onclick={() => void saveHeightDrafts()}>Save height/cover drafts</button>
         <button type="button" class="px-2 py-1 border border-stone-300 rounded bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => void cancelHeightDrafts()}>Cancel height/cover drafts</button>
       </div>
       {#each heightInvalid as message}<p role="alert">{message}</p>{/each}
@@ -396,30 +396,30 @@
 {:else if region === 'speciesModal'}
   {#if showSpeciesModal}
     <div class="fixed inset-0 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl border border-stone-200 w-full max-w-lg flex flex-col max-h-[80vh]">
-        <div class="p-3 border-b border-stone-200 flex justify-between items-center bg-stone-50 rounded-t-lg">
-          <h4 class="font-bold text-sm text-stone-900">BC Master Species Search</h4>
-          <button type="button" onclick={() => { showSpeciesModal = false; }} class="text-stone-400 hover:text-stone-700 p-1"><X size={16} /></button>
+      <div class="bg-white rounded-lg shadow-xl border border-[#D8D8D8] w-full max-w-lg flex flex-col max-h-[80vh]">
+        <div class="p-3 border-b border-[#D8D8D8] flex justify-between items-center bg-[#F2F2F2] rounded-t-lg">
+          <h4 class="font-bold text-sm text-[#003366]">BC Master Species Search</h4>
+          <button type="button" onclick={() => { showSpeciesModal = false; }} class="text-[#606060] hover:text-[#313132] p-1"><X size={16} /></button>
         </div>
-        <div class="p-3 border-b border-stone-100 flex gap-2">
+        <div class="p-3 border-b border-[#D8D8D8] flex flex-wrap gap-2">
           <input type="text" placeholder="Search code (e.g. ABIE) or name (e.g. fir, spruce)..." bind:value={speciesSearchQuery}
-            oninput={() => void searchSpecies()} class="flex-1 border border-stone-300 rounded px-3 py-1.5 text-xs bg-white" />
-          <button type="button" onclick={() => void searchSpecies()} class="px-3 py-1.5 bg-emerald-700 text-white rounded text-xs font-medium hover:bg-emerald-800">Search</button>
+            oninput={() => void searchSpecies()} class="min-w-0 flex-1 border border-[#D8D8D8] rounded px-3 py-1.5 text-xs bg-white text-[#313132]" />
+          <button type="button" onclick={() => void searchSpecies()} class="px-3 py-1.5 bg-[#003366] text-white rounded text-xs font-medium hover:bg-[#002244]">Search</button>
         </div>
-        <div class="p-2 overflow-y-auto flex-1 divide-y divide-stone-100">
+        <div class="p-2 overflow-y-auto flex-1 divide-y divide-[#F2F2F2]">
           {#if searchingSpecies}
-            <div class="p-4 text-center text-xs text-stone-400">Searching catalog...</div>
+            <div class="p-4 text-center text-xs text-[#606060]">Searching catalog...</div>
           {:else if speciesSearchResults.length > 0}
             {#each speciesSearchResults as sp}
-              <button type="button" class="w-full p-2 hover:bg-emerald-50 rounded flex justify-between items-center text-left" onclick={() => void selectSpeciesToAdd(sp)}>
+              <button type="button" class="w-full p-2 hover:bg-[#F2F2F2] rounded flex justify-between items-center text-left" onclick={() => void selectSpeciesToAdd(sp)}>
                 <div>
                   <div class="flex items-center gap-2">
-                    <span class="font-mono font-bold text-xs text-emerald-900 bg-emerald-100 px-1.5 py-0.5 rounded">{sp.code}</span>
-                    <span class="font-medium text-xs text-stone-900 italic">{sp.scientificName}</span>
+                    <span class="font-mono font-bold text-xs text-[#003366] bg-[#E6F0FA] px-1.5 py-0.5 rounded">{sp.code}</span>
+                    <span class="font-medium text-xs text-[#313132] italic">{sp.scientificName}</span>
                   </div>
-                  {#if sp.englishName}<div class="text-[11px] text-stone-500 mt-0.5">{sp.englishName}</div>{/if}
+                  {#if sp.englishName}<div class="text-[11px] text-[#606060] mt-0.5">{sp.englishName}</div>{/if}
                 </div>
-                <span class="px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] rounded font-medium">Select</span>
+                <span class="px-2 py-1 bg-[#003366] hover:bg-[#002244] text-white text-[11px] rounded font-medium">Select</span>
               </button>
             {/each}
           {:else if speciesSearchQuery.trim()}

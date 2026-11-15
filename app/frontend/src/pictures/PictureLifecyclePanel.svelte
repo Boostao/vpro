@@ -95,21 +95,21 @@
 </section>
 
 <style>
-  .lifecycle { display: grid; gap: .65rem; min-width: 0; max-width: 100%; padding: .75rem; border: 1px solid #cbd5e1; }
-  h3, summary { font-weight: 600; }
+  .lifecycle { display: grid; gap: .65rem; min-width: 0; max-width: 100%; padding: .75rem; border: 1px solid #D8D8D8; background: #FFFFFF; border-radius: .25rem; }
+  h3, summary { font-weight: 600; color: #003366; }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .65rem; }
   label { display: grid; gap: .25rem; min-width: 0; }
-  output { display: block; min-width: 0; padding: .4rem; background: #f1f5f9; overflow-wrap: anywhere; }
+  output { display: block; min-width: 0; padding: .4rem; background: #F2F2F2; overflow-wrap: anywhere; border: 1px solid #D8D8D8; border-radius: .25rem; }
   .confirmation { display: flex; gap: .5rem; align-items: start; }
   .confirmation input { margin-top: .25rem; flex: none; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-  button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; min-height: 2rem; overflow-wrap: anywhere; }
+  button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; min-height: 2rem; overflow-wrap: anywhere; color: #313132; background: #FFFFFF; }
   button:disabled, input:disabled { opacity: .5; }
   details, .history { min-width: 0; display: block; }
   summary { cursor: pointer; min-height: 2rem; padding: .35rem 0; overflow-wrap: anywhere; }
-  .history { padding: .5rem 0; border-bottom: 1px solid #e2e8f0; }
+  .history { padding: .5rem 0; border-bottom: 1px solid #D8D8D8; }
   p { overflow-wrap: anywhere; }
-  .error { color: #991b1b; background: #fef2f2; padding: .5rem; }
-  .safety { color: #92400e; background: #fffbeb; padding: .5rem; }
-  .guidance { color: #475569; font-size: .8rem; }
+  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
+  .safety { color: #313132; background: #FEF6E0; border-left: 3px solid #FCBA19; padding: .5rem; }
+  .guidance { color: #474543; font-size: .8rem; }
 </style>

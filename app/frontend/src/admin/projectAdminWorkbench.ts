@@ -1,9 +1,11 @@
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { ContextService, ValidationService } from '../../bindings/github.com/boostao/vpro/app';
+import type { ProjectMetadataPreset } from './projectMetadataPresets';
 
 export const PROJECT_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 export type MergeResolutionChoice = 'keep_target' | 'accept_source';
+export type { ProjectMetadataPreset };
 
 export interface NewProjectRequest {
   projectName: string;
@@ -66,6 +68,7 @@ export interface CompareProjectsRequest {
   sourceProject?: string;
   targetPath: string;
   targetProject?: string;
+  caseInsensitiveText?: boolean;
 }
 
 export interface FieldDiff {
@@ -94,8 +97,10 @@ export interface CompareProjectsResult {
   removedCount: number;
   identicalCount: number;
   modifiedCount: number;
+  metadataDiffCount?: number;
   plots: PlotDiff[];
   fieldDiffs: FieldDiff[];
+  metadataDiffs?: FieldDiff[] | null;
 }
 
 export interface ComplianceOptions {
@@ -157,6 +162,12 @@ export interface TaxonomyComplianceFinding {
   suggestedCode?: string;
 }
 
+export interface SkippedListDefinition {
+  listName: string;
+  field: string;
+  reason: string;
+}
+
 export interface ComplianceValidationReport {
   project: string;
   su: string;
@@ -164,6 +175,7 @@ export interface ComplianceValidationReport {
   passed: boolean;
   summary: ComplianceSummaryCounts;
   envCodeFindings: EnvironmentCodeFinding[];
+  skippedDefinitions?: SkippedListDefinition[] | null;
   boundsFindings: BoundsFinding[];
   envAdminFindings: EnvAdminCompletenessFinding[];
   orphanFindings: OrphanChildFinding[];
@@ -194,6 +206,26 @@ export interface QuarantineOrphanResult {
 
 export interface OptimizeVegOptions {
   plotNumbers?: string[];
+  custodianAuditOverride?: boolean;
+}
+
+export interface OptimizeVegConflict {
+  plotNumber: string;
+  species: string;
+  field: string;
+  reason: string;
+  values?: string[] | null;
+  sourceIds?: number[] | null;
+  overrideable?: boolean;
+}
+
+export interface OptimizeVegAuditRef {
+  plotNumber: string;
+  species: string;
+  retiredId: number;
+  table: string;
+  editField: string;
+  editWhen: string;
 }
 
 export interface OptimizeVegGroup {
@@ -207,6 +239,10 @@ export interface OptimizeVegGroup {
   mergedCovers: Record<string, number>;
   mergedHeights: Record<string, number>;
   mergedHeightB?: string;
+  blocked?: boolean;
+  blockedReasons?: string[] | null;
+  conflicts?: OptimizeVegConflict[] | null;
+  auditReferences?: OptimizeVegAuditRef[] | null;
 }
 
 export interface OptimizeVegPreview {
@@ -217,13 +253,18 @@ export interface OptimizeVegPreview {
   duplicateSpeciesCount: number;
   overlappingGroupCount: number;
   cappedCoverCount: number;
+  blockedGroupCount?: number;
+  hasBlockingConflicts?: boolean;
   previewDigest: string;
   groups: OptimizeVegGroup[];
+  conflicts?: OptimizeVegConflict[] | null;
+  auditReferences?: OptimizeVegAuditRef[] | null;
 }
 
 export interface ApplyOptimizeVegRequest {
   plotNumbers?: string[];
   expectedDigest?: string;
+  custodianAuditOverride?: boolean;
 }
 
 export interface OptimizeVegResult {
@@ -244,6 +285,7 @@ export interface ThreeWayMergePreviewRequest {
   targetProject?: string;
   basePath?: string;
   baseProject?: string;
+  caseInsensitiveText?: boolean;
 }
 
 export interface MergeConflictItem {
@@ -255,13 +297,13 @@ export interface MergeConflictItem {
   baseVal?: string | null;
   sourceVal: string | null;
   targetVal: string | null;
-  kind: 'FastForward' | 'Conflict' | 'TargetModifiedOnly';
+  kind: 'FastForward' | 'Conflict' | 'TargetModifiedOnly' | 'SourceDelete';
   defaultResolution: MergeResolutionChoice;
 }
 
 export interface MergePlotPreview {
   plotNumber: string;
-  category: 'Added' | 'Identical' | 'FastForward' | 'Conflict' | 'TargetOnly';
+  category: 'Added' | 'Identical' | 'FastForward' | 'Conflict' | 'TargetOnly' | 'SourceDelete';
   items: MergeConflictItem[];
 }
 
@@ -278,8 +320,11 @@ export interface ThreeWayMergePreview {
   fastForwardCount: number;
   conflictCount: number;
   targetOnlyCount: number;
+  sourceDeleteCount?: number;
+  metadataConflictCount?: number;
   plots: MergePlotPreview[];
   conflicts: MergeConflictItem[];
+  metadataItems?: MergeConflictItem[] | null;
 }
 
 export interface ThreeWayMergeExecuteRequest {
@@ -293,6 +338,7 @@ export interface ThreeWayMergeExecuteRequest {
   defaultConflictResolution?: MergeResolutionChoice;
   plotResolutions?: Record<string, MergeResolutionChoice>;
   fieldResolutions?: Record<string, MergeResolutionChoice>;
+  caseInsensitiveText?: boolean;
 }
 
 export interface ThreeWayMergeResult {
@@ -308,6 +354,7 @@ export interface ThreeWayMergeResult {
 }
 
 export interface ProjectAdminPort {
+  listProjectMetadataPresets?(): Promise<ProjectMetadataPreset[]>;
   createNewProject(contextId: string, req: NewProjectRequest): Promise<NewProjectResult>;
   saveProjectAs(contextId: string, req: SaveProjectAsRequest): Promise<SaveProjectAsResult>;
   exportSplinterProject(contextId: string, req: ExportSplinterRequest): Promise<ExportSplinterResult>;
@@ -321,6 +368,7 @@ export interface ProjectAdminPort {
 }
 
 export const defaultProjectAdminPort: ProjectAdminPort = {
+  listProjectMetadataPresets: () => (ContextService.ListProjectMetadataPresets() as never),
   createNewProject: (contextId, req) => (ContextService.CreateNewProject(contextId, req) as never),
   saveProjectAs: (contextId, req) => (ContextService.SaveProjectAs(contextId, req) as never),
   exportSplinterProject: (contextId, req) => (ContextService.ExportSplinterProject(contextId, req) as never),
@@ -408,5 +456,50 @@ export function buildInitialMergeFieldResolutions(preview: ThreeWayMergePreview)
   for (const c of preview.conflicts) {
     map[c.conflictId] = c.defaultResolution;
   }
+  for (const c of preview.metadataItems ?? []) {
+    map[c.conflictId] = c.defaultResolution;
+  }
   return map;
+}
+
+export function buildInitialMergePlotResolutions(preview: ThreeWayMergePreview): Record<string, MergeResolutionChoice> {
+  const map: Record<string, MergeResolutionChoice> = {};
+  for (const plot of preview.plots ?? []) {
+    if (plot.category === 'Added' || plot.category === 'FastForward' || plot.category === 'SourceDelete') {
+      map[plot.plotNumber] = 'accept_source';
+    } else if (plot.category === 'Conflict' || plot.category === 'TargetOnly') {
+      map[plot.plotNumber] = 'keep_target';
+    }
+  }
+  return map;
+}
+
+function escapeDelimitedCell(raw: string | null | undefined, delimiter: ',' | '\t'): string {
+  const text = raw === null || raw === undefined ? 'NULL' : String(raw);
+  if (delimiter === '\t') {
+    return text.replace(/[\r\n\t]+/g, ' ');
+  }
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+export function formatCompareDiffsDelimited(
+  result: Pick<CompareProjectsResult, 'fieldDiffs' | 'metadataDiffs'>,
+  delimiter: ',' | '\t' = ','
+): string {
+  const rows = [...(result.fieldDiffs ?? []), ...(result.metadataDiffs ?? [])];
+  const header = ['PlotNumber', 'Table', 'Key', 'Field', 'SourceValue', 'TargetValue'].join(delimiter);
+  const lines = rows.map(row =>
+    [
+      escapeDelimitedCell(row.plotNumber, delimiter),
+      escapeDelimitedCell(row.table, delimiter),
+      escapeDelimitedCell(row.key, delimiter),
+      escapeDelimitedCell(row.field, delimiter),
+      escapeDelimitedCell(row.sourceVal, delimiter),
+      escapeDelimitedCell(row.targetVal, delimiter),
+    ].join(delimiter)
+  );
+  return [header, ...lines].join('\n');
 }

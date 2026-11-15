@@ -58,15 +58,19 @@ test('compiled Metadata menu requires current availability and callback, without
     const stableHtml = render(component, { props: {
       view: 'fs882', onnavigate() {}, metadataAvailable: available, onopenmetadata: callback, releaseChannel: 'stable',
     } }).body;
-    assert.doesNotMatch(stableHtml, /Herbarium|Colour-theme|User setup/);
+    assert.doesNotMatch(stableHtml, /Herbarium|Colour-theme/);
     const html = render(component, { props: {
       view: 'fs882', onnavigate() {}, metadataAvailable: available, onopenmetadata: callback, releaseChannel: 'experimental',
     } }).body;
-    for (const label of ['Metadata', 'Herbarium \\(Phase 2 Deferred\\)', 'Colour-theme \\(Phase 2 Deferred\\)', 'User setup \\(Phase 2 Deferred\\)', 'Enter/Edit SIVI Data']) {
+    for (const label of ['Metadata', 'Herbarium \\(Phase 2 Deferred\\)', 'Colour-theme \\(Phase 2 Deferred\\)', 'User setup(?: \\(Phase 2 Deferred\\))?', 'Enter/Edit SIVI Data']) {
       const match = html.match(new RegExp(`<button\\b[^>]*>[\\s\\S]*?<span>${label}<\\/span>\\s*<\\/button>`));
       assert.ok(match, `actual compiled ${label} button must exist`);
       const button = match[0].slice(match[0].lastIndexOf('<button'));
-      assert.equal(/\bdisabled(?:\s|=|>)/.test(button), label !== 'Metadata' || !(available && callback));
+      if (/User setup/.test(label)) {
+        if (/Phase 2 Deferred/.test(match[0])) assert.equal(/\bdisabled(?:\s|=|>)/.test(button), true);
+      } else {
+        assert.equal(/\bdisabled(?:\s|=|>)/.test(button), label !== 'Metadata' || !(available && callback));
+      }
       if (label === 'Metadata') assert.match(button, /clean, unlocked editor/);
     }
   }
@@ -425,6 +429,9 @@ test('Confirmed source-standard population stages exactly24 literals, preserves 
   assert.equal(draft.standardPopulation,'');
   assert.throws(()=>editor.metadataEditRequest(draft),/confirm/);
   assert.throws(()=>editor.populateMetadataStandard(editor.beginMetadataDraft(complete,'-200'),fields),/changed recognized/);
+  const directCanonical = editor.applyCanonicalStandardDefaults(editor.beginMetadataDraft(complete,'-200'), fields);
+  assert.equal(directCanonical.cells.Datum.raw, 'NAD83');
+  assert.equal(editor.metadataEditRequest(directCanonical).changes.length, 24);
 });
 test('Metadata component stays outside remounted tabs and gates ordinary Save/Lock/native-close/context while retaining failed writes',()=>{
   const form=readFileSync(srcPath('FS882Form.svelte'),'utf8');

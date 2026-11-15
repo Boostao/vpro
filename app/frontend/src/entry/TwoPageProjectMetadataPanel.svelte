@@ -5,7 +5,8 @@
   import { twoPageProjectMetadataFromWire, twoPageProjectMetadataCellLabel, twoPageProjectMetadataGroups,
     type TwoPageProjectMetadataOwner, type TwoPageProjectMetadataView } from './twoPageProjectMetadata';
 
-  let { contextId, project, projectPath, su, suPath, plot, form, onBusyChange }: TwoPageProjectMetadataOwner & {
+  let { onEditMetadata, editDisabled = false, contextId, project, projectPath, su, suPath, plot, form, onBusyChange }: TwoPageProjectMetadataOwner & {
+    onEditMetadata?: () => void; editDisabled?: boolean;
     form: string; onBusyChange: (busy: boolean) => void;
   } = $props();
   const owner = untrack(() => ({ contextId, project, projectPath, su, suPath, plot }));
@@ -50,7 +51,15 @@
     terminal ASCII spaces without modifying original text. General ACE locale parity is unverified.
     At most100000 physical metadata rows; pages contain up to50 matching rows in physical-row order.</p>
   <div class="flex flex-wrap gap-2">
-    <button type="button" disabled={busy} onclick={() => load()}>Load saved project metadata</button>
+    <button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1.5 text-xs font-medium text-[#313132] disabled:opacity-50"
+      disabled={busy} onclick={() => load()}>Load saved project metadata</button>
+    {#if onEditMetadata}
+      <button type="button" data-two-page-metadata-edit-link
+        class="rounded border border-[#003366] bg-[#003366] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        disabled={busy || editDisabled} onclick={onEditMetadata}>
+        Edit project metadata
+      </button>
+    {/if}
     {#if busy}<button type="button" onclick={cancel}>Cancel project metadata read</button><p role="status">Reading owned metadata page...</p>{/if}
     {#if review}
       <button type="button" disabled={busy || review.offset === 0} onclick={() => load(Math.max(0, review!.offset - pageSize))}>Previous metadata page</button>

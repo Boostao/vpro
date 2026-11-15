@@ -60,8 +60,10 @@
                 <button type="button" data-source-control={control.controlName} disabled={speciesCheckDisabled} onclick={onSpeciesCheck}>{label}</button>
               {:else if control.controlName === 'btnFindPlot' && onFindPlot}
                 <button type="button" data-source-control={control.controlName} disabled={findPlotDisabled} onclick={onFindPlot}>{label}</button>
+              {:else if control.controlName === 'btnAllowSmallEntry'}
+                <button type="button" disabled title="Small-entry cover precision (<1%) is always enabled in VPro 2.0" data-source-control={control.controlName}>{label}</button>
               {:else}
-                <button type="button" disabled title="Source workflow not migrated" data-source-control={control.controlName}>{label}</button>
+                <button type="button" disabled title="Legacy Access paper-form action; use the corresponding VPro 2.0 toolbar workflow" data-source-control={control.controlName}>{label}</button>
               {/if}
             </div>
           {:else if fieldEditor?.labelled}

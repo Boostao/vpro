@@ -269,6 +269,17 @@
       // Compare browser display only; retain original tagged bytes and unchanged assignments.
       const displayed = control instanceof HTMLTextAreaElement ? raw.replace(/\r\n|\r/g, '\n') : raw.replace(/[\r\n]/g, '');
       if (control.value !== displayed) throw new Error('Observed soil value differs from its retained raw/original display.');
+      if (typeof panel.querySelectorAll === 'function') {
+        const inputs = Array.from(
+          panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-soil-column] input[type="text"], [data-soil-column] textarea'),
+        ).filter(el => !el.disabled && el.checkVisibility());
+        const idx = inputs.indexOf(control);
+        if (idx >= 0 && idx + 1 < inputs.length) {
+          error = null;
+          inputs[idx + 1].focus();
+          return;
+        }
+      }
       const current = depthOrder?.rows.findIndex(candidate => candidate.rowId === row.rowId) ?? -1;
       const next = current >= 0 ? depthOrder?.rows[current + 1] : undefined;
       if (!next) throw new Error('No next existing soil record. Creation and automatic Save are unavailable.');
