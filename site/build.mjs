@@ -29,7 +29,7 @@ export function escapeHtml(value) {
 }
 
 const ICONS = Object.freeze({
-  crest: '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 2L4 5.5v6c0 5.25 3.4 9.85 8 11 4.6-1.15 8-5.75 8-11v-6L12 2z"/><path d="M12 7v10"/><path d="M8.5 11.5L12 8l3.5 3.5"/><path d="M7.5 15L12 11l4.5 4"/></svg>',
+  crest: '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-vpro-crest="topbar"><path d="M12 2L4 5.5v6c0 5.25 3.4 9.85 8 11 4.6-1.15 8-5.75 8-11v-6L12 2z" stroke="#FCBA19" fill="rgba(255,255,255,0.08)"/><path d="M12 7v10M8.5 11.5L12 8l3.5 3.5M7.5 15L12 11l4.5 4" stroke="#FFFFFF"/></svg>',
   download: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
   shield: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>',
   windows: '<svg class="icon-lg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M3 5.3l7.4-1v7.1H3V5.3zm8.4-1.1L21 3v8.4h-9.6V4.2zM3 12.6h7.4v7.1l-7.4-1v-6.1zm8.4 0H21V21l-9.6-1.3v-7.1z"/></svg>',
@@ -195,18 +195,20 @@ export function renderPortalHtml({
               </div>
             </div>
             <h3>${escapeHtml(key.title)}</h3>
-            <table class="bcgov-table">
-              <thead>
-                <tr>
-                  <th>Step</th>
-                  <th>Diagnostic Criterion / Reference Scale</th>
-                  ${hasYesNo ? '<th>If Yes</th><th>If No</th>' : '<th colspan="2">Reference</th>'}
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsHtml}
-              </tbody>
-            </table>
+            <div class="table-scroll">
+              <table class="bcgov-table">
+                <thead>
+                  <tr>
+                    <th>Step</th>
+                    <th>Diagnostic Criterion / Reference Scale</th>
+                    ${hasYesNo ? '<th>If Yes</th><th>If No</th>' : '<th colspan="2">Reference</th>'}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+            </div>
           </article>`;
   }).join('\n');
 
@@ -278,17 +280,19 @@ export function renderPortalHtml({
               </div>
             </div>
             <h3>VPro 2.0 Keyboard Shortcuts &amp; High-Speed Card Entry</h3>
-            <table class="bcgov-table">
-              <thead>
-                <tr>
-                  <th>Shortcut</th>
-                  <th>Context / Form Scope</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>${shortcutsRows}
-              </tbody>
-            </table>
+            <div class="table-scroll">
+              <table class="bcgov-table">
+                <thead>
+                  <tr>
+                    <th>Shortcut</th>
+                    <th>Context / Form Scope</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>${shortcutsRows}
+                </tbody>
+              </table>
+            </div>
           </article>`;
 
   const clausesHtml = dataUseAgreement.clauses.map(clause => `
@@ -412,7 +416,7 @@ export function renderPortalHtml({
           </div>
 
           <div id="primary-sha256-row" class="primary-sha-row" hidden>
-            <span>SHA-256: <code id="primary-sha256-value" class="mono"></code></span>
+            <span class="primary-sha-label">SHA-256: <code id="primary-sha256-value" class="mono"></code></span>
             <button type="button" id="primary-sha256-copy" class="copy-btn">Copy SHA-256</button>
           </div>
 
@@ -568,7 +572,7 @@ export function renderPortalHtml({
         </div>
 
         <div class="checksum-bar">
-          <div>
+          <div class="checksum-bar-info">
             ${ICONS.shield}
             <strong>Cryptographic Checksum Manifest:</strong>
             Verify downloaded packages against <a id="dl-checksums" class="download-link" aria-disabled="true">SHA256SUMS.txt</a>
@@ -695,7 +699,7 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
               <button type="button" id="copy-citation-btn" class="copy-btn">Copy Citation</button>
             </div>
           </div>
-          <p id="mandatory-citation-text" class="mono" style="margin: 0.35rem 0 0; font-size: 0.85rem;">${escapeHtml(dataUseAgreement.citation)}</p>
+          <p id="mandatory-citation-text" class="mono citation-text">${escapeHtml(dataUseAgreement.citation)}</p>
         </div>
 
         <ol class="clauses-list">
@@ -711,45 +715,49 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
           <p>Structured release history replacing legacy <code>tblWhatsNew</code> and <code>vuser.ca</code> version tables, paired with cryptographic digests for embedded 2026 BEC reference databases.</p>
         </div>
 
-        <table class="bcgov-table" style="margin-bottom: 1.5rem;">
-          <thead>
-            <tr>
-              <th>Version</th>
-              <th>Date</th>
-              <th>Channel</th>
-              <th>Key Capabilities &amp; Calibration Notes</th>
-            </tr>
-          </thead>
-          <tbody>${changelogRowsHtml}
-          </tbody>
-        </table>
+        <div class="table-scroll table-scroll-spaced">
+          <table class="bcgov-table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Date</th>
+                <th>Channel</th>
+                <th>Key Capabilities &amp; Calibration Notes</th>
+              </tr>
+            </thead>
+            <tbody>${changelogRowsHtml}
+            </tbody>
+          </table>
+        </div>
 
-        <table class="bcgov-table">
-          <thead>
-            <tr>
-              <th>Embedded 2026 Master Standard</th>
-              <th>Release Stamp</th>
-              <th>Verified SHA-256 Digest</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>BECdb Master Classification</strong></td>
-              <td class="mono">BECdb_v13_2026 (2026-05-28)</td>
-              <td class="mono">${escapeHtml(standards.becSha256)}</td>
-            </tr>
-            <tr>
-              <td><strong>B.C. Provincial Plant Taxonomy</strong></td>
-              <td class="mono">BCPlantTaxonomy v19 (2026-02-09)</td>
-              <td class="mono">${escapeHtml(standards.taxonomySha256)}</td>
-            </tr>
-            <tr>
-              <td><strong>Canonical SQLite VLists.db</strong></td>
-              <td class="mono">resources/database-family/VLists.db</td>
-              <td class="mono">${escapeHtml(standards.vlistsSha256)}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="bcgov-table">
+            <thead>
+              <tr>
+                <th>Embedded 2026 Master Standard</th>
+                <th>Release Stamp</th>
+                <th>Verified SHA-256 Digest</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>BECdb Master Classification</strong></td>
+                <td class="mono">BECdb_v13_2026 (2026-05-28)</td>
+                <td class="mono sha-digest-cell">${escapeHtml(standards.becSha256)}</td>
+              </tr>
+              <tr>
+                <td><strong>B.C. Provincial Plant Taxonomy</strong></td>
+                <td class="mono">BCPlantTaxonomy v19 (2026-02-09)</td>
+                <td class="mono sha-digest-cell">${escapeHtml(standards.taxonomySha256)}</td>
+              </tr>
+              <tr>
+                <td><strong>Canonical SQLite VLists.db</strong></td>
+                <td class="mono">resources/database-family/VLists.db</td>
+                <td class="mono sha-digest-cell">${escapeHtml(standards.vlistsSha256)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>
@@ -759,7 +767,7 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
       <div>
         <strong>Province of British Columbia — Ministry of Forests, Research Branch</strong>
         <div>Biogeoclimatic Ecosystem Classification (BEC) Program · VPro (VENUS — Vegetation and Environment NexUS — Professional)</div>
-        <div style="margin-top: 0.35rem; color: #C9D8E8;">Successor to VPro 64 (Table Version VP08) formerly distributed via <code>vuser.ca</code>.</div>
+        <div class="footer-legacy-note">Successor to VPro 64 (Table Version VP08) formerly distributed via <code>vuser.ca</code>.</div>
       </div>
       <div class="footer-links">
         <a href="https://www.for.gov.bc.ca/hre/becweb/" target="_blank" rel="noopener noreferrer">BECWeb Home</a>
@@ -798,6 +806,17 @@ export function validateBuiltAssets({ html, css, downloadsJs, portalDocsJs }) {
     if (pattern.test(combined)) {
       throw new Error(`Forbidden ${description} found in compiled portal.`);
     }
+  }
+  if (!css.includes('--vpro-navy') || !css.includes('--vpro-forest') || !css.includes('--vpro-gold')) {
+    throw new Error('Compiled CSS is missing synchronized --vpro-* design tokens.');
+  }
+  if (!html.includes('data-vpro-crest="topbar"')) {
+    throw new Error('Compiled HTML is missing canonical Shield + Conifer Tree VPro crest SVG.');
+  }
+  const tableCount = (html.match(/<table class="bcgov-table"/g) || []).length;
+  const scrollWrapCount = (html.match(/<div class="table-scroll(?:\s+[^"]*)?">\s*<table class="bcgov-table"/g) || []).length;
+  if (tableCount === 0 || tableCount !== scrollWrapCount) {
+    throw new Error(`Expected every .bcgov-table (${tableCount}) to be wrapped in .table-scroll (${scrollWrapCount}).`);
   }
   const uniqueIds = [
     ...Object.keys(assetLinks),

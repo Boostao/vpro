@@ -603,19 +603,33 @@ func TestRealQuartoSingleUnitAndBGCGuidePublicationAndRMarkdownFallback(t *testi
 	}
 	rawHTML := string(rawHTMLBytes)
 	for _, tokenStr := range []string{
+		"--vpro-navy: #003366",
+		"--vpro-forest: #1E5128",
 		"#003366",
 		"#FCBA19",
 		"BC Sans",
+		`data-vpro-crest="topbar"`,
 		"BWBSmw2 / 05",
 		"Relative Edatopic Grid",
 		"Actual Edatopic Grid",
+		"Soil Nutrient Regime (SNR)",
 		"Aspect Rose",
 		"Elevation Distribution",
 		"Characteristic Vegetation Summary",
+		"diag-pill",
+		"tabular-nums",
+		"table-scroll",
+		"print-color-adjust: exact",
+		"guide-footer",
 		"<svg",
 	} {
 		if !strings.Contains(rawHTML, tokenStr) {
 			t.Fatalf("published Quarto single-unit HTML missing expected content %q", tokenStr)
+		}
+	}
+	for _, forbidden := range []string{"#2563eb", "#bfdbfe", "#dbeafe", "```{=html}", "{=html}", "```"} {
+		if strings.Contains(strings.ToLower(rawHTML), strings.ToLower(forbidden)) {
+			t.Fatalf("published Quarto single-unit HTML contains forbidden token/fence %q", forbidden)
 		}
 	}
 	if singleRes.PDFStatus != "published" && singleRes.PDFStatus != "tex_unavailable_print_html_ready" {
@@ -637,6 +651,27 @@ func TestRealQuartoSingleUnitAndBGCGuidePublicationAndRMarkdownFallback(t *testi
 	if bgcRes.RendererUsed != "quarto" || !strings.Contains(bgcRes.HTMLPreview, "Component Site Units Summary") {
 		t.Fatalf("expected quarto BGC guide with Component Site Units Summary, got renderer=%q", bgcRes.RendererUsed)
 	}
+	bgcHTMLBytes, err := os.ReadFile(bgcRes.HTMLPath)
+	if err != nil {
+		t.Fatalf("read published BGC Quarto HTML: %v", err)
+	}
+	bgcHTML := string(bgcHTMLBytes)
+	for _, tokenStr := range []string{
+		"--vpro-navy: #003366",
+		`data-vpro-crest="topbar"`,
+		"Soil Nutrient Regime (SNR)",
+		"Component Site Units Summary",
+		"guide-footer",
+	} {
+		if !strings.Contains(bgcHTML, tokenStr) {
+			t.Fatalf("published BGC Quarto HTML missing expected content %q", tokenStr)
+		}
+	}
+	for _, forbidden := range []string{"#2563eb", "#bfdbfe", "#dbeafe", "{=html}", "```"} {
+		if strings.Contains(strings.ToLower(bgcHTML), strings.ToLower(forbidden)) {
+			t.Fatalf("published BGC Quarto HTML contains forbidden token/fence %q", forbidden)
+		}
+	}
 
 	// 3. Standalone R rmarkdown/knitr fallback when Quarto CLI is absent
 	fbDest := filepath.Join(outDir, "fallback_guide.html")
@@ -650,6 +685,29 @@ func TestRealQuartoSingleUnitAndBGCGuidePublicationAndRMarkdownFallback(t *testi
 	}
 	if fbRes.RendererUsed != "rmarkdown_fallback" || fbRes.HTMLSizeBytes < 4000 {
 		t.Fatalf("expected rmarkdown_fallback standalone HTML, got renderer=%q size=%d", fbRes.RendererUsed, fbRes.HTMLSizeBytes)
+	}
+	fbHTMLBytes, err := os.ReadFile(fbRes.HTMLPath)
+	if err != nil {
+		t.Fatalf("read published fallback HTML: %v", err)
+	}
+	fbHTML := string(fbHTMLBytes)
+	for _, tokenStr := range []string{
+		"--vpro-navy: #003366",
+		"--vpro-forest: #1E5128",
+		`data-vpro-crest="topbar"`,
+		"Soil Nutrient Regime (SNR)",
+		"Characteristic Vegetation Summary",
+		"guide-footer",
+		"<svg",
+	} {
+		if !strings.Contains(fbHTML, tokenStr) {
+			t.Fatalf("rmarkdown_fallback HTML missing expected content %q", tokenStr)
+		}
+	}
+	for _, forbidden := range []string{"#2563eb", "#bfdbfe", "#dbeafe", "{=html}", "```"} {
+		if strings.Contains(strings.ToLower(fbHTML), strings.ToLower(forbidden)) {
+			t.Fatalf("rmarkdown_fallback HTML contains forbidden token/fence %q", forbidden)
+		}
 	}
 
 	// Ensure JSON wire serialization of result DTOs is clean and round-trippable

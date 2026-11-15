@@ -9,17 +9,49 @@ qmd_path <- args[[1L]]
 payload_path <- args[[2L]]
 out_html <- args[[3L]]
 
-# Convert Quarto {=html} fenced block to standard RMarkdown raw HTML if needed and knit
-lines <- readLines(qmd_path, warn = FALSE, encoding = "UTF-8")
-lines <- gsub("^```\\{=html\\}\\s*$", "", lines)
-# Strip closing backticks of raw style block right after </style>
-for (i in seq_along(lines)) {
-  if (i > 1L && grepl("</style>", lines[[i - 1L]], fixed = TRUE) && grepl("^```\\s*$", lines[[i]])) {
-    lines[[i]] <- ""
+# Strip all Quarto ```{=html} ... ``` raw HTML fences cleanly while preserving ```{r ...}``` chunks
+strip_quarto_raw_html_fences <- function(src_lines) {
+  out <- character(length(src_lines))
+  in_raw_html <- FALSE
+  raw_ticks <- ""
+  in_code_chunk <- FALSE
+  code_ticks <- ""
+
+  for (i in seq_along(src_lines)) {
+    ln <- src_lines[[i]]
+    if (in_raw_html) {
+      if (grepl(paste0("^\\s*", raw_ticks, "\\s*$"), ln)) {
+        out[[i]] <- ""
+        in_raw_html <- FALSE
+        raw_ticks <- ""
+      } else {
+        out[[i]] <- ln
+      }
+    } else if (in_code_chunk) {
+      out[[i]] <- ln
+      if (grepl(paste0("^\\s*", code_ticks, "\\s*$"), ln)) {
+        in_code_chunk <- FALSE
+        code_ticks <- ""
+      }
+    } else if (grepl("^\\s*(`{3,})\\{=html\\}\\s*$", ln)) {
+      raw_ticks <- sub("^\\s*(`{3,})\\{=html\\}\\s*$", "\\1", ln)
+      in_raw_html <- TRUE
+      out[[i]] <- ""
+    } else if (grepl("^\\s*(`{3,})\\{[^}]+\\}\\s*$", ln) || grepl("^\\s*(`{3,})\\s*[A-Za-z0-9_-]*\\s*$", ln)) {
+      code_ticks <- sub("^\\s*(`{3,}).*$", "\\1", ln)
+      in_code_chunk <- TRUE
+      out[[i]] <- ln
+    } else {
+      out[[i]] <- ln
+    }
   }
+  out
 }
+
+lines <- readLines(qmd_path, warn = FALSE, encoding = "UTF-8")
+clean_lines <- strip_quarto_raw_html_fences(lines)
 rmd_path <- sub("\\.qmd$", "_fallback.Rmd", qmd_path)
-writeLines(lines, rmd_path, useBytes = TRUE)
+writeLines(clean_lines, rmd_path, useBytes = TRUE)
 
 rmarkdown::render(
   input = rmd_path,
