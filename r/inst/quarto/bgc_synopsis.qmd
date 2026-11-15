@@ -1,0 +1,158 @@
+---
+title: "BEC Biogeoclimatic Subzone / Variant Synopsis"
+format:
+  html:
+    embed-resources: true
+    toc: false
+    theme: none
+    minimal: true
+    css: bcgov.css
+  pdf:
+    toc: false
+params:
+  payload_json: "guide_payload.json"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup, include=FALSE}
+library(jsonlite)
+library(knitr)
+
+payload <- jsonlite::fromJSON(params$payload_json, simplifyVector = FALSE)
+
+esc_html <- function(x) {
+  if (is.null(x) || length(x) == 0L || is.na(x)) return("")
+  s <- as.character(x)
+  s <- gsub("&", "&amp;", s, fixed = TRUE)
+  s <- gsub("<", "&lt;", s, fixed = TRUE)
+  s <- gsub(">", "&gt;", s, fixed = TRUE)
+  s <- gsub('"', "&quot;", s, fixed = TRUE)
+  s
+}
+
+render_edatopic_svg <- function(cells_list, title_text) {
+  snrs <- c("A", "B", "C", "D", "E")
+  rows <- as.character(0:8)
+  cell_w <- 48L
+  cell_h <- 28L
+  pad_l <- 48L
+  pad_t <- 42L
+  w <- pad_l + length(snrs) * cell_w + 16L
+  h <- pad_t + length(rows) * cell_h + 18L
+
+  max_cnt <- 1L
+  cell_map <- new.env(hash = TRUE, parent = emptyenv())
+  if (!is.null(cells_list)) {
+    for (ci in cells_list) {
+      k <- paste0(as.character(ci$smr), "|", toupper(as.character(ci$snr)))
+      cnt <- as.integer(ci$count)
+      if (cnt > max_cnt) max_cnt <- cnt
+      assign(k, cnt, envir = cell_map)
+    }
+  }
+
+  parts <- c(
+    sprintf('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d" width="%d" height="%d" role="img" aria-label="%s">', w, h, w, h, esc_html(title_text)),
+    sprintf('<rect x="0" y="0" width="%d" height="%d" fill="#ffffff" stroke="#d8d8d8" rx="3"/>', w, h),
+    sprintf('<text x="%d" y="18" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="12" font-weight="700" fill="#003366">%s</text>', as.integer(w / 2), esc_html(title_text))
+  )
+  for (ci in seq_along(snrs)) {
+    cx <- pad_l + (ci - 1L) * cell_w + (cell_w / 2.0)
+    parts <- c(parts, sprintf('<text x="%.1f" y="35" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="11" font-weight="700" fill="#313132">%s</text>', cx, snrs[[ci]]))
+  }
+  for (ri in seq_along(rows)) {
+    ry <- pad_t + (ri - 1L) * cell_h
+    r_lbl <- rows[[ri]]
+    parts <- c(parts, sprintf('<text x="%d" y="%.1f" text-anchor="end" font-family="BC Sans, sans-serif" font-size="10" font-weight="700" fill="#313132">%s</text>', pad_l - 6L, ry + cell_h * 0.66, r_lbl))
+    for (ci in seq_along(snrs)) {
+      cx <- pad_l + (ci - 1L) * cell_w
+      k <- paste0(r_lbl, "|", snrs[[ci]])
+      cnt <- if (exists(k, envir = cell_map, inherits = FALSE)) get(k, envir = cell_map) else 0L
+      fill <- "#f8fafc"
+      txt <- "#64748b"
+      if (cnt > 0L) {
+        ratio <- cnt / max_cnt
+        if (ratio >= 0.7) {
+          fill <- "#003366"
+          txt <- "#ffffff"
+        } else if (ratio >= 0.35) {
+          fill <- "#38598A"
+          txt <- "#ffffff"
+        } else {
+          fill <- "#dbeafe"
+          txt <- "#003366"
+        }
+      }
+      parts <- c(parts, sprintf('<rect x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="#cbd5e1" stroke-width="0.8"/>', cx, ry, cell_w, cell_h, fill))
+      if (cnt > 0L) {
+        parts <- c(parts, sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" font-family="BC Sans, sans-serif" font-size="10" font-weight="700" fill="%s">%d</text>', cx + cell_w / 2.0, ry + cell_h * 0.66, txt, cnt))
+      }
+    }
+  }
+  paste(c(parts, "</svg>"), collapse = "\n")
+}
+```
+
+```{r header_block, results='asis'}
+cat(sprintf("<h2>%s</h2>\n", esc_html(payload$title)))
+cat(sprintf(
+  "<p><strong>Project:</strong> %s &nbsp;|&nbsp; <strong>BGC Scope:</strong> %s &nbsp;|&nbsp; <strong>Total Plots:</strong> %d &nbsp;|&nbsp; <strong>Site Units:</strong> %d</p>\n",
+  esc_html(payload$project),
+  esc_html(payload$bgcLabel),
+  as.integer(payload$plotCount),
+  as.integer(length(payload$unitSummaries))
+))
+```
+
+### Subzone Edatopic Envelope
+
+```{r edatopic_block, results='asis'}
+if (knitr::is_html_output()) {
+  cat('<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;margin-bottom:16px;">\n')
+  cat(render_edatopic_svg(payload$relativeGrid, "Subzone Relative Edatope (rSMR x rSNR)"))
+  cat(render_edatopic_svg(payload$actualGrid, "Subzone Actual Edatope (aSMR x rSNR)"))
+  cat("</div>\n")
+}
+```
+
+### Classified Site Units Overview
+
+```{r unit_overview}
+if (!is.null(payload$unitSummaries) && length(payload$unitSummaries) > 0L) {
+  u_rows <- lapply(payload$unitSummaries, function(u) {
+    data.frame(
+      `Site Unit` = as.character(u$siteUnit),
+      Plots = as.integer(u$nPlots),
+      `Mean Elev (m)` = as.numeric(u$meanElev),
+      `Modal rSMR` = as.character(u$modalSmr),
+      `Modal rSNR` = as.character(u$modalSnr),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+  })
+  knitr::kable(do.call(rbind, u_rows))
+}
+```
+
+### Diagnostic and Constant Species Across Subzone
+
+```{r veg_table}
+if (!is.null(payload$vegetationTable) && length(payload$vegetationTable) > 0L) {
+  veg_rows <- lapply(payload$vegetationTable, function(r) {
+    data.frame(
+      Strata = as.character(r$layer),
+      Code = as.character(r$species),
+      `Scientific Name` = as.character(r$scientificName),
+      `Presence Class` = as.character(r$constancyClass),
+      `Constancy (%)` = round(as.numeric(r$constancyPct), 1),
+      `Mean Cover (%)` = round(as.numeric(r$meanCover), 1),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+  })
+  knitr::kable(do.call(rbind, veg_rows))
+}
+```

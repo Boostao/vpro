@@ -1,0 +1,21 @@
+{
+  "run_date": "2026-09-23",
+  "oracle_root": "C:\\Users\\sshadmin\\AppData\\Local\\Temp\\vpro-short-veg-denominator-20260923-104025-568",
+  "method": "Access DAO scratch tables inside full-directory disposable front-end copy; reconstructed CreateTempVeg max/group, SnTable, SV1 and SV2 aggregate query stages; not a NewShortVeg invocation",
+  "source_sha256_before": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "initial_copy_sha256": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "source_sha256_after": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "copy_sha256_after": "locked after shutdown",
+  "input": {
+    "vegetation": ["P1/SP/10", "P1/SP/15", "P2/SP/5"],
+    "baseline_memberships": ["P1/U", "P2/U", "P3/U"],
+    "duplicate_addition": "P1/U",
+    "cross_unit_additions": ["P1/V", "P3/V"]
+  },
+  "cases": [
+    {"case":"baseline","site_unit":"U","n_plots":3,"cover_records":2,"sum_cover":20,"characteristic":10,"presence_ratio":0.6666666666666666,"by_n_plots":6.666666666666667},
+    {"case":"duplicate","site_unit":"U","n_plots":4,"cover_records":3,"sum_cover":35,"characteristic":11.666666666666666,"presence_ratio":0.75,"by_n_plots":8.75},
+    {"case":"cross_unit","site_unit":"U","n_plots":3,"cover_records":2,"sum_cover":20,"characteristic":10,"presence_ratio":0.6666666666666666,"by_n_plots":6.666666666666667},
+    {"case":"cross_unit","site_unit":"V","n_plots":2,"cover_records":1,"sum_cover":15,"characteristic":15,"presence_ratio":0.5,"by_n_plots":7.5}
+  ]
+}

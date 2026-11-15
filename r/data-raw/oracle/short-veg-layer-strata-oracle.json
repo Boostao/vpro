@@ -1,0 +1,919 @@
+{
+  "Method": "Hidden Access DAO on full-directory disposable copy; scratch SELECT DISTINCTROW / INSERT / UPDATE stages reconstructed from ConvertProVeg2V2 and BuildStrataTable; not VBA function or full report invocation",
+  "Limitations": [
+    "No CurrPlotlist/CurrProject, DoCmd.CopyObject, report aggregation, or lumping invocation",
+    "Consolidation is First per plot/species; this fixture has one source row per key",
+    "Actual LayerCode queried read-only; linked mapping, if present, is not modified"
+  ],
+  "OracleRoot": "C:\\Users\\sshadmin\\AppData\\Local\\Temp\\vpro-short-veg-layer-strata-aa3a9e171b7549e183ef83c16219792c",
+  "SourceHashBefore": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "InitialCopyHash": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "Fixture": [
+    "N: all null",
+    "Z: Cover1/5a/6/7 = 0",
+    "P: Cover1=10, Cover2=20, Cover5a/b/c=5/6/7, Cover6=2, Cover7=3",
+    "CAP: Cover1/2=60/50, Cover4/5/5a=50/40/20",
+    "AUTH: Cover1/2=60/50, TotalA=120, Cover4/5=60/50, TotalB=0",
+    "AUTHB: Cover1=10, TotalA=0, Cover4/5=60/50, TotalB=123"
+  ],
+  "LayerCode": [
+    {
+      "LayerCode": "01",
+      "Layer1234567": "1",
+      "LayerText": "1",
+      "Strata": "A"
+    },
+    {
+      "LayerCode": "10",
+      "Layer1234567": "10",
+      "LayerText": "10",
+      "Strata": "D"
+    },
+    {
+      "LayerCode": "02",
+      "Layer1234567": "2",
+      "LayerText": "2",
+      "Strata": "A"
+    },
+    {
+      "LayerCode": "03",
+      "Layer1234567": "3",
+      "LayerText": "3",
+      "Strata": "A"
+    },
+    {
+      "LayerCode": "04",
+      "Layer1234567": "4",
+      "LayerText": "4",
+      "Strata": "B"
+    },
+    {
+      "LayerCode": "05",
+      "Layer1234567": "5",
+      "LayerText": "5",
+      "Strata": "B"
+    },
+    {
+      "LayerCode": "05a",
+      "Layer1234567": "5a",
+      "LayerText": "5a",
+      "Strata": "B"
+    },
+    {
+      "LayerCode": "05b",
+      "Layer1234567": "5b",
+      "LayerText": "5b",
+      "Strata": "B"
+    },
+    {
+      "LayerCode": "05c",
+      "Layer1234567": "5c",
+      "LayerText": "5c",
+      "Strata": "B"
+    },
+    {
+      "LayerCode": "06",
+      "Layer1234567": "6",
+      "LayerText": "6",
+      "Strata": "C"
+    },
+    {
+      "LayerCode": "07",
+      "Layer1234567": "7",
+      "LayerText": "7",
+      "Strata": "D"
+    },
+    {
+      "LayerCode": "08",
+      "Layer1234567": "8",
+      "LayerText": "8",
+      "Strata": "D"
+    },
+    {
+      "LayerCode": "09",
+      "Layer1234567": "9",
+      "LayerText": "9",
+      "Strata": "D"
+    }
+  ],
+  "Converted": [
+    {
+      "PlotNumber": "AUTH",
+      "Layer": "1",
+      "Cover": 60,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "AUTH",
+      "Layer": "2",
+      "Cover": 50,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "AUTH",
+      "Layer": "4",
+      "Cover": 60,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "AUTH",
+      "Layer": "5",
+      "Cover": 50,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "AUTHB",
+      "Layer": "1",
+      "Cover": 10,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "AUTHB",
+      "Layer": "4",
+      "Cover": 60,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "AUTHB",
+      "Layer": "5",
+      "Cover": 50,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "CAP",
+      "Layer": "1",
+      "Cover": 60,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "CAP",
+      "Layer": "2",
+      "Cover": 50,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "CAP",
+      "Layer": "4",
+      "Cover": 50,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "CAP",
+      "Layer": "5",
+      "Cover": 40,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "CAP",
+      "Layer": "5a",
+      "Cover": 20,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "1",
+      "Cover": 10,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "2",
+      "Cover": 20,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "5a",
+      "Cover": 5,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "5b",
+      "Cover": 6,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "5c",
+      "Cover": 7,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "6",
+      "Cover": 2,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "7",
+      "Cover": 3,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "Z",
+      "Layer": "1",
+      "Cover": 0,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "Z",
+      "Layer": "5a",
+      "Cover": 0,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "Z",
+      "Layer": "6",
+      "Cover": 0,
+      "ProjectID": "ORACLE"
+    },
+    {
+      "PlotNumber": "Z",
+      "Layer": "7",
+      "Cover": 0,
+      "ProjectID": "ORACLE"
+    }
+  ],
+  "Strata": [
+    {
+      "PlotNumber": "AUTH",
+      "Layer": "1",
+      "Cover": 120
+    },
+    {
+      "PlotNumber": "AUTHB",
+      "Layer": "4",
+      "Cover": 123
+    },
+    {
+      "PlotNumber": "CAP",
+      "Layer": "1",
+      "Cover": 99
+    },
+    {
+      "PlotNumber": "CAP",
+      "Layer": "4",
+      "Cover": 99
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "1",
+      "Cover": 30
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "4",
+      "Cover": 18
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "6",
+      "Cover": 2
+    },
+    {
+      "PlotNumber": "P",
+      "Layer": "7",
+      "Cover": 3
+    },
+    {
+      "PlotNumber": "Z",
+      "Layer": "6",
+      "Cover": 0
+    },
+    {
+      "PlotNumber": "Z",
+      "Layer": "7",
+      "Cover": 0
+    }
+  ],
+  "Joins": [
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTH",
+      "Layer": "1",
+      "Cover": 60,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTH",
+      "Layer": "2",
+      "Cover": 50,
+      "MatchedCode": "02",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTH",
+      "Layer": "4",
+      "Cover": 60,
+      "MatchedCode": "04",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTH",
+      "Layer": "5",
+      "Cover": 50,
+      "MatchedCode": "05",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTHB",
+      "Layer": "1",
+      "Cover": 10,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTHB",
+      "Layer": "4",
+      "Cover": 60,
+      "MatchedCode": "04",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTHB",
+      "Layer": "5",
+      "Cover": 50,
+      "MatchedCode": "05",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "CAP",
+      "Layer": "1",
+      "Cover": 60,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "CAP",
+      "Layer": "2",
+      "Cover": 50,
+      "MatchedCode": "02",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "CAP",
+      "Layer": "4",
+      "Cover": 50,
+      "MatchedCode": "04",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "CAP",
+      "Layer": "5",
+      "Cover": 40,
+      "MatchedCode": "05",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "CAP",
+      "Layer": "5a",
+      "Cover": 20,
+      "MatchedCode": "05a",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "1",
+      "Cover": 10,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "2",
+      "Cover": 20,
+      "MatchedCode": "02",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "5a",
+      "Cover": 5,
+      "MatchedCode": "05a",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "5b",
+      "Cover": 6,
+      "MatchedCode": "05b",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "5c",
+      "Cover": 7,
+      "MatchedCode": "05c",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "6",
+      "Cover": 2,
+      "MatchedCode": "06",
+      "MatchedStrata": "C"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "7",
+      "Cover": 3,
+      "MatchedCode": "07",
+      "MatchedStrata": "D"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "Z",
+      "Layer": "1",
+      "Cover": 0,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "Z",
+      "Layer": "5a",
+      "Cover": 0,
+      "MatchedCode": "05a",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "Z",
+      "Layer": "6",
+      "Cover": 0,
+      "MatchedCode": "06",
+      "MatchedStrata": "C"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "layer_strata",
+      "PlotNumber": "Z",
+      "Layer": "7",
+      "Cover": 0,
+      "MatchedCode": "07",
+      "MatchedStrata": "D"
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTH",
+      "Layer": "1",
+      "Cover": 60,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTH",
+      "Layer": "2",
+      "Cover": 50,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTH",
+      "Layer": "4",
+      "Cover": 60,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTH",
+      "Layer": "5",
+      "Cover": 50,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTHB",
+      "Layer": "1",
+      "Cover": 10,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTHB",
+      "Layer": "4",
+      "Cover": 60,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTHB",
+      "Layer": "5",
+      "Cover": 50,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "CAP",
+      "Layer": "1",
+      "Cover": 60,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "CAP",
+      "Layer": "2",
+      "Cover": 50,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "CAP",
+      "Layer": "4",
+      "Cover": 50,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "CAP",
+      "Layer": "5",
+      "Cover": 40,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "CAP",
+      "Layer": "5a",
+      "Cover": 20,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "1",
+      "Cover": 10,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "2",
+      "Cover": 20,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "5a",
+      "Cover": 5,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "5b",
+      "Cover": 6,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "5c",
+      "Cover": 7,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "6",
+      "Cover": 2,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "7",
+      "Cover": 3,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "Z",
+      "Layer": "1",
+      "Cover": 0,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "Z",
+      "Layer": "5a",
+      "Cover": 0,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "Z",
+      "Layer": "6",
+      "Cover": 0,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSConverted",
+      "Branch": "lifeform",
+      "PlotNumber": "Z",
+      "Layer": "7",
+      "Cover": 0,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTH",
+      "Layer": "1",
+      "Cover": 120,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "AUTHB",
+      "Layer": "4",
+      "Cover": 123,
+      "MatchedCode": "04",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "CAP",
+      "Layer": "1",
+      "Cover": 99,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "CAP",
+      "Layer": "4",
+      "Cover": 99,
+      "MatchedCode": "04",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "1",
+      "Cover": 30,
+      "MatchedCode": "01",
+      "MatchedStrata": "A"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "4",
+      "Cover": 18,
+      "MatchedCode": "04",
+      "MatchedStrata": "B"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "6",
+      "Cover": 2,
+      "MatchedCode": "06",
+      "MatchedStrata": "C"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "P",
+      "Layer": "7",
+      "Cover": 3,
+      "MatchedCode": "07",
+      "MatchedStrata": "D"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "Z",
+      "Layer": "6",
+      "Cover": 0,
+      "MatchedCode": "06",
+      "MatchedStrata": "C"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "layer_strata",
+      "PlotNumber": "Z",
+      "Layer": "7",
+      "Cover": 0,
+      "MatchedCode": "07",
+      "MatchedStrata": "D"
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTH",
+      "Layer": "1",
+      "Cover": 120,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "AUTHB",
+      "Layer": "4",
+      "Cover": 123,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "CAP",
+      "Layer": "1",
+      "Cover": 99,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "CAP",
+      "Layer": "4",
+      "Cover": 99,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "1",
+      "Cover": 30,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "4",
+      "Cover": 18,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "6",
+      "Cover": 2,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "P",
+      "Layer": "7",
+      "Cover": 3,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "Z",
+      "Layer": "6",
+      "Cover": 0,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    },
+    {
+      "Stage": "zOracleLSStrata",
+      "Branch": "lifeform",
+      "PlotNumber": "Z",
+      "Layer": "7",
+      "Cover": 0,
+      "MatchedCode": null,
+      "MatchedStrata": null
+    }
+  ],
+  "Checks": [
+    {
+      "Name": "conversion rows including non-null zero and 5a-c, excluding null",
+      "Pass": true
+    },
+    {
+      "Name": "conversion UPDATE assigned project to all rows",
+      "Pass": true
+    },
+    {
+      "Name": "strata fallback cap, authoritative totals, zero C/D, suppressed zero A/B",
+      "Pass": true
+    },
+    {
+      "Name": "actual LayerCode contains 1/4/5a/5b/5c/6/7",
+      "Pass": true
+    },
+    {
+      "Name": "Layer1234567 resolves all observed layer and strata rows",
+      "Pass": true
+    },
+    {
+      "Name": "LayerCode lifeform key leaves all fixture layer/strata values unmatched",
+      "Pass": true
+    },
+    {
+      "Name": "source front-end unchanged",
+      "Pass": true
+    }
+  ],
+  "SourceHashAfter": "01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423",
+  "CopyHashAfter": "locked after shutdown"
+}

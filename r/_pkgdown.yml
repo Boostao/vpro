@@ -1,0 +1,168 @@
+url: https://bcgov.github.io/vpro/
+
+template:
+  bootstrap: 5
+  bslib:
+    primary: "#003366"
+    secondary: "#38598A"
+    warning: "#FCBA19"
+    bg: "#FFFFFF"
+    fg: "#313132"
+    base_font: "BC Sans, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    heading_font: "BC Sans, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+
+navbar:
+  bg: primary
+  type: dark
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search]
+  components:
+    articles:
+      text: Workflows
+      menu:
+      - text: Live Workspace and Tidy Extraction
+        href: articles/getting-started-with-vpro-wails.html
+      - text: Community Ecology and Clustering Round-Trip
+        href: articles/community-ecology-and-clustering.html
+      - text: BEC Diagnostics, Pairwise Similarity, and Synthesis
+        href: articles/bec-diagnostics-and-synthesis.html
+      - text: Climate Normals, aSMR, and Edatopic Grids
+        href: articles/climate-asmr-and-edatopic-grids.html
+      - text: Cloud BECMaster Governance, Merge, and Snapshots
+        href: articles/cloud-becmaster-governance-and-sync.html
+
+reference:
+- title: Workspace, Standards, and Access Interchange
+  desc: Live vpro_wails WAL workspace connection, 2026 BECdb v13 / BCPlantTaxonomy v19 verification, and Access conversion.
+  contents:
+  - vpro_connect
+  - vpro_sample
+  - vpro_use
+  - vpro_status
+  - vpro_standards
+  - vpro_data_dir
+  - vpro_config_dir
+  - vpro_list_projects
+  - vpro_list_su
+  - vpro_list_hierarchies
+  - vpro_list_lumps
+  - vpro_project_discover
+  - vpro_project_validate
+  - vpro_project_inspect
+  - vpro_duckdb
+  - vpro_access_inspect
+  - vpro_import_access
+
+- title: Tidy Ecological Extraction, Taxonomy, and Hierarchies
+  desc: Plot environment, lumped multi-strata vegetation, LMH25-ordered soil horizons, and BEC classification trees.
+  contents:
+  - vpro_env
+  - vpro_veg
+  - vpro_soil
+  - vpro_other
+  - vpro_audit
+  - vpro_metadata
+  - vpro_site_units
+  - vpro_filter_plots
+  - vpro_is_modifier_unit
+  - vpro_taxonomy
+  - vpro_bec_units
+  - vpro_lump_map
+  - vpro_hierarchy
+  - vpro_hierarchy_to_table
+  - vpro_table_to_hierarchy
+
+- title: Community Matrices, Clustering, Spatial GIS, and LMH25 QA
+  desc: vegan/vegclust multivariate workflows, NAD83 spatial GeoPackage export, and LMH25 (2023) pedological checks.
+  contents:
+  - vpro_matrix
+  - vpro_cluster
+  - vpro_indicators
+  - vpro_sf
+  - vpro_export_gpkg
+  - vpro_check_lmh25
+  - vpro_validate
+
+- title: BEC Diagnostic Synthesis, Pairwise Similarity, and Profiling
+  desc: V7mdlDiagnostic fidelity classes, pairwise unit similarity, LOO outlier detection, plot profiling, and summary tables.
+  contents:
+  - vpro_diagnostics
+  - vpro_diagnostic_classify
+  - vpro_pairwise
+  - vpro_outliers
+  - vpro_profile
+  - vpro_rule
+  - vpro_summary_veg
+  - vpro_summary_env
+  - vpro_export_xlsx
+
+- title: Climate Normals, Ministry aSMR, Edatopic Grids, and Write-Back
+  desc: Shared __VPRO_PlotClimate cache, CMD to aSMR transfer function, dual 9x5 edatopic grids, and guarded SQLite write-back.
+  contents:
+  - vpro_climate
+  - vpro_cache_climate
+  - vpro_coord_elev_hash
+  - vpro_asmr
+  - vpro_evaluate_asmr
+  - vpro_edatopic_grid
+  - plot_edatope
+  - vpro_write_candidate_su
+  - vpro_write_su
+  - vpro_write_lump
+
+- title: Cloud BECMaster Governance, Staging Merge, and RDS Snapshots
+  desc: Role-based PostgreSQL BECMaster queries, contributor staging, custodian 3-way SERIALIZABLE merges, audit hash-chain verification, and portable RDS snapshots.
+  contents:
+  - vpro_has_pg_credentials
+  - vpro_master_connect
+  - vpro_master_disconnect
+  - vpro_master_status
+  - vpro_master_bootstrap
+  - vpro_master_env
+  - vpro_master_veg
+  - vpro_master_soil
+  - vpro_master_audit
+  - vpro_master_verify_audit
+  - vpro_master_standards
+  - vpro_master_workspace
+  - vpro_master_pull
+  - vpro_standards_sync
+  - vpro_staging_submit
+  - vpro_staging_list
+  - vpro_staging_inspect
+  - vpro_staging_diff
+  - vpro_staging_merge
+  - vpro_staging_reject
+  - vpro_publish_snapshot
+  - vpro_list_snapshots
+  - vpro_write_rds_snapshot
+  - vpro_read_rds_project
+
+- title: Quarto BEC Field Guides, Sidecar Bridge, and Calibrated Math
+  desc: B.C. Government Quarto guide publication, vpro_wails sidecar JSON bridge, and calibrated Access/BEC domain helpers.
+  contents:
+  - vpro_render_guide
+  - vpro_sidecar_exec
+  - vpro_bcgov_theme
+  - vpro_presence_class
+  - vpro_presence_class_numeric
+  - vpro_significance_class
+  - vpro_prominence_class
+  - vpro_goldstream_class
+  - vpro_narrow_float32
+  - vpro_round_ace
+  - vpro_round_minimum
+  - vpro_cap_percent
+  - vpro_access_to_logical
+  - vpro_logical_to_access
+  - vpro_coordinate_decimal
+  - vpro_coordinate_dms
+  - vpro_coordinate_dm
+
+- title: S3 Print, Summary, Plot, and Coercion Methods
+  contents:
+  - starts_with("as_tibble.")
+  - starts_with("print.")
+  - starts_with("summary.")
+  - starts_with("plot.")

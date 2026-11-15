@@ -1,0 +1,11 @@
+.navbar {
+  border-bottom: 3px solid #FCBA19;
+}
+
+h1, h2, h3, .page-header h1 {
+  color: #003366;
+}
+
+a {
+  color: #1A5A96;
+}

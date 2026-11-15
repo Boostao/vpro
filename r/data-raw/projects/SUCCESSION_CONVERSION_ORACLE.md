@@ -1,0 +1,25 @@
+# Disposable Access succession-conversion oracle
+
+`V7mdlSuccession.Convert2Succession` (canonical `../VPRO_ACCESS/VPro64_forAI/Modules/V7mdlSuccession.txt`, lines 13–90) was tested on Windows Access 16.0 through `data-raw/oracle/run-succession-conversion-probe.ps1` and `modSuccessionConversionProbe.bas`. **No original database was modified.** The runner copied the entire front-end folder to a timestamped VM temp directory, checked the original/initial-copy SHA-256 (`01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423`), and created a separate backend there. It copied the eight `Sample_*` tables *with records* to new `Oracle_*` tables in that backend and linked them into the cloned front end with `;DATABASE=...`. The original Sample table retained 1,633 vegetation rows. It preserved and restored the VM user's `CurrProject`, `ProjectPath`, and `CurrPlotlist` registry values (all were unset before and after these runs).
+
+The imported conversion module is a renamed copy of the Access routine. It substitutes the year prompt with **2021**, suppresses modal messages, and captures errors. Because `DoCmd.OpenForm "MainMenu"` failed with error 2102 in this front-end copy, its `OpenForm`/wait/recalc navigation was suppressed in the probe; the original `SetCurrentProject("Sample")` and subsequent reactivation, linked-table lookup, schema changes, and data update remained. A first unmodified-navigation attempt stopped with DAO/Access error 2102 before schema mutation. These results therefore establish the database path **under the navigation bypass**, not an end-to-end normal UI conversion. The DAO backend was closed and reopened before inspecting fields; otherwise a previously cached `TableDefs` collection incorrectly appeared to have no new columns.
+
+| Check | Before | Successful conversion | Injected interruption immediately before Env alteration |
+|---|---|---|---|
+| Veg rows | 1,633 | 1,633 | 1,633 |
+| Env rows | 52 | 52 | 52 |
+| Veg `SuccessionYear` | absent | `dbInteger` (2 bytes), 2021 for all 1,633 | present, 2021 for all 1,633 |
+| Env `SuccessionPlot` | absent | `dbBoolean` (1 byte), false for all 52; zero nulls | absent |
+| Veg identity count/min/max | 1,633 / -2143555711 / 2144819739 | unchanged | unchanged |
+| Active project after routine | Oracle before call | Oracle | Sample |
+| `USysVegA` includes `SuccessionYear` after call | no | yes | no |
+
+Success evidence: `data-raw/oracle/succession-conversion-success.tsv`. Interruption evidence: `data-raw/oracle/succession-conversion-interrupted.tsv`. In the interruption run the probe injected `Err.Raise` **after** the original `UPDATE Oracle_Veg SET SuccessionYear = 2021` and **before** changing the Env schema; Access caught the error and did not roll back the already applied vegetation schema/data changes or reactivate Oracle. `SuccessionProject` will regard this partially converted database as successional because it checks only for `SuccessionYear`, so the normal early guard would prevent a simple rerun. This failure was deliberately injected; no claim is made that this specific error occurs naturally.
+
+## Reattachment of the interrupted project
+
+A fresh Access 16.0 process opened a **new disposable clone** of the unchanged original front end and a second copy of the interrupted `OracleProject.accdb`. The copied backend's SHA-256 before/after the run matched `17942DC66351058B64723B211E0B45970EC5BCB9693F442BC95B7C8A66340EC7`; the original front-end hash before/after remained `01481B94569C7172F32A812E65365F78CEA5E440DD63220D91A37DADE5778423`. The runner restored the VM user's project registry values afterward. See `data-raw/oracle/run-succession-reattach-probe.ps1`, `modSuccessionReattachProbe.bas`, and `succession-reattach-partial.tsv`.
+
+The eight `Oracle_*` tables linked successfully; `SuccessionProject("Oracle")` returned true, and `SetCurrentProject("Oracle")` selected the copied project and its path. DAO opened `USysVegA`–`USysVegD` (all SQL definitions include `SuccessionYear`) and `USysEnv` successfully, even though `Oracle_Env` still lacked `SuccessionPlot`. Calling a renamed conversion routine again stopped at its original `SuccessionProject` precheck with the captured message “Already successional”; the Env field remained absent. This demonstrates **successful project selection and these query opens**, not success of forms, reports, or workflows that reference `SuccessionPlot`. The copied project was attached by the probe through the same DAO linked-table mechanism, not through the original file-picker/version-gating UI.
+
+Implications for a future SQLite conversion: require an explicit year, validate both schemas before mutation, update both tables transactionally, verify row counts and resulting fields, and make recovery from an existing `SuccessionYear`/missing `SuccessionPlot` state explicit rather than treating it as complete. The `dbBoolean` false outcome was observed for these 52 copied Env rows; test additional inputs before treating it as a universal default. No package conversion API was implemented by this probe, and the separate `CopySuccessionData` routine was not exercised.

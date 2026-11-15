@@ -1,0 +1,94 @@
+"FieldName","FieldLabel","UseField","Order"
+"PlotNumber","PlotNumber",1,1
+"Zone","Zone",1,2
+"Subzone","Subzone",1,3
+"SiteSeries","Site Series",1,4
+"UserSiteUnit","UserSiteUnit",1,5
+"BECSiteUnit","BECSiteUnit",1,6
+"SlopeGradient","Slope Gradient(%)",0,8
+"Aspect","Aspect(degrees)",0,9
+"Elevation","Elevation(m)",1,10
+"MesoSlopePosition","Meso Slope Position",0,11
+"Exposure1","Exposure1",1,12
+"Exposure2","Exposure2",0,13
+"SiteDisturbance1","SiteDisturbance1",0,14
+"SiteDisturbance2","SiteDisturbance2",0,15
+"SurficialMaterialSurf","SurficialMaterialSurf",0,16
+"SurficialMaterialSubSurf","SurficialMaterialSubSurf",0,17
+"SoilDrainage","SoilDrainage",0,18
+"SeepageDepth","Seepage Depth(cm)",0,19
+"SoilClassSubGroup","Soil Class Sub Group",0,20
+"SoilClassGroup","Soil Class Group",0,21
+"HumusForm","Humus Form",0,22
+"StrataCoverTree","StrataCoverTree",0,23
+"StrataCoverShrub","StrataCoverShrub",0,24
+"StrataCoverHerb","StrataCoverHerb",0,25
+"StrataCoverMoss","StrataCoverMoss",0,26
+"MoistureRegime","Moisture Regime",0,27
+"NutrientRegime","Nutrient Regime",0,28
+"SuccessionalStatus","Successional Status",0,29
+"StructuralStage","StructuralStage",0,30
+"StandAge","StandAge",0,31
+"Location","Location",1,7
+"WaterSource","WaterSource",0,33
+"SubstrateDecWood","Substrate Decaying Wood",0,34
+"SubstrateBedrock","Substrate Bedrock",0,35
+"SubstrateRocks","Substrate Rocks",0,36
+"SubstrateMineralSoil","Substrate Mineral Soil",0,37
+"SubstrateOrganicMatter","Substrate Organic Matter",0,38
+"SubstrateWater","Substrate Water",0,39
+"SurfaceTopographyType","Surface Topography Type",0,40
+"SiteNotes","SiteNotes",0,41
+"SoilSurveyor","SoilSurveyor",0,42
+"BedrockGeology1","BedrockGeology1",0,43
+"BedrockGeology2","BedrockGeology2",0,44
+"BedrockGeology3","BedrockGeology3",0,45
+"CoarseFragLith1","CoarseFragLith1",0,46
+"CoarseFragLith2","CoarseFragLith2",0,47
+"CoarseFragLith3","CoarseFragLith3",0,48
+"TerrainTextureSurf","TerrainTextureSurf",0,49
+"SurfaceExpSurf","SurfaceExpSurf",0,50
+"GeoMorProSurf","GeoMorProSurf",0,51
+"TerrainTextureSubSurf","TerrainTextureSubSurf",0,52
+"SurfaceExpSubSurf","SurfaceExpSubSurf",0,53
+"GeoMorProSubSurf","GeoMorProSubSurf",0,54
+"FloodingRegimeFreq","FloodingRegimeFreq",0,55
+"MoistureRegimeSub","MoistureRegimeSub",0,56
+"FloodingRegimeDur","FloodingRegimeDur",0,57
+"SurfaceTopographySize","SurfaceTopographySize",0,58
+"RootRestrictingType","RootRestrictingType",0,59
+"RootRestrictingDepth","Root Restricting Depth(cm)",0,60
+"RootZoneParticleSize","Root Zone Particle Size",0,61
+"RootingDepth","Rooting Depth(cm)",0,62
+"HumusFormPhase","HumusFormPhase",0,63
+"HumusThickness","HumusThickness",0,64
+"SoilNotes","SoilNotes",0,65
+"VegSurveyor","VegSurveyor",0,66
+"VegNotes","VegNotes",0,67
+"Photo","Photo",0,68
+"HydroGeoSystem","HydroGeoSystem",0,69
+"HydroGeoSubSystem","HydroGeoSubSystem",0,70
+"FieldNumber","FieldNumber",0,71
+"ProjectID","ProjectID",0,72
+"FSRegionDistrict","FSRegionDistrict",0,73
+"SitePlotQuality","SitePlotQuality",0,74
+"Date","Date",0,75
+"SiteSurveyor","SiteSurveyor",0,76
+"PlotRepresenting","PlotRepresenting",0,77
+"Ecosection","Ecosection",0,78
+"NTSMapSheet","NTS Map Sheet",0,79
+"Longitude","Longitude",0,80
+"Latitude","Latitude",0,81
+"UTMZone","UTMZone",0,82
+"UTMEasting","UTMEasting",0,83
+"UTMNorthing","UTMNorthing",0,84
+"LocationAccuracy","LocationAccuracy",0,85
+"AirPhotoNum","AirPhotoNum",0,86
+"XCoord","XCoord",0,87
+"YCoord","YCoord",0,88
+"TransDistrib","TransDistrib",0,89
+"RealmClass","RealmClass",0,90
+"MapUnit","MapUnit",0,91
+"SiteUnitShortName","SiteUnitShortName",0,92
+"SiteUnitLongName","SiteUnitLongName",0,93
+"StructuralStageMod","StructuralStageMod",0,94

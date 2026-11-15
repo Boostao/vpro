@@ -1,0 +1,2136 @@
+=== FULL TABLE DESIGN DOCUMENTATION ===
+Database: C:\Users\BrunoTremblay\Work\VPRO_ACCESS\VPro64\VMetaData.accda
+Exported: 3/17/2026 11:01:11 AM
+================================================================================
+
+TABLE: ProjectMetadata
+  Record Count: 8
+--------------------------------------------------------------------------------
+FIELD: ProjectID
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Links to VPRO project id field
+  Text Align:         General
+  New Values:         -
+  Indexed:            Primary Key
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: ProjectID
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: ProjectTitle
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: ProjectTitle
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CoordinatingAgency
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: CoordinatingAgency
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: ProponentFunder
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Funding agency/University
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: ProponentFunder
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: FieldCompanyAgency
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: FieldCompanyAgency
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: FieldLeader
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: FieldLeader
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: FieldDataCollectionTeam
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: FieldDataCollectionTeam
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: ProjectPurpose
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Purpose of project
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: ProjectPurpose
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: GeographicStudyArea
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        Geographic area of study
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: GeographicStudyArea
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: GeographicStudyRegion
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: GeographicStudyRegion
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: GeographicStudyDistrict
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         255
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 10
+  SourceField: GeographicStudyDistrict
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: StartDate
+  ----------------------------------------------------------------------
+  Data Type:          Date/Time
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 11
+  SourceField: StartDate
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  IMEMode: 0
+  IMESentenceMode: 3
+  GUID: ????????
+  AggregateType: -1
+  ShowDatePicker: 1
+----------------------------------------------------------------------
+
+FIELD: EndDate
+  ----------------------------------------------------------------------
+  Data Type:          Date/Time
+  Field Size:         -
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 12
+  SourceField: EndDate
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  IMEMode: 0
+  IMESentenceMode: 3
+  GUID: ????????
+  AggregateType: -1
+  ShowDatePicker: 1
+----------------------------------------------------------------------
+
+FIELD: NumberOfFS882Plots
+  ----------------------------------------------------------------------
+  Data Type:          Number (Long)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 13
+  SourceField: NumberOfFS882Plots
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: NumberOfSiteVisits
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 14
+  SourceField: NumberOfSiteVisits
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedSite
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 15
+  SourceField: CollectedSite
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedVeg
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 16
+  SourceField: CollectedVeg
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedSoil
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 17
+  SourceField: CollectedSoil
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedTerrain
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 18
+  SourceField: CollectedTerrain
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedMens
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 19
+  SourceField: CollectedMens
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedCWD
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 20
+  SourceField: CollectedCWD
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedWildTree
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 21
+  SourceField: CollectedWildTree
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedSoilChem
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 22
+  SourceField: CollectedSoilChem
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedOther
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = complete, 2 = partial, 3 = none
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 23
+  SourceField: CollectedOther
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedCompleteOtherName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 24
+  SourceField: CollectedCompleteOtherName
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 0
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedPartialOtherName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 25
+  SourceField: CollectedPartialOtherName
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 0
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CollectedNoneOtherName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 26
+  SourceField: CollectedNoneOtherName
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 0
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: GeoRefMethod
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = GPS, 2 = base correct, 3 = pre2000
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 27
+  SourceField: GeoRefMethod
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: Map
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = 10K, 2 = 50K, 3 = 250K
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 28
+  SourceField: Map
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: Datum
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = NAD27, 2 = NAD83
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 29
+  SourceField: Datum
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: CoordinateSystem
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = UTM, 2 = dd.ddd, 3 = dd.mm.mmm, 4 = dd.mm.ss.s
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 30
+  SourceField: CoordinateSystem
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: EcosysCollectionStandard
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = DIEF1980, 2 = DEIF1990, 3 = DTE1998, 4 = Other
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 31
+  SourceField: EcosysCollectionStandard
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: EcosysCollectionStandardOtherName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 32
+  SourceField: EcosysCollectionStandardOtherName
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: VegCoverMethod
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = Percent, 2 = Braun-Blanquet, 3 = Domin-Krajina, 4 = Other
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 33
+  SourceField: VegCoverMethod
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: VegCoverMethodOtherName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 34
+  SourceField: VegCoverMethodOtherName
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: MensurationMethod
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = Fixed, 2 = Prism, 3 = Paired Prism, 4 = Other
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 35
+  SourceField: MensurationMethod
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: MensurationMethodOtherName
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 36
+  SourceField: MensurationMethodOtherName
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: ExtraVegFieldDescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         100
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 37
+  SourceField: ExtraVegFieldDescription
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: PlotMethod
+  ----------------------------------------------------------------------
+  Data Type:          Number (Integer)
+  Field Size:         -
+  Format:             -
+  Decimal Places:     255
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        1 = 20x20, 2 = Nested, 3 = 1x1, 4 = Transect, 5 = Frame
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 38
+  SourceField: PlotMethod
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: DataCustodian
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         100
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 39
+  SourceField: DataCustodian
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: StorageLocation
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         100
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 40
+  SourceField: StorageLocation
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  AggregateType: -1
+----------------------------------------------------------------------
+
+FIELD: Notes
+  ----------------------------------------------------------------------
+  Data Type:          Long Text
+  Field Size:         0
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 41
+  SourceField: Notes
+  SourceTable: ProjectMetadata
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: True
+  GUID: ????????
+  TextFormat: 0
+  AggregateType: -1
+----------------------------------------------------------------------
+
+================================================================================
+
+TABLE: ProjectMetaDataCodes
+  Record Count: 5
+--------------------------------------------------------------------------------
+FIELD: PlotQualityVegetationCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 0
+  SourceField: PlotQualityVegetationCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ?? ?????
+----------------------------------------------------------------------
+
+FIELD: PlotQualityVegetationdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 1
+  SourceField: PlotQualityVegetationdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: PlotQualitySoilsCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 2
+  SourceField: PlotQualitySoilsCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: PlotQualitySoilsdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 3
+  SourceField: PlotQualitySoilsdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: DatumCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 4
+  SourceField: DatumCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: Datumdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 5
+  SourceField: Datumdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: CoordinateSystemCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 6
+  SourceField: CoordinateSystemCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: CoordinateSystemdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 7
+  SourceField: CoordinateSystemdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ??3?????
+----------------------------------------------------------------------
+
+FIELD: GeoReferenceMethodCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 8
+  SourceField: GeoReferenceMethodCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: GeoReferenceMethoddescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 9
+  SourceField: GeoReferenceMethoddescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: FieldCollectionStdsCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 10
+  SourceField: FieldCollectionStdsCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: FieldCollectionStdsdescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 11
+  SourceField: FieldCollectionStdsdescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: VegCoverClassTypeCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         1
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      Null
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Unique (No Duplicates)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 12
+  SourceField: VegCoverClassTypeCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: VegCoverClassTypedescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 13
+  SourceField: VegCoverClassTypedescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: ExtraVegFieldTypeCode
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         20
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            Indexed (Duplicates OK)
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 14
+  SourceField: ExtraVegFieldTypeCode
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+FIELD: ExtraVegFieldTypedescription
+  ----------------------------------------------------------------------
+  Data Type:          Short Text
+  Field Size:         50
+  Format:             -
+  Decimal Places:     Auto
+  Input Mask:         -
+  Caption:            -
+  Default Value:      
+  Validation Rule:    
+  Validation Text:    
+  Required:           No
+  Allow Zero Length:  No
+  Description:        -
+  Text Align:         General
+  New Values:         -
+  Indexed:            No
+  Column Hidden:      False
+  Column Order:       0
+  Column Width:       -1
+  -- Other Properties --
+  CollatingOrder: 1033
+  OrdinalPosition: 15
+  SourceField: ExtraVegFieldTypedescription
+  SourceTable: ProjectMetaDataCodes
+  DataUpdatable: False
+  AppendOnly: False
+  Expression: 
+  Precision: 1033
+  Scale: 0
+  DisplayControl: Text Box
+  IMEMode: 0
+  IMESentenceMode: 3
+  UnicodeCompression: False
+  GUID: ????????
+----------------------------------------------------------------------
+
+================================================================================
+
