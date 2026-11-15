@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -110,7 +111,7 @@ test('source-bound soil presentation contains each of the12/18 editable bindings
 });
 
 test('enabled creation renders one labelled retained input and explicit action in both compiled source panels', async () => {
-  const cases = require('./fixtures/twoPageSoilCreationWire.json');
+  const cases = readJsonFixture('twoPageSoilCreationWire.json');
   for (const entry of [cases[0], cases[4]]) {
     const { contextId, project, plot, form } = entry.request.original;
     const owner = { contextId, project, plot, form };
@@ -200,7 +201,7 @@ test('actual client soil choices reject stale remount delivery, detach proxies a
   let release, cancelled = 0, saves = 0;
   const first = Object.assign(new Promise(resolve => { release = resolve; }), { cancel() { cancelled++; } });
   const referenceWire = () => {
-    const result = structuredClone(require('./fixtures/twoPageSoilReferenceWire.json')[0].wire);
+    const result = structuredClone(readJsonFixture('twoPageSoilReferenceWire.json')[0].wire);
     Object.assign(result, fixture.owner);
     const historic = structuredClone(result.fields[0].definitions.rows[0]);
     historic.rowId = '-9'; historic.cells[3] = cell('text', 'overlength');
@@ -256,7 +257,7 @@ test('actual source chooser preserves numeric TEXT parsing, NULL versus empty an
   const client = await import('svelte/internal/client');
   for (const [index, kind, column, fieldIndex] of [[0, 'Humus', 'vonPost', 3], [1, 'Mineral', 'ASP', 0]]) {
     const source = complete(kind), owner = { ...fixture.owner, form: source.form };
-    const references = structuredClone(require('./fixtures/twoPageSoilReferenceWire.json')[index].wire);
+    const references = structuredClone(readJsonFixture('twoPageSoilReferenceWire.json')[index].wire);
     Object.assign(references, owner);
     const textField = references.fields[kind === 'Humus' ? 0 : 1];
     source.records.rows[0].cells[source.records.columns.findIndex(field => field.name === column)] = cell('integer', '2');
@@ -418,7 +419,7 @@ test('parent child guards refuse new drafts/write/variant/close while retaining 
 });
 
 test('root and form lifecycle barriers retain soil ownership and default-off numeric child fallback', () => {
-  const root = read('App.svelte'), form = read('FS882Form.svelte');
+  const root = read('App.svelte'), form = read('FS882Form.svelte') + '\n' + read('FS882Modals.svelte');
   assert.match(root, /editorBusy = \$derived\(localEditorBusy \|\| matrixPublicationBusy \|\| pictureCreationBusy \|\| pictureLifecycleBusy \|\| twoPageSoilBusy \|\| twoPageVegetationBusy \|\| externalSUEnvironmentBusy \|\| summaryPreferenceBusy \|\| summaryFieldListBusy \|\| summaryEnvironmentalBusy \|\| projectReportBusy\)/);
   assert.match(root, /subscribeTwoPageSoilActivity\(activity => \{ twoPageSoilBusy = activity\.busy \|\| activity\.blocked;/);
   assert.match(form, /twoPageSoilReviewEnabled && twoPageScope === 'entry'/);
@@ -683,7 +684,7 @@ test('physical-soil profile propagates unrelated read failures without becoming 
 });
 
 test('ordinary soil controls, empty placeholders and layer counts preserve availability guard', () => {
-  const source = read('FS882Form.svelte'), soilSection = read('FS882SoilHorizonSection.svelte');
+  const source = read('FS882Form.svelte') + '\n' + read('FS882SoilTab.svelte') + '\n' + read('FS882Modals.svelte'), soilSection = read('FS882SoilHorizonSection.svelte');
   assert.match(source, /ordinarySoilUnavailable: string \| null = null/);
   assert.match(source, /soilEditingDisabled = \$derived\(!!ordinarySoilUnavailable \|\| !soilEditingEnabled/);
   assert.match(source, /if \(ordinarySoilUnavailable \|\| !soilEditingEnabled \|\| soilReferenceBusy\) return/);

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { loadTypeScript } = require('./svelteTestHelpers.cjs');
@@ -36,7 +37,7 @@ const sessions = loadTypeScript('siviCreationSession.ts', {
 const owner = { contextId: 'C', project: 'Sample', plot: 'P' };
 const token = '00000000-0000-4000-8000-000000000001';
 const copy = value => structuredClone(value);
-const references = () => copy(require('./fixtures/siviSpeciesReferenceFixture.json'));
+const references = () => copy(readJsonFixture('siviSpeciesReferenceFixture.json'));
 function validDraft(form = 'SubVegA-SIVI') {
   let draft = editor.stageSIVICreationSpecies(editor.beginSIVICreation(form, owner),
     form === 'SubVegD-SIVI' ? 'MOSS' : 'TREE');

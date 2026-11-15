@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -13,7 +14,7 @@ const shared = loadTypeScript('reportTitlePreferences.ts', { './qualityEditor': 
 const prefs = loadTypeScript('longVegetationSelectedFieldPreferences.ts', {
   './qualityEditor': quality, './reportTitlePreferences': shared, './googleEarthReview': earth,
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'longVegetationSelectedFieldWire.json'), 'utf8'));
+const wire = readJsonFixture('longVegetationSelectedFieldWire.json');
 const scope = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath'].map(key => [key, wire.review[key]]));
 const review = (mode = 1, field = wire.review.values.selectedField) =>
   ({ ...structuredClone(wire.review), values: { mode, selectedField: field } });

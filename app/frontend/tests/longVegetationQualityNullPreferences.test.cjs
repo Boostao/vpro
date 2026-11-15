@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -13,7 +14,7 @@ const earth = loadTypeScript('googleEarthReview.ts', {
 });
 const shared = loadTypeScript('reportTitlePreferences.ts', { './qualityEditor': quality, './googleEarthReview': earth });
 const prefs = loadTypeScript('longVegetationQualityNullPreferences.ts', { './reportTitlePreferences': shared, './googleEarthReview': earth });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'longVegetationQualityNullWire.json'), 'utf8'));
+const wire = readJsonFixture('longVegetationQualityNullWire.json');
 const scope = { ...wire.review }; delete scope.values;
 const fields = ['siteIncludeNulls', 'vegIncludeNulls', 'soilIncludeNulls'];
 const review = (values = wire.review.values, owner = scope) => ({ ...owner, values });

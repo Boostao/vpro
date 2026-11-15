@@ -729,3 +729,52 @@ export function validateWorkbookExportDraft(draft: {
   }
   return '';
 }
+
+export interface SynthesisExportDraft {
+  outputPath: string;
+  reportTitle: string;
+  includeCommonNames: boolean;
+  diagnosticSheetName: string;
+  similaritySheetName: string;
+  outlierSheetName: string;
+  edatopicSheetName: string;
+  includeUnitEdatopicTabs: boolean;
+}
+
+export function createDefaultSynthesisExportDraft(): SynthesisExportDraft {
+  return {
+    outputPath: '',
+    reportTitle: '',
+    includeCommonNames: true,
+    diagnosticSheetName: 'Diagnostic Summary',
+    similaritySheetName: 'Pairwise Similarity',
+    outlierSheetName: 'Outlier Queue',
+    edatopicSheetName: 'Edatopic Grid',
+    includeUnitEdatopicTabs: false,
+  };
+}
+
+export function buildDiagnosticWorkbookPayload(
+  draft: SynthesisExportDraft,
+  options: SynthesisOptions
+): ExportDiagnosticWorkbookRequest {
+  return {
+    outputPath: draft.outputPath.trim(),
+    reportTitle: draft.reportTitle.trim(),
+    includeCommonNames: draft.includeCommonNames,
+    diagnosticSheetName: draft.diagnosticSheetName.trim(),
+    similaritySheetName: draft.similaritySheetName.trim(),
+    outlierSheetName: draft.outlierSheetName.trim(),
+    edatopicSheetName: draft.edatopicSheetName.trim(),
+    includeUnitEdatopicTabs: draft.includeUnitEdatopicTabs,
+    options,
+  };
+}
+
+export function mergeUniqueLumpOptions(
+  existing: SynthesisLumpTableOption[],
+  incoming: SynthesisLumpTableOption[]
+): SynthesisLumpTableOption[] {
+  const keys = new Set(existing.map(o => `${o.dbPath}::${o.tableName}`));
+  return [...existing, ...incoming.filter(o => !keys.has(`${o.dbPath}::${o.tableName}`))];
+}

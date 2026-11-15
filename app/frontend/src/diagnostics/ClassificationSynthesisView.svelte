@@ -2,26 +2,28 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { ReadRequests } from '../shared/readRequests';
   import { notifications } from '../shell/notificationService.svelte';
+  import SynthesisEdatopicTab from './SynthesisEdatopicTab.svelte';
+  import SynthesisExportModal from './SynthesisExportModal.svelte';
+  import SynthesisHeader from './SynthesisHeader.svelte';
+  import SynthesisMatrixTab from './SynthesisMatrixTab.svelte';
+  import SynthesisOutlierQueue from './SynthesisOutlierQueue.svelte';
+  import SynthesisSimilarityTab from './SynthesisSimilarityTab.svelte';
+  import SynthesisToolbar from './SynthesisToolbar.svelte';
   import {
+    buildDiagnosticWorkbookPayload,
     chooseExternalSQLiteTarget,
     createDefaultPairwiseParams,
+    createDefaultSynthesisExportDraft,
     createDefaultSynthesisOptions,
     defaultSynthesisBackendPort,
-    DIAGNOSTIC_CODE_META,
     discoverExternalSynthesisLumps,
-    EDATOPIC_SMR_ROWS,
-    EDATOPIC_SNR_COLS,
-    edatopicHeatLevel,
     filterAndGroupSpeciesRows,
     filterOutlierQueue,
     findPairwiseComparison,
-    formatSynthesisMatrixCell,
     getEdatopicCellMatrix,
     groupUnitsByHierarchyBreakpoints,
-    resolveDiagnosticCellClass,
+    mergeUniqueLumpOptions,
     resolveSynthesisHierarchyBreakpoints,
-    SMR_DESCRIPTIONS,
-    SNR_DESCRIPTIONS,
     validateWorkbookExportDraft,
     type BreakpointUnitRollup,
     type EdatopicCell,
@@ -30,6 +32,7 @@
     type MatrixGroupingMode,
     type OutlierFilterMode,
     type SynthesisBackendPort,
+    type SynthesisExportDraft,
     type SynthesisLumpTableOption,
     type SynthesisOptions,
     type SynthesisSnapshot,
@@ -86,20 +89,11 @@
   let selectedEdatopicScope = $state<string>('__OVERALL__');
   let inspectedEdatopicCell = $state.raw<EdatopicCell | null>(null);
 
-  // Drag-and-drop plot reassignment state
   let draggingPlotNumber = $state<string | null>(null);
   let dragOverUnit = $state<string | null>(null);
 
-  // Workbook export modal state
   let exportModalOpen = $state(false);
-  let exportPath = $state('');
-  let exportTitle = $state('');
-  let exportIncludeCommon = $state(true);
-  let exportDiagSheet = $state('Diagnostic Summary');
-  let exportSimSheet = $state('Pairwise Similarity');
-  let exportOutlierSheet = $state('Outlier Queue');
-  let exportEdatopicSheet = $state('Edatopic Grid');
-  let exportUnitEdatopicTabs = $state(false);
+  let exportDraft = $state<SynthesisExportDraft>(createDefaultSynthesisExportDraft());
   let exportingWorkbook = $state(false);
   let lastExportResult = $state.raw<ExportDiagnosticWorkbookResult | null>(null);
 
@@ -120,66 +114,56 @@
     }
   });
 
+  function pushNotice(severity: 'success' | 'info', category: 'general' | 'background', title: string, message: string) {
+    if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+      notifications.push({ severity, category, source: 'BEC Synthesis', title, message });
+    }
+  }
+
   function setBusyState(nextLoading: boolean, nextMutating: boolean) {
     loading = nextLoading;
     mutating = nextMutating;
     onBusyChange?.(nextLoading || nextMutating || exportingWorkbook);
   }
 
-  async function refreshAll(): Promise<void> {
+  async function runReadSnapshot(withLumps: boolean): Promise<void> {
     if (!effectiveContextId) return;
     reads.cancelAll();
     const gen = ++requestGeneration;
     setBusyState(true, mutating);
     errorMessage = '';
-
     try {
       const plainOpts = $state.snapshot(options);
-      const [lumps, snap] = await Promise.all([
-        reads.track(port.listSynthesisLumpTables(effectiveContextId)),
-        reads.track(port.computeSynthesisSnapshot(effectiveContextId, plainOpts)),
-      ]);
-      if (gen !== requestGeneration) return;
-      lumpOptions = lumps ?? [];
-      applyIncomingSnapshot(snap, snap.computeMs);
-    } catch (err) {
-      if (gen !== requestGeneration) return;
-      errorMessage = err instanceof Error ? err.message : String(err);
-    } finally {
-      if (gen === requestGeneration) {
-        setBusyState(false, mutating);
-      }
-    }
-  }
-
-  async function recomputeSnapshotOnly(): Promise<void> {
-    if (!effectiveContextId) return;
-    reads.cancelAll();
-    const gen = ++requestGeneration;
-    setBusyState(true, mutating);
-    errorMessage = '';
-
-    try {
-      const plainOpts = $state.snapshot(options);
-      const snap = await reads.track(port.computeSynthesisSnapshot(effectiveContextId, plainOpts));
-      if (gen !== requestGeneration) return;
-      applyIncomingSnapshot(snap, snap.computeMs);
-      if (useBreakpointGrouping) {
-        const res = await reads.track(resolveSynthesisHierarchyBreakpoints(effectiveContextId, breakpointPolicy));
+      if (withLumps) {
+        const [lumps, snap] = await Promise.all([
+          reads.track(port.listSynthesisLumpTables(effectiveContextId)),
+          reads.track(port.computeSynthesisSnapshot(effectiveContextId, plainOpts)),
+        ]);
         if (gen !== requestGeneration) return;
-        breakpointRollups = groupUnitsByHierarchyBreakpoints(snap, res);
+        lumpOptions = lumps ?? [];
+        applyIncomingSnapshot(snap, snap.computeMs);
       } else {
-        breakpointRollups = [];
+        const snap = await reads.track(port.computeSynthesisSnapshot(effectiveContextId, plainOpts));
+        if (gen !== requestGeneration) return;
+        applyIncomingSnapshot(snap, snap.computeMs);
+        if (useBreakpointGrouping) {
+          const res = await reads.track(resolveSynthesisHierarchyBreakpoints(effectiveContextId, breakpointPolicy));
+          if (gen !== requestGeneration) return;
+          breakpointRollups = groupUnitsByHierarchyBreakpoints(snap, res);
+        } else {
+          breakpointRollups = [];
+        }
       }
     } catch (err) {
       if (gen !== requestGeneration) return;
       errorMessage = err instanceof Error ? err.message : String(err);
     } finally {
-      if (gen === requestGeneration) {
-        setBusyState(false, mutating);
-      }
+      if (gen === requestGeneration) setBusyState(false, mutating);
     }
   }
+
+  const refreshAll = () => runReadSnapshot(true);
+  const recomputeSnapshotOnly = () => runReadSnapshot(false);
 
   async function browseExternalLumpDatabase() {
     if (!effectiveContextId || loading || mutating) return;
@@ -189,8 +173,7 @@
       if (!picked?.selectedPath) return;
       externalLumpDbPath = picked.selectedPath;
       const extLumps = await discoverExternalSynthesisLumps(effectiveContextId, picked.selectedPath);
-      const existingKeys = new Set(lumpOptions.map(o => `${o.dbPath}::${o.tableName}`));
-      lumpOptions = [...lumpOptions, ...extLumps.filter(o => !existingKeys.has(`${o.dbPath}::${o.tableName}`))];
+      lumpOptions = mergeUniqueLumpOptions(lumpOptions, extLumps);
       if (extLumps.length > 0) {
         options.lumpTable = extLumps[0].name;
         options.lumpDbPath = extLumps[0].dbPath;
@@ -225,6 +208,14 @@
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
+  }
+
+  function updateOptions(patch: Partial<SynthesisOptions>, recompute = false) {
+    Object.assign(options, patch);
+    if (patch.minMaxPresencePct !== undefined) {
+      options.minMaxPresencePct = patch.minMaxPresencePct;
+    }
+    if (recompute) void recomputeSnapshotOnly();
   }
 
   function updatePairwiseParam(
@@ -305,14 +296,8 @@
       statusNotice = res.changed
         ? `Moved plot ${res.plotNumber} from ${res.beforeSiteUnit || 'Unassigned'} to ${res.afterSiteUnit} in ${res.latencyMs.toFixed(1)} ms.`
         : `Plot ${res.plotNumber} is already assigned to ${res.afterSiteUnit}.`;
-      if (res.changed && typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
-        notifications.push({
-          severity: 'success',
-          category: 'general',
-          source: 'BEC Synthesis',
-          title: `Moved plot ${res.plotNumber} -> ${res.afterSiteUnit}`,
-          message: `From ${res.beforeSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`,
-        });
+      if (res.changed) {
+        pushNotice('success', 'general', `Moved plot ${res.plotNumber} -> ${res.afterSiteUnit}`, `From ${res.beforeSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`);
       }
     } catch (err) {
       if (gen !== requestGeneration) return;
@@ -337,15 +322,7 @@
       if (gen !== requestGeneration) return;
       applyIncomingSnapshot(res.snapshot, res.latencyMs);
       statusNotice = `Restored plot ${res.plotNumber} to ${res.afterSiteUnit || 'Unassigned'} in ${res.latencyMs.toFixed(1)} ms.`;
-      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
-        notifications.push({
-          severity: 'info',
-          category: 'general',
-          source: 'BEC Synthesis',
-          title: `Restored plot ${res.plotNumber}`,
-          message: `Reverted to ${res.afterSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`,
-        });
-      }
+      pushNotice('info', 'general', `Restored plot ${res.plotNumber}`, `Reverted to ${res.afterSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`);
     } catch (err) {
       if (gen !== requestGeneration) return;
       errorMessage = err instanceof Error ? err.message : String(err);
@@ -357,13 +334,7 @@
   }
 
   async function handlePublishWorkbook(): Promise<void> {
-    const validationErr = validateWorkbookExportDraft({
-      outputPath: exportPath,
-      diagnosticSheetName: exportDiagSheet,
-      similaritySheetName: exportSimSheet,
-      outlierSheetName: exportOutlierSheet,
-      edatopicSheetName: exportEdatopicSheet,
-    });
+    const validationErr = validateWorkbookExportDraft(exportDraft);
     if (validationErr) {
       errorMessage = validationErr;
       return;
@@ -373,30 +344,14 @@
     onBusyChange?.(true);
     errorMessage = '';
     try {
-      const plainOpts = $state.snapshot(options);
-      const res = await port.exportDiagnosticWorkbook(effectiveContextId, {
-        outputPath: exportPath.trim(),
-        reportTitle: exportTitle.trim(),
-        includeCommonNames: exportIncludeCommon,
-        diagnosticSheetName: exportDiagSheet.trim(),
-        similaritySheetName: exportSimSheet.trim(),
-        outlierSheetName: exportOutlierSheet.trim(),
-        edatopicSheetName: exportEdatopicSheet.trim(),
-        includeUnitEdatopicTabs: exportUnitEdatopicTabs,
-        options: plainOpts,
-      });
+      const res = await port.exportDiagnosticWorkbook(
+        effectiveContextId,
+        buildDiagnosticWorkbookPayload(exportDraft, $state.snapshot(options))
+      );
       if (gen !== requestGeneration) return;
       lastExportResult = res;
       statusNotice = `Published 4-sheet BEC Diagnostic workbook (${res.path}) in ${res.latencyMs.toFixed(1)} ms.`;
-      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
-        notifications.push({
-          severity: 'success',
-          category: 'background',
-          source: 'BEC Synthesis',
-          title: 'Published BEC Diagnostic Workbook (.xlsx)',
-          message: `${res.path} (${res.latencyMs.toFixed(1)} ms)`,
-        });
-      }
+      pushNotice('success', 'background', 'Published BEC Diagnostic Workbook (.xlsx)', `${res.path} (${res.latencyMs.toFixed(1)} ms)`);
     } catch (err) {
       if (gen !== requestGeneration) return;
       errorMessage = err instanceof Error ? err.message : String(err);
@@ -491,371 +446,54 @@
   const edatopicRows = $derived(getEdatopicCellMatrix(activeEdatopicGrid));
 
   const exportValidationMessage = $derived(
-    exportModalOpen
-      ? validateWorkbookExportDraft({
-          outputPath: exportPath,
-          diagnosticSheetName: exportDiagSheet,
-          similaritySheetName: exportSimSheet,
-          outlierSheetName: exportOutlierSheet,
-          edatopicSheetName: exportEdatopicSheet,
-        })
-      : ''
+    exportModalOpen ? validateWorkbookExportDraft(exportDraft) : ''
   );
 </script>
 
 <section class="synthesis-workbench" data-tour="diagnostic-synthesis-root" aria-label="BEC Differential and Pairwise Synthesis Workbench">
-  <!-- BC Gov #003366 / #FCBA19 Synthesis Command Header -->
-  <header class="syn-header">
-    <div class="syn-header-brand">
-      <div class="syn-eyebrow">B.C. MINISTRY OF FORESTS · BEC CLASSIFICATION SYNTHESIS</div>
-      <div class="syn-title-row">
-        <h2>Reactive BEC Differential &amp; Pairwise Synthesis</h2>
-        <span class="syn-chip syn-chip-gold">
-          {snapshot?.project || project || 'Active Project'} · SU: {snapshot?.su || su || 'None'}
-        </span>
-        {#if snapshot}
-          <span class="syn-chip">
-            {snapshot.classifiedPlotCount} Classified Plots · {snapshot.units.length} Units
-          </span>
-          {#if lastLatencyMs !== null}
-            <span class="syn-chip syn-latency-badge" data-testid="synthesis-latency-badge">
-              {lastLatencyMs.toFixed(1)} ms
-            </span>
-          {/if}
-        {/if}
-      </div>
-    </div>
+  <SynthesisHeader
+    {snapshot}
+    {project}
+    {su}
+    {lastLatencyMs}
+    {loading}
+    {mutating}
+    onRefresh={() => void refreshAll()}
+    onUndo={() => void handleUndoReassignment()}
+    onOpenExport={() => {
+      lastExportResult = null;
+      exportModalOpen = true;
+    }}
+  />
 
-    <div class="syn-header-actions">
-      <button
-        type="button"
-        class="syn-btn syn-btn-ghost"
-        disabled={loading || mutating}
-        onclick={() => void refreshAll()}
-      >
-        Refresh
-      </button>
-
-      <button
-        type="button"
-        class="syn-btn syn-btn-ghost"
-        disabled={!snapshot?.canUndo || mutating || loading}
-        title={snapshot?.latestUndo
-          ? `Undo move of plot ${snapshot.latestUndo.plotNumber} (${snapshot.latestUndo.afterSiteUnit} -> ${snapshot.latestUndo.beforeSiteUnit || 'Unassigned'})`
-          : 'No synthesis SU reassignment to undo'}
-        onclick={() => void handleUndoReassignment()}
-      >
-        Undo Move{snapshot?.undoDepth ? ` (${snapshot.undoDepth})` : ''}
-      </button>
-
-      <button
-        type="button"
-        class="syn-btn syn-btn-gold"
-        disabled={!snapshot || loading}
-        onclick={() => {
-          lastExportResult = null;
-          exportModalOpen = true;
-        }}
-      >
-        Publish Diagnostic .xlsx
-      </button>
-    </div>
-  </header>
-
-  <!-- Synthesis Controls & Filter Bar -->
-  <div class="syn-toolbar" role="region" aria-label="Synthesis Options">
-    <label class="syn-control">
-      <span>Unit Classification Source</span>
-      <select
-        data-synthesis-unit-source
-        value={options.unitSource ?? 'auto'}
-        disabled={loading || mutating}
-        onchange={e => {
-          options.unitSource = (e.currentTarget as HTMLSelectElement).value as
-            | 'auto'
-            | 'su'
-            | 'user_site_unit';
-          void recomputeSnapshotOnly();
-        }}
-      >
-        <option value="auto">Auto (SU -> UserSiteUnitList)</option>
-        <option value="su">Active SU Table ({snapshot?.su || su || 'None'})</option>
-        <option value="user_site_unit">UserSiteUnitList Working Units</option>
-      </select>
-    </label>
-
-    <label class="syn-control">
-      <span>Species Lumping (99% Cap)</span>
-      <select
-        data-synthesis-lump-select
-        value={`${options.lumpDbPath ?? ''}::${options.lumpTable ?? ''}`}
-        disabled={loading || mutating}
-        onchange={e => {
-          const val = (e.currentTarget as HTMLSelectElement).value;
-          const sep = val.indexOf('::');
-          options.lumpDbPath = sep >= 0 ? val.slice(0, sep) : '';
-          options.lumpTable = sep >= 0 ? val.slice(sep + 2) : '';
-          void recomputeSnapshotOnly();
-        }}
-      >
-        <option value="::">None (Raw Species)</option>
-        {#each lumpOptions as opt (`${opt.dbPath}::${opt.tableName}`)}
-          <option value={`${opt.dbPath}::${opt.name}`}>
-            {opt.tableName} ({opt.activeCount} active){opt.dbPath ? ` — ${opt.dbPath.split(/[\\/]/).pop()}` : ''}
-          </option>
-        {/each}
-      </select>
-    </label>
-
-    <div class="syn-control-buttons">
-      <button type="button" class="syn-btn syn-btn-ghost-dark" data-synthesis-browse-lump onclick={() => void browseExternalLumpDatabase()} disabled={loading || mutating}>
-        External Lump .db...
-      </button>
-      <button type="button" class="syn-btn syn-btn-ghost-dark" data-synthesis-browse-su onclick={() => void browseExternalSUFile()} disabled={loading || mutating}>
-        Inspect External SU .db...
-      </button>
-    </div>
-
-    <label class="syn-control">
-      <span>Significance Basis</span>
-      <select
-        value={options.significanceBasis ?? 'all_plots'}
-        disabled={loading || mutating}
-        onchange={e => {
-          options.significanceBasis = (e.currentTarget as HTMLSelectElement).value as
-            | 'all_plots'
-            | 'present_plots';
-          void recomputeSnapshotOnly();
-        }}
-      >
-        <option value="all_plots">Mean Cover (All Unit Plots)</option>
-        <option value="present_plots">Characteristic Cover (Present Plots)</option>
-      </select>
-    </label>
-
-    <label class="syn-control">
-      <span>Cell Notation</span>
-      <select
-        value={matrixDisplay}
-        onchange={e => {
-          matrixDisplay = (e.currentTarget as HTMLSelectElement).value as MatrixDisplayMode;
-        }}
-      >
-        <option value="roman_signif">BEC Class (I..V - +..9)</option>
-        <option value="pct_cover">Constancy % / Mean Cover</option>
-        <option value="crosstab">Diagnostic10 Code (1..5 - +..9)</option>
-      </select>
-    </label>
-
-    <label class="syn-control">
-      <span>Row Grouping</span>
-      <select
-        value={matrixGrouping}
-        onchange={e => {
-          matrixGrouping = (e.currentTarget as HTMLSelectElement).value as MatrixGroupingMode;
-        }}
-      >
-        <option value="diagnostic_unit">Diagnostic Unit (~Unit + Companions)</option>
-        <option value="stratum">Stratum (Tree / Shrub / Herb / Moss)</option>
-        <option value="lifeform">Lifeform (1..13)</option>
-        <option value="flat">Flat Taxonomic List</option>
-      </select>
-    </label>
-
-    <label class="syn-checkbox-control">
-      <input
-        type="checkbox"
-        checked={options.excludeStandardModifiers}
-        disabled={loading || mutating}
-        onchange={e => {
-          options.excludeStandardModifiers = (e.currentTarget as HTMLInputElement).checked;
-          void recomputeSnapshotOnly();
-        }}
-      />
-      <span>
-        Exclude <code>.support</code> / <code>.poor</code> / <code>.nudum</code>
-        {#if snapshot && snapshot.excludedPlotCount > 0}
-          ({snapshot.excludedPlotCount} excluded)
-        {/if}
-      </span>
-    </label>
-
-    <label class="syn-control">
-      <span>Min Max Presence (%)</span>
-      <input
-        type="number"
-        min="0"
-        max="100"
-        step="1"
-        data-synthesis-min-max-presence
-        value={options.minMaxPresencePct ?? 0}
-        oninput={e => {
-          const val = Number((e.currentTarget as HTMLInputElement).value);
-          options.minMaxPresencePct = Number.isFinite(val) ? Math.max(0, Math.min(100, val)) : 0;
-        }}
-        onchange={() => void recomputeSnapshotOnly()}
-      />
-    </label>
-
-    <label class="syn-checkbox-control">
-      <input
-        type="checkbox"
-        data-synthesis-use-breakpoints
-        checked={useBreakpointGrouping}
-        onchange={e => void toggleBreakpointGrouping((e.currentTarget as HTMLInputElement).checked)}
-      />
-      <span>Group by '~' Breakpoints</span>
-    </label>
-
-    {#if useBreakpointGrouping}
-      <label class="syn-control">
-        <span>Breakpoint Policy</span>
-        <select
-          data-synthesis-breakpoint-policy
-          value={breakpointPolicy}
-          onchange={e =>
-            void toggleBreakpointGrouping(
-              true,
-              (e.currentTarget as HTMLSelectElement).value as 'lowest' | 'highest'
-            )}
-        >
-          <option value="lowest">Lowest ('~' Closest Parent)</option>
-          <option value="highest">Highest ('~' Broadest Parent)</option>
-        </select>
-      </label>
-    {/if}
-
-    <label class="syn-checkbox-control">
-      <input
-        type="checkbox"
-        checked={diagnosticOnly}
-        onchange={e => {
-          diagnosticOnly = (e.currentTarget as HTMLInputElement).checked;
-        }}
-      />
-      <span>Diagnostic Taxa Only</span>
-    </label>
-  </div>
-
-  <details class="syn-advanced-panel" data-synthesis-advanced-params>
-    <summary>
-      Advanced BEC Synthesis &amp; Pairwise Thresholds (Defaults: MinPlots=2, Constancy=60%, Noise=10%, MinDiff=0.5, MinDd=0.5)
-    </summary>
-    <div class="syn-advanced-body">
-      <div class="syn-params-grid">
-        <label class="syn-control">
-          <span>Exclude Species Patterns (comma-separated)</span>
-          <input
-            type="text"
-            placeholder="e.g. sp., x, cf."
-            data-synthesis-exclude-patterns
-            value={excludePatternsText}
-            oninput={e => applyExcludePatterns((e.currentTarget as HTMLInputElement).value)}
-            onchange={() => void recomputeSnapshotOnly()}
-          />
-        </label>
-
-        <label class="syn-control">
-          <span>Min Plots / Unit</span>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            data-synthesis-pairwise-min-plots
-            value={options.pairwise?.minPlots ?? 2}
-            oninput={e => updatePairwiseParam('minPlots', (e.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-
-        <label class="syn-control">
-          <span>Min Constancy (%)</span>
-          <input
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            data-synthesis-pairwise-min-constancy
-            value={options.pairwise?.minConstancy ?? 60}
-            oninput={e => updatePairwiseParam('minConstancy', (e.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-
-        <label class="syn-control">
-          <span>Noise Constancy (%)</span>
-          <input
-            type="number"
-            min="0"
-            max="100"
-            step="1"
-            data-synthesis-pairwise-noise-constancy
-            value={options.pairwise?.noiseConstancy ?? 10}
-            oninput={e =>
-              updatePairwiseParam('noiseConstancy', (e.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-
-        <label class="syn-control">
-          <span>Min Diff Score</span>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            data-synthesis-pairwise-min-diff
-            value={options.pairwise?.minDiff ?? 0.5}
-            oninput={e => updatePairwiseParam('minDiff', (e.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-
-        <label class="syn-control">
-          <span>Min dd Score</span>
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            data-synthesis-pairwise-min-dd
-            value={options.pairwise?.minDd ?? 0.5}
-            oninput={e => updatePairwiseParam('minDd', (e.currentTarget as HTMLInputElement).value)}
-          />
-        </label>
-      </div>
-
-      <div class="syn-advanced-actions">
-        <button
-          type="button"
-          class="syn-btn syn-btn-ghost-dark"
-          data-synthesis-reset-pairwise
-          onclick={resetPairwiseDefaults}
-        >
-          Reset Pairwise Defaults (2, 60, 10, 0.5, 0.5)
-        </button>
-        <button
-          type="button"
-          class="syn-btn syn-btn-navy"
-          data-synthesis-apply-params
-          disabled={loading || mutating}
-          onclick={() => void recomputeSnapshotOnly()}
-        >
-          Apply Parameters &amp; Recompute
-        </button>
-      </div>
-
-      {#if externalLumpDbPath || externalSuPath}
-        <div class="syn-external-summary" data-synthesis-external-paths>
-          {#if externalLumpDbPath}
-            <div><strong>External Lump DB:</strong> <code>{externalLumpDbPath}</code></div>
-          {/if}
-          {#if externalSuPath}
-            <div>
-              <strong>Inspected External SU DB:</strong> <code>{externalSuPath}</code>
-              {#if externalSuNames.length > 0}
-                <span> ({externalSuNames.join(', ')})</span>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-  </details>
+  <SynthesisToolbar
+    {options}
+    {lumpOptions}
+    {su}
+    {snapshot}
+    {loading}
+    {mutating}
+    {matrixDisplay}
+    {matrixGrouping}
+    {diagnosticOnly}
+    {useBreakpointGrouping}
+    {breakpointPolicy}
+    {excludePatternsText}
+    {externalLumpDbPath}
+    {externalSuPath}
+    {externalSuNames}
+    onUpdateOptions={updateOptions}
+    onRecompute={() => void recomputeSnapshotOnly()}
+    onBrowseExternalLump={() => void browseExternalLumpDatabase()}
+    onBrowseExternalSU={() => void browseExternalSUFile()}
+    onMatrixDisplayChange={mode => (matrixDisplay = mode)}
+    onMatrixGroupingChange={mode => (matrixGrouping = mode)}
+    onDiagnosticOnlyChange={checked => (diagnosticOnly = checked)}
+    onToggleBreakpoints={(enabled, policy) => void toggleBreakpointGrouping(enabled, policy)}
+    onExcludePatternsInput={applyExcludePatterns}
+    onUpdatePairwiseParam={updatePairwiseParam}
+    onResetPairwise={resetPairwiseDefaults}
+  />
 
   {#if errorMessage}
     <div class="syn-alert syn-alert-error" role="alert">{errorMessage}</div>
@@ -874,10 +512,8 @@
     </div>
   {/if}
 
-  <!-- Workspace Split Grid: Primary Synthesis Canvas + Docked Outlier Queue -->
   <div class="syn-workspace-grid">
     <div class="syn-primary-pane">
-      <!-- Primary View Switcher -->
       <div class="syn-tabbar" role="tablist" aria-label="Synthesis Views">
         <button
           type="button"
@@ -921,1733 +557,94 @@
         {/if}
       </div>
 
-      <!-- Legend Strip for BEC Differential Classes -->
       {#if activeTab === 'matrix'}
-        <div class="syn-legend-bar">
-          <span class="syn-legend-title">BEC Diagnostic Classes:</span>
-          {#each Object.entries(DIAGNOSTIC_CODE_META) as [code, meta] (code)}
-            <span class="diag-badge {meta.badgeClass}" title={meta.label}>
-              {meta.shortLabel}
-            </span>
-          {/each}
-          {#if snapshot?.lumpTableUsed}
-            <span class="syn-lump-pill">
-              Lumped via {snapshot.lumpTableUsed} ({snapshot.lumpFoldedTaxa} folded, {snapshot.lumpCappedCells} capped at 99%)
-            </span>
-          {/if}
-          {#if snapshot?.suWritable}
-            <span class="syn-drop-hint">
-              Tip: Drag any outlier plot card onto a Site Unit column header to reassign live.
-            </span>
-          {/if}
-        </div>
+        <SynthesisMatrixTab
+          {snapshot}
+          {matrixSections}
+          {matrixDisplay}
+          {useBreakpointGrouping}
+          {breakpointPolicy}
+          {breakpointRollups}
+          {loading}
+          {dragOverUnit}
+          {onUnitDragOver}
+          onUnitDragLeave={unitCode => {
+            if (dragOverUnit === unitCode) dragOverUnit = null;
+          }}
+          {onUnitDrop}
+        />
       {/if}
 
-      {#if useBreakpointGrouping && breakpointRollups.length > 0}
-        <div class="syn-breakpoint-rollups" data-synthesis-breakpoint-rollups>
-          <span class="syn-legend-title">'~' Hierarchy Breakpoint Rollup ({breakpointPolicy}):</span>
-          {#each breakpointRollups as rollup (rollup.breakpointUnit)}
-            <span class="syn-breakpoint-chip">
-              <strong>~{rollup.breakpointUnit}</strong>
-              <span>n={rollup.plotCount}, {rollup.speciesCount} taxa</span>
-              <span class="syn-muted">[{rollup.descendantUnits.join(', ')}]</span>
-            </span>
-          {/each}
-        </div>
-      {/if}
-
-      <!-- TAB 1: Diagnostic Species x SiteUnit Matrix -->
-      {#if activeTab === 'matrix'}
-        <div class="syn-table-container">
-          {#if !snapshot || snapshot.units.length === 0}
-            <div class="syn-empty">
-              {loading
-                ? 'Computing BEC synthesis snapshot...'
-                : 'No classified Site Units available in the current scope.'}
-            </div>
-          {:else}
-            <table class="syn-matrix-table">
-              <thead>
-                <tr>
-                  <th class="sticky-col col-code">Code</th>
-                  <th class="sticky-col col-sci">Scientific Name</th>
-                  <th class="col-lf">Stratum</th>
-                  <th class="col-diag">Diagnosis</th>
-                  {#each snapshot.units as unit (unit.siteUnit)}
-                    <th
-                      class="col-unit"
-                      class:drop-active={dragOverUnit === unit.siteUnit}
-                      ondragover={ev => onUnitDragOver(ev, unit.siteUnit)}
-                      ondragleave={() => {
-                        if (dragOverUnit === unit.siteUnit) dragOverUnit = null;
-                      }}
-                      ondrop={ev => onUnitDrop(ev, unit.siteUnit)}
-                      title={unit.longName
-                        ? `${unit.siteUnit} — ${unit.longName} (n=${unit.plotCount} plots, ${unit.diagnosticCount} diagnostic taxa)`
-                        : `${unit.siteUnit} (n=${unit.plotCount} plots)`}
-                    >
-                      <div class="unit-th-code">{unit.siteUnit}</div>
-                      <div class="unit-th-sub">n={unit.plotCount} · diag={unit.diagnosticCount}</div>
-                    </th>
-                  {/each}
-                </tr>
-              </thead>
-              <tbody>
-                {#each matrixSections as section (section.key)}
-                  <tr class="syn-section-row">
-                    <td colspan={4 + snapshot.units.length}>
-                      <strong>{section.title}</strong>
-                      {#if section.subtitle}
-                        <span class="syn-section-sub">{section.subtitle}</span>
-                      {/if}
-                    </td>
-                  </tr>
-                  {#each section.rows as sp (sp.species)}
-                    <tr>
-                      <td class="sticky-col col-code mono-cell">
-                        {sp.species}
-                        {#if sp.sourceSpecies && sp.sourceSpecies.length > 0}
-                          <span
-                            class="lump-origin-tag"
-                            title={`Includes lumped: ${sp.sourceSpecies.join(', ')}`}
-                          >
-                            +{sp.sourceSpecies.length}
-                          </span>
-                        {/if}
-                      </td>
-                      <td class="sticky-col col-sci" title={sp.englishName}>
-                        <em>{sp.scientificName}</em>
-                      </td>
-                      <td class="col-lf">{sp.stratumGroup}</td>
-                      <td class="col-diag">
-                        {#if sp.diagnosticCodes.length > 0}
-                          <div class="diag-cell-badges">
-                            {#each sp.diagnosticCodes as dc (dc)}
-                              <span
-                                class="diag-badge {DIAGNOSTIC_CODE_META[dc]?.badgeClass ?? ''}"
-                                title={`${sp.diagnosticUnit}: ${DIAGNOSTIC_CODE_META[dc]?.label ?? dc}`}
-                              >
-                                {dc}
-                              </span>
-                            {/each}
-                            <span class="diag-unit-ref">{sp.diagnosticUnit}</span>
-                          </div>
-                        {/if}
-                      </td>
-                      {#each sp.cells as cell (cell.siteUnit)}
-                        <td
-                          class="col-unit-val {resolveDiagnosticCellClass(cell.cellDiagnosticCodes)}"
-                          title={cell.presentPlots > 0
-                            ? `${sp.species} in ${cell.siteUnit}: ${cell.presentPlots}/${cell.plotCount} plots (${cell.presencePctText}%, Class ${cell.presenceRoman}), Mean All=${cell.meanCoverAllText}%, Mean Present=${cell.meanCoverPresentText}%, Signif=${cell.signifClass}`
-                            : ''}
-                        >
-                          {#if cell.presentPlots > 0}
-                            <span>
-                              {formatSynthesisMatrixCell(
-                                cell,
-                                matrixDisplay,
-                                snapshot.significanceBasis
-                              )}
-                            </span>
-                            {#if cell.isPrimaryDiagnosticUnit && cell.cellDiagnosticCodes.length > 0}
-                              <sup class="cell-diag-sup">{cell.cellDiagnosticCodes.join(',')}</sup>
-                            {/if}
-                          {/if}
-                        </td>
-                      {/each}
-                    </tr>
-                  {/each}
-                {/each}
-              </tbody>
-            </table>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- TAB 2: Pairwise Unit Similarity Matrix & do_pairwise Differential Inspector -->
       {#if activeTab === 'similarity'}
-        <div class="syn-similarity-pane">
-          {#if !snapshot || snapshot.similarityMatrix.length === 0}
-            <div class="syn-empty">Need at least one classified Site Unit for similarity analysis.</div>
-          {:else}
-            <div class="syn-subbar">
-              <span class="syn-subbar-label">Similarity Metric:</span>
-              <button
-                type="button"
-                class="syn-pill-btn"
-                class:active={similarityMetric === 'sorensen'}
-                onclick={() => (similarityMetric = 'sorensen')}
-              >
-                Sorensen / Diagnostic10 (2*min / sum)
-              </button>
-              <button
-                type="button"
-                class="syn-pill-btn"
-                class:active={similarityMetric === 'bec_diff'}
-                onclick={() => (similarityMetric = 'bec_diff')}
-              >
-                BEC Differential Similarity (BEC.sim.mean)
-              </button>
-            </div>
-
-            <div class="syn-table-container">
-              <table class="syn-sim-table">
-                <thead>
-                  <tr>
-                    <th>Site Unit</th>
-                    {#each snapshot.units as u (u.siteUnit)}
-                      <th>{u.siteUnit}</th>
-                    {/each}
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each snapshot.similarityMatrix as row, rIdx (row.unit)}
-                    <tr>
-                      <th class="sim-row-hdr">{row.unit}</th>
-                      {#each row.cells as cell, cIdx (cell.unit)}
-                        {@const pct =
-                          similarityMetric === 'sorensen' ? cell.similarityPct : cell.becSimMeanPct}
-                        <td
-                          class="sim-cell"
-                          class:sim-diag={rIdx === cIdx}
-                          class:sim-high={rIdx !== cIdx && pct >= 70}
-                          class:sim-med={rIdx !== cIdx && pct >= 50 && pct < 70}
-                          class:sim-selected={
-                            (selectedPairUnits[0] === row.unit &&
-                              selectedPairUnits[1] === cell.unit) ||
-                            (selectedPairUnits[1] === row.unit &&
-                              selectedPairUnits[0] === cell.unit)
-                          }
-                          onclick={() => {
-                            if (row.unit !== cell.unit) {
-                              selectedPairUnits = [row.unit, cell.unit];
-                            }
-                          }}
-                        >
-                          {pct.toFixed(1)}%
-                        </td>
-                      {/each}
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-
-            {#if activePairComparison}
-              <div class="syn-pair-detail">
-                <div class="syn-pair-detail-hdr">
-                  <strong>
-                    Pairwise Differential Breakdown: {activePairComparison.unit1} (n={activePairComparison.plotsUnit1})
-                    vs {activePairComparison.unit2} (n={activePairComparison.plotsUnit2})
-                  </strong>
-                  <span>
-                    Sorensen: {activePairComparison.sorensenPct.toFixed(1)}% · BEC.sim.mean:{' '}
-                    {(activePairComparison.becSimMean * 100).toFixed(1)}% · Shared Diag Pot:{' '}
-                    {activePairComparison.sharedDiagPotential.toFixed(1)}
-                  </span>
-                </div>
-                {#if activePairComparison.differentialTaxa.length === 0}
-                  <p class="syn-muted">No species exceed BEC pairwise differential thresholds between these two units.</p>
-                {:else}
-                  <table class="syn-pair-taxa-table">
-                    <thead>
-                      <tr>
-                        <th>Species</th>
-                        <th>Scientific Name</th>
-                        <th>{activePairComparison.unit1} (Const% / Cov%)</th>
-                        <th>{activePairComparison.unit2} (Const% / Cov%)</th>
-                        <th>Diff Pts ({activePairComparison.unit1})</th>
-                        <th>Diff Pts ({activePairComparison.unit2})</th>
-                        <th>Favours</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#each activePairComparison.differentialTaxa.slice(0, 15) as dt (dt.species)}
-                        <tr>
-                          <td class="mono-cell">{dt.species}</td>
-                          <td><em>{dt.scientificName}</em></td>
-                          <td>{dt.constancyUnit1.toFixed(0)}% / {dt.meanCoverUnit1.toFixed(1)}%</td>
-                          <td>{dt.constancyUnit2.toFixed(0)}% / {dt.meanCoverUnit2.toFixed(1)}%</td>
-                          <td>{dt.diffPtsUnit1.toFixed(2)}</td>
-                          <td>{dt.diffPtsUnit2.toFixed(2)}</td>
-                          <td><strong>{dt.favoursUnit}</strong></td>
-                        </tr>
-                      {/each}
-                    </tbody>
-                  </table>
-                {/if}
-              </div>
-            {/if}
-          {/if}
-        </div>
+        <SynthesisSimilarityTab
+          {snapshot}
+          {similarityMetric}
+          {selectedPairUnits}
+          {activePairComparison}
+          onMetricChange={metric => (similarityMetric = metric)}
+          onSelectPair={pair => (selectedPairUnits = pair)}
+        />
       {/if}
 
-      <!-- TAB 3: Live 9x6 (rSMR 0..8 x rSNR A..F) Relative Edatopic Grid Heatmap -->
       {#if activeTab === 'edatopic'}
-        <div class="syn-edatopic-pane">
-          {#if !snapshot}
-            <div class="syn-empty">No edatopic data loaded.</div>
-          {:else}
-            <div class="syn-subbar">
-              <span class="syn-subbar-label">Unit Scope:</span>
-              <button
-                type="button"
-                class="syn-pill-btn"
-                class:active={selectedEdatopicScope === '__OVERALL__'}
-                onclick={() => {
-                  selectedEdatopicScope = '__OVERALL__';
-                  inspectedEdatopicCell = null;
-                }}
-              >
-                All Classified ({snapshot.overallEdatopicGrid.plottedEdatopicCount}/{snapshot.overallEdatopicGrid.totalPlots})
-              </button>
-              {#each snapshot.unitEdatopicGrids as ug (ug.siteUnit)}
-                <button
-                  type="button"
-                  class="syn-pill-btn"
-                  class:active={selectedEdatopicScope === ug.siteUnit}
-                  class:drop-active={dragOverUnit === ug.siteUnit}
-                  ondragover={ev => onUnitDragOver(ev, ug.siteUnit)}
-                  ondrop={ev => onUnitDrop(ev, ug.siteUnit)}
-                  onclick={() => {
-                    selectedEdatopicScope = ug.siteUnit;
-                    inspectedEdatopicCell = null;
-                  }}
-                >
-                  {ug.siteUnit} ({ug.plottedEdatopicCount}/{ug.totalPlots})
-                </button>
-              {/each}
-            </div>
-
-            {#if activeEdatopicGrid}
-              <div class="edatopic-layout">
-                <div class="edatopic-grid-card">
-                  <div class="edatopic-card-hdr">
-                    <strong>{activeEdatopicGrid.label} — Relative Edatopic Grid (9 x 6)</strong>
-                    <span>
-                      Plotted: {activeEdatopicGrid.plottedEdatopicCount} · Missing SMR/SNR:{' '}
-                      {activeEdatopicGrid.missingEdatopicCount}
-                    </span>
-                  </div>
-                  <table class="edatopic-table" aria-label="Relative Edatopic Grid">
-                    <thead>
-                      <tr>
-                        <th class="eda-corner">rSMR \ rSNR</th>
-                        {#each EDATOPIC_SNR_COLS as snr (snr)}
-                          <th title={SNR_DESCRIPTIONS[snr]}>
-                            <div>{snr}</div>
-                            <div class="eda-axis-sub">{SNR_DESCRIPTIONS[snr]}</div>
-                          </th>
-                        {/each}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#each edatopicRows as rowCells, rIdx (EDATOPIC_SMR_ROWS[rIdx])}
-                        {@const smrCode = EDATOPIC_SMR_ROWS[rIdx]}
-                        <tr>
-                          <th class="eda-row-hdr" title={SMR_DESCRIPTIONS[smrCode]}>
-                            <span class="mono-cell">{smrCode}</span>
-                            <span class="eda-axis-sub">{SMR_DESCRIPTIONS[smrCode]}</span>
-                          </th>
-                          {#each rowCells as cell (cell.snr)}
-                            {@const heat = edatopicHeatLevel(cell.prominence, cell.plotCount)}
-                            <td
-                              class="eda-cell eda-heat-{heat}"
-                              class:eda-selected={
-                                inspectedEdatopicCell?.smr === cell.smr &&
-                                inspectedEdatopicCell?.snr === cell.snr
-                              }
-                              onclick={() => (inspectedEdatopicCell = cell)}
-                              title={`rSMR ${cell.smr} / rSNR ${cell.snr}: ${cell.plotCount} plots (${cell.prominence.toFixed(1)}% prominence)`}
-                            >
-                              {#if cell.plotCount > 0}
-                                <div class="eda-count">{cell.plotCount}</div>
-                                <div class="eda-prom">{cell.prominence.toFixed(0)}%</div>
-                              {/if}
-                            </td>
-                          {/each}
-                        </tr>
-                      {/each}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div class="edatopic-inspector">
-                  <h3>Cell Plot Membership</h3>
-                  {#if !inspectedEdatopicCell}
-                    <p class="syn-muted">
-                      Select any cell in the 9x6 (rSMR 0..8 x rSNR A..F) grid to inspect contributing plots.
-                    </p>
-                  {:else}
-                    <p class="eda-inspected-title">
-                      <strong>rSMR {inspectedEdatopicCell.smr}{inspectedEdatopicCell.snr}</strong>
-                      ({SMR_DESCRIPTIONS[inspectedEdatopicCell.smr]} / {SNR_DESCRIPTIONS[inspectedEdatopicCell.snr]})
-                      — {inspectedEdatopicCell.plotCount} plots ({inspectedEdatopicCell.prominence.toFixed(1)}% prominence)
-                    </p>
-                    {#if inspectedEdatopicCell.plotNumbers.length === 0}
-                      <p class="syn-muted">No plots occupy this edatopic position.</p>
-                    {:else}
-                      <div class="eda-plot-chips">
-                        {#each inspectedEdatopicCell.plotNumbers as pNum (pNum)}
-                          <button
-                            type="button"
-                            class="plot-jump-chip"
-                            onclick={() => onOpenPlot?.(pNum)}
-                          >
-                            {pNum}
-                          </button>
-                        {/each}
-                      </div>
-                    {/if}
-                  {/if}
-                </div>
-              </div>
-            {/if}
-          {/if}
-        </div>
+        <SynthesisEdatopicTab
+          {snapshot}
+          {selectedEdatopicScope}
+          {inspectedEdatopicCell}
+          {activeEdatopicGrid}
+          {edatopicRows}
+          {dragOverUnit}
+          onSelectScope={scope => {
+            selectedEdatopicScope = scope;
+            inspectedEdatopicCell = null;
+          }}
+          onSelectCell={cell => (inspectedEdatopicCell = cell)}
+          {onUnitDragOver}
+          {onUnitDrop}
+          {onOpenPlot}
+        />
       {/if}
     </div>
 
-    <!-- Right Docked Pane: Candidate Misplaced Plots (LOO Outlier Queue) -->
-    <aside class="syn-outlier-pane" aria-label="Candidate Misplaced Plots Queue">
-      <div class="outlier-pane-hdr">
-        <div>
-          <h3>Candidate Misplaced Plots</h3>
-          <p>
-            Leave-One-Out centroid similarity · {misplacedCount} misplaced of{' '}
-            {snapshot?.outlierQueue.length ?? 0}
-          </p>
-        </div>
-      </div>
-
-      <div class="outlier-filter-bar">
-        <div class="outlier-pills">
-          <button
-            type="button"
-            class="syn-pill-btn"
-            class:active={outlierFilter === 'all'}
-            onclick={() => (outlierFilter = 'all')}
-          >
-            All ({snapshot?.outlierQueue.length ?? 0})
-          </button>
-          <button
-            type="button"
-            class="syn-pill-btn"
-            class:active={outlierFilter === 'misplaced'}
-            onclick={() => (outlierFilter = 'misplaced')}
-          >
-            Misplaced ({misplacedCount})
-          </button>
-          <button
-            type="button"
-            class="syn-pill-btn"
-            class:active={outlierFilter === 'top5'}
-            onclick={() => (outlierFilter = 'top5')}
-          >
-            Top 5%
-          </button>
-        </div>
-        <input
-          type="search"
-          class="outlier-search"
-          placeholder="Search plot or unit..."
-          value={outlierSearch}
-          oninput={e => (outlierSearch = (e.currentTarget as HTMLInputElement).value)}
-        />
-      </div>
-
-      <div class="outlier-list">
-        {#if visibleOutliers.length === 0}
-          <div class="syn-empty-small">No plots match the selected outlier filter.</div>
-        {:else}
-          {#each visibleOutliers as cand (cand.plotNumber)}
-            {@const chosenUnit =
-              manualTargetByPlot[cand.plotNumber] || cand.nearestRivalUnit || ''}
-            <article
-              class="outlier-card"
-              class:is-misplaced={cand.misplaced}
-              class:is-top5={cand.top5PercentAnomaly}
-              draggable={Boolean(snapshot?.suWritable)}
-              ondragstart={ev => onPlotDragStart(ev, cand.plotNumber)}
-              ondragend={onPlotDragEnd}
-            >
-              <div class="outlier-card-top">
-                <div class="outlier-id-group">
-                  <span class="outlier-rank">#{cand.rank}</span>
-                  <button
-                    type="button"
-                    class="outlier-plot-link"
-                    title={`Open plot ${cand.plotNumber}`}
-                    onclick={() => onOpenPlot?.(cand.plotNumber)}
-                  >
-                    {cand.plotNumber}
-                  </button>
-                  {#if cand.moistureRegime || cand.nutrientRegime}
-                    <span class="outlier-eda-tag">
-                      {cand.moistureRegime || '?'}{cand.nutrientRegime || '?'}
-                    </span>
-                  {/if}
-                </div>
-
-                {#if cand.misplaced}
-                  <span class="outlier-flag flag-misplaced">Rival Closer (+{cand.deltaSimilarityPct.toFixed(1)}%)</span>
-                {:else if cand.singletonUnit}
-                  <span class="outlier-flag flag-singleton">Singleton Unit</span>
-                {:else if cand.top5PercentAnomaly}
-                  <span class="outlier-flag flag-top5">Top 5%</span>
-                {/if}
-              </div>
-
-              <div class="outlier-metrics">
-                <div>
-                  <span class="metric-lbl">Assigned:</span>
-                  <strong>{cand.assignedUnit}</strong>
-                  <span>({cand.ownSimilarityPct.toFixed(1)}% LOO)</span>
-                </div>
-                {#if cand.nearestRivalUnit}
-                  <div>
-                    <span class="metric-lbl">Nearest Rival:</span>
-                    <strong>{cand.nearestRivalUnit}</strong>
-                    <span>({cand.rivalSimilarityPct.toFixed(1)}%)</span>
-                  </div>
-                {/if}
-              </div>
-
-              {#if snapshot && snapshot.units.length > 1}
-                <div class="outlier-actions">
-                  {#if cand.nearestRivalUnit}
-                    <button
-                      type="button"
-                      class="syn-btn-reassign"
-                      disabled={!snapshot.suWritable || mutating}
-                      onclick={() => void handleReassignPlot(cand.plotNumber, cand.nearestRivalUnit)}
-                    >
-                      Move to {cand.nearestRivalUnit}
-                    </button>
-                  {/if}
-
-                  <select
-                    aria-label={`Select target unit for plot ${cand.plotNumber}`}
-                    value={chosenUnit}
-                    disabled={!snapshot.suWritable || mutating}
-                    onchange={e => {
-                      const val = (e.currentTarget as HTMLSelectElement).value;
-                      manualTargetByPlot[cand.plotNumber] = val;
-                      if (val && val !== cand.assignedUnit) {
-                        void handleReassignPlot(cand.plotNumber, val);
-                      }
-                    }}
-                  >
-                    <option value="">Assign unit...</option>
-                    {#each snapshot.units as u (u.siteUnit)}
-                      {#if u.siteUnit !== cand.assignedUnit}
-                        <option value={u.siteUnit}>{u.siteUnit}</option>
-                      {/if}
-                    {/each}
-                  </select>
-                </div>
-              {/if}
-            </article>
-          {/each}
-        {/if}
-      </div>
-    </aside>
+    <SynthesisOutlierQueue
+      {snapshot}
+      {visibleOutliers}
+      {misplacedCount}
+      {outlierFilter}
+      {outlierSearch}
+      {manualTargetByPlot}
+      {mutating}
+      onFilterChange={mode => (outlierFilter = mode)}
+      onSearchChange={val => (outlierSearch = val)}
+      onManualTargetChange={(plotNumber, val) => (manualTargetByPlot[plotNumber] = val)}
+      onReassignPlot={(plotNumber, targetUnit) => void handleReassignPlot(plotNumber, targetUnit)}
+      {onPlotDragStart}
+      {onPlotDragEnd}
+      {onOpenPlot}
+    />
   </div>
 
-  <!-- Diagnostic10.xla-Compatible .xlsx Publication Modal -->
-  {#if exportModalOpen}
-    <div class="syn-modal-backdrop" role="dialog" aria-modal="true" aria-label="Publish BEC Diagnostic Workbook">
-      <div class="syn-modal">
-        <div class="syn-modal-hdr">
-          <h3>Publish BEC Diagnostic Synthesis Workbook (.xlsx)</h3>
-          <button type="button" class="syn-dismiss" onclick={() => (exportModalOpen = false)}>
-            Close
-          </button>
-        </div>
-
-        <div class="syn-modal-body">
-          <p class="syn-modal-desc">
-            Publishes an atomic, non-overwriting 4-sheet workbook compatible with legacy{' '}
-            <code>Diagnostic10.xla</code>: BEC colour-coded Diagnostic Summary, Pairwise Similarity
-            Matrix, Leave-One-Out Outlier Queue, and 9x6 Edatopic Grids.
-          </p>
-
-          <label class="syn-modal-field">
-            <span>Output .xlsx File Path (Absolute Path, No Overwrite)</span>
-            <input
-              type="text"
-              placeholder="/path/to/BEC_Diagnostic_Synthesis.xlsx"
-              value={exportPath}
-              oninput={e => (exportPath = (e.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
-
-          <label class="syn-modal-field">
-            <span>Report Title (Optional)</span>
-            <input
-              type="text"
-              placeholder="VPro BEC Diagnostic Summary Vegetation Report"
-              value={exportTitle}
-              oninput={e => (exportTitle = (e.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
-
-          <div class="syn-sheet-grid">
-            <label class="syn-modal-field">
-              <span>Sheet 1 (Diagnostic)</span>
-              <input
-                type="text"
-                maxlength="31"
-                value={exportDiagSheet}
-                oninput={e => (exportDiagSheet = (e.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-            <label class="syn-modal-field">
-              <span>Sheet 2 (Similarity)</span>
-              <input
-                type="text"
-                maxlength="31"
-                value={exportSimSheet}
-                oninput={e => (exportSimSheet = (e.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-            <label class="syn-modal-field">
-              <span>Sheet 3 (Outliers)</span>
-              <input
-                type="text"
-                maxlength="31"
-                value={exportOutlierSheet}
-                oninput={e => (exportOutlierSheet = (e.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-            <label class="syn-modal-field">
-              <span>Sheet 4 (Edatopic)</span>
-              <input
-                type="text"
-                maxlength="31"
-                value={exportEdatopicSheet}
-                oninput={e => (exportEdatopicSheet = (e.currentTarget as HTMLInputElement).value)}
-              />
-            </label>
-          </div>
-
-          <div class="syn-modal-checks">
-            <label class="syn-checkbox-control">
-              <input
-                type="checkbox"
-                checked={exportIncludeCommon}
-                onchange={e => (exportIncludeCommon = (e.currentTarget as HTMLInputElement).checked)}
-              />
-              <span>Include English Common Names Column</span>
-            </label>
-            <label class="syn-checkbox-control">
-              <input
-                type="checkbox"
-                checked={exportUnitEdatopicTabs}
-                onchange={e =>
-                  (exportUnitEdatopicTabs = (e.currentTarget as HTMLInputElement).checked)}
-              />
-              <span>Append Individual Unit Edatopic Tabs</span>
-            </label>
-          </div>
-
-          {#if exportValidationMessage}
-            <div class="syn-validation-hint">{exportValidationMessage}</div>
-          {/if}
-
-          {#if lastExportResult}
-            <div class="syn-export-success">
-              <strong>Published:</strong> <code>{lastExportResult.path}</code>
-              <div>SHA-256: <code>{lastExportResult.sha256.slice(0, 16)}...</code> · Sheets: {lastExportResult.sheetNames.join(', ')}</div>
-            </div>
-          {/if}
-        </div>
-
-        <div class="syn-modal-ftr">
-          <button
-            type="button"
-            class="syn-btn syn-btn-ghost-dark"
-            onclick={() => (exportModalOpen = false)}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            class="syn-btn syn-btn-navy"
-            disabled={exportingWorkbook || Boolean(exportValidationMessage)}
-            onclick={() => void handlePublishWorkbook()}
-          >
-            {exportingWorkbook ? 'Publishing...' : 'Publish .xlsx Workbook'}
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+  <SynthesisExportModal
+    open={exportModalOpen}
+    bind:draft={exportDraft}
+    {exportValidationMessage}
+    {lastExportResult}
+    {exportingWorkbook}
+    onClose={() => (exportModalOpen = false)}
+    onPublish={() => void handlePublishWorkbook()}
+  />
 </section>
 
 <style>
-  .synthesis-workbench {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    min-width: 0;
-    color: #313132;
-  }
-
-  .syn-header {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.85rem;
-    padding: 0.9rem 1.15rem;
-    background: #003366;
-    color: #FFFFFF;
-    border-bottom: 4px solid #FCBA19;
-    border-radius: 5px 5px 0 0;
-  }
-
-  .syn-eyebrow {
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: #FCBA19;
-  }
-
-  .syn-title-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.55rem;
-    margin-top: 0.2rem;
-  }
-
-  .syn-title-row h2 {
-    margin: 0;
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #FFFFFF;
-  }
-
-  .syn-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.18rem 0.55rem;
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.14);
-    color: #F2F2F2;
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .syn-chip-gold {
-    background: #FCBA19;
-    color: #003366;
-  }
-
-  .syn-latency-badge {
-    font-family: var(--font-mono, monospace);
-    border: 1px solid rgba(252, 186, 25, 0.65);
-  }
-
-  .syn-header-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .syn-btn {
-    min-height: 36px;
-    padding: 0.4rem 0.8rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    border: 1px solid transparent;
-  }
-
-  .syn-btn-ghost {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.35);
-    color: #FFFFFF;
-  }
-
-  .syn-btn-ghost:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.2);
-  }
-
-  .syn-btn-gold {
-    background: #FCBA19;
-    color: #003366;
-    font-weight: 700;
-  }
-
-  .syn-btn-gold:hover:not(:disabled) {
-    background: #FCBA19;
-    opacity: 0.92;
-  }
-
-  .syn-btn-navy {
-    background: #003366;
-    color: #FFFFFF;
-  }
-
-  .syn-btn-navy:hover:not(:disabled) {
-    background: #002244;
-  }
-
-  .syn-btn-ghost-dark {
-    background: #F2F2F2;
-    border-color: #D8D8D8;
-    color: #313132;
-  }
-
-  .syn-btn:disabled {
-    opacity: 0.5;
-  }
-
-  .syn-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 0.75rem;
-    padding: 0.7rem 0.9rem;
-    background: #FFFFFF;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-  }
-
-  .syn-control {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #003366;
-    min-width: 0;
-  }
-
-  .syn-control select,
-  .syn-control input {
-    min-height: 34px;
-    padding: 0.3rem 0.55rem;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    background: #FFFFFF;
-    font-size: 0.8rem;
-    color: #313132;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
-  .syn-control-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-
-  .syn-checkbox-control {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    min-height: 34px;
-    font-size: 0.8rem;
-    color: #313132;
-  }
-
-  .syn-advanced-panel {
-    background: #FFFFFF;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    padding: 0.55rem 0.85rem;
-  }
-
-  .syn-advanced-panel summary {
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #003366;
-  }
-
-  .syn-advanced-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.7rem;
-    margin-top: 0.65rem;
-    padding-top: 0.65rem;
-    border-top: 1px solid #D8D8D8;
-  }
-
-  .syn-params-grid {
+  :global(.syn-params-grid) {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
     gap: 0.65rem;
   }
 
-  .syn-advanced-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .syn-external-summary {
-    font-size: 0.76rem;
-    color: #474543;
-    background: #F2F2F2;
-    border-left: 3px solid #1A5A96;
-    padding: 0.45rem 0.65rem;
-    overflow-wrap: anywhere;
-  }
-
-  .syn-alert {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.55rem 0.85rem;
-    border-radius: 4px;
-    font-size: 0.82rem;
-  }
-
-  .syn-alert-error {
-    background: rgba(216, 41, 47, 0.1);
-    border-left: 4px solid #D8292F;
-    color: #D8292F;
-  }
-
-  .syn-alert-info {
-    background: rgba(26, 90, 150, 0.1);
-    border-left: 4px solid #003366;
-    color: #003366;
-  }
-
-  .syn-readonly-note {
-    padding: 0.45rem 0.75rem;
-    background: rgba(252, 186, 25, 0.16);
-    border-left: 4px solid #FCBA19;
-    font-size: 0.78rem;
-    color: #313132;
-  }
-
-  .syn-dismiss {
-    padding: 0.2rem 0.5rem;
-    border: 1px solid #D8D8D8;
-    border-radius: 3px;
-    background: #FFFFFF;
-    color: #313132;
-    font-size: 0.74rem;
-  }
-
-  .syn-workspace-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
-    gap: 0.85rem;
-    align-items: start;
-  }
-
-  .syn-primary-pane {
-    background: #FFFFFF;
-    border: 1px solid #D8D8D8;
-    border-radius: 5px;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  .syn-tabbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.45rem 0.65rem;
-    background: #F2F2F2;
-    border-bottom: 1px solid #D8D8D8;
-  }
-
-  .syn-tab {
-    min-height: 34px;
-    padding: 0.35rem 0.75rem;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    background: transparent;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #474543;
-  }
-
-  .syn-tab.active {
-    background: #003366;
-    color: #FFFFFF;
-    border-bottom: 2px solid #FCBA19;
-  }
-
-  .syn-inline-search {
-    margin-left: auto;
-    min-height: 32px;
-    min-width: min(100%, 210px);
-    max-width: 100%;
-    padding: 0.25rem 0.55rem;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    background: #FFFFFF;
-    color: #313132;
-    box-sizing: border-box;
-  }
-
-  .syn-legend-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.75rem;
-    background: #F2F2F2;
-    border-bottom: 1px solid #D8D8D8;
-    font-size: 0.75rem;
-  }
-
-  .syn-legend-title {
-    font-weight: 700;
-    color: #003366;
-  }
-
-  .diag-badge {
-    display: inline-block;
-    padding: 0.1rem 0.4rem;
-    border-radius: 3px;
-    font-family: var(--font-mono, monospace);
-    font-size: 0.72rem;
-    font-weight: 700;
-    border: 1px solid rgba(49, 49, 50, 0.2);
-  }
-
-  .diag-badge-d {
-    background: #2E8540;
-    color: #FFFFFF;
-  }
-  .diag-badge-dd {
-    background: #FCBA19;
-    color: #003366;
-  }
-  .diag-badge-cd {
-    background: #003366;
-    color: #FFFFFF;
-  }
-  .diag-badge-c {
-    background: #1A5A96;
-    color: #FFFFFF;
-  }
-  .diag-badge-ic {
-    background: #474543;
-    color: #FFFFFF;
-  }
-
-  .syn-lump-pill {
-    padding: 0.12rem 0.45rem;
-    background: #FFFFFF;
-    border: 1px solid #1A5A96;
-    color: #003366;
-    border-radius: 3px;
-    font-weight: 600;
-  }
-
-  .syn-drop-hint {
-    margin-left: auto;
-    color: #474543;
-    font-style: italic;
-  }
-
-  .syn-breakpoint-rollups {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.75rem;
-    background: #F2F2F2;
-    border-bottom: 1px solid #D8D8D8;
-    font-size: 0.75rem;
-  }
-
-  .syn-breakpoint-chip {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.16rem 0.45rem;
-    background: #FFFFFF;
-    border: 1px solid #1A5A96;
-    border-radius: 3px;
-    color: #003366;
-  }
-
-  .syn-table-container {
-    overflow: auto;
-    max-height: 68vh;
-    max-width: 100%;
-  }
-
-  .syn-matrix-table,
-  .syn-sim-table,
-  .syn-pair-taxa-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.8rem;
-  }
-
-  .syn-matrix-table th,
-  .syn-matrix-table td {
-    padding: 0.38rem 0.55rem;
-    border-bottom: 1px solid #D8D8D8;
-    border-right: 1px solid #F2F2F2;
-  }
-
-  .syn-matrix-table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    background: #003366;
-    color: #FFFFFF;
-    border-bottom: 2px solid #FCBA19;
-  }
-
-  .col-unit {
-    text-align: center;
-    min-width: 88px;
-  }
-
-  .col-unit.drop-active,
-  .syn-pill-btn.drop-active {
-    outline: 3px solid #FCBA19;
-    background: #1A5A96;
-    color: #FFFFFF;
-  }
-
-  .unit-th-code {
-    font-weight: 700;
-    font-size: 0.8rem;
-  }
-
-  .unit-th-sub {
-    font-size: 0.68rem;
-    color: #D8D8D8;
-    font-weight: 400;
-  }
-
-  .syn-section-row td {
-    background: #F2F2F2;
-    color: #003366;
-    font-size: 0.78rem;
-    padding: 0.35rem 0.65rem;
-  }
-
-  .syn-section-sub {
-    margin-left: 0.5rem;
-    color: #474543;
-    font-weight: 400;
-  }
-
-  .mono-cell {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.76rem;
-  }
-
-  .lump-origin-tag {
-    margin-left: 0.25rem;
-    padding: 0.05rem 0.28rem;
-    background: #FCBA19;
-    color: #003366;
-    border-radius: 3px;
-    font-size: 0.66rem;
-    font-weight: 700;
-  }
-
-  .diag-cell-badges {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .diag-unit-ref {
-    font-size: 0.7rem;
-    color: #474543;
-  }
-
-  .col-unit-val {
-    text-align: center;
-    font-family: var(--font-mono, monospace);
-    font-size: 0.76rem;
-  }
-
-  .cell-diag-sup {
-    margin-left: 0.15rem;
-    font-weight: 700;
-    color: #003366;
-  }
-
-  .diag-cell-d-dom {
-    background: rgba(252, 186, 25, 0.35);
-    color: #003366;
-    font-weight: 700;
-  }
-  .diag-cell-dd {
-    background: rgba(252, 186, 25, 0.22);
-    color: #313132;
-    font-weight: 700;
-  }
-  .diag-cell-d {
-    background: rgba(46, 133, 64, 0.16);
-    color: #1E5128;
-    font-weight: 700;
-  }
-  .diag-cell-cd {
-    background: rgba(26, 90, 150, 0.18);
-    color: #003366;
-    font-weight: 600;
-  }
-  .diag-cell-c {
-    background: rgba(26, 90, 150, 0.1);
-    color: #313132;
-  }
-  .diag-cell-ic {
-    background: #F2F2F2;
-    color: #474543;
-  }
-
-  .syn-subbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid #D8D8D8;
-    background: #F2F2F2;
-  }
-
-  .syn-subbar-label {
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #003366;
-  }
-
-  .syn-pill-btn {
-    padding: 0.25rem 0.6rem;
-    border: 1px solid #D8D8D8;
-    border-radius: 999px;
-    background: #FFFFFF;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #313132;
-  }
-
-  .syn-pill-btn.active {
-    background: #003366;
-    border-color: #003366;
-    color: #FCBA19;
-  }
-
-  .syn-sim-table th,
-  .syn-sim-table td {
-    padding: 0.45rem 0.6rem;
-    text-align: center;
-    border: 1px solid #D8D8D8;
-  }
-
-  .syn-sim-table thead th,
-  .sim-row-hdr {
-    background: #003366;
-    color: #FFFFFF;
-  }
-
-  .sim-cell {
-    cursor: pointer;
-    font-family: var(--font-mono, monospace);
-  }
-  .sim-diag {
-    background: #F2F2F2;
-    color: #474543;
-    cursor: default;
-  }
-  .sim-high {
-    background: rgba(26, 90, 150, 0.24);
-    font-weight: 700;
-  }
-  .sim-med {
-    background: rgba(26, 90, 150, 0.12);
-  }
-  .sim-selected {
-    outline: 2px solid #FCBA19;
-    outline-offset: -2px;
-  }
-
-  .syn-pair-detail {
-    padding: 0.8rem;
-    border-top: 2px solid #003366;
-  }
-
-  .syn-pair-detail-hdr {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-bottom: 0.6rem;
-    font-size: 0.82rem;
-    color: #003366;
-  }
-
-  .edatopic-layout {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-    gap: 0.85rem;
-    padding: 0.8rem;
-  }
-
-  .edatopic-grid-card,
-  .edatopic-inspector {
-    border: 1px solid var(--vpro-border, #D8D8D8);
-    border-radius: var(--vpro-radius-sm, 4px);
-    padding: 0.7rem;
-    background: var(--vpro-surface, #FFFFFF);
-    min-width: 0;
-    overflow-x: auto;
-  }
-
-  .mono-cell,
-  .col-unit-val,
-  .sim-cell,
-  .eda-count,
-  .eda-prom,
-  .syn-latency-badge,
-  .outlier-rank,
-  .outlier-plot-link,
-  .outlier-metrics {
-    font-variant-numeric: tabular-nums;
-  }
-
-  @media (pointer: coarse) {
-    .syn-btn,
-    .syn-tab,
-    .syn-pill-btn,
-    .syn-btn-reassign,
-    .syn-control select {
-      min-height: 44px;
-    }
-  }
-
-  .edatopic-card-hdr {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 0.4rem;
-    margin-bottom: 0.55rem;
-    font-size: 0.8rem;
-    color: #003366;
-  }
-
-  .edatopic-table {
-    width: 100%;
-    min-width: 0;
-    border-collapse: collapse;
-  }
-
-  .edatopic-table th,
-  .edatopic-table td {
-    border: 1px solid #D8D8D8;
-    padding: 0.35rem;
-    text-align: center;
-  }
-
-  .edatopic-table thead th,
-  .eda-corner {
-    background: #003366;
-    color: #FFFFFF;
-    font-size: 0.75rem;
-  }
-
-  .eda-row-hdr {
-    background: #F2F2F2;
-    color: #003366;
-    text-align: left;
-    font-size: 0.75rem;
-    white-space: nowrap;
-  }
-
-  .eda-axis-sub {
-    display: block;
-    font-size: 0.64rem;
-    font-weight: 400;
-    opacity: 0.85;
-  }
-
-  .eda-cell {
-    height: 44px;
-    min-width: 48px;
-    cursor: pointer;
-    vertical-align: middle;
-  }
-
-  .eda-heat-0 {
-    background: #FFFFFF;
-  }
-  .eda-heat-1 {
-    background: rgba(252, 186, 25, 0.22);
-  }
-  .eda-heat-2 {
-    background: rgba(252, 186, 25, 0.45);
-  }
-  .eda-heat-3 {
-    background: #FCBA19;
-    font-weight: 700;
-    color: #003366;
-  }
-  .eda-heat-4 {
-    background: #003366;
-    font-weight: 700;
-    color: #FCBA19;
-  }
-
-  .eda-selected {
-    outline: 3px solid #313132;
-    outline-offset: -3px;
-  }
-
-  .eda-count {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.82rem;
-    font-weight: 700;
-  }
-
-  .eda-prom {
-    font-size: 0.66rem;
-  }
-
-  .edatopic-inspector h3 {
-    margin: 0 0 0.45rem;
-    font-size: 0.88rem;
-    color: #003366;
-  }
-
-  .eda-plot-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.5rem;
-  }
-
-  .plot-jump-chip {
-    padding: 0.22rem 0.5rem;
-    border: 1px solid #003366;
-    border-radius: 3px;
-    background: #F2F2F2;
-    color: #003366;
-    font-family: var(--font-mono, monospace);
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  /* Docked Outlier Queue */
-  .syn-outlier-pane {
-    background: #FFFFFF;
-    border: 1px solid #D8D8D8;
-    border-top: 4px solid #003366;
-    border-radius: 5px;
-    display: flex;
-    flex-direction: column;
-    max-height: 78vh;
-    min-width: 0;
-  }
-
-  .outlier-pane-hdr {
-    padding: 0.65rem 0.8rem;
-    border-bottom: 1px solid #D8D8D8;
-  }
-
-  .outlier-pane-hdr h3 {
-    margin: 0;
-    font-size: 0.92rem;
-    color: #003366;
-  }
-
-  .outlier-pane-hdr p {
-    margin: 0.18rem 0 0;
-    font-size: 0.74rem;
-    color: #474543;
-  }
-
-  .outlier-filter-bar {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    padding: 0.55rem 0.75rem;
-    background: #F2F2F2;
-    border-bottom: 1px solid #D8D8D8;
-  }
-
-  .outlier-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-
-  .outlier-search {
-    min-height: 30px;
-    padding: 0.25rem 0.5rem;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    background: #FFFFFF;
-    color: #313132;
-    font-size: 0.78rem;
-  }
-
-  .outlier-list {
-    overflow-y: auto;
-    padding: 0.55rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .outlier-card {
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    padding: 0.55rem 0.65rem;
-    background: #FFFFFF;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .outlier-card.is-misplaced {
-    border-left: 4px solid #FCBA19;
-    background: rgba(252, 186, 25, 0.08);
-  }
-
-  .outlier-card-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  .outlier-id-group {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-
-  .outlier-rank {
-    font-family: var(--font-mono, monospace);
-    font-size: 0.72rem;
-    color: #474543;
-  }
-
-  .outlier-plot-link {
-    border: 0;
-    padding: 0;
-    background: transparent;
-    color: #003366;
-    font-family: var(--font-mono, monospace);
-    font-weight: 700;
-    font-size: 0.82rem;
-    text-decoration: underline;
-  }
-
-  .outlier-eda-tag {
-    padding: 0.06rem 0.3rem;
-    background: #F2F2F2;
-    color: #313132;
-    border-radius: 3px;
-    font-family: var(--font-mono, monospace);
-    font-size: 0.7rem;
-  }
-
-  .outlier-flag {
-    padding: 0.1rem 0.38rem;
-    border-radius: 3px;
-    font-size: 0.68rem;
-    font-weight: 700;
-  }
-
-  .flag-misplaced {
-    background: #FCBA19;
-    color: #003366;
-  }
-  .flag-singleton {
-    background: #F2F2F2;
-    color: #313132;
-  }
-  .flag-top5 {
-    background: #1A5A96;
-    color: #FFFFFF;
-  }
-
-  .outlier-metrics {
-    font-size: 0.75rem;
-    color: #474543;
-    display: grid;
-    gap: 0.15rem;
-  }
-
-  .metric-lbl {
-    color: #474543;
-  }
-
-  .outlier-actions {
-    display: flex;
-    gap: 0.35rem;
-    align-items: center;
-  }
-
-  .syn-btn-reassign {
-    flex: 1;
-    min-height: 28px;
-    padding: 0.2rem 0.45rem;
-    background: #003366;
-    color: #FCBA19;
-    border: 1px solid #003366;
-    border-radius: 3px;
-    font-size: 0.73rem;
-    font-weight: 700;
-  }
-
-  .outlier-actions select {
-    max-width: 118px;
-    min-height: 28px;
-    border: 1px solid #D8D8D8;
-    border-radius: 3px;
-    font-size: 0.73rem;
-    background: #FFFFFF;
-    color: #313132;
-  }
-
-  .syn-empty,
-  .syn-empty-small {
-    padding: 2rem;
-    text-align: center;
-    color: #474543;
-    font-size: 0.85rem;
-  }
-
-  .syn-muted {
-    color: #474543;
-    font-size: 0.8rem;
-  }
-
-  /* Export Modal */
-  .syn-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    background: rgba(0, 34, 68, 0.55);
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-  }
-
-  .syn-modal {
-    width: min(620px, 100%);
-    background: #FFFFFF;
-    border-top: 5px solid #FCBA19;
-    border-radius: 5px;
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
-    overflow: hidden;
-  }
-
-  .syn-modal-hdr {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.85rem 1.1rem;
-    background: #003366;
-    color: #FFFFFF;
-  }
-
-  .syn-modal-hdr h3 {
-    margin: 0;
-    font-size: 0.98rem;
-  }
-
-  .syn-modal-body {
-    padding: 1rem 1.1rem;
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .syn-modal-desc {
-    margin: 0;
-    font-size: 0.8rem;
-    color: #474543;
-    line-height: 1.45;
-  }
-
-  .syn-modal-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.76rem;
-    font-weight: 600;
-    color: #003366;
-  }
-
-  .syn-modal-field input {
-    min-height: 36px;
-    padding: 0.35rem 0.6rem;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    font-size: 0.82rem;
-    background: #FFFFFF;
-    color: #313132;
-  }
-
-  .syn-sheet-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.6rem;
-  }
-
-  .syn-modal-checks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .syn-validation-hint {
-    padding: 0.45rem 0.65rem;
-    background: rgba(216, 41, 47, 0.1);
-    border-left: 3px solid #D8292F;
-    color: #D8292F;
-    font-size: 0.78rem;
-  }
-
-  .syn-export-success {
-    padding: 0.55rem 0.75rem;
-    background: rgba(46, 133, 64, 0.1);
-    border-left: 3px solid #2E8540;
-    color: #1E5128;
-    font-size: 0.78rem;
-    overflow-wrap: anywhere;
-  }
-
-  .syn-modal-ftr {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.55rem;
-    padding: 0.75rem 1.1rem;
-    background: #F2F2F2;
-    border-top: 1px solid #D8D8D8;
-  }
-
   @media (max-width: 960px) {
-    .syn-workspace-grid,
-    .edatopic-layout,
-    .syn-sheet-grid {
+    .syn-workspace-grid {
       grid-template-columns: minmax(0, 1fr);
-    }
-
-    .syn-inline-search {
-      margin-left: 0;
-      width: 100%;
-    }
-
-    .syn-drop-hint {
-      margin-left: 0;
     }
   }
 </style>

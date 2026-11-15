@@ -102,16 +102,17 @@ test('remounted picture panel exposes retained correction and recovery before it
 });
 
 test('metadata wiring does not broaden image, creation/deletion or parent write authority', () => {
-  const root = source('FS882Form.svelte'), panel = source('PicturePanel.svelte'), manager = source('PictureManager.svelte');
+  const root = source('FS882Form.svelte') + '\n' + source('FS882SiteTab.svelte') + '\n' + source('FS882SoilTab.svelte'), panel = source('PicturePanel.svelte'), manager = source('PictureManager.svelte');
   assert.match(root, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(root, /disabled=\{busy \|\| otherHeaderWorkflowBusy \|\| !capabilitiesReady \|\| dirty \|\| childUnsaved\}/);
+  assert.match(root, /pictureDisabled=\{busy \|\| otherHeaderWorkflowBusy \|\| !capabilitiesReady \|\| dirty \|\| childUnsaved\}/);
+  assert.match(source('FS882SiteTab.svelte'), /<PicturePanel[^>]*disabled=\{pictureDisabled\}/);
   assert.match(panel, /metadataPending/);
   assert.match(panel, /if \(!update \|\| update.revision === appliedMetadataRevision\) return/);
   assert.doesNotMatch(source('pictureMetadataSessions.ts'), /CreatePlot|SwitchContext|GetImage|Delete|Restore/);
 });
 
 test('every ordinary parent editor waits for picture ownership while retained picture recovery stays reachable', () => {
-  const root = source('FS882Form.svelte');
+  const root = source('FS882Form.svelte') + '\n' + source('FS882SiteTab.svelte') + '\n' + source('FS882SoilTab.svelte');
   const expression = root.match(/const headerInputsDisabled = \$derived\(([^;\n]+)\);/)[1];
   const base = { draft: { locked: false }, busy: false, siviSourceBarrier: false, capabilitiesReady: true,
     childUnsaved: false, pictureBusy: false, pictureMetadataPending: false };
@@ -126,7 +127,8 @@ test('every ordinary parent editor waits for picture ownership while retained pi
     assert.ok(elements.length, name);
     for (const [element] of elements) assert.match(element, /disabled=\{headerInputsDisabled(?: \|\||\})/, name);
   }
-  const recovery = root.match(/metadataDisabled=\{(busy \|\| otherHeaderWorkflowBusy[^}\n]+)\}/)[1];
+  const recovery = root.match(/pictureMetadataDisabled=\{(busy \|\| otherHeaderWorkflowBusy[^}\n]+)\}/)[1];
+  assert.match(source('FS882SiteTab.svelte'), /<PicturePanel[^>]*metadataDisabled=\{pictureMetadataDisabled\}/);
   const state = { busy: false, otherHeaderWorkflowBusy: false, capabilitiesReady: true,
     pictureMetadataPending: false, dirty: true, childUnsaved: false };
   assert.equal(vm.runInNewContext(recovery, state), true);

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -25,7 +26,7 @@ const prefs = loadTypeScript(privateFile('summaryVegetationQualityPreferences.ts
   './googleEarthReview': earth, './lifeformSummary': lifeform, './qualityEditor': quality,
   './qualityMinimumReference': references, './reportTitlePreferences': shared,
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationQualityPreferencesWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationQualityPreferencesWire.json');
 const { values: ignoredValues, source: ignoredSource, qualityDefinitions: ignoredQuality, becDefinitions: ignoredBEC, ...scope } = wire.review;
 const reviewed = values => ({ ...structuredClone(wire.review), values });
 const ready = (values = wire.review.values) => {
@@ -301,7 +302,7 @@ test('production Summary pane unlocks enforced preview and holds sibling saves d
   const Panel = serverComponent(readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8'),
     'SummaryVegetationReport.svelte', {
       './summaryVegetation': report,
-      './summaryVegetationQualityPreferenceSessions': { summaryVegetationQualityPreferenceSession: () => qualitySession },
+      './summaryVegetationQualityPreferences': { summaryVegetationQualityPreferenceSession: () => qualitySession },
       '../bindings/github.com/boostao/vpro/app': {},
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
       '../classification/siteUnitExclusionFilter': {},

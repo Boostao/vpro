@@ -365,15 +365,17 @@ test('unsupported new metadata remains distinguishable but disabled, and unavail
 });
 
 test('FS882 candidate owns assignment across Save/Undo/Lock/close/remount/source and refreshes both clean peers', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
   for (const api of ['GetSIVIProjectAssignmentOriginal', 'SaveSIVIProjectAssignment', 'RestoreSIVIProjectAssignment']) {
     assert.ok(parent.includes(`ContextService.${api}`));
   }
-  assert.match(parent, /if \(siviProjectAssignmentUnsaved\) \{ await siviProjectAssignmentOperation\('save'\); return; \}/);
-  assert.match(parent, /if \(siviProjectAssignmentUnsaved\) \{ void siviProjectAssignmentOperation\('undo'\); return; \}/);
+  assert.match(parent, /\[\(\) => siviProjectAssignmentUnsaved, \(\) => siviProjectAssignmentOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => siviProjectAssignmentUnsaved, \(\) => void siviProjectAssignmentOperation\('undo'\)\]/);
   assert.match(parent, /Undo ProjectID selection\/recovery before changing the plot lock/);
   assert.match(parent, /siviProjectAssignmentSession\.closeState\(\)\.unsaved/);
-  assert.match(parent, /\|\| \(siviProjectAssignmentClose\?\.blocked \?\? false\)/);
+  assert.match(parent, /blocked: \[[^\]]*siviProjectAssignmentClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
   assert.match(parent, /refreshSIVIParent\(plot, \[siviParentWriteSession, siviParentActionSession, siviParentSharedSession\]\)/);
   assert.match(parent, /refreshSIVIParent\(plot, \[siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
   assert.match(parent, /refreshSIVIParent\(plot, \[siviParentWriteSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
@@ -402,7 +404,9 @@ test('SIVI metadata entry is independently absent by default and guarded by pare
 });
 
 test('SIVI metadata reuses the existing guarded editor and commit recovery instead of assigning or creating an identity implicitly', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
   assert.match(parent, /siviParentView && !metadataOpen/);
   assert.match(parent, /onMetadata=\{metadataEnabled \? openProjectMetadata : undefined\}/);
   assert.match(parent, /metadataDisabled=\{!canOpenProjectMetadata\(\)\}/);
@@ -414,9 +418,10 @@ test('SIVI metadata reuses the existing guarded editor and commit recovery inste
   }
   assert.match(parent, /oncommitted=\{refreshProjectMetadata\}/);
   const refresh = parent.slice(parent.indexOf('async function refreshProjectMetadata()'), parent.indexOf('async function refreshProjectMetadata()') + 700);
+  const siviHelper = readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
   assert.match(refresh, /refreshSIVIParent\(draft\.plotNumber, \[siviParentWriteSession, siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
   assert.match(refresh, /siviParentSourceSession\.load\(\)/);
-  assert.match(refresh, /siviParentSession\?\.view\(\)\.error/);
+  assert.match(siviHelper, /siviParentSession\.view\(\)\.error/);
   assert.match(refresh, /siviParentSourceSession\.view\(\)\.error/);
   assert.match(parent, /peer\.view\(\)\.original \|\| peer\.view\(\)\.error/);
   assert.match(refresh, /throw new Error/);

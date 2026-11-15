@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -27,8 +28,8 @@ const project = loadTypeScript('longVegetationProjectReport.ts', {
 const scopeClient = loadTypeScript('longVegetationProjectScope.ts', {
   './longVegetationProjectReport':project,'./longVegetationSelectedUnitSelection':selection,'./qualityEditor':quality
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectScopeWire.json'),'utf8'));
-const previews = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectUnitsWire.json'),'utf8'));
+const wire = readJsonFixture('longVegetationProjectScopeWire.json');
+const previews = readJsonFixture('longVegetationProjectUnitsWire.json');
 const owner = scope => Object.fromEntries(['contextId','project','projectPath','su','suPath'].map(key=>[key,scope[key]]));
 const options = (value,index) => ({scope:structuredClone(value.scope),options:{...owner(value.scope),settings:structuredClone(previews[index].settings)}});
 const preview = (value,index) => ({scope:structuredClone(value.scope),preview:structuredClone(previews[index])});

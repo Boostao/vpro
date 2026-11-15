@@ -120,7 +120,9 @@ test('panel safety feedback precedes fields and parent owner sits outside tab li
   assert.match(markup, /data-sivi-parent-cancel/);
   assert.match(markup, /data-sivi-parent-reload[^>]*disabled/);
   assert.doesNotMatch(markup, /data-sivi-parent-field=/);
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
   assert.match(parent, /siviParentSession\?\.dispose\(\)/);
   assert.match(parent, /GetSIVIParentOriginal\(siviContextId, plot\)/);
   assert.match(parent, /independentHeaderWorkflowBusy = \$derived\([^\n]*siviParentBusy/);
@@ -215,14 +217,16 @@ test('actual parent Save Lock and close authority block unknown source preferenc
   await context.actions.toggleLock(); assert.match(context.error, /observe.*before changing the plot lock/);
 });
 test('actual nested soil and terrain control permissions preserve source observation reachability', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
   const values = { draft: { locked: false }, busy: false, siviSourceBarrier: true, capabilitiesReady: true,
     childUnsaved: false, coordinateBusy: false, workingUnitBusy: false, qualityBusy: false,
     siteCodeBusy: false, regionCodeBusy: false, soilCodeBusy: false, geologyCodeBusy: false,
     pictureBusy: false, pictureMetadataPending: false };
   const header = parent.match(/const headerInputsDisabled = \$derived\(([^;\n]+)\);/)[1];
   const permissions = state => ({ ...state, headerInputsDisabled: vm.runInNewContext(header, state) });
-  const soilControls = parent + '\n' + readFileSync(srcPath('FS882SoilHorizonSection.svelte'), 'utf8');
+  const soilControls = parent + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882SoilHorizonSection.svelte'), 'utf8');
   for (const name of ['DrainageFields', 'SoilCodeFields', 'GeologyCodeFields', 'ParentCodeFields']) {
     const controls = [...soilControls.matchAll(new RegExp(`<${name}\\b[^>]*disabled=\\{([^}]+)\\}`, 'g'))];
     assert.ok(controls.length, name);

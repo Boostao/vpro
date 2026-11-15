@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { srcPath, resolveDependency } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -7,7 +8,7 @@ const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const req = createRequire(path.join(__dirname, '..', 'package.json'));
 const ts = req('typescript'), compiler = req('svelte/compiler'), runtime = req('svelte/internal/client');
-const wire = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationFieldListWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationFieldListWire.json');
 const { physical, source, sourcePath, ...context } = wire.review;
 const plain = value => JSON.parse(JSON.stringify(value));
 function execute(code, dependencies = {}, globals = {}) {
@@ -92,9 +93,9 @@ function report(value, { presentation = null, preferences = null, quality = null
     '../bindings/github.com/boostao/vpro/app': {},
     './readRequests': { ReadRequests: class { track(promise) { return promise; } cancelAll() {} } },
     './summaryVegetation': { summaryVegetationSession: () => preview },
-    './summaryVegetationPreferenceSessions': { summaryVegetationPreferenceSession: preferences ? () => preferences : null },
-    './summaryVegetationQualityPreferenceSessions': { summaryVegetationQualityPreferenceSession: quality ? () => quality : null },
-    './summaryVegetationPresentationPreferenceSessions': { summaryVegetationPresentationPreferenceSession: presentation ? () => presentation : null },
+    './summaryVegetationPreferences': { summaryVegetationPreferenceSession: preferences ? () => preferences : null },
+    './summaryVegetationQualityPreferences': { summaryVegetationQualityPreferenceSession: quality ? () => quality : null },
+    './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: presentation ? () => presentation : null },
     './summaryVegetationFieldListDesktop': { summaryVegetationFieldListDesktop: value },
     './summaryVegetationEnvironmentalDesktop': { summaryEnvironmentalEnabled: false, summaryEnvironmentalDesktop: {}, summaryEnvironmentalPort: {} },
   };

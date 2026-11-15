@@ -50,7 +50,7 @@ test('Native-verified five source slots compile with explicit opt-out and no imp
   assert.match(parent, /siteCodeKey\(control.column\)/);
   assert.match(parent, /@render siteCodeInputs/);
   assert.match(parent, /onbusy=\{onSiteCodeBusyChange\}/);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
   assert.match(form, /coordinateBusy \|\| workingUnitBusy \|\| qualityBusy \|\| siteCodeBusy/);
   assert.match(form, /onSiteCodeBusyChange=\{\(pending\) => siteCodeBusy = pending\}/);
 });

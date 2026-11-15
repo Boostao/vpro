@@ -79,18 +79,22 @@ test('Actual renderer gives12 labelled raw controls, duplicate cultural suggesti
 });
 
 test('Persistent attribute sessions gate shared lifecycle and clear only committed or explicitly cancelled drafts', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormChildren.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
   assert.match(form, /let attributeDrafts = \$state<VegetationAttributeDrafts>/);
   assert.match(form, /siviCreationPeerUnsaved = \$derived\(heightUnsaved \|\| siviUnsaved \|\| siviCoverUnsaved \|\| siviCombinedUnsaved \|\| siviCollectedUnsaved \|\| siviSpeciesUnsaved \|\| siviIdentityUnsaved \|\| otherUnsaved \|\| soilUnsaved \|\| attributeUnsaved \|\| collectedUnsaved \|\| speciesUnsaved \|\| deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
-  assert.match(form, /attributeInvalid\.length > 0/);
-  assert.match(form, /if \(attributeUnsaved\) \{ await saveAttributeDrafts\(\); return; \}/);
-  assert.match(form, /if \(attributeUnsaved\) \{ void cancelAttributeDrafts\(\); return; \}/);
+  assert.match(form, /i\.attributeInvalidCount > 0/);
+  assert.match(form, /\[\(\) => attributeUnsaved, \(\) => saveAttributeDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => attributeUnsaved, \(\) => void cancelAttributeDrafts\(\)\]/);
   assert.match(form, /Save or Cancel vegetation attribute drafts before changing the plot lock/);
-  assert.match(form, /await PlotService\.UpdateVegetationAttributes[\s\S]*?committed = true;[\s\S]*?attributeDrafts = \{\}/);
+  assert.match(form, /PlotService\.UpdateVegetationAttributes[\s\S]*?clearOnCommit: \(\) => \{ attributeDrafts = \{\}/);
+  assert.match(form, /committed = true;[\s\S]*?params\.clearOnCommit\(\)/);
   assert.match(form, /Vegetation attribute save failed; drafts retained/);
   assert.match(form, /Vegetation attributes committed, but refresh failed/);
   const otherSection = readFileSync(srcPath('FS882OtherRecordsSection.svelte'), 'utf8');
-  assert.match(form, /untrack\(\(\) => void loadAttributeSuggestions\(\)\)/);
+  assert.match(form, /untrack\(\(\) => \{ void loadSpeciesReferences\(\); void loadSoilSuggestions\(\); void loadAttributeSuggestions\(\); \}\)/);
   assert.match(form, /<FS882OtherRecordsSection/);
   assert.match(otherSection, /onattributestage=\{attributeEditingEnabled \? stageAttributeCell : undefined\}/);
 });

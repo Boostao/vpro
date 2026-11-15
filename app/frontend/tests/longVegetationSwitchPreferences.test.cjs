@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -15,7 +16,7 @@ const shared = loadTypeScript('reportTitlePreferences.ts', { './qualityEditor': 
 const prefs = loadTypeScript('longVegetationSwitchPreferences.ts', { './reportTitlePreferences': shared, './googleEarthReview': earth });
 const titles = loadTypeScript('longVegetationPreferences.ts', { './reportTitlePreferences': shared });
 const statistics = loadTypeScript('longVegetationStatisticsPreferences.ts', { './reportTitlePreferences': shared, './googleEarthReview': earth });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'longVegetationSwitchWire.json'), 'utf8'));
+const wire = readJsonFixture('longVegetationSwitchWire.json');
 const scope = { ...wire.review }; delete scope.values;
 const fields = ['quickReport', 'spaceBetweenGroups', 'reportSummary', 'constantSpeciesList'];
 const review = (values = wire.review.values, owner = scope) => ({ ...owner, values });

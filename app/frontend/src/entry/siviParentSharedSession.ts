@@ -63,7 +63,7 @@ export type SIVIParentSharedView = SIVIParentWriteView<SIVIParentSharedDrafts> &
   referencesEnabled?: boolean; referencesBusy?: boolean; referenceError?: string | null;
   references?: SIVIReferences | null; advisories?: Partial<Record<SIVIParentSharedColumn, string>>;
 };
-export function isSIVIParentSharedColumn(value: string, referencesEnabled = false): value is SIVIParentSharedColumn {
+function isSIVIParentSharedColumn(value: string, referencesEnabled = false): value is SIVIParentSharedColumn {
   return siviParentSharedColumns.some(column => column === value) ||
     referencesEnabled && siviReferencePolicies.some(field => field.column === value);
 }
@@ -115,9 +115,6 @@ export function siviParentSharedCell(original: SIVIParentOriginal, column: SIVIP
   return target(original, column).cell;
 }
 const nullCell = (): ProjectMetadataCell => ({ storage: 'null', text: null, integer: null, real: null, blobHex: null });
-export function siviParentSharedErrors(drafts: SIVIParentSharedDrafts): string[] {
-  return Object.values(drafts).flatMap(draft => draft?.error ? [draft.error] : []);
-}
 export function siviParentSharedDirty(drafts: SIVIParentSharedDrafts): boolean {
   return Object.values(drafts).some(draft => draft && (draft.error !== null || !equalCell(draft.expected, draft.value)));
 }

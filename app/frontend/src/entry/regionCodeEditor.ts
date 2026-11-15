@@ -16,7 +16,6 @@ export function regionCodeList(key: RegionCodeKey): RegionCodeList {
   return key === 'fsRegionDistrict' ? 'Region' : 'Ecosection';
 }
 const limits: Record<RegionCodeList, number> = { Region: 7, Ecosection: 3 };
-export function regionCodeLimit(key: RegionCodeKey): number { return limits[regionCodeList(key)]; }
 const reference = createReferenceCodeEditor({ keys: regionCodeKeys, labels: regionCodeLabels, list: regionCodeList, limits });
 export const regionCodeValueError = reference.valueError;
 export const regionCodesChanged = reference.changed;

@@ -142,3 +142,5 @@ export class SummaryVegetationQualityPreferencesSession extends ReportPreference
 }
 export const createSummaryVegetationQualityPreferencesRegistry = () =>
   reportPreferencesRegistry(scope => new SummaryVegetationQualityPreferencesSession(scope));
+
+export const summaryVegetationQualityPreferenceSession = createSummaryVegetationQualityPreferencesRegistry();

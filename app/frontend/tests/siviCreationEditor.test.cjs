@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { loadTypeScript, serverComponent, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
@@ -28,7 +29,7 @@ const editor = loadTypeScript('siviCreationEditor.ts', {
 const defaults = require('../../resources/sivi-new-row-defaults.json');
 const owner = { contextId: 'C', project: 'Sample', plot: 'P' };
 function references() {
-  const refs = structuredClone(require('./fixtures/siviSpeciesReferenceFixture.json'));
+  const refs = structuredClone(readJsonFixture('siviSpeciesReferenceFixture.json'));
   const herb = structuredClone(refs.master.rows[0]);
   herb.rowId = '2'; herb.cells[0] = cell('text', 'HERB'); herb.cells[2] = cell('integer', '5'); herb.cells[5] = cell();
   refs.master.rows.push(herb);

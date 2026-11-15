@@ -9,8 +9,6 @@
     validateClusteringDraft,
     validatePromoteCandidateDraft,
     validateQuartoGuideDraft,
-    edatopicCellColor,
-    indexEdatopicCells,
     computeDendrogramSVGLayout,
     type RSidecarBackendPort,
     type RRuntimeStatus,
@@ -28,6 +26,10 @@
     type QuartoGuideType,
     type QuartoGuideResult,
   } from './rSidecarWorkbench';
+  import RSidecarClusteringTab from './RSidecarClusteringTab.svelte';
+  import RSidecarEdatopicTab from './RSidecarEdatopicTab.svelte';
+  import RSidecarQuartoTab from './RSidecarQuartoTab.svelte';
+  import RSidecarRuntimeTab from './RSidecarRuntimeTab.svelte';
 
   let {
     contextId,
@@ -60,7 +62,6 @@
     onBusyChange?.(next);
   }
 
-  // Tab 1: Runtime & Cached Plot Climate state
   let runtimeStatus = $state<RRuntimeStatus | null>(null);
   let refPeriod = $state<ClimateRefPeriod>('1961_1990');
   let climateGroupBy = $state<ClimateGroupBy>('bgc');
@@ -70,11 +71,9 @@
   let climateResult = $state<ClimateEdatopicResult | null>(null);
   let cachedRows = $state<PlotClimateRow[]>([]);
 
-  // Tab 2: Dual Relative vs Actual Edatopic Grids state
   let selectedUnitGroup = $state<string>('__overall__');
   let selectedCellDetail = $state<{ gridKind: string; cell: EdatopicGridCell } | null>(null);
 
-  // Tab 3: BEC_R Clustering & SVG Dendrogram state
   let clusterMethod = $state<ClusteringMethod>('NC');
   let clusterDistance = $state<EcologicalDistance>('bray');
   let clusterLinkage = $state<HierarchicalLinkage>('ward.D2');
@@ -100,7 +99,6 @@
   let promoteActivate = $state(false);
   let promoteResult = $state<PromoteCandidateSUResult | null>(null);
 
-  // Tab 4: Quarto Guide Publication state
   let quartoGuideType = $state<QuartoGuideType>('single_unit');
   let quartoTitle = $state('');
   let quartoTargetUnit = $state('');
@@ -127,8 +125,15 @@
     onBusyChange?.(false);
   });
 
-  const displayedClimateRows = $derived(
-    climateResult ? climateResult.plots : cachedRows
+  const displayedClimateRows = $derived(climateResult ? climateResult.plots : cachedRows);
+  const climateEngineLabel = $derived(
+    !runtimeStatus
+      ? ''
+      : !runtimeStatus.available
+        ? 'Rscript Required (Unavailable)'
+        : runtimeStatus.climrRastersCached
+          ? 'Local climr Rasters'
+          : 'Offline Ministry BGC Lapse Model'
   );
 
   const activeEdatopicView = $derived.by(() => {
@@ -163,9 +168,6 @@
       actualGrid: found.actualGrid,
     };
   });
-
-  const relIndexed = $derived(indexEdatopicCells(activeEdatopicView?.relativeGrid));
-  const actIndexed = $derived(indexEdatopicCells(activeEdatopicView?.actualGrid));
 
   const vegclustMode = $derived(isVegclustMethod(clusterMethod));
   const dissimilarityActive = $derived(usesDissimilarity(clusterMethod));
@@ -443,1067 +445,78 @@
 
   <div class="tab-bar" role="tablist" aria-label="R Sidecar Sections">
     <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'runtime'}
-      class:active={activeTab === 'runtime'}
-      onclick={() => (activeTab = 'runtime')}
+      type="button" role="tab" aria-selected={activeTab === 'runtime'}
+      class:active={activeTab === 'runtime'} onclick={() => (activeTab = 'runtime')}
     >
       1. Runtime &amp; climr Climate Normals
     </button>
     <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'edatopic'}
-      class:active={activeTab === 'edatopic'}
-      onclick={() => (activeTab = 'edatopic')}
+      type="button" role="tab" aria-selected={activeTab === 'edatopic'}
+      class:active={activeTab === 'edatopic'} onclick={() => (activeTab = 'edatopic')}
     >
       2. Dual rSMR vs aSMR Edatopic Grids
     </button>
     <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'clustering'}
-      class:active={activeTab === 'clustering'}
-      onclick={() => (activeTab = 'clustering')}
+      type="button" role="tab" aria-selected={activeTab === 'clustering'}
+      class:active={activeTab === 'clustering'} onclick={() => (activeTab = 'clustering')}
     >
       3. BEC_R Clustering &amp; Dendrogram
     </button>
     <button
-      type="button"
-      role="tab"
-      aria-selected={activeTab === 'quarto'}
-      class:active={activeTab === 'quarto'}
-      onclick={() => (activeTab = 'quarto')}
+      type="button" role="tab" aria-selected={activeTab === 'quarto'}
+      class:active={activeTab === 'quarto'} onclick={() => (activeTab = 'quarto')}
     >
       4. Quarto Unit &amp; BGC Guide Publisher
     </button>
   </div>
 
-  {#if error}
-    <div class="banner-error" role="alert">{error}</div>
-  {/if}
-  {#if statusMessage}
-    <div class="banner-status" role="status">{statusMessage}</div>
-  {/if}
+  {#if error}<div class="banner-error" role="alert">{error}</div>{/if}
+  {#if statusMessage}<div class="banner-status" role="status">{statusMessage}</div>{/if}
 
   {#if activeTab === 'runtime'}
-    <div class="panel">
-      <div class="card">
-        <h3>Out-of-Process R &amp; Quarto Runtime Status</h3>
-        {#if runtimeStatus}
-          <div class="badge-strip">
-            <span class="badge" class:ok={runtimeStatus.available} class:warn={!runtimeStatus.available}>
-              Rscript: {runtimeStatus.available ? `Ready (${runtimeStatus.rVersion})` : 'Not Detected'}
-            </span>
-            <span class="badge" class:ok={runtimeStatus.quartoAvailable} class:warn={!runtimeStatus.quartoAvailable}>
-              Quarto CLI: {runtimeStatus.quartoAvailable ? `Ready (${runtimeStatus.quartoVersion})` : 'Fallback RMarkdown'}
-            </span>
-            <span
-              class="badge"
-              class:warn={!runtimeStatus.available}
-              class:ok={runtimeStatus.available && runtimeStatus.climrRastersCached}
-              class:neutral={runtimeStatus.available && !runtimeStatus.climrRastersCached}
-            >
-              Climate Engine: {!runtimeStatus.available ? 'Rscript Required (Unavailable)' : runtimeStatus.climrRastersCached ? 'Local climr Rasters' : 'Offline Ministry BGC Lapse Model'}
-            </span>
-            <span class="badge" class:ok={runtimeStatus.readyForClustering} class:warn={!runtimeStatus.readyForClustering}>
-              BEC_R Clustering: {runtimeStatus.readyForClustering ? 'Ready' : 'Missing Packages'}
-            </span>
-          </div>
-
-          {#if runtimeStatus.packages.length > 0}
-            <div class="table-scroll">
-              <table class="data-table compact">
-                <thead>
-                  <tr>
-                    <th>R Package</th>
-                    <th>Status</th>
-                    <th>Version</th>
-                    <th>Role</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each runtimeStatus.packages as pkg}
-                    <tr>
-                      <td><code>{pkg.name}</code></td>
-                      <td>{pkg.installed ? 'Installed' : 'Missing'}</td>
-                      <td>{pkg.version || '—'}</td>
-                      <td>{pkg.required ? 'Required' : 'Optional / Sidecar'}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          {/if}
-
-          {#if runtimeStatus.setupInstructions.length > 0}
-            <div class="setup-box">
-              <strong>Workstation Setup Guidance:</strong>
-              <ul>
-                {#each runtimeStatus.setupInstructions as step}
-                  <li>{step}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-        {:else}
-          <p class="muted">Click "Probe R &amp; Quarto Runtime" to inspect installed Rscript, Quarto CLI, and BEC_R package versions.</p>
-        {/if}
-      </div>
-
-      <div class="card">
-        <h3>Cached Plot Climate Normals (__VPRO_PlotClimate)</h3>
-        <div class="form-row">
-          <label>
-            Reference Period
-            <select bind:value={refPeriod}>
-              <option value="1961_1990">1961-1990 Historical Baseline</option>
-              <option value="1991_2020">1991-2020 Modern Normal</option>
-            </select>
-          </label>
-          <label>
-            Group Grids By
-            <select bind:value={climateGroupBy}>
-              <option value="bgc">BGC Subzone / Variant</option>
-              <option value="site_unit">Assigned Site Unit (*_SU)</option>
-            </select>
-          </label>
-          <label>
-            BGC Prefix Filter
-            <input type="text" bind:value={climateBgcFilter} placeholder="e.g. SBS, BWBS, MH" />
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={climateUseSu} />
-            Scope to Active SU ({activeSu})
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={climateForceRefresh} />
-            Force Re-compute Cache
-          </label>
-        </div>
-
-        <div class="button-row">
-          <button type="button" class="btn-primary" disabled={busy} onclick={runClimateAndDualEdatopic}>
-            Compute Climate &amp; CMD to aSMR
-          </button>
-          <button type="button" class="btn-secondary" disabled={busy} onclick={loadCachedPlotClimate}>
-            Load Cached __VPRO_PlotClimate
-          </button>
-        </div>
-
-        {#if climateResult}
-          <div class="kpi-row">
-            <div class="kpi"><span>Scoped Plots</span><strong>{climateResult.totalScopedPlots}</strong></div>
-            <div class="kpi"><span>Coordinatized</span><strong>{climateResult.coordinatizedPlots}</strong></div>
-            <div class="kpi"><span>Cache Hits</span><strong>{climateResult.cacheHits}</strong></div>
-            <div class="kpi"><span>Cache Misses</span><strong>{climateResult.cacheMisses}</strong></div>
-          </div>
-        {/if}
-
-        {#if displayedClimateRows.length > 0}
-          <div class="table-scroll">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Plot</th>
-                  <th>BGC</th>
-                  <th>Lat / Lon</th>
-                  <th>Elev (m)</th>
-                  <th>MAT (C)</th>
-                  <th>MAP (mm)</th>
-                  <th>MSP (mm)</th>
-                  <th>PAS (mm)</th>
-                  <th>CMD</th>
-                  <th>CMD.site</th>
-                  <th>rSMR</th>
-                  <th>aSMR</th>
-                  <th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each displayedClimateRows.slice(0, 100) as row}
-                  <tr>
-                    <td><code>{row.plotNumber}</code></td>
-                    <td>{row.bgc || '—'}</td>
-                    <td>{row.latitude.toFixed(4)}, {row.longitude.toFixed(4)}</td>
-                    <td>{row.elevation.toFixed(0)}</td>
-                    <td>{row.mat.toFixed(1)}</td>
-                    <td>{row.map.toFixed(0)}</td>
-                    <td>{row.msp.toFixed(0)}</td>
-                    <td>{row.pas.toFixed(0)}</td>
-                    <td>{row.cmd.toFixed(0)}</td>
-                    <td>{row.cmdSite !== undefined ? row.cmdSite.toFixed(0) : '—'}</td>
-                    <td>{row.rsmr || '—'}</td>
-                    <td><strong>{row.asmr !== undefined ? row.asmr : '—'}</strong></td>
-                    <td><code>{row.source}</code></td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {/if}
-      </div>
-    </div>
+    <RSidecarRuntimeTab
+      {activeSu} {busy} {runtimeStatus} {climateEngineLabel}
+      bind:refPeriod bind:climateGroupBy bind:climateBgcFilter bind:climateUseSu bind:climateForceRefresh
+      {climateResult} {displayedClimateRows}
+      onRunClimate={runClimateAndDualEdatopic} onLoadCached={loadCachedPlotClimate}
+    />
   {:else if activeTab === 'edatopic'}
-    <div class="panel">
-      <div class="card">
-        <h3>Ministry CMD to aSMR Dual Edatopic Grids</h3>
-        {#if !climateResult || !activeEdatopicView}
-          <p class="muted">Run "Compute Climate &amp; CMD to aSMR" on Tab 1 first to populate Dual Relative and Actual Edatopic Grids.</p>
-        {:else}
-          <div class="form-row">
-            <label>
-              BGC / Site Unit Scope
-              <select bind:value={selectedUnitGroup}>
-                <option value="__overall__">Overall Project Scope ({climateResult.coordinatizedPlots} plots)</option>
-                {#each climateResult.unitSummaries as unit}
-                  <option value={unit.groupKey}>
-                    {unit.groupKey} ({unit.plotCount} plots{unit.meanAsmr !== undefined ? `, mean aSMR ${unit.meanAsmr}` : ''})
-                  </option>
-                {/each}
-              </select>
-            </label>
-            {#if activeEdatopicView.meanShift !== null}
-              <div class="kpi">
-                <span>Mean Moisture Shift (aSMR - rSMR)</span>
-                <strong>{activeEdatopicView.meanShift > 0 ? `+${activeEdatopicView.meanShift}` : activeEdatopicView.meanShift}</strong>
-              </div>
-            {/if}
-          </div>
-
-          <div class="dual-grid-wrap">
-            <div class="edatopic-panel">
-              <h4>Relative Edatopic Grid (rSMR x rSNR) — Modal: {activeEdatopicView.relativeGrid.modalCell || '—'}</h4>
-              <div class="table-scroll">
-                <table class="edatopic-table">
-                <thead>
-                  <tr>
-                    <th>rSMR \ rSNR</th>
-                    {#each activeEdatopicView.relativeGrid.nutrientAxis as snr}
-                      <th>{snr}</th>
-                    {/each}
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each activeEdatopicView.relativeGrid.moistureAxis as smr}
-                    <tr>
-                      <th>{smr}</th>
-                      {#each activeEdatopicView.relativeGrid.nutrientAxis as snr}
-                        {@const cell = relIndexed.byKey[`${smr}|${snr}`]}
-                        {@const colors = edatopicCellColor(cell?.count || 0, relIndexed.maxCount)}
-                        <td style="background:{colors.bg};color:{colors.fg}">
-                          {#if cell}
-                            <button
-                              type="button"
-                              class="edatopic-cell-btn"
-                              style="color:{colors.fg}"
-                              onclick={() => {
-                                selectedCellDetail = { gridKind: 'Relative (rSMR)', cell };
-                              }}
-                            >
-                              <strong>{cell.count}</strong>
-                              <small>{cell.frequency}%</small>
-                            </button>
-                          {:else}
-                            ·
-                          {/if}
-                        </td>
-                      {/each}
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-              </div>
-            </div>
-
-            <div class="edatopic-panel">
-              <h4>Actual Edatopic Grid (aSMR x rSNR) — Modal: {activeEdatopicView.actualGrid.modalCell || '—'}</h4>
-              <div class="table-scroll">
-                <table class="edatopic-table compact-edatope">
-                <thead>
-                  <tr>
-                    <th>aSMR \ rSNR</th>
-                    {#each activeEdatopicView.actualGrid.nutrientAxis as snr}
-                      <th>{snr}</th>
-                    {/each}
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each activeEdatopicView.actualGrid.moistureAxis as asmr}
-                    <tr>
-                      <th>{asmr}</th>
-                      {#each activeEdatopicView.actualGrid.nutrientAxis as snr}
-                        {@const cell = actIndexed.byKey[`${asmr}|${snr}`]}
-                        {@const colors = edatopicCellColor(cell?.count || 0, actIndexed.maxCount)}
-                        <td style="background:{colors.bg};color:{colors.fg}">
-                          {#if cell}
-                            <button
-                              type="button"
-                              class="edatopic-cell-btn"
-                              style="color:{colors.fg}"
-                              onclick={() => {
-                                selectedCellDetail = { gridKind: 'Actual (aSMR)', cell };
-                              }}
-                            >
-                              <strong>{cell.count}</strong>
-                            </button>
-                          {:else}
-                            ·
-                          {/if}
-                        </td>
-                      {/each}
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-              </div>
-            </div>
-          </div>
-
-          {#if selectedCellDetail}
-            <div class="cell-detail-box">
-              <strong>
-                {selectedCellDetail.gridKind} Cell {selectedCellDetail.cell.moisture}/{selectedCellDetail.cell.nutrient}:
-              </strong>
-              {selectedCellDetail.cell.count} plot(s) ({selectedCellDetail.cell.frequency}%)
-              {#if selectedCellDetail.cell.meanCmdSite !== undefined}
-                | Mean CMD.site: {selectedCellDetail.cell.meanCmdSite} mm
-              {/if}
-              <div>Plots: <code>{selectedCellDetail.cell.plotNumbers.join(', ')}</code></div>
-            </div>
-          {/if}
-        {/if}
-      </div>
-    </div>
+    <RSidecarEdatopicTab
+      {climateResult} {activeEdatopicView} bind:selectedUnitGroup bind:selectedCellDetail
+    />
   {:else if activeTab === 'clustering'}
-    <div class="panel">
-      <div class="card">
-        <h3>BEC_R Multivariate Clustering (vegclust, vegan Hierarchical, Flexible-Beta &amp; PAM)</h3>
-        <div class="form-row">
-          <label>
-            Algorithm
-            <select data-cluster-method bind:value={clusterMethod}>
-              <option value="NC">vegclust Noise Clustering (NC)</option>
-              <option value="KM">vegclust Crisp K-Means (KM)</option>
-              <option value="FCM">vegclust Fuzzy C-Means (FCM)</option>
-              <option value="HCLUST">vegan Hierarchical Clustering (HCLUST)</option>
-              <option value="BETA_FLEXIBLE">Flexible-Beta Hierarchical (BETA_FLEXIBLE)</option>
-              <option value="PAM">Partitioning Around Medoids (PAM)</option>
-            </select>
-          </label>
-          <label class:field-muted={!dissimilarityActive}>
-            Dissimilarity
-            <select
-              data-cluster-distance
-              bind:value={clusterDistance}
-              disabled={!dissimilarityActive}
-              aria-disabled={!dissimilarityActive}
-            >
-              <option value="bray">Bray-Curtis</option>
-              <option value="chord">Chord Normalized</option>
-              <option value="jaccard">Jaccard</option>
-              <option value="kulczynski">Kulczynski</option>
-            </select>
-            {#if vegclustMode}
-              <span class="field-hint">Disabled for vegclust ({clusterMethod})</span>
-            {/if}
-          </label>
-          <label class:field-muted={!linkageActive}>
-            Linkage
-            <select
-              data-cluster-linkage
-              bind:value={clusterLinkage}
-              disabled={!linkageActive}
-              aria-disabled={!linkageActive}
-            >
-              <option value="ward.D2">Ward.D2</option>
-              <option value="average">UPGMA (Average)</option>
-              <option value="complete">Complete</option>
-            </select>
-            {#if !linkageActive}
-              <span class="field-hint">
-                {vegclustMode ? `Disabled for vegclust (${clusterMethod})` : betaActive ? 'Uses Flexible-Beta parameter' : 'N/A for PAM medoids'}
-              </span>
-            {/if}
-          </label>
-          <label>
-            Cover Transform
-            <select bind:value={clusterTransform}>
-              <option value="sqrt">Square Root</option>
-              <option value="log1p">Log(1 + Cover)</option>
-              <option value="hellinger">Hellinger</option>
-              <option value="chord">Chord</option>
-              <option value="raw">Raw % Cover</option>
-            </select>
-          </label>
-          <label>
-            Clusters (k)
-            <input type="number" min="2" max="50" bind:value={clusterK} />
-          </label>
-          {#if betaActive}
-            <label data-cluster-beta-field>
-              Flexible Beta (beta)
-              <input type="number" step="0.05" min="-0.99" max="0.99" bind:value={clusterBeta} />
-            </label>
-          {/if}
-          <label class:field-muted={!vegclustMode}>
-            Fuzziness (m)
-            <input type="number" step="0.05" min="1.05" max="5" bind:value={clusterFuzziness} disabled={!vegclustMode} />
-          </label>
-          <label class:field-muted={clusterMethod !== 'NC'}>
-            Noise Distance (dnoise)
-            <input type="number" step="0.05" min="0.05" max="5" bind:value={clusterDnoise} disabled={clusterMethod !== 'NC'} />
-          </label>
-          <label>
-            Unit Prefix
-            <input type="text" data-cluster-unit-prefix bind:value={clusterUnitPrefix} placeholder="CL or BEC" />
-          </label>
-          <label>
-            BGC Filter
-            <input type="text" data-cluster-bgc-filter bind:value={clusterBgcFilter} placeholder="e.g. SBS, BWBS, MH" />
-          </label>
-          <label class:field-muted={!clusterApplyLump}>
-            Lump Table (*_Lump)
-            <input
-              type="text"
-              data-cluster-lump-name
-              bind:value={clusterLumpName}
-              disabled={!clusterApplyLump}
-              placeholder={activeProject}
-            />
-          </label>
-          <label>
-            Candidate Prefix
-            <input type="text" bind:value={clusterCandidatePrefix} placeholder={activeProject} />
-          </label>
-        </div>
-
-        <div class="form-row">
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={clusterApplyLump} />
-            Fold Taxonomic Lump Table (*_Lump)
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={clusterUseSu} />
-            Scope to Active SU ({activeSu})
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={clusterMaterializeCandidate} />
-            Stage &lt;Name&gt;_ClusterCandidate_SU (Never Overwrites Active SU)
-          </label>
-        </div>
-
-        {#if clusteringValidationError}
-          <div class="inline-error">{clusteringValidationError}</div>
-        {/if}
-
-        <div class="button-row">
-          <button
-            type="button"
-            class="btn-primary"
-            disabled={busy || Boolean(clusteringValidationError)}
-            onclick={submitClustering}
-          >
-            Run BEC_R Clustering
-          </button>
-        </div>
-
-        {#if clusterResult}
-          <div class="kpi-row">
-            <div class="kpi"><span>Clustered Plots</span><strong>{clusterResult.plotCount}</strong></div>
-            <div class="kpi"><span>Species Taxa</span><strong>{clusterResult.speciesCount}</strong></div>
-            <div class="kpi"><span>Cophenetic r</span><strong>{clusterResult.copheneticCorrelation}</strong></div>
-            <div class="kpi"><span>Mean Silhouette</span><strong>{clusterResult.meanSilhouette}</strong></div>
-            <div class="kpi"><span>Noise Outliers</span><strong>{clusterResult.noiseCount}</strong></div>
-            {#if clusterResult.candidateTableName}
-              <div class="kpi"><span>Staged Table</span><strong>{clusterResult.candidateTableName}</strong></div>
-            {/if}
-          </div>
-
-          <h4>Interactive Hierarchical Dendrogram</h4>
-          <div class="form-row">
-            <label>
-              Reference Cut Height ({clusterCutHeight.toFixed(3)} / Max {clusterResult.dendrogram.maxHeight})
-              <input
-                type="range"
-                min="0.01"
-                max={clusterResult.dendrogram.maxHeight}
-                step="0.01"
-                bind:value={clusterCutHeight}
-              />
-            </label>
-            {#if selectedDendroPlot}
-              <span>Selected Leaf Plot: <code>{selectedDendroPlot}</code></span>
-            {/if}
-          </div>
-
-          <div class="dendrogram-scroll">
-            <svg
-              viewBox="0 0 {dendrogramLayout.width} {dendrogramLayout.height}"
-              width={dendrogramLayout.width}
-              height={dendrogramLayout.height}
-              role="img"
-              aria-label="BEC Hierarchical Cluster Dendrogram"
-            >
-              <rect x="0" y="0" width={dendrogramLayout.width} height={dendrogramLayout.height} fill="#FFFFFF" />
-              {#each dendrogramLayout.segments as seg}
-                <line x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} stroke="#003366" stroke-width="1.4" />
-              {/each}
-              <line
-                x1="36"
-                y1={dendrogramLayout.cutLineY}
-                x2={dendrogramLayout.width - 16}
-                y2={dendrogramLayout.cutLineY}
-                stroke="#FCBA19"
-                stroke-width="2"
-                stroke-dasharray="6,4"
-              />
-              {#each dendrogramLayout.leaves as leaf}
-                <g
-                  class="dendro-leaf"
-                  role="button"
-                  tabindex="0"
-                  aria-label="Select plot {leaf.plotNumber}"
-                  transform="translate({leaf.cx}, {leaf.cy})"
-                  onclick={() => (selectedDendroPlot = leaf.plotNumber)}
-                  onkeydown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      selectedDendroPlot = leaf.plotNumber;
-                    }
-                  }}
-                >
-                  <circle
-                    r="3.4"
-                    cy="-8"
-                    fill={leaf.isNoise ? '#D8292F' : selectedDendroPlot === leaf.plotNumber ? '#1A5A96' : '#003366'}
-                    stroke={selectedDendroPlot === leaf.plotNumber ? '#FCBA19' : 'none'}
-                    stroke-width="1.5"
-                  />
-                  <text
-                    transform="rotate(65)"
-                    text-anchor="start"
-                    font-family="monospace"
-                    font-size="10"
-                    font-weight={selectedDendroPlot === leaf.plotNumber ? '700' : '400'}
-                    fill={selectedDendroPlot === leaf.plotNumber ? '#1A5A96' : '#313132'}
-                  >
-                    {leaf.plotNumber} ({leaf.clusterUnit})
-                  </text>
-                </g>
-              {/each}
-            </svg>
-          </div>
-
-          <h4>Cluster Units &amp; Indicator Species Fidelity (IndVal)</h4>
-          <div class="table-scroll">
-            <table class="data-table">
-            <thead>
-              <tr>
-                <th>Cluster Unit</th>
-                <th>Plots</th>
-                <th>Mean Richness</th>
-                <th>Mean Silhouette</th>
-                <th>Top Diagnostic / Indicator Species</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each clusterResult.clusters as cl}
-                <tr>
-                  <td><strong>{cl.clusterUnit}</strong></td>
-                  <td>{cl.plotCount}</td>
-                  <td>{cl.meanRichness}</td>
-                  <td>{cl.meanSilhouette}</td>
-                  <td>
-                    {#each cl.indicators.slice(0, 5) as ind, idx}
-                      <span>
-                        <code>{ind.species}</code>
-                        {#if ind.scientificName}<em>({ind.scientificName})</em>{/if}
-                        [{ind.constancyPct}% | IndVal {ind.indVal}]{idx < Math.min(4, cl.indicators.length - 1) ? ', ' : ''}
-                      </span>
-                    {/each}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-          </div>
-        {/if}
-      </div>
-
-      <div class="card">
-        <h3>Promote Staged Cluster Candidate to Site Unit Table (*_SU)</h3>
-        <div class="form-row">
-          <label>
-            Target SU Name
-            <input type="text" bind:value={promoteTargetSuName} placeholder="e.g. SubzoneRev2026" />
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={promoteExcludeNoise} />
-            Exclude *_Noise Outliers
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={promoteConfirmOverwrite} />
-            Confirm overwrite if target *_SU exists
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={promoteActivate} />
-            Activate promoted *_SU immediately
-          </label>
-        </div>
-
-        {#if promoteValidationError}
-          <div class="inline-error">{promoteValidationError}</div>
-        {/if}
-
-        <div class="button-row">
-          <button
-            type="button"
-            class="btn-primary"
-            disabled={busy || !promoteTargetSuName.trim() || Boolean(promoteValidationError)}
-            onclick={submitPromoteCandidate}
-          >
-            Promote Candidate to *_SU
-          </button>
-        </div>
-
-        {#if promoteResult}
-          <div class="banner-status">
-            Promoted {promoteResult.promotedRows} plot assignments into <strong>{promoteResult.targetTableName}</strong>
-            (skipped {promoteResult.skippedNoiseRows} noise plots).
-          </div>
-        {/if}
-      </div>
-    </div>
+    <RSidecarClusteringTab
+      {activeProject} {activeSu} {busy}
+      bind:clusterMethod bind:clusterDistance bind:clusterLinkage bind:clusterTransform
+      bind:clusterK bind:clusterFuzziness bind:clusterDnoise bind:clusterBeta bind:clusterCutHeight
+      bind:clusterApplyLump bind:clusterLumpName bind:clusterUseSu bind:clusterBgcFilter
+      bind:clusterUnitPrefix bind:clusterCandidatePrefix bind:clusterMaterializeCandidate
+      {vegclustMode} {dissimilarityActive} {linkageActive} {betaActive}
+      {clusteringValidationError} {clusterResult} {dendrogramLayout} bind:selectedDendroPlot
+      bind:promoteTargetSuName bind:promoteExcludeNoise bind:promoteConfirmOverwrite bind:promoteActivate
+      {promoteValidationError} {promoteResult}
+      onSubmitClustering={submitClustering} onSubmitPromote={submitPromoteCandidate}
+    />
   {:else if activeTab === 'quarto'}
-    <div class="panel">
-      <div class="card">
-        <h3>Automated Quarto Single-Unit &amp; BGC Guide Publisher</h3>
-        <div class="form-row">
-          <label>
-            Guide Template
-            <select bind:value={quartoGuideType}>
-              <option value="single_unit">Single Site Unit Ecosystem Guide (4.d)</option>
-              <option value="bgc_unit">Full BGC Subzone / Variant Synthesis Guide (4.e)</option>
-            </select>
-          </label>
-          <label>
-            Guide Title (Optional)
-            <input type="text" bind:value={quartoTitle} placeholder="Auto-titled from unit or BGC" />
-          </label>
-          <label>
-            Target Site Unit Filter
-            <input type="text" bind:value={quartoTargetUnit} placeholder="e.g. BWBSmw 2 /05" />
-          </label>
-          <label>
-            BGC Filter
-            <input type="text" bind:value={quartoBgcFilter} placeholder="e.g. BWBS, MH, SBSdk" />
-          </label>
-          <label>
-            Min Constancy (%)
-            <input type="number" min="0" max="100" step="5" bind:value={quartoMinConstancy} />
-          </label>
-          <label>
-            Destination .html Path (Optional)
-            <input type="text" bind:value={quartoDestinationPath} placeholder="Defaults to <ProjectDir>/exports/" />
-          </label>
-        </div>
-
-        <div class="form-row">
-          <label class="full-width">
-            Authored Ecological Concept &amp; Diagnostic Narrative
-            <textarea
-              rows="3"
-              bind:value={quartoConceptNotes}
-              placeholder="Enter ecosystem concept statement, characteristicphysiography, soils, and seral dynamics..."
-            ></textarea>
-          </label>
-        </div>
-
-        <div class="form-row">
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={quartoUseSu} />
-            Scope to Active SU ({activeSu})
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={quartoApplyLump} />
-            Fold Taxonomic Lump Table (*_Lump)
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" bind:checked={quartoIncludePdf} />
-            Attempt Companion PDF Export (Print-Ready HTML Always Embedded)
-          </label>
-        </div>
-
-        {#if quartoValidationError}
-          <div class="inline-error">{quartoValidationError}</div>
-        {/if}
-
-        <div class="button-row">
-          <button
-            type="button"
-            class="btn-primary"
-            disabled={busy || Boolean(quartoValidationError)}
-            onclick={submitRenderQuartoGuide}
-          >
-            Render &amp; Publish Guide
-          </button>
-        </div>
-
-        {#if quartoResult}
-          <div class="kpi-row">
-            <div class="kpi"><span>Renderer</span><strong>{quartoResult.rendererUsed}</strong></div>
-            <div class="kpi"><span>Plots Summarized</span><strong>{quartoResult.plotCount}</strong></div>
-            <div class="kpi"><span>Characteristic Taxa</span><strong>{quartoResult.speciesRowCount}</strong></div>
-            <div class="kpi"><span>HTML Size</span><strong>{(quartoResult.htmlSizeBytes / 1024).toFixed(1)} KB</strong></div>
-            {#if quartoResult.pdfStatus}
-              <div class="kpi"><span>PDF Status</span><strong>{quartoResult.pdfStatus}</strong></div>
-            {/if}
-          </div>
-          <p class="receipt-line">
-            Published Path: <code>{quartoResult.htmlPath}</code> | SHA-256: <code>{quartoResult.htmlSha256.slice(0, 16)}...</code>
-          </p>
-
-          <h4>Standalone HTML Guide Preview</h4>
-          <iframe
-            class="quarto-preview-frame"
-            title="Published BEC Quarto Guide Preview"
-            sandbox=""
-            srcdoc={quartoResult.htmlPreview}
-          ></iframe>
-        {/if}
-      </div>
-    </div>
+    <RSidecarQuartoTab
+      {activeSu} {busy}
+      bind:quartoGuideType bind:quartoTitle bind:quartoTargetUnit bind:quartoBgcFilter
+      bind:quartoConceptNotes bind:quartoMinConstancy bind:quartoUseSu bind:quartoApplyLump
+      bind:quartoIncludePdf bind:quartoDestinationPath
+      {quartoValidationError} {quartoResult}
+      onRenderQuarto={submitRenderQuartoGuide}
+    />
   {/if}
 </section>
 
 <style>
-  .rsidecar-workbench {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    color: #313132;
-    background: #F2F2F2;
-    border: 1px solid #D8D8D8;
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .bcgov-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    background: #003366;
-    color: #FFFFFF;
-    border-bottom: 4px solid #FCBA19;
-    padding: 14px 18px;
-  }
-  .bcgov-header h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 700;
-  }
-  .bcgov-header .subtitle {
-    margin: 4px 0 0;
-    font-size: 12px;
-    color: #F2F2F2;
-  }
-  .tab-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 0 16px;
-    border-bottom: 1px solid #D8D8D8;
-    background: #F2F2F2;
-  }
-  .tab-bar button {
-    background: transparent;
-    border: none;
-    border-bottom: 3px solid transparent;
-    padding: 10px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #474543;
-    cursor: pointer;
-  }
-  .tab-bar button.active {
-    color: #003366;
-    border-bottom-color: #FCBA19;
-    background: #FFFFFF;
-  }
-  .panel {
-    padding: 4px 16px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    min-width: 0;
-  }
-  .card {
-    background: #FFFFFF;
-    border: 1px solid #D8D8D8;
-    border-radius: 6px;
-    padding: 14px 16px;
-    min-width: 0;
-  }
-  .card h3 {
-    margin: 0 0 12px;
-    font-size: 15px;
-    color: #003366;
-    border-bottom: 2px solid #FCBA19;
-    padding-bottom: 4px;
-  }
-  .card h4 {
-    margin: 14px 0 8px;
-    font-size: 13px;
-    color: #003366;
-  }
-  .form-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: flex-end;
-    margin-bottom: 10px;
-  }
-  .form-row label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #313132;
-    min-width: 0;
-  }
-  .form-row label.field-muted {
-    opacity: 0.65;
-  }
-  .field-hint {
-    font-size: 11px;
-    font-weight: 400;
-    color: #474543;
-  }
-  .form-row label.full-width {
-    flex: 1 1 100%;
-  }
-  .form-row label.checkbox-label {
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-    padding-bottom: 6px;
-  }
-  input[type='text'],
-  input[type='number'],
-  select,
-  textarea {
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    padding: 6px 8px;
-    font-size: 12px;
-    background: #FFFFFF;
-    color: #313132;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-  select:disabled,
-  input:disabled {
-    background: #F2F2F2;
-    color: #474543;
-    cursor: not-allowed;
-  }
-  .button-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 8px 0;
-  }
-  .btn-primary {
-    background: #003366;
-    color: #FFFFFF;
-    border: 1px solid #003366;
-    border-radius: 4px;
-    padding: 7px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .btn-secondary {
-    background: #FFFFFF;
-    color: #003366;
-    border: 1px solid #003366;
-    border-radius: 4px;
-    padding: 7px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .btn-gold {
-    background: #FCBA19;
-    color: #003366;
-    border: 1px solid #003366;
-    border-radius: 4px;
-    padding: 7px 14px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-  .banner-error,
-  .inline-error {
-    margin: 4px 16px;
-    padding: 8px 12px;
-    background: rgba(216, 41, 47, 0.08);
-    border-left: 4px solid #D8292F;
-    color: #D8292F;
-    font-size: 12px;
-  }
-  .inline-error {
-    margin: 6px 0;
-  }
-  .banner-status {
-    margin: 4px 16px;
-    padding: 8px 12px;
-    background: rgba(26, 90, 150, 0.08);
-    border-left: 4px solid #003366;
-    color: #003366;
-    font-size: 12px;
-  }
-  .badge-strip,
-  .kpi-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-  .badge {
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .badge.ok {
-    background: rgba(46, 133, 64, 0.14);
-    color: #1E5128;
-  }
-  .badge.warn {
-    background: rgba(252, 186, 25, 0.25);
-    color: #313132;
-  }
-  .badge.neutral {
-    background: rgba(26, 90, 150, 0.12);
-    color: #1A5A96;
-  }
-  .kpi {
-    background: #F2F2F2;
-    border-left: 3px solid #003366;
-    padding: 6px 10px;
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    font-size: 11px;
-  }
-  .kpi strong {
-    font-size: 14px;
-    color: #313132;
-  }
-  .table-scroll,
-  .dendrogram-scroll {
+  .rsidecar-workbench :global(.table-scroll) {
     overflow-x: auto;
-    max-width: 100%;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-  }
-  .data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-  .data-table th {
-    background: #003366;
-    color: #FFFFFF;
-    text-align: left;
-    padding: 6px 8px;
-  }
-  .data-table td {
-    padding: 5px 8px;
-    border-bottom: 1px solid #D8D8D8;
-  }
-  .dual-grid-wrap {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-    gap: 16px;
-  }
-  .edatopic-panel {
-    min-width: 0;
-  }
-  .edatopic-table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: center;
-    font-size: 11px;
-  }
-  .edatopic-table th,
-  .edatopic-table td {
-    border: 1px solid #D8D8D8;
-    padding: 5px 4px;
-  }
-  .edatopic-table thead th {
-    background: #003366;
-    color: #FFFFFF;
-  }
-  .compact-edatope td,
-  .compact-edatope th {
-    padding: 2px 4px;
-  }
-  .edatopic-cell-btn {
-    background: transparent;
-    border: none;
-    width: 100%;
-    padding: 0;
-    cursor: pointer;
-    font: inherit;
-  }
-  .edatopic-table td small {
-    display: block;
-    font-size: 9px;
-    opacity: 0.85;
-  }
-  .cell-detail-box,
-  .setup-box {
-    margin-top: 10px;
-    padding: 10px 12px;
-    background: #F2F2F2;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    font-size: 12px;
-  }
-  .dendro-leaf {
-    cursor: pointer;
-  }
-  .quarto-preview-frame {
-    width: 100%;
-    height: 440px;
-    border: 1px solid #D8D8D8;
-    border-radius: 4px;
-    background: #FFFFFF;
-  }
-  .receipt-line,
-  .muted {
-    font-size: 12px;
-    color: #474543;
   }
   @media (max-width: 960px) {
-    .bcgov-header {
+    .rsidecar-workbench :global(.bcgov-header) {
       flex-direction: column;
       align-items: flex-start;
-    }
-    .panel {
-      padding: 4px 10px 12px;
-    }
-    .form-row > label {
-      flex: 1 1 220px;
     }
   }
 </style>

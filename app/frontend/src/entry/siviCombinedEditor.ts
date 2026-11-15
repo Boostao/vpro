@@ -14,7 +14,7 @@ export interface SIVICombinedRequest { original: SIVIProjection[]; edits: (SIVIC
 export function isSIVICoverColumn(column: string): column is SIVICoverColumn {
   return siviCoverColumns.some(value => value === column);
 }
-export function isSIVIHeightColumn(column: string): column is SIVIHeightColumn {
+function isSIVIHeightColumn(column: string): column is SIVIHeightColumn {
   return column === 'HeightA' || column === 'HeightB' || column === 'Height6';
 }
 export function siviCombinedGroups(index: number, extended: boolean): SIVICombinedColumn[][] {

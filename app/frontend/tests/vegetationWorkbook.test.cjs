@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -73,7 +74,7 @@ test('strict unlumped review retains detached owned preview and nullable absent 
 
 test('None workbook summary requires derived join count and does not infer original quality or physical SU count',()=>{
   const input=fixture();
-  input.preview=JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationNoneUnitsWire.json'),'utf8'));
+  input.preview=readJsonFixture('longVegetationNoneUnitsWire.json');
   input.preview.contextId=owner.contextId;
   input.sheets=[{unit:cell('All plots'),name:'All plots'}];
   input.summary.selectedPlotRows=2;
@@ -87,7 +88,7 @@ test('None workbook summary requires derived join count and does not infer origi
 });
 test('selected-unit workbook retains independent consumer gate and derived summary count',()=>{
   const input=fixture();
-  input.preview=JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationSelectedUnitsWire.json'),'utf8'));
+  input.preview=readJsonFixture('longVegetationSelectedUnitsWire.json');
   input.preview.contextId=owner.contextId;
   input.sheets=['Alpha','Beta'].map(name=>({unit:cell(name),name}));
   input.summary.selectedPlotRows=8;
@@ -238,7 +239,7 @@ test('actual review handler cancels borrowed reads, suppresses stale results and
 });
 
 test('actual workbook review handler independently refuses mode4 without client capability and retains typed approved scalars when enabled', async () => {
-  const wire=JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationSelectedScalarWire.json'),'utf8'));
+  const wire=readJsonFixture('longVegetationSelectedScalarWire.json');
   for(const [kind, scalar] of Object.entries(wire.cells)) {
     const harness=routeHarness(), input=fixture();
     input.preview=structuredClone(wire.preview);

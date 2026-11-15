@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -8,8 +9,8 @@ const { compile } = require('svelte/compiler');
 const ts = require('typescript');
 const { serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 const { references, TwoPageVegetationSession, cell } = require('./twoPageVegetationTestHelpers.cjs');
-const fixture = require('./fixtures/twoPageVegetationReferenceWire.json');
-const receipts = require('./fixtures/twoPageVegetationReceipts.json');
+const fixture = readJsonFixture('twoPageVegetationReferenceWire.json');
+const receipts = readJsonFixture('twoPageVegetationReceipts.json');
 const fresh = () => structuredClone(fixture);
 const ownerOf = wire => ({ contextId: wire.contextId, project: wire.project, plot: wire.plot, form: wire.form });
 const owner = ownerOf(fixture);

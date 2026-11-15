@@ -19,7 +19,7 @@ export interface SoilReferences extends TwoPageSoilOwner {
   source: string;
   fields: SoilReferenceField[];
 }
-export const soilReferenceBindings: Record<TwoPageSoilForm, readonly (readonly [string, string])[]> = {
+const soilReferenceBindings: Record<TwoPageSoilForm, readonly (readonly [string, string])[]> = {
   SoilHumusXL: [
     ['Horizon', 'HumusHorizon'], ['HumusStructureKind', 'HumusStructureKind'],
     ['HumusStructureDegree', 'HumusStructureDegree'], ['vonPost', 'vonPost'],

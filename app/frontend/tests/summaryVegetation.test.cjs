@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -6,7 +7,7 @@ const { proxy } = require('svelte/internal/client');
 const { loadTypeScript } = require('./svelteTestHelpers.cjs');
 const lifeform = loadTypeScript('lifeformSummary.ts');
 const report = loadTypeScript('summaryVegetation.ts', { './lifeformSummary': lifeform }, { setTimeout });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationWire.json');
 const owner = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath'].map(key => [key, wire[0][key]]));
 const plain = value => JSON.parse(JSON.stringify(value));
 const deferred = () => {

@@ -6,6 +6,12 @@ import type {
   OtherRecord,
   VegRecord,
 } from '../../bindings/github.com/boostao/vpro/app';
+import type { SIVIHeightSession } from './siviHeightSession';
+import type { SIVICoverSession } from './siviCoverSession';
+import type { SIVICombinedSession } from './siviCombinedSession';
+import type { SIVICollectedSession } from './siviCollectedSession';
+import type { SIVISpeciesSession } from './siviSpeciesSession';
+import type { SIVIIdentitySession } from './siviIdentitySession';
 
 export type FS882ChildKind = 'Veg' | 'Humus' | 'Mineral' | 'Other';
 
@@ -175,7 +181,7 @@ export function newEmptyFS882Draft(): FS882Header {
 const treeColumns = ['cover1', 'cover2', 'cover3', 'totalA', 'cover4', 'cover5', 'cover5a', 'cover5b', 'cover5c', 'totalB'] as const;
 const heightTreeColumns = ['cover1', 'height1', 'cover2', 'height2', 'cover3', 'height3', 'totalA', 'cover4', 'height4', 'cover5', 'height5', 'totalB'] as const;
 
-export function projectChildValues(
+function projectChildValues(
   record: object,
   kind: FS882ChildKind,
   childCapabilities: FS882ChildCapabilities,
@@ -283,25 +289,6 @@ export function validateOrdinarySoilRecordIds<T extends { id: number }>(
   return { records: rows, reason: null };
 }
 
-export function resolveHeaderValidationErrorMessage(
-  message: string,
-  headerValidation: Record<string, string>,
-): string {
-  if (message === headerValidation['ordinary-veg']) {
-    return `Correct the invalid header input on Vegetation or Undo changes before saving. ${message}`;
-  }
-  if (
-    message === headerValidation['ordinary-soils'] ||
-    message === headerValidation['parentCodes-soils'] ||
-    message === headerValidation.soilDrainage ||
-    message === headerValidation.soilCodes ||
-    message === headerValidation.geologyCodes
-  ) {
-    return `Correct the invalid header input on Soils or Undo changes before saving. ${message}`;
-  }
-  return `Correct the invalid header input on Site or Undo changes before saving. ${message}`;
-}
-
 export async function executeReviewedSIVISessionOperation(
   owner: {
     load: () => Promise<boolean>;
@@ -317,6 +304,249 @@ export async function executeReviewedSIVISessionOperation(
   if (operation === 'save') return owner.save();
   if (operation === 'undo') return owner.undo();
   return owner.restore(operation === 'retain' ? retainAction : pruneAction);
+}
+
+/** Return the first value whose predicate evaluates true (lazy short-circuiting). */
+export function firstMatch<T>(guards: Array<[() => boolean, T]>): T | null {
+  for (const [cond, value] of guards) {
+    if (cond()) return value;
+  }
+  return null;
+}
+
+export type ReviewedSiviKind =
+  | 'parentWrite'
+  | 'parentAction'
+  | 'projectAssignment'
+  | 'parentShared'
+  | 'height'
+  | 'cover'
+  | 'combined'
+  | 'collected'
+  | 'species'
+  | 'identity';
+
+export type ReviewedSiviOperation = 'load' | 'save' | 'undo' | 'retain' | 'prune';
+
+export type SiviChildOwner =
+  | 'height'
+  | 'cover'
+  | 'combined'
+  | 'collected'
+  | 'species'
+  | 'identity'
+  | 'creation'
+  | 'deletion'
+  | 'restoration'
+  | 'creationUndo';
+
+interface ReviewedSiviDescriptor {
+  guardMsg: string;
+  saveMsg: string;
+  restoreMsg: string;
+  reloadMsg: string;
+  failMsg: string;
+}
+
+export const REVIEWED_SIVI_DESCRIPTORS: Record<ReviewedSiviKind, ReviewedSiviDescriptor> = {
+  parentWrite: {
+    guardMsg: 'SIVI parent edits require a clean unlocked parent and no conflicting operation; resolve acknowledgements explicitly.',
+    saveMsg: 'SIVI directly bound parent fields saved and independently reloaded.',
+    restoreMsg: 'SIVI typed parent restoration completed and reloaded.',
+    reloadMsg: 'SIVI parent originals reloaded; no mutation was replayed.',
+    failMsg: 'SIVI parent operation failed; owner state retained',
+  },
+  parentAction: {
+    guardMsg: 'SIVI source actions require a clean unlocked parent and no conflicting drafts or operation; resolve acknowledgements explicitly.',
+    saveMsg: 'SIVI source actions saved; callback directive verified and owned parent reloaded.',
+    restoreMsg: 'SIVI typed source-action restoration completed and reloaded.',
+    reloadMsg: 'SIVI action originals reloaded; no mutation was replayed.',
+    failMsg: 'SIVI source-action operation failed; owner state retained',
+  },
+  projectAssignment: {
+    guardMsg: 'ProjectID assignment requires a clean unlocked parent and no conflicting drafts or operation; resolve acknowledgements explicitly.',
+    saveMsg: 'Existing physical ProjectID definition assigned; owned parent and choices reloaded.',
+    restoreMsg: 'Typed ProjectID restoration completed and reloaded; metadata was not changed.',
+    reloadMsg: 'Owned ProjectID parent and choices reloaded; no mutation was replayed.',
+    failMsg: 'ProjectID assignment operation failed; owner state retained',
+  },
+  parentShared: {
+    guardMsg: 'Shared SIVI edits require a clean unlocked parent and no conflicting operation; recover uncertain writes explicitly.',
+    saveMsg: 'Shared SIVI operation completed and owned originals reloaded; no mutation was replayed.',
+    restoreMsg: 'Shared SIVI operation completed and owned originals reloaded; no mutation was replayed.',
+    reloadMsg: 'Shared SIVI operation completed and owned originals reloaded; no mutation was replayed.',
+    failMsg: 'Shared SIVI operation failed; owner state retained',
+  },
+  height: {
+    guardMsg: 'SIVI requires an available clean, unlocked parent and no conflicting operation or unresolved acknowledgement.',
+    saveMsg: 'SIVI aggregate heights saved; current rows and audits reloaded.',
+    restoreMsg: 'SIVI typed height restoration completed; current rows and audits reloaded.',
+    reloadMsg: 'SIVI source rows reloaded. No height mutation was replayed.',
+    failMsg: 'SIVI operation failed; owner state retained',
+  },
+  cover: {
+    guardMsg: 'SIVI covers require a clean, unlocked available parent and no conflicting drafts or operation.',
+    saveMsg: 'SIVI source covers saved; current rows and audits reloaded.',
+    restoreMsg: 'SIVI typed cover restoration completed; current rows and audits reloaded.',
+    reloadMsg: 'SIVI source cover rows reloaded. No mutation was replayed.',
+    failMsg: 'SIVI cover operation failed; owner state retained',
+  },
+  combined: {
+    guardMsg: 'SIVI combined editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
+    saveMsg: 'SIVI covers and heights saved atomically; current rows and audits reloaded.',
+    restoreMsg: 'SIVI typed combined restoration completed; current rows and audits reloaded.',
+    reloadMsg: 'SIVI combined source rows reloaded. No mutation was replayed.',
+    failMsg: 'SIVI combined operation failed; owner state retained',
+  },
+  collected: {
+    guardMsg: 'SIVI Collected editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
+    saveMsg: 'SIVI Collected cycle intent saved; current rows and audits reloaded.',
+    restoreMsg: 'SIVI typed Collected restoration completed; current rows and audits reloaded.',
+    reloadMsg: 'SIVI Collected source rows reloaded. No mutation was replayed.',
+    failMsg: 'SIVI Collected operation failed; owner state retained',
+  },
+  species: {
+    guardMsg: 'SIVI Species editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
+    saveMsg: 'SIVI Species source decisions saved; current rows, definitions and audits reloaded.',
+    restoreMsg: 'SIVI typed Species restoration completed; current rows, definitions and audits reloaded.',
+    reloadMsg: 'SIVI Species rows and definitions reloaded. No mutation was replayed.',
+    failMsg: 'SIVI Species operation failed; owner state retained',
+  },
+  identity: {
+    guardMsg: 'SIVI ID editing requires a clean, unlocked available parent and no conflicting drafts or operation.',
+    saveMsg: 'SIVI IDs saved with technical restoration history; no source field audits were created.',
+    restoreMsg: 'Original IDs restored without source audit pruning or vegetation deletion.',
+    reloadMsg: 'Owned SIVI ID source rows reloaded. No mutation was replayed.',
+    failMsg: 'SIVI ID operation failed; owner state retained',
+  },
+};
+
+export interface ReviewedSiviOwner {
+  load: () => Promise<boolean>;
+  save: () => Promise<boolean>;
+  undo: () => Promise<boolean>;
+  restore: (action: AuditRestoreAction) => Promise<boolean>;
+  view: () => { error: string | null };
+}
+
+/** Run any reviewed SIVI parent or child session operation with owner-swap protection. */
+export async function runReviewedSiviOp(params: {
+  kind: ReviewedSiviKind;
+  operation: ReviewedSiviOperation;
+  allowed: boolean;
+  getOwner: () => ReviewedSiviOwner | null;
+  retainAction: AuditRestoreAction;
+  pruneAction: AuditRestoreAction;
+  trackOwner?: boolean;
+  onReading?: (reading: boolean) => void;
+  setError: (msg: string | null) => void;
+  setSuccess: (msg: string | null) => void;
+}): Promise<boolean> {
+  const desc = REVIEWED_SIVI_DESCRIPTORS[params.kind];
+  const owner = params.getOwner();
+  if (!owner || !params.allowed) {
+    params.setError(desc.guardMsg);
+    return false;
+  }
+  params.setError(null);
+  params.setSuccess(null);
+  params.onReading?.(params.operation === 'load');
+  try {
+    const ok = await executeReviewedSIVISessionOperation(owner, params.operation, params.retainAction, params.pruneAction);
+    if (params.trackOwner && owner !== params.getOwner()) return false;
+    if (!ok) {
+      params.setError(owner.view().error);
+      return false;
+    }
+    params.setSuccess(
+      params.operation === 'save'
+        ? desc.saveMsg
+        : params.operation === 'retain' || params.operation === 'prune'
+          ? desc.restoreMsg
+          : desc.reloadMsg,
+    );
+    return true;
+  } catch (cause) {
+    if (params.trackOwner && owner !== params.getOwner()) return false;
+    params.setError(`${desc.failMsg}: ${String(cause)}`);
+    return false;
+  } finally {
+    if (!params.trackOwner || owner === params.getOwner()) {
+      params.onReading?.(false);
+    }
+  }
+}
+
+/** Execute a synchronous SIVI cell staging callback with normalized error handling. */
+export function runStageSivi(params: {
+  allowed: boolean;
+  guardMessage: string;
+  errorPrefix: string;
+  failPrefix: string;
+  action: () => void;
+  readError: () => string | null;
+  currentError: string | null;
+  setError: (msg: string | null) => void;
+  setSuccess: (msg: string | null) => void;
+}): void {
+  try {
+    if (!params.allowed) throw new Error(params.guardMessage);
+    params.action();
+    const message = params.readError();
+    if (message) params.setError(`${params.errorPrefix}${message}`);
+    else if (params.errorPrefix && params.currentError?.startsWith(params.errorPrefix)) params.setError(null);
+    else if (!params.errorPrefix) params.setError(null);
+    params.setSuccess(null);
+  } catch (cause) {
+    params.setError(`${params.failPrefix}: ${String(cause)}`);
+  }
+}
+
+/** Refresh ordinary child lists and untouched SIVI child editors after an exclusive child mutation. */
+export async function refreshSiviChildEditorsImpl(params: {
+  plot: string;
+  owner: SiviChildOwner;
+  siviCreationPending: boolean;
+  siviDeletionPending: boolean;
+  siviRestorationPending: boolean;
+  siviCreationUndoPending: boolean;
+  sessions: {
+    height: SIVIHeightSession | null;
+    cover: SIVICoverSession | null;
+    combined: SIVICombinedSession | null;
+    collected: SIVICollectedSession | null;
+    species: SIVISpeciesSession | null;
+    identity: SIVIIdentitySession | null;
+  };
+  loadChildData: (plot: string) => Promise<void>;
+}): Promise<void> {
+  if (
+    (params.owner !== 'creation' && params.siviCreationPending) ||
+    (params.owner !== 'deletion' && params.siviDeletionPending) ||
+    (params.owner !== 'restoration' && params.siviRestorationPending) ||
+    (params.owner !== 'creationUndo' && params.siviCreationUndoPending)
+  ) {
+    throw new Error('SIVI lifecycle peer owns an unresolved review; no peer originals were reset.');
+  }
+  const peers = [
+    params.owner !== 'height' ? params.sessions.height : null,
+    params.owner !== 'cover' ? params.sessions.cover : null,
+    params.owner !== 'combined' ? params.sessions.combined : null,
+    params.owner !== 'collected' ? params.sessions.collected : null,
+    params.owner !== 'species' ? params.sessions.species : null,
+    params.owner !== 'identity' ? params.sessions.identity : null,
+  ];
+  for (const peer of peers) {
+    if (peer?.closeState().unsaved || peer?.closeState().busy || peer?.closeState().blocked) {
+      throw new Error('SIVI peer owns unresolved drafts or an operation; no peer originals were reset.');
+    }
+  }
+  await params.loadChildData(params.plot);
+  for (const peer of peers) {
+    if (peer?.view().review && !(await peer.refreshSource())) {
+      throw new Error('SIVI peer originals failed to refresh; reload explicitly before continuing.');
+    }
+  }
 }
 
 export function buildDirectSourceChildWrite(

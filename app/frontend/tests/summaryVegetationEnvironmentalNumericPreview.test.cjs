@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -12,7 +13,7 @@ const client = loadTypeScript('summaryVegetationEnvironmental.ts', {
   './lifeformSummary': lifeform, './summaryVegetationFieldList': fields, './summaryVegetation': vegetation,
   './summaryVegetationEnvironmentalNumeric': numeric,
 }, { setTimeout });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationEnvironmentalNumericPreviewWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationEnvironmentalNumericPreviewWire.json');
 const owner = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath'].map(key => [key, wire.vegetation[key]]));
 const plain = value => JSON.parse(JSON.stringify(value));
 const yieldNow = () => Promise.resolve();

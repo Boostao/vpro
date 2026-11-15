@@ -227,7 +227,7 @@ test('Concurrent preference writes refused explicitly and disposal never publish
   assert.equal(events.length, count);
 });
 test('Header lifecycle and all mutation gates include Working Unit preference/lookup ownership', () => {
-  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
   assert.match(source, /independentHeaderWorkflowBusy = \$derived\(coordinateBusy \|\| workingUnitBusy \|\| qualityBusy \|\| siteCodeBusy \|\| regionCodeBusy \|\| soilCodeBusy \|\| geologyCodeBusy \|\| parentCodeBusy \|\| drainageBusy \|\| speciesDecisionBusy \|\| deletionBusy \|\| codeCheckBusy \|\| metadataBusy \|\| profileReviewBusy \|\| environmentSUOpen \|\| externalSUEnvironmentBusy \|\| externalSUEnvironmentBlocked \|\| siviParentBusy \|\| siviBusy \|\| siviCombinedBusy \|\| siviCoverBusy \|\| siviCollectedBusy \|\| siviSpeciesBusy \|\| siviIdentityBusy \|\| siviCreationBusy \|\| siviLifecycleBusy\)/);
   assert.match(source, /otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
   assert.match(source, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);

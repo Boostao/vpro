@@ -105,7 +105,7 @@ function target(original: SIVIParentOriginal, column: TwoPageParentCommonColumn)
 export function twoPageParentCommonCell(original: SIVIParentOriginal, column: TwoPageParentCommonColumn) {
   return target(original, column).expected;
 }
-export function twoPageParentCommonErrors(drafts: TwoPageParentCommonDrafts) {
+function twoPageParentCommonErrors(drafts: TwoPageParentCommonDrafts) {
   return Object.values(drafts).flatMap(draft => draft?.error ? [draft.error] : []);
 }
 export function twoPageParentCommonDirty(drafts: TwoPageParentCommonDrafts) {

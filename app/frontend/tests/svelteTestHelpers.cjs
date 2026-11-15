@@ -4,6 +4,7 @@ const { existsSync, readdirSync, readFileSync } = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
+const { readFixtureText, resolveFixturePath } = require('./fixtureLoader.cjs');
 
 const SRC_ROOT = path.resolve(__dirname, '..', 'src');
 let cachedByBasename = null;
@@ -26,6 +27,9 @@ function srcPath(name) {
   const raw = String(name);
   if (path.isAbsolute(raw) && existsSync(raw)) return raw;
   const clean = raw.replaceAll('\\', '/').replace(/^\.\//, '');
+  if (clean.startsWith('fixtures/')) {
+    try { return resolveFixturePath(clean.slice('fixtures/'.length)).filePath; } catch {}
+  }
   const testRelative = path.join(__dirname, clean);
   if (clean.startsWith('fixtures/') && existsSync(testRelative)) return testRelative;
   const direct = path.join(SRC_ROOT, clean);
@@ -39,6 +43,10 @@ function srcPath(name) {
 }
 
 function readSrc(name) {
+  const clean = String(name).replaceAll('\\', '/').replace(/^\.\//, '');
+  if (clean.startsWith('fixtures/')) {
+    return readFixtureText(clean.slice('fixtures/'.length));
+  }
   return readFileSync(srcPath(name), 'utf8');
 }
 
@@ -168,13 +176,13 @@ function serverComponent(source, filename, dependencies = {}, _environment = {})
       if (canon === './ProjectMetadataEditor.svelte') {
         return { default: () => {} };
       }
-      if (canon === './summaryVegetationPreferenceSessions') {
+      if (canon === './summaryVegetationPreferences') {
         return { summaryVegetationPreferenceSession: null };
       }
-      if (canon === './summaryVegetationQualityPreferenceSessions') {
-        return { summaryVegetationQualityPreferenceSession: null };
+      if (canon === './summaryVegetationQualityPreferences') {
+        return { ...qualityPreferenceHelpers().preferences, summaryVegetationQualityPreferenceSession: null };
       }
-      if (canon === './summaryVegetationPresentationPreferenceSessions') {
+      if (canon === './summaryVegetationPresentationPreferences') {
         return { summaryVegetationPresentationPreferenceSession: null };
       }
       if (canon === './summaryVegetationFieldListDesktop') {
@@ -212,6 +220,16 @@ function serverComponent(source, filename, dependencies = {}, _environment = {})
         readSrc('FieldGuidance.svelte'), 'FieldGuidance.svelte', {}) };
       if (canon === './SIVIChildSourceNotices.svelte') return { default: serverComponent(
         readSrc('SIVIChildSourceNotices.svelte'), 'SIVIChildSourceNotices.svelte', {}) };
+      if (canon.startsWith('./') && canon.endsWith('.svelte')) {
+        const childBase = canon.slice(2);
+        const siblingPath = path.join(path.dirname(resolvedFilename), childBase);
+        const targetPath = existsSync(siblingPath) ? siblingPath : srcPath(childBase);
+        if (existsSync(targetPath)) {
+          return {
+            default: serverComponent(readFileSync(targetPath, 'utf8'), targetPath, dependencies),
+          };
+        }
+      }
       throw new Error(`Unexpected renderer dependency ${rawName}`);
     }
   });
@@ -263,6 +281,14 @@ function loadTypeScript(filename, dependencies = {}, globals = {}) {
         }),
       });
     }
+    if (canon === './spatialCompute') return loadTypeScript('spatial/spatialCompute.ts', dependencies, globals);
+    if (canon === './spatialFlatGeobuf') return loadTypeScript('spatial/spatialFlatGeobuf.ts', dependencies, globals);
+    if (rawName.endsWith('/fs882-xl-layout.json') || rawName.endsWith('/fs882-extended-shrub-layout.json')) {
+      return JSON.parse(readFileSync(path.resolve(__dirname, '../../resources', path.basename(rawName)), 'utf8'));
+    }
+    if (/^\.\/(fs882Form|ordinaryEditor|qualityEditor|numericEditor|becEditor|heightEditor|otherEditor|soilChildEditor|vegetationAttributeEditor|collectedEditor|vegetationSpeciesEditor|vegetationCreationEditor|personalSpeciesEditor|vegetationDeletionEditor|vegetationReadAvailability|paperLayout)/.test(canon)) {
+      return loadTypeScript(`${canon.slice(2)}.ts`, dependencies, globals);
+    }
     if (canon.endsWith('bindings/github.com/boostao/vpro/app')) {
       return new Proxy({}, { get: () => new Proxy({}, { get: () => async () => null }) });
     }
@@ -280,7 +306,16 @@ function componentFunctions(filename, names, values) {
   const ast = ts.createSourceFile(baseName + '.ts', script, ts.ScriptTarget.Latest, true);
   const selected = ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.includes(node.name.text));
   assert.equal(selected.length, names.length);
-  const fs882Helpers = baseName === 'FS882Form.svelte' ? loadTypeScript('fs882FormHelpers.ts') : {};
+  const fs882Helpers = baseName === 'FS882Form.svelte'
+    ? {
+        ...loadTypeScript('fs882FormHelpers.ts'),
+        ...loadTypeScript('fs882FormSivi.ts'),
+        ...loadTypeScript('fs882FormSiviOps.ts'),
+        ...loadTypeScript('fs882FormChildren.ts'),
+        ...loadTypeScript('fs882FormVegDrafts.ts'),
+        ...loadTypeScript('fs882FormLoadSave.ts'),
+      }
+    : {};
   const defaultSoilReviewProfile = baseName === 'App.svelte' || baseName === 'FS882Form.svelte'
     ? { ...fs882Helpers, twoPageSoilBusy: false, twoPageSoilBlocked: false, ordinarySoilUnavailable: null, historicalSoilUnavailable: null,
       twoPageVegetationBusy: false, twoPageVegetationBlocked: false, ordinaryVegetationUnavailable: null } : {};

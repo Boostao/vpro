@@ -5,10 +5,10 @@
   import { projectState } from '../shared/state';
   import SiteUnitExclusionFilter from '../classification/SiteUnitExclusionFilter.svelte';
   import { summaryVegetationSession, type SummaryVegetationPort } from './summaryVegetation';
-  import { summaryVegetationPreferenceSession } from './summaryVegetationPreferenceSessions';
-  import { summaryVegetationQualityPreferenceSession } from './summaryVegetationQualityPreferenceSessions';
+  import { summaryVegetationPreferenceSession } from './summaryVegetationPreferences';
+  import { summaryVegetationQualityPreferenceSession } from './summaryVegetationQualityPreferences';
   import SummaryVegetationQualityPreferences from './SummaryVegetationQualityPreferences.svelte';
-  import { summaryVegetationPresentationPreferenceSession } from './summaryVegetationPresentationPreferenceSessions';
+  import { summaryVegetationPresentationPreferenceSession } from './summaryVegetationPresentationPreferences';
   import SummaryVegetationPresentationPreferences from './SummaryVegetationPresentationPreferences.svelte';
   import SummaryVegetationFieldList from './SummaryVegetationFieldList.svelte';
   import { summaryVegetationFieldListDesktop } from './summaryVegetationFieldListDesktop';

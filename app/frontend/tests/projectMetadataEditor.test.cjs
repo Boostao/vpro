@@ -30,7 +30,9 @@ function restorationReview() {
     columns,current,restored,audits:[audit]};
 }
 test('actual metadata opener and both existing buttons share the exact flag/parent/child/header guard',()=>{
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
   assert.equal((form.match(/metadataDisabled=\{!canOpenProjectMetadata\(\)\}/g) ?? []).length, 2);
   for (const enabled of [false, true]) for (const parent of [false, true])
     for (const child of [false, true]) for (const invalid of [false, true]) {
@@ -439,7 +441,7 @@ test('Metadata component stays outside remounted tabs and gates ordinary Save/Lo
   assert.match(form,/siviCreationPeerUnsaved = \$derived\([^;]*metadataOpen/);
   assert.match(form,/childParentDisabled = \$derived\([^;]*metadataOpen/);
   assert.match(form,/if \(metadataOpen\) return metadataEditor\?\.getCloseState/);
-  assert.match(form,/if \(metadataOpen\) \{ metadataEditor\?\.undo\(\); return; \}/);
+  assert.match(form,/\[\(\) => metadataOpen, \(\) => metadataEditor\?\.undo\(\)\]/);
   assert.match(form,/ordinary plot Save never applies it/);
   assert.match(form,/Finish or close metadata review before changing the plot lock/);
   assert.match(component,/await client\.SaveProjectMetadata\(request\)/);

@@ -76,7 +76,7 @@ export const defaultSIVIParentCreatePort: SIVIParentCreatePort = {
   listCreatedPlots: contextId => (ContextService.ListCreatedSIVIPlots(contextId) as never),
 };
 
-export function validateSIVIFieldUTF16(label: string, value: string | undefined, maxUnits: number, required = false): string | null {
+function validateSIVIFieldUTF16(label: string, value: string | undefined, maxUnits: number, required = false): string | null {
   const text = value ?? '';
   if (!wellFormedUTF16(text) || text.includes('\0')) {
     return `${label} contains malformed Unicode or NUL bytes.`;

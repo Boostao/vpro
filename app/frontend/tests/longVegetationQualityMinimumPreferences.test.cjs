@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -20,7 +21,7 @@ const prefs = loadTypeScript('longVegetationQualityMinimumPreferences.ts', {
   './qualityEditor': quality, './siviParentTransport': transport, './projectMetadataRestore': cells,
   './reportTitlePreferences': shared, './googleEarthReview': earth,
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'longVegetationQualityMinimumWire.json'), 'utf8'));
+const wire = readJsonFixture('longVegetationQualityMinimumWire.json');
 const scope = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath'].map(key => [key, wire.review[key]]));
 const fields = ['siteMinimum', 'vegMinimum', 'soilMinimum'];
 const review = (values = wire.review.values, owner = scope) => ({ ...wire.review, ...owner, values });

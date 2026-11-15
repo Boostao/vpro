@@ -97,13 +97,15 @@ test('Actual source table owns eight controls and nullable flag clearing with ra
 });
 
 test('Other drafts gate hidden Save, Undo, Lock, close, context and unrelated mutations independently', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormChildren.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
   assert.match(form, /siviCreationPeerUnsaved = \$derived\(heightUnsaved \|\| siviUnsaved \|\| siviCoverUnsaved \|\| siviCombinedUnsaved \|\| siviCollectedUnsaved \|\| siviSpeciesUnsaved \|\| siviIdentityUnsaved \|\| otherUnsaved \|\| soilUnsaved \|\| attributeUnsaved \|\| collectedUnsaved \|\| speciesUnsaved \|\| deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
-  assert.match(form, /if \(otherUnsaved\) \{ await saveOtherDrafts\(\); return; \}/);
-  assert.match(form, /if \(otherUnsaved\) \{ void cancelOtherDrafts\(\); return; \}/);
+  assert.match(form, /\[\(\) => otherUnsaved, \(\) => saveOtherDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => otherUnsaved, \(\) => void cancelOtherDrafts\(\)\]/);
   assert.match(form, /Save or Cancel Other drafts before changing the plot lock/);
-  assert.match(form, /otherInvalid.length > 0 \? 'Correct invalid Other drafts/);
-  assert.match(form, /await PlotService.UpdateOtherRecords\(draft.plotNumber, updates\)/);
+  assert.match(form, /i\.otherInvalidCount > 0, 'Correct invalid Other drafts/);
+  assert.match(form, /PlotService\.UpdateOtherRecords\(draft\.plotNumber, updates\)/);
   assert.match(form, /Other changes committed, but refresh failed/);
   assert.match(form, /Child changes committed, but refresh failed/);
 });

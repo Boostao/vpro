@@ -1,7 +1,7 @@
 import { becGroups, equalCode } from './becEditor';
 
 export type WorkingUnitMode = 'env' | 'master' | 'su';
-export const workingUnitControls = ['UserSiteUnit', 'BECSiteUnit', 'btnCoptToWorkingUnit', 'Option455', 'Option457', 'Option459'] as const;
+const workingUnitControls = ['UserSiteUnit', 'BECSiteUnit', 'btnCoptToWorkingUnit', 'Option455', 'Option457', 'Option459'] as const;
 export function isWorkingUnitControl(name: string | undefined): boolean {
   return workingUnitControls.some(control => control === name);
 }

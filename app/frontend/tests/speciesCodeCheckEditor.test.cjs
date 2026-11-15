@@ -87,7 +87,7 @@ test('Code-check scope and raw errors remain outside remounted tabs and explicit
   assert.match(form,/siviCreationPeerUnsaved = \$derived\([^;]*codeCheckOpen/);
   assert.match(form,/childParentDisabled = \$derived\([^;]*codeCheckOpen/);
   assert.match(form,/if \(codeCheckOpen\) return codeCheckEditor\?\.getCloseState/);
-  assert.match(form,/if \(codeCheckOpen\) \{ codeCheckEditor\?\.undo\(\); return; \}/);
+  assert.match(form,/\[\(\) => codeCheckOpen, \(\) => codeCheckEditor\?\.undo\(\)\]/);
   assert.match(form,/ordinary plot Save never applies them/);
   assert.match(form,/Finish or close species-code review before changing the plot lock/);
   assert.match(page,/btnCheckSppCodes' && onSpeciesCheck/);

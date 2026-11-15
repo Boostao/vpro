@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -14,7 +15,7 @@ const prefs = loadTypeScript('longVegetationNamingPreferences.ts', {
   './qualityEditor': quality, './reportTitlePreferences': shared, './googleEarthReview': earth,
 });
 const source = file => readFileSync(srcPath(file), 'utf8');
-const wire = JSON.parse(source('./fixtures/longVegetationNamingWire.json'));
+const wire = readJsonFixture('longVegetationNamingWire.json');
 const scope = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath'].map(key => [key, wire.review[key]]));
 const available = { none: true, english: true, code: true, selectedField: false };
 const review = (mode = 1, selectedField = wire.review.values.selectedField, code = true, owner = scope) =>

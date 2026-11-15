@@ -39,11 +39,11 @@ export interface BECView {
 }
 export const becLengths: Record<BECKey, number> = { zone: 4, subZone: 8, siteSeries: 5 };
 export const becLabels: Record<BECKey, string> = { zone: 'BEC zone', subZone: 'BEC subzone / variant', siteSeries: 'Site series' };
-export const becKeys = ['zone', 'subZone', 'siteSeries'] as const;
+const becKeys = ['zone', 'subZone', 'siteSeries'] as const;
 export function becKey(column: string | undefined): BECKey | undefined {
   return column === 'Zone' ? 'zone' : column === 'SubZone' ? 'subZone' : column === 'SiteSeries' ? 'siteSeries' : undefined;
 }
-export function becFingerprint(codes: BECCodes): string {
+function becFingerprint(codes: BECCodes): string {
   return JSON.stringify(becKeys.map(key => codes[key]));
 }
 export function becChanged(codes: BECCodes, original: BECCodes | null): boolean {

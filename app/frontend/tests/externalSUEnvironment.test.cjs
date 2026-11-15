@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { webcrypto } = require('node:crypto');
@@ -30,7 +31,7 @@ class Reads {
 const external = loadTypeScript('externalSUEnvironment.ts', {
   './siteUnitEnvironment': reverse, './googleEarthReview': earth, './qualityEditor': quality, './readRequests': { ReadRequests: Reads },
 }, { crypto: webcrypto });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'externalSUEnvironmentWire.json'), 'utf8'));
+const wire = readJsonFixture('externalSUEnvironmentWire.json');
 const scope = { contextId: wire.review.review.contextId, project: wire.review.review.project,
   projectPath: wire.review.projectPath, su: wire.review.review.su, suPath: wire.review.suPath };
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -195,10 +196,10 @@ test('card-independent retained receipt and readonly recovery controls survive s
 });
 
 test('normal/CHARS integration keeps independent gates, shared parent lifecycle and one source action path', () => {
-  for (const name of ['ExternalSUEnvironmentTransfer.svelte', 'FS882Form.svelte', 'App.svelte']) {
+  for (const name of ['ExternalSUEnvironmentTransfer.svelte', 'FS882Form.svelte', 'FS882Modals.svelte', 'App.svelte']) {
     assert.equal(compile(readFileSync(srcPath(name), 'utf8'), { filename: name, generate: 'client' }).warnings.length, 0);
   }
-  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
   assert.match(root, /environmentSUDirection = 'external-reverse'; environmentSUOpen = true/);
   assert.match(root, /ExternalSUEnvironmentTransfer bind:this=\{environmentSUEditor\}/);
   assert.match(root, /externalSUEnvironmentBusy \|\| externalSUEnvironmentBlocked/);

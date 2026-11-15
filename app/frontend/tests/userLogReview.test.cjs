@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -14,7 +15,7 @@ const log = loadTypeScript('userLogReview.ts', {
   './siviParentTransport': transport, './qualityEditor': quality, './twoPageVegetationTable': vegetation,
 });
 const { ReadRequests } = loadTypeScript('readRequests.ts', { '@wailsio/runtime': {} });
-const fixture = () => JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'userLogWire.json'), 'utf8'));
+const fixture = () => readJsonFixture('userLogWire.json');
 const validate = value => log.userLogFromWire(value, 'owned-context', value.mode, value.offset, value.limit);
 
 test('shared actual-Go all/current/page/end wires retain source captions, raw storage and separate duplicate rows', () => {

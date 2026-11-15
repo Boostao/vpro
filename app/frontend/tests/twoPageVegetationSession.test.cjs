@@ -1,9 +1,10 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const client = require('svelte/internal/client');
 const { wire, cell, TwoPageVegetationSession } = require('./twoPageVegetationTestHelpers.cjs');
-const fixtures = require('./fixtures/twoPageVegetationReceipts.json');
-const outcomeFixtures = require('./fixtures/twoPageVegetationOutcomes.json');
+const fixtures = readJsonFixture('twoPageVegetationReceipts.json');
+const outcomeFixtures = readJsonFixture('twoPageVegetationOutcomes.json');
 const saved = (index = 3) => structuredClone(fixtures[index]);
 const seed = saved().history.Request;
 const requestId = seed.requestId;

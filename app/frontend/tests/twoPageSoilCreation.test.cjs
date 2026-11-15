@@ -1,8 +1,9 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const client = require('svelte/internal/client');
 const { editor, receipt, TwoPageSoilSession } = require('./twoPageSoilTestHelpers.cjs');
-const cases = require('./fixtures/twoPageSoilCreationWire.json');
+const cases = readJsonFixture('twoPageSoilCreationWire.json');
 const fresh = index => structuredClone(cases[index]);
 const ownerOf = request => {
   const { contextId, project, plot, form } = request.original;

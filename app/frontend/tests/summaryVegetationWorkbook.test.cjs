@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -29,15 +30,15 @@ const client = loadTypeScript('summaryVegetationWorkbook.ts', {
   './summaryVegetation': vegetation, './summaryVegetationEnvironmental': environmental,
   './publicationSession': publication, './environmentWorkbook': environmentWorkbook,
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookWire.json'), 'utf8'));
-const ancillaryWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookAncillaryWire.json'), 'utf8'));
-const referenceWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookReferencesWire.json'), 'utf8'));
-const groupedWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookGroupedWire.json'), 'utf8'));
-const strataReferenceWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookStrataReferencesWire.json'), 'utf8'));
-const groupedAttributeWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookGroupedAttributesWire.json'), 'utf8'));
-const groupedAncillaryWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookGroupedAncillaryWire.json'), 'utf8'));
-const constancyWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookConstancyWire.json'), 'utf8'));
-const unanimousWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationWorkbookUnanimousCommonWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationWorkbookWire.json');
+const ancillaryWire = readJsonFixture('summaryVegetationWorkbookAncillaryWire.json');
+const referenceWire = readJsonFixture('summaryVegetationWorkbookReferencesWire.json');
+const groupedWire = readJsonFixture('summaryVegetationWorkbookGroupedWire.json');
+const strataReferenceWire = readJsonFixture('summaryVegetationWorkbookStrataReferencesWire.json');
+const groupedAttributeWire = readJsonFixture('summaryVegetationWorkbookGroupedAttributesWire.json');
+const groupedAncillaryWire = readJsonFixture('summaryVegetationWorkbookGroupedAncillaryWire.json');
+const constancyWire = readJsonFixture('summaryVegetationWorkbookConstancyWire.json');
+const unanimousWire = readJsonFixture('summaryVegetationWorkbookUnanimousCommonWire.json');
 const owner = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath']
   .map(key => [key, wire.vegetation.preview[key]]));
 const yieldNow = () => Promise.resolve();
@@ -361,7 +362,7 @@ test('consumed outer Summary takes only loaded presentation Constancy intent and
         svelte: require(path.join(path.dirname(require.resolve('svelte/package.json')), 'src', 'index-server.js')),
         './summaryVegetation': vegetation,
         '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
-        './summaryVegetationPresentationPreferenceSessions': { summaryVegetationPresentationPreferenceSession: () => presentation },
+        './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: () => presentation },
         './SummaryVegetationWorkbookPanel.svelte': { default: (_payload, props) => { calls.push(props); } },
         '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
         '../classification/siteUnitExclusionFilter': {},

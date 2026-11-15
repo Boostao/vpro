@@ -94,7 +94,7 @@ test('Source availability, None and write authority require complete explicit me
 });
 
 test('Profile selection is independently default-off and uses shared draft publication with readonly editor gating',()=>{
-  const app=read('PlotProfilePanel.svelte'),form=read('FS882Form.svelte');
+  const app=read('PlotProfilePanel.svelte'),form=read('FS882Form.svelte')+'\n'+read('FS882Modals.svelte');
   const start=app.indexOf('async function choosePlotProfile');
   const action=app.slice(start,app.indexOf('\n  async function ',start+1));
   assert.match(action,/const proposal = \{ name: source\.name, path: source\.path \}/);
@@ -105,7 +105,8 @@ test('Profile selection is independently default-off and uses shared draft publi
   assert.match(action,/selection committed, but refresh failed; do not replay selection/);
   assert.match(app,/profileSourceContext !== \$projectState\.contextId/);
   assert.match(app,/sources\.map\(validatePlotProfileSource\)/);
-  assert.match(form,/allowEditing=\{profileEditingEnabled && \$projectState\?\.plotProfile\?\.writable === true\}/);
+  assert.match(form,/plotProfileWritable=\{\$projectState\?\.plotProfile\?\.writable === true\}/);
+  assert.match(form,/allowEditing=\{profileEditingEnabled && plotProfileWritable\}/);
 });
 
 test('Profile opener caption uses the same editing and selected-source ownership as its editor',()=>{
@@ -130,7 +131,7 @@ test('Profile opener caption uses the same editing and selected-source ownership
 
 test('Project-local profile review and editing are separately gated, resident across tabs and preserve independent draft ownership',()=>{
   const component=read('ProjectPlotProfileReview.svelte');
-  const form=read('FS882Form.svelte');
+  const form=read('FS882Form.svelte')+'\n'+read('FS882Modals.svelte');
   assert.equal(compile(component,{filename:'ProjectPlotProfileReview.svelte',generate:'client'}).warnings.length,0);
   assert.match(form,/independentHeaderWorkflowBusy = \$derived\([^;]*profileReviewBusy/);
   assert.match(form,/otherHeaderWorkflowBusy = \$derived\(independentHeaderWorkflowBusy \|\| twoPageOpen \|\| twoPageBusy\)/);
@@ -153,7 +154,7 @@ test('Project-local profile review and editing are separately gated, resident ac
   assert.match(component,/committedFailure = true; draft = null/);
   assert.match(component,/completed writes must not be replayed/);
   assert.match(form,/if \(profileReviewBlocked\) return profileEditor\?\.getCloseState/);
-  assert.match(form,/if \(profileReviewBlocked\) \{ profileEditor\?\.undo\(\); return; \}/);
+  assert.match(form,/\[\(\) => profileReviewBlocked, \(\) => profileEditor\?\.undo\(\)\]/);
   assert.match(form,/ordinary plot Save never writes profile rules/);
   assert.match(component,/if \(!allowRun \|\| busy \|\| blocked \|\| !review\) return/);
   assert.match(component,/\{#if allowRun\}[\s\S]*Run stored profile preview[\s\S]*\{:else\}[\s\S]*Run Profile \(unavailable\)/);
@@ -326,7 +327,7 @@ test('Lifecycle refresh independently preserves ownership, exact surviving typed
   });
 
   test('Creation/deletion controls are separately default-off, resident and own parent gates without replaying committed writes',()=>{
-    const component=read('ProjectPlotProfileReview.svelte'),form=read('FS882Form.svelte');
+    const component=read('ProjectPlotProfileReview.svelte'),form=read('FS882Form.svelte')+'\n'+read('FS882Modals.svelte');
     assert.match(component,/allowCreation = false, allowDeletion = false/);
     assert.match(form,/allowCreation=\{profileCreationEnabled\} allowDeletion=\{profileDeletionEnabled\}/);
     assert.match(form,/profileEditingEnabled && \$projectState\?\.plotProfile\?\.writable === true && \(metadataOpen \|\| codeCheckOpen \|\| personalDraft !== null/);

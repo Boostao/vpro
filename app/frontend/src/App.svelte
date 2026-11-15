@@ -19,9 +19,9 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   import PlotsBrowserPanel from './shell/PlotsBrowserPanel.svelte';
   import ResetSampleModal from './shell/ResetSampleModal.svelte';
   import WorkspaceStatusBanners from './shell/WorkspaceStatusBanners.svelte';
-  import { summaryVegetationPreferenceSession } from './reports/summaryVegetationPreferenceSessions';
-  import { summaryVegetationQualityPreferenceSession } from './reports/summaryVegetationQualityPreferenceSessions';
-  import { summaryVegetationPresentationPreferenceSession } from './reports/summaryVegetationPresentationPreferenceSessions';
+  import { summaryVegetationPreferenceSession } from './reports/summaryVegetationPreferences';
+  import { summaryVegetationQualityPreferenceSession } from './reports/summaryVegetationQualityPreferences';
+  import { summaryVegetationPresentationPreferenceSession } from './reports/summaryVegetationPresentationPreferences';
   import { summaryVegetationFieldListDesktop } from './reports/summaryVegetationFieldListDesktop';
   import { summaryEnvironmentalDesktop, summaryEnvironmentalEnabled } from './reports/summaryVegetationEnvironmentalDesktop';
   import { matrixPublicationSession } from './reports/subzoneMatrixReport';

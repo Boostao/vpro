@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -15,7 +16,7 @@ const summary = loadTypeScript('summaryVegetation.ts', { './lifeformSummary': li
 const prefs = loadTypeScript('summaryVegetationPreferences.ts', {
   './googleEarthReview': earth, './reportTitlePreferences': shared, './lifeformSummary': lifeform, './summaryVegetation': summary,
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationPreferencesWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationPreferencesWire.json');
 const { values: unused, previewEnabled: unusedPreview, selectionAvailable: unusedSelection, ...scope } = wire.review;
 const values = (groupBy = 1, average = 1, display = 1, showClass = 1, valueLimit = 0) =>
   ({ groupBy, average, display, showClass, valueLimit });
@@ -164,7 +165,7 @@ const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8'
 function panel(session, preferencesEnabled = true) {
   return serverComponent(component, 'SummaryVegetationReport.svelte', {
     './summaryVegetation': summary,
-    './summaryVegetationPreferenceSessions': { summaryVegetationPreferenceSession: preferencesEnabled ? () => session : null },
+    './summaryVegetationPreferences': { summaryVegetationPreferenceSession: preferencesEnabled ? () => session : null },
     '../bindings/github.com/boostao/vpro/app': {},
     '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
     '../classification/siteUnitExclusionFilter': {},

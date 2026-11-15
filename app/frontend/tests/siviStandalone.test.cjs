@@ -157,8 +157,8 @@ test('shared original loading does not read new-owner choices after late deliver
 });
 
 test('standalone host uses the existing editor owner/close guards, not a duplicated controller or FS882 field fallback', () => {
-  const app = source('App.svelte'), host = source('FS882Form.svelte');
-  for (const [filename, text] of [['App.svelte', app], ['FS882Form.svelte', host]]) {
+  const app = source('App.svelte'), host = source('FS882Form.svelte'), vegTab = source('FS882VegTab.svelte');
+  for (const [filename, text] of [['App.svelte', app], ['FS882Form.svelte', host], ['FS882VegTab.svelte', vegTab]]) {
     assert.equal(compile(text, { filename, generate: 'client' }).warnings.length, 0);
   }
   assert.match(app, /entryForm=\{editorEntryForm\}/);
@@ -174,8 +174,8 @@ test('standalone host uses the existing editor owner/close guards, not a duplica
   assert.match(host, /No FS882 fallback|no FS882 fallback/);
   assert.match(host, /async function loadSIVIParentOriginals/);
   assert.match(host, /siviStandalone && siviStandaloneEnabled && siviParentSession/);
-  assert.match(host, /\{#if siviCombinedEnabled\}/);
-  assert.match(host, /Species creation\/deletion and original species-list callbacks remain unavailable/);
+  assert.match(vegTab, /\{#if siviCombinedEnabled\}/);
+  assert.match(vegTab, /Species creation\/deletion and original species-list callbacks remain unavailable/);
   assert.match(host, /Close SIVI form/);
   assert.match(host, /siviStandalone && !getCloseState\(\)\.canSave/);
   assert.match(host, /!siviStandaloneEnabled \|\| !siviParentView\?\.original \|\| Boolean\(siviParentView\?\.error\) \|\| childUnsaved \|\| siviSourceBarrier/);

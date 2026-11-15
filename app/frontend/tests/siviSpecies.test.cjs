@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -27,7 +28,7 @@ const child = loadTypeScript('siviChildWriteSession.ts', {
 const session = loadTypeScript('siviSpeciesSession.ts', {
   './siviChildWriteSession': child, './siviHeightSession': heightSession, './siviSpeciesEditor': editor,
 });
-const wireReferences = require('./fixtures/siviSpeciesReferenceFixture.json');
+const wireReferences = readJsonFixture('siviSpeciesReferenceFixture.json');
 const owner = { contextId: 'C', project: 'Sample', plot: 'P' };
 const id = '9007199254740993';
 const clone = value => structuredClone(value);
