@@ -213,7 +213,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	// 4. Upgrade site-codes.db, soil-codes.db, parent-codes.db from verified DAO fixtures + LMH25 (2023)
-	siteSnap, err := os.ReadFile(filepath.Join(*resDir, "site-codes-fixture.json"))
+	siteSnap, err := listcatalog.ReadFixture(filepath.Join(*resDir, "site-codes-fixture.json.gz"))
 	if err != nil {
 		return err
 	}
@@ -241,15 +241,15 @@ func run(args []string, stdout io.Writer) error {
 		return fmt.Errorf("generate soil-codes.db: %w", err)
 	}
 
-	parentSnap, err := os.ReadFile(filepath.Join(*resDir, "parent-codes-fixture.json"))
+	parentSnap, err := listcatalog.ReadFixture(filepath.Join(*resDir, "parent-codes-fixture.json.gz"))
 	if err != nil {
 		return err
 	}
-	parentCapProv, err := os.ReadFile(filepath.Join(*resDir, "parent-codes-source-provenance.json"))
+	parentCapProv, err := listcatalog.ReadFixture(filepath.Join(*resDir, "parent-codes-source-provenance.json.gz"))
 	if err != nil {
 		return err
 	}
-	parentManifest, err := os.ReadFile(filepath.Join(*resDir, "parent-codes-fixture-manifest.json"))
+	parentManifest, err := listcatalog.ReadFixture(filepath.Join(*resDir, "parent-codes-fixture-manifest.json.gz"))
 	if err != nil {
 		return err
 	}

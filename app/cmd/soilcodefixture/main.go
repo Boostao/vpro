@@ -66,11 +66,11 @@ func run(args []string, output io.Writer) error {
 		if *sourceProvenance == "" || *manifest == "" || *bedrock == "" {
 			return errors.New("parent requires -source-provenance -manifest -bedrock")
 		}
-		source, err := os.ReadFile(*sourceProvenance)
+		source, err := listcatalog.ReadFixture(*sourceProvenance)
 		if err != nil {
 			return err
 		}
-		seal, err := os.ReadFile(*manifest)
+		seal, err := listcatalog.ReadFixture(*manifest)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,13 @@ func run(args []string, output io.Writer) error {
 	if *profileName != "parent" && (*sourceProvenance != "" || *manifest != "" || *bedrock != "") {
 		return errors.New("source provenance/manifest/bedrock inputs require parent profile")
 	}
-	data, err := os.ReadFile(*snapshot)
+	var data []byte
+	var err error
+	if *profileName == "parent" {
+		data, err = listcatalog.ReadFixture(*snapshot)
+	} else {
+		data, err = os.ReadFile(*snapshot)
+	}
 	if err != nil {
 		return err
 	}

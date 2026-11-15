@@ -16,7 +16,7 @@ import (
 
 func fixturePaths() (string, string) {
 	base := filepath.Join("..", "..", "resources")
-	return filepath.Join(base, "site-codes-fixture.json"), filepath.Join(base, "site-codes-fixture-manifest.json")
+	return filepath.Join(base, "site-codes-fixture.json.gz"), filepath.Join(base, "site-codes-fixture-manifest.json")
 }
 
 func workspace(t *testing.T) string {
@@ -78,7 +78,10 @@ func TestGenerateAndNonOverwriting(t *testing.T) {
 
 func TestManifestAndFlagFailures(t *testing.T) {
 	snapshot, manifestPath := fixturePaths()
-	data, _ := os.ReadFile(snapshot)
+	data, err := listcatalog.ReadFixture(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rawManifest, _ := os.ReadFile(manifestPath)
 	if _, err := fixtureProvenance(data, rawManifest); err != nil {
 		t.Fatal(err)
@@ -116,7 +119,10 @@ func TestManifestAndFlagFailures(t *testing.T) {
 func TestGenerationFailureRemovesOnlyOwnedOutputs(t *testing.T) {
 	dir := workspace(t)
 	snapshot, manifest := fixturePaths()
-	data, _ := os.ReadFile(snapshot)
+	data, err := listcatalog.ReadFixture(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rawManifest, _ := os.ReadFile(manifest)
 	p, err := fixtureProvenance(data, rawManifest)
 	if err != nil {

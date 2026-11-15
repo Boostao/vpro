@@ -29,7 +29,7 @@ func TestSiteCodeCatalogueFrozenCellsDTOOrderAndDuplicates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join("resources", "site-codes-fixture.json"))
+	data, err := listcatalog.ReadFixture(filepath.Join("resources", "site-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}
