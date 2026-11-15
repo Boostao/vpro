@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -19,7 +20,7 @@ const ordinary = loadTypeScript('longVegetationReport.ts', {
 const project = loadTypeScript('longVegetationProjectReport.ts', {
   './longVegetationReport':ordinary, './projectMetadataRestore':restoration, './qualityEditor':quality
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectUnitsWire.json'),'utf8'));
+const wire = readJsonFixture('longVegetationProjectUnitsWire.json');
 const owner = {contextId:'owned',project:'Sample',projectPath:'C:\\project.db',su:'None',suPath:''};
 const fields = value => value.report.sourceKind === 'project-selected-fields' ? ['Zone'] : [];
 const validate = (value, enabled=true, context={...owner,su:value.report.su,suPath:value.suPath}) =>

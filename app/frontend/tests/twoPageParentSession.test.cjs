@@ -318,7 +318,7 @@ test('actual root guards delegate additional-field errors and refuse ordinary Sa
   assert.equal(root.actions.getCloseState().busy, true);
 });
 test('additional-field review excludes ordinary parent drafts until its owner is explicitly closed', () => {
-  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8');
   const expression = source.match(/const childUnsaved = \$derived\(([^;]+)\);/)[1];
   const clean = { nonParentChildUnsaved: false, siviParentWriteUnsaved: false,
     siviParentActionUnsaved: false, siviProjectAssignmentUnsaved: false,

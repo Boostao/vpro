@@ -47,7 +47,7 @@ test('Native-verified source controls compile with explicit opt-out, shared gate
   assert.match(parent, /regionCodeKey\(control.column\)/);
   assert.match(parent, /@render regionCodeInputs/);
   assert.match(parent, /onbusy=\{onRegionCodeBusyChange\}/);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
   assert.match(form, /siteCodeBusy \|\| regionCodeBusy/);
   assert.match(form, /onRegionCodeBusyChange=\{\(pending\) => regionCodeBusy = pending\}/);
 });

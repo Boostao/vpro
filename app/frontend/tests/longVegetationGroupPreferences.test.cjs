@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -11,7 +12,7 @@ const locations = loadTypeScript('plotLocationReview.ts', { './projectMetadataRe
 const earth = loadTypeScript('googleEarthReview.ts', { './projectMetadataRestore': cells, './qualityEditor': quality, './plotLocationReview': locations });
 const shared = loadTypeScript('reportTitlePreferences.ts', { './qualityEditor': quality, './googleEarthReview': earth });
 const prefs = loadTypeScript('longVegetationGroupPreferences.ts', { './reportTitlePreferences': shared, './googleEarthReview': earth });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'longVegetationGroupWire.json'), 'utf8'));
+const wire = readJsonFixture('longVegetationGroupWire.json');
 const scope = { ...wire.review }; delete scope.values; delete scope.availability;
 const all = { layer: true, strata: true, lifeform: true, none: true };
 const client = { strata: true, lifeform: true };

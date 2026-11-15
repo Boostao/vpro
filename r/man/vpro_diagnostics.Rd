@@ -46,7 +46,7 @@ An S3 object of class \code{vpro_diagnostics} containing \verb{$unit_species}
 }
 \description{
 Vectorised R counterpart to legacy \code{V7mdlDiagnostic} (\code{Diagnostic10.xla}) and
-\code{vpro_wails/internal/diagnostics}. Aggregates plot-level vegetation across
+VPro Desktop (\code{app/internal/diagnostics}). Aggregates plot-level vegetation across
 \code{SiteUnit}s (or \code{~} tilde \code{BreakpointUnit}s when \code{hierarchy_breaks = TRUE}),
 applying IEEE-754 \code{float32} cover narrowing and VPro's \verb{99\%} per-layer cap on
 lumped taxa, then computes Presence (\code{I..V} / \verb{1..5}), Domin-Krajina

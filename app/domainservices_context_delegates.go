@@ -1,0 +1,357 @@
+package main
+
+import (
+	"context"
+	"errors"
+	classificationpkg "github.com/boostao/vpro/app/internal/classification"
+	envreportpkg "github.com/boostao/vpro/app/internal/envreport"
+	interchangepkg "github.com/boostao/vpro/app/internal/interchange"
+	plotentrypkg "github.com/boostao/vpro/app/internal/plotentry"
+	projectopspkg "github.com/boostao/vpro/app/internal/projectops"
+	sivipkg "github.com/boostao/vpro/app/internal/sivi"
+	sourceformpkg "github.com/boostao/vpro/app/internal/sourceform"
+	spatialpkg "github.com/boostao/vpro/app/internal/spatial"
+	twopagepkg "github.com/boostao/vpro/app/internal/twopage"
+	validationpkg "github.com/boostao/vpro/app/internal/validation"
+	vegreportpkg "github.com/boostao/vpro/app/internal/vegreport"
+	vprocorepkg "github.com/boostao/vpro/app/internal/vprocore"
+)
+
+func (s *ContextService) CreateBlankProjectMetadata(p0 context.Context, p1 string, p2 ProjectMetadataCreate) (ProjectMetadataRow, error) {
+	return classificationpkg.CreateBlankProjectMetadata(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) CreatePersonalSpeciesDefinition(p0 context.Context, p1 string, p2 PersonalSpeciesDefinitionRequest) (VegetationSpeciesOption, error) {
+	return plotentrypkg.CtxCreatePersonalSpeciesDefinition(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) CreatePlotProfileFile(p0 context.Context, p1 string, p2 PlotProfileFileCreation) (PlotProfileFileCreated, error) {
+	return classificationpkg.CreatePlotProfileFile(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) CreatePlotProfileTable(p0 context.Context, p1 string, p2 PlotProfileTableCreation) (PlotProfileFileCreated, error) {
+	return classificationpkg.CreatePlotProfileTable(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) CreateProjectMetadataFromTemplate(p0 context.Context, p1 string, p2 ProjectMetadataTemplateCreate) (ProjectMetadataRow, error) {
+	return classificationpkg.CreateProjectMetadataFromTemplate(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) CreateProjectPlotProfileRule(p0 context.Context, p1 string, p2 ProjectPlotProfileCreation) (ProjectMetadataRow, error) {
+	return classificationpkg.CreateProjectPlotProfileRule(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) DeleteProjectPlotProfileRule(p0 context.Context, p1 string, p2 ProjectPlotProfileDeletion) error {
+	return classificationpkg.DeleteProjectPlotProfileRule(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) DeleteReviewedVegetation(p0 string, p1 string, p2 VegetationDeletionRequest) error {
+	return plotentrypkg.CtxDeleteReviewedVegetation(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) GetLongEnvironmentOptions(p0 context.Context, p1 string) (LongEnvironmentOptions, error) {
+	return envreportpkg.GetLongEnvironmentOptions(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) GetLongVegetationOptions(p0 context.Context, p1 string) (LongVegetationOptions, error) {
+	return vegreportpkg.GetLongVegetationOptions(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) GetPlotLocationReview(p0 context.Context, p1 string) (*PlotLocationReview, error) {
+	return spatialpkg.GetPlotLocationReview(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) GetProjectTableCSVReview(p0 context.Context, p1 string, p2 string) (*ProjectTableCSVReview, error) {
+	return interchangepkg.GetProjectTableCSVReview(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) GetSIVIParentActionOriginal(p0 context.Context, p1 string, p2 string) (*SIVIParentProjection, error) {
+	return sivipkg.GetSIVIParentActionOriginal(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) GetSIVIParentDirectOriginal(p0 context.Context, p1 string, p2 string) (*SIVIParentProjection, error) {
+	return sourceformpkg.GetSIVIParentDirectOriginal(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) GetSIVIParentJoinReview(p0 context.Context, p1 string, p2 string) (*SIVIParentJoinReview, error) {
+	return sivipkg.GetSIVIParentJoinReview(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) GetSIVIParentOriginal(p0 context.Context, p1 string, p2 string) (*SIVIParentProjection, error) {
+	return sivipkg.GetSIVIParentOriginal(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) GetSIVIProjectAssignmentOriginal(p0 context.Context, p1 string, p2 string) (*SIVIProjectAssignmentOriginal, error) {
+	return sourceformpkg.GetSIVIProjectAssignmentOriginal(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) GetSIVIProjectIDChoices(p0 context.Context, p1 string) (*SIVIProjectChoices, error) {
+	return sivipkg.GetSIVIProjectIDChoices(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) GetSIVIVegetation(p0 context.Context, p1 string, p2 string, p3 bool) ([]SIVIVegetationProjection, error) {
+	return sivipkg.GetSIVIVegetation(unwrapContextService(s), p0, p1, p2, p3)
+}
+
+func (s *ContextService) GetSiteUnitSummaryOptions(p0 context.Context, p1 string) (SiteUnitSummaryOptions, error) {
+	return envreportpkg.GetSiteUnitSummaryOptions(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ImportAccessProject(p0 context.Context, p1 string, p2 AccessProjectImportRequest) (AccessProjectImportResult, error) {
+	return interchangepkg.ImportAccessProject(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) InspectAccessDatabase(p0 context.Context, p1 string, p2 string) (AccessDatabaseInspection, error) {
+	return interchangepkg.InspectAccessDatabase(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) ListProjectMetadataFields(p0 context.Context, p1 string) ([]ProjectMetadataEditorField, error) {
+	return classificationpkg.ListProjectMetadataFields(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ListProjectMetadataRestoreHistory(p0 context.Context, p1 string, p2 string) (ProjectMetadataRestoreHistory, error) {
+	return classificationpkg.ListProjectMetadataRestoreHistory(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) ListProjectPlotProfileChoices(p0 context.Context, p1 string) (ProjectPlotProfileChoices, error) {
+	return classificationpkg.ListProjectPlotProfileChoices(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ListSoilSuggestions(p0 context.Context, p1 string) ([]SoilSuggestion, error) {
+	return plotentrypkg.ListSoilSuggestions(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ListVegetationAttributeSuggestions(p0 context.Context, p1 string) ([]SoilSuggestion, error) {
+	return plotentrypkg.ListVegetationAttributeSuggestions(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) LookupSpeciesCodeCheckTarget(p0 context.Context, p1 string, p2 VegetationSpeciesLookup) ([]SpeciesCodeCheckOption, error) {
+	return validationpkg.LookupSpeciesCodeCheckTarget(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) PreviewLongEnvironment(p0 context.Context, p1 string, p2 LongEnvironmentRequest) (LongEnvironmentPreview, error) {
+	return envreportpkg.PreviewLongEnvironment(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) PreviewLongVegetation(p0 context.Context, p1 string) (LongVegetationPreview, error) {
+	return vegreportpkg.PreviewLongVegetation(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) PreviewSiteUnitSummary(p0 context.Context, p1 string, p2 SiteUnitSummaryRequest) (SiteUnitSummaryPreview, error) {
+	return envreportpkg.PreviewSiteUnitSummary(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) PreviewSiteUnitSummaryLifeforms(p0 context.Context, p1 string, p2 SiteUnitSummaryRequest) (SiteUnitSummaryPreview, error) {
+	return envreportpkg.PreviewSiteUnitSummaryLifeforms(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) PreviewSiteUnitSummarySpecies(p0 context.Context, p1 string, p2 SiteUnitSpeciesListRequest) (SiteUnitSpeciesListPreview, error) {
+	return envreportpkg.PreviewSiteUnitSummarySpecies(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) ResolveProjectPlotProfileNavigation(p0 context.Context, p1 string, p2 ProjectPlotProfileFilterRequest) (ProjectPlotProfileNavigation, error) {
+	return classificationpkg.ResolveProjectPlotProfileNavigation(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) RestoreProjectMetadata(p0 context.Context, p1 string, p2 ProjectMetadataRestore) (*AuditRestoreResult, error) {
+	return classificationpkg.RestoreProjectMetadata(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) RestoreSIVIHeights(p0 context.Context, p1 string, p2 string, p3 string, p4 AuditRestoreAction) (*AuditRestoreResult, error) {
+	return sivipkg.RestoreSIVIHeights(unwrapContextService(s), p0, p1, p2, p3, vprocorepkg.AuditRestoreAction(p4))
+}
+
+func (s *ContextService) RestoreSIVIParentActions(p0 context.Context, p1 string, p2 string, p3 string, p4 AuditRestoreAction) (*AuditRestoreResult, error) {
+	return sivipkg.RestoreSIVIParentActions(unwrapContextService(s), p0, p1, p2, p3, vprocorepkg.AuditRestoreAction(p4))
+}
+
+func (s *ContextService) RestoreSIVIParentDirect(p0 context.Context, p1 string, p2 string, p3 string, p4 AuditRestoreAction) (*AuditRestoreResult, error) {
+	return sourceformpkg.RestoreSIVIParentDirect(unwrapContextService(s), p0, p1, p2, p3, vprocorepkg.AuditRestoreAction(p4))
+}
+
+func (s *ContextService) RestoreSIVIProjectAssignment(p0 context.Context, p1 string, p2 string, p3 string, p4 AuditRestoreAction) (*AuditRestoreResult, error) {
+	return sourceformpkg.RestoreSIVIProjectAssignment(unwrapContextService(s), p0, p1, p2, p3, vprocorepkg.AuditRestoreAction(p4))
+}
+
+func (s *ContextService) ReviewEnvironmentSiteUnits(p0 context.Context, p1 string) (EnvironmentSiteUnitReview, error) {
+	return classificationpkg.ReviewEnvironmentSiteUnits(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ReviewPlotProfileFileCreation(p0 context.Context, p1 string) (PlotProfileFileReview, error) {
+	return classificationpkg.ReviewPlotProfileFileCreation(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ReviewPlotProfileTableCreation(p0 context.Context, p1 string) (PlotProfileTableReview, error) {
+	return classificationpkg.ReviewPlotProfileTableCreation(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ReviewProjectMetadataRestoration(p0 context.Context, p1 string, p2 string, p3 string) (ProjectMetadataRestoreReview, error) {
+	return classificationpkg.ReviewProjectMetadataRestoration(unwrapContextService(s), p0, p1, p2, p3)
+}
+
+func (s *ContextService) ReviewProjectPlotProfile(p0 context.Context, p1 string) (ProjectPlotProfileReview, error) {
+	return classificationpkg.ReviewProjectPlotProfile(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ReviewProjectPlotProfileLump(p0 context.Context, p1 string) (ProjectMetadataTable, error) {
+	return classificationpkg.ReviewProjectPlotProfileLump(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ReviewProjectPlotProfileSU(p0 context.Context, p1 string, p2 ProjectPlotProfileFilterRequest) (ProfileSUReview, error) {
+	return classificationpkg.ReviewProjectPlotProfileSU(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) ReviewProjectPlotProfileSUInProject(p0 context.Context, p1 string, p2 ProjectPlotProfileFilterRequest) (ProfileSUProjectReview, error) {
+	return classificationpkg.ReviewProjectPlotProfileSUInProject(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) ReviewSiteUnitEnvironment(p0 context.Context, p1 string) (SiteUnitEnvironmentReview, error) {
+	return classificationpkg.ReviewSiteUnitEnvironment(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ReviewSpeciesCodes(p0 context.Context, p1 string) (SpeciesCodeCheckReview, error) {
+	return validationpkg.ReviewSpeciesCodes(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) ReviewVegetationDeletion(p0 context.Context, p1 string, p2 string, p3 string, p4 int64) (VegetationDeletionReview, error) {
+	return plotentrypkg.ReviewVegetationDeletion(unwrapContextService(s), p0, p1, p2, p3, p4)
+}
+
+func (s *ContextService) RunProjectPlotProfile(p0 context.Context, p1 string, p2 ProjectPlotProfileRunRequest) (ProjectPlotProfileResult, error) {
+	return classificationpkg.RunProjectPlotProfile(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) SaveProjectPlotProfile(p0 context.Context, p1 string, p2 ProjectPlotProfileEdit) error {
+	return classificationpkg.SaveProjectPlotProfile(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) SaveProjectPlotProfileSU(p0 context.Context, p1 string, p2 ProfileSUCreation) (ProfileSUCreated, error) {
+	return classificationpkg.SaveProjectPlotProfileSU(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) SaveProjectPlotProfileSUInProject(p0 context.Context, p1 string, p2 ProfileSUProjectCreation) (ProfileSUCreated, error) {
+	return classificationpkg.SaveProjectPlotProfileSUInProject(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) SaveSIVIHeights(p0 context.Context, p1 string, p2 string, p3 bool, p4 []SIVIVegetationProjection, p5 []SIVIHeightEdit) (*SIVIHeightWriteResult, error) {
+	return sivipkg.SaveSIVIHeights(unwrapContextService(s), p0, p1, p2, p3, p4, p5)
+}
+
+func (s *ContextService) SaveSIVIParentActions(p0 context.Context, p1 string, p2 string, p3 SIVIParentActionWrite) (*SIVIParentActionSaveResult, error) {
+	return sivipkg.SaveSIVIParentActions(unwrapContextService(s), p0, p1, p2, p3)
+}
+
+func (s *ContextService) SaveSIVIParentDirect(p0 context.Context, p1 string, p2 string, p3 SIVIParentDirectWrite) (*SIVIParentWriteResult, error) {
+	return sourceformpkg.SaveSIVIParentDirect(unwrapContextService(s), p0, p1, p2, p3)
+}
+
+func (s *ContextService) SaveSIVIProjectAssignment(p0 context.Context, p1 string, p2 string, p3 SIVIProjectAssignmentWrite) (*SIVIParentWriteResult, error) {
+	return sourceformpkg.SaveSIVIProjectAssignment(unwrapContextService(s), p0, p1, p2, p3)
+}
+
+func (s *ContextService) SaveSpeciesCodeCheck(p0 string, p1 []SpeciesCodeCheckUpdate) error {
+	return validationpkg.SaveSpeciesCodeCheck(unwrapContextService(s), p0, p1)
+}
+
+func (s *ContextService) SetPlotProfileEditing(p0 context.Context, p1 string, p2 PlotProfileWriteRequest) (ProjectState, error) {
+	return classificationpkg.SetPlotProfileEditing(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) SetSIVIProjectIDSource(p0 context.Context, p1 string, p2 int, p3 int) (*SIVIProjectChoices, error) {
+	return sivipkg.SetSIVIProjectIDSource(unwrapContextService(s), p0, p1, p2, p3)
+}
+
+func (s *ContextService) TransferEnvironmentSiteUnits(p0 context.Context, p1 string, p2 EnvironmentSiteUnitTransfer) (*EnvironmentSiteUnitResult, error) {
+	return classificationpkg.TransferEnvironmentSiteUnits(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) TransferSiteUnitEnvironment(p0 context.Context, p1 string, p2 SiteUnitEnvironmentTransfer) (*SiteUnitEnvironmentResult, error) {
+	return classificationpkg.TransferSiteUnitEnvironment(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) UpdateVegetationAttributes(p0 string, p1 string, p2 []VegetationAttributeUpdate) error {
+	return plotentrypkg.CtxUpdateVegetationAttributes(unwrapContextService(s), p0, p1, p2)
+}
+
+func (s *ContextService) RestoreSelectedAuditRecords(contextID, plot string, rowIDs []string, action AuditRestoreAction) (*AuditRestoreResult, error) {
+	if s == nil || s.core == nil {
+		return nil, errors.New("project context is unavailable")
+	}
+	return s.core.RestoreSelectedAuditRecords(contextID, plot, rowIDs, vprocorepkg.AuditRestoreAction(action))
+}
+
+func (s *ContextService) CreateNewProject(ctx context.Context, contextID string, req projectopspkg.NewProjectRequest) (projectopspkg.NewProjectResult, error) {
+	return projectopspkg.CreateNewProject(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) SaveProjectAs(ctx context.Context, contextID string, req projectopspkg.SaveProjectAsRequest) (projectopspkg.SaveProjectAsResult, error) {
+	return projectopspkg.SaveProjectAs(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) ExportSplinterProject(ctx context.Context, contextID string, req projectopspkg.ExportSplinterRequest) (projectopspkg.ExportSplinterResult, error) {
+	return projectopspkg.ExportSplinterProject(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) CompareProjects(ctx context.Context, contextID string, req projectopspkg.CompareProjectsRequest) (projectopspkg.CompareProjectsResult, error) {
+	return projectopspkg.CompareProjects(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) PreviewOptimizeVeg(ctx context.Context, contextID string, opts projectopspkg.OptimizeVegOptions) (projectopspkg.OptimizeVegPreview, error) {
+	return projectopspkg.PreviewOptimizeVeg(unwrapContextService(s), ctx, contextID, opts)
+}
+
+func (s *ContextService) ApplyOptimizeVeg(ctx context.Context, contextID string, req projectopspkg.ApplyOptimizeVegRequest) (projectopspkg.OptimizeVegResult, error) {
+	return projectopspkg.ApplyOptimizeVeg(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) PreviewThreeWayMerge(ctx context.Context, contextID string, req projectopspkg.ThreeWayMergePreviewRequest) (projectopspkg.ThreeWayMergePreview, error) {
+	return projectopspkg.PreviewThreeWayMerge(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) ExecuteThreeWayMerge(ctx context.Context, contextID string, req projectopspkg.ThreeWayMergeExecuteRequest) (projectopspkg.ThreeWayMergeResult, error) {
+	return projectopspkg.ExecuteThreeWayMerge(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) DeriveProjectMetadataFromPlots(ctx context.Context, contextID, projectID string) (projectopspkg.DerivedProjectMetadata, error) {
+	return projectopspkg.DeriveProjectMetadataFromPlots(unwrapContextService(s), ctx, contextID, projectID)
+}
+
+func (s *ContextService) ListProjectMetadataPresets() []projectopspkg.ProjectMetadataPreset {
+	return projectopspkg.ListProjectMetadataPresets()
+}
+
+func (s *ContextService) ApplyProjectMetadataAutomation(ctx context.Context, contextID string, req projectopspkg.ApplyProjectMetadataAutomationRequest) (projectopspkg.ApplyProjectMetadataAutomationResult, error) {
+	return projectopspkg.ApplyProjectMetadataAutomation(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) RunComplianceValidation(ctx context.Context, contextID string, opts validationpkg.ComplianceOptions) (validationpkg.ComplianceValidationReport, error) {
+	return validationpkg.RunComplianceValidation(unwrapContextService(s), ctx, contextID, opts)
+}
+
+func (s *ContextService) QuarantineOrphanRecords(ctx context.Context, contextID string, req validationpkg.QuarantineOrphanRequest) (validationpkg.QuarantineOrphanResult, error) {
+	return validationpkg.QuarantineOrphanRecords(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) DeleteTwoPageSoilHorizon(ctx context.Context, contextID string, req twopagepkg.DeleteTwoPageSoilHorizonRequest) (twopagepkg.DeleteTwoPageSoilHorizonResult, error) {
+	return twopagepkg.DeleteTwoPageSoilHorizon(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) RestoreTwoPageSoilHorizon(ctx context.Context, contextID string, req twopagepkg.RestoreTwoPageSoilHorizonRequest) (twopagepkg.RestoreTwoPageSoilHorizonResult, error) {
+	return twopagepkg.RestoreTwoPageSoilHorizon(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) ListTwoPageSoilDeletedHorizons(ctx context.Context, contextID, plotNumber, form string) ([]twopagepkg.DeletedTwoPageSoilHorizonEntry, error) {
+	return twopagepkg.ListTwoPageSoilDeletedHorizons(unwrapContextService(s), ctx, contextID, plotNumber, form)
+}
+
+func (s *ContextService) CreateSIVIPlot(ctx context.Context, contextID string, req sivipkg.CreateSIVIPlotRequest) (sivipkg.CreateSIVIPlotResult, error) {
+	return sivipkg.CreateSIVIPlot(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) UndoCreateSIVIPlot(ctx context.Context, contextID string, req sivipkg.UndoCreateSIVIPlotRequest) (sivipkg.UndoCreateSIVIPlotResult, error) {
+	return sivipkg.UndoCreateSIVIPlot(unwrapContextService(s), ctx, contextID, req)
+}
+
+func (s *ContextService) ListCreatedSIVIPlots(ctx context.Context, contextID string) ([]sivipkg.SIVICreatedPlotEntry, error) {
+	return sivipkg.ListCreatedSIVIPlots(unwrapContextService(s), ctx, contextID)
+}

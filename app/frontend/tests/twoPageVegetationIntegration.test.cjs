@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -9,7 +10,7 @@ const client = require('svelte/internal/client');
 const { loadTypeScript, serverComponent, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
 const { TwoPageVegetationSession, wire, editor, cell, speciesList } = require('./twoPageVegetationTestHelpers.cjs');
 const { metadata } = require('./siviParentTestHelpers.cjs');
-const fixtures = require('./fixtures/twoPageVegetationReceipts.json');
+const fixtures = readJsonFixture('twoPageVegetationReceipts.json');
 const read = name => readFileSync(srcPath(name), 'utf8');
 const presentation = loadTypeScript('twoPageVegetationPresentation.ts', {
   './twoPageVegetationWire': wire, './twoPageVegetationEditor': editor, './projectMetadataEditor': metadata,
@@ -67,7 +68,7 @@ test('all four source presentations retain every25 field exactly once with label
 });
 
 test('enabled A/CHARS picker has one labelled control full tuple options and explicit common-cover unavailability', async () => {
-  const receipt = structuredClone(require('./fixtures/twoPageVegetationSpeciesListReceipts.json')[7]);
+  const receipt = structuredClone(readJsonFixture('twoPageVegetationSpeciesListReceipts.json')[7]);
   const request = receipt.history.Request;
   const session = owned(request.original, { references: () => operation(client.proxy(request.speciesList)) }, true);
   await session.load(); await session.loadReferences();
@@ -188,7 +189,7 @@ test('actual reactive owner switch retains the newer panel error when an older r
       const error = mounted.actions().error;
       assert.match(error, /definitions unavailable/);
       if (completion === 'resolve') {
-        const data = structuredClone(require('./fixtures/twoPageVegetationReferenceWire.json'));
+        const data = structuredClone(readJsonFixture('twoPageVegetationReferenceWire.json'));
         Object.assign(data, { contextId, project, plot, form });
         release(client.proxy(data));
       } else reject(new Error('old owner source failure'));
@@ -351,7 +352,7 @@ test('actual root native-close and context transition barriers survive unmounted
   });
   const session = owned(source(), {
     save: () => Promise.reject(new Error('unknown delivery')),
-    outcome: json => operation({ ...structuredClone(require('./fixtures/twoPageVegetationOutcomes.json')[2]), requestJSON: json }),
+    outcome: json => operation({ ...structuredClone(readJsonFixture('twoPageVegetationOutcomes.json')[2]), requestJSON: json }),
   });
   const stop = session.subscribe(() => {
     const state = session.closeState();

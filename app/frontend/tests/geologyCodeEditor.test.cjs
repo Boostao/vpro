@@ -71,7 +71,7 @@ test('Bedrock review is draft-bound, exact-value-bound and retained across remou
 });
 
 test('Bedrock defaults on with opt-out and wires source slots, hidden validation and explicit Retry', () => {
-  const source = read('GeologyCodeFields.svelte'), form = read('FS882Form.svelte'), soilSection = read('FS882SoilHorizonSection.svelte');
+  const source = read('GeologyCodeFields.svelte'), form = read('FS882Form.svelte') + '\n' + read('FS882SoilTab.svelte') + '\n' + read('fs882FormLoadSave.ts'), soilSection = read('FS882SoilHorizonSection.svelte');
   assert.equal(compile(source, { filename: 'GeologyCodeFields.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(source, /onDestroy[\s\S]*onvalidation\('geologyCodes'/);
   assert.match(source, /Retry bedrock choices/);

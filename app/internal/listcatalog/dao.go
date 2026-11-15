@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -41,6 +42,45 @@ type daoSnapshotCatalogue struct {
 	Count  int
 	SHA256 string
 	Rows   []string
+}
+
+// ReadFixture reads a fixture file, gunzipping .gz inputs or falling back to
+// path+".gz" when the uncompressed file does not exist.
+func ReadFixture(path string) ([]byte, error) {
+	if strings.HasSuffix(path, ".gz") {
+		compressed, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		return gunzipBytes(compressed)
+	}
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return data, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	compressed, gzErr := os.ReadFile(path + ".gz")
+	if gzErr != nil {
+		if errors.Is(gzErr, os.ErrNotExist) {
+			return nil, err
+		}
+		return nil, gzErr
+	}
+	return gunzipBytes(compressed)
+}
+
+func gunzipBytes(compressed []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(compressed))
+	if err != nil {
+		return nil, err
+	}
+	raw, readErr := io.ReadAll(reader)
+	if err := errors.Join(readErr, reader.Close()); err != nil {
+		return nil, err
+	}
+	return raw, nil
 }
 
 func readDAOGzip(data []byte, target any) error {

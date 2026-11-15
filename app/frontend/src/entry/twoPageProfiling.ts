@@ -18,7 +18,6 @@ export interface TwoPageProfilingView extends TwoPageProfilingOwner {
   limit: number;
   totalRows: number;
 }
-export const twoPageProfilingFields = definition.fields;
 const ordering = 'physical-rowid; not source Order execution';
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);

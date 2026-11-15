@@ -168,7 +168,7 @@ test('picture transport/backend errors remain visible and can be explicitly retr
 });
 
 test('picture source slot is independently gated and participates in root pending lifecycle', () => {
-  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
   const header = readFileSync(srcPath('HeaderEditor.svelte'), 'utf8');
   const panel = readFileSync(srcPath('PicturePanel.svelte'), 'utf8');
   assert.match(root, /pictureEditor=\{pictureReadingEnabled && !twoPageOpen \? linkedPictures : undefined\}/);
@@ -219,7 +219,7 @@ test('manager previews use explicit manager policy without inheriting child auth
 });
 
 test('actual complete-entry picture child reuses owned readonly child policy only for the mapped source and reading gate', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
   const snippet = form.match(/\{#snippet twoPageLinkedChild\([\s\S]*?\{\/snippet\}/)?.[0];
   assert.ok(snippet);
   const captured = [];
@@ -286,7 +286,7 @@ test('actual complete-entry picture child reuses owned readonly child policy onl
 });
 
 test('actual ordinary picture snippet is absent while complete-entry owns the source picture surface', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882SiteTab.svelte'), 'utf8');
   const expression = form.match(/pictureEditor=\{([^}]+) \? linkedPictures : undefined\}/)?.[1];
   assert.ok(expression);
   const enabled = new Function('pictureReadingEnabled', 'twoPageOpen', `return ${expression};`);

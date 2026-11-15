@@ -15,7 +15,7 @@ import (
 
 func fixture(t *testing.T) ([]byte, []byte) {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "region-codes-fixture.json"))
+	data, err := listcatalog.ReadFixture(filepath.Join("..", "..", "resources", "region-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}

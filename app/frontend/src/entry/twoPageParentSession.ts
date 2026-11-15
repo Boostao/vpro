@@ -95,7 +95,7 @@ function target(original: SIVIParentOriginal, column: TwoPageParentColumn) {
 export function twoPageParentCell(original: SIVIParentOriginal, column: TwoPageParentColumn) {
   return target(original, column).expected;
 }
-export function twoPageParentErrors(drafts: TwoPageParentDrafts): string[] {
+function twoPageParentErrors(drafts: TwoPageParentDrafts): string[] {
   return Object.values(drafts).flatMap(draft => draft?.error ? [draft.error] : []);
 }
 export function twoPageParentDirty(drafts: TwoPageParentDrafts): boolean {

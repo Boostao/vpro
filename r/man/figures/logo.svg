@@ -107,7 +107,7 @@
   <text x="600" y="968"
         text-anchor="middle"
         fill="#FFFFFF"
-        font-family="'BC Sans', 'IBM Plex Sans', 'Liberation Sans', 'DejaVu Sans', system-ui, -apple-system, sans-serif"
+        font-family="'BC Sans', 'Liberation Sans', 'DejaVu Sans', system-ui, -apple-system, sans-serif"
         font-size="224"
         font-weight="700"
         letter-spacing="4">vpro</text>
@@ -117,7 +117,7 @@
   <text x="600" y="1116"
         text-anchor="middle"
         fill="#FCBA19"
-        font-family="'BC Sans', 'IBM Plex Sans', 'Liberation Sans', 'DejaVu Sans', system-ui, -apple-system, sans-serif"
+        font-family="'BC Sans', 'Liberation Sans', 'DejaVu Sans', system-ui, -apple-system, sans-serif"
         font-size="52"
         font-weight="700"
         letter-spacing="9">BEC &#183; VP08</text>

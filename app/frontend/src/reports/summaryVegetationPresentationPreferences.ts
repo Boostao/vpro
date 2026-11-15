@@ -162,3 +162,5 @@ export class SummaryVegetationPresentationPreferencesSession extends ReportPrefe
 export function createSummaryVegetationPresentationPreferencesRegistry() {
   return reportPreferencesRegistry(scope => new SummaryVegetationPresentationPreferencesSession(scope));
 }
+
+export const summaryVegetationPresentationPreferenceSession = createSummaryVegetationPresentationPreferencesRegistry();

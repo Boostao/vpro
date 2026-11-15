@@ -68,7 +68,7 @@ test('extended renderer has one labelled live control per field and normal rende
 });
 
 test('shared option gates extended presentation and restricts heights without clearing drafts or replacing parent identity', () => {
-  const form = read('FS882Form.svelte');
+  const form = read('FS882Form.svelte') + '\n' + read('FS882VegTab.svelte') + '\n' + read('FS882Modals.svelte');
   assert.match(form, /data-extended-shrubs/);
   assert.match(form, /Show extended shrub layers/);
   assert.match(form, /function setExtendedShrubs\(next: boolean\)/);

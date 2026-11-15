@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { loadTypeScript } = require('./svelteTestHelpers.cjs');
 const { transport, restoration, metadata, cell } = require('./siviParentTestHelpers.cjs');
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
@@ -22,9 +23,9 @@ const { TwoPageSoilSession } = loadTypeScript('twoPageSoilSession.ts', {
   './readRequests': loadTypeScript('readRequests.ts', { '@wailsio/runtime': {} }),
   './projectMetadataEditor': metadata, './twoPageSoilEditor': editor, './twoPageSoilReceipt': receipt,
 });
-const fixture = require('./fixtures/twoPageSoilWire.json');
-const receipts = require('./fixtures/twoPageSoilReceiptWire.json');
-const outcomes = require('./fixtures/twoPageSoilOutcomeWire.json');
+const fixture = readJsonFixture('twoPageSoilWire.json');
+const receipts = readJsonFixture('twoPageSoilReceiptWire.json');
+const outcomes = readJsonFixture('twoPageSoilOutcomeWire.json');
 const original = () => structuredClone(fixture.request.original);
 const wire = (strength = 1) => structuredClone(receipts.find(entry => entry.name === String(strength)).receipt);
 function outcome(json, status = 'committed', committed = wire()) {

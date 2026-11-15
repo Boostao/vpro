@@ -16,7 +16,7 @@ flowchart LR
         Acc["VPro64.accdb + VLists.accda<br/>External Project .accdb/.mdb<br/>Excel COM + Diagnostic10.xla"]
     end
 
-    subgraph Bridge["Phase 1: Local Desktop Cutover (vpro_wails)"]
+    subgraph Bridge["Phase 1: Local Desktop Cutover (app/ · VPro Desktop)"]
         Imp["Zero-Office CGO libmdb Wizard<br/>Auto-Upgrades VP05/06/07/08 -> SQLite .db"]
         UX["Paper-Faithful FS882/SIVI + Editable Grid<br/>+ SU/Hierarchy Trees + In-App 3D MapLibre v6"]
         Xlsx["Native excelize .xlsx + .gpkg/.kml + PDF<br/>(Compatible with Diagnostic10.xla)"]
@@ -51,13 +51,13 @@ In `VproMailExchange` `0035` (`2026-03-13`), Will MacKenzie confirmed twice (`YE
 * Support **multi-column sort, column pinning (`PlotNumber`), range copy/paste from/to Excel, find-and-replace within column**, and inline cell validation—routing every bulk mutation through the exact same SQLite `BEGIN IMMEDIATE` transaction and `<Project>_Audit` writer as the form editors.
 
 ### 2.3 Replacing `MSComctlLib.TreeCtrl.2` with a Native Svelte 5 Dual-Pane Classification Explorer
-Legacy `USysAssignSU` relied on broken 32-bit/64-bit ActiveX tree controls (`forensics_access_vba` §5.2), while `vpro_wails` currently renders only a flat 4-column read-only table (`App.svelte:1718-1734`). To achieve UX continuity (`RE26OCF433` Schedule A `3.d`, `3.e`; `SCREENCAPS/Screenshot 2026-02-12 091723.png` & `091809.png`):
+Legacy `USysAssignSU` relied on broken 32-bit/64-bit ActiveX tree controls (`forensics_access_vba` §5.2), whereas the initial October 2026 desktop prototype rendered only a flat 4-column read-only table. To achieve UX continuity in `app/` (`RE26OCF433` Schedule A `3.d`, `3.e`; `SCREENCAPS/Screenshot 2026-02-12 091723.png` & `091809.png`):
 * Implement a virtualized Svelte 5 **Dual-Pane Classification Explorer**:
   * **Left Pane:** Switchable between `Site Unit -> Plots Tree` (`U` unit folders containing draggable `P` plot leaves, plus an `Unassigned Plots` root bucket), `Hierarchy -> Units Tree` (with `~` breakpoint toggles), and editable `Flat Hierarchy / SU Table` (`VPro2.0_Functions` PDF p. 7).
   * **Right Pane:** Live plot environment + vegetation summary inspector, Master/User `BECdb` unit picker (`ZZZZsssvp/##` mask), and one-click `SU Into Env` / `Env Into SU` sync buttons.
 
 ### 2.4 Replacing External Google Earth KML Handoffs with In-App 3D Geospatial (`MapLibre v6` + `WebGPU`)
-Legacy VPro exported KML files and launched `googleearth.exe` (`VPro2.0_Functions` PDF p. 15; `RE26OCF433` Schedule A `3.h`) solely because MS Access lacked an embedded GIS canvas. Consolidating geospatial visualization directly inside `vpro_wails` via **MapLibre GL JS v6 (WebGL2) + progressive WebGPU overlays + offline `PMTiles`** eliminates external app switching:
+Legacy VPro exported KML files and launched `googleearth.exe` (`VPro2.0_Functions` PDF p. 15; `RE26OCF433` Schedule A `3.h`) solely because MS Access lacked an embedded GIS canvas. Consolidating geospatial visualization directly inside `VPro Desktop` (`app/`) via **MapLibre GL JS v6 (WebGL2) + progressive WebGPU overlays + offline `PMTiles`** eliminates external app switching:
 * **3D Terrain & BGC QA:** Inspect plot `Elevation`, `SlopeGradient`, and `Aspect` on extruded 3D DEM hillshade alongside colour-themed provincial BGC v13 polygons—visually flagging `GIS_BGC` vs. field `Zone`/`SubZone` or `UTM` vs. `Lat/Lon` discrepancies in real time.
 * **Direct Spatial $\leftrightarrow$ `SU` & Editor Loop:** Lasso/polygon-select plots on the map (`Schedule A 2.iii`) to create or update an active `*_SU` table, or click any plot marker to open `FS882Form.svelte` directly (retaining `.gpkg` and `.kml` strictly as secondary GIS exports).
 
@@ -93,7 +93,7 @@ During the 6–12 month transition window while external partners still use VPro
 * **Default-ON Graduation (`c4cbd1a`):** Enabled SQLite `WAL` mode, graduated all validated workflows to default-ON under `config.yml` `release_channel: stable`, and pruned Red-marked standalone `CHARS` forms and `PC-ORD Break Report`.
 
 ### Stage 2: Priority Workstation Parity, Automations & R Companion SDK (**Delivered in `v2.0.1` & `vpro` `v2.0.0`**)
-* Delivered all Priority Retain/Modify desktop workflows and `Auto-1`..`Auto-7` in `vpro_wails` `v2.0.1` + `vpro` `v2.0.0`:
+* Delivered all Priority Retain/Modify desktop workflows and `Auto-1`..`Auto-7` in `VPro Desktop` (`app/`) `v2.0.1` + `vpro` `v2.0.0`:
   1. **Project Lifecycle Suite (`internal/projectops`):** `New Project`, `Save Project As`, `Export Splinter Project`, `Compare Two Projects`, and WAL-resilient `3-Way Merge`.
   2. **Classification, Datasheet & Taxonomy (`internal/datasheet`, `internal/classification`, `internal/lumping`):** `UniversalDatasheetGrid.svelte`, virtualized dual-pane `ClassificationExplorer.svelte`, `Create SU from Env Fields` (into new or existing SU), SiteUnit `.support`/`.poor`/`.nudum` exclusions, and `LumpEditor.svelte` (`*_Lump` + `LumpSpec`).
   3. **Standards, 3D GIS & Interchange (`internal/spatial`, `internal/interchange`):** Bundled 2026 `BECdb v13` + `BCPlantTaxonomy v19` + `LMH25 (2023)` catalogues, **MapLibre GL JS v6 + WebGPU + offline `PMTiles` workbench**, batch `USysTableOfLists` compliance gate, `VENUS 5.0` import, **official `TurboVeg 3` 31-table SQLite & `Plot_package` XML** import/export, OGC `GeoPackage` (`.gpkg`), R `.rds`, Long/Wide CSV, and `User Species` I/O.

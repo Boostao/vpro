@@ -3,14 +3,15 @@ package classification
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
 func TestExternalSUEnvironmentProductionClientWire(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "externalSUEnvironmentWire.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "externalSUEnvironmentWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

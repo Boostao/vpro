@@ -229,7 +229,7 @@ test('metadata recovery retries failed outer cohorts through the actual root cal
 
 test('original action and Forms menu use one owned opener without enabling another two-page scope', () => {
   const source = readFileSync(srcPath('TwoPageEntryEditor.svelte'), 'utf8');
-  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
   assert.match(root, /sourceBlocked=\{twoPageLinkedParentBlocked \|\| Object\.keys\(headerValidation\)\.length > 0/);
   assert.match(source, /disabled=\{!canOpenMetadataEditor\(\)\} onclick=\{openMetadataEditor\}/);
   assert.match(source, /<ProjectMetadataEditor[\s\S]*?oncommitted=\{refreshMetadataPeers\}/);

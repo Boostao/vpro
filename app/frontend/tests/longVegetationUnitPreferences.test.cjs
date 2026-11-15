@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -11,7 +12,7 @@ const locations = loadTypeScript('plotLocationReview.ts', {'./projectMetadataRes
 const earth = loadTypeScript('googleEarthReview.ts', {'./projectMetadataRestore':cells,'./qualityEditor':quality,'./plotLocationReview':locations});
 const shared = loadTypeScript('reportTitlePreferences.ts', {'./qualityEditor':quality,'./googleEarthReview':earth});
 const prefs = loadTypeScript('longVegetationUnitPreferences.ts', {'./reportTitlePreferences':shared,'./googleEarthReview':earth});
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationUnitWire.json'),'utf8'));
+const wire = readJsonFixture('longVegetationUnitWire.json');
 const scope = {...wire.review}; delete scope.values; delete scope.availability;
 const review = (unitGroups=1, none=true, owner=scope) => ({
   ...owner, values:{unitGroups}, availability:{siteUnitTable:true,selectedFields:false,none}

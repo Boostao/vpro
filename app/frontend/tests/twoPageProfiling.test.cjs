@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -16,7 +17,7 @@ const api = loadTypeScript('twoPageProfiling.ts', {
   '../../resources/two-page-plot-profiling-fields.json': definition, './siviParentTransport': transport,
   './qualityEditor': quality, './twoPageVegetationTable': vegetation,
 }, { setTimeout });
-const fixture = () => JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'twoPageProfilingWire.json'), 'utf8'));
+const fixture = () => readJsonFixture('twoPageProfilingWire.json');
 const ownerOf = value => ({
   ...Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath', 'plot'].map(name => [name, value[name]])),
   profileSource: { ...value.source },

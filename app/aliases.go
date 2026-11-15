@@ -316,7 +316,6 @@ type SpeciesItem = referencespkg.SpeciesItem
 type StandardsArtifactStamp = lifecyclepkg.StandardsArtifactStamp
 type StandardsSourceStamp = lifecyclepkg.StandardsSourceStamp
 type StartupRecoveryRequest = lifecyclepkg.StartupRecoveryRequest
-type startupService = lifecyclepkg.StartupService
 type StartupState = lifecyclepkg.StartupState
 type SubzoneMatrixPreview = envreportpkg.SubzoneMatrixPreview
 type SubzoneMatrixRow = envreportpkg.SubzoneMatrixRow

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { srcPath } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -11,7 +12,7 @@ const ts = req('typescript');
 const compiler = req('svelte/compiler');
 const runtime = req('svelte/internal/client');
 const source = fs.readFileSync(srcPath('SummaryVegetationFieldList.svelte'), 'utf8');
-const wire = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationFieldListWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationFieldListWire.json');
 const { physical, source: provenance, ...owner } = wire.review;
 function execute(code, dependencies, globals = {}) {
   const module = { exports: {} };

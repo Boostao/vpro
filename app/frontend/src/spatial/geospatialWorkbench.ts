@@ -5,39 +5,24 @@ import type {
 
 export type SpatialGeoArrowColumns = SpatialWorkbenchPayload['geoArrow'];
 
-export type SpatialComputeBackendKind = 'webgpu' | 'webgl2-cpu';
 
-export interface SpatialComputeBackendInfo {
-  backend: SpatialComputeBackendKind;
-  available: boolean;
-  adapterLabel: string;
-  maxComputeWorkgroupSizeX: number;
-  fallbackReason: string | null;
-}
-
-export interface SpatialFilterKernelResult {
-  backend: SpatialComputeBackendKind;
-  matchedIndices: number[];
-  matchedCount: number;
-  densityGrid: Uint32Array;
-  gridSize: number;
-}
-
-export interface DecodedFlatGeobufPlot {
-  plotNumber: string;
-  lat: number;
-  lon: number;
-  utmDerivedLat: number | null;
-  utmDerivedLon: number | null;
-  divergenceMeters: number | null;
-  elevation: number | null;
-  slope: number | null;
-  aspect: number | null;
-  fieldBgc: string;
-  gisBgc: string;
-  bgcMismatch: boolean;
-  siteUnit: string;
-}
+export {
+  buildWGSLSpatialFilterShader,
+  detectSpatialComputeBackend,
+  executeCPUSpatialFilterKernel,
+  executeSpatialFilterKernel,
+} from './spatialCompute';
+export type {
+  SpatialComputeBackendKind,
+  SpatialComputeBackendInfo,
+  SpatialFilterKernelResult,
+} from './spatialCompute';
+export {
+  FLATGEOBUF_MAGIC_V3,
+  decodeFlatGeobufPoints,
+  pointInPolygonRing,
+} from './spatialFlatGeobuf';
+export type { DecodedFlatGeobufPlot } from './spatialFlatGeobuf';
 
 export interface WorkbenchPlotPoint {
   index: number;
@@ -81,10 +66,6 @@ export interface MapLayerVisibility {
   discrepancyVectors: boolean;
 }
 
-export const FLATGEOBUF_MAGIC_V3 = new Uint8Array([
-  0x66, 0x67, 0x62, 0x03, 0x66, 0x67, 0x62, 0x01,
-]);
-
 // Official BC Ministry of Forests BEC v13 Zone thematic palette
 export const BEC_ZONE_PALETTE: Record<string, string> = {
   CDF: '#a3cc51',
@@ -112,647 +93,6 @@ export const DEFAULT_BC_VIEW_STATE = {
   pitch: 0,
   bearing: 0,
 };
-
-/**
- * Generates the WGSL compute kernel for parallel spatial BBOX + radius filtering
- * and 2D spatial density binning across 71,567+ BECMaster plot coordinates.
- */
-export function buildWGSLSpatialFilterShader(workgroupSize = 64): string {
-  const wg = Math.max(1, Math.min(256, Math.trunc(workgroupSize)));
-  return `struct SpatialFilterUniforms {
-  minLon: f32,
-  minLat: f32,
-  maxLon: f32,
-  maxLat: f32,
-  gridSize: u32,
-  count: u32,
-  pad0: u32,
-  pad1: u32,
-};
-
-@group(0) @binding(0) var<storage, read> coords: array<vec2<f32>>;
-@group(0) @binding(1) var<uniform> params: SpatialFilterUniforms;
-@group(0) @binding(2) var<storage, read_write> flags: array<u32>;
-@group(0) @binding(3) var<storage, read_write> densityBins: array<atomic<u32>>;
-
-@compute @workgroup_size(${wg})
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let idx = gid.x;
-  if (idx >= params.count) {
-    return;
-  }
-  let pt = coords[idx];
-  let inside = pt.x >= params.minLon && pt.x <= params.maxLon &&
-               pt.y >= params.minLat && pt.y <= params.maxLat;
-  if (!inside) {
-    flags[idx] = 0u;
-    return;
-  }
-  flags[idx] = 1u;
-  let spanLon = max(params.maxLon - params.minLon, 0.00001);
-  let spanLat = max(params.maxLat - params.minLat, 0.00001);
-  let nx = clamp((pt.x - params.minLon) / spanLon, 0.0, 0.999999);
-  let ny = clamp((pt.y - params.minLat) / spanLat, 0.0, 0.999999);
-  let gx = u32(nx * f32(params.gridSize));
-  let gy = u32(ny * f32(params.gridSize));
-  let binIdx = gy * params.gridSize + gx;
-  atomicAdd(&densityBins[binIdx], 1u);
-}
-`;
-}
-
-interface MinimalGPUDevice {
-  limits?: { maxComputeWorkgroupSizeX?: number };
-  createShaderModule(descriptor: { code: string }): unknown;
-  createBuffer?(descriptor: { size: number; usage: number }): any;
-  createBindGroupLayout?(descriptor: unknown): unknown;
-  createPipelineLayout?(descriptor: unknown): unknown;
-  createComputePipeline?(descriptor: unknown): any;
-  createBindGroup?(descriptor: unknown): unknown;
-  createCommandEncoder?(): any;
-  queue?: {
-    writeBuffer(buffer: any, offset: number, data: BufferSource): void;
-    submit(commands: unknown[]): void;
-  };
-  destroy?(): void;
-}
-
-interface MinimalGPUAdapter {
-  info?: { vendor?: string; architecture?: string; description?: string };
-  limits?: { maxComputeWorkgroupSizeX?: number };
-  requestDevice(): Promise<MinimalGPUDevice | null>;
-}
-
-interface MinimalNavigatorWithGPU {
-  gpu?: {
-    requestAdapter(): Promise<MinimalGPUAdapter | null>;
-  };
-}
-
-/**
- * Probes navigator.gpu (requestAdapter + requestDevice + WGSL shader module compilation)
- * and falls back cleanly to WebGL2 + TypedArray CPU execution when WebGPU is unavailable.
- */
-export async function detectSpatialComputeBackend(
-  nav?: unknown
-): Promise<SpatialComputeBackendInfo> {
-  const targetNav = (nav !== undefined
-    ? nav
-    : typeof navigator !== 'undefined'
-      ? navigator
-      : undefined) as MinimalNavigatorWithGPU | undefined;
-
-  if (!targetNav || !targetNav.gpu || typeof targetNav.gpu.requestAdapter !== 'function') {
-    return {
-      backend: 'webgl2-cpu',
-      available: false,
-      adapterLabel: 'WebGL2 + TypedArray CPU Fallback',
-      maxComputeWorkgroupSizeX: 0,
-      fallbackReason: 'navigator.gpu is unavailable in this WebView runtime',
-    };
-  }
-
-  try {
-    const adapter = await targetNav.gpu.requestAdapter();
-    if (!adapter || typeof adapter.requestDevice !== 'function') {
-      return {
-        backend: 'webgl2-cpu',
-        available: false,
-        adapterLabel: 'WebGL2 + TypedArray CPU Fallback',
-        maxComputeWorkgroupSizeX: 0,
-        fallbackReason: 'WebGPU adapter unavailable on active graphics driver',
-      };
-    }
-    const device = await adapter.requestDevice();
-    if (!device || typeof device.createShaderModule !== 'function') {
-      return {
-        backend: 'webgl2-cpu',
-        available: false,
-        adapterLabel: 'WebGL2 + TypedArray CPU Fallback',
-        maxComputeWorkgroupSizeX: 0,
-        fallbackReason: 'WebGPU logical device creation returned null',
-      };
-    }
-    device.createShaderModule({ code: buildWGSLSpatialFilterShader(64) });
-    const labelParts = [
-      adapter.info?.vendor,
-      adapter.info?.description || adapter.info?.architecture,
-    ].filter(Boolean);
-    const maxWg =
-      device.limits?.maxComputeWorkgroupSizeX ??
-      adapter.limits?.maxComputeWorkgroupSizeX ??
-      256;
-    device.destroy?.();
-    return {
-      backend: 'webgpu',
-      available: true,
-      adapterLabel: labelParts.length > 0 ? labelParts.join(' - ') : 'WebGPU Hardware Compute',
-      maxComputeWorkgroupSizeX: maxWg,
-      fallbackReason: null,
-    };
-  } catch (cause) {
-    return {
-      backend: 'webgl2-cpu',
-      available: false,
-      adapterLabel: 'WebGL2 + TypedArray CPU Fallback',
-      maxComputeWorkgroupSizeX: 0,
-      fallbackReason: cause instanceof Error ? cause.message : String(cause),
-    };
-  }
-}
-
-export function executeCPUSpatialFilterKernel(
-  coordsLonLat: Float32Array,
-  bounds: readonly [number, number, number, number],
-  gridSize = 16
-): SpatialFilterKernelResult {
-  const safeGrid = Math.max(1, Math.min(64, Math.trunc(gridSize)));
-  const count = Math.floor(coordsLonLat.length / 2);
-  const [minLon, minLat, maxLon, maxLat] = bounds;
-  const spanLon = Math.max(maxLon - minLon, 1e-5);
-  const spanLat = Math.max(maxLat - minLat, 1e-5);
-  const densityGrid = new Uint32Array(safeGrid * safeGrid);
-  const matchedIndices: number[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const lon = coordsLonLat[i * 2];
-    const lat = coordsLonLat[i * 2 + 1];
-    if (lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat) {
-      matchedIndices.push(i);
-      const nx = Math.min(0.999999, Math.max(0, (lon - minLon) / spanLon));
-      const ny = Math.min(0.999999, Math.max(0, (lat - minLat) / spanLat));
-      const gx = Math.floor(nx * safeGrid);
-      const gy = Math.floor(ny * safeGrid);
-      densityGrid[gy * safeGrid + gx]++;
-    }
-  }
-
-  return {
-    backend: 'webgl2-cpu',
-    matchedIndices,
-    matchedCount: matchedIndices.length,
-    densityGrid,
-    gridSize: safeGrid,
-  };
-}
-
-/**
- * Dispatches the WGSL spatial filter & density-bin compute shader on WebGPU when available,
- * falling back deterministically to executeCPUSpatialFilterKernel otherwise.
- */
-export async function executeSpatialFilterKernel(
-  coordsLonLat: Float32Array,
-  bounds: readonly [number, number, number, number],
-  options?: { nav?: unknown; gridSize?: number }
-): Promise<SpatialFilterKernelResult> {
-  const safeGrid = Math.max(1, Math.min(64, Math.trunc(options?.gridSize ?? 16)));
-  const count = Math.floor(coordsLonLat.length / 2);
-  if (count === 0) {
-    return {
-      backend: 'webgl2-cpu',
-      matchedIndices: [],
-      matchedCount: 0,
-      densityGrid: new Uint32Array(safeGrid * safeGrid),
-      gridSize: safeGrid,
-    };
-  }
-
-  const targetNav = (options?.nav !== undefined
-    ? options.nav
-    : typeof navigator !== 'undefined'
-      ? navigator
-      : undefined) as MinimalNavigatorWithGPU | undefined;
-
-  const gpuBufUsage = (globalThis as any).GPUBufferUsage;
-  const gpuMapMode = (globalThis as any).GPUMapMode;
-
-  if (targetNav?.gpu && gpuBufUsage && gpuMapMode) {
-    let device: MinimalGPUDevice | null = null;
-    try {
-      const adapter = await targetNav.gpu.requestAdapter();
-      device = adapter ? await adapter.requestDevice() : null;
-      if (
-        device &&
-        device.createBuffer &&
-        device.createComputePipeline &&
-        device.createBindGroup &&
-        device.createCommandEncoder &&
-        device.queue
-      ) {
-        const shaderModule = device.createShaderModule({
-          code: buildWGSLSpatialFilterShader(64),
-        });
-        const pipeline = device.createComputePipeline({
-          layout: 'auto',
-          compute: { module: shaderModule, entryPoint: 'main' },
-        });
-
-        const coordsBytes = Math.max(8, coordsLonLat.byteLength);
-        const flagsBytes = Math.max(4, count * 4);
-        const binsBytes = safeGrid * safeGrid * 4;
-
-        const coordsBuffer = device.createBuffer({
-          size: coordsBytes,
-          usage: gpuBufUsage.STORAGE | gpuBufUsage.COPY_DST,
-        });
-        const uniformBuffer = device.createBuffer({
-          size: 32,
-          usage: gpuBufUsage.UNIFORM | gpuBufUsage.COPY_DST,
-        });
-        const flagsBuffer = device.createBuffer({
-          size: flagsBytes,
-          usage: gpuBufUsage.STORAGE | gpuBufUsage.COPY_SRC,
-        });
-        const binsBuffer = device.createBuffer({
-          size: binsBytes,
-          usage: gpuBufUsage.STORAGE | gpuBufUsage.COPY_SRC | gpuBufUsage.COPY_DST,
-        });
-        const flagsReadBuffer = device.createBuffer({
-          size: flagsBytes,
-          usage: gpuBufUsage.MAP_READ | gpuBufUsage.COPY_DST,
-        });
-        const binsReadBuffer = device.createBuffer({
-          size: binsBytes,
-          usage: gpuBufUsage.MAP_READ | gpuBufUsage.COPY_DST,
-        });
-
-        const uniformData = new ArrayBuffer(32);
-        const uv = new DataView(uniformData);
-        uv.setFloat32(0, bounds[0], true);
-        uv.setFloat32(4, bounds[1], true);
-        uv.setFloat32(8, bounds[2], true);
-        uv.setFloat32(12, bounds[3], true);
-        uv.setUint32(16, safeGrid, true);
-        uv.setUint32(20, count, true);
-        uv.setUint32(24, 0, true);
-        uv.setUint32(28, 0, true);
-
-        device.queue.writeBuffer(coordsBuffer, 0, coordsLonLat as unknown as BufferSource);
-        device.queue.writeBuffer(uniformBuffer, 0, uniformData);
-        device.queue.writeBuffer(binsBuffer, 0, new Uint32Array(safeGrid * safeGrid));
-
-        const bindGroup = device.createBindGroup({
-          layout: pipeline.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: { buffer: coordsBuffer } },
-            { binding: 1, resource: { buffer: uniformBuffer } },
-            { binding: 2, resource: { buffer: flagsBuffer } },
-            { binding: 3, resource: { buffer: binsBuffer } },
-          ],
-        });
-
-        const encoder = device.createCommandEncoder();
-        const pass = encoder.beginComputePass();
-        pass.setPipeline(pipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(Math.ceil(count / 64));
-        pass.end();
-
-        encoder.copyBufferToBuffer(flagsBuffer, 0, flagsReadBuffer, 0, flagsBytes);
-        encoder.copyBufferToBuffer(binsBuffer, 0, binsReadBuffer, 0, binsBytes);
-        device.queue.submit([encoder.finish()]);
-
-        await Promise.all([
-          flagsReadBuffer.mapAsync(gpuMapMode.READ),
-          binsReadBuffer.mapAsync(gpuMapMode.READ),
-        ]);
-
-        const flagsArr = new Uint32Array(flagsReadBuffer.getMappedRange().slice(0));
-        const densityGrid = new Uint32Array(binsReadBuffer.getMappedRange().slice(0));
-        flagsReadBuffer.unmap();
-        binsReadBuffer.unmap();
-
-        const matchedIndices: number[] = [];
-        for (let i = 0; i < count; i++) {
-          if (flagsArr[i] === 1) matchedIndices.push(i);
-        }
-
-        coordsBuffer.destroy?.();
-        uniformBuffer.destroy?.();
-        flagsBuffer.destroy?.();
-        binsBuffer.destroy?.();
-        flagsReadBuffer.destroy?.();
-        binsReadBuffer.destroy?.();
-        device.destroy?.();
-
-        return {
-          backend: 'webgpu',
-          matchedIndices,
-          matchedCount: matchedIndices.length,
-          densityGrid,
-          gridSize: safeGrid,
-        };
-      }
-    } catch {
-      device?.destroy?.();
-    }
-  }
-
-  return executeCPUSpatialFilterKernel(coordsLonLat, bounds, safeGrid);
-}
-
-// --- OGC FlatGeobuf v3 Point Stream Decoder ---
-
-const BASE64_LOOKUP = (() => {
-  const table = new Int16Array(128).fill(-1);
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  for (let i = 0; i < alphabet.length; i++) {
-    table[alphabet.charCodeAt(i)] = i;
-  }
-  table['-'.charCodeAt(0)] = 62;
-  table['_'.charCodeAt(0)] = 63;
-  return table;
-})();
-
-function decodeBase64Pure(raw: string): Uint8Array {
-  const cleaned = raw.replace(/[\r\n\s=]+/g, '');
-  const outLen = Math.floor((cleaned.length * 3) / 4);
-  const out = new Uint8Array(outLen);
-  let outIdx = 0;
-  let acc = 0;
-  let bits = 0;
-  for (let i = 0; i < cleaned.length; i++) {
-    const code = cleaned.charCodeAt(i);
-    const val = code < 128 ? BASE64_LOOKUP[code] : -1;
-    if (val < 0) continue;
-    acc = (acc << 6) | val;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      out[outIdx++] = (acc >> bits) & 0xff;
-    }
-  }
-  return outIdx === outLen ? out : out.subarray(0, outIdx);
-}
-
-function decodeUTF8Slice(bytes: Uint8Array): string {
-  if (typeof TextDecoder !== 'undefined') {
-    return new TextDecoder('utf-8').decode(bytes);
-  }
-  let out = '';
-  let i = 0;
-  while (i < bytes.length) {
-    const b0 = bytes[i++];
-    if (b0 < 0x80) {
-      out += String.fromCharCode(b0);
-    } else if ((b0 & 0xe0) === 0xc0 && i < bytes.length) {
-      const b1 = bytes[i++] & 0x3f;
-      out += String.fromCharCode(((b0 & 0x1f) << 6) | b1);
-    } else if ((b0 & 0xf0) === 0xe0 && i + 1 < bytes.length) {
-      const b1 = bytes[i++] & 0x3f;
-      const b2 = bytes[i++] & 0x3f;
-      out += String.fromCharCode(((b0 & 0x0f) << 12) | (b1 << 6) | b2);
-    } else if ((b0 & 0xf8) === 0xf0 && i + 2 < bytes.length) {
-      const b1 = bytes[i++] & 0x3f;
-      const b2 = bytes[i++] & 0x3f;
-      const b3 = bytes[i++] & 0x3f;
-      const cp = ((b0 & 0x07) << 18) | (b1 << 12) | (b2 << 6) | b3;
-      out += String.fromCodePoint(cp);
-    }
-  }
-  return out;
-}
-
-function toUint8Array(input: Uint8Array | ArrayBuffer | string | null | undefined): Uint8Array {
-  if (!input) return new Uint8Array(0);
-  if (input instanceof Uint8Array) return input;
-  if (ArrayBuffer.isView(input)) {
-    return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
-  }
-  if (input instanceof ArrayBuffer || Object.prototype.toString.call(input) === '[object ArrayBuffer]') {
-    return new Uint8Array(input as ArrayBuffer);
-  }
-  if (typeof input === 'string') {
-    return decodeBase64Pure(input);
-  }
-  return new Uint8Array(0);
-}
-
-function fbFieldPos(dv: DataView, tablePos: number, fieldIdx: number): number | null {
-  if (tablePos < 0 || tablePos + 4 > dv.byteLength) return null;
-  const soffset = dv.getInt32(tablePos, true);
-  const vtPos = tablePos - soffset;
-  if (vtPos < 0 || vtPos + 4 > dv.byteLength) return null;
-  const vtLen = dv.getUint16(vtPos, true);
-  const slotOff = 4 + 2 * fieldIdx;
-  if (slotOff + 2 > vtLen || vtPos + slotOff + 2 > dv.byteLength) return null;
-  const rel = dv.getUint16(vtPos + slotOff, true);
-  if (rel === 0 || tablePos + rel > dv.byteLength) return null;
-  return tablePos + rel;
-}
-
-function fbDeref(dv: DataView, slotPos: number): number | null {
-  if (slotPos < 0 || slotPos + 4 > dv.byteLength) return null;
-  const target = slotPos + dv.getUint32(slotPos, true);
-  return target >= 0 && target <= dv.byteLength ? target : null;
-}
-
-function fbReadString(
-  dv: DataView,
-  bytes: Uint8Array,
-  slotPos: number
-): string {
-  const strPos = fbDeref(dv, slotPos);
-  if (strPos === null || strPos + 4 > dv.byteLength) return '';
-  const len = dv.getUint32(strPos, true);
-  if (strPos + 4 + len > dv.byteLength) return '';
-  return decodeUTF8Slice(bytes.subarray(strPos + 4, strPos + 4 + len));
-}
-
-/**
- * Decodes an OGC FlatGeobuf v3 binary buffer (or Wails base64 string) into plot point records.
- */
-export function decodeFlatGeobufPoints(
-  input: Uint8Array | ArrayBuffer | string | null | undefined
-): DecodedFlatGeobufPlot[] {
-  const bytes = toUint8Array(input);
-  if (bytes.byteLength === 0) return [];
-  if (bytes.byteLength < 12) {
-    throw new Error('FlatGeobuf buffer shorter than 12-byte magic + header prefix');
-  }
-  for (let i = 0; i < 8; i++) {
-    if (bytes[i] !== FLATGEOBUF_MAGIC_V3[i]) {
-      throw new Error('Invalid OGC FlatGeobuf v3 magic signature');
-    }
-  }
-
-  const fullDV = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let pos = 8;
-  const hdrLen = fullDV.getUint32(pos, true);
-  pos += 4;
-  if (hdrLen < 8 || pos + hdrLen > bytes.byteLength) {
-    throw new Error('FlatGeobuf header size exceeds buffer bounds');
-  }
-
-  const hdrBytes = bytes.subarray(pos, pos + hdrLen);
-  const hdrDV = new DataView(hdrBytes.buffer, hdrBytes.byteOffset, hdrBytes.byteLength);
-  pos += hdrLen;
-
-  const hdrRoot = fbDeref(hdrDV, 0);
-  if (hdrRoot === null) {
-    throw new Error('Invalid FlatGeobuf header root offset');
-  }
-
-  const colDefs: Array<{ name: string; colType: number }> = [];
-  const colsSlot = fbFieldPos(hdrDV, hdrRoot, 7);
-  if (colsSlot !== null) {
-    const colsVec = fbDeref(hdrDV, colsSlot);
-    if (colsVec !== null && colsVec + 4 <= hdrDV.byteLength) {
-      const nCols = hdrDV.getUint32(colsVec, true);
-      for (let i = 0; i < nCols; i++) {
-        const elemSlot = colsVec + 4 + i * 4;
-        const colTbl = fbDeref(hdrDV, elemSlot);
-        if (colTbl === null) throw new Error('Invalid FlatGeobuf column table offset');
-        const nameSlot = fbFieldPos(hdrDV, colTbl, 0);
-        const typeSlot = fbFieldPos(hdrDV, colTbl, 1);
-        colDefs.push({
-          name: nameSlot !== null ? fbReadString(hdrDV, hdrBytes, nameSlot) : '',
-          colType: typeSlot !== null ? hdrDV.getUint8(typeSlot) : 0,
-        });
-      }
-    }
-  }
-
-  const out: DecodedFlatGeobufPlot[] = [];
-  while (pos < bytes.byteLength) {
-    if (pos + 4 > bytes.byteLength) {
-      throw new Error('Truncated FlatGeobuf feature size prefix');
-    }
-    const fLen = fullDV.getUint32(pos, true);
-    pos += 4;
-    if (fLen < 4 || pos + fLen > bytes.byteLength) {
-      throw new Error('FlatGeobuf feature size exceeds buffer bounds');
-    }
-    const fBytes = bytes.subarray(pos, pos + fLen);
-    const fDV = new DataView(fBytes.buffer, fBytes.byteOffset, fBytes.byteLength);
-    pos += fLen;
-
-    const fRoot = fbDeref(fDV, 0);
-    if (fRoot === null) throw new Error('Invalid FlatGeobuf feature root offset');
-
-    const rec: DecodedFlatGeobufPlot = {
-      plotNumber: '',
-      lat: 0,
-      lon: 0,
-      utmDerivedLat: null,
-      utmDerivedLon: null,
-      divergenceMeters: null,
-      elevation: null,
-      slope: null,
-      aspect: null,
-      fieldBgc: '',
-      gisBgc: '',
-      bgcMismatch: false,
-      siteUnit: '',
-    };
-
-    const geomSlot = fbFieldPos(fDV, fRoot, 0);
-    if (geomSlot !== null) {
-      const geomTbl = fbDeref(fDV, geomSlot);
-      if (geomTbl !== null) {
-        const xySlot = fbFieldPos(fDV, geomTbl, 1);
-        if (xySlot !== null) {
-          const xyVec = fbDeref(fDV, xySlot);
-          if (xyVec !== null && xyVec + 20 <= fDV.byteLength) {
-            const nCoords = fDV.getUint32(xyVec, true);
-            if (nCoords >= 2) {
-              rec.lon = fDV.getFloat64(xyVec + 4, true);
-              rec.lat = fDV.getFloat64(xyVec + 12, true);
-            }
-          }
-        }
-      }
-    }
-
-    const propSlot = fbFieldPos(fDV, fRoot, 1);
-    if (propSlot !== null) {
-      const propVec = fbDeref(fDV, propSlot);
-      if (propVec !== null && propVec + 4 <= fDV.byteLength) {
-        const pLen = fDV.getUint32(propVec, true);
-        if (propVec + 4 + pLen <= fDV.byteLength) {
-          const pSub = fBytes.subarray(propVec + 4, propVec + 4 + pLen);
-          const pDV = new DataView(pSub.buffer, pSub.byteOffset, pSub.byteLength);
-          let pIdx = 0;
-          while (pIdx + 2 <= pSub.byteLength) {
-            const colIdx = pDV.getUint16(pIdx, true);
-            pIdx += 2;
-            const col = colDefs[colIdx];
-            if (!col) break;
-            if (col.colType === 11) {
-              if (pIdx + 4 > pSub.byteLength) break;
-              const sLen = pDV.getUint32(pIdx, true);
-              pIdx += 4;
-              if (pIdx + sLen > pSub.byteLength) break;
-              const sv = decodeUTF8Slice(pSub.subarray(pIdx, pIdx + sLen));
-              pIdx += sLen;
-              if (col.name === 'PlotNumber') rec.plotNumber = sv;
-              else if (col.name === 'FieldBGC') rec.fieldBgc = sv;
-              else if (col.name === 'GIS_BGC') rec.gisBgc = sv;
-              else if (col.name === 'SiteUnit') rec.siteUnit = sv;
-            } else if (col.colType === 8) {
-              if (pIdx + 8 > pSub.byteLength) break;
-              const dv = pDV.getFloat64(pIdx, true);
-              pIdx += 8;
-              if (col.name === 'Lat') rec.lat = dv;
-              else if (col.name === 'Lon') rec.lon = dv;
-              else if (col.name === 'UTMDerivedLat') rec.utmDerivedLat = dv;
-              else if (col.name === 'UTMDerivedLon') rec.utmDerivedLon = dv;
-              else if (col.name === 'DivergenceMeters') rec.divergenceMeters = dv;
-              else if (col.name === 'Elevation') rec.elevation = dv;
-              else if (col.name === 'Slope') rec.slope = dv;
-              else if (col.name === 'Aspect') rec.aspect = dv;
-            } else if (col.colType === 5) {
-              if (pIdx + 1 > pSub.byteLength) break;
-              const bv = pDV.getUint8(pIdx) !== 0;
-              pIdx += 1;
-              if (col.name === 'BGCMismatch') rec.bgcMismatch = bv;
-            } else {
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    out.push(rec);
-  }
-
-  return out;
-}
-
-/**
- * Even-odd Jordan curve ray-casting test for an EPSG:4326 [lon, lat] polygon ring.
- */
-export function pointInPolygonRing(
-  lon: number,
-  lat: number,
-  ring: ReadonlyArray<readonly [number, number]>
-): boolean {
-  if (!Number.isFinite(lon) || !Number.isFinite(lat) || ring.length < 3) {
-    return false;
-  }
-  const effectiveLen =
-    ring.length >= 4 &&
-    ring[ring.length - 1][0] === ring[0][0] &&
-    ring[ring.length - 1][1] === ring[0][1]
-      ? ring.length - 1
-      : ring.length;
-  if (effectiveLen < 3) return false;
-
-  let inside = false;
-  let j = effectiveLen - 1;
-  for (let i = 0; i < effectiveLen; i++) {
-    const xi = ring[i][0];
-    const yi = ring[i][1];
-    const xj = ring[j][0];
-    const yj = ring[j][1];
-    if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-    j = i;
-  }
-  return inside;
-}
 
 export function materializeWorkbenchPlots(cols: SpatialGeoArrowColumns | null | undefined): {
   points: WorkbenchPlotPoint[];
@@ -999,4 +339,293 @@ export function classifyWMSMapError(
     return 'BC OpenMaps WMS tile request failed (offline or remote service unreachable). Offline PMTiles vector layers remain active.';
   }
   return null;
+}
+
+export interface SpatialStampOptions {
+  allScoped: boolean;
+  plotNumbers: string[];
+  stampGisBgc: boolean;
+  stampAdminFields: boolean;
+  onlyWhenBlank: boolean;
+  normalizeLongitudeSign: boolean;
+  syncUtmFromLatLon: boolean;
+  syncLatLonFromUTM: boolean;
+}
+
+export interface SpatialAOICommitInput {
+  mode: 'update_active' | 'create_project_su' | 'create_su_file';
+  suName: string;
+  filePath: string;
+  siteUnit: string;
+  includeNonAoiPlotsAsUnassigned: boolean;
+  activate: boolean;
+}
+
+export interface SpatialGpkgExportInput {
+  destinationPath: string;
+  crs: 'EPSG:3005' | 'EPSG:4326';
+  includeAttributeTables: boolean;
+  includeUnlocatedPlots: boolean;
+}
+
+export function filterWorkbenchPlots(
+  plotPoints: WorkbenchPlotPoint[],
+  zoneFilter: string,
+  plotSearch: string
+): WorkbenchPlotPoint[] {
+  const zf = zoneFilter.trim().toUpperCase();
+  const sq = plotSearch.trim().toLowerCase();
+  return plotPoints.filter((pt) => {
+    if (zf && pt.zone.toUpperCase() !== zf && !pt.gisBgc.toUpperCase().startsWith(zf)) {
+      return false;
+    }
+    if (sq && !pt.plotNumber.toLowerCase().includes(sq) && !pt.siteUnit.toLowerCase().includes(sq)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export function extractDistinctZones(plotPoints: WorkbenchPlotPoint[]): string[] {
+  const set = new Set<string>();
+  for (const p of plotPoints) {
+    if (p.zone) set.add(p.zone);
+  }
+  return [...set].sort();
+}
+
+export function buildAOIGeoJSONFeatureCollection(aoiVertices: Array<[number, number]>) {
+  const features: any[] = [];
+  if (aoiVertices.length >= 3) {
+    const closed = [...aoiVertices, aoiVertices[0]];
+    features.push({
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'Polygon', coordinates: [closed] },
+    });
+  } else if (aoiVertices.length === 2) {
+    features.push({
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: aoiVertices },
+    });
+  }
+  for (const v of aoiVertices) {
+    features.push({
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'Point', coordinates: v },
+    });
+  }
+  return { type: 'FeatureCollection' as const, features };
+}
+
+export function computeViewportAOIRectangle(
+  mapBounds: { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number } | null,
+  payloadBBox?: readonly number[] | null
+): Array<[number, number]> {
+  let minLon = -124.5;
+  let minLat = 53.2;
+  let maxLon = -121.5;
+  let maxLat = 54.6;
+  if (mapBounds) {
+    const padLon = (mapBounds.getEast() - mapBounds.getWest()) * 0.15;
+    const padLat = (mapBounds.getNorth() - mapBounds.getSouth()) * 0.15;
+    minLon = Math.round((mapBounds.getWest() + padLon) * 1e5) / 1e5;
+    maxLon = Math.round((mapBounds.getEast() - padLon) * 1e5) / 1e5;
+    minLat = Math.round((mapBounds.getSouth() + padLat) * 1e5) / 1e5;
+    maxLat = Math.round((mapBounds.getNorth() - padLat) * 1e5) / 1e5;
+  } else if (payloadBBox && payloadBBox.length >= 4) {
+    [minLon, minLat, maxLon, maxLat] = payloadBBox;
+  }
+  return [
+    [minLon, minLat],
+    [maxLon, minLat],
+    [maxLon, maxLat],
+    [minLon, maxLat],
+  ];
+}
+
+export function initQASelectedPlots(
+  rows: Array<{
+    plotNumber: string;
+    bgcMismatch?: boolean;
+    divergenceFlagged?: boolean;
+    longitudeSignFlipped?: boolean;
+    storedGisBgc?: string;
+    suggestedGisBgc?: string;
+  }>
+): Record<string, boolean> {
+  const nextSelected: Record<string, boolean> = {};
+  for (const r of rows) {
+    if (
+      r.bgcMismatch ||
+      r.divergenceFlagged ||
+      r.longitudeSignFlipped ||
+      (!r.storedGisBgc && !!r.suggestedGisBgc)
+    ) {
+      nextSelected[r.plotNumber] = true;
+    }
+  }
+  return nextSelected;
+}
+
+export function filterSpatialQARows<
+  T extends {
+    bgcMismatch?: boolean;
+    divergenceFlagged?: boolean;
+    longitudeSignFlipped?: boolean;
+    elevationFlagged?: boolean;
+    storedGisBgc?: string;
+    suggestedGisBgc?: string;
+  },
+>(rows: T[], onlyIssues: boolean): T[] {
+  if (!onlyIssues) return rows;
+  return rows.filter(
+    (r) =>
+      r.bgcMismatch ||
+      r.divergenceFlagged ||
+      r.longitudeSignFlipped ||
+      r.elevationFlagged ||
+      (!r.storedGisBgc && !!r.suggestedGisBgc)
+  );
+}
+
+export function syncMapAOIOverlay(
+  mapInstance: any,
+  aoiVertices: Array<[number, number]>
+): void {
+  if (!mapInstance) return;
+  const fc = buildAOIGeoJSONFeatureCollection(aoiVertices);
+  const src = mapInstance.getSource('vpro-aoi-overlay');
+  if (src) {
+    src.setData(fc);
+    return;
+  }
+  if (!mapInstance.isStyleLoaded()) return;
+  mapInstance.addSource('vpro-aoi-overlay', { type: 'geojson', data: fc });
+  mapInstance.addLayer({
+    id: 'vpro-aoi-fill',
+    type: 'fill',
+    source: 'vpro-aoi-overlay',
+    filter: ['==', '$type', 'Polygon'],
+    paint: { 'fill-color': '#FCBA19', 'fill-opacity': 0.22 },
+  });
+  mapInstance.addLayer({
+    id: 'vpro-aoi-stroke',
+    type: 'line',
+    source: 'vpro-aoi-overlay',
+    paint: { 'line-color': '#FCBA19', 'line-width': 2.5 },
+  });
+  mapInstance.addLayer({
+    id: 'vpro-aoi-vertices',
+    type: 'circle',
+    source: 'vpro-aoi-overlay',
+    filter: ['==', '$type', 'Point'],
+    paint: {
+      'circle-radius': 5,
+      'circle-color': '#003366',
+      'circle-stroke-color': '#FCBA19',
+      'circle-stroke-width': 2,
+    },
+  });
+}
+
+export function fitMapToPayloadBounds(
+  mapInstance: any,
+  payload: SpatialWorkbenchPayload | null
+): void {
+  if (!mapInstance || !payload || payload.plottableCount === 0) return;
+  const [minLon, minLat, maxLon, maxLat] = payload.boundingBox;
+  if (!Number.isFinite(minLon) || !Number.isFinite(maxLon)) return;
+  if (Math.abs(maxLon - minLon) < 0.005 && Math.abs(maxLat - minLat) < 0.005) {
+    mapInstance.jumpTo({ center: [minLon, minLat], zoom: 9.5 });
+    return;
+  }
+  mapInstance.fitBounds(
+    [
+      [minLon, minLat],
+      [maxLon, maxLat],
+    ],
+    { padding: 48, maxZoom: 10, duration: 500 }
+  );
+}
+
+export function buildSpatialDeckLayers(params: {
+  LineLayerCtor: any;
+  ScatterplotLayerCtor: any;
+  pts: WorkbenchPlotPoint[];
+  matched: Set<string>;
+  selPlotNum: string;
+  showVectors: boolean;
+  discrepancySegments: DiscrepancyVectorSegment[];
+  aoiPreviewTrigger: unknown;
+  onPinClick: (pt: WorkbenchPlotPoint) => void;
+}): any[] {
+  const {
+    LineLayerCtor,
+    ScatterplotLayerCtor,
+    pts,
+    matched,
+    selPlotNum,
+    showVectors,
+    discrepancySegments,
+    aoiPreviewTrigger,
+    onPinClick,
+  } = params;
+  const layers: any[] = [];
+  if (showVectors && discrepancySegments.length > 0) {
+    layers.push(
+      new LineLayerCtor({
+        id: 'vpro-utm-dd-vectors',
+        data: discrepancySegments,
+        getSourcePosition: (d: DiscrepancyVectorSegment) => d.sourcePosition,
+        getTargetPosition: (d: DiscrepancyVectorSegment) => d.targetPosition,
+        getColor: (d: DiscrepancyVectorSegment) =>
+          d.flagged ? [216, 41, 47, 220] : [252, 186, 25, 200],
+        getWidth: 2.5,
+        widthUnits: 'pixels',
+      }),
+      new ScatterplotLayerCtor({
+        id: 'vpro-utm-derived-pins',
+        data: discrepancySegments,
+        getPosition: (d: DiscrepancyVectorSegment) => d.targetPosition,
+        getFillColor: [252, 186, 25, 220],
+        getLineColor: [0, 51, 102, 255],
+        stroked: true,
+        lineWidthMinPixels: 1.5,
+        getRadius: 4.5,
+        radiusUnits: 'pixels',
+      })
+    );
+  }
+  layers.push(
+    new ScatterplotLayerCtor({
+      id: 'vpro-plot-pins',
+      data: pts,
+      pickable: true,
+      getPosition: (d: WorkbenchPlotPoint) => [d.lon, d.lat],
+      getRadius: (d: WorkbenchPlotPoint) =>
+        d.plotNumber === selPlotNum ? 9 : matched.has(d.plotNumber) ? 7.5 : 5.5,
+      radiusUnits: 'pixels',
+      stroked: true,
+      lineWidthMinPixels: 1.5,
+      getLineColor: (d: WorkbenchPlotPoint) =>
+        d.plotNumber === selPlotNum ? [252, 186, 25, 255] : [255, 255, 255, 235],
+      getFillColor: (d: WorkbenchPlotPoint) => {
+        if (matched.has(d.plotNumber)) return [252, 186, 25, 245];
+        if (d.divergenceFlagged || d.bgcMismatch) return [216, 41, 47, 235];
+        return [46, 133, 64, 230];
+      },
+      updateTriggers: {
+        getRadius: [selPlotNum, aoiPreviewTrigger],
+        getLineColor: [selPlotNum],
+        getFillColor: [aoiPreviewTrigger],
+      },
+      onClick: (info: { object?: WorkbenchPlotPoint }) => {
+        if (info.object) onPinClick(info.object);
+      },
+    })
+  );
+  return layers;
 }

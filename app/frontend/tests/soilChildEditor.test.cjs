@@ -100,18 +100,22 @@ test('Actual source renderer keeps one labelled draft control per soil binding, 
 });
 
 test('Root soil sessions participate in every shared lifecycle and disable instant-save/hidden alternate actions', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormChildren.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
   assert.match(form, /let soilDrafts = \$state<SoilDrafts>/);
   assert.match(form, /siviCreationPeerUnsaved = \$derived\(heightUnsaved \|\| siviUnsaved \|\| siviCoverUnsaved \|\| siviCombinedUnsaved \|\| siviCollectedUnsaved \|\| siviSpeciesUnsaved \|\| siviIdentityUnsaved \|\| otherUnsaved \|\| soilUnsaved \|\| attributeUnsaved \|\| collectedUnsaved \|\| speciesUnsaved \|\| deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
-  assert.match(form, /soilInvalid\.length > 0/);
-  assert.match(form, /if \(soilUnsaved\) \{ await saveSoilDrafts\(\); return; \}/);
-  assert.match(form, /if \(soilUnsaved\) \{ void cancelSoilDrafts\(\); return; \}/);
+  assert.match(form, /i\.soilInvalidCount > 0/);
+  assert.match(form, /\[\(\) => soilUnsaved, \(\) => saveSoilDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => soilUnsaved, \(\) => void cancelSoilDrafts\(\)\]/);
   assert.match(form, /Save or Cancel soil drafts before changing the plot lock/);
-  assert.match(form, /await PlotService\.UpdateSoilRecords[\s\S]*?committed = true;[\s\S]*?soilDrafts = \{\}/);
+  assert.match(form, /PlotService\.UpdateSoilRecords[\s\S]*?clearOnCommit: \(\) => \{ soilDrafts = \{\}/);
+  assert.match(form, /committed = true;[\s\S]*?params\.clearOnCommit\(\)/);
   assert.match(form, /Soil save failed; drafts retained/);
   assert.match(form, /Soil changes committed, but refresh failed/);
   const soilSection = readFileSync(srcPath('FS882SoilHorizonSection.svelte'), 'utf8');
-  assert.match(form, /untrack\(\(\) => void loadSoilSuggestions\(\)\)/);
+  assert.match(form, /untrack\(\(\) => \{ void loadSpeciesReferences\(\); void loadSoilSuggestions\(\); void loadAttributeSuggestions\(\); \}\)/);
   assert.match(form, /<FS882SoilHorizonSection/);
   assert.match(soilSection, /onsoilstage=\{soilEditingEnabled \? stageSoilCell : undefined\}/);
   assert.match(soilSection, /deleteDisabled=\{soilUnsaved\}/);

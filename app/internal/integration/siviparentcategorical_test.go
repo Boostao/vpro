@@ -99,8 +99,8 @@ func TestSIVIParentCategoricalHistoryAndClone(t *testing.T) {
 func TestSIVIParentCategoricalCompletePayloadAndDomainIsolation(t *testing.T) {
 	env, admin, snow := sftest.SiviScalarFixture(t, "SnowCoverregime", vprotest.MetadataText("S"))
 	snow.Value = vprotest.MetadataText("Z")
-	texture := sourceform.SiviParentScalarEdit{"owned", "Sample_Env", snow.RowID, "SV_RootZoneTexture", vprotest.MetadataText("original"), vprotest.MetadataText("  MiXeD \t ")}
-	ah := sourceform.SiviParentScalarEdit{"owned", "Sample_Env", snow.RowID, "SV_AhorizonType", vprotest.MetadataText("Ah"), vprotest.MetadataText("")}
+	texture := sourceform.SiviParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_RootZoneTexture", Expected: vprotest.MetadataText("original"), Value: vprotest.MetadataText("  MiXeD \t ")}
+	ah := sourceform.SiviParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: snow.RowID, Column: "SV_AhorizonType", Expected: vprotest.MetadataText("Ah"), Value: vprotest.MetadataText("")}
 	for index, column := range env.Columns {
 		switch column.Name {
 		case texture.Column:
@@ -180,7 +180,7 @@ func TestSIVIParentCategoricalCompletePayloadAndDomainIsolation(t *testing.T) {
 func TestSIVIParentCategoricalCancellationAndRetry(t *testing.T) {
 	env, admin, edit := sftest.SiviScalarFixture(t, "SnowCoverregime", vprotest.MetadataText("S"))
 	edit.Value = vprotest.MetadataText("Z")
-	ah := sourceform.SiviParentScalarEdit{"owned", "Sample_Env", edit.RowID, "SV_AhorizonType", vprocore.ProjectMetadataCell{Storage: "null"}, vprotest.MetadataText("")}
+	ah := sourceform.SiviParentScalarEdit{ContextID: "owned", Table: "Sample_Env", RowID: edit.RowID, Column: "SV_AhorizonType", Expected: vprocore.ProjectMetadataCell{Storage: "null"}, Value: vprotest.MetadataText("")}
 	for index, column := range env.Columns {
 		if column.Name == ah.Column {
 			env.Rows[0].Cells[index] = ah.Expected

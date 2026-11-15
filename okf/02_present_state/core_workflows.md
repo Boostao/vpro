@@ -22,7 +22,7 @@ flowchart LR
 
 ### 2.1 Active Session Context Switching
 * **Legacy Access (`frmMainMenuFloat.txt:1579-2140`, `V7mdlSetCurrent.txt:23-135`):** Selecting a Project, Site Unit (`_SU`), or Hierarchy on the floating `Data...` palette deleted and recreated 11 persistent `QueryDefs` (`UsysEnv`, `Filtered_Env`, `UsysVeg`, `USysVegA..D`, etc.) and hot-rebound open forms. *Crucial rule:* Changing the active Project automatically clears the active Site Unit filter (`VProXP_Userguide.pdf` PDF p. 44).
-* **Present State (`vpro_wails/App.svelte:1197-1346`, `sqliteprojectservice.go:108-159`):**
+* **Present State (`app/` `App.svelte:1197-1346`, `sqliteprojectservice.go:108-159`):**
   1. Left collapsible `#project-context` sidebar provides selectors for **Project**, **Site Unit**, and **Hierarchy**, plus **Attach SQLite Project**, **Import Access (`.mdb`/`.accdb`)**, and **Reveal in File Explorer** (`projectfileexplorer.go:71-197`).
   2. Calling `ContextService.SwitchContext()` checks for unsaved form drafts first, attaches the selected SQLite files in `mode=ro` to a fresh `:memory:` coordinator, rebuilds temporary `USys*` views (`Filtered_Env` restricts `USysEnv` when an SU is active), and returns a new **128-bit `contextID`** (`contextservice.go:70-100`).
 
@@ -56,7 +56,7 @@ sequenceDiagram
 ## 3. Workflow 2: High-Speed Plot Card Entry & Real-Time Validation
 
 ### 3.1 Form Modalities & Paper-Card Alignment
-`vpro_wails` implements the retained field-card layouts specified in `VPro2.0_Functions to remove-retain-modify.pdf` (PDF pp. 1, 3) and `RE26OCF433` Schedule A (`3.a`):
+`VPro Desktop` (`app/`) implements the retained field-card layouts specified in `VPro2.0_Functions to remove-retain-modify.pdf` (PDF pp. 1, 3) and `RE26OCF433` Schedule A (`3.a`):
 1. **Standard Multi-Tab FS882 (`FS882Form.svelte:3498-3565`):** Six tabs mirroring VPro64's `FS882-6x4XL` (`Screenshot 2026-02-12 091116.png`–`091238.png`):
    * `Site & Location` (`site`): **98 stored parent columns** (`88` `Env` + `10` `Admin`, `plotheader.go:25-124`) rendered over compiled Access twip coordinates (`paperLayout.ts` + `resources/fs882-xl-layout.json`), with live `DD` / `DM` / `DMS` / `UTM` coordinate mode switching (`HeaderEditor.svelte:1-220`) and Working Unit source radio (`Env` / `Master` / `SU`, `workingunitservice.go:34-240`).
    * `Vegetation` (`veg`): Strata total covers (`Tree A`, `Shrub B`, `Herb C`, `Moss D`), `SpeciesListComplete`, and sub-grids `SubVegAXL` (`A1..A3, TotalA, B1..B2, TotalB, Collected`), `SubVegCXL` (`C`), and `SubVegDXL` (`Dh, Dw, Dr, Ep`).
@@ -89,14 +89,14 @@ flowchart TD
     PromptUser --> Accept
 ```
 
-*(Sources: `vpro_wails/vegetationspeciesreference.go:41-61`, `vegetationspeciesservice.go:75-169`, `personalspecies.go:130-160`, `FS882Form.svelte:2211-2360`.)*
+*(Sources: `app/` `vegetationspeciesreference.go:41-61`, `vegetationspeciesservice.go:75-169`, `personalspecies.go:130-160`, `FS882Form.svelte:2211-2360`.)*
 
 ---
 
 ## 4. Workflow 3: Data Cleaning, Integrity Verification & Transactional Audit Rollback
 
 ### 4.1 Batch Species Cleaning & Duplicate Consolidation
-* **Interactive Species Code Check (`vpro_wails/speciescodecheck.go:55-160`, `SpeciesCodeCheck.svelte:1-220`; Legacy `V7mdlSpellCheck2020.txt:3-315`):** Scans all `<Project>_Veg` records (or active SU subset) against `USysAllSpecs` and `USysUserSpp`, flagging obsolete synonyms (`OldCode -> Code`) and unrecognized codes for single-record or project-wide replacement with audit logging.
+* **Interactive Species Code Check (`app/` `speciescodecheck.go:55-160`, `SpeciesCodeCheck.svelte:1-220`; Legacy `V7mdlSpellCheck2020.txt:3-315`):** Scans all `<Project>_Veg` records (or active SU subset) against `USysAllSpecs` and `USysUserSpp`, flagging obsolete synonyms (`OldCode -> Code`) and unrecognized codes for single-record or project-wide replacement with audit logging.
 * **Batch Compliance Validator, Transactional `OptimizeVeg` & 3-Way Project Merge (`internal/validation`, `internal/projectops`):**
   * `ValidationService` & `ProjectAdminWorkbench.svelte` run batch `USysTableOfLists` picklist validation, 1-to-many referential integrity checks, numeric/UTF-16 bounds, and `LMH25 (2023)` pedon/edatopic diagnostics (`internal/lmh25rules`) across entire staging projects (`RE26OCF433` Schedule A `1.i.1`).
   * `OptimizeVeg` (`internal/projectops`) pre-filters duplicate `(PlotNumber, Species)` keys in SQL and consolidates multi-row per-stratum entries inside an atomic SQLite `SAVEPOINT` (fixing legacy non-transactional `DELETE *` and `Sum(Height6)` bugs).
@@ -104,7 +104,7 @@ flowchart TD
 
 ### 4.2 Atomic Audit Trail & Safe Field Restoration
 * **Legacy Defect Eliminated (`archive/oct2026-parity-ledgers/FS882-6x4XL-access-contract.md:83-155`):** In Access `Form_BeforeUpdate` (`V7mdlAudit.txt:236-320`), unbound UI checkboxes (`Check369`/`Check371`/`Check373`) and aborted saves wrote orphan/phantom rows into `<Project>_Audit`, while `frmSIVIsite` logged table `"Unknown"`.
-* **Transactional SQLite Audit (`vpro_wails/plotrestore.go:15-180`, `vpro/R/plot-crud.R:54-101`):**
+* **Transactional SQLite Audit (`app/` `plotrestore.go:15-180`, `vpro` `plot-crud` parity):**
   1. Every parent (`_Env`, `_Admin`) and child (`_Veg`, `_Humus`, `_Mineral`, `_Other`) mutation writes its `<Project>_Audit` rows (`BeforeEdit`, `AfterEdit`, `User`, `EditWhen`, child `ID`) inside the **same SQLite `BEGIN IMMEDIATE` transaction**, honoring `AuditStrength` (`0=Off`, `1=Edit`, `2=Edit+Add`, `3=Edit+Add+Delete`).
   2. `RestoreSelectedAuditRecords` rolls back selected field edits with explicit post-restore disposition (`retain` vs. `prune` audit rows) while **refusing destructive `CleanVegPlot` silent row deletion** (`CleanedVegRows == 0` enforced in `plotrestore.go` and `FS882Form.svelte:1710`) and preserving Access's rule skipping `_Veg.Cover*` audit restoration (`V7mdlAudit.txt:174`).
 
@@ -129,14 +129,14 @@ flowchart TB
     SaveSU <-->|"SU Into Env / Env Into SU<br/>(siteunittransfer.go)"| AdminSU["<Project>_Admin.UserSiteUnit"]
 ```
 
-* **Calibrated Plot Profiling (`vpro_wails/projectprofiling.go:63-205`, `ProjectPlotProfileReview.svelte`):** Evaluates multi-step environmental, species-layer, species-absence (`IS NULL`), and lumped-taxa (`<Project>_Lump` + 7-char subspecies folding) rules using custom SQLite scalar functions (`vpro_profile_single_sum`, `vpro_profile_cover_decimal_compare`) calibrated to ACE fixed-decimal arithmetic—fixing legacy `V7mdlPlotProfiling.txt:30-46` where undeclared `MyMax` broke equality checks on layers `2..7`!
+* **Calibrated Plot Profiling (`app/` `projectprofiling.go:63-205`, `ProjectPlotProfileReview.svelte`):** Evaluates multi-step environmental, species-layer, species-absence (`IS NULL`), and lumped-taxa (`<Project>_Lump` + 7-char subspecies folding) rules using custom SQLite scalar functions (`vpro_profile_single_sum`, `vpro_profile_cover_decimal_compare`) calibrated to ACE fixed-decimal arithmetic—fixing legacy `V7mdlPlotProfiling.txt:30-46` where undeclared `MyMax` broke equality checks on layers `2..7`!
 * **Bidirectional `Env <-> SU` Synchronization (`siteunittransfer.go`, `siteunitenvironment.go`, `siteunitenvironmentexternal.go`):** Because recreating or switching an `*_SU` table changes active unit memberships (`VProXP_Userguide.pdf` PDF p. 74), ecologists persist working classifications into `<Project>_Admin.UserSiteUnit` via **`SU Into Env`** and repopulate `*_SU` tables via **`Env Into SU`** (fixing legacy `V7mdlSUTableTools1.txt:119-125`'s hardcoded `Sample_SU` bug), with full `__VPRO_*SUHistory` rollback receipts.
 
 ---
 
 ## 6. Workflow 5: Phytosociological Reporting, Spatial Review & Interchange
 
-All analytical reports in `vpro_wails` execute without Microsoft Excel COM automation (`GetObject(, "Excel.Application")` eliminated) and lift legacy Access's hardcoded 250-plot column ceiling (`V7mdlReportsLongVeg.txt:237`), following a two-phase **Preview $\rightarrow$ Guarded File Publication** pattern:
+All analytical reports in `VPro Desktop` (`app/`) execute without Microsoft Excel COM automation (`GetObject(, "Excel.Application")` eliminated) and lift legacy Access's hardcoded 250-plot column ceiling up to `16,000` plots per workbook (bounded by Excel `.xlsx` column limits, replacing `V7mdlReportsLongVeg.txt:237`), following a two-phase **Preview $\rightarrow$ Guarded File Publication** pattern:
 
 1. **Summary & Long Vegetation Reports (`summaryvegetation*.go`, `vegetationreport.go`, `LongVegetationReport.svelte`, `SummaryVegetationReport.svelte`):**
    * Applies Data Quality plot filtering (`SitePlotQuality`, `VegPlotQuality`, `SoilPlotQuality`, `BEC_Use`, `Include Nulls`), optional subspecies collapse, and `<Name>_Lump` aggregation (summed cover capped at `99%`).

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -11,7 +12,7 @@ const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScri
 const table = loadTypeScript('twoPageVegetationTable.ts', {
   './siviParentTransport': transport, './projectMetadataEditor': metadata, './qualityEditor': quality,
 });
-const fixture = () => JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'twoPageVegetationTableWire.json'), 'utf8'));
+const fixture = () => readJsonFixture('twoPageVegetationTableWire.json');
 const ownerOf = value => Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath', 'plot', 'form'].map(key => [key, value[key]]));
 const owner = ownerOf(fixture().normal);
 const validate = value => table.twoPageVegetationTableFromWire(value, ownerOf(value), value.offset, value.limit);

@@ -22,9 +22,18 @@ import (
 func parentCatalogueExpected(t *testing.T, _ listcatalog.Provenance) []listcatalog.Choice {
 	t.Helper()
 	var inputs [][]byte
-	for _, name := range []string{"parent-codes-fixture.json", "parent-codes-source-provenance.json",
-		"parent-codes-fixture-manifest.json", "geology-codes-fixture.json.gz"} {
-		data, err := os.ReadFile(filepath.Join("resources", name))
+	for i, name := range []string{"parent-codes-fixture.json.gz", "parent-codes-source-provenance.json.gz",
+		"parent-codes-fixture-manifest.json.gz", "geology-codes-fixture.json.gz"} {
+		path := filepath.Join("resources", name)
+		var (
+			data []byte
+			err  error
+		)
+		if i == 3 {
+			data, err = os.ReadFile(path)
+		} else {
+			data, err = listcatalog.ReadFixture(path)
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

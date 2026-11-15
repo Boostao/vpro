@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -33,8 +34,8 @@ const moduleUnderTest=loadTypeScript('longVegetationProjectUnitSession.ts',{
   './longVegetationProjectReport':report,'./longVegetationProjectScope':guards,
   './longVegetationUnitPreferences':ordinaryUnits,'./reportTitlePreferences':preferences
 });
-const wire=JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectScopeWire.json'),'utf8'));
-const requests=JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectUnitRequestWire.json'),'utf8'));
+const wire=readJsonFixture('longVegetationProjectScopeWire.json');
+const requests=readJsonFixture('longVegetationProjectUnitRequestWire.json');
 const owner={contextId:'owned',project:'Sample',projectPath:'C:\\project.db',su:'None',suPath:''};
 const deferred=()=>{let resolve;const promise=new Promise(yes=>resolve=yes);return {promise,resolve}};
 const ready=async(index=0)=>{

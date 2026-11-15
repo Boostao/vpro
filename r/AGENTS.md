@@ -25,7 +25,7 @@
   - Keep `PlotNumber` strictly R `character` / SQLite `TEXT` (never stripping leading zeroes like `'00337'`).
   - Convert Access `BOOLEAN` (`-1L` = `TRUE`, `0L` = `FALSE`, `NULL` = `NA` on disk $\leftrightarrow$ R `logical`).
   - Narrow cover to IEEE-754 `float32` before `< 100`, cap lumped (`*_Lump`) and fallback `TotalA`/`TotalB` strata sums at `99%` without mutating `<Project>_Veg`, apply ACE 15-sig-digit rounding (`1.005 -> 1.01`), respect `VLists.USysAllSpecs.Lifeform` (`INT32`) vs `VUser.USysUserSpp.LifeForm` (`INT16`), join short-veg layers on `LayerCode.Layer1234567`, enforce UTF-16 code-unit limits, and order `LMH25 (2023)` horizons (`L/F/H` upward `UpperDepth DESC`; `Of/Om/Oh` & `A/B/C/R/W` downward `UpperDepth ASC`).
-- **Cloud `BECMaster` (`R/cloud_{connect,read,sync,snapshots}.R`):**
+- **Cloud `BECMaster` (`R/cloud_*.R`):**
   - Keep `RPostgres` optional in `Suggests`; resolve credentials from `.env` / `becmaster.env` / `VPRO_PG_*` / `BECMASTER_*` (`.env*` git/build-ignored) with strict password/DSN redaction in `print()` and errors.
   - Enforce TLS (`sslmode = "require"` / `"verify-full"`) on non-loopback hosts, RBAC/RLS session roles (`public`, `contributor`, `ecologist`, `custodian`), rare-plant coordinate redaction (`USysSppAttributes.RedBlueList`) on non-custodian reads/snapshots, `becmaster.download_log` entries on `vpro_master_pull()`, mandatory pre-upload compliance gating on `vpro_staging_submit()`, `SERIALIZABLE` Custodian 3-way merge (`vpro_staging_merge()`) with monotonic `child_identity`, and SHA-256 hash-chained `becmaster.audit` verified by `vpro_master_audit(..., verify_chain = TRUE)`.
 

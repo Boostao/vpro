@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -15,9 +16,9 @@ const client = loadTypeScript('summaryVegetationEnvironmental.ts', {
   './summaryVegetationEnvironmentalNumeric': loadTypeScript('summaryVegetationEnvironmentalNumeric.ts', { './summaryVegetationFieldList': fields }),
 }, { setTimeout });
 const source = fs.readFileSync(srcPath('SummaryVegetationEnvironmental.svelte'), 'utf8');
-const wire = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationEnvironmentalWire.json'), 'utf8'));
-const numericWire = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationEnvironmentalNumericPreviewWire.json'), 'utf8'));
-const lifeformWire = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationEnvironmentalLifeformPreviewWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationEnvironmentalWire.json');
+const numericWire = readJsonFixture('summaryVegetationEnvironmentalNumericPreviewWire.json');
+const lifeformWire = readJsonFixture('summaryVegetationEnvironmentalLifeformPreviewWire.json');
 const owner = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath'].map(key => [key, wire.vegetation[key]]));
 const deferred = () => {
   let resolve;

@@ -1,9 +1,12 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
+)
+
+import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -24,7 +27,7 @@ func TestTwoPageSourceAuditProductionWireFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "twoPageAuditWire.json"))
+	fixture, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "twoPageAuditWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -17,7 +18,7 @@ const table = loadTypeScript('twoPageProjectMetadata.ts', {
   '../../resources/project-metadata-layout.json': definition, './siviParentTransport': transport,
   './projectMetadataPresentation': presentation, './qualityEditor': quality, './twoPageVegetationTable': vegetation,
 });
-const fixture = () => JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'twoPageProjectMetadataWire.json'), 'utf8'));
+const fixture = () => readJsonFixture('twoPageProjectMetadataWire.json');
 const ownerOf = value => Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath', 'plot'].map(name => [name, value[name]]));
 const owner = ownerOf(fixture().default);
 const validate = value => table.twoPageProjectMetadataFromWire(value, ownerOf(value), value.offset, value.limit);

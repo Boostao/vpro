@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -16,7 +17,7 @@ const matrix = loadTypeScript('subzoneMatrixReport.ts', {
   './publicationSession': publication,
 });
 const { ReadRequests } = loadTypeScript('readRequests.ts', { '@wailsio/runtime': {} });
-const fixture = () => JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'subzoneMatrixWire.json'), 'utf8'));
+const fixture = () => readJsonFixture('subzoneMatrixWire.json');
 const owner = { contextId: 'matrix-context', hierarchy: 'Sample', hierarchyPath: 'C:\\fixture\\hierarchy.db' };
 const destination = 'C:\\fixture\\matrix.xlsx';
 

@@ -86,7 +86,7 @@ test('source-held callbacks cannot stage, save, switch or close a retained sourc
 });
 
 test('actual mapped picture activity holds parent callbacks and source action until owner-local Cancel completes', async () => {
-  const source = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const source = readFileSync(srcPath('FS882Modals.svelte'), 'utf8');
   const expression = source.match(/childBlocked=\{([^}]+)\}/)?.[1];
   assert.ok(expression);
   const keys = ['twoPageSoilBusy', 'twoPageSoilBlocked', 'twoPageVegetationBusy', 'twoPageVegetationBlocked', 'pictureBusy', 'pictureMetadataPending'];

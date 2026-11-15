@@ -64,13 +64,14 @@ test('New-row metadata save stages a separate personal decision and transport ne
 });
 
 test('New-row metadata owns separate Save/Undo gates and retains deliberately saved definitions on proposal cancellation', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormVegDrafts.ts'), 'utf8');
   const toolbars = readFileSync(srcPath('FS882ChildCreateModal.svelte'), 'utf8');
   assert.match(form, /personalSourceMatches\(proposed\)/);
   assert.match(form, /matchesCreationPersonalSpeciesSource\(proposed, creationDraft\)/);
   assert.match(toolbars, /data-personal-create-source=\{creationDraft\.form\}/);
-  assert.match(form, /if \(personalDraft !== null\) \{ error = 'Cancel personal definition entry before cancelling the new-row proposal/);
-  assert.match(form, /creationDraft = chooseVegetationCreationSpecies\(creationDraft, reloaded, 'user'/);
+  assert.match(form, /Cancel personal definition entry before cancelling the new-row proposal/);
+  assert.match(form, /chooseVegetationCreationSpecies\((?:creationDraft|cd), reloaded, 'user'/);
   assert.match(form, /No project data or history changed; explicitly saved personal definitions remain available/);
   assert.match(toolbars, /Save new vegetation record[\s\S]*?Cancel vegetation creation/);
   assert.doesNotMatch(form, /proposed\.id|personalDraft\.id/);
@@ -125,15 +126,16 @@ test('Personal creation checks independent metadata and only recognizes explicit
 });
 
 test('Personal definition has separate explicit save, persistent metadata and native close/Undo gates', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormVegDrafts.ts'), 'utf8');
   const toolbars = readFileSync(srcPath('FS882ChildCreateModal.svelte'), 'utf8');
-  assert.match(form, /personalDraft !== null \? 'Save the personal definition explicitly/);
-  assert.match(form, /if \(personalDraft !== null\) \{ cancelPersonalSpecies\(\); return; \}/);
+  assert.match(form, /Save the personal definition explicitly/);
+  assert.match(form, /\[\(\) => personalDraft !== null, \(\) => cancelPersonalSpecies\(\)\]/);
   assert.match(form, /ordinary plot Save never writes the user database/);
-  assert.match(form, /await PlotService\.CreatePersonalSpeciesDefinition\(request\)/);
+  assert.match(form, /CreatePersonalSpeciesDefinition\(request\)/);
   assert.match(form, /users\.filter\(option => personalSpeciesMatches\(option, request\)\)\.length !== 1/);
   assert.match(form, /committed = committed \|\| personalSpeciesCommittedError\(cause\)/);
-  assert.match(form, /if \(committed\) \{ personalDraft = null; capabilitiesReady = false; \}/);
+  assert.match(form, /if \(committed\) \{\s*params\.setPersonalDraft\(null\);\s*params\.invalidateCapabilities\(\);\s*\}/);
   assert.match(toolbars, /personal-species-draft[\s\S]*?Save personal definition only/);
   assert.doesNotMatch(form, /personal-[\s\S]{0,100}maxlength=/);
   assert.doesNotMatch(toolbars, /personal-[\s\S]{0,100}maxlength=/);
@@ -236,26 +238,31 @@ test('Explicit replacement, keep and personal choices preserve ambiguity, origin
 });
 
 test('Species drafts gate every session and survive tab remount, Save, Undo, Lock and native close', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882VegTab.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormChildren.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormVegDrafts.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
   assert.match(form, /let speciesDrafts = \$state<SpeciesDrafts>/);
   assert.match(form, /siviCreationPeerUnsaved = \$derived\([^;]*speciesUnsaved \|\| deletionReview !== null \|\| creationDraft !== null \|\| codeCheckOpen \|\| metadataOpen \|\| profileReviewBlocked \|\| environmentSUOpen\)/);
   for (const name of ['height', 'other', 'soil', 'attribute', 'collected']) {
     assert.match(form, new RegExp(`const ${name}EditingDisabled = \\$derived\\([^;]*speciesUnsaved\\)`));
   }
-  assert.match(form, /if \(speciesUnsaved\) \{ await saveSpeciesDrafts\(\); return; \}/);
-  assert.match(form, /if \(speciesUnsaved\) \{ void cancelSpeciesDrafts\(\); return; \}/);
+  assert.match(form, /\[\(\) => speciesUnsaved, \(\) => saveSpeciesDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => speciesUnsaved, \(\) => void cancelSpeciesDrafts\(\)\]/);
   assert.match(form, /Save or Cancel species drafts before changing the plot lock/);
-  assert.match(form, /speciesInvalid\.length > 0 \? 'Correct invalid species drafts/);
-  assert.match(form, /speciesUnsaved && \(!speciesReferenceReady \|\| speciesReferenceBusy\)/);
-  assert.match(form, /await PlotService\.UpdateVegetationSpecies[\s\S]*?committed = true;[\s\S]*?speciesDrafts = \{\}/);
+  assert.match(form, /i\.speciesInvalidCount > 0, 'Correct invalid species drafts/);
+  assert.match(form, /i\.speciesUnsaved && \(!i\.speciesReferenceReady \|\| i\.speciesReferenceBusy\)/);
+  assert.match(form, /PlotService\.UpdateVegetationSpecies[\s\S]*?clearOnCommit: \(\) => \{ speciesDrafts = \{\}/);
+  assert.match(form, /committed = true;[\s\S]*?params\.clearOnCommit\(\)/);
   assert.match(form, /Species save failed; drafts retained/);
   assert.match(form, /Species changes committed, but refresh failed/);
   assert.match(form, /onspeciesstage=\{speciesEditingEnabled \? stageSpeciesCell : undefined\}/);
   assert.match(form, /Species requires the source-list draft workflow; unrestricted source-grid edits are unavailable/);
   assert.match(form, /speciesDecisionBusy = \$state\(false\)/);
-  assert.match(form, /speciesChoiceRequest\+\+; speciesChoiceReads\.cancelAll\(\)/);
+  assert.match(form, /speciesChoiceRequest\+\+[\s\S]*speciesChoiceReads[^\n]*\.cancelAll\(\)/);
   const toolbars = readFileSync(srcPath('FS882ChildCreateModal.svelte'), 'utf8');
-  assert.match(form, /if \(!cell\.decision\) drafts = stageSpecies/);
-  assert.match(form, /const users = aliases\.some\(option => option\.code !== null\) \? \[\]/);
+  assert.match(form, /if \(!cell\.decision\)[\s\S]{0,40}stageSpecies/);
+  assert.match(form, /const users = aliases\.some\(option => option\.code !== null\)\s*\? \[\]/);
   assert.match(toolbars, /Personal-list creation is unavailable; correct or Cancel the draft/);
 });

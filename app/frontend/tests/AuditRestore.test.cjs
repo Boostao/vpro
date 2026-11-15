@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
@@ -65,7 +66,7 @@ test('component compiles with accessible native dialog and explicit actions', ()
 });
 
 test('real Go nullable ordinary wire stays readable but explicitly unavailable to strict restoration', () => {
-  const entries = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'ordinaryAuditWire.json'), 'utf8'));
+  const entries = readJsonFixture('ordinaryAuditWire.json');
   assert.match(auditRestoreReason(entries[0], 'Sample', '108050', caps), /NULL audit actor.*unavailable/);
   assert.match(reason(row({ editWhen: null })), /NULL audit date.*unavailable/);
   assert.equal(reason(row({ user: '', editWhen: '' })), null);
@@ -86,7 +87,7 @@ test('real Go nullable ordinary wire stays readable but explicitly unavailable t
   assert.match(empty, /\(empty text\).*<br\s*\/?>\(empty text\)/);
 });
 test('form gates restoration and refreshes both header and child revision after all outcomes', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8');
   const auditSection = readFileSync(srcPath('FS882AuditTrailSection.svelte'), 'utf8');
   assert.match(form, /auditBlocked = \$derived\(childEditingDisabled \|\| Object\.keys\(headerValidation\)\.length > 0\)/);
   assert.match(form, /<FS882AuditTrailSection/);

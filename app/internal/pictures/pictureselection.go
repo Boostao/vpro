@@ -66,7 +66,7 @@ func resolvePictureSelectionPath(path string, links int) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// Go 1.25 exposes Windows junctions as irregular reparse points, not
+		// Go 1.27+ exposes Windows junctions as irregular reparse points, not
 		// symlinks; EvalSymlinks alone can leave this physical alias unresolved.
 		if info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
 			target, err := os.Readlink(current)

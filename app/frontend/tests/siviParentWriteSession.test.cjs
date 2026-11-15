@@ -222,9 +222,9 @@ test('mounted parent retains77 fields and one visible source-labelled live contr
 test('parent draft owner joins global lifecycle and permits remount without implicit refresh/source writes', () => {
   const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
   assert.match(parent, /childUnsaved = \$derived\(nonParentChildUnsaved \|\| siviParentWriteUnsaved \|\| siviParentActionUnsaved \|\| siviProjectAssignmentUnsaved \|\| siviParentSharedUnsaved \|\| twoPageOpen \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
-  assert.match(parent, /blocked: \(siviClose\?\.blocked \?\? false\) \|\| \(siviCoverClose\?\.blocked \?\? false\) \|\| \(siviCombinedClose\?\.blocked \?\? false\) \|\| \(siviCollectedClose\?\.blocked \?\? false\) \|\| \(siviSpeciesClose\?\.blocked \?\? false\) \|\| \(siviIdentityClose\?\.blocked \?\? false\) \|\| \(siviParentWriteClose\?\.blocked \?\? false\)/);
-  assert.match(parent, /if \(siviParentWriteUnsaved\) \{ await siviParentWriteOperation\('save'\); return; \}/);
-  assert.match(parent, /if \(siviParentWriteUnsaved\) \{ void siviParentWriteOperation\('undo'\); return; \}/);
+  assert.match(parent, /blocked: \[[^\]]*siviClose[^\]]*siviParentWriteClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
+  assert.match(parent, /\[\(\) => siviParentWriteUnsaved, \(\) => siviParentWriteOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => siviParentWriteUnsaved, \(\) => void siviParentWriteOperation\('undo'\)\]/);
   assert.match(parent, /Save or explicitly Undo SIVI parent drafts\/recovery before changing the plot lock/);
   assert.match(parent, /dirty \|\| nonParentChildUnsaved \|\| !siviParentSession/);
   assert.match(parent, /if \(!siviParentWriteUnsaved && !siviParentActionUnsaved && !siviProjectAssignmentUnsaved && !siviParentSharedUnsaved &&\s+siviParentSourceSession/);

@@ -84,7 +84,7 @@ func twoPageEntryHistoryAssignments(ctx context.Context, form string, masterAllo
 	}
 	edits := make([]sourceform.SiviParentScalarEdit, 0, len(event.Changes))
 	for _, change := range event.Changes {
-		edits = append(edits, sourceform.SiviParentScalarEdit{original.ContextID, change.Table, change.RowID, change.Column, change.Before, change.After})
+		edits = append(edits, sourceform.SiviParentScalarEdit{ContextID: original.ContextID, Table: change.Table, RowID: change.RowID, Column: change.Column, Expected: change.Before, Value: change.After})
 	}
 	audited, err := PlanTwoPageEntryProjection(ctx, original, edits, masterAllowed)
 	if err != nil || len(audited) != len(event.Changes) {

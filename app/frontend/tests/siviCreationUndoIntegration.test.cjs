@@ -4,7 +4,7 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
-const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+const root = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882VegTab.svelte'), 'utf8');
 const requestId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 function host(overrides = {}) {
   return componentFunctions('FS882Form.svelte', ['siviCreationUndoOperation', 'stageSIVICreationUndo',

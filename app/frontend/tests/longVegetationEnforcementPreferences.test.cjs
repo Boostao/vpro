@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -13,7 +14,7 @@ const shared = loadTypeScript('reportTitlePreferences.ts', { './qualityEditor': 
 const prefs = loadTypeScript('longVegetationEnforcementPreferences.ts', {
   './qualityEditor': quality, './reportTitlePreferences': shared, './googleEarthReview': earth,
 });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'longVegetationEnforcementWire.json'), 'utf8'));
+const wire = readJsonFixture('longVegetationEnforcementWire.json');
 const scope = Object.fromEntries(['contextId', 'project', 'projectPath', 'su', 'suPath'].map(key => [key, wire.review[key]]));
 const review = (enforce = false, unitGroups = 2) => ({ ...structuredClone(wire.review), values: { enforce, unitGroups } });
 const outcome = (changed = true, errorMessage = '') => ({ ...structuredClone(wire.outcome), changed, committed: changed, errorMessage });

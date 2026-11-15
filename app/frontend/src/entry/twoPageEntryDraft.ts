@@ -9,7 +9,7 @@ export type TwoPageEntryInput = SourceParentEntryInput;
 export type TwoPageEntryParsed = SourceParentEntryParsed;
 export const twoPageEntryKinds = ['text', 'categorical', 'plot-type', 'date', 'integer', 'single',
   'latitude', 'longitude', 'boolean', 'option'] as const;
-export const twoPageEntryNull = sourceParentEntryNull;
+const twoPageEntryNull = sourceParentEntryNull;
 
 export function parseTwoPageEntryValue(policy: TwoPageEntryFieldPolicy, expected: ProjectMetadataCell,
   input: TwoPageEntryInput): TwoPageEntryParsed {

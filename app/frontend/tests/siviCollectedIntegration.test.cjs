@@ -5,7 +5,8 @@ const path = require('node:path');
 const { compile } = require('svelte/compiler');
 const { componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
 
-const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+const rawParent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+const parent = rawParent + '\n' + readFileSync(srcPath('FS882VegTab.svelte'), 'utf8') + '\n' + readFileSync(srcPath('fs882FormSivi.ts'), 'utf8') + '\n' + readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
 const main = readFileSync(path.join(__dirname, '..', '..', 'main.go'), 'utf8') + '\n' +
   readFileSync(path.join(__dirname, '..', '..', 'domainservices_plotentry.go'), 'utf8');
 const peers = ['siviSession', 'siviCoverSession', 'siviCombinedSession', 'siviCollectedSession', 'siviSpeciesSession', 'siviIdentitySession'];
@@ -34,15 +35,17 @@ function host(overrides = {}) {
 }
 
 test('Collected has unconditional actual native registration without granting other columns', () => {
-  assert.equal(compile(parent, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
+  assert.equal(compile(rawParent, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
+  assert.equal(compile(readFileSync(srcPath('FS882VegTab.svelte'), 'utf8'), { filename: 'FS882VegTab.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(main, /NewSIVICollectedService\((?:contextService|core)\)/);
   assert.match(main, /siviCollected:\s*siviCollected/);
   assert.match(main, /application\.NewService\(plotEntryService\)/);
   for (const method of ['GetSIVICollectedOriginal', 'SaveSIVICollectedReviewed', 'RestoreSIVICollectedReviewed']) assert.ok(parent.includes(`PlotEntryService.${method}(`));
   assert.match(parent, /read: extended => siviCollectedReads.track\(PlotEntryService.GetSIVICollectedOriginal/);
   assert.match(parent, /siviCollectedSession\?\.dispose\(\);[\s\S]{0,70}siviCollectedReads\.cancelAll\(\)/);
-  assert.match(parent, /data-sivi-collected-cancel-read[\s\S]{0,110}siviCollectedReads\.cancelAll/);
-  assert.match(parent, /siviCollectedSession\?\.presentation\(next\)/);
+  assert.match(parent, /data-sivi-collected-cancel-read[\s\S]{0,110}onCancelSiviCollectedRead/);
+  assert.match(parent, /onCancelSiviCollectedRead=\{\(\) => siviCollectedReads\.cancelAll\(\)\}/);
+  assert.match(parent, /\[siviSession,[^\]]*siviCollectedSession[^\]]*\]\)\s*s\?\.presentation\(next\)/);
 });
 
 test('Collected owns root Save Undo Lock close busy and every mutually exclusive editor guard', () => {
@@ -51,10 +54,10 @@ test('Collected owns root Save Undo Lock close busy and every mutually exclusive
   assert.match(parent, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
   assert.match(parent, /siviCreationPeerUnsaved = \$derived\([^\n]*\|\| siviCollectedUnsaved/);
   assert.match(parent, /nonParentChildUnsaved = \$derived\(siviCreationPeerUnsaved \|\| siviCreationPending \|\| siviDeletionPending \|\| siviRestorationPending \|\| siviCreationUndoPending\)/);
-  assert.match(parent, /if \(siviCollectedUnsaved\) \{ await siviCollectedOperation\('save'\); return; \}/);
-  assert.match(parent, /if \(siviCollectedUnsaved\) \{ void siviCollectedOperation\('undo'\); return; \}/);
-  assert.match(parent, /\|\| \(siviCollectedClose\?\.blocked \?\? false\)/);
-  assert.match(parent, /siviCollectedClose\?\.saveReason \?\? 'Correct or Undo unresolved SIVI Collected cycles.'/);
+  assert.match(parent, /\[\(\) => siviCollectedUnsaved, \(\) => siviCollectedOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => siviCollectedUnsaved, \(\) => void siviCollectedOperation\('undo'\)\]/);
+  assert.match(parent, /blocked: \[[^\]]*siviCollectedClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
+  assert.match(parent, /i\.siviCollectedClose\?\.saveReason \?\? 'Correct or Undo unresolved SIVI Collected cycles.'/);
   assert.match(parent, /SIVI Collected or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock/);
   for (const gate of ['height', 'other', 'soil', 'attribute', 'collected', 'species', 'sivi', 'siviCover', 'siviCombined']) {
     assert.match(parent, new RegExp(`${gate}EditingDisabled = \\$derived\\([^\\n]*\\|\\| siviCollectedUnsaved`));

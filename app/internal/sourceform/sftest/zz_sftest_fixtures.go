@@ -323,7 +323,7 @@ func SiviParentEdit(t *testing.T, parent *sourceform.SiviParentProjection, colum
 		if binding.Table == parent.AdminTable {
 			row = parent.Rows[0].Admin
 		}
-		return sourceform.SiviParentScalarEdit{parent.ContextID, binding.Table, row.RowID, column, vprocore.CloneSiteUnitCell(row.Cells[binding.Column]), value}
+		return sourceform.SiviParentScalarEdit{ContextID: parent.ContextID, Table: binding.Table, RowID: row.RowID, Column: column, Expected: vprocore.CloneSiteUnitCell(row.Cells[binding.Column]), Value: value}
 	}
 	t.Fatal("controlled parent target missing", column)
 	return sourceform.SiviParentScalarEdit{}
@@ -465,9 +465,9 @@ func SiviWriteFixture(t *testing.T, external bool, strength int) (*vprocore.Cont
 		t.Fatal("controlled source row unavailable")
 	}
 	return service, state, db, original, []sourceform.SiviHeightEdit{
-		{rowID, "SubVegA-SIVI_BC", "HeightA", vprotest.SiviReal(2), vprotest.SiviReal(3)},
-		{rowID, "SubVegA-SIVI_BC", "HeightB", vprotest.MetadataText("before"), vprotest.MetadataText("")},
-		{rowID, "SubVegC-SIVI", "Height6", vprotest.SiviReal(-3), vprocore.ProjectMetadataCell{Storage: "null"}},
+		{RowID: rowID, Form: "SubVegA-SIVI_BC", Column: "HeightA", Expected: vprotest.SiviReal(2), Value: vprotest.SiviReal(3)},
+		{RowID: rowID, Form: "SubVegA-SIVI_BC", Column: "HeightB", Expected: vprotest.MetadataText("before"), Value: vprotest.MetadataText("")},
+		{RowID: rowID, Form: "SubVegC-SIVI", Column: "Height6", Expected: vprotest.SiviReal(-3), Value: vprocore.ProjectMetadataCell{Storage: "null"}},
 	}
 }
 

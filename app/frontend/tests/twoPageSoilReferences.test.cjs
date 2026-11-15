@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -11,7 +12,7 @@ const references = loadTypeScript('twoPageSoilReferences.ts', {
   './siviParentTransport': transport, './projectMetadataRestore': restoration,
   './qualityEditor': quality, './readRequests': requests,
 });
-const fixtures = require('./fixtures/twoPageSoilReferenceWire.json');
+const fixtures = readJsonFixture('twoPageSoilReferenceWire.json');
 const fresh = (index = 0) => structuredClone(fixtures[index]);
 const normalized = () => references.soilReferencesFromWire(fresh().wire, fresh().owner);
 function held() {

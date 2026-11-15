@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -6,7 +7,7 @@ const { proxy } = require('svelte/internal/client');
 const { loadTypeScript } = require('./svelteTestHelpers.cjs');
 const fields = loadTypeScript('summaryVegetationFieldList.ts');
 const client = loadTypeScript('summaryVegetationEnvironmentalNumeric.ts', { './summaryVegetationFieldList': fields });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationEnvironmentalNumericWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationEnvironmentalNumericWire.json');
 const plain = value => JSON.parse(JSON.stringify(value));
 const cell = (storage, text = null) => ({ storage, text, integer: null, real: null, blobHex: null });
 

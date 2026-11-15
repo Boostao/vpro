@@ -250,15 +250,17 @@ test('action errors precede fields and both scoped editors preserve distinct his
   assert.equal(await session.restore('prune'), true);
 });
 test('mounted source actions join Save/Undo/Lock/close ownership and refresh only clean peer originals', () => {
-  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
   for (const api of ['GetSIVIParentActionOriginal', 'SaveSIVIParentActions', 'RestoreSIVIParentActions']) assert.ok(parent.includes(`ContextService.${api}`));
-  assert.match(parent, /if \(siviParentActionUnsaved\) \{ await siviParentActionOperation\('save'\); return; \}/);
-  assert.match(parent, /if \(siviParentActionUnsaved\) \{ void siviParentActionOperation\('undo'\); return; \}/);
+  assert.match(parent, /\[\(\) => siviParentActionUnsaved, \(\) => siviParentActionOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => siviParentActionUnsaved, \(\) => void siviParentActionOperation\('undo'\)\]/);
   assert.match(parent, /Undo SIVI source-action drafts\/recovery before changing the plot lock/);
   assert.match(parent, /siviParentActionSession\.closeState\(\)\.unsaved/);
-  assert.match(parent, /\|\| \(siviParentActionClose\?\.blocked \?\? false\)/);
+  assert.match(parent, /blocked: \[[^\]]*siviParentActionClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
   assert.match(parent, /refreshSIVIParent\(plot, \[siviParentWriteSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
   assert.match(parent, /refreshSIVIParent\(plot, \[siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession\]\)/);
   assert.match(parent, /peer\.closeState\(\)\.unsaved \|\| peer\.closeState\(\)\.busy/);
-  assert.match(parent, /peer && \(peer\.view\(\)\.original \|\| peer\.view\(\)\.error\) && !await peer\.load\(\)/);
+  assert.match(parent, /peer && \(peer\.view\(\)\.original \|\| peer\.view\(\)\.error\) && !\(await peer\.load\(\)\)/);
 });

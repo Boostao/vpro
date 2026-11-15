@@ -55,7 +55,7 @@ func TestSIVICoverServiceValidOwnedWireAndHeightIsolation(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(read, original) {
 		t.Fatal("public source differs from private reviewed projection", read, err)
 	}
-	edit := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	edit := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	saved, err := service.SaveReviewed(context.Background(), state.ContextID, "108050", false, siviCoverRequestJSON(t, original, edit))
 	if err != nil || saved == nil || saved.ChangedCells != 1 || saved.HistoryID == "" {
 		t.Fatal("valid strict cover wire failed", saved, err)
@@ -78,7 +78,7 @@ func TestSIVICoverServiceValidOwnedWireAndHeightIsolation(t *testing.T) {
 func TestSIVICoverServiceRejectsRawMalformedTransportWithoutWrites(t *testing.T) {
 	contexts, state, _, original, heights := sftest.SiviWriteFixture(t, false, 3)
 	service := siviCoverServiceFixture(t, contexts, "true", true)
-	edit := sourceform.SiviHeightEdit{heights[0].RowID, "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), vprotest.SiviReal(3)}
+	edit := sourceform.SiviHeightEdit{RowID: heights[0].RowID, Form: "SubVegA-SIVI_BC", Column: "Cover1", Expected: vprotest.SiviReal(0), Value: vprotest.SiviReal(3)}
 	valid := siviCoverRequestJSON(t, original, edit)
 	before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	for _, body := range []string{

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -8,7 +9,7 @@ const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScri
 const lookup = loadTypeScript('scopedPlotLookup.ts', { './qualityEditor': quality });
 const labels = loadTypeScript('plotLabelPreview.ts', { './qualityEditor': quality, './scopedPlotLookup': lookup });
 const regional = loadTypeScript('plotLabelRegional.ts', { './qualityEditor': quality, './plotLabelPreview': labels });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'plotLabelRegionalWire.json'), 'utf8'));
+const wire = readJsonFixture('plotLabelRegionalWire.json');
 const plain = value => JSON.parse(JSON.stringify(value));
 function host(operation = () => Promise.resolve(wire)) {
   const calls = [], changes = [];

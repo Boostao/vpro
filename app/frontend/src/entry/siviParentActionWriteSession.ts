@@ -4,7 +4,7 @@ import { siviParentProposal } from './siviParentEditor';
 import type { SIVIParentOwner } from './siviParentTransport';
 import { SIVIParentScopedWriteSession, siviParentWriteDraftScope, siviParentWriteErrors, type SIVIParentWritePort } from './siviParentWriteSession';
 
-export const siviParentActionColumns = ['PlotType', 'SpeciesListComplete'] as const satisfies readonly SIVIParentColumn[];
+const siviParentActionColumns = ['PlotType', 'SpeciesListComplete'] as const satisfies readonly SIVIParentColumn[];
 export type SIVIParentActionColumn = typeof siviParentActionColumns[number];
 export function isSIVIParentActionColumn(value: string): value is SIVIParentActionColumn {
   return siviParentActionColumns.some(column => column === value);

@@ -2,6 +2,7 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -11,7 +12,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -73,7 +73,7 @@ func TestProjectWorkbookStrictClientWireMatchesOriginalKernelAndSummary(t *testi
 		t.Fatal(err)
 	}
 	fixture := filepath.Join("frontend", "tests", "fixtures", "longVegetationProjectWorkbookWire.json")
-	raw, err := os.ReadFile(fixture)
+	raw, err := sqlutil.ReadWireFixture(fixture)
 	if err != nil {
 		t.Fatal(err)
 	}

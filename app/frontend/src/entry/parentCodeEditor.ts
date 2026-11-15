@@ -29,7 +29,7 @@ export type ParentCodeList = typeof parentCodeFields[number]['list'];
 export type ParentCodes = Record<ParentCodeKey, string | null>;
 export type ParentCodeScope = 'site' | 'soils';
 export type ParentCodeViews = Partial<Record<ParentCodeList, QualityView>>;
-export const parentCodeKeys = parentCodeFields.map(field => field.key);
+const parentCodeKeys = parentCodeFields.map(field => field.key);
 export function parentCodeField(column: string | undefined) {
   return parentCodeFields.find(field => field.column === column);
 }

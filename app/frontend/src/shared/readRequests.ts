@@ -28,7 +28,7 @@ export function expectedReadCancellation(reason: unknown): boolean {
     reason.cause instanceof Call.RuntimeError && reason.cause.message === 'context canceled';
 }
 
-// beta.26 reports the backend acknowledgement even after its promise was cancelled.
+// Wails v3.1.0 runtime reports the backend acknowledgement even after its promise was cancelled.
 if (typeof window !== 'undefined') {
   window.addEventListener('unhandledrejection', event => {
     if (expectedReadCancellation(event.reason)) event.preventDefault();

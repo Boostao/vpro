@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/reports/reportcore"
-	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
@@ -259,45 +258,4 @@ func PreviewLongVegetationLayers(s *vprocore.ContextService, ctx context.Context
 			return source.Report, err
 		})
 	})
-}
-
-func readLongVegetationLayers(ctx context.Context, plots *vprocore.PlotService, options longVegetationOptions) (result vegetationLayerReport, resultErr error) {
-	owner := plots.Projects.Sqlite
-	if owner.Selection.SU == "None" {
-		return result, errors.New("Long Vegetation requires an explicitly selected SU, not an all-project fallback")
-	}
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
-		return result, err
-	}
-	defer owner.Mu.Unlock()
-	if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-		return result, err
-	}
-	tx, err := owner.BeginReadSnapshot(ctx)
-	if err != nil {
-		return result, err
-	}
-	defer func() {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			resultErr = errors.Join(resultErr, err)
-		}
-		if resultErr != nil {
-			result = vegetationLayerReport{}
-		}
-	}()
-	source, err := readLongVegetationReportSource(ctx, owner, tx, options)
-	if err != nil {
-		return result, err
-	}
-	result = source.Report
-	if err := vprocore.ProfileOwnedFiles(owner); err != nil {
-		return result, err
-	}
-	if err := ctx.Err(); err != nil {
-		return result, err
-	}
-	if err := tx.Commit(); err != nil {
-		return result, err
-	}
-	return result, nil
 }

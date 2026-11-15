@@ -2,7 +2,7 @@ import { finiteSingleValue } from './numericEditor';
 import type { VegetationNumberUpdate } from '../../bindings/github.com/boostao/vpro/app';
 export { singleMaximum } from './numericEditor';
 
-export const heightFields = ['cover1', 'cover2', 'cover3', 'totalA', 'cover4', 'cover5', 'totalB',
+const heightFields = ['cover1', 'cover2', 'cover3', 'totalA', 'cover4', 'cover5', 'totalB',
   'cover6', 'cover7', 'cover8', 'cover9', 'height1', 'height2', 'height3', 'height4', 'height5', 'height6',
   'cover5a', 'cover5b', 'cover5c'] as const;
 export type HeightField = typeof heightFields[number];

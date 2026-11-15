@@ -4,16 +4,18 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { compile } = require('svelte/compiler');
-const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+const rawParent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+const parent = rawParent + '\n' + readFileSync(srcPath('FS882Modals.svelte'), 'utf8') + '\n' + readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
 test('shared SIVI scope is independently gated and uses its owned facade rather than whole-header saves', () => {
-  assert.equal(compile(parent, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
+  assert.equal(compile(rawParent, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
+  assert.equal(compile(readFileSync(srcPath('FS882Modals.svelte'), 'utf8'), { filename: 'FS882Modals.svelte', generate: 'client' }).warnings.length, 0);
   for (const method of ['GetSIVIParentSharedOriginal', 'SaveSIVIParentShared', 'RestoreSIVIParentShared']) assert.ok(parent.includes(`PlotEntryService.${method}(`));
   assert.match(parent, /read: \(\) => siviParentSharedReads\.track/);
   assert.match(parent, /cancelRead: \(\) => siviParentSharedReads\.cancelAll/);
 });
 test('shared SIVI state joins Save Undo Lock close ownership and sibling refresh without duplicate source fields', () => {
-  assert.match(parent, /if \(siviParentSharedUnsaved\) \{ await siviParentSharedOperation\('save'\); return; \}/);
-  assert.match(parent, /if \(siviParentSharedUnsaved\) \{ void siviParentSharedOperation\('undo'\); return; \}/);
+  assert.match(parent, /\[\(\) => siviParentSharedUnsaved, \(\) => siviParentSharedOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => siviParentSharedUnsaved, \(\) => void siviParentSharedOperation\('undo'\)\]/);
   assert.match(parent, /Undo shared SIVI drafts\/recovery before changing the plot lock/);
   assert.match(parent, /siviParentSharedSession\.closeState\(\)\.unsaved/);
   assert.match(parent, /\|\| \(siviParentSharedClose\?\.blocked \?\? false\)/);

@@ -80,7 +80,7 @@ test_that("BECMaster_fixing (71,567 plots, 1.65M veg rows) meets all Wave 5 scal
   expect_equal(dim(mat_dense), dim(mat_sparse))
   expect_equal(rownames(mat_dense), attr(mat_dense, "env")$PlotNumber)
 
-  # Gate 3: BEC diagnostics & pairwise unit similarity parity against vpro_wails Go engine
+  # Gate 3: BEC diagnostics & pairwise unit similarity parity against VPro desktop Go engine
   t0 <- proc.time()[["elapsed"]]
   diag_res <- vpro_diagnostics(ws, lump = FALSE, exclude_modifiers = FALSE, average_type = "unit")
   pw_res <- vpro_pairwise(ws, lump = FALSE, exclude_modifiers = FALSE, min_plots = 2L)
@@ -90,7 +90,7 @@ test_that("BECMaster_fixing (71,567 plots, 1.65M veg rows) meets all Wave 5 scal
   expect_gt(nrow(diag_res$unit_species), 100L)
   expect_gt(nrow(pw_res$pairs), 0L)
 
-  # Direct cross-verification against vpro_wails Go-generated BECMaster_PG_Diagnostics.xlsx when present
+  # Direct cross-verification against VPro Go-generated BECMaster_PG_Diagnostics.xlsx when present
   go_xlsx_candidates <- Sys.glob("/tmp/TestBECMasterProductionScaleQualification*/002/BECMaster_PG_Diagnostics.xlsx")
   if (length(go_xlsx_candidates) > 0L && has_pg) {
     go_xlsx <- sort(go_xlsx_candidates, decreasing = TRUE)[[1L]]

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { loadTypeScript } = require('./svelteTestHelpers.cjs');
 const { transport, restoration, metadata, cell } = require('./siviParentTestHelpers.cjs');
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
@@ -18,7 +19,7 @@ const editor = loadTypeScript('twoPageVegetationEditor.ts', {
   './numericEditor': loadTypeScript('numericEditor.ts'), './siviRequestId': loadTypeScript('siviRequestId.ts'),
   './twoPageVegetationSpeciesList': speciesList,
 });
-const fixture = require('./fixtures/twoPageVegetationWire.json');
+const fixture = readJsonFixture('twoPageVegetationWire.json');
 const original = () => structuredClone(fixture.request.original);
 const sourceAudit = loadTypeScript('siviDeletionReceipt.ts', {
   './projectMetadataEditor': metadata, './projectMetadataRestore': restoration, './qualityEditor': quality,

@@ -34,7 +34,6 @@ export const siviReferencePolicies = [
   { column: 'RootRestrictingType', list: 'RootRestrictingType', maximum: 1, required: false, scope: 'soils', label: 'Root Restricting Type' },
 ] as const;
 export type SIVIReferenceColumn = typeof siviReferencePolicies[number]['column'];
-export const siviReferenceBuildEnabled = (value: unknown): boolean => value === 'true';
 export interface SIVIReferenceChoice {
   rowId: string; code: string | null; description: string | null; selectable: boolean; diagnostic: string;
 }
@@ -54,7 +53,7 @@ function choice(value: unknown): value is SIVIReferenceChoice {
   return record(value) && typeof value.rowId === 'string' && nullableText(value.code) &&
     nullableText(value.description) && typeof value.selectable === 'boolean' && typeof value.diagnostic === 'string';
 }
-export function sourceParentReferenceFromWire<Column extends string>(field: unknown,
+function sourceParentReferenceFromWire<Column extends string>(field: unknown,
   policy: { column: Column; list: string; required: boolean }, label: string,
   definitionsFromWire = siviMetadataTableFromWire): SourceParentReferenceField<Column> {
   if (!record(field) || field.column !== policy.column || field.listName !== policy.list || field.required !== policy.required ||

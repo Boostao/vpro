@@ -2,6 +2,7 @@ package integration
 
 import (
 	"github.com/boostao/vpro/app/internal/datasheet"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
@@ -79,7 +80,7 @@ func TestTwoPageEnvironmentTableProductionWire(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join("frontend", "tests", "fixtures", "twoPageEnvironmentTableWire.json")
-	fixture, err := os.ReadFile(path)
+	fixture, err := sqlutil.ReadWireFixture(path)
 	if err != nil || !bytes.Equal(append(encoded, '\n'), fixture) {
 		t.Fatal(err)
 	}

@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -17,7 +18,7 @@ const lifeform = loadTypeScript('lifeformSummary.ts');
 const file = path.relative(path.join(frontend, 'src'), srcPath('summaryVegetationPresentationPreferences.ts'));
 const prefs = loadTypeScript(file, { './googleEarthReview': earth, './qualityEditor': quality,
   './lifeformSummary': lifeform, './reportTitlePreferences': shared });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationPresentationPreferencesWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationPresentationPreferencesWire.json');
 const { values: ignoredValues, source: ignoredSource, ...scope } = wire.review;
 const clone = value => structuredClone(value);
 const reviewed = values => ({ ...clone(wire.review), values });
@@ -475,7 +476,7 @@ test('production report wires one presentation pane, peer mutation holds and exp
   const Panel = serverComponent(readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8'),
     'SummaryVegetationReport.svelte', {
       './summaryVegetation': report,
-      './summaryVegetationPresentationPreferenceSessions': { summaryVegetationPresentationPreferenceSession: () => presentation },
+      './summaryVegetationPresentationPreferences': { summaryVegetationPresentationPreferenceSession: () => presentation },
       '../bindings/github.com/boostao/vpro/app': {},
       '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
       '../classification/siteUnitExclusionFilter': {},

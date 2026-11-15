@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -56,7 +57,7 @@ vm.runInNewContext(ts.transpileModule(compiled.js.code, {
   }
 });
 const projectWorkbook = moduleValue.exports;
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectWorkbookWire.json'),'utf8'));
+const wire = readJsonFixture('longVegetationProjectWorkbookWire.json');
 const fixture = (index=0) => structuredClone(wire[index]);
 const owner = scope => Object.fromEntries(['contextId','project','projectPath','su','suPath'].map(key=>[key,scope[key]]));
 const cell = text => ({storage:text===null?'null':'text',text,integer:null,real:null,blobHex:null});

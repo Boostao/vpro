@@ -1,4 +1,4 @@
-# Direct vpro_wails Out-of-Process Sidecar Bridge (`internal/rsidecar`) --------
+# Direct VPro Desktop Out-of-Process Sidecar Bridge (`internal/rsidecar`) -----
 
 vpro_rows_to_dt <- function(x) {
   if (is.data.frame(x)) {

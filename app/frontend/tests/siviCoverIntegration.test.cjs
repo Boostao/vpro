@@ -7,8 +7,11 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
 
-const parent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
-const script = parent.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
+const rawParent = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+const parent = rawParent + '\n' +
+  readFileSync(srcPath('FS882VegTab.svelte'), 'utf8') + '\n' +
+  readFileSync(srcPath('fs882FormSivi.ts'), 'utf8');
+const script = rawParent.match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
 const ast = ts.createSourceFile('host.ts', script, ts.ScriptTarget.Latest, true);
 
 function host(overrides = {}) {
@@ -49,13 +52,15 @@ function host(overrides = {}) {
 }
 
 test('cover facade and source panel are independently gated without widening height saves', () => {
-  assert.equal(compile(parent, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
+  assert.equal(compile(rawParent, { filename: 'FS882Form.svelte', generate: 'client' }).warnings.length, 0);
+  assert.equal(compile(readFileSync(srcPath('FS882VegTab.svelte'), 'utf8'), { filename: 'FS882VegTab.svelte', generate: 'client' }).warnings.length, 0);
   for (const method of ['GetSIVICoverOriginal', 'SaveSIVICoverReviewed', 'RestoreSIVICoverReviewed']) {
     assert.ok(parent.includes(`PlotEntryService.${method}(`));
   }
   assert.match(parent, /read: extended => siviCoverReads\.track\(PlotEntryService\.GetSIVICoverOriginal/);
   assert.match(parent, /siviCoverSession\?\.dispose\(\);[\s\S]{0,70}siviCoverReads\.cancelAll\(\)/);
-  assert.match(parent, /data-sivi-cover-cancel-read[\s\S]{0,110}siviCoverReads\.cancelAll/);
+  assert.match(parent, /data-sivi-cover-cancel-read[\s\S]{0,110}onCancelSiviCoverRead/);
+  assert.match(parent, /onCancelSiviCoverRead=\{\(\) => siviCoverReads\.cancelAll\(\)\}/);
   assert.match(parent, /siviCoverSession = new SIVICoverSession/);
 });
 
@@ -73,9 +78,9 @@ test('cover owner contributes dirty busy blocked Save Undo Lock and peer-editor 
   assert.match(parent, /headerWorkflowBusy = \$derived\(otherHeaderWorkflowBusy \|\| pictureBusy \|\| pictureMetadataPending \|\| twoPageSoilBusy \|\| twoPageSoilBlocked \|\| twoPageVegetationBusy \|\| twoPageVegetationBlocked\)/);
   assert.match(parent, /siviCreationPeerUnsaved = \$derived\([^\n]*\|\| siviCoverUnsaved/);
   assert.match(parent, /nonParentChildUnsaved = \$derived\(siviCreationPeerUnsaved \|\| siviCreationPending \|\| siviDeletionPending \|\| siviRestorationPending \|\| siviCreationUndoPending\)/);
-  assert.match(parent, /if \(siviCoverUnsaved\) \{ await siviCoverOperation\('save'\); return; \}/);
-  assert.match(parent, /if \(siviCoverUnsaved\) \{ void siviCoverOperation\('undo'\); return; \}/);
-  assert.match(parent, /\|\| \(siviCoverClose\?\.blocked \?\? false\)/);
+  assert.match(parent, /\[\(\) => siviCoverUnsaved, \(\) => siviCoverOperation\('save'\)\]/);
+  assert.match(parent, /\[\(\) => siviCoverUnsaved, \(\) => void siviCoverOperation\('undo'\)\]/);
+  assert.match(parent, /blocked: \[[^\]]*siviCoverClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
   assert.match(parent, /siviCoverSession\.closeState\(\)\.unsaved \|\| siviCoverSession\.closeState\(\)\.busy/);
   assert.match(parent, /SIVI covers or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock/);
   for (const gate of ['height', 'other', 'soil', 'attribute', 'collected', 'species', 'sivi']) {
@@ -175,9 +180,9 @@ test('acknowledged child changes refresh only an already-loaded peer and preserv
     test('combined facade is wired through Save Undo Lock close and disposal', () => {
       for (const method of ['GetSIVICombinedOriginal', 'SaveSIVICombinedReviewed', 'RestoreSIVICombinedReviewed']) assert.ok(parent.includes(`PlotEntryService.${method}(`));
       assert.match(parent, /siviCombinedSession\?\.dispose\(\);[\s\S]{0,70}siviCombinedReads\.cancelAll\(\)/);
-      assert.match(parent, /if \(siviCombinedUnsaved\) \{ await siviCombinedOperation\('save'\); return; \}/);
-      assert.match(parent, /if \(siviCombinedUnsaved\) \{ void siviCombinedOperation\('undo'\); return; \}/);
-      assert.match(parent, /\|\| \(siviCombinedClose\?\.blocked \?\? false\)/);
+      assert.match(parent, /\[\(\) => siviCombinedUnsaved, \(\) => siviCombinedOperation\('save'\)\]/);
+      assert.match(parent, /\[\(\) => siviCombinedUnsaved, \(\) => void siviCombinedOperation\('undo'\)\]/);
+      assert.match(parent, /blocked: \[[^\]]*siviCombinedClose[^\]]*\]\.some\(c => c\?\.blocked \?\? false\)/);
       assert.match(parent, /Combined SIVI drafts or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock/);
       for (const gate of ['height', 'other', 'soil', 'attribute', 'collected', 'species', 'sivi', 'siviCover']) {
         assert.match(parent, new RegExp(`${gate}EditingDisabled = \\$derived\\([^\\n]*\\|\\| siviCombinedUnsaved`));

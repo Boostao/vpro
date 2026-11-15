@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { loadTypeScript } = require('./svelteTestHelpers.cjs');
 const { picture, cell } = require('./pictureCreationTestHelpers.cjs');
 const { metadata } = require('./siviParentTestHelpers.cjs');
@@ -6,7 +7,7 @@ const editor = loadTypeScript('pictureLifecycleEditor.ts', {
   './pictureRead': picture, './projectMetadataEditor': metadata, './qualityEditor': quality,
   './siviRequestId': loadTypeScript('siviRequestId.ts'),
 });
-const fixture = require('./fixtures/pictureLifecycleWire.json');
+const fixture = readJsonFixture('pictureLifecycleWire.json');
 const owner = fixture.owner;
 const requestId = fixture.deletion.request.requestId;
 function deletion() { return structuredClone(fixture.deletion); }

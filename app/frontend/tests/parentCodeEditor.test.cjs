@@ -154,7 +154,7 @@ test('Parent component renders exactly its source slots and metadata distinction
     assert.match(html, /data-negative-zero="true"/);
     assert.doesNotMatch(html, /position:absolute/);
   }
-  const form = read('FS882Form.svelte'), soilSection = read('FS882SoilHorizonSection.svelte'), header = read('HeaderEditor.svelte');
+  const form = read('FS882Form.svelte') + '\n' + read('FS882SiteTab.svelte') + '\n' + read('FS882SoilTab.svelte') + '\n' + read('fs882FormLoadSave.ts'), soilSection = read('FS882SoilHorizonSection.svelte'), header = read('HeaderEditor.svelte');
   assert.match(form, /scope="site"/);
   assert.match(soilSection, /scope="soils"/);
   assert.match(form, /geologyCodeBusy \|\| parentCodeBusy/);

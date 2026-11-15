@@ -162,7 +162,7 @@ vpro_clone_sample_schema <- function(target_con, target_project) {
     t_sql <- ddl_rows$sql[ddl_rows$type == "table" & ddl_rows$name == src_tbl]
     if (length(t_sql) == 1L) {
       rewritten <- gsub("Sample_", paste0(target_project, "_"), t_sql[[1L]], fixed = TRUE)
-      # Remove strict FK constraints in SQLite table DDL when mirroring vpro_wails Access import,
+      # Remove strict FK constraints in SQLite table DDL when mirroring VPro Desktop Access import,
       # since orphan checks are enforced explicitly via __VPRO_ImportQuarantine
       DBI::dbExecute(target_con, rewritten)
     }
@@ -212,7 +212,7 @@ vpro_normalize_access_chunk <- function(df, target_fields, boolean_fields = char
 #' Convert a Microsoft Access `.accdb` / `.mdb` project (`VP05`--`VP08`) to `VP08` SQLite
 #'
 #' Streams Access tables via `mdbr` in bounded row batches into a clean `VP08`
-#' SQLite database matching `vpro_wails` (`internal/interchange/accessprojectimport.go`).
+#' SQLite database matching `VPro Desktop` (`app/internal/interchange/accessprojectimport.go`).
 #' Never mutates the source Access file. Duplicate plot keys, malformed values,
 #' and FK orphan child records are quarantined into `__VPRO_ImportQuarantine`.
 #'

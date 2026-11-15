@@ -25,7 +25,7 @@ func TestRegionCatalogueAll1640CellsShapeAndNativeOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	data, err := os.ReadFile(filepath.Join("resources", "region-codes-fixture.json"))
+	data, err := listcatalog.ReadFixture(filepath.Join("resources", "region-codes-fixture.json.gz"))
 	if err != nil {
 		t.Fatal(err)
 	}

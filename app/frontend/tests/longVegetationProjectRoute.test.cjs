@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -7,8 +8,8 @@ const ts = require('typescript');
 const {compile} = require('svelte/compiler');
 const {render} = require('svelte/server');
 const { loadTypeScript,serverComponent,componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
-const wire=JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectWorkbookWire.json'),'utf8'));
-const scopeWire=JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectScopeWire.json'),'utf8'));
+const wire=readJsonFixture('longVegetationProjectWorkbookWire.json');
+const scopeWire=readJsonFixture('longVegetationProjectScopeWire.json');
 const source=filename=>readFileSync(srcPath(filename),'utf8');
 const owner=scope=>Object.fromEntries(['contextId','project','projectPath','su','suPath'].map(key=>[key,scope[key]]));
 const deferred=()=>{let resolve;const promise=new Promise(yes=>resolve=yes);return {promise,resolve};};

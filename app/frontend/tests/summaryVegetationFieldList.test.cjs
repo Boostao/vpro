@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { srcPath } = require('./svelteTestHelpers.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -25,7 +26,7 @@ function load(name, dependencies = {}) {
 }
 const client = load('summaryVegetationFieldList.ts');
 const registries = load('summaryVegetationFieldListSessions.ts', { './summaryVegetationFieldList': client });
-const wire = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'summaryVegetationFieldListWire.json'), 'utf8'));
+const wire = readJsonFixture('summaryVegetationFieldListWire.json');
 const { physical, source, ...owner } = wire.review;
 const plain = value => clone(value);
 const reports = table => Array.from(table.rows, r => r.cells[4].integer);

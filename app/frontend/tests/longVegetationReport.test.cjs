@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -64,11 +65,11 @@ function qualifiedFixture() {
 }
 const validate = value => report.validateLongVegetationPreview(value,'owned','Sample','C:\\project.db','Selected','C:\\external.db');
 const validateOptions = value => report.validateLongVegetationOptions(value,'owned','Sample','C:\\project.db','Selected','C:\\external.db');
-const scalarWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationSelectedScalarWire.json'),'utf8'));
-const selectedUnitWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationSelectedUnitsWire.json'),'utf8'));
+const scalarWire = readJsonFixture('longVegetationSelectedScalarWire.json');
+const selectedUnitWire = readJsonFixture('longVegetationSelectedUnitsWire.json');
 const validateSelectedUnits = value => report.validateLongVegetationPreview(value,'owned','Sample','C:\\project.db','Selected','C:\\external.db',true);
 test('ordinary selected-list validator refuses all distinct project wire on actual reactive proxies',()=>{
-  const projectWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationProjectUnitsWire.json'),'utf8'));
+  const projectWire = readJsonFixture('longVegetationProjectUnitsWire.json');
   assert.equal(projectWire.length,3);
   for(const value of projectWire) {
     assert.throws(()=>report.validateLongVegetationPreview(value,'owned','Sample','C:\\project.db','None','',true),/Whole-project/);
@@ -223,7 +224,7 @@ test('strict-Go selected scalar preview retains all four typed kinds on actual c
     assert.throws(()=>validate(value));
   }
 });
-const noneWire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures','longVegetationNoneUnitsWire.json'),'utf8'));
+const noneWire = readJsonFixture('longVegetationNoneUnitsWire.json');
 test('strict-Go None unit wire distinguishes derived joins from physical membership IDs on actual client proxies',()=>{
   assert.equal(validate(noneWire),noneWire);
   const reactive=proxy(structuredClone(noneWire));

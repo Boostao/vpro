@@ -35,7 +35,7 @@ A list summarizing \code{source_path}, \code{source_project}, \code{source_versi
 }
 \description{
 Streams Access tables via \code{mdbr} in bounded row batches into a clean \code{VP08}
-SQLite database matching \code{vpro_wails} (\code{internal/interchange/accessprojectimport.go}).
+SQLite database matching \verb{VPro Desktop} (\code{app/internal/interchange/accessprojectimport.go}).
 Never mutates the source Access file. Duplicate plot keys, malformed values,
 and FK orphan child records are quarantined into \verb{__VPRO_ImportQuarantine}.
 }

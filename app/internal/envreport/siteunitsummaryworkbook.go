@@ -25,10 +25,6 @@ type siteUnitSummaryWorkbook struct {
 	Sheets []reportcore.VegetationWorkbookSheetInternal
 }
 
-func validateSiteUnitSummaryWorkbook(ctx context.Context, preview SiteUnitSummaryPreview) ([]reportcore.VegetationWorkbookSheetInternal, error) {
-	return validateSiteUnitSummaryWorkbookProjection(ctx, preview, 1)
-}
-
 func validateSiteUnitSummaryWorkbookProjection(ctx context.Context, preview SiteUnitSummaryPreview, grouping int) ([]reportcore.VegetationWorkbookSheetInternal, error) {
 	report := preview.Report
 	fields, err := siteUnitSummaryWorkbookFields(grouping)

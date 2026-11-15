@@ -41,9 +41,9 @@ flowchart LR
 * **Severity:** **Critical (Contractual / Governance)**
 * **Evidence:**
   * Executed Contract `RE26OCF433` Schedule A Section `1.01` & Item `3` (`0072` Contract PDF pp. 10–11) specify *"using R, R-shiny, PostgreSQL, and other open-source tools for both cloud and local machine environments"* and *"R-based scripts for web and local machine apps"*.
-  * On `2026-10-02` (`VproMailExchange` `0017`), desktop UI development pivoted to `boostao/vpro_wails` (Go + Wails v3 + Svelte 5) while retaining `boostao/vpro` as a headless R package (`archive/oct2026-parity-ledgers/CLIENT_SCOPE.md:7-11, 56-65`).
+  * On `2026-10-02` (`VproMailExchange` `0017`), desktop UI development pivoted to `app/` (Go + Wails v3 + Svelte 5 inside the unified `Boostao/vpro` monorepo) while retaining `r/` as the headless `vpro` R package (`archive/oct2026-parity-ledgers/CLIENT_SCOPE.md:7-11, 56-65`).
 * **Decision Needed from Client (Will MacKenzie / MoF):**
-  * Formally ratify the **hybrid architecture** in the 12-month renewal amendment (`Schedule A Section 3.01`): `vpro_wails` as the local cross-platform desktop app + `vpro` / `BEC_R` / `climr` / Quarto / R-Shiny / PostgreSQL for statistical analytics, cloud `BECMaster`, and public `BECWeb 2.0` portal.
+  * Formally ratify the **hybrid architecture** in the 12-month renewal amendment (`Schedule A Section 3.01`): `app/` (`VPro Desktop`) as the local cross-platform desktop workstation + `vpro` / `BEC_R` / `climr` / Quarto / R-Shiny / PostgreSQL for statistical analytics, cloud `BECMaster`, and public `BECWeb 2.0` portal.
 
 ---
 

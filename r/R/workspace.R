@@ -1,4 +1,4 @@
-# Cross-OS vpro_wails Workspace & SQLite WAL Bridge ----------------------------
+# Cross-OS VPro Desktop Workspace & SQLite WAL Bridge -------------------------
 
 vpro_first_nonempty <- function(...) {
   vals <- list(...)
@@ -88,9 +88,9 @@ vpro_resolve_config_dir <- function(
   vpro_abs_path(p)
 }
 
-#' Locate the `vpro_wails` user data directory
+#' Locate the `VPro` desktop user data directory
 #'
-#' Matches `UserDataDir()` in `vpro_wails` (`internal/sqlutil/sqlutil_foundation.go`)
+#' Matches `UserDataDir()` in `VPro Desktop` (`app/internal/sqlutil/sqlutil_foundation.go`)
 #' byte-for-byte across Windows (`%LOCALAPPDATA%/vpro`), macOS
 #' (`~/Library/Application Support/vpro`), and Linux (`$XDG_DATA_HOME/vpro` or
 #' `~/.local/share/vpro`), honoring `getOption("vpro.data_dir")` and
@@ -102,9 +102,9 @@ vpro_data_dir <- function() {
   vpro_resolve_data_dir()
 }
 
-#' Locate the `vpro_wails` user configuration directory
+#' Locate the `VPro` desktop user configuration directory
 #'
-#' Matches `UserConfigDir()` in `vpro_wails` (`internal/sqlutil/sqlutil_foundation.go`)
+#' Matches `UserConfigDir()` in `VPro Desktop` (`app/internal/sqlutil/sqlutil_foundation.go`)
 #' byte-for-byte across Windows (`%APPDATA%/vpro`), macOS
 #' (`~/Library/Application Support/vpro`), and Linux (`$XDG_CONFIG_HOME/vpro` or
 #' `~/.config/vpro`), honoring `getOption("vpro.config_dir")` and

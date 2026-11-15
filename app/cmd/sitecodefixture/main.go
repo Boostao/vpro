@@ -48,7 +48,7 @@ func run(args []string, output io.Writer) error {
 	if flags.NArg() != 0 || *snapshot == "" || *manifestPath == "" || *database == "" || *provenancePath == "" {
 		return errors.New("required flags: -snapshot -manifest -database -provenance")
 	}
-	data, err := os.ReadFile(*snapshot)
+	data, err := listcatalog.ReadFixture(*snapshot)
 	if err != nil {
 		return err
 	}

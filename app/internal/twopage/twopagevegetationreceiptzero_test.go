@@ -1,6 +1,7 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -9,13 +10,12 @@ import (
 	"context"
 	"encoding/json"
 	"math"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestTwoPageVegetationClientUnauditedSignedZeroHistory(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationReceipts.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationReceipts.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

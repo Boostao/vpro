@@ -40,7 +40,7 @@ clone_sample_wal_workspace <- function(scratch_dir) {
   )
 }
 
-test_that("CoordElevHash and pure-R vectorized SHA-256 match NIST and vpro_wails byte-for-byte", {
+test_that("CoordElevHash and pure-R vectorized SHA-256 match NIST and Go app byte-for-byte", {
   # NIST FIPS 180-4 test vectors (empty, single-block, multi-block)
   nist <- vpro:::vpro_sha256_utf8(c(
     "",
@@ -78,7 +78,7 @@ test_that("CoordElevHash and pure-R vectorized SHA-256 match NIST and vpro_wails
 })
 
 test_that("vpro_climate, __VPRO_PlotClimate round-trip cache hit, and vpro_asmr transfer rules work cleanly", {
-  # Direct Ministry CMD -> aSMR rule parity against vpro_wails rsidecar_test.go
+  # Direct Ministry CMD -> aSMR rule parity against app/internal/rsidecar rsidecar_test.go
   wet_cool <- vpro_evaluate_asmr(
     cmd = 180,
     ppt_05 = 110, ppt_06 = 105, ppt_07 = 95, ppt_08 = 100, ppt_09 = 140,

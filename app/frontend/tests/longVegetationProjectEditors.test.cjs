@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
@@ -7,7 +8,7 @@ const { serverComponent,componentFunctions, srcPath } = require('./svelteTestHel
 const source = name => readFileSync(srcPath(name),'utf8');
 const scopeFile = 'LongVegetationProjectScopeSelection.svelte';
 const unitFile = 'LongVegetationProjectUnitPreferences.svelte';
-const wire = JSON.parse(source('./fixtures/longVegetationProjectScopeWire.json'));
+const wire = readJsonFixture('longVegetationProjectScopeWire.json');
 const component = name => serverComponent(source(name),name,{});
 const scopeView = () => ({
   scope:{sourceKind:'project-selected-fields',build:null},definitions:[

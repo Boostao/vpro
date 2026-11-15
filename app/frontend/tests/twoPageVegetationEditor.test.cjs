@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const client = require('svelte/internal/client');
@@ -102,7 +103,7 @@ test('all25 source bindings are independently mapped and all21 cover controls en
 });
 
 test('all21 numeric bindings match independently observed Access SINGLE storage and preserve raw draft text', () => {
-  const calibration = require('./fixtures/twoPageVegetationSingle.json');
+  const calibration = readJsonFixture('twoPageVegetationSingle.json');
   for (const form of ['SubVegAXL_BC', 'SubVegAXL', 'SubVegCXL', 'SubVegDXL']) {
     const source = variant(form);
     for (const column of editor.twoPageVegetationFields(source).filter(column => column !== 'Collected')) {

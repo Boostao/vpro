@@ -65,7 +65,7 @@ export const coordinateOptions: Record<string, CoordinateDisplayMode> = { Check3
 export function isCoordinateControl(name: string | undefined) {
   return name !== undefined && (Object.hasOwn(coordinateControls, name) || Object.hasOwn(coordinateOptions, name) || name === 'optCoordMethod2');
 }
-export function isCoordinateMode(mode: string): mode is CoordinateDisplayMode { return ['dd', 'dm', 'dms'].includes(mode); }
+function isCoordinateMode(mode: string): mode is CoordinateDisplayMode { return ['dd', 'dm', 'dms'].includes(mode); }
 
 function coordinatePartValue(axis: CoordinateAxis, part: CoordinatePart, text: string): number | null {
   if (text === '') return null;

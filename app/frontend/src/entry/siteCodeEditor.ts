@@ -19,7 +19,6 @@ export function siteCodeList(key: SiteCodeKey): SiteCodeList {
   return key === 'exposure1' || key === 'exposure2' ? 'Exposure' : 'SiteDisturbance';
 }
 const limits: Record<SiteCodeList, number> = { SiteDisturbance: 8, Exposure: 2 };
-export function siteCodeLimit(key: SiteCodeKey): number { return limits[siteCodeList(key)]; }
 const reference = createReferenceCodeEditor({ keys: siteCodeKeys, labels: siteCodeLabels, list: siteCodeList, limits });
 export const siteCodeValueError = reference.valueError;
 export const siteCodeLengthError = reference.lengthError;

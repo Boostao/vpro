@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
@@ -51,7 +52,7 @@ test('two-page soil review, writing and creation are enabled by default and load
 });
 
 test('creation profile retains drafts and dispatches only its exact owner/action across remounts', async () => {
-  const entry = structuredClone(require('./fixtures/twoPageSoilCreationWire.json')[0]);
+  const entry = structuredClone(readJsonFixture('twoPageSoilCreationWire.json')[0]);
   const { contextId, project, plot, form } = entry.request.original;
   const creationOwner = { contextId, project, plot, form };
   const creates = [];

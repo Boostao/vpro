@@ -127,3 +127,5 @@ export class SummaryVegetationPreferencesSession extends ReportPreferencesSessio
 export function createSummaryVegetationPreferencesRegistry(clientPreviewEnabled: boolean) {
   return reportPreferencesRegistry(scope => new SummaryVegetationPreferencesSession(scope, clientPreviewEnabled));
 }
+
+export const summaryVegetationPreferenceSession = createSummaryVegetationPreferencesRegistry(true);

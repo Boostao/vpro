@@ -1,6 +1,7 @@
 package twopage
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -11,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -24,7 +24,7 @@ func TestTwoPageSoilCreationWire(t *testing.T) {
 		Request json.RawMessage `json:"request"`
 		Receipt json.RawMessage `json:"receipt"`
 	}
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "twoPageSoilCreationWire.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "twoPageSoilCreationWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

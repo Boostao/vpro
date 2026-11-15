@@ -41,7 +41,7 @@ test('Soil reference compiles and cannot mutate a draft or source record', () =>
   assert.match(source, /ListSubgroupChoices/);
   assert.match(source, /Retry \{label\} reference/);
   assert.doesNotMatch(source, /<input|bind:|PlotService|UpdatePlot|CreatePlot|onchange=|oninput=/);
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' + readFileSync(srcPath('FS882SoilTab.svelte'), 'utf8');
   const soilSection = readFileSync(srcPath('FS882SoilHorizonSection.svelte'), 'utf8');
   assert.match(form, /<FS882SoilHorizonSection/);
   assert.match(soilSection, /<SoilCodeReference disabled=\{busy \|\| headerWorkflowBusy\}/);

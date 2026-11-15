@@ -184,7 +184,7 @@ func twoPageParentHistory(form, scope, label string, plan func(context.Context, 
 			}
 			edits := make([]sourceform.SiviParentScalarEdit, 0, len(event.Changes))
 			for _, change := range event.Changes {
-				edits = append(edits, sourceform.SiviParentScalarEdit{original.ContextID, change.Table, change.RowID, change.Column, change.Before, change.After})
+				edits = append(edits, sourceform.SiviParentScalarEdit{ContextID: original.ContextID, Table: change.Table, RowID: change.RowID, Column: change.Column, Expected: change.Before, Value: change.After})
 			}
 			assignments, err := plan(ctx, original, edits)
 			if err != nil || len(assignments) != len(event.Changes) {

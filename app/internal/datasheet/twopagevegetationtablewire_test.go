@@ -1,6 +1,7 @@
 package datasheet
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
@@ -8,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -75,7 +75,7 @@ func TestTwoPageVegetationTableProductionWire(t *testing.T) {
 	}
 	_ = encoded
 	path := filepath.Join("frontend", "tests", "fixtures", "twoPageVegetationTableWire.json")
-	fixture, err := os.ReadFile(path)
+	fixture, err := sqlutil.ReadWireFixture(path)
 	if err != nil {
 		t.Fatal(err)
 	}

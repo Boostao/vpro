@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -136,7 +137,7 @@ func TestSummaryVegetationGroupedClientWireFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture := filepath.Join("frontend", "tests", "fixtures", "summaryVegetationGroupedWire.json")
-	raw, err := os.ReadFile(fixture)
+	raw, err := sqlutil.ReadWireFixture(fixture)
 	if err != nil || !bytes.Equal(append(encoded, '\n'), raw) {
 		t.Fatal(err)
 	}

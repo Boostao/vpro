@@ -66,17 +66,21 @@ test('Collected retains the original warning source through remount and alternat
 });
 
 test('Persistent Collected drafts gate every other session, Save, Undo, Lock and native/context lifecycle', () => {
-  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8');
+  const form = readFileSync(srcPath('FS882Form.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('FS882VegTab.svelte'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormChildren.ts'), 'utf8') + '\n' +
+    readFileSync(srcPath('fs882FormLoadSave.ts'), 'utf8');
   assert.match(form, /let collectedDrafts = \$state<CollectedDrafts>/);
   assert.match(form, /const stored = rows\[0\]\.collected \?\? null/);
   assert.match(form, /siviCreationPeerUnsaved = \$derived\([^;]*collectedUnsaved[^;]*\)/);
   for (const name of ['height', 'other', 'soil', 'attribute']) {
     assert.match(form, new RegExp(`const ${name}EditingDisabled = \\$derived\\([^;]*collectedUnsaved[^;]*\\)`));
   }
-  assert.match(form, /if \(collectedUnsaved\) \{ await saveCollectedDrafts\(\); return; \}/);
-  assert.match(form, /if \(collectedUnsaved\) \{ void cancelCollectedDrafts\(\); return; \}/);
+  assert.match(form, /\[\(\) => collectedUnsaved, \(\) => saveCollectedDrafts\(\)\]/);
+  assert.match(form, /\[\(\) => collectedUnsaved, \(\) => void cancelCollectedDrafts\(\)\]/);
   assert.match(form, /Save or Cancel Collected drafts before changing the plot lock/);
-  assert.match(form, /await PlotService\.UpdateCollectedRecords[\s\S]*?committed = true;[\s\S]*?collectedDrafts = \{\}/);
+  assert.match(form, /PlotService\.UpdateCollectedRecords[\s\S]*?clearOnCommit: \(\) => \{ collectedDrafts = \{\}/);
+  assert.match(form, /committed = true;[\s\S]*?params\.clearOnCommit\(\)/);
   assert.match(form, /Collected save failed; drafts retained/);
   assert.match(form, /Collected changes committed, but refresh failed/);
   assert.match(form, /oncollectedstage=\{collectedEditingEnabled \? stageCollectedCell : undefined\}/);

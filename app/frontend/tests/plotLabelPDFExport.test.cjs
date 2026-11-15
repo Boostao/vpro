@@ -1,3 +1,4 @@
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { webcrypto } = require('node:crypto');
@@ -19,7 +20,7 @@ const pdf = loadTypeScript('plotLabelPDFExport.ts', {
   './qualityEditor': quality, './googleEarthReview': earth, './plotLabelRegional': regional,
   './publicationSession': loadTypeScript('publicationSession.ts'),
 }, { crypto: webcrypto });
-const wire = JSON.parse(readFileSync(path.join(__dirname, 'fixtures', 'plotLabelPDFWire.json'), 'utf8'));
+const wire = readJsonFixture('plotLabelPDFWire.json');
 const scope = { contextId: wire.review.preview.contextId, project: wire.review.project,
   projectPath: wire.review.projectPath, su: wire.review.su, suPath: wire.review.suPath };
 const plain = value => JSON.parse(JSON.stringify(value));

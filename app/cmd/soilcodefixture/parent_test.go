@@ -13,9 +13,9 @@ func TestParentProfileGeneratorDeterministicPinnedNonoverwriting(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		dir := t.TempDir()
 		database, provenance := filepath.Join(dir, "parent.db"), filepath.Join(dir, "parent.json")
-		args := []string{"-profile", "parent", "-snapshot", filepath.Join(resource, "parent-codes-fixture.json"),
-			"-source-provenance", filepath.Join(resource, "parent-codes-source-provenance.json"),
-			"-manifest", filepath.Join(resource, "parent-codes-fixture-manifest.json"),
+		args := []string{"-profile", "parent", "-snapshot", filepath.Join(resource, "parent-codes-fixture.json.gz"),
+			"-source-provenance", filepath.Join(resource, "parent-codes-source-provenance.json.gz"),
+			"-manifest", filepath.Join(resource, "parent-codes-fixture-manifest.json.gz"),
 			"-bedrock", filepath.Join(resource, "geology-codes-fixture.json.gz"),
 			"-database", database, "-provenance", provenance}
 		var out bytes.Buffer

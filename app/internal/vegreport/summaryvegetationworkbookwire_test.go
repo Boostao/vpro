@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"os"
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -68,7 +68,7 @@ func TestSummaryDraftWorkbookClientWire(t *testing.T) {
 		t.Fatal("strict production review DTO round trip differs", err)
 	}
 	path := filepath.Join("frontend", "tests", "fixtures", "summaryVegetationWorkbookWire.json")
-	expected, err := os.ReadFile(path)
+	expected, err := sqlutil.ReadWireFixture(path)
 	if err != nil || !bytes.Equal(expected, raw) {
 		t.Fatal("portable strict-Go Summary workbook wire differs", err)
 	}

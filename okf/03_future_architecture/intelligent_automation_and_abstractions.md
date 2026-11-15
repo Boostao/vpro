@@ -8,7 +8,7 @@
 
 Legacy VPro 64 forced ecologists and field technicians to execute multi-step manual choreography across MS Access forms, standalone validation dialogs, Excel `.xla` macros (`Diagnostic10.xla`), Google Earth, and external R scripts.
 
-This document specifies **seven concrete, evidence-backed automations and higher-level abstractions** designed directly for implementation in the unified **`Boostao/vpro`** monorepo (`app/` Go `1.25` + Svelte `5` + SQLite and `r/` headless `vpro` / `BEC_R`). Every automation **suggests or previews non-destructively first**, preserving user control and recording accepted writes through `<Project>_Audit`.
+This document specifies **seven concrete, evidence-backed automations and higher-level abstractions** designed directly for implementation in the unified **`Boostao/vpro`** monorepo (`app/` Go `1.27` + Wails `v3.1.0` + Svelte `5` + SQLite and `r/` headless `vpro` / `BEC_R`). Every automation **suggests or previews non-destructively first**, preserving user control and recording accepted writes through `<Project>_Audit`.
 
 ```mermaid
 flowchart TB
@@ -36,7 +36,7 @@ flowchart TB
 ## 2. Automation 1: Coordinate-Driven Geodetic, Administrative & DEM Auto-Attribution
 
 * **Manual Pain Eliminated:** Legacy `V7mdlCoordTools.txt` had zero `UTM <-> Lat/Lon` projection math, truncated DMS through `Single` floats (`~1 m` error), and required users to manually look up `GIS_BGC`, `Ecosection`, `FSRegionDistrict`, `NtsMapSheet`, `Elevation`, `SlopeGradient`, and `Aspect`.
-* **Target Touchpoints in `vpro_wails`:** `coordinateservice.go`, `SpatialService` (`internal/spatial/`), `frontend/src/entry/CoordinateFields.svelte`, and MapLibre `PMTiles` layers.
+* **Target Touchpoints in `app/`:** `coordinateservice.go`, `SpatialService` (`internal/spatial/`), `frontend/src/entry/CoordinateFields.svelte`, and MapLibre `PMTiles` layers.
 * **Implementation Contract:**
   1. **Bidirectional `NAD83` Projection (`EPSG:4269` $\leftrightarrow$ `EPSG:26907..26911`):** Entering `Latitude`/`Longitude` (`DD`, `DM`, or `DMS`) automatically computes `UTMZone (7..11)`, `UTMEasting`, and `UTMNorthing` (and vice versa). If both are entered from a paper card and diverge by `> max(LocationAccuracy, 50m)`, render an inline geodetic warning badge + dual pins on the MapLibre canvas.
   2. **Point-in-Polygon Administrative & BGC Stamp (`SuggestSpatialAttributes(lat, lon)`):** Query local `.pmtiles` / R-tree index (`BGC v13+`, BC Ecosections, Natural Resource Regions/Districts, BCGS 1:20k MapSheet grid) to offer one-click population of:
@@ -94,7 +94,7 @@ sequenceDiagram
 ## 5. Automation 4: One-Click "Pre-Flight QA & 3-Way Project Merge" Pipeline
 
 * **Manual Pain Eliminated:** Consolidates **five separate legacy manual workflows** (`ValidateEnvData`, `Check Spp Codes`, `OptimizeVeg`, `CompareTwoProjects`, and `USysMerge` — `VPro2.0_Functions` PDF pp. 5, 11; `RE26OCF433` Schedule A `1.i–ii`) into a single deterministic, transactional wizard.
-* **Target Touchpoints:** `ValidationService` + `ProjectMergeService` in `vpro_wails` (porting `vpro/R/environment-validation.R`, `integrity-validation.R`, `vegetation-duplicates.R`) + Cloud `BECMaster` upload endpoint.
+* **Target Touchpoints:** `ValidationService` + `ProjectMergeService` in `app/` (porting `vpro/R/environment-validation.R`, `integrity-validation.R`, `vegetation-duplicates.R`) + Cloud `BECMaster` upload endpoint.
 * **Four-Step Automated Pipeline (`RunProjectPreflightAndDiff`):**
   1. **Schema & FK Integrity Check:** Detect orphan `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit` rows (`PlotNumber NOT IN _Env`) and missing 1:1 `_Admin` rows; quarantine or repair transactionally.
   2. **Safe Transactional `OptimizeVeg` & Duplicate Resolution:** Group split multi-row species entries `(PlotNumber, Species)` across sub-layers inside a `SAVEPOINT` (fixing legacy `CombineSppCovers` bug that summed `Height6` instead of `Max(Height6)` in `V7mdlSpellCheck2020.txt:185`), previewing exact before/after row counts.
@@ -132,7 +132,7 @@ sequenceDiagram
 ## 8. Automation 7: Integrated `climr` $\rightarrow$ `aSMR` + `BEC_R` Classification & Report Pipeline
 
 * **Manual Pain Eliminated:** Exporting CSVs by hand, running standalone R scripts for climate normals, manually converting CMD to aSMR, copying cluster memberships back into `*_SU`, and assembling Word/PDF unit descriptions (`RE26OCF433` Schedule A `4.b.iii–iv, 4.c–e, 5.a–b`).
-* **Target Touchpoints:** `vpro_wails` R Sidecar / Cloud Job Runner (`Target Stack Recommendation` §4.3) invoking `vpro` + `BEC_R` + `climr` + Quarto.
+* **Target Touchpoints:** `app/` R Sidecar / Cloud Job Runner (`Target Stack Recommendation` §4.3) invoking `vpro` + `BEC_R` + `climr` + Quarto.
 * **End-to-End Automated Workflow:**
   1. **Cached Plot Climate Table (`__VPRO_PlotClimate` in `<Project>.db`):** Given `(PlotNumber, Latitude, Longitude, Elevation)`, batch-fetch downscaled `climr` historical (`1961–1990`, `1991–2020`) and GCM normals (`MAT, MWMT, MCMT, MAP, MSP, PAS, CMD, DD5, NFFD`) once and cache locally keyed by coordinate hash.
   2. **Automated `CMD -> aSMR` & Dual Edatopic Grids (`Schedule A 4.b.ii, 4.b.iv`):** Combine cached `CMD` with plot `MoistureRegime (rSMR)`, `SeepageDepth`, `SoilDrainage`, and `RootZoneParticleSize` via the Ministry `CMD -> aSMR` transfer function to render side-by-side **Relative `(rSMR × rSNR)`** and **Actual `(aSMR × rSNR)`** heatmaps per BGC unit.

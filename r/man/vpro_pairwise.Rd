@@ -47,7 +47,7 @@ An S3 object of class \code{vpro_pairwise} with \verb{$pairs} tibble,
 }
 \description{
 Implements the B.C. Ministry of Forests BEC pairwise unit comparison
-algorithm (\verb{_do_pairwise.R} and \code{vpro_wails/internal/diagnostics}), combining
+algorithm (\verb{_do_pairwise.R} and VPro Desktop \code{app/internal/diagnostics}), combining
 quantitative Sørensen / Bray-Curtis unit similarity with BEC constancy (\code{d})
 and abundance (\code{dd}) differential points and shared diagnostic potential.
 }
