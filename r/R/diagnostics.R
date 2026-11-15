@@ -30,7 +30,7 @@
   reg_one("base", "print", "vpro_outliers")
   reg_one("tibble", "as_tibble", "vpro_outliers")
 
-  reg_one("base", "print", "vpro_rule")
+  reg_one("base", "print", "vpro_profile_rule")
   reg_one("base", "print", "vpro_profile_result")
   reg_one("tibble", "as_tibble", "vpro_profile_result")
 
@@ -111,11 +111,11 @@
   u[order(tolower(u), u, method = "radix")]
 }
 
-.vpro_apply_hierarchy_breaks <- function(con, su_df) {
-  if (nrow(su_df) == 0L || is.null(con$hierarchy)) {
+.vpro_apply_hierarchy_breaks <- function(ws, su_df) {
+  if (nrow(su_df) == 0L || is.null(ws$hierarchy)) {
     return(list(su = su_df, applied = FALSE))
   }
-  hier <- vpro_hierarchy(con, as = "both")
+  hier <- vpro_hierarchy(ws, as = "both")
   if (nrow(hier$nodes) == 0L || !any(hier$nodes$IsBreakpoint, na.rm = TRUE)) {
     return(list(su = su_df, applied = FALSE))
   }
@@ -178,11 +178,11 @@
 }
 
 .vpro_resolve_classified_plots <- function(
-  con,
+  ws,
   exclude_modifiers = TRUE,
   hierarchy_breaks = FALSE
 ) {
-  env_df <- vpro_env(con, scope = "project", include_admin = TRUE, exclude_modifiers = FALSE)
+  env_df <- vpro_env(ws, scope = "project", include_admin = TRUE, exclude_modifiers = FALSE)
   if (nrow(env_df) == 0L) {
     return(list(
       su = tibble::tibble(PlotNumber = character(), SiteUnit = character()),
@@ -192,8 +192,8 @@
     ))
   }
 
-  if (!is.null(con$su)) {
-    su_raw <- vpro_site_units(con, exclude_modifiers = FALSE)
+  if (!is.null(ws$su)) {
+    su_raw <- vpro_site_units(ws, exclude_modifiers = FALSE)
     su_raw <- su_raw[su_raw$PlotNumber %in% env_df$PlotNumber, , drop = FALSE]
   } else if ("UserSiteUnit" %in% names(env_df)) {
     usu <- trimws(ifelse(is.na(env_df$UserSiteUnit), "", as.character(env_df$UserSiteUnit)))
@@ -216,7 +216,7 @@
 
   breaks_applied <- FALSE
   if (isTRUE(hierarchy_breaks) && nrow(su_raw) > 0L) {
-    hb <- .vpro_apply_hierarchy_breaks(con, su_raw)
+    hb <- .vpro_apply_hierarchy_breaks(ws, su_raw)
     su_raw <- hb$su
     breaks_applied <- hb$applied
   }
@@ -236,11 +236,13 @@
 }
 
 .vpro_extract_plot_species_veg <- function(
-  con,
+  ws,
   plot_numbers,
   lump = TRUE,
-  resolve_synonyms = FALSE
+  resolve_synonyms = FALSE,
+  cover_precedence = c("sublayer_sum", "strata_totals")
 ) {
+  cover_precedence <- match.arg(cover_precedence)
   empty <- tibble::tibble(
     PlotNumber = character(),
     Species = character(),
@@ -251,10 +253,10 @@
     return(empty)
   }
 
-  dbc <- vpro_sqlite_ro(con$project_path)
+  dbc <- vpro_sqlite_ro(ws$project_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
 
-  veg_tbl <- paste0(con$project, "_Veg")
+  veg_tbl <- paste0(ws$project, "_Veg")
   veg_fields <- DBI::dbListFields(dbc, veg_tbl)
   all_layer_cols <- c(
     "Cover1", "Cover2", "Cover3", "TotalA",
@@ -301,28 +303,51 @@
     data.table::set(dt, j = cc, value = v)
   }
 
-  # Match vpro_wails/internal/diagnostics/engine.go Stratum A/B fallback:
-  # use Cover1..Cover3 when any sublayer is populated, else TotalA; same for Cover4..5c vs TotalB
+  # Stratum A/B cover precedence:
+  # - "sublayer_sum" (diagnostics/synthesis engine default): use Cover1..3 when any sublayer is populated, else TotalA
+  # - "strata_totals" (MS Access vpro_veg default): use positive TotalA (or non-NA TotalA when sublayers are absent)
   sub_a <- intersect(c("Cover1", "Cover2", "Cover3"), present_cols)
   if ("TotalA" %in% present_cols && length(sub_a) > 0L) {
     has_sub_a <- rowSums(!is.na(as.matrix(dt[, sub_a, with = FALSE]))) > 0L
     ta <- dt[["TotalA"]]
-    ta[has_sub_a] <- NA_real_
-    data.table::set(dt, j = "TotalA", value = ta)
+    if (identical(cover_precedence, "sublayer_sum")) {
+      ta[has_sub_a] <- NA_real_
+      data.table::set(dt, j = "TotalA", value = ta)
+    } else {
+      use_ta <- !is.na(ta) & (ta > 0 | !has_sub_a)
+      ta[!use_ta] <- NA_real_
+      data.table::set(dt, j = "TotalA", value = ta)
+      for (sc in sub_a) {
+        sv <- dt[[sc]]
+        sv[use_ta] <- NA_real_
+        data.table::set(dt, j = sc, value = sv)
+      }
+    }
   }
   sub_b <- intersect(c("Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c"), present_cols)
   if ("TotalB" %in% present_cols && length(sub_b) > 0L) {
     has_sub_b <- rowSums(!is.na(as.matrix(dt[, sub_b, with = FALSE]))) > 0L
     tb <- dt[["TotalB"]]
-    tb[has_sub_b] <- NA_real_
-    data.table::set(dt, j = "TotalB", value = tb)
+    if (identical(cover_precedence, "sublayer_sum")) {
+      tb[has_sub_b] <- NA_real_
+      data.table::set(dt, j = "TotalB", value = tb)
+    } else {
+      use_tb <- !is.na(tb) & (tb > 0 | !has_sub_b)
+      tb[!use_tb] <- NA_real_
+      data.table::set(dt, j = "TotalB", value = tb)
+      for (sc in sub_b) {
+        sv <- dt[[sc]]
+        sv[use_tb] <- NA_real_
+        data.table::set(dt, j = sc, value = sv)
+      }
+    }
   }
 
   # Resolve optional species lump mapping & synonyms
-  lump_tbl <- vpro_lump_map(con, lump = lump)
+  lump_tbl <- vpro_lump_map(ws, lump = lump)
   has_lump <- nrow(lump_tbl) > 0L
   lmap <- if (has_lump) stats::setNames(lump_tbl$LumpCode, lump_tbl$SppCode) else character()
-  syn_map <- if (isTRUE(resolve_synonyms)) vpro_synonym_map(con) else character()
+  syn_map <- if (isTRUE(resolve_synonyms)) vpro_synonym_map(ws) else character()
 
   if (length(lmap) > 0L && length(syn_map) > 0L) {
     syn_spp <- unname(syn_map[names(lmap)])
@@ -552,9 +577,8 @@
 #' BEC refined differential tiers (`d1`, `d2`, `d3`, `dd1`, `dd2`, `dd3`, `dd4`,
 #' `cd`, `c`, `ic`).
 #'
-#' @param con A `vpro_workspace` handle created by [vpro_connect()] or
-#'   [vpro_sample()].
-#' @param lump Logical (`TRUE` uses active `con$lump`), `FALSE`, a `*_Lump` table
+#' @param ws A `vpro_workspace` handle created by [vpro_connect()].
+#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
 #'   name, or a two-column `data.frame(SppCode, LumpCode)`.
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
@@ -563,30 +587,36 @@
 #' @param average_type Cover denominator for Domin-Krajina significance,
 #'   Goldstream, and Prominence: `"unit"` (`sum(cover) / n_plots`, standard BEC
 #'   `By n Plots`) or `"characteristic"` (`sum(cover) / n_present`).
-#' @param hierarchy_breaks Logical; if `TRUE` and `con$hierarchy` contains `~`
+#' @param hierarchy_breaks Logical; if `TRUE` and `ws$hierarchy` contains `~`
 #'   breakpoint nodes, rolls plots up to their `BreakpointUnit`.
+#' @param cover_precedence Stratum cover precedence: `"sublayer_sum"` (default,
+#'   matching Go/MS Access diagnostics where `TotalA`/`TotalB` is used only when
+#'   sublayers are `NA`) or `"strata_totals"` (matching `vpro_veg` where positive
+#'   `TotalA`/`TotalB` overrides sublayers).
 #' @return An S3 object of class `vpro_diagnostics` containing `$unit_species`
 #'   (long tibble), `$crosstab` (wide species-by-unit tibble with
 #'   `DiagnosticUnit`, `Diagnosis`, `BECDiagnosticUnit`, and `BECDiagnosis`), and
 #'   `$units` (unit summary tibble).
 #' @export
 vpro_diagnostics <- function(
-  con,
+  ws,
   lump = TRUE,
   exclude_modifiers = TRUE,
   min_constancy = 0,
   average_type = c("unit", "characteristic"),
-  hierarchy_breaks = FALSE
+  hierarchy_breaks = FALSE,
+  cover_precedence = c("sublayer_sum", "strata_totals")
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   .vpro_register_wave2b_s3()
   average_type <- match.arg(average_type)
+  cover_precedence <- match.arg(cover_precedence)
   if (!is.numeric(min_constancy) || length(min_constancy) != 1L || is.na(min_constancy) || min_constancy < 0 || min_constancy > 100) {
     rlang::abort("`min_constancy` must be a single number between 0 and 100.")
   }
 
   scoped <- .vpro_resolve_classified_plots(
-    con,
+    ws,
     exclude_modifiers = exclude_modifiers,
     hierarchy_breaks = hierarchy_breaks
   )
@@ -657,7 +687,12 @@ vpro_diagnostics <- function(
   unit_counts_dt <- su_dt[, list(n_plots = .N), by = "SiteUnit"]
   n_plots_map <- stats::setNames(as.integer(unit_counts_dt[["n_plots"]]), unit_counts_dt[["SiteUnit"]])
 
-  veg_ps <- .vpro_extract_plot_species_veg(con, su_dt[["PlotNumber"]], lump = lump)
+  veg_ps <- .vpro_extract_plot_species_veg(
+    ws,
+    su_dt[["PlotNumber"]],
+    lump = lump,
+    cover_precedence = cover_precedence
+  )
   if (nrow(veg_ps) == 0L) {
     units_tbl <- tibble::tibble(
       SiteUnit = ordered_units,
@@ -735,7 +770,7 @@ vpro_diagnostics <- function(
 
   eff_cover <- if (identical(average_type, "unit")) mean_unit_raw else mean_pres_raw
   pres_cls <- vpro_presence_class(presence_raw)
-  pres_num <- as.integer(vpro_presence_class_numeric(presence_raw))
+  pres_num <- as.integer(vpro_presence_class(presence_raw, format = "numeric"))
   sig_cls <- vpro_significance_class(eff_cover)
   sig_num <- ifelse(sig_cls == "+", 0L, suppressWarnings(as.integer(sig_cls)))
   gold_vec <- vpro_goldstream_class(eff_cover, presence_raw, return_score = TRUE)
@@ -743,7 +778,7 @@ vpro_diagnostics <- function(
   cell_code_vec <- paste0(pres_num, " - ", sig_cls)
   diag_pot_vec <- .vpro_calc_diagnostic_potential(constancy_raw, mean_unit_raw)$diagnostic_potential
 
-  tax <- vpro_taxonomy(con, include_synonyms = FALSE, include_user = TRUE)
+  tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
   all_spp <- sort(unique(agg_dt[["Species"]]))
   tax_m <- match(all_spp, tax$Code)
   spp_sci <- ifelse(is.na(tax_m), all_spp, tax$ScientificName[tax_m])
@@ -782,7 +817,7 @@ vpro_diagnostics <- function(
 
   for (s_i in seq_len(n_spp)) {
     uc <- stats::setNames(code_mat[s_i, ], ordered_units)
-    v7 <- vpro_diagnostic_classify(uc)
+    v7 <- vpro_classify_diagnostic_codes(uc)
     diag_unit[[s_i]] <- v7$unit
     diag_str[[s_i]] <- v7$diagnosis
 

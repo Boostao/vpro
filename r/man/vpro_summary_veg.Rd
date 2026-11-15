@@ -5,25 +5,26 @@
 \title{Produce BEC vegetation constancy and cover synthesis tables}
 \usage{
 vpro_summary_veg(
-  con,
+  ws,
   group_by = c("strata", "layer", "lifeform", "total"),
   hierarchy_breaks = FALSE,
   lump = TRUE,
   exclude_modifiers = TRUE,
   min_constancy = 0,
-  digits = 1L
+  digits = 1L,
+  cover_precedence = c("strata_totals", "sublayer_sum")
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{group_by}{Vegetation grouping level: \code{"strata"} (\code{A}, \code{B}, \code{C}, \code{D}),
 \code{"layer"}, \code{"lifeform"}, or \code{"total"}.}
 
-\item{hierarchy_breaks}{Logical; if \code{TRUE} and \code{con$hierarchy} has \code{~}
+\item{hierarchy_breaks}{Logical; if \code{TRUE} and \code{ws$hierarchy} has \code{~}
 breakpoint nodes, aggregates plots by \code{BreakpointUnit}.}
 
-\item{lump}{Logical (\code{TRUE} uses active \code{con$lump}), \code{FALSE}, a \verb{*_Lump} table
+\item{lump}{Logical (\code{TRUE} uses active \code{ws$lump}), \code{FALSE}, a \verb{*_Lump} table
 name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE} (default), excludes \code{.support},
@@ -34,6 +35,10 @@ least one unit to retain a species/group row.}
 
 \item{digits}{Integer decimal places for ACE 15-significant-digit rounding
 (default \code{1L}).}
+
+\item{cover_precedence}{Precedence when both \code{TotalA}/\code{TotalB} and sublayers
+(\code{Cover1..3}/\code{Cover4..5c}) exist: \code{"strata_totals"} (default, matching MS
+Access summary queries) or \code{"sublayer_sum"}.}
 }
 \value{
 An S3 object of class \code{vpro_summary_veg} containing \verb{$long}, \verb{$wide},

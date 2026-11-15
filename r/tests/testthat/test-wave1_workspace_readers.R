@@ -92,11 +92,11 @@ test_that("calibrated float32 narrowing, ACE 15-digit rounding, and BEC classes 
   expect_equal(vpro_goldstream_class(25, 0.5, return_score = FALSE), 4L)
 
   expect_equal(
-    vpro_diagnostic_classify(c(UnitB = "5 - 6", UnitA = "2 - 1", UnitC = "1 - +")),
+    vpro_classify_diagnostic_codes(c(UnitB = "5 - 6", UnitA = "2 - 1", UnitC = "1 - +")),
     list(unit = "UnitB", diagnosis = "d, cd")
   )
   expect_equal(
-    vpro_diagnostic_classify(c(UnitB = "4 - 6", UnitA = "4 - 2", UnitC = "2 - 1")),
+    vpro_classify_diagnostic_codes(c(UnitB = "4 - 6", UnitA = "4 - 2", UnitC = "2 - 1")),
     list(unit = "UnitB", diagnosis = "dd")
   )
 
@@ -105,8 +105,8 @@ test_that("calibrated float32 narrowing, ACE 15-digit rounding, and BEC classes 
   expect_equal(round(vpro_coordinate_dm(-126.5)$minutes, 4), 30)
 })
 
-test_that("vpro_sample and tidy readers work with leading-zero PlotNumber, booleans, lump 99% cap, and LMH25 order", {
-  ws <- vpro_sample()
+test_that("vpro_connect('Sample') and tidy readers work with leading-zero PlotNumber, booleans, lump 99% cap, and LMH25 order", {
+  ws <- vpro_connect("Sample")
   expect_s3_class(ws, "vpro_workspace")
   expect_equal(ws$project, "Sample")
   expect_equal(ws$su, "Sample_SU")
@@ -161,7 +161,7 @@ test_that("live simulated vpro_wails WAL workspace coexists with active writer a
   # Clone Sample.db -> LiveProj.db in WAL mode with leading-zero PlotNumber '00337',
   # synonym THUIABI -> ABIEABI, lumped species exceeding 99% in layer, and upland/wetland horizons
   db_path <- file.path(sim_data, "projects", "Sample.db")
-  file.copy(vpro_sample()$project_path, db_path)
+  file.copy(vpro_connect("Sample")$project_path, db_path)
 
   wcon <- DBI::dbConnect(RSQLite::SQLite(), db_path)
   on.exit(if (DBI::dbIsValid(wcon)) DBI::dbDisconnect(wcon), add = TRUE)
@@ -259,7 +259,7 @@ test_that("vpro_import_access streams real Access .accdb into VP08 SQLite with q
   file.copy(accdb_orig, tmp_accdb)
   sha_before <- vpro:::vpro_sha256_file(tmp_accdb)
 
-  res <- vpro_import_access(tmp_accdb, target_db = tmp_db)
+  res <- vpro_import_access(tmp_accdb, dest_db = tmp_db)
   sha_after <- vpro:::vpro_sha256_file(tmp_accdb)
   expect_equal(sha_before, sha_after)
   expect_gt(res$plot_count, 0L)

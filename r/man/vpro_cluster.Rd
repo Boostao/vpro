@@ -5,7 +5,7 @@
 \title{Cluster VPro plots with hierarchical, medoid, or fuzzy noise classification}
 \usage{
 vpro_cluster(
-  con,
+  ws,
   method = c("ward.D2", "average", "beta_flexible", "pam", "vegclust_fcm", "vegclust_nc"),
   distance = "bray",
   transform = "sqrt",
@@ -21,7 +21,7 @@ vpro_cluster(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or \code{\link[=vpro_sample]{vpro_sample()}}.}
+\item{ws}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}}.}
 
 \item{method}{Clustering algorithm: \code{"ward.D2"}, \code{"average"},
 \code{"beta_flexible"} (Lance-Williams flexible-beta via \code{\link[cluster:agnes]{cluster::agnes()}}),

@@ -11,7 +11,7 @@ make_w2b_scratch <- function() {
 
 build_cwh_synthesis_workspace <- function(scratch_dir) {
   db_path <- file.path(scratch_dir, "Sample.db")
-  file.copy(vpro_sample()$project_path, db_path, overwrite = TRUE)
+  file.copy(vpro_connect("Sample")$project_path, db_path, overwrite = TRUE)
 
   con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -122,7 +122,7 @@ build_cwh_synthesis_workspace <- function(scratch_dir) {
     su = "Working_SU",
     hierarchy = "None",
     lump = "CombineTest_Lump",
-    data_dir = dirname(vpro_sample()$project_path),
+    data_dir = dirname(vpro_connect("Sample")$project_path),
     config_dir = scratch_dir
   )
 }
@@ -217,7 +217,7 @@ test_that("vpro_diagnostics matches vpro_wails test vectors, 99% lump cap, V7mdl
 })
 
 test_that("vpro_diagnostics supports Sample.db and ~ tilde hierarchy_breaks rollup", {
-  ws <- vpro_sample()
+  ws <- vpro_connect("Sample")
   d_su <- vpro_diagnostics(ws, min_constancy = 20)
   expect_equal(nrow(d_su$units), 11L)
   expect_false(d_su$hierarchy_breaks)
@@ -258,7 +258,7 @@ test_that("vpro_pairwise computes BEC differential points and symmetric similari
   expect_gt(nrow(pw$species_diffs), 4L)
 
   # Sample.db pairwise across units with >= 2 plots (9 units -> 36 pairs)
-  ws_sample <- vpro_sample()
+  ws_sample <- vpro_connect("Sample")
   pw_sample <- vpro_pairwise(ws_sample, min_plots = 2L)
   expect_equal(nrow(pw_sample$similarity_matrix), 9L)
   expect_equal(nrow(pw_sample$pairs), 36L)
@@ -274,10 +274,10 @@ test_that("vpro_outliers flags injected misclassified plot '00337' #1 with leadi
   ws <- build_cwh_synthesis_workspace(scratch)
 
   for (tr in c("sqrt", "raw", "log1p", "chord", "hellinger")) {
-    out <- vpro_outliers(ws, transform = tr, threshold = 0.45)
+    out <- vpro_outliers(ws, transform = tr, threshold = 0.45, keep_singletons = FALSE)
     expect_s3_class(out, "vpro_outliers")
     expect_type(out$queue$PlotNumber, "character")
-    # 6 plots in CWHvm1/01 + 5 plots in CWHvm1/05 = 11 evaluated plots (singleton CWHvm1/09 excluded from LOO)
+    # 6 plots in CWHvm1/01 + 5 plots in CWHvm1/05 = 11 evaluated plots when keep_singletons = FALSE
     expect_equal(nrow(out$queue), 11L)
     expect_false("U09_01" %in% out$queue$PlotNumber)
 
@@ -293,16 +293,18 @@ test_that("vpro_outliers flags injected misclassified plot '00337' #1 with leadi
     expect_true(top$flagged)
   }
 
+  # Default keep_singletons = TRUE aligns with Go ComputeOutlierQueue (includes U09_01 as singleton)
   out_def <- vpro_outliers(ws)
   expect_message(print(out_def), "vpro_outliers")
-  expect_equal(nrow(tibble::as_tibble(out_def)), 11L)
-  expect_equal(nrow(tibble::as_tibble(out_def, flagged_only = TRUE)), 1L)
-  expect_identical(out_def$outliers$PlotNumber, "00337")
+  expect_equal(nrow(tibble::as_tibble(out_def)), 12L)
+  expect_equal(nrow(tibble::as_tibble(out_def, flagged_only = TRUE)), 2L)
+  expect_true(all(c("00337", "U09_01") %in% out_def$outliers$PlotNumber))
+  expect_identical(out_def$queue$PlotNumber[[1L]], "00337")
 })
 
-test_that("vpro_profile evaluates both Sample_Profile SQLite table and vpro_rule set algebra", {
+test_that("vpro_profile evaluates both Sample_Profile SQLite table and vpro_profile_rule set algebra", {
   # 1. Stored Sample_Profile in Sample.db
-  ws_sample <- vpro_sample()
+  ws_sample <- vpro_connect("Sample")
   prof_tbl <- vpro_profile(ws_sample, profile_table = "Sample_Profile", scope = "su")
   expect_s3_class(prof_tbl, "vpro_profile_result")
   expect_message(print(prof_tbl), "vpro_profile_result")
@@ -315,36 +317,43 @@ test_that("vpro_profile evaluates both Sample_Profile SQLite table and vpro_rule
   expect_equal(nrow(tibble::as_tibble(prof_tbl)), 11L)
   expect_type(prof_tbl$plots, "character")
 
-  # 2. Tidy vpro_rule() constructor & ordered Add / Common / Subtract across Env, Humus, Veg, and species absence
+  # 2. Tidy vpro_profile_rule() constructor & ordered Add / Common / Subtract across Env, Humus, Veg, and species absence
   scratch <- make_w2b_scratch()
   on.exit(unlink(scratch, recursive = TRUE, force = TRUE), add = TRUE)
   ws <- build_cwh_synthesis_workspace(scratch)
 
-  r1 <- vpro_rule("Env", field = "MoistureRegime", operator = "=", value = "4", operation = "Add")
-  r2 <- vpro_rule("Env", field = "NutrientRegime", operator = "=", value = "D", operation = "Add")
-  r3 <- vpro_rule("Veg", species = "TSUGHET", layer = "Any", operator = "=", value = 0, operation = "Common")
-  r4 <- vpro_rule("Humus", field = "Horizon", operator = "LIKE", value = "Mo*", operation = "Subtract")
-  expect_s3_class(r1, "vpro_rule")
-  expect_message(print(r1), "vpro_rule")
+  r1 <- vpro_profile_rule("Env", field = "MoistureRegime", operator = "=", value = "4", operation = "Add")
+  r2 <- vpro_profile_rule("Env", field = "NutrientRegime", operator = "=", value = "D", operation = "Add")
+  r3 <- vpro_profile_rule("Lump", species = "TSUGHET", layer = "Any", operator = "=", value = 0, operation = "Common")
+  r4 <- vpro_profile_rule("Humus", field = "Horizon", operator = "LIKE", value = "Mo*", operation = "Subtract")
+  expect_s3_class(r1, "vpro_profile_rule")
+  expect_message(print(r1), "vpro_profile_rule")
 
   res <- vpro_profile(ws, rules = list(r1, r2, r3, r4), scope = "project", lump = TRUE)
   # r1 matches 6 SMR=4 plots (U01_01..05 + SUP_01)
   expect_equal(res$steps$retained_n[[1L]], 6L)
   # r2 adds 6 SNR=D plots ('00337' + U05_01..05) -> 12 plots
   expect_equal(res$steps$retained_n[[2L]], 12L)
-  # r3 intersects with TSUGHET absent (= 0 with lump = TRUE) -> keeps only the 6 SNR=D plots ('00337' + U05_01..05)
-  expect_equal(res$steps$retained_n[[3L]], 6L)
-  # r4 subtracts plots with Humus Horizon LIKE 'Mo*' (U05_01..05 have 'Moder'; '00337' has 'Ah') -> leaves ONLY '00337'!
-  expect_equal(res$steps$retained_n[[4L]], 1L)
-  expect_identical(res$plots, "00337")
-  expect_identical(res$env$PlotNumber, "00337")
+  # r3 (Table == 'Lump') strictly evaluates *_Lump: U01_01..05 lump TSUGHET1/2 -> TSUGHET and are dropped,
+  # while unmapped SUP_01 (raw TSUGHET) + 6 SNR=D plots pass -> 7 plots retained
+  expect_equal(res$steps$retained_n[[3L]], 7L)
+  # r4 subtracts plots with Humus Horizon LIKE 'Mo*' (U05_01..05 have 'Moder'; '00337' has 'Ah', SUP_01 NULL) -> leaves c('00337', 'SUP_01')
+  expect_equal(res$steps$retained_n[[4L]], 2L)
+  expect_identical(res$plots, c("00337", "SUP_01"))
+  expect_identical(res$env$PlotNumber, c("00337", "SUP_01"))
+
+  # Track 1B.2: Table == "Veg" stays unlumped even when lump = TRUE (U01_* carry raw TSUGHET1/TSUGHET2 while SUP_01 has raw TSUGHET)
+  r3_veg <- vpro_profile_rule("Veg", species = "TSUGHET", layer = "Any", operator = "=", value = 0, operation = "Common")
+  res_veg_unlumped <- vpro_profile(ws, rules = list(r1, r2, r3_veg, r4), scope = "project", lump = TRUE)
+  expect_equal(res_veg_unlumped$steps$retained_n[[3L]], 11L)
+  expect_true(all(c("00337", paste0("U01_0", 1:5)) %in% res_veg_unlumped$plots))
 
   # Verify IS NULL / IS NOT NULL and step-1 Common seeding
   res_null <- vpro_profile(
     ws,
     rules = list(
-      vpro_rule("Env", field = "Elevation", operator = "<", value = 260, operation = "Common"),
-      vpro_rule("Veg", species = "ABIEAMA", operator = "IS NULL", operation = "Common")
+      vpro_profile_rule("Env", field = "Elevation", operator = "<", value = 260, operation = "Common"),
+      vpro_profile_rule("Veg", species = "ABIEAMA", operator = "IS NULL", operation = "Common")
     ),
     scope = "su"
   )
@@ -353,7 +362,7 @@ test_that("vpro_profile evaluates both Sample_Profile SQLite table and vpro_rule
 })
 
 test_that("vpro_summary_veg, vpro_summary_env, ~ breakpoint rollups, and vpro_export_xlsx work end-to-end", {
-  ws <- vpro_sample()
+  ws <- vpro_connect("Sample")
 
   for (gb in c("strata", "layer", "lifeform", "total")) {
     sv <- vpro_summary_veg(ws, group_by = gb, min_constancy = 20, digits = 1L)

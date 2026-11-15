@@ -4,13 +4,16 @@
 \alias{vpro_export_xlsx}
 \title{Export BEC synthesis tables to a multi-sheet \code{.xlsx} workbook}
 \usage{
-vpro_export_xlsx(x, path)
+vpro_export_xlsx(x, path, overwrite = TRUE)
 }
 \arguments{
 \item{x}{A BEC synthesis result object, data frame, or named list of data
 frames.}
 
 \item{path}{Destination \code{.xlsx} file path.}
+
+\item{overwrite}{Logical; if \code{TRUE} (default), replaces an existing \code{.xlsx}
+at \code{path}. If \code{FALSE} and \code{path} exists, aborts with an error.}
 }
 \value{
 Normalized path (\code{winslash = "/"}) to the written \code{.xlsx} file,

@@ -2,38 +2,49 @@
 % Please edit documentation in R/writeback.R
 \name{vpro_write_su}
 \alias{vpro_write_su}
-\title{Write or replace a working \verb{*_SU} site-unit table atomically}
+\title{Write or replace a working \verb{*_SU} or staging \verb{*_ClusterCandidate_SU} table atomically}
 \usage{
 vpro_write_su(
-  con,
+  ws,
   memberships,
-  su_name,
+  su = NULL,
   create = FALSE,
-  confirm_overwrite = FALSE,
+  overwrite = FALSE,
+  candidate = FALSE,
   actor = Sys.info()[["user"]]
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle referencing a writable user \code{.db}.}
+\item{ws}{A \code{vpro_workspace} handle referencing a writable user \code{.db}.}
 
-\item{memberships}{A \code{vpro_clusters} object or \code{data.frame(PlotNumber, SiteUnit)}.}
+\item{memberships}{A \code{vpro_clusters} object or a \code{data.frame} containing
+literal character \code{PlotNumber} and \code{SiteUnit} (or \code{Cluster}).}
 
-\item{su_name}{Target working site-unit name (with or without \verb{_SU} suffix).}
+\item{su}{Target working site-unit name (with or without \verb{_SU} suffix). When
+\code{candidate = TRUE} and \code{su = NULL}, defaults to
+\code{paste0(ws$project, "_ClusterCandidate")}.}
 
-\item{create}{Logical; must be \code{TRUE} to create a table that does not yet exist.}
+\item{create}{Logical; must be \code{TRUE} to create a table that does not yet
+exist (defaults to \code{FALSE} for working \verb{*_SU} tables and \code{TRUE} when
+\code{candidate = TRUE}).}
 
-\item{confirm_overwrite}{Logical; must be \code{TRUE} to overwrite an existing \verb{*_SU} table.}
+\item{overwrite}{Logical; must be \code{TRUE} to replace an existing \verb{*_SU} table.}
+
+\item{candidate}{Logical; if \code{TRUE}, writes a staging
+\verb{<Prefix>_ClusterCandidate_SU} table (\code{MaterializeClusterCandidate} audit)
+instead of a working \verb{*_SU} table.}
 
 \item{actor}{Username recorded in \verb{<Project>_Audit}.}
 }
 \value{
-Invisibly returns an updated \code{vpro_workspace} with \code{con$su} switched
+Invisibly returns an updated \code{vpro_workspace} with \code{ws$su} switched
 to the written \verb{*_SU} table.
 }
 \description{
-Persists plot-to-SiteUnit assignments to \verb{<su_name>_SU} inside
-\code{con$project_path} under \verb{BEGIN IMMEDIATE}, strictly refusing \verb{Master*},
-\verb{USys*}, \code{BECSiteUnit}, and core \code{VP08} tables. Requires \code{create = TRUE} when
-creating a new \verb{*_SU} table and \code{confirm_overwrite = TRUE} when replacing an
-existing \verb{*_SU} table.
+Persists plot-to-SiteUnit assignments to \verb{<su>_SU} (or, when
+\code{candidate = TRUE}, \verb{<Prefix>_ClusterCandidate_SU}) inside \code{ws$project_path}
+under \verb{BEGIN IMMEDIATE}, strictly refusing \verb{Master*}, \verb{USys*}, \code{BECSiteUnit},
+and core \code{VP08} tables. Requires \code{create = TRUE} when creating a new table
+(default \code{TRUE} when \code{candidate = TRUE}) and \code{overwrite = TRUE} when replacing
+an existing table.
 }

@@ -135,17 +135,8 @@ vpro_sqlite_physical_tables <- function(path) {
   )$name
 }
 
-#' Discover VPro project families in a SQLite database
-#'
-#' Scans physical SQLite tables for `<Project>_Env` and reports completeness of
-#' the 8-table `VP08` family (`_Admin`, `_Audit`, `_Env`, `_Humus`, `_Metadata`,
-#' `_Mineral`, `_Other`, `_Veg`).
-#'
-#' @param path Path to a VPro SQLite `.db` file.
-#' @return A tibble with `project`, `core_tables`, `optional_tables`,
-#'   `complete`, and `version`.
-#' @export
-vpro_project_discover <- function(path) {
+# Discover VPro project families in a SQLite database
+.vpro_project_discover <- function(path) {
   tables <- vpro_sqlite_physical_tables(path)
   env_tables <- grep("^[A-Za-z][A-Za-z0-9_]{0,30}_Env$", tables, value = TRUE)
   env_tables <- setdiff(env_tables, c("Filtered_Env", "USysEnv", "UsysEnv"))
@@ -186,13 +177,7 @@ vpro_project_discover <- function(path) {
   do.call(rbind, rows)
 }
 
-#' Validate a VPro project 8-table family
-#'
-#' @param path Path to a VPro project SQLite database.
-#' @param project Project prefix.
-#' @return A tibble listing required suffixes, table names, and presence.
-#' @export
-vpro_project_validate <- function(path, project) {
+.vpro_project_validate <- function(path, project) {
   project <- vpro_project_name(project)
   tables <- vpro_sqlite_physical_tables(path)
   expected <- paste0(project, "_", .vpro_core_project_suffixes)
@@ -203,28 +188,39 @@ vpro_project_validate <- function(path, project) {
   )
 }
 
-#' Inspect a VPro project SQLite database for `VP08` compatibility
+#' Inspect a VPro project SQLite database for `VP08` compatibility and schema completeness
 #'
-#' Preserves exact return fields (`path`, `project`, `version`, `compatible`,
-#' `validation`) required by `vpro_wails/internal/rsidecar`.
+#' Validates the required 8-table `VP08` family (`_Admin`, `_Audit`, `_Env`,
+#' `_Humus`, `_Metadata`, `_Mineral`, `_Other`, `_Veg`) and `_table_metadata`
+#' version tag, preserving exact return fields (`path`, `project`, `version`,
+#' `compatible`, `validation`) required by `rsidecar`.
 #'
 #' @param path Path to a VPro project SQLite database.
-#' @param project Project prefix.
+#' @param project Optional project prefix inside `path`. When `NULL`, auto-detects
+#'   the primary project in `path`.
 #' @return A list with `path`, `project`, `version`, `compatible`, and `validation`.
 #' @export
-vpro_project_inspect <- function(path, project) {
-  project <- vpro_project_name(project)
+vpro_project_inspect <- function(path, project = NULL) {
   path <- normalizePath(path, winslash = "/", mustWork = FALSE)
   if (!file.exists(path)) {
     rlang::abort(paste0("VPro project database does not exist: ", path))
   }
-  validation <- vpro_project_validate(path, project)
-  con <- vpro_sqlite_ro(path)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  if (is.null(project)) {
+    disc <- .vpro_project_discover(path)
+    if (nrow(disc) == 0L) {
+      rlang::abort(paste0("Database contains no `<Project>_Env` table: ", path))
+    }
+    stem <- tools::file_path_sans_ext(basename(path))
+    project <- if (stem %in% disc$project) stem else disc$project[[1L]]
+  }
+  project <- vpro_project_name(project)
+  validation <- .vpro_project_validate(path, project)
+  dbc <- vpro_sqlite_ro(path)
+  on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   version <- "Unknown"
-  if (DBI::dbExistsTable(con, "_table_metadata")) {
+  if (DBI::dbExistsTable(dbc, "_table_metadata")) {
     res <- DBI::dbGetQuery(
-      con,
+      dbc,
       'SELECT "description" FROM "_table_metadata" WHERE "table_name" = ?',
       params = list(paste0(project, "_Env"))
     )
@@ -289,18 +285,20 @@ vpro_find_support_db <- function(name, data_dir, project_dir = NULL) {
   vpro_bundled_db(name)
 }
 
-#' Connect to a live `vpro_wails` workspace, SQLite `.db`, or Access archive
+#' Connect to a live `VPro` workspace, bundled `Sample`, SQLite `.db`, or Access archive
 #'
 #' Creates a lightweight, read-only-by-default S3 `vpro_workspace` handle.
 #' Called with zero arguments (`vpro_connect()`), auto-discovers the user's
-#' active `vpro_wails` `config.yml` and 7-DB SQLite WAL workspace. Also accepts
-#' an explicit project name in `data_dir`, a `.db` / `.sqlite` file path, a
-#' directory containing `.db` projects, or an `.accdb` / `.mdb` archive (which
-#' is non-destructively converted into a session temporary `VP08` SQLite file).
+#' active `VPro` `config.yml` and 7-DB SQLite WAL workspace. Passing `"Sample"`
+#' (with default `data_dir`) opens the bundled read-only 2026 `VP08` `Sample`
+#' teaching workspace. Also accepts an explicit project name in `data_dir`, a
+#' `.db` / `.sqlite` / `.rds` file path, a directory containing `.db` projects,
+#' or an `.accdb` / `.mdb` archive (which is non-destructively converted into a
+#' session-temporary `VP08` SQLite file).
 #'
-#' @param project Optional project name, `.db` path, directory path, or
-#'   `.accdb`/`.mdb` path. When `NULL`, reads `Current$CurrProject` from
-#'   `config.yml` or discovers projects in `data_dir`.
+#' @param project Optional project name, `"Sample"`, `.db` / `.rds` path,
+#'   directory path, or `.accdb`/`.mdb` path. When `NULL`, reads
+#'   `Current$CurrProject` from `config.yml` or discovers projects in `data_dir`.
 #' @param su Optional site-unit table name (with or without `_SU` suffix), or
 #'   `"None"` to disable SU scoping.
 #' @param hierarchy Optional hierarchy table name (with or without `_Hierarchy`
@@ -320,6 +318,7 @@ vpro_connect <- function(
   data_dir = vpro_data_dir(),
   config_dir = vpro_config_dir()
 ) {
+  data_dir_missing <- missing(data_dir)
   data_dir <- normalizePath(data_dir, winslash = "/", mustWork = FALSE)
   config_dir <- normalizePath(config_dir, winslash = "/", mustWork = FALSE)
   cfg_path <- file.path(config_dir, "config.yml")
@@ -368,7 +367,7 @@ vpro_connect <- function(
       project_path <- normalizePath(existing[[1L]], winslash = "/", mustWork = TRUE)
       project_name <- cfg_prj
     } else {
-      listed <- vpro_list_projects(data_dir = data_dir)
+      listed <- vpro_list_projects(path = data_dir)
       if (nrow(listed) > 0L) {
         project_path <- listed$path[[1L]]
         project_name <- listed$project[[1L]]
@@ -376,7 +375,7 @@ vpro_connect <- function(
         rlang::abort(c(
           "No VPro project database was found in the workspace.",
           "i" = paste0("Checked data_dir: ", data_dir),
-          "i" = "Pass an explicit `.db` path or call `vpro_sample()` for the bundled Sample workspace."
+          "i" = "Pass an explicit `.db` path or call `vpro_connect(\"Sample\")` for the bundled Sample workspace."
         ))
       }
     }
@@ -405,7 +404,7 @@ vpro_connect <- function(
     }
     req <- trimws(project)
     if (dir.exists(req)) {
-      listed <- vpro_list_projects(data_dir = req)
+      listed <- vpro_list_projects(path = req)
       if (nrow(listed) == 0L) {
         rlang::abort(paste0("No VPro `.db` projects were found in directory: ", req))
       }
@@ -417,16 +416,27 @@ vpro_connect <- function(
       ext <- tolower(tools::file_ext(req))
       if (ext %in% c("accdb", "mdb")) {
         tmp_db <- tempfile(pattern = "vpro-access-ws-", fileext = ".db")
-        imp <- vpro_import_access(req, target_db = tmp_db)
+        imp <- vpro_import_access(req, dest_db = tmp_db)
         project_path <- imp$target_db
         project_name <- imp$target_project
         source_kind <- "access_import"
       } else if (identical(ext, "rds")) {
-        return(vpro_read_rds_project(req, su = su, lump = lump))
+        return(vpro_import_rds(req, su = su, lump = lump))
       } else {
         project_path <- normalizePath(req, winslash = "/", mustWork = TRUE)
-        source_kind <- "file"
+        bundled_sample <- normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = FALSE)
+        source_kind <- if (identical(project_path, bundled_sample)) "sample" else "file"
       }
+    } else if (identical(tolower(req), "sample") && data_dir_missing) {
+      sample_path <- vpro_bundled_db("Sample.db")
+      project_path <- normalizePath(sample_path, winslash = "/", mustWork = TRUE)
+      project_name <- "Sample"
+      data_dir <- dirname(project_path)
+      config_dir <- tempdir()
+      source_kind <- "sample"
+      if (is.null(su)) su <- "Sample_SU"
+      if (is.null(hierarchy)) hierarchy <- "Sample_Hierarchy"
+      if (is.null(lump)) lump <- "Sample_Lump"
     } else {
       # Look up project name inside data_dir
       base <- sub("\\.(db|sqlite|sqlite3)$", "", req, ignore.case = TRUE)
@@ -435,15 +445,26 @@ vpro_connect <- function(
         file.path(data_dir, paste0(base, ".db"))
       )
       existing <- candidates[file.exists(candidates) & !dir.exists(candidates)]
-      if (length(existing) == 0L) {
+      if (length(existing) > 0L) {
+        project_path <- normalizePath(existing[[1L]], winslash = "/", mustWork = TRUE)
+        project_name <- base
+      } else if (identical(tolower(base), "sample")) {
+        sample_path <- vpro_bundled_db("Sample.db")
+        project_path <- normalizePath(sample_path, winslash = "/", mustWork = TRUE)
+        project_name <- "Sample"
+        data_dir <- dirname(project_path)
+        config_dir <- tempdir()
+        source_kind <- "sample"
+        if (is.null(su)) su <- "Sample_SU"
+        if (is.null(hierarchy)) hierarchy <- "Sample_Hierarchy"
+        if (is.null(lump)) lump <- "Sample_Lump"
+      } else {
         rlang::abort(paste0("Could not find VPro project `", req, "` as a file or inside `", data_dir, "`."))
       }
-      project_path <- normalizePath(existing[[1L]], winslash = "/", mustWork = TRUE)
-      project_name <- base
     }
   }
 
-  fams <- vpro_project_discover(project_path)
+  fams <- .vpro_project_discover(project_path)
   if (nrow(fams) == 0L) {
     rlang::abort(paste0("Database contains no `<Project>_Env` table: ", project_path))
   }
@@ -478,7 +499,7 @@ vpro_connect <- function(
   resolved_lump <- vpro_resolve_table_suffix(tables, lump, "Lump", default_prefix = project_name)
 
   proj_dir <- dirname(project_path)
-  con_obj <- structure(
+  ws_obj <- structure(
     list(
       project = project_name,
       project_path = project_path,
@@ -498,69 +519,40 @@ vpro_connect <- function(
     ),
     class = "vpro_workspace"
   )
-  con_obj
+  ws_obj
 }
 
-#' Connect to the bundled 2026 `VP08` `Sample` workspace
-#'
-#' Returns a zero-configuration read-only [vpro_connect()] workspace backed by
-#' the embedded `Sample.db` (`52` plots, `1,633` veg records) and 2026
-#' `BECdb v13` + `BCPlantTaxonomy v19` reference databases.
-#'
-#' @param su Active site-unit table (defaults to `"Sample_SU"`, or `"None"`).
-#' @param hierarchy Active hierarchy table (defaults to `"Sample_Hierarchy"`).
-#' @param lump Active species-lump table (defaults to `"Sample_Lump"`, or `"None"`).
-#' @return An S3 object of class `vpro_workspace`.
-#' @export
-vpro_sample <- function(
-  su = "Sample_SU",
-  hierarchy = "Sample_Hierarchy",
-  lump = "Sample_Lump"
-) {
-  sample_path <- vpro_bundled_db("Sample.db")
-  ws <- vpro_connect(
-    project = sample_path,
-    su = su,
-    hierarchy = hierarchy,
-    lump = lump,
-    data_dir = dirname(sample_path),
-    config_dir = tempdir()
-  )
-  ws$source <- "sample"
-  ws
-}
-
-vpro_assert_workspace <- function(con) {
-  if (inherits(con, "vpro_pg_conn")) {
+vpro_assert_workspace <- function(ws) {
+  if (inherits(ws, "vpro_pg_conn")) {
     rlang::abort(c(
-      "`con` is a PostgreSQL `vpro_pg_conn` handle, not a local `vpro_workspace`.",
-      "i" = "Use `vpro_master_env(con, ...)` / `vpro_master_veg(con, ...)` for direct cloud tibbles, or wrap a filtered cloud subset with `vpro_master_workspace(con, ...)` / `vpro_master_pull(con, ...)`."
+      "`ws` is a PostgreSQL `vpro_pg_conn` handle, not a local `vpro_workspace`.",
+      "i" = "Use `vpro_master_env(pg, ...)` / `vpro_master_veg(pg, ...)` for direct cloud tibbles, or wrap a filtered cloud subset with `vpro_master_workspace(pg, ...)` / `vpro_master_pull(pg, ...)`."
     ))
   }
-  if (!inherits(con, "vpro_workspace") || !is.list(con) ||
-      is.null(con$project_path) || !file.exists(con$project_path)) {
-    rlang::abort("`con` must be a valid `vpro_workspace` created by `vpro_connect()` or `vpro_sample()`.")
+  if (!inherits(ws, "vpro_workspace") || !is.list(ws) ||
+      is.null(ws$project_path) || !file.exists(ws$project_path)) {
+    rlang::abort("`ws` must be a valid `vpro_workspace` created by `vpro_connect()`.")
   }
-  invisible(con)
+  invisible(ws)
 }
 
 #' Switch active project, SiteUnit (`*_SU`), hierarchy, or lump table on a workspace
 #'
 #' Returns an updated `vpro_workspace` handle without mutating disk files.
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param project Optional project prefix inside `con$project_path`.
+#' @param ws A `vpro_workspace` handle.
+#' @param project Optional project prefix inside `ws$project_path`.
 #' @param su Optional `*_SU` table name (or `"None"` to clear).
 #' @param hierarchy Optional `*_Hierarchy` table name (or `"None"` to clear).
 #' @param lump Optional `*_Lump` table name (or `"None"` to clear).
 #' @return An updated `vpro_workspace` object.
 #' @export
-vpro_use <- function(con, project = NULL, su = NULL, hierarchy = NULL, lump = NULL) {
-  vpro_assert_workspace(con)
-  out <- con
+vpro_use <- function(ws, project = NULL, su = NULL, hierarchy = NULL, lump = NULL) {
+  vpro_assert_workspace(ws)
+  out <- ws
   tables <- vpro_sqlite_physical_tables(out$project_path)
   if (!is.null(project)) {
-    fams <- vpro_project_discover(out$project_path)
+    fams <- .vpro_project_discover(out$project_path)
     if (!(project %in% fams$project)) {
       rlang::abort(paste0("Project `", project, "` not found in ", out$project_path))
     }
@@ -580,27 +572,44 @@ vpro_use <- function(con, project = NULL, su = NULL, hierarchy = NULL, lump = NU
   out
 }
 
-#' List VPro projects available in a workspace or database
+#' Discover and list VPro projects in a workspace, directory, or `.db` file
 #'
-#' @param con Optional `vpro_workspace` handle. When omitted, scans `data_dir`
-#'   and `file.path(data_dir, "projects")` for `.db` project files.
-#' @param data_dir Workspace data directory used when `con` is `NULL`.
-#' @return A tibble with `project`, `path`, `version`, `complete`, and `n_plots`.
+#' @param ws Optional `vpro_workspace` handle. When supplied (and `path` is not
+#'   overridden), inspects `ws$project_path` and scans `ws$data_dir` and
+#'   `file.path(ws$data_dir, "projects")` for `.db` project files.
+#' @param path Optional directory or single `.db` file path to inspect (defaults
+#'   to [vpro_data_dir()]).
+#' @return A tibble with `project`, `path`, `version`, `complete`,
+#'   `core_tables`, `optional_tables`, and `n_plots`.
 #' @export
-vpro_list_projects <- function(con = NULL, data_dir = vpro_data_dir()) {
+vpro_list_projects <- function(ws = NULL, path = vpro_data_dir()) {
+  empty_tbl <- tibble::tibble(
+    project = character(),
+    path = character(),
+    version = character(),
+    complete = logical(),
+    core_tables = integer(),
+    optional_tables = integer(),
+    n_plots = integer()
+  )
   db_files <- character()
-  if (!is.null(con)) {
-    vpro_assert_workspace(con)
+  if (!is.null(ws) && missing(path)) {
+    vpro_assert_workspace(ws)
     db_files <- unique(c(
-      con$project_path,
-      Sys.glob(file.path(con$data_dir, "*.db")),
-      Sys.glob(file.path(con$data_dir, "projects", "*.db"))
+      ws$project_path,
+      Sys.glob(file.path(ws$data_dir, "*.db")),
+      Sys.glob(file.path(ws$data_dir, "projects", "*.db"))
     ))
-  } else if (dir.exists(data_dir)) {
-    db_files <- unique(c(
-      Sys.glob(file.path(data_dir, "*.db")),
-      Sys.glob(file.path(data_dir, "projects", "*.db"))
-    ))
+  } else if (is.character(path) && length(path) == 1L && !is.na(path) && nzchar(trimws(path))) {
+    p_clean <- trimws(path)
+    if (file.exists(p_clean) && !dir.exists(p_clean)) {
+      db_files <- p_clean
+    } else if (dir.exists(p_clean)) {
+      db_files <- unique(c(
+        Sys.glob(file.path(p_clean, "*.db")),
+        Sys.glob(file.path(p_clean, "projects", "*.db"))
+      ))
+    }
   }
   support_names <- tolower(c(
     "vpro64.db", "vlists.db", "vuser.db", "vmetadata.db",
@@ -609,17 +618,11 @@ vpro_list_projects <- function(con = NULL, data_dir = vpro_data_dir()) {
   ))
   db_files <- db_files[file.exists(db_files) & !(tolower(basename(db_files)) %in% support_names)]
   if (length(db_files) == 0L) {
-    return(tibble::tibble(
-      project = character(),
-      path = character(),
-      version = character(),
-      complete = logical(),
-      n_plots = integer()
-    ))
+    return(empty_tbl)
   }
   rows <- list()
   for (p in sort(unique(normalizePath(db_files, winslash = "/", mustWork = TRUE)))) {
-    disc <- tryCatch(vpro_project_discover(p), error = function(e) NULL)
+    disc <- tryCatch(.vpro_project_discover(p), error = function(e) NULL)
     if (is.null(disc) || nrow(disc) == 0L) next
     dbc <- vpro_sqlite_ro(p)
     for (i in seq_len(nrow(disc))) {
@@ -633,19 +636,15 @@ vpro_list_projects <- function(con = NULL, data_dir = vpro_data_dir()) {
         path = p,
         version = disc$version[[i]],
         complete = disc$complete[[i]],
+        core_tables = disc$core_tables[[i]],
+        optional_tables = disc$optional_tables[[i]],
         n_plots = n_plots
       )
     }
     DBI::dbDisconnect(dbc)
   }
   if (length(rows) == 0L) {
-    return(tibble::tibble(
-      project = character(),
-      path = character(),
-      version = character(),
-      complete = logical(),
-      n_plots = integer()
-    ))
+    return(empty_tbl)
   }
   do.call(rbind, rows)
 }
@@ -690,12 +689,12 @@ vpro_list_suffixed_tables <- function(db_path, suffix, active_name = NULL, count
 
 #' List site-unit (`*_SU`) tables in a workspace
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @return A tibble with `name`, `table`, `n_plots`, `n_units`, and `active`.
 #' @export
-vpro_list_su <- function(con) {
-  vpro_assert_workspace(con)
-  res <- vpro_list_suffixed_tables(con$su_path, "SU", con$su, count_distinct = "SiteUnit")
+vpro_list_su <- function(ws) {
+  vpro_assert_workspace(ws)
+  res <- vpro_list_suffixed_tables(ws$su_path, "SU", ws$su, count_distinct = "SiteUnit")
   names(res)[names(res) == "n_rows"] <- "n_plots"
   names(res)[names(res) == "n_distinct"] <- "n_units"
   res
@@ -703,12 +702,12 @@ vpro_list_su <- function(con) {
 
 #' List classification hierarchy (`*_Hierarchy`) tables in a workspace
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @return A tibble with `name`, `table`, `n_nodes`, and `active`.
 #' @export
-vpro_list_hierarchies <- function(con) {
-  vpro_assert_workspace(con)
-  res <- vpro_list_suffixed_tables(con$hierarchy_path, "Hierarchy", con$hierarchy)
+vpro_list_hierarchies <- function(ws) {
+  vpro_assert_workspace(ws)
+  res <- vpro_list_suffixed_tables(ws$hierarchy_path, "Hierarchy", ws$hierarchy)
   res$n_distinct <- NULL
   names(res)[names(res) == "n_rows"] <- "n_nodes"
   res
@@ -716,12 +715,12 @@ vpro_list_hierarchies <- function(con) {
 
 #' List species lump (`*_Lump`) tables in a workspace
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @return A tibble with `name`, `table`, `n_rows`, `n_lump_codes`, and `active`.
 #' @export
-vpro_list_lumps <- function(con) {
-  vpro_assert_workspace(con)
-  res <- vpro_list_suffixed_tables(con$lump_path, "Lump", con$lump, count_distinct = "LumpCode")
+vpro_list_lumps <- function(ws) {
+  vpro_assert_workspace(ws)
+  res <- vpro_list_suffixed_tables(ws$lump_path, "Lump", ws$lump, count_distinct = "LumpCode")
   names(res)[names(res) == "n_distinct"] <- "n_lump_codes"
   res
 }
@@ -732,18 +731,18 @@ vpro_list_lumps <- function(con) {
 #' as `vuser` in `READ_ONLY` mode via DuckDB's SQLite scanner. The caller owns
 #' the returned `DBI` connection and should close it with `DBI::dbDisconnect()`.
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @return A `DBI` connection to an in-memory `duckdb` instance.
 #' @export
-vpro_duckdb <- function(con) {
-  vpro_assert_workspace(con)
+vpro_duckdb <- function(ws) {
+  vpro_assert_workspace(ws)
   rlang::check_installed("duckdb", reason = "to run cross-database DuckDB SQLite queries.")
   dcon <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   ok <- FALSE
   on.exit(if (!ok && DBI::dbIsValid(dcon)) DBI::dbDisconnect(dcon, shutdown = TRUE), add = TRUE)
-  DBI::dbExecute(dcon, paste0("ATTACH ", DBI::dbQuoteString(dcon, con$project_path), " AS project (TYPE SQLITE, READ_ONLY)"))
-  DBI::dbExecute(dcon, paste0("ATTACH ", DBI::dbQuoteString(dcon, con$vlists_path), " AS vlists (TYPE SQLITE, READ_ONLY)"))
-  DBI::dbExecute(dcon, paste0("ATTACH ", DBI::dbQuoteString(dcon, con$vuser_path), " AS vuser (TYPE SQLITE, READ_ONLY)"))
+  DBI::dbExecute(dcon, paste0("ATTACH ", DBI::dbQuoteString(dcon, ws$project_path), " AS project (TYPE SQLITE, READ_ONLY)"))
+  DBI::dbExecute(dcon, paste0("ATTACH ", DBI::dbQuoteString(dcon, ws$vlists_path), " AS vlists (TYPE SQLITE, READ_ONLY)"))
+  DBI::dbExecute(dcon, paste0("ATTACH ", DBI::dbQuoteString(dcon, ws$vuser_path), " AS vuser (TYPE SQLITE, READ_ONLY)"))
   ok <- TRUE
   dcon
 }

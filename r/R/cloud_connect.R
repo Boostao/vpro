@@ -478,25 +478,25 @@ vpro_pg_exec_safe <- function(expr_fn, secrets = character(), action = "PostgreS
   )
 }
 
-vpro_assert_pg_conn <- function(con, require_custodian = FALSE) {
-  if (!inherits(con, "vpro_pg_conn") || !is.list(con) || is.null(con$conn)) {
+vpro_assert_pg_conn <- function(pg, require_custodian = FALSE) {
+  if (!inherits(pg, "vpro_pg_conn") || !is.list(pg) || is.null(pg$conn)) {
     cli::cli_abort(
-      "{.arg con} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}."
+      "{.arg pg} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}."
     )
   }
-  valid <- tryCatch(DBI::dbIsValid(con$conn), error = function(e) FALSE)
+  valid <- tryCatch(DBI::dbIsValid(pg$conn), error = function(e) FALSE)
   if (!isTRUE(valid)) {
     cli::cli_abort(
       "PostgreSQL BECMaster connection is closed or invalid. Reconnect with {.fn vpro_master_connect}."
     )
   }
-  if (isTRUE(require_custodian) && !identical(con$role, "custodian")) {
+  if (isTRUE(require_custodian) && !identical(pg$role, "custodian")) {
     cli::cli_abort(c(
-      "This operation requires a {.val custodian} PostgreSQL connection (active role: {.val {con$role}}).",
+      "This operation requires a {.val custodian} PostgreSQL connection (active role: {.val {pg$role}}).",
       "i" = "Connect with {.code vpro_master_connect(role = \"custodian\")}."
     ))
   }
-  invisible(con)
+  invisible(pg)
 }
 
 vpro_muffle_pg_result_warning <- function(expr) {
@@ -2053,24 +2053,24 @@ vpro_master_connect <- function(
 #' Cleanly closes the underlying `PqConnection` when valid. Safe to call inside
 #' `on.exit()` even if the connection has already been closed.
 #'
-#' @param con A `vpro_pg_conn` connection object (or `NULL`).
+#' @param pg A `vpro_pg_conn` connection object (or `NULL`).
 #' @return `invisible(TRUE)` when an active connection was closed, or
-#'   `invisible(FALSE)` when `con` was already disconnected.
+#'   `invisible(FALSE)` when `pg` was already disconnected.
 #' @export
-vpro_master_disconnect <- function(con) {
-  if (is.null(con)) {
+vpro_master_disconnect <- function(pg) {
+  if (is.null(pg)) {
     return(invisible(FALSE))
   }
-  if (!inherits(con, "vpro_pg_conn") || !is.list(con) || is.null(con$conn)) {
+  if (!inherits(pg, "vpro_pg_conn") || !is.list(pg) || is.null(pg$conn)) {
     cli::cli_abort(
-      "{.arg con} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}."
+      "{.arg pg} must be a {.cls vpro_pg_conn} connection created by {.fn vpro_master_connect}."
     )
   }
-  valid <- tryCatch(DBI::dbIsValid(con$conn), error = function(e) FALSE)
+  valid <- tryCatch(DBI::dbIsValid(pg$conn), error = function(e) FALSE)
   if (!isTRUE(valid)) {
     return(invisible(FALSE))
   }
-  tryCatch(DBI::dbDisconnect(con$conn), error = function(e) NULL)
+  tryCatch(DBI::dbDisconnect(pg$conn), error = function(e) NULL)
   invisible(TRUE)
 }
 
@@ -2081,16 +2081,16 @@ vpro_master_disconnect <- function(con) {
 #' capabilities, master plot and vegetation row counts, snapshot tags, active
 #' 2026 standards release metadata, and pending contributor submissions.
 #'
-#' @param con An active `vpro_pg_conn` connection object.
+#' @param pg An active `vpro_pg_conn` connection object.
 #' @return An S3 object of class `vpro_pg_status` with `print()` and
 #'   `as_tibble()` methods.
 #' @export
-vpro_master_status <- function(con) {
-  vpro_assert_pg_conn(con)
+vpro_master_status <- function(pg) {
+  vpro_assert_pg_conn(pg)
   .vpro_register_pg_s3()
 
   t0 <- proc.time()[["elapsed"]]
-  ver_df <- vpro_pg_query(con, "SHOW server_version", action = "Probe PostgreSQL version")
+  ver_df <- vpro_pg_query(pg, "SHOW server_version", action = "Probe PostgreSQL version")
   elapsed_ms <- max(1L, as.integer(round((proc.time()[["elapsed"]] - t0) * 1000)))
   server_version <- if (nrow(ver_df) >= 1L && ncol(ver_df) >= 1L) {
     trimws(as.character(ver_df[[1L]][[1L]]))
@@ -2100,7 +2100,7 @@ vpro_master_status <- function(con) {
 
   ext_df <- tryCatch(
     vpro_pg_query(
-      con,
+      pg,
       "SELECT extversion FROM pg_extension WHERE extname = 'postgis' LIMIT 1",
       action = "Inspect PostGIS extension"
     ),
@@ -2114,7 +2114,7 @@ vpro_master_status <- function(con) {
 
   can_bootstrap_schema <- tryCatch({
     b_df <- vpro_pg_query(
-      con,
+      pg,
       "SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS ok",
       action = "Check database CREATE privilege"
     )
@@ -2122,7 +2122,7 @@ vpro_master_status <- function(con) {
   }, error = function(e) FALSE)
 
   sch_df <- vpro_pg_query(
-    con,
+    pg,
     "SELECT COUNT(*) AS n FROM information_schema.schemata WHERE schema_name IN ('becmaster', 'staging', 'standards')",
     action = "Inspect VPro PostgreSQL schemas"
   )
@@ -2132,7 +2132,7 @@ vpro_master_status <- function(con) {
   if (schema_count == 3L) {
     env_tbl_df <- tryCatch(
       vpro_pg_query(
-        con,
+        pg,
         paste(
           "SELECT EXISTS (",
           "  SELECT 1 FROM pg_class c",
@@ -2174,7 +2174,7 @@ vpro_master_status <- function(con) {
       "       ELSE FALSE END AS can_read_staging"
     )
     priv_df <- tryCatch(
-      vpro_pg_query(con, priv_sql, action = "Check PostgreSQL table privileges"),
+      vpro_pg_query(pg, priv_sql, action = "Check PostgreSQL table privileges"),
       error = function(e) data.frame()
     )
     if (nrow(priv_df) >= 1L) {
@@ -2200,23 +2200,23 @@ vpro_master_status <- function(con) {
 
   if (schemas_bootstrapped && can_read_master) {
     becmaster_plots <- tryCatch({
-      d <- vpro_pg_query(con, "SELECT COUNT(*) AS n FROM becmaster.env")
+      d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.env")
       if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
     }, error = function(e) 0L)
 
     becmaster_veg <- tryCatch({
-      d <- vpro_pg_query(con, "SELECT COUNT(*) AS n FROM becmaster.veg")
+      d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.veg")
       if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
     }, error = function(e) 0L)
 
     snapshot_count <- tryCatch({
-      d <- vpro_pg_query(con, "SELECT COUNT(*) AS n FROM becmaster.snapshots")
+      d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.snapshots")
       if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
     }, error = function(e) 0L)
 
     latest_snapshot_tag <- tryCatch({
       d <- vpro_pg_query(
-        con,
+        pg,
         "SELECT snapshot_tag FROM becmaster.snapshots ORDER BY created_at DESC LIMIT 1"
       )
       if (nrow(d) >= 1L && !is.na(d$snapshot_tag[[1L]]) && nzchar(d$snapshot_tag[[1L]])) {
@@ -2228,7 +2228,7 @@ vpro_master_status <- function(con) {
 
     rel_df <- tryCatch(
       vpro_pg_query(
-        con,
+        pg,
         paste(
           "SELECT release_id, bec_version, taxonomy_version, vlists_sha256",
           "FROM standards.library_releases",
@@ -2250,7 +2250,7 @@ vpro_master_status <- function(con) {
   if (schemas_bootstrapped && can_read_staging) {
     pending_submissions <- tryCatch({
       d <- vpro_pg_query(
-        con,
+        pg,
         "SELECT COUNT(*) AS n FROM staging.submissions WHERE status = 'pending'"
       )
       if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
@@ -2260,10 +2260,10 @@ vpro_master_status <- function(con) {
   structure(
     list(
       connected = TRUE,
-      role = as.character(con$role),
-      config_source = as.character(con$config_source),
-      dbname = as.character(con$dbname),
-      sslmode = as.character(con$sslmode),
+      role = as.character(pg$role),
+      config_source = as.character(pg$config_source),
+      dbname = as.character(pg$dbname),
+      sslmode = as.character(pg$sslmode),
       latency_ms = elapsed_ms,
       server_version = server_version,
       postgis_version = postgis_version,
@@ -2353,7 +2353,7 @@ as_tibble.vpro_pg_status <- function(x, ...) {
 #' role grants / RLS policies matching `vpro_wails/internal/cloudsync/schema.go`.
 #' Never modifies `public` or drops existing data.
 #'
-#' @param con A custodian `vpro_pg_conn` connection (`role == "custodian"`).
+#' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`).
 #' @param contributor_role Optional PostgreSQL role name to receive contributor
 #'   `SELECT` / `staging` `INSERT` grants and RLS policies when present in
 #'   `pg_roles`.
@@ -2363,8 +2363,8 @@ as_tibble.vpro_pg_status <- function(x, ...) {
 #' @return A list summarizing pre-existing and newly created schemas/tables,
 #'   applied migrations, extension flags, and role grant status.
 #' @export
-vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role = NULL) {
-  vpro_assert_pg_conn(con, require_custodian = TRUE)
+vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = NULL) {
+  vpro_assert_pg_conn(pg, require_custodian = TRUE)
 
   norm_role <- function(r, arg_nm) {
     if (is.null(r)) return("")
@@ -2384,7 +2384,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   target_schemas <- c("becmaster", "staging", "standards")
 
   existing_sch_df <- vpro_pg_query(
-    con,
+    pg,
     "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('becmaster', 'staging', 'standards')",
     action = "Inspect existing PostgreSQL schemas"
   )
@@ -2395,7 +2395,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   }
 
   existing_tbl_df <- vpro_pg_query(
-    con,
+    pg,
     paste(
       "SELECT table_schema, table_name FROM information_schema.tables",
       "WHERE table_schema IN ('becmaster', 'staging', 'standards') AND table_type = 'BASE TABLE'",
@@ -2413,7 +2413,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   for (s_name in target_schemas) {
     if (s_name %in% existing_schemas) {
       priv <- vpro_pg_query(
-        con,
+        pg,
         "SELECT has_schema_privilege(current_user, $1, 'CREATE') AS ok",
         params = list(s_name),
         action = "Check schema CREATE privilege"
@@ -2425,7 +2425,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
       }
     } else {
       db_priv <- vpro_pg_query(
-        con,
+        pg,
         "SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS ok",
         action = "Check database CREATE privilege"
       )
@@ -2436,7 +2436,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
         ))
       }
       vpro_pg_execute(
-        con,
+        pg,
         paste0("CREATE SCHEMA IF NOT EXISTS ", vpro_quote_ident(s_name)),
         action = paste0("Create schema ", s_name)
       )
@@ -2445,7 +2445,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   }
 
   ext_df <- vpro_pg_query(
-    con,
+    pg,
     paste(
       "SELECT e.extname, n.nspname AS schema_name",
       "FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace",
@@ -2462,7 +2462,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   }
 
   vpro_pg_execute(
-    con,
+    pg,
     paste(
       "CREATE TABLE IF NOT EXISTS becmaster.schema_migrations (",
       "  version INT PRIMARY KEY,",
@@ -2475,7 +2475,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   )
 
   mig_df <- vpro_pg_query(
-    con,
+    pg,
     "SELECT EXISTS (SELECT 1 FROM becmaster.schema_migrations WHERE version = 1) AS ok",
     action = "Check schema_migrations version 1"
   )
@@ -2489,13 +2489,13 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   applied_migrations <- character(0L)
   vpro_pg_exec_safe(
     function() {
-      DBI::dbWithTransaction(con$conn, {
+      DBI::dbWithTransaction(pg$conn, {
         for (stmt in stmts) {
-          DBI::dbExecute(con$conn, stmt)
+          DBI::dbExecute(pg$conn, stmt)
         }
         if (!v1_already_applied) {
           DBI::dbExecute(
-            con$conn,
+            pg$conn,
             "INSERT INTO becmaster.schema_migrations (version, name) VALUES (1, 'v1_becmaster_staging_standards') ON CONFLICT (version) DO NOTHING"
           )
           applied_migrations <<- "1:v1_becmaster_staging_standards"
@@ -2508,7 +2508,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   role_exists <- function(r_name) {
     if (!nzchar(r_name)) return(FALSE)
     d <- vpro_pg_query(
-      con,
+      pg,
       "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok",
       params = list(r_name),
       action = "Check PostgreSQL pg_roles"
@@ -2585,9 +2585,9 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
 
     vpro_pg_exec_safe(
       function() {
-        DBI::dbWithTransaction(con$conn, {
+        DBI::dbWithTransaction(pg$conn, {
           for (g_stmt in grant_stmts) {
-            DBI::dbExecute(con$conn, g_stmt)
+            DBI::dbExecute(pg$conn, g_stmt)
           }
         })
       },
@@ -2598,7 +2598,7 @@ vpro_master_bootstrap <- function(con, contributor_role = NULL, custodian_role =
   }
 
   after_tbl_df <- vpro_pg_query(
-    con,
+    pg,
     paste(
       "SELECT table_schema, table_name FROM information_schema.tables",
       "WHERE table_schema IN ('becmaster', 'staging', 'standards') AND table_type = 'BASE TABLE'",

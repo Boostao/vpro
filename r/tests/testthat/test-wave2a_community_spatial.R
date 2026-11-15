@@ -8,7 +8,7 @@ make_wave2a_scratch_dir <- function(prefix = "wave2a") {
 }
 
 test_that("vpro_matrix preserves '00337', aligns env 1-to-1, supports dense/sparse transforms, and feeds vegan in 1 line", {
-  ws <- vpro_sample()
+  ws <- vpro_connect("Sample")
 
   m_proj <- vpro_matrix(ws, scope = "project", value = "cover", strata = "total", lump = TRUE, transform = "none")
   expect_true(is.matrix(m_proj))
@@ -72,7 +72,7 @@ test_that("vpro_cluster supports hierarchical, flexible-beta, PAM, FCM, and NC w
   skip_if_not_installed("vegclust")
   skip_if_not_installed("indicspecies")
 
-  ws <- vpro_sample()
+  ws <- vpro_connect("Sample")
   scratch <- make_wave2a_scratch_dir("cluster")
   on.exit(unlink(scratch, recursive = TRUE), add = TRUE)
 
@@ -145,7 +145,7 @@ test_that("vpro_sf repairs positive BC longitudes, backfills UTM->DD, flags >250
   on.exit(unlink(scratch, recursive = TRUE), add = TRUE)
 
   db_path <- file.path(scratch, "Sample.db")
-  file.copy(vpro_sample()$project_path, db_path)
+  file.copy(vpro_connect("Sample")$project_path, db_path)
 
   wcon <- DBI::dbConnect(RSQLite::SQLite(), db_path)
   on.exit(if (DBI::dbIsValid(wcon)) DBI::dbDisconnect(wcon), add = TRUE)
@@ -233,12 +233,12 @@ test_that("vpro_sf repairs positive BC longitudes, backfills UTM->DD, flags >250
   expect_error(vpro_export_gpkg(ws, gpkg_path, overwrite = FALSE), "overwrite = FALSE")
 })
 
-test_that("vpro_check_lmh25 and vpro_validate detect all 7 pedological rule families and 5 workspace QA checks", {
+test_that("vpro_validate(checks = 'lmh25') and vpro_validate detect all 7 pedological rule families and 5 workspace QA checks", {
   scratch <- make_wave2a_scratch_dir("lmh25")
   on.exit(unlink(scratch, recursive = TRUE), add = TRUE)
 
   db_path <- file.path(scratch, "Sample.db")
-  file.copy(vpro_sample()$project_path, db_path)
+  file.copy(vpro_connect("Sample")$project_path, db_path)
 
   wcon <- DBI::dbConnect(RSQLite::SQLite(), db_path)
   on.exit(if (DBI::dbIsValid(wcon)) DBI::dbDisconnect(wcon), add = TRUE)
@@ -304,8 +304,11 @@ test_that("vpro_check_lmh25 and vpro_validate detect all 7 pedological rule fami
 
   ws <- vpro_connect(db_path)
 
-  # 1. Test vpro_check_lmh25() across all 7 rule families
-  aud <- vpro_check_lmh25(ws, scope = "project")
+  # 1. Test vpro_validate(checks = "lmh25") across all 7 rule families
+  val_lmh <- vpro_validate(ws, scope = "project", checks = "lmh25")
+  expect_s3_class(val_lmh, "vpro_validation")
+  expect_identical(val_lmh$checks, "lmh25")
+  aud <- val_lmh$lmh25
   expect_s3_class(aud, "vpro_lmh25_audit")
   expect_message(print.vpro_lmh25_audit(aud), "vpro_lmh25_audit")
   iss <- as_tibble.vpro_lmh25_audit(aud)

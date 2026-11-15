@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -77,14 +78,15 @@ type DendrogramGeometry struct {
 
 // ClusteringRequest configures out-of-process BEC_R vegan / vegclust multivariate clustering.
 type ClusteringRequest struct {
-	Method               string   `json:"method"`    // "NC" (vegclust Noise Clustering, default) | "KM" | "FCM" | "HCLUST"
-	Distance             string   `json:"distance"`  // "bray" (default) | "chord" | "jaccard"
-	Linkage              string   `json:"linkage"`   // "ward.D2" (default) | "average" | "complete"
-	Transform            string   `json:"transform"` // "sqrt" (default) | "log1p" | "chord" | "hellinger" | "raw"
-	K                    int      `json:"k"`         // Target cluster count (default 3)
-	Fuzziness            float64  `json:"fuzziness"` // vegclust m > 1.0 (default 1.25)
-	DNoise               float64  `json:"dnoise"`    // vegclust noise distance (default 0.75)
-	CutHeight            float64  `json:"cutHeight"` // Optional hierarchical cut height
+	Method               string   `json:"method"`         // "NC" (vegclust Noise Clustering, default) | "KM" | "FCM" | "HCLUST" | "BETA_FLEXIBLE" | "PAM"
+	Distance             string   `json:"distance"`       // "bray" (default) | "chord" | "jaccard"
+	Linkage              string   `json:"linkage"`        // "ward.D2" (default) | "average" | "complete"
+	Transform            string   `json:"transform"`      // "sqrt" (default) | "log1p" | "chord" | "hellinger" | "raw"
+	K                    int      `json:"k"`              // Target cluster count (default 3)
+	Fuzziness            float64  `json:"fuzziness"`      // vegclust m > 1.0 (default 1.25)
+	DNoise               float64  `json:"dnoise"`         // vegclust noise distance (default 0.75)
+	Beta                 *float64 `json:"beta,omitempty"` // Lance-Williams flexible-beta parameter in (-1.0, 1.0) (default -0.25)
+	CutHeight            float64  `json:"cutHeight"`      // Optional hierarchical cut height
 	ApplyLump            bool     `json:"applyLump"` // Fold <Name>_Lump (Use != 0) species codes
 	LumpName             string   `json:"lumpName"`  // Optional explicit Lump prefix (defaults to active project)
 	UseActiveSU          bool     `json:"useActiveSu"`
@@ -234,9 +236,9 @@ func RunMultivariateClustering(
 		method = "NC"
 	}
 	switch method {
-	case "NC", "KM", "FCM", "HCLUST":
+	case "NC", "KM", "FCM", "HCLUST", "BETA_FLEXIBLE", "PAM":
 	default:
-		return nil, fmt.Errorf("unsupported clustering method %q (expected NC, KM, FCM, or HCLUST)", req.Method)
+		return nil, fmt.Errorf("unsupported clustering method %q (expected NC, KM, FCM, HCLUST, BETA_FLEXIBLE, or PAM)", req.Method)
 	}
 
 	distance := strings.ToLower(strings.TrimSpace(req.Distance))
@@ -278,6 +280,13 @@ func RunMultivariateClustering(
 	}
 	if dnoise < 0.05 || dnoise > 5.0 {
 		return nil, fmt.Errorf("vegclust noise distance dnoise (%.2f) must be in [0.05, 5.0]", dnoise)
+	}
+	beta := -0.25
+	if req.Beta != nil {
+		beta = *req.Beta
+	}
+	if math.IsNaN(beta) || math.IsInf(beta, 0) || beta <= -1.0 || beta >= 1.0 {
+		return nil, fmt.Errorf("flexible-beta parameter beta (%.2f) must be finite and strictly in (-1.0, 1.0)", beta)
 	}
 
 	unitPrefix := strings.TrimSpace(req.UnitPrefix)
@@ -353,6 +362,7 @@ func RunMultivariateClustering(
 			"k":           k,
 			"fuzziness":   fuzziness,
 			"dnoise":      dnoise,
+			"beta":        beta,
 			"cutHeight":   req.CutHeight,
 			"applyLump":   req.ApplyLump,
 			"lumpTable":   lumpTable,

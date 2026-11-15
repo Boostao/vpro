@@ -988,10 +988,11 @@ func ComputePlotClimateAndDualEdatopic(
 			evaluatedSpecs = append(evaluatedSpecs, plotClimateSpec{ep: ep, hash: h, hit: false})
 			if _, ok := normByHash[h]; !ok {
 				if _, queued := uncachedByHash[h]; !queued {
+					normLon := NormalizeBCWesternLongitude(*ep.Longitude)
 					pt := rClimatePointInput{
 						CoordElevHash: h,
 						Lat:           math.Round((*ep.Latitude)*1e5) / 1e5,
-						Lon:           math.Round((*ep.Longitude)*1e5) / 1e5,
+						Lon:           math.Round(normLon*1e5) / 1e5,
 						Elev:          math.Round((*ep.Elevation)*10.0) / 10.0,
 						BGC:           ep.BGC,
 						Zone:          ep.Zone,

@@ -10,12 +10,12 @@
 #' species-by-unit synthesis table (`Constancy`, `MeanCover`,
 #' `Presence-Signif`).
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param group_by Vegetation grouping level: `"strata"` (`A`, `B`, `C`, `D`),
 #'   `"layer"`, `"lifeform"`, or `"total"`.
-#' @param hierarchy_breaks Logical; if `TRUE` and `con$hierarchy` has `~`
+#' @param hierarchy_breaks Logical; if `TRUE` and `ws$hierarchy` has `~`
 #'   breakpoint nodes, aggregates plots by `BreakpointUnit`.
-#' @param lump Logical (`TRUE` uses active `con$lump`), `FALSE`, a `*_Lump` table
+#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
 #'   name, or a two-column `data.frame(SppCode, LumpCode)`.
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
@@ -23,25 +23,30 @@
 #'   least one unit to retain a species/group row.
 #' @param digits Integer decimal places for ACE 15-significant-digit rounding
 #'   (default `1L`).
+#' @param cover_precedence Precedence when both `TotalA`/`TotalB` and sublayers
+#'   (`Cover1..3`/`Cover4..5c`) exist: `"strata_totals"` (default, matching MS
+#'   Access summary queries) or `"sublayer_sum"`.
 #' @return An S3 object of class `vpro_summary_veg` containing `$long`, `$wide`,
 #'   and `$units` tibbles.
 #' @export
 vpro_summary_veg <- function(
-  con,
+  ws,
   group_by = c("strata", "layer", "lifeform", "total"),
   hierarchy_breaks = FALSE,
   lump = TRUE,
   exclude_modifiers = TRUE,
   min_constancy = 0,
-  digits = 1L
+  digits = 1L,
+  cover_precedence = c("strata_totals", "sublayer_sum")
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   .vpro_register_wave2b_s3()
   group_by <- match.arg(group_by)
+  cover_precedence <- match.arg(cover_precedence)
   digits <- as.integer(digits)
 
   scoped <- .vpro_resolve_classified_plots(
-    con,
+    ws,
     exclude_modifiers = exclude_modifiers,
     hierarchy_breaks = hierarchy_breaks
   )
@@ -102,12 +107,13 @@ vpro_summary_veg <- function(
     "total" = "total"
   )
   veg_df <- vpro_veg(
-    con,
+    ws,
     scope = "project",
     lump = lump,
     strata = strata_arg,
     combine = "sum",
-    exclude_modifiers = FALSE
+    exclude_modifiers = FALSE,
+    cover_precedence = cover_precedence
   )
   veg_df <- veg_df[veg_df$PlotNumber %in% su_dt[["PlotNumber"]] & !is.na(veg_df$Cover) & veg_df$Cover > 0, , drop = FALSE]
 
@@ -340,8 +346,8 @@ as_tibble.vpro_summary_veg <- function(x, format = c("long", "wide"), ...) {
 #' strata cover attributes per `SiteUnit` (or rolled up to `~` tilde
 #' `BreakpointUnit`s when `hierarchy_breaks = TRUE`).
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param hierarchy_breaks Logical; if `TRUE` and `con$hierarchy` contains `~`
+#' @param ws A `vpro_workspace` handle.
+#' @param hierarchy_breaks Logical; if `TRUE` and `ws$hierarchy` contains `~`
 #'   breakpoint nodes, rolls plots up to their `BreakpointUnit`.
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
@@ -349,14 +355,14 @@ as_tibble.vpro_summary_veg <- function(x, format = c("long", "wide"), ...) {
 #'   with one row per unit.
 #' @export
 vpro_summary_env <- function(
-  con,
+  ws,
   hierarchy_breaks = FALSE,
   exclude_modifiers = TRUE
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   .vpro_register_wave2b_s3()
   scoped <- .vpro_resolve_classified_plots(
-    con,
+    ws,
     exclude_modifiers = exclude_modifiers,
     hierarchy_breaks = hierarchy_breaks
   )
@@ -529,13 +535,22 @@ as_tibble.vpro_summary_env <- function(x, ...) {
 #' @param x A BEC synthesis result object, data frame, or named list of data
 #'   frames.
 #' @param path Destination `.xlsx` file path.
+#' @param overwrite Logical; if `TRUE` (default), replaces an existing `.xlsx`
+#'   at `path`. If `FALSE` and `path` exists, aborts with an error.
 #' @return Normalized path (`winslash = "/"`) to the written `.xlsx` file,
 #'   invisibly.
 #' @export
-vpro_export_xlsx <- function(x, path) {
+vpro_export_xlsx <- function(x, path, overwrite = TRUE) {
   rlang::check_installed("writexl", reason = "to export BEC synthesis workbooks to `.xlsx`.")
   if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
     rlang::abort("`path` must be a single non-empty `.xlsx` file path.")
+  }
+  if (!is.logical(overwrite) || length(overwrite) != 1L || is.na(overwrite)) {
+    rlang::abort("`overwrite` must be TRUE or FALSE.")
+  }
+  out_path <- vpro_abs_path(trimws(path))
+  if (file.exists(out_path) && !isTRUE(overwrite)) {
+    rlang::abort(paste0("Workbook already exists and `overwrite = FALSE`: ", out_path))
   }
 
   sheets <- if (inherits(x, "vpro_diagnostics")) {
@@ -594,10 +609,10 @@ vpro_export_xlsx <- function(x, path) {
   }
 
   names(sheets) <- .vpro_sanitize_sheet_names(names(sheets))
-  parent_dir <- dirname(path)
+  parent_dir <- dirname(out_path)
   if (!dir.exists(parent_dir)) {
     dir.create(parent_dir, recursive = TRUE, showWarnings = FALSE)
   }
-  writexl::write_xlsx(sheets, path = path)
-  invisible(normalizePath(path, winslash = "/", mustWork = TRUE))
+  writexl::write_xlsx(sheets, path = out_path)
+  invisible(normalizePath(out_path, winslash = "/", mustWork = TRUE))
 }

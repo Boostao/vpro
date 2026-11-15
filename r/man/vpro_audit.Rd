@@ -4,10 +4,10 @@
 \alias{vpro_audit}
 \title{Read \verb{<Project>_Audit} trail records}
 \usage{
-vpro_audit(con)
+vpro_audit(ws)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 }
 \value{
 A tibble of \verb{_Audit} records with normalized booleans.

@@ -5,7 +5,7 @@
 \title{Query tidy vegetation records from PostgreSQL \code{BECMaster} with lump and strata synthesis}
 \usage{
 vpro_master_veg(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -20,7 +20,7 @@ vpro_master_veg(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
+\item{pg}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
 
 \item{zones}{Optional character vector of BEC zone codes (e.g. \code{"CWH"}, \code{"SBS"}).}
 

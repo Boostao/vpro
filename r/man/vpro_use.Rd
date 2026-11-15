@@ -4,12 +4,12 @@
 \alias{vpro_use}
 \title{Switch active project, SiteUnit (\verb{*_SU}), hierarchy, or lump table on a workspace}
 \usage{
-vpro_use(con, project = NULL, su = NULL, hierarchy = NULL, lump = NULL)
+vpro_use(ws, project = NULL, su = NULL, hierarchy = NULL, lump = NULL)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
-\item{project}{Optional project prefix inside \code{con$project_path}.}
+\item{project}{Optional project prefix inside \code{ws$project_path}.}
 
 \item{su}{Optional \verb{*_SU} table name (or \code{"None"} to clear).}
 

@@ -35,7 +35,7 @@ vpro_pg_validate_flag <- function(x, arg_name) {
   x
 }
 
-vpro_pg_postgis_geom_schema <- function(con) {
+vpro_pg_postgis_geom_schema <- function(pg) {
   sql <- paste(
     "SELECT COALESCE((",
     "  SELECT n.nspname",
@@ -52,7 +52,7 @@ vpro_pg_postgis_geom_schema <- function(con) {
     ") AS has_geom"
   )
   res <- tryCatch(
-    vpro_pg_query(con, sql, params = NULL, action = "inspect becmaster.env PostGIS geometry column"),
+    vpro_pg_query(pg, sql, params = NULL, action = "inspect becmaster.env PostGIS geometry column"),
     error = function(e) data.frame(postgis_schema = "", has_geom = FALSE)
   )
   if (nrow(res) >= 1L && isTRUE(vpro_access_to_logical(res$has_geom[[1L]])) &&
@@ -65,7 +65,7 @@ vpro_pg_postgis_geom_schema <- function(con) {
 
 # Internal parameterized WHERE builder for becmaster.env push-down queries
 vpro_pg_subset_where <- function(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -75,7 +75,7 @@ vpro_pg_subset_where <- function(
   allow_full = FALSE,
   has_limit = FALSE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   allow_full <- vpro_pg_validate_flag(allow_full, "allow_full")
   has_limit <- vpro_pg_validate_flag(has_limit, "has_limit")
 
@@ -146,7 +146,7 @@ vpro_pg_subset_where <- function(
     p_min_lat <- next_param(bbox_clean[[2L]])
     p_max_lon <- next_param(bbox_clean[[3L]])
     p_max_lat <- next_param(bbox_clean[[4L]])
-    postgis_schema <- vpro_pg_postgis_geom_schema(con)
+    postgis_schema <- vpro_pg_postgis_geom_schema(pg)
     if (nzchar(postgis_schema)) {
       clauses <- c(
         clauses,
@@ -189,15 +189,158 @@ vpro_pg_subset_where <- function(
   )
 }
 
+.vpro_sensitive_species_codes <- function(pg = NULL, vlists_path = getOption("vpro.vlists_path", NULL)) {
+  codes <- character()
+  syn_pairs <- data.frame(Code = character(), OldCode = character(), stringsAsFactors = FALSE)
+
+  vdb <- if (!is.null(vlists_path) && is.character(vlists_path) && length(vlists_path) == 1L &&
+             !is.na(vlists_path) && nzchar(trimws(vlists_path)) && file.exists(vlists_path)) {
+    trimws(vlists_path)
+  } else {
+    cand <- file.path(vpro_data_dir(), "VLists.db")
+    if (file.exists(cand)) cand else tryCatch(vpro_bundled_db("VLists.db"), error = function(e) "")
+  }
+
+  if (is.character(vdb) && length(vdb) == 1L && nzchar(vdb) && file.exists(vdb)) {
+    dbc <- tryCatch(vpro_sqlite_ro(vdb), error = function(e) NULL)
+    if (!is.null(dbc)) {
+      on.exit(if (DBI::dbIsValid(dbc)) DBI::dbDisconnect(dbc), add = TRUE)
+      if (isTRUE(tryCatch(DBI::dbExistsTable(dbc, "USysSppAttributes"), error = function(e) FALSE))) {
+        attr_df <- tryCatch(
+          DBI::dbGetQuery(
+            dbc,
+            'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM "USysSppAttributes" WHERE "RedBlueList" IS NOT NULL AND TRIM(CAST("RedBlueList" AS TEXT)) <> \'\' AND "Code" IS NOT NULL AND TRIM(CAST("Code" AS TEXT)) <> \'\''
+          ),
+          error = function(e) data.frame()
+        )
+        if (nrow(attr_df) > 0L) {
+          codes <- c(codes, as.character(attr_df$code))
+        }
+      }
+      if (isTRUE(tryCatch(DBI::dbExistsTable(dbc, "USysAllSpecs"), error = function(e) FALSE))) {
+        sp_df <- tryCatch(
+          DBI::dbGetQuery(
+            dbc,
+            'SELECT UPPER(TRIM(CAST("Code" AS TEXT))) AS "Code", UPPER(TRIM(CAST("OldCode" AS TEXT))) AS "OldCode" FROM "USysAllSpecs" WHERE "OldCode" IS NOT NULL AND TRIM(CAST("OldCode" AS TEXT)) <> \'\' AND "Code" IS NOT NULL AND TRIM(CAST("Code" AS TEXT)) <> \'\''
+          ),
+          error = function(e) data.frame()
+        )
+        if (nrow(sp_df) > 0L) {
+          syn_pairs <- rbind(syn_pairs, sp_df)
+        }
+      }
+    }
+  }
+
+  if (!is.null(pg)) {
+    has_pg_attr <- tryCatch({
+      chk <- vpro_pg_query(
+        pg,
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'standards' AND table_name = 'usys_spp_attributes') AS ok",
+        params = NULL,
+        action = "check standards.usys_spp_attributes availability"
+      )
+      nrow(chk) >= 1L && isTRUE(vpro_access_to_logical(chk$ok[[1L]]))
+    }, error = function(e) FALSE)
+    if (isTRUE(has_pg_attr)) {
+      pg_attr <- tryCatch(
+        vpro_pg_query(
+          pg,
+          'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM standards.usys_spp_attributes WHERE "RedBlueList" IS NOT NULL AND TRIM(CAST("RedBlueList" AS TEXT)) <> \'\' AND "Code" IS NOT NULL AND TRIM(CAST("Code" AS TEXT)) <> \'\'',
+          params = NULL,
+          action = "query sensitive species in standards.usys_spp_attributes"
+        ),
+        error = function(e) data.frame()
+      )
+      if (nrow(pg_attr) > 0L) {
+        codes <- c(codes, as.character(pg_attr$code))
+      }
+    }
+  }
+
+  codes <- unique(toupper(trimws(codes[!is.na(codes)])))
+  codes <- codes[nzchar(codes)]
+  if (length(codes) > 0L && nrow(syn_pairs) > 0L) {
+    syn_pairs$Code <- toupper(trimws(as.character(syn_pairs$Code)))
+    syn_pairs$OldCode <- toupper(trimws(as.character(syn_pairs$OldCode)))
+    old_hits <- syn_pairs$OldCode[syn_pairs$Code %in% codes]
+    canon_hits <- syn_pairs$Code[syn_pairs$OldCode %in% codes]
+    codes <- unique(c(codes, old_hits, canon_hits))
+    codes <- codes[nzchar(codes)]
+  }
+  sort(codes)
+}
+
+.vpro_sensitive_plots_in_pg <- function(pg, plots, sensitive_codes) {
+  plots <- unique(as.character(plots[!is.na(plots) & nzchar(trimws(as.character(plots)))]))
+  sensitive_codes <- unique(toupper(trimws(as.character(sensitive_codes[!is.na(sensitive_codes)]))))
+  sensitive_codes <- sensitive_codes[nzchar(sensitive_codes)]
+  if (length(plots) == 0L || length(sensitive_codes) == 0L) {
+    return(character(0L))
+  }
+
+  tax_bundle <- tryCatch(vpro_pg_load_cloud_taxonomy(pg, resolve_synonyms = TRUE), error = function(e) NULL)
+  if (!is.null(tax_bundle) && length(tax_bundle$syn_map) > 0L) {
+    syn_map <- tax_bundle$syn_map
+    extra_old <- names(syn_map)[unname(syn_map) %in% sensitive_codes]
+    extra_canon <- unname(syn_map[names(syn_map) %in% sensitive_codes])
+    sensitive_codes <- unique(c(sensitive_codes, extra_old, extra_canon))
+    sensitive_codes <- sensitive_codes[nzchar(sensitive_codes)]
+  }
+
+  hit_df <- vpro_pg_query(
+    pg,
+    paste(
+      'SELECT DISTINCT CAST("PlotNumber" AS TEXT) AS "PlotNumber"',
+      "FROM becmaster.veg",
+      'WHERE "PlotNumber" = ANY($1::text[])',
+      '  AND UPPER(TRIM(CAST("Species" AS TEXT))) = ANY($2::text[])'
+    ),
+    params = list(vpro_pg_text_array(plots), vpro_pg_text_array(sensitive_codes)),
+    action = "identify plots containing Red/Blue listed sensitive species"
+  )
+  if (!is.data.frame(hit_df) || nrow(hit_df) == 0L) {
+    return(character(0L))
+  }
+  unique(as.character(hit_df$PlotNumber[!is.na(hit_df$PlotNumber) & nzchar(hit_df$PlotNumber)]))
+}
+
+.vpro_redact_coord_df <- function(df, sensitive_plots) {
+  if (!is.data.frame(df) || nrow(df) == 0L || length(sensitive_plots) == 0L || !("PlotNumber" %in% names(df))) {
+    return(df)
+  }
+  mask <- as.character(df$PlotNumber) %in% as.character(sensitive_plots)
+  if (!any(mask)) {
+    return(df)
+  }
+  coord_cols <- intersect(
+    c("Latitude", "Longitude", "UTMEasting", "UTMNorthing", "UTMZone"),
+    names(df)
+  )
+  for (cc in coord_cols) {
+    if (is.character(df[[cc]])) {
+      df[[cc]][mask] <- NA_character_
+    } else if (is.integer(df[[cc]])) {
+      df[[cc]][mask] <- NA_integer_
+    } else {
+      df[[cc]][mask] <- NA_real_
+    }
+  }
+  df
+}
+
 #' Query tidy plot environment and administration records from PostgreSQL `BECMaster`
 #'
 #' Executes a parameterized push-down query against `becmaster.env` (optionally
 #' left-joining `becmaster.admin`), preserving literal leading-zero `PlotNumber`
 #' strings, converting Access `-1/0` booleans to R `logical`, narrowing
 #' `StrataCover*` columns to IEEE-754 `float32`, and deriving `SiteUnit` so the
-#' returned tibble matches [vpro_env()] column names and types.
+#' returned tibble matches [vpro_env()] column names and types. When connecting
+#' as a non-custodian role, coordinates (`Latitude`, `Longitude`, `UTMEasting`,
+#' `UTMNorthing`, `UTMZone`) are automatically redacted to `NA` on plots
+#' containing sensitive (`USysSppAttributes.RedBlueList`) species.
 #'
-#' @param con A `vpro_pg_conn` handle created by `vpro_master_connect()`.
+#' @param pg A `vpro_pg_conn` handle created by `vpro_master_connect()`.
 #' @param zones Optional character vector of BEC zone codes (e.g. `"CWH"`, `"SBS"`).
 #' @param subzones Optional character vector of BEC subzone/variant codes (e.g. `"vm1"`).
 #' @param project_ids Optional character vector of `ProjectID` values.
@@ -215,7 +358,7 @@ vpro_pg_subset_where <- function(
 #' @return A tibble of plot environment records ordered by `PlotNumber`.
 #' @export
 vpro_master_env <- function(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -226,13 +369,13 @@ vpro_master_env <- function(
   limit = NULL,
   allow_full = FALSE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   include_admin <- vpro_pg_validate_flag(include_admin, "include_admin")
   allow_full <- vpro_pg_validate_flag(allow_full, "allow_full")
   limit_int <- vpro_pg_validate_limit(limit, allow_null = TRUE)
 
   sub <- vpro_pg_subset_where(
-    con = con,
+    pg = pg,
     zones = zones,
     subzones = subzones,
     project_ids = project_ids,
@@ -297,7 +440,7 @@ vpro_master_env <- function(
   )
 
   df <- vpro_pg_query(
-    con,
+    pg,
     sql,
     params = if (length(sub$params) > 0L) sub$params else NULL,
     action = "query becmaster.env"
@@ -338,13 +481,23 @@ vpro_master_env <- function(
     df[[cc]] <- vpro_narrow_float32(as.numeric(df[[cc]]))
   }
 
+  if (!identical(pg$role, "custodian") && nrow(df) > 0L) {
+    sens_codes <- .vpro_sensitive_species_codes(pg = pg)
+    if (length(sens_codes) > 0L) {
+      sens_plots <- .vpro_sensitive_plots_in_pg(pg, df$PlotNumber, sens_codes)
+      if (length(sens_plots) > 0L) {
+        df <- .vpro_redact_coord_df(df, sens_plots)
+      }
+    }
+  }
+
   front <- intersect(c("PlotNumber", "SiteUnit"), names(df))
   df <- df[, c(front, setdiff(names(df), front)), drop = FALSE]
   rownames(df) <- NULL
   tibble::as_tibble(df)
 }
 
-vpro_pg_load_cloud_taxonomy <- function(con, resolve_synonyms = TRUE) {
+vpro_pg_load_cloud_taxonomy <- function(pg, resolve_synonyms = TRUE) {
   sql <- paste(
     'SELECT UPPER(TRIM(CAST("Code" AS TEXT))) AS "Code",',
     '       UPPER(TRIM(CAST("OldCode" AS TEXT))) AS "OldCode",',
@@ -356,7 +509,7 @@ vpro_pg_load_cloud_taxonomy <- function(con, resolve_synonyms = TRUE) {
     'WHERE "Code" IS NOT NULL AND TRIM("Code") <> \'\''
   )
   cloud_specs <- tryCatch(
-    vpro_pg_query(con, sql, params = NULL, action = "query standards.usys_all_specs"),
+    vpro_pg_query(pg, sql, params = NULL, action = "query standards.usys_all_specs"),
     error = function(e) NULL
   )
 
@@ -433,7 +586,7 @@ vpro_pg_load_cloud_taxonomy <- function(con, resolve_synonyms = TRUE) {
 #' @return A tibble matching [vpro_veg()] column names and types identically.
 #' @export
 vpro_master_veg <- function(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -446,7 +599,7 @@ vpro_master_veg <- function(
   limit = NULL,
   allow_full = FALSE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   strata <- match.arg(strata)
   combine <- match.arg(combine)
   resolve_synonyms <- vpro_pg_validate_flag(resolve_synonyms, "resolve_synonyms")
@@ -458,10 +611,10 @@ vpro_master_veg <- function(
       "{.arg lump} in {.fn vpro_master_veg} must be {.code NULL}, {.code FALSE}, or a {.cls data.frame} containing {.field SppCode} and {.field LumpCode}."
     )
   }
-  lump_tbl <- vpro_lump_map(con = NULL, lump = lump)
+  lump_tbl <- vpro_lump_map(ws = NULL, lump = lump)
 
   sub <- vpro_pg_subset_where(
-    con = con,
+    pg = pg,
     zones = zones,
     subzones = subzones,
     project_ids = project_ids,
@@ -491,7 +644,7 @@ vpro_master_veg <- function(
   )
 
   raw_df <- vpro_pg_query(
-    con,
+    pg,
     sql,
     params = if (length(sub$params) > 0L) sub$params else NULL,
     action = "query becmaster.veg"
@@ -607,7 +760,7 @@ vpro_master_veg <- function(
     cov_cols <- c(cov_cols, "__eff_A", "__eff_B", "__eff_C", "__eff_D")
   }
 
-  tax_bundle <- vpro_pg_load_cloud_taxonomy(con, resolve_synonyms = resolve_synonyms)
+  tax_bundle <- vpro_pg_load_cloud_taxonomy(pg, resolve_synonyms = resolve_synonyms)
   syn_map <- tax_bundle$syn_map
   tax <- tax_bundle$tax
 
@@ -742,7 +895,7 @@ vpro_master_veg <- function(
 #' @return A `vpro_soil` object (`type = "both"`) or a tibble (`"humus"` / `"mineral"`).
 #' @export
 vpro_master_soil <- function(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -752,13 +905,13 @@ vpro_master_soil <- function(
   limit = NULL,
   allow_full = FALSE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   type <- match.arg(type)
   allow_full <- vpro_pg_validate_flag(allow_full, "allow_full")
   limit_int <- vpro_pg_validate_limit(limit, allow_null = TRUE)
 
   sub <- vpro_pg_subset_where(
-    con = con,
+    pg = pg,
     zones = zones,
     subzones = subzones,
     project_ids = project_ids,
@@ -797,7 +950,7 @@ vpro_master_soil <- function(
       'INNER JOIN matched AS m ON s."PlotNumber" = m."PlotNumber"'
     )
     raw <- vpro_pg_query(
-      con,
+      pg,
       sql,
       params = if (length(sub$params) > 0L) sub$params else NULL,
       action = paste0("query becmaster.", pg_tbl)
@@ -835,10 +988,9 @@ vpro_master_soil <- function(
 #' Retrieves audit trail entries filtered by `plots`, `zones` / `subzones` /
 #' `project_ids` (via `becmaster.env`), and/or `merge_tx_id`, ordered by
 #' `audit_seq DESC`. Optionally verifies the cryptographic SHA-256 hash chain
-#' via [vpro_master_verify_audit()] and attaches the result as
-#' `attr(result, "chain_verification")`.
+#' and attaches the result as `attr(result, "chain_verification")`.
 #'
-#' @param con A `vpro_pg_conn` handle.
+#' @param pg A `vpro_pg_conn` handle.
 #' @param plots Optional character vector of `PlotNumber` values.
 #' @param zones Optional character vector of BEC zone codes.
 #' @param subzones Optional character vector of BEC subzone/variant codes.
@@ -846,12 +998,12 @@ vpro_master_soil <- function(
 #' @param merge_tx_id Optional merge transaction UUID(s).
 #' @param limit Optional positive integer row limit (defaults to `1000L`, or
 #'   `NULL` for all matching rows).
-#' @param verify_chain Logical; if `TRUE`, runs [vpro_master_verify_audit()] and
+#' @param verify_chain Logical; if `TRUE`, verifies the SHA-256 hash chain and
 #'   attaches its report to `attr(result, "chain_verification")`.
 #' @return A tibble of `becmaster.audit` records.
 #' @export
 vpro_master_audit <- function(
-  con,
+  pg,
   plots = NULL,
   zones = NULL,
   subzones = NULL,
@@ -860,7 +1012,7 @@ vpro_master_audit <- function(
   limit = 1000L,
   verify_chain = FALSE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   verify_chain <- vpro_pg_validate_flag(verify_chain, "verify_chain")
   limit_int <- vpro_pg_validate_limit(limit, allow_null = TRUE)
 
@@ -933,7 +1085,7 @@ vpro_master_audit <- function(
   )
 
   df <- vpro_pg_query(
-    con,
+    pg,
     sql,
     params = if (length(params) > 0L) params else NULL,
     action = "query becmaster.audit"
@@ -957,7 +1109,7 @@ vpro_master_audit <- function(
   tbl <- tibble::as_tibble(df)
   if (isTRUE(verify_chain)) {
     v_lim <- if (is.null(limit_int)) 1000L else limit_int
-    attr(tbl, "chain_verification") <- vpro_master_verify_audit(con, limit = v_lim)
+    attr(tbl, "chain_verification") <- .vpro_master_verify_audit(pg, limit = v_lim)
   }
   tbl
 }
@@ -970,25 +1122,25 @@ vpro_same_hash <- function(a, b) {
     tolower(trimws(unname(as.character(b[[1L]]))))
 }
 
-#' Verify the cryptographic SHA-256 hash chain on `becmaster.audit`
+#' Verify the cryptographic SHA-256 hash chain on `becmaster.audit` (internal)
 #'
 #' Recomputes `row_hash` across the most recent `limit` rows of `becmaster.audit`
 #' in ascending `audit_seq` order using `vpro_compute_audit_row_hash()`,
-#' matching `VerifyBECMasterAuditChain` in `vpro_wails`
+#' matching `VerifyBECMasterAuditChain` in `vpro`
 #' (`internal/cloudsync/custodian_merge.go`). Anchors the window's first row
 #' against `.vpro_genesis_audit_hash` when starting at the beginning of the
 #' ledger, or against the immediate predecessor row's `row_hash` when verifying
 #' a bounded tail window.
 #'
-#' @param con A `vpro_pg_conn` handle.
+#' @param pg A `vpro_pg_conn` handle.
 #' @param limit Positive integer number of most-recent audit rows to verify
 #'   (defaults to `1000L`).
 #' @return A list with `verified_rows` (`integer`), `valid` (`logical`),
 #'   `partial_window` (`logical`), `tail_hash` (`character`), and `detail`
 #'   (`character`).
-#' @export
-vpro_master_verify_audit <- function(con, limit = 1000L) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+#' @keywords internal
+.vpro_master_verify_audit <- function(pg, limit = 1000L) {
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   limit_int <- if (is.null(limit)) 1000L else vpro_pg_validate_limit(limit, allow_null = FALSE)
 
   audit_spec <- vpro_pg_vp08_specs("Audit")
@@ -1008,7 +1160,7 @@ vpro_master_verify_audit <- function(con, limit = 1000L) {
   )
 
   df <- vpro_pg_query(
-    con,
+    pg,
     sql,
     params = list(as.integer(limit_int)),
     action = "verify becmaster.audit hash chain"
@@ -1089,7 +1241,7 @@ vpro_master_verify_audit <- function(con, limit = 1000L) {
   }
 
   pred_df <- vpro_pg_query(
-    con,
+    pg,
     "SELECT row_hash FROM becmaster.audit WHERE audit_seq < $1::bigint ORDER BY audit_seq DESC LIMIT 1",
     params = list(first_seq_txt),
     action = "verify becmaster.audit predecessor anchor"
@@ -1147,14 +1299,14 @@ vpro_master_verify_audit <- function(con, limit = 1000L) {
 #' `bec_site_series`, `master_site_unit_list`, `usys_zone_list`,
 #' `project_metadata`) ordered by `row_seq`.
 #'
-#' @param con A `vpro_pg_conn` handle.
+#' @param pg A `vpro_pg_conn` handle.
 #' @param table Standards table to read: `"releases"`, `"usys_all_specs"`,
 #'   `"usys_table_of_lists"`, `"bec_site_series"`, `"master_site_unit_list"`,
 #'   `"usys_zone_list"`, or `"project_metadata"`.
 #' @return A tibble of standards release metadata or catalogue records.
 #' @export
 vpro_master_standards <- function(
-  con,
+  pg,
   table = c(
     "releases",
     "usys_all_specs",
@@ -1165,7 +1317,7 @@ vpro_master_standards <- function(
     "project_metadata"
   )
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   table <- match.arg(table)
 
   if (identical(table, "releases")) {
@@ -1176,7 +1328,7 @@ vpro_master_standards <- function(
       "FROM standards.library_releases",
       "ORDER BY published_at DESC, release_id DESC"
     )
-    df <- vpro_pg_query(con, sql, params = NULL, action = "query standards.library_releases")
+    df <- vpro_pg_query(pg, sql, params = NULL, action = "query standards.library_releases")
     for (tc in intersect(c(
       "release_id", "published_by", "bec_version", "taxonomy_version",
       "vlists_sha256", "bec_db_sha256", "vmetadata_sha256", "notes"
@@ -1200,7 +1352,7 @@ vpro_master_standards <- function(
     " FROM standards.", vpro_quote_ident(table),
     " ORDER BY row_seq"
   )
-  df <- vpro_pg_query(con, sql, params = NULL, action = paste0("query standards.", table))
+  df <- vpro_pg_query(pg, sql, params = NULL, action = paste0("query standards.", table))
   df <- vpro_pg_canonicalize_to_tidy(df, spec)
 
   text_cols <- as.character(spec$name[!is.na(spec$pg_type) & toupper(spec$pg_type) == "TEXT"])
@@ -1299,7 +1451,7 @@ vpro_serialize_subset_filter_json <- function(filters, limit_int = NULL, allow_f
 }
 
 vpro_master_pull_impl <- function(
-  con,
+  pg,
   dest_path,
   project_name,
   zones = NULL,
@@ -1315,7 +1467,7 @@ vpro_master_pull_impl <- function(
   unit_col = NULL,
   unit_col_fallback = TRUE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   overwrite <- vpro_pg_validate_flag(overwrite, "overwrite")
   allow_full <- vpro_pg_validate_flag(allow_full, "allow_full")
   log_download <- vpro_pg_validate_flag(log_download, "log_download")
@@ -1357,7 +1509,7 @@ vpro_master_pull_impl <- function(
   }
 
   sub <- vpro_pg_subset_where(
-    con = con,
+    pg = pg,
     zones = zones,
     subzones = subzones,
     project_ids = project_ids,
@@ -1372,14 +1524,14 @@ vpro_master_pull_impl <- function(
   on.exit({
     if (tx_open) {
       tryCatch(
-        vpro_pg_execute(con, "ROLLBACK", params = NULL, action = "rollback subset snapshot transaction"),
+        vpro_pg_execute(pg, "ROLLBACK", params = NULL, action = "rollback subset snapshot transaction"),
         error = function(e) NULL
       )
     }
   }, add = TRUE)
 
   vpro_pg_exec_safe(
-    function() vpro_pg_begin_isolated_tx(con$conn, "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", "vpro_master_pull"),
+    function() vpro_pg_begin_isolated_tx(pg$conn, "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", "vpro_master_pull"),
     action = "begin subset snapshot transaction"
   )
   tx_open <- TRUE
@@ -1393,7 +1545,7 @@ vpro_master_pull_impl <- function(
     limit_part
   )
   matched_df <- vpro_pg_query(
-    con,
+    pg,
     plot_sql,
     params = if (length(sub$params) > 0L) sub$params else NULL,
     action = "query matching BECMaster plots"
@@ -1402,6 +1554,13 @@ vpro_master_pull_impl <- function(
   plot_list <- plot_list[!is.na(plot_list) & nzchar(plot_list)]
   if (length(plot_list) == 0L) {
     cli::cli_abort("Subset filter matched 0 plots in {.code becmaster.env}.")
+  }
+
+  sensitive_plots <- if (!identical(pg$role, "custodian")) {
+    sens_codes <- .vpro_sensitive_species_codes(pg = pg)
+    .vpro_sensitive_plots_in_pg(pg, plot_list, sens_codes)
+  } else {
+    character(0L)
   }
 
   dir.create(dirname(dest_resolved), recursive = TRUE, showWarnings = FALSE)
@@ -1474,7 +1633,7 @@ vpro_master_pull_impl <- function(
           ord_clause
         )
         part <- vpro_pg_query(
-          con,
+          pg,
           q,
           params = list(vpro_pg_text_array(ch)),
           action = paste0("stream becmaster.", pg_tbl)
@@ -1485,6 +1644,9 @@ vpro_master_pull_impl <- function(
         part <- vpro_pg_canonicalize_to_sqlite(part, spec)
         if (plot_col %in% names(part)) {
           part[[plot_col]] <- as.character(part[[plot_col]])
+        }
+        if (identical(suffix, "Env") && length(sensitive_plots) > 0L) {
+          part <- .vpro_redact_coord_df(part, sensitive_plots)
         }
         bool_cols <- as.character(spec$name[!is.na(spec$is_bool) & spec$is_bool])
         for (bc in intersect(bool_cols, names(part))) {
@@ -1543,7 +1705,7 @@ vpro_master_pull_impl <- function(
       meta_cols <- as.character(meta_spec$name)
       meta_csv <- paste(vapply(meta_cols, vpro_quote_ident, character(1)), collapse = ", ")
       meta_df <- vpro_pg_query(
-        con,
+        pg,
         paste0(
           "SELECT ", meta_csv,
           ' FROM becmaster.metadata WHERE "ProjectID" = ANY($1::text[]) ORDER BY "ProjectID"'
@@ -1696,7 +1858,7 @@ vpro_master_pull_impl <- function(
   snap_tax_ver <- "BCPlantTaxa_v19_2025"
   rel_in_tx <- tryCatch(
     vpro_pg_query(
-      con,
+      pg,
       "SELECT bec_version, taxonomy_version FROM standards.library_releases WHERE is_current = TRUE ORDER BY published_at DESC, release_id DESC LIMIT 1",
       params = NULL,
       action = "query active standards release inside snapshot"
@@ -1713,7 +1875,7 @@ vpro_master_pull_impl <- function(
   }
   tail_in_tx <- tryCatch(
     vpro_pg_query(
-      con,
+      pg,
       "SELECT COALESCE((SELECT row_hash FROM becmaster.audit ORDER BY audit_seq DESC LIMIT 1), $1) AS tail_hash",
       params = list(.vpro_genesis_audit_hash),
       action = "query audit tail row_hash inside snapshot"
@@ -1727,7 +1889,7 @@ vpro_master_pull_impl <- function(
   }
 
   # Close read-only PostgreSQL snapshot transaction cleanly before WAL finalization & download_log write
-  vpro_pg_execute(con, "ROLLBACK", params = NULL, action = "close subset snapshot transaction")
+  vpro_pg_execute(pg, "ROLLBACK", params = NULL, action = "close subset snapshot transaction")
   tx_open <- FALSE
 
   DBI::dbDisconnect(sq_con)
@@ -1767,6 +1929,8 @@ vpro_master_pull_impl <- function(
 
   dest_final <- normalizePath(dest_resolved, winslash = "/", mustWork = TRUE)
   ws <- vpro_connect(dest_final)
+  attr(ws, "cloud_redacted") <- (!identical(pg$role, "custodian") && length(sensitive_plots) > 0L)
+  attr(ws, "cloud_role") <- as.character(pg$role)
 
   # Cleanly close a RW handle after SQLITE_RO inspection inside vpro_connect() so
   # SQLite removes idle -shm/-wal sidecars while preserving journal_mode = WAL
@@ -1781,15 +1945,15 @@ vpro_master_pull_impl <- function(
 
   download_log_id <- NA_integer_
   if (isTRUE(log_download)) {
-    actor <- if (!is.null(con$user) && length(con$user) >= 1L &&
-                 !is.na(con$user[[1L]]) && nzchar(trimws(as.character(con$user[[1L]])))) {
-      trimws(as.character(con$user[[1L]]))
+    actor <- if (!is.null(pg$user) && length(pg$user) >= 1L &&
+                 !is.na(pg$user[[1L]]) && nzchar(trimws(as.character(pg$user[[1L]])))) {
+      trimws(as.character(pg$user[[1L]]))
     } else {
       "VProUser"
     }
-    role_tier <- if (!is.null(con$role) && length(con$role) >= 1L &&
-                     !is.na(con$role[[1L]]) && nzchar(trimws(as.character(con$role[[1L]])))) {
-      trimws(as.character(con$role[[1L]]))
+    role_tier <- if (!is.null(pg$role) && length(pg$role) >= 1L &&
+                     !is.na(pg$role[[1L]]) && nzchar(trimws(as.character(pg$role[[1L]])))) {
+      trimws(as.character(pg$role[[1L]]))
     } else {
       "contributor"
     }
@@ -1799,7 +1963,7 @@ vpro_master_pull_impl <- function(
       allow_full = allow_full
     )
     log_df <- vpro_pg_query(
-      con,
+      pg,
       paste(
         "INSERT INTO becmaster.download_log (actor, role_tier, filter_json, format, plot_count)",
         "VALUES ($1, $2, $3::jsonb, 'VP08_SQLite', $4)",
@@ -1850,21 +2014,21 @@ vpro_master_pull_impl <- function(
 #' provenance receipt in `becmaster.download_log`.
 #'
 #' @inheritParams vpro_master_env
-#' @param dest_path Destination SQLite `.db` file path (`.db` is appended if no
+#' @param dest_db Destination SQLite `.db` file path (`.db` is appended if no
 #'   file extension is present).
-#' @param project_name Target `VP08` project prefix (must start with an ASCII
+#' @param project Target `VP08` project prefix (must start with an ASCII
 #'   letter, contain only letters, digits, or underscores up to 31 characters,
 #'   and cannot be `"None"`, `"Sample"`, or contain `"master"`).
-#' @param overwrite Logical; if `TRUE`, replaces an existing `dest_path` when no
+#' @param overwrite Logical; if `TRUE`, replaces an existing `dest_db` when no
 #'   active `-wal`/`-shm` sidecar files exist.
 #' @return A list containing `dest_path`, `project_name`, `sha256`, `plot_count`,
 #'   `veg_count`, `humus_count`, `mineral_count`, `other_count`,
 #'   `metadata_count`, `download_log_id`, and `workspace` (`vpro_workspace`).
 #' @export
 vpro_master_pull <- function(
-  con,
-  dest_path,
-  project_name,
+  pg,
+  dest_db,
+  project,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -1875,9 +2039,9 @@ vpro_master_pull <- function(
   allow_full = FALSE
 ) {
   res <- vpro_master_pull_impl(
-    con = con,
-    dest_path = dest_path,
-    project_name = project_name,
+    pg = pg,
+    dest_path = dest_db,
+    project_name = project,
     zones = zones,
     subzones = subzones,
     project_ids = project_ids,
@@ -1912,7 +2076,7 @@ vpro_master_pull <- function(
 #' @return An S3 `vpro_workspace` object with `ws$source == "cloud_workspace"`.
 #' @export
 vpro_master_workspace <- function(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -1927,7 +2091,7 @@ vpro_master_workspace <- function(
 
   tmp_ws_db <- tempfile(pattern = "vpro-cloud-ws-", fileext = ".db")
   res <- vpro_master_pull_impl(
-    con = con,
+    pg = pg,
     dest_path = tmp_ws_db,
     project_name = project_name,
     zones = zones,
@@ -1967,7 +2131,7 @@ vpro_master_workspace <- function(
   ws
 }
 
-vpro_rebuild_vlists_from_standards <- function(con, base_vlists_path, out_path, bec_version, taxonomy_version) {
+vpro_rebuild_vlists_from_standards <- function(pg, base_vlists_path, out_path, bec_version, taxonomy_version) {
   if (!file.copy(base_vlists_path, out_path, overwrite = TRUE)) {
     cli::cli_abort("Failed to stage baseline {.file VLists.db} for relational standards rebuild.")
   }
@@ -1990,7 +2154,7 @@ vpro_rebuild_vlists_from_standards <- function(con, base_vlists_path, out_path, 
       col_names <- as.character(spec$name)
       quoted_cols <- paste(vapply(col_names, vpro_quote_ident, character(1)), collapse = ", ")
       df <- vpro_pg_query(
-        con,
+        pg,
         paste0("SELECT ", quoted_cols, " FROM standards.", vpro_quote_ident(item$pg), " ORDER BY row_seq"),
         params = NULL,
         action = paste0("sync standards.", item$pg)
@@ -2039,15 +2203,15 @@ vpro_rebuild_vlists_from_standards <- function(con, base_vlists_path, out_path, 
 #' `NULL`), verifies `PRAGMA integrity_check` and SHA-256 integrity, and
 #' atomically swaps the staged database onto `VLists.db`.
 #'
-#' @param con A `vpro_pg_conn` handle.
+#' @param pg A `vpro_pg_conn` handle.
 #' @param data_dir Target VPro workspace data directory (defaults to
 #'   [vpro_data_dir()]).
 #' @return A list with `updated`, `already_current`, `release_id`,
 #'   `bec_version`, `taxonomy_version`, `local_sha256`, `cloud_sha256`,
 #'   `vlists_path`, and `published_at`.
 #' @export
-vpro_standards_sync <- function(con, data_dir = vpro_data_dir()) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   if (!is.character(data_dir) || length(data_dir) != 1L || is.na(data_dir) || !nzchar(trimws(data_dir))) {
     cli::cli_abort("{.arg data_dir} must be a single non-empty directory path.")
   }
@@ -2057,7 +2221,7 @@ vpro_standards_sync <- function(con, data_dir = vpro_data_dir()) {
   }
 
   rel_df <- vpro_pg_query(
-    con,
+    pg,
     paste(
       "SELECT release_id, bec_version, taxonomy_version, vlists_sha256, published_at, vlists_gzip",
       "FROM standards.library_releases",
@@ -2168,7 +2332,7 @@ vpro_standards_sync <- function(con, data_dir = vpro_data_dir()) {
   } else {
     base_vlists <- if (target_exists) target_path else vpro_bundled_db("VLists.db")
     vpro_rebuild_vlists_from_standards(
-      con = con,
+      pg = pg,
       base_vlists_path = base_vlists,
       out_path = tmp_vlists,
       bec_version = bec_version,

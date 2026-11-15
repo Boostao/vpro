@@ -217,22 +217,22 @@ vpro_normalize_access_chunk <- function(df, target_fields, boolean_fields = char
 #' and FK orphan child records are quarantined into `__VPRO_ImportQuarantine`.
 #'
 #' @param path Path to source `.accdb` or `.mdb` archive.
-#' @param target_db Destination SQLite `.db` path.
+#' @param dest_db Destination SQLite `.db` path.
 #' @param project Optional source project prefix inside `path` (auto-detected if
 #'   only one project exists).
-#' @param target_project Optional destination project prefix (defaults to a
+#' @param dest_project Optional destination project prefix (defaults to a
 #'   sanitized identifier derived from `project`).
 #' @param batch_rows Positive integer batch size for streaming reads.
-#' @param overwrite Logical; if `TRUE`, replaces an existing `target_db`.
+#' @param overwrite Logical; if `TRUE`, replaces an existing `dest_db`.
 #' @return A list summarizing `source_path`, `source_project`, `source_version`,
 #'   `target_project`, `target_db`, `plot_count`, `quarantined_orphan_rows`,
 #'   `quarantined_malformed_rows`, and `imported_su`.
 #' @export
 vpro_import_access <- function(
   path,
-  target_db,
+  dest_db,
   project = NULL,
-  target_project = NULL,
+  dest_project = NULL,
   batch_rows = 5000L,
   overwrite = FALSE
 ) {
@@ -260,11 +260,11 @@ vpro_import_access <- function(
     if (!nzchar(s) || !grepl("^[A-Za-z]", s)) s <- paste0("P_", s)
     substr(s, 1L, 31L)
   }
-  dst_prj <- if (is.null(target_project)) sanitize_name(src_prj) else vpro_project_name(target_project)
+  dst_prj <- if (is.null(dest_project)) sanitize_name(src_prj) else vpro_project_name(dest_project)
 
-  target_db <- vpro_abs_path(target_db)
+  target_db <- vpro_abs_path(dest_db)
   if (identical(target_db, insp$source_path)) {
-    rlang::abort("`target_db` must not overwrite the source Access archive.")
+    rlang::abort("`dest_db` must not overwrite the source Access archive.")
   }
   if (file.exists(target_db)) {
     if (!isTRUE(overwrite)) {

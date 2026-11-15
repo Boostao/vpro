@@ -4,13 +4,13 @@
 \alias{vpro_hierarchy}
 \title{Read classification hierarchy (\verb{*_Hierarchy}) as nodes and/or flat BEC paths}
 \usage{
-vpro_hierarchy(con, hierarchy = NULL, as = c("both", "nodes", "paths"))
+vpro_hierarchy(ws, hierarchy = NULL, as = c("both", "nodes", "paths"))
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{hierarchy}{Optional \verb{*_Hierarchy} table override (defaults to
-\code{con$hierarchy}).}
+\code{ws$hierarchy}).}
 
 \item{as}{Return shape: \code{"both"} (S3 \code{vpro_hierarchy} bundle with \verb{$nodes} and
 \verb{$paths}), \code{"nodes"}, or \code{"paths"}.}

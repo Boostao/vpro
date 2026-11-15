@@ -4,34 +4,46 @@
 \alias{vpro_validate}
 \title{Run comprehensive VPro workspace standards, referential, and \code{LMH25} QA}
 \usage{
-vpro_validate(con, scope = c("su", "project"))
+vpro_validate(
+  ws,
+  scope = c("su", "project"),
+  checks = c("all", "compliance", "lmh25")
+)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or \code{\link[=vpro_sample]{vpro_sample()}}.}
+\item{ws}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}}.}
 
 \item{scope}{Validation scope: \code{"su"} (restricts plot-scoped checks to active
-\code{con$su} when set) or \code{"project"} (validates the entire \verb{<Project>}).}
+\code{ws$su} when set) or \code{"project"} (validates the entire \verb{<Project>}).}
+
+\item{checks}{Which validation engines to execute: \code{"all"} (default),
+\code{"compliance"} (VP08 standards/bounds/referential checks only), or \code{"lmh25"}
+(pedological & edatopic audit only).}
 }
 \value{
 An S3 object of class \code{vpro_validation} containing \verb{$issues},
-\verb{$env_codes}, \verb{$veg_codes}, \verb{$orphans}, \verb{$duplicates}, \verb{$lmh25},
-\verb{$skipped_definitions}, and \verb{$passed}.
+\verb{$env_codes}, \verb{$veg_codes}, \verb{$orphans}, \verb{$duplicates}, \verb{$bounds},
+\verb{$lmh25}, \verb{$skipped_definitions}, \verb{$checks}, and \verb{$passed}.
 }
 \description{
-Combines five canonical VPro validation engines into a single read-only
-quality-assurance bundle:
+Combines canonical VPro validation engines into a single read-only
+quality-assurance bundle, selectable via \code{checks = c("all", "compliance", "lmh25")}:
 \enumerate{
 \item \strong{\code{env_codes}}: \code{USysTableOfLists} picklist validation (\code{Validate != 0},
 expanding positive \code{ValidateLoops} such as \code{SiteDisturbance1..3}, calibrated
 to \code{V7mdlReportsValidateEnvData}).
 \item \strong{\code{veg_codes}}: \verb{BCPlantTaxonomy v19} (\code{USysAllSpecs}) + user species
-(\code{USysUserSpp}) check for unlisted codes and \code{OldCode -> Code} synonyms
-(calibrated to \code{V7mdlReportsValidateVegCodes}).
+(\code{USysUserSpp}) check for unlisted codes, local user codes (\code{"user"}), and
+case-insensitive \code{OldCode -> Code} synonyms (\code{V7mdlReportsValidateVegCodes}).
 \item \strong{\code{orphans}}: referential integrity across \verb{_Env <-> _Admin}, \verb{_Veg},
 \verb{_Humus}, \verb{_Mineral}, \verb{_Other}, and active \verb{*_SU}, plus plots without
 vegetation (\code{V7mdlReportValidation}).
 \item \strong{\code{duplicates}}: duplicate physical \verb{(PlotNumber, Species)} rows and
 same-layer cover collisions (\code{V7mdlOptimizeVeg.Check4DuplicatedSpecies}).
-\item \strong{\code{lmh25}}: pedological and edatopic audit via \code{\link[=vpro_check_lmh25]{vpro_check_lmh25()}}.
+\item \strong{\code{bounds}}: VP08 UTF-16 field length limits, IEEE-754 \code{float32} \verb{< 100\%}
+cover bounds, numeric \verb{_Env} / \verb{_Admin} bounds (\code{Latitude}, \code{Longitude},
+\code{Aspect}, \code{SlopeGradient}, \code{StartDate}).
+\item \strong{\code{lmh25}}: \code{LMH25 (2023)} pedological & edatopic audit (horizon depth
+directions, contiguity, substrate sums, von Post ranges, Keys \code{9.4}/\code{9.6}).
 }
 }

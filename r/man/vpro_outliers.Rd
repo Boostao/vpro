@@ -5,27 +5,37 @@
 \title{Detect candidate misclassified and anomalous plots via Leave-One-Out centroids}
 \usage{
 vpro_outliers(
-  con,
+  ws,
   lump = TRUE,
   exclude_modifiers = TRUE,
-  transform = "sqrt",
-  threshold = 0.45
+  transform = c("none", "raw", "sqrt", "log1p", "chord", "hellinger"),
+  threshold = 0.45,
+  keep_singletons = TRUE,
+  cover_precedence = c("sublayer_sum", "strata_totals")
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
-\item{lump}{Logical (\code{TRUE} uses active \code{con$lump}), \code{FALSE}, a \verb{*_Lump} table
+\item{lump}{Logical (\code{TRUE} uses active \code{ws$lump}), \code{FALSE}, a \verb{*_Lump} table
 name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE} (default), excludes \code{.support},
 \code{.poor}, and \code{.nudum} units.}
 
 \item{transform}{Cover transformation applied before centroid similarity:
-\code{"sqrt"} (default), \code{"raw"}, \code{"log1p"}, \code{"chord"}, or \code{"hellinger"}.}
+\code{"none"} (or alias \code{"raw"}, default matching Go \code{ComputeOutlierQueue}),
+\code{"sqrt"}, \code{"log1p"}, \code{"chord"}, or \code{"hellinger"}.}
 
 \item{threshold}{Minimum \code{own_similarity} (\verb{[0, 1]}, default \code{0.45}) below
 which a plot is flagged for ecological review.}
+
+\item{keep_singletons}{Logical; if \code{TRUE} (default, matching Go
+\code{ComputeOutlierQueue}), evaluates singleton (\code{n_unit_plots == 1}) plots with
+\code{own_similarity = 0.0} against rival unit centroids rather than omitting them.}
+
+\item{cover_precedence}{Stratum cover precedence (\code{"sublayer_sum"} default,
+or \code{"strata_totals"}).}
 }
 \value{
 An S3 object of class \code{vpro_outliers} with \verb{$queue} (all evaluated

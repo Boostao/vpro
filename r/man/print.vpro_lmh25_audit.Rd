@@ -7,7 +7,7 @@
 \method{print}{vpro_lmh25_audit}(x, ...)
 }
 \arguments{
-\item{x}{A \code{vpro_lmh25_audit} object from \code{\link[=vpro_check_lmh25]{vpro_check_lmh25()}}.}
+\item{x}{A \code{vpro_lmh25_audit} object (e.g., \verb{$lmh25} from \code{\link[=vpro_validate]{vpro_validate()}}).}
 
 \item{...}{Unused additional arguments.}
 }

@@ -209,9 +209,9 @@ test_that("compact .rds snapshots preserve '00337', Access booleans, float32 cov
 
   ws_sql <- vpro_connect(src_db, su = "Sample_SU", lump = "Sample_Lump", data_dir = tmp_dir, config_dir = tmp_dir)
   rds_file <- file.path(tmp_dir, "BECMaster_TestSnap.rds")
-  written <- vpro_write_rds_snapshot(
+  written <- vpro_export_rds(
     ws_sql,
-    dest_path = rds_file,
+    path = rds_file,
     snapshot_tag = "BECMaster_TestSnap_2026",
     provenance = list(bec_version = "BECdb_v13_2026", taxonomy_version = "BCPlantTaxa_v19_2025"),
     compress = "xz"
@@ -220,8 +220,8 @@ test_that("compact .rds snapshots preserve '00337', Access booleans, float32 cov
   expect_equal(nchar(written$sha256), 64L)
   expect_equal(written$plot_count, 53L)
 
-  # Read back via both vpro_read_rds_project() and vpro_connect("...rds")
-  ws_rds <- vpro_read_rds_project(rds_file)
+  # Read back via both vpro_import_rds() and vpro_connect("...rds")
+  ws_rds <- vpro_import_rds(rds_file)
   ws_rds_via_connect <- vpro_connect(rds_file)
   expect_s3_class(ws_rds, "vpro_rds_project")
   expect_s3_class(ws_rds, "vpro_workspace")
@@ -286,7 +286,7 @@ test_that("compact .rds snapshots preserve '00337', Access booleans, float32 cov
     ),
     wails_rds
   )
-  ws_wails <- vpro_read_rds_project(wails_rds)
+  ws_wails <- vpro_import_rds(wails_rds)
   expect_equal(vpro_env(ws_wails)$PlotNumber, c("00337", "00338"))
   expect_equal(nrow(vpro_veg(ws_wails, strata = "total")), 2L)
 })
@@ -451,21 +451,28 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   baseline_max_audit <- base_counts$max_audit_seq[[1L]]
   baseline_max_dl <- base_counts$max_dl_id[[1L]]
 
-  # Select a clean compliant BECMaster plot ('9624781' in SBSdk, or fallback search) and an unused leading-zero test PlotNumber
+  # Select a clean compliant BECMaster plot ('0112931' in SBSdk, or fallback search with valid bounds) and an unused leading-zero test PlotNumber
   cand_df <- DBI::dbGetQuery(
     admin_con$conn,
     paste(
       'SELECT e."PlotNumber", e."Zone", e."SubZone", e."SiteNotes", a."BECSiteUnit"',
       'FROM becmaster.env e',
       'JOIN becmaster.admin a ON a."Plot" = e."PlotNumber"',
-      'WHERE e."PlotNumber" = \'9624781\'',
+      'WHERE e."PlotNumber" = \'0112931\'',
+      '  AND (a."StrataCoverTotal" IS NULL OR (a."StrataCoverTotal" >= 0 AND a."StrataCoverTotal" < 100))',
       'LIMIT 1'
     )
   )
   if (nrow(cand_df) == 0L) {
     cand_df <- DBI::dbGetQuery(
       admin_con$conn,
-      'SELECT e."PlotNumber", e."Zone", e."SubZone", e."SiteNotes", a."BECSiteUnit" FROM becmaster.env e JOIN becmaster.admin a ON a."Plot" = e."PlotNumber" WHERE length(e."PlotNumber") <= 7 ORDER BY e."PlotNumber" LIMIT 1'
+      paste(
+        'SELECT e."PlotNumber", e."Zone", e."SubZone", e."SiteNotes", a."BECSiteUnit"',
+        'FROM becmaster.env e JOIN becmaster.admin a ON a."Plot" = e."PlotNumber"',
+        'WHERE length(e."PlotNumber") <= 7',
+        '  AND (a."StrataCoverTotal" IS NULL OR (a."StrataCoverTotal" >= 0 AND a."StrataCoverTotal" < 100))',
+        'ORDER BY e."PlotNumber" LIMIT 1'
+      )
     )
   }
   expect_equal(nrow(cand_df), 1L)
@@ -598,7 +605,7 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   soil_sub <- vpro_master_soil(contrib_con, plots = target_plot)
   expect_s3_class(soil_sub, "vpro_soil")
 
-  aud_check <- vpro_master_verify_audit(contrib_con, limit = 100L)
+  aud_check <- attr(vpro_master_audit(contrib_con, limit = 100L, verify_chain = TRUE), "chain_verification")
   expect_true(aud_check$valid)
 
   tmp_work <- tempfile("vpro-live-pg-")
@@ -606,8 +613,8 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   on.exit(unlink(tmp_work, recursive = TRUE), add = TRUE)
 
   sync_dir <- file.path(tmp_work, "std_data")
-  sync_res1 <- vpro_standards_sync(contrib_con, data_dir = sync_dir)
-  sync_res2 <- vpro_standards_sync(contrib_con, data_dir = sync_dir)
+  sync_res1 <- vpro_master_standards_sync(contrib_con, data_dir = sync_dir)
+  sync_res2 <- vpro_master_standards_sync(contrib_con, data_dir = sync_dir)
   expect_true(file.exists(sync_res1$vlists_path))
   expect_true(sync_res2$already_current)
   expect_false(sync_res2$updated)
@@ -616,8 +623,8 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   base_db_path <- file.path(tmp_work, "BaseCWH.db")
   pulled <- vpro_master_pull(
     contrib_con,
-    dest_path = base_db_path,
-    project_name = "BaseCWH",
+    dest_db = base_db_path,
+    project = "BaseCWH",
     zones = target_zone,
     plots = target_plot
   )
@@ -799,7 +806,10 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
     if (is.na(orig_bec_unit)) NA_character_ else as.character(orig_bec_unit)
   )
 
-  chain_after <- vpro_master_verify_audit(admin_con, limit = as.integer(m_res$audit_rows_written + 25L))
+  chain_after <- attr(
+    vpro_master_audit(admin_con, limit = as.integer(m_res$audit_rows_written + 25L), verify_chain = TRUE),
+    "chain_verification"
+  )
   expect_true(chain_after$valid)
   expect_equal(chain_after$tail_hash, m_res$tail_audit_hash)
 
@@ -825,7 +835,7 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   } else {
     c("rds", "sqlite", "csv")
   }
-  pub <- vpro_publish_snapshot(
+  pub <- vpro_master_publish_snapshot(
     admin_con,
     snapshot_tag = test_snap_tag,
     out_dir = snap_dir,
@@ -839,11 +849,11 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   expect_equal(nrow(pub$artifacts), length(snap_fmts))
   expect_true(all(file.exists(pub$artifacts$path)))
 
-  snaps_tbl <- vpro_list_snapshots(contrib_con)
+  snaps_tbl <- vpro_master_list_snapshots(contrib_con)
   expect_true(test_snap_tag %in% snaps_tbl$snapshot_tag)
 
   rds_art_path <- pub$artifacts$path[pub$artifacts$format == "rds"][[1L]]
-  rds_proj <- vpro_read_rds_project(rds_art_path)
+  rds_proj <- vpro_import_rds(rds_art_path)
   rds_env <- vpro_env(rds_proj, scope = "project")
   expect_true(all(c(target_plot, leading_zero_plot) %in% rds_env$PlotNumber))
 
@@ -896,5 +906,5 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   )
   expect_equal(as.integer(after_counts$plot_n[[1L]]), baseline_plots)
   expect_equal(after_counts$veg_n[[1L]], baseline_veg)
-  expect_true(vpro_master_verify_audit(admin_con, limit = 100L)$valid)
+  expect_true(attr(vpro_master_audit(admin_con, limit = 100L, verify_chain = TRUE), "chain_verification")$valid)
 })

@@ -5,37 +5,41 @@
 \title{Compute BEC diagnostic-potential pairwise unit similarity}
 \usage{
 vpro_pairwise(
-  con,
+  ws,
   lump = TRUE,
   exclude_modifiers = TRUE,
-  min_plots = 2L,
-  min_constancy = 60,
+  min_plots = 1L,
+  min_constancy = 50,
   noise_constancy = 10,
-  min_diff = 0.5,
-  min_dd = 0.5
+  min_diff = 0.1,
+  min_dd = 0.35,
+  cover_precedence = c("sublayer_sum", "strata_totals")
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
-\item{lump}{Logical (\code{TRUE} uses active \code{con$lump}), \code{FALSE}, a \verb{*_Lump} table
+\item{lump}{Logical (\code{TRUE} uses active \code{ws$lump}), \code{FALSE}, a \verb{*_Lump} table
 name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE} (default), excludes \code{.support},
 \code{.poor}, and \code{.nudum} units.}
 
 \item{min_plots}{Minimum number of plots required for a unit to enter pairwise
-comparison (default \code{2L}).}
+comparison (default \code{1L}, matching Go \code{SynthesisOptions}).}
 
-\item{min_constancy}{Minimum constancy percentage (\verb{[0, 100]}, default \code{60})
+\item{min_constancy}{Minimum constancy percentage (\verb{[0, 100]}, default \code{50})
 required in at least one unit for diagnostic-potential scoring.}
 
 \item{noise_constancy}{Constancy threshold (\verb{[0, 100]}, default \code{10}) below
 which noisy unit-species occurrences are ignored in differential scoring.}
 
-\item{min_diff}{Minimum constancy differential points (\verb{default 0.5}).}
+\item{min_diff}{Minimum constancy differential points (default \code{0.1}).}
 
-\item{min_dd}{Minimum dominant-differential points (\verb{default 0.5}).}
+\item{min_dd}{Minimum dominant-differential points (default \code{0.35}).}
+
+\item{cover_precedence}{Stratum cover precedence (\code{"sublayer_sum"} default,
+or \code{"strata_totals"}).}
 }
 \value{
 An S3 object of class \code{vpro_pairwise} with \verb{$pairs} tibble,

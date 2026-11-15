@@ -19,9 +19,21 @@ if (length(args) < 2L) {
 req_path <- args[[1L]]
 resp_path <- args[[2L]]
 
+if (!nzchar(Sys.getenv("VPRO_SIDECAR_STANDALONE")) &&
+    requireNamespace("vpro", quietly = TRUE) &&
+    exists(".vpro_sidecar_exec", envir = asNamespace("vpro"), inherits = FALSE)) {
+  vpro_exec <- get(".vpro_sidecar_exec", envir = asNamespace("vpro"), inherits = FALSE)
+  vpro_exec("compute_climate_asmr", req_path, output_json = resp_path)
+  quit(save = "no", status = 0L)
+}
+
 req <- jsonlite::fromJSON(req_path, simplifyVector = TRUE)
 assets_dir <- req$assetsDir
-ref_period <- if (!is.null(req$refPeriod) && nzchar(req$refPeriod)) req$refPeriod else "1961_1990"
+raw_rp <- if (!is.null(req$refPeriod) && nzchar(req$refPeriod)) trimws(as.character(req$refPeriod)) else "1961_1990"
+ref_period <- gsub("-", "_", raw_rp, fixed = TRUE)
+if (!ref_period %in% c("1961_1990", "1991_2020")) {
+  stop(sprintf("Unsupported climate reference period '%s' (expected '1961_1990' or '1991_2020').", raw_rp), call. = FALSE)
+}
 
 rules_dt <- data.table::fread(file.path(assets_dir, "aSMR_Rules_HalfStep.csv"))
 cmd_adj_dt <- data.table::fread(file.path(assets_dir, "CMD_adjustments.csv"))
@@ -75,10 +87,13 @@ compute_bgc_lapse_normals <- function(pts_dt, period_label) {
       m <- zone_means[toupper(Zone) == toupper(zone_clean)]
       if (nrow(m) > 0L) ref <- m[1L]
     }
+    norm_lon_val <- as.numeric(row$lon)
+    if (is.finite(norm_lon_val) && norm_lon_val > 0) norm_lon_val <- -norm_lon_val
+
     if (is.null(ref)) {
       # Nearest BGC climate centroid in (lat, lon, elev_km) space
       d2 <- (bgc_norm_dt$Latitude - row$lat)^2 +
-            ((bgc_norm_dt$Longitude - row$lon) * cos(row$lat * pi / 180))^2 +
+            ((bgc_norm_dt$Longitude - norm_lon_val) * cos(row$lat * pi / 180))^2 +
             ((bgc_norm_dt$Elevation - row$elev) / 250.0)^2
       idx <- which.min(d2)
       if (length(idx) == 1L && is.finite(idx)) {
@@ -148,6 +163,16 @@ compute_bgc_lapse_normals <- function(pts_dt, period_label) {
 computed_normals <- list()
 if (!is.null(req$uncachedPoints) && length(req$uncachedPoints) > 0L) {
   pts_dt <- data.table::as.data.table(req$uncachedPoints)
+  pts_dt[, lon := ifelse(is.finite(as.numeric(lon)) & as.numeric(lon) > 0, -as.numeric(lon), as.numeric(lon))]
+  if (!"coordElevHash" %in% names(pts_dt) || any(is.na(pts_dt$coordElevHash) | !nzchar(as.character(pts_dt$coordElevHash)))) {
+    if (requireNamespace("vpro", quietly = TRUE) &&
+        exists(".vpro_coord_elev_hash", envir = asNamespace("vpro"), inherits = FALSE)) {
+      h_fn <- get(".vpro_coord_elev_hash", envir = asNamespace("vpro"), inherits = FALSE)
+      miss_ix <- if ("coordElevHash" %in% names(pts_dt)) which(is.na(pts_dt$coordElevHash) | !nzchar(as.character(pts_dt$coordElevHash))) else seq_len(nrow(pts_dt))
+      if (!"coordElevHash" %in% names(pts_dt)) pts_dt[, coordElevHash := ""]
+      pts_dt[miss_ix, coordElevHash := h_fn(lat, lon, elev, ref_period)]
+    }
+  }
   used_climr <- FALSE
   if (can_use_climr_local) {
     climr_try <- tryCatch({
@@ -160,15 +185,29 @@ if (!is.null(req$uncachedPoints) && length(req$uncachedPoints) > 0L) {
       vars_req <- c("MAT", "MWMT", "MCMT", "MAP", "MSP", "PAS_an", "CMD_an",
                     "PPT_05", "PPT_06", "PPT_07", "PPT_08", "PPT_09",
                     "PPT_at", "PPT_wt", "DD5_an", "NFFD_an")
-      dl <- climr::downscale(
-        xyz = xyz,
-        vars = vars_req,
-        return_refperiod = TRUE,
-        db_option = "local",
-        cache = TRUE
-      )
+      dl <- if (identical(ref_period, "1991_2020")) {
+        climr::downscale(
+          xyz = xyz,
+          vars = vars_req,
+          obs_periods = "1991_2020",
+          return_refperiod = FALSE,
+          db_option = "local",
+          cache = TRUE
+        )
+      } else {
+        climr::downscale(
+          xyz = xyz,
+          vars = vars_req,
+          return_refperiod = TRUE,
+          db_option = "local",
+          cache = TRUE
+        )
+      }
       if (!is.null(dl) && nrow(dl) >= nrow(pts_dt)) {
         dl_dt <- data.table::as.data.table(dl)
+        if ("PERIOD" %in% names(dl_dt) && any(dl_dt$PERIOD == ref_period, na.rm = TRUE)) {
+          dl_dt <- dl_dt[PERIOD == ref_period]
+        }
         dl_dt <- dl_dt[!duplicated(id)][order(id)]
         pick_col <- function(dt, candidates) {
           for (nm in candidates) {

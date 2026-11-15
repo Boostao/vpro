@@ -4,10 +4,10 @@
 \alias{vpro_staging_list}
 \title{List submissions in the PostgreSQL \code{staging.submissions} queue}
 \usage{
-vpro_staging_list(con, status = "pending", submitted_by = NULL, limit = 100L)
+vpro_staging_list(pg, status = "pending", submitted_by = NULL, limit = 100L)
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle from \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
+\item{pg}{A \code{vpro_pg_conn} handle from \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
 \item{status}{Queue status filter: \code{"pending"} (default), \code{"approved"},
 \code{"rejected"}, \code{"merged"}, or \code{NULL} / \code{"all"} to return all statuses.}

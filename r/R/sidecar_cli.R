@@ -138,11 +138,19 @@ vpro_sidecar_climate_asmr <- function(req) {
   climr_used <- FALSE
   if (!is.null(req$uncachedPoints) && length(req$uncachedPoints) > 0L) {
     pts_dt <- vpro_rows_to_dt(req$uncachedPoints)
+    lat_in <- as.numeric(pts_dt$lat)
+    lon_in <- vpro_normalize_bc_lon(as.numeric(pts_dt$lon))
+    elev_in <- as.numeric(pts_dt$elev)
+    hashes_in <- if ("coordElevHash" %in% names(pts_dt)) as.character(pts_dt$coordElevHash) else rep("", nrow(pts_dt))
+    missing_h <- is.na(hashes_in) | !nzchar(trimws(hashes_in))
+    if (any(missing_h)) {
+      hashes_in[missing_h] <- .vpro_coord_elev_hash(lat_in[missing_h], lon_in[missing_h], elev_in[missing_h], ref_period = ref_period)
+    }
     pts_df <- data.frame(
-      CoordElevHash = as.character(pts_dt$coordElevHash),
-      lat = as.numeric(pts_dt$lat),
-      lon = as.numeric(pts_dt$lon),
-      elev = as.numeric(pts_dt$elev),
+      CoordElevHash = hashes_in,
+      lat = lat_in,
+      lon = lon_in,
+      elev = elev_in,
       bgc = if ("bgc" %in% names(pts_dt)) as.character(pts_dt$bgc) else rep("", nrow(pts_dt)),
       zone = if ("zone" %in% names(pts_dt)) as.character(pts_dt$zone) else rep("", nrow(pts_dt)),
       stringsAsFactors = FALSE
@@ -281,7 +289,21 @@ vpro_sidecar_run_clustering <- function(req) {
   cut_height <- if (!is.null(req$cutHeight) && is.finite(as.numeric(req$cutHeight)) && as.numeric(req$cutHeight) > 0) as.numeric(req$cutHeight) else NA_real_
   unit_prefix <- if (!is.null(req$unitPrefix) && nzchar(req$unitPrefix)) as.character(req$unitPrefix) else "CL"
 
-  mat_raw <- vpro_matrix(ws, scope = "project", value = "cover", strata = "total", lump = !identical(lump_arg, FALSE), transform = "none")
+  lump_applied_count <- 0L
+  if (!identical(lump_arg, FALSE)) {
+    lump_tbl <- vpro_lump_map(ws, lump = lump_arg)
+    if (nrow(lump_tbl) > 0L) {
+      raw_veg_spp <- vpro_veg(ws, scope = "project", strata = "total", lump = FALSE, resolve_synonyms = TRUE)
+      if (!is.null(req$plotNumbers) && length(req$plotNumbers) > 0L && nrow(raw_veg_spp) > 0L) {
+        raw_veg_spp <- raw_veg_spp[raw_veg_spp$PlotNumber %in% as.character(req$plotNumbers), , drop = FALSE]
+      }
+      if (nrow(raw_veg_spp) > 0L) {
+        lump_applied_count <- sum(raw_veg_spp$Species %in% lump_tbl$SppCode)
+      }
+    }
+  }
+
+  mat_raw <- vpro_matrix(ws, scope = "project", value = "cover", strata = "total", lump = if (!identical(lump_arg, FALSE)) lump_arg else FALSE, transform = "none")
   if (!is.null(req$plotNumbers) && length(req$plotNumbers) > 0L) {
     keep_p <- intersect(rownames(mat_raw), as.character(req$plotNumbers))
     mat_raw <- mat_raw[keep_p, , drop = FALSE]
@@ -310,10 +332,23 @@ vpro_sidecar_run_clustering <- function(req) {
 
   hc_method <- if (linkage %in% c("ward.D2", "average", "complete", "single", "mcquitty")) linkage else "ward.D2"
   hc <- stats::hclust(dist_obj, method = hc_method)
+  if (identical(method_req, "BETA_FLEXIBLE")) {
+    rlang::check_installed("cluster", reason = "to run flexible-beta hierarchical clustering.")
+    beta_val <- if (!is.null(req$beta) && is.finite(as.numeric(req$beta))) as.numeric(req$beta) else -0.25
+    if (beta_val <= -1.0 || beta_val >= 1.0) {
+      rlang::abort("`beta` must be a finite number strictly between -1 and 1.")
+    }
+    alpha <- (1.0 - beta_val) / 2.0
+    ag <- cluster::agnes(dist_obj, diss = TRUE, method = "flexible", par.method = c(alpha, alpha, beta_val, 0.0))
+    hc <- stats::as.hclust(ag)
+    hc$labels <- plots_unique
+    hc_method <- "beta_flexible"
+  }
   coph_corr <- suppressWarnings(stats::cor(dist_obj, stats::cophenetic(hc)))
   if (!is.finite(coph_corr)) coph_corr <- 0.0
 
   cluster_labels <- character(length(plots_unique))
+  names(cluster_labels) <- plots_unique
   max_membership <- rep(1.0, length(plots_unique))
   is_noise <- rep(FALSE, length(plots_unique))
   effective_cut <- if (is.finite(cut_height)) cut_height else round(0.55 * max(c(0.0001, hc$height)), 4)
@@ -323,11 +358,11 @@ vpro_sidecar_run_clustering <- function(req) {
     rlang::check_installed("vegclust", reason = "to run fuzzy/noise clustering.")
     vc_data <- vegan::decostand(mat_trans, method = "normalize")
     vc_fit <- if (identical(method_req, "NC")) {
-      vegclust::vegclust(vc_data, mobileCenters = k, method = "NC", m = max(1.05, fuzziness_m), dnoise = max(0.05, dnoise_val), nstart = 5L, iter.max = 100L)
+      vegclust::vegclust(vc_data, mobileCenters = k, method = "NC", m = max(1.05, fuzziness_m), dnoise = max(0.05, dnoise_val), nstart = 20L, iter.max = 100L)
     } else if (identical(method_req, "FCM")) {
-      vegclust::vegclust(vc_data, mobileCenters = k, method = "FCM", m = max(1.05, fuzziness_m), nstart = 5L, iter.max = 100L)
+      vegclust::vegclust(vc_data, mobileCenters = k, method = "FCM", m = max(1.05, fuzziness_m), nstart = 20L, iter.max = 100L)
     } else {
-      vegclust::vegclust(vc_data, mobileCenters = k, method = "KM", nstart = 5L, iter.max = 100L)
+      vegclust::vegclust(vc_data, mobileCenters = k, method = "KM", nstart = 20L, iter.max = 100L)
     }
     memb_mat <- as.matrix(vc_fit$memb)
     defuzz <- vegclust::defuzzify(vc_fit)$cluster
@@ -342,24 +377,58 @@ vpro_sidecar_run_clustering <- function(req) {
         cluster_labels[[i]] <- if (is.finite(num_part)) sprintf("%s_%02d", unit_prefix, num_part) else paste0(unit_prefix, "_", raw_cl)
       }
     }
+  } else if (identical(method_req, "PAM")) {
+    rlang::check_installed("cluster", reason = "to run PAM medoid clustering.")
+    pm <- cluster::pam(dist_obj, k = k, diss = TRUE)
+    cluster_labels[] <- sprintf("%s_%02d", unit_prefix, as.integer(pm$clustering))
   } else {
-    grp <- if (is.finite(cut_height)) stats::cutree(hc, h = cut_height) else stats::cutree(hc, k = k)
-    cluster_labels <- sprintf("%s_%02d", unit_prefix, as.integer(grp))
+    grp <- if (is.finite(cut_height)) {
+      stats::cutree(hc, h = cut_height)
+    } else {
+      if (k >= 2L && k <= length(plots_unique) && !is.null(hc$merge) && nrow(hc$merge) >= (k - 1L)) {
+        n_m <- nrow(hc$merge)
+        idx_lo <- max(1L, n_m - k + 1L)
+        idx_hi <- min(n_m, n_m - k + 2L)
+        effective_cut <- round(0.5 * (hc$height[[idx_lo]] + hc$height[[idx_hi]]), 4)
+      }
+      stats::cutree(hc, k = k)
+    }
+    cluster_labels[] <- sprintf("%s_%02d", unit_prefix, as.integer(grp))
   }
 
   sil_widths <- rep(0.0, length(plots_unique))
   mean_sil <- 0.0
-  int_codes <- as.integer(factor(cluster_labels))
-  if (length(unique(int_codes)) >= 2L && length(unique(int_codes)) < length(plots_unique) && requireNamespace("cluster", quietly = TRUE)) {
-    sil_obj <- tryCatch(cluster::silhouette(int_codes, dist_obj), error = function(e) NULL)
+  non_noise_idx <- which(!is_noise)
+  non_noise_units <- unique(cluster_labels[non_noise_idx])
+  if (length(non_noise_units) >= 2L && length(non_noise_idx) > length(non_noise_units) && requireNamespace("cluster", quietly = TRUE)) {
+    sub_codes <- as.integer(factor(cluster_labels[non_noise_idx]))
+    d_full <- as.matrix(dist_obj)
+    sub_dist <- stats::as.dist(d_full[non_noise_idx, non_noise_idx, drop = FALSE])
+    sil_obj <- tryCatch(cluster::silhouette(sub_codes, sub_dist), error = function(e) NULL)
     if (!is.null(sil_obj)) {
-      sil_widths <- round(as.numeric(as.matrix(sil_obj)[, "sil_width"]), 4)
-      mean_sil <- round(mean(sil_widths, na.rm = TRUE), 4)
+      sil_widths[non_noise_idx] <- round(as.numeric(as.matrix(sil_obj)[, "sil_width"]), 4)
+      mean_sil <- round(mean(sil_widths[non_noise_idx], na.rm = TRUE), 4)
+    }
+  } else {
+    int_codes <- as.integer(factor(cluster_labels))
+    if (length(unique(int_codes)) >= 2L && length(unique(int_codes)) < length(plots_unique) && requireNamespace("cluster", quietly = TRUE)) {
+      sil_obj <- tryCatch(cluster::silhouette(int_codes, dist_obj), error = function(e) NULL)
+      if (!is.null(sil_obj)) {
+        sil_widths <- round(as.numeric(as.matrix(sil_obj)[, "sil_width"]), 4)
+        mean_sil <- round(mean(sil_widths, na.rm = TRUE), 4)
+      }
     }
   }
 
-  tax <- vpro_taxonomy(ws)
-  tax_ix <- function(sc) match(sc, tax$Code)
+  tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
+  syn_map <- vpro_synonym_map(ws)
+  tax_ix <- function(sc) {
+    ix <- match(sc, tax$Code)
+    if (is.na(ix) && sc %in% names(syn_map)) {
+      ix <- match(unname(syn_map[[sc]]), tax$Code)
+    }
+    ix
+  }
 
   unique_clusters <- sort(unique(cluster_labels))
   non_noise <- unique_clusters[!grepl("_Noise$", unique_clusters)]
@@ -423,7 +492,7 @@ vpro_sidecar_run_clustering <- function(req) {
     k = as.integer(k),
     plotCount = as.integer(length(plots_unique)),
     speciesCount = as.integer(length(spp_unique)),
-    lumpAppliedRows = 0L,
+    lumpAppliedRows = as.integer(lump_applied_count),
     copheneticCorrelation = round(coph_corr, 4),
     meanSilhouette = mean_sil,
     noiseCount = as.integer(sum(is_noise)),
@@ -446,7 +515,7 @@ vpro_sidecar_render_guide <- function(req) {
     "single_unit"
   }
   art <- vpro_render_guide(
-    con = ws,
+    ws = ws,
     type = g_type,
     unit = req$targetUnit,
     bgc = req$bgcFilter,
@@ -466,7 +535,7 @@ vpro_sidecar_render_guide <- function(req) {
     pdf_dest <- paste0(tools::file_path_sans_ext(art$path), ".pdf")
     pdf_try <- tryCatch(
       vpro_render_guide(
-        con = ws,
+        ws = ws,
         type = g_type,
         unit = req$targetUnit,
         bgc = req$bgcFilter,
@@ -509,9 +578,9 @@ vpro_sidecar_render_guide <- function(req) {
   out
 }
 
-#' Execute a `vpro_wails` sidecar action with 100% JSON schema parity
+#' Execute an internal VPro desktop sidecar action with JSON schema parity
 #'
-#' Allows `vpro_wails` (`internal/rsidecar`) or CLI scripts to invoke `vpro`'s
+#' Allows VPro (`app/internal/rsidecar`) or internal harnesses to invoke `vpro`'s
 #' native engines directly while preserving exact request/response JSON field
 #' names for `probe_runtime`, `compute_climate_asmr`, `run_clustering`, and
 #' `render_guide`.
@@ -522,10 +591,10 @@ vpro_sidecar_render_guide <- function(req) {
 #'   file (ignored when `action = "probe_runtime"` and omitted).
 #' @param output_json Optional destination `.json` file path where the serialized
 #'   JSON response is written atomically.
-#' @return Structured response list matching the `vpro_wails/internal/rsidecar`
+#' @return Structured response list matching the `app/internal/rsidecar`
 #'   JSON contract.
-#' @export
-vpro_sidecar_exec <- function(
+#' @keywords internal
+.vpro_sidecar_exec <- function(
   action = c("probe_runtime", "compute_climate_asmr", "run_clustering", "render_guide"),
   payload_json = list(),
   output_json = NULL

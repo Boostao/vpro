@@ -49,7 +49,7 @@ test_that("BECMaster_fixing (71,567 plots, 1.65M veg rows) meets all Wave 5 scal
       )
     )
     DBI::dbDisconnect(dbc_tmp)
-    ws <- vpro_write_su(ws, sbs_su, su_name = "PG_Cohort_SU", create = TRUE, confirm_overwrite = TRUE)
+    ws <- vpro_write_su(ws, sbs_su, su = "PG_Cohort_SU", create = TRUE, overwrite = TRUE)
   }
 
   custom_lump <- data.frame(
@@ -139,7 +139,7 @@ test_that("BECMaster_fixing (71,567 plots, 1.65M veg rows) meets all Wave 5 scal
 
   cl_sub <- vpro_cluster(ws, method = "ward.D2", k = 4L, lump = custom_lump)
   t0 <- proc.time()[["elapsed"]]
-  ws_after <- vpro_write_candidate_su(ws, cl_sub, name = "PG_Cand")
+  ws_after <- vpro_write_su(ws, cl_sub, su = "PG_Cand", candidate = TRUE)
   t_wb <- proc.time()[["elapsed"]] - t0
 
   rest_batch <- DBI::dbFetch(open_q, n = 5L)

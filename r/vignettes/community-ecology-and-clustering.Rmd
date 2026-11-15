@@ -21,9 +21,9 @@ knitr::opts_chunk$set(
 ```{r}
 library(vpro)
 
-con <- vpro_sample()
+ws <- vpro_connect("Sample")
 mat <- vpro_matrix(
-  con,
+  ws,
   value = "cover",
   strata = "total",
   lump = TRUE,
@@ -52,7 +52,7 @@ BEC classification workflows frequently use fuzzy noise clustering (`method = "v
 
 ```{r}
 cl <- vpro_cluster(
-  con,
+  ws,
   method = "vegclust_nc",
   transform = "sqrt",
   k = 4,
@@ -67,21 +67,21 @@ head(cl$memberships)
 Compute indicator species fidelity and specificity across the resulting candidate clusters with `vpro_indicators()`:
 
 ```{r}
-ind <- vpro_indicators(con, clusters = cl, permutations = 49)
+ind <- vpro_indicators(ws, clusters = cl, permutations = 49)
 head(ind, 10)
 ```
 
-## Atomic Round-Trip Write-Back to `VPro` (`vpro_wails`)
+## Atomic Round-Trip Write-Back to Desktop `VPro`
 
-Once candidate clusters are reviewed in R, `vpro_write_candidate_su()` writes `<Name>_ClusterCandidate_SU` atomically (`BEGIN IMMEDIATE`) with `_table_metadata ('VP04')`, `<Project>_Audit`, and `__VPRO_RSidecarHistory` provenance so the candidate classification appears immediately in `vpro_wails`:
+Once candidate clusters are reviewed in R, `vpro_write_su(..., candidate = TRUE)` writes `<Name>_ClusterCandidate_SU` atomically (`BEGIN IMMEDIATE`) with `_table_metadata ('VP04')`, `<Project>_Audit`, and `__VPRO_RSidecarHistory` provenance so the candidate classification appears immediately in Desktop `VPro`:
 
 ```{r}
 # Demonstrate on a disposable WAL copy of Sample.db
 work_db <- tempfile("sample-roundtrip-", fileext = ".db")
-file.copy(con$project_path, work_db)
+file.copy(ws$project_path, work_db)
 
 ws_work <- vpro_connect(work_db)
-ws_cand <- vpro_write_candidate_su(ws_work, cl, name = "Sample_Noise4")
+ws_cand <- vpro_write_su(ws_work, cl, su = "Sample_Noise4", candidate = TRUE)
 vpro_list_su(ws_cand)
 
 unlink(c(work_db, paste0(work_db, "-wal"), paste0(work_db, "-shm")))

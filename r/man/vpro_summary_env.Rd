@@ -4,12 +4,12 @@
 \alias{vpro_summary_env}
 \title{Produce BEC site and environment unit summaries}
 \usage{
-vpro_summary_env(con, hierarchy_breaks = FALSE, exclude_modifiers = TRUE)
+vpro_summary_env(ws, hierarchy_breaks = FALSE, exclude_modifiers = TRUE)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
-\item{hierarchy_breaks}{Logical; if \code{TRUE} and \code{con$hierarchy} contains \code{~}
+\item{hierarchy_breaks}{Logical; if \code{TRUE} and \code{ws$hierarchy} contains \code{~}
 breakpoint nodes, rolls plots up to their \code{BreakpointUnit}.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE} (default), excludes \code{.support},

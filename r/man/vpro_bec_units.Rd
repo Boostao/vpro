@@ -4,10 +4,10 @@
 \alias{vpro_bec_units}
 \title{Query 2026 \verb{BECdb v13} Biogeoclimatic units and site series}
 \usage{
-vpro_bec_units(con = NULL, zone = NULL, subzone = NULL)
+vpro_bec_units(ws = NULL, zone = NULL, subzone = NULL)
 }
 \arguments{
-\item{con}{Optional \code{vpro_workspace} handle. When \code{NULL}, uses bundled 2026
+\item{ws}{Optional \code{vpro_workspace} handle. When \code{NULL}, uses bundled 2026
 \code{VLists.db}.}
 
 \item{zone}{Optional BGC zone filter (case-insensitive, e.g. \code{"CWH"}, \code{"SBS"}).}

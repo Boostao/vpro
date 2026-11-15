@@ -602,39 +602,43 @@ vpro_pivot_veg_long_to_vp08 <- function(veg_long_df) {
 #'
 #' Extracts all 8 `VP08` project tables (`env`, `admin`, `veg`, `humus`,
 #' `mineral`, `other`, `metadata`, `audit`), site-unit assignments (`su`), and
-#' species lump mappings (`lump`) from any `vpro_workspace` ([vpro_connect()] or
-#' [vpro_sample()]), enforces literal `character` `PlotNumber`/`Plot` keys,
+#' species lump mappings (`lump`) from any `vpro_workspace` (see [vpro_connect()],
+#' e.g. `vpro_connect("Sample")`), enforces literal `character` `PlotNumber`/`Plot` keys,
 #' normalizes Access `-1/0` booleans to R `logical`, narrows cover columns via
 #' [vpro_narrow_float32()], and atomically writes a compressed `"vpro_rds_bundle"`
 #' file suitable for zero-database ecological analysis via
-#' [vpro_read_rds_project()].
+#' [vpro_import_rds()].
 #'
-#' @param con_ws A `vpro_workspace` handle from [vpro_connect()] or
-#'   [vpro_sample()].
-#' @param dest_path Destination `.rds` file path.
+#' @param ws A `vpro_workspace` handle from [vpro_connect()].
+#' @param path Destination `.rds` file path.
 #' @param snapshot_tag Optional snapshot identifier tag stored in `provenance`.
 #'   Defaults to `provenance$snapshot_tag` when present, or the file stem of
-#'   `dest_path`.
+#'   `path`.
 #' @param provenance Optional named list of provenance metadata (`snapshot_tag`,
 #'   `created_at`, `created_by`, `bec_version`, `taxonomy_version`,
 #'   `tail_audit_hash`, `notes`).
 #' @param compress Compression codec passed to [base::saveRDS()]: `"xz"`
 #'   (default maximum compression) or `"gzip"` (faster write).
+#' @param redact_sensitive Logical; if `TRUE`, redacts coordinates (`Latitude`,
+#'   `Longitude`, `UTMEasting`, `UTMNorthing`, `UTMZone`) to `NA` on plots
+#'   containing sensitive (`USysSppAttributes.RedBlueList`) species. Defaults to
+#'   `isTRUE(attr(ws, "cloud_redacted"))`.
 #' @return A list with `path`, `sha256`, `bytes`, `plot_count`, and `veg_count`.
-#' @seealso [vpro_read_rds_project()], [vpro_publish_snapshot()]
+#' @seealso [vpro_import_rds()], [vpro_master_publish_snapshot()]
 #' @export
-vpro_write_rds_snapshot <- function(
-  con_ws,
-  dest_path,
+vpro_export_rds <- function(
+  ws,
+  path,
   snapshot_tag = NULL,
   provenance = list(),
-  compress = c("xz", "gzip")
+  compress = c("xz", "gzip"),
+  redact_sensitive = isTRUE(attr(ws, "cloud_redacted"))
 ) {
-  vpro_assert_workspace(con_ws)
+  vpro_assert_workspace(ws)
   compress <- match.arg(compress)
 
-  if (!is.character(dest_path) || length(dest_path) != 1L || is.na(dest_path) || !nzchar(trimws(dest_path))) {
-    cli::cli_abort("{.arg dest_path} must be a single non-empty {.file .rds} file path.")
+  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
+    cli::cli_abort("{.arg path} must be a single non-empty {.file .rds} file path.")
   }
   if (is.null(provenance)) {
     provenance <- list()
@@ -646,22 +650,33 @@ vpro_write_rds_snapshot <- function(
     cli::cli_abort("{.arg snapshot_tag} must be {.code NULL} or a single non-empty character string.")
   }
 
-  dest_clean <- trimws(dest_path)
+  dest_clean <- trimws(path)
   if (!nzchar(tools::file_ext(dest_clean))) {
     dest_clean <- paste0(dest_clean, ".rds")
   }
   dest_resolved <- vpro_abs_path(dest_clean)
 
   if (file.exists(dest_resolved) && dir.exists(dest_resolved)) {
-    cli::cli_abort("{.arg dest_path} points to an existing directory: {.path {dest_resolved}}.")
+    cli::cli_abort("{.arg path} points to an existing directory: {.path {dest_resolved}}.")
   }
-  if (vpro_is_protected_support_db(dest_resolved, con = con_ws) || vpro_is_bundled_package_path(dest_resolved)) {
+  if (vpro_is_protected_support_db(dest_resolved, con = ws) || vpro_is_bundled_package_path(dest_resolved)) {
     cli::cli_abort(
       "Refusing to write RDS snapshot onto protected or bundled package path: {.path {dest_resolved}}."
     )
   }
 
-  tables <- vpro_extract_workspace_snapshot_tables(con_ws)
+  tables <- vpro_extract_workspace_snapshot_tables(ws)
+  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L &&
+      is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
+    sens_codes <- .vpro_sensitive_species_codes(vlists_path = ws$vlists_path)
+    if (length(sens_codes) > 0L) {
+      veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
+      sens_plots <- unique(as.character(tables$veg$PlotNumber[veg_spp %in% sens_codes]))
+      if (length(sens_plots) > 0L) {
+        tables$env <- .vpro_redact_coord_df(tables$env, sens_plots)
+      }
+    }
+  }
   plot_count <- as.integer(nrow(tables$env))
   veg_count <- as.integer(nrow(tables$veg))
 
@@ -677,7 +692,7 @@ vpro_write_rds_snapshot <- function(
     trimws(snapshot_tag)
   } else {
     stem <- tools::file_path_sans_ext(basename(dest_resolved))
-    pick_chr(provenance$snapshot_tag, if (nzchar(stem)) stem else con_ws$project)
+    pick_chr(provenance$snapshot_tag, if (nzchar(stem)) stem else ws$project)
   }
 
   sys_user <- tryCatch(Sys.info()[["user"]], error = function(e) "")
@@ -713,7 +728,7 @@ vpro_write_rds_snapshot <- function(
   bundle <- structure(
     list(
       schema_version = "VP08",
-      project = as.character(con_ws$project),
+      project = as.character(ws$project),
       provenance = prov_clean,
       tables = tables
     ),
@@ -755,9 +770,9 @@ vpro_write_rds_snapshot <- function(
 
 #' Open a portable `.rds` project snapshot as a live `vpro_workspace`
 #'
-#' Reads either a `"vpro_rds_bundle"` written by [vpro_write_rds_snapshot()] /
-#' [vpro_publish_snapshot()] or a named-list `.rds` bundle exported by
-#' `vpro_wails` (`ExportProjectRDS` with `env`, `admin`, `veg_long`, `humus`,
+#' Reads either a `"vpro_rds_bundle"` written by [vpro_export_rds()] /
+#' [vpro_master_publish_snapshot()] or a named-list `.rds` bundle exported by
+#' `VPro` desktop (`ExportProjectRDS` with `env`, `admin`, `veg_long`, `humus`,
 #' `mineral`, `su`, `metadata`), automatically pivoting `veg_long` into the
 #' canonical 44-column `VP08` `veg` schema when `veg` is absent. Enforces all
 #' `VP08` domain invariants, stages a self-cleaning ephemeral SQLite `VP08`
@@ -767,7 +782,7 @@ vpro_write_rds_snapshot <- function(
 #' [vpro_asmr()], [vpro_sf()], and [vpro_render_guide()] work out-of-the-box
 #' with zero external database setup.
 #'
-#' @param rds_path Path to an `.rds` project snapshot file.
+#' @param path Path to an `.rds` project snapshot file.
 #' @param su Optional site-unit override: `NULL` (default uses bundle `su`
 #'   table), `"None"` / `FALSE` to disable active SU scoping, a custom
 #'   `data.frame(PlotNumber, SiteUnit)`, or a target `*_SU` table name.
@@ -775,19 +790,19 @@ vpro_write_rds_snapshot <- function(
 #'   `lump` table), `"None"` / `FALSE` to disable active lumping, a custom
 #'   `data.frame(SppCode, LumpCode, Use)`, or a target `*_Lump` table name.
 #' @return An S3 object of class `c("vpro_rds_project", "vpro_workspace")`.
-#' @seealso [vpro_write_rds_snapshot()], [vpro_publish_snapshot()], [vpro_env()],
+#' @seealso [vpro_export_rds()], [vpro_master_publish_snapshot()], [vpro_env()],
 #'   [vpro_diagnostics()]
 #' @export
-vpro_read_rds_project <- function(rds_path, su = NULL, lump = NULL) {
+vpro_import_rds <- function(path, su = NULL, lump = NULL) {
   .vpro_register_snap_s3()
 
-  if (!is.character(rds_path) || length(rds_path) != 1L || is.na(rds_path) || !nzchar(trimws(rds_path))) {
-    cli::cli_abort("{.arg rds_path} must be a single non-empty {.file .rds} file path.")
+  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(trimws(path))) {
+    cli::cli_abort("{.arg path} must be a single non-empty {.file .rds} file path.")
   }
-  if (!file.exists(rds_path) || dir.exists(rds_path)) {
-    cli::cli_abort("RDS snapshot file does not exist: {.path {rds_path}}.")
+  if (!file.exists(path) || dir.exists(path)) {
+    cli::cli_abort("RDS snapshot file does not exist: {.path {path}}.")
   }
-  rds_norm <- normalizePath(rds_path, winslash = "/", mustWork = TRUE)
+  rds_norm <- normalizePath(path, winslash = "/", mustWork = TRUE)
   raw_obj <- readRDS(rds_norm)
 
   is_bundle <- inherits(raw_obj, "vpro_rds_bundle") || (
@@ -805,7 +820,7 @@ vpro_read_rds_project <- function(rds_path, su = NULL, lump = NULL) {
   if (!is_bundle && !is_wails_list) {
     cli::cli_abort(c(
       "Unsupported RDS object in {.path {rds_norm}}.",
-      "i" = "Expected a {.cls vpro_rds_bundle} from {.fn vpro_write_rds_snapshot} or a named list of data frames ({.field env}, {.field admin}, {.field veg}/{.field veg_long}, ...) from {.code vpro_wails}."
+      "i" = "Expected a {.cls vpro_rds_bundle} from {.fn vpro_export_rds} or a named list of data frames ({.field env}, {.field admin}, {.field veg}/{.field veg_long}, ...) from {.code VPro}."
     ))
   }
 
@@ -1214,8 +1229,8 @@ vpro_read_rds_project <- function(rds_path, su = NULL, lump = NULL) {
   res_obj
 }
 
-#' @rdname vpro_read_rds_project
-#' @param x A `vpro_rds_project` object returned by [vpro_read_rds_project()].
+#' @rdname vpro_import_rds
+#' @param x A `vpro_rds_project` object returned by [vpro_import_rds()].
 #' @param ... Unused additional arguments.
 #' @export
 print.vpro_rds_project <- function(x, ...) {
@@ -1272,13 +1287,13 @@ print.vpro_rds_project <- function(x, ...) {
   invisible(x)
 }
 
-#' @rdname vpro_read_rds_project
+#' @rdname vpro_import_rds
 #' @export
 as_tibble.vpro_rds_project <- function(x, ...) {
   tibble::as_tibble(x$tables$env)
 }
 
-vpro_write_snapshot_csv_bundle <- function(con_ws, snapshot_tag, out_dir_abs, provenance, overwrite = FALSE) {
+vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, provenance, overwrite = FALSE, redact_sensitive = FALSE) {
   csv_dir <- file.path(out_dir_abs, paste0(snapshot_tag, "_csv"))
   tar_path <- file.path(out_dir_abs, paste0(snapshot_tag, "_csv.tar.gz"))
 
@@ -1295,7 +1310,18 @@ vpro_write_snapshot_csv_bundle <- function(con_ws, snapshot_tag, out_dir_abs, pr
   }
 
   dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
-  tables <- vpro_extract_workspace_snapshot_tables(con_ws)
+  tables <- vpro_extract_workspace_snapshot_tables(ws)
+  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L &&
+      is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
+    sens_codes <- .vpro_sensitive_species_codes(vlists_path = ws$vlists_path)
+    if (length(sens_codes) > 0L) {
+      veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
+      sens_plots <- unique(as.character(tables$veg$PlotNumber[veg_spp %in% sens_codes]))
+      if (length(sens_plots) > 0L) {
+        tables$env <- .vpro_redact_coord_df(tables$env, sens_plots)
+      }
+    }
+  }
 
   csv_targets <- list(
     env = tables$env,
@@ -1336,7 +1362,7 @@ vpro_write_snapshot_csv_bundle <- function(con_ws, snapshot_tag, out_dir_abs, pr
   manifest_obj <- list(
     schema_version = "VP08",
     snapshot_tag = as.character(snapshot_tag),
-    project = as.character(con_ws$project),
+    project = as.character(ws$project),
     created_at = as.character(provenance$created_at),
     created_by = as.character(provenance$created_by),
     plot_count = as.integer(provenance$plot_count),
@@ -1394,15 +1420,15 @@ vpro_write_snapshot_csv_bundle <- function(con_ws, snapshot_tag, out_dir_abs, pr
 
 #' Publish a custodian `BECMaster` snapshot and multi-format release artifacts
 #'
-#' Requires a custodian PostgreSQL connection (`con$role == "custodian"`).
+#' Requires a custodian PostgreSQL connection (`pg$role == "custodian"`).
 #' Pulls a `REPEATABLE READ` consistent snapshot from `becmaster.*`, writes the
 #' requested release artifacts (`"rds"`, `"sqlite"`, `"gpkg"` in `EPSG:3005`,
 #' and/or `"csv"` directory + `.tar.gz` bundle) into `out_dir`, computes a
 #' deterministic SHA-256 manifest digest across artifact hashes, counts, and
 #' active standards versions, and upserts the release record into
-#' `becmaster.snapshots` matching `CreateBECMasterSnapshot` in `vpro_wails`.
+#' `becmaster.snapshots` matching `CreateBECMasterSnapshot` in `vpro`.
 #'
-#' @param con A custodian `vpro_pg_conn` connection (`role == "custodian"`).
+#' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`).
 #' @param snapshot_tag Snapshot release identifier (`1..80` ASCII characters
 #'   matching `^[A-Za-z0-9._-]{1,80}$`, e.g. `"BECMaster_2026_11"`).
 #' @param out_dir Output directory where snapshot artifact files are written
@@ -1418,15 +1444,18 @@ vpro_write_snapshot_csv_bundle <- function(con_ws, snapshot_tag, out_dir_abs, pr
 #' @param compress Compression codec for `.rds` output (`"xz"` or `"gzip"`).
 #' @param overwrite Logical; if `TRUE`, replaces existing local artifacts and
 #'   updates an existing `snapshot_tag` row in `becmaster.snapshots`.
+#' @param redact_sensitive Logical; if `TRUE`, redacts coordinates on plots
+#'   containing sensitive (`USysSppAttributes.RedBlueList`) species across
+#'   generated artifacts.
 #' @return A structured list with `snapshot_tag`, `created_at`, `created_by`,
 #'   `plot_count`, `veg_count`, `bec_version`, `taxonomy_version`,
 #'   `manifest_sha256`, `notes`, and an `artifacts` tibble (`format`, `path`,
 #'   `sha256`, `bytes`).
-#' @seealso [vpro_list_snapshots()], [vpro_write_rds_snapshot()],
-#'   [vpro_read_rds_project()], [vpro_export_gpkg()]
+#' @seealso [vpro_master_list_snapshots()], [vpro_export_rds()],
+#'   [vpro_import_rds()], [vpro_export_gpkg()]
 #' @export
-vpro_publish_snapshot <- function(
-  con,
+vpro_master_publish_snapshot <- function(
+  pg,
   snapshot_tag,
   out_dir,
   formats = c("rds", "sqlite", "gpkg", "csv"),
@@ -1437,9 +1466,10 @@ vpro_publish_snapshot <- function(
   plots = NULL,
   bbox = NULL,
   compress = c("xz", "gzip"),
-  overwrite = FALSE
+  overwrite = FALSE,
+  redact_sensitive = FALSE
 ) {
-  vpro_assert_pg_conn(con, require_custodian = TRUE)
+  vpro_assert_pg_conn(pg, require_custodian = TRUE)
   tag <- vpro_validate_snapshot_tag(snapshot_tag, "snapshot_tag")
   overwrite <- vpro_pg_validate_flag(overwrite, "overwrite")
   compress <- match.arg(compress)
@@ -1535,7 +1565,7 @@ vpro_publish_snapshot <- function(
   }
 
   pull_res <- vpro_master_pull_impl(
-    con = con,
+    pg = pg,
     dest_path = stage_sqlite_path,
     project_name = snap_proj_name,
     zones = zones,
@@ -1570,13 +1600,13 @@ vpro_publish_snapshot <- function(
   }
 
   usr_df <- tryCatch(
-    vpro_pg_query(con, "SELECT current_user AS usr", params = NULL, action = "read current_user"),
+    vpro_pg_query(pg, "SELECT current_user AS usr", params = NULL, action = "read current_user"),
     error = function(e) data.frame()
   )
   pg_actor <- if (nrow(usr_df) >= 1L && !is.na(usr_df$usr[[1L]]) && nzchar(trimws(as.character(usr_df$usr[[1L]])))) {
     trimws(as.character(usr_df$usr[[1L]]))
-  } else if (!is.null(con$user) && nzchar(trimws(as.character(con$user)))) {
-    trimws(as.character(con$user))
+  } else if (!is.null(pg$user) && nzchar(trimws(as.character(pg$user)))) {
+    trimws(as.character(pg$user))
   } else {
     "VProCustodian"
   }
@@ -1605,12 +1635,13 @@ vpro_publish_snapshot <- function(
         bytes = as.double(file.info(pull_res$dest_path)$size)
       )
     } else if (identical(fmt, "rds")) {
-      rds_res <- vpro_write_rds_snapshot(
-        con_ws = ws_snap,
-        dest_path = rds_dest,
+      rds_res <- vpro_export_rds(
+        ws = ws_snap,
+        path = rds_dest,
         snapshot_tag = tag,
         provenance = prov_meta,
-        compress = compress
+        compress = compress,
+        redact_sensitive = isTRUE(redact_sensitive)
       )
       art_rows[[i]] <- tibble::tibble(
         format = "rds",
@@ -1636,11 +1667,12 @@ vpro_publish_snapshot <- function(
       )
     } else if (identical(fmt, "csv")) {
       csv_res <- vpro_write_snapshot_csv_bundle(
-        con_ws = ws_snap,
+        ws = ws_snap,
         snapshot_tag = tag,
         out_dir_abs = out_dir_abs,
         provenance = prov_meta,
-        overwrite = overwrite
+        overwrite = overwrite,
+        redact_sensitive = isTRUE(redact_sensitive)
       )
       art_rows[[i]] <- tibble::tibble(
         format = "csv",
@@ -1690,7 +1722,7 @@ vpro_publish_snapshot <- function(
   )
 
   up_df <- vpro_pg_query(
-    con,
+    pg,
     upsert_sql,
     params = list(
       tag,
@@ -1732,18 +1764,18 @@ vpro_publish_snapshot <- function(
 #' List published `BECMaster` snapshots from PostgreSQL
 #'
 #' Queries `becmaster.snapshots` ordered newest-first (`created_at DESC`) and
-#' returns a tidy tibble matching `ListBECMasterSnapshots` in `vpro_wails`.
+#' returns a tidy tibble matching `ListBECMasterSnapshots` in `vpro`.
 #'
-#' @param con A `vpro_pg_conn` connection handle.
+#' @param pg A `vpro_pg_conn` connection handle.
 #' @param limit Positive integer maximum number of snapshot rows to return
 #'   (defaults to `100L`).
 #' @return A tibble with `snapshot_tag`, `created_at`, `created_by`,
 #'   `plot_count`, `veg_count`, `bec_version`, `taxonomy_version`,
 #'   `manifest_sha256`, and `notes`.
-#' @seealso [vpro_publish_snapshot()], [vpro_read_rds_project()]
+#' @seealso [vpro_master_publish_snapshot()], [vpro_import_rds()]
 #' @export
-vpro_list_snapshots <- function(con, limit = 100L) {
-  vpro_assert_pg_conn(con, require_custodian = FALSE)
+vpro_master_list_snapshots <- function(pg, limit = 100L) {
+  vpro_assert_pg_conn(pg, require_custodian = FALSE)
   limit_int <- vpro_pg_validate_limit(limit, allow_null = FALSE)
 
   sql <- paste(
@@ -1762,7 +1794,7 @@ vpro_list_snapshots <- function(con, limit = 100L) {
     "LIMIT $1"
   )
   df <- vpro_pg_query(
-    con,
+    pg,
     sql,
     params = list(as.integer(limit_int)),
     action = "list becmaster.snapshots"

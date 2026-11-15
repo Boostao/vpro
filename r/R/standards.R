@@ -52,20 +52,34 @@ vpro_standards <- function(vlists_path = NULL) {
   )
 }
 
-#' Inspect `vpro_wails` workspace, 2026 standards, and R ecosystem readiness
+#' Inspect VPro workspace, 2026 standards, and R ecosystem readiness
 #'
-#' Reports cross-OS `vpro_wails` workspace directories (`vpro_data_dir()` and
-#' `vpro_config_dir()`), active project/SU/hierarchy/profile settings from
-#' `config.yml` when present, 7-DB SQLite family availability, 2026 `BECdb v13`
+#' Reports cross-OS VPro workspace directories (`vpro_data_dir()` and
+#' `vpro_config_dir()`), active project/SU/hierarchy/profile settings (from `ws`
+#' or `config.yml` when present), 7-DB SQLite family availability, 2026 `BECdb v13`
 #' and `BCPlantTaxonomy v19` SHA-256 verification, `climr` local raster cache
 #' availability, and installed versions of companion R packages.
 #'
-#' @param data_dir Workspace data directory (defaults to [vpro_data_dir()]).
-#' @param config_dir Workspace config directory (defaults to [vpro_config_dir()]).
+#' @param ws Optional active `vpro_workspace` handle from [vpro_connect()].
+#'   When supplied, reports status using `ws$data_dir`, `ws$config_dir`, and the
+#'   live workspace selection (`ws$project`, `ws$su`, `ws$hierarchy`, `ws$lump`).
+#' @param data_dir Workspace data directory (defaults to [vpro_data_dir()] or
+#'   `ws$data_dir` when `ws` is supplied).
+#' @param config_dir Workspace config directory (defaults to [vpro_config_dir()]
+#'   or `ws$config_dir` when `ws` is supplied).
 #' @return An S3 object of class `vpro_status` with `print()` and `as_tibble()`
 #'   methods.
 #' @export
-vpro_status <- function(data_dir = vpro_data_dir(), config_dir = vpro_config_dir()) {
+vpro_status <- function(ws = NULL, data_dir = vpro_data_dir(), config_dir = vpro_config_dir()) {
+  if (!is.null(ws)) {
+    vpro_assert_workspace(ws)
+    if (missing(data_dir) && !is.null(ws$data_dir) && nzchar(ws$data_dir)) {
+      data_dir <- ws$data_dir
+    }
+    if (missing(config_dir) && !is.null(ws$config_dir) && nzchar(ws$config_dir)) {
+      config_dir <- ws$config_dir
+    }
+  }
   data_dir <- normalizePath(data_dir, winslash = "/", mustWork = FALSE)
   config_dir <- normalizePath(config_dir, winslash = "/", mustWork = FALSE)
   config_path <- file.path(config_dir, "config.yml")
@@ -81,17 +95,17 @@ vpro_status <- function(data_dir = vpro_data_dir(), config_dir = vpro_config_dir
     hierarchy_path = NA_character_,
     lump = NA_character_
   )
+  chr_or_na <- function(val) {
+    if (is.null(val) || length(val) == 0L || is.na(val[[1L]]) || !nzchar(trimws(as.character(val[[1L]])))) {
+      NA_character_
+    } else {
+      as.character(val[[1L]])
+    }
+  }
   if (has_config) {
     cfg <- tryCatch(yaml::read_yaml(config_path, readLines.warn = FALSE), error = function(e) NULL)
     if (is.list(cfg) && is.list(cfg$Current)) {
       cur <- cfg$Current
-      chr_or_na <- function(val) {
-        if (is.null(val) || length(val) == 0L || is.na(val[[1L]]) || !nzchar(trimws(as.character(val[[1L]])))) {
-          NA_character_
-        } else {
-          as.character(val[[1L]])
-        }
-      }
       active$project <- chr_or_na(cur$CurrProject)
       active$su <- chr_or_na(cur$CurrPlotlist)
       active$hierarchy <- chr_or_na(cur$CurrHierarchy)
@@ -101,6 +115,15 @@ vpro_status <- function(data_dir = vpro_data_dir(), config_dir = vpro_config_dir
       active$hierarchy_path <- chr_or_na(cur$HierarchyPath)
       active$lump <- chr_or_na(cur$CurrLump)
     }
+  }
+  if (!is.null(ws)) {
+    active$project <- chr_or_na(ws$project)
+    active$su <- chr_or_na(ws$su)
+    active$hierarchy <- chr_or_na(ws$hierarchy)
+    active$project_path <- chr_or_na(ws$project_path)
+    active$su_path <- chr_or_na(ws$su_path)
+    active$hierarchy_path <- chr_or_na(ws$hierarchy_path)
+    active$lump <- chr_or_na(ws$lump)
   }
 
   family_names <- c("VPro64.db", "VLists.db", "VUser.db", "VMetaData.db", "VMessageBoard.db", "VPics.db")

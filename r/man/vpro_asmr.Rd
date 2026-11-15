@@ -5,7 +5,7 @@
 \title{Compute plot climate normals and Ministry Actual Soil Moisture Regime (\code{aSMR})}
 \usage{
 vpro_asmr(
-  con,
+  ws,
   scope = c("su", "project"),
   ref_period = "1961_1990",
   cache = TRUE,
@@ -13,7 +13,7 @@ vpro_asmr(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{scope}{Either \code{"su"} (active SU plots) or \code{"project"} (all \verb{_Env} plots).}
 

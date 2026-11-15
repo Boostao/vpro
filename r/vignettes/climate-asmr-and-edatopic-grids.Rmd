@@ -18,15 +18,14 @@ knitr::opts_chunk$set(
 
 ## Shared `__VPRO_PlotClimate` Cache and `CoordElevHash`
 
-`vpro` and `vpro_wails` share the exact same `__VPRO_PlotClimate` SQLite table and 16-byte SHA-256 `CoordElevHash` key (`lat|lon|elev|ref_period`). Plots downscaled in R via `climr` (or evaluated with the offline BGC lapse fallback when working offline) are immediate cache hits in `vpro_wails` and vice-versa:
+`vpro` and Desktop `VPro` share the exact same `__VPRO_PlotClimate` SQLite table and 16-byte SHA-256 `CoordElevHash` key (`lat|lon|elev|ref_period`). Plots downscaled in R via `climr` (or evaluated with the offline BGC lapse fallback when working offline) are immediate cache hits in `VPro` and vice-versa:
 
 ```{r}
 library(vpro)
 
-con <- vpro_sample()
-vpro_coord_elev_hash(lat = 54.25, lon = -126.75, elev = 650, ref_period = "1961_1990")
+ws <- vpro_connect("Sample")
 
-clim <- vpro_climate(con, ref_period = "1961_1990", cache = FALSE, force_offline = TRUE)
+clim <- vpro_climate(ws, ref_period = "1961_1990", cache = FALSE, force_offline = TRUE)
 head(clim[, c("PlotNumber", "BGC", "Elevation", "MAT", "MAP", "MSP", "CMD", "PAS")])
 ```
 
@@ -35,20 +34,20 @@ head(clim[, c("PlotNumber", "BGC", "Elevation", "MAT", "MAP", "MSP", "CMD", "PAS
 `vpro_asmr()` applies the Ministry water-balance rules (`aSMR_Rules_HalfStep.csv`): 5-month summer moist surplus (`PPT_05..09 >= 90 mm`), dormant-season recharge deficit (`350 - (PPT_at + PPT_wt)`), steep (`> 35%`) warm SW (`1.25x`) and cool N (`0.85x`) aspect adjustments, and shedding/receiving `rSMR` step transforms:
 
 ```{r}
-asmr_df <- vpro_asmr(con, ref_period = "1961_1990", cache = FALSE, force_offline = TRUE)
+asmr_df <- vpro_asmr(ws, ref_period = "1961_1990", cache = FALSE, force_offline = TRUE)
 head(asmr_df[, c("PlotNumber", "SiteUnit", "rSMR", "rSNR", "CMD", "CMD_site", "aSMR")])
 ```
 
 ## Dual Relative and Actual `9 x 5` Edatopic Grids
 
-`vpro_edatopic_grid(mode = "dual")` computes paired Relative (`rSMR x rSNR`) and Actual (`aSMR x rSNR`) `9 x 5` grids along with species prominence tiers, rendered with B.C. Government `#003366` / `#FCBA19` styling via `plot_edatope()`:
+`vpro_edatopic_grid(mode = "dual")` computes paired Relative (`rSMR x rSNR`) and Actual (`aSMR x rSNR`) `9 x 5` grids along with species prominence tiers, rendered with B.C. Government `#003366` / `#FCBA19` styling via `vpro_plot_edatope()`:
 
 ```{r}
-ed <- vpro_edatopic_grid(con, mode = "dual", force_offline = TRUE)
+ed <- vpro_edatopic_grid(ws, mode = "dual", force_offline = TRUE)
 ed
 
 if (requireNamespace("ggplot2", quietly = TRUE)) {
-  plot_edatope(ed)
+  vpro_plot_edatope(ed)
 }
 ```
 
@@ -58,7 +57,7 @@ if (requireNamespace("ggplot2", quietly = TRUE)) {
 
 ```{r}
 out_guide <- tempfile("unit-guide-", fileext = ".html")
-art <- vpro_render_guide(con, type = "single_unit", output_file = out_guide, force_offline = TRUE)
+art <- vpro_render_guide(ws, type = "single_unit", output_file = out_guide, force_offline = TRUE)
 art
 unlink(out_guide)
 ```

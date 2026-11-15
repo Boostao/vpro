@@ -4,10 +4,10 @@
 \alias{vpro_list_lumps}
 \title{List species lump (\verb{*_Lump}) tables in a workspace}
 \usage{
-vpro_list_lumps(con)
+vpro_list_lumps(ws)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 }
 \value{
 A tibble with \code{name}, \code{table}, \code{n_rows}, \code{n_lump_codes}, and \code{active}.

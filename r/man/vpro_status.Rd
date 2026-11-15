@@ -2,23 +2,33 @@
 % Please edit documentation in R/standards.R
 \name{vpro_status}
 \alias{vpro_status}
-\title{Inspect \code{vpro_wails} workspace, 2026 standards, and R ecosystem readiness}
+\title{Inspect VPro workspace, 2026 standards, and R ecosystem readiness}
 \usage{
-vpro_status(data_dir = vpro_data_dir(), config_dir = vpro_config_dir())
+vpro_status(
+  ws = NULL,
+  data_dir = vpro_data_dir(),
+  config_dir = vpro_config_dir()
+)
 }
 \arguments{
-\item{data_dir}{Workspace data directory (defaults to \code{\link[=vpro_data_dir]{vpro_data_dir()}}).}
+\item{ws}{Optional active \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}}.
+When supplied, reports status using \code{ws$data_dir}, \code{ws$config_dir}, and the
+live workspace selection (\code{ws$project}, \code{ws$su}, \code{ws$hierarchy}, \code{ws$lump}).}
 
-\item{config_dir}{Workspace config directory (defaults to \code{\link[=vpro_config_dir]{vpro_config_dir()}}).}
+\item{data_dir}{Workspace data directory (defaults to \code{\link[=vpro_data_dir]{vpro_data_dir()}} or
+\code{ws$data_dir} when \code{ws} is supplied).}
+
+\item{config_dir}{Workspace config directory (defaults to \code{\link[=vpro_config_dir]{vpro_config_dir()}}
+or \code{ws$config_dir} when \code{ws} is supplied).}
 }
 \value{
 An S3 object of class \code{vpro_status} with \code{print()} and \code{as_tibble()}
 methods.
 }
 \description{
-Reports cross-OS \code{vpro_wails} workspace directories (\code{vpro_data_dir()} and
-\code{vpro_config_dir()}), active project/SU/hierarchy/profile settings from
-\code{config.yml} when present, 7-DB SQLite family availability, 2026 \verb{BECdb v13}
+Reports cross-OS VPro workspace directories (\code{vpro_data_dir()} and
+\code{vpro_config_dir()}), active project/SU/hierarchy/profile settings (from \code{ws}
+or \code{config.yml} when present), 7-DB SQLite family availability, 2026 \verb{BECdb v13}
 and \verb{BCPlantTaxonomy v19} SHA-256 verification, \code{climr} local raster cache
 availability, and installed versions of companion R packages.
 }

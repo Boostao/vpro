@@ -7,7 +7,7 @@
 #' default excludes synonym rows (`LOWER(Codetype) = 's'`) and attaches any
 #' conflicting duplicate used-code definitions in `attr(result, "conflicts")`.
 #'
-#' @param con Optional `vpro_workspace` handle. When `NULL`, queries the bundled
+#' @param ws Optional `vpro_workspace` handle. When `NULL`, queries the bundled
 #'   2026 `VLists.db` and `VUser.db`.
 #' @param include_synonyms Logical; if `TRUE`, retains `Codetype == "S"` rows.
 #' @param include_user Logical; if `TRUE`, merges `VUser.db` `USysUserSpp` rows.
@@ -15,12 +15,12 @@
 #'   `ShortenedGuideName`, `Lifeform` (`integer`), `Codetype`, `TaxonLevel`,
 #'   `FamilyCode`, `Native`, and `SourceCatalog`.
 #' @export
-vpro_taxonomy <- function(con = NULL, include_synonyms = FALSE, include_user = TRUE) {
-  vlists_path <- if (is.null(con)) vpro_bundled_db("VLists.db") else {
-    vpro_assert_workspace(con)
-    con$vlists_path
+vpro_taxonomy <- function(ws = NULL, include_synonyms = FALSE, include_user = TRUE) {
+  vlists_path <- if (is.null(ws)) vpro_bundled_db("VLists.db") else {
+    vpro_assert_workspace(ws)
+    ws$vlists_path
   }
-  vuser_path <- if (is.null(con)) vpro_bundled_db("VUser.db") else con$vuser_path
+  vuser_path <- if (is.null(ws)) vpro_bundled_db("VUser.db") else ws$vuser_path
 
   dbc <- vpro_sqlite_ro(vlists_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
@@ -113,8 +113,8 @@ vpro_taxonomy <- function(con = NULL, include_synonyms = FALSE, include_user = T
   out
 }
 
-vpro_synonym_map <- function(con = NULL) {
-  vlists_path <- if (is.null(con)) vpro_bundled_db("VLists.db") else con$vlists_path
+vpro_synonym_map <- function(ws = NULL) {
+  vlists_path <- if (is.null(ws)) vpro_bundled_db("VLists.db") else ws$vlists_path
   dbc <- vpro_sqlite_ro(vlists_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   syns <- DBI::dbGetQuery(
@@ -137,17 +137,17 @@ vpro_synonym_map <- function(con = NULL) {
 #'
 #' Reads `USysSiteSeriesNames` and `USysZoneList` from `VLists.db`.
 #'
-#' @param con Optional `vpro_workspace` handle. When `NULL`, uses bundled 2026
+#' @param ws Optional `vpro_workspace` handle. When `NULL`, uses bundled 2026
 #'   `VLists.db`.
 #' @param zone Optional BGC zone filter (case-insensitive, e.g. `"CWH"`, `"SBS"`).
 #' @param subzone Optional BGC subzone/variant filter (e.g. `"vm"`, `"dk"` or
 #'   full `BGCName` like `"CWHvm1"`).
 #' @return A tibble of BEC units and site series.
 #' @export
-vpro_bec_units <- function(con = NULL, zone = NULL, subzone = NULL) {
-  vlists_path <- if (is.null(con)) vpro_bundled_db("VLists.db") else {
-    vpro_assert_workspace(con)
-    con$vlists_path
+vpro_bec_units <- function(ws = NULL, zone = NULL, subzone = NULL) {
+  vlists_path <- if (is.null(ws)) vpro_bundled_db("VLists.db") else {
+    vpro_assert_workspace(ws)
+    ws$vlists_path
   }
   dbc <- vpro_sqlite_ro(vlists_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
@@ -190,18 +190,18 @@ vpro_bec_units <- function(con = NULL, zone = NULL, subzone = NULL) {
 
 #' Read or normalize a species lump mapping (`SppCode -> LumpCode`)
 #'
-#' Supports `lump = TRUE` (active `con$lump` table where `Use != 0`),
+#' Supports `lump = TRUE` (active `ws$lump` table where `Use != 0`),
 #' `lump = FALSE` / `NULL` (empty tibble), `lump = "<TableName>"` (explicit
-#' `*_Lump` table in `con`), or a custom `data.frame` with `SppCode` and
+#' `*_Lump` table in `ws`), or a custom `data.frame` with `SppCode` and
 #' `LumpCode` columns (and optional `Use` column).
 #'
-#' @param con A `vpro_workspace` handle (optional when `lump` is a `data.frame`
+#' @param ws A `vpro_workspace` handle (optional when `lump` is a `data.frame`
 #'   or `FALSE`).
 #' @param lump Logical flag, lump table name, or `data.frame(SppCode, LumpCode)`.
 #' @return A tibble with active `SppCode` and `LumpCode` mappings (uppercase,
 #'   trimmed).
 #' @export
-vpro_lump_map <- function(con = NULL, lump = TRUE) {
+vpro_lump_map <- function(ws = NULL, lump = TRUE) {
   empty <- tibble::tibble(SppCode = character(), LumpCode = character())
   if (is.null(lump) || identical(lump, FALSE)) {
     return(empty)
@@ -223,12 +223,12 @@ vpro_lump_map <- function(con = NULL, lump = TRUE) {
     return(df[!duplicated(df$SppCode), , drop = FALSE])
   }
 
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   tbl_name <- if (isTRUE(lump)) {
-    con$lump
+    ws$lump
   } else if (is.character(lump) && length(lump) == 1L) {
-    tables <- vpro_sqlite_physical_tables(con$lump_path)
-    vpro_resolve_table_suffix(tables, lump, "Lump", default_prefix = con$project)
+    tables <- vpro_sqlite_physical_tables(ws$lump_path)
+    vpro_resolve_table_suffix(tables, lump, "Lump", default_prefix = ws$project)
   } else {
     rlang::abort("`lump` must be TRUE, FALSE, a table name, or a two-column data.frame.")
   }
@@ -236,7 +236,7 @@ vpro_lump_map <- function(con = NULL, lump = TRUE) {
     return(empty)
   }
 
-  dbc <- vpro_sqlite_ro(con$lump_path)
+  dbc <- vpro_sqlite_ro(ws$lump_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   if (!DBI::dbExistsTable(dbc, tbl_name)) {
     return(empty)

@@ -16,7 +16,7 @@
 - **Read-Only Default (`SQLITE_RO`):** Open connections with `flags = RSQLite::SQLITE_RO` + `on.exit(DBI::dbDisconnect(con), add = TRUE)` (or `busy_timeout = 5000`, `synchronous = NORMAL`, `query_only = ON`), percent-encoding `#`, `?`, and `%` in `file:` URIs. Never hold idle write locks or run in-place `VACUUM` against live workspace DBs open in `../app/`.
 - **Guarded Opt-In Write-Back (`BEGIN IMMEDIATE`):**
   - Permitted targets strictly limited to `<Name>_ClusterCandidate_SU`, user-confirmed working `<Name>_SU`, `<Name>_Lump`, `__VPRO_PlotClimate`, and `__VPRO_RSidecarHistory`.
-  - Unconditionally refuse `Master*` (case-insensitive), `USys*` tables/views, bundled `VLists.db`, or unauthorized `BECSiteUnit`. Require `confirm_overwrite = TRUE` before replacing existing `*_SU` or `*_Lump` tables, and append `<Project>_Audit` + `__VPRO_*` provenance atomically without reusing deleted child IDs.
+  - Unconditionally refuse `Master*` (case-insensitive), `USys*` tables/views, bundled `VLists.db`, or unauthorized `BECSiteUnit`. Require `overwrite = TRUE` before replacing existing `*_SU` or `*_Lump` tables, and append `<Project>_Audit` + `__VPRO_*` provenance atomically without reusing deleted child IDs.
 
 ## 3. `VP08`, BEC Calibration & Cloud `BECMaster` Rules
 
@@ -27,7 +27,7 @@
   - Narrow cover to IEEE-754 `float32` before `< 100`, cap lumped (`*_Lump`) and fallback `TotalA`/`TotalB` strata sums at `99%` without mutating `<Project>_Veg`, apply ACE 15-sig-digit rounding (`1.005 -> 1.01`), respect `VLists.USysAllSpecs.Lifeform` (`INT32`) vs `VUser.USysUserSpp.LifeForm` (`INT16`), join short-veg layers on `LayerCode.Layer1234567`, enforce UTF-16 code-unit limits, and order `LMH25 (2023)` horizons (`L/F/H` upward `UpperDepth DESC`; `Of/Om/Oh` & `A/B/C/R/W` downward `UpperDepth ASC`).
 - **Cloud `BECMaster` (`R/cloud_{connect,read,sync,snapshots}.R`):**
   - Keep `RPostgres` optional in `Suggests`; resolve credentials from `.env` / `becmaster.env` / `VPRO_PG_*` / `BECMASTER_*` (`.env*` git/build-ignored) with strict password/DSN redaction in `print()` and errors.
-  - Enforce TLS (`sslmode = "require"` / `"verify-full"`) on non-loopback hosts, RBAC/RLS session roles (`public`, `contributor`, `ecologist`, `custodian`), rare-plant coordinate redaction on public reads, `becmaster.download_log` entries on `vpro_master_pull()`, mandatory pre-upload compliance gating on `vpro_staging_submit()`, `SERIALIZABLE` Custodian 3-way merge (`vpro_staging_merge()`) with monotonic `child_identity`, and SHA-256 hash-chained `becmaster.audit` verified by `vpro_master_verify_audit()`.
+  - Enforce TLS (`sslmode = "require"` / `"verify-full"`) on non-loopback hosts, RBAC/RLS session roles (`public`, `contributor`, `ecologist`, `custodian`), rare-plant coordinate redaction (`USysSppAttributes.RedBlueList`) on non-custodian reads/snapshots, `becmaster.download_log` entries on `vpro_master_pull()`, mandatory pre-upload compliance gating on `vpro_staging_submit()`, `SERIALIZABLE` Custodian 3-way merge (`vpro_staging_merge()`) with monotonic `child_identity`, and SHA-256 hash-chained `becmaster.audit` verified by `vpro_master_audit(..., verify_chain = TRUE)`.
 
 ## 4. R Formatting, Quality Gates & Worktree Rules
 

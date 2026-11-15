@@ -2,17 +2,23 @@
 % Please edit documentation in R/utils_domain.R
 \name{vpro_presence_class}
 \alias{vpro_presence_class}
-\title{Convert vegetation presence to a Roman-numeral class}
+\title{Convert vegetation presence to Roman (\code{"I"}..\code{"V"}) or numeric (\code{1L}..\code{5L}) classes}
 \usage{
-vpro_presence_class(presence)
+vpro_presence_class(presence, format = c("roman", "numeric"))
 }
 \arguments{
 \item{presence}{Numeric vegetation presence expressed as a proportion in \verb{[0, 1]}.}
+
+\item{format}{Output representation: \code{"roman"} (character \code{"I"} through \code{"V"})
+or \code{"numeric"} (integer \code{1L} through \code{5L}).}
 }
 \value{
-A character vector containing classes \code{"I"} through \code{"V"} or \code{NA}.
+A character vector (when \code{format = "roman"}) or integer vector (when
+\code{format = "numeric"}), with out-of-range values \verb{< 0} or \verb{> 1} mapped to \code{NA}.
 }
 \description{
-Reproduces \code{V7mdlValueConversions.Presence2Class} (\verb{<= 0.2, 0.4, 0.6, 0.8, > 0.8}
-mapping to \code{"I"} through \code{"V"}).
+Reproduces \code{V7mdlValueConversions.Presence2Class} (\code{"roman"}) and
+\code{V7mdlValueConversions.Presence2ClassNval} (\code{"numeric"}), mapping
+proportions in \verb{[0, 1]} at breakpoints \verb{0.2, 0.4, 0.6, 0.8}. Values \verb{< 0},
+\verb{> 1}, or \code{NA} return \code{NA}.
 }

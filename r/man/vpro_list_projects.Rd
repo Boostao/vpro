@@ -2,19 +2,22 @@
 % Please edit documentation in R/workspace.R
 \name{vpro_list_projects}
 \alias{vpro_list_projects}
-\title{List VPro projects available in a workspace or database}
+\title{Discover and list VPro projects in a workspace, directory, or \code{.db} file}
 \usage{
-vpro_list_projects(con = NULL, data_dir = vpro_data_dir())
+vpro_list_projects(ws = NULL, path = vpro_data_dir())
 }
 \arguments{
-\item{con}{Optional \code{vpro_workspace} handle. When omitted, scans \code{data_dir}
-and \code{file.path(data_dir, "projects")} for \code{.db} project files.}
+\item{ws}{Optional \code{vpro_workspace} handle. When supplied (and \code{path} is not
+overridden), inspects \code{ws$project_path} and scans \code{ws$data_dir} and
+\code{file.path(ws$data_dir, "projects")} for \code{.db} project files.}
 
-\item{data_dir}{Workspace data directory used when \code{con} is \code{NULL}.}
+\item{path}{Optional directory or single \code{.db} file path to inspect (defaults
+to \code{\link[=vpro_data_dir]{vpro_data_dir()}}).}
 }
 \value{
-A tibble with \code{project}, \code{path}, \code{version}, \code{complete}, and \code{n_plots}.
+A tibble with \code{project}, \code{path}, \code{version}, \code{complete},
+\code{core_tables}, \code{optional_tables}, and \code{n_plots}.
 }
 \description{
-List VPro projects available in a workspace or database
+Discover and list VPro projects in a workspace, directory, or \code{.db} file
 }

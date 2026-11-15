@@ -4,10 +4,10 @@
 \alias{vpro_master_bootstrap}
 \title{Bootstrap \code{becmaster}, \code{staging}, and \code{standards} PostgreSQL schemas}
 \usage{
-vpro_master_bootstrap(con, contributor_role = NULL, custodian_role = NULL)
+vpro_master_bootstrap(pg, contributor_role = NULL, custodian_role = NULL)
 }
 \arguments{
-\item{con}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}).}
+\item{pg}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}).}
 
 \item{contributor_role}{Optional PostgreSQL role name to receive contributor
 \code{SELECT} / \code{staging} \code{INSERT} grants and RLS policies when present in

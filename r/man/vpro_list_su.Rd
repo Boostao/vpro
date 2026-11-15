@@ -4,10 +4,10 @@
 \alias{vpro_list_su}
 \title{List site-unit (\verb{*_SU}) tables in a workspace}
 \usage{
-vpro_list_su(con)
+vpro_list_su(ws)
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 }
 \value{
 A tibble with \code{name}, \code{table}, \code{n_plots}, \code{n_units}, and \code{active}.

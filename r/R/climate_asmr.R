@@ -280,23 +280,7 @@ vpro_normalize_ref_period <- function(ref_period) {
   norm
 }
 
-#' Compute deterministic 128-bit `CoordElevHash` matching `vpro_wails`
-#'
-#' Normalizes legacy positive B.C. western longitudes (`110..145` -> `-lon`),
-#' formats `sprintf("%.5f|%.5f|%.1f|%s", round(lat, 5), round(lon, 5), round(elev, 1), ref_period)`
-#' using Go half-away-from-zero rounding, hashes UTF-8 bytes with vectorized
-#' pure-R SHA-256, and returns the first 32 lowercase hexadecimal characters
-#' (`sha256.Sum256([]byte(...))[:16]`).
-#'
-#' @param lat Numeric latitude(s) in decimal degrees.
-#' @param lon Numeric longitude(s) in decimal degrees (positive B.C. longitudes
-#'   in `[110, 145]` are normalized to negative western degrees).
-#' @param elev Numeric elevation(s) in metres.
-#' @param ref_period Reference normal period (`"1961_1990"` or `"1991_2020"`).
-#' @return Character vector of 32-character lowercase hexadecimal digests (`NA`
-#'   where coordinates or elevation are missing/non-finite).
-#' @export
-vpro_coord_elev_hash <- function(lat, lon, elev, ref_period = "1961_1990") {
+.vpro_coord_elev_hash <- function(lat, lon, elev, ref_period = "1961_1990") {
   vals <- vpro_value_recycle(list(
     lat = as.double(lat),
     lon = as.double(lon),
@@ -458,7 +442,7 @@ vpro_climr_has_local_rasters <- function() {
 vpro_downscale_climr_points <- function(pts_df, ref_period) {
   xyz <- data.table::data.table(
     id = seq_len(nrow(pts_df)),
-    lon = as.double(pts_df$lon),
+    lon = vpro_normalize_bc_lon(as.double(pts_df$lon)),
     lat = as.double(pts_df$lat),
     elev = as.double(pts_df$elev)
   )
@@ -492,6 +476,9 @@ vpro_downscale_climr_points <- function(pts_df, ref_period) {
     return(NULL)
   }
   dl_dt <- data.table::as.data.table(dl)
+  if ("PERIOD" %in% names(dl_dt) && any(dl_dt[["PERIOD"]] == ref_period, na.rm = TRUE)) {
+    dl_dt <- dl_dt[dl_dt[["PERIOD"]] == ref_period]
+  }
   dl_dt <- dl_dt[!duplicated(dl_dt[["id"]])]
   dl_dt <- dl_dt[order(dl_dt[["id"]])]
   if (nrow(dl_dt) != nrow(pts_df)) {
@@ -687,14 +674,14 @@ vpro_compute_bgc_lapse_normals <- function(pts_df, ref_period) {
 #' `BEGIN IMMEDIATE` WAL transaction, preserving literal character `PlotNumber`
 #' keys (`typeof("PlotNumber") = 'text'`).
 #'
-#' @param con A `vpro_workspace` handle referencing a writable user `.db`.
+#' @param ws A `vpro_workspace` handle referencing a writable user `.db`.
 #' @param climate_df Data frame containing `__VPRO_PlotClimate` columns (as
 #'   returned by [vpro_climate()]).
 #' @return Invisibly returns the written `__VPRO_PlotClimate` tibble.
 #' @export
-vpro_cache_climate <- function(con, climate_df) {
-  vpro_assert_workspace(con)
-  vpro_assert_writable_project_db(con$project_path, con = con)
+vpro_cache_climate <- function(ws, climate_df) {
+  vpro_assert_workspace(ws)
+  vpro_assert_writable_project_db(ws$project_path, con = ws)
 
   if (!is.data.frame(climate_df)) {
     rlang::abort("`climate_df` must be a `data.frame` of plot climate records.")
@@ -710,7 +697,7 @@ vpro_cache_climate <- function(con, climate_df) {
   }
 
   if (nrow(climate_df) == 0L) {
-    vpro_with_immediate_tx(con$project_path, con = con, fn = function(dbc) {
+    vpro_with_immediate_tx(ws$project_path, con = ws, fn = function(dbc) {
       DBI::dbExecute(dbc, .vpro_plot_climate_ddl)
       vpro_append_rsidecar_history_in_tx(
         dbc,
@@ -774,7 +761,7 @@ vpro_cache_climate <- function(con, climate_df) {
     clean_tbl[[nc]] <- v
   }
 
-  vpro_with_immediate_tx(con$project_path, con = con, fn = function(dbc) {
+  vpro_with_immediate_tx(ws$project_path, con = ws, fn = function(dbc) {
     DBI::dbExecute(dbc, .vpro_plot_climate_ddl)
     DBI::dbExecute(
       dbc,
@@ -810,7 +797,7 @@ vpro_cache_climate <- function(con, climate_df) {
 
 #' Extract or compute cached plot climate normals (`__VPRO_PlotClimate`)
 #'
-#' Reads existing `__VPRO_PlotClimate` rows in `con$project_path` whose
+#' Reads existing `__VPRO_PlotClimate` rows in `ws$project_path` whose
 #' `CoordElevHash` and `RefPeriod` match each plot's current coordinates and
 #' elevation. For cache misses, uses `climr::downscale()` when `climr` and local
 #' cached rasters are available (and `!force_offline`), falling back cleanly to
@@ -818,10 +805,10 @@ vpro_cache_climate <- function(con, climate_df) {
 #' `CMD_adjustments.csv`) when `allow_fallback = TRUE`. Automatically caches
 #' newly computed rows on writable user databases when `cache = TRUE`.
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param scope Either `"su"` (active SU plots) or `"project"` (all `_Env` plots).
 #' @param ref_period Climate normal period (`"1961_1990"` or `"1991_2020"`).
-#' @param cache Logical; if `TRUE` (default) and `con` points to a writable user
+#' @param cache Logical; if `TRUE` (default) and `ws` points to a writable user
 #'   `.db` outside the installed `vpro` package, persists cache misses via
 #'   [vpro_cache_climate()].
 #' @param allow_fallback Logical; if `TRUE` (default), falls back to the offline
@@ -832,14 +819,14 @@ vpro_cache_climate <- function(con, climate_df) {
 #'   `PlotNumber`, site metadata, `CoordElevHash`, `Source`, and 16 climate variables.
 #' @export
 vpro_climate <- function(
-  con,
+  ws,
   scope = c("su", "project"),
   ref_period = "1961_1990",
   cache = TRUE,
   allow_fallback = TRUE,
   force_offline = FALSE
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
   ref_period <- vpro_normalize_ref_period(ref_period)
 
@@ -850,7 +837,7 @@ vpro_climate <- function(
     rlang::check_installed("climr", reason = "to downscale plot climate normals when `allow_fallback = FALSE`.")
   }
 
-  env_df <- vpro_env(con, scope = scope, include_admin = TRUE)
+  env_df <- vpro_env(ws, scope = scope, include_admin = TRUE)
   empty_res <- function(skipped = 0L) {
     res <- tibble::tibble(
       PlotNumber = character(),
@@ -922,8 +909,8 @@ vpro_climate <- function(
     bgc_chr[miss_bgc] <- gis_bgc[miss_bgc]
   }
 
-  hashes <- vpro_coord_elev_hash(lat_v, lon_v, elev_v, ref_period = ref_period)
-  existing_cache <- vpro_read_plot_climate_cache(con$project_path)
+  hashes <- .vpro_coord_elev_hash(lat_v, lon_v, elev_v, ref_period = ref_period)
+  existing_cache <- vpro_read_plot_climate_cache(ws$project_path)
   existing_period <- existing_cache[existing_cache$RefPeriod == ref_period, , drop = FALSE]
 
   plot_match_ix <- match(sub_env$PlotNumber, existing_period$PlotNumber)
@@ -1012,11 +999,11 @@ vpro_climate <- function(
     }
 
     can_auto_write <- isTRUE(cache) &&
-      !identical(con$source, "sample") &&
-      !vpro_is_bundled_package_path(con$project_path) &&
-      !vpro_is_protected_support_db(con$project_path, con = con)
+      !identical(ws$source, "sample") &&
+      !vpro_is_bundled_package_path(ws$project_path) &&
+      !vpro_is_protected_support_db(ws$project_path, con = ws)
     if (can_auto_write) {
-      vpro_cache_climate(con, miss_tbl)
+      vpro_cache_climate(ws, miss_tbl)
     }
   }
 
@@ -1196,7 +1183,7 @@ vpro_evaluate_asmr <- function(
 #' `CMD -> aSMR` transfer function (`aSMR_Rules_HalfStep.csv` &
 #' `CMD_adjustments.csv`).
 #'
-#' @param con A `vpro_workspace` handle.
+#' @param ws A `vpro_workspace` handle.
 #' @param scope Either `"su"` (active SU plots) or `"project"` (all `_Env` plots).
 #' @param ref_period Climate normal period (`"1961_1990"` or `"1991_2020"`).
 #' @param cache Logical; passed to [vpro_climate()] to persist new
@@ -1209,19 +1196,19 @@ vpro_evaluate_asmr <- function(
 #'   climate normals.
 #' @export
 vpro_asmr <- function(
-  con,
+  ws,
   scope = c("su", "project"),
   ref_period = "1961_1990",
   cache = TRUE,
   force_offline = FALSE
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
   ref_period <- vpro_normalize_ref_period(ref_period)
 
-  env_df <- vpro_env(con, scope = scope, include_admin = TRUE)
+  env_df <- vpro_env(ws, scope = scope, include_admin = TRUE)
   clim_df <- vpro_climate(
-    con,
+    ws,
     scope = scope,
     ref_period = ref_period,
     cache = cache,

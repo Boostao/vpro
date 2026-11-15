@@ -5,7 +5,7 @@
 \title{Render a B.C. Government Quarto BEC ecosystem guide or QC audit report}
 \usage{
 vpro_render_guide(
-  con,
+  ws,
   type = c("single_unit", "bgc_unit", "veg_summary", "qc_audit"),
   unit = NULL,
   bgc = NULL,
@@ -20,7 +20,7 @@ vpro_render_guide(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
 \item{type}{Guide template: \code{"single_unit"}, \code{"bgc_unit"}, \code{"veg_summary"},
 or \code{"qc_audit"}.}

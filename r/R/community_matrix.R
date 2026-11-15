@@ -99,15 +99,15 @@ vpro_sparse_transform <- function(smat, transform) {
 #' `attr(m, "dropped_empty_plots")`, and `attr(m, "env")` is strictly aligned
 #' 1-to-1 with `rownames(m)` (`identical(attr(m, "env")$PlotNumber, rownames(m))`).
 #'
-#' @param con A `vpro_workspace` handle from [vpro_connect()] or [vpro_sample()].
-#' @param scope Plot scope: `"su"` (active `con$su` when set, else all project
+#' @param ws A `vpro_workspace` handle from [vpro_connect()].
+#' @param scope Plot scope: `"su"` (active `ws$su` when set, else all project
 #'   plots) or `"project"` (all `<Project>_Env` plots).
 #' @param value Cell abundance metric prior to `transform`: `"cover"`
 #'   (percentage cover), `"presence"` (`1`/`0` incidence), or `"goldstream"`
 #'   (`sqrt(cover)` plot-level Goldstream scaling).
 #' @param strata Taxonomic column resolution: `"total"` (`Species`), `"abcd"`
 #'   (`paste0(Species, "_", Strata)`), or `"raw"` (`paste0(Species, "_", Layer)`).
-#' @param lump Logical (`TRUE` uses active `con$lump` with VPro's `99%` cap),
+#' @param lump Logical (`TRUE` uses active `ws$lump` with VPro's `99%` cap),
 #'   `FALSE`, a `*_Lump` table name, or a two-column `data.frame(SppCode, LumpCode)`.
 #' @param transform Ecological standardization applied after `value`: `"none"`,
 #'   `"sqrt"`, `"log1p"`, `"hellinger"` (\eqn{\sqrt{x_{ij} / x_{i+}}} with
@@ -121,12 +121,17 @@ vpro_sparse_transform <- function(smat, transform) {
 #'   dense `matrix`.
 #' @param exclude_modifiers Logical; if `TRUE`, excludes `.support`, `.poor`,
 #'   and `.nudum` site units.
+#' @param cover_precedence Precedence rule passed to [vpro_veg()]:
+#'   `"strata_totals"` (default, matching MS Access `vpro_veg` where positive
+#'   `TotalA`/`TotalB` overrides sublayer combinations) or `"sublayer_sum"`
+#'   (matching BEC diagnostics where `TotalA`/`TotalB` is used only when
+#'   sublayers are `NA`).
 #' @return A `plot x species` numeric `matrix` (or `Matrix::dgCMatrix` when
 #'   `sparse = TRUE`) carrying `attr(m, "env")` (row-aligned [vpro_env()] tibble)
 #'   and `attr(m, "dropped_empty_plots")` (character vector of zero-sum plots).
 #' @export
 vpro_matrix <- function(
-  con,
+  ws,
   scope = c("su", "project"),
   value = c("cover", "presence", "goldstream"),
   strata = c("total", "abcd", "raw"),
@@ -134,13 +139,15 @@ vpro_matrix <- function(
   transform = c("none", "sqrt", "log1p", "hellinger", "chord", "wisconsin"),
   drop_rare = 0,
   sparse = FALSE,
-  exclude_modifiers = FALSE
+  exclude_modifiers = FALSE,
+  cover_precedence = c("strata_totals", "sublayer_sum")
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   scope <- match.arg(scope)
   value <- match.arg(value)
   strata <- match.arg(strata)
   transform <- match.arg(transform)
+  cover_precedence <- match.arg(cover_precedence)
 
   if (!is.numeric(drop_rare) || length(drop_rare) != 1L || is.na(drop_rare) ||
       !is.finite(drop_rare) || drop_rare < 0) {
@@ -160,16 +167,17 @@ vpro_matrix <- function(
     rlang::check_installed("vegan", reason = "to apply Wisconsin double standardization.")
   }
 
-  env <- vpro_env(con, scope = scope, exclude_modifiers = exclude_modifiers)
+  env <- vpro_env(ws, scope = scope, exclude_modifiers = exclude_modifiers)
   env[["PlotNumber"]] <- as.character(env[["PlotNumber"]])
   env <- env[!duplicated(env[["PlotNumber"]]), , drop = FALSE]
 
   veg <- vpro_veg(
-    con,
+    ws,
     scope = scope,
     lump = lump,
     strata = strata,
-    exclude_modifiers = exclude_modifiers
+    exclude_modifiers = exclude_modifiers,
+    cover_precedence = cover_precedence
   )
 
   make_empty_matrix <- function(dropped) {

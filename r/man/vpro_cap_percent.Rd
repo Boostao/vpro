@@ -4,10 +4,10 @@
 \alias{vpro_cap_percent}
 \title{Cap percentage-like values at 100}
 \usage{
-vpro_cap_percent(value)
+vpro_cap_percent(x)
 }
 \arguments{
-\item{value}{Numeric vector.}
+\item{x}{Numeric vector.}
 }
 \value{
 Numeric vector capped above at \code{100}.

@@ -45,10 +45,10 @@
 #' `Humus`, and `Mineral` tables and ordered set-algebra operations
 #' (`"Common"` = \eqn{\cap}, `"Add"` = \eqn{\cup}, `"Subtract"` = \eqn{\setminus}).
 #'
-#' @param table Target table domain: `"Veg"`, `"Env"`, `"Humus"`, or `"Mineral"`
-#'   (also accepts `"Admin"` and `"Lump"`).
+#' @param table Target table domain: `"Veg"`, `"Lump"`, `"Env"`, `"Humus"`,
+#'   `"Mineral"`, or `"Admin"`.
 #' @param field Column name for `"Env"`, `"Admin"`, `"Humus"`, or `"Mineral"`
-#'   rules (optional for `"Veg"` rules).
+#'   rules (optional for `"Veg"` / `"Lump"` rules).
 #' @param operator Comparison operator: `"="`, `"!="` / `"<>"`, `">"`, `">="`,
 #'   `"<"`, `"<="`, `"LIKE"`, `"NOT LIKE"`, `"IS NULL"`, or `"IS NOT NULL"`.
 #' @param value Scalar comparison threshold or pattern (`NULL` for `"IS NULL"` /
@@ -61,10 +61,10 @@
 #'   code (`"1".."10"`, `"5a".."5c"`, `"TotalA"`, `"TotalB"`).
 #' @param operation Ordered set-algebra operation: `"Common"` (intersection),
 #'   `"Add"` (union), or `"Subtract"` (set difference).
-#' @return An S3 object of class `vpro_rule`.
+#' @return An S3 object of class `vpro_profile_rule`.
 #' @export
-vpro_rule <- function(
-  table = c("Veg", "Env", "Humus", "Mineral"),
+vpro_profile_rule <- function(
+  table = c("Veg", "Lump", "Env", "Humus", "Mineral", "Admin"),
   field = NULL,
   operator = "=",
   value = NULL,
@@ -77,7 +77,7 @@ vpro_rule <- function(
     table <- table[[1L]]
   }
   if (!is.character(table) || length(table) != 1L || is.na(table)) {
-    rlang::abort("`table` must be one of 'Veg', 'Env', 'Humus', 'Mineral', 'Admin', or 'Lump'.")
+    rlang::abort("`table` must be one of 'Veg', 'Lump', 'Env', 'Humus', 'Mineral', or 'Admin'.")
   }
   tbl_low <- tolower(trimws(table))
   tbl_map <- c(
@@ -139,19 +139,19 @@ vpro_rule <- function(
       layer = norm_layer,
       operation = norm_op
     ),
-    class = "vpro_rule"
+    class = "vpro_profile_rule"
   )
 }
 
-#' Print a `vpro_rule` specification
+#' Print a `vpro_profile_rule` specification
 #'
-#' @param x A `vpro_rule` object.
+#' @param x A `vpro_profile_rule` object.
 #' @param ... Unused; included for S3 method compatibility.
 #' @return `x`, invisibly.
 #' @export
-print.vpro_rule <- function(x, ...) {
+print.vpro_profile_rule <- function(x, ...) {
   desc <- .vpro_describe_rule(x)
-  cli::cli_text("<vpro_rule [{x$operation}] {.field {desc}}>")
+  cli::cli_text("<vpro_profile_rule [{x$operation}] {.field {desc}}>")
   invisible(x)
 }
 
@@ -253,7 +253,7 @@ print.vpro_rule <- function(x, ...) {
 }
 
 .vpro_coerce_rules <- function(rules) {
-  if (inherits(rules, "vpro_rule")) {
+  if (inherits(rules, "vpro_profile_rule")) {
     return(list(rules))
   }
   if (is.data.frame(rules)) {
@@ -279,7 +279,7 @@ print.vpro_rule <- function(x, ...) {
 
     out <- vector("list", nrow(rules))
     for (i in seq_len(nrow(rules))) {
-      out[[i]] <- vpro_rule(
+      out[[i]] <- vpro_profile_rule(
         table = if (is.null(tbl_c)) "Veg" else tbl_c[[i]],
         field = if (is.null(fld_c)) NULL else fld_c[[i]],
         operator = if (is.null(opr_c)) "=" else opr_c[[i]],
@@ -293,12 +293,12 @@ print.vpro_rule <- function(x, ...) {
   }
   if (is.list(rules)) {
     return(lapply(rules, function(item) {
-      if (inherits(item, "vpro_rule")) return(item)
-      if (is.list(item)) return(do.call(vpro_rule, item))
-      rlang::abort("Each element of `rules` must be a `vpro_rule` object.")
+      if (inherits(item, "vpro_profile_rule")) return(item)
+      if (is.list(item)) return(do.call(vpro_profile_rule, item))
+      rlang::abort("Each element of `rules` must be a `vpro_profile_rule` object.")
     }))
   }
-  rlang::abort("`rules` must be a `vpro_rule`, a list of `vpro_rule` objects, or a rule `data.frame`.")
+  rlang::abort("`rules` must be a `vpro_profile_rule`, a list of `vpro_profile_rule` objects, or a rule `data.frame`.")
 }
 
 .vpro_eval_veg_rule <- function(rule, universe_plots, raw_veg_dt, lump_map_vec) {
@@ -448,45 +448,50 @@ print.vpro_rule <- function(x, ...) {
 
 #' Filter plots via ordered VPro Plot Profiling set algebra
 #'
-#' Evaluates either a tidy sequence of [vpro_rule()] specifications (or rule
+#' Evaluates either a tidy sequence of [vpro_profile_rule()] specifications (or rule
 #' `data.frame`) or a stored `*_Profile` SQLite table (such as `Sample_Profile`)
 #' using VPro's ordered set algebra (`Add` = \eqn{\cup}, `Common` = \eqn{\cap},
 #' `Subtract` = \eqn{\setminus}) across `Env`, `Admin`, `Humus`, `Mineral`,
 #' `Veg`, and `Lump` criteria (including species absence via `IS NULL` or `= 0`).
+#' In alignment with VPro's Plot Profiling engine, `Table == "Lump"` rules
+#' apply taxonomic lumping (`*_Lump`) while `Table == "Veg"` rules match raw
+#' `Species` codes directly.
 #'
-#' @param con A `vpro_workspace` handle.
-#' @param rules Optional [vpro_rule()], list of [vpro_rule()] objects, or
-#'   rule `data.frame`. When `NULL`, reads `profile_table` (or the default
-#'   `<Project>_Profile` table in `con`).
-#' @param profile_table Optional `*_Profile` table name inside `con$project_path`
+#' @param ws A `vpro_workspace` handle.
+#' @param rules Optional [vpro_profile_rule()], list of [vpro_profile_rule()]
+#'   objects, or rule `data.frame`. When `NULL`, reads `profile_table` (or the
+#'   default `<Project>_Profile` table in `ws`).
+#' @param profile_table Optional `*_Profile` table name inside `ws$project_path`
 #'   (with or without `_Profile` suffix).
 #' @param scope Plot universe: `"project"` (all `<Project>_Env` plots, default)
-#'   or `"su"` (active `con$su` plots).
-#' @param lump Logical (`TRUE` folds `Veg` rules through active `con$lump`),
-#'   `FALSE` (default; folds only explicit `Table == "Lump"` rules), a `*_Lump`
-#'   table name, or a two-column `data.frame(SppCode, LumpCode)`.
+#'   or `"su"` (active `ws$su` plots).
+#' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE` (default), a
+#'   `*_Lump` table name, or a two-column `data.frame(SppCode, LumpCode)`,
+#'   applied to `Table == "Lump"` rules (falling back to active `ws$lump` when
+#'   `lump = FALSE` on explicit `"Lump"` rules). `Table == "Veg"` rules always
+#'   match raw unlumped `Species` codes.
 #' @return An S3 object of class `vpro_profile_result` containing `$plots`
 #'   (retained literal character `PlotNumber` vector), `$env` (retained
 #'   [vpro_env()] tibble), and `$steps` (step-by-step diagnostic tibble).
 #' @export
 vpro_profile <- function(
-  con,
+  ws,
   rules = NULL,
   profile_table = NULL,
   scope = c("project", "su"),
   lump = FALSE
 ) {
-  vpro_assert_workspace(con)
+  vpro_assert_workspace(ws)
   .vpro_register_wave2b_s3()
   scope <- match.arg(scope)
 
   if (is.null(rules)) {
-    tables <- vpro_sqlite_physical_tables(con$project_path)
-    prof_tbl <- vpro_resolve_table_suffix(tables, profile_table, "Profile", default_prefix = con$project)
+    tables <- vpro_sqlite_physical_tables(ws$project_path)
+    prof_tbl <- vpro_resolve_table_suffix(tables, profile_table, "Profile", default_prefix = ws$project)
     if (is.null(prof_tbl)) {
       rlang::abort("No `rules` supplied and no `*_Profile` table found in workspace.")
     }
-    dbc_prof <- vpro_sqlite_ro(con$project_path)
+    dbc_prof <- vpro_sqlite_ro(ws$project_path)
     prof_df <- tryCatch(
       DBI::dbGetQuery(
         dbc_prof,
@@ -499,7 +504,7 @@ vpro_profile <- function(
     rule_list <- .vpro_coerce_rules(rules)
   }
 
-  env_all <- vpro_env(con, scope = scope, include_admin = TRUE, exclude_modifiers = FALSE)
+  env_all <- vpro_env(ws, scope = scope, include_admin = TRUE, exclude_modifiers = FALSE)
   universe_plots <- as.character(env_all$PlotNumber)
 
   if (length(rule_list) == 0L || length(universe_plots) == 0L) {
@@ -528,9 +533,9 @@ vpro_profile <- function(
   table_lump_vec <- character()
 
   if (any(rule_tables %in% c("Veg", "Lump"))) {
-    dbc_veg <- vpro_sqlite_ro(con$project_path)
+    dbc_veg <- vpro_sqlite_ro(ws$project_path)
     on.exit(DBI::dbDisconnect(dbc_veg), add = TRUE)
-    veg_tbl <- paste0(con$project, "_Veg")
+    veg_tbl <- paste0(ws$project, "_Veg")
     vf <- DBI::dbListFields(dbc_veg, veg_tbl)
     layer_cols <- intersect(
       c("Cover1", "Cover2", "Cover3", "TotalA", "Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c", "TotalB", "Cover6", "Cover7", "Cover8", "Cover9", "Cover10"),
@@ -559,18 +564,14 @@ vpro_profile <- function(
         data.table::set(raw_veg_dt, j = cc, value = vpro_narrow_float32(as.numeric(raw_veg_dt[[cc]])))
       }
     }
-    if (!identical(lump, FALSE) && !is.null(lump)) {
-      lt <- vpro_lump_map(con, lump = lump)
-      if (nrow(lt) > 0L) veg_lump_vec <- stats::setNames(lt$LumpCode, lt$SppCode)
-    }
     if (any(rule_tables == "Lump")) {
-      lt_explicit <- vpro_lump_map(con, lump = if (identical(lump, FALSE) || is.null(lump)) TRUE else lump)
+      lt_explicit <- vpro_lump_map(ws, lump = if (identical(lump, FALSE) || is.null(lump)) TRUE else lump)
       if (nrow(lt_explicit) > 0L) table_lump_vec <- stats::setNames(lt_explicit$LumpCode, lt_explicit$SppCode)
     }
   }
 
-  humus_df <- if (any(rule_tables == "Humus")) vpro_soil(con, scope = scope, type = "humus") else NULL
-  mineral_df <- if (any(rule_tables == "Mineral")) vpro_soil(con, scope = scope, type = "mineral") else NULL
+  humus_df <- if (any(rule_tables == "Humus")) vpro_soil(ws, scope = scope, type = "humus") else NULL
+  mineral_df <- if (any(rule_tables == "Mineral")) vpro_soil(ws, scope = scope, type = "mineral") else NULL
 
   eval_soil <- function(soil_tbl, rule) {
     col_ix <- match(tolower(rule$field), tolower(names(soil_tbl)))

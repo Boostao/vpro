@@ -5,7 +5,7 @@
 \title{Export a multi-layer VPro OGC GeoPackage (\code{.gpkg}) for QGIS and GIS workflows}
 \usage{
 vpro_export_gpkg(
-  con,
+  ws,
   path,
   crs = 3005,
   scope = c("su", "project"),
@@ -13,7 +13,7 @@ vpro_export_gpkg(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or \code{\link[=vpro_sample]{vpro_sample()}}.}
+\item{ws}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}}.}
 
 \item{path}{Destination \code{.gpkg} file path.}
 

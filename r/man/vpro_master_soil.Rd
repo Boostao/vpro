@@ -5,7 +5,7 @@
 \title{Query tidy \code{LMH25 (2023)}-ordered soil horizon records from PostgreSQL \code{BECMaster}}
 \usage{
 vpro_master_soil(
-  con,
+  pg,
   zones = NULL,
   subzones = NULL,
   project_ids = NULL,
@@ -17,7 +17,7 @@ vpro_master_soil(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
+\item{pg}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
 
 \item{zones}{Optional character vector of BEC zone codes (e.g. \code{"CWH"}, \code{"SBS"}).}
 

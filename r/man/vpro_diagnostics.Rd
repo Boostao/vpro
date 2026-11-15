@@ -5,19 +5,19 @@
 \title{Compute BEC differential and diagnostic vegetation synthesis}
 \usage{
 vpro_diagnostics(
-  con,
+  ws,
   lump = TRUE,
   exclude_modifiers = TRUE,
   min_constancy = 0,
   average_type = c("unit", "characteristic"),
-  hierarchy_breaks = FALSE
+  hierarchy_breaks = FALSE,
+  cover_precedence = c("sublayer_sum", "strata_totals")
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle created by \code{\link[=vpro_connect]{vpro_connect()}} or
-\code{\link[=vpro_sample]{vpro_sample()}}.}
+\item{ws}{A \code{vpro_workspace} handle created by \code{\link[=vpro_connect]{vpro_connect()}}.}
 
-\item{lump}{Logical (\code{TRUE} uses active \code{con$lump}), \code{FALSE}, a \verb{*_Lump} table
+\item{lump}{Logical (\code{TRUE} uses active \code{ws$lump}), \code{FALSE}, a \verb{*_Lump} table
 name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 
 \item{exclude_modifiers}{Logical; if \code{TRUE} (default), excludes \code{.support},
@@ -30,8 +30,13 @@ required in at least one unit to retain a species.}
 Goldstream, and Prominence: \code{"unit"} (\code{sum(cover) / n_plots}, standard BEC
 \verb{By n Plots}) or \code{"characteristic"} (\code{sum(cover) / n_present}).}
 
-\item{hierarchy_breaks}{Logical; if \code{TRUE} and \code{con$hierarchy} contains \code{~}
+\item{hierarchy_breaks}{Logical; if \code{TRUE} and \code{ws$hierarchy} contains \code{~}
 breakpoint nodes, rolls plots up to their \code{BreakpointUnit}.}
+
+\item{cover_precedence}{Stratum cover precedence: \code{"sublayer_sum"} (default,
+matching Go/MS Access diagnostics where \code{TotalA}/\code{TotalB} is used only when
+sublayers are \code{NA}) or \code{"strata_totals"} (matching \code{vpro_veg} where positive
+\code{TotalA}/\code{TotalB} overrides sublayers).}
 }
 \value{
 An S3 object of class \code{vpro_diagnostics} containing \verb{$unit_species}

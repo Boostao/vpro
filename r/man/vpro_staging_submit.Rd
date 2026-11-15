@@ -5,8 +5,8 @@
 \title{Submit a local \code{VP08} project to PostgreSQL \code{BECMaster} staging}
 \usage{
 vpro_staging_submit(
-  con,
-  project,
+  pg,
+  ws,
   submitter,
   notes = NULL,
   scope = c("project", "su"),
@@ -15,9 +15,9 @@ vpro_staging_submit(
 )
 }
 \arguments{
-\item{con}{An active \code{vpro_pg_conn} connection from \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
+\item{pg}{An active \code{vpro_pg_conn} connection from \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
-\item{project}{Either a \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or a
+\item{ws}{Either a \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or a
 character project name / \code{.db} file path. The built-in \code{"Sample"} project
 is rejected.}
 

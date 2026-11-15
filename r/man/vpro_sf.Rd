@@ -5,7 +5,7 @@
 \title{Extract spatial \code{sf} plot features with NAD83 geodesy audit and BCGS mapsheets}
 \usage{
 vpro_sf(
-  con,
+  ws,
   scope = c("su", "project"),
   crs = 3005,
   audit_geodesy = TRUE,
@@ -14,9 +14,9 @@ vpro_sf(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}} or \code{\link[=vpro_sample]{vpro_sample()}}.}
+\item{ws}{A \code{vpro_workspace} handle from \code{\link[=vpro_connect]{vpro_connect()}}.}
 
-\item{scope}{Plot scope: \code{"su"} (active \code{con$su} when set) or \code{"project"}.}
+\item{scope}{Plot scope: \code{"su"} (active \code{ws$su} when set) or \code{"project"}.}
 
 \item{crs}{Target coordinate reference system passed to \code{\link[sf:st_transform]{sf::st_transform()}}
 (default \code{3005} for NAD83 / BC Albers).}

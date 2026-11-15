@@ -5,7 +5,7 @@
 \title{Read tidy plot environment and administration records (\verb{_Env} + \verb{_Admin})}
 \usage{
 vpro_env(
-  con,
+  ws,
   scope = c("su", "project"),
   include_admin = TRUE,
   filter_quality = NULL,
@@ -14,9 +14,9 @@ vpro_env(
 )
 }
 \arguments{
-\item{con}{A \code{vpro_workspace} handle.}
+\item{ws}{A \code{vpro_workspace} handle.}
 
-\item{scope}{Either \code{"su"} (restrict to active \code{con$su} when set, else all
+\item{scope}{Either \code{"su"} (restrict to active \code{ws$su} when set, else all
 project plots) or \code{"project"} (all \verb{_Env} plots with \code{SiteUnit} left-joined).}
 
 \item{include_admin}{Logical; if \code{TRUE}, joins \verb{_Admin} columns.}
