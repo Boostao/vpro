@@ -83,7 +83,10 @@ test('LumpEditor.svelte compiles with zero warnings, renders BC Gov header, and 
   assert.match(source, /#003366/);
   assert.match(source, /#fcba19/i);
 
-  const Component = serverComponent(source, 'LumpEditor.svelte', { './lumpEditor': lump });
+  const Component = serverComponent(source, 'LumpEditor.svelte', {
+    './lumpEditor': lump,
+    '../shell/notificationService.svelte': { notifications: { push() {}, success() {}, info() {}, warning() {}, error() {} } },
+  });
   const rendered = render(Component, { props: { contextId: 'ctx-lump-test' } });
   assert.match(rendered.body, /Combine Species \(\*_Lump\)/);
   assert.match(rendered.body, /Declarative LumpSpec \(Auto-5\)/);

@@ -310,7 +310,7 @@
   }
 </script>
 
-<section bind:this={panel} class="min-w-0 space-y-3 rounded border border-[#D8D8D8] bg-white p-3" aria-label={`${form} linked vegetation`}
+<section bind:this={panel} class="two-page-veg-panel min-w-0 space-y-3 rounded border border-[#D8D8D8] bg-white p-3" aria-label={`${form} linked vegetation`}
   data-two-page-vegetation-panel={form} data-vegetation-current-row={row?.rowId}>
   <h4 class="font-semibold text-[#003366]">{form === 'SubVegCXL' ? 'Herb' : form === 'SubVegDXL' ? 'Moss/Lichen' : 'Tree/Shrubs'}</h4>
   {#if parentBlocked}<p role="status">Finish actual parent/other-owner drafts and unlock the plot before new vegetation staging.</p>{/if}
@@ -505,3 +505,9 @@
   {#if view.references}<VegetationSpeciesReferences references={view.references} />{/if}
   <p class="text-xs text-[#606060]">LMH25 2-Page vegetation strata &amp; species editor: cover values validate against calibrated single-precision (&lt; 100%) bounds while leaving untouched historical values intact. Save commits species, cover, and voucher changes atomically.</p>
 </section>
+
+<style>
+  .two-page-veg-panel { max-width: 100%; overflow-x: auto; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
+  .two-page-veg-panel :global(input[type="text"]), .two-page-veg-panel :global(select) { border-color: var(--vpro-forest-border, #D8D8D8); font-variant-numeric: tabular-nums; }
+  .two-page-veg-panel :global(input[type="text"]:focus), .two-page-veg-panel :global(select:focus) { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
+</style>

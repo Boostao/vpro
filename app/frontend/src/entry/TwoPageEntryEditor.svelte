@@ -24,6 +24,10 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   import ProjectMetadataEditor from '../admin/ProjectMetadataEditor.svelte';
   import type { bindContextPlots } from '../shared/contextPlots';
   import TwoPageProfilingPanel from './TwoPageProfilingPanel.svelte';
+  import { Columns2, FileText } from '@lucide/svelte';
+  import FieldCardPreviewModal from './FieldCardPreviewModal.svelte';
+  import { buildFieldCardViewModel } from './fieldCardPreview';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, plot, cache, revision, onchange, onbusy, onclosed, oncommitted, embedded: childContent, childBlocked = false, pictureReaderAvailable = false, auditReaderAvailable = false, googleEarthReaderAvailable = false, vegetationTableReaderAvailable = false, environmentTableReaderAvailable = false, projectMetadataReaderAvailable = false, vegetationTableSU = '', vegetationTableSUPath = '', sourceProjectPath = '',
     projectMetadataClient, metadataRestorationAvailable = false,
@@ -76,9 +80,39 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   let form = $state<TwoPageParentForm>(untrack(() => initialForm));
   let session = $state(makeSession(untrack(() => initialForm)));
   let error = $state<string | null>(null);
+  let fieldCardModalOpen = $state(false);
+  let fieldCardSplitOpen = $state(false);
   const view = $derived.by(() => { revision; return session.view(); });
   const close = $derived.by(() => { revision; return session.closeState(); });
   const projection = $derived(twoPageEntryProjection(form));
+  const twoPageFieldCardViewModel = $derived.by(() => {
+    if (!fieldCardModalOpen && !fieldCardSplitOpen) return null;
+    let projectChoiceText: string | null = null;
+    if (view.projectRowId && view.snapshot?.ProjectChoices?.Choices?.rows) {
+      const matched = view.snapshot.ProjectChoices.Choices.rows.find(r => r.rowId === view.projectRowId);
+      const codeCell = matched?.cells?.[0];
+      if (codeCell && codeCell.storage !== 'null') {
+        projectChoiceText = metadataCellText(codeCell);
+      }
+    }
+    return buildFieldCardViewModel({
+      formKind: 'two-page',
+      draftHeader: { plotNumber: owner.plot },
+      twoPageOriginal: view.original ?? null,
+      twoPageDrafts: view.drafts,
+      twoPageProjectText: projectChoiceText,
+      extendedShrubs: form === 'FS882-8x6XL-CHARS',
+      isDirty: close.unsaved || childBlocked,
+    });
+  });
+
+  function handleTwoPageKeydown(event: KeyboardEvent) {
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'p') {
+      event.preventDefault();
+      fieldCardModalOpen = !fieldCardModalOpen;
+      if (fieldCardModalOpen) fieldCardSplitOpen = false;
+    }
+  }
 
   function makeSession(sourceForm: TwoPageParentForm) {
     const existing = sessions.get(sourceForm);
@@ -321,6 +355,9 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
         : action === 'undo' ? await session.undo() : action === 'references' ? await session.loadReferences()
         : await session.restore(action === 'retain' ? AuditRestoreAction.AuditRestoreRetain : AuditRestoreAction.AuditRestorePrune);
       if (!ok) error = session.view().error ?? session.view().referenceError;
+      else if (action === 'save' && typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        notifications.success(`Two-page plot ${owner.plot} saved`, `${form} complete-entry changes committed atomically.`);
+      }
     } catch (cause) { error = `Complete-entry operation refused; owned state retained: ${String(cause)}`; }
   }
   function stage(column: string, input: TwoPageEntryInput) {
@@ -433,8 +470,33 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   }
 </script>
 
-<section class="space-y-4 rounded border border-[#D8D8D8] bg-white p-4" aria-label="Complete two-page entry review" data-two-page-entry-panel={form}>
-  <h3 class="font-semibold text-[#003366]">{form}: one owned complete-entry draft</h3>
+<svelte:window onkeydown={handleTwoPageKeydown} />
+
+<section class="two-page-entry-shell space-y-4 rounded border border-[#D8D8D8] bg-white p-4 text-[#313132]" aria-label="Complete two-page entry review" data-two-page-entry-panel={form}>
+  <div class="two-page-entry-header flex flex-wrap items-center justify-between gap-3 border-b border-[#D1D5DB] pb-3">
+    <h3 class="font-bold text-[#003366]">{form}: one owned complete-entry draft</h3>
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        data-view-field-card-btn
+        title="Preview official printed field card (Alt+P)"
+        onclick={() => { fieldCardModalOpen = true; fieldCardSplitOpen = false; }}
+        class="px-3 py-1 rounded text-xs font-semibold border border-[#003366] bg-[#EBF1F8] text-[#003366] hover:bg-[#003366] hover:text-white flex items-center gap-1.5"
+      >
+        <FileText size={14} /> View Field Card
+      </button>
+      <button
+        type="button"
+        data-dock-field-card-btn
+        aria-pressed={fieldCardSplitOpen}
+        title="Toggle live side-by-side split field card preview (>= 1760px)"
+        onclick={() => { fieldCardSplitOpen = !fieldCardSplitOpen; if (fieldCardSplitOpen) fieldCardModalOpen = false; }}
+        class="two-page-dock-btn px-3 py-1 rounded text-xs font-semibold border flex items-center gap-1.5 {fieldCardSplitOpen ? 'bg-[#003366] text-white border-[#003366]' : 'border-[#D1D5DB] bg-white text-[#003366] hover:bg-[#EBF1F8]'}"
+      >
+        <Columns2 size={14} /> Dock Split View
+      </button>
+    </div>
+  </div>
   {#if error}<p role="alert" class="text-sm text-[#D8292F]">{error}</p>{/if}
   {#if view.error && view.error !== error}<p role="alert" class="text-sm text-[#D8292F]">{view.error}</p>{/if}
   {#if view.referenceError}<p role="alert" class="text-sm text-[#D8292F]">{view.referenceError}</p>{/if}
@@ -580,24 +642,58 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
         onclick={() => operation('prune')}>Restore (prune audits)</button>
     {/if}
   </div>
-  {#if view.original && view.snapshot}
-    <TwoPageEntryLayout {form} {pictureReaderAvailable} values={twoPageEntryValues(view.original, form)}
-      editors={(['xl', 'common', 'extra'] as const).map(scope => ({
-        scope, columns: projection.fields.filter(field => field.scope === scope && field.page !== null).map(field => field.column),
-        input: fieldInput, labelled: true,
-      }))} identity={identityField} embedded={childContent} />
+  <div class="two-page-split-wrap" class:split-open={fieldCardSplitOpen && twoPageFieldCardViewModel !== null}>
+    <div class="two-page-form-col min-w-0 flex-1" data-field-card-form-pane>
+      {#if view.original && view.snapshot}
+        <TwoPageEntryLayout {form} {pictureReaderAvailable} values={twoPageEntryValues(view.original, form)}
+          editors={(['xl', 'common', 'extra'] as const).map(scope => ({
+            scope, columns: projection.fields.filter(field => field.scope === scope && field.page !== null).map(field => field.column),
+            input: fieldInput, labelled: true,
+          }))} identity={identityField} embedded={childContent} />
+      {/if}
+      <p class="mt-3 text-xs text-stone-600">One atomic parent Save covers all three accepted field scopes.
+        Identity changes, coordinate-conversion callbacks, metadata creation, picture creation and unverified source actions remain unavailable.
+        Linked children use their independently gated readers/editors outside this parent transaction.
+        The picture child is read-only. Metadata editing uses its separate owned editor and transaction;
+        record deletion remains outside this review.</p>
+    </div>
+    {#if fieldCardSplitOpen && twoPageFieldCardViewModel}
+      <div class="two-page-dock-col">
+        <FieldCardPreviewModal
+          open={true}
+          mode="docked"
+          viewModel={twoPageFieldCardViewModel}
+          onclose={() => { fieldCardSplitOpen = false; }}
+          onmodechange={(nextMode) => {
+            if (nextMode === 'modal') {
+              fieldCardSplitOpen = false;
+              fieldCardModalOpen = true;
+            }
+          }}
+        />
+      </div>
+    {/if}
+  </div>
   {/if}
-  <p class="text-xs text-stone-600">One atomic parent Save covers all three accepted field scopes.
-    Identity changes, coordinate-conversion callbacks, metadata creation, picture creation and unverified source actions remain unavailable.
-    Linked children use their independently gated readers/editors outside this parent transaction.
-    The picture child is read-only. Metadata editing uses its separate owned editor and transaction;
-    record deletion remains outside this review.</p>
+  {#if fieldCardModalOpen && twoPageFieldCardViewModel}
+    <FieldCardPreviewModal
+      open={true}
+      mode="modal"
+      viewModel={twoPageFieldCardViewModel}
+      onclose={() => { fieldCardModalOpen = false; }}
+      onmodechange={(nextMode) => {
+        if (nextMode === 'docked') {
+          fieldCardModalOpen = false;
+          fieldCardSplitOpen = true;
+        }
+      }}
+    />
   {/if}
 </section>
 
 {#snippet identityField(field: TwoPageEntryField)}
-  <label class="block text-sm font-medium" for="complete-entry-identity">Plot number</label>
-  <input id="complete-entry-identity" class="w-full rounded border p-2" disabled
+  <label class="block text-sm font-medium text-[#003366]" for="complete-entry-identity">Plot number</label>
+  <input id="complete-entry-identity" class="two-page-plot-id w-full rounded border p-2" disabled
     data-column={field.column} data-help-id="site.plot_number" value={owner.plot} />
 {/snippet}
 
@@ -749,3 +845,14 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     </div>
   {/if}
 {/snippet}
+
+<style>
+  .two-page-entry-shell { border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); }
+  .two-page-plot-id { font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; font-weight: 600; border-color: var(--vpro-forest-border, #D8D8D8); }
+  .two-page-split-wrap { display: flex; gap: 1rem; align-items: flex-start; min-width: 0; }
+  .two-page-dock-col { width: min(46%, 700px); min-width: 500px; max-height: 85vh; flex: none; position: sticky; top: .5rem; }
+  @media (max-width: 1759px) {
+    .two-page-dock-btn { display: none; }
+    .two-page-dock-col { display: none; }
+  }
+</style>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { notifications } from '../shell/notificationService.svelte';
   import {
     countDiagnosticsBySeverity,
     defaultLMH25DiagnosticsPort,
@@ -38,6 +39,7 @@
   let diagnostics = $state.raw<PlotDiagnosticsResult | null>(null);
   let detailsOpen = $state(false);
   let generation = 0;
+  let lastNotifiedSignature = '';
 
   function cancel() {
     generation++;
@@ -71,6 +73,37 @@
       const validated = normalizeDiagnosticsWire(raw);
       if (reqGen !== generation || owner !== contextId) return;
       diagnostics = validated;
+      if (validated.smrDivergent || validated.snrDivergent || validated.issues.some((i) => i.severity === 'error' || i.severity === 'warning')) {
+        const sig = [
+          validated.plotNumber,
+          validated.smrDivergent ? `${validated.keyedSmr}:${validated.fieldSmr}` : '',
+          validated.snrDivergent ? `${validated.keyedSnr}:${validated.fieldSnr}` : '',
+          validated.issues.map((i) => i.code).join(','),
+        ].join('|');
+        if (sig !== lastNotifiedSignature) {
+          lastNotifiedSignature = sig;
+          const parts: string[] = [];
+          if (validated.smrDivergent) {
+            parts.push(`Keyed rSMR ${validated.keyedSmr} vs Field ${validated.fieldSmr || 'blank'}`);
+          }
+          if (validated.snrDivergent) {
+            parts.push(`Keyed rSNR ${validated.keyedSnr} vs Field ${validated.fieldSnr || 'blank'}`);
+          }
+          if (validated.issues.length > 0) {
+            parts.push(`${validated.issues.length} pedon/substrate finding(s)`);
+          }
+          if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+            notifications.push({
+              severity: validated.issues.some((i) => i.severity === 'error') ? 'error' : 'warning',
+              category: 'lmh25',
+              source: `LMH25 · Plot ${validated.plotNumber}`,
+              title: `LMH25 edatopic/pedon advisory for Plot ${validated.plotNumber}`,
+              message: parts.join(' · '),
+              toast: false,
+            });
+          }
+        }
+      }
     } catch (cause) {
       if (reqGen === generation) error = String(cause);
     } finally {
@@ -188,28 +221,35 @@
 </aside>
 
 <style>
-  .lmh25-bar { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 5px solid #003366; border-radius: 4px; padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; }
+  .lmh25-bar { background: var(--vpro-surface-subtle, #f8fafb); border: 1px solid var(--vpro-border, #d1d5db); border-left: 5px solid #003366; border-radius: 4px; padding: 0.65rem 0.9rem; margin-bottom: 0.85rem; min-width: 0; }
   .lmh25-summary-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.65rem; }
   .lmh25-brand { display: inline-flex; align-items: center; gap: 0.5rem; color: #003366; font-size: 0.88rem; }
   .lmh25-tag { background: #003366; color: #fcba19; padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; }
-  .lmh25-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
-  .chip { display: inline-flex; align-items: center; gap: 0.35rem; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 0.25rem 0.55rem; font-size: 0.8rem; color: #1e293b; }
-  .chip.divergent { background: #fffbeb; border-color: #d97706; color: #78350f; }
+  .lmh25-chips { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; font-variant-numeric: tabular-nums; }
+  .chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; background: #ffffff; border: 1px solid var(--vpro-border, #d1d5db); border-radius: 4px; padding: 0.25rem 0.55rem; font-size: 0.8rem; color: var(--vpro-ink, #313132); }
+  .chip.divergent { background: var(--vpro-warning-bg, #fef6e0); border-color: var(--vpro-warning-border, #d99b26); color: var(--vpro-warning-ink, #704b00); }
   .alert-flag { background: #fcba19; color: #003366; padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.72rem; }
   .chip-action { background: #003366; color: #ffffff; border: 0; border-radius: 3px; padding: 0.12rem 0.4rem; font-size: 0.73rem; }
   .substrate-meter { width: 56px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; display: inline-block; }
-  .substrate-fill { display: block; height: 100%; background: #003366; }
+  .substrate-fill { display: block; height: 100%; background: var(--vpro-forest, #1e5128); }
   .substrate-fill.invalid { background: #d97706; }
-  .lmh25-controls { display: flex; gap: 0.4rem; }
+  .lmh25-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; }
   .bcgov-btn { background: #003366; color: #ffffff; border: 1px solid #003366; border-radius: 4px; padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; }
   .bcgov-btn-outline { background: #ffffff; color: #003366; border: 1px solid #003366; border-radius: 4px; padding: 0.35rem 0.7rem; font-size: 0.8rem; font-weight: 600; }
-  .lmh25-drawer { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #cbd5e1; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; font-size: 0.82rem; }
+  .lmh25-drawer { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--vpro-border, #d1d5db); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; font-size: 0.82rem; min-width: 0; }
   .lmh25-drawer h4 { margin: 0 0 0.45rem; color: #003366; font-size: 0.86rem; }
   .issue-list, .trace-list { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; }
-  .sev-error { color: #991b1b; }
-  .sev-warning { color: #92400e; }
+  .sev-error { color: var(--vpro-error-ink, #a61b20); }
+  .sev-warning { color: var(--vpro-warning-ink, #704b00); }
   .sev-info { color: #003366; }
-  .ref-cite { color: #64748b; font-size: 0.76rem; }
-  .trace-key { background: #e6eef8; color: #003366; padding: 0.05rem 0.35rem; border-radius: 3px; font-weight: 600; margin-right: 0.25rem; }
-  .ok-note { color: #166534; margin: 0; }
+  .ref-cite { color: var(--vpro-ink-muted, #5f6b7a); font-size: 0.76rem; }
+  .trace-key { background: var(--vpro-navy-tint, #ebf1f8); color: #003366; padding: 0.05rem 0.35rem; border-radius: 3px; font-weight: 600; margin-right: 0.25rem; }
+  .ok-note { color: var(--vpro-success-ink, #1b5e29); margin: 0; }
+  @media (pointer: coarse) {
+    .bcgov-btn,
+    .bcgov-btn-outline,
+    .chip-action {
+      min-height: 44px;
+    }
+  }
 </style>

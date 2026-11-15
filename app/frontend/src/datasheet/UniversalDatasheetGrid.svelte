@@ -1417,11 +1417,13 @@
     background: #FFFFFF;
   }
   .vpro-ds-viewport {
-    height: 520px;
+    height: min(560px, calc(100dvh - 250px));
+    min-height: 300px;
     max-width: 100%;
+    min-width: 0;
     overflow: auto;
-    border: 1px solid #D8D8D8;
-    background: #FFFFFF;
+    border: 1px solid var(--vpro-border, #d1d5db);
+    background: var(--vpro-surface, #ffffff);
     position: relative;
   }
   .vpro-ds-grid {
@@ -1586,5 +1588,18 @@
     color: #D8292F;
     border-radius: 3px;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .vpro-ds-badge,
+  .vpro-ds-footer {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (pointer: coarse) {
+    .vpro-btn-primary,
+    .vpro-btn-secondary,
+    .vpro-ds-tab,
+    .vpro-ds-search {
+      min-height: 44px;
+    }
   }
 </style>

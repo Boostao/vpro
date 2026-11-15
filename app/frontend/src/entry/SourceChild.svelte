@@ -190,16 +190,21 @@
 </div>
 
 <style>
-  .source-child { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; background: white; border: 1px solid #D8D8D8; border-radius: 4px; }
-  table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .875rem; }
-  th { background: #F2F2F2; color: #003366; text-align: left; font-size: .875rem; font-weight: 600; white-space: normal; }
-  th, td { padding: .5rem; min-width: 7rem; max-width: 18rem; border-bottom: 1px solid #D8D8D8; }
+  .source-child { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; background: var(--vpro-surface, white); border: 1px solid var(--vpro-border, #d1d5db); border-radius: 4px; }
+  table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: .875rem; font-variant-numeric: tabular-nums; }
+  th { background: var(--vpro-rail, #eaeff3); color: var(--vpro-navy, #003366); text-align: left; font-size: .8125rem; font-weight: 600; white-space: normal; }
+  th, td { padding: .5rem; min-width: 7rem; max-width: 18rem; border-bottom: 1px solid var(--vpro-border, #d1d5db); }
+  th:first-child, td:first-child { position: sticky; left: 0; z-index: 2; box-shadow: inset -1px 0 0 var(--vpro-border, #d1d5db); }
+  th:first-child { z-index: 3; background: var(--vpro-rail, #eaeff3); }
+  td:first-child { background: var(--vpro-surface, white); font-family: var(--vpro-font-mono, monospace); }
   td { overflow: visible; white-space: normal; }
-  td:focus-within { background: #E6F0FA; }
-  .source-cell { display: block; box-sizing: border-box; width: 100%; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem; color: #313132; font: inherit; line-height: 1.4; overflow-wrap: anywhere; }
-  .source-cell:focus-visible { outline: 2px solid #003366; outline-offset: 2px; }
-  input[type="checkbox"] { width: 1.2rem; min-height: 1.2rem; accent-color: #003366; }
-  .pending { color: #606060; background: #F2F2F2; }
-  .delete { min-height: 40px; color: #D8292F; padding: .5rem .75rem; border: 1px solid #D8D8D8; border-radius: 4px; }
-  .empty { padding: 1rem; color: #606060; }
+  td:focus-within { background: var(--vpro-forest-surface, #e9f1eb); }
+  td:first-child:focus-within { background: var(--vpro-forest-surface, #e9f1eb); }
+  .source-cell { display: block; box-sizing: border-box; width: 100%; min-height: 40px; border: 1px solid var(--vpro-forest-border, #D8D8D8); border-radius: 4px; padding: .5rem; font: inherit; font-variant-numeric: tabular-nums; line-height: 1.4; overflow-wrap: anywhere; background: var(--vpro-surface, white); color: var(--vpro-ink, #313132); }
+  .source-cell:focus-visible { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 2px; }
+  .source-cell[aria-invalid="true"] { border-color: var(--vpro-error, #d8292f); }
+  input[type="checkbox"] { width: 1.2rem; min-height: 1.2rem; accent-color: var(--vpro-forest, #1e5128); }
+  .pending { color: var(--vpro-ink-muted, #5f6b7a); background: var(--vpro-surface-subtle, #f8fafb); }
+  .delete { min-height: 40px; color: var(--vpro-error-ink, #a61b20); padding: .5rem .75rem; border: 1px solid var(--vpro-border, #d1d5db); border-radius: 4px; background: var(--vpro-surface, white); }
+  .empty { padding: 1rem; color: var(--vpro-ink-muted, #5f6b7a); }
 </style>

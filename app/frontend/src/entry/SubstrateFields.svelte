@@ -36,7 +36,7 @@
   }
 </script>
 
-{#if editingEnabled}
+{#if editingEnabled && errors.length > 0}
   <div class="substrate-toolbar" aria-label="Substrate draft safety controls">
     {#each errors as message}<span role="alert">{message}</span>{/each}
   </div>
@@ -63,9 +63,9 @@
   {/each}
 {/snippet}
 <style>
-  .substrate-toolbar { display: grid; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid #D8D8D8; font-size: .75rem; }
-  .substrate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
-  .substrate-control:disabled { color: #606060; background: #F2F2F2; }
-  .substrate-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
-  .substrate-control[aria-invalid="true"] { border-color: #D8292F; }
+  .substrate-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; padding: .35rem .5rem; margin-bottom: .5rem; border: 1px solid var(--vpro-error-border, #e59ba0); background: var(--vpro-error-bg, #fbeaea); color: var(--vpro-error-ink, #a61b20); border-radius: 4px; font-size: .75rem; }
+  .substrate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-forest-border, #D8D8D8); border-radius: 4px; padding: .5rem .65rem; background: var(--vpro-surface, white); color: var(--vpro-ink, #313132); font: inherit; font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; line-height: 1.4; }
+  .substrate-control:disabled { color: var(--vpro-ink-muted, #5f6b7a); background: var(--vpro-surface-subtle, #f8fafb); }
+  .substrate-control:focus { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
+  .substrate-control[aria-invalid="true"] { border-color: var(--vpro-error, #d8292f); }
 </style>

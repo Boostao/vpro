@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { notifications } from '../shell/notificationService.svelte';
   import {
     TURBOVEG_LAYER_CROSSWALK,
     defaultInterchangeHubPort,
@@ -183,6 +184,15 @@
       const res = await port.importVenusProject(owner, payload);
       if (reqGen !== generation || owner !== contextId) return;
       venusResult = res;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'Interchange · VENUS 5.0',
+          title: `Imported ${res.plotCount} plots into ${res.targetProject}`,
+          message: `Saved to ${res.destinationPath}`,
+        });
+      }
       if (res.activated && res.state) {
         onProjectActivated(res.state);
       }
@@ -212,6 +222,15 @@
       const res = await port.exportTurboVeg(owner, payload);
       if (reqGen !== generation || owner !== contextId) return;
       tvExportOutcome = res;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'Interchange · TurboVeg',
+          title: `Exported ${res.plotCount} TurboVeg plot(s)`,
+          message: res.path,
+        });
+      }
     } catch (cause) {
       if (reqGen === generation) error = String(cause);
     } finally {
@@ -273,6 +292,15 @@
       const res = await port.importTurboVeg(owner, payload);
       if (reqGen !== generation || owner !== contextId) return;
       tvImportOutcome = res;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'Interchange · TurboVeg',
+          title: `Imported ${res.plotCount} TurboVeg plot(s) into ${res.targetProject}`,
+          message: res.destinationPath,
+        });
+      }
       if (res.activated && res.state) {
         onProjectActivated(res.state);
       }
@@ -412,6 +440,15 @@
       const res = await port.exportProjectRDS(owner, payload);
       if (reqGen !== generation || owner !== contextId) return;
       rdsOutcome = res;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'Interchange · R .rds',
+          title: `Exported R .rds (${res.plotCount} plots)`,
+          message: res.path,
+        });
+      }
     } catch (cause) {
       if (reqGen === generation) error = String(cause);
     } finally {
@@ -440,6 +477,15 @@
       const res = await port.exportGeoPackage(owner, payload);
       if (reqGen !== generation || owner !== contextId) return;
       gpkgOutcome = res;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'Interchange · GeoPackage',
+          title: `Exported ${res.featureCount} GeoPackage plot features (${res.crs})`,
+          message: res.path,
+        });
+      }
     } catch (cause) {
       if (reqGen === generation) error = String(cause);
     } finally {
@@ -889,7 +935,16 @@
   .table-scroll { overflow-x: auto; max-width: 100%; }
   .compact-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.78rem; }
   .compact-table th, .compact-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #D8D8D8; white-space: normal; text-align: left; }
-  .mono { font-family: var(--font-mono, monospace); }
+  .mono { font-family: var(--vpro-font-mono, var(--font-mono, monospace)); font-variant-numeric: tabular-nums; }
   .xml-check-box { font-size: 0.8rem; border-top: 1px solid #D8D8D8; padding-top: 0.5rem; }
   .ok-text { color: #2E8540; margin: 0.3rem 0 0; font-weight: 600; }
+  @media (pointer: coarse) {
+    .hub-tabs button,
+    .btn-primary,
+    .btn-secondary,
+    input:not([type="checkbox"]),
+    select {
+      min-height: 44px;
+    }
+  }
 </style>

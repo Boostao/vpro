@@ -617,14 +617,14 @@
   }
 </script>
 
-<section data-tour="project-admin-root" class="min-w-0 space-y-4 rounded border border-[#D8D8D8] bg-white text-[#313132] shadow-sm" aria-label="Project Lifecycle and Pre-Flight Workbench">
-  <header class="border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-4 text-white">
+<section data-tour="project-admin-root" class="vpro-project-admin min-w-0 space-y-4 rounded border border-[#D8D8D8] bg-white text-[#313132] shadow-sm" aria-label="Project Lifecycle and Pre-Flight Workbench">
+  <header class="border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-4 py-3.5 sm:px-5 text-white">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <div>
+      <div class="min-w-0">
         <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">VPro Project Governance</p>
-        <h2 class="m-0 text-lg font-semibold text-white">Project Lifecycle, Compliance Pre-Flight &amp; 3-Way Merge</h2>
+        <h2 class="m-0 text-base sm:text-lg font-semibold text-white">Project Lifecycle, Compliance Pre-Flight &amp; 3-Way Merge</h2>
       </div>
-      <div class="text-xs text-slate-200">
+      <div class="text-xs text-slate-200 tabular-nums">
         Active Project: <span class="font-mono font-semibold text-white">{activeProject}</span>
         {#if activeSu !== 'None'}
           | Active SU: <span class="font-mono font-semibold text-[#FCBA19]">{activeSu}</span>
@@ -1473,3 +1473,19 @@
     {/if}
   </div>
 </section>
+
+<style>
+  .vpro-project-admin {
+    font-variant-numeric: tabular-nums;
+  }
+  .vpro-project-admin fieldset {
+    min-width: 0;
+  }
+  @media (pointer: coarse) {
+    .vpro-project-admin button,
+    .vpro-project-admin input:not([type="checkbox"]),
+    .vpro-project-admin select {
+      min-height: 44px;
+    }
+  }
+</style>

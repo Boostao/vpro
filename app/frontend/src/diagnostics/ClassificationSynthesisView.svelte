@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
   import { ReadRequests } from '../shared/readRequests';
+  import { notifications } from '../shell/notificationService.svelte';
   import {
     createDefaultSynthesisOptions,
     defaultSynthesisBackendPort,
@@ -205,6 +206,15 @@
       statusNotice = res.changed
         ? `Moved plot ${res.plotNumber} from ${res.beforeSiteUnit || 'Unassigned'} to ${res.afterSiteUnit} in ${res.latencyMs.toFixed(1)} ms.`
         : `Plot ${res.plotNumber} is already assigned to ${res.afterSiteUnit}.`;
+      if (res.changed && typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'general',
+          source: 'BEC Synthesis',
+          title: `Moved plot ${res.plotNumber} -> ${res.afterSiteUnit}`,
+          message: `From ${res.beforeSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`,
+        });
+      }
     } catch (err) {
       if (gen !== requestGeneration) return;
       errorMessage = err instanceof Error ? err.message : String(err);
@@ -228,6 +238,15 @@
       if (gen !== requestGeneration) return;
       applyIncomingSnapshot(res.snapshot, res.latencyMs);
       statusNotice = `Restored plot ${res.plotNumber} to ${res.afterSiteUnit || 'Unassigned'} in ${res.latencyMs.toFixed(1)} ms.`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'info',
+          category: 'general',
+          source: 'BEC Synthesis',
+          title: `Restored plot ${res.plotNumber}`,
+          message: `Reverted to ${res.afterSiteUnit || 'Unassigned'} (${res.latencyMs.toFixed(1)} ms)`,
+        });
+      }
     } catch (err) {
       if (gen !== requestGeneration) return;
       errorMessage = err instanceof Error ? err.message : String(err);
@@ -270,6 +289,15 @@
       if (gen !== requestGeneration) return;
       lastExportResult = res;
       statusNotice = `Published 4-sheet BEC Diagnostic workbook (${res.path}) in ${res.latencyMs.toFixed(1)} ms.`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'BEC Synthesis',
+          title: 'Published BEC Diagnostic Workbook (.xlsx)',
+          message: `${res.path} (${res.latencyMs.toFixed(1)} ms)`,
+        });
+      }
     } catch (err) {
       if (gen !== requestGeneration) return;
       errorMessage = err instanceof Error ? err.message : String(err);
@@ -1780,10 +1808,34 @@
 
   .edatopic-grid-card,
   .edatopic-inspector {
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
+    border: 1px solid var(--vpro-border, #d1d5db);
+    border-radius: var(--vpro-radius-sm, 4px);
     padding: 0.7rem;
-    background: #ffffff;
+    background: var(--vpro-surface, #ffffff);
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .mono-cell,
+  .col-unit-val,
+  .sim-cell,
+  .eda-count,
+  .eda-prom,
+  .syn-latency-badge,
+  .outlier-rank,
+  .outlier-plot-link,
+  .outlier-metrics {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (pointer: coarse) {
+    .syn-btn,
+    .syn-tab,
+    .syn-pill-btn,
+    .syn-btn-reassign,
+    .syn-control select {
+      min-height: 44px;
+    }
   }
 
   .edatopic-card-hdr {

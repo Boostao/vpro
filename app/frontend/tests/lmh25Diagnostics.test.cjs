@@ -91,6 +91,7 @@ test('LMH25DiagnosticsBar.svelte compiles cleanly, contains zero emojis, and ren
 
   const Component = serverComponent(source, 'LMH25DiagnosticsBar.svelte', {
     './lmh25Diagnostics': diag,
+    '../shell/notificationService.svelte': { notifications: { push() {}, success() {}, info() {}, warning() {}, error() {} } },
   });
   const rendered = render(Component, {
     props: {

@@ -136,7 +136,10 @@ test('InterchangeHub.svelte compiles cleanly, contains zero emojis, and renders 
   assert.match(source, /#003366/);
   assert.match(source, /#fcba19/i);
 
-  const Component = serverComponent(source, 'InterchangeHub.svelte', { './interchangeHub': hub });
+  const Component = serverComponent(source, 'InterchangeHub.svelte', {
+    './interchangeHub': hub,
+    '../shell/notificationService.svelte': { notifications: { push() {}, success() {}, info() {}, warning() {}, error() {} } },
+  });
   const rendered = render(Component, { props: { contextId: 'ctx-hub' } });
   assert.match(rendered.body, /data-tour="interchange-hub-root"/);
   assert.match(rendered.body, /VENUS 5\.0/);

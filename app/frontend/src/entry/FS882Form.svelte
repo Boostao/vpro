@@ -15,8 +15,13 @@
     type VegetationDeletionReview,
     type ProjectPlotProfileFilterRequest
   } from '../../bindings/github.com/boostao/vpro/app';
-  import { Lock, Unlock, Save, RotateCcw, AlertTriangle, Check } from '@lucide/svelte';
+  import { Lock, Unlock, Save, RotateCcw, AlertTriangle, Check, FileText, Columns2 } from '@lucide/svelte';
   import HeaderEditor from './HeaderEditor.svelte';
+  import FormValidationSummary from './FormValidationSummary.svelte';
+  import { buildFormValidationItems, focusValidationTarget, type FormValidationItem } from './formValidationSummary';
+  import FieldCardPreviewModal from './FieldCardPreviewModal.svelte';
+  import { buildFieldCardViewModel } from './fieldCardPreview';
+  import { notifications } from '../shell/notificationService.svelte';
   import SourcePage from './SourcePage.svelte';
   import ParentCodeFields from './ParentCodeFields.svelte';
   import OrdinaryFields from './OrdinaryFields.svelte';
@@ -237,6 +242,8 @@
   let speciesChoices = $state<Record<string, SpeciesChoices>>({});
 
   let activeTab = $state<'site' | 'veg' | 'vegOther' | 'soils' | 'other' | 'audit' | 'siviParent'>('site');
+  let fieldCardModalOpen = $state(false);
+  let fieldCardSplitOpen = $state(false);
   async function vegetationNotesTab() {
     activeTab = 'soils';
     await tick();
@@ -276,6 +283,13 @@
   const metadataRestorationEnabled = true;
   const sourceEnterEnabled = true;
   function sourceEnter(event: KeyboardEvent) {
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'p') {
+      if (twoPageOpen && twoPageScope === 'entry') return;
+      event.preventDefault();
+      fieldCardModalOpen = !fieldCardModalOpen;
+      if (fieldCardModalOpen) fieldCardSplitOpen = false;
+      return;
+    }
     if (!sourceEnterEnabled || !container) return;
     try { navigateSourceEnter(event, container); }
     catch (cause) { error = `Source Enter navigation failed; drafts retained: ${String(cause)}`; }
@@ -710,6 +724,57 @@
     : draft.locked ? 'Unlock the plot before restoring fields.'
     : dirty || Object.keys(headerValidation).length > 0 ? 'Save valid header changes or Undo before restoring fields.'
     : 'Save the plot before restoring fields.');
+
+  const validationSummaryItems = $derived(
+    buildFormValidationItems({
+      siviStandalone,
+      headerValidation,
+      soilInvalid,
+      speciesInvalid,
+      heightInvalid,
+      creationInvalid,
+      personalInvalid,
+      attributeInvalid,
+      otherInvalid,
+    }),
+  );
+
+  async function handleValidationJump(item: FormValidationItem) {
+    activeTab = item.tab;
+    if (item.tab === 'siviParent') siviParentOpen = true;
+    await tick();
+    focusValidationTarget(container, item);
+  }
+
+  const fieldCardViewModel = $derived.by(() => {
+    if (!fieldCardModalOpen && !fieldCardSplitOpen) return null;
+    return buildFieldCardViewModel({
+      formKind: siviStandalone ? 'sivi' : 'fs882',
+      committedHeader: original as unknown as Record<string, unknown> | null,
+      draftHeader: draft as unknown as Record<string, unknown>,
+      siviParentOriginal:
+        siviParentSharedView?.original ??
+        siviParentWriteView?.original ??
+        siviParentActionView?.original ??
+        siviParentView?.original ??
+        null,
+      siviSharedDrafts: siviParentSharedView?.drafts,
+      siviDirectDrafts: siviParentWriteView?.drafts,
+      siviActionDrafts: siviParentActionView?.drafts,
+      humusRows: humusList as unknown as Record<string, unknown>[],
+      mineralRows: mineralList as unknown as Record<string, unknown>[],
+      soilDrafts,
+      vegRows: vegList as unknown as Record<string, unknown>[],
+      heightDrafts,
+      speciesDrafts,
+      collectedDrafts,
+      creationDraft,
+      extendedShrubs,
+      snowCoverRegimeRaw: snowCoverRegimeInput,
+      activeLayerDepthRaw: activeLayerDepthInput,
+      isDirty: dirty || childUnsaved || Object.keys(headerValidation).length > 0,
+    });
+  });
 
   async function siviParentWriteOperation(operation: 'load' | 'save' | 'undo' | 'retain' | 'prune'): Promise<boolean> {
     if (!siviParentWriteSession || busy || headerWorkflowBusy || siviParentActionUnsaved || siviProjectAssignmentUnsaved || siviParentSharedUnsaved || operation !== 'undo' && siviParentWriteEditingDisabled) {
@@ -2791,6 +2856,9 @@
       dirty = false;
       headerValidation = {};
       successMsg = `Plot ${draft.plotNumber} saved successfully.`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        notifications.success(`Plot ${draft.plotNumber} saved`, 'Committed to canonical SQLite project database.');
+      }
       await loadChildData(draft.plotNumber);
       if (siviParentSession?.view().original || siviParentSession?.view().error) {
         await refreshSIVIParent(draft.plotNumber, [siviParentWriteSession, siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession]);
@@ -2940,6 +3008,9 @@
     error = null;
     headerRevision++;
     successMsg = 'Changes undone.';
+    if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+      notifications.success('Draft changes undone', draft.plotNumber ? `Plot ${draft.plotNumber} restored to last saved state.` : 'Draft reset.');
+    }
   }
 
   async function toggleLock() {
@@ -2974,6 +3045,12 @@
     if (speciesUnsaved) { error = 'Save or Cancel species drafts before changing the plot lock.'; return; }
     if (!draft.locked && dirty) { await save(); if (dirty) return; }
     draft.locked = !draft.locked;
+    if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+      notifications.success(
+        draft.locked ? `Plot ${draft.plotNumber || ''} locked`.trim() : `Plot ${draft.plotNumber || ''} unlocked`.trim(),
+        draft.locked ? 'Form is now protected in read-only mode.' : 'Form is now unlocked for editing.',
+      );
+    }
   }
 
   async function childOperation(operation: () => Promise<void>) {
@@ -3090,6 +3167,25 @@
           {profileEditingEnabled && $projectState?.plotProfile?.writable === true ? 'Review project profile rules' : 'Review project profile (read-only)'}
         </button>
       {/if}
+      <button
+        type="button"
+        data-view-field-card-btn
+        title="Preview official printed field card (Alt+P)"
+        onclick={() => { fieldCardModalOpen = true; fieldCardSplitOpen = false; }}
+        class="px-3 py-1 rounded text-xs font-semibold border border-[#003366] bg-[#EBF1F8] text-[#003366] hover:bg-[#003366] hover:text-white flex items-center gap-1.5"
+      >
+        <FileText size={14} /> View Field Card
+      </button>
+      <button
+        type="button"
+        data-dock-field-card-btn
+        aria-pressed={fieldCardSplitOpen}
+        title="Toggle live side-by-side split field card preview (>= 1760px)"
+        onclick={() => { fieldCardSplitOpen = !fieldCardSplitOpen; if (fieldCardSplitOpen) fieldCardModalOpen = false; }}
+        class="dock-field-card-btn px-3 py-1 rounded text-xs font-semibold border flex items-center gap-1.5 {fieldCardSplitOpen ? 'bg-[#003366] text-white border-[#003366]' : 'border-[#D1D5DB] bg-white text-[#003366] hover:bg-[#EBF1F8]'}"
+      >
+        <Columns2 size={14} /> Dock Split View
+      </button>
       <button type="button" onclick={toggleLock}
         disabled={busy || headerWorkflowBusy || !capabilitiesReady || siviStandalone &&
           (!siviStandaloneEnabled || !siviParentView?.original || Boolean(siviParentView?.error) || childUnsaved || siviSourceBarrier)}
@@ -3163,6 +3259,7 @@
         onclick={() => activeTab = 'audit'} disabled={tabWorkflowBusy}>Audit Trail</button>
     {/if}
   </nav>
+  <FormValidationSummary items={validationSummaryItems} onjump={(item) => void handleValidationJump(item)} />
   {#if (extendedShrubsEnabled && !twoPageOpen) || (siviParentReviewEnabled && !siviStandalone)}
     <div class="border-b border-stone-200 px-4 py-2 flex flex-wrap items-center gap-4">
       {#if extendedShrubsEnabled && !twoPageOpen}
@@ -3181,8 +3278,9 @@
     </div>
   {/if}
 
-  <!-- Tab Contents -->
-  <div class="fs882-body overflow-y-auto flex-1">
+  <!-- Tab Contents + Optional Split Field Card Dock -->
+  <div class="fs882-workspace-split flex-1 min-h-0 flex" class:split-active={fieldCardSplitOpen && fieldCardViewModel !== null}>
+  <div class="fs882-body overflow-y-auto flex-1 min-w-0" data-field-card-form-pane>
     {#if siviStandalone && !siviStandaloneEnabled}
       <p role="alert" class="p-4">Standalone SIVI is unavailable. Its independent entry gate and parent-review gate are required; no FS882 fallback is presented.</p>
     {/if}
@@ -3743,4 +3841,44 @@
     </div>
     <FS882ChildCreateModal region="newChild" {newChild} {busy} {error} {createChild} cancelNewChild={() => { newChild = null; }} />
   </div>
+  {#if fieldCardSplitOpen && fieldCardViewModel}
+    <div class="fs882-dock-pane">
+      <FieldCardPreviewModal
+        open={true}
+        mode="docked"
+        viewModel={fieldCardViewModel}
+        onclose={() => { fieldCardSplitOpen = false; }}
+        onmodechange={(nextMode) => {
+          if (nextMode === 'modal') {
+            fieldCardSplitOpen = false;
+            fieldCardModalOpen = true;
+          }
+        }}
+      />
+    </div>
+  {/if}
+  </div>
+  {#if fieldCardModalOpen && fieldCardViewModel}
+    <FieldCardPreviewModal
+      open={true}
+      mode="modal"
+      viewModel={fieldCardViewModel}
+      onclose={() => { fieldCardModalOpen = false; }}
+      onmodechange={(nextMode) => {
+        if (nextMode === 'docked') {
+          fieldCardModalOpen = false;
+          fieldCardSplitOpen = true;
+        }
+      }}
+    />
+  {/if}
 </div>
+
+<style>
+  .fs882-workspace-split { min-width: 0; }
+  .fs882-dock-pane { width: min(46%, 720px); min-width: 520px; max-width: 52%; height: 100%; flex: none; }
+  @media (max-width: 1759px) {
+    .dock-field-card-btn { display: none; }
+    .fs882-dock-pane { display: none; }
+  }
+</style>

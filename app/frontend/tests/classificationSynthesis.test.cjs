@@ -411,7 +411,10 @@ test('ClassificationSynthesisView SSR renders cleanly with zero warnings and zer
   const ViewComponent = serverComponent(
     svelteSource,
     'ClassificationSynthesisView.svelte',
-    { './classificationSynthesis': syn }
+    {
+      './classificationSynthesis': syn,
+      '../shell/notificationService.svelte': { notifications: { push() {}, success() {}, info() {}, warning() {}, error() {} } },
+    }
   );
 
   const snap = buildFixtureSnapshot();

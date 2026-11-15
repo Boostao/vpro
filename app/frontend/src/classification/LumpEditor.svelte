@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { notifications } from '../shell/notificationService.svelte';
   import {
     defaultLumpEditorPort,
     groupLumpRowsByCode,
@@ -201,6 +202,15 @@
       selectedDbPath = created.databasePath;
       newTableName = '';
       notice = `Created ${created.tableName} (VP05).`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'general',
+          source: 'Combine Species',
+          title: `Created ${created.tableName}`,
+          message: created.databasePath,
+        });
+      }
       onChanged(created.tableName);
     } catch (cause) {
       if (reqGen === generation) error = String(cause);
@@ -389,6 +399,15 @@
       selectedTable = res.table.tableName;
       selectedDbPath = res.table.databasePath;
       notice = `Materialized ${res.rowsWritten} folding rules into ${res.table.tableName}.`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
+        notifications.push({
+          severity: 'success',
+          category: 'background',
+          source: 'Declarative LumpSpec',
+          title: `Materialized ${res.rowsWritten} rules into ${res.table.tableName}`,
+          message: res.table.databasePath,
+        });
+      }
       onChanged(res.table.tableName);
     } catch (cause) {
       if (reqGen === generation) error = String(cause);
@@ -724,19 +743,28 @@
   .field-block { display: grid; gap: 0.3rem; font-size: 0.82rem; margin-bottom: 0.65rem; }
   .inline-row, .toolbar-row, .row-editor { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; margin-bottom: 0.75rem; }
   .row-editor label { display: grid; gap: 0.25rem; font-size: 0.8rem; }
-  .checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.45rem; margin: 0.65rem 0; }
+  .checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0.45rem; margin: 0.65rem 0; }
   .checkbox-label { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.83rem; }
   input:not([type="checkbox"]), select { padding: 0.45rem 0.6rem; border: 1px solid #94a3b8; border-radius: 4px; font-size: 0.85rem; }
   .bcgov-btn-primary { background: #003366; color: #ffffff; border: 1px solid #003366; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
   .bcgov-btn-secondary { background: #ffffff; color: #003366; border: 1px solid #003366; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
   .bcgov-notice { padding: 0.65rem 0.9rem; background: #eef5fc; border-left: 4px solid #003366; color: #003366; margin: 0; font-size: 0.85rem; }
-  .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; }
+  .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 0.75rem; }
   .stat-strip div { padding: 0.55rem 0.75rem; background: #f8fafc; border-left: 3px solid #fcba19; display: grid; }
   .stat-strip span { font-size: 0.75rem; color: #475569; }
-  .stat-strip strong { font-size: 1.1rem; color: #003366; }
-  .mono { font-family: var(--font-mono, monospace); }
+  .stat-strip strong { font-size: 1.1rem; color: #003366; font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--vpro-font-mono, var(--font-mono, monospace)); font-variant-numeric: tabular-nums; }
   .link-btn { background: transparent; border: 0; color: #003366; text-decoration: underline; padding: 0.15rem 0.35rem; font-size: 0.8rem; }
   .link-btn.danger { color: #991b1b; }
   .empty-note { font-size: 0.82rem; color: #64748b; padding: 0.5rem 0; }
   @media (max-width: 860px) { .lump-grid { grid-template-columns: minmax(0, 1fr); } }
+  @media (pointer: coarse) {
+    .bcgov-tab-strip button,
+    .bcgov-btn-primary,
+    .bcgov-btn-secondary,
+    input:not([type="checkbox"]),
+    select {
+      min-height: 44px;
+    }
+  }
 </style>

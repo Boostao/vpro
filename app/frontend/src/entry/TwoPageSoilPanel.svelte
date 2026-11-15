@@ -351,7 +351,7 @@
   }
 </script>
 
-<section bind:this={panel} class="min-w-0 space-y-3 rounded border bg-white p-3" aria-label={`${form} linked soil`} data-two-page-soil-panel={form} data-soil-current-row={row?.rowId} data-help-id={form === 'SoilHumusXL' ? 'humus.upper_lower_depth' : 'mineral.horizon'}>
+<section bind:this={panel} class="two-page-soil-panel min-w-0 space-y-3 rounded border bg-white p-3" aria-label={`${form} linked soil`} data-two-page-soil-panel={form} data-soil-current-row={row?.rowId} data-help-id={form === 'SoilHumusXL' ? 'humus.upper_lower_depth' : 'mineral.horizon'}>
   <h4 class="font-semibold">{form === 'SoilHumusXL' ? 'Humus' : 'Mineral soil'}</h4>
   {#if parentBlocked}<p role="status">Finish actual parent drafts/operations and unlock the plot before new soil staging.</p>{/if}
   {#if error}<p role="alert" class="break-words text-sm text-red-700">{error}</p>{/if}
@@ -507,3 +507,9 @@
   {#if view.receipts.length}<p role="status">{view.receipts.length} immutable committed soil receipt(s) retained across remounts.</p>{/if}
   <p class="text-xs text-gray-600">LMH25 pedon horizon editor: upland L/F/H depths measure upward from 0 cm; wetland Of/Om/Oh and mineral A/B/C/R/W measure downward. Press Enter to move to the next horizon without auto-saving; use Save to commit changes, or New horizon / Delete to manage child rows while preserving permanent IDs.</p>
 </section>
+
+<style>
+  .two-page-soil-panel { max-width: 100%; overflow-x: auto; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
+  .two-page-soil-panel :global(input[type="text"]), .two-page-soil-panel :global(textarea) { border-color: var(--vpro-forest-border, #D8D8D8); font-variant-numeric: tabular-nums; }
+  .two-page-soil-panel :global(input[type="text"]:focus), .two-page-soil-panel :global(textarea:focus) { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
+</style>

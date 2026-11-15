@@ -189,13 +189,14 @@
 {@render children(coordinateInputs)}
 
 <style>
-  .coordinate-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; font-size: .75rem; color: #606060; }
+  .coordinate-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .5rem; font-size: .75rem; color: var(--vpro-ink-secondary, #4b5563); }
   .coordinate-toolbar label { display: flex; align-items: center; gap: .25rem; }
-  .coordinate-toolbar select, .coordinate-toolbar button { border: 1px solid #D8D8D8; border-radius: 2px; background: white; color: #313132; padding: 0 .25rem; }
-  .coordinate-toolbar [role="alert"] { color: #D8292F; }
+  .coordinate-toolbar select, .coordinate-toolbar button { border: 1px solid var(--vpro-border-strong, #9ca3af); border-radius: 4px; background: var(--vpro-surface, white); color: var(--vpro-navy, #003366); font-weight: 500; padding: .2rem .5rem; min-height: 30px; }
+  .coordinate-toolbar button:hover:not(:disabled) { background: var(--vpro-navy-tint, #ebf1f8); border-color: var(--vpro-navy, #003366); }
+  .coordinate-toolbar [role="alert"] { color: var(--vpro-error-ink, #a61b20); }
   .coordinate-inputs { display: contents; }
-  .coordinate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
-  .coordinate-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
-  .coordinate-control:read-only { color: #606060; background: #F2F2F2; }
+  .coordinate-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-forest-border, #D8D8D8); border-radius: 4px; padding: .5rem .65rem; background: var(--vpro-surface, white); color: var(--vpro-ink, #313132); font: inherit; font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; line-height: 1.4; }
+  .coordinate-control:focus { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
+  .coordinate-control:read-only { color: var(--vpro-ink-muted, #5f6b7a); background: var(--vpro-surface-subtle, #f8fafb); }
   .coordinate-radio { margin: 0; padding: 0; }
 </style>

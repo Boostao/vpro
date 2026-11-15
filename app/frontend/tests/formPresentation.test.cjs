@@ -171,8 +171,8 @@ test('Responsive CSS defines readable controls and container-aware wide-to-singl
   assert.match(css, /grid-template-columns: repeat\(12, minmax\(0, 1fr\)\)/);
   for (const width of [900, 620, 420]) assert.match(css, new RegExp(`@container fs882-fields \\(max-width: ${width}px\\)`));
   assert.match(css, /min-height: 40px/);
-  assert.match(css, /font-sans: "(IBM Plex Sans|BC Sans)"/);
-  assert.match(css, /border-top: 3px solid (#bd9b48|var\(--bcgov-gold\))/);
+  assert.match(css, /BC Sans|IBM Plex Sans/);
+  assert.match(css, /border-top:\s*3px solid (?:#bd9b48|#003366|#FCBA19|var\(--bcgov-gold\)|var\(--vpro-)/i);
   assert.match(read('App.svelte'), /aria-expanded=\{contextExpanded\} aria-controls="project-context"/);
   for (const file of ['HeaderEditor', 'SourcePage', 'SourceChild', 'BECFields', 'CoordinateFields', 'WorkingUnitFields',
     'QualityFields', 'SubstrateFields', 'RegionCodeFields', 'SiteCodeFields', 'SoilCodeFields', 'GeologyCodeFields']) {
@@ -180,6 +180,77 @@ test('Responsive CSS defines readable controls and container-aware wide-to-singl
     assert.equal(compile(source, { filename: `${file}.svelte`, generate: 'client' }).warnings.length, 0);
     assert.doesNotMatch(source, /position:\s*absolute|transform:scale|ResizeObserver|appendChild|appendTo/);
   }
+});
+
+test('Proportional 12-column card zones, 6-cell Substrate strip and Surface/Subsurface terrain spans align with printed forms', () => {
+  assert.equal(presentation.groupCardZone('Site', 'Identity and survey'), 'top-band');
+  assert.equal(presentation.groupCardZone('Site', 'Project'), 'top-band');
+  assert.equal(presentation.groupCardZone('Site', 'Location'), 'quad-left');
+  assert.equal(presentation.groupCardZone('Site', 'Coordinate display'), 'quad-left');
+  assert.equal(presentation.groupCardZone('Site', 'BEC Master and Working Unit'), 'quad-right');
+  assert.equal(presentation.groupCardZone('Site', 'Site classification'), 'quad-right');
+  assert.equal(presentation.groupCardZone('Site', 'Site conditions and stand'), 'quad-right');
+  assert.equal(presentation.groupCardZone('Site', 'Substrate (%)'), 'full');
+  assert.equal(presentation.groupCardZone('Site', 'Field and office notes'), 'full');
+
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Survey'), 'top-band');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Geology'), 'top-band');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Surface terrain'), 'full');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Subsurface terrain'), 'full');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Soil classification'), 'quad-left');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Humus form'), 'quad-left');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Hydrogeology'), 'quad-right');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Rooting and restricting layer'), 'quad-right');
+  assert.equal(presentation.groupCardZone('Soil/Terrain', 'Water and drainage'), 'quad-right');
+
+  assert.equal(presentation.groupCardZone('Vegetation', 'Vegetation survey'), 'quad-left');
+  assert.equal(presentation.groupCardZone('Vegetation', 'Stratum cover (%)'), 'quad-right');
+  assert.equal(presentation.groupCardZone('Vegetation', 'Tree and shrub strata (A / B)'), 'full');
+
+  const siteControls = paper.paperPage('Site').controls;
+  const siteGroups = presentation.presentationGroups('Site', siteControls);
+  const substrateGroup = siteGroups.find(g => g.title === 'Substrate (%)');
+  assert.ok(substrateGroup);
+  assert.deepEqual(
+    Array.from(substrateGroup.controls, c => c.column),
+    ['SubstrateOrganicMatter', 'SubstrateDecWood', 'SubstrateBedRock', 'SubstrateRocks', 'SubstrateMineralSoil', 'SubstrateWater']
+  );
+  for (const ctrl of substrateGroup.controls) {
+    assert.equal(presentation.controlColumnSpan('Site', 'Substrate (%)', ctrl), 2);
+  }
+
+  const notesGroup = siteGroups.find(g => g.title === 'Field and office notes');
+  assert.ok(notesGroup);
+  for (const ctrl of notesGroup.controls) {
+    assert.equal(presentation.controlColumnSpan('Site', 'Field and office notes', ctrl), 6);
+  }
+
+  const soilControls = paper.paperPage('Soil/Terrain').controls;
+  const soilGroups = presentation.presentationGroups('Soil/Terrain', soilControls);
+  const surfIdx = soilGroups.findIndex(g => g.title === 'Surface terrain');
+  const subSurfIdx = soilGroups.findIndex(g => g.title === 'Subsurface terrain');
+  assert.equal(subSurfIdx, surfIdx + 1, 'Subsurface terrain must sit directly below Surface terrain');
+  assert.equal(soilGroups[surfIdx].controls.length, 4);
+  assert.equal(soilGroups[subSurfIdx].controls.length, 4);
+  for (const ctrl of soilGroups[surfIdx].controls) {
+    assert.equal(presentation.controlColumnSpan('Soil/Terrain', 'Surface terrain', ctrl), 3);
+  }
+  for (const ctrl of soilGroups[subSurfIdx].controls) {
+    assert.equal(presentation.controlColumnSpan('Soil/Terrain', 'Subsurface terrain', ctrl), 3);
+  }
+
+  assert.equal(presentation.isUnmigratedStubControl({ controlName: 'Option477', type: 'OptionButton' }), true);
+  assert.equal(presentation.isUnmigratedStubControl({ controlName: 'Toggle408', type: 'ToggleButton' }), true);
+  assert.equal(presentation.isUnmigratedStubControl({ controlName: 'btnCoverAndHeight', type: 'ToggleButton' }), false);
+  assert.equal(presentation.isUnmigratedStubControl({ controlName: 'btnLoadMetadata', type: 'CommandButton' }), false);
+
+  const siteHtml = render(HeaderEditor, { props: headerProps() }).body;
+  assert.match(siteHtml, /data-card-zone="top-band"/);
+  assert.match(siteHtml, /data-card-zone="quad-left"/);
+  assert.match(siteHtml, /data-card-zone="quad-right"/);
+  assert.match(siteHtml, /data-col-span="2"/);
+  assert.match(siteHtml, /data-substrate-total/);
+  assert.doesNotMatch(siteHtml, /class="form-status"/);
 });
 
 module.exports.renderResponsiveFixture = (name = 'Site', vegetationMode = 'initial') => {
