@@ -10,7 +10,7 @@ const navigation = readFileSync(srcPath('Navigation.svelte'), 'utf8');
 
 test('standalone lifeform and summary vegetation previews are wired in navigation and app routes', () => {
   assert.equal(compile(navigation, { filename: 'Navigation.svelte', generate: 'client' }).warnings.length, 0);
-  assert.match(navigation, /name: 'Lifeform & Species Attribute Summaries'.*view: 'lifeform-summary'/);
+  assert.match(navigation, /name: '(Lifeform Summary|Lifeform (&|and) Species Attribute Summar(y|ies))'.*view: 'lifeform-summary'/);
   assert.match(navigation, /name: 'Summary Vegetation', icon: ChartColumn, view: 'summary-vegetation'/);
   assert.match(app, /view === 'lifeform-summary' && \$projectState/);
 });

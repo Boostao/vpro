@@ -114,12 +114,13 @@
 </section>
 
 <style>
-  .external-transfer { min-width: 0; padding: 1rem; border: 1px solid #d6d3d1; border-radius: .5rem; }
-  h3 { font-weight: 600; } p, dl { margin: .75rem 0; } [role="alert"] { color: #991b1b; }
-  .scope { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; } dt { font-weight: 600; }
+  .external-transfer { min-width: 0; padding: 1rem; border: 1px solid #d8d8d8; border-top: 3px solid #003366; border-radius: .5rem; background: #ffffff; color: #313132; }
+  h3 { font-weight: 600; color: #003366; } p, dl { margin: .75rem 0; } [role="alert"] { color: #d8292f; }
+  .scope { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; } dt { font-weight: 600; color: #003366; }
   dd { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-  .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; }
-  button { max-width: 100%; padding: .5rem .75rem; border: 1px solid #d6d3d1; border-radius: .375rem; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+  button { max-width: 100%; padding: .5rem .75rem; border: 1px solid #003366; border-radius: .375rem; background: #ffffff; color: #003366; }
   button:disabled { opacity: .5; } .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid #e7e5e4; text-align: left; overflow-wrap: anywhere; }
+  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid #d8d8d8; text-align: left; overflow-wrap: anywhere; }
+  thead th { background: #003366; color: #ffffff; }
 </style>

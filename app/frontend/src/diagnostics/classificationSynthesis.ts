@@ -1,5 +1,11 @@
 import type { CancellableRead } from '../shared/readRequests';
-import { ClassificationService } from '../../bindings/github.com/boostao/vpro/app';
+import {
+  ClassificationService,
+  ContextService,
+  ImportExportService,
+  VegetationReportService,
+} from '../../bindings/github.com/boostao/vpro/app';
+import type { HierarchyBreakpointResolution } from '../classification/siteUnitExclusionFilter';
 
 export const EDATOPIC_SMR_ROWS = ['0', '1', '2', '3', '4', '5', '6', '7', '8'] as const;
 export const EDATOPIC_SNR_COLS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
@@ -360,15 +366,85 @@ export const defaultSynthesisBackendPort: SynthesisBackendPort = {
     (ClassificationService.ExportDiagnosticWorkbook(contextId, req) as never),
 };
 
+export function createDefaultPairwiseParams(): Required<
+  Pick<PairwiseParams, 'minPlots' | 'minConstancy' | 'noiseConstancy' | 'minDiff' | 'minDd'>
+> {
+  return {
+    minPlots: 2,
+    minConstancy: 60,
+    noiseConstancy: 10,
+    minDiff: 0.5,
+    minDd: 0.5,
+  };
+}
+
 export function createDefaultSynthesisOptions(): SynthesisOptions {
   return {
     unitSource: 'auto',
     lumpTable: '',
+    lumpDbPath: '',
     excludeStandardModifiers: true,
     excludePatterns: [],
     significanceBasis: 'all_plots',
     minMaxPresencePct: 0,
+    pairwise: createDefaultPairwiseParams(),
   };
+}
+
+export async function chooseExternalSQLiteTarget(contextId: string) {
+  return ContextService.ChooseExternalSQLiteFile(contextId);
+}
+
+export async function discoverExternalSynthesisLumps(
+  contextId: string,
+  externalDbPath: string
+): Promise<SynthesisLumpTableOption[]> {
+  if (!externalDbPath) return [];
+  const rows = (await ImportExportService.DiscoverLumpTables(contextId, [externalDbPath])) ?? [];
+  return rows.map(row => ({
+    name: row.name,
+    tableName: row.tableName,
+    dbPath: row.databasePath || externalDbPath,
+    rowCount: row.rowCount,
+    activeCount: row.activeCount,
+  }));
+}
+
+export function resolveSynthesisHierarchyBreakpoints(
+  contextId: string,
+  breakpointPolicy: 'lowest' | 'highest'
+): CancellableRead<HierarchyBreakpointResolution | null> {
+  return VegetationReportService.ResolveHierarchyBreakpointUnits(contextId, {
+    options: { breakpointPolicy },
+  } as never) as unknown as CancellableRead<HierarchyBreakpointResolution | null>;
+}
+
+export interface BreakpointUnitRollup {
+  breakpointUnit: string;
+  descendantUnits: string[];
+  plotCount: number;
+  speciesCount: number;
+}
+
+export function groupUnitsByHierarchyBreakpoints(
+  snapshot: SynthesisSnapshot | null,
+  resolution: HierarchyBreakpointResolution | null
+): BreakpointUnitRollup[] {
+  if (!snapshot || !resolution || !Array.isArray(resolution.buckets)) return [];
+  const unitMap = new Map(snapshot.units.map(u => [u.siteUnit, u]));
+  return resolution.buckets.map(bucket => {
+    const members = (bucket.sourceUnits ?? []).filter((code: string) => unitMap.has(code));
+    const plotSum = members.reduce((acc: number, code: string) => acc + (unitMap.get(code)?.plotCount ?? 0), 0);
+    const activeSpecies = snapshot.species.filter(row =>
+      row.cells.some(cell => members.includes(cell.siteUnit) && cell.presentPlots > 0)
+    ).length;
+    return {
+      breakpointUnit: bucket.breakpointUnit,
+      descendantUnits: members,
+      plotCount: plotSum > 0 ? plotSum : bucket.plotCount,
+      speciesCount: activeSpecies,
+    };
+  });
 }
 
 export interface SpeciesMatrixSection {

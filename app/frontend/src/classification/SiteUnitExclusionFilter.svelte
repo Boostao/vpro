@@ -78,12 +78,31 @@
     onBusyChange?.(busy);
   });
 
+  function dispatchExclusionEvent(extra: {
+    summaryPreview?: SummaryVegetationExclusionPreview;
+    longPreview?: LongVegetationExclusionPreview;
+  } = {}) {
+    if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('vpro:site-unit-exclusion-update', {
+        detail: {
+          reportMode,
+          rules: $state.snapshot(rules),
+          useHierarchyBreakpoints,
+          breakpointOptions: $state.snapshot(breakpointOptions),
+          ...extra,
+        },
+      })
+    );
+  }
+
   function emitChange() {
     onRulesChange?.(
       $state.snapshot(rules),
       useHierarchyBreakpoints,
       $state.snapshot(breakpointOptions)
     );
+    dispatchExclusionEvent();
   }
 
   async function refreshExclusionPreview() {
@@ -151,6 +170,7 @@
           breakpoints: res.breakpoints,
         };
         onSummaryPreview?.(res);
+        dispatchExclusionEvent({ summaryPreview: res });
       } else {
         const res = await reads.track(
           port.previewLongWithExclusions(contextId, {
@@ -170,6 +190,7 @@
           breakpoints: res.breakpoints,
         };
         onLongPreview?.(res);
+        dispatchExclusionEvent({ longPreview: res });
       }
     } catch (err) {
       if (reqGen === generation) {
@@ -435,12 +456,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
+    background: #f2f2f2;
+    border: 1px solid #d8d8d8;
     border-left: 4px solid #003366;
     border-radius: 4px;
     padding: 0.85rem 1rem;
     min-width: 0;
+    color: #313132;
   }
   .vpro-sux-header {
     display: flex;
@@ -484,19 +506,19 @@
   }
   .vpro-sux-chip.disabled {
     opacity: 0.55;
-    border-color: #94a3b8;
+    border-color: #d8d8d8;
   }
   .vpro-sux-mode-tag {
     font-size: 0.66rem;
-    background: #e2e8f0;
-    color: #334155;
+    background: #d8d8d8;
+    color: #313132;
     padding: 0.05rem 0.35rem;
     border-radius: 3px;
   }
   .vpro-sux-remove {
     border: 0;
     background: transparent;
-    color: #991b1b;
+    color: #d8292f;
     font-weight: 700;
     padding: 0 2px;
   }
@@ -521,13 +543,14 @@
   .vpro-sux-bp-opts select {
     min-height: 30px;
     padding: 0.2rem 0.45rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #d8d8d8;
     border-radius: 3px;
     font-size: 0.8rem;
     background: #ffffff;
+    color: #313132;
   }
   .vpro-sux-breakpoints {
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid #d8d8d8;
     padding-top: 0.5rem;
     display: grid;
     gap: 0.45rem;
@@ -538,11 +561,11 @@
     align-items: center;
     gap: 0.4rem !important;
     font-size: 0.8rem;
-    color: #1e293b;
+    color: #313132;
   }
   .vpro-sux-summary {
     background: #ffffff;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d8d8d8;
     border-top: 2px solid #fcba19;
     padding: 0.55rem 0.75rem;
     border-radius: 4px;
@@ -562,9 +585,9 @@
   .vpro-sux-alert {
     margin: 0;
     padding: 0.45rem 0.7rem;
-    background: #fef2f2;
-    border-left: 4px solid #b91c1c;
-    color: #991b1b;
+    background: rgba(216, 41, 47, 0.08);
+    border-left: 4px solid #d8292f;
+    color: #d8292f;
     font-size: 0.8rem;
   }
   .vpro-btn-primary {
@@ -583,7 +606,7 @@
     padding: 0.3rem 0.65rem;
     background: #ffffff;
     color: #003366;
-    border: 1px solid #94a3b8;
+    border: 1px solid #003366;
     border-radius: 4px;
     font-size: 0.8rem;
   }

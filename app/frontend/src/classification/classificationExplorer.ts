@@ -1,5 +1,14 @@
 import type { CancellableRead } from '../shared/readRequests';
-import { ClassificationService } from '../../bindings/github.com/boostao/vpro/app';
+import {
+  ClassificationService,
+  ContextService,
+  type BECSiteSeries,
+  type DeleteUserSiteUnitRequest,
+  type SaveHierarchyTableAsRequest,
+  type UpsertUserSiteUnitRequest,
+  type UserSiteUnitEntry,
+  type UserSiteUnitImportResult,
+} from '../../bindings/github.com/boostao/vpro/app';
 
 export type ExplorerMode = 'su_tree' | 'hierarchy_tree' | 'hierarchy_flat';
 
@@ -295,6 +304,20 @@ export interface SaveFlatHierarchyRequest {
   rows: FlatHierarchyRow[];
 }
 
+export type {
+  BECSiteSeries,
+  DeleteUserSiteUnitRequest,
+  SaveHierarchyTableAsRequest,
+  UpsertUserSiteUnitRequest,
+  UserSiteUnitEntry,
+  UserSiteUnitImportResult,
+};
+
+export interface BECZoneSummary {
+  zone: string;
+  description: string;
+}
+
 export interface ClassificationBackendPort {
   createSUTable(contextId: string, req: CreateSUTableRequest): Promise<SUTableLifecycleResult>;
   saveSUTableAs(contextId: string, req: SaveSUTableAsRequest): Promise<SUTableLifecycleResult>;
@@ -304,6 +327,26 @@ export interface ClassificationBackendPort {
     contextId: string,
     req: BECUnitPickerRequest
   ): CancellableRead<BECUnitPickerChoice[]>;
+  searchBECSiteSeries?: (
+    zone: string | null,
+    subZone: string | null,
+    query: string,
+    limit: number
+  ) => CancellableRead<BECUnitPickerChoice[]>;
+  listBECZones?: () => CancellableRead<BECZoneSummary[]>;
+  listUserSiteUnitList?: (contextId: string) => CancellableRead<UserSiteUnitEntry[]>;
+  saveUserSiteUnitEntry?: (
+    contextId: string,
+    req: UpsertUserSiteUnitRequest
+  ) => Promise<UserSiteUnitEntry | null>;
+  deleteUserSiteUnitEntry?: (contextId: string, req: DeleteUserSiteUnitRequest) => Promise<void>;
+  exportUserSiteUnitListCSV?: (contextId: string) => Promise<string>;
+  importUserSiteUnitListCSV?: (
+    contextId: string,
+    csvText: string,
+    overwriteExisting: boolean
+  ) => Promise<UserSiteUnitImportResult | null>;
+  chooseNewSQLiteProjectFile?: (contextId: string, suggestedProject: string) => Promise<string>;
   assignPlotsToSiteUnit(
     contextId: string,
     req: AssignPlotsToSiteUnitRequest
@@ -318,6 +361,10 @@ export interface ClassificationBackendPort {
     contextId: string,
     req: CreateHierarchyTableRequest
   ): Promise<HierarchyTableLifecycleResult>;
+  saveHierarchyTableAs?: (
+    contextId: string,
+    req: SaveHierarchyTableAsRequest
+  ) => Promise<HierarchyTableLifecycleResult | null>;
   addHierarchyNode(
     contextId: string,
     req: HierarchyAddNodeRequest
@@ -344,6 +391,25 @@ export interface ClassificationBackendPort {
   ): Promise<HierarchyMutationResult>;
 }
 
+export function becSiteSeriesToPickerChoice(row: BECSiteSeries): BECUnitPickerChoice {
+  const code = (
+    row.mergedBGC ||
+    row.ssCode ||
+    `${row.zone ?? ''}${row.subZone ?? ''}${row.siteSeries ? `/${row.siteSeries}` : ''}`
+  ).trim();
+  return {
+    siteSeries: code,
+    longName: (row.name || row.description || '').trim(),
+    scientificName: (row.plantAssociation || '').trim(),
+    zone: (row.zone || '').trim(),
+    subZone: (row.subZone || '').trim(),
+    alliance: row.alliance ?? undefined,
+    suballiance: row.suballiance ?? undefined,
+    source: 'becdb_v13',
+    maskValid: isValidBECUnitMask(code),
+  };
+}
+
 export const defaultClassificationBackendPort: ClassificationBackendPort = {
   createSUTable: (contextId, req) =>
     (ClassificationService.CreateSUTable(contextId, req) as never),
@@ -355,6 +421,43 @@ export const defaultClassificationBackendPort: ClassificationBackendPort = {
     (ClassificationService.GetPlotInspectorSummary(contextId, plotNumber) as never),
   searchBECUnitPicker: (contextId, req) =>
     (ClassificationService.SearchBECUnitPicker(contextId, req) as never),
+  searchBECSiteSeries: (zone, subZone, query, limit) => {
+    const raw = ClassificationService.SearchBECSiteSeries(zone, subZone, query, limit);
+    const mapped = raw.then(rows => (rows ?? []).map(becSiteSeriesToPickerChoice)) as CancellableRead<
+      BECUnitPickerChoice[]
+    >;
+    mapped.cancel = () => raw.cancel();
+    return mapped;
+  },
+  listBECZones: () => {
+    const raw = ClassificationService.ListBECZones();
+    const mapped = raw.then(rows =>
+      (rows ?? [])
+        .map(row => ({
+          zone: (row.zone ?? '').trim(),
+          description: (row.description ?? '').trim(),
+        }))
+        .filter(row => row.zone !== '')
+    ) as CancellableRead<BECZoneSummary[]>;
+    mapped.cancel = () => raw.cancel();
+    return mapped;
+  },
+  listUserSiteUnitList: contextId =>
+    (ClassificationService.ListUserSiteUnitList(contextId) as never),
+  saveUserSiteUnitEntry: (contextId, req) =>
+    (ClassificationService.SaveUserSiteUnitEntry(contextId, req) as never),
+  deleteUserSiteUnitEntry: (contextId, req) =>
+    (ClassificationService.DeleteUserSiteUnitEntry(contextId, req) as never),
+  exportUserSiteUnitListCSV: contextId =>
+    (ClassificationService.ExportUserSiteUnitListCSV(contextId) as never),
+  importUserSiteUnitListCSV: (contextId, csvText, overwriteExisting) =>
+    (ClassificationService.ImportUserSiteUnitListCSV(
+      contextId,
+      csvText,
+      overwriteExisting
+    ) as never),
+  chooseNewSQLiteProjectFile: (contextId, suggestedProject) =>
+    (ContextService.ChooseNewSQLiteProjectFile(contextId, suggestedProject) as never),
   assignPlotsToSiteUnit: (contextId, req) =>
     (ClassificationService.AssignPlotsToSiteUnit(contextId, req) as never),
   undoSUAssignment: (contextId, historyId) =>
@@ -365,6 +468,8 @@ export const defaultClassificationBackendPort: ClassificationBackendPort = {
     (ClassificationService.GetHierarchyExplorer(contextId) as never),
   createHierarchyTable: (contextId, req) =>
     (ClassificationService.CreateHierarchyTable(contextId, req) as never),
+  saveHierarchyTableAs: (contextId, req) =>
+    (ClassificationService.SaveHierarchyTableAs(contextId, req) as never),
   addHierarchyNode: (contextId, req) =>
     (ClassificationService.AddHierarchyNode(contextId, req) as never),
   renameHierarchyNode: (contextId, req) =>

@@ -210,8 +210,11 @@ test('edatopic heatmap indexer and SVG dendrogram coordinate layout scale determ
     ],
   });
   assert.equal(indexed.maxCount, 5);
+  assert.equal(wb.edatopicCellColor(0, 5).bg, '#F2F2F2');
   assert.equal(wb.edatopicCellColor(5, 5).bg, '#003366');
-  assert.equal(wb.edatopicCellColor(1, 5).bg, '#dbeafe');
+  assert.equal(wb.edatopicCellColor(3, 5).bg, '#1A5A96');
+  assert.equal(wb.edatopicCellColor(1, 5).bg, '#D8D8D8');
+  assert.equal(wb.edatopicCellColor(1, 5).fg, '#003366');
 
   const layout = wb.computeDendrogramSVGLayout({
     maxHeight: 1.0,
@@ -230,6 +233,108 @@ test('edatopic heatmap indexer and SVG dendrogram coordinate layout scale determ
   assert.equal(layout.leaves.length, 2);
   assert.equal(layout.segments.length, 3);
   assert.ok(layout.cutLineY > 24 && layout.cutLineY < 234);
+
+  const longLabelLayout = wb.computeDendrogramSVGLayout({
+    maxHeight: 1.0,
+    cutHeight: 0.5,
+    newick: '(PLOT_A:0.2,PLOT_LONG:0.2);',
+    segments: [],
+    leaves: [
+      { plotNumber: 'PLOT_A', x: 1, order: 1, clusterUnit: 'CL_01', isNoise: false },
+      { plotNumber: 'LONG_PLOT_123456', x: 2, order: 2, clusterUnit: 'SUBALPINE_MOUNTAIN_HEMLOCK_UNIT_12', isNoise: false },
+    ],
+  });
+  assert.ok(
+    longLabelLayout.height > layout.height,
+    `expected long angled leaf labels to expand SVG height dynamically (${longLabelLayout.height} vs ${layout.height})`
+  );
+  assert.ok(
+    longLabelLayout.width > layout.width,
+    `expected rightmost long angled label to widen SVG right margin (${longLabelLayout.width} vs ${layout.width})`
+  );
+});
+
+test('S6.5 vegclust vs BETA_FLEXIBLE / PAM method controls, beta validation, and r-sidecar-root tour marker', async () => {
+  assert.equal(wb.isVegclustMethod('NC'), true);
+  assert.equal(wb.isVegclustMethod('KM'), true);
+  assert.equal(wb.isVegclustMethod('FCM'), true);
+  assert.equal(wb.isVegclustMethod('BETA_FLEXIBLE'), false);
+  assert.equal(wb.isVegclustMethod('PAM'), false);
+
+  assert.equal(wb.usesDissimilarity('NC'), false);
+  assert.equal(wb.usesDissimilarity('BETA_FLEXIBLE'), true);
+  assert.equal(wb.usesDissimilarity('PAM'), true);
+  assert.equal(wb.usesHierarchicalLinkage('HCLUST'), true);
+  assert.equal(wb.usesHierarchicalLinkage('NC'), false);
+  assert.equal(wb.usesHierarchicalLinkage('PAM'), false);
+  assert.equal(wb.usesBetaParameter('BETA_FLEXIBLE'), true);
+
+  assert.match(
+    wb.validateClusteringDraft({
+      method: 'BETA_FLEXIBLE',
+      distance: 'bray',
+      linkage: 'ward.D2',
+      transform: 'sqrt',
+      k: 4,
+      fuzziness: 1.25,
+      dnoise: 0.75,
+      beta: -1.0,
+      applyLump: true,
+      useActiveSu: false,
+      materializeCandidate: false,
+    }),
+    /strictly between -1\.0 and 1\.0/
+  );
+  assert.equal(
+    wb.validateClusteringDraft({
+      method: 'PAM',
+      distance: 'chord',
+      linkage: 'ward.D2',
+      transform: 'hellinger',
+      k: 3,
+      fuzziness: 1.25,
+      dnoise: 0.75,
+      applyLump: false,
+      useActiveSu: true,
+      materializeCandidate: false,
+    }),
+    null
+  );
+
+  const svelteSrc = read('RSidecarWorkbench.svelte');
+  const seededClusteringSrc = svelteSrc.replace(
+    "let activeTab = $state<SidecarTab>('runtime');",
+    "let activeTab = $state<SidecarTab>('clustering');"
+  );
+  const ClusteringComp = serverComponent(seededClusteringSrc, 'RSidecarWorkbench.svelte', {
+    './rSidecarWorkbench': wb,
+  });
+  const html = render(ClusteringComp, {
+    props: { contextId: 'ctx-cluster', activeProject: 'Sample', activeSu: 'Sample' },
+  }).body;
+  assert.match(html, /data-tour="r-sidecar-root"/);
+  assert.match(html, /value="BETA_FLEXIBLE"/);
+  assert.match(html, /value="PAM"/);
+  assert.match(html, /<select[^>]*data-cluster-distance[^>]*\sdisabled=""/);
+  assert.match(html, /<select[^>]*data-cluster-linkage[^>]*\sdisabled=""/);
+  assert.match(html, /data-cluster-unit-prefix/);
+  assert.match(html, /data-cluster-bgc-filter/);
+  assert.match(html, /data-cluster-lump-name/);
+
+  const seededBetaSrc = seededClusteringSrc.replace(
+    "let clusterMethod = $state<ClusteringMethod>('NC');",
+    "let clusterMethod = $state<ClusteringMethod>('BETA_FLEXIBLE');"
+  );
+  const BetaComp = serverComponent(seededBetaSrc, 'RSidecarWorkbench.svelte', {
+    './rSidecarWorkbench': wb,
+  });
+  const betaHtml = render(BetaComp, {
+    props: { contextId: 'ctx-beta', activeProject: 'Sample', activeSu: 'Sample' },
+  }).body;
+  assert.match(betaHtml, /data-cluster-beta-field/);
+  assert.doesNotMatch(betaHtml, /<select[^>]*data-cluster-distance[^>]*\sdisabled=""/);
+  assert.match(betaHtml, /<select[^>]*data-cluster-distance[^>]*aria-disabled="false"/);
+  assert.match(betaHtml, /<select[^>]*data-cluster-linkage[^>]*\sdisabled=""/);
 });
 
 test('RSidecarWorkbench SSR renders BC Gov #003366/#FCBA19 styling, 4 tabs, and zero emojis', () => {

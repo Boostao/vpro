@@ -59,7 +59,7 @@
     if (busy || mutationHeld || view.busy || view.blocked) return;
     cancel(); error = ''; preferences.editTitle(raw);
   }
-  function editFlag(key: typeof flags[number]['key'], raw: boolean) {
+  function editFlag(key: typeof flags[number]['key'] | 'hierarchyHeader', raw: boolean) {
     if (busy || mutationHeld || view.busy || view.blocked) return;
     cancel(); error = '';
     try {
@@ -106,8 +106,10 @@
       {/each}
       <label for="summary-presentation-hierarchyHeader">
         <input id="summary-presentation-hierarchyHeader" data-source-control="optIncludeHierarchyHeader"
-          type="checkbox" checked={view.draft?.hierarchyHeader ?? false} disabled />
-        <span>Include hierarchy header <small>(saved, read-only; hierarchy scope unavailable)</small></span>
+          type="checkbox" checked={view.draft ? view.draft.hierarchyHeader : false}
+          disabled={busy || mutationHeld || view.busy || view.blocked || !view.draft}
+          onchange={event => { const raw = event.currentTarget.checked; editFlag('hierarchyHeader', raw); }} />
+        <span>Include hierarchy header</span>
       </label>
     </div>
     {#if view.draft}
@@ -144,23 +146,22 @@
 </section>
 
 <style>
-  .summary-presentation { min-width: 0; margin: 0.75rem 0; }
-  fieldset { min-width: 0; border: 1px solid #9ca3af; border-radius: 0.5rem; padding: 0.75rem; }
-  legend { font-weight: 600; }
+  .summary-presentation { min-width: 0; margin: 0.75rem 0; color: #313132; }
+  fieldset { min-width: 0; border: 1px solid #D8D8D8; border-radius: 0.5rem; padding: 0.75rem; background: #FFFFFF; }
+  legend { font-weight: 600; color: #003366; }
   .title { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
-  .title input { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #6b7280; border-radius: 0.25rem; padding: 0.5rem; }
+  .title input { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #D8D8D8; border-radius: 0.25rem; padding: 0.5rem; background: #FFFFFF; color: #313132; }
   .flags { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; margin-top: 0.75rem; }
   .flags label { display: flex; align-items: flex-start; gap: 0.5rem; min-width: 0; min-height: 2.75rem; overflow-wrap: anywhere; }
   .flags input { flex: none; margin-top: 0.25rem; }
-  small { display: block; }
   dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; margin-top: 0.75rem; }
   dl div { min-width: 0; overflow-wrap: anywhere; }
-  dt { font-weight: 600; }
+  dt { font-weight: 600; color: #003366; }
   dd { margin: 0; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
-  button { min-height: 2.75rem; max-width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #6b7280; border-radius: 0.25rem; }
+  button { min-height: 2.75rem; max-width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #003366; border-radius: 0.25rem; background: #FFFFFF; color: #003366; font-weight: 600; }
   button:disabled { opacity: 0.55; }
-  .error { color: #991b1b; overflow-wrap: anywhere; margin-bottom: 0.5rem; }
-  .guidance { font-size: 0.875rem; margin-top: 0.75rem; overflow-wrap: anywhere; }
+  .error { color: #D8292F; overflow-wrap: anywhere; margin-bottom: 0.5rem; font-weight: 600; }
+  .guidance { font-size: 0.875rem; margin-top: 0.75rem; overflow-wrap: anywhere; color: #474543; }
   @media (max-width: 640px) { .flags, dl { grid-template-columns: minmax(0, 1fr); } }
 </style>

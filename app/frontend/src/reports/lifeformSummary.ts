@@ -69,9 +69,9 @@ function singleCoefficient(value: number): bigint {
   return bits >>> 31 ? -coefficient : coefficient;
 }
 
-export function validateLifeformSummary(value: unknown, owner: LifeformSummaryOwner): LifeformSummaryPreview {
+export function validateLifeformSummary(value: unknown, owner: LifeformSummaryOwner, allowDynamic = false): LifeformSummaryPreview {
   if (!shape(value, ['contextId', 'projectPath', 'suPath', 'report']) ||
-      !Object.values(owner).every(text) || owner.contextId === '' || owner.su === 'None' || owner.su === 'USysSuTableDynamic' ||
+      !Object.values(owner).every(text) || owner.contextId === '' || owner.su === 'None' || (!allowDynamic && owner.su === 'USysSuTableDynamic') ||
       value.contextId !== owner.contextId || value.projectPath !== owner.projectPath || value.suPath !== owner.suPath ||
       !shape(value.report, ['project', 'su', 'querySource', 'ordering', 'memberships', 'entries', 'catalogue', 'units'])) reject();
   const report = value.report;

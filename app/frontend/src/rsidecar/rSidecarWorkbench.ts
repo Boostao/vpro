@@ -6,11 +6,27 @@ export const SU_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 export type ClimateRefPeriod = '1961_1990' | '1991_2020';
 export type ClimateGroupBy = 'bgc' | 'site_unit';
-export type ClusteringMethod = 'NC' | 'KM' | 'FCM' | 'HCLUST';
+export type ClusteringMethod = 'NC' | 'KM' | 'FCM' | 'HCLUST' | 'BETA_FLEXIBLE' | 'PAM';
 export type EcologicalDistance = 'bray' | 'chord' | 'jaccard' | 'kulczynski' | 'euclidean';
 export type HierarchicalLinkage = 'ward.D2' | 'average' | 'complete' | 'single';
 export type AbundanceTransform = 'sqrt' | 'log1p' | 'hellinger' | 'chord' | 'raw';
 export type QuartoGuideType = 'single_unit' | 'bgc_unit';
+
+export function isVegclustMethod(method: ClusteringMethod): boolean {
+  return method === 'NC' || method === 'KM' || method === 'FCM';
+}
+
+export function usesDissimilarity(method: ClusteringMethod): boolean {
+  return !isVegclustMethod(method);
+}
+
+export function usesHierarchicalLinkage(method: ClusteringMethod): boolean {
+  return method === 'HCLUST';
+}
+
+export function usesBetaParameter(method: ClusteringMethod): boolean {
+  return method === 'BETA_FLEXIBLE';
+}
 
 export interface RPackageStatus {
   name: string;
@@ -198,6 +214,7 @@ export interface ClusteringRequest {
   k: number;
   fuzziness: number;
   dnoise: number;
+  beta?: number;
   cutHeight?: number;
   applyLump: boolean;
   lumpName?: string;
@@ -334,6 +351,17 @@ export function validateClusteringDraft(req: ClusteringRequest): string | null {
   if (!Number.isFinite(req.dnoise) || req.dnoise < 0.05 || req.dnoise > 5.0) {
     return 'Noise distance (dnoise) must be between 0.05 and 5.0.';
   }
+  if (req.method === 'BETA_FLEXIBLE' || req.beta !== undefined) {
+    const beta = req.beta ?? -0.25;
+    if (!Number.isFinite(beta) || beta <= -1.0 || beta >= 1.0) {
+      return 'Flexible-beta parameter (beta) must be strictly between -1.0 and 1.0.';
+    }
+  }
+  if (req.lumpName !== undefined && req.lumpName !== '') {
+    if (!wellFormedUTF16(req.lumpName) || req.lumpName.length > 64 || /[\x00\r\n]/.test(req.lumpName)) {
+      return 'Lump table name must be well-formed UTF-16 up to 64 characters.';
+    }
+  }
   if (req.unitPrefix !== undefined && req.unitPrefix !== '') {
     if (!wellFormedUTF16(req.unitPrefix) || req.unitPrefix.length > 24 || /[\x00\r\n]/.test(req.unitPrefix)) {
       return 'Cluster unit prefix must be well-formed UTF-16 up to 24 characters.';
@@ -400,16 +428,16 @@ export function validateQuartoGuideDraft(req: QuartoGuideRequest): string | null
 
 export function edatopicCellColor(count: number, maxCount: number): { bg: string; fg: string } {
   if (!count || count <= 0 || maxCount <= 0) {
-    return { bg: '#f8fafc', fg: '#94a3b8' };
+    return { bg: '#F2F2F2', fg: '#474543' };
   }
   const ratio = count / maxCount;
   if (ratio >= 0.75) {
-    return { bg: '#003366', fg: '#ffffff' };
+    return { bg: '#003366', fg: '#FFFFFF' };
   }
   if (ratio >= 0.4) {
-    return { bg: '#1d4ed8', fg: '#ffffff' };
+    return { bg: '#1A5A96', fg: '#FFFFFF' };
   }
-  return { bg: '#dbeafe', fg: '#0f172a' };
+  return { bg: '#D8D8D8', fg: '#003366' };
 }
 
 export function indexEdatopicCells(matrix: EdatopicGridMatrix | null | undefined): {
@@ -450,26 +478,54 @@ export function computeDendrogramSVGLayout(
   customCutHeight?: number
 ): ScaledDendrogramLayout {
   const padLeft = 48;
-  const padRight = 24;
   const padTop = 24;
-  const padBottom = 86;
   const plotHeight = 210;
+  const basePadBottom = 86;
+  const basePadRight = 24;
 
   if (!dendro || !Array.isArray(dendro.leaves) || dendro.leaves.length === 0) {
-    return { width: 640, height: padTop + plotHeight + padBottom, cutLineY: padTop + plotHeight * 0.5, segments: [], leaves: [] };
+    return {
+      width: 640,
+      height: padTop + plotHeight + basePadBottom,
+      cutLineY: padTop + plotHeight * 0.5,
+      segments: [],
+      leaves: [],
+    };
   }
 
   const leafCount = dendro.leaves.length;
   const stepX = Math.max(18, Math.min(34, Math.floor(760 / Math.max(1, leafCount))));
   const innerWidth = Math.max(480, leafCount * stepX);
-  const width = padLeft + innerWidth + padRight;
-  const height = padTop + plotHeight + padBottom;
-  const maxH = Math.max(0.0001, dendro.maxHeight || 1);
+  const angleRad = (65 * Math.PI) / 180;
+  const sinA = Math.sin(angleRad);
+  const cosA = Math.cos(angleRad);
+  const pxPerChar = 6.8;
 
   const mapX = (xVal: number) => {
     if (leafCount <= 1) return padLeft + innerWidth / 2;
     return padLeft + ((xVal - 1) / (leafCount - 1)) * innerWidth;
   };
+
+  let maxLabelWidthPx = 0;
+  let maxRightEdgeX = padLeft + innerWidth + basePadRight;
+  for (const leaf of dendro.leaves) {
+    const labelText = `${leaf.plotNumber} (${leaf.clusterUnit})`;
+    const labelLenPx = labelText.length * pxPerChar;
+    if (labelLenPx > maxLabelWidthPx) {
+      maxLabelWidthPx = labelLenPx;
+    }
+    const rightEnd = mapX(leaf.x) + labelLenPx * cosA + 16;
+    if (rightEnd > maxRightEdgeX) {
+      maxRightEdgeX = rightEnd;
+    }
+  }
+
+  const padBottom = Math.max(basePadBottom, Math.ceil(maxLabelWidthPx * sinA) + 32);
+  const padRight = Math.max(basePadRight, Math.ceil(maxRightEdgeX - (padLeft + innerWidth)));
+  const width = padLeft + innerWidth + padRight;
+  const height = padTop + plotHeight + padBottom;
+  const maxH = Math.max(0.0001, dendro.maxHeight || 1);
+
   const mapY = (hVal: number) => {
     const clamped = Math.max(0, Math.min(maxH, hVal));
     return padTop + plotHeight * (1 - clamped / maxH);

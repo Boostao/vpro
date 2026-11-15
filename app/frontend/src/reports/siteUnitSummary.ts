@@ -16,7 +16,14 @@ const keys = ['Zone', 'SubZone', 'Elevation', 'Aspect', 'SlopeGradient', 'MesoSl
 export const summaryLifeformCaptions = ['Genus-level and mixed', 'Coniferous Tree', 'Deciduous Tree',
   'Evergreen Shrub', 'Deciduous Shrub', 'Ferns or Fern-ally', 'Graminoid', 'Forb',
   'Parasite or Saprophyte', 'Moss', 'Liverwort', 'Lichen', 'Dwarf woody plant', 'Macroalgae'] as const;
-export type SiteUnitSummaryMode = 'layer' | 'lifeform';
+export type SiteUnitSummaryMode = 'layer' | 'lifeform' | 'strata';
+
+const configuredQuerySources = new Set([
+  'selected-su-filtered-env-admin',
+  'dynamic-su-env-admin',
+  'hierarchy-breakpoints-env-admin',
+  'field-derived-env-admin',
+]);
 
 function completeText(value: unknown): value is string {
   return typeof value === 'string' && completeCell({ storage: 'text', text: value,
@@ -24,9 +31,10 @@ function completeText(value: unknown): value is string {
 }
 
 export function validateSiteUnitSummaryOptions(value: SiteUnitSummaryOptions | null, contextId: string,
-  project: string, projectPath: string, su: string, suPath: string): SiteUnitSummaryOptions {
+  project: string, projectPath: string, su: string, suPath: string, allowConfiguredScope = false): SiteUnitSummaryOptions {
+  const suMissing = allowConfiguredScope ? (value?.siteUnitType === 1 && su === 'None') : su === 'None';
   if (!value || value.contextId !== contextId || value.project !== project ||
-      value.projectPath !== projectPath || value.su !== su || value.suPath !== suPath || su === 'None' ||
+      value.projectPath !== projectPath || value.su !== su || value.suPath !== suPath || suMissing ||
       ![1, 2].includes(value.method) || ![1, 2, 3].includes(value.siteUnitType)) {
     throw new Error('Saved summary options are incomplete or belong to another owned context; no defaults applied.');
   }
@@ -53,18 +61,27 @@ function hasSummaryArrays(value: SiteUnitSummaryPreview): value is ValidatedSite
 
 export function validateSiteUnitSummary(value: SiteUnitSummaryPreview, contextId: string,
   project: string, projectPath: string, su: string, suPath: string, method: number,
-  mode: SiteUnitSummaryMode = 'layer'): ValidatedSiteUnitSummary {
-  if (mode !== 'layer' && mode !== 'lifeform') throw new Error('Summary mode is unavailable.');
+  mode: SiteUnitSummaryMode = 'layer', allowConfiguredScope = false): ValidatedSiteUnitSummary {
+  if (mode !== 'layer' && mode !== 'lifeform' && (!allowConfiguredScope || mode !== 'strata')) throw new Error('Summary mode is unavailable.');
   if (!hasSummaryArrays(value)) throw new Error('Summary arrays are incomplete.');
   const report = value.report;
   const lifeform = mode === 'lifeform';
   const expectedKeys = lifeform ? [...keys.slice(0, 23),
     ...summaryLifeformCaptions.map((_, form) => `Lifeform${form}`), ...keys.slice(27)] : keys;
   const vegetationEnd = lifeform ? 37 : 27;
+  const baseQuerySource = lifeform && report?.querySource?.endsWith('-quickveg-lifeform')
+    ? report.querySource.slice(0, -'-quickveg-lifeform'.length)
+    : report?.querySource ?? '';
+  const querySourceValid = allowConfiguredScope
+    ? configuredQuerySources.has(baseQuerySource) && (!lifeform || report?.querySource === `${baseQuerySource}-quickveg-lifeform`) && !(lifeform && !report?.querySource?.endsWith('-quickveg-lifeform'))
+    : report?.querySource === (lifeform ? 'selected-su-filtered-env-admin-quickveg-lifeform' : 'selected-su-filtered-env-admin');
+  const suRejected = allowConfiguredScope
+    ? (su === 'None' && baseQuerySource !== 'hierarchy-breakpoints-env-admin' && baseQuerySource !== 'field-derived-env-admin')
+    : su === 'None';
   if (!value || value.contextId !== contextId || value.projectPath !== projectPath || value.suPath !== suPath ||
-      !report || report.project !== project || report.su !== su || su === 'None' ||
+      !report || report.project !== project || report.su !== su || suRejected ||
       ![1, 2].includes(method) || report.method !== method ||
-      report.querySource !== (lifeform ? 'selected-su-filtered-env-admin-quickveg-lifeform' : 'selected-su-filtered-env-admin') ||
+      !querySourceValid ||
       !Array.isArray(report.fields) || report.fields.length !== expectedKeys.length ||
       !Array.isArray(report.units) || !Array.isArray(report.memberships)) {
     throw new Error('Summary belongs to a different or incomplete context/method.');

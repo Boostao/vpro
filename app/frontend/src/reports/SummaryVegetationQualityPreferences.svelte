@@ -77,8 +77,11 @@
   {/each}
   <fieldset>
     <legend>Data Quality Filter</legend>
-    <label class="flag"><input type="checkbox" checked={view.saved?.enforce ?? false} disabled
-      data-source-control="optEnforceQC" />Enforce QC (saved, read-only)</label>
+    <label class="flag" for="summary-quality-enforce"><input id="summary-quality-enforce" type="checkbox"
+      checked={view.draft ? view.draft.enforce : false}
+      disabled={busy || mutationHeld || view.busy || view.blocked || !view.draft}
+      onchange={event => { const raw = event.currentTarget.checked; cancel(); error = ''; preferences.editEnforce(raw); }}
+      data-source-control="optEnforceQC" />Enforce QC (DataQuality &amp; BEC_Use filtering)</label>
     <div class="fields">
       {#each summaryVegetationQualityMinimumFields as field}
         <label for={'summary-quality-' + field.key}>
@@ -145,25 +148,23 @@
   {/if}
   <p class="guidance">Load before editing; disabled unloaded controls do not represent saved values.
     Suggestions are optional, not DataQuality ranks. Literal text and unchanged historical values are retained.
-    Save changes only these quality YAML options; the BEC minimum is shared with other report preferences.
-    Enforcement is read-only because its original callback reloads the form and changes other settings.
-    This panel does not enable QC or claim automatic Access Change typing timing.
+    Save updates these quality YAML options including Enforce QC (DataQuality and BEC_Use plot filtering).
     Unknown outcomes require explicit owned Load, never blind Save replay.</p>
 </section>
 
 <style>
-  .summary-quality { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; }
-  fieldset { min-width: 0; border: 1px solid #cbd5e1; border-radius: .4rem; padding: .75rem; }
-  legend { padding: 0 .35rem; }
+  .summary-quality { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; color: #313132; }
+  fieldset { min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .75rem; background: #FFFFFF; }
+  legend { padding: 0 .35rem; font-weight: 600; color: #003366; }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; margin-top: .75rem; }
   label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; min-width: 0; }
-  input[type="text"] { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #cbd5e1; border-radius: .3rem; padding: .45rem; }
+  input[type="text"] { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #D8D8D8; border-radius: .3rem; padding: .45rem; background: #FFFFFF; color: #313132; }
   .flag { display: flex; gap: .5rem; align-items: center; }
   .null-options, .actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
   .null-options { margin-top: .75rem; }
-  button { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .5rem .75rem; background: white; }
+  button { border: 1px solid #003366; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; color: #003366; font-weight: 600; }
   button:disabled, input:disabled { opacity: .5; }
-  .error { color: #991b1b; overflow-wrap: anywhere; }
+  .error { color: #D8292F; overflow-wrap: anywhere; font-weight: 600; }
   p, li { overflow-wrap: anywhere; }
-  .guidance { color: #475569; font-size: .85rem; }
+  .guidance { color: #474543; font-size: .85rem; }
 </style>

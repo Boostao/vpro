@@ -96,13 +96,15 @@ test('four text drafts preserve empty, whitespace, case, nonmembers and historic
     }
   }
 });
-test('source enforcement stays readonly; invalid edits do not alter reference authority', async () => {
+test('unlocked enforcement edits cleanly without invalid edits altering reference authority', async () => {
   const session = ready();
   assert.throws(() => session.editNullFlag('enforce', true));
-  session.editDraft({ ...session.view().draft, enforce: !wire.review.values.enforce });
-  assert.match(session.view().draftError, /Form_Load/);
-  await assert.rejects(() => session.save(() => { throw new Error('mutating Load invented'); }));
+  const toggled = !wire.review.values.enforce;
+  session.editEnforce(toggled);
+  assert.equal(session.view().draftError, '');
+  assert.equal(session.view().draft.enforce, toggled);
   session.undo();
+  assert.equal(session.view().draft.enforce, wire.review.values.enforce);
   const original = session.reference();
   const invalid = clone(wire.review);
   invalid.becDefinitions.columns[0].declaredType = 'NUMERIC';
@@ -208,8 +210,8 @@ test('compiled private panel has one labeled control per original quality field 
     assert.ok(html.includes(field.label.replace('>=', '&gt;=')) || html.includes(field.label));
   }
   assert.equal(html.split('data-source-control="optEnforceQC"').length - 1, 1);
-  assert.match(html, /disabled[^>]*data-source-control="optEnforceQC"/);
-  assert.match(html, /does not enable QC/);
+  assert.doesNotMatch(html.match(/<input[^>]*data-source-control="optEnforceQC"[^>]*>/)[0], /\bdisabled\b/);
+  assert.match(html, /Save updates these quality YAML options including Enforce QC/);
 });
 test('actual private panel handlers preserve failed reload guards and cancel late reads without replay', async () => {
   const session = ready();
@@ -291,7 +293,7 @@ test('production root effect combines both retained preference holds without one
   assert.equal(context.summaryPreferenceBusy, false);
   cleanup();
 });
-test('production Summary pane refuses unqualified enforced preview and holds sibling saves during quality mutation', () => {
+test('production Summary pane unlocks enforced preview and holds sibling saves during quality mutation', () => {
   const report = loadTypeScript('summaryVegetation.ts', { './lifeformSummary': lifeform });
   const owner = { ...scope, su: 'NormalSU' };
   const qualitySession = new prefs.SummaryVegetationQualityPreferencesSession(owner);
@@ -301,10 +303,12 @@ test('production Summary pane refuses unqualified enforced preview and holds sib
       './summaryVegetation': report,
       './summaryVegetationQualityPreferenceSessions': { summaryVegetationQualityPreferenceSession: () => qualitySession },
       '../bindings/github.com/boostao/vpro/app': {},
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+      '../classification/siteUnitExclusionFilter': {},
     });
   const html = render(Panel, { props: { ...owner, onBusyChange() {} } }).body;
-  assert.match(html.match(/<button[^>]*data-summary-preview[^>]*>/)[0], /\bdisabled\b/);
-  assert.match(html, /no unfiltered report is returned/);
+  assert.doesNotMatch(html.match(/<button[^>]*data-summary-preview[^>]*>/)[0], /\bdisabled\b/);
+  assert.match(html, /Saved QC enforcement is active/);
   assert.equal(html.split('data-source-control="BEC_Use"').length - 1, 1);
   const unloaded = new prefs.SummaryVegetationQualityPreferencesSession(owner);
   const actions = componentFunctions('SummaryVegetationReport.svelte', ['loadPreferences', 'savePreferences'], {

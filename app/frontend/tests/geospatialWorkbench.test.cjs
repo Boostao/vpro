@@ -254,7 +254,7 @@ test('GeospatialWorkbench, Navigation, App, and CoordinateFields compile cleanly
     pmtiles: { Protocol: class { tile = () => {}; } },
     '@deck.gl/mapbox': { MapboxOverlay: class {} },
     '@deck.gl/layers': { LineLayer: class {}, ScatterplotLayer: class {} },
-    '../bindings/github.com/boostao/vpro/app': { SpatialService: {} },
+    '../bindings/github.com/boostao/vpro/app': { SpatialService: {}, ImportExportService: {} },
     './geospatialWorkbench': wb,
   });
   const html = render(SSRWorkbench, {
@@ -338,7 +338,7 @@ test('GeospatialWorkbench imports bundled maplibre-gl-worker.mjs?worker&url and 
       if (name === 'pmtiles') return { Protocol: class { tile = () => {}; } };
       if (name === '@deck.gl/mapbox') return { MapboxOverlay: class { setProps() {} } };
       if (name === '@deck.gl/layers') return { LineLayer: class {}, ScatterplotLayer: class {} };
-      if (name.includes('bindings/github.com/boostao/vpro/app')) return { SpatialService: {} };
+      if (name.includes('bindings/github.com/boostao/vpro/app')) return { SpatialService: {}, ImportExportService: {} };
       if (name === './geospatialWorkbench') return wb;
       throw new Error(`Unexpected module ${name}`);
     },

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { notifications } from '../shell/notificationService.svelte';
   import {
     defaultLumpEditorPort,
@@ -15,6 +15,7 @@
     type LumpSpec,
     type LumpSpecPreview,
     type LumpTableSummary,
+    type SpeciesItem,
   } from './lumpEditor';
 
   let {
@@ -45,16 +46,20 @@
   let impact = $state.raw<LumpImpactPreview | null>(null);
   let filterQuery = $state('');
 
-  // Create / SaveAs inputs
+  // Create / SaveAs / Delete inputs
   let newTableName = $state('');
   let saveAsTargetName = $state('');
+  let pendingDeleteTable = $state('');
 
-  // Row editor inputs
+  // Row editor & USysAllSpecs browser inputs
   let draftLumpCode = $state('');
   let draftSppCode = $state('');
   let draftUse = $state(true);
   let draftAllowUnlisted = $state(false);
   let editingSppCode = $state('');
+  let speciesSearchQuery = $state('');
+  let speciesSearchResults = $state.raw<SpeciesItem[]>([]);
+  let speciesSearching = $state(false);
 
   // Declarative LumpSpec (Auto-5) state
   let presets = $state.raw<LumpPresetInfo[]>([]);
@@ -112,7 +117,9 @@
       collapseSeedlingAndDeadSuffixes: collapseSeedlingAndDead,
       genusRollups: parseGenusRollupTokens(genusRollupsText),
       nonVascularLifeforms: lifeforms,
-      baseLumpTable: selectedSummary?.isActiveProject ? selectedSummary.tableName : '',
+      baseLumpTable: selectedSummary?.tableName ?? '',
+      baseLumpDbPath:
+        selectedSummary && !selectedSummary.isActiveProject ? selectedSummary.databasePath : '',
       scopeToProjectSpecies: scopeToProject,
     };
   }
@@ -426,10 +433,89 @@
     draftAllowUnlisted = row.sourceCatalog === 'Unlisted';
   }
 
+  async function confirmDeleteSelectedTable() {
+    if (!pendingDeleteTable || !selectedSummary?.isActiveProject || busy || operationHeld || !contextId) {
+      return;
+    }
+    const targetName = pendingDeleteTable;
+    const reqGen = ++generation;
+    const owner = contextId;
+    error = '';
+    notice = '';
+    setBusyState(true);
+    try {
+      await port.deleteLumpTable(owner, targetName);
+      if (reqGen !== generation || owner !== contextId) return;
+      pendingDeleteTable = '';
+      if (selectedTable === targetName) {
+        selectedTable = '';
+        selectedDbPath = '';
+        rows = [];
+        impact = null;
+      }
+      notice = `Deleted lump table ${targetName}.`;
+      onChanged('');
+    } catch (cause) {
+      if (reqGen === generation) error = String(cause);
+      setBusyState(false);
+      return;
+    }
+    setBusyState(false);
+    await refreshTables();
+  }
+
+  async function toggleGroupUse(groupRows: LumpRow[], nextUse: boolean) {
+    if (!selectedSummary?.isActiveProject || busy || operationHeld || !contextId || groupRows.length === 0) {
+      return;
+    }
+    const reqGen = ++generation;
+    const owner = contextId;
+    error = '';
+    setBusyState(true);
+    try {
+      for (const row of groupRows) {
+        await port.toggleLumpRow(owner, selectedTable, row.sppCode, nextUse);
+        if (reqGen !== generation || owner !== contextId) return;
+      }
+      onChanged(selectedTable);
+    } catch (cause) {
+      if (reqGen === generation) error = String(cause);
+      setBusyState(false);
+      return;
+    }
+    setBusyState(false);
+    await selectLumpTable(selectedTable, selectedDbPath);
+  }
+
+  async function lookupUSysAllSpecs() {
+    if (!port.searchSpecies || !speciesSearchQuery.trim() || speciesSearching) return;
+    speciesSearching = true;
+    error = '';
+    try {
+      const found = await port.searchSpecies(speciesSearchQuery.trim(), 25);
+      speciesSearchResults = found ?? [];
+    } catch (cause) {
+      error = `Species search failed: ${String(cause)}`;
+    } finally {
+      speciesSearching = false;
+    }
+  }
+
+  onMount(() => {
+    if (contextId) {
+      void refreshTables();
+    }
+  });
+
   onDestroy(cancelPending);
 </script>
 
-<section class="bcgov-lump-editor" data-lump-editor aria-label="Combine Species and Declarative LumpSpec Workbench">
+<section
+  class="bcgov-lump-editor"
+  data-lump-editor
+  data-tour="lump-editor-root"
+  aria-label="Combine Species and Declarative LumpSpec Workbench"
+>
   <header class="bcgov-header">
     <div>
       <p class="bcgov-eyebrow">BEC TAXONOMIC CORRELATION</p>
@@ -514,6 +600,42 @@
               </button>
             </div>
           </label>
+
+          {#if selectedSummary?.isActiveProject}
+            <div class="delete-table-box">
+              {#if pendingDeleteTable === selectedSummary.tableName}
+                <p class="delete-confirm-note">
+                  Confirm permanent deletion of <strong>{selectedSummary.tableName}</strong>?
+                </p>
+                <div class="inline-row">
+                  <button
+                    type="button"
+                    class="bcgov-btn-danger"
+                    disabled={busy || operationHeld}
+                    onclick={confirmDeleteSelectedTable}
+                  >
+                    Confirm Delete Table
+                  </button>
+                  <button
+                    type="button"
+                    class="bcgov-btn-secondary"
+                    onclick={() => (pendingDeleteTable = '')}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              {:else}
+                <button
+                  type="button"
+                  class="bcgov-btn-danger"
+                  disabled={busy || operationHeld || !selectedTable}
+                  onclick={() => (pendingDeleteTable = selectedSummary.tableName)}
+                >
+                  Delete {selectedSummary.tableName}
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
       </aside>
 
@@ -553,6 +675,45 @@
             {/if}
           </div>
 
+          {#if port.searchSpecies}
+            <div class="species-picker-panel" aria-label="Searchable USysAllSpecs Species Picker">
+              <div class="inline-row">
+                <input
+                  type="search"
+                  bind:value={speciesSearchQuery}
+                  placeholder="Search USysAllSpecs code or scientific name..."
+                  disabled={busy || operationHeld}
+                  onkeydown={e => { if (e.key === 'Enter') void lookupUSysAllSpecs(); }}
+                />
+                <button
+                  type="button"
+                  class="bcgov-btn-secondary"
+                  disabled={busy || operationHeld || speciesSearching || !speciesSearchQuery.trim()}
+                  onclick={lookupUSysAllSpecs}
+                >
+                  {speciesSearching ? 'Searching...' : 'Browse USysAllSpecs'}
+                </button>
+              </div>
+              {#if speciesSearchResults.length > 0}
+                <div class="species-chip-list">
+                  {#each speciesSearchResults as item (item.code)}
+                    <button
+                      type="button"
+                      class="species-pick-btn"
+                      onclick={() => {
+                        draftSppCode = item.code;
+                        if (!draftLumpCode.trim()) draftLumpCode = item.code.slice(0, 7);
+                      }}
+                    >
+                      <strong class="mono">{item.code}</strong>
+                      <span>{item.scientificName || item.englishName}</span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
+
           <div class="toolbar-row">
             <input type="search" bind:value={filterQuery} placeholder="Filter by code or scientific name..." />
             <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || rows.length === 0} onclick={() => setAllUse(true)}>
@@ -581,6 +742,25 @@
                 <tr><td colspan="6" class="empty-row">No species mappings in current selection.</td></tr>
               {/if}
               {#each groupedRows as grp (grp.lumpCode)}
+                {@const allGroupActive = grp.rows.length > 0 && grp.activeCount === grp.rows.length}
+                <tr class="group-header-row">
+                  <td colspan="4">
+                    <strong class="mono">{grp.lumpCode}</strong>
+                    <span class="group-count">({grp.activeCount}/{grp.rows.length} active)</span>
+                  </td>
+                  <td colspan="2">
+                    {#if selectedSummary?.isActiveProject}
+                      <button
+                        type="button"
+                        class="link-btn"
+                        disabled={busy || operationHeld}
+                        onclick={() => toggleGroupUse(grp.rows, !allGroupActive)}
+                      >
+                        {allGroupActive ? 'Disable Group' : 'Enable Group'}
+                      </button>
+                    {/if}
+                  </td>
+                </tr>
                 {#each grp.rows as row (row.sppCode)}
                   <tr>
                     <td class="mono">{row.lumpCode}</td>
@@ -726,42 +906,53 @@
 </section>
 
 <style>
-  .bcgov-lump-editor { display: grid; gap: 1rem; min-width: 0; }
+  .bcgov-lump-editor { display: grid; gap: 1rem; min-width: 0; color: #313132; }
   .bcgov-header { background: #003366; color: #ffffff; border-bottom: 4px solid #fcba19; padding: 1rem 1.25rem; border-radius: 4px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; }
   .bcgov-header h2 { margin: 0.2rem 0 0; font-size: 1.2rem; color: #ffffff; }
   .bcgov-eyebrow { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: #fcba19; font-weight: 700; }
   .bcgov-tab-strip { display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .bcgov-tab-strip button[role="tab"] { background: rgba(255, 255, 255, 0.12); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.28); padding: 0.45rem 0.85rem; border-radius: 4px; font-size: 0.85rem; }
   .bcgov-tab-strip button[role="tab"].active { background: #fcba19; color: #003366; border-color: #fcba19; font-weight: 700; }
-  .bcgov-card { background: #ffffff; border: 1px solid #d1d9e0; border-top: 3px solid #003366; border-radius: 4px; padding: 1rem; min-width: 0; }
-  .bcgov-card h3 { margin: 0 0 0.75rem; font-size: 1rem; color: #003366; display: flex; align-items: center; gap: 0.5rem; }
+  .bcgov-card { background: #ffffff; border: 1px solid #d8d8d8; border-top: 3px solid #003366; border-radius: 4px; padding: 1rem; min-width: 0; }
+  .bcgov-card h3 { margin: 0 0 0.75rem; font-size: 1rem; color: #003366; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
   .badge { background: #fcba19; color: #003366; padding: 0.1rem 0.45rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700; }
-  .lump-grid { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 1rem; }
+  .lump-grid { display: grid; grid-template-columns: minmax(min(100%, 260px), 320px) minmax(0, 1fr); gap: 1rem; }
   .lump-table-list { list-style: none; padding: 0; margin: 0.75rem 0; display: grid; gap: 0.35rem; max-height: 240px; overflow-y: auto; }
-  .lump-table-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.65rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; text-align: left; font-size: 0.82rem; }
-  .lump-table-list button.selected { background: #e6eef8; border-color: #003366; color: #003366; }
+  .lump-table-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.65rem; border: 1px solid #d8d8d8; border-radius: 4px; background: #f2f2f2; text-align: left; font-size: 0.82rem; color: #313132; }
+  .lump-table-list button.selected { background: rgba(26, 90, 150, 0.14); border-color: #003366; color: #003366; }
   .field-block { display: grid; gap: 0.3rem; font-size: 0.82rem; margin-bottom: 0.65rem; }
   .inline-row, .toolbar-row, .row-editor { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; margin-bottom: 0.75rem; }
+  .inline-row input, .toolbar-row input { flex: 1 1 160px; min-width: 0; }
   .row-editor label { display: grid; gap: 0.25rem; font-size: 0.8rem; }
+  .species-picker-panel { border: 1px solid #d8d8d8; background: #f2f2f2; border-radius: 4px; padding: 0.55rem 0.7rem; margin-bottom: 0.75rem; }
+  .species-chip-list { display: flex; flex-wrap: wrap; gap: 0.35rem; max-height: 140px; overflow-y: auto; }
+  .species-pick-btn { display: inline-flex; gap: 0.35rem; align-items: center; padding: 0.25rem 0.5rem; border: 1px solid #d8d8d8; background: #ffffff; border-radius: 3px; font-size: 0.76rem; color: #003366; }
+  .delete-table-box { border-top: 1px solid #d8d8d8; padding-top: 0.6rem; display: grid; gap: 0.4rem; }
+  .delete-confirm-note { margin: 0; font-size: 0.8rem; color: #d8292f; }
+  .group-header-row { background: #f2f2f2; }
+  .group-count { font-size: 0.75rem; color: #474543; margin-left: 0.35rem; }
   .checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0.45rem; margin: 0.65rem 0; }
   .checkbox-label { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.83rem; }
-  input:not([type="checkbox"]), select { padding: 0.45rem 0.6rem; border: 1px solid #94a3b8; border-radius: 4px; font-size: 0.85rem; }
-  .bcgov-btn-primary { background: #003366; color: #ffffff; border: 1px solid #003366; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
+  input:not([type="checkbox"]), select { padding: 0.45rem 0.6rem; border: 1px solid #d8d8d8; border-radius: 4px; font-size: 0.85rem; max-width: 100%; background: #ffffff; color: #313132; }
+  .bcgov-btn-primary { background: #003366; color: #ffffff; border: 1px solid #003366; border-bottom: 2px solid #fcba19; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
   .bcgov-btn-secondary { background: #ffffff; color: #003366; border: 1px solid #003366; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
-  .bcgov-notice { padding: 0.65rem 0.9rem; background: #eef5fc; border-left: 4px solid #003366; color: #003366; margin: 0; font-size: 0.85rem; }
+  .bcgov-btn-danger { background: #ffffff; color: #d8292f; border: 1px solid #d8292f; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
+  .bcgov-notice { padding: 0.65rem 0.9rem; background: #f2f2f2; border-left: 4px solid #fcba19; color: #003366; margin: 0; font-size: 0.85rem; }
+  .error { padding: 0.65rem 0.9rem; background: rgba(216, 41, 47, 0.08); border-left: 4px solid #d8292f; color: #d8292f; margin: 0; font-size: 0.85rem; }
   .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 0.75rem; }
-  .stat-strip div { padding: 0.55rem 0.75rem; background: #f8fafc; border-left: 3px solid #fcba19; display: grid; }
-  .stat-strip span { font-size: 0.75rem; color: #475569; }
+  .stat-strip div { padding: 0.55rem 0.75rem; background: #f2f2f2; border-left: 3px solid #fcba19; display: grid; }
+  .stat-strip span { font-size: 0.75rem; color: #474543; }
   .stat-strip strong { font-size: 1.1rem; color: #003366; font-variant-numeric: tabular-nums; }
   .mono { font-family: var(--vpro-font-mono, var(--font-mono, monospace)); font-variant-numeric: tabular-nums; }
   .link-btn { background: transparent; border: 0; color: #003366; text-decoration: underline; padding: 0.15rem 0.35rem; font-size: 0.8rem; }
-  .link-btn.danger { color: #991b1b; }
-  .empty-note { font-size: 0.82rem; color: #64748b; padding: 0.5rem 0; }
-  @media (max-width: 860px) { .lump-grid { grid-template-columns: minmax(0, 1fr); } }
+  .link-btn.danger { color: #d8292f; }
+  .empty-row, .empty-note { font-size: 0.82rem; color: #474543; padding: 0.5rem 0; }
+  @media (max-width: 960px) { .lump-grid { grid-template-columns: minmax(0, 1fr); } }
   @media (pointer: coarse) {
     .bcgov-tab-strip button,
     .bcgov-btn-primary,
     .bcgov-btn-secondary,
+    .bcgov-btn-danger,
     input:not([type="checkbox"]),
     select {
       min-height: 44px;

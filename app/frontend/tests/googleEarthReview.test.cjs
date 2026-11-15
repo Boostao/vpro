@@ -67,6 +67,16 @@ test('Earth transport rejects foreign scopes, malformed pages/cells, repeated pa
   ]) {
     const value = document(); mutate(value); await assert.rejects(validate(value));
   }
+  // Already-negative stored longitudes must remain negative and never double-negate (-(-lon) -> +lon)
+  const neg = document();
+  neg.rows[0].storedLongitude = cell('real', -123.25); neg.rows[0].longitude = cell('real', -123.25);
+  neg.rows[1].storedLongitude = cell('real', -123.25); neg.rows[1].longitude = cell('real', -123.25);
+  assert.equal((await validate(neg)).rows.length, 2);
+
+  const flipped = document();
+  flipped.rows[0].storedLongitude = cell('real', -123.25); flipped.rows[0].longitude = cell('real', 123.25);
+  await assert.rejects(validate(flipped));
+
   const zeros = document();
   zeros.rows[0].storedLongitude = cell('real', 0); zeros.rows[0].longitude = cell('real', -0);
   zeros.rows[1].storedLongitude = cell('real', -0); zeros.rows[1].longitude = cell('real', 0);

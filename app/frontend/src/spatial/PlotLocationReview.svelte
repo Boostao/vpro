@@ -53,7 +53,7 @@
       No data, audits, configuration or output files written.</p>
     <div class="table-scroll">
       <table>
-        <caption>Source location report fields: latitude then negated stored longitude</caption>
+        <caption>Source location report fields: latitude then western-hemisphere longitude</caption>
         <thead><tr>{#each review.report.fields as field}<th id={`location-${field.key}`} scope="col">{field.label}</th>{/each}</tr></thead>
         <tbody>{#each rows as row (row.envRowId)}
           <tr data-plot-location-row={row.envRowId}>{#each review.report.fields as field, i}
@@ -80,19 +80,19 @@
 </section>
 
 <style>
-  .locations { padding: 1rem; min-width: 0; max-width: 100%; }
-  h1 { font-size: 1.5rem; margin-bottom: .75rem; }
+  .locations { padding: 1rem; min-width: 0; max-width: 100%; color: #313132; background: #FFFFFF; }
+  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: #003366; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }
-  button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem .6rem; }
+  button { border: 1px solid #003366; border-radius: .25rem; padding: .4rem .6rem; background: #FFFFFF; color: #003366; font-weight: 600; }
   button:disabled { opacity: .5; }
   dl > div { margin: .6rem 0; }
-  dt { font-weight: 600; }
+  dt { font-weight: 600; color: #003366; }
   dd, p { overflow-wrap: anywhere; }
   .table-scroll { overflow-x: auto; max-width: 100%; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
-  th { background: #f1f5f9; }
-  caption { text-align: left; margin-bottom: .5rem; }
-  .notice { color: #475569; }
-  .error { color: #991b1b; }
+  th, td { border: 1px solid #D8D8D8; padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
+  th { background: #F2F2F2; color: #003366; }
+  caption { text-align: left; margin-bottom: .5rem; color: #474543; }
+  .notice { color: #474543; }
+  .error { color: #D8292F; }
 </style>

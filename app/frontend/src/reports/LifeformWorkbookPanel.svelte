@@ -161,16 +161,20 @@
 </section>
 
 <style>
-  .workbook { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; overflow-wrap: anywhere; }
-  fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .5rem; min-width: 0; }
+  .workbook { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; overflow-wrap: anywhere; padding: 1rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; color: #313132; }
+  fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .5rem; min-width: 0; border: 1px solid #D8D8D8; border-radius: .35rem; padding: .75rem; }
   .option { display: flex; align-items: center; gap: .5rem; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-  input, textarea { box-sizing: border-box; min-width: 0; }
+  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { background: #002244; border-color: #002244; }
+  button:disabled { opacity: .6; cursor: not-allowed; }
+  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .25rem; padding: .45rem; background: #FFFFFF; color: #313132; }
   textarea { width: 100%; }
-  .table-scroll { overflow-x: auto; }
-  table { border-collapse: collapse; margin-bottom: .75rem; }
-  th, td { padding: .35rem .65rem; border: 1px solid #64748b; text-align: left; }
-  caption { text-align: left; font-weight: 600; }
-  .error { color: #b91c1c; font-weight: 600; }
-  .guidance { font-size: .9rem; }
+  .table-scroll { overflow-x: auto; max-width: 100%; }
+  table { border-collapse: collapse; margin-bottom: .75rem; width: 100%; background: #FFFFFF; }
+  th, td { padding: .35rem .65rem; border: 1px solid #D8D8D8; text-align: left; }
+  thead th { background: #F2F2F2; color: #003366; }
+  caption { text-align: left; font-weight: 600; color: #003366; }
+  .error { color: #D8292F; font-weight: 600; }
+  .guidance { font-size: .9rem; color: #474543; }
 </style>

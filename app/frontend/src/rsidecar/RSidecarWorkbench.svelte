@@ -2,6 +2,10 @@
   import { onDestroy } from 'svelte';
   import {
     defaultRSidecarPort,
+    isVegclustMethod,
+    usesDissimilarity,
+    usesHierarchicalLinkage,
+    usesBetaParameter,
     validateClusteringDraft,
     validatePromoteCandidateDraft,
     validateQuartoGuideDraft,
@@ -78,8 +82,10 @@
   let clusterK = $state(3);
   let clusterFuzziness = $state(1.25);
   let clusterDnoise = $state(0.75);
+  let clusterBeta = $state(-0.25);
   let clusterCutHeight = $state<number>(0);
   let clusterApplyLump = $state(true);
+  let clusterLumpName = $state('');
   let clusterUseSu = $state(false);
   let clusterBgcFilter = $state('');
   let clusterUnitPrefix = $state('BEC');
@@ -161,6 +167,11 @@
   const relIndexed = $derived(indexEdatopicCells(activeEdatopicView?.relativeGrid));
   const actIndexed = $derived(indexEdatopicCells(activeEdatopicView?.actualGrid));
 
+  const vegclustMode = $derived(isVegclustMethod(clusterMethod));
+  const dissimilarityActive = $derived(usesDissimilarity(clusterMethod));
+  const linkageActive = $derived(usesHierarchicalLinkage(clusterMethod));
+  const betaActive = $derived(usesBetaParameter(clusterMethod));
+
   const dendrogramLayout = $derived(
     computeDendrogramSVGLayout(
       clusterResult?.dendrogram,
@@ -177,8 +188,10 @@
       k: Number(clusterK),
       fuzziness: Number(clusterFuzziness),
       dnoise: Number(clusterDnoise),
+      beta: betaActive ? Number(clusterBeta) : undefined,
       cutHeight: clusterCutHeight > 0 ? Number(clusterCutHeight) : undefined,
       applyLump: clusterApplyLump,
+      lumpName: clusterLumpName || undefined,
       useActiveSu: clusterUseSu,
       bgcFilter: clusterBgcFilter || undefined,
       unitPrefix: clusterUnitPrefix || undefined,
@@ -301,8 +314,10 @@
       k: Number(clusterK),
       fuzziness: Number(clusterFuzziness),
       dnoise: Number(clusterDnoise),
+      beta: betaActive ? Number(clusterBeta) : undefined,
       cutHeight: clusterCutHeight > 0 ? Number(clusterCutHeight) : undefined,
       applyLump: clusterApplyLump,
+      lumpName: clusterLumpName.trim() || undefined,
       useActiveSu: clusterUseSu,
       bgcFilter: clusterBgcFilter.trim() || undefined,
       unitPrefix: clusterUnitPrefix.trim() || undefined,
@@ -411,8 +426,8 @@
   }
 </script>
 
-<section class="rsidecar-workbench" aria-label="BEC R Sidecar Climate Clustering and Quarto Workbench">
-  <header class="bcgov-header" style="background:#003366;border-bottom:4px solid #FCBA19;color:#ffffff">
+<section class="rsidecar-workbench" data-tour="r-sidecar-root" aria-label="BEC R Sidecar Climate Clustering and Quarto Workbench">
+  <header class="bcgov-header" style="background:#003366;border-bottom:4px solid #FCBA19;color:#FFFFFF">
     <div>
       <h2>BEC_R Sidecar, Climate Normals &amp; Quarto Publication Workbench</h2>
       <p class="subtitle">
@@ -498,26 +513,28 @@
           </div>
 
           {#if runtimeStatus.packages.length > 0}
-            <table class="data-table compact">
-              <thead>
-                <tr>
-                  <th>R Package</th>
-                  <th>Status</th>
-                  <th>Version</th>
-                  <th>Role</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each runtimeStatus.packages as pkg}
+            <div class="table-scroll">
+              <table class="data-table compact">
+                <thead>
                   <tr>
-                    <td><code>{pkg.name}</code></td>
-                    <td>{pkg.installed ? 'Installed' : 'Missing'}</td>
-                    <td>{pkg.version || '—'}</td>
-                    <td>{pkg.required ? 'Required' : 'Optional / Sidecar'}</td>
+                    <th>R Package</th>
+                    <th>Status</th>
+                    <th>Version</th>
+                    <th>Role</th>
                   </tr>
-                {/each}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {#each runtimeStatus.packages as pkg}
+                    <tr>
+                      <td><code>{pkg.name}</code></td>
+                      <td>{pkg.installed ? 'Installed' : 'Missing'}</td>
+                      <td>{pkg.version || '—'}</td>
+                      <td>{pkg.required ? 'Required' : 'Optional / Sidecar'}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
           {/if}
 
           {#if runtimeStatus.setupInstructions.length > 0}
@@ -658,7 +675,8 @@
           <div class="dual-grid-wrap">
             <div class="edatopic-panel">
               <h4>Relative Edatopic Grid (rSMR x rSNR) — Modal: {activeEdatopicView.relativeGrid.modalCell || '—'}</h4>
-              <table class="edatopic-table">
+              <div class="table-scroll">
+                <table class="edatopic-table">
                 <thead>
                   <tr>
                     <th>rSMR \ rSNR</th>
@@ -696,11 +714,13 @@
                   {/each}
                 </tbody>
               </table>
+              </div>
             </div>
 
             <div class="edatopic-panel">
               <h4>Actual Edatopic Grid (aSMR x rSNR) — Modal: {activeEdatopicView.actualGrid.modalCell || '—'}</h4>
-              <table class="edatopic-table compact-edatope">
+              <div class="table-scroll">
+                <table class="edatopic-table compact-edatope">
                 <thead>
                   <tr>
                     <th>aSMR \ rSNR</th>
@@ -737,6 +757,7 @@
                   {/each}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
 
@@ -758,33 +779,53 @@
   {:else if activeTab === 'clustering'}
     <div class="panel">
       <div class="card">
-        <h3>BEC_R Multivariate Clustering (vegclust Fuzzy/Noise &amp; vegan Hierarchical)</h3>
+        <h3>BEC_R Multivariate Clustering (vegclust, vegan Hierarchical, Flexible-Beta &amp; PAM)</h3>
         <div class="form-row">
           <label>
             Algorithm
-            <select bind:value={clusterMethod}>
+            <select data-cluster-method bind:value={clusterMethod}>
               <option value="NC">vegclust Noise Clustering (NC)</option>
               <option value="KM">vegclust Crisp K-Means (KM)</option>
               <option value="FCM">vegclust Fuzzy C-Means (FCM)</option>
-              <option value="HCLUST">vegan Hierarchical Clustering</option>
+              <option value="HCLUST">vegan Hierarchical Clustering (HCLUST)</option>
+              <option value="BETA_FLEXIBLE">Flexible-Beta Hierarchical (BETA_FLEXIBLE)</option>
+              <option value="PAM">Partitioning Around Medoids (PAM)</option>
             </select>
           </label>
-          <label>
+          <label class:field-muted={!dissimilarityActive}>
             Dissimilarity
-            <select bind:value={clusterDistance}>
+            <select
+              data-cluster-distance
+              bind:value={clusterDistance}
+              disabled={!dissimilarityActive}
+              aria-disabled={!dissimilarityActive}
+            >
               <option value="bray">Bray-Curtis</option>
               <option value="chord">Chord Normalized</option>
               <option value="jaccard">Jaccard</option>
               <option value="kulczynski">Kulczynski</option>
             </select>
+            {#if vegclustMode}
+              <span class="field-hint">Disabled for vegclust ({clusterMethod})</span>
+            {/if}
           </label>
-          <label>
+          <label class:field-muted={!linkageActive}>
             Linkage
-            <select bind:value={clusterLinkage}>
+            <select
+              data-cluster-linkage
+              bind:value={clusterLinkage}
+              disabled={!linkageActive}
+              aria-disabled={!linkageActive}
+            >
               <option value="ward.D2">Ward.D2</option>
               <option value="average">UPGMA (Average)</option>
               <option value="complete">Complete</option>
             </select>
+            {#if !linkageActive}
+              <span class="field-hint">
+                {vegclustMode ? `Disabled for vegclust (${clusterMethod})` : betaActive ? 'Uses Flexible-Beta parameter' : 'N/A for PAM medoids'}
+              </span>
+            {/if}
           </label>
           <label>
             Cover Transform
@@ -800,13 +841,37 @@
             Clusters (k)
             <input type="number" min="2" max="50" bind:value={clusterK} />
           </label>
-          <label>
+          {#if betaActive}
+            <label data-cluster-beta-field>
+              Flexible Beta (beta)
+              <input type="number" step="0.05" min="-0.99" max="0.99" bind:value={clusterBeta} />
+            </label>
+          {/if}
+          <label class:field-muted={!vegclustMode}>
             Fuzziness (m)
-            <input type="number" step="0.05" min="1.05" max="5" bind:value={clusterFuzziness} />
+            <input type="number" step="0.05" min="1.05" max="5" bind:value={clusterFuzziness} disabled={!vegclustMode} />
+          </label>
+          <label class:field-muted={clusterMethod !== 'NC'}>
+            Noise Distance (dnoise)
+            <input type="number" step="0.05" min="0.05" max="5" bind:value={clusterDnoise} disabled={clusterMethod !== 'NC'} />
           </label>
           <label>
-            Noise Distance (dnoise)
-            <input type="number" step="0.05" min="0.05" max="5" bind:value={clusterDnoise} />
+            Unit Prefix
+            <input type="text" data-cluster-unit-prefix bind:value={clusterUnitPrefix} placeholder="CL or BEC" />
+          </label>
+          <label>
+            BGC Filter
+            <input type="text" data-cluster-bgc-filter bind:value={clusterBgcFilter} placeholder="e.g. SBS, BWBS, MH" />
+          </label>
+          <label class:field-muted={!clusterApplyLump}>
+            Lump Table (*_Lump)
+            <input
+              type="text"
+              data-cluster-lump-name
+              bind:value={clusterLumpName}
+              disabled={!clusterApplyLump}
+              placeholder={activeProject}
+            />
           </label>
           <label>
             Candidate Prefix
@@ -881,7 +946,7 @@
               role="img"
               aria-label="BEC Hierarchical Cluster Dendrogram"
             >
-              <rect x="0" y="0" width={dendrogramLayout.width} height={dendrogramLayout.height} fill="#ffffff" />
+              <rect x="0" y="0" width={dendrogramLayout.width} height={dendrogramLayout.height} fill="#FFFFFF" />
               {#each dendrogramLayout.segments as seg}
                 <line x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} stroke="#003366" stroke-width="1.4" />
               {/each}
@@ -909,13 +974,20 @@
                     }
                   }}
                 >
-                  <circle r="3.2" cy="-8" fill={leaf.isNoise ? '#dc2626' : '#003366'} />
+                  <circle
+                    r="3.4"
+                    cy="-8"
+                    fill={leaf.isNoise ? '#D8292F' : selectedDendroPlot === leaf.plotNumber ? '#1A5A96' : '#003366'}
+                    stroke={selectedDendroPlot === leaf.plotNumber ? '#FCBA19' : 'none'}
+                    stroke-width="1.5"
+                  />
                   <text
                     transform="rotate(65)"
                     text-anchor="start"
                     font-family="monospace"
                     font-size="10"
-                    fill={selectedDendroPlot === leaf.plotNumber ? '#b45309' : '#1e293b'}
+                    font-weight={selectedDendroPlot === leaf.plotNumber ? '700' : '400'}
+                    fill={selectedDendroPlot === leaf.plotNumber ? '#1A5A96' : '#313132'}
                   >
                     {leaf.plotNumber} ({leaf.clusterUnit})
                   </text>
@@ -925,7 +997,8 @@
           </div>
 
           <h4>Cluster Units &amp; Indicator Species Fidelity (IndVal)</h4>
-          <table class="data-table">
+          <div class="table-scroll">
+            <table class="data-table">
             <thead>
               <tr>
                 <th>Cluster Unit</th>
@@ -955,6 +1028,7 @@
               {/each}
             </tbody>
           </table>
+          </div>
         {/if}
       </div>
 
@@ -1109,9 +1183,9 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    color: #0f172a;
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
+    color: #313132;
+    background: #F2F2F2;
+    border: 1px solid #D8D8D8;
     border-radius: 6px;
     overflow: hidden;
   }
@@ -1121,7 +1195,7 @@
     align-items: center;
     gap: 16px;
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     border-bottom: 4px solid #FCBA19;
     padding: 14px 18px;
   }
@@ -1133,15 +1207,15 @@
   .bcgov-header .subtitle {
     margin: 4px 0 0;
     font-size: 12px;
-    color: #e2e8f0;
+    color: #F2F2F2;
   }
   .tab-bar {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     padding: 0 16px;
-    border-bottom: 1px solid #cbd5e1;
-    background: #f1f5f9;
+    border-bottom: 1px solid #D8D8D8;
+    background: #F2F2F2;
   }
   .tab-bar button {
     background: transparent;
@@ -1150,25 +1224,27 @@
     padding: 10px 14px;
     font-size: 13px;
     font-weight: 600;
-    color: #334155;
+    color: #474543;
     cursor: pointer;
   }
   .tab-bar button.active {
     color: #003366;
     border-bottom-color: #FCBA19;
-    background: #ffffff;
+    background: #FFFFFF;
   }
   .panel {
     padding: 4px 16px 16px;
     display: flex;
     flex-direction: column;
     gap: 14px;
+    min-width: 0;
   }
   .card {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
+    background: #FFFFFF;
+    border: 1px solid #D8D8D8;
     border-radius: 6px;
     padding: 14px 16px;
+    min-width: 0;
   }
   .card h3 {
     margin: 0 0 12px;
@@ -1195,7 +1271,16 @@
     gap: 4px;
     font-size: 12px;
     font-weight: 600;
-    color: #334155;
+    color: #313132;
+    min-width: 0;
+  }
+  .form-row label.field-muted {
+    opacity: 0.65;
+  }
+  .field-hint {
+    font-size: 11px;
+    font-weight: 400;
+    color: #474543;
   }
   .form-row label.full-width {
     flex: 1 1 100%;
@@ -1210,21 +1295,30 @@
   input[type='number'],
   select,
   textarea {
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 12px;
-    background: #ffffff;
-    color: #0f172a;
+    background: #FFFFFF;
+    color: #313132;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  select:disabled,
+  input:disabled {
+    background: #F2F2F2;
+    color: #474543;
+    cursor: not-allowed;
   }
   .button-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
     margin: 8px 0;
   }
   .btn-primary {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     border: 1px solid #003366;
     border-radius: 4px;
     padding: 7px 14px;
@@ -1233,7 +1327,7 @@
     cursor: pointer;
   }
   .btn-secondary {
-    background: #ffffff;
+    background: #FFFFFF;
     color: #003366;
     border: 1px solid #003366;
     border-radius: 4px;
@@ -1245,7 +1339,7 @@
   .btn-gold {
     background: #FCBA19;
     color: #003366;
-    border: 1px solid #d99b00;
+    border: 1px solid #003366;
     border-radius: 4px;
     padding: 7px 14px;
     font-size: 12px;
@@ -1260,9 +1354,9 @@
   .inline-error {
     margin: 4px 16px;
     padding: 8px 12px;
-    background: #fef2f2;
-    border-left: 4px solid #dc2626;
-    color: #991b1b;
+    background: rgba(216, 41, 47, 0.08);
+    border-left: 4px solid #D8292F;
+    color: #D8292F;
     font-size: 12px;
   }
   .inline-error {
@@ -1271,9 +1365,9 @@
   .banner-status {
     margin: 4px 16px;
     padding: 8px 12px;
-    background: #eff6ff;
+    background: rgba(26, 90, 150, 0.08);
     border-left: 4px solid #003366;
-    color: #1e3a8a;
+    color: #003366;
     font-size: 12px;
   }
   .badge-strip,
@@ -1290,19 +1384,19 @@
     font-weight: 600;
   }
   .badge.ok {
-    background: #dcfce7;
-    color: #166534;
+    background: rgba(46, 133, 64, 0.14);
+    color: #1E5128;
   }
   .badge.warn {
-    background: #fef3c7;
-    color: #92400e;
+    background: rgba(252, 186, 25, 0.25);
+    color: #313132;
   }
   .badge.neutral {
-    background: #e0f2fe;
-    color: #075985;
+    background: rgba(26, 90, 150, 0.12);
+    color: #1A5A96;
   }
   .kpi {
-    background: #f1f5f9;
+    background: #F2F2F2;
     border-left: 3px solid #003366;
     padding: 6px 10px;
     border-radius: 4px;
@@ -1312,12 +1406,13 @@
   }
   .kpi strong {
     font-size: 14px;
-    color: #0f172a;
+    color: #313132;
   }
   .table-scroll,
   .dendrogram-scroll {
     overflow-x: auto;
-    border: 1px solid #e2e8f0;
+    max-width: 100%;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
   }
   .data-table {
@@ -1327,18 +1422,21 @@
   }
   .data-table th {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     text-align: left;
     padding: 6px 8px;
   }
   .data-table td {
     padding: 5px 8px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #D8D8D8;
   }
   .dual-grid-wrap {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
     gap: 16px;
+  }
+  .edatopic-panel {
+    min-width: 0;
   }
   .edatopic-table {
     width: 100%;
@@ -1348,12 +1446,12 @@
   }
   .edatopic-table th,
   .edatopic-table td {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     padding: 5px 4px;
   }
   .edatopic-table thead th {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
   }
   .compact-edatope td,
   .compact-edatope th {
@@ -1376,8 +1474,8 @@
   .setup-box {
     margin-top: 10px;
     padding: 10px 12px;
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
+    background: #F2F2F2;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
     font-size: 12px;
   }
@@ -1387,13 +1485,25 @@
   .quarto-preview-frame {
     width: 100%;
     height: 440px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
-    background: #ffffff;
+    background: #FFFFFF;
   }
   .receipt-line,
   .muted {
     font-size: 12px;
-    color: #475569;
+    color: #474543;
+  }
+  @media (max-width: 960px) {
+    .bcgov-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .panel {
+      padding: 4px 10px 12px;
+    }
+    .form-row > label {
+      flex: 1 1 220px;
+    }
   }
 </style>

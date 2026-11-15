@@ -84,20 +84,27 @@ function ordered(keys: string[][]): boolean {
 }
 
 export function validateSiteUnitSummaryWorkbookReview(value: SiteUnitSummaryWorkbookReview | null,
-  owner: GoogleEarthScope, requestedMethod: number): ValidatedSiteUnitSummaryWorkbookReview {
-  return validateSiteUnitSummaryWorkbookEvidence(value, owner, requestedMethod, 'layer', false);
+  owner: GoogleEarthScope, requestedMethod: number, allowConfiguredScope = false): ValidatedSiteUnitSummaryWorkbookReview {
+  return validateSiteUnitSummaryWorkbookEvidence(value, owner, requestedMethod, 'layer', false, allowConfiguredScope);
 }
 
 export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWorkbookReview | null,
-  owner: GoogleEarthScope, requestedMethod: number, mode: SiteUnitSummaryMode, extended: boolean): ValidatedSiteUnitSummaryWorkbookReview {
+  owner: GoogleEarthScope, requestedMethod: number, mode: SiteUnitSummaryMode, extended: boolean,
+  allowConfiguredScope = false): ValidatedSiteUnitSummaryWorkbookReview {
   value = value ? structuredClone(value) : null;
-  if (![owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath].every(v => workbookText(v) && v !== '') ||
-      owner.su === 'None' || owner.su === 'USysSuTableDynamic' ||
+  const scopeInvalid = allowConfiguredScope
+    ? (!workbookText(owner.contextId) || !owner.contextId || !workbookText(owner.project) || !owner.project ||
+       !workbookText(owner.projectPath) || !owner.projectPath || !workbookText(owner.su) || !owner.su ||
+       !workbookText(owner.suPath) || (owner.su !== 'None' && !owner.suPath))
+    : (![owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath].every(v => workbookText(v) && v !== '') ||
+       owner.su === 'None' || owner.su === 'USysSuTableDynamic');
+  const validUnitTypes = allowConfiguredScope ? [1, 2, 3] : [1];
+  if (scopeInvalid ||
       !shape(value, ['preview', 'scope', 'sheets', 'approvalHash', 'workbookSHA256', 'bytes']) ||
       !hash(value.approvalHash) || !hash(value.workbookSHA256) ||
       !Number.isSafeInteger(value.bytes) || value.bytes <= 0 ||
       !shape(value.scope, ['savedMethod', 'siteUnitType', 'orderBy', 'includeSpecies']) ||
-      ![1, 2].includes(value.scope.savedMethod) || value.scope.siteUnitType !== 1 ||
+      ![1, 2].includes(value.scope.savedMethod) || !validUnitTypes.includes(value.scope.siteUnitType) ||
       !(extended ? [1, 2, 3] : [1, 3]).includes(value.scope.orderBy) ||
       !(extended ? [0, 1] : [0]).includes(value.scope.includeSpecies) ||
       !shape(value.preview, ['contextId', 'projectPath', 'suPath', 'report']) ||
@@ -105,7 +112,7 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
       !Array.isArray(value.sheets)) reject();
   validateSummaryWorkbookText(value);
   const preview = validateSiteUnitSummary(value.preview, owner.contextId, owner.project,
-    owner.projectPath, owner.su, owner.suPath, requestedMethod, mode);
+    owner.projectPath, owner.su, owner.suPath, requestedMethod, mode, allowConfiguredScope);
   const report = preview.report;
   const fields = mode === 'layer' ? siteUnitSummaryWorkbookFields : [
     ...siteUnitSummaryWorkbookFields.slice(0, 23),
@@ -128,6 +135,10 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
     if (!shape(member, ['rowId', 'plotNumber', 'siteUnit', 'joinedRows', 'status']) ||
         !cellShape(member.plotNumber) || !cellShape(member.siteUnit)) reject();
   }
+  const sheetUnits = new Map<string, { name: string; index: number }>();
+  if (allowConfiguredScope) {
+    report.units.forEach((unit, idx) => sheetUnits.set(unit.code, { name: workbookWorksheetName(unit.code, idx), index: idx }));
+  }
   for (const [i, unit] of report.units.entries()) {
     if (!shape(unit, ['code', 'longName', 'nameStatus', 'nameCandidates', 'plots', 'values']) ||
         !['unique', 'missing'].includes(unit.nameStatus) || unit.values[8] !== unit.values[9] ||
@@ -147,10 +158,18 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
     }
     const sheet = value.sheets[i], expectedName = workbookWorksheetName(unit.code, i);
     if (!shape(sheet, ['unit', 'name']) || !cellShape(sheet.unit) || !completeCell(sheet.unit) ||
-        sheet.unit.storage !== 'text' || sheet.unit.text !== unit.code || sheet.name !== expectedName ||
-        sheetNames.has(workbookFoldedName(sheet.name))) reject();
-    sheetNames.add(workbookFoldedName(sheet.name));
+        sheet.unit.storage !== 'text') reject();
+    if (!allowConfiguredScope) {
+      if (sheet.unit.text !== unit.code || sheet.name !== expectedName || sheetNames.has(workbookFoldedName(sheet.name))) reject();
+      sheetNames.add(workbookFoldedName(sheet.name));
+    } else {
+      const target = sheetUnits.get(sheet.unit.text!);
+      if (!target || sheet.name !== target.name || sheetNames.has(workbookFoldedName(sheet.name))) reject();
+      sheetNames.add(workbookFoldedName(sheet.name));
+      sheetUnits.delete(sheet.unit.text!);
+    }
   }
+  if (allowConfiguredScope && sheetUnits.size !== 0) reject();
   const envCounts = new Map<string, number>(), adminCounts = new Map<string, number>();
   for (const plot of envOwners.values()) envCounts.set(plot, (envCounts.get(plot) ?? 0) + 1);
   for (const plot of adminOwners.values()) adminCounts.set(plot, (adminCounts.get(plot) ?? 0) + 1);
@@ -172,11 +191,11 @@ export class SiteUnitSummaryWorkbookPublicationSession {
   subscribe(listener: () => void) { return this.receipt.subscribe(listener); }
   async publish(review: SiteUnitSummaryWorkbookReview, destination: string,
     port: (request: SiteUnitSummaryWorkbookExportRequest) => PromiseLike<SiteUnitSummaryWorkbookOutcome | null>,
-    requestedMethod: number) {
+    requestedMethod: number, allowConfiguredScope = false) {
     if (!workbookText(destination) || !destination || !/\.xlsx$/i.test(destination)) {
       throw new Error('Workbook publication requires an explicit literal .xlsx destination; no trimming or replacement.');
     }
-    const validated = validateSiteUnitSummaryWorkbookReview(review, this.owner, requestedMethod);
+    const validated = validateSiteUnitSummaryWorkbookReview(review, this.owner, requestedMethod, allowConfiguredScope);
     await this.receipt.publish({ method: requestedMethod, approvalHash: validated.approvalHash, destination },
       destination, port, value => validateEnvironmentWorkbookOutcome(value, destination, validated.workbookSHA256));
   }

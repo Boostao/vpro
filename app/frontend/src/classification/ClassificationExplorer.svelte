@@ -2,6 +2,7 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { ReadRequests } from '../shared/readRequests';
   import { computeVirtualWindow } from '../datasheet/universalDatasheetGrid';
+  import SiteUnitExclusionFilter from './SiteUnitExclusionFilter.svelte';
   import {
     createEmptyFlatHierarchyRow,
     defaultClassificationBackendPort,
@@ -14,6 +15,7 @@
     validateFlatHierarchyRows,
     wouldIntroduceHierarchyCycle,
     type BECUnitPickerChoice,
+    type BECZoneSummary,
     type ClassificationBackendPort,
     type CreateSUFromEnvFieldsResult,
     type ExplorerMode,
@@ -22,6 +24,8 @@
     type PlotInspectorSummary,
     type SUFromEnvMode,
     type SUPlotTree,
+    type UserSiteUnitEntry,
+    type UserSiteUnitImportResult,
   } from './classificationExplorer';
 
   interface Props {
@@ -87,20 +91,43 @@
   let treeViewportHeight = $state(480);
   let treeViewportEl = $state<HTMLDivElement | null>(null);
 
-  // Right pane Plot Inspector & BECdb v13 Picker state
+  // Right pane Plot Inspector & BECdb v13 Picker + UserSiteUnitList state
   let inspectedPlot = $state.raw<PlotInspectorSummary | null>(null);
+  let rightPaneTab = $state<'bec_picker' | 'user_su_list'>('bec_picker');
+  let becSearchMode = $state<'combined' | 'becdb_v13'>('combined');
+  let becZones = $state.raw<BECZoneSummary[]>([]);
   let becQuery = $state('');
   let becZone = $state('');
   let becSubZone = $state('');
   let becChoices = $state.raw<BECUnitPickerChoice[]>([]);
   let customTargetUnit = $state('');
 
-  // SU Table New / Save As / Create from Env modals/drawers
-  let activeDialog = $state<'none' | 'new_su' | 'save_su_as' | 'su_from_env' | 'new_hierarchy'>('none');
+  // S3.8 Admin / Project UserSiteUnitList CRUD + CSV state
+  let userSiteUnits = $state.raw<UserSiteUnitEntry[]>([]);
+  let userSUFilter = $state('');
+  let userSULoading = $state(false);
+  let userSUFormId = $state<number | null>(null);
+  let userSUSeries = $state('');
+  let userSULongName = $state('');
+  let userSUSciName = $state('');
+  let userSULevel = $state<number>(11);
+  let userSUCSVText = $state('');
+  let userSUOverwrite = $state(false);
+  let userSUImportResult = $state.raw<UserSiteUnitImportResult | null>(null);
+  let exclusionBusy = $state(false);
+
+  // SU & Hierarchy Table New / Save As / Create from Env modals/drawers
+  let activeDialog = $state<
+    'none' | 'new_su' | 'save_su_as' | 'su_from_env' | 'new_hierarchy' | 'save_hierarchy_as'
+  >('none');
   let newSUName = $state('');
+  let newSUDestination = $state<'project' | 'new_file'>('project');
+  let newSUFilePath = $state('');
   let populateAllPlots = $state(true);
   let seedFromUserSU = $state(false);
   let saveAsNewName = $state('');
+  let saveAsDestination = $state<'project' | 'new_file'>('project');
+  let saveAsFilePath = $state('');
 
   // Create SU from Env Fields state
   const AVAILABLE_ENV_FIELDS = [
@@ -120,6 +147,9 @@
   let envUseBECSlash = $state(true);
   let envConcatMode = $state<SUFromEnvMode>('fill_unassigned_only');
   let envNewSUName = $state('');
+  let envDestination = $state<'project' | 'new_file'>('project');
+  let envFilePath = $state('');
+  let envScopeToExistingOnly = $state(false);
   let envSkipIncomplete = $state(false);
   let envConcatPreview = $state.raw<CreateSUFromEnvFieldsResult | null>(null);
 
@@ -128,6 +158,11 @@
   let expandedHierarchyIds = $state<number[]>([]);
   let selectedHierarchyNodeId = $state<number | null>(null);
   let newHierarchyTableName = $state('');
+  let newHierarchyDestination = $state<'project' | 'new_file'>('project');
+  let newHierarchyFilePath = $state('');
+  let saveHierarchyAsName = $state('');
+  let saveHierarchyAsDestination = $state<'project' | 'new_file'>('project');
+  let saveHierarchyAsFilePath = $state('');
   let addNodeName = $state('');
   let addNodeLevel = $state(11);
   let addNodeBreak = $state(false);
@@ -144,6 +179,19 @@
   let statusBanner = $state('');
 
   let generation = 0;
+
+  const filteredUserSiteUnits = $derived(
+    userSUFilter.trim()
+      ? userSiteUnits.filter(entry => {
+          const needle = userSUFilter.trim().toLowerCase();
+          return (
+            entry.siteSeries.toLowerCase().includes(needle) ||
+            entry.siteSeriesLongName.toLowerCase().includes(needle) ||
+            entry.siteSeriesScientificName.toLowerCase().includes(needle)
+          );
+        })
+      : userSiteUnits
+  );
 
   const flatSUItems = $derived(flattenVisibleSUTree(suTree, new Set(expandedSUIds)));
   const suVirtualSlice = $derived(
@@ -176,7 +224,7 @@
   );
 
   $effect(() => {
-    onBusyChange?.(busy || mutating || flatDirty || !!flatValidationError);
+    onBusyChange?.(busy || mutating || flatDirty || !!flatValidationError || exclusionBusy);
     onDirtyChange?.(!busy && !mutating && flatDirty);
   });
 
@@ -184,8 +232,57 @@
     if (!effectiveContextId) return;
     if (mode === 'su_tree') {
       await loadSUTreeAndPicker();
+      void loadUserSiteUnitList();
     } else {
       await loadHierarchy();
+    }
+  }
+
+  async function queryBECChoices(): Promise<BECUnitPickerChoice[]> {
+    const zoneArg = becZone.trim() || null;
+    const subZoneArg = becSubZone.trim() || null;
+    const queryArg = becQuery.trim();
+    if (becSearchMode === 'becdb_v13' && port.searchBECSiteSeries) {
+      const series = await reads.track(port.searchBECSiteSeries(zoneArg, subZoneArg, queryArg, 120));
+      return series ?? [];
+    }
+    const picker = await reads.track(
+      port.searchBECUnitPicker(effectiveContextId, {
+        query: queryArg,
+        zone: becZone,
+        subZone: becSubZone,
+        limit: 80,
+      })
+    );
+    const baseChoices = picker ?? [];
+    if (port.searchBECSiteSeries && (zoneArg || subZoneArg || queryArg)) {
+      try {
+        const series = await reads.track(
+          port.searchBECSiteSeries(zoneArg, subZoneArg, queryArg, 120)
+        );
+        const seen = new Set(baseChoices.map(c => c.siteSeries));
+        const merged = [...baseChoices];
+        for (const item of series ?? []) {
+          if (item.siteSeries && !seen.has(item.siteSeries)) {
+            seen.add(item.siteSeries);
+            merged.push(item);
+          }
+        }
+        return merged;
+      } catch {
+        return baseChoices;
+      }
+    }
+    return baseChoices;
+  }
+
+  async function loadBECZonesCatalog() {
+    if (!port.listBECZones) return;
+    try {
+      const zones = await reads.track(port.listBECZones());
+      becZones = zones ?? [];
+    } catch {
+      // Optional zone datalist; keep typing functional even when catalogue offline.
     }
   }
 
@@ -199,14 +296,7 @@
     try {
       const [tree, picker] = await Promise.all([
         reads.track(port.getSUPlotTree(effectiveContextId, suFilterText)),
-        reads.track(
-          port.searchBECUnitPicker(effectiveContextId, {
-            query: becQuery,
-            zone: becZone,
-            subZone: becSubZone,
-            limit: 80,
-          })
-        ),
+        queryBECChoices(),
       ]);
       if (reqGen !== generation) return;
       suTree = tree;
@@ -228,17 +318,145 @@
   async function refreshBECPicker() {
     if (!effectiveContextId) return;
     try {
-      const choices = await reads.track(
-        port.searchBECUnitPicker(effectiveContextId, {
-          query: becQuery,
-          zone: becZone,
-          subZone: becSubZone,
-          limit: 80,
-        })
-      );
-      becChoices = choices ?? [];
+      becChoices = await queryBECChoices();
     } catch (err) {
       errorMessage = String(err);
+    }
+  }
+
+  async function loadUserSiteUnitList() {
+    if (!effectiveContextId || !port.listUserSiteUnitList) return;
+    userSULoading = true;
+    try {
+      const entries = await reads.track(port.listUserSiteUnitList(effectiveContextId));
+      userSiteUnits = entries ?? [];
+    } catch (err) {
+      errorMessage = `Load UserSiteUnitList failed: ${String(err)}`;
+    } finally {
+      userSULoading = false;
+    }
+  }
+
+  function resetUserSiteUnitForm() {
+    userSUFormId = null;
+    userSUSeries = '';
+    userSULongName = '';
+    userSUSciName = '';
+    userSULevel = 11;
+  }
+
+  function editUserSiteUnitEntry(entry: UserSiteUnitEntry) {
+    userSUFormId = entry.id;
+    userSUSeries = entry.siteSeries;
+    userSULongName = entry.siteSeriesLongName;
+    userSUSciName = entry.siteSeriesScientificName;
+    userSULevel = entry.level || 11;
+    rightPaneTab = 'user_su_list';
+  }
+
+  async function submitUserSiteUnitEntry() {
+    if (!effectiveContextId || !port.saveUserSiteUnitEntry || !userSUSeries.trim() || mutating) return;
+    mutating = true;
+    errorMessage = '';
+    try {
+      const saved = await port.saveUserSiteUnitEntry(effectiveContextId, {
+        id: userSUFormId,
+        siteSeries: userSUSeries.trim(),
+        siteSeriesLongName: userSULongName.trim(),
+        siteSeriesScientificName: userSUSciName.trim(),
+        level: Number.isFinite(userSULevel) ? userSULevel : 11,
+      });
+      statusBanner = saved
+        ? `Saved UserSiteUnit "${saved.siteSeries}".`
+        : 'Saved UserSiteUnit entry.';
+      resetUserSiteUnitForm();
+      await loadUserSiteUnitList();
+    } catch (err) {
+      errorMessage = `Save UserSiteUnit failed: ${String(err)}`;
+    } finally {
+      mutating = false;
+    }
+  }
+
+  async function removeUserSiteUnitEntry(entry: UserSiteUnitEntry) {
+    if (!effectiveContextId || !port.deleteUserSiteUnitEntry || mutating) return;
+    mutating = true;
+    errorMessage = '';
+    try {
+      await port.deleteUserSiteUnitEntry(effectiveContextId, { id: entry.id });
+      if (userSUFormId === entry.id) resetUserSiteUnitForm();
+      statusBanner = `Deleted UserSiteUnit "${entry.siteSeries}".`;
+      await loadUserSiteUnitList();
+    } catch (err) {
+      errorMessage = `Delete UserSiteUnit failed: ${String(err)}`;
+    } finally {
+      mutating = false;
+    }
+  }
+
+  async function exportUserSiteUnitsCSV() {
+    if (!effectiveContextId || !port.exportUserSiteUnitListCSV || mutating) return;
+    mutating = true;
+    errorMessage = '';
+    try {
+      const csv = await port.exportUserSiteUnitListCSV(effectiveContextId);
+      userSUCSVText = csv;
+      if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && typeof document !== 'undefined') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${(project || 'UserSiteUnitList').replace(/[^A-Za-z0-9_-]+/g, '_')}_UserSiteUnits.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+      statusBanner = 'Exported UserSiteUnitList CSV.';
+    } catch (err) {
+      errorMessage = `Export UserSiteUnit CSV failed: ${String(err)}`;
+    } finally {
+      mutating = false;
+    }
+  }
+
+  async function handleUserSUCSVFile(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    userSUCSVText = await file.text();
+  }
+
+  async function importUserSiteUnitsCSV() {
+    if (!effectiveContextId || !port.importUserSiteUnitListCSV || !userSUCSVText.trim() || mutating) return;
+    mutating = true;
+    errorMessage = '';
+    try {
+      const result = await port.importUserSiteUnitListCSV(
+        effectiveContextId,
+        userSUCSVText,
+        userSUOverwrite
+      );
+      userSUImportResult = result;
+      statusBanner = result
+        ? `Imported UserSiteUnit CSV: ${result.inserted} inserted, ${result.updated} updated, ${result.skipped} skipped (${result.total} total).`
+        : 'Imported UserSiteUnit CSV.';
+      await loadUserSiteUnitList();
+    } catch (err) {
+      errorMessage = `Import UserSiteUnit CSV failed: ${String(err)}`;
+    } finally {
+      mutating = false;
+    }
+  }
+
+  async function browseNewSQLitePath(suggestedName: string, applyPath: (picked: string) => void) {
+    if (!effectiveContextId || !port.chooseNewSQLiteProjectFile) return;
+    try {
+      const picked = await port.chooseNewSQLiteProjectFile(
+        effectiveContextId,
+        suggestedName.trim() || 'StandaloneTable'
+      );
+      if (picked) applyPath(picked);
+    } catch (err) {
+      errorMessage = `Select external SQLite path failed: ${String(err)}`;
     }
   }
 
@@ -449,13 +667,17 @@
 
   async function submitCreateSU() {
     if (!newSUName.trim() || mutating) return;
+    if (newSUDestination === 'new_file' && !newSUFilePath.trim()) {
+      errorMessage = 'Enter or browse an external .db file path for the new SU table.';
+      return;
+    }
     mutating = true;
     errorMessage = '';
     try {
       const res = await port.createSUTable(effectiveContextId, {
         name: newSUName.trim(),
-        destination: 'project',
-        filePath: '',
+        destination: newSUDestination,
+        filePath: newSUDestination === 'new_file' ? newSUFilePath.trim() : '',
         populateAllProjectPlots: populateAllPlots,
         seedFromUserSiteUnit: seedFromUserSU,
         activate: true,
@@ -466,6 +688,8 @@
       }
       activeDialog = 'none';
       newSUName = '';
+      newSUFilePath = '';
+      newSUDestination = 'project';
       statusBanner = `Created and activated ${res.tableName} (${res.plotCount} plot(s)).`;
       await loadSUTreeAndPicker();
     } catch (err) {
@@ -477,14 +701,18 @@
 
   async function submitSaveSUAs() {
     if (!saveAsNewName.trim() || mutating) return;
+    if (saveAsDestination === 'new_file' && !saveAsFilePath.trim()) {
+      errorMessage = 'Enter or browse an external .db file path for Save SU As.';
+      return;
+    }
     mutating = true;
     errorMessage = '';
     try {
       const res = await port.saveSUTableAs(effectiveContextId, {
         sourceSu: '',
         newName: saveAsNewName.trim(),
-        destination: 'project',
-        filePath: '',
+        destination: saveAsDestination,
+        filePath: saveAsDestination === 'new_file' ? saveAsFilePath.trim() : '',
         activate: true,
       });
       if (res.activated) {
@@ -493,6 +721,8 @@
       }
       activeDialog = 'none';
       saveAsNewName = '';
+      saveAsFilePath = '';
+      saveAsDestination = 'project';
       statusBanner = `Saved SU copy as ${res.tableName} (${res.plotCount} plot(s)).`;
       await loadSUTreeAndPicker();
     } catch (err) {
@@ -504,6 +734,10 @@
 
   async function runSUFromEnv(previewOnly: boolean) {
     if (envConcatFields.length === 0 || mutating) return;
+    if (envConcatMode === 'new_table' && envDestination === 'new_file' && !envFilePath.trim()) {
+      errorMessage = 'Enter or browse an external .db file path when writing a new SU file.';
+      return;
+    }
     mutating = true;
     errorMessage = '';
     try {
@@ -513,8 +747,12 @@
         useBecSlashFormat: envUseBECSlash,
         mode: envConcatMode,
         targetSuName: envConcatMode === 'new_table' ? envNewSUName.trim() : undefined,
-        destination: 'project',
-        scopeToExistingSuRowsOnly: false,
+        destination: envConcatMode === 'new_table' ? envDestination : 'project',
+        filePath:
+          envConcatMode === 'new_table' && envDestination === 'new_file'
+            ? envFilePath.trim()
+            : undefined,
+        scopeToExistingSuRowsOnly: envScopeToExistingOnly,
         skipIncompleteRows: envSkipIncomplete,
         previewOnly,
         activate: envConcatMode === 'new_table',
@@ -540,13 +778,17 @@
 
   async function submitCreateHierarchyTable() {
     if (!newHierarchyTableName.trim() || mutating) return;
+    if (newHierarchyDestination === 'new_file' && !newHierarchyFilePath.trim()) {
+      errorMessage = 'Enter or browse an external .db file path for the new hierarchy.';
+      return;
+    }
     mutating = true;
     errorMessage = '';
     try {
       const res = await port.createHierarchyTable(effectiveContextId, {
         name: newHierarchyTableName.trim(),
-        destination: 'project',
-        filePath: '',
+        destination: newHierarchyDestination,
+        filePath: newHierarchyDestination === 'new_file' ? newHierarchyFilePath.trim() : '',
         activate: true,
       });
       if (res.activated) {
@@ -555,10 +797,48 @@
       }
       activeDialog = 'none';
       newHierarchyTableName = '';
+      newHierarchyFilePath = '';
+      newHierarchyDestination = 'project';
       statusBanner = `Created and activated ${res.tableName}.`;
       await loadHierarchy();
     } catch (err) {
       errorMessage = `Create Hierarchy failed: ${String(err)}`;
+    } finally {
+      mutating = false;
+    }
+  }
+
+  async function submitSaveHierarchyAs() {
+    if (!saveHierarchyAsName.trim() || !port.saveHierarchyTableAs || mutating) return;
+    if (saveHierarchyAsDestination === 'new_file' && !saveHierarchyAsFilePath.trim()) {
+      errorMessage = 'Enter or browse an external .db file path for Save Hierarchy As.';
+      return;
+    }
+    mutating = true;
+    errorMessage = '';
+    try {
+      const res = await port.saveHierarchyTableAs(effectiveContextId, {
+        sourceHierarchy: hierarchyView?.hierarchy ?? '',
+        newName: saveHierarchyAsName.trim(),
+        destination: saveHierarchyAsDestination,
+        filePath:
+          saveHierarchyAsDestination === 'new_file' ? saveHierarchyAsFilePath.trim() : '',
+        activate: true,
+      });
+      if (res?.activated) {
+        effectiveContextId = res.contextId;
+        onContextChanged?.(res.contextId, res.newState);
+      }
+      activeDialog = 'none';
+      saveHierarchyAsName = '';
+      saveHierarchyAsFilePath = '';
+      saveHierarchyAsDestination = 'project';
+      statusBanner = res
+        ? `Saved hierarchy copy as ${res.tableName}.`
+        : 'Saved hierarchy table copy.';
+      await loadHierarchy();
+    } catch (err) {
+      errorMessage = `Save Hierarchy As failed: ${String(err)}`;
     } finally {
       mutating = false;
     }
@@ -689,6 +969,7 @@
   }
 
   onMount(() => {
+    void loadBECZonesCatalog();
     if (effectiveContextId) {
       void reloadActivePane();
     }
@@ -702,7 +983,11 @@
   });
 </script>
 
-<section class="vpro-cls-explorer" aria-label="Dual-Pane Classification Explorer">
+<section
+  class="vpro-cls-explorer"
+  data-tour="classification-explorer-root"
+  aria-label="Dual-Pane Classification Explorer"
+>
   <header class="vpro-cls-header">
     <div>
       <p class="vpro-cls-eyebrow">BEC CLASSIFICATION WORKBENCH</p>
@@ -774,6 +1059,33 @@
           <span>SU Name (without _SU)</span>
           <input type="text" bind:value={newSUName} placeholder="e.g. Working2026" />
         </label>
+        <label>
+          <span>Destination</span>
+          <select bind:value={newSUDestination}>
+            <option value="project">Active Project DB</option>
+            <option value="new_file">External .db File</option>
+          </select>
+        </label>
+        {#if newSUDestination === 'new_file'}
+          <label class="vpro-cls-filepath-field">
+            <span>External .db Path</span>
+            <div class="vpro-cls-inline-browse">
+              <input type="text" bind:value={newSUFilePath} placeholder="/path/to/WorkingSU.db" />
+              {#if port.chooseNewSQLiteProjectFile}
+                <button
+                  type="button"
+                  class="vpro-btn-secondary"
+                  onclick={() =>
+                    browseNewSQLitePath(newSUName || 'WorkingSU', picked => {
+                      newSUFilePath = picked;
+                    })}
+                >
+                  Browse...
+                </button>
+              {/if}
+            </div>
+          </label>
+        {/if}
         <label class="vpro-cls-check">
           <input type="checkbox" bind:checked={populateAllPlots} />
           <span>Include all project plots</span>
@@ -798,6 +1110,37 @@
           <span>New SU Name</span>
           <input type="text" bind:value={saveAsNewName} placeholder="e.g. RegionalSubset" />
         </label>
+        <label>
+          <span>Destination</span>
+          <select bind:value={saveAsDestination}>
+            <option value="project">Active Project DB</option>
+            <option value="new_file">External .db File</option>
+          </select>
+        </label>
+        {#if saveAsDestination === 'new_file'}
+          <label class="vpro-cls-filepath-field">
+            <span>External .db Path</span>
+            <div class="vpro-cls-inline-browse">
+              <input
+                type="text"
+                bind:value={saveAsFilePath}
+                placeholder="/path/to/RegionalSubset.db"
+              />
+              {#if port.chooseNewSQLiteProjectFile}
+                <button
+                  type="button"
+                  class="vpro-btn-secondary"
+                  onclick={() =>
+                    browseNewSQLitePath(saveAsNewName || 'RegionalSubset', picked => {
+                      saveAsFilePath = picked;
+                    })}
+                >
+                  Browse...
+                </button>
+              {/if}
+            </div>
+          </label>
+        {/if}
         <button type="button" class="vpro-btn-primary" disabled={mutating} onclick={submitSaveSUAs}>
           Save Copy &amp; Activate
         </button>
@@ -823,14 +1166,45 @@
             <span>New SU Table Name</span>
             <input type="text" bind:value={envNewSUName} placeholder="e.g. FieldBEC" />
           </label>
+          <label>
+            <span>Destination</span>
+            <select bind:value={envDestination}>
+              <option value="project">Active Project DB</option>
+              <option value="new_file">External .db File</option>
+            </select>
+          </label>
+          {#if envDestination === 'new_file'}
+            <label class="vpro-cls-filepath-field">
+              <span>External .db Path</span>
+              <div class="vpro-cls-inline-browse">
+                <input type="text" bind:value={envFilePath} placeholder="/path/to/FieldBEC.db" />
+                {#if port.chooseNewSQLiteProjectFile}
+                  <button
+                    type="button"
+                    class="vpro-btn-secondary"
+                    onclick={() =>
+                      browseNewSQLitePath(envNewSUName || 'FieldBEC', picked => {
+                        envFilePath = picked;
+                      })}
+                  >
+                    Browse...
+                  </button>
+                {/if}
+              </div>
+            </label>
+          {/if}
         {/if}
         <label>
           <span>Separator</span>
-          <input type="text" bind:value={envSeparator} style="width:5rem;" />
+          <input type="text" class="vpro-cls-sep-input" bind:value={envSeparator} />
         </label>
         <label class="vpro-cls-check">
           <input type="checkbox" bind:checked={envUseBECSlash} />
           <span>BEC format (Zone+SubZone + "/" + SiteSeries)</span>
+        </label>
+        <label class="vpro-cls-check">
+          <input type="checkbox" bind:checked={envScopeToExistingOnly} />
+          <span>Limit to plots already in SU table</span>
         </label>
         <label class="vpro-cls-check">
           <input type="checkbox" bind:checked={envSkipIncomplete} />
@@ -898,6 +1272,37 @@
           <span>Hierarchy Name (without _Hierarchy)</span>
           <input type="text" bind:value={newHierarchyTableName} placeholder="e.g. Coast2026" />
         </label>
+        <label>
+          <span>Destination</span>
+          <select bind:value={newHierarchyDestination}>
+            <option value="project">Active Project DB</option>
+            <option value="new_file">External .db File</option>
+          </select>
+        </label>
+        {#if newHierarchyDestination === 'new_file'}
+          <label class="vpro-cls-filepath-field">
+            <span>External .db Path</span>
+            <div class="vpro-cls-inline-browse">
+              <input
+                type="text"
+                bind:value={newHierarchyFilePath}
+                placeholder="/path/to/Coast2026_Hierarchy.db"
+              />
+              {#if port.chooseNewSQLiteProjectFile}
+                <button
+                  type="button"
+                  class="vpro-btn-secondary"
+                  onclick={() =>
+                    browseNewSQLitePath(newHierarchyTableName || 'Coast2026', picked => {
+                      newHierarchyFilePath = picked;
+                    })}
+                >
+                  Browse...
+                </button>
+              {/if}
+            </div>
+          </label>
+        {/if}
         <button
           type="button"
           class="vpro-btn-primary"
@@ -905,6 +1310,58 @@
           onclick={submitCreateHierarchyTable}
         >
           Create &amp; Activate
+        </button>
+        <button type="button" class="vpro-btn-secondary" onclick={() => (activeDialog = 'none')}>
+          Cancel
+        </button>
+      </div>
+    </section>
+  {:else if activeDialog === 'save_hierarchy_as'}
+    <section class="vpro-cls-dialog" aria-label="Save Hierarchy Table As">
+      <h3>Save Active Hierarchy Table As</h3>
+      <div class="vpro-cls-dialog-row">
+        <label>
+          <span>New Hierarchy Name</span>
+          <input type="text" bind:value={saveHierarchyAsName} placeholder="e.g. CoastBackup" />
+        </label>
+        <label>
+          <span>Destination</span>
+          <select bind:value={saveHierarchyAsDestination}>
+            <option value="project">Active Project DB</option>
+            <option value="new_file">External .db File</option>
+          </select>
+        </label>
+        {#if saveHierarchyAsDestination === 'new_file'}
+          <label class="vpro-cls-filepath-field">
+            <span>External .db Path</span>
+            <div class="vpro-cls-inline-browse">
+              <input
+                type="text"
+                bind:value={saveHierarchyAsFilePath}
+                placeholder="/path/to/CoastBackup.db"
+              />
+              {#if port.chooseNewSQLiteProjectFile}
+                <button
+                  type="button"
+                  class="vpro-btn-secondary"
+                  onclick={() =>
+                    browseNewSQLitePath(saveHierarchyAsName || 'CoastBackup', picked => {
+                      saveHierarchyAsFilePath = picked;
+                    })}
+                >
+                  Browse...
+                </button>
+              {/if}
+            </div>
+          </label>
+        {/if}
+        <button
+          type="button"
+          class="vpro-btn-primary"
+          disabled={mutating || !saveHierarchyAsName.trim()}
+          onclick={submitSaveHierarchyAs}
+        >
+          Save Copy &amp; Activate
         </button>
         <button type="button" class="vpro-btn-secondary" onclick={() => (activeDialog = 'none')}>
           Cancel
@@ -929,6 +1386,13 @@
             onclick={() => (activeDialog = 'new_hierarchy')}
           >
             New Hierarchy
+          </button>
+          <button
+            type="button"
+            class="vpro-btn-secondary"
+            onclick={() => (activeDialog = 'save_hierarchy_as')}
+          >
+            Save Hierarchy As
           </button>
           <button
             type="button"
@@ -1202,6 +1666,13 @@
             <button
               type="button"
               class="vpro-btn-secondary"
+              onclick={() => (activeDialog = 'save_hierarchy_as')}
+            >
+              Save Hierarchy As
+            </button>
+            <button
+              type="button"
+              class="vpro-btn-secondary"
               onclick={() => {
                 expandedHierarchyIds = (hierarchyView?.flatNodes ?? []).map(n => n.id);
               }}
@@ -1372,32 +1843,34 @@
               </dl>
 
               {#if inspectedPlot.topSpecies.length > 0}
-                <table class="vpro-cls-spp-table">
-                  <thead>
-                    <tr>
-                      <th>Species</th>
-                      <th>A</th>
-                      <th>B</th>
-                      <th>C</th>
-                      <th>D</th>
-                      <th>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each inspectedPlot.topSpecies.slice(0, 8) as sp (sp.species)}
+                <div class="table-scroll">
+                  <table class="vpro-cls-spp-table">
+                    <thead>
                       <tr>
-                        <td title={sp.scientificName}>
-                          <strong class="mono">{sp.species}</strong>
-                        </td>
-                        <td class="mono">{sp.coverA}</td>
-                        <td class="mono">{sp.coverB}</td>
-                        <td class="mono">{sp.coverC}</td>
-                        <td class="mono">{sp.coverD}</td>
-                        <td class="mono"><strong>{sp.totalFormatted}</strong></td>
+                        <th>Species</th>
+                        <th>A</th>
+                        <th>B</th>
+                        <th>C</th>
+                        <th>D</th>
+                        <th>Total</th>
                       </tr>
-                    {/each}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {#each inspectedPlot.topSpecies.slice(0, 8) as sp (sp.species)}
+                        <tr>
+                          <td title={sp.scientificName}>
+                            <strong class="mono">{sp.species}</strong>
+                          </td>
+                          <td class="mono">{sp.coverA}</td>
+                          <td class="mono">{sp.coverB}</td>
+                          <td class="mono">{sp.coverC}</td>
+                          <td class="mono">{sp.coverD}</td>
+                          <td class="mono"><strong>{sp.totalFormatted}</strong></td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
               {/if}
             {:else}
               <p class="vpro-cls-muted">
@@ -1408,83 +1881,305 @@
           </section>
 
           <section class="vpro-cls-card">
-            <h3>BECdb v13 Unit Picker (ZZZZsssvp/##)</h3>
-            <div class="vpro-cls-picker-filters">
-              <input
-                type="text"
-                placeholder="Zone (e.g. CWH)"
-                bind:value={becZone}
-                style="width:5.5rem;"
-                onkeydown={e => {
-                  if (e.key === 'Enter') void refreshBECPicker();
-                }}
-              />
-              <input
-                type="text"
-                placeholder="SubZone"
-                bind:value={becSubZone}
-                style="width:5.5rem;"
-                onkeydown={e => {
-                  if (e.key === 'Enter') void refreshBECPicker();
-                }}
-              />
-              <input
-                type="search"
-                placeholder="Search code or name..."
-                bind:value={becQuery}
-                style="flex:1;"
-                onkeydown={e => {
-                  if (e.key === 'Enter') void refreshBECPicker();
-                }}
-              />
-              <button type="button" class="vpro-btn-secondary" onclick={refreshBECPicker}>
-                Search
-              </button>
-            </div>
-
-            <div class="vpro-cls-custom-assign">
-              <input
-                type="text"
-                class="mono"
-                placeholder="Custom or ZZZZsssvp/## unit..."
-                bind:value={customTargetUnit}
-              />
-              {#if customTargetUnit.trim()}
-                <span
-                  class="vpro-mask-badge"
-                  class:valid={isValidBECUnitMask(customTargetUnit)}
+            <div class="vpro-cls-card-head">
+              <h3>BECdb v13 Unit Picker (ZZZZsssvp/##)</h3>
+              <div class="vpro-cls-actions">
+                <button
+                  type="button"
+                  class="vpro-btn-mini"
+                  class:active-pill={rightPaneTab === 'bec_picker'}
+                  onclick={() => (rightPaneTab = 'bec_picker')}
                 >
-                  {isValidBECUnitMask(customTargetUnit) ? 'BEC Mask OK' : 'Working Unit'}
-                </span>
-              {/if}
-              <button
-                type="button"
-                class="vpro-btn-primary"
-                disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating}
-                onclick={() => assignPlots(selectedPlots, customTargetUnit.trim())}
-              >
-                Assign ({selectedPlots.length})
-              </button>
+                  BEC Picker
+                </button>
+                <button
+                  type="button"
+                  class="vpro-btn-mini"
+                  class:active-pill={rightPaneTab === 'user_su_list'}
+                  onclick={() => {
+                    rightPaneTab = 'user_su_list';
+                    void loadUserSiteUnitList();
+                  }}
+                >
+                  UserSiteUnitList ({userSiteUnits.length})
+                </button>
+              </div>
             </div>
 
-            <div class="vpro-cls-bec-list">
-              {#each becChoices as choice (choice.siteSeries)}
-                <div class="vpro-cls-bec-row">
-                  <div>
-                    <strong class="mono">{choice.siteSeries}</strong>
-                    <span class="vpro-cls-sub">{choice.longName}</span>
+            {#if rightPaneTab === 'bec_picker'}
+              <datalist id="vpro-cls-bec-zone-options">
+                {#each becZones as bz (bz.zone)}
+                  <option value={bz.zone}>{bz.zone} — {bz.description}</option>
+                {/each}
+              </datalist>
+
+              <div class="vpro-cls-picker-filters">
+                <input
+                  type="text"
+                  class="vpro-cls-zone-input"
+                  list="vpro-cls-bec-zone-options"
+                  placeholder="Zone (e.g. CWH)"
+                  bind:value={becZone}
+                  onkeydown={e => {
+                    if (e.key === 'Enter') void refreshBECPicker();
+                  }}
+                />
+                <input
+                  type="text"
+                  class="vpro-cls-zone-input"
+                  placeholder="SubZone"
+                  bind:value={becSubZone}
+                  onkeydown={e => {
+                    if (e.key === 'Enter') void refreshBECPicker();
+                  }}
+                />
+                <select
+                  aria-label="BEC lookup catalogue source"
+                  bind:value={becSearchMode}
+                  onchange={() => void refreshBECPicker()}
+                >
+                  <option value="combined">All Sources</option>
+                  <option value="becdb_v13">BECdb v13 (Zone / Series)</option>
+                </select>
+                <input
+                  type="search"
+                  class="vpro-cls-query-input"
+                  placeholder="Search code or name..."
+                  bind:value={becQuery}
+                  onkeydown={e => {
+                    if (e.key === 'Enter') void refreshBECPicker();
+                  }}
+                />
+                <button type="button" class="vpro-btn-secondary" onclick={refreshBECPicker}>
+                  Search
+                </button>
+              </div>
+
+              <div class="vpro-cls-custom-assign">
+                <input
+                  type="text"
+                  class="mono"
+                  placeholder="Custom or ZZZZsssvp/## unit..."
+                  bind:value={customTargetUnit}
+                />
+                {#if customTargetUnit.trim()}
+                  <span
+                    class="vpro-mask-badge"
+                    class:valid={isValidBECUnitMask(customTargetUnit)}
+                  >
+                    {isValidBECUnitMask(customTargetUnit) ? 'BEC Mask OK' : 'Working Unit'}
+                  </span>
+                {/if}
+                <button
+                  type="button"
+                  class="vpro-btn-primary"
+                  disabled={selectedPlots.length === 0 || !customTargetUnit.trim() || mutating}
+                  onclick={() => assignPlots(selectedPlots, customTargetUnit.trim())}
+                >
+                  Assign ({selectedPlots.length})
+                </button>
+              </div>
+
+              <div class="vpro-cls-bec-list">
+                {#each becChoices as choice (`${choice.source}::${choice.siteSeries}`)}
+                  <div class="vpro-cls-bec-row">
+                    <div>
+                      <strong class="mono">{choice.siteSeries}</strong>
+                      <span class="vpro-cls-sub">{choice.longName}</span>
+                    </div>
+                    <button
+                      type="button"
+                      class="vpro-btn-mini"
+                      disabled={selectedPlots.length === 0 || mutating}
+                      onclick={() => assignPlots(selectedPlots, choice.siteSeries)}
+                    >
+                      Assign ({selectedPlots.length})
+                    </button>
                   </div>
+                {/each}
+                {#if becChoices.length === 0}
+                  <p class="vpro-cls-empty">No BEC site series matched the active zone/filter.</p>
+                {/if}
+              </div>
+            {:else}
+              <div class="vpro-cls-user-su-panel" aria-label="User Site Unit List Editor">
+                <div class="vpro-cls-subtoolbar">
+                  <input
+                    type="search"
+                    class="vpro-cls-filter"
+                    placeholder="Filter UserSiteUnitList..."
+                    bind:value={userSUFilter}
+                  />
                   <button
                     type="button"
-                    class="vpro-btn-mini"
-                    disabled={selectedPlots.length === 0 || mutating}
-                    onclick={() => assignPlots(selectedPlots, choice.siteSeries)}
+                    class="vpro-btn-secondary"
+                    disabled={userSULoading}
+                    onclick={loadUserSiteUnitList}
                   >
-                    Assign ({selectedPlots.length})
+                    Refresh
                   </button>
+                  {#if port.exportUserSiteUnitListCSV}
+                    <button
+                      type="button"
+                      class="vpro-btn-secondary"
+                      disabled={mutating}
+                      onclick={exportUserSiteUnitsCSV}
+                    >
+                      Export CSV
+                    </button>
+                  {/if}
                 </div>
-              {/each}
-            </div>
+
+                <div class="vpro-cls-dialog-row">
+                  <label>
+                    <span>SiteSeries</span>
+                    <input
+                      type="text"
+                      class="mono"
+                      bind:value={userSUSeries}
+                      placeholder="e.g. CWHvm1/01"
+                    />
+                  </label>
+                  <label>
+                    <span>Long Name</span>
+                    <input
+                      type="text"
+                      bind:value={userSULongName}
+                      placeholder="Descriptive unit name"
+                    />
+                  </label>
+                  <label>
+                    <span>Scientific Name</span>
+                    <input
+                      type="text"
+                      bind:value={userSUSciName}
+                      placeholder="Plant association"
+                    />
+                  </label>
+                  <label>
+                    <span>Level</span>
+                    <input
+                      type="number"
+                      class="vpro-cls-sep-input"
+                      bind:value={userSULevel}
+                      min={1}
+                      max={11}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    class="vpro-btn-primary"
+                    disabled={mutating || !userSUSeries.trim() || !port.saveUserSiteUnitEntry}
+                    onclick={submitUserSiteUnitEntry}
+                  >
+                    {userSUFormId !== null ? 'Update Entry' : 'Add Entry'}
+                  </button>
+                  {#if userSUFormId !== null}
+                    <button
+                      type="button"
+                      class="vpro-btn-secondary"
+                      onclick={resetUserSiteUnitForm}
+                    >
+                      Cancel Edit
+                    </button>
+                  {/if}
+                </div>
+
+                <div class="vpro-cls-bec-list">
+                  <div class="table-scroll">
+                    <table class="vpro-cls-spp-table">
+                      <thead>
+                        <tr>
+                          <th>SiteSeries</th>
+                          <th>Long Name</th>
+                          <th>Scientific</th>
+                          <th>Lvl</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {#each filteredUserSiteUnits as entry (entry.id)}
+                          <tr>
+                            <td class="mono"><strong>{entry.siteSeries}</strong></td>
+                            <td>{entry.siteSeriesLongName}</td>
+                            <td>{entry.siteSeriesScientificName}</td>
+                            <td class="mono">{entry.level}</td>
+                            <td class="vpro-cls-actions">
+                              <button
+                                type="button"
+                                class="vpro-btn-mini"
+                                disabled={selectedPlots.length === 0 || mutating}
+                                onclick={() => assignPlots(selectedPlots, entry.siteSeries)}
+                              >
+                                Assign ({selectedPlots.length})
+                              </button>
+                              <button
+                                type="button"
+                                class="vpro-btn-mini"
+                                onclick={() => editUserSiteUnitEntry(entry)}
+                              >
+                                Edit
+                              </button>
+                              {#if port.deleteUserSiteUnitEntry}
+                                <button
+                                  type="button"
+                                  class="vpro-btn-mini"
+                                  disabled={mutating}
+                                  onclick={() => removeUserSiteUnitEntry(entry)}
+                                >
+                                  Delete
+                                </button>
+                              {/if}
+                            </td>
+                          </tr>
+                        {/each}
+                        {#if filteredUserSiteUnits.length === 0}
+                          <tr>
+                            <td colspan="5" class="vpro-cls-empty">
+                              {userSULoading
+                                ? 'Loading UserSiteUnitList...'
+                                : 'No UserSiteUnitList entries stored yet.'}
+                            </td>
+                          </tr>
+                        {/if}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {#if port.importUserSiteUnitListCSV}
+                  <div class="vpro-cls-csv-import">
+                    <div class="vpro-cls-subtoolbar">
+                      <label class="vpro-cls-check">
+                        <input type="checkbox" bind:checked={userSUOverwrite} />
+                        <span>Overwrite matching SiteSeries</span>
+                      </label>
+                      <input type="file" accept=".csv,text/csv" onchange={handleUserSUCSVFile} />
+                      <button
+                        type="button"
+                        class="vpro-btn-secondary"
+                        disabled={mutating || !userSUCSVText.trim()}
+                        onclick={importUserSiteUnitsCSV}
+                      >
+                        Import CSV
+                      </button>
+                    </div>
+                    <textarea
+                      rows="3"
+                      class="vpro-cls-csv-box"
+                      placeholder="Paste or load UserSiteUnitList CSV rows..."
+                      bind:value={userSUCSVText}
+                    ></textarea>
+                    {#if userSUImportResult}
+                      <p class="vpro-cls-preview-note">
+                        Imported: {userSUImportResult.inserted} inserted · {userSUImportResult.updated}
+                        updated · {userSUImportResult.skipped} skipped.
+                      </p>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/if}
           </section>
         {:else}
           <!-- HIERARCHY NODE INSPECTOR & MUTATION CONTROLS -->
@@ -1599,6 +2294,23 @@
       </aside>
     </div>
   {/if}
+
+  {#if effectiveContextId}
+    <details class="vpro-cls-exclusion-drawer">
+      <summary class="vpro-cls-exclusion-summary">
+        Site Unit Exclusion Rules (~ Breakpoints &amp; Report Filters)
+      </summary>
+      <div class="vpro-cls-exclusion-body">
+        <SiteUnitExclusionFilter
+          contextId={effectiveContextId}
+          su={suTree?.su || su}
+          hierarchy={hierarchyView?.hierarchy || (hierarchy && hierarchy !== 'None' ? hierarchy : '') || 'None'}
+          reportMode="summary"
+          onBusyChange={val => (exclusionBusy = val)}
+        />
+      </div>
+    </details>
+  {/if}
 </section>
 
 <style>
@@ -1607,11 +2319,12 @@
     flex-direction: column;
     gap: 0.75rem;
     background: #ffffff;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d8d8d8;
     border-top: 4px solid #003366;
     border-radius: 4px;
     padding: 1rem;
     min-width: 0;
+    color: #313132;
   }
   .vpro-cls-header {
     display: flex;
@@ -1619,7 +2332,7 @@
     justify-content: space-between;
     align-items: flex-end;
     gap: 0.75rem;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid #d8d8d8;
     padding-bottom: 0.65rem;
   }
   .vpro-cls-eyebrow {
@@ -1642,23 +2355,25 @@
   .vpro-cls-pill {
     font-size: 0.74rem;
     font-weight: 500;
-    background: #f0f4f8;
-    border: 1px solid #cbd5e1;
+    background: #f2f2f2;
+    border: 1px solid #d8d8d8;
     color: #003366;
     padding: 0.12rem 0.45rem;
     border-radius: 3px;
   }
-  .vpro-cls-mode-bar {
+  .vpro-cls-mode-bar,
+  .vpro-cls-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.35rem;
   }
   .vpro-cls-mode-btn {
     min-height: 34px;
     padding: 0.35rem 0.75rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d8d8d8;
     border-radius: 4px;
-    background: #f8fafc;
-    color: #334155;
+    background: #f2f2f2;
+    color: #313132;
     font-size: 0.82rem;
     font-weight: 600;
   }
@@ -1670,13 +2385,13 @@
   }
   .vpro-cls-dual-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(min(100%, 300px), 1fr);
     gap: 0.9rem;
     min-width: 0;
   }
   @media (max-width: 960px) {
     .vpro-cls-dual-grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
   .vpro-cls-left-pane,
@@ -1694,24 +2409,52 @@
     gap: 0.4rem;
   }
   .vpro-cls-filter {
-    flex: 1;
-    min-width: 140px;
+    flex: 1 1 140px;
+    min-width: 0;
     min-height: 32px;
     padding: 0.25rem 0.5rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #d8d8d8;
     border-radius: 3px;
     font-size: 0.82rem;
+    color: #313132;
+    background: #ffffff;
+  }
+  .vpro-cls-zone-input {
+    flex: 1 1 88px;
+    min-width: 0;
+  }
+  .vpro-cls-query-input {
+    flex: 2 1 140px;
+    min-width: 0;
+  }
+  .vpro-cls-sep-input {
+    width: 4.5rem;
+    max-width: 100%;
+  }
+  .vpro-cls-filepath-field {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+  .vpro-cls-inline-browse {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+  }
+  .vpro-cls-inline-browse input {
+    flex: 1 1 180px;
+    min-width: 0;
   }
   .vpro-cls-counts {
     margin: 0;
     font-size: 0.78rem;
-    color: #334155;
+    color: #474543;
   }
   .vpro-cls-tree-viewport {
     height: min(480px, calc(100dvh - 280px));
     min-height: 280px;
     overflow: auto;
-    border: 1px solid var(--vpro-border, #d1d5db);
+    border: 1px solid var(--vpro-border, #d8d8d8);
     border-radius: 4px;
     background: var(--vpro-surface, #ffffff);
   }
@@ -1722,42 +2465,42 @@
     align-items: center;
     gap: 0.45rem;
     padding: 0 0.6rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f2f2f2;
     font-size: 0.82rem;
     user-select: none;
     cursor: pointer;
     box-sizing: border-box;
   }
   .vpro-tree-folder {
-    background: #f8fafc;
+    background: #f2f2f2;
     font-weight: 600;
     color: #003366;
   }
   .vpro-tree-folder.unassigned {
-    background: #fffbeb;
-    color: #78350f;
+    background: rgba(252, 186, 25, 0.16);
+    color: #002244;
   }
   .vpro-tree-folder.drop-target {
     outline: 2px dashed #003366;
-    background: #e0f2fe;
+    background: rgba(26, 90, 150, 0.14);
   }
   .vpro-tree-leaf {
     padding-left: 2.1rem;
-    color: #1e293b;
+    color: #313132;
   }
   .vpro-tree-leaf.selected,
   .vpro-tree-hnode.selected {
-    background: #dbeafe;
+    background: rgba(26, 90, 150, 0.14);
     box-shadow: inset 3px 0 0 #003366;
   }
   .vpro-tree-hnode.breakpoint {
-    background: #fef9c3;
+    background: rgba(252, 186, 25, 0.2);
   }
   .vpro-tree-caret,
   .vpro-tree-caret-btn {
     font-family: var(--font-mono, monospace);
     font-size: 0.75rem;
-    color: #475569;
+    color: #474543;
     background: transparent;
     border: 0;
     padding: 0;
@@ -1779,14 +2522,14 @@
     width: 16px;
     height: 16px;
     border-radius: 2px;
-    background: #e2e8f0;
+    background: #d8d8d8;
     color: #003366;
     font-size: 0.68rem;
     font-weight: 700;
   }
   .vpro-tree-sub,
   .vpro-cls-sub {
-    color: #64748b;
+    color: #474543;
     font-size: 0.76rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1795,15 +2538,15 @@
   }
   .vpro-tree-count {
     font-size: 0.72rem;
-    background: #e2e8f0;
-    color: #0f172a;
+    background: #d8d8d8;
+    color: #313132;
     padding: 0.05rem 0.35rem;
     border-radius: 999px;
   }
   .vpro-rank-badge {
     font-size: 0.68rem;
     font-weight: 600;
-    background: #e2e8f0;
+    background: #d8d8d8;
     color: #003366;
     padding: 0.05rem 0.35rem;
     border-radius: 3px;
@@ -1812,25 +2555,26 @@
     margin-left: auto;
     padding: 1px 6px;
     font-size: 0.7rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d8d8d8;
     border-radius: 3px;
     background: #ffffff;
-    color: #334155;
+    color: #313132;
   }
   .vpro-tilde-btn.active {
     background: #fcba19;
-    color: #003366;
-    border-color: #d99b00;
+    color: #002244;
+    border-color: #003366;
     font-weight: 700;
   }
   .vpro-cls-card {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d8d8d8;
     border-radius: 4px;
     padding: 0.75rem;
-    background: #f8fafc;
+    background: #f2f2f2;
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+    min-width: 0;
   }
   .vpro-cls-card h3 {
     margin: 0;
@@ -1840,25 +2584,31 @@
   }
   .vpro-cls-card-head {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
+    gap: 0.4rem;
   }
   .vpro-cls-kv {
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
     gap: 0.35rem 0.6rem;
     font-size: 0.78rem;
   }
   .vpro-cls-kv dt {
     margin: 0;
     font-size: 0.68rem;
-    color: #64748b;
+    color: #474543;
   }
   .vpro-cls-kv dd {
     margin: 0;
     font-weight: 600;
-    color: #0f172a;
+    color: #313132;
+  }
+  .table-scroll {
+    overflow-x: auto;
+    max-width: 100%;
   }
   .vpro-cls-spp-table {
     width: 100%;
@@ -1870,7 +2620,12 @@
   .vpro-cls-spp-table th,
   .vpro-cls-spp-table td {
     padding: 3px 6px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #d8d8d8;
+  }
+  .vpro-cls-spp-table th {
+    background: #003366;
+    color: #ffffff;
+    text-align: left;
   }
   .vpro-cls-picker-filters,
   .vpro-cls-custom-assign,
@@ -1881,22 +2636,26 @@
     gap: 0.4rem;
   }
   .vpro-cls-picker-filters input,
+  .vpro-cls-picker-filters select,
   .vpro-cls-custom-assign input,
   .vpro-cls-dialog input[type='text'],
   .vpro-cls-dialog select,
   .vpro-cls-stack input[type='text'],
-  .vpro-cls-stack select {
+  .vpro-cls-stack select,
+  .vpro-cls-user-su-panel input[type='text'],
+  .vpro-cls-user-su-panel input[type='number'] {
     min-height: 30px;
     padding: 0.2rem 0.45rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #d8d8d8;
     border-radius: 3px;
     font-size: 0.8rem;
     background: #ffffff;
+    color: #313132;
   }
   .vpro-cls-bec-list {
-    max-height: 195px;
+    max-height: 215px;
     overflow: auto;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d8d8d8;
     background: #ffffff;
   }
   .vpro-cls-bec-row {
@@ -1905,24 +2664,24 @@
     align-items: center;
     gap: 0.5rem;
     padding: 4px 8px;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f2f2f2;
     font-size: 0.78rem;
   }
   .vpro-mask-badge {
     font-size: 0.7rem;
     padding: 2px 6px;
     border-radius: 3px;
-    background: #e2e8f0;
-    color: #334155;
+    background: #d8d8d8;
+    color: #313132;
   }
   .vpro-mask-badge.valid {
-    background: #dcfce7;
-    color: #166534;
+    background: rgba(46, 133, 64, 0.15);
+    color: #1e5128;
     font-weight: 600;
   }
   .vpro-cls-dialog {
-    background: #f0f4f8;
-    border: 1px solid #94a3b8;
+    background: #f2f2f2;
+    border: 1px solid #d8d8d8;
     border-left: 4px solid #fcba19;
     padding: 0.75rem;
     border-radius: 4px;
@@ -1935,7 +2694,8 @@
     color: #003366;
   }
   .vpro-cls-dialog label,
-  .vpro-cls-stack label {
+  .vpro-cls-stack label,
+  .vpro-cls-user-su-panel label {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
@@ -1956,10 +2716,10 @@
   .vpro-cls-chip {
     padding: 0.2rem 0.55rem;
     font-size: 0.76rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #d8d8d8;
     border-radius: 999px;
     background: #ffffff;
-    color: #334155;
+    color: #313132;
   }
   .vpro-cls-chip.selected {
     background: #003366;
@@ -1968,7 +2728,7 @@
   }
   .vpro-cls-flat-scroll {
     overflow-x: auto;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d8d8d8;
   }
   .vpro-cls-flat-table {
     border-collapse: collapse;
@@ -1985,10 +2745,10 @@
   }
   .vpro-cls-flat-table td {
     padding: 2px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #d8d8d8;
   }
   .vpro-cls-flat-table td.breakpoint-cell {
-    background: #fef9c3;
+    background: rgba(252, 186, 25, 0.24);
   }
   .vpro-cls-flat-table input {
     width: 132px;
@@ -1997,10 +2757,38 @@
     background: transparent;
     font-size: 0.8rem;
   }
-  .vpro-cls-stack {
+  .vpro-cls-stack,
+  .vpro-cls-user-su-panel,
+  .vpro-cls-csv-import {
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
+  }
+  .vpro-cls-csv-box {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.4rem;
+    border: 1px solid #d8d8d8;
+    border-radius: 3px;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.75rem;
+    color: #313132;
+    background: #ffffff;
+  }
+  .vpro-cls-exclusion-drawer {
+    border: 1px solid #d8d8d8;
+    border-radius: 4px;
+    background: #f2f2f2;
+    padding: 0.45rem 0.7rem;
+  }
+  .vpro-cls-exclusion-summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #003366;
+  }
+  .vpro-cls-exclusion-body {
+    margin-top: 0.6rem;
   }
   .vpro-btn-primary {
     min-height: 32px;
@@ -2018,39 +2806,45 @@
     padding: 0.3rem 0.65rem;
     background: #ffffff;
     color: #003366;
-    border: 1px solid #94a3b8;
+    border: 1px solid #003366;
     border-radius: 4px;
     font-size: 0.8rem;
   }
   .vpro-btn-danger {
     min-height: 32px;
     padding: 0.3rem 0.65rem;
-    background: #fef2f2;
-    color: #991b1b;
-    border: 1px solid #f87171;
+    background: #ffffff;
+    color: #d8292f;
+    border: 1px solid #d8292f;
     border-radius: 4px;
     font-size: 0.8rem;
+    font-weight: 600;
   }
   .vpro-btn-mini {
     padding: 2px 6px;
     font-size: 0.7rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #d8d8d8;
     border-radius: 3px;
     background: #ffffff;
     color: #003366;
   }
+  .vpro-btn-mini.active-pill {
+    background: #003366;
+    color: #ffffff;
+    border-color: #003366;
+  }
   .vpro-cls-alert {
     margin: 0;
     padding: 0.5rem 0.75rem;
-    background: #fef2f2;
-    border-left: 4px solid #b91c1c;
-    color: #991b1b;
+    background: rgba(216, 41, 47, 0.08);
+    border-left: 4px solid #d8292f;
+    color: #d8292f;
     font-size: 0.83rem;
   }
   .vpro-cls-status {
     margin: 0;
     padding: 0.45rem 0.75rem;
-    background: #f0f4f8;
+    background: #f2f2f2;
     border-left: 4px solid #fcba19;
     color: #003366;
     font-size: 0.82rem;
@@ -2059,12 +2853,12 @@
   .vpro-cls-preview-note {
     margin: 0;
     font-size: 0.78rem;
-    color: #475569;
+    color: #474543;
   }
   .vpro-cls-empty {
     padding: 1.5rem;
     text-align: center;
-    color: #64748b;
+    color: #474543;
   }
   .mono,
   .vpro-tree-count,

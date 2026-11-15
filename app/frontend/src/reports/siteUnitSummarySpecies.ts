@@ -43,8 +43,8 @@ export class SummarySpeciesCriteria {
   reset() { const enabled = this.state.enabled; this.state = initial(); this.state.enabled = enabled; this.notify(); }
   request(method: number, mode: SiteUnitSummaryMode): SiteUnitSpeciesListRequest {
     if (![1, 2].includes(method) || ![1, 2].includes(this.state.coverCalculation) || ![1, 2].includes(this.state.andOr) ||
-        !['layer', 'lifeform'].includes(mode)) throw new Error('Choose an available species calculation, comparison and grouping.');
-    return { method, orderBy: mode === 'layer' ? 1 : 2, coverCalculation: this.state.coverCalculation, andOr: this.state.andOr,
+        !['layer', 'lifeform', 'strata'].includes(mode)) throw new Error('Choose an available species calculation, comparison and grouping.');
+    return { method, orderBy: mode === 'layer' ? 1 : mode === 'lifeform' ? 2 : 3, coverCalculation: this.state.coverCalculation, andOr: this.state.andOr,
       presenceGreaterThan: summarySpeciesCriterion(this.state.presenceGreaterThan, 'Presence threshold'),
       coverGreaterThan: summarySpeciesCriterion(this.state.coverGreaterThan, 'Cover threshold') };
   }
@@ -93,26 +93,31 @@ function sourcePresence(count: number, plots: number): string {
   return `${rounded / 10n}.${rounded % 10n}`;
 }
 export function validateSummarySpecies(value: SiteUnitSpeciesListPreview, owner: GoogleEarthScope,
-  request: SiteUnitSpeciesListRequest): ValidatedSummarySpecies {
+  request: SiteUnitSpeciesListRequest, allowConfiguredScope = false): ValidatedSummarySpecies {
+  const validOrders = allowConfiguredScope ? [1, 2, 3] : [1, 2];
   if (!hasSpeciesArrays(value) || !value.options ||
-      ![1, 2].includes(request.orderBy) || ![1, 2].includes(request.coverCalculation) || ![1, 2].includes(request.andOr) ||
+      !validOrders.includes(request.orderBy) || ![1, 2].includes(request.coverCalculation) || ![1, 2].includes(request.andOr) ||
       (['method', 'orderBy', 'coverCalculation', 'andOr', 'presenceGreaterThan', 'coverGreaterThan'] as const)
         .some(key => value.options[key] !== request[key]) ||
       !Number.isSafeInteger(request.presenceGreaterThan) || request.presenceGreaterThan < -32768 || request.presenceGreaterThan > 32767 ||
       !Number.isSafeInteger(request.coverGreaterThan) || request.coverGreaterThan < -32768 || request.coverGreaterThan > 32767) {
     throw new Error('Species preview arrays or explicit criteria are incomplete or different.');
   }
-  const mode = request.orderBy === 1 ? 'layer' : 'lifeform';
+  const mode: SiteUnitSummaryMode = request.orderBy === 1 ? 'layer' : request.orderBy === 2 ? 'lifeform' : 'strata';
   const environment = validateSiteUnitSummary(value.environment, owner.contextId, owner.project, owner.projectPath,
-    owner.su, owner.suPath, request.method, mode);
+    owner.su, owner.suPath, request.method, mode, allowConfiguredScope);
   if (value.units.length !== environment.report.units.length) throw new Error('Species and Environment units differ.');
   for (let i = 0; i < value.units.length; i++) {
     const unit = value.units[i], source = environment.report.units[i];
     if (unit.code !== source.code || unit.nPlots !== source.plots.length) throw new Error('Species physical plot denominator differs.');
-    let previous = request.orderBy === 1 ? 0 : -1;
+    let previous = request.orderBy === 2 ? -1 : 0;
     for (const group of unit.groups) {
-      if (!Number.isInteger(group.index) || group.index <= previous || group.index > (request.orderBy === 1 ? 7 : 13) ||
-          group.caption !== (request.orderBy === 1 ? `Layer ${group.index}` : summaryLifeformCaptions[group.index]) || group.rows.length === 0) {
+      const validGroup = request.orderBy === 1
+        ? (group.index <= 7 && group.caption === `Layer ${group.index}`)
+        : request.orderBy === 2
+          ? (group.index <= 13 && group.caption === summaryLifeformCaptions[group.index])
+          : (group.index >= 1 && group.caption.startsWith('Strata '));
+      if (!Number.isInteger(group.index) || group.index <= previous || !validGroup || group.rows.length === 0) {
         throw new Error('Species grouping/header differs from the source loop.');
       }
       previous = group.index;
@@ -124,8 +129,9 @@ export function validateSummarySpecies(value: SiteUnitSpeciesListPreview, owner:
             row.presence !== sourcePresence(row.physicalValues, unit.nPlots) || typeof row.included !== 'boolean' ||
             !row.referenceRowIds.length || row.referenceRowIds.some(id => !exactSigned64(id)) ||
             new Set(row.referenceRowIds).size !== row.referenceRowIds.length ||
-            (request.orderBy === 1 ? row.codeType !== null : !row.codeType || !completeCell(row.codeType) ||
-              row.codeType.storage !== 'text' || row.codeType.text?.toLowerCase() === 's')) {
+            (request.orderBy === 2
+              ? (!row.codeType || !completeCell(row.codeType) || row.codeType.storage !== 'text' || row.codeType.text?.toLowerCase() === 's')
+              : row.codeType !== null)) {
           throw new Error('Species values, definitions or physical/reference provenance are incomplete.');
         }
         const identity = JSON.stringify([row.species, row.scientificName, row.englishName, row.codeType]);

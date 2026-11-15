@@ -150,21 +150,36 @@ test('ClassificationExplorer.svelte compiles with zero warnings, renders all 3 m
   const svelteSource = readFileSync(srcPath('ClassificationExplorer.svelte'), 'utf8');
   assert.equal(/\p{Extended_Pictographic}/u.test(svelteSource), false, 'must contain zero emojis');
 
+  const exclusionSvc = loadTypeScript('siteUnitExclusionFilter.ts', {
+    '@wailsio/runtime': wailsStub,
+  });
+  const exclusionComponent = serverComponent(
+    readFileSync(srcPath('SiteUnitExclusionFilter.svelte'), 'utf8'),
+    'SiteUnitExclusionFilter.svelte',
+    {
+      './siteUnitExclusionFilter': exclusionSvc,
+    }
+  );
   const Component = serverComponent(svelteSource, 'ClassificationExplorer.svelte', {
     './classificationExplorer': cls,
     './universalDatasheetGrid': grid,
+    './SiteUnitExclusionFilter.svelte': { default: exclusionComponent },
   });
 
   const suRender = render(Component, {
     props: { contextId: 'ctx-1', project: 'Sample', su: 'Sample', hierarchy: 'Sample', initialMode: 'su_tree' },
   });
+  assert.match(suRender.body, /data-tour="classification-explorer-root"/);
   assert.match(suRender.body, /role="tree"/);
   assert.match(suRender.body, /BECdb v13 Unit Picker/);
+  assert.match(suRender.body, /UserSiteUnitList/);
+  assert.match(suRender.body, /Site Unit Exclusion Rules/);
 
   const flatRender = render(Component, {
     props: { contextId: 'ctx-1', project: 'Sample', su: 'Sample', hierarchy: 'Sample', initialMode: 'hierarchy_flat' },
   });
   assert.match(flatRender.body, /Wide Phytosociological Rank Editor/);
+  assert.match(flatRender.body, /Save Hierarchy As/);
   assert.match(flatRender.body, /SubAlliance/);
 });
 

@@ -236,14 +236,14 @@
 <style>
   .report { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; overflow-wrap: anywhere; gap: .75rem; }
   h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3 { font-weight: 600; }
-  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid #cbd5e1; border-radius: .4rem; padding: .6rem; width: 100%; }
+  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .6rem; width: 100%; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .5rem .75rem; background: white; }
+  button { border: 1px solid #D8D8D8; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; }
   button:disabled { opacity: .5; }
   .unit { min-width: 0; display: grid; gap: .5rem; }
-  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #cbd5e1; }
+  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #D8D8D8; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #e2e8f0; padding: .5rem; text-align: left; min-width: 9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-  th[scope="row"] { min-width: 16rem; } .heading { background: #e7f1ec; }
-  .error { color: #b91c1c; } .diagnostic { color: #92400e; } .guidance { color: #57534e; font-size: .875rem; }
+  th, td { border: 1px solid #D8D8D8; padding: .5rem; text-align: left; min-width: 9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  th[scope="row"] { min-width: 16rem; } .heading { background: #F2F2F2; }
+  .error { color: #D8292F; } .diagnostic { color: #1A5A96; } .guidance { color: #474543; font-size: .875rem; }
 </style>

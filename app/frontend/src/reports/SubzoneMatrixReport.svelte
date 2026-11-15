@@ -155,7 +155,7 @@
   input { box-sizing: border-box; width: 100%; min-width: 0; }
   .table-scroll { max-width: 100%; overflow-x: auto; }
   table { border-collapse: collapse; min-width: 100%; }
-  th, td { min-width: 5rem; max-width: 24rem; padding: .5rem; text-align: left; border-bottom: 1px solid #d1d5db; white-space: pre-wrap; overflow-wrap: anywhere; }
+  th, td { min-width: 5rem; max-width: 24rem; padding: .5rem; text-align: left; border-bottom: 1px solid #D8D8D8; white-space: pre-wrap; overflow-wrap: anywhere; }
   caption { text-align: left; font-weight: 600; }
   .workbook { margin-block: 1rem; }
   .workbook button { justify-self: start; }

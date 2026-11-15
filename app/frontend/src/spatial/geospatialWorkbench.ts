@@ -823,7 +823,7 @@ export function buildBECZoneMatchExpression(): any[] {
   for (const [zone, hex] of Object.entries(BEC_ZONE_PALETTE)) {
     expr.push(zone, hex);
   }
-  expr.push('#4b6b88');
+  expr.push('#474543');
   return expr;
 }
 
@@ -873,7 +873,7 @@ export function buildMapLibreGeospatialStyle(
       id: 'vpro-ocean-background',
       type: 'background',
       paint: {
-        'background-color': visibility.hillshade3D ? '#0c2238' : '#dde7f0',
+        'background-color': visibility.hillshade3D ? '#002244' : '#F2F2F2',
       },
     },
     {
@@ -898,7 +898,7 @@ export function buildMapLibreGeospatialStyle(
         visibility: visibility.bgcFill ? 'visible' : 'none',
       },
       paint: {
-        'line-color': '#1e3a5f',
+        'line-color': '#003366',
         'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.35, 9, 1.1],
         'line-opacity': 0.55,
       },
@@ -912,7 +912,7 @@ export function buildMapLibreGeospatialStyle(
         visibility: visibility.ecosections ? 'visible' : 'none',
       },
       paint: {
-        'line-color': '#003366',
+        'line-color': '#1A5A96',
         'line-width': 1.4,
         'line-dasharray': [3, 2],
         'line-opacity': 0.85,
@@ -927,7 +927,7 @@ export function buildMapLibreGeospatialStyle(
         visibility: visibility.nrDistricts ? 'visible' : 'none',
       },
       paint: {
-        'line-color': '#b45309',
+        'line-color': '#FCBA19',
         'line-width': 1.8,
         'line-opacity': 0.9,
       },

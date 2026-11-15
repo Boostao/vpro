@@ -18,9 +18,12 @@
 
 <script lang="ts">
   import { onMount, onDestroy, untrack } from 'svelte';
-  import { VegetationReportService, type ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
+  import { ImportExportService, VegetationReportService, type ProjectMetadataCell } from '../../bindings/github.com/boostao/vpro/app';
 import type { LongVegetationSettings } from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
+  import { projectState } from '../shared/state';
   import { ReadRequests } from '../shared/readRequests';
+  import SiteUnitExclusionFilter from '../classification/SiteUnitExclusionFilter.svelte';
+  import { createDefaultBreakpointOptions, type HierarchyBreakpointOptions, type SiteUnitExclusionRule, type SiteUnitExclusionSummary } from '../classification/siteUnitExclusionFilter';
   import { reportCellText } from './longEnvironmentReport';
   import { requireLongVegetationGrouping, validateLongVegetationOptions, validateLongVegetationPreview, type ValidatedLongVegetationPreview } from './longVegetationReport';
   import { vegetationWorkbookPublicationSession, VegetationWorkbookPublicationSession, type ValidatedVegetationWorkbookReview } from './vegetationWorkbook';
@@ -44,17 +47,34 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   import LongVegetationProjectUnitPreferences from './LongVegetationProjectUnitPreferences.svelte';
   import { projectReportWorkspace } from './longVegetationProjectWorkspaces';
 
-  let { contextId, project, projectPath, su, suPath, operationHeld = false, onBusyChange }: {
+  let { contextId, project, projectPath, su, suPath, hierarchy = '', operationHeld = false, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
+    hierarchy?: string;
     operationHeld?: boolean;
     onBusyChange: (busy: boolean) => void;
   } = $props();
+
+  const effectiveHierarchy = $derived(
+    (hierarchy && hierarchy !== 'None' ? hierarchy : '') ||
+    ($projectState?.activeHierarchy && $projectState.activeHierarchy !== 'None' ? $projectState.activeHierarchy : '') ||
+    'None'
+  );
   let settings = $state.raw<LongVegetationSettings | null>(null);
   let busy = $state(false);
   let error = $state('');
   let preview = $state.raw<ValidatedLongVegetationPreview | null>(null);
   let workbookReview = $state.raw<ValidatedVegetationWorkbookReview | null>(null);
   let destination = $state('');
+  let selectedWorkbookScope = $state('unlumped');
+  let selectedScopeOverridden = $state(false);
+  let lumpTables = $state<string[]>([]);
+  let useSppCodesOnly = $state(false);
+  let useSppCodesOnlyOverridden = $state(false);
+  let applyExclusionsToReport = $state(false);
+  let exclusionRules = $state<SiteUnitExclusionRule[]>([]);
+  let useHierarchyBreakpoints = $state(false);
+  let breakpointOptions = $state<HierarchyBreakpointOptions>(createDefaultBreakpointOptions());
+  let exclusionSummary = $state.raw<SiteUnitExclusionSummary | null>(null);
   const reads = new ReadRequests();
   let generation = 0;
   let disposed = false;
@@ -277,6 +297,75 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     try { await operation(); }
     catch (cause) { error = `Original project report unavailable: ${String(cause)}`; }
   }
+  async function loadLumpTables() {
+    if (typeof ImportExportService?.DiscoverLumpTables !== 'function') return;
+    try {
+      const discovered = await reads.track(ImportExportService.DiscoverLumpTables(contextId, []));
+      if (disposed || !Array.isArray(discovered)) return;
+      lumpTables = discovered
+        .map(item => (typeof item === 'string' ? item : String((item as { tableName?: string })?.tableName ?? '')))
+        .filter(name => !!name && !/^none(?:_lump)?$/i.test(name) && !/^combinedspp_lump$/i.test(name));
+    } catch {
+      // Optional lump discovery leaves 'unlumped' default intact if service is unattached.
+    }
+  }
+  function syncScopeAndVariantOptions(candidate: LongVegetationSettings | null | undefined) {
+    if (!candidate) return;
+    if (typeof useSppCodesOnlyOverridden === 'boolean' && !useSppCodesOnlyOverridden) useSppCodesOnly = !!candidate.combineVariants;
+    if (typeof selectedScopeOverridden === 'boolean' && !selectedScopeOverridden && candidate.lumpTable &&
+        !/^none(?:_lump)?$/i.test(candidate.lumpTable) && !/^combinedspp_lump$/i.test(candidate.lumpTable)) {
+      selectedWorkbookScope = `lump:${candidate.lumpTable}`;
+    }
+  }
+  function acceptValidatedPreview(raw: unknown) {
+    const candidate = validateLongVegetationPreview(raw as never, contextId, project, projectPath, su, suPath, selectedUnitsEnabled);
+    requireLongVegetationGrouping(candidate.settings, lifeformEnabled, strataEnabled, codeEnabled, selectedFieldEnabled, noneUnitsEnabled, selectedUnitsEnabled);
+    preview = candidate;
+    settings = candidate.settings;
+  }
+  function baseVariantCode(code: string): string {
+    if (code.length <= 1) return code;
+    const last = code.charAt(code.length - 1);
+    return last >= '0' && last < '9' ? code.slice(0, -1) : code;
+  }
+  function rollupUnitRows(unit: ValidatedLongVegetationPreview['report']['units'][number], activeSettings: LongVegetationSettings) {
+    if (!useSppCodesOnly || activeSettings.combineVariants) return unit.rows;
+    const merged = new Map<string, typeof unit.rows[number]>();
+    for (const row of unit.rows) {
+      const rawSpecies = row.species.storage === 'text' ? (row.species.text ?? '') : '';
+      const rolledSpecies = rawSpecies ? baseVariantCode(rawSpecies) : rawSpecies;
+      const layerKey = `${row.layer.storage}:${row.layer.text ?? row.layer.integer ?? ''}`;
+      const key = `${layerKey}|${rolledSpecies.toUpperCase()}`;
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, {
+          ...row,
+          species: row.species.storage === 'text' ? { ...row.species, text: rolledSpecies } : row.species,
+          plots: row.plots.map(plot => ({ ...plot })),
+        });
+      } else {
+        let nonNullPlots = 0;
+        let coverSum = 0;
+        const combinedPlots = existing.plots.map((plot, index) => {
+          const incoming = row.plots[index]?.cover ?? null;
+          let nextCover = plot.cover;
+          if (incoming !== null) {
+            nextCover = nextCover === null ? incoming : Math.min(99, nextCover + incoming);
+          }
+          if (nextCover !== null) {
+            nonNullPlots += 1;
+            coverSum += nextCover;
+          }
+          return { ...plot, cover: nextCover };
+        });
+        const denom = activeSettings.average === 'observations' ? nonNullPlots : unit.numPlots;
+        existing.plots = combinedPlots;
+        existing.presence = unit.numPlots > 0 ? nonNullPlots / unit.numPlots : null;
+        existing.meanCover = denom > 0 ? coverSum / denom : null;
+      }
+    }
+    return [...merged.values()];
+  }
   async function options() {
     if (projectActive && projectWorkspace) { await readProject(() => projectWorkspace.loadOptions()); return; }
     if (busy || operationHeld || workbookBarrier || preferenceBarrier) return;
@@ -288,6 +377,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       const candidate = validateLongVegetationOptions(value, contextId, project, projectPath, su, suPath, selectedUnitsEnabled).settings;
       requireLongVegetationGrouping(candidate, lifeformEnabled, strataEnabled, codeEnabled, selectedFieldEnabled, noneUnitsEnabled, selectedUnitsEnabled);
       settings = candidate;
+      if (typeof syncScopeAndVariantOptions === 'function') syncScopeAndVariantOptions(candidate);
     } catch (cause) {
       if (request === generation) error = `Report options unavailable: ${String(cause)}`;
     } finally {
@@ -300,12 +390,32 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     cancel(); const request = generation; error = ''; preview = null; workbookReview = null;
     busy = true; reportBusy();
     try {
-      const value = await reads.track(VegetationReportService.PreviewLongVegetation(contextId));
-      if (request !== generation) return;
-      const candidate = validateLongVegetationPreview(value, contextId, project, projectPath, su, suPath, selectedUnitsEnabled);
-      requireLongVegetationGrouping(candidate.settings, lifeformEnabled, strataEnabled, codeEnabled, selectedFieldEnabled, noneUnitsEnabled, selectedUnitsEnabled);
-      preview = candidate;
-      settings = candidate.settings;
+      const targetScope = typeof selectedWorkbookScope === 'string' && selectedWorkbookScope.trim()
+        ? selectedWorkbookScope.trim() : 'unlumped';
+      const activeExclusions = typeof applyExclusionsToReport === 'boolean' && applyExclusionsToReport;
+      const activeBP = typeof useHierarchyBreakpoints === 'boolean' && useHierarchyBreakpoints;
+      const activeRules = typeof exclusionRules !== 'undefined' && Array.isArray(exclusionRules) ? exclusionRules : [];
+      const useExclusions = (activeExclusions || activeBP) && activeRules.some(rule => rule.enabled);
+      if (useExclusions && typeof VegetationReportService?.PreviewLongVegetationWithExclusions === 'function') {
+        const res = await reads.track(VegetationReportService.PreviewLongVegetationWithExclusions(contextId, {
+          rules: activeRules.map(rule => ({ ...rule })),
+          useDefaultPresets: false,
+          useHierarchyBreakpoints: activeBP,
+          breakpointOptions: typeof breakpointOptions === 'object' && breakpointOptions ? { ...breakpointOptions } : createDefaultBreakpointOptions(),
+        }));
+        if (request !== generation) return;
+        acceptValidatedPreview(res?.preview);
+        exclusionSummary = (res?.exclusions as SiteUnitExclusionSummary | undefined) ?? null;
+      } else if (targetScope !== 'unlumped' && su !== 'USysSuTableDynamic') {
+        const reviewed = await reads.track(VegetationReportService.GetVegetationWorkbookReview(contextId, JSON.stringify({ scope: targetScope })));
+        if (request !== generation) return;
+        if (!reviewed?.preview) throw new Error('No lumped report preview returned.');
+        acceptValidatedPreview(reviewed.preview);
+      } else {
+        const value = await reads.track(VegetationReportService.PreviewLongVegetation(contextId));
+        if (request !== generation) return;
+        acceptValidatedPreview(value);
+      }
     } catch (cause) {
       if (request === generation) error = `Report unavailable; no data or configuration written: ${String(cause)}`;
     } finally {
@@ -321,7 +431,9 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     cancel(); const request = generation;
     error = ''; preview = null; workbookReview = null; busy = true; reportBusy();
     try {
-      const value = await reads.track(VegetationReportService.GetVegetationWorkbookReview(contextId, JSON.stringify({ scope: 'unlumped' })));
+      const targetScope = typeof selectedWorkbookScope === 'string' && selectedWorkbookScope.trim()
+        ? selectedWorkbookScope.trim() : 'unlumped';
+      const value = await reads.track(VegetationReportService.GetVegetationWorkbookReview(contextId, JSON.stringify({ scope: targetScope })));
       if (request !== generation) return;
       if (!value) throw new Error('No owned workbook review returned.');
       const reviewed = workbookSession.prepare(value);
@@ -417,6 +529,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   const supplementaryText = (cell: ProjectMetadataCell) => preview?.report.selectedFieldType === 'boolean' && cell.storage !== 'null'
     ? cell.integer === '-1' ? 'TRUE' : 'FALSE' : reportCellText(cell);
   onMount(() => {
+    void loadLumpTables();
     if (projectWorkspace) void projectWorkspace.selection.load().then(() => {
       if (disposed) return;
       if (projectWorkspace.view().scope.scope?.sourceKind === 'selected-list') void options();
@@ -670,19 +783,106 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       {/if}
     </dl>
   {/if}
+  <div class="lump-and-variant-controls" aria-label="Lump table and species variant controls">
+    <div class="control-field">
+      <label for="long-vegetation-lump-scope">Species Lump Table (<code>LVLumpTable</code> / workbook scope)</label>
+      <div class="lump-picker-row">
+        <select
+          id="long-vegetation-lump-scope"
+          data-source-control="rptLvLumpTable"
+          disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || projectActive}
+          value={selectedWorkbookScope}
+          onchange={(e) => {
+            selectedScopeOverridden = true;
+            selectedWorkbookScope = (e.currentTarget as HTMLSelectElement).value;
+            invalidateReports();
+          }}
+        >
+          <option value="unlumped">None (unlumped)</option>
+          {#each lumpTables as table}
+            <option value={`lump:${table}`}>{table}</option>
+          {/each}
+        </select>
+        <button
+          type="button"
+          disabled={busy || operationHeld || projectActive}
+          onclick={loadLumpTables}
+        >Refresh Lump Tables</button>
+      </div>
+    </div>
+    <label class="toggle-field">
+      <input
+        id="long-vegetation-combine-variants"
+        data-source-control="LVUseSppCodesOnly"
+        type="checkbox"
+        checked={useSppCodesOnly}
+        disabled={busy || operationHeld || workbookBarrier || preferenceBarrier}
+        onchange={(e) => {
+          useSppCodesOnlyOverridden = true;
+          useSppCodesOnly = (e.currentTarget as HTMLInputElement).checked;
+        }}
+      />
+      <span>Combine species variants / subspecies (<code>LVUseSppCodesOnly</code>){settings?.combineVariants ? ' — active in backend options' : ''}</span>
+    </label>
+    <label class="toggle-field">
+      <input
+        id="long-vegetation-apply-exclusions"
+        type="checkbox"
+        checked={applyExclusionsToReport}
+        disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || projectActive}
+        onchange={(e) => {
+          applyExclusionsToReport = (e.currentTarget as HTMLInputElement).checked;
+          invalidateReports();
+        }}
+      />
+      <span>Apply active unit exclusions / hierarchy breakpoints (<code>~</code>) on View Report</span>
+    </label>
+  </div>
+  <details class="exclusion-panel">
+    <summary>Site Unit Exclusions &amp; Hierarchy Breakpoints (~)</summary>
+    <SiteUnitExclusionFilter
+      {contextId}
+      {su}
+      hierarchy={effectiveHierarchy}
+      reportMode="long"
+      onRulesChange={(nextRules, nextUseBP, nextBPOpts) => {
+        exclusionRules = nextRules.map(rule => ({ ...rule }));
+        useHierarchyBreakpoints = nextUseBP;
+        breakpointOptions = { ...nextBPOpts };
+        if (nextUseBP || applyExclusionsToReport) invalidateReports();
+      }}
+      onLongPreview={(res) => {
+        if (!res?.preview) return;
+        try {
+          acceptValidatedPreview(res.preview);
+          exclusionSummary = res.exclusions ?? null;
+          error = '';
+        } catch (cause) {
+          error = `Exclusion preview unavailable: ${String(cause)}`;
+        }
+      }}
+    />
+  </details>
+  {#if exclusionSummary && exclusionSummary.excludedUnits?.length}
+    <p class="notice" role="status">
+      Exclusion filter active: {exclusionSummary.excludedUnits.length} site units excluded ({exclusionSummary.excludedPlots} plots), {exclusionSummary.retainedPlots} plots retained.
+    </p>
+  {/if}
   <div class="actions">
     <button data-source-control="btnViewReport" disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None')} onclick={show}>View Report</button>
     <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || projectActive && !projectView?.outputReady} onclick={options}>Reload report options</button>
     {#if workbookEnabled}
-      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None' || su === 'USysSuTableDynamic')} onclick={reviewWorkbook}>Review unlumped XLSX workbook (no file yet)</button>
+      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None' || su === 'USysSuTableDynamic')} onclick={reviewWorkbook}>
+        {selectedWorkbookScope === 'unlumped' ? 'Review unlumped XLSX workbook (no file yet)' : `Review ${selectedWorkbookScope.replace(/^lump:/, '')} XLSX workbook (no file yet)`}
+      </button>
     {/if}
     {#if busy || projectView?.readBusy}<button onclick={cancel}>Cancel report read</button><p role="status">Reading owned report snapshots...</p>{/if}
     {#if projectView?.readBusy}<button data-project-report-cancel onclick={() => projectWorkspace?.cancelReportRead()}>Cancel original project report read</button><p role="status">Reading original project report snapshots...</p>{/if}
   </div>
   {#if activeWorkbookReview}
     {@const reviewed = activeWorkbookReview}
-    <section class="workbook" aria-label="Reviewed unlumped workbook">
-      <h2>Reviewed workbook — explicit unlumped scope</h2>
+    <section class="workbook" aria-label="Reviewed workbook">
+      <h2>Reviewed workbook — explicit {reviewed.scope ?? 'unlumped'} scope</h2>
       <dl class="settings">
         <div><dt>Reviewed creation date</dt><dd>{reviewed.createdDate} (reused at publication)</dd></div>
         <div><dt>Quick report</dt><dd>{reviewed.options.quickReport ? 'On' : 'Off — source print layout retained'}</dd></div>
@@ -800,6 +1000,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       <p class="diagnostic">{diagnostic.code}: {JSON.stringify(diagnostic.identity)}; count {diagnostic.count}.</p>
     {/each}
     {#each preview.report.units as unit}
+      {@const renderedRows = rollupUnitRows(unit, preview.settings)}
       <section class="unit">
         <h3>Site Unit — {unit.code.storage === 'null' ? 'Unassigned (NULL)' : reportCellText(unit.code)}</h3>
         <p class="unit-name">Long name: {unit.longName === null ? unit.nameStatus : unit.longName === '' ? '"" (empty name)' : unit.longName};
@@ -814,7 +1015,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
           <p>{preview.settings.unitGrouping === 'all-plots' ? 'Derived Env/current-list denominator' : preview.settings.unitGrouping === 'selected-fields' ? 'Derived selected-field denominator' : preview.settings.quality ? 'Qualified denominator' : 'Physical denominator'}: {unit.numPlots}; retained physical membership rows: {unit.membershipIds.length}.</p>
           <details><summary>Physical membership row IDs ({unit.membershipIds.length})</summary><p>{unit.membershipIds.join(', ')}</p></details>
         {/if}
-        {#if unit.rows.length === 0}
+        {#if renderedRows.length === 0}
           <p>No {groupLabel.toLowerCase()}/species rows satisfy the current report settings.</p>
         {:else}
           <div class="table-scroll" role="region" aria-label={`Vegetation table for unit ${reportCellText(unit.code)}`}>
@@ -826,9 +1027,9 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
                 {:else if preview.settings.showEnglishName}<th scope="col">List English name</th><th scope="col">Matched report English name</th>
                 {:else if preview.settings.selectedField !== undefined}<th scope="col">List {preview.settings.selectedField}</th><th scope="col">Matched report {preview.settings.selectedField}</th>{/if}
                 <th scope="col">Presence (%)</th><th scope="col">Mean cover (%)</th>
-                {#each unit.rows[0].plots as plot}<th scope="col">Plot {JSON.stringify(plot.plotNumber)}</th>{/each}
+                {#each renderedRows[0].plots as plot}<th scope="col">Plot {JSON.stringify(plot.plotNumber)}</th>{/each}
               </tr></thead>
-              <tbody>{#each unit.rows as row}
+              <tbody>{#each renderedRows as row}
                 <tr>
                   <td>{reportCellText(row.layer)}</td><th scope="row">{reportCellText(row.species)}</th>
                   {#if preview.settings.showEnglishName || preview.settings.showSpeciesCode || preview.settings.selectedField !== undefined}<td>{supplementaryText(row.englishName)}</td><td>{supplementaryText(row.matchedName)}</td>{/if}
@@ -847,21 +1048,30 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
 </section>
 
 <style>
-  .report { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
-  .workbook, .preferences { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; }
-  textarea, select { box-sizing: border-box; min-width: 0; border: 1px solid #cbd5e1; border-radius: .4rem; padding: .6rem; width: 100%; }
-  h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3, dt { font-weight: 600; }
+  .report { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; color: #313132; }
+  .workbook, .preferences, .lump-and-variant-controls, .exclusion-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; }
+  .lump-and-variant-controls, .exclusion-panel { background: #F2F2F2; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .75rem; }
+  .control-field { display: grid; gap: .35rem; min-width: 0; }
+  .lump-picker-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .lump-picker-row select { flex: 1 1 16rem; }
+  .toggle-field { display: flex; align-items: center; gap: .5rem; font-weight: 500; cursor: pointer; }
+  .exclusion-panel summary { cursor: pointer; font-weight: 600; color: #003366; }
+  textarea, select { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .6rem; width: 100%; background: #FFFFFF; color: #313132; }
+  h1, h2 { color: #003366; }
+  h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3, dt { font-weight: 600; color: #003366; }
   .scope, .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: .75rem 1.5rem; }
   .scope > div, .settings > div { min-width: 0; display: grid; gap: .25rem; align-content: start; }
   dd { white-space: pre-wrap; overflow-wrap: anywhere; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .5rem .75rem; background: white; }
-  button:disabled { opacity: .5; }
+  button { border: 1px solid #003366; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; color: #003366; font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { background: #F2F2F2; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
   .unit { min-width: 0; display: grid; gap: .5rem; }
   .unit-name, .name-candidate, .quality-occurrence { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #cbd5e1; }
+  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #D8D8D8; background: #FFFFFF; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #e2e8f0; padding: .5rem; text-align: left; min-width: 8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .error { color: #b91c1c; } .diagnostic, .notice { color: #92400e; }
-  .guidance { color: #57534e; font-size: .875rem; }
+  th, td { border: 1px solid #D8D8D8; padding: .5rem; text-align: left; min-width: 8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  thead th { background: #003366; color: #FFFFFF; }
+  .error { color: #D8292F; font-weight: 600; } .diagnostic, .notice { color: #1A5A96; }
+  .guidance { color: #474543; font-size: .875rem; }
 </style>

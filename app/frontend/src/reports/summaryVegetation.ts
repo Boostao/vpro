@@ -1,3 +1,8 @@
+import type {
+  SummaryVegetationAppliedPreferences,
+  SummaryVegetationGoldstreamMetadata,
+  SummaryVegetationQualityFilterResult,
+} from '../../bindings/github.com/boostao/vpro/app/internal/vegreport/models';
 import { lifeformText, lifeformShape, lifeformCell, lifeformRowID, type LifeformTextCell } from './lifeformSummary';
 
 export type SummaryVegetationOwner = { contextId: string; project: string; projectPath: string; su: string; suPath: string };
@@ -11,7 +16,7 @@ export type SummaryVegetationWitness = {
   referenceOrigins: { table: string; rowId: string }[]; rawVegRowIds: string[];
   cover: { storage: 'real'; real: number; text: null; integer: null; blobHex: null };
 };
-export type SummaryVegetationUnit = { code: string; numPlots: number; membershipIds: string[]; rawVegRowIds: string[] };
+export type SummaryVegetationUnit = { code: string; hierarchyHeader?: string | null; numPlots: number; membershipIds: string[]; rawVegRowIds: string[] };
 export type SummaryVegetationField = { name: string; daoType: number; size: number };
 export type SummaryVegetationOrder = LifeformTextCell | { storage: 'real'; text: null; integer: null; real: number; blobHex: null };
 export type SummaryVegetationGroup = LifeformTextCell | {
@@ -28,6 +33,15 @@ export type SummaryVegetationPreview = SummaryVegetationOwner & {
   source: 'literal-normal-su-layer' | 'literal-normal-su-grouped' | 'literal-normal-su-effective-references' | 'literal-normal-su-constancy' | 'literal-normal-su-unanimous-common';
   ordering: 'literal-null-first-layer-species' | 'literal-null-first-group-species' | 'literal-null-first-layer-species-common' | 'literal-null-first-numeric-lifeform-species-raw-code' | 'literal-null-first-group-species-unanimous-common';
   references?: SummaryVegetationReferenceMetadata;
+  quality?: SummaryVegetationQualityFilterResult | null;
+  unitScope?: string;
+  unitField?: string;
+  hierarchyHeaderEnabled?: boolean;
+  combineVariants?: boolean;
+  lumpTable?: string;
+  valueLimit?: number;
+  goldstream?: SummaryVegetationGoldstreamMetadata | null;
+  appliedPreferences?: SummaryVegetationAppliedPreferences | null;
   memberships: { rowId: string; plotNumber: LifeformTextCell; siteUnit: LifeformTextCell }[];
   units: SummaryVegetationUnit[]; columns: string[]; rows: SummaryVegetationRow[];
 };
@@ -105,12 +119,20 @@ function* summaryVegetationValidation(value: unknown, owner: SummaryVegetationOw
       !lifeformShape(references, ['showCommon', 'useGuideNames']) ||
       typeof references.showCommon !== 'boolean' || typeof references.useGuideNames !== 'boolean')) reject();
   if (constancy && (groupAndOrder !== 13 || display !== 1 || !references || common)) reject();
+  const optionalPreviewKeys = [
+    'quality', 'unitScope', 'unitField', 'hierarchyHeaderEnabled',
+    'combineVariants', 'lumpTable', 'valueLimit', 'goldstream', 'appliedPreferences',
+  ].filter(key => value !== null && typeof value === 'object' && Object.hasOwn(value, key));
+  const rawUnitScope = value && typeof value === 'object' && typeof (value as Record<string, unknown>).unitScope === 'string'
+    ? (value as Record<string, unknown>).unitScope as string : 'su';
+  const suAllowed = rawUnitScope === 'hierarchy' || rawUnitScope === 'none' || rawUnitScope === 'field'
+    ? true : owner.su !== '' && owner.su !== 'None' && owner.su !== 'USysSuTableDynamic';
   if (summaryVegetationOptionError(average, display, showClass, groupAndOrder) || !Object.values(owner).every(lifeformText) ||
-      owner.contextId === '' || owner.project === '' || owner.projectPath === '' || owner.suPath === '' ||
-      owner.su === '' || owner.su === 'None' || owner.su === 'USysSuTableDynamic' ||
+      owner.contextId === '' || owner.project === '' || owner.projectPath === '' || owner.suPath === '' || !suAllowed ||
       !lifeformShape(value, ['contextId', 'project', 'projectPath', 'su', 'suPath', 'average', 'display',
         'source', 'ordering', 'memberships', 'units', 'columns', 'rows', ...(classMode ? ['showClass'] : []),
-        ...(grouped ? ['groupAndOrder', 'groupField', 'orderField'] : []), ...(references ? ['references'] : [])]) ||
+        ...(grouped ? ['groupAndOrder', 'groupField', 'orderField'] : []), ...(references ? ['references'] : []),
+        ...optionalPreviewKeys]) ||
       Object.entries(owner).some(([key, item]) => value[key] !== item) ||
       value.average !== average || value.display !== display || classMode && value.showClass !== showClass ||
       value.source !== source || value.ordering !== ordering || !Array.isArray(value.memberships) ||
@@ -150,14 +172,22 @@ function* summaryVegetationValidation(value: unknown, owner: SummaryVegetationOw
   const units: SummaryVegetationUnit[] = [], unitMap = new Map<string, SummaryVegetationUnit>();
   for (const item of value.units) {
     yield;
-    if (!lifeformShape(item, ['code', 'numPlots', 'membershipIds', 'rawVegRowIds']) || !lifeformText(item.code) ||
+    const unitKeys = ['code', 'numPlots', 'membershipIds', 'rawVegRowIds',
+      ...(item && typeof item === 'object' && Object.hasOwn(item, 'hierarchyHeader') ? ['hierarchyHeader'] : [])];
+    if (!lifeformShape(item, unitKeys) || !lifeformText(item.code) ||
+        (Object.hasOwn(item, 'hierarchyHeader') && item.hierarchyHeader !== null && typeof item.hierarchyHeader !== 'string') ||
         unitMap.has(item.code) || typeof item.numPlots !== 'number' || !Number.isInteger(item.numPlots) ||
         item.numPlots < 1 || item.numPlots > 2147483647 || !ids(item.membershipIds, true) || !ids(item.rawVegRowIds, true)) reject();
-    const members = memberships.filter(member => member.siteUnit.text === item.code);
-    const membershipIds = item.membershipIds;
+    const membershipIds = item.membershipIds as string[];
+    const rawVegRowIds = item.rawVegRowIds as string[];
+    const members = rawUnitScope === 'su'
+      ? memberships.filter(member => member.siteUnit.text === item.code)
+      : memberships.filter(member => membershipIds.includes(member.rowId));
     if (members.length !== membershipIds.length || members.some(member => !membershipIds.includes(member.rowId)) ||
         members.filter(member => member.plotNumber.storage === 'text').length !== item.numPlots) reject();
-    const unit = { code: item.code, numPlots: item.numPlots, membershipIds: [...item.membershipIds], rawVegRowIds: [...item.rawVegRowIds] };
+    const unit: SummaryVegetationUnit = { code: item.code,
+      ...(Object.hasOwn(item, 'hierarchyHeader') ? { hierarchyHeader: item.hierarchyHeader as string | null } : {}),
+      numPlots: item.numPlots, membershipIds: [...membershipIds], rawVegRowIds: [...rawVegRowIds] };
     units.push(unit); unitMap.set(unit.code, unit);
   }
   if (units.some((unit, i) => i > 0 && literalCompare(units[i - 1].code, unit.code) >= 0)) reject();
@@ -221,7 +251,7 @@ function* summaryVegetationValidation(value: unknown, owner: SummaryVegetationOw
         witness.cover.blobHex !== null || typeof witness.cover.real !== 'number' ||
         !Number.isFinite(witness.cover.real) || Math.fround(witness.cover.real) !== witness.cover.real) reject();
       const member = memberMap.get(witness.membershipId), unit = unitMap.get(witness.unit);
-      if (!member || member.siteUnit.text !== witness.unit || member.plotNumber.text === null || !unit ||
+      if (!member || (rawUnitScope === 'su' ? member.siteUnit.text !== witness.unit : !unit?.membershipIds.includes(witness.membershipId)) || member.plotNumber.text === null || !unit ||
           witness.rawVegRowIds.some(id => !unit.rawVegRowIds.includes(id))) reject();
       const origins: SummaryVegetationWitness['referenceOrigins'] = [], originKeys = new Set<string>();
       for (const origin of witness.referenceOrigins) {
@@ -272,7 +302,17 @@ function* summaryVegetationValidation(value: unknown, owner: SummaryVegetationOw
   const result: SummaryVegetationPreview = { ...owner, average, display,
     source, ordering, ...(referenceMetadata ? { references: referenceMetadata } : {}),
     ...(grouped ? { groupAndOrder, groupField, orderField } : {}),
-    ...(classMode ? { showClass } : {}), memberships, units, columns, rows };
+    ...(classMode ? { showClass } : {}),
+    ...(Object.hasOwn(value, 'quality') ? { quality: value.quality as SummaryVegetationPreview['quality'] } : {}),
+    ...(Object.hasOwn(value, 'unitScope') ? { unitScope: value.unitScope as string } : {}),
+    ...(Object.hasOwn(value, 'unitField') ? { unitField: value.unitField as string } : {}),
+    ...(Object.hasOwn(value, 'hierarchyHeaderEnabled') ? { hierarchyHeaderEnabled: value.hierarchyHeaderEnabled as boolean } : {}),
+    ...(Object.hasOwn(value, 'combineVariants') ? { combineVariants: value.combineVariants as boolean } : {}),
+    ...(Object.hasOwn(value, 'lumpTable') ? { lumpTable: value.lumpTable as string } : {}),
+    ...(Object.hasOwn(value, 'valueLimit') ? { valueLimit: value.valueLimit as number } : {}),
+    ...(Object.hasOwn(value, 'goldstream') ? { goldstream: value.goldstream as SummaryVegetationPreview['goldstream'] } : {}),
+    ...(Object.hasOwn(value, 'appliedPreferences') ? { appliedPreferences: value.appliedPreferences as SummaryVegetationPreview['appliedPreferences'] } : {}),
+    memberships, units, columns, rows };
   const pending: object[] = [result];
   while (pending.length) {
     yield;
@@ -314,6 +354,8 @@ export interface SummaryVegetationPort {
   previewClass?(average: number, display: number, showClass: number): PromiseLike<unknown>;
   previewGrouped?(average: number, groupAndOrder: number): PromiseLike<unknown>;
   previewGroupedDisplay?(average: number, groupAndOrder: number, display: number, showClass: number): PromiseLike<unknown>;
+  previewConfigured?(requestJSON: string): PromiseLike<unknown>;
+  previewWithPreferences?(): PromiseLike<unknown>;
   cancel(): void;
   validationYield?(): PromiseLike<void>;
 }
@@ -341,6 +383,31 @@ export class SummaryVegetationSession {
     this.preview = null; this.error = ''; this.generation++; this.notify();
   }
   cancel(port: SummaryVegetationPort): void { this.generation++; port.cancel(); this.busy = false; this.notify(); }
+  private async validateResolvedPreview(value: unknown, port: SummaryVegetationPort, request: number, syncOptions: boolean): Promise<void> {
+    const raw = (value !== null && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+    const average = typeof raw.average === 'number' ? raw.average : this.average;
+    const display = typeof raw.display === 'number' ? raw.display : this.display;
+    const showClass = typeof raw.showClass === 'number' ? raw.showClass : this.showClass;
+    const groupAndOrder = typeof raw.groupAndOrder === 'number' ? raw.groupAndOrder : this.groupAndOrder;
+    const rawRef = raw.references && typeof raw.references === 'object' ? raw.references as Record<string, unknown> : null;
+    const references: SummaryVegetationReferenceMode | undefined = rawRef
+      ? { showCommon: Boolean(rawRef.showCommon), useGuideNames: Boolean(rawRef.useGuideNames) }
+      : undefined;
+    const constancy = typeof raw.constancy === 'boolean' ? raw.constancy : false;
+    const unanimousCommon = typeof raw.unanimousCommon === 'boolean' ? raw.unanimousCommon : false;
+    const optionError = summaryVegetationOptionError(average, display, showClass, groupAndOrder);
+    if (optionError) throw new Error(optionError);
+    const result = await validateSummaryVegetationAsync(value, this.owner, average, display, showClass, groupAndOrder, port,
+      () => request === this.generation, references, constancy, unanimousCommon);
+    if (request !== this.generation || result === null) return;
+    if (syncOptions) {
+      this.average = result.average;
+      this.display = result.display;
+      this.showClass = result.showClass ?? this.showClass;
+      this.groupAndOrder = result.groupAndOrder ?? this.groupAndOrder;
+    }
+    this.preview = result;
+  }
   async show(port: SummaryVegetationPort): Promise<void> {
     if (this.busy) throw new Error('Summary Vegetation preview is already running.');
     if (this.view().draftError) { this.error = this.view().draftError; this.notify(); return; }
@@ -359,6 +426,48 @@ export class SummaryVegetationSession {
         () => request === this.generation);
       if (request !== this.generation || result === null) return;
       this.preview = result;
+    } catch (cause) {
+      if (request === this.generation) this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
+    } finally {
+      if (request === this.generation) { this.busy = false; this.notify(); }
+    }
+  }
+  async showConfigured(port: SummaryVegetationPort, requestJSON: string): Promise<void> {
+    if (this.busy) throw new Error('Summary Vegetation preview is already running.');
+    if (!port.previewConfigured) throw new Error('Summary Vegetation configured transport is unavailable.');
+    const request = ++this.generation;
+    this.busy = true; this.error = ''; this.preview = null; this.notify();
+    try {
+      const value = await port.previewConfigured(requestJSON);
+      if (request !== this.generation) return;
+      await this.validateResolvedPreview(value, port, request, false);
+    } catch (cause) {
+      if (request === this.generation) this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
+    } finally {
+      if (request === this.generation) { this.busy = false; this.notify(); }
+    }
+  }
+  async showWithPreferences(port: SummaryVegetationPort): Promise<void> {
+    if (this.busy) throw new Error('Summary Vegetation preview is already running.');
+    if (!port.previewWithPreferences) throw new Error('Summary Vegetation preference preview transport is unavailable.');
+    const request = ++this.generation;
+    this.busy = true; this.error = ''; this.preview = null; this.notify();
+    try {
+      const value = await port.previewWithPreferences();
+      if (request !== this.generation) return;
+      await this.validateResolvedPreview(value, port, request, true);
+    } catch (cause) {
+      if (request === this.generation) this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
+    } finally {
+      if (request === this.generation) { this.busy = false; this.notify(); }
+    }
+  }
+  async applyExternalPreview(value: unknown, port: SummaryVegetationPort): Promise<void> {
+    const request = ++this.generation;
+    port.cancel();
+    this.busy = true; this.error = ''; this.preview = null; this.notify();
+    try {
+      await this.validateResolvedPreview(value, port, request, false);
     } catch (cause) {
       if (request === this.generation) this.error = `Summary Vegetation unavailable; no data or settings saved: ${String(cause)}`;
     } finally {

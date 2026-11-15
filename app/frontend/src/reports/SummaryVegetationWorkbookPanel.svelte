@@ -3,12 +3,18 @@
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
   import { summaryVegetationReferenceGroupingAvailable, summaryVegetationUnanimousCommonAvailable, type SummaryVegetationOwner } from './summaryVegetation';
   import { summaryEnvironmentalLifeformEnabled } from './summaryVegetationEnvironmentalDesktop';
-  import { summaryVegetationWorkbookSession, sameSummaryWorkbookOptions,
+  import { summaryVegetationWorkbookSession, sameSummaryWorkbookOptions, summaryWorkbookScopeOptions,
     type SummaryWorkbookCalculation } from './summaryVegetationWorkbook';
 
-  let { owner, calculation, disabled, onBusyChange }: {
+  let { owner, calculation, disabled, savedPresentation = null, onPreferencesLoaded, onBusyChange }: {
     owner: SummaryVegetationOwner; calculation: SummaryWorkbookCalculation;
-    disabled: boolean; onBusyChange: (held: boolean) => void;
+    disabled: boolean;
+    savedPresentation?: {
+      title: string; includeEnv: boolean; createSummary: boolean;
+      showCommon: boolean; showGuide: boolean; constancy?: boolean;
+    } | null;
+    onPreferencesLoaded?: (options: ReturnType<ReturnType<typeof summaryVegetationWorkbookSession>['options']>) => void;
+    onBusyChange: (held: boolean) => void;
   } = $props();
   const owned = untrack(() => structuredClone(owner));
   const session = summaryVegetationWorkbookSession(owned);
@@ -47,6 +53,7 @@
     ...(grouped ? { groupAndOrder: calculation.groupAndOrder } : {}),
     ...(constancy ? { constancy: true } : {}),
     ...(unanimousCommon ? { unanimousCommon: true } : {}),
+    ...summaryWorkbookScopeOptions(calculation),
     ...(viewState.includeAncillary ? { ancillary: { createSummary: viewState.createSummary } } : {}),
     ...(effectiveReferences ? { references: {
       showCommon: effectiveCommon, useGuideNames: effectiveGuide } } : {}),
@@ -93,6 +100,35 @@
         review: (contextId, options) => VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options)),
         validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
       });
+    } catch (cause) { error = String(cause); }
+  }
+  function syncSavedPresentation() {
+    if (held || !savedPresentation) return;
+    error = '';
+    try {
+      session.syncPresentation({
+        title: savedPresentation.title,
+        includeEnv: savedPresentation.includeEnv,
+        includeAncillary: savedPresentation.createSummary,
+        createSummary: savedPresentation.createSummary,
+        includeReferences: savedPresentation.showCommon || savedPresentation.showGuide,
+        showCommon: savedPresentation.showCommon,
+        useGuideNames: savedPresentation.showGuide,
+      });
+    } catch (cause) { error = String(cause); }
+  }
+  async function reviewFromPreferences() {
+    if (!enabled || held || viewState.draftError) return;
+    error = '';
+    unitPage = 0;
+    referencePage = 0;
+    try {
+      const loaded = await session.reviewFromPreferences({
+        review: (contextId, options) => VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options)),
+        reviewFromPreferences: contextId => VegetationReportService.GetSummaryVegetationWorkbookReviewFromPreferences(contextId),
+        validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
+      });
+      if (loaded) onPreferencesLoaded?.(loaded.options);
     } catch (cause) { error = String(cause); }
   }
   async function publish() {
@@ -204,6 +240,10 @@
   {/if}
   <div class="actions">
     <button data-summary-workbook-review disabled={!enabled || held || modeUnavailable || !!viewState.draftError} onclick={review}>Review inspection workbook</button>
+    <button type="button" data-summary-workbook-review-preferences disabled={!enabled || held || !!viewState.draftError} onclick={reviewFromPreferences}>Review from Saved Preferences</button>
+    {#if savedPresentation}
+      <button type="button" data-summary-workbook-sync disabled={held} onclick={syncSavedPresentation}>Sync from Saved Presentation</button>
+    {/if}
     <button data-summary-workbook-cancel disabled={!viewState.reviewing || barrier} onclick={() => session.cancel()}>Cancel review</button>
     <button data-summary-workbook-undo disabled={!enabled || held} onclick={undo}>Undo export options</button>
     <button data-summary-workbook-publish disabled={!enabled || held || modeUnavailable || !!viewState.draftError || !currentReview || !viewState.destination}
@@ -307,15 +347,19 @@
 
 <style>
   .workbook, .plan { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
-  .workbook { padding: 1rem; border: 1px solid #d1d5db; border-radius: .5rem; }
-  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
-  label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
-  input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; min-width: 0; padding: .5rem; }
+  .workbook { padding: 1rem; border: 1px solid #D8D8D8; border-radius: .5rem; background: #FFFFFF; color: #313132; }
+  .workbook h2 { margin: 0; color: #003366; }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
+  label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: #313132; font-weight: 500; }
+  input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; min-width: 0; padding: .5rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; color: #313132; }
   .checkbox { flex-direction: row; align-items: center; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
-  button { min-height: 2.5rem; padding: .5rem .75rem; }
+  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; cursor: pointer; font-weight: 600; }
+  button:hover:not(:disabled) { background: #002244; border-color: #002244; }
+  button:disabled { opacity: .6; cursor: not-allowed; }
   .unit-table { min-width: 0; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: .5rem; border: 1px solid #d1d5db; text-align: left; overflow-wrap: anywhere; }
-  [role="alert"] { color: var(--color-red-700, #b91c1c); }
+  table { width: 100%; border-collapse: collapse; background: #FFFFFF; }
+  th, td { padding: .5rem; border: 1px solid #D8D8D8; text-align: left; overflow-wrap: anywhere; }
+  thead th { background: #F2F2F2; color: #003366; }
+  [role="alert"] { color: #D8292F; }
 </style>

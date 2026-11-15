@@ -163,6 +163,7 @@ test('actual parent unit registry retains invalid drafts across remount and reac
       './longVegetationUnitPreferences':{createLongVegetationUnitPreferencesRegistry(){created++;return registry}},
       './LongVegetationUnitPreferences.svelte':{default:child()},
       './longVegetationSelectedUnitSelection':{},'./LongVegetationSelectedUnitSelection.svelte':{default(){}},
+      '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
       './longVegetationGroupPreferences':{},'./LongVegetationGroupPreferences.svelte':{default(){}},
       './longVegetationNamingPreferences':{},'./LongVegetationNamingPreferences.svelte':{default(){}},
       './longVegetationSelectedFieldPreferences':{},'./LongVegetationSelectedFieldPreferences.svelte':{default(){}},

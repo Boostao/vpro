@@ -13,6 +13,12 @@ const mockBindings = {
       return Promise.resolve(null);
     },
   }),
+  PlotEntryService: new Proxy({}, {
+    get: (_, method) => (...args) => {
+      calls.push([`main.PlotEntryService.${String(method)}`, ...args]);
+      return Promise.resolve([]);
+    },
+  }),
 };
 
 const lump = loadTypeScript('lumpEditor.ts', { '../../bindings/github.com/boostao/vpro/app': mockBindings });
@@ -72,9 +78,13 @@ test('defaultLumpEditorPort routes Wails Call.ByName to main.ImportExportService
     genusRollups: ['CARE*'],
     scopeToProjectSpecies: true,
   });
+  await lump.defaultLumpEditorPort.deleteLumpTable('ctx-1', 'Test_Lump');
+  await lump.defaultLumpEditorPort.searchSpecies('CAREX', 25);
   assert.equal(calls[0][0], 'main.ImportExportService.DiscoverLumpTables');
   assert.equal(calls[1][0], 'main.ImportExportService.ToggleLumpRow');
   assert.equal(calls[2][0], 'main.ImportExportService.PreviewLumpSpec');
+  assert.equal(calls[3][0], 'main.ImportExportService.DeleteLumpTable');
+  assert.equal(calls[4][0], 'main.PlotEntryService.SearchSpecies');
 });
 
 test('LumpEditor.svelte compiles with zero warnings, renders BC Gov header, and contains zero emojis', () => {
@@ -82,12 +92,14 @@ test('LumpEditor.svelte compiles with zero warnings, renders BC Gov header, and 
   assert.equal(/\p{Extended_Pictographic}/u.test(source), false);
   assert.match(source, /#003366/);
   assert.match(source, /#fcba19/i);
+  assert.match(source, /baseLumpDbPath/);
 
   const Component = serverComponent(source, 'LumpEditor.svelte', {
     './lumpEditor': lump,
     '../shell/notificationService.svelte': { notifications: { push() {}, success() {}, info() {}, warning() {}, error() {} } },
   });
   const rendered = render(Component, { props: { contextId: 'ctx-lump-test' } });
+  assert.match(rendered.body, /data-tour="lump-editor-root"/);
   assert.match(rendered.body, /Combine Species \(\*_Lump\)/);
   assert.match(rendered.body, /Declarative LumpSpec \(Auto-5\)/);
 });

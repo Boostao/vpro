@@ -19,10 +19,32 @@ export const summaryVegetationGroupedAttributesScope = 'Explicit read-only norma
 export const summaryVegetationGroupedAncillaryScope = 'Explicit read-only normal-SU Strata/Lifeform/None inspection with optional effective references, SU Table and optional ReportSummary; typed XLSX, no Lifeform/None common names, original Report callbacks or formatting/printing parity';
 export const summaryVegetationConstancyScope = 'Explicit read-only normal-SU Constancy inspection with numeric lifeform and raw-species grouping; typed XLSX with optional environment/ancillary composition, adapted raw-code tie ordering, not original Report callbacks or formatting/printing parity';
 export const summaryVegetationUnanimousCommonScope = 'Explicit read-only normal-SU Lifeform/None unanimous common-name inspection; typed XLSX with optional environment/ancillary composition, source First empty-to-NULL output and explicit mixed-name refusal, not original Report/guide callbacks, Access collation or formatting/printing parity';
-type SummaryVegetationWorkbookOptions = Omit<GeneratedSummaryWorkbookOptions, 'references' | 'groupAndOrder' | 'constancy' | 'unanimousCommon'> & {
-  references?: SummaryVegetationReferenceMode; groupAndOrder?: number; constancy?: true; unanimousCommon?: true;
+type SummaryVegetationWorkbookScopeOptions = {
+  unitScope?: 'su' | 'hierarchy' | 'none' | 'field';
+  unitField?: string;
+  hierarchyHeader?: boolean;
+  breakpointPolicy?: 'lowest' | 'highest';
+  combineVariants?: boolean;
+  lumpTable?: string;
+  valueLimit?: number;
+  includeGoldstreamMetadata?: boolean;
 };
-export type SummaryWorkbookCalculation = Pick<SummaryVegetationWorkbookOptions, 'average' | 'display' | 'showClass' | 'groupAndOrder' | 'constancy'>;
+type SummaryVegetationWorkbookOptions = Omit<GeneratedSummaryWorkbookOptions, 'references' | 'groupAndOrder' | 'constancy' | 'unanimousCommon' | keyof SummaryVegetationWorkbookScopeOptions> & {
+  references?: SummaryVegetationReferenceMode; groupAndOrder?: number; constancy?: true; unanimousCommon?: true;
+} & SummaryVegetationWorkbookScopeOptions;
+export type SummaryWorkbookCalculation = Pick<SummaryVegetationWorkbookOptions, 'average' | 'display' | 'showClass' | 'groupAndOrder' | 'constancy'> & SummaryVegetationWorkbookScopeOptions;
+export function summaryWorkbookScopeOptions(calculation: SummaryWorkbookCalculation): SummaryVegetationWorkbookScopeOptions {
+  return {
+    ...(calculation.unitScope !== undefined ? { unitScope: calculation.unitScope } : {}),
+    ...(calculation.unitField !== undefined ? { unitField: calculation.unitField } : {}),
+    ...(calculation.hierarchyHeader !== undefined ? { hierarchyHeader: calculation.hierarchyHeader } : {}),
+    ...(calculation.breakpointPolicy !== undefined ? { breakpointPolicy: calculation.breakpointPolicy } : {}),
+    ...(calculation.combineVariants !== undefined ? { combineVariants: calculation.combineVariants } : {}),
+    ...(calculation.lumpTable !== undefined ? { lumpTable: calculation.lumpTable } : {}),
+    ...(calculation.valueLimit !== undefined ? { valueLimit: calculation.valueLimit } : {}),
+    ...(calculation.includeGoldstreamMetadata !== undefined ? { includeGoldstreamMetadata: calculation.includeGoldstreamMetadata } : {}),
+  };
+}
 type SummaryWorkbookReportSummary = Omit<SummaryVegetationWorkbookReportSummary, 'units'> & {
   units: NonNullable<SummaryVegetationWorkbookReportSummary['units']>;
 };
@@ -42,6 +64,7 @@ export type SummaryVegetationWorkbookExportRequest = {
 export interface SummaryWorkbookRead extends PromiseLike<unknown> { cancel?(): void }
 export interface SummaryWorkbookPort {
   review(contextId: string, options: SummaryVegetationWorkbookOptions): SummaryWorkbookRead;
+  reviewFromPreferences?(contextId: string): SummaryWorkbookRead;
   validationYield(): PromiseLike<void>;
 }
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
@@ -50,9 +73,13 @@ const ownerKey = (owner: SummaryVegetationOwner) =>
 function reject(): never {
   throw new Error('Summary inspection workbook review has inconsistent options, owned source, scope or frame; no repairs applied.');
 }
+const scopeOptionalKeys = [
+  'unitScope', 'unitField', 'hierarchyHeader', 'breakpointPolicy',
+  'combineVariants', 'lumpTable', 'valueLimit', 'includeGoldstreamMetadata',
+] as const;
 function optionsValue(value: unknown): SummaryVegetationWorkbookOptions {
   const keys = ['title', 'average', 'display', 'showClass', 'includeEnv'];
-  const optional = ['ancillary', 'references', 'groupAndOrder', 'constancy', 'unanimousCommon'].filter(key =>
+  const optional = ['ancillary', 'references', 'groupAndOrder', 'constancy', 'unanimousCommon', ...scopeOptionalKeys].filter(key =>
     value !== null && typeof value === 'object' && Object.hasOwn(value, key));
   if (!shape(value, [...keys, ...optional]) ||
       !workbookText(value.title) || typeof value.includeEnv !== 'boolean' ||
@@ -86,6 +113,38 @@ function optionsValue(value: unknown): SummaryVegetationWorkbookOptions {
   }
   if (result.references && !result.unanimousCommon && !summaryVegetationReferenceGroupingAvailable(result.groupAndOrder ?? 11,
     result.references.showCommon || result.references.useGuideNames)) reject();
+  if (Object.hasOwn(value, 'unitScope')) {
+    if (value.unitScope !== 'su' && value.unitScope !== 'hierarchy' && value.unitScope !== 'none' && value.unitScope !== 'field') reject();
+    result.unitScope = value.unitScope;
+  }
+  if (Object.hasOwn(value, 'unitField')) {
+    if (typeof value.unitField !== 'string' || !workbookText(value.unitField)) reject();
+    result.unitField = value.unitField;
+  }
+  if (Object.hasOwn(value, 'hierarchyHeader')) {
+    if (typeof value.hierarchyHeader !== 'boolean') reject();
+    result.hierarchyHeader = value.hierarchyHeader;
+  }
+  if (Object.hasOwn(value, 'breakpointPolicy')) {
+    if (value.breakpointPolicy !== 'lowest' && value.breakpointPolicy !== 'highest') reject();
+    result.breakpointPolicy = value.breakpointPolicy;
+  }
+  if (Object.hasOwn(value, 'combineVariants')) {
+    if (typeof value.combineVariants !== 'boolean') reject();
+    result.combineVariants = value.combineVariants;
+  }
+  if (Object.hasOwn(value, 'lumpTable')) {
+    if (typeof value.lumpTable !== 'string' || !workbookText(value.lumpTable)) reject();
+    result.lumpTable = value.lumpTable;
+  }
+  if (Object.hasOwn(value, 'valueLimit')) {
+    if (typeof value.valueLimit !== 'number' || !Number.isFinite(value.valueLimit) || value.valueLimit < 0) reject();
+    result.valueLimit = value.valueLimit;
+  }
+  if (Object.hasOwn(value, 'includeGoldstreamMetadata')) {
+    if (typeof value.includeGoldstreamMetadata !== 'boolean') reject();
+    result.includeGoldstreamMetadata = value.includeGoldstreamMetadata;
+  }
   return result;
 }
 export function sameSummaryWorkbookOptions(left: SummaryVegetationWorkbookOptions,
@@ -93,6 +152,10 @@ export function sameSummaryWorkbookOptions(left: SummaryVegetationWorkbookOption
   return left.title === right.title && left.average === right.average && left.display === right.display &&
     left.showClass === right.showClass && left.includeEnv === right.includeEnv && left.groupAndOrder === right.groupAndOrder &&
     left.constancy === right.constancy && left.unanimousCommon === right.unanimousCommon &&
+    left.unitScope === right.unitScope && left.unitField === right.unitField &&
+    left.hierarchyHeader === right.hierarchyHeader && left.breakpointPolicy === right.breakpointPolicy &&
+    left.combineVariants === right.combineVariants && left.lumpTable === right.lumpTable &&
+    left.valueLimit === right.valueLimit && left.includeGoldstreamMetadata === right.includeGoldstreamMetadata &&
     (left.ancillary === undefined ? right.ancillary === undefined :
       !!left.ancillary && !!right.ancillary && left.ancillary.createSummary === right.ancillary.createSummary) &&
     (left.references === undefined ? right.references === undefined : !!left.references && !!right.references &&
@@ -257,11 +320,37 @@ export class SummaryVegetationWorkbookSession {
       ...(calculation.groupAndOrder !== undefined ? { groupAndOrder: calculation.groupAndOrder } : {}),
       ...(calculation.constancy !== undefined ? { constancy: calculation.constancy } : {}),
       ...(unanimousCommon ? { unanimousCommon: true } : {}),
+      ...summaryWorkbookScopeOptions(calculation),
       title: this.state.title, includeEnv: this.state.includeEnv,
       ...(this.state.includeAncillary ? { ancillary: { createSummary: this.state.createSummary } } : {}),
       ...(calculation.constancy ? { references: { showCommon: false, useGuideNames: false } } :
         this.state.includeReferences ? { references: {
         showCommon: this.state.showCommon, useGuideNames: this.state.useGuideNames } } : {}) });
+  }
+  syncPresentation(patch: {
+    title?: string; includeEnv?: boolean; includeAncillary?: boolean; createSummary?: boolean;
+    includeReferences?: boolean; showCommon?: boolean; useGuideNames?: boolean;
+  }): void {
+    if (!this.editable()) throw new Error('Wait for review or acknowledge the workbook publication before editing.');
+    if (patch.title !== undefined) this.state.title = patch.title;
+    if (patch.includeEnv !== undefined) this.state.includeEnv = patch.includeEnv;
+    if (patch.includeAncillary !== undefined) {
+      this.state.includeAncillary = patch.includeAncillary;
+      if (!patch.includeAncillary) this.state.createSummary = false;
+    }
+    if (patch.createSummary !== undefined) {
+      this.state.createSummary = patch.createSummary;
+      if (patch.createSummary) this.state.includeAncillary = true;
+    }
+    if (patch.includeReferences !== undefined) this.state.includeReferences = patch.includeReferences;
+    if (patch.showCommon !== undefined) this.state.showCommon = patch.showCommon;
+    if (patch.useGuideNames !== undefined) {
+      this.state.useGuideNames = patch.useGuideNames;
+      if (patch.useGuideNames) this.state.showCommon = true;
+    }
+    if (this.state.showCommon || this.state.useGuideNames) this.state.includeReferences = true;
+    this.state.review = null; this.state.error = '';
+    this.validateDraft(); this.notify();
   }
   edit(field: 'title' | 'destination', raw: string): void {
     if (!this.editable()) throw new Error('Wait for review or acknowledge the workbook publication before editing.');
@@ -334,6 +423,37 @@ export class SummaryVegetationWorkbookSession {
     } catch (cause) {
       if (generation === this.generation) this.state.error = `Workbook review unavailable; no file published: ${String(cause)}`;
       return false;
+    } finally {
+      this.read = null; this.state.reviewing = false; this.notify();
+    }
+  }
+  async reviewFromPreferences(port: SummaryWorkbookPort): Promise<ValidatedSummaryVegetationWorkbookReview | null> {
+    if (this.held()) throw new Error('Resolve workbook validation or wait for the prior operation before review.');
+    if (!port.reviewFromPreferences) throw new Error('Summary Vegetation workbook preference review transport is unavailable.');
+    const generation = ++this.generation;
+    this.state.reviewing = true; this.state.review = null; this.state.error = ''; this.notify();
+    try {
+      this.read = port.reviewFromPreferences(this.owner.contextId);
+      const value = await this.read;
+      if (generation !== this.generation) return null;
+      const rawOptions = value !== null && typeof value === 'object' ? (value as { options?: unknown }).options : undefined;
+      const options = optionsValue(rawOptions);
+      const result = await validateSummaryVegetationWorkbookReview(value, this.owner, options,
+        port.validationYield, () => generation === this.generation);
+      if (generation !== this.generation || result === null) return null;
+      this.state.title = result.options.title;
+      this.state.includeEnv = result.options.includeEnv;
+      this.state.includeAncillary = !!result.options.ancillary;
+      this.state.createSummary = !!result.options.ancillary?.createSummary;
+      this.state.includeReferences = !!result.options.references;
+      this.state.showCommon = !!result.options.references?.showCommon;
+      this.state.useGuideNames = !!result.options.references?.useGuideNames;
+      this.validateDraft();
+      this.state.review = result;
+      return result;
+    } catch (cause) {
+      if (generation === this.generation) this.state.error = `Workbook review unavailable; no file published: ${String(cause)}`;
+      return null;
     } finally {
       this.read = null; this.state.reviewing = false; this.notify();
     }

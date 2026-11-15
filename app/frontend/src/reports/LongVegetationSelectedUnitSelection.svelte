@@ -107,10 +107,10 @@
   li { margin-bottom: .65rem; overflow-wrap: anywhere; }
   li > span, small { display: block; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .5rem .75rem; background: white; }
+  button { border: 1px solid #D8D8D8; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; }
   button:disabled { opacity: .5; }
   .receipt code, .receipt p { overflow-wrap: anywhere; }
-  .error { color: #b91c1c; }
-  .guidance, small { color: #57534e; font-size: .875rem; }
+  .error { color: #D8292F; }
+  .guidance, small { color: #474543; font-size: .875rem; }
   @media (max-width: 640px) { .lists { grid-template-columns: minmax(0, 1fr); } }
 </style>
