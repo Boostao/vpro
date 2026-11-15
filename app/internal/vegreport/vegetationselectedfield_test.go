@@ -12,14 +12,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestLongVegetationSelectedScalarStrictGoClientWire(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "longVegetationSelectedScalarWire.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "longVegetationSelectedScalarWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

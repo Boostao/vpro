@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -48,7 +49,7 @@ func TestLongVegetationThresholdPreferencesStrictWire(t *testing.T) {
 		Request LongVegetationThresholdPreferencesRequest `json:"request"`
 		Outcome LongVegetationThresholdPreferencesOutcome `json:"outcome"`
 	}
-	raw, err := os.ReadFile("frontend/tests/fixtures/longVegetationThresholdWire.json")
+	raw, err := sqlutil.ReadWireFixture("frontend/tests/fixtures/longVegetationThresholdWire.json")
 	if err != nil {
 		t.Fatal(err)
 	}

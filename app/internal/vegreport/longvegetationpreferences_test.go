@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -50,7 +51,7 @@ func TestLongVegetationPreferencesStrictWireAndYAMLOnly(t *testing.T) {
 		Request LongVegetationPreferencesRequest `json:"request"`
 		Outcome LongVegetationPreferencesOutcome `json:"outcome"`
 	}
-	raw, err := os.ReadFile("frontend/tests/fixtures/longVegetationPreferenceWire.json")
+	raw, err := sqlutil.ReadWireFixture("frontend/tests/fixtures/longVegetationPreferenceWire.json")
 	if err != nil {
 		t.Fatal(err)
 	}

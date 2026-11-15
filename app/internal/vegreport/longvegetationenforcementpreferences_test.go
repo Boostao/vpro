@@ -1,6 +1,7 @@
 package vegreport
 
 import (
+	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
@@ -135,7 +136,7 @@ func TestLongVegetationEnforcementStrictRequestsMalformedStorageAndFeature(t *te
 }
 
 func TestLongVegetationEnforcementStrictGoClientWire(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("frontend", "tests", "fixtures", "longVegetationEnforcementWire.json"))
+	raw, err := sqlutil.ReadWireFixture(filepath.Join("frontend", "tests", "fixtures", "longVegetationEnforcementWire.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
