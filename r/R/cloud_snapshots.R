@@ -1472,6 +1472,7 @@ vpro_master_publish_snapshot <- function(
   vpro_assert_pg_conn(pg, require_custodian = TRUE)
   tag <- vpro_validate_snapshot_tag(snapshot_tag, "snapshot_tag")
   overwrite <- vpro_pg_validate_flag(overwrite, "overwrite")
+  redact_sensitive <- vpro_pg_validate_flag(redact_sensitive, "redact_sensitive")
   compress <- match.arg(compress)
 
   if (!is.null(notes) && (!is.character(notes) || length(notes) != 1L)) {
@@ -1576,7 +1577,8 @@ vpro_master_publish_snapshot <- function(
     overwrite = if (want_sqlite) overwrite else TRUE,
     allow_full = is_full,
     log_download = TRUE,
-    allow_reserved_name = TRUE
+    allow_reserved_name = TRUE,
+    redact_sensitive = isTRUE(redact_sensitive)
   )
 
   ws_snap <- pull_res$workspace

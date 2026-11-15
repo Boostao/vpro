@@ -501,6 +501,7 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   allocated_child_ids <- integer()
   test_proj_id <- "RSDK_QA_2026_PROJ"
   test_snap_tag <- "RSDK_QA_Wave6_Snap"
+  red_snap_tag <- "RSDK_QA_Wave6_RedSnap"
 
   # Unconditional Custodian cleanup restoring exact production BECMaster state
   on.exit({
@@ -561,8 +562,8 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
       }
       DBI::dbExecute(
         clean_con$conn,
-        "DELETE FROM becmaster.snapshots WHERE snapshot_tag = $1",
-        params = list(test_snap_tag)
+        "DELETE FROM becmaster.snapshots WHERE snapshot_tag = ANY($1::text[])",
+        params = list(vpro:::vpro_pg_text_array(c(test_snap_tag, red_snap_tag)))
       )
       DBI::dbExecute(
         clean_con$conn,
@@ -857,6 +858,58 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
   rds_env <- vpro_env(rds_proj, scope = "project")
   expect_true(all(c(target_plot, leading_zero_plot) %in% rds_env$PlotNumber))
 
+  # 7b. Verify S6.6 redact_sensitive = TRUE redacts sensitive plots across ALL 4 snapshot formats (sqlite, gpkg, rds, csv)
+  red_vlists_dir <- file.path(tmp_work, "redacted_vlists")
+  dir.create(red_vlists_dir)
+  file.copy(vpro:::vpro_bundled_db("VLists.db"), file.path(red_vlists_dir, "VLists.db"))
+  vred_con <- DBI::dbConnect(RSQLite::SQLite(), file.path(red_vlists_dir, "VLists.db"))
+  DBI::dbExecute(
+    vred_con,
+    "INSERT OR REPLACE INTO \"USysSppAttributes\" (\"Code\", \"RedBlueList\") VALUES ('RQASPP1', 'Red')"
+  )
+  DBI::dbDisconnect(vred_con)
+
+  red_snap_dir <- file.path(tmp_work, "published_redacted_snap")
+  pub_red <- withr::with_options(list(vpro.data_dir = red_vlists_dir), {
+    vpro_master_publish_snapshot(
+      admin_con,
+      snapshot_tag = red_snap_tag,
+      out_dir = red_snap_dir,
+      formats = snap_fmts,
+      plots = c(target_plot, leading_zero_plot),
+      notes = "Wave 6 S6.6 redacted multi-format snapshot test",
+      compress = "gzip",
+      redact_sensitive = TRUE
+    )
+  })
+  expect_equal(pub_red$snapshot_tag, red_snap_tag)
+
+  sqlite_red_ws <- vpro_connect(pub_red$artifacts$path[pub_red$artifacts$format == "sqlite"][[1L]])
+  sqlite_red_env <- vpro_env(sqlite_red_ws, scope = "project")
+  sq_hit <- sqlite_red_env[sqlite_red_env$PlotNumber == target_plot, , drop = FALSE]
+  expect_true(all(is.na(c(sq_hit$Latitude, sq_hit$Longitude, sq_hit$UTMEasting, sq_hit$UTMNorthing))))
+  expect_true(is.na(sq_hit$UTMZone))
+
+  rds_red_env <- vpro_env(vpro_import_rds(pub_red$artifacts$path[pub_red$artifacts$format == "rds"][[1L]]), scope = "project")
+  rds_hit <- rds_red_env[rds_red_env$PlotNumber == target_plot, , drop = FALSE]
+  expect_true(all(is.na(c(rds_hit$Latitude, rds_hit$Longitude, rds_hit$UTMEasting, rds_hit$UTMNorthing))))
+  expect_true(is.na(rds_hit$UTMZone))
+
+  if ("gpkg" %in% snap_fmts) {
+    gpkg_red_path <- pub_red$artifacts$path[pub_red$artifacts$format == "gpkg"][[1L]]
+    gpkg_plots_sf <- sf::st_read(gpkg_red_path, layer = "plots", quiet = TRUE)
+    expect_false(target_plot %in% as.character(gpkg_plots_sf$PlotNumber))
+  }
+
+  csv_untar_dir <- file.path(tmp_work, "csv_red_untar")
+  dir.create(csv_untar_dir)
+  utils::untar(pub_red$artifacts$path[pub_red$artifacts$format == "csv"][[1L]], exdir = csv_untar_dir)
+  csv_env_file <- list.files(csv_untar_dir, pattern = "^env\\.csv$", recursive = TRUE, full.names = TRUE)[[1L]]
+  csv_env <- utils::read.csv(csv_env_file, colClasses = c(PlotNumber = "character"), na.strings = c("NA", ""), stringsAsFactors = FALSE)
+  csv_hit <- csv_env[csv_env$PlotNumber == target_plot, , drop = FALSE]
+  expect_true(all(is.na(c(csv_hit$Latitude, csv_hit$Longitude, csv_hit$UTMEasting, csv_hit$UTMNorthing))))
+  expect_true(is.na(csv_hit$UTMZone))
+
   # Run cleanup explicitly inside the test body too and assert exact 71,567-plot zero-drift restoration!
   DBI::dbExecute(admin_con$conn, 'DELETE FROM becmaster.env WHERE "PlotNumber" = $1', params = list(leading_zero_plot))
   DBI::dbExecute(
@@ -892,7 +945,11 @@ test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custod
     DBI::dbExecute(admin_con$conn, "DELETE FROM staging.submissions WHERE submission_id = $1::uuid", params = list(sid))
   }
   created_sub_ids <- character()
-  DBI::dbExecute(admin_con$conn, "DELETE FROM becmaster.snapshots WHERE snapshot_tag = $1", params = list(test_snap_tag))
+  DBI::dbExecute(
+    admin_con$conn,
+    "DELETE FROM becmaster.snapshots WHERE snapshot_tag = ANY($1::text[])",
+    params = list(vpro:::vpro_pg_text_array(c(test_snap_tag, red_snap_tag)))
+  )
   DBI::dbExecute(
     admin_con$conn,
     "DELETE FROM becmaster.download_log WHERE id > $1 AND actor = ANY($2::text[])",

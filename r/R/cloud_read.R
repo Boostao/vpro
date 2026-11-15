@@ -1465,12 +1465,14 @@ vpro_master_pull_impl <- function(
   log_download = TRUE,
   allow_reserved_name = FALSE,
   unit_col = NULL,
-  unit_col_fallback = TRUE
+  unit_col_fallback = TRUE,
+  redact_sensitive = !identical(pg$role, "custodian")
 ) {
   vpro_assert_pg_conn(pg, require_custodian = FALSE)
   overwrite <- vpro_pg_validate_flag(overwrite, "overwrite")
   allow_full <- vpro_pg_validate_flag(allow_full, "allow_full")
   log_download <- vpro_pg_validate_flag(log_download, "log_download")
+  redact_sensitive <- vpro_pg_validate_flag(redact_sensitive, "redact_sensitive")
   limit_int <- vpro_pg_validate_limit(limit, allow_null = TRUE)
 
   project_name <- vpro_validate_splinter_project_name(
@@ -1556,7 +1558,7 @@ vpro_master_pull_impl <- function(
     cli::cli_abort("Subset filter matched 0 plots in {.code becmaster.env}.")
   }
 
-  sensitive_plots <- if (!identical(pg$role, "custodian")) {
+  sensitive_plots <- if (isTRUE(redact_sensitive)) {
     sens_codes <- .vpro_sensitive_species_codes(pg = pg)
     .vpro_sensitive_plots_in_pg(pg, plot_list, sens_codes)
   } else {
@@ -1929,7 +1931,7 @@ vpro_master_pull_impl <- function(
 
   dest_final <- normalizePath(dest_resolved, winslash = "/", mustWork = TRUE)
   ws <- vpro_connect(dest_final)
-  attr(ws, "cloud_redacted") <- (!identical(pg$role, "custodian") && length(sensitive_plots) > 0L)
+  attr(ws, "cloud_redacted") <- (isTRUE(redact_sensitive) && length(sensitive_plots) > 0L)
   attr(ws, "cloud_role") <- as.character(pg$role)
 
   # Cleanly close a RW handle after SQLITE_RO inspection inside vpro_connect() so

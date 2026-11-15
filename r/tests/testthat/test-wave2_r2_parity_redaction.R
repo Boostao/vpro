@@ -154,6 +154,16 @@ test_that("S6.6: USysSppAttributes RedBlueList redacts coordinates on vpro_expor
   non_sens <- env_back[!(env_back$PlotNumber %in% sens_expected_plots) & !is.na(env_back$Latitude), , drop = FALSE]
   expect_gt(nrow(non_sens), 10L)
 
+  if (requireNamespace("sf", quietly = TRUE)) {
+    gpkg_red <- file.path(td, "redacted.gpkg")
+    vpro_export_gpkg(ws_back, path = gpkg_red, crs = 3005, scope = "project", overwrite = TRUE)
+    gpkg_sf <- sf::st_read(gpkg_red, layer = "plots", quiet = TRUE)
+    expect_false("00337" %in% as.character(gpkg_sf$PlotNumber))
+  }
+
+  expect_false(isTRUE(formals(vpro_master_publish_snapshot)$redact_sensitive))
+  expect_identical(deparse(formals(vpro:::vpro_master_pull_impl)$redact_sensitive), "!identical(pg$role, \"custodian\")")
+
   # Direct cloud df redaction helper parity check
   df_in <- data.frame(
     PlotNumber = c("00337", "00338"),
