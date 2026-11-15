@@ -25,6 +25,12 @@ type ProjectMetadataPreset struct {
 	VegCoverMethod           string            `json:"vegCoverMethod"`
 	PlotMethod               string            `json:"plotMethod"`
 	Datum                    string            `json:"datum"`
+	CoordinatingAgency       string            `json:"coordinatingAgency"`
+	ProponentFunder          string            `json:"proponentFunder"`
+	FieldCompanyAgency       string            `json:"fieldCompanyAgency"`
+	GeographicStudyArea      string            `json:"geographicStudyArea"`
+	GeoRefMethod             string            `json:"geoRefMethod"`
+	CoordinateSystem         string            `json:"coordinateSystem"`
 	CoverDescriptions        map[string]string `json:"coverDescriptions"`
 }
 
@@ -54,7 +60,13 @@ var builtinMetadataPresets = []ProjectMetadataPreset{
 		EcosysCollectionStandard: "LMH25",
 		VegCoverMethod:           "Percent",
 		PlotMethod:               "20x20",
-		Datum:                    "2",
+		Datum:                    "NAD83",
+		CoordinatingAgency:       "MoF",
+		ProponentFunder:          "MoF",
+		FieldCompanyAgency:       "Forests, Lands and Natural Resources",
+		GeographicStudyArea:      "British Columbia",
+		GeoRefMethod:             "GPS +/- 10m",
+		CoordinateSystem:         "dd.mm.ss.s",
 		CoverDescriptions: map[string]string{
 			"CoverA1Description":  "Dominant / emergent / veteran trees (>10 m)",
 			"CoverA2Description":  "Main tree canopy (>10 m)",
@@ -80,7 +92,13 @@ var builtinMetadataPresets = []ProjectMetadataPreset{
 		EcosysCollectionStandard: "LMH25",
 		VegCoverMethod:           "Percent",
 		PlotMethod:               "20x20",
-		Datum:                    "2",
+		Datum:                    "NAD83",
+		CoordinatingAgency:       "MoF",
+		ProponentFunder:          "MoF",
+		FieldCompanyAgency:       "Forests, Lands and Natural Resources",
+		GeographicStudyArea:      "British Columbia",
+		GeoRefMethod:             "GPS +/- 10m",
+		CoordinateSystem:         "dd.mm.ss.s",
 		CoverDescriptions: map[string]string{
 			"CoverA1Description":  "SIVI dominant trees (>10 m)",
 			"CoverA2Description":  "SIVI main canopy trees (>10 m)",
@@ -106,7 +124,13 @@ var builtinMetadataPresets = []ProjectMetadataPreset{
 		EcosysCollectionStandard: "DEIF 1980",
 		VegCoverMethod:           "Percent",
 		PlotMethod:               "20x20",
-		Datum:                    "2",
+		Datum:                    "NAD83",
+		CoordinatingAgency:       "MoF",
+		ProponentFunder:          "MoF",
+		FieldCompanyAgency:       "Forests, Lands and Natural Resources",
+		GeographicStudyArea:      "British Columbia",
+		GeoRefMethod:             "GPS +/- 10m",
+		CoordinateSystem:         "dd.mm.ss.s",
 		CoverDescriptions: map[string]string{
 			"CoverA1Description":  "DEIF 1980 A1 veteran/emergent tree sublayer (>10 m)",
 			"CoverA2Description":  "DEIF 1980 A2 main tree canopy (>10 m)",
@@ -132,7 +156,13 @@ var builtinMetadataPresets = []ProjectMetadataPreset{
 		EcosysCollectionStandard: "CHAR",
 		VegCoverMethod:           "Percent",
 		PlotMethod:               "20x20",
-		Datum:                    "2",
+		Datum:                    "NAD83",
+		CoordinatingAgency:       "MoF",
+		ProponentFunder:          "MoF",
+		FieldCompanyAgency:       "Forests, Lands and Natural Resources",
+		GeographicStudyArea:      "British Columbia",
+		GeoRefMethod:             "GPS +/- 10m",
+		CoordinateSystem:         "dd.mm.ss.s",
 		CoverDescriptions: map[string]string{
 			"CoverA1Description":  "Dominant trees (>10 m, subarctic treeline)",
 			"CoverA2Description":  "Main tree canopy (>10 m, subarctic treeline)",
@@ -665,6 +695,12 @@ func ApplyProjectMetadataAutomation(s *vprocore.ContextService, ctx context.Cont
 				addCol("VegCoverMethod", preset.VegCoverMethod)
 				addCol("PlotMethod", preset.PlotMethod)
 				addCol("Datum", preset.Datum)
+				addCol("CoordinatingAgency", preset.CoordinatingAgency)
+				addCol("ProponentFunder", preset.ProponentFunder)
+				addCol("FieldCompanyAgency", preset.FieldCompanyAgency)
+				addCol("GeographicStudyArea", preset.GeographicStudyArea)
+				addCol("GeoRefMethod", preset.GeoRefMethod)
+				addCol("CoordinateSystem", preset.CoordinateSystem)
 				for _, col := range coverDescriptionColumns {
 					if val, ok := preset.CoverDescriptions[col]; ok {
 						addCol(col, val)

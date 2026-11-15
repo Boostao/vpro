@@ -106,7 +106,7 @@ func TestPlotLabelRegionalMalformedStorageCorrectionAndNullEmpty(t *testing.T) {
 	service, state := plotLabelRegionalFixture(t)
 	path := service.contexts.Projects.Sqlite.Attachments["project"]
 	for _, assignment := range []string{
-		"Zone=NULL", "Zone='12345'", "Zone=CAST(X'FF' AS TEXT)", "Zone=X'434857'",
+		"Zone='12345'", "Zone=CAST(X'FF' AS TEXT)", "Zone=X'434857'",
 		"ProjectID=CAST(X'FF' AS TEXT)", "PlotRepresenting=CAST(X'FF' AS TEXT)",
 		"ProjectID='" + strings.Repeat("x", 51) + "'", "SubZone='" + strings.Repeat("x", 46) + "',SiteSeries=''",
 	} {
@@ -120,8 +120,16 @@ func TestPlotLabelRegionalMalformedStorageCorrectionAndNullEmpty(t *testing.T) {
 			t.Fatal("source correction did not retry", result, err)
 		}
 	}
-	vprotest.MutateContextFixture(t, path, `UPDATE Sample_Env SET Zone='',SubZone=NULL,SiteSeries=NULL,ProjectID='',PlotRepresenting=NULL WHERE PlotNumber='LB001'`)
+	vprotest.MutateContextFixture(t, path, `UPDATE Sample_Env SET Zone=NULL,SubZone='dm',SiteSeries='01',ProjectID='',PlotRepresenting=NULL WHERE PlotNumber='LB001'`)
 	got, err := service.GetPreview(t.Context(), state.ContextID, "LB001")
+	if err != nil || got == nil || got.Header.Zone != nil ||
+		got.Header.ProjectID == nil || *got.Header.ProjectID != "" || got.Header.PlotRepresenting != nil ||
+		got.Header.SubZone == nil || *got.Header.SubZone != "dm" ||
+		got.Header.SiteSeries == nil || *got.Header.SiteSeries != "01" {
+		t.Fatal("NULL Zone failed or lost source distinction", got, err)
+	}
+	vprotest.MutateContextFixture(t, path, `UPDATE Sample_Env SET Zone='',SubZone=NULL,SiteSeries=NULL,ProjectID='',PlotRepresenting=NULL WHERE PlotNumber='LB001'`)
+	got, err = service.GetPreview(t.Context(), state.ContextID, "LB001")
 	if err != nil || got == nil || got.Header.Zone == nil || *got.Header.Zone != "" ||
 		got.Header.ProjectID == nil || *got.Header.ProjectID != "" || got.Header.PlotRepresenting != nil ||
 		got.Header.SubZone != nil || got.Header.SiteSeries != nil {

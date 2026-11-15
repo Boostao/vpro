@@ -186,11 +186,12 @@ func (r *RejectSubmissionRequest) UnmarshalJSON(data []byte) error {
 
 // CreateSnapshotRequest cuts a dated BECMaster snapshot record and optional local export bundle.
 type CreateSnapshotRequest struct {
-	SnapshotTag     string `json:"snapshotTag"`
-	Notes           string `json:"notes,omitempty"`
-	ExportFormat    string `json:"exportFormat,omitempty"` // "" | "sqlite" | "rds" | "gpkg"
-	DestinationPath string `json:"destinationPath,omitempty"`
-	ZoneFilter      string `json:"zoneFilter,omitempty"`
+	SnapshotTag               string `json:"snapshotTag"`
+	Notes                     string `json:"notes,omitempty"`
+	ExportFormat              string `json:"exportFormat,omitempty"` // "" | "sqlite" | "rds" | "gpkg"
+	DestinationPath           string `json:"destinationPath,omitempty"`
+	ZoneFilter                string `json:"zoneFilter,omitempty"`
+	IncludeSensitiveCoordinates bool   `json:"includeSensitiveCoordinates,omitempty"`
 }
 
 func (r *CreateSnapshotRequest) UnmarshalJSON(data []byte) error {
@@ -204,16 +205,17 @@ type SnapshotBundleExporterFunc func(ctx context.Context, sqlitePath, projectNam
 
 // SnapshotRecord represents a row in becmaster.snapshots (Schedule A 1.iii).
 type SnapshotRecord struct {
-	SnapshotTag     string `json:"snapshotTag"`
-	CreatedAt       string `json:"createdAt"`
-	CreatedBy       string `json:"createdBy"`
-	PlotCount       int    `json:"plotCount"`
-	VegCount        int64  `json:"vegCount"`
-	BECVersion      string `json:"becVersion"`
-	TaxonomyVersion string `json:"taxonomyVersion"`
-	ManifestSHA256  string `json:"manifestSha256"`
-	Notes           string `json:"notes,omitempty"`
-	ExportedPath    string `json:"exportedPath,omitempty"`
+	SnapshotTag          string `json:"snapshotTag"`
+	CreatedAt            string `json:"createdAt"`
+	CreatedBy            string `json:"createdBy"`
+	PlotCount            int    `json:"plotCount"`
+	VegCount             int64  `json:"vegCount"`
+	BECVersion           string `json:"becVersion"`
+	TaxonomyVersion      string `json:"taxonomyVersion"`
+	ManifestSHA256       string `json:"manifestSha256"`
+	Notes                string `json:"notes,omitempty"`
+	ExportedPath         string `json:"exportedPath,omitempty"`
+	MaskedSensitivePlots int    `json:"maskedSensitivePlots,omitempty"`
 }
 
 // DownloadLogEntry represents a row in becmaster.download_log (Schedule A 1.v).
@@ -2044,6 +2046,7 @@ func (m *Manager) CreateBECMasterSnapshot(
 	`).Scan(&becVer, &taxVer)
 
 	var exportedPath, manifestSHA string
+	var maskedSensitive int
 	if format != "" {
 		if s == nil || contextID == "" {
 			return SnapshotRecord{}, errors.New("active context is required when exporting a local snapshot file")
@@ -2071,14 +2074,16 @@ func (m *Manager) CreateBECMasterSnapshot(
 		}
 
 		subRes, pErr := m.PullBECMasterSubset(ctx, s, contextID, PullSubsetRequest{
-			Filter:            filter,
-			TargetProject:     "SnapExport",
-			DestinationPath:   stageSQLitePath,
-			ActivateOnSuccess: false,
+			Filter:                   filter,
+			TargetProject:            "SnapExport",
+			DestinationPath:          stageSQLitePath,
+			ActivateOnSuccess:        false,
+			MaskSensitiveCoordinates: !req.IncludeSensitiveCoordinates,
 		})
 		if pErr != nil {
 			return SnapshotRecord{}, pErr
 		}
+		maskedSensitive = subRes.MaskedSensitivePlots
 		if format == "sqlite" {
 			exportedPath = subRes.DestinationPath
 			manifestSHA = subRes.DestinationSHA
@@ -2126,16 +2131,17 @@ func (m *Manager) CreateBECMasterSnapshot(
 	}
 
 	return SnapshotRecord{
-		SnapshotTag:     tag,
-		CreatedAt:       nowUTC.Format(time.RFC3339),
-		CreatedBy:       createdBy,
-		PlotCount:       plotCount,
-		VegCount:        vegCount,
-		BECVersion:      becVer,
-		TaxonomyVersion: taxVer,
-		ManifestSHA256:  manifestSHA,
-		Notes:           strings.TrimSpace(req.Notes),
-		ExportedPath:    exportedPath,
+		SnapshotTag:          tag,
+		CreatedAt:            nowUTC.Format(time.RFC3339),
+		CreatedBy:            createdBy,
+		PlotCount:            plotCount,
+		VegCount:             vegCount,
+		BECVersion:           becVer,
+		TaxonomyVersion:      taxVer,
+		ManifestSHA256:       manifestSHA,
+		Notes:                strings.TrimSpace(req.Notes),
+		ExportedPath:         exportedPath,
+		MaskedSensitivePlots: maskedSensitive,
 	}, nil
 }
 

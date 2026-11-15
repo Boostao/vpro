@@ -22,7 +22,7 @@ func TestGoogleEarthLocationsDirectEnvAndSourceJoinFanout(t *testing.T) {
 	}
 	if project.Rows[2].EnvRowID != "5" || *project.Rows[2].PlotNumber.Text != "NOADMIN" ||
 		project.Rows[0].MembershipRowID != "" || *project.Rows[0].Description.Text != "  Zone  " ||
-		project.Rows[1].Description.Storage != "null" || *project.Rows[1].Longitude.Real != 123.75 ||
+		project.Rows[1].Description.Storage != "null" || *project.Rows[1].Longitude.Real != -123.75 ||
 		!math.Signbit(*project.Rows[1].Latitude.Real) {
 		t.Fatal("source scope, raw descriptions, numeric sign or signed zero changed", project)
 	}

@@ -379,13 +379,14 @@ func (m *Manager) PublishStandardsToCloud(ctx context.Context, s *vprocore.Conte
 			standards.bec_site_series,
 			standards.master_site_unit_list,
 			standards.usys_zone_list,
+			standards.usys_spp_attributes,
 			standards.project_metadata
 		RESTART IDENTITY
 	`); err != nil {
 		return PublishStandardsResult{}, wrapRedactedError("truncate standards tables", err, creds)
 	}
 
-	counts := make(map[string]int, 6)
+	counts := make(map[string]int, 7)
 	type copyJob struct {
 		db       *sql.DB
 		srcTable string
@@ -398,6 +399,7 @@ func (m *Manager) PublishStandardsToCloud(ctx context.Context, s *vprocore.Conte
 		{becSQLite, "BECSiteSeries", "bec_site_series", StandardsBECSiteSeriesColumns},
 		{vlistsSQLite, "MasterSiteUnitList", "master_site_unit_list", StandardsMasterSiteUnitListColumns},
 		{vlistsSQLite, "USysZoneList", "usys_zone_list", StandardsUSysZoneListColumns},
+		{vlistsSQLite, "USysSppAttributes", "usys_spp_attributes", StandardsUSysSppAttributesColumns},
 		{vmetaSQLite, "ProjectMetadata", "project_metadata", StandardsProjectMetadataColumns},
 	}
 	for _, job := range jobs {

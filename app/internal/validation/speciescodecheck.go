@@ -17,10 +17,11 @@ import (
 )
 
 type SpeciesCodeCheckRow struct {
-	ID         int     `json:"id"`
-	PlotNumber string  `json:"plotNumber"`
-	Code       *string `json:"code"`
-	Status     string  `json:"status"`
+	ID            int     `json:"id"`
+	PlotNumber    string  `json:"plotNumber"`
+	Code          *string `json:"code"`
+	Status        string  `json:"status"`
+	SuggestedCode *string `json:"suggestedCode,omitempty"`
 }
 
 type SpeciesCodeCheckReview struct {
@@ -71,7 +72,15 @@ func ReviewSpeciesCodes(s *vprocore.ContextService, ctx context.Context, context
 		c := plots.Projects.Sqlite
 		table := `"project".` + vprocore.QuoteHeaderIdentifier(c.Selection.Project+"_Veg")
 		rows, err := c.Conn.QueryContext(ctx, `SELECT v.ID,v.PlotNumber,v.Species,typeof(v.Species),
-			EXISTS(SELECT 1 FROM USysAllSpecs WHERE Code COLLATE BINARY=v.Species),
+			EXISTS(SELECT 1 FROM USysAllSpecs WHERE Code COLLATE BINARY=v.Species AND LOWER(COALESCE(CAST(Codetype AS TEXT),''))<>'s'),
+			(SELECT s.Code FROM USysAllSpecs s
+			 WHERE s.OldCode COLLATE BINARY=v.Species
+			   AND s.OldCode IS NOT NULL AND s.OldCode<>''
+			   AND s.Code IS NOT NULL AND s.Code<>''
+			   AND s.OldCode<>s.Code
+			 ORDER BY CASE WHEN EXISTS(SELECT 1 FROM USysAllSpecs c WHERE c.Code COLLATE BINARY=s.Code AND LOWER(COALESCE(CAST(c.Codetype AS TEXT),''))<>'s') THEN 0 ELSE 1 END,
+			          s.Code COLLATE BINARY
+			 LIMIT 1),
 			EXISTS(SELECT 1 FROM USysUserSpp WHERE Code COLLATE BINARY=v.Species)
 			FROM `+table+` AS v WHERE EXISTS(SELECT 1 FROM USysEnv e WHERE e.PlotNumber=v.PlotNumber)
 			ORDER BY v.PlotNumber COLLATE BINARY,v.ID`)
@@ -85,7 +94,8 @@ func ReviewSpeciesCodes(s *vprocore.ContextService, ctx context.Context, context
 			var row SpeciesCodeCheckRow
 			var storage string
 			var master, user bool
-			if err := rows.Scan(&row.ID, &row.PlotNumber, &row.Code, &storage, &master, &user); err != nil {
+			var suggested sql.NullString
+			if err := rows.Scan(&row.ID, &row.PlotNumber, &row.Code, &storage, &master, &suggested, &user); err != nil {
 				return SpeciesCodeCheckReview{}, fmt.Errorf("species check row could not be read: %w", err)
 			}
 			if row.ID < -2147483648 || row.ID > 2147483647 || seen[row.ID] {
@@ -100,6 +110,10 @@ func ReviewSpeciesCodes(s *vprocore.ContextService, ctx context.Context, context
 				row.Status = "missing"
 			case master:
 				row.Status = "master"
+			case suggested.Valid && suggested.String != "":
+				codeCopy := suggested.String
+				row.SuggestedCode = &codeCopy
+				row.Status = "synonym"
 			case user:
 				row.Status = "user"
 			default:
@@ -120,7 +134,7 @@ func LookupSpeciesCodeCheckTarget(s *vprocore.ContextService, ctx context.Contex
 			return nil, err
 		}
 		rows, err := plots.Projects.Sqlite.Conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype,'master'
-			FROM USysAllSpecs WHERE Code COLLATE BINARY=?
+			FROM USysAllSpecs WHERE Code COLLATE BINARY=? AND LOWER(COALESCE(CAST(Codetype AS TEXT),''))<>'s'
 			UNION ALL SELECT Code,ScientificName,LifeForm,EnglishName,Codetype,'user'
 			FROM USysUserSpp WHERE Code COLLATE BINARY=?
 			ORDER BY 6,1,2,4,5,3`, lookup.Code, lookup.Code)
@@ -165,7 +179,7 @@ func SaveSpeciesCodeCheck(s *vprocore.ContextService, contextID string, updates 
 				var allowed, listed bool
 				if err := c.Conn.QueryRowContext(plots.OperationContext(), `SELECT
 					EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?),
-					EXISTS(SELECT 1 FROM USysAllSpecs WHERE Code COLLATE BINARY=?) OR
+					EXISTS(SELECT 1 FROM USysAllSpecs WHERE Code COLLATE BINARY=? AND LOWER(COALESCE(CAST(Codetype AS TEXT),''))<>'s') OR
 					EXISTS(SELECT 1 FROM USysUserSpp WHERE Code COLLATE BINARY=?)`,
 					plot, update.Value, update.Value).Scan(&allowed, &listed); err != nil {
 					return fmt.Errorf("species check scope/target could not be revalidated: %w", err)

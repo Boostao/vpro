@@ -31,12 +31,14 @@ func (r *NewProjectRequest) UnmarshalJSON(data []byte) error {
 }
 
 type NewProjectResult struct {
-	ProjectName     string                 `json:"projectName"`
-	ProjectID       string                 `json:"projectId"`
-	DestinationPath string                 `json:"destinationPath"`
-	DestinationSHA  string                 `json:"destinationSha256"`
-	Activated       bool                   `json:"activated"`
-	State           *vprocore.ProjectState `json:"state,omitempty"`
+	ProjectName      string                 `json:"projectName"`
+	ProjectID        string                 `json:"projectId"`
+	ProjectIDDerived bool                   `json:"projectIdDerived,omitempty"`
+	ProjectIDNotice  string                 `json:"projectIdNotice,omitempty"`
+	DestinationPath  string                 `json:"destinationPath"`
+	DestinationSHA   string                 `json:"destinationSha256"`
+	Activated        bool                   `json:"activated"`
+	State            *vprocore.ProjectState `json:"state,omitempty"`
 }
 
 // CreateNewProject creates a canonical VP08 SQLite <Name>.db project from VPro64.USys*Table
@@ -49,10 +51,15 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 		return NewProjectResult{}, err
 	}
 	projectID := strings.TrimSpace(req.ProjectID)
+	projectIDDerived := false
+	projectIDNotice := ""
 	if projectID == "" {
 		projectID = projectName
 		if utf16Len(projectID) > 20 {
-			projectID = string([]rune(projectID)[:20])
+			origUnits := utf16Len(projectID)
+			projectID = truncateUTF16(projectID, 20)
+			projectIDDerived = true
+			projectIDNotice = fmt.Sprintf("ProjectName %q (%d UTF-16 code units) exceeded the 20-unit ProjectID limit and was truncated to %q.", projectName, origUnits, projectID)
 		}
 	}
 	if err := validateUTF16Max("Metadata.ProjectID", projectID, 20); err != nil {
@@ -158,8 +165,16 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 			metaVals = append(metaVals, req.ProjectTitle)
 		}
 		if hasPreset {
-			metaCols = append(metaCols, "EcosysCollectionStandard", "VegCoverMethod", "PlotMethod", "Datum")
-			metaVals = append(metaVals, preset.EcosysCollectionStandard, preset.VegCoverMethod, preset.PlotMethod, preset.Datum)
+			metaCols = append(metaCols,
+				"EcosysCollectionStandard", "VegCoverMethod", "PlotMethod", "Datum",
+				"CoordinatingAgency", "ProponentFunder", "FieldCompanyAgency",
+				"GeographicStudyArea", "GeoRefMethod", "CoordinateSystem",
+			)
+			metaVals = append(metaVals,
+				preset.EcosysCollectionStandard, preset.VegCoverMethod, preset.PlotMethod, preset.Datum,
+				preset.CoordinatingAgency, preset.ProponentFunder, preset.FieldCompanyAgency,
+				preset.GeographicStudyArea, preset.GeoRefMethod, preset.CoordinateSystem,
+			)
 			for _, col := range coverDescriptionColumns {
 				if val, ok := preset.CoverDescriptions[col]; ok {
 					metaCols = append(metaCols, col)
@@ -225,10 +240,12 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 		return NewProjectResult{}, err
 	}
 	res := NewProjectResult{
-		ProjectName:     projectName,
-		ProjectID:       projectID,
-		DestinationPath: resolvedDest,
-		DestinationSHA:  shaHex,
+		ProjectName:      projectName,
+		ProjectID:        projectID,
+		ProjectIDDerived: projectIDDerived,
+		ProjectIDNotice:  projectIDNotice,
+		DestinationPath:  resolvedDest,
+		DestinationSHA:   shaHex,
 	}
 	if req.ActivateOnSuccess {
 		state, swErr := s.SwitchContext(contextID, vprocore.ContextSelection{
@@ -424,6 +441,7 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 	var specs []tableCopySpec
 	var copiedTables, companionTables []string
 	hasCompanionSU := false
+	hasCompanionHierarchy := false
 
 	for _, item := range orderedSuffixes {
 		oldTbl := oldName + "_" + item.suffix
@@ -485,6 +503,8 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 			companionTables = append(companionTables, newTbl)
 			if item.suffix == "SU" {
 				hasCompanionSU = true
+			} else if item.suffix == "Hierarchy" {
+				hasCompanionHierarchy = true
 			}
 		}
 	}
@@ -641,12 +661,19 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 			nextSU = newName
 			nextSUPath = resolvedDest
 		}
+		nextHierarchy := "None"
+		nextHierarchyPath := ""
+		if hasCompanionHierarchy && snap.Hierarchy == oldName && (snap.HierarchyPath == "" || vprocore.SameDesktopPath(snap.HierarchyPath, snap.ProjectPath)) {
+			nextHierarchy = newName
+			nextHierarchyPath = resolvedDest
+		}
 		state, swErr := s.SwitchContext(contextID, vprocore.ContextSelection{
-			Project:     newName,
-			ProjectPath: resolvedDest,
-			SU:          nextSU,
-			SUPath:      nextSUPath,
-			Hierarchy:   "None",
+			Project:       newName,
+			ProjectPath:   resolvedDest,
+			SU:            nextSU,
+			SUPath:        nextSUPath,
+			Hierarchy:     nextHierarchy,
+			HierarchyPath: nextHierarchyPath,
 		})
 		if swErr != nil {
 			return res, fmt.Errorf("project saved as %s, but context switch failed: %w", resolvedDest, swErr)
@@ -858,7 +885,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 			selectedPlots[plot] = true
 			orderedSelectedPlots = append(orderedSelectedPlots, plot)
 			if pid != "" {
-				selectedProjectIDs[pid] = true
+				selectedProjectIDs[strings.ToLower(pid)] = true
 			}
 		}
 	}
@@ -866,7 +893,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 		return ExportSplinterResult{}, err
 	}
 
-	filterRowsByColumn := func(cols []string, allRows [][]rawSQLiteCell, colName string, allowed map[string]bool) [][]rawSQLiteCell {
+	filterRowsByColumn := func(cols []string, allRows [][]rawSQLiteCell, colName string, allowed map[string]bool, caseInsensitive bool) [][]rawSQLiteCell {
 		colIdx := -1
 		for i, c := range cols {
 			if strings.EqualFold(c, colName) {
@@ -880,7 +907,14 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 		var filtered [][]rawSQLiteCell
 		for _, r := range allRows {
 			cell := r[colIdx]
-			if cell.storage == "text" && allowed[string(cell.bytes)] {
+			if cell.storage != "text" {
+				continue
+			}
+			key := string(cell.bytes)
+			if caseInsensitive {
+				key = strings.ToLower(key)
+			}
+			if allowed[key] {
 				filtered = append(filtered, r)
 			}
 		}
@@ -908,7 +942,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 		if rErr != nil {
 			return ExportSplinterResult{}, rErr
 		}
-		filteredRows := filterRowsByColumn(cols, allRows, spec.keyCol, selectedPlots)
+		filteredRows := filterRowsByColumn(cols, allRows, spec.keyCol, selectedPlots, false)
 		if spec.suffix == "Audit" {
 			rewriteAuditProjectCells(cols, filteredRows, splinterName)
 		}
@@ -924,7 +958,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 	}
 	extracted["Metadata"] = tableData{
 		cols: metaCols,
-		rows: filterRowsByColumn(metaCols, metaAllRows, "ProjectID", selectedProjectIDs),
+		rows: filterRowsByColumn(metaCols, metaAllRows, "ProjectID", selectedProjectIDs, true),
 	}
 
 	var sourceIdentityReservations []struct {

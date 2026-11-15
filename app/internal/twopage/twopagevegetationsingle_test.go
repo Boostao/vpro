@@ -57,7 +57,8 @@ func TestTwoPageVegetationSingleCalibrationTypedAssignments(t *testing.T) {
 					}
 					edit := vegetationPlanEdit(original, column, vprotest.SiviReal(value))
 					plan, err := planTwoPageVegetationEdits(context.Background(), original, []twoPageVegetationEdit{edit})
-					rawCanonical := observed.ClientAccepted && value == *observed.NativeValue
+					// S1.11 rejects new negative (< 0) covers on Veg child writes while retaining SINGLE calibration for 0..99.99999.
+					rawCanonical := observed.ClientAccepted && value == *observed.NativeValue && value >= 0
 					if (err == nil) != rawCanonical || err != nil && plan != nil {
 						t.Fatalf("raw input is not canonical typed transport: %+v %v", plan, err)
 					}
@@ -72,10 +73,11 @@ func TestTwoPageVegetationSingleCalibrationTypedAssignments(t *testing.T) {
 						}
 						edit.Value = vprotest.SiviReal(*observed.NativeValue)
 						plan, err = planTwoPageVegetationEdits(context.Background(), original, []twoPageVegetationEdit{edit})
-						if (err == nil) != observed.ClientAccepted || err != nil && plan != nil {
+						expectedAccepted := observed.ClientAccepted && *observed.NativeValue >= 0
+						if (err == nil) != expectedAccepted || err != nil && plan != nil {
 							t.Fatalf("canonical source assignment / SQLite signed-zero adaptation: %+v %v", plan, err)
 						}
-						if observed.ClientAccepted && (len(plan) != 1 || !twoPageVegetationCellEqual(plan[0].After, edit.Value)) {
+						if expectedAccepted && (len(plan) != 1 || !twoPageVegetationCellEqual(plan[0].After, edit.Value)) {
 							t.Fatal("planner silently altered canonical typed transport", plan)
 						}
 					}

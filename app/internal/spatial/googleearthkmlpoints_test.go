@@ -165,7 +165,7 @@ func TestGoogleEarthKMLPointsFromDirectEnvAndSelectedSUProjection(t *testing.T) 
 	points, err := planGoogleEarthKMLPoints(context.Background(), project.Rows)
 	if err != nil || len(points) != 3 || points[2].Name != "NOADMIN" ||
 		points[1].Description != "" || project.Rows[1].Description.Storage != "null" ||
-		points[1].Longitude != 123.75 || !math.Signbit(points[1].Latitude) {
+		points[1].Longitude != -123.75 || !math.Signbit(points[1].Latitude) {
 		t.Fatal("direct Env orphan/NULL text/coordinate direction lost across adapter", points, err)
 	}
 	env.Rows = append(env.Rows, vprocore.ProjectMetadataRow{RowID: "9007199254740993", Cells: append([]vprocore.ProjectMetadataCell(nil), env.Rows[0].Cells...)})

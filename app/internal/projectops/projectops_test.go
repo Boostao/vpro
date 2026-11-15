@@ -51,7 +51,7 @@ func TestCreateNewProjectAndSaveAsAndSplinterAndCompare(t *testing.T) {
 		t.Fatalf("expected no-overwrite failure when destination already exists")
 	}
 
-	// Inspect created DB for VP08 tags, Metadata row ID=1, __VPRO_ChildIdentity, Datum='2', and Audit rows.
+	// Inspect created DB for VP08 tags, Metadata row ID=1, __VPRO_ChildIdentity, Datum='NAD83', and Audit rows.
 	newDB, err := sqlutil.OpenReadOnly(created.DestinationPath)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestCreateNewProjectAndSaveAsAndSplinterAndCompare(t *testing.T) {
 		Scan(&datum, &std, &coverC); err != nil {
 		t.Fatalf("read initial metadata row: %v", err)
 	}
-	if datum != "2" || std != "LMH25" || coverC == "" {
+	if datum != "NAD83" || std != "LMH25" || coverC == "" {
 		t.Fatalf("unexpected preset values datum=%q std=%q coverC=%q", datum, std, coverC)
 	}
 
@@ -198,27 +198,27 @@ func TestOptimizeVegMaxHeightCap99AndPermanentChildIDNonReuse(t *testing.T) {
 	}
 	cid := proj.State.ContextID
 
-	// Seed 1 plot and 3 split rows for PSEUMEN + 2 overlapping rows for TSUGHET exceeding 100% cover.
+	// Seed 1 plot and 3 split rows for PSEUMEN + 2 overlapping rows for TSUGHET with agreeing metadata/HeightB/Flag.
 	vprotest.MutateContextFixture(t, proj.DestinationPath, `
 		INSERT INTO OptVegProj_Env (PlotNumber, ProjectID, Zone) VALUES ('P001', 'OV1', 'CWH');
 		INSERT INTO OptVegProj_Admin (Plot, PlotType) VALUES ('P001', 'FS882');
 		INSERT INTO OptVegProj_Veg (PlotNumber, Species, ID, Cover2, Height2, Cover6, Height6, Flag)
 			VALUES ('P001', 'PSEUMEN', 10, 45.0, 28.5, 12.0, 0.4, 0);
 		INSERT INTO OptVegProj_Veg (PlotNumber, Species, ID, Cover5, Height5, Cover6, Height6, Collected, Flag)
-			VALUES ('P001', 'PSEUMEN', 25, 18.0, 3.2, 8.0, 0.65, 'V', -1);
+			VALUES ('P001', 'PSEUMEN', 25, 18.0, 3.2, 8.0, 0.65, 'V', 0);
 		INSERT INTO OptVegProj_Veg (PlotNumber, Species, ID, Cover7, Flag)
 			VALUES ('P001', 'PSEUMEN', 42, 2.5, 0);
 		INSERT INTO OptVegProj_Veg (PlotNumber, Species, ID, Cover4, Height4, HeightB, Flag)
-			VALUES ('P001', 'TSUGHET', 50, 65.0, 6.0, '5.5', 0);
+			VALUES ('P001', 'TSUGHET', 50, 65.0, 6.0, '8.2', 0);
 		INSERT INTO OptVegProj_Veg (PlotNumber, Species, ID, Cover4, Height4, HeightB, Flag)
-			VALUES ('P001', 'TSUGHET', 55, 55.0, 8.2, '8.2', 0);
+			VALUES ('P001', 'TSUGHET', 55, 55.0, 8.2, NULL, 0);
 	`)
 
 	preview, err := projectops.PreviewOptimizeVeg(svc, ctx, cid, projectops.OptimizeVegOptions{})
 	if err != nil {
 		t.Fatalf("PreviewOptimizeVeg failed: %v", err)
 	}
-	if preview.BeforeRowCount != 5 || preview.AfterRowCount != 2 || preview.DuplicateSpeciesCount != 2 {
+	if preview.BeforeRowCount != 5 || preview.AfterRowCount != 2 || preview.DuplicateSpeciesCount != 2 || preview.HasBlockingConflicts {
 		t.Fatalf("unexpected OptimizeVeg preview counts: %+v", preview)
 	}
 
@@ -248,8 +248,8 @@ func TestOptimizeVegMaxHeightCap99AndPermanentChildIDNonReuse(t *testing.T) {
 		t.Fatalf("unexpected ApplyOptimizeVeg result: %+v", applied)
 	}
 
-	// Check PSEUMEN Height6 == MAX(0.4, 0.65) == 0.65 (NOT 1.05 sum!), Cover6 == 20.0, Flag == -1, Collected == 'V'.
-	// Check TSUGHET Cover4 capped at 99.0 (65 + 55 = 120 -> 99.0), Height4 == MAX(6.0, 8.2) == 8.2, HeightB == '8.2'.
+	// Check PSEUMEN Height6 == MAX(0.4, 0.65) == 0.65, Cover6 == MAX(12.0, 8.0) == 12.0, Collected == 'V'.
+	// Check TSUGHET Cover4 == MAX(65.0, 55.0) == 65.0, Height4 == MAX(6.0, 8.2) == 8.2, HeightB == '8.2'.
 	vegRows, err := svc.ListVegRecords(ctx, cid, "P001")
 	if err != nil {
 		t.Fatal(err)
@@ -261,17 +261,17 @@ func TestOptimizeVegMaxHeightCap99AndPermanentChildIDNonReuse(t *testing.T) {
 		switch r.Species {
 		case "PSEUMEN":
 			if r.Height6 == nil || math.Abs(*r.Height6-0.65) > 1e-5 {
-				t.Fatalf("expected PSEUMEN Height6 MAX=0.65 (not sum 1.05), got %v", r.Height6)
+				t.Fatalf("expected PSEUMEN Height6 MAX=0.65, got %v", r.Height6)
 			}
-			if r.Cover6 == nil || math.Abs(*r.Cover6-20.0) > 1e-5 {
-				t.Fatalf("expected PSEUMEN Cover6=20.0, got %v", r.Cover6)
+			if r.Cover6 == nil || math.Abs(*r.Cover6-12.0) > 1e-5 {
+				t.Fatalf("expected PSEUMEN Cover6 independent MAX=12.0, got %v", r.Cover6)
 			}
 			if r.Cover2 == nil || *r.Cover2 != 45.0 || r.Cover5 == nil || *r.Cover5 != 18.0 || r.Cover7 == nil || *r.Cover7 != 2.5 {
 				t.Fatalf("unexpected PSEUMEN disjoint covers: %+v", r)
 			}
 		case "TSUGHET":
-			if r.Cover4 == nil || math.Abs(*r.Cover4-99.0) > 1e-5 {
-				t.Fatalf("expected TSUGHET Cover4 capped at 99.0, got %v", r.Cover4)
+			if r.Cover4 == nil || math.Abs(*r.Cover4-65.0) > 1e-5 {
+				t.Fatalf("expected TSUGHET Cover4 independent MAX=65.0, got %v", r.Cover4)
 			}
 			if r.Height4 == nil || math.Abs(*r.Height4-8.2) > 1e-5 {
 				t.Fatalf("expected TSUGHET Height4 MAX=8.2, got %v", r.Height4)
@@ -286,6 +286,13 @@ func TestOptimizeVegMaxHeightCap99AndPermanentChildIDNonReuse(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
+	var heightB sql.NullString
+	if err := db.QueryRow(`SELECT "HeightB" FROM OptVegProj_Veg WHERE "PlotNumber"='P001' AND "Species"='TSUGHET'`).Scan(&heightB); err != nil {
+		t.Fatal(err)
+	}
+	if !heightB.Valid || heightB.String != "8.2" {
+		t.Fatalf("expected TSUGHET HeightB consensus '8.2', got %#v", heightB)
+	}
 	for _, retired := range []int64{25, 42, 55} {
 		var cnt int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM "__VPRO_ChildIdentity" WHERE "ID" = ?`, retired).Scan(&cnt); err != nil {
@@ -419,8 +426,8 @@ func TestThreeWayProjectMergeAndMetadataAutomation(t *testing.T) {
 		t.Fatalf("expected 4 built-in presets, got %d", len(presets))
 	}
 	for _, p := range presets {
-		if p.Datum != "2" || len(p.CoverDescriptions) != 15 {
-			t.Fatalf("preset %s missing Datum='2' or 15 Cover*Description fields: %+v", p.ID, p)
+		if p.Datum != "NAD83" || len(p.CoverDescriptions) != 15 {
+			t.Fatalf("preset %s missing Datum='NAD83' or 15 Cover*Description fields: %+v", p.ID, p)
 		}
 	}
 
@@ -461,7 +468,7 @@ func TestThreeWayProjectMergeAndMetadataAutomation(t *testing.T) {
 		Scan(&startYr, &endYr, &fs882Cnt, &siviCnt, &std, &datum, &b2a); err != nil {
 		t.Fatal(err)
 	}
-	if startYr != 2024 || endYr != 2026 || fs882Cnt != 2 || siviCnt != 1 || std != "CHAR" || datum != "2" || !strings.Contains(b2a, "CHARS") {
+	if startYr != 2024 || endYr != 2026 || fs882Cnt != 2 || siviCnt != 1 || std != "CHAR" || datum != "NAD83" || !strings.Contains(b2a, "CHARS") {
 		t.Fatalf("unexpected stored metadata row: start=%d end=%d fs882=%d sivi=%d std=%s datum=%s b2a=%s",
 			startYr, endYr, fs882Cnt, siviCnt, std, datum, b2a)
 	}

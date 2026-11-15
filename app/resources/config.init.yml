@@ -69,11 +69,6 @@ ReportOptions:
   LVSpaceBetweenGroups: 0
   LVUnitGroups: 1
   LVUseSppCodesOnly: 0
-  PcOrdGroup: 1
-  PcOrdLayerAsSpp: 0
-  PcOrdSppCodesOnly: 0
-  PcOrdSppGreater: 0
-  PcOrdStrataAsSpp: 0
   SECoverCalc: 1
   SEIncludeSppSummary: 0
   SEOptAndOr: 1

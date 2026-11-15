@@ -5,6 +5,7 @@ import (
 )
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -120,6 +121,65 @@ func (s *PlotService) UpdateSoilRecords(plot string, updates []SoilRecordUpdate)
 				return err
 			}
 			patch.Cells[property] = ChildExpectedValue{expected, value, scalar}
+		}
+		var depthHorizonChanged bool
+		for _, prop := range []string{"horizon", "upperDepth", "lowerDepth"} {
+			if cell, ok := patch.Cells[prop]; ok && !reflect.DeepEqual(cell.Expected, cell.Value) {
+				depthHorizonChanged = true
+				break
+			}
+		}
+		if depthHorizonChanged {
+			kind := update.Kind
+			id := update.ID
+			cells := patch.Cells
+			patch.Validate = func(tx *sql.Tx, table, plot string) error {
+				var curHorizon sql.NullString
+				var curUpper, curLower sql.NullFloat64
+				if err := tx.QueryRow(`SELECT "Horizon", "UpperDepth", "LowerDepth" FROM `+table+` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, id).
+					Scan(&curHorizon, &curUpper, &curLower); err != nil {
+					return err
+				}
+				var effHorizon *string
+				if curHorizon.Valid {
+					h := curHorizon.String
+					effHorizon = &h
+				}
+				var effUpper, effLower *float64
+				if curUpper.Valid {
+					u := curUpper.Float64
+					effUpper = &u
+				}
+				if curLower.Valid {
+					l := curLower.Float64
+					effLower = &l
+				}
+				if cell, ok := cells["horizon"]; ok {
+					if cell.Value == nil {
+						effHorizon = nil
+					} else if h, ok := cell.Value.(string); ok {
+						effHorizon = &h
+					}
+				}
+				if cell, ok := cells["upperDepth"]; ok {
+					if cell.Value == nil {
+						effUpper = nil
+					} else if u, ok := cell.Value.(float64); ok {
+						effUpper = &u
+					}
+				}
+				if cell, ok := cells["lowerDepth"]; ok {
+					if cell.Value == nil {
+						effLower = nil
+					} else if l, ok := cell.Value.(float64); ok {
+						effLower = &l
+					}
+				}
+				if err := ValidateSoilHorizonDepthSign(kind, effHorizon, effUpper, effLower); err != nil {
+					return fmt.Errorf("%s identity (%q, %d): %w", kind, plot, id, err)
+				}
+				return nil
+			}
 		}
 		patches = append(patches, patch)
 	}

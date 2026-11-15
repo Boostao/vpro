@@ -370,13 +370,19 @@ func extractLongVegObservations(
 			if !covers[idx].Valid {
 				continue
 			}
-			cov := float64(float32(covers[idx].Float64))
+			cov32 := float32(covers[idx].Float64)
+			cov := float64(cov32)
 			if cov < 0 {
 				continue
 			}
 			emittedAny = true
-			// Clean float32 decimal artifacts to 4 decimals
-			cov = math.Round(cov*10000) / 10000
+			// Clean float32 decimal artifacts to 4 decimals without rounding valid < 100
+			// float32 covers (such as 99.999996) up to 100.0 (used by rdsexport.go / veg_long).
+			rounded := math.Round(cov*10000) / 10000
+			if cov32 < 100 && rounded >= 100 {
+				rounded = 99.9999
+			}
+			cov = rounded
 			var htPtr *float64
 			if heights[idx].Valid {
 				hv := math.Round(float64(float32(heights[idx].Float64))*100) / 100

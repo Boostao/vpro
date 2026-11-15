@@ -115,20 +115,9 @@ func ProjectBCAlbersToNAD83(easting, northing float64) (latDeg, lonDeg float64) 
 }
 
 // NormalizeWesternLongitude normalizes positive Western Hemisphere longitudes (e.g., 125.4 -> -125.4)
-// and validates BC / Canadian Arctic latitude & longitude bounds.
+// and validates unified Western Canada / Alaska / BC latitude & longitude bounds ([45.0..85.0] N, [-170.0..-100.0] W).
 func NormalizeWesternLongitude(lat, lon float64) (normLat, normLon float64, wasFlipped, valid bool) {
-	normLat, normLon = lat, lon
-	if math.IsNaN(lat) || math.IsNaN(lon) || math.IsInf(lat, 0) || math.IsInf(lon, 0) {
-		return lat, lon, false, false
-	}
-	if normLon >= 100.0 && normLon <= 170.0 {
-		normLon = -normLon
-		wasFlipped = true
-	}
-	if normLat < 45.0 || normLat > 85.0 || normLon < -170.0 || normLon > -100.0 {
-		return normLat, normLon, wasFlipped, false
-	}
-	return normLat, normLon, wasFlipped, true
+	return vprocore.NormalizeWesternBCCoordinates(lat, lon)
 }
 
 // EncodeGeoPackagePoint encodes a standard OGC GeoPackage Binary (GP v0) Little-Endian Point with XY envelope.

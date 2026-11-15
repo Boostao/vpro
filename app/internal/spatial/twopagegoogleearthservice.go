@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"unicode/utf8"
 )
 
@@ -130,13 +129,11 @@ func (s *TwoPageGoogleEarthService) GetReview(ctx context.Context, contextID, pl
 			if err != nil {
 				return nil, fmt.Errorf("two-page Google Earth source schema: %w", err)
 			}
-			longitude, err := googleEarthKMLNumber(original.Rows[0].Cells[columns["Longitude"]])
-			if err != nil {
+			if _, err := googleEarthKMLNumber(original.Rows[0].Cells[columns["Longitude"]]); err != nil {
 				return nil, fmt.Errorf("two-page Google Earth stored Longitude: %w", err)
 			}
-			if math.Signbit(longitude) {
-				return nil, errors.New("two-page Google Earth source minus-prefix requires nonnegative stored Longitude; no coordinate repaired")
-			}
+			// Positive Western magnitudes are normalized via vprocore.NegateLocationLongitude while
+			// already-negative Western longitudes (e.g. -125.4) are preserved cleanly for KML export.
 			// The source reads one current-project Env row, not SU-expanded locations.
 			locations, err := planGoogleEarthLocations(ctx, project, "None", request.DescriptionField, original, vprocore.ProjectMetadataTable{})
 			if err != nil {

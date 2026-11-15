@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/boostao/vpro/app/internal/accessimport"
@@ -188,13 +189,40 @@ var vp06EnvMapping = [][2]string{
 	{"SpeciesListComplete", "SpeciesListComplete"}, {"Temporary", "Temporary"}, {"Flag", "Flag"},
 }
 
+// vp06AdminFromEnvMapping maps VP06 _Env columns onto VP08 _Admin, including
+// USysConvE.Date -> _Admin.StartDate per V7mdlImportVProVer06.txt:47-49.
 var vp06AdminFromEnvMapping = [][2]string{
-	{"Plot", "PlotNumber"},
+	{"Plot", "PlotNumber"}, {"StartDate", "Date"},
 	{"SitePlotQuality", "SitePlotQuality"}, {"VegPlotQuality", "VegPlotQuality"},
 	{"SoilPlotQuality", "SoilPlotQuality"}, {"UpdatedFromCards", "UpdatedFromCards"},
 	{"EnteredBy", "EnteredBy"}, {"UserSiteUnit", "UserSiteUnit"}, {"BECSiteUnit", "BECSiteUnit"},
 	{"SiteUnitShortName", "SiteUnitShortName"}, {"SiteUnitLongName", "SiteUnitLongName"},
 	{"OfficeNotes", "OfficeNotes"}, {"HumusThickness", "HumusThickness"},
+}
+
+func accessColumnUTF16Limit(targetTable, colName string) int {
+	upperTable := strings.ToUpper(targetTable)
+	switch strings.ToLower(colName) {
+	case "plotnumber", "plot":
+		return 7
+	case "species":
+		if strings.HasSuffix(upperTable, "_VEG") {
+			return 8
+		}
+	case "horizon":
+		if strings.HasSuffix(upperTable, "_HUMUS") || strings.HasSuffix(upperTable, "_MINERAL") {
+			return 8
+		}
+	case "texture":
+		if strings.HasSuffix(upperTable, "_MINERAL") {
+			return 4
+		}
+	case "colour":
+		if strings.HasSuffix(upperTable, "_MINERAL") {
+			return 14
+		}
+	}
+	return 0
 }
 
 var vp05EnvMapping = [][2]string{
@@ -667,14 +695,16 @@ func streamAccessSourceIntoSQLite(
 	}
 
 	type preparedTarget struct {
-		spec          streamInsertSpec
-		stmt          *sql.Stmt
-		sourceIndices []int
-		overrides     []func(any) any
-		computedKeys  []string
-		argsBuf       []any
-		seenPlots     map[string]struct{}
-		plotIdx       int
+		spec           streamInsertSpec
+		stmt           *sql.Stmt
+		sourceIndices  []int
+		overrides      []func(any) any
+		computedKeys   []string
+		targetColNames []string
+		targetLimits   []int
+		argsBuf        []any
+		seenPlots      map[string]struct{}
+		plotIdx        int
 	}
 	targets := make([]preparedTarget, len(specs))
 	for sIdx, spec := range specs {
@@ -709,6 +739,8 @@ func streamAccessSourceIntoSQLite(
 			overrideByLower[strings.ToLower(k)] = fn
 		}
 		targetCols := make([]string, 0, len(mapping)+len(spec.computed))
+		targetColNames := make([]string, 0, len(mapping)+len(spec.computed))
+		targetLimits := make([]int, 0, len(mapping)+len(spec.computed))
 		sourceIndices := make([]int, len(mapping))
 		overrides := make([]func(any) any, len(mapping))
 		for i, pair := range mapping {
@@ -725,6 +757,8 @@ func streamAccessSourceIntoSQLite(
 			}
 			overrides[i] = overrideFn
 			targetCols = append(targetCols, vprocore.QuoteHeaderIdentifier(pair[0]))
+			targetColNames = append(targetColNames, pair[0])
+			targetLimits = append(targetLimits, accessColumnUTF16Limit(spec.targetTable, pair[0]))
 		}
 		var computedKeys []string
 		for k := range spec.computed {
@@ -733,6 +767,8 @@ func streamAccessSourceIntoSQLite(
 		slices.Sort(computedKeys)
 		for _, k := range computedKeys {
 			targetCols = append(targetCols, vprocore.QuoteHeaderIdentifier(k))
+			targetColNames = append(targetColNames, k)
+			targetLimits = append(targetLimits, accessColumnUTF16Limit(spec.targetTable, k))
 		}
 		marks := make([]string, len(targetCols))
 		for i := range marks {
@@ -761,14 +797,16 @@ func streamAccessSourceIntoSQLite(
 			seen = make(map[string]struct{})
 		}
 		targets[sIdx] = preparedTarget{
-			spec:          spec,
-			stmt:          stmt,
-			sourceIndices: sourceIndices,
-			overrides:     overrides,
-			computedKeys:  computedKeys,
-			argsBuf:       make([]any, len(sourceIndices)+len(computedKeys)),
-			seenPlots:     seen,
-			plotIdx:       pIdx,
+			spec:           spec,
+			stmt:           stmt,
+			sourceIndices:  sourceIndices,
+			overrides:      overrides,
+			computedKeys:   computedKeys,
+			targetColNames: targetColNames,
+			targetLimits:   targetLimits,
+			argsBuf:        make([]any, len(sourceIndices)+len(computedKeys)),
+			seenPlots:      seen,
+			plotIdx:        pIdx,
 		}
 	}
 
@@ -842,7 +880,7 @@ func streamAccessSourceIntoSQLite(
 			continue
 		}
 
-		insertedPrimary := false
+		var utf16Violation string
 		for tIdx := range targets {
 			tg := &targets[tIdx]
 			args := tg.argsBuf
@@ -860,7 +898,40 @@ func streamAccessSourceIntoSQLite(
 			for i, k := range tg.computedKeys {
 				args[nSrc+i] = tg.spec.computed[k](adapted, colIndex)
 			}
-			if _, execErr := tg.stmt.ExecContext(ctx, args...); execErr != nil {
+			if utf16Violation == "" {
+				for i, limit := range tg.targetLimits {
+					if limit <= 0 {
+						continue
+					}
+					if s, ok := args[i].(string); ok {
+						if !utf8.ValidString(s) || strings.ContainsRune(s, 0) || len(utf16.Encode([]rune(s))) > limit {
+							utf16Violation = fmt.Sprintf("%s.%s exceeds %d UTF-16 code units or invalid UTF-8", tg.spec.targetTable, tg.targetColNames[i], limit)
+							break
+						}
+					}
+				}
+			}
+		}
+		if utf16Violation != "" {
+			metrics.malformedRows++
+			for tIdx := range targets {
+				reserveQuarantinedID(&targets[tIdx], adapted)
+			}
+			if quarantineStmt != nil {
+				plotKey := ""
+				if len(targets) > 0 && targets[0].plotIdx >= 0 && adapted[targets[0].plotIdx] != nil {
+					plotKey = adaptedPlotKey(adapted[targets[0].plotIdx])
+				}
+				payload, _ := json.Marshal(adapted)
+				_, _ = quarantineStmt.ExecContext(ctx, sourceTable, rowOrdinal, plotKey, "utf16_length_bound: "+utf16Violation, string(payload))
+			}
+			continue
+		}
+
+		insertedPrimary := false
+		for tIdx := range targets {
+			tg := &targets[tIdx]
+			if _, execErr := tg.stmt.ExecContext(ctx, tg.argsBuf...); execErr != nil {
 				metrics.malformedRows++
 				reserveQuarantinedID(tg, adapted)
 				if quarantineStmt != nil {

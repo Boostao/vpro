@@ -75,15 +75,17 @@ func resolveNewProjectDestination(projectsRoot, projectName, requestedDest strin
 }
 
 type contextSnapshotInfo struct {
-	Root        string
-	Project     string
-	ProjectPath string
-	SU          string
-	SUPath      string
-	VListsPath  string
-	VPro64Path  string
-	CurrentUser string
-	AuditLevel  int
+	Root          string
+	Project       string
+	ProjectPath   string
+	SU            string
+	SUPath        string
+	Hierarchy     string
+	HierarchyPath string
+	VListsPath    string
+	VPro64Path    string
+	CurrentUser   string
+	AuditLevel    int
 }
 
 func inspectContextSnapshot(ctx context.Context, s *vprocore.ContextService, contextID string) (contextSnapshotInfo, error) {
@@ -104,15 +106,17 @@ func inspectContextSnapshot(ctx context.Context, s *vprocore.ContextService, con
 			user = "VProUser"
 		}
 		return contextSnapshotInfo{
-			Root:        plots.Projects.Root,
-			Project:     owner.Selection.Project,
-			ProjectPath: owner.Selection.ProjectPath,
-			SU:          owner.Selection.SU,
-			SUPath:      owner.Selection.SUPath,
-			VListsPath:  owner.Attachments["VLists"],
-			VPro64Path:  owner.Attachments["VPro64"],
-			CurrentUser: user,
-			AuditLevel:  plots.AuditStrength,
+			Root:          plots.Projects.Root,
+			Project:       owner.Selection.Project,
+			ProjectPath:   owner.Selection.ProjectPath,
+			SU:            owner.Selection.SU,
+			SUPath:        owner.Selection.SUPath,
+			Hierarchy:     owner.Selection.Hierarchy,
+			HierarchyPath: owner.Selection.HierarchyPath,
+			VListsPath:    owner.Attachments["VLists"],
+			VPro64Path:    owner.Attachments["VPro64"],
+			CurrentUser:   user,
+			AuditLevel:    plots.AuditStrength,
 		}, nil
 	})
 }
