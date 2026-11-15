@@ -70,7 +70,6 @@ func TestOwnedPlotLabelPDFTypedNullEmptyAndStorageRefusals(t *testing.T) {
 		}
 	}
 	for _, mutation := range []string{
-		`UPDATE Sample_Env SET Zone=NULL WHERE PlotNumber='LB001'`,
 		`UPDATE Sample_Env SET Zone=CAST(X'4348' AS BLOB) WHERE PlotNumber='LB001'`,
 		`UPDATE Sample_Env SET Zone='CWH',ProjectID=CAST(X'FF' AS TEXT) WHERE PlotNumber='LB001'`,
 	} {

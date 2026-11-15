@@ -25,30 +25,30 @@ func TestTwoPageVegetationSourceCoverControlBounds(t *testing.T) {
 		t.Run(test.form, func(t *testing.T) {
 			original := twoPageVegetationPlanFixture(t, test.form)
 			for _, column := range test.fields {
-				for _, invalid := range []float64{math.Nextafter(100, math.Inf(-1)), 99.999999, 100, math.Nextafter(100, math.Inf(1)), 101} {
+				for _, invalid := range []float64{-math.MaxFloat32, -1, -0.25, math.Nextafter(100, math.Inf(-1)), 99.999999, 100, math.Nextafter(100, math.Inf(1)), 101} {
 					got, err := planTwoPageVegetationEdits(context.Background(), original,
 						[]twoPageVegetationEdit{vegetationPlanEdit(original, column, vprotest.SiviReal(invalid))})
 					if err == nil || got != nil || !strings.Contains(err.Error(), "below 100 or NULL") {
-						t.Fatalf("%s source >=100 control bound missing: %+v %v", column, got, err)
+						t.Fatalf("%s source <0 or >=100 control bound missing: %+v %v", column, got, err)
 					}
 				}
 
 				for _, valid := range []vprocore.ProjectMetadataCell{
 					vprotest.SiviReal(float64(math.Nextafter32(100, float32(math.Inf(-1))))),
-					vprotest.SiviReal(-1), vprotest.SiviReal(-math.MaxFloat32), {Storage: "null"},
+					vprotest.SiviReal(0), {Storage: "null"},
 				} {
 					got, err := planTwoPageVegetationEdits(context.Background(), original,
 						[]twoPageVegetationEdit{vegetationPlanEdit(original, column, valid)})
 					if err != nil || len(got) != 1 {
-						t.Fatalf("%s below100/negative/NULL acquired an invented constraint: %+v %v", column, got, err)
+						t.Fatalf("%s valid cover/0/NULL rejected: %+v %v", column, got, err)
 					}
 				}
-				for _, historical := range []float64{100, 101} {
+				for _, historical := range []float64{-1, -math.MaxFloat32, 100, 101} {
 					*vegetationPlanCell(original, "-7", column) = vprotest.SiviReal(historical)
 					got, err := planTwoPageVegetationEdits(context.Background(), original,
 						[]twoPageVegetationEdit{vegetationPlanEdit(original, column, vprotest.SiviReal(historical))})
 					if err != nil || len(got) != 0 {
-						t.Fatalf("%s unchanged historical >=100 was implicitly rejected/rewritten: %+v %v", column, got, err)
+						t.Fatalf("%s unchanged historical <0/>=100 was implicitly rejected/rewritten: %+v %v", column, got, err)
 					}
 				}
 				*vegetationPlanCell(original, "-7", column) = vprotest.MetadataInteger("0")

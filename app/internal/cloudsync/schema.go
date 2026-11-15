@@ -468,6 +468,8 @@ func buildV1MigrationStatements(hasPostGIS bool) []string {
 		`CREATE INDEX IF NOT EXISTS idx_standards_bec_zone ON standards.bec_site_series ("Zone", "SubZone");`,
 		buildStandardsTableDDL("master_site_unit_list", StandardsMasterSiteUnitListColumns),
 		buildStandardsTableDDL("usys_zone_list", StandardsUSysZoneListColumns),
+		buildStandardsTableDDL("usys_spp_attributes", StandardsUSysSppAttributesColumns),
+		`CREATE INDEX IF NOT EXISTS idx_standards_spp_attr_code ON standards.usys_spp_attributes ("Code");`,
 		buildStandardsTableDDL("project_metadata", StandardsProjectMetadataColumns),
 	)
 

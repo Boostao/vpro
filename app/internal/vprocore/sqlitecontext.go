@@ -15,6 +15,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 type SqliteContext struct {
@@ -30,6 +33,9 @@ type SqliteContext struct {
 	Profile        *PlotProfileSource          `json:"-" yaml:"-"`
 	profileRole    string
 	ProfileWrite   bool `json:"-" yaml:"-"`
+	userLogPath    string
+	userLogRowID   int64
+	userLogUser    string
 }
 
 // database/sql discards a pinned SQLite connection when a transaction's context
@@ -87,7 +93,7 @@ func (c *SqliteContext) ProjectDatabase(ctx context.Context) (*sql.DB, error) {
 	if c.ProjectDB != nil {
 		return c.ProjectDB, nil
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(c.Selection.ProjectPath, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL")
+	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(c.Selection.ProjectPath, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
@@ -485,6 +491,7 @@ func (c *SqliteContext) createViews(ctx context.Context) error {
 func (c *SqliteContext) Close() error {
 	c.Mu.Lock()
 	defer c.Mu.Unlock()
+	_ = c.endUserLogSessionLocked()
 	if c.Conn == nil {
 		return nil
 	}
@@ -502,4 +509,240 @@ func (c *SqliteContext) Close() error {
 	c.ProjectReadDB = nil
 	c.ProjectDB = nil
 	return err
+}
+
+func truncateUserLogUTF16(raw string, maxUnits int) string {
+	units := 0
+	var out strings.Builder
+	for _, r := range raw {
+		need := 1
+		if r > 0xFFFF {
+			need = 2
+		}
+		if units+need > maxUnits {
+			break
+		}
+		out.WriteRune(r)
+		units += need
+	}
+	return out.String()
+}
+
+func isReadOnlyUserLogErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var sqliteErr sqlite3.Error
+	if errors.As(err, &sqliteErr) {
+		switch sqliteErr.Code {
+		case sqlite3.ErrReadonly, sqlite3.ErrPerm, sqlite3.ErrCantOpen:
+			return true
+		}
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "readonly") || strings.Contains(lower, "permission denied")
+}
+
+func openWritableVPro64LogDB(ctx context.Context, path string) (*sql.DB, error) {
+	if path == "" {
+		return nil, nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, nil
+	}
+	if info.Mode().Perm()&0222 == 0 {
+		return nil, nil
+	}
+	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw")+"&_busy_timeout=5000&_txlock=immediate")
+	if err != nil {
+		if isReadOnlyUserLogErr(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	var tableExists bool
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='USysUserLog' COLLATE BINARY)`).Scan(&tableExists); err != nil || !tableExists {
+		_ = db.Close()
+		return nil, nil
+	}
+	cols := map[string]bool{}
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info("USysUserLog")`)
+	if err != nil {
+		_ = db.Close()
+		return nil, nil
+	}
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, colType string
+		var dflt sql.NullString
+		if scanErr := rows.Scan(&cid, &name, &colType, &notNull, &dflt, &pk); scanErr == nil {
+			cols[name] = true
+		}
+	}
+	_ = rows.Close()
+	for _, req := range []string{"User", "InTime", "OutTime", "LocalMachine"} {
+		if !cols[req] {
+			_ = db.Close()
+			return nil, nil
+		}
+	}
+	return db, nil
+}
+
+// StartUserLogSession appends an InTime entry to VPro64.USysUserLog for the active session,
+// cleanly skipping writes when VPro64.db is read-only or lacks the USysUserLog table.
+func (c *SqliteContext) StartUserLogSession(ctx context.Context, user string) error {
+	if c == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	c.Mu.Lock()
+	defer c.Mu.Unlock()
+	return c.startUserLogSessionLocked(ctx, user)
+}
+
+func (c *SqliteContext) startUserLogSessionLocked(ctx context.Context, user string) error {
+	if c.userLogRowID > 0 {
+		return nil
+	}
+	vpro64Path := c.Attachments["VPro64"]
+	db, err := openWritableVPro64LogDB(ctx, vpro64Path)
+	if err != nil || db == nil {
+		return err
+	}
+	defer db.Close()
+
+	actor := strings.TrimSpace(user)
+	if actor == "" {
+		actor = "Admin"
+	}
+	actor = truncateUserLogUTF16(actor, 50)
+	host, _ := os.Hostname()
+	host = truncateUserLogUTF16(strings.TrimSpace(host), 50)
+	now := time.Now().Format("2006-01-02 15:04:05")
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		if isReadOnlyUserLogErr(err) {
+			return nil
+		}
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO "USysUserLog" ("User","InTime","OutTime","LocalMachine") VALUES (?,?,NULL,?)`,
+		actor, now, host)
+	if err != nil {
+		if isReadOnlyUserLogErr(err) {
+			return nil
+		}
+		return err
+	}
+	rowID, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		if isReadOnlyUserLogErr(err) {
+			return nil
+		}
+		return err
+	}
+	c.userLogPath = vpro64Path
+	c.userLogRowID = rowID
+	c.userLogUser = actor
+	return nil
+}
+
+// EndUserLogSession closes the tracked USysUserLog row by recording OutTime on close.
+func (c *SqliteContext) EndUserLogSession() error {
+	if c == nil {
+		return nil
+	}
+	c.Mu.Lock()
+	defer c.Mu.Unlock()
+	return c.endUserLogSessionLocked()
+}
+
+func (c *SqliteContext) endUserLogSessionLocked() error {
+	if c.userLogRowID == 0 || c.userLogPath == "" {
+		return nil
+	}
+	rowID := c.userLogRowID
+	vpro64Path := c.userLogPath
+	c.userLogRowID = 0
+	c.userLogPath = ""
+	c.userLogUser = ""
+
+	ctx := context.Background()
+	db, err := openWritableVPro64LogDB(ctx, vpro64Path)
+	if err != nil || db == nil {
+		return err
+	}
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		if isReadOnlyUserLogErr(err) {
+			return nil
+		}
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now().Format("2006-01-02 15:04:05")
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE "USysUserLog" SET "OutTime" = ? WHERE rowid = ? AND "OutTime" IS NULL`,
+		now, rowID); err != nil {
+		if isReadOnlyUserLogErr(err) {
+			return nil
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		if isReadOnlyUserLogErr(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// RotateUserLogSession closes any active session row only if user actually changed and opens a new one.
+func (c *SqliteContext) RotateUserLogSession(ctx context.Context, user string) {
+	if c == nil {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	c.Mu.Lock()
+	defer c.Mu.Unlock()
+	if c.userLogRowID == 0 {
+		return
+	}
+	trimmed := truncateUserLogUTF16(strings.TrimSpace(user), 50)
+	if trimmed == "" || trimmed == c.userLogUser {
+		return
+	}
+	_ = c.endUserLogSessionLocked()
+	_ = c.startUserLogSessionLocked(ctx, user)
+}
+
+// TransferUserLogSession moves active USysUserLog session tracking from old context to target on context switch.
+func (c *SqliteContext) TransferUserLogSession(target *SqliteContext) {
+	if c == nil || target == nil || c == target {
+		return
+	}
+	c.Mu.Lock()
+	rowID, path, user := c.userLogRowID, c.userLogPath, c.userLogUser
+	c.userLogRowID, c.userLogPath, c.userLogUser = 0, "", ""
+	c.Mu.Unlock()
+
+	target.Mu.Lock()
+	target.userLogRowID, target.userLogPath, target.userLogUser = rowID, path, user
+	target.Mu.Unlock()
 }

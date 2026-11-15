@@ -13,10 +13,11 @@ import (
 )
 
 type CompareProjectsRequest struct {
-	SourcePath    string `json:"sourcePath,omitempty"`
-	SourceProject string `json:"sourceProject,omitempty"`
-	TargetPath    string `json:"targetPath"`
-	TargetProject string `json:"targetProject,omitempty"`
+	SourcePath          string `json:"sourcePath,omitempty"`
+	SourceProject       string `json:"sourceProject,omitempty"`
+	TargetPath          string `json:"targetPath"`
+	TargetProject       string `json:"targetProject,omitempty"`
+	CaseInsensitiveText bool   `json:"caseInsensitiveText,omitempty"`
 }
 
 func (r *CompareProjectsRequest) UnmarshalJSON(data []byte) error {
@@ -25,12 +26,15 @@ func (r *CompareProjectsRequest) UnmarshalJSON(data []byte) error {
 }
 
 type FieldDiff struct {
-	Table      string  `json:"table"`
-	PlotNumber string  `json:"plotNumber"`
-	Key        string  `json:"key"`
-	Field      string  `json:"field"`
-	SourceVal  *string `json:"sourceVal"`
-	TargetVal  *string `json:"targetVal"`
+	Table        string  `json:"table"`
+	PlotNumber   string  `json:"plotNumber"`
+	Key          string  `json:"key"`
+	Field        string  `json:"field"`
+	SourceVal    *string `json:"sourceVal"`
+	TargetVal    *string `json:"targetVal"`
+	srcRowKey    string
+	tgtRowKey    string
+	baseGroupKey string
 }
 
 type PlotDiff struct {
@@ -41,17 +45,19 @@ type PlotDiff struct {
 }
 
 type CompareProjectsResult struct {
-	SourcePath     string      `json:"sourcePath"`
-	SourceProject  string      `json:"sourceProject"`
-	TargetPath     string      `json:"targetPath"`
-	TargetProject  string      `json:"targetProject"`
-	TotalPlots     int         `json:"totalPlots"`
-	AddedCount     int         `json:"addedCount"`
-	RemovedCount   int         `json:"removedCount"`
-	IdenticalCount int         `json:"identicalCount"`
-	ModifiedCount  int         `json:"modifiedCount"`
-	Plots          []PlotDiff  `json:"plots"`
-	FieldDiffs     []FieldDiff `json:"fieldDiffs"`
+	SourcePath        string      `json:"sourcePath"`
+	SourceProject     string      `json:"sourceProject"`
+	TargetPath        string      `json:"targetPath"`
+	TargetProject     string      `json:"targetProject"`
+	TotalPlots        int         `json:"totalPlots"`
+	AddedCount        int         `json:"addedCount"`
+	RemovedCount      int         `json:"removedCount"`
+	IdenticalCount    int         `json:"identicalCount"`
+	ModifiedCount     int         `json:"modifiedCount"`
+	MetadataDiffCount int         `json:"metadataDiffCount,omitempty"`
+	Plots             []PlotDiff  `json:"plots"`
+	FieldDiffs        []FieldDiff `json:"fieldDiffs"`
+	MetadataDiffs     []FieldDiff `json:"metadataDiffs,omitempty"`
 }
 
 var compareTableSuffixes = []string{"Env", "Admin", "Veg", "Humus", "Mineral", "Other"}
@@ -115,10 +121,17 @@ func formatComparableCell(cell rawSQLiteCell, declaredBool bool) *string {
 }
 
 func sameNullableString(a, b *string) bool {
+	return sameNullableText(a, b, false)
+}
+
+func sameNullableText(a, b *string, caseInsensitive bool) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	return *a == *b
+	if *a == *b {
+		return true
+	}
+	return caseInsensitive && strings.EqualFold(*a, *b)
 }
 
 type loadedProjectSnapshot struct {
@@ -130,6 +143,11 @@ type loadedProjectSnapshot struct {
 	columns map[string][]string
 	// raw typed cells for 3-way merge execution: tableSuffix -> plotNumber -> logicalRowKey -> colName -> rawSQLiteCell
 	rawCells map[string]map[string]map[string]map[string]rawSQLiteCell
+	// tableSuffix -> plotNumber -> logicalRowKey -> natural baseKey
+	baseKeys    map[string]map[string]map[string]string
+	metaColumns []string
+	metaRows    map[string]map[string]*string
+	metaRaw     map[string]map[string]rawSQLiteCell
 }
 
 func loadProjectSnapshotForDiff(ctx context.Context, dbPath, project string) (*loadedProjectSnapshot, error) {
@@ -156,6 +174,9 @@ func loadProjectSnapshotFromQueryer(ctx context.Context, tx sqliteQueryer, dbPat
 		cells:    map[string]map[string]map[string]map[string]*string{},
 		columns:  map[string][]string{},
 		rawCells: map[string]map[string]map[string]map[string]rawSQLiteCell{},
+		baseKeys: map[string]map[string]map[string]string{},
+		metaRows: map[string]map[string]*string{},
+		metaRaw:  map[string]map[string]rawSQLiteCell{},
 	}
 
 	for _, suffix := range compareTableSuffixes {
@@ -192,6 +213,7 @@ func loadProjectSnapshotFromQueryer(ctx context.Context, tx sqliteQueryer, dbPat
 		snap.columns[suffix] = cols
 		snap.cells[suffix] = map[string]map[string]map[string]*string{}
 		snap.rawCells[suffix] = map[string]map[string]map[string]rawSQLiteCell{}
+		snap.baseKeys[suffix] = map[string]map[string]string{}
 
 		colIndex := map[string]int{}
 		for i, c := range cols {
@@ -222,6 +244,7 @@ func loadProjectSnapshotFromQueryer(ctx context.Context, tx sqliteQueryer, dbPat
 		for plot, plotRows := range byPlot {
 			snap.cells[suffix][plot] = map[string]map[string]*string{}
 			snap.rawCells[suffix][plot] = map[string]map[string]rawSQLiteCell{}
+			snap.baseKeys[suffix][plot] = map[string]string{}
 
 			baseKeyFn := func(r []rawSQLiteCell) string {
 				switch suffix {
@@ -282,18 +305,13 @@ func loadProjectSnapshotFromQueryer(ctx context.Context, tx sqliteQueryer, dbPat
 			for _, r := range plotRows {
 				baseGroupCounts[baseKeyFn(r)]++
 			}
-			idIdx, hasIDCol := colIndex["ID"]
 			keyCounts := map[string]int{}
 			for _, r := range plotRows {
 				baseKey := baseKeyFn(r)
 				keyCounts[baseKey]++
 				rowKey := baseKey
 				if suffix != "Env" && suffix != "Admin" && baseGroupCounts[baseKey] > 1 {
-					if hasIDCol && r[idIdx].storage == "integer" {
-						rowKey = fmt.Sprintf("%s[ID=%d]", baseKey, r[idIdx].intVal)
-					} else {
-						rowKey = fmt.Sprintf("%s#%d", baseKey, keyCounts[baseKey])
-					}
+					rowKey = fmt.Sprintf("%s#%d", baseKey, keyCounts[baseKey])
 				}
 				colMap := make(map[string]*string, len(cols))
 				rawMap := make(map[string]rawSQLiteCell, len(cols))
@@ -306,7 +324,83 @@ func loadProjectSnapshotFromQueryer(ctx context.Context, tx sqliteQueryer, dbPat
 				}
 				snap.cells[suffix][plot][rowKey] = colMap
 				snap.rawCells[suffix][plot][rowKey] = rawMap
+				snap.baseKeys[suffix][plot][rowKey] = baseKey
 			}
+		}
+	}
+
+	// Load <Project>_Metadata if present for project-level diff & 3-way reconciliation.
+	metaTable := project + "_Metadata"
+	hasMetaTable := false
+	mCheckRows, err := tx.QueryContext(ctx, `SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1`, metaTable)
+	if err != nil {
+		return nil, err
+	}
+	hasMetaTable = mCheckRows.Next()
+	if err := errors.Join(mCheckRows.Err(), mCheckRows.Close()); err != nil {
+		return nil, err
+	}
+	if hasMetaTable {
+		quotedMeta := vprocore.QuoteHeaderIdentifier(metaTable)
+		metaCols, metaRows, mErr := readExactTableRows(ctx, tx, quotedMeta, "")
+		if mErr != nil {
+			return nil, mErr
+		}
+		snap.metaColumns = metaCols
+		pidIdx := -1
+		for i, c := range metaCols {
+			if c == "ProjectID" {
+				pidIdx = i
+				break
+			}
+		}
+		metaKeyForRow := func(r []rawSQLiteCell) string {
+			if pidIdx >= 0 && r[pidIdx].storage == "text" && string(r[pidIdx].bytes) != "" {
+				return "ProjectID=" + string(r[pidIdx].bytes)
+			}
+			return "ProjectID="
+		}
+		metaSig := func(r []rawSQLiteCell) string {
+			parts := []string{metaKeyForRow(r)}
+			for i, col := range metaCols {
+				if col == "ID" {
+					continue
+				}
+				s := formatComparableCell(r[i], false)
+				if s == nil {
+					parts = append(parts, "\x00")
+				} else {
+					parts = append(parts, *s)
+				}
+			}
+			return strings.Join(parts, "\x1f")
+		}
+		slices.SortFunc(metaRows, func(a, b []rawSQLiteCell) int {
+			return strings.Compare(metaSig(a), metaSig(b))
+		})
+		baseMetaCounts := map[string]int{}
+		for _, r := range metaRows {
+			baseMetaCounts[metaKeyForRow(r)]++
+		}
+		seenMetaCounts := map[string]int{}
+		for _, r := range metaRows {
+			bk := metaKeyForRow(r)
+			seenMetaCounts[bk]++
+			rk := bk
+			if baseMetaCounts[bk] > 1 {
+				rk = fmt.Sprintf("%s#%d", bk, seenMetaCounts[bk])
+			}
+			colMap := make(map[string]*string, len(metaCols))
+			rawMap := make(map[string]rawSQLiteCell, len(metaCols))
+			for i, col := range metaCols {
+				rawMap[col] = r[i]
+				if col == "ID" {
+					continue
+				}
+				colMap[col] = formatComparableCell(r[i], false)
+			}
+			snap.metaRows[rk] = colMap
+			snap.metaRaw[rk] = rawMap
 		}
 	}
 	return snap, nil
@@ -377,10 +471,253 @@ func CompareProjects(s *vprocore.ContextService, ctx context.Context, contextID 
 		return CompareProjectsResult{}, fmt.Errorf("read target project %s: %w", tgtProject, err)
 	}
 
-	return diffLoadedSnapshots(srcSnap, tgtSnap), nil
+	return diffLoadedSnapshotsWithOptions(srcSnap, tgtSnap, req.CaseInsensitiveText), nil
+}
+
+func rowMatchSignature(colOrder []string, m map[string]*string, skipCols map[string]bool, caseInsensitive bool) string {
+	parts := make([]string, 0, len(colOrder))
+	for _, col := range colOrder {
+		if skipCols[col] {
+			continue
+		}
+		v := m[col]
+		if v == nil {
+			parts = append(parts, "\x00")
+		} else if caseInsensitive {
+			parts = append(parts, strings.ToLower(*v))
+		} else {
+			parts = append(parts, *v)
+		}
+	}
+	return strings.Join(parts, "\x1f")
+}
+
+func diffRowGroupsCanonical(
+	tableName string,
+	plot string,
+	colOrder []string,
+	srcRows map[string]map[string]*string,
+	tgtRows map[string]map[string]*string,
+	srcGroupFn func(rk string) string,
+	tgtGroupFn func(rk string) string,
+	skipCols map[string]bool,
+	singleRowKeyed bool,
+	caseInsensitive bool,
+) []FieldDiff {
+	groupKey := func(raw string) string {
+		if caseInsensitive {
+			return strings.ToLower(raw)
+		}
+		return raw
+	}
+	srcGroups := map[string][]string{}
+	tgtGroups := map[string][]string{}
+	groupNames := map[string]string{}
+	allGroupsSet := map[string]bool{}
+
+	for rk := range srcRows {
+		rawG := srcGroupFn(rk)
+		cg := groupKey(rawG)
+		srcGroups[cg] = append(srcGroups[cg], rk)
+		if _, ok := groupNames[cg]; !ok {
+			groupNames[cg] = rawG
+		}
+		allGroupsSet[cg] = true
+	}
+	for rk := range tgtRows {
+		rawG := tgtGroupFn(rk)
+		cg := groupKey(rawG)
+		tgtGroups[cg] = append(tgtGroups[cg], rk)
+		if _, ok := groupNames[cg]; !ok {
+			groupNames[cg] = rawG
+		}
+		allGroupsSet[cg] = true
+	}
+
+	allGroups := make([]string, 0, len(allGroupsSet))
+	for cg := range allGroupsSet {
+		slices.Sort(srcGroups[cg])
+		slices.Sort(tgtGroups[cg])
+		allGroups = append(allGroups, cg)
+	}
+	slices.Sort(allGroups)
+
+	var diffs []FieldDiff
+	for _, cg := range allGroups {
+		sKeys := srcGroups[cg]
+		tKeys := tgtGroups[cg]
+
+		// First pass: canonical multiset match on identical rows so differing physical IDs
+		// or shifted #N suffixes never cause false diffs or swapped additions/removals.
+		sMatched := make([]bool, len(sKeys))
+		tMatched := make([]bool, len(tKeys))
+		tSigs := make([]string, len(tKeys))
+		for ti, tK := range tKeys {
+			tSigs[ti] = rowMatchSignature(colOrder, tgtRows[tK], skipCols, caseInsensitive)
+		}
+		for si, sK := range sKeys {
+			sSig := rowMatchSignature(colOrder, srcRows[sK], skipCols, caseInsensitive)
+			for ti := range tKeys {
+				if !tMatched[ti] && tSigs[ti] == sSig {
+					sMatched[si] = true
+					tMatched[ti] = true
+					break
+				}
+			}
+		}
+
+		var remSrc, remTgt []string
+		for si, sK := range sKeys {
+			if !sMatched[si] {
+				remSrc = append(remSrc, sK)
+			}
+		}
+		for ti, tK := range tKeys {
+			if !tMatched[ti] {
+				remTgt = append(remTgt, tK)
+			}
+		}
+
+		pairs := min(len(remSrc), len(remTgt))
+		for idx := 0; idx < pairs; idx++ {
+			sK := remSrc[idx]
+			tK := remTgt[idx]
+			sRow := srcRows[sK]
+			tRow := tgtRows[tK]
+			displayRowKey := sK
+			if sK != tK {
+				if len(sKeys) == 1 && len(tKeys) == 1 {
+					displayRowKey = groupNames[cg]
+				} else {
+					displayRowKey = fmt.Sprintf("%s#%d", groupNames[cg], idx+1)
+				}
+			}
+			for _, col := range colOrder {
+				if skipCols[col] {
+					continue
+				}
+				sVal := sRow[col]
+				tVal := tRow[col]
+				if !sameNullableText(sVal, tVal, caseInsensitive) {
+					cellKey := col
+					if !singleRowKeyed {
+						cellKey = displayRowKey + "." + col
+					}
+					var sCopy, tCopy *string
+					if sVal != nil {
+						v := *sVal
+						sCopy = &v
+					}
+					if tVal != nil {
+						v := *tVal
+						tCopy = &v
+					}
+					diffs = append(diffs, FieldDiff{
+						Table:        tableName,
+						PlotNumber:   plot,
+						Key:          cellKey,
+						Field:        col,
+						SourceVal:    sCopy,
+						TargetVal:    tCopy,
+						srcRowKey:    sK,
+						tgtRowKey:    tK,
+						baseGroupKey: cg,
+					})
+				}
+			}
+		}
+
+		for _, sK := range remSrc[pairs:] {
+			summary := summarizeRowMap(colOrder, srcRows[sK])
+			diffs = append(diffs, FieldDiff{
+				Table:        tableName,
+				PlotNumber:   plot,
+				Key:          sK,
+				Field:        "*",
+				SourceVal:    &summary,
+				TargetVal:    nil,
+				srcRowKey:    sK,
+				baseGroupKey: cg,
+			})
+		}
+		for _, tK := range remTgt[pairs:] {
+			summary := summarizeRowMap(colOrder, tgtRows[tK])
+			diffs = append(diffs, FieldDiff{
+				Table:        tableName,
+				PlotNumber:   plot,
+				Key:          tK,
+				Field:        "*",
+				SourceVal:    nil,
+				TargetVal:    &summary,
+				tgtRowKey:    tK,
+				baseGroupKey: cg,
+			})
+		}
+	}
+	return diffs
+}
+
+func diffSinglePlotSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot, plot string, caseInsensitive bool) []FieldDiff {
+	skipPlotCols := map[string]bool{"ID": true, "PlotNumber": true, "Plot": true}
+	var plotDiffs []FieldDiff
+	for _, suffix := range compareTableSuffixes {
+		srcRows := srcSnap.cells[suffix][plot]
+		tgtRows := tgtSnap.cells[suffix][plot]
+
+		colOrder := append([]string(nil), srcSnap.columns[suffix]...)
+		for _, c := range tgtSnap.columns[suffix] {
+			if !slices.Contains(colOrder, c) {
+				colOrder = append(colOrder, c)
+			}
+		}
+		singleRow := suffix == "Env" || suffix == "Admin"
+		srcBase := func(rk string) string {
+			if bk := srcSnap.baseKeys[suffix][plot][rk]; bk != "" {
+				return bk
+			}
+			return rk
+		}
+		tgtBase := func(rk string) string {
+			if bk := tgtSnap.baseKeys[suffix][plot][rk]; bk != "" {
+				return bk
+			}
+			return rk
+		}
+		plotDiffs = append(plotDiffs, diffRowGroupsCanonical(
+			suffix, plot, colOrder, srcRows, tgtRows,
+			srcBase, tgtBase, skipPlotCols, singleRow, caseInsensitive,
+		)...)
+	}
+	return plotDiffs
+}
+
+func diffMetadataSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot, caseInsensitive bool) []FieldDiff {
+	metaCols := append([]string(nil), srcSnap.metaColumns...)
+	for _, c := range tgtSnap.metaColumns {
+		if !slices.Contains(metaCols, c) {
+			metaCols = append(metaCols, c)
+		}
+	}
+	if len(metaCols) == 0 && len(srcSnap.metaRows) == 0 && len(tgtSnap.metaRows) == 0 {
+		return nil
+	}
+	metaGroupFn := func(rk string) string {
+		if i := strings.IndexByte(rk, '#'); i > 0 {
+			return rk[:i]
+		}
+		return rk
+	}
+	return diffRowGroupsCanonical(
+		"Metadata", "", metaCols, srcSnap.metaRows, tgtSnap.metaRows,
+		metaGroupFn, metaGroupFn, map[string]bool{"ID": true}, false, caseInsensitive,
+	)
 }
 
 func diffLoadedSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot) CompareProjectsResult {
+	return diffLoadedSnapshotsWithOptions(srcSnap, tgtSnap, false)
+}
+
+func diffLoadedSnapshotsWithOptions(srcSnap, tgtSnap *loadedProjectSnapshot, caseInsensitive bool) CompareProjectsResult {
 	allPlotsMap := map[string]bool{}
 	for p := range srcSnap.plots {
 		allPlotsMap[p] = true
@@ -402,6 +739,7 @@ func diffLoadedSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot) CompareProject
 		TotalPlots:    len(allPlots),
 		Plots:         make([]PlotDiff, 0, len(allPlots)),
 		FieldDiffs:    []FieldDiff{},
+		MetadataDiffs: []FieldDiff{},
 	}
 
 	for _, plot := range allPlots {
@@ -449,90 +787,8 @@ func diffLoadedSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot) CompareProject
 			continue
 		}
 
-		// Present in both Source and Target: compare across all 6 tables.
-		var plotDiffs []FieldDiff
-		for _, suffix := range compareTableSuffixes {
-			srcRows := srcSnap.cells[suffix][plot]
-			tgtRows := tgtSnap.cells[suffix][plot]
-			rowKeysMap := map[string]bool{}
-			for k := range srcRows {
-				rowKeysMap[k] = true
-			}
-			for k := range tgtRows {
-				rowKeysMap[k] = true
-			}
-			rowKeys := make([]string, 0, len(rowKeysMap))
-			for k := range rowKeysMap {
-				rowKeys = append(rowKeys, k)
-			}
-			slices.Sort(rowKeys)
-
-			colOrder := srcSnap.columns[suffix]
-			for _, c := range tgtSnap.columns[suffix] {
-				if !slices.Contains(colOrder, c) {
-					colOrder = append(colOrder, c)
-				}
-			}
-
-			for _, rk := range rowKeys {
-				sRow, sHas := srcRows[rk]
-				tRow, tHas := tgtRows[rk]
-				if sHas && !tHas {
-					summary := summarizeRowMap(colOrder, sRow)
-					plotDiffs = append(plotDiffs, FieldDiff{
-						Table:      suffix,
-						PlotNumber: plot,
-						Key:        rk,
-						Field:      "*",
-						SourceVal:  &summary,
-						TargetVal:  nil,
-					})
-					continue
-				}
-				if !sHas && tHas {
-					summary := summarizeRowMap(colOrder, tRow)
-					plotDiffs = append(plotDiffs, FieldDiff{
-						Table:      suffix,
-						PlotNumber: plot,
-						Key:        rk,
-						Field:      "*",
-						SourceVal:  nil,
-						TargetVal:  &summary,
-					})
-					continue
-				}
-				for _, col := range colOrder {
-					if col == "ID" || col == "PlotNumber" || col == "Plot" {
-						continue
-					}
-					sVal := sRow[col]
-					tVal := tRow[col]
-					if !sameNullableString(sVal, tVal) {
-						cellKey := col
-						if suffix != "Env" && suffix != "Admin" {
-							cellKey = rk + "." + col
-						}
-						var sCopy, tCopy *string
-						if sVal != nil {
-							v := *sVal
-							sCopy = &v
-						}
-						if tVal != nil {
-							v := *tVal
-							tCopy = &v
-						}
-						plotDiffs = append(plotDiffs, FieldDiff{
-							Table:      suffix,
-							PlotNumber: plot,
-							Key:        cellKey,
-							Field:      col,
-							SourceVal:  sCopy,
-							TargetVal:  tCopy,
-						})
-					}
-				}
-			}
-		}
+		// Present in both Source and Target: compare across all 6 plot tables.
+		plotDiffs := diffSinglePlotSnapshots(srcSnap, tgtSnap, plot, caseInsensitive)
 
 		if len(plotDiffs) == 0 {
 			out.IdenticalCount++
@@ -552,6 +808,12 @@ func diffLoadedSnapshots(srcSnap, tgtSnap *loadedProjectSnapshot) CompareProject
 			})
 			out.FieldDiffs = append(out.FieldDiffs, plotDiffs...)
 		}
+	}
+
+	metaDiffs := diffMetadataSnapshots(srcSnap, tgtSnap, caseInsensitive)
+	if len(metaDiffs) > 0 {
+		out.MetadataDiffs = metaDiffs
+		out.MetadataDiffCount = len(metaDiffs)
 	}
 
 	return out

@@ -305,7 +305,25 @@ func (s *SIVICombinedService) SaveReviewed(ctx context.Context, contextID, plot 
 	for i, edit := range request.Edits {
 		edits[i] = sourceform.SiviHeightEdit{edit.RowID, edit.Form, edit.Column, edit.Expected, edit.Value}
 	}
+	if err := validateSIVINewCoverEdits(edits); err != nil {
+		return nil, err
+	}
 	return sourceform.WriteSIVIVegetationCells(s.contexts, ctx, contextID, plot, extended, request.Original, edits, siviCombinedWritePolicy())
+}
+
+func validateSIVINewCoverEdits(edits []sourceform.SiviHeightEdit) error {
+	for _, edit := range edits {
+		if !vprocore.VegetationCoverColumns[edit.Column] {
+			continue
+		}
+		if vprocore.MetadataCellEqual(edit.Expected, edit.Value) {
+			continue
+		}
+		if edit.Value.Storage == "real" && edit.Value.Real != nil && float32(*edit.Value.Real) < 0 {
+			return fmt.Errorf("SIVI %s cover %q must be >= 0 and < 100 or NULL", edit.RowID, edit.Column)
+		}
+	}
+	return nil
 }
 
 func (s *SIVICombinedService) RestoreReviewed(ctx context.Context, contextID, plot, historyID string, action vprocore.AuditRestoreAction) (*vprocore.AuditRestoreResult, error) {
@@ -398,6 +416,9 @@ func (s *SIVICoverService) SaveReviewed(ctx context.Context, contextID, plot str
 	edits := make([]sourceform.SiviHeightEdit, len(request.Edits))
 	for i, edit := range request.Edits {
 		edits[i] = sourceform.SiviHeightEdit{edit.RowID, edit.Form, edit.Column, edit.Expected, edit.Value}
+	}
+	if err := validateSIVINewCoverEdits(edits); err != nil {
+		return nil, err
 	}
 	result, err := sourceform.WriteSIVICovers(s.contexts, ctx, contextID, plot, extended, request.Original, edits)
 	if err != nil {

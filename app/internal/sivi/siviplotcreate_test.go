@@ -15,12 +15,12 @@ func TestCreateSIVIPlotAndUndoCreateSIVIPlot(t *testing.T) {
 	svc, state := vprotest.ContextServiceFixture(t)
 	ctx := context.Background()
 
-	// 1. Validation guards: PlotNumber <= 7 UTF-16 units & PlotType in Ground/Visual/Note/Other.
+	// 1. Validation guards: PlotNumber <= 7 UTF-16 units & PlotType in Ground/Visual/Note/FS882/Other.
 	for _, bad := range []sivi.CreateSIVIPlotRequest{
 		{PlotNumber: "", PlotType: "Ground"},
 		{PlotNumber: "12345678", PlotType: "Ground"},
 		{PlotNumber: "\U0001D538\U0001D538\U0001D538\U0001D538", PlotType: "Ground"}, // 4 astral chars = 8 UTF-16 code units (> 7!)
-		{PlotNumber: "SV001", PlotType: "FS882"},                                     // Invalid SIVI PlotType
+		{PlotNumber: "SV001", PlotType: "Unknown"},                                   // Invalid SIVI PlotType
 	} {
 		if _, err := sivi.CreateSIVIPlot(svc, ctx, state.ContextID, bad); err == nil {
 			t.Fatalf("expected invalid SIVI plot request %+v to fail", bad)
@@ -190,5 +190,22 @@ func TestUndoCreateSIVIPlotToleratesForwardFieldsInStoredHistory(t *testing.T) {
 	}
 	if !undone.RemovedFromSU {
 		t.Fatalf("UndoCreateSIVIPlot lost AddedToSU / failed to remove SU row due to strict request decoder on history row: %+v", undone)
+	}
+
+	// 4. Create & Undo an 'FS882' plot via CreateSIVIPlot (S1.7).
+	fsCreated, err := sivi.CreateSIVIPlot(svc, ctx, suState.ContextID, sivi.CreateSIVIPlotRequest{
+		RequestID:  "33333333-3333-4444-8555-666666666663",
+		PlotNumber: "FS88201",
+		PlotType:   "FS882",
+	})
+	if err != nil || fsCreated.PlotType != "FS882" {
+		t.Fatalf("CreateSIVIPlot failed for PlotType FS882: %+v err=%v", fsCreated, err)
+	}
+	if _, err := sivi.UndoCreateSIVIPlot(svc, ctx, suState.ContextID, sivi.UndoCreateSIVIPlotRequest{
+		RequestID:         "33333333-3333-4444-8555-666666666664",
+		CreationRequestID: fsCreated.RequestID,
+		PlotNumber:        "FS88201",
+	}); err != nil {
+		t.Fatalf("UndoCreateSIVIPlot FS882 failed: %v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/boostao/vpro/app/internal/sourceform"
@@ -51,6 +52,11 @@ func (s *SIVICreationService) Create(ctx context.Context, contextID, requestJSON
 	var request sourceform.SiviCreationRequest
 	if err := json.Unmarshal([]byte(requestJSON), &request); err != nil {
 		return nil, err
+	}
+	for _, cover := range request.Covers {
+		if vprocore.VegetationCoverColumns[cover.Column] && cover.Value.Storage == "real" && cover.Value.Real != nil && float32(*cover.Value.Real) < 0 {
+			return nil, fmt.Errorf("SIVI creation cover %q must be >= 0 and < 100 or NULL", cover.Column)
+		}
 	}
 	return sourceform.CreateSIVIVegetation(s.contexts, ctx, contextID, request)
 }

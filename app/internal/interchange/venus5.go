@@ -252,6 +252,39 @@ func loadVenusArchive(ctx context.Context, sourcePath string) (string, venusNorm
 	}
 }
 
+func validateVenus5PlusVersion(raw string) error {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return nil
+	}
+	end := 0
+	seenDot := false
+	for end < len(s) {
+		ch := s[end]
+		if ch >= '0' && ch <= '9' {
+			end++
+			continue
+		}
+		if ch == '.' && !seenDot {
+			seenDot = true
+			end++
+			continue
+		}
+		break
+	}
+	if end == 0 {
+		return fmt.Errorf("unsupported VENUS version %q (VENUS 5.0+ required)", raw)
+	}
+	verNum, err := strconv.ParseFloat(s[:end], 64)
+	if err != nil {
+		return fmt.Errorf("unsupported VENUS version %q (VENUS 5.0+ required)", raw)
+	}
+	if verNum < 5.0 {
+		return fmt.Errorf("VENUS version %q is retired (< 5.0); upgrade to VENUS 5.0+ before import", raw)
+	}
+	return nil
+}
+
 func parseVenusAccessArchive(ctx context.Context, resolvedPath, shaHex string) (venusNormalizedArchive, error) {
 	db, err := accessreader.Open(resolvedPath)
 	if err != nil {
@@ -297,8 +330,20 @@ func parseVenusAccessArchive(ctx context.Context, resolvedPath, shaHex string) (
 		return nil, false, nil
 	}
 
+	return parseVenusAccessTables(byLower, readStringTable, shaHex)
+}
+
+func parseVenusAccessTables(
+	byLower map[string]string,
+	readStringTable func(candidates ...string) ([]map[string]string, bool, error),
+	shaHex string,
+) (venusNormalizedArchive, error) {
+	vRows, hasVer, err := readStringTable("USysVersion")
+	if err != nil {
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS USysVersion: %w", err)
+	}
 	version := "5.0"
-	if vRows, ok, _ := readStringTable("USysVersion"); ok && len(vRows) > 0 {
+	if hasVer && len(vRows) > 0 {
 		if v := vRows[0]["version"]; v != "" {
 			version = v
 			if b := vRows[0]["beta"]; b != "" && b != "0" {
@@ -306,24 +351,53 @@ func parseVenusAccessArchive(ctx context.Context, resolvedPath, shaHex string) (
 			}
 		}
 	}
+	if err := validateVenus5PlusVersion(version); err != nil {
+		return venusNormalizedArchive{}, err
+	}
+
+	if _, hasLegacyEnv := byLower["tblenv"]; hasLegacyEnv {
+		_, hasPlotData := byLower["tblplotdata"]
+		_, hasPlot := byLower["tblplot"]
+		if !hasPlotData && !hasPlot {
+			return venusNormalizedArchive{}, errors.New("VENUS 4.2 (tblEnv) archives are retired; VENUS 5.0+ (tblPlotData) is required")
+		}
+	}
 
 	projRows, _, err := readStringTable("tblProjectManager", "tblProject")
 	if err != nil {
-		return venusNormalizedArchive{}, err
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblProjectManager: %w", err)
 	}
-	plotRows, hasPlotTbl, err := readStringTable("tblPlotData", "tblPlot", "tblEnv")
+	plotRows, hasPlotTbl, err := readStringTable("tblPlotData", "tblPlot")
 	if err != nil {
-		return venusNormalizedArchive{}, err
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblPlotData: %w", err)
 	}
 	if !hasPlotTbl {
-		return venusNormalizedArchive{}, errors.New("VENUS database is missing tblPlotData / tblPlot / tblEnv")
+		return venusNormalizedArchive{}, errors.New("VENUS database is missing tblPlotData / tblPlot")
 	}
-	soilRows, _, _ := readStringTable("tblSoil")
-	vegMainRows, _, _ := readStringTable("tblVegMain")
-	vegLayerRows, _, _ := readStringTable("tblVegLayer")
-	vegSppRows, _, _ := readStringTable("tblVegSpecies")
-	humusRows, _, _ := readStringTable("tblOrganicHorizons", "tblSoilHumus")
-	mineralRows, _, _ := readStringTable("tblMineralHorizons", "tblSoilMineral")
+	soilRows, _, err := readStringTable("tblSoil")
+	if err != nil {
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblSoil: %w", err)
+	}
+	vegMainRows, _, err := readStringTable("tblVegMain")
+	if err != nil {
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblVegMain: %w", err)
+	}
+	vegLayerRows, _, err := readStringTable("tblVegLayer")
+	if err != nil {
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblVegLayer: %w", err)
+	}
+	vegSppRows, _, err := readStringTable("tblVegSpecies")
+	if err != nil {
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblVegSpecies: %w", err)
+	}
+	humusRows, _, err := readStringTable("tblOrganicHorizons", "tblSoilHumus")
+	if err != nil {
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblOrganicHorizons: %w", err)
+	}
+	mineralRows, _, err := readStringTable("tblMineralHorizons", "tblSoilMineral")
+	if err != nil {
+		return venusNormalizedArchive{}, fmt.Errorf("read VENUS tblMineralHorizons: %w", err)
+	}
 
 	return assembleRelationalVenusArchive("mdb", version, shaHex, projRows, plotRows, soilRows, vegMainRows, vegLayerRows, vegSppRows, humusRows, mineralRows), nil
 }
@@ -377,15 +451,15 @@ func assembleRelationalVenusArchive(
 
 	plotIdxByKey := map[string]int{}
 	for i, pr := range plotRows {
-		plotNum := firstNonEmpty(pr, "plotnumber", "plot")
+		rawPlotNum := firstNonEmpty(pr, "plotnumber", "plot")
 		plotID := firstNonEmpty(pr, "plotid", "id")
-		if plotNum == "" {
-			plotNum = plotID
+		if rawPlotNum == "" {
+			rawPlotNum = plotID
 		}
-		if plotNum == "" {
-			plotNum = fmt.Sprintf("VP%05d", i+1)
+		if rawPlotNum == "" {
+			rawPlotNum = fmt.Sprintf("VP%05d", i+1)
 		}
-		plotNum = truncateUTF16Units(plotNum, 7)
+		plotNum := truncateUTF16Units(rawPlotNum, 7)
 		if plotID == "" {
 			plotID = plotNum
 		}
@@ -430,7 +504,12 @@ func assembleRelationalVenusArchive(
 		idx := len(arch.Plots)
 		arch.Plots = append(arch.Plots, rec)
 		plotIdxByKey[plotID] = idx
-		plotIdxByKey["PN:"+plotNum] = idx
+		if _, exists := plotIdxByKey["PN:"+rawPlotNum]; !exists {
+			plotIdxByKey["PN:"+rawPlotNum] = idx
+		}
+		if _, exists := plotIdxByKey["PN:"+plotNum]; !exists {
+			plotIdxByKey["PN:"+plotNum] = idx
+		}
 	}
 
 	findPlotIdx := func(m map[string]string) (int, bool) {
@@ -441,6 +520,9 @@ func assembleRelationalVenusArchive(
 		}
 		if pn := firstNonEmpty(m, "plotnumber", "plot"); pn != "" {
 			if idx, ok := plotIdxByKey["PN:"+pn]; ok {
+				return idx, true
+			}
+			if idx, ok := plotIdxByKey["PN:"+truncateUTF16Units(pn, 7)]; ok {
 				return idx, true
 			}
 			if idx, ok := plotIdxByKey[pn]; ok {
@@ -588,6 +670,9 @@ func parseVenusXMLArchive(ctx context.Context, data []byte, shaHex string) (venu
 			}
 			if v := firstNonEmpty(m, "version"); v != "" {
 				version = v
+				if b := firstNonEmpty(m, "beta"); b != "" && b != "0" {
+					version += "." + b
+				}
 			}
 		case "tblprojectmanager", "tblproject":
 			m, err := decodeFlatXMLElement(dec, se)
@@ -595,7 +680,9 @@ func parseVenusXMLArchive(ctx context.Context, data []byte, shaHex string) (venu
 				return venusNormalizedArchive{}, err
 			}
 			projRows = append(projRows, m)
-		case "tblplotdata", "tblenv", "tblplot":
+		case "tblenv":
+			return venusNormalizedArchive{}, errors.New("VENUS 4.2 (tblEnv) archives are retired; VENUS 5.0+ (tblPlotData) is required")
+		case "tblplotdata", "tblplot":
 			m, err := decodeFlatXMLElement(dec, se)
 			if err != nil {
 				return venusNormalizedArchive{}, err
@@ -646,6 +733,9 @@ func parseVenusXMLArchive(ctx context.Context, data []byte, shaHex string) (venu
 		}
 	}
 
+	if err := validateVenus5PlusVersion(version); err != nil {
+		return venusNormalizedArchive{}, err
+	}
 	if len(hierPlots) > 0 && len(plotRows) == 0 {
 		projs := map[string]string{}
 		for _, hp := range hierPlots {
@@ -660,7 +750,7 @@ func parseVenusXMLArchive(ctx context.Context, data []byte, shaHex string) (venu
 		}, nil
 	}
 	if len(plotRows) == 0 {
-		return venusNormalizedArchive{}, errors.New("VENUS XML contains no Plot / tblPlotData / tblEnv records")
+		return venusNormalizedArchive{}, errors.New("VENUS XML contains no Plot / tblPlotData records")
 	}
 	return assembleRelationalVenusArchive("xml", version, shaHex, projRows, plotRows, soilRows, vegMainRows, vegLayerRows, vegSppRows, humusRows, mineralRows), nil
 }
@@ -1122,6 +1212,11 @@ func writeVenusToVP08Tx(
 	)`); err != nil {
 		return 0, 0, 0, err
 	}
+	childIDStmt, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?)`)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	defer childIDStmt.Close()
 
 	quarantineSoilHorizon := func(suffix string, id int64, plotNum string, hz any, upper, lower *float64, reason string, rawRow map[string]string) error {
 		qTbl := vprocore.QuoteHeaderIdentifier("__VPRO_Quarantine_" + suffix)
@@ -1383,6 +1478,9 @@ func writeVenusToVP08Tx(
 			if _, err := vegStmt.ExecContext(ctx, args...); err != nil {
 				return 0, 0, 0, fmt.Errorf("insert VENUS veg %s/%s: %w", pNum, wv.spp, err)
 			}
+			if _, err := childIDStmt.ExecContext(ctx, vegTbl, args[vegColPos["ID"]]); err != nil {
+				return 0, 0, 0, err
+			}
 			vegCount++
 		}
 
@@ -1417,6 +1515,9 @@ func writeVenusToVP08Tx(
 				optStrField(hr, 0, "comment"),
 			); err != nil {
 				return 0, 0, 0, fmt.Errorf("insert VENUS humus %s: %w", pNum, err)
+			}
+			if _, err := childIDStmt.ExecContext(ctx, humusTbl, id); err != nil {
+				return 0, 0, 0, err
 			}
 			humusCount++
 		}
@@ -1457,6 +1558,9 @@ func writeVenusToVP08Tx(
 				optStrField(mr, 0, "comments", "comment"),
 			); err != nil {
 				return 0, 0, 0, fmt.Errorf("insert VENUS mineral %s: %w", pNum, err)
+			}
+			if _, err := childIDStmt.ExecContext(ctx, mineralTbl, id); err != nil {
+				return 0, 0, 0, err
 			}
 			mineralCount++
 		}

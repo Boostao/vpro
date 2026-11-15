@@ -34,7 +34,7 @@ const siviCreationPlotHistoryDDL = `CREATE TABLE IF NOT EXISTS "__VPRO_SIVICreat
 type CreateSIVIPlotRequest struct {
 	RequestID       string `json:"requestId,omitempty"`
 	PlotNumber      string `json:"plotNumber"`
-	PlotType        string `json:"plotType"` // "Ground" | "Visual" | "Note" | "Other"
+	PlotType        string `json:"plotType"` // "Ground" | "Visual" | "Note" | "FS882" | "Other"
 	ProjectID       string `json:"projectId,omitempty"`
 	FieldNumber     string `json:"fieldNumber,omitempty"`
 	Date            string `json:"date,omitempty"`
@@ -134,10 +134,12 @@ func normalizeSIVIPlotType(raw string) (string, error) {
 		return "Visual", nil
 	case "Note":
 		return "Note", nil
+	case "FS882":
+		return "FS882", nil
 	case "Other":
 		return "Other", nil
 	default:
-		return "", fmt.Errorf("invalid SIVI PlotType %q (expected Ground, Visual, Note, or Other)", raw)
+		return "", fmt.Errorf("invalid SIVI PlotType %q (expected Ground, Visual, Note, FS882, or Other)", raw)
 	}
 }
 

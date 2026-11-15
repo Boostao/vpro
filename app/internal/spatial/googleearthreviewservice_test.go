@@ -162,7 +162,7 @@ INSERT INTO Earth_SU SELECT PlotNumber,'' FROM source.Sample_Env WHERE Latitude 
 		stored, storedErr := vprocore.MetadataCellValue(row.StoredLongitude)
 		latitude, latitudeErr := vprocore.MetadataCellValue(row.Latitude)
 		if row.MembershipRowID == "" || row.EnvRowID == "" || longitudeErr != nil || storedErr != nil ||
-			latitudeErr != nil || longitude != float64(200) || stored != float64(-200) || latitude != float64(99) {
+			latitudeErr != nil || longitude != float64(-200) || stored != float64(-200) || latitude != float64(99) {
 			t.Fatal("historical numeric coordinates or physical IDs changed", row)
 		}
 	}

@@ -199,12 +199,13 @@ func planTwoPageVegetationQualifiedEdits(ctx context.Context, original *twoPageV
 		} else {
 			err = sourceform.ValidateSIVIChildSingle(edit.Column, edit.Value)
 			if err == nil && edit.Value.Real != nil {
+				narrowed := float64(float32(*edit.Value.Real))
 				cover := *edit.Value.Real
 				if canonicalSingle {
-					cover = float64(float32(cover))
+					cover = narrowed
 				}
-				if cover >= 100 {
-					err = errors.New("source cover validation requires a value below 100 or NULL (<100 Or Is Null)")
+				if narrowed < 0 || cover >= 100 {
+					err = errors.New("source cover validation requires a value >= 0 and below 100 or NULL (<100 Or Is Null)")
 				} else if canonicalSingle && cover == 0 && math.Signbit(cover) {
 					err = errors.New("new negative-zero values after source SINGLE conversion require lossless source/storage calibration")
 				} else if canonicalSingle && math.Float64bits(cover) != math.Float64bits(*edit.Value.Real) {

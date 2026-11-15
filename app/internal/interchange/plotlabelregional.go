@@ -163,10 +163,18 @@ AND (SELECT COUNT(*) FROM main.sqlite_master WHERE type='table' AND name COLLATE
 		}
 		text[i] = &value
 	}
-	if text[0] == nil || *text[0] != plot || text[1] == nil {
-		return nil, errors.New("saved plot label requires its literal plot and non-NULL Zone for source Len/Space")
+	if text[0] == nil || *text[0] != plot {
+		return nil, errors.New("saved plot label requires its literal plot")
 	}
-	combined := *text[1] + strings.Repeat(" ", 4-len(utf16.Encode([]rune(*text[1]))))
+	zoneVal := ""
+	if text[1] != nil {
+		zoneVal = *text[1]
+	}
+	pad := 4 - len(utf16.Encode([]rune(zoneVal)))
+	if pad < 0 {
+		pad = 0
+	}
+	combined := zoneVal + strings.Repeat(" ", pad)
 	if text[2] != nil {
 		combined += *text[2]
 	}

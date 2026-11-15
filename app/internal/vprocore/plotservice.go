@@ -382,7 +382,7 @@ func (s *PlotService) openActiveDB(readOnly bool) (*sql.DB, string, func(), erro
 		release()
 		return nil, "", nil, err
 	}
-	dsn := sqlutil.SqliteFileURI(dbPath, "rw") + "&_foreign_keys=on"
+	dsn := sqlutil.SqliteFileURI(dbPath, "rw") + "&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate"
 	if readOnly {
 		dsn = sqlutil.SqliteFileURI(dbPath, "ro") + "&_foreign_keys=on&_busy_timeout=5000"
 	}

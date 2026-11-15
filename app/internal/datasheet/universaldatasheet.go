@@ -54,6 +54,7 @@ type DatasheetTableInfo struct {
 	Available         bool                  `json:"available"`
 	UnavailableReason string                `json:"unavailableReason,omitempty"`
 	Editable          bool                  `json:"editable"`
+	ReadOnly          bool                  `json:"readOnly"`
 	RowCount          int64                 `json:"rowCount"`
 	Columns           []DatasheetColumnMeta `json:"columns"`
 }
@@ -114,6 +115,7 @@ type DatasheetPage struct {
 	Limit           int                   `json:"limit"`
 	TotalRows       int64                 `json:"totalRows"`
 	CanEditMaster   bool                  `json:"canEditMaster"`
+	ReadOnly        bool                  `json:"readOnly"`
 	ScopeToActiveSU bool                  `json:"scopeToActiveSU"`
 }
 
@@ -197,6 +199,7 @@ type resolvedDatasheetTarget struct {
 	tableName         string
 	pinnedColumn      string
 	available         bool
+	readOnly          bool
 	unavailableReason string
 }
 
@@ -245,14 +248,23 @@ func hierLabel(h string) string {
 	return h + "_Hierarchy (Classification Hierarchy)"
 }
 
+func resolveExtendedDatasheetTargets(owner *vprocore.SqliteContext) []resolvedDatasheetTarget {
+	p := owner.Selection.Project
+	targets := resolveDatasheetTargets(owner)
+	return append(targets,
+		resolvedDatasheetTarget{key: "Audit", label: p + "_Audit (Change Audit Log)", role: "project", tableName: p + "_Audit", pinnedColumn: "PlotNumber", available: true, readOnly: true},
+		resolvedDatasheetTarget{key: "Metadata", label: p + "_Metadata (Project Metadata)", role: "project", tableName: p + "_Metadata", pinnedColumn: "ProjectID", available: true, readOnly: true},
+	)
+}
+
 func findDatasheetTarget(owner *vprocore.SqliteContext, tableKey string) (resolvedDatasheetTarget, error) {
 	trimmed := strings.TrimPrefix(strings.TrimSpace(tableKey), "_")
-	for _, target := range resolveDatasheetTargets(owner) {
+	for _, target := range resolveExtendedDatasheetTargets(owner) {
 		if strings.EqualFold(target.key, trimmed) {
 			return target, nil
 		}
 	}
-	return resolvedDatasheetTarget{}, fmt.Errorf("unsupported datasheet table key %q; expected one of %s", tableKey, strings.Join(canonicalDatasheetKeys, ", "))
+	return resolvedDatasheetTarget{}, fmt.Errorf("unsupported datasheet table key %q; expected one of %s, Audit, Metadata", tableKey, strings.Join(canonicalDatasheetKeys, ", "))
 }
 
 // Known Access VP08 UTF-16 text field widths across all 9 canonical tables.
@@ -387,8 +399,14 @@ func classifyColumnMeta(tableKey string, col vprocore.ProjectMetadataColumn, pin
 		editable = false
 		protected = true
 	}
+	// Audit and Metadata tables are strictly read-only in datasheet mode.
+	if tableKey == "Audit" || tableKey == "Metadata" {
+		editable = false
+		protected = true
+	}
 	// Calculated Admin fields and custodian-locked BECSiteUnit protection.
 	if tableKey == "Admin" && (col.Name == "HumusThickness" || col.Name == "StrataCoverTotal") {
+		editable = false
 		protected = true
 	}
 	if tableKey == "Admin" && col.Name == "BECSiteUnit" {
@@ -424,6 +442,15 @@ func tableExistsInSnapshot(ctx context.Context, tx *sql.Tx, role, table string) 
 }
 
 func ListDatasheetTables(ctx context.Context, contexts *vprocore.ContextService, contextID string) ([]DatasheetTableInfo, error) {
+	return listDatasheetTablesFiltered(ctx, contexts, contextID, false)
+}
+
+// ListDatasheetAllTables returns the 9 canonical datasheet tables plus read-only _Audit and _Metadata views.
+func ListDatasheetAllTables(ctx context.Context, contexts *vprocore.ContextService, contextID string) ([]DatasheetTableInfo, error) {
+	return listDatasheetTablesFiltered(ctx, contexts, contextID, true)
+}
+
+func listDatasheetTablesFiltered(ctx context.Context, contexts *vprocore.ContextService, contextID string, includeSystem bool) ([]DatasheetTableInfo, error) {
 	if ctx == nil {
 		return nil, errors.New("datasheet table listing requires a request context")
 	}
@@ -453,7 +480,12 @@ func ListDatasheetTables(ctx context.Context, contexts *vprocore.ContextService,
 			}
 		}()
 
-		targets := resolveDatasheetTargets(owner)
+		var targets []resolvedDatasheetTarget
+		if includeSystem {
+			targets = resolveExtendedDatasheetTargets(owner)
+		} else {
+			targets = resolveDatasheetTargets(owner)
+		}
 		out := make([]DatasheetTableInfo, 0, len(targets))
 		for _, target := range targets {
 			if err := ctx.Err(); err != nil {
@@ -467,7 +499,8 @@ func ListDatasheetTables(ctx context.Context, contexts *vprocore.ContextService,
 				PinnedColumn:      target.pinnedColumn,
 				Available:         target.available,
 				UnavailableReason: target.unavailableReason,
-				Editable:          target.available,
+				Editable:          target.available && !target.readOnly,
+				ReadOnly:          !target.available || target.readOnly,
 				Columns:           []DatasheetColumnMeta{},
 			}
 			if !target.available {
@@ -481,6 +514,7 @@ func ListDatasheetTables(ctx context.Context, contexts *vprocore.ContextService,
 			if !exists {
 				info.Available = false
 				info.Editable = false
+				info.ReadOnly = true
 				info.UnavailableReason = fmt.Sprintf("Table %s does not exist in %s database", target.tableName, target.role)
 				out = append(out, info)
 				continue
@@ -790,7 +824,20 @@ func buildDatasheetWhereAndOrder(
 		}
 		if target.key == "Humus" {
 			if _, ok := colLookup["upperdepth"]; ok {
-				orderParts = append(orderParts, `CASE WHEN __t."UpperDepth" IS NULL THEN 1 ELSE 0 END ASC`, `__t."UpperDepth" DESC`)
+				if _, hasHorizon := colLookup["horizon"]; hasHorizon {
+					qHor := orderPrefix + `__t."Horizon"`
+					qUp := orderPrefix + `__t."UpperDepth"`
+					normHor := `LTRIM(UPPER(TRIM(COALESCE(` + qHor + `, ''))), '0123456789IVX ')`
+					wetlandPred := `(` + normHor + ` LIKE 'OF%' OR ` + normHor + ` LIKE 'OM%' OR ` + normHor + ` LIKE 'OH%')`
+					orderParts = append(orderParts,
+						`CASE WHEN `+wetlandPred+` THEN 1 ELSE 0 END ASC`,
+						`CASE WHEN `+qUp+` IS NULL THEN 1 ELSE 0 END ASC`,
+						`CASE WHEN `+wetlandPred+` THEN `+qUp+` ELSE -`+qUp+` END ASC`,
+					)
+				} else {
+					qUp := orderPrefix + `__t."UpperDepth"`
+					orderParts = append(orderParts, `CASE WHEN `+qUp+` IS NULL THEN 1 ELSE 0 END ASC`, qUp+` DESC`)
+				}
 			}
 		} else if target.key == "Mineral" {
 			if _, ok := colLookup["upperdepth"]; ok {
@@ -1345,6 +1392,7 @@ func GetDatasheetPage(ctx context.Context, contexts *vprocore.ContextService, co
 			Limit:           limit,
 			TotalRows:       totalRows,
 			CanEditMaster:   canEditMaster,
+			ReadOnly:        target.readOnly,
 			ScopeToActiveSU: request.ScopeToActiveSU,
 		}, nil
 	})
@@ -1428,6 +1476,16 @@ func buildReplacedCellFromString(colMeta DatasheetColumnMeta, replaced string) (
 // ValidateAndNormalizeDatasheetCell validates a proposed cell value against VP08 rules
 // (UTF-16 bounds, IEEE-754 float32 <100 cover narrowing, Access BOOLEAN -1/0, integer ranges)
 // and returns the SQLite driver storage value plus canonical audit string.
+func isProtectedDatasheetColumn(tableKey string, colMeta DatasheetColumnMeta, canEditMaster bool) bool {
+	if !colMeta.Editable {
+		return true
+	}
+	if colMeta.Protected && !(tableKey == "Admin" && colMeta.Name == "BECSiteUnit" && canEditMaster) {
+		return true
+	}
+	return false
+}
+
 func validateAndNormalizeDatasheetCell(
 	tableKey string,
 	colMeta DatasheetColumnMeta,
@@ -1437,8 +1495,8 @@ func validateAndNormalizeDatasheetCell(
 	if tableKey == "Admin" && colMeta.Name == "BECSiteUnit" && !canEditMaster {
 		return nil, nil, vprocore.ProjectMetadataCell{}, errors.New("BEC Master editing is restricted to the source-authorized user; use UserSiteUnit instead")
 	}
-	if !colMeta.Editable {
-		return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("column %s.%s is read-only in datasheet mode", tableKey, colMeta.Name)
+	if isProtectedDatasheetColumn(tableKey, colMeta, canEditMaster) {
+		return nil, nil, vprocore.ProjectMetadataCell{}, fmt.Errorf("column %s.%s is protected or read-only in datasheet mode", tableKey, colMeta.Name)
 	}
 
 	rawVal, err := vprocore.MetadataCellValue(after)
@@ -1775,6 +1833,9 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 		if !target.available {
 			return nil, errors.New(target.unavailableReason)
 		}
+		if target.readOnly {
+			return nil, fmt.Errorf("table %s (%s) is read-only in datasheet mode", target.key, target.tableName)
+		}
 
 		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
 			return nil, err
@@ -1800,8 +1861,10 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 		columns := make([]DatasheetColumnMeta, len(rawCols))
 		colIndex := -1
 		pinnedIndex := -1
+		colMetaByLower := make(map[string]DatasheetColumnMeta, len(rawCols))
 		for i, col := range rawCols {
 			columns[i] = classifyColumnMeta(target.key, col, target.pinnedColumn, canEditMaster)
+			colMetaByLower[strings.ToLower(col.Name)] = columns[i]
 			if strings.EqualFold(col.Name, strings.TrimSpace(request.Column)) {
 				colIndex = i
 			}
@@ -1813,7 +1876,10 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 			return nil, fmt.Errorf("unknown column %q on %s", request.Column, target.tableName)
 		}
 		colMeta := columns[colIndex]
-		if !colMeta.Editable {
+		if target.key == "Admin" && colMeta.Name == "BECSiteUnit" && !canEditMaster {
+			return nil, errors.New("BEC Master editing is restricted to the source-authorized user; use UserSiteUnit instead")
+		}
+		if isProtectedDatasheetColumn(target.key, colMeta, canEditMaster) {
 			return nil, fmt.Errorf("column %s.%s is protected or read-only", target.key, colMeta.Name)
 		}
 
@@ -1824,11 +1890,83 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 			return nil, err
 		}
 
-		// Query only rowid, pinned column, and target column for fast scanning even on large tables.
+		// Query target column, pinned column, plus extra sibling columns needed for row-level plot lock,
+		// LMH25 soil depth-sign, and Hierarchy cycle validation during Find & Replace preview.
 		scanCols := []DatasheetColumnMeta{colMeta}
-		if pinnedIndex >= 0 && pinnedIndex != colIndex {
-			scanCols = append(scanCols, columns[pinnedIndex])
+		scanIdxByLower := map[string]int{strings.ToLower(colMeta.Name): 0}
+		ensureScanCol := func(name string) int {
+			low := strings.ToLower(name)
+			if idx, ok := scanIdxByLower[low]; ok {
+				return idx
+			}
+			meta, ok := colMetaByLower[low]
+			if !ok {
+				return -1
+			}
+			idx := len(scanCols)
+			scanCols = append(scanCols, meta)
+			scanIdxByLower[low] = idx
+			return idx
 		}
+		scanPinnedIdx := -1
+		if pinnedIndex >= 0 {
+			scanPinnedIdx = ensureScanCol(columns[pinnedIndex].Name)
+		}
+		plotColIdx := -1
+		plotColName := plotColNameForDatasheetKey(target.key)
+		if plotColName != "" {
+			plotColIdx = ensureScanCol(plotColName)
+		}
+		checkPlotLock := false
+		lockedPlots := map[string]bool{}
+		sameAsProject := owner.AttachmentInfo[target.role] != nil &&
+			owner.AttachmentInfo["project"] != nil &&
+			os.SameFile(owner.AttachmentInfo[target.role], owner.AttachmentInfo["project"])
+		if sameAsProject && plotColIdx >= 0 &&
+			(target.key == "Env" || target.key == "Admin" || target.key == "Veg" || target.key == "Humus" || target.key == "Mineral" || target.key == "Other") &&
+			!(target.key == "Env" && colMeta.Name == "Flag") {
+			checkPlotLock = true
+			envRel := vprocore.QuoteHeaderIdentifier("project") + "." + vprocore.QuoteHeaderIdentifier(owner.Selection.Project+"_Env")
+			lockRows, lockErr := tx.QueryContext(ctx,
+				`SELECT CAST("PlotNumber" AS TEXT) FROM `+envRel+` WHERE typeof("PlotNumber")='text' AND "Flag" IS NOT NULL AND CAST("Flag" AS INTEGER) <> 0`,
+			)
+			if lockErr != nil {
+				return nil, lockErr
+			}
+			for lockRows.Next() {
+				var p string
+				if scanErr := lockRows.Scan(&p); scanErr != nil {
+					lockRows.Close()
+					return nil, scanErr
+				}
+				lockedPlots[p] = true
+			}
+			if closeErr := errors.Join(lockRows.Err(), lockRows.Close()); closeErr != nil {
+				return nil, closeErr
+			}
+		}
+
+		soilHorizonIdx, soilUpperIdx, soilLowerIdx := -1, -1, -1
+		checkSoilDepth := (target.key == "Humus" || target.key == "Mineral") &&
+			(colMeta.Name == "Horizon" || colMeta.Name == "UpperDepth" || colMeta.Name == "LowerDepth")
+		if checkSoilDepth {
+			soilHorizonIdx = ensureScanCol("Horizon")
+			soilUpperIdx = ensureScanCol("UpperDepth")
+			soilLowerIdx = ensureScanCol("LowerDepth")
+		}
+
+		hierIDIdx := -1
+		var hierParents map[int64]*int64
+		checkHierarchyCycle := target.key == "Hierarchy" && strings.EqualFold(colMeta.Name, "Parent")
+		if checkHierarchyCycle {
+			hierIDIdx = ensureScanCol("ID")
+			var loadErr error
+			hierParents, loadErr = loadHierarchyParentsMap(ctx, tx, target.role, target.tableName)
+			if loadErr != nil {
+				return nil, loadErr
+			}
+		}
+
 		rows, err := queryDatasheetWindowRows(ctx, tx, target.role, target.tableName, scanCols, whereSQL, whereArgs, orderSQL, 0, 0)
 		if err != nil {
 			return nil, err
@@ -1848,10 +1986,8 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 			}
 			beforeCell := row.Cells[0]
 			pinnedVal := row.RowID
-			if len(row.Cells) > 1 {
-				pinnedVal = cellToDisplayString(row.Cells[1], columns[pinnedIndex].IsBoolean)
-			} else if pinnedIndex == colIndex {
-				pinnedVal = cellToDisplayString(beforeCell, colMeta.IsBoolean)
+			if scanPinnedIdx >= 0 && scanPinnedIdx < len(row.Cells) {
+				pinnedVal = cellToDisplayString(row.Cells[scanPinnedIdx], scanCols[scanPinnedIdx].IsBoolean)
 			}
 
 			beforeText := cellToDisplayString(beforeCell, colMeta.IsBoolean)
@@ -1909,6 +2045,37 @@ func PreviewDatasheetFindReplace(ctx context.Context, contexts *vprocore.Context
 					valErr = vErr.Error()
 				} else {
 					normalizedCell = norm
+				}
+			}
+			if valErr == "" && checkPlotLock && plotColIdx >= 0 && plotColIdx < len(row.Cells) && row.Cells[plotColIdx].Text != nil {
+				plotVal := *row.Cells[plotColIdx].Text
+				if lockedPlots[plotVal] {
+					valErr = fmt.Sprintf("plot %q is locked (Flag = -1); unlock the plot before editing its cells", plotVal)
+				}
+			}
+			if valErr == "" && checkSoilDepth && soilHorizonIdx >= 0 && soilUpperIdx >= 0 && soilLowerIdx >= 0 {
+				effHorizon := row.Cells[soilHorizonIdx]
+				effUpper := row.Cells[soilUpperIdx]
+				effLower := row.Cells[soilLowerIdx]
+				switch colMeta.Name {
+				case "Horizon":
+					effHorizon = normalizedCell
+				case "UpperDepth":
+					effUpper = normalizedCell
+				case "LowerDepth":
+					effLower = normalizedCell
+				}
+				if effHorizon.Text != nil {
+					if sErr := validateSoilHorizonDepthSign(target.key, *effHorizon.Text, cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
+						valErr = sErr.Error()
+					}
+				}
+			}
+			if valErr == "" && checkHierarchyCycle && hierIDIdx >= 0 && hierIDIdx < len(row.Cells) && row.Cells[hierIDIdx].Integer != nil {
+				if nodeID, idErr := strconv.ParseInt(*row.Cells[hierIDIdx].Integer, 10, 64); idErr == nil {
+					if hErr := validateCandidateHierarchyParent(nodeID, normalizedCell, hierParents); hErr != nil {
+						valErr = hErr.Error()
+					}
 				}
 			}
 			if valErr != "" {
@@ -2034,6 +2201,9 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 		}
 		if !target.available {
 			return nil, errors.New(target.unavailableReason)
+		}
+		if target.readOnly {
+			return nil, fmt.Errorf("table %s (%s) is read-only in datasheet mode", target.key, target.tableName)
 		}
 
 		// Group edits by rowID in deterministic submission order, rejecting duplicate (rowId, column).
@@ -2368,10 +2538,22 @@ func ApplyDatasheetEdits(ctx context.Context, contexts *vprocore.ContextService,
 	})
 }
 
-func verifyHierarchyAcyclicInTx(ctx context.Context, tx *sql.Tx, tableName string) error {
-	rows, err := tx.QueryContext(ctx, "SELECT ID, Parent FROM main."+vprocore.QuoteHeaderIdentifier(tableName))
+func plotColNameForDatasheetKey(tableKey string) string {
+	switch tableKey {
+	case "Env", "Veg", "Humus", "Mineral", "Other", "SU":
+		return "PlotNumber"
+	case "Admin":
+		return "Plot"
+	default:
+		return ""
+	}
+}
+
+func loadHierarchyParentsMap(ctx context.Context, tx *sql.Tx, schema, tableName string) (map[int64]*int64, error) {
+	rel := vprocore.QuoteHeaderIdentifier(schema) + "." + vprocore.QuoteHeaderIdentifier(tableName)
+	rows, err := tx.QueryContext(ctx, "SELECT ID, Parent FROM "+rel)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 	parents := map[int64]*int64{}
@@ -2379,7 +2561,7 @@ func verifyHierarchyAcyclicInTx(ctx context.Context, tx *sql.Tx, tableName strin
 		var id int64
 		var parent sql.NullInt64
 		if err := rows.Scan(&id, &parent); err != nil {
-			return err
+			return nil, err
 		}
 		if parent.Valid {
 			p := parent.Int64
@@ -2389,6 +2571,37 @@ func verifyHierarchyAcyclicInTx(ctx context.Context, tx *sql.Tx, tableName strin
 		}
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return parents, nil
+}
+
+func validateCandidateHierarchyParent(nodeID int64, candidate vprocore.ProjectMetadataCell, parents map[int64]*int64) error {
+	if candidate.Storage == "null" || candidate.Integer == nil {
+		return nil
+	}
+	parentID, err := strconv.ParseInt(*candidate.Integer, 10, 64)
+	if err != nil {
+		return fmt.Errorf("Hierarchy node %d has invalid Parent %q", nodeID, *candidate.Integer)
+	}
+	if _, ok := parents[parentID]; !ok {
+		return fmt.Errorf("Hierarchy node %d references non-existent Parent %d", nodeID, parentID)
+	}
+	visited := map[int64]bool{nodeID: true}
+	curr := &parentID
+	for curr != nil {
+		if visited[*curr] {
+			return fmt.Errorf("Hierarchy edit introduces a cycle involving node %d", *curr)
+		}
+		visited[*curr] = true
+		curr = parents[*curr]
+	}
+	return nil
+}
+
+func verifyHierarchyAcyclicInTx(ctx context.Context, tx *sql.Tx, tableName string) error {
+	parents, err := loadHierarchyParentsMap(ctx, tx, "main", tableName)
+	if err != nil {
 		return err
 	}
 	for id, p := range parents {
@@ -2408,4 +2621,457 @@ func verifyHierarchyAcyclicInTx(ctx context.Context, tx *sql.Tx, tableName strin
 		}
 	}
 	return nil
+}
+
+type DatasheetInsertChildRowRequest struct {
+	TableKey   string                                  `json:"tableKey"`
+	PlotNumber string                                  `json:"plotNumber"`
+	Cells      map[string]vprocore.ProjectMetadataCell `json:"cells"`
+}
+
+func (r *DatasheetInsertChildRowRequest) UnmarshalJSON(data []byte) error {
+	type plain DatasheetInsertChildRowRequest
+	return sqlutil.DecodeStrictJSON(data, (*plain)(r))
+}
+
+type DatasheetInsertChildRowResult struct {
+	ContextID  string `json:"contextId"`
+	TableKey   string `json:"tableKey"`
+	TableName  string `json:"tableName"`
+	PlotNumber string `json:"plotNumber"`
+	RowID      string `json:"rowId"`
+	ID         int64  `json:"id"`
+	AuditRows  int    `json:"auditRows"`
+}
+
+type DatasheetDeleteChildRowRequest struct {
+	TableKey           string `json:"tableKey"`
+	RowID              string `json:"rowId"`
+	ExpectedPlotNumber string `json:"expectedPlotNumber,omitempty"`
+	ExpectedID         *int64 `json:"expectedId,omitempty"`
+}
+
+func (r *DatasheetDeleteChildRowRequest) UnmarshalJSON(data []byte) error {
+	type plain DatasheetDeleteChildRowRequest
+	return sqlutil.DecodeStrictJSON(data, (*plain)(r))
+}
+
+type DatasheetDeleteChildRowResult struct {
+	ContextID  string `json:"contextId"`
+	TableKey   string `json:"tableKey"`
+	TableName  string `json:"tableName"`
+	PlotNumber string `json:"plotNumber"`
+	RowID      string `json:"rowId"`
+	DeletedID  int64  `json:"deletedId"`
+	AuditRows  int    `json:"auditRows"`
+}
+
+func isEditableDatasheetChildTable(key string) bool {
+	return key == "Veg" || key == "Humus" || key == "Mineral" || key == "Other"
+}
+
+func validateDatasheetTargetFiles(owner *vprocore.SqliteContext, target resolvedDatasheetTarget) func() error {
+	return func() error {
+		if err := owner.ValidateMetadataWriterFiles(); err != nil {
+			return err
+		}
+		roleInfo := owner.AttachmentInfo[target.role]
+		if roleInfo == nil {
+			return fmt.Errorf("datasheet role %s is not attached", target.role)
+		}
+		for supportRole, info := range owner.AttachmentInfo {
+			if strings.HasPrefix(supportRole, "V") && os.SameFile(roleInfo, info) {
+				return fmt.Errorf("datasheet target %s shares a file with support database %s; writes are prohibited", target.tableName, supportRole)
+			}
+		}
+		return nil
+	}
+}
+
+func requirePlotUnlockedInMainTx(ctx context.Context, tx *sql.Tx, project, plotNumber string) error {
+	var lockedCount int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM main.`+vprocore.QuoteHeaderIdentifier(project+"_Env")+
+			` WHERE typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB) AND "Flag" IS NOT NULL AND CAST("Flag" AS INTEGER) <> 0`,
+		plotNumber,
+	).Scan(&lockedCount); err != nil {
+		return err
+	}
+	if lockedCount > 0 {
+		return fmt.Errorf("plot %q is locked (Flag = -1); unlock the plot before editing its child rows", plotNumber)
+	}
+	return nil
+}
+
+// InsertDatasheetChildRow atomically inserts a row into an editable project child table
+// (Veg, Humus, Mineral, or Other), enforcing plot existence and lock, LMH25 depth sign,
+// cover bounds, monotonic __VPRO_ChildIdentity reservation, and <Project>_Audit provenance.
+func InsertDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextService, contextID string, request DatasheetInsertChildRowRequest) (*DatasheetInsertChildRowResult, error) {
+	if ctx == nil {
+		return nil, errors.New("datasheet row insert requires a request context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if contexts == nil {
+		return nil, errors.New("datasheet context service is unavailable")
+	}
+	if err := vprocore.ValidateChildPhysicalText("PlotNumber", request.PlotNumber, 7); err != nil {
+		return nil, err
+	}
+
+	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*DatasheetInsertChildRowResult, error) {
+		owner := plots.Projects.Sqlite
+		canEditMaster := plots.CanEditMasterBEC()
+		plots.Mu.RLock()
+		currentUser := plots.CurrentUser
+		plots.Mu.RUnlock()
+		if strings.TrimSpace(currentUser) == "" {
+			currentUser = "VPro"
+		}
+
+		target, err := findDatasheetTarget(owner, request.TableKey)
+		if err != nil {
+			return nil, err
+		}
+		if !target.available || target.readOnly || !isEditableDatasheetChildTable(target.key) {
+			return nil, fmt.Errorf("datasheet row insert is only supported for editable child tables (Veg, Humus, Mineral, Other), got %q", request.TableKey)
+		}
+
+		validateFiles := validateDatasheetTargetFiles(owner, target)
+		var out *DatasheetInsertChildRowResult
+		wErr := owner.WithSelectedFileWriter(ctx, target.role, validateFiles, func(conn *sql.Conn) (txErr error) {
+			tx, err := conn.BeginTx(ctx, nil)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
+					txErr = errors.Join(txErr, rb)
+				}
+			}()
+
+			project := owner.Selection.Project
+			if err := vprocore.ChildParent(tx, project, request.PlotNumber); err != nil {
+				return err
+			}
+			if err := requirePlotUnlockedInMainTx(ctx, tx, project, request.PlotNumber); err != nil {
+				return err
+			}
+
+			rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, tx, "main", target.tableName)
+			if err != nil {
+				return err
+			}
+			colMetaByLower := make(map[string]DatasheetColumnMeta, len(rawCols))
+			for _, col := range rawCols {
+				colMetaByLower[strings.ToLower(col.Name)] = classifyColumnMeta(target.key, col, target.pinnedColumn, canEditMaster)
+			}
+
+			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
+				"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+				return err
+			}
+			quotedTable := vprocore.QuoteHeaderIdentifier(target.tableName)
+			newID, err := vprocore.AllocateChildID(tx, quotedTable)
+			if err != nil {
+				return err
+			}
+
+			cellKeys := make([]string, 0, len(request.Cells))
+			for k := range request.Cells {
+				cellKeys = append(cellKeys, k)
+			}
+			slices.Sort(cellKeys)
+
+			insertCols := []string{`"PlotNumber"`, `"ID"`}
+			insertVals := []any{request.PlotNumber, newID}
+			hasFlag := false
+			var auditCols []string
+			var auditAfters []*string
+			var effHorizon vprocore.ProjectMetadataCell
+			var effUpper vprocore.ProjectMetadataCell
+			var effLower vprocore.ProjectMetadataCell
+			hasSpecies := false
+
+			for _, key := range cellKeys {
+				colMeta, ok := colMetaByLower[strings.ToLower(strings.TrimSpace(key))]
+				if !ok {
+					return fmt.Errorf("unknown column %q on %s", key, target.tableName)
+				}
+				if colMeta.Name == "PlotNumber" || colMeta.Name == "ID" {
+					continue
+				}
+				driverVal, auditAfter, normalized, vErr := validateAndNormalizeDatasheetCell(target.key, colMeta, request.Cells[key], canEditMaster)
+				if vErr != nil {
+					return vErr
+				}
+				if colMeta.Name == "Flag" {
+					hasFlag = true
+				}
+				if colMeta.Name == "Species" && normalized.Text != nil && strings.TrimSpace(*normalized.Text) != "" {
+					hasSpecies = true
+				}
+				switch colMeta.Name {
+				case "Horizon":
+					effHorizon = normalized
+				case "UpperDepth":
+					effUpper = normalized
+				case "LowerDepth":
+					effLower = normalized
+				}
+				insertCols = append(insertCols, vprocore.QuoteHeaderIdentifier(colMeta.Name))
+				insertVals = append(insertVals, driverVal)
+				if normalized.Storage != "null" {
+					auditCols = append(auditCols, colMeta.Name)
+					auditAfters = append(auditAfters, auditAfter)
+				}
+			}
+			if target.key == "Veg" && !hasSpecies {
+				return errors.New("Veg.Species is required when inserting a vegetation row")
+			}
+			if target.key == "Humus" || target.key == "Mineral" {
+				if effHorizon.Text != nil {
+					if sErr := validateSoilHorizonDepthSign(target.key, *effHorizon.Text, cellFloat64Ptr(effUpper), cellFloat64Ptr(effLower)); sErr != nil {
+						return sErr
+					}
+				}
+			}
+			if !hasFlag {
+				if _, ok := colMetaByLower["flag"]; ok {
+					insertCols = append(insertCols, `"Flag"`)
+					insertVals = append(insertVals, int64(0))
+				}
+			}
+
+			if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?) ON CONFLICT DO NOTHING`,
+				quotedTable, newID); err != nil {
+				return err
+			}
+			marks := strings.TrimSuffix(strings.Repeat("?,", len(insertCols)), ",")
+			res, err := tx.ExecContext(ctx, `INSERT INTO main.`+quotedTable+` (`+strings.Join(insertCols, ",")+`) VALUES (`+marks+`)`, insertVals...)
+			if err != nil {
+				return err
+			}
+			rid, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+
+			auditTable := vprocore.QuoteHeaderIdentifier(project + "_Audit")
+			tableSuffix := "_" + target.key
+			now := time.Now().Format("2006-01-02 15:04:05")
+			for i, colName := range auditCols {
+				if _, err := tx.ExecContext(ctx,
+					`INSERT INTO main.`+auditTable+
+						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
+					project, currentUser, request.PlotNumber, tableSuffix, colName, now, nil, auditAfters[i], newID,
+				); err != nil {
+					return err
+				}
+			}
+
+			proposalBytes, err := json.Marshal(struct {
+				ContextID string                         `json:"contextId"`
+				User      string                         `json:"user"`
+				Request   DatasheetInsertChildRowRequest `json:"request"`
+				ID        int64                          `json:"id"`
+			}{contextID, currentUser, request, newID})
+			if err != nil {
+				return err
+			}
+			if err := vprocore.AppendTechnicalProvenance(ctx, tx, datasheetHistoryTable, datasheetHistorySQL, string(proposalBytes), "datasheet row insert"); err != nil {
+				return err
+			}
+			if err := validateFiles(); err != nil {
+				return err
+			}
+			if err := tx.Commit(); err != nil {
+				return err
+			}
+			out = &DatasheetInsertChildRowResult{
+				ContextID:  contextID,
+				TableKey:   target.key,
+				TableName:  target.tableName,
+				PlotNumber: request.PlotNumber,
+				RowID:      strconv.FormatInt(rid, 10),
+				ID:         newID,
+				AuditRows:  len(auditCols),
+			}
+			return nil
+		})
+		if wErr != nil {
+			return nil, wErr
+		}
+		return out, nil
+	})
+}
+
+// DeleteDatasheetChildRow atomically deletes an existing row from an editable project child table
+// (Veg, Humus, Mineral, or Other), permanently reserving its ID in __VPRO_ChildIdentity and
+// recording <Project>_Audit provenance.
+func DeleteDatasheetChildRow(ctx context.Context, contexts *vprocore.ContextService, contextID string, request DatasheetDeleteChildRowRequest) (*DatasheetDeleteChildRowResult, error) {
+	if ctx == nil {
+		return nil, errors.New("datasheet row delete requires a request context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if contexts == nil {
+		return nil, errors.New("datasheet context service is unavailable")
+	}
+	rid, parseErr := strconv.ParseInt(strings.TrimSpace(request.RowID), 10, 64)
+	if parseErr != nil {
+		return nil, fmt.Errorf("invalid datasheet rowId %q", request.RowID)
+	}
+
+	return vprocore.WithContextPlotRequest(ctx, contexts, contextID, func(plots *vprocore.PlotService) (*DatasheetDeleteChildRowResult, error) {
+		owner := plots.Projects.Sqlite
+		canEditMaster := plots.CanEditMasterBEC()
+		plots.Mu.RLock()
+		currentUser := plots.CurrentUser
+		plots.Mu.RUnlock()
+		if strings.TrimSpace(currentUser) == "" {
+			currentUser = "VPro"
+		}
+
+		target, err := findDatasheetTarget(owner, request.TableKey)
+		if err != nil {
+			return nil, err
+		}
+		if !target.available || target.readOnly || !isEditableDatasheetChildTable(target.key) {
+			return nil, fmt.Errorf("datasheet row delete is only supported for editable child tables (Veg, Humus, Mineral, Other), got %q", request.TableKey)
+		}
+
+		validateFiles := validateDatasheetTargetFiles(owner, target)
+		var out *DatasheetDeleteChildRowResult
+		wErr := owner.WithSelectedFileWriter(ctx, target.role, validateFiles, func(conn *sql.Conn) (txErr error) {
+			tx, err := conn.BeginTx(ctx, nil)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if rb := tx.Rollback(); rb != nil && !errors.Is(rb, sql.ErrTxDone) {
+					txErr = errors.Join(txErr, rb)
+				}
+			}()
+
+			rawCols, err := vprocore.ReadSQLiteStorageColumns(ctx, tx, "main", target.tableName)
+			if err != nil {
+				return err
+			}
+			columns := make([]DatasheetColumnMeta, len(rawCols))
+			colIdxByLower := make(map[string]int, len(rawCols))
+			for i, col := range rawCols {
+				columns[i] = classifyColumnMeta(target.key, col, target.pinnedColumn, canEditMaster)
+				colIdxByLower[strings.ToLower(col.Name)] = i
+			}
+			cells, err := readSinglePhysicalRowByRowID(ctx, tx, target.tableName, columns, rid)
+			if err != nil {
+				return err
+			}
+			pIdx, okP := colIdxByLower["plotnumber"]
+			idIdx, okID := colIdxByLower["id"]
+			if !okP || !okID || cells[pIdx].Text == nil || cells[idIdx].Integer == nil {
+				return fmt.Errorf("%s row %d is missing PlotNumber or ID identity", target.tableName, rid)
+			}
+			plotNumber := *cells[pIdx].Text
+			childID, err := strconv.ParseInt(*cells[idIdx].Integer, 10, 64)
+			if err != nil {
+				return fmt.Errorf("%s row %d has non-integer ID %q", target.tableName, rid, *cells[idIdx].Integer)
+			}
+			if request.ExpectedPlotNumber != "" && request.ExpectedPlotNumber != plotNumber {
+				return fmt.Errorf("concurrency conflict on %s row %d: expected PlotNumber %q, stored %q", target.tableName, rid, request.ExpectedPlotNumber, plotNumber)
+			}
+			if request.ExpectedID != nil && *request.ExpectedID != childID {
+				return fmt.Errorf("concurrency conflict on %s row %d: expected ID %d, stored %d", target.tableName, rid, *request.ExpectedID, childID)
+			}
+
+			project := owner.Selection.Project
+			if err := requirePlotUnlockedInMainTx(ctx, tx, project, plotNumber); err != nil {
+				return err
+			}
+
+			quotedTable := vprocore.QuoteHeaderIdentifier(target.tableName)
+			if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
+				"ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable","ID"))`); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable","ID") VALUES (?,?) ON CONFLICT DO NOTHING`,
+				quotedTable, childID); err != nil {
+				return err
+			}
+
+			res, err := tx.ExecContext(ctx, `DELETE FROM main.`+quotedTable+` WHERE rowid = ?`, rid)
+			if err != nil {
+				return err
+			}
+			if affected, aErr := res.RowsAffected(); aErr != nil || affected != 1 {
+				return errors.Join(aErr, fmt.Errorf("delete %s row %d affected %d rows (expected 1)", target.tableName, rid, affected))
+			}
+
+			auditTable := vprocore.QuoteHeaderIdentifier(project + "_Audit")
+			tableSuffix := "_" + target.key
+			now := time.Now().Format("2006-01-02 15:04:05")
+			auditCount := 0
+			for i, col := range columns {
+				if col.Name == "PlotNumber" || col.Name == "ID" || cells[i].Storage == "null" {
+					continue
+				}
+				beforeText := auditTextForStoredCell(cells[i], col.IsBoolean)
+				if _, err := tx.ExecContext(ctx,
+					`INSERT INTO main.`+auditTable+
+						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
+					project, currentUser, plotNumber, tableSuffix, col.Name, now, beforeText, nil, childID,
+				); err != nil {
+					return err
+				}
+				auditCount++
+			}
+			if auditCount == 0 {
+				if _, err := tx.ExecContext(ctx,
+					`INSERT INTO main.`+auditTable+
+						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag","ID") VALUES (?,?,?,?,?,?,?,?,0,0,?)`,
+					project, currentUser, plotNumber, tableSuffix, "ID", now, cells[idIdx].Integer, nil, childID,
+				); err != nil {
+					return err
+				}
+				auditCount = 1
+			}
+
+			proposalBytes, err := json.Marshal(struct {
+				ContextID string                         `json:"contextId"`
+				User      string                         `json:"user"`
+				Request   DatasheetDeleteChildRowRequest `json:"request"`
+				Plot      string                         `json:"plotNumber"`
+				DeletedID int64                          `json:"deletedId"`
+			}{contextID, currentUser, request, plotNumber, childID})
+			if err != nil {
+				return err
+			}
+			if err := vprocore.AppendTechnicalProvenance(ctx, tx, datasheetHistoryTable, datasheetHistorySQL, string(proposalBytes), "datasheet row delete"); err != nil {
+				return err
+			}
+			if err := validateFiles(); err != nil {
+				return err
+			}
+			if err := tx.Commit(); err != nil {
+				return err
+			}
+			out = &DatasheetDeleteChildRowResult{
+				ContextID:  contextID,
+				TableKey:   target.key,
+				TableName:  target.tableName,
+				PlotNumber: plotNumber,
+				RowID:      strconv.FormatInt(rid, 10),
+				DeletedID:  childID,
+				AuditRows:  auditCount,
+			}
+			return nil
+		})
+		if wErr != nil {
+			return nil, wErr
+		}
+		return out, nil
+	})
 }

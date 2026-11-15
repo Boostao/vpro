@@ -85,8 +85,8 @@ func ValidateHeightNumericChange(property string, before, after *float64) error 
 	if after == nil || SameHeightValue(before, after) {
 		return nil
 	}
-	if !strings.HasPrefix(property, "height") && float32(*after) >= 100 {
-		return fmt.Errorf("property %q must be less than 100 or NULL", property)
+	if !strings.HasPrefix(property, "height") && (float32(*after) < 0 || float32(*after) >= 100) {
+		return fmt.Errorf("property %q must be >= 0 and less than 100 or NULL", property)
 	}
 	return nil
 }

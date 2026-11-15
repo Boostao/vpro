@@ -307,6 +307,11 @@ type TurboVegImportRequest struct {
 	TargetProject     string `json:"targetProject"`
 	DestinationPath   string `json:"destinationPath,omitempty"`
 	ActivateOnSuccess bool   `json:"activateOnSuccess"`
+	// ResolveVProCodeSynonyms maps explicit incoming vpro_code UDF/JSON entries that match
+	// a USysAllSpecs Codetype='S' synonym (OldCode) onto their canonical USysAllSpecs.Code.
+	// When false (default), explicit vpro_code values are preserved verbatim while adopting
+	// matched synonym Lifeform metadata.
+	ResolveVProCodeSynonyms bool `json:"resolveVProCodeSynonyms,omitempty"`
 }
 
 func (r *TurboVegImportRequest) UnmarshalJSON(data []byte) error {
@@ -410,11 +415,12 @@ type speciesResolvedInfo struct {
 }
 
 type speciesImportResolver struct {
-	byActiveCode  map[string]speciesResolvedInfo
-	bySynonymCode map[string]speciesResolvedInfo
-	byUserCode    map[string]speciesResolvedInfo
-	bySciFull     map[string]speciesResolvedInfo
-	bySciCanon    map[string]speciesResolvedInfo
+	byActiveCode            map[string]speciesResolvedInfo
+	bySynonymCode           map[string]speciesResolvedInfo
+	byUserCode              map[string]speciesResolvedInfo
+	bySciFull               map[string]speciesResolvedInfo
+	bySciCanon              map[string]speciesResolvedInfo
+	resolveVProCodeSynonyms bool
 }
 
 func normalizeScientificFull(raw string) string {
@@ -586,6 +592,9 @@ func (r *speciesImportResolver) resolveTaxon(explicitVProCode, sciName, validSci
 				return v, info.Lifeform
 			}
 			if info, ok := r.bySynonymCode[v]; ok {
+				if r.resolveVProCodeSynonyms && info.Code != "" {
+					return info.Code, info.Lifeform
+				}
 				return v, info.Lifeform
 			}
 		}
@@ -977,6 +986,7 @@ func ImportTurboVeg(s *vprocore.ContextService, ctx context.Context, contextID s
 	if err != nil {
 		return TurboVegImportOutcome{}, err
 	}
+	resolver.resolveVProCodeSynonyms = request.ResolveVProCodeSynonyms
 
 	var plots []tvImportPlot
 	switch format {

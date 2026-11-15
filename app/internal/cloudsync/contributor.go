@@ -53,18 +53,21 @@ func (r *SubsetFilter) UnmarshalJSON(data []byte) error {
 
 // SubsetPreview summarizes matching plot counts before downloading a local splinter .db.
 type SubsetPreview struct {
-	MatchingPlots int            `json:"matchingPlots"`
-	MatchingVeg   int64          `json:"matchingVeg"`
-	SamplePlots   []string       `json:"samplePlots"`
-	ZoneBreakdown map[string]int `json:"zoneBreakdown"`
+	MatchingPlots     int            `json:"matchingPlots"`
+	MatchingVeg       int64          `json:"matchingVeg"`
+	SensitivePlots    int            `json:"sensitivePlots,omitempty"`
+	CoordinatesMasked bool           `json:"coordinatesMasked,omitempty"`
+	SamplePlots       []string       `json:"samplePlots"`
+	ZoneBreakdown     map[string]int `json:"zoneBreakdown"`
 }
 
 // PullSubsetRequest downloads a filtered BECMaster subset into a fresh local VP08 SQLite .db.
 type PullSubsetRequest struct {
-	Filter            SubsetFilter `json:"filter"`
-	TargetProject     string       `json:"targetProject"`
-	DestinationPath   string       `json:"destinationPath,omitempty"`
-	ActivateOnSuccess bool         `json:"activateOnSuccess"`
+	Filter                   SubsetFilter `json:"filter"`
+	TargetProject            string       `json:"targetProject"`
+	DestinationPath          string       `json:"destinationPath,omitempty"`
+	ActivateOnSuccess        bool         `json:"activateOnSuccess"`
+	MaskSensitiveCoordinates bool         `json:"maskSensitiveCoordinates,omitempty"`
 }
 
 func (r *PullSubsetRequest) UnmarshalJSON(data []byte) error {
@@ -74,18 +77,19 @@ func (r *PullSubsetRequest) UnmarshalJSON(data []byte) error {
 
 // PullSubsetResult summarizes a completed regional subset download and download_log receipt.
 type PullSubsetResult struct {
-	TargetProject   string                 `json:"targetProject"`
-	DestinationPath string                 `json:"destinationPath"`
-	DestinationSHA  string                 `json:"destinationSha256"`
-	PlotCount       int                    `json:"plotCount"`
-	VegCount        int                    `json:"vegCount"`
-	HumusCount      int                    `json:"humusCount"`
-	MineralCount    int                    `json:"mineralCount"`
-	OtherCount      int                    `json:"otherCount"`
-	MetadataCount   int                    `json:"metadataCount"`
-	DownloadLogID   int64                  `json:"downloadLogId"`
-	Activated       bool                   `json:"activated"`
-	State           *vprocore.ProjectState `json:"state,omitempty"`
+	TargetProject        string                 `json:"targetProject"`
+	DestinationPath      string                 `json:"destinationPath"`
+	DestinationSHA       string                 `json:"destinationSha256"`
+	PlotCount            int                    `json:"plotCount"`
+	VegCount             int                    `json:"vegCount"`
+	HumusCount           int                    `json:"humusCount"`
+	MineralCount         int                    `json:"mineralCount"`
+	OtherCount           int                    `json:"otherCount"`
+	MetadataCount        int                    `json:"metadataCount"`
+	MaskedSensitivePlots int                    `json:"maskedSensitivePlots,omitempty"`
+	DownloadLogID        int64                  `json:"downloadLogId"`
+	Activated            bool                   `json:"activated"`
+	State                *vprocore.ProjectState `json:"state,omitempty"`
 }
 
 // CloudUserSpeciesRecord mirrors VUser.USysUserSpp entries packaged with staging uploads.
@@ -368,12 +372,28 @@ func materializeVListsFromRelationalStandards(ctx context.Context, pool interfac
 		pgTbl     string
 		sqliteTbl string
 		cols      []ColumnSpec
+		optional  bool
 	}{
-		{"usys_all_specs", "USysAllSpecs", StandardsUSysAllSpecsColumns},
-		{"usys_table_of_lists", "USysTableOfLists", StandardsUSysTableOfListsColumns},
-		{"master_site_unit_list", "MasterSiteUnitList", StandardsMasterSiteUnitListColumns},
-		{"usys_zone_list", "USysZoneList", StandardsUSysZoneListColumns},
+		{"usys_all_specs", "USysAllSpecs", StandardsUSysAllSpecsColumns, false},
+		{"usys_table_of_lists", "USysTableOfLists", StandardsUSysTableOfListsColumns, false},
+		{"master_site_unit_list", "MasterSiteUnitList", StandardsMasterSiteUnitListColumns, false},
+		{"usys_zone_list", "USysZoneList", StandardsUSysZoneListColumns, false},
+		{"usys_spp_attributes", "USysSppAttributes", StandardsUSysSppAttributesColumns, true},
 	} {
+		if item.optional {
+			chkRows, qErr := pool.Query(ctx, `SELECT to_regclass($1) IS NOT NULL`, "standards."+item.pgTbl)
+			if qErr != nil {
+				continue
+			}
+			var hasPG bool
+			if chkRows.Next() {
+				_ = chkRows.Scan(&hasPG)
+			}
+			chkRows.Close()
+			if !hasPG {
+				continue
+			}
+		}
 		if err := syncTable(item.pgTbl, item.sqliteTbl, item.cols); err != nil {
 			_ = tx.Rollback()
 			_ = db.Close()
@@ -542,11 +562,26 @@ func (m *Manager) PreviewBECMasterSubset(ctx context.Context, filter SubsetFilte
 		sRows.Close()
 	}
 
+	sensitivePlots := 0
+	var hasSppAttr bool
+	if qErr := pool.QueryRow(ctx, `SELECT to_regclass('standards.usys_spp_attributes') IS NOT NULL`).Scan(&hasSppAttr); qErr == nil && hasSppAttr {
+		_ = pool.QueryRow(ctx, cte+`
+			SELECT COUNT(DISTINCT v."PlotNumber")
+			FROM becmaster.veg v
+			INNER JOIN standards.usys_spp_attributes a ON UPPER(TRIM(v."Species")) = UPPER(TRIM(a."Code"))
+			WHERE v."PlotNumber" IN (SELECT "PlotNumber" FROM matched)
+			  AND COALESCE(UPPER(TRIM(a."Codetype")), '') <> 'S'
+			  AND UPPER(TRIM(COALESCE(a."RedBlueList", ''))) IN ('R', 'B', 'RED', 'BLUE')
+		`, args...).Scan(&sensitivePlots)
+	}
+
 	return SubsetPreview{
-		MatchingPlots: plotCount,
-		MatchingVeg:   vegCount,
-		SamplePlots:   samplePlots,
-		ZoneBreakdown: zones,
+		MatchingPlots:     plotCount,
+		MatchingVeg:       vegCount,
+		SensitivePlots:    sensitivePlots,
+		CoordinatesMasked: creds.ActiveRoleMode != RoleModeCustodian && sensitivePlots > 0,
+		SamplePlots:       samplePlots,
+		ZoneBreakdown:     zones,
 	}, nil
 }
 
@@ -561,10 +596,11 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		return PullSubsetResult{}, err
 	}
 
-	var projectsDir string
+	var projectsDir, vlistsPath string
 	actor := "VProUser"
 	if _, err := vprocore.WithContextPlotRequest(ctx, s, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
 		projectsDir = filepath.Join(plots.Projects.Root, "projects")
+		vlistsPath = plots.Projects.SupportPaths["VLists"]
 		if u := strings.TrimSpace(plots.CurrentUser); u != "" {
 			actor = u
 		}
@@ -635,6 +671,15 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		return PullSubsetResult{}, errors.New("subset filter matched 0 plots in BECMaster")
 	}
 
+	maskSensitive := creds.ActiveRoleMode != RoleModeCustodian || req.MaskSensitiveCoordinates
+	sensitivePlots := map[string]struct{}{}
+	if maskSensitive {
+		sensitivePlots, err = findSensitivePlotsForSubsetPG(ctx, pgTx, plotList, vlistsPath)
+		if err != nil {
+			return PullSubsetResult{}, wrapRedactedError("identify RedBlueList sensitive plots", err, creds)
+		}
+	}
+
 	tmpFile, err := os.CreateTemp(filepath.Dir(resolvedDest), ".vpro-pgsubset-*.db")
 	if err != nil {
 		return PullSubsetResult{}, err
@@ -697,13 +742,15 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 			defer rows.Close()
 
 			marks := make([]string, len(cols))
-			idColIdx, sppColIdx := -1, -1
+			idColIdx, sppColIdx, plotColIdx := -1, -1, -1
 			for i, col := range cols {
 				marks[i] = "?"
 				if col.Name == "ID" {
 					idColIdx = i
 				} else if sqliteSuffix == "Veg" && col.Name == "Species" {
 					sppColIdx = i
+				} else if sqliteSuffix == "Env" && col.Name == "PlotNumber" {
+					plotColIdx = i
 				}
 			}
 			enforceUniqueID := sqliteSuffix == "Humus" || sqliteSuffix == "Mineral" || sqliteSuffix == "Other" || sqliteSuffix == "Veg"
@@ -729,6 +776,13 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 				}
 				if sppColIdx >= 0 && rowArgs[sppColIdx] == nil {
 					rowArgs[sppColIdx] = ""
+				}
+				if sqliteSuffix == "Env" && len(sensitivePlots) > 0 && plotColIdx >= 0 {
+					if plotNum, ok := rowArgs[plotColIdx].(string); ok {
+						if _, isSens := sensitivePlots[plotNum]; isSens {
+							MaskSensitiveEnvRow(cols, rowArgs)
+						}
+					}
 				}
 				if enforceUniqueID && idColIdx >= 0 {
 					var idVal int64
@@ -958,18 +1012,19 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 	}
 
 	return PullSubsetResult{
-		TargetProject:   targetProject,
-		DestinationPath: resolvedDest,
-		DestinationSHA:  destSHA,
-		PlotCount:       len(plotList),
-		VegCount:        vegN,
-		HumusCount:      humusN,
-		MineralCount:    mineralN,
-		OtherCount:      otherN,
-		MetadataCount:   metaN,
-		DownloadLogID:   logID,
-		Activated:       activated,
-		State:           newState,
+		TargetProject:        targetProject,
+		DestinationPath:      resolvedDest,
+		DestinationSHA:       destSHA,
+		PlotCount:            len(plotList),
+		VegCount:             vegN,
+		HumusCount:           humusN,
+		MineralCount:         mineralN,
+		OtherCount:           otherN,
+		MetadataCount:        metaN,
+		MaskedSensitivePlots: len(sensitivePlots),
+		DownloadLogID:        logID,
+		Activated:            activated,
+		State:                newState,
 	}, nil
 }
 

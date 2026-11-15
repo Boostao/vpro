@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+	"unicode/utf8"
 
 	"codeberg.org/go-pdf/fpdf"
 	"golang.org/x/image/font/sfnt"
@@ -46,16 +47,18 @@ func plotLabelPDFFields(preview PlotLabelRegionalPreview) ([]plotLabelPDFField, 
 			}
 		}
 	}
-	if h.Zone == nil {
-		return nil, time.Time{}, errors.New("label PDF requires non-NULL Zone for source Len/Space")
-	}
 	value := func(text *string) string {
 		if text == nil {
 			return ""
 		}
 		return *text
 	}
-	zone := *h.Zone + strings.Repeat(" ", 4-len(utf16.Encode([]rune(*h.Zone)))) + value(h.SubZone) + "/" + value(h.SiteSeries)
+	zoneRaw := value(h.Zone)
+	pad := 4 - len(utf16.Encode([]rune(zoneRaw)))
+	if pad < 0 {
+		pad = 0
+	}
+	zone := zoneRaw + strings.Repeat(" ", pad) + value(h.SubZone) + "/" + value(h.SiteSeries)
 	if err := plotLabelText(zone, "Zone1", 50); err != nil {
 		return nil, time.Time{}, err
 	}
@@ -63,9 +66,15 @@ func plotLabelPDFFields(preview PlotLabelRegionalPreview) ([]plotLabelPDFField, 
 	if err != nil || date.Year() < 1601 || date.Year() > 9999 {
 		return nil, time.Time{}, errors.Join(err, errors.New("label PDF requires a supported complete ISO date"))
 	}
-	if preview.Source != "windows-user-long-date" || preview.Locale != "en-US" ||
-		preview.Pattern != "dddd, MMMM d, yyyy" || preview.LabelDate != date.Format("Monday, January 2, 2006") {
-		return nil, time.Time{}, errors.New("label PDF requires the calibrated en-US Windows Long Date; no locale fallback")
+	if preview.Source != "windows-user-long-date" ||
+		!utf8.ValidString(preview.Locale) || strings.TrimSpace(preview.Locale) == "" ||
+		!utf8.ValidString(preview.Pattern) || strings.TrimSpace(preview.Pattern) == "" ||
+		!utf8.ValidString(preview.LabelDate) || strings.TrimSpace(preview.LabelDate) == "" {
+		return nil, time.Time{}, errors.New("label PDF requires a valid Windows Long Date preview")
+	}
+	if preview.Locale == "en-US" && preview.Pattern == "dddd, MMMM d, yyyy" &&
+		preview.LabelDate != date.Format("Monday, January 2, 2006") {
+		return nil, time.Time{}, errors.New("label PDF requires a matching Windows Long Date for its ISO date")
 	}
 	fields := []plotLabelPDFField{
 		{"PlotNumber1", strings.Trim(h.PlotNumber, " "), 72, 60, 1213, 9, true, false},
@@ -77,8 +86,8 @@ func plotLabelPDFFields(preview PlotLabelRegionalPreview) ([]plotLabelPDFField, 
 	}
 	for _, field := range fields {
 		for _, r := range field.text {
-			if r < 32 || r > 126 {
-				return nil, time.Time{}, fmt.Errorf("%s label PDF glyph/layout is unavailable outside printable ASCII", field.name)
+			if r < 32 || r == 127 || !utf8.ValidRune(r) {
+				return nil, time.Time{}, fmt.Errorf("%s label PDF contains unsupported control or invalid character", field.name)
 			}
 		}
 	}
@@ -90,9 +99,14 @@ func validatePlotLabelPDFFont(data []byte, expectedName string) error {
 }
 
 func validatePlotLabelPDFFontNames(data []byte, allowedNames ...string) error {
+	_, err := parseAndValidatePlotLabelPDFFont(data, allowedNames...)
+	return err
+}
+
+func parseAndValidatePlotLabelPDFFont(data []byte, allowedNames ...string) (*sfnt.Font, error) {
 	font, err := sfnt.Parse(data)
 	if err != nil {
-		return fmt.Errorf("label PDF font parse: %w", err)
+		return nil, fmt.Errorf("label PDF font parse: %w", err)
 	}
 	name, err := font.Name(nil, sfnt.NameID(6))
 	matched := false
@@ -109,14 +123,14 @@ func validatePlotLabelPDFFontNames(data []byte, allowedNames ...string) error {
 		if len(allowedNames) > 0 {
 			expectedLabel = allowedNames[0]
 		}
-		return errors.Join(err, fmt.Errorf("label PDF requires original %s, not substituted font %q", expectedLabel, name))
+		return nil, errors.Join(err, fmt.Errorf("label PDF requires original %s, not substituted font %q", expectedLabel, name))
 	}
 	if len(data) < 12 || binary.BigEndian.Uint32(data[:4]) != 0x00010000 {
-		return errors.New("label PDF requires TrueType outlines")
+		return nil, errors.New("label PDF requires TrueType outlines")
 	}
 	count := int(binary.BigEndian.Uint16(data[4:6]))
 	if count > (len(data)-12)/16 {
-		return errors.New("label PDF font table directory is incomplete")
+		return nil, errors.New("label PDF font table directory is incomplete")
 	}
 	found := false
 	for i := 0; i < count; i++ {
@@ -125,28 +139,28 @@ func validatePlotLabelPDFFontNames(data []byte, allowedNames ...string) error {
 			continue
 		}
 		if found {
-			return errors.New("label PDF font has duplicate embedding metadata")
+			return nil, errors.New("label PDF font has duplicate embedding metadata")
 		}
 		found = true
 		offset, length := uint64(binary.BigEndian.Uint32(table[8:12])), uint64(binary.BigEndian.Uint32(table[12:16]))
 		if length < 10 || offset+length > uint64(len(data)) {
-			return errors.New("label PDF font embedding metadata is incomplete")
+			return nil, errors.New("label PDF font embedding metadata is incomplete")
 		}
 		flags := binary.BigEndian.Uint16(data[offset+8 : offset+10])
 		if flags != 0 && flags != 8 {
-			return fmt.Errorf("label PDF font embedding/subsetting permissions are unsupported: 0x%04x", flags)
+			return nil, fmt.Errorf("label PDF font embedding/subsetting permissions are unsupported: 0x%04x", flags)
 		}
 	}
 	if !found {
-		return errors.New("label PDF font lacks explicit embedding metadata")
+		return nil, errors.New("label PDF font lacks explicit embedding metadata")
 	}
 	for r := rune(32); r <= 126; r++ {
 		glyph, err := font.GlyphIndex(nil, r)
 		if err != nil || glyph == 0 {
-			return errors.Join(err, fmt.Errorf("label PDF font lacks required glyph U+%04X", r))
+			return nil, errors.Join(err, fmt.Errorf("label PDF font lacks required glyph U+%04X", r))
 		}
 	}
-	return nil
+	return font, nil
 }
 
 func renderPlotLabelPDF(ctx context.Context, preview PlotLabelRegionalPreview, fonts plotLabelPDFFonts) ([]byte, error) {
@@ -174,6 +188,8 @@ func renderPlotLabelPDF(ctx context.Context, preview PlotLabelRegionalPreview, f
 	if fonts.boldName != "" {
 		bldNames = []string{fonts.boldName}
 	}
+	// Go/fpdf formats PDF coordinates with locale-invariant '.' decimals regardless of Windows regional numeric settings.
+	parsedFonts := make(map[string]*sfnt.Font, 2)
 	for _, font := range []struct {
 		data  []byte
 		names []string
@@ -186,9 +202,11 @@ func renderPlotLabelPDF(ctx context.Context, preview PlotLabelRegionalPreview, f
 			return nil, err
 		}
 		data := bytes.Clone(font.data)
-		if err := validatePlotLabelPDFFontNames(data, font.names...); err != nil {
+		parsed, err := parseAndValidatePlotLabelPDFFont(data, font.names...)
+		if err != nil {
 			return nil, err
 		}
+		parsedFonts[font.style] = parsed
 		pdf.AddUTF8FontFromBytes("VPROSystemArial", font.style, data)
 		// Registration errors in this library become observable at selection.
 		pdf.SetFont("VPROSystemArial", font.style, 6)
@@ -204,6 +222,13 @@ func renderPlotLabelPDF(ctx context.Context, preview PlotLabelRegionalPreview, f
 		style := ""
 		if field.bold {
 			style = "B"
+		}
+		sf := parsedFonts[style]
+		for _, r := range field.text {
+			glyph, gErr := sf.GlyphIndex(nil, r)
+			if gErr != nil || glyph == 0 {
+				return nil, errors.Join(gErr, fmt.Errorf("%s label PDF font lacks required glyph U+%04X", field.name, r))
+			}
 		}
 		pdf.SetFont("VPROSystemArial", style, field.size)
 		width := pdf.GetStringWidth(field.text)

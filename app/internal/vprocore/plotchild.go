@@ -629,7 +629,7 @@ func (s *PlotService) saveChildWithChecks(kind string, record any, mode childSav
 	if kind == "Veg" && !deleting {
 		for i, field := range fields {
 			property := ChildJSONKey(value, field)
-			if !HeightProperties[property] && field.Column != "Cover5a" && field.Column != "Cover5b" && field.Column != "Cover5c" {
+			if !HeightProperties[property] && !VegetationCoverColumns[field.Column] {
 				continue
 			}
 			var oldNumber, newNumber *float64

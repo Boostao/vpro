@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/boostao/vpro/app/internal/sqlutil"
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 const (
@@ -202,18 +203,9 @@ func ProjectNAD83UTMToLatLon(zone int, easting, northing float64) (lat, lon floa
 }
 
 // NormalizeBCWesternCoordinates normalizes positive Western Hemisphere longitudes (e.g. 125.4 -> -125.4)
-// and checks whether coordinates fall within BC / Canadian North bounds ([46.0..84.5] N, [-144.0..-110.0] W).
+// and checks whether coordinates fall within unified Western Canada / Alaska / BC bounds ([45.0..85.0] N, [-170.0..-100.0] W).
 func NormalizeBCWesternCoordinates(lat, lon float64) (normLat, normLon float64, flipped, inBounds bool) {
-	normLat, normLon = lat, lon
-	if math.IsNaN(lat) || math.IsNaN(lon) || math.IsInf(lat, 0) || math.IsInf(lon, 0) {
-		return lat, lon, false, false
-	}
-	if normLon >= 110.0 && normLon <= 144.0 {
-		normLon = -normLon
-		flipped = true
-	}
-	inBounds = normLat >= 46.0 && normLat <= 84.5 && normLon >= -144.0 && normLon <= -110.0
-	return normLat, normLon, flipped, inBounds
+	return vprocore.NormalizeWesternBCCoordinates(lat, lon)
 }
 
 // ComputeBCGSMapSheet computes the 7-character BCGS 1:20,000 map sheet identifier (e.g. "092G025", "093H015")

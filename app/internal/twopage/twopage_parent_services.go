@@ -320,3 +320,53 @@ func (s *TwoPageSourceAuditService) GetOriginal(ctx context.Context, contextID, 
 		})
 	})
 }
+
+func validateTwoPageSourceAuditScope(ctx context.Context, s *TwoPageSourceAuditService, plot, form string) error {
+	if ctx == nil {
+		return errors.New("two-page source audit requires a request context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s == nil || s.contexts == nil {
+		return errors.New("two-page source audit requires owned contexts")
+	}
+	if plot == "" || !utf8.ValidString(plot) {
+		return errors.New("two-page source audit requires an exact valid literal parent")
+	}
+	if form != "FS882-8x6XL" && form != "FS882-8x6XL-CHARS" {
+		return fmt.Errorf("two-page source audit does not support source form %q", form)
+	}
+	return nil
+}
+
+func (s *TwoPageSourceAuditService) SetRestoreSelection(ctx context.Context, contextID, plot, form string, rowIDs []string) error {
+	if err := validateTwoPageSourceAuditScope(ctx, s, plot, form); err != nil {
+		return err
+	}
+	if _, err := vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+		return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (struct{}, error) {
+			return struct{}{}, sourceform.RequireTwoPageChildReadScope(ctx, tx, owner.Selection.Project, owner.Selection.Project+"_Audit", plot, "audit")
+		})
+	}); err != nil {
+		return err
+	}
+	return s.contexts.SetAuditRestoreSelection(contextID, plot, rowIDs)
+}
+
+func (s *TwoPageSourceAuditService) RestoreSelected(ctx context.Context, contextID, plot, form string, rowIDs []string, action vprocore.AuditRestoreAction) (*vprocore.AuditRestoreResult, error) {
+	if err := validateTwoPageSourceAuditScope(ctx, s, plot, form); err != nil {
+		return nil, err
+	}
+	if action == vprocore.AuditRestoreCancel {
+		return &vprocore.AuditRestoreResult{Cancelled: true}, nil
+	}
+	if _, err := vprocore.WithContextPlotRequest(ctx, s.contexts, contextID, func(plots *vprocore.PlotService) (struct{}, error) {
+		return vprocore.WithOwnedSIVISnapshot(ctx, plots, func(owner *vprocore.SqliteContext, tx *sql.Tx) (struct{}, error) {
+			return struct{}{}, sourceform.RequireTwoPageChildReadScope(ctx, tx, owner.Selection.Project, owner.Selection.Project+"_Audit", plot, "audit")
+		})
+	}); err != nil {
+		return nil, err
+	}
+	return s.contexts.RestoreSelectedAuditRecords(contextID, plot, rowIDs, action)
+}

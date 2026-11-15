@@ -96,36 +96,79 @@ func TestPlotLabelPDFSourceDateCases(t *testing.T) {
 }
 
 func TestPlotLabelPDFRefusesUnsupportedProjection(t *testing.T) {
+	bundledFonts, fontErr := loadBundledPlotLabelPDFFonts(context.Background())
+	if fontErr != nil {
+		t.Fatalf("loadBundledPlotLabelPDFFonts: %v", fontErr)
+	}
 	cases := []struct {
 		name, want string
+		fonts      plotLabelPDFFonts
 		change     func(*PlotLabelRegionalPreview)
 	}{
-		{"owner", "matching saved-plot owner", func(p *PlotLabelRegionalPreview) { p.ContextID = "" }},
-		{"identity", "matching saved-plot owner", func(p *PlotLabelRegionalPreview) { p.Header.PlotNumber = "P02" }},
-		{"null-zone", "non-NULL Zone", func(p *PlotLabelRegionalPreview) { p.Header.Zone = nil }},
-		{"long-zone", "UTF-16 bound", func(p *PlotLabelRegionalPreview) { s := "ABCDE"; p.Header.Zone = &s }},
-		{"long-project", "UTF-16 bound", func(p *PlotLabelRegionalPreview) { s := strings.Repeat("x", 51); p.Header.ProjectID = &s }},
-		{"combined-zone", "Zone1", func(p *PlotLabelRegionalPreview) { s := strings.Repeat("x", 46); p.Header.SiteSeries = &s }},
-		{"invalid-utf8", "repairing source text", func(p *PlotLabelRegionalPreview) { s := string([]byte{0xff}); p.Header.ProjectID = &s }},
-		{"nul", "repairing source text", func(p *PlotLabelRegionalPreview) { s := "a\x00"; p.Header.PlotRepresenting = &s }},
-		{"tab", "printable ASCII", func(p *PlotLabelRegionalPreview) { s := "a\t"; p.Header.PlotRepresenting = &s }},
-		{"newline", "printable ASCII", func(p *PlotLabelRegionalPreview) { s := "a\n"; p.Header.PlotRepresenting = &s }},
-		{"unicode", "printable ASCII", func(p *PlotLabelRegionalPreview) { s := "\u00e9"; p.Header.ProjectID = &s }},
-		{"astral", "printable ASCII", func(p *PlotLabelRegionalPreview) { s := "\U0001f332"; p.Header.ProjectID = &s }},
-		{"date", "ISO date", func(p *PlotLabelRegionalPreview) { p.ISODate = "2026-02-30" }},
-		{"early-date", "ISO date", func(p *PlotLabelRegionalPreview) { p.ISODate = "1600-01-01" }},
-		{"date-mismatch", "calibrated en-US", func(p *PlotLabelRegionalPreview) { p.LabelDate = "Tuesday, October 12, 2026" }},
-		{"locale", "calibrated en-US", func(p *PlotLabelRegionalPreview) { p.Locale = "fr-CA" }},
-		{"pattern", "calibrated en-US", func(p *PlotLabelRegionalPreview) { p.Pattern = "MMMM d, yyyy" }},
-		{"source", "calibrated en-US", func(p *PlotLabelRegionalPreview) { p.Source = "browser" }},
+		{"owner", "matching saved-plot owner", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.ContextID = "" }},
+		{"identity", "matching saved-plot owner", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.Header.PlotNumber = "P02" }},
+		{"long-zone", "UTF-16 bound", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := "ABCDE"; p.Header.Zone = &s }},
+		{"long-project", "UTF-16 bound", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := strings.Repeat("x", 51); p.Header.ProjectID = &s }},
+		{"combined-zone", "Zone1", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := strings.Repeat("x", 46); p.Header.SiteSeries = &s }},
+		{"invalid-utf8", "repairing source text", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := string([]byte{0xff}); p.Header.ProjectID = &s }},
+		{"nul", "repairing source text", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := "a\x00"; p.Header.PlotRepresenting = &s }},
+		{"tab", "control", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := "a\t"; p.Header.PlotRepresenting = &s }},
+		{"newline", "control", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { s := "a\n"; p.Header.PlotRepresenting = &s }},
+		{"astral", "lacks required glyph", bundledFonts, func(p *PlotLabelRegionalPreview) { s := "\U0001f332"; p.Header.ProjectID = &s }},
+		{"date", "ISO date", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.ISODate = "2026-02-30" }},
+		{"early-date", "ISO date", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.ISODate = "1600-01-01" }},
+		{"date-mismatch", "matching Windows Long Date", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.LabelDate = "Tuesday, October 12, 2026" }},
+		{"empty-locale", "valid Windows Long Date", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.Locale = "" }},
+		{"empty-pattern", "valid Windows Long Date", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.Pattern = "" }},
+		{"source", "valid Windows Long Date", plotLabelPDFFonts{}, func(p *PlotLabelRegionalPreview) { p.Source = "browser" }},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
 			preview := plotLabelPDFTestPreview()
 			test.change(&preview)
-			output, err := renderPlotLabelPDF(context.Background(), preview, plotLabelPDFFonts{})
+			output, err := renderPlotLabelPDF(context.Background(), preview, test.fonts)
 			if err == nil || !strings.Contains(err.Error(), test.want) || output != nil {
 				t.Fatalf("expected %q and zero output, got %q, %v", test.want, output, err)
+			}
+		})
+	}
+}
+
+func TestPlotLabelPDFNullZoneNonUSLocaleAndAccentedGlyphs(t *testing.T) {
+	fonts, err := loadBundledPlotLabelPDFFonts(context.Background())
+	if err != nil {
+		t.Fatalf("loadBundledPlotLabelPDFFonts: %v", err)
+	}
+	// 1. Nullable Zone must space-pad to 4 spaces before SubZone/SiteSeries
+	previewNull := plotLabelPDFTestPreview()
+	previewNull.Header.Zone = nil
+	fields, _, err := plotLabelPDFFields(previewNull)
+	if err != nil {
+		t.Fatalf("null Zone failed: %v", err)
+	}
+	if fields[2].text != "    B/" {
+		t.Fatalf("expected 4-space padded Zone1 %q, got %q", "    B/", fields[2].text)
+	}
+	// 2. Non-en-US Windows locales (en-CA, fr-CA) + Unicode/CP1252 accented text must render validly
+	for _, tc := range []struct {
+		name, locale, pattern, labelDate, representing string
+	}{
+		{"en-CA", "en-CA", "MMMM d, yyyy", "October 12, 2026", "Café — Mont-Sainte-Anne"},
+		{"fr-CA", "fr-CA", "d MMMM yyyy", "12 octobre 2026", "Forêt boréale protégée"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := previewNull
+			p.Locale = tc.locale
+			p.Pattern = tc.pattern
+			p.LabelDate = tc.labelDate
+			rep := tc.representing
+			p.Header.PlotRepresenting = &rep
+			pdfBytes, rErr := renderPlotLabelPDF(context.Background(), p, fonts)
+			if rErr != nil {
+				t.Fatalf("renderPlotLabelPDF(%s) failed: %v", tc.name, rErr)
+			}
+			if !strings.HasPrefix(string(pdfBytes), "%PDF-1.") || len(pdfBytes) < 512 {
+				t.Fatalf("invalid PDF bytes for %s: len=%d", tc.name, len(pdfBytes))
 			}
 		})
 	}

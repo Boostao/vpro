@@ -133,6 +133,29 @@ func ValidateDesktopConfig(values ConfigValues) error {
 	return nil
 }
 
+// UserName reads the persisted Current.User identity from config.yml.
+func (s *DesktopConfig) UserName() (string, error) {
+	if s == nil {
+		return "", errors.New("desktop configuration is unavailable")
+	}
+	values, err := s.Snapshot()
+	if err != nil {
+		return "", err
+	}
+	return ConfigString(values, "Current", "User")
+}
+
+// SetUserName validates and atomically persists Current.User in config.yml.
+func (s *DesktopConfig) SetUserName(user string) error {
+	if s == nil {
+		return errors.New("desktop configuration is unavailable")
+	}
+	if user == "" || !utf8.ValidString(user) || strings.ContainsRune(user, 0) {
+		return errors.New("Current.User must be non-empty valid Unicode text")
+	}
+	return s.Update("Current", map[string]any{"User": user})
+}
+
 func mergeConfigDefaults(values ConfigValues) error {
 	defaults, err := DecodeConfig(DesktopDefaults)
 	if err != nil {

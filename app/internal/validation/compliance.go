@@ -269,9 +269,44 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 			return report, err
 		}
 
-		// 1. 1:1 _Env <-> _Admin completeness (always project-wide on physical tables).
+		suTextPlots := map[string]struct{}{}
+		var suPlotList []string
+		suOrphanCounts := map[string]int{}
+		if activeSU != "None" {
+			suTbl := `"su".` + vprocore.QuoteHeaderIdentifier(activeSU+"_SU")
+			suRows, suErr := tx.QueryContext(ctx, `SELECT typeof("PlotNumber"), CAST("PlotNumber" AS BLOB), COALESCE(CAST("PlotNumber" AS TEXT), '<NULL>')
+				FROM `+suTbl)
+			if suErr != nil {
+				return report, suErr
+			}
+			for suRows.Next() {
+				var pType, disp string
+				var raw []byte
+				if err := suRows.Scan(&pType, &raw, &disp); err != nil {
+					suRows.Close()
+					return report, err
+				}
+				rawStr := string(raw)
+				if pType == "text" {
+					if _, seen := suTextPlots[rawStr]; !seen {
+						suTextPlots[rawStr] = struct{}{}
+						suPlotList = append(suPlotList, rawStr)
+					}
+					if _, ok := envTextPlots[rawStr]; !ok {
+						suOrphanCounts[disp]++
+					}
+				} else {
+					suOrphanCounts[disp]++
+				}
+			}
+			if err := errors.Join(suRows.Err(), suRows.Close()); err != nil {
+				return report, err
+			}
+		}
+
+		// 1. 1:1 _Env <-> _Admin completeness (scoped by UseActiveSU when enabled).
 		adminTextPlots := make(map[string]struct{}, len(envTextPlots))
-		var orphanAdmins []string
+		var orphanAdmins []plotKeyEntry
 		adminScanRows, err := tx.QueryContext(ctx, `SELECT typeof("Plot"), CAST("Plot" AS BLOB), COALESCE(CAST("Plot" AS TEXT), '<NULL>')
 			FROM `+adminTbl+`
 			ORDER BY "Plot"`)
@@ -289,10 +324,10 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 			if pType == "text" {
 				adminTextPlots[rawStr] = struct{}{}
 				if _, ok := envTextPlots[rawStr]; !ok {
-					orphanAdmins = append(orphanAdmins, disp)
+					orphanAdmins = append(orphanAdmins, plotKeyEntry{isText: true, rawKey: rawStr, display: disp})
 				}
 			} else {
-				orphanAdmins = append(orphanAdmins, disp)
+				orphanAdmins = append(orphanAdmins, plotKeyEntry{isText: false, rawKey: rawStr, display: disp})
 			}
 		}
 		if err := errors.Join(adminScanRows.Err(), adminScanRows.Close()); err != nil {
@@ -300,6 +335,14 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 		}
 
 		for _, eRow := range envOrdered {
+			if useSU {
+				if !eRow.isText {
+					continue
+				}
+				if _, inSU := suTextPlots[eRow.rawKey]; !inSU {
+					continue
+				}
+			}
 			if !eRow.isText {
 				report.EnvAdminFindings = append(report.EnvAdminFindings, EnvAdminCompletenessFinding{
 					PlotNumber: eRow.display,
@@ -314,9 +357,17 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 				})
 			}
 		}
-		for _, p := range orphanAdmins {
+		for _, aRow := range orphanAdmins {
+			if useSU {
+				if !aRow.isText {
+					continue
+				}
+				if _, inSU := suTextPlots[aRow.rawKey]; !inSU {
+					continue
+				}
+			}
 			report.EnvAdminFindings = append(report.EnvAdminFindings, EnvAdminCompletenessFinding{
-				PlotNumber: p,
+				PlotNumber: aRow.display,
 				Issue:      "orphan_admin",
 			})
 		}
@@ -379,52 +430,20 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 			}
 		}
 
-		suTextPlots := map[string]struct{}{}
-		var suPlotList []string
-		if activeSU != "None" {
-			suTbl := `"su".` + vprocore.QuoteHeaderIdentifier(activeSU+"_SU")
-			suRows, suErr := tx.QueryContext(ctx, `SELECT typeof("PlotNumber"), CAST("PlotNumber" AS BLOB), COALESCE(CAST("PlotNumber" AS TEXT), '<NULL>')
-				FROM `+suTbl)
-			if suErr != nil {
-				return report, suErr
+		if len(suOrphanCounts) > 0 {
+			keys := make([]string, 0, len(suOrphanCounts))
+			for k := range suOrphanCounts {
+				keys = append(keys, k)
 			}
-			suOrphanCounts := map[string]int{}
-			for suRows.Next() {
-				var pType, disp string
-				var raw []byte
-				if err := suRows.Scan(&pType, &raw, &disp); err != nil {
-					suRows.Close()
-					return report, err
-				}
-				rawStr := string(raw)
-				if pType == "text" {
-					if _, seen := suTextPlots[rawStr]; !seen {
-						suTextPlots[rawStr] = struct{}{}
-						suPlotList = append(suPlotList, rawStr)
-					}
-					if _, ok := envTextPlots[rawStr]; !ok {
-						suOrphanCounts[disp]++
-					}
-				} else {
-					suOrphanCounts[disp]++
-				}
-			}
-			if err := errors.Join(suRows.Err(), suRows.Close()); err != nil {
-				return report, err
-			}
-			if len(suOrphanCounts) > 0 {
-				keys := make([]string, 0, len(suOrphanCounts))
-				for k := range suOrphanCounts {
-					keys = append(keys, k)
-				}
-				slices.Sort(keys)
-				for _, k := range keys {
-					report.OrphanFindings = append(report.OrphanFindings, OrphanChildFinding{
-						Table:      "SU",
-						PlotNumber: k,
-						RowCount:   suOrphanCounts[k],
-					})
-				}
+			slices.Sort(keys)
+			for _, k := range keys {
+				cnt := suOrphanCounts[k]
+				report.OrphanFindings = append(report.OrphanFindings, OrphanChildFinding{
+					Table:      "SU",
+					PlotNumber: k,
+					RowCount:   cnt,
+				})
+				report.Summary.OrphanChildRows += cnt
 			}
 		}
 
@@ -703,7 +722,7 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 		report.Summary.BoundsErrors = len(report.BoundsFindings)
 
 		// 5. Duplicate (PlotNumber, Species) strata splits & overlapping layer covers.
-		if err := checkDuplicateVegSpecies(ctx, tx, project, &report); err != nil {
+		if err := checkDuplicateVegSpecies(ctx, tx, project, useSU, suTextPlots, suPlotList, &report); err != nil {
 			return report, err
 		}
 		report.Summary.DuplicateSpeciesSplits = len(report.DuplicateVegFindings)
@@ -1163,13 +1182,21 @@ func checkProjectBounds(
 				continue
 			}
 		}
-		trimmedUpper := strings.ToUpper(strings.TrimSpace(hz))
+		if upper < 0 || lower < 0 {
+			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+				Table: "Humus", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
+				Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
+				Rule:  "LMH25 soil horizon depths must be >= 0 cm",
+			})
+			continue
+		}
+		trimmedUpper := strings.TrimLeft(strings.ToUpper(strings.TrimSpace(hz)), "0123456789")
 		if strings.HasPrefix(trimmedUpper, "OF") || strings.HasPrefix(trimmedUpper, "OM") || strings.HasPrefix(trimmedUpper, "OH") {
 			if upper >= lower {
 				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
 					Table: "Humus", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
 					Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-					Rule:  "LMH25 wetland Of/Om/Oh horizons measure downward (UpperDepth < LowerDepth)",
+					Rule:  "LMH25 wetland Of/Om/Oh horizons measure downward (0 <= UpperDepth < LowerDepth)",
 				})
 			}
 		} else if strings.HasPrefix(trimmedUpper, "L") || strings.HasPrefix(trimmedUpper, "F") || strings.HasPrefix(trimmedUpper, "H") {
@@ -1177,7 +1204,7 @@ func checkProjectBounds(
 				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
 					Table: "Humus", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
 					Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-					Rule:  "LMH25 upland L/F/H horizons measure upward from 0 cm (UpperDepth > LowerDepth)",
+					Rule:  "LMH25 upland L/F/H horizons measure upward from 0 cm (UpperDepth > LowerDepth >= 0)",
 				})
 			}
 		}
@@ -1187,7 +1214,7 @@ func checkProjectBounds(
 	}
 
 	minTbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_Mineral")
-	mWhere := ` WHERE t."UpperDepth" IS NOT NULL AND t."LowerDepth" IS NOT NULL AND t."UpperDepth" >= t."LowerDepth"`
+	mWhere := ` WHERE t."UpperDepth" IS NOT NULL AND t."LowerDepth" IS NOT NULL AND (t."UpperDepth" < 0 OR t."LowerDepth" < 0 OR t."UpperDepth" >= t."LowerDepth")`
 	var mArgs []any
 	if useSU {
 		if pre, args := buildSUPlotInPreFilter(`t."PlotNumber"`, minTypes["plotnumber"], suPlotList); pre != "" {
@@ -1217,7 +1244,13 @@ func checkProjectBounds(
 				continue
 			}
 		}
-		if upper >= lower {
+		if upper < 0 || lower < 0 {
+			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
+				Table: "Mineral", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
+				Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
+				Rule:  "LMH25 mineral horizon depths must be >= 0 cm (0 <= UpperDepth < LowerDepth)",
+			})
+		} else if upper >= lower {
 			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
 				Table: "Mineral", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
 				Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
@@ -1228,7 +1261,10 @@ func checkProjectBounds(
 	return errors.Join(mRows.Err(), mRows.Close())
 }
 
-func checkDuplicateVegSpecies(ctx context.Context, tx *sql.Tx, project string, report *ComplianceValidationReport) error {
+func checkDuplicateVegSpecies(ctx context.Context, tx *sql.Tx, project string, useSU bool, suTextPlots map[string]struct{}, suPlotList []string, report *ComplianceValidationReport) error {
+	if useSU && len(suPlotList) == 0 {
+		return nil
+	}
 	vegTbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_Veg")
 
 	// Pre-filter duplicate (PlotNumber, Species) plots in C-level SQLite
@@ -1253,6 +1289,11 @@ func checkDuplicateVegSpecies(ctx context.Context, tx *sql.Tx, project string, r
 		if err := dupPlotRows.Scan(&p, &nonText); err != nil {
 			dupPlotRows.Close()
 			return err
+		}
+		if useSU {
+			if _, inSU := suTextPlots[p]; !inSU {
+				continue
+			}
 		}
 		if nonText != 0 {
 			anyNonTextCandidate = true

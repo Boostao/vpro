@@ -120,6 +120,29 @@ func (s *ContextService) CanEditMasterBEC(ctx context.Context, contextID string)
 	})
 }
 
+func (s *ContextService) GetUserSetup(ctx context.Context, contextID string) (UserAccreditation, error) {
+	return WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (UserAccreditation, error) {
+		return plots.UserAccreditationStatus(ctx)
+	})
+}
+
+func (s *ContextService) SetUserName(ctx context.Context, contextID, user string) (UserAccreditation, error) {
+	return WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (UserAccreditation, error) {
+		if err := plots.SetCurrentUser(user); err != nil {
+			return UserAccreditation{}, err
+		}
+		if plots.Projects != nil {
+			plots.Projects.Mu.RLock()
+			coordinator := plots.Projects.Sqlite
+			plots.Projects.Mu.RUnlock()
+			if coordinator != nil {
+				coordinator.RotateUserLogSession(ctx, user)
+			}
+		}
+		return plots.UserAccreditationStatus(ctx)
+	})
+}
+
 func (s *ContextService) GetChildCapabilities(ctx context.Context, contextID, kind string) (map[string]bool, error) {
 	return WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (map[string]bool, error) { return plots.GetChildCapabilities(kind) })
 }

@@ -104,19 +104,23 @@ func ValidateLMH25HorizonDepth(tableSuffix, horizon string, upper, lower *float6
 	}
 	switch tableSuffix {
 	case "Humus":
-		hz := strings.ToUpper(strings.TrimSpace(horizon))
+		if u < 0 || l < 0 {
+			return fmt.Errorf("LMH25 humus %s horizon depths must be >= 0 cm (got %g..%g)", strings.TrimSpace(horizon), u, l)
+		}
+		// Match LMH25 (2023) & R vpro_validate_lmh25_merge_horizon numeric-prefixed prefixes: ^[0-9]*(OF|OM|OH) and ^[0-9]*(L|F|H).
+		hz := strings.TrimLeft(strings.ToUpper(strings.TrimSpace(horizon)), "0123456789")
 		if strings.HasPrefix(hz, "OF") || strings.HasPrefix(hz, "OM") || strings.HasPrefix(hz, "OH") {
 			if u >= l {
-				return fmt.Errorf("LMH25 wetland %s horizon requires UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(horizon), u, l)
+				return fmt.Errorf("LMH25 wetland %s horizon requires 0 <= UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(horizon), u, l)
 			}
 		} else if strings.HasPrefix(hz, "L") || strings.HasPrefix(hz, "F") || strings.HasPrefix(hz, "H") {
 			if u <= l {
-				return fmt.Errorf("LMH25 upland %s horizon requires UpperDepth > LowerDepth (got %g..%g)", strings.TrimSpace(horizon), u, l)
+				return fmt.Errorf("LMH25 upland %s horizon requires UpperDepth > LowerDepth >= 0 (got %g..%g)", strings.TrimSpace(horizon), u, l)
 			}
 		}
 	case "Mineral":
-		if u >= l {
-			return fmt.Errorf("LMH25 mineral %s horizon requires UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(horizon), u, l)
+		if u < 0 || l < 0 || u >= l {
+			return fmt.Errorf("LMH25 mineral %s horizon requires 0 <= UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(horizon), u, l)
 		}
 	}
 	return nil
@@ -881,6 +885,38 @@ var StandardsUSysZoneListColumns = []ColumnSpec{
 	tCol("SubZone", "TEXT", 0),
 	tCol("ZoneDescription", "TEXT", 0),
 	tCol("SubZoneVarDescription", "TEXT", 0),
+}
+
+var StandardsUSysSppAttributesColumns = []ColumnSpec{
+	bCol("Flag"),
+	tCol("Code", "TEXT", 0),
+	tCol("Climate", "TEXT", 0),
+	tCol("Est_ASMR", "TEXT", 0),
+	tCol("Est_SNR", "TEXT", 0),
+	tCol("GSM", "TEXT", 0),
+	tCol("Codetype", "TEXT", 0),
+	tCol("Native", "TEXT", 0),
+	tCol("Mult_life", "TEXT", 0),
+	tCol("P_Organism", "TEXT", 0),
+	tCol("Poison_Humans", "TEXT", 0),
+	tCol("Poison_Livestock", "TEXT", 0),
+	tCol("Poison_Wildlife", "TEXT", 0),
+	tCol("P_Descriptor", "TEXT", 0),
+	tCol("P_Mode", "TEXT", 0),
+	tCol("P_Toxin", "TEXT", 0),
+	tCol("P_Toxicity", "TEXT", 0),
+	tCol("P_Season", "TEXT", 0),
+	tCol("P_Parts", "TEXT", 0),
+	tCol("P_Comments", "TEXT", 0),
+	tCol("GBearSpring", "TEXT", 0),
+	tCol("GBearSummer", "TEXT", 0),
+	tCol("GBearFall", "TEXT", 0),
+	tCol("Cow_Forage", "TEXT", 0),
+	tCol("WeedStatus", "TEXT", 0),
+	tCol("Wetland_Ind", "TEXT", 0),
+	tCol("RedBlueList", "TEXT", 0),
+	tCol("SRank", "TEXT", 0),
+	iCol("ID", "INTEGER"),
 }
 
 var StandardsProjectMetadataColumns = []ColumnSpec{

@@ -178,6 +178,9 @@ func NewSQLiteProjectService(root, config string, preferences *DesktopConfig) (_
 		return nil, err
 	}
 	service.PublishSQLiteSelection(candidate, id)
+	if userName, err := preferences.UserName(); err == nil {
+		_ = candidate.StartUserLogSession(context.Background(), userName)
+	}
 	return service, nil
 }
 
@@ -244,6 +247,7 @@ func (service *ProjectService) switchSQLiteProfileLocked(selection DesktopSelect
 	if err := service.persistSQLiteContext(candidate); err != nil {
 		return ProjectState{}, errors.Join(err, candidate.Close())
 	}
+	old.TransferUserLogSession(candidate)
 	service.PublishSQLiteSelection(candidate, id)
 	if err := old.Close(); err != nil {
 		log.Printf("Warning: new context committed, but previous owned SQLite context could not close: %v", err)

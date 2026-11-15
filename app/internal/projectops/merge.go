@@ -24,12 +24,13 @@ const (
 )
 
 type ThreeWayMergePreviewRequest struct {
-	SourcePath    string `json:"sourcePath"`
-	SourceProject string `json:"sourceProject,omitempty"`
-	TargetPath    string `json:"targetPath,omitempty"`
-	TargetProject string `json:"targetProject,omitempty"`
-	BasePath      string `json:"basePath,omitempty"`
-	BaseProject   string `json:"baseProject,omitempty"`
+	SourcePath          string `json:"sourcePath"`
+	SourceProject       string `json:"sourceProject,omitempty"`
+	TargetPath          string `json:"targetPath,omitempty"`
+	TargetProject       string `json:"targetProject,omitempty"`
+	BasePath            string `json:"basePath,omitempty"`
+	BaseProject         string `json:"baseProject,omitempty"`
+	CaseInsensitiveText bool   `json:"caseInsensitiveText,omitempty"`
 }
 
 func (r *ThreeWayMergePreviewRequest) UnmarshalJSON(data []byte) error {
@@ -46,31 +47,36 @@ type MergeConflictItem struct {
 	BaseVal           *string `json:"baseVal,omitempty"`
 	SourceVal         *string `json:"sourceVal"`
 	TargetVal         *string `json:"targetVal"`
-	Kind              string  `json:"kind"`              // "FastForward" | "Conflict" | "TargetModifiedOnly"
+	Kind              string  `json:"kind"`              // "FastForward" | "Conflict" | "TargetModifiedOnly" | "SourceDelete"
 	DefaultResolution string  `json:"defaultResolution"` // "accept_source" | "keep_target"
+	srcRowKey         string
+	tgtRowKey         string
 }
 
 type MergePlotPreview struct {
 	PlotNumber string              `json:"plotNumber"`
-	Category   string              `json:"category"` // "Added" | "Identical" | "FastForward" | "Conflict" | "TargetOnly"
+	Category   string              `json:"category"` // "Added" | "Identical" | "FastForward" | "Conflict" | "TargetOnly" | "SourceDelete"
 	Items      []MergeConflictItem `json:"items"`
 }
 
 type ThreeWayMergePreview struct {
-	SourcePath       string              `json:"sourcePath"`
-	SourceProject    string              `json:"sourceProject"`
-	TargetPath       string              `json:"targetPath"`
-	TargetProject    string              `json:"targetProject"`
-	BasePath         string              `json:"basePath,omitempty"`
-	BaseProject      string              `json:"baseProject,omitempty"`
-	PreviewDigest    string              `json:"previewDigest"`
-	AddedCount       int                 `json:"addedCount"`
-	IdenticalCount   int                 `json:"identicalCount"`
-	FastForwardCount int                 `json:"fastForwardCount"`
-	ConflictCount    int                 `json:"conflictCount"`
-	TargetOnlyCount  int                 `json:"targetOnlyCount"`
-	Plots            []MergePlotPreview  `json:"plots"`
-	Conflicts        []MergeConflictItem `json:"conflicts"`
+	SourcePath            string              `json:"sourcePath"`
+	SourceProject         string              `json:"sourceProject"`
+	TargetPath            string              `json:"targetPath"`
+	TargetProject         string              `json:"targetProject"`
+	BasePath              string              `json:"basePath,omitempty"`
+	BaseProject           string              `json:"baseProject,omitempty"`
+	PreviewDigest         string              `json:"previewDigest"`
+	AddedCount            int                 `json:"addedCount"`
+	IdenticalCount        int                 `json:"identicalCount"`
+	FastForwardCount      int                 `json:"fastForwardCount"`
+	ConflictCount         int                 `json:"conflictCount"`
+	TargetOnlyCount       int                 `json:"targetOnlyCount"`
+	SourceDeleteCount     int                 `json:"sourceDeleteCount"`
+	MetadataConflictCount int                 `json:"metadataConflictCount,omitempty"`
+	Plots                 []MergePlotPreview  `json:"plots"`
+	Conflicts             []MergeConflictItem `json:"conflicts"`
+	MetadataItems         []MergeConflictItem `json:"metadataItems,omitempty"`
 }
 
 type ThreeWayMergeExecuteRequest struct {
@@ -84,6 +90,7 @@ type ThreeWayMergeExecuteRequest struct {
 	DefaultConflictResolution string            `json:"defaultConflictResolution,omitempty"`
 	PlotResolutions           map[string]string `json:"plotResolutions,omitempty"`
 	FieldResolutions          map[string]string `json:"fieldResolutions,omitempty"`
+	CaseInsensitiveText       bool              `json:"caseInsensitiveText,omitempty"`
 }
 
 func (r *ThreeWayMergeExecuteRequest) UnmarshalJSON(data []byte) error {
@@ -98,6 +105,7 @@ type ThreeWayMergeResult struct {
 	AddedPlots         int     `json:"addedPlots"`
 	UpdatedPlots       int     `json:"updatedPlots"`
 	SkippedPlots       int     `json:"skippedPlots"`
+	DeletedPlots       int     `json:"deletedPlots,omitempty"`
 	AllocatedChildIDs  []int64 `json:"allocatedChildIds"`
 	ReservedDeletedIDs []int64 `json:"reservedDeletedIds"`
 	AuditRowsWritten   int     `json:"auditRowsWritten"`
@@ -234,6 +242,34 @@ func hashLoadedProjectSnapshot(snap *loadedProjectSnapshot) string {
 			}
 		}
 	}
+
+	writeDigestString(h, "Metadata")
+	writeDigestUint64(h, uint64(len(snap.metaColumns)))
+	for _, col := range snap.metaColumns {
+		writeDigestString(h, col)
+	}
+	metaKeys := make([]string, 0, len(snap.metaRaw))
+	for k := range snap.metaRaw {
+		metaKeys = append(metaKeys, k)
+	}
+	slices.Sort(metaKeys)
+	writeDigestUint64(h, uint64(len(metaKeys)))
+	for _, k := range metaKeys {
+		writeDigestString(h, k)
+		rowMap := snap.metaRaw[k]
+		for _, col := range snap.metaColumns {
+			cell := rowMap[col]
+			writeDigestString(h, cell.storage)
+			switch cell.storage {
+			case "integer":
+				writeDigestUint64(h, uint64(cell.intVal))
+			case "real":
+				writeDigestUint64(h, math.Float64bits(cell.realVal))
+			case "text", "blob":
+				writeDigestBytes(h, cell.bytes)
+			}
+		}
+	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -245,7 +281,7 @@ func computeMergeSnapshotDigest(srcSnap, tgtSnap, baseSnap *loadedProjectSnapsho
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tgtPath, tgtProj, basePath, baseProj string, tgtQueryer sqliteQueryer) (ThreeWayMergePreview, *loadedProjectSnapshot, *loadedProjectSnapshot, *loadedProjectSnapshot, error) {
+func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tgtPath, tgtProj, basePath, baseProj string, tgtQueryer sqliteQueryer, caseInsensitive bool) (ThreeWayMergePreview, *loadedProjectSnapshot, *loadedProjectSnapshot, *loadedProjectSnapshot, error) {
 	srcSnap, err := loadProjectSnapshotForDiff(ctx, srcPath, srcProj)
 	if err != nil {
 		return ThreeWayMergePreview{}, nil, nil, nil, err
@@ -268,7 +304,7 @@ func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tg
 	}
 	digest := computeMergeSnapshotDigest(srcSnap, tgtSnap, baseSnap)
 
-	diff := diffLoadedSnapshots(srcSnap, tgtSnap)
+	diff := diffLoadedSnapshotsWithOptions(srcSnap, tgtSnap, caseInsensitive)
 	preview := ThreeWayMergePreview{
 		SourcePath:    srcPath,
 		SourceProject: srcProj,
@@ -279,21 +315,92 @@ func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tg
 		PreviewDigest: digest,
 		Plots:         make([]MergePlotPreview, 0, len(diff.Plots)),
 		Conflicts:     []MergeConflictItem{},
+		MetadataItems: []MergeConflictItem{},
 	}
 
-	lookupBaseVal := func(suffix, plot, rowKey, field string) (*string, bool) {
+	skipPlotCols := map[string]bool{"ID": true, "PlotNumber": true, "Plot": true}
+	lookupBaseVal := func(fd FieldDiff, plot string) (*string, bool) {
 		if baseSnap == nil || !baseSnap.plots[plot] {
 			return nil, false
 		}
-		rowMap, hasRow := baseSnap.cells[suffix][plot][rowKey]
-		if !hasRow {
+		if fd.Table == "Env" || fd.Table == "Admin" {
+			rowMap, hasRow := baseSnap.cells[fd.Table][plot][fd.Table]
+			if !hasRow {
+				return nil, true
+			}
+			return rowMap[fd.Field], true
+		}
+
+		// Child table (Veg, Humus, Mineral, Other): match canonically against Base rows
+		// belonging to the same natural baseGroupKey (supporting multiset additions/deletes).
+		bRows := baseSnap.cells[fd.Table][plot]
+		var groupKeys []string
+		for bk := range bRows {
+			rawG := baseSnap.baseKeys[fd.Table][plot][bk]
+			if rawG == "" {
+				rawG = bk
+			}
+			cg := rawG
+			if caseInsensitive {
+				cg = strings.ToLower(rawG)
+			}
+			if fd.baseGroupKey == "" || cg == fd.baseGroupKey || bk == fd.Key {
+				groupKeys = append(groupKeys, bk)
+			}
+		}
+		slices.Sort(groupKeys)
+
+		if fd.Field == "*" {
+			colOrder := append([]string(nil), baseSnap.columns[fd.Table]...)
+			if fd.SourceVal != nil && fd.TargetVal == nil {
+				// Source has row; check if Base had an exact matching row.
+				sRow := srcSnap.cells[fd.Table][plot][fd.srcRowKey]
+				sSig := rowMatchSignature(colOrder, sRow, skipPlotCols, caseInsensitive)
+				for _, bk := range groupKeys {
+					if rowMatchSignature(colOrder, bRows[bk], skipPlotCols, caseInsensitive) == sSig {
+						summary := summarizeRowMap(colOrder, bRows[bk])
+						return &summary, true
+					}
+				}
+				return nil, true
+			}
+			if fd.SourceVal == nil && fd.TargetVal != nil {
+				// Target has row; check if Base had an exact matching row.
+				tRow := tgtSnap.cells[fd.Table][plot][fd.tgtRowKey]
+				tSig := rowMatchSignature(colOrder, tRow, skipPlotCols, caseInsensitive)
+				for _, bk := range groupKeys {
+					if rowMatchSignature(colOrder, bRows[bk], skipPlotCols, caseInsensitive) == tSig {
+						summary := summarizeRowMap(colOrder, bRows[bk])
+						return &summary, true
+					}
+				}
+				if len(groupKeys) > 0 {
+					summary := summarizeRowMap(colOrder, bRows[groupKeys[0]])
+					return &summary, true
+				}
+				return nil, true
+			}
 			return nil, true
 		}
-		if field == "*" {
-			summary := summarizeRowMap(baseSnap.columns[suffix], rowMap)
-			return &summary, true
+
+		var bRow map[string]*string
+		if fd.srcRowKey != "" {
+			if r, ok := bRows[fd.srcRowKey]; ok {
+				bRow = r
+			}
 		}
-		return rowMap[field], true
+		if bRow == nil && fd.tgtRowKey != "" {
+			if r, ok := bRows[fd.tgtRowKey]; ok {
+				bRow = r
+			}
+		}
+		if bRow == nil && len(groupKeys) == 1 {
+			bRow = bRows[groupKeys[0]]
+		}
+		if bRow == nil {
+			return nil, true
+		}
+		return bRow[fd.Field], true
 	}
 
 	for _, pd := range diff.Plots {
@@ -331,12 +438,60 @@ func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tg
 				})
 			}
 		case "Removed":
-			preview.TargetOnlyCount++
-			preview.Plots = append(preview.Plots, MergePlotPreview{
-				PlotNumber: pd.PlotNumber,
-				Category:   "TargetOnly",
-				Items:      []MergeConflictItem{},
-			})
+			if baseSnap != nil && baseSnap.plots[pd.PlotNumber] {
+				// Source deleted a plot that existed in Base & Target:
+				// unchanged vs Base -> SourceDelete (fast-forward delete); modified vs Base -> Conflict.
+				tgtVsBase := diffSinglePlotSnapshots(tgtSnap, baseSnap, pd.PlotNumber, caseInsensitive)
+				cid := makeConflictID(pd.PlotNumber, "Env", "Plot")
+				present := "Present"
+				if len(tgtVsBase) == 0 {
+					item := MergeConflictItem{
+						ConflictID:        cid,
+						PlotNumber:        pd.PlotNumber,
+						Table:             "Env",
+						Key:               "Plot",
+						Field:             "PlotNumber",
+						BaseVal:           &present,
+						SourceVal:         nil,
+						TargetVal:         &present,
+						Kind:              "SourceDelete",
+						DefaultResolution: MergeResolutionAcceptSource,
+					}
+					preview.SourceDeleteCount++
+					preview.Plots = append(preview.Plots, MergePlotPreview{
+						PlotNumber: pd.PlotNumber,
+						Category:   "SourceDelete",
+						Items:      []MergeConflictItem{item},
+					})
+				} else {
+					item := MergeConflictItem{
+						ConflictID:        cid,
+						PlotNumber:        pd.PlotNumber,
+						Table:             "Env",
+						Key:               "Plot",
+						Field:             "PlotNumber",
+						BaseVal:           &present,
+						SourceVal:         nil,
+						TargetVal:         &present,
+						Kind:              "Conflict",
+						DefaultResolution: MergeResolutionKeepTarget,
+					}
+					preview.ConflictCount++
+					preview.Plots = append(preview.Plots, MergePlotPreview{
+						PlotNumber: pd.PlotNumber,
+						Category:   "Conflict",
+						Items:      []MergeConflictItem{item},
+					})
+					preview.Conflicts = append(preview.Conflicts, item)
+				}
+			} else {
+				preview.TargetOnlyCount++
+				preview.Plots = append(preview.Plots, MergePlotPreview{
+					PlotNumber: pd.PlotNumber,
+					Category:   "TargetOnly",
+					Items:      []MergeConflictItem{},
+				})
+			}
 		case "Identical":
 			preview.IdenticalCount++
 			preview.Plots = append(preview.Plots, MergePlotPreview{
@@ -349,23 +504,15 @@ func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tg
 			hasRealConflict := false
 			hasFastForward := false
 			for _, fd := range pd.FieldDiffs {
-				rowKey := fd.Table
-				if fd.Field == "*" {
-					rowKey = fd.Key
-				} else if fd.Table != "Env" && fd.Table != "Admin" {
-					if idx := strings.LastIndex(fd.Key, "."); idx > 0 {
-						rowKey = fd.Key[:idx]
-					}
-				}
-				bVal, inBase := lookupBaseVal(fd.Table, pd.PlotNumber, rowKey, fd.Field)
+				bVal, inBase := lookupBaseVal(fd, pd.PlotNumber)
 				kind := "Conflict"
 				defRes := MergeResolutionKeepTarget
 				if baseSnap != nil && inBase {
-					if sameNullableString(fd.TargetVal, bVal) && !sameNullableString(fd.SourceVal, bVal) {
+					if sameNullableText(fd.TargetVal, bVal, caseInsensitive) && !sameNullableText(fd.SourceVal, bVal, caseInsensitive) {
 						kind = "FastForward"
 						defRes = MergeResolutionAcceptSource
 						hasFastForward = true
-					} else if sameNullableString(fd.SourceVal, bVal) && !sameNullableString(fd.TargetVal, bVal) {
+					} else if sameNullableText(fd.SourceVal, bVal, caseInsensitive) && !sameNullableText(fd.TargetVal, bVal, caseInsensitive) {
 						kind = "TargetModifiedOnly"
 						defRes = MergeResolutionKeepTarget
 					} else {
@@ -385,6 +532,8 @@ func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tg
 					TargetVal:         fd.TargetVal,
 					Kind:              kind,
 					DefaultResolution: defRes,
+					srcRowKey:         fd.srcRowKey,
+					tgtRowKey:         fd.tgtRowKey,
 				}
 				items = append(items, item)
 				if kind == "Conflict" {
@@ -409,6 +558,89 @@ func buildThreeWayMergePreviewInternal(ctx context.Context, srcPath, srcProj, tg
 		}
 	}
 
+	// Reconcile <Project>_Metadata differences using Base snapshot when present.
+	if len(diff.MetadataDiffs) > 0 {
+		for _, fd := range diff.MetadataDiffs {
+			var bVal *string
+			inBase := false
+			if baseSnap != nil && len(baseSnap.metaRows) > 0 {
+				inBase = true
+				if fd.Field == "*" {
+					skipID := map[string]bool{"ID": true}
+					if fd.SourceVal != nil && fd.TargetVal == nil {
+						sSig := rowMatchSignature(srcSnap.metaColumns, srcSnap.metaRows[fd.srcRowKey], skipID, caseInsensitive)
+						for _, bRow := range baseSnap.metaRows {
+							if rowMatchSignature(baseSnap.metaColumns, bRow, skipID, caseInsensitive) == sSig {
+								summary := summarizeRowMap(baseSnap.metaColumns, bRow)
+								bVal = &summary
+								break
+							}
+						}
+					} else if fd.SourceVal == nil && fd.TargetVal != nil {
+						tSig := rowMatchSignature(tgtSnap.metaColumns, tgtSnap.metaRows[fd.tgtRowKey], skipID, caseInsensitive)
+						for _, bRow := range baseSnap.metaRows {
+							if rowMatchSignature(baseSnap.metaColumns, bRow, skipID, caseInsensitive) == tSig {
+								summary := summarizeRowMap(baseSnap.metaColumns, bRow)
+								bVal = &summary
+								break
+							}
+						}
+					}
+				} else {
+					var bRow map[string]*string
+					if fd.srcRowKey != "" {
+						bRow = baseSnap.metaRows[fd.srcRowKey]
+					}
+					if bRow == nil && fd.tgtRowKey != "" {
+						bRow = baseSnap.metaRows[fd.tgtRowKey]
+					}
+					if bRow == nil && fd.baseGroupKey != "" {
+						for mk, cand := range baseSnap.metaRows {
+							if strings.EqualFold(mk, fd.baseGroupKey) {
+								bRow = cand
+								break
+							}
+						}
+					}
+					if bRow != nil {
+						bVal = bRow[fd.Field]
+					}
+				}
+			}
+
+			kind := "Conflict"
+			defRes := MergeResolutionKeepTarget
+			if inBase {
+				if sameNullableText(fd.TargetVal, bVal, caseInsensitive) && !sameNullableText(fd.SourceVal, bVal, caseInsensitive) {
+					kind = "FastForward"
+					defRes = MergeResolutionAcceptSource
+				} else if sameNullableText(fd.SourceVal, bVal, caseInsensitive) && !sameNullableText(fd.TargetVal, bVal, caseInsensitive) {
+					kind = "TargetModifiedOnly"
+					defRes = MergeResolutionKeepTarget
+				}
+			}
+			item := MergeConflictItem{
+				ConflictID:        makeConflictID("METADATA", "Metadata", fd.Key),
+				PlotNumber:        "",
+				Table:             "Metadata",
+				Key:               fd.Key,
+				Field:             fd.Field,
+				BaseVal:           bVal,
+				SourceVal:         fd.SourceVal,
+				TargetVal:         fd.TargetVal,
+				Kind:              kind,
+				DefaultResolution: defRes,
+				srcRowKey:         fd.srcRowKey,
+				tgtRowKey:         fd.tgtRowKey,
+			}
+			preview.MetadataItems = append(preview.MetadataItems, item)
+			if kind == "Conflict" {
+				preview.MetadataConflictCount++
+				preview.Conflicts = append(preview.Conflicts, item)
+			}
+		}
+	}
+
 	return preview, srcSnap, tgtSnap, baseSnap, nil
 }
 
@@ -424,7 +656,7 @@ func PreviewThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 	if err != nil {
 		return ThreeWayMergePreview{}, err
 	}
-	preview, _, _, _, err := buildThreeWayMergePreviewInternal(ctx, srcPath, srcProj, tgtPath, tgtProj, basePath, baseProj, nil)
+	preview, _, _, _, err := buildThreeWayMergePreviewInternal(ctx, srcPath, srcProj, tgtPath, tgtProj, basePath, baseProj, nil, req.CaseInsensitiveText)
 	return preview, err
 }
 
@@ -474,7 +706,7 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 		if choice, ok := req.PlotResolutions[item.PlotNumber]; ok {
 			return choice
 		}
-		if item.Kind == "FastForward" || item.Kind == "TargetModifiedOnly" {
+		if item.Kind == "FastForward" || item.Kind == "TargetModifiedOnly" || item.Kind == "SourceDelete" {
 			return item.DefaultResolution
 		}
 		return defaultRes
@@ -492,7 +724,7 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 			}
 		}()
 
-		preview, srcSnap, tgtSnap, _, pErr := buildThreeWayMergePreviewInternal(ctx, srcPath, srcProj, tgtPath, tgtProj, basePath, baseProj, tx)
+		preview, srcSnap, tgtSnap, _, pErr := buildThreeWayMergePreviewInternal(ctx, srcPath, srcProj, tgtPath, tgtProj, basePath, baseProj, tx, req.CaseInsensitiveText)
 		if pErr != nil {
 			return ThreeWayMergeResult{}, pErr
 		}
@@ -513,7 +745,50 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 
 		now := time.Now().Format("2006-01-02 15:04:05")
 		var allocatedIDs, reservedDeletedIDs []int64
-		addedPlots, updatedPlots, skippedPlots, auditRows := 0, 0, 0, 0
+		addedPlots, updatedPlots, skippedPlots, deletedPlots, auditRows := 0, 0, 0, 0, 0
+
+		deleteWholePlotFromTarget := func(plot string) error {
+			// Reserve child IDs before deleting rows in FK order (children -> Admin -> Env).
+			for _, suffix := range []string{"Other", "Mineral", "Humus", "Veg"} {
+				tgtChildRows := tgtSnap.rawCells[suffix][plot]
+				var keys []string
+				for k := range tgtChildRows {
+					keys = append(keys, k)
+				}
+				slices.Sort(keys)
+				for _, rk := range keys {
+					if idCell := tgtChildRows[rk]["ID"]; idCell.storage == "integer" && idCell.intVal > 0 {
+						if err := reserveChildID(ctx, tx, tgtProj+"_"+suffix, idCell.intVal); err != nil {
+							return err
+						}
+						reservedDeletedIDs = append(reservedDeletedIDs, idCell.intVal)
+					}
+				}
+				qTbl := vprocore.QuoteHeaderIdentifier(tgtProj + "_" + suffix)
+				if _, err := tx.ExecContext(ctx, `DELETE FROM `+qTbl+` WHERE typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB)`, plot); err != nil {
+					return err
+				}
+			}
+			adminTbl := vprocore.QuoteHeaderIdentifier(tgtProj + "_Admin")
+			if _, err := tx.ExecContext(ctx, `DELETE FROM `+adminTbl+` WHERE typeof("Plot")='text' AND CAST("Plot" AS BLOB)=CAST(? AS BLOB)`, plot); err != nil {
+				return err
+			}
+			envTbl := vprocore.QuoteHeaderIdentifier(tgtProj + "_Env")
+			dRes, dErr := tx.ExecContext(ctx, `DELETE FROM `+envTbl+` WHERE typeof("PlotNumber")='text' AND CAST("PlotNumber" AS BLOB)=CAST(? AS BLOB)`, plot)
+			if dErr != nil {
+				return dErr
+			}
+			if n, _ := dRes.RowsAffected(); n != 1 {
+				return fmt.Errorf("merge plot delete on %s matched %d Env rows", plot, n)
+			}
+			// Record deletion provenance with PlotNumber=NULL so ON DELETE CASCADE on _Env neither
+			// cascades out the deletion audit trail nor triggers FK error after _Env removal.
+			if _, err := auditStmt.ExecContext(ctx, tgtProj, actor, nil, "_Env", "PlotNumber", now, plot, nil, nil); err != nil {
+				return err
+			}
+			auditRows++
+			return nil
+		}
 
 		insertPlotChildRow := func(suffix, plot string, srcRaw map[string]rawSQLiteCell) error {
 			cols := tgtSnap.columns[suffix]
@@ -655,18 +930,42 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 					return ThreeWayMergeResult{}, err
 				}
 				addedPlots++
-			case "FastForward", "Conflict":
-				// Handle special case where Base had plot, Target deleted it, Source kept it
-				if len(plotPlan.Items) == 1 && plotPlan.Items[0].Key == "Plot" && !tgtSnap.plots[plot] && srcSnap.plots[plot] {
-					if resolveDecision(plotPlan.Items[0]) == MergeResolutionAcceptSource {
-						if err := insertWholePlotFromSource(plot); err != nil {
-							return ThreeWayMergeResult{}, err
-						}
-						addedPlots++
-					} else {
-						skippedPlots++
+			case "SourceDelete":
+				if len(plotPlan.Items) == 1 && resolveDecision(plotPlan.Items[0]) == MergeResolutionAcceptSource {
+					if err := deleteWholePlotFromTarget(plot); err != nil {
+						return ThreeWayMergeResult{}, err
 					}
-					continue
+					deletedPlots++
+				} else {
+					skippedPlots++
+				}
+			case "FastForward", "Conflict":
+				// Handle special cases where plot membership differs vs Base:
+				// (a) Base had plot, Target deleted it, Source kept it -> re-insert if accept_source
+				// (b) Base had plot, Source deleted it, Target modified it -> delete if accept_source
+				if len(plotPlan.Items) == 1 && plotPlan.Items[0].Key == "Plot" {
+					if !tgtSnap.plots[plot] && srcSnap.plots[plot] {
+						if resolveDecision(plotPlan.Items[0]) == MergeResolutionAcceptSource {
+							if err := insertWholePlotFromSource(plot); err != nil {
+								return ThreeWayMergeResult{}, err
+							}
+							addedPlots++
+						} else {
+							skippedPlots++
+						}
+						continue
+					}
+					if tgtSnap.plots[plot] && !srcSnap.plots[plot] {
+						if resolveDecision(plotPlan.Items[0]) == MergeResolutionAcceptSource {
+							if err := deleteWholePlotFromTarget(plot); err != nil {
+								return ThreeWayMergeResult{}, err
+							}
+							deletedPlots++
+						} else {
+							skippedPlots++
+						}
+						continue
+					}
 				}
 
 				plotModified := false
@@ -715,14 +1014,22 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 					if item.Field == "*" {
 						if item.SourceVal != nil && item.TargetVal == nil {
 							// Row added in Source -> allocate monotonic child ID & insert.
-							srcRow := srcSnap.rawCells[suffix][plot][item.Key]
+							sKey := item.srcRowKey
+							if sKey == "" {
+								sKey = item.Key
+							}
+							srcRow := srcSnap.rawCells[suffix][plot][sKey]
 							if err := insertPlotChildRow(suffix, plot, srcRow); err != nil {
 								return ThreeWayMergeResult{}, err
 							}
 							plotModified = true
 						} else if item.SourceVal == nil && item.TargetVal != nil {
 							// Row deleted in Source -> delete from Target and permanently reserve ID!
-							tgtRow := tgtSnap.rawCells[suffix][plot][item.Key]
+							tKey := item.tgtRowKey
+							if tKey == "" {
+								tKey = item.Key
+							}
+							tgtRow := tgtSnap.rawCells[suffix][plot][tKey]
 							idCell := tgtRow["ID"]
 							if idCell.storage != "integer" {
 								return ThreeWayMergeResult{}, fmt.Errorf("cannot delete target %s row in plot %s without integer ID", suffix, plot)
@@ -765,8 +1072,16 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 						return ThreeWayMergeResult{}, fmt.Errorf("malformed child diff key %q", item.Key)
 					}
 					rowKey := item.Key[:idx]
-					srcCell := srcSnap.rawCells[suffix][plot][rowKey][item.Field]
-					tgtRow := tgtSnap.rawCells[suffix][plot][rowKey]
+					sKey := item.srcRowKey
+					if sKey == "" {
+						sKey = rowKey
+					}
+					tKey := item.tgtRowKey
+					if tKey == "" {
+						tKey = rowKey
+					}
+					srcCell := srcSnap.rawCells[suffix][plot][sKey][item.Field]
+					tgtRow := tgtSnap.rawCells[suffix][plot][tKey]
 					idCell := tgtRow["ID"]
 					if idCell.storage != "integer" {
 						return ThreeWayMergeResult{}, fmt.Errorf("target %s row in plot %s lacks integer ID for field merge", suffix, plot)
@@ -805,6 +1120,147 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 			}
 		}
 
+		// Reconcile accepted <Target>_Metadata changes inside the same atomic transaction.
+		metaTbl := vprocore.QuoteHeaderIdentifier(tgtProj + "_Metadata")
+		for _, item := range preview.MetadataItems {
+			if err := ctx.Err(); err != nil {
+				return ThreeWayMergeResult{}, err
+			}
+			if resolveDecision(item) != MergeResolutionAcceptSource {
+				continue
+			}
+			if item.Field == "*" {
+				if item.SourceVal != nil && item.TargetVal == nil {
+					sKey := item.srcRowKey
+					if sKey == "" {
+						sKey = item.Key
+					}
+					srcRow := srcSnap.metaRaw[sKey]
+					cols := tgtSnap.metaColumns
+					if len(cols) == 0 {
+						cols = srcSnap.metaColumns
+					}
+					newMetaID, mErr := allocateSafeMetadataID(ctx, tx, tgtProj)
+					if mErr != nil {
+						return ThreeWayMergeResult{}, mErr
+					}
+					allocatedIDs = append(allocatedIDs, newMetaID)
+					quotedCols := make([]string, len(cols))
+					marks := make([]string, len(cols))
+					args := make([]any, len(cols))
+					for i, col := range cols {
+						quotedCols[i] = vprocore.QuoteHeaderIdentifier(col)
+						marks[i] = "?"
+						if col == "ID" {
+							args[i] = newMetaID
+							continue
+						}
+						cell := srcRow[col]
+						if err := validateMergedCell("Metadata", col, cell); err != nil {
+							return ThreeWayMergeResult{}, fmt.Errorf("metadata %s.%s: %w", sKey, col, err)
+						}
+						args[i] = normalizeMergedParam("Metadata", col, cell)
+					}
+					insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", metaTbl, strings.Join(quotedCols, ", "), strings.Join(marks, ", "))
+					if _, err := tx.ExecContext(ctx, insSQL, args...); err != nil {
+						return ThreeWayMergeResult{}, err
+					}
+					for _, col := range cols {
+						if col == "ID" {
+							continue
+						}
+						c := srcRow[col]
+						if c.storage == "null" {
+							continue
+						}
+						if _, err := auditStmt.ExecContext(ctx, tgtProj, actor, nil, "_Metadata", col, now, nil, auditTextForRawCell(c), newMetaID); err != nil {
+							return ThreeWayMergeResult{}, err
+						}
+						auditRows++
+					}
+				} else if item.SourceVal == nil && item.TargetVal != nil {
+					tKey := item.tgtRowKey
+					if tKey == "" {
+						tKey = item.Key
+					}
+					tgtRow := tgtSnap.metaRaw[tKey]
+					idCell := tgtRow["ID"]
+					if idCell.storage != "integer" {
+						return ThreeWayMergeResult{}, fmt.Errorf("cannot delete target Metadata row %s without integer ID", tKey)
+					}
+					if idCell.intVal > 0 {
+						if err := reserveChildID(ctx, tx, tgtProj+"_Metadata", idCell.intVal); err != nil {
+							return ThreeWayMergeResult{}, err
+						}
+						reservedDeletedIDs = append(reservedDeletedIDs, idCell.intVal)
+					}
+					dRes, dErr := tx.ExecContext(ctx, `DELETE FROM `+metaTbl+` WHERE "ID" = ?`, idCell.intVal)
+					if dErr != nil {
+						return ThreeWayMergeResult{}, dErr
+					}
+					if n, _ := dRes.RowsAffected(); n != 1 {
+						return ThreeWayMergeResult{}, fmt.Errorf("merge metadata delete (ID %d) matched %d rows", idCell.intVal, n)
+					}
+					for _, col := range tgtSnap.metaColumns {
+						if col == "ID" {
+							continue
+						}
+						c := tgtRow[col]
+						if c.storage == "null" {
+							continue
+						}
+						if _, err := auditStmt.ExecContext(ctx, tgtProj, actor, nil, "_Metadata", col, now, auditTextForRawCell(c), nil, idCell.intVal); err != nil {
+							return ThreeWayMergeResult{}, err
+						}
+						auditRows++
+					}
+				}
+				continue
+			}
+
+			idx := strings.LastIndex(item.Key, ".")
+			if idx <= 0 {
+				return ThreeWayMergeResult{}, fmt.Errorf("malformed metadata diff key %q", item.Key)
+			}
+			rowKey := item.Key[:idx]
+			sKey := item.srcRowKey
+			if sKey == "" {
+				sKey = rowKey
+			}
+			tKey := item.tgtRowKey
+			if tKey == "" {
+				tKey = rowKey
+			}
+			srcCell := srcSnap.metaRaw[sKey][item.Field]
+			tgtRow := tgtSnap.metaRaw[tKey]
+			idCell := tgtRow["ID"]
+			if idCell.storage != "integer" {
+				return ThreeWayMergeResult{}, fmt.Errorf("target Metadata row %s lacks integer ID", tKey)
+			}
+			if err := validateMergedCell("Metadata", item.Field, srcCell); err != nil {
+				return ThreeWayMergeResult{}, fmt.Errorf("metadata %s.%s: %w", tKey, item.Field, err)
+			}
+			param := normalizeMergedParam("Metadata", item.Field, srcCell)
+			uRes, uErr := tx.ExecContext(ctx, `UPDATE `+metaTbl+` SET `+vprocore.QuoteHeaderIdentifier(item.Field)+` = ? WHERE "ID" = ?`, param, idCell.intVal)
+			if uErr != nil {
+				return ThreeWayMergeResult{}, uErr
+			}
+			if n, _ := uRes.RowsAffected(); n != 1 {
+				return ThreeWayMergeResult{}, fmt.Errorf("merge metadata update on %s (ID %d) matched %d rows", item.Field, idCell.intVal, n)
+			}
+			var beforeVal, afterVal any
+			if item.TargetVal != nil {
+				beforeVal = *item.TargetVal
+			}
+			if item.SourceVal != nil {
+				afterVal = *item.SourceVal
+			}
+			if _, err := auditStmt.ExecContext(ctx, tgtProj, actor, nil, "_Metadata", item.Field, now, beforeVal, afterVal, idCell.intVal); err != nil {
+				return ThreeWayMergeResult{}, err
+			}
+			auditRows++
+		}
+
 		if err := ctx.Err(); err != nil {
 			return ThreeWayMergeResult{}, err
 		}
@@ -821,6 +1277,7 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 			AddedPlots:         addedPlots,
 			UpdatedPlots:       updatedPlots,
 			SkippedPlots:       skippedPlots,
+			DeletedPlots:       deletedPlots,
 			AllocatedChildIDs:  allocatedIDs,
 			ReservedDeletedIDs: reservedDeletedIDs,
 			AuditRowsWritten:   auditRows,
@@ -860,7 +1317,7 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 var mergedEnvTextMax = map[string]int{
 	"PlotNumber": 7, "FieldNumber": 50, "ProjectID": 30, "FSRegionDistrict": 7,
 	"Ecosection": 3, "NtsMapSheet": 8, "AirPhotoNum": 20,
-	"Zone": 4, "SubZone": 8, "SiteSeries": 5, "RealmClass": 5, "MapUnit": 30,
+	"Zone": 4, "SubZone": 8, "SiteSeries": 5, "RealmClass": 5, "MapUnit": 15,
 	"SnowCoverregime": 1, "Exposure1": 2, "Exposure2": 2,
 	"SiteDisturbance1": 8, "SiteDisturbance2": 8, "SiteDisturbance3": 8,
 	"Photo": 50, "SoilSurveyor": 30, "VegSurveyor": 30,
