@@ -10,7 +10,7 @@ import (
 
 func TestPortableSpatialAssetsDirAnd71kFlatGeobufPrealloc(t *testing.T) {
 	tmpRoot := t.TempDir()
-	fakeRepo := filepath.Join(tmpRoot, "vpro_wails")
+	fakeRepo := filepath.Join(tmpRoot, "vpro")
 	if err := os.MkdirAll(fakeRepo, 0o755); err != nil {
 		t.Fatal(err)
 	}
