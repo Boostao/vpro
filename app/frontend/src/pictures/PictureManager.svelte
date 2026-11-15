@@ -96,12 +96,12 @@
 
 <style>
   .manager { padding: 1rem; min-width: 0; max-width: 100%; }
-  h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: .75rem; }
+  h1 { font-size: 1.5rem; font-weight: 600; color: #003366; margin-bottom: .75rem; }
   form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: .75rem 0; }
-  label { display: grid; gap: .3rem; min-width: 0; flex: 1; }
-  input, button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; }
+  label { display: grid; gap: .3rem; min-width: 0; flex: 1 1 14rem; }
+  input, button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; color: #313132; background: #FFFFFF; }
   button:disabled, input:disabled { opacity: .5; }
   p { overflow-wrap: anywhere; }
-  .error { color: #991b1b; background: #fef2f2; padding: .5rem; }
-  .guidance { font-size: .8rem; color: #475569; margin-top: 1rem; }
+  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
+  .guidance { font-size: .8rem; color: #474543; margin-top: 1rem; }
 </style>

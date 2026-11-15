@@ -33,7 +33,7 @@ const cloudSync = loadTypeScript('cloudSyncWorkbench.ts', {
   './projectAdminWorkbench': projectAdmin,
 });
 
-test('all 19 defaultCloudSyncPort methods call exact main.ContextService.* Wails endpoints', async () => {
+test('all 20 defaultCloudSyncPort methods call exact main.ContextService.* Wails endpoints', async () => {
   wailsCalls.length = 0;
   const p = cloudSync.defaultCloudSyncPort;
 
@@ -63,8 +63,9 @@ test('all 19 defaultCloudSyncPort methods call exact main.ContextService.* Wails
   await p.createBECMasterSnapshot('ctx-1', { snapshotTag: 'BECMaster_2026_11' });
   await p.listBECMasterSnapshots();
   await p.listBECMasterDownloadLog(50);
+  await p.verifyBECMasterAuditChain(250);
 
-  assert.equal(wailsCalls.length, 19);
+  assert.equal(wailsCalls.length, 20);
   assert.deepEqual(
     wailsCalls.map(c => c.methodName),
     [
@@ -87,6 +88,7 @@ test('all 19 defaultCloudSyncPort methods call exact main.ContextService.* Wails
       'main.ContextService.CreateBECMasterSnapshot',
       'main.ContextService.ListBECMasterSnapshots',
       'main.ContextService.ListBECMasterDownloadLog',
+      'main.ContextService.VerifyBECMasterAuditChain',
     ]
   );
 
@@ -96,6 +98,7 @@ test('all 19 defaultCloudSyncPort methods call exact main.ContextService.* Wails
   assert.deepEqual(wailsCalls[9].args, ['ctx-1', false]);
   assert.deepEqual(wailsCalls[12].args, ['sub-001']);
   assert.deepEqual(wailsCalls[18].args, [50]);
+  assert.deepEqual(wailsCalls[19].args, [250]);
 });
 
 test('subset filter, bbox, compliance gate, custodian-protected field, and snapshot tag helpers enforce VPro invariants', () => {
@@ -250,6 +253,7 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
       mergeExecuteResult,
       snapshots,
       downloadLog,
+      auditChainResult,
     }),
     setSessionInputs(vals) {
       if (vals.roleMode !== undefined) selectedRoleMode = vals.roleMode;
@@ -280,6 +284,8 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     runSubmitToStaging,
     refreshSubmissionsList,
     runBootstrapSchemas,
+    setAuditChainLimit(v) { auditChainLimit = v; },
+    runVerifyAuditChain,
     runPublishStandards,
     setSeedPath(p) { seedSourceDbPath = p; },
     runSeedBaseline,
@@ -417,6 +423,15 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
         roleGrantsApplied: true,
         contributorRoleSet: true,
         bootstrappedAt: '2026-11-14T14:01:00Z',
+      };
+    },
+    async verifyBECMasterAuditChain(limit) {
+      assertClonableArgs('verifyBECMasterAuditChain', [limit]);
+      return {
+        verifiedRows: limit > 0 ? limit : 597277,
+        valid: true,
+        partialWindow: limit > 0,
+        tailHash: 'abcdef0123456789fedcba9876543210',
       };
     },
     async publishStandardsToCloud(cid, req) {
@@ -839,6 +854,13 @@ test('CloudSyncWorkbench client rune actions are offline-first on mount, detach 
     assert.equal(api.getState().connectionReport.becmasterPlotCount, 71567);
 
     await api.runBootstrapSchemas();
+    api.setAuditChainLimit(100);
+    client.flush();
+    await api.runVerifyAuditChain();
+    client.flush();
+    assert.equal(api.getState().auditChainResult.valid, true);
+    assert.equal(api.getState().auditChainResult.verifiedRows, 100);
+    assert.equal(api.getState().auditChainResult.partialWindow, true);
     await api.runPublishStandards();
     api.setSeedPath('/data/BECMaster_fixing.db');
     client.flush();

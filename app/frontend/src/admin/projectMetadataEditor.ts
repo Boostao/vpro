@@ -189,6 +189,17 @@ export function populateMetadataStandard(draft: MetadataDraft, fields: ProjectMe
   }
   return { ...next, standardPopulation: 'populate' };
 }
+
+export function applyCanonicalStandardDefaults(draft: MetadataDraft, fields: ProjectMetadataEditorField[]): MetadataDraft {
+  let next = draft;
+  for (const [name, value] of Object.entries(metadataStandardDefaults)) {
+    const matches = fields.filter(field => field.name === name && field.kind === 'text');
+    if (matches.length !== 1) throw new Error(`Source population field ${name} is unavailable or ambiguous; drafts were retained.`);
+    next = stageMetadata(next, matches[0], value, false);
+    if (next.cells[name].error) throw new Error(`Source population was not applied; drafts were retained: ${next.cells[name].error}`);
+  }
+  return metadataStandardDecisionRequired(next) ? { ...next, standardPopulation: 'populate' } : next;
+}
 export function metadataEditRequest(draft: MetadataDraft): ProjectMetadataEdit {
   const errors = metadataErrors(draft);
   if (errors.length) throw new Error(errors[0]);

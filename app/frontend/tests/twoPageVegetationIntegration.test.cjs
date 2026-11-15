@@ -39,10 +39,12 @@ function owned(original = source(), ports = {}, speciesListEnabled = false) {
     save: () => { throw new Error('Unexpected Save'); }, outcome: () => { throw new Error('Unexpected recovery'); }, ...ports,
   }, true, speciesListEnabled);
 }
+const enterNav = loadTypeScript('enterNavigation.ts');
 const dependencies = session => ({
   './twoPageVegetationSessions': { twoPageVegetationSession: () => session, twoPageVegetationWritingEnabled: true, twoPageVegetationSpeciesListEnabled: false },
   './twoPageVegetationWire': wire, './projectMetadataEditor': metadata,
   './collectedEditor': collected, './twoPageVegetationPresentation': presentation,
+  './enterNavigation': enterNav,
   './twoPageVegetationSpeciesList': speciesList,
   './VegetationSpeciesReferences.svelte': { default: serverComponent(read('VegetationSpeciesReferences.svelte'), 'VegetationSpeciesReferences.svelte', {}) },
 });
@@ -121,20 +123,20 @@ test('physical aliases NULL IDs and missing source controls remain distinct with
 async function mountScript(session, parent = false, dom = {}, sourceProps = props) {
   let script = read('TwoPageVegetationPanel.svelte').match(/<script lang="ts">([\s\S]*?)<\/script>/)[1];
   script = script.replace('form, parentBlocked }', 'form, parentBlocked, inspect }');
-  script += '\nfunction bindTestPanel(value) { panel = value; }\n$effect(() => inspect({ operation, stage, selectRow, cycleCollected, bindTestPanel, row, error, view, close, fieldsDisabled }));';
+  script += '\nfunction bindTestPanel(value) { panel = value; }\n$effect(() => inspect({ operation, stage, selectRow, cycleCollected, enterRecord, submitCreateRow, confirmDeleteRow, loadDeletedRows, restoreDeletedRow, setCreateFields: (s, l = "", c = "") => { createSpecies = s; createLayer = l; createCollected = c; }, setDeleteConfirm: id => { deleteConfirmRowId = id; }, deletedRows, bindTestPanel, row, error, statusMsg, view, close, fieldsDisabled }));';
   const compiled = compile(`<script lang="ts">${script}</script>`, { generate: 'client' });
   assert.equal(compiled.warnings.length, 0);
   const ast = ts.createSourceFile('panel.js', compiled.js.code, ts.ScriptTarget.Latest, true);
   const code = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n')
     .replace('export default function', 'function');
-  const mount = new Function('$', 'untrack', 'twoPageVegetationSession', 'twoPageVegetationWritingEnabled',
-    'vegetationColumnIndex', 'vegetationSourceCell', 'metadataCellText', 'collectedNext',
+  const mount = new Function('$', 'tick', 'untrack', 'twoPageVegetationSession', 'twoPageVegetationWritingEnabled',
+    'vegetationColumnIndex', 'vegetationSourceCell', 'metadataCellText', 'collectedNext', 'enterNavigationMode',
     'twoPageVegetationGroups', 'twoPageVegetationStoredText', 'twoPageVegetationRowDiagnostic', 'twoPageVegetationHasColumn',
-    'HTMLButtonElement', 'crypto', code + '\nreturn _unknown_;')(
-    client, client.untrack, typeof session === 'function' ? session : () => session, true, wire.vegetationColumnIndex, wire.vegetationSourceCell,
-    metadata.metadataCellText, collected.collectedNext, presentation.twoPageVegetationGroups,
+    'HTMLButtonElement', 'HTMLInputElement', 'crypto', code + '\nreturn _unknown_;')(
+    client, dom.tick ?? (async () => {}), client.untrack, typeof session === 'function' ? session : () => session, true, wire.vegetationColumnIndex, wire.vegetationSourceCell,
+    metadata.metadataCellText, collected.collectedNext, enterNav.enterNavigationMode, presentation.twoPageVegetationGroups,
     presentation.twoPageVegetationStoredText, presentation.twoPageVegetationRowDiagnostic, presentation.twoPageVegetationHasColumn,
-    dom.HTMLButtonElement, { randomUUID: () => request.requestId });
+    dom.HTMLButtonElement, dom.HTMLInputElement ?? class {}, { randomUUID: () => request.requestId });
   const blocked = client.state(parent);
   let actions;
   const dispose = client.effect_root(() => mount(null, {
@@ -374,4 +376,102 @@ test('actual root native-close and context transition barriers survive unmounted
     await context.actions.requestTransition(async () => transitions.push('changed context'));
     assert.deepEqual(transitions, ['changed context']);
   } finally { stop(); }
+});
+
+test('two-page vegetation CRUD actions and intra-row/next-row Enter navigation work through Panel actions', async () => {
+  const crudCalls = { create: [], delete: [], restore: [], listDeleted: [] };
+  let loads = 0;
+  const session = new TwoPageVegetationSession({ contextId, project, plot, form }, {
+    read: () => { loads++; return operation(client.proxy(source())); },
+    save: () => { throw new Error('Unexpected Save'); },
+    outcome: () => { throw new Error('Unexpected recovery'); },
+  }, true, false);
+  await session.load();
+
+  const vegetationCrudPort = {
+    createRow: async (cid, req) => { crudCalls.create.push([cid, req]); return { requestId: req.requestId, rowId: '3', id: 3, species: req.species }; },
+    deleteRow: async (cid, req) => { crudCalls.delete.push([cid, req]); return { requestId: req.requestId, deletedId: req.id, species: 'TSUGHET' }; },
+    restoreRow: async (cid, req) => { crudCalls.restore.push([cid, req]); return { requestId: req.requestId, restoredId: 3, restoredRowId: '3', species: 'TSUGHET' }; },
+    listDeletedRows: async (cid, p, f) => {
+      crudCalls.listDeleted.push([cid, p, f]);
+      return [{ deleteRequestId: 'del-1', plotNumber: p, form: f, deletedId: 3, species: 'TSUGHET', layer: 'A1', deletedBy: 'tester', deletedAt: '2026-04-01', restored: false }];
+    },
+  };
+
+  class FakeInput {
+    disabled = false;
+    constructor(col) { this.col = col; this.focused = 0; }
+    checkVisibility() { return true; }
+    focus() { this.focused++; }
+    closest() { return { dataset: { vegetationColumn: this.col } }; }
+  }
+  const input1 = new FakeInput('Cover1');
+  const input2 = new FakeInput('Cover2');
+  const firstNextInput = new FakeInput('Cover1');
+  const currentInputs = [input1, input2];
+  const panel = {
+    dataset: { twoPageVegetationPanel: form, get vegetationCurrentRow() { return mounted.actions().row?.rowId; } },
+    contains(el) { return currentInputs.includes(el); },
+    querySelectorAll() { return currentInputs; },
+    querySelector() { return firstNextInput; },
+  };
+  const prevDoc = global.document;
+  global.document = { activeElement: input1 };
+  const mounted = await mountScript(session, false, {
+    HTMLInputElement: FakeInput,
+    tick: async () => { await Promise.resolve(); client.flush(); },
+  }, { ...props, vegetationCrudPort });
+  try {
+    mounted.actions().bindTestPanel(panel); client.flush();
+
+    // Intra-row Enter advances from Cover1 to Cover2 without switching physical row
+    await mounted.actions().enterRecord({
+      key: 'Enter', defaultPrevented: false, isComposing: false, repeat: false,
+      altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+      preventDefault() {}, currentTarget: input1, target: input1,
+    }, 'Cover1');
+    client.flush();
+    assert.equal(mounted.actions().error, null);
+    assert.equal(input2.focused, 1);
+    assert.equal(mounted.actions().row.rowId, '-7');
+
+    // End-of-row Enter advances to next physical row ('3') and focuses its first input
+    global.document.activeElement = input2;
+    await mounted.actions().enterRecord({
+      key: 'Enter', defaultPrevented: false, isComposing: false, repeat: false,
+      altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+      preventDefault() {}, currentTarget: input2, target: input2,
+    }, 'Cover2');
+    client.flush();
+    assert.equal(mounted.actions().error, null);
+    assert.equal(mounted.actions().row.rowId, '3');
+    assert.equal(firstNextInput.focused, 1);
+
+    // Create species row
+    mounted.actions().setCreateFields('ABIEALB', 'A1', 'C'); client.flush();
+    await mounted.actions().submitCreateRow(); client.flush();
+    assert.equal(crudCalls.create.length, 1);
+    assert.equal(crudCalls.create[0][1].species, 'ABIEALB');
+    assert.match(mounted.actions().statusMsg, /Created vegetation row for ABIEALB/);
+
+    // Delete confirmed row ('3' has positive ID 3)
+    mounted.actions().selectRow('3'); client.flush();
+    mounted.actions().setDeleteConfirm('3'); client.flush();
+    await mounted.actions().confirmDeleteRow(); client.flush();
+    assert.equal(crudCalls.delete.length, 1);
+    assert.equal(crudCalls.delete[0][1].rowId, '3');
+    assert.match(mounted.actions().statusMsg, /Deleted vegetation row/);
+
+    // List & restore deleted rows
+    await mounted.actions().loadDeletedRows(); client.flush();
+    assert.equal(mounted.actions().deletedRows.length, 1);
+    await mounted.actions().restoreDeletedRow('del-1'); client.flush();
+    assert.equal(crudCalls.restore.length, 1);
+    assert.equal(crudCalls.restore[0][1].deleteRequestId, 'del-1');
+    assert.match(mounted.actions().statusMsg, /Restored vegetation row 3/);
+    assert.ok(loads >= 4);
+  } finally {
+    global.document = prevDoc;
+    mounted.dispose();
+  }
 });

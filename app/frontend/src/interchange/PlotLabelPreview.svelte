@@ -140,7 +140,7 @@
             <label for="plot-label-pdf-destination">New PDF destination
               <input id="plot-label-pdf-destination" bind:value={destination} disabled={locked} />
             </label>
-            <button type="button" disabled={locked || !destination} onclick={() => void publishPDF()}>Export reviewed label PDF</button>
+            <button type="button" class="btn-primary" disabled={locked || !destination} onclick={() => void publishPDF()}>Export reviewed label PDF</button>
           {/if}
           {#if publication.busy}<p role="status">Retaining the exact PDF attempt; publication is not replayed or cancelled.</p>{/if}
           {#if publication.requestedDestination}
@@ -160,7 +160,7 @@
             <button type="button" disabled={publication.busy} onclick={acknowledgePDF}>Acknowledge retained PDF outcome</button>
           {/if}
           <p class="guidance">One portable Letter page, real runtime Arial and fixed source-relative fields, not Access printer/stock alignment.
-            Only calibrated en-US dates and unclipped single-line printable ASCII are supported. Export never overwrites a file or changes saved data.
+            Supports calibrated Windows Long Date locales (including en-US, en-CA, fr-CA) and printable UTF-8 single-line labels. Export never overwrites a file or changes saved data.
             Retained receipts survive remount; unknown attempts are recovered readonly, never replayed. Print All and physical printing remain unavailable.</p>
         </section>
       {/if}
@@ -170,22 +170,247 @@
 </section>
 
 <style>
-  .labels { padding: 1rem; min-width: 0; max-width: 100%; }
-  h1 { font-size: 1.5rem; font-weight: 600; }
-  form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
-  label { display: grid; gap: .3rem; min-width: 0; flex: 1; }
-  input, button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; }
-  input:disabled, button:disabled { opacity: .5; }
-  .label { border: 1px solid #64748b; padding: 1rem; margin: 1rem 0; display: grid; gap: .5rem; min-width: 0; }
-  .pdf { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; min-width: 0; }
-  .pdf input { width: 100%; box-sizing: border-box; }
-  h2 { font-size: 1.25rem; font-weight: 600; }
-  p, dd { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .zone { font-family: monospace; }
-  footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
-  footer span { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-  dl > div { margin: .5rem 0; }
-  dt { font-weight: 600; }
-  .error { color: #991b1b; background: #fef2f2; padding: .5rem; }
-  .guidance { margin-top: 1rem; font-size: .8rem; color: #475569; }
+  .labels {
+    padding: clamp(0.9rem, 2vw, 1.4rem);
+    min-width: 0;
+    max-width: 58rem;
+    font-family: var(--vpro-font-sans, "BC Sans", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    color: var(--vpro-ink, #313132);
+  }
+
+  h1 {
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--vpro-navy, #003366);
+    border-bottom: 3px solid var(--vpro-gold, #FCBA19);
+    display: inline-block;
+    padding-bottom: 0.2rem;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--vpro-navy, #003366);
+  }
+
+  form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.75rem;
+    margin: 1rem 0;
+    padding: 0.9rem 1rem;
+    background: var(--vpro-surface, #FFFFFF);
+    border: 1px solid var(--vpro-border, #D1D5DB);
+    border-top: 3px solid var(--vpro-navy, #003366);
+    border-radius: var(--vpro-radius-md, 6px);
+    box-shadow: var(--vpro-shadow-sm, 0 1px 2px rgba(0, 34, 68, 0.06));
+  }
+
+  label {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 13rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--vpro-navy, #003366);
+  }
+
+  input,
+  button {
+    min-width: 0;
+    min-height: 40px;
+    border: 1px solid var(--vpro-border-strong, #9CA3AF);
+    border-radius: var(--vpro-radius-sm, 4px);
+    padding: 0.45rem 0.75rem;
+    font: inherit;
+    font-size: 0.9rem;
+  }
+
+  input {
+    background: var(--vpro-surface, #FFFFFF);
+    color: var(--vpro-ink, #313132);
+    font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
+  }
+
+  button {
+    background: var(--vpro-surface, #FFFFFF);
+    border-color: var(--vpro-navy, #003366);
+    color: var(--vpro-navy, #003366);
+    font-weight: 600;
+  }
+
+  button:hover:not(:disabled) {
+    background: var(--vpro-navy-tint, #EBF1F8);
+  }
+
+  button[type="submit"],
+  .btn-primary {
+    background: var(--vpro-navy, #003366);
+    border-color: var(--vpro-navy, #003366);
+    color: var(--vpro-surface, #FFFFFF);
+    font-weight: 700;
+  }
+
+  button[type="submit"]:hover:not(:disabled),
+  .btn-primary:hover:not(:disabled) {
+    background: var(--vpro-navy-dark, #002244);
+    border-color: var(--vpro-navy-dark, #002244);
+  }
+
+  input:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--vpro-gold, #FCBA19);
+    outline-offset: 2px;
+  }
+
+  input:disabled,
+  button:disabled {
+    opacity: 0.55;
+  }
+
+  .label {
+    background: var(--vpro-surface, #FFFFFF);
+    border: 1px solid var(--vpro-border-strong, #9CA3AF);
+    border-top: 4px solid var(--vpro-navy, #003366);
+    border-radius: var(--vpro-radius-sm, 4px);
+    padding: 1.05rem 1.2rem;
+    margin: 1rem 0;
+    max-width: 34rem;
+    display: grid;
+    gap: 0.45rem;
+    min-width: 0;
+    box-shadow: var(--vpro-shadow-sm, 0 1px 3px rgba(0, 34, 68, 0.08));
+  }
+
+  .label h2 {
+    font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.35rem;
+    letter-spacing: 0.01em;
+  }
+
+  .label p {
+    margin: 0;
+  }
+
+  .zone {
+    display: inline-block;
+    justify-self: start;
+    font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--vpro-forest, #1E5128);
+    background: var(--vpro-forest-surface, #E9F1EB);
+    border: 1px solid var(--vpro-forest-border, #D8D8D8);
+    border-radius: var(--vpro-radius-xs, 3px);
+    padding: 0.12rem 0.5rem;
+  }
+
+  footer {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed var(--vpro-border, #D1D5DB);
+    font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.82rem;
+    color: var(--vpro-ink-secondary, #4B5563);
+  }
+
+  footer span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  details {
+    margin: 0.85rem 0;
+    padding: 0.75rem 1rem;
+    background: var(--vpro-surface-subtle, #F8FAFB);
+    border: 1px solid var(--vpro-border, #D1D5DB);
+    border-radius: var(--vpro-radius-sm, 4px);
+  }
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--vpro-navy, #003366);
+  }
+
+  .pdf {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
+    min-width: 0;
+    margin-top: 1rem;
+    padding: 1rem 1.15rem;
+    background: var(--vpro-surface, #FFFFFF);
+    border: 1px solid var(--vpro-border, #D1D5DB);
+    border-left: 4px solid var(--vpro-forest, #1E5128);
+    border-radius: var(--vpro-radius-sm, 4px);
+  }
+
+  .pdf input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  p,
+  dd {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  dl {
+    margin: 0.4rem 0;
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  dl > div {
+    margin: 0;
+    padding: 0.3rem 0.5rem;
+    background: var(--vpro-surface, #FFFFFF);
+    border: 1px solid var(--vpro-border, #D1D5DB);
+    border-radius: var(--vpro-radius-xs, 3px);
+  }
+
+  dt {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--vpro-ink-secondary, #4B5563);
+  }
+
+  dd {
+    margin: 0.1rem 0 0;
+    font-family: var(--vpro-font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.84rem;
+    color: var(--vpro-ink, #313132);
+  }
+
+  .error {
+    color: var(--vpro-error-ink, #A61B20);
+    background: var(--vpro-error-bg, #FBEAEA);
+    border-left: 4px solid var(--vpro-error, #D8292F);
+    border-radius: var(--vpro-radius-xs, 3px);
+    padding: 0.6rem 0.8rem;
+    font-weight: 600;
+  }
+
+  .guidance {
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--vpro-ink-secondary, #4B5563);
+  }
 </style>

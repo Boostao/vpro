@@ -18,8 +18,8 @@ export function validatePlotLabelPDFReview(value: PlotLabelPDFExportReview | nul
     throw new Error('Label PDF review has a foreign/incomplete owner, layout or approval; no partial export allowed.');
   }
   const native = validatePlotLabelRegionalPreview(value.preview, scope.contextId, plot);
-  if (native.evidence.locale !== 'en-US' || native.evidence.pattern !== 'dddd, MMMM d, yyyy') {
-    throw new Error('Label PDF review is outside the calibrated regional profile.');
+  if (!native.evidence.locale.trim() || !native.evidence.pattern.trim() || !native.labelDate.trim()) {
+    throw new Error('Label PDF review requires non-blank Windows Long Date locale, pattern, and formatted date.');
   }
   return value;
 }

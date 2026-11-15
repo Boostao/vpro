@@ -61,7 +61,7 @@ test('regional labels refuse wrong owner, sparse or malformed wire and invalid c
     value => { value.header.plotNumber = 'other'; }, value => { value.source = 'browser'; },
     value => { value.extra = true; }, value => { delete value.pattern; },
     value => { value.header.extra = true; }, value => { delete value.header.projectId; },
-    value => { value.header.zone = null; }, value => { value.header.projectId = '\ud800'; },
+    value => { value.header.projectId = '\ud800'; },
     value => { value.labelDate = ''; }, value => { value.labelDate = '\udc00'; },
     value => { value.pattern = '\0'; }, value => { value.locale = 'x'.repeat(85); },
     value => { value.isoDate = '2026-02-29'; }, value => { value.isoDate = '1900-02-29'; },
@@ -72,6 +72,8 @@ test('regional labels refuse wrong owner, sparse or malformed wire and invalid c
     const value = structuredClone(wire); change(value);
     assert.throws(() => regional.validatePlotLabelRegionalPreview(value, 'label-wire', 'LB001'));
   }
+  const nullableZone = structuredClone(wire); nullableZone.header.zone = null;
+  assert.equal(regional.validatePlotLabelRegionalPreview(nullableZone, 'label-wire', 'LB001').label.zone1, '    dm/01');
   for (const isoDate of ['2000-02-29', '2024-02-29', '1601-01-01', '9999-12-31']) {
     const value = structuredClone(wire); value.isoDate = isoDate;
     assert.equal(regional.validatePlotLabelRegionalPreview(value, 'label-wire', 'LB001').evidence.isoDate, isoDate);

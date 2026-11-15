@@ -126,14 +126,15 @@
 </section>
 
 <style>
-  h3 { font-weight: 600; }
-  .failure { color: #b91c1c; }
+  h3 { font-weight: 600; color: #003366; }
+  .failure { color: #D8292F; }
   .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
-  button { border: 1px solid #94a3b8; border-radius: .35rem; padding: .5rem .75rem; margin: .25rem; overflow-wrap: anywhere; }
+  button { border: 1px solid #9F9F9F; border-radius: .35rem; padding: .5rem .75rem; margin: .25rem; overflow-wrap: anywhere; color: #003366; background: #FFFFFF; font-weight: 600; }
   button:disabled { opacity: .5; }
-  fieldset { border: 1px solid #cbd5e1; padding: .75rem; min-width: 0; }
-  .table-scroll { overflow-x: auto; }
+  fieldset { border: 1px solid #D8D8D8; padding: .75rem; min-width: 0; }
+  .table-scroll { max-width: 100%; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-  th, td { border: 1px solid #cbd5e1; padding: .5rem; text-align: left; overflow-wrap: anywhere; }
+  th, td { border: 1px solid #D8D8D8; padding: .5rem; text-align: left; overflow-wrap: anywhere; }
+  th { background: #F2F2F2; color: #003366; }
   td { min-width: 8rem; }
 </style>

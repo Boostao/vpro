@@ -80,10 +80,10 @@
   {/if}
 {/snippet}
 <style>
-  input { border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; }
-  input:disabled { color: #78716c; background: #f5f5f4; }
-  input:focus { outline: 2px solid #047857; outline-offset: 1px; }
-  input[aria-invalid="true"] { border-color: #b91c1c; }
+  input { border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; }
+  input:disabled { color: #606060; background: #F2F2F2; }
+  input:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  input[aria-invalid="true"] { border-color: #D8292F; }
   .drainage-toolbar { font-size: .75rem; }
-  p[role="alert"] { color: #b91c1c; }
+  p[role="alert"] { color: #D8292F; }
 </style>

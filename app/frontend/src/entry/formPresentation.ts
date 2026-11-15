@@ -12,7 +12,7 @@ const groups: Record<string, readonly Group[]> = {
     { title: 'Site conditions and stand', fields: ['MoistureRegime', 'NutrientRegime', 'SuccessionalStatus', 'StructuralStage', 'StandAge'] },
     { title: 'Topography', fields: ['Elevation', 'SlopeGradient', 'Aspect', 'MesoSlopePosition', 'SurfaceShape', 'SurfaceTopographyType', 'SurfaceTopographySize'] },
     { title: 'Data quality', fields: ['SitePlotQuality', 'VegPlotQuality', 'SoilPlotQuality'] },
-    { title: 'Substrate (%)', fields: ['SubstrateOrganicMatter', 'SubstrateRocks', 'SubstrateDecWood', 'SubstrateMineralSoil', 'SubstrateBedRock', 'SubstrateWater'] },
+    { title: 'Substrate (%)', fields: ['SubstrateOrganicMatter', 'SubstrateDecWood', 'SubstrateBedRock', 'SubstrateRocks', 'SubstrateMineralSoil', 'SubstrateWater'] },
     { title: 'Disturbance and exposure', fields: ['SiteDisturbance1', 'SiteDisturbance2', 'SiteDisturbance3', 'Exposure1', 'Exposure2'] },
     { title: 'Site diagram and pictures', fields: ['frmVPics', 'btnManagePictures', 'Photo'] },
     { title: 'Entry and source actions', fields: ['EnteredBy', 'UpdatedFromCards', 'Toggle408', 'Toggle409'] },
@@ -121,6 +121,130 @@ export function presentationGroups(name: string, controls: PaperControl[]) {
   if (remaining.size) result.push({ title: 'Additional source fields and actions', controls: [...remaining].sort((a, b) => a.tabOrder - b.tabOrder) });
   return result;
 }
+export type CardZone = 'top-band' | 'quad-left' | 'quad-right' | 'full';
+
+const unmigratedControlNames = new Set([
+  'Option477', 'Option479', 'Option304', 'Option306', 'Option290', 'Option292',
+  'Toggle408', 'Toggle409', 'Toggle196', 'Toggle197', 'AddSpp', 'btnAllowSmallEntry'
+]);
+
+const migratedButtonNames = new Set([
+  'btnCoverAndHeight', 'btnCheckSppCodes', 'btnFindPlot',
+  'btnLoadMetadata', 'btnCoptToWorkingUnit', 'btnCopyToUserSU'
+]);
+
+export function isUnmigratedStubControl(control: PaperControl): boolean {
+  const name = control.controlName ?? '';
+  if (unmigratedControlNames.has(name)) return true;
+  if (control.type === 'CommandButton' || control.type === 'ToggleButton') {
+    return !migratedButtonNames.has(name);
+  }
+  return false;
+}
+
+export function groupCardZone(pageName: string, groupTitle: string): CardZone {
+  if (pageName === 'Site' || pageName === 'Site/Veg') {
+    if (groupTitle === 'Identity and survey' || groupTitle === 'Project') return 'top-band';
+    if (groupTitle === 'Location' || groupTitle === 'Coordinate display' || groupTitle === 'Vegetation survey') return 'quad-left';
+    if (
+      groupTitle === 'BEC Master and Working Unit' ||
+      groupTitle === 'Site classification' ||
+      groupTitle === 'Site conditions and stand' ||
+      groupTitle === 'Stratum cover (%)'
+    ) {
+      return 'quad-right';
+    }
+    return 'full';
+  }
+  if (pageName === 'Soil/Terrain') {
+    if (groupTitle === 'Survey' || groupTitle === 'Geology') return 'top-band';
+    if (groupTitle === 'Surface terrain' || groupTitle === 'Subsurface terrain') return 'full';
+    if (groupTitle === 'Soil classification' || groupTitle === 'Humus form') return 'quad-left';
+    if (
+      groupTitle === 'Hydrogeology' ||
+      groupTitle === 'Rooting and restricting layer' ||
+      groupTitle === 'Water and drainage'
+    ) {
+      return 'quad-right';
+    }
+    return 'full';
+  }
+  if (pageName === 'Vegetation') {
+    if (groupTitle === 'Vegetation survey') return 'quad-left';
+    if (groupTitle === 'Stratum cover (%)') return 'quad-right';
+    return 'full';
+  }
+  return 'full';
+}
+
+export function controlColumnSpan(pageName: string, groupTitle: string, control: PaperControl): number {
+  if (control.type === 'Subform') return 12;
+  const col = control.column ?? '';
+  const name = control.controlName ?? '';
+
+  if (groupTitle === 'Substrate (%)') return 2;
+  if (groupTitle === 'Surface terrain' || groupTitle === 'Subsurface terrain') return 3;
+  if (groupTitle === 'Field and office notes') return 6;
+  if (col === 'SoilNotes' || col === 'VegNotes') return 12;
+  if (groupTitle === 'Geology') return 4;
+  if (groupTitle === 'Topography') return 2;
+  if (groupTitle === 'Data quality') return 4;
+
+  if (groupTitle === 'Identity and survey') {
+    if (col === 'PlotNumber' || col === 'Date' || col === 'SiteSurveyor' || col === 'FieldNumber') return 3;
+    return 4;
+  }
+  if (groupTitle === 'Project') {
+    if (name === 'btnLoadMetadata') return 12;
+    return 6;
+  }
+  if (groupTitle === 'Location') {
+    if (col === 'Location') return 12;
+    if (col === 'FSRegionDistrict' || col === 'Ecosection') return 6;
+    return 4;
+  }
+  if (groupTitle === 'Coordinate display') {
+    if (name === 'Check369' || name === 'Check371' || name === 'Check373') return 4;
+    if (col === 'Latitude' || col === 'Longitude' || name === 'Latitude' || name === 'Longitude') return 6;
+    if (name === 'LatD2' || name === 'LatMD' || name === 'LonD2' || name === 'LonMD') return 3;
+    if (name === 'LatD' || name === 'LatM' || name === 'LatS' || name === 'LonD' || name === 'LonM' || name === 'LonS') return 4;
+    return 4;
+  }
+  if (groupTitle === 'BEC Master and Working Unit') {
+    if (col === 'BECSiteUnit' || col === 'UserSiteUnit') return 6;
+    if (col === 'SiteUnitLongName') return 12;
+    if (name === 'btnCoptToWorkingUnit' || name === 'btnCopyToUserSU') return 6;
+    return 4;
+  }
+  if (groupTitle === 'Site classification') {
+    if (col === 'PlotRepresenting') return 12;
+    return 4;
+  }
+  if (groupTitle === 'Site conditions and stand') {
+    if (col === 'MoistureRegime' || col === 'NutrientRegime') return 6;
+    if (col === 'SV_CanopyComposition') return 12;
+    return 4;
+  }
+  if (groupTitle === 'Disturbance and exposure') {
+    if (col === 'Exposure1' || col === 'Exposure2') return 3;
+    return 2;
+  }
+  if (groupTitle === 'Survey') return 6;
+  if (groupTitle === 'Soil classification') return 6;
+  if (groupTitle === 'Humus form') return 4;
+  if (groupTitle === 'Hydrogeology') return 6;
+  if (groupTitle === 'Rooting and restricting layer') return 6;
+  if (groupTitle === 'Water and drainage') return 4;
+  if (groupTitle === 'Vegetation survey') return 4;
+  if (groupTitle === 'Stratum cover (%)') {
+    if (pageName === 'Site/Veg') return col === 'StrataCoverTotal' ? 4 : 2;
+    return 3;
+  }
+  if (groupTitle === 'Vegetation actions') return 4;
+
+  return wideControl(control) ? 12 : 3;
+}
+
 export function wideControl(control: PaperControl): boolean {
   return control.type === 'Subform' || ['Location', 'PlotRepresenting', 'SiteNotes', 'OfficeNotes', 'SoilNotes', 'VegNotes'].includes(control.column ?? '');
 }

@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { FS882Header, ListItem } from '../../bindings/github.com/boostao/vpro/app';
   import { paperPage, type PaperControl } from './paperLayout';
-  import { controlLabel, presentationGroups, wideControl } from './formPresentation';
+  import { controlColumnSpan, controlLabel, groupCardZone, isUnmigratedStubControl, presentationGroups, wideControl } from './formPresentation';
   import CoordinateFields from './CoordinateFields.svelte';
   import BECFields from './BECFields.svelte';
   import WorkingUnitFields from './WorkingUnitFields.svelte';
@@ -12,7 +12,7 @@
   import { siteCodeKey, type SiteCodes } from './siteCodeEditor';
   import RegionCodeFields from './RegionCodeFields.svelte';
   import { regionCodeKey, type RegionCodes } from './regionCodeEditor';
-  import { substrateKey, type SubstrateValues } from './substrateEditor';
+  import { substrateKey, substrateKeys, type SubstrateValues } from './substrateEditor';
   import { qualityKey, type QualityCodes } from './qualityEditor';
   import { becKey, type BECCodes } from './becEditor';
   import { isWorkingUnitControl, type WorkingUnitCodes, type WorkingUnitSession } from './workingUnitEditor';
@@ -26,7 +26,7 @@
     { key: NumberKey; label: string; kind: 'number'; step?: string };
 
   type HeaderSlot = { columns: readonly string[]; controls: readonly string[]; input: Snippet<[PaperControl, string]>; labelled: true };
-  let { draft = $bindable(), original, capabilities, disabled, existing, lists, onchange, onerror, onvalidation, onCoordinateBusyChange, onWorkingUnitBusyChange, onQualityBusyChange, onSiteCodeBusyChange, onRegionCodeBusyChange, workingUnitSession, masterAllowed = false, extendedShrubs = false, snowCoverRegime = '', activeLayerDepth = '', snowCoverRegimeError = null, activeLayerDepthError = null, onSnowCoverRegimeChange, onActiveLayerDepthChange, editor, additionalEditor, onMetadata, metadataDisabled = true, pictureEditor, sourcePage, coordinateMode = $bindable<CoordinateDisplayMode>('dd'), children: layoutContent }: {
+  let { draft = $bindable(), original, capabilities, disabled, existing, lists, onchange, onerror, onvalidation, onCoordinateBusyChange, onWorkingUnitBusyChange, onQualityBusyChange, onSiteCodeBusyChange, onRegionCodeBusyChange, workingUnitSession, masterAllowed = false, extendedShrubs = false, snowCoverRegime = '', activeLayerDepth = '', snowCoverRegimeDisabled, activeLayerDepthDisabled, snowCoverRegimeError = null, activeLayerDepthError = null, onSnowCoverRegimeChange, onActiveLayerDepthChange, editor, additionalEditor, onMetadata, metadataDisabled = true, onOpenPictureManager, projectIds = [], pictureEditor, sourcePage, coordinateMode = $bindable<CoordinateDisplayMode>('dd'), children: layoutContent }: {
     draft: FS882Header;
     original: (BECCodes & WorkingUnitCodes & QualityCodes & SubstrateValues & SiteCodes & RegionCodes) | null;
     capabilities: Record<string, boolean | undefined>;
@@ -40,6 +40,8 @@
     extendedShrubs?: boolean;
     snowCoverRegime?: string;
     activeLayerDepth?: string;
+    snowCoverRegimeDisabled?: boolean;
+    activeLayerDepthDisabled?: boolean;
     snowCoverRegimeError?: string | null;
     activeLayerDepthError?: string | null;
     onSnowCoverRegimeChange?: (value: string) => void;
@@ -54,14 +56,30 @@
     additionalEditor?: { columns: readonly string[]; input: Snippet<[PaperControl, string]> };
     onMetadata?: () => void;
     metadataDisabled?: boolean;
+    onOpenPictureManager?: (plotNumber: string) => void;
+    projectIds?: readonly string[];
     pictureEditor?: Snippet;
     sourcePage?: ReturnType<typeof paperPage>;
     coordinateMode?: CoordinateDisplayMode;
     children?: Snippet<[HeaderSlot, CoordinateDisplayMode]>;
   } = $props();
 
+  const pageName = $derived(sourcePage ? 'Site/Veg' : 'Site');
   const page = $derived(sourcePage ?? paperPage('Site', 'initial', coordinateMode));
-  const groups = $derived(presentationGroups(sourcePage ? 'Site/Veg' : 'Site', page.controls));
+  const groups = $derived(presentationGroups(pageName, page.controls));
+  const headerSubstrateTotalText = $derived.by(() => {
+    let sum = 0;
+    let count = 0;
+    for (const key of substrateKeys) {
+      const val = draft[key];
+      if (typeof val === 'number' && Number.isFinite(val)) {
+        sum += val;
+        count++;
+      }
+    }
+    if (count === 0) return 'Total: — / 100%';
+    return `Total: ${Math.round(sum * 100) / 100}% / 100%`;
+  });
 
   const sections: { title: string; fields: Field[] }[] = [
     { title: 'Identity and survey', fields: [
@@ -207,9 +225,18 @@
     onvalidation(key, null);
     onchange();
   }
+
+  function attachSuContextMenu(node: HTMLElement) {
+    function onContextMenu(event: MouseEvent) {
+      event.preventDefault();
+      const copyBtn = node.closest('.responsive-form')?.querySelector<HTMLButtonElement>('[data-source-control="btnCoptToWorkingUnit"]');
+      if (copyBtn && !copyBtn.disabled) copyBtn.click();
+    }
+    node.addEventListener('contextmenu', onContextMenu);
+    return { destroy() { node.removeEventListener('contextmenu', onContextMenu); } };
+  }
 </script>
 
-<p class="form-status">Verified workflows are editable. Grey fields and actions remain unavailable.</p>
 <WorkingUnitFields bind:draft {original} controls={ordered} {position} {capabilities} {disabled}
   {onchange} {onerror} {onvalidation} {masterAllowed} onbusy={onWorkingUnitBusyChange} session={workingUnitSession}>
 {#snippet children(workingUnitInputs)}
@@ -239,7 +266,13 @@
         {#if isCoordinateControl(control.controlName)}
           {@render coordinateInputs(control)}
         {:else if isWorkingUnitControl(control.controlName)}
-          {@render workingUnitInputs(control)}
+          {#if control.controlName === 'UserSiteUnit' || control.controlName === 'BECSiteUnit'}
+            <span class="su-context-wrap" use:attachSuContextMenu title="Right-click to copy BEC Master Site Unit to Working Unit">
+              {@render workingUnitInputs(control)}
+            </span>
+          {:else}
+            {@render workingUnitInputs(control)}
+          {/if}
         {:else if becKey(control.column)}
           {@render becInputs(control)}
         {:else if qualityKey(control.column)}
@@ -255,14 +288,14 @@
         {:else if editor && control.column && editor.columns.includes(control.column)}
           {@render editor.input(control, position(control))}
         {:else if control.column === 'PlotNumber'}
-          <input class="paper-control" id="header-plotNumber" data-column={control.column} data-source-control={control.controlName} aria-label="Plot number"
+          <input class="paper-control plot-number-control" id="header-plotNumber" data-column={control.column} data-source-control={control.controlName} aria-label="Plot number"
             title={existing ? 'Existing plot identities cannot be renamed here' : 'Plot number'}
             value={draft.plotNumber} readonly={existing} disabled={unavailable || capabilities.plotNumber !== true}
             data-help-id="site.plot_number"
             oninput={(event) => { draft.plotNumber = event.currentTarget.value; onchange(); }} />
         {:else if field}
           {#if field.kind === 'number'}
-            <input class="paper-control" id={`header-${field.key}`} data-column={control.column} data-source-control={control.controlName} aria-label={field.label}
+            <input class="paper-control numeric-control" id={`header-${field.key}`} data-column={control.column} data-source-control={control.controlName} aria-label={field.label}
               type="number" step={field.step ?? '1'} value={draft[field.key] ?? ''}
               disabled={unavailable || capabilities[field.key] !== true}
               data-help-id={headerHelpId(control.column, control.controlName)}
@@ -287,15 +320,30 @@
             </select>
           {:else}
             <input class="paper-control" id={`header-${field.key}`} data-column={control.column} data-source-control={control.controlName} aria-label={field.label}
+              list={field.key === 'projectId' && projectIds.length ? 'header-projectId-options' : undefined}
               value={draft[field.key] ?? ''} disabled={unavailable || capabilities[field.key] !== true}
               data-help-id={headerHelpId(control.column, control.controlName)}
               oninput={(event) => setText(field.key, event.currentTarget.value)} />
+            {#if field.key === 'projectId' && projectIds.length}
+              <datalist id="header-projectId-options">
+                {#each projectIds as pid (pid)}
+                  <option value={pid}></option>
+                {/each}
+              </datalist>
+            {/if}
           {/if}
         {:else if control.type === 'CommandButton' || control.type === 'ToggleButton'}
           {#if control.controlName === 'btnLoadMetadata' && onMetadata}
-            <button class="paper-control" data-source-control={control.controlName} disabled={metadataDisabled} onclick={onMetadata}>{controlLabel(control)}</button>
+            <button type="button" class="paper-control" data-source-control={control.controlName} disabled={metadataDisabled} onclick={onMetadata}>{controlLabel(control)}</button>
+          {:else if control.controlName === 'btnManagePictures' && onOpenPictureManager}
+            <button type="button" class="paper-control" data-source-control={control.controlName}
+              disabled={!draft.plotNumber.trim()}
+              title={draft.plotNumber.trim() ? `Manage pictures for plot ${draft.plotNumber.trim()}` : 'Select or enter a Plot Number first'}
+              onclick={() => { if (draft.plotNumber.trim()) onOpenPictureManager(draft.plotNumber.trim()); }}>{controlLabel(control)}</button>
+          {:else if control.controlName === 'Toggle408' || control.controlName === 'Toggle409'}
+            <button type="button" class="paper-control pending" data-source-control={control.controlName} disabled title="Legacy Access paper-form display toggle (not used in VPro 2.0 web layout)">{controlLabel(control)}</button>
           {:else}
-            <button class="paper-control pending" data-source-control={control.controlName} disabled title="Workflow not yet migrated">{controlLabel(control)}</button>
+            <button type="button" class="paper-control pending" data-source-control={control.controlName} disabled title="Legacy Access paper-form action; use the corresponding VPro 2.0 workflow">{controlLabel(control)}</button>
           {/if}
         {:else if control.type === 'CheckBox' || control.type === 'OptionButton'}
           <input class="paper-control pending" id={inputId(control)} data-column={control.column} data-source-control={control.controlName} type={control.type === 'OptionButton' ? 'radio' : 'checkbox'} checked={stored === true} disabled aria-label={controlLabel(control)} />
@@ -303,10 +351,10 @@
           {#if pictureEditor && control.controlName === 'frmVPics' && control.properties.SourceObject?.value === 'Form.frmVPicsXL'}
             <div class="embedded" data-source-control={control.controlName}>{@render pictureEditor()}</div>
           {:else}
-          <div class="pending embedded" data-source-control={control.controlName} title="Embedded workflow not yet migrated">Pictures: pending</div>
+          <div class="pending embedded" data-source-control={control.controlName} title="Pictures subform is managed via Pictures tab or Picture Manager">Pictures panel</div>
           {/if}
         {:else if control.type === 'TextBox' || control.type === 'ComboBox'}
-          <input class="paper-control pending" id={inputId(control)} data-column={control.column} data-source-control={control.controlName} disabled value={typeof stored === 'string' || typeof stored === 'number' ? stored : ''} placeholder={stored !== undefined ? '' : 'Pending'} title={`${controlLabel(control)}: workflow not yet verified`} aria-label={controlLabel(control)} />
+          <input class="paper-control pending" id={inputId(control)} data-column={control.column} data-source-control={control.controlName} disabled value={typeof stored === 'string' || typeof stored === 'number' ? stored : ''} placeholder={stored !== undefined ? '' : 'Legacy field'} title={`${controlLabel(control)}: read-only legacy Access field`} aria-label={controlLabel(control)} />
         {/if}
 {/snippet}
 {#snippet input(control: PaperControl, _position: string)}
@@ -315,14 +363,22 @@
 {#if layoutContent}
   {@render layoutContent({ columns: ownedColumns, controls: ownedControls, input, labelled: true }, coordinateMode)}
 {:else}
-<div class="responsive-form header-editor" data-source-page={sourcePage ? 'Site/Veg' : 'Site'}>
+<div class="responsive-form header-editor" data-source-page={pageName}>
   {#each groups as group (group.title)}
-    <fieldset class="form-group">
+    {@const allStubs = group.controls.length > 0 && group.controls.every(control => isUnmigratedStubControl(control))}
+    <fieldset class="form-group" class:unmigrated-group={allStubs} data-card-zone={groupCardZone(pageName, group.title)} data-group-title={group.title}>
       <legend>{group.title}</legend>
+      {#if group.title === 'Substrate (%)'}
+        <div class="group-meta-bar">
+          <span class="group-total-badge tabular-nums" data-substrate-total data-header-substrate-total>{headerSubstrateTotalText}</span>
+        </div>
+      {/if}
       <div class="field-grid">
       {#each group.controls as control (control.controlId)}
         {@const action = control.type === 'CommandButton' || control.type === 'ToggleButton' || control.type === 'Subform'}
-        <div class="form-field" class:full-width={wideControl(control)} class:action-field={action} data-help-id={action ? undefined : headerHelpId(control.column, control.controlName)}>
+        {@const span = controlColumnSpan(pageName, group.title, control)}
+        {@const stub = isUnmigratedStubControl(control)}
+        <div class="form-field" class:full-width={wideControl(control)} class:action-field={action} class:unmigrated-source-stub={stub} data-col-span={span} data-help-id={action ? undefined : headerHelpId(control.column, control.controlName)}>
         {@render fieldInput(control)}
         </div>
       {/each}
@@ -330,23 +386,23 @@
     </fieldset>
   {/each}
   {#if extendedShrubs}
-    <fieldset class="form-group" data-extended-arctic-fields data-help-id="site.realm_class">
+    <fieldset class="form-group" data-card-zone="full" data-extended-arctic-fields data-help-id="site.realm_class">
       <legend>Arctic / extended site fields</legend>
       <div class="field-grid">
-        <div class="form-field" data-help-id="site.realm_class">
+        <div class="form-field" data-col-span={6} data-help-id="site.realm_class">
           <label class="field-label" for="header-snowCoverregime">Snow cover regime</label>
           <input class="paper-control" id="header-snowCoverregime" data-column="SnowCoverregime" type="text"
-            value={snowCoverRegime} disabled={disabled || capabilities.snowCoverRegime !== true || !onSnowCoverRegimeChange}
+            value={snowCoverRegime} disabled={(snowCoverRegimeDisabled ?? disabled) || capabilities.snowCoverRegime !== true || !onSnowCoverRegimeChange}
             aria-invalid={snowCoverRegimeError ? 'true' : undefined}
             title={onSnowCoverRegimeChange ? 'SnowCoverregime' : 'Use Complete two-page entry or SIVI parent editor to save SnowCoverregime'}
             data-help-id="site.realm_class"
             oninput={(event) => onSnowCoverRegimeChange?.(event.currentTarget.value)} />
           {#if snowCoverRegimeError}<p role="alert" class="text-xs text-red-700 mt-1">{snowCoverRegimeError}</p>{/if}
         </div>
-        <div class="form-field" data-help-id="site.realm_class">
+        <div class="form-field" data-col-span={6} data-help-id="site.realm_class">
           <label class="field-label" for="header-activeLayerDepth">Active layer depth (cm)</label>
-          <input class="paper-control" id="header-activeLayerDepth" data-column="ActiveLayerDepth" type="text" inputmode="decimal"
-            value={activeLayerDepth} disabled={disabled || capabilities.activeLayerDepth !== true || !onActiveLayerDepthChange}
+          <input class="paper-control numeric-control" id="header-activeLayerDepth" data-column="ActiveLayerDepth" type="text" inputmode="decimal"
+            value={activeLayerDepth} disabled={(activeLayerDepthDisabled ?? disabled) || capabilities.activeLayerDepth !== true || !onActiveLayerDepthChange}
             aria-invalid={activeLayerDepthError ? 'true' : undefined}
             title={onActiveLayerDepthChange ? 'ActiveLayerDepth' : 'Use Complete two-page entry or Two-page additional fields to save ActiveLayerDepth'}
             data-help-id="site.realm_class"
@@ -374,9 +430,33 @@
 </WorkingUnitFields>
 
 <style>
-  .paper-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; line-height: 1.4; }
-  .paper-control:focus { outline: 2px solid #047857; outline-offset: 1px; }
-  .paper-control:disabled { color: #78716c; background: #f5f5f4; }
+  .su-context-wrap { display: contents; }
+  .responsive-form { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .85rem; align-items: start; grid-auto-flow: row dense; }
+  .form-group { grid-column: 1 / -1; margin: 0; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); background: var(--vpro-surface, #ffffff); }
+  .form-group :global(legend) { color: var(--vpro-navy, #003366); }
+  .group-meta-bar { display: flex; justify-content: flex-end; margin: 0 0 .45rem; }
+  .group-total-badge { display: inline-flex; align-items: center; padding: .15rem .55rem; border-radius: 999px; border: 1px solid var(--vpro-border, #d1d5db); background: var(--vpro-navy-tint, #ebf1f8); color: var(--vpro-navy, #003366); font-family: var(--vpro-font-mono, monospace); font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .unmigrated-source-stub, .unmigrated-group { display: none; }
+  .paper-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid var(--vpro-forest-border, #D8D8D8); border-radius: 4px; padding: .5rem .65rem; background: var(--vpro-surface, white); color: var(--vpro-ink, #313132); font: inherit; line-height: 1.4; }
+  .plot-number-control { font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .numeric-control { font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; }
+  .paper-control:focus { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
+  .paper-control:disabled { color: var(--vpro-ink-muted, #5f6b7a); background: var(--vpro-surface-subtle, #f8fafb); }
   .pending { opacity: .65; }
   .embedded { display: flex; align-items: center; justify-content: center; }
+  @container fs882-fields (min-width: 960px) {
+    .form-group[data-card-zone="quad-left"] { grid-column: 1 / 7; }
+    .form-group[data-card-zone="quad-right"] { grid-column: 7 / 13; }
+    .form-group[data-card-zone="top-band"] { grid-column: span 6; }
+    .form-group[data-group-title="Identity and survey"] { grid-column: 1 / 9; }
+    .form-group[data-group-title="Project"] { grid-column: 9 / 13; }
+    .form-group[data-card-zone="full"] { grid-column: 1 / -1; }
+  }
+  @container fs882-fields (min-width: 901px) {
+    .form-field[data-col-span="2"] { grid-column: span 2; }
+    .form-field[data-col-span="3"] { grid-column: span 3; }
+    .form-field[data-col-span="4"] { grid-column: span 4; }
+    .form-field[data-col-span="6"] { grid-column: span 6; }
+    .form-field[data-col-span="12"] { grid-column: 1 / -1; }
+  }
 </style>

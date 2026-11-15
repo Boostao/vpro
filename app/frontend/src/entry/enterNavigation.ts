@@ -8,7 +8,8 @@ export interface EnterPosition {
 }
 
 export const sourceNextRecordForms: ReadonlySet<string> = new Set([
-  'SubVegAXL_BC', 'SubVegAXL', 'SubVegCXL', 'SubVegDXL', 'SoilHumusXL', 'SoilMineralXL',
+  'SubVegAXL_BC', 'SubVegAXL', 'SubVegAhtXL', 'SubVegCXL', 'SubVegChtXL',
+  'SubVegDXL', 'SubOtherXL', 'SubOther', 'SoilHumusXL', 'SoilMineralXL',
 ]);
 
 export function enterNavigationMode(form: string | null): 'field' | 'record' | null {
@@ -41,8 +42,11 @@ function entryControl(element: Element): element is HTMLInputElement | HTMLSelec
 export function navigateSourceEnter(event: KeyboardEvent, root: HTMLElement): void {
   const source = event.target;
   if (event.key !== 'Enter' || event.defaultPrevented || event.isComposing || event.repeat ||
-      event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !(source instanceof HTMLInputElement) ||
-      !entryControl(source) || source.list || !root.contains(source) || document.activeElement !== source ||
+      event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
+      source instanceof HTMLTextAreaElement ||
+      !(source instanceof HTMLInputElement || source instanceof HTMLSelectElement) ||
+      !entryControl(source) ||
+      !root.contains(source) || document.activeElement !== source ||
       source.closest('dialog,[role=dialog]')) return;
   const child = source.closest<HTMLElement>('[data-source-form]');
   const area = child ?? source.closest<HTMLElement>('[data-source-page]');

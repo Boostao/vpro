@@ -245,12 +245,12 @@
   {/each}
 {/snippet}
 <style>
-  .working-unit-toolbar { display: grid; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid #d6d3d1; font-size: .75rem; }
+  .working-unit-toolbar { display: grid; gap: .3rem; padding: .5rem; margin-bottom: .5rem; border: 1px solid #D8D8D8; font-size: .75rem; }
   .working-unit-toolbar ul { margin: 0; padding-left: 1.2rem; }
-  .working-unit-toolbar button { padding: .2rem .4rem; border: 1px solid #a8a29e; background: white; }
+  .working-unit-toolbar button { padding: .2rem .4rem; border: 1px solid #D8D8D8; background: white; color: #313132; }
   .working-unit-toolbar label { display: flex; align-items: center; gap: .35rem; }
   .copy-confirmation { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
-  .working-unit-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; line-height: 1.4; }
-  .working-unit-control:disabled, .working-unit-control[readonly] { color: #78716c; background: #f5f5f4; }
-  .working-unit-control:focus { outline: 2px solid #047857; outline-offset: 1px; }
+  .working-unit-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
+  .working-unit-control:disabled, .working-unit-control[readonly] { color: #606060; background: #F2F2F2; }
+  .working-unit-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
 </style>

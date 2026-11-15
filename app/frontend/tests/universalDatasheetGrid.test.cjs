@@ -207,9 +207,39 @@ test('UniversalDatasheetGrid.svelte compiles with zero warnings, renders all 9 t
     },
   });
   assert.match(body, /Universal Project Datasheet/);
-  for (const key of grid.CANONICAL_DATASHEET_KEYS) {
+  assert.match(body, /data-tour="datasheet-grid-root"/);
+  for (const key of grid.ALL_DATASHEET_KEYS) {
     assert.match(body, new RegExp(`_${key}`));
   }
+});
+
+test('Protected columns (HumusThickness, StrataCoverTotal), Arrow navigation, and Audit/Metadata read-only guards work', () => {
+  const humusCol = {
+    name: 'HumusThickness',
+    declaredType: 'REAL',
+    kind: 'single',
+    pinned: false,
+    editable: true,
+    protected: true,
+    maxUtf16: 0,
+    isCoverSingle: false,
+    isBoolean: false,
+  };
+  assert.equal(grid.isColumnEditable('Admin', humusCol, true), false);
+  assert.notEqual(grid.parseAndValidateCellInput('Admin', humusCol, '12', true).error, '');
+  assert.equal(grid.isColumnEditable('Audit', { ...humusCol, name: 'BeforeEdit', protected: false }, true), false);
+
+  assert.equal(grid.shouldNavigateOnArrowKey('ArrowLeft', 0, 0, 5), true);
+  assert.equal(grid.shouldNavigateOnArrowKey('ArrowLeft', 2, 2, 5), false);
+  assert.equal(grid.shouldNavigateOnArrowKey('ArrowRight', 5, 5, 5), true);
+  assert.equal(grid.shouldNavigateOnArrowKey('ArrowRight', 3, 3, 5), false);
+  assert.equal(grid.shouldNavigateOnArrowKey('ArrowUp', 2, 2, 5), true);
+  assert.deepEqual(plain(grid.computeNextGridCell({ row: 1, col: 2 }, 'ArrowUp', true, 5, 5)), { row: 0, col: 2 });
+  assert.deepEqual(plain(grid.computeNextGridCell({ row: 1, col: 2 }, 'ArrowDown', true, 5, 5)), { row: 2, col: 2 });
+  assert.deepEqual(plain(grid.computeNextGridCell({ row: 1, col: 2 }, 'ArrowLeft', false, 5, 5)), { row: 1, col: 1 });
+  assert.deepEqual(plain(grid.computeNextGridCell({ row: 1, col: 2 }, 'ArrowRight', false, 5, 5)), { row: 1, col: 3 });
+  assert.equal(grid.isCellInRange(2, 1, { startRow: 3, endRow: 1, startCol: 2, endCol: 0 }), true);
+  assert.equal(grid.isCellInRange(0, 1, { startRow: 3, endRow: 1, startCol: 2, endCol: 0 }), false);
 });
 
 test('UniversalDatasheetGrid preserves statusBanner across post-commit refreshTablesAndLoad after Save and Find/Replace', async () => {

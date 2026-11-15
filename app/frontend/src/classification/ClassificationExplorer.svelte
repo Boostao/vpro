@@ -1708,11 +1708,12 @@
     color: #334155;
   }
   .vpro-cls-tree-viewport {
-    height: 480px;
+    height: min(480px, calc(100dvh - 280px));
+    min-height: 280px;
     overflow: auto;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--vpro-border, #d1d5db);
     border-radius: 4px;
-    background: #ffffff;
+    background: var(--vpro-surface, #ffffff);
   }
   .vpro-tree-folder,
   .vpro-tree-leaf,
@@ -2065,7 +2066,22 @@
     text-align: center;
     color: #64748b;
   }
+  .mono,
+  .vpro-tree-count,
+  .vpro-cls-counts,
+  .vpro-cls-spp-table td {
+    font-variant-numeric: tabular-nums;
+  }
   .mono {
-    font-family: var(--font-mono, monospace);
+    font-family: var(--vpro-font-mono, var(--font-mono, monospace));
+  }
+  @media (pointer: coarse) {
+    .vpro-cls-mode-btn,
+    .vpro-btn-primary,
+    .vpro-btn-secondary,
+    .vpro-btn-danger,
+    .vpro-cls-filter {
+      min-height: 44px;
+    }
   }
 </style>

@@ -146,10 +146,21 @@ func encodeDiagnosticWorkbookBytes(
 	}
 	sectionBannerStyle, err := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10, Color: "#003366", Family: "Calibri"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E5EBF2"}},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#EBF1F8"}},
 		Border: []excelize.Border{
-			{Type: "top", Color: "#94A3B8", Style: 1},
-			{Type: "bottom", Color: "#94A3B8", Style: 1},
+			{Type: "top", Color: "#9EC3E6", Style: 1},
+			{Type: "bottom", Color: "#9EC3E6", Style: 1},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	unitBannerStyle, err := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 10, Color: "#1E5128", Family: "Calibri"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E9F1EB"}},
+		Border: []excelize.Border{
+			{Type: "top", Color: "#B7CFC0", Style: 1},
+			{Type: "bottom", Color: "#B7CFC0", Style: 1},
 		},
 	})
 	if err != nil {
@@ -171,14 +182,14 @@ func encodeDiagnosticWorkbookBytes(
 
 	makeDiagFill := func(hexColor string, bold bool) (int, error) {
 		return f.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Bold: bold, Size: 10, Color: "#0F172A", Family: "Calibri"},
+			Font:      &excelize.Font{Bold: bold, Size: 10, Color: "#313132", Family: "Calibri"},
 			Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{hexColor}},
 			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 			Border: []excelize.Border{
-				{Type: "left", Color: "#CBD5E1", Style: 1},
-				{Type: "right", Color: "#CBD5E1", Style: 1},
-				{Type: "top", Color: "#CBD5E1", Style: 1},
-				{Type: "bottom", Color: "#CBD5E1", Style: 1},
+				{Type: "left", Color: "#D1D5DB", Style: 1},
+				{Type: "right", Color: "#D1D5DB", Style: 1},
+				{Type: "top", Color: "#D1D5DB", Style: 1},
+				{Type: "bottom", Color: "#D1D5DB", Style: 1},
 			},
 		})
 	}
@@ -188,11 +199,11 @@ func encodeDiagnosticWorkbookBytes(
 		bold bool
 	}{
 		"d_dom": {"#FCBA19", true},  // Differential + Dominant / Constant Dominant (BC Gold)
-		"dd":    {"#FDE68A", true},  // Dominant Differential
-		"d":     {"#BBF7D0", true},  // Differential
-		"cd":    {"#BFDBFE", true},  // Constant Dominant
-		"c":     {"#E0F2FE", false}, // Constant
-		"ic":    {"#F5EFE0", false}, // Important Companion
+		"dd":    {"#FEF6E0", true},  // Dominant Differential (BC Advisory Gold tint)
+		"d":     {"#E9F1EB", true},  // Differential (BEC Forest tint)
+		"cd":    {"#D6E6F5", true},  // Constant Dominant (BC Navy tint)
+		"c":     {"#EBF1F8", false}, // Constant (Subtle BC Navy tint)
+		"ic":    {"#F4F6F8", false}, // Important Companion (Neutral canvas)
 	} {
 		stID, sErr := makeDiagFill(spec.hex, spec.bold)
 		if sErr != nil {
@@ -201,15 +212,15 @@ func encodeDiagnosticWorkbookBytes(
 		diagStyles[k] = stID
 	}
 
-	warnRowStyle, err := makeDiagFill("#FEF3C7", true)
+	warnRowStyle, err := makeDiagFill("#FEF6E0", true)
 	if err != nil {
 		return nil, err
 	}
-	highSimStyle, err := makeDiagFill("#BFDBFE", true)
+	highSimStyle, err := makeDiagFill("#D6E6F5", true)
 	if err != nil {
 		return nil, err
 	}
-	medSimStyle, err := makeDiagFill("#E0F2FE", false)
+	medSimStyle, err := makeDiagFill("#EBF1F8", false)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +228,7 @@ func encodeDiagnosticWorkbookBytes(
 	if err != nil {
 		return nil, err
 	}
-	edatopicSubStyle, err := makeDiagFill("#FEF08A", false)
+	edatopicSubStyle, err := makeDiagFill("#E9F1EB", false)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +404,7 @@ func encodeDiagnosticWorkbookBytes(
 		if err := setCellChecked(f, diagSheet, 2, curRow, unitHeader); err != nil {
 			return nil, err
 		}
-		_ = styleRangeChecked(f, diagSheet, 1, curRow, totalDiagCols, curRow, sectionBannerStyle)
+		_ = styleRangeChecked(f, diagSheet, 1, curRow, totalDiagCols, curRow, unitBannerStyle)
 		curRow++
 
 		for _, sp := range diagByUnit[u.SiteUnit] {

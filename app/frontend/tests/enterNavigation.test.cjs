@@ -30,7 +30,7 @@ test('Source Enter record navigation retains the literal column and physical for
   assert.throws(()=>navigation.nextEnterPosition([position({column:''})],0,'field'),/literal column/);
 });
 
-test('Five linked next-record paths and the shared extended A presentation are enabled; stale handlers are not inferred',()=>{
+test('Wave 3 extended next-record forms include height/other forms alongside the 5 linked record sources',()=>{
   const fixture=readFileSync(path.join(__dirname,'..','..','testdata','navigation','enter-mode.vba'),'utf8').replace(/\r\n/g,'\n');
   const source=JSON.parse(readFileSync(path.join(__dirname,'..','..','resources','fs882-xl-layout.json'),'utf8')).forms[0];
   assert.match(fixture,/RunEnterKeyActionNF\(\)[\s\S]*?Application\.SetOption "Move After Enter", 1/);
@@ -42,25 +42,74 @@ test('Five linked next-record paths and the shared extended A presentation are e
       linked.push(control.properties.SourceObject.value.replace(/^Form\./,''));
     }
   }
-  assert.deepEqual([...linked, 'SubVegAXL'].sort(),[...navigation.sourceNextRecordForms].sort());
+  assert.deepEqual([...linked, 'SubVegAXL', 'SubVegAhtXL', 'SubVegChtXL', 'SubOtherXL', 'SubOther'].sort(),[...navigation.sourceNextRecordForms].sort());
   assert.equal(navigation.enterNavigationMode(null),'field');
-  for(const form of ['SubVegAXL_BC','SubVegAXL','SubVegCXL','SubVegDXL','SoilHumusXL','SoilMineralXL']) {
+  for(const form of ['SubVegAXL_BC','SubVegAXL','SubVegAhtXL','SubVegCXL','SubVegChtXL','SubVegDXL','SubOtherXL','SubOther','SoilHumusXL','SoilMineralXL']) {
     assert.equal(navigation.enterNavigationMode(form),'record');
   }
-  for(const form of ['SubVegAhtXL','SubVegChtXL','USysVegOtherXL','SubOtherXL','Child162','Child164','Child165']) {
+  for(const form of ['USysVegOtherXL','Child162','Child164','Child165']) {
     assert.equal(navigation.enterNavigationMode(form),null);
   }
 });
 
-test('Enter adapter preserves native list/select/multiline/IME shortcuts and uses real visibility and fieldset disabling',()=>{
+test('Enter adapter extends across datalists and <select> while preserving multiline/IME/dialog guards',()=>{
   const source=readFileSync(srcPath('enterNavigation.ts'),'utf8');
   const form=readFileSync(srcPath('FS882Form.svelte'),'utf8');
   for(const guard of ['event.isComposing','event.repeat','event.altKey','event.ctrlKey','event.metaKey','event.shiftKey',
-    'source.list',"source.closest('dialog,[role=dialog]')","control.matches(':disabled')",'control.checkVisibility()',
+    'source instanceof HTMLTextAreaElement',"source.closest('dialog,[role=dialog]')","control.matches(':disabled')",'control.checkVisibility()',
     'control.readOnly',"control.getAttribute('aria-invalid') === 'true'"]) assert.ok(source.includes(guard),guard);
+  assert.doesNotMatch(source,/\.list\b/);
+  assert.doesNotMatch(source,/!\(source instanceof HTMLInputElement\)/);
   assert.doesNotMatch(source,/\.click\(|\.submit\(|Save|Create|ByID|fetch\(/);
   assert.match(form,/<svelte:window onkeydown=\{sourceEnter\}/);
   assert.match(form,/error = `Source Enter navigation failed/);
   assert.match(source,/element instanceof HTMLTextAreaElement/);
   assert.match(source,/textarea\[data-column\]/);
+
+  // Behavioral check: Enter advances from both <select> and datalist <input list="...">
+  const fakeDoc = { activeElement: null };
+  class NavSelect {
+    dataset;
+    constructor(col) { this.dataset = { column: col }; this.focused = 0; }
+    matches() { return false; }
+    checkVisibility() { return true; }
+    getAttribute() { return null; }
+    closest(selector) { return selector.includes('dialog') ? null : this.page; }
+    focus() { fakeDoc.activeElement = this; this.focused++; }
+  }
+  class NavInput extends NavSelect {
+    constructor(col, list = null) { super(col); this.type = 'text'; this.list = list; this.readOnly = false; }
+  }
+  class NavTextArea extends NavSelect {}
+  const domNavReal = loadTypeScript('enterNavigation.ts', {}, {
+    document: fakeDoc,
+    HTMLInputElement: NavInput,
+    HTMLSelectElement: NavSelect,
+    HTMLTextAreaElement: NavTextArea,
+  });
+  const dlInput = new NavInput('Zone', { id: 'zones' });
+  const sel = new NavSelect('MoistureRegime');
+  const nextInput = new NavInput('NutrientRegime');
+  const page = {
+    dataset: {},
+    contains: el => [dlInput, sel, nextInput].includes(el),
+    querySelectorAll: () => [dlInput, sel, nextInput],
+  };
+  dlInput.page = page; sel.page = page; nextInput.page = page;
+  fakeDoc.activeElement = dlInput;
+  domNavReal.navigateSourceEnter({
+    key: 'Enter', defaultPrevented: false, isComposing: false, repeat: false,
+    altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+    target: dlInput, preventDefault() {},
+  }, page);
+  assert.equal(fakeDoc.activeElement, sel);
+  assert.equal(sel.focused, 1);
+
+  domNavReal.navigateSourceEnter({
+    key: 'Enter', defaultPrevented: false, isComposing: false, repeat: false,
+    altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+    target: sel, preventDefault() {},
+  }, page);
+  assert.equal(fakeDoc.activeElement, nextInput);
+  assert.equal(nextInput.focused, 1);
 });

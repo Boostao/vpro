@@ -168,12 +168,13 @@
   {/if}
 {/snippet}
 <style>
-  .soil-code-toolbar { display: grid; gap: .3rem; margin-bottom: .5rem; padding: .5rem; border: 1px solid #d6d3d1; font-size: .75rem; }
+  .soil-code-toolbar { display: grid; gap: .3rem; margin-bottom: .5rem; padding: .5rem; border: 1px solid #D8D8D8; font-size: .75rem; }
   .soil-code-toolbar p { margin: 0; }
-  button { padding: .2rem .4rem; border: 1px solid #a8a29e; background: white; }
+  button { padding: .2rem .4rem; border: 1px solid #D8D8D8; background: white; color: #313132; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: .1rem .6rem; }
   dd { margin: 0; overflow-wrap: anywhere; }
-  .soil-code-control { border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; color: #065f46; font: inherit; line-height: 1.4; }
-  .soil-code-control:disabled { color: #78716c; background: #f5f5f4; }
-  .soil-code-control[aria-invalid="true"] { border-color: #b91c1c; }
+  .soil-code-control { border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
+  .soil-code-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  .soil-code-control:disabled { color: #606060; background: #F2F2F2; }
+  .soil-code-control[aria-invalid="true"] { border-color: #D8292F; }
 </style>

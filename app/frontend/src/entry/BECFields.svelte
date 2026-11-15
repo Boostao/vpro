@@ -148,14 +148,14 @@
 {@render children(becInputs)}
 
 <style>
-  .bec-toolbar { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .5rem; font-size: .75rem; color: #57534e; }
-  .bec-toolbar [role="alert"] { color: #b91c1c; }
-  .bec-toolbar button { align-self: flex-start; border: 1px solid #a8a29e; border-radius: 2px; background: white; padding: 0 .25rem; }
+  .bec-toolbar { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .5rem; font-size: .75rem; color: #606060; }
+  .bec-toolbar [role="alert"] { color: #D8292F; }
+  .bec-toolbar button { align-self: flex-start; border: 1px solid #D8D8D8; border-radius: 2px; background: white; color: #313132; padding: 0 .25rem; }
   .bec-warnings { padding-left: 1rem; color: #92400e; }
   .bec-acknowledgement { display: flex; align-items: center; gap: .35rem; }
   .bec-definitions ul { padding-left: 1rem; }
   .bec-definitions dl { display: grid; grid-template-columns: max-content 1fr; gap: .1rem .5rem; }
-  .bec-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #b7cfc0; border-radius: 4px; padding: .5rem .65rem; background: white; font: inherit; line-height: 1.4; }
-  .bec-control:focus { outline: 2px solid #047857; outline-offset: 1px; }
-  .bec-control:disabled { color: #78716c; background: #f5f5f4; }
+  .bec-control { box-sizing: border-box; width: 100%; min-width: 0; min-height: 40px; border: 1px solid #D8D8D8; border-radius: 4px; padding: .5rem .65rem; background: white; color: #313132; font: inherit; line-height: 1.4; }
+  .bec-control:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  .bec-control:disabled { color: #606060; background: #F2F2F2; }
 </style>

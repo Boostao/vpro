@@ -24,11 +24,15 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   import ProjectMetadataEditor from '../admin/ProjectMetadataEditor.svelte';
   import type { bindContextPlots } from '../shared/contextPlots';
   import TwoPageProfilingPanel from './TwoPageProfilingPanel.svelte';
+  import { Columns2, FileText } from '@lucide/svelte';
+  import FieldCardPreviewModal from './FieldCardPreviewModal.svelte';
+  import { buildFieldCardViewModel } from './fieldCardPreview';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, plot, cache, revision, onchange, onbusy, onclosed, oncommitted, embedded: childContent, childBlocked = false, pictureReaderAvailable = false, auditReaderAvailable = false, googleEarthReaderAvailable = false, vegetationTableReaderAvailable = false, environmentTableReaderAvailable = false, projectMetadataReaderAvailable = false, vegetationTableSU = '', vegetationTableSUPath = '', sourceProjectPath = '',
     projectMetadataClient, metadataRestorationAvailable = false,
     profilingReaderAvailable = false, profilingSource = null, externalScope = null, sourceBlocked = true, initialForm = 'FS882-8x6XL',
-    onExtendedShrubsChange }: {
+    onExtendedShrubsChange, onOpenProfileSU }: {
     contextId: string; project: string; plot: string; cache: TwoPageEntrySessionCache; revision: number;
     onchange: () => void; onbusy: (busy: boolean) => void; onclosed: () => void; oncommitted: () => Promise<void>;
     embedded: Snippet<[TwoPageEntryChild, PaperControl]>;
@@ -39,6 +43,7 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     profilingReaderAvailable?: boolean; profilingSource?: { name: string; path: string } | null;
     externalScope?: GoogleEarthScope | null; sourceBlocked?: boolean; initialForm?: TwoPageParentForm;
     onExtendedShrubsChange?: (enabled: boolean) => void;
+    onOpenProfileSU?: () => void;
   } = $props();
   const owner = untrack(() => ({ contextId, project, plot }));
   const reviewEnabled = true;
@@ -75,9 +80,39 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   let form = $state<TwoPageParentForm>(untrack(() => initialForm));
   let session = $state(makeSession(untrack(() => initialForm)));
   let error = $state<string | null>(null);
+  let fieldCardModalOpen = $state(false);
+  let fieldCardSplitOpen = $state(false);
   const view = $derived.by(() => { revision; return session.view(); });
   const close = $derived.by(() => { revision; return session.closeState(); });
   const projection = $derived(twoPageEntryProjection(form));
+  const twoPageFieldCardViewModel = $derived.by(() => {
+    if (!fieldCardModalOpen && !fieldCardSplitOpen) return null;
+    let projectChoiceText: string | null = null;
+    if (view.projectRowId && view.snapshot?.ProjectChoices?.Choices?.rows) {
+      const matched = view.snapshot.ProjectChoices.Choices.rows.find(r => r.rowId === view.projectRowId);
+      const codeCell = matched?.cells?.[0];
+      if (codeCell && codeCell.storage !== 'null') {
+        projectChoiceText = metadataCellText(codeCell);
+      }
+    }
+    return buildFieldCardViewModel({
+      formKind: 'two-page',
+      draftHeader: { plotNumber: owner.plot },
+      twoPageOriginal: view.original ?? null,
+      twoPageDrafts: view.drafts,
+      twoPageProjectText: projectChoiceText,
+      extendedShrubs: form === 'FS882-8x6XL-CHARS',
+      isDirty: close.unsaved || childBlocked,
+    });
+  });
+
+  function handleTwoPageKeydown(event: KeyboardEvent) {
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'p') {
+      event.preventDefault();
+      fieldCardModalOpen = !fieldCardModalOpen;
+      if (fieldCardModalOpen) fieldCardSplitOpen = false;
+    }
+  }
 
   function makeSession(sourceForm: TwoPageParentForm) {
     const existing = sessions.get(sourceForm);
@@ -179,6 +214,23 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     }
     if (projectMetadataBusy) { error = 'Wait for or cancel the owned project metadata read before returning to the source form.'; return; }
     projectMetadataOpen = null; error = null; onchange();
+  }
+  function canSwitchToMetadataEdit() {
+    const states = [...sessions.values()].map(owned => owned.closeState());
+    if (!metadataEditingEnabled || !metadataClient || sourceBlocked || childBlocked || !view.original ||
+        projectMetadataBusy || externalOpen || auditOpen || googleEarthOpen || vegetationTableOpen || environmentTableOpen || profilingOpen ||
+        states.some(state => state.unsaved || state.busy || state.blocked) ||
+        [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))) return false;
+    const projectId = twoPageEntryCell(view.original, 'ProjectID');
+    return projectId.storage === 'text' && projectId.text !== null && projectId.text.length > 0;
+  }
+  function switchReadMetadataToEdit() {
+    if (projectMetadataBusy) {
+      error = 'Wait for or cancel the owned project metadata read before switching to edit.';
+      return;
+    }
+    projectMetadataOpen = null;
+    openMetadataEditor();
   }
   function openEnvironmentTable() {
     const draftState = getDraftState();
@@ -303,6 +355,9 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
         : action === 'undo' ? await session.undo() : action === 'references' ? await session.loadReferences()
         : await session.restore(action === 'retain' ? AuditRestoreAction.AuditRestoreRetain : AuditRestoreAction.AuditRestorePrune);
       if (!ok) error = session.view().error ?? session.view().referenceError;
+      else if (action === 'save' && typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        notifications.success(`Two-page plot ${owner.plot} saved`, `${form} complete-entry changes committed atomically.`);
+      }
     } catch (cause) { error = `Complete-entry operation refused; owned state retained: ${String(cause)}`; }
   }
   function stage(column: string, input: TwoPageEntryInput) {
@@ -363,13 +418,88 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     if (reference.choices === null) throw new Error(`${reference.column} reference lost its complete choice receipt.`);
     return reference.choices;
   }
+
+  let coordHelperOpen = $state(false);
+  let coordHelperMode = $state<'dm' | 'dms' | 'utm'>('dms');
+  let coordHelperAxis = $state<'latitude' | 'longitude'>('latitude');
+  let coordDeg = $state('');
+  let coordMin = $state('');
+  let coordSec = $state('');
+  let coordDir = $state<'N' | 'S' | 'E' | 'W'>('N');
+  let utmZone = $state('');
+  let utmEasting = $state('');
+  let utmNorthing = $state('');
+  let coordBusy = $state(false);
+  let coordError = $state<string | null>(null);
+
+  async function applyTwoPageCoordConversion() {
+    if (!editingEnabled || close.busy || view.blocked || childBlocked || coordBusy) return;
+    coordBusy = true;
+    coordError = null;
+    try {
+      const { SpatialService, CoordinateMode } = await import('../../bindings/github.com/boostao/vpro/app');
+      if (coordHelperMode === 'utm') {
+        const z = Number.parseInt(utmZone.trim(), 10);
+        const e = Number.parseFloat(utmEasting.trim());
+        const n = Number.parseFloat(utmNorthing.trim());
+        if (!Number.isFinite(z) || !Number.isFinite(e) || !Number.isFinite(n)) {
+          throw new Error('Enter valid NAD83 UTM Zone, Easting, and Northing.');
+        }
+        const projected = await SpatialService.ProjectNAD83UTMToLatLon(z, e, n);
+        stage('Latitude', { kind: 'text', raw: String(Math.round(projected.latitude * 1e6) / 1e6) });
+        stage('Longitude', { kind: 'text', raw: String(Math.round(projected.longitude * 1e6) / 1e6) });
+        const snap = view.snapshot;
+        if (snap?.Fields.some(f => f.column === 'UTMZone')) stage('UTMZone', { kind: 'text', raw: String(z) });
+        if (snap?.Fields.some(f => f.column === 'UTMEasting')) stage('UTMEasting', { kind: 'text', raw: String(Math.round(e * 10) / 10) });
+        if (snap?.Fields.some(f => f.column === 'UTMNorthing')) stage('UTMNorthing', { kind: 'text', raw: String(Math.round(n * 10) / 10) });
+      } else {
+        const deg = coordDeg.trim() === '' ? null : Number(coordDeg);
+        const min = coordMin.trim() === '' ? null : Number(coordMin);
+        const sec = coordHelperMode === 'dms' ? (coordSec.trim() === '' ? null : Number(coordSec)) : null;
+        const negative = coordDir === 'S' || coordDir === 'W';
+        const mode = coordHelperMode === 'dms' ? CoordinateMode.CoordinateModeDMS : CoordinateMode.CoordinateModeDM;
+        const dd = await SpatialService.ConvertCoordinate(coordHelperAxis, mode, { degrees: deg, minutes: min, seconds: sec, negative });
+        if (dd === null || !Number.isFinite(dd)) throw new Error('Coordinate conversion returned empty result.');
+        stage(coordHelperAxis === 'latitude' ? 'Latitude' : 'Longitude', { kind: 'text', raw: String(dd) });
+      }
+    } catch (cause) {
+      coordError = String(cause);
+    } finally {
+      coordBusy = false;
+    }
+  }
 </script>
 
-<section class="space-y-4 rounded border bg-white p-4" aria-label="Complete two-page entry review" data-two-page-entry-panel={form}>
-  <h3 class="font-semibold">{form}: one owned complete-entry draft</h3>
-  {#if error}<p role="alert" class="text-sm text-red-700">{error}</p>{/if}
-  {#if view.error && view.error !== error}<p role="alert" class="text-sm text-red-700">{view.error}</p>{/if}
-  {#if view.referenceError}<p role="alert" class="text-sm text-red-700">{view.referenceError}</p>{/if}
+<svelte:window onkeydown={handleTwoPageKeydown} />
+
+<section class="two-page-entry-shell space-y-4 rounded border border-[#D8D8D8] bg-white p-4 text-[#313132]" aria-label="Complete two-page entry review" data-two-page-entry-panel={form}>
+  <div class="two-page-entry-header flex flex-wrap items-center justify-between gap-3 border-b border-[#D1D5DB] pb-3">
+    <h3 class="font-bold text-[#003366]">{form}: one owned complete-entry draft</h3>
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        data-view-field-card-btn
+        title="Preview official printed field card (Alt+P)"
+        onclick={() => { fieldCardModalOpen = true; fieldCardSplitOpen = false; }}
+        class="px-3 py-1 rounded text-xs font-semibold border border-[#003366] bg-[#EBF1F8] text-[#003366] hover:bg-[#003366] hover:text-white flex items-center gap-1.5"
+      >
+        <FileText size={14} /> View Field Card
+      </button>
+      <button
+        type="button"
+        data-dock-field-card-btn
+        aria-pressed={fieldCardSplitOpen}
+        title="Toggle live side-by-side split field card preview (>= 1760px)"
+        onclick={() => { fieldCardSplitOpen = !fieldCardSplitOpen; if (fieldCardSplitOpen) fieldCardModalOpen = false; }}
+        class="two-page-dock-btn px-3 py-1 rounded text-xs font-semibold border flex items-center gap-1.5 {fieldCardSplitOpen ? 'bg-[#003366] text-white border-[#003366]' : 'border-[#D1D5DB] bg-white text-[#003366] hover:bg-[#EBF1F8]'}"
+      >
+        <Columns2 size={14} /> Dock Split View
+      </button>
+    </div>
+  </div>
+  {#if error}<p role="alert" class="text-sm text-[#D8292F]">{error}</p>{/if}
+  {#if view.error && view.error !== error}<p role="alert" class="text-sm text-[#D8292F]">{view.error}</p>{/if}
+  {#if view.referenceError}<p role="alert" class="text-sm text-[#D8292F]">{view.referenceError}</p>{/if}
   {#if view.blocked}<p role="alert">Write outcome or refresh is unresolved. Undo / reload explicitly; never replay Save.</p>{/if}
   {#if view.busy || view.referencesBusy}<p role="status">Complete-entry {view.operation ?? 'reference read'} in progress...</p>{/if}
   {#if profilingOpen && profileSource}
@@ -377,7 +507,17 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     <TwoPageProfilingPanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
       projectPath={vegetationScope.projectPath} su={vegetationScope.su} suPath={vegetationScope.suPath}
       profileSource={profileSource} onBusyChange={value => profilingBusy = value} />
-    <button type="button" disabled={profilingBusy} onclick={returnFromProfiling}>Return to complete-entry source</button>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1.5 text-xs text-[#313132]" disabled={profilingBusy} onclick={returnFromProfiling}>Return to complete-entry source</button>
+      {#if onOpenProfileSU}
+        <button type="button" data-two-page-create-su-link
+          class="rounded bg-[#003366] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          disabled={profilingBusy || childBlocked || close.unsaved || close.busy || close.blocked}
+          onclick={onOpenProfileSU}>
+          Open Plot Profiling / Create SU from Filter
+        </button>
+      {/if}
+    </div>
   {:else if projectMetadataOpen === 'edit'}
     <p role="status">Source action {form} / {projection.metadataAction.controlId}; pinned opening plot {JSON.stringify(owner.plot)}.</p>
     {#if metadataClient}
@@ -392,6 +532,8 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     <p role="status">Source action {form} / {projection.metadataAction.controlId}; pinned opening plot {JSON.stringify(owner.plot)}.</p>
     <TwoPageProjectMetadataPanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
       projectPath={vegetationScope.projectPath} su={vegetationScope.su} suPath={vegetationScope.suPath}
+      onEditMetadata={metadataEditingEnabled ? switchReadMetadataToEdit : undefined}
+      editDisabled={!canSwitchToMetadataEdit()}
       onBusyChange={value => projectMetadataBusy = value} />
     <button type="button" disabled={projectMetadataBusy} onclick={returnFromProjectMetadata}>Return to complete-entry source</button>
   {:else if environmentTableOpen}
@@ -414,6 +556,7 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
   {:else if auditOpen}
     <p role="status">Source action {form} / {projection.auditAction.controlId}; pinned literal plot {JSON.stringify(owner.plot)}.</p>
     <TwoPageAuditPanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
+      onRestored={async () => { await session.load(); await refreshMetadataPeers(); }}
       onBusyChange={value => auditBusy = value} />
     <button type="button" disabled={auditBusy} onclick={returnFromAudit}>Return to complete-entry source</button>
   {:else if externalOpen && sourceScope?.projectPath && sourceScope.suPath}
@@ -499,24 +642,58 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
         onclick={() => operation('prune')}>Restore (prune audits)</button>
     {/if}
   </div>
-  {#if view.original && view.snapshot}
-    <TwoPageEntryLayout {form} {pictureReaderAvailable} values={twoPageEntryValues(view.original, form)}
-      editors={(['xl', 'common', 'extra'] as const).map(scope => ({
-        scope, columns: projection.fields.filter(field => field.scope === scope && field.page !== null).map(field => field.column),
-        input: fieldInput, labelled: true,
-      }))} identity={identityField} embedded={childContent} />
+  <div class="two-page-split-wrap" class:split-open={fieldCardSplitOpen && twoPageFieldCardViewModel !== null}>
+    <div class="two-page-form-col min-w-0 flex-1" data-field-card-form-pane>
+      {#if view.original && view.snapshot}
+        <TwoPageEntryLayout {form} {pictureReaderAvailable} values={twoPageEntryValues(view.original, form)}
+          editors={(['xl', 'common', 'extra'] as const).map(scope => ({
+            scope, columns: projection.fields.filter(field => field.scope === scope && field.page !== null).map(field => field.column),
+            input: fieldInput, labelled: true,
+          }))} identity={identityField} embedded={childContent} />
+      {/if}
+      <p class="mt-3 text-xs text-stone-600">One atomic parent Save covers all three accepted field scopes.
+        Identity changes, coordinate-conversion callbacks, metadata creation, picture creation and unverified source actions remain unavailable.
+        Linked children use their independently gated readers/editors outside this parent transaction.
+        The picture child is read-only. Metadata editing uses its separate owned editor and transaction;
+        record deletion remains outside this review.</p>
+    </div>
+    {#if fieldCardSplitOpen && twoPageFieldCardViewModel}
+      <div class="two-page-dock-col">
+        <FieldCardPreviewModal
+          open={true}
+          mode="docked"
+          viewModel={twoPageFieldCardViewModel}
+          onclose={() => { fieldCardSplitOpen = false; }}
+          onmodechange={(nextMode) => {
+            if (nextMode === 'modal') {
+              fieldCardSplitOpen = false;
+              fieldCardModalOpen = true;
+            }
+          }}
+        />
+      </div>
+    {/if}
+  </div>
   {/if}
-  <p class="text-xs text-stone-600">One atomic parent Save covers all three accepted field scopes.
-    Identity changes, coordinate-conversion callbacks, metadata creation, picture creation and unverified source actions remain unavailable.
-    Linked children use their independently gated readers/editors outside this parent transaction.
-    The picture child is read-only. Metadata editing uses its separate owned editor and transaction;
-    record deletion remains outside this review.</p>
+  {#if fieldCardModalOpen && twoPageFieldCardViewModel}
+    <FieldCardPreviewModal
+      open={true}
+      mode="modal"
+      viewModel={twoPageFieldCardViewModel}
+      onclose={() => { fieldCardModalOpen = false; }}
+      onmodechange={(nextMode) => {
+        if (nextMode === 'docked') {
+          fieldCardModalOpen = false;
+          fieldCardSplitOpen = true;
+        }
+      }}
+    />
   {/if}
 </section>
 
 {#snippet identityField(field: TwoPageEntryField)}
-  <label class="block text-sm font-medium" for="complete-entry-identity">Plot number</label>
-  <input id="complete-entry-identity" class="w-full rounded border p-2" disabled
+  <label class="block text-sm font-medium text-[#003366]" for="complete-entry-identity">Plot number</label>
+  <input id="complete-entry-identity" class="two-page-plot-id w-full rounded border p-2" disabled
     data-column={field.column} data-help-id="site.plot_number" value={owner.plot} />
 {/snippet}
 
@@ -600,6 +777,59 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
         <div class="flex flex-wrap gap-2 text-xs">
           <button type="button" disabled={unavailable || nullBlocked} onclick={() => stage(column, { kind: 'clear' })}>Clear to NULL</button>
           <button type="button" disabled={unavailable} onclick={() => stage(column, { kind: 'original' })}>Keep original</button>
+          {#if column === 'Latitude'}
+            <button type="button" data-two-page-coord-toggle
+              onclick={() => { coordHelperOpen = !coordHelperOpen; coordError = null; }}>
+              {coordHelperOpen ? 'Close DD/DM/DMS/UTM' : 'Coordinate Modes (DM/DMS/UTM)'}
+            </button>
+          {/if}
+        </div>
+      {/if}
+      {#if column === 'Latitude' && coordHelperOpen}
+        <div class="mt-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-2.5 space-y-2 text-xs" data-two-page-coord-helper>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="font-medium" for="two-page-coord-mode">Mode</label>
+            <select id="two-page-coord-mode" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordHelperMode}>
+              <option value="dm">DM (Deg / Min)</option>
+              <option value="dms">DMS (Deg / Min / Sec)</option>
+              <option value="utm">NAD83 UTM</option>
+            </select>
+            {#if coordHelperMode !== 'utm'}
+              <select aria-label="Coordinate Axis" class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+                bind:value={coordHelperAxis}
+                onchange={() => { coordDir = coordHelperAxis === 'latitude' ? 'N' : 'W'; }}>
+                <option value="latitude">Latitude</option>
+                <option value="longitude">Longitude</option>
+              </select>
+            {/if}
+          </div>
+          {#if coordHelperMode === 'utm'}
+            <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+              <input type="text" placeholder="Zone (e.g. 10)" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmZone} />
+              <input type="text" placeholder="Easting" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmEasting} />
+              <input type="text" placeholder="Northing" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={utmNorthing} />
+            </div>
+          {:else}
+            <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              <input type="text" placeholder="Deg" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordDeg} />
+              <input type="text" placeholder="Min" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordMin} />
+              {#if coordHelperMode === 'dms'}
+                <input type="text" placeholder="Sec" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordSec} />
+              {/if}
+              <select aria-label="Hemisphere" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordDir}>
+                {#if coordHelperAxis === 'latitude'}
+                  <option value="N">N</option><option value="S">S</option>
+                {:else}
+                  <option value="W">W</option><option value="E">E</option>
+                {/if}
+              </select>
+            </div>
+          {/if}
+          {#if coordError}<p role="alert" class="text-[#D8292F]">{coordError}</p>{/if}
+          <button type="button" class="rounded bg-[#003366] px-2.5 py-1 text-white disabled:opacity-50"
+            disabled={unavailable || coordBusy} onclick={() => void applyTwoPageCoordConversion()}>
+            {coordBusy ? 'Converting...' : 'Apply converted coordinates'}
+          </button>
         </div>
       {/if}
       {#if column === 'SV_FloodPlain' || column === 'SpeciesListComplete'}<p class="text-xs">Source Yes/No converts NULL to No; choose No explicitly. Unchanged historical NULL is retained.</p>{/if}
@@ -615,3 +845,14 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     </div>
   {/if}
 {/snippet}
+
+<style>
+  .two-page-entry-shell { border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); }
+  .two-page-plot-id { font-family: var(--vpro-font-mono, monospace); font-variant-numeric: tabular-nums; font-weight: 600; border-color: var(--vpro-forest-border, #D8D8D8); }
+  .two-page-split-wrap { display: flex; gap: 1rem; align-items: flex-start; min-width: 0; }
+  .two-page-dock-col { width: min(46%, 700px); min-width: 500px; max-height: 85vh; flex: none; position: sticky; top: .5rem; }
+  @media (max-width: 1759px) {
+    .two-page-dock-btn { display: none; }
+    .two-page-dock-col { display: none; }
+  }
+</style>

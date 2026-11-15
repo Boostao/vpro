@@ -93,6 +93,13 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
     } finally { if (request === generation) reading = false; }
   }
 
+  async function applySuggested(row: SpeciesCodeCheckRow) {
+    const suggested = row.suggestedCode;
+    if (!suggested || !session || busy || metadata || committedFailure) return;
+    stage(row.id, suggested);
+    if (!error) await reviewTarget(row.id);
+  }
+
   function accept(id: number, all: boolean) {
     if (!session || busy || metadata || committedFailure) { error = 'An available replacement review is required.'; return; }
     try {
@@ -189,82 +196,100 @@ import type { SpeciesCodeCheckRow } from '../../bindings/github.com/boostao/vpro
   }
 </script>
 
-<section class="species-code-check mb-3 rounded border border-emerald-300 bg-emerald-50 p-3 text-sm" aria-label="Species code check">
-  <h3 class="font-semibold">Species code check - explicit scope and replacements</h3>
+<section class="species-code-check min-w-0 mb-3 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-3 text-sm text-[#313132]" aria-label="Species code check">
+  <h3 class="font-semibold text-[#003366]">Species code check - explicit scope and replacements</h3>
   {#if session}
     <p class="mt-2" role="status">Project: {session.review.project}. Working unit: {session.review.su === 'None' ? 'None - entire project' : session.review.su}.
       {session.review.rows.length} physical rows reviewed; {unresolved.length} unresolved; {session.ignored.length} ignored locally.</p>
   {/if}
   {#if busy}<p role="status">Waiting for the owned context operation...</p>{/if}
-  {#if error}<p class="mt-2 font-medium text-red-700" role="alert">{error}</p>{/if}
-  {#if success}<p class="mt-2 font-medium" role="status">{success}</p>{/if}
-  {#each errors as message}<p class="mt-2 text-red-700" role="alert">{message}</p>{/each}
+  {#if error}<p class="mt-2 font-medium text-[#D8292F]" role="alert">{error}</p>{/if}
+  {#if success}<p class="mt-2 font-medium text-[#2E8540]" role="status">{success}</p>{/if}
+  {#each errors as message}<p class="mt-2 text-[#D8292F]" role="alert">{message}</p>{/each}
   <div class="my-3 flex flex-wrap gap-2">
-    <button type="button" disabled={busy || committedFailure || !!metadata || !pending || errors.length > 0} onclick={() => void save()}>Save reviewed replacements</button>
+    <button type="button" class="primary-btn" disabled={busy || committedFailure || !!metadata || !pending || errors.length > 0} onclick={() => void save()}>Save reviewed replacements</button>
     <button type="button" disabled={busy || committedFailure || !!metadata || pending > 0} onclick={() => void reload()}>Reload species-check scope</button>
     <button type="button" disabled={saving} onclick={undo}>{metadata ? 'Cancel personal entry' : 'Discard proposals and close review'}</button>
   </div>
   {#if metadata}
-    <section class="personal-species-draft rounded border border-amber-300 bg-amber-50 p-3" aria-label="New personal species definition" data-personal-editor="codecheck">
+    <section class="personal-species-draft rounded border border-[#FCBA19] bg-[#FFF9E6] p-3" aria-label="New personal species definition" data-personal-editor="codecheck">
       <p class="mb-2">Separate Save writes only the user definition and its audit. Project replacements have their own transaction.</p>
-      {#each metadataErrors as message}<p class="text-red-700" role="alert">{message}</p>{/each}
+      {#each metadataErrors as message}<p class="text-[#D8292F]" role="alert">{message}</p>{/each}
       <PersonalSpeciesFields draft={metadata} disabled={busy} onchange={value => { metadata = value; error = null; success = null; }} />
-      <button type="button" disabled={busy || committedFailure || metadataErrors.length > 0} onclick={() => void savePersonal()}>Save personal definition only</button>
+      <button type="button" class="primary-btn mt-2" disabled={busy || committedFailure || metadataErrors.length > 0} onclick={() => void savePersonal()}>Save personal definition only</button>
     </section>
   {/if}
   {#if session}
-    <div class="overflow-x-auto">
+    <div class="table-scroll overflow-x-auto rounded border border-[#D8D8D8] bg-white">
       <table class="w-full">
-        <thead><tr><th scope="col">Plot / physical ID</th><th scope="col">Original code</th><th scope="col">Literal replacement and review</th><th scope="col">Actions</th></tr></thead>
+        <thead><tr><th scope="col">Plot / physical ID</th><th scope="col">Original code &amp; suggestion</th><th scope="col">Literal replacement and review</th><th scope="col">Actions</th></tr></thead>
         <tbody>
           {#each visible as row (row.id)}
             {@const cell = session.cells[String(row.id)]}
             {@const target = choices[String(row.id)]}
             <tr data-code-check-id={row.id}>
               <td>{row.plotNumber} / {row.id}</td>
-              <td>{row.code === null ? 'NULL' : JSON.stringify(row.code)}</td>
+              <td>
+                <div class="font-mono">{row.code === null ? 'NULL' : JSON.stringify(row.code)}</div>
+                <div class="mt-1 text-xs text-[#606060]">Status: {row.status}</div>
+                {#if row.suggestedCode}
+                  <div class="mt-1 flex flex-wrap items-center gap-1.5" data-suggested-code={row.suggestedCode}>
+                    <span class="rounded bg-[#FFF9E6] px-1.5 py-0.5 text-xs font-medium text-[#313132] border border-[#FCBA19]">Suggested: {row.suggestedCode}</span>
+                    <button type="button" class="text-xs" data-use-suggested-id={row.id} disabled={busy || !!metadata || committedFailure}
+                      onclick={() => void applySuggested(row)}>Use suggested ({row.suggestedCode})</button>
+                  </div>
+                {/if}
+              </td>
               <td>
                 <label for={`check-replacement-${row.id}`}>Replacement, plot {row.plotNumber}, row {row.id}
                   <input id={`check-replacement-${row.id}`} type="text" value={cell?.raw ?? ''} disabled={busy || !!metadata || committedFailure}
                     aria-invalid={!!cell?.error} oninput={event => stage(row.id, event.currentTarget.value)} />
                 </label>
-                <button type="button" disabled={busy || !!metadata || committedFailure || !cell} onclick={() => void reviewTarget(row.id)}>Review literal target</button>
+                <button type="button" class="mt-1" disabled={busy || !!metadata || committedFailure || !cell} onclick={() => void reviewTarget(row.id)}>Review literal target</button>
                 {#if target && target.entered === cell?.raw}
-                  <div aria-label={`Target definitions, row ${row.id}`}>
+                  <div class="mt-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-2 text-xs" aria-label={`Target definitions, row ${row.id}`}>
                     {#each target.options as option}
                       <p>{option.source}: {JSON.stringify(option.code)}; scientific {option.scientificName === null ? 'NULL' : JSON.stringify(option.scientificName)};
                         English {option.englishName === null ? 'NULL' : JSON.stringify(option.englishName)};
                         Lifeform {option.lifeform ?? 'NULL'}; Codetype {option.codeType === null ? 'NULL' : JSON.stringify(option.codeType)}.</p>
                     {/each}
-                    <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => accept(row.id, false)}>Use for this physical row</button>
-                    <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => accept(row.id, true)}>Use for matching originals in this scope</button>
+                    <p class="mt-1 text-[#003366]">Replacing an old code where the target species already exists on the same plot/layer combines covers safely (capped at 99%).</p>
+                    <div class="mt-1.5 flex flex-wrap gap-1.5">
+                      <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => accept(row.id, false)}>Use for this physical row</button>
+                      <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => accept(row.id, true)}>Use for matching originals in this scope</button>
+                    </div>
                   </div>
                 {/if}
               </td>
               <td>
-                <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => ignore(row.id, false)}>Ignore this row</button>
-                <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => ignore(row.id, true)}>Ignore matching codes locally</button>
-                {#if personalEnabled && row.status === 'unlisted' && row.code !== null && !speciesEventError(row.code)}
-                  <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => void startPersonal(row)}>Create personal definition</button>
-                {/if}
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => ignore(row.id, false)}>Ignore this row</button>
+                  <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => ignore(row.id, true)}>Ignore matching codes locally</button>
+                  {#if personalEnabled && row.status === 'unlisted' && row.code !== null && !speciesEventError(row.code)}
+                    <button type="button" disabled={busy || !!metadata || committedFailure} onclick={() => void startPersonal(row)}>Create personal definition</button>
+                  {/if}
+                </div>
               </td>
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
-    <div class="mt-2 flex gap-2">
+    <div class="mt-2 flex flex-wrap gap-2">
       <button type="button" disabled={busy || offset === 0} onclick={() => offset = Math.max(0, offset - 25)}>Previous codes</button>
       <button type="button" disabled={busy || offset + 25 >= unresolved.length} onclick={() => offset += 25}>Next codes</button>
     </div>
     <p class="mt-2">Only unresolved rows are shown. Registered master/user codes remain untouched. Ignore never creates or deletes temporary LifeForm999 definitions.
-      Replacement matching is literal; no trim, automatic completion or case repair is performed. Personal Save and project Save are separate.</p>
+      Replacement matching is literal; no trim, automatic completion or case repair is performed. Cover values combine cleanly (capped at 99%) when merging duplicate plot/layer codes. Personal Save and project Save are separate.</p>
   {/if}
 </section>
 
 <style>
-  th, td { padding: .5rem; text-align: left; vertical-align: top; border-bottom: 1px solid #b7cfc0; }
-  input { display: block; min-height: 40px; width: 100%; padding: .5rem; border: 1px solid #b7cfc0; border-radius: 4px; background: white; }
-  button { min-height: 40px; padding: .4rem .6rem; border: 1px solid #b7cfc0; border-radius: 4px; background: white; }
+  th, td { padding: .5rem; text-align: left; vertical-align: top; border-bottom: 1px solid #D8D8D8; }
+  th { background: #F2F2F2; color: #003366; font-weight: 600; }
+  input { display: block; min-height: 40px; width: 100%; padding: .5rem; border: 1px solid #D8D8D8; border-radius: 4px; background: white; color: #313132; }
+  input:focus { outline: 2px solid #003366; outline-offset: 1px; }
+  button { min-height: 40px; padding: .4rem .6rem; border: 1px solid #D8D8D8; border-radius: 4px; background: white; color: #313132; }
+  .primary-btn { background: #003366; border-color: #003366; color: white; font-weight: 600; }
   button:disabled { opacity: .5; }
 </style>

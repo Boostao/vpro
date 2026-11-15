@@ -70,13 +70,18 @@ test('PDF reviews refuse foreign owners, sparse fields, wrong layout, malformed 
     v => { v.preview.contextId = 'foreign'; }, v => { v.preview.header.plotNumber = 'foreign'; },
     v => { v.layout = 'access-printer'; }, v => { v.approvalHash = 'A'.repeat(64); },
     v => { v.pdfSHA256 = ''; }, v => { v.sessionId = ''; }, v => { v.sessionId = '\ud800'; },
-    v => { v.sessionId = 'x'.repeat(129); }, v => { v.preview.locale = 'fr-CA'; },
-    v => { v.preview.pattern = 'yyyy-MM-dd'; }, v => { v.preview.source = 'browser'; },
+    v => { v.sessionId = 'x'.repeat(129); }, v => { v.preview.locale = '   '; },
+    v => { v.preview.pattern = '   '; }, v => { v.preview.source = 'browser'; },
     v => { v.extra = true; }, v => { delete v.suPath; }, v => { delete v.preview.header.projectId; },
   ]) {
     const value = review(); change(value);
     assert.throws(() => pdf.validatePlotLabelPDFReview(value, scope, 'P01'));
   }
+  const frCa = review();
+  frCa.preview.locale = 'fr-CA';
+  frCa.preview.pattern = 'yyyy-MM-dd';
+  frCa.preview.labelDate = '2026-10-11';
+  assert.equal(pdf.validatePlotLabelPDFReview(frCa, scope, 'P01').preview.locale, 'fr-CA');
   assert.throws(() => pdf.validatePlotLabelPDFReview(null, scope, 'P01'));
   assert.throws(() => pdf.validatePlotLabelPDFReview(review(), scope, 'another'));
 });

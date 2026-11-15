@@ -473,10 +473,42 @@ test('BC Gov Design System build outputs self-hosted fonts, searchable LMH25 doc
     assert.ok(distCss.includes(`./fonts/${fontName}`), `CSS missing @font-face for ${fontName}`);
   }
 
-  // BC Gov Design System color tokens
+  // BC Gov Design System color tokens + synchronized --vpro-* custom property parity
   for (const color of ['#003366', '#FCBA19', '#FFFFFF', '#F2F2F2', '#313132', '#2E8540', '#D8292F', '#1E5128']) {
     assert.ok(distCss.includes(color), `Missing BC Gov token ${color}`);
   }
+  for (const token of [
+    '--vpro-navy: #003366',
+    '--vpro-navy-dark: #002244',
+    '--vpro-gold: #FCBA19',
+    '--vpro-gold-muted: #E3A812',
+    '--vpro-forest: #1E5128',
+    '--vpro-forest-surface: #E9F1EB',
+    '--vpro-forest-border: #B7CFC0',
+    '--vpro-surface: #FFFFFF',
+    '--vpro-canvas: #F4F6F8',
+    '--vpro-ink: #313132',
+    '--vpro-ink-secondary: #4B5563',
+    '--vpro-success-ink: #1B5E29',
+    '--vpro-warning-ink: #704B00',
+    '--vpro-error-ink: #A61B20',
+  ]) {
+    assert.ok(distCss.includes(token), `Missing synchronized VPro CSS token: ${token}`);
+  }
+
+  // Canonical Shield + Conifer crest, byte-synchronized favicon.ico, and multi-viewport responsive guards
+  assert.match(distHtml, /data-vpro-crest="topbar"/);
+  assert.deepEqual(
+    readFileSync(path.join(distDir, 'favicon.ico')),
+    readFileSync(path.join(repoRoot, 'site', 'favicon.ico')),
+  );
+  const bcgovTableCount = (distHtml.match(/<table class="bcgov-table"/g) || []).length;
+  const wrappedTableCount = (distHtml.match(/<div class="table-scroll(?:\s+[^"]*)?">\s*<table class="bcgov-table"/g) || []).length;
+  assert.ok(bcgovTableCount >= 4, `Expected >= 4 .bcgov-table elements, found ${bcgovTableCount}`);
+  assert.equal(wrappedTableCount, bcgovTableCount, 'Every .bcgov-table must be wrapped in .table-scroll to prevent 390px horizontal page overflow');
+  assert.match(distCss, /\.table-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(distCss, /@media\s*\(pointer:\s*coarse\)\s*\{[^}]*min-height:\s*44px/s);
+  assert.match(distCss, /font-variant-numeric:\s*tabular-nums/);
 
   // Zero emojis, zero CDN scripts, zero runtime GitHub API references, zero legacy branding bugs
   for (const content of [distHtml, distCss, distDownloads, distPortalDocs]) {

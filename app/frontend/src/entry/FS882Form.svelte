@@ -15,8 +15,13 @@
     type VegetationDeletionReview,
     type ProjectPlotProfileFilterRequest
   } from '../../bindings/github.com/boostao/vpro/app';
-  import { Lock, Unlock, Save, RotateCcw, AlertTriangle, Check } from '@lucide/svelte';
+  import { Lock, Unlock, Save, RotateCcw, AlertTriangle, Check, FileText, Columns2 } from '@lucide/svelte';
   import HeaderEditor from './HeaderEditor.svelte';
+  import FormValidationSummary from './FormValidationSummary.svelte';
+  import { buildFormValidationItems, focusValidationTarget, type FormValidationItem } from './formValidationSummary';
+  import FieldCardPreviewModal from './FieldCardPreviewModal.svelte';
+  import { buildFieldCardViewModel } from './fieldCardPreview';
+  import { notifications } from '../shell/notificationService.svelte';
   import SourcePage from './SourcePage.svelte';
   import ParentCodeFields from './ParentCodeFields.svelte';
   import OrdinaryFields from './OrdinaryFields.svelte';
@@ -76,7 +81,7 @@
   import { embeddedForm, paperChild, type VegetationMode, type PaperControl } from './paperLayout';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import { heightField, stageHeight, heightDirty, heightErrors, heightSourceNotices, aCoverSourceNotice, aCoverSourceNotices, heightUpdates, vegetationNumberUpdates, type HeightDrafts } from './heightEditor';
-  import { ordinaryTextError, ordinaryNumberValue } from './ordinaryEditor';
+  import { ordinaryTextError, ordinaryNumberValue, ordinarySession, rememberOrdinarySession } from './ordinaryEditor';
   import { otherField, stageOther, otherDirty, otherErrors, otherUpdates, type OtherDrafts, type OtherValue } from './otherEditor';
   import { soilField, stageSoil, soilDirty, soilErrors, soilUpdates, type SoilDrafts, type SoilKind } from './soilChildEditor';
   import { vegetationAttributeField, stageVegetationAttribute, vegetationAttributeDirty, vegetationAttributeErrors, vegetationAttributeUpdates, type VegetationAttributeDrafts } from './vegetationAttributeEditor';
@@ -90,10 +95,12 @@
   import { beginVegetationCreation, stageVegetationCreation, stageVegetationCreationSpecies, chooseVegetationCreationSpecies, vegetationCreationSpeciesError, vegetationCreationErrors, vegetationCreationRequest, type VegetationCreationDraft } from './vegetationCreationEditor';
   import { beginPersonalSpecies, beginCreationPersonalSpecies, matchesPersonalSpeciesSource, matchesCreationPersonalSpeciesSource, stagePersonalText, personalSpeciesErrors, personalSpeciesRequest, personalSpeciesMatches, personalSpeciesCommittedError, personalLifeforms, personalTextFields, type PersonalSpeciesDraft } from './personalSpeciesEditor';
 
-  let { plotNumber, contextId, onSaved, onClosed, onBusyChange, onProfileNavigation, onProfileSUReview, onFindPlot, entryForm = 'fs882' }: { plotNumber?: string; contextId: string; onSaved?: (p: string) => void | Promise<void>; onClosed?: () => void; onBusyChange?: (busy: boolean) => void; onFindPlot?: () => void;
-    entryForm?: 'fs882' | 'sivi';
+  let { plotNumber, contextId, onSaved, onClosed, onBusyChange, onProfileNavigation, onProfileSUReview, onFindPlot, onOpenPictureManager, onDiagnosticsContextChange, entryForm = 'fs882' }: { plotNumber?: string; contextId: string; onSaved?: (p: string) => void | Promise<void>; onClosed?: () => void; onBusyChange?: (busy: boolean) => void; onFindPlot?: () => void;
+    entryForm?: 'fs882' | 'sivi' | 'fs882-twopage';
     onProfileNavigation?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
     onProfileSUReview?: (proposal: ProjectPlotProfileFilterRequest, contextId: string) => Promise<void>;
+    onOpenPictureManager?: (plotNumber: string) => void;
+    onDiagnosticsContextChange?: (state: { header: Record<string, unknown> | null; humus: Record<string, unknown>[]; mineral: Record<string, unknown>[] }) => void;
   } = $props();
   const PlotService = { ...PlotEntryService, ...bindContextPlots(untrack(() => contextId)) };
   const siviContextId = untrack(() => contextId);
@@ -235,6 +242,8 @@
   let speciesChoices = $state<Record<string, SpeciesChoices>>({});
 
   let activeTab = $state<'site' | 'veg' | 'vegOther' | 'soils' | 'other' | 'audit' | 'siviParent'>('site');
+  let fieldCardModalOpen = $state(false);
+  let fieldCardSplitOpen = $state(false);
   async function vegetationNotesTab() {
     activeTab = 'soils';
     await tick();
@@ -274,6 +283,13 @@
   const metadataRestorationEnabled = true;
   const sourceEnterEnabled = true;
   function sourceEnter(event: KeyboardEvent) {
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'p') {
+      if (twoPageOpen && twoPageScope === 'entry') return;
+      event.preventDefault();
+      fieldCardModalOpen = !fieldCardModalOpen;
+      if (fieldCardModalOpen) fieldCardSplitOpen = false;
+      return;
+    }
     if (!sourceEnterEnabled || !container) return;
     try { navigateSourceEnter(event, container); }
     catch (cause) { error = `Source Enter navigation failed; drafts retained: ${String(cause)}`; }
@@ -600,8 +616,15 @@
   const activeLayerDepthInput = $derived(
     activeLayerDepthRaw ?? (draft.activeLayerDepth == null ? '' : String(draft.activeLayerDepth)),
   );
+  const arcticInputsDisabled = $derived(
+    draft.locked || busy || siviSourceBarrier || !capabilitiesReady || nonParentChildUnsaved ||
+    siviParentWriteUnsaved || siviParentActionUnsaved || siviProjectAssignmentUnsaved ||
+    twoPageOpen || twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked ||
+    pictureBusy || pictureMetadataPending,
+  );
   function stageSnowCoverRegime(raw: string) {
-    if (headerInputsDisabled || capabilities.snowCoverRegime !== true) return;
+    const inputsDisabled = typeof arcticInputsDisabled !== 'undefined' ? arcticInputsDisabled : headerInputsDisabled;
+    if (inputsDisabled || capabilities.snowCoverRegime !== true) return;
     const value = raw === '' ? null : raw;
     draft.snowCoverRegime = value;
     const message = ordinaryTextError(
@@ -613,7 +636,8 @@
     markDirty();
   }
   function stageActiveLayerDepth(raw: string) {
-    if (headerInputsDisabled || capabilities.activeLayerDepth !== true) return;
+    const inputsDisabled = typeof arcticInputsDisabled !== 'undefined' ? arcticInputsDisabled : headerInputsDisabled;
+    if (inputsDisabled || capabilities.activeLayerDepth !== true) return;
     activeLayerDepthRaw = raw;
     const cell = ordinaryNumberValue(
       { label: 'Active layer depth', kind: 'single' },
@@ -625,6 +649,12 @@
     markDirty();
   }
   const headerInputsDisabled = $derived(draft.locked || busy || siviSourceBarrier || !capabilitiesReady || childUnsaved || pictureBusy || pictureMetadataPending);
+  const nonArcticHeaderDirty = $derived.by(() => {
+    if (!dirty || !original) return dirty;
+    const { snowCoverRegime: _ds, activeLayerDepth: _da, ...restDraft } = draft;
+    const { snowCoverRegime: _os, activeLayerDepth: _oa, ...restOrig } = original;
+    return JSON.stringify(restDraft) !== JSON.stringify(restOrig);
+  });
   const twoPageLinkedParentBlocked = $derived.by(() => {
     twoPageRevision;
     const parent = twoPageEditor?.getDraftState?.();
@@ -664,7 +694,7 @@
     dirty || original === null || personalDraft !== null || Object.keys(headerValidation).length > 0);
   const siviCreationEditingDisabled = $derived(siviCreationRecoveryDisabled || !capabilitiesReady || draft.locked || siviSourceBarrier ||
     dirty || original === null || personalDraft !== null || Object.keys(headerValidation).length > 0);
-  const siviParentSharedEditingDisabled = $derived(!siviParentSharedEnabled || !capabilitiesReady || draft.locked || busy || headerWorkflowBusy || dirty ||
+  const siviParentSharedEditingDisabled = $derived(!siviParentSharedEnabled || !capabilitiesReady || draft.locked || busy || headerWorkflowBusy || nonArcticHeaderDirty ||
     original === null || nonParentChildUnsaved || siviParentWriteUnsaved || siviParentActionUnsaved || siviProjectAssignmentUnsaved ||
     personalDraft !== null || siviSourceAuthorityUnknown || Object.keys(headerValidation).length > 0 || (siviParentSharedView?.blocked ?? false));
   const siviParentWriteEditingDisabled = $derived(!siviParentEditingEnabled || !capabilitiesReady || draft.locked || busy || headerWorkflowBusy || dirty ||
@@ -694,6 +724,57 @@
     : draft.locked ? 'Unlock the plot before restoring fields.'
     : dirty || Object.keys(headerValidation).length > 0 ? 'Save valid header changes or Undo before restoring fields.'
     : 'Save the plot before restoring fields.');
+
+  const validationSummaryItems = $derived(
+    buildFormValidationItems({
+      siviStandalone,
+      headerValidation,
+      soilInvalid,
+      speciesInvalid,
+      heightInvalid,
+      creationInvalid,
+      personalInvalid,
+      attributeInvalid,
+      otherInvalid,
+    }),
+  );
+
+  async function handleValidationJump(item: FormValidationItem) {
+    activeTab = item.tab;
+    if (item.tab === 'siviParent') siviParentOpen = true;
+    await tick();
+    focusValidationTarget(container, item);
+  }
+
+  const fieldCardViewModel = $derived.by(() => {
+    if (!fieldCardModalOpen && !fieldCardSplitOpen) return null;
+    return buildFieldCardViewModel({
+      formKind: siviStandalone ? 'sivi' : 'fs882',
+      committedHeader: original as unknown as Record<string, unknown> | null,
+      draftHeader: draft as unknown as Record<string, unknown>,
+      siviParentOriginal:
+        siviParentSharedView?.original ??
+        siviParentWriteView?.original ??
+        siviParentActionView?.original ??
+        siviParentView?.original ??
+        null,
+      siviSharedDrafts: siviParentSharedView?.drafts,
+      siviDirectDrafts: siviParentWriteView?.drafts,
+      siviActionDrafts: siviParentActionView?.drafts,
+      humusRows: humusList as unknown as Record<string, unknown>[],
+      mineralRows: mineralList as unknown as Record<string, unknown>[],
+      soilDrafts,
+      vegRows: vegList as unknown as Record<string, unknown>[],
+      heightDrafts,
+      speciesDrafts,
+      collectedDrafts,
+      creationDraft,
+      extendedShrubs,
+      snowCoverRegimeRaw: snowCoverRegimeInput,
+      activeLayerDepthRaw: activeLayerDepthInput,
+      isDirty: dirty || childUnsaved || Object.keys(headerValidation).length > 0,
+    });
+  });
 
   async function siviParentWriteOperation(operation: 'load' | 'save' | 'undo' | 'retain' | 'prune'): Promise<boolean> {
     if (!siviParentWriteSession || busy || headerWorkflowBusy || siviParentActionUnsaved || siviProjectAssignmentUnsaved || siviParentSharedUnsaved || operation !== 'undo' && siviParentWriteEditingDisabled) {
@@ -1379,6 +1460,124 @@
     }
     openTwoPageReview();
     if (twoPageOpen) twoPageScope = 'entry';
+  }
+
+  function openProfileSUFromTwoPage() {
+    if (twoPageBusy || twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked) {
+      error = 'Finish active two-page operations before opening Plot Profiling / Create SU.';
+      return;
+    }
+    if (siviSourceBarrier) {
+      error = 'Observe the ProjectID source preference outcome before opening profile rules.';
+      return;
+    }
+    twoPageOpen = false;
+    twoPageBusy = false;
+    twoPageProject = null;
+    profileReviewOpen = true;
+    profileReviewBusy = true;
+  }
+
+  let projectIdDatalist = $state<string[]>([]);
+  $effect(() => {
+    const rows = siviProjectAssignmentView?.choices?.Choices?.rows;
+    if (rows?.length) {
+      const next: string[] = [...new Set(rows.map(r => r.cells?.[0]?.storage === 'text' ? (r.cells[0].text ?? '').trim() : '').filter(Boolean))];
+      if (next.length) projectIdDatalist = next;
+      return;
+    }
+    const cid = siviContextId;
+    if (!cid || typeof ContextService?.GetSIVIProjectIDChoices !== 'function') return;
+    let active = true;
+    void ContextService.GetSIVIProjectIDChoices(cid).then(res => {
+      if (!active || !res?.Choices?.rows) return;
+      const next = [...new Set(
+        res.Choices.rows
+          .map(r => r.cells?.[0]?.storage === 'text' ? (r.cells[0].text ?? '').trim() : '')
+          .filter(Boolean),
+      )];
+      if (next.length) projectIdDatalist = next;
+    }).catch(() => {});
+    return () => { active = false; };
+  });
+
+  let autoOpenedTwoPageKey = $state<string | null>(null);
+  $effect(() => {
+    if (entryForm !== 'fs882-twopage') {
+      autoOpenedTwoPageKey = null;
+      return;
+    }
+    const loadedPlot = original?.plotNumber ?? null;
+    const activeProject = $projectState?.activeProject ?? null;
+    const ctxMatch = $projectState?.contextId === siviContextId;
+    if (!loadedPlot || !activeProject || !ctxMatch || !twoPageEntryReviewEnabled || siviStandalone ||
+        childParentDisabled || twoPageOpen || childUnsaved || dirty || Object.keys(headerValidation).length > 0) {
+      if (!loadedPlot) autoOpenedTwoPageKey = null;
+      return;
+    }
+    const key = `${siviContextId}:${activeProject}:${loadedPlot}`;
+    if (autoOpenedTwoPageKey === key) return;
+    autoOpenedTwoPageKey = key;
+    openTwoPageEntryReview();
+  });
+
+  function mergeSoilDraftRows<T extends { id: number }>(kind: 'Humus' | 'Mineral', rows: T[], drafts: SoilDrafts): Record<string, unknown>[] {
+    return rows.map(row => {
+      const snap = $state.snapshot(row) as unknown as Record<string, unknown>;
+      const staged = drafts[`${kind}/${row.id}`];
+      if (!staged) return snap;
+      const merged: Record<string, unknown> = { ...snap };
+      for (const [key, cell] of Object.entries(staged.cells)) {
+        if (cell.error === null) merged[key] = cell.value;
+      }
+      return merged;
+    });
+  }
+
+  $effect(() => {
+    if (!onDiagnosticsContextChange) return;
+    const headerSnap = original ? ($state.snapshot(draft) as unknown as Record<string, unknown>) : null;
+    const humusSnap = original ? mergeSoilDraftRows('Humus', humusList, soilDrafts) : [];
+    const mineralSnap = original ? mergeSoilDraftRows('Mineral', mineralList, soilDrafts) : [];
+    onDiagnosticsContextChange({ header: headerSnap, humus: humusSnap, mineral: mineralSnap });
+  });
+
+  export function applyDiagnosticHumusThickness(v: number) {
+    if (headerInputsDisabled || capabilities.humusThickness !== true || !Number.isFinite(v)) return;
+    const field = { key: 'humusThickness' as const, column: 'HumusThickness', label: 'Humus thickness', scope: 'soils' as const, kind: 'single' as const };
+    const cell = ordinaryNumberValue(field, String(v), original?.humusThickness ?? null);
+    if (cell.error !== null) {
+      error = cell.error;
+      return;
+    }
+    draft.humusThickness = cell.value;
+    if (original) {
+      const existing = ordinarySession(draft, original);
+      if ('humusThickness' in existing) {
+        const next = { ...existing };
+        delete next.humusThickness;
+        rememberOrdinarySession(draft, original, next);
+      }
+    }
+    validateHeader('ordinary-soils', null);
+    markDirty();
+    headerRevision++;
+  }
+
+  export function applyDiagnosticSMR(smr: string) {
+    if (headerInputsDisabled || capabilities.moistureRegime !== true) return;
+    draft.moistureRegime = smr === '' ? null : smr;
+    validateHeader('moistureRegime', null);
+    markDirty();
+    headerRevision++;
+  }
+
+  export function applyDiagnosticSNR(snr: string) {
+    if (headerInputsDisabled || capabilities.nutrientRegime !== true) return;
+    draft.nutrientRegime = snr === '' ? null : snr;
+    validateHeader('nutrientRegime', null);
+    markDirty();
+    headerRevision++;
   }
 
   async function refreshTwoPagePeers(scope: 'extra' | 'common' | 'entry') {
@@ -2657,6 +2856,9 @@
       dirty = false;
       headerValidation = {};
       successMsg = `Plot ${draft.plotNumber} saved successfully.`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        notifications.success(`Plot ${draft.plotNumber} saved`, 'Committed to canonical SQLite project database.');
+      }
       await loadChildData(draft.plotNumber);
       if (siviParentSession?.view().original || siviParentSession?.view().error) {
         await refreshSIVIParent(draft.plotNumber, [siviParentWriteSession, siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession]);
@@ -2806,6 +3008,9 @@
     error = null;
     headerRevision++;
     successMsg = 'Changes undone.';
+    if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+      notifications.success('Draft changes undone', draft.plotNumber ? `Plot ${draft.plotNumber} restored to last saved state.` : 'Draft reset.');
+    }
   }
 
   async function toggleLock() {
@@ -2840,6 +3045,12 @@
     if (speciesUnsaved) { error = 'Save or Cancel species drafts before changing the plot lock.'; return; }
     if (!draft.locked && dirty) { await save(); if (dirty) return; }
     draft.locked = !draft.locked;
+    if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+      notifications.success(
+        draft.locked ? `Plot ${draft.plotNumber || ''} locked`.trim() : `Plot ${draft.plotNumber || ''} unlocked`.trim(),
+        draft.locked ? 'Form is now protected in read-only mode.' : 'Form is now unlocked for editing.',
+      );
+    }
   }
 
   async function childOperation(operation: () => Promise<void>) {
@@ -2894,9 +3105,9 @@
 
 <svelte:window onkeydown={sourceEnter} />
 
-<div bind:this={container} data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="fs882-container bg-white rounded-lg shadow border border-stone-200 flex flex-col h-full text-stone-800 text-sm">
+<div bind:this={container} data-tour="fs882-form-root" data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="fs882-container bg-white rounded-lg shadow border border-stone-200 flex flex-col h-full text-stone-800 text-sm">
   <!-- Header Bar -->
-  <header class="fs882-toolbar p-3 bg-stone-100 border-b border-stone-200 flex justify-between items-center">
+  <header class="fs882-toolbar p-3 bg-stone-100 border-b border-stone-200 flex flex-wrap justify-between items-center gap-2">
     <div class="flex items-center gap-3">
       <h2 class="font-bold text-stone-900 text-base">{siviStandalone ? 'SIVI / FS1333: Site Visit' : 'FS882-6x4XL: Ecosystem Field Form'}</h2>
       <span class="px-2 py-0.5 rounded text-xs font-semibold {dirty || childUnsaved ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-600'}">
@@ -2909,7 +3120,7 @@
       {/if}
     </div>
 
-    <div class="fs882-actions flex items-center gap-2">
+    <div class="fs882-actions flex flex-wrap items-center gap-2">
       {#if twoPageReviewEnabled && !siviStandalone}
         <button type="button" data-two-page-review class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50"
           disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0}
@@ -2956,6 +3167,25 @@
           {profileEditingEnabled && $projectState?.plotProfile?.writable === true ? 'Review project profile rules' : 'Review project profile (read-only)'}
         </button>
       {/if}
+      <button
+        type="button"
+        data-view-field-card-btn
+        title="Preview official printed field card (Alt+P)"
+        onclick={() => { fieldCardModalOpen = true; fieldCardSplitOpen = false; }}
+        class="px-3 py-1 rounded text-xs font-semibold border border-[#003366] bg-[#EBF1F8] text-[#003366] hover:bg-[#003366] hover:text-white flex items-center gap-1.5"
+      >
+        <FileText size={14} /> View Field Card
+      </button>
+      <button
+        type="button"
+        data-dock-field-card-btn
+        aria-pressed={fieldCardSplitOpen}
+        title="Toggle live side-by-side split field card preview (>= 1760px)"
+        onclick={() => { fieldCardSplitOpen = !fieldCardSplitOpen; if (fieldCardSplitOpen) fieldCardModalOpen = false; }}
+        class="dock-field-card-btn px-3 py-1 rounded text-xs font-semibold border flex items-center gap-1.5 {fieldCardSplitOpen ? 'bg-[#003366] text-white border-[#003366]' : 'border-[#D1D5DB] bg-white text-[#003366] hover:bg-[#EBF1F8]'}"
+      >
+        <Columns2 size={14} /> Dock Split View
+      </button>
       <button type="button" onclick={toggleLock}
         disabled={busy || headerWorkflowBusy || !capabilitiesReady || siviStandalone &&
           (!siviStandaloneEnabled || !siviParentView?.original || Boolean(siviParentView?.error) || childUnsaved || siviSourceBarrier)}
@@ -2971,7 +3201,7 @@
       <button type="button" onclick={save}
         disabled={(!dirty && !childUnsaved) || draft.locked || busy || headerWorkflowBusy || !capabilitiesReady ||
           siviStandalone && !getCloseState().canSave}
-        class="px-3 py-1 rounded text-xs font-medium bg-emerald-700 hover:bg-emerald-800 text-white disabled:opacity-50 flex items-center gap-1">
+        class="px-3 py-1 rounded text-xs font-medium bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50 flex items-center gap-1">
         <Save size={14} /> Save
       </button>
       {#if onClosed}
@@ -2995,40 +3225,41 @@
     </p>
   {/if}
   {#if successMsg}
-    <div class="p-2 bg-emerald-50 border-b border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-      <Check size={14} class="text-emerald-600 shrink-0" /><span>{successMsg}</span>
+    <div class="p-2 bg-[#EBF5ED] border-b border-[#2E8540]/30 text-[#1F5C2C] text-xs flex items-center gap-2">
+      <Check size={14} class="text-[#2E8540] shrink-0" /><span>{successMsg}</span>
     </div>
   {/if}
 
   <!-- Navigation Tabs -->
-  <nav aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'} class="fs882-tabs flex border-b border-stone-200 bg-stone-50 px-3 text-xs font-medium">
+  <nav aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'} class="fs882-tabs flex flex-wrap border-b border-stone-200 bg-stone-50 px-3 text-xs font-medium">
     {#if siviStandalone}
       <button type="button" data-sivi-site-tab data-help-id="sivi.plot_type" aria-current={activeTab === 'siviParent' ? 'page' : undefined}
-        class="px-4 py-2 border-b-2 {activeTab === 'siviParent' ? 'border-emerald-600 text-emerald-800 font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
+        class="px-4 py-2 border-b-2 {activeTab === 'siviParent' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
         disabled={tabWorkflowBusy || !siviStandaloneEnabled} onclick={() => { activeTab = 'siviParent'; siviParentOpen = true; }}>Plot &amp; Site Description</button>
     {:else}
       <button data-help-id="site.moisture_regime" aria-current={activeTab === 'site' ? 'page' : undefined}
-        class="px-4 py-2 border-b-2 {activeTab === 'site' ? 'border-emerald-600 text-emerald-800 font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
+        class="px-4 py-2 border-b-2 {activeTab === 'site' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
         onclick={() => activeTab = 'site'} disabled={tabWorkflowBusy}>Site & Location</button>
     {/if}
     <button data-help-id="veg.covers" aria-current={activeTab === 'veg' ? 'page' : undefined}
-      class="px-4 py-2 border-b-2 {activeTab === 'veg' ? 'border-emerald-600 text-emerald-800 font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
+      class="px-4 py-2 border-b-2 {activeTab === 'veg' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
       onclick={() => activeTab = 'veg'} disabled={tabWorkflowBusy || siviStandalone && !siviStandaloneEnabled}>Vegetation</button>
     {#if !siviStandalone}
       <button data-help-id="veg.species" aria-current={activeTab === 'vegOther' ? 'page' : undefined}
-        class="px-4 py-2 border-b-2 {activeTab === 'vegOther' ? 'border-emerald-600 text-emerald-800 font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
+        class="px-4 py-2 border-b-2 {activeTab === 'vegOther' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
         onclick={() => activeTab = 'vegOther'} disabled={tabWorkflowBusy}>Veg Other</button>
       <button data-help-id="humus.upper_lower_depth" aria-current={activeTab === 'soils' ? 'page' : undefined}
-        class="px-4 py-2 border-b-2 {activeTab === 'soils' ? 'border-emerald-600 text-emerald-800 font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
+        class="px-4 py-2 border-b-2 {activeTab === 'soils' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
         onclick={() => activeTab = 'soils'} disabled={tabWorkflowBusy}>Soils (Humus & Mineral)</button>
       <button aria-current={activeTab === 'other' ? 'page' : undefined}
-        class="px-4 py-2 border-b-2 {activeTab === 'other' ? 'border-emerald-600 text-emerald-800 font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
+        class="px-4 py-2 border-b-2 {activeTab === 'other' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
         onclick={() => activeTab = 'other'} disabled={tabWorkflowBusy}>Other Data</button>
       <button aria-current={activeTab === 'audit' ? 'page' : undefined}
-        class="px-4 py-2 border-b-2 {activeTab === 'audit' ? 'border-emerald-600 text-emerald-800 font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
+        class="px-4 py-2 border-b-2 {activeTab === 'audit' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}"
         onclick={() => activeTab = 'audit'} disabled={tabWorkflowBusy}>Audit Trail</button>
     {/if}
   </nav>
+  <FormValidationSummary items={validationSummaryItems} onjump={(item) => void handleValidationJump(item)} />
   {#if (extendedShrubsEnabled && !twoPageOpen) || (siviParentReviewEnabled && !siviStandalone)}
     <div class="border-b border-stone-200 px-4 py-2 flex flex-wrap items-center gap-4">
       {#if extendedShrubsEnabled && !twoPageOpen}
@@ -3047,8 +3278,9 @@
     </div>
   {/if}
 
-  <!-- Tab Contents -->
-  <div class="fs882-body overflow-y-auto flex-1">
+  <!-- Tab Contents + Optional Split Field Card Dock -->
+  <div class="fs882-workspace-split flex-1 min-h-0 flex" class:split-active={fieldCardSplitOpen && fieldCardViewModel !== null}>
+  <div class="fs882-body overflow-y-auto flex-1 min-w-0" data-field-card-form-pane>
     {#if siviStandalone && !siviStandaloneEnabled}
       <p role="alert" class="p-4">Standalone SIVI is unavailable. Its independent entry gate and parent-review gate are required; no FS882 fallback is presented.</p>
     {/if}
@@ -3066,8 +3298,8 @@
             onExtendedShrubsChange={extendedShrubsEnabled ? setExtendedShrubs : undefined}
             snowCoverRegime={snowCoverRegimeInput}
             activeLayerDepth={activeLayerDepthInput}
-            snowCoverRegimeDisabled={headerInputsDisabled || capabilities.snowCoverRegime !== true}
-            activeLayerDepthDisabled={headerInputsDisabled || capabilities.activeLayerDepth !== true}
+            snowCoverRegimeDisabled={arcticInputsDisabled || capabilities.snowCoverRegime !== true}
+            activeLayerDepthDisabled={arcticInputsDisabled || capabilities.activeLayerDepth !== true}
             snowCoverRegimeError={headerValidation.snowCoverRegime ?? null}
             activeLayerDepthError={headerValidation.activeLayerDepth ?? null}
             onSnowCoverRegimeChange={stageSnowCoverRegime}
@@ -3227,6 +3459,7 @@
             childBlocked={twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked || pictureBusy || pictureMetadataPending}
             onbusy={value => twoPageBusy = value}
             onclosed={() => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; error = null; }}
+            onOpenProfileSU={profileReviewEnabled && !siviStandalone ? openProfileSUFromTwoPage : undefined}
             oncommitted={() => refreshTwoPagePeers('entry')} embedded={twoPageLinkedChild} />
         {:catch loadError}
           <p role="alert" data-two-page-load-error="entry" class="p-3 text-xs text-red-700">Two-page complete entry could not load: {String(loadError)}</p>
@@ -3315,9 +3548,12 @@
         {#snippet children(ordinaryEditor)}
         <HeaderEditor bind:draft {original} {capabilities} disabled={headerInputsDisabled}
           onMetadata={metadataEnabled ? openProjectMetadata : undefined} metadataDisabled={!canOpenProjectMetadata()}
+          {onOpenPictureManager} projectIds={projectIdDatalist}
           {editor} additionalEditor={ordinaryEditor} {masterAllowed} {extendedShrubs}
           snowCoverRegime={snowCoverRegimeInput}
           activeLayerDepth={activeLayerDepthInput}
+          snowCoverRegimeDisabled={arcticInputsDisabled}
+          activeLayerDepthDisabled={arcticInputsDisabled}
           snowCoverRegimeError={headerValidation.snowCoverRegime ?? null}
           activeLayerDepthError={headerValidation.activeLayerDepth ?? null}
           onSnowCoverRegimeChange={stageSnowCoverRegime}
@@ -3431,7 +3667,7 @@
           onclick={() => void showSIVIIdentityPanel()}>{siviIdentityPanelOpen ? 'Close ID view' : 'Show SIVI IDs'}</button>
       {/if}
       {#if extendedShrubs && !siviPanelOpen && !siviCoverPanelOpen && !siviCombinedPanelOpen && !siviCollectedPanelOpen && !siviSpeciesPanelOpen && !siviIdentityPanelOpen}
-        <p class="mb-3 text-sm" role="status">Extended shrubs use cover mode (Cover5a–Cover5c / Height5a–Height5c). Turn this option off to use height mode; hidden values, drafts and errors are retained.</p>
+        <p class="mb-3 text-sm" role="status">Extended shrubs use cover mode (Cover5a–Cover5c only; Height5a–Height5c height fields are disabled). Turn this option off to use height mode; hidden values, drafts and errors are retained.</p>
       {/if}
       {#if siviIdentityPanelOpen && siviIdentityView}
         {#if siviIdentityReading && siviIdentityBusy}
@@ -3574,13 +3810,15 @@
       <FS882ChildCreateModal region="speciesModal" bind:showSpeciesModal bind:speciesSearchQuery
         {speciesSearchResults} {searchingSpecies} {searchSpecies} {selectSpeciesToAdd} />
     {:else if activeTab === 'soils'}
-      <FS882SoilHorizonSection bind:draft {original} {capabilities} {sourceHeaderValues} {ordinarySoilUnavailable}
-        {historicalSoilUnavailable} {soilEditingEnabled} {soilCodeEditingEnabled} {soilReferenceBusy}
-        {soilReferenceError} {soilEditingDisabled} {soilUnsaved} {headerInputsDisabled} {busy} {headerWorkflowBusy}
-        {coordinateBusy} {workingUnitBusy} {qualityBusy} {siteCodeBusy} {regionCodeBusy}
-        bind:soilCodeBusy bind:geologyCodeBusy bind:parentCodeBusy bind:drainageBusy
-        {childRevision} {soilDrafts} {soilSuggestions} {humusList} {mineralList} {sourceRows} {markDirty}
-        {validateHeader} {loadSoilSuggestions} {openNewChild} {stageSoilCell} {deleteSourceChild} {deleteHumus} />
+      {#key headerRevision}
+        <FS882SoilHorizonSection bind:draft {original} {capabilities} {sourceHeaderValues} {ordinarySoilUnavailable}
+          {historicalSoilUnavailable} {soilEditingEnabled} {soilCodeEditingEnabled} {soilReferenceBusy}
+          {soilReferenceError} {soilEditingDisabled} {soilUnsaved} {headerInputsDisabled} {busy} {headerWorkflowBusy}
+          {coordinateBusy} {workingUnitBusy} {qualityBusy} {siteCodeBusy} {regionCodeBusy}
+          bind:soilCodeBusy bind:geologyCodeBusy bind:parentCodeBusy bind:drainageBusy
+          {childRevision} {soilDrafts} {soilSuggestions} {humusList} {mineralList} {sourceRows} {markDirty}
+          {validateHeader} {loadSoilSuggestions} {openNewChild} {stageSoilCell} {deleteSourceChild} {deleteHumus} />
+      {/key}
     {:else if activeTab === 'vegOther'}
       <FS882OtherRecordsSection mode="vegOther" {sourceHeaderValues} {childRevision} {busy} {headerWorkflowBusy}
         {sourceRows} {vegetationReadUnavailable} {attributeEditingEnabled} {attributeReferenceBusy}
@@ -3603,4 +3841,44 @@
     </div>
     <FS882ChildCreateModal region="newChild" {newChild} {busy} {error} {createChild} cancelNewChild={() => { newChild = null; }} />
   </div>
+  {#if fieldCardSplitOpen && fieldCardViewModel}
+    <div class="fs882-dock-pane">
+      <FieldCardPreviewModal
+        open={true}
+        mode="docked"
+        viewModel={fieldCardViewModel}
+        onclose={() => { fieldCardSplitOpen = false; }}
+        onmodechange={(nextMode) => {
+          if (nextMode === 'modal') {
+            fieldCardSplitOpen = false;
+            fieldCardModalOpen = true;
+          }
+        }}
+      />
+    </div>
+  {/if}
+  </div>
+  {#if fieldCardModalOpen && fieldCardViewModel}
+    <FieldCardPreviewModal
+      open={true}
+      mode="modal"
+      viewModel={fieldCardViewModel}
+      onclose={() => { fieldCardModalOpen = false; }}
+      onmodechange={(nextMode) => {
+        if (nextMode === 'docked') {
+          fieldCardModalOpen = false;
+          fieldCardSplitOpen = true;
+        }
+      }}
+    />
+  {/if}
 </div>
+
+<style>
+  .fs882-workspace-split { min-width: 0; }
+  .fs882-dock-pane { width: min(46%, 720px); min-width: 520px; max-width: 52%; height: 100%; flex: none; }
+  @media (max-width: 1759px) {
+    .dock-field-card-btn { display: none; }
+    .fs882-dock-pane { display: none; }
+  }
+</style>

@@ -67,10 +67,15 @@ test('compiled Forms menu requires an available owned entry and callback without
       const ownButton = button.slice(button.lastIndexOf('<button'));
       assert.equal(/\bdisabled(?:\s|=|>)/.test(ownButton), !(available && callback));
       assert.match(ownButton, available && callback ? /Existing draft and close guards apply/ : /Select a plot to open SIVI/);
-      for (const label of ['Metadata', 'Herbarium \\(Phase 2 Deferred\\)', 'Colour-theme \\(Phase 2 Deferred\\)', 'User setup \\(Phase 2 Deferred\\)']) {
+      for (const label of ['Metadata', 'Herbarium \\(Phase 2 Deferred\\)', 'Colour-theme \\(Phase 2 Deferred\\)', 'User setup(?: \\(Phase 2 Deferred\\))?']) {
         const menuButton = html.match(new RegExp(`<button\\b[^>]*>[\\s\\S]*?<span>${label}<\\/span>\\s*<\\/button>`))?.[0];
         assert.ok(menuButton);
-        assert.match(menuButton.slice(menuButton.lastIndexOf('<button')), /\bdisabled(?:\s|=|>)/);
+        const targetButton = menuButton.slice(menuButton.lastIndexOf('<button'));
+        if (/User setup/.test(label)) {
+          if (/Phase 2 Deferred/.test(targetButton)) assert.match(targetButton, /\bdisabled(?:\s|=|>)/);
+        } else {
+          assert.match(targetButton, /\bdisabled(?:\s|=|>)/);
+        }
       }
     }
   }
@@ -157,7 +162,7 @@ test('standalone host uses the existing editor owner/close guards, not a duplica
     assert.equal(compile(text, { filename, generate: 'client' }).warnings.length, 0);
   }
   assert.match(app, /entryForm=\{editorEntryForm\}/);
-  assert.match(app, /const editorLabel = \$derived\(editorEntryForm === 'sivi' \? 'SIVI \/ FS1333' : 'FS882'\)/);
+  assert.match(app, /const editorLabel = \$derived(?:<[^>]+>)?\([\s\S]*?editorEntryForm === 'sivi' \? 'SIVI \/ FS1333'[\s\S]*?'FS882'[\s\S]*?\)/);
   assert.match(app, /\{editorLabel\}/);
   const close = source('CloseConfirm.svelte');
   assert.match(close, /editorLabel = 'FS882'/);

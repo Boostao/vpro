@@ -2,16 +2,21 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { ReadRequests } from '../shared/readRequests';
   import {
-    CANONICAL_DATASHEET_KEYS,
+    ALL_DATASHEET_KEYS,
     cellsSemanticallyEqual,
     computeNextGridCell,
     computeVirtualWindow,
     defaultDatasheetBackendPort,
     formatCellForEditor,
     formatTSVRange,
+    isCellInRange,
+    isColumnEditable,
+    isEditableChildTable,
+    isReadOnlyDatasheetTable,
     normalizeGridRange,
     parseAndValidateCellInput,
     parseTSVClipboard,
+    shouldNavigateOnArrowKey,
     toggleMultiColumnSort,
     type DatasheetBackendPort,
     type DatasheetCellEdit,
@@ -20,6 +25,7 @@
     type DatasheetFindReplacePreview,
     type DatasheetPage,
     type DatasheetSortSpec,
+    type DatasheetStorageCell,
     type DatasheetTableInfo,
     type DatasheetTableKey,
     type GridSelectionRange,
@@ -74,7 +80,17 @@
   let drafts = $state<Record<string, CellDraft>>({});
 
   let activeCell = $state<{ row: number; col: number } | null>(null);
+  let selectionAnchor = $state<{ row: number; col: number } | null>(null);
   let selectionRange = $state<GridSelectionRange | null>(null);
+  let isMouseSelecting = $state(false);
+
+  // Child-row insert & delete state
+  let insertDrawerOpen = $state(false);
+  let insertPlotNumber = $state('');
+  let insertFieldDrafts = $state<Record<string, string>>({});
+  let insertBusy = $state(false);
+  let pendingDeleteRow = $state<{ rowId: string; plotNumber: string; id: number | null } | null>(null);
+  let deleteBusy = $state(false);
 
   let scrollTop = $state(0);
   let viewportHeight = $state(520);
@@ -120,16 +136,35 @@
   const draftEntries = $derived(Object.values(drafts));
   const invalidDraftCount = $derived(draftEntries.filter(d => d.error !== '').length);
   const validEditCount = $derived(draftEntries.filter(d => d.error === '' && d.after !== null).length);
+  const activeTableReadOnly = $derived(
+    page ? isReadOnlyDatasheetTable(page.tableKey, page.readOnly) : isReadOnlyDatasheetTable(activeTableKey)
+  );
+  const activeChildTableEditable = $derived(
+    !!page && !activeTableReadOnly && isEditableChildTable(page.tableKey)
+  );
+  const editableColumns = $derived.by(() => {
+    const p = page;
+    return p ? p.columns.filter(c => isColumnEditable(p.tableKey, c, p.canEditMaster)) : [];
+  });
+  const insertableColumns = $derived.by(() => {
+    const p = page;
+    if (!p) return [] as Array<{ meta: DatasheetColumnMeta; originalIndex: number }>;
+    return orderedColumns
+      .filter(c => c.meta.name !== 'ID' && c.meta.name !== 'PlotNumber' && isColumnEditable(p.tableKey, c.meta, p.canEditMaster))
+      .slice(0, 6);
+  });
 
   function notifyHost() {
-    onBusyChange?.(busy || saving || findBusy || draftEntries.length > 0);
-    onDirtyChange?.(!busy && !saving && !findBusy && draftEntries.length > 0);
+    onBusyChange?.(busy || saving || findBusy || insertBusy || deleteBusy || draftEntries.length > 0);
+    onDirtyChange?.(!busy && !saving && !findBusy && !insertBusy && !deleteBusy && draftEntries.length > 0);
   }
 
   $effect(() => {
     void busy;
     void saving;
     void findBusy;
+    void insertBusy;
+    void deleteBusy;
     void invalidDraftCount;
     void draftEntries.length;
     notifyHost();
@@ -169,7 +204,7 @@
     busy = true;
     errorMessage = '';
     try {
-      const listed = await reads.track(port.listTables(contextId));
+      const listed = await reads.track((port.listAllTables ?? port.listTables)(contextId));
       if (reqGen !== generation) return;
       tables = listed ?? [];
 
@@ -194,7 +229,9 @@
       page = loaded;
       offset = loaded.offset;
       if (!findColumn && loaded.columns.length > 0) {
-        const firstEditable = loaded.columns.find(c => c.editable && !c.pinned) ?? loaded.columns[0];
+        const firstEditable =
+          loaded.columns.find(c => !c.pinned && isColumnEditable(loaded.tableKey, c, loaded.canEditMaster)) ??
+          loaded.columns[0];
         findColumn = firstEditable.name;
       }
       if (!options?.preserveStatus) {
@@ -254,7 +291,11 @@
     columnFilters = {};
     globalSearch = '';
     activeCell = null;
+    selectionAnchor = null;
     selectionRange = null;
+    isMouseSelecting = false;
+    insertDrawerOpen = false;
+    pendingDeleteRow = null;
     findPreview = null;
     findColumn = '';
     scrollTop = 0;
@@ -331,9 +372,19 @@
     }
   }
 
-  function focusGridInput(rowIdx: number, colIdx: number) {
+  function focusGridInput(rowIdx: number, colIdx: number, extendSelection = false) {
     activeCell = { row: rowIdx, col: colIdx };
-    selectionRange = { startRow: rowIdx, endRow: rowIdx, startCol: colIdx, endCol: colIdx };
+    if (extendSelection && selectionAnchor) {
+      selectionRange = {
+        startRow: selectionAnchor.row,
+        endRow: rowIdx,
+        startCol: selectionAnchor.col,
+        endCol: colIdx,
+      };
+    } else {
+      selectionAnchor = { row: rowIdx, col: colIdx };
+      selectionRange = { startRow: rowIdx, endRow: rowIdx, startCol: colIdx, endCol: colIdx };
+    }
     if (viewportEl) {
       const topTarget = rowIdx * ROW_HEIGHT;
       const bottomTarget = topTarget + ROW_HEIGHT;
@@ -348,7 +399,9 @@
         `input[data-grid-row="${rowIdx}"][data-grid-col="${colIdx}"]`
       );
       el?.focus();
-      el?.select();
+      if (!extendSelection) {
+        el?.select();
+      }
     });
   }
 
@@ -364,7 +417,37 @@
       );
       if (next) {
         event.preventDefault();
-        focusGridInput(next.row, next.col);
+        focusGridInput(next.row, next.col, false);
+      }
+      return;
+    }
+    if (
+      event.key === 'ArrowUp' ||
+      event.key === 'ArrowDown' ||
+      event.key === 'ArrowLeft' ||
+      event.key === 'ArrowRight'
+    ) {
+      const inputEl = event.currentTarget as HTMLInputElement | null;
+      if (
+        !shouldNavigateOnArrowKey(
+          event.key,
+          inputEl?.selectionStart ?? null,
+          inputEl?.selectionEnd ?? null,
+          inputEl?.value.length ?? 0
+        )
+      ) {
+        return;
+      }
+      const next = computeNextGridCell(
+        { row: rowIdx, col: colIdx },
+        event.key,
+        event.shiftKey,
+        page.rows.length,
+        orderedColumns.length
+      );
+      if (next) {
+        event.preventDefault();
+        focusGridInput(next.row, next.col, event.shiftKey);
       }
       return;
     }
@@ -422,7 +505,7 @@
       for (let cOff = 0; cOff < line.length; cOff++) {
         const targetCol = anchorCol + cOff;
         if (targetCol >= orderedColumns.length) break;
-        if (!orderedColumns[targetCol].meta.editable) continue;
+        if (!isColumnEditable(page.tableKey, orderedColumns[targetCol].meta, page.canEditMaster)) continue;
         setCellDraft(targetRow, targetCol, line[cOff]);
         applied++;
       }
@@ -492,6 +575,116 @@
     }
   }
 
+  function openInsertChildDrawer() {
+    if (!page || !activeChildTableEditable) return;
+    let seedPlot = '';
+    if (activeCell && page.rows[activeCell.row]) {
+      const row = page.rows[activeCell.row];
+      const plotCol = orderedColumns.find(c => c.meta.name === 'PlotNumber');
+      if (plotCol) {
+        seedPlot = formatCellForEditor(row.cells[plotCol.originalIndex], plotCol.meta);
+      }
+    }
+    insertPlotNumber = seedPlot;
+    insertFieldDrafts = {};
+    pendingDeleteRow = null;
+    insertDrawerOpen = true;
+    errorMessage = '';
+  }
+
+  async function commitInsertChildRow() {
+    if (!page || !activeChildTableEditable || insertBusy) return;
+    const plotNumber = insertPlotNumber.trim();
+    if (!plotNumber) {
+      errorMessage = 'PlotNumber is required to insert a child row.';
+      return;
+    }
+    const insertCells: Record<string, DatasheetStorageCell> = {};
+    for (const colEntry of orderedColumns) {
+      const meta = colEntry.meta;
+      if (meta.name === 'ID' || meta.name === 'PlotNumber') continue;
+      if (!isColumnEditable(page.tableKey, meta, page.canEditMaster)) continue;
+      const raw = insertFieldDrafts[meta.name] ?? '';
+      if (raw === '') continue;
+      const parsed = parseAndValidateCellInput(page.tableKey, meta, raw, page.canEditMaster);
+      if (parsed.error || !parsed.cell) {
+        errorMessage = parsed.error || `Invalid value for ${meta.name}.`;
+        return;
+      }
+      insertCells[meta.name] = parsed.cell;
+    }
+
+    const fn = port.insertChildRow ?? defaultDatasheetBackendPort.insertChildRow;
+    if (!fn) {
+      errorMessage = 'Child row insert port is unavailable.';
+      return;
+    }
+    insertBusy = true;
+    errorMessage = '';
+    try {
+      const res = await fn(contextId, {
+        tableKey: page.tableKey,
+        plotNumber,
+        cells: insertCells,
+      });
+      insertDrawerOpen = false;
+      insertFieldDrafts = {};
+      statusBanner = `Inserted row ID ${res.id} for plot ${res.plotNumber} in ${res.tableName} (${res.auditRows} audit record(s)).`;
+      await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
+    } catch (err) {
+      errorMessage = `Insert child row failed: ${String(err)}`;
+    } finally {
+      insertBusy = false;
+    }
+  }
+
+  function requestDeleteSelectedRow() {
+    if (!page || !activeChildTableEditable || !activeCell) return;
+    const row = page.rows[activeCell.row];
+    if (!row) return;
+    const plotCol = orderedColumns.find(c => c.meta.name === 'PlotNumber');
+    const idCol = orderedColumns.find(c => c.meta.name === 'ID');
+    const plotNumber = plotCol ? formatCellForEditor(row.cells[plotCol.originalIndex], plotCol.meta) : '';
+    const idStr = idCol ? formatCellForEditor(row.cells[idCol.originalIndex], idCol.meta) : '';
+    const parsedId = idStr && /^-?\d+$/.test(idStr.trim()) ? Number(idStr.trim()) : null;
+    insertDrawerOpen = false;
+    pendingDeleteRow = {
+      rowId: row.rowId,
+      plotNumber,
+      id: parsedId,
+    };
+  }
+
+  async function confirmDeleteSelectedRow() {
+    if (!page || !activeChildTableEditable || !pendingDeleteRow || deleteBusy) return;
+    const fn = port.deleteChildRow ?? defaultDatasheetBackendPort.deleteChildRow;
+    if (!fn) {
+      errorMessage = 'Child row delete port is unavailable.';
+      return;
+    }
+    deleteBusy = true;
+    errorMessage = '';
+    try {
+      const target = pendingDeleteRow;
+      const res = await fn(contextId, {
+        tableKey: page.tableKey,
+        rowId: target.rowId,
+        expectedPlotNumber: target.plotNumber || undefined,
+        expectedId: target.id,
+      });
+      pendingDeleteRow = null;
+      activeCell = null;
+      selectionAnchor = null;
+      selectionRange = null;
+      statusBanner = `Deleted row ID ${res.deletedId} (plot ${res.plotNumber}) from ${res.tableName} (${res.auditRows} audit record(s)).`;
+      await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
+    } catch (err) {
+      errorMessage = `Delete child row failed: ${String(err)}`;
+    } finally {
+      deleteBusy = false;
+    }
+  }
+
   onMount(() => {
     if (contextId) {
       void refreshTablesAndLoad(activeTableKey, 0);
@@ -506,8 +699,11 @@
   });
 </script>
 
+<svelte:window onmouseup={() => { isMouseSelecting = false; }} />
+
 <section
   class="vpro-datasheet-workbench"
+  data-tour="datasheet-grid-root"
   aria-label="Universal Project Datasheet Grid"
   oncopy={handleCopySelection}
 >
@@ -548,13 +744,33 @@
       <button
         type="button"
         class="vpro-btn-secondary"
-        disabled={!page}
+        disabled={!page || activeTableReadOnly}
         onclick={() => {
           findDrawerOpen = !findDrawerOpen;
         }}
       >
         {findDrawerOpen ? 'Hide Find & Replace' : 'Find & Replace'}
       </button>
+      {#if activeChildTableEditable}
+        <button
+          type="button"
+          class="vpro-btn-secondary"
+          data-add-child-row
+          disabled={busy || saving || insertBusy || deleteBusy}
+          onclick={openInsertChildDrawer}
+        >
+          {insertDrawerOpen ? 'Close Add Row' : '+ Add Row'}
+        </button>
+        <button
+          type="button"
+          class="vpro-btn-danger-outline"
+          data-delete-child-row
+          disabled={busy || saving || insertBusy || deleteBusy || !activeCell || !page?.rows[activeCell.row]}
+          onclick={requestDeleteSelectedRow}
+        >
+          Delete Selected Row
+        </button>
+      {/if}
       <button
         type="button"
         class="vpro-btn-secondary"
@@ -566,7 +782,7 @@
       <button
         type="button"
         class="vpro-btn-primary"
-        disabled={validEditCount === 0 || invalidDraftCount > 0 || saving}
+        disabled={validEditCount === 0 || invalidDraftCount > 0 || saving || activeTableReadOnly}
         onclick={saveDrafts}
       >
         {saving ? 'Saving...' : `Save Edits (${validEditCount})`}
@@ -575,8 +791,9 @@
   </header>
 
   <nav class="vpro-ds-tabs" aria-label="Canonical Project Tables">
-    {#each CANONICAL_DATASHEET_KEYS as key (key)}
+    {#each ALL_DATASHEET_KEYS as key (key)}
       {@const info = tables.find(t => t.key === key)}
+      {@const isReadOnlyTab = isReadOnlyDatasheetTable(key, info?.readOnly)}
       <button
         type="button"
         class="vpro-ds-tab"
@@ -585,6 +802,9 @@
         onclick={() => selectTable(key)}
       >
         <span>_{key}</span>
+        {#if isReadOnlyTab}
+          <span class="vpro-ds-ro-tag">RO</span>
+        {/if}
         {#if info}
           <span class="vpro-ds-badge" class:unavailable={!info.available}>
             {info.available ? info.rowCount.toLocaleString() : 'N/A'}
@@ -594,11 +814,66 @@
     {/each}
   </nav>
 
+  {#if activeTableReadOnly && page}
+    <p role="status" class="vpro-ds-status" data-readonly-table-banner>
+      Read-only system table view (<code>{page.tableName}</code>): inspection, sorting, filtering, and copy are enabled; mutations are locked.
+    </p>
+  {/if}
+
   {#if errorMessage}
     <p role="alert" class="vpro-ds-alert">{errorMessage}</p>
   {/if}
   {#if statusBanner}
     <p role="status" class="vpro-ds-status">{statusBanner}</p>
+  {/if}
+
+  {#if pendingDeleteRow && page}
+    <div class="vpro-ds-confirm-bar" role="alertdialog" aria-label="Confirm Child Row Deletion" data-delete-confirm-bar>
+      <span>
+        Delete row <code>{pendingDeleteRow.rowId}</code>
+        {#if pendingDeleteRow.id !== null}(ID {pendingDeleteRow.id}){/if}
+        for plot <strong>{pendingDeleteRow.plotNumber || '(unknown)'}</strong> from <code>{page.tableName}</code>?
+        This logs a permanent delete audit entry.
+      </span>
+      <div class="vpro-ds-toolbar-actions">
+        <button type="button" class="vpro-btn-danger" data-confirm-delete-row disabled={deleteBusy} onclick={confirmDeleteSelectedRow}>
+          {deleteBusy ? 'Deleting...' : 'Confirm Delete Row'}
+        </button>
+        <button type="button" class="vpro-btn-secondary" disabled={deleteBusy} onclick={() => { pendingDeleteRow = null; }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  {/if}
+
+  {#if insertDrawerOpen && page && activeChildTableEditable}
+    <section class="vpro-ds-find-drawer" aria-label="Insert Child Table Row" data-insert-child-drawer>
+      <div class="vpro-ds-find-controls">
+        <label>
+          <span>PlotNumber (required)</span>
+          <input type="text" data-insert-plot bind:value={insertPlotNumber} placeholder="e.g. 00337" maxlength={7} />
+        </label>
+        {#each insertableColumns as colEntry (colEntry.meta.name)}
+          <label>
+            <span>{colEntry.meta.name}</span>
+            <input
+              type="text"
+              data-insert-field={colEntry.meta.name}
+              value={insertFieldDrafts[colEntry.meta.name] ?? ''}
+              oninput={e => {
+                insertFieldDrafts = { ...insertFieldDrafts, [colEntry.meta.name]: e.currentTarget.value };
+              }}
+            />
+          </label>
+        {/each}
+        <button type="button" class="vpro-btn-primary" data-commit-insert-row disabled={insertBusy} onclick={commitInsertChildRow}>
+          {insertBusy ? 'Inserting...' : 'Commit New Row'}
+        </button>
+        <button type="button" class="vpro-btn-secondary" disabled={insertBusy} onclick={() => { insertDrawerOpen = false; }}>
+          Cancel
+        </button>
+      </div>
+    </section>
   {/if}
 
   {#if findDrawerOpen && page}
@@ -607,7 +882,7 @@
         <label>
           <span>Column</span>
           <select bind:value={findColumn}>
-            {#each page.columns.filter(c => c.editable) as col (col.name)}
+            {#each editableColumns as col (col.name)}
               <option value={col.name}>{col.name} ({col.kind})</option>
             {/each}
           </select>
@@ -754,12 +1029,16 @@
                 {@const cell = row.cells[colEntry.originalIndex]}
                 {@const key = draftKey(row.rowId, colMeta.name)}
                 {@const draft = drafts[key]}
+                {@const cellEditable = isColumnEditable(page.tableKey, colMeta, page.canEditMaster)}
+                {@const cellSelected = isCellInRange(rowIdx, colIdx, selectionRange)}
                 {@const displayVal = draft ? draft.rawText : formatCellForEditor(cell, colMeta)}
                 <td
                   class:pinned={colMeta.pinned}
+                  class:protected={colMeta.protected}
+                  class:selected={cellSelected}
                   class:dirty={!!draft && !draft.error}
                   class:invalid={!!draft?.error}
-                  class:readonly={!colMeta.editable}
+                  class:readonly={!cellEditable}
                 >
                   <div class="vpro-ds-cell-wrap">
                     <input
@@ -769,11 +1048,14 @@
                       data-grid-row={rowIdx}
                       data-grid-col={colIdx}
                       value={displayVal}
-                      readonly={!colMeta.editable}
+                      readonly={!cellEditable}
                       aria-invalid={draft?.error ? 'true' : undefined}
-                      title={draft?.error || `${colMeta.name} (${colMeta.declaredType || colMeta.kind})`}
+                      title={draft?.error || `${colMeta.name} (${colMeta.declaredType || colMeta.kind})${colMeta.protected ? ' [Protected]' : ''}`}
                       onfocus={() => {
                         activeCell = { row: rowIdx, col: colIdx };
+                        if (!selectionAnchor) {
+                          selectionAnchor = { row: rowIdx, col: colIdx };
+                        }
                         if (!selectionRange) {
                           selectionRange = {
                             startRow: rowIdx,
@@ -784,18 +1066,32 @@
                         }
                       }}
                       onmousedown={e => {
-                        if (e.shiftKey && activeCell) {
+                        isMouseSelecting = true;
+                        if (e.shiftKey && selectionAnchor) {
+                          activeCell = { row: rowIdx, col: colIdx };
                           selectionRange = {
-                            startRow: activeCell.row,
+                            startRow: selectionAnchor.row,
                             endRow: rowIdx,
-                            startCol: activeCell.col,
+                            startCol: selectionAnchor.col,
                             endCol: colIdx,
                           };
                         } else {
+                          activeCell = { row: rowIdx, col: colIdx };
+                          selectionAnchor = { row: rowIdx, col: colIdx };
                           selectionRange = {
                             startRow: rowIdx,
                             endRow: rowIdx,
                             startCol: colIdx,
+                            endCol: colIdx,
+                          };
+                        }
+                      }}
+                      onmouseenter={() => {
+                        if (isMouseSelecting && selectionAnchor) {
+                          selectionRange = {
+                            startRow: selectionAnchor.row,
+                            endRow: rowIdx,
+                            startCol: selectionAnchor.col,
                             endCol: colIdx,
                           };
                         }
@@ -890,8 +1186,8 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
+    background: #FFFFFF;
+    border: 1px solid #D8D8D8;
     border-top: 4px solid #003366;
     border-radius: 4px;
     padding: 1rem;
@@ -903,6 +1199,7 @@
     justify-content: space-between;
     align-items: flex-end;
     gap: 0.75rem;
+    min-width: 0;
   }
   .vpro-ds-eyebrow {
     margin: 0;
@@ -924,8 +1221,8 @@
   .vpro-ds-context-pill {
     font-size: 0.75rem;
     font-weight: 500;
-    background: #f0f4f8;
-    border: 1px solid #cbd5e1;
+    background: #F2F2F2;
+    border: 1px solid #D8D8D8;
     color: #003366;
     padding: 0.15rem 0.5rem;
     border-radius: 3px;
@@ -935,28 +1232,32 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
   }
   .vpro-ds-inline-check {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     font-size: 0.82rem;
-    color: #1e293b;
+    color: #313132;
   }
   .vpro-ds-search {
     min-height: 34px;
     padding: 0.3rem 0.6rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #9F9F9F;
     border-radius: 4px;
     font-size: 0.85rem;
+    color: #313132;
+    background: #FFFFFF;
+    min-width: 0;
   }
   .vpro-btn-primary {
     min-height: 34px;
     padding: 0.35rem 0.8rem;
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     border: 1px solid #003366;
-    border-bottom: 2px solid #fcba19;
+    border-bottom: 2px solid #FCBA19;
     border-radius: 4px;
     font-size: 0.82rem;
     font-weight: 600;
@@ -967,47 +1268,79 @@
   .vpro-btn-secondary {
     min-height: 34px;
     padding: 0.35rem 0.7rem;
-    background: #f8fafc;
+    background: #FFFFFF;
     color: #003366;
-    border: 1px solid #94a3b8;
+    border: 1px solid #003366;
     border-radius: 4px;
     font-size: 0.82rem;
     font-weight: 500;
+  }
+  .vpro-btn-secondary:disabled,
+  .vpro-btn-danger-outline:disabled,
+  .vpro-btn-danger:disabled {
+    opacity: 0.5;
+  }
+  .vpro-btn-danger-outline {
+    min-height: 34px;
+    padding: 0.35rem 0.7rem;
+    background: #FFFFFF;
+    color: #D8292F;
+    border: 1px solid #D8292F;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .vpro-btn-danger {
+    min-height: 34px;
+    padding: 0.35rem 0.8rem;
+    background: #D8292F;
+    color: #FFFFFF;
+    border: 1px solid #D8292F;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    font-weight: 600;
   }
   .vpro-ds-tabs {
     display: flex;
     flex-wrap: wrap;
     gap: 0.3rem;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid #D8D8D8;
     padding-bottom: 0.35rem;
+    min-width: 0;
   }
   .vpro-ds-tab {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
     padding: 0.4rem 0.7rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 4px 4px 0 0;
-    background: #f8fafc;
-    color: #334155;
+    background: #F2F2F2;
+    color: #313132;
     font-size: 0.82rem;
     font-weight: 600;
   }
   .vpro-ds-tab.active {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     border-color: #003366;
-    box-shadow: inset 0 -3px 0 #fcba19;
+    box-shadow: inset 0 -3px 0 #FCBA19;
   }
-  .vpro-ds-badge {
+  .vpro-ds-badge,
+  .vpro-ds-ro-tag {
     font-size: 0.7rem;
     padding: 0.05rem 0.35rem;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.2);
   }
   .vpro-ds-tab:not(.active) .vpro-ds-badge {
-    background: #e2e8f0;
-    color: #334155;
+    background: #D8D8D8;
+    color: #313132;
+  }
+  .vpro-ds-tab:not(.active) .vpro-ds-ro-tag {
+    background: #FEF6E0;
+    color: #313132;
+    border: 1px solid #FCBA19;
   }
   .vpro-ds-badge.unavailable {
     opacity: 0.65;
@@ -1015,27 +1348,41 @@
   .vpro-ds-alert {
     margin: 0;
     padding: 0.55rem 0.75rem;
-    background: #fef2f2;
-    border-left: 4px solid #b91c1c;
-    color: #991b1b;
+    background: #FBEAEA;
+    border-left: 4px solid #D8292F;
+    color: #D8292F;
     font-size: 0.85rem;
   }
   .vpro-ds-status {
     margin: 0;
     padding: 0.5rem 0.75rem;
-    background: #f0f4f8;
-    border-left: 4px solid #fcba19;
+    background: #F2F2F2;
+    border-left: 4px solid #FCBA19;
     color: #003366;
     font-size: 0.83rem;
   }
+  .vpro-ds-confirm-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.6rem 0.8rem;
+    background: #FBEAEA;
+    border: 1px solid #D8292F;
+    border-radius: 4px;
+    color: #313132;
+    font-size: 0.84rem;
+  }
   .vpro-ds-find-drawer {
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
+    background: #F2F2F2;
+    border: 1px solid #D8D8D8;
     border-left: 4px solid #003366;
     padding: 0.75rem;
     border-radius: 4px;
     display: grid;
     gap: 0.6rem;
+    min-width: 0;
   }
   .vpro-ds-find-controls {
     display: flex;
@@ -1050,26 +1397,33 @@
     font-size: 0.78rem;
     font-weight: 600;
     color: #003366;
+    min-width: 0;
   }
   .vpro-ds-find-controls input[type='text'],
   .vpro-ds-find-controls select {
     min-height: 32px;
     padding: 0.25rem 0.5rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #9F9F9F;
     border-radius: 3px;
     font-size: 0.82rem;
+    background: #FFFFFF;
+    color: #313132;
+    min-width: 0;
   }
   .vpro-ds-find-preview-scroll {
     max-height: 180px;
     overflow: auto;
-    border: 1px solid #cbd5e1;
-    background: #fff;
+    border: 1px solid #D8D8D8;
+    background: #FFFFFF;
   }
   .vpro-ds-viewport {
-    height: 520px;
+    height: min(560px, calc(100dvh - 250px));
+    min-height: 300px;
+    max-width: 100%;
+    min-width: 0;
     overflow: auto;
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
+    border: 1px solid var(--vpro-border, #d1d5db);
+    background: var(--vpro-surface, #ffffff);
     position: relative;
   }
   .vpro-ds-grid {
@@ -1086,17 +1440,20 @@
   }
   .vpro-ds-header-row th {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     padding: 0;
-    border-right: 1px solid #1e4976;
-    border-bottom: 2px solid #fcba19;
+    border-right: 1px solid #002244;
+    border-bottom: 2px solid #FCBA19;
     min-width: 118px;
   }
+  .vpro-ds-header-row th.protected {
+    background: #002244;
+  }
   .vpro-ds-filter-row th {
-    background: #f1f5f9;
+    background: #F2F2F2;
     padding: 3px 4px;
-    border-right: 1px solid #cbd5e1;
-    border-bottom: 1px solid #94a3b8;
+    border-right: 1px solid #D8D8D8;
+    border-bottom: 1px solid #9F9F9F;
   }
   .vpro-ds-grid th.pinned,
   .vpro-ds-grid td.pinned {
@@ -1124,7 +1481,7 @@
   }
   .vpro-ds-sort-indicator {
     font-size: 0.68rem;
-    background: #fcba19;
+    background: #FCBA19;
     color: #003366;
     padding: 0.05rem 0.3rem;
     border-radius: 2px;
@@ -1134,28 +1491,33 @@
     width: 100%;
     box-sizing: border-box;
     padding: 0.2rem 0.35rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 2px;
     font-size: 0.76rem;
-    background: #ffffff;
+    background: #FFFFFF;
+    color: #313132;
   }
   .vpro-ds-row td {
     padding: 0;
-    border-right: 1px solid #e2e8f0;
-    border-bottom: 1px solid #e2e8f0;
-    background: #ffffff;
+    border-right: 1px solid #D8D8D8;
+    border-bottom: 1px solid #D8D8D8;
+    background: #FFFFFF;
   }
   .vpro-ds-row td.pinned {
-    background: #f8fafc;
+    background: #F2F2F2;
+  }
+  .vpro-ds-row td.selected {
+    background: rgba(26, 90, 150, 0.12);
+    box-shadow: inset 0 0 0 1px #1A5A96;
   }
   .vpro-ds-row td.dirty {
-    background: #fef9c3;
+    background: #FEF6E0;
   }
   .vpro-ds-row td.invalid {
-    background: #fee2e2;
+    background: #FBEAEA;
   }
   .vpro-ds-row td.readonly {
-    background: #f1f5f9;
+    background: #F2F2F2;
   }
   .vpro-ds-cell-wrap {
     display: flex;
@@ -1169,13 +1531,13 @@
     border: 0;
     padding: 0 0.45rem;
     background: transparent;
-    color: #0f172a;
+    color: #313132;
     font-size: 0.82rem;
   }
   .vpro-ds-cell-input:focus {
     outline: 2px solid #003366;
     outline-offset: -2px;
-    background: #ffffff;
+    background: #FFFFFF;
   }
   .vpro-ds-open-plot {
     flex: none;
@@ -1183,7 +1545,7 @@
     padding: 1px 5px;
     font-size: 0.68rem;
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     border: 0;
     border-radius: 2px;
   }
@@ -1191,13 +1553,13 @@
     font-family: var(--font-mono, monospace);
   }
   .text-err {
-    color: #b91c1c;
+    color: #D8292F;
     font-weight: 600;
   }
   .vpro-ds-empty {
     padding: 2rem;
     text-align: center;
-    color: #64748b;
+    color: #474543;
   }
   .vpro-ds-footer {
     display: flex;
@@ -1206,10 +1568,11 @@
     align-items: center;
     gap: 0.75rem;
     font-size: 0.82rem;
-    color: #334155;
+    color: #313132;
   }
   .vpro-ds-pager {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
   }
@@ -1221,9 +1584,22 @@
   .vpro-ds-err-pill {
     margin-left: 0.5rem;
     padding: 0.1rem 0.45rem;
-    background: #fee2e2;
-    color: #991b1b;
+    background: #FBEAEA;
+    color: #D8292F;
     border-radius: 3px;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .vpro-ds-badge,
+  .vpro-ds-footer {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (pointer: coarse) {
+    .vpro-btn-primary,
+    .vpro-btn-secondary,
+    .vpro-ds-tab,
+    .vpro-ds-search {
+      min-height: 44px;
+    }
   }
 </style>

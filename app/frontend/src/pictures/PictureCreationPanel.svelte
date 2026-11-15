@@ -75,13 +75,13 @@
 </section>
 
 <style>
-  .creation { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; margin: 1rem 0; padding: .75rem; border: 1px solid #94a3b8; border-radius: .25rem; min-width: 0; }
-  h2 { font-weight: 600; }
+  .creation { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; margin: 1rem 0; padding: .75rem; border: 1px solid #D8D8D8; background: #FFFFFF; border-radius: .25rem; min-width: 0; }
+  h2 { font-weight: 600; color: #003366; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-  button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .5rem .65rem; min-width: 0; overflow-wrap: anywhere; }
+  button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .5rem .65rem; min-width: 0; overflow-wrap: anywhere; color: #313132; background: #FFFFFF; }
   button:disabled { opacity: .5; }
   p, summary { overflow-wrap: anywhere; }
   img { max-width: 100%; max-height: 28rem; object-fit: contain; }
-  .error { color: #991b1b; background: #fef2f2; padding: .5rem; }
-  .guidance { font-size: .8rem; color: #475569; }
+  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
+  .guidance { font-size: .8rem; color: #474543; }
 </style>

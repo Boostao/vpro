@@ -166,19 +166,20 @@
 
 <style>
   .table-review { padding: 1rem; max-width: 100%; min-width: 0; }
-  h1 { font-size: 1.5rem; margin-bottom: .75rem; }
+  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: #003366; }
+  h2 { color: #003366; }
   .actions { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
-  .actions label { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
-  select, button, textarea { border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem .6rem; }
+  .actions label { display: flex; flex-direction: column; gap: .3rem; min-width: 0; flex: 1 1 12rem; }
+  select, button, textarea { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; color: #313132; background: #FFFFFF; min-width: 0; }
   button:disabled { opacity: .5; }
-  textarea { display: block; width: 100%; margin-top: .4rem; font-family: monospace; }
+  textarea { display: block; width: 100%; box-sizing: border-box; margin-top: .4rem; font-family: monospace; }
   dl > div { margin: .6rem 0; }
-  dt { font-weight: 600; }
+  dt { font-weight: 600; color: #313132; }
   dd, p { overflow-wrap: anywhere; }
   details { margin: .75rem 0; }
-  pre { overflow: auto; max-height: 24rem; padding: .5rem; background: #f1f5f9; }
-  .notice { color: #475569; }
-  .error { color: #991b1b; }
-  .receipt { border: 1px solid #94a3b8; padding: .75rem; margin: .75rem 0; }
+  pre { overflow: auto; max-height: 24rem; padding: .5rem; background: #F2F2F2; border: 1px solid #D8D8D8; }
+  .notice { color: #474543; }
+  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
+  .receipt { border: 1px solid #D8D8D8; background: #FFFFFF; padding: .75rem; margin: .75rem 0; border-radius: .25rem; }
   .receipt p { white-space: pre-wrap; }
 </style>

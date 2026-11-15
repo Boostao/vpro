@@ -10,7 +10,9 @@ export type DatasheetTableKey =
   | 'Other'
   | 'SU'
   | 'Lump'
-  | 'Hierarchy';
+  | 'Hierarchy'
+  | 'Audit'
+  | 'Metadata';
 
 export const CANONICAL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [
   'Env',
@@ -23,6 +25,27 @@ export const CANONICAL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [
   'Lump',
   'Hierarchy',
 ];
+
+export const ALL_DATASHEET_KEYS: readonly DatasheetTableKey[] = [
+  ...CANONICAL_DATASHEET_KEYS,
+  'Audit',
+  'Metadata',
+];
+
+export const EDITABLE_CHILD_TABLE_KEYS: readonly DatasheetTableKey[] = [
+  'Veg',
+  'Humus',
+  'Mineral',
+  'Other',
+];
+
+export function isEditableChildTable(tableKey: string): boolean {
+  return (EDITABLE_CHILD_TABLE_KEYS as readonly string[]).includes(tableKey);
+}
+
+export function isReadOnlyDatasheetTable(tableKey: string, readOnlyFlag?: boolean): boolean {
+  return Boolean(readOnlyFlag) || tableKey === 'Audit' || tableKey === 'Metadata';
+}
 
 export interface DatasheetStorageCell {
   storage: 'null' | 'text' | 'integer' | 'real' | 'blob';
@@ -53,6 +76,7 @@ export interface DatasheetTableInfo {
   available: boolean;
   unavailableReason?: string;
   editable: boolean;
+  readOnly?: boolean;
   rowCount: number;
   columns: DatasheetColumnMeta[];
 }
@@ -98,6 +122,7 @@ export interface DatasheetPage {
   limit: number;
   totalRows: number;
   canEditMaster: boolean;
+  readOnly?: boolean;
   scopeToActiveSU: boolean;
 }
 
@@ -159,25 +184,73 @@ export interface DatasheetFindReplacePreview {
   truncated: boolean;
 }
 
+export interface DatasheetInsertChildRowRequest {
+  tableKey: string;
+  plotNumber: string;
+  cells: Record<string, DatasheetStorageCell>;
+}
+
+export interface DatasheetInsertChildRowResult {
+  contextId: string;
+  tableKey: string;
+  tableName: string;
+  plotNumber: string;
+  rowId: string;
+  id: number;
+  auditRows: number;
+}
+
+export interface DatasheetDeleteChildRowRequest {
+  tableKey: string;
+  rowId: string;
+  expectedPlotNumber?: string;
+  expectedId?: number | null;
+}
+
+export interface DatasheetDeleteChildRowResult {
+  contextId: string;
+  tableKey: string;
+  tableName: string;
+  plotNumber: string;
+  rowId: string;
+  deletedId: number;
+  auditRows: number;
+}
+
 export interface DatasheetBackendPort {
   listTables(contextId: string): CancellableRead<DatasheetTableInfo[]>;
+  listAllTables?(contextId: string): CancellableRead<DatasheetTableInfo[]>;
   getPage(contextId: string, request: DatasheetPageRequest): CancellableRead<DatasheetPage>;
   previewFindReplace(
     contextId: string,
     request: DatasheetFindReplaceRequest
   ): CancellableRead<DatasheetFindReplacePreview>;
   applyEdits(contextId: string, request: DatasheetEditRequest): Promise<DatasheetEditResult>;
+  insertChildRow?(
+    contextId: string,
+    request: DatasheetInsertChildRowRequest
+  ): Promise<DatasheetInsertChildRowResult>;
+  deleteChildRow?(
+    contextId: string,
+    request: DatasheetDeleteChildRowRequest
+  ): Promise<DatasheetDeleteChildRowResult>;
 }
 
 export const defaultDatasheetBackendPort: DatasheetBackendPort = {
   listTables: (contextId: string) =>
     (DatasheetService.ListDatasheetTables(contextId) as never),
+  listAllTables: (contextId: string) =>
+    (DatasheetService.ListDatasheetAllTables(contextId) as never),
   getPage: (contextId: string, request: DatasheetPageRequest) =>
     (DatasheetService.GetDatasheetPage(contextId, request) as never),
   previewFindReplace: (contextId: string, request: DatasheetFindReplaceRequest) =>
     (DatasheetService.PreviewDatasheetFindReplace(contextId, request) as never),
   applyEdits: (contextId: string, request: DatasheetEditRequest) =>
     (DatasheetService.ApplyDatasheetEdits(contextId, request as never) as never),
+  insertChildRow: (contextId: string, request: DatasheetInsertChildRowRequest) =>
+    (DatasheetService.InsertDatasheetChildRow(contextId, request as never) as never),
+  deleteChildRow: (contextId: string, request: DatasheetDeleteChildRowRequest) =>
+    (DatasheetService.DeleteDatasheetChildRow(contextId, request as never) as never),
 };
 
 export interface VirtualWindowSlice {
@@ -247,12 +320,38 @@ function hasUnpairedSurrogate(text: string): boolean {
   return false;
 }
 
+export function isColumnEditable(
+  tableKey: string,
+  col: DatasheetColumnMeta,
+  canEditMaster: boolean
+): boolean {
+  if (tableKey === 'Audit' || tableKey === 'Metadata') {
+    return false;
+  }
+  if (!col.editable) {
+    return false;
+  }
+  if (col.protected) {
+    if (col.name === 'HumusThickness' || col.name === 'StrataCoverTotal') {
+      return false;
+    }
+    return canEditMaster;
+  }
+  return true;
+}
+
 export function parseAndValidateCellInput(
   tableKey: string,
   col: DatasheetColumnMeta,
   rawInput: string,
   canEditMaster: boolean
 ): ParsedCellResult {
+  if (tableKey === 'Audit' || tableKey === 'Metadata') {
+    return {
+      cell: null,
+      error: `${tableKey} is strictly read-only in datasheet mode.`,
+    };
+  }
   if (tableKey === 'Admin' && col.name === 'BECSiteUnit' && !canEditMaster) {
     return {
       cell: null,
@@ -261,6 +360,12 @@ export function parseAndValidateCellInput(
   }
   if (!col.editable) {
     return { cell: null, error: `${col.name} is read-only in datasheet mode.` };
+  }
+  if (col.protected && !isColumnEditable(tableKey, col, canEditMaster)) {
+    return {
+      cell: null,
+      error: `${col.name} is a protected column and cannot be edited unless custodian-unlocked.`,
+    };
   }
   if (rawInput.includes('\u0000') || hasUnpairedSurrogate(rawInput)) {
     return { cell: null, error: `${col.name} contains invalid Unicode or NUL characters.` };
@@ -524,14 +629,52 @@ export interface GridNavigationCoords {
   col: number;
 }
 
+export type GridNavigationKey = 'Enter' | 'Tab' | 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
+
+export function shouldNavigateOnArrowKey(
+  key: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight',
+  selectionStart: number | null,
+  selectionEnd: number | null,
+  valueLength: number
+): boolean {
+  if (key === 'ArrowUp' || key === 'ArrowDown') {
+    return true;
+  }
+  if (selectionStart === null || selectionEnd === null) {
+    return true;
+  }
+  if (key === 'ArrowLeft') {
+    return selectionStart === 0 && selectionEnd === 0;
+  }
+  return selectionStart === valueLength && selectionEnd === valueLength;
+}
+
+export function isCellInRange(row: number, col: number, range: GridSelectionRange | null): boolean {
+  if (!range) return false;
+  const norm = normalizeGridRange(range);
+  return row >= norm.startRow && row <= norm.endRow && col >= norm.startCol && col <= norm.endCol;
+}
+
 export function computeNextGridCell(
   current: GridNavigationCoords,
-  key: 'Enter' | 'Tab',
+  key: GridNavigationKey,
   shiftKey: boolean,
   rowCount: number,
   colCount: number
 ): GridNavigationCoords | null {
   if (rowCount <= 0 || colCount <= 0) return null;
+  if (key === 'ArrowUp') {
+    return current.row > 0 ? { row: current.row - 1, col: current.col } : null;
+  }
+  if (key === 'ArrowDown') {
+    return current.row + 1 < rowCount ? { row: current.row + 1, col: current.col } : null;
+  }
+  if (key === 'ArrowLeft') {
+    return current.col > 0 ? { row: current.row, col: current.col - 1 } : null;
+  }
+  if (key === 'ArrowRight') {
+    return current.col + 1 < colCount ? { row: current.row, col: current.col + 1 } : null;
+  }
   if (key === 'Enter') {
     // Vertical same-column progression (VPro muscle memory!)
     const nextRow = shiftKey ? current.row - 1 : current.row + 1;

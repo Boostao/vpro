@@ -281,19 +281,19 @@
 
 <style>
   .pictures { display: grid; gap: .65rem; min-width: 0; padding: .75rem; }
-  .pictures h3 { font-weight: 600; }
+  .pictures h3 { font-weight: 600; color: #003366; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button, select { border: 1px solid #94a3b8; border-radius: .25rem; padding: .35rem .5rem; }
+  button, select { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .35rem .5rem; color: #313132; background: #FFFFFF; min-width: 0; }
   button:disabled, select:disabled { opacity: .5; }
   select { min-width: 0; max-width: 100%; }
   .metadata { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: .5rem; }
-  dt { font-weight: 600; }
+  dt { font-weight: 600; color: #313132; }
   dd { white-space: pre-wrap; overflow-wrap: anywhere; }
   .preview { width: fit-content; max-width: 100%; }
   img { max-width: 100%; height: auto; }
-  .error { color: #991b1b; background: #fef2f2; padding: .5rem; overflow-wrap: anywhere; }
-  .guidance { font-size: .8rem; color: #475569; }
-  .viewer::backdrop { background: #0008; }
-  .viewer { background: white; padding: 1rem; max-width: calc(100% - 2rem); max-height: calc(100% - 2rem); overflow: auto; }
+  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; overflow-wrap: anywhere; border-radius: .25rem; }
+  .guidance { font-size: .8rem; color: #474543; }
+  .viewer::backdrop { background: rgba(0, 34, 68, 0.55); }
+  .viewer { background: #FFFFFF; padding: 1rem; max-width: calc(100% - 2rem); max-height: calc(100% - 2rem); overflow: auto; border: 1px solid #D8D8D8; border-radius: .25rem; }
   .viewer[open] { display: grid; gap: .75rem; }
 </style>
