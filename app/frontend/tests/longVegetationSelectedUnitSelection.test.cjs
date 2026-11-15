@@ -191,6 +191,7 @@ test('actual report module retains selector draft safety across remount with ind
       '../bindings/github.com/boostao/vpro/app':{},
       './longVegetationSelectedUnitSelection':{createSelectedUnitSelectionRegistry(){created++;return registry}},
       './LongVegetationSelectedUnitSelection.svelte':{default:child},
+      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
       './longVegetationUnitPreferences':{},'./LongVegetationUnitPreferences.svelte':{default(){}},
       './longVegetationGroupPreferences':{},'./LongVegetationGroupPreferences.svelte':{default(){}},
       './longVegetationNamingPreferences':{},'./LongVegetationNamingPreferences.svelte':{default(){}},

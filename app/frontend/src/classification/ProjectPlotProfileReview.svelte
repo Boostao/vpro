@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import type { bindContextPlots } from '../shared/contextPlots';
-  import { ReadRequests } from '../shared/readRequests';
+  import { ReadRequests, type CancellableRead } from '../shared/readRequests';
   import type { EditorCloseState } from '../shell/closeLifecycle';
   import ProfileRuleInputs from './ProfileRuleInputs.svelte';
   import { validateSpeciesPresencePreview, type SpeciesPresencePreview } from './projectProfileSpeciesPresence';
-  import type { ProjectPlotProfileRunRequest, ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
+  import { ClassificationService, type ProjectMetadataTable, type ProjectPlotProfileRunRequest, type ProjectPlotProfileFilterRequest, type ProfileLumpChoice } from '../../bindings/github.com/boostao/vpro/app';
   import { profileEditableFields, profileRuleValue, profileRuleOptions, stageProfileRule, profileRulesDirty,
     profileRuleErrors, profileRuleEditRequest, validateProfileChoices, beginProfileRuleCreation, stageProfileRuleCreation,
     profileCreationValue, profileCreationOptions, profileCreationErrors, profileRuleCreationRequest, profileRuleDeletionRequest,
@@ -26,6 +26,9 @@
   let running = $state(false);
   let error = $state<string | null>(null);
   let lump = $state<ProfileReviewTable | null>(null);
+  let lumpChoices = $state.raw<ProfileLumpChoice[]>([]);
+  let selectedLumpLocation = $state('');
+  let startWithAllPlots = $state(false);
   let subvarieties = $state(false);
   let result = $state<ProfileRunResult | null>(null);
   let presenceResult = $state.raw<SpeciesPresencePreview | null>(null);
@@ -172,14 +175,37 @@
     presenceResult = null;
     review = null; error = null; lump = null; result = null; reading = true; onbusy(true);
     try {
-      const [source, suggestions] = await Promise.all([
+      const toCancellable = <T>(p: Promise<T>): CancellableRead<T> =>
+        typeof (p as { cancel?: unknown }).cancel === 'function'
+          ? (p as unknown as CancellableRead<T>)
+          : Object.assign(p, { cancel() {} });
+      const listLumpFn = (client as unknown as { ListProjectPlotProfileLumpTables?: () => Promise<ProfileLumpChoice[] | null> }).ListProjectPlotProfileLumpTables;
+      const [source, suggestions, availableLumps] = await Promise.all([
         reads.track(client.ReviewProjectPlotProfile()),
         allowEditing ? reads.track(client.ListProjectPlotProfileChoices()) : Promise.resolve(null),
+        (allowRun || allowEditing || allowPresence)
+          ? reads.track(
+              toCancellable(
+                listLumpFn
+                  ? listLumpFn()
+                  : contextId
+                    ? ClassificationService.ListProjectPlotProfileLumpTables(contextId)
+                    : Promise.resolve(null)
+              )
+            ).catch(() => null)
+          : Promise.resolve(null),
       ]);
       const result = validateProjectPlotProfileReview(source);
       const validatedChoices = suggestions ? validateProfileChoices(suggestions) : null;
       if (request === generation) {
         review = result; choices = validatedChoices; draft = allowEditing ? { review: result, cells: {} } : null;
+        if (Array.isArray(availableLumps) && availableLumps.length > 0) {
+          lumpChoices = availableLumps;
+          if (!selectedLumpLocation || !availableLumps.some(c => c.location === selectedLumpLocation)) {
+            const firstTable = availableLumps.find(c => c.location !== 'None');
+            selectedLumpLocation = firstTable ? firstTable.location : 'None';
+          }
+        }
         committedFailure = false; success = null;
       }
     } catch (cause) {
@@ -190,10 +216,24 @@
   }
   async function reviewLump() {
     if ((!allowRun && !allowEditing && !allowPresence) || busy || !review) return;
+    if (selectedLumpLocation === 'None') {
+      lump = null; result = null; presenceResult = null; error = null;
+      return;
+    }
     const request = ++generation;
     error = null; lump = null; result = null; presenceResult = null; reading = true; onbusy(true);
     try {
-      const source = validateProjectProfileLump(await reads.track(client.ReviewProjectPlotProfileLump()));
+      const reviewLumpFn = (client as unknown as { ReviewProjectPlotProfileLumpTable?: (location: string) => Promise<ProjectMetadataTable> }).ReviewProjectPlotProfileLumpTable;
+      const rawLoader: Promise<ProjectMetadataTable> = selectedLumpLocation && (reviewLumpFn || contextId)
+        ? (reviewLumpFn
+            ? reviewLumpFn(selectedLumpLocation)
+            : ClassificationService.ReviewProjectPlotProfileLumpTable(contextId, selectedLumpLocation))
+        : client.ReviewProjectPlotProfileLump();
+      const cancellableLoader: CancellableRead<ProjectMetadataTable> =
+        typeof (rawLoader as { cancel?: unknown }).cancel === 'function'
+          ? (rawLoader as unknown as CancellableRead<ProjectMetadataTable>)
+          : Object.assign(rawLoader, { cancel() {} });
+      const source = validateProjectProfileLump(await reads.track(cancellableLoader));
       if (request === generation) lump = source;
     } catch (cause) {
       if (request === generation) error = `Project-local lump review failed; no definitions changed: ${String(cause)}`;
@@ -204,7 +244,15 @@
   async function run() {
     if (!allowRun || busy || blocked || !review) return;
     const source = review, request = ++generation;
-    const input = { originalRules: source.rules, projectLump: lump, subvarieties };
+    const activeLumpChoice = selectedLumpLocation.trim();
+    const effectiveLump = activeLumpChoice === 'None' ? null : lump;
+    if (activeLumpChoice === 'None' && lump !== null) lump = null;
+    const input: ProjectPlotProfileRunRequest = {
+      originalRules: source.rules, projectLump: lump, subvarieties,
+      ...(startWithAllPlots ? { startWithAllPlots: true } : {}),
+      ...(activeLumpChoice ? { lumpTable: activeLumpChoice } : {}),
+    };
+    if (effectiveLump !== lump) input.projectLump = effectiveLump;
     result = null; presenceResult = null; error = null; reading = true; running = true; onbusy(true);
     try {
       const preview = await reads.track(client.RunProjectPlotProfile(input));
@@ -260,89 +308,113 @@
   }
 </script>
 
-<section class="m-3 p-3 border border-stone-300 rounded-lg bg-stone-50" aria-label="Project-local plot profile review">
+<section class="vpro-prof-panel m-3 p-3 rounded-lg" aria-label="Project-local plot profile review">
   <div class="flex flex-wrap gap-2 items-center justify-between">
-    <h2 class="font-semibold text-stone-800">Selected plot profile {allowEditing ? 'rules' : 'review (read-only)'}</h2>
+    <h2 class="vpro-prof-title font-semibold">Selected plot profile {allowEditing ? 'rules' : 'review (read-only)'}</h2>
     <div class="flex flex-wrap gap-2">
-      <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50" disabled={busy || dirty || creation !== null || deletion !== null} onclick={() => void reload()}>Reload profile review</button>
+      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || dirty || creation !== null || deletion !== null} onclick={() => void reload()}>Reload profile review</button>
       {#if allowRun}
-        <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50" disabled={busy || blocked || !review} onclick={() => void run()}>Run stored profile preview</button>
-        {#if running}<button type="button" class="px-3 py-2 border rounded bg-white" onclick={cancelRun}>Cancel profile preview</button>{/if}
+        <button type="button" class="vpro-prof-btn-primary px-3 py-2 rounded disabled:opacity-50" disabled={busy || blocked || !review} onclick={() => void run()}>Run stored profile preview</button>
+        {#if running}<button type="button" class="vpro-prof-btn px-3 py-2 rounded" onclick={cancelRun}>Cancel profile preview</button>{/if}
       {:else}
-        <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50" disabled title="Ordered profile execution is not implemented.">Run Profile (unavailable)</button>
+        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled title="Ordered profile execution is not implemented.">Run Profile (unavailable)</button>
       {/if}
       {#if allowPresence}
-        <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50"
+        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
           disabled={busy || blocked || !review || subvarieties} onclick={() => void runPresence()}>Preview saved species-only matches</button>
-        {#if running && !allowRun}<button type="button" class="px-3 py-2 border rounded bg-white" onclick={cancelRun}>Cancel species-only preview</button>{/if}
+        {#if running && !allowRun}<button type="button" class="vpro-prof-btn px-3 py-2 rounded" onclick={cancelRun}>Cancel species-only preview</button>{/if}
       {/if}
-      <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50" disabled={busy || blocked} onclick={close}>Close profile review</button>
+      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || blocked} onclick={close}>Close profile review</button>
     </div>
   </div>
-  {#if error}<p role="alert" class="mt-3 text-red-800">{error}</p>{/if}
-  {#if allowPresence && subvarieties}<p role="alert" class="mt-3 text-amber-800">Species-only subvariety preparation is unavailable. Clear the ordered preview's subvariety selection to preview literal saved species.</p>{/if}
+  {#if error}<p role="alert" class="vpro-prof-alert mt-3">{error}</p>{/if}
+  {#if allowPresence && subvarieties}<p role="alert" class="vpro-prof-warn mt-3">Species-only subvariety preparation is unavailable. Clear the ordered preview's subvariety selection to preview literal saved species.</p>{/if}
   {#if presenceResult}
     <section aria-label="Readonly species-only matches" class="mt-3 min-w-0">
       <h3 class="font-semibold">Saved species-only matches: {presenceResult.plotNumbers.length} of {presenceResult.totalPlots} scope plots</h3>
       <p class="text-sm">{presenceResult.project} / {presenceResult.table} / {presenceResult.su}</p>
       <p class="mt-2 whitespace-pre-wrap">{presenceResult.plotNumbers.length ? presenceResult.plotNumbers.join(', ') : 'No matching plots.'}</p>
-      <p class="mt-2 text-sm text-stone-600">Readonly Table/Species intersection using the nine source presence columns. Species equality ignores ASCII case and terminal ASCII spaces; * and ? remain literal. Order, field, numeric criteria, layer, operation and historical counts are ignored. No navigation, Save-as-SU, count or audit action is available for this result; the original Access callback remains unavailable.</p>
+      <p class="vpro-prof-muted mt-2 text-sm">Readonly Table/Species intersection using the nine source presence columns. Species equality ignores ASCII case and terminal ASCII spaces; * and ? remain literal. Order, field, numeric criteria, layer, operation and historical counts are ignored. No navigation, Save-as-SU, count or audit action is available for this result; the original Access callback remains unavailable.</p>
     </section>
   {/if}
   {#if allowSaveSU && result}
-    <button type="button" class="mt-3 px-3 py-2 border rounded bg-white disabled:opacity-50"
+    <button type="button" class="vpro-prof-btn mt-3 px-3 py-2 rounded disabled:opacity-50"
       disabled={busy || blocked} onclick={() => void reviewSaveSU()}>Review Save as SU</button>
   {/if}
   {#if allowFiltering && result}
     <div class="mt-3">
-      <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50"
+      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
         disabled={busy || blocked || profileFilterUnavailable(result) !== null} onclick={() => void applyNavigation()}>Apply reviewed profile navigation</button>
-      {#if profileFilterUnavailable(result)}<p role="alert" class="mt-2 text-red-800">{profileFilterUnavailable(result)}</p>{/if}
+      {#if profileFilterUnavailable(result)}<p role="alert" class="vpro-prof-alert mt-2">{profileFilterUnavailable(result)}</p>{/if}
       <p class="mt-2 text-sm">Explicit navigation only; current stored inputs are independently rechecked after Save/Discard/Cancel. No count, SU or configuration write.</p>
     </div>
   {/if}
-  {#if success}<p role="status" class="mt-3 text-emerald-800">{success}</p>{/if}
+  {#if success}<p role="status" class="vpro-prof-success mt-3">{success}</p>{/if}
   {#if reading}<p role="status" class="mt-3">Reading original inputs or evaluating stored profile rules...</p>{/if}
   {#if (allowRun || allowEditing || allowPresence) && review}
     <div class="flex flex-wrap gap-3 items-center mt-3">
-      <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50" disabled={busy} onclick={() => void reviewLump()}>Review and select project lump table</button>
+      {#if lumpChoices.length > 0}
+        <label class="flex gap-2 items-center text-sm">
+          <span>Lump Table</span>
+          <select
+            class="vpro-prof-select px-2 py-1 rounded"
+            disabled={busy || blocked}
+            bind:value={selectedLumpLocation}
+            onchange={() => {
+              lump = null;
+              result = null;
+              presenceResult = null;
+              error = null;
+            }}
+          >
+            {#each lumpChoices as ch (`${ch.role}::${ch.location}`)}
+              <option value={ch.location}>
+                {ch.location === 'None' ? 'None (no lump table)' : `${ch.role}.${ch.table} (${ch.rowCount})`}
+              </option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+      <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || selectedLumpLocation === 'None'} onclick={() => void reviewLump()}>Review and select project lump table</button>
       {#if lump}
-        <span>{review.project}_Lump explicitly selected: {lump.rows.length} physical definitions.</span>
-        <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50" disabled={busy || blocked} onclick={() => { lump = null; subvarieties = false; result = null; error = null; presenceResult = null; }}>Clear lump selection</button>
+        <span>{selectedLumpLocation && selectedLumpLocation !== 'None' ? selectedLumpLocation : `${review.project}_Lump`} explicitly selected: {lump.rows.length} physical definitions.</span>
+        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={busy || blocked} onclick={() => { lump = null; subvarieties = false; result = null; error = null; presenceResult = null; }}>Clear lump selection</button>
       {/if}
       {#if allowRun}
-        <label class="flex gap-2 items-center"><input type="checkbox" disabled={busy || blocked || !lump} checked={subvarieties}
+        <label class="flex gap-2 items-center"><input type="checkbox" disabled={busy || blocked || (!lump && selectedLumpLocation !== 'None')} checked={subvarieties}
           onchange={event => { subvarieties = event.currentTarget.checked; result = null; presenceResult = null; error = null; }} />Combine source subvarieties</label>
+        <label class="flex gap-2 items-center"><input type="checkbox" disabled={busy || blocked} bind:checked={startWithAllPlots}
+          onchange={() => { result = null; error = null; }} />Start with all plots (optResetFilter)</label>
       {/if}
     </div>
   {/if}
   {#if allowEditing && draft}
     <section class="mt-3" aria-label="Stored profile rule editor">
       <div class="flex flex-wrap gap-2">
-        <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50"
+        <button type="button" class="vpro-prof-btn-primary px-3 py-2 rounded disabled:opacity-50"
           disabled={authorityBlocked || busy || committedFailure || creation !== null || deletion !== null || !dirty || errors.length > 0} onclick={() => void saveRules()}>Save profile rules</button>
-        <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50"
+        <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
           disabled={busy || committedFailure || !blocked} onclick={undo}>Undo profile drafts</button>
         {#if allowCreation}
-          <button type="button" class="px-3 py-2 border rounded bg-white disabled:opacity-50"
+          <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50"
             disabled={authorityBlocked || busy || blocked} onclick={proposeCreation}>Review new profile rule</button>
         {/if}
       </div>
       {#if creation}
         {@const proposal = creation}
-        <fieldset class="mt-3 p-3 border rounded bg-white" disabled={authorityBlocked || busy || committedFailure}>
+        <fieldset class="vpro-prof-card mt-3 p-3 rounded" disabled={authorityBlocked || busy || committedFailure}>
           <legend class="font-semibold">New rule proposal (no physical identity allocated)</legend>
           <ProfileRuleInputs prefix="new-profile-rule" identityLabel="new proposal"
             fields={profileEditableFields.map(name => ({ name, cell: profileCreationValue(proposal, name), options: profileCreationOptions(proposal, name, choices, lump) }))}
             onstage={stageCreation} />
           <p class="mt-3 text-sm">Eight explicit nullable assignments; PlotCount remains NULL. Create allocates one unused physical identity and complete typed history. Rule completeness for preview is a separate decision.</p>
-          <button type="button" class="mt-3 px-3 py-2 border rounded bg-white disabled:opacity-50"
+          <button type="button" class="vpro-prof-btn-primary mt-3 px-3 py-2 rounded disabled:opacity-50"
             disabled={authorityBlocked || errors.length > 0} onclick={() => void createRule()}>Create reviewed profile rule</button>
         </fieldset>
       {/if}
       {#if deletion !== null}
         {@const row = review?.rules.rows.find(row => row.rowId === deletion)}
-        <section class="mt-3 p-3 border border-red-300 rounded bg-white" aria-label="Profile rule deletion confirmation">
+        <section class="vpro-prof-danger-card mt-3 p-3 rounded" aria-label="Profile rule deletion confirmation">
           <h3 class="font-semibold">Delete reviewed physical rule {deletion}?</h3>
           {#if row && review}
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">{#each row.cells as cell, index}
@@ -350,33 +422,33 @@
             {/each}</dl>
           {/if}
           <p class="mt-3">One rule only. Surviving rules and historical counts remain unchanged. Full typed deletion history and the reserved physical identity commit together; restoration is unavailable.</p>
-          <button type="button" class="mt-3 px-3 py-2 border rounded bg-white disabled:opacity-50" disabled={authorityBlocked || busy || committedFailure}
+          <button type="button" class="vpro-prof-btn px-3 py-2 rounded disabled:opacity-50" disabled={authorityBlocked || busy || committedFailure}
             onclick={() => void deleteRule()}>Confirm profile rule deletion</button>
-          <button type="button" class="mt-3 ml-2 px-3 py-2 border rounded bg-white disabled:opacity-50" disabled={busy || committedFailure}
+          <button type="button" class="vpro-prof-btn mt-3 ml-2 px-3 py-2 rounded disabled:opacity-50" disabled={busy || committedFailure}
             onclick={undo}>Cancel profile deletion</button>
         </section>
       {/if}
       {#each draft.review.rules.rows as row (row.rowId)}
         {@const sourceDraft = draft}
-        <fieldset class="mt-3 p-3 border rounded bg-white" disabled={authorityBlocked || busy || committedFailure || creation !== null || deletion !== null}>
+        <fieldset class="vpro-prof-card mt-3 p-3 rounded" disabled={authorityBlocked || busy || committedFailure || creation !== null || deletion !== null}>
           <legend class="font-semibold">Physical rule {row.rowId}</legend>
           <ProfileRuleInputs prefix={`profile-${row.rowId}`} identityLabel={`rule ${row.rowId}`}
             fields={profileEditableFields.map(name => ({ name, cell: profileRuleValue(sourceDraft, row.rowId, name), options: profileRuleOptions(sourceDraft, row.rowId, name, choices, lump) }))}
             onstage={(name, raw, nullValue) => stage(row.rowId, name, raw, nullValue)} />
           {#if allowDeletion}
-            <button type="button" class="mt-3 px-3 py-2 border rounded bg-white disabled:opacity-50"
+            <button type="button" class="vpro-prof-btn mt-3 px-3 py-2 rounded disabled:opacity-50"
               disabled={authorityBlocked || dirty} onclick={() => reviewDeletion(row.rowId)}>Review deletion of rule {row.rowId}</button>
           {/if}
         </fieldset>
       {/each}
-      <p class="mt-3 text-sm text-stone-600">Existing rules only. Table changes to Veg/Lump visibly propose Field=Species/LumpCode; no Layer, Species or Criteria is cleared. NULL differs from empty text. Only changed assignments are saved; stored PlotCount is read-only. Env field suggestions come from this project; Veg species suggestions use grouped VLists codes, and Lump species suggestions require explicit lump review. Suggestions do not restrict those literal fields.</p>
+      <p class="vpro-prof-muted mt-3 text-sm">Existing rules only. Table changes to Veg/Lump visibly propose Field=Species/LumpCode; no Layer, Species or Criteria is cleared. NULL differs from empty text. Only changed assignments are saved; stored PlotCount is read-only. Env field suggestions come from this project; Veg species suggestions use grouped VLists codes, and Lump species suggestions require explicit lump review. Suggestions do not restrict those literal fields.</p>
       {#if choices}
-        <p class="mt-1 text-xs text-stone-600">Source species definitions: {choices.species.length} distinct typed codes, including {choices.species.filter(cell => cell.storage === 'null').length} NULL and {choices.species.filter(cell => cell.storage === 'text' && cell.text === '').length} empty. NULL is set explicitly, not by an empty suggestion.</p>
+        <p class="vpro-prof-muted mt-1 text-xs">Source species definitions: {choices.species.length} distinct typed codes, including {choices.species.filter(cell => cell.storage === 'null').length} NULL and {choices.species.filter(cell => cell.storage === 'text' && cell.text === '').length} empty. NULL is set explicitly, not by an empty suggestion.</p>
       {/if}
     </section>
   {/if}
   {#if result}
-    <section class="mt-3 p-3 border border-emerald-300 rounded bg-white" aria-label="Stored profile preview results">
+    <section class="vpro-prof-result-card mt-3 p-3 rounded" aria-label="Stored profile preview results">
       <h3 class="font-semibold">Preview only: {result.plotNumbers.length} matching plots / {result.totalPlots} stored scope plots</h3>
       <p>Scope: {result.project}; Working Unit list: {result.su}. No form filter or SU table has been changed.</p>
       <div class="overflow-x-auto">
@@ -402,7 +474,7 @@
         <table class="w-full border-collapse text-xs">
           <caption class="text-left font-semibold py-2">{item.title}</caption>
           <thead><tr><th scope="col" class="border p-2 text-left">Physical row</th>
-            {#each item.table.columns as column}<th scope="col" class="border p-2 text-left">{column.name}<span class="block font-normal text-stone-500">{column.declaredType}</span></th>{/each}
+            {#each item.table.columns as column}<th scope="col" class="border p-2 text-left">{column.name}<span class="vpro-prof-muted block font-normal">{column.declaredType}</span></th>{/each}
           </tr></thead>
           <tbody>{#each item.table.rows as row (row.rowId)}
             <tr><th scope="row" class="border p-2 text-left">{row.rowId}</th>
@@ -414,5 +486,55 @@
       </div>
     {/each}
   {/if}
-  <p class="mt-3 text-sm text-stone-600">This uses only explicitly selected stored rules and project data, never unsaved plot drafts. Ordered preview runs use isolated SQLite TEMP results and source-scoped Env/Veg/Lump operations; their text matching supports ASCII literals and simple * / ? patterns only. Unsupported rules fail explicitly. Other-table/external writes require separate current-session authorization; restoration remains unavailable. Save as SU creates only a new SQLite file after its separate opt-in and explicit review. Profile selection, rule creation/deletion and navigation filtering require their separate opt-ins. No stored PlotCount or shipped scratch table is changed.</p>
+  <p class="vpro-prof-muted mt-3 text-sm">This uses only explicitly selected stored rules and project data, never unsaved plot drafts. Ordered preview runs use isolated SQLite TEMP results and source-scoped Env/Veg/Lump operations (including Lump/Any/=/Add fixed equality semantics and Start with all plots); their text matching supports ASCII literals and simple * / ? patterns only. Unsupported rules fail explicitly. Other-table/external writes require separate current-session authorization; restoration remains unavailable. Save as SU creates only a new SQLite file after its separate opt-in and explicit review. Profile selection, rule creation/deletion and navigation filtering require their separate opt-ins. No stored PlotCount or shipped scratch table is changed.</p>
 </section>
+
+<style>
+  .vpro-prof-panel {
+    background: #f2f2f2;
+    border: 1px solid #d8d8d8;
+    border-top: 4px solid #003366;
+    color: #313132;
+  }
+  .vpro-prof-title { color: #003366; }
+  .vpro-prof-btn {
+    background: #ffffff;
+    color: #003366;
+    border: 1px solid #003366;
+  }
+  .vpro-prof-btn-primary {
+    background: #003366;
+    color: #ffffff;
+    border: 1px solid #003366;
+    border-bottom: 2px solid #fcba19;
+    font-weight: 600;
+  }
+  .vpro-prof-select {
+    background: #ffffff;
+    color: #313132;
+    border: 1px solid #d8d8d8;
+  }
+  .vpro-prof-card {
+    background: #ffffff;
+    border: 1px solid #d8d8d8;
+  }
+  .vpro-prof-danger-card {
+    background: #ffffff;
+    border: 1px solid #d8292f;
+    border-left: 4px solid #d8292f;
+  }
+  .vpro-prof-result-card {
+    background: #ffffff;
+    border: 1px solid #2e8540;
+    border-left: 4px solid #2e8540;
+  }
+  .vpro-prof-alert { color: #d8292f; font-weight: 600; }
+  .vpro-prof-warn {
+    color: #002244;
+    background: rgba(252, 186, 25, 0.22);
+    border-left: 3px solid #fcba19;
+    padding: 0.35rem 0.6rem;
+  }
+  .vpro-prof-success { color: #1e5128; font-weight: 600; }
+  .vpro-prof-muted { color: #474543; }
+</style>

@@ -158,7 +158,10 @@ test('Project-local profile review and editing are separately gated, resident ac
   assert.match(component,/if \(!allowRun \|\| busy \|\| blocked \|\| !review\) return/);
   assert.match(component,/\{#if allowRun\}[\s\S]*Run stored profile preview[\s\S]*\{:else\}[\s\S]*Run Profile \(unavailable\)/);
   assert.match(component,/originalRules: source\.rules, projectLump: lump, subvarieties/);
-  assert.match(component,/disabled=\{busy \|\| blocked \|\| !lump\}/);
+  assert.match(component,/disabled=\{busy \|\| blocked \|\| \(!lump && selectedLumpLocation !== 'None'\)\}/);
+  assert.match(component,/bind:checked=\{startWithAllPlots\}/);
+  assert.match(component,/ListProjectPlotProfileLumpTables/);
+  assert.match(component,/ReviewProjectPlotProfileLumpTable/);
   assert.match(component,/lump = null; subvarieties = false; result = null; error = null/);
   assert.match(component,/function cancelRun\(\) \{\s*generation\+\+; reads\.cancelAll\(\);/);
   assert.match(component,/running = false; reading = false; result = null; onbusy\(false\)/);

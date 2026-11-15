@@ -88,13 +88,16 @@
 </section>
 
 <style>
-  .environmental { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
+  .environmental { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; color: #313132; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
-  button { min-height: 2.5rem; padding: .5rem .75rem; }
-  .paths { overflow-wrap: anywhere; }
+  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #FFFFFF; color: #003366; font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { background: #F2F2F2; }
+  button:disabled { opacity: .6; cursor: not-allowed; }
+  .paths { overflow-wrap: anywhere; color: #474543; }
   .table-scroll { max-width: 100%; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: .5rem; border: 1px solid #d1d5db; text-align: left; vertical-align: top; white-space: pre-wrap; }
-  small { display: block; font-weight: normal; }
+  table { width: 100%; border-collapse: collapse; background: #FFFFFF; }
+  th, td { padding: .5rem; border: 1px solid #D8D8D8; text-align: left; vertical-align: top; white-space: pre-wrap; }
+  thead th { background: #F2F2F2; color: #003366; }
+  small { display: block; font-weight: normal; color: #474543; }
   article { min-width: 0; }
 </style>

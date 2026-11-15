@@ -13,9 +13,9 @@
   } from './siteUnitSummaryExtendedWorkbook';
   import { reportCellText } from './longEnvironmentReport';
 
-  let { owner, method, disabled, onBusyChange, extendedOptions }: {
+  let { owner, method, disabled, onBusyChange, extendedOptions, siteUnitType = 1, allowConfiguredScope = false }: {
     owner: GoogleEarthScope; method: number | null; disabled: boolean; onBusyChange: (held: boolean) => void;
-    extendedOptions?: ExtendedSummaryWorkbookOptions | null;
+    extendedOptions?: ExtendedSummaryWorkbookOptions | null; siteUnitType?: number | null; allowConfiguredScope?: boolean;
   } = $props();
   const extended = untrack(() => extendedOptions !== undefined);
   const enabled = true;
@@ -39,7 +39,9 @@
   const reviewedSpecies = $derived(review !== null && 'species' in review ? review.species : null);
   const barrier = $derived(publication.busy || publication.blocked);
   const held = $derived(disabled || busy || barrier);
-  const normalOwner = owned.su !== 'None' && owned.su !== 'USysSuTableDynamic';
+  const normalOwner = $derived(allowConfiguredScope
+    ? (siteUnitType === 3 || (owned.su !== 'None' && (siteUnitType === 2 || owned.su !== 'USysSuTableDynamic')))
+    : (owned.su !== 'None' && owned.su !== 'USysSuTableDynamic'));
   function reportBusy() { onBusyChange(busy || publication.busy || publication.blocked); }
   const unsubscribe = session.subscribe(() => {
     publication = session.view();
@@ -54,6 +56,7 @@
     cancel();
     const requestGeneration = generation, requestedMethod = method;
     const requestedOptions = extendedOptions ? structuredClone(extendedOptions) : null;
+    const configuredScope = typeof allowConfiguredScope === 'boolean' && allowConfiguredScope;
     busy = true; error = ''; reportBusy();
     try {
       if (extended && requestedOptions) {
@@ -61,12 +64,16 @@
           JSON.stringify(requestedOptions)));
         if (disposed || requestGeneration !== generation || method !== requestedMethod ||
             !sameExtendedSummaryWorkbookOptions(requestedOptions, extendedOptions ?? null)) return;
-        review = validateExtendedSummaryWorkbookReview(value, owned, requestedOptions);
+        review = configuredScope
+          ? validateExtendedSummaryWorkbookReview(value, owned, requestedOptions, true)
+          : validateExtendedSummaryWorkbookReview(value, owned, requestedOptions);
       } else {
         const value = await reads.track(EnvironmentReportService.GetSiteUnitSummaryWorkbookReview(owned.contextId,
           JSON.stringify({ method: requestedMethod })));
         if (disposed || requestGeneration !== generation || method !== requestedMethod) return;
-        review = validateSiteUnitSummaryWorkbookReview(value, owned, requestedMethod);
+        review = configuredScope
+          ? validateSiteUnitSummaryWorkbookReview(value, owned, requestedMethod, true)
+          : validateSiteUnitSummaryWorkbookReview(value, owned, requestedMethod);
       }
     } catch (cause) {
       if (!disposed && requestGeneration === generation && method === requestedMethod) {
@@ -78,14 +85,15 @@
   }
   async function publish() {
     if (!enabled || held || !review || !currentReview || !validMethod || method === null) return;
+    const configuredScope = typeof allowConfiguredScope === 'boolean' && allowConfiguredScope;
     error = '';
     try {
       if ('environment' in review && extendedSession && extendedOptions) {
         await extendedSession.publish(review, destination, request =>
-          EnvironmentReportService.ExportReviewedSiteUnitSummaryExtendedWorkbook(owned.contextId, JSON.stringify(request)), extendedOptions);
+          EnvironmentReportService.ExportReviewedSiteUnitSummaryExtendedWorkbook(owned.contextId, JSON.stringify(request)), extendedOptions, configuredScope);
       } else if ('preview' in review && originalSession) {
         await originalSession.publish(review, destination, request =>
-          EnvironmentReportService.ExportReviewedSiteUnitSummaryWorkbook(owned.contextId, JSON.stringify(request)), method);
+          EnvironmentReportService.ExportReviewedSiteUnitSummaryWorkbook(owned.contextId, JSON.stringify(request)), method, configuredScope);
       }
     } catch (cause) {
       if (!disposed) error = String(cause);
@@ -141,7 +149,7 @@
         Saved method: {review.scope.savedMethod}. Normal Site Unit scope: {review.scope.siteUnitType}.
         Saved order: {review.scope.orderBy}. Saved species included: {review.scope.includeSpecies}.</p>
       {#if 'options' in review}
-        <p>Requested grouping: {review.options.orderBy === 1 ? 'Layers' : 'Lifeforms'}.
+        <p>Requested grouping: {review.options.orderBy === 1 ? 'Layers' : review.options.orderBy === 2 ? 'Lifeforms' : 'Strata A-D'}.
           Species included: {review.options.includeSpecies}.
           {#if review.options.includeSpecies === 1}Cover calculation: {review.options.coverCalculation === 1 ? 'All plots' : 'Present values'}.
             Criteria: {review.options.andOr === 1 ? 'AND' : 'OR'}; presence &gt; {review.options.presenceGreaterThan};
@@ -203,16 +211,22 @@
 </section>
 
 <style>
-  .workbook { display: grid; gap: 0.75rem; min-width: 0; }
+  .workbook { display: grid; gap: 0.75rem; min-width: 0; padding: 1rem; border: 1px solid #D8D8D8; border-radius: 0.5rem; background: #FFFFFF; color: #313132; }
   h2, h3, h4, p { margin: 0; }
+  h2, h3, h4 { color: #003366; }
   .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .plan, .unit { display: grid; gap: 0.75rem; min-width: 0; }
-  .summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; align-items: start; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  caption { text-align: left; font-weight: bold; padding: 0.5rem; }
-  th, td { text-align: left; vertical-align: top; padding: 0.5rem; border-bottom: 1px solid #cbd5e1; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; align-items: start; }
+  .species-table { overflow-x: auto; max-width: 100%; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #FFFFFF; }
+  caption { text-align: left; font-weight: bold; padding: 0.5rem; color: #003366; }
+  th, td { text-align: left; vertical-align: top; padding: 0.5rem; border-bottom: 1px solid #D8D8D8; overflow-wrap: anywhere; white-space: pre-wrap; }
+  thead th { background: #F2F2F2; color: #003366; }
   .destination { display: grid; gap: 0.25rem; }
-  input { box-sizing: border-box; width: 100%; min-width: 0; }
-  .error { color: #b91c1c; overflow-wrap: anywhere; }
-  .guidance { font-size: 0.875rem; }
+  input { box-sizing: border-box; width: 100%; min-width: 0; padding: 0.45rem; border: 1px solid #D8D8D8; border-radius: 0.25rem; background: #FFFFFF; color: #313132; }
+  button { min-height: 2.5rem; padding: 0.45rem 0.85rem; border: 1px solid #003366; border-radius: 0.25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { background: #002244; border-color: #002244; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error { color: #D8292F; overflow-wrap: anywhere; font-weight: 600; }
+  .guidance { font-size: 0.875rem; color: #474543; }
 </style>

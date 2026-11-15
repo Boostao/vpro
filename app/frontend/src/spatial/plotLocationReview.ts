@@ -16,12 +16,24 @@ export type ValidatedPlotLocationReview = Omit<PlotLocationReview, 'report'> & {
   };
 };
 
+export function normalizeWesternLongitudeReal(value: number): number {
+  return value < 0 ? value : -value;
+}
+
 export function exactLongitudeNegation(original: ProjectMetadataCell, converted: ProjectMetadataCell): boolean {
   if (original.storage === 'real' && converted.storage === 'real' && original.real !== null && converted.real !== null) {
+    // Negative western BC longitudes are already signed West and must never flip positive (-(-lon) -> +lon).
+    if (original.real < 0) {
+      return Object.is(converted.real, original.real);
+    }
     return Object.is(converted.real, -original.real);
   }
   if (original.storage === 'integer' && converted.storage === 'integer' && original.integer !== null && converted.integer !== null) {
-    return original.integer !== '-9223372036854775808' && converted.integer === (-BigInt(original.integer)).toString();
+    if (original.integer === '-9223372036854775808') return false;
+    const parsed = BigInt(original.integer);
+    return parsed < 0n
+      ? converted.integer === original.integer
+      : converted.integer === (-parsed).toString();
   }
   return false;
 }

@@ -128,15 +128,15 @@
 
 <style>
   .quality-minima { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; }
-  fieldset { min-width: 0; border: 1px solid #cbd5e1; border-radius: .4rem; padding: .75rem; }
+  fieldset { min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .75rem; }
   legend { padding: 0 .35rem; }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; }
   label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; min-width: 0; }
-  input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #cbd5e1; border-radius: .3rem; padding: .45rem; }
+  input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #D8D8D8; border-radius: .3rem; padding: .45rem; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button { border: 1px solid #cbd5e1; border-radius: .4rem; padding: .5rem .75rem; background: white; }
+  button { border: 1px solid #D8D8D8; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; }
   button:disabled, input:disabled { opacity: .5; }
   details { min-width: 0; } summary { cursor: pointer; padding: .5rem 0; }
   p, li { overflow-wrap: anywhere; } ul { padding-left: 1.25rem; }
-  .error { color: #b91c1c; } .guidance { color: #57534e; font-size: .875rem; }
+  .error { color: #D8292F; } .guidance { color: #474543; font-size: .875rem; }
 </style>

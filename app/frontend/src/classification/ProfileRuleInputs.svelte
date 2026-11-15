@@ -20,7 +20,7 @@
       <datalist id={`${id}-choices`}>{#each options as option}<option value={option}></option>{/each}</datalist>
       <label class="flex gap-2 items-center text-xs mt-1"><input type="checkbox" checked={cell.nullValue}
         onchange={event => onstage(name, cell.raw, event.currentTarget.checked)} />NULL {name}, {identityLabel}</label>
-      {#if cell.error}<p id={`${id}-error`} role="alert" class="text-xs text-red-800 mt-1">{cell.error}</p>{/if}
+      {#if cell.error}<p id={`${id}-error`} role="alert" class="text-xs mt-1" style="color: #D8292F;">{cell.error}</p>{/if}
     </div>
   {/each}
 </div>

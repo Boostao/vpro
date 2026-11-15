@@ -86,6 +86,7 @@ test('compiled class and None grouped panels retain source controls without enab
   const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
   const panel = serverComponent(component, 'SummaryVegetationReport.svelte', {
     './summaryVegetation': report, '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
+    '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} }, '../classification/siteUnitExclusionFilter': {},
   });
   const session = report.summaryVegetationSession(owner);
   for (const group of [12, 13, 14]) {

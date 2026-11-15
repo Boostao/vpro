@@ -30,9 +30,9 @@ export type SpeciesAttributeSummaryPreview = {
 const key = (value: LifeformTextCell) => JSON.stringify([value.storage, value.text]);
 function reject(): never { throw new Error('Species attribute summary is incomplete, inconsistent or belongs to another owned context; no repairs applied.'); }
 
-export function validateSpeciesAttributeSummary(value: unknown, owner: LifeformSummaryOwner): SpeciesAttributeSummaryPreview {
+export function validateSpeciesAttributeSummary(value: unknown, owner: LifeformSummaryOwner, allowDynamic = false): SpeciesAttributeSummaryPreview {
   if (!shape(value, ['contextId', 'projectPath', 'suPath', 'report']) ||
-      !Object.values(owner).every(text) || owner.contextId === '' || owner.su === 'None' || owner.su === 'USysSuTableDynamic' ||
+      !Object.values(owner).every(text) || owner.contextId === '' || owner.su === 'None' || (!allowDynamic && owner.su === 'USysSuTableDynamic') ||
       value.contextId !== owner.contextId || value.projectPath !== owner.projectPath || value.suPath !== owner.suPath ||
       !shape(value.report, ['project', 'su', 'querySource', 'definitions', 'memberships', 'matches', 'units'])) reject();
   const report = value.report;

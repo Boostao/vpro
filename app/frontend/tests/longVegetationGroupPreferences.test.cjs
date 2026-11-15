@@ -29,6 +29,7 @@ const child = () => serverComponent(source('LongVegetationGroupPreferences.svelt
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
+      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
 });
 
 test('strict-Go grouping wire detaches actual reactive proxies before transport', async () => {
@@ -150,6 +151,7 @@ test('actual parent module retains grouping validation across remount without re
       './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
       './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
       './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
+      '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
       './LongVegetationGroupPreferences.svelte': { default: child() },
       './longVegetationPreferences': {}, './longVegetationStatisticsPreferences': {},
       './longVegetationSwitchPreferences': {}, './LongVegetationSwitchPreferences.svelte': { default() {} },

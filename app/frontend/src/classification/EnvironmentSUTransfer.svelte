@@ -111,11 +111,12 @@
 </section>
 
 <style>
-  .transfer-panel { padding: 1rem; border: 1px solid #d6d3d1; border-radius: .5rem; }
-  h3 { font-weight: 600; } p { margin: .5rem 0; } .failure { color: #991b1b; }
+  .transfer-panel { padding: 1rem; border: 1px solid #d8d8d8; border-top: 3px solid #003366; border-radius: .5rem; background: #ffffff; color: #313132; }
+  h3 { font-weight: 600; color: #003366; } p { margin: .5rem 0; } .failure { color: #d8292f; }
   .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
-  button { padding: .5rem .75rem; border: 1px solid #d6d3d1; border-radius: .375rem; }
+  button { padding: .5rem .75rem; border: 1px solid #003366; border-radius: .375rem; background: #ffffff; color: #003366; }
   button:disabled { opacity: .5; } .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid #e7e5e4; text-align: left; overflow-wrap: anywhere; }
-  .guidance { color: #57534e; font-size: .875rem; }
+  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid #d8d8d8; text-align: left; overflow-wrap: anywhere; }
+  thead th { background: #003366; color: #ffffff; }
+  .guidance { color: #474543; font-size: .875rem; }
 </style>

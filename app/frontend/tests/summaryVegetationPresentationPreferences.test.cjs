@@ -325,7 +325,7 @@ test('actual compiled pane preserves unique associated original labels and unava
     assert.ok(html.includes(label));
   }
   assert.match(html, /<input[^>]*id="summary-presentation-showCommon"[^>]*disabled/);
-  assert.match(html, /<input[^>]*id="summary-presentation-hierarchyHeader"[^>]*disabled/);
+  assert.doesNotMatch(html.match(/<input[^>]*id="summary-presentation-hierarchyHeader"[^>]*>/)[0], /\bdisabled\b/);
   assert.match(html, /7\.25/);
   assert.match(html, /Stored presentation drafts, not original report-output formatting parity/);
   assert.match(html, /original Report output or printing/);
@@ -477,6 +477,8 @@ test('production report wires one presentation pane, peer mutation holds and exp
       './summaryVegetation': report,
       './summaryVegetationPresentationPreferenceSessions': { summaryVegetationPresentationPreferenceSession: () => presentation },
       '../bindings/github.com/boostao/vpro/app': {},
+      '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+      '../classification/siteUnitExclusionFilter': {},
     });
   const html = render(Panel, { props: { ...owner, onBusyChange() {} } }).body;
   assert.equal(html.split('data-summary-presentation-preferences').length - 1, 1);

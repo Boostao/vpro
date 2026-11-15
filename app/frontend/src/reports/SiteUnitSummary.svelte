@@ -4,7 +4,7 @@
   import { ReadRequests } from '../shared/readRequests';
   import { validateSiteUnitSummary, validateSiteUnitSummaryOptions, type ValidatedSiteUnitSummary, type SiteUnitSummaryMode } from './siteUnitSummary';
   import { reportCellText } from './longEnvironmentReport';
-  import { siteUnitSummaryPreferencesSession } from './siteUnitSummaryPreferences';
+  import { siteUnitSummaryPreferencesSession, siteUnitSummaryFullPreferencesSession, type SummaryFullPreferenceValues } from './siteUnitSummaryPreferences';
   import SiteUnitSummaryWorkbookPanel from './SiteUnitSummaryWorkbookPanel.svelte';
   import { summarySpeciesCriteria, validateSummarySpecies, type ValidatedSummarySpecies } from './siteUnitSummarySpecies';
   import { extendedSummaryWorkbookPublicationSession, type ExtendedSummaryWorkbookOptions } from './siteUnitSummaryExtendedWorkbook';
@@ -24,7 +24,7 @@
   const extendedAuthority = untrack(() => extendedWorkbookEnabled
     ? extendedSummaryWorkbookPublicationSession({ contextId, project, projectPath, su, suPath }) : null);
   const retainedOptions = extendedAuthority?.view().blocked ? extendedAuthority.requestedOptions() : null;
-  let mode = $state<SiteUnitSummaryMode>(retainedOptions?.orderBy === 2 ? 'lifeform' : 'layer');
+  let mode = $state<SiteUnitSummaryMode>(retainedOptions?.orderBy === 2 ? 'lifeform' : retainedOptions?.orderBy === 3 ? 'strata' : 'layer');
   const lifeformsEnabled = true;
   const speciesEnabled = true;
   const ownedCriteria = () => summarySpeciesCriteria({ contextId, project, projectPath, su, suPath });
@@ -35,29 +35,92 @@
   const extendedOptions = $derived.by((): ExtendedSummaryWorkbookOptions | null => {
     if ((method !== 1 && method !== 2) || speciesBarrier) return null;
     if (speciesView?.enabled && criteria) return { ...criteria.request(method, mode), includeSpecies: 1 };
-    return mode === 'lifeform' ? { method, orderBy: 2, includeSpecies: 0, coverCalculation: 1,
-      andOr: 1, presenceGreaterThan: 0, coverGreaterThan: 0 } : null;
+    if (mode === 'lifeform') return { method, orderBy: 2, includeSpecies: 0, coverCalculation: 1,
+      andOr: 1, presenceGreaterThan: 0, coverGreaterThan: 0 };
+    if (mode === 'strata') return { method, orderBy: 3, includeSpecies: 1, coverCalculation: 1,
+      andOr: 1, presenceGreaterThan: 0, coverGreaterThan: 0 };
+    return null;
   });
   const reads = new ReadRequests();
   let generation = 0;
   const preferencesEnabled = true;
   const ownedPreferences = () => siteUnitSummaryPreferencesSession({ contextId, project, projectPath, su, suPath });
   const preferences = preferencesEnabled ? ownedPreferences() : null;
+  const fullPreferences = preferencesEnabled && typeof siteUnitSummaryFullPreferencesSession === 'function'
+    ? untrack(() => siteUnitSummaryFullPreferencesSession({ contextId, project, projectPath, su, suPath })) : null;
   let preferenceView = $state(preferences?.view() ?? null);
-  const preferenceBarrier = $derived(!!preferenceView && (preferenceView.busy || preferenceView.blocked ||
-    preferenceView.authorityUnknown || !!preferenceView.draftError));
+  let fullPreferenceView = $state(fullPreferences?.view() ?? null);
+  const preferenceBarrier = $derived((!!preferenceView && (preferenceView.busy || preferenceView.blocked ||
+    preferenceView.authorityUnknown || !!preferenceView.draftError)) ||
+    (!!fullPreferenceView && (fullPreferenceView.busy || fullPreferenceView.blocked ||
+      fullPreferenceView.authorityUnknown || !!fullPreferenceView.draftError)));
+  const scopeAllowed = $derived(siteUnitType === 3 || (su !== 'None' && (siteUnitType === 2 || (siteUnitType === 1 && su !== 'USysSuTableDynamic'))));
   function reportBusy() { onBusyChange(busy || preferenceBarrier || workbookBusy || speciesBarrier); }
   const unsubscribeSpecies = criteria?.subscribe(() => {
-    speciesView = criteria.view(); preview = null; speciesPreview = null; reportBusy();
+    speciesView = criteria.view(); preview = null; speciesPreview = null; syncFullDraftFromUI(); reportBusy();
   });
   const unsubscribe = preferences?.subscribe(() => {
-    preferenceView = preferences.view(); method = preferenceView.draft?.method ?? null;
-    siteUnitType = preferenceView.draft?.siteUnitType ?? null;
-    ready = (method === 1 || method === 2) && siteUnitType === 1 && !preferenceView.authorityUnknown;
+    preferenceView = preferences.view();
+    if (!fullPreferenceView?.draft) {
+      method = preferenceView.draft?.method ?? null;
+      siteUnitType = preferenceView.draft?.siteUnitType ?? null;
+    }
+    const effectiveType = siteUnitType ?? preferenceView.draft?.siteUnitType ?? 0;
+    const allowed = effectiveType === 3 || (su !== 'None' && (effectiveType === 2 || (effectiveType === 1 && su !== 'USysSuTableDynamic')));
+    ready = (method === 1 || method === 2) && [1, 2, 3].includes(effectiveType) && allowed && !preferenceView.authorityUnknown;
     preview = null; speciesPreview = null;
     reportBusy();
   });
-  function cancel() { generation++; reads.cancelAll(); preferences?.cancelLoad(); busy = false; reportBusy(); }
+  const unsubscribeFull = fullPreferences?.subscribe(() => {
+    fullPreferenceView = fullPreferences.view();
+    if (fullPreferenceView.draft) {
+      method = fullPreferenceView.draft.method;
+      siteUnitType = fullPreferenceView.draft.siteUnitType;
+    }
+    const effectiveType = siteUnitType ?? 0;
+    const allowed = effectiveType === 3 || (su !== 'None' && (effectiveType === 2 || (effectiveType === 1 && su !== 'USysSuTableDynamic')));
+    ready = (method === 1 || method === 2) && [1, 2, 3].includes(effectiveType) && allowed && !fullPreferenceView.authorityUnknown;
+    reportBusy();
+  });
+  function syncFullDraftFromUI() {
+    if (!fullPreferences || !fullPreferenceView?.draft || fullPreferenceView.busy || fullPreferenceView.blocked) return;
+    if (method !== 1 && method !== 2) return;
+    const orderBy = mode === 'layer' ? 1 : mode === 'lifeform' ? 2 : 3;
+    const nextPatch: Partial<SummaryFullPreferenceValues> = {
+      method,
+      siteUnitType: [1, 2, 3].includes(siteUnitType ?? 0) ? (siteUnitType as number) : fullPreferenceView.draft.siteUnitType,
+      includeSpecies: speciesView?.enabled ? 1 : 0,
+      orderBy,
+    };
+    if (speciesView && !speciesView.error) {
+      nextPatch.coverCalculation = speciesView.coverCalculation;
+      nextPatch.andOr = speciesView.andOr;
+      const pNum = Number(speciesView.presenceGreaterThan);
+      const cNum = Number(speciesView.coverGreaterThan);
+      if (Number.isSafeInteger(pNum) && pNum >= 0 && pNum <= 32767) nextPatch.presenceGreaterThan = pNum;
+      if (Number.isSafeInteger(cNum) && cNum >= 0 && cNum <= 32767) nextPatch.coverGreaterThan = cNum;
+    }
+    fullPreferences.edit(nextPatch);
+  }
+  function applyFullPreferencesToUI(values: SummaryFullPreferenceValues) {
+    method = values.method;
+    siteUnitType = values.siteUnitType;
+    mode = values.orderBy === 2 ? 'lifeform' : values.orderBy === 3 ? 'strata' : 'layer';
+    if (criteria) {
+      criteria.editChoice('coverCalculation', values.coverCalculation);
+      criteria.editChoice('andOr', values.andOr);
+      criteria.editText('presenceGreaterThan', String(values.presenceGreaterThan));
+      criteria.editText('coverGreaterThan', String(values.coverGreaterThan));
+      if (criteria.view().enabled !== (values.includeSpecies === 1)) {
+        criteria.setEnabled(values.includeSpecies === 1);
+      }
+    }
+  }
+  function cancel() {
+    generation++; reads.cancelAll(); preferences?.cancelLoad();
+    if (typeof fullPreferences !== 'undefined') fullPreferences?.cancelLoad();
+    busy = false; reportBusy();
+  }
   async function options() {
     if (workbookBusy) return;
     cancel(); const request = generation;
@@ -65,10 +128,11 @@
     try {
       const value = await reads.track(EnvironmentReportService.GetSiteUnitSummaryOptions(contextId));
       if (request !== generation) return;
-      const configured = validateSiteUnitSummaryOptions(value, contextId, project, projectPath, su, suPath);
+      const configured = validateSiteUnitSummaryOptions(value, contextId, project, projectPath, su, suPath, true);
       method = configured.method; siteUnitType = configured.siteUnitType;
-      ready = siteUnitType === 1;
-      if (!ready) error = `Saved site-unit type ${siteUnitType} is unavailable in this normal-SU preview; no saved options were reset.`;
+      const allowed = siteUnitType === 3 || (su !== 'None' && (siteUnitType === 2 || (siteUnitType === 1 && su !== 'USysSuTableDynamic')));
+      ready = allowed;
+      if (!ready) error = `Saved site-unit type ${siteUnitType} requires an eligible active Site Unit table; choose Hierarchy (~) or Field-Derived.`;
     } catch (cause) {
       if (request === generation) error = `Summary options unavailable; no defaults or configuration writes: ${String(cause)}`;
     } finally {
@@ -76,22 +140,30 @@
     }
   }
   async function show() {
-    if (busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || su === 'None' || (method !== 1 && method !== 2)) return;
+    if (busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || (method !== 1 && method !== 2)) return;
+    const activeType = typeof siteUnitType === 'number' ? siteUnitType : 1;
+    const typeAllowed = activeType === 3 || (su !== 'None' && (activeType === 2 || (activeType === 1 && su !== 'USysSuTableDynamic')));
+    if (!typeAllowed) return;
     cancel(); const request = generation; const requestedMethod = method; const requestedMode = mode;
+    const allowConfigured = activeType !== 1 || requestedMode === 'strata';
     const speciesRequest = speciesView?.enabled ? criteria?.request(requestedMethod, requestedMode) : null;
     error = ''; preview = null; speciesPreview = null; busy = true; reportBusy();
     try {
       if (speciesRequest) {
         const value = await reads.track(EnvironmentReportService.PreviewSiteUnitSummarySpecies(contextId, speciesRequest));
         if (request !== generation) return;
-        speciesPreview = validateSummarySpecies(value, { contextId, project, projectPath, su, suPath }, speciesRequest);
+        speciesPreview = allowConfigured
+          ? validateSummarySpecies(value, { contextId, project, projectPath, su, suPath }, speciesRequest, true)
+          : validateSummarySpecies(value, { contextId, project, projectPath, su, suPath }, speciesRequest);
         preview = speciesPreview.environment;
       } else {
         const value = await reads.track(requestedMode === 'lifeform'
           ? EnvironmentReportService.PreviewSiteUnitSummaryLifeforms(contextId, { method: requestedMethod })
           : EnvironmentReportService.PreviewSiteUnitSummary(contextId, { method: requestedMethod }));
         if (request !== generation) return;
-        preview = validateSiteUnitSummary(value, contextId, project, projectPath, su, suPath, requestedMethod, requestedMode);
+        preview = allowConfigured
+          ? validateSiteUnitSummary(value, contextId, project, projectPath, su, suPath, requestedMethod, requestedMode, true)
+          : validateSiteUnitSummary(value, contextId, project, projectPath, su, suPath, requestedMethod, requestedMode);
       }
     } catch (cause) {
       if (request === generation) error = `Summary unavailable; no data or configuration writes: ${String(cause)}`;
@@ -102,13 +174,47 @@
   async function loadPreferences() {
     if (workbookBusy || !preferences || preferenceView?.busy || preferenceView?.blocked) return;
     cancel(); const request = generation; const token = preferences.beginLoad();
+    const fullToken = typeof fullPreferences !== 'undefined' && fullPreferences && typeof fullPreferenceView !== 'undefined' && !fullPreferenceView?.busy && !fullPreferenceView?.blocked ? fullPreferences.beginLoad() : null;
     error = ''; busy = true; reportBusy();
     try {
-      const value = await reads.track(EnvironmentReportService.GetSiteUnitSummaryPreferences(contextId));
-      if (request !== generation) return;
-      preferences.applyLoaded(value, token);
+      if (typeof EnvironmentReportService.GetFullSiteUnitSummaryPreferences === 'function' && fullPreferences && fullToken !== null) {
+        try {
+          const fullValue = await reads.track(EnvironmentReportService.GetFullSiteUnitSummaryPreferences(contextId));
+          if (request !== generation) return;
+          if (fullValue && fullPreferences.applyLoaded(fullValue, fullToken)) {
+            applyFullPreferencesToUI(fullValue.values);
+          }
+        } catch {
+          // Legacy fallback below handles mocked contexts or partial fixtures.
+        }
+      }
+      if (su !== 'None') {
+        const value = await reads.track(EnvironmentReportService.GetSiteUnitSummaryPreferences(contextId));
+        if (request !== generation) return;
+        preferences.applyLoaded(value, token);
+      } else if (fullPreferenceView?.draft) {
+        method = fullPreferenceView.draft.method;
+        siteUnitType = fullPreferenceView.draft.siteUnitType;
+        ready = siteUnitType === 3;
+      }
     } catch (cause) {
       if (request === generation) error = `Saved summary options unavailable; no defaults applied: ${String(cause)}`;
+    } finally {
+      if (request === generation) { busy = false; reportBusy(); }
+    }
+  }
+  async function loadFullPreferences() {
+    if (workbookBusy || !fullPreferences || fullPreferenceView?.busy || fullPreferenceView?.blocked) return;
+    cancel(); const request = generation; const token = fullPreferences.beginLoad();
+    error = ''; busy = true; reportBusy();
+    try {
+      const fullValue = await reads.track(EnvironmentReportService.GetFullSiteUnitSummaryPreferences(contextId));
+      if (request !== generation) return;
+      if (fullValue && fullPreferences.applyLoaded(fullValue, token)) {
+        applyFullPreferencesToUI(fullValue.values);
+      }
+    } catch (cause) {
+      if (request === generation) error = `Full summary preferences unavailable; no defaults applied: ${String(cause)}`;
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -121,15 +227,36 @@
       await preferences.save(request => EnvironmentReportService.SaveSiteUnitSummaryPreferences(contextId, JSON.stringify(request)));
     } catch (cause) { error = String(cause); }
   }
+  async function saveFullPreferences() {
+    if (workbookBusy || !fullPreferences || busy || speciesBarrier || fullPreferenceView?.busy || fullPreferenceView?.blocked) return;
+    cancel(); error = '';
+    try {
+      syncFullDraftFromUI();
+      await fullPreferences.save(request => EnvironmentReportService.SaveFullSiteUnitSummaryPreferences(contextId, JSON.stringify(request)));
+    } catch (cause) { error = String(cause); }
+  }
   function editMethod(value: number) {
     if (workbookBusy || speciesBarrier) return;
     cancel(); error = ''; preview = null; speciesPreview = null;
+    if (typeof fullPreferences !== 'undefined' && fullPreferences && typeof fullPreferenceView !== 'undefined' && fullPreferenceView?.draft) {
+      fullPreferences.edit({ method: value });
+    }
     if (preferences) preferences.editMethod(value);
     else method = value;
+  }
+  function editSiteUnitType(value: number) {
+    if (busy || workbookBusy || preferenceBarrier || speciesBarrier) return;
+    cancel(); error = ''; preview = null; speciesPreview = null;
+    siteUnitType = value;
+    if (fullPreferences && fullPreferenceView?.draft) fullPreferences.edit({ siteUnitType: value });
+    if (value === 1 && preferences && preferenceView?.draft) preferences.selectNormalSU();
+    const allowed = value === 3 || (su !== 'None' && (value === 2 || (value === 1 && su !== 'USysSuTableDynamic')));
+    ready = (method === 1 || method === 2) && [1, 2, 3].includes(value) && allowed && !preferenceView?.authorityUnknown;
   }
   function editMode(value: SiteUnitSummaryMode) {
     if (busy || workbookBusy || preferenceBarrier || speciesBarrier || (value === 'lifeform' && !lifeformsEnabled)) return;
     cancel(); error = ''; preview = null; speciesPreview = null; mode = value;
+    if (typeof syncFullDraftFromUI === 'function') syncFullDraftFromUI();
   }
   function editSpeciesEnabled(enabled: boolean) {
     if (busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || !criteria) return;
@@ -151,7 +278,7 @@
     if (!preferencesEnabled) void options();
     else if (!preferenceView?.draft && !preferenceBarrier) void loadPreferences();
   });
-  onDestroy(() => { unsubscribe?.(); unsubscribeSpecies?.(); cancel(); });
+  onDestroy(() => { unsubscribe?.(); unsubscribeFull?.(); unsubscribeSpecies?.(); cancel(); });
 </script>
 
 <section class="summary" data-site-unit-summary aria-label="Summary Environment">
@@ -159,21 +286,30 @@
   {#if error}<p role="alert" class="error">{error}</p>{/if}
   {#if preferenceView?.error}<p role="alert" class="error">{preferenceView.error}</p>{/if}
   {#if preferenceView?.draftError}<p role="alert" class="error">{preferenceView.draftError}</p>{/if}
+  {#if fullPreferenceView?.error}<p role="alert" class="error">{fullPreferenceView.error}</p>{/if}
+  {#if fullPreferenceView?.draftError}<p role="alert" class="error">{fullPreferenceView.draftError}</p>{/if}
   {#if speciesView?.error}<p role="alert" class="error" data-summary-species-error>{speciesView.error}</p>{/if}
-  <p>Project {project}; selected normal SU {su}. Profile navigation does not filter this report.</p>
+  <p>Project {project}; active SU {su}. Profile navigation does not filter this report.</p>
   {#if lifeformsEnabled}
     <fieldset disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready}>
-      <legend>Vegetation summary preview</legend>
-      <label><input type="radio" name="summary-vegetation" checked={mode === 'layer'} onchange={() => editMode('layer')} />Layer covers</label>
-      <label><input type="radio" name="summary-vegetation" checked={mode === 'lifeform'} onchange={() => editMode('lifeform')} />Lifeform cover values</label>
+      <legend>Vegetation summary preview (OrderBy)</legend>
+      <label><input type="radio" name="summary-vegetation" checked={mode === 'layer'} onchange={() => editMode('layer')} />Layer covers (1)</label>
+      <label><input type="radio" name="summary-vegetation" checked={mode === 'lifeform'} onchange={() => editMode('lifeform')} />Lifeform cover values (2)</label>
+      <label><input type="radio" name="summary-vegetation" data-summary-orderby-strata checked={mode === 'strata'} onchange={() => editMode('strata')} />Strata A-D (3)</label>
     </fieldset>
     {#if mode === 'lifeform'}
-      <p>Explicit read-only lifeform preview; saved report grouping and species-list options are unchanged.
-        Lifeform values use source minimum/mean/maximum even when other fields use Interquartile.
-        {#if !speciesEnabled}Species-threshold output is unavailable.{/if}
-        {#if !extendedWorkbookEnabled}Lifeform workbook publication remains unavailable.{/if}</p>
+      <p>Explicit read-only lifeform preview; saved report grouping and species-list options can be saved via full preferences.
+        Lifeform values use source minimum/mean/maximum even when other fields use Interquartile.</p>
+    {:else if mode === 'strata'}
+      <p>Strata A-D (OrderBy = 3) sums layer covers per plot/species across USysAllSpecs strata A-D (Tree/Shrub/Herb/Moss) capped at 99%.</p>
     {/if}
   {/if}
+  <fieldset disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier} data-source-control="optSiteUnitType">
+    <legend>Site-Unit Scope (SESuType)</legend>
+    <label><input type="radio" name="summary-su-type" value={1} checked={siteUnitType === 1} disabled={su === 'None' || su === 'USysSuTableDynamic'} onchange={() => editSiteUnitType(1)} />Normal SU (1)</label>
+    <label><input type="radio" name="summary-su-type" value={2} checked={siteUnitType === 2} disabled={su === 'None'} data-summary-sutype-hierarchy onchange={() => editSiteUnitType(2)} />Hierarchy (~) Breakpoints (2)</label>
+    <label><input type="radio" name="summary-su-type" value={3} checked={siteUnitType === 3} data-summary-sutype-field onchange={() => editSiteUnitType(3)} />Field-Derived (3)</label>
+  </fieldset>
   <fieldset disabled={busy || workbookBusy || speciesBarrier || preferenceView?.busy || preferenceView?.blocked || !ready} data-source-control="optValueMethod">
     <legend>Quantitative Values</legend>
     <label><input type="radio" name="summary-method" value={1} checked={method === 1} onchange={() => editMethod(1)} />Mean</label>
@@ -200,29 +336,36 @@
         <button data-summary-species-reset onclick={resetSpeciesCriteria}>Reset preview criteria</button>
       {/if}
     </fieldset>
-    <p class="guidance">Explicit read-only criteria start at all plots, AND, and zero thresholds; they do not load or save source species preferences.
-      Draft criteria/errors survive remounts. Strict thresholds compare source-formatted values; physical presence can exceed100%.
-      Layer species use raw covers in layers1-7; lifeform species use capped plot/species covers.
-      {#if !extendedWorkbookEnabled}Species workbook publication is unavailable.{/if}</p>
+    <p class="guidance">Criteria apply to layer, lifeform, and Strata A-D species lists and can be saved across all 8 SE* preferences.
+      Strict thresholds compare source-formatted values; physical presence can exceed 100%.</p>
   {/if}
-  <p data-source-control="optSiteUnitType">Site-unit type:
-    {siteUnitType === 1 ? 'Normal SU' : siteUnitType === 2 ? 'Hierarchy (unavailable)' :
-      siteUnitType === 3 ? 'Field-derived units (unavailable)' : 'not loaded'}.</p>
+  <p>Active site-unit type:
+    {siteUnitType === 1 ? 'Normal SU (1)' : siteUnitType === 2 ? 'Hierarchy (~) Breakpoints (2)' :
+      siteUnitType === 3 ? 'Field-Derived (3)' : 'not loaded'}.</p>
   <div class="actions">
-    <button data-source-control="btnCreateReport" disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || su === 'None'} onclick={show}>Create Report</button>
+    <button data-source-control="btnCreateReport" disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed} onclick={show}>Create Report</button>
     {#if preferencesEnabled}
       <button data-summary-preferences-load disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked} onclick={loadPreferences}>Load saved summary options</button>
       <button data-summary-preferences-save disabled={busy || workbookBusy || speciesBarrier || !!preferenceView?.busy || !!preferenceView?.blocked || !!preferenceView?.draftError ||
-        !preferenceView?.saved || !ready} onclick={savePreferences}>Save reviewed summary options</button>
+        !preferenceView?.saved || !ready || siteUnitType !== 1} onclick={savePreferences}>Save normal-SU options</button>
       <button data-summary-preferences-undo disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.saved}
         onclick={() => { if (workbookBusy) return; cancel(); preferences?.undo(); }}>Undo summary options</button>
       {#if siteUnitType !== 1}
-        <button data-summary-preferences-normal disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.draft}
-          onclick={() => { if (workbookBusy) return; cancel(); preferences?.selectNormalSU(); }}>Select normal SU</button>
+        <button data-summary-preferences-normal disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.draft || su === 'None'}
+          onclick={() => { if (workbookBusy) return; cancel(); preferences?.selectNormalSU(); editSiteUnitType(1); }}>Select normal SU</button>
       {/if}
       {#if preferenceView?.blocked}
         <button data-summary-preferences-acknowledge disabled={workbookBusy || preferenceView.busy}
           onclick={() => { if (!workbookBusy) preferences?.acknowledge(); }}>Acknowledge summary preference outcome</button>
+      {/if}
+      {#if fullPreferences}
+        <button data-summary-full-preferences-load disabled={workbookBusy || !!fullPreferenceView?.busy || !!fullPreferenceView?.blocked} onclick={loadFullPreferences}>Load full SE* preferences</button>
+        <button data-summary-full-preferences-save disabled={busy || workbookBusy || speciesBarrier || !!fullPreferenceView?.busy || !!fullPreferenceView?.blocked || !!fullPreferenceView?.draftError || !fullPreferenceView?.saved}
+          onclick={saveFullPreferences}>Save full SE* preferences</button>
+        {#if fullPreferenceView?.blocked}
+          <button data-summary-full-preferences-acknowledge disabled={workbookBusy || fullPreferenceView.busy}
+            onclick={() => { if (!workbookBusy) fullPreferences?.acknowledge(); }}>Acknowledge full preference outcome</button>
+        {/if}
       {/if}
     {:else}
       <button data-summary-options-reload disabled={busy || workbookBusy} onclick={options}>Reload summary options</button>
@@ -230,12 +373,12 @@
     {#if busy}<button data-summary-cancel onclick={cancel}>Cancel report read</button><p role="status">Reading owned summary options or snapshots...</p>{/if}
   </div>
   {#if mode === 'layer' && !speciesView?.enabled}
-    <SiteUnitSummaryWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} {method}
-      disabled={busy || preferenceBarrier || speciesBarrier || !ready || su === 'None'}
+    <SiteUnitSummaryWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} {method} {siteUnitType} allowConfiguredScope={true}
+      disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
       onBusyChange={(held) => { workbookBusy = held; reportBusy(); }} />
-  {:else if extendedWorkbookEnabled && (mode === 'lifeform' || speciesView?.enabled)}
-    <SiteUnitSummaryWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} {method} {extendedOptions}
-      disabled={busy || preferenceBarrier || speciesBarrier || !ready || su === 'None'}
+  {:else if extendedWorkbookEnabled && (mode === 'lifeform' || mode === 'strata' || speciesView?.enabled)}
+    <SiteUnitSummaryWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} {method} {siteUnitType} allowConfiguredScope={true} {extendedOptions}
+      disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
       onBusyChange={(held) => { workbookBusy = held; reportBusy(); }} />
   {/if}
   {#if preferenceView?.busy}<p role="status">Saving reviewed summary options; this preference write cannot be cancelled.</p>{/if}
@@ -322,22 +465,25 @@
 </section>
 
 <style>
-  .summary { padding: 1rem; max-width: 90rem; margin: auto; }
-  h1, h2, h3 { font-weight: 600; margin: .8rem 0; }
+  .summary { display: grid; gap: 1rem; padding: 1rem; max-width: 90rem; margin: auto; background: #F2F2F2; color: #313132; min-width: 0; }
+  h1, h2, h3 { font-weight: 600; margin: .8rem 0; color: #003366; }
   h1 { font-size: 1.5rem; } h2 { font-size: 1.2rem; }
-  fieldset, .actions { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
-  label { display: flex; align-items: center; gap: .5rem; }
-  button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .5rem .8rem; }
-  button:disabled { opacity: .5; }
-  article { border: 1px solid #cbd5e1; border-radius: .4rem; padding: 1rem; margin-top: 1rem; }
-  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: .5rem 1rem; }
-  dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; padding: .4rem; background: #f8fafc; }
-  dt { font-weight: 500; } dd, li, h2 { white-space: pre-wrap; overflow-wrap: anywhere; }
-  details { margin-top: .8rem; } .guidance { font-size: .9rem; margin: .6rem 0; }
-  .error { color: #991b1b; white-space: pre-wrap; }
-  .species-table { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; margin: .5rem 0; }
-  th, td { padding: .5rem; border-bottom: 1px solid #cbd5e1; text-align: left; overflow-wrap: anywhere; }
-  select, input:not([type="radio"]):not([type="checkbox"]) { max-width: 100%; border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem; }
+  fieldset, .actions { display: flex; flex-wrap: wrap; gap: 1rem; margin: .5rem 0; padding: .75rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; }
+  fieldset legend { font-weight: 600; color: #003366; padding: 0 .35rem; }
+  label { display: flex; align-items: center; gap: .5rem; color: #313132; }
+  button, summary { min-height: 2.5rem; border: 1px solid #003366; border-radius: .25rem; padding: .5rem .85rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled), summary:hover { background: #002244; border-color: #002244; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  article { border: 1px solid #D8D8D8; border-radius: .5rem; padding: 1rem; margin-top: 1rem; background: #FFFFFF; min-width: 0; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .5rem 1rem; }
+  dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; padding: .45rem .6rem; background: #F2F2F2; border-radius: .25rem; }
+  dt { font-weight: 600; color: #003366; } dd, li, h2 { white-space: pre-wrap; overflow-wrap: anywhere; }
+  details { margin-top: .8rem; } .guidance { font-size: .9rem; margin: .4rem 0; color: #474543; }
+  .error { color: #D8292F; white-space: pre-wrap; font-weight: 600; }
+  .species-table { overflow-x: auto; max-width: 100%; }
+  table { width: 100%; border-collapse: collapse; margin: .5rem 0; background: #FFFFFF; }
+  th, td { padding: .5rem; border-bottom: 1px solid #D8D8D8; text-align: left; overflow-wrap: anywhere; }
+  thead th { background: #F2F2F2; color: #003366; }
+  select, input:not([type="radio"]):not([type="checkbox"]) { max-width: 100%; min-width: 0; border: 1px solid #D8D8D8; border-radius: .25rem; padding: .4rem; background: #FFFFFF; color: #313132; }
   @media (max-width: 640px) { dl > div { grid-template-columns: minmax(0, 1fr); } }
 </style>

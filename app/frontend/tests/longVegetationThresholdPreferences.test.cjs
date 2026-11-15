@@ -134,6 +134,7 @@ test('actual parent/child composition renders thresholds and propagates retained
     './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
     './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
+    '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
     './longEnvironmentReport': {}, './longVegetationReport': {},
     './vegetationWorkbook': {
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),

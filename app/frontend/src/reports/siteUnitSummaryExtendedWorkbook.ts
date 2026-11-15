@@ -24,8 +24,9 @@ export type ExtendedSummaryWorkbookExportRequest = ExtendedSummaryWorkbookOption
 function reject(): never {
   throw new Error('Extended Summary workbook review has inconsistent explicit options, species or owned Environment evidence; no repairs applied.');
 }
-export function validateExtendedSummaryWorkbookOptions(value: ExtendedSummaryWorkbookOptions): void {
-  if (!shape(value, [...optionKeys]) || ![1, 2].includes(value.method) || ![1, 2].includes(value.orderBy) ||
+export function validateExtendedSummaryWorkbookOptions(value: ExtendedSummaryWorkbookOptions, allowConfiguredScope = false): void {
+  const validOrders = allowConfiguredScope ? [1, 2, 3] : [1, 2];
+  if (!shape(value, [...optionKeys]) || ![1, 2].includes(value.method) || !validOrders.includes(value.orderBy) ||
       ![0, 1].includes(value.includeSpecies) || ![1, 2].includes(value.coverCalculation) || ![1, 2].includes(value.andOr) ||
       !Number.isSafeInteger(value.presenceGreaterThan) || value.presenceGreaterThan < -32768 || value.presenceGreaterThan > 32767 ||
       !Number.isSafeInteger(value.coverGreaterThan) || value.coverGreaterThan < -32768 || value.coverGreaterThan > 32767 ||
@@ -37,17 +38,18 @@ export function sameExtendedSummaryWorkbookOptions(left: ExtendedSummaryWorkbook
   return !!left && !!right && optionKeys.every(key => left[key] === right[key]);
 }
 export function validateExtendedSummaryWorkbookReview(value: SiteUnitSummaryExtendedWorkbookReview | null,
-  owner: GoogleEarthScope, requested: ExtendedSummaryWorkbookOptions): ValidatedExtendedSummaryWorkbookReview {
-  validateExtendedSummaryWorkbookOptions(requested);
+  owner: GoogleEarthScope, requested: ExtendedSummaryWorkbookOptions, allowConfiguredScope = false): ValidatedExtendedSummaryWorkbookReview {
+  validateExtendedSummaryWorkbookOptions(requested, allowConfiguredScope);
   value = value ? structuredClone(value) : null;
   if (!shape(value, ['environment', 'species', 'scope', 'options', 'sheets', 'approvalHash', 'workbookSHA256', 'bytes'])) reject();
-  validateExtendedSummaryWorkbookOptions(value.options);
+  validateExtendedSummaryWorkbookOptions(value.options, allowConfiguredScope);
   if (!sameExtendedSummaryWorkbookOptions(value.options, requested)) reject();
   validateSummaryWorkbookText(value);
+  const mode = requested.orderBy === 1 ? 'layer' : requested.orderBy === 2 ? 'lifeform' : 'strata';
   const evidence = validateSiteUnitSummaryWorkbookEvidence({
     preview: value.environment, scope: value.scope, sheets: value.sheets,
     approvalHash: value.approvalHash, workbookSHA256: value.workbookSHA256, bytes: value.bytes,
-  }, owner, requested.method, requested.orderBy === 1 ? 'layer' : 'lifeform', true);
+  }, owner, requested.method, mode, true, allowConfiguredScope);
   let species: ValidatedSummarySpecies | null = null;
   if (requested.includeSpecies === 0) {
     if (value.species !== null) reject();
@@ -57,7 +59,7 @@ export function validateExtendedSummaryWorkbookReview(value: SiteUnitSummaryExte
         !shape(raw.options, optionKeys.filter(key => key !== 'includeSpecies')) ||
         !Array.isArray(raw.units) || !sameWorkbookSource(raw.environment, value.environment)) reject();
     const { includeSpecies, ...speciesRequest } = requested;
-    species = validateSummarySpecies(raw, owner, speciesRequest);
+    species = validateSummarySpecies(raw, owner, speciesRequest, allowConfiguredScope);
     for (const unit of species.units) {
       if (!shape(unit, ['code', 'nPlots', 'groups'])) reject();
       let rows = 4;
@@ -86,11 +88,11 @@ export class ExtendedSummaryWorkbookPublicationSession {
   requestedOptions() { return this.requested ? structuredClone(this.requested) : null; }
   async publish(review: SiteUnitSummaryExtendedWorkbookReview, destination: string,
     port: (request: ExtendedSummaryWorkbookExportRequest) => PromiseLike<SiteUnitSummaryWorkbookOutcome | null>,
-    requested: ExtendedSummaryWorkbookOptions) {
+    requested: ExtendedSummaryWorkbookOptions, allowConfiguredScope = false) {
     if (!workbookText(destination) || !destination || !/\.xlsx$/i.test(destination)) {
       throw new Error('Workbook publication requires an explicit literal .xlsx destination; no trimming or replacement.');
     }
-    const validated = validateExtendedSummaryWorkbookReview(review, this.owner, requested);
+    const validated = validateExtendedSummaryWorkbookReview(review, this.owner, requested, allowConfiguredScope);
     if (this.receipt.view().busy || this.receipt.view().blocked) {
       throw new Error('Acknowledge the prior Extended Summary workbook outcome before a new publication.');
     }

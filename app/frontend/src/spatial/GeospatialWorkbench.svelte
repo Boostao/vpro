@@ -15,6 +15,7 @@
   import { MapboxOverlay } from '@deck.gl/mapbox';
   import { LineLayer, ScatterplotLayer } from '@deck.gl/layers';
   import {
+    ImportExportService,
     SpatialService,
     type ApplySpatialAttributesRequest,
     type AssignSpatialAOIToSURequest,
@@ -23,6 +24,7 @@
     type SpatialBatchAuditReport,
     type SpatialWorkbenchPayload,
   } from '../../bindings/github.com/boostao/vpro/app';
+  import type { GeoPackageExportOutcome } from '../../bindings/github.com/boostao/vpro/app/internal/interchange/models';
 
   type SpatialPlotQARow = NonNullable<SpatialBatchAuditReport['rows']>[number];
   import {
@@ -128,6 +130,16 @@
   let stampOnlyWhenBlank = $state(true);
   let normalizeLonSign = $state(true);
   let syncUTMFromDD = $state(true);
+  let syncLatLonFromUTM = $state(false);
+
+  // Direct GeoPackage (.gpkg) shortcut export state
+  let gpkgPanelOpen = $state(false);
+  let gpkgDestPath = $state('');
+  let gpkgCrs = $state<'EPSG:3005' | 'EPSG:4326'>('EPSG:3005');
+  let gpkgIncludeAttributes = $state(true);
+  let gpkgIncludeUnlocated = $state(false);
+  let gpkgExporting = $state(false);
+  let gpkgOutcome = $state.raw<GeoPackageExportOutcome | null>(null);
 
   const aoiMatchedSet = $derived(new Set(aoiPreview?.plotNumbers ?? []));
   const filteredPoints = $derived.by(() => {
@@ -270,7 +282,7 @@
           data: discrepancySegments,
           getSourcePosition: (d) => d.sourcePosition,
           getTargetPosition: (d) => d.targetPosition,
-          getColor: (d) => (d.flagged ? [220, 38, 38, 220] : [245, 158, 11, 180]),
+          getColor: (d) => (d.flagged ? [216, 41, 47, 220] : [252, 186, 25, 200]),
           getWidth: 2.5,
           widthUnits: 'pixels',
         }),
@@ -278,7 +290,7 @@
           id: 'vpro-utm-derived-pins',
           data: discrepancySegments,
           getPosition: (d) => d.targetPosition,
-          getFillColor: [249, 115, 22, 200],
+          getFillColor: [252, 186, 25, 220],
           getLineColor: [0, 51, 102, 255],
           stroked: true,
           lineWidthMinPixels: 1.5,
@@ -303,8 +315,8 @@
           d.plotNumber === selPlotNum ? [252, 186, 25, 255] : [255, 255, 255, 235],
         getFillColor: (d) => {
           if (matched.has(d.plotNumber)) return [252, 186, 25, 245];
-          if (d.divergenceFlagged || d.bgcMismatch) return [220, 38, 38, 235];
-          return [5, 150, 105, 230];
+          if (d.divergenceFlagged || d.bgcMismatch) return [216, 41, 47, 235];
+          return [46, 133, 64, 230];
         },
         updateTriggers: {
           getRadius: [selPlotNum, aoiPreview],
@@ -688,7 +700,7 @@
         onlyWhenBlank: stampOnlyWhenBlank,
         normalizeLongitudeSign: normalizeLonSign,
         syncUtmFromLatLon: syncUTMFromDD,
-        syncLatLonFromUtm: false,
+        syncLatLonFromUtm: syncLatLonFromUTM,
       });
       const res = await SpatialService.ApplySpatialAttributes(contextId, req);
       if (!alive || !res) return;
@@ -702,7 +714,41 @@
     } finally {
       if (alive) {
         mutating = false;
-        setBusyState(loading);
+        setBusyState(loading || gpkgExporting);
+      }
+    }
+  }
+
+  async function exportGeoPackageShortcut() {
+    if (!contextId || gpkgExporting || mutating || loading) return;
+    const rawDest = gpkgDestPath.trim();
+    if (!rawDest) {
+      errorMsg = 'Enter a destination .gpkg file path before exporting.';
+      return;
+    }
+    const destinationPath = rawDest.toLowerCase().endsWith('.gpkg') ? rawDest : `${rawDest}.gpkg`;
+    gpkgExporting = true;
+    errorMsg = '';
+    statusMsg = '';
+    setBusyState(true);
+    try {
+      const outcome = await ImportExportService.ExportGeoPackage(contextId, {
+        destinationPath,
+        crs: gpkgCrs,
+        includeAttributeTables: gpkgIncludeAttributes,
+        includeUnlocatedPlots: gpkgIncludeUnlocated,
+      });
+      if (!alive || !outcome) return;
+      gpkgOutcome = outcome;
+      statusMsg = `Exported ${outcome.featureCount} GeoPackage plot features (${outcome.crs}, SRS ${outcome.srsId}) to ${outcome.path}.`;
+    } catch (cause) {
+      if (alive) {
+        errorMsg = `GeoPackage (.gpkg) export failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+      }
+    } finally {
+      if (alive) {
+        gpkgExporting = false;
+        setBusyState(loading || mutating);
       }
     }
   }
@@ -762,7 +808,7 @@
   });
 </script>
 
-<section class="geospatial-workbench" aria-label="3D Geospatial Workbench">
+<section class="geospatial-workbench" data-tour="geospatial-workbench-root" aria-label="3D Geospatial Workbench">
   <header class="wb-banner">
     <div class="wb-title-block">
       <span class="wb-eyebrow">BC MINISTRY OF FORESTS - BEC GEOSPATIAL WORKBENCH</span>
@@ -836,8 +882,73 @@
       <button type="button" class="wb-btn" onclick={() => void loadWorkbenchData()} disabled={loading || mutating}>
         Refresh Stream
       </button>
+      <button
+        type="button"
+        class="wb-btn wb-btn-gold"
+        data-gpkg-export-shortcut
+        disabled={loading || mutating || gpkgExporting || !contextId}
+        onclick={() => {
+          if (!gpkgDestPath.trim()) {
+            const safeProj = (project || 'vpro').replace(/[^A-Za-z0-9_-]+/g, '_');
+            gpkgDestPath = `${safeProj}_plots.gpkg`;
+          }
+          gpkgPanelOpen = !gpkgPanelOpen;
+        }}
+      >
+        Export .gpkg...
+      </button>
     </div>
   </div>
+
+  {#if gpkgPanelOpen}
+    <div class="wb-gpkg-panel" data-gpkg-export-panel>
+      <div class="wb-gpkg-grid">
+        <label class="wb-gpkg-field">
+          <span>Destination GeoPackage (.gpkg) Path</span>
+          <input
+            type="text"
+            class="wb-input"
+            data-gpkg-dest-input
+            bind:value={gpkgDestPath}
+            placeholder="/path/to/plots.gpkg"
+            disabled={gpkgExporting}
+          />
+        </label>
+        <label class="wb-gpkg-field">
+          <span>CRS</span>
+          <select class="wb-input" data-gpkg-crs-select bind:value={gpkgCrs} disabled={gpkgExporting}>
+            <option value="EPSG:3005">EPSG:3005 (BC Albers)</option>
+            <option value="EPSG:4326">EPSG:4326 (NAD83 Lon/Lat)</option>
+          </select>
+        </label>
+        <label class="wb-check-row">
+          <input type="checkbox" bind:checked={gpkgIncludeAttributes} disabled={gpkgExporting} />
+          <span>Include veg/soil attribute tables</span>
+        </label>
+        <label class="wb-check-row">
+          <input type="checkbox" bind:checked={gpkgIncludeUnlocated} disabled={gpkgExporting} />
+          <span>Include unlocated plots</span>
+        </label>
+      </div>
+      <div class="wb-btn-row">
+        <button
+          type="button"
+          class="wb-btn wb-btn-primary"
+          data-gpkg-export-run
+          disabled={gpkgExporting || loading || mutating || !gpkgDestPath.trim()}
+          onclick={() => void exportGeoPackageShortcut()}
+        >
+          {gpkgExporting ? 'Exporting .gpkg...' : 'Export GeoPackage (.gpkg)'}
+        </button>
+        <button type="button" class="wb-btn" onclick={() => (gpkgPanelOpen = false)}>Close</button>
+      </div>
+      {#if gpkgOutcome}
+        <div class="wb-alert wb-alert-ok">
+          Exported {gpkgOutcome.featureCount} features ({gpkgOutcome.crs}) | Flipped West Lons: {gpkgOutcome.normalizedWestLongitudes} | {gpkgOutcome.path}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   {#if errorMsg}
     <div role="alert" class="wb-alert wb-alert-error">{errorMsg}</div>
@@ -931,7 +1042,7 @@
               </div>
 
               <dl class="wb-kv-grid">
-                <div><dt>NAD83 Lat, Lon</dt><dd>{selectedPlot.lat.toFixed(5)}, {selectedPlot.lon.toFixed(5)}</dd></div>
+                <div><dt>NAD83 Lat, Western Lon</dt><dd>{selectedPlot.lat.toFixed(5)}, {selectedPlot.lon.toFixed(5)}</dd></div>
                 <div><dt>Active SiteUnit</dt><dd>{selectedPlot.siteUnit || 'Unassigned'}</dd></div>
                 <div><dt>Field BGC</dt><dd>{selectedPlot.fieldBgc || 'Blank'}</dd></div>
                 <div>
@@ -979,7 +1090,7 @@
                 class:selected={selectedPlot?.plotNumber === pt.plotNumber}
                 onclick={() => void inspectPlotPin(pt)}
               >
-                <span class="mono font-semibold">{pt.plotNumber}</span>
+                <span class="wb-plot-code mono">{pt.plotNumber}</span>
                 <span>{pt.fieldBgc || '-'} -&gt; {pt.gisBgc || '-'}</span>
                 {#if pt.bgcMismatch || pt.divergenceFlagged}
                   <span class="wb-pill-err">QA</span>
@@ -1114,6 +1225,10 @@
                 <span>Project NAD83 Lat/Lon -&gt; UTMZone / Easting / Northing</span>
               </label>
               <label class="wb-check-row">
+                <input type="checkbox" data-sync-latlon-from-utm bind:checked={syncLatLonFromUTM} />
+                <span>Derive NAD83 Lat/Lon &lt;- UTMZone / Easting / Northing</span>
+              </label>
+              <label class="wb-check-row">
                 <input type="checkbox" bind:checked={qaFilterOnlyIssues} />
                 <span>Show only plots with QA discrepancies or missing GIS_BGC</span>
               </label>
@@ -1197,9 +1312,11 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 640px;
-    background: #f4f6f9;
-    color: #1f2937;
+    min-height: 0;
+    min-width: 0;
+    max-width: 100%;
+    background: #F2F2F2;
+    color: #313132;
   }
   .wb-banner {
     display: flex;
@@ -1209,20 +1326,21 @@
     gap: 0.75rem;
     padding: 0.75rem 1rem;
     background: #003366;
-    border-bottom: 3px solid #fcba19;
-    color: #ffffff;
+    border-bottom: 3px solid #FCBA19;
+    color: #FFFFFF;
   }
   .wb-eyebrow {
     display: block;
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.06em;
-    color: #fcba19;
+    color: #FCBA19;
   }
   .wb-title-block h1 {
     margin: 0;
     font-size: 1.05rem;
     font-weight: 700;
+    color: #FFFFFF;
   }
   .wb-badges {
     display: flex;
@@ -1236,16 +1354,18 @@
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.14);
     border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #FFFFFF;
   }
   .wb-badge-gold {
-    background: #fcba19;
+    background: #FCBA19;
     color: #003366;
-    border-color: #fcba19;
+    border-color: #FCBA19;
     font-weight: 700;
   }
   .wb-badge-alert {
-    background: #991b1b;
-    border-color: #fca5a5;
+    background: #D8292F;
+    border-color: #FFFFFF;
+    color: #FFFFFF;
   }
   .wb-toolbar {
     display: flex;
@@ -1254,8 +1374,8 @@
     align-items: center;
     gap: 0.65rem;
     padding: 0.5rem 0.85rem;
-    background: #ffffff;
-    border-bottom: 1px solid #cbd5e1;
+    background: #FFFFFF;
+    border-bottom: 1px solid #D8D8D8;
     font-size: 0.78rem;
   }
   .wb-layer-toggles,
@@ -1271,13 +1391,17 @@
     gap: 0.3rem;
     cursor: pointer;
     font-weight: 500;
+    color: #313132;
   }
   .wb-input {
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
     padding: 0.3rem 0.5rem;
     font-size: 0.78rem;
-    background: #ffffff;
+    background: #FFFFFF;
+    color: #313132;
+    max-width: 100%;
+    box-sizing: border-box;
   }
   .wb-btn {
     border: 1px solid #003366;
@@ -1285,7 +1409,7 @@
     padding: 0.32rem 0.65rem;
     font-size: 0.78rem;
     font-weight: 600;
-    background: #ffffff;
+    background: #FFFFFF;
     color: #003366;
     cursor: pointer;
   }
@@ -1295,46 +1419,67 @@
   }
   .wb-btn-primary {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
   }
   .wb-btn-gold {
-    background: #fcba19;
-    border-color: #b45309;
+    background: #FCBA19;
+    border-color: #FCBA19;
     color: #003366;
+    font-weight: 700;
+  }
+  .wb-gpkg-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.65rem 0.85rem;
+    background: #FFFFFF;
+    border-bottom: 2px solid #003366;
+    font-size: 0.78rem;
+  }
+  .wb-gpkg-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 0.55rem;
+    align-items: end;
+  }
+  .wb-gpkg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-weight: 600;
+    color: #003366;
+    min-width: 0;
   }
   .wb-alert {
     padding: 0.45rem 0.9rem;
     font-size: 0.8rem;
-    border-bottom: 1px solid #cbd5e1;
+    border-bottom: 1px solid #D8D8D8;
   }
   .wb-alert-error {
-    background: #fef2f2;
-    color: #991b1b;
+    background: rgba(216, 41, 47, 0.1);
+    color: #D8292F;
   }
   .wb-alert-ok {
-    background: #ecfdf5;
-    color: #065f46;
+    background: rgba(46, 133, 64, 0.1);
+    color: #1E5128;
   }
   .wb-alert-info {
-    background: #eff6ff;
-    color: #1e3a8a;
+    background: rgba(26, 90, 150, 0.1);
+    color: #003366;
   }
   .wb-main-split {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 370px;
     flex: 1;
     min-height: 520px;
-  }
-  @media (max-width: 960px) {
-    .wb-main-split {
-      grid-template-columns: 1fr;
-    }
+    min-width: 0;
   }
   .wb-map-stage {
     display: flex;
     flex-direction: column;
     min-height: 460px;
-    background: #cbd5e1;
+    min-width: 0;
+    background: #D8D8D8;
   }
   .wb-map-canvas {
     flex: 1;
@@ -1346,8 +1491,8 @@
   }
   .wb-map-legend {
     padding: 0.4rem 0.75rem;
-    background: #0f172a;
-    color: #f8fafc;
+    background: #002244;
+    color: #FFFFFF;
     font-size: 0.72rem;
     display: flex;
     flex-direction: column;
@@ -1362,7 +1507,7 @@
   }
   .wb-viewport-stat {
     margin-left: auto;
-    color: #fcba19;
+    color: #FCBA19;
     font-weight: 600;
   }
   .wb-dot {
@@ -1372,13 +1517,13 @@
     border-radius: 999px;
   }
   .wb-dot-ok {
-    background: #059669;
+    background: #2E8540;
   }
   .wb-dot-err {
-    background: #dc2626;
+    background: #D8292F;
   }
   .wb-dot-aoi {
-    background: #fcba19;
+    background: #FCBA19;
   }
   .wb-swatch {
     display: inline-flex;
@@ -1394,28 +1539,29 @@
   .wb-drawer {
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    border-left: 1px solid #cbd5e1;
+    background: #FFFFFF;
+    border-left: 1px solid #D8D8D8;
+    min-width: 0;
     overflow: hidden;
   }
   .wb-tabs {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    background: #e2e8f0;
+    background: #F2F2F2;
     border-bottom: 2px solid #003366;
   }
   .wb-tabs button {
     padding: 0.5rem 0.35rem;
     font-size: 0.75rem;
     font-weight: 700;
-    color: #334155;
+    color: #313132;
     background: transparent;
     border: none;
     cursor: pointer;
   }
   .wb-tabs button.active {
     background: #003366;
-    color: #fcba19;
+    color: #FCBA19;
   }
   .wb-panel-body {
     flex: 1;
@@ -1427,13 +1573,14 @@
     font-size: 0.8rem;
   }
   .wb-card {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 6px;
     padding: 0.7rem;
-    background: #f8fafc;
+    background: #F2F2F2;
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+    min-width: 0;
   }
   .wb-card h2 {
     margin: 0;
@@ -1443,6 +1590,7 @@
   }
   .wb-card-head {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
@@ -1450,29 +1598,30 @@
   .wb-label {
     font-size: 0.65rem;
     font-weight: 700;
-    color: #64748b;
+    color: #474543;
   }
   .wb-kv-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
     gap: 0.4rem;
     margin: 0;
   }
   .wb-kv-grid dt {
     font-size: 0.68rem;
-    color: #64748b;
+    color: #474543;
   }
   .wb-kv-grid dd {
     margin: 0;
     font-weight: 600;
     word-break: break-word;
+    color: #313132;
   }
   .wb-flag-text {
-    color: #b91c1c;
+    color: #D8292F;
     font-weight: 700;
   }
   .wb-suggestion-box {
-    background: #eff6ff;
+    background: #FFFFFF;
     border-left: 3px solid #003366;
     padding: 0.45rem 0.55rem;
     border-radius: 3px;
@@ -1480,9 +1629,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
+    color: #313132;
   }
   .wb-muted {
-    color: #64748b;
+    color: #474543;
     font-size: 0.74rem;
     margin: 0;
   }
@@ -1490,7 +1640,7 @@
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
-    color: #475569;
+    color: #474543;
   }
   .wb-plot-list {
     display: flex;
@@ -1504,20 +1654,25 @@
     justify-content: space-between;
     align-items: center;
     padding: 0.3rem 0.5rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
-    background: #ffffff;
+    background: #FFFFFF;
+    color: #313132;
     text-align: left;
     font-size: 0.75rem;
     cursor: pointer;
   }
   .wb-plot-row.selected {
     border-color: #003366;
-    background: #eff6ff;
+    background: rgba(26, 90, 150, 0.1);
+  }
+  .wb-plot-code {
+    font-weight: 600;
+    color: #003366;
   }
   .wb-pill-err {
-    background: #fee2e2;
-    color: #991b1b;
+    background: rgba(216, 41, 47, 0.12);
+    color: #D8292F;
     font-size: 0.65rem;
     font-weight: 700;
     padding: 0.05rem 0.35rem;
@@ -1538,6 +1693,7 @@
     align-items: center;
     gap: 0.4rem;
     font-size: 0.75rem;
+    color: #313132;
   }
   .wb-chip-wrap {
     display: flex;
@@ -1547,7 +1703,7 @@
   }
   .wb-chip {
     background: #003366;
-    color: #fcba19;
+    color: #FCBA19;
     padding: 0.08rem 0.35rem;
     border-radius: 3px;
     font-size: 0.68rem;
@@ -1555,19 +1711,21 @@
   }
   .wb-qa-summary {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.3rem;
     font-size: 0.73rem;
-    background: #ffffff;
+    background: #FFFFFF;
     padding: 0.4rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
   }
   .wb-qa-table-wrap {
     max-height: 260px;
-    overflow-y: auto;
-    border: 1px solid #e2e8f0;
+    overflow: auto;
+    max-width: 100%;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
+    background: #FFFFFF;
   }
   .wb-qa-table {
     width: 100%;
@@ -1577,11 +1735,11 @@
   .wb-qa-table th,
   .wb-qa-table td {
     padding: 0.3rem 0.4rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #D8D8D8;
     text-align: left;
   }
   .wb-qa-table th {
-    background: #f1f5f9;
+    background: #F2F2F2;
     color: #003366;
     position: sticky;
     top: 0;
@@ -1608,5 +1766,28 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+  }
+  @media (max-width: 960px) {
+    .geospatial-workbench {
+      height: auto;
+      min-height: 0;
+    }
+    .wb-main-split,
+    .wb-qa-summary {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .wb-map-stage {
+      min-height: 320px;
+    }
+    .wb-map-canvas {
+      min-height: 300px;
+    }
+    .wb-drawer {
+      border-left: none;
+      border-top: 1px solid #D8D8D8;
+    }
+    .wb-viewport-stat {
+      margin-left: 0;
+    }
   }
 </style>

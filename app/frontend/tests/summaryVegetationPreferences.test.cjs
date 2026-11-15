@@ -166,6 +166,8 @@ function panel(session, preferencesEnabled = true) {
     './summaryVegetation': summary,
     './summaryVegetationPreferenceSessions': { summaryVegetationPreferenceSession: preferencesEnabled ? () => session : null },
     '../bindings/github.com/boostao/vpro/app': {},
+    '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
+    '../classification/siteUnitExclusionFilter': {},
   });
 }
 test('compiled saved-option panel has one live source control per field and no render-time mutation', async () => {

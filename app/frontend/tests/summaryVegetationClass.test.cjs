@@ -95,6 +95,7 @@ test('compiled class panel retains Show labels and source-enabled but ignored Sh
   const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
   const panel = serverComponent(component, 'SummaryVegetationReport.svelte', {
     './summaryVegetation': report, '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
+    '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} }, '../classification/siteUnitExclusionFilter': {},
   });
   const session = report.summaryVegetationSession(owner);
   session.edit(1, 4, 20);

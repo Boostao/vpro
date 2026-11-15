@@ -2,9 +2,12 @@
   import { onDestroy, onMount, untrack } from 'svelte';
   import { ReadRequests } from '../shared/readRequests';
   import {
+    chooseExternalSQLiteTarget,
+    createDefaultPairwiseParams,
     createDefaultSynthesisOptions,
     defaultSynthesisBackendPort,
     DIAGNOSTIC_CODE_META,
+    discoverExternalSynthesisLumps,
     EDATOPIC_SMR_ROWS,
     EDATOPIC_SNR_COLS,
     edatopicHeatLevel,
@@ -13,10 +16,13 @@
     findPairwiseComparison,
     formatSynthesisMatrixCell,
     getEdatopicCellMatrix,
+    groupUnitsByHierarchyBreakpoints,
     resolveDiagnosticCellClass,
+    resolveSynthesisHierarchyBreakpoints,
     SMR_DESCRIPTIONS,
     SNR_DESCRIPTIONS,
     validateWorkbookExportDraft,
+    type BreakpointUnitRollup,
     type EdatopicCell,
     type ExportDiagnosticWorkbookResult,
     type MatrixDisplayMode,
@@ -56,6 +62,13 @@
   let lumpOptions = $state.raw<SynthesisLumpTableOption[]>([]);
 
   let options = $state<SynthesisOptions>(createDefaultSynthesisOptions());
+  let excludePatternsText = $state('');
+  let externalLumpDbPath = $state('');
+  let externalSuPath = $state('');
+  let externalSuNames = $state<string[]>([]);
+  let useBreakpointGrouping = $state(false);
+  let breakpointPolicy = $state<'lowest' | 'highest'>('lowest');
+  let breakpointRollups = $state.raw<BreakpointUnitRollup[]>([]);
   let activeTab = $state<SynthesisWorkspaceTab>('matrix');
   let matrixDisplay = $state<MatrixDisplayMode>('roman_signif');
   let matrixGrouping = $state<MatrixGroupingMode>('diagnostic_unit');
@@ -150,6 +163,13 @@
       const snap = await reads.track(port.computeSynthesisSnapshot(effectiveContextId, plainOpts));
       if (gen !== requestGeneration) return;
       applyIncomingSnapshot(snap, snap.computeMs);
+      if (useBreakpointGrouping) {
+        const res = await reads.track(resolveSynthesisHierarchyBreakpoints(effectiveContextId, breakpointPolicy));
+        if (gen !== requestGeneration) return;
+        breakpointRollups = groupUnitsByHierarchyBreakpoints(snap, res);
+      } else {
+        breakpointRollups = [];
+      }
     } catch (err) {
       if (gen !== requestGeneration) return;
       errorMessage = err instanceof Error ? err.message : String(err);
@@ -157,6 +177,85 @@
       if (gen === requestGeneration) {
         setBusyState(false, mutating);
       }
+    }
+  }
+
+  async function browseExternalLumpDatabase() {
+    if (!effectiveContextId || loading || mutating) return;
+    errorMessage = '';
+    try {
+      const picked = await chooseExternalSQLiteTarget(effectiveContextId);
+      if (!picked?.selectedPath) return;
+      externalLumpDbPath = picked.selectedPath;
+      const extLumps = await discoverExternalSynthesisLumps(effectiveContextId, picked.selectedPath);
+      const existingKeys = new Set(lumpOptions.map(o => `${o.dbPath}::${o.tableName}`));
+      lumpOptions = [...lumpOptions, ...extLumps.filter(o => !existingKeys.has(`${o.dbPath}::${o.tableName}`))];
+      if (extLumps.length > 0) {
+        options.lumpTable = extLumps[0].name;
+        options.lumpDbPath = extLumps[0].dbPath;
+        await recomputeSnapshotOnly();
+      } else {
+        statusNotice = `No *_Lump tables found in ${picked.selectedPath}.`;
+      }
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  async function browseExternalSUFile() {
+    if (!effectiveContextId || loading || mutating) return;
+    errorMessage = '';
+    try {
+      const picked = await chooseExternalSQLiteTarget(effectiveContextId);
+      if (!picked?.selectedPath) return;
+      externalSuPath = picked.selectedPath;
+      externalSuNames = (picked.sus ?? []).map(s => s.name).filter(Boolean);
+      statusNotice = externalSuNames.length > 0
+        ? `Inspected external SU file (${picked.selectedPath}): ${externalSuNames.join(', ')}. Switch active SU in Classification Explorer or UserSiteUnitList mode.`
+        : `Selected ${picked.selectedPath} (no *_SU tables found).`;
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  function applyExcludePatterns(raw: string) {
+    excludePatternsText = raw;
+    options.excludePatterns = raw
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+
+  function updatePairwiseParam(
+    key: 'minPlots' | 'minConstancy' | 'noiseConstancy' | 'minDiff' | 'minDd',
+    raw: string
+  ) {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    options.pairwise = {
+      ...(options.pairwise ?? createDefaultPairwiseParams()),
+      [key]: parsed,
+    };
+  }
+
+  function resetPairwiseDefaults() {
+    options.pairwise = createDefaultPairwiseParams();
+    void recomputeSnapshotOnly();
+  }
+
+  async function toggleBreakpointGrouping(nextEnabled: boolean, nextPolicy = breakpointPolicy) {
+    useBreakpointGrouping = nextEnabled;
+    breakpointPolicy = nextPolicy;
+    if (!nextEnabled) {
+      breakpointRollups = [];
+      return;
+    }
+    if (!effectiveContextId || !snapshot) return;
+    try {
+      const res = await reads.track(resolveSynthesisHierarchyBreakpoints(effectiveContextId, nextPolicy));
+      breakpointRollups = groupUnitsByHierarchyBreakpoints(snapshot, res);
+    } catch (err) {
+      errorMessage = err instanceof Error ? err.message : String(err);
     }
   }
 
@@ -376,7 +475,7 @@
   );
 </script>
 
-<section class="synthesis-workbench" aria-label="BEC Differential and Pairwise Synthesis Workbench">
+<section class="synthesis-workbench" data-tour="diagnostic-synthesis-root" aria-label="BEC Differential and Pairwise Synthesis Workbench">
   <!-- BC Gov #003366 / #FCBA19 Synthesis Command Header -->
   <header class="syn-header">
     <div class="syn-header-brand">
@@ -438,23 +537,56 @@
   <!-- Synthesis Controls & Filter Bar -->
   <div class="syn-toolbar" role="region" aria-label="Synthesis Options">
     <label class="syn-control">
-      <span>Species Lumping (99% Cap)</span>
+      <span>Unit Classification Source</span>
       <select
-        value={options.lumpTable ?? ''}
+        data-synthesis-unit-source
+        value={options.unitSource ?? 'auto'}
         disabled={loading || mutating}
         onchange={e => {
-          options.lumpTable = (e.currentTarget as HTMLSelectElement).value;
+          options.unitSource = (e.currentTarget as HTMLSelectElement).value as
+            | 'auto'
+            | 'su'
+            | 'user_site_unit';
           void recomputeSnapshotOnly();
         }}
       >
-        <option value="">None (Raw Species)</option>
-        {#each lumpOptions as opt (opt.tableName)}
-          <option value={opt.name}>
-            {opt.tableName} ({opt.activeCount} active)
+        <option value="auto">Auto (SU -> UserSiteUnitList)</option>
+        <option value="su">Active SU Table ({snapshot?.su || su || 'None'})</option>
+        <option value="user_site_unit">UserSiteUnitList Working Units</option>
+      </select>
+    </label>
+
+    <label class="syn-control">
+      <span>Species Lumping (99% Cap)</span>
+      <select
+        data-synthesis-lump-select
+        value={`${options.lumpDbPath ?? ''}::${options.lumpTable ?? ''}`}
+        disabled={loading || mutating}
+        onchange={e => {
+          const val = (e.currentTarget as HTMLSelectElement).value;
+          const sep = val.indexOf('::');
+          options.lumpDbPath = sep >= 0 ? val.slice(0, sep) : '';
+          options.lumpTable = sep >= 0 ? val.slice(sep + 2) : '';
+          void recomputeSnapshotOnly();
+        }}
+      >
+        <option value="::">None (Raw Species)</option>
+        {#each lumpOptions as opt (`${opt.dbPath}::${opt.tableName}`)}
+          <option value={`${opt.dbPath}::${opt.name}`}>
+            {opt.tableName} ({opt.activeCount} active){opt.dbPath ? ` — ${opt.dbPath.split(/[\\/]/).pop()}` : ''}
           </option>
         {/each}
       </select>
     </label>
+
+    <div class="syn-control-buttons">
+      <button type="button" class="syn-btn syn-btn-ghost-dark" data-synthesis-browse-lump onclick={() => void browseExternalLumpDatabase()} disabled={loading || mutating}>
+        External Lump .db...
+      </button>
+      <button type="button" class="syn-btn syn-btn-ghost-dark" data-synthesis-browse-su onclick={() => void browseExternalSUFile()} disabled={loading || mutating}>
+        Inspect External SU .db...
+      </button>
+    </div>
 
     <label class="syn-control">
       <span>Significance Basis</span>
@@ -520,6 +652,51 @@
       </span>
     </label>
 
+    <label class="syn-control">
+      <span>Min Max Presence (%)</span>
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="1"
+        data-synthesis-min-max-presence
+        value={options.minMaxPresencePct ?? 0}
+        oninput={e => {
+          const val = Number((e.currentTarget as HTMLInputElement).value);
+          options.minMaxPresencePct = Number.isFinite(val) ? Math.max(0, Math.min(100, val)) : 0;
+        }}
+        onchange={() => void recomputeSnapshotOnly()}
+      />
+    </label>
+
+    <label class="syn-checkbox-control">
+      <input
+        type="checkbox"
+        data-synthesis-use-breakpoints
+        checked={useBreakpointGrouping}
+        onchange={e => void toggleBreakpointGrouping((e.currentTarget as HTMLInputElement).checked)}
+      />
+      <span>Group by '~' Breakpoints</span>
+    </label>
+
+    {#if useBreakpointGrouping}
+      <label class="syn-control">
+        <span>Breakpoint Policy</span>
+        <select
+          data-synthesis-breakpoint-policy
+          value={breakpointPolicy}
+          onchange={e =>
+            void toggleBreakpointGrouping(
+              true,
+              (e.currentTarget as HTMLSelectElement).value as 'lowest' | 'highest'
+            )}
+        >
+          <option value="lowest">Lowest ('~' Closest Parent)</option>
+          <option value="highest">Highest ('~' Broadest Parent)</option>
+        </select>
+      </label>
+    {/if}
+
     <label class="syn-checkbox-control">
       <input
         type="checkbox"
@@ -531,6 +708,126 @@
       <span>Diagnostic Taxa Only</span>
     </label>
   </div>
+
+  <details class="syn-advanced-panel" data-synthesis-advanced-params>
+    <summary>
+      Advanced BEC Synthesis &amp; Pairwise Thresholds (Defaults: MinPlots=2, Constancy=60%, Noise=10%, MinDiff=0.5, MinDd=0.5)
+    </summary>
+    <div class="syn-advanced-body">
+      <div class="syn-params-grid">
+        <label class="syn-control">
+          <span>Exclude Species Patterns (comma-separated)</span>
+          <input
+            type="text"
+            placeholder="e.g. sp., x, cf."
+            data-synthesis-exclude-patterns
+            value={excludePatternsText}
+            oninput={e => applyExcludePatterns((e.currentTarget as HTMLInputElement).value)}
+            onchange={() => void recomputeSnapshotOnly()}
+          />
+        </label>
+
+        <label class="syn-control">
+          <span>Min Plots / Unit</span>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            data-synthesis-pairwise-min-plots
+            value={options.pairwise?.minPlots ?? 2}
+            oninput={e => updatePairwiseParam('minPlots', (e.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+
+        <label class="syn-control">
+          <span>Min Constancy (%)</span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            data-synthesis-pairwise-min-constancy
+            value={options.pairwise?.minConstancy ?? 60}
+            oninput={e => updatePairwiseParam('minConstancy', (e.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+
+        <label class="syn-control">
+          <span>Noise Constancy (%)</span>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="1"
+            data-synthesis-pairwise-noise-constancy
+            value={options.pairwise?.noiseConstancy ?? 10}
+            oninput={e =>
+              updatePairwiseParam('noiseConstancy', (e.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+
+        <label class="syn-control">
+          <span>Min Diff Score</span>
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            data-synthesis-pairwise-min-diff
+            value={options.pairwise?.minDiff ?? 0.5}
+            oninput={e => updatePairwiseParam('minDiff', (e.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+
+        <label class="syn-control">
+          <span>Min dd Score</span>
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            data-synthesis-pairwise-min-dd
+            value={options.pairwise?.minDd ?? 0.5}
+            oninput={e => updatePairwiseParam('minDd', (e.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+      </div>
+
+      <div class="syn-advanced-actions">
+        <button
+          type="button"
+          class="syn-btn syn-btn-ghost-dark"
+          data-synthesis-reset-pairwise
+          onclick={resetPairwiseDefaults}
+        >
+          Reset Pairwise Defaults (2, 60, 10, 0.5, 0.5)
+        </button>
+        <button
+          type="button"
+          class="syn-btn syn-btn-navy"
+          data-synthesis-apply-params
+          disabled={loading || mutating}
+          onclick={() => void recomputeSnapshotOnly()}
+        >
+          Apply Parameters &amp; Recompute
+        </button>
+      </div>
+
+      {#if externalLumpDbPath || externalSuPath}
+        <div class="syn-external-summary" data-synthesis-external-paths>
+          {#if externalLumpDbPath}
+            <div><strong>External Lump DB:</strong> <code>{externalLumpDbPath}</code></div>
+          {/if}
+          {#if externalSuPath}
+            <div>
+              <strong>Inspected External SU DB:</strong> <code>{externalSuPath}</code>
+              {#if externalSuNames.length > 0}
+                <span> ({externalSuNames.join(', ')})</span>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </details>
 
   {#if errorMessage}
     <div class="syn-alert syn-alert-error" role="alert">{errorMessage}</div>
@@ -615,6 +912,19 @@
               Tip: Drag any outlier plot card onto a Site Unit column header to reassign live.
             </span>
           {/if}
+        </div>
+      {/if}
+
+      {#if useBreakpointGrouping && breakpointRollups.length > 0}
+        <div class="syn-breakpoint-rollups" data-synthesis-breakpoint-rollups>
+          <span class="syn-legend-title">'~' Hierarchy Breakpoint Rollup ({breakpointPolicy}):</span>
+          {#each breakpointRollups as rollup (rollup.breakpointUnit)}
+            <span class="syn-breakpoint-chip">
+              <strong>~{rollup.breakpointUnit}</strong>
+              <span>n={rollup.plotCount}, {rollup.speciesCount} taxa</span>
+              <span class="syn-muted">[{rollup.descendantUnits.join(', ')}]</span>
+            </span>
+          {/each}
         </div>
       {/if}
 
@@ -1253,7 +1563,7 @@
     flex-direction: column;
     gap: 0.75rem;
     min-width: 0;
-    color: #0f172a;
+    color: #313132;
   }
 
   .syn-header {
@@ -1264,8 +1574,8 @@
     gap: 0.85rem;
     padding: 0.9rem 1.15rem;
     background: #003366;
-    color: #ffffff;
-    border-bottom: 4px solid #fcba19;
+    color: #FFFFFF;
+    border-bottom: 4px solid #FCBA19;
     border-radius: 5px 5px 0 0;
   }
 
@@ -1273,7 +1583,7 @@
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.08em;
-    color: #fcba19;
+    color: #FCBA19;
   }
 
   .syn-title-row {
@@ -1288,7 +1598,7 @@
     margin: 0;
     font-size: 1.15rem;
     font-weight: 700;
-    color: #ffffff;
+    color: #FFFFFF;
   }
 
   .syn-chip {
@@ -1297,13 +1607,13 @@
     padding: 0.18rem 0.55rem;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.14);
-    color: #f8fafc;
+    color: #F2F2F2;
     font-size: 0.75rem;
     font-weight: 600;
   }
 
   .syn-chip-gold {
-    background: #fcba19;
+    background: #FCBA19;
     color: #003366;
   }
 
@@ -1330,7 +1640,7 @@
   .syn-btn-ghost {
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.35);
-    color: #ffffff;
+    color: #FFFFFF;
   }
 
   .syn-btn-ghost:hover:not(:disabled) {
@@ -1338,24 +1648,29 @@
   }
 
   .syn-btn-gold {
-    background: #fcba19;
+    background: #FCBA19;
     color: #003366;
     font-weight: 700;
   }
 
   .syn-btn-gold:hover:not(:disabled) {
-    background: #ffd15c;
+    background: #FCBA19;
+    opacity: 0.92;
   }
 
   .syn-btn-navy {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
+  }
+
+  .syn-btn-navy:hover:not(:disabled) {
+    background: #002244;
   }
 
   .syn-btn-ghost-dark {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-    color: #1e293b;
+    background: #F2F2F2;
+    border-color: #D8D8D8;
+    color: #313132;
   }
 
   .syn-btn:disabled {
@@ -1368,8 +1683,8 @@
     align-items: end;
     gap: 0.75rem;
     padding: 0.7rem 0.9rem;
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
+    background: #FFFFFF;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
   }
 
@@ -1380,16 +1695,26 @@
     font-size: 0.75rem;
     font-weight: 600;
     color: #003366;
+    min-width: 0;
   }
 
-  .syn-control select {
+  .syn-control select,
+  .syn-control input {
     min-height: 34px;
     padding: 0.3rem 0.55rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
-    background: #ffffff;
+    background: #FFFFFF;
     font-size: 0.8rem;
-    color: #0f172a;
+    color: #313132;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .syn-control-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
   }
 
   .syn-checkbox-control {
@@ -1398,7 +1723,51 @@
     gap: 0.4rem;
     min-height: 34px;
     font-size: 0.8rem;
-    color: #1e293b;
+    color: #313132;
+  }
+
+  .syn-advanced-panel {
+    background: #FFFFFF;
+    border: 1px solid #D8D8D8;
+    border-radius: 4px;
+    padding: 0.55rem 0.85rem;
+  }
+
+  .syn-advanced-panel summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #003366;
+  }
+
+  .syn-advanced-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-top: 0.65rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid #D8D8D8;
+  }
+
+  .syn-params-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+    gap: 0.65rem;
+  }
+
+  .syn-advanced-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .syn-external-summary {
+    font-size: 0.76rem;
+    color: #474543;
+    background: #F2F2F2;
+    border-left: 3px solid #1A5A96;
+    padding: 0.45rem 0.65rem;
+    overflow-wrap: anywhere;
   }
 
   .syn-alert {
@@ -1412,30 +1781,31 @@
   }
 
   .syn-alert-error {
-    background: #fef2f2;
-    border-left: 4px solid #b91c1c;
-    color: #7f1d1d;
+    background: rgba(216, 41, 47, 0.1);
+    border-left: 4px solid #D8292F;
+    color: #D8292F;
   }
 
   .syn-alert-info {
-    background: #eff6ff;
+    background: rgba(26, 90, 150, 0.1);
     border-left: 4px solid #003366;
     color: #003366;
   }
 
   .syn-readonly-note {
     padding: 0.45rem 0.75rem;
-    background: #fffbeb;
-    border-left: 4px solid #fcba19;
+    background: rgba(252, 186, 25, 0.16);
+    border-left: 4px solid #FCBA19;
     font-size: 0.78rem;
-    color: #78350f;
+    color: #313132;
   }
 
   .syn-dismiss {
     padding: 0.2rem 0.5rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 3px;
-    background: #ffffff;
+    background: #FFFFFF;
+    color: #313132;
     font-size: 0.74rem;
   }
 
@@ -1446,15 +1816,9 @@
     align-items: start;
   }
 
-  @media (max-width: 1120px) {
-    .syn-workspace-grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-
   .syn-primary-pane {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
+    background: #FFFFFF;
+    border: 1px solid #D8D8D8;
     border-radius: 5px;
     min-width: 0;
     overflow: hidden;
@@ -1466,8 +1830,8 @@
     align-items: center;
     gap: 0.25rem;
     padding: 0.45rem 0.65rem;
-    background: #f1f5f9;
-    border-bottom: 1px solid #cbd5e1;
+    background: #F2F2F2;
+    border-bottom: 1px solid #D8D8D8;
   }
 
   .syn-tab {
@@ -1478,24 +1842,27 @@
     background: transparent;
     font-size: 0.8rem;
     font-weight: 600;
-    color: #334155;
+    color: #474543;
   }
 
   .syn-tab.active {
     background: #003366;
-    color: #ffffff;
-    border-bottom: 2px solid #fcba19;
+    color: #FFFFFF;
+    border-bottom: 2px solid #FCBA19;
   }
 
   .syn-inline-search {
     margin-left: auto;
     min-height: 32px;
-    min-width: 210px;
+    min-width: min(100%, 210px);
+    max-width: 100%;
     padding: 0.25rem 0.55rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
     font-size: 0.8rem;
-    background: #ffffff;
+    background: #FFFFFF;
+    color: #313132;
+    box-sizing: border-box;
   }
 
   .syn-legend-bar {
@@ -1504,8 +1871,8 @@
     align-items: center;
     gap: 0.4rem;
     padding: 0.45rem 0.75rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    background: #F2F2F2;
+    border-bottom: 1px solid #D8D8D8;
     font-size: 0.75rem;
   }
 
@@ -1521,33 +1888,34 @@
     font-family: var(--font-mono, monospace);
     font-size: 0.72rem;
     font-weight: 700;
-    border: 1px solid rgba(15, 23, 42, 0.18);
+    border: 1px solid rgba(49, 49, 50, 0.2);
   }
 
   .diag-badge-d {
-    background: #bbf7d0;
-    color: #14532d;
+    background: #2E8540;
+    color: #FFFFFF;
   }
   .diag-badge-dd {
-    background: #fcba19;
+    background: #FCBA19;
     color: #003366;
   }
   .diag-badge-cd {
-    background: #bfdbfe;
-    color: #1e3a8a;
+    background: #003366;
+    color: #FFFFFF;
   }
   .diag-badge-c {
-    background: #e0f2fe;
-    color: #0c4a6e;
+    background: #1A5A96;
+    color: #FFFFFF;
   }
   .diag-badge-ic {
-    background: #f5efe0;
-    color: #57411d;
+    background: #474543;
+    color: #FFFFFF;
   }
 
   .syn-lump-pill {
     padding: 0.12rem 0.45rem;
-    background: #e0f2fe;
+    background: #FFFFFF;
+    border: 1px solid #1A5A96;
     color: #003366;
     border-radius: 3px;
     font-weight: 600;
@@ -1555,13 +1923,37 @@
 
   .syn-drop-hint {
     margin-left: auto;
-    color: #475569;
+    color: #474543;
     font-style: italic;
+  }
+
+  .syn-breakpoint-rollups {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    background: #F2F2F2;
+    border-bottom: 1px solid #D8D8D8;
+    font-size: 0.75rem;
+  }
+
+  .syn-breakpoint-chip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.16rem 0.45rem;
+    background: #FFFFFF;
+    border: 1px solid #1A5A96;
+    border-radius: 3px;
+    color: #003366;
   }
 
   .syn-table-container {
     overflow: auto;
     max-height: 68vh;
+    max-width: 100%;
   }
 
   .syn-matrix-table,
@@ -1575,8 +1967,8 @@
   .syn-matrix-table th,
   .syn-matrix-table td {
     padding: 0.38rem 0.55rem;
-    border-bottom: 1px solid #e2e8f0;
-    border-right: 1px solid #f1f5f9;
+    border-bottom: 1px solid #D8D8D8;
+    border-right: 1px solid #F2F2F2;
   }
 
   .syn-matrix-table thead th {
@@ -1584,8 +1976,8 @@
     top: 0;
     z-index: 3;
     background: #003366;
-    color: #ffffff;
-    border-bottom: 2px solid #fcba19;
+    color: #FFFFFF;
+    border-bottom: 2px solid #FCBA19;
   }
 
   .col-unit {
@@ -1595,9 +1987,9 @@
 
   .col-unit.drop-active,
   .syn-pill-btn.drop-active {
-    outline: 3px solid #fcba19;
-    background: #1d4ed8;
-    color: #ffffff;
+    outline: 3px solid #FCBA19;
+    background: #1A5A96;
+    color: #FFFFFF;
   }
 
   .unit-th-code {
@@ -1607,12 +1999,12 @@
 
   .unit-th-sub {
     font-size: 0.68rem;
-    color: #cbd5e1;
+    color: #D8D8D8;
     font-weight: 400;
   }
 
   .syn-section-row td {
-    background: #e2e8f0;
+    background: #F2F2F2;
     color: #003366;
     font-size: 0.78rem;
     padding: 0.35rem 0.65rem;
@@ -1620,7 +2012,7 @@
 
   .syn-section-sub {
     margin-left: 0.5rem;
-    color: #475569;
+    color: #474543;
     font-weight: 400;
   }
 
@@ -1632,10 +2024,11 @@
   .lump-origin-tag {
     margin-left: 0.25rem;
     padding: 0.05rem 0.28rem;
-    background: #fef3c7;
-    color: #92400e;
+    background: #FCBA19;
+    color: #003366;
     border-radius: 3px;
     font-size: 0.66rem;
+    font-weight: 700;
   }
 
   .diag-cell-badges {
@@ -1646,7 +2039,7 @@
 
   .diag-unit-ref {
     font-size: 0.7rem;
-    color: #475569;
+    color: #474543;
   }
 
   .col-unit-val {
@@ -1662,26 +2055,32 @@
   }
 
   .diag-cell-d-dom {
-    background: #fde68a;
+    background: rgba(252, 186, 25, 0.35);
+    color: #003366;
     font-weight: 700;
   }
   .diag-cell-dd {
-    background: #fef08a;
+    background: rgba(252, 186, 25, 0.22);
+    color: #313132;
     font-weight: 700;
   }
   .diag-cell-d {
-    background: #dcfce7;
+    background: rgba(46, 133, 64, 0.16);
+    color: #1E5128;
     font-weight: 700;
   }
   .diag-cell-cd {
-    background: #dbeafe;
+    background: rgba(26, 90, 150, 0.18);
+    color: #003366;
     font-weight: 600;
   }
   .diag-cell-c {
-    background: #f0f9ff;
+    background: rgba(26, 90, 150, 0.1);
+    color: #313132;
   }
   .diag-cell-ic {
-    background: #faf5eb;
+    background: #F2F2F2;
+    color: #474543;
   }
 
   .syn-subbar {
@@ -1690,8 +2089,8 @@
     align-items: center;
     gap: 0.4rem;
     padding: 0.6rem 0.8rem;
-    border-bottom: 1px solid #e2e8f0;
-    background: #f8fafc;
+    border-bottom: 1px solid #D8D8D8;
+    background: #F2F2F2;
   }
 
   .syn-subbar-label {
@@ -1702,31 +2101,31 @@
 
   .syn-pill-btn {
     padding: 0.25rem 0.6rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 999px;
-    background: #ffffff;
+    background: #FFFFFF;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #1e293b;
+    color: #313132;
   }
 
   .syn-pill-btn.active {
     background: #003366;
     border-color: #003366;
-    color: #fcba19;
+    color: #FCBA19;
   }
 
   .syn-sim-table th,
   .syn-sim-table td {
     padding: 0.45rem 0.6rem;
     text-align: center;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #D8D8D8;
   }
 
   .syn-sim-table thead th,
   .sim-row-hdr {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
   }
 
   .sim-cell {
@@ -1734,19 +2133,19 @@
     font-family: var(--font-mono, monospace);
   }
   .sim-diag {
-    background: #f1f5f9;
-    color: #64748b;
+    background: #F2F2F2;
+    color: #474543;
     cursor: default;
   }
   .sim-high {
-    background: #bfdbfe;
+    background: rgba(26, 90, 150, 0.24);
     font-weight: 700;
   }
   .sim-med {
-    background: #e0f2fe;
+    background: rgba(26, 90, 150, 0.12);
   }
   .sim-selected {
-    outline: 2px solid #fcba19;
+    outline: 2px solid #FCBA19;
     outline-offset: -2px;
   }
 
@@ -1767,23 +2166,19 @@
 
   .edatopic-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(220px, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
     gap: 0.85rem;
     padding: 0.8rem;
   }
 
-  @media (max-width: 860px) {
-    .edatopic-layout {
-      grid-template-columns: 1fr;
-    }
-  }
-
   .edatopic-grid-card,
   .edatopic-inspector {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
     padding: 0.7rem;
-    background: #ffffff;
+    background: #FFFFFF;
+    min-width: 0;
+    overflow-x: auto;
   }
 
   .edatopic-card-hdr {
@@ -1798,13 +2193,13 @@
 
   .edatopic-table {
     width: 100%;
-    min-width: 420px;
+    min-width: 0;
     border-collapse: collapse;
   }
 
   .edatopic-table th,
   .edatopic-table td {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     padding: 0.35rem;
     text-align: center;
   }
@@ -1812,12 +2207,12 @@
   .edatopic-table thead th,
   .eda-corner {
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
     font-size: 0.75rem;
   }
 
   .eda-row-hdr {
-    background: #f1f5f9;
+    background: #F2F2F2;
     color: #003366;
     text-align: left;
     font-size: 0.75rem;
@@ -1833,33 +2228,33 @@
 
   .eda-cell {
     height: 44px;
-    min-width: 54px;
+    min-width: 48px;
     cursor: pointer;
     vertical-align: middle;
   }
 
   .eda-heat-0 {
-    background: #ffffff;
+    background: #FFFFFF;
   }
   .eda-heat-1 {
-    background: #fef9c3;
+    background: rgba(252, 186, 25, 0.22);
   }
   .eda-heat-2 {
-    background: #fde047;
+    background: rgba(252, 186, 25, 0.45);
   }
   .eda-heat-3 {
-    background: #fcba19;
+    background: #FCBA19;
     font-weight: 700;
     color: #003366;
   }
   .eda-heat-4 {
     background: #003366;
     font-weight: 700;
-    color: #fcba19;
+    color: #FCBA19;
   }
 
   .eda-selected {
-    outline: 3px solid #0f172a;
+    outline: 3px solid #313132;
     outline-offset: -3px;
   }
 
@@ -1890,7 +2285,7 @@
     padding: 0.22rem 0.5rem;
     border: 1px solid #003366;
     border-radius: 3px;
-    background: #eff6ff;
+    background: #F2F2F2;
     color: #003366;
     font-family: var(--font-mono, monospace);
     font-size: 0.75rem;
@@ -1899,18 +2294,19 @@
 
   /* Docked Outlier Queue */
   .syn-outlier-pane {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
+    background: #FFFFFF;
+    border: 1px solid #D8D8D8;
     border-top: 4px solid #003366;
     border-radius: 5px;
     display: flex;
     flex-direction: column;
     max-height: 78vh;
+    min-width: 0;
   }
 
   .outlier-pane-hdr {
     padding: 0.65rem 0.8rem;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #D8D8D8;
   }
 
   .outlier-pane-hdr h3 {
@@ -1922,7 +2318,7 @@
   .outlier-pane-hdr p {
     margin: 0.18rem 0 0;
     font-size: 0.74rem;
-    color: #475569;
+    color: #474543;
   }
 
   .outlier-filter-bar {
@@ -1930,8 +2326,8 @@
     flex-direction: column;
     gap: 0.45rem;
     padding: 0.55rem 0.75rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    background: #F2F2F2;
+    border-bottom: 1px solid #D8D8D8;
   }
 
   .outlier-pills {
@@ -1943,8 +2339,10 @@
   .outlier-search {
     min-height: 30px;
     padding: 0.25rem 0.5rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
+    background: #FFFFFF;
+    color: #313132;
     font-size: 0.78rem;
   }
 
@@ -1957,18 +2355,18 @@
   }
 
   .outlier-card {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
     padding: 0.55rem 0.65rem;
-    background: #ffffff;
+    background: #FFFFFF;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
   }
 
   .outlier-card.is-misplaced {
-    border-left: 4px solid #fcba19;
-    background: #fffdf5;
+    border-left: 4px solid #FCBA19;
+    background: rgba(252, 186, 25, 0.08);
   }
 
   .outlier-card-top {
@@ -1987,7 +2385,7 @@
   .outlier-rank {
     font-family: var(--font-mono, monospace);
     font-size: 0.72rem;
-    color: #64748b;
+    color: #474543;
   }
 
   .outlier-plot-link {
@@ -2003,7 +2401,8 @@
 
   .outlier-eda-tag {
     padding: 0.06rem 0.3rem;
-    background: #e2e8f0;
+    background: #F2F2F2;
+    color: #313132;
     border-radius: 3px;
     font-family: var(--font-mono, monospace);
     font-size: 0.7rem;
@@ -2017,27 +2416,27 @@
   }
 
   .flag-misplaced {
-    background: #fcba19;
+    background: #FCBA19;
     color: #003366;
   }
   .flag-singleton {
-    background: #e2e8f0;
-    color: #334155;
+    background: #F2F2F2;
+    color: #313132;
   }
   .flag-top5 {
-    background: #dbeafe;
-    color: #1e3a8a;
+    background: #1A5A96;
+    color: #FFFFFF;
   }
 
   .outlier-metrics {
     font-size: 0.75rem;
-    color: #334155;
+    color: #474543;
     display: grid;
     gap: 0.15rem;
   }
 
   .metric-lbl {
-    color: #64748b;
+    color: #474543;
   }
 
   .outlier-actions {
@@ -2051,7 +2450,7 @@
     min-height: 28px;
     padding: 0.2rem 0.45rem;
     background: #003366;
-    color: #fcba19;
+    color: #FCBA19;
     border: 1px solid #003366;
     border-radius: 3px;
     font-size: 0.73rem;
@@ -2061,22 +2460,23 @@
   .outlier-actions select {
     max-width: 118px;
     min-height: 28px;
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 3px;
     font-size: 0.73rem;
-    background: #ffffff;
+    background: #FFFFFF;
+    color: #313132;
   }
 
   .syn-empty,
   .syn-empty-small {
     padding: 2rem;
     text-align: center;
-    color: #64748b;
+    color: #474543;
     font-size: 0.85rem;
   }
 
   .syn-muted {
-    color: #64748b;
+    color: #474543;
     font-size: 0.8rem;
   }
 
@@ -2085,7 +2485,7 @@
     position: fixed;
     inset: 0;
     z-index: 40;
-    background: rgba(15, 23, 42, 0.55);
+    background: rgba(0, 34, 68, 0.55);
     display: grid;
     place-items: center;
     padding: 1rem;
@@ -2093,8 +2493,8 @@
 
   .syn-modal {
     width: min(620px, 100%);
-    background: #ffffff;
-    border-top: 5px solid #fcba19;
+    background: #FFFFFF;
+    border-top: 5px solid #FCBA19;
     border-radius: 5px;
     box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
     overflow: hidden;
@@ -2106,7 +2506,7 @@
     align-items: center;
     padding: 0.85rem 1.1rem;
     background: #003366;
-    color: #ffffff;
+    color: #FFFFFF;
   }
 
   .syn-modal-hdr h3 {
@@ -2123,7 +2523,7 @@
   .syn-modal-desc {
     margin: 0;
     font-size: 0.8rem;
-    color: #334155;
+    color: #474543;
     line-height: 1.45;
   }
 
@@ -2139,9 +2539,11 @@
   .syn-modal-field input {
     min-height: 36px;
     padding: 0.35rem 0.6rem;
-    border: 1px solid #94a3b8;
+    border: 1px solid #D8D8D8;
     border-radius: 4px;
     font-size: 0.82rem;
+    background: #FFFFFF;
+    color: #313132;
   }
 
   .syn-sheet-grid {
@@ -2158,17 +2560,17 @@
 
   .syn-validation-hint {
     padding: 0.45rem 0.65rem;
-    background: #fef2f2;
-    border-left: 3px solid #b91c1c;
-    color: #7f1d1d;
+    background: rgba(216, 41, 47, 0.1);
+    border-left: 3px solid #D8292F;
+    color: #D8292F;
     font-size: 0.78rem;
   }
 
   .syn-export-success {
     padding: 0.55rem 0.75rem;
-    background: #f0fdf4;
-    border-left: 3px solid #15803d;
-    color: #14532d;
+    background: rgba(46, 133, 64, 0.1);
+    border-left: 3px solid #2E8540;
+    color: #1E5128;
     font-size: 0.78rem;
     overflow-wrap: anywhere;
   }
@@ -2178,7 +2580,24 @@
     justify-content: flex-end;
     gap: 0.55rem;
     padding: 0.75rem 1.1rem;
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
+    background: #F2F2F2;
+    border-top: 1px solid #D8D8D8;
+  }
+
+  @media (max-width: 960px) {
+    .syn-workspace-grid,
+    .edatopic-layout,
+    .syn-sheet-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .syn-inline-search {
+      margin-left: 0;
+      width: 100%;
+    }
+
+    .syn-drop-hint {
+      margin-left: 0;
+    }
   }
 </style>

@@ -83,9 +83,7 @@ export class SummaryVegetationQualityPreferencesSession extends ReportPreference
       review: (value, owner) => validateSummaryVegetationQualityPreferences(value, owner).values,
       draft: copy,
       validate: (draft, saved) => {
-        if (!valid(draft)) return 'Correct all four quality minima and Include Nulls flags or Undo the draft.';
-        if (!saved || draft.enforce !== saved.enforce)
-          return 'Summary quality enforcement invokes mutating source Form_Load; changes remain unavailable.';
+        if (!valid(draft) || !saved) return 'Correct all four quality minima and Include Nulls flags or Undo the draft.';
         if (summaryVegetationQualityMinimumFields.some(field => draft[field.key] !== saved[field.key] && draft[field.key].includes('\0')))
           return 'Changed quality minima require complete Unicode without NUL; correct them or Undo the draft.';
         return '';
@@ -134,6 +132,12 @@ export class SummaryVegetationQualityPreferencesSession extends ReportPreference
     const draft = this.view().draft;
     if (!draft) throw new Error('Load saved Summary quality options before editing.');
     this.editDraft({ ...draft, [key]: raw });
+  }
+  editEnforce(raw: boolean) {
+    if (typeof raw !== 'boolean') throw new Error('Unsupported Summary quality enforcement flag.');
+    const draft = this.view().draft;
+    if (!draft) throw new Error('Load saved Summary quality options before editing.');
+    this.editDraft({ ...draft, enforce: raw });
   }
 }
 export const createSummaryVegetationQualityPreferencesRegistry = () =>

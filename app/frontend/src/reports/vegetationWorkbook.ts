@@ -86,17 +86,29 @@ export function validateWorkbookVersionEvidence(summary: Pick<NonNullable<Vegeta
   }
 }
 
+export function validVegetationWorkbookScope(scope: unknown): scope is string {
+  if (typeof scope !== 'string' || !scope) return false;
+  if (scope === 'unlumped') return true;
+  if (!scope.startsWith('lump:')) return false;
+  const candidate = scope.slice(5).trim();
+  if (!candidate || candidate.includes('\0')) return false;
+  const normalized = /_lump$/i.test(candidate) ? candidate : `${candidate}_Lump`;
+  return normalized.length > 5 &&
+    normalized.toLowerCase() !== 'none_lump' &&
+    normalized.toLowerCase() !== 'combinedspp_lump';
+}
+
 export function validateVegetationWorkbookReview(value: VegetationWorkbookReview | null,
   owner: LifeformSummaryOwner, selectedUnitsEnabled = false): ValidatedVegetationWorkbookReview {
   value = value ? structuredClone(value) : null;
   if (!shape(value, ['preview', 'options', 'summary', 'scope', 'createdDate', 'sheets', 'skippedUnits', 'approvalHash', 'workbookSHA256', 'bytes']) ||
-      value.scope !== 'unlumped' || !text(value.createdDate) || !workbookCalendarDate(value.createdDate) ||
+      !validVegetationWorkbookScope(value.scope) || !text(value.createdDate) || !workbookCalendarDate(value.createdDate) ||
       !hash(value.approvalHash) || !hash(value.workbookSHA256) || !count(value.bytes) || value.bytes === 0 ||
       !Array.isArray(value.sheets) || !Array.isArray(value.skippedUnits) ||
       !shape(value.options, ['quickReport', 'spaceBetweenGroups', 'reportSummary']) ||
       typeof value.options.quickReport !== 'boolean' || typeof value.options.spaceBetweenGroups !== 'boolean' ||
       typeof value.options.reportSummary !== 'boolean' || owner.su === 'USysSuTableDynamic') {
-    throw new Error('Workbook review has incomplete or unsupported unlumped source approval/layout.');
+    throw new Error('Workbook review has incomplete or unsupported unlumped or lumped source approval/layout.');
   }
   const preview = validateLongVegetationPreview(value.preview, owner.contextId, owner.project, owner.projectPath, owner.su, owner.suPath, selectedUnitsEnabled);
   validateSummary(value, preview);
@@ -167,7 +179,7 @@ export class VegetationWorkbookPublicationSession {
     return validated;
   }
   async publish(review: VegetationWorkbookReview, destination: string,
-    port: (request: { scope: 'unlumped'; createdDate: string; approvalHash: string; destination: string }) => PromiseLike<VegetationWorkbookOutcome | null>) {
+    port: (request: { scope: string; createdDate: string; approvalHash: string; destination: string }) => PromiseLike<VegetationWorkbookOutcome | null>) {
     if (!text(destination) || !destination || !/\.xlsx$/i.test(destination)) {
       throw new Error('Workbook publication requires an explicit literal .xlsx destination.');
     }
@@ -175,7 +187,7 @@ export class VegetationWorkbookPublicationSession {
     if (this.view().busy || this.view().blocked) throw new Error('Acknowledge the prior workbook outcome before a new publication.');
     if (this.consumed.has(validated.approvalHash)) throw new Error('Obtain a fresh explicit workbook review before retrying.');
     this.consumed.add(validated.approvalHash);
-    const request = { scope: 'unlumped' as const, createdDate: validated.createdDate, approvalHash: validated.approvalHash, destination };
+    const request = { scope: validated.scope, createdDate: validated.createdDate, approvalHash: validated.approvalHash, destination };
     await this.receipt.publish(request, destination, port,
       value => validateVegetationWorkbookOutcome(value, destination, validated.workbookSHA256));
   }

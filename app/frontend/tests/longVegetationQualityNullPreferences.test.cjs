@@ -159,6 +159,7 @@ test('actual report retains errors across remount and propagates barriers', () =
     './longVegetationEnforcementPreferences': {}, './LongVegetationEnforcementPreferences.svelte': { default() {} },
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
     './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
+    '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
     './LongVegetationSwitchPreferences.svelte': { default() {} }, './longEnvironmentReport': {}, './longVegetationReport': {},
     './vegetationWorkbook': {
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),

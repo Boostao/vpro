@@ -1,4 +1,6 @@
-import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
+import { ImportExportService, PlotEntryService, type SpeciesItem } from '../../bindings/github.com/boostao/vpro/app';
+
+export type { SpeciesItem };
 
 export interface LumpTableSummary {
   name: string;
@@ -101,6 +103,7 @@ export interface LumpEditorPort {
   listLumpPresets(): Promise<LumpPresetInfo[]>;
   previewLumpSpec(contextID: string, spec: LumpSpec): Promise<LumpSpecPreview>;
   materializeLumpSpec(contextID: string, targetName: string, spec: LumpSpec, replaceExisting: boolean): Promise<LumpMaterializeResult>;
+  searchSpecies?: (query: string, limit: number) => Promise<SpeciesItem[]>;
 }
 
 export const defaultLumpEditorPort: LumpEditorPort = {
@@ -132,6 +135,8 @@ export const defaultLumpEditorPort: LumpEditorPort = {
     (ImportExportService.PreviewLumpSpec(contextID, spec) as never),
   materializeLumpSpec: (contextID, targetName, spec, replaceExisting) =>
     (ImportExportService.MaterializeLumpSpec(contextID, targetName, spec, replaceExisting) as never),
+  searchSpecies: (query, limit) =>
+    (PlotEntryService.SearchSpecies(query, limit) as never),
 };
 
 const LUMP_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;

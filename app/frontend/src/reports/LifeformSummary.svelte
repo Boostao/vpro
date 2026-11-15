@@ -17,25 +17,46 @@
   let busy = $state(false);
   let workbookBusy = $state(false);
   let error = $state('');
+  let unitScope = $state<'su' | 'hierarchy'>('su');
+  let breakpointPolicy = $state<'lowest' | 'highest'>('lowest');
   let preview = $state<LifeformSummaryPreview | null>(null);
   let attributePreview = $state<SpeciesAttributeSummaryPreview | null>(null);
   const ownerKey = $derived(JSON.stringify([contextId, project, projectPath, su, suPath]));
   let previewKey = $state('');
+  let attributeKey = $state('');
   const currentPreview = $derived(previewKey === ownerKey ? preview : null);
-  const currentAttributes = $derived(previewKey === ownerKey ? attributePreview : null);
+  const currentAttributes = $derived((attributeKey === ownerKey || (!attributeKey && previewKey === ownerKey)) ? attributePreview : null);
+  const scopeBlocked = $derived(unitScope === 'su' ? (su === 'None' || su === 'USysSuTableDynamic') : su === 'None');
   function reportBusy() { onBusyChange(busy || workbookBusy); }
   function cancel() { generation++; reads.cancelAll(); busy = false; reportBusy(); }
   async function show(kind: 'lifeform' | 'attributes') {
-    if (!enabled || kind === 'attributes' && !attributesEnabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic') return;
+    if (!enabled || kind === 'attributes' && !attributesEnabled || busy || workbookBusy || scopeBlocked) return;
     cancel(); const request = generation, key = ownerKey;
     const owner = { contextId, project, projectPath, su, suPath };
-    busy = true; error = ''; preview = null; attributePreview = null; reportBusy();
+    busy = true; error = '';
+    if (kind === 'attributes') attributePreview = null;
+    else preview = null;
+    reportBusy();
     try {
-      const value = await reads.track<unknown>(kind === 'attributes' ? VegetationReportService.PreviewSpeciesAttributeSummary(contextId) : VegetationReportService.PreviewLifeformSummary(contextId));
+      const value = await reads.track<unknown>(kind === 'attributes'
+        ? (unitScope === 'hierarchy'
+            ? VegetationReportService.PreviewSpeciesAttributeSummaryWithHierarchyBreakpoints(contextId, breakpointPolicy)
+            : VegetationReportService.PreviewSpeciesAttributeSummary(contextId))
+        : (unitScope === 'hierarchy'
+            ? VegetationReportService.PreviewLifeformSummaryWithHierarchyBreakpoints(contextId, breakpointPolicy)
+            : VegetationReportService.PreviewLifeformSummary(contextId)));
       if (request !== generation || key !== ownerKey) return;
-      if (kind === 'attributes') attributePreview = validateSpeciesAttributeSummary(value, owner);
-      else preview = validateLifeformSummary(value, owner);
-      previewKey = key;
+      if (kind === 'attributes') {
+        attributePreview = unitScope === 'hierarchy'
+          ? validateSpeciesAttributeSummary(value, owner, true)
+          : validateSpeciesAttributeSummary(value, owner);
+        attributeKey = key;
+      } else {
+        preview = unitScope === 'hierarchy'
+          ? validateLifeformSummary(value, owner, true)
+          : validateLifeformSummary(value, owner);
+        previewKey = key;
+      }
     } catch (cause) {
       if (request === generation && key === ownerKey) error = `${kind === 'attributes' ? 'Species attribute summary' : 'Lifeform Summary'} unavailable; no data or configuration writes: ${String(cause)}`;
     } finally {
@@ -48,11 +69,32 @@
 <section class="lifeform-summary" data-lifeform-summary aria-label="Lifeform Summary">
   <h1>Lifeform Summary</h1>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
-  <p>Project {project}; selected normal SU {su}. Profile navigation does not filter this report.</p>
-  {#if su === 'None' || su === 'USysSuTableDynamic'}<p>A selected normal SU is required. Hierarchy and dynamic breaks are unavailable.</p>{/if}
+  <p>Project {project}; selected SU {su}. Profile navigation does not filter this report.</p>
+  <div class="scope-controls">
+    <label>Unit Scope
+      <select value={unitScope} onchange={event => { unitScope = (event.currentTarget as HTMLSelectElement).value as 'su' | 'hierarchy'; }} disabled={busy || workbookBusy} data-lifeform-unit-scope>
+        <option value="su">Selected Site Unit Table</option>
+        <option value="hierarchy">Hierarchy Breakpoints (~)</option>
+      </select>
+    </label>
+    {#if unitScope === 'hierarchy'}
+      <label>Breakpoint Policy
+        <select value={breakpointPolicy} onchange={event => { breakpointPolicy = (event.currentTarget as HTMLSelectElement).value as 'lowest' | 'highest'; }} disabled={busy || workbookBusy} data-lifeform-breakpoint-policy>
+          <option value="lowest">Lowest (~) Breakpoint</option>
+          <option value="highest">Highest (~) Breakpoint</option>
+        </select>
+      </label>
+    {/if}
+  </div>
+  {#if scopeBlocked}<p>{unitScope === 'hierarchy' ? 'An active Site Unit selection or USysSuTableDynamic (not None) is required for hierarchy breakpoint resolution.' : 'A selected normal SU is required. Switch Unit Scope to Hierarchy Breakpoints (~) for breakpoint resolution.'}</p>{/if}
   <div class="actions">
-    <button onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview Lifeform Summary</button>
-    <button onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview species attribute summaries</button>
+    {#if unitScope === 'su'}
+      <button onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview Lifeform Summary</button>
+      <button onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview species attribute summaries</button>
+    {:else}
+      <button data-lifeform-hierarchy-preview onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None'}>Preview Lifeform (~) Summary</button>
+      <button data-attributes-hierarchy-preview onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None'}>Preview species attribute (~) summaries</button>
+    {/if}
     {#if busy}<button onclick={cancel}>Cancel preview</button><p role="status">Reading owned project and SU…</p>{/if}
   </div>
   <LifeformWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} disabled={busy}
@@ -108,19 +150,27 @@
     {/each}
     {#if currentAttributes.report.units.length === 0}<p>No physical SU memberships.</p>{/if}
   {/if}
-  <p class="guidance">Read-only preview: no database, configuration or Excel writes. Lifeform global inserted rows rejoin SU by PlotNumber, retaining duplicate and cross-unit weights. Attribute summaries instead join raw physical vegetation/SU/attribute rows; repeated observations and definitions retain their weights. NULL counts stay NULL; totals include non-pivot values. All six detail families are displayed without changing saved report options. Literal identities are not a claim about Access collation. Zero Lifeform denominators are shown as NULL instead of evaluating division by zero. Attribute summaries have an independent default-off gate. Workbook publication has a separate default-off gate and requires explicit review and a new XLSX destination; hierarchy breaks remain unavailable.</p>
+  <p class="guidance">Read-only preview: no database, configuration or Excel writes. Lifeform and Species Attribute previews stay independent without clearing each other. Lifeform global inserted rows rejoin SU by PlotNumber, retaining duplicate and cross-unit weights. Attribute summaries instead join raw physical vegetation/SU/attribute rows; repeated observations and definitions retain their weights. Hierarchy Breakpoints (~) resolves unit memberships at lowest or highest '~' nodes against the active SU/Hierarchy.</p>
 </section>
 
 <style>
-  .lifeform-summary { display: grid; gap: 1rem; min-width: 0; }
-  h1, h2, p { margin: 0; }
+  .lifeform-summary { display: grid; gap: 1rem; padding: 1rem; background: #F2F2F2; color: #313132; min-width: 0; }
+  h1, h2 { margin: 0; color: #003366; }
+  p { margin: 0; }
+  .scope-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; background: #FFFFFF; padding: .85rem; border: 1px solid #D8D8D8; border-radius: .5rem; }
+  .scope-controls label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; font-weight: 500; color: #313132; }
+  .scope-controls select { box-sizing: border-box; width: 100%; min-width: 0; padding: .5rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; color: #313132; }
   .actions { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
-  article { display: grid; gap: .75rem; padding: 1rem; border: 1px solid #9ca3af; border-radius: .5rem; min-width: 0; }
-  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .75rem; margin: 0; }
-  dt { font-weight: 600; } dd { margin: .25rem 0 0; }
-  .table-scroll { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { padding: .5rem; border-bottom: 1px solid #9ca3af; text-align: left; }
-  caption { text-align: left; padding-bottom: .5rem; }
-  .error { color: #b91c1c; } .guidance { font-size: .9rem; }
+  .actions button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
+  .actions button:hover:not(:disabled) { background: #002244; border-color: #002244; }
+  .actions button:disabled { opacity: .6; cursor: not-allowed; }
+  article { display: grid; gap: .75rem; padding: 1rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; min-width: 0; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; margin: 0; }
+  dt { font-weight: 600; color: #003366; } dd { margin: .25rem 0 0; }
+  .table-scroll { overflow-x: auto; max-width: 100%; }
+  table { border-collapse: collapse; width: 100%; background: #FFFFFF; }
+  th, td { padding: .5rem; border-bottom: 1px solid #D8D8D8; text-align: left; }
+  thead th { background: #F2F2F2; color: #003366; }
+  caption { text-align: left; padding-bottom: .5rem; font-weight: 600; color: #003366; }
+  .error { color: #D8292F; font-weight: 600; } .guidance { font-size: .9rem; color: #474543; }
 </style>

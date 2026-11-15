@@ -152,6 +152,7 @@ test('actual report retains enforcement draft barriers across remounts', () => {
     './LongVegetationEnforcementPreferences.svelte': { default: panel() },
     './longVegetationUnitPreferences': {}, './LongVegetationUnitPreferences.svelte': { default() {} },
     './longVegetationSelectedUnitSelection': {}, './LongVegetationSelectedUnitSelection.svelte': { default() {} },
+    '../classification/SiteUnitExclusionFilter.svelte': { default() {} }, '../classification/siteUnitExclusionFilter': { createDefaultBreakpointOptions: () => ({ breakpointPolicy: 'lowest', unbrokenUnitPolicy: 'keep_original', stripTildePrefix: true }) },
     './vegetationWorkbook': {
       vegetationWorkbookPublicationSession: () => ({ view: () => ({ busy: false, blocked: false }), subscribe: () => () => {} }),
       VegetationWorkbookPublicationSession: class { view() { return { busy: false, blocked: false }; } subscribe() { return () => {}; } },

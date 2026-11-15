@@ -287,7 +287,7 @@
       {:else}No data, audits, preferences or files written.{/if}</p>
     <div class="table-scroll">
       <table>
-        <caption>Direct Env preparation; numeric-negated longitude then original latitude, altitude not yet serialized</caption>
+        <caption>Direct Env preparation; western-hemisphere longitude then original latitude, altitude not yet serialized</caption>
         <thead><tr>{#each review.fields as field, i}<th id={`earth-field-${i}`} scope="col">{field.label}</th>{/each}</tr></thead>
         <tbody>{#each review.rows as row (`${row.envRowId}:${row.membershipRowId}`)}
           <tr data-google-earth-row={`${row.envRowId}:${row.membershipRowId}`}>
@@ -316,23 +316,24 @@
 </section>
 
 <style>
-  .earth-review { padding: 1rem; min-width: 0; max-width: 100%; }
-  h1 { font-size: 1.5rem; margin-bottom: .75rem; }
+  .earth-review { padding: 1rem; min-width: 0; max-width: 100%; color: #313132; background: #FFFFFF; }
+  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: #003366; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }
   .field { display: grid; grid-template-columns: minmax(10rem, auto) minmax(0, 30rem); align-items: center; gap: .5rem; }
-  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); gap: 1rem; }
-  label, dt { font-weight: 600; }
-  select, textarea, button { border: 1px solid #94a3b8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; }
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
+  label, dt { font-weight: 600; color: #003366; }
+  select, textarea, button { border: 1px solid #D8D8D8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; background: #FFFFFF; color: #313132; }
+  button { border-color: #003366; color: #003366; font-weight: 600; }
   select, textarea { width: 100%; }
   button:disabled { opacity: .5; }
   dl > div { margin: .6rem 0; }
   dd, p { overflow-wrap: anywhere; }
   .table-scroll { overflow-x: auto; max-width: 100%; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #cbd5e1; padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
-  th { background: #f1f5f9; }
-  caption { text-align: left; margin-bottom: .5rem; }
-  .notice { color: #475569; }
-  .error { color: #991b1b; }
-  @media (max-width: 40rem) { .field { grid-template-columns: minmax(0, 1fr); } }
+  th, td { border: 1px solid #D8D8D8; padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
+  th { background: #F2F2F2; color: #003366; }
+  caption { text-align: left; margin-bottom: .5rem; color: #474543; }
+  .notice { color: #474543; }
+  .error { color: #D8292F; }
+  @media (max-width: 960px) { .field { grid-template-columns: minmax(0, 1fr); } }
 </style>
