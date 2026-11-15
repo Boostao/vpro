@@ -47,7 +47,7 @@ jobs:
               - '.github/workflows/ci.yml'
             rsidecar:
               - 'r/**'
-              - 'app/internal/rsidecar/**'
+              - 'app/**'
               - '.github/workflows/ci.yml'
             website:
               - 'site/**'
@@ -179,9 +179,15 @@ jobs:
       - name: Build frontend assets for Go embed
         working-directory: app/frontend
         run: npm ci && npm run build
-      - name: Run Go test suite with race detector and live PostgreSQL RBAC/RLS
+      - name: Run race detector on concurrent services, WAL core, and live PostgreSQL RBAC/RLS
         working-directory: app
-        run: go test -tags sqliteonly -race ./...
+        run: go test -tags sqliteonly -race . ./internal/cloudsync/... ./internal/lifecycle/... ./internal/sqlutil/... ./internal/vprocore/... ./internal/diagnostics/...
+      - name: Run full Go backend suite including 4-layer DAG and 71.5k scale gates
+        working-directory: app
+        run: |
+          set -euo pipefail
+          mapfile -t pkgs < <(go list -tags sqliteonly ./... | grep -v '/internal/rsidecar$')
+          go test -tags sqliteonly -timeout 20m "${pkgs[@]}"
       - name: Verify native Linux desktop binary build
         working-directory: app
         run: task linux:build EXTRA_TAGS=sqliteonly
@@ -302,8 +308,7 @@ jobs:
             con$conn,
             paste(
               'INSERT INTO becmaster.veg ("PlotNumber", "Species", "Layer", "Cover1", "Flag", "ID")',
-              "VALUES ('9624781', 'PINUCON', '1', 42.0, 0, 100001)",
-              'ON CONFLICT ("ID") DO NOTHING'
+              "VALUES ('9624781', 'PINUCON', '1', 42.0, 0, 100001)"
             )
           )
           RSCRIPT
