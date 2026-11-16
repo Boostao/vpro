@@ -336,24 +336,34 @@ func buildDatasheetWhereAndOrder(
 		if strings.ContainsAny(trimmedGlobal, `%_\`) {
 			likeExpr = " LIKE " + paramRef + " ESCAPE '\\'"
 		}
-		var orParts []string
+		var priorityTextParts []string
+		var textOrParts []string
+		var otherOrParts []string
 		for _, colMeta := range columns {
 			qCol := `__t.` + vprocore.QuoteHeaderIdentifier(colMeta.Name)
 			if colMeta.Kind == "text" {
-				orParts = append(orParts, qCol+likeExpr)
+				if colMeta.Name == "Species" || colMeta.Name == "PlotNumber" || colMeta.Name == "Plot" {
+					priorityTextParts = append(priorityTextParts, qCol+likeExpr)
+				} else {
+					textOrParts = append(textOrParts, qCol+likeExpr)
+				}
 				continue
 			}
 			if colMeta.Kind == "boolean" {
 				if !matchBool {
-					orParts = append(orParts, "(+"+qCol+" >= '' AND typeof("+qCol+") = 'text' AND "+qCol+likeExpr+")")
+					otherOrParts = append(otherOrParts, "(+"+qCol+" >= '' AND typeof("+qCol+") = 'text' AND "+qCol+likeExpr+")")
 					continue
 				}
 			} else if !matchNum {
-				orParts = append(orParts, "(+"+qCol+" >= '' AND typeof("+qCol+") = 'text' AND "+qCol+likeExpr+")")
+				otherOrParts = append(otherOrParts, "(+"+qCol+" >= '' AND typeof("+qCol+") = 'text' AND "+qCol+likeExpr+")")
 				continue
 			}
-			orParts = append(orParts, "CAST("+qCol+" AS TEXT)"+likeExpr)
+			otherOrParts = append(otherOrParts, "CAST("+qCol+" AS TEXT)"+likeExpr)
 		}
+		orParts := make([]string, 0, len(priorityTextParts)+len(textOrParts)+len(otherOrParts))
+		orParts = append(orParts, priorityTextParts...)
+		orParts = append(orParts, textOrParts...)
+		orParts = append(orParts, otherOrParts...)
 		if len(orParts) > 0 {
 			args = append(args, likeArg)
 			clauses = append(clauses, "("+strings.Join(orParts, " OR ")+")")

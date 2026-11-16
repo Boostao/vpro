@@ -1,0 +1,3 @@
+# Global CODEOWNERS for Boostao/vpro
+# Anyone from the Boostao organization is a code owner and can approve gated Actions runs.
+* @Boostao/boostao-dev @meztez @FrankBornais @nic-gauthier

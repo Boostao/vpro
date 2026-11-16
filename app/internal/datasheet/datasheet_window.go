@@ -229,7 +229,7 @@ func parallelRangeScanDatasheetWindow(
 	minRowID, maxRowID int64,
 	limit, workers int,
 ) ([]DatasheetRow, int64, bool, error) {
-	roDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(dbPath, "ro")+"&_busy_timeout=5000")
+	roDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(dbPath, "ro")+"&_busy_timeout=5000&_mmap_size=268435456")
 	if err != nil {
 		return nil, 0, false, nil
 	}
@@ -266,7 +266,14 @@ func parallelRangeScanDatasheetWindow(
 			cArgs := make([]any, 0, len(whereArgs)+3)
 			cArgs = append(cArgs, whereArgs...)
 			cArgs = append(cArgs, loID, hiID, limit)
-			rRows, qErr := roDB.QueryContext(ctx, chunkSQL, cArgs...)
+			conn, cErr := roDB.Conn(ctx)
+			if cErr != nil {
+				results[idx].err = cErr
+				return
+			}
+			defer conn.Close()
+			_, _ = conn.ExecContext(ctx, "PRAGMA mmap_size = 268435456")
+			rRows, qErr := conn.QueryContext(ctx, chunkSQL, cArgs...)
 			if qErr != nil {
 				results[idx].err = qErr
 				return

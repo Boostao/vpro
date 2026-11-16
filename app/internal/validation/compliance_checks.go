@@ -14,17 +14,34 @@ func checkDuplicateVegSpecies(ctx context.Context, tx *sql.Tx, project string, u
 		return nil
 	}
 	vegTbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_Veg")
+	_, vegTypes, err := readTableColumnTypes(ctx, tx, "project", project+"_Veg")
+	if err != nil {
+		return err
+	}
 
 	// Pre-filter duplicate (PlotNumber, Species) plots in C-level SQLite
 	// so clean 1.65M-row datasets never materialize per-row layer bitmasks in Go.
 	// Group by CAST("PlotNumber" AS TEXT), CAST("Species" AS TEXT) so mixed-storage integer 337 + text '337'
 	// duplicates match the exact final duplicate-grouping semantics.
+	dupWhere := ` WHERE "PlotNumber" IS NOT NULL AND "Species" IS NOT NULL`
+	var dupArgs []any
+	if useSU {
+		var hasNonTextVegPlot bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+vegTbl+` WHERE "PlotNumber" IS NOT NULL AND typeof("PlotNumber") <> 'text' LIMIT 1)`).Scan(&hasNonTextVegPlot); err != nil {
+			return err
+		}
+		if !hasNonTextVegPlot {
+			if pre, args := buildSUPlotInPreFilter(`"PlotNumber"`, vegTypes["plotnumber"], suPlotList); pre != "" {
+				dupWhere += ` AND ` + pre
+				dupArgs = append(dupArgs, args...)
+			}
+		}
+	}
 	dupPlotRows, err := tx.QueryContext(ctx, `SELECT COALESCE(CAST("PlotNumber" AS TEXT), ''),
 		       MAX(CASE WHEN typeof("PlotNumber") <> 'text' THEN 1 ELSE 0 END)
-		FROM `+vegTbl+`
-		WHERE "PlotNumber" IS NOT NULL AND "Species" IS NOT NULL
+		FROM `+vegTbl+dupWhere+`
 		GROUP BY CAST("PlotNumber" AS TEXT), CAST("Species" AS TEXT)
-		HAVING COUNT(*) > 1`)
+		HAVING COUNT(*) > 1`, dupArgs...)
 	if err != nil {
 		return err
 	}
@@ -72,10 +89,6 @@ func checkDuplicateVegSpecies(ctx context.Context, tx *sql.Tx, project string, u
 		colExprs = append(colExprs, `CASE WHEN `+vprocore.QuoteHeaderIdentifier(lc.col)+` IS NOT NULL THEN 1 ELSE 0 END`)
 	}
 
-	_, vegTypes, err := readTableColumnTypes(ctx, tx, "project", project+"_Veg")
-	if err != nil {
-		return err
-	}
 	whereExtra := ""
 	var qArgs []any
 	plotFilterCol := `"PlotNumber"`

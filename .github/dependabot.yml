@@ -28,7 +28,6 @@ updates:
       - dependency-name: "github.com/wailsapp/wails/v3"
       # CGO native bindings with strict cross-OS static/MinGW toolchain pinning
       # (see scripts/release.py WINDOWS_TOOLCHAINS). Upgrade manually with full release dry-run.
-      - dependency-name: "github.com/duckdb/duckdb-go/v2"
       - dependency-name: "github.com/mattn/go-sqlite3"
     groups:
       go-minor-and-patch:
@@ -49,6 +48,10 @@ updates:
     ignore:
       # Must match github.com/wailsapp/wails/v3 in app/go.mod (enforced by check-dep-lockstep.py).
       - dependency-name: "@wailsio/runtime"
+      # svelte-check 4.x requires peer typescript@"^5.0.0 || ^6.0.0" (TS 7 native port is incompatible).
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
     groups:
       geospatial-webgpu:
         patterns:

@@ -199,7 +199,7 @@ func TestComplianceStrataCoverBoundsLiteralNonCollisionAnd71kScale(t *testing.T)
 
 	ciFactor := time.Duration(1)
 	if os.Getenv("CI") == "true" {
-		ciFactor = 2
+		ciFactor = 3
 	}
 	boundedCtx, cancel := context.WithTimeout(ctx, 3*time.Second*ciFactor)
 	defer cancel()

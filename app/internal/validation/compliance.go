@@ -201,38 +201,50 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 		report.Summary.EnvAdminMismatches = len(report.EnvAdminFindings)
 
 		// 2. 1:N Foreign Key Integrity across _Veg, _Humus, _Mineral, _Other, _Audit, and active *_SU.
-		vegTextPlots := make(map[string]struct{}, len(envTextPlots))
+		envCols, envTypes, err := readTableColumnTypes(ctx, tx, "project", project+"_Env")
+		if err != nil {
+			return report, err
+		}
+		adminCols, adminTypes, err := readTableColumnTypes(ctx, tx, "project", project+"_Admin")
+		if err != nil {
+			return report, err
+		}
+
+		envIdxEq := ""
+		if isTextOrNoneAffinityType(envTypes["plotnumber"]) {
+			envIdxEq = `e."PlotNumber" = c."PlotNumber" AND `
+		}
 		for _, suffix := range []string{"Veg", "Humus", "Mineral", "Other", "Audit"} {
 			childTbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_"+suffix)
-			whereClause := ""
+			auditFilter := ""
 			if suffix == "Audit" {
 				// System-level audit entries (e.g. NewProject, USysAllSpecs) legitimately have NULL PlotNumber.
-				whereClause = ` WHERE "PlotNumber" IS NOT NULL AND CAST("PlotNumber" AS TEXT) <> ''`
+				auditFilter = `c."PlotNumber" IS NOT NULL AND CAST(c."PlotNumber" AS TEXT) <> '' AND `
 			}
-			cRows, cErr := tx.QueryContext(ctx, `SELECT typeof("PlotNumber"), CAST("PlotNumber" AS BLOB), COALESCE(CAST("PlotNumber" AS TEXT), '<NULL>'), COUNT(*)
-				FROM `+childTbl+whereClause+`
-				GROUP BY "PlotNumber", typeof("PlotNumber"), CAST("PlotNumber" AS BLOB)`)
+			orphanQuery := `SELECT COALESCE(CAST(c."PlotNumber" AS TEXT), '<NULL>'), COUNT(*)
+				FROM ` + childTbl + ` c
+				WHERE ` + auditFilter + `(
+					typeof(c."PlotNumber") <> 'text'
+					OR NOT EXISTS (
+						SELECT 1 FROM ` + envTbl + ` e
+						WHERE ` + envIdxEq + `typeof(e."PlotNumber") = 'text'
+							AND CAST(e."PlotNumber" AS BLOB) = CAST(c."PlotNumber" AS BLOB)
+					)
+				)
+				GROUP BY COALESCE(CAST(c."PlotNumber" AS TEXT), '<NULL>')`
+			cRows, cErr := tx.QueryContext(ctx, orphanQuery)
 			if cErr != nil {
 				return report, cErr
 			}
 			orphanCounts := map[string]int{}
 			for cRows.Next() {
-				var pType, disp string
-				var raw []byte
+				var disp string
 				var grpCnt int
-				if err := cRows.Scan(&pType, &raw, &disp, &grpCnt); err != nil {
+				if err := cRows.Scan(&disp, &grpCnt); err != nil {
 					cRows.Close()
 					return report, err
 				}
-				rawStr := string(raw)
-				if suffix == "Veg" && pType == "text" {
-					vegTextPlots[rawStr] = struct{}{}
-				}
-				if pType != "text" {
-					orphanCounts[disp] += grpCnt
-				} else if _, ok := envTextPlots[rawStr]; !ok {
-					orphanCounts[disp] += grpCnt
-				}
+				orphanCounts[disp] += grpCnt
 			}
 			if err := errors.Join(cRows.Err(), cRows.Close()); err != nil {
 				return report, err
@@ -275,6 +287,38 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 		}
 
 		// Plots without vegetation (respects UseActiveSU).
+		vegTextPlots := map[string]struct{}{}
+		if !useSU || len(suPlotList) > 0 {
+			vegTbl := `"project".` + vprocore.QuoteHeaderIdentifier(project+"_Veg")
+			_, vegTypes, err := readTableColumnTypes(ctx, tx, "project", project+"_Veg")
+			if err != nil {
+				return report, err
+			}
+			vegPlotWhere := ` WHERE typeof("PlotNumber") = 'text'`
+			var vegPlotArgs []any
+			if useSU {
+				if pre, args := buildSUPlotInPreFilter(`"PlotNumber"`, vegTypes["plotnumber"], suPlotList); pre != "" {
+					vegPlotWhere += ` AND ` + pre
+					vegPlotArgs = append(vegPlotArgs, args...)
+				}
+			}
+			vPlotRows, vErr := tx.QueryContext(ctx, `SELECT DISTINCT CAST("PlotNumber" AS BLOB) FROM `+vegTbl+vegPlotWhere, vegPlotArgs...)
+			if vErr != nil {
+				return report, vErr
+			}
+			for vPlotRows.Next() {
+				var raw []byte
+				if err := vPlotRows.Scan(&raw); err != nil {
+					vPlotRows.Close()
+					return report, err
+				}
+				vegTextPlots[string(raw)] = struct{}{}
+			}
+			if err := errors.Join(vPlotRows.Err(), vPlotRows.Close()); err != nil {
+				return report, err
+			}
+		}
+
 		for _, eRow := range envOrdered {
 			if useSU {
 				if !eRow.isText {
@@ -295,14 +339,6 @@ func RunComplianceValidation(s *vprocore.ContextService, ctx context.Context, co
 		report.Summary.PlotsWithoutVeg = len(report.PlotsWithoutVegetation)
 
 		// 3. VLists.USysTableOfLists (Validate <> 0) code compliance.
-		envCols, envTypes, err := readTableColumnTypes(ctx, tx, "project", project+"_Env")
-		if err != nil {
-			return report, err
-		}
-		adminCols, adminTypes, err := readTableColumnTypes(ctx, tx, "project", project+"_Admin")
-		if err != nil {
-			return report, err
-		}
 
 		defRows, err := tx.QueryContext(ctx, `SELECT COALESCE(MIN("ListName"), ''), COALESCE(MIN("FieldUsedIn"), ''), COALESCE(CAST("ValidateLoops" AS TEXT), '')
 			FROM "VLists"."USysTableOfLists"

@@ -13,11 +13,12 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   changes:
     name: Detect Changed Subsystems
+    environment: actions-approval
     runs-on: ubuntu-24.04
     outputs:
       portal: ${{ steps.filter.outputs.portal }}
@@ -43,7 +44,7 @@ jobs:
               - 'r/NAMESPACE'
               - 'app/resources/standards-2026-provenance.json'
               - 'app/resources/help_bundle.json'
-              - '.github/workflows/**'
+              - '.github/**'
             app:
               - 'app/**'
               - 'docs-src/**'
@@ -67,7 +68,7 @@ jobs:
   portal-and-scripts:
     name: Portal, Docs Bundle & Release Verifier
     needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.portal == 'true'
+    if: needs.changes.outputs.portal == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -96,7 +97,7 @@ jobs:
   app-frontend:
     name: Desktop Frontend (Svelte 5 & TypeScript)
     needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -120,7 +121,7 @@ jobs:
   app-backend:
     name: Desktop Backend (Go, CGO, DAG & Live PG16)
     needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -213,7 +214,7 @@ jobs:
   r-cmd-check-linux:
     name: R CMD check (${{ matrix.os }}, R ${{ matrix.r }}, Live PG16)
     needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.r == 'true'
+    if: needs.changes.outputs.r == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -339,7 +340,7 @@ jobs:
   r-cmd-check-cross-os:
     name: R CMD check (${{ matrix.os }}, R ${{ matrix.r }})
     needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.r == 'true'
+    if: needs.changes.outputs.r == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -370,7 +371,7 @@ jobs:
   rsidecar-integration:
     name: Go <-> R Sidecar End-to-End Contract
     needs: changes
-    if: github.event_name == 'push' || needs.changes.outputs.rsidecar == 'true'
+    if: needs.changes.outputs.rsidecar == 'true'
     runs-on: ubuntu-24.04
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}

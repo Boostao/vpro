@@ -14,9 +14,28 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var DatabaseFamilyFiles = resources.DatabaseFamilyFS
+
+var verifiedSeedCache sync.Map
+
+func readVerifiedEmbeddedSeed(resourcePath, expectedHash, label string) ([]byte, error) {
+	cacheKey := resourcePath + ":" + expectedHash
+	if cached, ok := verifiedSeedCache.Load(cacheKey); ok {
+		return cached.([]byte), nil
+	}
+	data, err := DatabaseFamilyFiles.ReadFile(resourcePath)
+	if err != nil {
+		return nil, err
+	}
+	if fmt.Sprintf("%x", sha256.Sum256(data)) != expectedHash {
+		return nil, fmt.Errorf("bundled %s seed hash does not match its provenance seal", label)
+	}
+	verifiedSeedCache.Store(cacheKey, data)
+	return data, nil
+}
 
 type databaseFamilySeed struct {
 	Name, Hash string `json:"-" yaml:"-"`
@@ -52,12 +71,9 @@ func InstallVPicsDatabase(root string) (string, error) {
 	}
 	destination := filepath.Join(directory, "VPics.db")
 	if _, err := os.Stat(destination); errors.Is(err, os.ErrNotExist) {
-		data, err := DatabaseFamilyFiles.ReadFile("resources/database-family/VPics.db")
+		data, err := readVerifiedEmbeddedSeed("resources/database-family/VPics.db", VPicsSeedSHA256, "VPics")
 		if err != nil {
 			return "", err
-		}
-		if fmt.Sprintf("%x", sha256.Sum256(data)) != VPicsSeedSHA256 {
-			return "", errors.New("bundled VPics seed hash does not match its provenance seal")
 		}
 		if err := installDatabaseSeed(destination, data); err != nil {
 			return "", fmt.Errorf("install VPics: %w", err)
@@ -92,12 +108,9 @@ func InstallDatabaseFamily(root string) (map[string]string, error) {
 	for _, seed := range DatabaseFamilySeeds {
 		destination := filepath.Join(directory, seed.Name+".db")
 		if _, err := os.Stat(destination); errors.Is(err, os.ErrNotExist) {
-			data, err := DatabaseFamilyFiles.ReadFile("resources/database-family/" + seed.Name + ".db")
+			data, err := readVerifiedEmbeddedSeed("resources/database-family/"+seed.Name+".db", seed.Hash, seed.Name)
 			if err != nil {
 				return nil, err
-			}
-			if fmt.Sprintf("%x", sha256.Sum256(data)) != seed.Hash {
-				return nil, fmt.Errorf("bundled %s seed hash does not match its provenance seal", seed.Name)
 			}
 			if err := installDatabaseSeed(destination, data); err != nil {
 				return nil, fmt.Errorf("install %s: %w", seed.Name, err)
@@ -106,12 +119,9 @@ func InstallDatabaseFamily(root string) (map[string]string, error) {
 			return nil, err
 		} else if seed.Name == "VLists" && seed.Hash != legacyVListsSeedSHA256 {
 			if existing, readErr := os.ReadFile(destination); readErr == nil && fmt.Sprintf("%x", sha256.Sum256(existing)) == legacyVListsSeedSHA256 {
-				data, err := DatabaseFamilyFiles.ReadFile("resources/database-family/VLists.db")
+				data, err := readVerifiedEmbeddedSeed("resources/database-family/VLists.db", seed.Hash, seed.Name)
 				if err != nil {
 					return nil, err
-				}
-				if fmt.Sprintf("%x", sha256.Sum256(data)) != seed.Hash {
-					return nil, fmt.Errorf("bundled %s seed hash does not match its provenance seal", seed.Name)
 				}
 				if err := sqlutil.ReplaceBundledCatalogueFile(destination, data, 0600); err != nil {
 					return nil, fmt.Errorf("upgrade %s: %w", seed.Name, err)

@@ -99,6 +99,40 @@ func createSUTableObjectsInTx(ctx context.Context, tx *sql.Tx, suName string) er
 	return nil
 }
 
+type suSeedPlot struct {
+	plot string
+	unit *string
+}
+
+func utf16UnitsWithin(s string, maxUnits int) bool {
+	if len(s) <= maxUnits {
+		return true
+	}
+	return len(utf16.Encode([]rune(s))) <= maxUnits
+}
+
+func insertSUSeedRowsBatched(ctx context.Context, tx *sql.Tx, qTable string, seeds []suSeedPlot) error {
+	const batchSize = 400
+	prefix := `INSERT INTO main.` + qTable + ` ("PlotNumber","SiteUnit") VALUES `
+	for start := 0; start < len(seeds); start += batchSize {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		end := min(start+batchSize, len(seeds))
+		chunk := seeds[start:end]
+		placeholders := make([]string, len(chunk))
+		args := make([]any, 0, len(chunk)*2)
+		for i, s := range chunk {
+			placeholders[i] = "(?,?)"
+			args = append(args, s.plot, s.unit)
+		}
+		if _, err := tx.ExecContext(ctx, prefix+strings.Join(placeholders, ","), args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, contextID string, request CreateSUTableRequest) (*SUTableLifecycleResult, error) {
 	if ctx == nil {
 		return nil, errors.New("SU creation requires a request context")
@@ -134,11 +168,7 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 		currentSelection = owner.Selection
 		project := owner.Selection.Project
 
-		type seedPlot struct {
-			plot string
-			unit *string
-		}
-		var seeds []seedPlot
+		var seeds []suSeedPlot
 
 		if request.PopulateAllProjectPlots {
 			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
@@ -202,18 +232,18 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 					return struct{}{}, sErr
 				}
 				rawKey := string(rawPlot)
-				if seen[rawKey] || len(utf16.Encode([]rune(p))) > 7 {
+				if seen[rawKey] || !utf16UnitsWithin(p, 7) {
 					continue
 				}
 				seen[rawKey] = true
 				var unitPtr *string
 				if request.SeedFromUserSiteUnit {
-					if uStr, ok := adminUnits[rawKey]; ok && strings.TrimSpace(uStr) != "" && len(utf16.Encode([]rune(uStr))) <= 255 {
+					if uStr, ok := adminUnits[rawKey]; ok && strings.TrimSpace(uStr) != "" && utf16UnitsWithin(uStr, 255) {
 						val := uStr
 						unitPtr = &val
 					}
 				}
-				seeds = append(seeds, seedPlot{plot: p, unit: unitPtr})
+				seeds = append(seeds, suSeedPlot{plot: p, unit: unitPtr})
 			}
 			rowsErr := rows.Err()
 			rows.Close()
@@ -246,17 +276,8 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 					return err
 				}
 				qTable := vprocore.QuoteHeaderIdentifier(tableName)
-				if len(seeds) > 0 {
-					stmt, pErr := tx.PrepareContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber","SiteUnit") VALUES (?,?)`)
-					if pErr != nil {
-						return pErr
-					}
-					defer stmt.Close()
-					for _, s := range seeds {
-						if _, err := stmt.ExecContext(ctx, s.plot, s.unit); err != nil {
-							return err
-						}
-					}
+				if err := insertSUSeedRowsBatched(ctx, tx, qTable, seeds); err != nil {
+					return err
 				}
 				if err := vprocore.AppendTechnicalProvenance(ctx, tx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU table creation"); err != nil {
 					return err
@@ -296,20 +317,9 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 				return struct{}{}, err
 			}
 			qTable := vprocore.QuoteHeaderIdentifier(tableName)
-			if len(seeds) > 0 {
-				stmt, pErr := tx.PrepareContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber","SiteUnit") VALUES (?,?)`)
-				if pErr != nil {
-					_ = tx.Rollback()
-					return struct{}{}, pErr
-				}
-				for _, s := range seeds {
-					if _, err := stmt.ExecContext(ctx, s.plot, s.unit); err != nil {
-						_ = stmt.Close()
-						_ = tx.Rollback()
-						return struct{}{}, err
-					}
-				}
-				_ = stmt.Close()
+			if err := insertSUSeedRowsBatched(ctx, tx, qTable, seeds); err != nil {
+				_ = tx.Rollback()
+				return struct{}{}, err
 			}
 			if err := vprocore.AppendTechnicalProvenance(ctx, tx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU file creation"); err != nil {
 				_ = tx.Rollback()

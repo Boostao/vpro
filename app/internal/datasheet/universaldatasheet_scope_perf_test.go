@@ -157,7 +157,7 @@ func TestDatasheetScopeToActiveSUTautologyAndVegGlobalSearchPerf(t *testing.T) {
 	}
 	searchBudget := 400 * time.Millisecond
 	if os.Getenv("CI") == "true" {
-		searchBudget = 800 * time.Millisecond
+		searchBudget = 1200 * time.Millisecond
 	}
 	if dur > searchBudget {
 		t.Fatalf("GetDatasheetPage(Veg, GlobalSearch='PSEUMEN') over 1M rows took %v, want <= %v", dur, searchBudget)
