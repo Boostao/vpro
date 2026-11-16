@@ -9,6 +9,7 @@ To avoid context bloat while preserving 100% of engineering invariants, instruct
 | Scope | Scoped Agent Contract | Deep Engineering Playbook / Specification |
 |---|---|---|
 | **Monorepo Root (`/*`)** | **`AGENTS.md`** *(this file)* · [`.github/copilot-instructions.md`](./.github/copilot-instructions.md) | [`okf/00_index.md`](./okf/00_index.md) · [`okf/04_evidence_and_sources/decisions_and_gaps.md`](./okf/04_evidence_and_sources/decisions_and_gaps.md) |
+| **Knowledge & Curation (`okf/`)** | **[`okf/AGENTS.md`](./okf/AGENTS.md)** | [`okf/00_index.md`](./okf/00_index.md) · [`okf/04_evidence_and_sources/decisions_and_gaps.md`](./okf/04_evidence_and_sources/decisions_and_gaps.md) |
 | **Desktop Workstation (`app/`)** | **[`app/AGENTS.md`](./app/AGENTS.md)** | **[`okf/05_engineering_and_agents/desktop_app_engineering.md`](./okf/05_engineering_and_agents/desktop_app_engineering.md)** · [`okf/02_present_state/system_architecture.md`](./okf/02_present_state/system_architecture.md) |
 | **Headless R SDK (`r/`)** | **[`r/AGENTS.md`](./r/AGENTS.md)** | **[`okf/05_engineering_and_agents/r_sdk_engineering.md`](./okf/05_engineering_and_agents/r_sdk_engineering.md)** · [`okf/03_future_architecture/analytics_and_governance.md`](./okf/03_future_architecture/analytics_and_governance.md) |
 | **Empirical Access & BEC Oracles** | [`okf/02_present_state/oracles/`](./okf/02_present_state/oracles/) | 9 disposable-VM DAO & BEC math/validation contracts + [`okf/02_present_state/data_dictionary.md`](./okf/02_present_state/data_dictionary.md) |
@@ -19,11 +20,11 @@ To avoid context bloat while preserving 100% of engineering invariants, instruct
 
 - **`app/`** — **VPro 2.0 Desktop Workstation** (`module github.com/boostao/vpro/app`): Go `1.27+` (`CGO_ENABLED=1`), Wails v3 (`v3.1.0`), Svelte 5, MapLibre GL JS v6 + WebGPU + offline `PMTiles`, SQLite `VP08` (`WAL`), vendored C `libmdb` (`mdbtools 1.0.1`), `pgx/v5` Cloud `BECMaster` sync, and native `.xlsx`/`.gpkg`/TurboVeg 3 SQLite+XML/`.rds` interchange.
 - **`r/`** — **Headless `vpro` R Companion SDK** (`R >= 4.4.0`, **zero Shiny/widgets**): WAL-safe `RSQLite`/`duckdb` readers, 2026 `BCPlantTaxonomy v19` & `BECdb v13` harmonization, `vegan`/`vegclust`/`indicspecies` phytosociology, `sf` GeoPackage, `bcgov/climr` $\rightarrow$ Ministry `aSMR` edatopic grids, BEC diagnostics, PostgreSQL `BECMaster` cloud sync/snapshots, and Quarto BEC guides.
-- **`okf/`** — **Operational Knowledge Framework**: authoritative specifications across `01_history_and_evolution/`, `02_present_state/` (incl. `oracles/`), `03_future_architecture/`, `04_evidence_and_sources/`, and `05_engineering_and_agents/`.
+- **`okf/`** — **Operational Knowledge Framework**: authoritative specifications across `01_history_and_evolution/`, `02_present_state/` (incl. `oracles/`), `03_future_architecture/`, `04_evidence_and_sources/`, and `05_engineering_and_agents/`, governed by [`okf/AGENTS.md`](./okf/AGENTS.md) (in-place sync on every export/RPC/policy change; zero stray `.md` files outside allowlisted paths).
 - **`docs-src/`** — Single-source JSON authoring (`lmh25_fields.json`, `guides.json`, `tours.json`, `shortcuts.json`, `whats_new.json`, `data_use_agreement.json`) compiled into `app/resources/help_bundle.json`.
 - **`site/`** — BC Government Design System (`BC Sans`, `#003366` BC Navy, `#FCBA19` Gold) static-manifest download & documentation portal (`site/build.mjs` $\rightarrow$ `site/dist`, `site/release-manifest.json`).
-- **`scripts/`** — Help compiler (`build-docs-src.mjs`), release packaging/PE DLL validator (`release.py`, `release-windows.ps1`), and portal/release test suites (`scripts/tests/`).
-- **`archive/`** — Historical October 2026 parity ledgers (`archive/oct2026-parity-ledgers/`); **historical provenance only — never governs scope or feature gating**.
+- **`scripts/`** — Help compiler (`build-docs-src.mjs`), release packaging/PE DLL validator (`release.py`, `release-windows.ps1`), OKF hygiene linter (`check-okf-hygiene.py`), and portal/release test suites (`scripts/tests/`).
+- **`archive/`** — Historical October 2026 parity ledgers (`archive/oct2026-parity-ledgers/`) and September 2026 R prototype notes (`archive/sep2026-r-prototype-notes/`); **historical provenance only — never governs scope or feature gating**.
 - **`.github/`** — Unified CI/Pages/Release workflows, Copilot instructions, specialized agents (`vba-analyzer`, `vproguy`), and prompts (`vproguy-write`).
 
 ---
@@ -89,7 +90,8 @@ Go (`app/internal/sqlutil/sqlutil_foundation.go`: `UserDataDir()`, `UserConfigDi
 (cd r && Rscript -e "roxygen2::roxygenise()" && Rscript -e "testthat::test_local(stop_on_failure = TRUE)")
 (cd r && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)
 
-# 4. Root Offline F1 Help Bundle, BC Gov Release Portal & Packaging Scripts
+# 4. Root Offline F1 Help Bundle, OKF Hygiene, BC Gov Release Portal & Packaging Scripts
+python3 scripts/check-okf-hygiene.py
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
 ```

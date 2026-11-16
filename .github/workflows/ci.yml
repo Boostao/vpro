@@ -35,6 +35,12 @@ jobs:
               - 'site/**'
               - 'docs-src/**'
               - 'scripts/**'
+              - 'okf/**'
+              - 'AGENTS.md'
+              - 'app/AGENTS.md'
+              - 'r/AGENTS.md'
+              - '.agents/**'
+              - 'r/NAMESPACE'
               - 'app/resources/standards-2026-provenance.json'
               - 'app/resources/help_bundle.json'
               - '.github/workflows/**'
@@ -73,6 +79,8 @@ jobs:
           node-version: '24'
       - name: Verify Go, Wails v3, WebGPU, and workflow dependency lockstep
         run: python3 scripts/check-dep-lockstep.py --strict-brand
+      - name: Verify OKF curation, markdown allowlist, links, and anti-drift hygiene
+        run: python3 scripts/check-okf-hygiene.py
       - name: Compile docs-src and verify zero help_bundle drift
         run: |
           set -euo pipefail

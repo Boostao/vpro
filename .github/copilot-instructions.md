@@ -4,14 +4,14 @@
 
 - **Desktop Workstation (`app/`):** [`app/AGENTS.md`](../app/AGENTS.md) $\rightarrow$ [`okf/05_engineering_and_agents/desktop_app_engineering.md`](../okf/05_engineering_and_agents/desktop_app_engineering.md)
 - **Headless R Companion SDK (`r/`):** [`r/AGENTS.md`](../r/AGENTS.md) $\rightarrow$ [`okf/05_engineering_and_agents/r_sdk_engineering.md`](../okf/05_engineering_and_agents/r_sdk_engineering.md)
-- **Specifications & Empirical Oracles (`okf/`):** [`okf/00_index.md`](../okf/00_index.md) & [`okf/02_present_state/oracles/`](../okf/02_present_state/oracles/)
+- **Specifications & Empirical Oracles (`okf/`):** [`okf/AGENTS.md`](../okf/AGENTS.md) $\rightarrow$ [`okf/00_index.md`](../okf/00_index.md) & [`okf/02_present_state/oracles/`](../okf/02_present_state/oracles/)
 
 ## Core Monorepo Guardrails
 
 1. **Strict Subsystem Boundaries (`app/` + `r/` + `okf/`):**
    - **`app/` (`module github.com/boostao/vpro/app`):** Owns all interactive UI (Wails v3 + Go `1.26+` + Svelte 5 + MapLibre GL JS v6/WebGPU + SQLite WAL + vendored C `libmdb`). Preserve the 4-layer acyclic `app/internal/*` DAG (zero sibling imports in Layer 2), strictly **12** registered Wails services in `app/main.go`, `-ts -i` TypeScript interface binding generation (`wails3 generate bindings -ts -i`), and `$state.snapshot(...)` proxy detachment before IPC.
    - **`r/` (Package `vpro`, `R >= 4.4.0`):** Strictly **headless** scientific analytics & stewardship SDK (`shiny`, `bslib`, `DT`, `rhandsontable`, `shinyTree`, `shinyjs`, `sass`, `leaflet`, and `rappdirs` are **forbidden** in `r/DESCRIPTION`). Default to `RSQLite::SQLITE_RO` / `query_only = ON` so R never blocks a live `app/` WAL session.
-   - **`docs-src/`, `site/`, `scripts/`:** Single-source offline `F1` `LMH25 (2023)` help bundle (`scripts/build-docs-src.mjs` $\rightarrow$ `app/resources/help_bundle.json`) and BC Gov Design System static-manifest download portal (`site/build.mjs` $\rightarrow$ `site/dist`). Historical files in `archive/oct2026-parity-ledgers/` never govern scope or feature flags.
+   - **`docs-src/`, `site/`, `scripts/`:** Single-source offline `F1` `LMH25 (2023)` help bundle (`scripts/build-docs-src.mjs` $\rightarrow$ `app/resources/help_bundle.json`) and BC Gov Design System static-manifest download portal (`site/build.mjs` $\rightarrow$ `site/dist`). Keep `okf/` synchronized in place with code/export/policy changes (zero stray `.md` files outside allowlisted paths); historical files in `archive/oct2026-parity-ledgers/` and `archive/sep2026-r-prototype-notes/` never govern scope or feature flags.
 
 2. **Shared `VP08`, Workspace & Cloud `BECMaster` Invariants:**
    - **Workspace Resolution:** `app/internal/sqlutil/sqlutil_foundation.go` (`UserDataDir`, `UserConfigDir`) and `r/R/workspace.R` (`vpro_data_dir`, `vpro_config_dir`) must match byte-for-byte across Windows, macOS, and Linux (`VPRO_DATA_DIR` / `VPRO_CONFIG_DIR` overrides first).
@@ -21,4 +21,4 @@
 3. **Targeted Validation Gates:**
    - **Desktop (`app/`):** `(cd app/frontend && npm test && npm run check && npm run build)` and `(cd app && go test -tags sqliteonly ./...)`
    - **R SDK (`r/`):** `(cd r && air format R tests && Rscript -e "roxygen2::roxygenise()" && Rscript -e "testthat::test_local(stop_on_failure = TRUE)" && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)` (`0 errors | 0 warnings | 0 notes`)
-   - **Portal & Help (`site/`, `scripts/`):** `python3 -m unittest discover -s scripts/tests -p 'test_*.py'` and `node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs`
+   - **Portal, Help & OKF Hygiene (`site/`, `scripts/`, `okf/`):** `python3 scripts/check-okf-hygiene.py`, `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`, and `node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs`

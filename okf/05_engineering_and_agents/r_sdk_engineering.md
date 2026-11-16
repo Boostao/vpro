@@ -17,7 +17,7 @@ This playbook preserves every architectural, SQLite WAL concurrency, Access/BEC 
   - `.onLoad()` (`r/R/zzz.R`) must remain fast, 100% offline, non-interactive, and side-effect-free (zero network calls, server launches, global option/state mutations, or automatic DuckDB extension installs).
   - **Retired Historical Baggage:** The 4,130-item Access GUI parity ledger and Access-form-to-Shiny translators remain permanently retired and must never be reintroduced or imitated.
 
-### Core R SDK Scope (`43` `r/R/*.R` Modules, `5` Vignettes & `4` Quarto Templates)
+### Core R SDK Scope (`43` `r/R/*.R` Modules, `89` Exports, `6` Vignettes & `4` Quarto Templates)
 
 1. **Workspace & `VP08` SQLite Layer (`workspace.R`, `import_access.R`):** Cross-OS `vpro_data_dir()` / `vpro_config_dir()` discovery, WAL-safe `RSQLite` connections, `VP08` family inspection (`vpro_project_inspect()`, preserving `isTRUE(insp$compatible)` expected by `app/internal/rsidecar`), Access `.mdb`/`.accdb` ingestion helpers, and optional explicit in-memory DuckDB (`sqlite_scanner`) cross-project queries.
 2. **Tidy Ecological Extraction & Taxonomy (`read_plots.R`, `plot_soil_hierarchy.R`, `standards.R`, `taxonomy_lump.R`):** Tibble/data-frame readers for `Env`, `Admin`, `Veg`, `Humus`, `Mineral`, `Other`, `Audit`, `Metadata`, `*_SU`, `*_Hierarchy` (`~` breakpoint rollups), `*_Lump`, and harmonized 2026 `VLists.db` (`USysAllSpecs` `BCPlantTaxonomy v19`, `BECdb v13`) + `VUser.db` (`USysUserSpp`) species catalogues.
@@ -67,7 +67,7 @@ This playbook preserves every architectural, SQLite WAL concurrency, Access/BEC 
 
 ## 3. Preserved `VP08`, Access Calibration & Empirical Oracle Rules
 
-All ecological calculations and validators in `r/` are anchored to the 9 empirical Access/BEC oracle contracts in [`okf/02_present_state/oracles/`](../02_present_state/oracles/) and reproducible DAO fixtures in `r/data-raw/oracle/` and [`r/data-raw/projects/VEGETATION_DUPLICATES.md`](../../r/data-raw/projects/VEGETATION_DUPLICATES.md):
+All ecological calculations and validators in `r/` are anchored to the 9 empirical Access/BEC oracle contracts in [`okf/02_present_state/oracles/`](../02_present_state/oracles/) (where [`VEGETATION_OPTIMIZATION_POLICY.md`](../02_present_state/oracles/VEGETATION_OPTIMIZATION_POLICY.md) holds the duplicate-species diagnosis oracle) and reproducible DAO fixtures in `r/data-raw/oracle/`:
 
 | Empirical Oracle Document | Calibrated Legacy Source & R SDK Contract |
 |---|---|
@@ -79,7 +79,7 @@ All ecological calculations and validators in `r/` are anchored to the 9 empiric
 | [`SHORT_VEG_LAYER_STRATA_ORACLE.md`](../02_present_state/oracles/SHORT_VEG_LAYER_STRATA_ORACLE.md) | `ConvertProVeg2V2` & `BuildStrataTable` (`TotalA`/`TotalB` authoritative override vs `99%`-capped sub-layer sum; positive-only A/B strata vs non-null zero C/D). |
 | [`VALUE_CONVERSIONS.md`](../02_present_state/oracles/VALUE_CONVERSIONS.md) | `V7mdlValueConversions` (`Presence2Class` `I–V`, `SignifClass` `+`/`1–9`, `ProminenceClass`, `GoldstreamClass`, no-op `vpRoundUp` identity, `vpRoundDown1` cap at 100, ACE 15-sig-digit rounding). |
 | [`VEGETATION_CODE_VALIDATION.md`](../02_present_state/oracles/VEGETATION_CODE_VALIDATION.md) | `V7mdlReportsValidateVegCodes.CheckVegData` (physical `USysAllSpecs.Code` left join, active-SU vs full-project orphan plot semantics). |
-| [`VEGETATION_OPTIMIZATION_POLICY.md`](../02_present_state/oracles/VEGETATION_OPTIMIZATION_POLICY.md) | Full-run DAO & `_Audit` probe of `V7mdlOptimizeVeg.OptimizeVeg` (`First()` order sensitivity, singleton ID regeneration breaking `_Audit` joins) & deterministic minimum-ID survivor policy. |
+| [`VEGETATION_OPTIMIZATION_POLICY.md`](../02_present_state/oracles/VEGETATION_OPTIMIZATION_POLICY.md) | Read-only duplicate diagnosis (`Check4DuplicatedSpecies` over 12-branch `USysAllVeg` `UNION`, `FilterOnLoad = False`, `129` `MyLayer='4'` DAO rows), `First()` order sensitivity, `_Audit` breakage probe, and approved 5-rule deterministic optimization policy. |
 
 ### Eight Non-Negotiable Domain Invariants
 

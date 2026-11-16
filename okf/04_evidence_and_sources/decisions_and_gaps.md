@@ -16,6 +16,7 @@ flowchart LR
         D4["D-04: Dual TurboVeg 3 (31-Table SQLite)<br/>+ Plot_package XML Implemented"]
         D5["D-05: Universal Datasheet Grid<br/>(_Env/_Admin/_Veg/_Humus/_Mineral/_Other/_SU)"]
         D11["D-11: 2026 BECdb v13 / Taxa v19 / LMH25<br/>+ 545 MB BECMaster Orphan Quarantine"]
+        D12["D-12: Wave 1–5 Parity Sign-Offs<br/>(OptimizeVeg, Cover Precedence, >250 Plots,<br/>Case Rules, 89-Export R SDK)"]
     end
 
     subgraph ClientConfirm["Client Governance & Domain Confirmation"]
@@ -138,3 +139,14 @@ flowchart LR
   1. **2026 Standards & `LMH25 (2023)` Codes Refreshed (`6873e74`, `7c3ec60`):** `VLists.db`, `bec.db`, `working-unit.db`, `site-codes.db`, `soil-codes.db`, and `parent-codes.db` are refreshed against **`BECdb v13` (`2026-05-28`)**, **`BCPlantTaxonomy v19` (`2026-02-09`, incl. `Codetype = 'XX'`)**, and **`LMH25 (2023)`** (`3c`, `3d`, `v`, `k`, `A.w.th`, `A.w.br`, `CO`, flood `S`, 2022 tree codes).
   2. **`545 MB` `BECMaster_fixing.accdb` Orphan Quarantine (`6056169`):** Streaming Access import automatically detects and quarantines orphan child rows (`Env -> Veg` dropped FK) with full receipt reporting so `PRAGMA foreign_keys = ON` succeeds cleanly across all `71,567` plots.
   3. **Preserved `VP08` Compatibility Quirks:** Legacy column types (`<Project>_Veg.HeightB VARCHAR(255)`, `<Project>_Metadata.ProjectID VARCHAR(20)` vs. `<Project>_Env.ProjectID VARCHAR(30)`, `Int16` `StartDate/EndDate`) remain preserved for strict `VP08` compatibility unless client authorizes a `VP09` schema bump in Phase 2.
+
+---
+
+### D-12: Wave 1–5 Product & Parity Sign-Offs (2026-11-15)
+* **Status:** **Resolved & Implemented**
+* **Evidence & Settled Decisions:**
+  1. **`OptimizeVeg` Retained with Deterministic Safety & Confirmation Gates (`app/internal/projectops/optimizeveg.go`):** Retained `OptimizeVeg` with all five deterministic safety gates (`PreviewOptimizeVeg` exact-byte `COLLATE BINARY` grouping, minimum signed 32-bit `ID` survivor without regenerating singleton IDs, independent numeric maxima with text `HeightB` agreement, non-null consensus metadata blocking `Layer`/field conflicts, and `_Audit` reference protection with `CustodianAuditOverride`) plus the SHA-256 `PreviewDigest` confirmation gate inside a single `BEGIN IMMEDIATE` transaction reserving retired IDs in `__VPRO_ChildIdentity`.
+  2. **Standardized Cover Precedence (`app/` & `r/`):** Standardized `cover_precedence` across both tracks: `"strata_totals"` is default for Short-Veg, Summary-Veg, `vpro_veg()`, and `vpro_matrix()` (`15.0` on canonical fixture plot `108050`, species `ABIE_RK`), while `"sublayer_sum"` is default for BEC Diagnostics, `vpro_pairwise()`, and `vpro_outliers()` (`20.0` on `108050` `ABIE_RK`), with an explicit toggle exposed in both Go (`app/internal/diagnostics`) and R (`cover_precedence = c("strata_totals", "sublayer_sum")` / `c("sublayer_sum", "strata_totals")`).
+  3. **Legacy Jet 255-Column `NumPlots > 250` Cap Lifted (`app/internal/vegreport/vegetationworkbook.go`):** Lifted the legacy Jet/Excel 255-column `NumPlots > 250` plot cap for `.xlsx` exports—bounded safely at `NumPlots <= 16,000` (Excel's `16,384`-column limit)—while preserving the `> 250` limit strictly for Summary Vegetation SiteUnit columns.
+  4. **Case-Sensitivity Rules & Opt-In Compare/Merge Toggle (`app/internal/projectops/{compare,merge}.go`):** BEC/LMH25 codes and literal `PlotNumber` keys remain case-sensitive (`COLLATE BINARY`) by default, whereas human-readable/catalog names remain case-insensitive, with an explicit opt-in `CaseInsensitiveText` checkbox exposed in Compare/Merge.
+  5. **Clean-Slate `89`-Export R 2.0 SDK & Aligned `vpro_pairwise` Defaults (`r/NAMESPACE`, `r/R/pairwise_outliers.R`):** Finalized the clean-slate `89`-export headless `vpro` `2.0.0` R SDK (`43` `r/R/*.R` files, `6` vignettes, `4` Quarto templates) and aligned `vpro_pairwise()` defaults across Go and R (`min_plots = 2L`, `min_constancy = 60`, `noise_constancy = 10`, `min_diff = 0.5`, `min_dd = 0.5`).
