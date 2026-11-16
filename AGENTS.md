@@ -81,8 +81,8 @@ Go (`app/internal/sqlutil/sqlutil_foundation.go`: `UserDataDir()`, `UserConfigDi
 # 1. Desktop Frontend (Svelte 5 unit tests, svelte-check & Vite bundle)
 (cd app/frontend && npm test && npm run check && npm run build)
 
-# 2. Desktop Go Backend (SQLite-only canonical desktop profile) & Wails TS bindings
-(cd app && go test -tags sqliteonly ./...)
+# 2. Desktop Go Backend & Wails TS bindings
+(cd app && go test ./...)
 (cd app && wails3 generate bindings -ts -i)
 
 # 3. Headless R Companion SDK (air format, roxygen2, testthat & tarball R CMD check: 0E/0W/0N)

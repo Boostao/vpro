@@ -15,7 +15,7 @@ This playbook preserves the complete engineering invariants, 4-layer Go architec
   - [`okf/04_evidence_and_sources/decisions_and_gaps.md`](../04_evidence_and_sources/decisions_and_gaps.md)
 - **Historical Archive Only (`archive/oct2026-parity-ledgers/`):** Superseded October 2026 slice-by-slice parity ledgers (`MIGRATION_PLAN.md`, `WINDOWS_HANDOFF.md`, `CLIENT_SCOPE.md`, `FEATURE_CAPABILITIES.md`, `*_CONTRACT.md`) are retained strictly for historical provenance. **They do NOT govern scope, feature gating, or work organization.**
 - **Feature Graduation & Build-Tier Rules:**
-  - Validated workflows run **unconditionally default-ON** in standard `-tags sqliteonly` builds (`PRAGMA journal_mode = WAL`).
+  - Validated workflows run **unconditionally default-ON** in standard SQLite `WAL` builds (`PRAGMA journal_mode = WAL`).
   - Do **not** introduce `VITE_*` or per-slice `VPRO_*` feature-flag sprawl. Use `config.yml` `release_channel: stable | experimental` for user-facing Phase 2 preview controls, and `app/internal/lifecycle/buildinfo.go` (`buildMode: "dev" | "alpha" | "release"`, `-ldflags "-X github.com/boostao/vpro/app/internal/lifecycle.buildMode=..."`) for compile-time build-tier gating (`VPRO_WEBVIEW_DEBUG_PORT` is restricted strictly to `dev` builds).
   - Follow Will MacKenzie's verified `VPro2.0_Functions` triage (`Red = Remove`, `Orange = Deferred`, `Green/Unmarked = Priority Retain/Modify`): keep Red-marked over-builds (`PC-ORD Break Report` and standalone `CHARS` forms/menus) pruned, and expose CHARS Arctic extensions (`Cover5a..5c`, `Height5a..5c`, `SnowCoverregime`, `ActiveLayerDepth`) exclusively via the inline `"Show extended shrub layers"` toggle on standard FS882, Two-Page, and SIVI forms.
 - **Product Identity & Packaging Boundaries:**
@@ -187,17 +187,17 @@ The Go backend in `app/` (`module github.com/boostao/vpro/app`) enforces a stric
 # Frontend unit tests (single-pass runner), svelte-check & Vite production bundle
 (cd app/frontend && npm test && npm run check && npm run build)
 
-# Backend Go test suite (canonical SQLite-only desktop profile)
-(cd app && go test -tags sqliteonly ./...)
+# Backend Go test suite
+(cd app && go test ./...)
 
 # Native desktop packaging (supports VERSION=2.1.0-alpha.1 / BUILD_MODE=dev|alpha|release)
-(cd app && wails3 task linux:build EXTRA_TAGS=sqliteonly)
-(cd app && wails3 task windows:build:sqliteonly)
+(cd app && wails3 task linux:build)
+(cd app && wails3 task windows:build)
 
 # Root single-source F1 help bundle, BC Gov release portal & packaging unit tests
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
 ```
 
-- **CGO Rebuild Note (`app/internal/accessreader`):** After editing C headers or C sources included by an amalgamating CGO file, pass **`-a`** (`(cd app && go test -a -tags sqliteonly ./internal/accessreader/...)`), because `-count=1` alone can reuse cached C object files. For full-repo `-race` runs on Windows, pass `-timeout 45m` (or `-timeout 150m` across all packages).
+- **CGO Rebuild Note (`app/internal/accessreader`):** After editing C headers or C sources included by an amalgamating CGO file, pass **`-a`** (`(cd app && go test -a ./internal/accessreader/...)`), because `-count=1` alone can reuse cached C object files. For full-repo `-race` runs on Windows, pass `-timeout 45m` (or `-timeout 150m` across all packages).
 - **Parallel Multi-Agent Worktree Rule:** Give each mutating parallel subagent an isolated worktree (`/home/bruno/Work/vpro.worktrees/waveN-<track>`) with strictly disjoint file ownership, especially around generated `app/frontend/bindings/` and shared root documentation/scripts.

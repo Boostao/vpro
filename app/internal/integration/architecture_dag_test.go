@@ -49,7 +49,7 @@ func TestFourLayerAcyclicArchitectureZeroLayer2SiblingImports(t *testing.T) {
 		modulePrefix + "internal/vegreport":      true,
 	}
 
-	cmd := exec.Command("go", "list", "-tags", "sqliteonly", "-json", "./internal/...")
+	cmd := exec.Command("go", "list", "-json", "./internal/...")
 	cmd.Dir = resources.RepoRoot()
 	out, err := cmd.CombinedOutput()
 	if err != nil {

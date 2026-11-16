@@ -768,7 +768,7 @@ func DetectRRuntime(ctx context.Context, opts ...RuntimeOptions) (*RRuntimeStatu
 		status.DiagnosticMessage = rErr.Error()
 		status.MissingRequired = []string{"Rscript", "vegan", "vegclust", "DBI", "RSQLite", "data.table", "jsonlite", "knitr", "rmarkdown"}
 		status.SetupInstructions = defaultSetupInstructions(true, !status.QuartoAvailable, []string{
-			"vegan", "vegclust", "climr", "DBI", "RSQLite", "duckdb", "data.table", "jsonlite", "knitr", "rmarkdown",
+			"vegan", "vegclust", "climr", "DBI", "RSQLite", "data.table", "jsonlite", "knitr", "rmarkdown",
 		})
 		return status, nil
 	}

@@ -19,6 +19,6 @@
    - **Cloud `BECMaster`:** `app/internal/cloudsync` and `r/R/cloud_*.R` share the 3-schema (`becmaster`, `staging`, `standards`) PostgreSQL/PostGIS contract with secret redaction, TLS on non-loopback hosts, pre-upload compliance gating, `SERIALIZABLE` Custodian 3-way merge, and SHA-256 hash-chained `becmaster.audit`.
 
 3. **Targeted Validation Gates:**
-   - **Desktop (`app/`):** `(cd app/frontend && npm test && npm run check && npm run build)` and `(cd app && go test -tags sqliteonly ./...)`
+   - **Desktop (`app/`):** `(cd app/frontend && npm test && npm run check && npm run build)` and `(cd app && go test ./...)`
    - **R SDK (`r/`):** `(cd r && air format R tests && Rscript -e "roxygen2::roxygenise()" && Rscript -e "testthat::test_local(stop_on_failure = TRUE)" && R CMD build . && R CMD check --no-manual vpro_*.tar.gz && rm -rf vpro_*.tar.gz vpro.Rcheck)` (`0 errors | 0 warnings | 0 notes`)
    - **Portal, Help & OKF Hygiene (`site/`, `scripts/`, `okf/`):** `python3 scripts/check-okf-hygiene.py`, `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`, and `node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs`

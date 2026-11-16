@@ -1,14 +1,14 @@
 # Wails Server Mode Dockerfile
 # Multi-stage build for a minimal CGO-enabled SQLite canonical image.
 #
-# Defaults build VPro with CGO_ENABLED=1 and -tags server,production,sqliteonly
+# Defaults build VPro with CGO_ENABLED=1 and -tags server,production
 # on Debian 13 (trixie) so Wails v3 Linux CGO pkg-config headers (gtk4 / webkitgtk-6.0)
 # and runtime shared libraries resolve cleanly, with writable VPRO_DATA_DIR and VPRO_CONFIG_DIR.
 
 ARG GO_IMAGE=golang:1.27.4-trixie
 ARG RUNTIME_IMAGE=debian:trixie-slim
 ARG CGO_ENABLED=1
-ARG EXTRA_TAGS=sqliteonly
+ARG EXTRA_TAGS=""
 
 # Build stage
 FROM ${GO_IMAGE} AS builder

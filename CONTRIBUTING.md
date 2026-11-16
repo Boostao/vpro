@@ -13,8 +13,8 @@ Thank you for maintaining **VPro 2.0**. Before editing any subsystem, read the m
 # Desktop frontend unit suites, typecheck & Vite bundle
 (cd app/frontend && npm test && npm run check && npm run build)
 
-# Desktop Go backend (SQLite-only canonical profile) & TS interface bindings
-(cd app && go test -tags sqliteonly ./...)
+# Desktop Go backend & TS interface bindings
+(cd app && go test ./...)
 (cd app && wails3 generate bindings -ts -i)
 
 # Headless R Companion SDK (zero-note tarball R CMD check)
@@ -38,7 +38,7 @@ Third-party upgrades are partitioned by blast radius (enforced by `.github/depen
 |---|---|---|---|
 | **1. Routine Patches** | GitHub Actions, isolated Go/npm libs | Monthly grouped PRs via `.github/dependabot.yml` | Standard `ci.yml` + weekly `govulncheck` & `npm audit` |
 | **2. Coupled Runtimes (Lockstep)** | `wailsapp/wails/v3` $\leftrightarrow$ `@wailsio/runtime` $\leftrightarrow$ `wails3` CLI; `@deck.gl/*` & `@luma.gl/*` | Manual coordinated bump PR (ignored by Dependabot) | Must pass `python3 scripts/check-dep-lockstep.py` + `wails3 generate bindings -ts -i` |
-| **3. Native CGO / Cross-OS** | `mattn/go-sqlite3`, `duckdb-go/v2`, vendored `libmdb`, Windows `winlibs`/`llvm-mingw` toolchains in `scripts/release.py` | Manual PR with explicit toolchain & PE DLL verification | Must run `go test -a -tags sqliteonly ./internal/accessreader/...` and cross-OS compile smoke (`upstream-canary.yml`) |
+| **3. Native CGO / Cross-OS** | `mattn/go-sqlite3`, vendored `libmdb`, Windows `winlibs`/`llvm-mingw` toolchains in `scripts/release.py` | Manual PR with explicit toolchain & PE DLL verification | Must run `go test -a ./internal/accessreader/...` and cross-OS compile smoke (`upstream-canary.yml`) |
 | **4. Scientific R & Annual BEC Standards** | `bcgov/climr`, `vegan`, `vegclust`, `BECdb`, `BCPlantTaxonomy` | Weekly R `Suggests` canary (`upstream-canary.yml`) + Annual Standards ingestion | Heavy R analytics stay in `Suggests` (`r/DESCRIPTION`); standards updates follow §3 below |
 
 ---

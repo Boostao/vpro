@@ -112,7 +112,7 @@ jobs:
         shell: pwsh
         run: |
           Push-Location app
-          task windows:create:nsis:installer "ARCH=$env:RELEASE_ARCH" CGO_ENABLED=1 EXTRA_TAGS=sqliteonly INSTALL_SCOPE=user "VERSION=$env:RELEASE_VERSION" "BUILD_MODE=$env:RELEASE_BUILD_MODE"
+          task windows:create:nsis:installer "ARCH=$env:RELEASE_ARCH" CGO_ENABLED=1 INSTALL_SCOPE=user "VERSION=$env:RELEASE_VERSION" "BUILD_MODE=$env:RELEASE_BUILD_MODE"
           $taskExit = $LASTEXITCODE
           Pop-Location
           if ($taskExit -ne 0) { throw "Windows build/NSIS packaging failed" }
@@ -163,7 +163,7 @@ jobs:
       - name: Build universal app and DMG without host rebuild
         run: |
           set -euo pipefail
-          (cd app && task darwin:package:universal EXTRA_TAGS=sqliteonly "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
+          (cd app && task darwin:package:universal "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
           python scripts/release.py cpu app/bin/VPro.app/Contents/MacOS/VPro --format macho --arch universal
           (cd app && task darwin:create:dmg)
           python scripts/release.py package macos
@@ -233,7 +233,7 @@ jobs:
       - name: Build native AppImage and deb
         run: |
           set -euo pipefail
-          (cd app && task linux:create:appimage linux:create:deb "ARCH=$RELEASE_ARCH" EXTRA_TAGS=sqliteonly "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
+          (cd app && task linux:create:appimage linux:create:deb "ARCH=$RELEASE_ARCH" "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
           python scripts/release.py package linux
       - uses: actions/upload-artifact@v7
         with:

@@ -193,22 +193,22 @@ jobs:
         working-directory: app
         run: |
           set -euo pipefail
-          wails3 generate bindings -f '-tags sqliteonly' -ts -i
+          wails3 generate bindings -ts -i
           git diff --exit-code -- frontend/bindings
       - name: Run race detector on concurrent services, WAL core, and live PostgreSQL RBAC/RLS
         working-directory: app
-        run: go test -tags sqliteonly -race . ./internal/cloudsync/... ./internal/lifecycle/... ./internal/sqlutil/... ./internal/vprocore/... ./internal/diagnostics/...
+        run: go test -race . ./internal/cloudsync/... ./internal/lifecycle/... ./internal/sqlutil/... ./internal/vprocore/... ./internal/diagnostics/...
       - name: Run full Go backend suite including 4-layer DAG and 71.5k scale gates
         working-directory: app
         env:
           TMPDIR: /dev/shm
         run: |
           set -euo pipefail
-          mapfile -t pkgs < <(go list -tags sqliteonly ./... | grep -v '/internal/rsidecar$')
-          go test -tags sqliteonly -timeout 20m "${pkgs[@]}"
+          mapfile -t pkgs < <(go list ./... | grep -v '/internal/rsidecar$')
+          go test -timeout 20m "${pkgs[@]}"
       - name: Verify native Linux desktop binary build
         working-directory: app
-        run: task linux:build EXTRA_TAGS=sqliteonly
+        run: task linux:build
 
   r-cmd-check-linux:
     name: R CMD check (${{ matrix.os }}, R ${{ matrix.r }}, Live PG16)
@@ -399,7 +399,7 @@ jobs:
         run: R CMD INSTALL r
       - name: Run Go rsidecar integration tests against installed vpro R SDK
         working-directory: app
-        run: go test -v -tags sqliteonly ./internal/rsidecar/...
+        run: go test -v ./internal/rsidecar/...
 
   website-dry-run:
     name: Unified Website Dry-Run (/ + /r/)

@@ -92,9 +92,9 @@ diag <- vpro_diagnostics(ctx)
 (cd app && wails3 dev)                                         # Live native dev window
 (cd app && wails3 generate bindings -ts -i)                    # Regenerate TS interface bindings (-i required)
 (cd app/frontend && npm test && npm run check && npm run build)
-(cd app && go test -tags sqliteonly ./...)
-(cd app && wails3 task linux:build EXTRA_TAGS=sqliteonly)
-(cd app && wails3 task windows:build:sqliteonly)
+(cd app && go test ./...)
+(cd app && wails3 task linux:build)
+(cd app && wails3 task windows:build)
 
 # --- Headless R Companion SDK (r/) ---
 (cd r && Rscript -e "roxygen2::roxygenise()")

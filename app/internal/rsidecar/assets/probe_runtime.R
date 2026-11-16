@@ -22,7 +22,7 @@ if (!requireNamespace("jsonlite", quietly = TRUE)) {
 
 target_pkgs <- c(
   "vpro", "climr", "vegclust", "vegan", "DBI", "RSQLite",
-  "duckdb", "sf", "data.table", "jsonlite", "knitr", "rmarkdown"
+  "sf", "data.table", "jsonlite", "knitr", "rmarkdown"
 )
 required_pkgs <- c("vegan", "vegclust", "DBI", "RSQLite", "data.table", "jsonlite", "knitr", "rmarkdown")
 

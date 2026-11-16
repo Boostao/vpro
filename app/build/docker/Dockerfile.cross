@@ -227,12 +227,9 @@ if [ "$GOOS" = "windows" ]; then
     LDFLAGS="-s -w ${VER_LDFLAGS} -H windowsgui -extldflags=-static"
 fi
 
-TAGS="production,sqliteonly"
+TAGS="production"
 if [ -n "$EXTRA_TAGS" ]; then
-    case ",$EXTRA_TAGS," in
-        *,sqliteonly,*) TAGS="production,${EXTRA_TAGS}" ;;
-        *) TAGS="${TAGS},${EXTRA_TAGS}" ;;
-    esac
+    TAGS="${TAGS},${EXTRA_TAGS}"
 fi
 
 if [ "$OBFUSCATED" = "true" ]; then

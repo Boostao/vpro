@@ -73,7 +73,7 @@ flowchart TB
 * **`mattn/go-sqlite3` (`CGO_ENABLED=1`) + SQLite `WAL` + Hardened Cross-Platform `libmdb` (`62ae643`, `6848960`):**
   * **Windows (`amd64` & `arm64`):** `.github/workflows/release.yml` pins architecture-matched MinGW/LLVM-MinGW toolchains (`scripts/release-windows.ps1`) and links `-static` / `-extldflags=-static` (`app/internal/accessreader/reader.go:12`, `app/build/windows/Taskfile.yml`), validated by `scripts/release.py validate_pe_imports` to reject any non-inbox Windows DLL imports.
   * **Linux (`amd64` & `arm64`) & macOS Universal (`darwin`):** `app/internal/accessreader/reader.go:1` builds across `linux || windows || darwin` with `-fvisibility=hidden` so vendored `fakeglib` symbols never collide with GTK4/WebKitGTK on Linux, while macOS ships a verified universal (`x86_64` + `arm64`) `VPro.app` `.dmg`.
-  * **SQLite `WAL` & `-tags sqliteonly` Default:** Active `<Project>.db` databases initialize `PRAGMA journal_mode = WAL` so `app/` and the headless `r/` (`vpro` `v2.0.0`) R SDK/sidecar read concurrently without locking, while `-tags sqliteonly` omits DuckDB C++ bloat from desktop installers (`~20 MB` Windows NSIS installer).
+  * **SQLite `WAL` Concurrency & Lean Binary Footprint:** Active `<Project>.db` databases initialize `PRAGMA journal_mode = WAL` so `app/` and the headless `r/` (`vpro` `v2.0.0`) R SDK/sidecar read concurrently without locking, keeping desktop installers lean (`~20 MB` Windows NSIS installer) with zero DuckDB C++ linkage in `app/`.
 
 ### 4.3 Desktop-to-R (`r/` `vpro` `v2.0.0` / `climr` / Quarto) Out-of-Process Sidecar (**Delivered**)
 Implemented in `app/internal/rsidecar/` (`c85d014`, `03d1218`) and `r/` (`vpro` `v2.0.0`) over the shared SQLite WAL contract:
