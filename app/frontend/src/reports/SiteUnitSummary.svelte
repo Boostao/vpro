@@ -8,6 +8,7 @@
   import SiteUnitSummaryWorkbookPanel from './SiteUnitSummaryWorkbookPanel.svelte';
   import { summarySpeciesCriteria, validateSummarySpecies, type ValidatedSummarySpecies } from './siteUnitSummarySpecies';
   import { extendedSummaryWorkbookPublicationSession, type ExtendedSummaryWorkbookOptions } from './siteUnitSummaryExtendedWorkbook';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, projectPath, su, suPath, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
@@ -134,7 +135,16 @@
       ready = allowed;
       if (!ready) error = `Saved site-unit type ${siteUnitType} requires an eligible active Site Unit table; choose Hierarchy (~) or Field-Derived.`;
     } catch (cause) {
-      if (request === generation) error = `Summary options unavailable; no defaults or configuration writes: ${String(cause)}`;
+      if (request === generation) {
+        error = `Summary options unavailable; no defaults or configuration writes: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Environment options failed', error, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -166,7 +176,16 @@
           : validateSiteUnitSummary(value, contextId, project, projectPath, su, suPath, requestedMethod, requestedMode);
       }
     } catch (cause) {
-      if (request === generation) error = `Summary unavailable; no data or configuration writes: ${String(cause)}`;
+      if (request === generation) {
+        error = `Summary unavailable; no data or configuration writes: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Environment report failed', error, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -198,7 +217,16 @@
         ready = siteUnitType === 3;
       }
     } catch (cause) {
-      if (request === generation) error = `Saved summary options unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved summary options unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Environment options load failed', error, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -214,7 +242,16 @@
         applyFullPreferencesToUI(fullValue.values);
       }
     } catch (cause) {
-      if (request === generation) error = `Full summary preferences unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Full summary preferences unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Environment full preferences load failed', error, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -225,7 +262,16 @@
     cancel(); error = '';
     try {
       await preferences.save(request => EnvironmentReportService.SaveSiteUnitSummaryPreferences(contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Environment options save failed', error, {
+          category: 'reports',
+          source: 'Summary Environment',
+          contextTag: (typeof project === 'string' && project) || undefined,
+        });
+      }
+    }
   }
   async function saveFullPreferences() {
     if (workbookBusy || !fullPreferences || busy || speciesBarrier || fullPreferenceView?.busy || fullPreferenceView?.blocked) return;
@@ -233,7 +279,16 @@
     try {
       syncFullDraftFromUI();
       await fullPreferences.save(request => EnvironmentReportService.SaveFullSiteUnitSummaryPreferences(contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Environment full preferences save failed', error, {
+          category: 'reports',
+          source: 'Summary Environment',
+          contextTag: (typeof project === 'string' && project) || undefined,
+        });
+      }
+    }
   }
   function editMethod(value: number) {
     if (workbookBusy || speciesBarrier) return;
@@ -282,7 +337,18 @@
 </script>
 
 <section class="summary" data-site-unit-summary aria-label="Summary Environment">
-  <h1>Summary Environment</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+    <h1>Summary Environment</h1>
+    <div class="sticky-actions">
+      <button data-source-control="btnCreateReport" disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed} onclick={show}>Create Report</button>
+      {#if preferencesEnabled}
+        <button data-summary-preferences-load disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked} onclick={loadPreferences}>Load saved summary options</button>
+      {:else}
+        <button data-summary-options-reload disabled={busy || workbookBusy} onclick={options}>Reload summary options</button>
+      {/if}
+      {#if busy}<button data-summary-cancel onclick={cancel}>Cancel report read</button><p role="status">Reading owned summary options or snapshots...</p>{/if}
+    </div>
+  </header>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
   {#if preferenceView?.error}<p role="alert" class="error">{preferenceView.error}</p>{/if}
   {#if preferenceView?.draftError}<p role="alert" class="error">{preferenceView.draftError}</p>{/if}
@@ -342,10 +408,8 @@
   <p>Active site-unit type:
     {siteUnitType === 1 ? 'Normal SU (1)' : siteUnitType === 2 ? 'Hierarchy (~) Breakpoints (2)' :
       siteUnitType === 3 ? 'Field-Derived (3)' : 'not loaded'}.</p>
-  <div class="actions">
-    <button data-source-control="btnCreateReport" disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed} onclick={show}>Create Report</button>
-    {#if preferencesEnabled}
-      <button data-summary-preferences-load disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked} onclick={loadPreferences}>Load saved summary options</button>
+  {#if preferencesEnabled}
+    <div class="actions">
       <button data-summary-preferences-save disabled={busy || workbookBusy || speciesBarrier || !!preferenceView?.busy || !!preferenceView?.blocked || !!preferenceView?.draftError ||
         !preferenceView?.saved || !ready || siteUnitType !== 1} onclick={savePreferences}>Save normal-SU options</button>
       <button data-summary-preferences-undo disabled={workbookBusy || !!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.saved}
@@ -367,11 +431,8 @@
             onclick={() => { if (!workbookBusy) fullPreferences?.acknowledge(); }}>Acknowledge full preference outcome</button>
         {/if}
       {/if}
-    {:else}
-      <button data-summary-options-reload disabled={busy || workbookBusy} onclick={options}>Reload summary options</button>
-    {/if}
-    {#if busy}<button data-summary-cancel onclick={cancel}>Cancel report read</button><p role="status">Reading owned summary options or snapshots...</p>{/if}
-  </div>
+    </div>
+  {/if}
   {#if mode === 'layer' && !speciesView?.enabled}
     <SiteUnitSummaryWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} {method} {siteUnitType} allowConfiguredScope={true}
       disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
@@ -466,6 +527,9 @@
 
 <style>
   .summary { display: grid; gap: 1rem; padding: 1rem; max-width: 90rem; margin: auto; background: #F2F2F2; color: #313132; min-width: 0; }
+  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
+  .report-sticky-bar h1 { margin: 0; }
+  .sticky-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
   h1, h2, h3 { font-weight: 600; margin: .8rem 0; color: #003366; }
   h1 { font-size: 1.5rem; } h2 { font-size: 1.2rem; }
   fieldset, .actions { display: flex; flex-wrap: wrap; gap: 1rem; margin: .5rem 0; padding: .75rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; }

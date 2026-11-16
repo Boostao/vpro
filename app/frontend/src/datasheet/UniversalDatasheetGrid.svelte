@@ -4,7 +4,7 @@
   import {
     cellsSemanticallyEqual, computeNextGridCell, computeVirtualWindow, defaultDatasheetBackendPort,
     formatCellForEditor, formatTSVRange, isColumnEditable, isEditableChildTable,
-    isReadOnlyDatasheetTable, normalizeGridRange, parseAndValidateCellInput, parseTSVClipboard,
+    isReadOnlyDatasheetTable, normalizeGridRange, notifications, parseAndValidateCellInput, parseTSVClipboard,
     shouldNavigateOnArrowKey, toggleMultiColumnSort,
     type DatasheetBackendPort, type DatasheetCellEdit, type DatasheetColumnMeta, type DatasheetFilterSpec,
     type DatasheetFindReplacePreview, type DatasheetPage, type DatasheetSortSpec,
@@ -110,6 +110,27 @@
 
   const draftKey = (rowId: string, column: string) => `${rowId}::${column}`;
 
+  function notifyGrid(severity: 'success' | 'info' | 'error', title: string, message: string) {
+    if (typeof notifications === 'undefined') return;
+    const opts = {
+      category: 'entry' as const,
+      source: 'Datasheet Grid',
+      contextTag: project || undefined,
+    };
+    if (severity === 'success') notifications.success(title, message, opts);
+    else if (severity === 'error') notifications.error(title, message, opts);
+    else notifications.info(title, message, opts);
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      if (page && !saving && !activeTableReadOnly && validEditCount > 0 && invalidDraftCount === 0) {
+        void saveDrafts();
+      }
+    }
+  }
+
   function buildActiveFilterSpecs(): DatasheetFilterSpec[] {
     const out: DatasheetFilterSpec[] = [];
     for (const [col, val] of Object.entries(columnFilters)) {
@@ -154,7 +175,10 @@
       }
       if (!options?.preserveStatus) statusBanner = '';
     } catch (err) {
-      if (reqGen === generation) errorMessage = String(err);
+      if (reqGen === generation) {
+        errorMessage = String(err);
+        notifyGrid('error', 'Datasheet load failed', errorMessage);
+      }
     } finally {
       if (reqGen === generation) busy = false;
     }
@@ -170,7 +194,10 @@
       if (reqGen !== generation) return;
       page = loaded; offset = loaded.offset;
     } catch (err) {
-      if (reqGen === generation) errorMessage = String(err);
+      if (reqGen === generation) {
+        errorMessage = String(err);
+        notifyGrid('error', 'Datasheet page load failed', errorMessage);
+      }
     } finally {
       if (reqGen === generation) busy = false;
     }
@@ -202,11 +229,16 @@
 
   function discardDrafts() {
     drafts = {}; errorMessage = ''; statusBanner = 'Discarded unsaved datasheet edits.';
+    notifyGrid('info', 'Datasheet edits discarded', statusBanner);
   }
 
   async function saveDrafts() {
     if (!page || saving || validEditCount === 0) return;
-    if (invalidDraftCount > 0) { errorMessage = `Resolve ${invalidDraftCount} invalid cell(s) before saving.`; return; }
+    if (invalidDraftCount > 0) {
+      errorMessage = `Resolve ${invalidDraftCount} invalid cell(s) before saving.`;
+      notifyGrid('error', 'Datasheet save blocked by invalid cells', errorMessage);
+      return;
+    }
     saving = true; errorMessage = '';
     try {
       const edits: DatasheetCellEdit[] = draftEntries
@@ -215,9 +247,11 @@
       const res = await port.applyEdits(contextId, { tableKey: page.tableKey, edits });
       drafts = {};
       statusBanner = `Saved ${res.updatedCells} cell(s) across ${res.updatedRows} row(s) (${res.auditRows} audit record(s)).`;
+      notifyGrid('success', `Saved ${page.tableName} edits`, statusBanner);
       await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
     } catch (err) {
       errorMessage = `Save failed (no changes were saved): ${String(err)}`;
+      notifyGrid('error', 'Datasheet save failed', errorMessage);
     } finally {
       saving = false;
     }
@@ -276,6 +310,7 @@
       event.preventDefault();
       event.clipboardData.setData('text/plain', tsv);
       statusBanner = `Copied ${norm.endRow - norm.startRow + 1}x${norm.endCol - norm.startCol + 1} spreadsheet (tab-separated) block to clipboard.`;
+      notifyGrid('info', 'Copied datasheet range', statusBanner);
     }
   }
 
@@ -299,6 +334,7 @@
       startCol: anchorCol, endCol: Math.min(orderedColumns.length - 1, anchorCol + (matrix[0]?.length ?? 1) - 1),
     };
     statusBanner = `Pasted ${applied} cell(s) from spreadsheet (tab-separated) clipboard. Review and click Save Edits to apply.`;
+    notifyGrid('info', 'Pasted datasheet cells', statusBanner);
   }
 
   function handleHeaderSort(colName: string, event: MouseEvent) {
@@ -318,6 +354,7 @@
       }));
     } catch (err) {
       errorMessage = `Find/Replace preview failed: ${String(err)}`;
+      notifyGrid('error', 'Find/Replace preview failed', errorMessage);
     } finally {
       findBusy = false;
     }
@@ -332,9 +369,11 @@
       const res = await port.applyEdits(contextId, { tableKey: page.tableKey, edits: validEdits });
       findPreview = null;
       statusBanner = `Applied ${res.updatedCells} replacement(s) on ${page.tableName} (${res.auditRows} audit record(s)).`;
+      notifyGrid('success', `Find/Replace applied on ${page.tableName}`, statusBanner);
       await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
     } catch (err) {
       errorMessage = `Find/Replace failed (no changes were saved): ${String(err)}`;
+      notifyGrid('error', 'Find/Replace failed', errorMessage);
     } finally {
       saving = false;
     }
@@ -366,7 +405,11 @@
   async function confirmDeleteSelectedRow() {
     if (!page || !activeChildTableEditable || !pendingDeleteRow || deleteBusy) return;
     const fn = port.deleteChildRow ?? defaultDatasheetBackendPort.deleteChildRow;
-    if (!fn) { errorMessage = 'Child row delete port is unavailable.'; return; }
+    if (!fn) {
+      errorMessage = 'Child row delete port is unavailable.';
+      notifyGrid('error', 'Delete child row failed', errorMessage);
+      return;
+    }
     deleteBusy = true; errorMessage = '';
     try {
       const target = pendingDeleteRow;
@@ -376,9 +419,11 @@
       });
       pendingDeleteRow = null; activeCell = null; selectionAnchor = null; selectionRange = null;
       statusBanner = `Deleted row ID ${res.deletedId} (plot ${res.plotNumber}) from ${res.tableName} (${res.auditRows} audit record(s)).`;
+      notifyGrid('success', `Deleted row from ${res.tableName}`, statusBanner);
       await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
     } catch (err) {
       errorMessage = `Delete child row failed: ${String(err)}`;
+      notifyGrid('error', 'Delete child row failed', errorMessage);
     } finally {
       deleteBusy = false;
     }
@@ -388,23 +433,25 @@
   onDestroy(() => { generation++; reads.cancelAll(); onDirtyChange?.(false); onBusyChange?.(false); });
 </script>
 
-<svelte:window onmouseup={() => { isMouseSelecting = false; }} />
+<svelte:window onkeydown={handleWindowKeydown} onmouseup={() => { isMouseSelecting = false; }} />
 
 <section class="vpro-datasheet-workbench" data-tour="datasheet-grid-root" aria-label="Universal Project Datasheet Grid" oncopy={handleCopySelection}>
-  <DatasheetHeader
-    {project} {su} {hierarchy} {tables} {activeTableKey} {page}
-    {activeTableReadOnly} {activeChildTableEditable}
-    bind:scopeToActiveSU bind:globalSearch bind:findDrawerOpen
-    {insertDrawerOpen} {busy} {saving} {insertBusy} {deleteBusy}
-    hasActiveCell={!!(activeCell && page?.rows[activeCell.row])}
-    draftCount={draftEntries.length} {validEditCount} {invalidDraftCount}
-    onApplyFilter={() => void loadPageOnly(0)}
-    onOpenInsert={openInsertChildDrawer}
-    onRequestDelete={requestDeleteSelectedRow}
-    onDiscard={discardDrafts}
-    onSave={() => void saveDrafts()}
-    onSelectTable={selectTable}
-  />
+  <div data-workbench-sticky-bar class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200 space-y-2">
+    <DatasheetHeader
+      {project} {su} {hierarchy} {tables} {activeTableKey} {page}
+      {activeTableReadOnly} {activeChildTableEditable}
+      bind:scopeToActiveSU bind:globalSearch bind:findDrawerOpen
+      {insertDrawerOpen} {busy} {saving} {insertBusy} {deleteBusy}
+      hasActiveCell={!!(activeCell && page?.rows[activeCell.row])}
+      draftCount={draftEntries.length} {validEditCount} {invalidDraftCount}
+      onApplyFilter={() => void loadPageOnly(0)}
+      onOpenInsert={openInsertChildDrawer}
+      onRequestDelete={requestDeleteSelectedRow}
+      onDiscard={discardDrafts}
+      onSave={() => void saveDrafts()}
+      onSelectTable={selectTable}
+    />
+  </div>
 
   {#if activeTableReadOnly && page}
     <p role="status" class="vpro-ds-status" data-readonly-table-banner>
@@ -412,7 +459,6 @@
     </p>
   {/if}
   {#if errorMessage}<p role="alert" class="vpro-ds-alert">{errorMessage}</p>{/if}
-  {#if statusBanner}<p role="status" class="vpro-ds-status">{statusBanner}</p>{/if}
 
   {#if pendingDeleteRow && page}
     <div class="vpro-ds-confirm-bar" role="alertdialog" aria-label="Confirm Child Row Deletion" data-delete-confirm-bar>
@@ -435,8 +481,15 @@
     <DatasheetInsertDrawer
       {contextId} {page} {orderedColumns} seedPlotNumber={insertSeedPlot} {port} {activeChildTableEditable}
       bind:insertDrawerOpen bind:insertBusy
-      onError={msg => { errorMessage = msg; }}
-      onInserted={async banner => { statusBanner = banner; await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true }); }}
+      onError={msg => {
+        errorMessage = msg;
+        if (msg) notifyGrid('error', 'Insert child row failed', msg);
+      }}
+      onInserted={async banner => {
+        statusBanner = banner;
+        notifyGrid('success', `Inserted row into ${page?.tableName ?? activeTableKey}`, banner);
+        await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
+      }}
     />
   {/if}
 

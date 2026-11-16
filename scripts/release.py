@@ -31,7 +31,7 @@ DESKTOP_ASSETS = {
        for arch in ARCHES},
     "macos-universal": ("vpro-macos-universal.dmg", "vpro-macos-universal.zip"),
     **{f"linux-{arch}": tuple(f"vpro-linux-{arch}{suffix}"
-                            for suffix in (".AppImage", ".deb", ".tar.gz"))
+                            for suffix in (".deb", ".rpm", ".tar.gz"))
        for arch in ARCHES},
 }
 ASSETS = {
@@ -440,6 +440,22 @@ def validate_deb(path, arch, full_version):
     cpu(tar_payload(members[payload[0]], "usr/bin/VPro"), "elf", arch)
 
 
+def validate_rpm(path, arch, full_version):
+    data = path.read_bytes()
+    require(len(data) > 96 and data[:4] == b"\xed\xab\xee\xdb",
+            f"Expected RPM package: {path}")
+    require(b"\x8e\xad\xe8\x01" in data[96:1024],
+            f"Missing RPM header magic: {path}")
+    lead_name = data[10:76].split(b"\x00", 1)[0].decode("utf-8", errors="replace")
+    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
+    expected_prefix = f"vpro-{full_version}-1"
+    require(lead_name.startswith(expected_prefix),
+            f"rpm lead name mismatch: {lead_name!r}, expected prefix {expected_prefix!r}")
+    if len(expected_prefix) + 1 + len(rpm_arch) <= 65:
+        require(lead_name.endswith(f".{rpm_arch}"),
+                f"rpm lead arch mismatch: {lead_name!r}, expected .{rpm_arch}")
+
+
 def check_bundle(bundle, numeric):
     check_cpu(bundle / "Contents/MacOS/VPro", "macho", "universal")
     info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
@@ -540,17 +556,12 @@ def package(root, platform, *, scope=None):
         shutil.copyfile(installer, destination / ASSETS[group][2])
     elif platform == "linux":
         check_cpu(binary, "elf", arch)
-        appimage = unique_output(app_root, ".AppImage")
-        check_cpu(appimage, "elf", arch)
-        require(appimage.read_bytes()[8:11] == b"AI\x02", "Expected type-2 AppImage")
-        with tempfile.TemporaryDirectory() as temporary:
-            run(str(appimage.resolve()), "--appimage-extract", cwd=temporary)
-            check_cpu(Path(temporary) / "squashfs-root/usr/bin/VPro", "elf", arch)
         deb = unique_output(app_root, ".deb")
         validate_deb(deb, arch, full)
-        shutil.copyfile(appimage, destination / ASSETS[group][0])
-        (destination / ASSETS[group][0]).chmod(0o755)
-        shutil.copyfile(deb, destination / ASSETS[group][1])
+        rpm = unique_output(app_root, ".rpm")
+        validate_rpm(rpm, arch, full)
+        shutil.copyfile(deb, destination / ASSETS[group][0])
+        shutil.copyfile(rpm, destination / ASSETS[group][1])
         with tarfile.open(destination / ASSETS[group][2], "w:gz") as archive:
             archive.add(binary, arcname="VPro")
     else:
@@ -593,8 +604,8 @@ def validate_portable(directory, group, full):
             require(archive.read("VPro.exe") == binary, "Windows ZIP payload differs")
     elif group.startswith("linux-"):
         arch = group.removeprefix("linux-")
-        check_cpu(directory / ASSETS[group][0], "elf", arch)
-        validate_deb(directory / ASSETS[group][1], arch, full)
+        validate_deb(directory / ASSETS[group][0], arch, full)
+        validate_rpm(directory / ASSETS[group][1], arch, full)
         cpu(tar_payload((directory / ASSETS[group][2]).read_bytes(), "VPro"), "elf", arch)
     else:
         with zipfile.ZipFile(directory / ASSETS[group][1]) as archive:

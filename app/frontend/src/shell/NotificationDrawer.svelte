@@ -4,6 +4,7 @@
   import {
     filterNotificationEntries,
     notifications,
+    type NotificationCategory,
     type NotificationFilter,
     type NotificationStateSnapshot,
   } from './notificationService.svelte';
@@ -40,9 +41,28 @@
   const filterTabs: { id: NotificationFilter; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'errors', label: 'Errors' },
-    { id: 'lmh25', label: 'LMH25 Warnings' },
-    { id: 'background', label: 'Background & Imports' },
+    { id: 'entry', label: 'Data Entry' },
+    { id: 'lmh25', label: 'LMH25 & QC' },
+    { id: 'reports', label: 'Reports & Exports' },
+    { id: 'background', label: 'System & Sync' },
   ];
+
+  function defaultCategorySource(category: NotificationCategory): string {
+    switch (category) {
+      case 'entry':
+        return 'Data Entry';
+      case 'lmh25':
+        return 'LMH25 Rule';
+      case 'reports':
+        return 'Reports & Exports';
+      case 'admin':
+        return 'System & Admin';
+      case 'background':
+        return 'Background';
+      default:
+        return 'Workspace';
+    }
+  }
 
   function formatTimestamp(iso: string) {
     try {
@@ -137,7 +157,7 @@
         </div>
       </div>
 
-      <div class="vpro-notif-list">
+      <div class="vpro-notif-list" role={filtered.length > 0 ? 'list' : undefined}>
         {#if filtered.length === 0}
           <div class="vpro-notif-empty">
             <p class="font-semibold text-[#313132]">No notifications in this view</p>
@@ -147,43 +167,65 @@
           </div>
         {:else}
           {#each filtered as item (item.id)}
-            <button
-              type="button"
+            <div
+              role="listitem"
               class="vpro-notif-item vpro-notif-{item.severity}"
               class:unread={!item.read}
               data-notification-entry={item.id}
-              onclick={() => controller.markRead(item.id)}
             >
-              <div class="vpro-notif-item-icon" aria-hidden="true">
-                {#if item.severity === 'error'}
-                  <AlertCircle size={16} />
-                {:else if item.severity === 'warning'}
-                  <AlertTriangle size={16} />
-                {:else if item.severity === 'success'}
-                  <CheckCircle2 size={16} />
-                {:else}
-                  <Info size={16} />
-                {/if}
-              </div>
-              <div class="vpro-notif-item-content">
-                <div class="vpro-notif-item-meta">
-                  <span class="vpro-notif-source">{item.source ?? (item.category === 'lmh25' ? 'LMH25 Rule' : item.category === 'background' ? 'Background' : 'Workspace')}</span>
-                  <time class="vpro-notif-time tabular-nums" datetime={item.timestampIso}>{formatTimestamp(item.timestampIso)}</time>
-                </div>
-                <div class="vpro-notif-item-heading">
-                  <strong>{item.title}</strong>
-                  {#if item.repeatCount > 1}
-                    <span class="vpro-notif-count tabular-nums">×{item.repeatCount}</span>
-                  {/if}
-                  {#if !item.read}
-                    <span class="vpro-notif-unread-dot" aria-label="Unread"></span>
+              <button
+                type="button"
+                class="vpro-notif-item-main"
+                onclick={() => controller.markRead(item.id)}
+              >
+                <div class="vpro-notif-item-icon" aria-hidden="true">
+                  {#if item.severity === 'error'}
+                    <AlertCircle size={16} />
+                  {:else if item.severity === 'warning'}
+                    <AlertTriangle size={16} />
+                  {:else if item.severity === 'success'}
+                    <CheckCircle2 size={16} />
+                  {:else}
+                    <Info size={16} />
                   {/if}
                 </div>
-                {#if item.message}
-                  <p>{item.message}</p>
-                {/if}
-              </div>
-            </button>
+                <div class="vpro-notif-item-content">
+                  <div class="vpro-notif-item-meta">
+                    <span class="vpro-notif-source-group">
+                      <span class="vpro-notif-source">{item.source ?? defaultCategorySource(item.category)}</span>
+                      {#if item.contextTag}
+                        <span class="vpro-notif-context tabular-nums" data-notification-context>{item.contextTag}</span>
+                      {/if}
+                    </span>
+                    <time class="vpro-notif-time tabular-nums" datetime={item.timestampIso}>{formatTimestamp(item.timestampIso)}</time>
+                  </div>
+                  <div class="vpro-notif-item-heading">
+                    <strong>{item.title}</strong>
+                    {#if item.repeatCount > 1}
+                      <span class="vpro-notif-count tabular-nums">×{item.repeatCount}</span>
+                    {/if}
+                    {#if !item.read}
+                      <span class="vpro-notif-unread-dot" aria-label="Unread"></span>
+                    {/if}
+                  </div>
+                  {#if item.message}
+                    <p>{item.message}</p>
+                  {/if}
+                </div>
+              </button>
+              {#if item.action}
+                <div class="vpro-notif-item-footer">
+                  <button
+                    type="button"
+                    class="vpro-notif-action-btn"
+                    data-notification-action={item.id}
+                    onclick={() => controller.triggerAction(item.id)}
+                  >
+                    {item.action.label}
+                  </button>
+                </div>
+              {/if}
+            </div>
           {/each}
         {/if}
       </div>
@@ -317,16 +359,33 @@
   }
   .vpro-notif-item {
     width: 100%;
-    text-align: left;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
     padding: 0.65rem 0.75rem;
     border-radius: 5px;
     border: 1px solid var(--vpro-border, #d1d5db);
     border-left-width: 3px;
     background: #ffffff;
     font-size: 0.78rem;
+  }
+  .vpro-notif-item-main {
+    width: 100%;
+    text-align: left;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.6rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  .vpro-notif-item-main:focus-visible {
+    outline: 2px solid var(--vpro-focus-ring, #1a5a96);
+    outline-offset: 2px;
+    border-radius: 3px;
   }
   .vpro-notif-item.unread {
     background: var(--vpro-navy-tint, #ebf1f8);
@@ -363,13 +422,35 @@
     font-size: 0.68rem;
     color: var(--vpro-ink-muted, #5f6b7a);
   }
+  .vpro-notif-source-group {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    min-width: 0;
+  }
   .vpro-notif-source {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
+  .vpro-notif-context {
+    font-family: var(--vpro-font-mono, monospace);
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.3;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    background: var(--vpro-navy-tint, #ebf1f8);
+    border: 1px solid var(--vpro-info-border, #9ec3e6);
+    color: var(--vpro-navy, #003366);
+    text-transform: none;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
   .vpro-notif-time {
     font-family: var(--vpro-font-mono, monospace);
+    flex: none;
   }
   .vpro-notif-item-heading {
     display: flex;
@@ -399,10 +480,37 @@
     line-height: 1.4;
     overflow-wrap: anywhere;
   }
+  .vpro-notif-item-footer {
+    display: flex;
+    justify-content: flex-start;
+    padding-left: calc(16px + 0.6rem);
+  }
+  .vpro-notif-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.22rem 0.55rem;
+    border-radius: var(--vpro-radius-sm, 4px);
+    border: 1px solid var(--vpro-navy, #003366);
+    background: #ffffff;
+    color: var(--vpro-navy, #003366);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .vpro-notif-action-btn:hover {
+    background: var(--vpro-navy, #003366);
+    color: #ffffff;
+  }
+  .vpro-notif-action-btn:focus-visible {
+    outline: 2px solid var(--vpro-focus-ring, #1a5a96);
+    outline-offset: 2px;
+  }
   @media (pointer: coarse) {
     .vpro-notif-close,
     .vpro-notif-filters button,
-    .vpro-notif-actions button {
+    .vpro-notif-actions button,
+    .vpro-notif-action-btn {
       min-height: 44px;
       padding: 0.5rem 0.75rem;
     }

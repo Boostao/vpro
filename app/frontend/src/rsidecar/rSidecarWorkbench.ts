@@ -1,5 +1,8 @@
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { EnvironmentReportService } from '../../bindings/github.com/boostao/vpro/app';
+import { notifications } from '../shell/notificationService.svelte';
+
+export { notifications };
 
 export const CANDIDATE_PREFIX_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,13}$/;
 export const SU_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;

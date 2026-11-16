@@ -1,8 +1,40 @@
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { validateProjectNameInput, parseLiteralTokenList } from './projectAdminWorkbench';
 import { ContextService } from '../../bindings/github.com/boostao/vpro/app';
+import { notifications } from '../shell/notificationService.svelte';
 
-export { validateProjectNameInput, parseLiteralTokenList };
+export { validateProjectNameInput, parseLiteralTokenList, notifications };
+
+/**
+ * Redacts PostgreSQL DSNs, password/token key-value pairs, Bearer credentials,
+ * and literal session password values before messages are shown or routed to notifications.
+ */
+export function redactCloudSecrets(message: string, secrets: readonly string[] = []): string {
+  let out = String(message ?? '');
+  if (!out) return '';
+  out = out.replace(/postgres(?:ql)?:\/\/[^\s'"`<>]+/gi, 'postgres://<redacted>');
+  out = out.replace(
+    /\b(PGPASSWORD|password|passwd|pwd|secret|token|api[_-]?key)\s*([:=])\s*(?:'[^']*'|"[^"]*"|[^\s;,&'"]+)/gi,
+    '$1$2<redacted>'
+  );
+  out = out.replace(/\bBearer\s+\S+/gi, 'Bearer <redacted>');
+  for (const raw of secrets) {
+    if (typeof raw !== 'string') continue;
+    const candidates = [raw, raw.trim()].filter((val, idx, arr) => val.length >= 2 && arr.indexOf(val) === idx);
+    for (const candidate of candidates) {
+      out = out.split(candidate).join('<redacted>');
+      try {
+        const encoded = encodeURIComponent(candidate);
+        if (encoded && encoded !== candidate) {
+          out = out.split(encoded).join('<redacted>');
+        }
+      } catch {
+        // Ignore malformed surrogate sequences during redaction.
+      }
+    }
+  }
+  return out;
+}
 
 export type CloudRoleMode = 'contributor' | 'custodian';
 export type CloudMergeResolution = 'keep_target' | 'accept_source';

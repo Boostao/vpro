@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { untrack } from 'svelte';
   import PicturePanel from './PicturePanel.svelte';
@@ -49,14 +53,38 @@
   $effect(() => { onBusyChange(busy || metadataBlocked || creationBlocked || lifecycleBlocked); });
 
   function selectPlot() {
-    if (busy) { error = 'Wait for or cancel the current picture read before selecting another plot.'; return; }
-    if (metadataBlocked) { error = 'Finish or explicitly discard the retained picture metadata draft before replacing its literal parent.'; return; }
-    if (creationBlocked) { error = 'Resolve the retained picture selection or creation receipt before replacing its literal parent.'; return; }
-    if (lifecycleBlocked) { error = 'Finish the retained picture lifecycle review or resolve/acknowledge its receipt before replacing its literal parent.'; return; }
+    const contextTag = selected ? `Plot ${selected}` : project || undefined;
+    if (busy) {
+      error = 'Wait for or cancel the current picture read before selecting another plot.';
+      if (typeof notifications !== 'undefined') notifications.error('Plot selection blocked', error, { category: 'entry', source: 'Plot Pictures', contextTag });
+      return;
+    }
+    if (metadataBlocked) {
+      error = 'Finish or explicitly discard the retained picture metadata draft before replacing its literal parent.';
+      if (typeof notifications !== 'undefined') notifications.error('Plot selection blocked', error, { category: 'entry', source: 'Plot Pictures', contextTag });
+      return;
+    }
+    if (creationBlocked) {
+      error = 'Resolve the retained picture selection or creation receipt before replacing its literal parent.';
+      if (typeof notifications !== 'undefined') notifications.error('Plot selection blocked', error, { category: 'entry', source: 'Plot Pictures', contextTag });
+      return;
+    }
+    if (lifecycleBlocked) {
+      error = 'Finish the retained picture lifecycle review or resolve/acknowledge its receipt before replacing its literal parent.';
+      if (typeof notifications !== 'undefined') notifications.error('Plot selection blocked', error, { category: 'entry', source: 'Plot Pictures', contextTag });
+      return;
+    }
     const invalid = plotLookupInputError(plot);
-    if (invalid) { error = invalid; return; }
+    if (invalid) {
+      error = invalid;
+      if (typeof notifications !== 'undefined') notifications.error('Invalid plot number', error, { category: 'entry', source: 'Plot Pictures', contextTag });
+      return;
+    }
     error = '';
     selected = plot;
+    if (typeof notifications !== 'undefined') {
+      notifications.info('Plot selected for pictures', `Selected plot ${plot}.`, { category: 'entry', source: 'Plot Pictures', contextTag: `Plot ${plot}` });
+    }
   }
   function reading(value: boolean) {
     busy = value;
@@ -65,15 +93,17 @@
 </script>
 
 <section class="manager" data-picture-manager aria-label="Plot Pictures">
-  <h1>Plot Pictures</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200" data-workbench-sticky-bar>
+    <h1>Plot Pictures</h1>
+    <p>Owned project {project}. Select an exact parent; Load checks its literal membership in the current context.</p>
+    <form onsubmit={event => { event.preventDefault(); selectPlot(); }}>
+      <label for="picture-manager-plot">Plot number
+        <input id="picture-manager-plot" bind:value={plot} disabled={busy || metadataBlocked || creationBlocked || lifecycleBlocked} />
+      </label>
+      <button type="submit" disabled={busy || metadataBlocked || creationBlocked || lifecycleBlocked}>Select exact plot</button>
+    </form>
+  </header>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
-  <p>Owned project {project}. Select an exact parent; Load checks its literal membership in the current context.</p>
-  <form onsubmit={event => { event.preventDefault(); selectPlot(); }}>
-    <label for="picture-manager-plot">Plot number
-      <input id="picture-manager-plot" bind:value={plot} disabled={busy || metadataBlocked || creationBlocked || lifecycleBlocked} />
-    </label>
-    <button type="submit" disabled={busy || metadataBlocked || creationBlocked || lifecycleBlocked}>Select exact plot</button>
-  </form>
   {#if selected}
     <p data-picture-manager-parent>Selected literal parent: {JSON.stringify(selected)}</p>
     {#key selected}

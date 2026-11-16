@@ -91,7 +91,7 @@ To replace `vuser.ca` (`http://vuser.ca/vpro64/index.htm`) and unify seamlessly 
 
 ```mermaid
 flowchart LR
-    Tag["Git Tag v2.x.y Push"] --> BuildCI["GitHub Actions Release Matrix<br/>• Win amd64 & arm64 (OV/EV Authenticode Signed)<br/>• macOS Universal .dmg (Developer ID + Notarized)<br/>• Linux amd64 & arm64 (.deb / AppImage)"]
+    Tag["Git Tag v2.x.y Push"] --> BuildCI["GitHub Actions Release Matrix<br/>• Win amd64 & arm64 (OV/EV Authenticode Signed)<br/>• macOS Universal .dmg (Developer ID + Notarized)<br/>• Linux amd64 & arm64 (.deb / .rpm / .tar.gz)"]
     BuildCI --> Manifest["Generate Static release-manifest.json<br/>+ SHA256SUMS.txt + SBOM<br/>(Baked at Build Time — Zero Browser API Calls!)"]
     Manifest --> SiteBuild["Vite / Quarto Static Build (site-dist/)<br/>Compiled CSS · BC Sans WOFF2 · User Guides ·<br/>Excludes Internal *_CONTRACT.md Dev Specs"]
     SiteBuild --> Deploy["Deploy Dedicated Artifact to Pages / BECWeb 2.0"]

@@ -5,6 +5,7 @@
   import { validateLifeformSummary, lifeformCellText, lifeformRatioText, type LifeformSummaryPreview } from './lifeformSummary';
   import { validateSpeciesAttributeSummary, speciesAttributeCountText, type SpeciesAttributeSummaryPreview } from './speciesAttributeSummary';
   import LifeformWorkbookPanel from './LifeformWorkbookPanel.svelte';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, projectPath, su, suPath, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
@@ -58,7 +59,20 @@
         previewKey = key;
       }
     } catch (cause) {
-      if (request === generation && key === ownerKey) error = `${kind === 'attributes' ? 'Species attribute summary' : 'Lifeform Summary'} unavailable; no data or configuration writes: ${String(cause)}`;
+      if (request === generation && key === ownerKey) {
+        error = `${kind === 'attributes' ? 'Species attribute summary' : 'Lifeform Summary'} unavailable; no data or configuration writes: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error(
+            kind === 'attributes' ? 'Species attribute summary failed' : 'Lifeform Summary failed',
+            error,
+            {
+              category: 'reports',
+              source: 'Lifeform Summary',
+              contextTag: (typeof project === 'string' && project) || undefined,
+            },
+          );
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -67,7 +81,19 @@
 </script>
 
 <section class="lifeform-summary" data-lifeform-summary aria-label="Lifeform Summary">
-  <h1>Lifeform Summary</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+    <h1>Lifeform Summary</h1>
+    <div class="actions">
+      {#if unitScope === 'su'}
+        <button onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview Lifeform Summary</button>
+        <button onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview species attribute summaries</button>
+      {:else}
+        <button data-lifeform-hierarchy-preview onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None'}>Preview Lifeform (~) Summary</button>
+        <button data-attributes-hierarchy-preview onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None'}>Preview species attribute (~) summaries</button>
+      {/if}
+      {#if busy}<button onclick={cancel}>Cancel preview</button><p role="status">Reading owned project and SU…</p>{/if}
+    </div>
+  </header>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
   <p>Project {project}; selected SU {su}. Profile navigation does not filter this report.</p>
   <div class="scope-controls">
@@ -87,16 +113,6 @@
     {/if}
   </div>
   {#if scopeBlocked}<p>{unitScope === 'hierarchy' ? 'An active Site Unit selection or USysSuTableDynamic (not None) is required for hierarchy breakpoint resolution.' : 'A selected normal SU is required. Switch Unit Scope to Hierarchy Breakpoints (~) for breakpoint resolution.'}</p>{/if}
-  <div class="actions">
-    {#if unitScope === 'su'}
-      <button onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview Lifeform Summary</button>
-      <button onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None' || su === 'USysSuTableDynamic'}>Preview species attribute summaries</button>
-    {:else}
-      <button data-lifeform-hierarchy-preview onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None'}>Preview Lifeform (~) Summary</button>
-      <button data-attributes-hierarchy-preview onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None'}>Preview species attribute (~) summaries</button>
-    {/if}
-    {#if busy}<button onclick={cancel}>Cancel preview</button><p role="status">Reading owned project and SU…</p>{/if}
-  </div>
   <LifeformWorkbookPanel owner={{ contextId, project, projectPath, su, suPath }} disabled={busy}
     onBusyChange={(held) => { workbookBusy = held; reportBusy(); }} />
   {#if currentPreview}
@@ -155,6 +171,7 @@
 
 <style>
   .lifeform-summary { display: grid; gap: 1rem; padding: 1rem; background: #F2F2F2; color: #313132; min-width: 0; }
+  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
   h1, h2 { margin: 0; color: #003366; }
   p { margin: 0; }
   .scope-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; background: #FFFFFF; padding: .85rem; border: 1px solid #D8D8D8; border-radius: .5rem; }

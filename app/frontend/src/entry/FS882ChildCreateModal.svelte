@@ -178,6 +178,8 @@
 </script>
 
 {#if region === 'toolbars'}
+  {#if speciesUnsaved || personalDraft || collectedUnsaved || attributeUnsaved || soilUnsaved || otherUnsaved || creationDraft || deletionReview || heightUnsaved}
+  <div class="sticky top-0 z-20 bg-white/95 py-1 shadow-xs" data-sticky-child-draft-bar>
   {#if speciesUnsaved}
     <div class="species-draft-toolbar mb-3 p-2 border border-amber-300 bg-amber-50 text-xs" aria-label="Species draft controls">
       {#if savedPersonalCodes.length}<p role="status">Saved personal definitions: {savedPersonalCodes.join(', ')}. Plot Undo does not remove these user-database records.</p>{/if}
@@ -392,6 +394,8 @@
         <p>Saving NULL Cover6 removes that row from the C-height view after refresh, but does not delete the vegetation record.</p>
       {/if}
     </div>
+  {/if}
+  </div>
   {/if}
 {:else if region === 'speciesModal'}
   {#if showSpeciesModal}

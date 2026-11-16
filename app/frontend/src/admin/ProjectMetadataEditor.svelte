@@ -10,6 +10,7 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
     beginMetadataTemplate, stageMetadataTemplate, metadataTemplateRequest, metadataTemplateFields, type MetadataDraft, type MetadataTemplateDraft } from './projectMetadataEditor';
   import { metadataGroups, metadataLabel } from './projectMetadataPresentation';
   import ProjectMetadataRestore from './ProjectMetadataRestore.svelte';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { client, contextId, plot, onclosed, onbusy, oncommitted, allowCreation = false, allowTemplateCreation = false, allowRestoration = false }: {
     client: ReturnType<typeof bindContextPlots>; contextId: string; plot: string; onclosed: () => void;
@@ -48,6 +49,17 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
   onMount(() => { void reload(); });
   onDestroy(() => { generation++; reads.cancelAll(); onbusy(false); });
 
+  function notifyMetadata(severity: 'success' | 'error', title: string, message: string) {
+    if (typeof notifications === 'undefined') return;
+    const opts = {
+      category: 'admin' as const,
+      source: 'Project Metadata',
+      contextTag: review?.project || (plot ? `Plot ${plot}` : undefined),
+    };
+    if (severity === 'success') notifications.success(title, message, opts);
+    else notifications.error(title, message, opts);
+  }
+
   export function getCloseState(): EditorCloseState {
     if (restorationOpen) return restorationEditor?.getCloseState() ?? {
       unsaved: true, busy, canSave: false, error, saveReason: 'Finish or dismiss metadata restoration before closing.'
@@ -77,7 +89,9 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
   }
   async function createBlank() {
     if (!allowCreation || !ready || !blank || busy || committedFailure) {
-      error = 'Explicitly review the empty metadata proposal before creation.'; return;
+      error = 'Explicitly review the empty metadata proposal before creation.';
+      notifyMetadata('error', 'Blank metadata creation blocked', error);
+      return;
     }
     let committed = false;
     saving = true; error = null; success = null;
@@ -88,11 +102,13 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
       const next = await client.ReviewProjectMetadata(plot);
       review = next; draft = beginMetadataDraft(next, created.rowId);
       success = 'Blank metadata record and full creation audit committed atomically. All73 ordinary/stamp fields remain NULL; edit and Save separately.';
+      notifyMetadata('success', 'Blank metadata record created', success);
     } catch (cause) {
       if (committed || String(cause).includes('metadata edit committed, but')) {
         committedFailure = true; blank = null; draft = null;
         error = `Metadata creation committed, but refresh/cleanup failed. Reload before another edit; completed writes must not be replayed: ${String(cause)}`;
       } else error = `Blank metadata creation failed; reviewed proposal retained for retry: ${String(cause)}`;
+      notifyMetadata('error', committed ? 'Blank metadata refresh failed' : 'Blank metadata creation failed', error);
     } finally { saving = false; }
   }
   function reviewTemplate(rowId: string) {
@@ -109,7 +125,9 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
   }
   async function createTemplate() {
     if (!allowTemplateCreation || !ready || !template || busy || committedFailure || errors.length) {
-      error = 'Resolve all explicit template assignments before creation; raw errors were retained.'; return;
+      error = 'Resolve all explicit template assignments before creation; raw errors were retained.';
+      notifyMetadata('error', 'Template metadata creation blocked', error);
+      return;
     }
     let committed = false;
     saving = true; error = null; success = null;
@@ -120,11 +138,13 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
       const next = await client.ReviewProjectMetadata(plot);
       review = next; draft = beginMetadataDraft(next, created.rowId);
       success = 'One reviewed template record and full creation audit committed atomically. Unmapped fields/stamps remain NULL; ordinary editing and Save are separate.';
+      notifyMetadata('success', 'Template metadata record created', success);
     } catch (cause) {
       if (committed || String(cause).includes('metadata edit committed, but')) {
         committedFailure = true; template = null; draft = null;
         error = `Template creation committed, but refresh/cleanup failed. Reload before another edit; completed writes must not be replayed: ${String(cause)}`;
       } else error = `Template creation failed; reviewed assignments retained for retry: ${String(cause)}`;
+      notifyMetadata('error', committed ? 'Template metadata refresh failed' : 'Template metadata creation failed', error);
     } finally { saving = false; }
   }
   async function reload() {
@@ -143,7 +163,10 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
       }
       review = next; fields = definitions; draft = null; committedFailure = false; ready = true; standardPreview = false;
     } catch (cause) {
-      if (request === generation) error = `Metadata review/references unavailable; no data changed: ${String(cause)}`;
+      if (request === generation) {
+        error = `Metadata review/references unavailable; no data changed: ${String(cause)}`;
+        notifyMetadata('error', 'Metadata reload failed', error);
+      }
     } finally { if (request === generation) reading = false; }
   }
   function select(rowId: string) {
@@ -174,8 +197,16 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
     } catch (cause) { error = `Source-default proposal failed; drafts retained: ${String(cause)}`; }
   }
   async function save() {
-    if (!ready || !draft || busy || committedFailure) { error = 'Reload available metadata and references, then select an existing record before metadata Save.'; return; }
-    if (standardPreview) { error = 'Apply or cancel the source-default preview before metadata Save.'; return; }
+    if (!ready || !draft || busy || committedFailure) {
+      error = 'Reload available metadata and references, then select an existing record before metadata Save.';
+      notifyMetadata('error', 'Metadata save blocked', error);
+      return;
+    }
+    if (standardPreview) {
+      error = 'Apply or cancel the source-default preview before metadata Save.';
+      notifyMetadata('error', 'Metadata save blocked', error);
+      return;
+    }
     let committed = false;
     saving = true; error = null; success = null;
     try {
@@ -186,11 +217,13 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
       const next = await client.ReviewProjectMetadata(plot);
       review = next; draft = beginMetadataDraft(next, request.original.rowId);
       success = 'Metadata fields, version/date stamps and applicable audits saved atomically. Other candidates and master templates were not copied.';
+      notifyMetadata('success', 'Project metadata saved', success);
     } catch (cause) {
       if (committed || String(cause).includes('metadata edit committed, but')) {
         committedFailure = true; draft = null;
         error = `Metadata committed, but refresh/cleanup failed. Reload before another edit; completed writes must not be replayed: ${String(cause)}`;
       } else error = `Metadata Save failed; raw drafts retained for correction or retry: ${String(cause)}`;
+      notifyMetadata('error', committed ? 'Metadata refresh failed after commit' : 'Project metadata save failed', error);
     } finally { saving = false; }
   }
   function close() {
@@ -222,7 +255,7 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
         review = next; draft = beginMetadataDraft(next, rowId); standardPreview = false;
       }} />
   {:else}
-  <div class="toolbar">
+  <div data-workbench-sticky-bar class="toolbar sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200">
     {#if allowRestoration}
       <button type="button" disabled={!ready || busy || dirty || errors.length > 0 || committedFailure || standardPreview}
         onclick={() => { restorationOpen = true; error = null; success = null; }}>Review typed metadata restoration</button>

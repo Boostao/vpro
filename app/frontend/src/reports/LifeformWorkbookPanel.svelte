@@ -8,6 +8,7 @@
     lifeformWorkbookOptions, lifeformWorkbookPublicationSession, validateLifeformWorkbookReview,
     type ValidatedLifeformWorkbookReview,
   } from './lifeformWorkbook';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { owner, disabled, onBusyChange }: {
     owner: LifeformSummaryOwner; disabled: boolean; onBusyChange: (held: boolean) => void;
@@ -50,7 +51,16 @@
       if (disposed || requestGeneration !== generation) return;
       review = validateLifeformWorkbookReview(value, owned, requestedDetails);
     } catch (cause) {
-      if (!disposed && requestGeneration === generation) error = `Workbook review unavailable; no file published: ${String(cause)}`;
+      if (!disposed && requestGeneration === generation) {
+        error = `Workbook review unavailable; no file published: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Lifeform Summary workbook review failed', error, {
+            category: 'reports',
+            source: 'Lifeform Summary',
+            contextTag: owned.project || undefined,
+          });
+        }
+      }
     } finally {
       if (!disposed && requestGeneration === generation) { busy = false; reportBusy(); }
     }
@@ -61,8 +71,38 @@
     try {
       await session.publish(review, destination, request =>
         VegetationReportService.ExportReviewedLifeformWorkbook(owned.contextId, JSON.stringify(request)));
+      const settled = session.view();
+      if (!disposed && typeof notifications !== 'undefined') {
+        if (settled.outcome?.status === 'published' && !settled.error) {
+          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+          notifications.success('Lifeform Summary workbook exported', exportedPath, {
+            category: 'reports',
+            source: 'Lifeform Summary',
+            contextTag: owned.project || undefined,
+          });
+        } else if (settled.error || settled.outcome) {
+          notifications.error(
+            'Lifeform Summary workbook export failed',
+            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+            {
+              category: 'reports',
+              source: 'Lifeform Summary',
+              contextTag: owned.project || undefined,
+            },
+          );
+        }
+      }
     } catch (cause) {
-      if (!disposed) error = String(cause);
+      if (!disposed) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Lifeform Summary workbook export failed', error, {
+            category: 'reports',
+            source: 'Lifeform Summary',
+            contextTag: owned.project || undefined,
+          });
+        }
+      }
     }
   }
   function acknowledge() {

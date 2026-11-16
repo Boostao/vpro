@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { ImportExportService } from '../../bindings/github.com/boostao/vpro/app';
@@ -50,7 +54,12 @@
       if (request !== generation) return;
       review = validated;
     } catch (cause) {
-      if (request === generation) error = `Table review unavailable; no data, audits, configuration or export files written: ${String(cause)}`;
+      if (request === generation) {
+        error = `Table review unavailable; no data, audits, configuration or export files written: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('CSV table review unavailable', error, { category: 'reports', source: 'CSV Export', contextTag: project || undefined });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; updateBusy(); }
     }
@@ -60,7 +69,12 @@
     if (!publicationSession || busy || publication?.busy || publication?.blocked) return;
     error = '';
     try { destination = await publicationSession.chooseDestination(destination, chooseTableCSVArchiveFile); }
-    catch (cause) { error = `Destination chooser unavailable; destination unchanged, no publication invoked: ${String(cause)}`; }
+    catch (cause) {
+      error = `Destination chooser unavailable; destination unchanged, no publication invoked: ${String(cause)}`;
+      if (typeof notifications !== 'undefined') {
+        notifications.error('CSV destination chooser failed', error, { category: 'reports', source: 'CSV Export', contextTag: project || undefined });
+      }
+    }
   }
   async function publish() {
     const table = `${project}_${suffix}`;
@@ -71,7 +85,28 @@
     try {
       await publicationSession.publish(approved, table, destination, request =>
         ImportExportService.ExportReviewedTableCSVArchive(contextId, JSON.stringify(request)));
-    } catch (cause) { error = `Archive export not invoked; review again before proceeding: ${String(cause)}`; }
+      const latest = publicationSession.view().receipts.at(-1);
+      if (typeof notifications !== 'undefined' && latest) {
+        if (latest.phase === 'known' && latest.outcome?.status === 'published') {
+          notifications.success(
+            'CSV archive exported',
+            `Exported ${table} CSV archive to ${latest.outcome.path || destination}.`,
+            { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
+          );
+        } else {
+          notifications.error(
+            'CSV archive export failed',
+            latest.error || latest.outcome?.errorMessage || `CSV archive export outcome for ${table}: ${latest.phase}.`,
+            { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
+          );
+        }
+      }
+    } catch (cause) {
+      error = `Archive export not invoked; review again before proceeding: ${String(cause)}`;
+      if (typeof notifications !== 'undefined') {
+        notifications.error('CSV archive export failed', error, { category: 'reports', source: 'CSV Export', contextTag: project || undefined });
+      }
+    }
   }
   function acknowledge() {
     try { publicationSession?.acknowledge(); changeTable(); }
@@ -82,7 +117,26 @@
 </script>
 
 <section class="table-review" data-project-table-csv-review aria-label="Project table CSV review">
-  <h1>Project table CSV review</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200" data-workbench-sticky-bar>
+    <h1>Project table CSV review</h1>
+    <div class="actions">
+      <label for="csv-core-table">Physical core table
+        <select id="csv-core-table" bind:value={suffix} disabled={(busy && !archiveEnabled) || !!publication?.busy || !!publication?.blocked} onchange={changeTable}>
+          {#each coreTableSuffixes as value}<option value={value}>{project}_{value}</option>{/each}
+        </select>
+      </label>
+      <button type="button" data-table-csv-read disabled={busy || !!publication?.busy || !!publication?.blocked} onclick={show}>Review core table CSV</button>
+      {#if archiveEnabled}
+        <button type="button" data-table-csv-archive-choose disabled={busy || !!publication?.busy || !!publication?.blocked} onclick={chooseDestination}>Choose ZIP destination...</button>
+        <button type="button" data-table-csv-archive-publish data-table-csv-archive-export disabled={busy || !!publication?.busy || !!publication?.blocked ||
+          !approval || approval.review.manifest.table !== `${project}_${suffix}` || !validTableCSVArchiveDestination(destination)} onclick={publish}>
+          Export reviewed {project}_{suffix} CSV archive
+        </button>
+      {/if}
+      {#if busy}<button type="button" data-table-csv-cancel onclick={cancel}>Cancel table read</button>
+        <p role="status">Reading and checking the owned table snapshot...</p>{/if}
+    </div>
+  </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if publication}
     {#if publication.storageError}<p class="error" role="alert">{publication.storageError}</p>{/if}
@@ -106,29 +160,12 @@
   {/if}
   <p>Project {project}. Whole physical project table; selected SU and plot/profile filters are not applied.</p>
   <dl><div><dt>Owned project database</dt><dd>{projectPath}</dd></div></dl>
-  <div class="actions">
-    <label for="csv-core-table">Physical core table
-      <select id="csv-core-table" bind:value={suffix} disabled={(busy && !archiveEnabled) || !!publication?.busy || !!publication?.blocked} onchange={changeTable}>
-        {#each coreTableSuffixes as value}<option value={value}>{project}_{value}</option>{/each}
-      </select>
-    </label>
-    <button type="button" data-table-csv-read disabled={busy || !!publication?.busy || !!publication?.blocked} onclick={show}>Review core table CSV</button>
-    {#if busy}<button type="button" data-table-csv-cancel onclick={cancel}>Cancel table read</button>
-      <p role="status">Reading and checking the owned table snapshot...</p>{/if}
-  </div>
   {#if archiveEnabled}
     {#if destination && !validTableCSVArchiveDestination(destination)}
       <p class="error" role="alert">Destination contains NUL or malformed UTF-16; export is blocked, and no spelling repair is applied.</p>
     {/if}
     <label for="table-csv-archive-destination">Project table CSV archive destination (.zip)</label>
     <textarea id="table-csv-archive-destination" rows="3" bind:value={destination} disabled={busy || !!publication?.busy || !!publication?.blocked}></textarea>
-    <div class="actions">
-      <button type="button" data-table-csv-archive-choose disabled={busy || !!publication?.busy || !!publication?.blocked} onclick={chooseDestination}>Choose ZIP destination...</button>
-      <button type="button" data-table-csv-archive-publish data-table-csv-archive-export disabled={busy || !!publication?.busy || !!publication?.blocked ||
-        !approval || approval.review.manifest.table !== `${project}_${suffix}` || !validTableCSVArchiveDestination(destination)} onclick={publish}>
-        Export reviewed {project}_{suffix} CSV archive
-      </button>
-    </div>
     {#if approval}
       <dl>
         <div><dt>Approved physical table</dt><dd>{approval.review.manifest.table}</dd></div>

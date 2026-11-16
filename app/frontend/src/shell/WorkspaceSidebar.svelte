@@ -29,10 +29,6 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
   let externalProject = $state('');
   let externalPath = $state('');
   let externalDiscoveredProjects = $state<ProjectInfo[]>([]);
-  let externalPickMessage = $state('');
-  let externalPickError = $state('');
-  let revealMessage = $state('');
-  let revealError = $state('');
   let accessSourcePath = $state('');
   let accessInspection = $state<AccessDatabaseInspection | null>(null);
   let accessSelectedSourceProject = $state('');
@@ -123,8 +119,6 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
   async function browseExternalSQLiteProject() {
     const contextId = $projectState?.contextId;
     if (!contextId) return;
-    externalPickError = '';
-    externalPickMessage = '';
     try {
       const inspection = await ContextService.ChooseExternalSQLiteFile(contextId);
       if (!inspection.selectedPath) return;
@@ -133,25 +127,58 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
       const firstCompatible = externalDiscoveredProjects.find(p => p.compatible) ?? externalDiscoveredProjects[0];
       if (firstCompatible) {
         externalProject = firstCompatible.name;
-        externalPickMessage = `Found ${externalDiscoveredProjects.length} project(s) in ${firstCompatible.file}.`;
+        notifications.push({
+          severity: 'info',
+          category: 'general',
+          source: 'Attach Project',
+          title: `Found ${externalDiscoveredProjects.length} project(s)`,
+          message: firstCompatible.file,
+          toast: true,
+        });
       } else {
-        externalPickMessage = 'Selected SQLite file contains no *_Env project table.';
+        notifications.push({
+          severity: 'warning',
+          category: 'general',
+          source: 'Attach Project',
+          title: 'No project table found',
+          message: 'Selected SQLite file contains no *_Env project table.',
+          toast: true,
+        });
       }
     } catch (cause) {
-      externalPickError = `Could not inspect SQLite file: ${String(cause)}`;
+      notifications.push({
+        severity: 'error',
+        category: 'general',
+        source: 'Attach Project',
+        title: 'Could not inspect SQLite file',
+        message: String(cause),
+        toast: true,
+      });
     }
   }
 
   async function revealInExplorer(target: 'root' | 'projects' | 'project' | 'su' | 'hierarchy') {
     const contextId = $projectState?.contextId;
     if (!contextId) return;
-    revealError = '';
-    revealMessage = '';
     try {
       const opened = await ContextService.RevealInFileExplorer(contextId, target);
-      revealMessage = `Opened in File Explorer: ${opened}`;
+      notifications.push({
+        severity: 'info',
+        category: 'general',
+        source: 'File Explorer',
+        title: 'Opened in File Explorer',
+        message: opened,
+        toast: true,
+      });
     } catch (cause) {
-      revealError = `Could not open File Explorer: ${String(cause)}`;
+      notifications.push({
+        severity: 'error',
+        category: 'general',
+        source: 'File Explorer',
+        title: 'Could not open File Explorer',
+        message: String(cause),
+        toast: true,
+      });
     }
   }
 
@@ -278,8 +305,6 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
       <FolderOpen size={16} strokeWidth={1.8} />
     </button>
   </div>
-  {#if revealMessage}<p role="status" class="px-3 py-1 text-xs text-[#1E5128] break-words">{revealMessage}</p>{/if}
-  {#if revealError}<p role="alert" class="px-3 py-1 text-xs text-[#D8292F] break-words">{revealError}</p>{/if}
   <nav aria-label="Project list">
     {#each $projectState?.projects ?? [] as project ((project.path ?? project.file) + project.name)}
       <button class:active={project.name === $projectState?.activeProject && project.path === $projectState?.projectPath} disabled={!project.compatible || busy || editorBusy || companionPanelBusy || transitionWorking} title={project.compatible ? project.path : `${project.version} is not a complete VPro project`} onclick={() => chooseProject(project)}>
@@ -313,8 +338,6 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
       <summary>Attach external SQLite project</summary>
       <form onsubmit={attachExternalProject}>
         <button type="button" id="browse-external-sqlite" disabled={busy || editorBusy || companionPanelBusy || transitionWorking || !$projectState?.contextId} onclick={() => void browseExternalSQLiteProject()}>Browse SQLite .db file…</button>
-        {#if externalPickMessage}<p role="status" class="text-[#1E5128] break-words">{externalPickMessage}</p>{/if}
-        {#if externalPickError}<p role="alert" class="text-[#D8292F] break-words">{externalPickError}</p>{/if}
         {#if externalDiscoveredProjects.length > 1}
           <label for="external-project-select">DISCOVERED PROJECTS IN FILE</label>
           <select id="external-project-select" value={externalProject} onchange={(e) => { externalProject = (e.currentTarget as HTMLSelectElement).value; }} disabled={busy || editorBusy || companionPanelBusy || transitionWorking}>

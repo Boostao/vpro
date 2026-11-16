@@ -3,6 +3,7 @@
   import {
     defaultProjectAdminPort, validateNewProjectDraft, validateProjectNameInput, validateSplinterDraft,
     parseLiteralTokenList, buildInitialMergeFieldResolutions, buildInitialMergePlotResolutions, formatCompareDiffsDelimited,
+    notifications,
     type ProjectAdminPort, type ProjectMetadataPreset, type NewProjectResult, type SaveProjectAsResult,
     type ExportSplinterResult, type CompareProjectsResult, type ComplianceValidationReport,
     type QuarantineOrphanResult, type OptimizeVegPreview, type OptimizeVegResult,
@@ -172,9 +173,29 @@
     onBusyChange?.(false);
   });
 
+  function notifyAdmin(
+    severity: 'success' | 'info' | 'warning' | 'error',
+    title: string,
+    message: string,
+    toast = true,
+  ) {
+    if (typeof notifications === 'undefined') return;
+    const opts = {
+      category: 'admin' as const,
+      source: 'Project Admin',
+      contextTag: activeProject || undefined,
+      toast,
+    };
+    if (severity === 'success') notifications.success(title, message, opts);
+    else if (severity === 'warning') notifications.warning(title, message, opts);
+    else if (severity === 'error') notifications.error(title, message, opts);
+    else notifications.info(title, message, opts);
+  }
+
   async function runAdminOp(busyLabel: string, errorLabel: string, fn: (isCurrent: () => boolean) => Promise<void>) {
     if (busy || operationHeld) {
       error = `Wait for the current operation or decision before ${busyLabel}.`;
+      notifyAdmin('error', 'Project admin action held', error);
       return;
     }
     const gen = ++generation;
@@ -184,7 +205,10 @@
     try {
       await fn(() => gen === generation);
     } catch (cause) {
-      if (gen === generation) error = `${errorLabel}: ${String(cause)}`;
+      if (gen === generation) {
+        error = `${errorLabel}: ${String(cause)}`;
+        notifyAdmin('error', errorLabel, error);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -201,11 +225,16 @@
     });
     await runAdminOp('creating a project', 'Create project failed', async isCurrent => {
       const vErr = validateNewProjectDraft(req);
-      if (vErr) { error = vErr; return; }
+      if (vErr) {
+        error = vErr;
+        notifyAdmin('error', 'Create project validation failed', vErr);
+        return;
+      }
       const res = await port.createNewProject(contextId, req);
       if (!isCurrent()) return;
       newProjResult = res;
       statusMessage = `Created VPro project "${res.projectName}" at ${res.destinationPath}.`;
+      notifyAdmin('success', `Created project "${res.projectName}"`, statusMessage);
       if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
     });
   }
@@ -218,11 +247,16 @@
     });
     await runAdminOp('saving project copy', 'Save Project As failed', async isCurrent => {
       const vErr = validateProjectNameInput(req.newProjectName);
-      if (vErr) { error = vErr; return; }
+      if (vErr) {
+        error = vErr;
+        notifyAdmin('error', 'Save Project As validation failed', vErr);
+        return;
+      }
       const res = await port.saveProjectAs(contextId, req);
       if (!isCurrent()) return;
       saveAsResult = res;
       statusMessage = `Saved project "${res.sourceProject}" as "${res.newProjectName}" (${res.copiedTables.length} tables).`;
+      notifyAdmin('success', `Saved project as "${res.newProjectName}"`, statusMessage);
       if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
     });
   }
@@ -238,11 +272,16 @@
     });
     await runAdminOp('exporting splinter project', 'Export Splinter Project failed', async isCurrent => {
       const vErr = validateSplinterDraft(req, activeSu);
-      if (vErr) { error = vErr; return; }
+      if (vErr) {
+        error = vErr;
+        notifyAdmin('error', 'Export Splinter Project validation failed', vErr);
+        return;
+      }
       const res = await port.exportSplinterProject(contextId, req);
       if (!isCurrent()) return;
       splinterResult = res;
       statusMessage = `Exported ${res.exportedPlotCount} of ${res.sourcePlotCount} plots to "${res.splinterProject}".`;
+      notifyAdmin('success', `Exported splinter "${res.splinterProject}"`, statusMessage);
       if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
     });
   }
@@ -257,12 +296,18 @@
       statusMessage = report.passed
         ? `Compliance validation passed for project "${report.project}".`
         : `Compliance validation identified issues requiring review in "${report.project}".`;
+      notifyAdmin(
+        report.passed ? 'success' : 'warning',
+        report.passed ? `Compliance passed: ${report.project}` : `Compliance issues found: ${report.project}`,
+        statusMessage,
+      );
     });
   }
 
   async function runQuarantine() {
     if (!busy && !operationHeld && !confirmQuarantine) {
       error = 'Confirm orphan quarantine before moving orphan child rows.';
+      notifyAdmin('error', 'Orphan quarantine confirmation required', error);
       return;
     }
     const req = $state.snapshot({});
@@ -272,6 +317,7 @@
       quarantineResult = res;
       confirmQuarantine = false;
       statusMessage = `Quarantined ${res.totalQuarantined} orphan child row(s) into quarantine tables (batch ${res.batchId}).`;
+      notifyAdmin('success', 'Orphan child rows quarantined', statusMessage);
       const refreshed = await port.runComplianceValidation(contextId, $state.snapshot({ useActiveSu: complianceUseSu }));
       if (isCurrent()) complianceReport = refreshed;
     });
@@ -299,17 +345,31 @@
         blockedCount > 0
           ? `OptimizeVeg preview found ${blockedCount} blocked group(s) with unresolved conflicts.`
           : `OptimizeVeg preview: ${preview.duplicateSpeciesCount} multi-row species group(s) (${preview.beforeRowCount} -> ${preview.afterRowCount} rows).`;
+      notifyAdmin(
+        blockedCount > 0 ? 'warning' : 'info',
+        blockedCount > 0 ? 'OptimizeVeg preview blocked by conflicts' : 'OptimizeVeg preview ready',
+        statusMessage,
+      );
     });
   }
 
   async function runApplyOptimizeVeg() {
     if (!busy && !operationHeld) {
-      if (!optPreview) { error = 'Run Preview OptimizeVeg before applying consolidation.'; return; }
-      if (optUnresolvedConflictCount > 0) {
-        error = `Resolve ${optUnresolvedConflictCount} OptimizeVeg blocking conflict(s) (or re-run preview with Custodian Audit Override if only _Audit references remain) before committing.`;
+      if (!optPreview) {
+        error = 'Run Preview OptimizeVeg before applying consolidation.';
+        notifyAdmin('error', 'OptimizeVeg preview required', error);
         return;
       }
-      if (!optConfirmReviewed) { error = 'Check "I have reviewed conflicts and want to commit OptimizeVeg" before committing.'; return; }
+      if (optUnresolvedConflictCount > 0) {
+        error = `Resolve ${optUnresolvedConflictCount} OptimizeVeg blocking conflict(s) (or re-run preview with Custodian Audit Override if only _Audit references remain) before committing.`;
+        notifyAdmin('error', 'OptimizeVeg conflicts unresolved', error);
+        return;
+      }
+      if (!optConfirmReviewed) {
+        error = 'Check "I have reviewed conflicts and want to commit OptimizeVeg" before committing.';
+        notifyAdmin('error', 'OptimizeVeg confirmation required', error);
+        return;
+      }
     }
     const plotNumbers = parseLiteralTokenList(optPlotNumbersRaw);
     const req = $state.snapshot({
@@ -324,12 +384,14 @@
       optPreview = null;
       optConfirmReviewed = false;
       statusMessage = `OptimizeVeg consolidated ${res.consolidatedGroups} group(s), removed ${res.deletedRows} duplicate row(s), and wrote ${res.auditRowsWritten} audit row(s).`;
+      notifyAdmin('success', 'OptimizeVeg consolidation complete', statusMessage);
     });
   }
 
   async function runCompareProjects() {
     if (!busy && !operationHeld && !cmpTargetPath.trim()) {
       error = 'Target .db file path is required to compare projects.';
+      notifyAdmin('error', 'Compare target path required', error);
       return;
     }
     const req = $state.snapshot({
@@ -345,6 +407,7 @@
       if (!isCurrent()) return;
       cmpResult = res;
       statusMessage = `Compared ${res.sourceProject} vs ${res.targetProject}: ${res.addedCount} Added, ${res.removedCount} Removed, ${res.modifiedCount} Modified, ${res.identicalCount} Identical.`;
+      notifyAdmin('info', 'Project comparison complete', statusMessage);
     });
   }
 
@@ -361,6 +424,7 @@
       URL.revokeObjectURL(url);
     }
     statusMessage = `Prepared ${format} export with ${cmpAllDiffs.length} project diff row(s).`;
+    notifyAdmin('success', `Prepared ${format} comparison export`, statusMessage);
   }
 
   function mergeEndpoints(preview?: ThreeWayMergePreview | null) {
@@ -378,6 +442,7 @@
   async function runPreviewMerge() {
     if (!busy && !operationHeld && !mergeSourcePath.trim()) {
       error = 'Staging source .db path is required for 3-way merge preview.';
+      notifyAdmin('error', '3-Way merge source required', error);
       return;
     }
     const req = $state.snapshot(mergeEndpoints());
@@ -389,12 +454,14 @@
       mergePlotResolutions = buildInitialMergePlotResolutions(preview);
       mergeFieldResolutions = buildInitialMergeFieldResolutions(preview);
       statusMessage = `Merge preview ready: ${preview.addedCount} Added, ${preview.fastForwardCount} Fast-Forward, ${preview.sourceDeleteCount ?? 0} Source Delete, ${preview.conflictCount} Conflict plot(s).`;
+      notifyAdmin('info', '3-Way merge preview ready', statusMessage);
     });
   }
 
   async function runExecuteMerge() {
     if (!busy && !operationHeld && !mergePreview) {
       error = 'Run Preview 3-Way Merge before executing merge.';
+      notifyAdmin('error', '3-Way merge preview required', error);
       return;
     }
     if (!mergePreview) return;
@@ -411,6 +478,7 @@
       mergeResult = res;
       mergePreview = null;
       statusMessage = `3-Way Merge complete: ${res.addedPlots} plot(s) added, ${res.updatedPlots} plot(s) updated, ${res.auditRowsWritten} audit row(s) recorded.`;
+      notifyAdmin('success', '3-Way merge committed', statusMessage);
     });
   }
 
@@ -439,7 +507,7 @@
     </div>
   </header>
 
-  <nav class="flex flex-wrap gap-1 border-b border-slate-200 px-5 pt-2" aria-label="Project workbench sections">
+  <nav data-workbench-sticky-bar class="sticky top-0 z-20 flex flex-wrap gap-1 border-b border-stone-200 bg-white/95 px-5 py-2 backdrop-blur-xs" aria-label="Project workbench sections">
     {#each [
       ['lifecycle', 'Project Lifecycle (New / Save As / Splinter)'],
       ['compliance', 'Compliance Validator & Quarantine'],
@@ -462,9 +530,6 @@
   <div class="space-y-4 px-5 pb-5">
     {#if error}
       <p role="alert" class="rounded border-l-4 border-red-700 bg-red-50 p-3 text-sm text-red-900">{error}</p>
-    {/if}
-    {#if statusMessage}
-      <p role="status" class="rounded border-l-4 border-[#003366] bg-slate-50 p-3 text-sm text-slate-900">{statusMessage}</p>
     {/if}
 
     {#if activeTab === 'lifecycle'}

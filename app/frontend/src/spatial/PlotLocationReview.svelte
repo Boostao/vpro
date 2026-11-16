@@ -4,6 +4,7 @@
   import { ReadRequests } from '../shared/readRequests';
   import { validatePlotLocationReview, type ValidatedPlotLocationReview } from './plotLocationReview';
   import { reportCellText } from '../reports/longEnvironmentReport';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, projectPath, su, suPath, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string; onBusyChange: (busy: boolean) => void;
@@ -28,8 +29,16 @@
       const validated = await validatePlotLocationReview(value, contextId, project, projectPath, su, suPath);
       if (request !== generation) return;
       review = validated;
+      notifications.info(
+        'Plot locations loaded',
+        `Loaded ${validated.report.rows.length} plot location row(s).`,
+        { category: 'reports', source: 'Plot Locations', contextTag: project || undefined },
+      );
     } catch (cause) {
-      if (request === generation) error = `Plot locations unavailable; no database, audits, configuration or output file written: ${String(cause)}`;
+      if (request === generation) {
+        error = `Plot locations unavailable; no database, audits, configuration or output file written: ${String(cause)}`;
+        notifications.error('Plot locations unavailable', error, { category: 'reports', source: 'Plot Locations', contextTag: project || undefined });
+      }
     } finally {
       if (request === generation) { busy = false; onBusyChange(false); }
     }
@@ -38,16 +47,18 @@
 </script>
 
 <section class="locations" data-plot-location-review aria-label="Plot location review">
-  <h1>Plot location review</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8]" data-workbench-sticky-bar>
+    <h1>Plot location review</h1>
+    <div class="actions">
+      <button type="button" data-plot-location-read disabled={busy} onclick={show}>Review plot locations</button>
+      {#if busy}<button type="button" data-plot-location-cancel onclick={cancel}>Cancel location read</button>
+        <p role="status">Reading and checking the owned location snapshot...</p>{/if}
+    </div>
+  </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <p>Project {project} / SU {su}. Selected context scope; current-plot and profile filters are not applied.</p>
   <dl><div><dt>Owned project database</dt><dd>{projectPath}</dd></div>
     {#if su !== 'None'}<div><dt>Owned SU database</dt><dd>{suPath}</dd></div>{/if}</dl>
-  <div class="actions">
-    <button type="button" data-plot-location-read disabled={busy} onclick={show}>Review plot locations</button>
-    {#if busy}<button type="button" data-plot-location-cancel onclick={cancel}>Cancel location read</button>
-      <p role="status">Reading and checking the owned location snapshot...</p>{/if}
-  </div>
   {#if review}
     <p role="status" data-plot-location-summary>{review.report.rows.length} physical Env rows with an Admin match and both coordinates present.
       No data, audits, configuration or output files written.</p>

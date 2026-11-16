@@ -1,6 +1,6 @@
 <script lang="ts">
   import { PlotEntryService, ContextService, AuditRestoreAction, type FS882Header, type VegRecord, type HumusRecord, type MineralRecord, type OtherRecord, type SoilSuggestion, type OrdinaryAuditReadEntry, type ListItem, type SpeciesItem, type VegetationDeletionReview, type ProjectPlotProfileFilterRequest } from '../../bindings/github.com/boostao/vpro/app';
-  import { Lock, Unlock, Save, RotateCcw, AlertTriangle, Check, FileText, Columns2 } from '@lucide/svelte';
+  import { Lock, Unlock, Save, RotateCcw, AlertTriangle, FileText, Columns2 } from '@lucide/svelte';
   import FormValidationSummary from './FormValidationSummary.svelte';
   import { buildFormValidationItems, focusValidationTarget, type FormValidationItem } from './formValidationSummary';
   import FieldCardPreviewModal from './FieldCardPreviewModal.svelte';
@@ -62,6 +62,7 @@
   const pictureReadingEnabled = true, siviParentReviewEnabled = true;
   const siviChildSourceNoticesEnabled = true;
   const siviStandalone = untrack(() => entryForm === 'sivi');
+  const standaloneTwoPage = $derived(entryForm === 'fs882-twopage');
   const siviStandaloneEnabled = true, siviParentEditingEnabled = true, siviParentSharedEnabled = true, siviParentReferenceEnabled = true, siviParentActionEditingEnabled = true, siviProjectAssignmentEnabled = true;
   const siviParentSharedColumns: readonly SIVIParentSharedColumn[] = siviParentSharedFieldsFor(siviParentReferenceEnabled).map(field => field.column);
   const siviParentSharedReads = new ReadRequests(), siviParentWriteReads = new ReadRequests(), siviParentActionReads = new ReadRequests(), siviProjectAssignmentReads = new ReadRequests();
@@ -145,7 +146,7 @@
   const ordinaryVegetationUnavailable: string | null = null;
   let twoPageOpen = $state(false), twoPageScope = $state<'extra' | 'common' | 'entry'>('extra'), twoPageEntryInitialForm = $state<TwoPageParentForm>('FS882-8x6XL'), twoPageBusy = $state(false), twoPageProject = $state<string | null>(null), twoPageRevision = $state(0);
   const twoPageSessions: TwoPageParentSessionCache = new Map(), twoPageCommonSessions: TwoPageParentCommonSessionCache = new Map(), twoPageEntrySessions: TwoPageEntrySessionCache = new Map();
-  let twoPageEditor = $state<{ getCloseState(): EditorCloseState; getDraftState?(): EditorCloseState; undo(): void; canOpenMetadataEditor?(): boolean; openMetadataEditor?(): void }>();
+  let twoPageEditor = $state<{ getCloseState(): EditorCloseState; getDraftState?(): EditorCloseState; undo(): void; saveForClose?(): Promise<boolean>; canOpenMetadataEditor?(): boolean; openMetadataEditor?(): void }>();
   let twoPageSoilBusy = $state(false), twoPageSoilBlocked = $state(false), twoPageVegetationBusy = $state(false), twoPageVegetationBlocked = $state(false), twoPageVegetationActivityRevision = $state(0);
   $effect(() => subscribeTwoPageSoilActivity(activity => { twoPageSoilBusy = activity.busy; twoPageSoilBlocked = activity.blocked; }));
   $effect(() => subscribeTwoPageVegetationActivity(activity => { twoPageVegetationBusy = activity.busy; twoPageVegetationBlocked = activity.blocked; untrack(() => twoPageVegetationActivityRevision++); }));
@@ -171,6 +172,22 @@
   const independentHeaderWorkflowBusy = $derived(coordinateBusy || workingUnitBusy || qualityBusy || siteCodeBusy || regionCodeBusy || soilCodeBusy || geologyCodeBusy || parentCodeBusy || drainageBusy || speciesDecisionBusy || deletionBusy || codeCheckBusy || metadataBusy || profileReviewBusy || environmentSUOpen || externalSUEnvironmentBusy || externalSUEnvironmentBlocked || siviParentBusy || siviBusy || siviCombinedBusy || siviCoverBusy || siviCollectedBusy || siviSpeciesBusy || siviIdentityBusy || siviCreationBusy || siviLifecycleBusy);
   const otherHeaderWorkflowBusy = $derived(independentHeaderWorkflowBusy || twoPageOpen || twoPageBusy);
   const headerWorkflowBusy = $derived(otherHeaderWorkflowBusy || pictureBusy || pictureMetadataPending || twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked);
+  const hostEditorBusy = $derived(
+    busy || siviSourceAuthorityUnknown ||
+    coordinateBusy || workingUnitBusy || qualityBusy || siteCodeBusy || regionCodeBusy ||
+    soilCodeBusy || geologyCodeBusy || parentCodeBusy || drainageBusy || speciesDecisionBusy ||
+    deletionBusy || codeCheckBusy || metadataBusy || profileReviewBusy ||
+    externalSUEnvironmentBusy || externalSUEnvironmentBlocked ||
+    siviParentBusy || siviBusy || siviCombinedBusy || siviCoverBusy || siviCollectedBusy ||
+    siviSpeciesBusy || siviIdentityBusy || siviCreationBusy || siviLifecycleBusy ||
+    twoPageBusy || pictureBusy ||
+    (pictureMetadataClose?.busy ?? false) || (pictureMetadataClose?.blocked ?? false) ||
+    twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked ||
+    (twoPageOpen && !twoPageEditor) ||
+    (environmentSUOpen && (!environmentSUEditor || environmentSUEditor.getCloseState().busy)) ||
+    (metadataOpen && !metadataEditor) ||
+    (codeCheckOpen && !codeCheckEditor)
+  );
   const tabWorkflowBusy = $derived(otherHeaderWorkflowBusy || pictureBusy || (pictureMetadataClose?.busy ?? false));
   const workingUnitSession: WorkingUnitSession & { plot: string } = { mode: null, plot: '' };
   const heightEditingEnabled = true, numberEditingEnabled = true, otherEditingEnabled = true, soilEditingEnabled = true, attributeEditingEnabled = true, collectedEditingEnabled = true, speciesEditingEnabled = true;
@@ -255,7 +272,7 @@
     loadRequest++; referenceRequest++; speciesRequest++; speciesReferenceRequest++; speciesChoiceRequest++; deletionRequest++; subEditorGeneration++;
     for (const r of [reads, referenceReads, speciesReads, speciesReferenceReads, speciesChoiceReads, deletionReads]) r.cancelAll();
   });
-  $effect(() => { onBusyChange?.(busy || headerWorkflowBusy || siviSourceAuthorityUnknown); });
+  $effect(() => { onBusyChange?.(hostEditorBusy); });
   $effect(() => observeProjectIdDatalist({ sourceChoices: siviParentSourceView?.choices, assignmentChoices: siviProjectAssignmentView?.choices, contextId: siviContextId, fetchChoices: typeof ContextService?.GetSIVIProjectIDChoices === 'function' ? cid => ContextService.GetSIVIProjectIDChoices(cid) : undefined, onChoices: next => { projectIdDatalist = next; } }));
   $effect(() => {
     if (entryForm !== 'fs882-twopage') { autoOpenedTwoPageKey = null; return; }
@@ -269,6 +286,24 @@
   $effect(() => { const plot = plotNumber; untrack(() => void load(plot)); });
   $effect(() => { void loadReferenceLists(); });
   $effect(() => { untrack(() => { void loadSpeciesReferences(); void loadSoilSuggestions(); void loadAttributeSuggestions(); }); });
+  let lastNotifiedSuccessMsg: string | null = null;
+  $effect(() => {
+    const msg = successMsg;
+    if (!msg) {
+      lastNotifiedSuccessMsg = null;
+      return;
+    }
+    if (msg === lastNotifiedSuccessMsg) return;
+    lastNotifiedSuccessMsg = msg;
+    const plot = untrack(() => draft.plotNumber);
+    if (typeof notifications !== 'undefined') {
+      notifications.success?.(msg, '', {
+        category: 'entry',
+        source: 'FS882 Form',
+        contextTag: plot ? `Plot ${plot}` : undefined,
+      });
+    }
+  });
 
   async function loadSubEditor<T>(loader: () => Promise<T>, label: string, onFailed: () => void): Promise<T> {
     const request = subEditorGeneration;
@@ -276,6 +311,13 @@
   }
   async function vegetationNotesTab() { activeTab = 'soils'; await tick(); document.querySelector<HTMLInputElement>('#header-soilSurveyor')?.focus(); }
   function sourceEnter(event: KeyboardEvent) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      if (!draft.locked && !busy && !headerWorkflowBusy && capabilitiesReady && (dirty || childUnsaved)) {
+        void save();
+      }
+      return;
+    }
     if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'p') {
       if (twoPageOpen && twoPageScope === 'entry') return;
       event.preventDefault(); fieldCardModalOpen = !fieldCardModalOpen; if (fieldCardModalOpen) fieldCardSplitOpen = false; return;
@@ -535,7 +577,8 @@
       const payload = $state.snapshot({ ...draft, locked: capabilities.locked === true && draft.locked });
       if (original) await PlotService.UpdatePlot(payload); else await PlotService.CreatePlot(payload);
       original = JSON.parse(JSON.stringify(draft)); activeLayerDepthRaw = null; workingUnitSession.plot = draft.plotNumber; dirty = false; headerValidation = {}; successMsg = `Plot ${draft.plotNumber} saved successfully.`;
-      if (typeof notifications !== 'undefined') notifications.success?.(`Plot ${draft.plotNumber} saved`, 'Saved to project file.');
+      lastNotifiedSuccessMsg = successMsg;
+      if (typeof notifications !== 'undefined') notifications.success?.(`Plot ${draft.plotNumber} saved`, 'Saved to project file.', { category: 'entry', source: 'FS882 Form', contextTag: draft.plotNumber ? `Plot ${draft.plotNumber}` : undefined });
       await loadChildData(draft.plotNumber);
       if (siviParentSession?.view().original || siviParentSession?.view().error) await refreshSIVIParent(draft.plotNumber, [siviParentWriteSession, siviParentActionSession, siviProjectAssignmentSession, siviParentSharedSession]);
       if (onSaved) await onSaved(draft.plotNumber);
@@ -548,6 +591,7 @@
     if (siviParentSourceView?.authorityUnknown) return { unsaved: true, busy: siviParentSourceView.busy, blocked: true, canSave: false, saveReason: 'Reload owned ProjectID choices to observe the source preference outcome before saving or closing.', error: siviParentSourceView.error ?? 'ProjectID source preference outcome is unknown.' };
     const lifecycle = siviCreationUndoPending && siviCreationUndoClose?.blocked ? siviCreationUndoClose : siviDeletionPending ? siviDeletionClose : siviRestorationPending ? siviRestorationClose : siviCreationUndoPending ? siviCreationUndoClose : null;
     if (lifecycle) return { ...lifecycle, canSave: false, busy: busy || headerWorkflowBusy || lifecycle.busy, saveReason: lifecycle.blocked || lifecycle.busy ? lifecycle.saveReason : 'Finish source deletion/restoration/creation Undo explicitly or discard its unsubmitted review before parent Save, Lock or close.' };
+    if (typeof twoPageRevision !== 'undefined') void twoPageRevision;
     if (twoPageOpen) return twoPageEditor?.getCloseState() ?? { unsaved: true, busy: true, blocked: true, canSave: false, error, saveReason: 'Wait for two-page field review, then finish and close it explicitly.' };
     if (environmentSUOpen) return environmentSUEditor?.getCloseState() ?? { unsaved: true, busy: true, canSave: false, error, saveReason: 'Wait for SU transfer review, then finish or dismiss and close it explicitly.' };
     if (profileReviewBlocked) return profileEditor?.getCloseState() ?? { unsaved: true, busy: true, canSave: false, error, saveReason: 'Finish profile rules explicitly before saving or closing the plot.' };
@@ -559,7 +603,10 @@
     const saveReason = computeSaveReason({ busy, headerWorkflowBusy, capabilitiesReady, locked: draft.locked, siviParentActionUnsaved, siviParentActionClose, siviParentWriteUnsaved, siviParentWriteClose, siviParentSharedUnsaved, siviParentSharedClose, siviProjectAssignmentUnsaved, siviProjectAssignmentClose, siviUnsaved, siviClose, siviCoverUnsaved, siviCoverClose, siviCombinedUnsaved, siviCombinedClose, siviCollectedUnsaved, siviCollectedClose, siviSpeciesUnsaved, siviSpeciesClose, siviIdentityUnsaved, siviIdentityClose, hasPersonalDraft: personalDraft !== null, hasDeletionReview: deletionReview !== null, creationInvalidCount: creationInvalid.length, hasCreationDraft: creationDraft !== null, speciesReferenceReady, speciesReferenceBusy, hasNewChild: newChild !== null, invalidChild, otherInvalidCount: otherInvalid.length, soilInvalidCount: soilInvalid.length, soilUnsaved, soilReferenceReady, soilReferenceBusy, attributeInvalidCount: attributeInvalid.length, attributeUnsaved, attributeReferenceReady, attributeReferenceBusy, speciesInvalidCount: speciesInvalid.length, speciesUnsaved, invalid, plotNumber: draft.plotNumber });
     return { unsaved: dirty || childUnsaved || invalid || newChild !== null || invalidChild, busy: busy || headerWorkflowBusy, blocked: [siviClose, siviCoverClose, siviCombinedClose, siviCollectedClose, siviSpeciesClose, siviIdentityClose, siviParentWriteClose, siviParentActionClose, siviProjectAssignmentClose, siviParentSharedClose].some(c => c?.blocked ?? false), canSave: saveReason === '', saveReason, error };
   }
-  export async function saveForClose(): Promise<boolean> { const state = getCloseState(); if (!state.canSave) { error = state.saveReason; return false; } await save(); return !dirty && !childUnsaved && Object.keys(headerValidation).length === 0 && error === null; }
+  export async function saveForClose(): Promise<boolean> {
+    if (twoPageOpen && typeof twoPageEditor?.saveForClose === 'function') return await twoPageEditor.saveForClose();
+    const state = getCloseState(); if (!state.canSave) { error = state.saveReason; return false; } await save(); return !dirty && !childUnsaved && Object.keys(headerValidation).length === 0 && error === null;
+  }
   function undo() {
     if (twoPageOpen) { twoPageEditor?.undo(); return; }
     if (environmentSUOpen) { environmentSUEditor?.undo(); return; }
@@ -570,16 +617,23 @@
     activeLayerDepthRaw = null; dirty = false; headerValidation = {}; error = null;
     headerRevision++;
     successMsg = 'Changes undone.';
-    if (typeof notifications !== 'undefined') notifications.success?.('Draft changes undone', draft.plotNumber ? `Plot ${draft.plotNumber} restored to last saved state.` : 'Draft reset.');
+    lastNotifiedSuccessMsg = successMsg;
+    if (typeof notifications !== 'undefined') notifications.success?.('Draft changes undone', draft.plotNumber ? `Plot ${draft.plotNumber} restored to last saved state.` : 'Draft reset.', { category: 'entry', source: 'FS882 Form', contextTag: draft.plotNumber ? `Plot ${draft.plotNumber}` : undefined });
   }
   async function toggleLock() {
     const blocked = firstMatch<string>([[() => siviDeletionPending || siviRestorationPending || siviCreationUndoPending, 'Finish or resolve source deletion/restoration/creation Undo before changing the plot lock.'], [() => siviSourceAuthorityUnknown, 'Read owned ProjectID choices to observe the source preference outcome before changing the plot lock.'], [() => busy || headerWorkflowBusy, 'Wait for the current operation to finish before changing the plot lock.'], [() => codeCheckOpen, 'Finish or close species-code review before changing the plot lock.'], [() => metadataOpen, 'Finish or close metadata review before changing the plot lock.'], [() => profileReviewBlocked, 'Finish profile drafts before changing the plot lock.'], [() => personalDraft !== null, 'Save the personal definition explicitly or Cancel its entry before changing the plot lock.'], [() => creationDraft !== null, 'Save or Cancel vegetation creation before changing the plot lock.'], [() => deletionReview !== null, 'Confirm or Cancel vegetation deletion review before changing the plot lock.'], [() => heightUnsaved, 'Save or Cancel height drafts before changing the plot lock.'], [() => siviParentWriteUnsaved, 'Save or explicitly Undo SIVI parent drafts/recovery before changing the plot lock.'], [() => siviParentSharedUnsaved, 'Save or explicitly Undo shared SIVI drafts/recovery before changing the plot lock.'], [() => siviParentActionUnsaved, 'Save or explicitly Undo SIVI source-action drafts/recovery before changing the plot lock.'], [() => siviProjectAssignmentUnsaved, 'Save or explicitly Undo ProjectID selection/recovery before changing the plot lock.'], [() => siviUnsaved, 'SIVI heights or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock.'], [() => siviCoverUnsaved, 'SIVI covers or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock.'], [() => siviCombinedUnsaved, 'Combined SIVI drafts or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock.'], [() => siviCollectedUnsaved, 'SIVI Collected or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock.'], [() => siviSpeciesUnsaved, 'SIVI Species or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock.'], [() => siviIdentityUnsaved, 'SIVI IDs or unresolved acknowledgements must be saved or explicitly undone before changing the plot lock.'], [() => siviCreationPending, 'SIVI creation drafts or unknown acknowledgements must be resolved before changing the plot lock.'], [() => otherUnsaved, 'Save or Cancel Other drafts before changing the plot lock.'], [() => soilUnsaved, 'Save or Cancel soil drafts before changing the plot lock.'], [() => attributeUnsaved, 'Save or Cancel vegetation attribute drafts before changing the plot lock.'], [() => collectedUnsaved, 'Save or Cancel Collected drafts before changing the plot lock.'], [() => speciesUnsaved, 'Save or Cancel species drafts before changing the plot lock.']]);
     if (blocked) { error = blocked; return; }
     if (!draft.locked && dirty) { await save(); if (dirty) return; }
     draft.locked = !draft.locked;
-    if (typeof notifications !== 'undefined') notifications.success?.(draft.locked ? `Plot ${draft.plotNumber || ''} locked`.trim() : `Plot ${draft.plotNumber || ''} unlocked`.trim(), draft.locked ? 'Form is now protected in read-only mode.' : 'Form is now unlocked for editing.');
+    if (typeof notifications !== 'undefined') notifications.success?.(draft.locked ? `Plot ${draft.plotNumber || ''} locked`.trim() : `Plot ${draft.plotNumber || ''} unlocked`.trim(), draft.locked ? 'Form is now protected in read-only mode.' : 'Form is now unlocked for editing.', { category: 'entry', source: 'FS882 Form', contextTag: draft.plotNumber ? `Plot ${draft.plotNumber}` : undefined });
   }
   function childOperation(operation: () => Promise<void>) { return childOperationImpl({ busy, headerWorkflowBusy, capabilitiesReady, locked: draft.locked, hasOriginal: Boolean(original), plotNumber: draft.plotNumber, dirty, childUnsaved, setBusy: b => { busy = b; }, setError: e => { error = e; }, appendError: s => { error = (error ?? '') + s; }, setSuccess: s => { successMsg = s; }, invalidateCapabilities: () => { capabilitiesReady = false; }, loadChildData }, operation); }
+  const effectiveFormDirty = $derived.by(() => {
+    twoPageRevision;
+    return twoPageOpen
+      ? Boolean(twoPageEditor?.getDraftState?.().unsaved || twoPageSoilBlocked || twoPageVegetationBlocked || pictureMetadataPending)
+      : (dirty || childUnsaved);
+  });
   const deleteVeg = (id: number) => deleteSourceChild('SubVegAXL_BC', id);
   const deleteHumus = (id: number) => deleteSourceChild('SoilHumusXL', id);
 </script>
@@ -587,10 +641,10 @@
 <svelte:window onkeydown={sourceEnter} />
 
 <div bind:this={container} data-tour="fs882-form-root" data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="fs882-container bg-white rounded-lg shadow border border-stone-200 flex flex-col h-full text-stone-800 text-sm">
-  <header class="fs882-toolbar p-3 bg-stone-100 border-b border-stone-200 flex flex-wrap justify-between items-center gap-2">
+  <header hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-toolbar p-3 bg-stone-100 border-b border-stone-200 flex flex-wrap justify-between items-center gap-2">
     <div class="flex items-center gap-3">
       <h2 class="font-bold text-stone-900 text-base">{siviStandalone ? 'SIVI / FS1333: Site Visit' : 'FS882-6x4XL: Ecosystem Field Form'}</h2>
-      <span class="px-2 py-0.5 rounded text-xs font-semibold {dirty || childUnsaved ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-600'}">{dirty || childUnsaved ? 'Draft Unsaved' : 'Clean'}</span>
+      <span class="px-2 py-0.5 rounded text-xs font-semibold {effectiveFormDirty ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-600'}">{effectiveFormDirty ? 'Draft Unsaved' : 'Clean'}</span>
       {#if draft.locked}<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1"><Lock size={12} /> Locked (Read-Only)</span>{/if}
     </div>
     <div class="fs882-actions flex flex-wrap items-center gap-2">
@@ -613,18 +667,17 @@
     </div>
   </header>
 
-  {#if error}<div role="alert" class="p-2 bg-red-50 border-b border-red-200 text-red-800 text-xs flex items-center gap-2"><AlertTriangle size={14} class="text-red-600 shrink-0" /><span>{error}</span></div>{/if}
+  {#if error}<div role="alert" class="p-2 bg-red-50 border-b border-red-200 text-red-800 text-xs flex items-center gap-2"><AlertTriangle size={14} class="text-red-600 shrink-0" /><span>{error}</span><button type="button" class="ml-auto rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Dismiss</button></div>{/if}
   {#if vegetationReadUnavailable}<p role="alert" class="p-2 bg-amber-50 text-amber-900 text-sm" data-vegetation-unavailable>Ordinary ID-keyed vegetation is unavailable: {vegetationReadUnavailable} Use independently enabled physical-row source views. Ordinary vegetation rows, totals and actions are not presented as an empty result.</p>{/if}
-  {#if successMsg}<div class="p-2 bg-[#EBF5ED] border-b border-[#2E8540]/30 text-[#1F5C2C] text-xs flex items-center gap-2"><Check size={14} class="text-[#2E8540] shrink-0" /><span>{successMsg}</span></div>{/if}
 
-  <nav aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'} class="fs882-tabs flex flex-wrap border-b border-stone-200 bg-stone-50 px-3 text-xs font-medium">
+  <nav aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'} hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-tabs flex flex-wrap border-b border-stone-200 bg-stone-50 px-3 text-xs font-medium">
     {#if siviStandalone}<button type="button" data-sivi-site-tab data-help-id="sivi.plot_type" aria-current={activeTab === 'siviParent' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'siviParent' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" disabled={tabWorkflowBusy || !siviStandaloneEnabled} onclick={() => { activeTab = 'siviParent'; siviParentOpen = true; }}>Plot &amp; Site Description</button>
     {:else}<button data-help-id="site.moisture_regime" aria-current={activeTab === 'site' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'site' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'site'} disabled={tabWorkflowBusy}>Site & Location</button>{/if}
     <button data-help-id="veg.covers" aria-current={activeTab === 'veg' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'veg' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'veg'} disabled={tabWorkflowBusy || (siviStandalone && !siviStandaloneEnabled)}>Vegetation</button>
     {#if !siviStandalone}<button data-help-id="veg.species" aria-current={activeTab === 'vegOther' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'vegOther' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'vegOther'} disabled={tabWorkflowBusy}>Veg Other</button><button data-help-id="humus.upper_lower_depth" aria-current={activeTab === 'soils' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'soils' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'soils'} disabled={tabWorkflowBusy}>Soils (Humus & Mineral)</button><button aria-current={activeTab === 'other' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'other' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'other'} disabled={tabWorkflowBusy}>Other Data</button><button aria-current={activeTab === 'audit' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'audit' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'audit'} disabled={tabWorkflowBusy}>Audit Trail</button>{/if}
   </nav>
   <FormValidationSummary items={validationSummaryItems} onjump={(item) => void handleValidationJump(item)} />
-  {#if (extendedShrubsEnabled && !twoPageOpen) || (siviParentReviewEnabled && !siviStandalone)}<div class="border-b border-stone-200 px-4 py-2 flex flex-wrap items-center gap-4">
+  {#if (extendedShrubsEnabled && !twoPageOpen) || (siviParentReviewEnabled && !siviStandalone && !(standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'))}<div class="border-b border-stone-200 px-4 py-2 flex flex-wrap items-center gap-4">
     {#if extendedShrubsEnabled && !twoPageOpen}<label class="inline-flex items-center gap-2 text-xs font-medium cursor-pointer" data-help-id="veg.covers"><input type="checkbox" data-extended-shrubs checked={extendedShrubs} disabled={busy || headerWorkflowBusy} onchange={(event) => setExtendedShrubs(event.currentTarget.checked)} /> Show extended shrub layers</label>{/if}
     {#if siviParentReviewEnabled && !siviStandalone}<button type="button" data-sivi-parent-open aria-pressed={activeTab === 'siviParent'} class="rounded border px-3 py-1 text-sm disabled:opacity-50" disabled={busy || headerWorkflowBusy || dirty || nonParentChildUnsaved || !siviParentSession} onclick={() => void showSIVIParentPanel()}>SIVI parent (read-only)</button>{/if}
   </div>{/if}
@@ -632,7 +685,7 @@
   <div class="fs882-workspace-split flex-1 min-h-0 flex" class:split-active={fieldCardSplitOpen && fieldCardViewModel !== null}>
   <div class="fs882-body overflow-y-auto flex-1 min-w-0" data-field-card-form-pane>
     {#if siviStandalone && !siviStandaloneEnabled}<p role="alert" class="p-4">Standalone SIVI is unavailable. Its independent entry gate and parent-review gate are required; no FS882 fallback is presented.</p>{/if}
-    <FS882Modals loaders={subEditorLoaders} {loadSubEditor} bind:environmentSUEditor bind:profileEditor bind:twoPageEditor bind:metadataEditor bind:codeCheckEditor bind:twoPageOpen bind:twoPageBusy bind:twoPageProject bind:twoPageRevision bind:profileReviewOpen bind:profileReviewBusy bind:profileReviewBlocked bind:environmentSUOpen bind:metadataOpen bind:metadataBusy bind:codeCheckOpen bind:codeCheckBusy bind:pictureBusy {contextId} {draft} plotNumber={draft.plotNumber} originalPlotNumber={original?.plotNumber} activeProject={$projectState?.activeProject ?? ''} activeSU={$projectState?.activeSU ?? ''} projectPath={$projectState?.projectPath ?? ''} suPath={$projectState?.suPath ?? ''} plotProfileWritable={$projectState?.plotProfile?.writable === true} plotProfileSource={$projectState?.plotProfile?.source ?? null} {busy} {dirty} {childUnsaved} {headerValidation} {activeTab} {siviStandalone} {siviStandaloneEnabled} {siviParentOpen} {siviParentSession} {siviParentView} {siviParentSourceSession} {siviParentSourceView} {siviParentBusy} {siviSourceBarrier} {siviParentSharedColumns} {siviParentSharedSession} {siviParentSharedView} {siviParentSharedClose} {siviParentSharedUnsaved} {siviParentSharedEditingDisabled} {siviParentWriteSession} {siviParentWriteView} {siviParentWriteClose} {siviParentWriteEditingDisabled} {siviParentActionSession} {siviParentActionView} {siviParentActionClose} {siviParentActionEditingDisabled} {siviProjectAssignmentSession} {siviProjectAssignmentView} {siviProjectAssignmentClose} {siviProjectAssignmentEditingDisabled} {extendedShrubs} {extendedShrubsEnabled} {setExtendedShrubs} {snowCoverRegimeInput} {activeLayerDepthInput} {arcticInputsDisabled} snowCoverRegimeSupported={capabilities.snowCoverRegime === true} activeLayerDepthSupported={capabilities.activeLayerDepth === true} {stageSnowCoverRegime} {stageActiveLayerDepth} {metadataEnabled} {metadataCreationEnabled} {metadataTemplateCreationEnabled} {metadataRestorationEnabled} {openProjectMetadata} {canOpenProjectMetadata} {stageSIVIParentShared} {siviParentSharedOperation} {stageSIVIParentCell} {siviParentWriteOperation} {stageSIVIParentAction} {siviParentActionOperation} {stageSIVIProjectAssignment} {siviProjectAssignmentOperation} {reloadSIVIProjectSource} {changeSIVIProjectSource} {PlotService} {environmentSUDirection} {profileReviewEnabled} {profileRunEnabled} {profileSpeciesPresenceEnabled} {profileEditingEnabled} {profileCreationEnabled} {profileDeletionEnabled} {profileFilteringEnabled} {profileSaveSUEnabled} {onProfileSUReview} {onProfileNavigation} {twoPageScope} {twoPageEntryInitialForm} {twoPageSessions} {twoPageCommonSessions} {twoPageEntrySessions} {twoPageSoilReviewEnabled} {twoPageVegetationReviewEnabled} {pictureReadingEnabled} {ordinaryVegetationUnavailable} {ordinarySoilUnavailable} {twoPageLinkedParentBlocked} {twoPageSoilParentBlocked} {linkedVegetationParentBlocked} {twoPageSoilBusy} {twoPageSoilBlocked} {twoPageVegetationBusy} {twoPageVegetationBlocked} {pictureMetadataPending} {externalSUEnvironmentEnabled} {separateSUSelected} {childRevision} {sourceRows} {openProfileSUFromTwoPage} {refreshTwoPagePeers} {refreshProjectMetadata} loadPlot={load} {loadChildData} onClearError={() => { error = null; }} />
+    <FS882Modals loaders={subEditorLoaders} {loadSubEditor} bind:environmentSUEditor bind:profileEditor bind:twoPageEditor bind:metadataEditor bind:codeCheckEditor bind:twoPageOpen bind:twoPageBusy bind:twoPageProject bind:twoPageRevision bind:profileReviewOpen bind:profileReviewBusy bind:profileReviewBlocked bind:environmentSUOpen bind:metadataOpen bind:metadataBusy bind:codeCheckOpen bind:codeCheckBusy bind:pictureBusy {contextId} {draft} plotNumber={draft.plotNumber} originalPlotNumber={original?.plotNumber} activeProject={$projectState?.activeProject ?? ''} activeSU={$projectState?.activeSU ?? ''} projectPath={$projectState?.projectPath ?? ''} suPath={$projectState?.suPath ?? ''} plotProfileWritable={$projectState?.plotProfile?.writable === true} plotProfileSource={$projectState?.plotProfile?.source ?? null} {busy} {dirty} {childUnsaved} {headerValidation} {activeTab} {siviStandalone} {standaloneTwoPage} onCloseStandalone={onClosed} {siviStandaloneEnabled} {siviParentOpen} {siviParentSession} {siviParentView} {siviParentSourceSession} {siviParentSourceView} {siviParentBusy} {siviSourceBarrier} {siviParentSharedColumns} {siviParentSharedSession} {siviParentSharedView} {siviParentSharedClose} {siviParentSharedUnsaved} {siviParentSharedEditingDisabled} {siviParentWriteSession} {siviParentWriteView} {siviParentWriteClose} {siviParentWriteEditingDisabled} {siviParentActionSession} {siviParentActionView} {siviParentActionClose} {siviParentActionEditingDisabled} {siviProjectAssignmentSession} {siviProjectAssignmentView} {siviProjectAssignmentClose} {siviProjectAssignmentEditingDisabled} {extendedShrubs} {extendedShrubsEnabled} {setExtendedShrubs} {snowCoverRegimeInput} {activeLayerDepthInput} {arcticInputsDisabled} snowCoverRegimeSupported={capabilities.snowCoverRegime === true} activeLayerDepthSupported={capabilities.activeLayerDepth === true} {stageSnowCoverRegime} {stageActiveLayerDepth} {metadataEnabled} {metadataCreationEnabled} {metadataTemplateCreationEnabled} {metadataRestorationEnabled} {openProjectMetadata} {canOpenProjectMetadata} {stageSIVIParentShared} {siviParentSharedOperation} {stageSIVIParentCell} {siviParentWriteOperation} {stageSIVIParentAction} {siviParentActionOperation} {stageSIVIProjectAssignment} {siviProjectAssignmentOperation} {reloadSIVIProjectSource} {changeSIVIProjectSource} {PlotService} {environmentSUDirection} {profileReviewEnabled} {profileRunEnabled} {profileSpeciesPresenceEnabled} {profileEditingEnabled} {profileCreationEnabled} {profileDeletionEnabled} {profileFilteringEnabled} {profileSaveSUEnabled} {onProfileSUReview} {onProfileNavigation} {twoPageScope} {twoPageEntryInitialForm} {twoPageSessions} {twoPageCommonSessions} {twoPageEntrySessions} {twoPageSoilReviewEnabled} {twoPageVegetationReviewEnabled} {pictureReadingEnabled} {ordinaryVegetationUnavailable} {ordinarySoilUnavailable} {twoPageLinkedParentBlocked} {twoPageSoilParentBlocked} {linkedVegetationParentBlocked} {twoPageSoilBusy} {twoPageSoilBlocked} {twoPageVegetationBusy} {twoPageVegetationBlocked} {pictureMetadataPending} {externalSUEnvironmentEnabled} {separateSUSelected} {childRevision} {sourceRows} {openProfileSUFromTwoPage} {refreshTwoPagePeers} {refreshProjectMetadata} loadPlot={load} {loadChildData} onClearError={() => { error = null; }} />
     <FS882ChildCreateModal region="toolbars" {busy} {headerWorkflowBusy} plotNumber={draft.plotNumber} {savedPersonalCodes} {personalSpeciesEnabled} {speciesUnsaved} {speciesEditingDisabled} {speciesInvalid} {speciesNotices} {speciesDecisionBusy} {speciesDrafts} {speciesChoices} {speciesLists} {speciesReferenceReady} {speciesReferenceBusy} {personalDraft} {personalInvalid} {collectedUnsaved} {collectedEditingDisabled} {collectedNotices} {attributeUnsaved} {attributeEditingDisabled} {attributeInvalid} {soilUnsaved} {soilEditingDisabled} {soilInvalid} {otherUnsaved} {otherEditingDisabled} {otherInvalid} {creationDraft} {creationInvalid} {creationSpeciesInvalid} {creationNotice} {creationChoices} {deletionReview} {heightUnsaved} {heightEditingDisabled} {heightInvalid} {heightNotices} {heightDrafts} {saveSpeciesDrafts} {cancelSpeciesDrafts} {reviewSpeciesChoices} {chooseSpeciesCode} {startPersonalSpecies} onPersonalDraftChange={(value) => { personalDraft = value; error = null; successMsg = null; }} {savePersonalSpecies} {cancelPersonalSpecies} {saveCollectedDrafts} {cancelCollectedDrafts} {saveAttributeDrafts} {cancelAttributeDrafts} {saveSoilDrafts} {cancelSoilDrafts} {saveOtherDrafts} {cancelOtherDrafts} {stageCreationSpecies} {reviewCreationSpeciesChoices} {chooseCreationSpecies} {startCreationPersonalSpecies} {stageCreationCell} {saveVegetationCreation} {cancelVegetationCreation} {confirmVegetationDeletion} {cancelVegetationDeletion} {saveHeightDrafts} {cancelHeightDrafts} />
     <div hidden={twoPageOpen && (twoPageScope === 'entry' || twoPageSourceLayoutEnabled)} data-two-page-ordinary-host>
     {#if activeTab === 'site' && !siviStandalone}{#key headerRevision}<FS882SiteTab bind:draft {original} {capabilities} {headerInputsDisabled} bind:parentCodeBusy bind:coordinateBusy bind:workingUnitBusy bind:qualityBusy bind:siteCodeBusy bind:regionCodeBusy bind:pictureBusy {metadataEnabled} {openProjectMetadata} {canOpenProjectMetadata} {onOpenPictureManager} projectIds={projectIdDatalist} {masterAllowed} {extendedShrubs} snowCoverRegime={snowCoverRegimeInput} activeLayerDepth={activeLayerDepthInput} snowCoverRegimeDisabled={arcticInputsDisabled} activeLayerDepthDisabled={arcticInputsDisabled} snowCoverRegimeError={headerValidation.snowCoverRegime ?? null} activeLayerDepthError={headerValidation.activeLayerDepth ?? null} onSnowCoverRegimeChange={stageSnowCoverRegime} onActiveLayerDepthChange={stageActiveLayerDepth} lists={{ moistureRegime: moistureList, nutrientRegime: nutrientList, mesoSlopePos: mesoSlopeList, surfaceShape: surfaceShapeList }} {workingUnitSession} {markDirty} {validateHeader} onError={(message) => error = message} {pictureReadingEnabled} {twoPageOpen} contextId={siviContextId} activeProject={$projectState?.activeProject ?? null} pictureDisabled={busy || otherHeaderWorkflowBusy || !capabilitiesReady || dirty || childUnsaved} pictureMetadataDisabled={busy || otherHeaderWorkflowBusy || !capabilitiesReady || (!pictureMetadataPending && (dirty || childUnsaved))} {pictureMetadataSession} />{/key}

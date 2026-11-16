@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import type { PictureLifecycleSession, PictureLifecycleView } from './pictureLifecycleSession';
   import { pictureCellLabel } from './pictureRead';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { session, disabled = false }: { session: PictureLifecycleSession; disabled?: boolean } = $props();
   const restoringEnabled = true;
@@ -13,10 +14,100 @@
     view.original?.records.rows.find(row => row.rowId === view.rowId));
   const columns = $derived(view.restoration?.deletion.request.columns ?? view.original?.records.columns);
   const blocked = $derived(disabled || view.busy || view.blocked || view.acknowledgementRequired);
-  async function run(operation: () => void | Promise<unknown>) {
+  async function run(operation: () => unknown | Promise<unknown>) {
     localError = '';
-    try { await operation(); }
-    catch (cause) { localError = `Picture lifecycle action unavailable: ${String(cause)}`; }
+    try {
+      const outcome = await operation();
+      const current = session.view();
+      if (outcome === false && current.error) {
+        notifications.error('Picture lifecycle action failed', current.error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+        });
+      }
+    } catch (cause) {
+      localError = `Picture lifecycle action unavailable: ${String(cause)}`;
+      notifications.error('Picture lifecycle action failed', localError, {
+        category: 'entry',
+        source: 'Plot Pictures',
+      });
+    }
+  }
+  async function saveLifecycle() {
+    localError = '';
+    const isRestore = Boolean(view.restoration);
+    const plotNumber = view.restoration?.plotNumber ?? view.original?.plotNumber;
+    const contextTag = plotNumber ? `Plot ${plotNumber}` : undefined;
+    try {
+      const ok = await session.save(crypto.randomUUID());
+      const current = session.view();
+      if (ok) {
+        const latest = current.receipts.at(-1);
+        const historyId = latest?.kind === 'restore'
+          ? latest.receipt.request.historyId
+          : latest?.receipt.historyId;
+        if (isRestore) {
+          notifications.success(
+            'Picture reference restored',
+            `Restored historical picture reference${historyId ? ` (history ${historyId})` : ''}.`,
+            { category: 'entry', source: 'Plot Pictures', contextTag },
+          );
+        } else {
+          notifications.success(
+            'Picture reference deleted',
+            `Deleted picture reference${historyId ? ` (history ${historyId})` : ''}. Image file was not deleted.`,
+            { category: 'entry', source: 'Plot Pictures', contextTag },
+          );
+        }
+      } else if (current.error) {
+        notifications.error(
+          isRestore ? 'Picture restoration failed' : 'Picture deletion failed',
+          current.error,
+          { category: 'entry', source: 'Plot Pictures', contextTag },
+        );
+      }
+    } catch (cause) {
+      localError = `Picture lifecycle action unavailable: ${String(cause)}`;
+      notifications.error(
+        isRestore ? 'Picture restoration failed' : 'Picture deletion failed',
+        localError,
+        { category: 'entry', source: 'Plot Pictures', contextTag },
+      );
+    }
+  }
+  async function resolveLifecycle() {
+    localError = '';
+    try {
+      const ok = await session.resolve();
+      const current = session.view();
+      if (ok) {
+        const latest = current.receipts.at(-1);
+        if (latest?.kind === 'restore') {
+          notifications.success(
+            'Picture restoration receipt recovered',
+            `Verified restored picture reference (history ${latest.receipt.request.historyId}).`,
+            { category: 'entry', source: 'Plot Pictures', contextTag: latest.receipt.request.deletion.plotNumber ? `Plot ${latest.receipt.request.deletion.plotNumber}` : undefined },
+          );
+        } else if (latest?.kind === 'delete') {
+          notifications.success(
+            'Picture deletion receipt recovered',
+            `Verified deleted picture reference (history ${latest.receipt.historyId}).`,
+            { category: 'entry', source: 'Plot Pictures', contextTag: latest.receipt.request.plotNumber ? `Plot ${latest.receipt.request.plotNumber}` : undefined },
+          );
+        }
+      } else if (current.error) {
+        notifications.error('Picture lifecycle recovery failed', current.error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+        });
+      }
+    } catch (cause) {
+      localError = `Picture lifecycle action unavailable: ${String(cause)}`;
+      notifications.error('Picture lifecycle recovery failed', localError, {
+        category: 'entry',
+        source: 'Plot Pictures',
+      });
+    }
   }
 </script>
 
@@ -28,7 +119,7 @@
   {/if}
   {#if view.blocked}
     <p class="safety">Mutation outcome is unknown. The exact original/request is retained; do not repeat Delete or Restore.</p>
-    <button data-picture-lifecycle-recover disabled={view.busy} onclick={() => run(() => session.resolve())}>Recover picture receipt read-only</button>
+    <button data-picture-lifecycle-recover disabled={view.busy} onclick={() => resolveLifecycle()}>Recover picture receipt read-only</button>
   {/if}
   {#if original && columns}
     <p data-picture-lifecycle-row>Reviewed physical rowid {JSON.stringify(original.rowId)}.
@@ -46,7 +137,7 @@
     </label>
     <div class="actions">
       <button data-picture-lifecycle-save disabled={disabled || !close.canSave}
-        onclick={() => run(() => session.save(crypto.randomUUID()))}>
+        onclick={() => saveLifecycle()}>
         {view.restoration ? 'Restore historical picture reference' : 'Delete reviewed picture reference'}
       </button>
       <button data-picture-lifecycle-discard disabled={blocked} onclick={() => run(() => session.discard())}>Discard uncommitted review</button>

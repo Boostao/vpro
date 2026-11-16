@@ -1,5 +1,8 @@
 import type { CancellableRead } from '../shared/readRequests';
 import { DatasheetService } from '../../bindings/github.com/boostao/vpro/app';
+import { notifications } from '../shell/notificationService.svelte';
+
+export { notifications };
 
 export type DatasheetTableKey =
   | 'Env'

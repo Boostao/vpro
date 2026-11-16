@@ -24,8 +24,8 @@ SPEC.loader.exec_module(release)
 
 # Independent ordered release contract, not generated from the implementation.
 DESKTOP_EXPECTED = (
-    "vpro-linux-amd64.AppImage", "vpro-linux-amd64.deb", "vpro-linux-amd64.tar.gz",
-    "vpro-linux-arm64.AppImage", "vpro-linux-arm64.deb", "vpro-linux-arm64.tar.gz",
+    "vpro-linux-amd64.deb", "vpro-linux-amd64.rpm", "vpro-linux-amd64.tar.gz",
+    "vpro-linux-arm64.deb", "vpro-linux-arm64.rpm", "vpro-linux-arm64.tar.gz",
     "vpro-macos-universal.dmg", "vpro-macos-universal.zip",
     "vpro-windows-amd64-installer.exe", "vpro-windows-amd64.exe", "vpro-windows-amd64.zip",
     "vpro-windows-arm64-installer.exe", "vpro-windows-arm64.exe", "vpro-windows-arm64.zip",
@@ -89,12 +89,32 @@ def pe(arch, imports=("KERNEL32.dll", "api-ms-win-crt-runtime-l1-1-0.dll"), dela
     return bytes(data)
 
 
+def rpm(arch, version="2.3.4"):
+    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
+    data = bytearray(256)
+    data[:4] = b"\xed\xab\xee\xdb"
+    name = f"vpro-{version}-1.{rpm_arch}".encode("utf-8")[:65]
+    data[10:10 + len(name)] = name
+    data[96:100] = b"\x8e\xad\xe8\x01"
+    return bytes(data)
+
+
 def elf(arch, appimage=False):
     data = bytearray(128)
     data[:6] = b"\x7fELF\x02\x01"
     struct.pack_into("<H", data, 18, 62 if arch == "amd64" else 183)
     if appimage:
         data[8:11] = b"AI\x02"
+    return bytes(data)
+
+
+def rpm(arch, version="2.3.4"):
+    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
+    data = bytearray(256)
+    data[:4] = b"\xed\xab\xee\xdb"
+    name = f"vpro-{version}-1.{rpm_arch}".encode("utf-8")[:65]
+    data[10:10 + len(name)] = name
+    data[96:100] = b"\x8e\xad\xe8\x01"
     return bytes(data)
 
 
@@ -105,6 +125,16 @@ def universal():
         struct.pack_into(">IIIII", data, 8 + index * 20, machine, 0, offset, 64, 0)
         data[offset:offset + 4] = b"\xcf\xfa\xed\xfe"
         struct.pack_into("<I", data, offset + 4, machine)
+    return bytes(data)
+
+
+def rpm(arch, version="2.3.4"):
+    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
+    data = bytearray(256)
+    data[:4] = b"\xed\xab\xee\xdb"
+    name = f"vpro-{version}-1.{rpm_arch}".encode("utf-8")[:65]
+    data[10:10 + len(name)] = name
+    data[96:100] = b"\x8e\xad\xe8\x01"
     return bytes(data)
 
 
@@ -133,6 +163,16 @@ def deb(arch, version="2.3.4"):
     return bytes(data)
 
 
+def rpm(arch, version="2.3.4"):
+    rpm_arch = "x86_64" if arch == "amd64" else "aarch64"
+    data = bytearray(256)
+    data[:4] = b"\xed\xab\xee\xdb"
+    name = f"vpro-{version}-1.{rpm_arch}".encode("utf-8")[:65]
+    data[10:10 + len(name)] = name
+    data[96:100] = b"\x8e\xad\xe8\x01"
+    return bytes(data)
+
+
 def bundle_info(numeric="2.3.4"):
     return plistlib.dumps({"CFBundleVersion": numeric, "CFBundleShortVersionString": numeric})
 
@@ -150,8 +190,8 @@ def asset_fixture(directory, full_version="2.3.4"):
         (directory / f"vpro-windows-{arch}-installer.exe").write_bytes(b"installer fixture")
         with zipfile.ZipFile(directory / f"vpro-windows-{arch}.zip", "w") as archive:
             archive.writestr("VPro.exe", pe(arch))
-        (directory / f"vpro-linux-{arch}.AppImage").write_bytes(elf(arch, True))
         (directory / f"vpro-linux-{arch}.deb").write_bytes(deb(arch, deb_ver))
+        (directory / f"vpro-linux-{arch}.rpm").write_bytes(rpm(arch, full_version))
         (directory / f"vpro-linux-{arch}.tar.gz").write_bytes(tar_bytes([("VPro", elf(arch))]))
     (directory / "vpro-macos-universal.dmg").write_bytes(b"DMG fixture")
     with zipfile.ZipFile(directory / "vpro-macos-universal.zip", "w") as archive:
@@ -477,8 +517,8 @@ class ReleaseTests(unittest.TestCase):
 
     def test_forged_receipt_does_not_hide_wrong_portable_cpu(self):
         asset_fixture(self.root)
-        path = self.root / "vpro-linux-arm64.AppImage"
-        path.write_bytes(elf("amd64", True))
+        path = self.root / "vpro-linux-arm64.tar.gz"
+        path.write_bytes(tar_bytes([("VPro", elf("amd64"))]))
         receipt = self.root / "release-witness-linux-arm64.json"
         witness = json.loads(receipt.read_text())
         witness["sha256"][path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -573,32 +613,25 @@ class ReleaseTests(unittest.TestCase):
                 release.package(self.root, "windows")
         self.assertEqual(list((self.root / "app/dist-artifacts").iterdir()), [])
 
-    def test_linux_native_packaging_requires_all_formats_and_extracts_payload(self):
+    def test_linux_native_packaging_requires_all_formats(self):
         (self.root / "app/bin").mkdir(parents=True)
         (self.root / "app/bin/VPro").write_bytes(elf("arm64"))
-        (self.root / "app/bin/VPro-aarch64.AppImage").write_bytes(elf("arm64", True))
         (self.root / "app/bin/VPro.deb").write_bytes(deb("arm64"))
+        (self.root / "app/bin/VPro.rpm").write_bytes(rpm("arm64"))
 
-        def extract(*args, **kwargs):
-            self.assertEqual(args[1], "--appimage-extract")
-            payload = Path(kwargs["cwd"]) / "squashfs-root/usr/bin/VPro"
-            payload.parent.mkdir(parents=True)
-            payload.write_bytes(elf("arm64"))
-
-        with patch.dict(os.environ, {"RELEASE_ARCH": "arm64"}), \
-                patch.object(release, "run", side_effect=extract):
+        with patch.dict(os.environ, {"RELEASE_ARCH": "arm64"}):
             release.package(self.root, "linux")
         self.assertEqual({path.name for path in (self.root / "app/dist-artifacts").iterdir()},
-                         {"vpro-linux-arm64.AppImage", "vpro-linux-arm64.deb",
+                         {"vpro-linux-arm64.deb", "vpro-linux-arm64.rpm",
                           "vpro-linux-arm64.tar.gz", "release-witness-linux-arm64.json"})
 
-    def test_linux_extract_error_is_fatal(self):
+    def test_linux_invalid_rpm_is_fatal(self):
         (self.root / "app/bin").mkdir(parents=True)
         (self.root / "app/bin/VPro").write_bytes(elf("amd64"))
-        (self.root / "app/bin/VPro-x86_64.AppImage").write_bytes(elf("amd64", True))
-        with patch.dict(os.environ, {"RELEASE_ARCH": "amd64"}), \
-                patch.object(release, "run", side_effect=subprocess.CalledProcessError(1, "AppImage")):
-            with self.assertRaises(subprocess.CalledProcessError):
+        (self.root / "app/bin/VPro.deb").write_bytes(deb("amd64"))
+        (self.root / "app/bin/VPro.rpm").write_bytes(b"not-an-rpm")
+        with patch.dict(os.environ, {"RELEASE_ARCH": "amd64"}):
+            with self.assertRaisesRegex(ValueError, "Expected RPM package"):
                 release.package(self.root, "linux")
         self.assertEqual(list((self.root / "app/dist-artifacts").iterdir()), [])
 
@@ -863,7 +896,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("runner: ubuntu-24.04-arm", workflow)
         self.assertIn("windows:create:nsis:installer", workflow)
         self.assertIn('CGO_ENABLED=1', workflow)
-        self.assertIn("task linux:create:appimage linux:create:deb", workflow)
+        self.assertIn("task linux:create:deb linux:create:rpm", workflow)
         self.assertNotIn("${{ inputs.version }}", workflow.split("run:", 1)[-1])
         self.assertEqual(workflow.count("contents: write"), 1)
         self.assertIn("contents: read", workflow)

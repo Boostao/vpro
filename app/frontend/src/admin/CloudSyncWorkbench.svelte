@@ -16,6 +16,8 @@
     canUploadStagingSubmission,
     buildInitialCloudMergeFieldResolutions,
     validateSnapshotTagInput,
+    redactCloudSecrets,
+    notifications,
     type CloudSyncPort,
     type CloudRoleMode,
     type CloudMergeResolution,
@@ -155,6 +157,32 @@
     return list;
   });
 
+  function sanitizeCloudText(raw: string, extraSecrets: readonly string[] = []): string {
+    return redactCloudSecrets(raw, [overridePassword, overrideAdminPassword, ...extraSecrets]);
+  }
+
+  function notifyCloud(
+    severity: 'success' | 'info' | 'warning' | 'error',
+    title: string,
+    message: string,
+    extraSecrets: readonly string[] = [],
+    toast = true,
+  ) {
+    const safeTitle = sanitizeCloudText(title, extraSecrets);
+    const safeMessage = sanitizeCloudText(message, extraSecrets);
+    if (typeof notifications === 'undefined') return;
+    const opts = {
+      category: 'background' as const,
+      source: 'BECMaster Cloud Sync',
+      contextTag: activeProject || undefined,
+      toast,
+    };
+    if (severity === 'success') notifications.success(safeTitle, safeMessage, opts);
+    else if (severity === 'warning') notifications.warning(safeTitle, safeMessage, opts);
+    else if (severity === 'error') notifications.error(safeTitle, safeMessage, opts);
+    else notifications.info(safeTitle, safeMessage, opts);
+  }
+
   onMount(() => {
     const mountGen = generation;
     void port
@@ -168,7 +196,10 @@
         if (status.sslMode) overrideSslMode = status.sslMode;
       })
       .catch(cause => {
-        if (mountGen === generation) error = `Could not read local cloud sync configuration status: ${String(cause)}`;
+        if (mountGen === generation) {
+          error = sanitizeCloudText(`Could not read local cloud sync configuration status: ${String(cause)}`);
+          notifyCloud('error', 'Cloud config status unavailable', error);
+        }
       });
   });
 
@@ -177,9 +208,11 @@
     onBusyChange?.(false);
   });
 
-  async function runCloudOp(label: string, blockedAction: string, work: (isCurrent: () => boolean) => Promise<void>) {
+  async function runCloudOp(label: string, blockedAction: string, work: (isCurrent: () => boolean, capturedSecrets: readonly string[]) => Promise<void>) {
+    const capturedSecrets = [overridePassword, overrideAdminPassword];
     if (busy || operationHeld) {
       error = `Wait for the current operation or decision before ${blockedAction}.`;
+      notifyCloud('error', 'Cloud sync action held', error, capturedSecrets);
       return;
     }
     const gen = ++generation;
@@ -187,9 +220,12 @@
     error = null;
     statusMessage = null;
     try {
-      await work(() => gen === generation);
+      await work(() => gen === generation, capturedSecrets);
     } catch (cause) {
-      if (gen === generation) error = `${label} failed: ${String(cause)}`;
+      if (gen === generation) {
+        error = sanitizeCloudText(`${label} failed: ${String(cause)}`, capturedSecrets);
+        notifyCloud('error', `${label} failed`, error, capturedSecrets);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -201,6 +237,7 @@
       const p = Number(overridePort.trim());
       if (!Number.isInteger(p) || p < 1 || p > 65535) {
         error = 'Server port must be an integer between 1 and 65535.';
+        notifyCloud('error', 'Invalid cloud server port', error);
         return;
       }
       parsedPort = p;
@@ -220,7 +257,7 @@
             adminPassword: overrideAdminPassword !== '' ? overrideAdminPassword : undefined,
           }
     );
-    await runCloudOp('Configure cloud session', 'changing cloud session settings', async isCurrent => {
+    await runCloudOp('Configure cloud session', 'changing cloud session settings', async (isCurrent, capturedSecrets) => {
       const status = await port.configureCloudSyncSession(req);
       if (!isCurrent()) return;
       overrideHost = '';
@@ -233,14 +270,18 @@
       configStatus = status;
       selectedRoleMode = status.activeRoleMode;
       if (connectionReport && connectionReport.activeRoleMode !== status.activeRoleMode) connectionReport = null;
-      statusMessage = clearOverrides
-        ? `Cleared session credential overrides (active role: ${status.activeRoleMode}).`
-        : `Updated session cloud settings (${status.activeRoleMode} role; password inputs cleared).`;
+      statusMessage = sanitizeCloudText(
+        clearOverrides
+          ? `Cleared session credential overrides (active role: ${status.activeRoleMode}).`
+          : `Updated session cloud settings (${status.activeRoleMode} role; password inputs cleared).`,
+        capturedSecrets,
+      );
+      notifyCloud('success', 'Cloud session configured', statusMessage, capturedSecrets);
     });
   }
 
   async function switchRoleAndConnect() {
-    await runCloudOp('Cloud connection probe', 'probing cloud status', async isCurrent => {
+    await runCloudOp('Cloud connection probe', 'probing cloud status', async (isCurrent, capturedSecrets) => {
       const currentRole = configStatus?.activeRoleMode ?? connectionReport?.activeRoleMode;
       if (currentRole !== selectedRoleMode) {
         const status = await port.configureCloudSyncSession($state.snapshot({ roleMode: selectedRoleMode }));
@@ -251,20 +292,38 @@
       if (!isCurrent()) return;
       connectionReport = report;
       selectedRoleMode = report.activeRoleMode;
-      statusMessage = report.connected
-        ? `Connected to ${report.database} as ${report.activeRoleMode} (${report.latencyMs} ms, ${report.becmasterPlotCount} BECMaster plots).`
-        : 'Cloud connection probe completed: server reported not connected.';
+      statusMessage = sanitizeCloudText(
+        report.connected
+          ? `Connected to ${report.database} as ${report.activeRoleMode} (${report.latencyMs} ms, ${report.becmasterPlotCount} BECMaster plots).`
+          : 'Cloud connection probe completed: server reported not connected.',
+        capturedSecrets,
+      );
+      notifyCloud(
+        report.connected ? 'success' : 'warning',
+        report.connected ? `Connected to ${report.database}` : 'Cloud server not connected',
+        statusMessage,
+        capturedSecrets,
+      );
     });
   }
 
   async function syncProvincialStandards() {
-    await runCloudOp('Sync Provincial Standards', 'syncing provincial standards', async isCurrent => {
+    await runCloudOp('Sync Provincial Standards', 'syncing provincial standards', async (isCurrent, capturedSecrets) => {
       const res = await port.pullCloudStandards(contextId);
       if (!isCurrent()) return;
       pullStandardsResult = res;
-      statusMessage = res.alreadyCurrent
-        ? `Provincial standards already current (Release ${res.releaseId}, BEC v${res.becVersion}, Taxa v${res.taxonomyVersion}).`
-        : `Updated local provincial standards to Release ${res.releaseId} (BEC v${res.becVersion}, Taxa v${res.taxonomyVersion}).`;
+      statusMessage = sanitizeCloudText(
+        res.alreadyCurrent
+          ? `Provincial standards already current (Release ${res.releaseId}, BEC v${res.becVersion}, Taxa v${res.taxonomyVersion}).`
+          : `Updated local provincial standards to Release ${res.releaseId} (BEC v${res.becVersion}, Taxa v${res.taxonomyVersion}).`,
+        capturedSecrets,
+      );
+      notifyCloud(
+        res.updated ? 'success' : 'info',
+        res.updated ? 'Provincial standards updated' : 'Provincial standards current',
+        statusMessage,
+        capturedSecrets,
+      );
       if (res.updated && res.state && oncontextswitched) oncontextswitched(res.state);
     });
   }
@@ -280,7 +339,8 @@
       allowFullCheckout: subsetAllowFull,
     });
     if (built.error || !built.filter) {
-      error = built.error ?? 'Invalid subset filter.';
+      error = sanitizeCloudText(built.error ?? 'Invalid subset filter.');
+      notifyCloud('error', 'Invalid subset filter', error);
       return null;
     }
     return built.filter;
@@ -290,18 +350,23 @@
     const filter = buildSubsetDraftOrError();
     if (!filter) return;
     const filterPayload = $state.snapshot(filter);
-    await runCloudOp('Preview BECMaster Subset', 'previewing BECMaster subset', async isCurrent => {
+    await runCloudOp('Preview BECMaster Subset', 'previewing BECMaster subset', async (isCurrent, capturedSecrets) => {
       const preview = await port.previewBECMasterSubset(filterPayload);
       if (!isCurrent()) return;
       subsetPreview = preview;
-      statusMessage = `Subset preview matched ${preview.matchingPlots} plot(s) and ${preview.matchingVeg} vegetation row(s).`;
+      statusMessage = sanitizeCloudText(
+        `Subset preview matched ${preview.matchingPlots} plot(s) and ${preview.matchingVeg} vegetation row(s).`,
+        capturedSecrets,
+      );
+      notifyCloud('info', 'BECMaster subset preview ready', statusMessage, capturedSecrets);
     });
   }
 
   async function runPullSubset() {
     const projErr = validateProjectNameInput(subsetTargetProject);
     if (projErr) {
-      error = projErr;
+      error = sanitizeCloudText(projErr);
+      notifyCloud('error', 'Invalid subset target project', error);
       return;
     }
     const filter = buildSubsetDraftOrError();
@@ -312,35 +377,50 @@
       destinationPath: subsetDestinationPath.trim() || undefined,
       activateOnSuccess: subsetActivateOnSuccess,
     });
-    await runCloudOp('Download Regional Subset', 'downloading BECMaster subset', async isCurrent => {
+    await runCloudOp('Download Regional Subset', 'downloading BECMaster subset', async (isCurrent, capturedSecrets) => {
       const res = await port.pullBECMasterSubset(contextId, req);
       if (!isCurrent()) return;
       pullSubsetResult = res;
-      statusMessage = `Checked out ${res.plotCount} plot(s) (${res.vegCount} veg rows) into "${res.targetProject}" at ${res.destinationPath}.`;
+      statusMessage = sanitizeCloudText(
+        `Checked out ${res.plotCount} plot(s) (${res.vegCount} veg rows) into "${res.targetProject}" at ${res.destinationPath}.`,
+        capturedSecrets,
+      );
+      notifyCloud('success', `Checked out "${res.targetProject}"`, statusMessage, capturedSecrets);
       if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
     });
   }
 
   async function runStagingPreflight() {
     const useSu = $state.snapshot(stagingUseActiveSu);
-    await runCloudOp('Staging pre-flight preview', 'running staging pre-flight', async isCurrent => {
+    await runCloudOp('Staging pre-flight preview', 'running staging pre-flight', async (isCurrent, capturedSecrets) => {
       const preflight = await port.previewStagingSubmission(contextId, useSu);
       if (!isCurrent()) return;
       stagingPreflight = preflight;
       stagingCustodianOverride = false;
-      statusMessage = preflight.compliancePassed
-        ? `Pre-flight compliance passed for "${preflight.project}" (${preflight.plotCount} plots, ${preflight.userSpeciesManifest.rowCount} personal species).`
-        : `Pre-flight detected ${preflight.blockingErrorCount} blocking compliance error(s) in "${preflight.project}".`;
+      statusMessage = sanitizeCloudText(
+        preflight.compliancePassed
+          ? `Pre-flight compliance passed for "${preflight.project}" (${preflight.plotCount} plots, ${preflight.userSpeciesManifest.rowCount} personal species).`
+          : `Pre-flight detected ${preflight.blockingErrorCount} blocking compliance error(s) in "${preflight.project}".`,
+        capturedSecrets,
+      );
+      notifyCloud(
+        preflight.compliancePassed ? 'success' : 'warning',
+        preflight.compliancePassed ? 'Staging pre-flight passed' : 'Staging pre-flight blocked',
+        statusMessage,
+        capturedSecrets,
+      );
     });
   }
 
   async function runSubmitToStaging() {
     if (!stagingPreflight) {
       error = 'Run Pre-Flight Compliance & Package Preview before uploading a staging bundle.';
+      notifyCloud('error', 'Staging pre-flight required', error);
       return;
     }
     if (!canUploadStagingSubmission(stagingPreflight, activeRoleMode, stagingCustodianOverride)) {
       error = 'Upload blocked: resolve pre-flight compliance errors before submitting to BECMaster staging.';
+      notifyCloud('error', 'Staging upload blocked', error);
       return;
     }
     const req = $state.snapshot({
@@ -350,11 +430,15 @@
       baseSnapshotTag: stagingBaseSnapshotTag.trim() || undefined,
       custodianOverride: !stagingPreflight.compliancePassed && activeRoleMode === 'custodian' ? stagingCustodianOverride : undefined,
     });
-    await runCloudOp('Upload Staging Bundle', 'uploading to staging', async isCurrent => {
+    await runCloudOp('Upload Staging Bundle', 'uploading to staging', async (isCurrent, capturedSecrets) => {
       const res = await port.submitProjectToStaging(contextId, req);
       if (!isCurrent()) return;
       submitStagingResult = res;
-      statusMessage = `Uploaded staging submission ${res.submissionId} for "${res.projectName}" (${res.plotCount} plots, status: ${res.status}).`;
+      statusMessage = sanitizeCloudText(
+        `Uploaded staging submission ${res.submissionId} for "${res.projectName}" (${res.plotCount} plots, status: ${res.status}).`,
+        capturedSecrets,
+      );
+      notifyCloud('success', `Uploaded staging submission ${res.submissionId}`, statusMessage, capturedSecrets);
     });
   }
 
@@ -364,32 +448,43 @@
       submittedBy: filterOpts.submittedBy?.trim() || undefined,
       limit: 50,
     });
-    await runCloudOp('Refresh Submissions', 'refreshing staging submissions', async isCurrent => {
+    await runCloudOp('Refresh Submissions', 'refreshing staging submissions', async (isCurrent, capturedSecrets) => {
       const rows = await port.listStagingSubmissions(filter);
       if (!isCurrent()) return;
       submissions = rows ?? [];
-      statusMessage = `Loaded ${submissions.length} staging submission(s).`;
+      statusMessage = sanitizeCloudText(`Loaded ${submissions.length} staging submission(s).`, capturedSecrets);
+      notifyCloud('info', 'Staging submissions refreshed', statusMessage, capturedSecrets);
     });
   }
 
   async function runBootstrapSchemas() {
-    await runCloudOp('Bootstrap Cloud Schemas', 'bootstrapping cloud schemas', async isCurrent => {
+    await runCloudOp('Bootstrap Cloud Schemas', 'bootstrapping cloud schemas', async (isCurrent, capturedSecrets) => {
       const res = await port.bootstrapCloudSchemas();
       if (!isCurrent()) return;
       bootstrapResult = res;
-      statusMessage = `Verified cloud schemas v${res.schemaVersion} (${res.schemasVerified.join(', ')}).`;
+      statusMessage = sanitizeCloudText(`Verified cloud schemas v${res.schemaVersion} (${res.schemasVerified.join(', ')}).`, capturedSecrets);
+      notifyCloud('success', 'Cloud schemas verified', statusMessage, capturedSecrets);
     });
   }
 
   async function runVerifyAuditChain() {
     const parsedLimit = Number.isInteger(Number(auditChainLimit)) && Number(auditChainLimit) > 0 ? Number(auditChainLimit) : 0;
-    await runCloudOp('Verify Audit Chain', 'verifying BECMaster audit hash chain', async isCurrent => {
+    await runCloudOp('Verify Audit Chain', 'verifying BECMaster audit hash chain', async (isCurrent, capturedSecrets) => {
       const res = await port.verifyBECMasterAuditChain(parsedLimit);
       if (!isCurrent()) return;
       auditChainResult = res;
-      statusMessage = res.valid
-        ? `BECMaster audit chain verified across ${res.verifiedRows} row(s) (tail ${res.tailHash ? res.tailHash.slice(0, 16) : 'empty'}).`
-        : `BECMaster audit chain verification FAILED across ${res.verifiedRows} row(s).`;
+      statusMessage = sanitizeCloudText(
+        res.valid
+          ? `BECMaster audit chain verified across ${res.verifiedRows} row(s) (tail ${res.tailHash ? res.tailHash.slice(0, 16) : 'empty'}).`
+          : `BECMaster audit chain verification FAILED across ${res.verifiedRows} row(s).`,
+        capturedSecrets,
+      );
+      notifyCloud(
+        res.valid ? 'success' : 'error',
+        res.valid ? 'BECMaster audit chain verified' : 'BECMaster audit chain verification failed',
+        statusMessage,
+        capturedSecrets,
+      );
     });
   }
 
@@ -403,17 +498,22 @@
       vmetaDataPath: draft.vmetaDataPath?.trim() || undefined,
       notes: draft.notes?.trim() || undefined,
     });
-    await runCloudOp('Publish Standards to Cloud', 'publishing provincial standards', async isCurrent => {
+    await runCloudOp('Publish Standards to Cloud', 'publishing provincial standards', async (isCurrent, capturedSecrets) => {
       const res = await port.publishStandardsToCloud(contextId, req);
       if (!isCurrent()) return;
       publishStandardsResult = res;
-      statusMessage = `Published provincial standards release "${res.releaseId}" (BEC v${res.becVersion}, Taxonomy v${res.taxonomyVersion}) in ${res.elapsedMs} ms.`;
+      statusMessage = sanitizeCloudText(
+        `Published provincial standards release "${res.releaseId}" (BEC v${res.becVersion}, Taxonomy v${res.taxonomyVersion}) in ${res.elapsedMs} ms.`,
+        capturedSecrets,
+      );
+      notifyCloud('success', `Published standards ${res.releaseId}`, statusMessage, capturedSecrets);
     });
   }
 
   async function runSeedBaseline(extras: SeedBaselineExtras = {}) {
     if (!seedSourceDbPath.trim()) {
       error = 'Source VPro project (.db) path is required to seed the BECMaster baseline.';
+      notifyCloud('error', 'Baseline source path required', error);
       return;
     }
     const req = $state.snapshot({
@@ -424,34 +524,46 @@
       skipAudit: extras.skipAudit || undefined,
       notes: extras.notes?.trim() || undefined,
     });
-    await runCloudOp('Seed BECMaster Baseline', 'seeding BECMaster baseline', async isCurrent => {
+    await runCloudOp('Seed BECMaster Baseline', 'seeding BECMaster baseline', async (isCurrent, capturedSecrets) => {
       const res = await port.seedBECMasterBaseline(req);
       if (!isCurrent()) return;
       seedBaselineResult = res;
-      statusMessage = `Seeded BECMaster baseline from "${res.sourceProject}" (${res.plotCount} plots, ${res.vegCount} veg rows, snapshot ${res.snapshotTag}).`;
+      statusMessage = sanitizeCloudText(
+        `Seeded BECMaster baseline from "${res.sourceProject}" (${res.plotCount} plots, ${res.vegCount} veg rows, snapshot ${res.snapshotTag}).`,
+        capturedSecrets,
+      );
+      notifyCloud('success', 'BECMaster baseline seeded', statusMessage, capturedSecrets);
     });
   }
 
   async function inspectSubmission(submissionId: string) {
     const idSnap = $state.snapshot(submissionId);
-    await runCloudOp('Inspect Submission Detail', 'inspecting submission details', async isCurrent => {
+    await runCloudOp('Inspect Submission Detail', 'inspecting submission details', async (isCurrent, capturedSecrets) => {
       const detail = await port.getStagingSubmissionDetail(idSnap);
       if (!isCurrent()) return;
       selectedSubmissionDetail = detail;
-      statusMessage = `Loaded submission ${detail.summary.submissionId} (${detail.provisionalSpeciesDiffs.length} provisional species crosswalk item(s)).`;
+      statusMessage = sanitizeCloudText(
+        `Loaded submission ${detail.summary.submissionId} (${detail.provisionalSpeciesDiffs.length} provisional species crosswalk item(s)).`,
+        capturedSecrets,
+      );
+      notifyCloud('info', `Loaded submission ${detail.summary.submissionId}`, statusMessage, capturedSecrets);
     });
   }
 
   async function runPreviewStagingMerge(submissionId: string, baseDbPath = '') {
     const req = $state.snapshot({ submissionId, baseDbPath: baseDbPath.trim() || undefined });
-    await runCloudOp('Preview Staging-to-Master Merge', 'previewing 3-way staging merge', async isCurrent => {
+    await runCloudOp('Preview Staging-to-Master Merge', 'previewing 3-way staging merge', async (isCurrent, capturedSecrets) => {
       const preview = await port.previewStagingToMasterMerge(req);
       if (!isCurrent()) return;
       mergePreview = preview;
       mergeExecuteResult = null;
       mergePlotResolutions = {};
       mergeFieldResolutions = buildInitialCloudMergeFieldResolutions(preview);
-      statusMessage = `3-Way Merge preview for ${preview.submissionId}: ${preview.addedCount} Added, ${preview.fastForwardCount} Fast-Forward, ${preview.conflictCount} Conflict, ${preview.identicalCount} Identical.`;
+      statusMessage = sanitizeCloudText(
+        `3-Way Merge preview for ${preview.submissionId}: ${preview.addedCount} Added, ${preview.fastForwardCount} Fast-Forward, ${preview.conflictCount} Conflict, ${preview.identicalCount} Identical.`,
+        capturedSecrets,
+      );
+      notifyCloud('info', `Merge preview ready (${preview.submissionId})`, statusMessage, capturedSecrets);
     });
   }
 
@@ -472,6 +584,7 @@
   async function runExecuteStagingMerge(opts: { baseDbPath?: string; defaultConflictResolution?: CloudMergeResolution; actor?: string } = {}) {
     if (!mergePreview) {
       error = 'Run Review & 3-Way Diff vs BECMaster before approving merge.';
+      notifyCloud('error', 'Merge preview required', error);
       return;
     }
     const req = $state.snapshot({
@@ -485,12 +598,16 @@
       reviewerNotes: mergeReviewerNotes.trim() || undefined,
       actor: opts.actor?.trim() || undefined,
     });
-    await runCloudOp('Approve & Merge into BECMaster', 'executing BECMaster merge', async isCurrent => {
+    await runCloudOp('Approve & Merge into BECMaster', 'executing BECMaster merge', async (isCurrent, capturedSecrets) => {
       const res = await port.executeStagingToMasterMerge(req);
       if (!isCurrent()) return;
       mergeExecuteResult = res;
       mergePreview = null;
-      statusMessage = `Merged submission ${res.submissionId} (tx ${res.mergeTxId}): +${res.addedPlots} added, ${res.updatedPlots} updated, ${res.auditRowsWritten} audit row(s).`;
+      statusMessage = sanitizeCloudText(
+        `Merged submission ${res.submissionId} (tx ${res.mergeTxId}): +${res.addedPlots} added, ${res.updatedPlots} updated, ${res.auditRowsWritten} audit row(s).`,
+        capturedSecrets,
+      );
+      notifyCloud('success', `Merged submission ${res.submissionId}`, statusMessage, capturedSecrets);
     });
   }
 
@@ -498,26 +615,30 @@
     const targetId = submissionId ?? mergePreview?.submissionId ?? selectedSubmissionDetail?.summary.submissionId;
     if (!targetId) {
       error = 'Select a staging submission before rejecting.';
+      notifyCloud('error', 'Submission selection required', error);
       return;
     }
     if (!mergeReviewerNotes.trim()) {
       error = 'Reviewer notes are required when rejecting a staging submission.';
+      notifyCloud('error', 'Reviewer notes required', error);
       return;
     }
     const req = $state.snapshot({ submissionId: targetId, reviewerNotes: mergeReviewerNotes.trim(), actor: actor?.trim() || undefined });
-    await runCloudOp('Reject Staging Submission', 'rejecting a staging submission', async isCurrent => {
+    await runCloudOp('Reject Staging Submission', 'rejecting a staging submission', async (isCurrent, capturedSecrets) => {
       const summary = await port.rejectStagingSubmission(req);
       if (!isCurrent()) return;
       submissions = submissions.map(s => (s.submissionId === summary.submissionId ? summary : s));
       if (mergePreview?.submissionId === summary.submissionId) mergePreview = null;
-      statusMessage = `Rejected submission ${summary.submissionId} (status: ${summary.status}).`;
+      statusMessage = sanitizeCloudText(`Rejected submission ${summary.submissionId} (status: ${summary.status}).`, capturedSecrets);
+      notifyCloud('success', `Rejected submission ${summary.submissionId}`, statusMessage, capturedSecrets);
     });
   }
 
   async function runCreateSnapshot(extras: { destinationPath?: string; zoneFilter?: string; notes?: string } = {}) {
     const tagErr = validateSnapshotTagInput(snapshotTag);
     if (tagErr) {
-      error = tagErr;
+      error = sanitizeCloudText(tagErr);
+      notifyCloud('error', 'Invalid snapshot tag', error);
       return;
     }
     const req = $state.snapshot({
@@ -527,17 +648,21 @@
       destinationPath: extras.destinationPath?.trim() || undefined,
       zoneFilter: extras.zoneFilter?.trim() || undefined,
     });
-    await runCloudOp('Create BECMaster Snapshot', 'cutting a BECMaster snapshot', async isCurrent => {
+    await runCloudOp('Create BECMaster Snapshot', 'cutting a BECMaster snapshot', async (isCurrent, capturedSecrets) => {
       const rec = await port.createBECMasterSnapshot(contextId, req);
       if (!isCurrent()) return;
       latestSnapshotCreated = rec;
       snapshots = [rec, ...snapshots.filter(s => s.snapshotTag !== rec.snapshotTag)];
-      statusMessage = `Created BECMaster snapshot "${rec.snapshotTag}" (${rec.plotCount} plots, ${rec.vegCount} veg rows).`;
+      statusMessage = sanitizeCloudText(
+        `Created BECMaster snapshot "${rec.snapshotTag}" (${rec.plotCount} plots, ${rec.vegCount} veg rows).`,
+        capturedSecrets,
+      );
+      notifyCloud('success', `Created snapshot "${rec.snapshotTag}"`, statusMessage, capturedSecrets);
     });
   }
 
   async function refreshSnapshotsAndLedger() {
-    await runCloudOp('Load Snapshots & Download Log', 'loading snapshots and download log', async isCurrent => {
+    await runCloudOp('Load Snapshots & Download Log', 'loading snapshots and download log', async (isCurrent, capturedSecrets) => {
       const [snapRows, logRows] = await Promise.all([
         port.listBECMasterSnapshots(),
         port.listBECMasterDownloadLog(50),
@@ -545,12 +670,52 @@
       if (!isCurrent()) return;
       snapshots = snapRows ?? [];
       downloadLog = logRows ?? [];
-      statusMessage = `Loaded ${snapshots.length} snapshot(s) and ${downloadLog.length} download log record(s).`;
+      statusMessage = sanitizeCloudText(
+        `Loaded ${snapshots.length} snapshot(s) and ${downloadLog.length} download log record(s).`,
+        capturedSecrets,
+      );
+      notifyCloud('info', 'Snapshots & download log loaded', statusMessage, capturedSecrets);
     });
   }
 </script>
 
 <div class="min-w-0 space-y-5 text-[#313132]" data-cloud-sync-workbench aria-label="Cloud BECMaster Sync Workbench">
+  <div
+    data-workbench-sticky-bar
+    class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 rounded-t border-b border-stone-200 bg-white/95 px-3 py-2 backdrop-blur-xs"
+  >
+    <div class="flex flex-wrap items-center gap-2 text-xs text-[#313132]">
+      <span class="font-semibold text-[#003366]">BECMaster Cloud Sync</span>
+      <span class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-[#003366]">
+        {activeRoleMode === 'custodian' ? 'Custodian Admin' : 'Contributor'}
+      </span>
+      <span class="text-slate-600">
+        {connectionReport?.connected ? `Connected (${connectionReport.database})` : 'Offline / Unprobed'}
+      </span>
+      {#if activeProject}
+        <span class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700">Project: {activeProject}</span>
+      {/if}
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        disabled={busy || operationHeld}
+        class="rounded bg-[#003366] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
+        onclick={switchRoleAndConnect}
+      >
+        Test Connection
+      </button>
+      <button
+        type="button"
+        disabled={busy || operationHeld}
+        class="rounded border border-[#003366] bg-white px-2.5 py-1 text-xs font-semibold text-[#003366] hover:bg-slate-50 disabled:opacity-50"
+        onclick={syncProvincialStandards}
+      >
+        Sync Standards
+      </button>
+    </div>
+  </div>
+
   <CloudSyncAuthPanel
     {busy} {operationHeld} {activeRoleMode} {configStatus} {connectionReport} {pullStandardsResult}
     bind:selectedRoleMode bind:overrideHost bind:overridePort bind:overrideDatabase bind:overrideSslMode
@@ -560,9 +725,6 @@
 
   {#if error}
     <p role="alert" class="rounded border-l-4 border-red-700 bg-red-50 p-3 text-sm text-red-900">{error}</p>
-  {/if}
-  {#if statusMessage}
-    <p role="status" class="rounded border-l-4 border-[#003366] bg-slate-50 p-3 text-sm text-slate-900">{statusMessage}</p>
   {/if}
 
   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -21,7 +21,7 @@ Ecological plot management, field validation, classification, 3D mapping, and sy
 
 ### 1. Install VPro 2.0 Desktop (`app/`)
 
-Download the Windows installer or portable `.zip`, macOS Universal `.dmg`, or Linux `.AppImage`/`.deb` with SHA-256 verification from **<https://boostao.github.io/vpro/>**.
+Download the Windows installer or portable `.zip`, macOS Universal `.dmg`, or Linux `.deb`/`.rpm` with SHA-256 verification from **<https://boostao.github.io/vpro/>**.
 
 ### 2. Install the `vpro` R Companion Package (`r/`)
 

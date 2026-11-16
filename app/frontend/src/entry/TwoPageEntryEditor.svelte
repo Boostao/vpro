@@ -31,7 +31,7 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
 
   let { contextId, project, plot, cache, revision, onchange, onbusy, onclosed, oncommitted, embedded: childContent, childBlocked = false, pictureReaderAvailable = false, auditReaderAvailable = false, googleEarthReaderAvailable = false, vegetationTableReaderAvailable = false, environmentTableReaderAvailable = false, projectMetadataReaderAvailable = false, vegetationTableSU = '', vegetationTableSUPath = '', sourceProjectPath = '',
     projectMetadataClient, metadataRestorationAvailable = false,
-    profilingReaderAvailable = false, profilingSource = null, externalScope = null, sourceBlocked = true, initialForm = 'FS882-8x6XL',
+    profilingReaderAvailable = false, profilingSource = null, externalScope = null, sourceBlocked = true, initialForm = 'FS882-8x6XL', standalone = false,
     onExtendedShrubsChange, onOpenProfileSU }: {
     contextId: string; project: string; plot: string; cache: TwoPageEntrySessionCache; revision: number;
     onchange: () => void; onbusy: (busy: boolean) => void; onclosed: () => void; oncommitted: () => Promise<void>;
@@ -41,7 +41,7 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     vegetationTableReaderAvailable?: boolean; environmentTableReaderAvailable?: boolean; projectMetadataReaderAvailable?: boolean; vegetationTableSU?: string; vegetationTableSUPath?: string;
     projectMetadataClient?: ReturnType<typeof bindContextPlots>; metadataRestorationAvailable?: boolean;
     profilingReaderAvailable?: boolean; profilingSource?: { name: string; path: string } | null;
-    externalScope?: GoogleEarthScope | null; sourceBlocked?: boolean; initialForm?: TwoPageParentForm;
+    externalScope?: GoogleEarthScope | null; sourceBlocked?: boolean; initialForm?: TwoPageParentForm; standalone?: boolean;
     onExtendedShrubsChange?: (enabled: boolean) => void;
     onOpenProfileSU?: () => void;
   } = $props();
@@ -111,6 +111,21 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
       event.preventDefault();
       fieldCardModalOpen = !fieldCardModalOpen;
       if (fieldCardModalOpen) fieldCardSplitOpen = false;
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      const subPanelActive =
+        (typeof profilingOpen !== 'undefined' && Boolean(profilingOpen)) ||
+        (typeof projectMetadataOpen !== 'undefined' && Boolean(projectMetadataOpen)) ||
+        (typeof environmentTableOpen !== 'undefined' && Boolean(environmentTableOpen)) ||
+        (typeof vegetationTableOpen !== 'undefined' && Boolean(vegetationTableOpen)) ||
+        (typeof googleEarthOpen !== 'undefined' && Boolean(googleEarthOpen)) ||
+        (typeof auditOpen !== 'undefined' && Boolean(auditOpen)) ||
+        (typeof externalOpen !== 'undefined' && Boolean(externalOpen));
+      if (!subPanelActive && !childBlocked && editingEnabled && close.canSave && !close.busy && !close.blocked) {
+        void operation('save');
+      }
     }
   }
 
@@ -137,6 +152,14 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     sessions.set(sourceForm, created); return created;
   }
   $effect(() => { onbusy(view.busy || view.referencesBusy || externalOpen || sourceRefreshing || auditOpen || auditBusy || googleEarthOpen || googleEarthBusy || vegetationTableOpen || vegetationTableBusy || environmentTableOpen || environmentTableBusy || Boolean(projectMetadataOpen) || projectMetadataBusy || profilingOpen || profilingBusy); });
+  let autoLoadedKey = '';
+  $effect(() => {
+    if (!standalone || !owner.plot) return;
+    const key = `${owner.contextId}:${owner.project}:${owner.plot}:${form}`;
+    if (autoLoadedKey === key || view.original || view.busy || view.referencesBusy || view.error || view.referenceError || view.blocked) return;
+    autoLoadedKey = key;
+    void operation('load');
+  });
   onDestroy(() => {
     const active = session.view();
     if (active.operation === 'read' || active.referencesBusy) session.cancel();
@@ -146,8 +169,49 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
       unsaved: true, busy: projectMetadataBusy, canSave: false, blocked: true, error,
       saveReason: 'Finish the owned metadata editor before closing the complete-entry source.',
     };
+    if (typeof standalone !== 'undefined' && standalone) {
+      const draftState = getDraftState();
+      const subPanelOpen = externalOpen || auditOpen || googleEarthOpen || vegetationTableOpen || environmentTableOpen || Boolean(projectMetadataOpen) || profilingOpen;
+      if (subPanelOpen || childBlocked) {
+        return {
+          ...close,
+          unsaved: true,
+          busy: draftState.busy,
+          blocked: draftState.blocked || childBlocked,
+          canSave: false,
+          error: error ?? close.error,
+          saveReason: 'Finish or return from the active sub-panel before saving or leaving this plot.',
+        };
+      }
+      if (!draftState.unsaved) {
+        return {
+          ...close,
+          unsaved: false,
+          busy: draftState.busy,
+          blocked: close.blocked,
+          canSave: true,
+          error: error ?? close.error,
+          saveReason: '',
+        };
+      }
+      return {
+        ...close,
+        unsaved: true,
+        busy: draftState.busy,
+        blocked: close.blocked,
+        canSave: editingEnabled && close.canSave && !childBlocked,
+        error: error ?? close.error,
+        saveReason: close.saveReason || (!editingEnabled ? 'Editing is disabled.' : ''),
+      };
+    }
     return { ...close, unsaved: true, busy: close.busy || projectMetadataBusy || profilingBusy, canSave: false, error: error ?? close.error,
       saveReason: 'Save or Undo complete-entry drafts explicitly, then close their review before saving or closing the plot.' };
+  }
+  export async function saveForClose(): Promise<boolean> {
+    const state = getCloseState();
+    if (!(typeof standalone !== 'undefined' && standalone) || !state.canSave) { error = state.saveReason; return false; }
+    await operation('save');
+    return !getDraftState().unsaved && !close.blocked && error === null;
   }
   export function getDraftState(): EditorCloseState {
     const states = [...sessions.values()].map(owned => owned.closeState());
@@ -336,6 +400,12 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
     await operation('load');
   }
   async function operation(action: 'load' | 'save' | 'undo' | 'retain' | 'prune' | 'references') {
+    const plotName = typeof owner !== 'undefined' && owner?.plot ? owner.plot : '';
+    const notifOpts = {
+      category: 'entry' as const,
+      source: 'Two-Page Form',
+      contextTag: plotName ? `Plot ${plotName}` : undefined,
+    };
     try {
       if (profilingOpen) throw new Error('Finish the owned profile review before parent operations.');
       if (projectMetadataOpen) throw new Error('Finish the owned project metadata review before parent operations.');
@@ -351,14 +421,55 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
         throw new Error('Resolve retained linked-child drafts, reads and receipts before changing the parent.');
       }
       error = null;
+      const hadUnsaved = action === 'undo' && (
+        (typeof session?.closeState === 'function' ? Boolean(session.closeState()?.unsaved) : false) ||
+        (typeof close !== 'undefined' ? Boolean(close?.unsaved) : false)
+      );
       const ok = action === 'load' ? await session.load() : action === 'save' ? await session.save()
         : action === 'undo' ? await session.undo() : action === 'references' ? await session.loadReferences()
         : await session.restore(action === 'retain' ? AuditRestoreAction.AuditRestoreRetain : AuditRestoreAction.AuditRestorePrune);
-      if (!ok) error = session.view().error ?? session.view().referenceError;
-      else if (action === 'save' && typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
-        notifications.success(`Two-page plot ${owner.plot} saved`, `${form} complete-entry changes committed atomically.`);
+      if (!ok) {
+        error = session.view().error ?? session.view().referenceError;
+        if (error && (action === 'save' || action === 'retain' || action === 'prune' || action === 'load') &&
+            typeof notifications !== 'undefined' && typeof notifications?.error === 'function') {
+          notifications.error(
+            `Two-page ${action === 'load' ? 'reload' : action === 'save' ? 'save' : 'restore'} failed`,
+            error,
+            notifOpts,
+          );
+        }
+      } else if (typeof notifications !== 'undefined') {
+        if (action === 'save' && typeof notifications?.success === 'function') {
+          notifications.success(
+            plotName ? `Two-page plot ${plotName} saved` : 'Two-page plot saved',
+            `${typeof form !== 'undefined' ? form : 'Two-page'} complete-entry changes committed atomically.`,
+            notifOpts,
+          );
+        } else if (action === 'undo' && hadUnsaved && typeof notifications?.info === 'function') {
+          notifications.info(
+            'Two-page changes undone',
+            plotName ? `Plot ${plotName} restored to last saved state.` : 'Draft changes discarded.',
+            notifOpts,
+          );
+        } else if ((action === 'retain' || action === 'prune') && typeof notifications?.success === 'function') {
+          notifications.success(
+            plotName ? `Two-page plot ${plotName} restored` : 'Two-page plot restored',
+            action === 'retain' ? 'Restored with audit history retained.' : 'Restored with audit history pruned.',
+            notifOpts,
+          );
+        }
       }
-    } catch (cause) { error = `Complete-entry operation refused; owned state retained: ${String(cause)}`; }
+    } catch (cause) {
+      error = `Complete-entry operation refused; owned state retained: ${String(cause)}`;
+      if ((action === 'save' || action === 'retain' || action === 'prune' || action === 'load') &&
+          typeof notifications !== 'undefined' && typeof notifications?.error === 'function') {
+        notifications.error(
+          `Two-page ${action === 'load' ? 'reload' : action === 'save' ? 'save' : 'restore'} refused`,
+          error,
+          notifOpts,
+        );
+      }
+    }
   }
   function stage(column: string, input: TwoPageEntryInput) {
     try {
@@ -473,8 +584,14 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
 <svelte:window onkeydown={handleTwoPageKeydown} />
 
 <section class="two-page-entry-shell space-y-4 rounded border border-[#D8D8D8] bg-white p-4 text-[#313132]" aria-label="Complete two-page entry review" data-two-page-entry-panel={form}>
+  <div class="vpro-sticky-bar sticky top-0 z-20 bg-white/95 pb-2 space-y-2" data-two-page-sticky-bar>
   <div class="two-page-entry-header flex flex-wrap items-center justify-between gap-3 border-b border-[#D1D5DB] pb-3">
-    <h3 class="font-bold text-[#003366]">{form}: one owned complete-entry draft</h3>
+    <div class="flex flex-wrap items-center gap-2.5">
+      <h3 class="font-bold text-[#003366]">{form === 'FS882-8x6XL-CHARS' ? 'FS882 (2-Page, Extended Shrubs): Ecosystem Field Form' : 'FS882 (2-Page): Ecosystem Field Form'}</h3>
+      {#if view.original || close.unsaved}
+        <span class="px-2 py-0.5 rounded text-xs font-semibold {close.unsaved ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-600'}">{close.unsaved ? 'Draft Unsaved' : 'Clean'}</span>
+      {/if}
+    </div>
     <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"
@@ -497,18 +614,101 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
       </button>
     </div>
   </div>
-  {#if error}<p role="alert" class="text-sm text-[#D8292F]">{error}</p>{/if}
+  {#if !(profilingOpen && profileSource) && projectMetadataOpen !== 'edit' && projectMetadataOpen !== 'read' && !environmentTableOpen && !vegetationTableOpen && !googleEarthOpen && !auditOpen && !(externalOpen && sourceScope?.projectPath && sourceScope.suPath)}
+  <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-stone-200 bg-stone-50 p-2">
+    <div class="flex flex-wrap items-center gap-1.5">
+      <button type="button" class="rounded bg-[#003366] hover:bg-[#002244] px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={childBlocked || !editingEnabled || !close.canSave || close.busy || close.blocked}
+        onclick={() => operation('save')}>Save</button>
+      <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={close.busy} onclick={() => operation('undo')}>Undo</button>
+      <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={childBlocked || !reviewEnabled || close.unsaved || close.busy || close.blocked}
+        onclick={() => operation('load')}>Reload Plot</button>
+      <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={!reviewEnabled || close.busy || !view.original || view.blocked}
+        onclick={() => operation('references')}>Refresh Lists</button>
+      <label class="inline-flex items-center gap-1.5 rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800">
+        <input type="checkbox" data-extended-shrubs checked={form === 'FS882-8x6XL-CHARS'}
+          disabled={childBlocked || close.unsaved || close.busy || close.blocked}
+          onchange={event => chooseForm(event.currentTarget.checked ? 'FS882-8x6XL-CHARS' : 'FS882-8x6XL')} />
+        Show extended shrub layers
+      </label>
+      <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={childBlocked || close.unsaved || close.busy || close.blocked} onclick={closeReview}>{standalone ? 'Close Form' : 'Return to 6x4 Form'}</button>
+      {#if view.busy && view.operation === 'read' || view.referencesBusy}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50" onclick={cancel}>Cancel Read</button>
+      {/if}
+      {#if view.historyId}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={childBlocked || !editingEnabled || close.unsaved || close.busy || close.blocked}
+          onclick={() => operation('retain')}>Restore (retain audits)</button>
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={childBlocked || !editingEnabled || close.unsaved || close.busy || close.blocked}
+          onclick={() => operation('prune')}>Restore (prune audits)</button>
+      {/if}
+    </div>
+    <div class="flex flex-wrap items-center gap-1.5">
+      {#if metadataEditingEnabled}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-two-page-project-metadata-edit-open data-source-control={projection.metadataAction.controlId}
+          disabled={!canOpenMetadataEditor()} onclick={openMetadataEditor}>{projection.metadataAction.caption}</button>
+      {/if}
+      {#if profilingReaderAvailable}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-two-page-profiling-open data-source-control={projection.profilingAction.controlId}
+          disabled={!profileSource?.name || profileSource.name === 'None' || !profileSource.path ||
+            !vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
+            sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
+            Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
+          onclick={openProfiling}>{projection.profilingAction.caption}</button>
+      {/if}
+      {#if projectMetadataReaderAvailable}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-two-page-project-metadata-open data-source-control={metadataEditingEnabled ? undefined : projection.metadataAction.controlId}
+          disabled={!vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
+            sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
+            Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
+          onclick={openProjectMetadata}>{metadataEditingEnabled ? 'View Project Metadata' : projection.metadataAction.caption}</button>
+      {/if}
+      {#if environmentTableReaderAvailable}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-two-page-environment-table-open data-source-control={projection.environmentTableAction.controlId}
+          disabled={!vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
+            sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
+            Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
+          onclick={openEnvironmentTable}>{projection.environmentTableAction.caption}</button>
+      {/if}
+      {#if vegetationTableReaderAvailable}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-two-page-vegetation-table-open data-source-control={projection.vegetationTableAction.controlId}
+          disabled={!vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
+            sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
+            Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
+          onclick={openVegetationTable}>{projection.vegetationTableAction.caption}</button>
+      {/if}
+      {#if googleEarthReaderAvailable}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-two-page-google-earth-open data-source-control={projection.googleEarthAction.controlId}
+          disabled={!googleEarthPath || sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
+            Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
+          onclick={openGoogleEarth}>{projection.googleEarthAction.caption} (KML)</button>
+      {/if}
+      {#if auditReaderAvailable}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-two-page-audit-open data-source-control={projection.auditAction.controlId}
+          disabled={sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
+            Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
+          onclick={openAudit}>{projection.auditAction.caption}</button>
+      {/if}
+      {#if sourceScope}
+        <button type="button" class="rounded border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" data-source-control={projection.reverseAction.controlId} data-two-page-su-environment-open
+          disabled={sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked || Boolean(getDraftState().error)
+            || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
+          onclick={openExternalTransfer}>{projection.reverseAction.caption} (External SU)</button>
+      {/if}
+    </div>
+  </div>
+  {/if}
+  </div>
+  {#if error}<div role="alert" class="rounded border border-[#e59ba0] bg-[#fbeaea] px-3 py-2 text-xs text-[#a61b20] flex items-center justify-between gap-2"><span>{error}</span><button type="button" class="rounded border border-[#e59ba0] bg-white px-2 py-0.5 text-[11px] font-medium text-[#a61b20] hover:bg-[#f8d7da]" onclick={() => { error = null; }}>Dismiss</button></div>{/if}
   {#if view.error && view.error !== error}<p role="alert" class="text-sm text-[#D8292F]">{view.error}</p>{/if}
   {#if view.referenceError}<p role="alert" class="text-sm text-[#D8292F]">{view.referenceError}</p>{/if}
-  {#if view.blocked}<p role="alert">Write outcome or refresh is unresolved. Undo / reload explicitly; never replay Save.</p>{/if}
-  {#if view.busy || view.referencesBusy}<p role="status">Complete-entry {view.operation ?? 'reference read'} in progress...</p>{/if}
+  {#if view.blocked}<p role="alert" class="rounded border border-[#e59ba0] bg-[#fbeaea] px-3 py-2 text-xs text-[#a61b20]">Write outcome or refresh is unresolved. Undo / reload explicitly; never replay Save.</p>{/if}
+  {#if view.busy || view.referencesBusy}<p role="status" class="text-xs font-medium text-[#003366]">{view.operation === 'save' ? 'Saving plot changes...' : 'Loading two-page plot data...'}</p>{/if}
   {#if profilingOpen && profileSource}
-    <p role="status">Source action {form} / {projection.profilingAction.controlId}; pinned opening plot {JSON.stringify(owner.plot)}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Plot {owner.plot} — Plot Profiling</p>
     <TwoPageProfilingPanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
       projectPath={vegetationScope.projectPath} su={vegetationScope.su} suPath={vegetationScope.suPath}
       profileSource={profileSource} onBusyChange={value => profilingBusy = value} />
     <div class="flex flex-wrap gap-2">
-      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1.5 text-xs text-[#313132]" disabled={profilingBusy} onclick={returnFromProfiling}>Return to complete-entry source</button>
+      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-3 py-1.5 text-xs text-[#313132]" disabled={profilingBusy} onclick={returnFromProfiling}>Back to Two-Page Form</button>
       {#if onOpenProfileSU}
         <button type="button" data-two-page-create-su-link
           class="rounded bg-[#003366] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
@@ -519,7 +719,7 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
       {/if}
     </div>
   {:else if projectMetadataOpen === 'edit'}
-    <p role="status">Source action {form} / {projection.metadataAction.controlId}; pinned opening plot {JSON.stringify(owner.plot)}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Plot {owner.plot} — Project Metadata</p>
     {#if metadataClient}
       <ProjectMetadataEditor bind:this={metadataEditor} client={metadataClient} contextId={owner.contextId} plot={owner.plot}
         allowRestoration={metadataRestore} onbusy={value => projectMetadataBusy = value}
@@ -529,119 +729,43 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
       <p role="alert">The owned context-bound metadata client is unavailable. No metadata operation can run.</p>
     {/if}
   {:else if projectMetadataOpen === 'read'}
-    <p role="status">Source action {form} / {projection.metadataAction.controlId}; pinned opening plot {JSON.stringify(owner.plot)}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Plot {owner.plot} — Project Metadata</p>
     <TwoPageProjectMetadataPanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
       projectPath={vegetationScope.projectPath} su={vegetationScope.su} suPath={vegetationScope.suPath}
       onEditMetadata={metadataEditingEnabled ? switchReadMetadataToEdit : undefined}
       editDisabled={!canSwitchToMetadataEdit()}
       onBusyChange={value => projectMetadataBusy = value} />
-    <button type="button" disabled={projectMetadataBusy} onclick={returnFromProjectMetadata}>Return to complete-entry source</button>
+    <button type="button" class="rounded border border-stone-300 bg-white px-3 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={projectMetadataBusy} onclick={returnFromProjectMetadata}>Back to Two-Page Form</button>
   {:else if environmentTableOpen}
-    <p role="status">Source action {form} / {projection.environmentTableAction.controlId}; pinned opening plot {JSON.stringify(owner.plot)}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Plot {owner.plot} — Environment Table</p>
     <TwoPageEnvironmentTablePanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
       projectPath={vegetationScope.projectPath} su={vegetationScope.su} suPath={vegetationScope.suPath}
       onBusyChange={value => environmentTableBusy = value} />
-    <button type="button" disabled={environmentTableBusy} onclick={returnFromEnvironmentTable}>Return to complete-entry source</button>
+    <button type="button" class="rounded border border-stone-300 bg-white px-3 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={environmentTableBusy} onclick={returnFromEnvironmentTable}>Back to Two-Page Form</button>
   {:else if vegetationTableOpen}
-    <p role="status">Source action {form} / {projection.vegetationTableAction.controlId}; pinned opening plot {JSON.stringify(owner.plot)}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Plot {owner.plot} — Vegetation Table</p>
     <TwoPageVegetationTablePanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
       projectPath={vegetationScope.projectPath} su={vegetationScope.su} suPath={vegetationScope.suPath}
       onBusyChange={value => vegetationTableBusy = value} />
-    <button type="button" disabled={vegetationTableBusy} onclick={returnFromVegetationTable}>Return to complete-entry source</button>
+    <button type="button" class="rounded border border-stone-300 bg-white px-3 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={vegetationTableBusy} onclick={returnFromVegetationTable}>Back to Two-Page Form</button>
   {:else if googleEarthOpen}
-    <p role="status">Source action {form} / {projection.googleEarthAction.controlId}; pinned saved plot {JSON.stringify(owner.plot)}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Plot {owner.plot} — Google Earth KML</p>
     <TwoPageGoogleEarthPanel contextId={owner.contextId} project={owner.project} projectPath={googleEarthPath} plot={owner.plot} {form}
       onBusyChange={value => googleEarthBusy = value} />
-    <button type="button" disabled={googleEarthBusy} onclick={returnFromGoogleEarth}>Return to complete-entry source</button>
+    <button type="button" class="rounded border border-stone-300 bg-white px-3 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={googleEarthBusy} onclick={returnFromGoogleEarth}>Back to Two-Page Form</button>
   {:else if auditOpen}
-    <p role="status">Source action {form} / {projection.auditAction.controlId}; pinned literal plot {JSON.stringify(owner.plot)}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Plot {owner.plot} — Audit Trail</p>
     <TwoPageAuditPanel contextId={owner.contextId} project={owner.project} plot={owner.plot} {form}
       onRestored={async () => { await session.load(); await refreshMetadataPeers(); }}
       onBusyChange={value => auditBusy = value} />
-    <button type="button" disabled={auditBusy} onclick={returnFromAudit}>Return to complete-entry source</button>
+    <button type="button" class="rounded border border-stone-300 bg-white px-3 py-1 text-xs font-medium text-stone-800 hover:bg-stone-50 disabled:opacity-50" disabled={auditBusy} onclick={returnFromAudit}>Back to Two-Page Form</button>
   {:else if externalOpen && sourceScope?.projectPath && sourceScope.suPath}
-    <p role="status">Source action {form} / {projection.reverseAction.controlId}: selected-SU bulk scope, not only {owner.plot}.</p>
+    <p role="status" class="text-xs font-semibold text-[#003366]">Site Unit Transfer ({owner.plot})</p>
     <ExternalSUEnvironmentTransfer bind:this={externalEditor} contextId={sourceScope.contextId}
       project={sourceScope.project} projectPath={sourceScope.projectPath} su={sourceScope.su} suPath={sourceScope.suPath}
       onclosed={() => { void returnFromExternalTransfer(); }} />
-    {#if sourceRefreshing}<p role="status">Refreshing source variants; the committed transfer will not be replayed.</p>{/if}
+    {#if sourceRefreshing}<p role="status">Refreshing plot fields after transfer...</p>{/if}
   {:else}
-  <div class="flex flex-wrap gap-2">
-    {#if metadataEditingEnabled}
-      <button type="button" data-two-page-project-metadata-edit-open data-source-control={projection.metadataAction.controlId}
-        disabled={!canOpenMetadataEditor()} onclick={openMetadataEditor}>{projection.metadataAction.caption}</button>
-    {/if}
-    {#if profilingReaderAvailable}
-      <button type="button" data-two-page-profiling-open data-source-control={projection.profilingAction.controlId}
-        disabled={!profileSource?.name || profileSource.name === 'None' || !profileSource.path ||
-          !vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
-          sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
-          Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
-        onclick={openProfiling}>{projection.profilingAction.caption}: read-only saved data</button>
-    {/if}
-    {#if projectMetadataReaderAvailable}
-      <button type="button" data-two-page-project-metadata-open data-source-control={metadataEditingEnabled ? undefined : projection.metadataAction.controlId}
-        disabled={!vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
-          sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
-          Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
-        onclick={openProjectMetadata}>{projection.metadataAction.caption}: read-only saved data</button>
-    {/if}
-    {#if environmentTableReaderAvailable}
-      <button type="button" data-two-page-environment-table-open data-source-control={projection.environmentTableAction.controlId}
-        disabled={!vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
-          sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
-          Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
-        onclick={openEnvironmentTable}>{projection.environmentTableAction.caption}: read-only saved data</button>
-    {/if}
-    {#if vegetationTableReaderAvailable}
-      <button type="button" data-two-page-vegetation-table-open data-source-control={projection.vegetationTableAction.controlId}
-        disabled={!vegetationScope.projectPath || !vegetationScope.su || vegetationScope.su !== 'None' && !vegetationScope.suPath ||
-          sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
-          Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
-        onclick={openVegetationTable}>{projection.vegetationTableAction.caption}: read-only saved data</button>
-    {/if}
-    {#if googleEarthReaderAvailable}
-      <button type="button" data-two-page-google-earth-open data-source-control={projection.googleEarthAction.controlId}
-        disabled={!googleEarthPath || sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
-          Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
-        onclick={openGoogleEarth}>{projection.googleEarthAction.caption}: saved-plot KML</button>
-    {/if}
-    {#if auditReaderAvailable}
-      <button type="button" data-two-page-audit-open data-source-control={projection.auditAction.controlId}
-        disabled={sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked ||
-          Boolean(getDraftState().error) || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
-        onclick={openAudit}>{projection.auditAction.caption}: source history</button>
-    {/if}
-    {#if sourceScope}
-      <button type="button" data-source-control={projection.reverseAction.controlId} data-two-page-su-environment-open
-        disabled={sourceBlocked || childBlocked || getDraftState().unsaved || getDraftState().busy || getDraftState().blocked || Boolean(getDraftState().error)
-          || [...sessions.values()].some(peer => Boolean(peer.view().error || peer.view().referenceError))}
-        onclick={openExternalTransfer}>{projection.reverseAction.caption}: separate file</button>
-    {/if}
-    <label class="inline-flex items-center gap-2 rounded border px-2 py-1 text-sm">
-      <input type="checkbox" data-extended-shrubs checked={form === 'FS882-8x6XL-CHARS'}
-        disabled={childBlocked || close.unsaved || close.busy || close.blocked}
-        onchange={event => chooseForm(event.currentTarget.checked ? 'FS882-8x6XL-CHARS' : 'FS882-8x6XL')} />
-      Show extended shrub layers
-    </label>
-    <button type="button" disabled={childBlocked || !reviewEnabled || close.unsaved || close.busy || close.blocked}
-      onclick={() => operation('load')}>Load complete entry</button>
-    <button type="button" disabled={childBlocked || !editingEnabled || !close.canSave || close.busy || close.blocked}
-      onclick={() => operation('save')}>Save complete entry</button>
-    <button type="button" disabled={close.busy} onclick={() => operation('undo')}>Undo / reload</button>
-    <button type="button" disabled={!reviewEnabled || close.busy || !view.original || view.blocked}
-      onclick={() => operation('references')}>Refresh draft choices</button>
-    <button type="button" disabled={childBlocked || close.unsaved || close.busy || close.blocked} onclick={closeReview}>Close complete-entry review</button>
-    {#if view.busy && view.operation === 'read' || view.referencesBusy}
-      <button type="button" onclick={cancel}>Cancel entry read</button>
-    {/if}
-    {#if view.historyId}
-      <button type="button" disabled={childBlocked || !editingEnabled || close.unsaved || close.busy || close.blocked}
-        onclick={() => operation('retain')}>Restore (retain audits)</button>
-      <button type="button" disabled={childBlocked || !editingEnabled || close.unsaved || close.busy || close.blocked}
-        onclick={() => operation('prune')}>Restore (prune audits)</button>
-    {/if}
-  </div>
   <div class="two-page-split-wrap" class:split-open={fieldCardSplitOpen && twoPageFieldCardViewModel !== null}>
     <div class="two-page-form-col min-w-0 flex-1" data-field-card-form-pane>
       {#if view.original && view.snapshot}
@@ -651,11 +775,7 @@ import type { SIVIParentSharedReference } from '../../bindings/github.com/boosta
             input: fieldInput, labelled: true,
           }))} identity={identityField} embedded={childContent} />
       {/if}
-      <p class="mt-3 text-xs text-stone-600">One atomic parent Save covers all three accepted field scopes.
-        Identity changes, coordinate-conversion callbacks, metadata creation, picture creation and unverified source actions remain unavailable.
-        Linked children use their independently gated readers/editors outside this parent transaction.
-        The picture child is read-only. Metadata editing uses its separate owned editor and transaction;
-        record deletion remains outside this review.</p>
+      <p class="mt-3 text-xs text-stone-600">Saves all Site, Location, and Soil summary fields on this two-page card together. Soil horizons and Vegetation layers save in their own sections below.</p>
     </div>
     {#if fieldCardSplitOpen && twoPageFieldCardViewModel}
       <div class="two-page-dock-col">

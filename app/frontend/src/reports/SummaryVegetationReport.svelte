@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { ImportExportService, VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
@@ -114,7 +118,17 @@
   async function loadFieldList() {
     if (!fieldListScopeAvailable || fieldListPeerDisabled || fieldListPeerValidation || fieldListState?.readBusy) return;
     fieldListError = '';
-    try { await fieldList.load(ownedContext()); } catch (cause) { fieldListError = String(cause); }
+    try { await fieldList.load(ownedContext()); }
+    catch (cause) {
+      fieldListError = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation field list failed', fieldListError, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
+    }
   }
   function dismissInitialFieldListReadError() {
     if (!fieldListScopeAvailable || !fieldListState?.canDismissInitialReadError) return;
@@ -165,7 +179,16 @@
       if (request !== preferenceGeneration) return;
       preferences.applyLoaded(value, token);
     } catch (cause) {
-      if (request === preferenceGeneration) preferences.rejectRead(cause);
+      if (request === preferenceGeneration) {
+        preferences.rejectRead(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Vegetation preferences load failed', String(cause), {
+            category: 'reports',
+            source: 'Summary Vegetation',
+            contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+          });
+        }
+      }
     } finally {
       if (request === preferenceGeneration) { preferenceReadBusy = false; reportBusy(); }
     }
@@ -177,6 +200,13 @@
       await preferences.save(value => VegetationReportService.SaveSummaryVegetationPreferences(contextId, JSON.stringify(value)));
     } catch (cause) {
       preferenceReadError = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation preferences save failed', preferenceReadError, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
     }
   }
   function editPreference(field: 'groupBy' | 'average' | 'display' | 'showClass', raw: string) {
@@ -218,6 +248,13 @@
       lumpTables = Array.from(new Set(names));
     } catch (cause) {
       lumpDiscoveryError = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation lump table discovery failed', lumpDiscoveryError, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
     }
   }
   function buildConfiguredRequestJSON(): string {
@@ -248,15 +285,51 @@
     exclusionSummaryText = '';
     const useConfigured = unitScope !== 'su' || hierarchyHeaderEnabled || effectiveCombineVariants || lumpTable !== '' ||
       includeGoldstreamMetadata || !!qualityView?.saved?.enforce;
-    if (!useConfigured) {
-      await session.show(port);
-      return;
+    try {
+      if (!useConfigured) {
+        await session.show(port);
+      } else {
+        await session.showConfigured(port, buildConfiguredRequestJSON());
+      }
+      const next = session.view();
+      if (next.error && typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation preview failed', next.error, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
+    } catch (cause) {
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation preview failed', String(cause), {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
     }
-    await session.showConfigured(port, buildConfiguredRequestJSON());
   }
   async function previewWithPreferences() {
     exclusionSummaryText = '';
-    await session.showWithPreferences(port);
+    try {
+      await session.showWithPreferences(port);
+      const next = session.view();
+      if (next.error && typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation preview failed', next.error, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
+    } catch (cause) {
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation preview failed', String(cause), {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
+    }
   }
   onDestroy(() => {
     session.cancel(port); unsubscribe(); unsubscribePreferences?.(); unsubscribeQuality?.(); unsubscribePresentation?.();
@@ -266,7 +339,19 @@
 </script>
 
 <section data-summary-vegetation aria-label="Summary Vegetation" class="summary-vegetation">
-  <h1>Summary Vegetation</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+    <h1>Summary Vegetation</h1>
+    <div class="actions">
+      <button onclick={previewReport} disabled={!enabled || unavailableScope || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || preferenceInvalid ||
+        qualityMutationHeld || qualityUnavailable || presentationMutationHeld || presentationInvalid || !!viewState.draftError || !!preferences && !preferenceView?.initialized} data-summary-preview>
+        Preview Summary Vegetation
+      </button>
+      <button type="button" onclick={previewWithPreferences} disabled={!enabled || !contextId || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || presentationMutationHeld} data-summary-preview-preferences>
+        Preview with Saved Preferences
+      </button>
+      {#if viewState.busy}<button onclick={() => session.cancel(port)} data-summary-cancel>Cancel preview</button><p role="status">Reading owned vegetation and Site Unit Table…</p>{/if}
+    </div>
+  </header>
   {#if viewState.error}<p role="alert" class="error">{viewState.error}</p>{/if}
   {#if viewState.draftError}<p role="alert" class="error">{viewState.draftError}</p>{/if}
   {#if preferenceReadError}<p role="alert" class="error">{preferenceReadError}</p>{/if}
@@ -481,16 +566,6 @@
       }} />
     {#if exclusionSummaryText}<p role="status" data-summary-exclusion-status>{exclusionSummaryText}</p>{/if}
   </div>
-  <div class="actions">
-    <button onclick={previewReport} disabled={!enabled || unavailableScope || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || preferenceInvalid ||
-      qualityMutationHeld || qualityUnavailable || presentationMutationHeld || presentationInvalid || !!viewState.draftError || !!preferences && !preferenceView?.initialized} data-summary-preview>
-      Preview Summary Vegetation
-    </button>
-    <button type="button" onclick={previewWithPreferences} disabled={!enabled || !contextId || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || presentationMutationHeld} data-summary-preview-preferences>
-      Preview with Saved Preferences
-    </button>
-    {#if viewState.busy}<button onclick={() => session.cancel(port)} data-summary-cancel>Cancel preview</button><p role="status">Reading owned vegetation and Site Unit Table…</p>{/if}
-  </div>
   <p>Preview uses retained drafts{preferences ? '; preferences change only through explicit Save' : ', not saved preferences'}. Original Access Load/View Report setters are not run.
     Stored presentation drafts are separate and are not consumed by this raw crosstab preview.
     Strata and Lifeform Presence Class and Significance Class remain unavailable because the original grouped query has a criteria type mismatch.
@@ -559,6 +634,7 @@
 
 <style>
   .summary-vegetation { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; background: #F2F2F2; color: #313132; min-width: 0; }
+  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding-inline: .75rem; border-radius: .35rem; }
   .summary-vegetation h1, .summary-vegetation h2 { margin: 0; color: #003366; }
   .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; background: #FFFFFF; padding: .9rem; border: 1px solid #D8D8D8; border-radius: .5rem; }
   .scope-toggles { display: flex; flex-wrap: wrap; gap: 1rem; padding: .65rem .9rem; background: #FFFFFF; border: 1px solid #D8D8D8; border-radius: .5rem; }

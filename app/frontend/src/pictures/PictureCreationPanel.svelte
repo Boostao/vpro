@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { PictureCreationSession } from './pictureCreationSession';
+  import { notifications } from '../shell/notificationService.svelte';
   let { session, disabled = false }: { session: PictureCreationSession; disabled?: boolean } = $props();
   let revision = $state(0);
   $effect(() => session.subscribe(() => untrack(() => revision++)));
@@ -10,17 +11,83 @@
     error = '';
     try {
       if (operation === 'cancel') session.cancel();
-      else if (operation === 'add') {
-        if (disabled) throw new Error('Finish the current picture read or metadata draft before adding.');
-        if (await session.add(crypto.randomUUID())) await session.preview();
-      } else if (operation === 'create') {
-        if (await session.create()) await session.preview();
-      } else if (operation === 'selection') await session.recoverSelection();
-      else if (operation === 'receipt') await session.recoverReceipt();
-      else if (operation === 'preview') await session.preview();
-      else if (operation === 'release') await session.release();
-      else await session.acknowledge();
-    } catch (cause) { error = `Picture operation unavailable; retained state is unchanged: ${String(cause)}`; }
+      else if (operation === 'add' || operation === 'create') {
+        if (operation === 'add' && disabled) throw new Error('Finish the current picture read or metadata draft before adding.');
+        const ok = operation === 'add' ? await session.add(crypto.randomUUID()) : await session.create();
+        const current = session.view();
+        const plotTag = current.receipt?.plotNumber
+          ? `Plot ${current.receipt.plotNumber}`
+          : current.request?.plotNumber
+            ? `Plot ${current.request.plotNumber}`
+            : undefined;
+        if (ok && current.receipt) {
+          notifications.success(
+            'Picture attached',
+            `Attached ${current.receipt.selectedPath} (ID ${current.receipt.id}, history ${current.receipt.historyId}).`,
+            { category: 'entry', source: 'Plot Pictures', contextTag: plotTag },
+          );
+          await session.preview();
+          const afterPreview = session.view();
+          if (afterPreview.error) {
+            notifications.error('Picture preview unavailable', afterPreview.error, {
+              category: 'entry',
+              source: 'Plot Pictures',
+              contextTag: plotTag,
+            });
+          }
+        } else if (current.error) {
+          notifications.error('Picture attach failed', current.error, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotTag,
+          });
+        }
+      } else if (operation === 'selection') {
+        const ok = await session.recoverSelection();
+        const current = session.view();
+        if (!ok && current.error) {
+          notifications.error('Picture selection recovery failed', current.error, { category: 'entry', source: 'Plot Pictures' });
+        }
+      } else if (operation === 'receipt') {
+        const ok = await session.recoverReceipt();
+        const current = session.view();
+        const plotTag = current.receipt?.plotNumber ? `Plot ${current.receipt.plotNumber}` : undefined;
+        if (ok && current.receipt) {
+          notifications.success('Picture receipt recovered', `Recovered attach receipt for ${current.receipt.selectedPath}.`, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotTag,
+          });
+        } else if (current.error) {
+          notifications.error('Picture receipt recovery failed', current.error, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotTag,
+          });
+        }
+      } else if (operation === 'preview') {
+        const ok = await session.preview();
+        const current = session.view();
+        if (!ok && current.error) {
+          notifications.error('Picture preview unavailable', current.error, { category: 'entry', source: 'Plot Pictures' });
+        }
+      } else if (operation === 'release') {
+        const ok = await session.release();
+        const current = session.view();
+        if (!ok && current.error) {
+          notifications.error('Picture selection release failed', current.error, { category: 'entry', source: 'Plot Pictures' });
+        }
+      } else {
+        const ok = await session.acknowledge();
+        const current = session.view();
+        if (!ok && current.error) {
+          notifications.error('Picture acknowledgement failed', current.error, { category: 'entry', source: 'Plot Pictures' });
+        }
+      }
+    } catch (cause) {
+      error = `Picture operation unavailable; retained state is unchanged: ${String(cause)}`;
+      notifications.error('Picture attach unavailable', error, { category: 'entry', source: 'Plot Pictures' });
+    }
   }
 </script>
 

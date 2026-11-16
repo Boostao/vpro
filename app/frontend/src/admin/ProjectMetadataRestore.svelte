@@ -7,6 +7,7 @@
   import { metadataCellText } from './projectMetadataEditor';
   import { metadataLabel } from './projectMetadataPresentation';
   import { validateMetadataRestorationHistory, validateMetadataRestorationReview, metadataRestorationRequest, validateMetadataRestorationResult } from './projectMetadataRestore';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { client, contextId, plot, onclosed, onbusy, oncommitted }: {
     client: ReturnType<typeof bindContextPlots>; contextId: string; plot: string;
@@ -75,12 +76,26 @@
       await oncommitted(committedRow);
       history = validateMetadataRestorationHistory(await client.ListProjectMetadataRestoreHistory(plot));
       success = `Restored ${result.restoredRows} audited metadata fields; ${result.prunedAuditRows} proven audit rows pruned. Original typed provenance and no-replay receipt retained. No parent, other metadata record or support database changed.`;
+      if (typeof notifications !== 'undefined') {
+        notifications.success('Project metadata restored', success, {
+          category: 'admin',
+          source: 'Project Metadata',
+          contextTag: plot ? `Plot ${plot}` : undefined,
+        });
+      }
     } catch (cause) {
       if (committed || String(cause).includes('metadata edit committed, but')) {
         committedRow ??= proposal?.current.rowId ?? null;
         committedFailure = true; proposal = null;
         error = `Metadata restoration committed, but response/refresh/cleanup failed. Reload without replaying the completed write: ${String(cause)}`;
       } else error = `Restoration failed; reviewed proposal retained for retry or explicit dismissal: ${String(cause)}`;
+      if (typeof notifications !== 'undefined') {
+        notifications.error(committed ? 'Metadata restoration refresh failed' : 'Metadata restoration failed', error, {
+          category: 'admin',
+          source: 'Project Metadata',
+          contextTag: plot ? `Plot ${plot}` : undefined,
+        });
+      }
     } finally { saving = false; }
   }
   function close() {

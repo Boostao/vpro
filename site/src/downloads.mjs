@@ -11,11 +11,11 @@ export const assetLinks = Object.freeze({
   'dl-win-arm64-zip': 'vpro-windows-arm64.zip',
   'dl-mac-dmg': 'vpro-macos-universal.dmg',
   'dl-mac-zip': 'vpro-macos-universal.zip',
-  'dl-linux-appimage': 'vpro-linux-amd64.AppImage',
   'dl-linux-deb': 'vpro-linux-amd64.deb',
+  'dl-linux-rpm': 'vpro-linux-amd64.rpm',
   'dl-linux-tar': 'vpro-linux-amd64.tar.gz',
-  'dl-linux-arm64-appimage': 'vpro-linux-arm64.AppImage',
   'dl-linux-arm64-deb': 'vpro-linux-arm64.deb',
+  'dl-linux-arm64-rpm': 'vpro-linux-arm64.rpm',
   'dl-linux-arm64-tar': 'vpro-linux-arm64.tar.gz',
   'dl-r-sdk': 'vpro-r-sdk.tar.gz',
   'dl-checksums': 'SHA256SUMS.txt',
@@ -352,8 +352,8 @@ export function recommendedAsset(client) {
   if (client.os === 'darwin') return 'dl-mac-dmg';
   if (client.os === 'windows') return client.arch === 'arm64' ? 'dl-win-arm64-installer'
     : client.arch === 'amd64' ? 'dl-win-x64-installer' : null;
-  if (client.os === 'linux') return client.arch === 'arm64' ? 'dl-linux-arm64-appimage'
-    : client.arch === 'amd64' ? 'dl-linux-appimage' : null;
+  if (client.os === 'linux') return client.arch === 'arm64' ? 'dl-linux-arm64-deb'
+    : client.arch === 'amd64' ? 'dl-linux-deb' : null;
   return null;
 }
 
@@ -577,7 +577,7 @@ export async function loadPortal(document, navigator, fetch, options = {}) {
         primary.href = release.links[recommended];
         const friendlyArch = activeClient.arch === 'arm64' ? 'ARM64' : '64-bit (x64)';
         primaryText.textContent = activeClient.os === 'windows' ? `Download Windows ${friendlyArch} installer`
-          : activeClient.os === 'darwin' ? 'Download macOS Universal (.dmg)' : `Download Linux ${friendlyArch} AppImage`;
+          : activeClient.os === 'darwin' ? 'Download macOS Universal (.dmg)' : `Download Linux ${friendlyArch} (.deb)`;
         const recMeta = release.metadata[recommended];
         if (primaryMetaEl) {
           primaryMetaEl.textContent = recMeta ? `${recMeta.name} (${recMeta.formattedSize})` : assetLinks[recommended];

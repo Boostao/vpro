@@ -10,6 +10,7 @@
     validatePromoteCandidateDraft,
     validateQuartoGuideDraft,
     computeDendrogramSVGLayout,
+    notifications,
     type RSidecarBackendPort,
     type RRuntimeStatus,
     type ClimateRefPeriod,
@@ -233,6 +234,25 @@
     })
   );
 
+  function notifySidecar(
+    severity: 'success' | 'info' | 'warning' | 'error',
+    title: string,
+    message: string,
+    toast = true,
+  ) {
+    if (typeof notifications === 'undefined') return;
+    const opts = {
+      category: 'background' as const,
+      source: 'R Companion',
+      contextTag: activeProject || undefined,
+      toast,
+    };
+    if (severity === 'success') notifications.success(title, message, opts);
+    else if (severity === 'warning') notifications.warning(title, message, opts);
+    else if (severity === 'error') notifications.error(title, message, opts);
+    else notifications.info(title, message, opts);
+  }
+
   async function refreshRRuntime() {
     if (operationHeld) return;
     const gen = ++generation;
@@ -246,8 +266,16 @@
       statusMessage = status.available
         ? `Detected R ${status.rVersion} (${status.rscriptPath})${status.quartoAvailable ? ` and Quarto ${status.quartoVersion}` : ''}.`
         : 'R runtime was not detected on this workstation. Review setup instructions below.';
+      notifySidecar(
+        status.available ? 'success' : 'warning',
+        status.available ? `R ${status.rVersion} detected` : 'R runtime not detected',
+        statusMessage,
+      );
     } catch (cause) {
-      if (gen === generation) error = `Runtime probe failed: ${String(cause)}`;
+      if (gen === generation) {
+        error = `Runtime probe failed: ${String(cause)}`;
+        notifySidecar('error', 'R runtime check failed', error);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -265,8 +293,12 @@
       if (gen !== generation) return;
       cachedRows = rows || [];
       statusMessage = `Loaded ${cachedRows.length} cached plot climate records (${periodSnap}).`;
+      notifySidecar('info', 'Loaded cached plot climate', statusMessage);
     } catch (cause) {
-      if (gen === generation) error = `Load cached plot climate failed: ${String(cause)}`;
+      if (gen === generation) {
+        error = `Load cached plot climate failed: ${String(cause)}`;
+        notifySidecar('error', 'Load cached plot climate failed', error);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -275,6 +307,7 @@
   async function runClimateAndDualEdatopic() {
     if (operationHeld) {
       error = 'Wait for the current operation or decision before computing climate normals.';
+      notifySidecar('error', 'Climate computation held', error);
       return;
     }
     const req = $state.snapshot({
@@ -296,8 +329,12 @@
       selectedUnitGroup = '__overall__';
       selectedCellDetail = null;
       statusMessage = `Evaluated ${res.coordinatizedPlots} plots (${res.cacheHits} cache hits, ${res.cacheMisses} computed) for ${res.refPeriod}.`;
+      notifySidecar('success', 'Climate & aSMR computation complete', statusMessage);
     } catch (cause) {
-      if (gen === generation) error = `Climate & aSMR computation failed: ${String(cause)}`;
+      if (gen === generation) {
+        error = `Climate & aSMR computation failed: ${String(cause)}`;
+        notifySidecar('error', 'Climate & aSMR computation failed', error);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -306,6 +343,7 @@
   async function submitClustering() {
     if (busy || operationHeld) {
       error = 'Wait for the current operation or decision before running R clustering.';
+      notifySidecar('error', 'R clustering held', error);
       return;
     }
     const req = $state.snapshot({
@@ -329,6 +367,7 @@
     const vErr = validateClusteringDraft(req);
     if (vErr) {
       error = vErr;
+      notifySidecar('error', 'Clustering configuration invalid', vErr);
       return;
     }
     const gen = ++generation;
@@ -344,8 +383,12 @@
       statusMessage = res.candidateTableName
         ? `Clustered ${res.plotCount} plots into ${res.clusters.length} groups and staged ${res.candidateTableName} (active SU preserved).`
         : `Clustered ${res.plotCount} plots into ${res.clusters.length} groups.`;
+      notifySidecar('success', `Clustered ${res.plotCount} plots`, statusMessage);
     } catch (cause) {
-      if (gen === generation) error = `R clustering failed: ${String(cause)}`;
+      if (gen === generation) {
+        error = `R clustering failed: ${String(cause)}`;
+        notifySidecar('error', 'R clustering failed', error);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -354,6 +397,7 @@
   async function submitPromoteCandidate() {
     if (busy || operationHeld) {
       error = 'Wait for the current operation or decision before promoting candidate SU.';
+      notifySidecar('error', 'Candidate SU promotion held', error);
       return;
     }
     const candName = clusterResult?.candidateSuName || `${activeProject}_ClusterCandidate`;
@@ -367,6 +411,7 @@
     const vErr = validatePromoteCandidateDraft(req, activeSu);
     if (vErr) {
       error = vErr;
+      notifySidecar('error', 'Candidate SU promotion blocked', vErr);
       return;
     }
     const gen = ++generation;
@@ -378,11 +423,15 @@
       if (gen !== generation) return;
       promoteResult = res;
       statusMessage = `Promoted ${res.promotedRows} plots from ${res.candidateTableName} into ${res.targetTableName}.`;
+      notifySidecar('success', `Promoted candidate to ${res.targetTableName}`, statusMessage);
       if (res.activated && res.newState && oncontextswitched) {
         oncontextswitched(res.newState);
       }
     } catch (cause) {
-      if (gen === generation) error = `Promote candidate SU failed: ${String(cause)}`;
+      if (gen === generation) {
+        error = `Promote candidate SU failed: ${String(cause)}`;
+        notifySidecar('error', 'Promote candidate SU failed', error);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -391,6 +440,7 @@
   async function submitRenderQuartoGuide() {
     if (busy || operationHeld) {
       error = 'Wait for the current operation or decision before rendering Quarto guide.';
+      notifySidecar('error', 'Quarto guide render held', error);
       return;
     }
     const req = $state.snapshot({
@@ -409,6 +459,7 @@
     const vErr = validateQuartoGuideDraft(req);
     if (vErr) {
       error = vErr;
+      notifySidecar('error', 'Quarto guide configuration invalid', vErr);
       return;
     }
     const gen = ++generation;
@@ -420,8 +471,12 @@
       if (gen !== generation) return;
       quartoResult = res;
       statusMessage = `Published ${res.guideType} HTML guide via ${res.rendererUsed} to ${res.htmlPath}.`;
+      notifySidecar('success', 'Quarto guide published', statusMessage);
     } catch (cause) {
-      if (gen === generation) error = `Quarto guide publication failed: ${String(cause)}`;
+      if (gen === generation) {
+        error = `Quarto guide publication failed: ${String(cause)}`;
+        notifySidecar('error', 'Quarto guide publication failed', error);
+      }
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -443,7 +498,7 @@
     </div>
   </header>
 
-  <div class="tab-bar" role="tablist" aria-label="R Companion Sections">
+  <div data-workbench-sticky-bar class="tab-bar sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8]" role="tablist" aria-label="R Companion Sections">
     <button
       type="button" role="tab" aria-selected={activeTab === 'runtime'}
       class:active={activeTab === 'runtime'} onclick={() => (activeTab = 'runtime')}
@@ -471,7 +526,6 @@
   </div>
 
   {#if error}<div class="banner-error" role="alert">{error}</div>{/if}
-  {#if statusMessage}<div class="banner-status" role="status">{statusMessage}</div>{/if}
 
   {#if activeTab === 'runtime'}
     <RSidecarRuntimeTab
@@ -510,6 +564,18 @@
 </section>
 
 <style>
+  .rsidecar-workbench {
+    overflow: clip;
+  }
+  .rsidecar-workbench .tab-bar[data-workbench-sticky-bar] {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(4px);
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
   .rsidecar-workbench :global(.table-scroll) {
     overflow-x: auto;
   }

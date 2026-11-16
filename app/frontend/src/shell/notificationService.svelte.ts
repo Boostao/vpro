@@ -1,8 +1,13 @@
 import { writable } from 'svelte/store';
 
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'error';
-export type NotificationCategory = 'general' | 'lmh25' | 'background';
-export type NotificationFilter = 'all' | 'errors' | 'lmh25' | 'background';
+export type NotificationCategory = 'general' | 'entry' | 'lmh25' | 'reports' | 'admin' | 'background';
+export type NotificationFilter = 'all' | 'errors' | 'entry' | 'lmh25' | 'reports' | 'background';
+
+export interface NotificationAction {
+  label: string;
+  onTrigger: () => void;
+}
 
 export interface NotificationEntry {
   id: string;
@@ -11,6 +16,8 @@ export interface NotificationEntry {
   title: string;
   message: string;
   source?: string;
+  contextTag?: string;
+  action?: NotificationAction;
   timestampIso: string;
   createdAtMs: number;
   read: boolean;
@@ -23,6 +30,8 @@ export interface ActiveToast {
   severity: NotificationSeverity;
   title: string;
   message: string;
+  contextTag?: string;
+  action?: NotificationAction;
   repeatCount: number;
   durationMs: number;
   remainingMs: number;
@@ -45,6 +54,8 @@ export interface PushNotificationInput {
   title: string;
   message?: string;
   source?: string;
+  contextTag?: string;
+  action?: NotificationAction;
   toast?: boolean;
   durationMs?: number;
 }
@@ -80,11 +91,17 @@ export function filterNotificationEntries(
   if (filter === 'errors') {
     return entries.filter((item) => item.severity === 'error');
   }
+  if (filter === 'entry') {
+    return entries.filter((item) => item.category === 'entry');
+  }
   if (filter === 'lmh25') {
-    return entries.filter((item) => item.category === 'lmh25' || (item.severity === 'warning' && item.category !== 'background'));
+    return entries.filter((item) => item.category === 'lmh25' || (item.severity === 'warning' && item.category === 'general'));
+  }
+  if (filter === 'reports') {
+    return entries.filter((item) => item.category === 'reports');
   }
   if (filter === 'background') {
-    return entries.filter((item) => item.category === 'background');
+    return entries.filter((item) => item.category === 'background' || item.category === 'admin');
   }
   return [...entries];
 }
@@ -172,6 +189,8 @@ export function createNotificationController(options: {
     const ts = now();
     const cleanTitle = String(input.title ?? '').trim() || 'Notification';
     const cleanMsg = String(input.message ?? '').trim();
+    const cleanContextTag =
+      input.contextTag === undefined ? undefined : (String(input.contextTag).trim() || undefined);
     const category: NotificationCategory = input.category ?? 'general';
     const showToast = input.toast ?? (input.severity === 'success' || input.severity === 'info' || input.severity === 'error');
     const durationMs = input.durationMs ?? DEFAULT_TOAST_DURATION_MS;
@@ -182,6 +201,7 @@ export function createNotificationController(options: {
         item.category === category &&
         item.title === cleanTitle &&
         item.message === cleanMsg &&
+        (!item.contextTag || !cleanContextTag || item.contextTag === cleanContextTag) &&
         ts - item.createdAtMs <= DEDUPE_WINDOW_MS,
     );
 
@@ -189,6 +209,9 @@ export function createNotificationController(options: {
       const existing = entries[recentIdx];
       const updated: NotificationEntry = {
         ...existing,
+        source: input.source ?? existing.source,
+        contextTag: cleanContextTag ?? existing.contextTag,
+        action: input.action ?? existing.action,
         createdAtMs: ts,
         timestampIso: new Date(ts).toISOString(),
         repeatCount: existing.repeatCount + 1,
@@ -202,6 +225,8 @@ export function createNotificationController(options: {
           const prevToast = toasts[toastIdx];
           const refreshed: ActiveToast = {
             ...prevToast,
+            contextTag: updated.contextTag,
+            action: updated.action,
             repeatCount: updated.repeatCount,
             remainingMs: durationMs,
             startedAtMs: ts,
@@ -216,6 +241,8 @@ export function createNotificationController(options: {
             severity: updated.severity,
             title: updated.title,
             message: updated.message,
+            contextTag: updated.contextTag,
+            action: updated.action,
             repeatCount: updated.repeatCount,
             durationMs,
             remainingMs: durationMs,
@@ -237,6 +264,8 @@ export function createNotificationController(options: {
       title: cleanTitle,
       message: cleanMsg,
       source: input.source,
+      contextTag: cleanContextTag,
+      action: input.action,
       timestampIso: new Date(ts).toISOString(),
       createdAtMs: ts,
       read: input.severity === 'success' && category === 'general',
@@ -257,6 +286,8 @@ export function createNotificationController(options: {
         severity: entry.severity,
         title: entry.title,
         message: entry.message,
+        contextTag: entry.contextTag,
+        action: entry.action,
         repeatCount: 1,
         durationMs,
         remainingMs: durationMs,
@@ -295,6 +326,32 @@ export function createNotificationController(options: {
     if (changed) emit();
   }
 
+  function triggerAction(entryId: string): boolean {
+    const entry = entries.find((item) => item.id === entryId);
+    let changed = false;
+    entries = entries.map((item) => {
+      if (item.id === entryId && !item.read) {
+        changed = true;
+        return { ...item, read: true };
+      }
+      return item;
+    });
+    const nextToasts = toasts.filter((t) => {
+      if (t.entryId === entryId) {
+        clearTimer(t.id);
+        changed = true;
+        return false;
+      }
+      return true;
+    });
+    if (nextToasts.length !== toasts.length) {
+      toasts = nextToasts;
+    }
+    if (changed || Boolean(entry?.action)) emit();
+    entry?.action?.onTrigger?.();
+    return Boolean(entry?.action);
+  }
+
   function clearHistory() {
     for (const id of timers.keys()) clearTimer(id);
     entries = [];
@@ -311,6 +368,7 @@ export function createNotificationController(options: {
     resumeToast,
     markRead,
     markAllRead,
+    triggerAction,
     clearHistory,
     success: (title: string, message = '', opts: Partial<PushNotificationInput> = {}) =>
       push({ ...opts, severity: 'success', title, message, toast: opts.toast ?? true }),

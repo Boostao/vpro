@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { PictureMetadataSession } from './pictureMetadataSession';
@@ -15,12 +19,80 @@
     catch (cause) { error = String(cause); }
   }
   async function operation(action: 'save' | 'resolve' | 'discard') {
+    const plotTag = view.draft?.plotNumber ? `Plot ${view.draft.plotNumber}` : undefined;
     try {
       error = '';
-      if (action === 'save') await session.save(crypto.randomUUID());
-      else if (action === 'resolve') await session.resolve();
-      else await session.discardAndReload();
-    } catch (cause) { error = String(cause); }
+      if (action === 'save') {
+        const ok = await session.save(crypto.randomUUID());
+        const current = session.view();
+        if (typeof notifications !== 'undefined') {
+          if (ok && current.receipt) {
+            notifications.success(
+              'Picture metadata saved',
+              `Saved picture metadata (history ${current.receipt.historyId}).`,
+              { category: 'entry', source: 'Plot Pictures', contextTag: plotTag },
+            );
+          } else if (ok) {
+            notifications.info(
+              'No picture metadata changes',
+              'No metadata fields differed from the saved picture row.',
+              { category: 'entry', source: 'Plot Pictures', contextTag: plotTag },
+            );
+          } else if (current.error) {
+            notifications.error('Picture metadata save failed', current.error, {
+              category: 'entry',
+              source: 'Plot Pictures',
+              contextTag: plotTag,
+            });
+          }
+        }
+      } else if (action === 'resolve') {
+        const ok = await session.resolve();
+        const current = session.view();
+        if (typeof notifications !== 'undefined') {
+          if (ok && current.receipt) {
+            notifications.success(
+              'Picture metadata receipt resolved',
+              `Resolved picture metadata save (history ${current.receipt.historyId}).`,
+              { category: 'entry', source: 'Plot Pictures', contextTag: plotTag },
+            );
+          } else if (!ok && current.error) {
+            notifications.error('Picture metadata recovery failed', current.error, {
+              category: 'entry',
+              source: 'Plot Pictures',
+              contextTag: plotTag,
+            });
+          }
+        }
+      } else {
+        const ok = await session.discardAndReload();
+        const current = session.view();
+        if (typeof notifications !== 'undefined') {
+          if (ok) {
+            notifications.info(
+              'Picture metadata draft discarded',
+              'Reloaded current picture metadata.',
+              { category: 'entry', source: 'Plot Pictures', contextTag: plotTag },
+            );
+          } else if (current.error) {
+            notifications.error('Picture metadata reload failed', current.error, {
+              category: 'entry',
+              source: 'Plot Pictures',
+              contextTag: plotTag,
+            });
+          }
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture metadata action failed', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag: plotTag,
+        });
+      }
+    }
   }
 </script>
 

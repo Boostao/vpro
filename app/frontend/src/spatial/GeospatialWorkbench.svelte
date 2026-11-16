@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { Map as MapLibreMap, NavigationControl, ScaleControl, addProtocol, setWorkerUrl, type IControl } from 'maplibre-gl';
@@ -208,7 +212,12 @@
       await runViewportKernel();
       if (plotPoints.length > 0 && !selectedPlot) void inspectPlotPin(plotPoints[0], false);
     } catch (cause) {
-      if (alive && gen === loadGeneration) errorMsg = `Failed to load spatial workbench: ${cause instanceof Error ? cause.message : String(cause)}`;
+      if (alive && gen === loadGeneration) {
+        errorMsg = `Failed to load spatial workbench: ${cause instanceof Error ? cause.message : String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('3D Map load failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+        }
+      }
     } finally {
       if (alive && gen === loadGeneration) { loading = false; setBusyState(mutating); }
     }
@@ -222,7 +231,16 @@
     suggestionBusy = true;
     try {
       const sug = await SpatialService.SuggestSpatialAttributes(pt.lat, pt.lon);
-      if (alive && gen === inspectorGeneration) selectedSuggestion = sug;
+      if (alive && gen === inspectorGeneration) {
+        selectedSuggestion = sug;
+        if (fly && typeof notifications !== 'undefined') {
+          notifications.info(
+            `Inspected plot ${pt.plotNumber}`,
+            sug?.gisBgc ? `Overlay BGC: ${sug.gisBgc}; field: ${pt.fieldBgc || 'blank'}.` : `Lat ${pt.lat.toFixed(5)}, Lon ${pt.lon.toFixed(5)}.`,
+            { category: 'entry', source: '3D Map', contextTag: project || undefined },
+          );
+        }
+      }
     } catch {
       if (alive && gen === inspectorGeneration) selectedSuggestion = null;
     } finally {
@@ -244,7 +262,12 @@
       if (!aoiSiteUnit && localMatches[0]?.gisBgc) aoiSiteUnit = `${localMatches[0].gisBgc}/01`;
       refreshDeckOverlay();
     } catch (cause) {
-      if (alive && gen === aoiGeneration) errorMsg = `AOI polygon preview failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+      if (alive && gen === aoiGeneration) {
+        errorMsg = `AOI polygon preview failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('AOI preview failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+        }
+      }
     } finally {
       if (alive && gen === aoiGeneration) aoiPreviewBusy = false;
     }
@@ -265,23 +288,39 @@
   async function runMutation(action: () => Promise<void>, label: string, keepBusyGpkg = false) {
     mutating = true; errorMsg = ''; statusMsg = ''; setBusyState(true);
     try { await action(); }
-    catch (cause) { if (alive) errorMsg = `${label}: ${cause instanceof Error ? cause.message : String(cause)}`; }
+    catch (cause) {
+      if (alive) {
+        errorMsg = `${label}: ${cause instanceof Error ? cause.message : String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error(label, errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+        }
+      }
+    }
     finally { if (alive) { mutating = false; setBusyState(loading || (keepBusyGpkg && gpkgExporting)); } }
   }
 
   async function commitAOIToSU(opts: SpatialAOICommitInput) {
     if (!contextId || mutating || loading || aoiPreviewBusy || !aoiPreview || aoiPreview.matchedCount === 0) return;
-    if (!opts.siteUnit) { errorMsg = 'Enter a target SiteUnit code (for example SBSmk1/01) before saving the AOI selection.'; return; }
+    if (!opts.siteUnit) {
+      errorMsg = 'Enter a target SiteUnit code (for example SBSmk1/01) before saving the AOI selection.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('AOI SiteUnit required', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+      }
+      return;
+    }
     await runMutation(async () => {
       const req: AssignSpatialAOIToSURequest = $state.snapshot({ ...opts, plotNumbers: aoiPreview?.plotNumbers ?? [], polygon: aoiVertices, rings: [] });
       const res = await SpatialService.AssignSpatialAOIToSU(contextId, req);
       if (!alive || !res) return;
       statusMsg = `Committed ${res.matchedPlots} AOI plots to ${res.tableName} as ${res.siteUnit} (${res.changedRows} row writes).`;
+      if (typeof notifications !== 'undefined') {
+        notifications.success('AOI plots assigned to SU', statusMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+      }
       if (res.activated) await onContextChanged?.(); else await loadWorkbenchData();
     }, 'AOI SU assignment failed');
   }
 
-  async function loadBatchAuditQA() {
+  async function loadBatchAuditQA(announce = true) {
     if (!contextId) return;
     const gen = ++qaGeneration;
     loading = true; errorMsg = ''; setBusyState(true);
@@ -290,8 +329,20 @@
       if (!alive || gen !== qaGeneration) return;
       qaReport = report;
       qaSelectedPlots = initQASelectedPlots(report?.rows ?? []);
+      if (announce && typeof notifications !== 'undefined') {
+        notifications.info(
+          'Spatial QA audit ready',
+          `Audited ${report?.rows?.length ?? 0} plot(s) (${report?.bgcMismatchCount ?? 0} BGC mismatch, ${report?.utmDivergenceCount ?? 0} UTM divergence).`,
+          { category: 'entry', source: '3D Map', contextTag: project || undefined },
+        );
+      }
     } catch (cause) {
-      if (alive && gen === qaGeneration) errorMsg = `Spatial QA batch audit failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+      if (alive && gen === qaGeneration) {
+        errorMsg = `Spatial QA batch audit failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Spatial QA audit failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+        }
+      }
     } finally {
       if (alive && gen === qaGeneration) { loading = false; setBusyState(mutating); }
     }
@@ -301,6 +352,9 @@
     if (!contextId || mutating || loading) return;
     if (!opts.allScoped && opts.plotNumbers.length === 0) {
       errorMsg = 'Select at least one plot in the Spatial QA table or run across all scoped plots.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Coordinate & BGC stamp blocked', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+      }
       return;
     }
     await runMutation(async () => {
@@ -317,15 +371,24 @@
       const res = await SpatialService.ApplySpatialAttributes(contextId, req);
       if (!alive || !res) return;
       statusMsg = `Stamped ${res.updatedPlots} plot(s) (${res.updatedCells} cell updates, ${res.auditRows} <Project>_Audit entries).`;
+      if (typeof notifications !== 'undefined') {
+        notifications.success('Coordinate & BGC stamp applied', statusMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+      }
       await loadWorkbenchData();
-      await loadBatchAuditQA();
+      await loadBatchAuditQA(false);
     }, 'Coordinate & BGC stamp failed', true);
   }
 
   async function exportGeoPackageShortcut(opts: SpatialGpkgExportInput) {
     if (!contextId || gpkgExporting || mutating || loading) return;
     const rawDest = opts.destinationPath.trim();
-    if (!rawDest) { errorMsg = 'Enter a destination .gpkg file path before exporting.'; return; }
+    if (!rawDest) {
+      errorMsg = 'Enter a destination .gpkg file path before exporting.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('GeoPackage destination required', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+      }
+      return;
+    }
     const destinationPath = rawDest.toLowerCase().endsWith('.gpkg') ? rawDest : `${rawDest}.gpkg`;
     gpkgExporting = true; errorMsg = ''; statusMsg = ''; setBusyState(true);
     try {
@@ -333,8 +396,16 @@
       if (!alive || !outcome) return;
       gpkgOutcome = outcome;
       statusMsg = `Exported ${outcome.featureCount} GeoPackage plot features (${outcome.crs}, SRS ${outcome.srsId}) to ${outcome.path}.`;
+      if (typeof notifications !== 'undefined') {
+        notifications.success('GeoPackage exported', statusMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+      }
     } catch (cause) {
-      if (alive) errorMsg = `GeoPackage (.gpkg) export failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+      if (alive) {
+        errorMsg = `GeoPackage (.gpkg) export failed: ${cause instanceof Error ? cause.message : String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('GeoPackage export failed', errorMsg, { category: 'entry', source: '3D Map', contextTag: project || undefined });
+        }
+      }
     } finally {
       if (alive) { gpkgExporting = false; setBusyState(loading || mutating); }
     }
@@ -395,7 +466,6 @@
   {/if}
 
   {#if errorMsg}<div role="alert" class="wb-alert wb-alert-error">{errorMsg}</div>{/if}
-  {#if statusMsg}<div role="status" class="wb-alert wb-alert-ok">{statusMsg}</div>{/if}
   {#if mapRenderWarning}<div role="status" class="wb-alert wb-alert-info">{mapRenderWarning}</div>{/if}
   {#if wmsOfflineWarning}<div role="status" data-wms-offline-warning class="wb-alert wb-alert-info">{wmsOfflineWarning}</div>{/if}
 

@@ -1,6 +1,9 @@
 import { wellFormedUTF16 } from '../entry/qualityEditor';
 import { ContextService, ValidationService } from '../../bindings/github.com/boostao/vpro/app';
+import { notifications } from '../shell/notificationService.svelte';
 import type { ProjectMetadataPreset } from './projectMetadataPresets';
+
+export { notifications };
 
 export const PROJECT_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 

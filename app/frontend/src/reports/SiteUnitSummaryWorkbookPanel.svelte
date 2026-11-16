@@ -12,6 +12,7 @@
     type ExtendedSummaryWorkbookOptions, type ValidatedExtendedSummaryWorkbookReview,
   } from './siteUnitSummaryExtendedWorkbook';
   import { reportCellText } from './longEnvironmentReport';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { owner, method, disabled, onBusyChange, extendedOptions, siteUnitType = 1, allowConfiguredScope = false }: {
     owner: GoogleEarthScope; method: number | null; disabled: boolean; onBusyChange: (held: boolean) => void;
@@ -78,6 +79,13 @@
     } catch (cause) {
       if (!disposed && requestGeneration === generation && method === requestedMethod) {
         error = `Workbook review unavailable; no file published: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Environment workbook review failed', error, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: owned.project || undefined,
+          });
+        }
       }
     } finally {
       if (!disposed && requestGeneration === generation) { busy = false; reportBusy(); }
@@ -86,6 +94,7 @@
   async function publish() {
     if (!enabled || held || !review || !currentReview || !validMethod || method === null) return;
     const configuredScope = typeof allowConfiguredScope === 'boolean' && allowConfiguredScope;
+    const activeSession = 'environment' in review && extendedSession && extendedOptions ? extendedSession : originalSession;
     error = '';
     try {
       if ('environment' in review && extendedSession && extendedOptions) {
@@ -95,8 +104,38 @@
         await originalSession.publish(review, destination, request =>
           EnvironmentReportService.ExportReviewedSiteUnitSummaryWorkbook(owned.contextId, JSON.stringify(request)), method, configuredScope);
       }
+      const settled = activeSession.view();
+      if (!disposed && typeof notifications !== 'undefined') {
+        if (settled.outcome?.status === 'published' && !settled.error) {
+          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+          notifications.success('Summary Environment workbook exported', exportedPath, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: owned.project || undefined,
+          });
+        } else if (settled.error || settled.outcome) {
+          notifications.error(
+            'Summary Environment workbook export failed',
+            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+            {
+              category: 'reports',
+              source: 'Summary Environment',
+              contextTag: owned.project || undefined,
+            },
+          );
+        }
+      }
     } catch (cause) {
-      if (!disposed) error = String(cause);
+      if (!disposed) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Environment workbook export failed', error, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: owned.project || undefined,
+          });
+        }
+      }
     }
   }
   function acknowledge() {

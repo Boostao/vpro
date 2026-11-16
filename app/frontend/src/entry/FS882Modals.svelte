@@ -67,6 +67,8 @@
     headerValidation,
     activeTab,
     siviStandalone,
+    standaloneTwoPage = false,
+    onCloseStandalone,
     siviStandaloneEnabled,
     siviParentOpen,
     siviParentSession, siviParentView, siviParentSourceSession, siviParentSourceView, siviParentBusy, siviSourceBarrier,
@@ -100,7 +102,7 @@
     loadSubEditor: <T>(loader: () => Promise<T>, label: string, onFailed: () => void) => Promise<T>;
     environmentSUEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
     profileEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
-    twoPageEditor: { getCloseState(): EditorCloseState; getDraftState?(): EditorCloseState; undo(): void; canOpenMetadataEditor?(): boolean; openMetadataEditor?(): void } | undefined;
+    twoPageEditor: { getCloseState(): EditorCloseState; getDraftState?(): EditorCloseState; undo(): void; saveForClose?(): Promise<boolean>; canOpenMetadataEditor?(): boolean; openMetadataEditor?(): void } | undefined;
     metadataEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
     codeCheckEditor: { getCloseState(): EditorCloseState; undo(): void } | undefined;
     twoPageOpen: boolean; twoPageBusy: boolean; twoPageProject: string | null; twoPageRevision: number;
@@ -113,7 +115,7 @@
     activeProject: string; activeSU: string; projectPath: string; suPath: string;
     plotProfileWritable: boolean; plotProfileSource: PlotProfileSource | null;
     busy: boolean; dirty: boolean; childUnsaved: boolean; headerValidation: Record<string, string>;
-    activeTab: string; siviStandalone: boolean; siviStandaloneEnabled: boolean; siviParentOpen: boolean;
+    activeTab: string; siviStandalone: boolean; standaloneTwoPage?: boolean; onCloseStandalone?: () => void; siviStandaloneEnabled: boolean; siviParentOpen: boolean;
     siviParentSession: SIVIParentReadSession | null; siviParentView: SIVIParentReadView | null;
     siviParentSourceSession: SIVIParentSourceSession | null; siviParentSourceView: SIVIParentSourceView | null;
     siviParentBusy: boolean; siviSourceBarrier: boolean;
@@ -322,6 +324,7 @@
     {:then { default: TwoPageEntryEditor }}
       <TwoPageEntryEditor bind:this={twoPageEditor} {contextId} project={twoPageProject} plot={plotNumber}
         initialForm={twoPageEntryInitialForm}
+        standalone={standaloneTwoPage}
         onExtendedShrubsChange={extendedShrubsEnabled ? setExtendedShrubs : undefined}
         pictureReaderAvailable={pictureReadingEnabled}
         auditReaderAvailable={true}
@@ -341,7 +344,7 @@
         cache={twoPageEntrySessions} revision={twoPageRevision} onchange={() => twoPageRevision++}
         childBlocked={twoPageSoilBusy || twoPageSoilBlocked || twoPageVegetationBusy || twoPageVegetationBlocked || pictureBusy || pictureMetadataPending}
         onbusy={value => twoPageBusy = value}
-        onclosed={() => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; onClearError(); }}
+        onclosed={() => { twoPageOpen = false; twoPageBusy = false; twoPageProject = null; onClearError(); if (standaloneTwoPage) onCloseStandalone?.(); }}
         onOpenProfileSU={profileReviewEnabled && !siviStandalone ? openProfileSUFromTwoPage : undefined}
         oncommitted={() => refreshTwoPagePeers('entry')} embedded={twoPageLinkedChild} />
     {:catch loadError}

@@ -88,7 +88,7 @@ During the 6–12 month transition window while external partners still use VPro
 ## 4. Phased Rollout, Feature-Gate Graduation & Packaging Roadmap
 
 ### Stage 1: Cross-Platform Installer Qualification, Official Release Portal & Feature Graduation (**Delivered in `v2.0.0`**)
-* **Cross-Platform Release Matrix (`6848960`, `56d4062`):** Shipped self-contained Windows `amd64`/`arm64` NSIS `.exe` installers (statically linking MinGW `winpthreads`/`libgcc` with PE import validation), macOS Universal `.dmg` (`VPro.app`), and Linux `amd64`/`arm64` `.AppImage`/`.deb`/`.tar.gz` archives; Phase 1 packages are unsigned with `SHA256SUMS.txt` verification (`D-02`).
+* **Cross-Platform Release Matrix (`6848960`, `56d4062`):** Shipped self-contained Windows `amd64`/`arm64` NSIS `.exe` installers (statically linking MinGW `winpthreads`/`libgcc` with PE import validation), macOS Universal `.dmg` (`VPro.app`), and Linux `amd64`/`arm64` `.deb`/`.rpm`/`.tar.gz` archives; Phase 1 packages are unsigned with `SHA256SUMS.txt` verification (`D-02`).
 * **BC Gov Design System Release Portal (`aa99f9e`):** Replaced uncompiled CDN drafts and browser `api.github.com` calls with `site/` (`BC Sans`, `#003366` BC Navy, `#FCBA19` Gold) backed by static `release-manifest.json`, while archiving October 2026 internal ledgers under `archive/oct2026-parity-ledgers/`.
 * **Default-ON Graduation (`c4cbd1a`):** Enabled SQLite `WAL` mode, graduated all validated workflows to default-ON under `config.yml` `release_channel: stable`, and pruned Red-marked standalone `CHARS` forms and `PC-ORD Break Report`.
 

@@ -46,6 +46,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   import LongVegetationProjectScopeSelection from './LongVegetationProjectScopeSelection.svelte';
   import LongVegetationProjectUnitPreferences from './LongVegetationProjectUnitPreferences.svelte';
   import { projectReportWorkspace } from './longVegetationProjectWorkspaces';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, projectPath, su, suPath, hierarchy = '', operationHeld = false, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
@@ -294,8 +295,28 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   async function readProject(operation: () => Promise<void>) {
     if (busy || operationHeld || workbookBarrier || sharedPreferenceBarrier || !projectView?.outputReady) return;
     error = '';
-    try { await operation(); }
-    catch (cause) { error = `Original project report unavailable: ${String(cause)}`; }
+    try {
+      await operation();
+      const pv = projectWorkspace?.view?.();
+      if (pv?.error && typeof notifications !== 'undefined') {
+        const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+        notifications.error('Long Vegetation project report failed', pv.error, {
+          category: 'reports',
+          source: 'Long Vegetation',
+          contextTag: ctxTag,
+        });
+      }
+    } catch (cause) {
+      error = `Original project report unavailable: ${String(cause)}`;
+      if (typeof notifications !== 'undefined') {
+        const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+        notifications.error('Long Vegetation project report failed', error, {
+          category: 'reports',
+          source: 'Long Vegetation',
+          contextTag: ctxTag,
+        });
+      }
+    }
   }
   async function loadLumpTables() {
     if (typeof ImportExportService?.DiscoverLumpTables !== 'function') return;
@@ -379,7 +400,17 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       settings = candidate;
       if (typeof syncScopeAndVariantOptions === 'function') syncScopeAndVariantOptions(candidate);
     } catch (cause) {
-      if (request === generation) error = `Report options unavailable: ${String(cause)}`;
+      if (request === generation) {
+        error = `Report options unavailable: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+          notifications.error('Long Vegetation options failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -417,7 +448,17 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
         acceptValidatedPreview(value);
       }
     } catch (cause) {
-      if (request === generation) error = `Report unavailable; no data or configuration written: ${String(cause)}`;
+      if (request === generation) {
+        error = `Report unavailable; no data or configuration written: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+          notifications.error('Long Vegetation report failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -442,17 +483,59 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       preview = reviewed.preview;
       settings = reviewed.preview.settings;
     } catch (cause) {
-      if (request === generation) error = `Workbook review unavailable; no file published: ${String(cause)}`;
+      if (request === generation) {
+        error = `Workbook review unavailable; no file published: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+          notifications.error('Long Vegetation workbook review failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
   }
   async function publishWorkbook() {
+    const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
     if (projectActive && projectWorkspace) {
       if (!workbookEnabled || busy || operationHeld || workbookBarrier || sharedPreferenceBarrier || !projectView?.workbookReview) return;
       error = '';
-      try { await projectWorkspace.publishWorkbook(destination); }
-      catch (cause) { error = String(cause); }
+      try {
+        await projectWorkspace.publishWorkbook(destination);
+        const settled = projectWorkspace.view?.().publication;
+        if (typeof notifications !== 'undefined' && settled) {
+          if (settled.outcome?.status === 'published' && !settled.error) {
+            const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+            notifications.success('Long Vegetation workbook exported', exportedPath, {
+              category: 'reports',
+              source: 'Long Vegetation',
+              contextTag: ctxTag,
+            });
+          } else if (settled.error || settled.outcome) {
+            notifications.error(
+              'Long Vegetation workbook export failed',
+              settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+              {
+                category: 'reports',
+                source: 'Long Vegetation',
+                contextTag: ctxTag,
+              },
+            );
+          }
+        }
+      } catch (cause) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation workbook export failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
       return;
     }
     if (!workbookEnabled || busy || operationHeld || workbookBarrier || preferenceBarrier || !workbookReview) return;
@@ -460,7 +543,37 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     try {
       await workbookSession.publish(workbookReview, destination, request =>
         VegetationReportService.ExportReviewedVegetationWorkbook(contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+      const settled = workbookSession.view();
+      if (typeof notifications !== 'undefined') {
+        if (settled.outcome?.status === 'published' && !settled.error) {
+          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+          notifications.success('Long Vegetation workbook exported', exportedPath, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        } else if (settled.error || settled.outcome) {
+          notifications.error(
+            'Long Vegetation workbook export failed',
+            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+            {
+              category: 'reports',
+              source: 'Long Vegetation',
+              contextTag: ctxTag,
+            },
+          );
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Vegetation workbook export failed', error, {
+          category: 'reports',
+          source: 'Long Vegetation',
+          contextTag: ctxTag,
+        });
+      }
+    }
   }
   function acknowledgeWorkbook() {
     workbookSession.acknowledge();
@@ -475,7 +588,17 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       if (request !== generation) return;
       preferences.applyLoaded(value, token);
     } catch (cause) {
-      if (request === generation) error = `Saved title unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved title unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+          notifications.error('Long Vegetation title load failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -486,7 +609,17 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     try {
       await preferences.save(value => VegetationReportService.SaveLongVegetationPreferences(contextId, JSON.stringify(value)));
     } catch (cause) {
-      if (request === generation) error = String(cause);
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+          notifications.error('Long Vegetation title save failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
     }
   }
   function editTitle(value: string) {
@@ -502,7 +635,17 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       if (request !== generation) return;
       statistics.applyLoaded(value, token);
     } catch (cause) {
-      if (request === generation) error = `Saved Average/Order choices unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved Average/Order choices unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+          notifications.error('Long Vegetation statistics load failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -513,7 +656,17 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     try {
       await statistics.save(value => VegetationReportService.SaveLongVegetationStatisticsPreferences(contextId, JSON.stringify(value)));
     } catch (cause) {
-      if (request === generation) error = String(cause);
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+          notifications.error('Long Vegetation statistics save failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: ctxTag,
+          });
+        }
+      }
     }
   }
   function editAverage(value: string) {
@@ -533,7 +686,17 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     if (projectWorkspace) void projectWorkspace.selection.load().then(() => {
       if (disposed) return;
       if (projectWorkspace.view().scope.scope?.sourceKind === 'selected-list') void options();
-    }).catch(cause => { error = `Owned report scope unavailable: ${String(cause)}`; });
+    }).catch(cause => {
+      error = `Owned report scope unavailable: ${String(cause)}`;
+      if (typeof notifications !== 'undefined') {
+        const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+        notifications.error('Long Vegetation scope load failed', error, {
+          category: 'reports',
+          source: 'Long Vegetation',
+          contextTag: ctxTag,
+        });
+      }
+    });
     else void options();
   });
   onDestroy(() => {
@@ -547,7 +710,20 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
 </script>
 
 <section class="report" data-long-vegetation-report aria-label="Long Vegetation report">
-  <h1>Long Vegetation</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+    <h1>Long Vegetation</h1>
+    <div class="actions">
+      <button data-source-control="btnViewReport" disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None')} onclick={show}>View Report</button>
+      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || projectActive && !projectView?.outputReady} onclick={options}>Reload report options</button>
+      {#if workbookEnabled}
+        <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None' || su === 'USysSuTableDynamic')} onclick={reviewWorkbook}>
+          {selectedWorkbookScope === 'unlumped' ? 'Review unlumped XLSX workbook (no file yet)' : `Review ${selectedWorkbookScope.replace(/^lump:/, '')} XLSX workbook (no file yet)`}
+        </button>
+      {/if}
+      {#if busy || projectView?.readBusy}<button onclick={cancel}>Cancel report read</button><p role="status">Reading owned report snapshots...</p>{/if}
+      {#if projectView?.readBusy}<button data-project-report-cancel onclick={() => projectWorkspace?.cancelReportRead()}>Cancel original project report read</button><p role="status">Reading original project report snapshots...</p>{/if}
+    </div>
+  </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if preferenceView?.draftError}<p class="error" role="alert">{preferenceView.draftError}</p>{/if}
   {#if preferenceView?.error}<p class="error" role="alert">{preferenceView.error}</p>{/if}
@@ -868,17 +1044,6 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       Exclusion filter active: {exclusionSummary.excludedUnits.length} site units excluded ({exclusionSummary.excludedPlots} plots), {exclusionSummary.retainedPlots} plots retained.
     </p>
   {/if}
-  <div class="actions">
-    <button data-source-control="btnViewReport" disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None')} onclick={show}>View Report</button>
-    <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || projectActive && !projectView?.outputReady} onclick={options}>Reload report options</button>
-    {#if workbookEnabled}
-      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None' || su === 'USysSuTableDynamic')} onclick={reviewWorkbook}>
-        {selectedWorkbookScope === 'unlumped' ? 'Review unlumped XLSX workbook (no file yet)' : `Review ${selectedWorkbookScope.replace(/^lump:/, '')} XLSX workbook (no file yet)`}
-      </button>
-    {/if}
-    {#if busy || projectView?.readBusy}<button onclick={cancel}>Cancel report read</button><p role="status">Reading owned report snapshots...</p>{/if}
-    {#if projectView?.readBusy}<button data-project-report-cancel onclick={() => projectWorkspace?.cancelReportRead()}>Cancel original project report read</button><p role="status">Reading original project report snapshots...</p>{/if}
-  </div>
   {#if activeWorkbookReview}
     {@const reviewed = activeWorkbookReview}
     <section class="workbook" aria-label="Reviewed workbook">
@@ -1049,6 +1214,8 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
 
 <style>
   .report { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; color: #313132; }
+  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+  .report-sticky-bar h1 { margin: 0; }
   .workbook, .preferences, .lump-and-variant-controls, .exclusion-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; }
   .lump-and-variant-controls, .exclusion-panel { background: #F2F2F2; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .75rem; }
   .control-field { display: grid; gap: .35rem; min-width: 0; }

@@ -47,12 +47,27 @@
         <div class="vpro-toast-body">
           <div class="vpro-toast-title-row">
             <strong class="vpro-toast-title">{toast.title}</strong>
+            {#if toast.contextTag}
+              <span class="vpro-toast-context tabular-nums" data-toast-context>{toast.contextTag}</span>
+            {/if}
             {#if toast.repeatCount > 1}
               <span class="vpro-toast-repeat tabular-nums">×{toast.repeatCount}</span>
             {/if}
           </div>
           {#if toast.message}
             <p class="vpro-toast-message">{toast.message}</p>
+          {/if}
+          {#if toast.action}
+            <div class="vpro-toast-actions">
+              <button
+                type="button"
+                class="vpro-toast-action-btn"
+                data-toast-action={toast.entryId}
+                onclick={() => controller.triggerAction(toast.entryId)}
+              >
+                {toast.action.label}
+              </button>
+            </div>
           {/if}
         </div>
         <button
@@ -130,12 +145,26 @@
   }
   .vpro-toast-title-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem;
   }
   .vpro-toast-title {
     font-weight: 700;
     color: var(--vpro-ink, #313132);
+    overflow-wrap: anywhere;
+  }
+  .vpro-toast-context {
+    font-family: var(--vpro-font-mono, monospace);
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.3;
+    padding: 0.05rem 0.35rem;
+    border-radius: 999px;
+    background: var(--vpro-navy-tint, #ebf1f8);
+    border: 1px solid var(--vpro-info-border, #9ec3e6);
+    color: var(--vpro-navy, #003366);
+    max-width: 100%;
     overflow-wrap: anywhere;
   }
   .vpro-toast-repeat {
@@ -152,6 +181,33 @@
     color: var(--vpro-ink-secondary, #4b5563);
     font-size: 0.75rem;
     overflow-wrap: anywhere;
+  }
+  .vpro-toast-actions {
+    margin-top: 0.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .vpro-toast-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--vpro-radius-sm, 4px);
+    border: 1px solid var(--vpro-navy, #003366);
+    background: #ffffff;
+    color: var(--vpro-navy, #003366);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .vpro-toast-action-btn:hover {
+    background: var(--vpro-navy, #003366);
+    color: #ffffff;
+  }
+  .vpro-toast-action-btn:focus-visible {
+    outline: 2px solid var(--vpro-focus-ring, #1a5a96);
+    outline-offset: 2px;
   }
   .vpro-toast-close {
     display: inline-grid;
@@ -171,6 +227,10 @@
     .vpro-toast-close {
       min-width: 44px;
       min-height: 44px;
+    }
+    .vpro-toast-action-btn {
+      min-height: 44px;
+      padding: 0.45rem 0.75rem;
     }
   }
   @media print {

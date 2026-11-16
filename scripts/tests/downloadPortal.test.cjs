@@ -162,13 +162,13 @@ test('architecture hints override emulated Windows UA; redacted/blocked hints pr
     [{ userAgent: 'Windows NT Win64 x64', platform: 'Win32' }, 'windows', 'amd64', 'dl-win-x64-installer'],
     [{ userAgent: 'Mozilla/5.0 (Windows NT 10.0; rv:159.0) Gecko/20100101 Firefox/159.0', platform: 'Win32' }, 'windows', 'amd64', 'dl-win-x64-installer'],
     [{ userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36', platform: 'Win32' }, 'windows', 'amd64', 'dl-win-x64-installer'],
-    [{ userAgent: 'Linux aarch64', platform: 'Linux' }, 'linux', 'arm64', 'dl-linux-arm64-appimage'],
-    [{ userAgent: 'Linux x86_64', platform: 'Linux' }, 'linux', 'amd64', 'dl-linux-appimage'],
-    [{ userAgent: 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0', platform: 'Linux x86_64', oscpu: 'Linux x86_64' }, 'linux', 'amd64', 'dl-linux-appimage'],
+    [{ userAgent: 'Linux aarch64', platform: 'Linux' }, 'linux', 'arm64', 'dl-linux-arm64-deb'],
+    [{ userAgent: 'Linux x86_64', platform: 'Linux' }, 'linux', 'amd64', 'dl-linux-deb'],
+    [{ userAgent: 'Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0', platform: 'Linux x86_64', oscpu: 'Linux x86_64' }, 'linux', 'amd64', 'dl-linux-deb'],
     [{ userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/156.0.0.0', platform: 'Linux x86_64',
-      userAgentData: { platform: 'Unknown', getHighEntropyValues: async () => ({ architecture: '', bitness: '' }) } }, 'linux', 'amd64', 'dl-linux-appimage'],
+      userAgentData: { platform: 'Unknown', getHighEntropyValues: async () => ({ architecture: '', bitness: '' }) } }, 'linux', 'amd64', 'dl-linux-deb'],
     [{ userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/156.0.0.0', platform: 'Linux x86_64',
-      userAgentData: { platform: 'Linux', getHighEntropyValues: async () => ({ architecture: 'x86_64', bitness: 64 }) } }, 'linux', 'amd64', 'dl-linux-appimage'],
+      userAgentData: { platform: 'Linux', getHighEntropyValues: async () => ({ architecture: 'x86_64', bitness: 64 }) } }, 'linux', 'amd64', 'dl-linux-deb'],
     [{ userAgent: 'Macintosh', platform: 'MacIntel' }, 'darwin', 'universal', 'dl-mac-dmg'],
     [{ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/156.0', platform: 'MacIntel', maxTouchPoints: 5,
       userAgentData: { platform: 'macOS', mobile: false } }, 'darwin', 'universal', 'dl-mac-dmg'],
@@ -333,8 +333,8 @@ test('loadPortal fetches local ./release-manifest.json with zero api.github.com 
   for (const [userAgent, platform, primary] of [
     ['Windows Win64 x64', 'Win32', 'dl-win-x64-installer'],
     ['Windows arm64', 'Win32', 'dl-win-arm64-installer'],
-    ['Linux x86_64', 'Linux', 'dl-linux-appimage'],
-    ['Linux aarch64', 'Linux', 'dl-linux-arm64-appimage'],
+    ['Linux x86_64', 'Linux', 'dl-linux-deb'],
+    ['Linux aarch64', 'Linux', 'dl-linux-arm64-deb'],
     ['Macintosh', 'MacIntel', 'dl-mac-dmg'],
   ]) {
     let copiedText = '';
@@ -390,7 +390,7 @@ test('loadPortal fetches local ./release-manifest.json with zero api.github.com 
     assert.equal(document.getElementById('card-macos').classList.contains('is-detected-platform'), true);
     assert.equal(document.getElementById('card-windows').classList.contains('is-detected-platform'), false);
     document.getElementById('plat-btn-linux-amd64').click();
-    assert.equal(document.getElementById('primary-download-btn').href, url(assetLinks['dl-linux-appimage'], 'v2.0.0'));
+    assert.equal(document.getElementById('primary-download-btn').href, url(assetLinks['dl-linux-deb'], 'v2.0.0'));
   }
 });
 

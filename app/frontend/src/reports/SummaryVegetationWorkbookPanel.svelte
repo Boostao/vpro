@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
@@ -96,11 +100,30 @@
     unitPage = 0;
     referencePage = 0;
     try {
-      await session.review(calculation, {
+      const ok = await session.review(calculation, {
         review: (contextId, options) => VegetationReportService.GetSummaryVegetationWorkbookReview(contextId, JSON.stringify(options)),
         validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
       });
-    } catch (cause) { error = String(cause); }
+      if (!ok) {
+        const current = session.view();
+        if (current.error && typeof notifications !== 'undefined') {
+          notifications.error('Summary Vegetation workbook review failed', current.error, {
+            category: 'reports',
+            source: 'Summary Vegetation',
+            contextTag: owned.project || undefined,
+          });
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation workbook review failed', error, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: owned.project || undefined,
+        });
+      }
+    }
   }
   function syncSavedPresentation() {
     if (held || !savedPresentation) return;
@@ -128,8 +151,28 @@
         reviewFromPreferences: contextId => VegetationReportService.GetSummaryVegetationWorkbookReviewFromPreferences(contextId),
         validationYield: () => new Promise(resolve => setTimeout(resolve, 0)),
       });
-      if (loaded) onPreferencesLoaded?.(loaded.options);
-    } catch (cause) { error = String(cause); }
+      if (loaded) {
+        onPreferencesLoaded?.(loaded.options);
+      } else {
+        const current = session.view();
+        if (current.error && typeof notifications !== 'undefined') {
+          notifications.error('Summary Vegetation workbook review failed', current.error, {
+            category: 'reports',
+            source: 'Summary Vegetation',
+            contextTag: owned.project || undefined,
+          });
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation workbook review failed', error, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: owned.project || undefined,
+        });
+      }
+    }
   }
   async function publish() {
     if (!enabled || held || modeUnavailable || viewState.draftError || !currentReview) return;
@@ -137,7 +180,37 @@
     try {
       await session.publish(calculation, request =>
         VegetationReportService.ExportReviewedSummaryVegetationWorkbook(owned.contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+      const settled = session.view().publication;
+      if (typeof notifications !== 'undefined') {
+        if (settled.outcome?.status === 'published' && !settled.error) {
+          const exportedPath = settled.outcome.path || settled.requestedDestination || viewState.destination;
+          notifications.success('Summary Vegetation workbook exported', exportedPath, {
+            category: 'reports',
+            source: 'Summary Vegetation',
+            contextTag: owned.project || undefined,
+          });
+        } else if (settled.error || settled.outcome) {
+          notifications.error(
+            'Summary Vegetation workbook export failed',
+            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || viewState.destination}`,
+            {
+              category: 'reports',
+              source: 'Summary Vegetation',
+              contextTag: owned.project || undefined,
+            },
+          );
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation workbook export failed', error, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: owned.project || undefined,
+        });
+      }
+    }
   }
   function acknowledge() {
     if (viewState.publication.busy || !viewState.publication.blocked) return;

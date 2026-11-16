@@ -112,6 +112,28 @@ const serverReads = { ReadRequests: class {
   cancelAll() {}
 } };
 
+const noopNotificationsStub = {
+  notifications: {
+    push: () => ({ id: 'stub' }),
+    success: () => ({ id: 'stub' }),
+    info: () => ({ id: 'stub' }),
+    warning: () => ({ id: 'stub' }),
+    error: () => ({ id: 'stub' }),
+    triggerAction: () => false,
+    markRead() {},
+    markAllRead() {},
+    clearHistory() {},
+    dismissToast() {},
+    pauseToast() {},
+    resumeToast() {},
+    subscribe: (fn) => {
+      fn({ entries: [], toasts: [], unreadCount: 0, unreadErrorCount: 0, unreadWarningCount: 0, badgeSeverity: 'none' });
+      return () => {};
+    },
+    getSnapshot: () => ({ entries: [], toasts: [], unreadCount: 0, unreadErrorCount: 0, unreadWarningCount: 0, badgeSeverity: 'none' }),
+  },
+};
+
 function serverComponent(source, filename, dependencies = {}, _environment = {}) {
   const resolvedFilename = srcPath(filename);
   const compiled = compile(source, { filename: resolvedFilename, generate: 'server' });
@@ -144,6 +166,7 @@ function serverComponent(source, filename, dependencies = {}, _environment = {})
         }
         return provided;
       }
+      if (canon === './notificationService.svelte') return noopNotificationsStub;
       if (canon === './readRequests') return serverReads;
       const qualityDep = resolveDependency('./qualityEditor', dependencies);
       if (canon === './ordinaryEditor') return loadTypeScript('ordinaryEditor.ts', {
@@ -244,6 +267,7 @@ function loadTypeScript(filename, dependencies = {}, globals = {}) {
     const canon = canonicalLocalSpecifier(rawName);
     const matched = resolveDependency(rawName, dependencies);
     if (matched.found) return matched.value;
+    if (canon === './notificationService.svelte') return noopNotificationsStub;
     const qualityDep = resolveDependency('./qualityEditor', dependencies);
     const restoreDep = resolveDependency('./projectMetadataRestore', dependencies);
     const transportDep = resolveDependency('./siviParentTransport', dependencies);
@@ -320,6 +344,7 @@ function componentFunctions(filename, names, values) {
     ? { ...fs882Helpers, twoPageSoilBusy: false, twoPageSoilBlocked: false, ordinarySoilUnavailable: null, historicalSoilUnavailable: null,
       twoPageVegetationBusy: false, twoPageVegetationBlocked: false, ordinaryVegetationUnavailable: null } : {};
   const context = vm.createContext({ exports: {},
+    notifications: noopNotificationsStub.notifications,
     ...(baseName === 'TwoPageEntryEditor.svelte' ? { vegetationTableOpen: false, vegetationTableBusy: false, environmentTableOpen: false, environmentTableBusy: false, projectMetadataOpen: false, projectMetadataBusy: false, profilingOpen: false, profilingBusy: false } : {}),
     ...(baseName === 'SummaryVegetationReport.svelte' ? {
       preferences: null, quality: null, qualityView: null, qualityReadBusy: false,
@@ -372,6 +397,7 @@ module.exports = {
   srcFiles,
   resolveDependency,
   canonicalLocalSpecifier,
+  noopNotificationsStub,
   serverComponent,
   loadTypeScript,
   componentFunctions,

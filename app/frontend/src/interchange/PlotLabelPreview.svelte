@@ -8,6 +8,7 @@
   import { validatePlotLabelRegionalPreview, type PlotLabelRegionalEvidence } from './plotLabelRegional';
   import { validatePlotLabelPDFReview, plotLabelPDFPublicationSession } from './plotLabelPDFExport';
   import type { PublicationView } from '../shared/publicationSession';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, projectPath = '', su = '', suPath = '', initialPlot = '', onBusyChange }: {
     contextId: string; project: string; projectPath?: string; su?: string; suPath?: string; initialPlot?: string; onBusyChange: (busy: boolean) => void;
@@ -39,9 +40,17 @@
     updateBusy();
   }
   async function load() {
-    if (busy || publication.busy || publication.blocked) { error = 'Resolve the current saved-label read or retained PDF outcome before another preview.'; return; }
+    if (busy || publication.busy || publication.blocked) {
+      error = 'Resolve the current saved-label read or retained PDF outcome before another preview.';
+      notifications.error('Plot label preview blocked', error, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+      return;
+    }
     const invalid = plotLookupInputError(plot);
-    if (invalid) { error = invalid; return; }
+    if (invalid) {
+      error = invalid;
+      notifications.error('Invalid plot number', error, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+      return;
+    }
     cancel();
     const request = generation, key = ownerKey, requestedPlot = plot;
     preview = null; error = ''; labelDate = ''; regionalEvidence = null; pdfReview = null; busy = true; updateBusy();
@@ -67,24 +76,65 @@
         preview = candidate; labelDate = date;
       }
     } catch (cause) {
-      if (request === generation && key === ownerKey) error = `Plot label preview unavailable; saved data and printing are unchanged: ${String(cause)}`;
+      if (request === generation && key === ownerKey) {
+        error = `Plot label preview unavailable; saved data and printing are unchanged: ${String(cause)}`;
+        notifications.error('Plot label preview unavailable', error, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+      }
     } finally {
       if (request === generation) { busy = false; updateBusy(); }
     }
   }
   async function publishPDF() {
-    if (!pdfSession || !pdfReview || busy || publication.busy || publication.blocked) { error = 'Prepare an owned PDF review and resolve the prior operation first.'; return; }
+    if (!pdfSession || !pdfReview || busy || publication.busy || publication.blocked) {
+      error = 'Prepare an owned PDF review and resolve the prior operation first.';
+      notifications.error('Label PDF export blocked', error, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+      return;
+    }
     error = '';
     try {
       await pdfSession.publish(pdfReview, destination, request => ImportExportService.ExportReviewedPlotLabelPDF(contextId, JSON.stringify(request)));
-    } catch (cause) { error = `Label PDF publication unavailable: ${String(cause)}`; }
+      const latest = pdfSession.view();
+      if (latest.outcome?.status === 'published') {
+        notifications.success(
+          'Label PDF exported',
+          `Exported plot ${pdfReview.preview.plotNumber} label PDF to ${latest.outcome.path || destination}.`,
+          { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+        );
+      } else {
+        notifications.error(
+          'Label PDF export failed',
+          latest.error || latest.outcome?.errorMessage || 'Label PDF publication did not complete.',
+          { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+        );
+      }
+    } catch (cause) {
+      error = `Label PDF publication unavailable: ${String(cause)}`;
+      notifications.error('Label PDF export failed', error, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+    }
   }
   async function recoverPDF() {
     if (!pdfSession) return;
     error = '';
     try {
       await pdfSession.recover(request => ImportExportService.RecoverPlotLabelPDFOutcome(contextId, JSON.stringify(request)));
-    } catch (cause) { error = `Readonly PDF recovery unavailable: ${String(cause)}`; }
+      const latest = pdfSession.view();
+      if (latest.outcome?.status === 'published') {
+        notifications.success(
+          'Label PDF receipt recovered',
+          `Verified exported PDF at ${latest.outcome.path}.`,
+          { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+        );
+      } else if (latest.error) {
+        notifications.error('Label PDF recovery notice', latest.error, {
+          category: 'reports',
+          source: 'Plot Labels',
+          contextTag: project || undefined,
+        });
+      }
+    } catch (cause) {
+      error = `Readonly PDF recovery unavailable: ${String(cause)}`;
+      notifications.error('Label PDF recovery failed', error, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+    }
   }
   function acknowledgePDF() {
     if (!pdfSession) return;
@@ -94,16 +144,18 @@
 </script>
 
 <section class="labels" data-plot-label-preview aria-label="VPro Plot Labels">
-  <h1>VPro Plot Labels</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200" data-workbench-sticky-bar>
+    <h1>VPro Plot Labels</h1>
+    <p>Owned project {project}. Preview an exact saved plot, not unsaved form controls.</p>
+    <form onsubmit={event => { event.preventDefault(); void load(); }}>
+      <label for="plot-label-number">Plot number
+        <input id="plot-label-number" bind:value={plot} disabled={locked} />
+      </label>
+      <button type="submit" disabled={locked}>{pdfEnabled ? 'Review saved plot label PDF' : 'Preview saved plot label'}</button>
+      {#if busy}<button type="button" onclick={cancel}>Cancel label read</button><span role="status">Reading saved label fields...</span>{/if}
+    </form>
+  </header>
   {#if error}<p role="alert" class="error">{error}</p>{/if}
-  <p>Owned project {project}. Preview an exact saved plot, not unsaved form controls.</p>
-  <form onsubmit={event => { event.preventDefault(); void load(); }}>
-    <label for="plot-label-number">Plot number
-      <input id="plot-label-number" bind:value={plot} disabled={locked} />
-    </label>
-    <button type="submit" disabled={locked}>{pdfEnabled ? 'Review saved plot label PDF' : 'Preview saved plot label'}</button>
-    {#if busy}<button type="button" onclick={cancel}>Cancel label read</button><span role="status">Reading saved label fields...</span>{/if}
-  </form>
   {#if preview}
     <section class="label" data-plot-label-card aria-label={`Label for saved plot ${preview.plotNumber1}`}>
       <h2>{preview.displayPlotNumber}</h2>

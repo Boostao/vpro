@@ -524,19 +524,19 @@ export function renderPortalHtml({
                 <span>Linux</span>
                 <span class="os-tag">Linux Desktop</span>
               </h3>
-              <p>Standalone AppImage runs directly on Fedora, RHEL, Ubuntu 24.04+, and Debian 13+; native <code>.deb</code> provided for Debian and Ubuntu.</p>
+              <p>Native <code>.deb</code> for Debian and Ubuntu, <code>.rpm</code> for Fedora, RHEL, and openSUSE, plus a portable <code>.tar.gz</code> archive.</p>
 
               <div class="arch-heading">64-bit Intel / AMD (x64)</div>
               <div class="asset-list">
-                ${renderAssetRow('dl-linux-appimage', 'Standalone AppImage', true)}
-                ${renderAssetRow('dl-linux-deb', 'Debian / Ubuntu (.deb)')}
+                ${renderAssetRow('dl-linux-deb', 'Debian / Ubuntu (.deb)', true)}
+                ${renderAssetRow('dl-linux-rpm', 'Fedora / RHEL / openSUSE (.rpm)')}
                 ${renderAssetRow('dl-linux-tar', 'Portable Archive (.tar.gz)')}
               </div>
 
               <div class="arch-heading">ARM64 (aarch64)</div>
               <div class="asset-list">
-                ${renderAssetRow('dl-linux-arm64-appimage', 'Standalone AppImage')}
                 ${renderAssetRow('dl-linux-arm64-deb', 'Debian / Ubuntu (.deb)')}
+                ${renderAssetRow('dl-linux-arm64-rpm', 'Fedora / RHEL / openSUSE (.rpm)')}
                 ${renderAssetRow('dl-linux-arm64-tar', 'Portable Archive (.tar.gz)')}
               </div>
             </div>
@@ -627,11 +627,11 @@ export function renderPortalHtml({
                 <li>Verify the downloaded package against <code>SHA256SUMS.txt</code>:
                   <pre class="code-block">sha256sum -c --ignore-missing SHA256SUMS.txt</pre>
                 </li>
-                <li>Run the AppImage directly or install the Debian package:
-                  <pre class="code-block">chmod +x vpro-linux-amd64.AppImage &amp;&amp; ./vpro-linux-amd64.AppImage
-sudo apt install ./vpro-linux-amd64.deb</pre>
+                <li>Install the native package for your distribution:
+                  <pre class="code-block">sudo apt install ./vpro-linux-amd64.deb
+sudo dnf install ./vpro-linux-amd64.rpm</pre>
                 </li>
-                <li>On systems without FUSE, run the AppImage with <code>--appimage-extract-and-run</code>.</li>
+                <li>Or extract and run <code>VPro</code> from <code>vpro-linux-amd64.tar.gz</code> (requires GTK4 and WebKitGTK 6.0).</li>
               </ol>
             </div>
           </div>

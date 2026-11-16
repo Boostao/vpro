@@ -4,6 +4,7 @@
   import { ReadRequests } from '../shared/readRequests';
   import { matrixPageFromWire, matrixWorkbookFromWire, sameMatrixSource, matrixCellText,
     matrixPublicationSession, type MatrixPage, type MatrixWorkbookReview } from './subzoneMatrixReport';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, hierarchy, hierarchyPath, onBusyChange }: {
     contextId: string; hierarchy: string; hierarchyPath: string; onBusyChange: (busy: boolean) => void;
@@ -45,6 +46,13 @@
       if (request === generation) {
         preview = null; workbook = null;
         error = `Matrix unavailable; no data or configuration writes invoked: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Subzone Matrix load failed', error, {
+            category: 'reports',
+            source: 'Subzone Matrix',
+            contextTag: typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined,
+          });
+        }
       }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
@@ -61,7 +69,16 @@
       if (request !== generation) return;
       workbook = validated; preview = validated.preview;
     } catch (cause) {
-      if (request === generation) error = `Workbook review unavailable; no file published: ${String(cause)}`;
+      if (request === generation) {
+        error = `Workbook review unavailable; no file published: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Subzone Matrix workbook review failed', error, {
+            category: 'reports',
+            source: 'Subzone Matrix',
+            contextTag: typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -69,17 +86,58 @@
   async function publishWorkbook() {
     if (busy || barrier || !workbook) return;
     cancel(); error = '';
+    const ctxTag = typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined;
     try {
       await session.publish(workbook, destination, request =>
         EnvironmentReportService.ExportReviewedSubzoneMatrix(contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+      const settled = session.view();
+      if (typeof notifications !== 'undefined') {
+        if (settled.outcome?.status === 'published' && !settled.error) {
+          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+          notifications.success('Subzone Matrix workbook exported', exportedPath, {
+            category: 'reports',
+            source: 'Subzone Matrix',
+            contextTag: ctxTag,
+          });
+        } else if (settled.error || settled.outcome) {
+          notifications.error(
+            'Subzone Matrix workbook export failed',
+            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+            {
+              category: 'reports',
+              source: 'Subzone Matrix',
+              contextTag: ctxTag,
+            },
+          );
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Subzone Matrix workbook export failed', error, {
+          category: 'reports',
+          source: 'Subzone Matrix',
+          contextTag: ctxTag,
+        });
+      }
+    }
   }
   function acknowledge() { session.acknowledge(); workbook = null; }
   onDestroy(() => { unsubscribe(); cancel(); });
 </script>
 
 <section class="matrix" data-subzone-matrix-report aria-label="Subzone Matrix of Units">
-  <h1>Subzone Matrix of Units</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+    <h1>Subzone Matrix of Units</h1>
+    <div class="actions">
+      <button type="button" data-matrix-read disabled={busy || barrier || !available} onclick={() => show()}>Review matrix</button>
+      <button type="button" data-matrix-workbook-review disabled={busy || barrier || !available} onclick={reviewWorkbook}>Review XLSX workbook</button>
+      {#if busy}
+        <button type="button" data-matrix-cancel onclick={cancel}>Cancel matrix read</button>
+        <p role="status">Reading or preparing the owned matrix...</p>
+      {/if}
+    </div>
+  </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if publication.error}<p class="error" role="alert">{publication.error}</p>{/if}
   {#if !available}<p role="status">Select a physical hierarchy to review this report.</p>{/if}
@@ -88,14 +146,6 @@
     <div><dt>Hierarchy database</dt><dd>{hierarchyPath}</dd></div>
     {#if preview}<div><dt>Owned VPro64 labels database</dt><dd>{preview.labelsPath}</dd></div>{/if}
   </dl>
-  <div class="actions">
-    <button type="button" data-matrix-read disabled={busy || barrier || !available} onclick={() => show()}>Review matrix</button>
-    <button type="button" data-matrix-workbook-review disabled={busy || barrier || !available} onclick={reviewWorkbook}>Review XLSX workbook</button>
-    {#if busy}
-      <button type="button" data-matrix-cancel onclick={cancel}>Cancel matrix read</button>
-      <p role="status">Reading or preparing the owned matrix...</p>
-    {/if}
-  </div>
   {#if preview}
     <p data-matrix-count>{preview.total} association rows; showing {preview.rows.length ? preview.offset + 1 : 0}
       through {preview.rows.length ? preview.offset + preview.rows.length : 0}.</p>
@@ -148,6 +198,9 @@
 
 <style>
   .matrix { min-width: 0; }
+  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+  .report-sticky-bar h1 { margin: 0; }
+  .report-sticky-bar .actions { margin-block: 0; }
   .actions { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-block: 1rem; }
   .provenance, .workbook { display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; }
   dd, [data-matrix-receipt] { margin: 0; overflow-wrap: anywhere; }

@@ -9,6 +9,7 @@
   import { soilFields } from './soilChildEditor';
   import { enterNavigationMode } from './enterNavigation';
   import { twoPageSoilGroups, twoPageSoilCell, twoPageSoilStoredText, twoPageSoilRowDiagnostic, twoPageSoilDepthOrder } from './twoPageSoilPresentation';
+  import { notifications } from '../shell/notificationService.svelte';
 
   interface SoilDeleteRestorePort {
     deleteHorizon(
@@ -128,7 +129,7 @@
     error = null;
     try {
       const port = await resolveSoilDeleteRestorePort();
-      await port.deleteHorizon(contextId, req);
+      const deleted = await port.deleteHorizon(contextId, req);
       if (gen !== deleteRestoreGeneration || owned !== session) return;
       deleteConfirmRowId = null;
       await owned.load();
@@ -138,6 +139,14 @@
       if (deletedHistoryOpen) {
         const list = await port.listDeletedHorizons(contextId, plot, form);
         if (gen === deleteRestoreGeneration) deletedHorizons = list ?? [];
+      }
+      if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+        notifications.success(
+          `${twoPageSoilKind(form)} horizon deleted`,
+          `Deleted horizon ${deleted?.horizon || '(NULL)'} (ID ${deleted?.deletedId ?? parsedId}).`,
+          { category: 'entry', source: 'Two-Page Soil', contextTag: plotTag },
+        );
       }
     } catch (cause) {
       if (gen === deleteRestoreGeneration) error = `Delete soil horizon refused: ${String(cause)}`;
@@ -171,6 +180,14 @@
       }
       const list = await port.listDeletedHorizons(contextId, plot, form);
       if (gen === deleteRestoreGeneration) deletedHorizons = list ?? [];
+      if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+        notifications.success(
+          `${twoPageSoilKind(form)} horizon restored`,
+          `Restored horizon ${restored?.horizon || '(NULL)'} (ID ${restored?.restoredId ?? ''}).`,
+          { category: 'entry', source: 'Two-Page Soil', contextTag: plotTag },
+        );
+      }
     } catch (cause) {
       if (gen === deleteRestoreGeneration) error = `Restore soil horizon refused: ${String(cause)}`;
     } finally {
@@ -242,6 +259,14 @@
       else {
         const receipt = owned.view().receipts.at(-1);
         if (receipt?.history.CreatedRowID) selected = receipt.history.CreatedRowID;
+        if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+          const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+          notifications.success(
+            `${twoPageSoilKind(form)} horizon created`,
+            plotTag ? `Added horizon to ${plotTag}.` : 'Horizon created.',
+            { category: 'entry', source: 'Two-Page Soil', contextTag: plotTag },
+          );
+        }
       }
     } catch (cause) {
       if (owned === session) error = `Explicit Horizon creation refused; retained state preserved: ${String(cause)}`;
@@ -328,6 +353,13 @@
         else if (action === 'load' && owned === session) {
           selected = row?.rowId ?? null;
           await focusHorizon(selected ?? undefined, owned);
+        } else if (action === 'save' && typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+          const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+          notifications.success(
+            `${twoPageSoilKind(form)} horizon changes saved`,
+            plotTag ? `${plotTag} (${form}) edits committed.` : `${form} edits committed.`,
+            { category: 'entry', source: 'Two-Page Soil', contextTag: plotTag },
+          );
         }
       }
     } catch (cause) { error = `Linked soil operation refused; owned state retained: ${String(cause)}`; }
@@ -352,7 +384,30 @@
 </script>
 
 <section bind:this={panel} class="two-page-soil-panel min-w-0 space-y-3 rounded border bg-white p-3" aria-label={`${form} linked soil`} data-two-page-soil-panel={form} data-soil-current-row={row?.rowId} data-help-id={form === 'SoilHumusXL' ? 'humus.upper_lower_depth' : 'mineral.horizon'}>
-  <h4 class="font-semibold">{form === 'SoilHumusXL' ? 'Humus' : 'Mineral soil'}</h4>
+  <div class="vpro-sticky-subbar sticky top-0 z-15 bg-white/95 border-b border-stone-200 pb-2 space-y-2" data-soil-sticky-bar>
+    <h4 class="font-semibold">{form === 'SoilHumusXL' ? 'Humus' : 'Mineral soil'}</h4>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" disabled={parentBlocked || close.unsaved || view.busy || referenceView.busy || close.blocked} onclick={() => operation('load')}>Load {twoPageSoilKind(form)}</button>
+      <button type="button" disabled={parentBlocked || referenceView.busy || !close.canSave} onclick={() => operation('save')}>Save {twoPageSoilKind(form)}</button>
+      <button type="button" disabled={parentBlocked || view.busy || referenceView.busy || view.blocked || view.acknowledgementRequired}
+        onclick={loadReferences}>{referenceView.error ? 'Retry' : 'Load'} source soil choices</button>
+      {#if referenceView.busy}<button type="button" onclick={() => referenceLookup?.cancel()}>Cancel source soil choices</button>{/if}
+      {#if twoPageSoilCreationEnabled}
+        <button type="button" disabled={parentBlocked || referenceView.busy || view.busy || close.unsaved || close.blocked || !view.original}
+          onclick={beginCreation}>New {twoPageSoilKind(form)} horizon</button>
+      {/if}
+      {#if twoPageSoilCreationEnabled || soilDeleteRestorePort}
+        <button type="button" data-soil-delete-trigger disabled={parentBlocked || referenceView.busy || view.busy || deleteRestoreBusy || close.unsaved || close.blocked || !view.original || !row || !!diagnostic}
+          onclick={() => { deleteConfirmRowId = row?.rowId ?? null; error = null; }}>Delete selected {twoPageSoilKind(form)} horizon</button>
+        <button type="button" data-soil-deleted-history-trigger disabled={parentBlocked || view.busy || deleteRestoreBusy || close.unsaved || close.blocked}
+          onclick={refreshDeletedHorizons}>Deleted {twoPageSoilKind(form)} horizons</button>
+      {/if}
+      <button type="button" disabled={view.busy || view.blocked || view.acknowledgementRequired || !Object.keys(view.drafts).length && !view.creation} onclick={() => operation('undo')}>Undo soil drafts</button>
+      {#if view.busy}<button type="button" onclick={() => operation('cancel')}>Cancel soil operation</button>{/if}
+      {#if view.blocked}<button type="button" disabled={view.busy} onclick={() => operation('recover')}>Recover soil outcome (read only)</button>{/if}
+      {#if view.acknowledgementRequired}<button type="button" disabled={view.busy} onclick={() => operation('acknowledge')}>Acknowledge committed soil receipt</button>{/if}
+    </div>
+  </div>
   {#if parentBlocked}<p role="status">Finish actual parent drafts/operations and unlock the plot before new soil staging.</p>{/if}
   {#if error}<p role="alert" class="break-words text-sm text-red-700">{error}</p>{/if}
   {#if view.error && view.error !== error}<p role="alert" class="break-words text-sm text-red-700">{view.error}</p>{/if}
@@ -361,27 +416,6 @@
   {#if view.blocked}<p role="alert">Save outcome unresolved. Recover the exact retained request; do not repeat Save.</p>{/if}
   {#if view.noCommitCertificate}<p role="status">Server certified no commit for {view.noCommitCertificate.requestId}. Drafts remain for correction or Undo; another Save needs a new request.</p>{/if}
   {#if Object.keys(view.drafts).length}<p role="status">{Object.keys(view.drafts).length} retained field draft(s). Save applies all retained edits together, including other physical rows.</p>{/if}
-  <div class="flex flex-wrap gap-2">
-    <button type="button" disabled={parentBlocked || close.unsaved || view.busy || referenceView.busy || close.blocked} onclick={() => operation('load')}>Load {twoPageSoilKind(form)}</button>
-    <button type="button" disabled={parentBlocked || referenceView.busy || !close.canSave} onclick={() => operation('save')}>Save {twoPageSoilKind(form)}</button>
-    <button type="button" disabled={parentBlocked || view.busy || referenceView.busy || view.blocked || view.acknowledgementRequired}
-      onclick={loadReferences}>{referenceView.error ? 'Retry' : 'Load'} source soil choices</button>
-    {#if referenceView.busy}<button type="button" onclick={() => referenceLookup?.cancel()}>Cancel source soil choices</button>{/if}
-    {#if twoPageSoilCreationEnabled}
-      <button type="button" disabled={parentBlocked || referenceView.busy || view.busy || close.unsaved || close.blocked || !view.original}
-        onclick={beginCreation}>New {twoPageSoilKind(form)} horizon</button>
-    {/if}
-    {#if twoPageSoilCreationEnabled || soilDeleteRestorePort}
-      <button type="button" data-soil-delete-trigger disabled={parentBlocked || referenceView.busy || view.busy || deleteRestoreBusy || close.unsaved || close.blocked || !view.original || !row || !!diagnostic}
-        onclick={() => { deleteConfirmRowId = row?.rowId ?? null; error = null; }}>Delete selected {twoPageSoilKind(form)} horizon</button>
-      <button type="button" data-soil-deleted-history-trigger disabled={parentBlocked || view.busy || deleteRestoreBusy || close.unsaved || close.blocked}
-        onclick={refreshDeletedHorizons}>Deleted {twoPageSoilKind(form)} horizons</button>
-    {/if}
-    <button type="button" disabled={view.busy || view.blocked || view.acknowledgementRequired || !Object.keys(view.drafts).length && !view.creation} onclick={() => operation('undo')}>Undo soil drafts</button>
-    {#if view.busy}<button type="button" onclick={() => operation('cancel')}>Cancel soil operation</button>{/if}
-    {#if view.blocked}<button type="button" disabled={view.busy} onclick={() => operation('recover')}>Recover soil outcome (read only)</button>{/if}
-    {#if view.acknowledgementRequired}<button type="button" disabled={view.busy} onclick={() => operation('acknowledge')}>Acknowledge committed soil receipt</button>{/if}
-  </div>
   {#if deleteConfirmRowId && row && deleteConfirmRowId === row.rowId && view.original}
     <fieldset class="min-w-0 space-y-2 rounded border border-red-300 border-t-[3px] border-t-[#FCBA19] bg-red-50/40 p-3" data-soil-delete-confirm>
       <legend class="text-sm font-semibold text-[#003366]">Confirm guarded {twoPageSoilKind(form)} horizon deletion</legend>
@@ -509,7 +543,7 @@
 </section>
 
 <style>
-  .two-page-soil-panel { max-width: 100%; overflow-x: auto; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
+  .two-page-soil-panel { max-width: 100%; overflow-x: clip; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
   .two-page-soil-panel :global(input[type="text"]), .two-page-soil-panel :global(textarea) { border-color: var(--vpro-forest-border, #D8D8D8); font-variant-numeric: tabular-nums; }
   .two-page-soil-panel :global(input[type="text"]:focus), .two-page-soil-panel :global(textarea:focus) { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
 </style>

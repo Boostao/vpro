@@ -231,10 +231,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: app/frontend
         run: npm ci
-      - name: Build native AppImage and deb
+      - name: Build native deb and rpm
         run: |
           set -euo pipefail
-          (cd app && task linux:create:appimage linux:create:deb "ARCH=$RELEASE_ARCH" "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
+          (cd app && task linux:create:deb linux:create:rpm "ARCH=$RELEASE_ARCH" "VERSION=$RELEASE_VERSION" "BUILD_MODE=$RELEASE_BUILD_MODE")
           python scripts/release.py package linux
       - uses: actions/upload-artifact@v7
         with:

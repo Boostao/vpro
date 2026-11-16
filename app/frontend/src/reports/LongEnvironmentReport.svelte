@@ -5,6 +5,7 @@
   import { reportTitleError, reportCellText, validateLongEnvironmentPreview } from './longEnvironmentReport';
   import { longEnvironmentPreferencesSession } from './longEnvironmentPreferences';
   import { environmentWorkbookPublicationSession, validateEnvironmentWorkbookReview, type ValidatedEnvironmentWorkbookReview } from './environmentWorkbook';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, projectPath, su, suPath, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string;
@@ -57,7 +58,16 @@
       if (!preferencesEnabled) title = value.title;
       ready = true;
     } catch (cause) {
-      if (request === generation) error = `Report options unavailable: ${String(cause)}`;
+      if (request === generation) {
+        error = `Report options unavailable: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Environment options failed', error, {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -71,7 +81,16 @@
       if (request !== generation) return;
       preview = validateLongEnvironmentPreview(value, contextId, project, projectPath, su, suPath, requestedTitle);
     } catch (cause) {
-      if (request === generation) error = `Report unavailable; this report preparation made no data or configuration writes: ${String(cause)}`;
+      if (request === generation) {
+        error = `Report unavailable; this report preparation made no data or configuration writes: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Environment report failed', error, {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -84,7 +103,16 @@
       if (request !== generation) return;
       preferences.applyLoaded(value, token);
     } catch (cause) {
-      if (request === generation) error = `Saved title unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved title unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Environment title load failed', error, {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -94,7 +122,16 @@
     cancel(); error = '';
     try {
       await preferences.save(request => EnvironmentReportService.SaveLongEnvironmentPreferences(contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Environment title save failed', error, {
+          category: 'reports',
+          source: 'Long Environment',
+          contextTag: (typeof project === 'string' && project) || undefined,
+        });
+      }
+    }
   }
   function editTitle(value: string) {
     if (preferences) { cancel(); preferences.edit(value); }
@@ -111,7 +148,16 @@
       workbookReview = validateEnvironmentWorkbookReview(value, workbookOwner, requestedTitle);
       preview = workbookReview.preview;
     } catch (cause) {
-      if (request === generation) error = `Workbook review unavailable; no file published: ${String(cause)}`;
+      if (request === generation) {
+        error = `Workbook review unavailable; no file published: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Environment workbook review failed', error, {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; reportBusy(); }
     }
@@ -119,10 +165,41 @@
   async function publishWorkbook() {
     if (!workbookEnabled || busy || preferenceBarrier || workbookBarrier || !workbookReview) return;
     cancel(); error = '';
+    const ctxTag = (typeof project === 'string' && project) || undefined;
     try {
       await workbookSession.publish(workbookReview, destination, request =>
         EnvironmentReportService.ExportReviewedEnvironmentWorkbook(contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+      const settled = workbookSession.view();
+      if (typeof notifications !== 'undefined') {
+        if (settled.outcome?.status === 'published' && !settled.error) {
+          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+          notifications.success('Long Environment workbook exported', exportedPath, {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: ctxTag,
+          });
+        } else if (settled.error || settled.outcome) {
+          notifications.error(
+            'Long Environment workbook export failed',
+            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+            {
+              category: 'reports',
+              source: 'Long Environment',
+              contextTag: ctxTag,
+            },
+          );
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Environment workbook export failed', error, {
+          category: 'reports',
+          source: 'Long Environment',
+          contextTag: ctxTag,
+        });
+      }
+    }
   }
   function acknowledgeWorkbook() {
     workbookSession.acknowledge();
@@ -133,7 +210,19 @@
 </script>
 
 <section class="report" data-long-environment-report aria-label="Long Environment report">
-  <h1>Long Environment</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+    <h1>Long Environment</h1>
+    <div class="actions">
+      <button data-source-control="btnViewReport" disabled={busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None'} onclick={show}>View Report</button>
+      <button disabled={!workbookEnabled || busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None' || su === 'USysSuTableDynamic'} onclick={reviewWorkbook}>Review XLSX workbook (no file yet)</button>
+      {#if preferencesEnabled}
+        <button data-long-environment-preferences-load disabled={!!preferenceView?.busy || !!preferenceView?.blocked || workbookBarrier} onclick={loadSavedTitle}>Load saved title</button>
+      {:else}
+        <button disabled={busy || workbookBarrier} onclick={options}>Reload report options</button>
+      {/if}
+      {#if busy}<button onclick={cancel}>Cancel report read</button><p role="status">Reading owned report snapshots…</p>{/if}
+    </div>
+  </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if titleError}<p class="error" role="alert">{titleError}</p>{/if}
   {#if preferenceView?.draftError}<p class="error" role="alert">{preferenceView.draftError}</p>{/if}
@@ -160,22 +249,16 @@
     <input id="long-environment-title" data-source-control="rptSvTitle" value={title} disabled={busy || !ready || workbookBarrier}
       oninput={(event) => { const value = event.currentTarget.value; editTitle(value); }} />
   {/if}
-  <div class="actions">
-    <button data-source-control="btnViewReport" disabled={busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None'} onclick={show}>View Report</button>
-    <button disabled={!workbookEnabled || busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None' || su === 'USysSuTableDynamic'} onclick={reviewWorkbook}>Review XLSX workbook (no file yet)</button>
-    {#if preferencesEnabled}
-      <button data-long-environment-preferences-load disabled={!!preferenceView?.busy || !!preferenceView?.blocked || workbookBarrier} onclick={loadSavedTitle}>Load saved title</button>
+  {#if preferencesEnabled}
+    <div class="actions">
       <button data-long-environment-preferences-save disabled={busy || !!preferenceView?.busy || !!preferenceView?.blocked || !!preferenceView?.draftError || !preferenceView?.saved || workbookBarrier}
         onclick={saveTitle}>Save reviewed title</button>
       <button data-long-environment-preferences-undo disabled={!!preferenceView?.busy || !!preferenceView?.blocked || !preferenceView?.saved || workbookBarrier} onclick={() => { cancel(); preferences?.undo(); }}>Undo title</button>
       {#if preferenceView?.blocked}
         <button data-long-environment-preferences-acknowledge disabled={preferenceView.busy} onclick={() => preferences?.acknowledge()}>Acknowledge preference outcome</button>
       {/if}
-    {:else}
-      <button disabled={busy || workbookBarrier} onclick={options}>Reload report options</button>
-    {/if}
-    {#if busy}<button onclick={cancel}>Cancel report read</button><p role="status">Reading owned report snapshots…</p>{/if}
-  </div>
+    </div>
+  {/if}
   {#if workbookReview}
     <p>Reviewed workbook: {workbookReview.sheets.length} source unit sheets; {workbookReview.bytes} bytes;
       SHA256 {workbookReview.workbookSHA256}. Hidden lossless source metadata preserves typed NULL/empty values and diagnostics.</p>
@@ -235,6 +318,8 @@
 
 <style>
   .report { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; overflow-wrap: anywhere; gap: .75rem; }
+  .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+  .report-sticky-bar h1 { margin: 0; }
   h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3 { font-weight: 600; }
   input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .6rem; width: 100%; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }

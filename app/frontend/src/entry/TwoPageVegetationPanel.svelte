@@ -8,6 +8,7 @@
   import { twoPageVegetationGroups, twoPageVegetationStoredText, twoPageVegetationRowDiagnostic, twoPageVegetationHasColumn } from './twoPageVegetationPresentation';
   import VegetationSpeciesReferences from './VegetationSpeciesReferences.svelte';
   import { vegetationSpeciesListOptions, vegetationSpeciesListHasCommonCover } from './twoPageVegetationSpeciesList';
+  import { notifications } from '../shell/notificationService.svelte';
 
   interface VegetationCrudPort {
     createRow(contextId: string, req: {
@@ -127,6 +128,14 @@
           : action === 'save' ? await owned.save(crypto.randomUUID()) : await owned.resolve();
         if (owned !== session) return;
         if (!ok) error = action === 'references' ? owned.view().referenceError : owned.view().error;
+        else if (action === 'save' && typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+          const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+          notifications.success(
+            'Vegetation changes saved',
+            plotTag ? `${plotTag} (${form}) edits committed.` : `${form} edits committed.`,
+            { category: 'entry', source: 'Two-Page Vegetation', contextTag: plotTag },
+          );
+        }
       }
     } catch (cause) {
       if (owned === session) error = `Linked vegetation operation refused; owned state retained: ${String(cause)}`;
@@ -178,6 +187,14 @@
       await owned.load();
       if (owned === session && created.rowId) owned.select(created.rowId);
       statusMsg = `Created vegetation row for ${created.species}.`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+        notifications.success(
+          `Created vegetation row (${created.species})`,
+          plotTag ? `Added to ${plotTag} (${form}).` : `Added to ${form}.`,
+          { category: 'entry', source: 'Two-Page Vegetation', contextTag: plotTag },
+        );
+      }
     } catch (cause) {
       if (owned === session) error = `Create vegetation row refused: ${String(cause)}`;
     } finally {
@@ -214,6 +231,14 @@
       deleteConfirmRowId = null;
       await owned.load();
       statusMsg = `Deleted vegetation row ${deleted.deletedId} (${deleted.species}).`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+        notifications.success(
+          `Deleted vegetation row (${deleted.species})`,
+          `Row ID ${deleted.deletedId} deleted (recoverable via Deleted rows).`,
+          { category: 'entry', source: 'Two-Page Vegetation', contextTag: plotTag },
+        );
+      }
     } catch (cause) {
       if (owned === session) error = `Delete vegetation row refused: ${String(cause)}`;
     } finally {
@@ -260,6 +285,14 @@
       const list = await port.listDeletedRows(contextId, plot, form);
       if (gen === crudGeneration) deletedRows = list ?? [];
       statusMsg = `Restored vegetation row ${restored.restoredId} (${restored.species}).`;
+      if (typeof notifications !== 'undefined' && typeof notifications?.success === 'function') {
+        const plotTag = typeof plot !== 'undefined' && plot ? `Plot ${plot}` : undefined;
+        notifications.success(
+          `Restored vegetation row (${restored.species})`,
+          `Row ID ${restored.restoredId} restored to ${form}.`,
+          { category: 'entry', source: 'Two-Page Vegetation', contextTag: plotTag },
+        );
+      }
     } catch (cause) {
       if (owned === session) error = `Restore vegetation row refused: ${String(cause)}`;
     } finally {
@@ -312,47 +345,48 @@
 
 <section bind:this={panel} class="two-page-veg-panel min-w-0 space-y-3 rounded border border-[#D8D8D8] bg-white p-3" aria-label={`${form} linked vegetation`}
   data-two-page-vegetation-panel={form} data-vegetation-current-row={row?.rowId}>
-  <h4 class="font-semibold text-[#003366]">{form === 'SubVegCXL' ? 'Herb' : form === 'SubVegDXL' ? 'Moss/Lichen' : 'Tree/Shrubs'}</h4>
+  <div class="vpro-sticky-subbar sticky top-0 z-15 bg-white/95 border-b border-stone-200 pb-2 pt-1 space-y-2" data-veg-sticky-bar>
+    <h4 class="font-semibold text-[#003366]">{form === 'SubVegCXL' ? 'Herb' : form === 'SubVegDXL' ? 'Moss/Lichen' : 'Tree/Shrubs'}</h4>
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+        disabled={parentBlocked || close.unsaved || view.busy || close.blocked || crudBusy} onclick={() => operation('load')}>Load vegetation</button>
+      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+        disabled={parentBlocked || view.busy || view.blocked || view.acknowledgementRequired || crudBusy}
+        onclick={() => operation('references')}>Review Species definitions (read only)</button>
+      <button type="button" class="rounded border border-[#003366] bg-[#003366] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+        disabled={parentBlocked || !close.canSave || crudBusy} onclick={() => operation('save')}>Save vegetation</button>
+      <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+        disabled={view.busy || view.blocked || view.acknowledgementRequired || !Object.keys(view.drafts).length || crudBusy} onclick={() => operation('undo')}>Undo vegetation drafts</button>
+      <button type="button" data-veg-create-toggle
+        class="rounded border border-[#003366] bg-white px-2.5 py-1 text-xs font-medium text-[#003366] disabled:opacity-50"
+        disabled={fieldsDisabled || close.unsaved || close.blocked || crudBusy || !view.original}
+        onclick={() => { createOpen = !createOpen; error = null; }}>
+        {createOpen ? 'Cancel Add Row' : 'Add species row'}
+      </button>
+      <button type="button" data-veg-delete-btn
+        class="rounded border border-[#D8292F] bg-white px-2.5 py-1 text-xs font-medium text-[#D8292F] disabled:opacity-50"
+        disabled={fieldsDisabled || close.unsaved || close.blocked || crudBusy || !row}
+        onclick={() => { if (row) deleteConfirmRowId = deleteConfirmRowId === row.rowId ? null : row.rowId; }}>
+        Delete selected row
+      </button>
+      <button type="button" data-veg-deleted-list-btn
+        class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
+        disabled={parentBlocked || view.busy || crudBusy}
+        onclick={() => { if (deletedHistoryOpen) deletedHistoryOpen = false; else void loadDeletedRows(); }}>
+        {deletedHistoryOpen ? 'Hide deleted rows' : 'Deleted rows'}
+      </button>
+      {#if view.busy}<button type="button" onclick={() => operation('cancel')}>Cancel vegetation operation</button>{/if}
+      {#if view.blocked}<button type="button" disabled={view.busy} onclick={() => operation('recover')}>Recover vegetation outcome (read only)</button>{/if}
+      {#if view.acknowledgementRequired}<button type="button" disabled={view.busy} onclick={() => operation('acknowledge')}>Acknowledge committed vegetation receipt</button>{/if}
+    </div>
+  </div>
   {#if parentBlocked}<p role="status">Finish actual parent/other-owner drafts and unlock the plot before new vegetation staging.</p>{/if}
   {#if error}<p role="alert" class="break-words text-sm text-[#D8292F]">{error}</p>{/if}
-  {#if statusMsg}<p role="status" class="break-words text-sm text-[#2E8540]">{statusMsg}</p>{/if}
   {#if view.error && view.error !== error}<p role="alert" class="break-words text-sm text-[#D8292F]">{view.error}</p>{/if}
   {#if view.referenceError && view.referenceError !== error}<p role="alert" class="break-words text-sm text-[#D8292F]">{view.referenceError}</p>{/if}
   {#if view.blocked}<p role="alert">Save outcome unresolved. Recover the exact retained request; do not repeat Save.</p>{/if}
   {#if view.noCommitCertificate}<p role="status" class="break-words">Server certified no commit for {view.noCommitCertificate.requestId}. Correct or Undo retained drafts; another Save needs a new request.</p>{/if}
   {#if Object.keys(view.drafts).length}<p role="status">{Object.keys(view.drafts).length} retained field draft(s). Save applies all retained edits together, including other physical rows.</p>{/if}
-  <div class="flex flex-wrap gap-2">
-    <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
-      disabled={parentBlocked || close.unsaved || view.busy || close.blocked || crudBusy} onclick={() => operation('load')}>Load vegetation</button>
-    <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
-      disabled={parentBlocked || view.busy || view.blocked || view.acknowledgementRequired || crudBusy}
-      onclick={() => operation('references')}>Review Species definitions (read only)</button>
-    <button type="button" class="rounded border border-[#003366] bg-[#003366] px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
-      disabled={parentBlocked || !close.canSave || crudBusy} onclick={() => operation('save')}>Save vegetation</button>
-    <button type="button" class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
-      disabled={view.busy || view.blocked || view.acknowledgementRequired || !Object.keys(view.drafts).length || crudBusy} onclick={() => operation('undo')}>Undo vegetation drafts</button>
-    <button type="button" data-veg-create-toggle
-      class="rounded border border-[#003366] bg-white px-2.5 py-1 text-xs font-medium text-[#003366] disabled:opacity-50"
-      disabled={fieldsDisabled || close.unsaved || close.blocked || crudBusy || !view.original}
-      onclick={() => { createOpen = !createOpen; error = null; }}>
-      {createOpen ? 'Cancel Add Row' : 'Add species row'}
-    </button>
-    <button type="button" data-veg-delete-btn
-      class="rounded border border-[#D8292F] bg-white px-2.5 py-1 text-xs font-medium text-[#D8292F] disabled:opacity-50"
-      disabled={fieldsDisabled || close.unsaved || close.blocked || crudBusy || !row}
-      onclick={() => { if (row) deleteConfirmRowId = deleteConfirmRowId === row.rowId ? null : row.rowId; }}>
-      Delete selected row
-    </button>
-    <button type="button" data-veg-deleted-list-btn
-      class="rounded border border-[#D8D8D8] bg-white px-2.5 py-1 text-xs font-medium text-[#313132] disabled:opacity-50"
-      disabled={parentBlocked || view.busy || crudBusy}
-      onclick={() => { if (deletedHistoryOpen) deletedHistoryOpen = false; else void loadDeletedRows(); }}>
-      {deletedHistoryOpen ? 'Hide deleted rows' : 'Deleted rows'}
-    </button>
-    {#if view.busy}<button type="button" onclick={() => operation('cancel')}>Cancel vegetation operation</button>{/if}
-    {#if view.blocked}<button type="button" disabled={view.busy} onclick={() => operation('recover')}>Recover vegetation outcome (read only)</button>{/if}
-    {#if view.acknowledgementRequired}<button type="button" disabled={view.busy} onclick={() => operation('acknowledge')}>Acknowledge committed vegetation receipt</button>{/if}
-  </div>
   {#if createOpen}
     <div class="rounded border border-[#003366]/30 bg-[#F2F2F2] p-3 space-y-2" data-veg-create-panel>
       <p class="text-xs font-semibold text-[#003366]">Add Vegetation Row ({form})</p>
@@ -507,7 +541,7 @@
 </section>
 
 <style>
-  .two-page-veg-panel { max-width: 100%; overflow-x: auto; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
+  .two-page-veg-panel { max-width: 100%; overflow-x: clip; border-color: var(--vpro-border, #d1d5db); border-top: 3px solid var(--vpro-gold, #fcba19); font-variant-numeric: tabular-nums; }
   .two-page-veg-panel :global(input[type="text"]), .two-page-veg-panel :global(select) { border-color: var(--vpro-forest-border, #D8D8D8); font-variant-numeric: tabular-nums; }
   .two-page-veg-panel :global(input[type="text"]:focus), .two-page-veg-panel :global(select:focus) { outline: 2px solid var(--vpro-focus-ring, #1a5a96); outline-offset: 1px; }
 </style>

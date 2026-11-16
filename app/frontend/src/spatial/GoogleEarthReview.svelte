@@ -8,6 +8,7 @@
   import { validateGoogleEarthKMLExportReview, googleEarthKMLPublicationSession } from './googleEarthKMLExport';
   import { wellFormedUTF16 } from '../entry/qualityEditor';
   import { googleEarthPreferencesSession } from './googleEarthPreferences';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, project, projectPath, su, suPath, onBusyChange }: {
     contextId: string; project: string; projectPath: string; su: string; suPath: string; onBusyChange: (busy: boolean) => void;
@@ -98,7 +99,10 @@
       fields = validateGoogleEarthFields(value, expected);
       preferenceSession?.setPhysicalFields(fields.fields.map(field => field.name));
     } catch (cause) {
-      if (request === generation) error = `Description fields unavailable; no data, audits, preferences or files written: ${String(cause)}`;
+      if (request === generation) {
+        error = `Description fields unavailable; no data, audits, preferences or files written: ${String(cause)}`;
+        notifications.error('Google Earth fields unavailable', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      }
     } finally {
       if (request === generation) { busy = false; updateBusy(); }
     }
@@ -106,7 +110,9 @@
   async function prepareKML() {
     if (locked) { error = 'Finish or acknowledge the current operation before preparing KML.'; return; }
     if (!fields || !fields.fields.some(field => field.name === selectedField) || !googleEarthXMLText(title)) {
-      error = 'Load and choose a literal description field and correct Place Name before preparing KML.'; return;
+      error = 'Load and choose a literal description field and correct Place Name before preparing KML.';
+      notifications.error('KML preview blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      return;
     }
     cancel(); const request = generation, expected = scope(), descriptionField = selectedField, placeName = title;
     kml = null; approval = null; error = ''; busy = true; onBusyChange(true);
@@ -126,7 +132,10 @@
         kml = validated;
       }
     } catch (cause) {
-      if (request === generation) error = `KML preview unavailable; no data, audits, preferences or files written: ${String(cause)}`;
+      if (request === generation) {
+        error = `KML preview unavailable; no data, audits, preferences or files written: ${String(cause)}`;
+        notifications.error('KML preview unavailable', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      }
     } finally {
       if (request === generation) { busy = false; updateBusy(); }
     }
@@ -134,7 +143,9 @@
   async function show(offset = 0) {
     if (locked) { error = 'Finish or acknowledge the current operation before another review.'; return; }
     if (!fields || !fields.fields.some(field => field.name === selectedField)) {
-      error = 'Load the owned physical Env fields and choose a literal description field before reviewing.'; return;
+      error = 'Load the owned physical Env fields and choose a literal description field before reviewing.';
+      notifications.error('Google Earth location review blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      return;
     }
     cancel(); const request = generation, expected = scope(), descriptionField = selectedField;
     review = null; error = ''; busy = true; onBusyChange(true);
@@ -146,19 +157,41 @@
       if (request !== generation) return;
       review = validated;
     } catch (cause) {
-      if (request === generation) error = `Google Earth preparation unavailable; no data, audits, preferences or files written: ${String(cause)}`;
+      if (request === generation) {
+        error = `Google Earth preparation unavailable; no data, audits, preferences or files written: ${String(cause)}`;
+        notifications.error('Google Earth review unavailable', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      }
     } finally {
       if (request === generation) { busy = false; updateBusy(); }
     }
   }
   async function publishKML() {
-    if (locked || !approval) { error = 'Prepare an owned KML file review and acknowledge any prior outcome first.'; return; }
+    if (locked || !approval) {
+      error = 'Prepare an owned KML file review and acknowledge any prior outcome first.';
+      notifications.error('KML export blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      return;
+    }
     error = '';
     try {
       await publicationSession.publish(approval, destination, request =>
         SpatialService.ExportReviewedGoogleEarthKML(contextId, JSON.stringify(request)));
+      const current = publicationSession.view();
+      if (current.outcome?.status === 'published') {
+        notifications.success(
+          'Google Earth KML exported',
+          `Exported KML to ${current.outcome.path || destination}.`,
+          { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+        );
+      } else {
+        notifications.error(
+          'Google Earth KML export failed',
+          current.outcome?.errorMessage || current.error || 'KML publication reported errors.',
+          { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+        );
+      }
     } catch (cause) {
       error = `KML publication request unavailable: ${String(cause)}`;
+      notifications.error('Google Earth KML export failed', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
     }
   }
   function acknowledgePublication() {
@@ -170,7 +203,24 @@
 </script>
 
 <section class="earth-review" data-google-earth-review aria-label="Google Earth location preparation">
-  <h1>Google Earth location preparation</h1>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8]" data-workbench-sticky-bar>
+    <h1>Google Earth location preparation</h1>
+    <div class="actions">
+      <button type="button" data-google-earth-fields disabled={locked} onclick={loadFields}>Load description fields</button>
+      <button type="button" data-google-earth-read disabled={locked || !selectedField || !fields} onclick={() => show()}>Review Google Earth locations</button>
+      {#if kmlEnabled || kmlExportEnabled}
+        <button type="button" data-google-earth-kml-prepare disabled={locked || !selectedField || !fields || !googleEarthXMLText(title)}
+          onclick={prepareKML}>{kmlExportEnabled ? 'Review KML file export (no file yet)' : 'Prepare KML text (no file)'}</button>
+        {#if kmlExportEnabled}
+          <button type="button" data-google-earth-kml-publish
+            disabled={locked || !approval || !destination || !wellFormedUTF16(destination) || destination.includes('\0')}
+            onclick={publishKML}>Build reviewed KML file (never replace)</button>
+        {/if}
+      {/if}
+      {#if busy}<button type="button" data-google-earth-cancel onclick={cancel}>Cancel preparation read</button>
+        <p role="status">Reading and checking the owned snapshot...</p>{/if}
+    </div>
+  </header>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if preferences?.draftError}<p class="error" role="alert" data-google-earth-preferences-draft-error>{preferences.draftError}</p>{/if}
   {#if preferencesEnabled && preferences}
@@ -213,11 +263,6 @@
   <p>Project {project} / SU {su}. Direct Env scope: no Admin, current-plot or profile filter.</p>
   <dl><div><dt>Owned project database</dt><dd>{projectPath}</dd></div>
     {#if su !== 'None'}<div><dt>Owned SU database</dt><dd>{suPath}</dd></div>{/if}</dl>
-  <div class="actions">
-    <button type="button" data-google-earth-fields disabled={locked} onclick={loadFields}>Load description fields</button>
-    {#if busy}<button type="button" data-google-earth-cancel onclick={cancel}>Cancel preparation read</button>
-      <p role="status">Reading and checking the owned snapshot...</p>{/if}
-  </div>
   <div class="options">
   {#if kmlExportEnabled}
     <div class="field">
@@ -251,19 +296,7 @@
       {/if}
     </p>
   {/if}
-  <div class="actions">
-    <button type="button" data-google-earth-read disabled={locked || !selectedField || !fields} onclick={() => show()}>Review Google Earth locations</button>
-  </div>
   {#if kmlEnabled || kmlExportEnabled}
-    <div class="actions">
-      <button type="button" data-google-earth-kml-prepare disabled={locked || !selectedField || !fields || !googleEarthXMLText(title)}
-        onclick={prepareKML}>{kmlExportEnabled ? 'Review KML file export (no file yet)' : 'Prepare KML text (no file)'}</button>
-      {#if kmlExportEnabled}
-        <button type="button" data-google-earth-kml-publish
-          disabled={locked || !approval || !destination || !wellFormedUTF16(destination) || destination.includes('\0')}
-          onclick={publishKML}>Build reviewed KML file (never replace)</button>
-      {/if}
-    </div>
     {#if kml}
       <p role="status" data-google-earth-kml-summary>{kml.placemarkCount} placemarks; {kml.byteCount} UTF-8 bytes from a new complete owned snapshot.
         {#if preferencesEnabled}Text preparation itself creates no file, saves no preference and launches no viewer; explicit preference saves and file publications have separate retained outcomes.
