@@ -26,7 +26,7 @@ name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 \code{.poor}, and \code{.nudum} units.}
 
 \item{min_plots}{Minimum number of plots required for a unit to enter pairwise
-comparison (default \code{2L}, matching the canonical BEC standard and Go \code{SynthesisOptions}).}
+comparison (default \code{2L}, matching the canonical BEC standard and VPro Desktop).}
 
 \item{min_constancy}{Minimum constancy percentage (\verb{[0, 100]}, default \code{60})
 required in at least one unit for diagnostic-potential scoring.}
@@ -46,8 +46,8 @@ An S3 object of class \code{vpro_pairwise} with \verb{$pairs} tibble,
 \verb{$species_diffs} tibble, and \verb{$similarity_matrix} symmetric numeric matrix.
 }
 \description{
-Implements the B.C. Ministry of Forests BEC pairwise unit comparison
-algorithm (\verb{_do_pairwise.R} and VPro Desktop \code{app/internal/diagnostics}), combining
-quantitative Sørensen / Bray-Curtis unit similarity with BEC constancy (\code{d})
-and abundance (\code{dd}) differential points and shared diagnostic potential.
+Implements the B.C. Ministry of Forests BEC pairwise unit comparison method
+matching VPro Desktop, combining quantitative Sorensen / Bray-Curtis unit
+similarity with BEC constancy (\code{d}) and abundance (\code{dd}) differential points
+and shared diagnostic potential.
 }

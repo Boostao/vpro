@@ -43,9 +43,8 @@ full-table query when no filter or \code{limit} is supplied.}
 A \code{vpro_soil} object (\code{type = "both"}) or a tibble (\code{"humus"} / \code{"mineral"}).
 }
 \description{
-Pushes plot filtering down into \code{becmaster.humus} and/or \code{becmaster.mineral}
-via \verb{WITH matched AS (...)}, normalizes literal character \code{PlotNumber} and
-logical \code{Flag} columns, classifies \code{HorizonRegime}, and orders horizons per
-\code{LMH25 (2023)} (\code{L/F/H} ordered \verb{UpperDepth DESC}; \code{Of/Om/Oh} and
-\code{A/B/C/R/W} ordered \verb{UpperDepth ASC}).
+Pushes plot filtering down into \code{becmaster.humus} and/or \code{becmaster.mineral},
+normalizes literal character \code{PlotNumber} and logical \code{Flag} columns,
+classifies \code{HorizonRegime}, and orders horizons per \code{LMH25 (2023)} (\code{L/F/H}
+ordered \verb{UpperDepth DESC}; \code{Of/Om/Oh} and \code{A/B/C/R/W} ordered \verb{UpperDepth ASC}).
 }

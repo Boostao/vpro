@@ -43,8 +43,8 @@ in EPSG:4326 or an \code{sf} \code{bbox} object.}
 An S3 \code{vpro_workspace} object with \code{ws$source == "cloud_workspace"}.
 }
 \description{
-Pulls a snapshot-consistent cloud subset into a session-temporary \code{VP08}
-SQLite database (\code{log_download = FALSE}), populates \verb{<Project>_SU} from
+Pulls a snapshot-consistent cloud subset into a session-temporary VPro
+project database (\code{log_download = FALSE}), populates \verb{<Project>_SU} from
 \code{unit_col}, attaches a garbage-collector / session-exit finalizer to remove
 the temporary database automatically, and returns a \code{vpro_workspace} handle
 ready for \code{\link[=vpro_matrix]{vpro_matrix()}}, \code{\link[=vpro_cluster]{vpro_cluster()}}, \code{\link[=vpro_diagnostics]{vpro_diagnostics()}},

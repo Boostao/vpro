@@ -1,15 +1,15 @@
-# Headless PostgreSQL BECMaster Contributor Staging Submit & Queue Review ----
+# PostgreSQL BECMaster Contributor Staging Submit & Queue Review -------------
 
 #' Submit a local `VP08` project to PostgreSQL `BECMaster` staging
 #'
 #' Runs mandatory pre-flight standards, referential, `LMH25 (2023)` pedological,
-#' UTF-16 code-unit (`PlotNumber <= 7`, `Species <= 8`, `Horizon <= 8`,
-#' `Texture <= 4`, `Colour <= 14`, quality labels `<= 15`), and IEEE-754
-#' `float32 < 100` cover validation ([vpro_validate()] +
-#' [vpro_narrow_float32()]), captures a WAL-consistent SQLite snapshot, packages
-#' referenced personal species from `VUser.db` (`USysUserSpp`) alongside active
-#' `<Project>_Lump` and `*_SU` assignments, and streams all eight `VP08` tables
-#' into `staging.*` inside a single atomic PostgreSQL transaction.
+#' text character-length (`PlotNumber <= 7`, `Species <= 8`, `Horizon <= 8`,
+#' `Texture <= 4`, `Colour <= 14`, quality labels `<= 15`), and cover (`0` to
+#' under `100%`) validation ([vpro_validate()] + [vpro_narrow_float32()]),
+#' captures a point-in-time snapshot of the project, packages referenced
+#' personal species from `VUser.db` (`USysUserSpp`) alongside active
+#' `<Project>_Lump` and `*_SU` assignments, and uploads all eight `VP08` tables
+#' into `staging.*` in one safe transaction.
 #'
 #' @param pg An active `vpro_pg_conn` connection from [vpro_master_connect()].
 #' @param ws Either a `vpro_workspace` handle from [vpro_connect()] or a
@@ -18,11 +18,11 @@
 #' @param submitter Non-empty character string identifying the submitting
 #'   analyst or ecologist.
 #' @param notes Optional character note for custodian review.
-#' @param scope Plot submission scope: `"project"` (all valid text-keyed plots
-#'   in `<Project>_Env`) or `"su"` (restricted to plots in the active `*_SU`
-#'   table).
+#' @param scope Plot submission scope: `"project"` (all valid plots with text
+#'   `PlotNumber` keys in `<Project>_Env`) or `"su"` (restricted to plots in the
+#'   active `*_SU` table).
 #' @param base_snapshot_tag Optional `BECMaster` baseline snapshot tag from
-#'   which the project splinter was originally checked out.
+#'   which the regional working copy was originally checked out.
 #' @param custodian_override Logical; if `TRUE` on a `"custodian"` connection,
 #'   permits staging upload when [vpro_validate()] reports blocking QA errors
 #'   (recording `compliance_passed = FALSE` for custodial remediation).
@@ -67,8 +67,10 @@ vpro_staging_submit <- function(
       "The built-in {.val Sample} project cannot be submitted to provincial {.code BECMaster} staging."
     )
   }
-  if (identical(scope, "su") &&
-      (is.null(ws$su) || !nzchar(trimws(ws$su)) || identical(tolower(trimws(ws$su)), "none"))) {
+  if (
+    identical(scope, "su") &&
+      (is.null(ws$su) || !nzchar(trimws(ws$su)) || identical(tolower(trimws(ws$su)), "none"))
+  ) {
     cli::cli_abort(
       "{.code scope = \"su\"} requires an active {.file *_SU} site-unit table on {.arg ws}."
     )
@@ -115,8 +117,8 @@ vpro_staging_submit <- function(
     cli::cli_abort(c(
       "Staging submission for project {.val {ws_snap$project}} blocked by pre-flight compliance gate ({total_blocking} blocking error{?s}).",
       "x" = "Standards/LMH25/orphan errors: {n_val_errors} (warnings: {n_val_warnings})",
-      "x" = "UTF-16 length / encoding errors: {n_utf16_errors}",
-      "x" = "IEEE-754 float32 cover (< 100) errors: {n_cover_errors}",
+      "x" = "Text length / encoding errors: {n_utf16_errors}",
+      "x" = "Vegetation cover (0 to under 100%) errors: {n_cover_errors}",
       "i" = "Inspect violations with {.fn vpro_validate} and resolve errors before calling {.fn vpro_staging_submit}."
     ))
   }
@@ -211,7 +213,9 @@ vpro_staging_submit <- function(
 
         for (pg_tbl in c("env", "admin", "veg", "humus", "mineral", "other", "metadata", "audit")) {
           df_t <- artifacts$tables[[pg_tbl]]
-          if (nrow(df_t) == 0L) next
+          if (nrow(df_t) == 0L) {
+            next
+          }
           df_sub <- cbind(
             data.frame(submission_id = rep(submission_id, nrow(df_t)), stringsAsFactors = FALSE),
             df_t
@@ -369,7 +373,8 @@ vpro_staging_list <- function(
   sql <- paste0(
     .vpro_staging_summary_select_sql,
     where_sql,
-    " ORDER BY submitted_at DESC LIMIT ", lim_p
+    " ORDER BY submitted_at DESC LIMIT ",
+    lim_p
   )
 
   df <- vpro_pg_query(pg, sql, params = params, action = "list staging.submissions")
@@ -405,7 +410,7 @@ print.vpro_staging_queue <- function(x, ...) {
 #' `"matches_synonym"` on `UPPER("OldCode")`, or `"new_provisional"`).
 #'
 #' @param pg A `vpro_pg_conn` handle from [vpro_master_connect()].
-#' @param submission_id Submission UUID string.
+#' @param submission_id Staging submission ID string.
 #' @return A list with `summary` (1-row `vpro_staging_queue` tibble),
 #'   `compliance_report` (parsed list), `user_species` (tibble),
 #'   `provisional_diffs` (tibble), `lump` (tibble), and `su` (tibble).
@@ -420,7 +425,9 @@ vpro_staging_inspect <- function(pg, submission_id) {
     "  s_raw.user_species_manifest::text AS user_species_manifest_raw, ",
     "  s_raw.lump_rows::text AS lump_rows_raw, ",
     "  s_raw.su_rows::text AS su_rows_raw ",
-    "FROM (", .vpro_staging_summary_select_sql, " WHERE submission_id = $1::uuid) AS sub ",
+    "FROM (",
+    .vpro_staging_summary_select_sql,
+    " WHERE submission_id = $1::uuid) AS sub ",
     "INNER JOIN staging.submissions AS s_raw ON s_raw.submission_id::text = sub.submission_id"
   )
   df <- vpro_pg_query(pg, sql, params = list(sub_id), action = "inspect staging submission")
@@ -526,7 +533,9 @@ vpro_staging_inspect <- function(pg, submission_id) {
     if (nrow(std_df) > 0L) {
       for (i in seq_len(nrow(user_species_tbl))) {
         cu <- toupper(trimws(ifelse(is.na(user_species_tbl$Code[[i]]), "", user_species_tbl$Code[[i]])))
-        if (!nzchar(cu)) next
+        if (!nzchar(cu)) {
+          next
+        }
         m_off <- which(std_df$code_up == cu & nzchar(std_df$official_code))
         if (length(m_off) >= 1L) {
           st_vec[[i]] <- "matches_official"
@@ -574,13 +583,17 @@ vpro_staging_inspect <- function(pg, submission_id) {
   } else {
     su_tbl <- tibble::tibble(
       PlotNumber = vapply(su_parsed, function(r) json_chr_or_empty(r$plotNumber), character(1L)),
-      SiteUnit = vapply(su_parsed, function(r) {
-        if (is.null(r$siteUnit) || length(r$siteUnit) == 0L || is.na(r$siteUnit[[1L]])) {
-          NA_character_
-        } else {
-          as.character(r$siteUnit[[1L]])
-        }
-      }, character(1L))
+      SiteUnit = vapply(
+        su_parsed,
+        function(r) {
+          if (is.null(r$siteUnit) || length(r$siteUnit) == 0L || is.na(r$siteUnit[[1L]])) {
+            NA_character_
+          } else {
+            as.character(r$siteUnit[[1L]])
+          }
+        },
+        character(1L)
+      )
     )
   }
 
@@ -594,7 +607,7 @@ vpro_staging_inspect <- function(pg, submission_id) {
   )
 }
 
-# Pure In-Memory 3-Way Diff Engine (1:1 with custodian_merge.go) ---------------
+# Custodian Queue Review & Rejection -------------------------------------------
 
 #' Reject a pending staging submission with custodian review notes
 #'
@@ -603,7 +616,7 @@ vpro_staging_inspect <- function(pg, submission_id) {
 #'
 #' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
 #'   [vpro_master_connect()].
-#' @param submission_id Pending staging submission UUID string.
+#' @param submission_id Pending staging submission ID string.
 #' @param reviewer_notes Non-empty character string explaining why the
 #'   submission was rejected.
 #' @param actor Optional custodian reviewer name (defaults to PostgreSQL
@@ -616,8 +629,7 @@ vpro_staging_reject <- function(pg, submission_id, reviewer_notes, actor = NULL)
   .vpro_register_sync_s3()
   sub_id <- vpro_validate_uuid_arg(submission_id, "submission_id")
 
-  if (!is.character(reviewer_notes) || length(reviewer_notes) != 1L ||
-      is.na(reviewer_notes) || !nzchar(trimws(reviewer_notes))) {
+  if (!is.character(reviewer_notes) || length(reviewer_notes) != 1L || is.na(reviewer_notes) || !nzchar(trimws(reviewer_notes))) {
     cli::cli_abort("{.arg reviewer_notes} must be a single non-empty character string.")
   }
   notes_clean <- trimws(reviewer_notes)

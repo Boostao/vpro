@@ -26,7 +26,7 @@ vpro_master_audit(
 
 \item{project_ids}{Optional character vector of \code{ProjectID} values.}
 
-\item{merge_tx_id}{Optional merge transaction UUID(s).}
+\item{merge_tx_id}{Optional merge transaction ID(s).}
 
 \item{limit}{Optional positive integer row limit (defaults to \code{1000L}, or
 \code{NULL} for all matching rows).}

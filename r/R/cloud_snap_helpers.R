@@ -3,10 +3,13 @@
 .vpro_snap_s3_state <- new.env(parent = emptyenv())
 
 .vpro_register_snap_s3 <- function() {
-  .vpro_register_s3_methods(.vpro_snap_s3_state, list(
-    c("base", "print", "vpro_rds_project"),
-    c("tibble", "as_tibble", "vpro_rds_project")
-  ))
+  .vpro_register_s3_methods(
+    .vpro_snap_s3_state,
+    list(
+      c("base", "print", "vpro_rds_project"),
+      c("tibble", "as_tibble", "vpro_rds_project")
+    )
+  )
 }
 
 .vpro_default_bec_version <- "BECdb_v13_2026"
@@ -40,12 +43,7 @@ vpro_snapshot_project_prefix <- function(raw_name, fallback = "Snap_Project", gu
   if (!nzchar(s)) {
     s <- fallback
   }
-  needs_prefix <- !grepl("^[A-Za-z]", s) || (
-    isTRUE(guard_reserved) && (
-      tolower(s) %in% c("none", "sample") ||
-      grepl("master", s, ignore.case = TRUE)
-    )
-  )
+  needs_prefix <- !grepl("^[A-Za-z]", s) || (isTRUE(guard_reserved) && (tolower(s) %in% c("none", "sample") || grepl("master", s, ignore.case = TRUE)))
   if (needs_prefix) {
     s <- paste0("Snap_", s)
   }
@@ -69,9 +67,7 @@ vpro_preserve_or_assign_unique_ids <- function(ids_raw, start_id = 100000000L, r
 
   for (i in seq_len(n)) {
     v <- nums[[i]]
-    valid <- !is.na(v) && is.finite(v) && v == trunc(v) &&
-      v > -2147483648 && v <= 2147483647 &&
-      (!isTRUE(require_positive) || v >= 1)
+    valid <- !is.na(v) && is.finite(v) && v == trunc(v) && v > -2147483648 && v <= 2147483647 && (!isTRUE(require_positive) || v >= 1)
     key <- if (valid) sprintf("%.0f", v) else ""
     if (!valid || exists(key, envir = used_env, inherits = FALSE)) {
       repeat {
@@ -92,10 +88,7 @@ vpro_preserve_or_assign_unique_ids <- function(ids_raw, start_id = 100000000L, r
 }
 
 vpro_is_none_selector <- function(x) {
-  identical(x, FALSE) || (
-    is.character(x) && length(x) == 1L && !is.na(x) &&
-      identical(tolower(trimws(x)), "none")
-  )
+  identical(x, FALSE) || (is.character(x) && length(x) == 1L && !is.na(x) && identical(tolower(trimws(x)), "none"))
 }
 
 vpro_assert_char_plot_key <- function(df, col_name, table_label) {
@@ -252,19 +245,23 @@ vpro_read_workspace_vp08_table <- function(dbc, project, suffix) {
   actual_low <- tolower(actual_fields)
   spec_names <- as.character(spec$name)
 
-  sel_exprs <- vapply(spec_names, function(col) {
-    ix <- match(tolower(col), actual_low)
-    q_alias <- vpro_quote_ident(col)
-    if (is.na(ix)) {
-      return(paste0("NULL AS ", q_alias))
-    }
-    q_src <- vpro_quote_ident(actual_fields[[ix]])
-    if (col %in% c("PlotNumber", "Plot")) {
-      paste0("CASE WHEN ", q_src, " IS NULL THEN NULL ELSE CAST(", q_src, " AS TEXT) END AS ", q_alias)
-    } else {
-      paste0(q_src, " AS ", q_alias)
-    }
-  }, character(1L))
+  sel_exprs <- vapply(
+    spec_names,
+    function(col) {
+      ix <- match(tolower(col), actual_low)
+      q_alias <- vpro_quote_ident(col)
+      if (is.na(ix)) {
+        return(paste0("NULL AS ", q_alias))
+      }
+      q_src <- vpro_quote_ident(actual_fields[[ix]])
+      if (col %in% c("PlotNumber", "Plot")) {
+        paste0("CASE WHEN ", q_src, " IS NULL THEN NULL ELSE CAST(", q_src, " AS TEXT) END AS ", q_alias)
+      } else {
+        paste0(q_src, " AS ", q_alias)
+      }
+    },
+    character(1L)
+  )
 
   where_sql <- ""
   order_sql <- ""
@@ -293,8 +290,10 @@ vpro_read_workspace_vp08_table <- function(dbc, project, suffix) {
   }
 
   sql <- paste0(
-    "SELECT ", paste(sel_exprs, collapse = ", "),
-    " FROM ", vpro_quote_ident(tbl_name),
+    "SELECT ",
+    paste(sel_exprs, collapse = ", "),
+    " FROM ",
+    vpro_quote_ident(tbl_name),
     where_sql,
     order_sql
   )
@@ -331,8 +330,7 @@ vpro_extract_workspace_snapshot_tables <- function(con_ws) {
   }
 
   lump_tbl <- vpro_normalize_lump_tibble(NULL)
-  if (!is.null(con_ws$lump) && nzchar(con_ws$lump) &&
-      !is.null(con_ws$lump_path) && file.exists(con_ws$lump_path)) {
+  if (!is.null(con_ws$lump) && nzchar(con_ws$lump) && !is.null(con_ws$lump_path) && file.exists(con_ws$lump_path)) {
     dbc_lump <- if (identical(con_ws$lump_path, con_ws$project_path)) {
       dbc
     } else {
@@ -349,7 +347,9 @@ vpro_extract_workspace_snapshot_tables <- function(con_ws) {
         paste0(
           'SELECT UPPER(TRIM(CAST("SppCode" AS TEXT))) AS "SppCode", ',
           'UPPER(TRIM(CAST("LumpCode" AS TEXT))) AS "LumpCode", ',
-          use_expr, " FROM ", vpro_quote_ident(con_ws$lump)
+          use_expr,
+          " FROM ",
+          vpro_quote_ident(con_ws$lump)
         )
       )
       lump_tbl <- vpro_normalize_lump_tibble(raw_lump)
@@ -431,21 +431,52 @@ vpro_pivot_veg_long_to_vp08 <- function(veg_long_df) {
   flags <- flags[valid]
 
   cov_map <- c(
-    "1" = "Cover1", "a1" = "Cover1", "cover1" = "Cover1",
-    "2" = "Cover2", "a2" = "Cover2", "cover2" = "Cover2",
-    "3" = "Cover3", "a3" = "Cover3", "cover3" = "Cover3",
-    "a" = "TotalA", "totala" = "TotalA",
-    "4" = "Cover4", "b1" = "Cover4", "cover4" = "Cover4",
-    "5" = "Cover5", "b2" = "Cover5", "cover5" = "Cover5",
-    "5a" = "Cover5a", "b2a" = "Cover5a", "cover5a" = "Cover5a",
-    "5b" = "Cover5b", "b2b" = "Cover5b", "cover5b" = "Cover5b",
-    "5c" = "Cover5c", "b2c" = "Cover5c", "cover5c" = "Cover5c",
-    "b" = "TotalB", "totalb" = "TotalB",
-    "6" = "Cover6", "c" = "Cover6", "cover6" = "Cover6",
-    "7" = "Cover7", "d" = "Cover7", "d1" = "Cover7", "cover7" = "Cover7",
-    "8" = "Cover8", "dw" = "Cover8", "d2" = "Cover8", "cover8" = "Cover8",
-    "9" = "Cover9", "dr" = "Cover9", "d3" = "Cover9", "cover9" = "Cover9",
-    "10" = "Cover10", "ep" = "Cover10", "cover10" = "Cover10"
+    "1" = "Cover1",
+    "a1" = "Cover1",
+    "cover1" = "Cover1",
+    "2" = "Cover2",
+    "a2" = "Cover2",
+    "cover2" = "Cover2",
+    "3" = "Cover3",
+    "a3" = "Cover3",
+    "cover3" = "Cover3",
+    "a" = "TotalA",
+    "totala" = "TotalA",
+    "4" = "Cover4",
+    "b1" = "Cover4",
+    "cover4" = "Cover4",
+    "5" = "Cover5",
+    "b2" = "Cover5",
+    "cover5" = "Cover5",
+    "5a" = "Cover5a",
+    "b2a" = "Cover5a",
+    "cover5a" = "Cover5a",
+    "5b" = "Cover5b",
+    "b2b" = "Cover5b",
+    "cover5b" = "Cover5b",
+    "5c" = "Cover5c",
+    "b2c" = "Cover5c",
+    "cover5c" = "Cover5c",
+    "b" = "TotalB",
+    "totalb" = "TotalB",
+    "6" = "Cover6",
+    "c" = "Cover6",
+    "cover6" = "Cover6",
+    "7" = "Cover7",
+    "d" = "Cover7",
+    "d1" = "Cover7",
+    "cover7" = "Cover7",
+    "8" = "Cover8",
+    "dw" = "Cover8",
+    "d2" = "Cover8",
+    "cover8" = "Cover8",
+    "9" = "Cover9",
+    "dr" = "Cover9",
+    "d3" = "Cover9",
+    "cover9" = "Cover9",
+    "10" = "Cover10",
+    "ep" = "Cover10",
+    "cover10" = "Cover10"
   )
 
   ht_map <- c(
@@ -480,13 +511,32 @@ vpro_pivot_veg_long_to_vp08 <- function(veg_long_df) {
   first_pos <- match(u_keys, grp_key)
 
   all_cov_cols <- c(
-    "Cover1", "Cover2", "Cover3", "TotalA",
-    "Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c", "TotalB",
-    "Cover6", "Cover7", "Cover8", "Cover9", "Cover10"
+    "Cover1",
+    "Cover2",
+    "Cover3",
+    "TotalA",
+    "Cover4",
+    "Cover5",
+    "Cover5a",
+    "Cover5b",
+    "Cover5c",
+    "TotalB",
+    "Cover6",
+    "Cover7",
+    "Cover8",
+    "Cover9",
+    "Cover10"
   )
   all_num_ht_cols <- c(
-    "Height1", "Height2", "Height3", "HeightA",
-    "Height4", "Height5", "Height5a", "Height5b", "Height5c",
+    "Height1",
+    "Height2",
+    "Height3",
+    "HeightA",
+    "Height4",
+    "Height5",
+    "Height5a",
+    "Height5b",
+    "Height5c",
     "Height6"
   )
 

@@ -36,7 +36,7 @@ navbar:
     articles:
       text: Workflows
       menu:
-      - text: VPro Rosetta Stone (Access <-> Go <-> R 2.0)
+      - text: VPro Rosetta Stone (Access <-> Desktop <-> R 2.0)
         href: articles/vpro-rosetta-stone.html
       - text: Live Workspace and Tidy Extraction
         href: articles/getting-started-with-vpro.html
@@ -51,7 +51,7 @@ navbar:
 
 reference:
 - title: Workspace, Standards, and Access Interchange
-  desc: Live VPro Desktop WAL workspace connection, 2026 BECdb v13 / BCPlantTaxonomy v19 verification, and Access conversion.
+  desc: Live VPro Desktop workspace connection, 2026 BECdb v13 / BCPlantTaxonomy v19 verification, and Access conversion.
   contents:
   - vpro_connect
   - vpro_use
@@ -98,7 +98,7 @@ reference:
   - vpro_validate
 
 - title: BEC Diagnostic Synthesis, Pairwise Similarity, and Profiling
-  desc: V7mdlDiagnostic fidelity classes, pairwise unit similarity, LOO outlier detection, plot profiling, and summary tables.
+  desc: Classic BEC diagnostic fidelity classes, pairwise unit similarity, leave-one-out outlier detection, plot profiling, and summary tables.
   contents:
   - vpro_diagnostics
   - vpro_classify_diagnostic_codes
@@ -111,7 +111,7 @@ reference:
   - vpro_export_xlsx
 
 - title: Climate Normals, Ministry aSMR, Edatopic Grids, and Write-Back
-  desc: Shared __VPRO_PlotClimate cache, CMD to aSMR transfer function, dual 9x5 edatopic grids, and guarded SQLite write-back.
+  desc: Shared plot climate cache, CMD to aSMR transfer function, dual 9x5 edatopic grids, and safeguarded candidate Site Unit and lumping write-back.
   contents:
   - vpro_climate
   - vpro_cache_climate
@@ -123,7 +123,7 @@ reference:
   - vpro_write_lump
 
 - title: Cloud BECMaster Governance, Staging Merge, and RDS Snapshots
-  desc: Role-based PostgreSQL BECMaster queries, contributor staging, custodian 3-way SERIALIZABLE merges, audit hash-chain verification, and portable RDS snapshots.
+  desc: Role-based PostgreSQL BECMaster queries, contributor staging, conflict-checked custodian 3-way merges, audit hash-chain verification, and portable RDS snapshots.
   contents:
   - vpro_has_pg_credentials
   - vpro_master_connect

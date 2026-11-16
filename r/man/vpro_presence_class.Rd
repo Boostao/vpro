@@ -17,8 +17,7 @@ A character vector (when \code{format = "roman"}) or integer vector (when
 \code{format = "numeric"}), with out-of-range values \verb{< 0} or \verb{> 1} mapped to \code{NA}.
 }
 \description{
-Reproduces \code{V7mdlValueConversions.Presence2Class} (\code{"roman"}) and
-\code{V7mdlValueConversions.Presence2ClassNval} (\code{"numeric"}), mapping
-proportions in \verb{[0, 1]} at breakpoints \verb{0.2, 0.4, 0.6, 0.8}. Values \verb{< 0},
-\verb{> 1}, or \code{NA} return \code{NA}.
+Maps proportions in \verb{[0, 1]} at breakpoints \verb{0.2, 0.4, 0.6, 0.8} into Roman
+(\code{"I"}..\code{"V"}) or numeric (\code{1L}..\code{5L}) presence classes matching VPro reports.
+Values \verb{< 0}, \verb{> 1}, or \code{NA} return \code{NA}.
 }

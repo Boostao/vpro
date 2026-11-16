@@ -25,30 +25,46 @@ vpro_downscale_climr_points <- function(pts_df, ref_period) {
     elev = as.double(pts_df$elev)
   )
   vars_req <- c(
-    "MAT", "MWMT", "MCMT", "MAP", "MSP", "PAS_an", "CMD_an",
-    "PPT_05", "PPT_06", "PPT_07", "PPT_08", "PPT_09",
-    "PPT_at", "PPT_wt", "DD5_an", "NFFD_an"
+    "MAT",
+    "MWMT",
+    "MCMT",
+    "MAP",
+    "MSP",
+    "PAS_an",
+    "CMD_an",
+    "PPT_05",
+    "PPT_06",
+    "PPT_07",
+    "PPT_08",
+    "PPT_09",
+    "PPT_at",
+    "PPT_wt",
+    "DD5_an",
+    "NFFD_an"
   )
-  dl <- tryCatch({
-    if (identical(ref_period, "1991_2020")) {
-      climr::downscale(
-        xyz = xyz,
-        vars = vars_req,
-        obs_periods = "1991_2020",
-        return_refperiod = FALSE,
-        db_option = "local",
-        cache = TRUE
-      )
-    } else {
-      climr::downscale(
-        xyz = xyz,
-        vars = vars_req,
-        return_refperiod = TRUE,
-        db_option = "local",
-        cache = TRUE
-      )
-    }
-  }, error = function(e) NULL)
+  dl <- tryCatch(
+    {
+      if (identical(ref_period, "1991_2020")) {
+        climr::downscale(
+          xyz = xyz,
+          vars = vars_req,
+          obs_periods = "1991_2020",
+          return_refperiod = FALSE,
+          db_option = "local",
+          cache = TRUE
+        )
+      } else {
+        climr::downscale(
+          xyz = xyz,
+          vars = vars_req,
+          return_refperiod = TRUE,
+          db_option = "local",
+          cache = TRUE
+        )
+      }
+    },
+    error = function(e) NULL
+  )
 
   if (is.null(dl) || nrow(dl) < nrow(pts_df)) {
     return(NULL)
@@ -108,9 +124,25 @@ vpro_compute_bgc_lapse_normals <- function(pts_df, ref_period) {
   precip_mult <- if (identical(ref_period, "1991_2020")) 1.03 else 1.00
 
   sd_cols <- c(
-    "Latitude", "Longitude", "Elevation", "MAT", "MWMT", "MCMT", "MAP", "MSP",
-    "PAS", "CMD", "PPT_05", "PPT_06", "PPT_07", "PPT_08", "PPT_09",
-    "PPT_at", "PPT_wt", "DD5", "NFFD"
+    "Latitude",
+    "Longitude",
+    "Elevation",
+    "MAT",
+    "MWMT",
+    "MCMT",
+    "MAP",
+    "MSP",
+    "PAS",
+    "CMD",
+    "PPT_05",
+    "PPT_06",
+    "PPT_07",
+    "PPT_08",
+    "PPT_09",
+    "PPT_at",
+    "PPT_wt",
+    "DD5",
+    "NFFD"
   )
   zone_means <- bgc_norm_dt[, lapply(.SD, mean, na.rm = TRUE), by = "Zone", .SDcols = sd_cols]
 
@@ -245,15 +277,15 @@ vpro_compute_bgc_lapse_normals <- function(pts_df, ref_period) {
   )
 }
 
-#' Extract or compute cached plot climate normals (`__VPRO_PlotClimate`)
+#' Extract or compute cached plot climate normals
 #'
-#' Reads existing `__VPRO_PlotClimate` rows in `ws$project_path` whose
-#' `CoordElevHash` and `RefPeriod` match each plot's current coordinates and
-#' elevation. For cache misses, uses `climr::downscale()` when `climr` and local
-#' cached rasters are available (and `!force_offline`), falling back cleanly to
-#' the calibrated BGC lapse-rate model (`bgc_climate_normals.csv` +
-#' `CMD_adjustments.csv`) when `allow_fallback = TRUE`. Automatically caches
-#' newly computed rows on writable user databases when `cache = TRUE`.
+#' Reads existing cached plot climate rows in `ws$project_path` matching each
+#' plot's current coordinates, elevation, and `RefPeriod` (shared directly with
+#' VPro Desktop). For uncached plots, uses `climr::downscale()` when `climr` and
+#' local cached rasters are available (and `!force_offline`), falling back
+#' cleanly to the calibrated BGC lapse-rate model when `allow_fallback = TRUE`.
+#' Automatically saves newly computed rows on writable user projects when
+#' `cache = TRUE`.
 #'
 #' @param ws A `vpro_workspace` handle.
 #' @param scope Either `"su"` (active SU plots) or `"project"` (all `_Env` plots).
@@ -336,9 +368,18 @@ vpro_climate <- function(
   lon_raw <- suppressWarnings(as.double(env_uniq$Longitude))
   elev_raw <- suppressWarnings(as.double(env_uniq$Elevation))
 
-  valid_coord <- !is.na(lat_raw) & is.finite(lat_raw) & abs(lat_raw) <= 90.0 & lat_raw != 0.0 &
-    !is.na(lon_raw) & is.finite(lon_raw) & abs(lon_raw) <= 180.0 & lon_raw != 0.0 &
-    !is.na(elev_raw) & is.finite(elev_raw) & elev_raw >= -100.0 & elev_raw <= 6000.0
+  valid_coord <- !is.na(lat_raw) &
+    is.finite(lat_raw) &
+    abs(lat_raw) <= 90.0 &
+    lat_raw != 0.0 &
+    !is.na(lon_raw) &
+    is.finite(lon_raw) &
+    abs(lon_raw) <= 180.0 &
+    lon_raw != 0.0 &
+    !is.na(elev_raw) &
+    is.finite(elev_raw) &
+    elev_raw >= -100.0 &
+    elev_raw <= 6000.0
 
   skipped_no_coords <- sum(!valid_coord)
   if (!any(valid_coord)) {

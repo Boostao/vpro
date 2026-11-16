@@ -2,7 +2,7 @@
 % Please edit documentation in R/cloud_custodian_merge.R
 \name{vpro_staging_merge}
 \alias{vpro_staging_merge}
-\title{Execute an atomic \code{SERIALIZABLE} custodian merge from \code{staging} into \code{BECMaster}}
+\title{Execute a conflict-checked custodian merge from \code{staging} into \code{BECMaster}}
 \usage{
 vpro_staging_merge(
   pg,
@@ -21,7 +21,7 @@ vpro_staging_merge(
 \item{pg}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
 \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
-\item{submission_id}{Pending staging submission UUID string.}
+\item{submission_id}{Pending staging submission ID string.}
 
 \item{default_resolution}{Fallback resolution for unresolved \code{Conflict} items:
 \code{"keep_target"} (default) or \code{"accept_source"}.}
@@ -53,16 +53,16 @@ A named list with \code{merge_tx_id}, \code{submission_id}, \code{source_project
 \code{merged_at}.
 }
 \description{
-Locks the pending \code{staging.submissions} record inside a single PostgreSQL
-\code{SERIALIZABLE} transaction, re-verifies the 3-way merge preview (enforcing
-\code{expected_digest} when supplied), resolves every plot and field/row change
-using VPro Desktop custodial precedence (\code{field_resolutions} ->
-custodian-protected \code{keep_target} guard -> \code{plot_resolutions} ->
+Locks the pending \code{staging.submissions} record inside a single
+conflict-checked database transaction, re-verifies the 3-way merge preview
+(enforcing \code{expected_digest} when supplied), resolves every plot and
+field/row change using VPro Desktop custodial precedence (\code{field_resolutions}
+-> custodian-protected \code{keep_target} guard -> \code{plot_resolutions} ->
 \code{FastForward}/\code{TargetModifiedOnly} item defaults -> \code{default_resolution}),
-validates UTF-16 bounds, IEEE-754 \code{float32 < 100} covers, and \code{LMH25 (2023)}
-soil horizon depth signs, allocates non-reused child \code{ID}s via
-\code{becmaster.child_identity_watermark} + \code{becmaster.child_identity}, appends
-SHA-256 hash-chained rows to \code{becmaster.audit} (verifiable via
+validates text length limits, cover bounds (\code{0} to under \verb{100\%}), and
+\code{LMH25 (2023)} soil horizon depth signs, allocates non-reused child \code{ID}s
+via \code{becmaster.child_identity_watermark} + \code{becmaster.child_identity},
+appends SHA-256 hash-chained rows to \code{becmaster.audit} (verifiable via
 \code{vpro_master_audit(pg, verify_chain = TRUE)}), and records provenance in
 \code{becmaster.merge_ledger} and \code{staging.submissions}.
 }

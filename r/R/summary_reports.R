@@ -151,22 +151,28 @@ vpro_summary_veg <- function(
   data.table::set(vdt, j = "Group", value = grp_vec)
 
   # Ensure at most one cover record per (PlotNumber, Group, Species)
-  plot_grp_spp <- vdt[, list(
-    Cover = sum(get("Cover")),
-    ScientificName = get("ScientificName")[[1L]],
-    EnglishName = get("EnglishName")[[1L]],
-    Lifeform = get("Lifeform")[[1L]]
-  ), by = c("PlotNumber", "Group", "Species")]
+  plot_grp_spp <- vdt[,
+    list(
+      Cover = sum(get("Cover")),
+      ScientificName = get("ScientificName")[[1L]],
+      EnglishName = get("EnglishName")[[1L]],
+      Lifeform = get("Lifeform")[[1L]]
+    ),
+    by = c("PlotNumber", "Group", "Species")
+  ]
 
   joined <- merge(su_dt, plot_grp_spp, by = "PlotNumber", all = FALSE, allow.cartesian = TRUE)
 
-  agg <- joined[, list(
-    n_present = .N,
-    sum_cover = sum(get("Cover")),
-    ScientificName = get("ScientificName")[[1L]],
-    EnglishName = get("EnglishName")[[1L]],
-    Lifeform = as.integer(get("Lifeform")[[1L]])
-  ), by = c("SiteUnit", "Group", "Species")]
+  agg <- joined[,
+    list(
+      n_present = .N,
+      sum_cover = sum(get("Cover")),
+      ScientificName = get("ScientificName")[[1L]],
+      EnglishName = get("EnglishName")[[1L]],
+      Lifeform = as.integer(get("Lifeform")[[1L]])
+    ),
+    by = c("SiteUnit", "Group", "Species")
+  ]
 
   data.table::set(agg, j = "n_plots", value = unname(n_plots_map[agg[["SiteUnit"]]]))
   pres_raw <- pmin(agg[["n_present"]] / agg[["n_plots"]], 1.0)
@@ -302,7 +308,9 @@ as_tibble.vpro_summary_veg <- function(x, format = c("long", "wide"), ...) {
 .vpro_modal_chr <- function(x) {
   vals <- trimws(as.character(x[!is.na(x)]))
   vals <- vals[nzchar(vals)]
-  if (length(vals) == 0L) return(NA_character_)
+  if (length(vals) == 0L) {
+    return(NA_character_)
+  }
   tab <- table(vals)
   names(tab)[order(-as.integer(tab), names(tab))][[1L]]
 }
@@ -410,7 +418,9 @@ vpro_summary_env <- function(
   }
 
   mean_col <- function(sub_df, col, digits = 1L) {
-    if (!(col %in% names(sub_df))) return(NA_real_)
+    if (!(col %in% names(sub_df))) {
+      return(NA_real_)
+    }
     vn <- suppressWarnings(as.numeric(sub_df[[col]]))
     vn <- vn[!is.na(vn) & is.finite(vn)]
     if (length(vn) == 0L) NA_real_ else vpro_round_ace(mean(vn), digits = digits)

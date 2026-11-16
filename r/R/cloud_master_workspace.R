@@ -12,7 +12,7 @@
 #' @param zones Optional character vector of BEC zone codes.
 #' @param subzones Optional character vector of BEC subzone/variant codes.
 #' @param project_ids Optional character vector of `ProjectID` values.
-#' @param merge_tx_id Optional merge transaction UUID(s).
+#' @param merge_tx_id Optional merge transaction ID(s).
 #' @param limit Optional positive integer row limit (defaults to `1000L`, or
 #'   `NULL` for all matching rows).
 #' @param verify_chain Logical; if `TRUE`, verifies the SHA-256 hash chain and
@@ -81,19 +81,27 @@ vpro_master_audit <- function(
   }
 
   audit_spec <- vpro_pg_vp08_specs("Audit")
-  vp08_sel <- paste(vapply(as.character(audit_spec$name), function(f) {
-    qf <- vpro_quote_ident(f)
-    if (identical(f, "PlotNumber")) {
-      'CAST(a."PlotNumber" AS TEXT) AS "PlotNumber"'
-    } else {
-      paste0("a.", qf, " AS ", qf)
-    }
-  }, character(1)), collapse = ", ")
+  vp08_sel <- paste(
+    vapply(
+      as.character(audit_spec$name),
+      function(f) {
+        qf <- vpro_quote_ident(f)
+        if (identical(f, "PlotNumber")) {
+          'CAST(a."PlotNumber" AS TEXT) AS "PlotNumber"'
+        } else {
+          paste0("a.", qf, " AS ", qf)
+        }
+      },
+      character(1)
+    ),
+    collapse = ", "
+  )
 
   where_part <- if (length(clauses) > 0L) paste0(" WHERE ", paste(clauses, collapse = " AND ")) else ""
   limit_part <- if (!is.null(limit_int)) sprintf(" LIMIT %d", limit_int) else ""
   sql <- paste0(
-    "SELECT a.audit_seq, ", vp08_sel,
+    "SELECT a.audit_seq, ",
+    vp08_sel,
     ", CAST(a.merge_tx_id AS TEXT) AS merge_tx_id, a.prev_hash, a.row_hash",
     " FROM becmaster.audit AS a",
     where_part,
@@ -119,9 +127,15 @@ vpro_master_audit <- function(
   for (bc in intersect(c("Restore", "Flag"), names(df))) {
     df[[bc]] <- vpro_access_to_logical(df[[bc]])
   }
-  if ("merge_tx_id" %in% names(df)) df$merge_tx_id <- as.character(df$merge_tx_id)
-  if ("prev_hash" %in% names(df)) df$prev_hash <- as.character(df$prev_hash)
-  if ("row_hash" %in% names(df)) df$row_hash <- as.character(df$row_hash)
+  if ("merge_tx_id" %in% names(df)) {
+    df$merge_tx_id <- as.character(df$merge_tx_id)
+  }
+  if ("prev_hash" %in% names(df)) {
+    df$prev_hash <- as.character(df$prev_hash)
+  }
+  if ("row_hash" %in% names(df)) {
+    df$row_hash <- as.character(df$row_hash)
+  }
 
   tbl <- tibble::as_tibble(df)
   if (isTRUE(verify_chain)) {
@@ -169,10 +183,19 @@ vpro_master_standards <- function(
       "ORDER BY published_at DESC, release_id DESC"
     )
     df <- vpro_pg_query(pg, sql, params = NULL, action = "query standards.library_releases")
-    for (tc in intersect(c(
-      "release_id", "published_by", "bec_version", "taxonomy_version",
-      "vlists_sha256", "bec_db_sha256", "vmetadata_sha256", "notes"
-    ), names(df))) {
+    for (tc in intersect(
+      c(
+        "release_id",
+        "published_by",
+        "bec_version",
+        "taxonomy_version",
+        "vlists_sha256",
+        "bec_db_sha256",
+        "vmetadata_sha256",
+        "notes"
+      ),
+      names(df)
+    )) {
       df[[tc]] <- as.character(df[[tc]])
     }
     if ("is_current" %in% names(df)) {
@@ -188,8 +211,10 @@ vpro_master_standards <- function(
   col_names <- as.character(spec$name)
   quoted_cols <- paste(vapply(col_names, vpro_quote_ident, character(1)), collapse = ", ")
   sql <- paste0(
-    "SELECT ", quoted_cols,
-    " FROM standards.", vpro_quote_ident(table),
+    "SELECT ",
+    quoted_cols,
+    " FROM standards.",
+    vpro_quote_ident(table),
     " ORDER BY row_seq"
   )
   df <- vpro_pg_query(pg, sql, params = NULL, action = paste0("query standards.", table))
@@ -215,8 +240,8 @@ vpro_master_standards <- function(
 
 #' Materialize a temporary local `vpro_workspace` from a PostgreSQL `BECMaster` subset
 #'
-#' Pulls a snapshot-consistent cloud subset into a session-temporary `VP08`
-#' SQLite database (`log_download = FALSE`), populates `<Project>_SU` from
+#' Pulls a snapshot-consistent cloud subset into a session-temporary VPro
+#' project database (`log_download = FALSE`), populates `<Project>_SU` from
 #' `unit_col`, attaches a garbage-collector / session-exit finalizer to remove
 #' the temporary database automatically, and returns a `vpro_workspace` handle
 #' ready for [vpro_matrix()], [vpro_cluster()], [vpro_diagnostics()],
@@ -347,15 +372,14 @@ vpro_rebuild_vlists_from_standards <- function(pg, base_vlists_path, out_path, b
   invisible(out_path)
 }
 
-#' Synchronize local `VLists.db` with the active PostgreSQL `standards.library_releases` snapshot
+#' Synchronize local `VLists.db` with the active provincial standards release
 #'
-#' Compares the SHA-256 digest of the workspace `VLists.db` against the active
+#' Compares the SHA-256 checksum of the workspace `VLists.db` against the active
 #' (`is_current = TRUE`) release in `standards.library_releases`. When absent or
-#' outdated, refuses to clobber any live WAL session (`-wal`/`-shm` guard),
-#' decompresses `vlists_gzip` (unwrapping `RPostgres` `BYTEA` `blob` payloads,
-#' with relational `standards.*` table rebuild fallback if `vlists_gzip` is
-#' `NULL`), verifies `PRAGMA integrity_check` and SHA-256 integrity, and
-#' atomically swaps the staged database onto `VLists.db`.
+#' outdated, refuses to overwrite `VLists.db` if it is open in an active VPro
+#' session, downloads and verifies the compressed cloud release (falling back to
+#' rebuilding from `standards.*` tables if needed), checks database integrity,
+#' and atomically swaps the staged database onto `VLists.db`.
 #'
 #' @param pg A `vpro_pg_conn` handle.
 #' @param data_dir Target VPro workspace data directory (defaults to
@@ -443,7 +467,7 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
     (file.exists(shm_path) && !is.na(file.info(shm_path)$size))
   if (has_wal_activity) {
     cli::cli_abort(
-      "Refusing to overwrite {.path {target_path}} while active SQLite WAL/SHM sidecar files exist."
+      "Refusing to overwrite {.path {target_path}} while it is open in another VPro or database session."
     )
   }
 
@@ -459,12 +483,15 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
   dir.create(dirname(target_path), recursive = TRUE, showWarnings = FALSE)
   tmp_vlists <- tempfile(pattern = ".vpro-vlists-sync-", tmpdir = dirname(target_path), fileext = ".db")
   published <- FALSE
-  on.exit({
-    if (!published) {
-      unlink(tmp_vlists, force = TRUE)
-    }
-    unlink(c(paste0(tmp_vlists, "-wal"), paste0(tmp_vlists, "-shm")), force = TRUE)
-  }, add = TRUE)
+  on.exit(
+    {
+      if (!published) {
+        unlink(tmp_vlists, force = TRUE)
+      }
+      unlink(c(paste0(tmp_vlists, "-wal"), paste0(tmp_vlists, "-shm")), force = TRUE)
+    },
+    add = TRUE
+  )
 
   if (!is.null(raw_vec) && is.raw(raw_vec) && length(raw_vec) > 0L) {
     db_bytes <- tryCatch(
@@ -500,12 +527,12 @@ vpro_master_standards_sync <- function(pg, data_dir = vpro_data_dir()) {
     finally = if (DBI::dbIsValid(chk_con)) DBI::dbDisconnect(chk_con)
   )
   if (nrow(ic_df) == 0L || !identical(tolower(trimws(as.character(ic_df[[1L]][[1L]]))), "ok")) {
-    cli::cli_abort("Staged {.file VLists.db} failed SQLite {.code PRAGMA integrity_check}.")
+    cli::cli_abort("Staged {.file VLists.db} failed database integrity verification.")
   }
 
   if (file.exists(wal_path) || file.exists(shm_path)) {
     cli::cli_abort(
-      "Refusing to overwrite {.path {target_path}} while active SQLite WAL/SHM sidecar files exist."
+      "Refusing to overwrite {.path {target_path}} while it is open in another VPro or database session."
     )
   }
 

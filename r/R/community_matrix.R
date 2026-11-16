@@ -149,8 +149,7 @@ vpro_matrix <- function(
   transform <- match.arg(transform)
   cover_precedence <- match.arg(cover_precedence)
 
-  if (!is.numeric(drop_rare) || length(drop_rare) != 1L || is.na(drop_rare) ||
-      !is.finite(drop_rare) || drop_rare < 0) {
+  if (!is.numeric(drop_rare) || length(drop_rare) != 1L || is.na(drop_rare) || !is.finite(drop_rare) || drop_rare < 0) {
     rlang::abort("`drop_rare` must be a single finite non-negative number.")
   }
   if (!is.logical(sparse) || length(sparse) != 1L || is.na(sparse)) {

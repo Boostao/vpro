@@ -38,7 +38,7 @@ An S3 object of class \code{vpro_workspace}.
 \description{
 Creates a lightweight, read-only-by-default S3 \code{vpro_workspace} handle.
 Called with zero arguments (\code{vpro_connect()}), auto-discovers the user's
-active \code{VPro} \code{config.yml} and 7-DB SQLite WAL workspace. Passing \code{"Sample"}
+active \code{VPro} \code{config.yml} and VPro Desktop project workspace. Passing \code{"Sample"}
 (with default \code{data_dir}) opens the bundled read-only 2026 \code{VP08} \code{Sample}
 teaching workspace. Also accepts an explicit project name in \code{data_dir}, a
 \code{.db} / \code{.sqlite} / \code{.rds} file path, a directory containing \code{.db} projects,

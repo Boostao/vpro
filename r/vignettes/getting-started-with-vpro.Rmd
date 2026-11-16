@@ -14,20 +14,20 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Working Alongside Desktop `VPro`
+## Working Alongside VPro Desktop
 
-`vpro` is designed for dual-screen work alongside the desktop `VPro` application (`app/` in [`Boostao/vpro`](https://github.com/Boostao/vpro)). While `VPro` holds your active SQLite WAL project open for FS882 plot-card review and spatial mapping, `vpro` opens read-only (`SQLITE_RO`, `query_only = ON`, `busy_timeout = 5000`) connections to the exact same workspace directory without locking conflicts.
+`vpro` is designed for dual-screen work alongside **VPro Desktop**. While VPro Desktop keeps your active project open in **FS882 Data Forms (6x4)**, **Universal Datasheet Grid**, or **3D Map**, `vpro` opens safe read-only connections to the exact same workspace directory (`vpro_data_dir()`) without file-locking conflicts.
 
 ```{r}
 library(vpro)
 
-# Check 2026 BECdb v13 + BCPlantTaxonomy v19 SHA-256 provenance
+# Check 2026 BECdb v13 + BCPlantTaxonomy v19 provenance
 std <- vpro_standards()
 std$verified
 std$sources[, c("version", "archive_name")]
 ```
 
-In a live desktop session, calling `vpro_connect()` with zero arguments reads `config.yml` from `vpro_config_dir()` and connects to your active project, site-unit (`*_SU`), hierarchy (`*_Hierarchy`), and lump (`*_Lump`) tables in `vpro_data_dir()`. For reproducible examples and automated pipelines, `vpro_connect("Sample")` opens the bundled `VP08` `Sample` project:
+In a live VPro Desktop session, calling `vpro_connect()` with zero arguments reads your active settings from `vpro_config_dir()` and connects to your current project, Site Unit (`*_SU`), Hierarchy (`*_Hierarchy`), and Lump (`*_Lump`) tables in `vpro_data_dir()`. For reproducible examples and automated scripts, `vpro_connect("Sample")` opens the bundled `Sample` teaching project:
 
 ```{r}
 ws <- vpro_connect("Sample")
@@ -38,7 +38,7 @@ vpro_list_lumps(ws)
 
 ## Tidy Environment, Vegetation, and `LMH25 (2023)` Soil Readers
 
-Plot identifiers (`PlotNumber`) are strictly preserved as 7-character text strings (keeping leading zeroes such as `"00337"`), and legacy Microsoft Access `-1/0` integers are normalized to R `logical` vectors:
+Plot identifiers (`PlotNumber`) are strictly preserved as text strings up to 7 characters (keeping leading zeroes such as `"00337"`), and VPro yes/no flags are normalized to R `logical` vectors:
 
 ```{r}
 env <- vpro_env(ws, scope = "project")
@@ -61,7 +61,7 @@ head(soil$humus[, c("PlotNumber", "Horizon", "UpperDepth", "LowerDepth", "vonPos
 
 ## Standards, Numeric Bounds, and `LMH25 (2023)` Quality Control Validation
 
-Before running multivariate classification or publishing unit summaries, run `vpro_validate()` (with `checks = "all"`, `"compliance"`, or `"lmh25"`) to catch substrate sum discrepancies, inverted horizon depths, `vonPost` scale mismatches, out-of-range numeric/UTF-16 bounds, and unlisted environment or species codes:
+Before running multivariate classification or publishing unit summaries, run `vpro_validate()` (with `checks = "all"`, `"compliance"`, or `"lmh25"`) to catch substrate sum discrepancies, inverted horizon depths, `vonPost` scale mismatches, out-of-range numeric or text-length bounds, and unlisted environment or species codes—matching the checks shown in **Forms -> Project Admin, QA & Merge**:
 
 ```{r}
 lmh <- vpro_validate(ws, checks = "lmh25")

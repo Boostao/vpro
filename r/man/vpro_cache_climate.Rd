@@ -2,22 +2,21 @@
 % Please edit documentation in R/climate_cache.R
 \name{vpro_cache_climate}
 \alias{vpro_cache_climate}
-\title{Persist plot climate normals to \verb{__VPRO_PlotClimate} atomically}
+\title{Persist plot climate normals to the project's shared climate cache}
 \usage{
 vpro_cache_climate(ws, climate_df)
 }
 \arguments{
 \item{ws}{A \code{vpro_workspace} handle referencing a writable user \code{.db}.}
 
-\item{climate_df}{Data frame containing \verb{__VPRO_PlotClimate} columns (as
-returned by \code{\link[=vpro_climate]{vpro_climate()}}).}
+\item{climate_df}{Data frame containing plot climate columns (as returned by
+\code{\link[=vpro_climate]{vpro_climate()}}).}
 }
 \value{
-Invisibly returns the written \verb{__VPRO_PlotClimate} tibble.
+Invisibly returns the written plot climate tibble.
 }
 \description{
-Writes or updates plot climate rows inside \verb{main."__VPRO_PlotClimate"} and
-appends provenance to \verb{main."__VPRO_RSidecarHistory"} inside a single
-\verb{BEGIN IMMEDIATE} WAL transaction, preserving literal character \code{PlotNumber}
-keys (\code{typeof("PlotNumber") = 'text'}).
+Writes or updates cached plot climate rows in the project database so VPro
+Desktop and R reuse previously downscaled normals, recording provenance in one
+safe transaction while preserving literal character \code{PlotNumber} keys.
 }

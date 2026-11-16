@@ -4,11 +4,11 @@
 \name{vpro-package}
 \alias{vpro}
 \alias{vpro-package}
-\title{vpro: Quantitative Ecology and Companion SDK for VPro}
+\title{vpro: Quantitative Ecology and R Companion for VPro}
 \description{
 \if{html}{\figure{logo.svg}{options: style='float: right' alt='logo' width='120'}}
 
-Programmatic R companion SDK and quantitative ecology engine for VPro (VENUS -- Vegetation and Environment NexUS -- Professional) and the British Columbia Ministry of Forests Biogeoclimatic Ecosystem Classification (BEC) program. Provides concurrent SQLite WAL read access alongside the desktop VPro application, tidy vegetation and soil extraction, BCPlantTaxonomy v19 and BECdb v13 harmonization, community matrices, multivariate clustering, spatial GeoPackage export, LMH25 (2023) pedological validation, climr climate normals and Ministry actual soil moisture regime (aSMR) modelling, dual edatopic grids, BEC diagnostic synthesis, guarded candidate site-unit write-back, PostgreSQL BECMaster cloud queries, contributor staging, custodian three-way merges, compact RDS snapshots, and Quarto BEC guides.
+Quantitative ecology tools and R companion for VPro (VENUS -- Vegetation and Environment NexUS -- Professional) and the British Columbia Ministry of Forests Biogeoclimatic Ecosystem Classification (BEC) program. Supports safe read access alongside VPro Desktop project files, tidy vegetation and LMH25 (2023) soil extraction, BCPlantTaxonomy v19 and BECdb v13 standards harmonization, community matrices, multivariate clustering, GeoPackage export, field data quality validation, climr climate normals and Ministry actual soil moisture regime (aSMR) modelling, dual edatopic grids, BEC diagnostic synthesis, safeguarded site-unit and lumping write-back, provincial BECMaster cloud queries, contributor staging, custodian three-way merges, portable RDS snapshots, and Quarto BEC field guides.
 }
 \seealso{
 Useful links:

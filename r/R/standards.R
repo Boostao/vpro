@@ -129,38 +129,64 @@ vpro_status <- function(ws = NULL, data_dir = vpro_data_dir(), config_dir = vpro
   family_names <- c("VPro64.db", "VLists.db", "VUser.db", "VMetaData.db", "VMessageBoard.db", "VPics.db")
   family_tbl <- tibble::tibble(
     database = family_names,
-    workspace_path = vapply(family_names, function(nm) {
-      candidates <- c(
-        file.path(data_dir, nm),
-        file.path(data_dir, "database-family", nm),
-        file.path(data_dir, "pics", nm)
-      )
-      hit <- candidates[file.exists(candidates)]
-      if (length(hit) > 0L) normalizePath(hit[[1L]], winslash = "/", mustWork = FALSE) else NA_character_
-    }, character(1)),
-    present_in_workspace = !is.na(vapply(family_names, function(nm) {
-      candidates <- c(
-        file.path(data_dir, nm),
-        file.path(data_dir, "database-family", nm),
-        file.path(data_dir, "pics", nm)
-      )
-      hit <- candidates[file.exists(candidates)]
-      if (length(hit) > 0L) hit[[1L]] else NA_character_
-    }, character(1)))
+    workspace_path = vapply(
+      family_names,
+      function(nm) {
+        candidates <- c(
+          file.path(data_dir, nm),
+          file.path(data_dir, "database-family", nm),
+          file.path(data_dir, "pics", nm)
+        )
+        hit <- candidates[file.exists(candidates)]
+        if (length(hit) > 0L) normalizePath(hit[[1L]], winslash = "/", mustWork = FALSE) else NA_character_
+      },
+      character(1)
+    ),
+    present_in_workspace = !is.na(vapply(
+      family_names,
+      function(nm) {
+        candidates <- c(
+          file.path(data_dir, nm),
+          file.path(data_dir, "database-family", nm),
+          file.path(data_dir, "pics", nm)
+        )
+        hit <- candidates[file.exists(candidates)]
+        if (length(hit) > 0L) hit[[1L]] else NA_character_
+      },
+      character(1)
+    ))
   )
 
   ws_vlists <- family_tbl$workspace_path[family_tbl$database == "VLists.db"]
   standards <- vpro_standards(if (!is.na(ws_vlists)) ws_vlists else NULL)
 
   ecosystem_pkgs <- c(
-    "DBI", "RSQLite", "RPostgres", "data.table", "tibble", "vegan", "vegclust",
-    "indicspecies", "labdsv", "sf", "terra", "climr", "duckdb",
-    "mdbr", "ggplot2", "quarto", "writexl"
+    "DBI",
+    "RSQLite",
+    "RPostgres",
+    "data.table",
+    "tibble",
+    "vegan",
+    "vegclust",
+    "indicspecies",
+    "labdsv",
+    "sf",
+    "terra",
+    "climr",
+    "duckdb",
+    "mdbr",
+    "ggplot2",
+    "quarto",
+    "writexl"
   )
   pkg_installed <- vapply(ecosystem_pkgs, requireNamespace, logical(1), quietly = TRUE)
-  pkg_version <- vapply(seq_along(ecosystem_pkgs), function(i) {
-    if (pkg_installed[[i]]) as.character(utils::packageVersion(ecosystem_pkgs[[i]])) else NA_character_
-  }, character(1))
+  pkg_version <- vapply(
+    seq_along(ecosystem_pkgs),
+    function(i) {
+      if (pkg_installed[[i]]) as.character(utils::packageVersion(ecosystem_pkgs[[i]])) else NA_character_
+    },
+    character(1)
+  )
   packages_tbl <- tibble::tibble(
     package = ecosystem_pkgs,
     installed = pkg_installed,
@@ -198,7 +224,7 @@ vpro_status <- function(ws = NULL, data_dir = vpro_data_dir(), config_dir = vpro
 
 #' @export
 print.vpro_status <- function(x, ...) {
-  cli::cli_h2("vpro 2.0 Companion SDK Status")
+  cli::cli_h2("vpro 2.0 Workspace & Standards Status")
   cli::cli_bullets(c(
     "*" = "Data dir: {.path {x$data_dir}} ({if (x$data_dir_exists) 'present' else 'absent'})",
     "*" = "Config: {.path {x$config_path}} ({if (x$config_exists) 'present' else 'absent'})",

@@ -1,4 +1,4 @@
-# Pure In-Memory 3-Way Diff Engine (1:1 with custodian_merge.go) ---------------
+# Pure In-Memory 3-Way Diff Engine -------------------------------------------
 
 vpro_format_float15 <- function(x) {
   out <- rep(NA_character_, length(x))
@@ -23,8 +23,14 @@ vpro_float64_hex_bits <- function(x) {
     raw_b <- writeBin(vals, raw(), size = 8L, endian = "big")
     hex_mat <- matrix(sprintf("%02x", as.integer(raw_b)), nrow = 8L)
     out[ok] <- paste0(
-      hex_mat[1L, ], hex_mat[2L, ], hex_mat[3L, ], hex_mat[4L, ],
-      hex_mat[5L, ], hex_mat[6L, ], hex_mat[7L, ], hex_mat[8L, ]
+      hex_mat[1L, ],
+      hex_mat[2L, ],
+      hex_mat[3L, ],
+      hex_mat[4L, ],
+      hex_mat[5L, ],
+      hex_mat[6L, ],
+      hex_mat[7L, ],
+      hex_mat[8L, ]
     )
   }
   out
@@ -88,7 +94,9 @@ vpro_build_cloud_snapshot <- function(label, tables_list) {
       } else if (identical(pg_t, "TEXT")) {
         chr <- if (is.null(col_v)) rep(NA_character_, n_rows) else vpro_pg_format_utc_text(col_v, cn)
         non_na <- !is.na(chr)
-        if (any(non_na)) chr[non_na] <- enc2utf8(chr[non_na])
+        if (any(non_na)) {
+          chr[non_na] <- enc2utf8(chr[non_na])
+        }
         raw_cols[[ci]] <- chr
         comp_cols[[ci]] <- chr
         hash_cols[[ci]] <- ifelse(is.na(chr), "null", paste0("text:", chr))
@@ -337,12 +345,18 @@ vpro_compute_3way_diff <- function(
   )
 
   src_plot_env <- new.env(hash = TRUE, parent = emptyenv())
-  for (p in src_snap$plots) assign(p, TRUE, envir = src_plot_env)
+  for (p in src_snap$plots) {
+    assign(p, TRUE, envir = src_plot_env)
+  }
   tgt_plot_env <- new.env(hash = TRUE, parent = emptyenv())
-  for (p in tgt_snap$plots) assign(p, TRUE, envir = tgt_plot_env)
+  for (p in tgt_snap$plots) {
+    assign(p, TRUE, envir = tgt_plot_env)
+  }
   base_plot_env <- new.env(hash = TRUE, parent = emptyenv())
   if (has_base) {
-    for (p in base_snap$plots) assign(p, TRUE, envir = base_plot_env)
+    for (p in base_snap$plots) {
+      assign(p, TRUE, envir = base_plot_env)
+    }
   }
 
   spec_cache <- stats::setNames(
@@ -410,9 +424,17 @@ vpro_compute_3way_diff <- function(
       if (has_base && exists(plot, envir = base_plot_env, inherits = FALSE)) {
         cid <- paste0(plot, "::Env::Plot")
         push_item(
-          cid, plot, "Env", "Plot", "PlotNumber",
-          "Present", "Present", NA_character_,
-          "Conflict", "keep_target", FALSE
+          cid,
+          plot,
+          "Env",
+          "Plot",
+          "PlotNumber",
+          "Present",
+          "Present",
+          NA_character_,
+          "Conflict",
+          "keep_target",
+          FALSE
         )
         conflict_count <- conflict_count + 1L
         plot_cats[[pi]] <- "Conflict"
@@ -456,7 +478,9 @@ vpro_compute_3way_diff <- function(
       rks <- sort(unique(c(s_keys, t_keys)), method = "radix")
 
       is_ambiguous <- function(rk) {
-        if (suffix %in% c("Env", "Admin")) return(FALSE)
+        if (suffix %in% c("Env", "Admin")) {
+          return(FALSE)
+        }
         base_k <- sub("#.*$", "", rk)
         k2 <- paste0(base_k, "#2")
         grepl("#", rk, fixed = TRUE) || (k2 %in% s_keys) || (k2 %in% t_keys) || (k2 %in% b_keys)
@@ -484,9 +508,16 @@ vpro_compute_3way_diff <- function(
           }
           push_item(
             paste0(plot, "::", suffix, "::", rk),
-            plot, suffix, rk, "*",
-            lb$val, s_sum, NA_character_,
-            knd, def_r, FALSE
+            plot,
+            suffix,
+            rk,
+            "*",
+            lb$val,
+            s_sum,
+            NA_character_,
+            knd,
+            def_r,
+            FALSE
           )
           next
         }
@@ -506,9 +537,16 @@ vpro_compute_3way_diff <- function(
           }
           push_item(
             paste0(plot, "::", suffix, "::", rk),
-            plot, suffix, rk, "*",
-            lb$val, NA_character_, t_sum,
-            knd, def_r, FALSE
+            plot,
+            suffix,
+            rk,
+            "*",
+            lb$val,
+            NA_character_,
+            t_sum,
+            knd,
+            def_r,
+            FALSE
           )
           next
         }
@@ -545,9 +583,16 @@ vpro_compute_3way_diff <- function(
 
           push_item(
             paste0(plot, "::", suffix, "::", fld_key),
-            plot, suffix, fld_key, col_nm,
-            lb$val, sv, tv,
-            knd, def_r, is_prot
+            plot,
+            suffix,
+            fld_key,
+            col_nm,
+            lb$val,
+            sv,
+            tv,
+            knd,
+            def_r,
+            is_prot
           )
         }
       }

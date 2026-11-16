@@ -42,9 +42,9 @@ Extracts all 8 \code{VP08} project tables (\code{env}, \code{admin}, \code{veg},
 \code{mineral}, \code{other}, \code{metadata}, \code{audit}), site-unit assignments (\code{su}), and
 species lump mappings (\code{lump}) from any \code{vpro_workspace} (see \code{\link[=vpro_connect]{vpro_connect()}},
 e.g. \code{vpro_connect("Sample")}), enforces literal \code{character} \code{PlotNumber}/\code{Plot} keys,
-normalizes Access \code{-1/0} booleans to R \code{logical}, narrows cover columns via
-\code{\link[=vpro_narrow_float32]{vpro_narrow_float32()}}, and atomically writes a compressed \code{"vpro_rds_bundle"}
-file suitable for zero-database ecological analysis via
+normalizes VPro yes/no flags to R \code{logical}, applies VPro cover precision
+via \code{\link[=vpro_narrow_float32]{vpro_narrow_float32()}}, and writes a compressed \code{"vpro_rds_bundle"}
+file suitable for portable offline ecological analysis via
 \code{\link[=vpro_import_rds]{vpro_import_rds()}}.
 }
 \seealso{

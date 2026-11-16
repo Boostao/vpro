@@ -1,75 +1,155 @@
 # Streaming Access (.accdb / .mdb) -> VP08 SQLite Converter --------------------
 
 .vp07_env_map <- c(
-  PlotNumber = "PlotNumber", FieldNumber = "FieldNumber", ProjectID = "ProjectID",
-  FSRegionDistrict = "FSRegionDistrict", Date = "Date", SiteSurveyor = "SiteSurveyor",
-  PlotRepresenting = "PlotRepresenting", Location = "Location", Ecosection = "Ecosection",
-  NtsMapSheet = "NtsMapSheet", Longitude = "Longitude", Latitude = "Latitude",
-  UTMZone = "UTMZone", UTMEasting = "UTMEasting", UTMNorthing = "UTMNorthing",
-  LocationAccuracy = "LocationAccuracy", AirPhotoNum = "AirPhotoNum", XCoord = "XCoord",
-  YCoord = "YCoord", Zone = "Zone", SubZone = "SubZone", SiteSeries = "SiteSeries",
-  SiteModifier1 = "SiteModifier1", SiteModifier2 = "SiteModifier2", TransDistrib = "TransDistrib",
-  RealmClass = "RealmClass", MapUnit = "MapUnit", SnowCoverregime = "SnowCoverregime",
-  MoistureRegime = "MoistureRegime", NutrientRegime = "NutrientRegime",
-  SuccessionalStatus = "SuccessionalStatus", StructuralStage = "StructuralStage",
-  StructuralStageMod = "StructuralStageMod", StandAge = "StandAge", Elevation = "Elevation",
-  SlopeGradient = "SlopeGradient", Aspect = "Aspect", MesoSlopePosition = "MesoSlopePosition",
-  SurfaceShape = "SurfaceShape", SurfaceTopographyType = "SurfaceTopographyType",
-  SurfaceTopographySize = "SurfaceTopographySize", WaterSource = "WaterSource", Photo = "Photo",
-  Exposure1 = "Exposure1", Exposure2 = "Exposure2", SiteDisturbance1 = "SiteDisturbance1",
-  SiteDisturbance2 = "SiteDisturbance2", SiteDisturbance3 = "SiteDisturbance3",
-  SubstrateDecWood = "SubstrateDecWood", SubstrateBedRock = "SubstrateBedRock",
-  SubstrateRocks = "SubstrateRocks", SubstrateMineralSoil = "SubstrateMineralSoil",
-  SubstrateOrganicMatter = "SubstrateOrganicMatter", SubstrateWater = "SubstrateWater",
-  SiteNotes = "SiteNotes", SoilSurveyor = "SoilSurveyor", BedrockGeology1 = "BedrockGeology1",
-  BedrockGeology2 = "BedrockGeology2", BedrockGeology3 = "BedrockGeology3",
-  CoarseFragLith1 = "CoarseFragLith1", CoarseFragLith2 = "CoarseFragLith2",
-  CoarseFragLith3 = "CoarseFragLith3", TerrainTextureSurf = "TerrainTextureSurf",
-  SurficialMaterialSurf = "SurficialMaterialSurf", SurfaceExpSurf = "SurfaceExpSurf",
-  GeoMorProSurf = "GeoMorProSurf", TerrainTextureSubSurf = "TerrainTextureSubSurf",
-  SurficialMaterialSubSurf = "SurficialMaterialSubSurf", SurfaceExpSubSurf = "SurfaceExpSubSurf",
-  GeoMorProSubSurf = "GeoMorProSubSurf", FloodingRegimeFreq = "FloodingRegimeFreq",
-  MoistureRegimeSub = "MoistureRegimeSub", FloodingRegimeDur = "FloodingRegimeDur",
-  SoilDrainage = "SoilDrainage", SeepageDepth = "SeepageDepth",
-  RootRestrictingType = "RootRestrictingType", RootRestrictingDepth = "RootRestrictingDepth",
-  RootZoneParticleSize = "RootZoneParticleSize", RootingDepth = "RootingDepth",
-  SoilClassSubGroup = "SoilClassSubGroup", SoilClassGroup = "SoilClassGroup",
-  HumusForm = "HumusForm", HumusFormPhase = "HumusFormPhase",
-  pHMethodCodeMineral = "pHMethodCodeMineral", pHMethodCodeOrganic = "pHMethodCodeOrganic",
-  SoilNotes = "SoilNotes", VegSurveyor = "VegSurveyor", StrataCoverTree = "StrataCoverTree",
-  StrataCoverShrub = "StrataCoverShrub", StrataCoverHerb = "StrataCoverHerb",
-  StrataCoverMoss = "StrataCoverMoss", VegNotes = "VegNotes",
-  HydroGeoSystem = "HydroGeoSystem", HydroGeoSubSystem = "HydroGeoSubSystem",
-  SpeciesListComplete = "SpeciesListComplete", Temporary = "Temporary", Flag = "Flag",
-  SV_PolygonNumber = "PolygonNumber", SV_FloodPlain = "FloodPlain",
-  SV_StandAgeEstMeas = "StandAgeEstMeas", SV_StandHeight = "StandHeight",
-  SV_StandHeightEstMeas = "StandHeightEstMeas", SV_CanopyComposition = "CanopyComposition",
-  SV_SoilDepth = "SoilDepth", SV_RootZoneTexture = "RootZoneTexture",
-  SV_PercentCoarseFrags = "PercentCoarseFrags", SV_GleyingMottlingCM = "GleyingMottlingCM",
-  SV_WaterTableCM = "WaterTableCM", SV_FullCruiseCard = "FullCruiseCard",
-  SV_AhorizonType = "AhorizonType", SV_AhorizonDepth = "AhorizonDepth",
+  PlotNumber = "PlotNumber",
+  FieldNumber = "FieldNumber",
+  ProjectID = "ProjectID",
+  FSRegionDistrict = "FSRegionDistrict",
+  Date = "Date",
+  SiteSurveyor = "SiteSurveyor",
+  PlotRepresenting = "PlotRepresenting",
+  Location = "Location",
+  Ecosection = "Ecosection",
+  NtsMapSheet = "NtsMapSheet",
+  Longitude = "Longitude",
+  Latitude = "Latitude",
+  UTMZone = "UTMZone",
+  UTMEasting = "UTMEasting",
+  UTMNorthing = "UTMNorthing",
+  LocationAccuracy = "LocationAccuracy",
+  AirPhotoNum = "AirPhotoNum",
+  XCoord = "XCoord",
+  YCoord = "YCoord",
+  Zone = "Zone",
+  SubZone = "SubZone",
+  SiteSeries = "SiteSeries",
+  SiteModifier1 = "SiteModifier1",
+  SiteModifier2 = "SiteModifier2",
+  TransDistrib = "TransDistrib",
+  RealmClass = "RealmClass",
+  MapUnit = "MapUnit",
+  SnowCoverregime = "SnowCoverregime",
+  MoistureRegime = "MoistureRegime",
+  NutrientRegime = "NutrientRegime",
+  SuccessionalStatus = "SuccessionalStatus",
+  StructuralStage = "StructuralStage",
+  StructuralStageMod = "StructuralStageMod",
+  StandAge = "StandAge",
+  Elevation = "Elevation",
+  SlopeGradient = "SlopeGradient",
+  Aspect = "Aspect",
+  MesoSlopePosition = "MesoSlopePosition",
+  SurfaceShape = "SurfaceShape",
+  SurfaceTopographyType = "SurfaceTopographyType",
+  SurfaceTopographySize = "SurfaceTopographySize",
+  WaterSource = "WaterSource",
+  Photo = "Photo",
+  Exposure1 = "Exposure1",
+  Exposure2 = "Exposure2",
+  SiteDisturbance1 = "SiteDisturbance1",
+  SiteDisturbance2 = "SiteDisturbance2",
+  SiteDisturbance3 = "SiteDisturbance3",
+  SubstrateDecWood = "SubstrateDecWood",
+  SubstrateBedRock = "SubstrateBedRock",
+  SubstrateRocks = "SubstrateRocks",
+  SubstrateMineralSoil = "SubstrateMineralSoil",
+  SubstrateOrganicMatter = "SubstrateOrganicMatter",
+  SubstrateWater = "SubstrateWater",
+  SiteNotes = "SiteNotes",
+  SoilSurveyor = "SoilSurveyor",
+  BedrockGeology1 = "BedrockGeology1",
+  BedrockGeology2 = "BedrockGeology2",
+  BedrockGeology3 = "BedrockGeology3",
+  CoarseFragLith1 = "CoarseFragLith1",
+  CoarseFragLith2 = "CoarseFragLith2",
+  CoarseFragLith3 = "CoarseFragLith3",
+  TerrainTextureSurf = "TerrainTextureSurf",
+  SurficialMaterialSurf = "SurficialMaterialSurf",
+  SurfaceExpSurf = "SurfaceExpSurf",
+  GeoMorProSurf = "GeoMorProSurf",
+  TerrainTextureSubSurf = "TerrainTextureSubSurf",
+  SurficialMaterialSubSurf = "SurficialMaterialSubSurf",
+  SurfaceExpSubSurf = "SurfaceExpSubSurf",
+  GeoMorProSubSurf = "GeoMorProSubSurf",
+  FloodingRegimeFreq = "FloodingRegimeFreq",
+  MoistureRegimeSub = "MoistureRegimeSub",
+  FloodingRegimeDur = "FloodingRegimeDur",
+  SoilDrainage = "SoilDrainage",
+  SeepageDepth = "SeepageDepth",
+  RootRestrictingType = "RootRestrictingType",
+  RootRestrictingDepth = "RootRestrictingDepth",
+  RootZoneParticleSize = "RootZoneParticleSize",
+  RootingDepth = "RootingDepth",
+  SoilClassSubGroup = "SoilClassSubGroup",
+  SoilClassGroup = "SoilClassGroup",
+  HumusForm = "HumusForm",
+  HumusFormPhase = "HumusFormPhase",
+  pHMethodCodeMineral = "pHMethodCodeMineral",
+  pHMethodCodeOrganic = "pHMethodCodeOrganic",
+  SoilNotes = "SoilNotes",
+  VegSurveyor = "VegSurveyor",
+  StrataCoverTree = "StrataCoverTree",
+  StrataCoverShrub = "StrataCoverShrub",
+  StrataCoverHerb = "StrataCoverHerb",
+  StrataCoverMoss = "StrataCoverMoss",
+  VegNotes = "VegNotes",
+  HydroGeoSystem = "HydroGeoSystem",
+  HydroGeoSubSystem = "HydroGeoSubSystem",
+  SpeciesListComplete = "SpeciesListComplete",
+  Temporary = "Temporary",
+  Flag = "Flag",
+  SV_PolygonNumber = "PolygonNumber",
+  SV_FloodPlain = "FloodPlain",
+  SV_StandAgeEstMeas = "StandAgeEstMeas",
+  SV_StandHeight = "StandHeight",
+  SV_StandHeightEstMeas = "StandHeightEstMeas",
+  SV_CanopyComposition = "CanopyComposition",
+  SV_SoilDepth = "SoilDepth",
+  SV_RootZoneTexture = "RootZoneTexture",
+  SV_PercentCoarseFrags = "PercentCoarseFrags",
+  SV_GleyingMottlingCM = "GleyingMottlingCM",
+  SV_WaterTableCM = "WaterTableCM",
+  SV_FullCruiseCard = "FullCruiseCard",
+  SV_AhorizonType = "AhorizonType",
+  SV_AhorizonDepth = "AhorizonDepth",
   ActiveLayerDepth = "ActiveLayerDepth"
 )
 
 .vp07_admin_map <- c(
-  Plot = "PlotNumber", StartDate = "StartDate", PlotType = "PlotType",
-  PlotSize = "PlotSize", ProvinceStateTerritory = "ProvinceStateTerritory",
-  SitePlotQuality = "SitePlotQuality", VegPlotQuality = "VegPlotQuality",
-  SoilPlotQuality = "SoilPlotQuality", UpdatedFromCards = "UpdatedFromCards",
-  EnteredBy = "EnteredBy", UserSiteUnit = "UserSiteUnit", BECSiteUnit = "BECSiteUnit",
-  SiteUnitShortName = "SiteUnitShortName", SiteUnitLongName = "SiteUnitLongName",
-  OfficeNotes = "OfficeNotes", HumusThickness = "HumusThickness",
-  GIS_BGC = "GIS_BGC", GIS_BGC_VER = "GIS_BGC_ver",
+  Plot = "PlotNumber",
+  StartDate = "StartDate",
+  PlotType = "PlotType",
+  PlotSize = "PlotSize",
+  ProvinceStateTerritory = "ProvinceStateTerritory",
+  SitePlotQuality = "SitePlotQuality",
+  VegPlotQuality = "VegPlotQuality",
+  SoilPlotQuality = "SoilPlotQuality",
+  UpdatedFromCards = "UpdatedFromCards",
+  EnteredBy = "EnteredBy",
+  UserSiteUnit = "UserSiteUnit",
+  BECSiteUnit = "BECSiteUnit",
+  SiteUnitShortName = "SiteUnitShortName",
+  SiteUnitLongName = "SiteUnitLongName",
+  OfficeNotes = "OfficeNotes",
+  HumusThickness = "HumusThickness",
+  GIS_BGC = "GIS_BGC",
+  GIS_BGC_VER = "GIS_BGC_ver",
   StrataCoverTotal = "StrataCoverTotal"
 )
 
 .vp06_admin_map <- c(
-  Plot = "PlotNumber", SitePlotQuality = "SitePlotQuality",
-  VegPlotQuality = "VegPlotQuality", SoilPlotQuality = "SoilPlotQuality",
-  UpdatedFromCards = "UpdatedFromCards", EnteredBy = "EnteredBy",
-  UserSiteUnit = "UserSiteUnit", BECSiteUnit = "BECSiteUnit",
-  SiteUnitShortName = "SiteUnitShortName", SiteUnitLongName = "SiteUnitLongName",
-  OfficeNotes = "OfficeNotes", HumusThickness = "HumusThickness"
+  Plot = "PlotNumber",
+  SitePlotQuality = "SitePlotQuality",
+  VegPlotQuality = "VegPlotQuality",
+  SoilPlotQuality = "SoilPlotQuality",
+  UpdatedFromCards = "UpdatedFromCards",
+  EnteredBy = "EnteredBy",
+  UserSiteUnit = "UserSiteUnit",
+  BECSiteUnit = "BECSiteUnit",
+  SiteUnitShortName = "SiteUnitShortName",
+  SiteUnitLongName = "SiteUnitLongName",
+  OfficeNotes = "OfficeNotes",
+  HumusThickness = "HumusThickness"
 )
 
 .vp05_env_renames <- c(
@@ -93,7 +173,9 @@
 
 vpro_access_table_desc <- function(path, table) {
   props <- tryCatch(mdbr::mdb_prop(path, name = table), error = function(e) NULL)
-  if (is.null(props)) return(NA_character_)
+  if (is.null(props)) {
+    return(NA_character_)
+  }
   tp <- props[[table]][["(none)"]]
   desc <- if (!is.null(tp) && "Description" %in% names(tp)) tp[["Description"]] else NULL
   if (is.null(desc) || length(desc) == 0L || is.na(desc[[1L]])) NA_character_ else trimws(as.character(desc[[1L]]))
@@ -127,7 +209,9 @@ vpro_access_inspect <- function(path) {
     env_tbl <- tables[[i]]
     prj <- sub("_Env$", "", env_tbl, ignore.case = TRUE)
     ver <- descs[[i]]
-    if (is.na(ver) || !nzchar(ver)) ver <- "VP08"
+    if (is.na(ver) || !nzchar(ver)) {
+      ver <- "VP08"
+    }
     tibble::tibble(
       project = prj,
       version = ver,
@@ -135,9 +219,16 @@ vpro_access_inspect <- function(path) {
       n_plots = rows[[i]]
     )
   })
-  projects_df <- if (length(proj_rows)) do.call(rbind, proj_rows) else tibble::tibble(
-    project = character(), version = character(), compatible = logical(), n_plots = integer()
-  )
+  projects_df <- if (length(proj_rows)) {
+    do.call(rbind, proj_rows)
+  } else {
+    tibble::tibble(
+      project = character(),
+      version = character(),
+      compatible = logical(),
+      n_plots = integer()
+    )
+  }
 
   list(
     source_path = path,
@@ -212,9 +303,10 @@ vpro_normalize_access_chunk <- function(df, target_fields, boolean_fields = char
 #' Convert a Microsoft Access `.accdb` / `.mdb` project (`VP05`--`VP08`) to `VP08` SQLite
 #'
 #' Streams Access tables via `mdbr` in bounded row batches into a clean `VP08`
-#' SQLite database matching `VPro Desktop` (`app/internal/interchange/accessprojectimport.go`).
-#' Never mutates the source Access file. Duplicate plot keys, malformed values,
-#' and FK orphan child records are quarantined into `__VPRO_ImportQuarantine`.
+#' SQLite project database matching VPro Desktop. Never mutates the source
+#' Access file. Duplicate plot keys, malformed values, and orphaned child
+#' records without a parent plot are saved to an import quarantine log rather
+#' than silently dropped.
 #'
 #' @param path Path to source `.accdb` or `.mdb` archive.
 #' @param dest_db Destination SQLite `.db` path.
@@ -257,7 +349,9 @@ vpro_import_access <- function(
 
   sanitize_name <- function(x) {
     s <- gsub("[^A-Za-z0-9_]", "_", trimws(x))
-    if (!nzchar(s) || !grepl("^[A-Za-z]", s)) s <- paste0("P_", s)
+    if (!nzchar(s) || !grepl("^[A-Za-z]", s)) {
+      s <- paste0("P_", s)
+    }
     substr(s, 1L, 31L)
   }
   dst_prj <- if (is.null(dest_project)) sanitize_name(src_prj) else vpro_project_name(dest_project)
@@ -271,7 +365,7 @@ vpro_import_access <- function(
       rlang::abort(paste0("Destination already exists (use `overwrite = TRUE` to replace): ", target_db))
     }
     if (file.exists(paste0(target_db, "-wal")) || file.exists(paste0(target_db, "-shm"))) {
-      rlang::abort(paste0("Refusing to overwrite active WAL/SHM SQLite database: ", target_db))
+      rlang::abort(paste0("Refusing to overwrite ", target_db, " while it is open in another VPro or database session."))
     }
   }
   dir.create(dirname(target_db), recursive = TRUE, showWarnings = FALSE)
@@ -300,10 +394,16 @@ vpro_import_access <- function(
   quarantined_malformed <- 0L
 
   log_quarantine <- function(src_tbl, row_nums, plots, reason, df_sub) {
-    if (length(row_nums) == 0L) return(invisible(NULL))
-    payloads <- vapply(seq_len(nrow(df_sub)), function(i) {
-      as.character(jsonlite::toJSON(as.list(df_sub[i, , drop = FALSE]), auto_unbox = TRUE, na = "null"))
-    }, character(1))
+    if (length(row_nums) == 0L) {
+      return(invisible(NULL))
+    }
+    payloads <- vapply(
+      seq_len(nrow(df_sub)),
+      function(i) {
+        as.character(jsonlite::toJSON(as.list(df_sub[i, , drop = FALSE]), auto_unbox = TRUE, na = "null"))
+      },
+      character(1)
+    )
     q_df <- data.frame(
       SourceTable = rep(src_tbl, length(row_nums)),
       SourceRow = as.integer(row_nums),
@@ -355,7 +455,9 @@ vpro_import_access <- function(
     offset <- 0L
     repeat {
       chunk <- DBI::dbFetch(cur, n = as.integer(batch_rows))
-      if (nrow(chunk) == 0L) break
+      if (nrow(chunk) == 0L) {
+        break
+      }
       row_ids <- seq.int(offset + 1L, length.out = nrow(chunk))
       offset <- offset + nrow(chunk)
 
@@ -439,7 +541,9 @@ vpro_import_access <- function(
     # 2. Stream remaining core tables
     stream_child <- function(suffix, plot_col = "PlotNumber", req_env = TRUE, dedupe = FALSE, bool_cols = "Flag") {
       src_tbl <- find_src(suffix, required = (suffix != "Metadata" && suffix != "Admin") || ver == "VP08")
-      if (is.null(src_tbl)) return(invisible(NULL))
+      if (is.null(src_tbl)) {
+        return(invisible(NULL))
+      }
       dst_tbl <- paste0(dst_prj, "_", suffix)
       dst_fields <- DBI::dbListFields(sq_con, dst_tbl)
       seen_vec <- character()
@@ -448,7 +552,9 @@ vpro_import_access <- function(
       off <- 0L
       repeat {
         ch <- DBI::dbFetch(c_cur, n = as.integer(batch_rows))
-        if (nrow(ch) == 0L) break
+        if (nrow(ch) == 0L) {
+          break
+        }
         r_ids <- seq.int(off + 1L, length.out = nrow(ch))
         off <- off + nrow(ch)
 
@@ -526,10 +632,14 @@ vpro_import_access <- function(
 
     # 3. Import optional *_SU, *_Hierarchy, *_Lump, *_Profile tables
     for (src_tbl in insp$tables$table_name) {
-      if (grepl("^USys", src_tbl, ignore.case = TRUE)) next
+      if (grepl("^USys", src_tbl, ignore.case = TRUE)) {
+        next
+      }
       if (grepl("_SU$", src_tbl, ignore.case = TRUE)) {
         su_prefix <- sub("_SU$", "", src_tbl, ignore.case = TRUE)
-        if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", su_prefix)) next
+        if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", su_prefix)) {
+          next
+        }
         dst_su <- if (tolower(su_prefix) == tolower(src_prj)) paste0(dst_prj, "_SU") else paste0(su_prefix, "_SU")
         q_su <- vpro_quote_ident(dst_su)
         DBI::dbExecute(sq_con, paste0("CREATE TABLE ", q_su, ' ("PlotNumber" VARCHAR, "SiteUnit" VARCHAR)'))
@@ -563,7 +673,9 @@ vpro_import_access <- function(
       } else if (grepl("_(Hierarchy|Lump|Profile)$", src_tbl, ignore.case = TRUE)) {
         sfx <- sub("^.*_(Hierarchy|Lump|Profile)$", "\\1", src_tbl, ignore.case = TRUE)
         pfx <- sub("_(Hierarchy|Lump|Profile)$", "", src_tbl, ignore.case = TRUE)
-        if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", pfx)) next
+        if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", pfx)) {
+          next
+        }
         dst_opt <- if (tolower(pfx) == tolower(src_prj)) paste0(dst_prj, "_", sfx) else paste0(pfx, "_", sfx)
         opt_df <- tryCatch(DBI::dbReadTable(mdb_con, src_tbl), error = function(e) NULL)
         if (!is.null(opt_df)) {
@@ -588,7 +700,7 @@ vpro_import_access <- function(
 
   if (file.exists(target_db)) {
     if (file.exists(paste0(target_db, "-wal")) || file.exists(paste0(target_db, "-shm"))) {
-      rlang::abort(paste0("Refusing to overwrite active WAL/SHM SQLite database: ", target_db))
+      rlang::abort(paste0("Refusing to overwrite ", target_db, " while it is open in another VPro or database session."))
     }
     unlink(target_db)
   }

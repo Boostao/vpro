@@ -41,7 +41,7 @@ database in \code{\link[base:tempdir]{base::tempdir()}}, and returns an S3 objec
 \code{"vpro_workspace"} so \code{\link[=vpro_env]{vpro_env()}}, \code{\link[=vpro_veg]{vpro_veg()}}, \code{\link[=vpro_soil]{vpro_soil()}},
 \code{\link[=vpro_matrix]{vpro_matrix()}}, \code{\link[=vpro_cluster]{vpro_cluster()}}, \code{\link[=vpro_diagnostics]{vpro_diagnostics()}}, \code{\link[=vpro_climate]{vpro_climate()}},
 \code{\link[=vpro_asmr]{vpro_asmr()}}, \code{\link[=vpro_sf]{vpro_sf()}}, and \code{\link[=vpro_render_guide]{vpro_render_guide()}} work out-of-the-box
-with zero external database setup.
+without requiring an external database setup.
 }
 \seealso{
 \code{\link[=vpro_export_rds]{vpro_export_rds()}}, \code{\link[=vpro_master_publish_snapshot]{vpro_master_publish_snapshot()}}, \code{\link[=vpro_env]{vpro_env()}},

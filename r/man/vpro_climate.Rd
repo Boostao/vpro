@@ -2,7 +2,7 @@
 % Please edit documentation in R/climate_normals.R
 \name{vpro_climate}
 \alias{vpro_climate}
-\title{Extract or compute cached plot climate normals (\verb{__VPRO_PlotClimate})}
+\title{Extract or compute cached plot climate normals}
 \usage{
 vpro_climate(
   ws,
@@ -35,11 +35,11 @@ A tibble of coordinatized plot climate normals with literal character
 \code{PlotNumber}, site metadata, \code{CoordElevHash}, \code{Source}, and 16 climate variables.
 }
 \description{
-Reads existing \verb{__VPRO_PlotClimate} rows in \code{ws$project_path} whose
-\code{CoordElevHash} and \code{RefPeriod} match each plot's current coordinates and
-elevation. For cache misses, uses \code{climr::downscale()} when \code{climr} and local
-cached rasters are available (and \code{!force_offline}), falling back cleanly to
-the calibrated BGC lapse-rate model (\code{bgc_climate_normals.csv} +
-\code{CMD_adjustments.csv}) when \code{allow_fallback = TRUE}. Automatically caches
-newly computed rows on writable user databases when \code{cache = TRUE}.
+Reads existing cached plot climate rows in \code{ws$project_path} matching each
+plot's current coordinates, elevation, and \code{RefPeriod} (shared directly with
+VPro Desktop). For uncached plots, uses \code{climr::downscale()} when \code{climr} and
+local cached rasters are available (and \code{!force_offline}), falling back
+cleanly to the calibrated BGC lapse-rate model when \code{allow_fallback = TRUE}.
+Automatically saves newly computed rows on writable user projects when
+\code{cache = TRUE}.
 }

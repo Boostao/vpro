@@ -59,10 +59,10 @@ vpro_site_units <- function(ws, su = NULL, exclude_modifiers = FALSE) {
 
 #' Filter plots by VPro `DataQuality`, lexical `BEC_Use`, and modifier rules
 #'
-#' Calibrated to `V7mdlReportsQualityControl.QC` and `QCLV`: ranks
-#' `SitePlotQuality`, `VegPlotQuality`, and `SoilPlotQuality` via
-#' `USysTableOfLists` (`ListName = 'DataQuality'`), applies case-insensitive
-#' lexical `BEC_Use >= bec_min` when `bec_min` is supplied, and optionally drops
+#' Matches VPro Desktop quality-control filtering: ranks `SitePlotQuality`,
+#' `VegPlotQuality`, and `SoilPlotQuality` via `USysTableOfLists`
+#' (`ListName = 'DataQuality'`), applies case-insensitive lexical
+#' `BEC_Use >= bec_min` when `bec_min` is supplied, and optionally drops
 #' `.support/.poor/.nudum` units.
 #'
 #' @param ws A `vpro_workspace` handle.
@@ -105,14 +105,18 @@ vpro_filter_plots <- function(
       'ORDER BY "ItemOrder", "Item" COLLATE NOCASE'
     )
   )
-  all_items <- tolower(DBI::dbGetQuery(
-    dbc_vlists,
-    'SELECT DISTINCT "Item" FROM "USysTableOfLists" WHERE "Item" IS NOT NULL'
-  )$Item)
+  all_items <- tolower(
+    DBI::dbGetQuery(
+      dbc_vlists,
+      'SELECT DISTINCT "Item" FROM "USysTableOfLists" WHERE "Item" IS NOT NULL'
+    )$Item
+  )
   lvl_keys <- tolower(levels$Item)
   resolve_thresh <- function(val, arg) {
     ix <- match(tolower(trimws(val)), lvl_keys)
-    if (is.na(ix)) rlang::abort(paste0("`", arg, "` is not a configured DataQuality level: ", val))
+    if (is.na(ix)) {
+      rlang::abort(paste0("`", arg, "` is not a configured DataQuality level: ", val))
+    }
     list(label = levels$Item[[ix]], order = as.numeric(levels$ItemOrder[[ix]]))
   }
   t_site <- resolve_thresh(site_min, "site_min")
@@ -136,9 +140,13 @@ vpro_filter_plots <- function(
         'CAST(admin."SitePlotQuality" AS TEXT) AS "SitePlotQuality", ',
         'CAST(admin."VegPlotQuality" AS TEXT) AS "VegPlotQuality", ',
         'CAST(admin."SoilPlotQuality" AS TEXT) AS "SoilPlotQuality", ',
-        bec_expr, ' AS "BEC_Use", ',
+        bec_expr,
+        ' AS "BEC_Use", ',
         'CASE WHEN admin."Plot" IS NOT NULL THEN 1 ELSE 0 END AS "has_admin" ',
-        'FROM ', env_q, ' AS env LEFT JOIN ', adm_q,
+        'FROM ',
+        env_q,
+        ' AS env LEFT JOIN ',
+        adm_q,
         ' AS admin ON env."PlotNumber" = admin."Plot" AND typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB) ',
         'WHERE typeof(env."PlotNumber") = \'text\''
       )
@@ -164,9 +172,13 @@ vpro_filter_plots <- function(
         'CAST(admin."SitePlotQuality" AS TEXT) AS "SitePlotQuality", ',
         'CAST(admin."VegPlotQuality" AS TEXT) AS "VegPlotQuality", ',
         'CAST(admin."SoilPlotQuality" AS TEXT) AS "SoilPlotQuality", ',
-        bec_expr, ' AS "BEC_Use", ',
+        bec_expr,
+        ' AS "BEC_Use", ',
         'CASE WHEN admin."Plot" IS NOT NULL THEN 1 ELSE 0 END AS "has_admin" ',
-        'FROM ', env_q, ' AS env LEFT JOIN ', adm_q,
+        'FROM ',
+        env_q,
+        ' AS env LEFT JOIN ',
+        adm_q,
         ' AS admin ON env."PlotNumber" = admin."Plot" AND typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB) ',
         'WHERE typeof(env."PlotNumber") = \'text\' ORDER BY env."PlotNumber"'
       )
@@ -194,10 +206,14 @@ vpro_filter_plots <- function(
     miss <- is.na(src$BEC_Use)
     cmp <- rep(FALSE, nrow(src))
     if (any(!miss)) {
-      cmp[!miss] <- vapply(src$BEC_Use[!miss], function(val) {
-        vl <- tolower(enc2utf8(val))
-        identical(vl, thr_low) || sort(c(vl, thr_low), method = "radix")[[1L]] == thr_low
-      }, logical(1))
+      cmp[!miss] <- vapply(
+        src$BEC_Use[!miss],
+        function(val) {
+          vl <- tolower(enc2utf8(val))
+          identical(vl, thr_low) || sort(c(vl, thr_low), method = "radix")[[1L]] == thr_low
+        },
+        logical(1)
+      )
     }
     cmp | (miss & isTRUE(include_bec_missing))
   }
@@ -220,15 +236,29 @@ vpro_filter_plots <- function(
       failed_criteria = character()
     )
   } else {
-    reasons <- vapply(rem_idx, function(i) {
-      r <- character()
-      if (!src$complete_plot[[i]]) r <- c(r, "Project")
-      if (src$complete_plot[[i]] && !s_ok[[i]]) r <- c(r, "Site")
-      if (src$complete_plot[[i]] && !v_ok[[i]]) r <- c(r, "Veg")
-      if (src$complete_plot[[i]] && !so_ok[[i]]) r <- c(r, "Soil")
-      if (src$complete_plot[[i]] && !b_ok[[i]]) r <- c(r, "BEC")
-      paste(r, collapse = ",")
-    }, character(1))
+    reasons <- vapply(
+      rem_idx,
+      function(i) {
+        r <- character()
+        if (!src$complete_plot[[i]]) {
+          r <- c(r, "Project")
+        }
+        if (src$complete_plot[[i]] && !s_ok[[i]]) {
+          r <- c(r, "Site")
+        }
+        if (src$complete_plot[[i]] && !v_ok[[i]]) {
+          r <- c(r, "Veg")
+        }
+        if (src$complete_plot[[i]] && !so_ok[[i]]) {
+          r <- c(r, "Soil")
+        }
+        if (src$complete_plot[[i]] && !b_ok[[i]]) {
+          r <- c(r, "BEC")
+        }
+        paste(r, collapse = ",")
+      },
+      character(1)
+    )
     removed <- tibble::tibble(
       PlotNumber = as.character(src$PlotNumber[rem_idx]),
       SiteUnit = as.character(src$SiteUnit[rem_idx]),
@@ -289,14 +319,18 @@ vpro_env <- function(
     req_cols <- unique(c("PlotNumber", as.character(columns)))
     env_fields <- env_fields[tolower(env_fields) %in% tolower(req_cols)]
   }
-  env_select <- vapply(env_fields, function(f) {
-    qf <- vpro_quote_ident(f)
-    if (identical(f, "PlotNumber")) {
-      'CAST(env."PlotNumber" AS TEXT) AS "PlotNumber"'
-    } else {
-      paste0("env.", qf, " AS ", qf)
-    }
-  }, character(1))
+  env_select <- vapply(
+    env_fields,
+    function(f) {
+      qf <- vpro_quote_ident(f)
+      if (identical(f, "PlotNumber")) {
+        'CAST(env."PlotNumber" AS TEXT) AS "PlotNumber"'
+      } else {
+        paste0("env.", qf, " AS ", qf)
+      }
+    },
+    character(1)
+  )
 
   join_sql <- ""
   adm_select <- character()
@@ -306,12 +340,17 @@ vpro_env <- function(
       adm_fields <- adm_fields[tolower(adm_fields) %in% tolower(as.character(columns))]
     }
     if (length(adm_fields) > 0L) {
-      adm_select <- vapply(adm_fields, function(f) {
-        qf <- vpro_quote_ident(f)
-        paste0("admin.", qf, " AS ", qf)
-      }, character(1))
+      adm_select <- vapply(
+        adm_fields,
+        function(f) {
+          qf <- vpro_quote_ident(f)
+          paste0("admin.", qf, " AS ", qf)
+        },
+        character(1)
+      )
       join_sql <- paste0(
-        " LEFT JOIN ", vpro_quote_ident(adm_tbl),
+        " LEFT JOIN ",
+        vpro_quote_ident(adm_tbl),
         ' AS admin ON env."PlotNumber" = admin."Plot" AND typeof(admin."Plot") = \'text\' AND CAST(env."PlotNumber" AS BLOB) = CAST(admin."Plot" AS BLOB)'
       )
     }
@@ -333,10 +372,17 @@ vpro_env <- function(
         ph_txt <- paste(rep("?", length(ch)), collapse = ",")
         ph_blb <- paste(rep("CAST(? AS BLOB)", length(ch)), collapse = ",")
         q <- paste0(
-          "SELECT ", paste(c(env_select, adm_select), collapse = ", "),
-          " FROM ", vpro_quote_ident(env_tbl), " AS env", join_sql,
-          ' WHERE typeof(env."PlotNumber") = \'text\' AND env."PlotNumber" IN (', ph_txt,
-          ') AND CAST(env."PlotNumber" AS BLOB) IN (', ph_blb, ')'
+          "SELECT ",
+          paste(c(env_select, adm_select), collapse = ", "),
+          " FROM ",
+          vpro_quote_ident(env_tbl),
+          " AS env",
+          join_sql,
+          ' WHERE typeof(env."PlotNumber") = \'text\' AND env."PlotNumber" IN (',
+          ph_txt,
+          ') AND CAST(env."PlotNumber" AS BLOB) IN (',
+          ph_blb,
+          ')'
         )
         DBI::dbGetQuery(dbc, q, params = as.list(c(ch, ch)))
       })
@@ -344,8 +390,11 @@ vpro_env <- function(
     }
   } else {
     sql <- paste0(
-      "SELECT ", paste(c(env_select, adm_select), collapse = ", "),
-      " FROM ", vpro_quote_ident(env_tbl), " AS env",
+      "SELECT ",
+      paste(c(env_select, adm_select), collapse = ", "),
+      " FROM ",
+      vpro_quote_ident(env_tbl),
+      " AS env",
       join_sql,
       ' WHERE typeof(env."PlotNumber") = \'text\''
     )
@@ -381,8 +430,12 @@ vpro_env <- function(
       list(ws = ws, scope = scope, exclude_modifiers = exclude_modifiers)
     } else if (is.character(filter_quality) && length(filter_quality) == 1L) {
       list(
-        ws = ws, site_min = filter_quality, veg_min = filter_quality,
-        soil_min = filter_quality, scope = scope, exclude_modifiers = exclude_modifiers
+        ws = ws,
+        site_min = filter_quality,
+        veg_min = filter_quality,
+        soil_min = filter_quality,
+        scope = scope,
+        exclude_modifiers = exclude_modifiers
       )
     } else if (is.list(filter_quality)) {
       utils::modifyList(list(ws = ws, scope = scope, exclude_modifiers = exclude_modifiers), filter_quality)
@@ -402,8 +455,8 @@ vpro_env <- function(
 
 #' Read tidy vegetation records (`_Veg`) with synonym, lump, and strata synthesis
 #'
-#' Extracts physical `<Project>_Veg` records, narrows cover values to IEEE-754
-#' `float32`, optionally resolves `BCPlantTaxonomy v19` synonyms
+#' Extracts physical `<Project>_Veg` records, applies VPro single-precision
+#' cover rounding, optionally resolves `BCPlantTaxonomy v19` synonyms
 #' (`OldCode -> Code`), folds `*_Lump` (or a custom two-column `data.frame`)
 #' with VPro's exact per-layer `99%` cover cap (`pmin(sum_cover, 99)`), combines
 #' cover across `raw`, `abcd` (`A: 1-3`, `B: 4-5c`, `C: 6`, `D: 7-10`),
@@ -468,9 +521,21 @@ vpro_veg <- function(
   veg_tbl <- paste0(ws$project, "_Veg")
   veg_fields <- DBI::dbListFields(dbc, veg_tbl)
   layer_defs <- c(
-    "1" = "Cover1", "2" = "Cover2", "3" = "Cover3", "A" = "TotalA",
-    "4" = "Cover4", "5" = "Cover5", "5a" = "Cover5a", "5b" = "Cover5b", "5c" = "Cover5c", "B" = "TotalB",
-    "6" = "Cover6", "7" = "Cover7", "8" = "Cover8", "9" = "Cover9", "10" = "Cover10"
+    "1" = "Cover1",
+    "2" = "Cover2",
+    "3" = "Cover3",
+    "A" = "TotalA",
+    "4" = "Cover4",
+    "5" = "Cover5",
+    "5a" = "Cover5a",
+    "5b" = "Cover5b",
+    "5c" = "Cover5c",
+    "B" = "TotalB",
+    "6" = "Cover6",
+    "7" = "Cover7",
+    "8" = "Cover8",
+    "9" = "Cover9",
+    "10" = "Cover10"
   )
   present_layers <- layer_defs[layer_defs %in% veg_fields]
   sel_cols <- paste(
@@ -539,7 +604,9 @@ vpro_veg <- function(
 
   # Vectorised stratum cover calculation helper
   combine_cols <- function(mat) {
-    if (ncol(mat) == 0L) return(rep(NA_real_, nrow(mat)))
+    if (ncol(mat) == 0L) {
+      return(rep(NA_real_, nrow(mat)))
+    }
     has_any <- rowSums(!is.na(mat)) > 0L
     m0 <- mat
     m0[is.na(m0)] <- 0.0
@@ -632,17 +699,34 @@ vpro_veg <- function(
   if (anyDuplicated(dt, by = c("PlotNumber", "Species")) > 0L) {
     sum_cap99 <- function(x) {
       ok <- x[!is.na(x)]
-      if (length(ok) == 0L) NA_real_ else if (length(ok) == 1L) ok else min(sum(ok), 99.0)
+      if (length(ok) == 0L) {
+        NA_real_
+      } else if (length(ok) == 1L) {
+        ok
+      } else {
+        min(sum(ok), 99.0)
+      }
     }
     dt <- dt[, lapply(.SD, sum_cap99), by = c("PlotNumber", "Species"), .SDcols = cov_cols]
   }
 
   # Layer-to-Strata mapping (matching LayerCode.Layer1234567)
   strata_of_layer <- c(
-    "1" = "A", "2" = "A", "3" = "A", "A" = "A",
-    "4" = "B", "5" = "B", "5a" = "B", "5b" = "B", "5c" = "B", "B" = "B",
+    "1" = "A",
+    "2" = "A",
+    "3" = "A",
+    "A" = "A",
+    "4" = "B",
+    "5" = "B",
+    "5a" = "B",
+    "5b" = "B",
+    "5c" = "B",
+    "B" = "B",
     "6" = "C",
-    "7" = "D", "8" = "D", "9" = "D", "10" = "D"
+    "7" = "D",
+    "8" = "D",
+    "9" = "D",
+    "10" = "D"
   )
 
   tax <- vpro_taxonomy(ws, include_synonyms = FALSE, include_user = TRUE)
@@ -669,7 +753,9 @@ vpro_veg <- function(
       cc <- present_layers[[lyr]]
       v <- dt[[cc]]
       ok <- !is.na(v)
-      if (!any(ok)) return(NULL)
+      if (!any(ok)) {
+        return(NULL)
+      }
       data.table::data.table(
         PlotNumber = dt$PlotNumber[ok],
         Species = dt$Species[ok],
@@ -679,7 +765,9 @@ vpro_veg <- function(
       )
     })
     long_dt <- data.table::rbindlist(Filter(Negate(is.null), long_parts))
-    if (nrow(long_dt) == 0L) return(empty_out())
+    if (nrow(long_dt) == 0L) {
+      return(empty_out())
+    }
     long_dt <- attach_meta(long_dt)
     data.table::setorderv(long_dt, c("PlotNumber", "Species", "Layer"))
     cols <- c("PlotNumber", "SiteUnit", "Species", "Layer", "Strata", "Cover", "ScientificName", "EnglishName", "Lifeform")
@@ -693,12 +781,17 @@ vpro_veg <- function(
 
   if (strata == "abcd") {
     abcd_list <- list(
-      A = cov_a, B = cov_b, C = cov_c, D = cov_d
+      A = cov_a,
+      B = cov_b,
+      C = cov_c,
+      D = cov_d
     )
     parts <- lapply(names(abcd_list), function(st) {
       v <- abcd_list[[st]]
       ok <- !is.na(v) & v > 0
-      if (!any(ok)) return(NULL)
+      if (!any(ok)) {
+        return(NULL)
+      }
       data.table::data.table(
         PlotNumber = dt$PlotNumber[ok],
         Species = dt$Species[ok],
@@ -707,7 +800,9 @@ vpro_veg <- function(
       )
     })
     res_dt <- data.table::rbindlist(Filter(Negate(is.null), parts))
-    if (nrow(res_dt) == 0L) return(empty_out())
+    if (nrow(res_dt) == 0L) {
+      return(empty_out())
+    }
     res_dt <- attach_meta(res_dt)
     data.table::setorderv(res_dt, c("PlotNumber", "Species", "Strata"))
     cols <- c("PlotNumber", "SiteUnit", "Species", "Strata", "Cover", "ScientificName", "EnglishName", "Lifeform")
@@ -716,7 +811,9 @@ vpro_veg <- function(
 
   tot_cov <- combine_cols(cbind(cov_a, cov_b, cov_c, cov_d))
   ok <- !is.na(tot_cov) & tot_cov > 0
-  if (!any(ok)) return(empty_out())
+  if (!any(ok)) {
+    return(empty_out())
+  }
   res_dt <- data.table::data.table(
     PlotNumber = dt$PlotNumber[ok],
     Species = dt$Species[ok],

@@ -33,7 +33,7 @@ matching \verb{^[A-Za-z0-9._-]\{1,80\}$}, e.g. \code{"BECMaster_2026_11"}).}
 
 \item{notes}{Optional release notes recorded in \code{becmaster.snapshots}.}
 
-\item{zones}{Optional BEC zone filter passed to the \verb{REPEATABLE READ} pull.}
+\item{zones}{Optional BEC zone filter passed to the snapshot pull.}
 
 \item{subzones}{Optional BEC subzone/variant filter.}
 
@@ -61,12 +61,12 @@ A structured list with \code{snapshot_tag}, \code{created_at}, \code{created_by}
 }
 \description{
 Requires a custodian PostgreSQL connection (\code{pg$role == "custodian"}).
-Pulls a \verb{REPEATABLE READ} consistent snapshot from \verb{becmaster.*}, writes the
+Pulls a snapshot-consistent release from \verb{becmaster.*}, writes the
 requested release artifacts (\code{"rds"}, \code{"sqlite"}, \code{"gpkg"} in \code{EPSG:3005},
 and/or \code{"csv"} directory + \code{.tar.gz} bundle) into \code{out_dir}, computes a
 deterministic SHA-256 manifest digest across artifact hashes, counts, and
 active standards versions, and upserts the release record into
-\code{becmaster.snapshots} matching \code{CreateBECMasterSnapshot} in \code{vpro}.
+\code{becmaster.snapshots} matching VPro Desktop.
 }
 \seealso{
 \code{\link[=vpro_master_list_snapshots]{vpro_master_list_snapshots()}}, \code{\link[=vpro_export_rds]{vpro_export_rds()}},

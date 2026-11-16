@@ -46,7 +46,7 @@ vpro_master_pull_impl <- function(
   }
   if (file.exists(paste0(dest_resolved, "-wal")) || file.exists(paste0(dest_resolved, "-shm"))) {
     cli::cli_abort(
-      "Refusing to write to {.path {dest_resolved}} while active SQLite WAL/SHM sidecar files exist."
+      "Refusing to write to {.path {dest_resolved}} while it is open in another VPro or database session."
     )
   }
   if (file.exists(dest_resolved)) {
@@ -73,14 +73,17 @@ vpro_master_pull_impl <- function(
   )
 
   tx_open <- FALSE
-  on.exit({
-    if (tx_open) {
-      tryCatch(
-        vpro_pg_execute(pg, "ROLLBACK", params = NULL, action = "rollback subset snapshot transaction"),
-        error = function(e) NULL
-      )
-    }
-  }, add = TRUE)
+  on.exit(
+    {
+      if (tx_open) {
+        tryCatch(
+          vpro_pg_execute(pg, "ROLLBACK", params = NULL, action = "rollback subset snapshot transaction"),
+          error = function(e) NULL
+        )
+      }
+    },
+    add = TRUE
+  )
 
   vpro_pg_exec_safe(
     function() vpro_pg_begin_isolated_tx(pg$conn, "BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY", "vpro_master_pull"),
@@ -118,12 +121,15 @@ vpro_master_pull_impl <- function(
   dir.create(dirname(dest_resolved), recursive = TRUE, showWarnings = FALSE)
   tmp_db <- tempfile(pattern = ".vpro-pgsubset-", tmpdir = dirname(dest_resolved), fileext = ".db")
   published <- FALSE
-  on.exit({
-    if (!published) {
-      unlink(tmp_db, force = TRUE)
-    }
-    unlink(c(paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
-  }, add = TRUE)
+  on.exit(
+    {
+      if (!published) {
+        unlink(tmp_db, force = TRUE)
+      }
+      unlink(c(paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
+    },
+    add = TRUE
+  )
 
   sq_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db)
   on.exit(if (DBI::dbIsValid(sq_con)) DBI::dbDisconnect(sq_con), add = TRUE)
@@ -179,9 +185,13 @@ vpro_master_pull_impl <- function(
 
       for (ch in plot_chunks) {
         q <- paste0(
-          "SELECT ", quoted_cols,
-          " FROM becmaster.", vpro_quote_ident(pg_tbl),
-          " WHERE ", vpro_quote_ident(plot_col), " = ANY($1::text[])",
+          "SELECT ",
+          quoted_cols,
+          " FROM becmaster.",
+          vpro_quote_ident(pg_tbl),
+          " WHERE ",
+          vpro_quote_ident(plot_col),
+          " = ANY($1::text[])",
           ord_clause
         )
         part <- vpro_pg_query(
@@ -259,7 +269,8 @@ vpro_master_pull_impl <- function(
       meta_df <- vpro_pg_query(
         pg,
         paste0(
-          "SELECT ", meta_csv,
+          "SELECT ",
+          meta_csv,
           ' FROM becmaster.metadata WHERE "ProjectID" = ANY($1::text[]) ORDER BY "ProjectID"'
         ),
         params = list(vpro_pg_text_array(ref_pids)),
@@ -287,7 +298,8 @@ vpro_master_pull_impl <- function(
       DBI::dbExecute(
         sq_con,
         paste0(
-          "INSERT INTO ", vpro_quote_ident(meta_dst),
+          "INSERT INTO ",
+          vpro_quote_ident(meta_dst),
           ' ("ProjectID", "ProjectTitle", "ID") VALUES (?, ?, 1)'
         ),
         params = list(project_name, paste0(project_name, " BECMaster Subset"))
@@ -303,7 +315,8 @@ vpro_master_pull_impl <- function(
         sq_con,
         paste0(
           'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") ',
-          "SELECT ?, \"ID\" FROM ", q_full,
+          "SELECT ?, \"ID\" FROM ",
+          q_full,
           ' WHERE typeof("ID") = \'integer\' AND "ID" >= 0'
         ),
         params = list(q_full)
@@ -359,12 +372,19 @@ vpro_master_pull_impl <- function(
       DBI::dbExecute(
         sq_con,
         paste0(
-          "INSERT INTO ", q_su, ' ("PlotNumber", "SiteUnit") ',
+          "INSERT INTO ",
+          q_su,
+          ' ("PlotNumber", "SiteUnit") ',
           "SELECT PlotNumber, SiteUnit FROM (",
           '  SELECT CAST(e."PlotNumber" AS TEXT) AS PlotNumber, ',
-          expr_sql, " AS SiteUnit ",
-          "  FROM ", q_env, " AS e ",
-          "  LEFT JOIN ", q_adm, ' AS a ON e."PlotNumber" = a."Plot" ',
+          expr_sql,
+          " AS SiteUnit ",
+          "  FROM ",
+          q_env,
+          " AS e ",
+          "  LEFT JOIN ",
+          q_adm,
+          ' AS a ON e."PlotNumber" = a."Plot" ',
           '  WHERE typeof(e."PlotNumber") = \'text\' AND TRIM(e."PlotNumber") <> \'\' ',
           '  ORDER BY e."PlotNumber"',
           ") WHERE SiteUnit IS NOT NULL AND TRIM(SiteUnit) <> ''"
@@ -383,7 +403,9 @@ vpro_master_pull_impl <- function(
       paste0(
         "CREATE UNIQUE INDEX ",
         vpro_quote_ident(paste0("uidx_", su_tbl, "_PlotNumber")),
-        " ON ", q_su, ' ("PlotNumber")'
+        " ON ",
+        q_su,
+        ' ("PlotNumber")'
       )
     )
     DBI::dbExecute(
@@ -391,7 +413,9 @@ vpro_master_pull_impl <- function(
       paste0(
         "CREATE INDEX ",
         vpro_quote_ident(paste0("idx_", su_tbl, "_SiteUnit")),
-        " ON ", q_su, ' ("SiteUnit")'
+        " ON ",
+        q_su,
+        ' ("SiteUnit")'
       )
     )
     DBI::dbExecute(
@@ -452,17 +476,20 @@ vpro_master_pull_impl <- function(
   }
 
   wal_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db, flags = RSQLite::SQLITE_RW)
-  tryCatch({
-    DBI::dbExecute(wal_con, "PRAGMA journal_mode = WAL")
-    DBI::dbExecute(wal_con, "PRAGMA wal_checkpoint(TRUNCATE)")
-  }, finally = {
-    if (DBI::dbIsValid(wal_con)) DBI::dbDisconnect(wal_con)
-  })
+  tryCatch(
+    {
+      DBI::dbExecute(wal_con, "PRAGMA journal_mode = WAL")
+      DBI::dbExecute(wal_con, "PRAGMA wal_checkpoint(TRUNCATE)")
+    },
+    finally = {
+      if (DBI::dbIsValid(wal_con)) DBI::dbDisconnect(wal_con)
+    }
+  )
   unlink(c(paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
 
   if (file.exists(paste0(dest_resolved, "-wal")) || file.exists(paste0(dest_resolved, "-shm"))) {
     cli::cli_abort(
-      "Refusing to overwrite {.path {dest_resolved}} while active SQLite WAL/SHM sidecar files exist."
+      "Refusing to overwrite {.path {dest_resolved}} while it is open in another VPro or database session."
     )
   }
 
@@ -487,24 +514,25 @@ vpro_master_pull_impl <- function(
   # Cleanly close a RW handle after SQLITE_RO inspection inside vpro_connect() so
   # SQLite removes idle -shm/-wal sidecars while preserving journal_mode = WAL
   clean_con <- DBI::dbConnect(RSQLite::SQLite(), dest_final, flags = RSQLite::SQLITE_RW)
-  tryCatch({
-    DBI::dbGetQuery(clean_con, "SELECT 1 FROM sqlite_master LIMIT 1")
-    DBI::dbExecute(clean_con, "PRAGMA wal_checkpoint(TRUNCATE)")
-  }, finally = {
-    if (DBI::dbIsValid(clean_con)) DBI::dbDisconnect(clean_con)
-  })
+  tryCatch(
+    {
+      DBI::dbGetQuery(clean_con, "SELECT 1 FROM sqlite_master LIMIT 1")
+      DBI::dbExecute(clean_con, "PRAGMA wal_checkpoint(TRUNCATE)")
+    },
+    finally = {
+      if (DBI::dbIsValid(clean_con)) DBI::dbDisconnect(clean_con)
+    }
+  )
   sha256 <- tolower(trimws(unname(as.character(vpro_sha256_file(dest_final)))))
 
   download_log_id <- NA_integer_
   if (isTRUE(log_download)) {
-    actor <- if (!is.null(pg$user) && length(pg$user) >= 1L &&
-                 !is.na(pg$user[[1L]]) && nzchar(trimws(as.character(pg$user[[1L]])))) {
+    actor <- if (!is.null(pg$user) && length(pg$user) >= 1L && !is.na(pg$user[[1L]]) && nzchar(trimws(as.character(pg$user[[1L]])))) {
       trimws(as.character(pg$user[[1L]]))
     } else {
       "VProUser"
     }
-    role_tier <- if (!is.null(pg$role) && length(pg$role) >= 1L &&
-                     !is.na(pg$role[[1L]]) && nzchar(trimws(as.character(pg$role[[1L]])))) {
+    role_tier <- if (!is.null(pg$role) && length(pg$role) >= 1L && !is.na(pg$role[[1L]]) && nzchar(trimws(as.character(pg$role[[1L]])))) {
       trimws(as.character(pg$role[[1L]]))
     } else {
       "contributor"
@@ -556,23 +584,22 @@ vpro_master_pull_impl <- function(
   )
 }
 
-#' Pull a snapshot-consistent PostgreSQL `BECMaster` subset into a local `VP08` SQLite `.db`
+#' Pull a snapshot-consistent PostgreSQL `BECMaster` subset into a local VPro `.db`
 #'
 #' Streams a filtered regional or project checkout from PostgreSQL `becmaster.*`
-#' inside a `REPEATABLE READ READ ONLY` transaction into an atomic `VP08` SQLite
-#' WAL database (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`,
-#' `_Audit`, `_Metadata`, `_SU`, `_table_metadata`, and `__VPRO_ChildIdentity`),
-#' verifies `VP08` compatibility via [vpro_project_inspect()], and records a
-#' provenance receipt in `becmaster.download_log`.
+#' inside a snapshot-consistent read into a clean `VP08` VPro project database
+#' (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`,
+#' `_Metadata`, `_SU`), verifies compatibility via [vpro_project_inspect()], and
+#' records a download receipt in `becmaster.download_log`.
 #'
 #' @inheritParams vpro_master_env
-#' @param dest_db Destination SQLite `.db` file path (`.db` is appended if no
-#'   file extension is present).
+#' @param dest_db Destination VPro `.db` file path (`.db` is appended if no file
+#'   extension is present).
 #' @param project Target `VP08` project prefix (must start with an ASCII
 #'   letter, contain only letters, digits, or underscores up to 31 characters,
 #'   and cannot be `"None"`, `"Sample"`, or contain `"master"`).
-#' @param overwrite Logical; if `TRUE`, replaces an existing `dest_db` when no
-#'   active `-wal`/`-shm` sidecar files exist.
+#' @param overwrite Logical; if `TRUE`, replaces an existing `dest_db` when it
+#'   is not open in an active VPro session.
 #' @return A list containing `dest_path`, `project_name`, `sha256`, `plot_count`,
 #'   `veg_count`, `humus_count`, `mineral_count`, `other_count`,
 #'   `metadata_count`, `download_log_id`, and `workspace` (`vpro_workspace`).

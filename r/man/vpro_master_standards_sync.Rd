@@ -2,7 +2,7 @@
 % Please edit documentation in R/cloud_master_workspace.R
 \name{vpro_master_standards_sync}
 \alias{vpro_master_standards_sync}
-\title{Synchronize local \code{VLists.db} with the active PostgreSQL \code{standards.library_releases} snapshot}
+\title{Synchronize local \code{VLists.db} with the active provincial standards release}
 \usage{
 vpro_master_standards_sync(pg, data_dir = vpro_data_dir())
 }
@@ -18,11 +18,10 @@ A list with \code{updated}, \code{already_current}, \code{release_id},
 \code{vlists_path}, and \code{published_at}.
 }
 \description{
-Compares the SHA-256 digest of the workspace \code{VLists.db} against the active
+Compares the SHA-256 checksum of the workspace \code{VLists.db} against the active
 (\code{is_current = TRUE}) release in \code{standards.library_releases}. When absent or
-outdated, refuses to clobber any live WAL session (\code{-wal}/\code{-shm} guard),
-decompresses \code{vlists_gzip} (unwrapping \code{RPostgres} \code{BYTEA} \code{blob} payloads,
-with relational \verb{standards.*} table rebuild fallback if \code{vlists_gzip} is
-\code{NULL}), verifies \verb{PRAGMA integrity_check} and SHA-256 integrity, and
-atomically swaps the staged database onto \code{VLists.db}.
+outdated, refuses to overwrite \code{VLists.db} if it is open in an active VPro
+session, downloads and verifies the compressed cloud release (falling back to
+rebuilding from \verb{standards.*} tables if needed), checks database integrity,
+and atomically swaps the staged database onto \code{VLists.db}.
 }

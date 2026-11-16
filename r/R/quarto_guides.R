@@ -25,7 +25,9 @@ vpro_aspect_rose_sectors <- function(aspects) {
   if (length(v) > 0L) {
     norm <- (v + 360.0) %% 360.0
     idx <- (as.integer(floor((norm + 22.5) / 45.0)) %% 8L) + 1L
-    for (k in idx) counts[[k]] <- counts[[k]] + 1L
+    for (k in idx) {
+      counts[[k]] <- counts[[k]] + 1L
+    }
   }
   lapply(seq_along(labels), function(i) {
     list(sector = labels[[i]], count = as.integer(counts[[i]]))
@@ -121,14 +123,22 @@ vpro_build_guide_payload <- function(
 
   bgc_vals <- gsub("[[:space:]]+", "", paste0(ifelse(is.na(env_df$Zone), "", env_df$Zone), ifelse(is.na(env_df$SubZone), "", env_df$SubZone)))
   bgc_vals <- bgc_vals[nzchar(bgc_vals)]
-  bgc_label <- if (!is.null(bgc) && nzchar(trimws(bgc))) trimws(bgc) else if (length(bgc_vals) > 0L) names(sort(table(bgc_vals), decreasing = TRUE))[[1L]] else "All"
+  bgc_label <- if (!is.null(bgc) && nzchar(trimws(bgc))) {
+    trimws(bgc)
+  } else if (length(bgc_vals) > 0L) {
+    names(sort(table(bgc_vals), decreasing = TRUE))[[1L]]
+  } else {
+    "All"
+  }
 
   # Relative & Actual edatopic cell counts across kept plots
   make_grid_cells <- function(smr_vec, snr_vec) {
     smr_i <- suppressWarnings(as.integer(round(as.numeric(smr_vec))))
     snr_c <- toupper(substr(trimws(ifelse(is.na(snr_vec), "", as.character(snr_vec))), 1L, 1L))
     ok <- !is.na(smr_i) & smr_i >= 0L & smr_i <= 8L & snr_c %in% c("A", "B", "C", "D", "E")
-    if (!any(ok)) return(list())
+    if (!any(ok)) {
+      return(list())
+    }
     tab <- as.data.frame(table(smr = smr_i[ok], snr = snr_c[ok]), stringsAsFactors = FALSE)
     tab <- tab[tab$Freq > 0L, , drop = FALSE]
     lapply(seq_len(nrow(tab)), function(i) {
@@ -138,14 +148,17 @@ vpro_build_guide_payload <- function(
   rel_cells <- make_grid_cells(asmr_sub$rSMR, asmr_sub$rSNR)
   act_cells <- make_grid_cells(asmr_sub$aSMR, asmr_sub$rSNR)
 
-  env_stats <- Filter(Negate(is.null), list(
-    vpro_five_num_stat(env_df$Elevation, "Elevation (m)"),
-    vpro_five_num_stat(env_df$SlopeGradient, "Slope Gradient (%)"),
-    vpro_five_num_stat(asmr_sub$MAT, "MAT (deg C)"),
-    vpro_five_num_stat(asmr_sub$MAP, "MAP (mm)"),
-    vpro_five_num_stat(asmr_sub$CMD, "Annual CMD (mm)"),
-    vpro_five_num_stat(asmr_sub$aSMR, "Modeled aSMR")
-  ))
+  env_stats <- Filter(
+    Negate(is.null),
+    list(
+      vpro_five_num_stat(env_df$Elevation, "Elevation (m)"),
+      vpro_five_num_stat(env_df$SlopeGradient, "Slope Gradient (%)"),
+      vpro_five_num_stat(asmr_sub$MAT, "MAT (deg C)"),
+      vpro_five_num_stat(asmr_sub$MAP, "MAP (mm)"),
+      vpro_five_num_stat(asmr_sub$CMD, "Annual CMD (mm)"),
+      vpro_five_num_stat(asmr_sub$aSMR, "Modeled aSMR")
+    )
+  )
 
   # Characteristic vegetation summary across kept plots
   veg_abcd <- vpro_veg(
@@ -159,12 +172,15 @@ vpro_build_guide_payload <- function(
   veg_rows <- list()
   if (nrow(veg_abcd) > 0L && n_plots > 0L) {
     vdt <- data.table::as.data.table(veg_abcd)
-    agg <- vdt[, list(
-      n_pres = length(unique(get("PlotNumber"))),
-      sum_cov = sum(get("Cover"), na.rm = TRUE),
-      sci = get("ScientificName")[[1L]],
-      eng = get("EnglishName")[[1L]]
-    ), by = c("Strata", "Species")]
+    agg <- vdt[,
+      list(
+        n_pres = length(unique(get("PlotNumber"))),
+        sum_cov = sum(get("Cover"), na.rm = TRUE),
+        sci = get("ScientificName")[[1L]],
+        eng = get("EnglishName")[[1L]]
+      ),
+      by = c("Strata", "Species")
+    ]
     agg$const_pct <- (agg$n_pres / n_plots) * 100.0
     agg$mean_cov <- agg$sum_cov / agg$n_pres
     agg <- agg[agg$const_pct >= min_constancy]
@@ -378,8 +394,10 @@ vpro_render_guide <- function(
 
   tmp_pub <- tempfile("vpro-guide-pub-", tmpdir = dirname(output_file), fileext = paste0(".", format))
   on.exit(unlink(tmp_pub), add = TRUE)
-  if (!file.copy(rendered_path, tmp_pub, overwrite = TRUE) ||
-      (!file.rename(tmp_pub, output_file) && !file.copy(tmp_pub, output_file, overwrite = TRUE))) {
+  if (
+    !file.copy(rendered_path, tmp_pub, overwrite = TRUE) ||
+      (!file.rename(tmp_pub, output_file) && !file.copy(tmp_pub, output_file, overwrite = TRUE))
+  ) {
     rlang::abort(paste0("Failed to publish rendered guide to: ", output_file))
   }
 

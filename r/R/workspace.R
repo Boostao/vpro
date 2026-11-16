@@ -1,4 +1,4 @@
-# Cross-OS VPro Desktop Workspace & SQLite WAL Bridge -------------------------
+# Cross-OS VPro Desktop Workspace Bridge --------------------------------------
 
 vpro_first_nonempty <- function(...) {
   vals <- list(...)
@@ -90,11 +90,10 @@ vpro_resolve_config_dir <- function(
 
 #' Locate the `VPro` desktop user data directory
 #'
-#' Matches `UserDataDir()` in `VPro Desktop` (`app/internal/sqlutil/sqlutil_foundation.go`)
-#' byte-for-byte across Windows (`%LOCALAPPDATA%/vpro`), macOS
-#' (`~/Library/Application Support/vpro`), and Linux (`$XDG_DATA_HOME/vpro` or
-#' `~/.local/share/vpro`), honoring `getOption("vpro.data_dir")` and
-#' `VPRO_DATA_DIR` overrides first.
+#' Matches VPro Desktop's user data directory byte-for-byte across Windows
+#' (`%LOCALAPPDATA%/vpro`), macOS (`~/Library/Application Support/vpro`), and
+#' Linux (`$XDG_DATA_HOME/vpro` or `~/.local/share/vpro`), honoring
+#' `getOption("vpro.data_dir")` and `VPRO_DATA_DIR` overrides first.
 #'
 #' @return Normalized path string (`/` separators).
 #' @export
@@ -104,11 +103,10 @@ vpro_data_dir <- function() {
 
 #' Locate the `VPro` desktop user configuration directory
 #'
-#' Matches `UserConfigDir()` in `VPro Desktop` (`app/internal/sqlutil/sqlutil_foundation.go`)
-#' byte-for-byte across Windows (`%APPDATA%/vpro`), macOS
-#' (`~/Library/Application Support/vpro`), and Linux (`$XDG_CONFIG_HOME/vpro` or
-#' `~/.config/vpro`), honoring `getOption("vpro.config_dir")` and
-#' `VPRO_CONFIG_DIR` overrides first.
+#' Matches VPro Desktop's user configuration directory byte-for-byte across
+#' Windows (`%APPDATA%/vpro`), macOS (`~/Library/Application Support/vpro`), and
+#' Linux (`$XDG_CONFIG_HOME/vpro` or `~/.config/vpro`), honoring
+#' `getOption("vpro.config_dir")` and `VPRO_CONFIG_DIR` overrides first.
 #'
 #' @return Normalized path string (`/` separators).
 #' @export
@@ -117,8 +115,7 @@ vpro_config_dir <- function() {
 }
 
 vpro_project_name <- function(project) {
-  if (!is.character(project) || length(project) != 1L || is.na(project) ||
-      !grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", project)) {
+  if (!is.character(project) || length(project) != 1L || is.na(project) || !grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", project)) {
     rlang::abort(
       "VPro project names must start with a letter, contain only letters, digits, or underscores, and be at most 31 characters."
     )
@@ -165,7 +162,9 @@ vpro_sqlite_physical_tables <- function(path) {
     core <- paste0(prj, "_", .vpro_core_project_suffixes)
     opt <- paste0(prj, "_", .vpro_optional_project_suffixes)
     ver <- unname(meta_map[paste0(prj, "_Env")])
-    if (length(ver) == 0L || is.na(ver) || !nzchar(ver)) ver <- "Unknown"
+    if (length(ver) == 0L || is.na(ver) || !nzchar(ver)) {
+      ver <- "Unknown"
+    }
     tibble::tibble(
       project = prj,
       core_tables = as.integer(sum(core %in% tables)),
@@ -192,8 +191,8 @@ vpro_sqlite_physical_tables <- function(path) {
 #'
 #' Validates the required 8-table `VP08` family (`_Admin`, `_Audit`, `_Env`,
 #' `_Humus`, `_Metadata`, `_Mineral`, `_Other`, `_Veg`) and `_table_metadata`
-#' version tag, preserving exact return fields (`path`, `project`, `version`,
-#' `compatible`, `validation`) required by `rsidecar`.
+#' version tag, returning standard compatibility fields (`path`, `project`,
+#' `version`, `compatible`, `validation`).
 #'
 #' @param path Path to a VPro project SQLite database.
 #' @param project Optional project prefix inside `path`. When `NULL`, auto-detects
@@ -241,8 +240,7 @@ vpro_resolve_table_suffix <- function(tables, requested, suffix, default_prefix 
   pattern <- paste0("_", suffix, "$")
   candidates <- grep(pattern, tables, value = TRUE, ignore.case = TRUE)
   candidates <- candidates[!grepl("^USys", candidates, ignore.case = TRUE)]
-  if (is.null(requested) || is.na(requested) || !nzchar(trimws(requested)) ||
-      identical(tolower(trimws(requested)), "none")) {
+  if (is.null(requested) || is.na(requested) || !nzchar(trimws(requested)) || identical(tolower(trimws(requested)), "none")) {
     if (identical(tolower(trimws(as.character(requested))), "none")) {
       return(NULL)
     }
@@ -251,7 +249,9 @@ vpro_resolve_table_suffix <- function(tables, requested, suffix, default_prefix 
       hit <- candidates[tolower(candidates) == tolower(def_tbl)]
       if (length(hit) >= 1L) return(hit[[1L]])
     }
-    if (length(candidates) >= 1L) return(candidates[[1L]])
+    if (length(candidates) >= 1L) {
+      return(candidates[[1L]])
+    }
     return(NULL)
   }
   req <- trimws(requested)
@@ -259,7 +259,12 @@ vpro_resolve_table_suffix <- function(tables, requested, suffix, default_prefix 
   hit <- candidates[tolower(candidates) == tolower(req_full)]
   if (length(hit) == 0L) {
     rlang::abort(paste0(
-      "Table `", req_full, "` was not found. Available `*", "_", suffix, "` tables: ",
+      "Table `",
+      req_full,
+      "` was not found. Available `*",
+      "_",
+      suffix,
+      "` tables: ",
       if (length(candidates)) paste(candidates, collapse = ", ") else "<none>"
     ))
   }
@@ -289,7 +294,7 @@ vpro_find_support_db <- function(name, data_dir, project_dir = NULL) {
 #'
 #' Creates a lightweight, read-only-by-default S3 `vpro_workspace` handle.
 #' Called with zero arguments (`vpro_connect()`), auto-discovers the user's
-#' active `VPro` `config.yml` and 7-DB SQLite WAL workspace. Passing `"Sample"`
+#' active `VPro` `config.yml` and VPro Desktop project workspace. Passing `"Sample"`
 #' (with default `data_dir`) opens the bundled read-only 2026 `VP08` `Sample`
 #' teaching workspace. Also accepts an explicit project name in `data_dir`, a
 #' `.db` / `.sqlite` / `.rds` file path, a directory containing `.db` projects,
@@ -382,17 +387,23 @@ vpro_connect <- function(
     if (is.null(su) && !is.null(cfg_cur$CurrPlotlist) && nzchar(trimws(as.character(cfg_cur$CurrPlotlist)))) {
       su <- trimws(as.character(cfg_cur$CurrPlotlist))
     }
-    if (!is.null(cfg_cur$SUPath) && nzchar(trimws(as.character(cfg_cur$SUPath))) &&
+    if (
+      !is.null(cfg_cur$SUPath) &&
+        nzchar(trimws(as.character(cfg_cur$SUPath))) &&
         file.exists(trimws(as.character(cfg_cur$SUPath))) &&
-        !dir.exists(trimws(as.character(cfg_cur$SUPath)))) {
+        !dir.exists(trimws(as.character(cfg_cur$SUPath)))
+    ) {
       su_db_override <- normalizePath(trimws(as.character(cfg_cur$SUPath)), winslash = "/", mustWork = TRUE)
     }
     if (is.null(hierarchy) && !is.null(cfg_cur$CurrHierarchy) && nzchar(trimws(as.character(cfg_cur$CurrHierarchy)))) {
       hierarchy <- trimws(as.character(cfg_cur$CurrHierarchy))
     }
-    if (!is.null(cfg_cur$HierarchyPath) && nzchar(trimws(as.character(cfg_cur$HierarchyPath))) &&
+    if (
+      !is.null(cfg_cur$HierarchyPath) &&
+        nzchar(trimws(as.character(cfg_cur$HierarchyPath))) &&
         file.exists(trimws(as.character(cfg_cur$HierarchyPath))) &&
-        !dir.exists(trimws(as.character(cfg_cur$HierarchyPath)))) {
+        !dir.exists(trimws(as.character(cfg_cur$HierarchyPath)))
+    ) {
       hier_db_override <- normalizePath(trimws(as.character(cfg_cur$HierarchyPath)), winslash = "/", mustWork = TRUE)
     }
     if (is.null(lump) && !is.null(cfg_cur$CurrLump) && nzchar(trimws(as.character(cfg_cur$CurrLump)))) {
@@ -434,8 +445,12 @@ vpro_connect <- function(
       data_dir <- dirname(project_path)
       config_dir <- tempdir()
       source_kind <- "sample"
-      if (is.null(su)) su <- "Sample_SU"
-      if (is.null(hierarchy)) hierarchy <- "Sample_Hierarchy"
+      if (is.null(su)) {
+        su <- "Sample_SU"
+      }
+      if (is.null(hierarchy)) {
+        hierarchy <- "Sample_Hierarchy"
+      }
       if (is.null(lump)) lump <- "Sample_Lump"
     } else {
       # Look up project name inside data_dir
@@ -455,8 +470,12 @@ vpro_connect <- function(
         data_dir <- dirname(project_path)
         config_dir <- tempdir()
         source_kind <- "sample"
-        if (is.null(su)) su <- "Sample_SU"
-        if (is.null(hierarchy)) hierarchy <- "Sample_Hierarchy"
+        if (is.null(su)) {
+          su <- "Sample_SU"
+        }
+        if (is.null(hierarchy)) {
+          hierarchy <- "Sample_Hierarchy"
+        }
         if (is.null(lump)) lump <- "Sample_Lump"
       } else {
         rlang::abort(paste0("Could not find VPro project `", req, "` as a file or inside `", data_dir, "`."))
@@ -529,8 +548,7 @@ vpro_assert_workspace <- function(ws) {
       "i" = "Use `vpro_master_env(pg, ...)` / `vpro_master_veg(pg, ...)` for direct cloud tibbles, or wrap a filtered cloud subset with `vpro_master_workspace(pg, ...)` / `vpro_master_pull(pg, ...)`."
     ))
   }
-  if (!inherits(ws, "vpro_workspace") || !is.list(ws) ||
-      is.null(ws$project_path) || !file.exists(ws$project_path)) {
+  if (!inherits(ws, "vpro_workspace") || !is.list(ws) || is.null(ws$project_path) || !file.exists(ws$project_path)) {
     rlang::abort("`ws` must be a valid `vpro_workspace` created by `vpro_connect()`.")
   }
   invisible(ws)
@@ -612,9 +630,17 @@ vpro_list_projects <- function(ws = NULL, path = vpro_data_dir()) {
     }
   }
   support_names <- tolower(c(
-    "vpro64.db", "vlists.db", "vuser.db", "vmetadata.db",
-    "vmessageboard.db", "vpics.db", "bec.db", "working-unit.db",
-    "site-codes.db", "soil-codes.db", "parent-codes.db"
+    "vpro64.db",
+    "vlists.db",
+    "vuser.db",
+    "vmetadata.db",
+    "vmessageboard.db",
+    "vpics.db",
+    "bec.db",
+    "working-unit.db",
+    "site-codes.db",
+    "soil-codes.db",
+    "parent-codes.db"
   ))
   db_files <- db_files[file.exists(db_files) & !(tolower(basename(db_files)) %in% support_names)]
   if (length(db_files) == 0L) {
@@ -623,7 +649,9 @@ vpro_list_projects <- function(ws = NULL, path = vpro_data_dir()) {
   rows <- list()
   for (p in sort(unique(normalizePath(db_files, winslash = "/", mustWork = TRUE)))) {
     disc <- tryCatch(.vpro_project_discover(p), error = function(e) NULL)
-    if (is.null(disc) || nrow(disc) == 0L) next
+    if (is.null(disc) || nrow(disc) == 0L) {
+      next
+    }
     dbc <- vpro_sqlite_ro(p)
     for (i in seq_len(nrow(disc))) {
       prj <- disc$project[[i]]
@@ -757,7 +785,9 @@ print.vpro_workspace <- function(x, ...) {
   )
   n_su <- if (!is.null(x$su)) {
     dbc_su <- if (identical(x$su_path, x$project_path)) dbc else vpro_sqlite_ro(x$su_path)
-    if (!identical(x$su_path, x$project_path)) on.exit(DBI::dbDisconnect(dbc_su), add = TRUE)
+    if (!identical(x$su_path, x$project_path)) {
+      on.exit(DBI::dbDisconnect(dbc_su), add = TRUE)
+    }
     tryCatch(
       DBI::dbGetQuery(dbc_su, paste0("SELECT COUNT(*) AS n FROM ", vpro_quote_ident(x$su)))$n[[1L]],
       error = function(e) NA_integer_

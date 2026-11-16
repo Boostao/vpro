@@ -1,4 +1,4 @@
-# Plot Climate Cache (`__VPRO_PlotClimate`), `climr` & Ministry `CMD -> aSMR` --
+# Plot Climate Cache, climr & Ministry CMD -> aSMR ------------------------
 
 .vpro_plot_climate_ddl <- paste(
   'CREATE TABLE IF NOT EXISTS main."__VPRO_PlotClimate" (',
@@ -27,26 +27,105 @@
 )
 
 .vpro_plot_climate_cols <- c(
-  "PlotNumber", "CoordElevHash", "RefPeriod", "Source",
-  "MAT", "MWMT", "MCMT", "MAP", "MSP", "PAS", "CMD",
-  "PPT_05", "PPT_06", "PPT_07", "PPT_08", "PPT_09",
-  "PPT_at", "PPT_wt", "DD5", "NFFD", "ComputedAt"
+  "PlotNumber",
+  "CoordElevHash",
+  "RefPeriod",
+  "Source",
+  "MAT",
+  "MWMT",
+  "MCMT",
+  "MAP",
+  "MSP",
+  "PAS",
+  "CMD",
+  "PPT_05",
+  "PPT_06",
+  "PPT_07",
+  "PPT_08",
+  "PPT_09",
+  "PPT_at",
+  "PPT_wt",
+  "DD5",
+  "NFFD",
+  "ComputedAt"
 )
 
 .vpro_sha256_K_hex <- c(
-  "428a2f98", "71374491", "b5c0fbcf", "e9b5dba5", "3956c25b", "59f111f1", "923f82a4", "ab1c5ed5",
-  "d807aa98", "12835b01", "243185be", "550c7dc3", "72be5d74", "80deb1fe", "9bdc06a7", "c19bf174",
-  "e49b69c1", "efbe4786", "0fc19dc6", "240ca1cc", "2de92c6f", "4a7484aa", "5cb0a9dc", "76f988da",
-  "983e5152", "a831c66d", "b00327c8", "bf597fc7", "c6e00bf3", "d5a79147", "06ca6351", "14292967",
-  "27b70a85", "2e1b2138", "4d2c6dfc", "53380d13", "650a7354", "766a0abb", "81c2c92e", "92722c85",
-  "a2bfe8a1", "a81a664b", "c24b8b70", "c76c51a3", "d192e819", "d6990624", "f40e3585", "106aa070",
-  "19a4c116", "1e376c08", "2748774c", "34b0bcb5", "391c0cb3", "4ed8aa4a", "5b9cca4f", "682e6ff3",
-  "748f82ee", "78a5636f", "84c87814", "8cc70208", "90befffa", "a4506ceb", "bef9a3f7", "c67178f2"
+  "428a2f98",
+  "71374491",
+  "b5c0fbcf",
+  "e9b5dba5",
+  "3956c25b",
+  "59f111f1",
+  "923f82a4",
+  "ab1c5ed5",
+  "d807aa98",
+  "12835b01",
+  "243185be",
+  "550c7dc3",
+  "72be5d74",
+  "80deb1fe",
+  "9bdc06a7",
+  "c19bf174",
+  "e49b69c1",
+  "efbe4786",
+  "0fc19dc6",
+  "240ca1cc",
+  "2de92c6f",
+  "4a7484aa",
+  "5cb0a9dc",
+  "76f988da",
+  "983e5152",
+  "a831c66d",
+  "b00327c8",
+  "bf597fc7",
+  "c6e00bf3",
+  "d5a79147",
+  "06ca6351",
+  "14292967",
+  "27b70a85",
+  "2e1b2138",
+  "4d2c6dfc",
+  "53380d13",
+  "650a7354",
+  "766a0abb",
+  "81c2c92e",
+  "92722c85",
+  "a2bfe8a1",
+  "a81a664b",
+  "c24b8b70",
+  "c76c51a3",
+  "d192e819",
+  "d6990624",
+  "f40e3585",
+  "106aa070",
+  "19a4c116",
+  "1e376c08",
+  "2748774c",
+  "34b0bcb5",
+  "391c0cb3",
+  "4ed8aa4a",
+  "5b9cca4f",
+  "682e6ff3",
+  "748f82ee",
+  "78a5636f",
+  "84c87814",
+  "8cc70208",
+  "90befffa",
+  "a4506ceb",
+  "bef9a3f7",
+  "c67178f2"
 )
 
 .vpro_sha256_H0_hex <- c(
-  "6a09e667", "bb67ae85", "3c6ef372", "a54ff53a",
-  "510e527f", "9b05688c", "1f83d9ab", "5be0cd19"
+  "6a09e667",
+  "bb67ae85",
+  "3c6ef372",
+  "a54ff53a",
+  "510e527f",
+  "9b05688c",
+  "1f83d9ab",
+  "5be0cd19"
 )
 
 .vpro_sha256_K_hi <- strtoi(substr(.vpro_sha256_K_hex, 1L, 4L), 16L)
@@ -273,7 +352,8 @@ vpro_normalize_ref_period <- function(ref_period) {
   norm <- gsub("-", "_", trimws(ref_period), fixed = TRUE)
   if (!(norm %in% c("1961_1990", "1991_2020"))) {
     rlang::abort(paste0(
-      "Unsupported climate reference period `", ref_period,
+      "Unsupported climate reference period `",
+      ref_period,
       "` (expected '1961_1990' or '1991_2020')."
     ))
   }
@@ -297,10 +377,7 @@ vpro_normalize_ref_period <- function(ref_period) {
   n <- length(vals$lat)
   out <- rep(NA_character_, n)
   norm_lon <- vpro_normalize_bc_lon(vals$lon)
-  ok <- !is.na(vals$lat) & is.finite(vals$lat) &
-    !is.na(norm_lon) & is.finite(norm_lon) &
-    !is.na(vals$elev) & is.finite(vals$elev) &
-    !is.na(rp) & nzchar(rp)
+  ok <- !is.na(vals$lat) & is.finite(vals$lat) & !is.na(norm_lon) & is.finite(norm_lon) & !is.na(vals$elev) & is.finite(vals$elev) & !is.na(rp) & nzchar(rp)
 
   if (any(ok)) {
     lat5 <- vpro_go_round(vals$lat[ok] * 1e5) / 1e5
@@ -382,17 +459,16 @@ vpro_read_plot_climate_cache <- function(db_path) {
   tibble::as_tibble(df)
 }
 
-#' Persist plot climate normals to `__VPRO_PlotClimate` atomically
+#' Persist plot climate normals to the project's shared climate cache
 #'
-#' Writes or updates plot climate rows inside `main."__VPRO_PlotClimate"` and
-#' appends provenance to `main."__VPRO_RSidecarHistory"` inside a single
-#' `BEGIN IMMEDIATE` WAL transaction, preserving literal character `PlotNumber`
-#' keys (`typeof("PlotNumber") = 'text'`).
+#' Writes or updates cached plot climate rows in the project database so VPro
+#' Desktop and R reuse previously downscaled normals, recording provenance in one
+#' safe transaction while preserving literal character `PlotNumber` keys.
 #'
 #' @param ws A `vpro_workspace` handle referencing a writable user `.db`.
-#' @param climate_df Data frame containing `__VPRO_PlotClimate` columns (as
-#'   returned by [vpro_climate()]).
-#' @return Invisibly returns the written `__VPRO_PlotClimate` tibble.
+#' @param climate_df Data frame containing plot climate columns (as returned by
+#'   [vpro_climate()]).
+#' @return Invisibly returns the written plot climate tibble.
 #' @export
 vpro_cache_climate <- function(ws, climate_df) {
   vpro_assert_workspace(ws)
@@ -406,7 +482,7 @@ vpro_cache_climate <- function(ws, climate_df) {
   missing_cols <- setdiff(req_cols, names(climate_df))
   if (length(missing_cols) > 0L) {
     rlang::abort(paste0(
-      "`climate_df` is missing required `__VPRO_PlotClimate` columns: ",
+      "`climate_df` is missing required plot climate columns: ",
       paste(missing_cols, collapse = ", ")
     ))
   }
@@ -431,7 +507,7 @@ vpro_cache_climate <- function(ws, climate_df) {
   ref_periods <- vapply(climate_df$RefPeriod, vpro_normalize_ref_period, character(1))
   sources <- trimws(as.character(climate_df$Source))
   if (anyNA(sources) || any(!nzchar(sources))) {
-    rlang::abort("`Source` must be non-empty for every `__VPRO_PlotClimate` row.")
+    rlang::abort("`Source` must be non-empty for every plot climate row.")
   }
 
   now_iso <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
@@ -443,9 +519,22 @@ vpro_cache_climate <- function(ws, climate_df) {
   }
 
   num_cols <- c(
-    "MAT", "MWMT", "MCMT", "MAP", "MSP", "PAS", "CMD",
-    "PPT_05", "PPT_06", "PPT_07", "PPT_08", "PPT_09",
-    "PPT_at", "PPT_wt", "DD5", "NFFD"
+    "MAT",
+    "MWMT",
+    "MCMT",
+    "MAP",
+    "MSP",
+    "PAS",
+    "CMD",
+    "PPT_05",
+    "PPT_06",
+    "PPT_07",
+    "PPT_08",
+    "PPT_09",
+    "PPT_at",
+    "PPT_wt",
+    "DD5",
+    "NFFD"
   )
   clean_tbl <- tibble::tibble(
     PlotNumber = climate_df$PlotNumber,

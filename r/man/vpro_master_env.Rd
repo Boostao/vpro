@@ -49,9 +49,9 @@ A tibble of plot environment records ordered by \code{PlotNumber}.
 \description{
 Executes a parameterized push-down query against \code{becmaster.env} (optionally
 left-joining \code{becmaster.admin}), preserving literal leading-zero \code{PlotNumber}
-strings, converting Access \code{-1/0} booleans to R \code{logical}, narrowing
-\verb{StrataCover*} columns to IEEE-754 \code{float32}, and deriving \code{SiteUnit} so the
-returned tibble matches \code{\link[=vpro_env]{vpro_env()}} column names and types. When connecting
+strings, converting VPro yes/no flags to R \code{logical}, applying VPro
+single-precision rounding to \verb{StrataCover*} columns, and deriving \code{SiteUnit}
+so the returned tibble matches \code{\link[=vpro_env]{vpro_env()}} column names and types. When connecting
 as a non-custodian role, coordinates (\code{Latitude}, \code{Longitude}, \code{UTMEasting},
 \code{UTMNorthing}, \code{UTMZone}) are automatically redacted to \code{NA} on plots
 containing sensitive (\code{USysSppAttributes.RedBlueList}) species.

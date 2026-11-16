@@ -105,7 +105,7 @@ vpro_pg_text_array <- function(x) {
   paste0("{", paste(elems, collapse = ","), "}")
 }
 
-# Canonical VP08 & Standards Column Specifications (1:1 with columns.go) -------
+# Canonical VP08 & Standards Column Specifications ---------------------------
 
 vpro_pg_format_utc_text <- function(v, col_name) {
   n <- length(v)
@@ -225,11 +225,11 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
           }
           u16 <- vpro_utf16_len(chr[non_na])
           if (anyNA(u16)) {
-            cli::cli_abort("Column {.field {col_name}} contains invalid UTF-8 or unpaired UTF-16 surrogates.")
+            cli::cli_abort("Column {.field {col_name}} contains invalid or unsupported text characters.")
           }
           if (utf16_max > 0L && any(u16 > utf16_max)) {
             cli::cli_abort(
-              "Column {.field {col_name}} exceeds maximum length of {utf16_max} UTF-16 code units."
+              "Column {.field {col_name}} exceeds maximum length of {utf16_max} characters."
             )
           }
           chr[non_na] <- enc2utf8(chr[non_na])
@@ -291,7 +291,7 @@ vpro_pg_canonicalize_to_pg <- function(df, spec) {
             narrowed <- vpro_narrow_float32(num)
             if (any(narrowed[non_na] < 0 | narrowed[non_na] >= 100)) {
               cli::cli_abort(
-                "Cover column {.field {col_name}} must narrow to >= 0 and < 100 in IEEE-754 float32."
+                "Cover column {.field {col_name}} must be >= 0 and strictly under 100%."
               )
             }
             out_cols[[i]] <- narrowed
@@ -405,7 +405,7 @@ vpro_pg_canonicalize_to_tidy <- function(df, spec) {
   tibble::as_tibble(out_cols)
 }
 
-# Tamper-Evident Audit SHA-256 Chain & RFC 4122 UUID v4 ------------------------
+# Tamper-Evident Audit SHA-256 Chain & Unique Transaction IDs ------------------
 
 vpro_compute_audit_row_hash <- function(prev_hash, merge_tx_id, vp08_audit_values) {
   prev_s <- if (is.null(prev_hash) || length(prev_hash) == 0L || is.na(prev_hash[[1L]])) {
@@ -492,11 +492,14 @@ vpro_compute_audit_row_hash <- function(prev_hash, merge_tx_id, vp08_audit_value
 vpro_uuid_v4 <- function() {
   bytes <- NULL
   if (file.exists("/dev/urandom")) {
-    bytes <- tryCatch({
-      con_ur <- file("/dev/urandom", open = "rb", raw = TRUE)
-      on.exit(close(con_ur), add = TRUE)
-      as.integer(readBin(con_ur, what = "raw", n = 16L))
-    }, error = function(e) NULL)
+    bytes <- tryCatch(
+      {
+        con_ur <- file("/dev/urandom", open = "rb", raw = TRUE)
+        on.exit(close(con_ur), add = TRUE)
+        as.integer(readBin(con_ur, what = "raw", n = 16L))
+      },
+      error = function(e) NULL
+    )
   }
   if (is.null(bytes) || length(bytes) != 16L) {
     bytes <- sample.int(256L, 16L, replace = TRUE) - 1L
@@ -505,10 +508,14 @@ vpro_uuid_v4 <- function() {
   bytes[[9L]] <- bitwOr(bitwAnd(bytes[[9L]], 63L), 128L)
   hex <- sprintf("%02x", bytes)
   paste0(
-    paste(hex[1L:4L], collapse = ""), "-",
-    paste(hex[5L:6L], collapse = ""), "-",
-    paste(hex[7L:8L], collapse = ""), "-",
-    paste(hex[9L:10L], collapse = ""), "-",
+    paste(hex[1L:4L], collapse = ""),
+    "-",
+    paste(hex[5L:6L], collapse = ""),
+    "-",
+    paste(hex[7L:8L], collapse = ""),
+    "-",
+    paste(hex[9L:10L], collapse = ""),
+    "-",
     paste(hex[11L:16L], collapse = "")
   )
 }

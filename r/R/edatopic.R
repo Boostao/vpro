@@ -89,10 +89,13 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
   cell_totals <- cell_plot_dt[, list(cell_total_plots = .N), by = c("grid_type", "SMR", "SNR")]
 
   # Plot counts per (grid_type, SiteUnit, SMR, SNR)
-  cells_dt <- pg_dt[, list(
-    n_plots = .N,
-    aSMR_mean = if (all(is.na(get("SMR_exact")))) NA_real_ else round(mean(get("SMR_exact"), na.rm = TRUE), 2L)
-  ), by = c("grid_type", "SiteUnit", "SMR", "SNR")]
+  cells_dt <- pg_dt[,
+    list(
+      n_plots = .N,
+      aSMR_mean = if (all(is.na(get("SMR_exact")))) NA_real_ else round(mean(get("SMR_exact"), na.rm = TRUE), 2L)
+    ),
+    by = c("grid_type", "SiteUnit", "SMR", "SNR")
+  ]
 
   unit_totals <- cells_dt[, list(unit_total_plots = sum(get("n_plots"))), by = c("grid_type", "SiteUnit")]
   cells_dt <- merge(cells_dt, unit_totals, by = c("grid_type", "SiteUnit"), all.x = TRUE, sort = FALSE)
@@ -115,9 +118,19 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
   data.table::set(cells_dt, j = "is_primary", value = (cells_dt[["unit_prop"]] >= 0.20) | is_modal_vec)
 
   cell_cols <- c(
-    "grid_type", "SiteUnit", "SMR", "SNR", "SNR_num", "Edatope",
-    "n_plots", "unit_total_plots", "unit_prop", "cell_total_plots",
-    "aSMR_mean", "is_modal", "is_primary"
+    "grid_type",
+    "SiteUnit",
+    "SMR",
+    "SNR",
+    "SNR_num",
+    "Edatope",
+    "n_plots",
+    "unit_total_plots",
+    "unit_prop",
+    "cell_total_plots",
+    "aSMR_mean",
+    "is_modal",
+    "is_primary"
   )
   cells_tbl <- tibble::as_tibble(cells_dt[, cell_cols, with = FALSE])
 
@@ -183,12 +196,15 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
   veg_dt <- veg_dt[!is.na(veg_dt[["Cover"]]) & veg_dt[["Cover"]] > 0]
   # Deduplicate (PlotNumber, Species) if multiple site units mapped the same plot
   if (anyDuplicated(veg_dt, by = c("PlotNumber", "Species")) > 0L) {
-    veg_dt <- veg_dt[, list(
-      Cover = max(get("Cover"), na.rm = TRUE),
-      ScientificName = get("ScientificName")[[1L]],
-      EnglishName = get("EnglishName")[[1L]],
-      Lifeform = get("Lifeform")[[1L]]
-    ), by = c("PlotNumber", "Species")]
+    veg_dt <- veg_dt[,
+      list(
+        Cover = max(get("Cover"), na.rm = TRUE),
+        ScientificName = get("ScientificName")[[1L]],
+        EnglishName = get("EnglishName")[[1L]],
+        Lifeform = get("Lifeform")[[1L]]
+      ),
+      by = c("PlotNumber", "Species")
+    ]
   }
 
   joined_veg <- merge(cell_plot_dt, veg_dt, by = "PlotNumber", all = FALSE, allow.cartesian = TRUE)
@@ -201,14 +217,17 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
     ))
   }
 
-  spp_agg <- joined_veg[, list(
-    n_plots = .N,
-    sum_cover = sum(get("Cover"), na.rm = TRUE),
-    mean_cover = mean(get("Cover"), na.rm = TRUE),
-    ScientificName = get("ScientificName")[[1L]],
-    EnglishName = get("EnglishName")[[1L]],
-    Lifeform = as.integer(get("Lifeform")[[1L]])
-  ), by = c("grid_type", "SMR", "SNR", "Species")]
+  spp_agg <- joined_veg[,
+    list(
+      n_plots = .N,
+      sum_cover = sum(get("Cover"), na.rm = TRUE),
+      mean_cover = mean(get("Cover"), na.rm = TRUE),
+      ScientificName = get("ScientificName")[[1L]],
+      EnglishName = get("EnglishName")[[1L]],
+      Lifeform = as.integer(get("Lifeform")[[1L]])
+    ),
+    by = c("grid_type", "SMR", "SNR", "Species")
+  ]
 
   spp_agg <- merge(spp_agg, cell_totals, by = c("grid_type", "SMR", "SNR"), all.x = TRUE, sort = FALSE)
   data.table::set(spp_agg, j = "cell_plots", value = as.integer(spp_agg[["cell_total_plots"]]))
@@ -244,10 +263,22 @@ vpro_build_edatopic_tables <- function(plot_grid_df, veg_df, min_constancy_pct) 
     c(1L, 1L, 1L, 1L, -1L, 1L)
   )
   spp_cols <- c(
-    "grid_type", "SMR", "SNR", "SNR_num", "Edatope",
-    "Species", "ScientificName", "EnglishName", "Lifeform",
-    "n_plots", "cell_plots", "constancy", "mean_cover", "mean_cover_all",
-    "prominence_tier", "order_score"
+    "grid_type",
+    "SMR",
+    "SNR",
+    "SNR_num",
+    "Edatope",
+    "Species",
+    "ScientificName",
+    "EnglishName",
+    "Lifeform",
+    "n_plots",
+    "cell_plots",
+    "constancy",
+    "mean_cover",
+    "mean_cover_all",
+    "prominence_tier",
+    "order_score"
   )
   spp_tbl <- tibble::as_tibble(spp_agg[, spp_cols, with = FALSE])
 
@@ -344,8 +375,7 @@ vpro_edatopic_grid <- function(
 
   grid_parts <- list()
   if (mode %in% c("dual", "relative") && nrow(plots_df) > 0L) {
-    ok_rel <- !is.na(plots_df$rSMR) & plots_df$rSMR >= 0L & plots_df$rSMR <= 8L &
-      !is.na(plots_df$rSNR) & plots_df$rSNR %in% .vpro_snr_levels
+    ok_rel <- !is.na(plots_df$rSMR) & plots_df$rSMR >= 0L & plots_df$rSMR <= 8L & !is.na(plots_df$rSNR) & plots_df$rSNR %in% .vpro_snr_levels
     if (any(ok_rel)) {
       grid_parts[[length(grid_parts) + 1L]] <- data.frame(
         grid_type = rep("relative", sum(ok_rel)),
@@ -359,8 +389,7 @@ vpro_edatopic_grid <- function(
     }
   }
   if (mode %in% c("dual", "actual") && nrow(plots_df) > 0L) {
-    ok_act <- !is.na(plots_df$aSMR) & is.finite(plots_df$aSMR) &
-      !is.na(plots_df$rSNR) & plots_df$rSNR %in% .vpro_snr_levels
+    ok_act <- !is.na(plots_df$aSMR) & is.finite(plots_df$aSMR) & !is.na(plots_df$rSNR) & plots_df$rSNR %in% .vpro_snr_levels
     if (any(ok_act)) {
       asmr_int <- pmin(8L, pmax(0L, as.integer(vpro_go_round(plots_df$aSMR[ok_act]))))
       asmr_half <- pmin(8.0, pmax(0.0, vpro_go_round(plots_df$aSMR[ok_act] * 2.0) / 2.0))
@@ -459,9 +488,18 @@ vpro_edatope_grid_label <- function(gt) {
 
 vpro_bcgov_unit_palette <- function(n) {
   base_cols <- c(
-    "#003366", "#FCBA19", "#38598A", "#2E8540",
-    "#B54B28", "#6A4C93", "#1F7A8C", "#A4243B",
-    "#4F6D7A", "#D9822B", "#2B580C", "#7A306C"
+    "#003366",
+    "#FCBA19",
+    "#38598A",
+    "#2E8540",
+    "#B54B28",
+    "#6A4C93",
+    "#1F7A8C",
+    "#A4243B",
+    "#4F6D7A",
+    "#D9822B",
+    "#2B580C",
+    "#7A306C"
   )
   if (n <= length(base_cols)) {
     return(base_cols[seq_len(n)])
@@ -524,11 +562,14 @@ vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL)
       rlang::abort("`species` must contain at least one non-empty species code.")
     }
 
-    bg_spp <- do.call(rbind, lapply(spp_req, function(sp) {
-      df <- base_grid
-      df$Species <- rep(sp, nrow(df))
-      df
-    }))
+    bg_spp <- do.call(
+      rbind,
+      lapply(spp_req, function(sp) {
+        df <- base_grid
+        df$Species <- rep(sp, nrow(df))
+        df
+      })
+    )
     bg_spp$Species <- factor(bg_spp$Species, levels = spp_req)
 
     sub_spp <- x$species[x$species$grid_type %in% avail_gt & x$species$Species %in% spp_req, , drop = FALSE]
@@ -603,9 +644,9 @@ vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL)
     if (length(spp_req) > 1L && length(avail_gt) > 1L) {
       p <- p + ggplot2::facet_grid(Species ~ grid_label)
     } else if (length(spp_req) > 1L) {
-      p <- p + ggplot2::facet_wrap(~ Species)
+      p <- p + ggplot2::facet_wrap(~Species)
     } else if (length(avail_gt) > 1L) {
-      p <- p + ggplot2::facet_wrap(~ grid_label, nrow = 1L)
+      p <- p + ggplot2::facet_wrap(~grid_label, nrow = 1L)
     }
     return(p)
   }
@@ -740,7 +781,7 @@ vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL)
     ggplot2::theme(panel.grid.major = ggplot2::element_blank())
 
   if (length(avail_gt) > 1L) {
-    p <- p + ggplot2::facet_wrap(~ grid_label, nrow = 1L)
+    p <- p + ggplot2::facet_wrap(~grid_label, nrow = 1L)
   }
   p
 }

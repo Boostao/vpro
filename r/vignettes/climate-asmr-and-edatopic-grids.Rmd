@@ -16,9 +16,9 @@ knitr::opts_chunk$set(
 )
 ```
 
-## Shared `__VPRO_PlotClimate` Cache and `CoordElevHash`
+## Shared Plot Climate Cache with VPro Desktop
 
-`vpro` and Desktop `VPro` share the exact same `__VPRO_PlotClimate` SQLite table and 16-byte SHA-256 `CoordElevHash` key (`lat|lon|elev|ref_period`). Plots downscaled in R via `climr` (or evaluated with the offline BGC lapse fallback when working offline) are immediate cache hits in `VPro` and vice-versa:
+`vpro` and **VPro Desktop** (**Reports -> R Analytics, climr aSMR & Quarto Guides**) share the exact same plot climate cache inside your project `.db`, keyed by plot coordinates, elevation, and climate normal period. Plots downscaled in R via `climr` (or evaluated with the offline BGC lapse fallback when working without local rasters) are immediate cache hits in VPro Desktop, and vice versa:
 
 ```{r}
 library(vpro)
@@ -31,7 +31,7 @@ head(clim[, c("PlotNumber", "BGC", "Elevation", "MAT", "MAP", "MSP", "CMD", "PAS
 
 ## Ministry `CMD -> aSMR` Water-Balance Transfer Function
 
-`vpro_asmr()` applies the Ministry water-balance rules (`aSMR_Rules_HalfStep.csv`): 5-month summer moist surplus (`PPT_05..09 >= 90 mm`), dormant-season recharge deficit (`350 - (PPT_at + PPT_wt)`), steep (`> 35%`) warm SW (`1.25x`) and cool N (`0.85x`) aspect adjustments, and shedding/receiving `rSMR` step transforms:
+`vpro_asmr()` applies the Ministry water-balance rules: 5-month summer moist surplus (`PPT_05..09 >= 90 mm`), dormant-season recharge deficit (`350 - (PPT_at + PPT_wt)`), steep (`> 35%`) warm SW (`1.25x`) and cool N (`0.85x`) aspect adjustments, and shedding/receiving `rSMR` step transforms:
 
 ```{r}
 asmr_df <- vpro_asmr(ws, ref_period = "1961_1990", cache = FALSE, force_offline = TRUE)

@@ -9,11 +9,14 @@ vpro_with_seed <- function(seed, expr) {
     old_seed <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
     on.exit(assign(".Random.seed", old_seed, envir = globalenv()), add = TRUE)
   } else {
-    on.exit({
-      if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
-        rm(".Random.seed", envir = globalenv())
-      }
-    }, add = TRUE)
+    on.exit(
+      {
+        if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+          rm(".Random.seed", envir = globalenv())
+        }
+      },
+      add = TRUE
+    )
   }
   set.seed(as.integer(seed[[1L]]))
   force(expr)
@@ -565,7 +568,7 @@ vpro_indicators <- function(
       iv <- labdsv::indval(mat_sub, as.numeric(grp_fac), numitr = as.integer(permutations))
       lvls <- levels(grp_fac)
       tibble::tibble(
-        Species = as.character( colnames(mat_sub) ),
+        Species = as.character(colnames(mat_sub)),
         Group = as.character(lvls[as.integer(iv$maxcls)]),
         IndVal = sqrt(pmax(0.0, as.double(iv$indcls))),
         p_value = as.double(iv$pval)

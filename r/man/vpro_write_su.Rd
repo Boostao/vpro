@@ -2,7 +2,7 @@
 % Please edit documentation in R/writeback.R
 \name{vpro_write_su}
 \alias{vpro_write_su}
-\title{Write or replace a working \verb{*_SU} or staging \verb{*_ClusterCandidate_SU} table atomically}
+\title{Write or replace a working \verb{*_SU} or candidate Site Unit table}
 \usage{
 vpro_write_su(
   ws,
@@ -41,9 +41,9 @@ Invisibly returns an updated \code{vpro_workspace} with \code{ws$su} switched
 to the written \verb{*_SU} table.
 }
 \description{
-Persists plot-to-SiteUnit assignments to \verb{<su>_SU} (or, when
+Saves plot-to-SiteUnit assignments to \verb{<su>_SU} (or, when
 \code{candidate = TRUE}, \verb{<Prefix>_ClusterCandidate_SU}) inside \code{ws$project_path}
-under \verb{BEGIN IMMEDIATE}, strictly refusing \verb{Master*}, \verb{USys*}, \code{BECSiteUnit},
+in one safe transaction, strictly refusing \verb{Master*}, \verb{USys*}, \code{BECSiteUnit},
 and core \code{VP08} tables. Requires \code{create = TRUE} when creating a new table
 (default \code{TRUE} when \code{candidate = TRUE}) and \code{overwrite = TRUE} when replacing
 an existing table.

@@ -1,13 +1,16 @@
-# Headless PostgreSQL BECMaster Connection, Schema Bootstrap & Canonicalizers --
+# PostgreSQL BECMaster Connection, Schema Bootstrap & Canonicalizers -----------
 
 .vpro_pg_s3_state <- new.env(parent = emptyenv())
 
 .vpro_register_pg_s3 <- function() {
-  .vpro_register_s3_methods(.vpro_pg_s3_state, list(
-    c("base", "print", "vpro_pg_conn"),
-    c("base", "print", "vpro_pg_status"),
-    c("tibble", "as_tibble", "vpro_pg_status")
-  ))
+  .vpro_register_s3_methods(
+    .vpro_pg_s3_state,
+    list(
+      c("base", "print", "vpro_pg_conn"),
+      c("base", "print", "vpro_pg_status"),
+      c("tibble", "as_tibble", "vpro_pg_status")
+    )
+  )
 }
 
 .vpro_valid_sslmodes <- c(
@@ -47,10 +50,11 @@ vpro_parse_dotenv <- function(lines) {
     key <- trimws(substr(line, 1L, eq_pos - 1L))
     val <- trimws(substring(line, eq_pos + 1L))
     n_val <- nchar(val)
-    if (n_val >= 2L && (
-      (startsWith(val, '"') && endsWith(val, '"')) ||
-      (startsWith(val, "'") && endsWith(val, "'"))
-    )) {
+    if (
+      n_val >= 2L &&
+        ((startsWith(val, '"') && endsWith(val, '"')) ||
+          (startsWith(val, "'") && endsWith(val, "'")))
+    ) {
       val <- substr(val, 2L, n_val - 1L)
     } else {
       hash_pos <- regexpr("[[:space:]]#", val)[[1L]]
@@ -159,7 +163,9 @@ vpro_parse_pg_url_impl <- function(raw_url) {
   if (nzchar(query_str)) {
     pairs <- strsplit(query_str, "&", fixed = TRUE)[[1L]]
     for (pair in pairs) {
-      if (!nzchar(pair)) next
+      if (!nzchar(pair)) {
+        next
+      }
       eq <- regexpr("=", pair, fixed = TRUE)[[1L]]
       if (eq > 0L) {
         qk <- tolower(trimws(vpro_urldecode_safe(substr(pair, 1L, eq - 1L))))
@@ -393,11 +399,17 @@ vpro_redact_pg_secrets <- function(msg, secrets = character(), redact_ip = FALSE
 
   cand <- character(0L)
   add_candidate <- function(val) {
-    if (is.null(val) || length(val) == 0L) return(invisible(NULL))
+    if (is.null(val) || length(val) == 0L) {
+      return(invisible(NULL))
+    }
     for (item in as.character(val)) {
-      if (is.na(item)) next
+      if (is.na(item)) {
+        next
+      }
       for (v in unique(c(item, trimws(item)))) {
-        if (nchar(v) < 1L) next
+        if (nchar(v) < 1L) {
+          next
+        }
         cand <<- c(
           cand,
           v,
@@ -451,7 +463,7 @@ vpro_redact_pg_secrets <- function(msg, secrets = character(), redact_ip = FALSE
 
 #' Check offline availability of PostgreSQL `BECMaster` credentials
 #'
-#' Performs a 100% offline inspection of process environment variables
+#' Performs a completely offline inspection of process environment variables
 #' (`VPRO_PG_*`) and `file.path(config_dir, "becmaster.env")` without opening
 #' network sockets or requiring `RPostgres` to be installed. Never throws on
 #' missing or malformed configuration files.

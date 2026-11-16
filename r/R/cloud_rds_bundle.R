@@ -6,9 +6,9 @@
 #' `mineral`, `other`, `metadata`, `audit`), site-unit assignments (`su`), and
 #' species lump mappings (`lump`) from any `vpro_workspace` (see [vpro_connect()],
 #' e.g. `vpro_connect("Sample")`), enforces literal `character` `PlotNumber`/`Plot` keys,
-#' normalizes Access `-1/0` booleans to R `logical`, narrows cover columns via
-#' [vpro_narrow_float32()], and atomically writes a compressed `"vpro_rds_bundle"`
-#' file suitable for zero-database ecological analysis via
+#' normalizes VPro yes/no flags to R `logical`, applies VPro cover precision
+#' via [vpro_narrow_float32()], and writes a compressed `"vpro_rds_bundle"`
+#' file suitable for portable offline ecological analysis via
 #' [vpro_import_rds()].
 #'
 #' @param ws A `vpro_workspace` handle from [vpro_connect()].
@@ -68,8 +68,7 @@ vpro_export_rds <- function(
   }
 
   tables <- vpro_extract_workspace_snapshot_tables(ws)
-  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L &&
-      is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
+  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L && is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
     sens_codes <- .vpro_sensitive_species_codes(vlists_path = ws$vlists_path)
     if (length(sens_codes) > 0L) {
       veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
@@ -182,7 +181,7 @@ vpro_export_rds <- function(
 #' `"vpro_workspace"` so [vpro_env()], [vpro_veg()], [vpro_soil()],
 #' [vpro_matrix()], [vpro_cluster()], [vpro_diagnostics()], [vpro_climate()],
 #' [vpro_asmr()], [vpro_sf()], and [vpro_render_guide()] work out-of-the-box
-#' with zero external database setup.
+#' without requiring an external database setup.
 #'
 #' @param path Path to an `.rds` project snapshot file.
 #' @param su Optional site-unit override: `NULL` (default uses bundle `su`
@@ -207,12 +206,11 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
   rds_norm <- normalizePath(path, winslash = "/", mustWork = TRUE)
   raw_obj <- readRDS(rds_norm)
 
-  is_bundle <- inherits(raw_obj, "vpro_rds_bundle") || (
-    is.list(raw_obj) &&
+  is_bundle <- inherits(raw_obj, "vpro_rds_bundle") ||
+    (is.list(raw_obj) &&
       !is.data.frame(raw_obj) &&
       is.list(raw_obj$tables) &&
-      ("env" %in% tolower(names(raw_obj$tables)))
-  )
+      ("env" %in% tolower(names(raw_obj$tables))))
   is_desktop_list <- !is_bundle &&
     is.list(raw_obj) &&
     !is.data.frame(raw_obj) &&
@@ -234,8 +232,7 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
   }
 
   file_stem <- tools::file_path_sans_ext(basename(rds_norm))
-  raw_proj <- if (is_bundle && is.character(raw_obj$project) && length(raw_obj$project) == 1L &&
-                  !is.na(raw_obj$project) && nzchar(trimws(raw_obj$project))) {
+  raw_proj <- if (is_bundle && is.character(raw_obj$project) && length(raw_obj$project) == 1L && !is.na(raw_obj$project) && nzchar(trimws(raw_obj$project))) {
     trimws(raw_obj$project)
   } else {
     file_stem
@@ -311,7 +308,7 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
       bad_cv <- !is.na(cv) & (!is.finite(cv) | cv < 0 | cv >= 100)
       if (any(bad_cv)) {
         cli::cli_abort(
-          "RDS vegetation cover column {.field {cc}} contains value(s) outside [0, 100) in IEEE-754 float32."
+          "RDS vegetation cover column {.field {cc}} contains value(s) outside [0, 100)."
         )
       }
     }
@@ -378,11 +375,14 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
   # Materialize ephemeral self-cleaning VP08 SQLite workspace in tempdir()
   tmp_db <- tempfile(pattern = "vpro-rds-proj-", fileext = ".db")
   staged_ok <- FALSE
-  on.exit({
-    if (!staged_ok) {
-      unlink(c(tmp_db, paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
-    }
-  }, add = TRUE)
+  on.exit(
+    {
+      if (!staged_ok) {
+        unlink(c(tmp_db, paste0(tmp_db, "-wal"), paste0(tmp_db, "-shm")), force = TRUE)
+      }
+    },
+    add = TRUE
+  )
 
   sq_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db)
   on.exit(if (DBI::dbIsValid(sq_con)) DBI::dbDisconnect(sq_con), add = TRUE)
@@ -461,7 +461,8 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
         sq_con,
         paste0(
           'INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") ',
-          'SELECT ?, "ID" FROM ', q_full,
+          'SELECT ?, "ID" FROM ',
+          q_full,
           ' WHERE typeof("ID") = \'integer\' AND "ID" >= 0'
         ),
         params = list(q_full)
@@ -541,12 +542,15 @@ vpro_import_rds <- function(path, su = NULL, lump = NULL) {
   tmp_db_norm <- normalizePath(tmp_db, winslash = "/", mustWork = TRUE)
   # Close a brief RW handle after SQLITE_RO inspection so idle -wal/-shm sidecars are cleaned
   clean_con <- DBI::dbConnect(RSQLite::SQLite(), tmp_db_norm, flags = RSQLite::SQLITE_RW)
-  tryCatch({
-    DBI::dbGetQuery(clean_con, "SELECT 1 FROM sqlite_master LIMIT 1")
-    DBI::dbExecute(clean_con, "PRAGMA wal_checkpoint(TRUNCATE)")
-  }, finally = {
-    if (DBI::dbIsValid(clean_con)) DBI::dbDisconnect(clean_con)
-  })
+  tryCatch(
+    {
+      DBI::dbGetQuery(clean_con, "SELECT 1 FROM sqlite_master LIMIT 1")
+      DBI::dbExecute(clean_con, "PRAGMA wal_checkpoint(TRUNCATE)")
+    },
+    finally = {
+      if (DBI::dbIsValid(clean_con)) DBI::dbDisconnect(clean_con)
+    }
+  )
   staged_ok <- TRUE
 
   cleanup_env <- new.env(parent = emptyenv())

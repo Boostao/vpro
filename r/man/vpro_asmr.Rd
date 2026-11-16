@@ -19,8 +19,8 @@ vpro_asmr(
 
 \item{ref_period}{Climate normal period (\code{"1961_1990"} or \code{"1991_2020"}).}
 
-\item{cache}{Logical; passed to \code{\link[=vpro_climate]{vpro_climate()}} to persist new
-\verb{__VPRO_PlotClimate} rows on writable user databases.}
+\item{cache}{Logical; passed to \code{\link[=vpro_climate]{vpro_climate()}} to save newly computed plot
+climate rows on writable user projects.}
 
 \item{force_offline}{Logical; if \code{TRUE}, uses the offline BGC lapse-rate
 normals model without querying \code{climr}.}

@@ -16,7 +16,7 @@ knitr::opts_chunk$set(
 
 ## Building `vegan`-Ready Community Matrices
 
-`vpro_matrix()` converts scoped `VP08` vegetation data directly into a dense `matrix` (or sparse `Matrix::dgCMatrix`) with literal `PlotNumber` row names and a 1-to-1 row-aligned `attr(mat, "env")` tibble:
+`vpro_matrix()` converts scoped VPro vegetation data directly into a dense `matrix` (or sparse `Matrix::dgCMatrix`) with literal `PlotNumber` row names and a 1-to-1 row-aligned `attr(mat, "env")` tibble:
 
 ```{r}
 library(vpro)
@@ -71,18 +71,20 @@ ind <- vpro_indicators(ws, clusters = cl, permutations = 49)
 head(ind, 10)
 ```
 
-## Atomic Round-Trip Write-Back to Desktop `VPro`
+## Safe Round-Trip Write-Back to VPro Desktop
 
-Once candidate clusters are reviewed in R, `vpro_write_su(..., candidate = TRUE)` writes `<Name>_ClusterCandidate_SU` atomically (`BEGIN IMMEDIATE`) with `_table_metadata ('VP04')`, `<Project>_Audit`, and `__VPRO_RSidecarHistory` provenance so the candidate classification appears immediately in Desktop `VPro`:
+Once candidate clusters are reviewed in R, `vpro_write_su(..., candidate = TRUE)` writes a candidate Site Unit table (`<Name>_ClusterCandidate_SU`) in one safe transaction with full `<Project>_Audit` history—never modifying `Master*`, `USys*`, `BECSiteUnit`, or core plot tables—so the candidate classification appears immediately under **Forms -> SU & Hierarchy Explorer** in VPro Desktop:
 
 ```{r}
-# Demonstrate on a disposable WAL copy of Sample.db
-work_db <- tempfile("sample-roundtrip-", fileext = ".db")
+# Demonstrate on a disposable copy of Sample.db
+work_dir <- tempfile("sample-roundtrip-")
+dir.create(work_dir)
+work_db <- file.path(work_dir, "Sample.db")
 file.copy(ws$project_path, work_db)
 
 ws_work <- vpro_connect(work_db)
 ws_cand <- vpro_write_su(ws_work, cl, su = "Sample_Noise4", candidate = TRUE)
 vpro_list_su(ws_cand)
 
-unlink(c(work_db, paste0(work_db, "-wal"), paste0(work_db, "-shm")))
+unlink(work_dir, recursive = TRUE)
 ```

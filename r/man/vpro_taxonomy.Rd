@@ -20,8 +20,8 @@ A tibble with \code{Code}, \code{OldCode}, \code{ScientificName}, \code{EnglishN
 \code{FamilyCode}, \code{Native}, and \code{SourceCatalog}.
 }
 \description{
-Queries \code{USysAllSpecs} in \code{VLists.db} (\code{INT32} \code{Lifeform}) and optionally
-\code{USysUserSpp} in \code{VUser.db} (\code{INT16} \code{LifeForm} promoted to integer). By
+Queries \code{USysAllSpecs} in \code{VLists.db} and optionally merges \code{USysUserSpp}
+in \code{VUser.db} with harmonized integer \code{Lifeform} codes. By
 default excludes synonym rows (\code{LOWER(Codetype) = 's'}) and attaches any
 conflicting duplicate used-code definitions in \code{attr(result, "conflicts")}.
 }

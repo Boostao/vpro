@@ -1,4 +1,4 @@
-# Guarded Non-Destructive Transactional SQLite WAL Write-Back ------------------
+# Guarded Non-Destructive Project Write-Back ---------------------------------
 
 .vpro_protected_db_basenames <- c(
   "vlists.db",
@@ -90,12 +90,15 @@ vpro_assert_writable_project_db <- function(db_path, con = NULL) {
       basename(db_path)
     ))
   }
-  if (vpro_is_bundled_package_path(db_path) ||
-      (!is.null(con) && identical(con$source, "sample") &&
-       identical(
-         normalizePath(db_path, winslash = "/", mustWork = FALSE),
-         normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = FALSE)
-       ))) {
+  if (
+    vpro_is_bundled_package_path(db_path) ||
+      (!is.null(con) &&
+        identical(con$source, "sample") &&
+        identical(
+          normalizePath(db_path, winslash = "/", mustWork = FALSE),
+          normalizePath(vpro_bundled_db("Sample.db"), winslash = "/", mustWork = FALSE)
+        ))
+  ) {
     rlang::abort(paste0(
       "Refusing write-back to read-only installed `vpro` package database: ",
       db_path,
@@ -110,14 +113,17 @@ vpro_with_immediate_tx <- function(db_path, fn, con = NULL) {
   dbc <- vpro_sqlite_rw_immediate(resolved)
   tx_started <- FALSE
   committed <- FALSE
-  on.exit({
-    if (tx_started && !committed && DBI::dbIsValid(dbc)) {
-      tryCatch(DBI::dbExecute(dbc, "ROLLBACK"), error = function(e) NULL)
-    }
-    if (DBI::dbIsValid(dbc)) {
-      DBI::dbDisconnect(dbc)
-    }
-  }, add = TRUE)
+  on.exit(
+    {
+      if (tx_started && !committed && DBI::dbIsValid(dbc)) {
+        tryCatch(DBI::dbExecute(dbc, "ROLLBACK"), error = function(e) NULL)
+      }
+      if (DBI::dbIsValid(dbc)) {
+        DBI::dbDisconnect(dbc)
+      }
+    },
+    add = TRUE
+  )
 
   DBI::dbExecute(dbc, "BEGIN IMMEDIATE")
   tx_started <- TRUE
@@ -151,25 +157,35 @@ vpro_assert_safe_prefix <- function(raw_name, full_table, project_name, kind = c
   # Hard refusal guards: Master* / *Master*, USys*, BECSiteUnit, core VP08 tables
   if (grepl("master", nm, ignore.case = TRUE) || grepl("master", ft, ignore.case = TRUE)) {
     rlang::abort(paste0(
-      "Refusing write-back to Master-protected table `", ft, "` (`Master*` prefixes are read-only)."
+      "Refusing write-back to Master-protected table `",
+      ft,
+      "` (`Master*` prefixes are read-only)."
     ))
   }
   if (grepl("^usys", nm, ignore.case = TRUE) || grepl("^usys", ft, ignore.case = TRUE)) {
     rlang::abort(paste0(
-      "Refusing write-back to system table/view `", ft, "` (`USys*` objects are protected)."
+      "Refusing write-back to system table/view `",
+      ft,
+      "` (`USys*` objects are protected)."
     ))
   }
-  if (grepl("^becsiteunit(_su|_lump)?$", nm, ignore.case = TRUE) ||
-      grepl("^becsiteunit(_su|_lump)?$", ft, ignore.case = TRUE)) {
+  if (
+    grepl("^becsiteunit(_su|_lump)?$", nm, ignore.case = TRUE) ||
+      grepl("^becsiteunit(_su|_lump)?$", ft, ignore.case = TRUE)
+  ) {
     rlang::abort(paste0(
-      "Refusing write-back to custodian-locked table `", ft, "` (`BECSiteUnit` is protected)."
+      "Refusing write-back to custodian-locked table `",
+      ft,
+      "` (`BECSiteUnit` is protected)."
     ))
   }
 
   core_pat <- paste0("_(", paste(.vpro_core_project_suffixes, collapse = "|"), ")$")
   if (grepl(core_pat, nm, ignore.case = TRUE) || grepl(core_pat, ft, ignore.case = TRUE)) {
     rlang::abort(paste0(
-      "Refusing write-back targeting core VP08 table `", ft, "`."
+      "Refusing write-back targeting core VP08 table `",
+      ft,
+      "`."
     ))
   }
   if (!is.null(project_name) && nzchar(project_name)) {
@@ -185,7 +201,9 @@ vpro_assert_safe_prefix <- function(raw_name, full_table, project_name, kind = c
 vpro_validate_plot_numbers_strict <- function(plot_vec, arg = "PlotNumber") {
   if (!is.character(plot_vec)) {
     rlang::abort(paste0(
-      "`", arg, "` must be a literal `character` vector (never numeric) to preserve leading zeroes such as '00337'."
+      "`",
+      arg,
+      "` must be a literal `character` vector (never numeric) to preserve leading zeroes such as '00337'."
     ))
   }
   if (length(plot_vec) == 0L) {
@@ -201,7 +219,11 @@ vpro_validate_plot_numbers_strict <- function(plot_vec, arg = "PlotNumber") {
   if (any(u16 > 7L)) {
     bad <- plot_vec[which(u16 > 7L)[[1L]]]
     rlang::abort(paste0(
-      "`", arg, "` value '", bad, "' exceeds VPro's 7 UTF-16 code-unit limit."
+      "`",
+      arg,
+      "` value '",
+      bad,
+      "' exceeds VPro's 7-character limit."
     ))
   }
   if (anyDuplicated(plot_vec) > 0L) {
@@ -241,8 +263,12 @@ vpro_extract_su_memberships <- function(memberships) {
 
   nms_low <- tolower(names(df))
   p_ix <- match("plotnumber", nms_low)
-  if (is.na(p_ix)) p_ix <- match("plot", nms_low)
-  if (is.na(p_ix)) p_ix <- match("plot_number", nms_low)
+  if (is.na(p_ix)) {
+    p_ix <- match("plot", nms_low)
+  }
+  if (is.na(p_ix)) {
+    p_ix <- match("plot_number", nms_low)
+  }
   u_ix <- NA_integer_
   for (col_cand in c("siteunit", "cluster", "clusterunit", "site_unit", "cluster_unit", "unit")) {
     m <- match(col_cand, nms_low)
@@ -270,7 +296,7 @@ vpro_extract_su_memberships <- function(memberships) {
   }
   u16_units <- vpro_utf16_len(units_chr)
   if (anyNA(u16_units) || any(u16_units > 50L)) {
-    rlang::abort("`SiteUnit` values must be valid UTF-8 up to 50 UTF-16 code units.")
+    rlang::abort("`SiteUnit` values must be valid text up to 50 characters.")
   }
 
   tibble::tibble(
@@ -355,7 +381,8 @@ vpro_append_project_audit_in_tx <- function(
     DBI::dbExecute(
       dbc,
       paste0(
-        "INSERT INTO main.", q_audit,
+        "INSERT INTO main.",
+        q_audit,
         ' ("Project", "User", "PlotNumber", "Table", "EditField", "EditWhen", "BeforeEdit", "AfterEdit", "Restore", "Flag", "ID") ',
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)"
       ),
@@ -375,7 +402,8 @@ vpro_append_project_audit_in_tx <- function(
     DBI::dbExecute(
       dbc,
       paste0(
-        "INSERT INTO main.", q_audit,
+        "INSERT INTO main.",
+        q_audit,
         ' ("Project", "User", "PlotNumber", "Table", "EditField", "EditWhen", "BeforeEdit", "AfterEdit", "Restore", "Flag") ',
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)"
       ),
@@ -427,11 +455,11 @@ vpro_upsert_table_metadata_in_tx <- function(dbc, table_name, version_tag) {
   invisible(TRUE)
 }
 
-#' Write or replace a working `*_SU` or staging `*_ClusterCandidate_SU` table atomically
+#' Write or replace a working `*_SU` or candidate Site Unit table
 #'
-#' Persists plot-to-SiteUnit assignments to `<su>_SU` (or, when
+#' Saves plot-to-SiteUnit assignments to `<su>_SU` (or, when
 #' `candidate = TRUE`, `<Prefix>_ClusterCandidate_SU`) inside `ws$project_path`
-#' under `BEGIN IMMEDIATE`, strictly refusing `Master*`, `USys*`, `BECSiteUnit`,
+#' in one safe transaction, strictly refusing `Master*`, `USys*`, `BECSiteUnit`,
 #' and core `VP08` tables. Requires `create = TRUE` when creating a new table
 #' (default `TRUE` when `candidate = TRUE`) and `overwrite = TRUE` when replacing
 #' an existing table.
@@ -492,7 +520,8 @@ vpro_write_su <- function(
     }
     if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
       rlang::abort(paste0(
-        "Candidate prefix `", base,
+        "Candidate prefix `",
+        base,
         "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
       ))
     }
@@ -509,7 +538,8 @@ vpro_write_su <- function(
     }
     if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
       rlang::abort(paste0(
-        "Target SU name `", base,
+        "Target SU name `",
+        base,
         "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
       ))
     }
@@ -522,13 +552,15 @@ vpro_write_su <- function(
     existing <- vpro_find_existing_table_ci(dbc, target_table)
     if (is.null(existing) && !isTRUE(create)) {
       rlang::abort(paste0(
-        "Target SU table `", target_table,
+        "Target SU table `",
+        target_table,
         "` does not exist; set `create = TRUE` to create a new working `*_SU` table."
       ))
     }
     if (!is.null(existing) && !isTRUE(overwrite)) {
       rlang::abort(paste0(
-        "Target SU table `", existing,
+        "Target SU table `",
+        existing,
         "` already exists; set `overwrite = TRUE` to replace it."
       ))
     }
@@ -597,13 +629,12 @@ vpro_write_su <- function(
   invisible(vpro_use(ws_next, su = written_table))
 }
 
-#' Write or replace a taxonomic lumping (`*_Lump`) table atomically
+#' Write or replace a taxonomic lumping (`*_Lump`) table
 #'
-#' Validates `LumpCode` (`<= 50` UTF-16 code units), `SppCode` (`<= 8` UTF-16
-#' code units, unique, distinct from `LumpCode`), and serializes `Use` to Access
-#' integer booleans (`-1L` = `TRUE`, `0L` = `FALSE`). Writes `<lump>_Lump`
-#' + `_table_metadata` (`'VP05'`) + `<Project>_Audit` + `__VPRO_RSidecarHistory`
-#' inside a `BEGIN IMMEDIATE` WAL transaction.
+#' Validates `LumpCode` (up to 50 characters), `SppCode` (up to 8 characters,
+#' unique, and distinct from `LumpCode`), normalizes `Use` to VPro's boolean
+#' format, and saves `<lump>_Lump` alongside project metadata and audit history
+#' in one safe transaction.
 #'
 #' @param ws A `vpro_workspace` handle referencing a writable user `.db`.
 #' @param lump_df A `data.frame` containing `LumpCode`, `SppCode`, and optional
@@ -640,7 +671,8 @@ vpro_write_lump <- function(
   }
   if (!grepl("^[A-Za-z][A-Za-z0-9_]{0,30}$", base)) {
     rlang::abort(paste0(
-      "Lump table name `", base,
+      "Lump table name `",
+      base,
       "` must start with an ASCII letter, contain only ASCII letters, digits, or underscores, and be at most 31 characters."
     ))
   }
@@ -675,11 +707,11 @@ vpro_write_lump <- function(
     }
     if (any(u16_lump > 50L)) {
       bad_l <- clean_lump[which(u16_lump > 50L)[[1L]]]
-      rlang::abort(paste0("`LumpCode` '", bad_l, "' exceeds 50 UTF-16 code units."))
+      rlang::abort(paste0("`LumpCode` '", bad_l, "' exceeds the 50-character limit."))
     }
     if (any(u16_spp > 8L)) {
       bad_s <- clean_spp[which(u16_spp > 8L)[[1L]]]
-      rlang::abort(paste0("`SppCode` '", bad_s, "' exceeds 8 UTF-16 code units."))
+      rlang::abort(paste0("`SppCode` '", bad_s, "' exceeds the 8-character limit (8 UTF-16 code units)."))
     }
     if (any(clean_lump == clean_spp)) {
       same_c <- clean_spp[which(clean_lump == clean_spp)[[1L]]]
@@ -708,13 +740,15 @@ vpro_write_lump <- function(
     existing <- vpro_find_existing_table_ci(dbc, target_table)
     if (is.null(existing) && !isTRUE(create)) {
       rlang::abort(paste0(
-        "Target lump table `", target_table,
+        "Target lump table `",
+        target_table,
         "` does not exist; set `create = TRUE` to create it."
       ))
     }
     if (!is.null(existing) && !isTRUE(overwrite)) {
       rlang::abort(paste0(
-        "Target lump table `", existing,
+        "Target lump table `",
+        existing,
         "` already exists; set `overwrite = TRUE` to confirm replacing it."
       ))
     }

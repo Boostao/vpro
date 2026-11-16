@@ -190,7 +190,9 @@ print.vpro_profile_rule <- function(x, ...) {
 
 .vpro_eval_field_predicate <- function(vec, operator, value) {
   n <- length(vec)
-  if (n == 0L) return(logical(0))
+  if (n == 0L) {
+    return(logical(0))
+  }
 
   is_miss <- is.na(vec) | (is.character(vec) & !nzchar(trimws(vec)))
   if (identical(operator, "IS NULL")) {
@@ -209,9 +211,15 @@ print.vpro_profile_rule <- function(x, ...) {
 
   if (is.logical(vec)) {
     target_lgl <- vpro_access_to_logical(value)
-    if (is.na(target_lgl)) return(rep(FALSE, n))
-    if (identical(operator, "=")) return(!is.na(vec) & (vec == target_lgl))
-    if (identical(operator, "!=")) return(!is.na(vec) & (vec != target_lgl))
+    if (is.na(target_lgl)) {
+      return(rep(FALSE, n))
+    }
+    if (identical(operator, "=")) {
+      return(!is.na(vec) & (vec == target_lgl))
+    }
+    if (identical(operator, "!=")) {
+      return(!is.na(vec) & (vec != target_lgl))
+    }
     rlang::abort(paste0("Operator `", operator, "` is not valid for logical column."))
   }
 
@@ -257,7 +265,9 @@ print.vpro_profile_rule <- function(x, ...) {
     return(list(rules))
   }
   if (is.data.frame(rules)) {
-    if (nrow(rules) == 0L) return(list())
+    if (nrow(rules) == 0L) {
+      return(list())
+    }
     nms <- tolower(names(rules))
     pick_col <- function(cands, default = NULL) {
       ix <- match(cands, nms)
@@ -293,8 +303,12 @@ print.vpro_profile_rule <- function(x, ...) {
   }
   if (is.list(rules)) {
     return(lapply(rules, function(item) {
-      if (inherits(item, "vpro_profile_rule")) return(item)
-      if (is.list(item)) return(do.call(vpro_profile_rule, item))
+      if (inherits(item, "vpro_profile_rule")) {
+        return(item)
+      }
+      if (is.list(item)) {
+        return(do.call(vpro_profile_rule, item))
+      }
       rlang::abort("Each element of `rules` must be a `vpro_profile_rule` object.")
     }))
   }
@@ -369,7 +383,13 @@ print.vpro_profile_rule <- function(x, ...) {
     # Collapse lumped/multiple rows per plot by summing each cover column with VPro's 99% lumped cap
     sum_na <- function(x) {
       ok <- x[!is.na(x)]
-      if (length(ok) == 0L) NA_real_ else if (length(ok) == 1L) ok else min(sum(ok), 99.0)
+      if (length(ok) == 0L) {
+        NA_real_
+      } else if (length(ok) == 1L) {
+        ok
+      } else {
+        min(sum(ok), 99.0)
+      }
     }
     by_plot <- dt[, lapply(.SD, sum_na), by = "PlotNumber", .SDcols = sel_cols]
 

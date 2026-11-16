@@ -2,8 +2,8 @@
 
 #' Read harmonized `BCPlantTaxonomy v19` + user species catalogue
 #'
-#' Queries `USysAllSpecs` in `VLists.db` (`INT32` `Lifeform`) and optionally
-#' `USysUserSpp` in `VUser.db` (`INT16` `LifeForm` promoted to integer). By
+#' Queries `USysAllSpecs` in `VLists.db` and optionally merges `USysUserSpp`
+#' in `VUser.db` with harmonized integer `Lifeform` codes. By
 #' default excludes synonym rows (`LOWER(Codetype) = 's'`) and attaches any
 #' conflicting duplicate used-code definitions in `attr(result, "conflicts")`.
 #'
@@ -16,7 +16,9 @@
 #'   `FamilyCode`, `Native`, and `SourceCatalog`.
 #' @export
 vpro_taxonomy <- function(ws = NULL, include_synonyms = FALSE, include_user = TRUE) {
-  vlists_path <- if (is.null(ws)) vpro_bundled_db("VLists.db") else {
+  vlists_path <- if (is.null(ws)) {
+    vpro_bundled_db("VLists.db")
+  } else {
     vpro_assert_workspace(ws)
     ws$vlists_path
   }
@@ -145,7 +147,9 @@ vpro_synonym_map <- function(ws = NULL) {
 #' @return A tibble of BEC units and site series.
 #' @export
 vpro_bec_units <- function(ws = NULL, zone = NULL, subzone = NULL) {
-  vlists_path <- if (is.null(ws)) vpro_bundled_db("VLists.db") else {
+  vlists_path <- if (is.null(ws)) {
+    vpro_bundled_db("VLists.db")
+  } else {
     vpro_assert_workspace(ws)
     ws$vlists_path
   }
@@ -246,7 +250,8 @@ vpro_lump_map <- function(ws = NULL, lump = TRUE) {
     paste0(
       'SELECT UPPER(TRIM(CAST("SppCode" AS TEXT))) AS "SppCode", ',
       'UPPER(TRIM(CAST("LumpCode" AS TEXT))) AS "LumpCode", ',
-      '"Use" FROM ', vpro_quote_ident(tbl_name)
+      '"Use" FROM ',
+      vpro_quote_ident(tbl_name)
     )
   )
   use_ok <- vpro_access_to_logical(raw$Use)

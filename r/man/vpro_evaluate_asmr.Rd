@@ -37,8 +37,8 @@ A tibble with \code{rSMR}, \code{MoistMonths}, \code{DormantDeficit}, \code{Aspe
 \code{CMD_topo}, \code{CMD_site}, and \code{aSMR}.
 }
 \description{
-Vectorized implementation of B.C. Ministry of Forests \verb{_calculate_aSMR.R} +
-\code{aSMR_Rules_HalfStep.csv} matching VPro Desktop \code{EvaluateMinistryASMR}:
+Vectorized implementation of the B.C. Ministry of Forests \code{CMD -> aSMR}
+water-balance model matching VPro Desktop:
 growing-season 5-month moist surplus (\verb{PPT_05..PPT_09 >= 90 mm}), dormant
 recharge deficit (\code{max(0, 350 - (PPT_at + PPT_wt))}), steep (\verb{> 35\%}) warm SW
 (\verb{180..270} -> \verb{1.25x}) and cool N (\verb{> 315} or \verb{< 45} -> \verb{0.85x}) aspect

@@ -14,8 +14,7 @@ vpro_parse_utm_zone <- function(zone_vec) {
 vpro_bcgs_mapsheet_20k <- function(lat, lon) {
   n <- length(lat)
   out <- rep(NA_character_, n)
-  ok <- !is.na(lat) & !is.na(lon) & is.finite(lat) & is.finite(lon) &
-    lat >= 48.0 & lat <= 60.0 & lon >= -140.0 & lon <= -114.0
+  ok <- !is.na(lat) & !is.na(lon) & is.finite(lat) & is.finite(lon) & lat >= 48.0 & lat <= 60.0 & lon >= -140.0 & lon <= -114.0
   if (!any(ok)) {
     return(out)
   }
@@ -55,16 +54,49 @@ vpro_bcgs_mapsheet_20k <- function(lat, lon) {
 }
 
 .vpro_spatial_core_cols <- c(
-  "PlotNumber", "FieldNumber", "ProjectID", "FSRegionDistrict", "Date",
-  "SiteSurveyor", "PlotRepresenting", "Location", "Ecosection", "NtsMapSheet",
-  "Longitude", "Latitude", "UTMZone", "UTMEasting", "UTMNorthing",
-  "LocationAccuracy", "Zone", "SubZone", "SiteSeries", "SiteModifier1",
-  "SiteModifier2", "MoistureRegime", "NutrientRegime", "SuccessionalStatus",
-  "StructuralStage", "StandAge", "Elevation", "SlopeGradient", "Aspect",
-  "MesoSlopePosition", "SoilDrainage", "HumusForm", "StrataCoverTree",
-  "StrataCoverShrub", "StrataCoverHerb", "StrataCoverMoss", "Flag",
-  "GIS_BGC", "BECSiteUnit", "UserSiteUnit", "SitePlotQuality",
-  "VegPlotQuality", "SoilPlotQuality"
+  "PlotNumber",
+  "FieldNumber",
+  "ProjectID",
+  "FSRegionDistrict",
+  "Date",
+  "SiteSurveyor",
+  "PlotRepresenting",
+  "Location",
+  "Ecosection",
+  "NtsMapSheet",
+  "Longitude",
+  "Latitude",
+  "UTMZone",
+  "UTMEasting",
+  "UTMNorthing",
+  "LocationAccuracy",
+  "Zone",
+  "SubZone",
+  "SiteSeries",
+  "SiteModifier1",
+  "SiteModifier2",
+  "MoistureRegime",
+  "NutrientRegime",
+  "SuccessionalStatus",
+  "StructuralStage",
+  "StandAge",
+  "Elevation",
+  "SlopeGradient",
+  "Aspect",
+  "MesoSlopePosition",
+  "SoilDrainage",
+  "HumusForm",
+  "StrataCoverTree",
+  "StrataCoverShrub",
+  "StrataCoverHerb",
+  "StrataCoverMoss",
+  "Flag",
+  "GIS_BGC",
+  "BECSiteUnit",
+  "UserSiteUnit",
+  "SitePlotQuality",
+  "VegPlotQuality",
+  "SoilPlotQuality"
 )
 
 #' Extract spatial `sf` plot features with NAD83 geodesy audit and BCGS mapsheets
@@ -146,9 +178,15 @@ vpro_sf <- function(
   lat_raw <- if ("Latitude" %in% names(env)) suppressWarnings(as.double(env[["Latitude"]])) else rep(NA_real_, n)
   lon_raw <- if ("Longitude" %in% names(env)) suppressWarnings(as.double(env[["Longitude"]])) else rep(NA_real_, n)
 
-  dd_finite <- !is.na(lat_raw) & !is.na(lon_raw) & is.finite(lat_raw) & is.finite(lon_raw) &
-    !(lat_raw == 0 & lon_raw == 0) & lat_raw >= -90.0 & lat_raw <= 90.0 &
-    lon_raw >= -180.0 & lon_raw <= 180.0
+  dd_finite <- !is.na(lat_raw) &
+    !is.na(lon_raw) &
+    is.finite(lat_raw) &
+    is.finite(lon_raw) &
+    !(lat_raw == 0 & lon_raw == 0) &
+    lat_raw >= -90.0 &
+    lat_raw <= 90.0 &
+    lon_raw >= -180.0 &
+    lon_raw <= 180.0
 
   sign_flipped <- dd_finite & lon_raw > 0.0 & lon_raw >= 110.0 & lon_raw <= 145.0
   lat_dd <- ifelse(dd_finite, lat_raw, NA_real_)
@@ -159,9 +197,17 @@ vpro_sf <- function(
   east_raw <- if ("UTMEasting" %in% names(env)) suppressWarnings(as.double(env[["UTMEasting"]])) else rep(NA_real_, n)
   north_raw <- if ("UTMNorthing" %in% names(env)) suppressWarnings(as.double(env[["UTMNorthing"]])) else rep(NA_real_, n)
 
-  has_utm <- !is.na(zone_int) & zone_int >= 7L & zone_int <= 11L &
-    !is.na(east_raw) & is.finite(east_raw) & east_raw >= 100000.0 & east_raw <= 900000.0 &
-    !is.na(north_raw) & is.finite(north_raw) & north_raw > 0.0 & north_raw <= 10000000.0
+  has_utm <- !is.na(zone_int) &
+    zone_int >= 7L &
+    zone_int <= 11L &
+    !is.na(east_raw) &
+    is.finite(east_raw) &
+    east_raw >= 100000.0 &
+    east_raw <= 900000.0 &
+    !is.na(north_raw) &
+    is.finite(north_raw) &
+    north_raw > 0.0 &
+    north_raw <= 10000000.0
 
   utm_lat <- rep(NA_real_, n)
   utm_lon <- rep(NA_real_, n)
@@ -221,13 +267,23 @@ vpro_sf <- function(
   geodesy_flag <- rep("ok", n)
   flagged <- which(sign_flipped | utm_backfilled | utm_dd_divergent)
   if (length(flagged) > 0L) {
-    geodesy_flag[flagged] <- vapply(flagged, function(i) {
-      flags <- character()
-      if (sign_flipped[[i]]) flags <- c(flags, "sign_flipped")
-      if (utm_backfilled[[i]]) flags <- c(flags, "utm_backfilled")
-      if (utm_dd_divergent[[i]]) flags <- c(flags, "utm_dd_divergent")
-      paste(flags, collapse = ",")
-    }, character(1))
+    geodesy_flag[flagged] <- vapply(
+      flagged,
+      function(i) {
+        flags <- character()
+        if (sign_flipped[[i]]) {
+          flags <- c(flags, "sign_flipped")
+        }
+        if (utm_backfilled[[i]]) {
+          flags <- c(flags, "utm_backfilled")
+        }
+        if (utm_dd_divergent[[i]]) {
+          flags <- c(flags, "utm_dd_divergent")
+        }
+        paste(flags, collapse = ",")
+      },
+      character(1)
+    )
   }
 
   env[["Latitude"]] <- final_lat

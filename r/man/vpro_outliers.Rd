@@ -2,7 +2,7 @@
 % Please edit documentation in R/pairwise_outliers.R
 \name{vpro_outliers}
 \alias{vpro_outliers}
-\title{Detect candidate misclassified and anomalous plots via Leave-One-Out centroids}
+\title{Detect candidate misclassified and anomalous plots via leave-one-out centroids}
 \usage{
 vpro_outliers(
   ws,
@@ -24,14 +24,14 @@ name, or a two-column \code{data.frame(SppCode, LumpCode)}.}
 \code{.poor}, and \code{.nudum} units.}
 
 \item{transform}{Cover transformation applied before centroid similarity:
-\code{"none"} (or alias \code{"raw"}, default matching Go \code{ComputeOutlierQueue}),
+\code{"none"} (or alias \code{"raw"}, default matching VPro Desktop),
 \code{"sqrt"}, \code{"log1p"}, \code{"chord"}, or \code{"hellinger"}.}
 
 \item{threshold}{Minimum \code{own_similarity} (\verb{[0, 1]}, default \code{0.45}) below
 which a plot is flagged for ecological review.}
 
-\item{keep_singletons}{Logical; if \code{TRUE} (default, matching Go
-\code{ComputeOutlierQueue}), evaluates singleton (\code{n_unit_plots == 1}) plots with
+\item{keep_singletons}{Logical; if \code{TRUE} (default, matching VPro Desktop),
+evaluates singleton (\code{n_unit_plots == 1}) plots with
 \code{own_similarity = 0.0} against rival unit centroids rather than omitting them.}
 
 \item{cover_precedence}{Stratum cover precedence (\code{"sublayer_sum"} default,
@@ -43,8 +43,8 @@ plots sorted worst-first) and \verb{$outliers} (flagged subset).
 }
 \description{
 For every plot in an assigned \code{SiteUnit} with \verb{>= 2} plots, computes its
-quantitative Bray-Curtis / chord similarity to its own unit's Leave-One-Out
-(LOO) centroid (\code{own_similarity}), identifies its closest rival unit centroid
+quantitative Bray-Curtis / chord similarity to its own unit's leave-one-out
+centroid (\code{own_similarity}), identifies its closest rival unit centroid
 (\code{nearest_unit}, \code{nearest_similarity}), computes
 \code{margin = own_similarity - nearest_similarity}, and flags plots that are
 closer to a rival unit (\code{margin < 0}) or fall below \code{threshold}

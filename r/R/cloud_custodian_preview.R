@@ -65,9 +65,13 @@ vpro_load_sqlite_base_tables <- function(base_info) {
     tbl_nm <- paste0(base_info$project, "_", suffix)
     key_col <- if (identical(suffix, "Admin")) "Plot" else "PlotNumber"
     sql <- paste0(
-      "SELECT ", vpro_sqlite_select_vp08_sql(spec),
-      " FROM ", vpro_quote_ident(tbl_nm),
-      " WHERE typeof(", vpro_quote_ident(key_col), ") = 'text'"
+      "SELECT ",
+      vpro_sqlite_select_vp08_sql(spec),
+      " FROM ",
+      vpro_quote_ident(tbl_nm),
+      " WHERE typeof(",
+      vpro_quote_ident(key_col),
+      ") = 'text'"
     )
     out[[suffix]] <- DBI::dbGetQuery(dbc, sql)
   }
@@ -87,18 +91,29 @@ vpro_build_pg_merge_preview_on_conn <- function(conn, sub_id, base_info = NULL, 
   src_sha <- as.character(hdr$source_db_sha256[[1L]])
 
   pg_tbl_map <- c(
-    Env = "env", Admin = "admin", Veg = "veg",
-    Humus = "humus", Mineral = "mineral", Other = "other"
+    Env = "env",
+    Admin = "admin",
+    Veg = "veg",
+    Humus = "humus",
+    Mineral = "mineral",
+    Other = "other"
   )
 
   src_tables <- stats::setNames(vector("list", length(.vpro_merge_table_suffixes)), .vpro_merge_table_suffixes)
   src_plots <- character(0L)
   for (suffix in .vpro_merge_table_suffixes) {
     spec <- vpro_pg_vp08_specs(suffix)
-    col_csv <- paste(vapply(spec$name, function(cn) {
-      q <- vpro_quote_ident(cn)
-      if (cn %in% c("PlotNumber", "Plot")) paste0("CAST(", q, " AS TEXT) AS ", q) else q
-    }, character(1L)), collapse = ", ")
+    col_csv <- paste(
+      vapply(
+        spec$name,
+        function(cn) {
+          q <- vpro_quote_ident(cn)
+          if (cn %in% c("PlotNumber", "Plot")) paste0("CAST(", q, " AS TEXT) AS ", q) else q
+        },
+        character(1L)
+      ),
+      collapse = ", "
+    )
     df_s <- DBI::dbGetQuery(
       conn,
       paste0("SELECT ", col_csv, " FROM staging.", vpro_quote_ident(pg_tbl_map[[suffix]]), " WHERE submission_id = $1::uuid"),
@@ -142,16 +157,27 @@ vpro_build_pg_merge_preview_on_conn <- function(conn, sub_id, base_info = NULL, 
     for (suffix in .vpro_merge_table_suffixes) {
       spec <- vpro_pg_vp08_specs(suffix)
       p_col <- if (identical(suffix, "Admin")) "Plot" else "PlotNumber"
-      col_csv <- paste(vapply(spec$name, function(cn) {
-        q <- vpro_quote_ident(cn)
-        if (cn %in% c("PlotNumber", "Plot")) paste0("CAST(", q, " AS TEXT) AS ", q) else q
-      }, character(1L)), collapse = ", ")
+      col_csv <- paste(
+        vapply(
+          spec$name,
+          function(cn) {
+            q <- vpro_quote_ident(cn)
+            if (cn %in% c("PlotNumber", "Plot")) paste0("CAST(", q, " AS TEXT) AS ", q) else q
+          },
+          character(1L)
+        ),
+        collapse = ", "
+      )
       tgt_tables[[suffix]] <- DBI::dbGetQuery(
         conn,
         paste0(
-          "SELECT ", col_csv,
-          " FROM becmaster.", vpro_quote_ident(pg_tbl_map[[suffix]]),
-          " WHERE ", vpro_quote_ident(p_col), " = ANY($1::text[])"
+          "SELECT ",
+          col_csv,
+          " FROM becmaster.",
+          vpro_quote_ident(pg_tbl_map[[suffix]]),
+          " WHERE ",
+          vpro_quote_ident(p_col),
+          " = ANY($1::text[])"
         ),
         params = list(pg_arr)
       )
@@ -194,7 +220,7 @@ vpro_build_pg_merge_preview_on_conn <- function(conn, sub_id, base_info = NULL, 
 #'
 #' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
 #'   [vpro_master_connect()].
-#' @param submission_id Staging submission UUID string.
+#' @param submission_id Staging submission ID string.
 #' @param base_db Optional common ancestor `VP08` SQLite `.db` path or
 #'   `vpro_workspace` handle for true 3-way diffing (`NULL` runs a 2-way diff).
 #' @param base_project Optional project prefix inside `base_db` when `base_db`
@@ -287,11 +313,11 @@ vpro_validate_merge_cell_value <- function(suffix, col_spec_row, raw_val, plot =
     s <- as.character(raw_val[[1L]])
     u16 <- vpro_utf16_len(s)
     if (is.na(u16)) {
-      cli::cli_abort("Plot {.val {plot}} {suffix}.{cn} contains malformed UTF-8 or unpaired surrogates.")
+      cli::cli_abort("Plot {.val {plot}} {suffix}.{cn} contains invalid or unsupported text characters.")
     }
     if (u16_max > 0L && u16 > u16_max) {
       cli::cli_abort(
-        "Plot {.val {plot}} {suffix}.{cn} exceeds {u16_max} UTF-16 code units (got {u16})."
+        "Plot {.val {plot}} {suffix}.{cn} exceeds {u16_max} characters (got {u16})."
       )
     }
   } else if (is_cov) {
@@ -299,7 +325,7 @@ vpro_validate_merge_cell_value <- function(suffix, col_spec_row, raw_val, plot =
     narrowed <- suppressWarnings(vpro_narrow_float32(v))
     if (is.na(v) || !is.finite(v) || v < 0 || is.na(narrowed) || narrowed < 0 || narrowed >= 100) {
       cli::cli_abort(
-        "Plot {.val {plot}} {suffix}.{cn} cover={raw_val[[1L]]} must narrow to >= 0 and < 100 in IEEE-754 float32."
+        "Plot {.val {plot}} {suffix}.{cn} cover={raw_val[[1L]]} must be >= 0 and strictly under 100%."
       )
     }
   }
@@ -310,9 +336,7 @@ vpro_validate_lmh25_merge_horizon <- function(suffix, horizon, upper_depth, lowe
   if (!(suffix %in% c("Humus", "Mineral"))) {
     return(invisible(NULL))
   }
-  if (is.null(upper_depth) || is.null(lower_depth) ||
-      length(upper_depth) == 0L || length(lower_depth) == 0L ||
-      is.na(upper_depth[[1L]]) || is.na(lower_depth[[1L]])) {
+  if (is.null(upper_depth) || is.null(lower_depth) || length(upper_depth) == 0L || length(lower_depth) == 0L || is.na(upper_depth[[1L]]) || is.na(lower_depth[[1L]])) {
     return(invisible(NULL))
   }
   u <- suppressWarnings(as.double(upper_depth[[1L]]))
@@ -351,8 +375,12 @@ vpro_pg_param_for_spec <- function(col_spec_row, raw_val) {
   is_cov <- isTRUE(col_spec_row$is_cover[[1L]])
 
   if (is.null(raw_val) || length(raw_val) == 0L || is.na(raw_val[[1L]])) {
-    if (identical(pg_t, "TEXT")) return(NA_character_)
-    if (identical(pg_t, "DOUBLE PRECISION")) return(NA_real_)
+    if (identical(pg_t, "TEXT")) {
+      return(NA_character_)
+    }
+    if (identical(pg_t, "DOUBLE PRECISION")) {
+      return(NA_real_)
+    }
     return(NA_integer_)
   }
   if (is_b) {
@@ -390,14 +418,18 @@ vpro_allocate_master_child_id <- function(conn, child_table) {
       "INSERT INTO becmaster.child_identity_watermark (child_table, max_id) ",
       "VALUES ($1, GREATEST(",
       "  COALESCE((SELECT GREATEST(MAX(id), 0) FROM becmaster.child_identity WHERE child_table = $1), 0),",
-      '  COALESCE((SELECT MAX("ID") FROM becmaster.', q_child, "), 0),",
+      '  COALESCE((SELECT MAX("ID") FROM becmaster.',
+      q_child,
+      "), 0),",
       "  0",
       ") + 1) ",
       "ON CONFLICT (child_table) DO UPDATE SET ",
       "  max_id = GREATEST(",
       "    becmaster.child_identity_watermark.max_id + 1,",
       "    COALESCE((SELECT GREATEST(MAX(id), 0) FROM becmaster.child_identity WHERE child_table = $1), 0) + 1,",
-      '    COALESCE((SELECT MAX("ID") FROM becmaster.', q_child, "), 0) + 1",
+      '    COALESCE((SELECT MAX("ID") FROM becmaster.',
+      q_child,
+      "), 0) + 1",
       "  ) ",
       "RETURNING max_id::text AS max_id"
     ),

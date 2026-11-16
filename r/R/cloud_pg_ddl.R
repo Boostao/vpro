@@ -19,7 +19,9 @@ vpro_pg_master_table_ddl <- function(table, spec, pk_cols = character(), extra =
     defs <- c(defs, paste0("  ", extra))
   }
   paste0(
-    "CREATE TABLE IF NOT EXISTS becmaster.", vpro_quote_ident(table), " (\n",
+    "CREATE TABLE IF NOT EXISTS becmaster.",
+    vpro_quote_ident(table),
+    " (\n",
     paste(defs, collapse = ",\n"),
     "\n);"
   )
@@ -43,13 +45,16 @@ vpro_pg_staging_table_ddl <- function(table, spec, pk_cols = character(), fk_to_
     defs <- c(
       defs,
       paste0(
-        "  FOREIGN KEY (submission_id, ", vpro_quote_ident(plot_col),
+        "  FOREIGN KEY (submission_id, ",
+        vpro_quote_ident(plot_col),
         ') REFERENCES staging.env(submission_id, "PlotNumber") ON DELETE CASCADE'
       )
     )
   }
   paste0(
-    "CREATE TABLE IF NOT EXISTS staging.", vpro_quote_ident(table), " (\n",
+    "CREATE TABLE IF NOT EXISTS staging.",
+    vpro_quote_ident(table),
+    " (\n",
     paste(defs, collapse = ",\n"),
     "\n);"
   )
@@ -58,7 +63,9 @@ vpro_pg_staging_table_ddl <- function(table, spec, pk_cols = character(), fk_to_
 vpro_pg_standards_table_ddl <- function(table, spec) {
   defs <- c("  row_seq BIGSERIAL PRIMARY KEY", vpro_pg_col_ddl(spec))
   paste0(
-    "CREATE TABLE IF NOT EXISTS standards.", vpro_quote_ident(table), " (\n",
+    "CREATE TABLE IF NOT EXISTS standards.",
+    vpro_quote_ident(table),
+    " (\n",
     paste(defs, collapse = ",\n"),
     "\n);"
   )
@@ -71,13 +78,27 @@ vpro_pg_trigger_if_missing_ddl <- function(schema_name, table_name, trigger_name
     "    SELECT 1 FROM pg_trigger t\n",
     "    JOIN pg_class c ON c.oid = t.tgrelid\n",
     "    JOIN pg_namespace n ON n.oid = c.relnamespace\n",
-    "    WHERE n.nspname = '", schema_name, "'\n",
-    "      AND c.relname = '", table_name, "'\n",
-    "      AND t.tgname = '", trigger_name, "'\n",
+    "    WHERE n.nspname = '",
+    schema_name,
+    "'\n",
+    "      AND c.relname = '",
+    table_name,
+    "'\n",
+    "      AND t.tgname = '",
+    trigger_name,
+    "'\n",
     "  ) THEN\n",
-    "    CREATE TRIGGER ", vpro_quote_ident(trigger_name), "\n",
-    "      BEFORE INSERT ON ", vpro_quote_ident(schema_name), ".", vpro_quote_ident(table_name), "\n",
-    "      FOR EACH ROW EXECUTE FUNCTION ", fn_qualified, "();\n",
+    "    CREATE TRIGGER ",
+    vpro_quote_ident(trigger_name),
+    "\n",
+    "      BEFORE INSERT ON ",
+    vpro_quote_ident(schema_name),
+    ".",
+    vpro_quote_ident(table_name),
+    "\n",
+    "      FOR EACH ROW EXECUTE FUNCTION ",
+    fn_qualified,
+    "();\n",
     "  END IF;\n",
     "END $$;"
   )
@@ -97,12 +118,18 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
     stmts <- c(
       stmts,
       paste0(
-        "ALTER TABLE becmaster.env ADD COLUMN IF NOT EXISTS geom ", q_pgis, ".geometry(Point, 4326) GENERATED ALWAYS AS (\n",
+        "ALTER TABLE becmaster.env ADD COLUMN IF NOT EXISTS geom ",
+        q_pgis,
+        ".geometry(Point, 4326) GENERATED ALWAYS AS (\n",
         "  CASE\n",
         '    WHEN "Longitude" IS NOT NULL AND "Latitude" IS NOT NULL\n',
         '         AND "Longitude" >= -180.0 AND "Longitude" <= 180.0\n',
         '         AND "Latitude" >= -90.0 AND "Latitude" <= 90.0\n',
-        "    THEN ", q_pgis, ".ST_SetSRID(", q_pgis, '.ST_MakePoint("Longitude", "Latitude"), 4326)\n',
+        "    THEN ",
+        q_pgis,
+        ".ST_SetSRID(",
+        q_pgis,
+        '.ST_MakePoint("Longitude", "Latitude"), 4326)\n',
         "    ELSE NULL\n",
         "  END\n",
         ") STORED;"

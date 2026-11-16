@@ -135,9 +135,13 @@
       chain <- c(cur, chain)
       seen <- c(seen, cur)
       p_id <- par_chr[[cur]]
-      if (is.na(p_id) || !(p_id %in% names(idx_by_id))) break
+      if (is.na(p_id) || !(p_id %in% names(idx_by_id))) {
+        break
+      }
       nxt <- idx_by_id[[p_id]]
-      if (identical(nxt, cur)) break
+      if (identical(nxt, cur)) {
+        break
+      }
       cur <- nxt
     }
     brk <- NA_character_
@@ -259,9 +263,21 @@
   veg_tbl <- paste0(ws$project, "_Veg")
   veg_fields <- DBI::dbListFields(dbc, veg_tbl)
   all_layer_cols <- c(
-    "Cover1", "Cover2", "Cover3", "TotalA",
-    "Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c", "TotalB",
-    "Cover6", "Cover7", "Cover8", "Cover9", "Cover10"
+    "Cover1",
+    "Cover2",
+    "Cover3",
+    "TotalA",
+    "Cover4",
+    "Cover5",
+    "Cover5a",
+    "Cover5b",
+    "Cover5c",
+    "TotalB",
+    "Cover6",
+    "Cover7",
+    "Cover8",
+    "Cover9",
+    "Cover10"
   )
   present_cols <- intersect(all_layer_cols, veg_fields)
   if (length(present_cols) == 0L) {
@@ -396,7 +412,9 @@
     cc <- present_cols[[idx]]
     vals <- dt[[cc]]
     ok <- !is.na(vals) & vals >= 0
-    if (!any(ok)) return(NULL)
+    if (!any(ok)) {
+      return(NULL)
+    }
     data.table::data.table(
       PlotNumber = dt[["PlotNumber"]][ok],
       LayerID = rep(idx, sum(ok)),
@@ -410,11 +428,14 @@
     return(empty)
   }
 
-  folded <- long_dt[, list(
-    Cover = sum(get("Cover")),
-    N = .N,
-    AnyMapped = any(get("Mapped"))
-  ), by = c("PlotNumber", "LayerID", "Species")]
+  folded <- long_dt[,
+    list(
+      Cover = sum(get("Cover")),
+      N = .N,
+      AnyMapped = any(get("Mapped"))
+    ),
+    by = c("PlotNumber", "LayerID", "Species")
+  ]
 
   if (has_lump) {
     cov_vec <- folded[["Cover"]]
@@ -484,7 +505,9 @@
 
   cell_diag <- rep(NA_character_, k)
   for (i in seq_len(k)) {
-    if (presence_num_vec[[i]] == 0L) next
+    if (presence_num_vec[[i]] == 0L) {
+      next
+    }
     p_self <- presence_vec[[i]]
     pn_self <- presence_num_vec[[i]]
     sn_self <- sig_num_vec[[i]]
@@ -539,12 +562,21 @@
 
   # Select primary BEC diagnostic unit prioritizing strongest differential/constant tier
   tier_score <- function(diag_str) {
-    if (is.na(diag_str) || !nzchar(diag_str)) return(0L)
+    if (is.na(diag_str) || !nzchar(diag_str)) {
+      return(0L)
+    }
     parts <- trimws(strsplit(diag_str, ",", fixed = TRUE)[[1L]])
     weights <- c(
-      "d1" = 100L, "d2" = 90L, "d3" = 80L,
-      "dd1" = 70L, "dd2" = 60L, "dd3" = 50L, "dd4" = 40L,
-      "cd" = 20L, "c" = 10L, "ic" = 5L
+      "d1" = 100L,
+      "d2" = 90L,
+      "d3" = 80L,
+      "dd1" = 70L,
+      "dd2" = 60L,
+      "dd3" = 50L,
+      "dd4" = 40L,
+      "cd" = 20L,
+      "c" = 10L,
+      "ic" = 5L
     )
     sum(unname(weights[parts]), na.rm = TRUE)
   }
@@ -567,15 +599,13 @@
 
 #' Compute BEC differential and diagnostic vegetation synthesis
 #'
-#' Vectorised R counterpart to legacy `V7mdlDiagnostic` (`Diagnostic10.xla`) and
-#' VPro Desktop (`app/internal/diagnostics`). Aggregates plot-level vegetation across
-#' `SiteUnit`s (or `~` tilde `BreakpointUnit`s when `hierarchy_breaks = TRUE`),
-#' applying IEEE-754 `float32` cover narrowing and VPro's `99%` per-layer cap on
-#' lumped taxa, then computes Presence (`I..V` / `1..5`), Domin-Krajina
-#' Significance (`+`, `1..9`), Goldstream and Prominence scores, Access
-#' `V7mdlDiagnostic` crosstab classifications (`d`, `dd`, `cd`, `c`, `ic`), and
-#' BEC refined differential tiers (`d1`, `d2`, `d3`, `dd1`, `dd2`, `dd3`, `dd4`,
-#' `cd`, `c`, `ic`).
+#' Aggregates plot-level vegetation across `SiteUnit`s (or `~` tilde
+#' `BreakpointUnit`s when `hierarchy_breaks = TRUE`), applying VPro cover
+#' precision and the `99%` per-layer cap on lumped taxa, then computes Presence
+#' (`I..V` / `1..5`), Domin-Krajina Significance (`+`, `1..9`), Goldstream and
+#' Prominence scores, classic VPro diagnostic classifications (`d`, `dd`, `cd`,
+#' `c`, `ic`), and BEC refined differential tiers (`d1`, `d2`, `d3`, `dd1`,
+#' `dd2`, `dd3`, `dd4`, `cd`, `c`, `ic`).
 #'
 #' @param ws A `vpro_workspace` handle created by [vpro_connect()].
 #' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
@@ -590,9 +620,9 @@
 #' @param hierarchy_breaks Logical; if `TRUE` and `ws$hierarchy` contains `~`
 #'   breakpoint nodes, rolls plots up to their `BreakpointUnit`.
 #' @param cover_precedence Stratum cover precedence: `"sublayer_sum"` (default,
-#'   matching Go/MS Access diagnostics where `TotalA`/`TotalB` is used only when
-#'   sublayers are `NA`) or `"strata_totals"` (matching `vpro_veg` where positive
-#'   `TotalA`/`TotalB` overrides sublayers).
+#'   matching standard VPro diagnostics where `TotalA`/`TotalB` is used only
+#'   when sublayers are `NA`) or `"strata_totals"` (matching `vpro_veg` where
+#'   positive `TotalA`/`TotalB` overrides sublayers).
 #' @return An S3 object of class `vpro_diagnostics` containing `$unit_species`
 #'   (long tibble), `$crosstab` (wide species-by-unit tibble with
 #'   `DiagnosticUnit`, `Diagnosis`, `BECDiagnosticUnit`, and `BECDiagnosis`), and
@@ -703,7 +733,9 @@ vpro_diagnostics <- function(
       diag_potential_sum = rep(0.0, length(ordered_units))
     )
     ct <- empty_crosstab
-    for (u in ordered_units) ct[[u]] <- character()
+    for (u in ordered_units) {
+      ct[[u]] <- character()
+    }
     return(structure(
       list(
         unit_species = empty_unit_spp,
@@ -723,10 +755,13 @@ vpro_diagnostics <- function(
     all = FALSE,
     allow.cartesian = TRUE
   )
-  agg_dt <- veg_dt[, list(
-    n_present = .N,
-    sum_cover = sum(get("Cover"))
-  ), by = c("SiteUnit", "Species")]
+  agg_dt <- veg_dt[,
+    list(
+      n_present = .N,
+      sum_cover = sum(get("Cover"))
+    ),
+    by = c("SiteUnit", "Species")
+  ]
 
   data.table::set(agg_dt, j = "n_plots", value = unname(n_plots_map[agg_dt[["SiteUnit"]]]))
   presence_raw <- pmin(agg_dt[["n_present"]] / agg_dt[["n_plots"]], 1.0)
@@ -750,7 +785,9 @@ vpro_diagnostics <- function(
         diag_potential_sum = rep(0.0, length(ordered_units))
       )
       ct <- empty_crosstab
-      for (u in ordered_units) ct[[u]] <- character()
+      for (u in ordered_units) {
+        ct[[u]] <- character()
+      }
       return(structure(
         list(
           unit_species = empty_unit_spp,
@@ -822,7 +859,9 @@ vpro_diagnostics <- function(
     diag_str[[s_i]] <- v7$diagnosis
 
     for (u_j in seq_len(n_u)) {
-      if (pnum_mat[s_i, u_j] == 0L) next
+      if (pnum_mat[s_i, u_j] == 0L) {
+        next
+      }
       if (!is.na(v7$unit) && identical(ordered_units[[u_j]], v7$unit)) {
         cell_prim_mat[s_i, u_j] <- TRUE
         cell_v7_mat[s_i, u_j] <- v7$diagnosis
@@ -920,9 +959,13 @@ vpro_diagnostics <- function(
   richness_vec <- colSums(pnum_mat > 0L)
   n_const_vec <- colSums(pnum_mat == 5L)
   n_diag_vec <- colSums(cell_prim_mat)
-  dpot_sum_vec <- vapply(ordered_units, function(u) {
-    vpro_round_ace(sum(diag_pot_vec[agg_dt[["SiteUnit"]] == u]), 2L)
-  }, numeric(1))
+  dpot_sum_vec <- vapply(
+    ordered_units,
+    function(u) {
+      vpro_round_ace(sum(diag_pot_vec[agg_dt[["SiteUnit"]] == u]), 2L)
+    },
+    numeric(1)
+  )
 
   units_tbl <- tibble::tibble(
     SiteUnit = ordered_units,
@@ -956,7 +999,7 @@ print.vpro_diagnostics <- function(x, ...) {
   cli::cli_h3("vpro_diagnostics ({nrow(x$units)} unit{?s}, {nrow(x$crosstab)} species)")
   cli::cli_bullets(c(
     "*" = "Classified plots: {sum(x$units$n_plots)} (average_type: {.val {x$average_type}}, hierarchy_breaks: {x$hierarchy_breaks})",
-    "*" = "Diagnostic species (`V7mdlDiagnostic`): {n_diag}/{nrow(x$crosstab)}"
+    "*" = "Diagnostic species (classic BEC classes): {n_diag}/{nrow(x$crosstab)}"
   ))
   invisible(x)
 }

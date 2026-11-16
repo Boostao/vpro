@@ -16,7 +16,7 @@ knitr::opts_chunk$set(
 
 ## Differential and Diagnostic Species Classification
 
-`vpro_diagnostics()` reproduces both legacy `V7mdlDiagnostic` crosstab rules (`d`, `dd`, `cd`, `c`, `ic`) and refined BEC differential tiers (`d1`--`d3`, `dd1`--`dd4`), alongside Roman-numeral presence (`I`--`V`), Domin-Krajina significance (`+`, `1`--`9`), Prominence, and Goldstream scores:
+`vpro_diagnostics()` reproduces both classic VPro diagnostic crosstab rules (`d`, `dd`, `cd`, `c`, `ic`) and refined BEC differential tiers (`d1`--`d3`, `dd1`--`dd4`), alongside Roman-numeral presence (`I`--`V`), Domin-Krajina significance (`+`, `1`--`9`), Prominence, and Goldstream scores:
 
 ```{r}
 library(vpro)
@@ -28,14 +28,14 @@ head(diag_res$crosstab, 10)
 
 ## Pairwise Unit Similarity and Misplaced-Plot Outlier Review
 
-`vpro_pairwise()` implements the Ministry diagnostic-potential pairwise similarity algorithm (`_do_pairwise.R`), quantifying shared diagnostic potential versus differential separation between every pair of site units:
+`vpro_pairwise()` implements the Ministry diagnostic-potential pairwise similarity method, quantifying shared diagnostic potential versus differential separation between every pair of site units:
 
 ```{r}
 pw <- vpro_pairwise(ws, min_plots = 3, min_constancy = 50)
 head(pw$pairs)
 ```
 
-`vpro_outliers()` computes Leave-One-Out (LOO) unit-centroid similarity per plot and flags plots that sit closer to a rival unit centroid (`margin < 0`):
+`vpro_outliers()` computes leave-one-out unit-centroid similarity per plot and flags plots that sit closer to a rival unit centroid (`margin < 0`):
 
 ```{r}
 out_q <- vpro_outliers(ws, threshold = 0.45)

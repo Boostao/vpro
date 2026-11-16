@@ -20,8 +20,7 @@ A list with \code{verified_rows} (\code{integer}), \code{valid} (\code{logical})
 \description{
 Recomputes \code{row_hash} across the most recent \code{limit} rows of \code{becmaster.audit}
 in ascending \code{audit_seq} order using \code{vpro_compute_audit_row_hash()},
-matching \code{VerifyBECMasterAuditChain} in \code{vpro}
-(\code{internal/cloudsync/custodian_merge.go}). Anchors the window's first row
+matching VPro Desktop. Anchors the window's first row
 against \code{.vpro_genesis_audit_hash} when starting at the beginning of the
 ledger, or against the immediate predecessor row's \code{row_hash} when verifying
 a bounded tail window.

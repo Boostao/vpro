@@ -1,4 +1,4 @@
-# BEC Pairwise Diagnostic Similarity & LOO Outlier Detection -------------------
+# BEC Pairwise Diagnostic Similarity & Leave-One-Out Outlier Detection ---------
 
 .vpro_sorensen_vec <- function(v1, v2) {
   denom <- sum(v1) + sum(v2)
@@ -58,10 +58,10 @@
 
 #' Compute BEC diagnostic-potential pairwise unit similarity
 #'
-#' Implements the B.C. Ministry of Forests BEC pairwise unit comparison
-#' algorithm (`_do_pairwise.R` and VPro Desktop `app/internal/diagnostics`), combining
-#' quantitative Sørensen / Bray-Curtis unit similarity with BEC constancy (`d`)
-#' and abundance (`dd`) differential points and shared diagnostic potential.
+#' Implements the B.C. Ministry of Forests BEC pairwise unit comparison method
+#' matching VPro Desktop, combining quantitative Sorensen / Bray-Curtis unit
+#' similarity with BEC constancy (`d`) and abundance (`dd`) differential points
+#' and shared diagnostic potential.
 #'
 #' @param ws A `vpro_workspace` handle.
 #' @param lump Logical (`TRUE` uses active `ws$lump`), `FALSE`, a `*_Lump` table
@@ -69,7 +69,7 @@
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
 #' @param min_plots Minimum number of plots required for a unit to enter pairwise
-#'   comparison (default `2L`, matching the canonical BEC standard and Go `SynthesisOptions`).
+#'   comparison (default `2L`, matching the canonical BEC standard and VPro Desktop).
 #' @param min_constancy Minimum constancy percentage (`[0, 100]`, default `60`)
 #'   required in at least one unit for diagnostic-potential scoring.
 #' @param noise_constancy Constancy threshold (`[0, 100]`, default `10`) below
@@ -193,10 +193,18 @@ vpro_pairwise <- function(
         bec_mat[i, j] <- 0.0
         bec_mat[j, i] <- 0.0
         pair_rows[[length(pair_rows) + 1L]] <- tibble::tibble(
-          Unit1 = u1, Unit2 = u2,
-          n_plots_1 = unname(n_plots_map[[u1]]), n_plots_2 = unname(n_plots_map[[u2]]),
-          shared_diag = 0.0, diff_tot_1 = 0.0, diff_tot_2 = 0.0, diff_tot = 0.0,
-          diff_ratio = 0.0, bec_sim_min = 0.0, bec_sim_mean = 0.0, bec_sim_max = 0.0,
+          Unit1 = u1,
+          Unit2 = u2,
+          n_plots_1 = unname(n_plots_map[[u1]]),
+          n_plots_2 = unname(n_plots_map[[u2]]),
+          shared_diag = 0.0,
+          diff_tot_1 = 0.0,
+          diff_tot_2 = 0.0,
+          diff_tot = 0.0,
+          diff_ratio = 0.0,
+          bec_sim_min = 0.0,
+          bec_sim_mean = 0.0,
+          bec_sim_max = 0.0,
           sorensen = 0.0
         )
       }
@@ -215,10 +223,13 @@ vpro_pairwise <- function(
     all = FALSE,
     allow.cartesian = TRUE
   )
-  agg_dt <- veg_dt[, list(
-    n_present = .N,
-    sum_cover = sum(get("Cover"))
-  ), by = c("SiteUnit", "Species")]
+  agg_dt <- veg_dt[,
+    list(
+      n_present = .N,
+      sum_cover = sum(get("Cover"))
+    ),
+    by = c("SiteUnit", "Species")
+  ]
   data.table::set(agg_dt, j = "n_plots", value = unname(n_plots_map[agg_dt[["SiteUnit"]]]))
 
   mean_cov <- pmin(agg_dt[["sum_cover"]] / agg_dt[["n_plots"]], 100.0)
@@ -405,11 +416,11 @@ as_tibble.vpro_pairwise <- function(x, ...) {
   x$pairs
 }
 
-#' Detect candidate misclassified and anomalous plots via Leave-One-Out centroids
+#' Detect candidate misclassified and anomalous plots via leave-one-out centroids
 #'
 #' For every plot in an assigned `SiteUnit` with `>= 2` plots, computes its
-#' quantitative Bray-Curtis / chord similarity to its own unit's Leave-One-Out
-#' (LOO) centroid (`own_similarity`), identifies its closest rival unit centroid
+#' quantitative Bray-Curtis / chord similarity to its own unit's leave-one-out
+#' centroid (`own_similarity`), identifies its closest rival unit centroid
 #' (`nearest_unit`, `nearest_similarity`), computes
 #' `margin = own_similarity - nearest_similarity`, and flags plots that are
 #' closer to a rival unit (`margin < 0`) or fall below `threshold`
@@ -421,12 +432,12 @@ as_tibble.vpro_pairwise <- function(x, ...) {
 #' @param exclude_modifiers Logical; if `TRUE` (default), excludes `.support`,
 #'   `.poor`, and `.nudum` units.
 #' @param transform Cover transformation applied before centroid similarity:
-#'   `"none"` (or alias `"raw"`, default matching Go `ComputeOutlierQueue`),
+#'   `"none"` (or alias `"raw"`, default matching VPro Desktop),
 #'   `"sqrt"`, `"log1p"`, `"chord"`, or `"hellinger"`.
 #' @param threshold Minimum `own_similarity` (`[0, 1]`, default `0.45`) below
 #'   which a plot is flagged for ecological review.
-#' @param keep_singletons Logical; if `TRUE` (default, matching Go
-#'   `ComputeOutlierQueue`), evaluates singleton (`n_unit_plots == 1`) plots with
+#' @param keep_singletons Logical; if `TRUE` (default, matching VPro Desktop),
+#'   evaluates singleton (`n_unit_plots == 1`) plots with
 #'   `own_similarity = 0.0` against rival unit centroids rather than omitting them.
 #' @param cover_precedence Stratum cover precedence (`"sublayer_sum"` default,
 #'   or `"strata_totals"`).
@@ -533,7 +544,9 @@ vpro_outliers <- function(
     if (use_cosine) {
       n1 <- sqrt(sum(v1^2))
       n2 <- sqrt(sum(v2^2))
-      if (n1 <= 0 || n2 <= 0) return(0.0)
+      if (n1 <= 0 || n2 <= 0) {
+        return(0.0)
+      }
       return(min(max(sum(v1 * v2) / (n1 * n2), 0.0), 1.0))
     }
     .vpro_sorensen_vec(v1, v2)
@@ -542,7 +555,9 @@ vpro_outliers <- function(
   # Precompute unit sum vectors and centroids
   unit_sums <- lapply(stats::setNames(all_units, all_units), function(u) {
     u_plots <- su_dt[["PlotNumber"]][su_dt[["SiteUnit"]] == u]
-    if (ncol(mat) == 0L) return(numeric(0))
+    if (ncol(mat) == 0L) {
+      return(numeric(0))
+    }
     colSums(mat[u_plots, , drop = FALSE])
   })
   unit_centroids <- lapply(stats::setNames(all_units, all_units), function(u) {
@@ -597,7 +612,9 @@ vpro_outliers <- function(
 
   env_m <- match(eval_su[["PlotNumber"]], env_df$PlotNumber)
   pull_env_chr <- function(col) {
-    if (!(col %in% names(env_df))) return(rep(NA_character_, n_eval))
+    if (!(col %in% names(env_df))) {
+      return(rep(NA_character_, n_eval))
+    }
     as.character(env_df[[col]][env_m])
   }
 
@@ -656,9 +673,9 @@ print.vpro_outliers <- function(x, ...) {
 #'
 #' @param x A `vpro_outliers` object.
 #' @param flagged_only Logical; if `TRUE`, returns only flagged outlier plots; if
-#'   `FALSE` (default), returns the full worst-first LOO review queue.
+#'   `FALSE` (default), returns the full worst-first leave-one-out review queue.
 #' @param ... Unused; included for S3 method compatibility.
-#' @return A tibble of LOO plot similarity diagnostics.
+#' @return A tibble of leave-one-out plot similarity diagnostics.
 #' @export
 as_tibble.vpro_outliers <- function(x, flagged_only = FALSE, ...) {
   if (isTRUE(flagged_only)) x$outliers else x$queue

@@ -18,6 +18,6 @@ A list with \code{path}, \code{project}, \code{version}, \code{compatible}, and 
 \description{
 Validates the required 8-table \code{VP08} family (\verb{_Admin}, \verb{_Audit}, \verb{_Env},
 \verb{_Humus}, \verb{_Metadata}, \verb{_Mineral}, \verb{_Other}, \verb{_Veg}) and \verb{_table_metadata}
-version tag, preserving exact return fields (\code{path}, \code{project}, \code{version},
-\code{compatible}, \code{validation}) required by \code{rsidecar}.
+version tag, returning standard compatibility fields (\code{path}, \code{project},
+\code{version}, \code{compatible}, \code{validation}).
 }

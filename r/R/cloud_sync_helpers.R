@@ -1,13 +1,16 @@
-# Headless PostgreSQL BECMaster Contributor Staging & Custodian 3-Way Merge ----
+# PostgreSQL BECMaster Contributor Staging & Custodian 3-Way Merge -----------
 
 .vpro_sync_s3_state <- new.env(parent = emptyenv())
 
 .vpro_register_sync_s3 <- function() {
-  .vpro_register_s3_methods(.vpro_sync_s3_state, list(
-    c("base", "print", "vpro_staging_queue"),
-    c("base", "print", "vpro_merge_preview"),
-    c("tibble", "as_tibble", "vpro_merge_preview")
-  ))
+  .vpro_register_s3_methods(
+    .vpro_sync_s3_state,
+    list(
+      c("base", "print", "vpro_staging_queue"),
+      c("base", "print", "vpro_merge_preview"),
+      c("tibble", "as_tibble", "vpro_merge_preview")
+    )
+  )
 }
 
 .vpro_merge_table_suffixes <- c("Env", "Admin", "Veg", "Humus", "Mineral", "Other")
@@ -24,7 +27,7 @@ vpro_validate_uuid_arg <- function(x, arg_name = "submission_id") {
   }
   val <- tolower(trimws(x))
   if (!grepl(.vpro_uuid_regex, val, perl = TRUE)) {
-    cli::cli_abort("{.arg {arg_name}} {.val {x}} is not a valid RFC 4122 UUID.")
+    cli::cli_abort("{.arg {arg_name}} {.val {x}} is not a valid submission ID.")
   }
   val
 }
@@ -73,9 +76,18 @@ vpro_sqlite_select_vp08_sql <- function(spec) {
     q_col <- vpro_quote_ident(col_nm)
     if (identical(spec$pg_type[[i]], "TEXT")) {
       parts[[i]] <- paste0(
-        "CASE WHEN typeof(", q_col, ") = 'text' THEN CAST(", q_col, " AS TEXT) ",
-        "WHEN ", q_col, " IS NULL THEN NULL ",
-        "ELSE CAST(", q_col, " AS TEXT) END AS ", q_col
+        "CASE WHEN typeof(",
+        q_col,
+        ") = 'text' THEN CAST(",
+        q_col,
+        " AS TEXT) ",
+        "WHEN ",
+        q_col,
+        " IS NULL THEN NULL ",
+        "ELSE CAST(",
+        q_col,
+        " AS TEXT) END AS ",
+        q_col
       )
     } else {
       parts[[i]] <- q_col
@@ -97,18 +109,22 @@ vpro_create_wal_consistent_snapshot <- function(src_path) {
   # Always capture an immutable VACUUM INTO snapshot so validation, SHA-256, and
   # streamed rows observe the exact same point-in-time state even if VPro Desktop writes concurrently.
   con_ro <- DBI::dbConnect(RSQLite::SQLite(), resolved, flags = RSQLite::SQLITE_RO)
-  tryCatch({
-    tryCatch(DBI::dbExecute(con_ro, "PRAGMA busy_timeout = 5000"), error = function(e) NULL)
-    esc_snap <- gsub("'", "''", normalizePath(snap_path, winslash = "/", mustWork = FALSE), fixed = TRUE)
-    DBI::dbExecute(con_ro, paste0("VACUUM INTO '", esc_snap, "'"))
-  }, error = function(e) {
-    cleanup_fn()
-    cli::cli_abort("Failed to capture WAL-consistent SQLite snapshot: {conditionMessage(e)}", parent = e)
-  }, finally = {
-    if (DBI::dbIsValid(con_ro)) {
-      DBI::dbDisconnect(con_ro)
+  tryCatch(
+    {
+      tryCatch(DBI::dbExecute(con_ro, "PRAGMA busy_timeout = 5000"), error = function(e) NULL)
+      esc_snap <- gsub("'", "''", normalizePath(snap_path, winslash = "/", mustWork = FALSE), fixed = TRUE)
+      DBI::dbExecute(con_ro, paste0("VACUUM INTO '", esc_snap, "'"))
+    },
+    error = function(e) {
+      cleanup_fn()
+      cli::cli_abort("Failed to capture a consistent project snapshot: {conditionMessage(e)}", parent = e)
+    },
+    finally = {
+      if (DBI::dbIsValid(con_ro)) {
+        DBI::dbDisconnect(con_ro)
+      }
     }
-  })
+  )
 
   list(
     path = normalizePath(snap_path, winslash = "/", mustWork = TRUE),
@@ -160,9 +176,13 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
   cover_issues <- list()
 
   add_u16 <- function(p_vec, tbl_lbl, col_nm, max_u16, vals_chr) {
-    if (length(vals_chr) == 0L) return(invisible(NULL))
+    if (length(vals_chr) == 0L) {
+      return(invisible(NULL))
+    }
     non_na <- !is.na(vals_chr)
-    if (!any(non_na)) return(invisible(NULL))
+    if (!any(non_na)) {
+      return(invisible(NULL))
+    }
     idx_non_na <- which(non_na)
     sub_v <- as.character(vals_chr[idx_non_na])
     u16 <- vpro_utf16_len(sub_v)
@@ -174,8 +194,8 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
       p_sub <- if (length(p_vec) == length(vals_chr)) as.character(p_vec[orig_i]) else rep("", length(orig_i))
       det <- ifelse(
         bad_utf8[bad],
-        sprintf("%s.%s contains malformed UTF-8 or unpaired UTF-16 surrogates.", tbl_lbl, col_nm),
-        sprintf("%s.%s exceeds %d UTF-16 code units (got %d).", tbl_lbl, col_nm, max_u16, u16[bad])
+        sprintf("%s.%s contains invalid or unsupported text characters.", tbl_lbl, col_nm),
+        sprintf("%s.%s exceeds the %d-character limit (got %d).", tbl_lbl, col_nm, max_u16, u16[bad])
       )
       utf16_issues[[length(utf16_issues) + 1L]] <<- tibble::tibble(
         PlotNumber = ifelse(is.na(p_sub), "", p_sub),
@@ -189,16 +209,22 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
   }
 
   add_cov <- function(p_vec, tbl_lbl, col_nm, raw_vec) {
-    if (length(raw_vec) == 0L) return(invisible(NULL))
+    if (length(raw_vec) == 0L) {
+      return(invisible(NULL))
+    }
     if (is.character(raw_vec)) {
       s <- trimws(raw_vec)
       non_blank <- !is.na(s) & nzchar(s)
-      if (!any(non_blank)) return(invisible(NULL))
+      if (!any(non_blank)) {
+        return(invisible(NULL))
+      }
       idx_nb <- which(non_blank)
       num <- suppressWarnings(as.double(s[idx_nb]))
     } else {
       non_na <- !is.na(raw_vec)
-      if (!any(non_na)) return(invisible(NULL))
+      if (!any(non_na)) {
+        return(invisible(NULL))
+      }
       idx_nb <- which(non_na)
       num <- suppressWarnings(as.double(raw_vec[idx_nb]))
     }
@@ -208,7 +234,7 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
       orig_i <- idx_nb[bad]
       p_sub <- if (length(p_vec) == length(raw_vec)) as.character(p_vec[orig_i]) else rep("", length(orig_i))
       det <- sprintf(
-        "%s.%s cover value (%s) must narrow to >= 0 and < 100 in IEEE-754 float32.",
+        "%s.%s cover value (%s) must be >= 0 and under 100%%.",
         tbl_lbl,
         col_nm,
         as.character(raw_vec[orig_i])
@@ -226,13 +252,19 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
 
   for (suffix in c("Env", "Admin", "Veg", "Humus", "Mineral", "Other", "Metadata")) {
     tbl_name <- paste0(project, "_", suffix)
-    if (!DBI::dbExistsTable(dbc, tbl_name)) next
+    if (!DBI::dbExistsTable(dbc, tbl_name)) {
+      next
+    }
     spec <- vpro_pg_vp08_specs(suffix)
     tbl_fields <- DBI::dbListFields(dbc, tbl_name)
-    if (length(tbl_fields) == 0L) next
+    if (length(tbl_fields) == 0L) {
+      next
+    }
 
     present_spec <- spec[tolower(spec$name) %in% tolower(tbl_fields), , drop = FALSE]
-    if (nrow(present_spec) == 0L) next
+    if (nrow(present_spec) == 0L) {
+      next
+    }
 
     key_col <- if (identical(suffix, "Admin")) {
       "Plot"
@@ -250,7 +282,9 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
       ""
     }
     df_raw <- DBI::dbGetQuery(dbc, paste0("SELECT ", sel_sql, " FROM ", q_tbl, where_sql))
-    if (nrow(df_raw) == 0L) next
+    if (nrow(df_raw) == 0L) {
+      next
+    }
 
     if (!is.null(scoped_plots) && (key_col %in% c("PlotNumber", "Plot")) && (key_col %in% names(df_raw))) {
       df_raw <- df_raw[as.character(df_raw[[key_col]]) %in% scoped_plots, , drop = FALSE]
@@ -262,7 +296,9 @@ vpro_staging_preflight_bounds <- function(dbc, project, scoped_plots = NULL) {
     for (ci in seq_len(nrow(present_spec))) {
       cn <- present_spec$name[[ci]]
       col_val <- vpro_pg_match_df_col(df_raw, cn)
-      if (is.null(col_val)) next
+      if (is.null(col_val)) {
+        next
+      }
       if (identical(present_spec$pg_type[[ci]], "TEXT")) {
         chr_val <- vpro_pg_format_utc_text(col_val, cn)
         add_u16(p_vec, suffix, cn, present_spec$utf16_max[[ci]], chr_val)
@@ -307,13 +343,14 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
     su_filter_df <- DBI::dbGetQuery(
       dbc_su,
       paste0(
-        'SELECT CAST("PlotNumber" AS TEXT) AS "PlotNumber" FROM ', su_q,
+        'SELECT CAST("PlotNumber" AS TEXT) AS "PlotNumber" FROM ',
+        su_q,
         ' WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" <> \'\''
       )
     )
     su_scope_plots <- unique(as.character(su_filter_df$PlotNumber))
     if (length(su_scope_plots) == 0L) {
-      cli::cli_abort("Active Site Unit table {.val {ws$su}} contains 0 text-keyed plots.")
+      cli::cli_abort("Active Site Unit table {.val {ws$su}} contains no plots with valid text PlotNumber keys.")
     }
   }
 
@@ -341,8 +378,10 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
       return(vpro_pg_canonicalize_to_pg(empty_df, spec))
     }
     sql <- paste0(
-      "SELECT ", vpro_sqlite_select_vp08_sql(present_spec),
-      " FROM ", vpro_quote_ident(tbl_nm),
+      "SELECT ",
+      vpro_sqlite_select_vp08_sql(present_spec),
+      " FROM ",
+      vpro_quote_ident(tbl_nm),
       where_clause,
       order_clause
     )
@@ -359,7 +398,7 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
   }
   scoped_plots <- if (nrow(raw_env) > 0L) as.character(raw_env$PlotNumber) else character(0L)
   if (length(scoped_plots) == 0L) {
-    cli::cli_abort("Project {.val {proj}} contains 0 valid text-keyed plots to submit.")
+    cli::cli_abort("Project {.val {proj}} contains no plots with valid text PlotNumber keys to submit.")
   }
 
   df_env <- vpro_pg_canonicalize_to_pg(raw_env, vpro_pg_vp08_specs("Env"))
@@ -471,8 +510,12 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
       if (nrow(u_df) > 0L) {
         for (ri in seq_len(nrow(u_df))) {
           cd <- u_df$Code[[ri]]
-          if (is.na(cd) || !nzchar(trimws(cd))) next
-          if (!(toupper(trimws(cd)) %in% ref_spp_upper)) next
+          if (is.na(cd) || !nzchar(trimws(cd))) {
+            next
+          }
+          if (!(toupper(trimws(cd)) %in% ref_spp_upper)) {
+            next
+          }
           rec <- list(
             code = as.character(cd),
             scientificName = if (is.na(u_df$ScientificName[[ri]])) NULL else as.character(u_df$ScientificName[[ri]]),
@@ -546,8 +589,7 @@ vpro_extract_submission_artifacts <- function(ws, snap_path, scope = c("project"
   # Extract active *_SU (or <Project>_SU)
   su_records <- list()
   su_tbl_cand <- if (!is.null(ws$su) && nzchar(ws$su)) ws$su else paste0(proj, "_SU")
-  su_db_cand <- if (!is.null(ws$su) && !is.null(ws$su_path) && file.exists(ws$su_path) &&
-                    !identical(ws$su_path, ws$project_path)) {
+  su_db_cand <- if (!is.null(ws$su) && !is.null(ws$su_path) && file.exists(ws$su_path) && !identical(ws$su_path, ws$project_path)) {
     ws$su_path
   } else {
     snap_path

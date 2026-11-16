@@ -9,7 +9,7 @@ vpro_staging_inspect(pg, submission_id)
 \arguments{
 \item{pg}{A \code{vpro_pg_conn} handle from \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
-\item{submission_id}{Submission UUID string.}
+\item{submission_id}{Staging submission ID string.}
 }
 \value{
 A list with \code{summary} (1-row \code{vpro_staging_queue} tibble),

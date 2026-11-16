@@ -10,7 +10,7 @@ vpro_staging_diff(pg, submission_id, base_db = NULL, base_project = NULL)
 \item{pg}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
 \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
-\item{submission_id}{Staging submission UUID string.}
+\item{submission_id}{Staging submission ID string.}
 
 \item{base_db}{Optional common ancestor \code{VP08} SQLite \code{.db} path or
 \code{vpro_workspace} handle for true 3-way diffing (\code{NULL} runs a 2-way diff).}

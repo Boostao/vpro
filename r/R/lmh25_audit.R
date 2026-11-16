@@ -3,8 +3,7 @@
 #' Audit plots against `LMH25 (2023)` pedological and edatopic consistency rules
 #'
 #' Evaluates `LMH25` (*Field Manual for Describing Terrestrial Ecosystems*, 2nd
-#' Ed., 2023) soil, substrate, and edatopic rules calibrated to
-#' VPro Desktop (`app/internal/lmh25rules`):
+#' Ed., 2023) soil, substrate, and edatopic rules calibrated to VPro Desktop:
 #' 1. `substrate_sum`: populated 6-component surface substrates out of `[0, 100]`
 #'    or not summing to `100%` (`abs(sum - 100) > 1.0`).
 #' 2. `upland_depth_sign`: upland organic (`L`, `F`, `H`) horizons must measure
@@ -41,8 +40,12 @@
   min_by_plot <- if (nrow(mineral) > 0L) split(mineral, mineral[["PlotNumber"]]) else list()
 
   sub_cols <- c(
-    "SubstrateDecWood", "SubstrateBedRock", "SubstrateRocks",
-    "SubstrateMineralSoil", "SubstrateOrganicMatter", "SubstrateWater"
+    "SubstrateDecWood",
+    "SubstrateBedRock",
+    "SubstrateRocks",
+    "SubstrateMineralSoil",
+    "SubstrateOrganicMatter",
+    "SubstrateWater"
   )
   present_sub_cols <- intersect(sub_cols, names(env))
 
@@ -76,7 +79,9 @@
           v <- sub_vals[[sc_nm]]
           if (v < 0 || v > 100) {
             add_issue(
-              pnum, "substrate_sum", "error",
+              pnum,
+              "substrate_sum",
+              "error",
               sprintf("%s (%.2f%%) must be between 0%% and 100%%.", sc_nm, v)
             )
           }
@@ -84,7 +89,9 @@
         s_tot <- sum(sub_vals[pop])
         if (abs(s_tot - 100.0) > 1.0) {
           add_issue(
-            pnum, "substrate_sum", "warning",
+            pnum,
+            "substrate_sum",
+            "warning",
             sprintf("Surface substrates sum to %.2f%% across %d populated field(s); LMH25 requires 100%%.", vpro_round_ace(s_tot, 2L), sum(pop))
           )
         }
@@ -136,7 +143,9 @@
         if (identical(h_kind, "upland")) {
           if (up_d <= lo_d || lo_d < 0 || up_d < 0) {
             add_issue(
-              pnum, "upland_depth_sign", "error",
+              pnum,
+              "upland_depth_sign",
+              "error",
               sprintf("Upland horizon %s (%.1f to %.1f cm) must have UpperDepth > LowerDepth >= 0.", hz, up_d, lo_d)
             )
           } else {
@@ -149,7 +158,9 @@
           has_peaty <- TRUE
           if (up_d < 0 || lo_d < 0 || up_d >= lo_d) {
             add_issue(
-              pnum, "downward_depth_sign", "error",
+              pnum,
+              "downward_depth_sign",
+              "error",
               sprintf("Wetland organic horizon %s (%.1f to %.1f cm) must have 0 <= UpperDepth < LowerDepth.", hz, up_d, lo_d)
             )
           } else {
@@ -160,7 +171,9 @@
             if (t_e > t_s) {
               sp <- t_e - t_s
               peat_u40 <- peat_u40 + sp
-              if (grepl("^[0-9]*OF", hz)) peat_of_u40 <- peat_of_u40 + sp
+              if (grepl("^[0-9]*OF", hz)) {
+                peat_of_u40 <- peat_of_u40 + sp
+              }
               if (grepl("^[0-9]*OM", hz)) peat_om_u40 <- peat_om_u40 + sp
             }
           }
@@ -175,7 +188,9 @@
         max_up <- max(vapply(up_valid, `[[`, numeric(1), "up"))
         if (abs(hdr_ht - max_up) > 2.0) {
           add_issue(
-            pnum, "humus_thickness", "warning",
+            pnum,
+            "humus_thickness",
+            "warning",
             sprintf("Header HumusThickness (%.1f cm) differs from max upland L/F/H UpperDepth (%.1f cm) by %.1f cm.", hdr_ht, max_up, hdr_ht - max_up)
           )
         }
@@ -229,7 +244,9 @@
         if (startsWith(mz, "B") && "Colour" %in% names(m_df)) {
           mval <- vpro_parse_munsell_value(m_df[["Colour"]][[r]])
           if (!is.na(mval)) {
-            if (mval <= 3.0) b_dark <- TRUE
+            if (mval <= 3.0) {
+              b_dark <- TRUE
+            }
             if (mval >= 7.0) b_light <- TRUE
           }
         }
@@ -239,7 +256,9 @@
         }
         if (up_d < 0 || lo_d < 0 || up_d >= lo_d) {
           add_issue(
-            pnum, "downward_depth_sign", "error",
+            pnum,
+            "downward_depth_sign",
+            "error",
             sprintf("Mineral horizon %s (%.1f to %.1f cm) must have 0 <= UpperDepth < LowerDepth.", mz, up_d, lo_d)
           )
           next
@@ -247,9 +266,15 @@
 
         min_valid[[length(min_valid) + 1L]] <- list(hz = mz, up = up_d, lo = lo_d)
         thick <- lo_d - up_d
-        if (lo_d > max_min_lower) max_min_lower <- lo_d
-        if (grepl("^[0-9]*(AH|AP)", mz)) ah_depth <- ah_depth + thick
-        if (grepl("^[0-9]*AE", mz)) ae_depth <- ae_depth + thick
+        if (lo_d > max_min_lower) {
+          max_min_lower <- lo_d
+        }
+        if (grepl("^[0-9]*(AH|AP)", mz)) {
+          ah_depth <- ah_depth + thick
+        }
+        if (grepl("^[0-9]*AE", mz)) {
+          ae_depth <- ae_depth + thick
+        }
 
         if ("PercentCoarseFragsTotal" %in% names(m_df) && up_d < 100) {
           cf_val <- suppressWarnings(as.double(m_df[["PercentCoarseFragsTotal"]][[r]]))
@@ -279,7 +304,9 @@
         if (abs(diff_d) > 0.01) {
           kind_str <- if (diff_d > 0) "gap" else "overlap"
           add_issue(
-            pnum, "horizon_contiguity", "warning",
+            pnum,
+            "horizon_contiguity",
+            "warning",
             sprintf("Upland humus contiguity %s between %s (LowerDepth %.1f cm) and %s (UpperDepth %.1f cm).", kind_str, cur$hz, cur$lo, nxt$hz, nxt$up)
           )
         }
@@ -289,7 +316,9 @@
       min_lo_u <- min(vapply(up_valid, `[[`, numeric(1), "lo"))
       if (min_lo_u > 0.01) {
         add_issue(
-          pnum, "horizon_contiguity", "warning",
+          pnum,
+          "horizon_contiguity",
+          "warning",
           sprintf("Lowest upland L/F/H horizon ends at %.1f cm instead of 0 cm mineral contact.", min_lo_u)
         )
       }
@@ -304,7 +333,9 @@
         if (abs(diff_d) > 0.01) {
           kind_str <- if (diff_d > 0) "gap" else "overlap"
           add_issue(
-            pnum, "horizon_contiguity", "warning",
+            pnum,
+            "horizon_contiguity",
+            "warning",
             sprintf("Wetland organic contiguity %s between %s (LowerDepth %.1f cm) and %s (UpperDepth %.1f cm).", kind_str, cur$hz, cur$lo, nxt$hz, nxt$up)
           )
         }
@@ -320,7 +351,9 @@
         if (abs(diff_d) > 0.01) {
           kind_str <- if (diff_d > 0) "gap" else "overlap"
           add_issue(
-            pnum, "horizon_contiguity", "warning",
+            pnum,
+            "horizon_contiguity",
+            "warning",
             sprintf("Mineral horizon contiguity %s between %s (LowerDepth %.1f cm) and %s (UpperDepth %.1f cm).", kind_str, cur$hz, cur$lo, nxt$hz, nxt$up)
           )
         }
@@ -350,7 +383,9 @@
     if (nzchar(raw_smr) && (is.na(smr_int) || !grepl("^[0-8]([+-]|[-/][0-8])?$", raw_smr))) {
       if (is.na(smr_int) || suppressWarnings(!is.na(as.numeric(raw_smr)) && (as.numeric(raw_smr) < 0 || as.numeric(raw_smr) > 8))) {
         add_issue(
-          pnum, "smr_snr_keys", "error",
+          pnum,
+          "smr_snr_keys",
+          "error",
           sprintf("MoistureRegime '%s' is outside valid LMH25 rSMR classes 0..8.", raw_smr)
         )
         smr_int <- NA_integer_
@@ -359,7 +394,9 @@
     if (nzchar(raw_snr) && (is.na(snr_int) || !grepl("^[A-Fa-f]([+-]|[-/][A-Fa-f])?$", raw_snr))) {
       if (is.na(snr_int) || !grepl("^[A-Fa-f]", raw_snr)) {
         add_issue(
-          pnum, "smr_snr_keys", "error",
+          pnum,
+          "smr_snr_keys",
+          "error",
           sprintf("NutrientRegime '%s' is outside valid LMH25 rSNR classes A..F.", raw_snr)
         )
         snr_int <- NA_integer_
@@ -369,18 +406,24 @@
     if (!is.na(smr_int)) {
       if (smr_int >= 7L && raw_drn %in% c("1", "2", "x", "vr", "r", "w", "very rapidly", "rapidly", "well")) {
         add_issue(
-          pnum, "smr_snr_keys", "warning",
+          pnum,
+          "smr_snr_keys",
+          "warning",
           sprintf("Subhydric/hydric MoistureRegime (%s) conflicts with xeric/rapid/well SoilDrainage ('%s').", raw_smr, raw_drn)
         )
       } else if (smr_int <= 1L && raw_drn %in% c("5", "6", "p", "v", "vp", "aq", "pa", "poorly", "very poorly")) {
         add_issue(
-          pnum, "smr_snr_keys", "warning",
+          pnum,
+          "smr_snr_keys",
+          "warning",
           sprintf("Very xeric/xeric MoistureRegime (%s) conflicts with poor/very poor SoilDrainage ('%s').", raw_smr, raw_drn)
         )
       }
       if (peat_tot >= 40.0 && smr_int <= 4L) {
         add_issue(
-          pnum, "smr_snr_keys", "warning",
+          pnum,
+          "smr_snr_keys",
+          "warning",
           sprintf("Wetland Of/Om/Oh peat thickness is %.1f cm (>= 40 cm) but MoistureRegime is '%s' (<= 4).", peat_tot, raw_smr)
         )
       }
@@ -388,20 +431,40 @@
 
     keyed <- vpro_infer_lmh25_keys(
       erow,
-      has_peaty, peat_tot, peat_u40, peat_of_u40, peat_om_u40,
-      upland_tot, upland_h,
-      ah_depth, ae_depth, b_dark, b_light, has_gley, min_gley_depth, lithic_depth,
-      max_min_lower, weighted_cf, cf_weight, dom_tex, has_turbation, has_saline
+      has_peaty,
+      peat_tot,
+      peat_u40,
+      peat_of_u40,
+      peat_om_u40,
+      upland_tot,
+      upland_h,
+      ah_depth,
+      ae_depth,
+      b_dark,
+      b_light,
+      has_gley,
+      min_gley_depth,
+      lithic_depth,
+      max_min_lower,
+      weighted_cf,
+      cf_weight,
+      dom_tex,
+      has_turbation,
+      has_saline
     )
     if (!is.na(smr_int) && !is.na(keyed$smr_class) && abs(smr_int - keyed$smr_class) >= 2L) {
       add_issue(
-        pnum, "smr_snr_keys", "warning",
+        pnum,
+        "smr_snr_keys",
+        "warning",
         sprintf("Field MoistureRegime ('%s') diverges by %d classes from LMH25 Key 9.4 inference ('%s').", raw_smr, abs(smr_int - keyed$smr_class), keyed$smr_label)
       )
     }
     if (!is.na(snr_int) && !is.na(keyed$snr_class) && abs(snr_int - keyed$snr_class) >= 2L) {
       add_issue(
-        pnum, "smr_snr_keys", "warning",
+        pnum,
+        "smr_snr_keys",
+        "warning",
         sprintf("Field NutrientRegime ('%s') diverges by %d classes from LMH25 Key 9.6 inference ('%s').", raw_snr, abs(snr_int - keyed$snr_class), keyed$snr_label)
       )
     }
@@ -418,10 +481,13 @@
     tibble::tibble(rule = character(), severity = character(), n_issues = integer(), n_plots = integer())
   } else {
     dt_s <- data.table::as.data.table(issues_tbl)
-    agg_s <- dt_s[, list(
-      n_issues = as.integer(length(get("PlotNumber"))),
-      n_plots = as.integer(length(unique(get("PlotNumber"))))
-    ), by = c("rule", "severity")]
+    agg_s <- dt_s[,
+      list(
+        n_issues = as.integer(length(get("PlotNumber"))),
+        n_plots = as.integer(length(unique(get("PlotNumber"))))
+      ),
+      by = c("rule", "severity")
+    ]
     data.table::setorderv(agg_s, c("rule", "severity"))
     tibble::as_tibble(agg_s)
   }
@@ -478,52 +544,87 @@ as_tibble.vpro_lmh25_audit <- function(x, ...) {
   }
 
   su_filter <- function(df, pcol = "PlotNumber") {
-    if (!use_su || nrow(df) == 0L) return(df)
+    if (!use_su || nrow(df) == 0L) {
+      return(df)
+    }
     p <- as.character(df[[pcol]])
     df[!is.na(p) & (p %in% su_plots), , drop = FALSE]
   }
 
   # 1. Text UTF-16 code-unit limits (VP08)
   text_rules <- list(
-    Env = list(plot_col = "PlotNumber", limits = c(
-      PlotNumber = 7L, FieldNumber = 50L, ProjectID = 30L,
-      Zone = 4L, SubZone = 8L, SiteSeries = 5L, Ecosection = 3L, NtsMapSheet = 8L
-    )),
+    Env = list(
+      plot_col = "PlotNumber",
+      limits = c(
+        PlotNumber = 7L,
+        FieldNumber = 50L,
+        ProjectID = 30L,
+        Zone = 4L,
+        SubZone = 8L,
+        SiteSeries = 5L,
+        Ecosection = 3L,
+        NtsMapSheet = 8L
+      )
+    ),
     Admin = list(plot_col = "Plot", limits = c(Plot = 7L, PlotType = 10L)),
-    Veg = list(plot_col = "PlotNumber", limits = c(
-      PlotNumber = 7L, Species = 8L, Layer = 2L, Collected = 1L
-    )),
+    Veg = list(
+      plot_col = "PlotNumber",
+      limits = c(
+        PlotNumber = 7L,
+        Species = 8L,
+        Layer = 2L,
+        Collected = 1L
+      )
+    ),
     Humus = list(plot_col = "PlotNumber", limits = c(PlotNumber = 7L, Horizon = 8L)),
-    Mineral = list(plot_col = "PlotNumber", limits = c(
-      PlotNumber = 7L, Horizon = 8L, Texture = 4L, Colour = 14L
-    ))
+    Mineral = list(
+      plot_col = "PlotNumber",
+      limits = c(
+        PlotNumber = 7L,
+        Horizon = 8L,
+        Texture = 4L,
+        Colour = 14L
+      )
+    )
   )
 
   for (sfx in names(text_rules)) {
     phys_tbl <- paste0(project, "_", sfx)
-    if (!DBI::dbExistsTable(dbc, phys_tbl)) next
+    if (!DBI::dbExistsTable(dbc, phys_tbl)) {
+      next
+    }
     flds <- DBI::dbListFields(dbc, phys_tbl)
     spec <- text_rules[[sfx]]
     pcol <- spec$plot_col
     check_cols <- names(spec$limits)[names(spec$limits) %in% flds]
-    if (!(pcol %in% flds) || length(check_cols) == 0L) next
+    if (!(pcol %in% flds) || length(check_cols) == 0L) {
+      next
+    }
 
     sel_parts <- c(
       paste0('CAST(', vpro_quote_ident(pcol), ' AS TEXT) AS "__plot__"'),
-      vapply(check_cols, function(cc) {
-        paste0('CAST(', vpro_quote_ident(cc), ' AS TEXT) AS ', vpro_quote_ident(cc))
-      }, character(1))
+      vapply(
+        check_cols,
+        function(cc) {
+          paste0('CAST(', vpro_quote_ident(cc), ' AS TEXT) AS ', vpro_quote_ident(cc))
+        },
+        character(1)
+      )
     )
     df <- DBI::dbGetQuery(dbc, paste0("SELECT ", paste(sel_parts, collapse = ", "), " FROM ", vpro_quote_ident(phys_tbl)))
     df <- su_filter(df, "__plot__")
-    if (nrow(df) == 0L) next
+    if (nrow(df) == 0L) {
+      next
+    }
     pvec <- ifelse(is.na(df[["__plot__"]]), "", as.character(df[["__plot__"]]))
 
     for (cc in check_cols) {
       lim <- spec$limits[[cc]]
       raw_v <- df[[cc]]
       nn <- !is.na(raw_v)
-      if (!any(nn)) next
+      if (!any(nn)) {
+        next
+      }
       s_v <- as.character(raw_v[nn])
       u16 <- vpro_utf16_len(s_v)
       bad <- is.na(u16) | (u16 > lim)
@@ -536,9 +637,9 @@ as_tibble.vpro_lmh25_audit <- function(x, ...) {
             cc,
             raw_v[[bi]],
             if (is.na(vpro_utf16_len(as.character(raw_v[[bi]])))) {
-              "Malformed UTF-8 byte sequence"
+              "Invalid or unsupported text characters"
             } else {
-              sprintf("Exceeds %d UTF-16 code units", lim)
+              sprintf("Exceeds %d-character limit", lim)
             }
           )
         }
@@ -548,42 +649,74 @@ as_tibble.vpro_lmh25_audit <- function(x, ...) {
 
   # 2. IEEE-754 float32 cover bounds (< 100 and >= 0) across Veg, Env, Admin
   cover_specs <- list(
-    Veg = list(plot_col = "PlotNumber", cols = c(
-      "Cover1", "Cover2", "Cover3", "TotalA",
-      "Cover4", "Cover5", "Cover5a", "Cover5b", "Cover5c", "TotalB",
-      "Cover6", "Cover7", "Cover8", "Cover9", "Cover10"
-    )),
-    Env = list(plot_col = "PlotNumber", cols = c(
-      "StrataCoverTree", "StrataCoverShrub", "StrataCoverHerb", "StrataCoverMoss"
-    )),
+    Veg = list(
+      plot_col = "PlotNumber",
+      cols = c(
+        "Cover1",
+        "Cover2",
+        "Cover3",
+        "TotalA",
+        "Cover4",
+        "Cover5",
+        "Cover5a",
+        "Cover5b",
+        "Cover5c",
+        "TotalB",
+        "Cover6",
+        "Cover7",
+        "Cover8",
+        "Cover9",
+        "Cover10"
+      )
+    ),
+    Env = list(
+      plot_col = "PlotNumber",
+      cols = c(
+        "StrataCoverTree",
+        "StrataCoverShrub",
+        "StrataCoverHerb",
+        "StrataCoverMoss"
+      )
+    ),
     Admin = list(plot_col = "Plot", cols = c("StrataCoverTotal"))
   )
 
   for (sfx in names(cover_specs)) {
     phys_tbl <- paste0(project, "_", sfx)
-    if (!DBI::dbExistsTable(dbc, phys_tbl)) next
+    if (!DBI::dbExistsTable(dbc, phys_tbl)) {
+      next
+    }
     flds <- DBI::dbListFields(dbc, phys_tbl)
     spec <- cover_specs[[sfx]]
     pcol <- spec$plot_col
     check_cols <- intersect(spec$cols, flds)
-    if (!(pcol %in% flds) || length(check_cols) == 0L) next
+    if (!(pcol %in% flds) || length(check_cols) == 0L) {
+      next
+    }
 
     sel_parts <- c(
       paste0('CAST(', vpro_quote_ident(pcol), ' AS TEXT) AS "__plot__"'),
-      vapply(check_cols, function(cc) {
-        paste0('CAST(', vpro_quote_ident(cc), ' AS TEXT) AS ', vpro_quote_ident(paste0("__txt_", cc)),
-               ', ', vpro_quote_ident(cc), ' AS ', vpro_quote_ident(cc))
-      }, character(1))
+      vapply(
+        check_cols,
+        function(cc) {
+          paste0('CAST(', vpro_quote_ident(cc), ' AS TEXT) AS ', vpro_quote_ident(paste0("__txt_", cc)), ', ', vpro_quote_ident(cc), ' AS ', vpro_quote_ident(cc))
+        },
+        character(1)
+      )
     )
     df <- DBI::dbGetQuery(dbc, paste0("SELECT ", paste(sel_parts, collapse = ", "), " FROM ", vpro_quote_ident(phys_tbl)))
     df <- su_filter(df, "__plot__")
-    if (nrow(df) == 0L) next
+    if (nrow(df) == 0L) {
+      next
+    }
     pvec <- ifelse(is.na(df[["__plot__"]]), "", as.character(df[["__plot__"]]))
 
     for (cc in check_cols) {
       raw_v <- df[[cc]]
       nn <- !is.na(raw_v) & !(is.character(raw_v) & !nzchar(trimws(as.character(raw_v))))
-      if (!any(nn)) next
+      if (!any(nn)) {
+        next
+      }
       num_v <- suppressWarnings(as.double(raw_v[nn]))
       f32_v <- vpro_narrow_float32(num_v)
       bad <- is.na(f32_v) | !is.finite(f32_v) | f32_v < 0 | f32_v >= 100
@@ -591,7 +724,7 @@ as_tibble.vpro_lmh25_audit <- function(x, ...) {
         bad_idx <- which(nn)[bad]
         txt_col <- paste0("__txt_", cc)
         for (bi in bad_idx) {
-          add_b(sfx, pvec[[bi]], cc, df[[txt_col]][[bi]], "Cover must be a valid single in [0, 100)")
+          add_b(sfx, pvec[[bi]], cc, df[[txt_col]][[bi]], "Cover must be >= 0 and under 100%")
         }
       }
     }
@@ -611,22 +744,30 @@ as_tibble.vpro_lmh25_audit <- function(x, ...) {
         if ("Latitude" %in% num_want) {
           lat <- suppressWarnings(as.double(edf[["Latitude"]]))
           bad <- !is.na(edf[["Latitude"]]) & (is.na(lat) | lat < -90 | lat > 90)
-          for (bi in which(bad)) add_b("Env", pvec[[bi]], "Latitude", edf[["Latitude"]][[bi]], "Latitude must be between -90 and 90")
+          for (bi in which(bad)) {
+            add_b("Env", pvec[[bi]], "Latitude", edf[["Latitude"]][[bi]], "Latitude must be between -90 and 90")
+          }
         }
         if ("Longitude" %in% num_want) {
           lon <- suppressWarnings(as.double(edf[["Longitude"]]))
           bad <- !is.na(edf[["Longitude"]]) & (is.na(lon) | lon < -180 | lon > 180)
-          for (bi in which(bad)) add_b("Env", pvec[[bi]], "Longitude", edf[["Longitude"]][[bi]], "Longitude must be between -180 and 180")
+          for (bi in which(bad)) {
+            add_b("Env", pvec[[bi]], "Longitude", edf[["Longitude"]][[bi]], "Longitude must be between -180 and 180")
+          }
         }
         if ("Aspect" %in% num_want) {
           asp <- suppressWarnings(as.double(edf[["Aspect"]]))
           bad <- !is.na(edf[["Aspect"]]) & (is.na(asp) | asp != floor(asp) | (asp != 999 & (asp < 0 | asp > 359)))
-          for (bi in which(bad)) add_b("Env", pvec[[bi]], "Aspect", edf[["Aspect"]][[bi]], "Aspect must be 0..359 or 999 (level)")
+          for (bi in which(bad)) {
+            add_b("Env", pvec[[bi]], "Aspect", edf[["Aspect"]][[bi]], "Aspect must be 0..359 or 999 (level)")
+          }
         }
         if ("SlopeGradient" %in% num_want) {
           slp <- suppressWarnings(as.double(edf[["SlopeGradient"]]))
           bad <- !is.na(edf[["SlopeGradient"]]) & (is.na(slp) | slp < 0)
-          for (bi in which(bad)) add_b("Env", pvec[[bi]], "SlopeGradient", edf[["SlopeGradient"]][[bi]], "SlopeGradient must be >= 0")
+          for (bi in which(bad)) {
+            add_b("Env", pvec[[bi]], "SlopeGradient", edf[["SlopeGradient"]][[bi]], "SlopeGradient must be >= 0")
+          }
         }
       }
     }
@@ -637,13 +778,18 @@ as_tibble.vpro_lmh25_audit <- function(x, ...) {
   if (DBI::dbExistsTable(dbc, adm_tbl)) {
     aflds <- DBI::dbListFields(dbc, adm_tbl)
     if (all(c("Plot", "StartDate") %in% aflds)) {
-      adf <- DBI::dbGetQuery(dbc, paste0('SELECT CAST("Plot" AS TEXT) AS "__plot__", typeof("StartDate") AS "__sd_t__", "StartDate" FROM ', vpro_quote_ident(adm_tbl), ' WHERE "StartDate" IS NOT NULL'))
+      adf <- DBI::dbGetQuery(
+        dbc,
+        paste0('SELECT CAST("Plot" AS TEXT) AS "__plot__", typeof("StartDate") AS "__sd_t__", "StartDate" FROM ', vpro_quote_ident(adm_tbl), ' WHERE "StartDate" IS NOT NULL')
+      )
       adf <- su_filter(adf, "__plot__")
       if (nrow(adf) > 0L) {
         pvec <- ifelse(is.na(adf[["__plot__"]]), "", as.character(adf[["__plot__"]]))
         sd_num <- suppressWarnings(as.double(adf[["StartDate"]]))
         bad <- adf[["__sd_t__"]] != "integer" | is.na(sd_num) | sd_num < 1900 | sd_num > 2500
-        for (bi in which(bad)) add_b("Admin", pvec[[bi]], "StartDate", adf[["StartDate"]][[bi]], "StartDate must be between 1900 and 2500")
+        for (bi in which(bad)) {
+          add_b("Admin", pvec[[bi]], "StartDate", adf[["StartDate"]][[bi]], "StartDate must be between 1900 and 2500")
+        }
       }
     }
   }

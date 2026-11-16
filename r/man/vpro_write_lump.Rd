@@ -2,7 +2,7 @@
 % Please edit documentation in R/writeback.R
 \name{vpro_write_lump}
 \alias{vpro_write_lump}
-\title{Write or replace a taxonomic lumping (\verb{*_Lump}) table atomically}
+\title{Write or replace a taxonomic lumping (\verb{*_Lump}) table}
 \usage{
 vpro_write_lump(
   ws,
@@ -32,11 +32,8 @@ Invisibly returns an updated \code{vpro_workspace} with \code{ws$lump} switched
 to the written \verb{*_Lump} table.
 }
 \description{
-Validates \code{LumpCode} (\verb{<= 50} UTF-16 code units), \code{SppCode} (\verb{<= 8} UTF-16
-code units, unique, distinct from \code{LumpCode}), and serializes \code{Use} to Access
-integer booleans (\code{-1L} = \code{TRUE}, \code{0L} = \code{FALSE}). Writes \verb{<lump>_Lump}
-\itemize{
-\item \verb{_table_metadata} (\code{'VP05'}) + \verb{<Project>_Audit} + \verb{__VPRO_RSidecarHistory}
-inside a \verb{BEGIN IMMEDIATE} WAL transaction.
-}
+Validates \code{LumpCode} (up to 50 characters), \code{SppCode} (up to 8 characters,
+unique, and distinct from \code{LumpCode}), normalizes \code{Use} to VPro's boolean
+format, and saves \verb{<lump>_Lump} alongside project metadata and audit history
+in one safe transaction.
 }

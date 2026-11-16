@@ -10,9 +10,8 @@ vpro_data_dir()
 Normalized path string (\code{/} separators).
 }
 \description{
-Matches \code{UserDataDir()} in \verb{VPro Desktop} (\code{app/internal/sqlutil/sqlutil_foundation.go})
-byte-for-byte across Windows (\verb{\%LOCALAPPDATA\%/vpro}), macOS
-(\verb{~/Library/Application Support/vpro}), and Linux (\verb{$XDG_DATA_HOME/vpro} or
-\verb{~/.local/share/vpro}), honoring \code{getOption("vpro.data_dir")} and
-\code{VPRO_DATA_DIR} overrides first.
+Matches VPro Desktop's user data directory byte-for-byte across Windows
+(\verb{\%LOCALAPPDATA\%/vpro}), macOS (\verb{~/Library/Application Support/vpro}), and
+Linux (\verb{$XDG_DATA_HOME/vpro} or \verb{~/.local/share/vpro}), honoring
+\code{getOption("vpro.data_dir")} and \code{VPRO_DATA_DIR} overrides first.
 }

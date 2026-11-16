@@ -1,6 +1,6 @@
-# vpro 2.0: Companion R SDK & Quantitative Ecology Engine for VPro <a href="https://boostao.github.io/vpro/r/"><img src="man/figures/logo.svg" align="right" height="138" alt="vpro R Companion SDK" /></a>
+# vpro 2.0: Quantitative Ecology and R Companion for VPro <a href="https://boostao.github.io/vpro/r/"><img src="man/figures/logo.svg" align="right" height="138" alt="vpro R package" /></a>
 
-`vpro` is the headless R companion package and scientific analytics engine for **`VPro`** (`app/` in [`Boostao/vpro`](https://github.com/Boostao/vpro)) under the British Columbia Ministry of Forests **Biogeoclimatic Ecosystem Classification (BEC)** Program.
+`vpro` is the R companion package and quantitative ecology engine for **VPro Desktop** under the British Columbia Ministry of Forests **Biogeoclimatic Ecosystem Classification (BEC)** Program.
 
 ## Installation
 
@@ -13,9 +13,9 @@ remotes::install_github("Boostao/vpro", subdir = "r")
 ```
 
 - **VPro Desktop Portal & Downloads:** <https://boostao.github.io/vpro/>
-- **R SDK Reference & Vignettes:** <https://boostao.github.io/vpro/r/>
+- **R Package Reference & Vignettes:** <https://boostao.github.io/vpro/r/>
 
-Interactive plot-card data entry, datasheet editing, and 3D MapLibre/WebGPU spatial inspection live in the desktop `VPro` application; `vpro` gives quantitative ecologists and data custodians direct, WAL-safe programmatic access to the local 7-database `VP08` SQLite workspace, portable zero-database `.rds` project snapshots, and the provincial PostgreSQL **`BECMaster`** service (`becmaster`, `staging`, and `standards` schemas) from R, Quarto, and `_targets`.
+Interactive FS882 and SIVI plot-card data entry, multi-plot datasheet editing, and 3D spatial mapping live in **VPro Desktop**; `vpro` gives quantitative ecologists and data custodians direct, read-safe programmatic access to local VPro project files (`.db`), portable self-contained `.rds` project snapshots, and the provincial **`BECMaster`** cloud service (`becmaster`, `staging`, and `standards` schemas) from R, Quarto, and `_targets`.
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ vpro_plot_edatope(ed)
 
 ## Portable `.rds` Project Snapshots
 
-Archive any `VP08` workspace—or open `.rds` project exports from `VPro` Desktop—as a self-contained, zero-database `vpro_workspace` with full `BECdb v13`, `BCPlantTaxonomy v19`, and audit-hash provenance:
+Archive any VPro project—or open `.rds` project exports from VPro Desktop—as a self-contained `vpro_workspace` with full `BECdb v13`, `BCPlantTaxonomy v19`, and audit provenance:
 
 ```r
 snap_file <- tempfile("bec-snapshot-", fileext = ".rds")
@@ -57,7 +57,7 @@ vpro_diagnostics(rds_ws, min_constancy = 50)
 
 ## Cloud `BECMaster` Queries, Contributor Staging, and Custodian Merge
 
-When PostgreSQL `BECMaster` credentials (`VPRO_PG_*` or `becmaster.env` in `vpro_config_dir()`) are configured, contributors and provincial custodians can query `becmaster.*`, check out `REPEATABLE READ` regional `VP08` SQLite splinters, stage validated plot edits, execute 3-way `SERIALIZABLE` merges with custodian-protected `Admin` field guards (`BECSiteUnit`, `BEC_Use`, `GIS_BGC`), and publish multi-format releases:
+When `BECMaster` cloud credentials (`VPRO_PG_*` or `becmaster.env` in `vpro_config_dir()`) are configured, contributors and provincial custodians can query `becmaster.*`, check out regional working subsets as local VPro `.db` files, stage validated plot edits, execute conflict-checked three-way merges with custodian-protected `Admin` field guards (`BECSiteUnit`, `BEC_Use`, `GIS_BGC`), and publish multi-format releases:
 
 ```r
 if (vpro_has_pg_credentials("contributor")) {
@@ -68,9 +68,9 @@ if (vpro_has_pg_credentials("contributor")) {
   ws_cloud <- vpro_master_workspace(pg, zones = "CWH", subzones = "vm1")
   attr(vpro_master_audit(pg, limit = 500, verify_chain = TRUE), "chain_verification")$valid
 
-  # Regional VP08 SQLite checkout & pre-flight-validated staging submission
-  splinter <- vpro_master_pull(pg, dest_db = "CWHvm_2026.db", project = "CWHvm_2026", zones = "CWH", subzones = "vm1")
-  vpro_staging_submit(pg, splinter$workspace, submitter = "Regional Ecologist")
+  # Regional VPro project checkout & pre-flight-validated staging submission
+  subset_pull <- vpro_master_pull(pg, dest_db = "CWHvm_2026.db", project = "CWHvm_2026", zones = "CWH", subzones = "vm1")
+  vpro_staging_submit(pg, subset_pull$workspace, submitter = "Regional Ecologist")
 
   vpro_master_disconnect(pg)
 }

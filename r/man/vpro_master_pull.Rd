@@ -2,7 +2,7 @@
 % Please edit documentation in R/cloud_master_pull.R
 \name{vpro_master_pull}
 \alias{vpro_master_pull}
-\title{Pull a snapshot-consistent PostgreSQL \code{BECMaster} subset into a local \code{VP08} SQLite \code{.db}}
+\title{Pull a snapshot-consistent PostgreSQL \code{BECMaster} subset into a local VPro \code{.db}}
 \usage{
 vpro_master_pull(
   pg,
@@ -21,8 +21,8 @@ vpro_master_pull(
 \arguments{
 \item{pg}{A \code{vpro_pg_conn} handle created by \code{vpro_master_connect()}.}
 
-\item{dest_db}{Destination SQLite \code{.db} file path (\code{.db} is appended if no
-file extension is present).}
+\item{dest_db}{Destination VPro \code{.db} file path (\code{.db} is appended if no file
+extension is present).}
 
 \item{project}{Target \code{VP08} project prefix (must start with an ASCII
 letter, contain only letters, digits, or underscores up to 31 characters,
@@ -40,8 +40,8 @@ and cannot be \code{"None"}, \code{"Sample"}, or contain \code{"master"}).}
 \item{bbox}{Optional spatial bounding box as \code{c(min_lon, min_lat, max_lon, max_lat)}
 in EPSG:4326 or an \code{sf} \code{bbox} object.}
 
-\item{overwrite}{Logical; if \code{TRUE}, replaces an existing \code{dest_db} when no
-active \code{-wal}/\code{-shm} sidecar files exist.}
+\item{overwrite}{Logical; if \code{TRUE}, replaces an existing \code{dest_db} when it
+is not open in an active VPro session.}
 
 \item{limit}{Optional positive integer row limit.}
 
@@ -55,9 +55,8 @@ A list containing \code{dest_path}, \code{project_name}, \code{sha256}, \code{pl
 }
 \description{
 Streams a filtered regional or project checkout from PostgreSQL \verb{becmaster.*}
-inside a \verb{REPEATABLE READ READ ONLY} transaction into an atomic \code{VP08} SQLite
-WAL database (\verb{_Env}, \verb{_Admin}, \verb{_Veg}, \verb{_Humus}, \verb{_Mineral}, \verb{_Other},
-\verb{_Audit}, \verb{_Metadata}, \verb{_SU}, \verb{_table_metadata}, and \verb{__VPRO_ChildIdentity}),
-verifies \code{VP08} compatibility via \code{\link[=vpro_project_inspect]{vpro_project_inspect()}}, and records a
-provenance receipt in \code{becmaster.download_log}.
+inside a snapshot-consistent read into a clean \code{VP08} VPro project database
+(\verb{_Env}, \verb{_Admin}, \verb{_Veg}, \verb{_Humus}, \verb{_Mineral}, \verb{_Other}, \verb{_Audit},
+\verb{_Metadata}, \verb{_SU}), verifies compatibility via \code{\link[=vpro_project_inspect]{vpro_project_inspect()}}, and
+records a download receipt in \code{becmaster.download_log}.
 }

@@ -4,9 +4,9 @@
 #'
 #' Executes a parameterized push-down query against `becmaster.env` (optionally
 #' left-joining `becmaster.admin`), preserving literal leading-zero `PlotNumber`
-#' strings, converting Access `-1/0` booleans to R `logical`, narrowing
-#' `StrataCover*` columns to IEEE-754 `float32`, and deriving `SiteUnit` so the
-#' returned tibble matches [vpro_env()] column names and types. When connecting
+#' strings, converting VPro yes/no flags to R `logical`, applying VPro
+#' single-precision rounding to `StrataCover*` columns, and deriving `SiteUnit`
+#' so the returned tibble matches [vpro_env()] column names and types. When connecting
 #' as a non-custodian role, coordinates (`Latitude`, `Longitude`, `UTMEasting`,
 #' `UTMNorthing`, `UTMZone`) are automatically redacted to `NA` on plots
 #' containing sensitive (`USysSppAttributes.RedBlueList`) species.
@@ -69,14 +69,18 @@ vpro_master_env <- function(
     env_fields <- env_fields[tolower(env_fields) %in% tolower(req_cols)]
   }
 
-  env_select <- vapply(env_fields, function(f) {
-    qf <- vpro_quote_ident(f)
-    if (identical(f, "PlotNumber")) {
-      'CAST(e."PlotNumber" AS TEXT) AS "PlotNumber"'
-    } else {
-      paste0("e.", qf, " AS ", qf)
-    }
-  }, character(1))
+  env_select <- vapply(
+    env_fields,
+    function(f) {
+      qf <- vpro_quote_ident(f)
+      if (identical(f, "PlotNumber")) {
+        'CAST(e."PlotNumber" AS TEXT) AS "PlotNumber"'
+      } else {
+        paste0("e.", qf, " AS ", qf)
+      }
+    },
+    character(1)
+  )
 
   join_sql <- ""
   adm_select <- character()
@@ -91,10 +95,14 @@ vpro_master_env <- function(
       adm_fields <- adm_fields[tolower(adm_fields) %in% tolower(as.character(columns))]
     }
     if (length(adm_fields) > 0L) {
-      adm_select <- vapply(adm_fields, function(f) {
-        qf <- vpro_quote_ident(f)
-        paste0("a.", qf, " AS ", qf)
-      }, character(1))
+      adm_select <- vapply(
+        adm_fields,
+        function(f) {
+          qf <- vpro_quote_ident(f)
+          paste0("a.", qf, " AS ", qf)
+        },
+        character(1)
+      )
     }
   }
 
@@ -102,7 +110,8 @@ vpro_master_env <- function(
   where_part <- if (nzchar(sub$where_sql)) paste0(" ", sub$where_sql) else ""
   limit_part <- if (!is.null(limit_int)) sprintf(" LIMIT %d", limit_int) else ""
   sql <- paste0(
-    "SELECT ", paste(select_parts, collapse = ", "),
+    "SELECT ",
+    paste(select_parts, collapse = ", "),
     " FROM becmaster.env AS e",
     join_sql,
     where_part,
@@ -137,7 +146,10 @@ vpro_master_env <- function(
   df$SiteUnit <- if ("SiteUnit" %in% names(df)) as.character(df$SiteUnit) else rep(NA_character_, nrow(df))
 
   bool_cols <- unique(c(
-    "SpeciesListComplete", "Flag", "SV_FloodPlain", "UpdatedFromCards",
+    "SpeciesListComplete",
+    "Flag",
+    "SV_FloodPlain",
+    "UpdatedFromCards",
     as.character(comb_spec$name[!is.na(comb_spec$is_bool) & comb_spec$is_bool])
   ))
   for (bc in intersect(bool_cols, names(df))) {
@@ -197,8 +209,10 @@ vpro_pg_load_cloud_taxonomy <- function(pg, resolve_synonyms = TRUE) {
       is_s <- !is.na(cloud_specs$Codetype) & tolower(trimws(cloud_specs$Codetype)) == "s"
       syns <- cloud_specs[
         is_s &
-          !is.na(cloud_specs$OldCode) & nzchar(cloud_specs$OldCode) &
-          !is.na(cloud_specs$Code) & nzchar(cloud_specs$Code) &
+          !is.na(cloud_specs$OldCode) &
+          nzchar(cloud_specs$OldCode) &
+          !is.na(cloud_specs$Code) &
+          nzchar(cloud_specs$Code) &
           cloud_specs$OldCode != cloud_specs$Code,
         c("OldCode", "Code"),
         drop = FALSE
@@ -234,15 +248,14 @@ vpro_pg_load_cloud_taxonomy <- function(pg, resolve_synonyms = TRUE) {
 
 #' Query tidy vegetation records from PostgreSQL `BECMaster` with lump and strata synthesis
 #'
-#' Pushes plot filtering down to PostgreSQL via a `WITH matched AS (...)` CTE on
-#' `becmaster.env` + `becmaster.admin`, extracts matching `becmaster.veg` rows,
-#' and runs the exact [vpro_veg()] phytosociological pipeline: IEEE-754 `float32`
-#' cover narrowing, duplicate `(PlotNumber, Species)` `max` deduplication,
-#' pre-lump effective stratum synthesis (`TotalA`/`TotalB` fallback), optional
-#' taxonomic lumping with VPro's `99%` per-layer cap (`pmin(sum, 99)`), optional
-#' `BCPlantTaxonomy v19` synonym resolution (`standards.usys_all_specs` with
-#' bundled `VLists.db` fallback), and `total` / `abcd` / `lifeform` / `raw`
-#' aggregation.
+#' Pushes plot filtering down to PostgreSQL on `becmaster.env` +
+#' `becmaster.admin`, extracts matching `becmaster.veg` rows, and runs the exact
+#' [vpro_veg()] phytosociological pipeline: VPro single-precision cover rounding,
+#' duplicate `(PlotNumber, Species)` `max` deduplication, pre-lump effective
+#' stratum synthesis (`TotalA`/`TotalB` fallback), optional taxonomic lumping
+#' with VPro's `99%` per-layer cap (`pmin(sum, 99)`), optional `BCPlantTaxonomy
+#' v19` synonym resolution (`standards.usys_all_specs` with bundled `VLists.db`
+#' fallback), and `total` / `abcd` / `lifeform` / `raw` aggregation.
 #'
 #' @inheritParams vpro_master_env
 #' @param strata Aggregation level: `"total"` (default), `"abcd"` (`A`, `B`, `C`,
@@ -361,9 +374,21 @@ vpro_master_veg <- function(
   su_map <- stats::setNames(su_vals[su_keep], raw_df$PlotNumber[su_keep])
 
   layer_defs <- c(
-    "1" = "Cover1", "2" = "Cover2", "3" = "Cover3", "A" = "TotalA",
-    "4" = "Cover4", "5" = "Cover5", "5a" = "Cover5a", "5b" = "Cover5b", "5c" = "Cover5c", "B" = "TotalB",
-    "6" = "Cover6", "7" = "Cover7", "8" = "Cover8", "9" = "Cover9", "10" = "Cover10"
+    "1" = "Cover1",
+    "2" = "Cover2",
+    "3" = "Cover3",
+    "A" = "TotalA",
+    "4" = "Cover4",
+    "5" = "Cover5",
+    "5a" = "Cover5a",
+    "5b" = "Cover5b",
+    "5c" = "Cover5c",
+    "B" = "TotalB",
+    "6" = "Cover6",
+    "7" = "Cover7",
+    "8" = "Cover8",
+    "9" = "Cover9",
+    "10" = "Cover10"
   )
   present_layers <- layer_defs[layer_defs %in% names(raw_df)]
   cov_cols <- unname(present_layers)
@@ -387,7 +412,9 @@ vpro_master_veg <- function(
   }
 
   combine_cols <- function(mat) {
-    if (ncol(mat) == 0L) return(rep(NA_real_, nrow(mat)))
+    if (ncol(mat) == 0L) {
+      return(rep(NA_real_, nrow(mat)))
+    }
     has_any <- rowSums(!is.na(mat)) > 0L
     m0 <- mat
     m0[is.na(m0)] <- 0.0
@@ -465,16 +492,33 @@ vpro_master_veg <- function(
   if (anyDuplicated(dt, by = c("PlotNumber", "Species")) > 0L) {
     sum_cap99 <- function(x) {
       ok <- x[!is.na(x)]
-      if (length(ok) == 0L) NA_real_ else if (length(ok) == 1L) ok else min(sum(ok), 99.0)
+      if (length(ok) == 0L) {
+        NA_real_
+      } else if (length(ok) == 1L) {
+        ok
+      } else {
+        min(sum(ok), 99.0)
+      }
     }
     dt <- dt[, lapply(.SD, sum_cap99), by = c("PlotNumber", "Species"), .SDcols = cov_cols]
   }
 
   strata_of_layer <- c(
-    "1" = "A", "2" = "A", "3" = "A", "A" = "A",
-    "4" = "B", "5" = "B", "5a" = "B", "5b" = "B", "5c" = "B", "B" = "B",
+    "1" = "A",
+    "2" = "A",
+    "3" = "A",
+    "A" = "A",
+    "4" = "B",
+    "5" = "B",
+    "5a" = "B",
+    "5b" = "B",
+    "5c" = "B",
+    "B" = "B",
     "6" = "C",
-    "7" = "D", "8" = "D", "9" = "D", "10" = "D"
+    "7" = "D",
+    "8" = "D",
+    "9" = "D",
+    "10" = "D"
   )
 
   attach_meta <- function(res_dt) {
@@ -491,7 +535,9 @@ vpro_master_veg <- function(
       cc <- present_layers[[lyr]]
       v <- dt[[cc]]
       ok <- !is.na(v)
-      if (!any(ok)) return(NULL)
+      if (!any(ok)) {
+        return(NULL)
+      }
       data.table::data.table(
         PlotNumber = dt$PlotNumber[ok],
         Species = dt$Species[ok],
@@ -501,7 +547,9 @@ vpro_master_veg <- function(
       )
     })
     long_dt <- data.table::rbindlist(Filter(Negate(is.null), long_parts))
-    if (nrow(long_dt) == 0L) return(empty_out())
+    if (nrow(long_dt) == 0L) {
+      return(empty_out())
+    }
     long_dt <- attach_meta(long_dt)
     data.table::setorderv(long_dt, c("PlotNumber", "Species", "Layer"))
     cols <- c("PlotNumber", "SiteUnit", "Species", "Layer", "Strata", "Cover", "ScientificName", "EnglishName", "Lifeform")
@@ -518,7 +566,9 @@ vpro_master_veg <- function(
     parts <- lapply(names(abcd_list), function(st) {
       v <- abcd_list[[st]]
       ok <- !is.na(v) & v > 0
-      if (!any(ok)) return(NULL)
+      if (!any(ok)) {
+        return(NULL)
+      }
       data.table::data.table(
         PlotNumber = dt$PlotNumber[ok],
         Species = dt$Species[ok],
@@ -527,7 +577,9 @@ vpro_master_veg <- function(
       )
     })
     res_dt <- data.table::rbindlist(Filter(Negate(is.null), parts))
-    if (nrow(res_dt) == 0L) return(empty_out())
+    if (nrow(res_dt) == 0L) {
+      return(empty_out())
+    }
     res_dt <- attach_meta(res_dt)
     data.table::setorderv(res_dt, c("PlotNumber", "Species", "Strata"))
     cols <- c("PlotNumber", "SiteUnit", "Species", "Strata", "Cover", "ScientificName", "EnglishName", "Lifeform")
@@ -536,7 +588,9 @@ vpro_master_veg <- function(
 
   tot_cov <- combine_cols(cbind(cov_a, cov_b, cov_c, cov_d))
   ok <- !is.na(tot_cov) & tot_cov > 0
-  if (!any(ok)) return(empty_out())
+  if (!any(ok)) {
+    return(empty_out())
+  }
   res_dt <- data.table::data.table(
     PlotNumber = dt$PlotNumber[ok],
     Species = dt$Species[ok],
@@ -554,11 +608,10 @@ vpro_master_veg <- function(
 
 #' Query tidy `LMH25 (2023)`-ordered soil horizon records from PostgreSQL `BECMaster`
 #'
-#' Pushes plot filtering down into `becmaster.humus` and/or `becmaster.mineral`
-#' via `WITH matched AS (...)`, normalizes literal character `PlotNumber` and
-#' logical `Flag` columns, classifies `HorizonRegime`, and orders horizons per
-#' `LMH25 (2023)` (`L/F/H` ordered `UpperDepth DESC`; `Of/Om/Oh` and
-#' `A/B/C/R/W` ordered `UpperDepth ASC`).
+#' Pushes plot filtering down into `becmaster.humus` and/or `becmaster.mineral`,
+#' normalizes literal character `PlotNumber` and logical `Flag` columns,
+#' classifies `HorizonRegime`, and orders horizons per `LMH25 (2023)` (`L/F/H`
+#' ordered `UpperDepth DESC`; `Of/Om/Oh` and `A/B/C/R/W` ordered `UpperDepth ASC`).
 #'
 #' @inheritParams vpro_master_env
 #' @param type `"both"` (returns an S3 `vpro_soil` object with `$humus` and
@@ -606,18 +659,28 @@ vpro_master_soil <- function(
 
   read_one <- function(pg_tbl, suffix) {
     spec <- vpro_pg_vp08_specs(suffix)
-    sel <- paste(vapply(as.character(spec$name), function(f) {
-      qf <- vpro_quote_ident(f)
-      if (identical(f, "PlotNumber")) {
-        'CAST(s."PlotNumber" AS TEXT) AS "PlotNumber"'
-      } else {
-        paste0("s.", qf, " AS ", qf)
-      }
-    }, character(1)), collapse = ", ")
+    sel <- paste(
+      vapply(
+        as.character(spec$name),
+        function(f) {
+          qf <- vpro_quote_ident(f)
+          if (identical(f, "PlotNumber")) {
+            'CAST(s."PlotNumber" AS TEXT) AS "PlotNumber"'
+          } else {
+            paste0("s.", qf, " AS ", qf)
+          }
+        },
+        character(1)
+      ),
+      collapse = ", "
+    )
     sql <- paste0(
       cte_sql,
-      "SELECT ", sel,
-      " FROM becmaster.", vpro_quote_ident(pg_tbl), " AS s ",
+      "SELECT ",
+      sel,
+      " FROM becmaster.",
+      vpro_quote_ident(pg_tbl),
+      " AS s ",
       'INNER JOIN matched AS m ON s."PlotNumber" = m."PlotNumber"'
     )
     raw <- vpro_pg_query(

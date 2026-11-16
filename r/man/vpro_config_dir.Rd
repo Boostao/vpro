@@ -10,9 +10,8 @@ vpro_config_dir()
 Normalized path string (\code{/} separators).
 }
 \description{
-Matches \code{UserConfigDir()} in \verb{VPro Desktop} (\code{app/internal/sqlutil/sqlutil_foundation.go})
-byte-for-byte across Windows (\verb{\%APPDATA\%/vpro}), macOS
-(\verb{~/Library/Application Support/vpro}), and Linux (\verb{$XDG_CONFIG_HOME/vpro} or
-\verb{~/.config/vpro}), honoring \code{getOption("vpro.config_dir")} and
-\code{VPRO_CONFIG_DIR} overrides first.
+Matches VPro Desktop's user configuration directory byte-for-byte across
+Windows (\verb{\%APPDATA\%/vpro}), macOS (\verb{~/Library/Application Support/vpro}), and
+Linux (\verb{$XDG_CONFIG_HOME/vpro} or \verb{~/.config/vpro}), honoring
+\code{getOption("vpro.config_dir")} and \code{VPRO_CONFIG_DIR} overrides first.
 }

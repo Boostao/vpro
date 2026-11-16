@@ -2,7 +2,7 @@
 % Please edit documentation in R/sidecar_cli.R
 \name{.vpro_sidecar_exec}
 \alias{.vpro_sidecar_exec}
-\title{Execute an internal VPro desktop sidecar action with JSON schema parity}
+\title{Execute an internal VPro Desktop action with JSON schema parity}
 \usage{
 .vpro_sidecar_exec(
   action = c("probe_runtime", "compute_climate_asmr", "run_clustering", "render_guide"),
@@ -11,7 +11,7 @@
 )
 }
 \arguments{
-\item{action}{Sidecar action name: \code{"probe_runtime"}, \code{"compute_climate_asmr"},
+\item{action}{Action name: \code{"probe_runtime"}, \code{"compute_climate_asmr"},
 \code{"run_clustering"}, or \code{"render_guide"}.}
 
 \item{payload_json}{Named R list, JSON string, or path to a request \code{.json}
@@ -21,13 +21,12 @@ file (ignored when \code{action = "probe_runtime"} and omitted).}
 JSON response is written atomically.}
 }
 \value{
-Structured response list matching the \code{app/internal/rsidecar}
-JSON contract.
+Structured response list matching VPro Desktop's JSON contract.
 }
 \description{
-Allows VPro (\code{app/internal/rsidecar}) or internal harnesses to invoke \code{vpro}'s
-native engines directly while preserving exact request/response JSON field
-names for \code{probe_runtime}, \code{compute_climate_asmr}, \code{run_clustering}, and
+Allows VPro Desktop or internal test harnesses to invoke \code{vpro} analytics
+engines directly while preserving the desktop JSON request/response contract
+for \code{probe_runtime}, \code{compute_climate_asmr}, \code{run_clustering}, and
 \code{render_guide}.
 }
 \keyword{internal}

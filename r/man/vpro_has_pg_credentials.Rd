@@ -20,7 +20,7 @@ vpro_has_pg_credentials(
 for \code{role}, otherwise \code{FALSE}.
 }
 \description{
-Performs a 100\% offline inspection of process environment variables
+Performs a completely offline inspection of process environment variables
 (\verb{VPRO_PG_*}) and \code{file.path(config_dir, "becmaster.env")} without opening
 network sockets or requiring \code{RPostgres} to be installed. Never throws on
 missing or malformed configuration files.

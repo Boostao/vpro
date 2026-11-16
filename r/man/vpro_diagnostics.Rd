@@ -34,9 +34,9 @@ Goldstream, and Prominence: \code{"unit"} (\code{sum(cover) / n_plots}, standard
 breakpoint nodes, rolls plots up to their \code{BreakpointUnit}.}
 
 \item{cover_precedence}{Stratum cover precedence: \code{"sublayer_sum"} (default,
-matching Go/MS Access diagnostics where \code{TotalA}/\code{TotalB} is used only when
-sublayers are \code{NA}) or \code{"strata_totals"} (matching \code{vpro_veg} where positive
-\code{TotalA}/\code{TotalB} overrides sublayers).}
+matching standard VPro diagnostics where \code{TotalA}/\code{TotalB} is used only
+when sublayers are \code{NA}) or \code{"strata_totals"} (matching \code{vpro_veg} where
+positive \code{TotalA}/\code{TotalB} overrides sublayers).}
 }
 \value{
 An S3 object of class \code{vpro_diagnostics} containing \verb{$unit_species}
@@ -45,13 +45,11 @@ An S3 object of class \code{vpro_diagnostics} containing \verb{$unit_species}
 \verb{$units} (unit summary tibble).
 }
 \description{
-Vectorised R counterpart to legacy \code{V7mdlDiagnostic} (\code{Diagnostic10.xla}) and
-VPro Desktop (\code{app/internal/diagnostics}). Aggregates plot-level vegetation across
-\code{SiteUnit}s (or \code{~} tilde \code{BreakpointUnit}s when \code{hierarchy_breaks = TRUE}),
-applying IEEE-754 \code{float32} cover narrowing and VPro's \verb{99\%} per-layer cap on
-lumped taxa, then computes Presence (\code{I..V} / \verb{1..5}), Domin-Krajina
-Significance (\code{+}, \verb{1..9}), Goldstream and Prominence scores, Access
-\code{V7mdlDiagnostic} crosstab classifications (\code{d}, \code{dd}, \code{cd}, \code{c}, \code{ic}), and
-BEC refined differential tiers (\code{d1}, \code{d2}, \code{d3}, \code{dd1}, \code{dd2}, \code{dd3}, \code{dd4},
-\code{cd}, \code{c}, \code{ic}).
+Aggregates plot-level vegetation across \code{SiteUnit}s (or \code{~} tilde
+\code{BreakpointUnit}s when \code{hierarchy_breaks = TRUE}), applying VPro cover
+precision and the \verb{99\%} per-layer cap on lumped taxa, then computes Presence
+(\code{I..V} / \verb{1..5}), Domin-Krajina Significance (\code{+}, \verb{1..9}), Goldstream and
+Prominence scores, classic VPro diagnostic classifications (\code{d}, \code{dd}, \code{cd},
+\code{c}, \code{ic}), and BEC refined differential tiers (\code{d1}, \code{d2}, \code{d3}, \code{dd1},
+\code{dd2}, \code{dd3}, \code{dd4}, \code{cd}, \code{c}, \code{ic}).
 }

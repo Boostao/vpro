@@ -33,10 +33,13 @@ vpro_sqlite_ro <- function(path) {
     normalizePath(path, winslash = "/", mustWork = TRUE),
     flags = RSQLite::SQLITE_RO
   )
-  tryCatch({
-    DBI::dbExecute(con, "PRAGMA busy_timeout = 5000")
-    DBI::dbExecute(con, "PRAGMA query_only = ON")
-  }, error = function(e) NULL)
+  tryCatch(
+    {
+      DBI::dbExecute(con, "PRAGMA busy_timeout = 5000")
+      DBI::dbExecute(con, "PRAGMA query_only = ON")
+    },
+    error = function(e) NULL
+  )
   con
 }
 
@@ -98,13 +101,14 @@ vpro_logical_to_access <- function(x) {
   out
 }
 
-#' Narrow numeric cover values to IEEE-754 single precision (`float32`)
+#' Round numeric cover values to VPro single-precision bounds
 #'
-#' Reproduces Microsoft Access `Single` (`float32`) cover narrowing prior to
-#' `< 100` bounds checks (`99.999996 -> 99.99999237 < 100`; `99.999999 -> 100.0`).
+#' Reproduces VPro Desktop and Microsoft Access `Single` cover precision prior
+#' to `< 100` bounds checks (`99.999996 -> 99.99999237 < 100`;
+#' `99.999999 -> 100.0`).
 #'
 #' @param x Numeric vector.
-#' @return Numeric vector rounded to nearest IEEE-754 binary32 representable values.
+#' @return Numeric vector rounded to nearest 32-bit single-precision values.
 #' @export
 vpro_narrow_float32 <- function(x) {
   if (!is.numeric(x)) {
@@ -156,7 +160,9 @@ vpro_utf16_len <- function(x) {
   chr <- enc2utf8(as.character(x))
   out <- rep(NA_integer_, length(chr))
   ok <- !is.na(chr) & validUTF8(chr)
-  if (!any(ok)) return(out)
+  if (!any(ok)) {
+    return(out)
+  }
   sub_c <- chr[ok]
   nb <- nchar(sub_c, type = "bytes", allowNA = TRUE)
   nc <- nchar(sub_c, type = "chars", allowNA = TRUE)
@@ -165,11 +171,17 @@ vpro_utf16_len <- function(x) {
   res[is_ascii] <- nb[is_ascii]
   non_ascii <- which(!is_ascii & !is.na(nc))
   if (length(non_ascii) > 0L) {
-    res[non_ascii] <- vapply(sub_c[non_ascii], function(s) {
-      cp <- utf8ToInt(s)
-      if (any(cp >= 0xD800L & cp <= 0xDFFFL)) return(NA_integer_)
-      as.integer(sum(ifelse(cp > 0xFFFFL, 2L, 1L)))
-    }, integer(1))
+    res[non_ascii] <- vapply(
+      sub_c[non_ascii],
+      function(s) {
+        cp <- utf8ToInt(s)
+        if (any(cp >= 0xD800L & cp <= 0xDFFFL)) {
+          return(NA_integer_)
+        }
+        as.integer(sum(ifelse(cp > 0xFFFFL, 2L, 1L)))
+      },
+      integer(1)
+    )
   }
   out[ok] <- res
   out
@@ -221,10 +233,9 @@ vpro_value_flag <- function(value, argument) {
 
 #' Convert vegetation presence to Roman (`"I"`..`"V"`) or numeric (`1L`..`5L`) classes
 #'
-#' Reproduces `V7mdlValueConversions.Presence2Class` (`"roman"`) and
-#' `V7mdlValueConversions.Presence2ClassNval` (`"numeric"`), mapping
-#' proportions in `[0, 1]` at breakpoints `0.2, 0.4, 0.6, 0.8`. Values `< 0`,
-#' `> 1`, or `NA` return `NA`.
+#' Maps proportions in `[0, 1]` at breakpoints `0.2, 0.4, 0.6, 0.8` into Roman
+#' (`"I"`..`"V"`) or numeric (`1L`..`5L`) presence classes matching VPro reports.
+#' Values `< 0`, `> 1`, or `NA` return `NA`.
 #'
 #' @param presence Numeric vegetation presence expressed as a proportion in `[0, 1]`.
 #' @param format Output representation: `"roman"` (character `"I"` through `"V"`)
@@ -261,8 +272,8 @@ vpro_score_result <- function(score, breaks, classes, return_score) {
 
 #' Calculate prominence classes or scores
 #'
-#' Reproduces `V7mdlValueConversions.ProminenceClass` (`mean_cover * 10 * sqrt(presence)`
-#' classified at `15, 50, 100, 200` into `1:5`).
+#' Computes BEC prominence scores (`mean_cover * 10 * sqrt(presence)`) and
+#' classifies them at `15, 50, 100, 200` into `1:5` matching VPro reports.
 #'
 #' @param mean_cover Numeric mean vegetation cover.
 #' @param presence Numeric vegetation presence expressed as a proportion.
@@ -283,8 +294,8 @@ vpro_prominence_class <- function(mean_cover, presence, return_score = FALSE) {
 
 #' Calculate Goldstream classes or scores
 #'
-#' Reproduces `V7mdlValueConversions.GoldstreamClass` (`presence * 100 * sqrt(mean_cover)`
-#' classified at `5, 25, 75, 150, 300, 500` into `0:6`).
+#' Computes Goldstream scores (`presence * 100 * sqrt(mean_cover)`) and
+#' classifies them at `5, 25, 75, 150, 300, 500` into `0:6` matching VPro reports.
 #'
 #' @inheritParams vpro_prominence_class
 #' @return Numeric score vector when `return_score = TRUE`, else integer classes `0:6`.
@@ -303,8 +314,8 @@ vpro_goldstream_class <- function(mean_cover, presence, return_score = FALSE) {
 
 #' Convert significance values to Domin-Krajina report classes
 #'
-#' Reproduces `V7mdlValueConversions.SignifClass` (`<= 0.3` -> `"+"`; `1, 2.2, 5,
-#' 10, 20, 33, 50, 75` -> `"1"` through `"9"`).
+#' Maps mean cover values to Domin-Krajina significance classes (`<= 0.3` ->
+#' `"+"`; `1, 2.2, 5, 10, 20, 33, 50, 75` -> `"1"` through `"9"`).
 #'
 #' @param significance Numeric significance (mean cover) values.
 #' @return A character vector containing `"+"`, `"1"` through `"9"`, or `NA`.
@@ -318,7 +329,8 @@ vpro_significance_class <- function(significance) {
       significance[valid],
       c(0.3, 1, 2.2, 5, 10, 20, 33, 50, 75),
       left.open = TRUE
-    ) + 1L
+    ) +
+      1L
   ]
   result
 }
@@ -335,8 +347,8 @@ vpro_cap_percent <- function(x) {
 
 #' Classify a species across ordered site-unit codes
 #'
-#' Translates `V7mdlDiagnostic.Diagnostic` for a named character vector of
-#' `"<presence 1-5> - <signif +|1-9>"` cells.
+#' Classifies a species into classic BEC diagnostic codes (`d`, `dd`, `cd`, `c`,
+#' `ic`) from a named character vector of `"<presence 1-5> - <signif +|1-9>"` cells.
 #'
 #' @param unit_codes Named character vector in crosstab field order (`"1 - +"` .. `"5 - 9"`).
 #' @return List with `unit` and `diagnosis` (`d`, `dd`, `cd`, `c`, `ic`).
@@ -382,7 +394,8 @@ vpro_classify_diagnostic_codes <- function(unit_codes) {
 
 #' Compose decimal degrees from degrees, minutes, and seconds
 #'
-#' Reproduces `V7mdlCoordTools.ConvertLongLatToDeg`.
+#' Converts degrees, minutes, and seconds to decimal degrees following VPro
+#' coordinate sign and missing-component conventions.
 #'
 #' @param degrees Numeric degrees (`NA` yields `NA`).
 #' @param minutes Numeric minutes (`NA` treated as `0`).
@@ -512,8 +525,11 @@ vpro_query_scoped_plots <- function(dbc, table_sql, plot_vec, select_cols = "*",
       ph_txt <- paste(rep("?", length(ch)), collapse = ",")
       ph_blb <- paste(rep("CAST(? AS BLOB)", length(ch)), collapse = ",")
       w <- paste0(
-        'WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" IN (', ph_txt,
-        ') AND CAST("PlotNumber" AS BLOB) IN (', ph_blb, ")"
+        'WHERE typeof("PlotNumber") = \'text\' AND "PlotNumber" IN (',
+        ph_txt,
+        ') AND CAST("PlotNumber" AS BLOB) IN (',
+        ph_blb,
+        ")"
       )
       if (!is.null(where_extra) && nzchar(where_extra)) {
         w <- paste(w, "AND", where_extra)

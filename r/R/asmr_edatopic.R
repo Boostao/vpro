@@ -42,8 +42,8 @@ vpro_normalize_rsnr <- function(x) {
 
 #' Evaluate the B.C. Ministry `CMD -> aSMR` transfer rules directly
 #'
-#' Vectorized implementation of B.C. Ministry of Forests `_calculate_aSMR.R` +
-#' `aSMR_Rules_HalfStep.csv` matching VPro Desktop `EvaluateMinistryASMR`:
+#' Vectorized implementation of the B.C. Ministry of Forests `CMD -> aSMR`
+#' water-balance model matching VPro Desktop:
 #' growing-season 5-month moist surplus (`PPT_05..PPT_09 >= 90 mm`), dormant
 #' recharge deficit (`max(0, 350 - (PPT_at + PPT_wt))`), steep (`> 35%`) warm SW
 #' (`180..270` -> `1.25x`) and cool N (`> 315` or `< 45` -> `0.85x`) aspect
@@ -182,8 +182,8 @@ vpro_evaluate_asmr <- function(
 #' @param ws A `vpro_workspace` handle.
 #' @param scope Either `"su"` (active SU plots) or `"project"` (all `_Env` plots).
 #' @param ref_period Climate normal period (`"1961_1990"` or `"1991_2020"`).
-#' @param cache Logical; passed to [vpro_climate()] to persist new
-#'   `__VPRO_PlotClimate` rows on writable user databases.
+#' @param cache Logical; passed to [vpro_climate()] to save newly computed plot
+#'   climate rows on writable user projects.
 #' @param force_offline Logical; if `TRUE`, uses the offline BGC lapse-rate
 #'   normals model without querying `climr`.
 #' @return A tibble joining `PlotNumber` (literal character), `SiteUnit`, `Zone`,

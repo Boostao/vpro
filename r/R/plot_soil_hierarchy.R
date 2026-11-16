@@ -12,7 +12,9 @@ vpro_classify_horizon <- function(horizon) {
 }
 
 vpro_order_soil_df <- function(df) {
-  if (nrow(df) == 0L) return(tibble::as_tibble(df))
+  if (nrow(df) == 0L) {
+    return(tibble::as_tibble(df))
+  }
   df$PlotNumber <- as.character(df$PlotNumber)
   if ("Flag" %in% names(df)) {
     df$Flag <- vpro_access_to_logical(df$Flag)
@@ -59,15 +61,26 @@ vpro_soil <- function(ws, scope = c("su", "project"), type = c("both", "humus", 
   read_one <- function(suffix) {
     tbl <- paste0(ws$project, "_", suffix)
     flds <- DBI::dbListFields(dbc, tbl)
-    sel <- paste(vapply(flds, function(f) {
-      if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
-    }, character(1)), collapse = ", ")
+    sel <- paste(
+      vapply(
+        flds,
+        function(f) {
+          if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
+        },
+        character(1)
+      ),
+      collapse = ", "
+    )
     raw <- vpro_query_scoped_plots(dbc, vpro_quote_ident(tbl), scoped_plots, select_cols = sel)
     vpro_order_soil_df(raw)
   }
 
-  if (type == "humus") return(read_one("Humus"))
-  if (type == "mineral") return(read_one("Mineral"))
+  if (type == "humus") {
+    return(read_one("Humus"))
+  }
+  if (type == "mineral") {
+    return(read_one("Mineral"))
+  }
 
   structure(
     list(
@@ -111,9 +124,16 @@ vpro_other <- function(ws, scope = c("su", "project")) {
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   tbl <- paste0(ws$project, "_Other")
   flds <- DBI::dbListFields(dbc, tbl)
-  sel <- paste(vapply(flds, function(f) {
-    if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
-  }, character(1)), collapse = ", ")
+  sel <- paste(
+    vapply(
+      flds,
+      function(f) {
+        if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
+      },
+      character(1)
+    ),
+    collapse = ", "
+  )
   df <- vpro_query_scoped_plots(dbc, vpro_quote_ident(tbl), scoped_plots, select_cols = sel)
   df$PlotNumber <- as.character(df$PlotNumber)
   for (bc in intersect(c("UserFlag1", "UserFlag2", "UserFlag3", "Flag"), names(df))) {
@@ -133,11 +153,20 @@ vpro_audit <- function(ws) {
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   tbl <- paste0(ws$project, "_Audit")
   flds <- DBI::dbListFields(dbc, tbl)
-  sel <- paste(vapply(flds, function(f) {
-    if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
-  }, character(1)), collapse = ", ")
+  sel <- paste(
+    vapply(
+      flds,
+      function(f) {
+        if (identical(f, "PlotNumber")) 'CAST("PlotNumber" AS TEXT) AS "PlotNumber"' else vpro_quote_ident(f)
+      },
+      character(1)
+    ),
+    collapse = ", "
+  )
   df <- DBI::dbGetQuery(dbc, paste("SELECT", sel, "FROM", vpro_quote_ident(tbl), "ORDER BY rowid"))
-  if ("PlotNumber" %in% names(df)) df$PlotNumber <- as.character(df$PlotNumber)
+  if ("PlotNumber" %in% names(df)) {
+    df$PlotNumber <- as.character(df$PlotNumber)
+  }
   for (bc in intersect(c("Restore", "Flag"), names(df))) {
     df[[bc]] <- vpro_access_to_logical(df[[bc]])
   }
@@ -159,8 +188,17 @@ vpro_metadata <- function(ws) {
 }
 
 .vpro_hierarchy_level_names <- c(
-  "Formation", "Class", "Subclass", "Order", "Suborder",
-  "Alliance", "Suball", "Assoc", "Subass", "Facies", "SiteUnit"
+  "Formation",
+  "Class",
+  "Subclass",
+  "Order",
+  "Suborder",
+  "Alliance",
+  "Suball",
+  "Assoc",
+  "Subass",
+  "Facies",
+  "SiteUnit"
 )
 
 #' Convert a VPro `*_Hierarchy` node table to a flat 11-level BEC path table
@@ -213,9 +251,13 @@ vpro_hierarchy_to_table <- function(nodes_df, preserve_tilde = FALSE) {
       chain <- c(cur, chain)
       visited <- c(visited, cur)
       p_id <- parent_chr[[cur]]
-      if (is.na(p_id) || !(p_id %in% names(idx_by_id))) break
+      if (is.na(p_id) || !(p_id %in% names(idx_by_id))) {
+        break
+      }
       nxt <- idx_by_id[[p_id]]
-      if (identical(nxt, cur)) break
+      if (identical(nxt, cur)) {
+        break
+      }
       cur <- nxt
     }
     vals <- rep(NA_character_, 11L)
@@ -228,10 +270,18 @@ vpro_hierarchy_to_table <- function(nodes_df, preserve_tilde = FALSE) {
       }
     }
     # MoF HierarchyConversion.R convention: fill missing Suborder/Suball/Subass from parent
-    if (is.na(vals[[5L]]) && !is.na(vals[[4L]])) vals[[5L]] <- vals[[4L]]
-    if (is.na(vals[[7L]]) && !is.na(vals[[6L]])) vals[[7L]] <- vals[[6L]]
-    if (is.na(vals[[9L]]) && !is.na(vals[[8L]])) vals[[9L]] <- vals[[8L]]
-    if (is.na(vals[[11L]])) vals[[11L]] <- disp_name[[leaf_i]]
+    if (is.na(vals[[5L]]) && !is.na(vals[[4L]])) {
+      vals[[5L]] <- vals[[4L]]
+    }
+    if (is.na(vals[[7L]]) && !is.na(vals[[6L]])) {
+      vals[[7L]] <- vals[[6L]]
+    }
+    if (is.na(vals[[9L]]) && !is.na(vals[[8L]])) {
+      vals[[9L]] <- vals[[8L]]
+    }
+    if (is.na(vals[[11L]])) {
+      vals[[11L]] <- disp_name[[leaf_i]]
+    }
 
     rec <- as.list(vals)
     names(rec) <- .vpro_hierarchy_level_names
@@ -277,13 +327,14 @@ vpro_table_to_hierarchy <- function(wide_df, level_names = NULL) {
     for (c_ix in seq_along(level_names)) {
       col <- level_names[[c_ix]]
       val <- wide_df[[col]][[r]]
-      if (is.na(val) || !nzchar(trimws(as.character(val)))) next
+      if (is.na(val) || !nzchar(trimws(as.character(val)))) {
+        next
+      }
       nm <- trimws(as.character(val))
       lv <- as.integer(lvl_nums[[c_ix]])
       # Collapse consecutive identical filled sublevels (e.g. Suborder == Order)
       key <- paste0(path_key, "/", lv, ":", nm)
-      if (!is.na(parent_id) && length(records) >= parent_id &&
-          identical(records[[parent_id]]$Name, nm)) {
+      if (!is.na(parent_id) && length(records) >= parent_id && identical(records[[parent_id]]$Name, nm)) {
         next
       }
       if (exists(key, envir = node_env, inherits = FALSE)) {
@@ -338,20 +389,31 @@ vpro_hierarchy <- function(ws, hierarchy = NULL, as = c("both", "nodes", "paths"
   }
   if (is.null(h_tbl)) {
     empty_nodes <- tibble::tibble(
-      ID = integer(), Name = character(), CleanName = character(),
-      Parent = integer(), Level = integer(), LevelName = character(),
-      IsBreakpoint = logical(), Path = character()
+      ID = integer(),
+      Name = character(),
+      CleanName = character(),
+      Parent = integer(),
+      Level = integer(),
+      LevelName = character(),
+      IsBreakpoint = logical(),
+      Path = character()
     )
     empty_paths <- vpro_hierarchy_to_table(empty_nodes)
-    if (as == "nodes") return(empty_nodes)
-    if (as == "paths") return(empty_paths)
+    if (as == "nodes") {
+      return(empty_nodes)
+    }
+    if (as == "paths") {
+      return(empty_paths)
+    }
     return(structure(list(table = NA_character_, nodes = empty_nodes, paths = empty_paths), class = "vpro_hierarchy"))
   }
 
   dbc <- vpro_sqlite_ro(ws$hierarchy_path)
   on.exit(DBI::dbDisconnect(dbc), add = TRUE)
   raw <- DBI::dbGetQuery(dbc, paste("SELECT * FROM", vpro_quote_ident(h_tbl)))
-  if ("Flag" %in% names(raw)) raw$Flag <- vpro_access_to_logical(raw$Flag)
+  if ("Flag" %in% names(raw)) {
+    raw$Flag <- vpro_access_to_logical(raw$Flag)
+  }
 
   raw_nm <- trimws(ifelse(is.na(raw$Name), "", as.character(raw$Name)))
   raw$IsBreakpoint <- startsWith(raw_nm, "~")
@@ -367,27 +429,39 @@ vpro_hierarchy <- function(ws, hierarchy = NULL, as = c("both", "nodes", "paths"
   id_chr <- as.character(raw$ID)
   par_chr <- ifelse(is.na(raw$Parent), NA_character_, as.character(raw$Parent))
   idx_map <- stats::setNames(seq_along(id_chr), id_chr)
-  raw$Path <- vapply(seq_len(nrow(raw)), function(i) {
-    parts <- character()
-    cur <- i
-    seen <- integer()
-    while (!is.na(cur) && !(cur %in% seen)) {
-      parts <- c(raw$CleanName[[cur]], parts)
-      seen <- c(seen, cur)
-      p <- par_chr[[cur]]
-      if (is.na(p) || !(p %in% names(idx_map))) break
-      nxt <- idx_map[[p]]
-      if (identical(nxt, cur)) break
-      cur <- nxt
-    }
-    paste(parts, collapse = " / ")
-  }, character(1))
+  raw$Path <- vapply(
+    seq_len(nrow(raw)),
+    function(i) {
+      parts <- character()
+      cur <- i
+      seen <- integer()
+      while (!is.na(cur) && !(cur %in% seen)) {
+        parts <- c(raw$CleanName[[cur]], parts)
+        seen <- c(seen, cur)
+        p <- par_chr[[cur]]
+        if (is.na(p) || !(p %in% names(idx_map))) {
+          break
+        }
+        nxt <- idx_map[[p]]
+        if (identical(nxt, cur)) {
+          break
+        }
+        cur <- nxt
+      }
+      paste(parts, collapse = " / ")
+    },
+    character(1)
+  )
 
   nodes_tbl <- tibble::as_tibble(raw)
   paths_tbl <- vpro_hierarchy_to_table(nodes_tbl)
 
-  if (as == "nodes") return(nodes_tbl)
-  if (as == "paths") return(paths_tbl)
+  if (as == "nodes") {
+    return(nodes_tbl)
+  }
+  if (as == "paths") {
+    return(paths_tbl)
+  }
   structure(
     list(
       table = h_tbl,

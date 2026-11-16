@@ -30,19 +30,19 @@ Combines canonical VPro validation engines into a single read-only
 quality-assurance bundle, selectable via \code{checks = c("all", "compliance", "lmh25")}:
 \enumerate{
 \item \strong{\code{env_codes}}: \code{USysTableOfLists} picklist validation (\code{Validate != 0},
-expanding positive \code{ValidateLoops} such as \code{SiteDisturbance1..3}, calibrated
-to \code{V7mdlReportsValidateEnvData}).
+expanding \code{ValidateLoops} such as \code{SiteDisturbance1..3}, matching VPro
+Desktop environment checks).
 \item \strong{\code{veg_codes}}: \verb{BCPlantTaxonomy v19} (\code{USysAllSpecs}) + user species
 (\code{USysUserSpp}) check for unlisted codes, local user codes (\code{"user"}), and
-case-insensitive \code{OldCode -> Code} synonyms (\code{V7mdlReportsValidateVegCodes}).
+case-insensitive \code{OldCode -> Code} synonyms.
 \item \strong{\code{orphans}}: referential integrity across \verb{_Env <-> _Admin}, \verb{_Veg},
 \verb{_Humus}, \verb{_Mineral}, \verb{_Other}, and active \verb{*_SU}, plus plots without
-vegetation (\code{V7mdlReportValidation}).
+vegetation.
 \item \strong{\code{duplicates}}: duplicate physical \verb{(PlotNumber, Species)} rows and
-same-layer cover collisions (\code{V7mdlOptimizeVeg.Check4DuplicatedSpecies}).
-\item \strong{\code{bounds}}: VP08 UTF-16 field length limits, IEEE-754 \code{float32} \verb{< 100\%}
-cover bounds, numeric \verb{_Env} / \verb{_Admin} bounds (\code{Latitude}, \code{Longitude},
-\code{Aspect}, \code{SlopeGradient}, \code{StartDate}).
+same-layer cover collisions.
+\item \strong{\code{bounds}}: VPro field length limits, \code{0} to under \verb{100\%} cover bounds,
+and numeric \verb{_Env} / \verb{_Admin} bounds (\code{Latitude}, \code{Longitude}, \code{Aspect},
+\code{SlopeGradient}, \code{StartDate}).
 \item \strong{\code{lmh25}}: \code{LMH25 (2023)} pedological & edatopic audit (horizon depth
 directions, contiguity, substrate sums, von Post ranges, Keys \code{9.4}/\code{9.6}).
 }

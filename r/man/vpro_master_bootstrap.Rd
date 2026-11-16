@@ -25,6 +25,6 @@ applied migrations, extension flags, and role grant status.
 Non-destructively inspects \code{information_schema.schemata} and
 \code{information_schema.tables}, then executes idempotent \verb{CREATE SCHEMA IF NOT EXISTS}, \verb{CREATE TABLE IF NOT EXISTS}, \verb{CREATE INDEX IF NOT EXISTS}, trigger,
 PostGIS \code{geom} column (when \code{postgis} is installed), and optional least-privilege
-role grants / RLS policies matching VPro Desktop (\code{app/internal/cloudsync/schema.go}).
+role grants / RLS policies matching VPro Desktop.
 Never modifies \code{public} or drops existing data.
 }

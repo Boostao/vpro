@@ -10,12 +10,12 @@
 \item{x}{A \code{vpro_outliers} object.}
 
 \item{flagged_only}{Logical; if \code{TRUE}, returns only flagged outlier plots; if
-\code{FALSE} (default), returns the full worst-first LOO review queue.}
+\code{FALSE} (default), returns the full worst-first leave-one-out review queue.}
 
 \item{...}{Unused; included for S3 method compatibility.}
 }
 \value{
-A tibble of LOO plot similarity diagnostics.
+A tibble of leave-one-out plot similarity diagnostics.
 }
 \description{
 Coerce \code{vpro_outliers} to a tibble

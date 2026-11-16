@@ -13,6 +13,6 @@ vpro_classify_diagnostic_codes(unit_codes)
 List with \code{unit} and \code{diagnosis} (\code{d}, \code{dd}, \code{cd}, \code{c}, \code{ic}).
 }
 \description{
-Translates \code{V7mdlDiagnostic.Diagnostic} for a named character vector of
-\code{"<presence 1-5> - <signif +|1-9>"} cells.
+Classifies a species into classic BEC diagnostic codes (\code{d}, \code{dd}, \code{cd}, \code{c},
+\code{ic}) from a named character vector of \code{"<presence 1-5> - <signif +|1-9>"} cells.
 }

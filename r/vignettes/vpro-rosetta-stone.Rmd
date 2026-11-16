@@ -1,8 +1,8 @@
 ---
-title: "The VPro 2.0 Rosetta Stone: MS Access <-> Go Desktop <-> R 2.0 SDK"
+title: "The VPro 2.0 Rosetta Stone: MS Access <-> VPro Desktop <-> R 2.0"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{The VPro 2.0 Rosetta Stone: MS Access <-> Go Desktop <-> R 2.0 SDK}
+  %\VignetteIndexEntry{The VPro 2.0 Rosetta Stone: MS Access <-> VPro Desktop <-> R 2.0}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -14,53 +14,53 @@ knitr::opts_chunk$set(
 )
 ```
 
-`VPro 2.0` (*VENUS — Vegetation and Environment NexUS — Professional*) replaces legacy Microsoft Access `VPro64` forms and VBA modules with two interoperable engines backed by the exact same 7-database `VP08` SQLite WAL physical schema and PostgreSQL `BECMaster` cloud schemas:
+`VPro 2.0` (*VENUS — Vegetation and Environment NexUS — Professional*) replaces legacy Microsoft Access `VPro64` forms and macros with two interoperable tools built on the same local VPro project format (`.db`) and provincial PostgreSQL `BECMaster` service:
 
-1. **Desktop Workstation (`app/`):** Go 1.27+ backend (`app/internal/*`) + Wails v3 / Svelte 5 / MapLibre GL JS v6 desktop interface (`app/frontend/src/*`).
-2. **Headless R Companion SDK (`r/`):** Zero-UI `vpro` 2.0 package (`89` curated exports) standardized around `ws` (`vpro_workspace` local SQLite / `.rds`) and `pg` (`vpro_pg_conn` PostgreSQL `BECMaster`) handles.
+1. **VPro Desktop:** Cross-platform desktop application for interactive FS882/SIVI plot-card data entry, multi-plot datasheet editing, Site Unit and hierarchy trees, 3D spatial mapping, and instant BEC reports.
+2. **`vpro` R Package:** Programmatic R companion centered on `ws` (`vpro_workspace` for local `.db` projects or `.rds` snapshots) and `pg` (`vpro_pg_conn` for cloud `BECMaster` connections).
 
-## Shared `VP08` & Cloud `BECMaster` Invariants
+## Shared BEC & `BECMaster` Domain Rules
 
-All three generations (or both modern engines where Access had no native equivalent) share these domain rules without divergence:
+VPro Desktop and the `vpro` R package enforce the exact same ecological and data-integrity rules:
 
-- **7-Database `VP08` WAL Layout:** `<Project>.db` (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`, `_Metadata`, plus `*_SU`, `*_Hierarchy` with `~` breakpoints, `*_Lump`, `*_Profile`, `__VPRO_*`), `VPro64.db`, `VLists.db` (`BCPlantTaxonomy v19`, `BECdb v13`, `LMH25 2023`), `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, and `VPics.db`.
-- **Literal Text `PlotNumber` (`Text 7`):** Always stored and joined as character preserving leading zeroes (e.g., `"00337"`).
-- **Access Booleans, IEEE-754 `float32` Cover Narrowing & `99%` Lump Cap:** `-1` (`TRUE`), `0` (`FALSE`), `NA`/`NULL`; species covers narrow through 32-bit float before `< 100` bounds; lumped (`*_Lump`) and `TotalA`/`TotalB` sums cap at `99%`; ACE rounding formats doubles to 15 significant digits before half-away rounding (`vpro_round_ace()`).
+- **Shared Project & Reference Family:** `<Project>.db` (`_Env`, `_Admin`, `_Veg`, `_Humus`, `_Mineral`, `_Other`, `_Audit`, `_Metadata`, plus `*_SU`, `*_Hierarchy` with `~` breakpoints, `*_Lump`, and `*_Profile`) alongside `VPro64.db`, `VLists.db` (`BCPlantTaxonomy v19`, `BECdb v13`, `LMH25 2023`), `VUser.db`, `VMetaData.db`, `VMessageBoard.db`, and `VPics.db`.
+- **Literal Text `PlotNumber` (`Text 7`):** Always stored and joined as text preserving leading zeroes (e.g., `"00337"`).
+- **VPro Booleans, Cover Bounds & `99%` Lump Cap:** Yes/no flags map cleanly to R `logical` (`TRUE`, `FALSE`, `NA`); species covers span `0` to under `100%` (e.g., `99.9%`) matching VPro's single-precision cover fields; lumped (`*_Lump`) and `TotalA`/`TotalB` sums cap at `99%` without altering raw field data; `vpro_round_ace()` reproduces VPro display rounding (`1.005 -> 1.01`).
 - **`LMH25 (2023)` Soil Horizon Depth Sign & Ordering:** Upland organic `L`/`F`/`H` horizons measure upward from `0 cm` (`UpperDepth > LowerDepth`, ordered `DESC`); wetland `Of`/`Om`/`Oh` and mineral horizons measure downward (`UpperDepth < LowerDepth`, ordered `ASC`).
-- **Explicit Cover Precedence:** Plot summaries and community matrices default to `cover_precedence = "strata_totals"` (`StrataCover*` when non-zero; fallback capped `99%`), whereas `vpro_diagnostics()`, `vpro_pairwise()`, and `vpro_outliers()` default to `"sublayer_sum"` to preserve MS Access `V7mdlDiagnostic` parity.
+- **Explicit Cover Precedence:** Plot summaries and community matrices default to `cover_precedence = "strata_totals"` (`StrataCover*` / `TotalA` / `TotalB` when positive; fallback capped at `99%`), whereas `vpro_diagnostics()`, `vpro_pairwise()`, and `vpro_outliers()` default to `"sublayer_sum"` to preserve classic VPro Diagnostic parity.
 
 ---
 
 ## Four-Column VPro Rosetta Stone (All 18 Workflows)
 
-| # | Workflow / Domain | MS Access `VPro64` (Legacy VBA / Forms) | Go UI View & Backend Service (`app/`) | R 2.0 `vpro::` SDK (`89` Exports) |
+| # | Workflow / Domain | MS Access `VPro64` (Legacy) | VPro Desktop Screen / Menu | R 2.0 `vpro::` Companion |
 |---|---|---|---|---|
-| **R1** | Workspace Connection, Standards & Paths | `USysVENUSPickProject`, `V7mdlAttachProjects.AttachProjects`, `V7mdlSetCurrent` | `WorkspaceSidebar` + `HomeWorkspaceHub` (`view: 'home'`) :: `ContextService.{GetState, SwitchContext, SelectProject, InspectExternalSQLiteFile}` & `LifecycleService.GetStartupState` | `vpro_connect()`, `vpro_use()`, `vpro_list_projects()`, `vpro_project_inspect()`, `vpro_status()`, `vpro_standards()`, `vpro_data_dir()`, `vpro_config_dir()` |
-| **R2** | Plot Data Entry & Tidy Extraction | `FS882-6x4`, `FS882-8x6XL`, `SoilHumus`, `SoilMineral`, `SubVegA..D`, `SubOther` | `FS882Form` / `TwoPageEntryLayout` (`view: 'fs882'`) :: `PlotEntryService.{GetPlot, SavePlot, EvaluateStoredPlotDiagnostics}` | `vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_other()`, `vpro_filter_plots()`, `vpro_access_to_logical()`, `vpro_logical_to_access()`, `vpro_narrow_float32()`, `vpro_cap_percent()` |
-| **R3** | SIVI / FS1333 Quick Plot Entry | `frmSIVIsite`, `FS882-1x1`, `SubVegA-SIVI_BC`, `SubVegC-SIVI`, `SubVegD-SIVI` | Quick SIVI / FS1333 Forms (`action: 'sivi'`, `'new-sivi'`) :: `ContextService.{CreateSIVIPlot, UndoCreateSIVIPlot}` & `PlotEntryService.CreateSIVIVegetation` | `vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_other()` (read-only tidy extraction of SIVI/FS1333 plots) |
-| **R4** | Datasheet Table Review & Bulk Queries | `USysEnv`, `USysVeg`, `USysTableOfLists`, `frmVegSample` | Universal Datasheet Grid (`view: 'datasheet'`) :: `DatasheetService.{ListDatasheetTables, GetDatasheetPage, PreviewDatasheetFindReplace, ApplyDatasheetEdits}` | `vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_duckdb()`, `vpro_taxonomy()`, `vpro_bec_units()`, `vpro_round_ace()` |
-| **R5** | Site Unit Assignment & Hierarchy Trees | `USysAssignSU`, `V7mdlAttachSU`, `V7mdlSUTableTools1/2`, `V7mdlHierarchyTools` | SU & Hierarchy Explorer (`view: 'classification-explorer'`) :: `ClassificationService.{GetSUPlotTree, SearchBECUnitPicker, AssignPlotsToSiteUnit, GetHierarchyNodes}` | `vpro_site_units()`, `vpro_list_su()`, `vpro_list_hierarchies()`, `vpro_hierarchy()`, `vpro_hierarchy_to_table()`, `vpro_table_to_hierarchy()`, `vpro_is_modifier_unit()`, `vpro_write_su()` |
-| **R6** | Species Lumping & Taxonomic Merging | `USysLump`, `USysLumpMaster`, `V7mdlLumping.{LumpVegData, CombineSpp}` | Combine Species / Lump Editor (`view: 'lump-editor'`) :: `ImportExportService.{DiscoverLumpTables, UpsertLumpRow, MaterializeLumpSpec}` | `vpro_list_lumps()`, `vpro_lump_map()`, `vpro_taxonomy()`, `vpro_write_lump()` |
-| **R7** | Multi-Rule Plot Profiling | `USysPlotProfiling`, `USysVegProfiling`, `V7mdlPlotProfiling`, `V7mdlVegProfiling` | `PlotProfilePanel` (`HomeWorkspaceHub` / `FS882`) :: `ClassificationService.{RunProjectPlotProfile, ResolveProjectPlotProfileNavigation}` | `vpro_profile()`, `vpro_profile_rule()`, `vpro_filter_plots()` |
-| **R8** | `VP08` Compliance & `LMH25 (2023)` QA | `USysValidateData`, `USysCodeCheck`, `V7mdlReportValidation.{ValidateData}` | Project Admin, QA & Merge / `LMH25DiagnosticsBar` (`view: 'project-admin'`) :: `ValidationService.{RunComplianceValidation, CheckSpeciesCodes}` | `vpro_validate(ws, scope, checks = c("all", "compliance", "lmh25"))`, `vpro_taxonomy()` |
-| **R9** | Summary Vegetation & Reports | `USysShortVegOptions`, `V7mdlReportsShortVeg.{NewShortVeg, RkFormula*}` | Summary / Long / Lifeform Vegetation (`view: 'summary-vegetation'`) :: `VegetationReportService.{PreviewSummaryVegetation, ExportReviewedSummaryVegetationWorkbook, PreviewLifeformSummary}` | `vpro_summary_veg()`, `vpro_export_xlsx()`, `vpro_prominence_class()`, `vpro_significance_class()`, `vpro_presence_class()`, `vpro_goldstream_class()` |
-| **R10** | Summary Environment & Unit Detail | `USysSuDetailReport`, `USysEnvReportOptions`, `V7mdlReportsSiteUnitDetail` | Summary / Long Environment (`view: 'summary-environment'`) :: `EnvironmentReportService.{PreviewSiteUnitSummary, ExportReviewedSiteUnitSummaryWorkbook}` | `vpro_summary_env()`, `vpro_export_xlsx()` |
-| **R11** | BEC Diagnostic Synthesis, Pairwise & Outliers | `V7mdlDiagnostic.{Diagnostic, MakeDiagnosticData, DiagnosticPresenceClass}` | BEC Diagnostic & Pairwise Synthesis (`view: 'diagnostic-synthesis'`) :: `ClassificationService.{ComputeSynthesisSnapshot, ExportDiagnosticWorkbook}` | `vpro_diagnostics()`, `vpro_classify_diagnostic_codes()`, `vpro_presence_class(..., format = c("roman", "numeric"))`, `vpro_pairwise()`, `vpro_outliers()` |
-| **R12** | Multivariate Clustering & Indicators | `frmR`, `frmRveg`, `V7mdlExportToR1.BuildRAll`, `V7mdlExportToR2.RunR` | R Analytics -> Clustering tab (`view: 'r-sidecar'`) :: `rsidecar.RunMultivariateClustering` (delegates to `vpro:::.vpro_sidecar_exec`) | `vpro_matrix()`, `vpro_cluster()`, `vpro_indicators()`, `vpro_write_su(..., candidate = TRUE)` |
-| **R13** | Climate Normals (`climr`), `aSMR` & Edatopic Grids | None native (external BEC R scripts `_calculate_aSMR.R`, `climr`, edatopic grids) | R Analytics -> Climate/`aSMR` & Edatopic tabs (`view: 'r-sidecar'`) :: `rsidecar.{ComputePlotClimateAndDualEdatopic, EvaluateMinistryASMR}` | `vpro_climate()`, `vpro_cache_climate()`, `vpro_asmr()`, `vpro_evaluate_asmr()`, `vpro_edatopic_grid()`, `vpro_plot_edatope()` |
-| **R14** | Quarto BEC Field Guides & BC Gov Theme | None native (Word / Excel exports) | R Analytics -> Quarto Guide tab (`view: 'r-sidecar'`) :: `rsidecar.RenderQuartoGuide` | `vpro_render_guide()`, `vpro_bcgov_theme()` |
-| **R15** | Spatial GIS, Geodesy & Google Earth | `frmGoogleEarth`, `V7mdlGoogleEarth.{PlotPlotsInGE, WriteKML}`, `V7mdlReportLocation` | 3D Geospatial Workbench & KML (`view: 'geospatial-map'`) :: `SpatialService.{GetPlotLocationReview, ComputeBCGSMapSheet, ExportReviewedGoogleEarthKML}` & `ImportExportService.ExportGeoPackage` | `vpro_sf()`, `vpro_export_gpkg()`, `vpro_coordinate_decimal()`, `vpro_coordinate_dm()`, `vpro_coordinate_dms()` |
-| **R16** | Access, VENUS, TurboVeg & `.rds` Interchange | `V7mdlImportVProVer07`, `V7mdlImportVenus`, `V7mdlTurboVeg`, `V7mdlExportCompactNew` | Interchange Hub & Table CSV (`views: 'interchange-hub', 'table-csv'`) :: `ImportExportService.{ImportAccessProject, ImportVenusProject, ImportTurboVeg, ExportProjectRDS}` & `ContextService.InspectAccessDatabase` | `vpro_access_inspect()`, `vpro_import_access()`, `vpro_export_rds()`, `vpro_import_rds()` |
-| **R17** | Audit Provenance, Metadata & Pictures | `frmPlotPictures`, `frmVPics`, `USysAudit`, `V7mdlAudit`, `USysfrmUserLog` | Picture Manager, Metadata & Two-Page Audit (`views: 'picture-manager', 'fs882'`) :: `PictureService.{GetMetadata, SaveMetadata, CreatePicture}`, `PlotEntryService.RestoreSelectedAuditRecords` & `LifecycleService.GetUserLogReview` | `vpro_audit()`, `vpro_metadata()` |
-| **R18** | Cloud `BECMaster` Sync, Staging, 3-Way Merge, Redaction & Snapshots | None native (VPro 2.0 PostgreSQL 3-schema `becmaster` / `staging` / `standards` governance) | Cloud `BECMaster` Sync Workbench (`action: 'cloud-sync'` :: `ContextService.{GetCloudSyncConfigStatus, PullCloudStandards, PullBECMasterSubset, SubmitProjectToStaging, ExecuteStagingToMasterMerge, CreateBECMasterSnapshot, VerifyBECMasterAuditChain}`) | `vpro_has_pg_credentials()`, `vpro_master_connect()`, `vpro_master_disconnect()`, `vpro_master_status()`, `vpro_master_bootstrap()`, `vpro_master_standards()`, `vpro_master_standards_sync()`, `vpro_master_env()`, `vpro_master_veg()`, `vpro_master_soil()`, `vpro_master_audit(..., verify_chain = ...)`, `vpro_master_pull()`, `vpro_master_workspace()`, `vpro_staging_submit()`, `vpro_staging_list()`, `vpro_staging_inspect()`, `vpro_staging_diff()`, `vpro_staging_merge()`, `vpro_staging_reject()`, `vpro_master_publish_snapshot()`, `vpro_master_list_snapshots()` |
+| **R1** | Workspace Connection, Standards & Paths | Pick Project / Attach Projects | **Home** & **Workspace Sidebar** (**Help -> About VPro & Standards Libraries**) | `vpro_connect()`, `vpro_use()`, `vpro_list_projects()`, `vpro_project_inspect()`, `vpro_status()`, `vpro_standards()`, `vpro_data_dir()`, `vpro_config_dir()` |
+| **R2** | Plot Data Entry & Tidy Extraction | `FS882-6x4`, `FS882-8x6XL`, `SoilHumus`, `SoilMineral` | **Forms -> FS882 Data Forms (6x4)** & **Two-Page Entry (FS882-8x6XL)** | `vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_other()`, `vpro_filter_plots()`, `vpro_access_to_logical()`, `vpro_logical_to_access()`, `vpro_narrow_float32()`, `vpro_cap_percent()` |
+| **R3** | SIVI / FS1333 Quick Plot Entry | `frmSIVIsite`, `FS882-1x1` | **Forms -> Enter/Edit SIVI Data** & **New SIVI / FS1333 Plot** | `vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_other()` (read-only tidy extraction of SIVI/FS1333 plots) |
+| **R4** | Datasheet Table Review & Bulk Queries | `USysEnv`, `USysVeg`, `USysTableOfLists` | **Forms -> Universal Datasheet Grid** | `vpro_env()`, `vpro_veg()`, `vpro_soil()`, `vpro_duckdb()`, `vpro_taxonomy()`, `vpro_bec_units()`, `vpro_round_ace()` |
+| **R5** | Site Unit Assignment & Hierarchy Trees | `USysAssignSU`, SU & Hierarchy Tools | **Forms -> SU & Hierarchy Explorer** & **Reports -> Hierarchy table** | `vpro_site_units()`, `vpro_list_su()`, `vpro_list_hierarchies()`, `vpro_hierarchy()`, `vpro_hierarchy_to_table()`, `vpro_table_to_hierarchy()`, `vpro_is_modifier_unit()`, `vpro_write_su()` |
+| **R6** | Species Lumping & Taxonomic Merging | `USysLump`, `USysLumpMaster` | **Forms -> Combine Species** | `vpro_list_lumps()`, `vpro_lump_map()`, `vpro_taxonomy()`, `vpro_write_lump()` |
+| **R7** | Multi-Rule Plot Profiling | `USysPlotProfiling`, `USysVegProfiling` | **Home / FS882 -> Plot Profile** | `vpro_profile()`, `vpro_profile_rule()`, `vpro_filter_plots()` |
+| **R8** | Project Compliance & `LMH25 (2023)` QA | `USysValidateData`, `USysCodeCheck` | **Forms -> Project Admin, QA & Merge** & **F1 LMH25 Field Checks** | `vpro_validate(ws, scope, checks = c("all", "compliance", "lmh25"))`, `vpro_taxonomy()` |
+| **R9** | Summary Vegetation & Reports | Short Veg & Lifeform Reports | **Reports -> Summary Vegetation**, **Long Vegetation**, **Lifeform & Species Attribute Summaries**, **Subzone Matrix of Units** | `vpro_summary_veg()`, `vpro_export_xlsx()`, `vpro_prominence_class()`, `vpro_significance_class()`, `vpro_presence_class()`, `vpro_goldstream_class()` |
+| **R10** | Summary Environment & Unit Detail | `USysSuDetailReport`, `USysEnvReportOptions` | **Reports -> Summary Environment** & **Long Environment** | `vpro_summary_env()`, `vpro_export_xlsx()` |
+| **R11** | BEC Diagnostic Synthesis, Pairwise & Outliers | Diagnostic Excel Workbook | **Reports -> BEC Diagnostic & Pairwise Synthesis** | `vpro_diagnostics()`, `vpro_classify_diagnostic_codes()`, `vpro_presence_class(..., format = c("roman", "numeric"))`, `vpro_pairwise()`, `vpro_outliers()` |
+| **R12** | Multivariate Clustering & Indicators | `frmR`, `frmRveg` export scripts | **Reports -> R Analytics, climr aSMR & Quarto Guides** (Clustering) | `vpro_matrix()`, `vpro_cluster()`, `vpro_indicators()`, `vpro_write_su(..., candidate = TRUE)` |
+| **R13** | Climate Normals (`climr`), `aSMR` & Edatopic Grids | External BEC R scripts | **Reports -> R Analytics, climr aSMR & Quarto Guides** (Climate / `aSMR` & Edatopic) | `vpro_climate()`, `vpro_cache_climate()`, `vpro_asmr()`, `vpro_evaluate_asmr()`, `vpro_edatopic_grid()`, `vpro_plot_edatope()` |
+| **R14** | Quarto BEC Field Guides & BC Gov Theme | Word / Excel exports | **Reports -> R Analytics, climr aSMR & Quarto Guides** (Quarto Guide) | `vpro_render_guide()`, `vpro_bcgov_theme()` |
+| **R15** | Spatial GIS, Geodesy & Google Earth | `frmGoogleEarth`, Location Report | **3D Map** (**Reports -> 3D Geospatial Workbench (BGC, QA & AOI)**), **Plot Locations**, & **Google Earth (KML)** | `vpro_sf()`, `vpro_export_gpkg()`, `vpro_coordinate_decimal()`, `vpro_coordinate_dm()`, `vpro_coordinate_dms()` |
+| **R16** | Access, VENUS, TurboVeg & `.rds` Interchange | Legacy Import / Compact Export | **Interchange -> Interchange Hub (VENUS 5, TurboVeg, RDS, GeoPackage)** & **Project Table CSV Archive** | `vpro_access_inspect()`, `vpro_import_access()`, `vpro_export_rds()`, `vpro_import_rds()` |
+| **R17** | Audit Provenance, Metadata & Pictures | `frmPlotPictures`, `USysAudit`, User Log | **Forms -> Metadata**, **Plot Pictures**, **User log**, & **Two-Page Entry** audit history | `vpro_audit()`, `vpro_metadata()` |
+| **R18** | Cloud `BECMaster` Sync, Staging, 3-Way Merge, Redaction & Snapshots | None native (new in VPro 2.0) | **Forms / Interchange -> Cloud BECMaster Sync** | `vpro_has_pg_credentials()`, `vpro_master_connect()`, `vpro_master_disconnect()`, `vpro_master_status()`, `vpro_master_bootstrap()`, `vpro_master_standards()`, `vpro_master_standards_sync()`, `vpro_master_env()`, `vpro_master_veg()`, `vpro_master_soil()`, `vpro_master_audit(..., verify_chain = ...)`, `vpro_master_pull()`, `vpro_master_workspace()`, `vpro_staging_submit()`, `vpro_staging_list()`, `vpro_staging_inspect()`, `vpro_staging_diff()`, `vpro_staging_merge()`, `vpro_staging_reject()`, `vpro_master_publish_snapshot()`, `vpro_master_list_snapshots()` |
 
 ---
 
-## R 1.0 -> R 2.0 Clean-Slate Migration Reference (`99 -> 89` Exports)
+## R 1.0 -> R 2.0 Migration Reference
 
-`vpro` 2.0 removes legacy shims (`0` deprecated wrappers) and consolidates overlapping helpers:
+`vpro` 2.0 streamlines overlapping helpers into a single consistent naming convention:
 
-| Category | Legacy R 1.x Call | R 2.0 Clean-Slate Replacement |
+| Category | Legacy R 1.x Call | R 2.0 Replacement |
 |---|---|---|
 | **Renamed (8)** | `vpro_standards_sync(pg, ...)` | `vpro_master_standards_sync(pg, ...)` |
 | **Renamed** | `vpro_publish_snapshot(pg, ...)` | `vpro_master_publish_snapshot(pg, ...)` |
@@ -77,8 +77,7 @@ All three generations (or both modern engines where Access had no native equival
 | **Merged** | `vpro_project_discover(...)` | `vpro_list_projects(...)` |
 | **Merged** | `vpro_project_validate(...)` | `vpro_project_inspect(...)` |
 | **Merged** | `vpro_write_candidate_su(ws, cl)` | `vpro_write_su(ws, cl, candidate = TRUE)` |
-| **Internal (2)** | `vpro_coord_elev_hash()`, `vpro_sidecar_exec()` | Internal `vpro:::.vpro_coord_elev_hash()`, `vpro:::.vpro_sidecar_exec()` |
-| **Removed (1)** | `vpro_round_minimum()` | `vpro_round_ace()` |
+| **Removed** | `vpro_round_minimum()` | `vpro_round_ace()` |
 
 ## Quick Runnable Parity Check (`Sample.db`)
 

@@ -17,5 +17,6 @@ vpro_coordinate_decimal(degrees, minutes = 0, seconds = 0)
 Numeric vector of decimal degrees.
 }
 \description{
-Reproduces \code{V7mdlCoordTools.ConvertLongLatToDeg}.
+Converts degrees, minutes, and seconds to decimal degrees following VPro
+coordinate sign and missing-component conventions.
 }

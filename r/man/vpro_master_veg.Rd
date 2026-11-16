@@ -56,13 +56,11 @@ full-table query when no filter or \code{limit} is supplied.}
 A tibble matching \code{\link[=vpro_veg]{vpro_veg()}} column names and types identically.
 }
 \description{
-Pushes plot filtering down to PostgreSQL via a \verb{WITH matched AS (...)} CTE on
-\code{becmaster.env} + \code{becmaster.admin}, extracts matching \code{becmaster.veg} rows,
-and runs the exact \code{\link[=vpro_veg]{vpro_veg()}} phytosociological pipeline: IEEE-754 \code{float32}
-cover narrowing, duplicate \verb{(PlotNumber, Species)} \code{max} deduplication,
-pre-lump effective stratum synthesis (\code{TotalA}/\code{TotalB} fallback), optional
-taxonomic lumping with VPro's \verb{99\%} per-layer cap (\code{pmin(sum, 99)}), optional
-\verb{BCPlantTaxonomy v19} synonym resolution (\code{standards.usys_all_specs} with
-bundled \code{VLists.db} fallback), and \code{total} / \code{abcd} / \code{lifeform} / \code{raw}
-aggregation.
+Pushes plot filtering down to PostgreSQL on \code{becmaster.env} +
+\code{becmaster.admin}, extracts matching \code{becmaster.veg} rows, and runs the exact
+\code{\link[=vpro_veg]{vpro_veg()}} phytosociological pipeline: VPro single-precision cover rounding,
+duplicate \verb{(PlotNumber, Species)} \code{max} deduplication, pre-lump effective
+stratum synthesis (\code{TotalA}/\code{TotalB} fallback), optional taxonomic lumping
+with VPro's \verb{99\%} per-layer cap (\code{pmin(sum, 99)}), optional \verb{BCPlantTaxonomy v19} synonym resolution (\code{standards.usys_all_specs} with bundled \code{VLists.db}
+fallback), and \code{total} / \code{abcd} / \code{lifeform} / \code{raw} aggregation.
 }

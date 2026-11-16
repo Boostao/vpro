@@ -17,6 +17,6 @@ vpro_goldstream_class(mean_cover, presence, return_score = FALSE)
 Numeric score vector when \code{return_score = TRUE}, else integer classes \code{0:6}.
 }
 \description{
-Reproduces \code{V7mdlValueConversions.GoldstreamClass} (\code{presence * 100 * sqrt(mean_cover)}
-classified at \verb{5, 25, 75, 150, 300, 500} into \code{0:6}).
+Computes Goldstream scores (\code{presence * 100 * sqrt(mean_cover)}) and
+classifies them at \verb{5, 25, 75, 150, 300, 500} into \code{0:6} matching VPro reports.
 }

@@ -44,8 +44,8 @@ used only when sublayers are \code{NA} / absent).}
 A tibble of tidy vegetation observations.
 }
 \description{
-Extracts physical \verb{<Project>_Veg} records, narrows cover values to IEEE-754
-\code{float32}, optionally resolves \verb{BCPlantTaxonomy v19} synonyms
+Extracts physical \verb{<Project>_Veg} records, applies VPro single-precision
+cover rounding, optionally resolves \verb{BCPlantTaxonomy v19} synonyms
 (\code{OldCode -> Code}), folds \verb{*_Lump} (or a custom two-column \code{data.frame})
 with VPro's exact per-layer \verb{99\%} cover cap (\code{pmin(sum_cover, 99)}), combines
 cover across \code{raw}, \code{abcd} (\code{A: 1-3}, \verb{B: 4-5c}, \code{C: 6}, \code{D: 7-10}),

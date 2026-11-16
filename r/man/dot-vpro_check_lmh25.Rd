@@ -8,8 +8,7 @@
 }
 \description{
 Evaluates \code{LMH25} (\emph{Field Manual for Describing Terrestrial Ecosystems}, 2nd
-Ed., 2023) soil, substrate, and edatopic rules calibrated to
-VPro Desktop (\code{app/internal/lmh25rules}):
+Ed., 2023) soil, substrate, and edatopic rules calibrated to VPro Desktop:
 \enumerate{
 \item \code{substrate_sum}: populated 6-component surface substrates out of \verb{[0, 100]}
 or not summing to \verb{100\%} (\code{abs(sum - 100) > 1.0}).

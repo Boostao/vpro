@@ -41,9 +41,9 @@ and \code{.nudum} units.}
 A list with \code{selected} tibble, \code{removed} tibble, and \code{thresholds}.
 }
 \description{
-Calibrated to \code{V7mdlReportsQualityControl.QC} and \code{QCLV}: ranks
-\code{SitePlotQuality}, \code{VegPlotQuality}, and \code{SoilPlotQuality} via
-\code{USysTableOfLists} (\code{ListName = 'DataQuality'}), applies case-insensitive
-lexical \code{BEC_Use >= bec_min} when \code{bec_min} is supplied, and optionally drops
+Matches VPro Desktop quality-control filtering: ranks \code{SitePlotQuality},
+\code{VegPlotQuality}, and \code{SoilPlotQuality} via \code{USysTableOfLists}
+(\code{ListName = 'DataQuality'}), applies case-insensitive lexical
+\code{BEC_Use >= bec_min} when \code{bec_min} is supplied, and optionally drops
 \code{.support/.poor/.nudum} units.
 }

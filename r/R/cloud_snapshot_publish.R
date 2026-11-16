@@ -18,8 +18,7 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
 
   dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
   tables <- vpro_extract_workspace_snapshot_tables(ws)
-  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L &&
-      is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
+  if (isTRUE(redact_sensitive) && is.data.frame(tables$env) && nrow(tables$env) > 0L && is.data.frame(tables$veg) && nrow(tables$veg) > 0L && "Species" %in% names(tables$veg)) {
     sens_codes <- .vpro_sensitive_species_codes(vlists_path = ws$vlists_path)
     if (length(sens_codes) > 0L) {
       veg_spp <- toupper(trimws(as.character(tables$veg$Species)))
@@ -94,16 +93,19 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
   on.exit(if (!published) unlink(tmp_tar, force = TRUE), add = TRUE)
 
   old_wd <- getwd()
-  tar_status <- tryCatch({
-    setwd(out_dir_abs)
-    utils::tar(
-      tarfile = tmp_tar,
-      files = basename(csv_dir),
-      compression = "gzip"
-    )
-  }, finally = {
-    setwd(old_wd)
-  })
+  tar_status <- tryCatch(
+    {
+      setwd(out_dir_abs)
+      utils::tar(
+        tarfile = tmp_tar,
+        files = basename(csv_dir),
+        compression = "gzip"
+      )
+    },
+    finally = {
+      setwd(old_wd)
+    }
+  )
   if (!identical(as.integer(tar_status), 0L) || !file.exists(tmp_tar)) {
     cli::cli_abort("Failed to create gzipped CSV snapshot archive {.path {tar_path}}.")
   }
@@ -128,12 +130,12 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
 #' Publish a custodian `BECMaster` snapshot and multi-format release artifacts
 #'
 #' Requires a custodian PostgreSQL connection (`pg$role == "custodian"`).
-#' Pulls a `REPEATABLE READ` consistent snapshot from `becmaster.*`, writes the
+#' Pulls a snapshot-consistent release from `becmaster.*`, writes the
 #' requested release artifacts (`"rds"`, `"sqlite"`, `"gpkg"` in `EPSG:3005`,
 #' and/or `"csv"` directory + `.tar.gz` bundle) into `out_dir`, computes a
 #' deterministic SHA-256 manifest digest across artifact hashes, counts, and
 #' active standards versions, and upserts the release record into
-#' `becmaster.snapshots` matching `CreateBECMasterSnapshot` in `vpro`.
+#' `becmaster.snapshots` matching VPro Desktop.
 #'
 #' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`).
 #' @param snapshot_tag Snapshot release identifier (`1..80` ASCII characters
@@ -142,7 +144,7 @@ vpro_write_snapshot_csv_bundle <- function(ws, snapshot_tag, out_dir_abs, proven
 #'   (created recursively if absent).
 #' @param formats Non-empty character subset of `c("rds", "sqlite", "gpkg", "csv")`.
 #' @param notes Optional release notes recorded in `becmaster.snapshots`.
-#' @param zones Optional BEC zone filter passed to the `REPEATABLE READ` pull.
+#' @param zones Optional BEC zone filter passed to the snapshot pull.
 #' @param subzones Optional BEC subzone/variant filter.
 #' @param project_ids Optional `ProjectID` filter.
 #' @param plots Optional literal character `PlotNumber` filter.
@@ -228,19 +230,26 @@ vpro_master_publish_snapshot <- function(
   csv_dir_dest <- file.path(out_dir_abs, paste0(tag, "_csv"))
   csv_tar_dest <- file.path(out_dir_abs, paste0(tag, "_csv.tar.gz"))
 
-  if ("sqlite" %in% req_formats &&
-      (file.exists(paste0(sqlite_dest, "-wal")) || file.exists(paste0(sqlite_dest, "-shm")))) {
+  if ("sqlite" %in% req_formats && (file.exists(paste0(sqlite_dest, "-wal")) || file.exists(paste0(sqlite_dest, "-shm")))) {
     cli::cli_abort(
-      "Refusing to write {.path {sqlite_dest}} while active SQLite WAL/SHM sidecar files exist."
+      "Refusing to write {.path {sqlite_dest}} while it is open in another VPro or database session."
     )
   }
 
   if (!isTRUE(overwrite)) {
     planned <- character()
-    if ("rds" %in% req_formats) planned <- c(planned, rds_dest)
-    if ("sqlite" %in% req_formats) planned <- c(planned, sqlite_dest)
-    if ("gpkg" %in% req_formats) planned <- c(planned, gpkg_dest)
-    if ("csv" %in% req_formats) planned <- c(planned, csv_tar_dest, csv_dir_dest)
+    if ("rds" %in% req_formats) {
+      planned <- c(planned, rds_dest)
+    }
+    if ("sqlite" %in% req_formats) {
+      planned <- c(planned, sqlite_dest)
+    }
+    if ("gpkg" %in% req_formats) {
+      planned <- c(planned, gpkg_dest)
+    }
+    if ("csv" %in% req_formats) {
+      planned <- c(planned, csv_tar_dest, csv_dir_dest)
+    }
     existing <- planned[file.exists(planned) | dir.exists(planned)]
     if (length(existing) > 0L) {
       cli::cli_abort(

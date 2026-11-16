@@ -1,4 +1,4 @@
-# Direct VPro Desktop Out-of-Process Sidecar Bridge (`internal/rsidecar`) -----
+# Internal VPro Desktop Bridge -----------------------------------------------
 
 vpro_rows_to_dt <- function(x) {
   if (is.data.frame(x)) {
@@ -89,8 +89,18 @@ vpro_build_dendrogram_geometry <- function(hc_obj, cluster_labels, plots_unique,
 
 vpro_sidecar_probe_runtime <- function() {
   target_pkgs <- c(
-    "vpro", "climr", "vegclust", "vegan", "DBI", "RSQLite",
-    "duckdb", "sf", "data.table", "jsonlite", "knitr", "rmarkdown"
+    "vpro",
+    "climr",
+    "vegclust",
+    "vegan",
+    "DBI",
+    "RSQLite",
+    "duckdb",
+    "sf",
+    "data.table",
+    "jsonlite",
+    "knitr",
+    "rmarkdown"
   )
   required_pkgs <- c("vegan", "vegclust", "DBI", "RSQLite", "data.table", "jsonlite", "knitr", "rmarkdown")
   pkg_rows <- lapply(target_pkgs, function(pkg) {
@@ -128,9 +138,7 @@ vpro_sidecar_climate_asmr <- function(req) {
   force_offline <- isTRUE(req$forceOfflineModel)
 
   vpro_compatible <- FALSE
-  if (!is.null(req$projectPath) && nzchar(req$projectPath) &&
-      !is.null(req$projectName) && nzchar(req$projectName) &&
-      file.exists(req$projectPath)) {
+  if (!is.null(req$projectPath) && nzchar(req$projectPath) && !is.null(req$projectName) && nzchar(req$projectName) && file.exists(req$projectPath)) {
     vpro_compatible <- tryCatch(isTRUE(vpro_project_inspect(req$projectPath, req$projectName)$compatible), error = function(e) FALSE)
   }
 
@@ -257,7 +265,7 @@ vpro_sidecar_climate_asmr <- function(req) {
 }
 
 vpro_sidecar_run_clustering <- function(req) {
-  rlang::check_installed("vegan", reason = "to execute sidecar multivariate clustering.")
+  rlang::check_installed("vegan", reason = "to run multivariate clustering.")
   project_path <- as.character(req$projectPath)
   project_name <- as.character(req$projectName)
   lump_arg <- if (isTRUE(req$applyLump)) {
@@ -345,7 +353,9 @@ vpro_sidecar_run_clustering <- function(req) {
     hc_method <- "beta_flexible"
   }
   coph_corr <- suppressWarnings(stats::cor(dist_obj, stats::cophenetic(hc)))
-  if (!is.finite(coph_corr)) coph_corr <- 0.0
+  if (!is.finite(coph_corr)) {
+    coph_corr <- 0.0
+  }
 
   cluster_labels <- character(length(plots_unique))
   names(cluster_labels) <- plots_unique
@@ -432,7 +442,9 @@ vpro_sidecar_run_clustering <- function(req) {
 
   unique_clusters <- sort(unique(cluster_labels))
   non_noise <- unique_clusters[!grepl("_Noise$", unique_clusters)]
-  if (length(non_noise) == 0L) non_noise <- unique_clusters
+  if (length(non_noise) == 0L) {
+    non_noise <- unique_clusters
+  }
   cl_mean_mat <- matrix(0.0, nrow = length(non_noise), ncol = ncol(mat_raw), dimnames = list(non_noise, colnames(mat_raw)))
   for (ci in seq_along(non_noise)) {
     cl_mean_mat[ci, ] <- colMeans(mat_raw[cluster_labels == non_noise[[ci]], , drop = FALSE])
@@ -508,7 +520,9 @@ vpro_sidecar_render_guide <- function(req) {
     su = if (isFALSE(req$useActiveSu)) "None" else req$suTable,
     lump = if (isFALSE(req$applyLump)) "None" else req$lumpTable
   )
-  if (!is.null(req$projectName) && nzchar(req$projectName)) ws$project <- as.character(req$projectName)
+  if (!is.null(req$projectName) && nzchar(req$projectName)) {
+    ws$project <- as.character(req$projectName)
+  }
   g_type <- if (!is.null(req$guideType) && req$guideType %in% c("single_unit", "bgc_unit", "veg_summary", "qc_audit")) {
     as.character(req$guideType)
   } else {
@@ -573,26 +587,29 @@ vpro_sidecar_render_guide <- function(req) {
     htmlPreview = html_preview,
     vegetationTable = art$payload$vegetationTable
   )
-  if (nzchar(pdf_path)) out$pdfPath <- pdf_path
-  if (nzchar(pdf_status)) out$pdfStatus <- pdf_status
+  if (nzchar(pdf_path)) {
+    out$pdfPath <- pdf_path
+  }
+  if (nzchar(pdf_status)) {
+    out$pdfStatus <- pdf_status
+  }
   out
 }
 
-#' Execute an internal VPro desktop sidecar action with JSON schema parity
+#' Execute an internal VPro Desktop action with JSON schema parity
 #'
-#' Allows VPro (`app/internal/rsidecar`) or internal harnesses to invoke `vpro`'s
-#' native engines directly while preserving exact request/response JSON field
-#' names for `probe_runtime`, `compute_climate_asmr`, `run_clustering`, and
+#' Allows VPro Desktop or internal test harnesses to invoke `vpro` analytics
+#' engines directly while preserving the desktop JSON request/response contract
+#' for `probe_runtime`, `compute_climate_asmr`, `run_clustering`, and
 #' `render_guide`.
 #'
-#' @param action Sidecar action name: `"probe_runtime"`, `"compute_climate_asmr"`,
+#' @param action Action name: `"probe_runtime"`, `"compute_climate_asmr"`,
 #'   `"run_clustering"`, or `"render_guide"`.
 #' @param payload_json Named R list, JSON string, or path to a request `.json`
 #'   file (ignored when `action = "probe_runtime"` and omitted).
 #' @param output_json Optional destination `.json` file path where the serialized
 #'   JSON response is written atomically.
-#' @return Structured response list matching the `app/internal/rsidecar`
-#'   JSON contract.
+#' @return Structured response list matching VPro Desktop's JSON contract.
 #' @keywords internal
 .vpro_sidecar_exec <- function(
   action = c("probe_runtime", "compute_climate_asmr", "run_clustering", "render_guide"),

@@ -38,14 +38,17 @@ vpro_master_status <- function(pg) {
     NA_character_
   }
 
-  can_bootstrap_schema <- tryCatch({
-    b_df <- vpro_pg_query(
-      pg,
-      "SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS ok",
-      action = "Check database CREATE privilege"
-    )
-    nrow(b_df) >= 1L && isTRUE(as.logical(b_df$ok[[1L]]))
-  }, error = function(e) FALSE)
+  can_bootstrap_schema <- tryCatch(
+    {
+      b_df <- vpro_pg_query(
+        pg,
+        "SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS ok",
+        action = "Check database CREATE privilege"
+      )
+      nrow(b_df) >= 1L && isTRUE(as.logical(b_df$ok[[1L]]))
+    },
+    error = function(e) FALSE
+  )
 
   sch_df <- vpro_pg_query(
     pg,
@@ -125,32 +128,44 @@ vpro_master_status <- function(pg) {
   pending_submissions <- 0L
 
   if (schemas_bootstrapped && can_read_master) {
-    becmaster_plots <- tryCatch({
-      d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.env")
-      if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
-    }, error = function(e) 0L)
+    becmaster_plots <- tryCatch(
+      {
+        d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.env")
+        if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
+      },
+      error = function(e) 0L
+    )
 
-    becmaster_veg <- tryCatch({
-      d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.veg")
-      if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
-    }, error = function(e) 0L)
+    becmaster_veg <- tryCatch(
+      {
+        d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.veg")
+        if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
+      },
+      error = function(e) 0L
+    )
 
-    snapshot_count <- tryCatch({
-      d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.snapshots")
-      if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
-    }, error = function(e) 0L)
+    snapshot_count <- tryCatch(
+      {
+        d <- vpro_pg_query(pg, "SELECT COUNT(*) AS n FROM becmaster.snapshots")
+        if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
+      },
+      error = function(e) 0L
+    )
 
-    latest_snapshot_tag <- tryCatch({
-      d <- vpro_pg_query(
-        pg,
-        "SELECT snapshot_tag FROM becmaster.snapshots ORDER BY created_at DESC LIMIT 1"
-      )
-      if (nrow(d) >= 1L && !is.na(d$snapshot_tag[[1L]]) && nzchar(d$snapshot_tag[[1L]])) {
-        as.character(d$snapshot_tag[[1L]])
-      } else {
-        NA_character_
-      }
-    }, error = function(e) NA_character_)
+    latest_snapshot_tag <- tryCatch(
+      {
+        d <- vpro_pg_query(
+          pg,
+          "SELECT snapshot_tag FROM becmaster.snapshots ORDER BY created_at DESC LIMIT 1"
+        )
+        if (nrow(d) >= 1L && !is.na(d$snapshot_tag[[1L]]) && nzchar(d$snapshot_tag[[1L]])) {
+          as.character(d$snapshot_tag[[1L]])
+        } else {
+          NA_character_
+        }
+      },
+      error = function(e) NA_character_
+    )
 
     rel_df <- tryCatch(
       vpro_pg_query(
@@ -174,13 +189,16 @@ vpro_master_status <- function(pg) {
   }
 
   if (schemas_bootstrapped && can_read_staging) {
-    pending_submissions <- tryCatch({
-      d <- vpro_pg_query(
-        pg,
-        "SELECT COUNT(*) AS n FROM staging.submissions WHERE status = 'pending'"
-      )
-      if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
-    }, error = function(e) 0L)
+    pending_submissions <- tryCatch(
+      {
+        d <- vpro_pg_query(
+          pg,
+          "SELECT COUNT(*) AS n FROM staging.submissions WHERE status = 'pending'"
+        )
+        if (nrow(d) >= 1L) as.integer(d$n[[1L]]) else 0L
+      },
+      error = function(e) 0L
+    )
   }
 
   structure(
@@ -276,7 +294,7 @@ as_tibble.vpro_pg_status <- function(x, ...) {
 #' `information_schema.tables`, then executes idempotent `CREATE SCHEMA IF NOT
 #' EXISTS`, `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, trigger,
 #' PostGIS `geom` column (when `postgis` is installed), and optional least-privilege
-#' role grants / RLS policies matching VPro Desktop (`app/internal/cloudsync/schema.go`).
+#' role grants / RLS policies matching VPro Desktop.
 #' Never modifies `public` or drops existing data.
 #'
 #' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`).
@@ -293,7 +311,9 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
   vpro_assert_pg_conn(pg, require_custodian = TRUE)
 
   norm_role <- function(r, arg_nm) {
-    if (is.null(r)) return("")
+    if (is.null(r)) {
+      return("")
+    }
     if (!is.character(r) || length(r) != 1L || is.na(r)) {
       cli::cli_abort("{.arg {arg_nm}} must be {.code NULL} or a single character string.")
     }
@@ -432,7 +452,9 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
   )
 
   role_exists <- function(r_name) {
-    if (!nzchar(r_name)) return(FALSE)
+    if (!nzchar(r_name)) {
+      return(FALSE)
+    }
     d <- vpro_pg_query(
       pg,
       "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS ok",
@@ -494,7 +516,8 @@ vpro_master_bootstrap <- function(pg, contributor_role = NULL, custodian_role = 
         paste0("CREATE POLICY submissions_contributor_select ON staging.submissions FOR SELECT TO ", q_user, " USING (true)"),
         "DROP POLICY IF EXISTS submissions_contributor_insert ON staging.submissions",
         paste0(
-          "CREATE POLICY submissions_contributor_insert ON staging.submissions FOR INSERT TO ", q_user,
+          "CREATE POLICY submissions_contributor_insert ON staging.submissions FOR INSERT TO ",
+          q_user,
           " WITH CHECK (status = 'pending' AND compliance_passed = TRUE AND db_role = current_user AND reviewed_by IS NULL AND merged_tx_id IS NULL)"
         )
       )

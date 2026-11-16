@@ -1,23 +1,23 @@
-# Atomic SERIALIZABLE Custodian 3-Way Merge Execution ------------------------
+# Conflict-Checked Custodian 3-Way Merge Execution ---------------------------
 
-#' Execute an atomic `SERIALIZABLE` custodian merge from `staging` into `BECMaster`
+#' Execute a conflict-checked custodian merge from `staging` into `BECMaster`
 #'
-#' Locks the pending `staging.submissions` record inside a single PostgreSQL
-#' `SERIALIZABLE` transaction, re-verifies the 3-way merge preview (enforcing
-#' `expected_digest` when supplied), resolves every plot and field/row change
-#' using VPro Desktop custodial precedence (`field_resolutions` ->
-#' custodian-protected `keep_target` guard -> `plot_resolutions` ->
+#' Locks the pending `staging.submissions` record inside a single
+#' conflict-checked database transaction, re-verifies the 3-way merge preview
+#' (enforcing `expected_digest` when supplied), resolves every plot and
+#' field/row change using VPro Desktop custodial precedence (`field_resolutions`
+#' -> custodian-protected `keep_target` guard -> `plot_resolutions` ->
 #' `FastForward`/`TargetModifiedOnly` item defaults -> `default_resolution`),
-#' validates UTF-16 bounds, IEEE-754 `float32 < 100` covers, and `LMH25 (2023)`
-#' soil horizon depth signs, allocates non-reused child `ID`s via
-#' `becmaster.child_identity_watermark` + `becmaster.child_identity`, appends
-#' SHA-256 hash-chained rows to `becmaster.audit` (verifiable via
+#' validates text length limits, cover bounds (`0` to under `100%`), and
+#' `LMH25 (2023)` soil horizon depth signs, allocates non-reused child `ID`s
+#' via `becmaster.child_identity_watermark` + `becmaster.child_identity`,
+#' appends SHA-256 hash-chained rows to `becmaster.audit` (verifiable via
 #' `vpro_master_audit(pg, verify_chain = TRUE)`), and records provenance in
 #' `becmaster.merge_ledger` and `staging.submissions`.
 #'
 #' @param pg A custodian `vpro_pg_conn` connection (`role == "custodian"`) from
 #'   [vpro_master_connect()].
-#' @param submission_id Pending staging submission UUID string.
+#' @param submission_id Pending staging submission ID string.
 #' @param default_resolution Fallback resolution for unresolved `Conflict` items:
 #'   `"keep_target"` (default) or `"accept_source"`.
 #' @param plot_resolutions Optional named character vector (`PlotNumber ->
@@ -84,8 +84,12 @@ vpro_staging_merge <- function(
   }
 
   pg_tbl_map <- c(
-    Env = "env", Admin = "admin", Veg = "veg",
-    Humus = "humus", Mineral = "mineral", Other = "other"
+    Env = "env",
+    Admin = "admin",
+    Veg = "veg",
+    Humus = "humus",
+    Mineral = "mineral",
+    Other = "other"
   )
   spec_cache <- stats::setNames(
     lapply(c(.vpro_merge_table_suffixes, "Metadata", "Audit"), vpro_pg_vp08_specs),
@@ -96,11 +100,14 @@ vpro_staging_merge <- function(
     function() {
       tx_committed <- FALSE
       vpro_pg_begin_isolated_tx(pg$conn, "BEGIN ISOLATION LEVEL SERIALIZABLE", "vpro_staging_merge")
-      on.exit({
-        if (!tx_committed && isTRUE(tryCatch(DBI::dbIsValid(pg$conn), error = function(e) FALSE))) {
-          tryCatch(DBI::dbExecute(pg$conn, "ROLLBACK"), error = function(e) NULL)
-        }
-      }, add = TRUE)
+      on.exit(
+        {
+          if (!tx_committed && isTRUE(tryCatch(DBI::dbIsValid(pg$conn), error = function(e) FALSE))) {
+            tryCatch(DBI::dbExecute(pg$conn, "ROLLBACK"), error = function(e) NULL)
+          }
+        },
+        add = TRUE
+      )
 
       lock_df <- DBI::dbGetQuery(
         pg$conn,
@@ -212,15 +219,22 @@ vpro_staging_merge <- function(
 
         col_csv <- paste(vapply(spec$name, vpro_quote_ident, character(1L)), collapse = ", ")
         ins_sql <- paste0(
-          "INSERT INTO becmaster.", vpro_quote_ident(pg_tbl_map[[suffix]]),
-          " (", col_csv, ") VALUES (", paste(placeholders, collapse = ", "), ")"
+          "INSERT INTO becmaster.",
+          vpro_quote_ident(pg_tbl_map[[suffix]]),
+          " (",
+          col_csv,
+          ") VALUES (",
+          paste(placeholders, collapse = ", "),
+          ")"
         )
         DBI::dbExecute(pg$conn, ins_sql, params = params)
 
         record_audit(plot, suffix, key_col, NA_character_, plot, NA_real_)
         for (i in seq_len(nrow(spec))) {
           cn <- spec$name[[i]]
-          if (identical(cn, key_col)) next
+          if (identical(cn, key_col)) {
+            next
+          }
           cv <- comp_row[[cn]][[1L]]
           if (!is.na(cv)) {
             record_audit(plot, suffix, cn, NA_character_, cv, NA_real_)
@@ -266,16 +280,25 @@ vpro_staging_merge <- function(
 
         col_csv <- paste(vapply(spec$name, vpro_quote_ident, character(1L)), collapse = ", ")
         ins_sql <- paste0(
-          "INSERT INTO becmaster.", vpro_quote_ident(pg_tbl),
-          " (", col_csv, ") VALUES (", paste(placeholders, collapse = ", "), ")"
+          "INSERT INTO becmaster.",
+          vpro_quote_ident(pg_tbl),
+          " (",
+          col_csv,
+          ") VALUES (",
+          paste(placeholders, collapse = ", "),
+          ")"
         )
         DBI::dbExecute(pg$conn, ins_sql, params = params)
 
         for (i in seq_len(nrow(spec))) {
           cn <- spec$name[[i]]
-          if (cn %in% c("PlotNumber", "ID")) next
+          if (cn %in% c("PlotNumber", "ID")) {
+            next
+          }
           cv <- comp_row[[cn]][[1L]]
-          if (is.na(cv) || (identical(cn, "Flag") && identical(cv, "0"))) next
+          if (is.na(cv) || (identical(cn, "Flag") && identical(cv, "0"))) {
+            next
+          }
           record_audit(plot, suffix, cn, NA_character_, cv, new_id)
         }
       }
@@ -283,13 +306,15 @@ vpro_staging_merge <- function(
       insert_whole_plot <- function(plot) {
         u16_p <- vpro_utf16_len(plot)
         if (is.na(u16_p) || u16_p > 7L) {
-          cli::cli_abort("PlotNumber {.val {plot}} exceeds 7 UTF-16 code units or contains invalid UTF-8.")
+          cli::cli_abort("PlotNumber {.val {plot}} exceeds 7 characters or contains invalid text.")
         }
         insert_parent_row("Env", plot)
         insert_parent_row("Admin", plot)
         for (suffix in c("Veg", "Humus", "Mineral", "Other")) {
           c_df <- src_snap$raw[[suffix]][[plot]]
-          if (is.null(c_df) || nrow(c_df) == 0L) next
+          if (is.null(c_df) || nrow(c_df) == 0L) {
+            next
+          }
           rks <- sort(rownames(c_df), method = "radix")
           for (rk in rks) {
             insert_child_row(suffix, plot, rk)
@@ -328,8 +353,7 @@ vpro_staging_merge <- function(
           next
         }
 
-        if (nrow(p_items) == 1L && identical(p_items$key[[1L]], "Plot") &&
-            !(plot %in% tgt_snap$plots) && (plot %in% src_snap$plots)) {
+        if (nrow(p_items) == 1L && identical(p_items$key[[1L]], "Plot") && !(plot %in% tgt_snap$plots) && (plot %in% src_snap$plots)) {
           if (identical(resolve_choice(p_items[1L, , drop = FALSE]), "accept_source")) {
             insert_whole_plot(plot)
             added_plots <- added_plots + 1L
@@ -370,9 +394,15 @@ vpro_staging_merge <- function(
             vpro_validate_merge_cell_value(suffix, c_row, rv, plot = plot)
             param_val <- vpro_pg_param_for_spec(c_row, rv)
             upd_sql <- paste0(
-              "UPDATE becmaster.", vpro_quote_ident(pg_tbl),
-              " SET ", vpro_quote_ident(fld), " = $1::", tolower(c_row$pg_type[[1L]]),
-              " WHERE ", vpro_quote_ident(key_col), " = $2"
+              "UPDATE becmaster.",
+              vpro_quote_ident(pg_tbl),
+              " SET ",
+              vpro_quote_ident(fld),
+              " = $1::",
+              tolower(c_row$pg_type[[1L]]),
+              " WHERE ",
+              vpro_quote_ident(key_col),
+              " = $2"
             )
             aff <- DBI::dbExecute(pg$conn, upd_sql, params = list(param_val, plot))
             if (!identical(as.integer(aff), 1L)) {
@@ -402,7 +432,8 @@ vpro_staging_merge <- function(
               reserved_deleted_ids <- c(reserved_deleted_ids, as.double(tgt_id))
 
               del_sql <- paste0(
-                "DELETE FROM becmaster.", vpro_quote_ident(pg_tbl),
+                "DELETE FROM becmaster.",
+                vpro_quote_ident(pg_tbl),
                 ' WHERE "PlotNumber" = $1 AND "ID" = $2::bigint'
               )
               aff <- DBI::dbExecute(pg$conn, del_sql, params = list(plot, sprintf("%.0f", tgt_id)))
@@ -413,9 +444,13 @@ vpro_staging_merge <- function(
               }
               for (ci in seq_len(nrow(spec))) {
                 cn <- spec$name[[ci]]
-                if (cn %in% c("PlotNumber", "ID")) next
+                if (cn %in% c("PlotNumber", "ID")) {
+                  next
+                }
                 old_v <- t_comp_row[[cn]][[1L]]
-                if (is.na(old_v) || (identical(cn, "Flag") && identical(old_v, "0"))) next
+                if (is.na(old_v) || (identical(cn, "Flag") && identical(old_v, "0"))) {
+                  next
+                }
                 record_audit(plot, suffix, cn, old_v, NA_character_, tgt_id)
               }
               plot_modified <- TRUE
@@ -445,8 +480,12 @@ vpro_staging_merge <- function(
           }
 
           upd_sql <- paste0(
-            "UPDATE becmaster.", vpro_quote_ident(pg_tbl),
-            " SET ", vpro_quote_ident(fld), " = $1::", tolower(c_row$pg_type[[1L]]),
+            "UPDATE becmaster.",
+            vpro_quote_ident(pg_tbl),
+            " SET ",
+            vpro_quote_ident(fld),
+            " = $1::",
+            tolower(c_row$pg_type[[1L]]),
             ' WHERE "PlotNumber" = $2 AND "ID" = $3::bigint'
           )
           aff <- DBI::dbExecute(pg$conn, upd_sql, params = list(param_val, plot, sprintf("%.0f", tgt_id)))
@@ -501,7 +540,9 @@ vpro_staging_merge <- function(
         new_meta <- DBI::dbGetQuery(
           pg$conn,
           paste0(
-            "SELECT ", meta_csv, " FROM staging.metadata AS s ",
+            "SELECT ",
+            meta_csv,
+            " FROM staging.metadata AS s ",
             "WHERE s.submission_id = $1::uuid ",
             '  AND s."ProjectID" IS NOT NULL AND s."ProjectID" <> \'\' ',
             '  AND NOT EXISTS (SELECT 1 FROM becmaster.metadata AS m WHERE m."ProjectID" = s."ProjectID")'
@@ -511,7 +552,9 @@ vpro_staging_merge <- function(
         if (nrow(new_meta) > 0L) {
           m_placeholders <- paste0("$", seq_len(nrow(meta_spec)), "::", tolower(meta_spec$pg_type))
           ins_meta_sql <- paste0(
-            "INSERT INTO becmaster.metadata (", meta_csv, ") VALUES (",
+            "INSERT INTO becmaster.metadata (",
+            meta_csv,
+            ") VALUES (",
             paste(m_placeholders, collapse = ", "),
             ') ON CONFLICT ("ProjectID") DO NOTHING'
           )
@@ -580,12 +623,16 @@ vpro_staging_merge <- function(
         id_col_out <- if (all(is.na(aud_id) | abs(aud_id) <= .Machine$integer.max)) {
           out_i <- rep(NA_integer_, n_aud)
           ok_i <- !is.na(aud_id)
-          if (any(ok_i)) out_i[ok_i] <- as.integer(aud_id[ok_i])
+          if (any(ok_i)) {
+            out_i[ok_i] <- as.integer(aud_id[ok_i])
+          }
           out_i
         } else {
           out_c <- rep(NA_character_, n_aud)
           ok_c <- !is.na(aud_id)
-          if (any(ok_c)) out_c[ok_c] <- sprintf("%.0f", aud_id[ok_c])
+          if (any(ok_c)) {
+            out_c[ok_c] <- sprintf("%.0f", aud_id[ok_c])
+          }
           out_c
         }
 
@@ -670,7 +717,9 @@ vpro_staging_merge <- function(
       tx_committed <- TRUE
 
       norm_id_vec <- function(v) {
-        if (length(v) == 0L) return(integer(0L))
+        if (length(v) == 0L) {
+          return(integer(0L))
+        }
         v <- sort(v)
         if (all(abs(v) <= .Machine$integer.max)) as.integer(v) else v
       }
@@ -689,6 +738,6 @@ vpro_staging_merge <- function(
         merged_at = now_iso_str
       )
     },
-    action = "execute SERIALIZABLE staging-to-BECMaster merge"
+    action = "execute custodian staging-to-BECMaster merge"
   )
 }

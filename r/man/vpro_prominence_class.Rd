@@ -17,6 +17,6 @@ vpro_prominence_class(mean_cover, presence, return_score = FALSE)
 Numeric score vector when \code{return_score = TRUE}, else integer classes \code{1:5}.
 }
 \description{
-Reproduces \code{V7mdlValueConversions.ProminenceClass} (\code{mean_cover * 10 * sqrt(presence)}
-classified at \verb{15, 50, 100, 200} into \code{1:5}).
+Computes BEC prominence scores (\code{mean_cover * 10 * sqrt(presence)}) and
+classifies them at \verb{15, 50, 100, 200} into \code{1:5} matching VPro reports.
 }

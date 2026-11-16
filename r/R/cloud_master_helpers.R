@@ -21,8 +21,7 @@ vpro_pg_validate_limit <- function(limit, allow_null = TRUE) {
     }
     cli::cli_abort("{.arg limit} must be a positive integer.")
   }
-  if (!is.numeric(limit) || length(limit) != 1L || is.na(limit) ||
-      !is.finite(limit) || limit < 1 || limit != trunc(limit)) {
+  if (!is.numeric(limit) || length(limit) != 1L || is.na(limit) || !is.finite(limit) || limit < 1 || limit != trunc(limit)) {
     cli::cli_abort("{.arg limit} must be a single positive integer (>= 1).")
   }
   as.integer(limit)
@@ -55,8 +54,7 @@ vpro_pg_postgis_geom_schema <- function(pg) {
     vpro_pg_query(pg, sql, params = NULL, action = "inspect becmaster.env PostGIS geometry column"),
     error = function(e) data.frame(postgis_schema = "", has_geom = FALSE)
   )
-  if (nrow(res) >= 1L && isTRUE(vpro_access_to_logical(res$has_geom[[1L]])) &&
-      !is.na(res$postgis_schema[[1L]]) && nzchar(trimws(as.character(res$postgis_schema[[1L]])))) {
+  if (nrow(res) >= 1L && isTRUE(vpro_access_to_logical(res$has_geom[[1L]])) && !is.na(res$postgis_schema[[1L]]) && nzchar(trimws(as.character(res$postgis_schema[[1L]])))) {
     trimws(as.character(res$postgis_schema[[1L]]))
   } else {
     ""
@@ -86,9 +84,10 @@ vpro_pg_subset_where <- function(
 
   bbox_clean <- NULL
   if (!is.null(bbox)) {
-    if (inherits(bbox, "bbox") ||
-        (is.numeric(bbox) && !is.null(names(bbox)) &&
-         all(c("xmin", "ymin", "xmax", "ymax") %in% names(bbox)))) {
+    if (
+      inherits(bbox, "bbox") ||
+        (is.numeric(bbox) && !is.null(names(bbox)) && all(c("xmin", "ymin", "xmax", "ymax") %in% names(bbox)))
+    ) {
       bbox_clean <- as.double(c(
         bbox[["xmin"]],
         bbox[["ymin"]],
@@ -151,18 +150,50 @@ vpro_pg_subset_where <- function(
       clauses <- c(
         clauses,
         paste0(
-          "(", pfx, "geom && ", vpro_quote_ident(postgis_schema), ".ST_MakeEnvelope(",
-          p_min_lon, ", ", p_min_lat, ", ", p_max_lon, ", ", p_max_lat,
-          ", 4326) AND ", pfx, '"Longitude" BETWEEN ', p_min_lon, " AND ", p_max_lon,
-          " AND ", pfx, '"Latitude" BETWEEN ', p_min_lat, " AND ", p_max_lat, ")"
+          "(",
+          pfx,
+          "geom && ",
+          vpro_quote_ident(postgis_schema),
+          ".ST_MakeEnvelope(",
+          p_min_lon,
+          ", ",
+          p_min_lat,
+          ", ",
+          p_max_lon,
+          ", ",
+          p_max_lat,
+          ", 4326) AND ",
+          pfx,
+          '"Longitude" BETWEEN ',
+          p_min_lon,
+          " AND ",
+          p_max_lon,
+          " AND ",
+          pfx,
+          '"Latitude" BETWEEN ',
+          p_min_lat,
+          " AND ",
+          p_max_lat,
+          ")"
         )
       )
     } else {
       clauses <- c(
         clauses,
         paste0(
-          "(", pfx, '"Longitude" BETWEEN ', p_min_lon, " AND ", p_max_lon,
-          " AND ", pfx, '"Latitude" BETWEEN ', p_min_lat, " AND ", p_max_lat, ")"
+          "(",
+          pfx,
+          '"Longitude" BETWEEN ',
+          p_min_lon,
+          " AND ",
+          p_max_lon,
+          " AND ",
+          pfx,
+          '"Latitude" BETWEEN ',
+          p_min_lat,
+          " AND ",
+          p_max_lat,
+          ")"
         )
       )
     }
@@ -193,8 +224,7 @@ vpro_pg_subset_where <- function(
   codes <- character()
   syn_pairs <- data.frame(Code = character(), OldCode = character(), stringsAsFactors = FALSE)
 
-  vdb <- if (!is.null(vlists_path) && is.character(vlists_path) && length(vlists_path) == 1L &&
-             !is.na(vlists_path) && nzchar(trimws(vlists_path)) && file.exists(vlists_path)) {
+  vdb <- if (!is.null(vlists_path) && is.character(vlists_path) && length(vlists_path) == 1L && !is.na(vlists_path) && nzchar(trimws(vlists_path)) && file.exists(vlists_path)) {
     trimws(vlists_path)
   } else {
     cand <- file.path(vpro_data_dir(), "VLists.db")
@@ -233,15 +263,18 @@ vpro_pg_subset_where <- function(
   }
 
   if (!is.null(pg)) {
-    has_pg_attr <- tryCatch({
-      chk <- vpro_pg_query(
-        pg,
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'standards' AND table_name = 'usys_spp_attributes') AS ok",
-        params = NULL,
-        action = "check standards.usys_spp_attributes availability"
-      )
-      nrow(chk) >= 1L && isTRUE(vpro_access_to_logical(chk$ok[[1L]]))
-    }, error = function(e) FALSE)
+    has_pg_attr <- tryCatch(
+      {
+        chk <- vpro_pg_query(
+          pg,
+          "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'standards' AND table_name = 'usys_spp_attributes') AS ok",
+          params = NULL,
+          action = "check standards.usys_spp_attributes availability"
+        )
+        nrow(chk) >= 1L && isTRUE(vpro_access_to_logical(chk$ok[[1L]]))
+      },
+      error = function(e) FALSE
+    )
     if (isTRUE(has_pg_attr)) {
       pg_attr <- tryCatch(
         vpro_pg_query(
@@ -333,16 +366,14 @@ vpro_same_hash <- function(a, b) {
   if (length(a) != 1L || length(b) != 1L || is.na(a[[1L]]) || is.na(b[[1L]])) {
     return(FALSE)
   }
-  tolower(trimws(unname(as.character(a[[1L]])))) ==
-    tolower(trimws(unname(as.character(b[[1L]]))))
+  tolower(trimws(unname(as.character(a[[1L]])))) == tolower(trimws(unname(as.character(b[[1L]]))))
 }
 
 #' Verify the cryptographic SHA-256 hash chain on `becmaster.audit` (internal)
 #'
 #' Recomputes `row_hash` across the most recent `limit` rows of `becmaster.audit`
 #' in ascending `audit_seq` order using `vpro_compute_audit_row_hash()`,
-#' matching `VerifyBECMasterAuditChain` in `vpro`
-#' (`internal/cloudsync/custodian_merge.go`). Anchors the window's first row
+#' matching VPro Desktop. Anchors the window's first row
 #' against `.vpro_genesis_audit_hash` when starting at the beginning of the
 #' ledger, or against the immediate predecessor row's `row_hash` when verifying
 #' a bounded tail window.
@@ -364,7 +395,9 @@ vpro_same_hash <- function(a, b) {
 
   sql <- paste0(
     "SELECT * FROM (",
-    "  SELECT audit_seq::text AS audit_seq_txt, audit_seq, ", quoted_csv, ", ",
+    "  SELECT audit_seq::text AS audit_seq_txt, audit_seq, ",
+    quoted_csv,
+    ", ",
     '         "ID"::text AS "__id_txt__", ',
     "         COALESCE(merge_tx_id::text, '') AS merge_tx_id, prev_hash, row_hash",
     "  FROM becmaster.audit",
@@ -427,8 +460,12 @@ vpro_same_hash <- function(a, b) {
         partial_window = FALSE,
         tail_hash = tail_hash,
         detail = paste0(
-          "Audit hash chain broken at seq=", seq_txt,
-          ": prev_hash=", prev_hash, " != expected=", expected_prev
+          "Audit hash chain broken at seq=",
+          seq_txt,
+          ": prev_hash=",
+          prev_hash,
+          " != expected=",
+          expected_prev
         )
       ))
     }
@@ -444,8 +481,12 @@ vpro_same_hash <- function(a, b) {
         partial_window = FALSE,
         tail_hash = tail_hash,
         detail = paste0(
-          "Audit row_hash tampered at seq=", seq_txt,
-          ": computed=", computed, " != stored=", row_hash
+          "Audit row_hash tampered at seq=",
+          seq_txt,
+          ": computed=",
+          computed,
+          " != stored=",
+          row_hash
         )
       ))
     }
@@ -471,7 +512,8 @@ vpro_same_hash <- function(a, b) {
         partial_window = FALSE,
         tail_hash = tail_hash,
         detail = paste0(
-          "Initial audit row seq=", first_seq_txt,
+          "Initial audit row seq=",
+          first_seq_txt,
           " does not anchor to genesis hash (deleted prefix detected)."
         )
       ))
@@ -486,8 +528,12 @@ vpro_same_hash <- function(a, b) {
         partial_window = TRUE,
         tail_hash = tail_hash,
         detail = paste0(
-          "Audit window boundary broken at seq=", first_seq_txt,
-          ": prev_hash=", first_prev_hash, " != predecessor=", pred_hash
+          "Audit window boundary broken at seq=",
+          first_seq_txt,
+          ": prev_hash=",
+          first_prev_hash,
+          " != predecessor=",
+          pred_hash
         )
       ))
     }
@@ -507,8 +553,9 @@ vpro_same_hash <- function(a, b) {
 }
 
 vpro_validate_splinter_project_name <- function(project_name, allow_reserved_name = FALSE) {
-  if (!is.character(project_name) || length(project_name) != 1L || is.na(project_name) ||
-      !validUTF8(project_name) || trimws(project_name) != project_name || !nzchar(project_name)) {
+  if (
+    !is.character(project_name) || length(project_name) != 1L || is.na(project_name) || !validUTF8(project_name) || trimws(project_name) != project_name || !nzchar(project_name)
+  ) {
     cli::cli_abort(
       "{.arg project_name} must be a non-empty string without leading or trailing whitespace."
     )
@@ -573,12 +620,26 @@ vpro_assign_unique_ids <- function(ids_raw, used_env, start_id = 100000000, requ
 
 vpro_serialize_subset_filter_json <- function(filters, limit_int = NULL, allow_full = FALSE) {
   payload <- stats::setNames(list(), character())
-  if (length(filters$zones) > 0L) payload$zones <- as.character(filters$zones)
-  if (length(filters$subzones) > 0L) payload$subzones <- as.character(filters$subzones)
-  if (length(filters$project_ids) > 0L) payload$projectIds <- as.character(filters$project_ids)
-  if (length(filters$plots) > 0L) payload$plotNumbers <- as.character(filters$plots)
-  if (!is.null(filters$bbox)) payload$bbox <- as.numeric(filters$bbox)
-  if (!is.null(limit_int)) payload$limit <- jsonlite::unbox(as.integer(limit_int))
-  if (isTRUE(allow_full)) payload$allowFullCheckout <- jsonlite::unbox(TRUE)
+  if (length(filters$zones) > 0L) {
+    payload$zones <- as.character(filters$zones)
+  }
+  if (length(filters$subzones) > 0L) {
+    payload$subzones <- as.character(filters$subzones)
+  }
+  if (length(filters$project_ids) > 0L) {
+    payload$projectIds <- as.character(filters$project_ids)
+  }
+  if (length(filters$plots) > 0L) {
+    payload$plotNumbers <- as.character(filters$plots)
+  }
+  if (!is.null(filters$bbox)) {
+    payload$bbox <- as.numeric(filters$bbox)
+  }
+  if (!is.null(limit_int)) {
+    payload$limit <- jsonlite::unbox(as.integer(limit_int))
+  }
+  if (isTRUE(allow_full)) {
+    payload$allowFullCheckout <- jsonlite::unbox(TRUE)
+  }
   as.character(jsonlite::toJSON(payload, auto_unbox = FALSE))
 }

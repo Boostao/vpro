@@ -26,12 +26,12 @@ analyst or ecologist.}
 
 \item{notes}{Optional character note for custodian review.}
 
-\item{scope}{Plot submission scope: \code{"project"} (all valid text-keyed plots
-in \verb{<Project>_Env}) or \code{"su"} (restricted to plots in the active \verb{*_SU}
-table).}
+\item{scope}{Plot submission scope: \code{"project"} (all valid plots with text
+\code{PlotNumber} keys in \verb{<Project>_Env}) or \code{"su"} (restricted to plots in the
+active \verb{*_SU} table).}
 
 \item{base_snapshot_tag}{Optional \code{BECMaster} baseline snapshot tag from
-which the project splinter was originally checked out.}
+which the regional working copy was originally checked out.}
 
 \item{custodian_override}{Logical; if \code{TRUE} on a \code{"custodian"} connection,
 permits staging upload when \code{\link[=vpro_validate]{vpro_validate()}} reports blocking QA errors
@@ -45,11 +45,11 @@ A named list with \code{submission_id}, \code{project_name}, \code{project_id},
 }
 \description{
 Runs mandatory pre-flight standards, referential, \code{LMH25 (2023)} pedological,
-UTF-16 code-unit (\code{PlotNumber <= 7}, \code{Species <= 8}, \code{Horizon <= 8},
-\code{Texture <= 4}, \code{Colour <= 14}, quality labels \verb{<= 15}), and IEEE-754
-\code{float32 < 100} cover validation (\code{\link[=vpro_validate]{vpro_validate()}} +
-\code{\link[=vpro_narrow_float32]{vpro_narrow_float32()}}), captures a WAL-consistent SQLite snapshot, packages
-referenced personal species from \code{VUser.db} (\code{USysUserSpp}) alongside active
-\verb{<Project>_Lump} and \verb{*_SU} assignments, and streams all eight \code{VP08} tables
-into \verb{staging.*} inside a single atomic PostgreSQL transaction.
+text character-length (\code{PlotNumber <= 7}, \code{Species <= 8}, \code{Horizon <= 8},
+\code{Texture <= 4}, \code{Colour <= 14}, quality labels \verb{<= 15}), and cover (\code{0} to
+under \verb{100\%}) validation (\code{\link[=vpro_validate]{vpro_validate()}} + \code{\link[=vpro_narrow_float32]{vpro_narrow_float32()}}),
+captures a point-in-time snapshot of the project, packages referenced
+personal species from \code{VUser.db} (\code{USysUserSpp}) alongside active
+\verb{<Project>_Lump} and \verb{*_SU} assignments, and uploads all eight \code{VP08} tables
+into \verb{staging.*} in one safe transaction.
 }

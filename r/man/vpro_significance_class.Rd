@@ -13,5 +13,6 @@ vpro_significance_class(significance)
 A character vector containing \code{"+"}, \code{"1"} through \code{"9"}, or \code{NA}.
 }
 \description{
-Reproduces \code{V7mdlValueConversions.SignifClass} (\verb{<= 0.3} -> \code{"+"}; \verb{1, 2.2, 5, 10, 20, 33, 50, 75} -> \code{"1"} through \code{"9"}).
+Maps mean cover values to Domin-Krajina significance classes (\verb{<= 0.3} ->
+\code{"+"}; \verb{1, 2.2, 5, 10, 20, 33, 50, 75} -> \code{"1"} through \code{"9"}).
 }

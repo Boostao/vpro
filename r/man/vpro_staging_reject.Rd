@@ -10,7 +10,7 @@ vpro_staging_reject(pg, submission_id, reviewer_notes, actor = NULL)
 \item{pg}{A custodian \code{vpro_pg_conn} connection (\code{role == "custodian"}) from
 \code{\link[=vpro_master_connect]{vpro_master_connect()}}.}
 
-\item{submission_id}{Pending staging submission UUID string.}
+\item{submission_id}{Pending staging submission ID string.}
 
 \item{reviewer_notes}{Non-empty character string explaining why the
 submission was rejected.}

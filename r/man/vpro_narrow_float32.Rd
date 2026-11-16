@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils_domain.R
 \name{vpro_narrow_float32}
 \alias{vpro_narrow_float32}
-\title{Narrow numeric cover values to IEEE-754 single precision (\code{float32})}
+\title{Round numeric cover values to VPro single-precision bounds}
 \usage{
 vpro_narrow_float32(x)
 }
@@ -10,9 +10,10 @@ vpro_narrow_float32(x)
 \item{x}{Numeric vector.}
 }
 \value{
-Numeric vector rounded to nearest IEEE-754 binary32 representable values.
+Numeric vector rounded to nearest 32-bit single-precision values.
 }
 \description{
-Reproduces Microsoft Access \code{Single} (\code{float32}) cover narrowing prior to
-\verb{< 100} bounds checks (\code{99.999996 -> 99.99999237 < 100}; \code{99.999999 -> 100.0}).
+Reproduces VPro Desktop and Microsoft Access \code{Single} cover precision prior
+to \verb{< 100} bounds checks (\code{99.999996 -> 99.99999237 < 100};
+\code{99.999999 -> 100.0}).
 }
