@@ -1,37 +1,37 @@
 [
   {
     "keys": "F1",
-    "scope": "Global / Focused Input",
-    "action": "Open offline LMH25 (2023) Field & Key Inspector for the focused field"
+    "scope": "Anywhere / Active Field",
+    "action": "Open offline LMH25 (2023) field help for the active field"
   },
   {
     "keys": "? or Ctrl+/",
-    "scope": "Global (outside text input)",
-    "action": "Open Keyboard Shortcut Cheat-Sheet"
+    "scope": "Anywhere (outside text boxes)",
+    "action": "Open keyboard shortcuts guide"
   },
   {
     "keys": "Enter",
-    "scope": "FS882 / Two-Page / SIVI / Datasheet",
-    "action": "Advance across header fields or down subgrid rows"
+    "scope": "FS882, Two-Page, SIVI & Datasheet",
+    "action": "Move to the next plot field or down to the next table row"
   },
   {
     "keys": "Shift+Enter",
-    "scope": "FS882 / Datasheet Subgrids",
-    "action": "Move to previous cell/row in subgrid"
+    "scope": "FS882 & Datasheet Tables",
+    "action": "Move to the previous cell or row in a table"
   },
   {
     "keys": "Ctrl+S",
-    "scope": "Plot Editors & Metadata",
-    "action": "Validate and commit atomic SQLite + _Audit save"
+    "scope": "Plot Forms & Project Metadata",
+    "action": "Validate and save plot changes with audit history"
   },
   {
     "keys": "Ctrl+F",
-    "scope": "Plots / Datasheet / Explorer",
-    "action": "Focus quick plot/taxon filter input"
+    "scope": "Plots, Datasheet & Explorer",
+    "action": "Jump to the quick plot or species filter box"
   },
   {
     "keys": "Esc",
-    "scope": "Drawers / Modals / Cell Edit",
-    "action": "Close active help drawer/modal or cancel active cell edit"
+    "scope": "Help Drawer, Dialogs & Cell Editing",
+    "action": "Close the open help drawer or dialog, or cancel editing a cell"
   }
 ]

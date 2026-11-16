@@ -1,15 +1,15 @@
 [
   {
     "version": "2.0.0",
-    "date": "2026-11-13",
+    "date": "2026-11-16",
     "channel": "stable",
     "highlights": [
-      "Complete native cross-platform SQLite WAL desktop architecture replacing 32/64-bit Microsoft Access runtime dependency.",
-      "Embedded SHA-256 verified 2026 Master Standards: BECdb v13 (2026-05-28), BCPlantTaxonomy v19 (2026-02-09), and LMH25 (2023) live field validation.",
-      "In-App 3D MapLibre v6 + WebGPU + offline PMTiles Geospatial Workbench with BGC v13 / Ecosection Point-in-Polygon QA and AOI -> *_SU assignment.",
-      "Reactive BEC Differential & Pairwise Synthesis Workbench (< 10 ms plot reassignment + 4-sheet Diagnostic10.xla-compatible .xlsx export).",
-      "Optional out-of-process R & Quarto Sidecar for climr climate normals, Ministry CMD -> aSMR edatopic grids, vegan/vegclust candidate clustering, and Quarto HTML/PDF unit guides.",
-      "100% offline Contextual F1 LMH25 (2023) Field & Key Inspector, interactive Sample.db guided tours, and open scientific interchange (VENUS 5.0, TurboVeg 3, GeoPackage, CSV, R .rds)."
+      "Standalone Windows, macOS, and Linux desktop app that imports VPro 64 .accdb and .mdb projects directly—no Microsoft Access needed.",
+      "Built-in 2026 BC standards (BECdb v13, BCPlantTaxonomy v19 with 16,728 species, and LMH25 (2023) live field checks).",
+      "Interactive 3D Map that works offline in the field for BGC v13 and Ecosection checks and selecting plots directly into Site Units.",
+      "Live BEC Differential and Pairwise Synthesis that updates immediately as plots move between Site Units and exports a 4-sheet Diagnostic Excel workbook (.xlsx).",
+      "Optional R Companion tools for climr climate normals, rSMR/aSMR edatopic grids, candidate plot clustering, and Quarto Site Unit and BGC guides.",
+      "Built-in offline F1 LMH25 (2023) field reference, 4 interactive guided tours on the Sample project, and open data exchange (VENUS 5.0, TurboVeg 3, GeoPackage, CSV, and R .rds)."
     ]
   },
   {
@@ -17,7 +17,7 @@
     "date": "2026-10-01",
     "channel": "preview",
     "highlights": [
-      "Initial Wails v3 + Svelte 5 foundation with VP08 Access calibration, FS882 / Two-Page / SIVI editors, Plot Profiling, and Summary/Long Excel/PDF reports."
+      "Initial VPro Desktop preview with FS882, Two-Page, and SIVI plot forms, Plot Profiling, and Summary and Long Excel/PDF reports."
     ]
   }
 ]

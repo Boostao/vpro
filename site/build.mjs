@@ -62,8 +62,8 @@ function renderNoscriptFallback(reviewedManifest) {
     return `
       <noscript>
         <div class="noscript-box">
-          <strong>JavaScript is disabled:</strong> Static release manifest check indicates no published desktop release is currently active in <code>release-manifest.json</code>.
-          Browse <a href="${escapeHtml(releasesURL)}">published GitHub releases</a> directly and verify downloaded archives against <code>SHA256SUMS.txt</code>.
+          <strong>JavaScript is disabled:</strong> No published desktop release is currently listed.
+          Browse <a href="${escapeHtml(releasesURL)}">published GitHub releases</a> directly and verify downloaded files against <code>SHA256SUMS.txt</code>.
         </div>
       </noscript>`;
   }
@@ -78,8 +78,8 @@ function renderNoscriptFallback(reviewedManifest) {
   return `
       <noscript>
         <div class="noscript-box">
-          <strong>Static Direct Downloads (${escapeHtml(active.tag)}${active.prerelease ? ' — Preview/UAT' : ''}):</strong>
-          <p>Verify every downloaded package against <a href="${escapeHtml(active.sha256sumsUrl)}">SHA256SUMS.txt</a> prior to installation.</p>
+          <strong>Direct Downloads (${escapeHtml(active.tag)}${active.prerelease ? ' — Preview/UAT' : ''}):</strong>
+          <p>Verify every downloaded package against <a href="${escapeHtml(active.sha256sumsUrl)}">SHA256SUMS.txt</a> before installing.</p>
           <ul>
             ${items}
           </ul>
@@ -251,7 +251,7 @@ export function renderPortalHtml({
             </div>
             <h3>${escapeHtml(field.title)}</h3>
             <p class="doc-summary">${escapeHtml(field.summary)}</p>
-            <p class="doc-summary"><strong>SQLite / VP08 Column:</strong> <code>${escapeHtml(field.column)}</code> · <strong>Unit / Type:</strong> <code>${escapeHtml(field.unit)}</code></p>
+            <p class="doc-summary"><strong>Field Column:</strong> <code>${escapeHtml(field.column)}</code> · <strong>Format &amp; Units:</strong> <code>${escapeHtml(field.unit)}</code></p>
             ${rulesHtml}
             ${codesHtml}
           </article>`;
@@ -341,7 +341,7 @@ export function renderPortalHtml({
       </a>
       <nav class="bcgov-nav" aria-label="Primary navigation">
         <a href="#downloads">Downloads</a>
-        <a href="./r/">R Companion SDK</a>
+        <a href="./r/">R Companion Package</a>
         <a href="#migration">Migrating from VPro 64</a>
         <a href="#installation">Checksum &amp; Setup</a>
         <a href="#documentation">User Guide &amp; LMH25</a>
@@ -359,13 +359,13 @@ export function renderPortalHtml({
         <div>
           <div class="hero-eyebrow">
             ${ICONS.shield}
-            <span>Successor to VPro 64 (Table Version VP08) at vuser.ca</span>
+            <span>Successor to VPro 64 at vuser.ca</span>
           </div>
           <h1 id="hero-heading">VPro — VENUS (Vegetation and Environment NexUS) Professional</h1>
           <p class="hero-lead">
-            Official cross-platform ecological plot management, validation, classification, and synthesis desktop software for the
+            Official cross-platform desktop software for ecological plot entry, field validation, classification, and synthesis for the
             <strong>B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program</strong>.
-            Runs natively on transactional SQLite WAL storage with zero Microsoft Access runtime dependency.
+            Runs standalone on Windows, macOS, and Linux with self-contained project files—no Microsoft Access needed.
           </p>
           <div class="standards-strip" aria-label="Bundled 2026 Provincial Reference Standards">
             <span class="standard-pill" title="SHA-256: ${escapeHtml(standards.becSha256)}">
@@ -396,7 +396,7 @@ export function renderPortalHtml({
             <span id="detected-platform-label">Detected workstation:</span> <strong id="detected-platform-name">Detecting...</strong>
           </div>
 
-          <div id="platform-switcher" class="platform-switcher" role="group" aria-label="Select workstation platform and architecture">
+          <div id="platform-switcher" class="platform-switcher" role="group" aria-label="Select workstation platform">
             <button type="button" id="plat-btn-win-amd64" class="platform-pill" aria-pressed="false">Windows x64</button>
             <button type="button" id="plat-btn-win-arm64" class="platform-pill" aria-pressed="false">Windows ARM64</button>
             <button type="button" id="plat-btn-mac-universal" class="platform-pill" aria-pressed="false">macOS</button>
@@ -421,7 +421,7 @@ export function renderPortalHtml({
           </div>
 
           <p id="download-status" class="status-banner" role="status" aria-live="polite">
-            Loading verified static release manifest...
+            Loading release information...
           </p>
         </div>
       </div>
@@ -437,24 +437,24 @@ export function renderPortalHtml({
           <div class="card">
             <div>
               <span class="card-step-num">1</span>
-              <h3>1. Install VPro 2.0 — Zero Access Runtime</h3>
-              <p>Deploy a single self-contained ~38 MB native desktop executable backed by SQLite Write-Ahead Logging (<code>PRAGMA journal_mode = WAL</code>). Eliminates 32-bit vs. 64-bit Microsoft Access Database Engine conflicts on Ministry Windows 11 workstations.</p>
+              <h3>1. Install VPro 2.0 — No Access Needed</h3>
+              <p>Install a self-contained desktop app that saves plots directly in fast, reliable VPro project files (<code>.db</code>). Eliminates 32-bit vs. 64-bit Microsoft Access driver conflicts on Ministry Windows 11 workstations.</p>
             </div>
             <a href="#downloads">Choose workstation package</a>
           </div>
           <div class="card">
             <div>
               <span class="card-step-num">2</span>
-              <h3>2. Import Existing .accdb/.mdb Projects</h3>
-              <p>Read legacy VPro 64 databases (Table Versions <code>VP05</code>–<code>VP08</code>, including 71,000+ plot <code>BECMaster</code> archives) directly into the canonical 7-database SQLite family with atomic audit logging and orphan-row quarantine receipts.</p>
+              <h3>2. Import Existing .accdb / .mdb Projects</h3>
+              <p>Import legacy VPro 64 databases (including 71,000+ plot <code>BECMaster</code> archives) directly into VPro 2.0 project files with full audit history and an import quarantine log for any unmatched rows.</p>
             </div>
             <a href="#doc-migrating-from-vpro64">Read VPro 64 migration guide</a>
           </div>
           <div class="card">
             <div>
               <span class="card-step-num">3</span>
-              <h3>3. Audit Standards &amp; Publish Reports</h3>
-              <p>Validate plots against embedded <code>BECdb v13 (2026)</code>, <code>BCPlantTaxonomy v19 (2026)</code>, and <code>LMH25 (2023)</code> rules, run sub-10 ms BEC differential synthesis, inspect 3D offline <code>PMTiles</code> maps, and export <code>.xlsx</code>, <code>.gpkg</code>, <code>VENUS 5.0</code>, <code>TurboVeg 3</code>, or R <code>.rds</code>.</p>
+              <h3>3. Check Standards &amp; Publish Reports</h3>
+              <p>Check plots against built-in <code>BECdb v13 (2026)</code>, <code>BCPlantTaxonomy v19 (2026)</code>, and <code>LMH25 (2023)</code> rules, run live BEC differential synthesis, inspect offline 3D maps, and export <code>.xlsx</code>, <code>.gpkg</code>, <code>VENUS 5.0</code>, <code>TurboVeg 3</code>, or R <code>.rds</code>.</p>
             </div>
             <a href="#doc-standards-and-interchange">Explore standards &amp; exports</a>
           </div>
@@ -465,13 +465,13 @@ export function renderPortalHtml({
     <section id="downloads" class="section" aria-labelledby="downloads-heading">
       <div class="container">
         <div class="section-header">
-          <h2 id="downloads-heading">Desktop Packages &amp; Static Checksum Manifest</h2>
-          <p>All download metadata is served from a build-verified static <code>release-manifest.json</code> with zero browser API calls, ensuring reliable access behind shared Government of B.C. network gateways.</p>
+          <h2 id="downloads-heading">Desktop Downloads &amp; File Verification</h2>
+          <p>Download details are published directly with this portal so links and checksums load reliably behind Government of B.C. network gateways.</p>
         </div>
 
         <div class="advisory-box">
-          <span class="alert-note">Phase 1 Unsigned Package Notice:</span>
-          Phase 1 desktop installers and portable archives are distributed as unsigned builds (macOS <code>VPro.app</code> is ad-hoc signed, not notarized). Ministry of Forests and contractor workstations should verify package SHA-256 digests against <code>SHA256SUMS.txt</code> before first launch. Note that standalone <code>VTrees</code> mensuration, CWD, and WHA modules remain out of scope for Phase 1.
+          <span class="alert-note">Unsigned Installer Notice:</span>
+          Initial desktop installers and portable archives are unsigned builds (macOS <code>VPro.app</code> is not Apple-notarized yet). Verify package SHA-256 checksums against <code>SHA256SUMS.txt</code> before opening on workplace computers. Standalone <code>VTrees</code> mensuration, CWD, and WHA modules are planned for a future phase.
         </div>
 
         <div class="three-col-grid">
@@ -482,18 +482,18 @@ export function renderPortalHtml({
                 <span>Windows</span>
                 <span class="os-tag">Windows 10 / 11</span>
               </h3>
-              <p>Native WebView2 desktop client with embedded SQLite WAL engine. Portable <code>.zip</code> runs without administrator elevation.</p>
+              <p>Native Windows 10 and 11 desktop app. The portable <code>.zip</code> runs without administrator rights.</p>
 
-              <div class="arch-heading">x86_64 (Standard 64-bit Intel / AMD)</div>
+              <div class="arch-heading">64-bit Intel / AMD (x64)</div>
               <div class="asset-list">
-                ${renderAssetRow('dl-win-x64-installer', 'NSIS Installer (.exe)', true)}
+                ${renderAssetRow('dl-win-x64-installer', 'Standard Installer (.exe)', true)}
                 ${renderAssetRow('dl-win-x64-zip', 'Portable Archive (.zip)')}
                 ${renderAssetRow('dl-win-x64-exe', 'Standalone Executable (.exe)')}
               </div>
 
               <div class="arch-heading">ARM64 (Surface Pro / Snapdragon)</div>
               <div class="asset-list">
-                ${renderAssetRow('dl-win-arm64-installer', 'NSIS Installer (.exe)')}
+                ${renderAssetRow('dl-win-arm64-installer', 'Standard Installer (.exe)')}
                 ${renderAssetRow('dl-win-arm64-zip', 'Portable Archive (.zip)')}
                 ${renderAssetRow('dl-win-arm64-exe', 'Standalone Executable (.exe)')}
               </div>
@@ -507,12 +507,12 @@ export function renderPortalHtml({
                 <span>macOS</span>
                 <span class="os-tag">macOS 12+ Universal</span>
               </h3>
-              <p>Fat Mach-O universal application bundle (<code>VPro.app</code>) supporting both Apple Silicon (M1–M4) and Intel Macs natively.</p>
+              <p>Universal <code>VPro.app</code> application supporting both Apple Silicon (M1–M4) and Intel Macs.</p>
 
               <div class="arch-heading">Universal (Apple Silicon &amp; Intel)</div>
               <div class="asset-list">
                 ${renderAssetRow('dl-mac-dmg', 'Disk Image (.dmg)', true)}
-                ${renderAssetRow('dl-mac-zip', 'VPro.app Bundle Archive (.zip)')}
+                ${renderAssetRow('dl-mac-zip', 'VPro.app Zip Archive (.zip)')}
               </div>
             </div>
           </div>
@@ -522,22 +522,22 @@ export function renderPortalHtml({
               <h3>
                 ${ICONS.linux}
                 <span>Linux</span>
-                <span class="os-tag">GTK4 / WebKitGTK 6.0</span>
+                <span class="os-tag">Linux Desktop</span>
               </h3>
               <p>Standalone AppImage runs directly on Fedora, RHEL, Ubuntu 24.04+, and Debian 13+; native <code>.deb</code> provided for Debian and Ubuntu.</p>
 
-              <div class="arch-heading">x86_64 (amd64)</div>
+              <div class="arch-heading">64-bit Intel / AMD (x64)</div>
               <div class="asset-list">
                 ${renderAssetRow('dl-linux-appimage', 'Standalone AppImage', true)}
                 ${renderAssetRow('dl-linux-deb', 'Debian / Ubuntu (.deb)')}
-                ${renderAssetRow('dl-linux-tar', 'Binary Tarball (.tar.gz)')}
+                ${renderAssetRow('dl-linux-tar', 'Portable Archive (.tar.gz)')}
               </div>
 
               <div class="arch-heading">ARM64 (aarch64)</div>
               <div class="asset-list">
                 ${renderAssetRow('dl-linux-arm64-appimage', 'Standalone AppImage')}
                 ${renderAssetRow('dl-linux-arm64-deb', 'Debian / Ubuntu (.deb)')}
-                ${renderAssetRow('dl-linux-arm64-tar', 'Binary Tarball (.tar.gz)')}
+                ${renderAssetRow('dl-linux-arm64-tar', 'Portable Archive (.tar.gz)')}
               </div>
             </div>
           </div>
@@ -545,25 +545,25 @@ export function renderPortalHtml({
 
         <div id="card-r-sdk" class="card" style="margin-top: 1.25rem;">
           <div style="display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: flex-start;">
-            <a href="./r/" aria-label="Open vpro R Companion SDK Documentation" style="flex: 0 0 auto;">
-              <img src="./r-logo.svg" width="112" height="130" alt="vpro R Companion SDK Hex Sticker" style="display: block;" />
+            <a href="./r/" aria-label="Open vpro R Companion Package Documentation" style="flex: 0 0 auto;">
+              <img src="./r-logo.svg" width="112" height="130" alt="vpro R Companion Package Hex Sticker" style="display: block;" />
             </a>
             <div style="flex: 1 1 320px;">
               <h3>
                 ${ICONS.book}
-                <span>Companion R SDK (<code>vpro</code>)</span>
-                <span class="os-tag">R &gt;= 4.4.0 · Headless</span>
+                <span>R Companion Package (<code>vpro</code>)</span>
+                <span class="os-tag">R &gt;= 4.4.0 · Scriptable</span>
               </h3>
-              <p>Scriptable R companion package sharing identical <code>VP08</code> SQLite WAL readers, <code>BECdb v13</code> / <code>BCPlantTaxonomy v19</code> / <code>LMH25</code> standards, <code>V7mdlDiagnostic</code> BEC synthesis, climate/aSMR edatopic grids, Quarto guides, and PostgreSQL <code>BECMaster</code> staging workflows.</p>
+              <p>Scriptable R package sharing the same VPro project files (<code>.db</code>), <code>BECdb v13</code>, <code>BCPlantTaxonomy v19</code>, and <code>LMH25 (2023)</code> standards, BEC differential synthesis, climate and aSMR edatopic grids, Quarto guides, and Cloud <code>BECMaster</code> staging workflows.</p>
               <div class="arch-heading">Install from GitHub Subdirectory (<code>r/</code>)</div>
               <pre class="code-block mono" style="margin: 0.5rem 0 0.9rem; padding: 0.65rem 0.85rem; background: #F2F2F2; border-left: 3px solid #003366; overflow-x: auto;"><code>pak::pak("${escapeHtml(repository)}/r")
 # or: remotes::install_github("${escapeHtml(repository)}", subdir = "r")</code></pre>
-              <div class="arch-heading">Release Source Tarball &amp; Reference Documentation</div>
+              <div class="arch-heading">Source Archive &amp; Reference Documentation</div>
               <div class="asset-list">
                 ${renderAssetRow('dl-r-sdk', 'R Source Package (vpro-r-sdk.tar.gz)')}
               </div>
               <div class="doc-meta-badges" style="margin-top: 0.75rem;">
-                <a href="./r/">Open R SDK Reference &amp; Vignettes (/r/)</a>
+                <a href="./r/">Open R Package Reference &amp; Vignettes (/r/)</a>
                 <a href="./r/articles/index.html">Workflow Vignettes</a>
                 <a href="./r/reference/index.html">Function Reference</a>
               </div>
@@ -574,7 +574,7 @@ export function renderPortalHtml({
         <div class="checksum-bar">
           <div class="checksum-bar-info">
             ${ICONS.shield}
-            <strong>Cryptographic Checksum Manifest:</strong>
+            <strong>File Checksum Verification:</strong>
             Verify downloaded packages against <a id="dl-checksums" class="download-link" aria-disabled="true">SHA256SUMS.txt</a>
             (<span id="dl-checksums-size" class="asset-size">Unavailable</span>, <code id="dl-checksums-sha256" class="asset-sha">SHA-256 pending</code>).
           </div>
@@ -591,7 +591,7 @@ export function renderPortalHtml({
       <div class="container">
         <div class="section-header">
           <h2 id="installation-heading">Workstation Installation &amp; SHA-256 Verification</h2>
-          <p>Verify every Phase 1 package hash locally before running on Ministry of Forests or research workstations.</p>
+          <p>Verify each download against its SHA-256 checksum before installing on Ministry of Forests or research computers.</p>
         </div>
         <div class="install-grid">
           <div class="card">
@@ -602,7 +602,7 @@ export function renderPortalHtml({
                 <li>Verify the SHA-256 hash in PowerShell against <code>SHA256SUMS.txt</code>:
                   <pre class="code-block">Get-FileHash .\\vpro-windows-amd64-installer.exe -Algorithm SHA256</pre>
                 </li>
-                <li>If Windows Defender SmartScreen prompts on an unsigned Phase 1 build, confirm the SHA-256 matches <code>SHA256SUMS.txt</code> before selecting <strong>More info</strong> &rarr; <strong>Run anyway</strong>.</li>
+                <li>If Windows Defender SmartScreen prompts on an unsigned build, confirm the SHA-256 checksum matches <code>SHA256SUMS.txt</code> before selecting <strong>More info</strong> &rarr; <strong>Run anyway</strong>.</li>
               </ol>
             </div>
           </div>
@@ -615,14 +615,14 @@ export function renderPortalHtml({
                   <pre class="code-block">shasum -a 256 vpro-macos-universal.dmg</pre>
                 </li>
                 <li>Mount the disk image and drag <strong>VPro.app</strong> to your <strong>Applications</strong> folder.</li>
-                <li>Because Phase 1 builds use ad-hoc signing without Apple notarization, Control-click <strong>VPro.app</strong> in Applications and select <strong>Open</strong> on first launch after verifying the checksum.</li>
+                <li>Because initial builds are not Apple-notarized, Control-click <strong>VPro.app</strong> in Applications and select <strong>Open</strong> on first launch after verifying the checksum.</li>
               </ol>
             </div>
           </div>
 
           <div class="card">
             <div>
-              <h3>${ICONS.linux} Linux (amd64 &amp; arm64)</h3>
+              <h3>${ICONS.linux} Linux (x64 &amp; ARM64)</h3>
               <ol class="rules-list">
                 <li>Verify the downloaded package against <code>SHA256SUMS.txt</code>:
                   <pre class="code-block">sha256sum -c --ignore-missing SHA256SUMS.txt</pre>
@@ -631,7 +631,7 @@ export function renderPortalHtml({
                   <pre class="code-block">chmod +x vpro-linux-amd64.AppImage &amp;&amp; ./vpro-linux-amd64.AppImage
 sudo apt install ./vpro-linux-amd64.deb</pre>
                 </li>
-                <li>Requires GTK4 and WebKitGTK 6.0 runtime libraries; pass <code>--appimage-extract-and-run</code> when FUSE is unavailable.</li>
+                <li>On systems without FUSE, run the AppImage with <code>--appimage-extract-and-run</code>.</li>
               </ol>
             </div>
           </div>
@@ -643,7 +643,7 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
       <div class="container">
         <div class="section-header">
           <h2 id="documentation-heading">${ICONS.book} Online User Guide &amp; LMH25 (2023) Field Reference</h2>
-          <p>Compiled from the same single-source <code>docs-src/</code> dictionary embedded offline inside VPro's in-app <code>F1</code> Field &amp; Key Inspector. Share deep-link anchors (<code>#doc-*</code> and <code>#field-*</code>) directly in email or Teams support threads.</p>
+          <p>The same offline reference built into VPro's in-app <code>F1</code> Field &amp; Key Inspector. Copy any section link (<code>#doc-*</code> or <code>#field-*</code>) to share directly in email or Teams support messages.</p>
         </div>
 
         <div class="docs-toolbar" role="search" aria-label="Filter User Guide and LMH25 Field Reference">
@@ -711,8 +711,8 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
     <section id="changelog" class="section" aria-labelledby="changelog-heading">
       <div class="container">
         <div class="section-header">
-          <h2 id="changelog-heading">Release History &amp; Standards Provenance Ledger</h2>
-          <p>Structured release history replacing legacy <code>tblWhatsNew</code> and <code>vuser.ca</code> version tables, paired with cryptographic digests for embedded 2026 BEC reference databases.</p>
+          <h2 id="changelog-heading">Release History &amp; Standards Versions</h2>
+          <p>Version history for VPro 2.0 alongside the built-in 2026 BEC reference standards and verification checksums.</p>
         </div>
 
         <div class="table-scroll table-scroll-spaced">
@@ -722,7 +722,7 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
                 <th>Version</th>
                 <th>Date</th>
                 <th>Channel</th>
-                <th>Key Capabilities &amp; Calibration Notes</th>
+                <th>Highlights &amp; Updates</th>
               </tr>
             </thead>
             <tbody>${changelogRowsHtml}
@@ -734,9 +734,9 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
           <table class="bcgov-table">
             <thead>
               <tr>
-                <th>Embedded 2026 Master Standard</th>
+                <th>Built-in 2026 Reference Standard</th>
                 <th>Release Stamp</th>
-                <th>Verified SHA-256 Digest</th>
+                <th>SHA-256 Checksum</th>
               </tr>
             </thead>
             <tbody>
@@ -751,8 +751,8 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
                 <td class="mono sha-digest-cell">${escapeHtml(standards.taxonomySha256)}</td>
               </tr>
               <tr>
-                <td><strong>Canonical SQLite VLists.db</strong></td>
-                <td class="mono">resources/database-family/VLists.db</td>
+                <td><strong>Built-in Reference Lists</strong></td>
+                <td class="mono">VLists.db</td>
                 <td class="mono sha-digest-cell">${escapeHtml(standards.vlistsSha256)}</td>
               </tr>
             </tbody>
@@ -767,11 +767,11 @@ sudo apt install ./vpro-linux-amd64.deb</pre>
       <div>
         <strong>Province of British Columbia — Ministry of Forests, Research Branch</strong>
         <div>Biogeoclimatic Ecosystem Classification (BEC) Program · VPro (VENUS — Vegetation and Environment NexUS — Professional)</div>
-        <div class="footer-legacy-note">Successor to VPro 64 (Table Version VP08) formerly distributed via <code>vuser.ca</code>.</div>
+        <div class="footer-legacy-note">Successor to VPro 64 formerly distributed via <code>vuser.ca</code>.</div>
       </div>
       <div class="footer-links">
         <a href="https://www.for.gov.bc.ca/hre/becweb/" target="_blank" rel="noopener noreferrer">BECWeb Home</a>
-        <a href="./r/">R Companion SDK</a>
+        <a href="./r/">R Companion Package</a>
         <a href="#data-use-agreement">Data Use Agreement</a>
         <a href="#documentation">LMH25 (2023) Reference</a>
         <a href="${escapeHtml(repoURL)}" target="_blank" rel="noopener noreferrer">Source Repository</a>

@@ -6,12 +6,12 @@
       "section": "Site & Plot Identification",
       "title": "Plot Number",
       "column": "PlotNumber",
-      "unit": "Text (<= 7 UTF-16 code units)",
+      "unit": "Text (up to 7 characters)",
       "lmh25Page": 14,
       "summary": "Unique literal plot identifier within the project (up to 7 characters; leading zeroes such as 00337 are preserved verbatim).",
       "rules": [
-        "Maximum 7 UTF-16 code units; leading zeroes are never coerced to integers.",
-        "Links <Project>_Env to <Project>_Veg, <Project>_Humus, <Project>_Mineral, <Project>_Other, and *_SU."
+        "Up to 7 characters; leading zeroes are kept exactly as entered.",
+        "Links each plot's Site header to its Vegetation, Humus, Mineral Soil, Other, and Site Unit records."
       ],
       "codes": []
     },
@@ -54,7 +54,7 @@
       "summary": "Regional climate unit from BECdb v13 (for example SBS dk, CWH vm 1, ESSF wk 1a) and field-assigned site series.",
       "rules": [
         "Validated against official BECdb v13 (2026) Zone / Subzone / Variant combinations.",
-        "Auto-1 Geospatial QA compares field-recorded Zone/SubZone against provincial BGC v13 polygons."
+        "Coordinate & BGC Stamp checks field-recorded Zone and Subzone against provincial BGC v13 polygons on the offline map."
       ],
       "codes": [
         {
@@ -129,7 +129,7 @@
       "lmh25Page": 21,
       "summary": "Physiographic ecosection (139 provincial polygons) and Natural Resource District (23 provincial polygons).",
       "rules": [
-        "Auto-1 point-in-polygon prefill derives Ecosection, NR District, and BCGS 1:20,000 mapsheet offline from plot coordinates."
+        "Coordinate & BGC Stamp fills in Ecosection, Natural Resource District, and BCGS 1:20,000 mapsheet offline from plot coordinates."
       ],
       "codes": []
     },
@@ -143,7 +143,7 @@
       "lmh25Page": 23,
       "summary": "Geodetic plot location stored in NAD83 decimal degrees (West longitude negative in B.C.) and/or UTM Zone, Easting, and Northing.",
       "rules": [
-        "Pure-Go NAD83 Transverse Mercator conversion synchronizes UTM <-> Decimal Degrees deterministically.",
+        "Built-in NAD83 coordinate conversion keeps UTM and Decimal Degrees in sync automatically.",
         "Positive longitudes inside B.C. bounding latitudes are flagged by Spatial QA as sign-inverted."
       ],
       "codes": []
@@ -225,13 +225,13 @@
       "section": "Edaphic & Hydrologic Regime",
       "title": "Relative Soil Moisture Regime (rSMR)",
       "column": "MoistureRegime",
-      "unit": "0–8 Ordinal Scale (Key 9.3 / 9.4)",
+      "unit": "0–8 Moisture Scale (Key 9.3 / 9.4)",
       "lmh25Page": 34,
       "keyRef": "key.rsmr_9_4",
       "summary": "Relative growing-season soil water availability within a biogeoclimatic subzone/variant (0 = very xeric through 8 = hydric).",
       "rules": [
         "Evaluated via LMH25 Key 9.3 (wet/water-table soils) and Key 9.4 (upland soils from slope position, soil depth, coarse fragments, texture, and seepage).",
-        "Paired with rSNR (A–E) on the 9 x 5 BEC Edatopic Grid and transformed via climr CMD into Actual SMR (aSMR)."
+        "Paired with rSNR (A–E) on the 9 x 5 BEC Edatopic Grid and linked with climate moisture deficit to estimate Actual SMR (aSMR)."
       ],
       "codes": [
         {
@@ -284,7 +284,7 @@
       "summary": "Available plant nutrient supply (particularly mineralizable N and base cations) from Very Poor (A) to Very Rich (E), plus Saline/Alkaline (F).",
       "rules": [
         "Evaluated via LMH25 Key 9.6 using humus form (Mor/Moder/Mull or Peat), A-horizon type (Ae vs. Ah), soil colour/SOM, texture, mineralogy, and seepage.",
-        "Auto-2 flags contradictions such as Mor humus + thick Ae horizon paired with Rich/Very Rich (D/E) without seepage."
+        "LMH25 Field Checks flag contradictions such as Mor humus with a thick Ae horizon paired with Rich or Very Rich (D/E) without seepage."
       ],
       "codes": [
         {
@@ -324,7 +324,7 @@
       "summary": "Six mutually exclusive ground-surface substrate fractions (Decaying Wood, Bedrock, Cobbles/Stones, Mineral Soil, Organic Matter, Water).",
       "rules": [
         "LMH25 requires the 6 surface substrate components to sum to 100% (+/- 1% rounding tolerance).",
-        "Auto-2 displays a live 100% progress bar on FS882 / Two-Page forms without silently overwriting historical legacy plots."
+        "LMH25 Field Checks show a live 100% progress bar on FS882 and Two-Page forms without silently altering historical plots."
       ],
       "codes": []
     },
@@ -379,11 +379,11 @@
         },
         {
           "code": "A.w.th",
-          "label": "SiteDisturbance — Windthrow (uprooting, LMH25 2023)"
+          "label": "Site Disturbance — Windthrow (uprooting, LMH25 2023)"
         },
         {
           "code": "A.w.br",
-          "label": "SiteDisturbance — Windbreak (stem snap, LMH25 2023)"
+          "label": "Site Disturbance — Windbreak (stem snap, LMH25 2023)"
         }
       ]
     },
@@ -404,15 +404,15 @@
     {
       "id": "humus.horizon",
       "code": "SOIL 4",
-      "section": "Organic & Humus Horizons (<Project>_Humus)",
+      "section": "Organic & Humus Horizons",
       "title": "Humus / Wetland Organic Horizon Designation",
       "column": "Horizon",
-      "unit": "Text (<= 8 UTF-16 code units)",
+      "unit": "Text (up to 8 characters)",
       "lmh25Page": 78,
       "summary": "Master organic horizon code: upland ectorganic L, F, H (Lv, Fm, Fa, Fz, Hh, Hz) or wetland peat Of, Om, Oh.",
       "rules": [
-        "Maximum 8 UTF-16 code units.",
-        "Determines depth measurement direction: upland L/F/H measure UPWARD from 0 cm mineral contact; wetland Of/Om/Oh measure DOWNWARD from 0 cm surface."
+        "Up to 8 characters.",
+        "Determines depth measurement direction: upland L, F, and H measure from 0 cm upward from the mineral contact; wetland Of, Om, and Oh measure downward from the 0 cm surface."
       ],
       "codes": [
         {
@@ -452,23 +452,23 @@
     {
       "id": "humus.upper_lower_depth",
       "code": "SOIL 5",
-      "section": "Organic & Humus Horizons (<Project>_Humus)",
+      "section": "Organic & Humus Horizons",
       "title": "Organic Horizon Upper & Lower Depth (LMH25 Sign Rule)",
       "column": "UpperDepth / LowerDepth",
       "unit": "cm from Mineral-Organic Interface (Upland) or Surface (Wetland)",
       "lmh25Page": 80,
       "summary": "Directional depth boundaries in centimetres obeying the Canadian System of Soil Classification & LMH25 zero-datum convention.",
       "rules": [
-        "Upland L/F/H horizons measure UPWARD from the mineral contact (0 cm): UpperDepth > LowerDepth (for example L: 8 -> 6 cm, Fm: 6 -> 1 cm, Hh: 1 -> 0 cm), ordered UpperDepth DESC.",
-        "Wetland Of/Om/Oh horizons measure DOWNWARD from the peat surface (0 cm): UpperDepth < LowerDepth (for example Of1: 0 -> 25 cm, Om1: 25 -> 65 cm), ordered UpperDepth ASC.",
-        "Auto-2 computes total HumusThickness automatically from valid upland L/F/H spans."
+        "Upland L, F, and H horizons measure from 0 cm upward from the mineral contact: UpperDepth is greater than LowerDepth (for example L: 8 to 6 cm, Fm: 6 to 1 cm, Hh: 1 to 0 cm), ordered from top down.",
+        "Wetland Of, Om, and Oh horizons measure downward from the peat surface (0 cm): UpperDepth is less than LowerDepth (for example Of1: 0 to 25 cm, Om1: 25 to 65 cm), ordered from top down.",
+        "LMH25 Field Checks calculate total HumusThickness automatically from valid upland L, F, and H spans."
       ],
       "codes": []
     },
     {
       "id": "humus.von_post",
       "code": "SOIL 9",
-      "section": "Organic & Humus Horizons (<Project>_Humus)",
+      "section": "Organic & Humus Horizons",
       "title": "von Post Humification Scale (1–10)",
       "column": "VonPost",
       "unit": "Integer 1–10",
@@ -476,7 +476,7 @@
       "summary": "Ten-class field squeeze test measuring peat decomposition and water/paste extrusion for Of, Om, and Oh horizons.",
       "rules": [
         "Of requires von Post 1–4; Om requires von Post 5–6; Oh requires von Post 7–10.",
-        "Auto-2 highlights horizon/von Post mismatches immediately during soil entry."
+        "LMH25 Field Checks highlight horizon and von Post mismatches immediately during soil entry."
       ],
       "codes": [
         {
@@ -496,14 +496,14 @@
     {
       "id": "humus.humus_form",
       "code": "SOIL 14",
-      "section": "Organic & Humus Horizons (<Project>_Env)",
+      "section": "Organic & Humus Horizons",
       "title": "Humus Form Classification",
       "column": "HumusForm",
       "unit": "Green et al. (1993) / LMH25 Code",
       "lmh25Page": 88,
       "summary": "Taxonomic humus form integrating L/F/H/Ah diagnostic horizon thickness, fungal vs. faunal fabric, and aeration.",
       "rules": [
-        "Key input to Key 9.6 Relative Soil Nutrient Regime (Mor -> A/B; Moder -> B/C/D; Mull -> D/E)."
+        "Key input to Key 9.6 Relative Soil Nutrient Regime (Mor typically A/B; Moder typically B/C/D; Mull typically D/E)."
       ],
       "codes": [
         {
@@ -527,14 +527,14 @@
     {
       "id": "mineral.horizon",
       "code": "SOIL 18",
-      "section": "Mineral Soil Horizons (<Project>_Mineral)",
+      "section": "Mineral Soil Horizons",
       "title": "Mineral Horizon & Suffixes",
       "column": "Horizon / UpperDepth / LowerDepth",
-      "unit": "CSSC Horizon Code (<= 8 UTF-16 code units) & cm Downward",
+      "unit": "CSSC Horizon Code (up to 8 characters) & cm Downward",
       "lmh25Page": 94,
       "summary": "Mineral master horizon (A, B, C, R, W) with diagnostic pedogenic suffixes (e, h, f, g, j, t, k, ca, x) measured downward from 0 cm.",
       "rules": [
-        "Mineral horizons ALWAYS measure downward from 0 cm mineral contact: UpperDepth < LowerDepth (for example Ae: 0 -> 6 cm, Bf: 6 -> 38 cm, BC: 38 -> 72 cm), ordered UpperDepth ASC.",
+        "Mineral horizons always measure downward from the 0 cm mineral contact: UpperDepth is less than LowerDepth (for example Ae: 0 to 6 cm, Bf: 6 to 38 cm, BC: 38 to 72 cm), ordered from top down.",
         "Gleyed/mottled suffixes (g, gj) within 60 cm indicate fluctuating water tables in Key 9.3 / 9.4."
       ],
       "codes": [
@@ -567,14 +567,14 @@
     {
       "id": "mineral.texture_cf",
       "code": "SOIL 22",
-      "section": "Mineral Soil Horizons (<Project>_Mineral)",
+      "section": "Mineral Soil Horizons",
       "title": "Soil Texture & Coarse Fragment Content",
       "column": "Texture / PercentCoarseFragsTotal / Gravel / Cobbles / Stones",
-      "unit": "CSSC Texture Code (<= 4 chars) & Volume %",
+      "unit": "CSSC Texture Code (up to 4 characters) & Volume %",
       "lmh25Page": 102,
       "summary": "Fine-earth (< 2 mm) textural class (S, LS, SL, L, SiL, SCL, CL, SiCL, SC, SiC, C) and volumetric % gravel, cobbles, and stones.",
       "rules": [
-        "Texture <= 4 UTF-16 code units; Munsell Colour <= 14 UTF-16 code units.",
+        "Texture up to 4 characters; Munsell Colour up to 14 characters.",
         "Particle-size class and coarse fragment % (> 35% vs. > 70% skeletal) drive water-holding capacity in Key 9.4."
       ],
       "codes": [
@@ -599,7 +599,7 @@
     {
       "id": "soil.rooting_seepage",
       "code": "SOIL 30",
-      "section": "Soil Profile Summary (<Project>_Env)",
+      "section": "Soil Profile Summary",
       "title": "Rooting Depth, Root Restricting Layer & Water Source",
       "column": "RootingDepth / RootRestrictingType / RootRestrictingDepth / SeepageDepth / FloodingRegimeDur",
       "unit": "cm",
@@ -611,37 +611,37 @@
       "codes": [
         {
           "code": "S",
-          "label": "FloodingRegimeDur — Semi-permanent / Merely subirrigated during flood events (LMH25 2023)"
+          "label": "Flooding Duration — Semi-permanent / Merely subirrigated during flood events (LMH25 2023)"
         }
       ]
     },
     {
       "id": "veg.species",
       "code": "VEG 1",
-      "section": "Vegetation Strata & Taxonomy (<Project>_Veg)",
+      "section": "Vegetation Strata & Taxonomy",
       "title": "Species Code & Taxonomic Validation",
       "column": "Species",
-      "unit": "BCPlantTaxonomy v19 Code (<= 8 UTF-16 code units)",
+      "unit": "BCPlantTaxonomy v19 Code (up to 8 characters)",
       "lmh25Page": 140,
-      "summary": "Standard 4- to 8-character B.C. provincial vascular, bryophyte, and lichen code from USysAllSpecs (2026 v19, 8,900+ taxa) or USysUserSpp.",
+      "summary": "Standard 4- to 8-character B.C. provincial vascular, bryophyte, and lichen code from the 2026 BCPlantTaxonomy v19 list (16,728 taxa) or your personal species list.",
       "rules": [
-        "Maximum 8 UTF-16 code units.",
-        "NotInList workflow checks retired OldCode -> current Code synonyms in USysAllSpecs before offering personal species creation in VUser.db."
+        "Up to 8 characters.",
+        "NotInList lookup checks retired codes against current accepted names in BCPlantTaxonomy v19 before offering to save a personal species to your user list."
       ],
       "codes": []
     },
     {
       "id": "veg.covers",
       "code": "VEG 2",
-      "section": "Vegetation Strata & Taxonomy (<Project>_Veg)",
+      "section": "Vegetation Strata & Taxonomy",
       "title": "Stratum Percent Covers (A1–A3, B1–B2, C, D / Cover1–Cover10)",
       "column": "Cover1..Cover10 / TotalA / TotalB",
-      "unit": "IEEE-754 SINGLE Percent Cover (> 0 to < 100%, chart on LMH25 p. 274)",
+      "unit": "Percent Cover (> 0 to under 100%, e.g. 99.9%; chart on LMH25 p. 274)",
       "lmh25Page": 144,
       "keyRef": "key.cover_chart",
       "summary": "Vertical crown/foliar cover (%) across Tree (A1=Cover1, A2=Cover2, A3=Cover3), Shrub (B1=Cover4, B2=Cover5), Herb (C=Cover6), Moss/Bryoid (D=Cover7), and Epiphyte/Seedling layers (Cover8–10).",
       "rules": [
-        "Inputs are narrowed to IEEE-754 SINGLE (float32) before checking < 100 Or Is Null (matching legacy Access calibration).",
+        "Accepts percent cover from 0 to under 100% (e.g. 99.9%) or blank, matching legacy VPro 64 cover rules.",
         "Extended CHARS shrub sub-layers (Cover5a Tall, Cover5b Medium, Cover5c Low) toggle cleanly via \"Show extended shrub layers\".",
         "Trace occurrences (< 0.1%) are typically recorded as 0.1% or 0.01%."
       ],
@@ -688,9 +688,9 @@
       "column": "Representing / PlotType / Zone / SubZone / SiteSeries",
       "unit": "SIVI Form Layout",
       "lmh25Page": 210,
-      "summary": "Streamlined single-screen Ecological/Silviculture plot entry writing directly into standard <Project>_Env, <Project>_Veg, <Project>_Humus, and <Project>_Mineral tables.",
+      "summary": "Streamlined single-screen Ecological/Silviculture plot entry that saves directly to the standard Site, Vegetation, Humus, and Mineral Soil tables.",
       "rules": [
-        "Creating a new SIVI plot uses the same atomic SQLite transaction and <Project>_Audit provenance as FS882.",
+        "Creating a new SIVI plot saves safely in one step with the same automatic audit history as FS882.",
         "Supports optional \"Show extended shrub layers\" toggle for subalpine/northern shrub structure."
       ],
       "codes": []

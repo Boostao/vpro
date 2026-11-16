@@ -239,7 +239,7 @@ test('exact asset names prevent AMD64/ARM64 and executable/installer confusion i
     assert.notEqual(reviewed.channels.stable.links['dl-win-x64-installer'], reviewed.channels.stable.links['dl-win-arm64-installer']);
   }
 
-  // Historical desktop-only release (e.g. v2.0.1 without vpro-r-sdk.tar.gz) leaves dl-r-sdk gracefully null.
+  // Desktop-only release without vpro-r-sdk.tar.gz (e.g. an earlier build) leaves dl-r-sdk gracefully null.
   const desktopOnlyLinks = Object.fromEntries(Object.entries(assetLinks).filter(([id]) => id !== 'dl-r-sdk'));
   const desktopOnlyReviewed = reviewManifest(manifestFixture(desktopOnlyLinks));
   assert.equal(desktopOnlyReviewed.channels.stable.links['dl-r-sdk'], null);

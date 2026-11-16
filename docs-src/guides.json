@@ -3,20 +3,20 @@
     "id": "migrating-from-vpro64",
     "slug": "migrating-from-vpro64",
     "category": "Onboarding & Migration",
-    "title": "Migrating from Microsoft Access VPro 64 to VPro 2.0",
-    "summary": "How VPro 64 concepts (Data Centre, .accdb/.mdb projects, VLists, SU tables, and Diagnostic10.xla) map 1:1 into VPro 2.0 SQLite WAL workspaces.",
+    "title": "Moving from Microsoft Access VPro 64 to VPro 2.0",
+    "summary": "How familiar VPro 64 tools—the Data Centre, Access project files, species lists, Site Units, and diagnostic workbooks—carry over into VPro 2.0 projects.",
     "sections": [
       {
-        "heading": "Zero Microsoft Access Runtime Required",
-        "body": "VPro 2.0 reads legacy Microsoft Access .mdb and .accdb databases (Table Versions VP05 through VP08) directly via an embedded C/Go reader and stores canonical working projects in fast, transactional SQLite WAL (.db) files."
+        "heading": "No Microsoft Access Needed",
+        "body": "VPro 2.0 opens legacy Microsoft Access .mdb and .accdb project files directly without installing Microsoft Access or switching between 32-bit and 64-bit Access drivers. Working projects are stored in self-contained VPro project files (.db) that support safe simultaneous reading."
       },
       {
         "heading": "From Floating Data Centre to Persistent Session Context",
-        "body": "The left Session Context bar replaces the legacy floating Data Centre dialog, showing your active Project, Site Unit (*_SU), Hierarchy, Lump (*_Lump), and Theme tables at all times with cryptographic stale-request protection."
+        "body": "The left Session Context bar replaces the old floating Data Centre window, keeping your active Project, Site Unit, Hierarchy, Lump, and Theme tables visible at all times and protected against accidental overwrites."
       },
       {
-        "heading": "Importing BECMaster & Field Projects Safely",
-        "body": "Open Project Admin or Interchange Hub to import .accdb/.mdb archives. Malformed or orphaned child vegetation/soil rows without a parent _Env plot are quarantined with a full audit receipt rather than silently dropped."
+        "heading": "Importing BECMaster and Field Projects Safely",
+        "body": "Open Project Admin or the Interchange Hub to import .accdb and .mdb archives. Any malformed entries or unmatched vegetation and soil rows with no matching plot header are placed in an import quarantine log with a full audit receipt instead of being silently dropped."
       }
     ]
   },
@@ -24,20 +24,20 @@
     "id": "fs882-sivi-datasheet-entry",
     "slug": "fs882-sivi-datasheet-entry",
     "category": "Data Entry & Validation",
-    "title": "FS882, Two-Page, SIVI & Universal Datasheet Entry",
-    "summary": "High-speed keyboard plot entry, LMH25 (2023) live diagnostics, NotInList species synonym resolution, and multi-plot spreadsheet editing.",
+    "title": "FS882, Two-Page, SIVI & Multi-Plot Datasheet Entry",
+    "summary": "Fast keyboard plot entry, live LMH25 (2023) field checks, NotInList species matching, and multi-plot spreadsheet editing.",
     "sections": [
       {
         "heading": "FS882, Two-Page & SIVI Forms",
-        "body": "Press Enter to advance across header fields and down vegetation/soil subgrids. Toggle \"Show extended shrub layers\" only when entering northern/subalpine Cover5a..5c, SnowCoverRegime, or ActiveLayerDepth."
+        "body": "Press Enter to move smoothly across plot header fields and down vegetation and soil grids. Turn on \"Show extended shrub layers\" only when recording northern or subalpine shrub sub-layers (Cover5a to 5c), SnowCoverRegime, or ActiveLayerDepth."
       },
       {
-        "heading": "Contextual F1 LMH25 (2023) Field Inspector",
-        "body": "Focus any Site, Soil, Vegetation, or SIVI input and press F1 to open the offline LMH25 (2023) specification, valid picklist codes, directional humus depth sign rules, and interactive rSMR/rSNR keys."
+        "heading": "F1 LMH25 (2023) Field Help",
+        "body": "Focus any Site, Soil, Vegetation, or SIVI field and press F1 to open the offline LMH25 (2023) reference, picklist codes, humus depth measurement rules, and interactive rSMR and rSNR keys."
       },
       {
-        "heading": "Universal 9-Table Datasheet Grid",
-        "body": "Edit <Project>_Env, _Veg, _Humus, _Mineral, _Other, _Admin, _Audit, *_SU, and *_Hierarchy in a virtualized grid supporting TSV clipboard paste, Find/Replace, and atomic <Project>_Audit logging."
+        "heading": "Multi-Plot 9-Table Datasheet",
+        "body": "Review and edit Site Environment, Vegetation, Humus, Mineral Soil, Other, Admin, Audit, Site Unit, and Hierarchy tables in a fast multi-plot spreadsheet with tab-separated clipboard paste, Find and Replace, and automatic audit history."
       }
     ]
   },
@@ -45,16 +45,16 @@
     "id": "classification-lumping-diagnostics",
     "slug": "classification-lumping-diagnostics",
     "category": "Classification & BEC Synthesis",
-    "title": "Site Unit Explorer, Taxon Lumping & Reactive BEC Diagnostics",
-    "summary": "Dual-pane SU/Hierarchy management, versioned LumpSpec recipes, and sub-50ms Diagnostic10.xla differential species synthesis.",
+    "title": "Site Unit Explorer, Taxon Lumping & Live BEC Diagnostics",
+    "summary": "Dual-pane Site Unit and Hierarchy management, Lumping Presets & Rules, and live BEC differential species synthesis.",
     "sections": [
       {
         "heading": "Dual-Pane Site Unit & Hierarchy Explorer",
-        "body": "Drag or reassign plots across Site Units, manage 12-level classifications with tilde (~) report breakpoints, sync SU <-> Env, and filter .support, .poor, or .nudum units from summary tables."
+        "body": "Drag or reassign plots across Site Units, organize 12-level classifications with tilde (~) report breakpoints, synchronize assignments between Site Units and plot records, and filter .support, .poor, or .nudum units from summary tables."
       },
       {
-        "heading": "Reactive BEC Differential & Pairwise Synthesis",
-        "body": "Replaces Excel Diagnostic10.xla macros: computes Presence Class (I–V), Goldstream Mean Cover, Differential Value (d, d1–d3, dd1–dd4, cd), and Cramér/Sørensen pairwise similarity, updating in under 10 ms when plots move between units and exporting a 4-sheet formatted .xlsx."
+        "heading": "Live BEC Differential & Pairwise Synthesis",
+        "body": "Replaces legacy Excel diagnostic macros: calculates Presence Class (I–V), Goldstream Mean Cover, Differential Value (d, d1–d3, dd1–dd4, cd), and Cramér or Sørensen pairwise similarity. Results update immediately as plots move between units and export to a formatted 4-sheet VPro diagnostic Excel workbook (.xlsx)."
       }
     ]
   },
@@ -62,16 +62,16 @@
     "id": "geospatial-and-r-sidecar",
     "slug": "geospatial-and-r-sidecar",
     "category": "Spatial QA & R / Quarto Analytics",
-    "title": "3D MapLibre + WebGPU Spatial QA, climr aSMR & Quarto Guides",
-    "summary": "Offline PMTiles BGC v13 point-in-polygon prefill, polygon lasso -> *_SU assignment, climr climate normals, vegan/vegclust clustering, and Quarto BEC guides.",
+    "title": "3D Map Spatial QA, climr aSMR & Quarto Guides",
+    "summary": "Offline 3D Map with BGC v13 boundary checks, lasso selection into Site Units, climr climate normals, candidate plot clustering, and Quarto BEC guides.",
     "sections": [
       {
-        "heading": "Offline PMTiles Geospatial Workbench",
-        "body": "Streams provincial BGC v13, Ecosections, and Natural Resource Districts via HTTP 206 byte-range PMTiles with WebGPU/deck.gl plot rendering, flagging coordinate sign errors and BGC boundary mismatches offline."
+        "heading": "Offline 3D Map & Spatial Checks",
+        "body": "View provincial BGC v13, Ecosections, and Natural Resource Districts on an offline 3D Map, flag swapped coordinates or BGC boundary mismatches in the field, and select plots directly into Site Units with a lasso tool."
       },
       {
-        "heading": "Headless R Sidecar (climr, vegan/vegclust & Quarto)",
-        "body": "When a local R runtime is installed, VPro caches downscaled climate normals in __VPRO_PlotClimate, maps CMD -> aSMR alongside rSMR x rSNR edatopic grids, writes non-destructive *_ClusterCandidate_SU tables, and renders BC Gov styled Quarto HTML/PDF unit guides."
+        "heading": "R Companion Tools (climr, Clustering & Quarto)",
+        "body": "When R is installed locally, VPro stores downscaled climate normals in the plot climate cache, maps climate moisture deficit to aSMR alongside rSMR by rSNR edatopic grids, saves non-destructive candidate Site Unit tables, and renders BC Gov styled Quarto HTML or PDF Site Unit and BGC guides."
       }
     ]
   },
@@ -79,16 +79,16 @@
     "id": "standards-and-interchange",
     "slug": "standards-and-interchange",
     "category": "Standards & Open Interchange",
-    "title": "2026 BECWeb Master Standards & Open Scientific Interchange",
-    "summary": "Embedded BECdb v13 (2026) and BCPlantTaxonomy v19 (2026) provenance plus lossless VENUS 5.0 XML, TurboVeg 3, GeoPackage, CSV, and native R .rds exports.",
+    "title": "2026 BC BEC Standards & Open Data Exchange",
+    "summary": "Built-in BECdb v13 (2026) and BCPlantTaxonomy v19 (2026) reference lists plus clean exchange with VENUS 5.0 XML, TurboVeg 3, GeoPackage, CSV, and R .rds.",
     "sections": [
       {
         "heading": "Pinned 2026 Provincial Standards",
-        "body": "Every VPro 2.0 build embeds SHA-256 verified read-models of BECdb v13 (2026-05-28) and BCPlantTaxonomy v19 (2026-02-09) alongside LMH25 (2023) rules, visible at any time under Help -> About VPro & Standards Libraries."
+        "body": "Every VPro 2.0 release includes verified built-in standards for BECdb v13 (2026-05-28) and BCPlantTaxonomy v19 (2026-02-09) alongside LMH25 (2023) rules, viewable anytime under Help, About VPro & Standards Libraries."
       },
       {
         "heading": "Open Ecosystem Interchange",
-        "body": "Import and export VENUS 5.0 XML, TurboVeg 3 (.sqlite + XML), OGC GeoPackage (.gpkg in EPSG:3005 BC Albers or EPSG:4326), Long/Wide CSV matrices, and native R version-2 .rds lists."
+        "body": "Import and export VENUS 5.0 XML, TurboVeg 3 archives, OGC GeoPackage (.gpkg in BC Albers EPSG:3005 or WGS84 EPSG:4326), Long and Wide CSV matrices, and native R (.rds) project snapshots."
       }
     ]
   },
@@ -96,16 +96,16 @@
     "id": "cloud-becmaster-sync",
     "slug": "cloud-becmaster-sync",
     "category": "Cloud BECMaster Sync",
-    "title": "PostgreSQL Cloud BECMaster Sync & Enterprise TLS Root CAs",
-    "summary": "3-schema (becmaster, staging, standards) synchronization, Custodian 3-way merge, and SSL_CERT_FILE / SSL_CERT_DIR enterprise CA configuration on Windows and macOS.",
+    "title": "Cloud BECMaster Sync & Ministry Certificate Setup",
+    "summary": "Provincial Cloud BECMaster staging and custodian merges over encrypted connections, with support for custom enterprise root certificates on Windows and macOS.",
     "sections": [
       {
-        "heading": "Enterprise Root CAs (SSL_CERT_FILE & SSL_CERT_DIR)",
-        "body": "Non-loopback Cloud BECMaster PostgreSQL connections enforce TLS. On Windows and macOS (in addition to Linux), Go 1.27 honors SSL_CERT_FILE (PEM bundle path) and SSL_CERT_DIR (certificate directory) alongside the OS trust store so BC Gov enterprise or custom root CAs can be trusted without modifying system keychains."
+        "heading": "Enterprise Root Certificates (SSL_CERT_FILE & SSL_CERT_DIR)",
+        "body": "Remote Cloud BECMaster connections always require encrypted TLS. Alongside the system certificate store on Windows, macOS, and Linux, VPro checks SSL_CERT_FILE (certificate file path) and SSL_CERT_DIR (certificate folder) so BC Gov enterprise or custom root certificates can be trusted without changing system keychains."
       },
       {
-        "heading": "Pre-Upload Compliance & Custodian 3-Way Merge",
-        "body": "Staging uploads pass RunComplianceValidation before writing to staging, and Custodian merges execute under SERIALIZABLE isolation with SHA-256 hash-chained becmaster.audit provenance."
+        "heading": "Pre-Upload Checks & Custodian Merge",
+        "body": "Submitted plots pass pre-upload compliance checks before entering staging, and custodian reviews run as a conflict-checked custodian merge with tamper-evident audit history."
       }
     ]
   }

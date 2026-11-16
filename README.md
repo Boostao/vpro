@@ -1,19 +1,19 @@
 # VPro 2.0 (`Boostao/vpro`) <img src="r/man/figures/logo.svg" align="right" height="128" alt="vpro Hex Logo" />
 
-Unified cross-platform **Biogeoclimatic Ecosystem Classification (BEC)** plot, classification, 3D geospatial, diagnostic synthesis, Cloud `BECMaster` stewardship, and scientific R analytics ecosystem for the **B.C. Ministry of Forests, Research Branch — BEC Program** (*VENUS — Vegetation and Environment NexUS — Professional*).
+Ecological plot management, field validation, classification, 3D mapping, and synthesis software for the **B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program** (*VENUS — Vegetation and Environment NexUS — Professional*).
 
-- **Official Download & Documentation Portal:** <https://boostao.github.io/vpro/>
-- **Headless R Companion SDK (`pkgdown`) Reference:** <https://boostao.github.io/vpro/r/>
+- **Download & Documentation Portal:** <https://boostao.github.io/vpro/>
+- **R Companion Package Reference:** <https://boostao.github.io/vpro/r/>
 - **Source Repository:** <https://github.com/Boostao/vpro>
 
 ---
 
-## Two Synchronized Tracks, One Canonical `VP08` Data Contract
+## Desktop App & R Companion Package
 
-`Boostao/vpro` pairs a zero-Access-runtime native desktop workstation with a programmatic R analytics & stewardship SDK over a shared **7-database SQLite (`VP08`, `WAL` mode) + `config.yml` + PostgreSQL/PostGIS `BECMaster`** contract:
+`Boostao/vpro` brings together a standalone desktop application and a scriptable R package that work side by side on the same local VPro project files (`.db`) and Cloud `BECMaster` repositories:
 
-1. **VPro 2.0 Desktop Workstation ([`app/`](./app/))** — Built with **Go `1.27+`**, **Wails v3**, **Svelte 5**, **MapLibre GL JS v6 + WebGPU + offline `PMTiles`**, **CGO SQLite (`WAL`)**, **`pgx/v5`**, and vendored **`libmdb` (`mdbtools` 1.0.1)** across Windows (`x64`/`arm64`), macOS Universal (`VPro.app`), and Linux (`x64`/`arm64`). Delivers paper-faithful FS882, Two-Page, and FS1333 (SIVI) editors (with inline CHARS shrub-layer toggle), Universal Datasheet Grid, Dual-Pane `SU`/`Hierarchy` Tree Explorer, 3-Way Project Merge, streaming `545 MB` (`71,567`-plot) `BECMaster` `.accdb` import, reactive BEC Diagnostics, R Sidecar (`climr -> aSMR`, `vegclust`, Quarto), Cloud `BECMaster` sync, 100% offline `F1` `LMH25 (2023)` contextual help, and complete interchange (`VENUS 5.0`, **TurboVeg 3 31-table SQLite & `Plot_package` XML**, OGC `GeoPackage`, R `.rds`, Long/Wide CSV, KML, Label PDF).
-2. **Headless `vpro` R Companion SDK ([`r/`](./r/), `R >= 4.4.0`)** — Pure programmatic R package (**zero Shiny/widget dependencies**) providing concurrent read-only SQLite WAL access alongside an open Desktop session, 2026 `BCPlantTaxonomy v19` (`16,728` taxa) & `BECdb v13` (`8,900` site series) harmonization, `vegan`/`vegclust`/`indicspecies`/`labdsv` community matrices & noise clustering, `sf` GeoPackage workflows, `bcgov/climr` normals & Ministry `CMD -> aSMR` dual edatopic grids, BEC differential fidelity (`d`, `dd`, `cd`, `c`, `ic`), guarded `BEGIN IMMEDIATE` candidate `*_SU` write-back, PostgreSQL `BECMaster` staging/3-way-merge/snapshots, and reproducible BC Gov Quarto ecosystem guides.
+1. **VPro 2.0 Desktop ([`app/`](./app/))** — Standalone workstation app for Windows, macOS, and Linux—no Microsoft Access needed. Import legacy VPro 64 `.accdb` and `.mdb` projects (including `71,567`-plot `BECMaster` archives), enter and validate `FS882`, `Two-Page`, and `FS1333 (SIVI)` field cards (with optional extended shrub layers), bulk-edit across a 9-table Datasheet, organize `Site Unit` and `Hierarchy` classifications, inspect plots on an offline 3D Map, run live BEC Differential and Pairwise Synthesis (`.xlsx`), browse offline `F1` `LMH25 (2023)` field help, and exchange open formats (`VENUS 5.0`, `TurboVeg 3`, `GeoPackage`, CSV, and R `.rds`).
+2. **`vpro` R Companion Package ([`r/`](./r/), `R >= 4.4.0`)** — Scriptable R package that reads local VPro projects safely alongside an open Desktop session. Harmonize plots with built-in `2026` `BCPlantTaxonomy v19` (`16,728` species) and `BECdb v13`, build `vegan`/`vegclust` community matrices and noise clusters, compute `climr` climate normals and `aSMR` edatopic grids, run BEC diagnostic fidelity tables, render BC Gov styled Quarto Site Unit and BGC guides, and sync staged edits with Cloud `BECMaster`.
 
 ---
 
@@ -21,9 +21,9 @@ Unified cross-platform **Biogeoclimatic Ecosystem Classification (BEC)** plot, c
 
 ### 1. Install VPro 2.0 Desktop (`app/`)
 
-Download the latest self-contained Windows (`.exe` NSIS installer), macOS Universal (`.dmg`), or Linux (`.AppImage` / `.deb` / `.tar.gz`) release with SHA-256 verification from **<https://boostao.github.io/vpro/>**.
+Download the Windows installer or portable `.zip`, macOS Universal `.dmg`, or Linux `.AppImage`/`.deb` with SHA-256 verification from **<https://boostao.github.io/vpro/>**.
 
-### 2. Install the Headless `vpro` R Companion SDK (`r/`)
+### 2. Install the `vpro` R Companion Package (`r/`)
 
 Install directly from the `r/` subdirectory of `Boostao/vpro`:
 
@@ -35,21 +35,22 @@ pak::pak("Boostao/vpro/r")
 remotes::install_github("Boostao/vpro", subdir = "r")
 ```
 
-Connect concurrently (read-only WAL) to your local VPro 2.0 workspace:
+Connect safely alongside your local VPro 2.0 workspace or explore the built-in `Sample` project:
 
 ```r
 library(vpro)
 
-# Resolves identical cross-OS workspace paths to VPro Desktop (app/)
+# Locate VPro workspace folders and list saved projects
 vpro_data_dir()
 vpro_config_dir()
 vpro_list_projects()
 
-# Open bundled Sample project (or use vpro_connect() on a workspace .db)
-ctx <- vpro_sample()
-env <- vpro_env(ctx)
-mat <- vpro_matrix(ctx, transform = "hellinger")
-diag <- vpro_diagnostics(ctx)
+# Open the built-in Sample project (or call vpro_connect() for your active Desktop project)
+ws <- vpro_connect("Sample")
+std <- vpro_standards()
+env <- vpro_env(ws)
+mat <- vpro_matrix(ws, transform = "hellinger")
+diag <- vpro_diagnostics(ws)
 ```
 
 ---
@@ -109,11 +110,10 @@ node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/te
 
 ## Governance, Roadmap & Security
 
-- **[Product Roadmap](./ROADMAP.md)** — Multi-horizon trajectory (`v2.0` hardening $\rightarrow$ Provincial Cloud `BECMaster` / `BECWeb 2.0` $\rightarrow$ Field Tablet PWA, Card OCR & `VTrees`/CWD/WHA).
+- **[Product Roadmap](./ROADMAP.md)** — Multi-horizon trajectory (`v2.0` hardening -> Provincial Cloud `BECMaster` / `BECWeb 2.0` -> Field Tablet Support, Card Transcription & `VTrees`/CWD/WHA).
 - **[Contributing & Release Runbook](./CONTRIBUTING.md)** — 4-tier dependency update policy, annual `BECdb`/`BCPlantTaxonomy` standards ingestion, 5-tier testing pyramid, and BC field-season release cadence.
 - **[Security & Ecological Data Custody](./SECURITY.md)** — Vulnerability reporting, PostgreSQL TLS/RBAC guarantees, and local-first `VP08` data protection.
 
 ## License
 
 Licensed under the [Apache License, Version 2.0](./LICENSE).
-

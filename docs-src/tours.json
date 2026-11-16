@@ -3,19 +3,19 @@
     "id": "tour-session-import",
     "title": "Tour 1 — Session Context & Access Import",
     "duration": "90 sec",
-    "description": "Explore the left Session Context bar (replacing legacy Data Centre) and see how .accdb/.mdb projects import into SQLite WAL.",
+    "description": "Explore the left Session Context bar (replacing the old Data Centre) and see how .accdb and .mdb projects import into VPro project files.",
     "steps": [
       {
         "target": "#project-context",
         "view": "home",
         "title": "Persistent Session Context Bar",
-        "body": "Replaces the floating VPro 64 Data Centre. Your active Project, Site Unit (*_SU), Hierarchy, and Lump tables stay visible and cryptographically scoped."
+        "body": "Replaces the floating VPro 64 Data Centre. Your active Project, Site Unit, Hierarchy, and Lump tables stay visible in one place and protected against accidental overwrites."
       },
       {
         "target": "[data-tour=\"project-admin-root\"]",
         "view": "project-admin",
         "title": "Project Admin & Access .accdb/.mdb Import",
-        "body": "Create projects, run 3-way merges, OptimizeVeg, or import legacy Access VP05–VP08 databases with full FK orphan quarantine."
+        "body": "Create projects, run 3-way merges, clean duplicate vegetation records, or import legacy Access projects with an import quarantine log for any unmatched rows."
       },
       {
         "target": "[data-tour=\"interchange-hub-root\"]",
@@ -29,19 +29,19 @@
     "id": "tour-card-datasheet",
     "title": "Tour 2 — Fast FS882 Card & Datasheet Entry",
     "duration": "90 sec",
-    "description": "Navigate FS882, Two-Page, SIVI, LMH25 live rules, CHARS shrub layer toggle, and the virtualized 9-table Datasheet Grid.",
+    "description": "Navigate FS882, Two-Page, and SIVI forms, live LMH25 field checks, extended shrub layers, and the multi-plot 9-table Datasheet.",
     "steps": [
       {
         "target": "[data-tour=\"fs882-form-root\"]",
         "view": "fs882",
         "title": "FS882 Ecological Field Card",
-        "body": "Enter Site, Soil, and Vegetation strata with Enter-key subgrid navigation, IEEE-754 SINGLE cover calibration, and F1 contextual LMH25 help on any field."
+        "body": "Enter Site, Soil, and Vegetation strata with Enter-key grid navigation, percent cover from 0 to under 100% (e.g. 99.9%), and F1 LMH25 help on any field."
       },
       {
         "target": "[data-tour=\"datasheet-grid-root\"]",
         "view": "datasheet",
-        "title": "Virtualized 9-Table Datasheet Grid",
-        "body": "Inspect and batch-edit _Env, _Veg, _Humus, _Mineral, _Audit, and *_SU with TSV clipboard paste and atomic audit trail."
+        "title": "Multi-Plot 9-Table Datasheet",
+        "body": "Review and batch-edit Site Environment, Vegetation, Humus, Mineral Soil, Audit, and Site Unit tables with clipboard paste and automatic audit history."
       }
     ]
   },
@@ -49,45 +49,45 @@
     "id": "tour-classification-profiling",
     "title": "Tour 3 — Classification Explorer & Taxon Lumping",
     "duration": "90 sec",
-    "description": "Manage Site Unit (*_SU) assignments, 12-level Hierarchies with ~ breakpoints, and versioned *_Lump species recipes.",
+    "description": "Manage Site Unit assignments, 12-level Hierarchies with tilde (~) breakpoints, and repeatable species lumping tables.",
     "steps": [
       {
         "target": "[data-tour=\"classification-explorer-root\"]",
         "view": "classification-explorer",
-        "title": "Dual-Pane SU & Hierarchy Explorer",
-        "body": "Assign plots across Site Units, synchronize SU <-> Env, and organize 12-level classification trees with ~ report breakpoints."
+        "title": "Dual-Pane Site Unit & Hierarchy Explorer",
+        "body": "Assign plots across Site Units, synchronize assignments between Site Units and plot records, and organize 12-level classification trees with tilde (~) report breakpoints."
       },
       {
         "target": "[data-tour=\"lump-editor-root\"]",
         "view": "lump-editor",
-        "title": "Taxon Lumping (*_Lump) & Recipes",
-        "body": "Build repeatable species lumping tables for regional synthesis without mutating raw field plot codes."
+        "title": "Taxon Lumping & Presets",
+        "body": "Build repeatable species lumping tables for regional synthesis without altering your original field plot codes."
       }
     ]
   },
   {
     "id": "tour-map-diagnostics-reports",
-    "title": "Tour 4 — 3D Geospatial QA, BEC Diagnostics & Reports",
+    "title": "Tour 4 — 3D Map, BEC Diagnostics & Reports",
     "duration": "90 sec",
-    "description": "Audit BGC v13 plot coordinates on the 3D MapLibre/WebGPU globe, run live BEC Differential Synthesis, and export .xlsx / Quarto guides.",
+    "description": "Verify BGC v13 plot locations on the offline 3D Map, run live BEC Differential Synthesis, and export Excel workbooks or Quarto guides.",
     "steps": [
       {
         "target": "[data-tour=\"geospatial-workbench-root\"]",
         "view": "geospatial-map",
-        "title": "3D MapLibre + WebGPU Geospatial Workbench",
-        "body": "Stream provincial BGC v13 & Ecosection PMTiles offline, run Point-in-Polygon spatial QA, and lasso plots directly into *_SU units."
+        "title": "Offline 3D Map & Spatial QA",
+        "body": "Explore provincial BGC v13 and Ecosection layers offline, check plot coordinates against regional boundaries, and select plots directly into Site Units."
       },
       {
         "target": "[data-tour=\"diagnostic-synthesis-root\"]",
         "view": "diagnostic-synthesis",
-        "title": "Reactive BEC Differential & Pairwise Synthesis",
-        "body": "Inspect Presence Class, Differential Value (d1–d3, dd1–dd4), and Cramér similarity with < 10 ms live plot reassignment and 4-sheet .xlsx export."
+        "title": "Live BEC Differential & Pairwise Synthesis",
+        "body": "Inspect Presence Class, Differential Value (d1–d3, dd1–dd4), and Cramér similarity—results update immediately as plots move between units and export to a 4-sheet Excel workbook (.xlsx)."
       },
       {
         "target": "[data-tour=\"r-sidecar-root\"]",
         "view": "r-sidecar",
-        "title": "R Sidecar: climr aSMR, Clustering & Quarto Guides",
-        "body": "Downscale climate normals into __VPRO_PlotClimate, compare rSMR vs. aSMR grids, run vegan/vegclust candidate clustering, and publish Quarto unit guides."
+        "title": "R Companion: climr aSMR, Clustering & Quarto Guides",
+        "body": "Save downscaled climate normals in the plot climate cache, compare rSMR and aSMR edatopic grids, run candidate plot clustering, and publish Quarto Site Unit and BGC guides."
       }
     ]
   }

@@ -67,7 +67,7 @@ function parseHintArch(hints) {
   }
   return {
     arch: 'unknown',
-    warning: `Unsupported CPU architecture (${rawArch}${rawBitness ? `/${rawBitness}-bit` : ''}); choose a package below.`,
+    warning: `Unsupported system architecture (${rawArch}${rawBitness ? `/${rawBitness}-bit` : ''}); choose a package below.`,
   };
 }
 
@@ -75,7 +75,7 @@ export function formatPlatformName(client) {
   if (!client || client.os === 'unknown') return 'No supported desktop platform detected';
   if (client.os === 'darwin') return 'macOS (Universal — Apple Silicon & Intel)';
   const osLabel = client.os === 'windows' ? 'Windows' : 'Linux';
-  const archLabel = client.arch === 'arm64' ? 'ARM64' : client.arch === 'amd64' ? 'x86_64' : 'architecture unknown';
+  const archLabel = client.arch === 'arm64' ? 'ARM64' : client.arch === 'amd64' ? '64-bit (x64)' : 'architecture unknown';
   return `${osLabel} (${archLabel})`;
 }
 
@@ -146,7 +146,7 @@ export async function detectPlatform(navigator) {
       arch = 'amd64';
     } else if (os === 'windows' && /\bwindows nt 10\.0\b/.test(archSignals)) {
       arch = 'amd64';
-      privacyArchNote = 'Browser privacy settings hid CPU architecture (defaulted to Windows x86_64; choose ARM64 if on Snapdragon).';
+      privacyArchNote = 'Browser privacy settings hid your system type (defaulted to Windows 64-bit (x64); choose ARM64 if using Snapdragon).';
     }
   }
 
@@ -166,7 +166,7 @@ export async function detectPlatform(navigator) {
 
   const fallbackWarning = privacyArchNote || (
     os === 'windows' && navigator?.userAgentData?.getHighEntropyValues
-      ? 'Verify x86_64 vs. ARM64 above if running Windows on ARM (Snapdragon).'
+      ? 'Verify 64-bit (x64) vs. ARM64 above if running Windows on ARM (Snapdragon).'
       : ''
   );
   return { os, arch, warning: fallbackWarning };
@@ -467,7 +467,7 @@ export async function loadPortal(document, navigator, fetch, options = {}) {
   };
 
   syncPlatformSelectionUI(false);
-  status.textContent = activeClient.warning || 'Loading verified release manifest...';
+  status.textContent = activeClient.warning || 'Loading release information...';
 
   const endpoint = options.manifestUrl || manifestPath;
   try {
@@ -478,8 +478,8 @@ export async function loadPortal(document, navigator, fetch, options = {}) {
     if (!response || !response.ok) {
       const code = response ? response.status : 'offline';
       throw new Error(code === 404
-        ? 'No published release manifest is available yet.'
-        : `Release manifest lookup failed (HTTP ${code}).`);
+        ? 'No published release is available yet.'
+        : `Release information lookup failed (HTTP ${code}).`);
     }
     const reviewed = reviewManifest(await response.json());
 
@@ -575,8 +575,9 @@ export async function loadPortal(document, navigator, fetch, options = {}) {
       const recommended = recommendedAsset(activeClient);
       if (recommended && release.links[recommended]) {
         primary.href = release.links[recommended];
-        primaryText.textContent = activeClient.os === 'windows' ? `Download Windows ${activeClient.arch} installer`
-          : activeClient.os === 'darwin' ? 'Download macOS Universal (.dmg)' : `Download Linux ${activeClient.arch} AppImage`;
+        const friendlyArch = activeClient.arch === 'arm64' ? 'ARM64' : '64-bit (x64)';
+        primaryText.textContent = activeClient.os === 'windows' ? `Download Windows ${friendlyArch} installer`
+          : activeClient.os === 'darwin' ? 'Download macOS Universal (.dmg)' : `Download Linux ${friendlyArch} AppImage`;
         const recMeta = release.metadata[recommended];
         if (primaryMetaEl) {
           primaryMetaEl.textContent = recMeta ? `${recMeta.name} (${recMeta.formattedSize})` : assetLinks[recommended];
@@ -591,8 +592,8 @@ export async function loadPortal(document, navigator, fetch, options = {}) {
           primaryShaRowEl.hidden = true;
         }
         const unsignedHint = release.unsignedNotice
-          ? 'Phase 1 unsigned build — verify SHA-256 against SHA256SUMS.txt before installation.'
-          : 'Verify your download against SHA256SUMS.txt before installation.';
+          ? 'Unsigned initial build — verify SHA-256 against SHA256SUMS.txt before installing.'
+          : 'Verify your download against SHA256SUMS.txt before installing.';
         status.textContent = activeClient.warning ? `${activeClient.warning} ${unsignedHint}` : unsignedHint;
       } else {
         primary.href = '#downloads';
@@ -602,7 +603,7 @@ export async function loadPortal(document, navigator, fetch, options = {}) {
         status.textContent = activeClient.warning || 'The matching package is unavailable in this release; choose an available package below.';
       }
       if (Object.values(release.links).some(url => !url)) {
-        status.textContent += ' Some release assets are unavailable; their links are disabled.';
+        status.textContent += ' Some release files are unavailable; their links are disabled.';
       }
     };
 
