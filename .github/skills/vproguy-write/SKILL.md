@@ -21,7 +21,9 @@ Before writing:
 3. State SQLite WAL concurrency and write-back boundaries plainly (read-only by default alongside VPro Desktop `app/`; opt-in `BEGIN IMMEDIATE` write-back only to candidate/working tables with `<Project>_Audit` + `__VPRO_*` provenance, never mutating `Master*` or `USys*` tables; governed Cloud `BECMaster` staging/merge via `r/R/cloud_*.R`).
 
 Writing rules:
-- Start from the ecologist's or analyst's scientific task.
+- Follow the plain-language ("CBC Standard") lexicon in `CONTRIBUTING.md` (`#6-user-facing-voice--plain-language-lexicon-cbc-standard`): start from the ecologist's or analyst's scientific task and focus on feature behavior rather than internal software mechanics.
+- Avoid `SQLite WAL`, `IEEE-754 float32`, `sidecar`, `BEGIN IMMEDIATE`, `SERIALIZABLE`, `VP08` internal table prefixes (`__VPRO_*`), and Go source paths in top-level descriptions, vignettes, and `r/NEWS.md` (describe concurrency, cover `< 100%` rounding, and safe write-back in plain analyst terms).
+- Condense `r/NEWS.md` into 4–7 workflow-themed bullets led by user outcomes.
 - Prefer practical, verifiable wording over marketing language or generic software abstractions.
 - Never write Shiny UI copy or Access GUI form-migration notes.
 - Do not invent biography or unsupported historical claims.

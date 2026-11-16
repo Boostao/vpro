@@ -31,7 +31,7 @@
 
 ## 4. R Formatting, Quality Gates & Worktree Rules
 
-Keep `TMPDIR`/`TEMP`/`TMP` free of whitespace (`Rscript` aborts at C startup if `R_TempDir` contains spaces), keep `^AGENTS\.md$` in `.Rbuildignore`, and always run `R CMD check` on the built tarball (`0 errors | 0 warnings | 0 notes`):
+Keep `TMPDIR`/`TEMP`/`TMP` free of whitespace (`Rscript` aborts at C startup if `R_TempDir` contains spaces), keep `^AGENTS\.md$` in `.Rbuildignore`, write all user-facing docs (`DESCRIPTION`, `NEWS.md`, `README.md`, `vignettes/`, `roxygen2`, and user warnings) in plain field-focused language per [`../CONTRIBUTING.md`](../CONTRIBUTING.md#6-user-facing-voice--plain-language-lexicon-cbc-standard), and always run `R CMD check` on the built tarball (`0 errors | 0 warnings | 0 notes`):
 
 ```bash
 (cd r && air format R tests)

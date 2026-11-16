@@ -67,7 +67,7 @@ tasks:
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe"'
       - task: clean:syso
     vars:
-      EFFECTIVE_VERSION: '{{if .VERSION}}{{.VERSION}}{{else if .RELEASE_VERSION}}{{.RELEASE_VERSION}}{{else if eq .DEV "true"}}2.0.1-dev{{else}}2.0.1{{end}}'
+      EFFECTIVE_VERSION: '{{if .VERSION}}{{.VERSION}}{{else if .RELEASE_VERSION}}{{.RELEASE_VERSION}}{{else if eq .DEV "true"}}2.0.0-dev{{else}}2.0.0{{end}}'
       DETECTED_GIT_SHA:
         sh: 'git rev-parse --short=12 HEAD 2>/dev/null || true'
       EFFECTIVE_COMMIT: '{{if .GIT_COMMIT}}{{.GIT_COMMIT}}{{else if .GITHUB_SHA}}{{.GITHUB_SHA}}{{else}}{{.DETECTED_GIT_SHA}}{{end}}'
@@ -117,7 +117,7 @@ tasks:
       - rm -f *.syso
     vars:
       DOCKER_ARCH: '{{.ARCH | default "amd64"}}'
-      EFFECTIVE_VERSION: '{{if .VERSION}}{{.VERSION}}{{else if .RELEASE_VERSION}}{{.RELEASE_VERSION}}{{else}}2.0.1{{end}}'
+      EFFECTIVE_VERSION: '{{if .VERSION}}{{.VERSION}}{{else if .RELEASE_VERSION}}{{.RELEASE_VERSION}}{{else}}2.0.0{{end}}'
       DETECTED_GIT_SHA:
         sh: 'git rev-parse --short=12 HEAD 2>/dev/null || true'
       EFFECTIVE_COMMIT: '{{if .GIT_COMMIT}}{{.GIT_COMMIT}}{{else if .GITHUB_SHA}}{{.GITHUB_SHA}}{{else}}{{.DETECTED_GIT_SHA}}{{end}}'

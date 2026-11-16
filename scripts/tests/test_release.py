@@ -331,7 +331,7 @@ class ReleaseTests(unittest.TestCase):
             "version=2.1.0\ntag=v2.1.0\nbuild_mode=alpha\n",
         )
         # Release script never emits 'dev' build_mode for CI release artifacts.
-        self.assertEqual(release.infer_build_mode("2.0.1-dev"), "alpha")
+        self.assertEqual(release.infer_build_mode("2.0.0-dev"), "alpha")
         self.assertEqual(release.infer_build_mode("2.1.0-rc.2+build.1"), "alpha")
         self.assertEqual(release.infer_build_mode("2.1.0", prerelease=True), "alpha")
         self.assertEqual(release.infer_build_mode("2.1.0"), "release")
@@ -353,7 +353,7 @@ class ReleaseTests(unittest.TestCase):
                     self.assertIn('-e RELEASE_BUILD_MODE="{{.EFFECTIVE_BUILD_MODE}}"', text)
                     self.assertIn('-e GITHUB_SHA="{{.EFFECTIVE_COMMIT}}"', text)
         cfg = (ROOT / "app/build/config.yml").read_text(encoding="utf-8")
-        self.assertIn('version: "2.0.1"', cfg)
+        self.assertIn('version: "2.0.0"', cfg)
         self.assertNotIn("My Other Data", cfg)
 
     def test_cpu_witnesses_and_wrong_architectures(self):
@@ -806,7 +806,7 @@ class ReleaseTests(unittest.TestCase):
             {"tag_name": "v2.3.4", "draft": False, "prerelease": False, "assets": desktop_only_assets},
         ]), encoding="utf-8")
 
-        # Simulate historical v2.0.0/v2.0.1 desktop-only manifest from Boostao/vpro_wails without R tarball.
+        # Simulate legacy desktop-only manifest from Boostao/vpro_wails without R tarball.
         legacy_stable_doc = json.loads(stable_manifest.read_text(encoding="utf-8"))
         legacy_stable_doc["repository"] = "Boostao/vpro_wails"
         legacy_stable_doc["channels"]["stable"]["sha256sumsUrl"] = (

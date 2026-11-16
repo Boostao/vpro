@@ -10,7 +10,7 @@
   <Identity 
     Name="ca.bc.gov.for.bec.vpro"
     Publisher="CN=Province of British Columbia"
-    Version="2.0.1.0" 
+    Version="2.0.0.0" 
     ProcessorArchitecture="x64" />
   
   <Properties>

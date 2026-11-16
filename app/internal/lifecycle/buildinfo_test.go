@@ -133,7 +133,7 @@ func TestHelpAndStartupExposeBuildTierAndHideDevPathsOutsideDev(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Dev mode exposes configPath and dataDir diagnostics ONLY when not compiled with -tags production.
-	appVersion = "2.0.1-dev"
+	appVersion = "2.0.0-dev"
 	buildMode = "dev"
 	gitCommit = "abc1234"
 	devAbout, err := svc.GetAboutInfo(ctx)
@@ -144,7 +144,7 @@ func TestHelpAndStartupExposeBuildTierAndHideDevPathsOutsideDev(t *testing.T) {
 		if devAbout.BuildMode != BuildModeAlpha || devAbout.ConfigPath != "" || devAbout.DataDir != "" {
 			t.Fatalf("expected -tags production binary to downgrade dev mode and omit local paths, got %+v", devAbout)
 		}
-	} else if devAbout.BuildMode != BuildModeDev || devAbout.AppVersion != "2.0.1-dev" || devAbout.GitCommit != "abc1234" ||
+	} else if devAbout.BuildMode != BuildModeDev || devAbout.AppVersion != "2.0.0-dev" || devAbout.GitCommit != "abc1234" ||
 		devAbout.ConfigPath == "" || devAbout.DataDir != dataDir {
 		t.Fatalf("expected dev AboutInfo to expose dev diagnostics, got %+v", devAbout)
 	}

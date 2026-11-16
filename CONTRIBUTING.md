@@ -76,6 +76,48 @@ Releases align with the British Columbia ecological field season:
 
 ---
 
-## 6. Parallel AI Agent Worktree Isolation
+## 6. User-Facing Voice & Plain-Language Lexicon ("CBC Standard")
+
+All user-facing copy across VPro (`app/frontend/src/`, `docs-src/*.json`, `site/`, `README.md` overview/quickstart, `ROADMAP.md`, and `r/` package descriptions, `NEWS.md`, vignettes, and errors) must read at **CBC plain-language level**: clear, concrete, calm prose focused on **what the feature does and looks like** for field ecologists, foresters, BEC analysts, and data custodians—never on internal software libraries, protocols, or storage mechanics.
+
+- **Keep authentic BEC & VPro domain terms:** `FS882`, `FS1333 (SIVI)`, `LMH25 (2023)`, `BECdb v13`, `BCPlantTaxonomy v19`, `rSMR`, `aSMR`, `rSNR`, `Site Unit`, `Hierarchy`, `Lumping`, `Presence Class`, `Domin-Krajina`, `PlotNumber`, `BECMaster`, `VENUS 5.0`, `TurboVeg 3`.
+- **Replace engineering/contract jargon with plain equivalents:**
+
+| Avoid in User-Facing Copy | Use Instead |
+|---|---|
+| `MapLibre` / `WebGPU` / `deck.gl` / `WGSL` / `FlatGeobuf` | `3D Map` / `Map` (or omit rendering engine details) |
+| `PMTiles` / `HTTP 206 byte-range PMTiles` / `PMTiles v3 Hilbert MVT` | `offline map` / `offline BGC & boundary layers` |
+| `SQLite WAL` / `PRAGMA journal_mode = WAL` / `WAL-safe` | `VPro project file (.db)` / `live VPro workspace` |
+| `Out-of-process R & Quarto Sidecar` / `Headless R Companion SDK` | `R Companion` / `vpro R package` / `R Analysis & Guides` |
+| `Auto-1..Auto-7`, `Schedule A 3.c.ii`, `(4.d)` / `(4.e)` | `Coordinate & BGC Stamp`, `LMH25 Field Checks`, `Lumping Presets & Rules`, `Auto-Populate Project Metadata`, `Single Site Unit Guide`, `BGC Subzone / Variant Guide` |
+| `Diagnostic10.xla` | `VPro diagnostic Excel workbook (.xlsx)` |
+| `Declarative LumpSpec` | `Lumping Presets & Rules` |
+| `UTF-16 code units` | `characters` (keep `"8 UTF-16"` only where an existing test regex explicitly matches it) |
+| `IEEE-754 SINGLE` / `float32 < 100` | `percent cover from 0 to under 100% (e.g. 99.9%)` |
+| `BEGIN IMMEDIATE` / `atomic transaction` / `SERIALIZABLE` / `cryptographic stale-request protection` | `saved safely in one step` / `conflict-checked custodian merge` / `protected against accidental overwrites` |
+| `__VPRO_PlotClimate`, `__VPRO_ImportQuarantine`, `<Name>_ClusterCandidate_SU` | `plot climate cache`, `import quarantine log`, `candidate Site Unit table` |
+| `< 10 ms` / `sub-50ms` / `virtualized grid` / `Materialize` | `updates immediately` / `multi-plot spreadsheet` / `Build` or `Restore` |
+| `Wails` / `Svelte` / `Go 1.27` / `C/Go reader` / `VP05–VP08` (unless inspecting schema metadata) | omit or say `VPro Desktop` / `legacy Access projects` |
+
+---
+
+## 7. Release Notes (`whatsNew` & `r/NEWS.md`) Condenser & Pre-Tag Checklist
+
+Because `app/resources/help_bundle.json` is compiled into the desktop binary (`//go:embed`), desktop release notes **must be updated before cutting a `vX.Y.Z` release tag**:
+
+1. **Edit `docs-src/whats_new.json`:** Place the newest release entry at index `0` (`version`, `date` `YYYY-MM-DD`, `channel` `"stable"` or `"preview"`, `highlights`). Index `0` is treated as `"latest"` by `HelpService.AcknowledgeWhatsNew`.
+2. **Condenser rules (for both `docs-src/whats_new.json` and `r/NEWS.md`):**
+   - Condense commits and PRs into **4–7 workflow-themed bullets** (*Data Entry*, *3D Map*, *Classification & Diagnostics*, *Reports & Interchange*, *Standards & Fixes*)—never a commit log or file list.
+   - Lead every bullet with the **user-visible outcome** in one plain sentence answering *"What can an ecologist do now?"*.
+   - Omit library names, internal `__VPRO_*` tables, SQL isolation levels, contract codes, and millisecond micro-benchmarks.
+3. **Compile and verify zero drift before tagging:**
+   ```bash
+   node scripts/build-docs-src.mjs && node site/build.mjs && node --test scripts/tests/downloadPortal.test.cjs
+   ```
+   Commit `docs-src/whats_new.json`, `app/resources/help_bundle.json`, and `r/NEWS.md` (when applicable) together.
+
+---
+
+## 8. Parallel AI Agent Worktree Isolation
 
 When running parallel mutating agents, isolate each track in `../vpro.worktrees/waveN-<track>` with strictly disjoint file ownership. Never modify `app/frontend/bindings/`, `r/DESCRIPTION`, `r/NAMESPACE`, or `r/man/*.Rd` concurrently across multiple worktrees; regenerate shared bindings and roxygen docs at the merge gate.

@@ -776,7 +776,7 @@ def validate_channel_entry(entry, channel_name, repository=REPOSITORY):
     assets = entry.get("assets")
     require(isinstance(assets, list) and len(assets) > 0,
             f"Channel {channel_name} assets must be a non-empty list")
-    # Historical desktop-only releases (v2.0.0, v2.0.1) contain DESKTOP_REQUIRED + SHA256SUMS.txt;
+    # Legacy desktop-only manifests contain DESKTOP_REQUIRED + SHA256SUMS.txt;
     # unified monorepo releases additionally attach vpro-r-sdk.tar.gz.
     allowed_names = REQUIRED | {MANIFEST}
     seen = set()
@@ -910,7 +910,7 @@ def sync_release_manifest(output, *, base_manifest=None, releases_json=None,
         releases = json.loads(result.stdout)
     require(isinstance(releases, list), "Expected GitHub releases JSON array")
 
-    # Historical releases (v2.0.0, v2.0.1) carry DESKTOP_REQUIRED; unified releases also carry R_SDK_ASSET.
+    # Legacy desktop-only releases carry DESKTOP_REQUIRED; unified releases also carry R_SDK_ASSET.
     required_remote = DESKTOP_REQUIRED | {MANIFEST, RELEASE_MANIFEST}
     matched = {}
     for rel in releases:

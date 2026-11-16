@@ -7,8 +7,8 @@ const (
 	BuildModeAlpha   = "alpha"
 	BuildModeRelease = "release"
 
-	DefaultDevAppVersion  = "2.0.1-dev"
-	DefaultProdAppVersion = "2.0.1"
+	DefaultDevAppVersion  = "2.0.0-dev"
+	DefaultProdAppVersion = "2.0.0"
 )
 
 // Linker-injectable build identity variables:

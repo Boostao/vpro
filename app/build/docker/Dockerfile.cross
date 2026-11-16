@@ -214,7 +214,7 @@ APP=${APP_NAME:-$(basename "$(pwd)")}
 mkdir -p bin
 
 EXT=""
-VER_LDFLAGS="-X github.com/boostao/vpro/app/internal/lifecycle.appVersion=${RELEASE_VERSION:-2.0.1}"
+VER_LDFLAGS="-X github.com/boostao/vpro/app/internal/lifecycle.appVersion=${RELEASE_VERSION:-2.0.0}"
 if [ -n "$RELEASE_BUILD_MODE" ]; then
     VER_LDFLAGS="${VER_LDFLAGS} -X github.com/boostao/vpro/app/internal/lifecycle.buildMode=${RELEASE_BUILD_MODE}"
 fi
