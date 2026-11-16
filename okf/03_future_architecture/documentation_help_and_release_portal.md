@@ -4,19 +4,19 @@
 
 ---
 
-## 1. Historical Deficit Audit & `v2.0.1` Resolution Summary
+## 1. Historical Deficit Audit & `v2.0.0` Resolution Summary
 
-Cross-examining legacy `VPro64` documentation assets against the October 2026 `VPro Desktop` (`app/`) baseline (`51d29cf`) identified two user-facing delivery gaps—**both now remediated in Wave 5 (`2928fd7`, `8182ee7`, `aa99f9e`, `56d4062`)**:
+Cross-examining legacy `VPro64` documentation assets against the October 2026 `VPro Desktop` (`app/`) baseline (`51d29cf`) identified two user-facing delivery gaps—**both now remediated in Wave 5 (`2928fd7`, `8182ee7`, `aa99f9e`, `56d4062`) and aligned to the `v2.0.0` CBC plain-language baseline**:
 
 ### 1.1 Pre-Wave 5 In-App Help Deficit $\rightarrow$ Resolved in `HelpService` (`8182ee7`)
 * **Legacy Baseline (`VPro64`):** Shipped compiled offline HTML Help (`VPro.chm`), **26 task-specific PDF/DOCX guides** (`VPro64/Helpfiles/`), `F12` contextual help (`Macros/AutoKeys.txt`), inline `LMH25` code legends on data-entry tabs (`Veg Other`), `About VPro` (`USysAbout`), and a 48-entry startup `What's New` log (`tblWhatsNew`).
-* **Pre-Wave 5 State (`51d29cf`) $\rightarrow$ `v2.0.1` Production State:** Formerly a single disabled `What's New` stub; now ships a full **100% offline `HelpService` + `HelpDrawer.svelte` + `OnboardingTour.svelte`** compiled from `docs-src/*.json` into embedded `app/resources/help_bundle.json` (context-sensitive `F1` `LMH25 (2023)` field inspector, 4 guided tours, `?` keyboard shortcut cheat-sheet, `What's New` unread counter, lock-safe `Reset Workspace to Sample`, and `About VPro & Standards Libraries`).
+* **Pre-Wave 5 State (`51d29cf`) $\rightarrow$ `v2.0.0` Production State:** Formerly a single disabled `What's New` stub; now ships a full **100% offline `HelpService` + `HelpDrawer.svelte` + `OnboardingTour.svelte`** authored in `docs-src/*.json` (using the CBC plain-language user lexicon and `whatsNew` condenser in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#6-user-facing-voice--plain-language-lexicon-cbc-standard)) and compiled by `scripts/build-docs-src.mjs` into embedded `app/resources/help_bundle.json` (context-sensitive `F1` `LMH25 (2023)` field inspector, 4 guided tours, `?` keyboard shortcut cheat-sheet, `What's New` unread counter, lock-safe `Reset Workspace to Sample`, and `About VPro & Standards Libraries`).
 
 ### 1.2 Pre-Wave 5 Deployment Portal Audit $\rightarrow$ Resolved in `site/` (`aa99f9e`, `56d4062`)
 The October 2026 draft page (`docs/index.html` @ `51d29cf`) had five production defects, all resolved in the current **`site/` $\rightarrow$ `site/dist` BC Gov Design System portal** deployed by `.github/workflows/pages.yml`:
 1. **Compiled CSS & Self-Hosted `BC Sans` WOFF2 (Play CDN Eliminated):** Removed runtime `cdn.tailwindcss.com` and consumer emojis in favor of self-hosted `BCSans-*.woff2` + `ibm-plex-mono-*.woff2` (`site/fonts/`) and compiled BC Gov Design System CSS (`#003366` BC Navy, `#FCBA19` Gold).
 2. **Accurate `VPro` & `vuser.ca` Branding:** Corrected product identity to **`VPro`** (*VENUS — Vegetation and Environment NexUS — Professional*), historical lineage to **`VPro 64` (`vuser.ca`)**, macOS bundle to **`VPro.app`**, and embedded the official 9-clause `BECWeb` Data Use Agreement (`docs-src/data_use_agreement.json`).
-3. **Zero-Rate-Limit Static `release-manifest.json` (`scripts/release.py sync-release-manifest`):** Eliminated browser `api.github.com` calls (`60 req/hr` corporate NAT exhaustion), hydrating `site/release-manifest.json` at CI build time with populated `<noscript>` direct download links and copyable SHA-256 badges (`v2.0.1` published `2026-11-13`).
+3. **Zero-Rate-Limit Static `release-manifest.json` (`scripts/release.py sync-release-manifest`):** Eliminated browser `api.github.com` calls (`60 req/hr` corporate NAT exhaustion), hydrating `site/release-manifest.json` at CI build time with populated `<noscript>` direct download links and copyable SHA-256 badges (clean `v2.0.0` baseline).
 4. **Isolated Public Artifact (`site/dist` vs. `archive/oct2026-parity-ledgers/`):** `.github/workflows/pages.yml` uploads strictly `site/dist`, keeping archived engineering contracts out of GitHub Pages.
 5. **Phase 1 Unsigned Checksum Policy (`D-02`) & Phase 2 Code Signing Option:** Phase 1 installers publish unsigned (`"unsignedNotice": true`) with explicit `SHA256SUMS.txt` verification; optional OV/EV Authenticode and Apple Developer ID notarization remain ready to enable once funded by BC Gov / MoF.
 

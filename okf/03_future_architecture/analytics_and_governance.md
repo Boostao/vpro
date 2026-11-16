@@ -119,7 +119,7 @@ With interactive visualization consolidated inside the app, file exports serve e
 
 ## 3. TurboVeg, R (`.rds`) & Analytical Interchange Architecture
 
-### 3.1 Resolving the `TurboVeg2` vs. `TurboVeg3` Specification (`Emails 0031–0034`, `Schedule A 2.iv.4`) — **Delivered in `v2.0.1`**
+### 3.1 Resolving the `TurboVeg2` vs. `TurboVeg3` Specification (`Emails 0031–0034`, `Schedule A 2.iv.4`) — **Delivered in `v2.0.0`**
 Forensic analysis of `VPro64_forAI/Modules/V7mdlTurboVeg.txt` revealed that legacy VPro 64 only wrote a Juice CSV matrix (`MakeJuiceFile`), while TurboVeg author Stephan Hennekens confirmed (`VproMailExchange` `0033`, `0031`) two distinct target architectures:
 * **TurboVeg 3 (`Turboveg3` — Primary Modern Target):** Official **31-table SQLite** single-file database (`https://www.synbiosys.alterra.nl/turboveg3/`), removing dBase 8-character/254-byte limits and avoiding unregistered Turboveg3's 250-plot export cap when VPro writes the SQLite target directly.
 * **TurboVeg 2 / JUICE Compatibility (`Plot_package` XML):** **TurboVeg XML** (`<Plot_package>`) is natively imported and exported by **TurboVeg 2**, **TurboVeg 3**, and **JUICE** without dBase `.dbf` truncation.
@@ -128,7 +128,7 @@ Forensic analysis of `VPro64_forAI/Modules/V7mdlTurboVeg.txt` revealed that lega
 1. Ships **both** official **31-table TurboVeg 3 SQLite** export/import (including calibrated Delphi `TDateTime` `1899-12-30` epoch encoding, WKT `POINT(lon lat)` geometry, GUIDs, header/remarks/abundance tables, and species dictionary crosswalks) **and** universal **TurboVeg `Plot_package` XML** export/import (handling UTF-8 and Windows-1252/ISO-8859-1 encodings plus Braun-Blanquet cover-scale midpoints)—eliminating format lock-in regardless of which version external phytosociologists run.
 2. Maps VPro's 10+ layers cleanly via an explicit layer crosswalk (`1..3/TotalA -> Tree`, `4..5c/TotalB -> Shrub`, `6 -> Herb`, `7..9 -> Moss/Cryptogam`, `10 -> Epiphyte`), preserving exact IEEE-754 `float32` `% Cover` values and transactional `<Project>_Audit` records on import without legacy `MakeJuiceFile`'s lossy integer quantization (`V7mdlTurboVeg.txt:115-130`).
 
-### 3.2 Native R `.rds` (Long) & Wide/Long CSV Interchange (`Schedule A 1.iii, 2.iv.2–3`, `VPro2.0_Functions` p. 8) — **Delivered in `v2.0.1`**
+### 3.2 Native R `.rds` (Long) & Wide/Long CSV Interchange (`Schedule A 1.iii, 2.iv.2–3`, `VPro2.0_Functions` p. 8) — **Delivered in `v2.0.0`**
 * **CSV Long & Wide (`app/internal/interchange/csvmatrix.go`, `tablecsvbundle.go`):** Provides user-selectable **Long Tidy CSV** (`PlotNumber, SiteUnit, Layer, Species, Cover, Height`) and **Wide Plot-by-Species Matrix CSV** alongside raw 8-table archival Store `.zip` bundles.
 * **R `.rds` (Long Format, `app/internal/interchange/rdsexport.go`):** Pure-Go R Serialization Format v2/v3 `.rds` writer generating compressed typed `data.frame` bundles (`env`, `admin`, `veg_long`, `humus`, `mineral`, `su`, `metadata`) directly on machines without R installed, complemented by native `r/` (`vpro` `v2.0.0`) R SDK WAL readers (`vpro_read_rds_project()`).
 

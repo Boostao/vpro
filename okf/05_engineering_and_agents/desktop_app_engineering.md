@@ -32,7 +32,7 @@ Workspace `glob` and `grep` tools default solely to the `Boostao/vpro` monorepo 
 1. **In-Tree Monorepo Companions (`Boostao/vpro`):**
    - `okf/` — Authoritative Operational Knowledge Framework, 9 empirical oracles (`okf/02_present_state/oracles/`), and engineering playbooks (`okf/05_engineering_and_agents/`).
    - `r/` — Official headless `vpro` R Companion SDK (`r/R/*.R`, `r/inst/extdata/`, `r/inst/quarto/*.qmd`, `r/data-raw/oracle/`).
-   - `docs-src/`, `site/`, `scripts/` — Single-source offline `F1` `LMH25 (2023)` help compiler (`scripts/build-docs-src.mjs` $\rightarrow$ `app/resources/help_bundle.json`), BC Gov Design System download portal (`site/build.mjs` $\rightarrow$ `site/dist`), and release/PE verification scripts (`scripts/release.py`).
+   - `docs-src/`, `site/`, `scripts/` — Authored single-source offline `F1` `LMH25 (2023)` help JSON (`docs-src/*.json`, CBC plain-language copy & `whatsNew` condenser per [`CONTRIBUTING.md`](../../CONTRIBUTING.md#6-user-facing-voice--plain-language-lexicon-cbc-standard)) compiled by `scripts/build-docs-src.mjs` $\rightarrow$ `app/resources/help_bundle.json`, BC Gov Design System download portal (`site/build.mjs` $\rightarrow$ `site/dist`), and release/PE verification scripts (`scripts/release.py`).
 2. **Legacy Manuals, Triage, Correspondence & Decompiled `VPro64` Exports (`/home/bruno/Work/VPRO_ACCESS/`):**
    - Field & Legacy Manuals: `LMH25_2023_web.pdf` (2023 ed.), `Lmh25_2015.pdf` (2015 ed.), `VProXP_Userguide.pdf`.
    - Client Scope & Triage: `VPro2.0_Functions to remove-retain-modify.pdf` (`.docx`), `_BEC_data_system_fs1a_schedule_of_services_v2 (13).md`, `VproMailExchange/` (106 emails incl. executed contract `RE26OCF433` in `0072`), `SCREENCAPS/` (21 VPro 64 PNGs).

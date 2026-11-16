@@ -69,12 +69,12 @@ Legacy VPro exported KML files and launched `googleearth.exe` (`VPro2.0_Function
 
 | Legacy Source Format | Schema Signature | Migration Path into Canonical `VP08` SQLite (`.db`) | Current Status & Required Action |
 |---|---|---|---|
-| **VPro 19 / VPro 64 (`.accdb`)** | `VP08` (8 core tables + `*_SU`, `*_Hierarchy`, `*_Lump`, `*_Profile`) | Direct 1:1 streaming via CGO `libmdb` (`ImportAccessProject` in `internal/interchange/accessprojectimport.go`) + SHA-256 verification + companion `*_SU`, `*_Hierarchy`, `*_Lump`, `*_Profile` import. | **Delivered (`v2.0.1`)** across **Windows, Linux, and macOS (`darwin`)**. |
-| **VPro 15 (`.accdb`)** | `VP07` (131-col `Env`, 75-col `Metadata`, no `Admin`) | Splits 19 columns into `<P>_Admin`, renames 14 `SV_*` columns, normalizes `Metadata`. | **Delivered (`v2.0.1`)** (`ImportVPro07` parity). |
-| **VPro 07 / 13 (`.accdb`)** | `VP06` (105-col `Env`, 36-col `Veg`) | Splits `Env`/`Admin` (94 + 12 mapped cols), creates empty `VP08` `Metadata`. | **Delivered (`v2.0.1`)** (`ImportVPro06` parity). |
-| **VPro XP / 03 (`.mdb`)** | `VP05` (DMS coords, legacy col names, 62-col `Veg`) | Converts DMS $\rightarrow$ `float64` DD (fixing legacy `Single` truncation!), renames 9 columns, synthesizes `Admin`. | **Delivered (`v2.0.1`)** (`ImportVPro05` parity). |
-| **VENUS 5.0 (`.mdb` / `.xml`)** | `TemplateVENUS5.mdb` (`tblEnv`, `tblVegLayer`, `tblVegSpecies`, etc.) | Pivots normalized `tblVegLayer` + `tblVegSpecies` into wide `VP08` `<P>_Veg` (`internal/interchange/venus5.go`). | **Delivered (`v2.0.1`)** (`InterchangeHub.svelte` `.mdb` & XML import). |
-| **`BECMaster_fixing.accdb` (`545 MB`)** | `VP08` (`71,567` plots, `1.65M` veg rows, dropped `Env->Veg` FK) | Streaming batch import into SQLite + automatic orphan-row quarantine report before enabling `PRAGMA foreign_keys = ON`. | **Qualified (`v2.0.1`, `6056169`)** (`internal/integration/becmaster_qualification_test.go`). |
+| **VPro 19 / VPro 64 (`.accdb`)** | `VP08` (8 core tables + `*_SU`, `*_Hierarchy`, `*_Lump`, `*_Profile`) | Direct 1:1 streaming via CGO `libmdb` (`ImportAccessProject` in `internal/interchange/accessprojectimport.go`) + SHA-256 verification + companion `*_SU`, `*_Hierarchy`, `*_Lump`, `*_Profile` import. | **Delivered (`v2.0.0`)** across **Windows, Linux, and macOS (`darwin`)**. |
+| **VPro 15 (`.accdb`)** | `VP07` (131-col `Env`, 75-col `Metadata`, no `Admin`) | Splits 19 columns into `<P>_Admin`, renames 14 `SV_*` columns, normalizes `Metadata`. | **Delivered (`v2.0.0`)** (`ImportVPro07` parity). |
+| **VPro 07 / 13 (`.accdb`)** | `VP06` (105-col `Env`, 36-col `Veg`) | Splits `Env`/`Admin` (94 + 12 mapped cols), creates empty `VP08` `Metadata`. | **Delivered (`v2.0.0`)** (`ImportVPro06` parity). |
+| **VPro XP / 03 (`.mdb`)** | `VP05` (DMS coords, legacy col names, 62-col `Veg`) | Converts DMS $\rightarrow$ `float64` DD (fixing legacy `Single` truncation!), renames 9 columns, synthesizes `Admin`. | **Delivered (`v2.0.0`)** (`ImportVPro05` parity). |
+| **VENUS 5.0 (`.mdb` / `.xml`)** | `TemplateVENUS5.mdb` (`tblEnv`, `tblVegLayer`, `tblVegSpecies`, etc.) | Pivots normalized `tblVegLayer` + `tblVegSpecies` into wide `VP08` `<P>_Veg` (`internal/interchange/venus5.go`). | **Delivered (`v2.0.0`)** (`InterchangeHub.svelte` `.mdb` & XML import). |
+| **`BECMaster_fixing.accdb` (`545 MB`)** | `VP08` (`71,567` plots, `1.65M` veg rows, dropped `Env->Veg` FK) | Streaming batch import into SQLite + automatic orphan-row quarantine report before enabling `PRAGMA foreign_keys = ON`. | **Qualified (`v2.0.0`, `6056169`)** (`internal/integration/becmaster_qualification_test.go`). |
 
 ### 3.2 Co-Existence & Round-Trip Compatibility Bridge
 During the 6–12 month transition window while external partners still use VPro 64 or Excel macros:
@@ -87,13 +87,13 @@ During the 6–12 month transition window while external partners still use VPro
 
 ## 4. Phased Rollout, Feature-Gate Graduation & Packaging Roadmap
 
-### Stage 1: Cross-Platform Installer Qualification, Official Release Portal & Feature Graduation (**Delivered in `v2.0.0` / `v2.0.1`**)
+### Stage 1: Cross-Platform Installer Qualification, Official Release Portal & Feature Graduation (**Delivered in `v2.0.0`**)
 * **Cross-Platform Release Matrix (`6848960`, `56d4062`):** Shipped self-contained Windows `amd64`/`arm64` NSIS `.exe` installers (statically linking MinGW `winpthreads`/`libgcc` with PE import validation), macOS Universal `.dmg` (`VPro.app`), and Linux `amd64`/`arm64` `.AppImage`/`.deb`/`.tar.gz` archives; Phase 1 packages are unsigned with `SHA256SUMS.txt` verification (`D-02`).
 * **BC Gov Design System Release Portal (`aa99f9e`):** Replaced uncompiled CDN drafts and browser `api.github.com` calls with `site/` (`BC Sans`, `#003366` BC Navy, `#FCBA19` Gold) backed by static `release-manifest.json`, while archiving October 2026 internal ledgers under `archive/oct2026-parity-ledgers/`.
 * **Default-ON Graduation (`c4cbd1a`):** Enabled SQLite `WAL` mode, graduated all validated workflows to default-ON under `config.yml` `release_channel: stable`, and pruned Red-marked standalone `CHARS` forms and `PC-ORD Break Report`.
 
-### Stage 2: Priority Workstation Parity, Automations & R Companion SDK (**Delivered in `v2.0.1` & `vpro` `v2.0.0`**)
-* Delivered all Priority Retain/Modify desktop workflows and `Auto-1`..`Auto-7` in `VPro Desktop` (`app/`) `v2.0.1` + `vpro` `v2.0.0`:
+### Stage 2: Priority Workstation Parity, Automations & R Companion SDK (**Delivered in `v2.0.0`**)
+* Delivered all Priority Retain/Modify desktop workflows and `Auto-1`..`Auto-7` in `VPro Desktop` (`app/`) `v2.0.0` + `vpro` `v2.0.0`:
   1. **Project Lifecycle Suite (`internal/projectops`):** `New Project`, `Save Project As`, `Export Splinter Project`, `Compare Two Projects`, and WAL-resilient `3-Way Merge`.
   2. **Classification, Datasheet & Taxonomy (`internal/datasheet`, `internal/classification`, `internal/lumping`):** `UniversalDatasheetGrid.svelte`, virtualized dual-pane `ClassificationExplorer.svelte`, `Create SU from Env Fields` (into new or existing SU), SiteUnit `.support`/`.poor`/`.nudum` exclusions, and `LumpEditor.svelte` (`*_Lump` + `LumpSpec`).
   3. **Standards, 3D GIS & Interchange (`internal/spatial`, `internal/interchange`):** Bundled 2026 `BECdb v13` + `BCPlantTaxonomy v19` + `LMH25 (2023)` catalogues, **MapLibre GL JS v6 + WebGPU + offline `PMTiles` workbench**, batch `USysTableOfLists` compliance gate, `VENUS 5.0` import, **official `TurboVeg 3` 31-table SQLite & `Plot_package` XML** import/export, OGC `GeoPackage` (`.gpkg`), R `.rds`, Long/Wide CSV, and `User Species` I/O.

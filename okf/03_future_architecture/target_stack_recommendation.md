@@ -63,7 +63,7 @@ flowchart TB
 
 ---
 
-## 4. Concrete Stack Refinements & Delivered Engineering Decisions (`v2.0.1` + `vpro` `v2.0.0`)
+## 4. Concrete Stack Refinements & Delivered Engineering Decisions (`v2.0.0`)
 
 ### 4.1 Consolidated `app/` Backend Services & Release-Channel Config (**Delivered**)
 * **Service Consolidation (`86 -> 12` Domain Services, `0cb5e76`, `d0353dd`):** Decomposed the flat root package into a 4-layer acyclic `app/internal/*` DAG and consolidated the 86 granular Wails bindings into **strictly 12 cohesive domain services** in `app/main.go` (`LifecycleService`, `ContextService`, `PlotEntryService`, `DatasheetService`, `ClassificationService`, `ValidationService`, `ImportExportService`, `VegetationReportService`, `EnvironmentReportService`, `SpatialService`, `PictureService`, `HelpService`).

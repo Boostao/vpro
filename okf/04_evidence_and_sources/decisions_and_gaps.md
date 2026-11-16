@@ -10,8 +10,8 @@ Per forensic engineering discipline, **no missing specification has been halluci
 
 ```mermaid
 flowchart LR
-    subgraph Resolved["Resolved in Desktop v2.0.1 & R SDK v2.0.0"]
-        D2["D-02: Cross-Platform v2.0.1 Installers,<br/>BC Gov Portal & Default-ON Graduation"]
+    subgraph Resolved["Resolved in Desktop v2.0.0 & R SDK v2.0.0"]
+        D2["D-02: Clean v2.0.0 Release Baseline,<br/>BC Gov Portal & CBC User-Copy Standard"]
         D3["D-03: Red Over-Builds Pruned<br/>(Inline CHARS Toggle, Break Report Removed)"]
         D4["D-04: Dual TurboVeg 3 (31-Table SQLite)<br/>+ Plot_package XML Implemented"]
         D5["D-05: Universal Datasheet Grid<br/>(_Env/_Admin/_Veg/_Humus/_Mineral/_Other/_SU)"]
@@ -48,10 +48,11 @@ flowchart LR
 
 ---
 
-### D-02: Cross-Platform `v2.0.1` Installer Delivery, BC Gov Portal Branding, Code Signing & Feature Gates
-* **Status:** **Resolved in Production (`v2.0.1`, `2026-11-13`)**
+### D-02: Cross-Platform `v2.0.0` Installer Baseline, BC Gov Portal Branding, CBC User Copy & Feature Gates
+* **Status:** **Resolved (`v2.0.0` Clean Baseline Reset, `2026-11-16`)**
 * **Evidence & Delivered State:**
-  * **Release Matrix Shipped (`v2.0.1`, `56d4062`, `6848960`):** GitHub Actions `Build and Release` and `Deploy GitHub Pages` publish verified Windows (`amd64`/`arm64` static NSIS `.exe` + `.zip` with zero non-inbox PE DLL imports), macOS Universal (`VPro.app` `.dmg` + `.zip`), and Linux (`amd64`/`arm64` `.AppImage`, `.deb`, `.tar.gz`) packages, with all validated features default-ON (`config.yml` `release_channel: stable`).
+  * **Clean `v2.0.0` Release Reset & Matrix:** GitHub Actions `Build and Release` and `Deploy GitHub Pages` publish verified Windows (`amd64`/`arm64` static NSIS `.exe` + `.zip` with zero non-inbox PE DLL imports), macOS Universal (`VPro.app` `.dmg` + `.zip`), and Linux (`amd64`/`arm64` `.AppImage`, `.deb`, `.tar.gz`) packages plus the checked R SDK tarball (`vpro-r-sdk.tar.gz`) from a single clean `v2.0.0` baseline (`app/` + `r/` both `2.0.0`), with all validated features default-ON (`config.yml` `release_channel: stable`).
+  * **Single-Source Help & CBC Plain-Language Standard:** `docs-src/*.json` serve as the authored single-source JSON truth compiled by `scripts/build-docs-src.mjs` into `app/resources/help_bundle.json`, and all user-facing text (`app/frontend/`, `docs-src/`, `site/`, `README.md`, `ROADMAP.md`, `r/`) follows the CBC-level plain-language lexicon and `whatsNew` / `r/NEWS.md` condenser rules in [`CONTRIBUTING.md`](../../CONTRIBUTING.md#6-user-facing-voice--plain-language-lexicon-cbc-standard).
   * **Code Signing Policy:** Phase 1 builds ship unsigned (`"unsignedNotice": true`) with static `release-manifest.json` + `SHA256SUMS.txt` verification; client (`BC Gov / MoF`) to confirm whether to fund OV/EV Authenticode & Apple Developer ID certificates for Phase 2 rollout.
   * **Product Naming & Branding:** Branded as **`VPro`** (*VENUS — Vegetation and Environment NexUS — Professional*) under the **BC Government Design System** (`BC Sans`, `#003366` BC Navy, `#FCBA19` Gold accent) for the **B.C. Ministry of Forests, Research Branch — Biogeoclimatic Ecosystem Classification (BEC) Program**.
   * **Bundled 2026 `BECWeb` Master Standards (`6873e74`):** Compiled via `app/cmd/standards2026` from **`BECdb_v13_2026.zip`** (`2026-05-28`, `8,900` `USysSiteSeriesNames`, `6,067` `MasterSiteUnitList`) and **`BCPlantTaxa2025_access.zip`** (`2026-02-09`, Version 19 `USysAllSpecs`, `16,728` rows) + `LMH25 (2023)` (`1,566` `USysTableOfLists` rows).
@@ -70,7 +71,7 @@ flowchart LR
 * **Status:** **Engineered Dual-Format Solution (`266921e`); Ready for Client UAT Confirmation**
 * **Evidence & Resolution:**
   * `RE26OCF433` Schedule A `2.iv.(4)` & `VPro2.0_Functions` (`PDF pp. 8–9` `P033, P038`) require both **TurboVeg export and import** (`VproMailExchange` `0031`–`0034`).
-  * `app/` `v2.0.1` (`app/internal/interchange/turboveg_sqlite.go` & `turboveg_xml.go`) implements **both** official **31-table `TurboVeg 3` SQLite** import/export (Delphi `TDateTime` + WKT `POINT` + GUIDs) **and** universal **`Plot_package` XML** import/export (natively supported by TurboVeg 2, TurboVeg 3, and JUICE)—covering both modern and legacy phytosociological workflows without dBase `.dbf` truncation.
+  * `app/` `v2.0.0` (`app/internal/interchange/turboveg_sqlite.go` & `turboveg_xml.go`) implements **both** official **31-table `TurboVeg 3` SQLite** import/export (Delphi `TDateTime` + WKT `POINT` + GUIDs) **and** universal **`Plot_package` XML** import/export (natively supported by TurboVeg 2, TurboVeg 3, and JUICE)—covering both modern and legacy phytosociological workflows without dBase `.dbf` truncation.
 * **Client Confirmation Item:** Confirm during UAT that `TurboVeg 3` `.sqlite` + `Plot_package` `.xml` satisfies all MoF/JUICE collaborator workflows without requiring legacy dBase III+ `.dbf` writers.
 
 ---

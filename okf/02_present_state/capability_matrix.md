@@ -9,11 +9,11 @@
 This matrix cross-audits **every functional surface** across four authoritative ground-truth baselines:
 1. **Legacy Baseline (`VPro64.accdb`):** 108 Forms, 15 Reports, 21 `QueryDefs`, 127 VBA Modules, and companion `VTrees.accdb` / `Diagnostic10.xla` (`VPro64_forAI/`).
 2. **Client Triage & Contract Mandate:** Will MacKenzie's ink-coded disposition document (`VPro2.0_Functions to remove-retain-modify.docx` / `.pdf` pp. 1–19, verified via `VproMailExchange` `0040`: **Red = Remove**, **Orange = Deferred/Lower Priority**, **Green/Unmarked = Priority Retain or Modify**) + Executed Contract **`RE26OCF433` Schedule A** (`0072` Contract PDF pp. 10–13) + Email `0035` (direct datasheet editing).
-3. **R SDK Track — `r/` (`vpro` `v2.0.0` + Wave 6 Cloud `BECMaster` in `Boostao/vpro`):** Clean-slate headless R companion SDK (`43` `r/R/*.R` files, `R >= 4.4.0`, zero-note `R CMD check`, qualified on 71,567-plot `BECMaster`) providing concurrent SQLite WAL reads, community matrices, BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedological validation, `climr` & Ministry `aSMR` modelling, dual edatopic grids, BEC diagnostics, guarded candidate `*_SU` write-back, PostgreSQL `BECMaster` sync/staging/snapshots (`r/R/cloud_*.R`), 5 scientist vignettes, and Quarto BEC guides.
-4. **Desktop Workstation Track — `app/` (`github.com/boostao/vpro/app`, `v2.0.1` in `Boostao/vpro`):** Go 1.27+ + Wails `v3.1.0` + Svelte 5 desktop workstation (`12` cohesive domain services across a 4-layer `app/internal/*` DAG, `24` active views, **default-ON** `release_channel: stable` in `config.yml`).
+3. **R SDK Track — `r/` (`vpro` `v2.0.0` + Wave 6 Cloud `BECMaster` in `Boostao/vpro`):** Clean-slate headless R companion SDK (`43` `r/R/*.R` files, `R >= 4.4.0`, zero-note `R CMD check`, qualified on 71,567-plot `BECMaster`) providing concurrent SQLite WAL reads, community matrices, BEC clustering, `sf` GeoPackage export, `LMH25 (2023)` pedological validation, `climr` & Ministry `aSMR` modelling, dual edatopic grids, BEC diagnostics, guarded candidate `*_SU` write-back, PostgreSQL `BECMaster` sync/staging/snapshots (`r/R/cloud_*.R`), 6 scientist vignettes, and Quarto BEC guides.
+4. **Desktop Workstation Track — `app/` (`github.com/boostao/vpro/app`, `v2.0.0` in `Boostao/vpro`):** Go 1.27+ + Wails `v3.1.0` + Svelte 5 desktop workstation (`12` cohesive domain services across a 4-layer `app/internal/*` DAG, `24` active views, **default-ON** `release_channel: stable` in `config.yml`).
 
 **Status Legend:**
-* `Implemented` — Production code & automated test suites shipped default-ON in `Boostao/vpro` (`app/` `v2.0.1` / `r/` `v2.0.0`).
+* `Implemented` — Production code & automated test suites shipped default-ON in `Boostao/vpro` (`app/` `v2.0.0` / `r/` `v2.0.0`).
 * `Partial` — Local desktop / SDK implementation complete; multi-user Cloud `BECMaster` PostgreSQL sync or deferred secondary UI pending Phase 2.
 * `Deferred` — Marked **Orange / Lower Priority** by client (`Herbarium`, `Colour-Theme`, `Hierarchy Diagram`, `Print All Labels`) and intentionally deferred.
 * `Cloud Phase 2` — Multi-user Cloud `BECMaster` PostgreSQL/PostGIS, OIDC accreditation, and public web hosting (`Schedule A 1–2, 6`).
@@ -31,8 +31,8 @@ flowchart TB
         Rem["Explicitly Retired (32 items)<br/>(Red Ink Strikethrough / X)"]
     end
 
-    subgraph DesktopState["VPro Desktop (app/ v2.0.1) + vpro (r/ v2.0.0) Audit"]
-        W_OK["Delivered Default-ON (Desktop v2.0.1 + R SDK v2.0.0):<br/>• 6-Tab & 2-Page FS882, SIVI (incl. Create/Undo) & Inline CHARS Toggle<br/>• Universal Datasheet Grid & Dual-Pane SU/Hierarchy Tree Explorer<br/>• New/SaveAs/Splinter/Compare/3-Way Merge, OptimizeVeg & Compliance Gate<br/>• Access VP05-08 (545 MB BECMaster + Quarantine) & VENUS 5.0 Import<br/>• Combine Species (*_Lump + LumpSpec), LMH25 Rules & Metadata Presets<br/>• 3D MapLibre v6 + WebGPU + Offline PMTiles + AOI->SU & .gpkg<br/>• Reactive BEC Diagnostics, R Sidecar (climr->aSMR, vegclust, Quarto)<br/>• Official TurboVeg 3 (31-Table SQLite + Plot_package XML), .rds, .xlsx, .pdf<br/>• Offline F1 LMH25 Help, 4 Tours & BC Gov v2.0.1 Release Portal"]
+    subgraph DesktopState["VPro Desktop (app/ v2.0.0) + vpro (r/ v2.0.0) Audit"]
+        W_OK["Delivered Default-ON (Desktop v2.0.0 + R SDK v2.0.0):<br/>• 6-Tab & 2-Page FS882, SIVI (incl. Create/Undo) & Inline CHARS Toggle<br/>• Universal Datasheet Grid & Dual-Pane SU/Hierarchy Tree Explorer<br/>• New/SaveAs/Splinter/Compare/3-Way Merge, OptimizeVeg & Compliance Gate<br/>• Access VP05-08 (545 MB BECMaster + Quarantine) & VENUS 5.0 Import<br/>• Combine Species (*_Lump + LumpSpec), LMH25 Rules & Metadata Presets<br/>• 3D MapLibre v6 + WebGPU + Offline PMTiles + AOI->SU & .gpkg<br/>• Reactive BEC Diagnostics, R Sidecar (climr->aSMR, vegclust, Quarto)<br/>• Official TurboVeg 3 (31-Table SQLite + Plot_package XML), .rds, .xlsx, .pdf<br/>• Offline F1 LMH25 Help, 4 Tours & BC Gov v2.0.0 Release Portal"]
         W_PHASE2["Remaining Phase 2 / Cloud Scope:<br/>• Cloud BECMaster PostgreSQL/PostGIS + IDIR/BCeID OIDC + Public BECWeb 2.0<br/>• Deferred Orange Items (Herbarium, Colour-Theme, Hierarchy Diagram)<br/>• Optional Enterprise Code Signing, Field PWA/OCR & Companion VTrees"]
         W_PRUNED["Client Red Items Cleanly Retired / Pruned:<br/>• Standalone CHARS Forms & PC-ORD Break Report Removed<br/>• Single-Page Form, GIF, Message Board, BAK*, PC-ORD & Legacy I/O Omitted"]
     end
@@ -49,7 +49,7 @@ flowchart TB
 
 ### 3.1 Session Dashboard, Data Entry Forms & Direct Grid Editing (`VPro2.0_Functions` pp. 1–3, Email `0035`)
 
-| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.1` Desktop) | Alignment & Verification Notes |
+| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.0` Desktop) | Alignment & Verification Notes |
 |---|---|---|---|---|---|---|
 | 1.1 | **Session Active Selectors** (`Project`, `Site Unit`, `Hierarchy`) | **MODIFY (Priority)** (`p.1`–`p.2`: Session dashboard) | `frmMainMenuFloat` (`Data Centre`) | **Implemented** (Workspace & WAL context readers) | **Implemented** (`App.svelte`, `ContextService.SwitchContext`) | Collapsible left `#project-context` sidebar + 128-bit `contextID` fencing. |
 | 1.2 | **FS882 Multi-Tab Form** (Site, Veg, VegOther, Soil/Humus/Min, Other, Audit) | **RETAIN (Priority)** (`p.1`, `Sched A 3.a`) | `FS882-6x4XL` (`98` parent + child subforms) | **Implemented** (Tidy veg/soil/env extractors) | **Implemented** (`FS882Form.svelte`, `internal/plotentry`) | Default-ON; `Enter`-key vertical/field nav, `DD/DM/DMS/UTM`, atomic `<P>_Audit`. |
@@ -70,7 +70,7 @@ flowchart TB
 
 ### 3.2 Project, Site Unit (`SU`) & Classification Hierarchy Management (`VPro2.0_Functions` pp. 4–7, `Sched A 3.c–g`)
 
-| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.1` Desktop) | Alignment & Verification Notes |
+| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.0` Desktop) | Alignment & Verification Notes |
 |---|---|---|---|---|---|---|
 | 2.1 | **New Empty Project Creation** | **RETAIN (Priority)** (`p.5`) | `V7mdlCreateTables.CreateTableSet` | **Implemented** | **Implemented** (`ProjectAdminWorkbench.svelte`, `internal/projectops`) | Creates canonical 8-table `VP08` SQLite `.db` in WAL mode (`c864381`). |
 | 2.2 | **Project Save As** | **RETAIN (Priority)** (`p.5`) | `V7mdlSaveAs` | **Implemented** | **Implemented** (`ProjectAdminWorkbench.svelte`, `internal/projectops`) | Single-pass DDL/table rewrite (`c887dd8`) preserving audit ownership. |
@@ -91,7 +91,7 @@ flowchart TB
 
 ### 3.3 Data Validation, Import & Export Pipelines (`VPro2.0_Functions` pp. 8–9, 11; `Sched A 1, 2.iv`)
 
-| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.1` Desktop) | Alignment & Verification Notes |
+| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.0` Desktop) | Alignment & Verification Notes |
 |---|---|---|---|---|---|---|
 | 3.1 | **Mandatory Code Standards & `LMH25 (2023)` Compliance Gate** (`USysTableOfLists`, 1:N FK, pedon/edatopic rules) | **MODIFY (Priority Gate)** (`p.11`, `Sched A 1.i.1`) | `USysValidateData`, `V7mdlReportsValidateEnvData` | **Implemented** (`LMH25 2023` & standards QA) | **Implemented** (`ProjectAdminWorkbench.svelte`, `internal/validation`, `internal/lmh25rules`) | Batch `USysTableOfLists`, FK integrity, numeric/UTF-16 bounds, and live `LMH25` pedon/`rSMR`/`rSNR` checks (`c864381`, `d29eb01`). |
 | 3.2 | **Batch Vegetation Species Code Check & Synonym Replacement** | **MODIFY (Priority)** (`p.11`) | `V7mdlSpellCheck2020.CheckForOldCodes` | **Implemented** (`BCPlantTaxonomy v19` check) | **Implemented** (`SpeciesCodeCheck.svelte`, `ValidationService`) | Validated against 2026 `BCPlantTaxonomy v19` (`16,728` rows incl. `Codetype = 'XX'`). |
@@ -107,7 +107,7 @@ flowchart TB
 
 ### 3.4 Phytosociological Reporting, 3D Geospatial, Climate/Edatopic Analytics & Help (`VPro2.0_Functions` pp. 10, 12–16; `Sched A 3.h, 4, 5, 6`)
 
-| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.1` Desktop) | Alignment & Verification Notes |
+| # | Functional Capability | Client Disposition (`VPro2.0_Functions` / `RE26OCF433`) | Legacy `VPro64` Artifact | `vpro` (`v2.0.0` R SDK) | `app/` (`v2.0.0` Desktop) | Alignment & Verification Notes |
 |---|---|---|---|---|---|---|
 | 4.1 | **Long Vegetation Report (`.xlsx`)** | **RETAIN (Priority)** (`p.10`, `p.13`, `Sched A 4.a`) | `V7mdlReportsLongVeg` (capped at `250` plots!) | **Implemented** | **Implemented** (`LongVegetationReport.svelte`, `internal/vegreport`) | Default-ON; lifts legacy 250-plot limit up to `16,000` plots per workbook (Excel `.xlsx` column limit); supports Layer/Strata/Lifeform/None, thresholds & quality filters. |
 | 4.2 | **Summary Vegetation Report (`.xlsx`)** | **RETAIN (Priority)** (`p.10`, `p.12`, `Sched A 4.a–b`) | `V7mdlReportsShortVeg` + `VProSummary.xltm` | **Implemented** (`wave2b` summary reports) | **Implemented** (`SummaryVegetationReport.svelte`, `internal/vegreport`) | Supports 2026 `BCPlantTaxonomy v19` (`7c3ec60`), `By n Plots`, quality & `BEC_Use` filters. |
@@ -118,4 +118,4 @@ flowchart TB
 | 4.7 | **Subzone Matrix, Hierarchy Diagram & Print Plot Label** | **DEFERRED** (`p.15` `P069`) | `V7mdlSubzoneMatrix`, `V7mdlReportsHierarchyDiagram`, `USysBecLabels` | **Deferred** | **Partial** (`SubzoneMatrixReport.svelte` & cross-platform `LiberationSans` `PlotLabelPreview` PDF shipped; `Hierarchy Diagram` & `Print All` deferred) | Exceeds Phase 1 priority on Subzone Matrix & single-label PDF (`f0a4990`). |
 | 4.8 | **`PC-ORD Break Report`** | **REMOVE** (`p.15` Red strikethrough) | `USysBreakReport` | **Retired** | **Retired (Pruned)** (`c4cbd1a`) | Pruned from `Navigation.svelte` and production codebase per client Red triage. |
 | 4.9 | **Reactive BEC Differential Synthesis (`Diagnostic10.xla` replacement), `climr` $\rightarrow$ `aSMR` Edatopic Grids & Quarto HTML/PDF Unit Guides** | **Contract Deliverable** (`Sched A 4.a.i`, `4.b.ii–iv`, `4.c–e`) | `ExcelTools\Diagnostic10.xla`; external MoF `BEC_Unit_Reporting` | **Implemented** (`wave2b`/`wave2c`/`wave3`: `climr`, `aSMR`, dual edatopic grids, Quarto guides) | **Implemented** (`ClassificationSynthesis.svelte`, `RSidecarWorkbench.svelte`, `internal/diagnostics`, `internal/rsidecar`) | Sub-second in-app `d/dd/cd/c/ic` matrix + LOO outliers + `Diagnostic10.xla` `.xlsx` + R sidecar `climr`/`aSMR`/Quarto (`a2cb579`, `c85d014`). |
-| 4.10 | **`BEC_R` Classification Analytics** (BEC Similarity, `vegclust`/Hierarchical Clustering, Dendrograms) & **Help / BC Gov Release Portal** | **Contract Deliverable** (`Sched A 5.a–b`, `6`) | `frmR` + `VPROTestScriptRK.R`; `VPro.chm` & `vuser.ca` | **Implemented** (`wave2a` clustering + 4 vignettes + `pkgdown`) | **Implemented** (`RSidecarWorkbench.svelte`, `HelpDrawer.svelte`, `OnboardingTour.svelte`, `site/` BC Gov `v2.0.1` Portal) | Candidate `*_SU` clustering, 100% offline `F1` `LMH25` help, 4 spotlight tours, and zero-API-call BC Gov portal (`8182ee7`, `aa99f9e`, `56d4062`). |
+| 4.10 | **`BEC_R` Classification Analytics** (BEC Similarity, `vegclust`/Hierarchical Clustering, Dendrograms) & **Help / BC Gov Release Portal** | **Contract Deliverable** (`Sched A 5.a–b`, `6`) | `frmR` + `VPROTestScriptRK.R`; `VPro.chm` & `vuser.ca` | **Implemented** (`wave2a` clustering + 6 vignettes + `pkgdown`) | **Implemented** (`RSidecarWorkbench.svelte`, `HelpDrawer.svelte`, `OnboardingTour.svelte`, `site/` BC Gov `v2.0.0` Portal) | Candidate `*_SU` clustering, 100% offline `F1` `LMH25` help, 4 spotlight tours, and zero-API-call BC Gov portal (`8182ee7`, `aa99f9e`, `56d4062`). |

@@ -141,9 +141,9 @@ sequenceDiagram
 
 ---
 
-## 9. Implementation Status & Production Package Mapping (`Boostao/vpro` `v2.0.1`)
+## 9. Implementation Status & Production Package Mapping (`Boostao/vpro` `v2.0.0`)
 
-All seven automations are **implemented and verified** across `Boostao/vpro` (`app/` `v2.0.1` and `r/` `v2.0.0`):
+All seven automations are **implemented and verified** across `Boostao/vpro` (`app/` `v2.0.0` and `r/` `v2.0.0`):
 
 | ID | Automation / Abstraction | Primary User Persona | Production Implementation (`app/` / `r/`) | Status (`2026-11-14`) |
 |---|---|---|---|---|
