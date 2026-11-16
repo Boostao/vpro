@@ -127,15 +127,37 @@
     return changed;
   }
 
+  function rectsAlmostEqual(
+    a: { top: number; left: number; width: number; height: number } | null,
+    b: { top: number; left: number; width: number; height: number }
+  ): boolean {
+    if (!a) return false;
+    return (
+      Math.abs(a.top - b.top) < 0.5 &&
+      Math.abs(a.left - b.left) < 0.5 &&
+      Math.abs(a.width - b.width) < 0.5 &&
+      Math.abs(a.height - b.height) < 0.5
+    );
+  }
+
+  function isSelfTourMutation(records?: MutationRecord[]): boolean {
+    if (!records || records.length === 0) return false;
+    return records.every((rec) => {
+      const target = rec.target as Element | null;
+      const el = target && target.nodeType === 1 ? target : target?.parentElement;
+      return !!el?.closest?.('[data-tour-overlay], [data-tour-spotlight-ring], [data-onboarding-tour-active], [data-onboarding-tour-catalog]');
+    });
+  }
+
   function measureResolvedElement(selector: string, allowScroll: boolean): boolean {
     if (typeof document === 'undefined' || !selector) {
-      targetRect = null;
+      if (targetRect !== null) targetRect = null;
       return false;
     }
     try {
       const el = document.querySelector(selector);
       if (!el || typeof el.getBoundingClientRect !== 'function') {
-        targetRect = null;
+        if (targetRect !== null) targetRect = null;
         return false;
       }
       const openedDetails = openAncestorDetails(el);
@@ -157,7 +179,7 @@
       const rect = el.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0 || openedDetails) {
         if (rect.width <= 0 || rect.height <= 0) {
-          targetRect = null;
+          if (targetRect !== null) targetRect = null;
           return false;
         }
       }
@@ -167,17 +189,29 @@
       const right = Math.min(vw - 4, rect.right + 4);
       const top = Math.max(4, rect.top - 4);
       const maxH = Math.max(24, vh - top - 4);
-      targetRect = {
+      const nextRect = {
         top,
         left,
         width: Math.max(24, right - left),
         height: Math.min(rect.height + 8, maxH),
       };
-      targetWaiting = false;
+      if (!rectsAlmostEqual(targetRect, nextRect)) {
+        targetRect = nextRect;
+      }
+      if (targetWaiting) {
+        targetWaiting = false;
+      }
       return true;
     } catch {
-      targetRect = null;
+      if (targetRect !== null) targetRect = null;
       return false;
+    }
+  }
+
+  function disconnectMutationObserver() {
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+      mutationObserver = null;
     }
   }
 
@@ -201,6 +235,7 @@
       if (resolved) {
         scrolledOnce = true;
         targetWaiting = false;
+        disconnectMutationObserver();
         // Re-sample once on the next animation frame after smooth scroll / details open settles
         if (attempts < 2 && typeof requestAnimationFrame === 'function') {
           attempts++;
@@ -215,10 +250,7 @@
       attempts++;
       if (attempts >= maxAttempts) {
         targetWaiting = false;
-        if (mutationObserver) {
-          mutationObserver.disconnect();
-          mutationObserver = null;
-        }
+        disconnectMutationObserver();
         return;
       }
       targetWaiting = true;
@@ -232,13 +264,16 @@
       }, 80);
     };
 
-    if (typeof MutationObserver === 'function' && document.body) {
-      mutationObserver = new MutationObserver(() => {
+    // Watch DOM only until lazy view/target resolves; resize/scroll listeners maintain position afterward.
+    if (typeof MutationObserver === 'function' && document.body && !measureResolvedElement(selector, false)) {
+      mutationObserver = new MutationObserver((records) => {
         if (!trackingActive || expectedGen !== trackGen || !open) return;
+        if (isSelfTourMutation(records)) return;
         const hit = measureResolvedElement(selector, !scrolledOnce);
         if (hit) {
           scrolledOnce = true;
           targetWaiting = false;
+          disconnectMutationObserver();
           if (retryTimer !== null) {
             clearTimeout(retryTimer);
             retryTimer = null;
@@ -422,17 +457,18 @@
 
 {#if open}
   {#if activeTour && activeStep}
-    {#if targetRect}
-      <div
-        aria-hidden="true"
-        data-tour-spotlight-ring
-        class="pointer-events-none fixed z-40 rounded border-[3px] border-[#FCBA19] shadow-[0_0_0_9999px_rgba(0,25,51,0.38)] transition-all duration-150"
-        style={`top:${targetRect.top}px;left:${targetRect.left}px;width:${targetRect.width}px;height:${targetRect.height}px;`}
-      ></div>
-    {/if}
+    <div data-tour-overlay class="contents">
+      {#if targetRect}
+        <div
+          aria-hidden="true"
+          data-tour-spotlight-ring
+          class="pointer-events-none fixed z-40 rounded border-[3px] border-[#FCBA19] shadow-[0_0_0_9999px_rgba(0,25,51,0.38)] transition-all duration-150"
+          style={`top:${targetRect.top}px;left:${targetRect.left}px;width:${targetRect.width}px;height:${targetRect.height}px;`}
+        ></div>
+      {/if}
 
-    <div
-      role="dialog"
+      <div
+        role="dialog"
       aria-modal="false"
       aria-labelledby="onboarding-tour-step-title"
       data-onboarding-tour-active={activeTour.id}
@@ -514,6 +550,7 @@
           </div>
         </div>
       </div>
+    </div>
     </div>
 
   {:else}

@@ -571,6 +571,7 @@ kbd,
   min-width: 0;
   min-height: 0;
   max-width: 100%;
+  overflow-x: clip;
 }
 
 .workspace.context-collapsed {
@@ -779,6 +780,7 @@ kbd,
   min-width: 0;
   min-height: 0;
   max-width: 100%;
+  overflow-x: clip;
   padding: 1.25rem 1.5rem 2rem;
 }
 
@@ -908,7 +910,6 @@ h2 {
 table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 620px;
   font-size: 0.8125rem;
 }
 
@@ -1408,7 +1409,7 @@ dd {
   }
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 1360px) {
   .topbar {
     height: auto;
     min-height: 50px;
@@ -1451,6 +1452,10 @@ dd {
 }
 
 @media (max-width: 640px) {
+  .context-toggle {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.74rem;
+  }
   .main-nav > button,
   .nav-menu > summary {
     padding: 0.4rem 0.5rem;

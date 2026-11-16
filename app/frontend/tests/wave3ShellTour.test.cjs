@@ -192,11 +192,13 @@ test('OnboardingTour waits for lazy targets, expands #project-context & ancestor
   assert.match(activeHtml, /max-sm:inset-x-3/);
 
   // 2. Unit-test DOM observation & ancestor details/context expansion helpers via componentFunctions
+  assert.match(tourSrc, /data-tour-overlay/);
   const outerDetails = { tagName: 'DETAILS', open: false, parentElement: null };
   const innerDetails = { tagName: 'DETAILS', open: false, parentElement: outerDetails };
   const scrolledCalls = [];
   const contextOpened = [];
   const observedTargets = [];
+  let mutationDisconnectCalls = 0;
   const targetElement = {
     tagName: 'DIV',
     parentElement: innerDetails,
@@ -230,7 +232,7 @@ test('OnboardingTour waits for lazy targets, expands #project-context & ancestor
   class MockMutationObserver {
     constructor(cb) { capturedMutationCb = cb; }
     observe() {}
-    disconnect() {}
+    disconnect() { mutationDisconnectCalls++; }
   }
   class MockResizeObserver {
     observe(el) { observedTargets.push(el); }
@@ -239,7 +241,7 @@ test('OnboardingTour waits for lazy targets, expands #project-context & ancestor
 
   const ctx = componentFunctions(
     'help/OnboardingTour.svelte',
-    ['openAncestorDetails', 'measureResolvedElement', 'beginTargetObservation', 'stopTargetTracking', 'boxesOverlap'],
+    ['openAncestorDetails', 'rectsAlmostEqual', 'isSelfTourMutation', 'disconnectMutationObserver', 'measureResolvedElement', 'beginTargetObservation', 'stopTargetTracking', 'boxesOverlap'],
     {
       document: mockDocument,
       window: mockWindow,
@@ -276,9 +278,16 @@ test('OnboardingTour waits for lazy targets, expands #project-context & ancestor
   assert.equal(ctx.targetWaiting, true);
   assert.ok(capturedMutationCb, 'MutationObserver must subscribe to lazy mount changes');
 
+  // Self-mutations from OnboardingTour overlay must be ignored without resolving or looping
+  const selfNode = {
+    nodeType: 1,
+    closest(sel) { return sel.includes('data-tour-spotlight-ring') ? {} : null; },
+  };
+  assert.equal(ctx.actions.isSelfTourMutation([{ target: selfNode }]), true);
+
   // Simulate async lazy view finish mounting
   queryReady = true;
-  capturedMutationCb();
+  capturedMutationCb([{ target: { nodeType: 1, closest: () => null } }]);
 
   assert.equal(outerDetails.open, true);
   assert.equal(innerDetails.open, true);
@@ -287,6 +296,10 @@ test('OnboardingTour waits for lazy targets, expands #project-context & ancestor
   assert.equal(observedTargets[0], targetElement);
   assert.equal(ctx.targetWaiting, false);
   assert.ok(ctx.targetRect && ctx.targetRect.width > 0);
+  assert.ok(mutationDisconnectCalls >= 1, 'MutationObserver must disconnect once lazy target resolves');
+  const prevRectRef = ctx.targetRect;
+  ctx.actions.measureResolvedElement('[data-tour="project-admin-root"]', false);
+  assert.equal(ctx.targetRect, prevRectRef, 'Unchanged bounding box must not churn targetRect state');
   assert.ok(ctx.targetRect.left >= 4 && ctx.targetRect.left + ctx.targetRect.width <= 386);
   assert.equal(ctx.actions.boxesOverlap(ctx.targetRect, { top: 200, left: 200, width: 100, height: 100 }), true);
   assert.equal(ctx.actions.boxesOverlap(ctx.targetRect, { top: 600, left: 200, width: 100, height: 100 }), false);
