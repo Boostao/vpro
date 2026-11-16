@@ -109,7 +109,7 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 	published := false
 	defer func() {
 		if !published {
-			_ = os.Remove(tmpPath)
+			_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 		}
 	}()
 	if err := tmpFile.Chmod(0600); err != nil {
@@ -125,7 +125,7 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 		return NewProjectResult{}, err
 	}
 	sqlDB.SetMaxOpenConns(1)
-	tx, err := sqlDB.BeginTx(ctx, nil)
+	tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		_ = sqlDB.Close()
 		return NewProjectResult{}, err
@@ -217,7 +217,7 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 		_ = sqlDB.Close()
 		return NewProjectResult{}, buildErr
 	}
-	if err := tx.Commit(); err != nil {
+	if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 		_ = sqlDB.Close()
 		return NewProjectResult{}, err
 	}
@@ -232,7 +232,7 @@ func CreateNewProject(s *vprocore.ContextService, ctx context.Context, contextID
 		return NewProjectResult{}, err
 	}
 	published = true
-	_ = os.Remove(tmpPath)
+	_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 
 	shaHex, err := computeFileSHA256(resolvedDest)
 	if err != nil {

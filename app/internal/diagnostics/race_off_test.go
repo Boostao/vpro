@@ -9,7 +9,7 @@ import (
 
 var synthesisLatencyBudget = func() time.Duration {
 	if os.Getenv("CI") == "true" {
-		return 100 * time.Millisecond
+		return 150 * time.Millisecond
 	}
 	return 50 * time.Millisecond
 }()

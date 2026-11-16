@@ -273,12 +273,7 @@ func SaveProjectPlotProfileSU(s *vprocore.ContextService, ctx context.Context, c
 	published := false
 	defer func() {
 		if temporary != "" {
-			resultErr = errors.Join(resultErr, os.Remove(temporary))
-			for _, suffix := range []string{"-journal", "-wal", "-shm"} {
-				if err := os.Remove(temporary + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
-					resultErr = errors.Join(resultErr, err)
-				}
-			}
+			resultErr = errors.Join(resultErr, sqlutil.RemoveSQLiteWithSidecars(temporary))
 		}
 		if published && resultErr != nil {
 			resultErr = fmt.Errorf("Profile SU file published, but cleanup failed; do not replay creation: %w", resultErr)
@@ -326,16 +321,13 @@ func SaveProjectPlotProfileSU(s *vprocore.ContextService, ctx context.Context, c
 }
 
 func writeProfileSUFile(ctx context.Context, path string, request ProfileSUCreation) (resultErr error) {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
 	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
 	db.SetMaxOpenConns(1)
-	tx, err := db.Begin()
+	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -351,10 +343,7 @@ func writeProfileSUFile(ctx context.Context, path string, request ProfileSUCreat
 	if err := writeProfileSUContents(ctx, tx, request, string(proposal)); err != nil {
 		return err
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return sqlutil.CommitStagedTx(ctx, tx)
 }
 
 func writeProfileSUContents(ctx context.Context, tx *sql.Tx, request ProfileSUCreation, proposal string) error {

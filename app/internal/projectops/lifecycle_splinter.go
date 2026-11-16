@@ -333,7 +333,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 	published := false
 	defer func() {
 		if !published {
-			_ = os.Remove(tmpPath)
+			_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 		}
 	}()
 	if err := tmpFile.Chmod(0600); err != nil {
@@ -349,7 +349,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 		return ExportSplinterResult{}, err
 	}
 	dstDB.SetMaxOpenConns(1)
-	dstTx, err := dstDB.BeginTx(ctx, nil)
+	dstTx, err := sqlutil.BeginStagedTx(ctx, dstDB)
 	if err != nil {
 		_ = dstDB.Close()
 		return ExportSplinterResult{}, err
@@ -447,7 +447,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 		_ = dstDB.Close()
 		return ExportSplinterResult{}, writeErr
 	}
-	if err := dstTx.Commit(); err != nil {
+	if err := sqlutil.CommitStagedTx(ctx, dstTx); err != nil {
 		_ = dstDB.Close()
 		return ExportSplinterResult{}, err
 	}
@@ -462,7 +462,7 @@ func ExportSplinterProject(s *vprocore.ContextService, ctx context.Context, cont
 		return ExportSplinterResult{}, err
 	}
 	published = true
-	_ = os.Remove(tmpPath)
+	_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 
 	shaHex, err := computeFileSHA256(resolvedDest)
 	if err != nil {

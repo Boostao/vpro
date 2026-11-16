@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"github.com/boostao/vpro/app/resources"
 	_ "github.com/mattn/go-sqlite3"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -293,17 +292,20 @@ func InitializeSQLiteWAL(ctx context.Context, path string) error {
 	return db.Close()
 }
 
+var sampleDBSeedOnce = sync.OnceValues(func() ([]byte, error) {
+	return SampleFiles.ReadFile("resources/Sample.db")
+})
+
 func installSample(destination string) error {
 	if _, err := os.Stat(destination); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	source, err := SampleFiles.Open("resources/Sample.db")
+	data, err := sampleDBSeedOnce()
 	if err != nil {
 		return err
 	}
-	defer source.Close()
 	temporary, err := os.CreateTemp(filepath.Dir(destination), ".sample-*.db")
 	if err != nil {
 		return err
@@ -313,7 +315,7 @@ func installSample(destination string) error {
 		temporary.Close()
 		return err
 	}
-	if _, err := io.Copy(temporary, source); err != nil {
+	if _, err := temporary.Write(data); err != nil {
 		temporary.Close()
 		return err
 	}

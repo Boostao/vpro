@@ -34,7 +34,7 @@ func writeTurboVeg3SQLite(ctx context.Context, destinationPath string, ds tvData
 	published := false
 	defer func() {
 		if !published {
-			_ = os.Remove(tmpPath)
+			_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 		}
 	}()
 	_ = tmpFile.Close()
@@ -45,7 +45,7 @@ func writeTurboVeg3SQLite(ctx context.Context, destinationPath string, ds tvData
 	}
 	db.SetMaxOpenConns(1)
 
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {
 		db.Close()
 		return "", "", err
@@ -527,7 +527,7 @@ func writeTurboVeg3SQLite(ctx context.Context, destinationPath string, ds tvData
 		_ = db.Close()
 		return "", "", err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 		_ = db.Close()
 		return "", "", err
 	}

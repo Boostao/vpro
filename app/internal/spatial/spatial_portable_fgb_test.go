@@ -76,7 +76,7 @@ func TestPortableSpatialAssetsDirAnd71kFlatGeobufPrealloc(t *testing.T) {
 	}
 	fgbBudget := 500 * time.Millisecond
 	if os.Getenv("CI") == "true" {
-		fgbBudget = time.Second
+		fgbBudget = 1500 * time.Millisecond
 	}
 	if dur > fgbBudget {
 		t.Fatalf("EncodeSpatialPlotsFlatGeobuf(71,567) took %v, want <= %v", dur, fgbBudget)

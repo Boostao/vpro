@@ -137,12 +137,7 @@ func CreatePlotProfileFile(s *vprocore.ContextService, ctx context.Context, cont
 	temporary, published := "", false
 	defer func() {
 		if temporary != "" {
-			resultErr = errors.Join(resultErr, os.Remove(temporary))
-			for _, suffix := range []string{"-journal", "-wal", "-shm"} {
-				if err := os.Remove(temporary + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
-					resultErr = errors.Join(resultErr, err)
-				}
-			}
+			resultErr = errors.Join(resultErr, sqlutil.RemoveSQLiteWithSidecars(temporary))
 		}
 		if published && resultErr != nil {
 			resultErr = fmt.Errorf("Profile file published, but cleanup failed; do not replay creation: %w", resultErr)
@@ -204,16 +199,13 @@ func CreatePlotProfileFile(s *vprocore.ContextService, ctx context.Context, cont
 }
 
 func writePlotProfileFile(ctx context.Context, path string, request PlotProfileFileCreation) (resultErr error) {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
 	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, db.Close()) }()
 	db.SetMaxOpenConns(1)
-	tx, err := db.Begin()
+	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -233,10 +225,7 @@ func writePlotProfileFile(ctx context.Context, path string, request PlotProfileF
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name='_table_metadata')`).Scan(&metadata); err != nil || metadata {
 		return errors.Join(err, errors.New("new profile synthesized description metadata"))
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return sqlutil.CommitStagedTx(ctx, tx)
 }
 
 func createBlankProfileTable(ctx context.Context, tx *sql.Tx, name string, template vprocore.ProjectMetadataTable, proposal string) error {

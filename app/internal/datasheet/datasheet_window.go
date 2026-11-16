@@ -229,7 +229,7 @@ func parallelRangeScanDatasheetWindow(
 	minRowID, maxRowID int64,
 	limit, workers int,
 ) ([]DatasheetRow, int64, bool, error) {
-	roDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(dbPath, "ro")+"&_busy_timeout=5000&_mmap_size=268435456")
+	roDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(dbPath, "ro")+"&_busy_timeout=5000")
 	if err != nil {
 		return nil, 0, false, nil
 	}

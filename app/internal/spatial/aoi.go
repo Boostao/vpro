@@ -505,7 +505,7 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 			}
 			tableName := suName + "_SU"
 			targetPath := owner.Selection.ProjectPath
-			var inserted int
+			seeds := buildSpatialSURowSeeds(plotOrder, allProjectPlots, seen, siteUnit)
 			wErr := owner.WithMetadataWriter(ctx, func(conn *sql.Conn) (txErr error) {
 				tx, bErr := conn.BeginTx(ctx, nil)
 				if bErr != nil {
@@ -520,20 +520,8 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 					return err
 				}
 				qTable := vprocore.QuoteHeaderIdentifier(tableName)
-				for _, p := range plotOrder {
-					if _, err := tx.ExecContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber", "SiteUnit") VALUES (?, ?)`, p, siteUnit); err != nil {
-						return err
-					}
-					inserted++
-				}
-				for _, p := range allProjectPlots {
-					if seen[p] {
-						continue
-					}
-					if _, err := tx.ExecContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber", "SiteUnit") VALUES (?, NULL)`, p); err != nil {
-						return err
-					}
-					inserted++
+				if err := sqlutil.InsertSURowsBatched(ctx, tx, qTable, seeds); err != nil {
+					return err
 				}
 				if err := vprocore.AppendTechnicalProvenance(ctx, tx, spatialAOISUHistoryTable, spatialAOISUHistorySQL, string(proposalJSON), "Spatial AOI project SU creation"); err != nil {
 					return err
@@ -553,7 +541,7 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 				FilePath:     targetPath,
 				SiteUnit:     siteUnit,
 				MatchedPlots: len(plotOrder),
-				ChangedRows:  inserted,
+				ChangedRows:  len(seeds),
 			}
 
 		case "create_su_file":
@@ -571,22 +559,20 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 			}
 			tmpPath := tmpFile.Name()
 			if err := tmpFile.Close(); err != nil {
-				_ = os.Remove(tmpPath)
+				_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 				return struct{}{}, err
 			}
 			defer func() {
-				_ = os.Remove(tmpPath)
-				for _, suf := range []string{"-journal", "-wal", "-shm"} {
-					_ = os.Remove(tmpPath + suf)
-				}
+				_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 			}()
 			tableName := suName + "_SU"
+			seeds := buildSpatialSURowSeeds(plotOrder, allProjectPlots, seen, siteUnit)
 			db, oErr := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_journal_mode=DELETE&_synchronous=FULL&_txlock=immediate")
 			if oErr != nil {
 				return struct{}{}, oErr
 			}
 			db.SetMaxOpenConns(1)
-			tx, bErr := db.BeginTx(ctx, nil)
+			tx, bErr := sqlutil.BeginStagedTx(ctx, db)
 			if bErr != nil {
 				_ = db.Close()
 				return struct{}{}, bErr
@@ -597,32 +583,17 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 				return struct{}{}, err
 			}
 			qTable := vprocore.QuoteHeaderIdentifier(tableName)
-			inserted := 0
-			for _, p := range plotOrder {
-				if _, err := tx.ExecContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber", "SiteUnit") VALUES (?, ?)`, p, siteUnit); err != nil {
-					_ = tx.Rollback()
-					_ = db.Close()
-					return struct{}{}, err
-				}
-				inserted++
-			}
-			for _, p := range allProjectPlots {
-				if seen[p] {
-					continue
-				}
-				if _, err := tx.ExecContext(ctx, `INSERT INTO main.`+qTable+` ("PlotNumber", "SiteUnit") VALUES (?, NULL)`, p); err != nil {
-					_ = tx.Rollback()
-					_ = db.Close()
-					return struct{}{}, err
-				}
-				inserted++
+			if err := sqlutil.InsertSURowsBatched(ctx, tx, qTable, seeds); err != nil {
+				_ = tx.Rollback()
+				_ = db.Close()
+				return struct{}{}, err
 			}
 			if err := vprocore.AppendTechnicalProvenance(ctx, tx, spatialAOISUHistoryTable, spatialAOISUHistorySQL, string(proposalJSON), "Spatial AOI SU file creation"); err != nil {
 				_ = tx.Rollback()
 				_ = db.Close()
 				return struct{}{}, err
 			}
-			if err := tx.Commit(); err != nil {
+			if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 				_ = db.Close()
 				return struct{}{}, err
 			}
@@ -639,7 +610,7 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 				FilePath:     freshPath,
 				SiteUnit:     siteUnit,
 				MatchedPlots: len(plotOrder),
-				ChangedRows:  inserted,
+				ChangedRows:  len(seeds),
 			}
 		}
 
@@ -665,4 +636,19 @@ func AssignSpatialAOIToSU(ctx context.Context, contexts *vprocore.ContextService
 		}
 	}
 	return out, nil
+}
+
+func buildSpatialSURowSeeds(plotOrder, allProjectPlots []string, seen map[string]bool, siteUnit string) []sqlutil.SURowSeed {
+	seeds := make([]sqlutil.SURowSeed, 0, len(plotOrder)+len(allProjectPlots))
+	for _, p := range plotOrder {
+		u := siteUnit
+		seeds = append(seeds, sqlutil.SURowSeed{PlotNumber: p, SiteUnit: &u})
+	}
+	for _, p := range allProjectPlots {
+		if seen[p] {
+			continue
+		}
+		seeds = append(seeds, sqlutil.SURowSeed{PlotNumber: p, SiteUnit: nil})
+	}
+	return seeds
 }

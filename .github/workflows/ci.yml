@@ -199,14 +199,28 @@ jobs:
       - name: Run race detector on concurrent services, WAL core, and live PostgreSQL RBAC/RLS
         working-directory: app
         run: go test -race . ./internal/cloudsync/... ./internal/lifecycle/... ./internal/sqlutil/... ./internal/vprocore/... ./internal/diagnostics/...
-      - name: Run full Go backend suite including 4-layer DAG and 71.5k scale gates
+      - name: Run Go backend functional suite including 4-layer DAG
         working-directory: app
         env:
           TMPDIR: /dev/shm
         run: |
           set -euo pipefail
           mapfile -t pkgs < <(go list ./... | grep -v '/internal/rsidecar$')
-          go test -timeout 20m "${pkgs[@]}"
+          go test -skip 'Scale|Perf|71k' -timeout 20m "${pkgs[@]}"
+      - name: Run 71.5k & 1M scale benchmarks sequentially without cross-package CPU contention
+        working-directory: app
+        env:
+          TMPDIR: /dev/shm
+        run: |
+          set -euo pipefail
+          go test -p 1 -run 'Scale|Perf|71k' -timeout 10m \
+            ./internal/classification \
+            ./internal/datasheet \
+            ./internal/diagnostics \
+            ./internal/integration \
+            ./internal/projectops \
+            ./internal/spatial \
+            ./internal/validation
       - name: Verify native Linux desktop binary build
         working-directory: app
         run: task linux:build

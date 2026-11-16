@@ -160,47 +160,32 @@ func installDatabaseSeed(destination string, data []byte) error {
 	return nil
 }
 
-// EnsureDefaultPictureLibrary ensures dataDir/pics/images exists and seeds dataDir/pics/VPics.db
-// (if absent) with the canonical 5-column tblVPics schema and VP08 _table_metadata tag.
-func EnsureDefaultPictureLibrary(dataDir string) (dbPath string, imagesDir string, err error) {
-	if strings.TrimSpace(dataDir) == "" {
-		return "", "", errors.New("dataDir must not be empty")
-	}
-	picsDir := filepath.Join(dataDir, "pics")
-	imagesDir = filepath.Join(picsDir, "images")
-	if err := os.MkdirAll(imagesDir, 0700); err != nil {
-		return "", "", err
-	}
-	dbPath = filepath.Join(picsDir, "VPics.db")
-	if _, statErr := os.Stat(dbPath); statErr == nil {
-		return dbPath, imagesDir, nil
-	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return "", "", statErr
-	}
+var defaultVPicsLibrarySeedOnce = sync.OnceValues(buildDefaultVPicsLibrarySeed)
 
-	tmpFile, err := os.CreateTemp(picsDir, ".vpics-seed-*.db")
+func buildDefaultVPicsLibrarySeed() ([]byte, error) {
+	tmpFile, err := os.CreateTemp("", "vpro-vpics-template-*.db")
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	tmpPath := tmpFile.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
+	defer func() { _ = sqlutil.RemoveSQLiteWithSidecars(tmpPath) }()
 	if err := tmpFile.Chmod(0600); err != nil {
 		_ = tmpFile.Close()
-		return "", "", err
+		return nil, err
 	}
 	if err := tmpFile.Close(); err != nil {
-		return "", "", err
+		return nil, err
 	}
 
 	sqlDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL&_txlock=immediate")
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	sqlDB.SetMaxOpenConns(1)
 	tx, err := sqlDB.Begin()
 	if err != nil {
 		_ = sqlDB.Close()
-		return "", "", err
+		return nil, err
 	}
 	const vpicsDDL = `
 		CREATE TABLE "tblVPics" (
@@ -219,16 +204,41 @@ func EnsureDefaultPictureLibrary(dataDir string) (dbPath string, imagesDir strin
 	if _, err := tx.Exec(vpicsDDL); err != nil {
 		_ = tx.Rollback()
 		_ = sqlDB.Close()
-		return "", "", err
+		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		_ = sqlDB.Close()
-		return "", "", err
+		return nil, err
 	}
 	if err := sqlDB.Close(); err != nil {
+		return nil, err
+	}
+	return os.ReadFile(tmpPath)
+}
+
+// EnsureDefaultPictureLibrary ensures dataDir/pics/images exists and seeds dataDir/pics/VPics.db
+// (if absent) with the canonical 5-column tblVPics schema and VP08 _table_metadata tag.
+func EnsureDefaultPictureLibrary(dataDir string) (dbPath string, imagesDir string, err error) {
+	if strings.TrimSpace(dataDir) == "" {
+		return "", "", errors.New("dataDir must not be empty")
+	}
+	picsDir := filepath.Join(dataDir, "pics")
+	imagesDir = filepath.Join(picsDir, "images")
+	if err := os.MkdirAll(imagesDir, 0700); err != nil {
 		return "", "", err
 	}
-	if err := InstallDesktopConfig(tmpPath, dbPath); err != nil && !errors.Is(err, os.ErrExist) {
+	dbPath = filepath.Join(picsDir, "VPics.db")
+	if _, statErr := os.Stat(dbPath); statErr == nil {
+		return dbPath, imagesDir, nil
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return "", "", statErr
+	}
+
+	seedBytes, err := defaultVPicsLibrarySeedOnce()
+	if err != nil {
+		return "", "", err
+	}
+	if err := installDatabaseSeed(dbPath, seedBytes); err != nil {
 		return "", "", err
 	}
 	return dbPath, imagesDir, nil

@@ -242,9 +242,7 @@ func ImportAccessProject(s *vprocore.ContextService, ctx context.Context, contex
 	published := false
 	defer func() {
 		if !published {
-			_ = os.Remove(tmpPath)
-			_ = os.Remove(tmpPath + "-wal")
-			_ = os.Remove(tmpPath + "-shm")
+			_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 		}
 	}()
 	if err := tmpFile.Chmod(0600); err != nil {
@@ -260,7 +258,7 @@ func ImportAccessProject(s *vprocore.ContextService, ctx context.Context, contex
 		return AccessProjectImportResult{}, err
 	}
 	sqlDB.SetMaxOpenConns(1)
-	tx, err := sqlDB.BeginTx(ctx, nil)
+	tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		sqlDB.Close()
 		return AccessProjectImportResult{}, err
@@ -633,7 +631,7 @@ func ImportAccessProject(s *vprocore.ContextService, ctx context.Context, contex
 		_ = sqlDB.Close()
 		return AccessProjectImportResult{}, err
 	}
-	if err := tx.Commit(); err != nil {
+	if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 		_ = sqlDB.Close()
 		return AccessProjectImportResult{}, err
 	}
@@ -672,12 +670,10 @@ func ImportAccessProject(s *vprocore.ContextService, ctx context.Context, contex
 		return AccessProjectImportResult{}, fmt.Errorf("publish SQLite database %s: %w", resolvedDest, err)
 	}
 	published = true
-	_ = os.Remove(tmpPath)
+	_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 
 	if err := vprocore.InitializeSQLiteWAL(ctx, resolvedDest); err != nil {
-		_ = os.Remove(resolvedDest + "-wal")
-		_ = os.Remove(resolvedDest + "-shm")
-		_ = os.Remove(resolvedDest)
+		_ = sqlutil.RemoveSQLiteWithSidecars(resolvedDest)
 		return AccessProjectImportResult{}, fmt.Errorf("initialize SQLite WAL on %s: %w", resolvedDest, err)
 	}
 

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -99,38 +98,11 @@ func createSUTableObjectsInTx(ctx context.Context, tx *sql.Tx, suName string) er
 	return nil
 }
 
-type suSeedPlot struct {
-	plot string
-	unit *string
-}
-
 func utf16UnitsWithin(s string, maxUnits int) bool {
 	if len(s) <= maxUnits {
 		return true
 	}
 	return len(utf16.Encode([]rune(s))) <= maxUnits
-}
-
-func insertSUSeedRowsBatched(ctx context.Context, tx *sql.Tx, qTable string, seeds []suSeedPlot) error {
-	const batchSize = 400
-	prefix := `INSERT INTO main.` + qTable + ` ("PlotNumber","SiteUnit") VALUES `
-	for start := 0; start < len(seeds); start += batchSize {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		end := min(start+batchSize, len(seeds))
-		chunk := seeds[start:end]
-		placeholders := make([]string, len(chunk))
-		args := make([]any, 0, len(chunk)*2)
-		for i, s := range chunk {
-			placeholders[i] = "(?,?)"
-			args = append(args, s.plot, s.unit)
-		}
-		if _, err := tx.ExecContext(ctx, prefix+strings.Join(placeholders, ","), args...); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, contextID string, request CreateSUTableRequest) (*SUTableLifecycleResult, error) {
@@ -168,7 +140,7 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 		currentSelection = owner.Selection
 		project := owner.Selection.Project
 
-		var seeds []suSeedPlot
+		var seeds []sqlutil.SURowSeed
 
 		if request.PopulateAllProjectPlots {
 			if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
@@ -243,7 +215,7 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 						unitPtr = &val
 					}
 				}
-				seeds = append(seeds, suSeedPlot{plot: p, unit: unitPtr})
+				seeds = append(seeds, sqlutil.SURowSeed{PlotNumber: p, SiteUnit: unitPtr})
 			}
 			rowsErr := rows.Err()
 			rows.Close()
@@ -276,7 +248,7 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 					return err
 				}
 				qTable := vprocore.QuoteHeaderIdentifier(tableName)
-				if err := insertSUSeedRowsBatched(ctx, tx, qTable, seeds); err != nil {
+				if err := sqlutil.InsertSURowsBatched(ctx, tx, qTable, seeds); err != nil {
 					return err
 				}
 				if err := vprocore.AppendTechnicalProvenance(ctx, tx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU table creation"); err != nil {
@@ -304,11 +276,11 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 			defer func() {
 				_ = db.Close()
 				if !committed {
-					_ = os.Remove(freshPath)
+					_ = sqlutil.RemoveSQLiteWithSidecars(freshPath)
 				}
 			}()
 			db.SetMaxOpenConns(1)
-			tx, bErr := db.BeginTx(ctx, nil)
+			tx, bErr := sqlutil.BeginStagedTx(ctx, db)
 			if bErr != nil {
 				return struct{}{}, bErr
 			}
@@ -317,7 +289,7 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 				return struct{}{}, err
 			}
 			qTable := vprocore.QuoteHeaderIdentifier(tableName)
-			if err := insertSUSeedRowsBatched(ctx, tx, qTable, seeds); err != nil {
+			if err := sqlutil.InsertSURowsBatched(ctx, tx, qTable, seeds); err != nil {
 				_ = tx.Rollback()
 				return struct{}{}, err
 			}
@@ -325,7 +297,7 @@ func CreateSUTable(ctx context.Context, contexts *vprocore.ContextService, conte
 				_ = tx.Rollback()
 				return struct{}{}, err
 			}
-			if err := tx.Commit(); err != nil {
+			if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 				return struct{}{}, err
 			}
 			committed = true
@@ -404,11 +376,7 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 			return struct{}{}, errors.New("an active or explicit source SU table is required for Save As")
 		}
 
-		type suRowPair struct {
-			plot *string
-			unit *string
-		}
-		var copiedRows []suRowPair
+		var copiedRows []sqlutil.SURowSeed
 
 		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
 			return struct{}{}, err
@@ -439,16 +407,15 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 				owner.Mu.Unlock()
 				return struct{}{}, sErr
 			}
-			var pp, up *string
+			seed := sqlutil.SURowSeed{PlotNull: !p.Valid}
 			if p.Valid {
-				v := p.String
-				pp = &v
+				seed.PlotNumber = p.String
 			}
 			if u.Valid {
 				v := u.String
-				up = &v
+				seed.SiteUnit = &v
 			}
-			copiedRows = append(copiedRows, suRowPair{plot: pp, unit: up})
+			copiedRows = append(copiedRows, seed)
 		}
 		rowsErr := rows.Err()
 		rows.Close()
@@ -480,10 +447,8 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 					return err
 				}
 				qTarget := vprocore.QuoteHeaderIdentifier(targetTable)
-				for _, r := range copiedRows {
-					if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, r.plot, r.unit); err != nil {
-						return err
-					}
+				if err := sqlutil.InsertSURowsBatched(ctx, wtx, qTarget, copiedRows); err != nil {
+					return err
 				}
 				if err := vprocore.AppendTechnicalProvenance(ctx, wtx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU save-as"); err != nil {
 					return err
@@ -510,11 +475,11 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 			defer func() {
 				_ = db.Close()
 				if !committed {
-					_ = os.Remove(freshPath)
+					_ = sqlutil.RemoveSQLiteWithSidecars(freshPath)
 				}
 			}()
 			db.SetMaxOpenConns(1)
-			wtx, bErr := db.BeginTx(ctx, nil)
+			wtx, bErr := sqlutil.BeginStagedTx(ctx, db)
 			if bErr != nil {
 				return struct{}{}, bErr
 			}
@@ -523,17 +488,15 @@ func SaveSUTableAs(ctx context.Context, contexts *vprocore.ContextService, conte
 				return struct{}{}, err
 			}
 			qTarget := vprocore.QuoteHeaderIdentifier(targetTable)
-			for _, r := range copiedRows {
-				if _, err := wtx.ExecContext(ctx, `INSERT INTO main.`+qTarget+` ("PlotNumber","SiteUnit") VALUES (?,?)`, r.plot, r.unit); err != nil {
-					_ = wtx.Rollback()
-					return struct{}{}, err
-				}
+			if err := sqlutil.InsertSURowsBatched(ctx, wtx, qTarget, copiedRows); err != nil {
+				_ = wtx.Rollback()
+				return struct{}{}, err
 			}
 			if err := vprocore.AppendTechnicalProvenance(ctx, wtx, suCreationHistoryTable, suCreationHistorySQL, string(proposalBytes), "SU file save-as"); err != nil {
 				_ = wtx.Rollback()
 				return struct{}{}, err
 			}
-			if err := wtx.Commit(); err != nil {
+			if err := sqlutil.CommitStagedTx(ctx, wtx); err != nil {
 				return struct{}{}, err
 			}
 			committed = true

@@ -291,7 +291,7 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 	published := false
 	defer func() {
 		if !published {
-			_ = os.Remove(tmpPath)
+			_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 		}
 	}()
 	if err := tmpFile.Chmod(0o600); err != nil {
@@ -307,7 +307,7 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		return PullSubsetResult{}, err
 	}
 	sqlDB.SetMaxOpenConns(1)
-	sqTx, err := sqlDB.BeginTx(ctx, nil)
+	sqTx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		_ = sqlDB.Close()
 		return PullSubsetResult{}, err
@@ -537,7 +537,7 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		_ = sqlDB.Close()
 		return PullSubsetResult{}, wrapRedactedError("populate local subset SQLite database", err, creds)
 	}
-	if err := sqTx.Commit(); err != nil {
+	if err := sqlutil.CommitStagedTx(ctx, sqTx); err != nil {
 		_ = sqlDB.Close()
 		return PullSubsetResult{}, err
 	}
@@ -569,12 +569,10 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		return PullSubsetResult{}, err
 	}
 	published = true
-	_ = os.Remove(tmpPath)
+	_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 
 	if err := vprocore.InitializeSQLiteWAL(ctx, resolvedDest); err != nil {
-		_ = os.Remove(resolvedDest + "-wal")
-		_ = os.Remove(resolvedDest + "-shm")
-		_ = os.Remove(resolvedDest)
+		_ = sqlutil.RemoveSQLiteWithSidecars(resolvedDest)
 		return PullSubsetResult{}, err
 	}
 

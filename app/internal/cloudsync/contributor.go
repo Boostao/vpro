@@ -306,7 +306,7 @@ func materializeVListsFromRelationalStandards(ctx context.Context, pool interfac
 		return nil, err
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = sqlutil.RemoveSQLiteWithSidecars(tmpPath) }()
 	if _, err := tmpFile.Write(baseVListsBytes); err != nil {
 		_ = tmpFile.Close()
 		return nil, err
@@ -320,7 +320,7 @@ func materializeVListsFromRelationalStandards(ctx context.Context, pool interfac
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
@@ -397,7 +397,7 @@ func materializeVListsFromRelationalStandards(ctx context.Context, pool interfac
 	}
 	_, _ = tx.ExecContext(ctx, `UPDATE "_table_metadata" SET "description" = ? WHERE "table_name" = 'USysAllSpecs'`, taxVer)
 	_, _ = tx.ExecContext(ctx, `UPDATE "_table_metadata" SET "description" = ? WHERE "table_name" = 'USysTableOfLists'`, becVer)
-	if err := tx.Commit(); err != nil {
+	if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

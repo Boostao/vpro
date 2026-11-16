@@ -324,7 +324,7 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 		published := false
 		defer func() {
 			if !published {
-				_ = os.Remove(tmpPath)
+				_ = sqlutil.RemoveSQLiteWithSidecars(tmpPath)
 			}
 		}()
 		_ = tmpFile.Close()
@@ -341,7 +341,7 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 			return GeoPackageExportOutcome{}, err
 		}
 
-		tx, err := gpkgDB.BeginTx(ctx, nil)
+		tx, err := sqlutil.BeginStagedTx(ctx, gpkgDB)
 		if err != nil {
 			gpkgDB.Close()
 			return GeoPackageExportOutcome{}, err
@@ -353,7 +353,7 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 			_ = gpkgDB.Close()
 			return GeoPackageExportOutcome{}, buildErr
 		}
-		if err := tx.Commit(); err != nil {
+		if err := sqlutil.CommitStagedTx(ctx, tx); err != nil {
 			_ = gpkgDB.Close()
 			return GeoPackageExportOutcome{}, err
 		}
