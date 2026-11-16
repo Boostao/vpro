@@ -70,37 +70,38 @@
   <polygon points="600,90 1124,392 1124,998 600,1300 76,998 76,392"
            fill="none" stroke="#FCBA19" stroke-opacity="0.34" stroke-width="3"/>
 
-  <!-- Centered VPro Shield + Conifer Tree Emblem (exact ICONS.crest geometry scaled 23x around x=600, y=492) -->
-  <g transform="translate(324, 198) scale(23)">
-    <path d="M12 2L4 5.5v6c0 5.25 3.4 9.85 8 11 4.6-1.15 8-5.75 8-11v-6L12 2z"
+  <!-- Centered VPro Shield + Conifer Tree Emblem (canonical appicon shield + 3-tier filled conifer) -->
+  <g id="vpro-shield-conifer" transform="translate(221.12, 100.12) scale(0.74)">
+    <!-- Heraldic shield -->
+    <path d="M 512 162
+             L 216 286
+             V 512
+             C 216 681 342 827 512 864
+             C 682 827 808 681 808 512
+             V 286
+             Z"
           fill="url(#shieldForest)"
-          stroke="#FCBA19"
-          stroke-width="1.25"
-          stroke-linecap="round"
+          stroke="url(#hexGoldRim)"
+          stroke-width="24"
           stroke-linejoin="round"/>
-    <path d="M12 3.35L5.25 6.3v5.15c0 4.35 2.82 8.22 6.75 9.35 3.93-1.13 6.75-5 6.75-9.35V6.3L12 3.35z"
+    <!-- Inner shield highlight hairline -->
+    <path d="M 512 190
+             L 242 303
+             V 510
+             C 242 664 358 799 512 834
+             C 666 799 782 664 782 510
+             V 303
+             Z"
           fill="none"
           stroke="#FFFFFF"
-          stroke-opacity="0.22"
-          stroke-width="0.32"
-          stroke-linejoin="round"/>
-    <path d="M12 6.8v10.6"
-          fill="none"
-          stroke="#FCBA19"
-          stroke-width="1.35"
-          stroke-linecap="round"/>
-    <path d="M8.5 11.5L12 8l3.5 3.5"
-          fill="none"
-          stroke="#FFFFFF"
-          stroke-width="1.55"
-          stroke-linecap="round"
-          stroke-linejoin="round"/>
-    <path d="M7.5 15L12 11l4.5 4"
-          fill="none"
-          stroke="#FFFFFF"
-          stroke-width="1.55"
-          stroke-linecap="round"
-          stroke-linejoin="round"/>
+          stroke-width="3"
+          stroke-opacity="0.16"/>
+    <!-- Gold conifer trunk (#FCBA19) -->
+    <path d="M 488 614 L 536 614 L 542 754 Q 512 764 482 754 Z" fill="#FCBA19"/>
+    <!-- Three-tier white conifer crown (#FFFFFF) -->
+    <path d="M 512 454 L 698 654 Q 512 618 326 654 Z" fill="#FFFFFF"/>
+    <path d="M 512 344 L 656 518 Q 512 488 368 518 Z" fill="#FFFFFF"/>
+    <path d="M 512 244 L 614 396 Q 512 372 410 396 Z" fill="#FFFFFF"/>
   </g>
 
   <!-- Package Title: vpro -->

@@ -32,12 +32,14 @@ esc_html <- function(x) {
 
 vpro_crest_svg <- function() {
   paste0(
-    '<svg class="bcgov-crest-svg" width="32" height="32" viewBox="0 0 24 24" fill="none" ',
+    '<svg class="bcgov-crest-svg" width="32" height="32" viewBox="160 120 704 784" fill="none" ',
     'xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" data-vpro-crest="topbar">',
-    '<path d="M12 2L4 5.5v6c0 5.25 3.4 9.85 8 11 4.6-1.15 8-5.75 8-11v-6L12 2z" ',
-    'stroke="#FCBA19" fill="rgba(255,255,255,0.08)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
-    '<path d="M12 7v10M8.5 11.5L12 8l3.5 3.5M7.5 15L12 11l4.5 4" ',
-    'stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+    '<path d="M512 162L216 286V512C216 681 342 827 512 864C682 827 808 681 808 512V286Z" ',
+    'fill="#1E5128" stroke="#FCBA19" stroke-width="32" stroke-linejoin="round"/>',
+    '<path d="M488 614H536L542 754Q512 764 482 754Z" fill="#FCBA19"/>',
+    '<path d="M512 454L698 654Q512 618 326 654Z" fill="#FFFFFF"/>',
+    '<path d="M512 344L656 518Q512 488 368 518Z" fill="#FFFFFF"/>',
+    '<path d="M512 244L614 396Q512 372 410 396Z" fill="#FFFFFF"/>',
     '</svg>'
   )
 }

@@ -142,20 +142,19 @@
       >
         <rect width="32" height="32" rx="6" fill="#003366" />
         <rect y="28" width="32" height="4" fill="#FCBA19" />
-        <path
-          d="M16 4.2L7.2 8v6.6c0 5.9 3.75 11.05 8.8 12.35 5.05-1.3 8.8-6.45 8.8-12.35V8L16 4.2z"
-          fill="#002244"
-          stroke="#FCBA19"
-          stroke-width="1.65"
-          stroke-linejoin="round"
-        />
-        <path
-          d="M16 9.2v11.3M12.2 14l3.8-4.1 3.8 4.1M11 17.8l5-4.5 5 4.5"
-          stroke="#FFFFFF"
-          stroke-width="1.85"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
+        <g transform="translate(2.5 0.5) scale(0.0263)">
+          <path
+            d="M512 162L216 286V512C216 681 342 827 512 864C682 827 808 681 808 512V286Z"
+            fill="#1E5128"
+            stroke="#FCBA19"
+            stroke-width="48"
+            stroke-linejoin="round"
+          />
+          <path d="M488 614H536L542 754Q512 764 482 754Z" fill="#FCBA19" />
+          <path d="M512 454L698 654Q512 618 326 654Z" fill="#FFFFFF" />
+          <path d="M512 344L656 518Q512 488 368 518Z" fill="#FFFFFF" />
+          <path d="M512 244L614 396Q512 372 410 396Z" fill="#FFFFFF" />
+        </g>
       </svg>
       <div>
         <h2 id="field-card-modal-title" class="fc-toolbar-heading">
