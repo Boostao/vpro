@@ -135,7 +135,7 @@
 
 <section class="min-w-0 space-y-4 rounded border border-slate-300 bg-white shadow-sm" aria-label="Auto-Derived ProjectMetadata and Standards Presets">
   <header class="border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-4 py-3 text-white">
-    <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">Schedule A 3.c.ii / Auto-6</p>
+    <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">PROJECT METADATA</p>
     <h3 class="m-0 text-base font-semibold text-white">Auto-Populate Project Metadata from Plots &amp; LMH25 Presets</h3>
   </header>
 
@@ -149,7 +149,7 @@
 
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-slate-700" for="auto-meta-pid">Target ProjectID (max 20 UTF-16)</label>
+        <label class="block text-xs font-semibold text-slate-700" for="auto-meta-pid">Target ProjectID (max 20 characters)</label>
         <input id="auto-meta-pid" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={targetProjectId} disabled={busy} />
       </div>
       <div class="space-y-1">
@@ -249,7 +249,7 @@
     </div>
 
     {#if lastResult}
-      <p class="text-xs text-slate-600">Committed Metadata ID {lastResult.metadataId} ({lastResult.updatedColumns.length} updated field(s)).</p>
+      <p class="text-xs text-slate-600">Saved Metadata ID {lastResult.metadataId} ({lastResult.updatedColumns.length} updated field(s)).</p>
     {/if}
   </div>
 </section>

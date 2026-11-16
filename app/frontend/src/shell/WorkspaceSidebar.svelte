@@ -282,7 +282,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
   {#if revealError}<p role="alert" class="px-3 py-1 text-xs text-[#D8292F] break-words">{revealError}</p>{/if}
   <nav aria-label="Project list">
     {#each $projectState?.projects ?? [] as project ((project.path ?? project.file) + project.name)}
-      <button class:active={project.name === $projectState?.activeProject && project.path === $projectState?.projectPath} disabled={!project.compatible || busy || editorBusy || companionPanelBusy || transitionWorking} title={project.compatible ? project.path : `${project.version} is not a complete VP08 project`} onclick={() => chooseProject(project)}>
+      <button class:active={project.name === $projectState?.activeProject && project.path === $projectState?.projectPath} disabled={!project.compatible || busy || editorBusy || companionPanelBusy || transitionWorking} title={project.compatible ? project.path : `${project.version} is not a complete VPro project`} onclick={() => chooseProject(project)}>
         <span class="project-name">{project.name}
           <span class="project-location">{$projectState?.projects?.filter(item => item.name === project.name).length === 1 ? project.file : project.path}</span>
         </span>
@@ -381,7 +381,7 @@ import type { ContextSelection, ProjectInfo } from '../../bindings/github.com/bo
                 data-access-quarantine-summary
                 class="m-0 rounded border border-[#FCBA19] bg-[#FEF6E0] px-2 py-1 text-[11px] font-medium text-[#313132]"
               >
-                Access import quarantined rows into <code class="font-mono">__VPRO_ImportQuarantine</code>:
+                Access import quarantined rows for review:
                 {accessResult.quarantinedMalformedRows ?? 0} malformed,
                 {accessResult.quarantinedOrphanRows ?? 0} orphan{overflowQuarantined > 0 ? `, ${overflowQuarantined} overflow` : ''}.
               </p>

@@ -105,7 +105,7 @@
   const selectedNewProjPreset = $derived(availablePresets.find(p => p.id === newProjPreset) ?? null);
   const newProjIdTruncationWarning = $derived(
     newProjName.trim().length > 20 && newProjId.trim() === ''
-      ? `Project name exceeds 20 UTF-16 characters and ProjectID is blank; derived ProjectID will truncate to "${newProjName.trim().slice(0, 20)}".`
+      ? `Project name exceeds 20 characters and ProjectID is blank; derived ProjectID will truncate to "${newProjName.trim().slice(0, 20)}".`
       : null
   );
   const complianceFindingCounts = $derived(
@@ -205,7 +205,7 @@
       const res = await port.createNewProject(contextId, req);
       if (!isCurrent()) return;
       newProjResult = res;
-      statusMessage = `Created VP08 project "${res.projectName}" at ${res.destinationPath}.`;
+      statusMessage = `Created VPro project "${res.projectName}" at ${res.destinationPath}.`;
       if (res.activated && res.state && oncontextswitched) oncontextswitched(res.state);
     });
   }
@@ -271,7 +271,7 @@
       if (!isCurrent()) return;
       quarantineResult = res;
       confirmQuarantine = false;
-      statusMessage = `Quarantined ${res.totalQuarantined} orphan child row(s) into __VPRO_Quarantine_* tables (batch ${res.batchId}).`;
+      statusMessage = `Quarantined ${res.totalQuarantined} orphan child row(s) into quarantine tables (batch ${res.batchId}).`;
       const refreshed = await port.runComplianceValidation(contextId, $state.snapshot({ useActiveSu: complianceUseSu }));
       if (isCurrent()) complianceReport = refreshed;
     });
@@ -297,7 +297,7 @@
             : 0;
       statusMessage =
         blockedCount > 0
-          ? `OptimizeVeg dry-run found ${blockedCount} blocked group(s) with unresolved conflicts.`
+          ? `OptimizeVeg preview found ${blockedCount} blocked group(s) with unresolved conflicts.`
           : `OptimizeVeg preview: ${preview.duplicateSpeciesCount} multi-row species group(s) (${preview.beforeRowCount} -> ${preview.afterRowCount} rows).`;
     });
   }
@@ -410,7 +410,7 @@
       if (!isCurrent()) return;
       mergeResult = res;
       mergePreview = null;
-      statusMessage = `3-Way Merge committed: ${res.addedPlots} plot(s) added, ${res.updatedPlots} plot(s) updated, ${res.auditRowsWritten} audit row(s) recorded.`;
+      statusMessage = `3-Way Merge complete: ${res.addedPlots} plot(s) added, ${res.updatedPlots} plot(s) updated, ${res.auditRowsWritten} audit row(s) recorded.`;
     });
   }
 
@@ -470,7 +470,7 @@
     {#if activeTab === 'lifecycle'}
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <fieldset class="space-y-3 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-4">
-          <legend class="px-1 text-sm font-semibold text-[#003366]">Create New VP08 Project</legend>
+          <legend class="px-1 text-sm font-semibold text-[#003366]">Create New VPro Project</legend>
           <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-name">Project Name (A-Z, 0-9, _, max 31)</label><input id="new-project-name" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={newProjName} disabled={busy} aria-invalid={!!newProjValidationError} /></div>
           <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-id">Metadata ProjectID (optional, max 20)</label><input id="new-project-id" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={newProjId} disabled={busy} /></div>
           <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-title">Project Title (optional)</label><input id="new-project-title" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={newProjTitle} disabled={busy} /></div>
@@ -486,7 +486,7 @@
           <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-dest">Destination .db Path (optional)</label><input id="new-project-dest" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={newProjDest} disabled={busy} placeholder="Defaults to projects/<Name>.db" /></div>
           <label class="flex items-center gap-2 text-xs text-slate-800"><input type="checkbox" bind:checked={newProjActivate} disabled={busy} />Switch active context to new project immediately</label>
           {#if newProjValidationError}<p role="alert" class="text-xs text-[#D8292F]">{newProjValidationError}</p>{/if}
-          <button type="button" disabled={busy || !newProjName || !!newProjValidationError} class="w-full rounded bg-[#003366] px-3 py-2 text-sm font-semibold text-white hover:bg-[#002244] disabled:opacity-50" onclick={submitCreateNewProject}>Create VP08 Project</button>
+          <button type="button" disabled={busy || !newProjName || !!newProjValidationError} class="w-full rounded bg-[#003366] px-3 py-2 text-sm font-semibold text-white hover:bg-[#002244] disabled:opacity-50" onclick={submitCreateNewProject}>Create VPro Project</button>
           {#if newProjResult}<p class="break-all text-xs text-[#474543]">ProjectID: <span class="font-mono font-semibold text-[#003366]">{newProjResult.projectId}</span> &middot; SHA-256: <span class="font-mono">{newProjResult.destinationSha256.slice(0, 16)}</span></p>{/if}
         </fieldset>
 

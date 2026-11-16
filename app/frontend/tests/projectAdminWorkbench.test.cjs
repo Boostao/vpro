@@ -122,7 +122,7 @@ test('ProjectAdminWorkbench SSR renders BC Gov header, data-tour root, active co
   assert.match(html, /#003366/);
   assert.match(html, /#FCBA19/);
   assert.match(html, /Datum:.*NAD83/);
-  assert.match(html, /Create New VP08 Project/);
+  assert.match(html, /Create New VPro Project/);
   assert.match(html, /Save Active Project As/);
   assert.match(html, /Export Splinter Project/);
 });

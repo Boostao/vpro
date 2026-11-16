@@ -30,7 +30,7 @@
   <div class="syn-header-brand">
     <div class="syn-eyebrow">B.C. MINISTRY OF FORESTS · BEC CLASSIFICATION SYNTHESIS</div>
     <div class="syn-title-row">
-      <h2>Reactive BEC Differential &amp; Pairwise Synthesis</h2>
+      <h2>BEC Differential &amp; Pairwise Synthesis</h2>
       <span class="syn-chip syn-chip-gold">
         {snapshot?.project || project || 'Active Project'} · SU: {snapshot?.su || su || 'None'}
       </span>

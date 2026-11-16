@@ -228,7 +228,7 @@
 
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-plot">PlotNumber (required, max 7 UTF-16)</label>
+          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-plot">PlotNumber (required, max 7 characters)</label>
           <input
             id="sivi-create-plot"
             type="text"
@@ -323,7 +323,7 @@
 
       {#if createdPlots.length > 0}
         <fieldset class="space-y-2 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-3">
-          <legend class="px-1 text-xs font-semibold text-[#003366]">Recent SIVI Plot Creations (__VPRO_SIVICreationPlotHistory)</legend>
+          <legend class="px-1 text-xs font-semibold text-[#003366]">Recent SIVI Plot Creations</legend>
           <div class="max-h-44 overflow-y-auto">
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-100 text-slate-700">

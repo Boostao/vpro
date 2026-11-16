@@ -77,7 +77,7 @@
       title: 'Universal Datasheet Grid',
       subtitle: 'Multi-Plot Tabular Editing',
       description:
-        'Filter, sort, and batch-edit Environment and Vegetation columns across scoped plots with atomic audit trail tracking.',
+        'Filter, sort, and batch-edit Environment and Vegetation columns across scoped plots with automatic audit history.',
       icon: TableProperties,
       cta: 'Open Datasheet',
       view: 'datasheet',
@@ -95,7 +95,7 @@
     {
       id: 'spatial',
       title: '3D Geospatial Workbench',
-      subtitle: 'MapLibre v6 & Offline PMTiles',
+      subtitle: 'Offline 3D Map & Coordinate Check',
       description:
         'Inspect plot coordinates over BGC v13, Ecosections, and Natural Resource Districts with spatial attribute verification and AOI filtering.',
       icon: Globe,
@@ -105,7 +105,7 @@
     {
       id: 'synthesis',
       title: 'BEC Diagnostic Synthesis',
-      subtitle: 'Presence, Fidelity & R Sidecar',
+      subtitle: 'Presence, Fidelity & R Companion',
       description:
         'Compute Presence (I–V), Domin-Krajina Significance, and differential species classes (d, dd, cd, c, ic) alongside climr aSMR & Quarto guides.',
       icon: ChartColumn,
@@ -117,7 +117,7 @@
       title: 'Interchange Hub & Admin',
       subtitle: 'Access, VENUS 5, TurboVeg 3, GeoPackage',
       description:
-        'Promote Access (.accdb/.mdb) projects, run 3-way merges & QA checks, and exchange VENUS 5.0 XML, TurboVeg 3 SQLite/XML, .gpkg, and R .rds archives.',
+        'Promote Access (.accdb/.mdb) projects, run 3-way merges & QA checks, and exchange VENUS 5.0 XML, TurboVeg 3 databases/XML, .gpkg, and R .rds archives.',
       icon: Database,
       cta: 'Open Interchange Hub',
       view: 'interchange-hub',
@@ -147,9 +147,8 @@
         </a>
       </div>
       <p class="mt-1.5 leading-relaxed text-[#313132]">
-        Keep backup copies of archival databases before running bulk Access imports or multi-project merges. Phase 1 preview
-        packages are unsigned — verify installer digests against <code class="font-mono text-[#003366]">SHA256SUMS.txt</code>
-        and <code class="font-mono text-[#003366]">release-manifest.json</code>.
+        Keep backup copies of archival databases before running bulk Access imports or multi-project merges. Preview
+        packages are unsigned — verify installer checksums against <code class="font-mono text-[#003366]">SHA256SUMS.txt</code>.
       </p>
     </section>
   {:else if buildMode === 'dev'}
@@ -159,7 +158,7 @@
       class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 border-l-[4px] border-l-[#003366] bg-slate-50 px-3.5 py-2 font-mono text-[11px] text-slate-700"
     >
       <span>
-        DEV BUILD · v{appVersion || '2.0.1-dev'}{shortCommit ? ` · ${shortCommit}` : ''} · channel={releaseChannel}
+        DEV BUILD · v{appVersion || '2.0.0-dev'}{shortCommit ? ` · ${shortCommit}` : ''} · channel={releaseChannel}
       </span>
       {#if onhelpaction}
         <button

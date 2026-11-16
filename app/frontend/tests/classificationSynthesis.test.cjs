@@ -427,7 +427,7 @@ test('ClassificationSynthesisView SSR renders cleanly with zero warnings and zer
     },
   });
 
-  assert.match(rendered.body, /Reactive BEC Differential &amp; Pairwise Synthesis/);
+  assert.match(rendered.body, /BEC Differential &amp; Pairwise Synthesis/);
   assert.match(rendered.body, /6\.4 ms/);
   assert.match(rendered.body, /CombineTest_Lump/);
   assert.match(rendered.body, /Tsuga heterophylla/);

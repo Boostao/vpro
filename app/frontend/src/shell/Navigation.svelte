@@ -46,8 +46,8 @@
         { name: 'User log', icon: History, view: 'user-log' },
         { name: 'User setup', icon: UserCog, action: 'user-setup' },
         ...(showDeferredPhase2 ? [
-          { name: 'Herbarium (Phase 2 Deferred)', icon: Leaf, deferredPhase2: true },
-          { name: 'Colour-theme (Phase 2 Deferred)', icon: Palette, deferredPhase2: true },
+          { name: 'Herbarium (Planned)', icon: Leaf, deferredPhase2: true },
+          { name: 'Colour-theme (Planned)', icon: Palette, deferredPhase2: true },
         ] : []),
       ] }
     ] },
@@ -62,7 +62,7 @@
         { name: 'Summary Environment', icon: ChartColumn, view: 'summary-environment' }
       ] },
       { label: 'Spatial & Synthesis', items: [
-        { name: '3D Geospatial Workbench (BGC, QA & AOI)', icon: Globe, view: 'geospatial-map' },
+        { name: '3D Map (BGC, Coordinate Check & Site Units)', icon: Globe, view: 'geospatial-map' },
         { name: 'BEC Diagnostic & Pairwise Synthesis', icon: ChartColumn, view: 'diagnostic-synthesis' },
         { name: 'R Analytics, climr aSMR & Quarto Guides', icon: Network, view: 'r-sidecar' }
       ] },
@@ -73,7 +73,7 @@
         { name: 'Plot Locations', icon: FileText, view: 'plot-locations' },
         { name: 'Google Earth (KML)', icon: Globe, view: 'google-earth-review' },
         ...(showDeferredPhase2 ? [
-          { name: 'Hierarchy Diagram (Phase 2 Deferred)', icon: Network, deferredPhase2: true },
+          { name: 'Hierarchy Diagram (Planned)', icon: Network, deferredPhase2: true },
         ] : []),
       ] }
     ] },
@@ -223,9 +223,9 @@
                   : item.action === 'cloud-sync'
                     ? item.name
                   : item.helpAction === 'reset-sample'
-                    ? 'Non-destructive recovery: materializes a fresh Sample.db and switches session to Sample without deleting user .db files.'
+                    ? 'Safe recovery: restores a fresh copy of the Sample project and switches your session without deleting your own projects.'
                   : item.helpAction ? item.name
-                  : item.deferredPhase2 ? 'Deferred to Phase 2 per BEC VPro 2.0 scope triage'
+                  : item.deferredPhase2 ? 'Planned for a future release'
                   : item.view === 'fs882' ? 'FS882 6x4 & 2-Page plot data entry' : item.view ? item.name : item.name}
                 onclick={() => activate(item)}
               >

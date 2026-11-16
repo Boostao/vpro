@@ -200,7 +200,7 @@
     if (!clearOverrides && overridePort.trim() !== '') {
       const p = Number(overridePort.trim());
       if (!Number.isInteger(p) || p < 1 || p > 65535) {
-        error = 'PostgreSQL port must be an integer between 1 and 65535.';
+        error = 'Server port must be an integer between 1 and 65535.';
         return;
       }
       parsedPort = p;
@@ -234,8 +234,8 @@
       selectedRoleMode = status.activeRoleMode;
       if (connectionReport && connectionReport.activeRoleMode !== status.activeRoleMode) connectionReport = null;
       statusMessage = clearOverrides
-        ? `Cleared in-memory session credential overrides (active role: ${status.activeRoleMode}).`
-        : `Updated in-memory cloud session (${status.activeRoleMode} role; password inputs cleared).`;
+        ? `Cleared session credential overrides (active role: ${status.activeRoleMode}).`
+        : `Updated session cloud settings (${status.activeRoleMode} role; password inputs cleared).`;
     });
   }
 
@@ -377,7 +377,7 @@
       const res = await port.bootstrapCloudSchemas();
       if (!isCurrent()) return;
       bootstrapResult = res;
-      statusMessage = `Verified cloud schemas v${res.schemaVersion} (${res.schemasVerified.join(', ')}); PostGIS=${res.postgisEnabled}, pgcrypto=${res.pgcryptoEnabled}.`;
+      statusMessage = `Verified cloud schemas v${res.schemaVersion} (${res.schemasVerified.join(', ')}).`;
     });
   }
 
@@ -413,7 +413,7 @@
 
   async function runSeedBaseline(extras: SeedBaselineExtras = {}) {
     if (!seedSourceDbPath.trim()) {
-      error = 'Source VP08 .db file path is required to seed the BECMaster baseline.';
+      error = 'Source VPro project (.db) path is required to seed the BECMaster baseline.';
       return;
     }
     const req = $state.snapshot({

@@ -54,7 +54,7 @@
 <div class="wb-panel-body">
   <div class="wb-card">
     <div class="wb-card-head">
-      <h2>Auto-1 Batch Geodetic &amp; BGC Stamp</h2>
+      <h2>Batch Coordinate &amp; BGC Stamp</h2>
       <button type="button" class="wb-btn" onclick={() => void onReaudit()} disabled={loading || mutating}>
         Re-Audit
       </button>

@@ -207,7 +207,7 @@
           class="rounded border-2 border-[#FCBA19] bg-[#003366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
           onclick={onExecuteMerge}
         >
-          Execute Atomic Merge
+          Apply 3-Way Merge
         </button>
       {/if}
     </div>

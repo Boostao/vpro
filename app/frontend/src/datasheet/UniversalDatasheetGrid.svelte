@@ -217,7 +217,7 @@
       statusBanner = `Saved ${res.updatedCells} cell(s) across ${res.updatedRows} row(s) (${res.auditRows} audit record(s)).`;
       await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
     } catch (err) {
-      errorMessage = `Save failed (transaction rolled back): ${String(err)}`;
+      errorMessage = `Save failed (no changes were saved): ${String(err)}`;
     } finally {
       saving = false;
     }
@@ -275,7 +275,7 @@
     if (event.clipboardData) {
       event.preventDefault();
       event.clipboardData.setData('text/plain', tsv);
-      statusBanner = `Copied ${norm.endRow - norm.startRow + 1}x${norm.endCol - norm.startCol + 1} TSV block to clipboard.`;
+      statusBanner = `Copied ${norm.endRow - norm.startRow + 1}x${norm.endCol - norm.startCol + 1} spreadsheet (tab-separated) block to clipboard.`;
     }
   }
 
@@ -298,7 +298,7 @@
       startRow: anchorRow, endRow: Math.min(page.rows.length - 1, anchorRow + matrix.length - 1),
       startCol: anchorCol, endCol: Math.min(orderedColumns.length - 1, anchorCol + (matrix[0]?.length ?? 1) - 1),
     };
-    statusBanner = `Pasted ${applied} cell(s) from TSV clipboard. Review and click Save Edits to commit.`;
+    statusBanner = `Pasted ${applied} cell(s) from spreadsheet (tab-separated) clipboard. Review and click Save Edits to apply.`;
   }
 
   function handleHeaderSort(colName: string, event: MouseEvent) {
@@ -334,7 +334,7 @@
       statusBanner = `Applied ${res.updatedCells} replacement(s) on ${page.tableName} (${res.auditRows} audit record(s)).`;
       await refreshTablesAndLoad(activeTableKey, offset, { preserveStatus: true });
     } catch (err) {
-      errorMessage = `Find/Replace commit failed (rolled back): ${String(err)}`;
+      errorMessage = `Find/Replace failed (no changes were saved): ${String(err)}`;
     } finally {
       saving = false;
     }
@@ -408,7 +408,7 @@
 
   {#if activeTableReadOnly && page}
     <p role="status" class="vpro-ds-status" data-readonly-table-banner>
-      Read-only system table view (<code>{page.tableName}</code>): inspection, sorting, filtering, and copy are enabled; mutations are locked.
+      Read-only system table view (<code>{page.tableName}</code>): inspection, sorting, filtering, and copy are enabled; edits are disabled.
     </p>
   {/if}
   {#if errorMessage}<p role="alert" class="vpro-ds-alert">{errorMessage}</p>{/if}

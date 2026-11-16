@@ -208,7 +208,7 @@
       selectedTable = created.tableName;
       selectedDbPath = created.databasePath;
       newTableName = '';
-      notice = `Created ${created.tableName} (VP05).`;
+      notice = `Created ${created.tableName}.`;
       if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
         notifications.push({
           severity: 'success',
@@ -405,13 +405,13 @@
       lastMaterialized = res;
       selectedTable = res.table.tableName;
       selectedDbPath = res.table.databasePath;
-      notice = `Materialized ${res.rowsWritten} folding rules into ${res.table.tableName}.`;
+      notice = `Saved ${res.rowsWritten} folding rules into ${res.table.tableName}.`;
       if (typeof notifications !== 'undefined' && typeof notifications?.push === 'function') {
         notifications.push({
           severity: 'success',
           category: 'background',
-          source: 'Declarative LumpSpec',
-          title: `Materialized ${res.rowsWritten} rules into ${res.table.tableName}`,
+          source: 'Lumping Presets',
+          title: `Saved ${res.rowsWritten} rules into ${res.table.tableName}`,
           message: res.table.databasePath,
         });
       }
@@ -514,12 +514,12 @@
   class="bcgov-lump-editor"
   data-lump-editor
   data-tour="lump-editor-root"
-  aria-label="Combine Species and Declarative LumpSpec Workbench"
+  aria-label="Combine Species and Lumping Rules"
 >
   <header class="bcgov-header">
     <div>
       <p class="bcgov-eyebrow">BEC TAXONOMIC CORRELATION</p>
-      <h2>Combine Species (*_Lump) &amp; Declarative LumpSpec Recipes</h2>
+      <h2>Combine Species (*_Lump) &amp; Lumping Presets</h2>
     </div>
     <div class="bcgov-tab-strip" role="tablist">
       <button
@@ -538,7 +538,7 @@
         class:active={activeTab === 'recipes'}
         onclick={() => (activeTab = 'recipes')}
       >
-        Declarative LumpSpec (Auto-5)
+        Lumping Presets &amp; Rules
       </button>
       <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || !contextId} onclick={refreshTables}>
         Refresh Catalog
@@ -807,7 +807,7 @@
     {/if}
   {:else}
     <div class="bcgov-card">
-      <h3>Declarative LumpSpec Compiler (Auto-5)</h3>
+      <h3>Species Lumping Presets &amp; Rollup Rules</h3>
       <div class="recipe-grid">
         <label class="field-block">
           <span>Provincial Preset</span>
@@ -845,13 +845,13 @@
           </label>
           <label class="checkbox-label">
             <input type="checkbox" bind:checked={scopeToProject} disabled={busy || operationHeld} />
-            <span>Scope materialization to species present in active project</span>
+            <span>Scope rules to species present in active project</span>
           </label>
         </div>
 
         <div class="inline-row">
           <button type="button" class="bcgov-btn-secondary" disabled={busy || operationHeld || !contextId} onclick={runSpecPreview}>
-            Preview LumpSpec Impact
+            Preview Lumping Impact
           </button>
           <input type="text" bind:value={materializeName} placeholder="Target name (e.g. BEC2026)" disabled={busy || operationHeld} />
           <label class="checkbox-label">
@@ -859,7 +859,7 @@
             <span>Overwrite if exists</span>
           </label>
           <button type="button" class="bcgov-btn-primary" disabled={busy || operationHeld || !contextId} onclick={runMaterializeSpec}>
-            Materialize into *_Lump
+            Build *_Lump Table
           </button>
         </div>
       </div>
@@ -898,7 +898,7 @@
       {/if}
       {#if lastMaterialized}
         <p class="bcgov-notice">
-          Materialized {lastMaterialized.rowsWritten} rows into {lastMaterialized.table.tableName}.
+          Saved {lastMaterialized.rowsWritten} rows into {lastMaterialized.table.tableName}.
         </p>
       {/if}
     </div>

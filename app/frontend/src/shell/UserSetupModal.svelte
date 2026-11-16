@@ -78,7 +78,7 @@
       if (gen !== loadGen) return;
       status = updated;
       draftUser = updated.userName ?? checked.value;
-      savedNotice = `Active user set to "${updated.userName}" (config.yml Current.User and audit log updated).`;
+      savedNotice = `Active user set to "${updated.userName}" (user settings and audit log updated).`;
       await onSaved?.(updated);
     } catch (cause) {
       if (gen === loadGen) {
@@ -140,8 +140,7 @@
 
       <div class="space-y-4 overflow-y-auto p-5 text-xs">
         <p class="leading-relaxed text-[#474543]">
-          Sets <code class="font-mono text-[#003366]">Current.User</code> for plot edits, audit provenance, and active
-          session <code class="font-mono text-[#003366]">USysUserLog</code> entries on
+          Sets the active user name for plot edits, audit history, and session user log entries on
           <strong class="font-mono text-[#003366]">{activeProject}</strong>.
         </p>
 

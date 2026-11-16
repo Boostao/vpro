@@ -43,8 +43,8 @@
       <label>
         Guide Template
         <select bind:value={quartoGuideType}>
-          <option value="single_unit">Single Site Unit Ecosystem Guide (4.d)</option>
-          <option value="bgc_unit">Full BGC Subzone / Variant Synthesis Guide (4.e)</option>
+          <option value="single_unit">Single Site Unit Ecosystem Guide</option>
+          <option value="bgc_unit">Full BGC Subzone / Variant Synthesis Guide</option>
         </select>
       </label>
       <label>
@@ -75,7 +75,7 @@
         <textarea
           rows="3"
           bind:value={quartoConceptNotes}
-          placeholder="Enter ecosystem concept statement, characteristicphysiography, soils, and seral dynamics..."
+          placeholder="Enter ecosystem concept statement, characteristic physiography, soils, and seral dynamics..."
         ></textarea>
       </label>
     </div>

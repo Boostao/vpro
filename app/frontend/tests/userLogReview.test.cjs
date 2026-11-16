@@ -175,7 +175,7 @@ test('actual compiled SSR consumes default Current, four populated column captio
   const initial = await renderComponent(source, props);
   assert.ok(destroyed > 0, 'lazy rendering must actually execute component callbacks');
   assert.match(initial, /value="2" selected/);
-  assert.match(initial, /not a list of live Wails users/);
+  assert.match(initial, /not a list of currently active desktop sessions/);
   assert.match(initial, /no login\/logout recording/);
   const body = await renderComponent(source, props, true);
   for (const caption of ['User', 'Login', 'OutTime', 'Local Machine']) assert.ok(body.includes(`>${caption}</th>`));

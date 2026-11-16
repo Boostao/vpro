@@ -176,10 +176,9 @@
               data-about-unsigned-notice
               class="rounded border border-slate-300 bg-[#F2F2F2] p-3 text-[11px] leading-relaxed text-[#313132]"
             >
-              <strong class="font-semibold text-[#003366]">Phase 1 Package Integrity (SHA-256 Verified):</strong>
-              Phase 1 desktop installers and portable archives are distributed unsigned prior to enterprise OV/EV code-signing
-              enrollment. Verify downloaded artifacts against the published <code class="font-mono text-[#003366]">SHA256SUMS.txt</code>
-              and <code class="font-mono text-[#003366]">release-manifest.json</code> digests on the release portal.
+              <strong class="font-semibold text-[#003366]">Preview Package Integrity (SHA-256 Verified):</strong>
+              Preview desktop installers and portable archives are unsigned. Verify downloaded files against the published
+              <code class="font-mono text-[#003366]">SHA256SUMS.txt</code> checksums on the release portal.
             </section>
           {/if}
 
@@ -247,7 +246,7 @@
 
           <details class="rounded border border-slate-200 bg-white p-3">
             <summary class="cursor-pointer text-xs font-bold text-[#003366]">
-              Embedded SQLite Read-Model Artifacts ({about.libraryStamps.artifacts.length})
+              Built-in Reference Databases ({about.libraryStamps.artifacts.length})
             </summary>
             <div class="mt-2 overflow-x-auto">
               <table class="w-full min-w-0 border-collapse text-[11px]">

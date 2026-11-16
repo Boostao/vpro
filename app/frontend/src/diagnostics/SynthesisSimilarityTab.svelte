@@ -32,7 +32,7 @@
         class:active={similarityMetric === 'sorensen'}
         onclick={() => onMetricChange('sorensen')}
       >
-        Sorensen / Diagnostic10 (2*min / sum)
+        Sorensen Similarity (2*min / sum)
       </button>
       <button
         type="button"

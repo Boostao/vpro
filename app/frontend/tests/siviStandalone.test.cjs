@@ -67,12 +67,12 @@ test('compiled Forms menu requires an available owned entry and callback without
       const ownButton = button.slice(button.lastIndexOf('<button'));
       assert.equal(/\bdisabled(?:\s|=|>)/.test(ownButton), !(available && callback));
       assert.match(ownButton, available && callback ? /Existing draft and close guards apply/ : /Select a plot to open SIVI/);
-      for (const label of ['Metadata', 'Herbarium \\(Phase 2 Deferred\\)', 'Colour-theme \\(Phase 2 Deferred\\)', 'User setup(?: \\(Phase 2 Deferred\\))?']) {
+      for (const label of ['Metadata', 'Herbarium \\(Planned\\)', 'Colour-theme \\(Planned\\)', 'User setup(?: \\(Planned\\))?']) {
         const menuButton = html.match(new RegExp(`<button\\b[^>]*>[\\s\\S]*?<span>${label}<\\/span>\\s*<\\/button>`))?.[0];
         assert.ok(menuButton);
         const targetButton = menuButton.slice(menuButton.lastIndexOf('<button'));
         if (/User setup/.test(label)) {
-          if (/Phase 2 Deferred/.test(targetButton)) assert.match(targetButton, /\bdisabled(?:\s|=|>)/);
+          if (/Planned/.test(targetButton)) assert.match(targetButton, /\bdisabled(?:\s|=|>)/);
         } else {
           assert.match(targetButton, /\bdisabled(?:\s|=|>)/);
         }

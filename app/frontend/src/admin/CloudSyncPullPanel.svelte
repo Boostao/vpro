@@ -45,7 +45,7 @@
 <fieldset class="space-y-3 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] bg-white p-4 shadow-sm">
   <legend class="px-1 text-sm font-semibold text-[#003366]">Checkout Regional Subset from BECMaster</legend>
   <p class="text-xs text-slate-600">
-    Query canonical <span class="font-mono">becmaster</span> plots by BGC Zone/Subzone, ProjectID, literal PlotNumbers (preserving leading zeros such as <span class="font-mono">'00337'</span>), or WGS84 bounding box into a local <span class="font-mono">VP08</span> SQLite project.
+    Query canonical <span class="font-mono">becmaster</span> plots by BGC Zone/Subzone, ProjectID, literal PlotNumbers (preserving leading zeros such as <span class="font-mono">'00337'</span>), or WGS84 bounding box into a local VPro project (<span class="font-mono">.db</span>).
   </p>
 
   <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -83,7 +83,7 @@
       />
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-slate-700" for="subset-plot-numbers">Literal Plot Numbers (max 7 UTF-16)</label>
+      <label class="block text-xs font-semibold text-slate-700" for="subset-plot-numbers">Literal Plot Numbers (max 7 characters)</label>
       <input
         id="subset-plot-numbers"
         type="text"
@@ -160,7 +160,7 @@
   <div class="space-y-2 border-t border-slate-200 pt-3">
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-slate-700" for="subset-target-project">Target VP08 Project Name</label>
+        <label class="block text-xs font-semibold text-slate-700" for="subset-target-project">Target Project Name</label>
         <input
           id="subset-target-project"
           type="text"

@@ -122,7 +122,7 @@
   function applyLayerVisibilities() {
     if (!visibility.bcOpenMapsWMS) wmsOfflineWarning = '';
     else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      wmsOfflineWarning = classifyWMSMapError({}, true, false) ?? 'BC OpenMaps WMS imagery is unreachable while offline. Offline PMTiles layers remain active.';
+      wmsOfflineWarning = classifyWMSMapError({}, true, false) ?? 'BC OpenMaps WMS imagery is unreachable while offline. Offline map layers remain active.';
     } else wmsOfflineWarning = '';
     if (!mapInstance) return;
     const style = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility));
@@ -182,7 +182,7 @@
       });
       mapInstance = map;
     } catch (cause) {
-      mapRenderWarning = `Hardware WebGL2 map viewport is unavailable in this environment (${cause instanceof Error ? cause.message : String(cause)}). Tabular Spatial QA, Auto-1 Attribution, FlatGeobuf stream, and Polygon AOI -> SU workflows remain active.`;
+      mapRenderWarning = `Hardware 3D map rendering is unavailable in this environment (${cause instanceof Error ? cause.message : String(cause)}). Table-based Coordinate Check, BGC Stamp, and Site Unit selection remain active.`;
     }
   }
 
@@ -319,7 +319,7 @@
       statusMsg = `Stamped ${res.updatedPlots} plot(s) (${res.updatedCells} cell updates, ${res.auditRows} <Project>_Audit entries).`;
       await loadWorkbenchData();
       await loadBatchAuditQA();
-    }, 'Auto-1 spatial stamp failed', true);
+    }, 'Coordinate & BGC stamp failed', true);
   }
 
   async function exportGeoPackageShortcut(opts: SpatialGpkgExportInput) {
@@ -375,7 +375,7 @@
   });
 </script>
 
-<section class="geospatial-workbench" data-tour="geospatial-workbench-root" aria-label="3D Geospatial Workbench">
+<section class="geospatial-workbench" data-tour="geospatial-workbench-root" aria-label="3D Map">
   <SpatialWorkbenchHeader
     {contextId} {project} {computeInfo} {payload} {flatGeobufCount} discrepancyCount={discrepancySegments.length}
     plotCount={plotPoints.length} {distinctZones} bind:visibility bind:zoneFilter bind:plotSearch
@@ -428,7 +428,7 @@
           type="button" role="tab" aria-selected={activePanel === 'qa'} class:active={activePanel === 'qa'}
           onclick={() => { aoiDrawMode = false; activePanel = 'qa'; if (!qaReport) void loadBatchAuditQA(); }}
         >
-          Auto-1 QA Stamp
+          Coordinate &amp; BGC Stamp
         </button>
       </div>
 

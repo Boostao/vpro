@@ -356,7 +356,7 @@ test('RSidecarWorkbench SSR renders BC Gov #003366/#FCBA19 styling, 4 tabs, and 
   assert.match(html, /#FCBA19/);
   assert.match(html, /1\. Runtime &amp; climr Climate Normals/);
   assert.match(html, /2\. Dual rSMR vs aSMR Edatopic Grids/);
-  assert.match(html, /3\. BEC_R Clustering &amp; Dendrogram/);
+  assert.match(html, /3\. R Clustering &amp; Dendrogram/);
   assert.match(html, /4\. Quarto Unit &amp; BGC Guide Publisher/);
 });
 

@@ -66,7 +66,7 @@
         <div class="text-xl font-bold text-[#003366]">{complianceReport.summary.envCodeErrors}</div>
       </div>
       <div class="rounded border border-[#D8D8D8] p-3">
-        <div class="text-xs text-[#474543]">Numeric / UTF-16 / Cover Bounds</div>
+        <div class="text-xs text-[#474543]">Numeric / Text / Cover Bounds</div>
         <div class="text-xl font-bold text-[#003366]">{complianceReport.summary.boundsErrors}</div>
       </div>
       <div class="rounded border border-[#D8D8D8] p-3">
@@ -86,10 +86,10 @@
     {#if complianceReport.summary.orphanChildRows > 0}
       <div class="space-y-2 rounded border border-[#FCBA19] bg-[#FEF6E0] p-4">
         <h3 class="m-0 text-sm font-semibold text-[#313132]">Orphan Child Records Detected ({complianceReport.summary.orphanChildRows} rows)</h3>
-        <p class="text-xs text-[#313132]">Quarantining moves orphan child rows (_Veg, _Humus, _Mineral, _Other, _Audit, and active *_SU rows missing from _Env) into __VPRO_Quarantine_&lt;Table&gt;, reserves their positive child IDs permanently in __VPRO_ChildIdentity, and writes an audit receipt so zero data is silently lost.</p>
+        <p class="text-xs text-[#313132]">Quarantining moves orphan child rows (_Veg, _Humus, _Mineral, _Other, _Audit, and active *_SU rows missing from _Env) into quarantine tables, permanently reserves their child IDs so they are never reused, and writes an audit record so no data is silently lost.</p>
         <label class="flex items-center gap-2 text-xs font-medium text-[#313132]">
           <input type="checkbox" bind:checked={confirmQuarantine} disabled={busy} />
-          Confirm transactional move to __VPRO_Quarantine_* tables
+          Confirm move to quarantine tables
         </label>
         <button
           type="button"
@@ -153,7 +153,7 @@
 
     {#if (complianceReport.boundsFindings?.length ?? 0) > 0}
       <div class="space-y-1">
-        <h4 class="m-0 text-xs font-semibold text-[#003366]">3. Numeric, UTF-16 &amp; LMH25 Horizon Bounds — {complianceReport.boundsFindings.length} finding(s)</h4>
+        <h4 class="m-0 text-xs font-semibold text-[#003366]">3. Numeric, Text &amp; LMH25 Horizon Bounds — {complianceReport.boundsFindings.length} finding(s)</h4>
         <div class="overflow-x-auto rounded border border-[#D8D8D8]">
           <table class="w-full text-left text-xs">
             <thead class="bg-[#F2F2F2] text-[#313132]">

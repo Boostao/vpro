@@ -359,12 +359,12 @@ export function validateClusteringDraft(req: ClusteringRequest): string | null {
   }
   if (req.lumpName !== undefined && req.lumpName !== '') {
     if (!wellFormedUTF16(req.lumpName) || req.lumpName.length > 64 || /[\x00\r\n]/.test(req.lumpName)) {
-      return 'Lump table name must be well-formed UTF-16 up to 64 characters.';
+      return 'Lump table name must be valid text up to 64 characters.';
     }
   }
   if (req.unitPrefix !== undefined && req.unitPrefix !== '') {
     if (!wellFormedUTF16(req.unitPrefix) || req.unitPrefix.length > 24 || /[\x00\r\n]/.test(req.unitPrefix)) {
-      return 'Cluster unit prefix must be well-formed UTF-16 up to 24 characters.';
+      return 'Cluster unit prefix must be valid text up to 24 characters.';
     }
   }
   if (req.materializeCandidate && req.candidatePrefix !== undefined && req.candidatePrefix.trim() !== '') {
@@ -415,10 +415,10 @@ export function validateQuartoGuideDraft(req: QuartoGuideRequest): string | null
     return 'Guide type must be "single_unit" or "bgc_unit".';
   }
   if (req.title && (!wellFormedUTF16(req.title) || req.title.length > 200)) {
-    return 'Guide title must be well-formed UTF-16 up to 200 characters.';
+    return 'Guide title must be valid text up to 200 characters.';
   }
   if (req.conceptNotes && (!wellFormedUTF16(req.conceptNotes) || req.conceptNotes.length > 16000)) {
-    return 'Concept notes must be well-formed UTF-16 up to 16,000 characters.';
+    return 'Concept notes must be valid text up to 16,000 characters.';
   }
   if (req.minConstancyPct !== undefined && (!Number.isFinite(req.minConstancyPct) || req.minConstancyPct < 0 || req.minConstancyPct > 100)) {
     return 'Minimum constancy threshold must be between 0% and 100%.';

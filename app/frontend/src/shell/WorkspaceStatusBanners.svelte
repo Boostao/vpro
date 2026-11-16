@@ -41,7 +41,7 @@
     <button type="button" data-build-tier-badge="dev" title="Local developer build — open About VPro & diagnostics"
       class="ml-1.5 rounded border border-[#FCBA19] bg-[#003366] px-2 py-0.5 font-mono text-[11px] font-semibold tracking-tight text-[#FCBA19] hover:bg-[#002244]"
       onclick={() => { if (!startupFailed) onopenabout(); }}>
-      DEV BUILD · v{appVersion || '2.0.1-dev'}{shortBuildCommit ? ` · ${shortBuildCommit}` : ''}
+      DEV BUILD · v{appVersion || '2.0.0-dev'}{shortBuildCommit ? ` · ${shortBuildCommit}` : ''}
     </button>
   {:else if buildMode === 'alpha'}
     <button type="button" data-build-tier-badge="alpha" title="Alpha preview build — open About VPro & verification details"
@@ -50,7 +50,7 @@
       ALPHA PREVIEW (v{appVersion})
     </button>
   {:else if buildMode === 'release' && releaseChannel === 'experimental'}
-    <button type="button" data-build-tier-badge="experimental" title="Experimental release channel enabled in config.yml"
+    <button type="button" data-build-tier-badge="experimental" title="Experimental release channel enabled in settings"
       class="ml-1.5 rounded border border-white/40 bg-white/10 px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-tight text-white hover:bg-white/20"
       onclick={() => { if (!startupFailed) onopenabout(); }}>
       EXPERIMENTAL CHANNEL

@@ -51,16 +51,16 @@
 
 <header class="wb-banner">
   <div class="wb-title-block">
-    <span class="wb-eyebrow">BC MINISTRY OF FORESTS - BEC GEOSPATIAL WORKBENCH</span>
-    <h1>3D BGC v13 Map, Geodetic QA &amp; Spatial AOI Classification</h1>
+    <span class="wb-eyebrow">BC MINISTRY OF FORESTS - BEC 3D MAP</span>
+    <h1>3D BGC v13 Map, Coordinate Check &amp; Site Units</h1>
   </div>
   <div class="wb-badges">
     <span class="wb-badge wb-badge-gold" data-compute-backend={computeInfo.backend} title={computeInfo.fallbackReason ?? computeInfo.adapterLabel}>
-      {computeInfo.backend === 'webgpu' ? 'WebGPU WGSL Compute' : 'WebGL2 + TypedArray Fallback'}
+      {computeInfo.backend === 'webgpu' ? 'Hardware Accelerated' : 'Standard Graphics'}
     </span>
     <span class="wb-badge">{summarizeArchiveResolution(payload)}</span>
     <span class="wb-badge">
-      Plots: {payload?.plottableCount ?? 0} / {payload?.totalPlots ?? 0} (FGB: {flatGeobufCount})
+      Plots: {payload?.plottableCount ?? 0} / {payload?.totalPlots ?? 0}
     </span>
     <span class="wb-badge" class:wb-badge-alert={(payload?.bgcMismatchCount ?? 0) > 0 || (payload?.utmDivergenceCount ?? 0) > 0}>
       BGC Mismatch: {payload?.bgcMismatchCount ?? 0} | UTM Div: {payload?.utmDivergenceCount ?? 0}
@@ -112,7 +112,7 @@
       Fit Project Extent
     </button>
     <button type="button" class="wb-btn" onclick={onRefreshStream} disabled={loading || mutating}>
-      Refresh Stream
+      Refresh Map
     </button>
     <button
       type="button"

@@ -235,7 +235,7 @@ test('GeospatialWorkbench, Navigation, App, and CoordinateFields compile cleanly
 
   // Lazy route in App.svelte, Spatial entry in Navigation.svelte, Auto-1 button in CoordinateFields.svelte
   assert.match(appSource, /import\('\.\/spatial\/GeospatialWorkbench\.svelte'\)/);
-  assert.match(navSource, /3D Geospatial Workbench/);
+  assert.match(navSource, /3D Map \(BGC, Coordinate Check & Site Units\)/);
   assert.match(navSource, /3D Map/);
   assert.match(coordSource, /data-auto1-spatial-stamp/);
 
@@ -260,10 +260,10 @@ test('GeospatialWorkbench, Navigation, App, and CoordinateFields compile cleanly
   const html = render(SSRWorkbench, {
     props: { contextId: 'ctx-wave3', project: 'Sample', su: 'None' },
   }).body;
-  assert.match(html, /3D BGC v13 Map, Geodetic QA/);
+  assert.match(html, /3D BGC v13 Map, Coordinate Check/);
   assert.match(html, /Plot Inspector/);
   assert.match(html, /Lasso \/ AOI/);
-  assert.match(html, /Auto-1 QA Stamp/);
+  assert.match(html, /Coordinate &amp; BGC Stamp/);
 });
 
 test('GeospatialWorkbench imports bundled maplibre-gl-worker.mjs?worker&url and configures worker URL before instantiating Map', async () => {
@@ -370,7 +370,7 @@ test('classifyWMSMapError surfaces offline WMS warnings without blocking offline
   assert.match(wb.classifyWMSMapError({}, true, false), /offline.*Offline BGC v13/i);
   assert.match(
     wb.classifyWMSMapError({ sourceId: 'bc_openmaps_wms', error: new Error('Failed to fetch') }, true, true),
-    /WMS tile request failed.*Offline PMTiles/i
+    /WMS tile request failed.*Offline map/i
   );
   assert.match(
     wb.classifyWMSMapError(

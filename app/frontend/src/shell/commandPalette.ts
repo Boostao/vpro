@@ -72,11 +72,11 @@ export interface BuildCommandPaletteInput {
 }
 
 const DEFAULT_HELP_TOPICS: readonly CommandPaletteHelpCandidate[] = [
-  { id: 'site.plot_number', title: 'LMH25 SITE 1 — Plot Number & Identity', subtitle: 'Field manual rules & 7-char UTF-16 identifier contract', keywords: 'plot number identity f1 site' },
+  { id: 'site.plot_number', title: 'LMH25 SITE 1 — Plot Number & Identity', subtitle: 'Field manual rules & 7-character plot identifier rules', keywords: 'plot number identity f1 site' },
   { id: 'site.moisture_regime', title: 'LMH25 Key 9.3 / 9.4 — Relative Soil Moisture Regime (rSMR)', subtitle: 'Upland & wetland moisture key (0 Very Xeric to 8 Hydric)', keywords: 'rsmr moisture regime edatopic key' },
   { id: 'site.nutrient_regime', title: 'LMH25 Key 9.6 — Soil Nutrient Regime (rSNR)', subtitle: 'Nutrient key (A Very Poor to F Saline)', keywords: 'rsnr nutrient regime edatopic key' },
   { id: 'humus.upper_lower_depth', title: 'LMH25 SOIL — Humus & Mineral Horizon Depth Signs', subtitle: 'Upland L/F/H upward (Upper > Lower) vs. mineral/peat downward', keywords: 'humus mineral horizon depth sign lfh' },
-  { id: 'veg.covers', title: 'LMH25 VEG — Strata & Species % Cover Visual Chart', subtitle: 'Tree A, Shrub B, Herb C, Moss D & IEEE-754 float32 <100 bounds', keywords: 'vegetation cover strata shrub chars' },
+  { id: 'veg.covers', title: 'LMH25 VEG — Strata & Species % Cover Visual Chart', subtitle: 'Tree A, Shrub B, Herb C, Moss D & cover bounds under 100%', keywords: 'vegetation cover strata shrub chars' },
   { id: 'sivi.plot_type', title: 'FS1333 SIVI — Site Visit Ground Inspection & Visual Calls', subtitle: 'TEM/SIBEC PlotType G / V / N / O conventions', keywords: 'sivi fs1333 site visit tem sibec' },
 ];
 
@@ -184,9 +184,9 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
     { id: 'view-fs882', title: 'FS882 Ecosystem Field Form (6×4)', subtitle: 'Site, Soil/Terrain, Vegetation, Veg Other & Audit editor', badge: 'Form', keywords: 'fs882 6x4 form entry site soil veg', action: { kind: 'navigate-view', view: 'fs882' } },
     { id: 'action-new-sivi', title: 'New SIVI / FS1333 Plot', subtitle: 'Create a new Site Visit plot in active project', badge: 'Form', keywords: 'new create sivi fs1333 plot', action: { kind: 'new-sivi' }, disabled: input.newSiviAvailable === false, disabledReason: 'Finish current busy workflow first' },
     { id: 'view-datasheet', title: 'Universal Datasheet Grid', subtitle: 'Direct spreadsheet editing across Env, Veg, Humus, Mineral & SU', badge: 'Grid', keywords: 'datasheet spreadsheet table grid bulk edit', action: { kind: 'navigate-view', view: 'datasheet' } },
-    { id: 'view-map', title: '3D Geospatial Workbench (MapLibre + PMTiles)', subtitle: 'Provincial BGC v13 overlay, coordinate QA & polygon AOI -> SU', badge: 'GIS', keywords: 'map 3d geospatial gis bgc pmtiles aoi coordinates', action: { kind: 'navigate-view', view: 'geospatial-map' } },
+    { id: 'view-map', title: '3D Map (BGC, Coordinate Check & Site Units)', subtitle: 'Provincial BGC v13 overlay, coordinate check & polygon AOI -> SU', badge: 'GIS', keywords: 'map 3d geospatial gis bgc pmtiles aoi coordinates', action: { kind: 'navigate-view', view: 'geospatial-map' } },
     { id: 'view-synthesis', title: 'BEC Diagnostic & Pairwise Synthesis', subtitle: 'Differential species matrix, Sorensen similarity, outliers & edatopic grid', badge: 'BEC', keywords: 'diagnostic synthesis differential edatopic matrix similarity', action: { kind: 'navigate-view', view: 'diagnostic-synthesis' } },
-    { id: 'view-rsidecar', title: 'R Analytics, climr aSMR & Quarto Guides', subtitle: 'Clustering, downscaled climate normals & publication HTML guides', badge: 'R / Quarto', keywords: 'r sidecar climr asmr quarto guide clustering', action: { kind: 'navigate-view', view: 'r-sidecar' } },
+    { id: 'view-rsidecar', title: 'R Companion: Climate, Clustering & Quarto Guides', subtitle: 'Clustering, downscaled climate normals & publication HTML guides', badge: 'R / Quarto', keywords: 'r sidecar climr asmr quarto guide clustering', action: { kind: 'navigate-view', view: 'r-sidecar' } },
     { id: 'view-classification', title: 'SU & Hierarchy Classification Explorer', subtitle: 'Dual-pane Site Unit assignment & flat hierarchy tree', badge: 'SU', keywords: 'classification explorer su hierarchy tree', action: { kind: 'navigate-view', view: 'classification-explorer' } },
     { id: 'view-project-admin', title: 'Project Admin, Compliance QA, Splinter & Merge', subtitle: 'Create, Save As, Splinter, Compare, Merge & LMH25 batch QA', badge: 'Admin', keywords: 'project admin new save as splinter merge compare qa', action: { kind: 'navigate-view', view: 'project-admin' } },
     { id: 'view-lump', title: 'Combine Species (Lump Table Editor)', subtitle: 'Non-destructive query/report taxonomic species lumping', badge: 'Taxonomy', keywords: 'combine species lump taxonomy synonym', action: { kind: 'navigate-view', view: 'lump-editor' } },
@@ -235,7 +235,7 @@ export function buildCommandPaletteCatalog(input: BuildCommandPaletteInput): Com
     { id: 'help-tours', title: 'Interactive Guided Walkthroughs (4 Tours)', subtitle: '90-second spotlight tours for migrating VPro 64 ecologists', keywords: 'tours walkthroughs onboarding tutorial vpro 64', action: { kind: 'help-action', action: 'tours' } },
     { id: 'help-shortcuts', title: 'Keyboard Shortcuts Cheat-Sheet', subtitle: 'Enter/Tab grid navigation, View Field Card, F1 & Ctrl+K', shortcut: '?', keywords: 'keyboard shortcuts hotkeys accelerators', action: { kind: 'help-action', action: 'shortcuts' } },
     { id: 'help-whats-new', title: "What's New & Release Changelog", subtitle: 'Version highlights & bundled BECdb/Taxonomy updates', keywords: 'whats new release notes changelog', action: { kind: 'help-action', action: 'whats-new' } },
-    { id: 'help-reset-sample', title: 'Reset Workspace to Sample.db', subtitle: 'Safe non-destructive Sample workspace recovery', keywords: 'reset sample recovery restore', action: { kind: 'help-action', action: 'reset-sample' } },
+    { id: 'help-reset-sample', title: 'Reset Workspace to Sample Project', subtitle: 'Safe non-destructive Sample workspace recovery', keywords: 'reset sample recovery restore', action: { kind: 'help-action', action: 'reset-sample' } },
     { id: 'help-about', title: 'About VPro & 2026 Master Standards Provenance', subtitle: 'Build stamps, BECdb v13, BCPlantTaxonomy v19 & Data Use Agreement', keywords: 'about vpro version standards sha256 license', action: { kind: 'help-action', action: 'about' } },
   ];
 

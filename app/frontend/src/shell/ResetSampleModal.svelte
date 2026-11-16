@@ -34,7 +34,7 @@
       </header>
       <div class="space-y-3 p-4 text-xs leading-relaxed">
         <p>
-          Materialize a fresh, pristine copy of embedded <code class="font-mono text-[#003366]">Sample.db</code> and switch the active session cleanly to
+          Restore a fresh copy of the built-in <code class="font-mono text-[#003366]">Sample</code> project and switch the active session cleanly to
           <strong>Project = Sample</strong>, <strong>SU = Sample</strong>, and <strong>Hierarchy = Sample</strong>?
         </p>
         <p class="rounded border border-slate-200 bg-[#F2F2F2] p-2.5 text-slate-700">

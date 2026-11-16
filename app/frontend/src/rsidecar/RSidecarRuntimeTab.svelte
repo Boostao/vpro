@@ -40,7 +40,7 @@
 
 <div class="panel">
   <div class="card">
-    <h3>Out-of-Process R &amp; Quarto Runtime Status</h3>
+    <h3>R &amp; Quarto Setup Status</h3>
     {#if runtimeStatus}
       <div class="badge-strip">
         <span class="badge" class:ok={runtimeStatus.available} class:warn={!runtimeStatus.available}>
@@ -58,7 +58,7 @@
           Climate Engine: {climateEngineLabel}
         </span>
         <span class="badge" class:ok={runtimeStatus.readyForClustering} class:warn={!runtimeStatus.readyForClustering}>
-          BEC_R Clustering: {runtimeStatus.readyForClustering ? 'Ready' : 'Missing Packages'}
+          R Clustering: {runtimeStatus.readyForClustering ? 'Ready' : 'Missing Packages'}
         </span>
       </div>
 
@@ -79,7 +79,7 @@
                   <td><code>{pkg.name}</code></td>
                   <td>{pkg.installed ? 'Installed' : 'Missing'}</td>
                   <td>{pkg.version || '—'}</td>
-                  <td>{pkg.required ? 'Required' : 'Optional / Sidecar'}</td>
+                  <td>{pkg.required ? 'Required' : 'Optional'}</td>
                 </tr>
               {/each}
             </tbody>
@@ -98,12 +98,12 @@
         </div>
       {/if}
     {:else}
-      <p class="muted">Click "Probe R &amp; Quarto Runtime" to inspect installed Rscript, Quarto CLI, and BEC_R package versions.</p>
+      <p class="muted">Click "Check R &amp; Quarto Setup" to inspect installed Rscript, Quarto CLI, and R package versions.</p>
     {/if}
   </div>
 
   <div class="card">
-    <h3>Cached Plot Climate Normals (__VPRO_PlotClimate)</h3>
+    <h3>Cached Plot Climate Normals</h3>
     <div class="form-row">
       <label>
         Reference Period
@@ -138,7 +138,7 @@
         Compute Climate &amp; CMD to aSMR
       </button>
       <button type="button" class="btn-secondary" disabled={busy} onclick={onLoadCached}>
-        Load Cached __VPRO_PlotClimate
+        Load Cached Plot Climate
       </button>
     </div>
 

@@ -264,7 +264,7 @@
       const rows = await port.getCachedPlotClimate(contextId, periodSnap);
       if (gen !== generation) return;
       cachedRows = rows || [];
-      statusMessage = `Loaded ${cachedRows.length} cached __VPRO_PlotClimate records (${periodSnap}).`;
+      statusMessage = `Loaded ${cachedRows.length} cached plot climate records (${periodSnap}).`;
     } catch (cause) {
       if (gen === generation) error = `Load cached plot climate failed: ${String(cause)}`;
     } finally {
@@ -305,7 +305,7 @@
 
   async function submitClustering() {
     if (busy || operationHeld) {
-      error = 'Wait for the current operation or decision before running BEC_R clustering.';
+      error = 'Wait for the current operation or decision before running R clustering.';
       return;
     }
     const req = $state.snapshot({
@@ -345,7 +345,7 @@
         ? `Clustered ${res.plotCount} plots into ${res.clusters.length} groups and staged ${res.candidateTableName} (active SU preserved).`
         : `Clustered ${res.plotCount} plots into ${res.clusters.length} groups.`;
     } catch (cause) {
-      if (gen === generation) error = `BEC_R clustering failed: ${String(cause)}`;
+      if (gen === generation) error = `R clustering failed: ${String(cause)}`;
     } finally {
       if (gen === generation) setBusy(false);
     }
@@ -428,22 +428,22 @@
   }
 </script>
 
-<section class="rsidecar-workbench" data-tour="r-sidecar-root" aria-label="BEC R Sidecar Climate Clustering and Quarto Workbench">
+<section class="rsidecar-workbench" data-tour="r-sidecar-root" aria-label="R Companion Climate Clustering and Guides">
   <header class="bcgov-header" style="background:#003366;border-bottom:4px solid #FCBA19;color:#FFFFFF">
     <div>
-      <h2>BEC_R Sidecar, Climate Normals &amp; Quarto Publication Workbench</h2>
+      <h2>R Companion: Climate, Clustering &amp; Ecosystem Guides</h2>
       <p class="subtitle">
-        Active Project: <strong>{activeProject}</strong> | Active SU: <strong>{activeSu}</strong> | Out-of-Process R / climr / vegclust / Quarto (Auto-7)
+        Active Project: <strong>{activeProject}</strong> | Active SU: <strong>{activeSu}</strong> | R / climr / vegclust / Quarto
       </p>
     </div>
     <div class="header-actions">
       <button type="button" class="btn-gold" disabled={busy} onclick={refreshRRuntime}>
-        Probe R &amp; Quarto Runtime
+        Check R &amp; Quarto Setup
       </button>
     </div>
   </header>
 
-  <div class="tab-bar" role="tablist" aria-label="R Sidecar Sections">
+  <div class="tab-bar" role="tablist" aria-label="R Companion Sections">
     <button
       type="button" role="tab" aria-selected={activeTab === 'runtime'}
       class:active={activeTab === 'runtime'} onclick={() => (activeTab = 'runtime')}
@@ -460,7 +460,7 @@
       type="button" role="tab" aria-selected={activeTab === 'clustering'}
       class:active={activeTab === 'clustering'} onclick={() => (activeTab = 'clustering')}
     >
-      3. BEC_R Clustering &amp; Dendrogram
+      3. R Clustering &amp; Dendrogram
     </button>
     <button
       type="button" role="tab" aria-selected={activeTab === 'quarto'}

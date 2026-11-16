@@ -64,12 +64,12 @@ test('compiled Metadata menu requires current availability and callback, without
     const html = render(component, { props: {
       view: 'fs882', onnavigate() {}, metadataAvailable: available, onopenmetadata: callback, releaseChannel: 'experimental',
     } }).body;
-    for (const label of ['Metadata', 'Herbarium \\(Phase 2 Deferred\\)', 'Colour-theme \\(Phase 2 Deferred\\)', 'User setup(?: \\(Phase 2 Deferred\\))?', 'Enter/Edit SIVI Data']) {
+    for (const label of ['Metadata', 'Herbarium \\(Planned\\)', 'Colour-theme \\(Planned\\)', 'User setup(?: \\(Planned\\))?', 'Enter/Edit SIVI Data']) {
       const match = html.match(new RegExp(`<button\\b[^>]*>[\\s\\S]*?<span>${label}<\\/span>\\s*<\\/button>`));
       assert.ok(match, `actual compiled ${label} button must exist`);
       const button = match[0].slice(match[0].lastIndexOf('<button'));
       if (/User setup/.test(label)) {
-        if (/Phase 2 Deferred/.test(match[0])) assert.equal(/\bdisabled(?:\s|=|>)/.test(button), true);
+        if (/Planned/.test(match[0])) assert.equal(/\bdisabled(?:\s|=|>)/.test(button), true);
       } else {
         assert.equal(/\bdisabled(?:\s|=|>)/.test(button), label !== 'Metadata' || !(available && callback));
       }

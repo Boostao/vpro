@@ -32,7 +32,7 @@
 <div class="space-y-4">
   <div class="space-y-3 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-3">
     <div class="text-xs text-[#313132]">
-      Mandatory Dry-Run Safety Gate: consolidates split multi-row <span class="font-mono">(PlotNumber, Species)</span> records atomically using <span class="font-semibold">MAX(Height*)</span> and IEEE-754 SINGLE &lt;100 cover capping (99%), retiring deleted child IDs in <span class="font-mono">__VPRO_ChildIdentity</span>.
+      Preview Before Saving: combines duplicate <span class="font-mono">(PlotNumber, Species)</span> rows in one step using <span class="font-semibold">MAX(Height*)</span> while capping summed cover under 100% (99% limit) and reserving retired child IDs so they are never reused.
     </div>
     <div class="flex flex-wrap items-end gap-3">
       <div class="min-w-0 flex-1 space-y-1">
@@ -189,6 +189,6 @@
   {/if}
 
   {#if optResult}
-    <p class="text-xs text-[#313132]">Committed OptimizeVeg: {optResult.beforeRowCount} -&gt; {optResult.afterRowCount} rows; retired IDs reserved: {optResult.reservedDeletedIds.join(', ') || 'none'}.</p>
+    <p class="text-xs text-[#313132]">Applied OptimizeVeg: {optResult.beforeRowCount} -&gt; {optResult.afterRowCount} rows; retired IDs reserved: {optResult.reservedDeletedIds.join(', ') || 'none'}.</p>
   {/if}
 </div>

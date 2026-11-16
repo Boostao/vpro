@@ -34,9 +34,9 @@
 
       <div class="syn-modal-body">
         <p class="syn-modal-desc">
-          Publishes an atomic, non-overwriting 4-sheet workbook compatible with legacy{' '}
-          <code>Diagnostic10.xla</code>: BEC colour-coded Diagnostic Summary, Pairwise Similarity
-          Matrix, Leave-One-Out Outlier Queue, and 9x6 Edatopic Grids.
+          Creates a new 4-sheet diagnostic Excel workbook (.xlsx, without overwriting existing files):
+          BEC colour-coded Diagnostic Summary, Pairwise Similarity Matrix, Leave-One-Out Outlier Queue, and
+          9x6 Edatopic Grids.
         </p>
 
         <label class="syn-modal-field">

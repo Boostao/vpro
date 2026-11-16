@@ -148,7 +148,7 @@
     >
       <option value="roman_signif">BEC Class (I..V - +..9)</option>
       <option value="pct_cover">Constancy % / Mean Cover</option>
-      <option value="crosstab">Diagnostic10 Code (1..5 - +..9)</option>
+      <option value="crosstab">Diagnostic Code (1..5 - +..9)</option>
     </select>
   </label>
 

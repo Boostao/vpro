@@ -153,15 +153,15 @@
   <!-- Collapsible Session Credential Override Panel -->
   <details class="px-4 py-2.5 text-xs" data-session-override-panel>
     <summary class="cursor-pointer font-semibold text-[#003366] select-none">
-      Session Credential Override (In-Memory Only — Never Persisted to Disk)
+      Session Credential Override (Used for This Session Only — Never Saved to Disk)
     </summary>
     <div class="mt-3 space-y-3 border-t border-slate-200 pt-3">
       <p class="text-xs text-slate-600">
-        Credentials entered here apply strictly to the current desktop memory session and are never written to <span class="font-mono">config.yml</span> or echoed after submission.
+        Credentials entered here apply strictly to the current desktop session and are never written to local configuration files or echoed after submission.
       </p>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="cloud-override-host">PostgreSQL Host</label>
+          <label class="block text-xs font-semibold text-slate-700" for="cloud-override-host">Server Host</label>
           <input
             id="cloud-override-host"
             type="text"

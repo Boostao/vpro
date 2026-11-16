@@ -91,7 +91,7 @@
 
 <div class="panel">
   <div class="card">
-    <h3>BEC_R Multivariate Clustering (vegclust, vegan Hierarchical, Flexible-Beta &amp; PAM)</h3>
+    <h3>R Multivariate Clustering (vegclust, vegan Hierarchical, Flexible-Beta &amp; PAM)</h3>
     <div class="form-row">
       <label>
         Algorithm
@@ -202,7 +202,7 @@
       </label>
       <label class="checkbox-label">
         <input type="checkbox" bind:checked={clusterMaterializeCandidate} />
-        Stage &lt;Name&gt;_ClusterCandidate_SU (Never Overwrites Active SU)
+        Save Candidate Site Unit Table (Never Overwrites Active SU)
       </label>
     </div>
 
@@ -217,7 +217,7 @@
         disabled={busy || Boolean(clusteringValidationError)}
         onclick={onSubmitClustering}
       >
-        Run BEC_R Clustering
+        Run R Clustering
       </button>
     </div>
 

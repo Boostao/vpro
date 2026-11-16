@@ -512,7 +512,7 @@
 
         {#if targetWaiting && !targetRect}
           <p role="status" data-tour-target-waiting class="font-mono text-[11px] text-[#1A5A96]">
-            Synchronizing highlight target in view…
+            Scrolling to highlighted panel…
           </p>
         {/if}
 
@@ -599,7 +599,7 @@
               <ShieldCheck size={16} class="shrink-0 text-[#2E8540]" />
               <span>
                 Active project: <strong class="font-mono text-[#003366]">{activeProject}</strong>.
-                Walkthroughs navigate read-only views safely without mutating user databases.
+                Walkthroughs navigate read-only views safely without changing user databases.
               </span>
             </div>
             {#if activeProject !== 'Sample' && onresetsample}
@@ -609,7 +609,7 @@
                 class="inline-flex items-center gap-1 rounded border border-[#003366] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#003366] hover:bg-[#EBF1F6]"
                 onclick={() => void onresetsample()}
               >
-                <RotateCcw size={12} /> Switch to Sample.db
+                <RotateCcw size={12} /> Switch to Sample
               </button>
             {/if}
           </div>

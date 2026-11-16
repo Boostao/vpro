@@ -202,10 +202,10 @@ export function validateLumpRowDraft(lumpCode: string, sppCode: string): {
   }
   // JavaScript string .length measures UTF-16 code units directly
   if (cleanLump.length > 50) {
-    return { valid: false, lumpCode: cleanLump, sppCode: cleanSpp, error: 'LumpCode must be at most 50 UTF-16 code units.' };
+    return { valid: false, lumpCode: cleanLump, sppCode: cleanSpp, error: 'LumpCode must be at most 50 characters.' };
   }
   if (cleanSpp.length > 8) {
-    return { valid: false, lumpCode: cleanLump, sppCode: cleanSpp, error: 'SppCode must be at most 8 UTF-16 code units.' };
+    return { valid: false, lumpCode: cleanLump, sppCode: cleanSpp, error: 'SppCode must be at most 8 characters.' };
   }
   if (cleanLump === cleanSpp) {
     return { valid: false, lumpCode: cleanLump, sppCode: cleanSpp, error: 'LumpCode and SppCode must not be identical.' };

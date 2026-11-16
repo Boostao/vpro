@@ -292,13 +292,13 @@ export function buildMapLibreGeospatialStyle(
 }
 
 export function summarizeArchiveResolution(payload: SpatialWorkbenchPayload | null): string {
-  if (!payload?.manifest?.archives) return 'Resolving local PMTiles archives...';
+  if (!payload?.manifest?.archives) return 'Resolving local map layers...';
   const bgc = payload.manifest.archives['bc-bgc-v13.pmtiles'];
-  if (!bgc) return 'Embedded Overview PMTiles (z3..6)';
+  if (!bgc) return 'Built-in Overview Map (z3..6)';
   if (bgc.fullResolution) {
-    return `Full-Res Provincial PMTiles (z${bgc.minZoom}..${bgc.maxZoom})`;
+    return `Full-Resolution Provincial Map (z${bgc.minZoom}..${bgc.maxZoom})`;
   }
-  return `Embedded Overview Fallback (z${bgc.minZoom}..${bgc.maxZoom})`;
+  return `Built-in Overview Fallback (z${bgc.minZoom}..${bgc.maxZoom})`;
 }
 
 export function classifyWMSMapError(
@@ -336,7 +336,7 @@ export function classifyWMSMapError(
     errMsg.toLowerCase().includes('networkerror') ||
     errMsg.toLowerCase().includes('load tile')
   ) {
-    return 'BC OpenMaps WMS tile request failed (offline or remote service unreachable). Offline PMTiles vector layers remain active.';
+    return 'BC OpenMaps WMS tile request failed (offline or remote service unreachable). Offline map vector layers remain active.';
   }
   return null;
 }

@@ -402,7 +402,7 @@ export function parseAndValidateCellInput(
     if (col.maxUtf16 > 0 && rawInput.length > col.maxUtf16) {
       return {
         cell: null,
-        error: `${col.name} exceeds ${col.maxUtf16} UTF-16 code units (got ${rawInput.length}).`,
+        error: `${col.name} exceeds ${col.maxUtf16} characters (got ${rawInput.length}).`,
       };
     }
     if (
@@ -446,18 +446,18 @@ export function parseAndValidateCellInput(
     const trimmed = rawInput.trim();
     const num = Number(trimmed);
     if (trimmed === '' || !Number.isFinite(num) || Math.abs(num) > MAX_FLOAT32) {
-      return { cell: null, error: `${col.name} requires a finite IEEE-754 Single number.` };
+      return { cell: null, error: `${col.name} requires a valid numeric value.` };
     }
     // Narrow float64 -> float32 via Math.fround BEFORE checking `< 100`!
     const narrowed = Math.fround(num);
     if (!Number.isFinite(narrowed)) {
-      return { cell: null, error: `${col.name} overflows IEEE-754 Single.` };
+      return { cell: null, error: `${col.name} number is too large.` };
     }
     if (col.isCoverSingle) {
       if (narrowed >= 100) {
         return {
           cell: null,
-          error: `${col.name} must narrow to IEEE-754 float32 < 100 (or blank).`,
+          error: `${col.name} percent cover must be under 100 (or blank).`,
         };
       }
       if (narrowed < 0) {

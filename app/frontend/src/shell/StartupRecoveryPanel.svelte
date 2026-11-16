@@ -102,9 +102,8 @@
   </div>
   <p class="text-sm">{startupFailure.message}</p>
   <p class="text-xs text-slate-600">
-    Saved preferences in <code>{startupFailure.configPath}</code> and existing databases have not been modified yet.
-    Choose an option below — VPro will automatically back up your current <code>config.yml</code> to
-    <code>config.backup-&lt;timestamp&gt;.yml</code> before updating settings.
+    Your saved preferences in <code>{startupFailure.configPath}</code> and existing project files have not been modified yet.
+    Choose an option below — VPro will automatically save a backup copy of your current settings before updating paths.
   </p>
   {#if recoveryError}
     <p role="alert" class="error text-xs" data-startup-recovery-error>{recoveryError}</p>
@@ -113,7 +112,7 @@
   <div class="p-3.5 border rounded bg-slate-50 space-y-2">
     <h2 class="text-sm font-semibold">Option 1: Open built-in Sample project</h2>
     <p class="text-xs text-slate-700">
-      Backs up your prior <code>config.yml</code> and opens VPro immediately with the built-in <strong>Sample</strong> project.
+      Backs up your current settings and opens VPro immediately with the built-in <strong>Sample</strong> project.
       None of your existing <code>.db</code> project files are deleted or altered.
     </p>
     <button
@@ -123,7 +122,7 @@
       class="px-3.5 py-1.5 rounded bg-[#003366] text-white text-xs font-semibold hover:bg-[#002244] disabled:opacity-50"
       onclick={() => void fallbackStartupToSample()}
     >
-      {recoveryWorking ? 'Recovering...' : 'Fall back to Sample project (backup config.yml)'}
+      {recoveryWorking ? 'Recovering...' : 'Switch to Sample project (back up settings)'}
     </button>
   </div>
 

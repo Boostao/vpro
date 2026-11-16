@@ -80,7 +80,7 @@
 
 {#if bootstrapResult}
   <div class="rounded border border-slate-200 bg-slate-50 p-2.5 text-xs">
-    Schema v<span class="font-mono font-bold">{bootstrapResult.schemaVersion}</span> verified ({bootstrapResult.schemasVerified.join(', ')}) &middot; PostGIS: {bootstrapResult.postgisEnabled ? 'Enabled' : 'No'} &middot; pgcrypto: {bootstrapResult.pgcryptoEnabled ? 'Enabled' : 'No'} &middot; Role Grants: {bootstrapResult.roleGrantsApplied ? 'Applied' : 'Skipped'}
+    Schema v<span class="font-mono font-bold">{bootstrapResult.schemaVersion}</span> verified ({bootstrapResult.schemasVerified.join(', ')}) &middot; Role Grants: {bootstrapResult.roleGrantsApplied ? 'Applied' : 'Skipped'}
   </div>
 {/if}
 
@@ -151,12 +151,12 @@
 
   <details class="rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-3 text-xs">
     <summary class="cursor-pointer font-semibold text-[#003366] select-none">
-      Seed Baseline VP08 .db into BECMaster
+      Seed Baseline VPro Project (.db) into BECMaster
     </summary>
     <div class="mt-3 space-y-2">
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div class="space-y-1">
-          <label class="block text-[11px] font-semibold text-slate-700" for="seed-db-path">Source VP08 .db Path (required)</label>
+          <label class="block text-[11px] font-semibold text-slate-700" for="seed-db-path">Source VPro Project (.db) Path (required)</label>
           <input id="seed-db-path" type="text" class="w-full rounded border border-slate-300 p-1.5 font-mono text-xs" bind:value={seedSourceDbPath} disabled={busy || operationHeld} />
         </div>
         <div class="space-y-1">
@@ -197,7 +197,7 @@
             notes: seedNotes,
           })}
       >
-        Seed Baseline VP08 .db
+        Seed Baseline VPro Project (.db)
       </button>
       {#if seedBaselineResult}
         <p class="text-[11px] text-slate-700">

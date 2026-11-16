@@ -61,10 +61,10 @@
       </dl>
 
       {#if suggestionBusy}
-        <p class="wb-muted" role="status">Querying local PMTiles v3 Hilbert MVT index...</p>
+        <p class="wb-muted" role="status">Looking up local BGC &amp; boundary overlay...</p>
       {:else if selectedSuggestion}
         <div class="wb-suggestion-box">
-          <strong>Auto-1 PMTiles Attribution ({selectedSuggestion.bgcSource || 'overview'} z{selectedSuggestion.bgcZoom}):</strong>
+          <strong>Map Overlay Suggestion ({selectedSuggestion.bgcSource || 'overview'} z{selectedSuggestion.bgcZoom}):</strong>
           <div>BGC: {selectedSuggestion.gisBgc} ({selectedSuggestion.zoneName || 'BC'})</div>
           <div>NAD83 UTM Zone {selectedSuggestion.utmZone}: {selectedSuggestion.utmEasting.toFixed(1)} E, {selectedSuggestion.utmNorthing.toFixed(1)} N</div>
           <div>BCGS 1:20k Sheet: {selectedSuggestion.ntsMapSheet} | District: {selectedSuggestion.fsRegionDistrict}</div>

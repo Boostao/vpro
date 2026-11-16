@@ -40,7 +40,7 @@
 <div class="wb-panel-body">
   <div class="wb-card">
     <h2>Polygon / Lasso AOI -&gt; Site Unit (*_SU)</h2>
-    <p class="wb-muted">Click vertices directly on the MapLibre canvas or capture the current viewport extent to select plots spatially.</p>
+    <p class="wb-muted">Click vertices directly on the map or capture the current map view extent to select plots spatially.</p>
     <div class="wb-btn-row">
       <button
         type="button"
@@ -51,7 +51,7 @@
         {aoiDrawMode ? 'Finish Drawing AOI' : 'Draw Polygon on Map'}
       </button>
       <button type="button" class="wb-btn" onclick={onSeedViewport}>
-        Use Viewport BBOX
+        Use Current Map View
       </button>
       <button type="button" class="wb-btn" onclick={onClear} disabled={aoiVerticesCount === 0}>
         Clear ({aoiVerticesCount} pts)
@@ -81,7 +81,7 @@
           Update Active SU ({su && su !== 'None' ? `${su}_SU` : 'None selected'})
         </option>
         <option value="create_project_su">Create New *_SU Table in Project ({project}.db)</option>
-        <option value="create_su_file">Create New Standalone SQLite SU File (.db)</option>
+        <option value="create_su_file">Create New Site Unit File (.db)</option>
       </select>
 
       {#if aoiTargetMode !== 'update_active'}
@@ -90,7 +90,7 @@
       {/if}
 
       {#if aoiTargetMode === 'create_su_file'}
-        <label for="aoi-su-filepath">New SQLite File Path (.db)</label>
+        <label for="aoi-su-filepath">New Site Unit File Path (.db)</label>
         <input id="aoi-su-filepath" class="wb-input" bind:value={aoiFilePath} placeholder="/path/to/NewAOI_SU.db" />
       {/if}
 

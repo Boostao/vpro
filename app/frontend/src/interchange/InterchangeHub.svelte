@@ -521,7 +521,7 @@
   {#if section === 'venus'}
     <div class="hub-card">
       <h3>VENUS 5.0 (.mdb &amp; .xml) Project Importer</h3>
-      <p class="desc">Pivots normalized VENUS 5.0 vegetation layers, site/soil attributes, and organic/mineral horizons into a verified VP08 SQLite project.</p>
+      <p class="desc">Pivots normalized VENUS 5.0 vegetation layers, site/soil attributes, and organic/mineral horizons into a verified VPro project (.db).</p>
       <div class="form-row">
         <label class="grow">
           <span>VENUS Source File (.mdb, .accdb, or .xml)</span>
@@ -551,7 +551,7 @@
               </select>
             </label>
             <label>
-              <span>Target VP08 Project Name</span>
+              <span>Target VPro Project Name</span>
               <input type="text" bind:value={venusTargetProject} disabled={busy || operationHeld} />
             </label>
             <label class="grow">
@@ -563,7 +563,7 @@
               <span>Open after import</span>
             </label>
             <button type="button" class="btn-primary" disabled={busy || operationHeld} onclick={runVenusImport}>
-              Import into VP08
+              Import into VPro
             </button>
           </div>
         </div>
@@ -626,7 +626,7 @@
       </div>
 
       <div class="hub-card">
-        <h3>Import TurboVeg (.sqlite or &lt;Plot_package&gt; .xml) into VP08</h3>
+        <h3>Import TurboVeg (.sqlite or &lt;Plot_package&gt; .xml) into VPro</h3>
         <div class="form-stack">
           <label>
             <span>Source TurboVeg File (.sqlite or .xml)</span>
@@ -644,14 +644,14 @@
             </select>
           </label>
           <label>
-            <span>Target VP08 Project Name</span>
+            <span>Target VPro Project Name</span>
             <input type="text" bind:value={tvImportTarget} placeholder="e.g. Phytosoc2026" disabled={busy || operationHeld} />
           </label>
           <label>
             <span>Destination .db Path (optional)</span>
             <div class="input-with-browse">
               <input type="text" class="grow" bind:value={tvImportDestPath} placeholder="Defaults to projects/<Target>.db" disabled={busy || operationHeld} />
-              <button type="button" class="btn-secondary" data-save-tv-dest disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Choose VP08 Project Destination', `${tvImportTarget.trim() || 'project'}.db`, [{ DisplayName: 'VPro SQLite (*.db)', Pattern: '*.db' }], (p) => { tvImportDestPath = p; })}>Save As...</button>
+              <button type="button" class="btn-secondary" data-save-tv-dest disabled={busy || operationHeld} onclick={() => pickFilePath('save', 'Choose VPro Project Destination', `${tvImportTarget.trim() || 'project'}.db`, [{ DisplayName: 'VPro Project (*.db)', Pattern: '*.db' }], (p) => { tvImportDestPath = p; })}>Save As...</button>
             </div>
           </label>
           <label class="check-inline">
@@ -668,7 +668,7 @@
         </div>
 
         <details class="xml-check-box">
-          <summary>Pre-validate pasted XML snippet (chunked non-blocking)</summary>
+          <summary>Pre-validate pasted XML snippet</summary>
           <textarea bind:value={tvXmlSnippet} rows={3} placeholder="<Plot_package><Plots><Plot releve_nr=&quot;1&quot;>..." disabled={busy || operationHeld}></textarea>
           <button type="button" class="btn-secondary" disabled={busy || operationHeld} onclick={checkTurboVegXmlSnippet}>
             Validate XML Snippet
@@ -824,7 +824,7 @@
 
       <div class="hub-card">
         <h3>Native R Serialization Format v2 (.rds) Export</h3>
-        <p class="desc">Writes a pure-Go gzipped RDX2 list of typed data.frames (<code>env</code>, <code>admin</code>, <code>veg_long</code>, <code>humus</code>, <code>mineral</code>, <code>su</code>, <code>metadata</code>) readable directly via <code>readRDS()</code> with zero R runtime dependency.</p>
+        <p class="desc">Exports project tables (<code>env</code>, <code>admin</code>, <code>veg_long</code>, <code>humus</code>, <code>mineral</code>, <code>su</code>, <code>metadata</code>) as an .rds file ready for <code>readRDS()</code> in R, without requiring R to be installed.</p>
         <div class="form-stack">
           <label>
             <span>Destination .rds Path</span>

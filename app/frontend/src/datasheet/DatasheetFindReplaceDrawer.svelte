@@ -61,11 +61,11 @@
       <span>Whole cell</span>
     </label>
     <button type="button" class="vpro-btn-secondary" disabled={findBusy} onclick={onRunPreview}>
-      {findBusy ? 'Previewing...' : 'Dry-Run Preview'}
+      {findBusy ? 'Previewing...' : 'Preview Matches'}
     </button>
     {#if findPreview && findPreview.validCount > 0}
       <button type="button" class="vpro-btn-primary" disabled={saving} onclick={onApplyValid}>
-        Commit {findPreview.validCount} Valid Replacement(s)
+        Apply {findPreview.validCount} Valid Replacement(s)
       </button>
     {/if}
   </div>

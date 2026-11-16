@@ -388,7 +388,7 @@
       <p class="text-xs text-slate-800">
         Delete Horizon <span class="font-mono font-semibold">{twoPageSoilStoredText(view.original, row.rowId, 'Horizon')}</span>
         (ID <span class="font-mono font-semibold">{twoPageSoilStoredText(view.original, row.rowId, 'ID')}</span>) from plot <span class="font-mono">{plot}</span>?
-        Its child ID remains permanently reserved in <span class="font-mono">__VPRO_ChildIdentity</span> and full provenance is recorded in <span class="font-mono">{project}_Audit</span> and <span class="font-mono">__VPRO_TwoPageSoilHistory</span>.
+        Its child ID remains permanently reserved and full history is recorded in <span class="font-mono">{project}_Audit</span>.
       </p>
       <div class="flex flex-wrap gap-2">
         <button type="button" data-soil-confirm-delete-btn disabled={deleteRestoreBusy || view.busy}

@@ -66,7 +66,7 @@ test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and st
       activeProject: 'Sample',
       plotCount: 42,
       buildMode: 'dev',
-      appVersion: '2.0.1-dev',
+      appVersion: '2.0.0-dev',
       gitCommit: '30e86f6abcdef',
       releaseChannel: 'stable',
       onnavigate: () => {},
@@ -74,7 +74,7 @@ test('HomeWorkspaceHub compiles cleanly with BC Gov styling, zero emojis, and st
     },
   }).body;
   assert.match(devHtml, /data-home-tier-banner="dev"/);
-  assert.match(devHtml, /DEV BUILD · v2\.0\.1-dev · 30e86f6/);
+  assert.match(devHtml, /DEV BUILD · v2\.0\.0-dev · 30e86f6/);
 });
 
 test('App and Navigation embed HomeWorkspaceHub and clean BEC workflow terminology', () => {

@@ -52,7 +52,7 @@
         <label class="block text-xs font-semibold text-slate-700" for="snapshot-export-format">Optional Archive Export</label>
         <select id="snapshot-export-format" class="w-full rounded border border-slate-300 p-2 text-xs" bind:value={snapshotExportFormat} disabled={busy || operationHeld}>
           <option value="">Cloud Snapshot Only</option>
-          <option value="sqlite">SQLite VP08 (.db)</option>
+          <option value="sqlite">VPro Project (.db)</option>
           <option value="rds">R Serialized Dataset (.rds)</option>
           <option value="gpkg">OGC GeoPackage (.gpkg)</option>
         </select>

@@ -675,12 +675,12 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         const nextState = await defaultHelpPort.resetWorkspaceToSample(contextId);
         cancelAllReads(); projectState.set(nextState); profileNavigation = null; plotProfilePanel?.clearCachedSources();
         selected = null; page = null; hierarchyNodes = []; editorPlotNumber = undefined; diagnosticsDraft = null; resetSampleConfirmOpen = false; view = 'plots';
-        resetSampleNotice = 'Workspace reset to pristine Sample.db (Project: Sample, SU: Sample, Hierarchy: Sample). User project .db files were preserved.';
+        resetSampleNotice = 'Workspace reset to the built-in Sample project (Project: Sample, SU: Sample, Hierarchy: Sample). Your own project files were preserved.';
         notifications.push({
           severity: 'success',
           category: 'general',
           source: 'Workspace',
-          title: 'Workspace reset to Sample.db',
+          title: 'Workspace reset to Sample project',
           message: 'User project .db files were preserved.',
         });
         await loadPlots(0);
@@ -915,7 +915,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     }
     const stopCloseEvents = Events.On(VproCloseRequest, (event) => {
       const requestId: unknown = event.data;
-      if (typeof requestId !== 'string' || !requestId) { error = 'Invalid native window close request; VPRO remains open.'; return; }
+      if (typeof requestId !== 'string' || !requestId) { error = 'Could not complete window close request; VPRO remains open.'; return; }
       void handleCloseRequest(requestId);
     });
     void LifecycleService.GetPendingCloseRequest().then((requestId) => { if (requestId) void handleCloseRequest(requestId); })
@@ -1141,7 +1141,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
               </form>
               {#if plotFindError}<p role="alert" class="mt-2 text-[#D8292F]">{plotFindError}</p>{/if}
               {#if plotFindResult}
-                <p role="status" class="mt-2">Found literal plot {JSON.stringify(plotFindResult.plot.plotNumber)} in the current recordset.</p>
+                <p role="status" class="mt-2">Found plot {JSON.stringify(plotFindResult.plot.plotNumber)} in the current recordset.</p>
                 <button type="button" class="mt-2 px-3 py-1 border rounded disabled:opacity-50"
                   disabled={busy || editorBusy || transitionWorking || pendingTransition !== null || plotFindResult.contextId !== $projectState?.contextId || plotFindResult.plot.plotNumber === editorPlotNumber}
                   onclick={() => void openFoundPlot()}>Open found plot</button>
@@ -1239,7 +1239,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {#if error}<p class="error" role="alert">{error}</p>{/if}
         {#key $projectState.contextId}
           {#await import('./classification/LumpEditor.svelte')}
-            <p role="status" class="p-4 text-sm">Loading Combine Species &amp; LumpSpec Editor...</p>
+            <p role="status" class="p-4 text-sm">Loading Combine Species...</p>
           {:then { default: LumpEditor }}
             <LumpEditor contextId={$projectState.contextId ?? ''} operationHeld={busy || transitionWorking || pendingTransition !== null || !!closeRequest}
               onBusyChange={(value) => { localEditorBusy = value; }} />
@@ -1249,7 +1249,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {#if error}<p class="error" role="alert">{error}</p>{/if}
         {#key $projectState.contextId}
           {#await import('./diagnostics/ClassificationSynthesisView.svelte')}
-            <p role="status" class="p-4 text-sm">Loading BEC Diagnostic &amp; Pairwise Synthesis Workbench...</p>
+            <p role="status" class="p-4 text-sm">Loading BEC Diagnostic &amp; Pairwise Synthesis...</p>
           {:then { default: ClassificationSynthesisView }}
             <ClassificationSynthesisView contextId={$projectState.contextId ?? ''} project={$projectState.activeProject} su={$projectState.activeSU}
               onBusyChange={(value) => { localEditorBusy = value; }}
@@ -1260,7 +1260,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {#if error}<p class="error" role="alert">{error}</p>{/if}
         {#key $projectState.contextId}
           {#await import('./rsidecar/RSidecarWorkbench.svelte')}
-            <p role="status" class="p-4 text-sm">Loading R Sidecar, climr &amp; Quarto Workbench...</p>
+            <p role="status" class="p-4 text-sm">Loading R Companion &amp; Guides...</p>
           {:then { default: RSidecarWorkbench }}
             <RSidecarWorkbench contextId={$projectState.contextId ?? ''} activeProject={$projectState.activeProject} activeSu={$projectState.activeSU}
               operationHeld={busy || transitionWorking || pendingTransition !== null || !!closeRequest}
@@ -1271,7 +1271,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {#if error}<p class="error" role="alert">{error}</p>{/if}
         {#key $projectState.contextId}
           {#await import('./spatial/GeospatialWorkbench.svelte')}
-            <p role="status" class="p-4 text-sm">Loading 3D Geospatial Workbench...</p>
+            <p role="status" class="p-4 text-sm">Loading 3D Map...</p>
           {:then { default: GeospatialWorkbench }}
             <GeospatialWorkbench contextId={$projectState.contextId ?? ''} project={$projectState.activeProject} su={$projectState.activeSU}
               onBusyChange={(value) => { localEditorBusy = value; }} onContextChanged={async () => { await refresh(); }}

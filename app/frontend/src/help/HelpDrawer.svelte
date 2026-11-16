@@ -619,7 +619,7 @@
             <div class="flex items-center justify-between gap-2 rounded border border-[#FCBA19] bg-amber-50/50 p-3">
               <div>
                 <div class="text-xs font-bold text-[#003366]">Coming from Microsoft Access VPro 64?</div>
-                <div class="text-[11px] text-slate-700">Launch the 4 interactive spotlight walkthroughs on Sample.db.</div>
+                <div class="text-[11px] text-slate-700">Launch the 4 interactive spotlight walkthroughs on the Sample project.</div>
               </div>
               <button
                 type="button"
@@ -633,7 +633,7 @@
 
           <div>
             <label for="help-guide-selector" class="block text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-              Workflow &amp; Architecture Guides
+              Workflow &amp; User Guides
             </label>
             <select
               id="help-guide-selector"

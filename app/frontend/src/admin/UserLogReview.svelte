@@ -47,7 +47,7 @@
 <section class="user-log" data-user-log-review aria-label="Saved VPro user log">
   <h1>VPro User Log</h1>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
-  <p>Saved Access log from this context's VPro64 support database, not a list of live Wails users.
+  <p>Saved Access log from this context's VPro64 support database, not a list of currently active desktop sessions.
     Read-only: no login/logout recording, editing or deletion.</p>
   <div class="actions">
     <label for="user-log-mode">Show

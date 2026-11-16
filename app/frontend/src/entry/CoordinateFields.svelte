@@ -73,7 +73,7 @@
       }
 
       if (lat === null || lon === null) {
-        throw new Error('Enter Latitude/Longitude or NAD83 UTM Zone/Easting/Northing before running Auto-1 attribution.');
+        throw new Error('Enter Latitude/Longitude or NAD83 UTM Zone/Easting/Northing before running map lookup.');
       }
 
       const suggestion = await SpatialService.SuggestSpatialAttributes(lat, lon);
