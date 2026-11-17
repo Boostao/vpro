@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { notifications } from '../shell/notificationService.svelte';
   import { ReadRequests } from '../shared/readRequests';
   import { longVegetationQualityNullFields, type LongVegetationQualityNullPreferencesSession, type LongVegetationQualityNullPreferenceValues } from './longVegetationQualityNullPreferences';
 
@@ -16,7 +17,51 @@
   let error = $state('');
   const reads = new ReadRequests();
   let generation = 0;
-  const unsubscribe = untrack(() => preferences.subscribe(() => { view = preferences.view(); }));
+  let notifiedReceipts = 0;
+  let lastViewError = '';
+  function syncPreferenceNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedReceipts) notifiedReceipts = 0;
+    const ctxTag = typeof contextId === 'string' && contextId ? contextId : undefined;
+    for (let i = notifiedReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Long Vegetation quality Include Nulls saved', receipt.outcome.changed ? 'Saved quality Include Nulls flags.' : 'No quality Include Nulls changes.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Long Vegetation quality Include Nulls saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Long Vegetation quality Include Nulls save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Long Vegetation quality Include Nulls unchanged', 'No quality Include Nulls changes were needed.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedReceipts = receipts.length;
+    const viewErr = view.error ?? '';
+    if (viewErr && viewErr !== lastViewError) {
+      notifications.error('Long Vegetation quality Include Nulls preference failed', viewErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastViewError = viewErr;
+  }
+  const unsubscribe = untrack(() => preferences.subscribe(() => {
+    view = preferences.view();
+    syncPreferenceNotifications();
+  }));
+  syncPreferenceNotifications();
   function cancel() {
     generation++; reads.cancelAll(); preferences.cancelLoad(); busy = false; onReadBusyChange(false);
   }
@@ -28,8 +73,17 @@
       const value = await reads.track(VegetationReportService.GetLongVegetationQualityNullPreferences(contextId));
       if (request !== generation) return;
       preferences.applyLoaded(value, token);
+      if (typeof syncPreferenceNotifications === 'function') syncPreferenceNotifications();
     } catch (cause) {
-      if (request === generation) error = `Saved quality Include Nulls flags unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved quality Include Nulls flags unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation quality Include Nulls load failed', error, {
+            category: 'reports', source: 'Long Vegetation',
+            contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; onReadBusyChange(false); }
     }
@@ -39,8 +93,34 @@
     cancel(); const request = generation; error = '';
     try {
       await preferences.save(value => VegetationReportService.SaveLongVegetationQualityNullPreferences(contextId, JSON.stringify(value)));
+      if (typeof syncPreferenceNotifications === 'function') syncPreferenceNotifications();
+      else if (typeof notifications !== 'undefined') {
+        const settled = preferences.view();
+        const latest = settled.receipts?.[settled.receipts.length - 1];
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Long Vegetation quality Include Nulls saved', latest.outcome.changed ? 'Saved quality Include Nulls flags.' : 'No quality Include Nulls changes.', {
+              category: 'reports', source: 'Long Vegetation',
+              contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Long Vegetation quality Include Nulls save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation',
+              contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+            });
+          }
+        }
+      }
     } catch (cause) {
-      if (request === generation) error = String(cause);
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation quality Include Nulls save failed', error, {
+            category: 'reports', source: 'Long Vegetation',
+            contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+          });
+        }
+      }
     }
   }
   function edit(key: keyof LongVegetationQualityNullPreferenceValues, checked: boolean) {
@@ -51,16 +131,13 @@
 </script>
 
 <section class="quality-nulls" aria-label="Saved Long Vegetation Data Quality Include Nulls" data-long-vegetation-quality-nulls>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if view.draftError}<p class="error" role="alert">{view.draftError}</p>{/if}
-  {#if view.error}<p class="error" role="alert">{view.error}</p>{/if}
-  {#if view.busy}<p role="status">Saving quality Include Nulls flags; Save cannot be cancelled.</p>{/if}
   {#each view.receipts as receipt}
-    <p data-long-vegetation-quality-null-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-      {#if receipt.kind === 'known'}Preference receipt: changed {String(receipt.outcome.changed)};
-        committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}
-      {:else}Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}{/if}
-    </p>
+    {#if receipt.kind !== 'known'}
+      <p data-long-vegetation-quality-null-receipt role="alert">
+        Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
+      </p>
+    {/if}
   {/each}
   <fieldset>
     <legend>Data Quality - Include Nulls</legend>
@@ -88,7 +165,7 @@
       <button data-long-vegetation-quality-null-acknowledge disabled={busy || mutationHeld}
         onclick={() => preferences.acknowledge()}>Acknowledge quality Include Nulls outcome</button>
     {/if}
-    {#if busy}<button onclick={cancel}>Cancel quality Include Nulls read</button><p role="status">Reading owned quality Include Nulls flags...</p>{/if}
+    {#if busy}<button onclick={cancel}>Cancel quality Include Nulls read</button>{/if}
   </div>
   <p class="guidance">Load saved flags before editing; unloaded disabled checkboxes do not represent saved values.
     Drafts do not change report output. Save explicitly, acknowledge and reload report options.

@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { PictureService } from '../../bindings/github.com/boostao/vpro/app';
@@ -92,7 +96,16 @@
       }
       review = refreshed; reviewKey = key; selected = receipt.rowId;
     } catch (cause) {
-      if (request === generation && key === ownerKey) error = `Picture creation committed; linked-list refresh failed and receipt is retained: ${String(cause)}`;
+      if (request === generation && key === ownerKey) {
+        error = `Picture creation committed; linked-list refresh failed and receipt is retained: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Picture list refresh failed', error, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; onBusyChange(false); }
     }
@@ -131,7 +144,16 @@
       }
       review = refreshed; reviewKey = key;
     } catch (cause) {
-      if (request === generation && key === ownerKey) error = `Picture lifecycle committed; linked-list refresh failed and irreversible receipt is retained: ${String(cause)}`;
+      if (request === generation && key === ownerKey) {
+        error = `Picture lifecycle committed; linked-list refresh failed and irreversible receipt is retained: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Picture list refresh failed', error, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; onBusyChange(false); }
     }
@@ -149,13 +171,31 @@
   async function reviewDeletion() {
     if (!lifecycleSession || !row || !deletionEnabled || view !== 'manager' || disabled || busy || metadataPending || lifecyclePending) return;
     try { await lifecycleSession.reviewDeletion(row.rowId); error = ''; }
-    catch (cause) { error = `Picture deletion review unavailable: ${String(cause)}`; }
+    catch (cause) {
+      error = `Picture deletion review unavailable: ${String(cause)}`;
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture deletion review unavailable', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+        });
+      }
+    }
   }
 
   function editMetadata() {
     if (!metadataSession || !currentReview || !row || disabled || busy || metadataPending || lifecyclePending) return;
     try { metadataSession.select(currentReview, row.rowId); error = ''; }
-    catch (cause) { error = `Picture metadata editing unavailable: ${String(cause)}`; }
+    catch (cause) {
+      error = `Picture metadata editing unavailable: ${String(cause)}`;
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture metadata editing unavailable', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+        });
+      }
+    }
   }
 
   function cancel() {
@@ -177,14 +217,43 @@
       reviewKey = key;
       selected = review.records.rows[0]?.rowId ?? '';
     } catch (cause) {
-      if (request === generation && key === ownerKey) error = `Linked pictures unavailable; no files or data changed: ${String(cause)}`;
+      if (request === generation && key === ownerKey) {
+        error = `Linked pictures unavailable; no files or data changed: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Linked pictures unavailable', error, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; onBusyChange(false); }
     }
   }
   function select(value: string) {
-    if (metadataPending) { error = 'Finish or discard the retained picture metadata draft before changing selection.'; return; }
-    if (lifecyclePending) { error = 'Finish the retained picture lifecycle review or resolve/acknowledge its receipt before changing selection.'; return; }
+    if (metadataPending) {
+      error = 'Finish or discard the retained picture metadata draft before changing selection.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture selection blocked', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+        });
+      }
+      return;
+    }
+    if (lifecyclePending) {
+      error = 'Finish the retained picture lifecycle review or resolve/acknowledge its receipt before changing selection.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture selection blocked', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+        });
+      }
+      return;
+    }
     cancel();
     selected = value; image = null; error = ''; viewerOpen = false;
   }
@@ -200,7 +269,16 @@
       if (request !== generation || key !== ownerKey || selected !== original.rowId) return;
       image = pictureImageFromWire(value, owner, original.rowId);
     } catch (cause) {
-      if (request === generation && key === ownerKey) error = `Picture preview unavailable; metadata and original files retained: ${String(cause)}`;
+      if (request === generation && key === ownerKey) {
+        error = `Picture preview unavailable; metadata and original files retained: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Picture preview unavailable', error, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; onBusyChange(false); }
     }
@@ -210,11 +288,25 @@
     if (event.currentTarget.naturalWidth !== currentImage.width || event.currentTarget.naturalHeight !== currentImage.height) {
       error = 'Displayed picture dimensions disagree with the owned decoded image; reload before viewing.';
       image = null; viewerOpen = false;
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Picture preview mismatch', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+        });
+      }
     }
   }
   function displayError() {
     error = 'The owned picture bytes could not be displayed; metadata and files are unchanged.';
     image = null; viewerOpen = false;
+    if (typeof notifications !== 'undefined') {
+      notifications.error('Picture preview unavailable', error, {
+        category: 'entry',
+        source: 'Plot Pictures',
+        contextTag: plotNumber ? `Plot ${plotNumber}` : project || undefined,
+      });
+    }
   }
   $effect(() => {
     if (viewerOpen && currentImage && viewer && !viewer.open) viewer.showModal();
@@ -225,10 +317,9 @@
 
 <section class="pictures" data-picture-panel aria-label="Linked plot pictures">
   <h3>Pictures</h3>
-  {#if error}<p role="alert" class="error">{error}</p>{/if}
   <div class="actions">
     <button onclick={load} disabled={disabled || busy || metadataPending || lifecyclePending}>Load linked pictures</button>
-    {#if busy}<button onclick={cancel}>Cancel picture read</button><span role="status">Reading owned pictures…</span>{/if}
+    {#if busy}<button onclick={cancel}>Cancel picture read</button>{/if}
   </div>
   {#if currentReview}
     {#if currentReview.records.rows.length === 0}
@@ -291,7 +382,6 @@
   dd { white-space: pre-wrap; overflow-wrap: anywhere; }
   .preview { width: fit-content; max-width: 100%; }
   img { max-width: 100%; height: auto; }
-  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; overflow-wrap: anywhere; border-radius: .25rem; }
   .guidance { font-size: .8rem; color: #474543; }
   .viewer::backdrop { background: rgba(0, 34, 68, 0.55); }
   .viewer { background: #FFFFFF; padding: 1rem; max-width: calc(100% - 2rem); max-height: calc(100% - 2rem); overflow: auto; border: 1px solid #D8D8D8; border-radius: .25rem; }

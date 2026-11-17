@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { notifications } from '../shell/notificationService.svelte';
   import { ReadRequests } from '../shared/readRequests';
   import type { LongVegetationEnforcementPreferencesSession } from './longVegetationEnforcementPreferences';
 
@@ -17,9 +18,59 @@
   let error = $state('');
   const reads = new ReadRequests();
   let generation = 0;
+  let notifiedReceipts = 0;
+  let lastViewError = '';
+  let lastPrintersError = '';
+  function syncPreferenceNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedReceipts) notifiedReceipts = 0;
+    const ctxTag = typeof contextId === 'string' && contextId ? contextId : undefined;
+    for (let i = notifiedReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Long Vegetation enforcement preferences saved', receipt.outcome.changed ? 'Saved enforcement preferences.' : 'No enforcement changes.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Long Vegetation enforcement preferences saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Long Vegetation enforcement save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Long Vegetation enforcement preferences unchanged', 'No enforcement preference changes were needed.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedReceipts = receipts.length;
+    const viewErr = view.error ?? '';
+    if (viewErr && viewErr !== lastViewError) {
+      notifications.error('Long Vegetation enforcement preference failed', viewErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastViewError = viewErr;
+    const printersErr = printers.error ?? '';
+    if (printersErr && printersErr !== lastPrintersError) {
+      notifications.error('Long Vegetation printer observation failed', printersErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastPrintersError = printersErr;
+  }
   const unsubscribe = untrack(() => preferences.subscribe(() => {
     view = preferences.view(); printers = preferences.printerView();
+    syncPreferenceNotifications();
   }));
+  syncPreferenceNotifications();
   function cancel() {
     generation++; reads.cancelAll(); preferences.cancelLoad(); busy = false; onReadBusyChange(false);
   }
@@ -31,8 +82,17 @@
       const value = await reads.track(VegetationReportService.GetLongVegetationEnforcementPreferences(contextId));
       if (request !== generation) return;
       preferences.applyLoaded(value, token);
+      if (typeof syncPreferenceNotifications === 'function') syncPreferenceNotifications();
     } catch (cause) {
-      if (request === generation) error = `Saved enforcement preferences unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved enforcement preferences unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation enforcement load failed', error, {
+            category: 'reports', source: 'Long Vegetation',
+            contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; onReadBusyChange(false); }
     }
@@ -42,8 +102,34 @@
     cancel(); const request = generation; error = '';
     try {
       await preferences.saveWithPrinters(value => VegetationReportService.SaveLongVegetationEnforcementPreferences(contextId, JSON.stringify(value)));
+      if (typeof syncPreferenceNotifications === 'function') syncPreferenceNotifications();
+      else if (typeof notifications !== 'undefined') {
+        const settled = preferences.view();
+        const latest = settled.receipts?.[settled.receipts.length - 1];
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Long Vegetation enforcement preferences saved', latest.outcome.changed ? 'Saved enforcement preferences.' : 'No enforcement changes.', {
+              category: 'reports', source: 'Long Vegetation',
+              contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Long Vegetation enforcement save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation',
+              contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+            });
+          }
+        }
+      }
     } catch (cause) {
-      if (request === generation) error = String(cause);
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation enforcement save failed', error, {
+            category: 'reports', source: 'Long Vegetation',
+            contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+          });
+        }
+      }
     }
   }
   function edit(raw: boolean) {
@@ -54,17 +140,13 @@
 </script>
 
 <section class="enforcement" aria-label="Saved Long Vegetation enforcement preferences" data-long-vegetation-enforcement>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if view.draftError}<p class="error" role="alert">{view.draftError}</p>{/if}
-  {#if view.error}<p class="error" role="alert">{view.error}</p>{/if}
-  {#if printers.error}<p class="error" role="alert">{printers.error}</p>{/if}
-  {#if view.busy}<p role="status">Saving enforcement preferences; Save cannot be cancelled.</p>{/if}
   {#each view.receipts as receipt}
-    <p data-long-vegetation-enforcement-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-      {#if receipt.kind === 'known'}Preference receipt: changed {String(receipt.outcome.changed)};
-        committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}
-      {:else}Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}{/if}
-    </p>
+    {#if receipt.kind !== 'known'}
+      <p data-long-vegetation-enforcement-receipt role="alert">
+        Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
+      </p>
+    {/if}
   {/each}
   <label for="long-vegetation-enforcement">
     <input id="long-vegetation-enforcement" data-source-control="optEnforceQC" type="checkbox"
@@ -100,7 +182,7 @@
       <button data-long-vegetation-enforcement-acknowledge disabled={busy || mutationHeld}
         onclick={() => preferences.acknowledge()}>Acknowledge enforcement outcome</button>
     {/if}
-    {#if busy}<button onclick={cancel}>Cancel enforcement read</button><p role="status">Reading owned enforcement preferences...</p>{/if}
+    {#if busy}<button onclick={cancel}>Cancel enforcement read</button>{/if}
   </div>
   <p class="guidance">An enforcement edit resets the unit group to Site unit table, including a toggle away and back.
     Undo restores the saved pair; remounting does not reset it. Save explicitly, acknowledge and reload report options.

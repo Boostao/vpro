@@ -31,7 +31,7 @@ async function unknown(target) {
   assert.equal(target.view().blocked, true);
   assert.equal(target.view().outcome, null);
 }
-function host(operation = () => Promise.resolve(review())) {
+function host(operation = () => Promise.resolve(review()), extraValues = {}) {
   const changes = [], calls = [], target = session();
   const context = componentFunctions('PlotLabelPreview.svelte',
     ['cancel', 'load', 'updateBusy', 'publishPDF', 'recoverPDF', 'acknowledgePDF'], {
@@ -50,6 +50,7 @@ function host(operation = () => Promise.resolve(review())) {
         GetPlotLabelRegionalPreview() { throw new Error('regional PDF fallback forbidden'); },
       },
       ContextService: { GetPlot() { throw new Error('legacy PDF fallback forbidden'); } },
+      ...extraValues,
     });
   target.subscribe(() => { context.publication = target.view(); context.actions.updateBusy(); });
   return { context, changes, calls, target };
@@ -228,15 +229,39 @@ test('cancel/owner invalidation discards late PDF review, malformed backend revi
   assert.equal(context.pdfReview, null);
 });
 
-test('PDF export renders distinct portable workflow and retains disabled physical print claims', () => {
-  const component = serverComponent(readFileSync(srcPath('PlotLabelPreview.svelte'), 'utf8'),
-    'PlotLabelPreview.svelte', {
-      '../bindings/github.com/boostao/vpro/app': {},
-      './scopedPlotLookup': lookup, './plotLabelPreview': labels,
-      './plotLabelRegional': regional, './plotLabelPDFExport': pdf,
-    });
-  const body = render(component, { props: { ...scope, onBusyChange() {} } }).body;
+test('PDF export renders distinct portable workflow, retains unknown recovery lock and emits reports notifications', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const source = readFileSync(srcPath('PlotLabelPreview.svelte'), 'utf8');
+  assert.doesNotMatch(source, /data-plot-label-pdf-receipt/);
+  assert.doesNotMatch(source, /Retaining the exact PDF attempt/);
+  assert.doesNotMatch(source, /\{#if error\}<p role="alert" class="error">/);
+  assert.doesNotMatch(source, /\{#if publication\.error\}<p role="alert" class="error">/);
+
+  const retainedScope = { ...scope, contextId: 'ssr-unknown-pdf' };
+  const retainedSession = pdf.plotLabelPDFPublicationSession(retainedScope);
+  const retainedReview = review();
+  retainedReview.preview.contextId = retainedScope.contextId;
+  await retainedSession.publish(retainedReview, wire.request.destination, () => Promise.reject(new Error('lost PDF RPC')), wire.request.requestId);
+  const component = serverComponent(source, 'PlotLabelPreview.svelte', {
+    '../bindings/github.com/boostao/vpro/app': {},
+    './scopedPlotLookup': lookup, './plotLabelPreview': labels,
+    './plotLabelRegional': regional, './plotLabelPDFExport': pdf,
+    '../shell/notificationService.svelte': { notifications },
+  });
+  const body = render(component, { props: { ...retainedScope, onBusyChange() {} } }).body;
   assert.match(body, /Review saved plot label PDF/);
   assert.match(body, /Portable saved label PDF/);
+  assert.match(body, /Recover PDF outcome readonly/);
+  assert.match(body, /PDF publication outcome is unknown/);
+  assert.doesNotMatch(body, /lost PDF RPC/);
   assert.match(body, /Print All and physical printing remain unavailable/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'error');
+  assert.equal(entries[0].category, 'reports');
+  assert.equal(entries[0].source, 'Plot Labels');
+  assert.match(entries[0].message, /lost PDF RPC/);
 });

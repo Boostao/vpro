@@ -111,6 +111,13 @@
     setBusy(false);
   }
 
+  function pushHubError(title: string, message: string) {
+    error = message;
+    if (typeof notifications !== 'undefined' && typeof notifications?.error === 'function') {
+      notifications.error(title, message, { category: 'background', source: 'Interchange Hub' });
+    }
+  }
+
   async function pickFilePath(
     mode: 'open' | 'save',
     title: string,
@@ -131,13 +138,13 @@
         assign(chosen.trim());
       }
     } catch (cause) {
-      error = String(cause);
+      pushHubError('File picker failed', String(cause));
     }
   }
 
   async function inspectVenus() {
     if (!venusSourcePath.trim()) {
-      error = 'Enter a VENUS 5.0 .mdb or .xml source file path.';
+      pushHubError('VENUS source path required', 'Enter a VENUS 5.0 .mdb or .xml source file path.');
       return;
     }
     if (busy || operationHeld || !contextId) return;
@@ -156,7 +163,7 @@
         venusDestinationPath = res.projects[0].suggestedDestPath;
       }
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('VENUS inspection failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -165,7 +172,7 @@
   async function runVenusImport() {
     const check = validateTargetProjectName(venusTargetProject);
     if (!check.valid) {
-      error = check.error;
+      pushHubError('Invalid VENUS target project', check.error);
       return;
     }
     if (busy || operationHeld || !contextId) return;
@@ -197,7 +204,7 @@
         onProjectActivated(res.state);
       }
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('VENUS import failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -205,7 +212,7 @@
 
   async function runTurboVegExport() {
     if (!tvExportPath.trim()) {
-      error = 'Enter a destination path for TurboVeg export.';
+      pushHubError('TurboVeg destination required', 'Enter a destination path for TurboVeg export.');
       return;
     }
     if (busy || operationHeld || !contextId) return;
@@ -232,7 +239,7 @@
         });
       }
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('TurboVeg export failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -254,12 +261,12 @@
       );
       if (reqGen !== generation || owner !== contextId) return;
       if (!check.valid) {
-        error = check.error;
+        pushHubError('TurboVeg XML validation failed', check.error);
         return;
       }
       tvXmlSnippetCount = check.plotTagCount;
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('TurboVeg XML validation failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -268,11 +275,11 @@
   async function runTurboVegImport() {
     const check = validateTargetProjectName(tvImportTarget);
     if (!check.valid) {
-      error = check.error;
+      pushHubError('Invalid TurboVeg target project', check.error);
       return;
     }
     if (!tvImportPath.trim()) {
-      error = 'Enter a TurboVeg .xml or .sqlite source path.';
+      pushHubError('TurboVeg source path required', 'Enter a TurboVeg .xml or .sqlite source path.');
       return;
     }
     if (busy || operationHeld || !contextId) return;
@@ -305,7 +312,7 @@
         onProjectActivated(res.state);
       }
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('TurboVeg import failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -326,7 +333,7 @@
       if (reqGen !== generation || owner !== contextId) return;
       userSppExportResult = res;
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('User species export failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -348,7 +355,7 @@
       if (reqGen !== generation || owner !== contextId) return;
       userSppPreview = res;
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('User species preview failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -371,7 +378,7 @@
       userSppImportResult = res;
       userSppPreview = res.preview;
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('User species import failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -392,7 +399,7 @@
       if (reqGen !== generation || owner !== contextId) return;
       csvOutcome = res;
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('Long CSV export failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -416,7 +423,7 @@
       if (reqGen !== generation || owner !== contextId) return;
       csvOutcome = res;
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('Wide CSV export failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -424,7 +431,7 @@
 
   async function runRdsExport() {
     if (!rdsDestPath.trim()) {
-      error = 'Enter a destination .rds file path.';
+      pushHubError('R .rds destination required', 'Enter a destination .rds file path.');
       return;
     }
     if (busy || operationHeld || !contextId) return;
@@ -450,7 +457,7 @@
         });
       }
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('R .rds export failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -458,7 +465,7 @@
 
   async function runGeoPackageExport() {
     if (!gpkgDestPath.trim()) {
-      error = 'Enter a destination .gpkg file path.';
+      pushHubError('GeoPackage destination required', 'Enter a destination .gpkg file path.');
       return;
     }
     if (busy || operationHeld || !contextId) return;
@@ -487,7 +494,7 @@
         });
       }
     } catch (cause) {
-      if (reqGen === generation) error = String(cause);
+      if (reqGen === generation) pushHubError('GeoPackage export failed', String(cause));
     } finally {
       if (reqGen === generation) setBusy(false);
     }
@@ -513,10 +520,6 @@
       {/if}
     </nav>
   </header>
-
-  {#if error}
-    <p class="error" role="alert">{error}</p>
-  {/if}
 
   {#if section === 'venus'}
     <div class="hub-card">
@@ -913,7 +916,6 @@
   .hub-tabs button { background: rgba(255, 255, 255, 0.12); color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.42rem 0.8rem; font-size: 0.82rem; }
   .hub-tabs button.active { background: #FCBA19; color: #003366; border-color: #FCBA19; font-weight: 700; }
   .hub-tabs button.cancel-btn { background: #D8292F; border-color: #FBEAEA; margin-left: auto; }
-  .error { background: #FBEAEA; color: #D8292F; border: 1px solid #D8292F; border-radius: 4px; padding: 0.65rem 0.8rem; margin: 0; font-size: 0.84rem; }
   .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 1rem; min-width: 0; }
   .hub-card { background: #FFFFFF; border: 1px solid #D8D8D8; border-top: 3px solid #003366; border-radius: 4px; padding: 1rem; display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
   .hub-card h3 { margin: 0; color: #003366; font-size: 1rem; }

@@ -3,6 +3,7 @@
   import { ReadRequests, type CancellableRead } from '../shared/readRequests';
   import type { SummaryVegetationPresentationPreferencesReview, SummaryVegetationPresentationPreferencesSession } from './summaryVegetationPresentationPreferences';
   import type { ReportTitlePreferencesOutcome } from './reportTitlePreferences';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, preferences, port, operationHeld = false, mutationHeld = false, onReadBusyChange }: {
     contextId: string;
@@ -28,7 +29,58 @@
   let error = $state('');
   const reads = new ReadRequests();
   let generation = 0;
-  const unsubscribe = untrack(() => preferences.subscribe(() => { view = preferences.view(); }));
+  let lastReadError = '';
+  let lastPrefError = '';
+  let notifiedReceipts = 0;
+  function syncPresentationNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedReceipts) notifiedReceipts = 0;
+    for (let i = notifiedReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Summary presentation saved', receipt.outcome.changed ? 'Saved presentation preferences.' : 'No presentation changes.', {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Summary presentation saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Summary presentation save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Summary presentation unchanged', 'No presentation changes were needed.', {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        }
+      }
+    }
+    notifiedReceipts = receipts.length;
+    const rErr = view.readError ?? '';
+    if (rErr && rErr !== lastReadError) {
+      notifications.error('Summary presentation load failed', rErr, {
+        category: 'reports', source: 'Summary Vegetation',
+      });
+    }
+    lastReadError = rErr;
+    const vErr = view.error ?? '';
+    if (vErr && vErr !== lastPrefError) {
+      notifications.error('Summary presentation failed', vErr, {
+        category: 'reports', source: 'Summary Vegetation',
+      });
+    }
+    lastPrefError = vErr;
+  }
+  const unsubscribe = untrack(() => preferences.subscribe(() => {
+    view = preferences.view();
+    syncPresentationNotifications();
+  }));
+  syncPresentationNotifications();
   function cancel() {
     generation++; reads.cancelAll(); preferences.cancelLoad(); busy = false; onReadBusyChange(false);
   }
@@ -51,8 +103,44 @@
     cancel(); const request = generation; error = '';
     try {
       await preferences.save(value => port.save(contextId, JSON.stringify(value)));
+      if (typeof syncPresentationNotifications === 'function') {
+        syncPresentationNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const current = preferences.view();
+        const latest = current.receipts?.at(-1);
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Summary presentation saved', latest.outcome.changed ? 'Saved presentation preferences.' : 'No presentation changes.', {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Summary presentation saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Summary presentation save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          } else {
+            notifications.info('Summary presentation unchanged', 'No presentation changes were needed.', {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          }
+        } else if (current.error) {
+          notifications.error('Summary presentation failed', current.error, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        }
+      }
     } catch (cause) {
-      if (request === generation) error = String(cause);
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary presentation save failed', error, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        }
+      }
     }
   }
   function editTitle(raw: string) {
@@ -66,24 +154,25 @@
       preferences.editFlag(key, raw);
     } catch (cause) {
       error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary presentation edit failed', error, {
+          category: 'reports', source: 'Summary Vegetation',
+        });
+      }
     }
   }
   onDestroy(() => { unsubscribe(); cancel(); });
 </script>
 
 <section class="summary-presentation" data-summary-presentation-preferences aria-label="Saved Summary presentation drafts">
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#if view.readError}<p class="error" role="alert">{view.readError}</p>{/if}
   {#if view.draftError}<p class="error" role="alert">{view.draftError}</p>{/if}
-  {#if view.error}<p class="error" role="alert">{view.error}</p>{/if}
-  {#if view.busy}<p role="status">Saving Summary presentation; Save cannot be cancelled.</p>{/if}
   {#each view.receipts as receipt}
-    <p data-summary-presentation-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-      {#if receipt.kind === 'known'}Preference receipt: changed {String(receipt.outcome.changed)};
-        committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}
-      {:else}Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}{/if}
-      Constancy-on callback plan: {String(receipt.request.constancyApplied)}.
-    </p>
+    {#if receipt.kind !== 'known'}
+      <p data-summary-presentation-receipt role="alert">
+        Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
+        Constancy-on callback plan: {String(receipt.request.constancyApplied)}.
+      </p>
+    {/if}
   {/each}
   <fieldset>
     <legend>Stored Summary presentation</legend>
@@ -133,8 +222,7 @@
       <button data-summary-presentation-acknowledge disabled={busy || mutationHeld}
         onclick={() => preferences.acknowledge()}>Acknowledge presentation outcome</button>
     {/if}
-    {#if busy}<button data-summary-presentation-cancel onclick={cancel}>Cancel presentation read</button>
-      <p role="status">Reading owned saved Summary presentation...</p>{/if}
+    {#if busy}<button data-summary-presentation-cancel onclick={cancel}>Cancel presentation read</button>{/if}
   </div>
   <p class="guidance">Stored presentation drafts, not original report-output formatting parity.
     Load before editing; unloaded controls do not represent saved values.

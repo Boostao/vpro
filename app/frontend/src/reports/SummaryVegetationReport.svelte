@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { ImportExportService, VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
   import { ReadRequests } from '../shared/readRequests';
   import { projectState } from '../shared/state';
@@ -44,7 +44,17 @@
   let environmentalError = $state('');
   if (summaryEnvironmentalEnabled) {
     try { environmentalSession = summaryEnvironmentalDesktop.session(ownedContext()); }
-    catch (cause) { environmentalError = `Combined environmental inspection unavailable: ${String(cause)}`; }
+    catch (cause) {
+      const envErr = `Combined environmental inspection unavailable: ${String(cause)}`;
+      environmentalError = envErr;
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation environmental inspection unavailable', envErr, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: untrack(() => (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined)),
+        });
+      }
+    }
   }
   const preferences = summaryVegetationPreferenceSession?.(ownedContext()) ?? null;
   const quality = summaryVegetationQualityPreferenceSession?.(ownedContext()) ?? null;
@@ -84,13 +94,83 @@
   let includeGoldstreamMetadata = $state(false);
   let exclusionSummaryText = $state('');
   let viewState = $state.raw(session.view());
+  let lastViewError = '';
+  let lastPrefReadError = '';
+  let lastPrefError = '';
+  let notifiedPrefReceipts = 0;
+  let lastFieldListReadError = '';
+  function reportContextTag() {
+    return (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined);
+  }
+  function syncReportNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = reportContextTag();
+    const vsErr = viewState?.error ?? '';
+    if (vsErr && vsErr !== lastViewError) {
+      notifications.error('Summary Vegetation preview failed', vsErr, {
+        category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastViewError = vsErr;
+    const pv = preferences?.view();
+    if (pv) {
+      const receipts = pv.receipts ?? [];
+      if (receipts.length < notifiedPrefReceipts) notifiedPrefReceipts = 0;
+      for (let i = notifiedPrefReceipts; i < receipts.length; i++) {
+        const receipt = receipts[i];
+        if (receipt.kind === 'known') {
+          if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+            notifications.success('Summary Vegetation options saved', receipt.outcome.changed ? 'Saved summary options.' : 'No option changes.', {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+          } else if (receipt.outcome.committed) {
+            notifications.warning('Summary Vegetation options saved with warning', receipt.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+            lastPrefError = receipt.outcome.errorMessage;
+          } else if (receipt.outcome.errorMessage) {
+            notifications.error('Summary Vegetation options save failed', receipt.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+            lastPrefError = receipt.outcome.errorMessage;
+          } else {
+            notifications.info('Summary Vegetation options unchanged', 'No option changes were needed.', {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+          }
+        }
+      }
+      notifiedPrefReceipts = receipts.length;
+      const pvReadErr = pv.readError ?? '';
+      if (pvReadErr && pvReadErr !== lastPrefReadError) {
+        notifications.error('Summary Vegetation options load failed', pvReadErr, {
+          category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+        });
+      }
+      lastPrefReadError = pvReadErr;
+      const pvErr = pv.error ?? '';
+      if (pvErr && pvErr !== lastPrefError) {
+        notifications.error('Summary Vegetation options failed', pvErr, {
+          category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+        });
+      }
+      lastPrefError = pvErr;
+    }
+    const flErr = fieldListState?.readError ?? '';
+    if (flErr && flErr !== lastFieldListReadError) {
+      notifications.error('Summary Vegetation field list failed', flErr, {
+        category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastFieldListReadError = flErr;
+  }
   function reportBusy() {
     onBusyChange(viewState.busy || (!preferences && !!viewState.draftError) || preferenceReadBusy ||
       !!preferenceView && (preferenceView.busy || preferenceView.blocked || !!preferenceView.draftError) ||
       qualityReadBusy || !!qualityView && (qualityView.busy || qualityView.blocked || !!qualityView.draftError) ||
       presentationReadBusy || !!presentationView && (presentationView.busy || presentationView.blocked || !!presentationView.draftError) || fieldListHeld || environmentalHeld || workbookHeld);
   }
-  const unsubscribe = session.subscribe(() => { viewState = session.view(); reportBusy(); });
+  const unsubscribe = session.subscribe(() => { viewState = session.view(); syncReportNotifications(); reportBusy(); });
   const unsubscribeEnvironment = summaryEnvironmentalEnabled ? summaryEnvironmentalDesktop.subscribe(() => {
     environmentalHeld = summaryEnvironmentalDesktop.activity().busy;
     reportBusy();
@@ -104,7 +184,7 @@
       session.edit(average, display, show, group);
   }
   const unsubscribePreferences = preferences?.subscribe(() => {
-    preferenceView = preferences.view(); syncPreferenceDraft(); reportBusy();
+    preferenceView = preferences.view(); syncPreferenceDraft(); syncReportNotifications(); reportBusy();
   });
   const unsubscribeQuality = quality?.subscribe(() => { qualityView = quality.view(); reportBusy(); });
   const unsubscribePresentation = presentation?.subscribe(() => { presentationView = presentation.view(); reportBusy(); });
@@ -113,8 +193,10 @@
     const activity = fieldList.activity();
     fieldListBusy = activity.busy;
     fieldListHeld = activity.busy || activity.blocked;
+    syncReportNotifications();
     reportBusy();
   }) : undefined;
+  syncReportNotifications();
   async function loadFieldList() {
     if (!fieldListScopeAvailable || fieldListPeerDisabled || fieldListPeerValidation || fieldListState?.readBusy) return;
     fieldListError = '';
@@ -133,7 +215,16 @@
   function dismissInitialFieldListReadError() {
     if (!fieldListScopeAvailable || !fieldListState?.canDismissInitialReadError) return;
     fieldListError = '';
-    try { fieldList.dismissInitialReadError(ownedContext()); } catch (cause) { fieldListError = String(cause); }
+    try { fieldList.dismissInitialReadError(ownedContext()); } catch (cause) {
+      fieldListError = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation field list acknowledgement failed', fieldListError, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined),
+        });
+      }
+    }
   }
   const presentationMutationHeld = $derived(presentationReadBusy || !!presentationView && (presentationView.busy || presentationView.blocked));
   const presentationInvalid = $derived(!!presentationView?.draftError || !!presentationView?.authorityUnknown || !!presentationView?.readError);
@@ -181,7 +272,9 @@
     } catch (cause) {
       if (request === preferenceGeneration) {
         preferences.rejectRead(cause);
-        if (typeof notifications !== 'undefined') {
+        if (typeof syncReportNotifications === 'function') {
+          syncReportNotifications();
+        } else if (typeof notifications !== 'undefined') {
           notifications.error('Summary Vegetation preferences load failed', String(cause), {
             category: 'reports',
             source: 'Summary Vegetation',
@@ -198,6 +291,36 @@
     cancelPreferenceRead(); preferenceReadError = '';
     try {
       await preferences.save(value => VegetationReportService.SaveSummaryVegetationPreferences(contextId, JSON.stringify(value)));
+      if (typeof syncReportNotifications === 'function') {
+        syncReportNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const pv = preferences.view();
+        const latest = pv.receipts?.at(-1);
+        const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined);
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Summary Vegetation options saved', latest.outcome.changed ? 'Saved summary options.' : 'No option changes.', {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Summary Vegetation options saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Summary Vegetation options save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+          } else {
+            notifications.info('Summary Vegetation options unchanged', 'No option changes were needed.', {
+              category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+            });
+          }
+        } else if (pv.error) {
+          notifications.error('Summary Vegetation options failed', pv.error, {
+            category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
     } catch (cause) {
       preferenceReadError = String(cause);
       if (typeof notifications !== 'undefined') {
@@ -349,15 +472,11 @@
       <button type="button" onclick={previewWithPreferences} disabled={!enabled || !contextId || viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || presentationMutationHeld} data-summary-preview-preferences>
         Preview with Saved Preferences
       </button>
-      {#if viewState.busy}<button onclick={() => session.cancel(port)} data-summary-cancel>Cancel preview</button><p role="status">Reading owned vegetation and Site Unit Table…</p>{/if}
+      {#if viewState.busy}<button onclick={() => session.cancel(port)} data-summary-cancel>Cancel preview</button>{/if}
     </div>
   </header>
-  {#if viewState.error}<p role="alert" class="error">{viewState.error}</p>{/if}
   {#if viewState.draftError}<p role="alert" class="error">{viewState.draftError}</p>{/if}
-  {#if preferenceReadError}<p role="alert" class="error">{preferenceReadError}</p>{/if}
-  {#if preferenceView?.readError}<p role="alert" class="error">{preferenceView.readError}</p>{/if}
   {#if preferenceView?.draftError}<p role="alert" class="error">{preferenceView.draftError}</p>{/if}
-  {#if preferenceView?.error}<p role="alert" class="error">{preferenceView.error}</p>{/if}
   <p class="owner">Project: {project}<br />{projectPath}<br />Current Site Unit Table: {su}<br />{suPath}</p>
   {#if !enabled}<p>Summary Vegetation report preview is currently unavailable.</p>{/if}
   {#if unavailableScope}
@@ -440,17 +559,15 @@
         disabled={editHeld} data-summary-goldstream-metadata />
       Include Goldstream cover-class metadata
     </label>
-    {#if lumpDiscoveryError}<p role="alert" class="error">{lumpDiscoveryError}</p>{/if}
   </div>
   {#if preferences && preferenceView}
     <section data-summary-preferences aria-label="Saved Summary options">
-      {#if preferenceView.busy}<p role="status">Saving Summary options; Save cannot be cancelled.</p>{/if}
       {#each preferenceView.receipts as receipt}
-        <p data-summary-preference-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-          {#if receipt.kind === 'known'}Preference receipt: changed {String(receipt.outcome.changed)};
-            committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}
-          {:else}Preference outcome unknown; do not replay. {receipt.errorMessage}{/if}
-        </p>
+        {#if receipt.kind !== 'known'}
+          <p data-summary-preference-receipt role="alert">
+            Preference outcome unknown; do not replay. {receipt.errorMessage}
+          </p>
+        {/if}
       {/each}
       <div class="actions">
         <button data-summary-preferences-load disabled={viewState.busy || operationHeld || fieldListHeld || preferenceHeld || qualityMutationHeld || qualityInvalid || presentationMutationHeld || presentationInvalid} onclick={loadPreferences}>Load saved Summary options</button>
@@ -490,8 +607,6 @@
   {/if}
   {#if fieldList.enabled && fieldListState}
     <section class="linked-field-list" data-summary-field-list-desktop aria-label="Linked Summary environmental field list">
-      {#if fieldListError}<p role="alert">{fieldListError}</p>{/if}
-      {#if fieldListState.readError}<p role="alert">{fieldListState.readError}</p>{/if}
       {#if fieldListState.readError && !fieldListState.session}
         <p>No field-list authority has been loaded. After all initial read dispatches and validation settle,
           explicitly acknowledge this failed read to release its close/navigation hold. This does not enable
@@ -519,12 +634,10 @@
           disabled={fieldListPeerDisabled || !!fieldListPeerValidation || fieldListState.readBusy || fieldListState.bootstrapPending}>Load environmental fields</button>
       {/if}
       {#if fieldListState.readBusy}
-        <p role="status">Reading complete owned field-list authority…</p>
         <button data-summary-field-list-bootstrap-cancel onclick={() => fieldList.cancel(ownedContext())}>Cancel environmental field read</button>
       {/if}
     </section>
   {/if}
-  {#if environmentalError}<p role="alert">{environmentalError}</p>{/if}
   {#if environmentalSession}
     <SummaryVegetationEnvironmental session={environmentalSession} port={summaryEnvironmentalPort} numeric={summaryEnvironmentalNumericEnabled} lifeform={summaryEnvironmentalLifeformEnabled}
       operationHeld={operationHeldProp || workbookHeld || unavailableScope || viewState.busy || fieldListHeld ||

@@ -30,8 +30,36 @@
   const locked = $derived(busy || publication.busy || publication.blocked);
   const ownerKey = $derived(JSON.stringify([contextId, project, projectPath, su, suPath]));
   let generation = 0;
+  let lastNotifiedPdfKey = '';
   function updateBusy() { onBusyChange(busy || publication.busy || publication.blocked); }
-  const unsubscribe = pdfSession?.subscribe(() => { publication = pdfSession.view(); updateBusy(); });
+  const unsubscribe = pdfSession?.subscribe(() => {
+    publication = pdfSession.view();
+    updateBusy();
+    if (!publication.busy && typeof notifications !== 'undefined') {
+      const key = publication.outcome
+        ? `outcome:${publication.requestedDestination}:${publication.outcome.status}:${publication.outcome.path}:${publication.outcome.errorMessage}`
+        : publication.error
+          ? `error:${publication.requestedDestination}:${publication.error}`
+          : '';
+      if (key && key !== lastNotifiedPdfKey) {
+        lastNotifiedPdfKey = key;
+        if (publication.outcome?.status === 'published') {
+          const plotLabel = pdfReview?.preview.plotNumber ? `plot ${pdfReview.preview.plotNumber} ` : '';
+          notifications.success(
+            'Label PDF exported',
+            `Exported ${plotLabel}label PDF to ${publication.outcome.path || publication.requestedDestination}.`,
+            { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+          );
+        } else {
+          notifications.error(
+            'Label PDF export failed',
+            publication.error || publication.outcome?.errorMessage || 'Label PDF publication did not complete.',
+            { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+          );
+        }
+      }
+    }
+  });
 
   function cancel() {
     generation++;
@@ -94,18 +122,26 @@
     try {
       await pdfSession.publish(pdfReview, destination, request => ImportExportService.ExportReviewedPlotLabelPDF(contextId, JSON.stringify(request)));
       const latest = pdfSession.view();
-      if (latest.outcome?.status === 'published') {
-        notifications.success(
-          'Label PDF exported',
-          `Exported plot ${pdfReview.preview.plotNumber} label PDF to ${latest.outcome.path || destination}.`,
-          { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
-        );
-      } else {
-        notifications.error(
-          'Label PDF export failed',
-          latest.error || latest.outcome?.errorMessage || 'Label PDF publication did not complete.',
-          { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
-        );
+      const key = latest.outcome
+        ? `outcome:${latest.requestedDestination}:${latest.outcome.status}:${latest.outcome.path}:${latest.outcome.errorMessage}`
+        : latest.error
+          ? `error:${latest.requestedDestination}:${latest.error}`
+          : '';
+      if (typeof lastNotifiedPdfKey === 'undefined' || (key && lastNotifiedPdfKey !== key)) {
+        if (typeof lastNotifiedPdfKey !== 'undefined' && key) lastNotifiedPdfKey = key;
+        if (latest.outcome?.status === 'published') {
+          notifications.success(
+            'Label PDF exported',
+            `Exported plot ${pdfReview.preview.plotNumber} label PDF to ${latest.outcome.path || destination}.`,
+            { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+          );
+        } else {
+          notifications.error(
+            'Label PDF export failed',
+            latest.error || latest.outcome?.errorMessage || 'Label PDF publication did not complete.',
+            { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+          );
+        }
       }
     } catch (cause) {
       error = `Label PDF publication unavailable: ${String(cause)}`;
@@ -118,18 +154,26 @@
     try {
       await pdfSession.recover(request => ImportExportService.RecoverPlotLabelPDFOutcome(contextId, JSON.stringify(request)));
       const latest = pdfSession.view();
-      if (latest.outcome?.status === 'published') {
-        notifications.success(
-          'Label PDF receipt recovered',
-          `Verified exported PDF at ${latest.outcome.path}.`,
-          { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
-        );
-      } else if (latest.error) {
-        notifications.error('Label PDF recovery notice', latest.error, {
-          category: 'reports',
-          source: 'Plot Labels',
-          contextTag: project || undefined,
-        });
+      const key = latest.outcome
+        ? `outcome:${latest.requestedDestination}:${latest.outcome.status}:${latest.outcome.path}:${latest.outcome.errorMessage}`
+        : latest.error
+          ? `error:${latest.requestedDestination}:${latest.error}`
+          : '';
+      if (typeof lastNotifiedPdfKey === 'undefined' || (key && lastNotifiedPdfKey !== key)) {
+        if (typeof lastNotifiedPdfKey !== 'undefined' && key) lastNotifiedPdfKey = key;
+        if (latest.outcome?.status === 'published') {
+          notifications.success(
+            'Label PDF receipt recovered',
+            `Verified exported PDF at ${latest.outcome.path}.`,
+            { category: 'reports', source: 'Plot Labels', contextTag: project || undefined },
+          );
+        } else if (latest.error) {
+          notifications.error('Label PDF recovery notice', latest.error, {
+            category: 'reports',
+            source: 'Plot Labels',
+            contextTag: project || undefined,
+          });
+        }
       }
     } catch (cause) {
       error = `Readonly PDF recovery unavailable: ${String(cause)}`;
@@ -138,7 +182,10 @@
   }
   function acknowledgePDF() {
     if (!pdfSession) return;
-    try { pdfSession.acknowledge(); } catch (cause) { error = String(cause); }
+    try { pdfSession.acknowledge(); } catch (cause) {
+      error = String(cause);
+      notifications.error('Label PDF acknowledgement failed', error, { category: 'reports', source: 'Plot Labels', contextTag: project || undefined });
+    }
   }
   onDestroy(() => { unsubscribe?.(); cancel(); });
 </script>
@@ -152,10 +199,9 @@
         <input id="plot-label-number" bind:value={plot} disabled={locked} />
       </label>
       <button type="submit" disabled={locked}>{pdfEnabled ? 'Review saved plot label PDF' : 'Preview saved plot label'}</button>
-      {#if busy}<button type="button" onclick={cancel}>Cancel label read</button><span role="status">Reading saved label fields...</span>{/if}
+      {#if busy}<button type="button" onclick={cancel}>Cancel label read</button>{/if}
     </form>
   </header>
-  {#if error}<p role="alert" class="error">{error}</p>{/if}
   {#if preview}
     <section class="label" data-plot-label-card aria-label={`Label for saved plot ${preview.plotNumber1}`}>
       <h2>{preview.displayPlotNumber}</h2>
@@ -183,7 +229,6 @@
       {#if pdfEnabled}
         <section class="pdf" data-plot-label-pdf-export aria-label="Portable saved label PDF">
           <h2>Portable saved label PDF</h2>
-          {#if publication.error}<p role="alert" class="error">{publication.error}</p>{/if}
           {#if pdfReview}
             <dl>
               <div><dt>Source approval</dt><dd>{pdfReview.approvalHash}</dd></div>
@@ -194,22 +239,16 @@
             </label>
             <button type="button" class="btn-primary" disabled={locked || !destination} onclick={() => void publishPDF()}>Export reviewed label PDF</button>
           {/if}
-          {#if publication.busy}<p role="status">Retaining the exact PDF attempt; publication is not replayed or cancelled.</p>{/if}
-          {#if publication.requestedDestination}
-            <p data-plot-label-pdf-destination>Requested destination: {publication.requestedDestination}</p>
-          {/if}
-          {#if publication.outcome}
-            <dl data-plot-label-pdf-receipt>
-              <div><dt>Publication outcome</dt><dd>{publication.outcome.status}</dd></div>
-              <div><dt>Published path</dt><dd>{publication.outcome.path || '(no published path)'}</dd></div>
-              <div><dt>Artifact SHA256</dt><dd>{publication.outcome.sha256 || '(no artifact hash)'}</dd></div>
-            </dl>
-          {/if}
-          {#if publication.blocked && !publication.outcome}
-            <button type="button" disabled={publication.busy} onclick={() => void recoverPDF()}>Recover PDF outcome readonly</button>
-          {/if}
-          {#if publication.blocked && publication.outcome}
-            <button type="button" disabled={publication.busy} onclick={acknowledgePDF}>Acknowledge retained PDF outcome</button>
+          {#if publication.blocked && !publication.busy}
+            {#if publication.requestedDestination}
+              <p data-plot-label-pdf-destination>Requested destination: {publication.requestedDestination}</p>
+            {/if}
+            {#if !publication.outcome}
+              <p role="alert">PDF publication outcome is unknown. Recover read-only instead of replaying.</p>
+              <button type="button" disabled={publication.busy} onclick={() => void recoverPDF()}>Recover PDF outcome readonly</button>
+            {:else}
+              <button type="button" disabled={publication.busy} onclick={acknowledgePDF}>Acknowledge retained PDF outcome</button>
+            {/if}
           {/if}
           <p class="guidance">One portable Letter page, real runtime Arial and fixed source-relative fields, not Access printer/stock alignment.
             Supports calibrated Windows Long Date locales (including en-US, en-CA, fr-CA) and printable UTF-8 single-line labels. Export never overwrites a file or changes saved data.
@@ -449,15 +488,6 @@
     font-variant-numeric: tabular-nums;
     font-size: 0.84rem;
     color: var(--vpro-ink, #313132);
-  }
-
-  .error {
-    color: var(--vpro-error-ink, #A61B20);
-    background: var(--vpro-error-bg, #FBEAEA);
-    border-left: 4px solid var(--vpro-error, #D8292F);
-    border-radius: var(--vpro-radius-xs, 3px);
-    padding: 0.6rem 0.8rem;
-    font-weight: 600;
   }
 
   .guidance {

@@ -4,7 +4,8 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { runInNewContext } = require('node:vm');
 const { compile } = require('svelte/compiler');
-const { componentFunctions, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { render } = require('svelte/server');
+const { componentFunctions, loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const read = name => readFileSync(srcPath(name), 'utf8');
 
@@ -155,21 +156,112 @@ test('WorkspaceSidebar routes Data on Disk and SQLite picker messages to notific
   assert.equal(snap.toasts.length, 2);
 });
 
-test('App error banners are dismissible/auto-clearing, global unclassed buttons are styled, and TwoPageEntryEditor uses plain copy', () => {
+test('App and shell panels route operational errors and startup recovery notices to notifications with zero duplicate inline error banners', async () => {
   const appSrc = read('App.svelte');
   const cssSrc = read('vpro.css');
   const twoPageSrc = read('TwoPageEntryEditor.svelte');
   const plotsPanelSrc = read('shell/PlotsBrowserPanel.svelte');
+  const statusBannersSrc = read('shell/WorkspaceStatusBanners.svelte');
 
-  assert.equal(compile(appSrc, { filename: srcPath('App.svelte'), generate: 'client' }).warnings.length, 0);
-  assert.equal(compile(plotsPanelSrc, { filename: srcPath('shell/PlotsBrowserPanel.svelte'), generate: 'client' }).warnings.length, 0);
+  for (const [rel, src] of [
+    ['App.svelte', appSrc],
+    ['shell/PlotsBrowserPanel.svelte', plotsPanelSrc],
+    ['shell/WorkspaceStatusBanners.svelte', statusBannersSrc],
+  ]) {
+    assert.equal(compile(src, { filename: srcPath(rel), generate: 'client' }).warnings.length, 0, `${rel} client compile must have 0 warnings`);
+    assert.equal(compile(src, { filename: srcPath(rel), generate: 'server' }).warnings.length, 0, `${rel} server compile must have 0 warnings`);
+  }
 
-  // Every shell error alert in App.svelte includes Dismiss button while preserving regex prefix
-  const bareAlerts = appSrc.match(/\{#if error\}<p class="error" role="alert">\{error\}<\/p>\{\/if\}/g) ?? [];
-  assert.equal(bareAlerts.length, 0);
-  assert.match(appSrc, /\{#if error\}<p class="error" role="alert">\{error\}<button type="button" class="error-dismiss"/);
+  // Zero inline {#if error}<p class="error" operational banners or redundant green notice banners remain
+  assert.equal((appSrc.match(/\{#if error\}<p class="error"/g) ?? []).length, 0);
+  assert.equal((plotsPanelSrc.match(/\{#if error\}<p class="error"/g) ?? []).length, 0);
+  assert.doesNotMatch(appSrc, /data-startup-backup-notice/);
+  assert.doesNotMatch(appSrc, /ondismisserror=/);
+  assert.doesNotMatch(statusBannersSrc, /data-reset-sample-notice/);
+
+  // Script state, auto-clear effect, Find Plot inline validation, and lazy-chunk catch fallback remain intact
+  assert.match(appSrc, /let offset = \$state\(0\), busy = \$state\(false\), error = \$state\(''\);/);
+  assert.match(appSrc, /let resetSampleConfirmOpen = \$state\(false\), resetSampleNotice = \$state\(''\);/);
+  assert.match(appSrc, /let startupBackupNotice = \$state\(''\);/);
   assert.match(appSrc, /error === 'Wait for the current operation or decision before changing context\.'/);
-  assert.match(appSrc, /ondismisserror=\{\(\) => \{ error = ''; \}\}/);
+  assert.match(appSrc, /data-entry-load-error="fs882"/);
+  assert.match(appSrc, /aria-label="Find scoped plot"/);
+
+  // App.svelte routes error (via deduped $effect + requestTransition) and startupBackupNotice (onrecovered) into notifications
+  assert.match(appSrc, /let lastPushedError = '';/);
+  assert.match(
+    appSrc,
+    /\$effect\(\(\) => \{\s*const currentError = error;[\s\S]*?lastPushedError = currentError;[\s\S]*?notifications\.push\(\{[\s\S]*?category:\s*'general'[\s\S]*?source:\s*'Workspace'[\s\S]*?message:\s*currentError[\s\S]*?toast:\s*true/
+  );
+  assert.match(
+    appSrc,
+    /onrecovered=\{async \(notice\) => \{[\s\S]*?startupBackupNotice = notice;[\s\S]*?notifications\.success\('Startup recovery complete', notice, \{ source: 'Startup Recovery' \}\)/
+  );
+
+  // Runtime requestTransition pushes Navigation paused warning once and sets lastPushedError to prevent $effect double-push
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const transitionCtx = componentFunctions('App.svelte', ['requestTransition'], {
+    document: { activeElement: null },
+    HTMLElement: class {},
+    tick: async () => {},
+    closeDisposition: () => 'busy',
+    view: 'plots',
+    editor: null,
+    busy: true,
+    editorBusy: false,
+    companionPanelBusy: false,
+    workbenchDirtyLabel: '',
+    transitionWorking: false,
+    archivePublicationBusy: false,
+    vegetationPublicationBusy: false,
+    lifeformPublicationBusy: false,
+    summaryPublicationBusy: false,
+    pendingTransition: null,
+    closeRequest: '',
+    editorInitializing: false,
+    $projectState: { contextId: 'ctx-1' },
+    error: '',
+    lastPushedError: '',
+    transitionError: '',
+    notifications,
+  });
+  await transitionCtx.actions.requestTransition(async () => {});
+  assert.equal(transitionCtx.error, 'Wait for the current operation or decision before changing context.');
+  assert.equal(transitionCtx.lastPushedError, transitionCtx.error);
+  const snap = notifications.getSnapshot();
+  assert.equal(snap.entries.length, 1);
+  assert.equal(snap.entries[0].severity, 'warning');
+  assert.equal(snap.entries[0].title, 'Navigation paused');
+  assert.equal(snap.entries[0].message, transitionCtx.error);
+  assert.equal(snap.toasts.length, 1);
+
+  // PlotsBrowserPanel & WorkspaceStatusBanners SSR cleanly without inline operational error or resetSample banners
+  const iconsProxy = new Proxy({}, { get: () => () => {} });
+  const BrowserSSR = serverComponent(plotsPanelSrc, 'shell/PlotsBrowserPanel.svelte', {
+    '@lucide/svelte': iconsProxy,
+    '../shared/state': { projectState: { subscribe: (fn) => { fn({ activeProject: 'Sample' }); return () => {}; } } },
+  });
+  const browserHtml = render(BrowserSSR, {
+    props: { region: 'main', view: 'plots', error: 'Transient load failure', page: { total: 0, plots: [] } },
+  }).body;
+  assert.doesNotMatch(browserHtml, /Transient load failure/);
+  assert.doesNotMatch(browserHtml, /class="error"/);
+
+  const BannersSSR = serverComponent(statusBannersSrc, 'shell/WorkspaceStatusBanners.svelte', {});
+  const bannersHtml = render(BannersSSR, {
+    props: {
+      region: 'banners',
+      startupFailed: true,
+      resetSampleNotice: 'Workspace reset',
+      diagnostics: [{ file: 'Sample.db', message: 'Check schema' }],
+    },
+  }).body;
+  assert.match(bannersHtml, /class="project-warning"/);
+  assert.match(bannersHtml, /Sample\.db: Check schema/);
+  assert.doesNotMatch(bannersHtml, /data-reset-sample-notice/);
 
   // Global zero-specificity default styling for unclassed buttons + error-dismiss CSS
   assert.match(cssSrc, /:where\(button:not\(\[class\]\)/);

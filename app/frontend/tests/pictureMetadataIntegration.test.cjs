@@ -20,6 +20,12 @@ function draft() {
   } }, '9223372036854775806', owner);
 }
 function source(name) { return readFileSync(srcPath(name), 'utf8'); }
+function makeNotifications() {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  return createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+}
 
 test('root Save/Lock/close and replacement retain picture errors and require explicit scoped Save', async () => {
   const close = { unsaved: true, busy: false, blocked: true, canSave: false, saveReason: 'retained invalid picture',
@@ -51,11 +57,13 @@ test('manager retains pending metadata through cancelled picture reads and rejec
   assert.match(manager.error, /retained picture metadata draft/);
 });
 
-test('picture editor renders associated source labels, identity and safety feedback before fields', () => {
+test('picture editor renders associated source labels, identity, Zone 1 field errors and safety lock while routing operational errors to notifications', () => {
+  const notifications = makeNotifications();
   const original = draft();
   const retained = editor.stagePictureMetadata(original, 'PicName', '', false);
   const component = serverComponent(source('PictureMetadataEditor.svelte'), 'PictureMetadataEditor.svelte', {
     './pictureMetadataEditor': editor,
+    '../shell/notificationService.svelte': { notifications },
   });
   const output = render(component, { props: { session: {
     subscribe: () => () => {},
@@ -68,15 +76,25 @@ test('picture editor renders associated source labels, identity and safety feedb
     assert.match(output, new RegExp(`for="picture-metadata-${column}"`));
     assert.match(output, new RegExp(`id="picture-metadata-${column}"`));
   }
-  assert.ok(output.indexOf('unknown receipt') < output.indexOf('picture-metadata-PicDir'));
+  assert.ok(output.indexOf('The picture Save outcome is unknown') < output.indexOf('picture-metadata-PicDir'));
+  assert.match(output, /PicName permits NULL but not new empty text/);
+  assert.doesNotMatch(output, /unknown receipt/);
   assert.ok(output.indexOf('does not undo a completed Save') > output.indexOf('picture-metadata-PicName'));
   assert.match(output, /Resolve picture Save receipt/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'error');
+  assert.equal(entries[0].category, 'entry');
+  assert.equal(entries[0].source, 'Plot Pictures');
+  assert.match(entries[0].message, /unknown receipt/);
 });
 
 test('remounted picture panel exposes retained correction and recovery before its read review is loaded', () => {
+  const notifications = makeNotifications();
   const retained = editor.stagePictureMetadata(draft(), 'PicName', '', false);
   const metadataEditor = serverComponent(source('PictureMetadataEditor.svelte'), 'PictureMetadataEditor.svelte', {
     './pictureMetadataEditor': editor,
+    '../shell/notificationService.svelte': { notifications },
   });
   const panel = serverComponent(source('PicturePanel.svelte'), 'PicturePanel.svelte', {
     '../bindings/github.com/boostao/vpro/app': { PictureService: {} },
@@ -93,12 +111,17 @@ test('remounted picture panel exposes retained correction and recovery before it
       receipt: null, originalUpdate: null }),
     closeState: () => ({ unsaved: true, busy: false, blocked: true, canSave: false }),
   } } }).body;
-  assert.match(output, /retained remount error/);
+  assert.doesNotMatch(output, /retained remount error/);
+  assert.match(output, /The picture Save outcome is unknown/);
+  assert.match(output, /PicName permits NULL but not new empty text/);
   assert.match(output, /id="picture-metadata-PicName"/);
   assert.match(output, /Discard draft and reload picture/);
   assert.match(output, /Resolve picture Save receipt/);
   assert.doesNotMatch(output, /id="picture-record"/);
   assert.match(output, /<button[^>]*disabled[^>]*>Load linked pictures/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.match(entries[0].message, /retained remount error/);
 });
 
 test('metadata wiring does not broaden image, creation/deletion or parent write authority', () => {

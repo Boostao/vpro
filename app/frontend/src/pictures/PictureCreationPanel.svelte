@@ -7,11 +7,34 @@
   $effect(() => session.subscribe(() => untrack(() => revision++)));
   const view = $derived.by(() => { revision; return session.view(); });
   let error = $state('');
+  const initialView = untrack(() => session.view());
+  if (initialView.error) {
+    const plotTag = initialView.receipt?.plotNumber
+      ? `Plot ${initialView.receipt.plotNumber}`
+      : initialView.request?.plotNumber
+        ? `Plot ${initialView.request.plotNumber}`
+        : undefined;
+    notifications.error('Picture operation error', initialView.error, {
+      category: 'entry',
+      source: 'Plot Pictures',
+      contextTag: plotTag,
+    });
+  }
   async function operate(operation: 'add' | 'selection' | 'create' | 'receipt' | 'preview' | 'release' | 'acknowledge' | 'cancel') {
     error = '';
     try {
-      if (operation === 'cancel') session.cancel();
-      else if (operation === 'add' || operation === 'create') {
+      if (operation === 'cancel') {
+        session.cancel();
+        const current = session.view();
+        if (current.error) {
+          const plotTag = current.request?.plotNumber ? `Plot ${current.request.plotNumber}` : undefined;
+          notifications.error('Picture operation cancelled', current.error, {
+            category: 'entry',
+            source: 'Plot Pictures',
+            contextTag: plotTag,
+          });
+        }
+      } else if (operation === 'add' || operation === 'create') {
         if (operation === 'add' && disabled) throw new Error('Finish the current picture read or metadata draft before adding.');
         const ok = operation === 'add' ? await session.add(crypto.randomUUID()) : await session.create();
         const current = session.view();
@@ -23,7 +46,7 @@
         if (ok && current.receipt) {
           notifications.success(
             'Picture attached',
-            `Attached ${current.receipt.selectedPath} (ID ${current.receipt.id}, history ${current.receipt.historyId}).`,
+            `Attached ${current.receipt.selectedPath} (ID ${current.receipt.id}, physical row ${current.receipt.rowId}, history ${current.receipt.historyId}; PicComment remains NULL).`,
             { category: 'entry', source: 'Plot Pictures', contextTag: plotTag },
           );
           await session.preview();
@@ -53,7 +76,7 @@
         const current = session.view();
         const plotTag = current.receipt?.plotNumber ? `Plot ${current.receipt.plotNumber}` : undefined;
         if (ok && current.receipt) {
-          notifications.success('Picture receipt recovered', `Recovered attach receipt for ${current.receipt.selectedPath}.`, {
+          notifications.success('Picture receipt recovered', `Recovered attach receipt for ${current.receipt.selectedPath} (ID ${current.receipt.id}, physical row ${current.receipt.rowId}, history ${current.receipt.historyId}; PicComment remains NULL).`, {
             category: 'entry',
             source: 'Plot Pictures',
             contextTag: plotTag,
@@ -93,10 +116,6 @@
 
 <section class="creation" data-picture-creation aria-label="Add a Picture">
   <h2>Add a Picture</h2>
-  {#if error || view.error}<p role="alert" class="error">{error || view.error}</p>{/if}
-  {#if view.phase === 'choosing'}
-    <p role="status">Finish or Cancel the native file chooser. Cancelling a promise does not close that dialog.</p>
-  {:else if view.busy}<p role="status">Picture operation: {view.phase}. Original request and receipts are retained.</p>{/if}
   <div class="actions">
     <button data-picture-add disabled={disabled || view.busy || view.blocked} onclick={() => operate('add')}>Add a Picture</button>
     {#if view.blocked}
@@ -127,15 +146,6 @@
     <img data-picture-selected-image src={view.image.dataUrl} alt="Selected file for the retained committed row" />
     <p>{view.image.width} × {view.image.height}; {view.image.mime}; SHA256 {view.image.sha256}</p>
   {/if}
-  {#if view.receipts.length}
-    <details data-picture-creation-receipts open>
-      <summary>Retained committed creation receipts ({view.receipts.length})</summary>
-      {#each view.receipts as receipt (receipt.requestId)}
-        <p data-picture-creation-receipt>Request {receipt.requestId}: ID {receipt.id}, physical row {receipt.rowId},
-          history {receipt.historyId}; stored {receipt.selectedPath}; PicComment remains NULL.</p>
-      {/each}
-    </details>
-  {/if}
   <p class="guidance">Source-bound, independently gated creation. Accepting a file appends its literal path and parent once;
     Cancel makes no assignments. Files are not copied. This selection never authorizes its directory or sibling files.
     Preview or refresh failures retain the metadata commit. Deletion and restoration remain unavailable.</p>
@@ -147,8 +157,7 @@
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
   button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .5rem .65rem; min-width: 0; overflow-wrap: anywhere; color: #313132; background: #FFFFFF; }
   button:disabled { opacity: .5; }
-  p, summary { overflow-wrap: anywhere; }
+  p { overflow-wrap: anywhere; }
   img { max-width: 100%; max-height: 28rem; object-fit: contain; }
-  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
   .guidance { font-size: .8rem; color: #474543; }
 </style>

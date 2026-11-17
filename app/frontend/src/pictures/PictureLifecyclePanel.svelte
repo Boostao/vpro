@@ -9,6 +9,27 @@
   let view = $state.raw<PictureLifecycleView>(untrack(() => session.view()));
   let localError = $state('');
   $effect(() => session.subscribe(() => { view = session.view(); }));
+  const initialView = untrack(() => session.view());
+  if (initialView.error) {
+    const plotTag = initialView.restoration?.plotNumber ?? initialView.original?.plotNumber;
+    notifications.error('Picture lifecycle error', initialView.error, {
+      category: 'entry',
+      source: 'Plot Pictures',
+      contextTag: plotTag ? `Plot ${plotTag}` : undefined,
+    });
+  }
+  function cancelLifecycle() {
+    session.cancel();
+    const current = session.view();
+    if (current.error) {
+      const plotTag = current.restoration?.plotNumber ?? current.original?.plotNumber;
+      notifications.error('Picture lifecycle cancelled', current.error, {
+        category: 'entry',
+        source: 'Plot Pictures',
+        contextTag: plotTag ? `Plot ${plotTag}` : undefined,
+      });
+    }
+  }
   const close = $derived.by(() => { view; return session.closeState(); });
   const original = $derived(view.restoration?.deletion.request.original ??
     view.original?.records.rows.find(row => row.rowId === view.rowId));
@@ -113,9 +134,8 @@
 
 <section class="lifecycle" data-picture-lifecycle aria-label="Picture deletion and historical restoration">
   <h3>Picture reference lifecycle</h3>
-  {#if view.error || localError}<p role="alert" class="error">{view.error || localError}</p>{/if}
   {#if view.busy}
-    <button data-picture-lifecycle-cancel onclick={() => session.cancel()}>Cancel acknowledgement or read</button>
+    <button data-picture-lifecycle-cancel onclick={() => cancelLifecycle()}>Cancel acknowledgement or read</button>
   {/if}
   {#if view.blocked}
     <p class="safety">Mutation outcome is unknown. The exact original/request is retained; do not repeat Delete or Restore.</p>
@@ -149,17 +169,6 @@
     <button data-picture-lifecycle-acknowledge disabled={view.busy || view.blocked} onclick={() => run(() => session.acknowledge())}>
       Acknowledge committed picture receipt
     </button>
-  {/if}
-  {#if view.receipts.length}
-    <details data-picture-lifecycle-receipts>
-      <summary>Retained irreversible receipts ({view.receipts.length})</summary>
-      {#each view.receipts as commit}
-        <p>{commit.kind === 'delete' ? 'Deleted' : 'Restored'} physical row
-          {JSON.stringify(commit.kind === 'delete' ? commit.receipt.request.original.rowId : commit.receipt.request.deletion.original.rowId)};
-          history {commit.kind === 'delete' ? commit.receipt.historyId : commit.receipt.request.historyId};
-          actor {JSON.stringify(commit.receipt.actor)}.</p>
-      {/each}
-    </details>
   {/if}
   {#if restoringEnabled}
     <details data-picture-lifecycle-history>
@@ -200,7 +209,6 @@
   summary { cursor: pointer; min-height: 2rem; padding: .35rem 0; overflow-wrap: anywhere; }
   .history { padding: .5rem 0; border-bottom: 1px solid #D8D8D8; }
   p { overflow-wrap: anywhere; }
-  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
   .safety { color: #313132; background: #FEF6E0; border-left: 3px solid #FCBA19; padding: .5rem; }
   .guidance { color: #474543; font-size: .8rem; }
 </style>

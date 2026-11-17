@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import type { SummaryEnvironmentalPort, SummaryEnvironmentalSession, SummaryEnvironmentalNumericSession, SummaryEnvironmentalLifeformSession } from './summaryVegetationEnvironmental';
@@ -12,14 +16,40 @@
   const retained = untrack(() => session);
   let view = $state.raw(retained.view());
   let error = $state('');
+  let lastViewError = '';
+  function syncEnvNotifications() {
+    const err = view?.error ?? '';
+    if (err && err !== lastViewError && typeof notifications !== 'undefined') {
+      notifications.error('Summary environmental inspection failed', err, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: retained.owner?.project || undefined,
+      });
+    }
+    lastViewError = err;
+  }
   const unsubscribe = retained.subscribe(() => {
     view = retained.view();
+    syncEnvNotifications();
     onBusyChange(view.busy || view.settling);
   });
+  syncEnvNotifications();
   async function preview() {
     if (operationHeld || view.busy || view.settling) return;
     error = '';
-    try { await retained.show(port); } catch (cause) { error = String(cause); }
+    try {
+      await retained.show(port);
+      if (typeof syncEnvNotifications === 'function') syncEnvNotifications();
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary environmental inspection failed', error, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: retained.owner?.project || undefined,
+        });
+      }
+    }
   }
   function cancel() { retained.cancel(); }
   function environmentalText(value: FieldListCell | SummaryEnvironmentalValue) {
@@ -36,13 +66,10 @@
 
 <section class="environmental" data-summary-environment aria-label="Combined Summary environmental inspection">
   <h2>Environmental rows — current Site Unit Table</h2>
-  {#if error}<p role="alert">{error}</p>{/if}
-  {#if view.error}<p role="alert">{view.error}</p>{/if}
   <div class="actions">
     <button data-summary-environment-preview disabled={operationHeld || view.busy || view.settling} onclick={preview}>Preview environmental rows</button>
     {#if view.busy}<button data-summary-environment-cancel onclick={cancel}>Cancel environmental preview</button>{/if}
   </div>
-  {#if view.busy}<p role="status">Reading vegetation, selected fields and environmental values in one owned snapshot…</p>{/if}
   {#if view.settling && !view.busy}<p role="status">Cancelled dispatch or validation is still settling. Navigation, close and another Preview must wait.</p>{/if}
   <p>This read-only inspection uses Layer, By n Plots and % Cover to establish the unit frame.
     It does not consume the controls or saved Include Env preference above. Every selected physical

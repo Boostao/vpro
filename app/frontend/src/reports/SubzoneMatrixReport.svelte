@@ -22,8 +22,42 @@
   const reads = new ReadRequests();
   const limit = 25;
   let generation = 0;
+  let lastPubKey = '';
   function reportBusy() { onBusyChange(busy || barrier); }
-  const unsubscribe = session.subscribe(() => { publication = session.view(); reportBusy(); });
+  function syncPublicationNotifications() {
+    const settled = session.view();
+    if (settled.busy) { lastPubKey = ''; return; }
+    if (!settled.outcome && !settled.error) return;
+    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
+    if (key === lastPubKey) return;
+    lastPubKey = key;
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined;
+    if (settled.outcome?.status === 'published' && !settled.error) {
+      const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+      notifications.success('Subzone Matrix workbook exported', exportedPath, {
+        category: 'reports',
+        source: 'Subzone Matrix',
+        contextTag: ctxTag,
+      });
+    } else if (settled.error || settled.outcome) {
+      notifications.error(
+        'Subzone Matrix workbook export failed',
+        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+        {
+          category: 'reports',
+          source: 'Subzone Matrix',
+          contextTag: ctxTag,
+        },
+      );
+    }
+  }
+  const unsubscribe = session.subscribe(() => {
+    publication = session.view();
+    syncPublicationNotifications();
+    reportBusy();
+  });
+  syncPublicationNotifications();
   function cancel() {
     generation++; reads.cancelAll(); busy = false; reportBusy();
   }
@@ -90,8 +124,10 @@
     try {
       await session.publish(workbook, destination, request =>
         EnvironmentReportService.ExportReviewedSubzoneMatrix(contextId, JSON.stringify(request)));
-      const settled = session.view();
-      if (typeof notifications !== 'undefined') {
+      if (typeof syncPublicationNotifications === 'function') {
+        syncPublicationNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const settled = session.view();
         if (settled.outcome?.status === 'published' && !settled.error) {
           const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
           notifications.success('Subzone Matrix workbook exported', exportedPath, {
@@ -134,12 +170,9 @@
       <button type="button" data-matrix-workbook-review disabled={busy || barrier || !available} onclick={reviewWorkbook}>Review XLSX workbook</button>
       {#if busy}
         <button type="button" data-matrix-cancel onclick={cancel}>Cancel matrix read</button>
-        <p role="status">Reading or preparing the owned matrix...</p>
       {/if}
     </div>
   </header>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#if publication.error}<p class="error" role="alert">{publication.error}</p>{/if}
   {#if !available}<p role="status">Select a physical hierarchy to review this report.</p>{/if}
   <dl class="provenance">
     <div><dt>Selected hierarchy</dt><dd>{hierarchy}</dd></div>
@@ -181,10 +214,8 @@
       <button type="button" data-matrix-publish disabled={busy || barrier || !destination} onclick={publishWorkbook}>Publish reviewed XLSX</button>
     </section>
   {/if}
-  {#if publication.busy}<p role="status">Publishing the reviewed workbook. Publication cannot be cancelled or replayed.</p>{/if}
-  {#if publication.outcome}
-    <p data-matrix-receipt role="status">Workbook {publication.outcome.status}: {publication.outcome.path || publication.requestedDestination}
-      {publication.outcome.sha256}</p>
+  {#if !publication.outcome && publication.blocked && !publication.busy}
+    <p data-matrix-unknown role="alert">Workbook outcome unknown. Retain and inspect {publication.requestedDestination || 'the requested destination'}; never replay blindly.</p>
   {/if}
   {#if publication.blocked && !publication.busy}
     <button type="button" data-matrix-acknowledge onclick={acknowledge}>Acknowledge workbook outcome</button>
@@ -203,7 +234,7 @@
   .report-sticky-bar .actions { margin-block: 0; }
   .actions { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-block: 1rem; }
   .provenance, .workbook { display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; }
-  dd, [data-matrix-receipt] { margin: 0; overflow-wrap: anywhere; }
+  dd { margin: 0; overflow-wrap: anywhere; }
   label { display: grid; gap: .25rem; }
   input { box-sizing: border-box; width: 100%; min-width: 0; }
   .table-scroll { max-width: 100%; overflow-x: auto; }

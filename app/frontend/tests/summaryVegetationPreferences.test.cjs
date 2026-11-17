@@ -5,6 +5,7 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { proxy } = require('svelte/internal/client');
 const { loadTypeScript, serverComponent, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
+const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
 const { render } = require('svelte/server');
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 const cells = loadTypeScript('projectMetadataRestore.ts', { './qualityEditor': quality, './projectMetadataEditor': {} });
@@ -162,16 +163,18 @@ test('held saves, late reads and known unknown receipts remain separate across r
 });
 
 const component = readFileSync(srcPath('SummaryVegetationReport.svelte'), 'utf8');
-function panel(session, preferencesEnabled = true) {
+function panel(session, preferencesEnabled = true, extraDependencies = {}) {
   return serverComponent(component, 'SummaryVegetationReport.svelte', {
     './summaryVegetation': summary,
     './summaryVegetationPreferences': { summaryVegetationPreferenceSession: preferencesEnabled ? () => session : null },
     '../bindings/github.com/boostao/vpro/app': {},
     '../shared/state': { projectState: { subscribe(fn) { fn(null); return () => {}; } } }, '../classification/SiteUnitExclusionFilter.svelte': { default: () => {} },
     '../classification/siteUnitExclusionFilter': {},
+    ...extraDependencies,
   });
 }
 test('compiled saved-option panel has one live source control per field and no render-time mutation', async () => {
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
   const owner = { ...scope, contextId: 'normal-panel', su: 'NormalSU' };
   const session = new prefs.SummaryVegetationPreferencesSession(owner, true);
   session.apply(review(values(4, 2, 6, 20, 3.5), true, owner));
@@ -191,8 +194,9 @@ test('compiled saved-option panel has one live source control per field and no r
   assert.doesNotMatch(body.match(/<button[^>]*data-summary-preferences-undo[^>]*>/)[0], /\bdisabled\b/);
   assert.ok(holds.includes(true)); session.undo();
   await session.save(async () => ({ contextId: owner.contextId, changed: false, committed: false, errorMessage: '' })); session.acknowledge();
-  body = render(panel(session), { props: { ...owner, onBusyChange() {} } }).body;
-  assert.match(body, /data-summary-preference-receipt/);
+  body = render(panel(session, true, { '../shell/notificationService.svelte': { notifications } }), { props: { ...owner, onBusyChange() {} } }).body;
+  assert.doesNotMatch(body, /data-summary-preference-receipt/);
+  assert.ok(notifications.getSnapshot().entries.some(e => e.category === 'reports' && e.source === 'Summary Vegetation' && /No option changes were needed/.test(e.message)));
   const disabled = render(panel(session, false), { props: { ...owner, onBusyChange() {} } }).body;
   assert.doesNotMatch(disabled, /data-summary-preferences/);
 });
@@ -257,8 +261,10 @@ test('failed owned reload blocks Save and Preview across remount until a success
   session.editOption('average', '2'); session.undo();
   assert.match(session.view().readError, /Owned reload unavailable/);
   const remounted = registry(owner);
-  let body = render(panel(remounted), { props: { ...owner, onBusyChange() {} } }).body;
-  assert.match(body, /Owned reload unavailable/);
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  let body = render(panel(remounted, true, { '../shell/notificationService.svelte': { notifications } }), { props: { ...owner, onBusyChange() {} } }).body;
+  assert.doesNotMatch(body, /Owned reload unavailable/);
+  assert.ok(notifications.getSnapshot().entries.some(e => e.category === 'reports' && e.severity === 'error' && /Owned reload unavailable/.test(e.message)));
   for (const selector of ['data-summary-preferences-save', 'data-summary-preview']) {
     assert.match(body.match(new RegExp(`<button[^>]*${selector}[^>]*>`))[0], /\bdisabled\b/);
   }
@@ -289,8 +295,10 @@ test('unchanged historical source failure is preview-unavailable rather than a p
     });
     session.acknowledge();
     const after = [];
-    const retainedBody = render(panel(session), { props: { ...owner, onBusyChange: flag => after.push(flag) } }).body;
-    assert.match(retainedBody, /data-summary-preference-receipt/);
+    const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+    const retainedBody = render(panel(session, true, { '../shell/notificationService.svelte': { notifications } }), { props: { ...owner, onBusyChange: flag => after.push(flag) } }).body;
+    assert.doesNotMatch(retainedBody, /data-summary-preference-receipt/);
+    assert.ok(notifications.getSnapshot().entries.some(e => e.category === 'reports' && e.source === 'Summary Vegetation' && /No option changes were needed/.test(e.message)));
     assert.ok(after.length > 0); assert.ok(after.every(flag => flag === false));
     session.editOption('average', '2');
     assert.ok(session.view().draftError);

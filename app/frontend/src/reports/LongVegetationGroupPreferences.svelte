@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { notifications } from '../shell/notificationService.svelte';
   import { ReadRequests } from '../shared/readRequests';
   import { longVegetationGroupChoices, type LongVegetationGroupPreferencesSession } from './longVegetationGroupPreferences';
 
@@ -17,9 +18,51 @@
   let error = $state('');
   const reads = new ReadRequests();
   let generation = 0;
+  let notifiedReceipts = 0;
+  let lastViewError = '';
+  function syncPreferenceNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedReceipts) notifiedReceipts = 0;
+    const ctxTag = typeof contextId === 'string' && contextId ? contextId : undefined;
+    for (let i = notifiedReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Long Vegetation report grouping saved', receipt.outcome.changed ? 'Saved report grouping preference.' : 'No report grouping changes.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Long Vegetation report grouping saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Long Vegetation report grouping save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Long Vegetation report grouping unchanged', 'No report grouping changes were needed.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedReceipts = receipts.length;
+    const viewErr = view.error ?? '';
+    if (viewErr && viewErr !== lastViewError) {
+      notifications.error('Long Vegetation report grouping preference failed', viewErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastViewError = viewErr;
+  }
   const unsubscribe = untrack(() => preferences.subscribe(() => {
     view = preferences.view(); availability = preferences.availability();
+    syncPreferenceNotifications();
   }));
+  syncPreferenceNotifications();
   function cancel() {
     generation++; reads.cancelAll(); preferences.cancelLoad(); busy = false; onReadBusyChange(false);
   }
@@ -31,8 +74,17 @@
       const value = await reads.track(VegetationReportService.GetLongVegetationGroupPreferences(contextId));
       if (request !== generation) return;
       preferences.applyLoaded(value, token);
+      if (typeof syncPreferenceNotifications === 'function') syncPreferenceNotifications();
     } catch (cause) {
-      if (request === generation) error = `Saved report grouping unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved report grouping unavailable; no defaults applied: ${String(cause)}`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation report grouping load failed', error, {
+            category: 'reports', source: 'Long Vegetation',
+            contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+          });
+        }
+      }
     } finally {
       if (request === generation) { busy = false; onReadBusyChange(false); }
     }
@@ -42,8 +94,34 @@
     cancel(); const request = generation; error = '';
     try {
       await preferences.save(value => VegetationReportService.SaveLongVegetationGroupPreferences(contextId, JSON.stringify(value)));
+      if (typeof syncPreferenceNotifications === 'function') syncPreferenceNotifications();
+      else if (typeof notifications !== 'undefined') {
+        const settled = preferences.view();
+        const latest = settled.receipts?.[settled.receipts.length - 1];
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Long Vegetation report grouping saved', latest.outcome.changed ? 'Saved report grouping preference.' : 'No report grouping changes.', {
+              category: 'reports', source: 'Long Vegetation',
+              contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Long Vegetation report grouping save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation',
+              contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+            });
+          }
+        }
+      }
     } catch (cause) {
-      if (request === generation) error = String(cause);
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation report grouping save failed', error, {
+            category: 'reports', source: 'Long Vegetation',
+            contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+          });
+        }
+      }
     }
   }
   function edit(raw: string) {
@@ -54,16 +132,13 @@
 </script>
 
 <section class="grouping" aria-label="Saved Long Vegetation report grouping" data-long-vegetation-grouping>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if view.draftError}<p class="error" role="alert">{view.draftError}</p>{/if}
-  {#if view.error}<p class="error" role="alert">{view.error}</p>{/if}
-  {#if view.busy}<p role="status">Saving report grouping; Save cannot be cancelled.</p>{/if}
   {#each view.receipts as receipt}
-    <p data-long-vegetation-group-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-      {#if receipt.kind === 'known'}Preference receipt: changed {String(receipt.outcome.changed)};
-        committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}
-      {:else}Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}{/if}
-    </p>
+    {#if receipt.kind !== 'known'}
+      <p data-long-vegetation-group-receipt role="alert">
+        Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
+      </p>
+    {/if}
   {/each}
   <label for="long-vegetation-group">
     <span>Group by</span>
@@ -91,7 +166,7 @@
       <button data-long-vegetation-group-acknowledge disabled={busy || mutationHeld}
         onclick={() => preferences.acknowledge()}>Acknowledge report grouping outcome</button>
     {/if}
-    {#if busy}<button onclick={cancel}>Cancel report grouping read</button><p role="status">Reading owned report grouping...</p>{/if}
+    {#if busy}<button onclick={cancel}>Cancel report grouping read</button>{/if}
   </div>
   <p class="guidance">Load saved grouping before editing; no defaults are applied. Drafts do not change report output.
     Save explicitly, acknowledge and reload report options. Unavailable modes cannot be newly selected;

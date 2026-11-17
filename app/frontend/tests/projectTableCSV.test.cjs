@@ -4,7 +4,7 @@ const {createHash} = require('node:crypto');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const {compile} = require('svelte/compiler');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { loadTypeScript, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
 const quality = loadTypeScript('qualityEditor.ts', {'./becEditor':loadTypeScript('becEditor.ts')});
 const cells = loadTypeScript('projectMetadataRestore.ts', {'./qualityEditor':quality,'./projectMetadataEditor':{}});
 const csv = loadTypeScript('projectTableCSV.ts', {'./qualityEditor':quality,'./projectMetadataRestore':cells});
@@ -114,4 +114,39 @@ test('CSV UI is independently default-off and shares existing draft, context and
   assert.match(component,/<textarea id="csv-value-preview" readonly/);
   assert.match(component,/JSON-escaped text and typed storage metadata/);
   assert.doesNotMatch(component,/Save|download=|CreateBlank|SaveProject/);
+});
+
+test('ProjectTableCSVReview routes table read errors to reports notifications', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const host = componentFunctions('ProjectTableCSVReview.svelte', ['cancel', 'updateBusy', 'show'], {
+    contextId: 'owner',
+    project: 'Sample',
+    projectPath: '/tmp/Sample.db',
+    suffix: 'Env',
+    busy: false,
+    error: '',
+    review: null,
+    approval: null,
+    publication: { busy: false, blocked: false },
+    archiveEnabled: true,
+    generation: 0,
+    reads: { track: v => v, cancelAll() {} },
+    onBusyChange() {},
+    notifications,
+    ImportExportService: {
+      GetTableCSVArchiveReview: async () => { throw new Error('table read refused'); },
+    },
+  });
+  await host.actions.show();
+  assert.match(host.error, /table read refused/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'error');
+  assert.equal(entries[0].category, 'reports');
+  assert.equal(entries[0].source, 'CSV Export');
+  assert.equal(entries[0].contextTag, 'Sample');
+  assert.match(entries[0].message, /table read refused/);
 });

@@ -56,9 +56,103 @@
     (!!fullPreferenceView && (fullPreferenceView.busy || fullPreferenceView.blocked ||
       fullPreferenceView.authorityUnknown || !!fullPreferenceView.draftError)));
   const scopeAllowed = $derived(siteUnitType === 3 || (su !== 'None' && (siteUnitType === 2 || (siteUnitType === 1 && su !== 'USysSuTableDynamic'))));
+  let lastPrefError = '';
+  let notifiedPrefReceipts = 0;
+  let lastFullPrefError = '';
+  let notifiedFullPrefReceipts = 0;
+  let lastSpeciesError = '';
+  function syncSpeciesNotifications() {
+    const err = criteria?.view()?.error ?? '';
+    if (err && err !== lastSpeciesError && typeof notifications !== 'undefined') {
+      notifications.error('Summary Environment species criteria invalid', err, {
+        category: 'reports',
+        source: 'Summary Environment',
+        contextTag: (typeof project === 'string' && project) || undefined,
+      });
+    }
+    lastSpeciesError = err;
+  }
+  function syncPreferenceNotifications() {
+    const view = preferences?.view();
+    if (!view) return;
+    const ctxTag = (typeof project === 'string' && project) || undefined;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedPrefReceipts) notifiedPrefReceipts = 0;
+    for (let i = notifiedPrefReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known' && typeof notifications !== 'undefined') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Summary Environment options saved', receipt.outcome.changed ? 'Saved summary preferences.' : 'No option changes.', {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Summary Environment options saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Summary Environment options save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Summary Environment options unchanged', 'No option changes were needed.', {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedPrefReceipts = receipts.length;
+    const err = view.error ?? '';
+    if (err && err !== lastPrefError && typeof notifications !== 'undefined') {
+      notifications.error('Summary Environment options failed', err, {
+        category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+      });
+    }
+    lastPrefError = err;
+  }
+  function syncFullPreferenceNotifications() {
+    const view = fullPreferences?.view();
+    if (!view) return;
+    const ctxTag = (typeof project === 'string' && project) || undefined;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedFullPrefReceipts) notifiedFullPrefReceipts = 0;
+    for (let i = notifiedFullPrefReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known' && typeof notifications !== 'undefined') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Summary Environment full preferences saved', receipt.outcome.changed ? 'Saved full SE* preferences.' : 'No preference changes.', {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Summary Environment full preferences saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+          lastFullPrefError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Summary Environment full preferences save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+          lastFullPrefError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Summary Environment full preferences unchanged', 'No preference changes were needed.', {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedFullPrefReceipts = receipts.length;
+    const err = view.error ?? '';
+    if (err && err !== lastFullPrefError && typeof notifications !== 'undefined') {
+      notifications.error('Summary Environment full preferences failed', err, {
+        category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+      });
+    }
+    lastFullPrefError = err;
+  }
   function reportBusy() { onBusyChange(busy || preferenceBarrier || workbookBusy || speciesBarrier); }
   const unsubscribeSpecies = criteria?.subscribe(() => {
-    speciesView = criteria.view(); preview = null; speciesPreview = null; syncFullDraftFromUI(); reportBusy();
+    speciesView = criteria.view(); preview = null; speciesPreview = null; syncFullDraftFromUI(); syncSpeciesNotifications(); reportBusy();
   });
   const unsubscribe = preferences?.subscribe(() => {
     preferenceView = preferences.view();
@@ -70,6 +164,7 @@
     const allowed = effectiveType === 3 || (su !== 'None' && (effectiveType === 2 || (effectiveType === 1 && su !== 'USysSuTableDynamic')));
     ready = (method === 1 || method === 2) && [1, 2, 3].includes(effectiveType) && allowed && !preferenceView.authorityUnknown;
     preview = null; speciesPreview = null;
+    syncPreferenceNotifications();
     reportBusy();
   });
   const unsubscribeFull = fullPreferences?.subscribe(() => {
@@ -81,8 +176,12 @@
     const effectiveType = siteUnitType ?? 0;
     const allowed = effectiveType === 3 || (su !== 'None' && (effectiveType === 2 || (effectiveType === 1 && su !== 'USysSuTableDynamic')));
     ready = (method === 1 || method === 2) && [1, 2, 3].includes(effectiveType) && allowed && !fullPreferenceView.authorityUnknown;
+    syncFullPreferenceNotifications();
     reportBusy();
   });
+  syncSpeciesNotifications();
+  syncPreferenceNotifications();
+  syncFullPreferenceNotifications();
   function syncFullDraftFromUI() {
     if (!fullPreferences || !fullPreferenceView?.draft || fullPreferenceView.busy || fullPreferenceView.blocked) return;
     if (method !== 1 && method !== 2) return;
@@ -133,7 +232,16 @@
       method = configured.method; siteUnitType = configured.siteUnitType;
       const allowed = siteUnitType === 3 || (su !== 'None' && (siteUnitType === 2 || (siteUnitType === 1 && su !== 'USysSuTableDynamic')));
       ready = allowed;
-      if (!ready) error = `Saved site-unit type ${siteUnitType} requires an eligible active Site Unit table; choose Hierarchy (~) or Field-Derived.`;
+      if (!ready) {
+        error = `Saved site-unit type ${siteUnitType} requires an eligible active Site Unit table; choose Hierarchy (~) or Field-Derived.`;
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary Environment options ineligible', error, {
+            category: 'reports',
+            source: 'Summary Environment',
+            contextTag: (typeof project === 'string' && project) || undefined,
+          });
+        }
+      }
     } catch (cause) {
       if (request === generation) {
         error = `Summary options unavailable; no defaults or configuration writes: ${String(cause)}`;
@@ -262,6 +370,36 @@
     cancel(); error = '';
     try {
       await preferences.save(request => EnvironmentReportService.SaveSiteUnitSummaryPreferences(contextId, JSON.stringify(request)));
+      if (typeof syncPreferenceNotifications === 'function') {
+        syncPreferenceNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const view = preferences.view();
+        const latest = view.receipts?.at(-1);
+        const ctxTag = (typeof project === 'string' && project) || undefined;
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Summary Environment options saved', latest.outcome.changed ? 'Saved summary preferences.' : 'No option changes.', {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Summary Environment options saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Summary Environment options save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          } else {
+            notifications.info('Summary Environment options unchanged', 'No option changes were needed.', {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          }
+        } else if (view.error) {
+          notifications.error('Summary Environment options failed', view.error, {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+        }
+      }
     } catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
@@ -279,6 +417,36 @@
     try {
       syncFullDraftFromUI();
       await fullPreferences.save(request => EnvironmentReportService.SaveFullSiteUnitSummaryPreferences(contextId, JSON.stringify(request)));
+      if (typeof syncFullPreferenceNotifications === 'function') {
+        syncFullPreferenceNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const view = fullPreferences.view();
+        const latest = view.receipts?.at(-1);
+        const ctxTag = (typeof project === 'string' && project) || undefined;
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Summary Environment full preferences saved', latest.outcome.changed ? 'Saved full SE* preferences.' : 'No preference changes.', {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Summary Environment full preferences saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Summary Environment full preferences save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          } else {
+            notifications.info('Summary Environment full preferences unchanged', 'No preference changes were needed.', {
+              category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+            });
+          }
+        } else if (view.error) {
+          notifications.error('Summary Environment full preferences failed', view.error, {
+            category: 'reports', source: 'Summary Environment', contextTag: ctxTag,
+          });
+        }
+      }
     } catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
@@ -346,15 +514,11 @@
       {:else}
         <button data-summary-options-reload disabled={busy || workbookBusy} onclick={options}>Reload summary options</button>
       {/if}
-      {#if busy}<button data-summary-cancel onclick={cancel}>Cancel report read</button><p role="status">Reading owned summary options or snapshots...</p>{/if}
+      {#if busy}<button data-summary-cancel onclick={cancel}>Cancel report read</button>{/if}
     </div>
   </header>
-  {#if error}<p role="alert" class="error">{error}</p>{/if}
-  {#if preferenceView?.error}<p role="alert" class="error">{preferenceView.error}</p>{/if}
   {#if preferenceView?.draftError}<p role="alert" class="error">{preferenceView.draftError}</p>{/if}
-  {#if fullPreferenceView?.error}<p role="alert" class="error">{fullPreferenceView.error}</p>{/if}
   {#if fullPreferenceView?.draftError}<p role="alert" class="error">{fullPreferenceView.draftError}</p>{/if}
-  {#if speciesView?.error}<p role="alert" class="error" data-summary-species-error>{speciesView.error}</p>{/if}
   <p>Project {project}; active SU {su}. Profile navigation does not filter this report.</p>
   {#if lifeformsEnabled}
     <fieldset disabled={busy || workbookBusy || preferenceBarrier || speciesBarrier || !ready}>
@@ -442,13 +606,9 @@
       disabled={busy || preferenceBarrier || speciesBarrier || !ready || !scopeAllowed}
       onBusyChange={(held) => { workbookBusy = held; reportBusy(); }} />
   {/if}
-  {#if preferenceView?.busy}<p role="status">Saving reviewed summary options; this preference write cannot be cancelled.</p>{/if}
   {#each preferenceView?.receipts ?? [] as receipt}
-    {#if receipt.kind === 'known'}
-      <p data-summary-preferences-receipt role="status">Preference receipt: changed {String(receipt.outcome.changed)};
-        committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}</p>
-    {:else}
-      <p data-summary-preferences-receipt data-summary-preferences-unknown-receipt role="status">
+    {#if receipt.kind !== 'known'}
+      <p data-summary-preferences-receipt data-summary-preferences-unknown-receipt role="alert">
         Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}</p>
     {/if}
   {/each}

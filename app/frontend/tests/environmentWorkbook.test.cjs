@@ -3,7 +3,9 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { compile } = require('svelte/compiler');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { render } = require('svelte/server');
+const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 const editor = loadTypeScript('projectMetadataEditor.ts', {
   './qualityEditor': quality,
@@ -108,5 +110,31 @@ test('workbook panel keeps title/preferences/read/navigation/native-close barrie
   assert.match(source, /function acknowledgeWorkbook\(\) \{\s*workbookSession\.acknowledge\(\);\s*workbookReview = null;/);
   assert.match(source, /input, textarea \{ box-sizing: border-box; min-width: 0;/);
   assert.match(source, /\.report \{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*overflow-wrap: anywhere;/);
-  assert.ok(source.indexOf('data-environment-workbook-receipt') < source.indexOf('class="guidance"'));
+  assert.doesNotMatch(source, /data-environment-workbook-receipt/);
+  assert.ok(source.indexOf('data-environment-workbook-unknown') >= 0 && source.indexOf('data-environment-workbook-unknown') < source.indexOf('class="guidance"'));
+});
+
+test('server-rendered LongEnvironmentReport routes known workbook receipts to notifications without DOM receipts', async () => {
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const owned = { ...owner, contextId: 'env-notif-ssr' };
+  const input = fixture();
+  input.preview.contextId = owned.contextId;
+  const session = workbook.environmentWorkbookPublicationSession(owned);
+  await session.publish(input, destination, async () => receipt('published'));
+  const Report = serverComponent(readFileSync(srcPath('LongEnvironmentReport.svelte'), 'utf8'), 'LongEnvironmentReport.svelte', {
+    '../bindings/github.com/boostao/vpro/app': { EnvironmentReportService: {} },
+    './longEnvironmentReport': report,
+    './longEnvironmentPreferences': { longEnvironmentPreferencesSession: () => ({ view: () => ({ busy: false, blocked: false, authorityUnknown: false, draftError: '', error: '', initialized: false, saved: null, draft: { title: '' }, receipts: [] }), subscribe: () => () => {}, cancelLoad() {} }) },
+    './environmentWorkbook': workbook,
+    '../shell/notificationService.svelte': { notifications },
+  });
+  const html = render(Report, { props: { ...owned, onBusyChange() {} } }).body;
+  assert.doesNotMatch(html, /data-environment-workbook-receipt/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'success');
+  assert.equal(entries[0].category, 'reports');
+  assert.equal(entries[0].source, 'Long Environment');
+  assert.equal(entries[0].contextTag, owned.project);
+  assert.ok(entries[0].message.includes(destination));
 });

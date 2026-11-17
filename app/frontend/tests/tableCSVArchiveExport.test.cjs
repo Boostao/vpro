@@ -376,17 +376,24 @@ test('actual App close handlers and navigation transition refuse pending/unackno
   assert.equal(context.calls.confirmed, 2); assert.equal(context.calls.navigated, 2);
 });
 
-test('UI literal opt-in, labels, receipts above fields and existing app native/navigation close guards remain integrated', async () => {
+test('UI literal opt-in, labels, unknown-outcome locks above fields and notifications routing remain integrated', async () => {
   const app = readFileSync(srcPath('App.svelte'), 'utf8');
   assert.equal(compile(componentSource, { filename: 'ProjectTableCSVReview.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(componentSource, /busy \|\| !!publication\?\.busy \|\| !!publication\?\.blocked/);
-  assert.ok(componentSource.indexOf('data-table-csv-archive-receipt') < componentSource.indexOf('id="table-csv-archive-destination"'));
+  assert.ok(componentSource.indexOf('data-table-csv-archive-unknown-receipt') < componentSource.indexOf('id="table-csv-archive-destination"'));
   assert.match(componentSource, /<label for="table-csv-archive-destination">/);
   assert.match(componentSource, /<textarea id="table-csv-archive-destination"/);
   assert.match(componentSource, /data-table-csv-archive-publish/);
   assert.match(componentSource, /data-table-csv-archive-choose/);
-  assert.match(componentSource, /data-table-csv-archive-receipt=\{receipt\.phase === 'known' \? '' : undefined\}/);
-  assert.match(componentSource, /data-table-csv-archive-unknown-receipt=\{receipt\.phase === 'unknown' \? '' : undefined\}/);
+  assert.doesNotMatch(componentSource, /data-table-csv-archive-receipt/);
+  assert.doesNotMatch(componentSource, /\{#if error\}<p class="error"/);
+  assert.doesNotMatch(componentSource, /\{#if publication\.storageError\}/);
+  assert.doesNotMatch(componentSource, /\{#if receipt\.error\}/);
+  assert.doesNotMatch(componentSource, /Reading and checking the owned table snapshot/);
+  assert.doesNotMatch(componentSource, /Archive operation in progress; close and navigation are blocked/);
+  assert.match(componentSource, /data-table-csv-archive-unknown-receipt=""/);
+  assert.match(componentSource, /Destination contains NUL or malformed UTF-16; export is blocked/);
+  assert.match(componentSource, /data-table-csv-summary/);
   assert.doesNotMatch(componentSource, /\.trim\(|toLowerCase\(|toUpperCase\(/);
   assert.match(componentSource, /not independently verified by browser/);
   assert.match(componentSource, /not independently computed by browser/);
@@ -397,14 +404,49 @@ test('UI literal opt-in, labels, receipts above fields and existing app native/n
   assert.match(app, /archivePublicationBusy = publication\.busy \|\| publication\.blocked/);
   assert.match(app, /publication\.blocked && view === 'home'\) view = 'table-csv'/);
   const { render } = await import('svelte/server');
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
   const mod = moduleFor();
+  const session = mod.tableCSVArchivePublicationSession(owner);
+  await session.publish(review(), table, destination, async () => outcome());
   const component = serverComponent(componentSource, 'ProjectTableCSVReview.svelte', {
     '../bindings/github.com/boostao/vpro/app': {}, './projectTableCSV': csv,
     './longEnvironmentReport': { reportCellText: String }, './tableCSVArchiveExport': mod,
+    '../shell/notificationService.svelte': { notifications },
   });
   const html = render(component, { props: { ...owner, onBusyChange() {} } }).body;
   assert.equal(html.includes('data-table-csv-archive-export'), true);
   assert.equal(html.includes('Exports a verified project table CSV archive (.zip)'), true);
+  assert.equal(html.includes('data-table-csv-archive-receipt'), false);
+  assert.equal(html.includes('data-table-csv-archive-acknowledge'), true);
+  const knownEntries = notifications.getSnapshot().entries;
+  assert.equal(knownEntries.length, 1);
+  assert.equal(knownEntries[0].severity, 'success');
+  assert.equal(knownEntries[0].category, 'reports');
+  assert.equal(knownEntries[0].source, 'CSV Export');
+
+  session.acknowledge();
+  await session.publish(review(), table, destination, async () => { throw new Error('lost IPC'); });
+  const unknownHtml = render(component, { props: { ...owner, onBusyChange() {} } }).body;
+  assert.equal(unknownHtml.includes('data-table-csv-archive-unknown-receipt'), true);
+  assert.equal(unknownHtml.includes('lost IPC'), false);
+  assert.ok(notifications.getSnapshot().entries.some(e => e.severity === 'error' && e.source === 'CSV Export' && /lost IPC/.test(e.message)));
+
+  const corruptStore = storage();
+  corruptStore.setItem(`vpro-owned-table-csv-receipts-v1:${owner.contextId}`, 'corrupt-json');
+  const corruptMod = moduleFor(corruptStore);
+  const corruptNotifs = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const corruptComp = serverComponent(componentSource, 'ProjectTableCSVReview.svelte', {
+    '../bindings/github.com/boostao/vpro/app': {}, './projectTableCSV': csv,
+    './longEnvironmentReport': { reportCellText: String }, './tableCSVArchiveExport': corruptMod,
+    '../shell/notificationService.svelte': { notifications: corruptNotifs },
+  });
+  const corruptHtml = render(corruptComp, { props: { ...owner, onBusyChange() {} } }).body;
+  assert.doesNotMatch(corruptHtml, /history unavailable/);
+  assert.ok(corruptNotifs.getSnapshot().entries.some(e => e.severity === 'error' && e.source === 'CSV Export' && /history unavailable/.test(e.message)));
+
   const scripts = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'))).scripts;
   assert.equal(scripts.test, 'node scripts/run-tests.mjs');
 });

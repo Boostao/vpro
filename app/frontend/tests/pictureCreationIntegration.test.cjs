@@ -13,6 +13,12 @@ const sessionModule = loadTypeScript('pictureCreationSession.ts', {
 });
 const operation = value => Object.assign(Promise.resolve(value), { cancel() {} });
 const source = name => readFileSync(srcPath(name), 'utf8');
+function makeNotifications() {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  return createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+}
 
 test('actual creation and coupled metadata subscription effects settle, track owner changes and detach on disposal', async () => {
   const client = await import('svelte/internal/client');
@@ -173,18 +179,46 @@ test('committed list refresh reads owned metadata and rejects complete-row drift
   assert.equal(JSON.stringify(context.review), previous);
 });
 
-test('creation panel retains receipts and safety feedback while unknown writes expose no replay action', () => {
-  const component = serverComponent(source('PictureCreationPanel.svelte'), 'PictureCreationPanel.svelte', {});
+test('creation panel retains interactive safety recovery locks while routing receipts and operational errors to notifications', async () => {
+  const notifications = makeNotifications();
+  const component = serverComponent(source('PictureCreationPanel.svelte'), 'PictureCreationPanel.svelte', {
+    '../shell/notificationService.svelte': { notifications },
+  });
   const wire = receipt(), view = { selection: selection(), request: editor.pictureCreationRequest(selection(), owner, requestId),
     receipt: null, receipts: [wire], image: null, phase: 'idle', busy: false, blocked: true, error: 'unknown write',
     acknowledged: false, attempted: true, noCommitVerified: false };
   const html = render(component, { props: { session: { subscribe: () => () => {}, view: () => view } } }).body;
-  assert.ok(html.indexOf('unknown write') < html.indexOf('data-picture-add'));
+  assert.doesNotMatch(html, /unknown write/);
+  assert.doesNotMatch(html, /role="alert"/);
+  assert.doesNotMatch(html, /data-picture-creation-receipts/);
+  assert.doesNotMatch(html, /physical row 9223372036854775807/);
+  assert.match(html, /Recover selection \(read-only\)/);
   assert.match(html, /Resolve creation history \(read-only\)/);
   assert.doesNotMatch(html, /data-picture-create-recovered/);
   assert.match(html, /data-picture-release[^>]*disabled/);
-  assert.match(html, /physical row 9223372036854775807/);
-  assert.match(html, /PicComment remains NULL/);
+
+  const entriesAfterRender = notifications.getSnapshot().entries;
+  assert.equal(entriesAfterRender.length, 1);
+  assert.equal(entriesAfterRender[0].severity, 'error');
+  assert.equal(entriesAfterRender[0].category, 'entry');
+  assert.equal(entriesAfterRender[0].source, 'Plot Pictures');
+  assert.match(entriesAfterRender[0].message, /unknown write/);
+
+  const runtimeNotifs = makeNotifications();
+  const liveSession = new sessionModule.PictureCreationSession(owner, {
+    choose: () => operation(selection()),
+    create: (_t, json) => operation(receipt(JSON.parse(json))),
+    image: () => operation({ ...owner, rowId: wire.rowId, mime: 'image/jpeg', width: 100, height: 100, sha256: 'a'.repeat(64), dataUrl: 'data:image/jpeg;base64,YQ==' }),
+  });
+  const panel = componentFunctions('PictureCreationPanel.svelte', ['operate'], {
+    session: liveSession, disabled: false, error: '', crypto: { randomUUID: () => requestId }, notifications: runtimeNotifs,
+  });
+  await panel.actions.operate('add');
+  const runtimeEntries = runtimeNotifs.getSnapshot().entries;
+  assert.equal(runtimeEntries.length, 1);
+  assert.equal(runtimeEntries[0].severity, 'success');
+  assert.match(runtimeEntries[0].message, /physical row 9223372036854775807/);
+  assert.match(runtimeEntries[0].message, /PicComment remains NULL/);
 });
 
 test('root aggregates persistent creation ownership rather than letting a disposed read clear native-close and transition guards', () => {

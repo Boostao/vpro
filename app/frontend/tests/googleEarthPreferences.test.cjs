@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { compile } = require('svelte/compiler');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 const cells = loadTypeScript('projectMetadataRestore.ts', { './qualityEditor': quality, './projectMetadataEditor': {} });
 const locations = loadTypeScript('plotLocationReview.ts', { './projectMetadataRestore': cells });
@@ -263,4 +263,40 @@ test('panel independently gates preferences shares one title and field and prote
   const generated = readFileSync(path.join(__dirname, '..', 'bindings', 'github.com', 'boostao', 'vpro', 'app', 'spatialservice.ts'), 'utf8');
   assert.match(generated, /export function SaveGoogleEarthPreferences/);
   assert.match(generated, /GoogleEarthPreferencesOutcome/);
+});
+
+test('GoogleEarthReview preference save routes committed receipts and errors to reports notifications', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const prefSession = new prefs.GoogleEarthPreferencesSession(scope);
+  prefSession.apply(review());
+  prefSession.edit({ title: 'Updated Title', descriptionField: 'Zone' });
+
+  const host = componentFunctions('GoogleEarthReview.svelte', ['savePreferences'], {
+    ...scope,
+    locked: false,
+    error: '',
+    fields: { fields: [{ name: 'Zone', declaredType: 'TEXT' }] },
+    preferenceSession: prefSession,
+    notifications,
+    SpatialService: {
+      SaveGoogleEarthPreferences: async () => outcome(true, ''),
+    },
+  });
+
+  await host.actions.savePreferences();
+  prefSession.acknowledge();
+  prefSession.edit({ title: 'Broken Title', descriptionField: 'Zone' });
+  host.SpatialService.SaveGoogleEarthPreferences = async () => { throw new Error('CAS conflict'); };
+  await host.actions.savePreferences();
+
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].severity, 'error');
+  assert.match(entries[0].message, /CAS conflict/);
+  assert.equal(entries[1].severity, 'success');
+  assert.equal(entries[1].title, 'Google Earth preferences saved');
+  assert.ok(entries.every(item => item.category === 'reports' && item.source === 'Google Earth KML' && item.contextTag === 'Sample'));
 });

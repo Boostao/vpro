@@ -4,6 +4,7 @@
   import { summaryVegetationQualityMinimumFields, summaryVegetationQualityNullFields,
     type SummaryVegetationQualityPreferencesSession, type SummaryVegetationQualityPreferencesReview } from './summaryVegetationQualityPreferences';
   import type { ReportTitlePreferencesOutcome } from './reportTitlePreferences';
+  import { notifications } from '../shell/notificationService.svelte';
 
   let { contextId, preferences, port, operationHeld = false, mutationHeld = false, onReadBusyChange }: {
     contextId: string;
@@ -22,9 +23,58 @@
   let error = $state('');
   const reads = new ReadRequests();
   let generation = 0;
+  let lastReadError = '';
+  let lastPrefError = '';
+  let notifiedReceipts = 0;
+  function syncQualityNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedReceipts) notifiedReceipts = 0;
+    for (let i = notifiedReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Summary quality options saved', receipt.outcome.changed ? 'Saved quality preferences.' : 'No quality changes.', {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Summary quality options saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Summary quality options save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Summary quality options unchanged', 'No quality changes were needed.', {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        }
+      }
+    }
+    notifiedReceipts = receipts.length;
+    const rErr = view.readError ?? '';
+    if (rErr && rErr !== lastReadError) {
+      notifications.error('Summary quality options load failed', rErr, {
+        category: 'reports', source: 'Summary Vegetation',
+      });
+    }
+    lastReadError = rErr;
+    const vErr = view.error ?? '';
+    if (vErr && vErr !== lastPrefError) {
+      notifications.error('Summary quality options failed', vErr, {
+        category: 'reports', source: 'Summary Vegetation',
+      });
+    }
+    lastPrefError = vErr;
+  }
   const unsubscribe = untrack(() => preferences.subscribe(() => {
     view = preferences.view(); reference = preferences.reference();
+    syncQualityNotifications();
   }));
+  syncQualityNotifications();
   function cancel() {
     generation++; reads.cancelAll(); preferences.cancelLoad(); busy = false; onReadBusyChange(false);
   }
@@ -47,8 +97,44 @@
     cancel(); const request = generation; error = '';
     try {
       await preferences.save(value => port.save(contextId, JSON.stringify(value)));
+      if (typeof syncQualityNotifications === 'function') {
+        syncQualityNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const current = preferences.view();
+        const latest = current.receipts?.at(-1);
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Summary quality options saved', latest.outcome.changed ? 'Saved quality preferences.' : 'No quality changes.', {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Summary quality options saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Summary quality options save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          } else {
+            notifications.info('Summary quality options unchanged', 'No quality changes were needed.', {
+              category: 'reports', source: 'Summary Vegetation',
+            });
+          }
+        } else if (current.error) {
+          notifications.error('Summary quality options failed', current.error, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        }
+      }
     } catch (cause) {
-      if (request === generation) error = String(cause);
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Summary quality options save failed', error, {
+            category: 'reports', source: 'Summary Vegetation',
+          });
+        }
+      }
     }
   }
   function editMinimum(key: typeof summaryVegetationQualityMinimumFields[number]['key'], raw: string) {
@@ -63,17 +149,13 @@
 </script>
 
 <section class="summary-quality" data-summary-quality-preferences aria-label="Saved Summary Data Quality options">
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#if view.readError}<p class="error" role="alert">{view.readError}</p>{/if}
   {#if view.draftError}<p class="error" role="alert">{view.draftError}</p>{/if}
-  {#if view.error}<p class="error" role="alert">{view.error}</p>{/if}
-  {#if view.busy}<p role="status">Saving Summary quality options; Save cannot be cancelled.</p>{/if}
   {#each view.receipts as receipt}
-    <p data-summary-quality-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-      {#if receipt.kind === 'known'}Preference receipt: changed {String(receipt.outcome.changed)};
-        committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}
-      {:else}Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}{/if}
-    </p>
+    {#if receipt.kind !== 'known'}
+      <p data-summary-quality-receipt role="alert">
+        Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
+      </p>
+    {/if}
   {/each}
   <fieldset>
     <legend>Data Quality Filter</legend>
@@ -129,8 +211,7 @@
       <button data-summary-quality-acknowledge disabled={busy || mutationHeld}
         onclick={() => preferences.acknowledge()}>Acknowledge quality outcome</button>
     {/if}
-    {#if busy}<button data-summary-quality-cancel onclick={cancel}>Cancel quality read</button>
-      <p role="status">Reading owned Summary quality options and suggestions...</p>{/if}
+    {#if busy}<button data-summary-quality-cancel onclick={cancel}>Cancel quality read</button>{/if}
   </div>
   {#if reference}
     <details data-summary-quality-definitions>

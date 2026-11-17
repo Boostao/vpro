@@ -62,7 +62,52 @@
     ...(effectiveReferences ? { references: {
       showCommon: effectiveCommon, useGuideNames: effectiveGuide } } : {}),
   }));
-  const unsubscribe = session.subscribe(() => { viewState = session.view(); onBusyChange(session.held()); });
+  let lastViewError = '';
+  let lastPubKey = '';
+  function syncWorkbookNotifications() {
+    const current = session.view();
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = owned.project || undefined;
+    const vErr = current.error ?? '';
+    if (vErr && vErr !== lastViewError) {
+      notifications.error('Summary Vegetation workbook review failed', vErr, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: ctxTag,
+      });
+    }
+    lastViewError = vErr;
+    const settled = current.publication;
+    if (settled.busy) { lastPubKey = ''; return; }
+    if (!settled.outcome && !settled.error) return;
+    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
+    if (key === lastPubKey) return;
+    lastPubKey = key;
+    if (settled.outcome?.status === 'published' && !settled.error) {
+      const exportedPath = settled.outcome.path || settled.requestedDestination || viewState.destination;
+      notifications.success('Summary Vegetation workbook exported', exportedPath, {
+        category: 'reports',
+        source: 'Summary Vegetation',
+        contextTag: ctxTag,
+      });
+    } else if (settled.error || settled.outcome) {
+      notifications.error(
+        'Summary Vegetation workbook export failed',
+        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || viewState.destination}`,
+        {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: ctxTag,
+        },
+      );
+    }
+  }
+  const unsubscribe = session.subscribe(() => {
+    viewState = session.view();
+    syncWorkbookNotifications();
+    onBusyChange(session.held());
+  });
+  syncWorkbookNotifications();
   function edit(field: 'title' | 'destination', raw: string) {
     if (held) return;
     error = '';
@@ -180,8 +225,10 @@
     try {
       await session.publish(calculation, request =>
         VegetationReportService.ExportReviewedSummaryVegetationWorkbook(owned.contextId, JSON.stringify(request)));
-      const settled = session.view().publication;
-      if (typeof notifications !== 'undefined') {
+      if (typeof syncWorkbookNotifications === 'function') {
+        syncWorkbookNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const settled = session.view().publication;
         if (settled.outcome?.status === 'published' && !settled.error) {
           const exportedPath = settled.outcome.path || settled.requestedDestination || viewState.destination;
           notifications.success('Summary Vegetation workbook exported', exportedPath, {
@@ -215,25 +262,24 @@
   function acknowledge() {
     if (viewState.publication.busy || !viewState.publication.blocked) return;
     error = '';
-    try { session.acknowledge(); } catch (cause) { error = String(cause); }
+    try { session.acknowledge(); } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Vegetation workbook acknowledgement failed', error, {
+          category: 'reports',
+          source: 'Summary Vegetation',
+          contextTag: owned.project || undefined,
+        });
+      }
+    }
   }
   onDestroy(() => { session.cancel(); unsubscribe(); });
 </script>
 
 <section class="workbook" data-summary-vegetation-workbook aria-label="Summary inspection workbook">
   <h2>Summary inspection workbook (draft)</h2>
-  {#if error}<p role="alert">{error}</p>{/if}
-  {#if viewState.error}<p role="alert">{viewState.error}</p>{/if}
   {#if viewState.draftError}<p role="alert">{viewState.draftError}</p>{/if}
-  {#if viewState.publication.error}<p role="alert">{viewState.publication.error}</p>{/if}
-  {#if viewState.publication.busy}
-    <p role="status">Publishing reviewed bytes. Publication cannot be cancelled; navigation and close remain blocked.</p>
-  {/if}
-  {#if viewState.publication.outcome}
-    <p data-summary-workbook-receipt role="status">Workbook receipt: {viewState.publication.outcome.status}.
-      Requested: {viewState.publication.requestedDestination}. Output: {viewState.publication.outcome.path || '(no published path)'}.
-      SHA256: {viewState.publication.outcome.sha256 || '(no acknowledged hash)'}.</p>
-  {:else if viewState.publication.requestedDestination && !viewState.publication.busy}
+  {#if !viewState.publication.outcome && viewState.publication.requestedDestination && !viewState.publication.busy}
     <p data-summary-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect
       {viewState.publication.requestedDestination}; never repeat the destination blindly.</p>
   {/if}
@@ -322,7 +368,6 @@
     <button data-summary-workbook-publish disabled={!enabled || held || modeUnavailable || !!viewState.draftError || !currentReview || !viewState.destination}
       onclick={publish}>Publish reviewed workbook</button>
   </div>
-  {#if viewState.reviewing}<p role="status">Reading and validating the complete owned workbook plan...</p>{/if}
   {#if viewState.review}
     <div data-summary-workbook-plan class="plan">
       {#if !currentReview}<p role="alert">Calculation options changed; review the current options before publication.</p>{/if}

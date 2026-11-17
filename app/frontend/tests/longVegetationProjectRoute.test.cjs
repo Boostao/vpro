@@ -8,6 +8,7 @@ const ts = require('typescript');
 const {compile} = require('svelte/compiler');
 const {render} = require('svelte/server');
 const { loadTypeScript,serverComponent,componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
+const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
 const wire=readJsonFixture('longVegetationProjectWorkbookWire.json');
 const scopeWire=readJsonFixture('longVegetationProjectScopeWire.json');
 const source=filename=>readFileSync(srcPath(filename),'utf8');
@@ -115,11 +116,17 @@ test('remount presentation retains unknown and committed-warning publication saf
         ...value.input.outcome,status,errorMessage:'linked then cleanup failed'}:null};
     value.state.closeBlocked=true;
     for(let mount=0;mount<2;mount++) {
-      const {body,busy}=renderReport(value);
+      const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+      const {body,busy}=renderReport(value,{},{'../shell/notificationService.svelte':{notifications}});
       assert.match(body,/Acknowledge original project workbook outcome/);
-      assert.ok(body.indexOf(status?'data-project-workbook-receipt':'data-project-workbook-unknown')<body.indexOf('data-project-report-source'));
-      if(status) assert.match(body,new RegExp(value.input.review.workbookSHA256));
-      else assert.match(body,/never replay blindly/);
+      assert.doesNotMatch(body,/data-project-workbook-receipt/);
+      if(status) {
+        assert.match(body,new RegExp(value.input.review.workbookSHA256));
+        assert.ok(notifications.getSnapshot().entries.some(e=>e.category==='reports'&&e.severity==='error'&&/linked then cleanup failed/.test(e.message)));
+      } else {
+        assert.ok(body.indexOf('data-project-workbook-unknown')>=0&&body.indexOf('data-project-workbook-unknown')<body.indexOf('data-project-report-source'));
+        assert.match(body,/never replay blindly/);
+      }
       assert.ok(busy.includes(true));
     }
     assert.equal(value.calls.some(call=>Array.isArray(call)&&call[0]==='publish'),false);
@@ -292,8 +299,10 @@ test('unobserved or refused project scope blocks output but not native close unl
     value.state.scope.scope=null;value.state.scope.outputReady=false;
     value.state.scope.error='Long Vegetation project report scope is disabled in this session';
     value.state.scope.authorityUnknown=held;value.state.scope.closeBlocked=held;value.state.closeBlocked=held;
-    const {body,busy}=renderReport(value);
-    assert.match(body,/project report scope is disabled/);
+    const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+    const {body,busy}=renderReport(value,{},{'../shell/notificationService.svelte':{notifications}});
+    assert.doesNotMatch(body,/project report scope is disabled/);
+    assert.ok(notifications.getSnapshot().entries.some(e=>e.category==='reports'&&/project report scope is disabled/.test(e.message)));
     const controls=body.match(/<button\b[^>]*data-source-control="btnViewReport"[^>]*>/g)??[];
     assert.equal(controls.length,1);assert.match(controls[0],/\bdisabled\b/);
     assert.equal(busy.includes(true),held);

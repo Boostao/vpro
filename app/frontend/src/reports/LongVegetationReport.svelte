@@ -185,6 +185,153 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     !!projectView?.publication && (projectView.publication.busy || projectView.publication.blocked));
   const activeWorkbookReview = $derived(projectActive ? projectView?.workbookReview ?? null : workbookReview);
   const groupLabel = $derived(settings?.grouping === 'lifeform' ? 'Lifeform' : settings?.grouping === 'strata' ? 'Strata' : 'Layer');
+  let notifiedPrefReceipts = 0;
+  let lastPrefError = '';
+  let notifiedStatReceipts = 0;
+  let lastStatError = '';
+  let lastPubNotificationKey = '';
+  let lastProjError = '';
+  let lastProjPubNotificationKey = '';
+  function resolveContextTag() {
+    return (typeof project === 'string' && project) ||
+      (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) ||
+      (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+  }
+  function syncWorkbookNotifications() {
+    const pub = publication;
+    if (!pub || typeof notifications === 'undefined') { lastPubNotificationKey = ''; return; }
+    const key = pub.outcome
+      ? `outcome:${pub.outcome.status}:${pub.requestedDestination}:${pub.outcome.path}:${pub.outcome.sha256}:${pub.error ?? ''}`
+      : pub.error ? `error:${pub.error}:${pub.requestedDestination}` : '';
+    if (!key) { lastPubNotificationKey = ''; return; }
+    if (key === lastPubNotificationKey) return;
+    lastPubNotificationKey = key;
+    const ctxTag = resolveContextTag();
+    if (pub.outcome?.status === 'published' && !pub.error) {
+      notifications.success('Long Vegetation workbook exported', pub.outcome.path || pub.requestedDestination, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    } else if (pub.error || pub.outcome) {
+      notifications.error(
+        'Long Vegetation workbook export failed',
+        pub.error || `Publication ${pub.outcome?.status ?? 'failed'} for ${pub.requestedDestination}`,
+        { category: 'reports', source: 'Long Vegetation', contextTag: ctxTag },
+      );
+    }
+  }
+  function syncProjectNotifications() {
+    const pv = projectView;
+    if (!pv || typeof notifications === 'undefined') {
+      lastProjError = '';
+      lastProjPubNotificationKey = '';
+      return;
+    }
+    const ctxTag = resolveContextTag();
+    const projErr = pv.error ?? '';
+    if (projErr && projErr !== lastProjError) {
+      notifications.error('Long Vegetation project report failed', projErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastProjError = projErr;
+    const pub = pv.publication;
+    if (!pub) { lastProjPubNotificationKey = ''; return; }
+    const key = pub.outcome
+      ? `outcome:${pub.outcome.status}:${pub.requestedDestination}:${pub.outcome.path}:${pub.outcome.sha256}:${pub.error ?? ''}`
+      : pub.error ? `error:${pub.error}:${pub.requestedDestination}` : '';
+    if (!key) { lastProjPubNotificationKey = ''; return; }
+    if (key === lastProjPubNotificationKey) return;
+    lastProjPubNotificationKey = key;
+    if (pub.outcome?.status === 'published' && !pub.error) {
+      notifications.success('Long Vegetation workbook exported', pub.outcome.path || pub.requestedDestination, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    } else if (pub.error || pub.outcome) {
+      notifications.error(
+        'Long Vegetation workbook export failed',
+        pub.error || `Publication ${pub.outcome?.status ?? 'failed'} for ${pub.requestedDestination}`,
+        { category: 'reports', source: 'Long Vegetation', contextTag: ctxTag },
+      );
+    }
+  }
+  function syncPreferenceNotifications() {
+    const v = preferenceView;
+    if (!v || typeof notifications === 'undefined') return;
+    const receipts = v.receipts ?? [];
+    if (receipts.length < notifiedPrefReceipts) notifiedPrefReceipts = 0;
+    const ctxTag = resolveContextTag();
+    for (let i = notifiedPrefReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Long Vegetation title saved', receipt.outcome.changed ? 'Saved report title preference.' : 'No title changes.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Long Vegetation title saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Long Vegetation title save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Long Vegetation title unchanged', 'No title preference changes were needed.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedPrefReceipts = receipts.length;
+    const prefErr = v.error ?? '';
+    if (prefErr && prefErr !== lastPrefError) {
+      notifications.error('Long Vegetation title preference failed', prefErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastPrefError = prefErr;
+  }
+  function syncStatisticsNotifications() {
+    const v = statisticsView;
+    if (!v || typeof notifications === 'undefined') return;
+    const receipts = v.receipts ?? [];
+    if (receipts.length < notifiedStatReceipts) notifiedStatReceipts = 0;
+    const ctxTag = resolveContextTag();
+    for (let i = notifiedStatReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Long Vegetation Average/Order saved', receipt.outcome.changed ? 'Saved Average/Order preferences.' : 'No Average/Order changes.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Long Vegetation Average/Order saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastStatError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Long Vegetation Average/Order save failed', receipt.outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastStatError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Long Vegetation Average/Order unchanged', 'No Average/Order changes were needed.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedStatReceipts = receipts.length;
+    const statErr = v.error ?? '';
+    if (statErr && statErr !== lastStatError) {
+      notifications.error('Long Vegetation Average/Order preference failed', statErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastStatError = statErr;
+  }
   function reportBusy() { onBusyChange(busy || workbookBarrier || sharedPreferenceBarrier || !!projectView?.closeBlocked); }
   function invalidateReports() {
     preview = null; workbookReview = null;
@@ -193,11 +340,13 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
   const unsubscribeWorkbook = workbookSession.subscribe(() => {
     publication = workbookSession.view();
     if (publication.blocked) workbookReview = null;
+    syncWorkbookNotifications();
     reportBusy();
   });
   const unsubscribePreferences = preferences?.subscribe(() => {
     preferenceView = preferences.view(); invalidateReports();
     if (preferenceView.authorityUnknown || settings && preferenceView.saved && settings.title !== preferenceView.saved.title) settings = null;
+    syncPreferenceNotifications();
     reportBusy();
   });
   const unsubscribeStatistics = statistics?.subscribe(() => {
@@ -205,6 +354,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     if (statisticsView.authorityUnknown || settings && statisticsView.saved &&
         (settings.average !== (statisticsView.saved.avgType === 10 ? 'all-plots' : 'observations') ||
          settings.order !== (statisticsView.saved.orderBy === 10 ? 'species' : 'presence'))) settings = null;
+    syncStatisticsNotifications();
     reportBusy();
   });
   const unsubscribeSwitches = switches?.subscribe(() => {
@@ -278,9 +428,14 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     workbookReview = null;
     settings = projectView?.projectActive ? projectView.settings : null;
     preview = projectView?.projectActive ? projectView.preview : null;
+    syncProjectNotifications();
     reportBusy();
   }
   const unsubscribeProject = projectWorkspace?.subscribe(projectChanged);
+  syncWorkbookNotifications();
+  syncPreferenceNotifications();
+  syncStatisticsNotifications();
+  syncProjectNotifications();
 
   function selectedUnitChanged() {
     generation++; reads.cancelAll(); busy = false;
@@ -505,25 +660,29 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       error = '';
       try {
         await projectWorkspace.publishWorkbook(destination);
-        const settled = projectWorkspace.view?.().publication;
-        if (typeof notifications !== 'undefined' && settled) {
-          if (settled.outcome?.status === 'published' && !settled.error) {
-            const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-            notifications.success('Long Vegetation workbook exported', exportedPath, {
-              category: 'reports',
-              source: 'Long Vegetation',
-              contextTag: ctxTag,
-            });
-          } else if (settled.error || settled.outcome) {
-            notifications.error(
-              'Long Vegetation workbook export failed',
-              settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-              {
+        if (typeof syncProjectNotifications === 'function') {
+          syncProjectNotifications();
+        } else {
+          const settled = projectWorkspace.view?.().publication;
+          if (typeof notifications !== 'undefined' && settled) {
+            if (settled.outcome?.status === 'published' && !settled.error) {
+              const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+              notifications.success('Long Vegetation workbook exported', exportedPath, {
                 category: 'reports',
                 source: 'Long Vegetation',
                 contextTag: ctxTag,
-              },
-            );
+              });
+            } else if (settled.error || settled.outcome) {
+              notifications.error(
+                'Long Vegetation workbook export failed',
+                settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+                {
+                  category: 'reports',
+                  source: 'Long Vegetation',
+                  contextTag: ctxTag,
+                },
+              );
+            }
           }
         }
       } catch (cause) {
@@ -543,25 +702,29 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     try {
       await workbookSession.publish(workbookReview, destination, request =>
         VegetationReportService.ExportReviewedVegetationWorkbook(contextId, JSON.stringify(request)));
-      const settled = workbookSession.view();
-      if (typeof notifications !== 'undefined') {
-        if (settled.outcome?.status === 'published' && !settled.error) {
-          const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
-          notifications.success('Long Vegetation workbook exported', exportedPath, {
-            category: 'reports',
-            source: 'Long Vegetation',
-            contextTag: ctxTag,
-          });
-        } else if (settled.error || settled.outcome) {
-          notifications.error(
-            'Long Vegetation workbook export failed',
-            settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
-            {
+      if (typeof syncWorkbookNotifications === 'function') {
+        syncWorkbookNotifications();
+      } else {
+        const settled = workbookSession.view();
+        if (typeof notifications !== 'undefined') {
+          if (settled.outcome?.status === 'published' && !settled.error) {
+            const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+            notifications.success('Long Vegetation workbook exported', exportedPath, {
               category: 'reports',
               source: 'Long Vegetation',
               contextTag: ctxTag,
-            },
-          );
+            });
+          } else if (settled.error || settled.outcome) {
+            notifications.error(
+              'Long Vegetation workbook export failed',
+              settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+              {
+                category: 'reports',
+                source: 'Long Vegetation',
+                contextTag: ctxTag,
+              },
+            );
+          }
         }
       }
     } catch (cause) {
@@ -608,6 +771,33 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     cancel(); const request = generation; error = '';
     try {
       await preferences.save(value => VegetationReportService.SaveLongVegetationPreferences(contextId, JSON.stringify(value)));
+      if (typeof syncPreferenceNotifications === 'function') {
+        syncPreferenceNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const settled = preferences.view?.();
+        const receipts = settled?.receipts ?? [];
+        const latest = receipts[receipts.length - 1];
+        const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Long Vegetation title saved', latest.outcome.changed ? 'Saved report title preference.' : 'No title changes.', {
+              category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Long Vegetation title saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Long Vegetation title save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+            });
+          }
+        } else if (settled?.error) {
+          notifications.error('Long Vegetation title preference failed', settled.error, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
     } catch (cause) {
       if (request === generation) {
         error = String(cause);
@@ -655,6 +845,33 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
     cancel(); const request = generation; error = '';
     try {
       await statistics.save(value => VegetationReportService.SaveLongVegetationStatisticsPreferences(contextId, JSON.stringify(value)));
+      if (typeof syncStatisticsNotifications === 'function') {
+        syncStatisticsNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const settled = statistics.view?.();
+        const receipts = settled?.receipts ?? [];
+        const latest = receipts[receipts.length - 1];
+        const ctxTag = (typeof project === 'string' && project) || (typeof effectiveHierarchy === 'string' && effectiveHierarchy !== 'None' ? effectiveHierarchy : undefined) || (typeof hierarchy === 'string' && hierarchy && hierarchy !== 'None' ? hierarchy : undefined);
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Long Vegetation Average/Order saved', latest.outcome.changed ? 'Saved Average/Order preferences.' : 'No Average/Order changes.', {
+              category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Long Vegetation Average/Order saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Long Vegetation Average/Order save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+            });
+          }
+        } else if (settled?.error) {
+          notifications.error('Long Vegetation Average/Order preference failed', settled.error, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
     } catch (cause) {
       if (request === generation) {
         error = String(cause);
@@ -720,36 +937,20 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
           {selectedWorkbookScope === 'unlumped' ? 'Review unlumped XLSX workbook (no file yet)' : `Review ${selectedWorkbookScope.replace(/^lump:/, '')} XLSX workbook (no file yet)`}
         </button>
       {/if}
-      {#if busy || projectView?.readBusy}<button onclick={cancel}>Cancel report read</button><p role="status">Reading owned report snapshots...</p>{/if}
-      {#if projectView?.readBusy}<button data-project-report-cancel onclick={() => projectWorkspace?.cancelReportRead()}>Cancel original project report read</button><p role="status">Reading original project report snapshots...</p>{/if}
+      {#if busy || projectView?.readBusy}<button onclick={cancel}>Cancel report read</button>{/if}
+      {#if projectView?.readBusy}<button data-project-report-cancel onclick={() => projectWorkspace?.cancelReportRead()}>Cancel original project report read</button>{/if}
     </div>
   </header>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if preferenceView?.draftError}<p class="error" role="alert">{preferenceView.draftError}</p>{/if}
-  {#if preferenceView?.error}<p class="error" role="alert">{preferenceView.error}</p>{/if}
   {#if statisticsView?.draftError}<p class="error" role="alert">{statisticsView.draftError}</p>{/if}
-  {#if statisticsView?.error}<p class="error" role="alert">{statisticsView.error}</p>{/if}
-  {#if publication.error}<p class="error" role="alert">{publication.error}</p>{/if}
-  {#if publication.busy}<p role="status">Publishing the reviewed unlumped workbook; publication cannot be cancelled.</p>{/if}
-  {#if publication.outcome}
-    <p data-vegetation-workbook-receipt role="status">Workbook receipt: {publication.outcome.status}.
-      Requested {publication.requestedDestination}; observed {publication.outcome.path || '(no committed file)'}.
-      SHA256 {publication.outcome.sha256 || '(none)'}.</p>
-  {:else if publication.requestedDestination && !publication.busy}
+  {#if !publication.outcome && publication.requestedDestination && !publication.busy}
     <p data-vegetation-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect {publication.requestedDestination}; never replay blindly.</p>
   {/if}
   {#if publication.blocked && !publication.busy}
     <button onclick={acknowledgeWorkbook}>Acknowledge workbook outcome</button>
   {/if}
   {#if projectWorkspace && projectView}
-    {#if projectView.error}<p role="alert" class="error">{projectView.error}</p>{/if}
-    {#if projectView.publication?.error}<p role="alert" class="error">{projectView.publication.error}</p>{/if}
-    {#if projectView.publication?.busy}<p role="status">Publishing the original project workbook; publication cannot be cancelled or replayed.</p>{/if}
-    {#if projectView.publication?.outcome}
-      <p data-project-workbook-receipt role="status">Original project workbook receipt: {projectView.publication.outcome.status}.
-        Requested {projectView.publication.requestedDestination}; observed {projectView.publication.outcome.path || '(no committed file)'}.
-        SHA256 {projectView.publication.outcome.sha256 || '(none)'}.</p>
-    {:else if projectView.publication?.requestedDestination && !projectView.publication.busy}
+    {#if !projectView.publication?.outcome && projectView.publication?.requestedDestination && !projectView.publication.busy}
       <p data-project-workbook-unknown role="alert">Original project workbook outcome unknown.
         Retain and inspect {projectView.publication.requestedDestination}; never replay blindly.</p>
     {/if}
@@ -791,12 +992,8 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
             onclick={() => preferences.acknowledge()}>Acknowledge title preference outcome</button>
         {/if}
       </div>
-      {#if preferenceView.busy}<p role="status">Saving title preferences; Save cannot be cancelled.</p>{/if}
       {#each preferenceView.receipts as receipt}
-        {#if receipt.kind === 'known'}
-          <p data-long-vegetation-preferences-receipt role="status">Preference receipt: changed {String(receipt.outcome.changed)};
-            committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}</p>
-        {:else}
+        {#if receipt.kind !== 'known'}
           <p data-long-vegetation-preferences-receipt role="alert">Preference receipt: outcome unknown; changed unknown; committed unknown.
             {receipt.errorMessage}</p>
         {/if}
@@ -839,13 +1036,12 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
             onclick={() => statistics.acknowledge()}>Acknowledge Average/Order outcome</button>
         {/if}
       </div>
-      {#if statisticsView.busy}<p role="status">Saving Average/Order preferences; Save cannot be cancelled.</p>{/if}
       {#each statisticsView.receipts as receipt}
-        <p data-long-vegetation-statistics-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-          {#if receipt.kind === 'known'}Preference receipt: changed {String(receipt.outcome.changed)};
-            committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}
-          {:else}Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}{/if}
-        </p>
+        {#if receipt.kind !== 'known'}
+          <p data-long-vegetation-statistics-receipt role="alert">
+            Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}
+          </p>
+        {/if}
       {/each}
       <p class="guidance">Drafts do not change report output. Save explicitly, acknowledge the outcome, then reload report options.
         Only the two saved source choices are changed; no registry, project data or source audits are written.</p>
@@ -1035,6 +1231,13 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
           error = '';
         } catch (cause) {
           error = `Exclusion preview unavailable: ${String(cause)}`;
+          if (typeof notifications !== 'undefined') {
+            notifications.error('Long Vegetation exclusion preview failed', error, {
+              category: 'reports',
+              source: 'Long Vegetation',
+              contextTag: resolveContextTag(),
+            });
+          }
         }
       }}
     />

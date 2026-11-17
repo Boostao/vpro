@@ -7,6 +7,7 @@ const ts = require('typescript');
 const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
 const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
 const lifeform = loadTypeScript('lifeformSummary.ts');
 const publication = loadTypeScript('publicationSession.ts');
 const environment = loadTypeScript('environmentWorkbook.ts', {
@@ -247,16 +248,18 @@ test('panel compiles with accessible scoped source tables, current-method guard 
   assert.match(text, /session\.acknowledge\(\); review = null/);
   assert.match(text, /<caption>/); assert.match(text, /scope="row"/); assert.match(text, /scope="col"/);
   assert.match(text, /'SITE', 'VEGETATION', 'SOILS'/);
-  assert.ok(text.indexOf('publication.error') < text.indexOf('class="destination"'));
+  assert.doesNotMatch(text, /data-site-unit-workbook-receipt/);
+  assert.doesNotMatch(text, /\{#if [^}]*error\}<p[^>]*class="error"/);
+  assert.ok(text.indexOf('data-site-unit-workbook-unknown') >= 0 && text.indexOf('data-site-unit-workbook-unknown') < text.indexOf('class="destination"'));
   assert.ok(text.indexOf('data-site-unit-workbook-export') < text.indexOf('class="guidance"'));
-  for (const selector of ['', '-review', '-cancel', '-destination', '-export', '-acknowledge', '-receipt', '-unknown']) {
+  for (const selector of ['', '-review', '-cancel', '-destination', '-export', '-acknowledge', '-unknown']) {
     assert.ok(text.includes(`data-site-unit-workbook${selector}`));
   }
   const cancellation = text.slice(text.indexOf('function cancel()'), text.indexOf('async function getReview()'));
   assert.doesNotMatch(cancellation, /acknowledge|publication\s*=|session\./);
 });
 
-test('actual server-rendered panel exposes label and explicit remount unknown alert above controls', () => {
+test('actual server-rendered panel exposes label and explicit remount unknown alert above controls', async () => {
   const owned = { ...owner, contextId: 'unknown-remount' };
   const Panel = serverComponent(source().replace('structuredClone(owner)', '({ ...owner })'),
     'SiteUnitSummaryWorkbookPanel.svelte', {
@@ -273,6 +276,30 @@ test('actual server-rendered panel exposes label and explicit remount unknown al
   assert.match(html, /data-site-unit-workbook-review[^>]*disabled/);
   assert.match(html, /data-site-unit-workbook-export[^>]*disabled/);
   assert.ok(html.indexOf('outcome unknown') < html.indexOf('Workbook destination'));
+
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const knownOwned = { ...owner, contextId: 'known-ssr-notif' };
+  const knownInput = fixture(1, knownOwned);
+  const knownSession = workbook.siteUnitSummaryWorkbookPublicationSession(knownOwned);
+  await knownSession.publish(knownInput, destination, async () => receipt('published'), 1);
+  const KnownPanel = serverComponent(source().replace('structuredClone(owner)', '({ ...owner })'),
+    'SiteUnitSummaryWorkbookPanel.svelte', {
+      '../bindings/github.com/boostao/vpro/app': { EnvironmentReportService: {} },
+      './siteUnitSummaryWorkbook': workbook,
+      './siteUnitSummaryExtendedWorkbook': {},
+      './longEnvironmentReport': {},
+      '../shell/notificationService.svelte': { notifications },
+    });
+  const knownHtml = render(KnownPanel, { props: { owner: knownOwned, method: 1, disabled: false, onBusyChange() {} } }).body;
+  assert.doesNotMatch(knownHtml, /data-site-unit-workbook-receipt/);
+  assert.doesNotMatch(knownHtml, /class="error"/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'success');
+  assert.equal(entries[0].category, 'reports');
+  assert.equal(entries[0].source, 'Summary Environment');
+  assert.equal(entries[0].contextTag, knownOwned.project);
+  assert.ok(entries[0].message.includes(destination));
 });
 
 function panelScript(owned) {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
+  import { notifications } from '../shell/notificationService.svelte';
   import type { LongVegetationProjectUnitOutcome, LongVegetationProjectUnitPreferences } from '../../bindings/github.com/boostao/vpro/app';
   import type { ProjectUnitPreferencesSession, ProjectUnitSaveRequest } from './longVegetationProjectUnitSession';
 
@@ -15,7 +16,65 @@
   let view = $state.raw(untrack(() => preferences.projectView()));
   let error = $state('');
   let generation = 0;
-  const unsubscribe = untrack(() => preferences.subscribe(() => { view = preferences.projectView(); onChange(); }));
+  let notifiedReceipts = 0;
+  let lastReadError = '';
+  let lastViewError = '';
+  function syncUnitNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = view.scope?.project || undefined;
+    const receipts = view.projectReceipts ?? [];
+    if (receipts.length < notifiedReceipts) notifiedReceipts = 0;
+    for (let i = notifiedReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known') {
+        const outcome = receipt.outcome.outcome;
+        if (outcome.committed && !outcome.errorMessage) {
+          notifications.success(
+            'Long Vegetation project Unit Groups saved',
+            outcome.changed
+              ? `Revision ${receipt.request.revision}: Unit Groups set to ${receipt.request.proposed.unitGroups}.`
+              : `Revision ${receipt.request.revision}: No Unit Groups changes.`,
+            { category: 'reports', source: 'Long Vegetation', contextTag: ctxTag },
+          );
+        } else if (outcome.committed) {
+          notifications.warning('Long Vegetation project Unit Groups saved with warning', outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = outcome.errorMessage;
+        } else if (outcome.errorMessage) {
+          notifications.error('Long Vegetation project Unit Groups save failed', outcome.errorMessage, {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+          lastViewError = outcome.errorMessage;
+        } else {
+          notifications.info('Long Vegetation project Unit Groups unchanged', 'No Unit Groups changes were needed.', {
+            category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedReceipts = receipts.length;
+    const readErr = view.readError ?? '';
+    if (readErr && readErr !== lastReadError) {
+      notifications.error('Long Vegetation project Unit Groups load failed', readErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastReadError = readErr;
+    const viewErr = view.error ?? '';
+    if (viewErr && viewErr !== lastViewError) {
+      notifications.error('Long Vegetation project Unit Groups preference failed', viewErr, {
+        category: 'reports', source: 'Long Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastViewError = viewErr;
+  }
+  const unsubscribe = untrack(() => preferences.subscribe(() => {
+    view = preferences.projectView();
+    syncUnitNotifications();
+    onChange();
+  }));
+  syncUnitNotifications();
   function cancel() {
     generation++;
     cancelReads();
@@ -25,51 +84,103 @@
     if (operationHeld || view.readBusy || view.busy || view.blocked || !view.scope) return;
     const request = ++generation;
     error = '';
-    try { await preferences.load(fetchPreferences); }
-    catch (cause) { if (request === generation) error = String(cause); }
+    try {
+      await preferences.load(fetchPreferences);
+      if (typeof syncUnitNotifications === 'function') syncUnitNotifications();
+    } catch (cause) {
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation project Unit Groups load failed', error, {
+            category: 'reports', source: 'Long Vegetation', contextTag: view.scope?.project || undefined,
+          });
+        }
+      }
+    }
   }
   async function save() {
     if (operationHeld || mutationHeld || !view.saveReady) return;
     const request = ++generation;
     error = '';
-    try { await preferences.saveProject(savePreferences); }
-    catch (cause) { if (request === generation) error = String(cause); }
+    try {
+      await preferences.saveProject(savePreferences);
+      if (typeof syncUnitNotifications === 'function') syncUnitNotifications();
+      else if (typeof notifications !== 'undefined') {
+        const settled = preferences.projectView();
+        const latest = settled.projectReceipts?.[settled.projectReceipts.length - 1];
+        if (latest?.kind === 'known') {
+          const outcome = latest.outcome.outcome;
+          if (outcome.committed && !outcome.errorMessage) {
+            notifications.success(
+              'Long Vegetation project Unit Groups saved',
+              outcome.changed
+                ? `Revision ${latest.request.revision}: Unit Groups set to ${latest.request.proposed.unitGroups}.`
+                : `Revision ${latest.request.revision}: No Unit Groups changes.`,
+              { category: 'reports', source: 'Long Vegetation', contextTag: settled.scope?.project || undefined },
+            );
+          } else if (outcome.errorMessage) {
+            notifications.error('Long Vegetation project Unit Groups save failed', outcome.errorMessage, {
+              category: 'reports', source: 'Long Vegetation', contextTag: settled.scope?.project || undefined,
+            });
+          }
+        }
+      }
+    } catch (cause) {
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation project Unit Groups save failed', error, {
+            category: 'reports', source: 'Long Vegetation', contextTag: view.scope?.project || undefined,
+          });
+        }
+      }
+    }
   }
   function edit(raw: string) {
     if (mutationHeld || view.readBusy || view.busy || view.blocked || !view.saved) return;
     error = '';
     try { preferences.editUnitGroups(raw); }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Vegetation project Unit Groups edit failed', error, {
+          category: 'reports', source: 'Long Vegetation', contextTag: view.scope?.project || undefined,
+        });
+      }
+    }
   }
   function undo() {
     if (mutationHeld || view.readBusy || view.busy || view.blocked || !view.saved) return;
     error = '';
     try { preferences.undo(); }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Vegetation project Unit Groups undo failed', error, {
+          category: 'reports', source: 'Long Vegetation', contextTag: view.scope?.project || undefined,
+        });
+      }
+    }
   }
   onDestroy(() => { unsubscribe(); cancel(); });
 </script>
 
 <section class="unit-preferences" aria-label="Actual saved project Unit Groups" data-project-unit-preferences>
-  {#if error}<p role="alert" class="error">{error}</p>{/if}
-  {#if view.readError}<p role="alert" class="error">{view.readError}</p>{/if}
   {#if view.draftError}<p role="alert" class="error">{view.draftError}</p>{/if}
-  {#if view.error}<p role="alert" class="error">{view.error}</p>{/if}
   {#if view.authorityUnknown}
     <p role="alert">Unit Groups outcome is unknown. Acknowledge the receipt, then Load actual saved values.
       The retained draft is not replayed automatically.</p>
   {/if}
-  {#if view.busy}<p role="status">Saving project Unit Groups. Save cannot be cancelled or switched to another scope.</p>{/if}
   {#each view.projectReceipts as receipt}
-    <div class="receipt" data-project-unit-receipt role={receipt.kind === 'known' ? 'status' : 'alert'}>
-      <p>Preference receipt for revision {receipt.request.revision}:
-        expected {receipt.request.expected.unitGroups}; proposed {receipt.request.proposed.unitGroups}.
-        {#if receipt.kind === 'known'}Changed {String(receipt.outcome.outcome.changed)}; committed {String(receipt.outcome.outcome.committed)}.
-          {receipt.outcome.outcome.errorMessage}
-        {:else}Changed unknown; committed unknown. {receipt.errorMessage}{/if}
-      </p>
-      <p>Approval: <code>{receipt.request.approvalHash}</code></p>
-    </div>
+    {#if receipt.kind !== 'known'}
+      <div class="receipt" data-project-unit-receipt role="alert">
+        <p>Preference receipt for revision {receipt.request.revision}:
+          expected {receipt.request.expected.unitGroups}; proposed {receipt.request.proposed.unitGroups}.
+          Changed unknown; committed unknown. {receipt.errorMessage}
+        </p>
+        <p>Approval: <code>{receipt.request.approvalHash}</code></p>
+      </div>
+    {/if}
   {/each}
   <label for="project-unit-groups">
     <span>Unit Groups</span>
@@ -95,7 +206,6 @@
     {/if}
     {#if view.readBusy}
       <button data-project-unit-cancel onclick={cancel}>Cancel Unit Groups read</button>
-      <p role="status">Reading actual saved project Unit Groups...</p>
     {/if}
   </div>
   <p class="guidance">Build the explicit project source before Load. Actual saved values are never normalized into the planned source choice.

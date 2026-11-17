@@ -326,6 +326,28 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     }
   });
 
+  let lastPushedError = '';
+  $effect(() => {
+    const currentError = error;
+    if (!currentError) {
+      lastPushedError = '';
+      return;
+    }
+    if (currentError === lastPushedError) return;
+    lastPushedError = currentError;
+    if (typeof notifications !== 'undefined') {
+      const isPause = currentError.startsWith('Wait for ') || currentError.startsWith('Save or discard ');
+      notifications.push({
+        severity: isPause ? 'warning' : 'error',
+        category: 'general',
+        source: 'Workspace',
+        title: currentError.startsWith('Wait for ') ? 'Navigation paused' : 'Workspace alert',
+        message: currentError,
+        toast: true,
+      });
+    }
+  });
+
   async function handleCloseRequest(requestId: string) {
     if (closeWorking || closeRequest === requestId) return;
     try {
@@ -376,7 +398,10 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     const state = view === 'fs882' ? editor?.getCloseState() ?? null : null;
     if (closeDisposition(ownedAction ? null : state, busy || !ownedAction && editorBusy || transitionWorking || archivePublicationBusy || vegetationPublicationBusy || lifeformPublicationBusy || summaryPublicationBusy || pendingTransition !== null || !!closeRequest || editorInitializing || (!ownedAction && typeof companionPanelBusy !== 'undefined' && companionPanelBusy)) === 'busy') {
       error = 'Wait for the current operation or decision before changing context.';
-      if (typeof notifications !== 'undefined') notifications.warning?.('Navigation paused', error, { toast: true, source: 'Workspace' });
+      if (typeof notifications !== 'undefined') {
+        lastPushedError = error;
+        notifications.warning?.('Navigation paused', error, { toast: true, source: 'Workspace' });
+      }
       return;
     }
     const contextId = $projectState?.contextId;
@@ -1116,31 +1141,23 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
     <WorkspaceSidebar {busy} {editorBusy} {companionPanelBusy} {transitionWorking} {requestTransition} {switchContext} onAccessActivated={handleAccessActivated} />
 
     <main class="content">
-      <WorkspaceStatusBanners region="banners" startupFailed={startupFailure !== null} {whatsNewStatus} {whatsNewPromptDismissed} {resetSampleNotice}
+      <WorkspaceStatusBanners region="banners" startupFailed={startupFailure !== null} {whatsNewStatus} {whatsNewPromptDismissed}
         onopenwhatsnew={() => { whatsNewModalOpen = true; }} onacknowledgewhatsnew={() => void acknowledgeUnreadWhatsNew()}
-        ondismisswhatsnew={() => { whatsNewPromptDismissed = true; }} ondismissresetnotice={() => { resetSampleNotice = ''; }} />
+        ondismisswhatsnew={() => { whatsNewPromptDismissed = true; }} />
       <PlotProfilePanel bind:this={plotProfilePanel} bind:view bind:busy bind:error bind:editorPlotNumber bind:profileNavigation bind:selected bind:page
         {editorBusy} {vegetationPublicationBusy} {lifeformPublicationBusy} {summaryPublicationBusy} {transitionWorking} {pendingTransition} {closeRequest}
         {profileIndex} {stateReads} {requestTransition} {loadPlots} {navigateProfilePlot} {clearProfileNavigation} {cancelAllReads} />
       <WorkspaceStatusBanners region="banners" startupFailed={true} diagnostics={$projectState?.diagnostics ?? []} />
       {#if startupFailure}
-        <StartupRecoveryPanel {startupFailure} {busy} onrecovered={async (notice) => { startupBackupNotice = notice; startupFailure = null; await refresh(); }} />
+        <StartupRecoveryPanel {startupFailure} {busy} onrecovered={async (notice) => { startupBackupNotice = notice; if (notice && typeof notifications !== 'undefined') notifications.success('Startup recovery complete', notice, { source: 'Startup Recovery' }); startupFailure = null; await refresh(); }} />
       {:else if view === 'home'}
         <div class="content-heading"><div><div class="eyebrow">VPro</div><h1>Home</h1></div></div>
-        {#if startupBackupNotice}
-          <div role="status" data-startup-backup-notice class="mb-3 p-2.5 border border-[#2E8540] rounded bg-[#EBF5ED] text-[#1E5128] text-xs flex items-center justify-between gap-2">
-            <span>{startupBackupNotice}</span>
-            <button type="button" class="underline text-xs" onclick={() => { startupBackupNotice = ''; }}>Dismiss</button>
-          </div>
-        {/if}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         <HomeWorkspaceHub activeProject={$projectState?.activeProject ?? 'No project selected'} projectPath={$projectState?.projectPath ?? ''}
           activeSU={$projectState?.activeSU ?? 'None'} activeHierarchy={$projectState?.activeHierarchy ?? 'None'} plotCount={page?.total ?? 0}
           {buildMode} {appVersion} gitCommit={startupInfo?.gitCommit ?? ''} {releaseChannel}
           onnavigate={(nextView) => navigate(nextView)} onhelpaction={(action) => handleHelpMenuAction(action)} />
       {:else if view === 'fs882'}
         <div class="h-full flex flex-col p-2">
-          {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
           {#if plotFindEnabled && plotFindOpen}
             <section aria-label="Find scoped plot" class="mb-2 p-3 border rounded">
               <form onsubmit={(event) => { event.preventDefault(); void findScopedPlot(); }} class="flex flex-wrap items-end gap-2">
@@ -1210,7 +1227,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         {/if}
       {:else if view === 'datasheet' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#key $projectState.contextId}
           {#await import('./datasheet/UniversalDatasheetGrid.svelte')}
             <p role="status" class="p-4 text-sm">Loading Universal Datasheet Grid...</p>
@@ -1221,7 +1237,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         {/key}
       {:else if view === 'classification-explorer' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./classification/ClassificationExplorer.svelte')}
           <p role="status" class="p-4 text-sm">Loading Classification Explorer...</p>
         {:then { default: ClassificationExplorer }}
@@ -1232,7 +1247,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onOpenPlot={(p) => { void requestTransition(async () => { editorPlotNumber = p; editorEntryForm = 'fs882'; view = 'fs882'; error = ''; }); }} />
         {/await}
       {:else if view === 'project-admin' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         <div class="p-3 space-y-4">
           {#await import('./admin/ProjectAdminWorkbench.svelte')}
             <p role="status" class="p-4 text-sm">Loading Project Admin Workbench...</p>
@@ -1249,7 +1263,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         </div>
       {:else if view === 'lump-editor' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#key $projectState.contextId}
           {#await import('./classification/LumpEditor.svelte')}
             <p role="status" class="p-4 text-sm">Loading Combine Species...</p>
@@ -1259,7 +1272,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         {/key}
       {:else if view === 'diagnostic-synthesis' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#key $projectState.contextId}
           {#await import('./diagnostics/ClassificationSynthesisView.svelte')}
             <p role="status" class="p-4 text-sm">Loading BEC Diagnostic &amp; Pairwise Synthesis...</p>
@@ -1270,7 +1282,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         {/key}
       {:else if view === 'r-sidecar' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#key $projectState.contextId}
           {#await import('./rsidecar/RSidecarWorkbench.svelte')}
             <p role="status" class="p-4 text-sm">Loading R Companion &amp; Guides...</p>
@@ -1281,7 +1292,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         {/key}
       {:else if view === 'geospatial-map' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#key $projectState.contextId}
           {#await import('./spatial/GeospatialWorkbench.svelte')}
             <p role="status" class="p-4 text-sm">Loading 3D Map...</p>
@@ -1292,7 +1302,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         {/key}
       {:else if view === 'interchange-hub' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#key $projectState.contextId}
           {#await import('./interchange/InterchangeHub.svelte')}
             <p role="status" class="p-4 text-sm">Loading Interchange Hub...</p>
@@ -1302,7 +1311,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/await}
         {/key}
       {:else if view === 'summary-environment' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./reports/SiteUnitSummary.svelte')}
           <p role="status" class="p-4 text-sm">Loading Site Unit Summary...</p>
         {:then { default: SiteUnitSummary }}
@@ -1311,7 +1319,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Site Unit Summary could not load: {String(loadError)}</p>{/await}
       {:else if view === 'long-environment' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./reports/LongEnvironmentReport.svelte')}
           <p role="status" class="p-4 text-sm">Loading Long Environment Report...</p>
         {:then { default: LongEnvironmentReport }}
@@ -1320,7 +1327,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Long Environment Report could not load: {String(loadError)}</p>{/await}
       {:else if view === 'long-vegetation' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await (import('./reports/LongVegetationReport.svelte') as unknown as Promise<{ default: Component<LongVegetationWave3Props> }>)}
           <p role="status" class="p-4 text-sm">Loading Long Vegetation Report...</p>
         {:then { default: LongVegetationReport }}
@@ -1331,7 +1337,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Long Vegetation Report could not load: {String(loadError)}</p>{/await}
       {:else if view === 'summary-vegetation' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await (import('./reports/SummaryVegetationReport.svelte') as unknown as Promise<{ default: Component<SummaryVegetationWave3Props> }>)}
           <p role="status" class="p-4 text-sm">Loading Summary Vegetation Report...</p>
         {:then { default: SummaryVegetationReport }}
@@ -1345,7 +1350,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
           {/key}
         {:catch loadError}<p class="error" role="alert">Summary Vegetation Report could not load: {String(loadError)}</p>{/await}
       {:else if view === 'lifeform-summary' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./reports/LifeformSummary.svelte')}
           <p role="status" class="p-4 text-sm">Loading Lifeform Summary...</p>
         {:then { default: LifeformSummary }}
@@ -1354,7 +1358,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Lifeform Summary could not load: {String(loadError)}</p>{/await}
       {:else if view === 'table-csv' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./interchange/ProjectTableCSVReview.svelte')}
           <p role="status" class="p-4 text-sm">Loading Table CSV Review...</p>
         {:then { default: ProjectTableCSVReview }}
@@ -1362,7 +1365,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             projectPath={$projectState.projectPath ?? ''} onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Table CSV Review could not load: {String(loadError)}</p>{/await}
       {:else if view === 'user-log' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./admin/UserLogReview.svelte')}
           <p role="status" class="p-4 text-sm">Loading User Log Review...</p>
         {:then { default: UserLogReview }}
@@ -1371,7 +1373,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">User Log Review could not load: {String(loadError)}</p>{/await}
       {:else if view === 'plot-label-preview' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./interchange/PlotLabelPreview.svelte')}
           <p role="status" class="p-4 text-sm">Loading Plot Label Preview...</p>
         {:then { default: PlotLabelPreview }}
@@ -1380,7 +1381,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             initialPlot={plotLabelNumber} onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Plot Label Preview could not load: {String(loadError)}</p>{/await}
       {:else if view === 'picture-manager' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./pictures/PictureManager.svelte')}
           <p role="status" class="p-4 text-sm">Loading Picture Manager...</p>
         {:then { default: PictureManager }}
@@ -1388,7 +1388,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             initialPlot={pictureManagerPlot} onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Picture Manager could not load: {String(loadError)}</p>{/await}
       {:else if view === 'plot-locations' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./spatial/PlotLocationReview.svelte')}
           <p role="status" class="p-4 text-sm">Loading Plot Location Review...</p>
         {:then { default: PlotLocationReview }}
@@ -1397,7 +1396,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Plot Location Review could not load: {String(loadError)}</p>{/await}
       {:else if view === 'google-earth-review' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./spatial/GoogleEarthReview.svelte')}
           <p role="status" class="p-4 text-sm">Loading Google Earth Review...</p>
         {:then { default: GoogleEarthReview }}
@@ -1406,7 +1404,6 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Google Earth Review could not load: {String(loadError)}</p>{/await}
       {:else if view === 'subzone-matrix' && $projectState}
-        {#if error}<p class="error" role="alert">{error}<button type="button" class="error-dismiss" onclick={() => { error = ''; }}>Dismiss</button></p>{/if}
         {#await import('./reports/SubzoneMatrixReport.svelte')}
           <p role="status" class="p-4 text-sm">Loading Subzone Matrix Report...</p>
         {:then { default: SubzoneMatrixReport }}
@@ -1416,7 +1413,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
       {:else}
         <PlotsBrowserPanel region="main" {view} {busy} {error} {page} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled}
           onrefresh={refresh} onloadpage={loadPlots} onopenexplorer={() => navigate('classification-explorer')}
-          onselectplot={() => { inspectorExpanded = true; }} ondismisserror={() => { error = ''; }} />
+          onselectplot={() => { inspectorExpanded = true; }} />
       {/if}
     </main>
 

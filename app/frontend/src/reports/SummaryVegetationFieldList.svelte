@@ -1,3 +1,7 @@
+<script module lang="ts">
+  import { notifications } from '../shell/notificationService.svelte';
+</script>
+
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { fieldListOwner, type FieldListCell, type FieldListRow, type FieldListView,
@@ -16,10 +20,50 @@
   const retained = untrack(() => session);
   let view = $state.raw(untrack(() => retained.view()));
   let error = $state('');
+  let lastReadError = '';
+  let lastOperationError = '';
+  let notifiedReceiptCount = 0;
+  function syncFieldListNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = ownedScope.project || undefined;
+    const rErr = view.readError ?? '';
+    if (rErr && rErr !== lastReadError) {
+      notifications.error('Summary environmental field list read failed', rErr, {
+        category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastReadError = rErr;
+    const opErr = view.operationError ?? '';
+    if (opErr && opErr !== lastOperationError) {
+      notifications.error('Summary environmental field list operation failed', opErr, {
+        category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+      });
+    }
+    lastOperationError = opErr;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedReceiptCount) notifiedReceiptCount = 0;
+    for (let i = notifiedReceiptCount; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known' && receipt.outcome?.verified && !receipt.error) {
+        if (receipt.outcome.committed) {
+          notifications.success('Summary environmental fields saved', `Saved field-list attempt ${receipt.request.requestId}.`, {
+            category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+          });
+        } else {
+          notifications.info('Summary environmental fields unchanged', `Attempt ${receipt.request.requestId}: no changes committed.`, {
+            category: 'reports', source: 'Summary Vegetation', contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedReceiptCount = receipts.length;
+  }
   const unsubscribe = untrack(() => retained.subscribe(() => {
     view = retained.view();
+    syncFieldListNotifications();
     onStateChange(view, retained.closeState());
   }));
+  syncFieldListNotifications();
   function held() {
     return peerDisabled || !!peerValidation || view.busy || !view.dispatchSettled;
   }
@@ -35,7 +79,17 @@
   }
   async function act(operation: () => unknown) {
     error = '';
-    try { await operation(); } catch (cause) { error = String(cause); }
+    try {
+      await operation();
+      if (typeof syncFieldListNotifications === 'function') syncFieldListNotifications();
+    } catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary environmental field list error', error, {
+          category: 'reports', source: 'Summary Vegetation', contextTag: ownedScope.project || undefined,
+        });
+      }
+    }
   }
   function load() { if (canLoad()) return act(() => retained.load()); }
   function save() {
@@ -79,23 +133,22 @@
 <section class="field-list" data-summary-field-list aria-label="Summary environmental field list">
   <h3>Environmental fields</h3>
   <div class="safety">
-    {#if error}<p role="alert">{error}</p>{/if}
-    {#if view.readError}<p role="alert">{view.readError}</p>{/if}
     {#if view.draftError}<p role="alert">{view.draftError}</p>{/if}
-    {#if view.operationError}<p role="alert">{view.operationError}</p>{/if}
     {#if peerValidation}<p role="alert">Peer validation hold: {peerValidation}</p>{/if}
     {#if peerDisabled}<p role="status">Peer operation holds field-list actions.</p>{/if}
     {#if view.busy || !view.dispatchSettled}<p role="status">Field-list operation/delivery pending; wait for settlement before reconciliation.</p>{/if}
     {#each view.receipts as receipt (receipt.request.requestId)}
-      <div data-field-list-receipt role={receipt.kind === 'unknown' || !receipt.outcome?.verified || receipt.error ? 'alert' : 'status'}>
-        <p>Save attempt {receipt.request.requestId}: {receipt.kind};
-          changed {receipt.outcome ? String(receipt.outcome.changed) : 'unknown'};
-          committed {receipt.outcome ? String(receipt.outcome.committed) : 'unknown'};
-          verified {receipt.outcome ? String(receipt.outcome.verified) : 'unknown'};
-          replayed {receipt.outcome ? String(receipt.outcome.replayed) : 'unknown'}.
-          {receipt.error}
-          Acknowledged: {String(receipt.acknowledged)}; reconciliation recorded: {String(!!receipt.reconciliation)}.</p>
-      </div>
+      {#if receipt.kind === 'unknown' || !receipt.outcome?.verified || receipt.error}
+        <div data-field-list-receipt role="alert">
+          <p>Save attempt {receipt.request.requestId}: {receipt.kind};
+            changed {receipt.outcome ? String(receipt.outcome.changed) : 'unknown'};
+            committed {receipt.outcome ? String(receipt.outcome.committed) : 'unknown'};
+            verified {receipt.outcome ? String(receipt.outcome.verified) : 'unknown'};
+            replayed {receipt.outcome ? String(receipt.outcome.replayed) : 'unknown'}.
+            {receipt.error}
+            Acknowledged: {String(receipt.acknowledged)}; reconciliation recorded: {String(!!receipt.reconciliation)}.</p>
+        </div>
+      {/if}
     {/each}
     {#if outstanding()}<p role="status">Do not replay Save. Unknown, unverified or error outcomes require explicit Load, correction to loaded authority, then acknowledgement. Acknowledgement retains evidence.</p>{/if}
     {#if view.reconciliationReview}<p role="status">Loaded reconciliation: {view.reconciliationReview.physical.rows.length} physical rows. Historical draft remains shown until explicit correction.</p>{/if}

@@ -12,9 +12,11 @@ const MODIFIED_COMPONENTS = [
   'spatial/GoogleEarthReview.svelte',
   'spatial/PlotLocationReview.svelte',
   'pictures/PictureManager.svelte',
+  'pictures/PicturePanel.svelte',
   'pictures/PictureCreationPanel.svelte',
   'pictures/PictureLifecyclePanel.svelte',
   'pictures/PictureMetadataEditor.svelte',
+  'interchange/InterchangeHub.svelte',
   'interchange/ProjectTableCSVReview.svelte',
   'interchange/PlotLabelPreview.svelte',
 ];
@@ -148,7 +150,15 @@ test('primary header/action toolbars render data-workbench-sticky-bar and Geospa
 
   const geoSrc = readFileSync(srcPath('spatial/GeospatialWorkbench.svelte'), 'utf8');
   assert.doesNotMatch(geoSrc, /\{#if statusMsg\}/, 'GeospatialWorkbench template must not render duplicate statusMsg banner');
+  assert.doesNotMatch(geoSrc, /\{#if errorMsg\}/, 'GeospatialWorkbench template must not render inline errorMsg banner');
+  assert.doesNotMatch(geoSrc, /\{#if mapRenderWarning\}/, 'GeospatialWorkbench template must not render inline mapRenderWarning banner');
+  assert.doesNotMatch(geoSrc, /\{#if wmsOfflineWarning\}/, 'GeospatialWorkbench template must not render inline wmsOfflineWarning banner');
   assert.match(geoSrc, /let statusMsg = \$state\(''\);/, 'GeospatialWorkbench script must keep statusMsg state');
+
+  for (const rel of MODIFIED_COMPONENTS) {
+    const src = readFileSync(srcPath(rel), 'utf8');
+    assert.doesNotMatch(src, /\{#if error(?:\s*\|\|\s*view\.error)?\}<p[^>]*class="error"/, `${rel} must not render operational error banner`);
+  }
 });
 
 test('GeospatialWorkbench routes 3D Map stamp, export, and audit actions to entry notifications', async () => {

@@ -24,9 +24,41 @@
   let publication = $state(publicationSession?.view() ?? null);
   let approval = $state<ValidatedTableCSVArchiveReview | null>(null);
   let destination = $state('');
+  let lastNotifiedStorageError = '';
+  let lastNotifiedReceiptKey = '';
   const unsubscribe = publicationSession?.subscribe(() => {
     publication = publicationSession.view();
     updateBusy();
+    if (typeof notifications !== 'undefined') {
+      if (publication.storageError && publication.storageError !== lastNotifiedStorageError) {
+        lastNotifiedStorageError = publication.storageError;
+        notifications.error('CSV archive storage error', publication.storageError, {
+          category: 'reports',
+          source: 'CSV Export',
+          contextTag: project || undefined,
+        });
+      }
+      const latest = publication.receipts.at(-1);
+      if (!publication.busy && latest && latest.phase !== 'pending') {
+        const key = `${publication.receipts.length}:${latest.phase}:${latest.outcome?.status ?? ''}:${latest.outcome?.path ?? ''}:${latest.error}`;
+        if (key !== lastNotifiedReceiptKey) {
+          lastNotifiedReceiptKey = key;
+          if (latest.phase === 'known' && latest.outcome?.status === 'published') {
+            notifications.success(
+              'CSV archive exported',
+              `Exported ${latest.table} CSV archive to ${latest.outcome.path || latest.requestedDestination}.`,
+              { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
+            );
+          } else {
+            notifications.error(
+              'CSV archive export failed',
+              latest.error || latest.outcome?.errorMessage || `CSV archive export outcome for ${latest.table}: ${latest.phase}.`,
+              { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
+            );
+          }
+        }
+      }
+    }
   });
   const reads = new ReadRequests();
   let generation = 0;
@@ -36,7 +68,13 @@
     generation++; reads.cancelAll(); busy = false; approval = null; updateBusy();
   }
   async function show() {
-    if (busy || publication?.busy || publication?.blocked) { error = 'Wait for or cancel the current table read and acknowledge any archive attempt before another review.'; return; }
+    if (busy || publication?.busy || publication?.blocked) {
+      error = 'Wait for or cancel the current table read and acknowledge any archive attempt before another review.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('CSV table review blocked', error, { category: 'reports', source: 'CSV Export', contextTag: project || undefined });
+      }
+      return;
+    }
     cancel(); const request = generation, table = `${project}_${suffix}`;
     review = null; error = ''; busy = true; updateBusy();
     try {
@@ -85,20 +123,25 @@
     try {
       await publicationSession.publish(approved, table, destination, request =>
         ImportExportService.ExportReviewedTableCSVArchive(contextId, JSON.stringify(request)));
-      const latest = publicationSession.view().receipts.at(-1);
+      const view = publicationSession.view();
+      const latest = view.receipts.at(-1);
       if (typeof notifications !== 'undefined' && latest) {
-        if (latest.phase === 'known' && latest.outcome?.status === 'published') {
-          notifications.success(
-            'CSV archive exported',
-            `Exported ${table} CSV archive to ${latest.outcome.path || destination}.`,
-            { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
-          );
-        } else {
-          notifications.error(
-            'CSV archive export failed',
-            latest.error || latest.outcome?.errorMessage || `CSV archive export outcome for ${table}: ${latest.phase}.`,
-            { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
-          );
+        const key = `${view.receipts.length}:${latest.phase}:${latest.outcome?.status ?? ''}:${latest.outcome?.path ?? ''}:${latest.error}`;
+        if (typeof lastNotifiedReceiptKey === 'undefined' || lastNotifiedReceiptKey !== key) {
+          if (typeof lastNotifiedReceiptKey !== 'undefined') lastNotifiedReceiptKey = key;
+          if (latest.phase === 'known' && latest.outcome?.status === 'published') {
+            notifications.success(
+              'CSV archive exported',
+              `Exported ${table} CSV archive to ${latest.outcome.path || destination}.`,
+              { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
+            );
+          } else {
+            notifications.error(
+              'CSV archive export failed',
+              latest.error || latest.outcome?.errorMessage || `CSV archive export outcome for ${table}: ${latest.phase}.`,
+              { category: 'reports', source: 'CSV Export', contextTag: project || undefined },
+            );
+          }
         }
       }
     } catch (cause) {
@@ -110,7 +153,12 @@
   }
   function acknowledge() {
     try { publicationSession?.acknowledge(); changeTable(); }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('CSV archive acknowledgement failed', error, { category: 'reports', source: 'CSV Export', contextTag: project || undefined });
+      }
+    }
   }
   onDestroy(cancel);
   onDestroy(() => unsubscribe?.());
@@ -133,30 +181,23 @@
           Export reviewed {project}_{suffix} CSV archive
         </button>
       {/if}
-      {#if busy}<button type="button" data-table-csv-cancel onclick={cancel}>Cancel table read</button>
-        <p role="status">Reading and checking the owned table snapshot...</p>{/if}
+      {#if busy}<button type="button" data-table-csv-cancel onclick={cancel}>Cancel table read</button>{/if}
     </div>
   </header>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if publication}
-    {#if publication.storageError}<p class="error" role="alert">{publication.storageError}</p>{/if}
-    {#each publication.receipts as receipt, index}
+    {#each publication.receipts.filter(receipt => receipt.phase === 'unknown') as receipt, index}
       <section class="receipt" data-table-csv-archive-attempt
-        data-table-csv-archive-receipt={receipt.phase === 'known' ? '' : undefined}
-        data-table-csv-archive-unknown-receipt={receipt.phase === 'unknown' ? '' : undefined}
+        data-table-csv-archive-unknown-receipt=""
         aria-label={`Archive attempt ${index + 1}`}>
-        <h2>Archive attempt {index + 1}: {receipt.phase === 'known' ? receipt.outcome?.status : receipt.phase === 'pending' ? 'awaiting receipt — outcome not yet known' : 'outcome unknown'}</h2>
+        <h2>Archive attempt {index + 1}: outcome unknown</h2>
         <p>{receipt.table}; requested literal destination: {receipt.requestedDestination}</p>
         <p>Expected archive SHA256: {receipt.archiveSHA256}</p>
-        {#if receipt.outcome?.path}<p>Observed published path: {receipt.outcome.path}</p>{/if}
-        {#if receipt.error}<p class="error" role="alert">{receipt.error}</p>{/if}
         <p>{receipt.acknowledged ? 'Acknowledged; historical evidence retained.' : 'Unacknowledged. Close and navigation are blocked. Publication cannot be cancelled or automatically replayed.'}</p>
       </section>
     {/each}
     {#if publication.blocked && !publication.storageError}
       <button type="button" data-table-csv-archive-acknowledge disabled={publication.busy} onclick={acknowledge}>Acknowledge archive outcome; retain all receipts</button>
     {/if}
-    {#if publication.busy}<p role="status">Archive operation in progress; close and navigation are blocked.</p>{/if}
   {/if}
   <p>Project {project}. Whole physical project table; selected SU and plot/profile filters are not applied.</p>
   <dl><div><dt>Owned project database</dt><dd>{projectPath}</dd></div></dl>

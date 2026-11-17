@@ -91,10 +91,9 @@
         <button data-lifeform-hierarchy-preview onclick={() => show('lifeform')} disabled={!enabled || busy || workbookBusy || su === 'None'}>Preview Lifeform (~) Summary</button>
         <button data-attributes-hierarchy-preview onclick={() => show('attributes')} disabled={!enabled || !attributesEnabled || busy || workbookBusy || su === 'None'}>Preview species attribute (~) summaries</button>
       {/if}
-      {#if busy}<button onclick={cancel}>Cancel preview</button><p role="status">Reading owned project and SU…</p>{/if}
+      {#if busy}<button onclick={cancel}>Cancel preview</button>{/if}
     </div>
   </header>
-  {#if error}<p role="alert" class="error">{error}</p>{/if}
   <p>Project {project}; selected SU {su}. Profile navigation does not filter this report.</p>
   <div class="scope-controls">
     <label>Unit Scope
@@ -189,5 +188,5 @@
   th, td { padding: .5rem; border-bottom: 1px solid #D8D8D8; text-align: left; }
   thead th { background: #F2F2F2; color: #003366; }
   caption { text-align: left; padding-bottom: .5rem; font-weight: 600; color: #003366; }
-  .error { color: #D8292F; font-weight: 600; } .guidance { font-size: .9rem; color: #474543; }
+  .guidance { font-size: .9rem; color: #474543; }
 </style>

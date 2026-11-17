@@ -4,7 +4,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
-const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const wb = loadTypeScript('geospatialWorkbench.ts');
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -381,4 +381,49 @@ test('classifyWMSMapError surfaces offline WMS warnings without blocking offline
     /WMS tile request failed/i
   );
   assert.equal(wb.classifyWMSMapError({ sourceId: 'bc_bgc_pmtiles', error: new Error(' unrelated ') }, true, true), null);
+});
+
+test('GeospatialWorkbench removes inline error/warning banners while routing wmsOfflineWarning and mapRenderWarning to background notifications', () => {
+  const wbSource = readFileSync(srcPath('GeospatialWorkbench.svelte'), 'utf8');
+  const lassoSource = readFileSync(srcPath('SpatialAOILassoTab.svelte'), 'utf8');
+  assert.doesNotMatch(wbSource, /\{#if errorMsg\}<div/);
+  assert.doesNotMatch(wbSource, /\{#if mapRenderWarning\}<div/);
+  assert.doesNotMatch(wbSource, /\{#if wmsOfflineWarning\}<div/);
+  assert.match(wbSource, /let errorMsg = \$state\(''\);/);
+  assert.match(wbSource, /let mapRenderWarning = \$state\(''\);/);
+  assert.match(wbSource, /let wmsOfflineWarning = \$state\(''\);/);
+  assert.match(lassoSource, /class="wb-suggestion-box" role="status"/);
+
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const host = componentFunctions('GeospatialWorkbench.svelte', ['applyLayerVisibilities', 'initializeMapCanvas'], {
+    project: 'Sample',
+    alive: true,
+    visibility: { bcOpenMapsWMS: true },
+    wmsOfflineWarning: '',
+    mapRenderWarning: '',
+    mapInstance: null,
+    mapContainer: {},
+    payload: null,
+    navigator: { onLine: false },
+    classifyWMSMapError: wb.classifyWMSMapError,
+    ensurePMTilesProtocol() {},
+    setWorkerUrl() {},
+    maplibreWorkerUrl: '/worker.js',
+    $state: { snapshot: v => v },
+    buildMapLibreGeospatialStyle() { throw new Error('WebGL unavailable'); },
+    notifications,
+  });
+
+  host.actions.applyLayerVisibilities();
+  host.actions.initializeMapCanvas();
+
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 2);
+  assert.ok(entries.every(item => item.severity === 'warning' && item.category === 'background' && item.source === '3D Map' && item.contextTag === 'Sample'));
+  assert.match(entries[0].message, /WebGL unavailable/);
+  assert.match(entries[1].message, /offline/i);
+  assert.match(wbSource, /const handleBrowserOffline = \(\) => \{[\s\S]*?notifications\.warning\(/);
 });

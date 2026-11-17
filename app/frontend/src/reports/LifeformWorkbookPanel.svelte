@@ -25,14 +25,45 @@
   let review = $state.raw<ValidatedLifeformWorkbookReview | null>(null);
   let destination = $state('');
   let publication = $state(session.view());
+  let lastPubKey = '';
   const barrier = $derived(publication.busy || publication.blocked);
   const held = $derived(disabled || busy || barrier);
   function reportBusy() { onBusyChange(busy || publication.busy || publication.blocked); }
+  function syncPublicationNotifications() {
+    const settled = session.view();
+    if (settled.busy) { lastPubKey = ''; return; }
+    if (!settled.outcome && !settled.error) return;
+    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
+    if (key === lastPubKey) return;
+    lastPubKey = key;
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = owned.project || undefined;
+    if (settled.outcome?.status === 'published' && !settled.error) {
+      const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+      notifications.success('Lifeform Summary workbook exported', exportedPath, {
+        category: 'reports',
+        source: 'Lifeform Summary',
+        contextTag: ctxTag,
+      });
+    } else if (settled.error || settled.outcome) {
+      notifications.error(
+        'Lifeform Summary workbook export failed',
+        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+        {
+          category: 'reports',
+          source: 'Lifeform Summary',
+          contextTag: ctxTag,
+        },
+      );
+    }
+  }
   const unsubscribe = session.subscribe(() => {
     publication = session.view();
     if (publication.busy) review = null;
+    syncPublicationNotifications();
     reportBusy();
   });
+  syncPublicationNotifications();
 
   function cancel() {
     generation++; reads.cancelAll(); busy = false; review = null; reportBusy();
@@ -71,8 +102,10 @@
     try {
       await session.publish(review, destination, request =>
         VegetationReportService.ExportReviewedLifeformWorkbook(owned.contextId, JSON.stringify(request)));
-      const settled = session.view();
-      if (!disposed && typeof notifications !== 'undefined') {
+      if (typeof syncPublicationNotifications === 'function') {
+        syncPublicationNotifications();
+      } else if (!disposed && typeof notifications !== 'undefined') {
+        const settled = session.view();
         if (settled.outcome?.status === 'published' && !settled.error) {
           const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
           notifications.success('Lifeform Summary workbook exported', exportedPath, {
@@ -108,7 +141,16 @@
   function acknowledge() {
     if (publication.busy || !publication.blocked) return;
     try { session.acknowledge(); review = null; }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Lifeform Summary workbook acknowledgement failed', error, {
+          category: 'reports',
+          source: 'Lifeform Summary',
+          contextTag: owned.project || undefined,
+        });
+      }
+    }
   }
   onDestroy(() => {
     disposed = true; generation++; reads.cancelAll(); busy = false;
@@ -118,17 +160,8 @@
 
 <section class="workbook" data-lifeform-workbook aria-label="Lifeform Summary workbook">
   <h2>Lifeform Summary workbook</h2>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#if publication.error}<p class="error" role="alert">{publication.error}</p>{/if}
-  {#if publication.busy}
-    <p role="status">Publishing the reviewed workbook; publication cannot be cancelled. Navigation and close remain blocked.</p>
-  {/if}
-  {#if publication.outcome}
-    <p data-lifeform-workbook-receipt role="status">Workbook receipt: {publication.outcome.status}.
-      Requested destination: {publication.requestedDestination}. Output: {publication.outcome.path || '(no published path)'}.
-      SHA256: {publication.outcome.sha256 || '(no acknowledged hash)'}.</p>
-  {:else if publication.requestedDestination && !publication.busy}
-    <p data-lifeform-workbook-unknown role="status">Workbook outcome unknown. Retain and inspect
+  {#if !publication.outcome && publication.requestedDestination && !publication.busy}
+    <p data-lifeform-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect
       {publication.requestedDestination} before acknowledging; never repeat the destination blindly.</p>
   {/if}
   {#if publication.blocked && !publication.busy}
@@ -149,7 +182,6 @@
       onclick={getReview}>Review summary workbook</button>
     <button data-lifeform-workbook-cancel disabled={!busy || barrier} onclick={cancel}>Cancel review</button>
   </div>
-  {#if busy}<p role="status">Reading the source workbook plan…</p>{/if}
   {#if review}
     <div data-lifeform-workbook-plan>
       <h3>Reviewed source plan</h3>
@@ -215,6 +247,5 @@
   th, td { padding: .35rem .65rem; border: 1px solid #D8D8D8; text-align: left; }
   thead th { background: #F2F2F2; color: #003366; }
   caption { text-align: left; font-weight: 600; color: #003366; }
-  .error { color: #D8292F; font-weight: 600; }
   .guidance { font-size: .9rem; color: #474543; }
 </style>

@@ -126,7 +126,16 @@
   function applyLayerVisibilities() {
     if (!visibility.bcOpenMapsWMS) wmsOfflineWarning = '';
     else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      wmsOfflineWarning = classifyWMSMapError({}, true, false) ?? 'BC OpenMaps WMS imagery is unreachable while offline. Offline map layers remain active.';
+      const nextWarn = classifyWMSMapError({}, true, false) ?? 'BC OpenMaps WMS imagery is unreachable while offline. Offline map layers remain active.';
+      if (nextWarn !== wmsOfflineWarning && typeof notifications !== 'undefined') {
+        notifications.warning('BC OpenMaps WMS offline', nextWarn, {
+          category: 'background',
+          source: '3D Map',
+          contextTag: project || undefined,
+          toast: true,
+        });
+      }
+      wmsOfflineWarning = nextWarn;
     } else wmsOfflineWarning = '';
     if (!mapInstance) return;
     const style = buildMapLibreGeospatialStyle(payload?.manifest, $state.snapshot(visibility));
@@ -175,7 +184,17 @@
         if (!alive) return;
         const online = typeof navigator !== 'undefined' ? navigator.onLine : undefined;
         const wmsWarn = classifyWMSMapError(evt, visibility.bcOpenMapsWMS, online);
-        if (wmsWarn) wmsOfflineWarning = wmsWarn;
+        if (wmsWarn) {
+          if (wmsWarn !== wmsOfflineWarning && typeof notifications !== 'undefined') {
+            notifications.warning('BC OpenMaps WMS unavailable', wmsWarn, {
+              category: 'background',
+              source: '3D Map',
+              contextTag: project || undefined,
+              toast: true,
+            });
+          }
+          wmsOfflineWarning = wmsWarn;
+        }
       });
       map.on('click', (evt) => {
         if (!alive || !aoiDrawMode) return;
@@ -187,6 +206,14 @@
       mapInstance = map;
     } catch (cause) {
       mapRenderWarning = `Hardware 3D map rendering is unavailable in this environment (${cause instanceof Error ? cause.message : String(cause)}). Table-based Coordinate Check, BGC Stamp, and Site Unit selection remain active.`;
+      if (typeof notifications !== 'undefined') {
+        notifications.warning('3D map rendering fallback', mapRenderWarning, {
+          category: 'background',
+          source: '3D Map',
+          contextTag: project || undefined,
+          toast: true,
+        });
+      }
     }
   }
 
@@ -416,7 +443,17 @@
   const handleBrowserOffline = () => {
     if (!alive || !visibility.bcOpenMapsWMS) return;
     const msg = classifyWMSMapError({}, true, false);
-    if (msg) wmsOfflineWarning = msg;
+    if (msg) {
+      if (msg !== wmsOfflineWarning && typeof notifications !== 'undefined') {
+        notifications.warning('BC OpenMaps WMS offline', msg, {
+          category: 'background',
+          source: '3D Map',
+          contextTag: project || undefined,
+          toast: true,
+        });
+      }
+      wmsOfflineWarning = msg;
+    }
   };
   const handleBrowserOnline = () => { if (alive) wmsOfflineWarning = ''; };
 
@@ -464,10 +501,6 @@
       onExport={exportGeoPackageShortcut} onClose={() => { gpkgPanelOpen = false; }}
     />
   {/if}
-
-  {#if errorMsg}<div role="alert" class="wb-alert wb-alert-error">{errorMsg}</div>{/if}
-  {#if mapRenderWarning}<div role="status" class="wb-alert wb-alert-info">{mapRenderWarning}</div>{/if}
-  {#if wmsOfflineWarning}<div role="status" data-wms-offline-warning class="wb-alert wb-alert-info">{wmsOfflineWarning}</div>{/if}
 
   <div class="wb-main-split">
     <div class="wb-map-stage">

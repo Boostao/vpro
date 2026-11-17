@@ -3,7 +3,9 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { compile } = require('svelte/compiler');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { render } = require('svelte/server');
+const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
 const lifeform = loadTypeScript('lifeformSummary.ts');
 const attributes = loadTypeScript('speciesAttributeSummary.ts', { './lifeformSummary': lifeform });
 const publication = loadTypeScript('publicationSession.ts');
@@ -272,7 +274,35 @@ test('panel compiles and exposes source options, independent gate, cancellable r
   for (const selector of ['review', 'cancel', 'destination', 'export', 'acknowledge', 'option']) {
     assert.ok(source.includes(`data-lifeform-workbook-${selector}`));
   }
-  assert.ok(source.indexOf('publication.error') < source.indexOf('<fieldset'));
-  assert.ok(source.indexOf('data-lifeform-workbook-receipt') < source.indexOf('class="guidance"'));
+  assert.doesNotMatch(source, /data-lifeform-workbook-receipt/);
+  assert.doesNotMatch(source, /\{#if [^}]*error\}<p[^>]*class="error"/);
+  assert.ok(source.indexOf('data-lifeform-workbook-unknown') >= 0 && source.indexOf('data-lifeform-workbook-unknown') < source.indexOf('<fieldset'));
+  assert.ok(source.indexOf('data-lifeform-workbook-unknown') < source.indexOf('class="guidance"'));
   assert.match(source, /attributeUnit.rows as row/);
+});
+
+test('server-rendered LifeformWorkbookPanel routes known receipts and errors to notifications without DOM receipts', async () => {
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const owned = { ...owner, contextId: 'lifeform-notif-ssr' };
+  const input = fixture();
+  input.lifeform.contextId = input.attributes.contextId = owned.contextId;
+  const session = workbook.lifeformWorkbookPublicationSession(owned);
+  await session.publish(input, destination, async () => receipt('published'));
+  const Panel = serverComponent(readFileSync(srcPath('LifeformWorkbookPanel.svelte'), 'utf8').replace('structuredClone(owner)', '({ ...owner })'), 'LifeformWorkbookPanel.svelte', {
+    '../bindings/github.com/boostao/vpro/app': { VegetationReportService: {} },
+    './lifeformSummary': lifeform,
+    './speciesAttributeSummary': attributes,
+    './lifeformWorkbook': workbook,
+    '../shell/notificationService.svelte': { notifications },
+  });
+  const html = render(Panel, { props: { owner: owned, disabled: false, onBusyChange() {} } }).body;
+  assert.doesNotMatch(html, /data-lifeform-workbook-receipt/);
+  assert.doesNotMatch(html, /class="error"/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'success');
+  assert.equal(entries[0].category, 'reports');
+  assert.equal(entries[0].source, 'Lifeform Summary');
+  assert.equal(entries[0].contextTag, owned.project);
+  assert.ok(entries[0].message.includes(destination));
 });

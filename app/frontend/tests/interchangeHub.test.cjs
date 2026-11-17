@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { render } = require('svelte/server');
-const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 
 const calls = [];
 const mockBindings = {
@@ -133,6 +133,7 @@ test('defaultInterchangeHubPort invokes all expected ImportExportService methods
 test('InterchangeHub.svelte compiles cleanly, contains zero emojis, and renders BC Gov 5-tab workbench', () => {
   const source = readFileSync(srcPath('InterchangeHub.svelte'), 'utf8');
   assert.equal(/\p{Extended_Pictographic}/u.test(source), false);
+  assert.doesNotMatch(source, /<p class="error" role="alert">/);
   assert.match(source, /#003366/);
   assert.match(source, /#fcba19/i);
 
@@ -168,4 +169,60 @@ test('defaultInterchangeHubPort wraps @wailsio/runtime native OS pickers and pas
   });
   assert.equal(calls[0][0], 'main.ImportExportService.ImportTurboVeg');
   assert.equal(calls[0][2].resolveVProCodeSynonyms, true);
+});
+
+test('InterchangeHub routes all validation and RPC error paths to background notifications while preserving error state', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const host = componentFunctions(
+    'InterchangeHub.svelte',
+    ['pushHubError', 'setBusy', 'inspectVenus', 'runVenusImport', 'runTurboVegExport', 'runTurboVegImport', 'runRdsExport', 'runGeoPackageExport'],
+    {
+      contextId: 'ctx-hub',
+      busy: false,
+      operationHeld: false,
+      error: '',
+      generation: 0,
+      venusSourcePath: '',
+      venusInspection: null,
+      venusSelectedProject: '',
+      venusTargetProject: 'Sample',
+      venusDestinationPath: '',
+      venusActivate: false,
+      tvExportFormat: 'sqlite',
+      tvExportPath: '',
+      tvExportLump: '',
+      tvImportPath: '',
+      tvImportFormat: '',
+      tvImportTarget: '99Invalid',
+      tvImportDestPath: '',
+      tvImportActivate: false,
+      tvResolveSynonyms: false,
+      rdsDestPath: '',
+      gpkgDestPath: '',
+      validateTargetProjectName: hub.validateTargetProjectName,
+      onBusyChange() {},
+      notifications,
+      port: {
+        inspectVenusSource: async () => { throw new Error('bad mdb header'); },
+      },
+    },
+  );
+
+  await host.actions.inspectVenus();
+  assert.match(host.error, /Enter a VENUS 5\.0/);
+  host.venusSourcePath = '/tmp/broken.mdb';
+  await host.actions.inspectVenus();
+  assert.match(host.error, /bad mdb header/);
+  await host.actions.runVenusImport();
+  await host.actions.runTurboVegExport();
+  await host.actions.runTurboVegImport();
+  await host.actions.runRdsExport();
+  await host.actions.runGeoPackageExport();
+
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 7);
+  assert.ok(entries.every(item => item.severity === 'error' && item.category === 'background' && item.source === 'Interchange Hub'));
 });

@@ -20,7 +20,11 @@
 
   function cancel() { generation++; reads.cancelAll(); busy = false; onBusyChange(false); }
   async function show() {
-    if (busy) { error = 'Wait for or cancel the current location read before another review.'; return; }
+    if (busy) {
+      error = 'Wait for or cancel the current location read before another review.';
+      notifications.error('Plot location review blocked', error, { category: 'reports', source: 'Plot Locations', contextTag: project || undefined });
+      return;
+    }
     cancel(); const request = generation;
     review = null; error = ''; offset = 0; busy = true; onBusyChange(true);
     try {
@@ -51,11 +55,9 @@
     <h1>Plot location review</h1>
     <div class="actions">
       <button type="button" data-plot-location-read disabled={busy} onclick={show}>Review plot locations</button>
-      {#if busy}<button type="button" data-plot-location-cancel onclick={cancel}>Cancel location read</button>
-        <p role="status">Reading and checking the owned location snapshot...</p>{/if}
+      {#if busy}<button type="button" data-plot-location-cancel onclick={cancel}>Cancel location read</button>{/if}
     </div>
   </header>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   <p>Project {project} / SU {su}. Selected context scope; current-plot and profile filters are not applied.</p>
   <dl><div><dt>Owned project database</dt><dd>{projectPath}</dd></div>
     {#if su !== 'None'}<div><dt>Owned SU database</dt><dd>{suPath}</dd></div>{/if}</dl>
@@ -105,5 +107,4 @@
   th { background: #F2F2F2; color: #003366; }
   caption { text-align: left; margin-bottom: .5rem; color: #474543; }
   .notice { color: #474543; }
-  .error { color: #D8292F; }
 </style>

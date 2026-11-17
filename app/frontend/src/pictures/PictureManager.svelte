@@ -103,7 +103,6 @@
       <button type="submit" disabled={busy || metadataBlocked || creationBlocked || lifecycleBlocked}>Select exact plot</button>
     </form>
   </header>
-  {#if error}<p role="alert" class="error">{error}</p>{/if}
   {#if selected}
     <p data-picture-manager-parent>Selected literal parent: {JSON.stringify(selected)}</p>
     {#key selected}
@@ -132,6 +131,5 @@
   input, button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; color: #313132; background: #FFFFFF; }
   button:disabled, input:disabled { opacity: .5; }
   p { overflow-wrap: anywhere; }
-  .error { color: #D8292F; background: #FBEAEA; border: 1px solid #D8292F; padding: .5rem; border-radius: .25rem; }
   .guidance { font-size: .8rem; color: #474543; margin-top: 1rem; }
 </style>

@@ -14,6 +14,12 @@ const sessionModule = loadTypeScript('pictureLifecycleSession.ts', {
 const source = name => readFileSync(srcPath(name), 'utf8');
 const plain = value => JSON.parse(JSON.stringify(value));
 const operation = value => Object.assign(Promise.resolve(value), { cancel() {} });
+function makeNotifications() {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  return createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+}
 function session(port = {}) {
   return new sessionModule.PictureLifecycleSession(owner, {
     read: () => operation(review()),
@@ -185,11 +191,13 @@ test('binding registry retains unknown requests across remount, recovers without
   } finally { unsubscribe(); }
 });
 
-test('lifecycle panel renders associated source fields and retained safety feedback before ordinary guidance', async () => {
+test('lifecycle panel renders associated source fields and safety lock while routing receipts and errors to notifications', async () => {
+  const notifications = makeNotifications();
   const value = session({ delete: () => operation(Promise.reject(new Error('Lost delivery'))) });
   await value.reviewDeletion('-7'); value.confirm(true);
   const component = serverComponent(source('PictureLifecyclePanel.svelte'), 'PictureLifecyclePanel.svelte', {
     './pictureRead': picture,
+    '../shell/notificationService.svelte': { notifications },
   });
   let html = render(component, { props: { session: value } }).body;
   assert.equal((html.match(/<output(?:\s[^>]*)?>/g) || []).length, 5);
@@ -202,15 +210,24 @@ test('lifecycle panel renders associated source fields and retained safety feedb
   assert.match(html, /Mutation outcome is unknown/);
   assert.match(html, /Recover picture receipt read-only/);
   assert.ok(html.indexOf('Mutation outcome is unknown') < html.indexOf('Reviewed physical rowid'));
-  assert.ok(html.indexOf('role="alert"') < html.indexOf('Reviewed physical rowid'));
+  assert.doesNotMatch(html, /<p role="alert" class="error">/);
   assert.match(html, /data-picture-lifecycle-confirm[^>]*disabled/);
-  await value.resolve();
+  assert.ok(notifications.getSnapshot().entries.some(e => e.severity === 'error' && e.category === 'entry' && e.source === 'Plot Pictures' && /Lost delivery/.test(e.message)));
+
+  const actionNotifs = makeNotifications();
+  const actionHost = componentFunctions('PictureLifecyclePanel.svelte', ['resolveLifecycle'], {
+    session: value,
+    localError: '',
+    notifications: actionNotifs,
+  });
+  await actionHost.actions.resolveLifecycle();
   html = render(component, { props: { session: value } }).body;
   assert.match(html, /The physical operation committed/);
-  assert.match(html, /Retained irreversible receipts \(1\)/);
+  assert.doesNotMatch(html, /data-picture-lifecycle-receipts/);
+  assert.ok(actionNotifs.getSnapshot().entries.some(e => e.severity === 'success' && e.category === 'entry' && e.source === 'Plot Pictures' && /Picture deletion receipt recovered/.test(e.title)));
   value.acknowledge();
   html = render(component, { props: { session: value } }).body;
-  assert.match(html, /Retained irreversible receipts \(1\)/);
+  assert.doesNotMatch(html, /data-picture-lifecycle-receipts/);
   assert.doesNotMatch(html, /Acknowledge committed picture receipt/);
 });
 

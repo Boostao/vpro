@@ -529,7 +529,7 @@ test('vegetation bindings are cancellable and report UI is independently default
   }
   assert.match(source('Navigation.svelte'),/name: 'Long Vegetation', icon: TableProperties, view: 'long-vegetation'/);
   assert.match(source('App.svelte'),/view === 'long-vegetation' && \$projectState/);
-  assert.match(source('App.svelte'),/view === 'long-vegetation'[^\n]+\n\s*\{#if error\}<p class="error" role="alert">\{error\}/);
+  assert.doesNotMatch(source('App.svelte'),/view === 'long-vegetation'[^\n]+\n\s*\{#if error\}<p class="error"/);
   assert.match(source('App.svelte'),/\{#key \$projectState\.contextId\}[\s\S]*<LongVegetationReport/);
   assert.match(source('App.svelte'),/closeDisposition\(state, busy \|\| editorBusy/);
   const panel=source('LongVegetationReport.svelte');

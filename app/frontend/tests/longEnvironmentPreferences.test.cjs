@@ -178,11 +178,16 @@ test('saved CRLF no-op preserves raw literals; deliberate multiline LF drafts su
   assert.equal(captured.expected.title, saved); assert.equal(captured.proposed.title, edited);
   assert.equal(remount.view().saved.title, edited);
 });
-test('rendered title has one labelled two-row textarea control', () => {
+test('rendered title has one labelled two-row textarea control', async () => {
   const source = readFileSync(srcPath('LongEnvironmentReport.svelte'), 'utf8');
-  const session = new prefs.LongEnvironmentPreferencesSession(scope);
+  const notifications = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') })
+    .createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const owned = { ...scope, contextId: 'rendered-title-notif' };
+  const session = new prefs.LongEnvironmentPreferencesSession(owned);
   const saved = 'First line\r\nSecond line';
-  session.apply(review(saved));
+  session.apply(review(saved, owned));
+  await session.save(async () => ({ contextId: owned.contextId, changed: false, committed: false, errorMessage: '' }));
+  session.acknowledge();
   const component = serverComponent(source,
     'LongEnvironmentReport.svelte', {
       '../bindings/github.com/boostao/vpro/app': { EnvironmentReportService: {} },
@@ -192,8 +197,11 @@ test('rendered title has one labelled two-row textarea control', () => {
         view: () => ({ busy: false, blocked: false, outcome: null, error: '', requestedDestination: '' }),
         subscribe: () => () => {},
       }) },
+      '../shell/notificationService.svelte': { notifications },
     });
-  const { body } = render(component, { props: { ...scope, onBusyChange: () => {} } });
+  const { body } = render(component, { props: { ...owned, onBusyChange: () => {} } });
+  assert.doesNotMatch(body, /data-long-environment-preferences-receipt/);
+  assert.ok(notifications.getSnapshot().entries.some(e => e.category === 'reports' && e.source === 'Long Environment' && /No title preference changes/.test(e.message)));
   const controls = body.match(/<(?:input|textarea)\b[^>]*id="long-environment-title"[^>]*>/g) ?? [];
   assert.equal(controls.length, 1);
   assert.match(body, /<label[^>]*for="long-environment-title"[^>]*>Title<\/label>/);
@@ -214,6 +222,8 @@ test('panel has one live title and explicit cancellable Load/noncancellable Save
   assert.match(panel, /ready = preferenceView.initialized/);
   assert.match(panel, /data-long-environment-preferences-undo disabled=\{[^}]+!preferenceView\?\.saved/);
   assert.match(panel, /receipt.kind === 'known'/);
+  assert.doesNotMatch(panel, /data-long-environment-preferences-receipt[^>]*role="status"/);
+  assert.match(panel, /data-long-environment-preferences-unknown-receipt[^>]*role="alert"/);
   assert.match(panel, /Preference receipt: outcome unknown; changed unknown; committed unknown/);
   assert.doesNotMatch(readFileSync(srcPath('longEnvironmentPreferences.ts'), 'utf8'), /Long Evironment Report/);
   assert.match(panel, /const value = event.currentTarget.value; editTitle\(value\)/);

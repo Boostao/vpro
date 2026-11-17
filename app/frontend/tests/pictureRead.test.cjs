@@ -27,7 +27,7 @@ function review() {
 function image(rowId = review().records.rows[0].rowId) {
   return { ...owner, rowId, mime: 'image/jpeg', width: 448, height: 300, sha256: 'a'.repeat(64), dataUrl: 'data:image/jpeg;base64,YQ==' };
 }
-function host(service = {}) {
+function host(service = {}, extraValues = {}) {
   const calls = [], busy = [];
   const context = componentFunctions('PicturePanel.svelte', ['cancel', 'load', 'select', 'preview'], {
     ...owner, view: 'child', ownerKey: 'owner', reviewKey: '', generation: 0, busy: false, disabled: false,
@@ -40,6 +40,7 @@ function host(service = {}) {
       GetMetadata(...args) { calls.push(['metadata', ...args]); return service.metadata ? service.metadata(...args) : Promise.resolve(review()); },
       GetImage(...args) { calls.push(['image', ...args]); return service.image ? service.image(...args) : Promise.resolve(image()); },
     },
+    ...extraValues,
   });
   return { context, calls, busy };
 }
@@ -155,12 +156,22 @@ test('picture selection changes invalidate held previews and retain metadata', a
   assert.equal(context.busy, false);
 });
 
-test('picture transport/backend errors remain visible and can be explicitly retried', async () => {
+test('picture transport/backend errors route to notifications and can be explicitly retried', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
   let fail = true;
-  const { context } = host({ metadata: () => fail ? Promise.reject(new Error('missing explicit library')) : Promise.resolve(review()) });
+  const { context } = host({ metadata: () => fail ? Promise.reject(new Error('missing explicit library')) : Promise.resolve(review()) }, { notifications });
   await context.actions.load();
   assert.match(context.error, /missing explicit library/);
   assert.equal(context.review, null);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'error');
+  assert.equal(entries[0].category, 'entry');
+  assert.equal(entries[0].source, 'Plot Pictures');
+  assert.match(entries[0].message, /missing explicit library/);
   fail = false;
   await context.actions.load();
   assert.equal(context.error, '');

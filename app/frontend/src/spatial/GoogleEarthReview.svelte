@@ -34,11 +34,68 @@
   const preferenceLocked = $derived(!!preferences && (preferences.busy || preferences.blocked));
   const locked = $derived(busy || publication.busy || publication.blocked || preferenceLocked);
   function updateBusy() { onBusyChange(busy || publication.busy || publication.blocked || !!preferences && (preferences.busy || preferences.blocked || !!preferences.draftError)); }
+  let lastNotifiedKmlKey = '';
+  let lastNotifiedPrefKey = '';
   const unsubscribe = publicationSession.subscribe(() => {
     publication = publicationSession.view();
     updateBusy();
+    if (!publication.busy && typeof notifications !== 'undefined') {
+      const key = publication.outcome
+        ? `outcome:${publication.requestedDestination}:${publication.outcome.status}:${publication.outcome.path}:${publication.outcome.errorMessage}`
+        : publication.error
+          ? `error:${publication.requestedDestination}:${publication.error}`
+          : '';
+      if (key && key !== lastNotifiedKmlKey) {
+        lastNotifiedKmlKey = key;
+        if (publication.outcome?.status === 'published') {
+          notifications.success(
+            'Google Earth KML exported',
+            `Exported KML to ${publication.outcome.path || publication.requestedDestination}.`,
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        } else {
+          notifications.error(
+            'Google Earth KML export failed',
+            publication.outcome?.errorMessage || publication.error || 'KML publication reported errors.',
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        }
+      }
+    }
   });
-  const unsubscribePreferences = preferenceSession?.subscribe(() => { preferences = preferenceSession.view(); updateBusy(); });
+  const unsubscribePreferences = preferenceSession?.subscribe(() => {
+    preferences = preferenceSession.view();
+    updateBusy();
+    if (preferences && preferences.attempted && !preferences.busy && typeof notifications !== 'undefined') {
+      const key = preferences.outcome
+        ? `outcome:${preferences.outcome.committed}:${preferences.outcome.changed}:${preferences.error}`
+        : preferences.error
+          ? `error:${preferences.error}`
+          : '';
+      if (key && key !== lastNotifiedPrefKey) {
+        lastNotifiedPrefKey = key;
+        if (preferences.error) {
+          notifications.error(
+            preferences.outcome?.committed ? 'Google Earth preference notice' : 'Google Earth preference save failed',
+            preferences.error,
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        } else if (preferences.outcome?.committed) {
+          notifications.success(
+            'Google Earth preferences saved',
+            `Saved Google Earth title "${preferences.draft.title}" and description field "${preferences.draft.descriptionField}".`,
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        } else if (preferences.outcome) {
+          notifications.info(
+            'Google Earth preferences unchanged',
+            'Saved preferences already matched the current draft.',
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        }
+      }
+    }
+  });
   const pageSize = 50;
   const reads = new ReadRequests();
   let generation = 0;
@@ -74,9 +131,15 @@
       const applied = preferenceSession.view().draft;
       title = applied.title; selectedField = applied.descriptionField;
       review = null; kml = null; approval = null;
-      if (!googleEarthXMLText(title)) error = 'Saved Place Name retained literally but is not valid KML XML text; correct it explicitly before preparing KML.';
+      if (!googleEarthXMLText(title)) {
+        error = 'Saved Place Name retained literally but is not valid KML XML text; correct it explicitly before preparing KML.';
+        notifications.error('Saved Place Name invalid for KML', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      }
     } catch (cause) {
-      if (request === generation) error = `Saved preferences unavailable; no defaults applied: ${String(cause)}`;
+      if (request === generation) {
+        error = `Saved preferences unavailable; no defaults applied: ${String(cause)}`;
+        notifications.error('Saved preferences unavailable', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      }
     } finally {
       if (request === generation) { busy = false; updateBusy(); }
     }
@@ -87,10 +150,45 @@
     try {
       await preferenceSession.save(fields?.fields.map(field => field.name) ?? [], request =>
         SpatialService.SaveGoogleEarthPreferences(contextId, JSON.stringify(request)));
-    } catch (cause) { error = String(cause); }
+      const current = preferenceSession.view();
+      const key = current.outcome
+        ? `outcome:${current.outcome.committed}:${current.outcome.changed}:${current.error}`
+        : current.error
+          ? `error:${current.error}`
+          : '';
+      if (typeof lastNotifiedPrefKey === 'undefined' || (key && lastNotifiedPrefKey !== key)) {
+        if (typeof lastNotifiedPrefKey !== 'undefined' && key) lastNotifiedPrefKey = key;
+        if (current.error) {
+          notifications.error(
+            current.outcome?.committed ? 'Google Earth preference notice' : 'Google Earth preference save failed',
+            current.error,
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        } else if (current.outcome?.committed) {
+          notifications.success(
+            'Google Earth preferences saved',
+            `Saved Google Earth title "${current.draft.title}" and description field "${current.draft.descriptionField}".`,
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        } else if (current.outcome) {
+          notifications.info(
+            'Google Earth preferences unchanged',
+            'Saved preferences already matched the current draft.',
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        }
+      }
+    } catch (cause) {
+      error = String(cause);
+      notifications.error('Google Earth preference save failed', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+    }
   }
   async function loadFields() {
-    if (locked) { error = 'Finish or acknowledge the current operation before reloading fields.'; return; }
+    if (locked) {
+      error = 'Finish or acknowledge the current operation before reloading fields.';
+      notifications.error('Google Earth fields blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      return;
+    }
     cancel(); const request = generation, expected = scope();
     fields = null; if (!preferencesEnabled) selectedField = ''; review = null; kml = null; approval = null; error = ''; busy = true; onBusyChange(true);
     try {
@@ -108,7 +206,11 @@
     }
   }
   async function prepareKML() {
-    if (locked) { error = 'Finish or acknowledge the current operation before preparing KML.'; return; }
+    if (locked) {
+      error = 'Finish or acknowledge the current operation before preparing KML.';
+      notifications.error('KML preview blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      return;
+    }
     if (!fields || !fields.fields.some(field => field.name === selectedField) || !googleEarthXMLText(title)) {
       error = 'Load and choose a literal description field and correct Place Name before preparing KML.';
       notifications.error('KML preview blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
@@ -141,7 +243,11 @@
     }
   }
   async function show(offset = 0) {
-    if (locked) { error = 'Finish or acknowledge the current operation before another review.'; return; }
+    if (locked) {
+      error = 'Finish or acknowledge the current operation before another review.';
+      notifications.error('Google Earth location review blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
+      return;
+    }
     if (!fields || !fields.fields.some(field => field.name === selectedField)) {
       error = 'Load the owned physical Env fields and choose a literal description field before reviewing.';
       notifications.error('Google Earth location review blocked', error, { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined });
@@ -176,18 +282,26 @@
       await publicationSession.publish(approval, destination, request =>
         SpatialService.ExportReviewedGoogleEarthKML(contextId, JSON.stringify(request)));
       const current = publicationSession.view();
-      if (current.outcome?.status === 'published') {
-        notifications.success(
-          'Google Earth KML exported',
-          `Exported KML to ${current.outcome.path || destination}.`,
-          { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
-        );
-      } else {
-        notifications.error(
-          'Google Earth KML export failed',
-          current.outcome?.errorMessage || current.error || 'KML publication reported errors.',
-          { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
-        );
+      const key = current.outcome
+        ? `outcome:${current.requestedDestination}:${current.outcome.status}:${current.outcome.path}:${current.outcome.errorMessage}`
+        : current.error
+          ? `error:${current.requestedDestination}:${current.error}`
+          : '';
+      if (typeof lastNotifiedKmlKey === 'undefined' || (key && lastNotifiedKmlKey !== key)) {
+        if (typeof lastNotifiedKmlKey !== 'undefined' && key) lastNotifiedKmlKey = key;
+        if (current.outcome?.status === 'published') {
+          notifications.success(
+            'Google Earth KML exported',
+            `Exported KML to ${current.outcome.path || destination}.`,
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        } else {
+          notifications.error(
+            'Google Earth KML export failed',
+            current.outcome?.errorMessage || current.error || 'KML publication reported errors.',
+            { category: 'reports', source: 'Google Earth KML', contextTag: project || undefined },
+          );
+        }
       }
     } catch (cause) {
       error = `KML publication request unavailable: ${String(cause)}`;
@@ -217,47 +331,36 @@
             onclick={publishKML}>Build reviewed KML file (never replace)</button>
         {/if}
       {/if}
-      {#if busy}<button type="button" data-google-earth-cancel onclick={cancel}>Cancel preparation read</button>
-        <p role="status">Reading and checking the owned snapshot...</p>{/if}
+      {#if busy}<button type="button" data-google-earth-cancel onclick={cancel}>Cancel preparation read</button>{/if}
     </div>
   </header>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if preferences?.draftError}<p class="error" role="alert" data-google-earth-preferences-draft-error>{preferences.draftError}</p>{/if}
   {#if preferencesEnabled && preferences}
     <section data-google-earth-preferences aria-label="Reviewed Google Earth preferences">
       <button type="button" data-google-earth-preferences-load disabled={locked} onclick={loadPreferences}>Load saved preferences (apply to live fields)</button>
       <button type="button" data-google-earth-preferences-save disabled={locked || !preferences.saved || !!preferences.draftError} onclick={savePreferences}>Save reviewed preferences</button>
       <button type="button" data-google-earth-preferences-undo disabled={locked || !preferences.saved} onclick={undoPreferences}>Undo preference draft</button>
-      {#if preferences.attempted}
+      {#if preferences.blocked && !preferences.busy}
         <div data-google-earth-preferences-outcome>
-        {#if preferences.busy}<p role="status">Saving reviewed preferences. This operation cannot be cancelled.</p>
-        {:else if preferences.outcome}
-          <p role={preferences.error ? 'alert' : 'status'}>Preference outcome:
-            {preferences.outcome.committed ? 'committed; do not replay' : preferences.error ? 'not committed' : 'unchanged'}.
-            {preferences.error}</p>
-        {:else}<p role="alert">{preferences.error}</p>{/if}
-        <button type="button" data-google-earth-preferences-acknowledge disabled={preferences.busy || !preferences.blocked}
-          onclick={() => preferenceSession?.acknowledge()}>Acknowledge preference outcome</button>
+          {#if !preferences.outcome}
+            <p role="alert">Preference save outcome is unknown. Do not replay; acknowledge and explicitly reload saved preferences before another save.</p>
+          {:else}
+            <p role="status">Preference save attempt requires acknowledgement before continuing.</p>
+          {/if}
+          <button type="button" data-google-earth-preferences-acknowledge disabled={preferences.busy || !preferences.blocked}
+            onclick={() => preferenceSession?.acknowledge()}>Acknowledge preference outcome</button>
         </div>
       {/if}
     </section>
   {/if}
-  {#if publication.requestedDestination}
+  {#if publication.requestedDestination && publication.blocked && !publication.busy}
     <section data-google-earth-kml-outcome aria-label="KML file publication outcome">
-      {#if publication.busy}
-        <p role="status">Publishing the reviewed KML file. Wait for its outcome; publication cannot be cancelled or replayed.</p>
-      {:else if publication.outcome}
-        <p role={publication.outcome.status === 'published' ? 'status' : 'alert'}>
-          KML file outcome: {publication.outcome.status}. {publication.outcome.errorMessage}
-          {#if publication.outcome.status !== 'not-published'}Do not repeat this publication.{/if}
-        </p>
-        {#if publication.outcome.path}<p>Observed destination: {publication.outcome.path}</p>{/if}
-        {#if publication.outcome.sha256}<p>SHA256: {publication.outcome.sha256}</p>{/if}
-      {:else if publication.error}<p class="error" role="alert">{publication.error}</p>{/if}
-      <p>Requested destination: {publication.requestedDestination}</p>
-      {#if publication.blocked && !publication.busy}
-        <button type="button" data-google-earth-kml-acknowledge onclick={acknowledgePublication}>Acknowledge outcome before a new review</button>
+      {#if !publication.outcome}
+        <p role="alert">KML publication outcome is unknown. Do not repeat {publication.requestedDestination}; inspect it before acknowledging.</p>
+      {:else}
+        <p>Requested destination: {publication.requestedDestination} ({publication.outcome.status}).</p>
       {/if}
+      <button type="button" data-google-earth-kml-acknowledge onclick={acknowledgePublication}>Acknowledge outcome before a new review</button>
     </section>
   {/if}
   <p>Project {project} / SU {su}. Direct Env scope: no Admin, current-plot or profile filter.</p>

@@ -26,7 +26,6 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onopenexplorer = () => {},
     oncollapseinspector = () => {},
     onselectplot = () => {},
-    ondismisserror,
   }: {
     region?: 'main' | 'detail';
     view?: string;
@@ -49,7 +48,6 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     onopenexplorer?: () => void;
     oncollapseinspector?: () => void;
     onselectplot?: (plot: PlotSummary) => void;
-    ondismisserror?: () => void;
   } = $props();
 </script>
 
@@ -145,7 +143,6 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
       <button class="icon-button" title="Refresh hierarchy" aria-label="Refresh hierarchy" disabled={busy} onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button>
     </div>
   </div>
-  {#if error}<p class="error" role="alert">{error}{#if ondismisserror}<button type="button" class="error-dismiss" onclick={ondismisserror}>Dismiss</button>{/if}</p>{/if}
   <div class="table-bar"><span>{hierarchyNodes.length} units</span><span>{$projectState?.activeHierarchy ?? 'None'}</span></div>
   <div class="table-scroll">
     <table>
@@ -164,7 +161,6 @@ import type { PlotSummary } from '../../bindings/github.com/boostao/vpro/app/int
     <div><div class="eyebrow">{$projectState?.activeProject ?? 'PROJECT'}</div><h1>Plots</h1></div>
     <button class="icon-button" title="Refresh projects and plots" aria-label="Refresh projects and plots" disabled={busy} onclick={onrefresh}><RefreshCw size={18} strokeWidth={1.8} /></button>
   </div>
-  {#if error}<p class="error" role="alert">{error}{#if ondismisserror}<button type="button" class="error-dismiss" onclick={ondismisserror}>Dismiss</button>{/if}</p>{/if}
   <div class="table-bar"><span>{page?.total ?? 0} plots</span><span>{busy ? 'Loading...' : 'Project data'}</span></div>
   <div class="table-scroll">
     <table>

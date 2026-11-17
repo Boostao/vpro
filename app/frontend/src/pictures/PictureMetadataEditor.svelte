@@ -13,10 +13,41 @@
   const view = $derived.by(() => { revision; return session.view(); });
   const close = $derived.by(() => { revision; return session.closeState(); });
   let error = $state('');
+  const initialView = untrack(() => session.view());
+  if (typeof notifications !== 'undefined' && initialView.error) {
+    const plotTag = initialView.draft?.plotNumber ? `Plot ${initialView.draft.plotNumber}` : undefined;
+    notifications.error('Picture metadata error', initialView.error, {
+      category: 'entry',
+      source: 'Plot Pictures',
+      contextTag: plotTag,
+    });
+  }
 
   function stage(column: PictureMetadataColumn, raw: string, nullValue: boolean) {
     try { session.stage(column, raw, nullValue); error = ''; }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        const plotTag = view.draft?.plotNumber ? `Plot ${view.draft.plotNumber}` : undefined;
+        notifications.error('Picture metadata staging failed', error, {
+          category: 'entry',
+          source: 'Plot Pictures',
+          contextTag: plotTag,
+        });
+      }
+    }
+  }
+  function cancelMetadata() {
+    session.cancel();
+    const current = session.view();
+    if (typeof notifications !== 'undefined' && current.error) {
+      const plotTag = current.draft?.plotNumber ? `Plot ${current.draft.plotNumber}` : undefined;
+      notifications.error('Picture metadata operation cancelled', current.error, {
+        category: 'entry',
+        source: 'Plot Pictures',
+        contextTag: plotTag,
+      });
+    }
   }
   async function operation(action: 'save' | 'resolve' | 'discard') {
     const plotTag = view.draft?.plotNumber ? `Plot ${view.draft.plotNumber}` : undefined;
@@ -99,7 +130,6 @@
 {#if view.draft}
   <section class="editor" data-picture-metadata-editor aria-label="Existing picture metadata">
     <h4>Existing picture metadata</h4>
-    {#if error || view.error}<p role="alert" class="error">{error || view.error}</p>{/if}
     <p>Literal parent {JSON.stringify(view.draft.plotNumber)}; ID {view.draft.id}; physical row {view.draft.original.rowId}.</p>
     {#if view.blocked}
       <p role="alert">The picture Save outcome is unknown. The original and draft remain retained.
@@ -123,9 +153,8 @@
       <button onclick={() => void operation('save')} disabled={disabled || !close.canSave || !close.unsaved}>Save picture metadata only</button>
       {#if view.blocked}<button onclick={() => void operation('resolve')} disabled={disabled || view.busy}>Resolve picture Save receipt</button>{/if}
       <button onclick={() => void operation('discard')} disabled={disabled || view.busy}>Discard draft and reload picture</button>
-      {#if view.busy}<button onclick={() => session.cancel()}>Cancel picture metadata operation</button>{/if}
+      {#if view.busy}<button onclick={() => cancelMetadata()}>Cancel picture metadata operation</button>{/if}
     </div>
-    {#if view.receipt}<p role="status">Picture metadata saved with durable history {view.receipt.historyId}. Image files were not changed.</p>{/if}
     <p class="guidance">Literal text, at most255 UTF-16 units. Directory permits empty text or NULL; File Name permits NULL, not new empty text.
       This saves only PicDir/PicName. It neither copies/renames image files nor authorizes external directories.
       Discard reloads the current stored row; it does not undo a completed Save.</p>

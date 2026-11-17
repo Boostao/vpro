@@ -32,6 +32,7 @@
   let review = $state.raw<ValidatedSiteUnitSummaryWorkbookReview | ValidatedExtendedSummaryWorkbookReview | null>(null);
   let destination = $state('');
   let publication = $state(session.view());
+  let lastPubKey = '';
   const validMethod = $derived(method === 1 || method === 2);
   const currentReview = $derived(review !== null && ('environment' in review
     ? sameExtendedSummaryWorkbookOptions(review.options, extendedOptions ?? null)
@@ -44,11 +45,41 @@
     ? (siteUnitType === 3 || (owned.su !== 'None' && (siteUnitType === 2 || owned.su !== 'USysSuTableDynamic')))
     : (owned.su !== 'None' && owned.su !== 'USysSuTableDynamic'));
   function reportBusy() { onBusyChange(busy || publication.busy || publication.blocked); }
+  function syncPublicationNotifications() {
+    const settled = session.view();
+    if (settled.busy) { lastPubKey = ''; return; }
+    if (!settled.outcome && !settled.error) return;
+    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
+    if (key === lastPubKey) return;
+    lastPubKey = key;
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = owned.project || undefined;
+    if (settled.outcome?.status === 'published' && !settled.error) {
+      const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+      notifications.success('Summary Environment workbook exported', exportedPath, {
+        category: 'reports',
+        source: 'Summary Environment',
+        contextTag: ctxTag,
+      });
+    } else if (settled.error || settled.outcome) {
+      notifications.error(
+        'Summary Environment workbook export failed',
+        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+        {
+          category: 'reports',
+          source: 'Summary Environment',
+          contextTag: ctxTag,
+        },
+      );
+    }
+  }
   const unsubscribe = session.subscribe(() => {
     publication = session.view();
     if (publication.busy) review = null;
+    syncPublicationNotifications();
     reportBusy();
   });
+  syncPublicationNotifications();
   function cancel() {
     generation++; reads.cancelAll(); busy = false; review = null; reportBusy();
   }
@@ -104,8 +135,10 @@
         await originalSession.publish(review, destination, request =>
           EnvironmentReportService.ExportReviewedSiteUnitSummaryWorkbook(owned.contextId, JSON.stringify(request)), method, configuredScope);
       }
-      const settled = activeSession.view();
-      if (!disposed && typeof notifications !== 'undefined') {
+      if (typeof syncPublicationNotifications === 'function') {
+        syncPublicationNotifications();
+      } else if (!disposed && typeof notifications !== 'undefined') {
+        const settled = activeSession.view();
         if (settled.outcome?.status === 'published' && !settled.error) {
           const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
           notifications.success('Summary Environment workbook exported', exportedPath, {
@@ -141,7 +174,16 @@
   function acknowledge() {
     if (publication.busy || !publication.blocked) return;
     try { session.acknowledge(); review = null; }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Summary Environment workbook acknowledgement failed', error, {
+          category: 'reports',
+          source: 'Summary Environment',
+          contextTag: owned.project || undefined,
+        });
+      }
+    }
   }
   onDestroy(() => {
     disposed = true; generation++; reads.cancelAll(); busy = false;
@@ -151,16 +193,7 @@
 
 <section class="workbook" data-site-unit-workbook aria-label="Summary Environment workbook">
   <h2>Summary Environment workbook</h2>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
-  {#if publication.error}<p class="error" role="alert">{publication.error}</p>{/if}
-  {#if publication.busy}
-    <p role="status">Publishing reviewed bytes. Publication cannot be cancelled; navigation and close remain blocked.</p>
-  {/if}
-  {#if publication.outcome}
-    <p data-site-unit-workbook-receipt role="status">Workbook receipt: {publication.outcome.status}.
-      Requested destination: {publication.requestedDestination}. Output: {publication.outcome.path || '(no published path)'}.
-      SHA256: {publication.outcome.sha256 || '(no acknowledged hash)'}.</p>
-  {:else if publication.requestedDestination && !publication.busy}
+  {#if !publication.outcome && publication.requestedDestination && !publication.busy}
     <p data-site-unit-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect
       {publication.requestedDestination} before acknowledging; never repeat the destination blindly.</p>
   {/if}
@@ -179,7 +212,6 @@
       onclick={getReview}>Review summary workbook</button>
     <button data-site-unit-workbook-cancel disabled={!busy || barrier} onclick={cancel}>Cancel review</button>
   </div>
-  {#if busy}<p role="status">Reading the source workbook plan…</p>{/if}
   {#if review && currentReview && reviewedPreview}
     <div class="plan">
       <h3>Reviewed source plan</h3>

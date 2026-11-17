@@ -12,7 +12,7 @@ function header() {
   return { plotNumber: '00337', zone: 'CWH', subZone: 'dm', siteSeries: '01',
     plotRepresenting: '  Original representing  ', projectId: ' literal ID ' };
 }
-function host(operation = () => Promise.resolve(header())) {
+function host(operation = () => Promise.resolve(header()), extraValues = {}) {
   const calls = [], changes = [];
   const context = componentFunctions('PlotLabelPreview.svelte', ['cancel', 'load', 'updateBusy'], {
     contextId: 'owned', project: 'Sample', ownerKey: 'owned-Sample', plot: '00337',
@@ -22,6 +22,7 @@ function host(operation = () => Promise.resolve(header())) {
     Date, onBusyChange(value) { changes.push(value); },
     reads: { track(value) { return value; }, cancelAll() { calls.push('cancel'); } },
     ContextService: { GetPlot(...args) { calls.push(['read', ...args]); return operation(...args); } },
+    ...extraValues,
   });
   return { context, calls, changes };
 }
@@ -139,17 +140,26 @@ test('saved-label owner changes reject late results without an implicit cross-co
   assert.equal(context.error, '');
 });
 
-test('saved-label failed reads or date rendering assign no partial card and retain explicit errors', async () => {
-  const { context } = host(() => Promise.reject(new Error('parent missing')));
+test('saved-label failed reads or date rendering assign no partial card and route errors to notifications', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const { context } = host(() => Promise.reject(new Error('parent missing')), { notifications });
   await context.actions.load();
   assert.match(context.error, /parent missing/);
   assert.equal(context.preview, null);
-  const second = host().context;
+  const second = host(undefined, { notifications }).context;
   second.Date = class { toLocaleDateString() { throw new Error('clock display unavailable'); } };
   await second.actions.load();
   assert.match(second.error, /clock display unavailable/);
   assert.equal(second.preview, null);
   assert.equal(second.labelDate, '');
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 2);
+  assert.ok(entries.every(e => e.severity === 'error' && e.category === 'reports' && e.source === 'Plot Labels'));
+  assert.match(entries[0].message, /clock display unavailable/);
+  assert.match(entries[1].message, /parent missing/);
 });
 
 test('saved-label server render and navigation remain independently default-off/read-only', () => {

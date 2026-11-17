@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
+  import { notifications } from '../shell/notificationService.svelte';
   import type { ProjectScopeSelectionSession } from './longVegetationProjectScopeSession';
 
   let { selection, allPlotsAvailable, cancelReads, onChange, operationHeld = false, mutationHeld = false }: {
@@ -12,7 +13,25 @@
   } = $props();
   let view = $state.raw(untrack(() => selection.view()));
   let error = $state('');
-  const unsubscribe = untrack(() => selection.subscribe(() => { view = selection.view(); onChange(); }));
+  let lastViewError = '';
+  function syncScopeNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const viewErr = view.error ?? '';
+    if (viewErr && viewErr !== lastViewError) {
+      notifications.error('Long Vegetation project scope failed', viewErr, {
+        category: 'reports',
+        source: 'Long Vegetation',
+        contextTag: view.scope?.project || undefined,
+      });
+    }
+    lastViewError = viewErr;
+  }
+  const unsubscribe = untrack(() => selection.subscribe(() => {
+    view = selection.view();
+    syncScopeNotifications();
+    onChange();
+  }));
+  syncScopeNotifications();
   let generation = 0;
 
   function cancel() {
@@ -23,8 +42,21 @@
   async function run(operation: () => Promise<void>) {
     const request = ++generation;
     error = '';
-    try { await operation(); }
-    catch (cause) { if (request === generation) error = String(cause); }
+    try {
+      await operation();
+      if (typeof syncScopeNotifications === 'function') syncScopeNotifications();
+    } catch (cause) {
+      if (request === generation) {
+        error = String(cause);
+        if (typeof notifications !== 'undefined') {
+          notifications.error('Long Vegetation project scope failed', error, {
+            category: 'reports',
+            source: 'Long Vegetation',
+            contextTag: view.scope?.project || undefined,
+          });
+        }
+      }
+    }
   }
   async function load() {
     if (operationHeld || view.busy) return;
@@ -34,6 +66,13 @@
     if (operationHeld || mutationHeld || view.busy || view.authorityUnknown || !view.scope) return;
     if (raw !== 'selected-list' && raw !== 'project-selected-fields' && raw !== 'project-all-plots') {
       error = 'Choose an explicit report source scope.';
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Vegetation project scope failed', error, {
+          category: 'reports',
+          source: 'Long Vegetation',
+          contextTag: view.scope?.project || undefined,
+        });
+      }
       return;
     }
     await run(() => selection.switchTo(raw));
@@ -48,7 +87,16 @@
     if (mutationHeld || view.busy || !view.scope) return;
     error = '';
     try { selection.edit(fields); }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Vegetation project field edit failed', error, {
+          category: 'reports',
+          source: 'Long Vegetation',
+          contextTag: view.scope?.project || undefined,
+        });
+      }
+    }
   }
   function move(index: number, offset: number) {
     const fields = [...view.fields], other = index + offset;
@@ -60,14 +108,21 @@
     if (mutationHeld || view.busy || !view.scope) return;
     error = '';
     try { selection.undo(); }
-    catch (cause) { error = String(cause); }
+    catch (cause) {
+      error = String(cause);
+      if (typeof notifications !== 'undefined') {
+        notifications.error('Long Vegetation project field undo failed', error, {
+          category: 'reports',
+          source: 'Long Vegetation',
+          contextTag: view.scope?.project || undefined,
+        });
+      }
+    }
   }
   onDestroy(() => { unsubscribe(); cancel(); });
 </script>
 
 <section class="selection" aria-label="Project report source and unit fields" data-project-report-scope>
-  {#if error}<p role="alert" class="error">{error}</p>{/if}
-  {#if view.error}<p role="alert" class="error">{view.error}</p>{/if}
   {#if view.draftError}<p role="alert" class="error">{view.draftError}</p>{/if}
   {#if view.authorityUnknown}
     <p role="alert">Report scope authority is unknown. Wait for the pending mutation to settle, then Load owned scope.
@@ -135,7 +190,6 @@
     <button data-project-field-undo disabled={mutationHeld || view.busy || !view.scope} onclick={undo}>Undo field draft</button>
     {#if view.busy}
       <button data-project-scope-cancel onclick={cancel}>Cancel scope observation</button>
-      <p role="status">Reading or changing owned report scope. Cancel does not cancel an issued mutation.</p>
     {/if}
   </div>
   {#if view.scope?.build}

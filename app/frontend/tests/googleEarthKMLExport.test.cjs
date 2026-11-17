@@ -4,7 +4,8 @@ const { createHash, webcrypto } = require('node:crypto');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { compile } = require('svelte/compiler');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { render } = require('svelte/server');
+const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 const quality = loadTypeScript('qualityEditor.ts', { './becEditor': loadTypeScript('becEditor.ts') });
 const cells = loadTypeScript('projectMetadataRestore.ts', { './qualityEditor': quality, './projectMetadataEditor': {} });
 const locations = loadTypeScript('plotLocationReview.ts', { './projectMetadataRestore': cells });
@@ -120,14 +121,53 @@ test('KML publication receipt and busy barrier survive remount and reject owners
   remount.acknowledge(); stop();
 });
 
-test('KML export panel shares single labels uses independent gate and keeps receipt above routine guidance', () => {
+test('KML export panel keeps interactive unknown locks and data summaries while routing operational errors and receipts to notifications', async () => {
   const source = readFileSync(srcPath('GoogleEarthReview.svelte'), 'utf8');
   assert.ok(compile(source, { filename: 'GoogleEarthReview.svelte', generate: 'client' }).js.code);
   assert.equal((source.match(/id="google-earth-place-name"/g) || []).length, 1);
   assert.match(source, /<label for="google-earth-kml-destination">New output file:/);
   assert.match(source, /data-google-earth-kml-acknowledge/);
+  assert.match(source, /data-google-earth-preferences-draft-error/);
+  assert.match(source, /data-google-earth-kml-summary/);
+  assert.match(source, /data-google-earth-summary/);
+  assert.doesNotMatch(source, /\{#if error\}<p class="error"/);
+  assert.doesNotMatch(source, /\{:else if publication\.error\}<p class="error"/);
+  assert.doesNotMatch(source, /Saving reviewed preferences\. This operation cannot be cancelled/);
+  assert.doesNotMatch(source, /Publishing the reviewed KML file\. Wait for its outcome/);
+  assert.doesNotMatch(source, /Reading and checking the owned snapshot/);
   assert.match(source, /onDestroy\(unsubscribe\)/);
   assert.doesNotMatch(source, /reads\.track\(GoogleEarthKMLExportService\.ExportReviewed/);
   assert.ok(source.indexOf('data-google-earth-kml-outcome') < source.indexOf('class="notice"'));
   assert.doesNotMatch(source, /\{@html/);
+
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const retainedScope = { ...scope, contextId: 'ssr-unknown-kml' };
+  const retainedSession = exportsModule.googleEarthKMLPublicationSession(retainedScope);
+  await retainedSession.publish(review(retainedScope), destination, async () => { throw new Error('KML write lost'); });
+
+  const component = serverComponent(source, 'GoogleEarthReview.svelte', {
+    '../../bindings/github.com/boostao/vpro/app': { SpatialService: {} },
+    './googleEarthReview': earth,
+    './googleEarthKMLReview': { validateGoogleEarthKMLReview: async v => v, googleEarthXMLText: () => true },
+    './googleEarthKMLExport': exportsModule,
+    './googleEarthPreferences': loadTypeScript('googleEarthPreferences.ts', {
+      './qualityEditor': quality, './googleEarthReview': earth, './googleEarthKMLReview': { googleEarthXMLText: () => true },
+    }),
+    '../reports/longEnvironmentReport': { reportCellText: String },
+    '../entry/qualityEditor': quality,
+    '../shell/notificationService.svelte': { notifications },
+  });
+  const html = render(component, { props: { ...retainedScope, onBusyChange() {} } }).body;
+  assert.match(html, /KML publication outcome is unknown/);
+  assert.match(html, /data-google-earth-kml-acknowledge/);
+  assert.doesNotMatch(html, /KML write lost/);
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].severity, 'error');
+  assert.equal(entries[0].category, 'reports');
+  assert.equal(entries[0].source, 'Google Earth KML');
+  assert.match(entries[0].message, /KML write lost/);
 });

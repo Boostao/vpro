@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import { VegetationReportService } from '../../bindings/github.com/boostao/vpro/app';
+  import { notifications } from '../shell/notificationService.svelte';
   import { ReadRequests } from '../shared/readRequests';
   import type { SelectedUnitSelectionSession } from './longVegetationSelectedUnitSelection';
 
@@ -13,11 +14,30 @@
   } = $props();
   let view = $state.raw(untrack(() => selection.view()));
   const reads = new ReadRequests();
-  const unsubscribe = untrack(() => selection.subscribe(() => { view = selection.view(); onChange(); }));
+  let lastViewError = '';
+  function syncSelectedUnitNotifications() {
+    if (typeof notifications === 'undefined') return;
+    const viewErr = view.error ?? '';
+    if (viewErr && viewErr !== lastViewError) {
+      notifications.error('Long Vegetation selected unit fields failed', viewErr, {
+        category: 'reports',
+        source: 'Long Vegetation',
+        contextTag: typeof contextId === 'string' && contextId ? contextId : undefined,
+      });
+    }
+    lastViewError = viewErr;
+  }
+  const unsubscribe = untrack(() => selection.subscribe(() => {
+    view = selection.view();
+    syncSelectedUnitNotifications();
+    onChange();
+  }));
+  syncSelectedUnitNotifications();
   function cancel() { reads.cancelAll(); selection.cancel(); }
   async function load() {
     if (operationHeld || view.busy) return;
     await selection.load(() => reads.track(VegetationReportService.GetLongVegetationSelectedUnitSelection(contextId)));
+    if (typeof syncSelectedUnitNotifications === 'function') syncSelectedUnitNotifications();
   }
   async function build() {
     if (operationHeld || view.busy || view.authorityUnknown || view.draftError || !view.review) return;
@@ -25,6 +45,7 @@
       request => reads.track(VegetationReportService.SetLongVegetationSelectedUnitFields(contextId, JSON.stringify(request))),
       revision => reads.track(VegetationReportService.BuildLongVegetationSelectedUnitSelection(contextId, revision)),
     );
+    if (typeof syncSelectedUnitNotifications === 'function') syncSelectedUnitNotifications();
   }
   function edit(fields: string[]) {
     if (mutationHeld || view.busy || !view.review) return;
@@ -40,7 +61,6 @@
 </script>
 
 <section class="selection" aria-label="Selected report unit fields" data-long-vegetation-selected-unit-selection>
-  {#if view.error}<p role="alert" class="error">{view.error}</p>{/if}
   {#if view.draftError}<p role="alert" class="error">{view.draftError}</p>{/if}
   {#if view.authorityUnknown}<p role="alert">Field selection authority is unknown; Load owned Field List before Build or output. No Save was replayed.</p>{/if}
   <div class="lists">
@@ -84,7 +104,7 @@
     <button data-selected-unit-build disabled={operationHeld || view.busy || view.authorityUnknown || !!view.draftError || !view.review}
       onclick={build}>Build SU List</button>
     <button data-selected-unit-undo disabled={mutationHeld || view.busy || !view.review} onclick={() => selection.undo()}>Undo field draft</button>
-    {#if view.busy}<button data-selected-unit-cancel onclick={cancel}>Cancel field read/Build</button><p role="status">Reading owned field selection...</p>{/if}
+    {#if view.busy}<button data-selected-unit-cancel onclick={cancel}>Cancel field read/Build</button>{/if}
   </div>
   {#if view.review?.build}
     <div class="receipt" data-selected-unit-build-receipt>

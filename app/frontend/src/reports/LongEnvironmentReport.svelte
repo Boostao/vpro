@@ -33,14 +33,98 @@
   const preferenceBarrier = $derived(!!preferenceView && (preferenceView.busy || preferenceView.blocked ||
     preferenceView.authorityUnknown || !!preferenceView.draftError));
   function reportBusy() { onBusyChange(busy || preferenceBarrier || workbookBarrier); }
+  let lastPubKey = '';
+  let lastPrefError = '';
+  let notifiedPrefReceipts = 0;
+  function syncWorkbookNotifications() {
+    const settled = workbookSession.view();
+    if (settled.busy) { lastPubKey = ''; return; }
+    if (!settled.outcome && !settled.error) return;
+    const key = JSON.stringify([settled.outcome?.status ?? '', settled.outcome?.path ?? '', settled.outcome?.sha256 ?? '', settled.error ?? '', settled.requestedDestination ?? '']);
+    if (key === lastPubKey) return;
+    lastPubKey = key;
+    if (typeof notifications === 'undefined') return;
+    const ctxTag = (typeof project === 'string' && project) || undefined;
+    if (settled.outcome?.status === 'published' && !settled.error) {
+      const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
+      notifications.success('Long Environment workbook exported', exportedPath, {
+        category: 'reports',
+        source: 'Long Environment',
+        contextTag: ctxTag,
+      });
+    } else if (settled.error || settled.outcome) {
+      notifications.error(
+        'Long Environment workbook export failed',
+        settled.error || `Publication ${settled.outcome?.status ?? 'failed'} for ${settled.requestedDestination || destination}`,
+        {
+          category: 'reports',
+          source: 'Long Environment',
+          contextTag: ctxTag,
+        },
+      );
+    }
+  }
+  function syncPreferenceNotifications() {
+    const view = preferences?.view();
+    if (!view) return;
+    const ctxTag = (typeof project === 'string' && project) || undefined;
+    const receipts = view.receipts ?? [];
+    if (receipts.length < notifiedPrefReceipts) notifiedPrefReceipts = 0;
+    for (let i = notifiedPrefReceipts; i < receipts.length; i++) {
+      const receipt = receipts[i];
+      if (receipt.kind === 'known' && typeof notifications !== 'undefined') {
+        if (receipt.outcome.committed && !receipt.outcome.errorMessage) {
+          notifications.success('Long Environment title saved', receipt.outcome.changed ? 'Saved report title preference.' : 'No title changes.', {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: ctxTag,
+          });
+        } else if (receipt.outcome.committed) {
+          notifications.warning('Long Environment title saved with warning', receipt.outcome.errorMessage, {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: ctxTag,
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else if (receipt.outcome.errorMessage) {
+          notifications.error('Long Environment title save failed', receipt.outcome.errorMessage, {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: ctxTag,
+          });
+          lastPrefError = receipt.outcome.errorMessage;
+        } else {
+          notifications.info('Long Environment title unchanged', 'No title preference changes were needed.', {
+            category: 'reports',
+            source: 'Long Environment',
+            contextTag: ctxTag,
+          });
+        }
+      }
+    }
+    notifiedPrefReceipts = receipts.length;
+    const prefErr = view.error ?? '';
+    if (prefErr && prefErr !== lastPrefError && typeof notifications !== 'undefined') {
+      notifications.error('Long Environment title preference failed', prefErr, {
+        category: 'reports',
+        source: 'Long Environment',
+        contextTag: ctxTag,
+      });
+    }
+    lastPrefError = prefErr;
+  }
   const unsubscribeWorkbook = workbookSession.subscribe(() => {
     publication = workbookSession.view();
+    syncWorkbookNotifications();
     reportBusy();
   });
   const unsubscribe = preferences?.subscribe(() => {
     preferenceView = preferences.view(); title = preferenceView.draft.title; ready = preferenceView.initialized; preview = null; workbookReview = null;
+    syncPreferenceNotifications();
     onBusyChange(busy || preferenceView.busy || preferenceView.blocked || preferenceView.authorityUnknown || !!preferenceView.draftError || workbookBarrier);
   });
+  syncWorkbookNotifications();
+  syncPreferenceNotifications();
 
   function cancel() {
     generation++; reads.cancelAll(); preferences?.cancelLoad(); busy = false; reportBusy();
@@ -122,6 +206,36 @@
     cancel(); error = '';
     try {
       await preferences.save(request => EnvironmentReportService.SaveLongEnvironmentPreferences(contextId, JSON.stringify(request)));
+      if (typeof syncPreferenceNotifications === 'function') {
+        syncPreferenceNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const view = preferences.view();
+        const latest = view.receipts?.at(-1);
+        const ctxTag = (typeof project === 'string' && project) || undefined;
+        if (latest?.kind === 'known') {
+          if (latest.outcome.committed && !latest.outcome.errorMessage) {
+            notifications.success('Long Environment title saved', latest.outcome.changed ? 'Saved report title preference.' : 'No title changes.', {
+              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.committed) {
+            notifications.warning('Long Environment title saved with warning', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
+            });
+          } else if (latest.outcome.errorMessage) {
+            notifications.error('Long Environment title save failed', latest.outcome.errorMessage, {
+              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
+            });
+          } else {
+            notifications.info('Long Environment title unchanged', 'No title preference changes were needed.', {
+              category: 'reports', source: 'Long Environment', contextTag: ctxTag,
+            });
+          }
+        } else if (view.error) {
+          notifications.error('Long Environment title preference failed', view.error, {
+            category: 'reports', source: 'Long Environment', contextTag: ctxTag,
+          });
+        }
+      }
     } catch (cause) {
       error = String(cause);
       if (typeof notifications !== 'undefined') {
@@ -169,8 +283,10 @@
     try {
       await workbookSession.publish(workbookReview, destination, request =>
         EnvironmentReportService.ExportReviewedEnvironmentWorkbook(contextId, JSON.stringify(request)));
-      const settled = workbookSession.view();
-      if (typeof notifications !== 'undefined') {
+      if (typeof syncWorkbookNotifications === 'function') {
+        syncWorkbookNotifications();
+      } else if (typeof notifications !== 'undefined') {
+        const settled = workbookSession.view();
         if (settled.outcome?.status === 'published' && !settled.error) {
           const exportedPath = settled.outcome.path || settled.requestedDestination || destination;
           notifications.success('Long Environment workbook exported', exportedPath, {
@@ -220,21 +336,13 @@
       {:else}
         <button disabled={busy || workbookBarrier} onclick={options}>Reload report options</button>
       {/if}
-      {#if busy}<button onclick={cancel}>Cancel report read</button><p role="status">Reading owned report snapshots…</p>{/if}
+      {#if busy}<button onclick={cancel}>Cancel report read</button>{/if}
     </div>
   </header>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if titleError}<p class="error" role="alert">{titleError}</p>{/if}
   {#if preferenceView?.draftError}<p class="error" role="alert">{preferenceView.draftError}</p>{/if}
-  {#if preferenceView?.error}<p class="error" role="alert">{preferenceView.error}</p>{/if}
-  {#if publication.error}<p class="error" role="alert">{publication.error}</p>{/if}
-  {#if publication.busy}<p role="status">Publishing the reviewed workbook; publication cannot be cancelled.</p>{/if}
-  {#if publication.outcome}
-    <p data-environment-workbook-receipt role="status">Workbook receipt: {publication.outcome.status}.
-      Requested {publication.requestedDestination}; observed {publication.outcome.path || '(no committed file)'}.
-      SHA256 {publication.outcome.sha256 || '(none)'}.</p>
-  {:else if publication.blocked && !publication.busy}
-    <p data-environment-workbook-unknown role="status">Workbook outcome unknown. Retain and inspect {publication.requestedDestination}; never replay blindly.</p>
+  {#if !publication.outcome && publication.blocked && !publication.busy}
+    <p data-environment-workbook-unknown role="alert">Workbook outcome unknown. Retain and inspect {publication.requestedDestination}; never replay blindly.</p>
   {/if}
   {#if publication.blocked && !publication.busy}
     <button onclick={acknowledgeWorkbook}>Acknowledge workbook outcome</button>
@@ -267,13 +375,9 @@
     <textarea id="environment-workbook-destination" rows="2" disabled={busy || preferenceBarrier || workbookBarrier} bind:value={destination}></textarea>
     <button disabled={busy || preferenceBarrier || workbookBarrier || !destination || !/\.xlsx$/i.test(destination)} onclick={publishWorkbook}>Publish reviewed XLSX workbook</button>
   {/if}
-  {#if preferenceView?.busy}<p role="status">Saving reviewed title; this preference write cannot be cancelled.</p>{/if}
   {#each preferenceView?.receipts ?? [] as receipt}
-    {#if receipt.kind === 'known'}
-      <p data-long-environment-preferences-receipt role="status">Preference receipt: changed {String(receipt.outcome.changed)};
-        committed {String(receipt.outcome.committed)}. {receipt.outcome.errorMessage}</p>
-    {:else}
-      <p data-long-environment-preferences-receipt data-long-environment-preferences-unknown-receipt role="status">
+    {#if receipt.kind !== 'known'}
+      <p data-long-environment-preferences-receipt data-long-environment-preferences-unknown-receipt role="alert">
         Preference receipt: outcome unknown; changed unknown; committed unknown. {receipt.errorMessage}</p>
     {/if}
   {/each}

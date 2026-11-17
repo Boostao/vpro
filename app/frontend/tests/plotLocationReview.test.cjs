@@ -3,7 +3,7 @@ const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const {compile} = require('svelte/compiler');
-const { loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { componentFunctions, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
 const quality = loadTypeScript('qualityEditor.ts', {'./becEditor':loadTypeScript('becEditor.ts')});
 const cells = loadTypeScript('projectMetadataRestore.ts', {'./qualityEditor':quality,'./projectMetadataEditor':{}});
 const locations = loadTypeScript('plotLocationReview.ts', {'./projectMetadataRestore':cells});
@@ -95,5 +95,53 @@ test('location UI remains independently gated, cancellable and uses shared draft
   assert.match(component,/scope="col"/);assert.match(component,/aria-label=.*Env row/);
   assert.match(component,/slice\(offset, offset \+ pageSize\)/);
   assert.match(component,/western-hemisphere sign convention/);
+  assert.doesNotMatch(component,/\{#if error\}<p class="error"/);
+  assert.doesNotMatch(component,/Reading and checking the owned location snapshot/);
+  assert.match(component,/data-plot-location-cancel/);
+  assert.match(component,/data-plot-location-summary/);
   assert.doesNotMatch(component,/download=|SaveProject|CreateBlank|BuildFile/);
+});
+
+test('PlotLocationReview routes load summaries and operational errors to reports notifications', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', {
+    'svelte/store': require('svelte/store'),
+  });
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const host = componentFunctions('PlotLocationReview.svelte', ['cancel', 'show'], {
+    contextId: 'owner',
+    project: 'Sample',
+    projectPath: 'C:\\fixture\\Sample.db',
+    su: 'Unit',
+    suPath: 'C:\\fixture\\Other.db',
+    review: null,
+    busy: false,
+    error: '',
+    offset: 0,
+    generation: 0,
+    reads: { track: v => v, cancelAll() {} },
+    validatePlotLocationReview: locations.validatePlotLocationReview,
+    onBusyChange() {},
+    notifications,
+    SpatialService: {
+      GetPlotLocationReview: async () => document(),
+    },
+  });
+
+  await host.actions.show();
+  host.busy = true;
+  await host.actions.show();
+  assert.match(host.error, /Wait for or cancel/);
+  host.busy = false;
+  host.SpatialService.GetPlotLocationReview = async () => { throw new Error('location query failed'); };
+  await host.actions.show();
+
+  const entries = notifications.getSnapshot().entries;
+  assert.equal(entries.length, 3);
+  assert.equal(entries[0].severity, 'error');
+  assert.match(entries[0].message, /location query failed/);
+  assert.equal(entries[1].severity, 'error');
+  assert.match(entries[1].message, /Wait for or cancel/);
+  assert.equal(entries[2].severity, 'info');
+  assert.match(entries[2].message, /Loaded 1 plot location/);
+  assert.ok(entries.every(item => item.category === 'reports' && item.source === 'Plot Locations' && item.contextTag === 'Sample'));
 });

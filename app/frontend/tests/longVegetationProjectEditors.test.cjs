@@ -4,12 +4,13 @@ const {test} = require('node:test');
 const {readFileSync} = require('node:fs');
 const path = require('node:path');
 const {render} = require('svelte/server');
-const { serverComponent,componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
+const { serverComponent, componentFunctions, loadTypeScript, srcPath } = require('./svelteTestHelpers.cjs');
+const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
 const source = name => readFileSync(srcPath(name),'utf8');
 const scopeFile = 'LongVegetationProjectScopeSelection.svelte';
 const unitFile = 'LongVegetationProjectUnitPreferences.svelte';
 const wire = readJsonFixture('longVegetationProjectScopeWire.json');
-const component = name => serverComponent(source(name),name,{});
+const component = (name, extraDeps = {}) => serverComponent(source(name), name, extraDeps);
 const scopeView = () => ({
   scope:{sourceKind:'project-selected-fields',build:null},definitions:[
     {table:'Env',name:'Zone',declaredType:'TEXT',available:true,reason:''},
@@ -24,10 +25,10 @@ const unitView = () => ({
 const session = (view,method) => ({
   [method]:()=>view,subscribe:listener=>{listener();return ()=>{}},cancel(){},cancelRead(){}
 });
-const scopeHTML = (view=scopeView(),props={}) => render(component(scopeFile),{props:{
+const scopeHTML = (view=scopeView(),props={},extraDeps={}) => render(component(scopeFile,extraDeps),{props:{
   selection:session(view,'view'),allPlotsAvailable:false,cancelReads(){},onChange(){},...props
 }}).body;
-const unitHTML = (view=unitView(),props={}) => render(component(unitFile),{props:{
+const unitHTML = (view=unitView(),props={},extraDeps={}) => render(component(unitFile,extraDeps),{props:{
   preferences:session(view,'projectView'),fetchPreferences(){},savePreferences(){},cancelReads(){},onChange(){},...props
 }}).body;
 const buttonDisabled = (html,selector) => {
@@ -122,16 +123,19 @@ test('full scoped receipts stay above controls and acknowledgement does not impl
     {kind:'known',request,outcome},
     {kind:'unknown',request,errorMessage:'Transport lost'}
   ];
-  const html=unitHTML(view);
-  assert.equal((html.match(/data-project-unit-receipt/g)||[]).length,2);
-  assert.ok(html.indexOf('Postcommit cleanup failed')<html.indexOf('<label'));
-  assert.match(html,/Changed true; committed true/);
-  assert.match(html,/Changed unknown; committed unknown/);
+  const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+  const html=unitHTML(view, {}, { '../shell/notificationService.svelte': { notifications } });
+  assert.equal((html.match(/data-project-unit-receipt/g)||[]).length,1);
+  assert.doesNotMatch(html,/Changed true; committed true/);
+  assert.doesNotMatch(html,/Postcommit cleanup failed/);
+  assert.ok(html.indexOf('Changed unknown; committed unknown')>=0&&html.indexOf('Changed unknown; committed unknown')<html.indexOf('<label'));
+  assert.match(html,/Transport lost/);
   assert.match(html,/expected 1; proposed 2/);
   assert.match(html,/Acknowledge the receipt, then Load actual saved values/);
   assert.equal(buttonDisabled(html,'data-project-unit-acknowledge'),false);
   assert.equal(buttonDisabled(html,'data-project-unit-save'),true);
   assert.equal(buttonDisabled(html,'data-project-unit-load'),true);
+  assert.ok(notifications.getSnapshot().entries.some(e=>e.category==='reports'&&e.source==='Long Vegetation'&&/Postcommit cleanup failed/.test(e.message)));
 });
 
 test('Unit read/Save and parent barriers distinguish cancellable reads, correction, Undo and receipts',()=>{
@@ -139,7 +143,8 @@ test('Unit read/Save and parent barriers distinguish cancellable reads, correcti
   assert.match(unitHTML(view),/data-project-unit-cancel/);
   view.readBusy=false;view.busy=true;
   assert.doesNotMatch(unitHTML(view),/data-project-unit-cancel/);
-  assert.match(unitHTML(view),/Save cannot be cancelled/);
+  assert.doesNotMatch(unitHTML(view),/Save cannot be cancelled/);
+  assert.equal(buttonDisabled(unitHTML(view),'data-project-unit-save'),true);
   view.busy=false;view.draftError='Correct or Undo';view.draft.unitGroups='2 ';
   let html=unitHTML(view,{operationHeld:true});
   assert.equal(buttonDisabled(html,'data-project-unit-save'),true);
@@ -181,7 +186,7 @@ test('Unit ports stay scope-owned and unmount cancellation never cancels or repl
   await context.actions.load();await context.actions.save();context.actions.edit('2');context.actions.undo();context.actions.cancel();
   assert.deepEqual(calls,['Save','2','undo','cancel getter only','drop read generation']);
   assert.doesNotMatch(source(unitFile),/savePreferences\.cancel|reads\.track|\.save\(/);
-  assert.doesNotMatch(source(scopeFile),/reads\.track|Service\.|JSON\.stringify/);
+  assert.doesNotMatch(source(scopeFile),/reads\.track|(?:Vegetation|Environment)ReportService\.|JSON\.stringify/);
   for(const name of [scopeFile,unitFile]) {
     assert.match(source(name),/\$state\.raw\(untrack/);
     assert.match(source(name),/onDestroy\(\(\) => \{ unsubscribe\(\); cancel\(\); \}\)/);
