@@ -268,8 +268,15 @@ mdb_crack_row(MdbTableDef *table, int row_start, size_t row_size, MdbField *fiel
 		fields[i].is_fixed = col->is_fixed;
 		byte_num = col->col_num / 8;
 		bit_num = col->col_num % 8;
-		/* logic on nulls is reverse, 1 is not null, 0 is null */
-		fields[i].is_null = nullmask[byte_num] & (1 << bit_num) ? 0 : 1;
+		/* logic on nulls is reverse, 1 is not null, 0 is null.
+		 * VPro patch (ENG-GO-001): rows written before ALTER TABLE ADD COLUMN carry fewer columns
+		 * (row_cols < num_cols) and a shorter null bitmask; a column the row does not contain is
+		 * NULL and must not be read past the end of the bitmask. */
+		if (col->col_num >= row_cols || byte_num >= bitmask_sz) {
+			fields[i].is_null = 1;
+		} else {
+			fields[i].is_null = nullmask[byte_num] & (1 << bit_num) ? 0 : 1;
+		}
 
 		if ((fields[i].is_fixed)
 		 && (fixed_cols_found < row_fixed_cols)) {

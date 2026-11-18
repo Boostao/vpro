@@ -102,17 +102,27 @@ int go_mdb_next(GoMdbReader *reader) {
     return 1;
 }
 
-void go_mdb_clear_row_error(GoMdbReader *reader) {
+/* Resets per-row error and iconv state without moving the cursor. Used when Go quarantines a
+ * row AFTER go_mdb_next returned 1: mdb_fetch_row has already advanced cur_row past it, so
+ * advancing again would silently skip the next valid row (ENG-GO-001). */
+void go_mdb_reset_row_state(GoMdbReader *reader) {
     if (!reader || !reader->mdb) return;
     reader->mdb->go_error = 0;
-    if (reader->table && reader->table->strategy != MDB_INDEX_SCAN) {
-        reader->table->cur_row++;
-    }
 #ifdef HAVE_ICONV
     if (reader->mdb->iconv_in != (iconv_t)-1) {
         iconv(reader->mdb->iconv_in, NULL, NULL, NULL, NULL);
     }
 #endif
+}
+
+/* Used when go_mdb_next returned < 0: mdb_fetch_row stopped on the failing row before its own
+ * cur_row++, so the cursor must be stepped past that row exactly once. */
+void go_mdb_clear_row_error(GoMdbReader *reader) {
+    if (!reader || !reader->mdb) return;
+    go_mdb_reset_row_state(reader);
+    if (reader->table && reader->table->strategy != MDB_INDEX_SCAN) {
+        reader->table->cur_row++;
+    }
 }
 
 void *go_mdb_blob(GoMdbReader *reader, int index, size_t *size) {

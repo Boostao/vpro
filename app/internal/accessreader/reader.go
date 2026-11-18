@@ -238,6 +238,9 @@ type Reader struct {
 	quarantineRows bool
 	rowNumber      int
 	Quarantined    []QuarantinedRow
+	// postFetchCheck is a test seam: when set, it runs after a row is fully decoded and a
+	// non-nil error quarantines the row through the same post-fetch path as a cell failure.
+	postFetchCheck func(rowNumber int, row Row) error
 }
 
 // EnableRowQuarantine configures Next to quarantine individual historical rows
@@ -343,7 +346,7 @@ nextRow:
 				cellErr := fmt.Errorf("Access memo in column %q exceeds safe bind buffer", column.Name)
 				if reader.quarantineRows {
 					reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: cellErr.Error()})
-					C.go_mdb_clear_row_error(reader.native)
+					C.go_mdb_reset_row_state(reader.native)
 					continue nextRow
 				}
 				reader.err = cellErr
@@ -361,7 +364,7 @@ nextRow:
 					cellErr := fmt.Errorf("binary column %q: %w", column.Name, err)
 					if reader.quarantineRows {
 						reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: cellErr.Error()})
-						C.go_mdb_clear_row_error(reader.native)
+						C.go_mdb_reset_row_state(reader.native)
 						continue nextRow
 					}
 					reader.err = cellErr
@@ -372,7 +375,7 @@ nextRow:
 					cellErr := fmt.Errorf("binary column %q is unreadable or too large", column.Name)
 					if reader.quarantineRows {
 						reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: cellErr.Error()})
-						C.go_mdb_clear_row_error(reader.native)
+						C.go_mdb_reset_row_state(reader.native)
 						continue nextRow
 					}
 					reader.err = cellErr
@@ -386,7 +389,7 @@ nextRow:
 				cellErr := fmt.Errorf("Access value in column %q exceeds bind buffer", column.Name)
 				if reader.quarantineRows {
 					reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: cellErr.Error()})
-					C.go_mdb_clear_row_error(reader.native)
+					C.go_mdb_reset_row_state(reader.native)
 					continue nextRow
 				}
 				reader.err = cellErr
@@ -414,10 +417,21 @@ nextRow:
 				cellErr := fmt.Errorf("column %q: %w", column.Name, parseErr)
 				if reader.quarantineRows {
 					reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: cellErr.Error()})
-					C.go_mdb_clear_row_error(reader.native)
+					C.go_mdb_reset_row_state(reader.native)
 					continue nextRow
 				}
 				reader.err = cellErr
+				return false
+			}
+		}
+		if reader.postFetchCheck != nil {
+			if checkErr := reader.postFetchCheck(reader.rowNumber, reader.row); checkErr != nil {
+				if reader.quarantineRows {
+					reader.Quarantined = append(reader.Quarantined, QuarantinedRow{RowNumber: reader.rowNumber, Reason: checkErr.Error()})
+					C.go_mdb_reset_row_state(reader.native)
+					continue nextRow
+				}
+				reader.err = checkErr
 				return false
 			}
 		}
