@@ -74,17 +74,19 @@ func TestLifeformSummaryGlobalEntryMultiplicityCountsAndNullMeans(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Entries) != 12 || len(report.Catalogue) != 6 || len(report.Units) != 5 {
+	// UX-REPORTS-001: A/1/U and A/1/u are one (Code, Lifeform) definition, so
+	// each veg row is counted once (was doubled: 12 entries, 24/12, 1.6, 16/8).
+	if len(report.Entries) != 8 || len(report.Catalogue) != 6 || len(report.Units) != 5 {
 		t.Fatal("global insertion/SU/definition fanout lost", report)
 	}
 	u, v, empty, zero, nullUnit := report.Units[0], report.Units[1], report.Units[2], report.Units[3], report.Units[4]
-	if u.NPlots != 2 || u.Occurrences != 24 || u.UniqueSpecies != 2 || v.NPlots != 1 || v.Occurrences != 12 ||
+	if u.NPlots != 2 || u.Occurrences != 16 || u.UniqueSpecies != 2 || v.NPlots != 1 || v.Occurrences != 8 ||
 		v.UniqueSpecies != 2 || empty.NPlots != 1 || empty.Occurrences != 0 || zero.NPlots != 0 ||
 		nullUnit.NPlots != 1 || nullUnit.Occurrences != 0 {
 		t.Fatal("physical denominator or plot-only rejoin changed", report.Units)
 	}
-	if *u.Rows[1].MeanCover != 1.6 || *v.Rows[1].MeanCover != 1.6 ||
-		u.Rows[1].CoverCount != 16 || v.Rows[1].CoverCount != 8 || *u.Rows[1].Presence != .5 ||
+	if *u.Rows[1].MeanCover != 0.8 || *v.Rows[1].MeanCover != 0.8 ||
+		u.Rows[1].CoverCount != 8 || v.Rows[1].CoverCount != 4 || *u.Rows[1].Presence != .5 ||
 		*u.Rows[0].MeanCover != 0 || u.Rows[0].CoverCount != 8 || u.Rows[0].PlotGroups != 1 {
 		t.Fatal("source Count/Sum semantics lost", u, v)
 	}

@@ -113,13 +113,13 @@ func TestLifeformWorkbookSourceCellsStylesProvenanceArithmeticAndClones(t *testi
 	}
 	for cell, want := range map[string]string{
 		"A1": "Project: Project", "A2": "Site Unit Table: Selected", "A3": "Unit: U",
-		"A4": "nPlots: 2", "A5": "Number of unique species: 2", "A6": "Total species occurences : 24",
+		"A4": "nPlots: 2", "A5": "Number of unique species: 2", "A6": "Total species occurences : 16", // UX-REPORTS-001: duplicate A definitions no longer double-count
 		"B8": "^Count", "C8": "^Number of plot occurences",
 		"A10": "SRank", "A11": "Wetland_Ind", "A12": "WeedStatus", "A13": "RedBlueList",
 		"A14": "ASMR", "A15": "Climate",
 		"B10": "8", "C10": "1", "B11": "4", "C11": "1",
 		"A18": "Lifeform", "B18": "Presence", "C18": "Mean Cover",
-		"A19": "2", "B19": "0.5", "C19": "0", "A20": "1", "B20": "0.5", "C20": "1.6",
+		"A19": "2", "B19": "0.5", "C19": "0", "A20": "1", "B20": "0.5", "C20": "0.8",
 		"E8": "SiteUnit", "E9": "nSRankDetail", "F8": "S1", "F9": "4", "G8": "S2", "G9": "",
 		"Y8": "SX", "Y9": "", "E12": "SiteUnit", "E13": "nWetland_Ind",
 		"E17": "nWeedStatusDetail", "E21": "nRedBlueListDetail",
@@ -297,7 +297,7 @@ func TestLifeformWorkbookAllDetailVectorsOnlyChangeDetails(t *testing.T) {
 				detailRow += 4
 			}
 			lifeformWorkbookCell(t, book, "U", fmt.Sprintf("E%d", detailRow), "")
-			lifeformWorkbookCell(t, book, "U", "C20", "0.8")
+			lifeformWorkbookCell(t, book, "U", "C20", "0.4")
 		})
 	}
 }

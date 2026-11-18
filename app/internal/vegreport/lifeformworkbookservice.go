@@ -76,7 +76,11 @@ func readLifeformWorkbookSource(ctx context.Context, owner *vprocore.SqliteConte
 			return lifeformWorkbookInput{}, err
 		}
 	}
-	lifeform, err := planLifeformSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], tables[1], tables[2], tables[3])
+	species, err := readLifeformSpeciesSource(ctx, tx, tables[2])
+	if err != nil {
+		return lifeformWorkbookInput{}, err
+	}
+	lifeform, err := planLifeformSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], tables[1], species, tables[3])
 	if err != nil {
 		return lifeformWorkbookInput{}, err
 	}

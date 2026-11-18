@@ -193,7 +193,15 @@ func planLifeformSummary(ctx context.Context, project, suName string, veg, su, s
 			return fail(fmt.Errorf("USysAllSpecs row %s Lifeform: %w", row.RowID, err))
 		}
 		if form != nil && *form >= 0 && *form <= 12 {
-			definitions[*code.Text] = append(definitions[*code.Text], definition{row.RowID, *form})
+			// UX-REPORTS-001: one definition per (Code, Lifeform); duplicate
+			// catalogue rows (e.g. CodeType U + XX) must not multiply a veg row.
+			duplicate := false
+			for _, existing := range definitions[*code.Text] {
+				duplicate = duplicate || existing.form == *form
+			}
+			if !duplicate {
+				definitions[*code.Text] = append(definitions[*code.Text], definition{row.RowID, *form})
+			}
 		}
 	}
 	// EntryDat is global across the selected SU. Each insertion retains every
@@ -509,11 +517,78 @@ func (s *LifeformSummaryService) previewConfigured(ctx context.Context, contextI
 					return LifeformSummaryPreview{}, err
 				}
 			}
-			report, err := planLifeformSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], suTable, tables[1], tables[2])
+			species, err := readLifeformSpeciesSource(ctx, tx, tables[1])
+			if err != nil {
+				return LifeformSummaryPreview{}, err
+			}
+			report, err := planLifeformSummary(ctx, owner.Selection.Project, owner.Selection.SU, tables[0], suTable, species, tables[2])
 			if err != nil {
 				return LifeformSummaryPreview{}, err
 			}
 			return LifeformSummaryPreview{contextID, owner.Selection.ProjectPath, owner.Selection.SUPath, report}, nil
 		})
 	})
+}
+
+// readLifeformSpeciesSource merges VLists.USysAllSpecs with the optional
+// VUser.USysUserSpp so personal species count toward their configured
+// LifeForm (UX-REPORTS-001). Shared by the preview and workbook readers.
+func readLifeformSpeciesSource(ctx context.Context, tx *sql.Tx, master vprocore.ProjectMetadataTable) (vprocore.ProjectMetadataTable, error) {
+	var personal vprocore.ProjectMetadataTable
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM "VUser".sqlite_master WHERE type='table' AND name COLLATE BINARY='USysUserSpp'`).Scan(&count); err != nil {
+		return vprocore.ProjectMetadataTable{}, err
+	}
+	if count == 1 {
+		var err error
+		personal, err = vprocore.ReadSQLiteStorageRows(ctx, tx, "VUser", "USysUserSpp", "", nil, "")
+		if err != nil {
+			return vprocore.ProjectMetadataTable{}, err
+		}
+	}
+	return mergeLifeformSpeciesSources(master, personal)
+}
+
+// mergeLifeformSpeciesSources projects VLists.USysAllSpecs and the optional
+// VUser.USysUserSpp (LifeForm or Lifeform) onto Code/Lifeform/Codetype. Master
+// rows keep their rowids; personal rows use the negated rowid so species row
+// identities stay numeric and distinct.
+func mergeLifeformSpeciesSources(master, personal vprocore.ProjectMetadataTable) (vprocore.ProjectMetadataTable, error) {
+	out := vprocore.ProjectMetadataTable{Columns: []vprocore.ProjectMetadataColumn{{Name: "Code"}, {Name: "Lifeform"}, {Name: "Codetype"}}}
+	masterColumns, err := vprocore.SiteUnitTransferColumns(master, "Code", "Lifeform", "Codetype")
+	if err != nil {
+		return out, err
+	}
+	for _, row := range master.Rows {
+		out.Rows = append(out.Rows, vprocore.ProjectMetadataRow{RowID: row.RowID, Cells: []vprocore.ProjectMetadataCell{
+			row.Cells[masterColumns["Code"]], row.Cells[masterColumns["Lifeform"]], row.Cells[masterColumns["Codetype"]]}})
+	}
+	if len(personal.Columns) == 0 {
+		return out, nil
+	}
+	lifeformColumn := "LifeForm"
+	canonical, original := false, false
+	for _, column := range personal.Columns {
+		canonical = canonical || column.Name == "Lifeform"
+		original = original || column.Name == "LifeForm"
+	}
+	if canonical && original {
+		return out, errors.New("USysUserSpp has ambiguous LifeForm/Lifeform columns")
+	}
+	if canonical {
+		lifeformColumn = "Lifeform"
+	}
+	personalColumns, err := vprocore.SiteUnitTransferColumns(personal, "Code", lifeformColumn, "Codetype")
+	if err != nil {
+		return out, fmt.Errorf("USysUserSpp: %w", err)
+	}
+	for _, row := range personal.Rows {
+		rowID, err := strconv.ParseInt(row.RowID, 10, 64)
+		if err != nil || rowID <= 0 {
+			return out, fmt.Errorf("USysUserSpp row %s requires a positive rowid", row.RowID)
+		}
+		out.Rows = append(out.Rows, vprocore.ProjectMetadataRow{RowID: strconv.FormatInt(-rowID, 10), Cells: []vprocore.ProjectMetadataCell{
+			row.Cells[personalColumns["Code"]], row.Cells[personalColumns[lifeformColumn]], row.Cells[personalColumns["Codetype"]]}})
+	}
+	return out, nil
 }

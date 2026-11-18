@@ -208,7 +208,9 @@ func TestLifeformSummarySampleRepresentativeCounts(t *testing.T) {
 	if len(preview.Report.Units) != 11 {
 		t.Fatal("Sample normal SU scope differs", len(preview.Report.Units))
 	}
-	expected := map[string][3]int{"BWBSdk 1 /08": {3, 41, 79}, "BWBSmw 2 /05": {9, 100, 283}}
+	// UX-REPORTS-001: duplicate (Code, Lifeform) catalogue rows count once;
+	// BWBSmw 2 /05 was 283 with double-counted species.
+	expected := map[string][3]int{"BWBSdk 1 /08": {3, 41, 79}, "BWBSmw 2 /05": {9, 100, 278}, "BWBSdk 1 /09": {1, 23, 23}}
 	seen := 0
 	for _, unit := range preview.Report.Units {
 		if unit.Code.Text == nil {
@@ -221,6 +223,18 @@ func TestLifeformSummarySampleRepresentativeCounts(t *testing.T) {
 			}
 			t.Logf("Sample unit %q: nPlots=%d uniqueSpecies=%d occurrences=%d", *unit.Code.Text,
 				unit.NPlots, unit.UniqueSpecies, unit.Occurrences)
+			if *unit.Code.Text == "BWBSdk 1 /09" {
+				// Forbs: ANEMRIC .5 + CORNCAN 1 + GOODREP .5 + MITENUD 1 + ORTHSEC 1 + PLATOBT .5 = 4.5%.
+				forb := false
+				for _, row := range unit.Rows {
+					if row.Lifeform == 7 {
+						forb = row.MeanCover != nil && *row.MeanCover == 0.045 && row.CoverCount == 6
+					}
+				}
+				if !forb {
+					t.Fatal("BWBSdk 1 /09 forb cover double-counted or lost", unit.Rows)
+				}
+			}
 		}
 	}
 	if seen != len(expected) {
