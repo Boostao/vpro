@@ -83,6 +83,9 @@ func (m *Manager) AcquirePool(ctx context.Context, roleMode string) (*pgxpool.Po
 	if err != nil {
 		return nil, creds, wrapRedactedError("configure PostgreSQL pool", err, creds)
 	}
+	if err := requireTLSForRemoteHost(poolCfg.ConnConfig); err != nil {
+		return nil, creds, err
+	}
 	poolCfg.MaxConns = 4
 	poolCfg.MinConns = 0
 	poolCfg.MaxConnIdleTime = 2 * time.Minute

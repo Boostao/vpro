@@ -133,8 +133,21 @@ func TestOfflineConfigResolutionAndSecretRedaction(t *testing.T) {
 	}
 }
 
+// liveTestOptInEnv must be set to "1" or "true" before any test may connect to a real PostgreSQL
+// server. Without it, configured credentials (VPRO_PG_* or <config dir>/becmaster.env) are ignored
+// so that a plain `go test ./...` can never mutate a shared BECMaster database.
+const liveTestOptInEnv = "VPRO_RUN_LIVE_PG_TESTS"
+
+func liveTestsOptedIn() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(liveTestOptInEnv)))
+	return v == "1" || v == "true"
+}
+
 func requireLivePostgresOrSkip(t *testing.T) *Manager {
 	t.Helper()
+	if !liveTestsOptedIn() {
+		t.Skip("live PostgreSQL test skipped: set " + liveTestOptInEnv + "=1 to run against the configured server")
+	}
 	mgr := NewManager("", os.LookupEnv)
 	st, err := mgr.GetConfigStatus()
 	if err != nil || !st.Configured || !st.HasCustodianCreds || !st.HasContributorCreds {

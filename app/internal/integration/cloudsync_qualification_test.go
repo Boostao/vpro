@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,12 +87,20 @@ func TestCloudSyncBECMaster71kQualificationAndThreeWayCustodianMerge(t *testing.
 	if testing.Short() {
 		t.Skip("skipping live PostgreSQL 71,567-plot BECMaster qualification in -short mode")
 	}
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("VPRO_RUN_LIVE_PG_TESTS"))); v != "1" && v != "true" {
+		t.Skip("live PostgreSQL qualification skipped: set VPRO_RUN_LIVE_PG_TESTS=1 to run against the configured server")
+	}
 
 	mgr := cloudsync.NewManager("", os.LookupEnv)
 	defer mgr.Close()
 	cfgStatus, err := mgr.GetConfigStatus()
 	if err != nil || !cfgStatus.Configured || !cfgStatus.HasContributorCreds || !cfgStatus.HasCustodianCreds {
 		t.Skip("live PostgreSQL credentials (VPRO_PG_URL / VPRO_PG_HOST or becmaster.env) not configured; skipping live qualification")
+	}
+	// This test can reseed the whole baseline (ReplaceExisting) and edits becmaster rows, so it must
+	// only ever run against a database the operator has explicitly named as disposable.
+	if confirmed := strings.TrimSpace(os.Getenv("VPRO_LIVE_PG_DESTRUCTIVE_DB")); confirmed == "" || confirmed != cfgStatus.Database {
+		t.Skip("destructive live qualification skipped: set VPRO_LIVE_PG_DESTRUCTIVE_DB to the configured database name to confirm it is a disposable test database")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
@@ -251,10 +260,15 @@ func TestCloudSyncBECMaster71kQualificationAndThreeWayCustodianMerge(t *testing.
 		if len(allocatedTestChildIDs) > 0 {
 			_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.child_identity WHERE id = ANY($1)`, allocatedTestChildIDs)
 		}
-		if baselineMaxAuditSeq > 0 {
-			_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.audit WHERE audit_seq > $1`, baselineMaxAuditSeq)
-		} else if createdMergeTxID != "" {
-			_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.audit WHERE merge_tx_id = $1::uuid`, createdMergeTxID)
+		// becmaster.audit is a SHA-256 hash chain shared with other writers: only remove this test's
+		// own rows, and only while they are still the chain tail, so no other row loses its prev_hash anchor.
+		if createdMergeTxID != "" {
+			_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.audit
+				WHERE merge_tx_id = $1::uuid
+				  AND NOT EXISTS (
+				    SELECT 1 FROM becmaster.audit later
+				    WHERE later.audit_seq > (SELECT MAX(audit_seq) FROM becmaster.audit WHERE merge_tx_id = $1::uuid)
+				      AND later.merge_tx_id IS DISTINCT FROM $1::uuid)`, createdMergeTxID)
 		}
 		if createdMergeTxID != "" {
 			_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.merge_ledger WHERE merge_tx_id = $1::uuid`, createdMergeTxID)
@@ -264,7 +278,7 @@ func TestCloudSyncBECMaster71kQualificationAndThreeWayCustodianMerge(t *testing.
 		}
 		_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.snapshots WHERE snapshot_tag = $1`, testSnapshotTag)
 		if createdDownloadLogID > 0 {
-			_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.download_log WHERE id >= $1`, createdDownloadLogID)
+			_, _ = cConn.Exec(cleanCtx, `DELETE FROM becmaster.download_log WHERE id = $1`, createdDownloadLogID)
 		}
 
 		var finalPlots int

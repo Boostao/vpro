@@ -569,5 +569,42 @@ func buildConnConfigForRole(creds *ResolvedCredentials, roleMode string) (*pgx.C
 	if err != nil {
 		return nil, wrapRedactedError("parse PostgreSQL connection config", err, creds)
 	}
+	if err := requireTLSForRemoteHost(cfg); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// errRemotePlaintext is returned when a non-loopback PostgreSQL host is configured with an
+// sslmode (disable, allow, prefer) that permits an unencrypted connection.
+var errRemotePlaintext = errors.New("TLS is required for remote PostgreSQL hosts: set sslmode to require, verify-ca or verify-full (disable, allow and prefer are only permitted for localhost)")
+
+// requireTLSForRemoteHost rejects connection configs that could send credentials or plot data in
+// plaintext to a non-loopback host. pgx represents sslmode=disable as a nil TLSConfig and
+// allow/prefer as a plaintext fallback, so both the primary config and every fallback are checked.
+func requireTLSForRemoteHost(cfg *pgx.ConnConfig) error {
+	if cfg == nil || isLoopbackPGHost(cfg.Host) {
+		return nil
+	}
+	if cfg.TLSConfig == nil {
+		return errRemotePlaintext
+	}
+	for _, fb := range cfg.Fallbacks {
+		if fb != nil && fb.TLSConfig == nil && !isLoopbackPGHost(fb.Host) {
+			return errRemotePlaintext
+		}
+	}
+	return nil
+}
+
+func isLoopbackPGHost(host string) bool {
+	h := strings.TrimSpace(host)
+	if h == "" || strings.HasPrefix(h, "/") { // empty or unix-domain socket directory
+		return true
+	}
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(strings.Trim(h, "[]"))
+	return ip != nil && ip.IsLoopback()
 }
