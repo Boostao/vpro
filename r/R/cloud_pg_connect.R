@@ -254,6 +254,29 @@ vpro_validate_pg_sslmode <- function(sslmode) {
   s
 }
 
+# Loopback hosts (and Unix-domain socket directories) may use any sslmode for local development.
+vpro_is_loopback_pg_host <- function(host) {
+  h <- tolower(trimws(as.character(host[[1L]])))
+  h <- sub("^\\[(.*)\\]$", "\\1", h)
+  !nzchar(h) || startsWith(h, "/") || h %in% c("localhost", "::1") ||
+    grepl("^127(\\.[0-9]{1,3}){3}$", h)
+}
+
+# Mirrors Go cloudsync.requireTLSForRemoteHost: disable/allow/prefer can send credentials and plot
+# data in plaintext, so they are refused for any non-loopback host before a connection is opened.
+vpro_require_pg_tls <- function(host, sslmode) {
+  if (vpro_is_loopback_pg_host(host)) {
+    return(invisible(TRUE))
+  }
+  if (trimws(as.character(sslmode[[1L]])) %in% c("disable", "allow", "prefer")) {
+    cli::cli_abort(c(
+      "TLS is required for remote PostgreSQL hosts.",
+      "i" = "Set {.arg sslmode} (or {.envvar VPRO_PG_SSLMODE}) to {.val require}, {.val verify-ca} or {.val verify-full}; {.val disable}, {.val allow} and {.val prefer} are only permitted for localhost."
+    ), class = "vpro_pg_tls_required")
+  }
+  invisible(TRUE)
+}
+
 vpro_resolve_pg_credentials <- function(
   role = c("contributor", "custodian"),
   host = NULL,
@@ -570,6 +593,7 @@ vpro_master_connect <- function(
       "i" = "Set {.envvar VPRO_PG_HOST}, {.envvar VPRO_PG_USER}, and {.envvar VPRO_PG_PASSWORD} (or {.envvar VPRO_PG_URL}), or configure {.file becmaster.env} in {.fn vpro_config_dir}."
     ))
   }
+  vpro_require_pg_tls(creds$host, creds$sslmode)
 
   raw_conn <- vpro_pg_exec_safe(
     function() {

@@ -404,10 +404,21 @@ test_that("offline 3-way diff algebra and SHA-256 audit hash chain detect confli
 })
 
 test_that("live PostgreSQL Contributor read/pull/sync, RBAC write denial, Custodian 3-way merge, audit chain, and snapshots succeed with zero drift", {
+  # Opt-in gate (ENG-R-001): this test writes to the configured BECMaster as Custodian, so it never
+  # runs just because credentials exist in becmaster.env. Same variables as the Go live tests.
+  skip_if_not(
+    tolower(Sys.getenv("VPRO_RUN_LIVE_PG_TESTS")) %in% c("1", "true"),
+    "live PostgreSQL test skipped: set VPRO_RUN_LIVE_PG_TESTS=1 to run against the configured server"
+  )
   skip_if_not_installed("RPostgres")
   skip_if_not(
     vpro_has_pg_credentials("contributor") && vpro_has_pg_credentials("custodian"),
     "Live PostgreSQL Contributor + Custodian credentials not configured"
+  )
+  skip_if_not(
+    nzchar(Sys.getenv("VPRO_LIVE_PG_DESTRUCTIVE_DB")) &&
+      identical(Sys.getenv("VPRO_LIVE_PG_DESTRUCTIVE_DB"), vpro_resolve_pg_credentials("custodian")$dbname),
+    "destructive live test skipped: set VPRO_LIVE_PG_DESTRUCTIVE_DB to the configured database name to confirm it is disposable"
   )
 
   admin_con <- vpro_master_connect("custodian")
