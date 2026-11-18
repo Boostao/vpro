@@ -131,6 +131,11 @@ func (s *ContextService) SetUserName(ctx context.Context, contextID, user string
 		if err := plots.SetCurrentUser(user); err != nil {
 			return UserAccreditation{}, err
 		}
+		// plots is a per-request snapshot; keep the long-lived service in sync
+		// so later audit rows and GetUserSetup see the new actor (UX-ADMIN-001).
+		s.Plots.Mu.Lock()
+		s.Plots.CurrentUser = user
+		s.Plots.Mu.Unlock()
 		if plots.Projects != nil {
 			plots.Projects.Mu.RLock()
 			coordinator := plots.Projects.Sqlite

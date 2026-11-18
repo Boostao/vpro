@@ -258,6 +258,7 @@ func TestSubstrateAuditLevelsRawValuesAndAtomicRollback(t *testing.T) {
 			if err := s.CreatePlot(h); err != nil {
 				t.Fatal(err)
 			}
+			vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 			count := 0
 			for i, value := range []*float64{vprotest.HeightFloat(1.25), vprotest.HeightFloat(1.234567890123), vprotest.HeightFloat(1.234567890123), nil} {
 				setSubstrate(&h, field.Column, value)
@@ -345,6 +346,7 @@ func TestSubstrateCreateAuditLevelsAndDataRollback(t *testing.T) {
 		if err := s.CreatePlot(h); err != nil {
 			t.Fatal(err)
 		}
+		vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 		want := 0
 		if strength >= 2 {
 			want = 6

@@ -193,6 +193,7 @@ func TestPlotHeader_NullableBooleans(t *testing.T) {
 			if err := s.CreatePlot(h); err != nil {
 				t.Fatal(err)
 			}
+			vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 			for i, value := range []*bool{boolPointer(false), boolPointer(true), boolPointer(true), boolPointer(false), nil} {
 				reflect.ValueOf(&h).Elem().FieldByName(field.Member).Set(reflect.ValueOf(value))
 				if field.Member == "SpeciesListComplete" && value == nil {
@@ -307,6 +308,9 @@ func TestPlotHeader_BooleanAuditStrengths(t *testing.T) {
 			}
 			if err := s.SavePlot(h); err != nil {
 				t.Fatal(err)
+			}
+			if i == 0 && strength >= 2 {
+				want += 2 // creation identity audits: Env.PlotNumber + Admin.Plot
 			}
 			if (i == 1 && strength >= 2) || (i == 2 && strength >= 1) {
 				want += 2

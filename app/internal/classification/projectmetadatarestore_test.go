@@ -218,7 +218,9 @@ func TestProjectMetadataRestorationRetainPruneCancelAndIndependentIdentity(t *te
 	}
 }
 
-func TestProjectMetadataRestorationAuditStrengthLeavesUnauditedChanges(t *testing.T) {
+func TestProjectMetadataRestorationRefusesPartialUnauditedRestore(t *testing.T) {
+	// UX-ADMIN-002: at AuditStrength 1 the NULL->value FieldLeader edit has no
+	// audit row; restoration must refuse instead of silently restoring a subset.
 	service, state, request := vprotest.MetadataEditFixture(t)
 	if err := service.Plots.SetAuditStrength(1); err != nil {
 		t.Fatal(err)
@@ -228,12 +230,34 @@ func TestProjectMetadataRestorationAuditStrengthLeavesUnauditedChanges(t *testin
 	if err := service.SaveProjectMetadata(t.Context(), state.ContextID, request); err != nil {
 		t.Fatal(err)
 	}
+	before := vprotest.MetadataFileBytes(t, service)
+	if _, err := ReviewProjectMetadataRestoration(service, t.Context(), state.ContextID, request.PlotNumber, "1"); err == nil ||
+		!strings.Contains(err.Error(), "FieldLeader") {
+		t.Fatalf("partial unaudited restoration was offered: %v", err)
+	}
+	vprotest.AssertMetadataFileBytes(t, service, before, "")
+}
+
+func TestProjectMetadataRestorationDefaultStrengthRestoresNullAddition(t *testing.T) {
+	service, state, request := vprotest.MetadataEditFixture(t)
+	if err := service.Plots.SetAuditStrength(3); err != nil {
+		t.Fatal(err)
+	}
+	request.Changes = []vprocore.ProjectMetadataChange{{Column: "Notes", Value: vprotest.MetadataText("Explicit existing-value edit")},
+		{Column: "FieldLeader", Value: vprotest.MetadataText("Audited addition")}}
+	if err := service.SaveProjectMetadata(t.Context(), state.ContextID, request); err != nil {
+		t.Fatal(err)
+	}
 	review, err := ReviewProjectMetadataRestoration(service, t.Context(), state.ContextID, request.PlotNumber, "1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(review.Audits) != 1 || review.Audits[0].EditField != "Notes" {
-		t.Fatal("restoration inherited phantom option/stamp/addition audits")
+	fields := map[string]bool{}
+	for _, audit := range review.Audits {
+		fields[audit.EditField] = true
+	}
+	if !fields["Notes"] || !fields["FieldLeader"] {
+		t.Fatalf("restoration review omitted audited fields: %v", fields)
 	}
 	if _, err := RestoreProjectMetadata(service, t.Context(), state.ContextID,
 		ProjectMetadataRestore{review, vprocore.AuditRestorePrune, true}); err != nil {
@@ -241,11 +265,8 @@ func TestProjectMetadataRestorationAuditStrengthLeavesUnauditedChanges(t *testin
 	}
 	actual := vprotest.ReloadMetadataEdit(t, service, state, request)
 	for i, column := range actual.Columns {
-		if column.Name == "Notes" && !reflect.DeepEqual(actual.Original.Cells[i], request.Original.Cells[i]) {
-			t.Fatal("audited Notes did not restore")
-		}
-		if column.Name == "FieldLeader" && !reflect.DeepEqual(actual.Original.Cells[i], vprotest.MetadataText("Unaudited addition remains")) {
-			t.Fatal("restoration changed an unaudited addition")
+		if (column.Name == "Notes" || column.Name == "FieldLeader") && !reflect.DeepEqual(actual.Original.Cells[i], request.Original.Cells[i]) {
+			t.Fatalf("%s did not restore to its original value", column.Name)
 		}
 	}
 }

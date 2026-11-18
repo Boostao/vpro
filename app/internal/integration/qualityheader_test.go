@@ -127,6 +127,7 @@ func TestQualityHeaderAuditsLevelsCaseOnlyAndAtomicRollback(t *testing.T) {
 			if err := service.CreatePlot(h); err != nil {
 				t.Fatal(err)
 			}
+			vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 			count := 0
 			for i, value := range []*string{vprotest.QualityString("lower"), vprotest.QualityString("LOWER"), vprotest.QualityString("LOWER"), nil} {
 				vprotest.QualitySet(&h, member, value)

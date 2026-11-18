@@ -221,6 +221,11 @@ func ChildFixture(t *testing.T) (*vprocore.PlotService, *sql.DB) {
 			t.Fatal(err)
 		}
 	}
+	// Child tests count audits from a clean baseline; plot creation itself is
+	// audited (UX-ENV-001) and covered by the header tests.
+	if _, err := db.Exec(`DELETE FROM Sample_Audit`); err != nil {
+		t.Fatal(err)
+	}
 	return service, db
 }
 
@@ -241,6 +246,17 @@ func HeaderFixture(t *testing.T) (*vprocore.PlotService, *sql.DB) {
 	db.SetMaxOpenConns(1)
 	t.Cleanup(release)
 	return service, db
+}
+
+// DeleteCreationIdentityAudits removes the NULL -> PlotNumber/Plot identity
+// rows that header creation writes at AuditStrength >= 2 (UX-ENV-001), for
+// tests that count field-level audits from a clean baseline.
+func DeleteCreationIdentityAudits(t *testing.T, db *sql.DB, plot string) {
+	t.Helper()
+	if _, err := db.Exec(`DELETE FROM Sample_Audit WHERE PlotNumber = ? AND BeforeEdit IS NULL
+		AND (("Table" = '_Env' AND EditField = 'PlotNumber') OR ("Table" = '_Admin' AND EditField = 'Plot'))`, plot); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func AuditCount(t *testing.T, db *sql.DB, plot string) int {

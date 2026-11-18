@@ -223,6 +223,7 @@ func TestSiteCodeAuditAllLevelsRawCaseAndNoop(t *testing.T) {
 			if err := s.CreatePlot(h); err != nil {
 				t.Fatal(err)
 			}
+			vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 			second := "NA"
 			if field.Maximum == 8 {
 				second = "at"
@@ -265,7 +266,7 @@ func TestSiteCodeAuditAllLevelsRawCaseAndNoop(t *testing.T) {
 		}
 		want := 0
 		if strength >= 2 {
-			want = 5
+			want = 5 + 2 // five site codes plus Env.PlotNumber + Admin.Plot identity audits
 		}
 		if vprotest.AuditCount(t, db, h.PlotNumber) != want {
 			t.Fatal("create code audit threshold mismatch")

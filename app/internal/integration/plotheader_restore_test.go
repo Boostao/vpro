@@ -62,6 +62,8 @@ func TestPlotHeader_RestoreNullAndRetainAudit(t *testing.T) {
 	if err := s.SavePlot(h); err != nil {
 		t.Fatal(err)
 	}
+	// Identity rows are not restorable (allowlist); restore the field audits only.
+	vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 	if _, err := db.Exec(`UPDATE Sample_Audit SET Restore = 1 WHERE PlotNumber = ?`, h.PlotNumber); err != nil {
 		t.Fatal(err)
 	}

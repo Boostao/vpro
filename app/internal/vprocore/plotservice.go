@@ -268,8 +268,10 @@ func (s *PlotService) RequireContextEdit() error {
 
 func NewPlotService(projects *ProjectService) *PlotService {
 	return &PlotService{
-		Projects:      projects,
-		AuditStrength: 1, // Default matching Access HKCU AuditStrength
+		Projects: projects,
+		// Default 3 records NULL<->value transitions so every write is audited
+		// (AGENTS.md §3.5, UX-ADMIN-002); lower levels remain opt-in via config.
+		AuditStrength: 3,
 		CurrentUser:   "User",
 	}
 }

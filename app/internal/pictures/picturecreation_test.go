@@ -629,7 +629,8 @@ func TestPictureCreationUUIDProvenanceAndPhysicalReplayRefusals(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "audit":
-				if err := service.Plots.SetAuditStrength(3); err != nil {
+				// Drift to a strength different from the receipt's (default is now 3).
+				if err := service.Plots.SetAuditStrength((service.Plots.AuditStrength + 1) % 4); err != nil {
 					t.Fatal(err)
 				}
 			case "row-cells":

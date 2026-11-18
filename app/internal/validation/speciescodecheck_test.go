@@ -30,6 +30,9 @@ func speciesCodeCheckFixture(t *testing.T) (*vprocore.ContextService, vprocore.P
 		t.Fatal(err)
 	}
 	defer release()
+	for _, plot := range []string{"CHECK1", "CHECK2"} {
+		vprotest.DeleteCreationIdentityAudits(t, db, plot)
+	}
 	if _, err := db.Exec(`ALTER TABLE Sample_Veg RENAME TO CheckSourceVeg;
 		CREATE TABLE Sample_Veg AS SELECT * FROM CheckSourceVeg;
 		DROP TABLE CheckSourceVeg`); err != nil {

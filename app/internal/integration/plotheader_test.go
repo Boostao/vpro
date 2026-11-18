@@ -219,23 +219,25 @@ func TestPlotHeader_AllFieldsRoundTripAndAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	fieldCount := typ.NumField() - 2 // identity and UI-only lock
-	if count := vprotest.AuditCount(t, db, h.PlotNumber); count != fieldCount {
-		t.Fatalf("initial audit count %d, want %d", count, fieldCount)
+	const identityAudits = 2         // creation audits Env.PlotNumber + Admin.Plot (UX-ENV-001)
+	if count := vprotest.AuditCount(t, db, h.PlotNumber); count != fieldCount+identityAudits {
+		t.Fatalf("initial audit count %d, want %d", count, fieldCount+identityAudits)
 	}
 	entries, err := s.ListAuditEntries(h.PlotNumber)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
+		identity := (entry.Table == "_Env" && entry.EditField == "PlotNumber") || (entry.Table == "_Admin" && entry.EditField == "Plot")
 		if entry.BeforeEdit != nil || entry.AfterEdit == nil || entry.User != "Will MacKenzie" ||
-			entry.EditField == "PlotNumber" || entry.EditField == "Plot" {
+			(identity && *entry.AfterEdit != h.PlotNumber) {
 			t.Fatalf("invalid initial audit: %#v", entry)
 		}
 	}
 	if err := s.SavePlot(*got); err != nil {
 		t.Fatal(err)
 	}
-	if count := vprotest.AuditCount(t, db, h.PlotNumber); count != fieldCount {
+	if count := vprotest.AuditCount(t, db, h.PlotNumber); count != fieldCount+identityAudits {
 		t.Fatalf("unchanged save audited: %d", count)
 	}
 	var unmanaged string
@@ -296,7 +298,7 @@ func TestPlotHeader_AllFieldsRoundTripAndAudit(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(*got, updated) {
 		t.Fatalf("updated roundtrip: %#v, %v", got, err)
 	}
-	if count := vprotest.AuditCount(t, db, h.PlotNumber); count != 2*fieldCount {
+	if count := vprotest.AuditCount(t, db, h.PlotNumber); count != 2*fieldCount+identityAudits {
 		t.Fatalf("update audit count: %d", count)
 	}
 	beforeClear := vprotest.SubstrateSnapshot(t, db)
@@ -316,7 +318,7 @@ func TestPlotHeader_AllFieldsRoundTripAndAudit(t *testing.T) {
 	if err := db.QueryRow(`SELECT COUNT(*) FROM Sample_Audit WHERE PlotNumber = ? AND BeforeEdit IS NOT NULL AND AfterEdit IS NULL`, h.PlotNumber).Scan(&cleared); err != nil {
 		t.Fatal(err)
 	}
-	if cleared != fieldCount-1 || vprotest.AuditCount(t, db, h.PlotNumber) != 3*fieldCount-1 {
+	if cleared != fieldCount-1 || vprotest.AuditCount(t, db, h.PlotNumber) != 3*fieldCount-1+identityAudits {
 		t.Fatalf("clear-to-null audit count: %d", cleared)
 	}
 }
@@ -332,6 +334,7 @@ func TestPlotHeader_AuditStrengths(t *testing.T) {
 			if err := s.SavePlot(h); err != nil {
 				t.Fatal(err)
 			}
+			vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 			n := 0
 			text := "" // non-null zero and empty text are values, not SQL NULL
 			h.Elevation, h.OfficeNotes = &n, &text

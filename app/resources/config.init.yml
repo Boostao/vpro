@@ -1,6 +1,6 @@
 release_channel: "stable"
 Audit:
-  AuditStrength: 1
+  AuditStrength: 3
 CHARS:
   ShowCHARStreeVersion: 0
 Current:

@@ -15,6 +15,7 @@ func TestPlotHeader_AuditRowIdentity(t *testing.T) {
 	if err := s.SavePlot(vprocore.FS882Header{PlotNumber: "HDRKEY"}); err != nil {
 		t.Fatal(err)
 	}
+	vprotest.DeleteCreationIdentityAudits(t, db, "HDRKEY")
 	for _, rowID := range []int64{9007199254740993, 9007199254740994} {
 		if _, err := db.Exec(`INSERT INTO Sample_Audit
 			(rowid, Project, User, PlotNumber, "Table", EditField, EditWhen, BeforeEdit, AfterEdit, Restore, Flag, ID)

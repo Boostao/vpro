@@ -493,6 +493,15 @@ func (s *PlotService) saveHeader(h FS882Header, mode headerSaveMode) error {
 		query := `INSERT INTO ` + QuoteHeaderIdentifier(project+"_Audit") +
 			` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`
 		now := time.Now().Format("2006-01-02 15:04:05")
+		if creating {
+			// Plot creation records its identity keys (NULL -> PlotNumber) in
+			// both Env and Admin, matching CreateSIVIPlot (UX-ENV-001).
+			for _, identity := range [][2]string{{"_Env", "PlotNumber"}, {"_Admin", "Plot"}} {
+				if _, err := tx.Exec(query, project, user, h.PlotNumber, identity[0], identity[1], now, nil, h.PlotNumber); err != nil {
+					return err
+				}
+			}
+		}
 		for _, field := range HeaderFields {
 			if !caps[field.Property] || field.Property == "plotNumber" {
 				continue

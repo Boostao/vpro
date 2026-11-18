@@ -17,6 +17,7 @@ func TestBECHeaderBoundsRawCodesAndDependentPreservation(t *testing.T) {
 	if err := s.CreatePlot(h); err != nil {
 		t.Fatal(err)
 	}
+	vprotest.DeleteCreationIdentityAudits(t, db, h.PlotNumber)
 	got, err := s.GetPlot(h.PlotNumber)
 	if err != nil || !reflect.DeepEqual(*got, h) {
 		t.Fatalf("raw codes changed: %#v %v", got, err)

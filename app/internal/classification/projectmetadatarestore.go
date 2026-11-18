@@ -197,6 +197,13 @@ func metadataRestoreReview(ctx context.Context, tx *sql.Tx, project, plot, conte
 		}
 		restored.Cells[column] = event.Original.Cells[column]
 	}
+	// Fail closed instead of silently restoring a subset: every column the edit
+	// changed must carry an audit row (e.g. NULL transitions under AuditStrength < 3).
+	for i, column := range table.Columns {
+		if !seen[column.Name] && !reflect.DeepEqual(event.Original.Cells[i], event.Committed.Cells[i]) {
+			return review, fmt.Errorf("metadata edit changed %s without an audit row; raise AuditStrength to 3 to make edits fully restorable", column.Name)
+		}
+	}
 	return ProjectMetadataRestoreReview{contextID, historyID, project, plot, event.ProjectID, event.ID,
 		table.Columns, current, restored, records}, nil
 }
