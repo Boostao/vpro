@@ -319,7 +319,8 @@ func validateSIVINewCoverEdits(edits []sourceform.SiviHeightEdit) error {
 		if vprocore.MetadataCellEqual(edit.Expected, edit.Value) {
 			continue
 		}
-		if edit.Value.Storage == "real" && edit.Value.Real != nil && float32(*edit.Value.Real) < 0 {
+		if edit.Value.Storage == "real" && edit.Value.Real != nil &&
+			vprocore.ValidateSingleCoverChange("Veg."+edit.Column, nil, edit.Value.Real) != nil {
 			return fmt.Errorf("SIVI %s cover %q must be >= 0 and < 100 or NULL", edit.RowID, edit.Column)
 		}
 	}

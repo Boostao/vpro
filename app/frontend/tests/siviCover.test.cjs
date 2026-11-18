@@ -80,11 +80,11 @@ async function saved(overrides = {}) {
   return fixtureValue;
 }
 
-test('every source cover/total obeys strict100, finite SINGLE, negative/no-lower-bound and NULL rules', () => {
+test('every source cover/total obeys SINGLE-narrowed [0, 100), finite SINGLE and NULL rules (ENG-GO-002/UX-VEG-001)', () => {
   for (const column of editor.siviCoverColumns) {
     const source = review({ extended: true });
-    const valid = [['', null], ['0', 0], ['-1', -1], ['99.99999999999999', 99.99999999999999],
-      ['1e-100', 1e-100], ['-3.4028234663852886e38', -numeric.singleMaximum], ['+.125', .125]];
+    const valid = [['', null], ['0', 0], ['99.999996', 99.999996],
+      ['1e-100', 1e-100], ['+.125', .125]];
     for (const [raw, value] of valid) {
       const drafts = editor.stageSIVICover(source, {}, id, column, raw, false);
       const draft = drafts[id][column];
@@ -94,7 +94,9 @@ test('every source cover/total obeys strict100, finite SINGLE, negative/no-lower
       assert.equal(draft.value.real, value);
       assert.doesNotThrow(() => editor.siviCoverEdits(source, drafts));
     }
-    for (const raw of ['100', '100.00001', '1e2', '101', '3.4028234663852886e38',
+    // 99.999999 and 99.99999999999999 narrow to SINGLE 100 and must be rejected; covers have a 0 lower bound.
+    for (const raw of ['100', '99.999999', '99.99999999999999', '-1', '-0.01', '-3.4028234663852886e38',
+      '100.00001', '1e2', '101', '3.4028234663852886e38',
       '-3.402823466385289e38', '1e309', '-Infinity', 'Infinity', 'NaN', '0x1', '1_0', '1,5',
       ' 5', '5 ', '\t5', '\n', ' ', '1\n2', 'five', '\u0000', '\ud800', '\udc00']) {
       const drafts = editor.stageSIVICover(source, {}, id, column, raw, false);
@@ -131,7 +133,7 @@ test('unchanged historical invalid typed cells are omitted exactly, never normal
 test('source controls are scoped to their actual forms, with physical row+column keys across groups', () => {
   const source = review({ extended: true });
   let drafts = {};
-  for (const column of editor.siviCoverColumns) drafts = editor.stageSIVICover(source, drafts, id, column, '-2', false);
+  for (const column of editor.siviCoverColumns) drafts = editor.stageSIVICover(source, drafts, id, column, '2.5', false);
   const edits = editor.siviCoverEdits(source, drafts);
   assert.equal(edits.length, 14);
   assert.equal(new Set(edits.map(edit => `${edit.rowId}:${edit.column}`)).size, 14);
@@ -161,14 +163,14 @@ test('source controls are scoped to their actual forms, with physical row+column
   assert.throws(() => editor.stageSIVICover(wrongForm, {}, id, 'Cover1', '1', false));
 });
 test('raw requests have exact wire aliases, complete cloned original typed cells and no raw draft Unicode repair', () => {
-  const { source, drafts } = stage('-3', cell('integer', '125'));
+  const { source, drafts } = stage('3', cell('integer', '125'));
   const json = editor.siviCoverRequestJSON(source, drafts), request = JSON.parse(json);
   assert.deepEqual(Object.keys(request), ['original', 'edits']);
   assert.deepEqual(Object.keys(request.original[0]), ['Form', 'Query', 'Columns', 'Rows']);
   assert.deepEqual(Object.keys(request.original[0].Rows[0]), ['rowId', 'cells']);
   assert.deepEqual(Object.keys(request.edits[0]), ['rowId', 'form', 'column', 'expected', 'value']);
   assert.deepEqual(request.edits[0].expected, cell('integer', '125'));
-  assert.deepEqual(request.edits[0].value, cell('real', -3));
+  assert.deepEqual(request.edits[0].value, cell('real', 3));
   request.original[0].Rows[0].cells[2].text = 'mutated';
   request.edits[0].expected.integer = '9';
   assert.equal(at(source, 0, 'Species').text, 'RAW');
@@ -227,7 +229,7 @@ test('invalid literal drafts/errors persist through snapshots and extended remou
     await assert.rejects(owner.load(), /Finish or Undo/);
     remount.drafts[id].Cover2.raw = 'foreign';
     assert.equal(owner.view().drafts[id].Cover2.raw, raw);
-    owner.stage(id, 'Cover2', '-5', false);
+    owner.stage(id, 'Cover2', '5', false);
     assert.equal(owner.view().error, null);
     assert.equal(owner.closeState().blocked, false);
     assert.equal(await owner.save(), true);
@@ -273,7 +275,7 @@ test('historical125/no-op never writes or refreshes, and changed Save refreshes 
   assert.equal(calls.save, 0);
   assert.equal(calls.refresh, 0);
   owner.stage(id, 'TotalA', '99', false);
-  owner.stage(id, 'Cover6', '-5', false);
+  owner.stage(id, 'Cover6', '5', false);
   assert.equal(await owner.save(), true);
   assert.equal(calls.request.edits.length, 2);
   assert.equal(calls.request.original.length, 3);

@@ -195,11 +195,26 @@ func resolveOptimizeVegGroup(
 			overlapping = true
 		}
 		finalCover := maxVal
-		if finalCover >= 0 {
-			if _, ok := NarrowSingleCover(finalCover); !ok {
-				finalCover = 99.0
-				cappedCols = append(cappedCols, col)
-			}
+		if finalCover < 0 {
+			// ENG-GO-002: a negative cover is invalid source data; block the group rather than
+			// silently carrying it into the consolidated row.
+			msg := fmt.Sprintf("negative %s cover %v cannot be consolidated", col, finalCover)
+			blockedReasons = append(blockedReasons, msg)
+			conflicts = append(conflicts, OptimizeVegConflict{
+				PlotNumber: gk.plot,
+				Species:    gk.species,
+				Field:      col,
+				Reason:     msg,
+				SourceIDs:  []int64{survivorLogicalID},
+			})
+			afterCells[col] = survivor.cells[col]
+			continue
+		}
+		if narrowed, ok := NarrowSingleCover(finalCover); ok {
+			finalCover = float64(narrowed) // store the Access SINGLE value, not the raw double
+		} else {
+			finalCover = 99.0
+			cappedCols = append(cappedCols, col)
 		}
 		afterCells[col] = rawSQLiteCell{storage: "real", realVal: finalCover}
 		mergedCovers[col] = finalCover

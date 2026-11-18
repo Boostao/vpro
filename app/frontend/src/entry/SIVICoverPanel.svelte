@@ -85,6 +85,6 @@
     <p class="text-sm text-stone-600">Load the original source rows before editing.</p>
   {/if}
   <SIVIChildSourceNotices notices={view.sourceNotices ?? []} saved={view.sourceNoticesSaved ?? false} />
-  <p class="text-xs text-stone-600">Source-scoped cover adaptation only: species, application ID, Collected and heights remain read-only. Changed numbers must be finite Access Single values strictly less than 100; zero and negative cover remain valid. Clear a field to NULL. No totals are calculated automatically.</p>
+  <p class="text-xs text-stone-600">Source-scoped cover adaptation only: species, application ID, Collected and heights remain read-only. Changed numbers must be finite Access Single values from 0 up to, but not including, 100. Clear a field to NULL. No totals are calculated automatically.</p>
   <p class="text-xs text-stone-600">Extended presentation adds B3/B4/B5 without resetting drafts, errors or this session's isolated cover history. Save and restoration refresh the whole source. Undo discards drafts and reloads; it does not reverse a committed write.</p>
 </section>

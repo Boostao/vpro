@@ -54,7 +54,8 @@ func (s *SIVICreationService) Create(ctx context.Context, contextID, requestJSON
 		return nil, err
 	}
 	for _, cover := range request.Covers {
-		if vprocore.VegetationCoverColumns[cover.Column] && cover.Value.Storage == "real" && cover.Value.Real != nil && float32(*cover.Value.Real) < 0 {
+		if vprocore.VegetationCoverColumns[cover.Column] && cover.Value.Storage == "real" && cover.Value.Real != nil &&
+			vprocore.ValidateSingleCoverChange("Veg."+cover.Column, nil, cover.Value.Real) != nil {
 			return nil, fmt.Errorf("SIVI creation cover %q must be >= 0 and < 100 or NULL", cover.Column)
 		}
 	}

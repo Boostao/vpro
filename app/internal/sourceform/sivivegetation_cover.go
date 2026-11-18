@@ -49,8 +49,11 @@ func validateSIVICoverCell(column string, cell vprocore.ProjectMetadataCell) err
 	if err := ValidateSIVIChildSingle(column, cell); err != nil {
 		return err
 	}
-	if cell.Real != nil && *cell.Real >= 100 {
-		return fmt.Errorf("Veg.%s requires a value less than 100 or NULL, matching the SIVI source control", column)
+	// Covers are Access SINGLE: narrow to float32 BEFORE the [0, 100) check (AGENTS.md §3.3), so
+	// 99.999996 is accepted while 99.999999 (which narrows to 100) is rejected (ENG-GO-002).
+	// ValidateSIVIChildSingle above already restricts covers to NULL or real storage.
+	if err := vprocore.ValidateSingleCoverChange("Veg."+column, nil, cell.Real); err != nil {
+		return fmt.Errorf("Veg.%s requires a value >= 0 and less than 100 or NULL, matching the SIVI source control", column)
 	}
 	return nil
 }

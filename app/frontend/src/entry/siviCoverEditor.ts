@@ -81,7 +81,10 @@ export function parseSIVICover(column: SIVICoverColumn, raw: string, nullValue: 
       error = parsed.error;
       if (parsed.value !== null) {
         value = { ...value, storage: 'real', real: parsed.value };
-        if (parsed.value >= 100) error = `${column} must be strictly less than 100 or NULL.`;
+        // Access SINGLE: narrow to float32 before the [0, 100) check (AGENTS.md §3.3), so
+        // 99.999996 is accepted but 99.999999 (which narrows to 100) is rejected.
+        const single = Math.fround(parsed.value);
+        if (single < 0 || single >= 100) error = `${column} must be 0 or more and strictly less than 100, or NULL.`;
       }
     }
   }

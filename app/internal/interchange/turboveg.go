@@ -104,7 +104,7 @@ func accumulateImportedSingleCover(covers map[string]float64, col string, obsCov
 		return nil
 	}
 	sumSingle := float32(prev + obsSingle)
-	if sumSingle >= 100 {
+	if sumSingle > 99 { // AGENTS.md §3.3: summed (lumped) covers are capped at 99%
 		covers[col] = 99.0
 	} else {
 		covers[col] = float64(sumSingle)

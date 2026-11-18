@@ -36,11 +36,11 @@ func TestSIVICoverPlanningOriginalControlMembership(t *testing.T) {
 					if column == "Cover1" || column == "Cover6" || column == "Cover9" {
 						expected = vprotest.SiviReal(0)
 					}
-					edit := SiviHeightEdit{target.row, target.form, column, expected, vprotest.SiviReal(-3.25)}
+					edit := SiviHeightEdit{target.row, target.form, column, expected, vprotest.SiviReal(3.25)}
 					source := vprotest.SiviProjectionFixture()
 					got, err := PlanSIVICoverEdits(context.Background(), "P", extended, source, []SiviHeightEdit{edit})
 					if err != nil || len(got) != 1 || got[0].RowID != target.row ||
-						got[0].Column != column || got[0].Value != float64(-3.25) ||
+						got[0].Column != column || got[0].Value != float64(3.25) ||
 						!reflect.DeepEqual(got[0].Before, expected) || !reflect.DeepEqual(got[0].After, edit.Value) {
 						t.Fatal("source field or typed literal changed", got, err)
 					}
@@ -58,8 +58,8 @@ func TestSIVICoverPlanningOriginalControlMembership(t *testing.T) {
 
 func TestSIVICoverPlanningSingleBoundsNULLAndHistoricalNoop(t *testing.T) {
 	for _, value := range []vprocore.ProjectMetadataCell{
-		vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(-1), vprotest.SiviReal(math.Nextafter(100, math.Inf(-1))),
-		{Storage: "null"},
+		// AGENTS.md §3.3: covers are SINGLE in [0, 100) after float32 narrowing (ENG-GO-002).
+		vprotest.SiviReal(50), vprotest.SiviReal(99.999996), {Storage: "null"},
 	} {
 		got, err := PlanSIVICoverEdits(context.Background(), "P", false, vprotest.SiviProjectionFixture(),
 			[]SiviHeightEdit{{"1", "SubVegA-SIVI_BC", "Cover1", vprotest.SiviReal(0), value}})
@@ -70,6 +70,8 @@ func TestSIVICoverPlanningSingleBoundsNULLAndHistoricalNoop(t *testing.T) {
 	for _, value := range []vprocore.ProjectMetadataCell{
 		vprotest.SiviReal(math.Nextafter(float64(math.MaxFloat32), math.Inf(1))),
 		vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(100), vprotest.SiviReal(125),
+		vprotest.SiviReal(-1), vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(99.999999),
+		vprotest.SiviReal(math.Nextafter(100, math.Inf(-1))),
 		vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)), vprotest.MetadataInteger("1"), vprotest.MetadataText("1"),
 	} {
 		got, err := PlanSIVICoverEdits(context.Background(), "P", false, vprotest.SiviProjectionFixture(),
@@ -110,10 +112,12 @@ func TestSIVICoverPlanningStrictSourceCeilingAllControls(t *testing.T) {
 			if column == "Cover1" || column == "Cover6" || column == "Cover9" {
 				expected = vprotest.SiviReal(0)
 			}
-			for _, value := range []float64{math.Nextafter(100, math.Inf(-1)), 100, math.Nextafter(100, math.Inf(1))} {
+			// The ceiling applies after SINGLE narrowing: 99.999996 stays below 100, while
+			// 99.999999 and the largest double below 100 both narrow to 100 and are rejected.
+			for _, value := range []float64{99.999996, 99.999999, math.Nextafter(100, math.Inf(-1)), 100, math.Nextafter(100, math.Inf(1))} {
 				edit := SiviHeightEdit{target.row, target.form, column, expected, vprotest.SiviReal(value)}
 				got, err := PlanSIVICoverEdits(context.Background(), "P", target.extended, vprotest.SiviProjectionFixture(), []SiviHeightEdit{edit})
-				if value < 100 {
+				if float32(value) < 100 {
 					if err != nil || len(got) != 1 || got[0].Value != value {
 						t.Fatal("strict ceiling changed precision or excluded a below-ceiling value", target.form, column, got, err)
 					}

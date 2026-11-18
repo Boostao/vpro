@@ -335,7 +335,7 @@ test('all three writer surfaces independently gate planned source warnings witho
       const owner = new Writer('P', { read: async () => source }, () => {}, true, enabled);
       assert.equal(await owner.load(), true);
       const column = Writer === coverSession.SIVICoverSession ? 'Cover5a' : 'HeightB';
-      owner.stage(id, column, column === 'Cover5a' ? '-1' : 'literal warning', false);
+      owner.stage(id, column, column === 'Cover5a' ? '1' : 'literal warning', false);
       assert.equal(owner.view().sourceNotices.length, enabled ? 1 : 0);
       assert.equal(owner.view().sourceNoticesSaved, false);
       assert.equal(owner.closeState().canSave, true);
@@ -466,7 +466,7 @@ test('every opted-in writer retains acknowledged warning feedback and clears it 
     }, () => {}, true, true);
     await owner.load();
     const column = Writer === coverSession.SIVICoverSession ? 'Cover5a' : 'HeightB';
-    owner.stage(id, column, column === 'Cover5a' ? '-1' : 'retained source warning', false);
+    owner.stage(id, column, column === 'Cover5a' ? '1' : 'retained source warning', false);
     assert.equal(await owner.save(), true);
     assert.equal(writes, 1);
     assert.equal(owner.view().sourceNoticesSaved, true);
