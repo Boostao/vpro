@@ -2,10 +2,12 @@
 
 vpro_classify_horizon <- function(horizon) {
   h <- trimws(ifelse(is.na(horizon), "", as.character(horizon)))
-  # Wetland organic (Of, Om, Oh) vs Upland organic (L, F, H) vs Mineral (A, B, C, R, W)
+  # Wetland organic (O*, Hydric, Limno, Cumulo) vs upland organic (L, F, H) vs mineral.
+  # Mirrors Go vprocore.ClassifySoilHorizon: strip a discontinuity prefix (2Of, IIOf, XAh) first.
+  u <- sub("^[0-9IVX ]+", "", toupper(h))
   out <- rep("mineral", length(h))
-  is_wet <- grepl("^[0-9]*O[fmhp]?", h, ignore.case = FALSE) | grepl("^o[fmh]", tolower(h))
-  is_up <- !is_wet & grepl("^[0-9]*[LFH]", h, ignore.case = TRUE)
+  is_wet <- grepl("^(O|HYDRIC|LIMNO|CUMULO)", u)
+  is_up <- !is_wet & grepl("^[LFH]", u)
   out[is_wet] <- "wetland_organic"
   out[is_up] <- "upland_organic"
   out

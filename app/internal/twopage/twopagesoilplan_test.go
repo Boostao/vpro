@@ -81,8 +81,11 @@ func TestTwoPageSoilPlanSourceBindingsAndDetachedAssignments(t *testing.T) {
 				switch {
 				case integerFields[column]:
 					cell, scalar = soilPlanInteger("-32768"), int(-32768)
+				case column == "LowerDepth":
+					// LMH25: depths are non-negative and mineral rows measure downward.
+					cell, scalar = vprotest.SiviReal(2.5), float64(2.5)
 				case realFields[column]:
-					cell, scalar = vprotest.SiviReal(-1.25), float64(-1.25)
+					cell, scalar = vprotest.SiviReal(1.25), float64(1.25)
 				}
 				edits = append(edits, soilPlanEdit(original, column, cell))
 				want = append(want, twoPageSoilAssignment{"-7", column, -2147483648,
@@ -151,8 +154,8 @@ func TestTwoPageSoilPlanPhysicalDomainsAndNull(t *testing.T) {
 			[]vprocore.ProjectMetadataCell{soilPlanInteger("-32769"), soilPlanInteger("32768"), soilPlanInteger("01"), vprotest.SiviReal(1), vprotest.MetadataText("1")}},
 		{"SoilMineralXL", "ASP", []vprocore.ProjectMetadataCell{soilPlanInteger("-32768"), soilPlanInteger("32767")},
 			[]vprocore.ProjectMetadataCell{soilPlanInteger("9223372036854775807"), vprotest.SiviReal(1.5)}},
-		{"SoilHumusXL", "UpperDepth", []vprocore.ProjectMetadataCell{vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0)},
-			[]vprocore.ProjectMetadataCell{vprotest.SiviReal(math.Nextafter(math.MaxFloat32, math.Inf(1))), vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)), soilPlanInteger("1")}},
+		{"SoilHumusXL", "UpperDepth", []vprocore.ProjectMetadataCell{vprotest.SiviReal(math.MaxFloat32), vprotest.SiviReal(0)},
+			[]vprocore.ProjectMetadataCell{vprotest.SiviReal(-math.MaxFloat32), vprotest.SiviReal(-0.5), vprotest.SiviReal(math.Nextafter(math.MaxFloat32, math.Inf(1))), vprotest.SiviReal(math.NaN()), vprotest.SiviReal(math.Inf(1)), soilPlanInteger("1")}},
 		{"SoilMineralXL", "MineralFormpH", []vprocore.ProjectMetadataCell{vprotest.SiviReal(1.234567890123456)},
 			[]vprocore.ProjectMetadataCell{vprotest.MetadataText("1"), vprotest.SiviReal(-math.MaxFloat64)}},
 	} {

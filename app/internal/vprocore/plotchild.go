@@ -274,6 +274,9 @@ func listChildRecords[T any](s *PlotService, kind, plot string) ([]T, error) {
 		switch kind {
 		case "Humus":
 			order = `"UpperDepth" DESC, "ID"`
+			if caps["horizon"] { // wetland Of/Om/Oh read downward (ASC) after upland L/F/H (DESC)
+				order = HumusOrderBySQL(`"Horizon"`, `"UpperDepth"`) + `, "ID"`
+			}
 		case "Mineral":
 			order = `"UpperDepth", "ID"`
 		}

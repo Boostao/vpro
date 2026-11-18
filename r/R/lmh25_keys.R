@@ -2,6 +2,8 @@
 
 vpro_classify_humus_lmh25 <- function(horizon, soil_group = "") {
   u <- toupper(trimws(ifelse(is.na(horizon), "", as.character(horizon))))
+  # Strip a lithologic-discontinuity prefix (2L, 2Of, IIOf) before classifying (ENG-XCUT-005).
+  u <- sub("^[0-9IVX ]+", "", u)
   sg <- toupper(trimws(ifelse(is.na(soil_group), "", as.character(soil_group))))
   if (!nzchar(u) || identical(u, "S")) {
     return("surface_or_blank")

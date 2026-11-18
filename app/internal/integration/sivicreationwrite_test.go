@@ -270,7 +270,14 @@ func TestSIVICreationAll21SourceFieldsAndNumericDomains(t *testing.T) {
 	for form, fields := range forms {
 		for _, field := range fields {
 			count++
-			for _, value := range []float64{0, -1, 99.999, -math.MaxFloat32} {
+			for _, value := range []float64{-1, -math.MaxFloat32} {
+				draft := request
+				draft.Form, draft.Covers = form, []sourceform.SiviCreationCover{{Column: field, Value: vprotest.SiviReal(value)}}
+				if err := sourceform.ValidateSIVICreationRequest(draft); err == nil {
+					t.Fatalf("negative SIVI cover %s.%s=%v accepted", form, field, value)
+				}
+			}
+			for _, value := range []float64{0, 99.999} {
 				t.Run(form+"/"+field+"/"+strconv.FormatFloat(value, 'g', -1, 64), func(t *testing.T) {
 					draft := request
 					draft.Form, draft.Covers = form, []sourceform.SiviCreationCover{{Column: field, Value: vprotest.SiviReal(value)}}

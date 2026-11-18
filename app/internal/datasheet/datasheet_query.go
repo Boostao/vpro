@@ -420,13 +420,7 @@ func buildDatasheetWhereAndOrder(
 				if _, hasHorizon := colLookup["horizon"]; hasHorizon {
 					qHor := orderPrefix + `__t."Horizon"`
 					qUp := orderPrefix + `__t."UpperDepth"`
-					normHor := `LTRIM(UPPER(TRIM(COALESCE(` + qHor + `, ''))), '0123456789IVX ')`
-					wetlandPred := `(` + normHor + ` LIKE 'OF%' OR ` + normHor + ` LIKE 'OM%' OR ` + normHor + ` LIKE 'OH%')`
-					orderParts = append(orderParts,
-						`CASE WHEN `+wetlandPred+` THEN 1 ELSE 0 END ASC`,
-						`CASE WHEN `+qUp+` IS NULL THEN 1 ELSE 0 END ASC`,
-						`CASE WHEN `+wetlandPred+` THEN `+qUp+` ELSE -`+qUp+` END ASC`,
-					)
+					orderParts = append(orderParts, vprocore.HumusOrderBySQL(qHor, qUp)) // shared LMH25 order (ENG-GO-005)
 				} else {
 					qUp := orderPrefix + `__t."UpperDepth"`
 					orderParts = append(orderParts, `CASE WHEN `+qUp+` IS NULL THEN 1 ELSE 0 END ASC`, qUp+` DESC`)

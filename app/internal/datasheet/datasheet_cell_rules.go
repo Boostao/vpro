@@ -346,38 +346,9 @@ func datasheetCellsSemanticallyEqual(a, b vprocore.ProjectMetadataCell, colMeta 
 	return vprocore.MetadataCellEqual(a, b)
 }
 
+// validateSoilHorizonDepthSign delegates to the single LMH25 rule in vprocore (ENG-GO-005).
 func validateSoilHorizonDepthSign(tableKey string, horizon string, upper, lower *float64) error {
-	if upper == nil || lower == nil {
-		return nil
-	}
-	trimmed := strings.TrimSpace(horizon)
-	if trimmed == "" {
-		return nil
-	}
-	first := strings.TrimSpace(strings.TrimLeft(strings.ToUpper(trimmed), "0123456789IVX"))
-	if first == "" {
-		return nil
-	}
-	if tableKey == "Humus" {
-		// Upland L/F/H measure upward from 0 cm (UpperDepth > LowerDepth); wetland Of/Om/Oh measure downward (UpperDepth < LowerDepth).
-		if strings.HasPrefix(first, "OF") || strings.HasPrefix(first, "OM") || strings.HasPrefix(first, "OH") {
-			if !(*upper < *lower) {
-				return fmt.Errorf("wetland humus horizon %q requires UpperDepth < LowerDepth (measured downward)", horizon)
-			}
-		} else if strings.HasPrefix(first, "L") || strings.HasPrefix(first, "F") || strings.HasPrefix(first, "H") {
-			if !(*upper > *lower) {
-				return fmt.Errorf("upland humus horizon %q requires UpperDepth > LowerDepth (measured upward from 0 cm)", horizon)
-			}
-		}
-	} else if tableKey == "Mineral" {
-		if strings.HasPrefix(first, "A") || strings.HasPrefix(first, "B") || strings.HasPrefix(first, "C") ||
-			strings.HasPrefix(first, "R") || strings.HasPrefix(first, "W") {
-			if !(*upper < *lower) {
-				return fmt.Errorf("mineral horizon %q requires UpperDepth < LowerDepth (measured downward)", horizon)
-			}
-		}
-	}
-	return nil
+	return vprocore.ValidateSoilHorizonDepthSign(tableKey, &horizon, upper, lower)
 }
 func cellFloat64Ptr(cell vprocore.ProjectMetadataCell) *float64 {
 	if cell.Storage == "null" {

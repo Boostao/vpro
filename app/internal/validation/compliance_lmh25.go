@@ -442,31 +442,14 @@ func checkProjectBounds(
 				continue
 			}
 		}
-		if upper < 0 || lower < 0 {
+		// ENG-GO-005: classify with the single shared LMH25 rule.
+		hzText := hz
+		if err := vprocore.ValidateSoilHorizonDepthSign("Humus", &hzText, &upper, &lower); err != nil {
 			report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
 				Table: "Humus", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
 				Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-				Rule:  "LMH25 soil horizon depths must be >= 0 cm",
+				Rule:  err.Error(),
 			})
-			continue
-		}
-		trimmedUpper := strings.TrimLeft(strings.ToUpper(strings.TrimSpace(hz)), "0123456789")
-		if strings.HasPrefix(trimmedUpper, "OF") || strings.HasPrefix(trimmedUpper, "OM") || strings.HasPrefix(trimmedUpper, "OH") {
-			if upper >= lower {
-				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-					Table: "Humus", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
-					Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-					Rule:  "LMH25 wetland Of/Om/Oh horizons measure downward (0 <= UpperDepth < LowerDepth)",
-				})
-			}
-		} else if strings.HasPrefix(trimmedUpper, "L") || strings.HasPrefix(trimmedUpper, "F") || strings.HasPrefix(trimmedUpper, "H") {
-			if upper <= lower {
-				report.BoundsFindings = append(report.BoundsFindings, BoundsFinding{
-					Table: "Humus", PlotNumber: plot, RowID: rid, Field: "UpperDepth",
-					Value: fmt.Sprintf("%g..%g (%s)", upper, lower, strings.TrimSpace(hz)),
-					Rule:  "LMH25 upland L/F/H horizons measure upward from 0 cm (UpperDepth > LowerDepth >= 0)",
-				})
-			}
 		}
 	}
 	if err := errors.Join(hRows.Err(), hRows.Close()); err != nil {

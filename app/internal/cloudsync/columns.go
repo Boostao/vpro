@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/boostao/vpro/app/internal/vprocore"
 )
 
 // ColumnSpec defines a canonical column across VP08 SQLite and PostgreSQL schemas.
@@ -95,35 +97,7 @@ func ValidateUTF16Bound(label, s string, maxUnits int) error {
 // Upland L/F/H humus horizons measure upward from 0 cm (UpperDepth > LowerDepth);
 // Wetland Of/Om/Oh and Mineral A/B/C/R/W measure downward (UpperDepth < LowerDepth).
 func ValidateLMH25HorizonDepth(tableSuffix, horizon string, upper, lower *float64) error {
-	if upper == nil || lower == nil {
-		return nil
-	}
-	u, l := *upper, *lower
-	if math.IsNaN(u) || math.IsInf(u, 0) || math.IsNaN(l) || math.IsInf(l, 0) {
-		return fmt.Errorf("%s depth contains NaN/Inf", tableSuffix)
-	}
-	switch tableSuffix {
-	case "Humus":
-		if u < 0 || l < 0 {
-			return fmt.Errorf("LMH25 humus %s horizon depths must be >= 0 cm (got %g..%g)", strings.TrimSpace(horizon), u, l)
-		}
-		// Match LMH25 (2023) & R vpro_validate_lmh25_merge_horizon numeric-prefixed prefixes: ^[0-9]*(OF|OM|OH) and ^[0-9]*(L|F|H).
-		hz := strings.TrimLeft(strings.ToUpper(strings.TrimSpace(horizon)), "0123456789")
-		if strings.HasPrefix(hz, "OF") || strings.HasPrefix(hz, "OM") || strings.HasPrefix(hz, "OH") {
-			if u >= l {
-				return fmt.Errorf("LMH25 wetland %s horizon requires 0 <= UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(horizon), u, l)
-			}
-		} else if strings.HasPrefix(hz, "L") || strings.HasPrefix(hz, "F") || strings.HasPrefix(hz, "H") {
-			if u <= l {
-				return fmt.Errorf("LMH25 upland %s horizon requires UpperDepth > LowerDepth >= 0 (got %g..%g)", strings.TrimSpace(horizon), u, l)
-			}
-		}
-	case "Mineral":
-		if u < 0 || l < 0 || u >= l {
-			return fmt.Errorf("LMH25 mineral %s horizon requires 0 <= UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(horizon), u, l)
-		}
-	}
-	return nil
+	return vprocore.ValidateSoilHorizonDepthSign(tableSuffix, &horizon, upper, lower) // single LMH25 rule (ENG-GO-005)
 }
 
 // CanonicalizeSQLiteToPG converts a dynamic SQLite value into a typed PostgreSQL parameter

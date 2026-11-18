@@ -300,7 +300,7 @@ func ExportGeoPackage(s *vprocore.ContextService, ctx context.Context, contextID
 			}
 			humusCols, humusRows, err = readRawTableForGPKG(ctx, readTx, "project", project+"_Humus",
 				`EXISTS (SELECT 1 FROM USysEnv AS u WHERE typeof(u.PlotNumber)=typeof(t."PlotNumber") AND CAST(u.PlotNumber AS BLOB)=CAST(t."PlotNumber" AS BLOB))`,
-				`t."PlotNumber", t."UpperDepth" DESC, t."ID"`)
+				`t."PlotNumber", `+vprocore.HumusOrderBySQL(`t."Horizon"`, `t."UpperDepth"`)+`, t."ID"`)
 			if err != nil {
 				return GeoPackageExportOutcome{}, err
 			}

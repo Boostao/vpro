@@ -611,7 +611,7 @@ func ExportProjectRDS(s *vprocore.ContextService, ctx context.Context, contextID
 		if err != nil {
 			return RDSExportOutcome{}, err
 		}
-		humusOrder := `t."PlotNumber", CASE WHEN LOWER(TRIM(COALESCE(t."Horizon", ''))) GLOB 'o[fmh]*' THEN 1 ELSE 0 END ASC, CASE WHEN LOWER(TRIM(COALESCE(t."Horizon", ''))) GLOB 'o[fmh]*' THEN t."UpperDepth" ELSE -t."UpperDepth" END ASC, t."Horizon" DESC, t."ID"`
+		humusOrder := `t."PlotNumber", ` + vprocore.HumusOrderBySQL(`t."Horizon"`, `t."UpperDepth"`) + `, t."Horizon" DESC, t."ID"`
 		humusDF, err := readSQLiteTableAsRDSDataFrame(ctx, tx, "humus", "project", project+"_Humus", scopePlotPred, humusOrder)
 		if err != nil {
 			return RDSExportOutcome{}, err

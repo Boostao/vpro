@@ -2,6 +2,7 @@ package vprocore
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"unicode/utf16"
@@ -94,35 +95,94 @@ func validateChildField(kind, column string, value any) error {
 	return ValidateSoilChildField(kind, column, value)
 }
 
-// ValidateSoilHorizonDepthSign enforces LMH25 depth sign conventions when Horizon,
-// UpperDepth, and LowerDepth are all non-nil:
-//   - Upland L/F/H (!OF/!OM/!OH) requires UpperDepth > LowerDepth
-//   - Wetland Of/Om/Oh and mineral A/B/C/R/W require UpperDepth < LowerDepth
+// Soil horizon classes used by the LMH25 (2023) depth-sign rule (AGENTS.md §3.4).
+const (
+	SoilHorizonUnknown = ""
+	SoilHorizonUpland  = "upland"  // L/F/H: measured upward from 0 cm, UpperDepth > LowerDepth
+	SoilHorizonWetland = "wetland" // O*/Hydric/Limno/Cumulo: measured downward, UpperDepth < LowerDepth
+	SoilHorizonMineral = "mineral" // every SoilMineral row: measured downward, UpperDepth < LowerDepth
+)
+
+// stripSoilDiscontinuityPrefix removes a leading lithologic-discontinuity marker: Arabic digits
+// (2Of, 3Ah) or a Roman numeral (IIOf, IXAh, XAh). No LMH25 horizon designation starts with I, V or X.
+func stripSoilDiscontinuityPrefix(horizon string) string {
+	return strings.TrimSpace(strings.TrimLeft(strings.ToUpper(strings.TrimSpace(horizon)), "0123456789IVX"))
+}
+
+// ClassifySoilHorizon is the single LMH25 horizon classifier shared by every write and read path.
+func ClassifySoilHorizon(kind, horizon string) string {
+	if kind == "Mineral" {
+		return SoilHorizonMineral
+	}
+	if kind != "Humus" {
+		return SoilHorizonUnknown
+	}
+	hz := stripSoilDiscontinuityPrefix(horizon)
+	switch {
+	case hz == "":
+		return SoilHorizonUnknown
+	case strings.HasPrefix(hz, "HYDRIC"), strings.HasPrefix(hz, "LIMNO"), strings.HasPrefix(hz, "CUMULO"), strings.HasPrefix(hz, "O"):
+		return SoilHorizonWetland
+	case strings.HasPrefix(hz, "L"), strings.HasPrefix(hz, "F"), strings.HasPrefix(hz, "H"):
+		return SoilHorizonUpland
+	}
+	return SoilHorizonUnknown
+}
+
+// ValidateSoilHorizonDepthSign is the only LMH25 horizon depth rule in the app (ENG-GO-005):
+//   - every non-NULL depth must be finite and >= 0 cm;
+//   - upland L/F/H humus requires UpperDepth > LowerDepth;
+//   - wetland O*/Hydric/Limno/Cumulo humus and every mineral row (including a blank
+//     Horizon) require UpperDepth < LowerDepth.
+//
+// Discontinuity prefixes (2Of, IIOf, XAh) are stripped before classification.
 func ValidateSoilHorizonDepthSign(kind string, horizon *string, upperDepth, lowerDepth *float64) error {
-	if horizon == nil || upperDepth == nil || lowerDepth == nil {
-		return nil
+	label := ""
+	if horizon != nil {
+		label = strings.TrimSpace(*horizon)
 	}
-	hz := strings.TrimSpace(strings.TrimLeft(strings.ToUpper(strings.TrimSpace(*horizon)), "0123456789IVX"))
-	if hz == "" {
-		return nil
-	}
-	switch kind {
-	case "Humus":
-		if strings.HasPrefix(hz, "OF") || strings.HasPrefix(hz, "OM") || strings.HasPrefix(hz, "OH") {
-			if !(*upperDepth < *lowerDepth) {
-				return fmt.Errorf("Humus wetland horizon %q requires UpperDepth < LowerDepth (got %v .. %v)", *horizon, *upperDepth, *lowerDepth)
-			}
-		} else if strings.HasPrefix(hz, "L") || strings.HasPrefix(hz, "F") || strings.HasPrefix(hz, "H") {
-			if !(*upperDepth > *lowerDepth) {
-				return fmt.Errorf("Humus upland horizon %q requires UpperDepth > LowerDepth (got %v .. %v)", *horizon, *upperDepth, *lowerDepth)
-			}
+	for _, depth := range []*float64{upperDepth, lowerDepth} {
+		if depth == nil {
+			continue
 		}
-	case "Mineral":
-		if strings.HasPrefix(hz, "A") || strings.HasPrefix(hz, "B") || strings.HasPrefix(hz, "C") || strings.HasPrefix(hz, "R") || strings.HasPrefix(hz, "W") {
-			if !(*upperDepth < *lowerDepth) {
-				return fmt.Errorf("Mineral horizon %q requires UpperDepth < LowerDepth (got %v .. %v)", *horizon, *upperDepth, *lowerDepth)
-			}
+		if math.IsNaN(*depth) || math.IsInf(*depth, 0) || *depth < 0 {
+			return fmt.Errorf("%s horizon %q depths must be finite and >= 0 cm", kind, label)
+		}
+	}
+	if upperDepth == nil || lowerDepth == nil {
+		return nil
+	}
+	class := SoilHorizonUnknown
+	if kind == "Mineral" {
+		class = SoilHorizonMineral
+	} else if horizon != nil {
+		class = ClassifySoilHorizon(kind, *horizon)
+	}
+	switch class {
+	case SoilHorizonUpland:
+		if !(*upperDepth > *lowerDepth) {
+			return fmt.Errorf("Humus upland horizon %q is measured upward from 0 cm and requires UpperDepth > LowerDepth (got %v .. %v)", label, *upperDepth, *lowerDepth)
+		}
+	case SoilHorizonWetland:
+		if !(*upperDepth < *lowerDepth) {
+			return fmt.Errorf("Humus wetland horizon %q is measured downward and requires UpperDepth < LowerDepth (got %v .. %v)", label, *upperDepth, *lowerDepth)
+		}
+	case SoilHorizonMineral:
+		if !(*upperDepth < *lowerDepth) {
+			return fmt.Errorf("Mineral horizon %q is measured downward and requires UpperDepth < LowerDepth (got %v .. %v)", label, *upperDepth, *lowerDepth)
 		}
 	}
 	return nil
+}
+
+// HumusOrderBySQL returns ORDER BY terms that list humus horizons the way LMH25 profiles are read
+// top to bottom (AGENTS.md §3.4, ENG-GO-005): upland L/F/H first by UpperDepth DESC, then wetland
+// O*/Hydric/Limno/Cumulo by UpperDepth ASC, with NULL depths last. The wetland test mirrors
+// ClassifySoilHorizon, including discontinuity-prefix stripping. Arguments are SQL expressions.
+func HumusOrderBySQL(horizonExpr, upperDepthExpr string) string {
+	norm := `LTRIM(UPPER(TRIM(COALESCE(` + horizonExpr + `, ''))), '0123456789IVX ')`
+	wetland := `(` + norm + ` LIKE 'O%' OR ` + norm + ` LIKE 'HYDRIC%' OR ` + norm + ` LIKE 'LIMNO%' OR ` + norm + ` LIKE 'CUMULO%')`
+	return `CASE WHEN ` + wetland + ` THEN 1 ELSE 0 END ASC, ` +
+		`CASE WHEN ` + upperDepthExpr + ` IS NULL THEN 1 ELSE 0 END ASC, ` +
+		`CASE WHEN ` + wetland + ` THEN ` + upperDepthExpr + ` ELSE -` + upperDepthExpr + ` END ASC`
 }

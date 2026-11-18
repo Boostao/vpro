@@ -51,12 +51,26 @@ export function twoPageSoilDepthOrder(original: TwoPageSoilOriginal) {
     else if (cell.storage === 'real' && cell.real !== null && Number.isFinite(cell.real)) values.set(row.rowId, cell.real);
     else return fallback(`Depth order unavailable: physical row ${row.rowId} has historical ${cell.storage} UpperDepth.`);
   }
-  const direction = original.form === 'SoilHumusXL' ? -1 : 1;
+  const humus = original.form === 'SoilHumusXL';
+  // LMH25 (AGENTS.md §3.4): upland L/F/H read top-down by UpperDepth DESC, then wetland
+  // O*/Hydric/Limno/Cumulo by UpperDepth ASC (mirrors Go vprocore.HumusOrderBySQL).
+  const horizonIndex = original.records.columns.findIndex(column => column.name === 'Horizon');
+  const wetland = new Map<string, boolean>();
+  for (const row of rows) {
+    const cell = horizonIndex < 0 ? null : row.cells[horizonIndex];
+    const code = cell && cell.storage === 'text' && cell.text !== null
+      ? cell.text.trim().toUpperCase().replace(/^[0-9IVX ]+/, '') : '';
+    wetland.set(row.rowId, humus && /^(O|HYDRIC|LIMNO|CUMULO)/.test(code));
+  }
   rows.sort((left, right) => {
     const a = values.get(left.rowId), b = values.get(right.rowId);
     if (a === undefined || b === undefined) throw new Error('Soil depth order lost its validated physical row.');
-    const comparison = a === null ? b === null ? 0 : -1 : b === null ? 1 : a < b ? -1 : a > b ? 1 : 0;
-    return direction * comparison;
+    const wa = wetland.get(left.rowId) === true, wb = wetland.get(right.rowId) === true;
+    if (!humus) return a === null ? b === null ? 0 : -1 : b === null ? 1 : a < b ? -1 : a > b ? 1 : 0;
+    if (wa !== wb) return wa ? 1 : -1;
+    if (a === null || b === null) return a === null ? (b === null ? 0 : 1) : -1; // NULL depths last
+    const comparison = a < b ? -1 : a > b ? 1 : 0;
+    return wa ? comparison : -comparison;
   });
   return { rows, diagnostic: null };
 }

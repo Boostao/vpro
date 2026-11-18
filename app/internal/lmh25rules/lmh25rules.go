@@ -90,7 +90,9 @@ func isOrganicOrderGroup(code string) bool {
 	}
 }
 func classifyHumusHorizon(h string, organicSoilOrder bool, soilClassGroup string) (isUpland, isWetland, isSurface bool) {
-	u := strings.ToUpper(strings.TrimSpace(h))
+	// Strip a lithologic-discontinuity prefix (2L, 2Of, IIOf) before classifying, matching
+	// vprocore.ClassifySoilHorizon and the R validator (ENG-XCUT-005).
+	u := strings.TrimSpace(strings.TrimLeft(strings.ToUpper(strings.TrimSpace(h)), "0123456789IVX"))
 	if u == "" {
 		return false, false, false
 	}

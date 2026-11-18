@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 	"unicode/utf8"
 )
 
@@ -222,35 +221,21 @@ func validateTwoPageSoilLMH25DepthSigns(
 		hzCell := effective(rowID, "Horizon", hzIdx, row)
 		upCell := effective(rowID, "UpperDepth", upIdx, row)
 		loCell := effective(rowID, "LowerDepth", loIdx, row)
-		if hzCell.Storage != "text" || hzCell.Text == nil ||
-			upCell.Storage != "real" || upCell.Real == nil ||
-			loCell.Storage != "real" || loCell.Real == nil {
-			continue
+		// ENG-GO-005: one LMH25 rule for every path. A blank Horizon still gets the mineral
+		// downward rule, and negative depths are rejected even when the other depth is NULL.
+		var hz *string
+		if hzCell.Storage == "text" && hzCell.Text != nil {
+			hz = hzCell.Text
 		}
-		hzUpper := strings.ToUpper(strings.TrimSpace(*hzCell.Text))
-		if hzUpper == "" {
-			continue
+		var upper, lower *float64
+		if upCell.Storage == "real" && upCell.Real != nil {
+			upper = upCell.Real
 		}
-		upper, lower := *upCell.Real, *loCell.Real
-		switch kind {
-		case "Humus":
-			if strings.HasPrefix(hzUpper, "OF") || strings.HasPrefix(hzUpper, "OM") || strings.HasPrefix(hzUpper, "OH") {
-				if upper >= lower {
-					return fmt.Errorf("LMH25 wetland %s horizon requires UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(*hzCell.Text), upper, lower)
-				}
-			} else if strings.HasPrefix(hzUpper, "L") || strings.HasPrefix(hzUpper, "F") || strings.HasPrefix(hzUpper, "H") {
-				if upper <= lower {
-					return fmt.Errorf("LMH25 upland %s horizon requires UpperDepth > LowerDepth (got %g..%g)", strings.TrimSpace(*hzCell.Text), upper, lower)
-				}
-			}
-		case "Mineral":
-			rest := strings.TrimLeft(hzUpper, "0123456789IV")
-			if strings.HasPrefix(rest, "A") || strings.HasPrefix(rest, "B") || strings.HasPrefix(rest, "C") ||
-				strings.HasPrefix(rest, "R") || strings.HasPrefix(rest, "W") {
-				if upper >= lower {
-					return fmt.Errorf("LMH25 mineral %s horizon requires UpperDepth < LowerDepth (got %g..%g)", strings.TrimSpace(*hzCell.Text), upper, lower)
-				}
-			}
+		if loCell.Storage == "real" && loCell.Real != nil {
+			lower = loCell.Real
+		}
+		if err := vprocore.ValidateSoilHorizonDepthSign(kind, hz, upper, lower); err != nil {
+			return fmt.Errorf("LMH25: %w", err)
 		}
 	}
 	return nil

@@ -36,8 +36,14 @@ func TestSoilAtomicExpectedPatchesDomainsAndNull(t *testing.T) {
 				update.Text[property] = vprocore.SoilTextUpdate{Value: &value}
 			} else {
 				value := -1.1234567890123
-				if vprocore.SoilChildIntegerColumns[kind][field.Column] {
+				switch {
+				case vprocore.SoilChildIntegerColumns[kind][field.Column]:
 					value = -32768
+				case field.Column == "UpperDepth":
+					// LMH25: depths are finite, >= 0, and mineral rows measure downward.
+					value = 1.1234567890123
+				case field.Column == "LowerDepth":
+					value = 2.1234567890123
 				}
 				update.Numbers[property] = vprocore.SoilNumberUpdate{Value: &value}
 			}
