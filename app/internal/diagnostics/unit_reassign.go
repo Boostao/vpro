@@ -301,7 +301,9 @@ func ReassignSynthesisPlotUnit(
 			_ = tx.QueryRowContext(ctx, `SELECT MAX(ID) FROM main.`+vprocore.QuoteHeaderIdentifier(synthesisSUHistoryTable)).Scan(&historyID)
 
 			if changed {
-				appendSynthesisSUAuditRow(ctx, tx, owner, plots, req.PlotNumber, beforePtr, afterCopy)
+				if err := appendSynthesisSUAuditRow(ctx, tx, owner, plots, req.PlotNumber, beforePtr, afterCopy); err != nil {
+					return err
+				}
 			}
 
 			if err := validateFiles(); err != nil {
@@ -549,7 +551,9 @@ func UndoSynthesisReassignment(
 					v := d.BeforeSiteUnit
 					undoAfterPtr = v
 				}
-				appendSynthesisSUAuditRow(ctx, tx, owner, plots, d.PlotNumber, undoBeforePtr, undoAfterPtr)
+				if err := appendSynthesisSUAuditRow(ctx, tx, owner, plots, d.PlotNumber, undoBeforePtr, undoAfterPtr); err != nil {
+					return err
+				}
 			}
 
 			if err := validateFiles(); err != nil {
@@ -602,17 +606,21 @@ func appendSynthesisSUAuditRow(
 	plotNumber string,
 	before any,
 	after any,
-) {
+) error {
 	if !vprocore.SameDesktopPath(owner.Selection.ProjectPath, owner.Selection.SUPath) {
-		return
+		return nil
 	}
 	actor := strings.TrimSpace(plots.CurrentUser)
 	if actor == "" {
 		actor = "VProUser"
 	}
 	qAudit := vprocore.QuoteHeaderIdentifier(owner.Selection.Project + "_Audit")
-	_, _ = tx.ExecContext(ctx,
+	// ENG-GO-004: a failed audit insert must abort the reassignment, never be ignored.
+	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO main.`+qAudit+` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`,
 		owner.Selection.Project, actor, plotNumber, "_SU", "SiteUnit", time.Now().Format("2006-01-02 15:04:05"), before, after,
-	)
+	); err != nil {
+		return fmt.Errorf("record SU reassignment audit: %w", err)
+	}
+	return nil
 }

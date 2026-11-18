@@ -55,8 +55,15 @@ func TestSiteUnitEnvironmentTransferCommitPreservationAndReplay(t *testing.T) {
 		t.Fatal("independent review changed", err)
 	}
 	vprotest.AssertProfileSUFiles(t, service, before)
+	if err := service.Plots.SetAuditStrength(3); err != nil {
+		t.Fatal(err)
+	}
+	auditBefore, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", "Sample_Audit", "", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	tables := map[string]vprocore.ProjectMetadataTable{}
-	for _, name := range []string{"Sample_Env", "Sample_SU", "Sample_Audit", "_table_metadata"} {
+	for _, name := range []string{"Sample_Env", "Sample_SU", "_table_metadata"} {
 		tables[name], err = vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", name, "", nil, "")
 		if err != nil {
 			t.Fatal(err)
@@ -69,7 +76,32 @@ func TestSiteUnitEnvironmentTransferCommitPreservationAndReplay(t *testing.T) {
 	for name, original := range tables {
 		actual, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", name, "", nil, "")
 		if err != nil || !reflect.DeepEqual(original, actual) {
-			t.Fatal("unrelated data/audits/descriptions changed", name, err)
+			t.Fatal("unrelated data/descriptions changed", name, err)
+		}
+	}
+	// ENG-GO-004: every transferred Admin cell is audited in the same transaction, after the
+	// untouched pre-existing audit rows.
+	auditAfter, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", "Sample_Audit", "", nil, "")
+	if err != nil || len(auditAfter.Rows) != len(auditBefore.Rows)+result.ChangedCells ||
+		!reflect.DeepEqual(auditAfter.Rows[:len(auditBefore.Rows)], auditBefore.Rows) {
+		t.Fatal("transfer must append exactly one audit row per changed cell", len(auditBefore.Rows), len(auditAfter.Rows), result.ChangedCells, err)
+	}
+	col := map[string]int{}
+	for i, column := range auditAfter.Columns {
+		col[column.Name] = i
+	}
+	for i, change := range request.Review.Changes {
+		row := auditAfter.Rows[len(auditBefore.Rows)+i]
+		text := func(name string) string {
+			if cell := row.Cells[col[name]]; cell.Text != nil {
+				return *cell.Text
+			}
+			return ""
+		}
+		after, _ := vprocore.MetadataCellValue(change.After)
+		if text("Table") != "_Admin" || text("EditField") != change.Field || text("PlotNumber") != change.PlotNumber ||
+			!vprocore.MetadataAuditTextEqual(row.Cells[col["AfterEdit"]].Text, after) {
+			t.Fatal("audit row does not describe the transferred cell", i, change.Field, row.Cells)
 		}
 	}
 	after := vprotest.DatabaseBytes(t, c.Attachments)

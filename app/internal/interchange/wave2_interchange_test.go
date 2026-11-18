@@ -368,6 +368,16 @@ func TestWave2S48TurboVegVProCodeSynonymOption(t *testing.T) {
 		dbDefault.Close()
 		t.Fatal(err)
 	}
+	// ENG-GO-004: every imported Veg and Metadata ID is reserved in __VPRO_ChildIdentity.
+	var unreserved int
+	if err := dbDefault.QueryRow(`SELECT
+		(SELECT COUNT(*) FROM TVSynDefault_Veg v WHERE typeof(v.ID)='integer' AND v.ID > 0 AND NOT EXISTS (
+			SELECT 1 FROM __VPRO_ChildIdentity c WHERE c.ChildTable = '"TVSynDefault_Veg"' AND c.ID = v.ID)) +
+		(SELECT COUNT(*) FROM TVSynDefault_Metadata m WHERE typeof(m.ID)='integer' AND m.ID > 0 AND NOT EXISTS (
+			SELECT 1 FROM __VPRO_ChildIdentity c WHERE c.ChildTable = '"TVSynDefault_Metadata"' AND c.ID = m.ID))`).Scan(&unreserved); err != nil || unreserved != 0 {
+		dbDefault.Close()
+		t.Fatalf("TurboVeg import left %d Veg/Metadata IDs unreserved (%v)", unreserved, err)
+	}
 	dbDefault.Close()
 	if gotDefault != "OLDSYNX" {
 		t.Fatalf("expected default ResolveVProCodeSynonyms=false to keep explicit vpro_code 'OLDSYNX', got %q", gotDefault)

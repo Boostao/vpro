@@ -628,11 +628,30 @@ func populateVP08FromTVPlots(ctx context.Context, tx *sql.Tx, project string, pl
 		}
 	}
 
-	_, err = tx.ExecContext(ctx, `
+	if _, err = tx.ExecContext(ctx, `
 		INSERT INTO `+metaTbl+` ("ID", "ProjectID", "ProjectTitle", "NumberOfFS882Plots", "VegCoverMethod", "Datum")
 		VALUES (1, ?, ?, ?, '1', '2')`,
-		project, project+" (TurboVeg Import)", len(usedTargetPlots))
-	return len(persistedSpecies), persistedObsCount, err
+		project, project+" (TurboVeg Import)", len(usedTargetPlots)); err != nil {
+		return 0, 0, err
+	}
+	// ENG-GO-004: reserve every imported child ID (same pattern as the Access import) so a later
+	// delete can never let AllocateChildID hand the same Veg/Metadata ID to a new row.
+	if _, err = tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" (
+		"ChildTable" TEXT NOT NULL,
+		"ID" INTEGER NOT NULL,
+		PRIMARY KEY ("ChildTable", "ID")
+	)`); err != nil {
+		return 0, 0, err
+	}
+	for _, suffix := range []string{"Veg", "Metadata"} {
+		qChild := vprocore.QuoteHeaderIdentifier(project + "_" + suffix)
+		if _, err = tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID")
+			 SELECT ?, "ID" FROM `+qChild+` WHERE typeof("ID") = 'integer' AND "ID" > 0`, qChild); err != nil {
+			return 0, 0, fmt.Errorf("reserve imported %s IDs: %w", suffix, err)
+		}
+	}
+	return len(persistedSpecies), persistedObsCount, nil
 }
 
 func allocateUniqueTVPlotNumber(rawPlot string, usedTargetPlots, reservedLiteralShort map[string]bool) string {

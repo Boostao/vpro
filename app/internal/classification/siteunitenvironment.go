@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"github.com/boostao/vpro/app/internal/sourceform"
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
 )
@@ -15,6 +16,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf16"
 )
 
@@ -294,8 +296,15 @@ func TransferSiteUnitEnvironment(s *vprocore.ContextService, ctx context.Context
 				return err
 			}
 			rows := map[string]bool{}
+			auditTable := vprocore.QuoteHeaderIdentifier(fresh.Project + "_Audit")
+			auditWhen := time.Now().Format("2006-01-02 15:04:05")
+			var auditRecords []vprocore.AuditEntry
 			for _, change := range fresh.Changes {
 				value, err := vprocore.MetadataCellValue(change.After)
+				if err != nil {
+					return err
+				}
+				beforeValue, err := vprocore.MetadataCellValue(change.Before)
 				if err != nil {
 					return err
 				}
@@ -318,6 +327,26 @@ func TransferSiteUnitEnvironment(s *vprocore.ContextService, ctx context.Context
 						expected.Rows[i].Cells = cells
 					}
 				}
+				// ENG-GO-004: every transferred Admin cell is recorded in <Project>_Audit in the same
+				// transaction, honouring the session AuditStrength like other header edits.
+				if vprocore.AuditHeaderChange(beforeValue, value, plots.AuditStrength) {
+					inserted, err := tx.ExecContext(ctx, `INSERT INTO `+auditTable+
+						` ("Project","User","PlotNumber","Table","EditField","EditWhen","BeforeEdit","AfterEdit","Restore","Flag") VALUES (?,?,?,?,?,?,?,?,0,0)`,
+						fresh.Project, plots.CurrentUser, change.PlotNumber, "_Admin", change.Field, auditWhen,
+						vprocore.HeaderAuditValue(beforeValue), vprocore.HeaderAuditValue(value))
+					if err != nil {
+						return err
+					}
+					auditRowID, err := inserted.LastInsertId()
+					if err != nil {
+						return err
+					}
+					records, err := vprocore.SelectedAuditEntries(tx, fresh.Project, change.PlotNumber, []int64{auditRowID})
+					if err != nil || len(records) != 1 {
+						return errors.Join(err, errors.New("SU/environment transfer audit row was not recorded exactly once"))
+					}
+					auditRecords = append(auditRecords, records[0])
+				}
 				rows[change.AdminRowID] = true
 				result.ChangedCells++
 			}
@@ -336,8 +365,15 @@ func TransferSiteUnitEnvironment(s *vprocore.ContextService, ctx context.Context
 			if err != nil {
 				return err
 			}
-			if err := vprocore.VerifySiteUnitTransferTables(original, observed,
-				map[string]vprocore.ProjectMetadataTable{fresh.Project + "_Admin": expected}, siteUnitEnvironmentHistory); err != nil {
+			expectedTables := map[string]vprocore.ProjectMetadataTable{fresh.Project + "_Admin": expected}
+			if len(auditRecords) > 0 {
+				plannedAudit, err := sourceform.AppendSIVIPlannedAudits(original[fresh.Project+"_Audit"], auditRecords)
+				if err != nil {
+					return err
+				}
+				expectedTables[fresh.Project+"_Audit"] = plannedAudit
+			}
+			if err := vprocore.VerifySiteUnitTransferTables(original, observed, expectedTables, siteUnitEnvironmentHistory); err != nil {
 				return err
 			}
 			if err := tx.QueryRowContext(ctx, `SELECT CAST(ID AS TEXT) FROM __VPRO_SUEnvironmentHistory ORDER BY ID DESC LIMIT 1`).Scan(&result.HistoryID); err != nil {

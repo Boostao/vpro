@@ -257,9 +257,14 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 
 		proj := owner.Selection.Project
 		var envAdminMismatch, orphans, boundsErrs, unlistedSpp int
+		// ENG-GO-004: this gate decides whether data may be uploaded, so every query or scan
+		// failure fails closed (returns an error) instead of silently counting as zero problems.
+		fail := func(step string, err error) (ComplianceGateResult, error) {
+			return ComplianceGateResult{}, fmt.Errorf("compliance check (%s) could not complete: %w", step, err)
+		}
 
 		// 1. Env <-> Admin 1:1 completeness
-		_ = tx.QueryRowContext(ctx, fmt.Sprintf(`
+		if err := tx.QueryRowContext(ctx, fmt.Sprintf(`
 			SELECT (
 				SELECT COUNT(*) FROM "project".%s e
 				WHERE typeof(e."PlotNumber")='text' AND NOT EXISTS (
@@ -271,60 +276,117 @@ func runLayer1ComplianceFallback(ctx context.Context, s *vprocore.ContextService
 					SELECT 1 FROM "project".%s e WHERE typeof(e."PlotNumber")='text' AND CAST(e."PlotNumber" AS BLOB)=CAST(a."Plot" AS BLOB)
 				)
 			)
-		`, quotePGIdent(proj+"_Env"), quotePGIdent(proj+"_Admin"), quotePGIdent(proj+"_Admin"), quotePGIdent(proj+"_Env"))).Scan(&envAdminMismatch)
+		`, quotePGIdent(proj+"_Env"), quotePGIdent(proj+"_Admin"), quotePGIdent(proj+"_Admin"), quotePGIdent(proj+"_Env"))).Scan(&envAdminMismatch); err != nil {
+			return fail("Env/Admin completeness", err)
+		}
 
 		// 2. Orphan child rows
 		for _, suffix := range []string{"Veg", "Humus", "Mineral", "Other"} {
 			var cnt int
-			_ = tx.QueryRowContext(ctx, fmt.Sprintf(`
+			if err := tx.QueryRowContext(ctx, fmt.Sprintf(`
 				SELECT COUNT(*) FROM "project".%s c
 				WHERE typeof(c."PlotNumber")<>'text' OR NOT EXISTS (
 					SELECT 1 FROM "project".%s e WHERE typeof(e."PlotNumber")='text' AND CAST(e."PlotNumber" AS BLOB)=CAST(c."PlotNumber" AS BLOB)
 				)
-			`, quotePGIdent(proj+"_"+suffix), quotePGIdent(proj+"_Env"))).Scan(&cnt)
+			`, quotePGIdent(proj+"_"+suffix), quotePGIdent(proj+"_Env"))).Scan(&cnt); err != nil {
+				return fail("orphan "+suffix+" rows", err)
+			}
 			orphans += cnt
 		}
 
-		// 3. PlotNumber UTF-16 <= 7 & Veg Species UTF-16 <= 8 & float32 cover < 100
-		pRows, pErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT CAST("PlotNumber" AS TEXT) FROM "project".%s WHERE typeof("PlotNumber")='text'`, quotePGIdent(proj+"_Env")))
-		if pErr == nil {
-			for pRows.Next() {
-				var p string
-				if pRows.Scan(&p) == nil && ValidateUTF16Bound("PlotNumber", p, 7) != nil {
+		// 3. PlotNumber UTF-16 <= 7
+		pRows, err := tx.QueryContext(ctx, fmt.Sprintf(`SELECT CAST("PlotNumber" AS TEXT) FROM "project".%s WHERE typeof("PlotNumber")='text'`, quotePGIdent(proj+"_Env")))
+		if err != nil {
+			return fail("PlotNumber bounds", err)
+		}
+		for pRows.Next() {
+			var p string
+			if err := pRows.Scan(&p); err != nil {
+				pRows.Close()
+				return fail("PlotNumber bounds", err)
+			}
+			if ValidateUTF16Bound("PlotNumber", p, 7) != nil {
+				boundsErrs++
+			}
+		}
+		if err := errors.Join(pRows.Err(), pRows.Close()); err != nil {
+			return fail("PlotNumber bounds", err)
+		}
+
+		// 3b. Veg Species UTF-16 <= 8 and every cover column present: SINGLE-narrowed [0, 100).
+		// Covers are scanned untyped so historical text such as 'bad' is a violation, not a skipped row.
+		var vegColumns []string
+		cRows, err := tx.QueryContext(ctx, `SELECT name FROM "project".pragma_table_info(?)`, proj+"_Veg")
+		if err != nil {
+			return fail("Veg schema", err)
+		}
+		for cRows.Next() {
+			var name string
+			if err := cRows.Scan(&name); err != nil {
+				cRows.Close()
+				return fail("Veg schema", err)
+			}
+			if vprocore.VegetationCoverColumns[name] {
+				vegColumns = append(vegColumns, quotePGIdent(name))
+			}
+		}
+		if err := errors.Join(cRows.Err(), cRows.Close()); err != nil {
+			return fail("Veg schema", err)
+		}
+		selectCols := `COALESCE(CAST("Species" AS TEXT),'')`
+		if len(vegColumns) > 0 {
+			selectCols += ", " + strings.Join(vegColumns, ", ")
+		}
+		vRows, err := tx.QueryContext(ctx, fmt.Sprintf(`SELECT %s FROM "project".%s`, selectCols, quotePGIdent(proj+"_Veg")))
+		if err != nil {
+			return fail("Veg bounds", err)
+		}
+		for vRows.Next() {
+			var spp string
+			covers := make([]any, len(vegColumns))
+			dest := []any{&spp}
+			for i := range covers {
+				dest = append(dest, &covers[i])
+			}
+			if err := vRows.Scan(dest...); err != nil {
+				vRows.Close()
+				return fail("Veg bounds", err)
+			}
+			if ValidateUTF16Bound("Species", spp, 8) != nil {
+				boundsErrs++
+			}
+			for _, raw := range covers {
+				if raw == nil {
+					continue
+				}
+				var value float64
+				switch v := raw.(type) {
+				case float64:
+					value = v
+				case int64:
+					value = float64(v)
+				default: // text, blob or anything non-numeric stored in a cover column
+					boundsErrs++
+					continue
+				}
+				if _, ok := NarrowSingleCover(value); !ok {
 					boundsErrs++
 				}
 			}
-			pRows.Close()
 		}
-
-		vRows, vErr := tx.QueryContext(ctx, fmt.Sprintf(`SELECT COALESCE(CAST("Species" AS TEXT),''), "Cover1", "Cover2", "Cover3", "TotalA", "Cover4", "Cover5", "TotalB", "Cover6", "Cover7" FROM "project".%s`, quotePGIdent(proj+"_Veg")))
-		if vErr == nil {
-			for vRows.Next() {
-				var spp string
-				var c1, c2, c3, ta, c4, c5, tb, c6, c7 sql.NullFloat64
-				if vRows.Scan(&spp, &c1, &c2, &c3, &ta, &c4, &c5, &tb, &c6, &c7) == nil {
-					if ValidateUTF16Bound("Species", spp, 8) != nil {
-						boundsErrs++
-					}
-					for _, cv := range []sql.NullFloat64{c1, c2, c3, ta, c4, c5, tb, c6, c7} {
-						if cv.Valid {
-							if _, ok := NarrowSingleCover(cv.Float64); !ok {
-								boundsErrs++
-							}
-						}
-					}
-				}
-			}
-			vRows.Close()
+		if err := errors.Join(vRows.Err(), vRows.Close()); err != nil {
+			return fail("Veg bounds", err)
 		}
 
 		// 4. Unlisted species check against VLists.USysAllSpecs + VUser.USysUserSpp
-		_ = tx.QueryRowContext(ctx, fmt.Sprintf(`
+		if err := tx.QueryRowContext(ctx, fmt.Sprintf(`
 			SELECT COUNT(*) FROM "project".%s v
 			WHERE v."Species" IS NOT NULL AND v."Species" <> ''
 			  AND NOT EXISTS (SELECT 1 FROM "VLists"."USysAllSpecs" s WHERE UPPER(s."Code") = UPPER(CAST(v."Species" AS TEXT)))
 			  AND NOT EXISTS (SELECT 1 FROM "VUser"."USysUserSpp" u WHERE UPPER(u."Code") = UPPER(CAST(v."Species" AS TEXT)))
-		`, quotePGIdent(proj+"_Veg"))).Scan(&unlistedSpp)
+		`, quotePGIdent(proj+"_Veg"))).Scan(&unlistedSpp); err != nil {
+			return fail("unlisted species", err)
+		}
 
 		blocking := envAdminMismatch + orphans + boundsErrs + unlistedSpp
 		summary := map[string]int{

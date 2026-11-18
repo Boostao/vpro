@@ -287,6 +287,8 @@ func TestWave2_PresetsTruncatedProjectIDSaveAsHierarchyAndSplinterCase(t *testin
 	vprotest.MutateContextFixture(t, proj.DestinationPath, `
 		CREATE TABLE IF NOT EXISTS "`+oldHierTable+`" ("ID" INTEGER PRIMARY KEY, "Name" TEXT, "Parent" INTEGER, "Level" INTEGER, "Tag" TEXT, "MyOrder" TEXT, "ChildID" INTEGER, "Flag" INTEGER);
 		INSERT INTO "`+oldHierTable+`" ("ID", "Name", "Parent", "Level") VALUES (1, 'Root', NULL, 1);
+		CREATE TABLE IF NOT EXISTS "__VPRO_HierarchyIdentity" ("HierarchyTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("HierarchyTable", "ID"));
+		INSERT INTO "__VPRO_HierarchyIdentity" ("HierarchyTable", "ID") VALUES ('`+oldHierTable+`', 1), ('`+oldHierTable+`', 3);
 	`)
 	switched, err := svc.SwitchContext(cid, vprocore.ContextSelection{
 		Project:       longName,
@@ -311,6 +313,18 @@ func TestWave2_PresetsTruncatedProjectIDSaveAsHierarchyAndSplinterCase(t *testin
 	}
 	if saved.State == nil || saved.State.ActiveHierarchy != "SavedHierProj" || saved.State.HierarchyPath != saved.DestinationPath {
 		t.Fatalf("expected active Hierarchy preserved as SavedHierProj at %s, got %+v", saved.DestinationPath, saved.State)
+	}
+	// ENG-GO-004: the reservation for deleted node ID 3 survives Save As under the new prefix, so
+	// the next node created in the saved project cannot reuse ID 3.
+	hdb, err := sqlutil.OpenReadOnly(saved.DestinationPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reservedMax sql.NullInt64
+	err = hdb.QueryRow(`SELECT MAX("ID") FROM "__VPRO_HierarchyIdentity" WHERE "HierarchyTable" = 'SavedHierProj_Hierarchy'`).Scan(&reservedMax)
+	hdb.Close()
+	if err != nil || !reservedMax.Valid || reservedMax.Int64 != 3 {
+		t.Fatalf("expected hierarchy reservation ID 3 carried into SavedHierProj_Hierarchy, got %v (%v)", reservedMax, err)
 	}
 
 	// S2.18: Seed mixed-case ProjectID in Env vs lowercase ProjectID in Metadata and splinter-export -> matches case-insensitively and preserves Metadata stored casing.

@@ -237,6 +237,35 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 		}
 	}
 
+	// ENG-GO-004: capture __VPRO_HierarchyIdentity reservations too, renaming the project prefix,
+	// so a hierarchy node ID deleted before Save As is never reallocated in the saved copy.
+	type hierarchyIDEntry struct {
+		table string
+		id    int64
+	}
+	var hierarchyIDs []hierarchyIDEntry
+	if _, ok := existingTables["__VPRO_HierarchyIdentity"]; ok {
+		hRows, hErr := srcTx.QueryContext(ctx, `SELECT "HierarchyTable", "ID" FROM "__VPRO_HierarchyIdentity"`)
+		if hErr != nil {
+			return SaveProjectAsResult{}, hErr
+		}
+		for hRows.Next() {
+			var ht string
+			var hid int64
+			if err := hRows.Scan(&ht, &hid); err != nil {
+				hRows.Close()
+				return SaveProjectAsResult{}, err
+			}
+			if after, matched := strings.CutPrefix(ht, oldName+"_"); matched {
+				ht = newName + "_" + after
+			}
+			hierarchyIDs = append(hierarchyIDs, hierarchyIDEntry{ht, hid})
+		}
+		if err := errors.Join(hRows.Err(), hRows.Close()); err != nil {
+			return SaveProjectAsResult{}, err
+		}
+	}
+
 	// Capture _vpro_su_policy for <Old>_SU if present.
 	var suPolicyKind string
 	if _, ok := existingTables["_vpro_su_policy"]; ok && hasCompanionSU {
@@ -305,6 +334,20 @@ func SaveProjectAs(s *vprocore.ContextService, ctx context.Context, contextID st
 			}
 			for _, entry := range childIds {
 				if _, err := dstTx.ExecContext(ctx, `INSERT INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?) ON CONFLICT DO NOTHING`, entry.childTable, entry.id); err != nil {
+					return err
+				}
+			}
+		}
+		if len(hierarchyIDs) > 0 {
+			if _, err := dstTx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_HierarchyIdentity" (
+				"HierarchyTable" TEXT NOT NULL,
+				"ID" INTEGER NOT NULL,
+				PRIMARY KEY ("HierarchyTable", "ID")
+			)`); err != nil {
+				return err
+			}
+			for _, entry := range hierarchyIDs {
+				if _, err := dstTx.ExecContext(ctx, `INSERT INTO "__VPRO_HierarchyIdentity" ("HierarchyTable", "ID") VALUES (?, ?) ON CONFLICT DO NOTHING`, entry.table, entry.id); err != nil {
 					return err
 				}
 			}

@@ -456,7 +456,9 @@ func RestoreTwoPageVegetationRow(s *vprocore.ContextService, ctx context.Context
 
 			for _, delAudit := range targetDeletion.Audits {
 				if aRowID, pErr := strconv.ParseInt(delAudit.RowID, 10, 64); pErr == nil {
-					_, _ = tx.ExecContext(ctx, `UPDATE `+quotedAudit+` SET "Restore" = -1 WHERE rowid = ? AND "PlotNumber" = ?`, aRowID, req.PlotNumber)
+					if _, err := tx.ExecContext(ctx, `UPDATE `+quotedAudit+` SET "Restore" = -1 WHERE rowid = ? AND "PlotNumber" = ?`, aRowID, req.PlotNumber); err != nil {
+						return fmt.Errorf("mark deletion audit restored: %w", err) // ENG-GO-004
+					}
 				}
 			}
 

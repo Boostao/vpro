@@ -354,7 +354,11 @@ func loadSQLiteBaseSubsetSnapshot(ctx context.Context, dbPath, reqProject string
 			}
 			plotStr := ""
 			for i, col := range cols {
-				pgVal, _ := CanonicalizeSQLiteToPG(col, rawVals[i])
+				pgVal, cErr := CanonicalizeSQLiteToPG(col, rawVals[i])
+				if cErr != nil {
+					rows.Close()
+					return nil, "", fmt.Errorf("canonicalize %s.%s for snapshot: %w", suffix, col.Name, cErr) // ENG-GO-004
+				}
 				cc := pgValueToCloudCell(col, pgVal)
 				rec.cells[col.Name] = cc
 				rec.comps[col.Name] = cc.comparableString()
