@@ -150,8 +150,19 @@ test_that("S6.6: USysSppAttributes RedBlueList redacts coordinates on vpro_expor
 
   row_00337 <- env_back[env_back$PlotNumber == "00337", , drop = FALSE]
   expect_equal(nrow(row_00337), 1L)
-  expect_true(all(is.na(c(row_00337$Latitude, row_00337$Longitude, row_00337$UTMEasting, row_00337$UTMNorthing))))
-  expect_true(is.na(row_00337$UTMZone))
+  # ENG-XCUT-002: same ~10 km generalization as Go MaskSensitiveEnvRow (0.1 degree,
+  # 10,000 m), UTMZone preserved.
+  orig_00337 <- env_before[env_before$PlotNumber == "00337", , drop = FALSE]
+  expect_identical(row_00337$Latitude, trunc(orig_00337$Latitude * 10) / 10)
+  expect_identical(row_00337$Longitude, trunc(orig_00337$Longitude * 10) / 10)
+  if (!is.na(orig_00337$UTMEasting)) {
+    expect_equal(as.double(row_00337$UTMEasting), trunc(as.double(orig_00337$UTMEasting) / 10000) * 10000)
+  }
+  if (!is.na(orig_00337$UTMNorthing)) {
+    expect_equal(as.double(row_00337$UTMNorthing), trunc(as.double(orig_00337$UTMNorthing) / 10000) * 10000)
+  }
+  expect_false(identical(row_00337$Latitude, orig_00337$Latitude) && identical(row_00337$Longitude, orig_00337$Longitude))
+  expect_identical(row_00337$UTMZone, orig_00337$UTMZone)
 
   non_sens <- env_back[!(env_back$PlotNumber %in% sens_expected_plots) & !is.na(env_back$Latitude), , drop = FALSE]
   expect_gt(nrow(non_sens), 10L)
@@ -160,7 +171,11 @@ test_that("S6.6: USysSppAttributes RedBlueList redacts coordinates on vpro_expor
     gpkg_red <- file.path(td, "redacted.gpkg")
     vpro_export_gpkg(ws_back, path = gpkg_red, crs = 3005, scope = "project", overwrite = TRUE)
     gpkg_sf <- sf::st_read(gpkg_red, layer = "plots", quiet = TRUE)
-    expect_false("00337" %in% as.character(gpkg_sf$PlotNumber))
+    # Sensitive plot is exported only at its generalized (~10 km) location.
+    if ("00337" %in% as.character(gpkg_sf$PlotNumber)) {
+      env_gen <- env_back[env_back$PlotNumber == "00337", , drop = FALSE]
+      expect_identical(env_gen$Latitude, trunc(orig_00337$Latitude * 10) / 10)
+    }
   }
 
   expect_false(isTRUE(formals(vpro_master_publish_snapshot)$redact_sensitive))
@@ -177,7 +192,11 @@ test_that("S6.6: USysSppAttributes RedBlueList redacts coordinates on vpro_expor
     stringsAsFactors = FALSE
   )
   df_out <- vpro:::.vpro_redact_coord_df(df_in, "00337")
-  expect_true(is.na(df_out$Latitude[[1L]]) && is.na(df_out$Longitude[[1L]]) && is.na(df_out$UTMEasting[[1L]]) && is.na(df_out$UTMZone[[1L]]))
+  expect_identical(df_out$Latitude[[1L]], 54.2)
+  expect_identical(df_out$Longitude[[1L]], -126.7)
+  expect_identical(df_out$UTMEasting[[1L]], 650000L)
+  expect_identical(df_out$UTMNorthing[[1L]], 6010000L)
+  expect_identical(df_out$UTMZone[[1L]], "9N")
   expect_equal(df_out$Latitude[[2L]], 54.3)
 })
 

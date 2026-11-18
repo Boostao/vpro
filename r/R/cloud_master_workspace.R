@@ -324,11 +324,28 @@ vpro_rebuild_vlists_from_standards <- function(pg, base_vlists_path, out_path, b
     list(pg = "usys_all_specs", sqlite = "USysAllSpecs"),
     list(pg = "usys_table_of_lists", sqlite = "USysTableOfLists"),
     list(pg = "master_site_unit_list", sqlite = "MasterSiteUnitList"),
-    list(pg = "usys_zone_list", sqlite = "USysZoneList")
+    list(pg = "usys_zone_list", sqlite = "USysZoneList"),
+    # Optional like Go contributor.go: Red/Blue status drives coordinate redaction.
+    list(pg = "usys_spp_attributes", sqlite = "USysSppAttributes", optional = TRUE)
   )
 
   DBI::dbWithTransaction(sq_con, {
     for (item in table_map) {
+      if (isTRUE(item$optional)) {
+        has_pg <- tryCatch(
+          {
+            chk <- vpro_pg_query(
+              pg,
+              "SELECT to_regclass($1) IS NOT NULL AS ok",
+              params = list(paste0("standards.", item$pg)),
+              action = paste0("check standards.", item$pg)
+            )
+            nrow(chk) >= 1L && isTRUE(vpro_access_to_logical(chk$ok[[1L]]))
+          },
+          error = function(e) FALSE
+        )
+        if (!has_pg || !DBI::dbExistsTable(sq_con, item$sqlite)) next
+      }
       spec <- vpro_pg_standards_specs(item$pg)
       col_names <- as.character(spec$name)
       quoted_cols <- paste(vapply(col_names, vpro_quote_ident, character(1)), collapse = ", ")

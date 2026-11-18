@@ -189,19 +189,9 @@ vpro_utf16_len <- function(x) {
 
 vpro_sha256_file <- function(path) {
   path <- normalizePath(path, winslash = "/", mustWork = TRUE)
-  if (nzchar(Sys.which("sha256sum"))) {
-    out <- system2("sha256sum", shQuote(path), stdout = TRUE)
-    return(tolower(sub("[[:space:]].*$", "", out[[1L]])))
-  }
-  if (nzchar(Sys.which("shasum"))) {
-    out <- system2("shasum", c("-a", "256", shQuote(path)), stdout = TRUE)
-    return(tolower(sub("[[:space:]].*$", "", out[[1L]])))
-  }
-  if (nzchar(Sys.which("openssl"))) {
-    out <- system2("openssl", c("dgst", "-sha256", shQuote(path)), stdout = TRUE)
-    return(tolower(sub("^.*=[[:space:]]*", "", out[[1L]])))
-  }
-  unname(tools::md5sum(path))
+  # Compiled SHA-256 from cli (already in Imports): identical 64-char lowercase
+  # hex on every OS, no PATH binaries and never an MD5 substitute.
+  tolower(unname(cli::hash_file_sha256(path)))
 }
 
 vpro_value_vector <- function(value, argument) {

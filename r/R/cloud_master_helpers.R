@@ -220,6 +220,16 @@ vpro_pg_subset_where <- function(
   )
 }
 
+# Red/Blue-listed accepted taxa only, matching Go IsSensitiveRedBlueList and
+# loadSensitiveSpecies*: RedBlueList in R/B/RED/BLUE and Codetype <> 'S'.
+.vpro_sensitive_attr_where_sql <- function() {
+  paste(
+    'WHERE "Code" IS NOT NULL AND TRIM(CAST("Code" AS TEXT)) <> \'\'',
+    'AND UPPER(TRIM(COALESCE(CAST("Codetype" AS TEXT), \'\'))) <> \'S\'',
+    'AND UPPER(TRIM(COALESCE(CAST("RedBlueList" AS TEXT), \'\'))) IN (\'R\', \'B\', \'RED\', \'BLUE\')'
+  )
+}
+
 .vpro_sensitive_species_codes <- function(pg = NULL, vlists_path = getOption("vpro.vlists_path", NULL)) {
   codes <- character()
   syn_pairs <- data.frame(Code = character(), OldCode = character(), stringsAsFactors = FALSE)
@@ -239,7 +249,10 @@ vpro_pg_subset_where <- function(
         attr_df <- tryCatch(
           DBI::dbGetQuery(
             dbc,
-            'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM "USysSppAttributes" WHERE "RedBlueList" IS NOT NULL AND TRIM(CAST("RedBlueList" AS TEXT)) <> \'\' AND "Code" IS NOT NULL AND TRIM(CAST("Code" AS TEXT)) <> \'\''
+            paste(
+              'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM "USysSppAttributes"',
+              .vpro_sensitive_attr_where_sql()
+            )
           ),
           error = function(e) data.frame()
         )
@@ -279,7 +292,10 @@ vpro_pg_subset_where <- function(
       pg_attr <- tryCatch(
         vpro_pg_query(
           pg,
-          'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM standards.usys_spp_attributes WHERE "RedBlueList" IS NOT NULL AND TRIM(CAST("RedBlueList" AS TEXT)) <> \'\' AND "Code" IS NOT NULL AND TRIM(CAST("Code" AS TEXT)) <> \'\'',
+          paste(
+            'SELECT DISTINCT UPPER(TRIM(CAST("Code" AS TEXT))) AS code FROM standards.usys_spp_attributes',
+            .vpro_sensitive_attr_where_sql()
+          ),
           params = NULL,
           action = "query sensitive species in standards.usys_spp_attributes"
         ),
@@ -338,6 +354,13 @@ vpro_pg_subset_where <- function(
   unique(as.character(hit_df$PlotNumber[!is.na(hit_df$PlotNumber) & nzchar(hit_df$PlotNumber)]))
 }
 
+# Truncate coordinates of sensitive plots to a ~10 km grid exactly like Go
+# MaskSensitiveEnvRow: Latitude/Longitude to 0.1 degree, UTMEasting/UTMNorthing
+# to 10,000 m, and XCoord/YCoord as degrees when |x| <= 180 and |y| <= 90,
+# otherwise as metres. UTMZone is preserved. Non-numeric values are cleared.
+.vpro_trunc_latlon <- function(x) trunc(x * 10) / 10
+.vpro_trunc_utm <- function(x) trunc(x / 10000) * 10000
+
 .vpro_redact_coord_df <- function(df, sensitive_plots) {
   if (!is.data.frame(df) || nrow(df) == 0L || length(sensitive_plots) == 0L || !("PlotNumber" %in% names(df))) {
     return(df)
@@ -346,17 +369,46 @@ vpro_pg_subset_where <- function(
   if (!any(mask)) {
     return(df)
   }
-  coord_cols <- intersect(
-    c("Latitude", "Longitude", "UTMEasting", "UTMNorthing", "UTMZone"),
-    names(df)
-  )
-  for (cc in coord_cols) {
-    if (is.character(df[[cc]])) {
-      df[[cc]][mask] <- NA_character_
-    } else if (is.integer(df[[cc]])) {
-      df[[cc]][mask] <- NA_integer_
+  apply_col <- function(df, cc, fn) {
+    v <- df[[cc]]
+    if (is.numeric(v)) {
+      idx <- mask & is.finite(v)
+      out <- fn(as.double(v[idx]))
+      if (is.integer(v)) out <- as.integer(out)
+      v[idx] <- out
     } else {
-      df[[cc]][mask] <- NA_real_
+      v[mask] <- NA
+    }
+    df[[cc]] <- v
+    df
+  }
+  for (cc in intersect(c("Latitude", "Longitude"), names(df))) {
+    df <- apply_col(df, cc, .vpro_trunc_latlon)
+  }
+  for (cc in intersect(c("UTMEasting", "UTMNorthing"), names(df))) {
+    df <- apply_col(df, cc, .vpro_trunc_utm)
+  }
+  has_x <- "XCoord" %in% names(df)
+  has_y <- "YCoord" %in% names(df)
+  if (has_x || has_y) {
+    num <- function(cc) {
+      if (cc %in% names(df) && is.numeric(df[[cc]])) as.double(df[[cc]]) else rep(NA_real_, nrow(df))
+    }
+    xv <- num("XCoord")
+    yv <- num("YCoord")
+    is_deg <- (!is.finite(xv) | abs(xv) <= 180) & (!is.finite(yv) | abs(yv) <= 90)
+    for (cc in intersect(c("XCoord", "YCoord"), names(df))) {
+      v <- df[[cc]]
+      if (is.numeric(v)) {
+        vals <- as.double(v)
+        idx <- mask & is.finite(vals)
+        out <- ifelse(is_deg[idx], .vpro_trunc_latlon(vals[idx]), .vpro_trunc_utm(vals[idx]))
+        if (is.integer(v)) out <- as.integer(out)
+        v[idx] <- out
+      } else {
+        v[mask] <- NA
+      }
+      df[[cc]] <- v
     }
   }
   df

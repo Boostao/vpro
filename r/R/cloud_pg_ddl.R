@@ -341,7 +341,12 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
       "DECLARE",
       "  is_table_owner BOOLEAN;",
       "  sub_ok BOOLEAN;",
+      "  cache_key TEXT;",
       "BEGIN",
+      "  cache_key := NEW.submission_id::text || ':' || current_user;",
+      "  IF COALESCE(current_setting('vpro.verified_sub_id', true), '') = cache_key THEN",
+      "    RETURN NEW;",
+      "  END IF;",
       "  SELECT pg_has_role(current_user, c.relowner, 'USAGE')",
       "  INTO is_table_owner",
       "  FROM pg_class c",
@@ -359,6 +364,7 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
       "      RAISE EXCEPTION 'contributor child row insert requires owned pending submission_id' USING ERRCODE = '42501';",
       "    END IF;",
       "  END IF;",
+      "  PERFORM set_config('vpro.verified_sub_id', cache_key, true);",
       "  RETURN NEW;",
       "END;",
       "$$;",
@@ -405,6 +411,8 @@ vpro_pg_build_v1_migration_stmts <- function(has_postgis = FALSE, postgis_schema
     'CREATE INDEX IF NOT EXISTS idx_standards_bec_zone ON standards.bec_site_series ("Zone", "SubZone");',
     vpro_pg_standards_table_ddl("master_site_unit_list", .vpro_pg_standards_spec_map$master_site_unit_list),
     vpro_pg_standards_table_ddl("usys_zone_list", .vpro_pg_standards_spec_map$usys_zone_list),
+    vpro_pg_standards_table_ddl("usys_spp_attributes", .vpro_pg_standards_spec_map$usys_spp_attributes),
+    'CREATE INDEX IF NOT EXISTS idx_standards_spp_attr_code ON standards.usys_spp_attributes ("Code");',
     vpro_pg_standards_table_ddl("project_metadata", .vpro_pg_standards_spec_map$project_metadata)
   )
 
