@@ -551,94 +551,23 @@ func SaveFlatHierarchyRows(ctx context.Context, contexts *vprocore.ContextServic
 			return nil, nil, err
 		}
 
-		type desiredNode struct {
-			id     int64
-			name   string
-			parent *int64
-			level  int64
-			tag    string
+		// UX-CLASS-001: refuse instead of silently deleting nodes when the current
+		// hierarchy cannot round-trip through the flat rank table (same-rank chains,
+		// "~X"/"X" clean-name twins, blank names, cycles or orphans).
+		if err := ensureFlatHierarchyRoundTrips(ctx, tx, qTable, hasTag, existingIDByClean); err != nil {
+			return nil, nil, err
 		}
-		desiredByClean := map[string]*desiredNode{}
-		desiredOrder := []string{}
 
-		for rowIdx, flat := range request.Rows {
-			steps := []struct {
-				raw   string
-				level int64
-				tag   string
-			}{
-				{flat.Superclass, 1, ""},
-				{flat.Class, 2, ""},
-				{flat.Subclass, 3, ""},
-				{flat.Order, 4, ""},
-				{flat.SubOrder, 5, ""},
-				{flat.Alliance, 6, ""},
-				{flat.SubAlliance, 7, ""},
-				{flat.Association, 8, ""},
-				{flat.SubAssociation, 9, ""},
-				{flat.Facies, 10, ""},
-				{flat.WorkingUnit, 10, "working"},
-				{flat.SiteSeries, 11, ""},
-			}
-
-			var parentID *int64
-			for _, step := range steps {
-				if strings.TrimSpace(step.raw) == "" {
-					continue
-				}
-				validatedName, vErr := validateHierarchyNodeName(step.raw, false)
-				if vErr != nil {
-					return nil, nil, fmt.Errorf("flat row %d: %w", rowIdx+1, vErr)
-				}
-				clean, _ := SplitBreakpointPrefix(validatedName)
-				key := strings.ToLower(clean)
-
-				existing := desiredByClean[key]
-				if existing != nil {
-					// Verify consistent parent across flat rows!
-					sameParent := (existing.parent == nil && parentID == nil) ||
-						(existing.parent != nil && parentID != nil && *existing.parent == *parentID)
-					if !sameParent {
-						return nil, nil, fmt.Errorf("flat row %d places node %q under conflicting parents in the same hierarchy", rowIdx+1, clean)
-					}
-					if strings.HasPrefix(validatedName, "~") {
-						existing.name = validatedName
-					}
-					idCopy := existing.id
-					parentID = &idCopy
-					continue
-				}
-
-				id, ok := existingIDByClean[key]
-				if !ok {
-					allocated, aErr := allocateHierarchyNodeID(ctx, tx, tableName)
-					if aErr != nil {
-						return nil, nil, aErr
-					}
-					id = allocated
-				}
-				var pCopy *int64
-				if parentID != nil {
-					v := *parentID
-					pCopy = &v
-				}
-				node := &desiredNode{
-					id:     id,
-					name:   validatedName,
-					parent: pCopy,
-					level:  step.level,
-					tag:    step.tag,
-				}
-				desiredByClean[key] = node
-				desiredOrder = append(desiredOrder, key)
-				idCopy := id
-				parentID = &idCopy
-			}
+		desiredByClean, desiredOrder, err := planFlatHierarchyNodes(request.Rows, existingIDByClean, func() (int64, error) {
+			return allocateHierarchyNodeID(ctx, tx, tableName)
+		})
+		if err != nil {
+			return nil, nil, err
 		}
 
 		// Diffed synchronization inside tx: DELETE removed, UPDATE existing (preserving legacy
 		// MyOrder, ChildID, StartChild, LastChild, Flag columns), and INSERT added nodes.
-		desiredByID := make(map[int64]*desiredNode, len(desiredOrder))
+		desiredByID := make(map[int64]*flatPlannedNode, len(desiredOrder))
 		for _, key := range desiredOrder {
 			n := desiredByClean[key]
 			desiredByID[n.id] = n
@@ -703,4 +632,143 @@ func nullStringIfEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+type flatPlannedNode struct {
+	id     int64
+	name   string
+	parent *int64
+	level  int64
+	tag    string
+}
+
+// planFlatHierarchyNodes turns flat rank rows into the desired node set, keyed
+// by lower-case clean name, reusing existing IDs and allocating new ones.
+func planFlatHierarchyNodes(rows []FlatHierarchyRow, existingIDByClean map[string]int64, allocate func() (int64, error)) (map[string]*flatPlannedNode, []string, error) {
+	desiredByClean := map[string]*flatPlannedNode{}
+	desiredOrder := []string{}
+	for rowIdx, flat := range rows {
+		steps := []struct {
+			raw   string
+			level int64
+			tag   string
+		}{
+			{flat.Superclass, 1, ""},
+			{flat.Class, 2, ""},
+			{flat.Subclass, 3, ""},
+			{flat.Order, 4, ""},
+			{flat.SubOrder, 5, ""},
+			{flat.Alliance, 6, ""},
+			{flat.SubAlliance, 7, ""},
+			{flat.Association, 8, ""},
+			{flat.SubAssociation, 9, ""},
+			{flat.Facies, 10, ""},
+			{flat.WorkingUnit, 10, "working"},
+			{flat.SiteSeries, 11, ""},
+		}
+		var parentID *int64
+		for _, step := range steps {
+			if strings.TrimSpace(step.raw) == "" {
+				continue
+			}
+			validatedName, vErr := validateHierarchyNodeName(step.raw, false)
+			if vErr != nil {
+				return nil, nil, fmt.Errorf("flat row %d: %w", rowIdx+1, vErr)
+			}
+			clean, _ := SplitBreakpointPrefix(validatedName)
+			key := strings.ToLower(clean)
+			if existing := desiredByClean[key]; existing != nil {
+				sameParent := (existing.parent == nil && parentID == nil) ||
+					(existing.parent != nil && parentID != nil && *existing.parent == *parentID)
+				if !sameParent {
+					return nil, nil, fmt.Errorf("flat row %d places node %q under conflicting parents in the same hierarchy", rowIdx+1, clean)
+				}
+				if strings.HasPrefix(validatedName, "~") {
+					existing.name = validatedName
+				}
+				idCopy := existing.id
+				parentID = &idCopy
+				continue
+			}
+			id, ok := existingIDByClean[key]
+			if !ok {
+				allocated, aErr := allocate()
+				if aErr != nil {
+					return nil, nil, aErr
+				}
+				id = allocated
+			}
+			var pCopy *int64
+			if parentID != nil {
+				v := *parentID
+				pCopy = &v
+			}
+			desiredByClean[key] = &flatPlannedNode{id: id, name: validatedName, parent: pCopy, level: step.level, tag: step.tag}
+			desiredOrder = append(desiredOrder, key)
+			idCopy := id
+			parentID = &idCopy
+		}
+	}
+	return desiredByClean, desiredOrder, nil
+}
+
+// ensureFlatHierarchyRoundTrips re-plans the stored hierarchy from its own flat
+// rows and requires every stored node to survive with the same ID, parent and
+// (valid) level; otherwise a flat save would silently delete or reparent nodes.
+func ensureFlatHierarchyRoundTrips(ctx context.Context, tx *sql.Tx, qTable string, hasTag bool, existingIDByClean map[string]int64) error {
+	tagExpr := `''`
+	if hasTag {
+		tagExpr = `COALESCE(CAST("Tag" AS TEXT), '')`
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT "ID", COALESCE(CAST("Name" AS TEXT), ''), "Parent", COALESCE("Level", 11), `+tagExpr+` FROM main.`+qTable+` ORDER BY "ID"`)
+	if err != nil {
+		return err
+	}
+	var records []rawHierarchyRecord
+	for rows.Next() {
+		var rec rawHierarchyRecord
+		var parent sql.NullInt64
+		if err := rows.Scan(&rec.id, &rec.name, &parent, &rec.level, &rec.tag); err != nil {
+			rows.Close()
+			return err
+		}
+		if parent.Valid {
+			v := parent.Int64
+			rec.parent = &v
+		}
+		records = append(records, rec)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
+	_, _, flatRows, _ := buildHierarchyTreeAndFlatRows(records)
+	next := int64(-1)
+	planned, _, err := planFlatHierarchyNodes(flatRows, existingIDByClean, func() (int64, error) {
+		next--
+		return next, nil
+	})
+	if err != nil {
+		return fmt.Errorf("this hierarchy cannot be edited in the Flat Rank Table (%v); use the Hierarchy Tree view", err)
+	}
+	byID := make(map[int64]*flatPlannedNode, len(planned))
+	for _, node := range planned {
+		byID[node.id] = node
+	}
+	for _, rec := range records {
+		node := byID[rec.id]
+		clean, _ := SplitBreakpointPrefix(rec.name)
+		lost := node == nil
+		if !lost {
+			sameParent := (node.parent == nil && rec.parent == nil) ||
+				(node.parent != nil && rec.parent != nil && *node.parent == *rec.parent)
+			lost = !sameParent || (rec.level >= 1 && rec.level <= 11 && node.level != rec.level)
+		}
+		if lost {
+			if clean == "" {
+				clean = fmt.Sprintf("ID %d", rec.id)
+			}
+			return fmt.Errorf("this hierarchy cannot be edited in the Flat Rank Table without losing node %q (same-rank nesting, duplicate or '~' twin names, or broken links); use the Hierarchy Tree view", clean)
+		}
+	}
+	return nil
 }

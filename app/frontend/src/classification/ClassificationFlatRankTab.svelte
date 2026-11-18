@@ -80,7 +80,7 @@
           <tr>
             <td class="mono">{idx + 1}</td>
             {#each PHYTOSOCIOLOGICAL_RANK_COLUMNS as col (col.key)}
-              {@const cellVal = row[col.key]}
+              {@const cellVal = row[col.key] ?? ''}
               <td class:breakpoint-cell={cellVal.trim().startsWith('~')}>
                 <input
                   type="text"

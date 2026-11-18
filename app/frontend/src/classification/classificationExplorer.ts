@@ -13,7 +13,9 @@ import {
 export type ExplorerMode = 'su_tree' | 'hierarchy_tree' | 'hierarchy_flat';
 
 export const PHYTOSOCIOLOGICAL_RANK_COLUMNS = [
+  { key: 'superclass', label: 'Superclass', level: 1 },
   { key: 'class', label: 'Class', level: 2 },
+  { key: 'subclass', label: 'Subclass', level: 3 },
   { key: 'order', label: 'Order', level: 4 },
   { key: 'subOrder', label: 'SubOrder', level: 5 },
   { key: 'alliance', label: 'Alliance', level: 6 },
@@ -773,7 +775,9 @@ export function validateFlatHierarchyRows(rows: readonly FlatHierarchyRow[]): st
 export function createEmptyFlatHierarchyRow(): FlatHierarchyRow {
   return {
     leafId: 0,
+    superclass: '',
     class: '',
+    subclass: '',
     order: '',
     subOrder: '',
     alliance: '',

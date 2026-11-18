@@ -19,11 +19,13 @@ const cls = loadTypeScript('classificationExplorer.ts', {
 });
 const plain = value => JSON.parse(JSON.stringify(value));
 
-test('phytosociological wide rank schema exposes all 10 required columns', () => {
+test('phytosociological wide rank schema exposes all 12 rank columns incl. Superclass and Subclass', () => {
   assert.deepEqual(
     plain(cls.PHYTOSOCIOLOGICAL_RANK_COLUMNS.map(c => c.label)),
     [
+      'Superclass',
       'Class',
+      'Subclass',
       'Order',
       'SubOrder',
       'Alliance',
@@ -332,4 +334,15 @@ test('ClassificationExplorer avoids duplicate reload races on self-activated SU 
   } finally {
     dispose();
   }
+});
+
+test('UX-CLASS-001: rows under an existing Superclass validate without false parent conflicts', () => {
+  const empty = cls.createEmptyFlatHierarchyRow();
+  assert.equal(empty.superclass, '');
+  assert.equal(empty.subclass, '');
+  const loaded = { ...empty, superclass: 'Conifer Forests', class: 'ClassA', subclass: 'SubclassA', siteSeries: 'SS01' };
+  const added = { ...empty, superclass: 'Conifer Forests', class: 'ClassA', siteSeries: 'QA_NEW_SERIES' };
+  assert.equal(cls.validateFlatHierarchyRows([loaded, added]), '');
+  const hiddenParent = { ...empty, class: 'ClassA', siteSeries: 'QA_NEW_SERIES' };
+  assert.match(cls.validateFlatHierarchyRows([loaded, hiddenParent]), /conflicting parents/);
 });
