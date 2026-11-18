@@ -89,7 +89,7 @@ func WithSIVIIdentityWriter[T any](ctx context.Context, service *vprocore.Contex
 
 func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contextID, plot string, extended bool, original []SiviVegetationProjection, edits []SiviHeightEdit) (*siviHeightWriteResult, error) {
 	return WithSIVIIdentityWriter(ctx, s, contextID, plot, "edit",
-		func(_ *vprocore.PlotService, owner *vprocore.SqliteContext, tx *sql.Tx) (*siviHeightWriteResult, bool, error) {
+		func(plots *vprocore.PlotService, owner *vprocore.SqliteContext, tx *sql.Tx) (*siviHeightWriteResult, bool, error) {
 			before, err := vprocore.EnvironmentSiteUnitTables(ctx, tx)
 			if err != nil {
 				return nil, false, err
@@ -156,6 +156,29 @@ func WriteSIVIIdentities(s *vprocore.ContextService, ctx context.Context, contex
 			if err := vprocore.VerifySiteUnitTransferTables(baseline, after, expected, ""); err != nil {
 				return nil, false, fmt.Errorf("SIVI identity transaction differs from its complete unaudited plan: %w", err)
 			}
+			// Audit identity changes
+			now := time.Now().UTC().Format("2006-01-02 15:04:05")
+			for _, assignment := range assignments {
+				beforeVal, err := vprocore.MetadataCellValue(assignment.Before)
+				if err != nil {
+					return nil, false, err
+				}
+				afterVal, err := vprocore.MetadataCellValue(assignment.After)
+				if err != nil {
+					return nil, false, err
+				}
+				id, _ := strconv.ParseInt(*assignment.Before.Integer, 10, 64)
+				audits, err := vprocore.AuditChildFieldsTracked(tx, project, "Veg", plot, id,
+					[]vprocore.ChildField{{Column: assignment.Column}}, []any{beforeVal}, []any{afterVal}, plots.CurrentUser, plots.AuditStrength, now)
+				if err != nil {
+					return nil, false, err
+				}
+				// Verify audit
+				if len(audits) != 1 {
+					return nil, false, errors.New("SIVI identity audit row not produced")
+				}
+			}
+
 			proposal, err := json.Marshal(event)
 			if err != nil {
 				return nil, false, err
