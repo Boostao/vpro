@@ -234,7 +234,7 @@
           <h4>Site Unit: {unit.code === '' ? '(empty)' : unit.code}</h4>
           <p>Source long name: {unit.longName === null ? '(NULL / missing)' : unit.longName === '' ? '(empty)' : unit.longName}.
             Name status: {unit.nameStatus}. Name candidates: {unit.nameCandidates.length}.
-            Joined rows: {unit.plots.length}. Worksheet: {review.sheets[unitIndex].name}.</p>
+            Joined rows: {unit.plots.length}. Worksheet: {review.sheets[review.sheets.length - 1 - unitIndex].name}.</p>
           {#if reviewedSpecies}
             {#each reviewedSpecies.units[unitIndex].groups as group}
               <h5>{group.caption}</h5>

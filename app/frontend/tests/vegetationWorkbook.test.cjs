@@ -279,6 +279,191 @@ test('actual export handler holds reads and duplicate publication without cancel
   assert.ok(context.workbookReview);
 });
 
+test('mounted LongVegetationReport publishWorkbook succeeds with live projectWorkspace and preference subscriptions across unlumped and lumped scopes', async () => {
+  const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
+  const earth = loadTypeScript('googleEarthReview.ts', {
+    './qualityEditor': quality, './projectMetadataRestore': restoration,
+    './plotLocationReview': loadTypeScript('plotLocationReview.ts', { './projectMetadataRestore': restoration }),
+  });
+  const sharedPrefs = loadTypeScript('reportTitlePreferences.ts', { './qualityEditor': quality, './googleEarthReview': earth });
+  const titlePrefs = loadTypeScript('longVegetationPreferences.ts', { './reportTitlePreferences': sharedPrefs });
+  const statPrefs = loadTypeScript('longVegetationStatisticsPreferences.ts', {
+    './googleEarthReview': earth, './reportTitlePreferences': sharedPrefs,
+  });
+  const ts = require('typescript');
+  const code = source();
+
+  for (const [scope, grouping, combineVariants] of [
+    ['unlumped', 'layer', false],
+    ['unlumped', 'strata', true],
+    ['unlumped', 'lifeform', false],
+    ['lump:Custom_Lump', 'none', false],
+  ]) {
+    const scopedOwner = { ...owner, contextId: `live-publish-${scope}-${grouping}` };
+    const session = new workbook.VegetationWorkbookPublicationSession(scopedOwner, true);
+    const prefs = new titlePrefs.LongVegetationPreferencesSession(scopedOwner);
+    const stats = new statPrefs.LongVegetationStatisticsPreferencesSession(scopedOwner);
+    const notifications = createNotificationController({ schedule: () => 0, cancelSchedule: () => {} });
+    const reads = new (loadTypeScript('readRequests.ts', {
+      '@wailsio/runtime': { Call: {}, CancelledRejectionError: class extends Error {} },
+    }).ReadRequests)();
+
+    const projectListeners = new Set();
+    let cancelReportReadCalls = 0;
+    const projectWorkspace = {
+      view: () => ({
+        projectActive: false,
+        readBusy: false,
+        outputReady: false,
+        closeBlocked: false,
+        error: '',
+        settings: null,
+        preview: null,
+        workbookReview: null,
+        publication: { busy: false, blocked: false, error: '', outcome: null, requestedDestination: '' },
+        scope: { scope: { sourceKind: 'selected-list' }, busy: false, dirty: false, authorityUnknown: false },
+        units: { readBusy: false, busy: false, blocked: false, closeBlocked: false },
+      }),
+      subscribe(listener) {
+        projectListeners.add(listener);
+        listener();
+        return () => projectListeners.delete(listener);
+      },
+      invalidate() {
+        for (const listener of projectListeners) listener();
+      },
+      cancelReportRead() {
+        cancelReportReadCalls++;
+        for (const listener of projectListeners) listener();
+      },
+    };
+
+    const reviewPayload = fixture();
+    reviewPayload.preview.contextId = scopedOwner.contextId;
+    reviewPayload.scope = scope;
+    reviewPayload.preview.settings.grouping = grouping;
+    if (combineVariants) {
+      reviewPayload.preview.settings.combineVariants = true;
+      reviewPayload.preview.settings.lumpTable = 'CombinedSpp_Lump';
+    }
+    if (grouping === 'lifeform') {
+      reviewPayload.preview.report.units[0].rows[0].layer = {
+        storage: 'integer', text: null, integer: '1', real: null, blobHex: null,
+      };
+    }
+    if (scope !== 'unlumped') {
+      reviewPayload.preview.settings.lumpTable = 'Custom_Lump';
+    }
+    const exportedRequests = [];
+
+    const context = vm.createContext({
+      ...scopedOwner,
+      untrack: fn => fn(),
+      effectiveHierarchy: 'None',
+      hierarchy: 'None',
+      workbookEnabled: true,
+      lifeformEnabled: true,
+      strataEnabled: true,
+      codeEnabled: true,
+      selectedFieldEnabled: true,
+      noneUnitsEnabled: true,
+      selectedUnitsEnabled: true,
+      selectedWorkbookScope: scope,
+      generation: 0,
+      busy: false,
+      operationHeld: false,
+      error: '',
+      preview: null,
+      workbookReview: null,
+      settings: structuredClone(reviewPayload.preview.settings),
+      projectWorkspace,
+      projectView: projectWorkspace.view(),
+      sharedPreferenceBarrier: false,
+      preferenceBarrier: false,
+      reads,
+      preferences: prefs,
+      preferenceView: prefs.view(),
+      statistics: stats,
+      statisticsView: stats.view(),
+      switches: null,
+      thresholds: null,
+      groups: null,
+      qualityNulls: null,
+      qualityMinima: null,
+      naming: null,
+      selectedField: null,
+      enforcement: null,
+      units: null,
+      selectedUnitSelection: null,
+      publication: session.view(),
+      workbookSession: session,
+      destination,
+      notifications,
+      notifiedPrefReceipts: 0,
+      lastPrefError: '',
+      notifiedStatReceipts: 0,
+      lastStatError: '',
+      lastPubNotificationKey: '',
+      lastProjError: '',
+      lastProjPubNotificationKey: '',
+      onBusyChange() {},
+      reportBusy() {},
+      requireLongVegetationGrouping: report.requireLongVegetationGrouping,
+      VegetationReportService: {
+        GetVegetationWorkbookReview: async (_ctx, reqJson) => {
+          assert.deepEqual(JSON.parse(reqJson), { scope });
+          return structuredClone(reviewPayload);
+        },
+        ExportReviewedVegetationWorkbook: async (_ctx, reqJson) => {
+          const parsed = JSON.parse(reqJson);
+          exportedRequests.push(parsed);
+          return receipt('published');
+        },
+      },
+    });
+    Object.defineProperty(context, 'projectActive', { get: () => !!context.projectView?.projectActive });
+    Object.defineProperty(context, 'workbookBarrier', { get: () => context.publication.busy || context.publication.blocked });
+
+    const wiringSlice = code.slice(code.indexOf('  function resolveContextTag()'), code.indexOf('  async function options()'));
+    const workbookSlice = code.slice(code.indexOf('  async function reviewWorkbook()'), code.indexOf('  async function loadSavedTitle()'));
+    vm.runInContext(
+      ts.transpileModule(
+        wiringSlice + '\n' + workbookSlice + '\nthis.actions = { cancel, reviewWorkbook, publishWorkbook, acknowledgeWorkbook };',
+        { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+      ).outputText,
+      context,
+    );
+
+    // Subscriptions run at initialization; restore loaded options as onMount/options() does.
+    context.settings = structuredClone(reviewPayload.preview.settings);
+    await context.actions.reviewWorkbook();
+    assert.equal(context.error, '');
+    assert.ok(context.workbookReview, 'workbookReview must be populated after reviewWorkbook()');
+    assert.equal(context.workbookReview.scope, scope);
+
+    await context.actions.publishWorkbook();
+    assert.equal(context.error, '');
+    assert.ok(cancelReportReadCalls >= 1, 'cancelReportRead notification ran during publishWorkbook without wiping selected-list state');
+    assert.equal(exportedRequests.length, 1);
+    assert.deepEqual(exportedRequests[0], {
+      scope,
+      createdDate: '2026-10-06',
+      approvalHash: 'a'.repeat(64),
+      destination,
+    });
+    assert.ok(context.settings, 'settings must remain loaded after publishWorkbook()');
+    assert.ok(context.preview, 'preview must remain visible after publishWorkbook()');
+    assert.equal(context.workbookReview, null, 'workbookReview clears once publication enters blocked receipt state');
+
+    const entries = notifications.getSnapshot().entries;
+    assert.equal(entries.filter(e => e.severity === 'error').length, 0);
+    assert.equal(entries.filter(e => e.severity === 'success' && e.title === 'Long Vegetation workbook exported').length, 1);
+
+    context.actions.acknowledgeWorkbook();
+    assert.equal(session.view().blocked, false);
+  }
+});
+
 test('actual root transition and both native-close paths reject unresolved publication even without a mounted route', async () => {
   const app = readFileSync(srcPath('App.svelte'), 'utf8'), ts = require('typescript');
   const close = app.slice(app.indexOf('  async function handleCloseRequest('), app.indexOf('  async function requestTransition('));

@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
 const { render } = require('svelte/server');
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { loadTypeScript, serverComponent, srcPath } = require('./svelteTestHelpers.cjs');
 const { createNotificationController } = loadTypeScript('shell/notificationService.svelte.ts', { 'svelte/store': require('svelte/store') });
 const lifeform = loadTypeScript('lifeformSummary.ts');
@@ -49,7 +50,8 @@ function fixture(method = 1, owned = owner) {
           plots: [{ plotNumber: 'P', suRowId: '1', envRowId: '1', adminRowId: '1' },
             { plotNumber: 'P', suRowId: '1', envRowId: '1', adminRowId: '2' }] }],
       } },
-    scope: { savedMethod: 2, siteUnitType: 1, orderBy: 3, includeSpecies: 0 },
+    scope: { savedMethod: 2, siteUnitType: 1, orderBy: 3, includeSpecies: 0,
+      coverCalculation: 1, andOr: 1, presenceGreaterThan: 0, coverGreaterThan: 0 },
     sheets: [{ unit: cell('U:1'), name: 'U-1' }],
     approvalHash: 'a'.repeat(64), workbookSHA256: 'b'.repeat(64), bytes: 1234,
   };
@@ -90,6 +92,10 @@ test('rejects raw unsafe Unicode, null/missing/extra shapes, ownership, method, 
     v => v.preview.report.project = 'foreign', v => v.preview.report.su = 'None', v => v.preview.report.method = 2,
     v => v.preview.report.querySource = 'layer', v => v.preview.extra = 1, v => v.preview.report.extra = 1,
     v => v.scope = null, v => v.scope.extra = 1, v => delete v.scope.savedMethod,
+    v => delete v.scope.coverCalculation, v => v.scope.coverCalculation = 0, v => v.scope.coverCalculation = 3,
+    v => v.scope.andOr = 0, v => v.scope.andOr = 3,
+    v => v.scope.presenceGreaterThan = -1, v => v.scope.presenceGreaterThan = 32768, v => v.scope.presenceGreaterThan = 1.5,
+    v => v.scope.coverGreaterThan = -1, v => v.scope.coverGreaterThan = 32768, v => v.scope.coverGreaterThan = '0',
     v => v.scope.savedMethod = 0, v => v.scope.siteUnitType = 2, v => v.scope.orderBy = 2,
     v => v.scope.includeSpecies = 1, v => v.scope.savedMethod = '2',
     v => v.preview.report.fields[0].label = 'invented', v => v.preview.report.fields[0].kind = 'numeric',
@@ -140,10 +146,13 @@ test('complete ordered physical memberships, Cartesian joins and original name o
   const extra = structuredClone(complete.preview.report.units[0]);
   extra.code = 'A'; extra.plots = extra.plots.map(p => ({ ...p, suRowId: '4' }));
   complete.preview.report.memberships.push({ rowId: '4', plotNumber: cell('P'), siteUnit: cell('A'), joinedRows: 4, status: 'joined' });
-  complete.preview.report.units.push(extra); complete.sheets.push({ unit: cell('A'), name: 'A' });
+  complete.preview.report.units.push(extra); complete.sheets.unshift({ unit: cell('A'), name: 'A' });
   assert.throws(() => validate(complete), /inconsistent/);
   extra.nameCandidates = []; extra.longName = null; extra.nameStatus = 'missing';
   assert.doesNotThrow(() => validate(complete));
+  const descendingSheets = structuredClone(complete);
+  descendingSheets.sheets.reverse();
+  assert.throws(() => validate(descendingSheets), /inconsistent/);
 });
 
 test('source worksheet names preserve literal empty codes and refuse collisions, reserved names and surrogate cuts', () => {
@@ -157,7 +166,7 @@ test('source worksheet names preserve literal empty codes and refuse collisions,
   other.code = 'u:1'; other.nameCandidates = []; other.longName = null; other.nameStatus = 'missing';
   other.plots = other.plots.map(p => ({ ...p, suRowId: '4' }));
   v.preview.report.memberships.push({ rowId: '4', plotNumber: cell('P'), siteUnit: cell('u:1'), joinedRows: 2, status: 'joined' });
-  v.preview.report.units.unshift(other); v.sheets.unshift({ unit: cell('u:1'), name: 'u-1' });
+  v.preview.report.units.unshift(other); v.sheets.push({ unit: cell('u:1'), name: 'u-1' });
   assert.throws(() => validate(v), /inconsistent/);
   const unicode = fixture(), first = unicode.preview.report.units[0];
   first.code = '😀'; unicode.preview.report.memberships[0].siteUnit = cell('😀');
@@ -167,9 +176,12 @@ test('source worksheet names preserve literal empty codes and refuse collisions,
   second.plots = second.plots.map(p => ({ ...p, suRowId: '4' }));
   unicode.preview.report.units.push(second);
   unicode.preview.report.memberships.push({ rowId: '4', plotNumber: cell('P'), siteUnit: cell('\ue000'), joinedRows: 2, status: 'joined' });
-  unicode.sheets.push({ unit: cell('\ue000'), name: '\ue000' });
+  unicode.sheets.unshift({ unit: cell('\ue000'), name: '\ue000' });
   assert.doesNotThrow(() => validate(unicode));
-  unicode.preview.report.units.reverse(); unicode.sheets.reverse();
+  const unicodeDescendingSheets = structuredClone(unicode);
+  unicodeDescendingSheets.sheets.reverse();
+  assert.throws(() => validate(unicodeDescendingSheets));
+  unicode.preview.report.units.reverse();
   assert.throws(() => validate(unicode));
 });
 
@@ -375,4 +387,49 @@ test('actual panel review script cancels late delivery and suppresses parent-met
   const remount = panelScript(owned);
   assert.equal(remount.publication().blocked, true); assert.equal(remount.holds.at(-1), true);
   remount.acknowledge(); assert.equal(remount.publication().blocked, false); remount.destroy();
+});
+
+test('live Go GetSiteUnitSummaryWorkbookReview wire payloads validate ascending sheets against descending units and render matching worksheet labels', async () => {
+  const wire = readJsonFixture('siteUnitSummaryWorkbookWire.json');
+  const wireOwner = {
+    contextId: 'summary-wire-context',
+    project: 'Sample',
+    projectPath: 'C:\\fixture\\Sample.db',
+    su: 'Report',
+    suPath: 'C:\\fixture\\Sample.db',
+  };
+  const validatedStandard = workbook.validateSiteUnitSummaryWorkbookReview(wire.standard, wireOwner, 1, false);
+  const validatedStandardConfigured = workbook.validateSiteUnitSummaryWorkbookReview(wire.standard, wireOwner, 1, true);
+  assert.deepEqual(validatedStandard.preview.report.units.map(u => u.code), ['Unit:Zeta', 'Unit:Alpha']);
+  assert.deepEqual(validatedStandard.sheets.map(s => s.name), ['Unit-Alpha', 'Unit-Zeta']);
+  assert.equal(validatedStandardConfigured.scope.coverCalculation, 1);
+  assert.equal(validatedStandardConfigured.scope.andOr, 1);
+
+  assert.throws(() => workbook.validateSiteUnitSummaryWorkbookReview(wire.breakpoints, wireOwner, 2, false));
+  const validatedBreakpoints = workbook.validateSiteUnitSummaryWorkbookReview(wire.breakpoints, wireOwner, 2, true);
+  assert.deepEqual(validatedBreakpoints.preview.report.units.map(u => u.code), ['BP_Zeta', 'BP_Alpha']);
+  assert.deepEqual(validatedBreakpoints.sheets.map(s => s.name), ['BP_Alpha', 'BP_Zeta']);
+
+  const session = new workbook.SiteUnitSummaryWorkbookPublicationSession(wireOwner);
+  await session.publish(wire.standard, wire.published.requestedDestination, async () => wire.published, 1, true);
+  assert.equal(session.view().outcome.status, 'published');
+  session.acknowledge();
+
+  const seededPanelSource = source()
+    .replace('structuredClone(owner)', '({ ...owner })')
+    .replace(
+      'let review = $state.raw<ValidatedSiteUnitSummaryWorkbookReview | ValidatedExtendedSummaryWorkbookReview | null>(null);',
+      `let review = $state.raw<ValidatedSiteUnitSummaryWorkbookReview | ValidatedExtendedSummaryWorkbookReview | null>(${JSON.stringify(validatedStandardConfigured)});`,
+    );
+  const Panel = serverComponent(seededPanelSource, 'SiteUnitSummaryWorkbookPanel.svelte', {
+    '../bindings/github.com/boostao/vpro/app': { EnvironmentReportService: {} },
+    './siteUnitSummaryWorkbook': workbook,
+    './siteUnitSummaryExtendedWorkbook': { sameExtendedSummaryWorkbookOptions: () => false },
+    './longEnvironmentReport': { reportCellText: c => c.text ?? '' },
+  });
+  const html = render(Panel, {
+    props: { owner: wireOwner, method: 1, siteUnitType: 1, allowConfiguredScope: true, disabled: false, onBusyChange() {} },
+  }).body;
+  assert.match(html, /<h4[^>]*>Site Unit: Unit:Zeta<\/h4>[\s\S]*?Worksheet: Unit-Zeta\./);
+  assert.match(html, /<h4[^>]*>Site Unit: Unit:Alpha<\/h4>[\s\S]*?Worksheet: Unit-Alpha\./);
 });

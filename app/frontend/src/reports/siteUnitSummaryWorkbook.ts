@@ -88,6 +88,9 @@ export function validateSiteUnitSummaryWorkbookReview(value: SiteUnitSummaryWork
   return validateSiteUnitSummaryWorkbookEvidence(value, owner, requestedMethod, 'layer', false, allowConfiguredScope);
 }
 
+const scopeKeys = ['savedMethod', 'siteUnitType', 'orderBy', 'includeSpecies',
+  'coverCalculation', 'andOr', 'presenceGreaterThan', 'coverGreaterThan'] as const;
+
 export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWorkbookReview | null,
   owner: GoogleEarthScope, requestedMethod: number, mode: SiteUnitSummaryMode, extended: boolean,
   allowConfiguredScope = false): ValidatedSiteUnitSummaryWorkbookReview {
@@ -103,10 +106,13 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
       !shape(value, ['preview', 'scope', 'sheets', 'approvalHash', 'workbookSHA256', 'bytes']) ||
       !hash(value.approvalHash) || !hash(value.workbookSHA256) ||
       !Number.isSafeInteger(value.bytes) || value.bytes <= 0 ||
-      !shape(value.scope, ['savedMethod', 'siteUnitType', 'orderBy', 'includeSpecies']) ||
+      !shape(value.scope, [...scopeKeys]) ||
       ![1, 2].includes(value.scope.savedMethod) || !validUnitTypes.includes(value.scope.siteUnitType) ||
       !(extended ? [1, 2, 3] : [1, 3]).includes(value.scope.orderBy) ||
       !(extended ? [0, 1] : [0]).includes(value.scope.includeSpecies) ||
+      ![1, 2].includes(value.scope.coverCalculation) || ![1, 2].includes(value.scope.andOr) ||
+      !Number.isSafeInteger(value.scope.presenceGreaterThan) || value.scope.presenceGreaterThan < 0 || value.scope.presenceGreaterThan > 32767 ||
+      !Number.isSafeInteger(value.scope.coverGreaterThan) || value.scope.coverGreaterThan < 0 || value.scope.coverGreaterThan > 32767 ||
       !shape(value.preview, ['contextId', 'projectPath', 'suPath', 'report']) ||
       !shape(value.preview.report, ['project', 'su', 'method', 'querySource', 'fields', 'memberships', 'units']) ||
       !Array.isArray(value.sheets)) reject();
@@ -114,7 +120,7 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
   const preview = validateSiteUnitSummary(value.preview, owner.contextId, owner.project,
     owner.projectPath, owner.su, owner.suPath, requestedMethod, mode, allowConfiguredScope);
   const report = preview.report;
-  const fields = mode === 'layer' ? siteUnitSummaryWorkbookFields : [
+  const fields = mode !== 'lifeform' ? siteUnitSummaryWorkbookFields : [
     ...siteUnitSummaryWorkbookFields.slice(0, 23),
     ...summaryLifeformCaptions.map((label, index) => ({
       source: 'Lifeform', key: `Lifeform${index}`, label, kind: 'lifeform-cover', section: 'VEGETATION',
@@ -135,10 +141,6 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
     if (!shape(member, ['rowId', 'plotNumber', 'siteUnit', 'joinedRows', 'status']) ||
         !cellShape(member.plotNumber) || !cellShape(member.siteUnit)) reject();
   }
-  const sheetUnits = new Map<string, { name: string; index: number }>();
-  if (allowConfiguredScope) {
-    report.units.forEach((unit, idx) => sheetUnits.set(unit.code, { name: workbookWorksheetName(unit.code, idx), index: idx }));
-  }
   for (const [i, unit] of report.units.entries()) {
     if (!shape(unit, ['code', 'longName', 'nameStatus', 'nameCandidates', 'plots', 'values']) ||
         !['unique', 'missing'].includes(unit.nameStatus) || unit.values[8] !== unit.values[9] ||
@@ -156,20 +158,15 @@ export function validateSiteUnitSummaryWorkbookEvidence(value: SiteUnitSummaryWo
       }
       joinedPlots.add(plot.plotNumber);
     }
-    const sheet = value.sheets[i], expectedName = workbookWorksheetName(unit.code, i);
+    const sheet = value.sheets[i];
+    const sheetUnitIndex = report.units.length - 1 - i;
+    const expectedUnit = report.units[sheetUnitIndex];
+    const expectedName = workbookWorksheetName(expectedUnit.code, sheetUnitIndex);
     if (!shape(sheet, ['unit', 'name']) || !cellShape(sheet.unit) || !completeCell(sheet.unit) ||
-        sheet.unit.storage !== 'text') reject();
-    if (!allowConfiguredScope) {
-      if (sheet.unit.text !== unit.code || sheet.name !== expectedName || sheetNames.has(workbookFoldedName(sheet.name))) reject();
-      sheetNames.add(workbookFoldedName(sheet.name));
-    } else {
-      const target = sheetUnits.get(sheet.unit.text!);
-      if (!target || sheet.name !== target.name || sheetNames.has(workbookFoldedName(sheet.name))) reject();
-      sheetNames.add(workbookFoldedName(sheet.name));
-      sheetUnits.delete(sheet.unit.text!);
-    }
+        sheet.unit.storage !== 'text' || sheet.unit.text !== expectedUnit.code || sheet.name !== expectedName ||
+        sheetNames.has(workbookFoldedName(sheet.name))) reject();
+    sheetNames.add(workbookFoldedName(sheet.name));
   }
-  if (allowConfiguredScope && sheetUnits.size !== 0) reject();
   const envCounts = new Map<string, number>(), adminCounts = new Map<string, number>();
   for (const plot of envOwners.values()) envCounts.set(plot, (envCounts.get(plot) ?? 0) + 1);
   for (const plot of adminOwners.values()) adminCounts.set(plot, (adminCounts.get(plot) ?? 0) + 1);

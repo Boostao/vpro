@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const { compile } = require('svelte/compiler');
+const { readJsonFixture } = require('./fixtureLoader.cjs');
 const { loadTypeScript, componentFunctions, srcPath } = require('./svelteTestHelpers.cjs');
 const { quality, restoration, summary, cell, fixture: environmentFixture } = require('./siteUnitSummaryTestFixtures.cjs');
 const location = loadTypeScript('plotLocationReview.ts', { './projectMetadataRestore': restoration });
@@ -49,7 +50,8 @@ function fixture(request = options(), owned = owner) {
     environment.report.units[0].values.splice(23, 4, ...summary.summaryLifeformCaptions.map(() => ''));
   }
   const { includeSpecies, ...criteria } = request;
-  return { environment, options: { ...request }, scope: { savedMethod: 2, siteUnitType: 1, orderBy: 3, includeSpecies: 1 },
+  return { environment, options: { ...request }, scope: { savedMethod: 2, siteUnitType: 1, orderBy: 3, includeSpecies: 1,
+      coverCalculation: 1, andOr: 1, presenceGreaterThan: 0, coverGreaterThan: 0 },
     species: includeSpecies === 0 ? null : { environment: structuredClone(environment), options: criteria,
       units: [{ code: '', nPlots: 2, groups: [{ index: 1,
         caption: request.orderBy === 1 ? 'Layer 1' : summary.summaryLifeformCaptions[1], rows: [{
@@ -97,6 +99,8 @@ test('extended transport refuses extra/missing shapes, cross-projection differen
     v => v.options.extra = 1, v => delete v.options.andOr,
     ...Object.keys(request).map(key => v => v.options[key]++),
     v => v.scope.orderBy = 0, v => v.scope.siteUnitType = 2, v => v.scope.includeSpecies = 2,
+    v => delete v.scope.coverCalculation, v => v.scope.coverCalculation = 0, v => v.scope.andOr = 3,
+    v => v.scope.presenceGreaterThan = -1, v => v.scope.coverGreaterThan = 32768,
     v => v.environment.contextId = 'foreign', v => v.environment.report.fields[23].label = 'invented',
     v => v.environment.report.units[0].values.pop(), v => v.sheets[0].name = 'invented',
     v => v.approvalHash = '', v => v.bytes = 0,
@@ -247,4 +251,48 @@ test('extended UI keeps visible labels and held authority while restoring the or
   assert.doesNotMatch(panel, /reads\.track\(EnvironmentReportService\.ExportReviewed/);
   for (const heading of ['Scientific Name', 'Common Name', '%Cover', '%Presence']) assert.ok(panel.includes(heading));
   assert.match(panel, /scope="row" aria-label=/);
+});
+
+test('live Go GetSiteUnitSummaryExtendedWorkbookReview wire payloads validate across lifeform, layer-species and Strata A-D modes', async () => {
+  const wire = readJsonFixture('siteUnitSummaryWorkbookWire.json');
+  const wireOwner = {
+    contextId: 'summary-wire-context',
+    project: 'Sample',
+    projectPath: 'C:\\fixture\\Sample.db',
+    su: 'Report',
+    suPath: 'C:\\fixture\\Sample.db',
+  };
+  for (const [key, allowConfigured, expectedFields, hasSpecies] of [
+    ['extendedLifeform', false, 49, false],
+    ['extendedLifeform', true, 49, false],
+    ['extendedLayerSpecies', false, 39, true],
+    ['extendedLayerSpecies', true, 39, true],
+    ['extendedStrataSpecies', true, 39, true],
+  ]) {
+    const payload = wire[key];
+    const validated = extended.validateExtendedSummaryWorkbookReview(payload, wireOwner, payload.options, allowConfigured);
+    assert.equal(validated.environment.report.fields.length, expectedFields);
+    assert.deepEqual(validated.environment.report.units.map(u => u.code), ['Unit:Zeta', 'Unit:Alpha']);
+    assert.deepEqual(validated.sheets.map(s => s.name), ['Unit-Alpha', 'Unit-Zeta']);
+    assert.equal(validated.species !== null, hasSpecies);
+  }
+  assert.throws(() => extended.validateExtendedSummaryWorkbookReview(
+    wire.extendedStrataSpecies, wireOwner, wire.extendedStrataSpecies.options, false));
+
+  const session = new extended.ExtendedSummaryWorkbookPublicationSession(wireOwner);
+  const strata = wire.extendedStrataSpecies;
+  await session.publish(strata, destination, async req => {
+    assert.equal(req.orderBy, 3);
+    assert.equal(req.includeSpecies, 1);
+    assert.equal(req.approvalHash, strata.approvalHash);
+    return {
+      status: 'published',
+      requestedDestination: destination,
+      path: destination,
+      sha256: strata.workbookSHA256,
+      errorMessage: '',
+    };
+  }, strata.options, true);
+  assert.equal(session.view().outcome.status, 'published');
+  session.acknowledge();
 });

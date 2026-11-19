@@ -422,12 +422,18 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
         (settings.unitGrouping === 'all-plots' ? 3 : settings.unitGrouping === 'selected-fields' ? 2 : 1) !== unitView.saved.unitGroups) settings = null;
     reportBusy();
   });
+  let wasProjectActive = untrack(() => !!projectView?.projectActive);
   function projectChanged() {
-    generation++; reads.cancelAll(); busy = false;
-    projectView = projectWorkspace?.view() ?? null;
-    workbookReview = null;
-    settings = projectView?.projectActive ? projectView.settings : null;
-    preview = projectView?.projectActive ? projectView.preview : null;
+    const nextView = projectWorkspace?.view() ?? null;
+    const nextActive = !!nextView?.projectActive;
+    if (wasProjectActive || nextActive) {
+      generation++; reads.cancelAll(); busy = false;
+      workbookReview = null;
+      settings = nextActive ? nextView?.settings ?? null : null;
+      preview = nextActive ? nextView?.preview ?? null : null;
+    }
+    wasProjectActive = nextActive;
+    projectView = nextView;
     syncProjectNotifications();
     reportBusy();
   }
@@ -698,9 +704,10 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       return;
     }
     if (!workbookEnabled || busy || operationHeld || workbookBarrier || preferenceBarrier || !workbookReview) return;
+    const reviewed = workbookReview;
     cancel(); error = '';
     try {
-      await workbookSession.publish(workbookReview, destination, request =>
+      await workbookSession.publish(reviewed, destination, request =>
         VegetationReportService.ExportReviewedVegetationWorkbook(contextId, JSON.stringify(request)));
       if (typeof syncWorkbookNotifications === 'function') {
         syncWorkbookNotifications();
@@ -1280,7 +1287,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
       {/if}
       <label for="vegetation-workbook-destination">New XLSX output file (existing files are never replaced)</label>
       <textarea id="vegetation-workbook-destination" rows="2" disabled={busy || operationHeld || workbookBarrier || preferenceBarrier} bind:value={destination}></textarea>
-      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || !destination || !/\.xlsx$/i.test(destination)} onclick={publishWorkbook}>Publish reviewed unlumped XLSX workbook</button>
+      <button disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || !destination || !/\.xlsx$/i.test(destination)} onclick={publishWorkbook}>{typeof reviewed.scope === 'string' && reviewed.scope !== 'unlumped' ? `Publish reviewed ${reviewed.scope.replace(/^lump:/, '')} XLSX workbook` : 'Publish reviewed unlumped XLSX workbook'}</button>
       <p class="guidance">Source settings/layout are read-only. Hidden lossless source metadata retains typed identities, reference candidates and diagnostics.
         Publication never replaces an existing file. Every returned or unknown outcome clears preparation; acknowledge it and explicitly obtain a new review before retrying.</p>
     </section>
