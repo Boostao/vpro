@@ -116,6 +116,8 @@ function buffersFrom(parts: CoordinateParts): CoordinateBuffers {
 export class CoordinateEditor {
   private data: CoordinateState;
   private revisions = { latitude: 0, longitude: 0 };
+  private activeDecompose: Record<CoordinateAxis, Promise<void> | null> = { latitude: null, longitude: null };
+  private draftIdentity: object | undefined = undefined;
   private epoch = 0;
   private pending = 0;
   private alive = true;
@@ -143,33 +145,60 @@ export class CoordinateEditor {
     this.callbacks.error(message);
     this.publish();
   }
-  syncDraft(latitude: number | null, longitude: number | null) {
-    for (const axis of axes) {
-      const value = axis === 'latitude' ? latitude : longitude;
-      if (Object.is(value, this.data.axes[axis].value)) continue;
-      const hadValidation = this.data.axes[axis].error !== null || this.data.axes[axis].pending;
-      this.revisions[axis]++;
-      this.data.axes[axis] = { ...axisState(), value };
-      if (hadValidation) this.callbacks.validation(axis, null);
-      if (this.data.ready && !this.preferencePending) void this.decompose(axis);
+  private async settleDecompositions(epoch: number) {
+    while (this.alive && epoch === this.epoch) {
+      const inflight = axes.map(axis => this.activeDecompose[axis]).filter((task): task is Promise<void> => task !== null);
+      if (inflight.length === 0) break;
+      await Promise.all(inflight);
     }
   }
-  private async decompose(axis: CoordinateAxis) {
+  syncDraft(latitude: number | null, longitude: number | null, draftIdentity?: object) {
+    const draftChanged = draftIdentity !== undefined && this.draftIdentity !== undefined && draftIdentity !== this.draftIdentity;
+    if (draftIdentity !== undefined) this.draftIdentity = draftIdentity;
+    let updated = false;
+    let decomposed = false;
+    for (const axis of axes) {
+      const value = axis === 'latitude' ? latitude : longitude;
+      const state = this.data.axes[axis];
+      if (Object.is(value, state.value) && !(draftChanged && (state.touched || state.pending || state.error !== null))) continue;
+      const hadValidation = state.error !== null || state.pending;
+      this.revisions[axis]++;
+      this.data.axes[axis] = { ...axisState(), value };
+      updated = true;
+      if (hadValidation) this.callbacks.validation(axis, null);
+      if (this.data.ready && !this.preferencePending) {
+        decomposed = true;
+        void this.decompose(axis);
+      }
+    }
+    if (updated && !decomposed) this.publish();
+  }
+  private decompose(axis: CoordinateAxis): Promise<void> {
     const revision = ++this.revisions[axis], epoch = this.epoch, state = this.data.axes[axis];
     state.ready = false;
     this.begin();
-    try {
-      const parts = await this.api.decompose(state.value, this.data.mode);
-      if (!this.valid(axis, revision, epoch)) return;
-      const hadError = state.error !== null;
-      state.buffers = buffersFrom(parts);
-      state.ready = true;
-      state.error = null;
-      state.pending = false;
-      if (hadError) this.callbacks.validation(axis, null);
-      this.publish();
-    } catch (cause) { if (this.valid(axis, revision, epoch)) this.fail(axis, cause); }
-    finally { this.end(); }
+    let settled = false;
+    let task: Promise<void> | null = null;
+    task = (async () => {
+      try {
+        const parts = await this.api.decompose(state.value, this.data.mode);
+        if (!this.valid(axis, revision, epoch) || this.data.axes[axis] !== state) return;
+        const hadError = state.error !== null;
+        state.buffers = buffersFrom(parts);
+        state.ready = true;
+        state.error = null;
+        state.pending = false;
+        if (hadError) this.callbacks.validation(axis, null);
+        this.publish();
+      } catch (cause) { if (this.valid(axis, revision, epoch) && this.data.axes[axis] === state) this.fail(axis, cause); }
+      finally {
+        settled = true;
+        if (task !== null && this.activeDecompose[axis] === task) this.activeDecompose[axis] = null;
+        this.end();
+      }
+    })();
+    if (!settled) this.activeDecompose[axis] = task;
+    return task;
   }
   async initialize() {
     if (!this.alive || this.data.busy) return;
@@ -184,17 +213,22 @@ export class CoordinateEditor {
       if (mode !== this.data.mode && invalid) this.callbacks.error('Coordinate preference changed while input is invalid; finish the input or Undo before changing display mode.');
       else if (mode !== this.data.mode) {
         this.data.mode = mode;
-        for (const axis of axes) this.data.axes[axis] = { ...axisState(), value: this.data.axes[axis].value };
+        for (const axis of axes) {
+          this.revisions[axis]++;
+          this.data.axes[axis] = { ...axisState(), value: this.data.axes[axis].value };
+        }
       }
       this.data.ready = true;
+      this.preferencePending = false;
       for (const axis of axes) {
         const state = this.data.axes[axis];
         if (state.touched) {
           state.ready = true;
           if (state.pending) void this.convert(axis);
           else if (state.error) this.callbacks.validation(axis, state.error);
-        } else await this.decompose(axis);
+        } else void this.decompose(axis);
       }
+      await this.settleDecompositions(epoch);
     } catch (cause) {
       if (this.alive && epoch === this.epoch) { this.data.ready = false; this.callbacks.error(`Coordinate preference could not be loaded: ${String(cause)}`); }
     } finally { if (epoch === this.epoch) this.preferencePending = false; this.end(); }
@@ -212,10 +246,24 @@ export class CoordinateEditor {
       await this.api.setMode(mode);
       if (!this.alive || epoch !== this.epoch) return;
       this.data.mode = mode;
-      for (const axis of axes) this.data.axes[axis] = { ...axisState(), value: this.data.axes[axis].value };
-      await Promise.all(axes.map(axis => this.decompose(axis)));
-    } catch (cause) { if (this.alive && epoch === this.epoch) this.callbacks.error(`Coordinate preference could not be saved: ${String(cause)}`); }
-    finally { if (epoch === this.epoch) this.preferencePending = false; this.end(); }
+      this.preferencePending = false;
+      for (const axis of axes) {
+        this.revisions[axis]++;
+        this.data.axes[axis] = { ...axisState(), value: this.data.axes[axis].value };
+      }
+      for (const axis of axes) void this.decompose(axis);
+      await this.settleDecompositions(epoch);
+    } catch (cause) {
+      if (this.alive && epoch === this.epoch) {
+        this.preferencePending = false;
+        this.callbacks.error(`Coordinate preference could not be saved: ${String(cause)}`);
+        for (const axis of axes) {
+          const state = this.data.axes[axis];
+          if (this.data.ready && !state.ready && !state.touched && state.error === null) void this.decompose(axis);
+        }
+        await this.settleDecompositions(epoch);
+      }
+    } finally { if (epoch === this.epoch) this.preferencePending = false; this.end(); }
   }
   edit(axis: CoordinateAxis, part: CoordinatePart | 'negative', value: string | boolean) {
     if (!this.alive || !this.data.ready || !this.data.axes[axis].ready || this.preferencePending) return;
@@ -237,14 +285,14 @@ export class CoordinateEditor {
     this.begin();
     try {
       const value = await this.api.convert(axis, this.data.mode, parts);
-      if (!this.valid(axis, revision, epoch)) return;
+      if (!this.valid(axis, revision, epoch) || this.data.axes[axis] !== state) return;
       if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) > (axis === 'latitude' ? 90 : 180))) throw new Error('Coordinate service returned an invalid coordinate.');
       state.value = value;
       state.pending = false;
       this.callbacks.value(axis, value);
       this.callbacks.validation(axis, null);
       this.publish();
-    } catch (cause) { if (this.valid(axis, revision, epoch)) { state.pending = false; this.fail(axis, cause); } }
+    } catch (cause) { if (this.valid(axis, revision, epoch) && this.data.axes[axis] === state) { state.pending = false; this.fail(axis, cause); } }
     finally { this.end(); }
   }
   dispose() {

@@ -69,7 +69,7 @@
         lon = Math.round(projected.longitude * 1e6) / 1e6;
         if (capabilities.latitude === true) { targetDraft.latitude = lat; changed = true; }
         if (capabilities.longitude === true) { targetDraft.longitude = lon; changed = true; }
-        editor.syncDraft(targetDraft.latitude, targetDraft.longitude);
+        editor.syncDraft(targetDraft.latitude, targetDraft.longitude, targetDraft);
       }
 
       if (lat === null || lon === null) {
@@ -81,7 +81,7 @@
 
       if (suggestion.longitudeSignFlipped && capabilities.longitude === true) {
         targetDraft.longitude = suggestion.normalizedLon;
-        editor.syncDraft(targetDraft.latitude, targetDraft.longitude);
+        editor.syncDraft(targetDraft.latitude, targetDraft.longitude, targetDraft);
         changed = true;
       }
       if (suggestion.utmZone > 0) {
@@ -127,7 +127,7 @@
   }
   $effect(() => {
     identity = draft;
-    editor.syncDraft(draft.latitude, draft.longitude);
+    editor.syncDraft(draft.latitude, draft.longitude, draft);
   });
   onMount(() => { void editor.initialize(); });
   onDestroy(() => { auto1Generation++; editor.dispose(); });

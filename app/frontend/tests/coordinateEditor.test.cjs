@@ -223,6 +223,265 @@ test('preference failure preserves display mode/buffers and invalid server numer
   assert.equal(events.values.length, 0);
   assert.match(events.validation.at(-1).message, /invalid coordinate/);
 });
+test('syncDraft before and during getMode decomposes latest plot coordinates once per axis without duplicate RPCs', async () => {
+  const beforeCalls = [];
+  const before = setup({
+    decompose: async (value, mode) => {
+      beforeCalls.push({ value, mode });
+      return { degrees: value, minutes: null, seconds: null, negative: false };
+    }
+  });
+  before.editor.syncDraft(58.1234550476074, 123.629028320313, {});
+  assert.equal(beforeCalls.length, 0);
+  await before.editor.initialize();
+  assert.deepEqual(beforeCalls, [
+    { value: 58.1234550476074, mode: 'dd' },
+    { value: 123.629028320313, mode: 'dd' }
+  ]);
+  assert.equal(before.editor.snapshot().ready, true);
+  assert.equal(before.editor.snapshot().busy, false);
+  assert.equal(before.editor.snapshot().axes.latitude.ready, true);
+  assert.equal(before.editor.snapshot().axes.longitude.ready, true);
+  assert.equal(before.editor.snapshot().axes.latitude.buffers.degrees, '58.1234550476074');
+  assert.equal(before.editor.snapshot().axes.longitude.buffers.degrees, '123.629028320313');
+
+  const modeGate = deferred();
+  const duringCalls = [];
+  const during = setup({
+    getMode: () => modeGate.promise,
+    decompose: async (value, mode) => {
+      duringCalls.push({ value, mode });
+      return mode === 'dm' && value !== null
+        ? { degrees: Math.trunc(Math.abs(value)), minutes: 15.5, seconds: null, negative: value < 0 }
+        : { degrees: value, minutes: null, seconds: null, negative: false };
+    }
+  });
+  const initPromise = during.editor.initialize();
+  during.editor.syncDraft(50.5, 120.5, {});
+  during.editor.syncDraft(58.1234550476074, 123.629028320313, {});
+  assert.equal(duringCalls.length, 0);
+  modeGate.resolve('dm');
+  await initPromise;
+  assert.deepEqual(duringCalls, [
+    { value: 58.1234550476074, mode: 'dm' },
+    { value: 123.629028320313, mode: 'dm' }
+  ]);
+  assert.equal(during.editor.snapshot().ready, true);
+  assert.equal(during.editor.snapshot().busy, false);
+  assert.equal(during.editor.snapshot().axes.latitude.ready, true);
+  assert.equal(during.editor.snapshot().axes.longitude.ready, true);
+  assert.equal(during.editor.snapshot().axes.latitude.buffers.degrees, '58');
+  assert.equal(during.editor.snapshot().axes.longitude.buffers.degrees, '123');
+});
+test('syncDraft arriving while initialize is awaiting initial decompose populates and enables both axes (UX-ENV-003)', async () => {
+  const decomposeRequests = [];
+  const { editor, events } = setup({
+    decompose: (value, mode) => {
+      const req = deferred();
+      decomposeRequests.push({ value, mode, ...req });
+      return req.promise;
+    }
+  });
+  const draft0 = {}, draft337 = {};
+  editor.syncDraft(null, null, draft0);
+  const init = editor.initialize();
+  await tick();
+  assert.equal(decomposeRequests.length, 2);
+  assert.deepEqual(decomposeRequests.map(r => r.value), [null, null]);
+
+  // Plot 00337 loads while initial (null, null) decomposition is still in flight
+  editor.syncDraft(58.1234550476074, 123.629028320313, draft337);
+  assert.equal(decomposeRequests.length, 4);
+  assert.deepEqual(decomposeRequests.slice(2).map(r => r.value), [58.1234550476074, 123.629028320313]);
+
+  // Resolve initial (null) latitude first, and resolve plot 00337 longitude BEFORE initial (null) longitude (out-of-order)
+  decomposeRequests[0].resolve({ degrees: null, minutes: null, seconds: null, negative: false });
+  decomposeRequests[3].resolve({ degrees: 123.629028320313, minutes: null, seconds: null, negative: false });
+  await tick();
+  assert.equal(editor.snapshot().busy, true);
+
+  decomposeRequests[1].resolve({ degrees: null, minutes: null, seconds: null, negative: false });
+  decomposeRequests[2].resolve({ degrees: 58.1234550476074, minutes: null, seconds: null, negative: false });
+  await init;
+
+  const snap = editor.snapshot();
+  assert.equal(snap.ready, true);
+  assert.equal(snap.busy, false);
+  assert.equal(snap.axes.latitude.ready, true);
+  assert.equal(snap.axes.longitude.ready, true);
+  assert.equal(snap.axes.latitude.buffers.degrees, '58.1234550476074');
+  assert.equal(snap.axes.longitude.buffers.degrees, '123.629028320313');
+  assert.equal(events.dirty, 0);
+  assert.equal(events.errors.length, 0);
+});
+test('syncDraft after getMode and changeMode invoke decompose once per axis and handle syncDraft during setMode', async () => {
+  const calls = [];
+  let setModeGate = null;
+  const { editor, events } = setup({
+    setMode: mode => {
+      events.preferences.push(mode);
+      return setModeGate ? setModeGate.promise : Promise.resolve();
+    },
+    decompose: async (value, mode) => {
+      calls.push({ value, mode });
+      return mode === 'dd'
+        ? { degrees: value, minutes: null, seconds: null, negative: false }
+        : value === null
+        ? { degrees: null, minutes: null, seconds: null, negative: false }
+        : { degrees: Math.trunc(Math.abs(value)), minutes: 30, seconds: mode === 'dms' ? 15 : null, negative: value < 0 };
+    }
+  });
+  const plotA = {}, plotB = {}, plotC = {}, plotD = {};
+  editor.syncDraft(58.1234550476074, 123.629028320313, plotA);
+  await editor.initialize();
+  assert.equal(calls.length, 2);
+
+  calls.length = 0;
+  editor.syncDraft(54.25, 125.75, plotB);
+  await tick();
+  assert.deepEqual(calls, [
+    { value: 54.25, mode: 'dd' },
+    { value: 125.75, mode: 'dd' }
+  ]);
+
+  // Repeated syncDraft with identical clean coordinates fires zero duplicate RPCs
+  calls.length = 0;
+  editor.syncDraft(54.25, 125.75, plotB);
+  await tick();
+  assert.equal(calls.length, 0);
+
+  // Mode switch invokes decompose exactly once per axis
+  await editor.changeMode('dms');
+  assert.deepEqual(calls, [
+    { value: 54.25, mode: 'dms' },
+    { value: 125.75, mode: 'dms' }
+  ]);
+
+  // syncDraft arriving while setMode is pending decomposes once in the new mode after setMode resolves
+  calls.length = 0;
+  setModeGate = deferred();
+  const modePromise = editor.changeMode('dm');
+  editor.syncDraft(51.5, 119.5, plotC);
+  assert.equal(calls.length, 0);
+  setModeGate.resolve();
+  await modePromise;
+  assert.deepEqual(calls, [
+    { value: 51.5, mode: 'dm' },
+    { value: 119.5, mode: 'dm' }
+  ]);
+  assert.equal(editor.snapshot().axes.latitude.ready, true);
+  assert.equal(editor.snapshot().axes.longitude.ready, true);
+
+  // If setMode fails after syncDraft updated coordinates while pending, new coordinates still decompose in retained mode
+  calls.length = 0;
+  setModeGate = deferred();
+  const failedModePromise = editor.changeMode('dd');
+  editor.syncDraft(49.5, 121.5, plotD);
+  assert.equal(calls.length, 0);
+  setModeGate.reject(new Error('save rejected'));
+  await failedModePromise;
+  assert.deepEqual(calls, [
+    { value: 49.5, mode: 'dm' },
+    { value: 121.5, mode: 'dm' }
+  ]);
+  assert.equal(editor.snapshot().mode, 'dm');
+  assert.equal(editor.snapshot().axes.latitude.ready, true);
+  assert.equal(editor.snapshot().axes.longitude.ready, true);
+});
+test('rapid plot switching ignores stale out-of-order decompose and convert replies across draft identities', async () => {
+  const decomposeRequests = [];
+  const convertRequests = [];
+  const { editor, events } = setup({
+    decompose: (value, mode) => {
+      const req = deferred();
+      decomposeRequests.push({ value, mode, ...req });
+      return req.promise;
+    },
+    convert: (axis, mode, parts) => {
+      const req = deferred();
+      convertRequests.push({ axis, mode, parts, ...req });
+      return req.promise;
+    }
+  });
+  const plot1 = {}, plot2 = {}, plot3 = {}, plot4 = {};
+  editor.syncDraft(58.12, 123.62, plot1);
+  const init = editor.initialize();
+  await tick();
+  decomposeRequests[0].resolve({ degrees: 58.12, minutes: null, seconds: null, negative: false });
+  decomposeRequests[1].resolve({ degrees: 123.62, minutes: null, seconds: null, negative: false });
+  await init;
+
+  // Rapidly switch Plot 1 -> Plot 2 -> Plot 3 while decompositions remain in flight
+  editor.syncDraft(54.0, 125.0, plot2);
+  editor.syncDraft(51.5, 120.5, plot3);
+  assert.equal(decomposeRequests.length, 6);
+
+  // Plot 3 resolves FIRST, then Plot 2 resolves/rejects out of order
+  decomposeRequests[4].resolve({ degrees: 51.5, minutes: null, seconds: null, negative: false });
+  decomposeRequests[5].resolve({ degrees: 120.5, minutes: null, seconds: null, negative: false });
+  await tick();
+  decomposeRequests[2].resolve({ degrees: 54.0, minutes: null, seconds: null, negative: false });
+  decomposeRequests[3].reject(new Error('stale plot 2 failure'));
+  await tick();
+
+  assert.equal(editor.snapshot().busy, false);
+  assert.equal(editor.snapshot().axes.latitude.ready, true);
+  assert.equal(editor.snapshot().axes.longitude.ready, true);
+  assert.equal(editor.snapshot().axes.latitude.buffers.degrees, '51.5');
+  assert.equal(editor.snapshot().axes.longitude.buffers.degrees, '120.5');
+  assert.equal(editor.snapshot().axes.longitude.error, null);
+  assert.equal(events.errors.length, 0);
+
+  // User starts typing on Plot 3 (whose latitude is 51.5), then switches to Plot 4 which ALSO has latitude 51.5
+  editor.edit('latitude', 'degrees', '52.0');
+  assert.equal(convertRequests.length, 1);
+  editor.syncDraft(51.5, 122.0, plot4);
+  decomposeRequests[6].resolve({ degrees: 51.5, minutes: null, seconds: null, negative: false });
+  decomposeRequests[7].resolve({ degrees: 122.0, minutes: null, seconds: null, negative: false });
+  convertRequests[0].resolve(52.0);
+  await tick();
+
+  assert.equal(events.values.length, 0);
+  assert.equal(editor.snapshot().axes.latitude.value, 51.5);
+  assert.equal(editor.snapshot().axes.latitude.buffers.degrees, '51.5');
+  assert.equal(editor.snapshot().axes.longitude.buffers.degrees, '122');
+});
+test('getMode failure never invokes decompose and recovers cleanly on retry', async () => {
+  let failMode = true;
+  const decomposeCalls = [];
+  const modeGate = deferred();
+  const { editor, events } = setup({
+    getMode: () => failMode ? modeGate.promise : Promise.resolve('dd'),
+    decompose: async (value, mode) => {
+      decomposeCalls.push({ value, mode });
+      return { degrees: value, minutes: null, seconds: null, negative: false };
+    }
+  });
+  const firstAttempt = editor.initialize();
+  editor.syncDraft(58.1234550476074, 123.629028320313, {});
+  modeGate.reject(new Error('config unavailable'));
+  await firstAttempt;
+
+  assert.equal(decomposeCalls.length, 0);
+  assert.equal(editor.snapshot().ready, false);
+  assert.equal(editor.snapshot().busy, false);
+  assert.equal(editor.snapshot().axes.latitude.ready, false);
+  assert.equal(editor.snapshot().axes.longitude.ready, false);
+  assert.match(events.errors.at(-1), /config unavailable/);
+
+  failMode = false;
+  await editor.initialize();
+  assert.deepEqual(decomposeCalls, [
+    { value: 58.1234550476074, mode: 'dd' },
+    { value: 123.629028320313, mode: 'dd' }
+  ]);
+  assert.equal(editor.snapshot().ready, true);
+  assert.equal(editor.snapshot().busy, false);
+  assert.equal(editor.snapshot().axes.latitude.ready, true);
+  assert.equal(editor.snapshot().axes.longitude.ready, true);
+  assert.equal(editor.snapshot().axes.latitude.buffers.degrees, '58.1234550476074');
+  assert.equal(editor.snapshot().axes.longitude.buffers.degrees, '123.629028320313');
+});
 test('coordinate inputs retain labelled relationships and configuration/schema/lock gates', () => {
   const component = readFileSync(srcPath('CoordinateFields.svelte'), 'utf8');
   const header = readFileSync(srcPath('HeaderEditor.svelte'), 'utf8');
