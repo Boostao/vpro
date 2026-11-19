@@ -1008,7 +1008,8 @@ summary.vpro_diagnostics <- function(object, ...) {
   diag_counts <- if (length(tab) == 0L) {
     tibble::tibble(Diagnosis = character(), n = integer())
   } else {
-    tibble::tibble(Diagnosis = names(tab), n = as.integer(unname(tab)))
+    ord_t <- order(names(tab), method = "radix")
+    tibble::tibble(Diagnosis = names(tab)[ord_t], n = as.integer(unname(tab))[ord_t])
   }
   list(
     units = object$units,

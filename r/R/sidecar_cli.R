@@ -440,7 +440,7 @@ vpro_sidecar_run_clustering <- function(req) {
     ix
   }
 
-  unique_clusters <- sort(unique(cluster_labels))
+  unique_clusters <- sort(unique(as.character(cluster_labels)), method = "radix")
   non_noise <- unique_clusters[!grepl("_Noise$", unique_clusters)]
   if (length(non_noise) == 0L) {
     non_noise <- unique_clusters
@@ -458,7 +458,8 @@ vpro_sidecar_run_clustering <- function(req) {
     mean_cov <- colMeans(sub_m)
     spec <- if (cname %in% non_noise) ifelse(col_sum_means > 0, cl_mean_mat[match(cname, non_noise), ] / col_sum_means, 0.0) else rep(0.0, ncol(mat_raw))
     indval <- spec * (pres_pct / 100.0)
-    ord <- utils::head(order(-indval, -pres_pct, -mean_cov)[pres_pct[order(-indval, -pres_pct, -mean_cov)] > 0], 8L)
+    ord_all <- order(-indval, -pres_pct, -mean_cov, as.character(colnames(mat_raw)), method = "radix")
+    ord <- utils::head(ord_all[pres_pct[ord_all] > 0], 8L)
     indicators <- lapply(ord, function(si) {
       scode <- colnames(mat_raw)[[si]]
       ti <- tax_ix(scode)

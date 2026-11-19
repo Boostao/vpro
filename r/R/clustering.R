@@ -278,9 +278,12 @@ vpro_cluster <- function(
   )
 
   # Order cluster summary with numbered clusters first and Noise last
-  uniq_units <- unique(fit$site_unit)
+  uniq_units <- as.character(unique(fit$site_unit))
   is_noise_unit <- grepl("_Noise$", uniq_units)
-  uniq_units <- c(sort(uniq_units[!is_noise_unit]), sort(uniq_units[is_noise_unit]))
+  uniq_units <- c(
+    sort(uniq_units[!is_noise_unit], method = "radix"),
+    sort(uniq_units[is_noise_unit], method = "radix")
+  )
 
   summary_rows <- lapply(uniq_units, function(u) {
     idx <- which(fit$site_unit == u)
@@ -584,7 +587,7 @@ vpro_indicators <- function(
   raw_tbl[["ScientificName"]] <- as.character(tax[["ScientificName"]][use_ix])
 
   raw_tbl <- raw_tbl[!is.na(raw_tbl[["Group"]]), , drop = FALSE]
-  ord <- order(raw_tbl[["p_value"]], -raw_tbl[["IndVal"]], raw_tbl[["Species"]], na.last = TRUE)
+  ord <- order(raw_tbl[["p_value"]], -raw_tbl[["IndVal"]], as.character(raw_tbl[["Species"]]), na.last = TRUE, method = "radix")
   raw_tbl <- raw_tbl[ord, c("Species", "Group", "IndVal", "p_value", "ScientificName"), drop = FALSE]
   rownames(raw_tbl) <- NULL
   tibble::as_tibble(raw_tbl)

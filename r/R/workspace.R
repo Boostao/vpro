@@ -912,7 +912,7 @@ vpro_list_projects <- function(ws = NULL, path = vpro_data_dir()) {
     return(empty_tbl)
   }
   rows <- list()
-  for (p in sort(unique(normalizePath(db_files, winslash = "/", mustWork = TRUE)))) {
+  for (p in sort(unique(as.character(normalizePath(db_files, winslash = "/", mustWork = TRUE))), method = "radix")) {
     disc <- tryCatch(.vpro_project_discover(p), error = function(e) NULL)
     if (is.null(disc) || nrow(disc) == 0L) {
       next

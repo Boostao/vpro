@@ -372,7 +372,7 @@ vpro_pg_subset_where <- function(
     ))
   }
 
-  sort(codes)
+  sort(as.character(codes), method = "radix")
 }
 
 .vpro_sensitive_plots_in_pg <- function(pg, plots, sensitive_codes) {

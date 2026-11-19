@@ -714,7 +714,7 @@ vpro_plot_edatope <- function(x, species = NULL, units = NULL, grid_type = NULL)
 
   if (nrow(boxes_sub) > 0L) {
     boxes_sub$grid_label <- vpro_edatope_grid_label(boxes_sub$grid_type)
-    unit_lvls <- sort(unique(boxes_sub$SiteUnit))
+    unit_lvls <- sort(unique(as.character(boxes_sub$SiteUnit)), method = "radix")
     boxes_sub$SiteUnit <- factor(boxes_sub$SiteUnit, levels = unit_lvls)
     # Slight deterministic jitter per unit rank so overlapping unit boxes remain legible
     rank_off <- ((as.integer(boxes_sub$SiteUnit) - 1L) %% 5L - 2L) * 0.03

@@ -225,11 +225,11 @@ vpro_matrix <- function(
   )
   agg <- dt[, list(Cover = max(get("Cover"))), by = c("PlotNumber", "ColKey")]
 
-  init_plots <- sort(unique(agg[["PlotNumber"]]))
+  init_plots <- sort(unique(as.character(agg[["PlotNumber"]])), method = "radix")
   n_init_plots <- length(init_plots)
 
   if (drop_rare > 0 && n_init_plots > 0L) {
-    all_cols <- sort(unique(agg[["ColKey"]]))
+    all_cols <- sort(unique(as.character(agg[["ColKey"]])), method = "radix")
     occ_counts <- tabulate(match(agg[["ColKey"]], all_cols), nbins = length(all_cols))
     keep_cols <- if (drop_rare < 1) {
       all_cols[(occ_counts / n_init_plots) >= drop_rare]
@@ -242,8 +242,8 @@ vpro_matrix <- function(
     }
   }
 
-  plots_vec <- as.character(sort(unique(agg[["PlotNumber"]])))
-  cols_vec <- as.character(sort(unique(agg[["ColKey"]])))
+  plots_vec <- sort(unique(as.character(agg[["PlotNumber"]])), method = "radix")
+  cols_vec <- sort(unique(as.character(agg[["ColKey"]])), method = "radix")
 
   cell_val <- switch(
     value,

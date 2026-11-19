@@ -66,7 +66,7 @@ test_that("ENG-R-006: canonical LMH25 soil horizon classifier and SQL Humus orde
   writeBin(memDecompress(readBin(gz, "raw", 5e7), "gzip"), db)
 
   con <- DBI::dbConnect(RSQLite::SQLite(), db)
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  on.exit(if (DBI::dbIsValid(con)) DBI::dbDisconnect(con), add = TRUE)
   DBI::dbExecute(con, 'DELETE FROM "Sample_Humus" WHERE "PlotNumber" = \'00337\'')
   ins_sql <- 'INSERT INTO "Sample_Humus" ("PlotNumber", "ID", "Horizon", "UpperDepth", "LowerDepth") VALUES (\'00337\', ?, ?, ?, ?)'
   rows_in <- list(
@@ -124,6 +124,113 @@ test_that("ENG-R-006: character order() calls use radix byte order identically a
 
     # Modal tie-breaking uses radix byte order
     expect_identical(.vpro_modal_chr(c("b1", "A1", "a1", "B1")), "A1")
+  }
+})
+
+test_that("ENG-R-006: vpro_validate, vpro_matrix, vpro_pairwise, vpro_outliers, vpro_indicators, and vpro_list_projects produce identical radix byte order under LC_COLLATE=C and en_US.UTF-8", {
+  old_loc <- Sys.getlocale("LC_COLLATE")
+  on.exit(suppressWarnings(Sys.setlocale("LC_COLLATE", old_loc)), add = TRUE)
+
+  d <- tempfile("radix-locale-")
+  dir.create(d, recursive = TRUE)
+  on.exit(unlink(d, recursive = TRUE), add = TRUE)
+  gz <- system.file("extdata", "Sample.db.gz", package = "vpro")
+  db <- file.path(d, "Sample.db")
+  raw_db <- memDecompress(readBin(gz, "raw", 5e7), "gzip")
+  writeBin(raw_db, db)
+  # Also write mixed-case/punctuation project files to verify vpro_list_projects() radix path order
+  writeBin(raw_db, file.path(d, "A_proj.db"))
+  writeBin(raw_db, file.path(d, "a-proj.db"))
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  on.exit(if (DBI::dbIsValid(con)) DBI::dbDisconnect(con), add = TRUE)
+
+  # Wipe to controlled mixed-case & punctuation plots/species/units so tie-breaking is exercised directly
+  DBI::dbExecute(con, 'DELETE FROM "Sample_Env"')
+  DBI::dbExecute(con, 'DELETE FROM "Sample_Admin"')
+  DBI::dbExecute(con, 'DELETE FROM "Sample_Veg"')
+  DBI::dbExecute(con, 'DELETE FROM "Sample_Humus"')
+  DBI::dbExecute(con, 'DELETE FROM "Sample_Mineral"')
+  DBI::dbExecute(con, 'DELETE FROM "Sample_SU"')
+
+  plots <- c("b2", "a1", "B2", "A1")
+  units <- c("u_2", "u-1", "U_2", "U-1")
+  for (i in seq_along(plots)) {
+    p <- plots[[i]]
+    DBI::dbExecute(
+      con,
+      'INSERT INTO "Sample_Env" ("PlotNumber", "Zone", "SubZone", "MoistureRegime") VALUES (?, \'BADZ\', \'xx\', \'99\')',
+      params = list(p)
+    )
+    DBI::dbExecute(con, 'INSERT INTO "Sample_Admin" ("Plot") VALUES (?)', params = list(p))
+  }
+  # Pair plots into 2 units ("U-1" vs "U_2") plus orphan SU rows ("z1", "Z1")
+  DBI::dbExecute(con, 'INSERT INTO "Sample_SU" ("PlotNumber", "SiteUnit") VALUES (\'a1\', \'U_2\')')
+  DBI::dbExecute(con, 'INSERT INTO "Sample_SU" ("PlotNumber", "SiteUnit") VALUES (\'A1\', \'U-1\')')
+  DBI::dbExecute(con, 'INSERT INTO "Sample_SU" ("PlotNumber", "SiteUnit") VALUES (\'b2\', \'U_2\')')
+  DBI::dbExecute(con, 'INSERT INTO "Sample_SU" ("PlotNumber", "SiteUnit") VALUES (\'B2\', \'U-1\')')
+  DBI::dbExecute(con, 'INSERT INTO "Sample_SU" ("PlotNumber", "SiteUnit") VALUES (\'z1\', \'U-1\')')
+  DBI::dbExecute(con, 'INSERT INTO "Sample_SU" ("PlotNumber", "SiteUnit") VALUES (\'Z1\', \'U_2\')')
+
+  # Add ZZ_SPP vs ZZ-SPP (ASCII '-' = 45 < '_' = 95; under en_US.UTF-8 punctuation is ignored/reordered!)
+  # Only A1 and a1 get veg so B2 and b2 become plot_without_veg orphans; duplicate species rows on A1 and a1
+  veg_rows <- list(
+    list(1L, "a1", "ZZ_SPP", 25.0, NA_real_),
+    list(2L, "a1", "ZZ-SPP", 25.0, NA_real_),
+    list(3L, "a1", "ZZ_SPP", NA_real_, 10.0),
+    list(4L, "A1", "ZZ_SPP", 25.0, NA_real_),
+    list(5L, "A1", "ZZ-SPP", 25.0, NA_real_),
+    list(6L, "A1", "ZZ_SPP", NA_real_, 10.0)
+  )
+  for (vr in veg_rows) {
+    DBI::dbExecute(
+      con,
+      'INSERT INTO "Sample_Veg" ("ID", "PlotNumber", "Species", "Cover1", "Cover2") VALUES (?, ?, ?, ?, ?)',
+      params = vr
+    )
+  }
+  DBI::dbDisconnect(con)
+
+  run_in_locale <- function(loc) {
+    res_loc <- suppressWarnings(tryCatch(Sys.setlocale("LC_COLLATE", loc), error = function(e) ""))
+    if (!nzchar(res_loc)) return(NULL)
+    ws <- vpro_connect(db, su = "Sample_SU", lump = NULL, data_dir = d, config_dir = d)
+    val <- vpro_validate(ws)
+    mat <- vpro_matrix(ws, scope = "project", lump = FALSE)
+    pw <- vpro_pairwise(ws, min_plots = 1L, min_constancy = 10, lump = FALSE)
+    out <- vpro_outliers(ws, keep_singletons = TRUE, lump = FALSE)
+    ind <- suppressWarnings(vpro_indicators(ws, lump = FALSE, permutations = 9L, seed = 42L))
+    projs <- vpro_list_projects(path = d)
+    list(
+      env_plots = unique(val$env_codes$PlotNumber),
+      veg_pairs = paste0(val$veg_codes$PlotNumber, ":", val$veg_codes$Species),
+      orphan_su = val$orphans$PlotNumber[val$orphans$issue == "orphan_su"],
+      orphan_veg = val$orphans$PlotNumber[val$orphans$issue == "plot_without_veg"],
+      dup_plots = val$duplicates$PlotNumber,
+      mat_rows = rownames(mat),
+      mat_cols = colnames(mat),
+      pw_spp = pw$species_diffs$Species,
+      out_plots = out$queue$PlotNumber,
+      ind_spp = ind$Species,
+      proj_paths = basename(projs$path)
+    )
+  }
+
+  out_c <- run_in_locale("C")
+  expect_false(is.null(out_c))
+  expect_identical(out_c$env_plots, c("A1", "B2", "a1", "b2"))
+  expect_identical(out_c$veg_pairs, c("A1:ZZ-SPP", "A1:ZZ_SPP", "a1:ZZ-SPP", "a1:ZZ_SPP"))
+  expect_identical(out_c$orphan_su, c("Z1", "z1"))
+  expect_identical(out_c$orphan_veg, c("B2", "b2"))
+  expect_identical(out_c$dup_plots, c("A1", "a1"))
+  expect_identical(out_c$mat_rows, c("A1", "a1"))
+  expect_identical(out_c$mat_cols, c("ZZ-SPP", "ZZ_SPP"))
+  expect_identical(out_c$out_plots, c("A1", "a1", "B2", "b2"))
+  expect_identical(out_c$proj_paths, c("A_proj.db", "Sample.db", "a-proj.db"))
+
+  out_en <- run_in_locale("en_US.UTF-8")
+  if (!is.null(out_en)) {
+    expect_identical(out_en, out_c)
   }
 })
 

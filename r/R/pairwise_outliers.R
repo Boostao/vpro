@@ -243,7 +243,7 @@ vpro_pairwise <- function(
     min_diff = min_diff
   )$diagnostic_potential
 
-  all_spp <- sort(unique(agg_dt[["Species"]]))
+  all_spp <- sort(unique(as.character(agg_dt[["Species"]])), method = "radix")
   tax_m <- match(all_spp, tax$Code)
   sci_map <- stats::setNames(ifelse(is.na(tax_m), all_spp, tax$ScientificName[tax_m]), all_spp)
 
@@ -318,7 +318,7 @@ vpro_pairwise <- function(
         has_diff <- (pts1 > 0) | (pts2 > 0) | (sh_spp > 0)
         if (any(has_diff)) {
           k_ix <- which(has_diff)
-          ord_d <- k_ix[order(-pmax(pts1[k_ix], pts2[k_ix]), -sh_spp[k_ix], spp_sub[k_ix])]
+          ord_d <- k_ix[order(-pmax(pts1[k_ix], pts2[k_ix]), -sh_spp[k_ix], spp_sub[k_ix], method = "radix")]
           fav <- ifelse(pts1[ord_d] > pts2[ord_d], u1, ifelse(pts2[ord_d] > pts1[ord_d], u2, "shared"))
           diff_rows[[length(diff_rows) + 1L]] <- tibble::tibble(
             Unit1 = rep(u1, length(ord_d)),
@@ -513,7 +513,7 @@ vpro_outliers <- function(
     lump = lump,
     cover_precedence = cover_precedence
   )
-  all_spp <- sort(unique(veg_ps$Species))
+  all_spp <- sort(unique(as.character(veg_ps$Species)), method = "radix")
 
   # Build Plot x Species cover matrix across all classified plots (so singleton rival units can also act as centroids)
   uniq_plots <- unique(all_plots)
@@ -587,7 +587,7 @@ vpro_outliers <- function(
     rivals <- setdiff(all_units, u_own)
     if (length(rivals) > 0L) {
       r_sims <- vapply(rivals, function(ru) sim_fn(x_vec, unit_centroids[[ru]]), numeric(1))
-      best_r <- order(-r_sims, rivals)[[1L]]
+      best_r <- order(-r_sims, as.character(rivals), method = "radix")[[1L]]
       near_unit[[i]] <- rivals[[best_r]]
       near_sim[[i]] <- r_sims[[best_r]]
     }
@@ -638,7 +638,7 @@ vpro_outliers <- function(
   )
 
   # Sort worst-first: flagged first, then smallest (most negative) margin, then lowest own_similarity
-  ord <- order(!q_tbl$flagged, !q_tbl$misclassified, q_tbl$margin, q_tbl$own_similarity, q_tbl$PlotNumber)
+  ord <- order(!q_tbl$flagged, !q_tbl$misclassified, q_tbl$margin, q_tbl$own_similarity, q_tbl$PlotNumber, method = "radix")
   q_tbl <- q_tbl[ord, , drop = FALSE]
   out_tbl <- q_tbl[q_tbl$flagged, , drop = FALSE]
 

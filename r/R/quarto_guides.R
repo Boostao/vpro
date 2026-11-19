@@ -105,7 +105,10 @@ vpro_build_guide_payload <- function(
 
   target_unit <- ""
   if (identical(type, "single_unit")) {
-    avail_units <- sort(unique(env_df$SiteUnit[!is.na(env_df$SiteUnit) & nzchar(trimws(env_df$SiteUnit))]))
+    avail_units <- sort(
+      unique(as.character(env_df$SiteUnit[!is.na(env_df$SiteUnit) & nzchar(trimws(env_df$SiteUnit))])),
+      method = "radix"
+    )
     if (!is.null(unit) && nzchar(trimws(unit))) {
       target_unit <- trimws(as.character(unit))
       env_df <- env_df[!is.na(env_df$SiteUnit) & env_df$SiteUnit == target_unit, , drop = FALSE]
@@ -126,7 +129,8 @@ vpro_build_guide_payload <- function(
   bgc_label <- if (!is.null(bgc) && nzchar(trimws(bgc))) {
     trimws(bgc)
   } else if (length(bgc_vals) > 0L) {
-    names(sort(table(bgc_vals), decreasing = TRUE))[[1L]]
+    tab_bgc <- table(as.character(bgc_vals))
+    names(tab_bgc)[order(-as.integer(tab_bgc), names(tab_bgc), method = "radix")][[1L]]
   } else {
     "All"
   }
@@ -185,7 +189,7 @@ vpro_build_guide_payload <- function(
     agg$mean_cov <- agg$sum_cov / agg$n_pres
     agg <- agg[agg$const_pct >= min_constancy]
     if (nrow(agg) > 0L) {
-      ord <- order(match(agg$Strata, c("A", "B", "C", "D")), -agg$const_pct, -agg$mean_cov)
+      ord <- order(match(agg$Strata, c("A", "B", "C", "D")), -agg$const_pct, -agg$mean_cov, as.character(agg$Species), method = "radix")
       agg <- agg[ord]
       p_cls <- vpro_presence_class(pmin(1.0, agg$const_pct / 100.0))
       veg_rows <- lapply(seq_len(nrow(agg)), function(i) {
@@ -204,11 +208,19 @@ vpro_build_guide_payload <- function(
 
   # Per-unit summaries for bgc_unit & veg_summary
   unit_list <- list()
-  u_names <- sort(unique(env_df$SiteUnit[!is.na(env_df$SiteUnit) & nzchar(trimws(env_df$SiteUnit))]))
+  u_names <- sort(
+    unique(as.character(env_df$SiteUnit[!is.na(env_df$SiteUnit) & nzchar(trimws(env_df$SiteUnit))])),
+    method = "radix"
+  )
   if (length(u_names) > 0L) {
     modal_chr <- function(x) {
       ok <- x[!is.na(x) & nzchar(trimws(as.character(x)))]
-      if (length(ok) == 0L) "-" else names(sort(table(ok), decreasing = TRUE))[[1L]]
+      if (length(ok) == 0L) {
+        "-"
+      } else {
+        tab_ok <- table(as.character(ok))
+        names(tab_ok)[order(-as.integer(tab_ok), names(tab_ok), method = "radix")][[1L]]
+      }
     }
     unit_list <- lapply(u_names, function(u) {
       sub <- env_df[!is.na(env_df$SiteUnit) & env_df$SiteUnit == u, , drop = FALSE]

@@ -189,7 +189,7 @@ vpro_validate <- function(
         bad <- !is.na(v_vec) & nzchar(v_chr) & !(tolower(v_chr) %in% allowed_low)
         if (any(bad)) {
           pairs <- unique(data.frame(p = p_vec[bad], v = v_chr[bad], stringsAsFactors = FALSE))
-          pairs <- pairs[order(pairs$p, pairs$v), , drop = FALSE]
+          pairs <- pairs[order(pairs$p, pairs$v, method = "radix"), , drop = FALSE]
           ec_list <- c(ec_list, rep(ln, nrow(pairs)))
           ec_field <- c(ec_field, rep(fld, nrow(pairs)))
           ec_plot <- c(ec_plot, pairs$p)
@@ -254,7 +254,7 @@ vpro_validate <- function(
 
     if (nrow(veg_codes_raw) > 0L) {
       uniq_vs <- unique(veg_codes_raw)
-      uniq_vs <- uniq_vs[order(uniq_vs[["PlotNumber"]], uniq_vs[["Species"]]), , drop = FALSE]
+      uniq_vs <- uniq_vs[order(as.character(uniq_vs[["PlotNumber"]]), as.character(uniq_vs[["Species"]]), method = "radix"), , drop = FALSE]
       for (vi in seq_len(nrow(uniq_vs))) {
         p_v <- as.character(uniq_vs[["PlotNumber"]][[vi]])
         s_v <- uniq_vs[["Species"]][[vi]]
@@ -367,7 +367,7 @@ vpro_validate <- function(
     if (!is.null(ws$su) && nrow(su_df) > 0L) {
       su_orph <- setdiff(su_plots, all_env_plots)
       if (length(su_orph) > 0L) {
-        for (sp in sort(su_orph)) {
+        for (sp in sort(as.character(su_orph), method = "radix")) {
           cnt <- sum(su_df[["PlotNumber"]] == sp)
           or_tbl <- c(or_tbl, "SU")
           or_plot <- c(or_plot, sp)
@@ -382,7 +382,7 @@ vpro_validate <- function(
       paste0('SELECT DISTINCT CAST("PlotNumber" AS TEXT) AS "PlotNumber" FROM ', veg_q, ' WHERE typeof("PlotNumber") = \'text\'')
     )[["PlotNumber"]]
     target_env_plots <- if (use_su) intersect(all_env_plots, su_plots) else all_env_plots
-    no_veg_plots <- sort(setdiff(target_env_plots, plots_with_veg))
+    no_veg_plots <- sort(as.character(setdiff(target_env_plots, plots_with_veg)), method = "radix")
     if (length(no_veg_plots) > 0L) {
       or_tbl <- c(or_tbl, rep("Veg", length(no_veg_plots)))
       or_plot <- c(or_plot, as.character(no_veg_plots))
@@ -484,7 +484,7 @@ vpro_validate <- function(
           d_conf[[ki]] <- length(hits) > 0L || dup_lcol
           d_ov[[ki]] <- paste(hits, collapse = ",")
         }
-        ord_d <- order(d_plot, d_spp)
+        ord_d <- order(d_plot, d_spp, method = "radix")
         tibble::tibble(
           PlotNumber = d_plot[ord_d],
           Species = d_spp[ord_d],
