@@ -219,8 +219,8 @@ func TestSIVIParentDirectWriterJoinRechecksAliasesAndContext(t *testing.T) {
 	service, state, db, parent, all := sftest.SiviParentWriteFixture(t, true, 3)
 	for _, test := range []struct{ sql, restore string }{
 		{`INSERT INTO Sample_Admin(Plot) VALUES('108050 ')`, `DELETE FROM Sample_Admin WHERE Plot='108050 ' COLLATE BINARY`},
-		{`INSERT INTO Sample_Admin(Plot) VALUES('é')`, `DELETE FROM Sample_Admin WHERE Plot='é'`},
-		{`INSERT INTO Sample_Admin(Plot) VALUES('')`, `DELETE FROM Sample_Admin WHERE Plot=''`},
+		{`INSERT INTO Sample_Admin(Plot) VALUES('108050  ')`, `DELETE FROM Sample_Admin WHERE Plot='108050  ' COLLATE BINARY`},
+		{`INSERT INTO Sample_Admin(Plot) VALUES(X'313038303530')`, `DELETE FROM Sample_Admin WHERE typeof(Plot)='blob'`},
 		{`ALTER TABLE Sample_Admin ADD COLUMN ExtraGenerated TEXT GENERATED ALWAYS AS ('x') VIRTUAL`,
 			`ALTER TABLE Sample_Admin DROP COLUMN ExtraGenerated`},
 	} {
@@ -237,7 +237,8 @@ func TestSIVIParentDirectWriterJoinRechecksAliasesAndContext(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.Exec(`INSERT INTO Sample_Env(PlotNumber) VALUES('a1'); INSERT INTO Sample_Admin(Plot) VALUES('A1')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO Sample_Env(PlotNumber) VALUES('a1'),('PLOT-01'),('P_01'),('é'),('😀😀😀A'),(' 00337');
+		INSERT INTO Sample_Admin(Plot) VALUES('A1'),('PLOT-01'),('P_01'),('é'),('😀😀😀A'),(' 00337')`); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := sourceform.WriteSIVIParentDirect(service, context.Background(), state.ContextID, "108050", parent, all); err != nil || got == nil {

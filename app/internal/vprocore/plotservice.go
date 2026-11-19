@@ -302,7 +302,7 @@ func (s *PlotService) SetAuditStrength(strength int) error {
 	}
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-	if s.Projects.Preferences != nil {
+	if s.Projects != nil && s.Projects.Preferences != nil {
 		if err := s.Projects.Preferences.Update("Audit", map[string]any{"AuditStrength": strength}); err != nil {
 			return err
 		}
@@ -317,13 +317,52 @@ func (s *PlotService) SetCurrentUser(user string) error {
 	}
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-	if s.Projects.Preferences != nil {
+	if s.Projects != nil && s.Projects.Preferences != nil {
 		if err := s.Projects.Preferences.Update("Current", map[string]any{"User": user}); err != nil {
 			return err
 		}
 	}
 	s.CurrentUser = user
 	return nil
+}
+
+// BeginImmediateActiveTx opens a BEGIN IMMEDIATE write transaction on the active
+// project database bound to OperationContext(). Both SqliteContext.ProjectDatabase
+// and standalone openActiveDB configure _txlock=immediate, so BeginTx acquires the
+// SQLite write lock immediately at transaction start (AGENTS.md §3.5, UX-VEG-002).
+func (s *PlotService) BeginImmediateActiveTx() (*sql.Tx, string, func(), error) {
+	ctx := s.OperationContext()
+	if err := ctx.Err(); err != nil {
+		return nil, "", nil, err
+	}
+	db, project, release, err := s.GetActiveDB()
+	if err != nil {
+		return nil, "", nil, err
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		release()
+		return nil, "", nil, errors.Join(err, ctx.Err())
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		_ = conn.Close()
+		release()
+		return nil, "", nil, errors.Join(err, ctx.Err())
+	}
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() {
+			_ = tx.Rollback()
+			_ = conn.Close()
+			release()
+		})
+	}
+	if err := ctx.Err(); err != nil {
+		cleanup()
+		return nil, "", nil, err
+	}
+	return tx, project, cleanup, nil
 }
 
 // Callers release the borrow, not the context-owned pool.

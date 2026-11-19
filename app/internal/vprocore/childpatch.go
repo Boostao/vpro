@@ -49,26 +49,28 @@ func (s *PlotService) UpdateChildPatches(plot string, updates []ChildRecordPatch
 	return s.UpdateChildPlotPatches(patches)
 }
 
-func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) error {
+func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) (resultErr error) {
 	if err := s.RequireContextEdit(); err != nil {
 		return err
 	}
 	if len(updates) == 0 {
 		return errors.New("child drafts require a plot and at least one row")
 	}
+	ctx := s.OperationContext()
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, ctx.Err())
+		}
+	}()
 	s.Mu.RLock()
 	user, strength := s.CurrentUser, s.AuditStrength
 	s.Mu.RUnlock()
-	db, project, release, err := s.GetActiveDB()
+	// Open a BEGIN IMMEDIATE transaction bound to OperationContext() (_txlock=immediate).
+	tx, project, cleanup, err := s.BeginImmediateActiveTx()
 	if err != nil {
 		return err
 	}
-	defer release()
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+	defer cleanup()
 	type identity struct {
 		kind string
 		id   int
@@ -79,6 +81,9 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) error {
 	var observations []ChildPlotPatch
 	when := time.Now().Format("2006-01-02 15:04:05")
 	for _, scoped := range updates {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		plot, update := scoped.Plot, scoped.Patch
 		if strings.TrimSpace(plot) == "" {
 			return errors.New("child drafts require a plot and at least one row")
@@ -131,7 +136,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) error {
 			}
 			column := QuoteHeaderIdentifier(field.Column)
 			var current any
-			if err := tx.QueryRow(`SELECT `+headerReadColumn(column, member)+` FROM `+table+
+			if err := tx.QueryRowContext(ctx, `SELECT `+headerReadColumn(column, member)+` FROM `+table+
 				` WHERE "PlotNumber" = ? AND "ID" = ?`, plot, update.Id).Scan(&current); err != nil {
 				return err
 			}
@@ -178,7 +183,7 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) error {
 				return err
 			}
 		}
-		result, err := tx.Exec(`UPDATE `+table+` SET `+strings.Join(assignments, ",")+
+		result, err := tx.ExecContext(ctx, `UPDATE `+table+` SET `+strings.Join(assignments, ",")+
 			` WHERE "PlotNumber" = ? AND "ID" = ?`, append(args, plot, update.Id)...)
 		if err != nil {
 			return err
@@ -201,6 +206,9 @@ func (s *PlotService) UpdateChildPlotPatches(updates []ChildPlotPatch) error {
 		if err := scoped.Patch.Observe(tx, table, scoped.Plot); err != nil {
 			return err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

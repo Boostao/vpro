@@ -301,6 +301,17 @@ func sameSIVICreationRequest(a, b SiviCreationRequest) bool {
 	return reflect.DeepEqual(a, b)
 }
 
+// SiviCreationAuditStrength ensures newly created vegetation rows record their
+// populated Species and Cover fields in <Project>_Audit whenever auditing is
+// enabled (AuditStrength >= 1), matching plot creation (UX-VEG-002, AGENTS.md §3.5),
+// while preserving AuditStrength == 0 as explicit opt-out.
+func SiviCreationAuditStrength(strength int) int {
+	if strength == 1 {
+		return 2
+	}
+	return strength
+}
+
 func VerifySIVICreationHistory(ctx context.Context, request SiviCreationRequest, history SiviCreationHistory, tables map[string]vprocore.ProjectMetadataTable) error {
 	if !sameSIVICreationRequest(request, history.Request) || history.Result.RequestID != request.RequestID ||
 		history.Result.HistoryID != request.RequestID || history.Result.Project != request.Project ||
@@ -375,7 +386,7 @@ func VerifySIVICreationHistory(ctx context.Context, request SiviCreationRequest,
 		if err != nil {
 			return err
 		}
-		if vprocore.AuditHeaderChange(nil, value, history.AuditStrength) {
+		if vprocore.AuditHeaderChange(nil, value, SiviCreationAuditStrength(history.AuditStrength)) {
 			expected[name] = true
 		}
 	}
@@ -618,7 +629,7 @@ func CreateSIVIVegetation(s *vprocore.ContextService, ctx context.Context, conte
 				fields, after = append(fields, vprocore.ChildField{Column: cover.Column}), append(after, *cover.Value.Real)
 			}
 			audits, err := vprocore.AuditChildFieldsTracked(tx, request.Project, "Veg", request.Plot, id, fields, make([]any, len(fields)), after,
-				plots.CurrentUser, plots.AuditStrength, when)
+				plots.CurrentUser, SiviCreationAuditStrength(plots.AuditStrength), when)
 			if err != nil {
 				return nil, false, err
 			}

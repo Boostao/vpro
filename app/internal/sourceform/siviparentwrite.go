@@ -123,7 +123,7 @@ func ReadSIVIParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.Sql
 
 func ReadSourceParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.SqliteContext, suAlias, contextID, plot string, projectParent SourceParentProjector) (*SiviParentProjection, error) {
 	project := owner.Selection.Project
-	join, err := readSIVIParentJoin(ctx, tx, "main", contextID, project, plot)
+	join, err := readSIVIParentWriteJoin(ctx, tx, "main", contextID, project, plot)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func ReadSourceParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.S
 		}
 		var member bool
 		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+vprocore.QuoteHeaderIdentifier(suAlias)+"."+
-			vprocore.QuoteHeaderIdentifier(table)+` WHERE typeof(PlotNumber)='text' AND PlotNumber COLLATE BINARY IS ?)`, plot).
+			vprocore.QuoteHeaderIdentifier(table)+` WHERE typeof(PlotNumber)='text' AND CAST(PlotNumber AS BLOB)=CAST(? AS BLOB))`, plot).
 			Scan(&member); err != nil {
 			return nil, err
 		}
@@ -153,11 +153,11 @@ func ReadSourceParentForWrite(ctx context.Context, tx *sql.Tx, owner *vprocore.S
 			return nil, errors.New("SIVI parent is outside the selected SU context")
 		}
 	}
-	env, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "main", project+"_Env", "PlotNumber", &plot, "")
+	env, err := vprocore.ReadSQLiteLiteralTextRows(ctx, tx, "main", project+"_Env", "PlotNumber", plot, "")
 	if err != nil {
 		return nil, err
 	}
-	admin, err := vprocore.ReadSQLiteStorageRows(ctx, tx, "main", project+"_Admin", "Plot", &plot, "")
+	admin, err := vprocore.ReadSQLiteLiteralTextRows(ctx, tx, "main", project+"_Admin", "Plot", plot, "")
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +365,7 @@ func ApplySIVIParentAssignments(ctx context.Context, tx *sql.Tx, original *SiviP
 		}
 		changed, err := tx.ExecContext(ctx, `UPDATE `+vprocore.QuoteHeaderIdentifier(assignment.Table)+
 			` SET `+vprocore.QuoteHeaderIdentifier(assignment.Column)+`=? WHERE rowid=? AND typeof(`+vprocore.QuoteHeaderIdentifier(identity)+
-			`)='text' AND `+vprocore.QuoteHeaderIdentifier(identity)+` COLLATE BINARY IS ?`, assignment.Value, assignment.RowID, original.Plot)
+			`)='text' AND CAST(`+vprocore.QuoteHeaderIdentifier(identity)+` AS BLOB)=CAST(? AS BLOB)`, assignment.Value, assignment.RowID, original.Plot)
 		if err != nil {
 			return nil, nil, nil, err
 		}
