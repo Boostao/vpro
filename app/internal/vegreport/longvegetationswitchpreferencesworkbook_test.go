@@ -13,7 +13,11 @@ import (
 )
 
 func TestLongVegetationSwitchPreferencesInvalidateWorkbookApproval(t *testing.T) {
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	if testing.Short() {
+		externalModes = []bool{false}
+	}
+	for _, external := range externalModes {
 		t.Run(map[bool]string{false: "attached", true: "external"}[external], func(t *testing.T) {
 			private, state := vegetationWorkbookServiceFixture(t, external)
 			workbooks := &VegetationWorkbookService{Private: private}

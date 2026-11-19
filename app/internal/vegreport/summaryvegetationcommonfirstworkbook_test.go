@@ -82,7 +82,11 @@ func TestSummaryCommonFirstWorkbookStrictRequests(t *testing.T) {
 
 func TestSummaryCommonFirstWorkbookOwnedOutputAndClientWire(t *testing.T) {
 	wire := map[string]*SummaryVegetationWorkbookReview{}
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	if testing.Short() {
+		externalModes = []bool{false}
+	}
+	for _, external := range externalModes {
 		service, state := summaryCommonFirstDesktopFixture(t, external)
 		contexts := service.source.environment.report.contexts
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)

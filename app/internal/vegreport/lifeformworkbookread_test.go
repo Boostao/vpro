@@ -22,7 +22,7 @@ import (
 
 func TestLifeformWorkbookReadCombinedOwnedSnapshotZeroWrites(t *testing.T) {
 	for _, external := range []bool{false, true} {
-		contexts, state := vprotest.ReportServiceFixture(t, external)
+		contexts, state := vegreportReportServiceFixture(t, external)
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 		config, err := os.ReadFile(contexts.Projects.Preferences.Path)
 		if err != nil {
@@ -69,7 +69,7 @@ func TestLifeformWorkbookReadCombinedOwnedSnapshotZeroWrites(t *testing.T) {
 
 func TestLifeformWorkbookReadPreparesCompleteOwnedSource(t *testing.T) {
 	for _, external := range []bool{false, true} {
-		contexts, state := vprotest.ReportServiceFixture(t, external)
+		contexts, state := vegreportReportServiceFixture(t, external)
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 		input, err := ReadLifeformWorkbookInput(contexts, context.Background(), state.ContextID, vprocore.PublicationReadSnapshotHooks{})
 		if err != nil {
@@ -101,7 +101,7 @@ func TestLifeformWorkbookReadPreparesCompleteOwnedSource(t *testing.T) {
 }
 
 func TestLifeformWorkbookReadCancellationOwnershipCompletionAndRetry(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	owner := contexts.Projects.Sqlite
 	zero := lifeformWorkbookInput{}
 	owner.Mu.Lock()
@@ -152,7 +152,7 @@ func TestLifeformWorkbookReadCancellationOwnershipCompletionAndRetry(t *testing.
 }
 
 func TestLifeformWorkbookReadNoPartialSourceAndScopeRefusal(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, false)
+	contexts, state := vegreportReportServiceFixture(t, false)
 	owner := contexts.Projects.Sqlite
 	mutate := func(role, statement string) {
 		t.Helper()

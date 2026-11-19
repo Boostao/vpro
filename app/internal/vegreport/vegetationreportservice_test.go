@@ -22,7 +22,7 @@ import (
 func TestLongVegetationServiceOwnedIdentitySettingsAndZeroWrites(t *testing.T) {
 	for _, external := range []bool{false, true} {
 		t.Run(map[bool]string{false: "project", true: "external"}[external], func(t *testing.T) {
-			service, state := vprotest.ReportServiceFixture(t, external)
+			service, state := vegreportReportServiceFixture(t, external)
 			before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 			config, err := os.ReadFile(service.Projects.Preferences.Path)
 			if err != nil {
@@ -72,7 +72,7 @@ func TestLongVegetationServiceOwnedIdentitySettingsAndZeroWrites(t *testing.T) {
 }
 
 func TestLongVegetationServiceReadsUnitNamesInOwnedSnapshot(t *testing.T) {
-	service, state := vprotest.ReportServiceFixture(t, true)
+	service, state := vegreportReportServiceFixture(t, true)
 	owner := service.Projects.Sqlite
 	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(owner.Attachments["VLists"], "rw"))
 	if err != nil {
@@ -120,7 +120,7 @@ func TestLongVegetationServiceReadsUnitNamesInOwnedSnapshot(t *testing.T) {
 }
 
 func TestLongVegetationServiceCancellationStaleNoneAndOwnership(t *testing.T) {
-	service, state := vprotest.ReportServiceFixture(t, true)
+	service, state := vegreportReportServiceFixture(t, true)
 	owner := service.Projects.Sqlite
 	owner.Mu.Lock()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -179,7 +179,7 @@ func TestLongVegetationServiceCancellationStaleNoneAndOwnership(t *testing.T) {
 }
 
 func TestLongVegetationServiceUsesCurrentStrictConfiguration(t *testing.T) {
-	service, state := vprotest.ReportServiceFixture(t, false)
+	service, state := vegreportReportServiceFixture(t, false)
 	if err := service.Projects.Preferences.Update("ReportOptions", map[string]any{
 		"LVReportTitle": "  Remembered \u00e9 title  ", "LVAvgType": 20,
 		"LVConstantSppList": 0, "LVPresenceGreaterThan": -2.5, "LVCoverGreaterThan": -3.5,

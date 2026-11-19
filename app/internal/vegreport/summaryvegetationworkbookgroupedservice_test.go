@@ -89,7 +89,17 @@ func TestSummaryGroupedDesktopStrictAuthorityAndIndependentGate(t *testing.T) {
 
 func TestSummaryGroupedDesktopOwnedModesTypedOutputAndZeroWrites(t *testing.T) {
 	count := 0
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	averages := []int{1, 2}
+	displays := []int{1, 2, 3, 4, 5, 6}
+	wantCount := 224
+	if testing.Short() {
+		externalModes = []bool{false}
+		averages = []int{1}
+		displays = []int{4, 6}
+		wantCount = 18
+	}
+	for _, external := range externalModes {
 		service, state := summaryGroupedDesktopFixture(t, external)
 		contexts := service.source.environment.report.contexts
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -98,14 +108,17 @@ func TestSummaryGroupedDesktopOwnedModesTypedOutputAndZeroWrites(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, grouping := range []int{12, 13, 14} {
-			for _, average := range []int{1, 2} {
-				for _, display := range []int{1, 2, 3, 4, 5, 6} {
+			for _, average := range averages {
+				for _, display := range displays {
 					if grouping != 14 && display == 2 {
 						continue
 					}
 					shows := []int{1}
 					if display == 4 || display == 5 {
 						shows = []int{1, 10, 20}
+						if testing.Short() {
+							shows = []int{1, 20}
+						}
 					}
 					for _, show := range shows {
 						for _, includeEnv := range []bool{false, true} {
@@ -175,8 +188,8 @@ func TestSummaryGroupedDesktopOwnedModesTypedOutputAndZeroWrites(t *testing.T) {
 			t.Fatal("grouped review wrote preferences", err)
 		}
 	}
-	if count != 224 {
-		t.Fatal("grouped desktop matrix coverage differs", count)
+	if count != wantCount {
+		t.Fatal("grouped desktop matrix coverage differs", count, wantCount)
 	}
 }
 

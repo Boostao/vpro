@@ -13,32 +13,21 @@ import (
 	"errors"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 )
 
 func summaryEnvironmentalLifeformServiceFixture(t *testing.T, external bool) (*SummaryVegetationEnvironmentalLifeformService, vprocore.ProjectState) {
 	t.Helper()
-	environment, state := summaryEnvironmentalNumericServiceFixture(t, external)
-	owner := environment.report.contexts.Projects.Sqlite
-	veg := vprocore.QuoteHeaderIdentifier(state.ActiveProject + "_Veg")
-	vprotest.MutateContextFixture(t, owner.Attachments["project"], "DELETE FROM "+veg)
-	vprotest.MutateContextFixture(t, owner.Attachments["VLists"], "DELETE FROM USysAllSpecs")
-	for form := 1; form <= 13; form++ {
-		argument := strconv.Itoa(form)
-		species := "LF" + argument
-		vprotest.MutateContextFixture(t, owner.Attachments["project"], "INSERT INTO "+veg+
-			"(PlotNumber,Species,Cover1) VALUES('P1','"+species+"',1.25),('P2','"+species+"',3.75)")
-		vprotest.MutateContextFixture(t, owner.Attachments["VLists"],
-			"INSERT INTO USysAllSpecs(Code,ScientificName,Lifeform,EnglishName,Codetype) VALUES('"+
-				species+"','Lifeform "+argument+"',"+argument+",'"+species+"','U')")
-		vprotest.MutateContextFixture(t, owner.Attachments["VPro64"],
-			"INSERT INTO USysShortVegSummaryFieldList VALUES("+
-				argument+",'Calc','Lifeform "+argument+"',NULL,-1,'SVLifeformCover','"+argument+"')")
+	contexts, state := vegreportSummaryLifeformContextFixture(t, external)
+	report, err := NewSummaryVegetationService(contexts)
+	if err != nil {
+		t.Fatal(err)
 	}
-	vprotest.MutateContextFixture(t, owner.Attachments["project"], "INSERT INTO "+veg+
-		"(PlotNumber,Species,Cover1) VALUES('P3','LF1',0)")
+	environment, err := NewSummaryVegetationEnvironmentalService(report)
+	if err != nil {
+		t.Fatal(err)
+	}
 	service, err := NewSummaryVegetationEnvironmentalLifeformService(environment)
 	if err != nil {
 		t.Fatal(err)

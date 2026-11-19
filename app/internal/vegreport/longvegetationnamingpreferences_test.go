@@ -31,7 +31,7 @@ func vegetationNamingRequest(t *testing.T, expected, proposed LongVegetationNami
 }
 
 func TestLongVegetationNamingPreferencesOwnershipCleanupCancellationCollisionAndRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	if err := store.Update("ReportOptions", map[string]any{"LVShowEnglishName": 1, "LVShowField": "retained field"}); err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestLongVegetationNamingPreferencesOwnedReadAndHistoricalAvailability(t *te
 			}
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationNamingPreferencesService(contexts)
 	for _, mode := range []int{0, 1, 2, 4} {
 		if err := contexts.Projects.Preferences.Update("ReportOptions", map[string]any{
@@ -190,7 +190,7 @@ func TestLongVegetationNamingPreferencesOwnedReadAndHistoricalAvailability(t *te
 }
 
 func TestLongVegetationNamingPreferencesSupportedChoicesAndAtomicClear(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationNamingPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	for _, originalMode := range []int{0, 1, 2, 4} {
@@ -236,7 +236,7 @@ func TestLongVegetationNamingPreferencesSupportedChoicesAndAtomicClear(t *testin
 }
 
 func TestLongVegetationNamingPreferencesStrictRequestsCoupledClearAndStaleRefusal(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	if err := store.Update("ReportOptions", map[string]any{"LVShowEnglishName": 1, "LVShowField": "old field"}); err != nil {
 		t.Fatal(err)
@@ -283,7 +283,7 @@ func TestLongVegetationNamingPreferencesStrictRequestsCoupledClearAndStaleRefusa
 }
 
 func TestLongVegetationNamingPreferencesMalformedStorageAndCorrection(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	service := NewLongVegetationNamingPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)

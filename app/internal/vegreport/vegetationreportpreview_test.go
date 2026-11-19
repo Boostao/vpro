@@ -19,7 +19,7 @@ import (
 func TestLongVegetationOwnedLayerPreviewExternalScopeAndZeroWrites(t *testing.T) {
 	for _, external := range []bool{false, true} {
 		t.Run(map[bool]string{false: "project", true: "external"}[external], func(t *testing.T) {
-			service, state := vprotest.ReportServiceFixture(t, external)
+			service, state := vegreportReportServiceFixture(t, external)
 			before := vprotest.DatabaseBytes(t, service.Projects.Sqlite.Attachments)
 			config, err := os.ReadFile(service.Projects.Preferences.Path)
 			if err != nil {
@@ -52,7 +52,7 @@ func TestLongVegetationOwnedLayerPreviewExternalScopeAndZeroWrites(t *testing.T)
 }
 
 func TestLongVegetationOwnedLayerPreviewCancellationStaleNoneAndInvalidOptions(t *testing.T) {
-	service, state := vprotest.ReportServiceFixture(t, true)
+	service, state := vegreportReportServiceFixture(t, true)
 	owner := service.Projects.Sqlite
 	before := vprotest.DatabaseBytes(t, owner.Attachments)
 	originalPaths := map[string]string{}
@@ -92,7 +92,7 @@ func TestLongVegetationOwnedLayerPreviewCancellationStaleNoneAndInvalidOptions(t
 			t.Fatal("cancellation/switch changed original bytes", role, err)
 		}
 	}
-	service, state = vprotest.ReportServiceFixture(t, true)
+	service, state = vegreportReportServiceFixture(t, true)
 	config, err := os.ReadFile(service.Projects.Preferences.Path)
 	if err != nil {
 		t.Fatal(err)

@@ -212,11 +212,18 @@ func TestSummaryGroupedWorkbookIndependentSourceRows(t *testing.T) {
 				averages := []int{source.Average}
 				if source.AverageIgnored {
 					averages = []int{1, 2}
+					if testing.Short() {
+						averages = []int{1}
+					}
 				}
 				for _, average := range averages {
 					input := summaryGroupedWorkbookSourceInput(t, source)
 					input.Vegetation.Average = average
-					for _, combined := range []bool{false, true} {
+					combinedModes := []bool{false, true}
+					if testing.Short() && index > 0 {
+						combinedModes = []bool{false}
+					}
+					for _, combined := range combinedModes {
 						if combined {
 							env := summaryEnvironmentalWorkbookFixture(t)
 							env.Units = summaryEnvironmentalPreviewUnits(input.Vegetation)
@@ -233,14 +240,27 @@ func TestSummaryGroupedWorkbookIndependentSourceRows(t *testing.T) {
 			})
 		}
 	}
-	if accepted != 112 || refused != 4 {
+	if !testing.Short() && (accepted != 112 || refused != 4) {
 		t.Fatal("source matrix coverage changed", accepted, refused)
+	}
+	if testing.Short() && (accepted == 0 || refused != 4) {
+		t.Fatal("short source matrix coverage changed", accepted, refused)
 	}
 }
 
 func TestSummaryGroupedWorkbookOwnedModesNoSourceWrites(t *testing.T) {
 	count := 0
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	averages := []int{1, 2}
+	displays := []int{1, 2, 3, 4, 5, 6}
+	wantCount := 224
+	if testing.Short() {
+		externalModes = []bool{false}
+		averages = []int{1}
+		displays = []int{4, 6}
+		wantCount = 18
+	}
+	for _, external := range externalModes {
 		service, state := summaryVegetationGroupedServiceFixture(t, external)
 		contexts := service.contexts
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -249,14 +269,17 @@ func TestSummaryGroupedWorkbookOwnedModesNoSourceWrites(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, grouping := range []int{12, 13, 14} {
-			for _, average := range []int{1, 2} {
-				for _, display := range []int{1, 2, 3, 4, 5, 6} {
+			for _, average := range averages {
+				for _, display := range displays {
 					if display == 2 && grouping != 14 {
 						continue
 					}
 					shows := []int{0}
 					if display == 4 || display == 5 {
 						shows = []int{1, 10, 20}
+						if testing.Short() {
+							shows = []int{1, 20}
+						}
 					}
 					for _, show := range shows {
 						preview, err := service.PreviewGroupedDisplay(t.Context(), state.ContextID, average, grouping, display, show)
@@ -295,8 +318,8 @@ func TestSummaryGroupedWorkbookOwnedModesNoSourceWrites(t *testing.T) {
 			t.Fatal("workbook changed saved preferences", err)
 		}
 	}
-	if count != 224 {
-		t.Fatal("owned grouped modes coverage changed", count)
+	if count != wantCount {
+		t.Fatal("owned grouped modes coverage changed", count, wantCount)
 	}
 }
 

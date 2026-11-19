@@ -25,7 +25,7 @@ import (
 
 func vegetationWorkbookServiceFixture(t *testing.T, external bool) (*vegetationWorkbookService, vprocore.ProjectState) {
 	t.Helper()
-	contexts, state := vprotest.ReportServiceFixture(t, external)
+	contexts, state := vegreportReportServiceFixture(t, external)
 	service, err := newVegetationWorkbookService(contexts)
 	if err != nil {
 		t.Fatal(err)

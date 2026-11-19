@@ -61,7 +61,7 @@ func TestLongVegetationPreferencesStrictWireAndYAMLOnly(t *testing.T) {
 	if wire.Request.Expected.Title != "Long Vegetation Report" || wire.Request.Proposed.Title != " Literal <&\U0001f332\r\n title " {
 		t.Fatal(wire.Request)
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	before, err := contexts.Projects.Preferences.Snapshot()
@@ -120,7 +120,7 @@ func TestLongVegetationPreferencesStrictWireAndYAMLOnly(t *testing.T) {
 }
 
 func TestLongVegetationPreferencesRefusalsNoopAndLiteralRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	before, err := os.ReadFile(store.Path)
@@ -197,7 +197,7 @@ func TestLongVegetationPreferencesRefusalsNoopAndLiteralRetry(t *testing.T) {
 
 func TestLongVegetationPreferencesHistoricalInvalidStorage(t *testing.T) {
 	for _, historical := range []any{"old\x00title", nil, true, 42} {
-		contexts, state := vprotest.PrepareKMLContextFixture(t)
+		contexts, state := vegreportPrepareKMLContextFixture(t)
 		store := contexts.Projects.Preferences
 		values, err := store.Snapshot()
 		if err != nil {
@@ -232,7 +232,7 @@ func TestLongVegetationPreferencesHistoricalInvalidStorage(t *testing.T) {
 }
 
 func TestLongVegetationPreferencesCleanupOwnershipRollbackAndCommittedReceipt(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	request := longVegetationTitleRequest(t, "Long Vegetation Report", "committed")

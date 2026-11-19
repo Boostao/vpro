@@ -64,7 +64,13 @@ func TestSummaryEffectiveReferenceWorkbookStrictRequestsAndIndependentGate(t *te
 }
 
 func TestSummaryEffectiveReferenceWorkbookOwnedModesAndLiteralColumns(t *testing.T) {
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	ancillaryModes := []*SummaryVegetationWorkbookAncillaryOptions{nil, {}, {CreateSummary: true}}
+	if testing.Short() {
+		externalModes = []bool{false}
+		ancillaryModes = []*SummaryVegetationWorkbookAncillaryOptions{nil, {CreateSummary: true}}
+	}
+	for _, external := range externalModes {
 		service, state := summaryReferenceWorkbookFixture(t, external)
 		contexts := service.source.environment.report.contexts
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -76,7 +82,7 @@ func TestSummaryEffectiveReferenceWorkbookOwnedModesAndLiteralColumns(t *testing
 			{}, {ShowCommon: true}, {UseGuideNames: true}, {ShowCommon: true, UseGuideNames: true},
 		} {
 			for _, includeEnv := range []bool{false, true} {
-				for _, ancillary := range []*SummaryVegetationWorkbookAncillaryOptions{nil, {}, {CreateSummary: true}} {
+				for _, ancillary := range ancillaryModes {
 					options := SummaryVegetationWorkbookOptions{Title: "=literal", Average: 1, Display: 6,
 						IncludeEnv: includeEnv, References: &selection, Ancillary: ancillary}
 					review, err := service.GetReview(t.Context(), state.ContextID, vprotest.WorkbookRequest(t, options))
@@ -204,14 +210,21 @@ func TestSummaryEffectiveReferenceWorkbookMasterLongPolicyAndPhysicalDrift(t *te
 
 func TestSummaryEffectiveReferenceWorkbookDisplayAverageMatrix(t *testing.T) {
 	service, state := summaryReferenceWorkbookFixture(t, false)
+	displays := []int{1, 2, 3, 4, 5, 6}
+	if testing.Short() {
+		displays = []int{2, 4, 6}
+	}
 	for _, selection := range []SummaryVegetationReferenceOptions{
 		{}, {ShowCommon: true}, {UseGuideNames: true}, {ShowCommon: true, UseGuideNames: true},
 	} {
 		for _, average := range []int{1, 2} {
-			for display := 1; display <= 6; display++ {
+			for _, display := range displays {
 				classes := []int{0}
 				if display == 4 || display == 5 {
 					classes = []int{1, 10, 20}
+					if testing.Short() {
+						classes = []int{20}
+					}
 				}
 				for _, class := range classes {
 					options := SummaryVegetationWorkbookOptions{Average: average, Display: display,

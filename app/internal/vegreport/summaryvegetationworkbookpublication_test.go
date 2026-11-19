@@ -76,8 +76,17 @@ func TestSummaryDraftWorkbookPublicationInvisibleDrift(t *testing.T) {
 }
 
 func TestSummaryDraftWorkbookPublicationCancellationCleanupAndRetry(t *testing.T) {
-	for _, mode := range []string{"legacy", "memberships", "summary", "constancy", "unanimous13", "unanimous14"} {
-		for _, phase := range []string{"first-commit", "first-cleanup", "prelink-cleanup", "published-cleanup", "prelink-cancel", "published-cancel"} {
+	modes := []string{"legacy", "memberships", "summary", "constancy", "unanimous13", "unanimous14"}
+	allPhases := []string{"first-commit", "first-cleanup", "prelink-cleanup", "published-cleanup", "prelink-cancel", "published-cancel"}
+	if testing.Short() {
+		modes = []string{"legacy", "summary", "constancy", "unanimous13"}
+	}
+	for _, mode := range modes {
+		phases := allPhases
+		if testing.Short() && mode != "legacy" {
+			phases = []string{"prelink-cancel", "published-cleanup"}
+		}
+		for _, phase := range phases {
 			t.Run(mode+"/"+phase, func(t *testing.T) {
 				var service *SummaryVegetationWorkbookService
 				var state vprocore.ProjectState

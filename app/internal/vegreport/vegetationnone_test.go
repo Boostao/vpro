@@ -79,7 +79,7 @@ func TestLongVegetationNoneDecodeAndIndependentPublicGate(t *testing.T) {
 		t.Fatal("source mode4 unavailable", options, err)
 	}
 	for _, external := range []bool{false, true} {
-		service, state := vprotest.ReportServiceFixture(t, external)
+		service, state := vegreportReportServiceFixture(t, external)
 		if err := service.Projects.Preferences.Update("ReportOptions", map[string]any{"LVGroupBy": 4}); err != nil {
 			t.Fatal(err)
 		}

@@ -22,9 +22,12 @@ import (
 
 func vegetationWorkbookFixture(t *testing.T) LongVegetationPreview {
 	t.Helper()
-	service, state := vprotest.ReportServiceFixture(t, false)
-	preview, err := PreviewLongVegetation(service, context.Background(), state.ContextID)
+	raw, err := cachedVegetationWorkbookPreviewJSON()
 	if err != nil {
+		t.Fatal(err)
+	}
+	var preview LongVegetationPreview
+	if err := json.Unmarshal(raw, &preview); err != nil {
 		t.Fatal(err)
 	}
 	return preview

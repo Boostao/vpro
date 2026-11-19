@@ -14,7 +14,7 @@ import (
 )
 
 func TestLongVegetationUnitPreferencesEnforcementResetConflictsAndOwnedRetry(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	service := NewLongVegetationUnitPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -55,7 +55,7 @@ func TestLongVegetationUnitPreferencesEnforcementResetConflictsAndOwnedRetry(t *
 }
 
 func TestLongVegetationUnitPreferencesCancellationOwnershipAndStaleContext(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	service := NewLongVegetationUnitPreferencesService(contexts)
 	owner := contexts.Projects.Sqlite
 	original := owner.AttachmentInfo["su"]

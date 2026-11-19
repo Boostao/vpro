@@ -82,10 +82,14 @@ func cloneSummaryAncillaryWorkbook(t *testing.T, input summaryVegetationAncillar
 }
 
 func TestSummaryAncillaryWorkbookOwnedPlacementsProvenanceAndModes(t *testing.T) {
+	averages := []int{1, 2}
+	if testing.Short() {
+		averages = []int{1}
+	}
 	for _, includeEnv := range []bool{false, true} {
 		input := summaryAncillaryWorkbookFixture(t, includeEnv)
 		for _, summary := range []bool{false, true} {
-			for _, average := range []int{1, 2} {
+			for _, average := range averages {
 				input := cloneSummaryAncillaryWorkbook(t, input)
 				input.CreateSummary = summary
 				input.Options.Average = average

@@ -59,7 +59,7 @@ func TestLongVegetationUnitPreferencesStrictRequest(t *testing.T) {
 }
 
 func TestLongVegetationUnitPreferencesChoiceMatrixRetainsHistoryAndOtherOptions(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	service := NewLongVegetationUnitPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -112,7 +112,7 @@ func TestLongVegetationUnitPreferencesChoiceMatrixRetainsHistoryAndOtherOptions(
 }
 
 func TestLongVegetationUnitPreferencesMalformedStorageConflictAndRecovery(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, false)
+	contexts, state := vegreportReportServiceFixture(t, false)
 	service := NewLongVegetationUnitPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	for _, bad := range []any{nil, true, "1", 0, 4} {

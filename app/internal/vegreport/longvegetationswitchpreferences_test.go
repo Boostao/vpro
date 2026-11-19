@@ -55,7 +55,7 @@ func TestLongVegetationSwitchPreferencesStrictWire(t *testing.T) {
 	if err := vprocore.DecodeStrictRequiredJSON(raw, &wire, "switch wire", "review", "request", "outcome"); err != nil {
 		t.Fatal(err)
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationSwitchPreferencesService(contexts)
 	read, err := service.GetLongVegetationSwitchPreferences(context.Background(), state.ContextID)
 	if err != nil || read.ContextID != state.ContextID || read.Project != "Sample" || read.SU != "None" ||
@@ -93,7 +93,7 @@ func TestLongVegetationSwitchPreferencesStrictWire(t *testing.T) {
 }
 
 func TestLongVegetationSwitchPreferencesRejectMalformedBooleanRequests(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationSwitchPreferencesService(contexts)
 	values := LongVegetationSwitchPreferenceValues{true, false, true, true}
 	base := vegetationSwitchRequest(t, values, values)
@@ -128,7 +128,7 @@ func TestLongVegetationSwitchPreferencesRejectMalformedBooleanRequests(t *testin
 }
 
 func TestLongVegetationSwitchPreferencesAllSixteenCombinationsAndNoop(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationSwitchPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	for combination := 0; combination < 16; combination++ {
@@ -187,7 +187,7 @@ func TestLongVegetationSwitchPreferencesAllSixteenCombinationsAndNoop(t *testing
 }
 
 func TestLongVegetationSwitchPreferencesHistoricalStoragePreservedAndInvalidUnavailable(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationSwitchPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	values, err := store.Snapshot()
@@ -249,7 +249,7 @@ func TestLongVegetationSwitchPreferencesHistoricalStoragePreservedAndInvalidUnav
 }
 
 func TestLongVegetationSwitchPreferencesOwnershipCleanupReplacementCancellationAndRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationSwitchPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	expected, proposed := LongVegetationSwitchPreferenceValues{true, false, true, true}, LongVegetationSwitchPreferenceValues{false, true, false, false}

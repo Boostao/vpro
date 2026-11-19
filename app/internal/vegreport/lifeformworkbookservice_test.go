@@ -22,7 +22,7 @@ import (
 
 func lifeformWorkbookServiceFixture(t *testing.T, external bool) (*LifeformWorkbookService, vprocore.ProjectState) {
 	t.Helper()
-	contexts, state := vprotest.ReportServiceFixture(t, external)
+	contexts, state := vegreportReportServiceFixture(t, external)
 	service, err := NewLifeformWorkbookService(contexts)
 	if err != nil {
 		t.Fatal(err)

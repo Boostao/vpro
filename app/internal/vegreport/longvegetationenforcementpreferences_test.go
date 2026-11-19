@@ -3,7 +3,6 @@ package vegreport
 import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (
@@ -31,7 +30,7 @@ func enforcementRequest(t *testing.T, expected, proposed LongVegetationEnforceme
 func TestLongVegetationEnforcementSourcePairsRepresentationsOmissionAndCAS(t *testing.T) {
 	for _, literal := range []any{false, true, 0, -1} {
 		for _, groups := range []int{1, 2, 3} {
-			contexts, _ := vprotest.PrepareKMLContextFixture(t)
+			contexts, _ := vegreportPrepareKMLContextFixture(t)
 			store := contexts.Projects.Preferences
 			if err := store.Update("ReportOptions", map[string]any{"DataQualityFilterEnforceLV": literal, "LVUnitGroups": groups}); err != nil {
 				t.Fatal(err)
@@ -109,7 +108,7 @@ func TestLongVegetationEnforcementStrictRequestsMalformedStorageAndFeature(t *te
 			t.Fatal("strict enforcement wire accepted malformed request", raw)
 		}
 	}
-	contexts, _ := vprotest.PrepareKMLContextFixture(t)
+	contexts, _ := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	for _, bad := range []any{nil, 1, -2, "False", "0", []any{false}} {
 		if err := store.Update("ReportOptions", map[string]any{"DataQualityFilterEnforceLV": bad, "LVUnitGroups": 1}); err != nil {
@@ -175,7 +174,7 @@ func TestLongVegetationEnforcementStrictGoClientWire(t *testing.T) {
 }
 
 func TestLongVegetationEnforcementOwnedCleanupPrinterFailureAndCommittedRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	expected, proposed := LongVegetationEnforcementPreferenceValues{false, 2}, LongVegetationEnforcementPreferenceValues{true, 1}
 	if err := store.Update("ReportOptions", map[string]any{"DataQualityFilterEnforceLV": 0, "LVUnitGroups": 2}); err != nil {

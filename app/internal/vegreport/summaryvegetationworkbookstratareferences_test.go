@@ -48,7 +48,13 @@ func summaryStrataReferenceWorkbookCases() []summaryStrataReferenceWorkbookCase 
 
 func TestSummaryStrataReferenceWorkbookOwnedTypedOutputAndZeroWrites(t *testing.T) {
 	count := 0
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	wantCount := 16
+	if testing.Short() {
+		externalModes = []bool{false}
+		wantCount = 8
+	}
+	for _, external := range externalModes {
 		service, state := summaryStrataReferenceWorkbookFixture(t, external)
 		contexts := service.source.environment.report.contexts
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -154,8 +160,8 @@ func TestSummaryStrataReferenceWorkbookOwnedTypedOutputAndZeroWrites(t *testing.
 			t.Fatal("Strata reference review wrote preferences", err)
 		}
 	}
-	if count != 16 {
-		t.Fatal("managed/external composition coverage differs", count)
+	if count != wantCount {
+		t.Fatal("managed/external composition coverage differs", count, wantCount)
 	}
 }
 

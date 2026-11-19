@@ -2,7 +2,6 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (
@@ -87,7 +86,7 @@ func TestSummaryPresentationFacadeIndependentGateAndOwner(t *testing.T) {
 			t.Fatal(got)
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationPresentationPreferencesService(contexts)
 	read, err := service.GetSummaryVegetationPresentationPreferences(context.Background(), state.ContextID)
 	if err != nil || read.ContextID != state.ContextID || read.Project != "Sample" || read.ProjectPath != state.ProjectPath ||
@@ -113,7 +112,7 @@ func TestSummaryPresentationFacadeIndependentGateAndOwner(t *testing.T) {
 }
 
 func TestSummaryPresentationFacadeCleanupCancellationReplacementAndCommittedReceipt(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationPresentationPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	read, err := service.GetSummaryVegetationPresentationPreferences(context.Background(), state.ContextID)
@@ -188,7 +187,7 @@ func TestSummaryPresentationFacadeCleanupCancellationReplacementAndCommittedRece
 }
 
 func TestSummaryPresentationFacadeConstancyAwayBackAndNoDatabaseChanges(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationPresentationPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	if err := store.Update("ReportOptions", map[string]any{
@@ -235,7 +234,7 @@ func TestSummaryPresentationFacadeConstancyAwayBackAndNoDatabaseChanges(t *testi
 
 func TestSummaryPresentationFacadeUnavailableHierarchyGuardAndHistoricalOmission(t *testing.T) {
 	for _, historical := range []int{0, -1} {
-		contexts, state := vprotest.PrepareKMLContextFixture(t)
+		contexts, state := vegreportPrepareKMLContextFixture(t)
 		service := NewSummaryVegetationPresentationPreferencesService(contexts)
 		store := contexts.Projects.Preferences
 		if err := store.Update("ReportOptions", map[string]any{"SVShowHierarchyHeader": historical}); err != nil {
@@ -273,7 +272,7 @@ func TestSummaryPresentationFacadeUnavailableHierarchyGuardAndHistoricalOmission
 
 func TestSummaryPresentationFacadeEmitActualGoWire(t *testing.T) {
 	directory := t.TempDir()
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationPresentationPreferencesService(contexts)
 	read, err := service.GetSummaryVegetationPresentationPreferences(context.Background(), state.ContextID)
 	if err != nil {

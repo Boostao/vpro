@@ -43,7 +43,11 @@ func projectWorkbookExportJSON(t *testing.T, review *LongVegetationProjectWorkbo
 }
 
 func TestProjectWorkbookOwnedReviewPublicationActualPathsSummaryAndOnceOnlyBytes(t *testing.T) {
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	if testing.Short() {
+		externalModes = []bool{false}
+	}
+	for _, external := range externalModes {
 		for _, mode := range []struct{ none, all bool }{{false, false}, {true, false}, {true, true}} {
 			service, state, scope := projectWorkbookOwnedFixture(t, external, mode.none, mode.all)
 			before := vprotest.DatabaseBytes(t, service.scope.contexts.Projects.Sqlite.Attachments)

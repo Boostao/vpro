@@ -43,7 +43,7 @@ func TestLongVegetationStatisticsPreferencesStrictRequests(t *testing.T) {
 			}
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationStatisticsPreferencesService(contexts)
 	before, err := os.ReadFile(contexts.Projects.Preferences.Path)
 	if err != nil {
@@ -89,7 +89,7 @@ func TestLongVegetationStatisticsPreferencesSharedWireAllCombinationsAndYAMLOnly
 	if err := vprocore.DecodeStrictRequiredJSON(raw, &wire, "statistics wire", "review", "request", "outcome"); err != nil {
 		t.Fatal(err)
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationStatisticsPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	read, err := service.GetLongVegetationStatisticsPreferences(context.Background(), state.ContextID)
@@ -168,7 +168,7 @@ func TestLongVegetationStatisticsPreferencesSharedWireAllCombinationsAndYAMLOnly
 }
 
 func TestLongVegetationStatisticsPreferencesUnavailableStorageNoDefaults(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationStatisticsPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	base, err := store.Snapshot()
@@ -201,7 +201,7 @@ func TestLongVegetationStatisticsPreferencesUnavailableStorageNoDefaults(t *test
 }
 
 func TestLongVegetationStatisticsPreferencesOwnershipCleanupReplacementCancellationAndRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationStatisticsPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	request := vegetationStatisticsRequest(t, LongVegetationStatisticsPreferenceValues{10, 20}, LongVegetationStatisticsPreferenceValues{20, 10})

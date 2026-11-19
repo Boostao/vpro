@@ -39,7 +39,7 @@ func TestSummaryVegetationPreferencesFacadeGatesStrictWire(t *testing.T) {
 			}
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationPreferencesService(contexts)
 	base := SummaryVegetationPreferenceValues{GroupBy: 1, Average: 1, Display: 1, ShowClass: 1}
 	valid := summaryPreferencesRequest(t, base, base)
@@ -86,7 +86,7 @@ func TestSummaryVegetationPreferencesFacadeGatesStrictWire(t *testing.T) {
 }
 
 func TestSummaryVegetationPreferencesFacadeOwnedTransitionsAndAvailability(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	protected := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	service := NewSummaryVegetationPreferencesService(contexts)
@@ -134,7 +134,7 @@ func TestSummaryVegetationPreferencesFacadeOwnedTransitionsAndAvailability(t *te
 }
 
 func TestSummaryVegetationPreferencesFacadeCleanupCollisionCancellationReceipt(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	base := SummaryVegetationPreferenceValues{GroupBy: 1, Average: 1, Display: 1, ShowClass: 1}
@@ -208,7 +208,7 @@ func TestSummaryVegetationPreferencesFacadeCleanupCollisionCancellationReceipt(t
 }
 
 func TestSummaryVegetationPreferencesFacadeProductionWire(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationPreferencesService(contexts)
 	review, err := service.GetSummaryVegetationPreferences(context.Background(), state.ContextID)
 	if err != nil {

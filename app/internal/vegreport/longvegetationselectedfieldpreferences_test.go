@@ -32,7 +32,7 @@ func TestLongVegetationSelectedFieldPhysicalDefinitionsAndOwnedCleanup(t *testin
 			}
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	owner, store := contexts.Projects.Sqlite, contexts.Projects.Preferences
 	lists, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(owner.Attachments["VLists"], "rw"))
 	if err != nil {
@@ -190,7 +190,7 @@ func TestLongVegetationSelectedFieldStrictGoClientWire(t *testing.T) {
 }
 
 func TestLongVegetationSelectedFieldSourceReachablePairsHistoricalNoopAndNamingCollision(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	service := NewLongVegetationSelectedFieldPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -251,7 +251,7 @@ func TestLongVegetationSelectedFieldSourceReachablePairsHistoricalNoopAndNamingC
 }
 
 func TestLongVegetationSelectedFieldStrictRequestsAndUnchangedInvalidOmission(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	service := NewLongVegetationSelectedFieldPreferencesService(contexts)
 	expected := LongVegetationSelectedFieldPreferenceValues{1, " historical\u0000field "}

@@ -94,7 +94,13 @@ func TestSummaryAncillaryDesktopStrictOptionalRequests(t *testing.T) {
 }
 
 func TestSummaryAncillaryDesktopModesReviewedTimeReopenAndZeroWrites(t *testing.T) {
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	averages := []int{1, 2}
+	if testing.Short() {
+		externalModes = []bool{false}
+		averages = []int{1}
+	}
+	for _, external := range externalModes {
 		service, state := summaryAncillaryDesktopFixture(t, external)
 		contexts := service.source.environment.report.contexts
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -104,7 +110,7 @@ func TestSummaryAncillaryDesktopModesReviewedTimeReopenAndZeroWrites(t *testing.
 		}
 		for _, includeEnv := range []bool{false, true} {
 			for _, summary := range []bool{false, true} {
-				for _, average := range []int{1, 2} {
+				for _, average := range averages {
 					options := SummaryVegetationWorkbookOptions{Title: "=literal title", Average: average, Display: 6,
 						ShowClass: 20, IncludeEnv: includeEnv,
 						Ancillary: &SummaryVegetationWorkbookAncillaryOptions{CreateSummary: summary}}

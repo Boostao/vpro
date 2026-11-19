@@ -15,7 +15,7 @@ import (
 )
 
 func TestLongVegetationQualityMinimumPreferencesIndependentQualification(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, false)
+	contexts, state := vegreportReportServiceFixture(t, false)
 	owner := contexts.Projects.Sqlite
 	project, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(owner.Attachments["project"], "rw"))
 	if err != nil {
@@ -90,7 +90,11 @@ func TestLongVegetationQualityMinimumPreferencesIndependentQualification(t *test
 }
 
 func TestLongVegetationQualityMinimumPreferencesWorkbookActiveInactiveAndStaleApproval(t *testing.T) {
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	if testing.Short() {
+		externalModes = []bool{false}
+	}
+	for _, external := range externalModes {
 		t.Run(map[bool]string{false: "attached", true: "external"}[external], func(t *testing.T) {
 			private, state := vegetationWorkbookServiceFixture(t, external)
 			workbooks := &VegetationWorkbookService{Private: private}

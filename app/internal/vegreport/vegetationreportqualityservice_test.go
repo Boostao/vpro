@@ -19,7 +19,7 @@ import (
 func TestLongVegetationQualityServiceOwnedFanoutNullExclusionAndRetry(t *testing.T) {
 	for _, external := range []bool{false, true} {
 		t.Run(map[bool]string{false: "project", true: "external"}[external], func(t *testing.T) {
-			service, state := vprotest.ReportServiceFixture(t, external)
+			service, state := vegreportReportServiceFixture(t, external)
 			owner := service.Projects.Sqlite
 			db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(owner.Attachments["project"], "rw"))
 			if err != nil {

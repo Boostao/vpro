@@ -55,7 +55,7 @@ func TestLongVegetationQualityNullPreferencesStrictWire(t *testing.T) {
 	if err := vprocore.DecodeStrictRequiredJSON(raw, &wire, "quality Include Nulls wire", "review", "request", "outcome"); err != nil {
 		t.Fatal(err)
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityNullPreferencesService(contexts)
 	read, err := service.GetLongVegetationQualityNullPreferences(context.Background(), state.ContextID)
 	if err != nil || read.ContextID != state.ContextID || read.Project != "Sample" || read.SU != "None" ||
@@ -93,7 +93,7 @@ func TestLongVegetationQualityNullPreferencesStrictWire(t *testing.T) {
 }
 
 func TestLongVegetationQualityNullPreferencesRejectMalformedRequests(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityNullPreferencesService(contexts)
 	values := LongVegetationQualityNullPreferenceValues{true, true, true}
 	base := vegetationQualityNullRequest(t, values, values)
@@ -126,7 +126,7 @@ func TestLongVegetationQualityNullPreferencesRejectMalformedRequests(t *testing.
 }
 
 func TestLongVegetationQualityNullPreferencesEightCombinationsAndQualification(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityNullPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	for mask := 0; mask < 8; mask++ {
@@ -192,7 +192,7 @@ func TestLongVegetationQualityNullPreferencesEightCombinationsAndQualification(t
 }
 
 func TestLongVegetationQualityNullPreferencesLegacyStorageNoopOmissionAndInvalid(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityNullPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	values, err := store.Snapshot()
@@ -285,7 +285,7 @@ func TestLongVegetationQualityNullPreferencesLegacyStorageNoopOmissionAndInvalid
 }
 
 func TestLongVegetationQualityNullPreferencesOwnershipCleanupCancellationCollisionAndRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityNullPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	expected, proposed := LongVegetationQualityNullPreferenceValues{true, true, true}, LongVegetationQualityNullPreferenceValues{false, false, false}

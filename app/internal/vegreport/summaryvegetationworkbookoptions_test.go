@@ -28,9 +28,15 @@ func TestSummaryDraftWorkbookRetainedShowOptionMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	averages := []int{1, 2}
+	displays := []int{1, 2, 3, 4, 5, 6}
+	if testing.Short() {
+		averages = []int{1}
+		displays = []int{4, 6}
+	}
 	for _, includeEnv := range []bool{false, true} {
-		for _, average := range []int{1, 2} {
-			for display := 1; display <= 6; display++ {
+		for _, average := range averages {
+			for _, display := range displays {
 				var baseline *SummaryVegetationWorkbookReview
 				approvals := map[string]bool{}
 				for _, show := range []int{0, 1, 10, 20} {

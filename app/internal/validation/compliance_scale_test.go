@@ -201,7 +201,11 @@ func TestComplianceStrataCoverBoundsLiteralNonCollisionAnd71kScale(t *testing.T)
 	if os.Getenv("CI") == "true" {
 		ciFactor = 3
 	}
-	boundedCtx, cancel := context.WithTimeout(ctx, 3*time.Second*ciFactor)
+	timeout := 3 * time.Second * ciFactor
+	if isRaceDetectorActive() {
+		timeout = 20 * time.Second * ciFactor
+	}
+	boundedCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	tFull := time.Now()
@@ -213,8 +217,12 @@ func TestComplianceStrataCoverBoundsLiteralNonCollisionAnd71kScale(t *testing.T)
 	if !fullRep.Passed {
 		t.Fatalf("expected clean 71k dataset to pass compliance, got summary=%+v", fullRep.Summary)
 	}
-	if fullDur > 2*time.Second*ciFactor {
-		t.Fatalf("RunComplianceValidation(71,567 plots, full) took %v, want <= %v", fullDur, 2*time.Second*ciFactor)
+	limit := 2 * time.Second * ciFactor
+	if isRaceDetectorActive() {
+		limit = 10 * time.Second * ciFactor
+	}
+	if fullDur > limit {
+		t.Fatalf("RunComplianceValidation(71,567 plots, full) took %v (race active=%v), want <= %v", fullDur, isRaceDetectorActive(), limit)
 	}
 
 	tScoped := time.Now()
@@ -223,7 +231,11 @@ func TestComplianceStrataCoverBoundsLiteralNonCollisionAnd71kScale(t *testing.T)
 	if err != nil {
 		t.Fatalf("RunComplianceValidation(71,567 plots, UseActiveSU=true) failed or timed out after %v: %v", scopedDur, err)
 	}
-	if !scopedRep.Passed || scopedDur > 500*time.Millisecond*ciFactor {
-		t.Fatalf("RunComplianceValidation(UseActiveSU=true) passed=%v dur=%v (want <= %v)", scopedRep.Passed, scopedDur, 500*time.Millisecond*ciFactor)
+	limitScoped := 500 * time.Millisecond * ciFactor
+	if isRaceDetectorActive() {
+		limitScoped = 2500 * time.Millisecond * ciFactor
+	}
+	if !scopedRep.Passed || scopedDur > limitScoped {
+		t.Fatalf("RunComplianceValidation(UseActiveSU=true) passed=%v dur=%v (want <= %v)", scopedRep.Passed, scopedDur, limitScoped)
 	}
 }

@@ -113,7 +113,13 @@ func TestSummaryGroupedAncillaryRetainedAuthority(t *testing.T) {
 
 func TestSummaryGroupedAncillaryOwnedCompositionAndMetadata(t *testing.T) {
 	count := 0
-	for _, external := range []bool{false, true} {
+	externalModes := []bool{false, true}
+	wantCount := 16
+	if testing.Short() {
+		externalModes = []bool{false}
+		wantCount = 8
+	}
+	for _, external := range externalModes {
 		service, state := summaryStrataReferenceWorkbookFixture(t, external)
 		contexts := service.source.environment.report.contexts
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -184,7 +190,7 @@ func TestSummaryGroupedAncillaryOwnedCompositionAndMetadata(t *testing.T) {
 			t.Fatal("grouped ancillary inspection changed preferences", err)
 		}
 	}
-	if count != 16 {
-		t.Fatal("managed/external grouped ancillary cases missing", count)
+	if count != wantCount {
+		t.Fatal("managed/external grouped ancillary cases missing", count, wantCount)
 	}
 }

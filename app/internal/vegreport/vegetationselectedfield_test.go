@@ -359,7 +359,7 @@ func TestLongVegetationSelectedFieldOwnedIndependentGateAndAllGroupings(t *testi
 		}{{"TEXT", "text", "literal native"}, {"INTEGER", "integer", int64(2147483647)},
 			{"BOOLEAN", "boolean", int64(-1)}, {"REAL", "real", 1.005}} {
 			t.Run(test.kind+map[bool]string{false: "-internal", true: "-external"}[external], func(t *testing.T) {
-				service, state := vprotest.ReportServiceFixture(t, external)
+				service, state := vegreportReportServiceFixture(t, external)
 				lists, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(service.Projects.Sqlite.Attachments["VLists"], "rw"))
 				if err != nil {
 					t.Fatal(err)

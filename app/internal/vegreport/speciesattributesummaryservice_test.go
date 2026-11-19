@@ -35,7 +35,7 @@ func TestSpeciesAttributeSummaryServiceOwnedZeroWrites(t *testing.T) {
 		t.Fatal("unavailable service published")
 	}
 	for _, external := range []bool{false, true} {
-		contexts, state := vprotest.ReportServiceFixture(t, external)
+		contexts, state := vegreportReportServiceFixture(t, external)
 		service := enabledAttributeSummary(t, contexts)
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 		config, err := os.ReadFile(contexts.Projects.Preferences.Path)
@@ -60,7 +60,7 @@ func TestSpeciesAttributeSummaryServiceOwnedZeroWrites(t *testing.T) {
 }
 
 func TestSpeciesAttributeSummaryServiceCancellationOwnershipAndSnapshotRefusal(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	service := enabledAttributeSummary(t, contexts)
 	owner := contexts.Projects.Sqlite
 	owner.Mu.Lock()
@@ -116,7 +116,7 @@ func TestSpeciesAttributeSummaryServiceCancellationOwnershipAndSnapshotRefusal(t
 }
 
 func TestSpeciesAttributeSummaryServicePhysicalSchemaAndBorrowedLifetime(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, false)
+	contexts, state := vegreportReportServiceFixture(t, false)
 	service := enabledAttributeSummary(t, contexts)
 	mutate := func(role, statement string) {
 		t.Helper()

@@ -44,7 +44,7 @@ func TestLongVegetationGroupPreferencesStrictWire(t *testing.T) {
 			}
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationGroupPreferencesService(contexts)
 	var wire struct {
 		Review  LongVegetationGroupPreferencesReview  `json:"review"`
@@ -124,7 +124,7 @@ func TestLongVegetationGroupPreferencesStrictWire(t *testing.T) {
 }
 
 func TestLongVegetationGroupPreferencesAllTransitions(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	service := NewLongVegetationGroupPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
@@ -174,7 +174,7 @@ func TestLongVegetationGroupPreferencesAllTransitions(t *testing.T) {
 }
 
 func TestLongVegetationGroupPreferencesStorageStaleAndOwnership(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	service := NewLongVegetationGroupPreferencesService(contexts)
 	values, err := store.Snapshot()
@@ -211,7 +211,7 @@ func TestLongVegetationGroupPreferencesStorageStaleAndOwnership(t *testing.T) {
 }
 
 func TestLongVegetationGroupPreferencesCleanupCollisionCancellationAndCommittedRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationGroupPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	request := vegetationGroupRequest(t, 1, 2)

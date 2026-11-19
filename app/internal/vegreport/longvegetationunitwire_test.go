@@ -3,7 +3,6 @@ package vegreport
 import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (
@@ -27,7 +26,7 @@ func TestLongVegetationUnitPreferencesStrictSharedClientWire(t *testing.T) {
 	if err := vprocore.DecodeStrictRequiredJSON(raw, &wire, "unit wire", "review", "request", "outcome"); err != nil {
 		t.Fatal(err)
 	}
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	service := NewLongVegetationUnitPreferencesService(contexts)
 	read, err := service.GetLongVegetationUnitPreferences(context.Background(), state.ContextID)
 	if err != nil {

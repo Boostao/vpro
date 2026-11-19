@@ -21,7 +21,7 @@ func TestLongVegetationLifeformDecodeAndDefaultIndependentGate(t *testing.T) {
 	if err != nil || !options.LifeformGrouping || options.NoneGrouping || vegetationSettings(options).Grouping != "lifeform" {
 		t.Fatal("source Lifeform grouping lost explicit identity", options, err)
 	}
-	service, _ := vprotest.ReportServiceFixture(t, false)
+	service, _ := vegreportReportServiceFixture(t, false)
 	options.NoneGrouping = true
 	if err := CheckLongVegetationGrouping(service, options); err == nil {
 		t.Fatal("conflicting grouping flags accepted")
@@ -30,7 +30,7 @@ func TestLongVegetationLifeformDecodeAndDefaultIndependentGate(t *testing.T) {
 
 func TestLongVegetationLifeformOwnedReaderDispatchIdentityAndZeroWrites(t *testing.T) {
 	for _, external := range []bool{false, true} {
-		service, state := vprotest.ReportServiceFixture(t, external)
+		service, state := vegreportReportServiceFixture(t, external)
 		if err := service.Projects.Preferences.Update("ReportOptions", map[string]any{"LVGroupBy": 3}); err != nil {
 			t.Fatal(err)
 		}
@@ -77,7 +77,7 @@ func TestLongVegetationLifeformOwnedReaderDispatchIdentityAndZeroWrites(t *testi
 }
 
 func TestLongVegetationLifeformRequiresOriginalPersonalTableWithoutLayerFallback(t *testing.T) {
-	service, state := vprotest.ReportServiceFixture(t, false)
+	service, state := vegreportReportServiceFixture(t, false)
 	if err := service.Projects.Preferences.Update("ReportOptions", map[string]any{"LVGroupBy": 3}); err != nil {
 		t.Fatal(err)
 	}

@@ -36,7 +36,7 @@ func TestLifeformSummaryServiceOwnedZeroWrites(t *testing.T) {
 		t.Fatal("unavailable service published")
 	}
 	for _, external := range []bool{false, true} {
-		contexts, state := vprotest.ReportServiceFixture(t, external)
+		contexts, state := vegreportReportServiceFixture(t, external)
 		service := enabledLifeformService(t, contexts)
 		before := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 		config, err := os.ReadFile(contexts.Projects.Preferences.Path)
@@ -67,7 +67,7 @@ func TestLifeformSummaryServiceOwnedZeroWrites(t *testing.T) {
 }
 
 func TestLifeformSummaryServiceCancellationStalenessIdentityAndRetry(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	service := enabledLifeformService(t, contexts)
 	owner := contexts.Projects.Sqlite
 	owner.Mu.Lock()
@@ -135,7 +135,7 @@ func TestLifeformSummaryServiceCancellationStalenessIdentityAndRetry(t *testing.
 }
 
 func TestLifeformSummaryServiceSchemaRefusalHierarchyExclusionAndBorrowedLifetime(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, false)
+	contexts, state := vegreportReportServiceFixture(t, false)
 	service, err := NewLifeformSummaryService(contexts)
 	if err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestLifeformSummarySampleRepresentativeCounts(t *testing.T) {
 }
 
 func TestLifeformAndAttributeSummaryDynamicHierarchyBreakpoints(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, false)
+	contexts, state := vegreportReportServiceFixture(t, false)
 	owner := contexts.Projects.Sqlite
 	vprotest.MutateContextFixture(t, owner.Attachments["project"], `
 		DELETE FROM `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Veg")+`;

@@ -20,17 +20,7 @@ import (
 
 func summaryVegetationServiceFixture(t *testing.T, external bool) (*SummaryVegetationService, vprocore.ProjectState) {
 	t.Helper()
-	contexts, state := vprotest.ReportServiceFixture(t, external)
-	owner := contexts.Projects.Sqlite
-	vprotest.MutateContextFixture(t, owner.Attachments["project"], `DELETE FROM `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Veg")+
-		`; INSERT INTO `+vprocore.QuoteHeaderIdentifier(state.ActiveProject+"_Veg")+`(PlotNumber,Species,Cover1) VALUES('P1','X',10),('P2','X',20),('P3','X',5),('P2','S',2)`)
-	vprotest.MutateContextFixture(t, owner.Attachments["su"], `DELETE FROM Report_SU;
-		INSERT INTO Report_SU VALUES('P1','A'),('P1','A'),('P2','A'),('P5','A'),('P3','B'),(NULL,'A'),('P9',NULL),('P6','Orphan')`)
-	vprotest.MutateContextFixture(t, owner.Attachments["VLists"], `DELETE FROM USysAllSpecs;
-		INSERT INTO USysAllSpecs(Code,ScientificName,Lifeform,EnglishName,Codetype) VALUES('X','Alpha',1,'x','U'),('S','Excluded',2,'s','s')`)
-	vprotest.MutateContextFixture(t, owner.Attachments["VUser"], `DELETE FROM USysUserSpp`)
-	vprotest.MutateContextFixture(t, owner.Attachments["VPro64"], `DELETE FROM LayerCode;
-		INSERT INTO LayerCode(LayerText,Layer1234567,Layer) VALUES('1','1','A1'),('10','10',NULL)`)
+	contexts, state := vegreportSummaryVegetationContextFixture(t, external)
 	service, err := NewSummaryVegetationService(contexts)
 	if err != nil {
 		t.Fatal(err)

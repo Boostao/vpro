@@ -20,7 +20,7 @@ import (
 
 func summaryEnvironmentalCountOwnedFixture(t *testing.T, external bool) (*SummaryVegetationEnvironmentalCountService, vprocore.ProjectState) {
 	t.Helper()
-	contexts, state := vprotest.ReportServiceFixture(t, external)
+	contexts, state := vegreportReportServiceFixture(t, external)
 	vprotest.MutateContextFixture(t, contexts.Projects.Sqlite.Attachments["su"], `DELETE FROM Report_SU;
 		INSERT INTO Report_SU VALUES('P1','A'),('P1','A'),(NULL,'A'),('P2','a'),(NULL,'zero'),('',''),('P3',' A ')`)
 	service, err := NewSummaryVegetationEnvironmentalCountService(contexts)

@@ -2,7 +2,6 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (
@@ -17,7 +16,7 @@ import (
 )
 
 func TestLongVegetationEnforcementCancellationAttachmentAndUnrelatedPreservation(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	if err := store.Update("ReportOptions", map[string]any{"DataQualityFilterEnforceLV": -1, "LVUnitGroups": 3,
 		"UnrelatedLiteral": " retain \x00 historical "}); err != nil {
@@ -92,7 +91,7 @@ func TestLongVegetationEnforcementCancellationAttachmentAndUnrelatedPreservation
 }
 
 func TestLongVegetationEnforcementInvalidPrintersNoopReadAndMalformedGroups(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	store := contexts.Projects.Preferences
 	if err := store.Update("ReportOptions", map[string]any{"DataQualityFilterEnforceLV": false, "LVUnitGroups": 2}); err != nil {
 		t.Fatal(err)

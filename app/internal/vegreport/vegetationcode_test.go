@@ -64,7 +64,7 @@ func TestLongVegetationCodeReferenceBridgePreservesLiteralCellsAndGrouping(t *te
 func TestLongVegetationCodeOwnedAllGroupingModes(t *testing.T) {
 	for _, external := range []bool{false, true} {
 		t.Run(map[bool]string{false: "internal", true: "external"}[external], func(t *testing.T) {
-			service, state := vprotest.ReportServiceFixture(t, external)
+			service, state := vegreportReportServiceFixture(t, external)
 			if err := service.Projects.Preferences.Update("ReportOptions", map[string]any{"LVShowEnglishName": 2}); err != nil {
 				t.Fatal(err)
 			}

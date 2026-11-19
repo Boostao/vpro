@@ -31,7 +31,7 @@ func vegetationQualityMinimumRequest(t *testing.T, expected, proposed LongVegeta
 }
 
 func TestLongVegetationQualityMinimumPreferencesOwnershipCleanupCancellationCollisionAndRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityMinimumPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	expected := LongVegetationQualityMinimumPreferenceValues{"Poor", "Poor", "Poor"}
@@ -123,7 +123,7 @@ func TestLongVegetationQualityMinimumPreferencesOwnedRead(t *testing.T) {
 			}
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityMinimumPreferencesService(contexts)
 	read, err := service.GetLongVegetationQualityMinimumPreferences(context.Background(), state.ContextID)
 	if err != nil {
@@ -154,7 +154,7 @@ func TestLongVegetationQualityMinimumPreferencesStrictGoClientWire(t *testing.T)
 	if err := vprocore.DecodeStrictRequiredJSON(raw, &wire, "quality minimum Go/client wire", "review", "request", "outcome"); err != nil {
 		t.Fatal(err)
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(contexts.Projects.Sqlite.Attachments["VLists"], "rw"))
 	if err != nil {
 		t.Fatal(err)
@@ -199,7 +199,7 @@ func TestLongVegetationQualityMinimumPreferencesStrictGoClientWire(t *testing.T)
 }
 
 func TestLongVegetationQualityMinimumPreferencesHistoricalNULOmissionAndUnavailableStorage(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityMinimumPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	values, err := store.Snapshot()
@@ -261,7 +261,7 @@ func TestLongVegetationQualityMinimumPreferencesHistoricalNULOmissionAndUnavaila
 }
 
 func TestLongVegetationQualityMinimumPreferencesLiteralSaveAndChangedOnlyOmission(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityMinimumPreferencesService(contexts)
 	beforeDB := vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)
 	for _, literal := range []string{"", " poor ", "CUSTOM-not-a-suggestion", strings.Repeat("界", 32), "Fair", "Poor"} {
@@ -307,7 +307,7 @@ func TestLongVegetationQualityMinimumPreferencesLiteralSaveAndChangedOnlyOmissio
 }
 
 func TestLongVegetationQualityMinimumPreferencesStrictRequestsAndStaleRefusal(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityMinimumPreferencesService(contexts)
 	values := LongVegetationQualityMinimumPreferenceValues{"Poor", "Poor", "Poor"}
 	base := vegetationQualityMinimumRequest(t, values, values)
@@ -343,7 +343,7 @@ func TestLongVegetationQualityMinimumPreferencesStrictRequestsAndStaleRefusal(t 
 }
 
 func TestLongVegetationQualityMinimumSuggestionsEmptyDuplicatesNullAndMalformedRetry(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewLongVegetationQualityMinimumPreferencesService(contexts)
 	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(contexts.Projects.Sqlite.Attachments["VLists"], "rw"))
 	if err != nil {

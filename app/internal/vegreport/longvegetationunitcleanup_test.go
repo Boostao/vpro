@@ -2,7 +2,6 @@ package vegreport
 
 import (
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (
@@ -17,7 +16,7 @@ import (
 )
 
 func TestLongVegetationUnitPreferencesSnapshotCleanupPersistenceCollisionAndCommittedCancel(t *testing.T) {
-	contexts, state := vprotest.ReportServiceFixture(t, true)
+	contexts, state := vegreportReportServiceFixture(t, true)
 	service := NewLongVegetationUnitPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	request := vegetationUnitRequest(t, 1, 3)

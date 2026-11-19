@@ -162,7 +162,11 @@ func TestSUExplorerLiteralPlotNonCollisionAnd71kScale(t *testing.T) {
 	if os.Getenv("CI") == "true" {
 		ciFactor = 3
 	}
-	boundedCtx, cancel := context.WithTimeout(ctx, 2*time.Second*ciFactor)
+	ctxTimeout := 2 * time.Second * ciFactor
+	if isRaceDetectorActive() {
+		ctxTimeout = 10 * time.Second * ciFactor
+	}
+	boundedCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
 	defer cancel()
 
 	t0 := time.Now()
@@ -180,8 +184,10 @@ func TestSUExplorerLiteralPlotNonCollisionAnd71kScale(t *testing.T) {
 	if suCreated.PlotCount != 71567 {
 		t.Fatalf("expected 71567 seeded SU rows, got %d", suCreated.PlotCount)
 	}
-	if createDur > 500*time.Millisecond*ciFactor {
+	if createDur > 500*time.Millisecond*ciFactor && !isRaceDetectorActive() {
 		t.Fatalf("CreateSUTable(71,567 plots) took %v, want <= %v", createDur, 500*time.Millisecond*ciFactor)
+	} else if isRaceDetectorActive() && createDur > 2500*time.Millisecond*ciFactor {
+		t.Fatalf("CreateSUTable(71,567 plots) took %v (race active), want <= %v", createDur, 2500*time.Millisecond*ciFactor)
 	}
 
 	t1 := time.Now()
@@ -193,8 +199,10 @@ func TestSUExplorerLiteralPlotNonCollisionAnd71kScale(t *testing.T) {
 	if scaleTree.TotalProject != 71567 || scaleTree.TotalAssigned != 71567 || len(scaleTree.Units) != 2 {
 		t.Fatalf("unexpected 71k SUPlotTree counts: project=%d assigned=%d units=%d", scaleTree.TotalProject, scaleTree.TotalAssigned, len(scaleTree.Units))
 	}
-	if treeDur > 500*time.Millisecond*ciFactor {
+	if treeDur > 500*time.Millisecond*ciFactor && !isRaceDetectorActive() {
 		t.Fatalf("GetSUPlotTree(71,567 plots) took %v, want <= %v", treeDur, 500*time.Millisecond*ciFactor)
+	} else if isRaceDetectorActive() && treeDur > 2500*time.Millisecond*ciFactor {
+		t.Fatalf("GetSUPlotTree(71,567 plots) took %v (race active), want <= %v", treeDur, 2500*time.Millisecond*ciFactor)
 	}
 
 	t2 := time.Now()
@@ -203,7 +211,9 @@ func TestSUExplorerLiteralPlotNonCollisionAnd71kScale(t *testing.T) {
 	if err != nil || insp.PlotNumber != "P071567" || len(insp.TopSpecies) == 0 {
 		t.Fatalf("GetPlotInspectorSummary(P071567) failed: %+v (%v)", insp, err)
 	}
-	if inspDur > 100*time.Millisecond*ciFactor {
+	if inspDur > 100*time.Millisecond*ciFactor && !isRaceDetectorActive() {
 		t.Fatalf("GetPlotInspectorSummary on 71.5k plots / 150k veg rows took %v, want <= %v", inspDur, 100*time.Millisecond*ciFactor)
+	} else if isRaceDetectorActive() && inspDur > 500*time.Millisecond*ciFactor {
+		t.Fatalf("GetPlotInspectorSummary on 71.5k plots / 150k veg rows took %v (race active), want <= %v", inspDur, 500*time.Millisecond*ciFactor)
 	}
 }

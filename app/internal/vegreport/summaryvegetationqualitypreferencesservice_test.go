@@ -3,7 +3,6 @@ package vegreport
 import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 	"github.com/boostao/vpro/app/internal/vprocore"
-	"github.com/boostao/vpro/app/internal/vprocore/vprotest"
 )
 
 import (
@@ -65,7 +64,7 @@ func TestSummaryQualityFacadeIndependentGateAndOwnedRead(t *testing.T) {
 			t.Fatal(saved)
 		}
 	}
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationQualityPreferencesService(contexts)
 	read, err := service.GetSummaryVegetationQualityPreferences(context.Background(), state.ContextID)
 	if err != nil {
@@ -87,7 +86,7 @@ func TestSummaryQualityFacadeIndependentGateAndOwnedRead(t *testing.T) {
 }
 
 func TestSummaryQualityFacadeOwnedCleanupCollisionCancellationAndReceipt(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationQualityPreferencesService(contexts)
 	store := contexts.Projects.Preferences
 	read, err := service.GetSummaryVegetationQualityPreferences(context.Background(), state.ContextID)
@@ -165,7 +164,7 @@ func TestSummaryQualityFacadeOwnedCleanupCollisionCancellationAndReceipt(t *test
 }
 
 func TestSummaryQualityFacadeBECSuggestionsEmptyAndMalformedCorrection(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationQualityPreferencesService(contexts)
 	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(contexts.Projects.Sqlite.Attachments["VLists"], "rw"))
 	if err != nil {
@@ -210,7 +209,7 @@ func TestSummaryQualityFacadeBECSuggestionsEmptyAndMalformedCorrection(t *testin
 }
 
 func TestSummaryQualityFacadeSharedBECExternalCASAndNoDatabaseWrites(t *testing.T) {
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationQualityPreferencesService(contexts)
 	read, err := service.GetSummaryVegetationQualityPreferences(context.Background(), state.ContextID)
 	if err != nil {
@@ -261,7 +260,7 @@ func TestSummaryQualityFacadeSharedBECExternalCASAndNoDatabaseWrites(t *testing.
 
 func TestSummaryQualityFacadeEmitActualGoWire(t *testing.T) {
 	directory := t.TempDir()
-	contexts, state := vprotest.PrepareKMLContextFixture(t)
+	contexts, state := vegreportPrepareKMLContextFixture(t)
 	service := NewSummaryVegetationQualityPreferencesService(contexts)
 	review, err := service.GetSummaryVegetationQualityPreferences(context.Background(), state.ContextID)
 	if err != nil {
