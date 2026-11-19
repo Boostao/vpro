@@ -105,7 +105,7 @@ func TestSQLiteProjectServiceFailedPublishKeepsHandlesSelectionAndPreferences(t 
 	if err != nil || published.ActiveSU != "Sample" || published.ContextID == before.ContextID {
 		t.Fatalf("candidate retry failed: %+v %v", published, err)
 	}
-	if original.Conn != nil {
+	if original.IsOpen() {
 		t.Fatal("publication leaked the previous owned coordinator")
 	}
 	if _, err := switchSQLiteTestSU(t, service, "Missing"); err == nil {
@@ -231,7 +231,7 @@ func TestSQLiteProjectServiceMissingExternalAndInvalidSupportKeepPreferences(t *
 
 func TestSQLiteProjectServiceClosedContextRejectsReads(t *testing.T) {
 	service, _, _, _ := vprotest.SqliteServiceFixture(t)
-	conn := service.Sqlite.Conn
+	conn := service.Sqlite.CoordinatorWhileLocked()
 	if err := service.CloseSQLiteContext(); err != nil {
 		t.Fatal(err)
 	}

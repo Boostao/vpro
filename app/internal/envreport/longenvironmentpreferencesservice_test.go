@@ -198,12 +198,12 @@ func TestLongEnvironmentPreferencesFacadeCleanupCancellationRetryAndOwnership(t 
 	service.snapshot = vprocore.PublicationReadSnapshotHooks{}
 	ctx, cancel := context.WithCancel(context.Background())
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	done := make(chan *LongEnvironmentPreferencesOutcome, 1)
 	go func() { done <- service.SaveLongEnvironmentPreferences(ctx, state.ContextID, request) }()
 	cancel()
 	got := <-done
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if got.Committed || got.ErrorMessage == "" {
 		t.Fatal(got)
 	}

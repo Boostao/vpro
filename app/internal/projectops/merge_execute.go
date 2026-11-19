@@ -76,12 +76,11 @@ func ExecuteThreeWayMerge(s *vprocore.ContextService, ctx context.Context, conte
 		}
 	}
 
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tgtPath, "rw")+"&_foreign_keys=on&_busy_timeout=5000&_txlock=immediate&_journal_mode=WAL")
+	db, err := sqlutil.OpenWALWriteSQLite(tgtPath)
 	if err != nil {
 		return ThreeWayMergeResult{}, err
 	}
 	defer db.Close()
-	db.SetMaxOpenConns(1)
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return ThreeWayMergeResult{}, err

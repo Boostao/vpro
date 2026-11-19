@@ -348,19 +348,19 @@
     align-items: center;
   }
   button {
-    border: 1px solid #d8d8d8;
+    border: 1px solid var(--vpro-border);
     border-radius: 0.4rem;
     padding: 0.5rem 0.75rem;
-    background: #ffffff;
+    background: var(--vpro-surface);
   }
   button:disabled {
     opacity: 0.5;
   }
   .error {
-    color: #d8292f;
+    color: var(--vpro-error);
   }
   .guidance {
-    color: #474543;
+    color: var(--vpro-ink-secondary);
     font-size: 0.875rem;
   }
 </style>

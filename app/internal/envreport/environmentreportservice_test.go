@@ -51,11 +51,11 @@ func TestLongEnvironmentPreviewOwnedPhysicalScopeAndZeroWrites(t *testing.T) {
 func TestLongEnvironmentPreviewCancellationStalenessAndRetry(t *testing.T) {
 	service, state := vprotest.ReportServiceFixture(t, true)
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	preview, err := PreviewLongEnvironment(service, ctx, state.ContextID, LongEnvironmentRequest{"Title"})
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(preview, LongEnvironmentPreview{}) {
 		t.Fatal("cancelled read publishes output or loses cancellation", preview, err)
 	}

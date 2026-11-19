@@ -70,11 +70,11 @@ func TestLifeformSummaryServiceCancellationStalenessIdentityAndRetry(t *testing.
 	contexts, state := vegreportReportServiceFixture(t, true)
 	service := enabledLifeformService(t, contexts)
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	preview, err := service.Preview(ctx, state.ContextID)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(preview, LifeformSummaryPreview{}) {
 		t.Fatal("cancelled lease published", preview, err)
 	}
@@ -188,7 +188,7 @@ func TestLifeformSummaryServiceSchemaRefusalHierarchyExclusionAndBorrowedLifetim
 	mutate("project", `DROP VIEW Report_SU; CREATE TABLE Report_SU(PlotNumber TEXT,SiteUnit TEXT);
 		INSERT INTO Report_SU VALUES('108050','U')`)
 	verifyRead("")
-	if _, err := contexts.Projects.GetState(context.Background()); err != nil || owner.Conn == nil {
+	if _, err := contexts.Projects.GetState(context.Background()); err != nil || !owner.IsOpen() {
 		t.Fatal("report closed its borrowed owner", err)
 	}
 }

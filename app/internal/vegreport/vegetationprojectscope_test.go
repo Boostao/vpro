@@ -288,12 +288,12 @@ func TestProjectScopeStrictCASAndFailedInstallsAreAtomic(t *testing.T) {
 		t.Fatal("source3 without original None context accepted")
 	}
 	owner := private.contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	short, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
 	_, err := service.SetLongVegetationReportScope(short, state.ContextID,
 		projectScopeRequestJSON(t, "0", vprocore.VegetationProjectFieldsScope))
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || projectReportScopes(private.contexts).Read(state.ContextID).Revision != 0 {
 		t.Fatal("cancelled waiting scope switch changed authority", err)
 	}

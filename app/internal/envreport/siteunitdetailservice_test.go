@@ -54,11 +54,11 @@ func TestSiteUnitSummaryCancellationCleanupStaleAndRetry(t *testing.T) {
 		}
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	result, err := PreviewSiteUnitSummary(service, ctx, state.ContextID, SiteUnitSummaryRequest{1})
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(result, SiteUnitSummaryPreview{}) {
 		t.Fatal("lease cancellation lost", result, err)
 	}

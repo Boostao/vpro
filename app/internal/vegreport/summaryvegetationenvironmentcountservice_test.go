@@ -101,11 +101,11 @@ func TestSummaryEnvironmentalCountServiceOwnershipCleanupCancellation(t *testing
 	service, state := summaryEnvironmentalCountOwnedFixture(t, true)
 	owner := service.contexts.Projects.Sqlite
 	unit := "A"
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	result, err := service.GetEnvironmentalPlotCount(ctx, state.ContextID, &unit)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || result != nil {
 		t.Fatal("queued lease cancellation returned data", result, err)
 	}

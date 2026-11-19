@@ -254,20 +254,20 @@ func TestSIVIOwnedCoverRejectsChangedFileOwnership(t *testing.T) {
 	owner := service.Projects.Sqlite
 	before := vprotest.DatabaseBytes(t, owner.Attachments)
 	reference := owner.Attachments["VLists"]
-	owner.Mu.Lock()
+	owner.LockForTest()
 	owner.Attachments["VLists"] = owner.Attachments["project"]
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	defer func() {
-		owner.Mu.Lock()
+		owner.LockForTest()
 		owner.Attachments["VLists"] = reference
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 	}()
 	if result, err := sourceform.WriteSIVICovers(service, context.Background(), state.ContextID, "108050", false, original, []sourceform.SiviHeightEdit{edit}); err == nil || result != nil {
 		t.Fatal("changed file ownership authorized cover writes", result, err)
 	}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	owner.Attachments["VLists"] = reference
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	vprotest.AssertProfileSUFiles(t, service, before)
 	if result, err := sourceform.WriteSIVICovers(service, context.Background(), state.ContextID, "108050", false, original, []sourceform.SiviHeightEdit{edit}); err != nil || result == nil {
 		t.Fatal("ownership refusal poisoned cover retry", result, err)

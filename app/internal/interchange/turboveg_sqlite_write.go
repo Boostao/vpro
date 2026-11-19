@@ -56,11 +56,10 @@ func writeTurboVeg3SQLite(ctx context.Context, destinationPath string, ds tvData
 	}()
 	_ = tmpFile.Close()
 
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL&_foreign_keys=on")
+	db, err := sqlutil.OpenStagedSQLite(tmpPath, sqlutil.StagedSQLiteOptions{ForeignKeys: true})
 	if err != nil {
 		return "", "", err
 	}
-	db.SetMaxOpenConns(1)
 
 	tx, err := sqlutil.BeginStagedTx(ctx, db)
 	if err != nil {

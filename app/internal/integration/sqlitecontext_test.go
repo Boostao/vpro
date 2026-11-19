@@ -45,7 +45,7 @@ func TestSQLitePinnedReadSnapshotCancellationPreservesContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := owner.Conn.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM USysEnv").Scan(&count); err != nil {
+	if err := owner.CoordinatorWhileLocked().QueryRowContext(context.Background(), "SELECT COUNT(*) FROM USysEnv").Scan(&count); err != nil {
 		t.Fatal("cancelled read discarded the pinned coordinator and its views", err)
 	}
 	if count == 0 {
@@ -184,11 +184,11 @@ func TestSQLiteContextOfflineReadonlyViewsAndOwnedClose(t *testing.T) {
 	for name, query := range views {
 		var differs int
 		check := "SELECT COUNT(*) FROM (SELECT * FROM " + vprocore.QuoteHeaderIdentifier(name) + " EXCEPT SELECT * FROM (" + query + "))"
-		if err := candidate.Conn.QueryRowContext(context.Background(), check).Scan(&differs); err != nil || differs != 0 {
+		if err := candidate.CoordinatorWhileLocked().QueryRowContext(context.Background(), check).Scan(&differs); err != nil || differs != 0 {
 			t.Fatalf("view %s includes unexpected rows: %d %v", name, differs, err)
 		}
 		check = "SELECT COUNT(*) FROM (SELECT * FROM (" + query + ") EXCEPT SELECT * FROM " + vprocore.QuoteHeaderIdentifier(name) + ")"
-		if err := candidate.Conn.QueryRowContext(context.Background(), check).Scan(&differs); err != nil || differs != 0 {
+		if err := candidate.CoordinatorWhileLocked().QueryRowContext(context.Background(), check).Scan(&differs); err != nil || differs != 0 {
 			t.Fatalf("view %s omitted expected rows: %d %v", name, differs, err)
 		}
 	}
@@ -200,14 +200,14 @@ func TestSQLiteContextOfflineReadonlyViewsAndOwnedClose(t *testing.T) {
 		"messages":  `DELETE FROM VMessageBoard.tblMessageBoard`,
 		"system":    `DELETE FROM VPro64.USysEnvTable`,
 	} {
-		if _, err := candidate.Conn.ExecContext(context.Background(), query); err == nil || !strings.Contains(err.Error(), "readonly") {
+		if _, err := candidate.CoordinatorWhileLocked().ExecContext(context.Background(), query); err == nil || !strings.Contains(err.Error(), "readonly") {
 			t.Fatalf("%s attachment was writable: %v", name, err)
 		}
 	}
 	if candidate.Descriptions["VPro64"] != nil || len(candidate.Descriptions["VLists"]) != 14 {
 		t.Fatal("missing metadata was synthesized or reference descriptions lost")
 	}
-	conn := candidate.Conn
+	conn := candidate.CoordinatorWhileLocked()
 	if err := candidate.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestSQLiteContextFamiliesShareOnePhysicalFileWithoutImplicitIdentity(t *tes
 	defer second.Close()
 	for candidate, expected := range map[*vprocore.SqliteContext]bool{first: false, second: true} {
 		var observed bool
-		if err := candidate.Conn.QueryRowContext(context.Background(),
+		if err := candidate.CoordinatorWhileLocked().QueryRowContext(context.Background(),
 			`SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotRepresenting='second family')`).Scan(&observed); err != nil || observed != expected {
 			t.Fatalf("context implicitly changed family identity: %t %v", observed, err)
 		}

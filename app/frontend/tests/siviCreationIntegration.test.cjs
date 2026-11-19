@@ -94,7 +94,7 @@ test('creation unconditionally registers in actual root/main and binds only owne
     readFileSync(path.join(__dirname, '..', '..', 'domainservices_plotentry.go'), 'utf8');
   assert.match(main, /NewSIVICreationService\((?:contextService|core)\)/);
   assert.match(main, /siviCreation:\s*siviCreation/);
-  assert.match(main, /application\.NewService\(plotEntryService\)/);
+  assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
   const calls = [];
   class Session { constructor(owner, port) { this.owner = owner; this.port = port; } }
   const cache = loadTypeScript('siviCreationSessions.ts', {

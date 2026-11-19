@@ -68,11 +68,11 @@ func TestSiteUnitDetailOwnedScopeCancellationCleanupAndRetry(t *testing.T) {
 		t.Fatal("late cancellation retained completed scope", result, err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
 	_, err = ReadSiteUnitDetailNormalSUScope(service, ctx, state.ContextID, 1, vprocore.PublicationReadSnapshotHooks{})
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("owned lease wait ignored deadline", err)
 	}

@@ -384,15 +384,15 @@
 <style>
   .plan { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
-  label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: #313132; font-weight: 500; }
-  input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; min-width: 0; padding: .5rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; color: #313132; }
+  label { display: flex; flex-direction: column; gap: .35rem; min-width: 0; color: var(--vpro-ink); font-weight: 500; }
+  input:not([type="checkbox"]) { width: 100%; box-sizing: border-box; min-width: 0; padding: .5rem; border: 1px solid var(--vpro-border); border-radius: .25rem; background: var(--vpro-surface); color: var(--vpro-ink); }
   .checkbox { flex-direction: row; align-items: center; }
   .actions { display: flex; flex-wrap: wrap; gap: .75rem; }
-  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; cursor: pointer; font-weight: 600; }
+  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); cursor: pointer; font-weight: 600; }
   button:disabled { opacity: .6; cursor: not-allowed; }
   .unit-table { min-width: 0; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; background: #FFFFFF; }
-  th, td { padding: .5rem; border: 1px solid #D8D8D8; text-align: left; overflow-wrap: anywhere; }
-  thead th { background: #F2F2F2; color: #003366; }
-  [role="alert"] { color: #D8292F; }
+  table { width: 100%; border-collapse: collapse; background: var(--vpro-surface); }
+  th, td { padding: .5rem; border: 1px solid var(--vpro-border); text-align: left; overflow-wrap: anywhere; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
+  [role="alert"] { color: var(--vpro-error); }
 </style>

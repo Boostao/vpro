@@ -119,8 +119,8 @@ test('ProjectAdminWorkbench SSR renders BC Gov header, data-tour root, active co
     props: { contextId: 'ctx-ssr', activeProject: 'Sample', activeSu: 'Sample' },
   }).body;
   assert.match(html, /data-tour="project-admin-root"/);
-  assert.match(html, /#003366/);
-  assert.match(html, /#FCBA19/);
+  assert.match(html, /#003366|vpro-navy/);
+  assert.match(html, /#FCBA19|vpro-gold/i);
   assert.match(html, /Datum:.*NAD83/);
   assert.match(html, /Create New VPro Project/);
   assert.match(html, /Save Active Project As/);

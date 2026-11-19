@@ -125,7 +125,7 @@ func (s *PlotService) validateVegetationSpeciesReference(tx *sql.Tx, update Vege
 	s.Projects.Mu.RUnlock()
 	if coordinator != nil {
 		// The context lease owns readonly family aliases, not the project writer pool.
-		query = coordinator.Conn.QueryRowContext
+		query = coordinator.conn.QueryRowContext
 	}
 	var member bool
 	statement := `SELECT EXISTS(SELECT 1 FROM (` + vegetationSpeciesUnion + `) WHERE ` + predicate + ` AND Code COLLATE BINARY=?)`

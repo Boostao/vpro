@@ -209,7 +209,7 @@ func TestTwoPageEnvironmentTableInFlightCancellationPreservesCoordinator(t *test
 	defer cancel()
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	if err := owner.Conn.Raw(func(driver any) error {
+	if err := owner.CoordinatorWhileLocked().Raw(func(driver any) error {
 		conn, ok := driver.(*sqlite3.SQLiteConn)
 		if !ok {
 			return errors.New("environment table cancellation requires actual SQLite")
@@ -223,10 +223,10 @@ func TestTwoPageEnvironmentTableInFlightCancellationPreservesCoordinator(t *test
 		t.Fatal(err)
 	}
 	var original string
-	if err := owner.Conn.QueryRowContext(context.Background(), `SELECT sql FROM sqlite_temp_master WHERE name='USysEnv'`).Scan(&original); err != nil {
+	if err := owner.CoordinatorWhileLocked().QueryRowContext(context.Background(), `SELECT sql FROM sqlite_temp_master WHERE name='USysEnv'`).Scan(&original); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := owner.Conn.ExecContext(context.Background(), `DROP VIEW USysEnv;
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysEnv;
 		CREATE TEMP VIEW USysEnv AS SELECT environmentTableReadBarrier(PlotNumber) PlotNumber FROM project.Sample_Env`); err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestTwoPageEnvironmentTableInFlightCancellationPreservesCoordinator(t *test
 	case <-time.After(5 * time.Second):
 		t.Fatal("cancelled environment read did not settle")
 	}
-	if _, err := owner.Conn.ExecContext(context.Background(), `DROP VIEW USysEnv;`+
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysEnv;`+
 		strings.Replace(original, "CREATE VIEW", "CREATE TEMP VIEW", 1)); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestTwoPageEnvironmentTableGateCancellationAndOpeningScope(t *testing.T) {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	service.Contexts.Projects.Sqlite.Mu.Lock()
+	service.Contexts.Projects.Sqlite.LockForTest()
 	result := make(chan error, 1)
 	go func() {
 		got, err := service.GetReview(ctx, state.ContextID, "108050", 0, 1)
@@ -287,7 +287,7 @@ func TestTwoPageEnvironmentTableGateCancellationAndOpeningScope(t *testing.T) {
 	}()
 	cancel()
 	err := <-result
-	service.Contexts.Projects.Sqlite.Mu.Unlock()
+	service.Contexts.Projects.Sqlite.UnlockForTest()
 	if !errors.Is(err, context.Canceled) {
 		t.Fatal("waiting request did not preserve cancellation", err)
 	}

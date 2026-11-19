@@ -53,22 +53,22 @@ func (c *SqliteContext) LookupUserAccreditation(ctx context.Context, user string
 	if c == nil || user == "" {
 		return status, nil
 	}
-	if err := sqlutil.AcquireMutexLease(ctx, &c.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return UserAccreditation{}, err
 	}
-	defer c.Mu.Unlock()
-	if c.Conn == nil {
+	defer c.mu.Unlock()
+	if c.conn == nil {
 		return UserAccreditation{}, errors.New("project context is closed")
 	}
 	var tableExists bool
-	if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "VPro64".sqlite_master WHERE type='table' AND name='USysUserRestrictions' COLLATE BINARY)`).Scan(&tableExists); err != nil {
+	if err := c.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "VPro64".sqlite_master WHERE type='table' AND name='USysUserRestrictions' COLLATE BINARY)`).Scan(&tableExists); err != nil {
 		return status, nil
 	}
 	if !tableExists {
 		return status, nil
 	}
 	var inRestrictions bool
-	err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "VPro64"."USysUserRestrictions" WHERE typeof("UserName")='text' AND "UserName" COLLATE NOCASE = ?)`, user).Scan(&inRestrictions)
+	err := c.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM "VPro64"."USysUserRestrictions" WHERE typeof("UserName")='text' AND "UserName" COLLATE NOCASE = ?)`, user).Scan(&inRestrictions)
 	if err == nil && inRestrictions {
 		status.InUserRestrictions = true
 		status.Accredited = true

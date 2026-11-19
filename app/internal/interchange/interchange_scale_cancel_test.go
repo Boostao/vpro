@@ -476,7 +476,7 @@ func TestInterchangeContextCancellationReleasesOwnerMutexAndCleansTempFiles(t *t
 
 	// 1. Hold owner.Mu externally, start each export with a short-timeout context, and verify
 	//    AcquireMutexLease aborts promptly without hanging or leaving staged temp files.
-	owner.Mu.Lock()
+	owner.LockForTest()
 	for _, tc := range []struct {
 		name string
 		run  func(ctx context.Context) error
@@ -527,15 +527,15 @@ func TestInterchangeContextCancellationReleasesOwnerMutexAndCleansTempFiles(t *t
 		cancel()
 		elapsed := time.Since(t0)
 		if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 			t.Fatalf("%s: expected context cancellation error while owner.Mu held, got %v", tc.name, err)
 		}
 		if elapsed > 2*time.Second {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 			t.Fatalf("%s: hung for %v waiting on owner.Mu despite ctx cancellation", tc.name, elapsed)
 		}
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 
 	// 2. Seed a multi-thousand-row fixture, cancel mid-flight during GeoPackage / CSV / RDS export,
 	//    and verify owner.Mu is released immediately so ListPlots succeeds and zero temp files remain.

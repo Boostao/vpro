@@ -134,7 +134,7 @@ func TestOwnedTableCSVRejectsForeignDerivedAndStaleReadsAndRetriesCancelledLease
 		t.Fatal("cancelled context returned success/partial document:", err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	waiting, cancelWaiting := context.WithCancel(context.Background())
 	defer cancelWaiting()
 	observed := &vprotest.TableCSVLeaseContext{Context: waiting, Queued: make(chan struct{})}
@@ -151,17 +151,17 @@ func TestOwnedTableCSVRejectsForeignDerivedAndStaleReadsAndRetriesCancelledLease
 	case <-observed.Queued:
 		cancelWaiting()
 	case <-time.After(3 * time.Second):
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		t.Fatal("table review never reached the held snapshot mutex")
 	}
 	select {
 	case err := <-done:
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		if !errors.Is(err, context.Canceled) {
 			t.Fatal("queued snapshot cancellation lost context error:", err)
 		}
 	case <-time.After(3 * time.Second):
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		t.Fatal("cancelled table review waited indefinitely for the snapshot mutex")
 	}
 	if _, err := ReadProjectTableCSV(service, context.Background(), state.ContextID, "Sample_Other"); err != nil {

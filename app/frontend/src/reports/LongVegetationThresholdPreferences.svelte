@@ -78,5 +78,5 @@
   label { display: grid; gap: .35rem; min-width: 0; }
   .value { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: center; }
   span { overflow-wrap: anywhere; }
-  input { width: 100%; box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .5rem; }
+  input { width: 100%; box-sizing: border-box; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .5rem; }
 </style>

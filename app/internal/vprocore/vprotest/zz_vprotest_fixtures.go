@@ -91,7 +91,7 @@ func ReportServiceFixture(t *testing.T, external bool) (*vprocore.ContextService
 	if external {
 		path = filepath.Join(t.TempDir(), "external.db")
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rwc"))
+	db, err := sqlutil.OpenSQLiteMode(path, "rwc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +353,7 @@ func ProjectMetadataFixture(t *testing.T) (*vprocore.ContextService, vprocore.Pr
 		VALUES (-200,'ZMETATEST',2000,NULL,-1,'  Literal metadata  '),(-201,'ZMETATEST',NULL,'',0,NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	master, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(service.Projects.SupportPaths["VMetaData"], "rw"))
+	master, err := sqlutil.OpenSQLiteMode(service.Projects.SupportPaths["VMetaData"], "rw")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func MetadataInteger(value string) vprocore.ProjectMetadataCell {
 
 func MetadataHistoryDatabase(t *testing.T, service *vprocore.ContextService) *sql.DB {
 	t.Helper()
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(service.Projects.Sqlite.Attachments["project"], "rw"))
+	db, err := sqlutil.OpenSQLiteMode(service.Projects.Sqlite.Attachments["project"], "rw")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,7 +521,7 @@ func SiviParentTables(t *testing.T) (vprocore.ProjectMetadataTable, vprocore.Pro
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "ro"))
+	db, err := sqlutil.OpenSQLiteMode(path, "ro")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +589,7 @@ func SiviReal(value float64) vprocore.ProjectMetadataCell {
 
 func MutateContextFixture(t *testing.T, path, query string) {
 	t.Helper()
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(path, "rw"))
+	db, err := sqlutil.OpenSQLiteMode(path, "rw")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -718,7 +718,7 @@ func TwoPageWriteTables(t *testing.T, db *sql.DB) map[string]vprocore.ProjectMet
 func TwoPageSoilReadFixture(t *testing.T, external bool, affinity string) (*vprocore.ContextService, vprocore.ProjectState, *sql.DB) {
 	t.Helper()
 	service, state := ReportServiceFixture(t, external)
-	db, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(service.Projects.Sqlite.Attachments["project"], "rw"))
+	db, err := sqlutil.OpenSQLiteMode(service.Projects.Sqlite.Attachments["project"], "rw")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -835,7 +835,7 @@ func WorkingUnitServiceFixture(t *testing.T) (*vprocore.WorkingUnitService, *vpr
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite3", filepath.Join(root, "projects", "Sample.db"))
+	db, err := sqlutil.OpenSQLiteMode(filepath.Join(root, "projects", "Sample.db"), "rw")
 	if err != nil {
 		t.Fatal(err)
 	}

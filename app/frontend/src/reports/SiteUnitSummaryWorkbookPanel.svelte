@@ -228,19 +228,19 @@
 
 <style>
   h3, h4, p { margin: 0; }
-  h3, h4 { color: #003366; }
+  h3, h4 { color: var(--vpro-navy); }
   .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .plan, .unit { display: grid; gap: 0.75rem; min-width: 0; }
   .summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; align-items: start; }
   .species-table { overflow-x: auto; max-width: 100%; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #FFFFFF; }
-  caption { text-align: left; font-weight: bold; padding: 0.5rem; color: #003366; }
-  th, td { text-align: left; vertical-align: top; padding: 0.5rem; border-bottom: 1px solid #D8D8D8; overflow-wrap: anywhere; white-space: pre-wrap; }
-  thead th { background: #F2F2F2; color: #003366; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; background: var(--vpro-surface); }
+  caption { text-align: left; font-weight: bold; padding: 0.5rem; color: var(--vpro-navy); }
+  th, td { text-align: left; vertical-align: top; padding: 0.5rem; border-bottom: 1px solid var(--vpro-border); overflow-wrap: anywhere; white-space: pre-wrap; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
   .destination { display: grid; gap: 0.25rem; }
-  input { box-sizing: border-box; width: 100%; min-width: 0; padding: 0.45rem; border: 1px solid #D8D8D8; border-radius: 0.25rem; background: #FFFFFF; color: #313132; }
-  button { min-height: 2.5rem; padding: 0.45rem 0.85rem; border: 1px solid #003366; border-radius: 0.25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
+  input { box-sizing: border-box; width: 100%; min-width: 0; padding: 0.45rem; border: 1px solid var(--vpro-border); border-radius: 0.25rem; background: var(--vpro-surface); color: var(--vpro-ink); }
+  button { min-height: 2.5rem; padding: 0.45rem 0.85rem; border: 1px solid var(--vpro-navy); border-radius: 0.25rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .error { color: #D8292F; overflow-wrap: anywhere; font-weight: 600; }
-  .guidance { font-size: 0.875rem; color: #474543; }
+  .error { color: var(--vpro-error); overflow-wrap: anywhere; font-weight: 600; }
+  .guidance { font-size: 0.875rem; color: var(--vpro-ink-secondary); }
 </style>

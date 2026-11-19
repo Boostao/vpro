@@ -21,9 +21,9 @@ import (
 )
 
 type SqliteContext struct {
-	Mu             sync.Mutex `json:"-" yaml:"-"`
+	mu             sync.Mutex `json:"-" yaml:"-"`
 	db             *sql.DB
-	Conn           *sql.Conn                   `json:"-" yaml:"-"`
+	conn           *sql.Conn                   `json:"-" yaml:"-"`
 	ProjectReadDB  *sql.DB                     `json:"-" yaml:"-"`
 	ProjectDB      *sql.DB                     `json:"-" yaml:"-"`
 	Selection      DesktopSelection            `json:"-" yaml:"-"`
@@ -64,19 +64,19 @@ func (c *SqliteContext) BeginReadSnapshot(ctx context.Context) (*sql.Tx, error) 
 	if c == nil {
 		return nil, errors.New("project context is closed")
 	}
-	return BeginConnReadSnapshot(ctx, c.Conn)
+	return BeginConnReadSnapshot(ctx, c.conn)
 }
 
 func (c *SqliteContext) projectReadDatabase(ctx context.Context) (*sql.DB, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &c.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return nil, err
 	}
-	defer c.Mu.Unlock()
+	defer c.mu.Unlock()
 	return c.projectReadDatabaseLocked(ctx)
 }
 
 func (c *SqliteContext) projectReadDatabaseLocked(ctx context.Context) (*sql.DB, error) {
-	if c.Conn == nil {
+	if c.conn == nil {
 		return nil, errors.New("project context is closed")
 	}
 	if c.ProjectDB != nil {
@@ -99,15 +99,15 @@ func (c *SqliteContext) projectReadDatabaseLocked(ctx context.Context) (*sql.DB,
 }
 
 func (c *SqliteContext) ProjectDatabase(ctx context.Context) (*sql.DB, error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &c.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return nil, err
 	}
-	defer c.Mu.Unlock()
+	defer c.mu.Unlock()
 	return c.projectDatabaseLocked(ctx)
 }
 
 func (c *SqliteContext) projectDatabaseLocked(ctx context.Context) (*sql.DB, error) {
-	if c.Conn == nil {
+	if c.conn == nil {
 		return nil, errors.New("project context is closed")
 	}
 	if c.ProjectDB != nil {
@@ -166,7 +166,7 @@ func NewSQLiteContext(ctx context.Context, selection DesktopSelection, support m
 		db.Close()
 		return nil, err
 	}
-	candidate := &SqliteContext{db: db, Conn: conn, Selection: selection,
+	candidate := &SqliteContext{db: db, conn: conn, Selection: selection,
 		Attachments: map[string]string{}, AttachmentInfo: map[string]os.FileInfo{}, Descriptions: map[string][]map[string]any{}}
 	defer func() {
 		if resultErr != nil {
@@ -275,7 +275,7 @@ func (c *SqliteContext) Attach(ctx context.Context, alias, path string) (string,
 	if err := errors.Join(statErr, file.Close()); err != nil {
 		return "", fmt.Errorf("capture attachment %s identity: %w", alias, err)
 	}
-	if _, err := c.Conn.ExecContext(ctx, "ATTACH DATABASE ? AS "+QuoteHeaderIdentifier(alias), sqlutil.SqliteFileURI(path, "ro")); err != nil {
+	if _, err := c.conn.ExecContext(ctx, "ATTACH DATABASE ? AS "+QuoteHeaderIdentifier(alias), sqlutil.SqliteFileURI(path, "ro")); err != nil {
 		return "", fmt.Errorf("attach %s: %w", alias, err)
 	}
 	current, err := os.Stat(path)
@@ -297,7 +297,7 @@ func (c *SqliteContext) Attach(ctx context.Context, alias, path string) (string,
 
 func (c *SqliteContext) requireTable(ctx context.Context, alias, table string) error {
 	var exists bool
-	if err := c.Conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM "+QuoteHeaderIdentifier(alias)+".sqlite_master WHERE type='table' AND name=?)", table).Scan(&exists); err != nil {
+	if err := c.conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM "+QuoteHeaderIdentifier(alias)+".sqlite_master WHERE type='table' AND name=?)", table).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
@@ -307,7 +307,7 @@ func (c *SqliteContext) requireTable(ctx context.Context, alias, table string) e
 }
 
 func (c *SqliteContext) columns(ctx context.Context, alias, table string) ([]string, error) {
-	rows, err := c.Conn.QueryContext(ctx, "PRAGMA "+QuoteHeaderIdentifier(alias)+".table_info("+QuoteHeaderIdentifier(table)+")")
+	rows, err := c.conn.QueryContext(ctx, "PRAGMA "+QuoteHeaderIdentifier(alias)+".table_info("+QuoteHeaderIdentifier(table)+")")
 	if err != nil {
 		return nil, err
 	}
@@ -340,13 +340,13 @@ func (c *SqliteContext) RequireColumns(ctx context.Context, alias, table string,
 
 func (c *SqliteContext) tableDescriptions(ctx context.Context, alias string) ([]map[string]any, error) {
 	var exists bool
-	if err := c.Conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM "+QuoteHeaderIdentifier(alias)+".sqlite_master WHERE type='table' AND name='_table_metadata')").Scan(&exists); err != nil {
+	if err := c.conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM "+QuoteHeaderIdentifier(alias)+".sqlite_master WHERE type='table' AND name='_table_metadata')").Scan(&exists); err != nil {
 		return nil, err
 	}
 	if !exists {
 		return nil, nil
 	}
-	rows, err := c.Conn.QueryContext(ctx, "SELECT * FROM "+QuoteHeaderIdentifier(alias)+"._table_metadata")
+	rows, err := c.conn.QueryContext(ctx, "SELECT * FROM "+QuoteHeaderIdentifier(alias)+"._table_metadata")
 	if err != nil {
 		return nil, err
 	}
@@ -411,10 +411,10 @@ func (c *SqliteContext) validateProject(ctx context.Context) error {
 }
 
 func (c *SqliteContext) createView(ctx context.Context, name, query string) error {
-	if _, err := c.Conn.ExecContext(ctx, "CREATE TEMP VIEW "+QuoteHeaderIdentifier(name)+" AS "+query); err != nil {
+	if _, err := c.conn.ExecContext(ctx, "CREATE TEMP VIEW "+QuoteHeaderIdentifier(name)+" AS "+query); err != nil {
 		return fmt.Errorf("create temporary %s: %w", name, err)
 	}
-	rows, err := c.Conn.QueryContext(ctx, "SELECT * FROM "+QuoteHeaderIdentifier(name)+" LIMIT 0")
+	rows, err := c.conn.QueryContext(ctx, "SELECT * FROM "+QuoteHeaderIdentifier(name)+" LIMIT 0")
 	if err != nil {
 		return fmt.Errorf("validate temporary %s: %w", name, err)
 	}
@@ -521,13 +521,13 @@ func (c *SqliteContext) createViews(ctx context.Context) error {
 }
 
 func (c *SqliteContext) Close() error {
-	c.Mu.Lock()
-	defer c.Mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	_ = c.endUserLogSessionLocked()
-	if c.Conn == nil {
+	if c.conn == nil {
 		return nil
 	}
-	connErr := errors.Join(c.Conn.Close(), c.db.Close())
+	connErr := errors.Join(c.conn.Close(), c.db.Close())
 	var readErr error
 	if c.ProjectReadDB != nil {
 		readErr = c.ProjectReadDB.Close()
@@ -537,7 +537,7 @@ func (c *SqliteContext) Close() error {
 		projectErr = c.ProjectDB.Close()
 	}
 	err := errors.Join(connErr, readErr, projectErr)
-	c.Conn, c.db = nil, nil
+	c.conn, c.db = nil, nil
 	c.ProjectReadDB = nil
 	c.ProjectDB = nil
 	return err
@@ -631,8 +631,8 @@ func (c *SqliteContext) StartUserLogSession(ctx context.Context, user string) er
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	c.Mu.Lock()
-	defer c.Mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.startUserLogSessionLocked(ctx, user)
 }
 
@@ -694,8 +694,8 @@ func (c *SqliteContext) EndUserLogSession() error {
 	if c == nil {
 		return nil
 	}
-	c.Mu.Lock()
-	defer c.Mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.endUserLogSessionLocked()
 }
 
@@ -750,8 +750,8 @@ func (c *SqliteContext) RotateUserLogSession(ctx context.Context, user string) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	c.Mu.Lock()
-	defer c.Mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.userLogRowID == 0 {
 		return
 	}
@@ -768,12 +768,12 @@ func (c *SqliteContext) TransferUserLogSession(target *SqliteContext) {
 	if c == nil || target == nil || c == target {
 		return
 	}
-	c.Mu.Lock()
+	c.mu.Lock()
 	rowID, path, user := c.userLogRowID, c.userLogPath, c.userLogUser
 	c.userLogRowID, c.userLogPath, c.userLogUser = 0, "", ""
-	c.Mu.Unlock()
+	c.mu.Unlock()
 
-	target.Mu.Lock()
+	target.mu.Lock()
 	target.userLogRowID, target.userLogPath, target.userLogUser = rowID, path, user
-	target.Mu.Unlock()
+	target.mu.Unlock()
 }

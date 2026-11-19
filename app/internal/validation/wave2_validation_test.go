@@ -16,7 +16,7 @@ func TestWave2SpeciesCodeCheckExcludesSynonymOnlyMasterAndResolvesOldCode(t *tes
 
 	// Confirm ARTHDIF is S-only and THUIABI is an OldCode -> ABIEABI in embedded VLists.db
 	var sCount, oldCount int
-	if err := svc.Projects.Sqlite.Conn.QueryRowContext(ctx, `
+	if err := svc.Projects.Sqlite.CoordinatorWhileLocked().QueryRowContext(ctx, `
 		SELECT
 			(SELECT COUNT(*) FROM USysAllSpecs WHERE Code COLLATE BINARY='ARTHDIF' AND LOWER(COALESCE(CAST(Codetype AS TEXT),''))='s'),
 			(SELECT COUNT(*) FROM USysAllSpecs WHERE OldCode COLLATE BINARY='THUIABI' AND Code COLLATE BINARY='ABIEABI')

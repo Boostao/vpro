@@ -494,50 +494,50 @@
 
 <style>
   .vpro-prof-panel {
-    background: #f2f2f2;
-    border: 1px solid #d8d8d8;
-    border-top: 4px solid #003366;
-    color: #313132;
+    background: var(--vpro-canvas);
+    border: 1px solid var(--vpro-border);
+    border-top: 4px solid var(--vpro-navy);
+    color: var(--vpro-ink);
   }
-  .vpro-prof-title { color: #003366; }
+  .vpro-prof-title { color: var(--vpro-navy); }
   .vpro-prof-btn {
-    background: #ffffff;
-    color: #003366;
-    border: 1px solid #003366;
+    background: var(--vpro-surface);
+    color: var(--vpro-navy);
+    border: 1px solid var(--vpro-navy);
   }
   .vpro-prof-btn-primary {
-    background: #003366;
-    color: #ffffff;
-    border: 1px solid #003366;
-    border-bottom: 2px solid #fcba19;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
+    border: 1px solid var(--vpro-navy);
+    border-bottom: 2px solid var(--vpro-gold);
     font-weight: 600;
   }
   .vpro-prof-select {
-    background: #ffffff;
-    color: #313132;
-    border: 1px solid #d8d8d8;
+    background: var(--vpro-surface);
+    color: var(--vpro-ink);
+    border: 1px solid var(--vpro-border);
   }
   .vpro-prof-card {
-    background: #ffffff;
-    border: 1px solid #d8d8d8;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
   }
   .vpro-prof-danger-card {
-    background: #ffffff;
-    border: 1px solid #d8292f;
-    border-left: 4px solid #d8292f;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-error);
+    border-left: 4px solid var(--vpro-error);
   }
   .vpro-prof-result-card {
-    background: #ffffff;
-    border: 1px solid #2e8540;
-    border-left: 4px solid #2e8540;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-success);
+    border-left: 4px solid var(--vpro-success);
   }
-  .vpro-prof-alert { color: #d8292f; font-weight: 600; }
+  .vpro-prof-alert { color: var(--vpro-error); font-weight: 600; }
   .vpro-prof-warn {
-    color: #002244;
+    color: var(--vpro-navy-dark);
     background: rgba(252, 186, 25, 0.22);
-    border-left: 3px solid #fcba19;
+    border-left: 3px solid var(--vpro-gold);
     padding: 0.35rem 0.6rem;
   }
-  .vpro-prof-success { color: #1e5128; font-weight: 600; }
-  .vpro-prof-muted { color: #474543; }
+  .vpro-prof-success { color: var(--vpro-forest); font-weight: 600; }
+  .vpro-prof-muted { color: var(--vpro-ink-secondary); }
 </style>

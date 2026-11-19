@@ -39,7 +39,7 @@ test('Collected has unconditional actual native registration without granting ot
   assert.equal(compile(readFileSync(srcPath('FS882VegTab.svelte'), 'utf8'), { filename: 'FS882VegTab.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(main, /NewSIVICollectedService\((?:contextService|core)\)/);
   assert.match(main, /siviCollected:\s*siviCollected/);
-  assert.match(main, /application\.NewService\(plotEntryService\)/);
+  assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
   for (const method of ['GetSIVICollectedOriginal', 'SaveSIVICollectedReviewed', 'RestoreSIVICollectedReviewed']) assert.ok(parent.includes(`PlotEntryService.${method}(`));
   assert.match(parent, /read: extended => siviCollectedReads.track\(PlotEntryService.GetSIVICollectedOriginal/);
   assert.match(parent, /siviCollectedSession\?\.dispose\(\);[\s\S]{0,70}siviCollectedReads\.cancelAll\(\)/);

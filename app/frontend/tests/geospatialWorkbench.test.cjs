@@ -225,9 +225,9 @@ test('GeospatialWorkbench, Navigation, App, and CoordinateFields compile cleanly
   // Zero new VITE_* or VPRO_* env flags in GeospatialWorkbench
   assert.doesNotMatch(wbSource, /VITE_|VPRO_/);
 
-  // BC Gov Design System palette (#003366 / #FCBA19)
-  assert.match(wbSource, /#003366/i);
-  assert.match(wbSource, /#fcba19/i);
+  // BC Gov Design System palette (#003366 / #FCBA19 via semantic vpro-* tokens)
+  assert.match(wbSource, /#003366|vpro-navy/i);
+  assert.match(wbSource, /#fcba19|vpro-gold/i);
 
   // Explicit bundled MapLibre worker URL configured for WebView2 http://wails.localhost/
   assert.match(wbSource, /maplibre-gl\/dist\/maplibre-gl-worker\.mjs\?worker&url/);

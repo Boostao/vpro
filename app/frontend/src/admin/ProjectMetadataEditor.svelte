@@ -269,7 +269,7 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
         review = next; draft = beginMetadataDraft(next, rowId); standardPreview = false;
       }} />
   {:else}
-  <div data-workbench-sticky-bar class="toolbar sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200">
+  <div data-workbench-sticky-bar class="toolbar sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border">
     {#if allowRestoration}
       <button type="button" disabled={!ready || busy || dirty || errors.length > 0 || committedFailure || standardPreview}
         onclick={() => { restorationOpen = true; error = null; success = null; }}>Review typed metadata restoration</button>
@@ -440,23 +440,23 @@ import type { ProjectMetadataReview } from '../../bindings/github.com/boostao/vp
 </section>
 
 <style>
-  .metadata-editor { border: 1px solid #D8D8D8; border-radius: .75rem; background: #FFFFFF; padding: 1rem; color: #313132; margin: 1rem 0; min-width: 0; }
-  h2 { font-size: 1.25rem; font-weight: 600; color: #003366; }
-  fieldset { border: 1px solid #D8D8D8; border-radius: .5rem; margin: 1rem 0; padding: 1rem; min-width: 0; }
-  legend { font-weight: 600; padding: 0 .4rem; color: #003366; }
+  .metadata-editor { border: 1px solid var(--vpro-border); border-radius: .75rem; background: var(--vpro-surface); padding: 1rem; color: var(--vpro-ink); margin: 1rem 0; min-width: 0; }
+  h2 { font-size: 1.25rem; font-weight: 600; color: var(--vpro-navy); }
+  fieldset { border: 1px solid var(--vpro-border); border-radius: .5rem; margin: 1rem 0; padding: 1rem; min-width: 0; }
+  legend { font-weight: 600; padding: 0 .4rem; color: var(--vpro-navy); }
   .metadata-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); gap: 1rem; }
   .metadata-field { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
   .wide { grid-column: 1 / -1; }
-  input:not([type=checkbox]), select, textarea { width: 100%; box-sizing: border-box; min-width: 0; min-height: 2.5rem; padding: .5rem; border: 1px solid #9F9F9F; border-radius: .35rem; font: inherit; color: #313132; background: #FFFFFF; }
-  input:focus, select:focus, textarea:focus { outline: 2px solid #003366; outline-offset: 2px; }
+  input:not([type=checkbox]), select, textarea { width: 100%; box-sizing: border-box; min-width: 0; min-height: 2.5rem; padding: .5rem; border: 1px solid var(--vpro-border-strong); border-radius: .35rem; font: inherit; color: var(--vpro-ink); background: var(--vpro-surface); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--vpro-navy); outline-offset: 2px; }
   .null-control { font-size: .8rem; }
   .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
-  button { padding: .5rem .75rem; border: 1px solid #9F9F9F; border-radius: .35rem; margin: .2rem; color: #003366; background: #FFFFFF; font-weight: 600; }
+  button { padding: .5rem .75rem; border: 1px solid var(--vpro-border-strong); border-radius: .35rem; margin: .2rem; color: var(--vpro-navy); background: var(--vpro-surface); font-weight: 600; }
   button:disabled { opacity: .5; cursor: not-allowed; }
-  button[aria-pressed=true] { background: #E6EEF5; border-color: #003366; }
-  .failure { color: #D8292F; }
-  .success { color: #2E8540; }
-  .decision { display: block; background: #FEF6E0; border-left: 4px solid #FCBA19; padding: .75rem; color: #313132; }
+  button[aria-pressed=true] { background: #E6EEF5; border-color: var(--vpro-navy); }
+  .failure { color: var(--vpro-error); }
+  .success { color: var(--vpro-success); }
+  .decision { display: block; background: var(--vpro-warning-bg); border-left: 4px solid var(--vpro-gold); padding: .75rem; color: var(--vpro-ink); }
   dl { display: grid; grid-template-columns: minmax(8rem, 1fr) 2fr; gap: .5rem; overflow-wrap: anywhere; }
   dt { font-weight: 600; }
   @media (max-width: 600px) { dl { grid-template-columns: 1fr; } }

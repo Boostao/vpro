@@ -50,7 +50,7 @@ func TestProfileTableCreationPreservesExistingTablesDescriptionsAndIndependentSe
 			if err != nil {
 				t.Fatal(err)
 			}
-			schema, err := vprocore.ReadSQLiteStorageRows(ctx, c.Conn, role, "sqlite_master", "", nil, "")
+			schema, err := vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), role, "sqlite_master", "", nil, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -58,7 +58,7 @@ func TestProfileTableCreationPreservesExistingTablesDescriptionsAndIndependentSe
 			for _, row := range schema.Rows {
 				if row.Cells[0].Text != nil && *row.Cells[0].Text == "table" {
 					name := *row.Cells[1].Text
-					tables[name], err = vprocore.ReadSQLiteStorageRows(ctx, c.Conn, role, name, "", nil, "")
+					tables[name], err = vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), role, name, "", nil, "")
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -76,13 +76,13 @@ func TestProfileTableCreationPreservesExistingTablesDescriptionsAndIndependentSe
 			if err != nil || !bytes.Equal(config, afterConfig) {
 				t.Fatal("creation changed YAML", err)
 			}
-			afterSchema, err := vprocore.ReadSQLiteStorageRows(ctx, c.Conn, role, "sqlite_master", "", nil, "")
+			afterSchema, err := vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), role, "sqlite_master", "", nil, "")
 			if err != nil || len(afterSchema.Rows) != len(schema.Rows)+2 ||
 				!reflect.DeepEqual(afterSchema.Rows[:len(schema.Rows)], schema.Rows) {
 				t.Fatal("old tables/indexes/views/triggers/schema changed", err)
 			}
 			for name, original := range tables {
-				observed, err := vprocore.ReadSQLiteStorageRows(ctx, c.Conn, role, name, "", nil, "")
+				observed, err := vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), role, name, "", nil, "")
 				if err != nil || !reflect.DeepEqual(observed, original) {
 					t.Fatal("original data or descriptions changed", name, err)
 				}
@@ -97,7 +97,7 @@ func TestProfileTableCreationPreservesExistingTablesDescriptionsAndIndependentSe
 				}
 			}
 			var raw string
-			if err := c.Conn.QueryRowContext(ctx, `SELECT Proposal FROM `+vprocore.QuoteHeaderIdentifier(role)+
+			if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT Proposal FROM `+vprocore.QuoteHeaderIdentifier(role)+
 				`.__VPRO_ProfileCreationHistory WHERE ID=1`).Scan(&raw); err != nil {
 				t.Fatal(err)
 			}

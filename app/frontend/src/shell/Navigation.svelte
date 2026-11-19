@@ -193,7 +193,7 @@
         <menu.icon size={16} aria-hidden="true" />
         {menu.label}
         {#if menu.label === 'Help' && whatsNewUnreadCount > 0}
-          <span class="rounded bg-[#FCBA19] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#003366]" data-nav-whats-new-badge>{whatsNewUnreadCount}</span>
+          <span class="rounded bg-vpro-gold px-1.5 py-0.5 font-mono text-[10px] font-bold text-vpro-navy" data-nav-whats-new-badge>{whatsNewUnreadCount}</span>
         {/if}
         <ChevronDown size={14} aria-hidden="true" />
       </summary>

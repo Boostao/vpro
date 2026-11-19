@@ -74,7 +74,7 @@
 </LongVegetationPreferenceSection>
 
 <style>
-  fieldset { min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .75rem; }
+  fieldset { min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .75rem; }
   legend { padding: 0 .35rem; }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; }
   label { display: flex; align-items: flex-start; gap: .5rem; min-width: 0; }

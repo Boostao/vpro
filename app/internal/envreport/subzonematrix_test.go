@@ -368,7 +368,7 @@ func TestSubzoneMatrixInFlightCancellationAndPinnedRetry(t *testing.T) {
 	observed := false
 	setAuthorizer := func(authorize func(int, string, string, string) int) {
 		t.Helper()
-		if err := owner.Conn.Raw(func(raw any) error {
+		if err := owner.CoordinatorWhileLocked().Raw(func(raw any) error {
 			driver, valid := raw.(*sqlite3.SQLiteConn)
 			if !valid {
 				return errors.New("Subzone Matrix requires actual SQLite cancellation witness")

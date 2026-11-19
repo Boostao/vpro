@@ -65,11 +65,11 @@ func TestLongVegetationOwnedLayerPreviewCancellationStaleNoneAndInvalidOptions(t
 		!reflect.DeepEqual(report, vegetationLayerReport{}) {
 		t.Fatal("cancelled request produced report", report, err)
 	}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
 	_, err := PreviewLongVegetationLayers(service, ctx, state.ContextID)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("waiting coordinator lease ignored cancellation", err)
 	}

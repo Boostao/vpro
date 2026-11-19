@@ -494,23 +494,23 @@
   }
 </script>
 
-<section data-tour="project-admin-root" class="vpro-project-admin min-w-0 space-y-4 rounded border border-[#D8D8D8] bg-white text-[#313132] shadow-sm" aria-label="Project Lifecycle and Pre-Flight Workbench">
-  <header class="border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-4 py-3.5 sm:px-5 text-white">
+<section data-tour="project-admin-root" class="vpro-project-admin min-w-0 space-y-4 rounded border border-vpro-border bg-white text-vpro-ink shadow-sm" aria-label="Project Lifecycle and Pre-Flight Workbench">
+  <header class="border-b-[3px] border-b-vpro-gold bg-vpro-navy px-4 py-3.5 sm:px-5 text-white">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div class="min-w-0">
-        <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">VPro Project Governance</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-vpro-gold">VPro Project Governance</p>
         <h2 class="m-0 text-base sm:text-lg font-semibold text-white">Project Lifecycle, Compliance Pre-Flight &amp; 3-Way Merge</h2>
       </div>
-      <div class="text-xs text-slate-200 tabular-nums">
+      <div class="text-xs text-vpro-ink-muted tabular-nums">
         Active Project: <span class="font-mono font-semibold text-white">{activeProject}</span>
         {#if activeSu !== 'None'}
-          | Active SU: <span class="font-mono font-semibold text-[#FCBA19]">{activeSu}</span>
+          | Active SU: <span class="font-mono font-semibold text-vpro-gold">{activeSu}</span>
         {/if}
       </div>
     </div>
   </header>
 
-  <nav data-workbench-sticky-bar class="sticky top-0 z-20 flex flex-wrap gap-1 border-b border-stone-200 bg-white/95 px-5 py-2 backdrop-blur-xs" aria-label="Project workbench sections">
+  <nav data-workbench-sticky-bar class="sticky top-0 z-20 flex flex-wrap gap-1 border-b border-vpro-border bg-white/95 px-5 py-2 backdrop-blur-xs" aria-label="Project workbench sections">
     {#each [
       ['lifecycle', 'Project Lifecycle (New / Save As / Splinter)'],
       ['compliance', 'Compliance Validator & Quarantine'],
@@ -522,7 +522,7 @@
         type="button"
         data-workbench-tab={id}
         disabled={busy}
-        class={`rounded-t px-4 py-2 text-sm font-medium transition-colors ${activeTab === id ? 'border-b-[3px] border-b-[#FCBA19] bg-[#003366] text-white' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}
+        class={`rounded-t px-4 py-2 text-sm font-medium transition-colors ${activeTab === id ? 'border-b-[3px] border-b-vpro-gold bg-vpro-navy text-white' : 'bg-vpro-canvas text-vpro-ink hover:bg-vpro-rail'}`}
         onclick={() => { activeTab = id as WorkbenchTab; error = null; }}
       >
         {label}
@@ -537,54 +537,54 @@
 
     {#if activeTab === 'lifecycle'}
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <fieldset class="space-y-3 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-4">
-          <legend class="px-1 text-sm font-semibold text-[#003366]">Create New VPro Project</legend>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-name">Project Name (A-Z, 0-9, _, max 31)</label><input id="new-project-name" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={newProjName} disabled={busy} aria-invalid={!!newProjValidationError} /></div>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-id">Metadata ProjectID (optional, max 20)</label><input id="new-project-id" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={newProjId} disabled={busy} /></div>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-title">Project Title (optional)</label><input id="new-project-title" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={newProjTitle} disabled={busy} /></div>
+        <fieldset class="space-y-3 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-4">
+          <legend class="px-1 text-sm font-semibold text-vpro-navy">Create New VPro Project</legend>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="new-project-name">Project Name (A-Z, 0-9, _, max 31)</label><input id="new-project-name" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={newProjName} disabled={busy} aria-invalid={!!newProjValidationError} /></div>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="new-project-id">Metadata ProjectID (optional, max 20)</label><input id="new-project-id" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={newProjId} disabled={busy} /></div>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="new-project-title">Project Title (optional)</label><input id="new-project-title" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={newProjTitle} disabled={busy} /></div>
           <div class="space-y-1">
-            <label class="block text-xs font-semibold text-[#313132]" for="new-project-preset">Standards Preset</label>
-            <select id="new-project-preset" class="w-full rounded border border-[#9F9F9F] p-2 text-sm" bind:value={newProjPreset} disabled={busy}>
+            <label class="block text-xs font-semibold text-vpro-ink" for="new-project-preset">Standards Preset</label>
+            <select id="new-project-preset" class="w-full rounded border border-vpro-border-strong p-2 text-sm" bind:value={newProjPreset} disabled={busy}>
               {#each availablePresets as preset (preset.id)}<option value={preset.id}>{preset.label}</option>{/each}
               <option value="">None (Blank Metadata)</option>
             </select>
-            {#if selectedNewProjPreset}<p class="text-[11px] text-[#474543]">Standard: <span class="font-mono font-semibold">{selectedNewProjPreset.ecosysCollectionStandard}</span> &middot; Datum: <span class="font-mono font-semibold">{selectedNewProjPreset.datum}</span> ({selectedNewProjPreset.plotMethod})</p>{/if}
+            {#if selectedNewProjPreset}<p class="text-[11px] text-vpro-ink-secondary">Standard: <span class="font-mono font-semibold">{selectedNewProjPreset.ecosysCollectionStandard}</span> &middot; Datum: <span class="font-mono font-semibold">{selectedNewProjPreset.datum}</span> ({selectedNewProjPreset.plotMethod})</p>{/if}
           </div>
-          {#if newProjIdTruncationWarning}<p role="status" data-projectid-truncation-warning class="rounded border-l-4 border-[#FCBA19] bg-[#FEF6E0] p-2 text-xs text-[#313132]">{newProjIdTruncationWarning}</p>{/if}
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="new-project-dest">Destination .db Path (optional)</label><input id="new-project-dest" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={newProjDest} disabled={busy} placeholder="Defaults to projects/<Name>.db" /></div>
-          <label class="flex items-center gap-2 text-xs text-slate-800"><input type="checkbox" bind:checked={newProjActivate} disabled={busy} />Switch active context to new project immediately</label>
-          {#if newProjValidationError}<p role="alert" class="text-xs text-[#D8292F]">{newProjValidationError}</p>{/if}
-          <button type="button" disabled={busy || !newProjName || !!newProjValidationError} class="w-full rounded bg-[#003366] px-3 py-2 text-sm font-semibold text-white hover:bg-[#002244] disabled:opacity-50" onclick={submitCreateNewProject}>Create VPro Project</button>
-          {#if newProjResult}<p class="break-all text-xs text-[#474543]">ProjectID: <span class="font-mono font-semibold text-[#003366]">{newProjResult.projectId}</span> &middot; SHA-256: <span class="font-mono">{newProjResult.destinationSha256.slice(0, 16)}</span></p>{/if}
+          {#if newProjIdTruncationWarning}<p role="status" data-projectid-truncation-warning class="rounded border-l-4 border-vpro-gold bg-vpro-warning-bg p-2 text-xs text-vpro-ink">{newProjIdTruncationWarning}</p>{/if}
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="new-project-dest">Destination .db Path (optional)</label><input id="new-project-dest" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={newProjDest} disabled={busy} placeholder="Defaults to projects/<Name>.db" /></div>
+          <label class="flex items-center gap-2 text-xs text-vpro-ink"><input type="checkbox" bind:checked={newProjActivate} disabled={busy} />Switch active context to new project immediately</label>
+          {#if newProjValidationError}<p role="alert" class="text-xs text-vpro-error">{newProjValidationError}</p>{/if}
+          <button type="button" disabled={busy || !newProjName || !!newProjValidationError} class="w-full rounded bg-vpro-navy px-3 py-2 text-sm font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50" onclick={submitCreateNewProject}>Create VPro Project</button>
+          {#if newProjResult}<p class="break-all text-xs text-vpro-ink-secondary">ProjectID: <span class="font-mono font-semibold text-vpro-navy">{newProjResult.projectId}</span> &middot; SHA-256: <span class="font-mono">{newProjResult.destinationSha256.slice(0, 16)}</span></p>{/if}
         </fieldset>
 
-        <fieldset class="space-y-3 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-4">
-          <legend class="px-1 text-sm font-semibold text-[#003366]">Save Active Project As</legend>
-          <p class="text-xs text-slate-600">Lossless copy of <span class="font-mono font-semibold">{activeProject}</span> renaming prefix across core and companion (_SU, _Hierarchy, _Lump, _Profile) tables.</p>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="saveas-name">New Project Prefix</label><input id="saveas-name" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={saveAsName} disabled={busy} aria-invalid={!!saveAsValidationError} /></div>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="saveas-dest">Destination .db Path (optional)</label><input id="saveas-dest" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={saveAsDest} disabled={busy} placeholder="Defaults to projects/<NewPrefix>.db" /></div>
-          <label class="flex items-center gap-2 text-xs text-slate-800"><input type="checkbox" bind:checked={saveAsActivate} disabled={busy} />Switch active context to saved copy</label>
+        <fieldset class="space-y-3 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-4">
+          <legend class="px-1 text-sm font-semibold text-vpro-navy">Save Active Project As</legend>
+          <p class="text-xs text-vpro-ink-secondary">Lossless copy of <span class="font-mono font-semibold">{activeProject}</span> renaming prefix across core and companion (_SU, _Hierarchy, _Lump, _Profile) tables.</p>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="saveas-name">New Project Prefix</label><input id="saveas-name" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={saveAsName} disabled={busy} aria-invalid={!!saveAsValidationError} /></div>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="saveas-dest">Destination .db Path (optional)</label><input id="saveas-dest" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={saveAsDest} disabled={busy} placeholder="Defaults to projects/<NewPrefix>.db" /></div>
+          <label class="flex items-center gap-2 text-xs text-vpro-ink"><input type="checkbox" bind:checked={saveAsActivate} disabled={busy} />Switch active context to saved copy</label>
           {#if saveAsValidationError}<p role="alert" class="text-xs text-red-700">{saveAsValidationError}</p>{/if}
-          <button type="button" disabled={busy || !saveAsName || !!saveAsValidationError} class="w-full rounded bg-[#003366] px-3 py-2 text-sm font-semibold text-white hover:bg-[#002244] disabled:opacity-50" onclick={submitSaveProjectAs}>Save Project As</button>
-          {#if saveAsResult && saveAsResult.companionTables.length > 0}<p class="text-xs text-slate-600">Preserved companions: <span class="font-mono">{saveAsResult.companionTables.join(', ')}</span></p>{/if}
+          <button type="button" disabled={busy || !saveAsName || !!saveAsValidationError} class="w-full rounded bg-vpro-navy px-3 py-2 text-sm font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50" onclick={submitSaveProjectAs}>Save Project As</button>
+          {#if saveAsResult && saveAsResult.companionTables.length > 0}<p class="text-xs text-vpro-ink-secondary">Preserved companions: <span class="font-mono">{saveAsResult.companionTables.join(', ')}</span></p>{/if}
         </fieldset>
 
-        <fieldset class="space-y-3 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-4">
-          <legend class="px-1 text-sm font-semibold text-[#003366]">Export Splinter Project</legend>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="splinter-name">Splinter Project Name</label><input id="splinter-name" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={splinterName} disabled={busy} aria-invalid={!!splinterValidationError} /></div>
-          <label class="flex items-center gap-2 text-xs text-slate-800"><input type="checkbox" bind:checked={splinterUseSu} disabled={busy} />Filter by active Site Unit table ({activeSu})</label>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="splinter-units">Site Unit Filter (comma-separated, optional)</label><input id="splinter-units" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={splinterUnitsRaw} disabled={busy} placeholder="e.g. CWHvm1/01, CWHvm1/05" /></div>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="splinter-plots">Explicit Plot Subset (comma-separated, optional)</label><input id="splinter-plots" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={splinterPlotsRaw} disabled={busy} placeholder="e.g. 00337, 108050" /></div>
-          <div class="space-y-1"><label class="block text-xs font-semibold text-slate-700" for="splinter-dest">Destination .db Path (optional)</label><input id="splinter-dest" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={splinterDest} disabled={busy} /></div>
-          <label class="flex items-center gap-2 text-xs text-slate-800"><input type="checkbox" bind:checked={splinterActivate} disabled={busy} />Switch active context to splinter project</label>
+        <fieldset class="space-y-3 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-4">
+          <legend class="px-1 text-sm font-semibold text-vpro-navy">Export Splinter Project</legend>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="splinter-name">Splinter Project Name</label><input id="splinter-name" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={splinterName} disabled={busy} aria-invalid={!!splinterValidationError} /></div>
+          <label class="flex items-center gap-2 text-xs text-vpro-ink"><input type="checkbox" bind:checked={splinterUseSu} disabled={busy} />Filter by active Site Unit table ({activeSu})</label>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="splinter-units">Site Unit Filter (comma-separated, optional)</label><input id="splinter-units" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={splinterUnitsRaw} disabled={busy} placeholder="e.g. CWHvm1/01, CWHvm1/05" /></div>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="splinter-plots">Explicit Plot Subset (comma-separated, optional)</label><input id="splinter-plots" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={splinterPlotsRaw} disabled={busy} placeholder="e.g. 00337, 108050" /></div>
+          <div class="space-y-1"><label class="block text-xs font-semibold text-vpro-ink-secondary" for="splinter-dest">Destination .db Path (optional)</label><input id="splinter-dest" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={splinterDest} disabled={busy} /></div>
+          <label class="flex items-center gap-2 text-xs text-vpro-ink"><input type="checkbox" bind:checked={splinterActivate} disabled={busy} />Switch active context to splinter project</label>
           {#if splinterValidationError}<p role="alert" class="text-xs text-red-700">{splinterValidationError}</p>{/if}
-          <button type="button" disabled={busy || !splinterName || !!splinterValidationError} class="w-full rounded bg-[#003366] px-3 py-2 text-sm font-semibold text-white hover:bg-[#002244] disabled:opacity-50" onclick={submitExportSplinter}>Export Splinter Project</button>
-          {#if splinterResult}<p class="text-xs text-slate-600">Exported {splinterResult.exportedPlotCount} / {splinterResult.sourcePlotCount} plots.</p>{/if}
+          <button type="button" disabled={busy || !splinterName || !!splinterValidationError} class="w-full rounded bg-vpro-navy px-3 py-2 text-sm font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50" onclick={submitExportSplinter}>Export Splinter Project</button>
+          {#if splinterResult}<p class="text-xs text-vpro-ink-secondary">Exported {splinterResult.exportedPlotCount} / {splinterResult.sourcePlotCount} plots.</p>{/if}
         </fieldset>
       </div>
     {:else if activeTab === 'compliance'}
       {#await import('./ProjectAdminComplianceTab.svelte')}
-        <p role="status" class="p-4 text-sm text-slate-700">Loading Compliance Validator...</p>
+        <p role="status" class="p-4 text-sm text-vpro-ink-secondary">Loading Compliance Validator...</p>
       {:then { default: ProjectAdminComplianceTab }}
         <ProjectAdminComplianceTab {busy} {activeSu} bind:complianceUseSu bind:confirmQuarantine
           {complianceReport} {quarantineResult} findingCounts={complianceFindingCounts}
@@ -594,7 +594,7 @@
       {/await}
     {:else if activeTab === 'optimizeveg'}
       {#await import('./ProjectAdminOptimizeVegTab.svelte')}
-        <p role="status" class="p-4 text-sm text-slate-700">Loading Safe OptimizeVeg...</p>
+        <p role="status" class="p-4 text-sm text-vpro-ink-secondary">Loading Safe OptimizeVeg...</p>
       {:then { default: ProjectAdminOptimizeVegTab }}
         <ProjectAdminOptimizeVegTab {busy} bind:optPlotNumbersRaw bind:optCustodianAuditOverride bind:optConfirmReviewed
           {optPreview} {optResult} {optUnresolvedConflictCount}
@@ -605,7 +605,7 @@
       {/await}
     {:else if activeTab === 'merge'}
       {#await import('./ProjectAdminMergeTab.svelte')}
-        <p role="status" class="p-4 text-sm text-slate-700">Loading Compare &amp; 3-Way Merge...</p>
+        <p role="status" class="p-4 text-sm text-vpro-ink-secondary">Loading Compare &amp; 3-Way Merge...</p>
       {:then { default: ProjectAdminMergeTab }}
         <ProjectAdminMergeTab {busy} bind:cmpTargetPath bind:cmpTargetProject bind:cmpSourceProject
           bind:cmpSourcePath bind:cmpCaseInsensitive {cmpResult} {cmpAllDiffs} {cmpExportPreview}
@@ -620,7 +620,7 @@
       {/await}
     {:else if activeTab === 'cloudsync'}
       {#await import('./CloudSyncWorkbench.svelte')}
-        <p role="status" class="p-4 text-sm text-slate-700">Loading Cloud BECMaster Sync Workbench...</p>
+        <p role="status" class="p-4 text-sm text-vpro-ink-secondary">Loading Cloud BECMaster Sync Workbench...</p>
       {:then { default: CloudSyncWorkbench }}
         <CloudSyncWorkbench {contextId} {activeProject} {activeSu} {operationHeld} onBusyChange={setBusy} {oncontextswitched} />
       {:catch loadError}

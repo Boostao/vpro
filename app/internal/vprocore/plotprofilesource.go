@@ -79,18 +79,18 @@ func (c *SqliteContext) ProfileInfo(ctx context.Context) (PlotProfileSourceInfo,
 	}
 	info.Table = table
 	var physical bool
-	if err := c.Conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM "+QuoteHeaderIdentifier(role)+".sqlite_master WHERE type='table' AND name=?)", table).Scan(&physical); err != nil {
+	if err := c.conn.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM "+QuoteHeaderIdentifier(role)+".sqlite_master WHERE type='table' AND name=?)", table).Scan(&physical); err != nil {
 		return info, err
 	}
 	if !physical {
 		info.Reason = "Original physical plot-profile table is unavailable"
 		return info, nil
 	}
-	columns, err := ReadSQLiteStorageColumns(ctx, c.Conn, role, table)
+	columns, err := ReadSQLiteStorageColumns(ctx, c.conn, role, table)
 	if err != nil {
 		return info, err
 	}
-	metadata, err := ProfileMetadataColumns(ctx, c.Conn, role)
+	metadata, err := ProfileMetadataColumns(ctx, c.conn, role)
 	if err != nil {
 		return info, err
 	}
@@ -163,7 +163,7 @@ func (c *SqliteContext) attachProfile(ctx context.Context, requested *PlotProfil
 	if err := c.RequireColumns(ctx, c.profileRole, table, PlotProfileColumns); err != nil {
 		return err
 	}
-	metadata, err := ProfileMetadataColumns(ctx, c.Conn, c.profileRole)
+	metadata, err := ProfileMetadataColumns(ctx, c.conn, c.profileRole)
 	if err != nil {
 		return err
 	}
@@ -210,7 +210,7 @@ func (s *ContextService) SelectPlotProfile(expectedID string, requested PlotProf
 	if expectedID == "" || expectedID != s.Projects.ContextID {
 		return ProjectState{}, errors.New("profile context changed; reload before selecting")
 	}
-	if s.Projects.Sqlite == nil || s.Projects.Sqlite.Conn == nil {
+	if s.Projects.Sqlite == nil || s.Projects.Sqlite.conn == nil {
 		return ProjectState{}, errors.New("profile context is closed")
 	}
 	if err := ProfileOwnedFiles(s.Projects.Sqlite); err != nil {

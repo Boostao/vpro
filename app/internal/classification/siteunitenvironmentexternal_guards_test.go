@@ -46,7 +46,7 @@ func TestExternalSUEnvironmentActualLateCancellationAndCleanupReceipt(t *testing
 					t.Fatal("cleanup error erased committed receipt", result, err)
 				}
 				var records int
-				if err := owner.Conn.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM project.__VPRO_SUEnvironmentHistory`).Scan(&records); err != nil || records != 1 {
+				if err := owner.CoordinatorWhileLocked().QueryRowContext(t.Context(), `SELECT COUNT(*) FROM project.__VPRO_SUEnvironmentHistory`).Scan(&records); err != nil || records != 1 {
 					t.Fatal("committed cleanup error lost physical history", records, err)
 				}
 				after := vprotest.DatabaseBytes(t, owner.Attachments)
@@ -152,7 +152,7 @@ func TestExternalSUEnvironmentWholeRowsDescriptionsAndProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	var raw string
-	if err := owner.Conn.QueryRowContext(t.Context(), `SELECT Proposal FROM project.__VPRO_SUEnvironmentHistory WHERE ID=1`).Scan(&raw); err != nil {
+	if err := owner.CoordinatorWhileLocked().QueryRowContext(t.Context(), `SELECT Proposal FROM project.__VPRO_SUEnvironmentHistory WHERE ID=1`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var saved struct {

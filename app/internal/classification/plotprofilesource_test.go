@@ -122,7 +122,7 @@ func TestPlotProfileSelectionFailedPublicationRetainsContextAndYAML(t *testing.T
 	}
 	after, readErr := os.ReadFile(service.Projects.Preferences.Path)
 	if readErr != nil || !bytes.Equal(before, after) || service.Projects.ContextID != state.ContextID ||
-		service.Projects.Sqlite != originalOwner || originalOwner.Conn == nil {
+		service.Projects.Sqlite != originalOwner || !originalOwner.IsOpen() {
 		t.Fatal("failed profile selection changed context/config or closed original owner", err, readErr)
 	}
 	service.Projects.Preferences.Replace = os.Rename

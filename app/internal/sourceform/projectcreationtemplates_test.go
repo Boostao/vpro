@@ -243,11 +243,11 @@ func TestNewProjectTemplatesStaleOwnershipAndCancellationRetry(t *testing.T) {
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	queued := &vprotest.TableCSVLeaseContext{Context: ctx, Queued: make(chan struct{})}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	locked := true
 	defer func() {
 		if locked {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 		}
 	}()
 	done := make(chan struct {
@@ -275,7 +275,7 @@ func TestNewProjectTemplatesStaleOwnershipAndCancellationRetry(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("queued cancellation did not release read leases")
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	locked = false
 	if got, err := service.ReadNewProjectTemplates(context.Background(), state.ContextID); got == nil || err != nil {
 		t.Fatal("queued cancellation retry failed", err)

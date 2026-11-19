@@ -36,7 +36,7 @@ func TestProfileSUProjectPreservesExistingDataDescriptionsAndIndependentSelectio
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema, err := vprocore.ReadSQLiteStorageRows(ctx, c.Conn, "project", "sqlite_master", "", nil, "")
+	schema, err := vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), "project", "sqlite_master", "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestProfileSUProjectPreservesExistingDataDescriptionsAndIndependentSelectio
 	for _, row := range schema.Rows {
 		if row.Cells[0].Text != nil && *row.Cells[0].Text == "table" {
 			name := *row.Cells[1].Text
-			before[name], err = vprocore.ReadSQLiteStorageRows(ctx, c.Conn, "project", name, "", nil, "")
+			before[name], err = vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), "project", name, "", nil, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -61,12 +61,12 @@ func TestProfileSUProjectPreservesExistingDataDescriptionsAndIndependentSelectio
 	if err != nil || !bytes.Equal(config, afterConfig) {
 		t.Fatal("SU creation wrote YAML", err)
 	}
-	afterSchema, err := vprocore.ReadSQLiteStorageRows(ctx, c.Conn, "project", "sqlite_master", "", nil, "")
+	afterSchema, err := vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), "project", "sqlite_master", "", nil, "")
 	if err != nil || len(afterSchema.Rows) != len(schema.Rows)+4 || !reflect.DeepEqual(schema.Rows, afterSchema.Rows[:len(schema.Rows)]) {
 		t.Fatal("existing schema/indexes/views/triggers changed", err)
 	}
 	for name, original := range before {
-		current, err := vprocore.ReadSQLiteStorageRows(ctx, c.Conn, "project", name, "", nil, "")
+		current, err := vprocore.ReadSQLiteStorageRows(ctx, c.CoordinatorWhileLocked(), "project", name, "", nil, "")
 		if err != nil || !reflect.DeepEqual(current, original) {
 			t.Fatal("existing data/descriptions changed", name, err)
 		}
@@ -81,7 +81,7 @@ func TestProfileSUProjectPreservesExistingDataDescriptionsAndIndependentSelectio
 		}
 	}
 	var raw string
-	if err := c.Conn.QueryRowContext(ctx, `SELECT Proposal FROM project.__VPRO_ProfileSUHistory WHERE ID=1`).Scan(&raw); err != nil {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT Proposal FROM project.__VPRO_ProfileSUHistory WHERE ID=1`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var saved ProfileSUProjectCreation
@@ -167,7 +167,7 @@ func TestProfileSUProjectAppendsIndependentCreationProposals(t *testing.T) {
 			t.Fatal("independent creation could not append to retained provenance", name, err)
 		}
 	}
-	rows, err := service.Projects.Sqlite.Conn.QueryContext(ctx, `SELECT ID,Proposal FROM project.__VPRO_ProfileSUHistory ORDER BY ID`)
+	rows, err := service.Projects.Sqlite.CoordinatorWhileLocked().QueryContext(ctx, `SELECT ID,Proposal FROM project.__VPRO_ProfileSUHistory ORDER BY ID`)
 	if err != nil {
 		t.Fatal(err)
 	}

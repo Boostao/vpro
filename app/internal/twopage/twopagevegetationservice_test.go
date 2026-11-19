@@ -105,7 +105,7 @@ func TestTwoPageVegetationServiceStrictTransportAndExplicitErrors(t *testing.T) 
 			t.Fatal("unowned facade accepted writer", result, err)
 		}
 	}
-	if len(contexts.TwoPageVegetationAttempts.Requests) != 0 ||
+	if len(twoPageVegAttempts(contexts).Requests) != 0 ||
 		!reflect.DeepEqual(before, vprotest.DatabaseBytes(t, contexts.Projects.Sqlite.Attachments)) {
 		t.Fatal("strict/pre-cancel denial created an attempt or changed physical data")
 	}

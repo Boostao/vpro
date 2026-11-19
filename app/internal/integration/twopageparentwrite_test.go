@@ -201,11 +201,11 @@ func TestTwoPageParentExtraOwnedBlockedCancellationNoopAndRetry(t *testing.T) {
 	}
 	vprotest.AssertProfileSUFiles(t, service, before)
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	got, err = twopage.WriteTwoPageParentExtra(service, ctx, state.ContextID, "108050", parent.Form, parent, edits)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || got != nil {
 		t.Fatal("blocked write ignored cancellation", got, err)
 	}

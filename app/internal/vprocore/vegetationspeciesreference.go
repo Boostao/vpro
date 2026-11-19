@@ -82,7 +82,7 @@ func (s *ContextService) ListVegetationSpecies(ctx context.Context, contextID, f
 		if err != nil {
 			return nil, err
 		}
-		rows, err := plots.Projects.Sqlite.Conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
+		rows, err := plots.Projects.Sqlite.conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
 			FROM (`+vegetationSpeciesUnion+`) WHERE `+predicate+`
 			ORDER BY Code COLLATE NOCASE,Code,ScientificName,EnglishName,Codetype`)
 		if err != nil {
@@ -110,7 +110,7 @@ func (s *ContextService) ListVegetationSpeciesAliases(ctx context.Context, conte
 		if err := ValidateVegetationSpeciesLookup(code); err != nil {
 			return nil, err
 		}
-		rows, err := plots.Projects.Sqlite.Conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype,OldCode
+		rows, err := plots.Projects.Sqlite.conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype,OldCode
 			FROM USysAllSpecs WHERE OldCode COLLATE NOCASE=?
 			ORDER BY Code COLLATE NOCASE,Code,ScientificName,EnglishName,Codetype`, code)
 		if err != nil {
@@ -137,7 +137,7 @@ func (s *ContextService) ListVegetationSpeciesUsers(ctx context.Context, context
 		if err := ValidateVegetationSpeciesLookup(lookup.Code); err != nil {
 			return nil, err
 		}
-		rows, err := plots.Projects.Sqlite.Conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
+		rows, err := plots.Projects.Sqlite.conn.QueryContext(ctx, `SELECT Code,ScientificName,Lifeform,EnglishName,Codetype
 			FROM USysUserSpp WHERE Code COLLATE NOCASE=?
 			ORDER BY Code,ScientificName,EnglishName,Codetype,Lifeform`, lookup.Code)
 		if err != nil {

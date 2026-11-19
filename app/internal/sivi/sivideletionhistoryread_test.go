@@ -256,11 +256,11 @@ func TestSIVIDeletionHistoryOwnershipCancellationAndSourceDrift(t *testing.T) {
 		t.Fatal("private reader accepted nil context", list, err)
 	}
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
 	list, err := service.GetHistory(ctx, state.ContextID, request.Plot)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if list != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("history lease ignored cancellation", list, err)
 	}
@@ -557,11 +557,11 @@ func TestSIVIDeletionTargetsCancellationOwnershipAndLiteralParentGuards(t *testi
 		t.Fatal("private target reader accepted nil context", targets, err)
 	}
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
 	targets, err := service.GetTargets(ctx, state.ContextID, deletion.Plot)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if targets != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("target snapshot lease ignored cancellation", targets, err)
 	}

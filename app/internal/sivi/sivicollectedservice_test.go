@@ -317,13 +317,13 @@ func TestSIVICollectedServiceRestoreDriftTamperRollbackAndOwnership(t *testing.T
 	owner := contexts.Projects.Sqlite
 	before := vprotest.DatabaseBytes(t, owner.Attachments)
 	reference := owner.Attachments["VLists"]
-	owner.Mu.Lock()
+	owner.LockForTest()
 	owner.Attachments["VLists"] = owner.Attachments["project"]
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	_, ownershipErr := service.SaveReviewed(context.Background(), state.ContextID, "108050", true, valid)
-	owner.Mu.Lock()
+	owner.LockForTest()
 	owner.Attachments["VLists"] = reference
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if ownershipErr == nil {
 		t.Fatal("changed file ownership authorized writes")
 	}

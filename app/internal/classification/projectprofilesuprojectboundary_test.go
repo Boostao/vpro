@@ -72,7 +72,7 @@ func TestProfileSUProjectExactZero200201AndNullableSelectedSiteUnits(t *testing.
 			if err != nil || created.PlotCount != count {
 				t.Fatal("exact empty/large SU insertion failed", created, err)
 			}
-			stored, err := vprocore.ReadSQLiteStorageRows(ctx, service.Projects.Sqlite.Conn, "project", "Threshold_SU", "", nil, "PlotNumber")
+			stored, err := vprocore.ReadSQLiteStorageRows(ctx, service.Projects.Sqlite.CoordinatorWhileLocked(), "project", "Threshold_SU", "", nil, "PlotNumber")
 			if err != nil || len(stored.Rows) != count {
 				t.Fatal("persisted measurable count differs", stored, err)
 			}

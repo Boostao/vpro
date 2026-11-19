@@ -66,11 +66,11 @@ func TestSummaryQuickVegetationOwnedCaptureDetachedAndZeroWrites(t *testing.T) {
 func TestSummaryQuickVegetationOwnedCancellationCleanupOwnershipAndRetry(t *testing.T) {
 	service, state := vprotest.ReportServiceFixture(t, true)
 	owner, zero := service.Projects.Sqlite, siteUnitQuickVegetationInput{}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	input, err := ReadSiteUnitQuickVegetationInput(service, ctx, state.ContextID, 1, vprocore.PublicationReadSnapshotHooks{})
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(input, zero) {
 		t.Fatal("cancelled acquisition retained partial source", err)
 	}

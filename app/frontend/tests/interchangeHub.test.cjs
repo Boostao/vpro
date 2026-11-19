@@ -134,8 +134,8 @@ test('InterchangeHub.svelte compiles cleanly, contains zero emojis, and renders 
   const source = readFileSync(srcPath('InterchangeHub.svelte'), 'utf8');
   assert.equal(/\p{Extended_Pictographic}/u.test(source), false);
   assert.doesNotMatch(source, /<p class="error" role="alert">/);
-  assert.match(source, /#003366/);
-  assert.match(source, /#fcba19/i);
+  assert.match(source, /#003366|vpro-navy/);
+  assert.match(source, /#fcba19|vpro-gold/i);
 
   const Component = serverComponent(source, 'InterchangeHub.svelte', {
     './interchangeHub': hub,

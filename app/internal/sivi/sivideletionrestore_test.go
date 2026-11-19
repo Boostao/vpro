@@ -649,11 +649,11 @@ func TestSIVIDeletionRestorationNewContextAuthorityAndReadonlyLeaseCancellation(
 	assertSIVIDeletionRestorationRefused(t, service, reopened.ContextID, request, false)
 	owner := service.Projects.Sqlite
 	files := vprotest.DatabaseBytes(t, owner.Attachments)
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	review, err := ReviewSIVIDeletionRestoration(service, ctx, reopened.ContextID, request.Plot, request.HistoryID)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if review != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("held read-only review ignored lease cancellation", review, err)
 	}
@@ -663,11 +663,11 @@ func TestSIVIDeletionRestorationNewContextAuthorityAndReadonlyLeaseCancellation(
 		t.Fatal("explicit new context could not restore", result, err)
 	}
 	files = vprotest.DatabaseBytes(t, owner.Attachments)
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
 	receipt, err := LookupSIVIDeletionRestorationReceipt(service, ctx, reopened.ContextID, request)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if receipt != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("held receipt lookup ignored lease cancellation", receipt, err)
 	}

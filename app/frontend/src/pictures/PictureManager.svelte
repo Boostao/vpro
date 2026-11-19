@@ -163,7 +163,7 @@
 </script>
 
 <section class="manager" data-picture-manager aria-label="Plot Pictures">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-stone-200" data-workbench-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" data-workbench-sticky-bar>
     <h1>Plot Pictures</h1>
     <p>Project <strong>{project}</strong>. Enter an exact plot number to view, attach, edit, or manage linked plot photos.</p>
     <form onsubmit={event => { event.preventDefault(); selectPlot(); }}>
@@ -246,15 +246,15 @@
 
 <style>
   .manager { padding: 1rem; min-width: 0; max-width: 100%; }
-  h1 { font-size: 1.5rem; font-weight: 600; color: #003366; margin-bottom: .75rem; }
+  h1 { font-size: 1.5rem; font-weight: 600; color: var(--vpro-navy); margin-bottom: .75rem; }
   form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: .75rem 0; }
   label { display: grid; gap: .3rem; min-width: 0; flex: 1 1 14rem; }
-  input, button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; color: #313132; background: #FFFFFF; }
+  input, button { border: 1px solid var(--vpro-border-strong); border-radius: .25rem; padding: .4rem .6rem; min-width: 0; color: var(--vpro-ink); background: var(--vpro-surface); }
   button:disabled, input:disabled { opacity: .5; }
   p { overflow-wrap: anywhere; }
-  .guidance { font-size: .8rem; color: #474543; margin-top: 1rem; }
-  .library-options { margin: .75rem 0; padding: .65rem .75rem; border: 1px solid #D8D8D8; border-radius: .25rem; background: #FFFFFF; }
-  .library-options summary { cursor: pointer; font-weight: 600; color: #003366; }
+  .guidance { font-size: .8rem; color: var(--vpro-ink-secondary); margin-top: 1rem; }
+  .library-options { margin: .75rem 0; padding: .65rem .75rem; border: 1px solid var(--vpro-border); border-radius: .25rem; background: var(--vpro-surface); }
+  .library-options summary { cursor: pointer; font-weight: 600; color: var(--vpro-navy); }
   .options-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: .75rem; margin-top: .75rem; }
   .options-actions { display: flex; flex-wrap: wrap; align-items: end; gap: .5rem; }
 </style>

@@ -61,11 +61,11 @@ func TestTwoPageVegetationAttemptSharedActiveOwnershipAndCommittedSealing(t *tes
 	}
 	completed := make(chan completion, 2)
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	unlocked := false
 	defer func() {
 		if !unlocked {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 		}
 	}()
 	for _, facade := range []*TwoPageVegetationService{first, second} {
@@ -98,7 +98,7 @@ func TestTwoPageVegetationAttemptSharedActiveOwnershipAndCommittedSealing(t *tes
 	if err != nil || outcome == nil || outcome.Status != "running" || outcome.Receipt != nil {
 		t.Fatal("active writer certified absent while physical writer was held", outcome, err)
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	unlocked = true
 	commits, replays := 0, 0
 	for range 2 {

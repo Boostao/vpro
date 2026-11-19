@@ -46,7 +46,7 @@
   const fields = $derived(siviParentSharedFieldsFor(Boolean(view.referencesEnabled)));
 </script>
 
-<section class="space-y-4 rounded border border-stone-200 bg-white p-4" aria-label="SIVI shared-field editor" data-sivi-shared-panel>
+<section class="space-y-4 rounded border border-vpro-border bg-white p-4" aria-label="SIVI shared-field editor" data-sivi-shared-panel>
   <div class="flex flex-wrap items-center justify-between gap-2">
     <h3 class="font-semibold">SIVI / FS1333 shared fields</h3>
     {#if onExtendedShrubsChange}
@@ -58,8 +58,8 @@
     {/if}
   </div>
   {#if extendedShrubs}
-    <p class="text-xs text-stone-600" data-sivi-extended-summary>Extended shrub cover columns (Cover5a–Cover5c only; height fields remain disabled) and Arctic site fields (SnowCoverregime, ActiveLayerDepth) are active.</p>
-    <fieldset class="space-y-2 rounded border border-stone-200 p-3" data-sivi-arctic-fields>
+    <p class="text-xs text-vpro-ink-secondary" data-sivi-extended-summary>Extended shrub cover columns (Cover5a–Cover5c only; height fields remain disabled) and Arctic site fields (SnowCoverregime, ActiveLayerDepth) are active.</p>
+    <fieldset class="space-y-2 rounded border border-vpro-border p-3" data-sivi-arctic-fields>
       <legend class="px-1 text-sm font-medium">Arctic / extended site fields</legend>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div class="min-w-0 space-y-1">
@@ -174,19 +174,19 @@
       </section>
     {/each}
   {/if}
-  <p class="text-xs text-stone-600">{fields.length} source-bound fields reuse storage validation and owned audited transactions.
+  <p class="text-xs text-vpro-ink-secondary">{fields.length} source-bound fields reuse storage validation and owned audited transactions.
     Explicit Save, Undo and restoration are desktop safety adaptations, not SIVI parent-event parity.
     ProjectID, source actions and XL callbacks are not part of this editor.</p>
-  <p class="text-xs text-stone-600">Latitude and longitude use signed decimal degrees with changed-value limits of
+  <p class="text-xs text-vpro-ink-secondary">Latitude and longitude use signed decimal degrees with changed-value limits of
     +/-90 and +/-180: a desktop safety adaptation. Source Fixed/six-decimal formatting is presentation evidence;
     editable and stored precision is not rounded. Yr. is an Admin integer, not a date or metadata update.
     Stand Age does not change Est./Meas. options.</p>
-  <p class="text-xs text-stone-600">Date uses exact YYYY-MM-DD HH:MM:SS with an optional 1-9 digit fraction,
+  <p class="text-xs text-vpro-ink-secondary">Date uses exact YYYY-MM-DD HH:MM:SS with an optional 1-9 digit fraction,
     years 0100-9999, and explicit NULL. This desktop wall-clock entry adaptation shows the full stored timestamp
     rather than source Medium Date formatting hiding time/precision. No timezone conversion, localized coercion,
     date-only completion, trimming or precision normalization is applied.</p>
   {#if fields.length > 32}
-    <p class="text-xs text-stone-600">Reference suggestions preserve duplicate definitions. Only Exposure 1/2,
+    <p class="text-xs text-vpro-ink-secondary">Reference suggestions preserve duplicate definitions. Only Exposure 1/2,
       Soil Drainage and Successional Status require exact listed Items; other reference fields retain physically
       valid free entry without acknowledgement. Changing BGC refreshes SubZone suggestions without clearing
       SubZone or changing Site Unit. Configured imported VLists ownership is not frozen DAO provenance.</p>

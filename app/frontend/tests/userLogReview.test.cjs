@@ -154,7 +154,7 @@ async function renderComponent(source, props, populated = false) {
     source = source.replace(marker, `let review = $state.raw<UserLogView | null>(${JSON.stringify(fixture().all)});`);
   }
   let code = compile(source, { filename: 'UserLogReview.svelte', generate: 'server' }).js.code;
-  code = code.replace(/import\s*\{\s*LifecycleService\s*\}\s*from\s*['"][^'"]+['"];?/,
+  code = code.replace(/import\s*(?:\{\s*LifecycleService\s*\}|\*\s*as\s*LifecycleService)\s*from\s*['"][^'"]+['"];?/,
     'const LifecycleService = {GetUserLogReview(){throw new Error("SSR must not invoke reads")}};');
   code = code.replace(/import\s*\{\s*ReadRequests\s*\}\s*from\s*['"][^'"]+['"];?/,
     'class ReadRequests {cancelAll(){}}');

@@ -405,17 +405,17 @@ func TestSIVISpeciesServiceOwnedWaitCancellationAndReadonlyUserAlias(t *testing.
 	owner := contexts.Projects.Sqlite
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	owner.Mu.Lock()
+	owner.LockForTest()
 	got, err := service.GetReferences(ctx, state.ContextID, "108050")
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || got.ContextID != "" {
 		t.Fatal("owned reference wait ignored cancellation", got, err)
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	owner.Mu.Lock()
+	owner.LockForTest()
 	result, err := service.SaveReviewed(ctx, state.ContextID, "108050", false, siviSpeciesRequestJSON(t, request))
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || result != nil {
 		t.Fatal("owned writer wait ignored cancellation", result, err)
 	}

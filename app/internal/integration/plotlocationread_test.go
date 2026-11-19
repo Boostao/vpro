@@ -151,11 +151,11 @@ func TestOwnedPlotLocationsStalePhysicalImpostorOwnershipCancellationAndRetry(t 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	queued := &vprotest.TableCSVLeaseContext{Context: ctx, Queued: make(chan struct{})}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	locked := true
 	defer func() {
 		if locked {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 		}
 	}()
 	done := make(chan error, 1)
@@ -181,7 +181,7 @@ func TestOwnedPlotLocationsStalePhysicalImpostorOwnershipCancellationAndRetry(t 
 	case <-time.After(5 * time.Second):
 		t.Fatal("location cancellation did not release leases")
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	locked = false
 	if value, err := service.ReadPlotLocations(context.Background(), state.ContextID); value == nil || err != nil {
 		t.Fatal("location cancellation discarded pinned context", err)

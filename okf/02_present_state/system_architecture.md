@@ -21,7 +21,7 @@ flowchart TB
     end
 
     subgraph Desktop["Primary Desktop App: app/ (github.com/boostao/vpro/app · 4-Layer Go DAG + Wails v3)"]
-        UI["Svelte 5 Runes Frontend (app/frontend · Vite 8 + Tailwind v4)<br/>24 Views · 176 Components · MapLibre v6 + WebGPU · F1 Help"]
+        UI["Svelte 5 Runes Frontend (app/frontend · Vite 8 + Tailwind v4)<br/>24 Views · 182 Components · MapLibre v6 + WebGPU · F1 Help"]
         IPC["Wails v3 Typed IPC Bridge (-ts -i)<br/>Strictly 12 Domain Services + Close Nonce Handshake"]
         CTX["Dual-Connection SQLiteContext (app/internal/vprocore)<br/>1) Pinned :memory: RO Coordinator (beginReadSnapshot)<br/>2) Lazy rw+WAL c.projectDB Writer (FK=ON, busy_timeout=5000)"]
         CAT["2026 Embedded SHA-256 Read-Model Catalogues<br/>BECdb v13, BCPlantTaxonomy v19, LMH25 (2023), bc-overview.pmtiles"]
@@ -158,7 +158,7 @@ flowchart LR
 
 ---
 
-## 4. Frontend Svelte 5 Architecture (176 focused `.svelte` components, `24` Views)
+## 4. Frontend Svelte 5 Architecture (182 focused `.svelte` components, `24` Views)
 
 ### 4.1 Reactive State, Session Machines & Bundle Splitting
 * **Svelte 5 Runes + Class Session Machines:** Uses Svelte 5 Runes (`$state`, `$derived`, `$effect`, `$props`) paired with stateful TypeScript session classes cached across view switches so unsaved drafts and preview snapshots survive tab navigation and block context-switch/close barriers (`41a09f8`, `d630301`).

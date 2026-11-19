@@ -63,11 +63,11 @@ func TestSiteUnitSummaryWorkbookReadOwnedDetachedAndZeroWrites(t *testing.T) {
 func TestSiteUnitSummaryWorkbookReadCancellationCleanupOwnershipAndRetry(t *testing.T) {
 	service, state := vprotest.ReportServiceFixture(t, true)
 	owner, zero := service.Projects.Sqlite, siteUnitSummaryWorkbookInput{}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	input, err := ReadSiteUnitSummaryWorkbookInput(service, ctx, state.ContextID, 1, vprocore.PublicationReadSnapshotHooks{})
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(input, zero) {
 		t.Fatal("cancelled acquisition produced source", err)
 	}

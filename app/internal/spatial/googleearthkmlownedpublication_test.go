@@ -273,7 +273,7 @@ func TestOwnedGoogleEarthKMLPublicationQueuedOwnerCancellationReleasesContextLea
 	directory := t.TempDir()
 	path := filepath.Join(directory, "output.kml")
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
@@ -289,7 +289,7 @@ func TestOwnedGoogleEarthKMLPublicationQueuedOwnerCancellationReleasesContextLea
 		service.Projects.OperationMu.Unlock()
 		if time.Now().After(deadline) {
 			cancel()
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 			<-done
 			t.Fatal("queued request never acquired its context operation lease")
 		}
@@ -298,12 +298,12 @@ func TestOwnedGoogleEarthKMLPublicationQueuedOwnerCancellationReleasesContextLea
 	cancel()
 	select {
 	case err := <-done:
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		if !errors.Is(err, context.Canceled) {
 			t.Fatal("queued cancellation cause lost", err)
 		}
 	case <-time.After(5 * time.Second):
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		t.Fatal("queued owner cancellation did not return")
 	}
 	vprotest.TableCSVPublicationOnly(t, directory)

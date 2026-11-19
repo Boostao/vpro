@@ -380,7 +380,7 @@ func TestProjectProfilingMidRunFailureIsIsolatedAndRetryRetainsInputs(t *testing
 		}
 	}
 	var leaked int
-	if err := service.Projects.Sqlite.Conn.QueryRowContext(context.Background(),
+	if err := service.Projects.Sqlite.CoordinatorWhileLocked().QueryRowContext(context.Background(),
 		`SELECT COUNT(*) FROM sqlite_temp_master WHERE name LIKE 'VProProfile%'`).Scan(&leaked); err != nil || leaked != 0 {
 		t.Fatal("isolated job leaked TEMP state into resident context", leaked, err)
 	}

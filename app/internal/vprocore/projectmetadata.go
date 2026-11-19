@@ -57,7 +57,7 @@ func (s *ContextService) ReviewProjectMetadata(ctx context.Context, contextID, p
 		}
 		c := plots.Projects.Sqlite
 		env := `"project".` + QuoteHeaderIdentifier(c.Selection.Project+"_Env")
-		rows, err := c.Conn.QueryContext(ctx, `SELECT CAST(ProjectID AS BLOB),typeof(ProjectID) FROM `+env+
+		rows, err := c.conn.QueryContext(ctx, `SELECT CAST(ProjectID AS BLOB),typeof(ProjectID) FROM `+env+
 			` WHERE PlotNumber COLLATE BINARY=? AND EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`, plot, plot)
 		if err != nil {
 			return ProjectMetadataReview{}, fmt.Errorf("metadata parent scope unavailable: %w", err)
@@ -107,7 +107,7 @@ func readProjectMetadataTable(ctx context.Context, c *SqliteContext, alias, tabl
 	if err := c.RequireColumns(ctx, alias, table, required); err != nil {
 		return ProjectMetadataTable{}, err
 	}
-	return ReadProjectMetadataRows(ctx, c.Conn, alias, table, projectID, project)
+	return ReadProjectMetadataRows(ctx, c.conn, alias, table, projectID, project)
 }
 
 type ProjectMetadataQueryer interface {

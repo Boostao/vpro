@@ -70,13 +70,13 @@
 </script>
 
 <div
-  class="mt-2 rounded border border-[#D8D8D8] bg-[#F2F2F2] p-2.5 space-y-2 text-xs"
+  class="mt-2 rounded border border-vpro-border bg-vpro-canvas p-2.5 space-y-2 text-xs"
   data-sivi-coord-helper={variant === 'sivi' ? '' : undefined}
   data-two-page-coord-helper={variant === 'two-page' ? '' : undefined}
 >
   <div class="flex flex-wrap items-center gap-2">
     <label class="font-medium" for={`${idPrefix}-coord-mode`}>Mode</label>
-    <select id={`${idPrefix}-coord-mode`} class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordHelperMode}>
+    <select id={`${idPrefix}-coord-mode`} class="rounded border border-vpro-border bg-white px-2 py-1" bind:value={coordHelperMode}>
       <option value="dm">DM (Deg / Min)</option>
       <option value="dms">DMS (Deg / Min / Sec)</option>
       <option value="utm">NAD83 UTM</option>
@@ -84,7 +84,7 @@
     {#if coordHelperMode !== 'utm'}
       <select
         aria-label="Coordinate Axis"
-        class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+        class="rounded border border-vpro-border bg-white px-2 py-1"
         bind:value={coordHelperAxis}
         onchange={() => {
           coordDir = coordHelperAxis === 'latitude' ? 'N' : 'W';
@@ -102,21 +102,21 @@
         type="text"
         aria-label="NAD83 UTM Zone"
         placeholder="Zone (e.g. 10)"
-        class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+        class="rounded border border-vpro-border bg-white px-2 py-1"
         bind:value={utmZone}
       />
       <input
         type="text"
         aria-label="NAD83 UTM Easting"
         placeholder="Easting"
-        class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+        class="rounded border border-vpro-border bg-white px-2 py-1"
         bind:value={utmEasting}
       />
       <input
         type="text"
         aria-label="NAD83 UTM Northing"
         placeholder="Northing"
-        class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+        class="rounded border border-vpro-border bg-white px-2 py-1"
         bind:value={utmNorthing}
       />
     </div>
@@ -126,14 +126,14 @@
         type="text"
         aria-label="Coordinate Degrees"
         placeholder="Deg"
-        class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+        class="rounded border border-vpro-border bg-white px-2 py-1"
         bind:value={coordDeg}
       />
       <input
         type="text"
         aria-label="Coordinate Minutes"
         placeholder="Min"
-        class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+        class="rounded border border-vpro-border bg-white px-2 py-1"
         bind:value={coordMin}
       />
       {#if coordHelperMode === 'dms'}
@@ -141,11 +141,11 @@
           type="text"
           aria-label="Coordinate Seconds"
           placeholder="Sec"
-          class="rounded border border-[#D8D8D8] bg-white px-2 py-1"
+          class="rounded border border-vpro-border bg-white px-2 py-1"
           bind:value={coordSec}
         />
       {/if}
-      <select aria-label="Hemisphere" class="rounded border border-[#D8D8D8] bg-white px-2 py-1" bind:value={coordDir}>
+      <select aria-label="Hemisphere" class="rounded border border-vpro-border bg-white px-2 py-1" bind:value={coordDir}>
         {#if coordHelperAxis === 'latitude'}
           <option value="N">N</option>
           <option value="S">S</option>
@@ -158,11 +158,11 @@
   {/if}
 
   {#if coordError}
-    <p role="alert" class="text-[#D8292F]">{coordError}</p>
+    <p role="alert" class="text-vpro-error">{coordError}</p>
   {/if}
   <button
     type="button"
-    class="rounded bg-[#003366] px-2.5 py-1 text-white disabled:opacity-50"
+    class="rounded bg-vpro-navy px-2.5 py-1 text-white disabled:opacity-50"
     disabled={disabled || coordBusy}
     onclick={() => void applyCoordConversion()}
   >

@@ -896,7 +896,7 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
 </script>
 
 <section class="report" data-long-vegetation-report aria-label="Long Vegetation report">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
     <h1>Long Vegetation</h1>
     <div class="actions">
       <button data-source-control="btnViewReport" disabled={busy || operationHeld || workbookBarrier || preferenceBarrier || (projectActive ? !projectView?.outputReady : !settings || su === 'None')} onclick={show}>View Report</button>
@@ -1385,33 +1385,33 @@ import type { LongVegetationSettings } from '../../bindings/github.com/boostao/v
 </section>
 
 <style>
-  .report { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; color: #313132; }
+  .report { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; overflow-wrap: anywhere; color: var(--vpro-ink); }
   .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
   .report-sticky-bar h1 { margin: 0; }
   .workbook, .preferences, .lump-and-variant-controls, .exclusion-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; min-width: 0; }
-  .lump-and-variant-controls, .exclusion-panel { background: #F2F2F2; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .75rem; }
+  .lump-and-variant-controls, .exclusion-panel { background: var(--vpro-canvas); border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .75rem; }
   .control-field { display: grid; gap: .35rem; min-width: 0; }
   .lump-picker-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
   .lump-picker-row select { flex: 1 1 16rem; }
   .toggle-field { display: flex; align-items: center; gap: .5rem; font-weight: 500; cursor: pointer; }
-  .exclusion-panel summary { cursor: pointer; font-weight: 600; color: #003366; }
-  textarea, select { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .6rem; width: 100%; background: #FFFFFF; color: #313132; }
-  h1, h2 { color: #003366; }
-  h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3, dt { font-weight: 600; color: #003366; }
+  .exclusion-panel summary { cursor: pointer; font-weight: 600; color: var(--vpro-navy); }
+  textarea, select { box-sizing: border-box; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .6rem; width: 100%; background: var(--vpro-surface); color: var(--vpro-ink); }
+  h1, h2 { color: var(--vpro-navy); }
+  h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3, dt { font-weight: 600; color: var(--vpro-navy); }
   .scope, .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: .75rem 1.5rem; }
   .scope > div, .settings > div { min-width: 0; display: grid; gap: .25rem; align-content: start; }
   dd { white-space: pre-wrap; overflow-wrap: anywhere; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button { border: 1px solid #003366; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; color: #003366; font-weight: 600; cursor: pointer; }
-  button:hover:not(:disabled) { background: #F2F2F2; }
+  button { border: 1px solid var(--vpro-navy); border-radius: .4rem; padding: .5rem .75rem; background: var(--vpro-surface); color: var(--vpro-navy); font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--vpro-canvas); }
   button:disabled { opacity: .5; cursor: not-allowed; }
   .unit { min-width: 0; display: grid; gap: .5rem; }
   .unit-name, .name-candidate, .quality-occurrence { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #D8D8D8; background: #FFFFFF; }
+  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--vpro-border); background: var(--vpro-surface); }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #D8D8D8; padding: .5rem; text-align: left; min-width: 8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-  thead th { background: #003366; color: #FFFFFF; }
-  .error { color: #D8292F; font-weight: 600; } .diagnostic, .notice { color: #1A5A96; }
-  .scope-guidance { margin: 0; padding: .6rem .85rem; border-left: 4px solid #003366; background: #F2F2F2; color: #313132; border-radius: .3rem; }
-  .guidance { color: #474543; font-size: .875rem; }
+  th, td { border: 1px solid var(--vpro-border); padding: .5rem; text-align: left; min-width: 8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  thead th { background: var(--vpro-navy); color: var(--vpro-surface); }
+  .error { color: var(--vpro-error); font-weight: 600; } .diagnostic, .notice { color: var(--vpro-info); }
+  .scope-guidance { margin: 0; padding: .6rem .85rem; border-left: 4px solid var(--vpro-navy); background: var(--vpro-canvas); color: var(--vpro-ink); border-radius: .3rem; }
+  .guidance { color: var(--vpro-ink-secondary); font-size: .875rem; }
 </style>

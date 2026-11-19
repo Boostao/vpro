@@ -277,7 +277,7 @@
 </script>
 
 <section class="report" data-long-environment-report aria-label="Long Environment report">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8] report-sticky-bar" data-report-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border report-sticky-bar" data-report-sticky-bar>
     <h1>Long Environment</h1>
     <div class="actions">
       <button data-source-control="btnViewReport" disabled={busy || preferenceBarrier || workbookBarrier || !ready || !!titleError || su === 'None'} onclick={show}>View Report</button>
@@ -376,14 +376,14 @@
   .report-sticky-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
   .report-sticky-bar h1 { margin: 0; }
   h1 { font-size: 1.5rem; } h2 { font-size: 1.25rem; } h3 { font-weight: 600; }
-  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .6rem; width: 100%; }
+  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .6rem; width: 100%; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-  button { border: 1px solid #D8D8D8; border-radius: .4rem; padding: .5rem .75rem; background: #FFFFFF; }
+  button { border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .5rem .75rem; background: var(--vpro-surface); }
   button:disabled { opacity: .5; }
   .unit { min-width: 0; display: grid; gap: .5rem; }
-  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid #D8D8D8; }
+  .table-scroll { overflow-x: auto; max-width: 100%; border: 1px solid var(--vpro-border); }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #D8D8D8; padding: .5rem; text-align: left; min-width: 9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
-  th[scope="row"] { min-width: 16rem; } .heading { background: #F2F2F2; }
-  .error { color: #D8292F; } .diagnostic { color: #1A5A96; } .guidance { color: #474543; font-size: .875rem; }
+  th, td { border: 1px solid var(--vpro-border); padding: .5rem; text-align: left; min-width: 9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  th[scope="row"] { min-width: 16rem; } .heading { background: var(--vpro-canvas); }
+  .error { color: var(--vpro-error); } .diagnostic { color: var(--vpro-info); } .guidance { color: var(--vpro-ink-secondary); font-size: .875rem; }
 </style>

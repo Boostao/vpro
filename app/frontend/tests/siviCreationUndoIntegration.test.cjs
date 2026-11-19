@@ -33,7 +33,7 @@ test('actual main and root unconditionally register historical creation Undo wit
     readFileSync(path.join(__dirname, '..', '..', 'domainservices_plotentry.go'), 'utf8');
   assert.match(main, /NewSIVICreationUndoService\((?:contextService|core)\)/);
   assert.match(main, /siviCreationUndo:\s*siviCreationUndo/);
-  assert.match(main, /application\.NewService\(plotEntryService\)/);
+  assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
   assert.match(root, /ownedSIVICreationUndoSession\(\{ contextId: siviContextId, project: \$projectState.activeProject, plot: original.plotNumber \}\)/);
   assert.match(root, /siviCreationUndoSession\?\.subscribe\(\(\) => untrack\(\(\) => siviCreationUndoRevision\+\+\)\)/);
   assert.match(root, /onoperation=\{operation => void siviCreationUndoOperation\(operation\)\}/);

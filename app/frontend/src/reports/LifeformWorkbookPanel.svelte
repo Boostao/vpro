@@ -179,17 +179,17 @@
 </WorkbookPublicationSection>
 
 <style>
-  fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .5rem; min-width: 0; border: 1px solid #D8D8D8; border-radius: .35rem; padding: .75rem; }
+  fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .5rem; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .35rem; padding: .75rem; }
   .option { display: flex; align-items: center; gap: .5rem; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid #003366; border-radius: .25rem; background: #003366; color: #FFFFFF; font-weight: 600; cursor: pointer; }
+  button { min-height: 2.5rem; padding: .5rem .85rem; border: 1px solid var(--vpro-navy); border-radius: .25rem; background: var(--vpro-navy); color: var(--vpro-surface); font-weight: 600; cursor: pointer; }
   button:disabled { opacity: .6; cursor: not-allowed; }
-  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .25rem; padding: .45rem; background: #FFFFFF; color: #313132; }
+  input, textarea { box-sizing: border-box; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .25rem; padding: .45rem; background: var(--vpro-surface); color: var(--vpro-ink); }
   textarea { width: 100%; }
   .table-scroll { overflow-x: auto; max-width: 100%; }
-  table { border-collapse: collapse; margin-bottom: .75rem; width: 100%; background: #FFFFFF; }
-  th, td { padding: .35rem .65rem; border: 1px solid #D8D8D8; text-align: left; }
-  thead th { background: #F2F2F2; color: #003366; }
-  caption { text-align: left; font-weight: 600; color: #003366; }
-  .guidance { font-size: .9rem; color: #474543; }
+  table { border-collapse: collapse; margin-bottom: .75rem; width: 100%; background: var(--vpro-surface); }
+  th, td { padding: .35rem .65rem; border: 1px solid var(--vpro-border); text-align: left; }
+  thead th { background: var(--vpro-canvas); color: var(--vpro-navy); }
+  caption { text-align: left; font-weight: 600; color: var(--vpro-navy); }
+  .guidance { font-size: .9rem; color: var(--vpro-ink-secondary); }
 </style>

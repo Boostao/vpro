@@ -32,10 +32,6 @@ type ContextService struct {
 	extensions             map[reflect.Type]any
 	switchHooks            []func()
 	selectedListScopeGuard func(string) error
-	// Deprecated: W4 merge compatibility shim for twopagevegetationservice_test.go:109 (owned by w4-go-test-hermeticity).
-	TwoPageVegetationAttempts struct {
-		Requests map[string]struct{} `json:"-" yaml:"-"`
-	} `json:"-" yaml:"-"`
 }
 
 func NewContextService(projects *ProjectService, plots *PlotService) (*ContextService, error) {
@@ -78,7 +74,7 @@ func WithContextPlotRequest[T any](ctx context.Context, s *ContextService, expec
 		var result T
 		return result, err
 	}
-	if expectedID == "" || expectedID != s.Projects.ContextID || s.Projects.Sqlite.Conn == nil {
+	if expectedID == "" || expectedID != s.Projects.ContextID || s.Projects.Sqlite.conn == nil {
 		s.Projects.Mu.RUnlock()
 		var result T
 		return result, errors.New("editor context is stale or closed; reload before editing")

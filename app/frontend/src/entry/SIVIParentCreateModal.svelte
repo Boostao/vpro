@@ -190,11 +190,11 @@
 </script>
 
 {#if open}
-  <div class="rounded border border-slate-300 bg-white shadow-lg" role="dialog" aria-modal="true" aria-label="Create FS1333 SIVI Parent Plot">
+  <div class="rounded border border-vpro-border bg-white shadow-lg" role="dialog" aria-modal="true" aria-label="Create FS1333 SIVI Parent Plot">
     <ModalDialogTrap onEscape={() => onclose?.()} escapeDisabled={busy || !onclose} initialFocusSelector="#sivi-create-plot" />
-    <header class="flex items-center justify-between border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-3 text-white">
+    <header class="flex items-center justify-between border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3 text-white">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">FS1333 Site Inspection &amp; Vegetation Inventory</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-vpro-gold">FS1333 Site Inspection &amp; Vegetation Inventory</p>
         <h3 class="m-0 text-base font-semibold text-white">Create SIVI Parent Plot ({activeProject})</h3>
       </div>
       {#if onclose}
@@ -214,16 +214,16 @@
         <p role="alert" class="rounded border-l-4 border-red-700 bg-red-50 p-3 text-xs text-red-900">{error}</p>
       {/if}
       {#if status}
-        <p role="status" class="rounded border-l-4 border-[#003366] bg-slate-50 p-3 text-xs text-slate-900">{status}</p>
+        <p role="status" class="rounded border-l-4 border-vpro-navy bg-vpro-surface-subtle p-3 text-xs text-vpro-ink">{status}</p>
       {/if}
 
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-plot">PlotNumber (required, max 7 characters)</label>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-plot">PlotNumber (required, max 7 characters)</label>
           <input
             id="sivi-create-plot"
             type="text"
-            class="w-full rounded border border-slate-300 p-2 text-sm font-mono"
+            class="w-full rounded border border-vpro-border p-2 text-sm font-mono"
             bind:value={plotNumber}
             disabled={busy}
             aria-invalid={!!draftErrors.plotNumber && plotNumber !== ''}
@@ -234,8 +234,8 @@
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-type">SIVI PlotType</label>
-          <select id="sivi-create-type" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={plotType} disabled={busy}>
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-type">SIVI PlotType</label>
+          <select id="sivi-create-type" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={plotType} disabled={busy}>
             {#each SIVI_PLOT_TYPES as pt}
               <option value={pt}>{pt}</option>
             {/each}
@@ -243,69 +243,69 @@
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-polygon">SV_PolygonNumber (max 25)</label>
-          <input id="sivi-create-polygon" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={svPolygonNumber} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-polygon">SV_PolygonNumber (max 25)</label>
+          <input id="sivi-create-polygon" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={svPolygonNumber} disabled={busy} />
           {#if draftErrors.svPolygonNumber}
             <p role="alert" class="text-xs text-red-700">{draftErrors.svPolygonNumber}</p>
           {/if}
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-fieldnum">FieldNumber (max 50)</label>
-          <input id="sivi-create-fieldnum" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={fieldNumber} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-fieldnum">FieldNumber (max 50)</label>
+          <input id="sivi-create-fieldnum" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={fieldNumber} disabled={busy} />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-date">Survey Date (YYYY-MM-DD)</label>
-          <input id="sivi-create-date" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={date} disabled={busy} placeholder="2026-07-15" />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-date">Survey Date (YYYY-MM-DD)</label>
+          <input id="sivi-create-date" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={date} disabled={busy} placeholder="2026-07-15" />
           {#if draftErrors.date}
             <p role="alert" class="text-xs text-red-700">{draftErrors.date}</p>
           {/if}
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-surveyor">SiteSurveyor (max 30)</label>
-          <input id="sivi-create-surveyor" type="text" class="w-full rounded border border-slate-300 p-2 text-sm" bind:value={siteSurveyor} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-surveyor">SiteSurveyor (max 30)</label>
+          <input id="sivi-create-surveyor" type="text" class="w-full rounded border border-vpro-border p-2 text-sm" bind:value={siteSurveyor} disabled={busy} />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-zone">BEC Zone (max 4)</label>
-          <input id="sivi-create-zone" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={zone} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-zone">BEC Zone (max 4)</label>
+          <input id="sivi-create-zone" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={zone} disabled={busy} />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-subzone">SubZone (max 8)</label>
-          <input id="sivi-create-subzone" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={subZone} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-subzone">SubZone (max 8)</label>
+          <input id="sivi-create-subzone" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={subZone} disabled={busy} />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-series">SiteSeries (max 5)</label>
-          <input id="sivi-create-series" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={siteSeries} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-series">SiteSeries (max 5)</label>
+          <input id="sivi-create-series" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={siteSeries} disabled={busy} />
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-pid">ProjectID (max 30, optional)</label>
-          <input id="sivi-create-pid" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={projectId} disabled={busy} placeholder={activeProject} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-pid">ProjectID (max 30, optional)</label>
+          <input id="sivi-create-pid" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={projectId} disabled={busy} placeholder={activeProject} />
         </div>
 
         <div class="space-y-1 sm:col-span-2">
-          <label class="block text-xs font-semibold text-slate-700" for="sivi-create-usu">UserSiteUnit (max 100, optional)</label>
-          <input id="sivi-create-usu" type="text" class="w-full rounded border border-slate-300 p-2 text-sm font-mono" bind:value={userSiteUnit} disabled={busy} />
+          <label class="block text-xs font-semibold text-vpro-ink-secondary" for="sivi-create-usu">UserSiteUnit (max 100, optional)</label>
+          <input id="sivi-create-usu" type="text" class="w-full rounded border border-vpro-border p-2 text-sm font-mono" bind:value={userSiteUnit} disabled={busy} />
         </div>
       </div>
 
       {#if activeSu !== 'None'}
-        <label class="flex items-center gap-2 text-xs text-slate-800">
+        <label class="flex items-center gap-2 text-xs text-vpro-ink">
           <input type="checkbox" bind:checked={addToActiveSu} disabled={busy} />
           Also append new plot into active Site Unit table ({activeSu}_SU)
         </label>
       {/if}
 
-      <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-3">
+      <div class="flex items-center justify-end gap-3 border-t border-vpro-border pt-3">
         <button
           type="button"
           disabled={busy || hasValidationErrors}
-          class="rounded border-2 border-[#FCBA19] bg-[#003366] px-5 py-2 text-sm font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
+          class="rounded border-2 border-vpro-gold bg-vpro-navy px-5 py-2 text-sm font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50"
           onclick={submitCreate}
         >
           Create SIVI Plot
@@ -313,11 +313,11 @@
       </div>
 
       {#if createdPlots.length > 0}
-        <fieldset class="space-y-2 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-3">
-          <legend class="px-1 text-xs font-semibold text-[#003366]">Recent SIVI Plot Creations</legend>
+        <fieldset class="space-y-2 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-3">
+          <legend class="px-1 text-xs font-semibold text-vpro-navy">Recent SIVI Plot Creations</legend>
           <div class="max-h-44 overflow-y-auto">
             <table class="w-full text-left text-xs">
-              <thead class="bg-slate-100 text-slate-700">
+              <thead class="bg-vpro-canvas text-vpro-ink-secondary">
                 <tr>
                   <th class="p-2">PlotNumber</th>
                   <th class="p-2">PlotType</th>
@@ -328,16 +328,16 @@
               </thead>
               <tbody>
                 {#each createdPlots as item (item.requestId)}
-                  <tr class="border-t border-slate-100">
+                  <tr class="border-t border-vpro-rail">
                     <td class="p-2 font-mono font-semibold">{item.plotNumber}</td>
                     <td class="p-2">{item.plotType}</td>
                     <td class="p-2 font-mono">{item.svPolygonNumber || '-'}</td>
                     <td class="p-2">{item.createdAt}</td>
                     <td class="p-2">
                       {#if item.undone}
-                        <span class="text-slate-500">Undone ({item.undoneAt})</span>
+                        <span class="text-vpro-ink-muted">Undone ({item.undoneAt})</span>
                       {:else if !item.canUndo}
-                        <span class="text-slate-500">Has child rows (locked)</span>
+                        <span class="text-vpro-ink-muted">Has child rows (locked)</span>
                       {:else if confirmUndoId === item.requestId}
                         <div class="flex items-center gap-1">
                           <button
@@ -351,7 +351,7 @@
                           <button
                             type="button"
                             disabled={busy}
-                            class="rounded border border-slate-300 px-2 py-1 text-xs"
+                            class="rounded border border-vpro-border px-2 py-1 text-xs"
                             onclick={() => {
                               confirmUndoId = null;
                             }}
@@ -363,7 +363,7 @@
                         <button
                           type="button"
                           disabled={busy}
-                          class="rounded border border-[#003366] px-2 py-1 text-xs font-medium text-[#003366] hover:bg-slate-50"
+                          class="rounded border border-vpro-navy px-2 py-1 text-xs font-medium text-vpro-navy hover:bg-vpro-surface-subtle"
                           onclick={() => {
                             confirmUndoId = item.requestId;
                           }}

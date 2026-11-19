@@ -38,7 +38,7 @@ test('actual main unconditionally registers the scoped deletion service', () => 
     readFileSync(path.join(__dirname, '..', '..', 'domainservices_plotentry.go'), 'utf8');
   assert.match(main, /NewSIVIDeletionService\((?:contextService|core)\)/);
   assert.match(main, /siviDeletion:\s*siviDeletion/);
-  assert.match(main, /application\.NewService\(plotEntryService\)/);
+  assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
   assert.match(root, /ownedSIVIDeletionSession\(\{ contextId: siviContextId, project: \$projectState.activeProject, plot: original.plotNumber \}\)/);
   assert.match(root, /ownedSIVIRestorationSession\(\{ contextId: siviContextId, project: \$projectState.activeProject, plot: original.plotNumber \}\)/);
 });

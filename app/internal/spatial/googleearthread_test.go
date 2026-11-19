@@ -158,11 +158,11 @@ func TestOwnedGoogleEarthLocationsOwnershipCancellationAndPhysicalScope(t *testi
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	queued := &vprotest.TableCSVLeaseContext{Context: ctx, Queued: make(chan struct{})}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	locked := true
 	defer func() {
 		if locked {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 		}
 	}()
 	done := make(chan error, 1)
@@ -187,7 +187,7 @@ func TestOwnedGoogleEarthLocationsOwnershipCancellationAndPhysicalScope(t *testi
 	case <-time.After(5 * time.Second):
 		t.Fatal("owned cancellation retained a lease")
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	locked = false
 	if got, err := ReadGoogleEarthLocations(service, context.Background(), state.ContextID, "Zone"); got == nil || err != nil {
 		t.Fatal("cancelled request discarded pinned context", got, err)

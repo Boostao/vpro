@@ -74,5 +74,5 @@
 <style>
   label { display: grid; grid-template-columns: minmax(0, 1fr); gap: .35rem; min-width: 0; }
   span { overflow-wrap: anywhere; }
-  select { width: 100%; box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .5rem; }
+  select { width: 100%; box-sizing: border-box; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .5rem; }
 </style>

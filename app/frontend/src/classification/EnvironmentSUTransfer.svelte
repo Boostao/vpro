@@ -112,12 +112,12 @@
 </section>
 
 <style>
-  .transfer-panel { padding: 1rem; border: 1px solid #d8d8d8; border-top: 3px solid #003366; border-radius: .5rem; background: #ffffff; color: #313132; }
-  h3 { font-weight: 600; color: #003366; } p { margin: .5rem 0; } .failure { color: #d8292f; }
+  .transfer-panel { padding: 1rem; border: 1px solid var(--vpro-border); border-top: 3px solid var(--vpro-navy); border-radius: .5rem; background: var(--vpro-surface); color: var(--vpro-ink); }
+  h3 { font-weight: 600; color: var(--vpro-navy); } p { margin: .5rem 0; } .failure { color: var(--vpro-error); }
   .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
-  button { padding: .5rem .75rem; border: 1px solid #003366; border-radius: .375rem; background: #ffffff; color: #003366; }
+  button { padding: .5rem .75rem; border: 1px solid var(--vpro-navy); border-radius: .375rem; background: var(--vpro-surface); color: var(--vpro-navy); }
   button:disabled { opacity: .5; } .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid #d8d8d8; text-align: left; overflow-wrap: anywhere; }
-  thead th { background: #003366; color: #ffffff; }
-  .guidance { color: #474543; font-size: .875rem; }
+  table { width: 100%; border-collapse: collapse; } th, td { padding: .5rem; border-bottom: 1px solid var(--vpro-border); text-align: left; overflow-wrap: anywhere; }
+  thead th { background: var(--vpro-navy); color: var(--vpro-surface); }
+  .guidance { color: var(--vpro-ink-secondary); font-size: .875rem; }
 </style>

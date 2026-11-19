@@ -148,39 +148,39 @@
     min-width: 0;
     overflow-wrap: anywhere;
     padding: 1rem;
-    background: #ffffff;
-    border: 1px solid #d8d8d8;
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border);
     border-radius: 0.5rem;
-    color: #313132;
+    color: var(--vpro-ink);
   }
   h2 {
     margin: 0;
-    color: #003366;
+    color: var(--vpro-navy);
   }
   button {
     min-height: 2.5rem;
     padding: 0.5rem 0.85rem;
-    border: 1px solid #003366;
+    border: 1px solid var(--vpro-navy);
     border-radius: 0.25rem;
-    background: #003366;
-    color: #ffffff;
+    background: var(--vpro-navy);
+    color: var(--vpro-surface);
     font-weight: 600;
     cursor: pointer;
   }
   button:hover:not(:disabled) {
-    background: #002244;
-    border-color: #002244;
+    background: var(--vpro-navy-dark);
+    border-color: var(--vpro-navy-dark);
   }
   button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
   .alert-text {
-    color: #d8292f;
+    color: var(--vpro-error);
   }
   .guidance {
     margin: 0;
     font-size: 0.875rem;
-    color: #474543;
+    color: var(--vpro-ink-secondary);
   }
 </style>

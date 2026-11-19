@@ -128,6 +128,6 @@
 
 <style>
   label { display: grid; gap: .35rem; min-width: 0; }
-  select { width: 100%; box-sizing: border-box; min-width: 0; border: 1px solid #D8D8D8; border-radius: .4rem; padding: .5rem; }
+  select { width: 100%; box-sizing: border-box; min-width: 0; border: 1px solid var(--vpro-border); border-radius: .4rem; padding: .5rem; }
   p, span { overflow-wrap: anywhere; }
 </style>

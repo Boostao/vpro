@@ -226,7 +226,7 @@ func (service *ProjectService) switchSQLiteLocked(selection DesktopSelection) (P
 }
 
 func (service *ProjectService) switchSQLiteProfileLocked(selection DesktopSelection, profile *PlotProfileSource) (ProjectState, error) {
-	if service.Sqlite == nil || service.Sqlite.Conn == nil {
+	if service.Sqlite == nil || service.Sqlite.conn == nil {
 		return ProjectState{}, errors.New("project context is closed")
 	}
 	candidate, err := NewSQLiteContext(context.Background(), selection, service.SupportPaths, profile)
@@ -260,7 +260,7 @@ func (service *ProjectService) sqliteStateLocked() (ProjectState, error) {
 }
 
 func (service *ProjectService) SqliteStateContextLocked(ctx context.Context) (ProjectState, error) {
-	if service.Sqlite.Conn == nil {
+	if service.Sqlite.conn == nil {
 		return ProjectState{}, errors.New("project context is closed")
 	}
 	selection := service.Sqlite.Selection
@@ -364,18 +364,18 @@ func (service *ProjectService) SqliteStateContextLocked(ctx context.Context) (Pr
 
 func (service *ProjectService) sqlitePlotsLocked(ctx context.Context, offset, limit int) (PlotPage, error) {
 	coordinator := service.Sqlite
-	if err := sqlutil.AcquireMutexLease(ctx, &coordinator.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &coordinator.mu); err != nil {
 		return PlotPage{}, err
 	}
-	defer coordinator.Mu.Unlock()
-	if coordinator.Conn == nil {
+	defer coordinator.mu.Unlock()
+	if coordinator.conn == nil {
 		return PlotPage{}, errors.New("project context is closed")
 	}
 	page := PlotPage{Plots: []PlotSummary{}}
-	if err := coordinator.Conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM USysEnv").Scan(&page.Total); err != nil {
+	if err := coordinator.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM USysEnv").Scan(&page.Total); err != nil {
 		return PlotPage{}, err
 	}
-	rows, err := coordinator.Conn.QueryContext(ctx, "SELECT PlotNumber,FieldNumber,PlotRepresenting,Zone,SubZone,SiteSeries FROM USysEnv ORDER BY PlotNumber LIMIT ? OFFSET ?", limit, offset)
+	rows, err := coordinator.conn.QueryContext(ctx, "SELECT PlotNumber,FieldNumber,PlotRepresenting,Zone,SubZone,SiteSeries FROM USysEnv ORDER BY PlotNumber LIMIT ? OFFSET ?", limit, offset)
 	if err != nil {
 		return PlotPage{}, err
 	}
@@ -392,18 +392,18 @@ func (service *ProjectService) sqlitePlotsLocked(ctx context.Context, offset, li
 
 func (service *ProjectService) sqliteHierarchyLocked(ctx context.Context) ([]HierarchyNode, error) {
 	coordinator := service.Sqlite
-	if err := sqlutil.AcquireMutexLease(ctx, &coordinator.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &coordinator.mu); err != nil {
 		return nil, err
 	}
-	defer coordinator.Mu.Unlock()
-	if coordinator.Conn == nil {
+	defer coordinator.mu.Unlock()
+	if coordinator.conn == nil {
 		return nil, errors.New("project context is closed")
 	}
 	nodes := []HierarchyNode{}
 	if coordinator.Selection.Hierarchy == "None" {
 		return nodes, nil
 	}
-	rows, err := coordinator.Conn.QueryContext(ctx, "SELECT ID,Name,Parent,Level FROM USysHierarchy ORDER BY Level,ID")
+	rows, err := coordinator.conn.QueryContext(ctx, "SELECT ID,Name,Parent,Level FROM USysHierarchy ORDER BY Level,ID")
 	if err != nil {
 		return nil, err
 	}

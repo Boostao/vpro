@@ -82,11 +82,11 @@ func TestScopedPlotLookupExactLiteralScopeAndNoWrites(t *testing.T) {
 func TestScopedPlotLookupCancellationWhileCoordinatorIsBusy(t *testing.T) {
 	service, state := vprotest.ContextServiceFixture(t)
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	_, err := service.LookupScopedPlot(ctx, state.ContextID, vprocore.ScopedPlotLookup{PlotNumber: "108050"})
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("queued lookup ignored cancellation or lost its cause", err)
 	}

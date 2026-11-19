@@ -286,11 +286,11 @@ func TestLongVegetationWorkbookPublicationRawAndConfigRechecks(t *testing.T) {
 func TestLongVegetationWorkbookPublicationCancelledLeaseAndStaleOwner(t *testing.T) {
 	service, state := vegetationWorkbookServiceFixture(t, false)
 	owner := service.contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	review, err := service.GetReview(ctx, state.ContextID, `{"scope":"unlumped"}`)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || review != nil {
 		t.Fatal("cancelled mutex lease produced review", review, err)
 	}

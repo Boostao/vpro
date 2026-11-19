@@ -308,8 +308,8 @@ test('offline SSR render of CloudSyncWorkbench shows BC Gov bar, Contributor con
   }).body;
 
   assert.equal(networkCalledDuringSSR, false);
-  assert.match(html, /#003366/);
-  assert.match(html, /#FCBA19/);
+  assert.match(html, /#003366|vpro-navy/);
+  assert.match(html, /#FCBA19|vpro-gold/i);
   assert.match(html, /Offline \/ Unprobed/);
   assert.match(html, /Contributor/);
   assert.match(html, /Checkout Regional Subset from BECMaster/);

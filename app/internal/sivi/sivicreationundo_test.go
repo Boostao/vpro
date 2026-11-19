@@ -276,11 +276,11 @@ func TestSIVICreationUndoCancelUnresolvedOwnershipCancellation(t *testing.T) {
 		t.Fatal("cancelled lookup acknowledged", result, err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Millisecond)
 	result, err := LookupSIVICreationUndoReceipt(service, ctx, state.ContextID, request)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if result != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("owned snapshot lease ignored cancellation", result, err)
 	}

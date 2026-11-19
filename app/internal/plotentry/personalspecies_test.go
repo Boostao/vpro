@@ -256,7 +256,7 @@ func TestPersonalSpeciesContextOwnershipCancellationAndConcurrentCollision(t *te
 		t.Fatalf("canceled write accepted: %v", err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	queued, stop := context.WithCancel(context.Background())
 	result := make(chan error, 1)
 	go func() {
@@ -267,7 +267,7 @@ func TestPersonalSpeciesContextOwnershipCancellationAndConcurrentCollision(t *te
 	if err := <-result; !errors.Is(err, context.Canceled) {
 		t.Errorf("queued user write did not cancel: %v", err)
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	original := owner.AttachmentInfo["VLists"]
 	owner.AttachmentInfo["VLists"] = owner.AttachmentInfo["VUser"]
 	if _, err := CreatePersonalSpeciesDefinition(service, context.Background(), state.ContextID, request); err == nil {
@@ -281,7 +281,7 @@ func TestPersonalSpeciesContextOwnershipCancellationAndConcurrentCollision(t *te
 		!strings.Contains(err.Error(), "shared-role") {
 		t.Fatalf("actual duplicate readonly user attachment did not reject writes: %v", err)
 	}
-	if _, err := owner.Conn.ExecContext(context.Background(), `DETACH DATABASE "shared-user"`); err != nil {
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(context.Background(), `DETACH DATABASE "shared-user"`); err != nil {
 		t.Fatal(err)
 	}
 	delete(owner.Attachments, "shared-user")
@@ -385,10 +385,10 @@ func TestPersonalSpeciesCancelBlockedTransactionWithoutDelayedWrite(t *testing.T
 	}()
 	deadline := time.Now().Add(2 * time.Second)
 	for owner := service.Projects.Sqlite; ; {
-		if !owner.Mu.TryLock() {
+		if !owner.TryLockForTest() {
 			break
 		}
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		if time.Now().After(deadline) {
 			t.Fatal("user writer did not acquire its operation lease")
 		}

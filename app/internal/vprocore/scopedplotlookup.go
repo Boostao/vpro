@@ -37,10 +37,10 @@ func (s *ContextService) LookupScopedPlot(ctx context.Context, contextID string,
 	}
 	return WithContextPlotRequest(ctx, s, contextID, func(plots *PlotService) (result ScopedPlotLookupResult, resultErr error) {
 		owner := plots.Projects.Sqlite
-		if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+		if err := sqlutil.AcquireMutexLease(ctx, &owner.mu); err != nil {
 			return result, err
 		}
-		defer owner.Mu.Unlock()
+		defer owner.mu.Unlock()
 		if err := ProfileOwnedFiles(owner); err != nil {
 			return result, err
 		}

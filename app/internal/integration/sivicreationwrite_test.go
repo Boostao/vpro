@@ -149,11 +149,11 @@ func TestSIVICreationLookupCancellationDoesNotRetryMutation(t *testing.T) {
 		t.Fatal("cancelled receipt lookup returned a result", receipt, err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
 	receipt, err := sourceform.LookupSIVICreationReceipt(service, ctx, state.ContextID, request)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if receipt != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("held owner lookup ignored cancellation", receipt, err)
 	}

@@ -150,12 +150,12 @@
 </section>
 
 <style>
-  .creation { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; margin: 1rem 0; padding: .75rem; border: 1px solid #D8D8D8; background: #FFFFFF; border-radius: .25rem; min-width: 0; }
-  h2 { font-weight: 600; color: #003366; }
+  .creation { display: grid; grid-template-columns: minmax(0, 1fr); gap: .65rem; margin: 1rem 0; padding: .75rem; border: 1px solid var(--vpro-border); background: var(--vpro-surface); border-radius: .25rem; min-width: 0; }
+  h2 { font-weight: 600; color: var(--vpro-navy); }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-  button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .5rem .65rem; min-width: 0; overflow-wrap: anywhere; color: #313132; background: #FFFFFF; }
+  button { border: 1px solid var(--vpro-border-strong); border-radius: .25rem; padding: .5rem .65rem; min-width: 0; overflow-wrap: anywhere; color: var(--vpro-ink); background: var(--vpro-surface); }
   button:disabled { opacity: .5; }
   p { overflow-wrap: anywhere; }
   img { max-width: 100%; max-height: 28rem; object-fit: contain; }
-  .guidance { font-size: .8rem; color: #474543; }
+  .guidance { font-size: .8rem; color: var(--vpro-ink-secondary); }
 </style>

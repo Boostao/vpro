@@ -22,7 +22,7 @@ func TestProfileChoicesSelectedProjectSourceSpeciesOwnershipAndReadOnly(t *testi
 	if err != nil || len(choices.EnvFields) == 0 || len(choices.Species) == 0 {
 		t.Fatal("source profile suggestions unavailable", choices, err)
 	}
-	columns, err := vprocore.ReadSQLiteStorageColumns(context.Background(), c.Conn, "project", c.Selection.Project+"_Env")
+	columns, err := vprocore.ReadSQLiteStorageColumns(context.Background(), c.CoordinatorWhileLocked(), "project", c.Selection.Project+"_Env")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestProfileChoicesSelectedProjectSourceSpeciesOwnershipAndReadOnly(t *testi
 		t.Fatal("selected project fields replaced by hardcoded Sample_Env", fields, choices.EnvFields)
 	}
 	var count int
-	if err := c.Conn.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM (SELECT Code FROM VLists.USysAllSpecs GROUP BY Code)`).Scan(&count); err != nil || count != len(choices.Species) {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(context.Background(), `SELECT COUNT(*) FROM (SELECT Code FROM VLists.USysAllSpecs GROUP BY Code)`).Scan(&count); err != nil || count != len(choices.Species) {
 		t.Fatal("source grouped species codes were filtered by lifeform or merged with personal definitions", count, err)
 	}
 	for role, prior := range before {

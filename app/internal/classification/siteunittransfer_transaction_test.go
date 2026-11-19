@@ -58,7 +58,7 @@ func TestEnvironmentSiteUnitTransferReviewCommitHistoryAndReplay(t *testing.T) {
 	vprotest.AssertProfileSUFiles(t, service, files)
 	before := map[string]vprocore.ProjectMetadataTable{}
 	for _, name := range []string{"Sample_Env", "Sample_Admin", "Sample_Audit", "_table_metadata"} {
-		before[name], err = vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", name, "", nil, "")
+		before[name], err = vprocore.ReadSQLiteStorageRows(t.Context(), c.CoordinatorWhileLocked(), "project", name, "", nil, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -68,7 +68,7 @@ func TestEnvironmentSiteUnitTransferReviewCommitHistoryAndReplay(t *testing.T) {
 		t.Fatal("reviewed transfer not committed", result, err)
 	}
 	for name, original := range before {
-		actual, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", name, "", nil, "")
+		actual, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.CoordinatorWhileLocked(), "project", name, "", nil, "")
 		if err != nil || !reflect.DeepEqual(actual, original) {
 			t.Fatal("original source/audits/descriptions changed", name, err)
 		}
@@ -78,7 +78,7 @@ func TestEnvironmentSiteUnitTransferReviewCommitHistoryAndReplay(t *testing.T) {
 		t.Fatal("committed values were not exact typed assignments", err)
 	}
 	var raw string
-	if err := c.Conn.QueryRowContext(t.Context(), `SELECT Proposal FROM project.__VPRO_EnvironmentSUHistory WHERE ID=1`).Scan(&raw); err != nil {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(t.Context(), `SELECT Proposal FROM project.__VPRO_EnvironmentSUHistory WHERE ID=1`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var provenance struct {

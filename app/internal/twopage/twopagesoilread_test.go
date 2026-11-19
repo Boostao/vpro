@@ -137,7 +137,7 @@ func TestTwoPageSoilOriginalScopeAndPhysicalTableRefusals(t *testing.T) {
 	if got, err := ReadTwoPageSoilOriginal(absent, ctx, state.ContextID, "108050", "SoilHumusXL"); err == nil || got != nil {
 		t.Fatal("nil owner accepted")
 	}
-	if _, err := service.Projects.Sqlite.Conn.ExecContext(ctx, `CREATE TEMP TABLE Sample_Humus(ID,PlotNumber,FalseShadow)`); err != nil {
+	if _, err := service.Projects.Sqlite.CoordinatorWhileLocked().ExecContext(ctx, `CREATE TEMP TABLE Sample_Humus(ID,PlotNumber,FalseShadow)`); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := ReadTwoPageSoilOriginal(service, ctx, state.ContextID, "108050", "SoilHumusXL"); err != nil ||
@@ -166,7 +166,7 @@ func TestTwoPageSoilOriginalRejectsMissingParentColumns(t *testing.T) {
 						t.Fatal(err)
 					}
 					if plot == "PlotNumber" {
-						if _, err := service.Projects.Sqlite.Conn.ExecContext(context.Background(), `DROP VIEW USysEnv;
+						if _, err := service.Projects.Sqlite.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysEnv;
 							CREATE TEMP VIEW USysEnv AS SELECT * FROM project.Sample_Env`); err != nil {
 							t.Fatal(err)
 						}
@@ -318,7 +318,7 @@ func TestTwoPageSoilOriginalInFlightCancellationRetainsCoordinator(t *testing.T)
 	defer cancel()
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	if err := owner.Conn.Raw(func(driver any) error {
+	if err := owner.CoordinatorWhileLocked().Raw(func(driver any) error {
 		conn, ok := driver.(*sqlite3.SQLiteConn)
 		if !ok {
 			return errors.New("soil cancellation test requires the actual SQLite driver")
@@ -332,10 +332,10 @@ func TestTwoPageSoilOriginalInFlightCancellationRetainsCoordinator(t *testing.T)
 		t.Fatal(err)
 	}
 	var originalView string
-	if err := owner.Conn.QueryRowContext(context.Background(), `SELECT sql FROM sqlite_temp_master WHERE name='USysEnv'`).Scan(&originalView); err != nil {
+	if err := owner.CoordinatorWhileLocked().QueryRowContext(context.Background(), `SELECT sql FROM sqlite_temp_master WHERE name='USysEnv'`).Scan(&originalView); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := owner.Conn.ExecContext(context.Background(), `DROP VIEW USysEnv;
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysEnv;
 		CREATE TEMP VIEW USysEnv AS SELECT twoPageSoilReadBarrier(PlotNumber) PlotNumber FROM project.Sample_Env`); err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +363,7 @@ func TestTwoPageSoilOriginalInFlightCancellationRetainsCoordinator(t *testing.T)
 	case <-time.After(5 * time.Second):
 		t.Fatal("actual in-flight SQLite read did not cancel")
 	}
-	if _, err := owner.Conn.ExecContext(context.Background(), `DROP VIEW USysEnv; `+
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysEnv; `+
 		strings.Replace(originalView, "CREATE VIEW", "CREATE TEMP VIEW", 1)); err != nil {
 		t.Fatalf("caller-owned snapshot lost its pinned coordinator: %v", err)
 	}

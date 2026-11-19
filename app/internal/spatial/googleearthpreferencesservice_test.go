@@ -256,14 +256,14 @@ func TestGoogleEarthPreferencesFacadeQueuedCancelledOwnerLeaseAndRestoration(t *
 	next.Title = "Queued"
 	ctx, cancel := context.WithCancel(context.Background())
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	done := make(chan *GoogleEarthPreferencesOutcome, 1)
 	go func() {
 		done <- service.SaveGoogleEarthPreferences(ctx, state.ContextID, preferenceRequest(t, review.Values, next))
 	}()
 	cancel()
 	got := <-done
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if got.Committed || got.ErrorMessage == "" {
 		t.Fatal(got)
 	}

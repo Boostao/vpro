@@ -36,7 +36,7 @@ test('identity is unconditionally registered in actual main and uses tracked own
   assert.equal(compile(readFileSync(srcPath('FS882VegTab.svelte'), 'utf8'), { filename: 'FS882VegTab.svelte', generate: 'client' }).warnings.length, 0);
   assert.match(main, /NewSIVIIdentityService\((?:contextService|core)\)/);
   assert.match(main, /siviIdentity:\s*siviIdentity/);
-  assert.match(main, /application\.NewService\(plotEntryService\)/);
+  assert.match(main, /application\.NewService\((?:plotEntryService|wailsGraph\.plotEntry)\)/);
   for (const method of ['GetSIVIIdentityOriginal', 'SaveSIVIIdentityReviewed', 'RestoreSIVIIdentityReviewed']) assert.ok(parent.includes(`PlotEntryService.${method}(`));
   assert.match(parent, /siviIdentityReads.track\(PlotEntryService.GetSIVIIdentityOriginal/);
   assert.match(parent, /siviIdentitySession\?\.dispose\(\);[\s\S]{0,70}siviIdentityReads\.cancelAll\(\)/);

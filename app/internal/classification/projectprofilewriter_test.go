@@ -78,7 +78,7 @@ func TestProfileWriteOwnershipSelectedFileTableHistoryAndSessionLifetime(t *test
 			if err != nil {
 				t.Fatal(err)
 			}
-			projectRules, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.Conn, "project", "Sample_Profile", "", nil, "Order")
+			projectRules, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.CoordinatorWhileLocked(), "project", "Sample_Profile", "", nil, "Order")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -109,12 +109,12 @@ func TestProfileWriteOwnershipSelectedFileTableHistoryAndSessionLifetime(t *test
 				t.Fatal(err)
 			}
 			var actualTable, actualUser string
-			if err := c.Conn.QueryRowContext(context.Background(), `SELECT ProfileTable,User FROM `+
+			if err := c.CoordinatorWhileLocked().QueryRowContext(context.Background(), `SELECT ProfileTable,User FROM `+
 				vprocore.QuoteHeaderIdentifier(role)+`.__VPRO_ProfileHistory`).Scan(&actualTable, &actualUser); err != nil ||
 				actualTable != table || actualUser != "Ownership test" {
 				t.Fatal("history did not follow selected file/table", actualTable, actualUser, err)
 			}
-			unchanged, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.Conn, "project", "Sample_Profile", "", nil, "Order")
+			unchanged, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.CoordinatorWhileLocked(), "project", "Sample_Profile", "", nil, "Order")
 			if err != nil || !sameProfileStorageRows(projectRules, unchanged) {
 				t.Fatal("independent writer changed the parent project's profile", err)
 			}
@@ -332,7 +332,7 @@ func TestProfileWriteOwnershipReservationsAreTableQualified(t *testing.T) {
 		t.Fatal("another table inherited deleted project rule identities", second, err)
 	}
 	var tables int
-	if err := c.Conn.QueryRowContext(ctx, `SELECT COUNT(DISTINCT ProfileTable) FROM project.__VPRO_ProfileIdentity WHERE RuleRowID=9`).Scan(&tables); err != nil || tables != 2 {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT COUNT(DISTINCT ProfileTable) FROM project.__VPRO_ProfileIdentity WHERE RuleRowID=9`).Scan(&tables); err != nil || tables != 2 {
 		t.Fatal("reservation qualification was lost", tables, err)
 	}
 }

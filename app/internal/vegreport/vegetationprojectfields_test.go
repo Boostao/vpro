@@ -258,11 +258,11 @@ func TestProjectFieldCatalogueDisabledStaleCancelledCleanupAndOwnerLease(t *test
 	}
 	service.snapshot = vprocore.PublicationReadSnapshotHooks{}
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	short, stop := context.WithTimeout(ctx, 20*time.Millisecond)
 	output, readErr := service.GetLongVegetationProjectFieldDefinitions(short, state.ContextID)
 	stop()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if output != nil || !errors.Is(readErr, context.DeadlineExceeded) {
 		t.Fatal("field read bypassed cancellable owner lease", output, readErr)
 	}

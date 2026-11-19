@@ -7,15 +7,12 @@
 import type { ContextSelection, PlotSummary } from '../bindings/github.com/boostao/vpro/app/internal/vprocore/models';
   import { projectState } from './shared/state';
   import Navigation from './shell/Navigation.svelte';
-  import CommandPalette from './shell/CommandPalette.svelte';
   import NotificationHost from './shell/NotificationHost.svelte';
-  import NotificationDrawer from './shell/NotificationDrawer.svelte';
   import { notifications, type NotificationStateSnapshot } from './shell/notificationService.svelte';
   import type { BuildCommandPaletteInput, CommandPaletteAction } from './shell/commandPalette';
   import HomeWorkspaceHub from './shell/HomeWorkspaceHub.svelte';
   import WorkspaceSidebar from './shell/WorkspaceSidebar.svelte';
   import PlotProfilePanel from './shell/PlotProfilePanel.svelte';
-  import PlotsBrowserPanel from './shell/PlotsBrowserPanel.svelte';
   import WorkspaceStatusBanners from './shell/WorkspaceStatusBanners.svelte';
   import { summaryVegetationPreferenceSession } from './reports/summaryVegetationPreferences';
   import { summaryVegetationQualityPreferenceSession } from './reports/summaryVegetationQualityPreferences';
@@ -1307,6 +1304,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   }
 
   onMount(() => {
+    void import('./shared/dialogA11y').then(({ installGlobalAriaModalTabTrap }) => installGlobalAriaModalTabTrap());
     const syncViewport = () => {
       if (typeof window === 'undefined') return;
       const narrow = window.innerWidth < 1200;
@@ -1544,15 +1542,15 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
         {/await}
       {:else if standaloneMetadataPlot && $projectState?.contextId}
         <div class="p-3 space-y-3" data-standalone-metadata-host>
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-stone-200 bg-stone-50 px-3 py-2 text-xs">
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-surface-subtle px-3 py-2 text-xs">
             <div class="flex flex-wrap items-center gap-2">
-              <span class="font-semibold text-[#003366]">Project Metadata ({$projectState.activeProject})</span>
+              <span class="font-semibold text-vpro-navy">Project Metadata ({$projectState.activeProject})</span>
               {#if allAvailablePlots.length > 1}
-                <label class="inline-flex items-center gap-1.5 text-stone-700" for="standalone-metadata-plot-select">
+                <label class="inline-flex items-center gap-1.5 text-vpro-ink-secondary" for="standalone-metadata-plot-select">
                   <span>Plot scope:</span>
                   <select
                     id="standalone-metadata-plot-select"
-                    class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs"
+                    class="rounded border border-vpro-border bg-white px-2 py-1 font-mono text-xs"
                     value={standaloneMetadataPlot}
                     disabled={localEditorBusy || Boolean(standaloneMetadataEditor?.hasUnsavedChanges?.())}
                     onchange={(e) => { standaloneMetadataPlot = e.currentTarget.value; }}
@@ -1566,7 +1564,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             </div>
             <button
               type="button"
-              class="rounded border border-[#003366] bg-white px-2.5 py-1 font-semibold text-[#003366] hover:bg-[#EBF1F8] disabled:opacity-50"
+              class="rounded border border-vpro-navy bg-white px-2.5 py-1 font-semibold text-vpro-navy hover:bg-vpro-navy-tint disabled:opacity-50"
               disabled={localEditorBusy || Boolean(standaloneMetadataEditor?.hasUnsavedChanges?.())}
               onclick={() => { standaloneMetadataPlot = ''; localEditorBusy = false; navigate('project-admin'); }}
             >
@@ -1616,7 +1614,7 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
                 <button type="button" class="px-3 py-1 border rounded disabled:opacity-50" disabled={busy || transitionWorking || pendingTransition !== null}
                   onclick={() => { plotFindOpen = false; plotFindResult = null; plotFindError = ''; }}>Dismiss find</button>
               </form>
-              {#if plotFindError}<p role="alert" class="mt-2 text-[#D8292F]">{plotFindError}</p>{/if}
+              {#if plotFindError}<p role="alert" class="mt-2 text-vpro-error">{plotFindError}</p>{/if}
               {#if plotFindResult}
                 <p role="status" class="mt-2">Found plot {JSON.stringify(plotFindResult.plot.plotNumber)} in the current recordset.</p>
                 <button type="button" class="mt-2 px-3 py-1 border rounded disabled:opacity-50"
@@ -1869,17 +1867,21 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
             hierarchyPath={$projectState.hierarchyPath ?? ''} onBusyChange={(value) => { localEditorBusy = value; }} />{/key}
         {:catch loadError}<p class="error" role="alert">Subzone Matrix Report could not load: {String(loadError)}</p>{/await}
       {:else}
-        <PlotsBrowserPanel region="main" {view} {busy} {error} {page} allPlots={allAvailablePlots} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled}
-          onrefresh={refresh} onloadpage={loadPlots} onopenexplorer={() => navigate('classification-explorer')}
-          onselectplot={() => { inspectorExpanded = true; }} />
+        {#await import('./shell/PlotsBrowserPanel.svelte') then { default: PlotsBrowserPanel }}
+          <PlotsBrowserPanel region="main" {view} {busy} {error} {page} allPlots={allAvailablePlots} {offset} {pageSize} {hierarchyNodes} bind:selected {siviStandaloneEnabled}
+            onrefresh={refresh} onloadpage={loadPlots} onopenexplorer={() => navigate('classification-explorer')}
+            onselectplot={() => { inspectorExpanded = true; }} />
+        {/await}
       {/if}
     </main>
 
     {#if showInspectorRail}
-      <PlotsBrowserPanel region="detail" {view} {busy} {page} allPlots={allAvailablePlots} bind:selected {siviStandaloneEnabled} {canUndoSelectedPlot} {editorBusy} {transitionWorking} {pendingTransition}
-        onopenfs882={() => navigate('fs882')} onopentwopage={() => navigate('fs882-twopage')} onopensivi={() => void openSIVI()}
-        oncopyplot={copyPlotToNewNumber} onremoveplot={removePlotFromProject}
-        oncollapseinspector={() => { inspectorExpanded = false; }} />
+      {#await import('./shell/PlotsBrowserPanel.svelte') then { default: PlotsBrowserPanel }}
+        <PlotsBrowserPanel region="detail" {view} {busy} {page} allPlots={allAvailablePlots} bind:selected {siviStandaloneEnabled} {canUndoSelectedPlot} {editorBusy} {transitionWorking} {pendingTransition}
+          onopenfs882={() => navigate('fs882')} onopentwopage={() => navigate('fs882-twopage')} onopensivi={() => void openSIVI()}
+          oncopyplot={copyPlotToNewNumber} onremoveplot={removePlotFromProject}
+          oncollapseinspector={() => { inspectorExpanded = false; }} />
+      {/await}
     {/if}
     {#if newSiviModalOpen && $projectState?.contextId}
       {#await import('./entry/SIVIParentCreateModal.svelte') then { default: SIVIParentCreateModal }}
@@ -1947,17 +1949,25 @@ import type { ContextSelection, PlotSummary } from '../bindings/github.com/boost
   {/if}
 
   {#if !startupFailure}
-    <CommandPalette
-      open={commandPaletteOpen}
-      catalogInput={commandCatalogInput}
-      onselect={handleCommandPaletteSelect}
-      onclose={() => { commandPaletteOpen = false; }}
-    />
-    <NotificationDrawer
-      open={notificationDrawerOpen}
-      controller={notifications}
-      onclose={() => { notificationDrawerOpen = false; }}
-    />
+    {#if commandPaletteOpen}
+      {#await import('./shell/CommandPalette.svelte') then { default: CommandPalette }}
+        <CommandPalette
+          open={commandPaletteOpen}
+          catalogInput={commandCatalogInput}
+          onselect={handleCommandPaletteSelect}
+          onclose={() => { commandPaletteOpen = false; }}
+        />
+      {/await}
+    {/if}
+    {#if notificationDrawerOpen}
+      {#await import('./shell/NotificationDrawer.svelte') then { default: NotificationDrawer }}
+        <NotificationDrawer
+          open={notificationDrawerOpen}
+          controller={notifications}
+          onclose={() => { notificationDrawerOpen = false; }}
+        />
+      {/await}
+    {/if}
   {/if}
   <NotificationHost controller={notifications} />
 </div>

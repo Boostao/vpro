@@ -113,11 +113,11 @@ func (c *SqliteContext) WithMetadataWriter(ctx context.Context, operation func(*
 
 func (c *SqliteContext) WithSelectedFileWriter(ctx context.Context, role string, validate func() error,
 	operation func(*sql.Conn) error) (resultErr error) {
-	if err := sqlutil.AcquireMutexLease(ctx, &c.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return err
 	}
-	defer c.Mu.Unlock()
-	if c.Conn == nil {
+	defer c.mu.Unlock()
+	if c.conn == nil {
 		return errors.New("metadata context is closed")
 	}
 	if err := validate(); err != nil {
@@ -293,7 +293,7 @@ func (s *PlotService) saveProjectMetadata(request ProjectMetadataEdit) error {
 	committed := false
 	err = c.WithMetadataWriter(ctx, func(conn *sql.Conn) (resultErr error) {
 		var member bool
-		if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
+		if err := c.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
 			request.PlotNumber).Scan(&member); err != nil || !member {
 			return errors.Join(errors.New("metadata parent is outside the selected context"), err)
 		}
@@ -410,7 +410,7 @@ func (s *PlotService) saveProjectMetadata(request ProjectMetadataEdit) error {
 		if err := c.ValidateMetadataWriterFiles(); err != nil {
 			return err
 		}
-		if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
+		if err := c.conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM USysEnv WHERE PlotNumber COLLATE BINARY=?)`,
 			request.PlotNumber).Scan(&member); err != nil || !member {
 			return errors.Join(errors.New("metadata parent left the selected context before commit"), err)
 		}

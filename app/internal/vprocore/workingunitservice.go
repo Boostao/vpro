@@ -186,7 +186,7 @@ func (s *WorkingUnitService) contextWithCancellation(ctx context.Context) (Proje
 		return ProjectInfo{}, "", errors.New("invalid active Working Unit project/SU context")
 	}
 	if s.projects.Sqlite != nil {
-		if s.projects.Sqlite.Conn == nil {
+		if s.projects.Sqlite.conn == nil {
 			return ProjectInfo{}, "", errors.New("Working Unit project context is closed")
 		}
 		selection := s.projects.Sqlite.Selection

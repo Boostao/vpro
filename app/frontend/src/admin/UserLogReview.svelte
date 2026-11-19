@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { LifecycleService } from '../../bindings/github.com/boostao/vpro/app';
+  import * as LifecycleService from '../../bindings/github.com/boostao/vpro/app/lifecycleservice';
   import { ReadRequests } from '../shared/readRequests';
   import { userLogFromWire, userLogFields, userLogCellLabel, type UserLogView } from './userLogReview';
 

@@ -223,7 +223,7 @@ func TestTwoPageSoilReferencesNumericCodesRemainSourceText(t *testing.T) {
 
 func TestTwoPageSoilReferencesIgnoreLegacyViewSubstitution(t *testing.T) {
 	service, state, _ := twoPageSoilReferenceFixture(t)
-	if _, err := service.Projects.Sqlite.Conn.ExecContext(context.Background(), `DROP VIEW USysTableOfLists;
+	if _, err := service.Projects.Sqlite.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysTableOfLists;
 			CREATE TEMP VIEW USysTableOfLists AS SELECT 'fake' ListName, 'repaired' Item`); err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestTwoPageSoilReferencesInFlightCancellationRetainsCoordinator(t *testing.
 	defer cancel()
 	entered, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	if err := owner.Conn.Raw(func(driver any) error {
+	if err := owner.CoordinatorWhileLocked().Raw(func(driver any) error {
 		conn, ok := driver.(*sqlite3.SQLiteConn)
 		if !ok {
 			return errors.New("soil reference cancellation requires the actual SQLite driver")
@@ -254,10 +254,10 @@ func TestTwoPageSoilReferencesInFlightCancellationRetainsCoordinator(t *testing.
 		t.Fatal(err)
 	}
 	var originalView string
-	if err := owner.Conn.QueryRowContext(context.Background(), `SELECT sql FROM sqlite_temp_master WHERE name='USysEnv'`).Scan(&originalView); err != nil {
+	if err := owner.CoordinatorWhileLocked().QueryRowContext(context.Background(), `SELECT sql FROM sqlite_temp_master WHERE name='USysEnv'`).Scan(&originalView); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := owner.Conn.ExecContext(context.Background(), `DROP VIEW USysEnv;
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysEnv;
 			CREATE TEMP VIEW USysEnv AS SELECT soilReferenceBarrier(PlotNumber) PlotNumber FROM project.Sample_Env`); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestTwoPageSoilReferencesInFlightCancellationRetainsCoordinator(t *testing.
 	case <-time.After(5 * time.Second):
 		t.Fatal("cancelled reference read did not finish")
 	}
-	if _, err := owner.Conn.ExecContext(context.Background(), `DROP VIEW USysEnv; `+
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(context.Background(), `DROP VIEW USysEnv; `+
 		strings.Replace(originalView, "CREATE VIEW", "CREATE TEMP VIEW", 1)); err != nil {
 		t.Fatal("caller-owned reference snapshot lost the coordinator", err)
 	}

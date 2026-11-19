@@ -266,7 +266,7 @@ func TestSiteUnitEnvironmentSampleProjectEndToEnd(t *testing.T) {
 		{"202050", "CWH vm 2 /11", "CwYc - Skunk cabbage (Personal)"},
 	} {
 		var gotUnit, gotShort, gotLong string
-		if err := service.Projects.Sqlite.Conn.QueryRowContext(t.Context(),
+		if err := service.Projects.Sqlite.CoordinatorWhileLocked().QueryRowContext(t.Context(),
 			`SELECT UserSiteUnit, SiteUnitShortName, SiteUnitLongName FROM project.Sample_Admin WHERE Plot=?`, want.plot).
 			Scan(&gotUnit, &gotShort, &gotLong); err != nil {
 			t.Fatalf("query Sample_Admin for plot %s: %v", want.plot, err)

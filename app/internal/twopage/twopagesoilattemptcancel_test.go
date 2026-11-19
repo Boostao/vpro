@@ -19,11 +19,11 @@ func TestTwoPageSoilAttemptCancellationAfterSealingRetainsLateDispatchRefusal(t 
 	raw := soilAttemptJSON(t, request)
 	owner := contexts.Projects.Sqlite
 	before := vprotest.DatabaseBytes(t, owner.Attachments)
-	owner.Mu.Lock()
+	owner.LockForTest()
 	unlocked := false
 	defer func() {
 		if !unlocked {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 		}
 	}()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -54,7 +54,7 @@ func TestTwoPageSoilAttemptCancellationAfterSealingRetainsLateDispatchRefusal(t 
 	if !sealed {
 		t.Fatal("recovery cancellation before its snapshot unsealed a future late request")
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	unlocked = true
 	if result, err := service.Save(context.Background(), state.ContextID, raw); err == nil || result != nil {
 		t.Fatal("late dispatch was accepted after cancelled sealed recovery", result, err)

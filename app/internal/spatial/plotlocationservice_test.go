@@ -85,11 +85,11 @@ func TestPlotLocationReviewFacadeStaleOwnershipCancellationRetryAndNilErrors(t *
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	queued := &vprotest.TableCSVLeaseContext{Context: ctx, Queued: make(chan struct{})}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	locked := true
 	defer func() {
 		if locked {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 		}
 	}()
 	done := make(chan error, 1)
@@ -115,7 +115,7 @@ func TestPlotLocationReviewFacadeStaleOwnershipCancellationRetryAndNilErrors(t *
 	case <-time.After(5 * time.Second):
 		t.Fatal("cancelled facade retained leases")
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	locked = false
 	if got, err := GetPlotLocationReview(service, context.Background(), state.ContextID); got == nil || err != nil {
 		t.Fatal("facade retry discarded pinned context:", err)

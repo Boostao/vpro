@@ -429,7 +429,7 @@ func ReplaceActiveVListsCatalogue(ctx context.Context, s *ContextService, expect
 	s.Projects.Mu.Lock()
 	defer s.Projects.Mu.Unlock()
 
-	if expectedID == "" || expectedID != s.Projects.ContextID || s.Projects.Sqlite == nil || s.Projects.Sqlite.Conn == nil {
+	if expectedID == "" || expectedID != s.Projects.ContextID || s.Projects.Sqlite == nil || s.Projects.Sqlite.conn == nil {
 		return ProjectState{}, errors.New("project context changed; reload before syncing VLists")
 	}
 	vlistsPath := s.Projects.SupportPaths["VLists"]

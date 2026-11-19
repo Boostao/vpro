@@ -19,7 +19,7 @@ func TestEnvironmentSiteUnitPlanReadsOriginalSQLiteTablesWithoutWrites(t *testin
 	before := vprotest.DatabaseBytes(t, c.Attachments)
 	read := func(suffix string) vprocore.ProjectMetadataTable {
 		t.Helper()
-		table, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.Conn, "project", state.ActiveProject+suffix, "", nil, "")
+		table, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.CoordinatorWhileLocked(), "project", state.ActiveProject+suffix, "", nil, "")
 		if err != nil {
 			t.Fatal(err)
 		}

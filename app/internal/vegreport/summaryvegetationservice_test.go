@@ -85,11 +85,11 @@ func TestSummaryVegetationServiceGateAndOwnedZeroWrites(t *testing.T) {
 func TestSummaryVegetationServiceOwnershipCancellationCleanupAndRetry(t *testing.T) {
 	service, state := summaryVegetationServiceFixture(t, true)
 	owner := service.contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	result, err := service.Preview(ctx, state.ContextID, 1, 6)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(result, SummaryVegetationPreview{}) {
 		t.Fatal("cancelled owner lease published", result, err)
 	}

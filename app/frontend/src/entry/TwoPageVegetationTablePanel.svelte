@@ -91,7 +91,7 @@
       {/each}
     </details>
   {/if}
-  <p class="text-xs text-stone-600">Explicit read of saved data, never an implicit parent Save.
+  <p class="text-xs text-vpro-ink-secondary">Explicit read of saved data, never an implicit parent Save.
     NULL/empty text, historical application IDs and complete typed originals remain distinct.
     Editable datasheets, TempVegView creation, query widths and export are unavailable.
     Each page is a new owned snapshot; concurrent saved-data changes can affect later pages.</p>

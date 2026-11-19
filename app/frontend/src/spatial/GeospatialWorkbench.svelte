@@ -659,14 +659,14 @@
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   }
   .geospatial-workbench :global(.wb-badge-gold) {
-    background: #FCBA19;
-    color: #003366;
+    background: var(--vpro-gold);
+    color: var(--vpro-navy);
   }
   .wb-alert-warn {
-    background: #F2F2F2;
-    border: 1px solid #D8D8D8;
-    border-left: 4px solid #FCBA19;
-    color: #003366;
+    background: var(--vpro-canvas);
+    border: 1px solid var(--vpro-border);
+    border-left: 4px solid var(--vpro-gold);
+    color: var(--vpro-navy);
     padding: 0.5rem 0.75rem;
     border-radius: 0.25rem;
     font-size: 0.875rem;
@@ -678,14 +678,14 @@
   .wb-coord-diag-wrap h3 {
     font-size: 0.875rem;
     font-weight: 700;
-    color: #003366;
+    color: var(--vpro-navy);
     margin: 0 0 0.4rem 0;
   }
   .wb-diag-list {
     margin: 0;
     padding-left: 1rem;
     font-size: 0.8125rem;
-    color: #313132;
+    color: var(--vpro-ink);
   }
   .wb-diag-list li {
     margin-bottom: 0.25rem;

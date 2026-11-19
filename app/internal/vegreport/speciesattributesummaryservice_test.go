@@ -63,11 +63,11 @@ func TestSpeciesAttributeSummaryServiceCancellationOwnershipAndSnapshotRefusal(t
 	contexts, state := vegreportReportServiceFixture(t, true)
 	service := enabledAttributeSummary(t, contexts)
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	preview, err := service.Preview(ctx, state.ContextID)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(preview, SpeciesAttributeSummaryPreview{}) {
 		t.Fatal("cancelled lease published", preview, err)
 	}

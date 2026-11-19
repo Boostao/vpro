@@ -47,15 +47,15 @@ func TestBrowseAndScopedReadsCancelQueuedCoordinatorAndSnapshotLocks(t *testing.
 		lock, unlock func()
 		read         func(context.Context) error
 	}{
-		{"browse coordinator", coordinator.Mu.Lock, coordinator.Mu.Unlock, func(ctx context.Context) error {
+		{"browse coordinator", coordinator.LockForTest, coordinator.UnlockForTest, func(ctx context.Context) error {
 			_, err := service.Projects.ListPlots(ctx, 0, 25)
 			return err
 		}},
-		{"hierarchy coordinator", coordinator.Mu.Lock, coordinator.Mu.Unlock, func(ctx context.Context) error {
+		{"hierarchy coordinator", coordinator.LockForTest, coordinator.UnlockForTest, func(ctx context.Context) error {
 			_, err := service.Projects.GetHierarchyNodes(ctx)
 			return err
 		}},
-		{"scoped pool coordinator", coordinator.Mu.Lock, coordinator.Mu.Unlock, func(ctx context.Context) error {
+		{"scoped pool coordinator", coordinator.LockForTest, coordinator.UnlockForTest, func(ctx context.Context) error {
 			_, err := service.GetPlot(ctx, state.ContextID, header.PlotNumber)
 			return err
 		}},

@@ -74,7 +74,7 @@ func TestProfileFileCreationPreservesOriginalsAndIsUsableWithoutDescriptions(t *
 	}
 	var raw string
 	c := service.Projects.Sqlite
-	if err := c.Conn.QueryRowContext(ctx, `SELECT Proposal FROM profile.__VPRO_ProfileCreationHistory WHERE ID=1`).Scan(&raw); err != nil {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT Proposal FROM profile.__VPRO_ProfileCreationHistory WHERE ID=1`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var saved PlotProfileFileCreation

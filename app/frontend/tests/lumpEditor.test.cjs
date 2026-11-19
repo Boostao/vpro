@@ -90,8 +90,8 @@ test('defaultLumpEditorPort routes Wails Call.ByName to main.ImportExportService
 test('LumpEditor.svelte compiles with zero warnings, renders BC Gov header, and contains zero emojis', () => {
   const source = readFileSync(srcPath('LumpEditor.svelte'), 'utf8');
   assert.equal(/\p{Extended_Pictographic}/u.test(source), false);
-  assert.match(source, /#003366/);
-  assert.match(source, /#fcba19/i);
+  assert.match(source, /#003366|vpro-navy/);
+  assert.match(source, /#fcba19|vpro-gold/i);
   assert.match(source, /baseLumpDbPath/);
 
   const Component = serverComponent(source, 'LumpEditor.svelte', {

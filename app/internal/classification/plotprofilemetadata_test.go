@@ -66,7 +66,7 @@ func TestProfileMetadataGenuineAbsenceSupportsSelectionReviewAndOwnedBlankRules(
 	}
 	c := service.Projects.Sqlite
 	var exists bool
-	if err := c.Conn.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM profile.sqlite_master WHERE name='_table_metadata')`).Scan(&exists); err != nil || exists {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM profile.sqlite_master WHERE name='_table_metadata')`).Scan(&exists); err != nil || exists {
 		t.Fatal("profile writer synthesized description metadata", exists, err)
 	}
 	review, err = ReviewProjectPlotProfile(service, ctx, granted.ContextID)

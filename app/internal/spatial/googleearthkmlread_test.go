@@ -164,11 +164,11 @@ func TestOwnedGoogleEarthKMLCancellationOwnershipAndRejectedCoordinates(t *testi
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 	queued := &vprotest.TableCSVLeaseContext{Context: ctx, Queued: make(chan struct{})}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	locked := true
 	defer func() {
 		if locked {
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 		}
 	}()
 	done := make(chan error, 1)
@@ -193,7 +193,7 @@ func TestOwnedGoogleEarthKMLCancellationOwnershipAndRejectedCoordinates(t *testi
 	case <-time.After(5 * time.Second):
 		t.Fatal("KML cancellation retained operation lease")
 	}
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	locked = false
 	if got, err := ReadGoogleEarthKML(service, context.Background(), state.ContextID, "Zone", "title"); got == nil || err != nil {
 		t.Fatal("cancellation discarded owned context", err)

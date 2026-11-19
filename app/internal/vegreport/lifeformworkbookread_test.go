@@ -104,11 +104,11 @@ func TestLifeformWorkbookReadCancellationOwnershipCompletionAndRetry(t *testing.
 	contexts, state := vegreportReportServiceFixture(t, true)
 	owner := contexts.Projects.Sqlite
 	zero := lifeformWorkbookInput{}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	input, err := ReadLifeformWorkbookInput(contexts, ctx, state.ContextID, vprocore.PublicationReadSnapshotHooks{})
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(input, zero) {
 		t.Fatal("cancelled combined read published", input, err)
 	}

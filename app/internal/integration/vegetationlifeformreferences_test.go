@@ -95,8 +95,8 @@ func TestVegetationLifeformReferencesActualImportedMixedCaseSchemas(t *testing.T
 	service, _ := vprotest.ReportServiceFixture(t, false)
 	owner := service.Projects.Sqlite
 	before := vprotest.DatabaseBytes(t, owner.Attachments)
-	owner.Mu.Lock()
-	defer owner.Mu.Unlock()
+	owner.LockForTest()
+	defer owner.UnlockForTest()
 	tx, err := owner.BeginReadSnapshot(context.Background())
 	if err != nil {
 		t.Fatal(err)

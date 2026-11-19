@@ -193,20 +193,20 @@
 </section>
 
 <style>
-  .lifecycle { display: grid; gap: .65rem; min-width: 0; max-width: 100%; padding: .75rem; border: 1px solid #D8D8D8; background: #FFFFFF; border-radius: .25rem; }
-  h3, summary { font-weight: 600; color: #003366; }
+  .lifecycle { display: grid; gap: .65rem; min-width: 0; max-width: 100%; padding: .75rem; border: 1px solid var(--vpro-border); background: var(--vpro-surface); border-radius: .25rem; }
+  h3, summary { font-weight: 600; color: var(--vpro-navy); }
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .65rem; }
   label { display: grid; gap: .25rem; min-width: 0; }
-  output { display: block; min-width: 0; padding: .4rem; background: #F2F2F2; overflow-wrap: anywhere; border: 1px solid #D8D8D8; border-radius: .25rem; }
+  output { display: block; min-width: 0; padding: .4rem; background: var(--vpro-canvas); overflow-wrap: anywhere; border: 1px solid var(--vpro-border); border-radius: .25rem; }
   .confirmation { display: flex; gap: .5rem; align-items: start; }
   .confirmation input { margin-top: .25rem; flex: none; }
   .actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-  button { border: 1px solid #9F9F9F; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; min-height: 2rem; overflow-wrap: anywhere; color: #313132; background: #FFFFFF; }
+  button { border: 1px solid var(--vpro-border-strong); border-radius: .25rem; padding: .4rem .6rem; min-width: 0; min-height: 2rem; overflow-wrap: anywhere; color: var(--vpro-ink); background: var(--vpro-surface); }
   button:disabled, input:disabled { opacity: .5; }
   details, .history { min-width: 0; display: block; }
   summary { cursor: pointer; min-height: 2rem; padding: .35rem 0; overflow-wrap: anywhere; }
-  .history { padding: .5rem 0; border-bottom: 1px solid #D8D8D8; }
+  .history { padding: .5rem 0; border-bottom: 1px solid var(--vpro-border); }
   p { overflow-wrap: anywhere; }
-  .safety { color: #313132; background: #FEF6E0; border-left: 3px solid #FCBA19; padding: .5rem; }
-  .guidance { color: #474543; font-size: .8rem; }
+  .safety { color: var(--vpro-ink); background: var(--vpro-warning-bg); border-left: 3px solid var(--vpro-gold); padding: .5rem; }
+  .guidance { color: var(--vpro-ink-secondary); font-size: .8rem; }
 </style>

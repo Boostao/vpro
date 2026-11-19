@@ -190,7 +190,7 @@ func TestTwoPageVegetationOriginalScopeSchemaAndRetry(t *testing.T) {
 	if got, err := ReadTwoPageVegetationOriginal(service, nil, state.ContextID, "108050", "SubVegCXL"); err == nil || got != nil {
 		t.Fatal("nil context accepted")
 	}
-	if _, err := service.Projects.Sqlite.Conn.ExecContext(ctx, `CREATE TEMP TABLE Sample_Veg(FalseShadow)`); err != nil {
+	if _, err := service.Projects.Sqlite.CoordinatorWhileLocked().ExecContext(ctx, `CREATE TEMP TABLE Sample_Veg(FalseShadow)`); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := ReadTwoPageVegetationOriginal(service, ctx, state.ContextID, "108050", "SubVegCXL"); err != nil || len(got.Records.Columns) != 20 {
@@ -238,11 +238,11 @@ func TestTwoPageVegetationOriginalPhysicalIdentityRefusals(t *testing.T) {
 func TestTwoPageVegetationOriginalCancellationAndRetry(t *testing.T) {
 	service, state, _ := twoPageVegetationReadFixture(t, false, "TEXT")
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 	original, err := ReadTwoPageVegetationOriginal(service, ctx, state.ContextID, "108050", "SubVegCXL")
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if original != nil || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("queued owned read did not cancel: %+v %v", original, err)
 	}

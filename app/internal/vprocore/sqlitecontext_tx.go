@@ -8,21 +8,30 @@ import (
 	"github.com/boostao/vpro/app/internal/sqlutil"
 )
 
+// LockForTest acquires c's internal mutex in fault-injection tests.
+func (c *SqliteContext) LockForTest() { c.mu.Lock() }
+
+// TryLockForTest tries to acquire c's internal mutex in fault-injection tests.
+func (c *SqliteContext) TryLockForTest() bool { return c.mu.TryLock() }
+
+// UnlockForTest releases c's internal mutex in fault-injection tests.
+func (c *SqliteContext) UnlockForTest() { c.mu.Unlock() }
+
 // IsOpen reports whether c is non-nil and its pinned coordinator connection is open.
 func (c *SqliteContext) IsOpen() bool {
-	return c != nil && c.Conn != nil
+	return c != nil && c.conn != nil
 }
 
 // LockBlocking acquires c's internal mutex synchronously without context cancellation
 // and returns an idempotent unlock function. Prefer WithReadSnapshot, WithImmediateWriteTx,
 // or WithLease for request-scoped operations.
 func (c *SqliteContext) LockBlocking() func() {
-	c.Mu.Lock()
+	c.mu.Lock()
 	unlocked := false
 	return func() {
 		if !unlocked {
 			unlocked = true
-			c.Mu.Unlock()
+			c.mu.Unlock()
 		}
 	}
 }
@@ -35,14 +44,14 @@ func (c *SqliteContext) AcquireMutex(ctx context.Context) (func(), error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := sqlutil.AcquireMutexLease(ctx, &c.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &c.mu); err != nil {
 		return nil, err
 	}
 	unlocked := false
 	return func() {
 		if !unlocked {
 			unlocked = true
-			c.Mu.Unlock()
+			c.mu.Unlock()
 		}
 	}, nil
 }
@@ -54,7 +63,7 @@ func (c *SqliteContext) WithLease(ctx context.Context, fn func() error) error {
 		return err
 	}
 	defer unlock()
-	if c.Conn == nil {
+	if c.conn == nil {
 		return errors.New("project context is closed")
 	}
 	return fn()
@@ -66,14 +75,14 @@ func (c *SqliteContext) CoordinatorWhileLocked() *sql.Conn {
 	if c == nil {
 		return nil
 	}
-	return c.Conn
+	return c.conn
 }
 
 // WithCoordinatorConn acquires c's mutex lease, verifies c is open, and passes the pinned
 // :memory: coordinator connection to fn.
 func (c *SqliteContext) WithCoordinatorConn(ctx context.Context, fn func(conn *sql.Conn) error) error {
 	return c.WithLease(ctx, func() error {
-		return fn(c.Conn)
+		return fn(c.conn)
 	})
 }
 
@@ -106,7 +115,7 @@ func (c *SqliteContext) WithReadSnapshot(ctx context.Context, fn func(tx *sql.Tx
 		return err
 	}
 	defer unlock()
-	if c.Conn == nil {
+	if c.conn == nil {
 		return errors.New("project context is closed")
 	}
 	tx, err := c.BeginReadSnapshot(ctx)
@@ -157,7 +166,7 @@ func WithOwnedPublicationSnapshot[T any](ctx context.Context, c *SqliteContext, 
 		return zero, err
 	}
 	defer unlock()
-	if c.Conn == nil {
+	if c.conn == nil {
 		return zero, errors.New("project context is closed")
 	}
 	return WithPublicationReadSnapshot(ctx, c, hooks, fn)
@@ -193,7 +202,7 @@ func (w *WriteTx) CoordinatorConn() *sql.Conn {
 	if w.Owner == nil {
 		return nil
 	}
-	return w.Owner.Conn
+	return w.Owner.conn
 }
 
 // RecordAudit appends one canonical audit row to <Project>_Audit inside this WriteTx.
@@ -239,7 +248,7 @@ func (c *SqliteContext) WithImmediateWriteTx(ctx context.Context, fn func(wtx *W
 		return err
 	}
 	defer unlock()
-	if c.Conn == nil {
+	if c.conn == nil {
 		return errors.New("project context is closed")
 	}
 	db, err := c.projectDatabaseLocked(ctx)

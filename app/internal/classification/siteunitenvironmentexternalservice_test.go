@@ -80,7 +80,7 @@ func TestExternalSUEnvironmentServiceCommittedOnceAndImmutableRecovery(t *testin
 		t.Fatal("exact service transfer did not commit", result, err)
 	}
 	var proposal string
-	if err := service.contexts.Projects.Sqlite.Conn.QueryRowContext(t.Context(),
+	if err := service.contexts.Projects.Sqlite.CoordinatorWhileLocked().QueryRowContext(t.Context(),
 		`SELECT Proposal FROM project.__VPRO_SUEnvironmentHistory WHERE ID=1`).Scan(&proposal); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestExternalSUEnvironmentServiceHeldCommitRecoveryAndSealing(t *testing.T) 
 		t.Fatal("held actual commit never reached response boundary")
 	}
 	var history int
-	if err := service.contexts.Projects.Sqlite.Conn.QueryRowContext(t.Context(),
+	if err := service.contexts.Projects.Sqlite.CoordinatorWhileLocked().QueryRowContext(t.Context(),
 		`SELECT COUNT(*) FROM project.__VPRO_SUEnvironmentHistory`).Scan(&history); err != nil || history != 1 {
 		close(release)
 		t.Fatal("hold did not follow actual committed history", history, err)

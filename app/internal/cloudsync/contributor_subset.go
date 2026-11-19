@@ -286,11 +286,10 @@ func (m *Manager) PullBECMasterSubset(ctx context.Context, s *vprocore.ContextSe
 		return PullSubsetResult{}, err
 	}
 
-	sqlDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_journal_mode=DELETE&_synchronous=FULL")
+	sqlDB, err := sqlutil.OpenStagedSQLite(tmpPath)
 	if err != nil {
 		return PullSubsetResult{}, err
 	}
-	sqlDB.SetMaxOpenConns(1)
 	sqTx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		_ = sqlDB.Close()
@@ -483,7 +482,7 @@ func populateSubsetSQLiteTx(
 			return counts, err
 		}
 	}
-	if _, err := sqTx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "__VPRO_ChildIdentity" ("ChildTable" TEXT NOT NULL, "ID" INTEGER NOT NULL, PRIMARY KEY ("ChildTable", "ID"))`); err != nil {
+	if _, err := sqTx.ExecContext(ctx, vprocore.ChildIdentityTableDDL); err != nil {
 		return counts, err
 	}
 

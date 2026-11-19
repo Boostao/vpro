@@ -102,7 +102,7 @@ func TestSpeciesCodeCheckScopedReadonlyReviewAndLiteralMetadata(t *testing.T) {
 func TestSpeciesCodeCheckPreservesTemporaryDefinitionsAndDuplicateNullableMetadata(t *testing.T) {
 	service, state, _ := speciesCodeCheckFixture(t)
 	var target string
-	if err := service.Projects.Sqlite.Conn.QueryRowContext(context.Background(),
+	if err := service.Projects.Sqlite.CoordinatorWhileLocked().QueryRowContext(context.Background(),
 		`SELECT Code FROM USysAllSpecs WHERE Code IS NOT NULL AND Code<>'' ORDER BY Code COLLATE BINARY LIMIT 1`).Scan(&target); err != nil {
 		t.Fatal(err)
 	}

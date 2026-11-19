@@ -1324,37 +1324,37 @@
 
 <style>
   .bcgov-interchange { display: grid; gap: 1rem; min-width: 0; }
-  .bcgov-banner { background: #003366; color: #FFFFFF; border-bottom: 4px solid #FCBA19; border-radius: 4px; padding: 1rem 1.25rem; display: grid; gap: 0.75rem; min-width: 0; }
-  .bcgov-banner h2 { margin: 0.15rem 0 0; font-size: 1.15rem; color: #FFFFFF; }
-  .eyebrow-gold { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: #FCBA19; font-weight: 700; }
+  .bcgov-banner { background: var(--vpro-navy); color: var(--vpro-surface); border-bottom: 4px solid var(--vpro-gold); border-radius: 4px; padding: 1rem 1.25rem; display: grid; gap: 0.75rem; min-width: 0; }
+  .bcgov-banner h2 { margin: 0.15rem 0 0; font-size: 1.15rem; color: var(--vpro-surface); }
+  .eyebrow-gold { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--vpro-gold); font-weight: 700; }
   .hub-tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .hub-tabs button { background: rgba(255, 255, 255, 0.12); color: #FFFFFF; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.42rem 0.8rem; font-size: 0.82rem; }
-  .hub-tabs button.active { background: #FCBA19; color: #003366; border-color: #FCBA19; font-weight: 700; }
-  .hub-tabs button.cancel-btn { background: #D8292F; border-color: #FBEAEA; margin-left: auto; }
+  .hub-tabs button { background: rgba(255, 255, 255, 0.12); color: var(--vpro-surface); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; padding: 0.42rem 0.8rem; font-size: 0.82rem; }
+  .hub-tabs button.active { background: var(--vpro-gold); color: var(--vpro-navy); border-color: var(--vpro-gold); font-weight: 700; }
+  .hub-tabs button.cancel-btn { background: var(--vpro-error); border-color: var(--vpro-error-bg); margin-left: auto; }
   .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 1rem; min-width: 0; }
-  .hub-card { background: #FFFFFF; border: 1px solid #D8D8D8; border-top: 3px solid #003366; border-radius: 4px; padding: 1rem; display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
-  .hub-card h3 { margin: 0; color: #003366; font-size: 1rem; }
-  .hub-card h4 { margin: 0.35rem 0 0.25rem; color: #003366; font-size: 0.86rem; }
-  .desc { margin: 0; color: #474543; font-size: 0.83rem; line-height: 1.45; }
+  .hub-card { background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-top: 3px solid var(--vpro-navy); border-radius: 4px; padding: 1rem; display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
+  .hub-card h3 { margin: 0; color: var(--vpro-navy); font-size: 1rem; }
+  .hub-card h4 { margin: 0.35rem 0 0.25rem; color: var(--vpro-navy); font-size: 0.86rem; }
+  .desc { margin: 0; color: var(--vpro-ink-secondary); font-size: 0.83rem; line-height: 1.45; }
   .form-row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; min-width: 0; }
   .form-stack { display: grid; gap: 0.6rem; min-width: 0; }
-  .form-row label, .form-stack label, .field-label-block { display: grid; gap: 0.25rem; font-size: 0.8rem; color: #313132; min-width: 0; }
+  .form-row label, .form-stack label, .field-label-block { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--vpro-ink); min-width: 0; }
   .input-with-browse { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; min-width: 0; }
   .grow { flex: 1 1 200px; min-width: 0; }
   .check-inline { display: inline-flex !important; flex-direction: row; align-items: center; gap: 0.4rem; padding-bottom: 0.35rem; }
-  input:not([type="checkbox"]), select, textarea { padding: 0.45rem 0.6rem; border: 1px solid #9F9F9F; border-radius: 4px; font-size: 0.84rem; font-family: inherit; color: #313132; background: #FFFFFF; min-width: 0; max-width: 100%; box-sizing: border-box; }
+  input:not([type="checkbox"]), select, textarea { padding: 0.45rem 0.6rem; border: 1px solid var(--vpro-border-strong); border-radius: 4px; font-size: 0.84rem; font-family: inherit; color: var(--vpro-ink); background: var(--vpro-surface); min-width: 0; max-width: 100%; box-sizing: border-box; }
   textarea { font-family: var(--font-mono, monospace); font-size: 0.78rem; width: 100%; }
-  .btn-primary { background: #003366; color: #FFFFFF; border: 1px solid #003366; border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
-  .btn-secondary { background: #FFFFFF; color: #003366; border: 1px solid #003366; border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
-  .sub-box { border: 1px solid #D8D8D8; border-left: 3px solid #FCBA19; padding: 0.65rem; border-radius: 4px; display: grid; gap: 0.5rem; min-width: 0; }
-  .receipt-box { background: #F2F2F2; border: 1px solid #D8D8D8; border-left: 4px solid #003366; padding: 0.65rem 0.8rem; border-radius: 4px; display: grid; gap: 0.35rem; font-size: 0.82rem; min-width: 0; overflow-wrap: anywhere; }
-  .receipt-box.success { background: #EBF5ED; border-left-color: #2E8540; }
+  .btn-primary { background: var(--vpro-navy); color: var(--vpro-surface); border: 1px solid var(--vpro-navy); border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
+  .btn-secondary { background: var(--vpro-surface); color: var(--vpro-navy); border: 1px solid var(--vpro-navy); border-radius: 4px; padding: 0.48rem 0.9rem; font-weight: 600; font-size: 0.83rem; }
+  .sub-box { border: 1px solid var(--vpro-border); border-left: 3px solid var(--vpro-gold); padding: 0.65rem; border-radius: 4px; display: grid; gap: 0.5rem; min-width: 0; }
+  .receipt-box { background: var(--vpro-canvas); border: 1px solid var(--vpro-border); border-left: 4px solid var(--vpro-navy); padding: 0.65rem 0.8rem; border-radius: 4px; display: grid; gap: 0.35rem; font-size: 0.82rem; min-width: 0; overflow-wrap: anywhere; }
+  .receipt-box.success { background: var(--vpro-success-bg); border-left-color: var(--vpro-success); }
   .table-scroll { overflow-x: auto; max-width: 100%; }
   .compact-table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 0.78rem; }
-  .compact-table th, .compact-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #D8D8D8; white-space: normal; text-align: left; }
+  .compact-table th, .compact-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--vpro-border); white-space: normal; text-align: left; }
   .mono { font-family: var(--vpro-font-mono, var(--font-mono, monospace)); font-variant-numeric: tabular-nums; }
-  .xml-check-box { font-size: 0.8rem; border-top: 1px solid #D8D8D8; padding-top: 0.5rem; }
-  .ok-text { color: #2E8540; margin: 0.3rem 0 0; font-weight: 600; }
+  .xml-check-box { font-size: 0.8rem; border-top: 1px solid var(--vpro-border); padding-top: 0.5rem; }
+  .ok-text { color: var(--vpro-success); margin: 0.3rem 0 0; font-weight: 600; }
   @media (pointer: coarse) {
     .hub-tabs button,
     .btn-primary,

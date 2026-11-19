@@ -122,11 +122,11 @@ func TestLongVegetationServiceReadsUnitNamesInOwnedSnapshot(t *testing.T) {
 func TestLongVegetationServiceCancellationStaleNoneAndOwnership(t *testing.T) {
 	service, state := vegreportReportServiceFixture(t, true)
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	preview, err := PreviewLongVegetation(service, ctx, state.ContextID)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(preview, LongVegetationPreview{}) {
 		t.Fatal("waiting cancellation returned output", preview, err)
 	}

@@ -86,7 +86,7 @@ func TestProjectMetadataRestorationCancellationAndHistoricalInvalidOriginal(t *t
 		t.Fatal("cancelled restoration mutated data")
 	}
 	vprotest.AssertMetadataFileBytes(t, service, before, "")
-	service.Projects.Sqlite.Mu.Lock()
+	service.Projects.Sqlite.LockForTest()
 	ctx, cancel = context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() {
@@ -95,7 +95,7 @@ func TestProjectMetadataRestorationCancellationAndHistoricalInvalidOriginal(t *t
 	}()
 	cancel()
 	err := <-done
-	service.Projects.Sqlite.Mu.Unlock()
+	service.Projects.Sqlite.UnlockForTest()
 	if err == nil {
 		t.Fatal("busy coordinator ignored cancellation")
 	}

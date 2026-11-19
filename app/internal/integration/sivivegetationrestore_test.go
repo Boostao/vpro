@@ -62,20 +62,20 @@ func TestSIVIOwnedHeightRejectsChangedFileOwnershipWithoutWrites(t *testing.T) {
 	owner := service.Projects.Sqlite
 	before := vprotest.DatabaseBytes(t, owner.Attachments)
 	reference := owner.Attachments["VLists"]
-	owner.Mu.Lock()
+	owner.LockForTest()
 	owner.Attachments["VLists"] = owner.Attachments["project"]
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	defer func() {
-		owner.Mu.Lock()
+		owner.LockForTest()
 		owner.Attachments["VLists"] = reference
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 	}()
 	if result, err := sourceform.WriteSIVIHeights(service, context.Background(), state.ContextID, "108050", false, original, edits); err == nil || result != nil {
 		t.Fatal("changed ownership was accepted", result, err)
 	}
-	owner.Mu.Lock()
+	owner.LockForTest()
 	owner.Attachments["VLists"] = reference
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	vprotest.AssertProfileSUFiles(t, service, before)
 	if result, err := sourceform.WriteSIVIHeights(service, context.Background(), state.ContextID, "108050", false, original, edits); err != nil || result == nil {
 		t.Fatal("ownership rejection poisoned retry", result, err)

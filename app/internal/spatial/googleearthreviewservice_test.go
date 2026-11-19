@@ -257,7 +257,7 @@ func TestGoogleEarthReviewFacadeStaleOwnershipPhysicalScopeCancellationRetry(t *
 		}
 		ctx, cancel = context.WithCancel(context.Background())
 		queued := &vprotest.TableCSVLeaseContext{Context: ctx, Queued: make(chan struct{})}
-		owner.Mu.Lock()
+		owner.LockForTest()
 		done := make(chan error, 1)
 		go func() {
 			got, err := method(queued, state.ContextID)
@@ -269,19 +269,19 @@ func TestGoogleEarthReviewFacadeStaleOwnershipPhysicalScopeCancellationRetry(t *
 		select {
 		case <-queued.Queued:
 		case <-time.After(5 * time.Second):
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 			cancel()
 			t.Fatal("request did not reach snapshot lease")
 		}
 		cancel()
 		select {
 		case err := <-done:
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 			if !errors.Is(err, context.Canceled) {
 				t.Fatal("queued cancellation lost", err)
 			}
 		case <-time.After(5 * time.Second):
-			owner.Mu.Unlock()
+			owner.UnlockForTest()
 			t.Fatal("cancelled request retained lease")
 		}
 		if got, err := method(context.Background(), state.ContextID); !got || err != nil {
@@ -297,7 +297,7 @@ func TestGoogleEarthDescriptionFieldsDoesNotNestOperationLease(t *testing.T) {
 	defer cancel()
 	queued := &vprotest.TableCSVLeaseContext{Context: ctx, Queued: make(chan struct{})}
 	owner := contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	done := make(chan error, 1)
 	go func() {
 		_, err := service.GetGoogleEarthDescriptionFields(queued, state.ContextID)
@@ -306,7 +306,7 @@ func TestGoogleEarthDescriptionFieldsDoesNotNestOperationLease(t *testing.T) {
 	select {
 	case <-queued.Queued:
 	case <-ctx.Done():
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		t.Fatal("field request did not acquire operation lease")
 	}
 	writer := make(chan struct{})
@@ -317,7 +317,7 @@ func TestGoogleEarthDescriptionFieldsDoesNotNestOperationLease(t *testing.T) {
 	}()
 	// A writer queued behind the field request must not prevent its snapshot completing.
 	time.Sleep(20 * time.Millisecond)
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	select {
 	case err := <-done:
 		if err != nil {

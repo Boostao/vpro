@@ -111,32 +111,32 @@
 {/snippet}
 </OrdinaryFields>
 {#if soilEditingEnabled && !ordinarySoilUnavailable}
-  <div class="mt-3 text-xs text-stone-600">
+  <div class="mt-3 text-xs text-vpro-ink-secondary">
     <p>Suggestions are optional. Raw text is never completed or case-changed automatically; no soil totals are guessed.</p>
     <button type="button" class="mt-2 px-2 py-1 border rounded" disabled={busy || soilReferenceBusy || headerWorkflowBusy}
       onclick={() => void loadSoilSuggestions()}>Reload soil references</button>
   </div>
 {/if}
 {#if !ordinarySoilUnavailable}
-<details class="mt-4 border border-stone-200 rounded p-3">
+<details class="mt-4 border border-vpro-border rounded p-3">
   <summary class="text-xs font-semibold cursor-pointer">Humus &amp; mineral horizon records</summary>
 <div class="space-y-6">
   <!-- Humus Section -->
   <div class="space-y-3" data-help-id="humus.upper_lower_depth">
     <div class="flex justify-between items-center">
-      <h3 class="font-bold text-xs uppercase tracking-wider text-stone-600">Humus Layers ({humusList.length})</h3>
+      <h3 class="font-bold text-xs uppercase tracking-wider text-vpro-ink-secondary">Humus Layers ({humusList.length})</h3>
       <button
         type="button"
         onclick={() => openNewChild('humus')}
         disabled={soilEditingDisabled || soilUnsaved}
-        class="px-2.5 py-1 bg-stone-700 hover:bg-stone-800 text-white rounded text-xs flex items-center gap-1"
+        class="px-2.5 py-1 bg-stone-700 hover:bg-vpro-ink text-white rounded text-xs flex items-center gap-1"
       >
         <Plus size={14} /> Add Humus Layer
       </button>
     </div>
-    <div class="border border-stone-200 rounded overflow-x-auto bg-white">
+    <div class="border border-vpro-border rounded overflow-x-auto bg-white">
       <table class="w-full text-left text-xs">
-        <thead class="bg-stone-100 border-b border-stone-200 text-stone-600 font-semibold">
+        <thead class="bg-vpro-canvas border-b border-vpro-border text-vpro-ink-secondary font-semibold">
           <tr>
             <th class="p-2">Horizon</th>
             <th class="p-2">Upper Depth</th>
@@ -146,9 +146,9 @@
             <th class="p-2">Action</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-stone-100">
+        <tbody class="divide-y divide-vpro-rail">
           {#each humusList as h (h.id)}
-            <tr class="hover:bg-stone-50" data-source-form="SoilHumusXL">
+            <tr class="hover:bg-vpro-surface-subtle" data-source-form="SoilHumusXL">
               <td class="p-2 font-semibold" data-column="Horizon">{h.horizon ?? '—'}</td>
               <td class="p-2" data-column="UpperDepth">{h.upperDepth ?? '—'}</td>
               <td class="p-2" data-column="LowerDepth">{h.lowerDepth ?? '—'}</td>
@@ -169,7 +169,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="6" class="p-4 text-center text-stone-400">{historicalSoilUnavailable ?? 'No humus layers recorded.'}</td>
+              <td colspan="6" class="p-4 text-center text-vpro-ink-muted">{historicalSoilUnavailable ?? 'No humus layers recorded.'}</td>
             </tr>
           {/each}
         </tbody>
@@ -179,10 +179,10 @@
 
   <!-- Mineral Section -->
   <div class="space-y-3" data-help-id="mineral.texture_cf">
-    <h3 class="font-bold text-xs uppercase tracking-wider text-stone-600">Mineral Layers ({mineralList.length})</h3>
-    <div class="border border-stone-200 rounded overflow-x-auto bg-white">
+    <h3 class="font-bold text-xs uppercase tracking-wider text-vpro-ink-secondary">Mineral Layers ({mineralList.length})</h3>
+    <div class="border border-vpro-border rounded overflow-x-auto bg-white">
       <table class="w-full text-left text-xs">
-        <thead class="bg-stone-100 border-b border-stone-200 text-stone-600 font-semibold">
+        <thead class="bg-vpro-canvas border-b border-vpro-border text-vpro-ink-secondary font-semibold">
           <tr>
             <th class="p-2">Horizon</th>
             <th class="p-2">Upper Depth</th>
@@ -192,9 +192,9 @@
             <th class="p-2">Comments</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-stone-100">
+        <tbody class="divide-y divide-vpro-rail">
           {#each mineralList as m (m.id)}
-            <tr class="hover:bg-stone-50" data-source-form="SoilMineralXL">
+            <tr class="hover:bg-vpro-surface-subtle" data-source-form="SoilMineralXL">
               <td class="p-2 font-semibold" data-column="Horizon">{m.horizon ?? '—'}</td>
               <td class="p-2" data-column="UpperDepth">{m.upperDepth ?? '—'}</td>
               <td class="p-2" data-column="LowerDepth">{m.lowerDepth ?? '—'}</td>
@@ -204,7 +204,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="6" class="p-4 text-center text-stone-400">{historicalSoilUnavailable ?? 'No mineral layers recorded.'}</td>
+              <td colspan="6" class="p-4 text-center text-vpro-ink-muted">{historicalSoilUnavailable ?? 'No mineral layers recorded.'}</td>
             </tr>
           {/each}
         </tbody>

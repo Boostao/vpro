@@ -26,7 +26,7 @@ func TestSoilSuggestionsCanonicalFamilyNullableDuplicateMetadataAndCancellation(
 	if err != nil || len(rows) != 110 {
 		t.Fatalf("canonical soil suggestions: count=%d %v", len(rows), err)
 	}
-	conn := service.Projects.Sqlite.Conn
+	conn := service.Projects.Sqlite.CoordinatorWhileLocked()
 	if _, err := conn.ExecContext(context.Background(), `CREATE TEMP TABLE SoilFixture AS SELECT * FROM USysTableOfLists;
 		DROP VIEW USysTableOfLists; ALTER TABLE SoilFixture RENAME TO USysTableOfLists;
 		INSERT INTO USysTableOfLists (ListName,Item,ItemDescription,Validate,Flag) VALUES

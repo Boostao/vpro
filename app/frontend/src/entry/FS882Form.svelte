@@ -692,14 +692,14 @@
 
 <svelte:window onkeydown={sourceEnter} />
 
-<div bind:this={container} data-tour="fs882-form-root" class="fs882-container bg-white rounded-lg shadow border border-stone-200 flex flex-col h-full text-stone-800 text-sm">
+<div bind:this={container} data-tour="fs882-form-root" class="fs882-container bg-white rounded-lg shadow border border-vpro-border flex flex-col h-full text-vpro-ink text-sm">
   {#if showTwoPagePlotPrompt}
     <div class="fs882-body overflow-y-auto flex-1 min-w-0 p-4" data-field-card-form-pane>
-      <section aria-label="Select plot for Two-Page Entry" data-twopage-select-plot-prompt class="mx-auto my-6 max-w-2xl rounded border border-[#D8D8D8] border-t-[4px] border-t-[#003366] bg-white p-5 shadow-sm space-y-4">
+      <section aria-label="Select plot for Two-Page Entry" data-twopage-select-plot-prompt class="mx-auto my-6 max-w-2xl rounded border border-vpro-border border-t-[4px] border-t-vpro-navy bg-white p-5 shadow-sm space-y-4">
         <div class="space-y-1">
-          <div class="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#1E5128]">FS882-8x6XL Two-Page Layout</div>
-          <h2 class="text-base font-bold text-[#003366] m-0">Two-Page Entry (FS882-8x6XL) — Select a Plot</h2>
-          <p class="text-xs leading-relaxed text-[#474543]">
+          <div class="font-mono text-[11px] font-semibold uppercase tracking-wider text-vpro-forest">FS882-8x6XL Two-Page Layout</div>
+          <h2 class="text-base font-bold text-vpro-navy m-0">Two-Page Entry (FS882-8x6XL) — Select a Plot</h2>
+          <p class="text-xs leading-relaxed text-vpro-ink-secondary">
             Two-Page Entry edits an existing plot across side-by-side Site, Soil, and Vegetation panels. Choose a plot below to open Two-Page Entry immediately, or create a new plot header first.
           </p>
         </div>
@@ -708,37 +708,37 @@
           <input
             type="search"
             data-twopage-plot-picker-filter
-            class="flex-1 min-w-48 rounded border border-stone-300 px-3 py-1.5 text-xs"
+            class="flex-1 min-w-48 rounded border border-vpro-border px-3 py-1.5 text-xs"
             placeholder="Filter plots by plot number, BGC unit, or location..."
             aria-label="Filter plots for Two-Page Entry"
             bind:value={twoPagePickerFilter}
           />
           {#if onClosed}
-            <button type="button" class="rounded border border-[#003366] bg-white px-3 py-1.5 text-xs font-semibold text-[#003366] hover:bg-[#EBF1F8]" onclick={onClosed}>
+            <button type="button" class="rounded border border-vpro-navy bg-white px-3 py-1.5 text-xs font-semibold text-vpro-navy hover:bg-vpro-navy-tint" onclick={onClosed}>
               Browse Plots Table
             </button>
           {/if}
           {#if onSwitchTo6x4NewPlot}
-            <button type="button" data-twopage-switch-new-plot class="rounded bg-[#1E5128] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#153B1D]" onclick={onSwitchTo6x4NewPlot}>
+            <button type="button" data-twopage-switch-new-plot class="rounded bg-vpro-forest px-3 py-1.5 text-xs font-semibold text-white hover:bg-vpro-forest-dark" onclick={onSwitchTo6x4NewPlot}>
               Create New Plot Header (FS882 6x4)
             </button>
           {/if}
         </div>
 
-        <div class="max-h-64 overflow-y-auto rounded border border-stone-200 divide-y divide-stone-100">
+        <div class="max-h-64 overflow-y-auto rounded border border-vpro-border divide-y divide-vpro-rail">
           {#each filteredTwoPagePlots as p (p.plotNumber)}
             <button
               type="button"
               data-twopage-pick-plot={p.plotNumber}
-              class="w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-[#EBF1F8]"
+              class="w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-vpro-navy-tint"
               onclick={() => onSelectPlotForTwoPage?.(p.plotNumber)}
             >
-              <span class="font-mono font-bold text-[#003366] tabular-nums">{p.plotNumber}</span>
-              <span class="truncate text-stone-600">{[p.zone && p.subZone ? `${p.zone}${p.subZone}` : (p.zone ?? p.subZone), p.siteSeries ? `/${p.siteSeries}` : '', p.plotRepresenting ?? ''].filter(Boolean).join(' ')}</span>
-              <span class="shrink-0 rounded border border-[#003366] px-2 py-0.5 font-semibold text-[#003366]">Open 2-Page</span>
+              <span class="font-mono font-bold text-vpro-navy tabular-nums">{p.plotNumber}</span>
+              <span class="truncate text-vpro-ink-secondary">{[p.zone && p.subZone ? `${p.zone}${p.subZone}` : (p.zone ?? p.subZone), p.siteSeries ? `/${p.siteSeries}` : '', p.plotRepresenting ?? ''].filter(Boolean).join(' ')}</span>
+              <span class="shrink-0 rounded border border-vpro-navy px-2 py-0.5 font-semibold text-vpro-navy">Open 2-Page</span>
             </button>
           {:else}
-            <p class="p-4 text-center text-xs text-stone-500">
+            <p class="p-4 text-center text-xs text-vpro-ink-muted">
               {availablePlots.length === 0 ? 'No plots in the active scope yet. Create a new plot header first.' : `No plots matched "${twoPagePickerFilter.trim()}".`}
             </p>
           {/each}
@@ -746,70 +746,70 @@
       </section>
     </div>
   {:else}
-  <header hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-toolbar p-3 bg-stone-100 border-b border-stone-200 flex flex-wrap justify-between items-center gap-2">
+  <header hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-toolbar p-3 bg-vpro-canvas border-b border-vpro-border flex flex-wrap justify-between items-center gap-2">
     <div class="flex items-center gap-3">
-      <h2 data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="font-bold text-stone-900 text-base">{siviStandalone ? 'SIVI / FS1333: Site Visit' : 'FS882-6x4XL: Ecosystem Field Form'}</h2>
-      <span class="px-2 py-0.5 rounded text-xs font-semibold {effectiveFormDirty ? 'bg-amber-100 text-amber-800' : 'bg-stone-200 text-stone-600'}">{effectiveFormDirty ? 'Draft Unsaved' : 'Clean'}</span>
+      <h2 data-help-id={siviStandalone ? 'sivi.plot_type' : 'site.plot_number'} class="font-bold text-vpro-ink text-base">{siviStandalone ? 'SIVI / FS1333: Site Visit' : 'FS882-6x4XL: Ecosystem Field Form'}</h2>
+      <span class="px-2 py-0.5 rounded text-xs font-semibold {effectiveFormDirty ? 'bg-amber-100 text-amber-800' : 'bg-vpro-rail text-vpro-ink-secondary'}">{effectiveFormDirty ? 'Draft Unsaved' : 'Clean'}</span>
       {#if draft.locked}<span class="px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700 flex items-center gap-1"><Lock size={12} /> Locked (Read-Only)</span>{/if}
     </div>
     <div class="fs882-actions flex flex-wrap items-center gap-2">
-      {#if twoPageReviewEnabled && !siviStandalone}<button type="button" data-two-page-review class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openTwoPageReview}>Two-page additional fields</button>{/if}
-      {#if twoPageCommonReviewEnabled && !siviStandalone}<button type="button" data-two-page-common-review class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openTwoPageCommonReview}>Two-page common fields</button>{/if}
-      {#if twoPageEntryReviewEnabled && !siviStandalone}<button type="button" data-two-page-entry-review class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openTwoPageEntryReview}>Complete two-page entry</button>{/if}
-      {#if environmentSUEnabled && !siviStandalone}<button type="button" data-source-control="btnEnvIntoSu" class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0 || $projectState?.activeSU === 'None'} onclick={() => openEnvironmentSU()}>Env Into SU</button>{/if}
-      {#if siteUnitEnvironmentEnabled && !siviStandalone && !(externalSUEnvironmentEnabled && separateSUSelected)}<button type="button" data-source-control="btnSuIntoEnv" class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0 || $projectState?.activeSU === 'None'} onclick={() => openEnvironmentSU('reverse')}>SU Into Env</button>{/if}
-      {#if externalSUEnvironmentEnabled && separateSUSelected && !siviStandalone && !twoPageOpen}<button type="button" data-source-control="btnSuIntoEnv" data-external-su-environment-open class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openExternalSUEnvironment}>SU Into Env: separate file</button>{/if}
-      {#if onFindPlot}<button type="button" class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy || !capabilitiesReady} onclick={onFindPlot}>Find Plot</button>{/if}
-      {#if original !== null && !siviStandalone && (onCopyPlotToNumber || onRemovePlotAction)}<button type="button" data-manage-plot-btn aria-expanded={managePlotOpen} class="px-3 py-1 rounded text-xs border border-stone-300 bg-white hover:bg-stone-50 disabled:opacity-50" disabled={busy || headerWorkflowBusy || dirty || childUnsaved || draft.locked || !capabilitiesReady} onclick={() => { managePlotOpen = !managePlotOpen; }}>Manage Plot #</button>{/if}
-      {#if profileReviewEnabled}<button type="button" data-project-profile-review-open class="px-3 py-1 rounded text-xs border border-stone-300 bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy || siviSourceBarrier || profileReviewOpen || !capabilitiesReady || (profileEditingEnabled && $projectState?.plotProfile?.writable === true && (metadataOpen || codeCheckOpen || personalDraft !== null || deletionReview !== null || creationDraft !== null))} onclick={() => { if (siviSourceBarrier) { error = 'Observe the ProjectID source preference outcome before opening profile rules.'; return; } profileReviewOpen = true; profileReviewBusy = true; }}>{profileEditingEnabled && $projectState?.plotProfile?.writable === true ? 'Review project profile rules' : 'Review project profile (read-only)'}</button>{/if}
-      <button type="button" data-view-field-card-btn title="Preview official printed field card (Alt+P)" onclick={() => { fieldCardModalOpen = true; fieldCardSplitOpen = false; }} class="px-3 py-1 rounded text-xs font-semibold border border-[#003366] bg-[#EBF1F8] text-[#003366] hover:bg-[#003366] hover:text-white flex items-center gap-1.5"><FileText size={14} /> View Field Card</button>
-      <button type="button" data-dock-field-card-btn aria-pressed={fieldCardSplitOpen} title="Toggle live side-by-side split field card preview (>= 1760px)" onclick={() => { fieldCardSplitOpen = !fieldCardSplitOpen; if (fieldCardSplitOpen) fieldCardModalOpen = false; }} class="dock-field-card-btn px-3 py-1 rounded text-xs font-semibold border flex items-center gap-1.5 {fieldCardSplitOpen ? 'bg-[#003366] text-white border-[#003366]' : 'border-[#D1D5DB] bg-white text-[#003366] hover:bg-[#EBF1F8]'}"><Columns2 size={14} /> Dock Split View</button>
-      <button type="button" onclick={toggleLock} disabled={busy || headerWorkflowBusy || !capabilitiesReady || siviStandalone && (!siviStandaloneEnabled || !siviParentView?.original || Boolean(siviParentView?.error) || childUnsaved || siviSourceBarrier)} class="px-3 py-1 rounded text-xs font-medium border flex items-center gap-1 {draft.locked ? 'bg-stone-200 hover:bg-stone-300 border-stone-300' : 'bg-stone-100 hover:bg-stone-200 border-stone-300'}" title={draft.locked ? 'Unlock Form' : 'Lock Form'}>
+      {#if twoPageReviewEnabled && !siviStandalone}<button type="button" data-two-page-review class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openTwoPageReview}>Two-page additional fields</button>{/if}
+      {#if twoPageCommonReviewEnabled && !siviStandalone}<button type="button" data-two-page-common-review class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openTwoPageCommonReview}>Two-page common fields</button>{/if}
+      {#if twoPageEntryReviewEnabled && !siviStandalone}<button type="button" data-two-page-entry-review class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openTwoPageEntryReview}>Complete two-page entry</button>{/if}
+      {#if environmentSUEnabled && !siviStandalone}<button type="button" data-source-control="btnEnvIntoSu" class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0 || $projectState?.activeSU === 'None'} onclick={() => openEnvironmentSU()}>Env Into SU</button>{/if}
+      {#if siteUnitEnvironmentEnabled && !siviStandalone && !(externalSUEnvironmentEnabled && separateSUSelected)}<button type="button" data-source-control="btnSuIntoEnv" class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0 || $projectState?.activeSU === 'None'} onclick={() => openEnvironmentSU('reverse')}>SU Into Env</button>{/if}
+      {#if externalSUEnvironmentEnabled && separateSUSelected && !siviStandalone && !twoPageOpen}<button type="button" data-source-control="btnSuIntoEnv" data-external-su-environment-open class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={childParentDisabled || childUnsaved || Object.keys(headerValidation).length > 0} onclick={openExternalSUEnvironment}>SU Into Env: separate file</button>{/if}
+      {#if onFindPlot}<button type="button" class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy || !capabilitiesReady} onclick={onFindPlot}>Find Plot</button>{/if}
+      {#if original !== null && !siviStandalone && (onCopyPlotToNumber || onRemovePlotAction)}<button type="button" data-manage-plot-btn aria-expanded={managePlotOpen} class="px-3 py-1 rounded text-xs border border-vpro-border bg-white hover:bg-vpro-surface-subtle disabled:opacity-50" disabled={busy || headerWorkflowBusy || dirty || childUnsaved || draft.locked || !capabilitiesReady} onclick={() => { managePlotOpen = !managePlotOpen; }}>Manage Plot #</button>{/if}
+      {#if profileReviewEnabled}<button type="button" data-project-profile-review-open class="px-3 py-1 rounded text-xs border border-vpro-border bg-white disabled:opacity-50" disabled={busy || headerWorkflowBusy || siviSourceBarrier || profileReviewOpen || !capabilitiesReady || (profileEditingEnabled && $projectState?.plotProfile?.writable === true && (metadataOpen || codeCheckOpen || personalDraft !== null || deletionReview !== null || creationDraft !== null))} onclick={() => { if (siviSourceBarrier) { error = 'Observe the ProjectID source preference outcome before opening profile rules.'; return; } profileReviewOpen = true; profileReviewBusy = true; }}>{profileEditingEnabled && $projectState?.plotProfile?.writable === true ? 'Review project profile rules' : 'Review project profile (read-only)'}</button>{/if}
+      <button type="button" data-view-field-card-btn title="Preview official printed field card (Alt+P)" onclick={() => { fieldCardModalOpen = true; fieldCardSplitOpen = false; }} class="px-3 py-1 rounded text-xs font-semibold border border-vpro-navy bg-vpro-navy-tint text-vpro-navy hover:bg-vpro-navy hover:text-white flex items-center gap-1.5"><FileText size={14} /> View Field Card</button>
+      <button type="button" data-dock-field-card-btn aria-pressed={fieldCardSplitOpen} title="Toggle live side-by-side split field card preview (>= 1760px)" onclick={() => { fieldCardSplitOpen = !fieldCardSplitOpen; if (fieldCardSplitOpen) fieldCardModalOpen = false; }} class="dock-field-card-btn px-3 py-1 rounded text-xs font-semibold border flex items-center gap-1.5 {fieldCardSplitOpen ? 'bg-vpro-navy text-white border-vpro-navy' : 'border-vpro-border bg-white text-vpro-navy hover:bg-vpro-navy-tint'}"><Columns2 size={14} /> Dock Split View</button>
+      <button type="button" onclick={toggleLock} disabled={busy || headerWorkflowBusy || !capabilitiesReady || siviStandalone && (!siviStandaloneEnabled || !siviParentView?.original || Boolean(siviParentView?.error) || childUnsaved || siviSourceBarrier)} class="px-3 py-1 rounded text-xs font-medium border flex items-center gap-1 {draft.locked ? 'bg-vpro-rail hover:bg-vpro-border border-vpro-border' : 'bg-vpro-canvas hover:bg-vpro-rail border-vpro-border'}" title={draft.locked ? 'Unlock Form' : 'Lock Form'}>
         {#if draft.locked}<Unlock size={14} /> Unlock{:else}<Lock size={14} /> Lock{/if}
       </button>
-      <button type="button" onclick={undo} disabled={(!dirty && !childUnsaved) || draft.locked || busy || headerWorkflowBusy || !capabilitiesReady} class="px-3 py-1 rounded text-xs font-medium border border-stone-300 bg-white hover:bg-stone-50 disabled:opacity-50 flex items-center gap-1"><RotateCcw size={14} /> Undo</button>
-      <button type="button" onclick={save} disabled={(!dirty && !childUnsaved) || draft.locked || busy || headerWorkflowBusy || !capabilitiesReady || (siviStandalone && !getCloseState().canSave)} class="px-3 py-1 rounded text-xs font-medium bg-[#003366] hover:bg-[#002244] text-white disabled:opacity-50 flex items-center gap-1"><Save size={14} /> Save</button>
-      {#if onClosed}<button type="button" aria-label={siviStandalone ? 'Close SIVI form' : 'Close FS882 form'} disabled={busy || headerWorkflowBusy} onclick={onClosed} class="px-2 py-1 text-stone-500 hover:text-stone-800 font-bold ml-2">✕</button>{/if}
+      <button type="button" onclick={undo} disabled={(!dirty && !childUnsaved) || draft.locked || busy || headerWorkflowBusy || !capabilitiesReady} class="px-3 py-1 rounded text-xs font-medium border border-vpro-border bg-white hover:bg-vpro-surface-subtle disabled:opacity-50 flex items-center gap-1"><RotateCcw size={14} /> Undo</button>
+      <button type="button" onclick={save} disabled={(!dirty && !childUnsaved) || draft.locked || busy || headerWorkflowBusy || !capabilitiesReady || (siviStandalone && !getCloseState().canSave)} class="px-3 py-1 rounded text-xs font-medium bg-vpro-navy hover:bg-vpro-navy-dark text-white disabled:opacity-50 flex items-center gap-1"><Save size={14} /> Save</button>
+      {#if onClosed}<button type="button" aria-label={siviStandalone ? 'Close SIVI form' : 'Close FS882 form'} disabled={busy || headerWorkflowBusy} onclick={onClosed} class="px-2 py-1 text-vpro-ink-muted hover:text-vpro-ink font-bold ml-2">✕</button>{/if}
     </div>
   </header>
 
   {#if managePlotOpen && original !== null}
-    <section aria-label="Manage plot number" data-manage-plot-panel class="border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-xs flex flex-wrap items-end gap-4">
+    <section aria-label="Manage plot number" data-manage-plot-panel class="border-b border-vpro-border bg-vpro-surface-subtle px-4 py-2.5 text-xs flex flex-wrap items-end gap-4">
       {#if onCopyPlotToNumber}
         <label class="flex flex-col gap-1">
-          <span class="font-semibold text-[#003366]">Copy Plot {original.plotNumber} to New Plot Number</span>
+          <span class="font-semibold text-vpro-navy">Copy Plot {original.plotNumber} to New Plot Number</span>
           <span class="flex items-center gap-1.5">
-            <input type="text" maxlength="7" data-fs882-copy-plot-input class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs w-28" placeholder="New plot #" bind:value={copyPlotTarget} disabled={managePlotBusy || busy} />
-            <button type="button" data-fs882-copy-plot-btn class="rounded bg-[#003366] px-2.5 py-1 font-semibold text-white hover:bg-[#002244] disabled:opacity-50" disabled={managePlotBusy || busy || !copyPlotTarget.trim()} onclick={() => void runCopyPlot()}>Copy Plot</button>
+            <input type="text" maxlength="7" data-fs882-copy-plot-input class="rounded border border-vpro-border bg-white px-2 py-1 font-mono text-xs w-28" placeholder="New plot #" bind:value={copyPlotTarget} disabled={managePlotBusy || busy} />
+            <button type="button" data-fs882-copy-plot-btn class="rounded bg-vpro-navy px-2.5 py-1 font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50" disabled={managePlotBusy || busy || !copyPlotTarget.trim()} onclick={() => void runCopyPlot()}>Copy Plot</button>
           </span>
         </label>
       {/if}
       {#if onRemovePlotAction}
         <div class="flex flex-col gap-1">
-          <span class="font-semibold text-[#A61B20]">{canUndoPlotDelete ? 'Delete Newly Created Plot' : `Remove Plot ${original.plotNumber} into Clean Project Copy`}</span>
+          <span class="font-semibold text-vpro-error-ink">{canUndoPlotDelete ? 'Delete Newly Created Plot' : `Remove Plot ${original.plotNumber} into Clean Project Copy`}</span>
           <div class="flex items-center gap-1.5">
             {#if !canUndoPlotDelete}
-              <input type="text" maxlength="30" aria-label="Clean project copy name" data-fs882-clean-project-input class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-xs w-44" placeholder="Clean project name" bind:value={removeCleanProject} disabled={managePlotBusy || busy} />
+              <input type="text" maxlength="30" aria-label="Clean project copy name" data-fs882-clean-project-input class="rounded border border-vpro-border bg-white px-2 py-1 font-mono text-xs w-44" placeholder="Clean project name" bind:value={removeCleanProject} disabled={managePlotBusy || busy} />
             {/if}
-            <button type="button" data-fs882-remove-plot-btn class="rounded border border-[#D8292F] bg-white px-2.5 py-1 font-semibold text-[#D8292F] hover:bg-[#FBEAEA] disabled:opacity-50" disabled={managePlotBusy || busy || (!canUndoPlotDelete && !removeCleanProject.trim())} onclick={() => void runRemovePlot()}>{canUndoPlotDelete ? 'Delete Plot' : 'Save & Switch Without Plot'}</button>
+            <button type="button" data-fs882-remove-plot-btn class="rounded border border-vpro-error bg-white px-2.5 py-1 font-semibold text-vpro-error hover:bg-vpro-error-bg disabled:opacity-50" disabled={managePlotBusy || busy || (!canUndoPlotDelete && !removeCleanProject.trim())} onclick={() => void runRemovePlot()}>{canUndoPlotDelete ? 'Delete Plot' : 'Save & Switch Without Plot'}</button>
           </div>
         </div>
       {/if}
-      <button type="button" class="ml-auto rounded border border-stone-300 bg-white px-2.5 py-1 text-stone-700 hover:bg-stone-100" onclick={() => { managePlotOpen = false; }}>Close</button>
+      <button type="button" class="ml-auto rounded border border-vpro-border bg-white px-2.5 py-1 text-vpro-ink-secondary hover:bg-vpro-canvas" onclick={() => { managePlotOpen = false; }}>Close</button>
     </section>
   {/if}
 
-  {#if error}<div role="alert" class="p-2 bg-red-50 border-b border-red-200 text-red-800 text-xs flex flex-wrap items-center gap-2"><AlertTriangle size={14} class="text-red-600 shrink-0" /><span>{error}</span>{#if isHeaderConflict && original}<div class="ml-auto flex items-center gap-1.5"><button type="button" data-fs882-conflict-reload class="rounded bg-[#003366] px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-[#002244] disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => { if (original) void load(original.plotNumber); }}>Reload Latest Plot</button><button type="button" data-fs882-conflict-review class="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Keep Draft to Review</button></div>{:else}<button type="button" class="ml-auto rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Dismiss</button>{/if}</div>{/if}
+  {#if error}<div role="alert" class="p-2 bg-red-50 border-b border-red-200 text-red-800 text-xs flex flex-wrap items-center gap-2"><AlertTriangle size={14} class="text-red-600 shrink-0" /><span>{error}</span>{#if isHeaderConflict && original}<div class="ml-auto flex items-center gap-1.5"><button type="button" data-fs882-conflict-reload class="rounded bg-vpro-navy px-2.5 py-0.5 text-[11px] font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50" disabled={busy || headerWorkflowBusy} onclick={() => { if (original) void load(original.plotNumber); }}>Reload Latest Plot</button><button type="button" data-fs882-conflict-review class="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Keep Draft to Review</button></div>{:else}<button type="button" class="ml-auto rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-medium text-red-800 hover:bg-red-100" onclick={() => { error = null; }}>Dismiss</button>{/if}</div>{/if}
   {#if vegetationReadUnavailable}<p role="alert" class="p-2 bg-amber-50 text-amber-900 text-sm" data-vegetation-unavailable>Ordinary ID-keyed vegetation is unavailable: {vegetationReadUnavailable} Use independently enabled physical-row source views. Ordinary vegetation rows, totals and actions are not presented as an empty result.</p>{/if}
 
-  <nav aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'} hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-tabs flex flex-wrap border-b border-stone-200 bg-stone-50 px-3 text-xs font-medium">
-    {#if siviStandalone}<button type="button" data-sivi-site-tab data-help-id="sivi.plot_type" aria-current={activeTab === 'siviParent' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'siviParent' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" disabled={tabWorkflowBusy || !siviStandaloneEnabled} onclick={() => { activeTab = 'siviParent'; siviParentOpen = true; }}>Plot &amp; Site Description</button>
-    {:else}<button data-help-id="site.moisture_regime" aria-current={activeTab === 'site' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'site' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'site'} disabled={tabWorkflowBusy}>Site & Location</button>{/if}
-    <button data-help-id="veg.covers" aria-current={activeTab === 'veg' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'veg' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'veg'} disabled={tabWorkflowBusy || (siviStandalone && !siviStandaloneEnabled)}>Vegetation</button>
-    {#if !siviStandalone}<button data-help-id="veg.species" aria-current={activeTab === 'vegOther' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'vegOther' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'vegOther'} disabled={tabWorkflowBusy}>Veg Other</button><button data-help-id="humus.upper_lower_depth" aria-current={activeTab === 'soils' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'soils' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'soils'} disabled={tabWorkflowBusy}>Soils (Humus & Mineral)</button><button aria-current={activeTab === 'other' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'other' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'other'} disabled={tabWorkflowBusy}>Other Data</button><button aria-current={activeTab === 'audit' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'audit' ? 'border-[#003366] text-[#003366] font-bold bg-white' : 'border-transparent text-stone-600 hover:text-stone-900'}" onclick={() => activeTab = 'audit'} disabled={tabWorkflowBusy}>Audit Trail</button>{/if}
+  <nav aria-label={siviStandalone ? 'SIVI sections' : 'FS882 sections'} hidden={standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'} class="fs882-tabs flex flex-wrap border-b border-vpro-border bg-vpro-surface-subtle px-3 text-xs font-medium">
+    {#if siviStandalone}<button type="button" data-sivi-site-tab data-help-id="sivi.plot_type" aria-current={activeTab === 'siviParent' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'siviParent' ? 'border-vpro-navy text-vpro-navy font-bold bg-white' : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}" disabled={tabWorkflowBusy || !siviStandaloneEnabled} onclick={() => { activeTab = 'siviParent'; siviParentOpen = true; }}>Plot &amp; Site Description</button>
+    {:else}<button data-help-id="site.moisture_regime" aria-current={activeTab === 'site' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'site' ? 'border-vpro-navy text-vpro-navy font-bold bg-white' : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}" onclick={() => activeTab = 'site'} disabled={tabWorkflowBusy}>Site & Location</button>{/if}
+    <button data-help-id="veg.covers" aria-current={activeTab === 'veg' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'veg' ? 'border-vpro-navy text-vpro-navy font-bold bg-white' : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}" onclick={() => activeTab = 'veg'} disabled={tabWorkflowBusy || (siviStandalone && !siviStandaloneEnabled)}>Vegetation</button>
+    {#if !siviStandalone}<button data-help-id="veg.species" aria-current={activeTab === 'vegOther' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'vegOther' ? 'border-vpro-navy text-vpro-navy font-bold bg-white' : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}" onclick={() => activeTab = 'vegOther'} disabled={tabWorkflowBusy}>Veg Other</button><button data-help-id="humus.upper_lower_depth" aria-current={activeTab === 'soils' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'soils' ? 'border-vpro-navy text-vpro-navy font-bold bg-white' : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}" onclick={() => activeTab = 'soils'} disabled={tabWorkflowBusy}>Soils (Humus & Mineral)</button><button aria-current={activeTab === 'other' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'other' ? 'border-vpro-navy text-vpro-navy font-bold bg-white' : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}" onclick={() => activeTab = 'other'} disabled={tabWorkflowBusy}>Other Data</button><button aria-current={activeTab === 'audit' ? 'page' : undefined} class="px-4 py-2 border-b-2 {activeTab === 'audit' ? 'border-vpro-navy text-vpro-navy font-bold bg-white' : 'border-transparent text-vpro-ink-secondary hover:text-vpro-ink'}" onclick={() => activeTab = 'audit'} disabled={tabWorkflowBusy}>Audit Trail</button>{/if}
   </nav>
   <FormValidationSummary items={validationSummaryItems} onjump={(item) => void handleValidationJump(item)} />
-  {#if (extendedShrubsEnabled && !twoPageOpen) || (siviParentReviewEnabled && !siviStandalone && !(standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'))}<div class="border-b border-stone-200 px-4 py-2 flex flex-wrap items-center gap-4">
+  {#if (extendedShrubsEnabled && !twoPageOpen) || (siviParentReviewEnabled && !siviStandalone && !(standaloneTwoPage && twoPageOpen && twoPageScope === 'entry'))}<div class="border-b border-vpro-border px-4 py-2 flex flex-wrap items-center gap-4">
     {#if extendedShrubsEnabled && !twoPageOpen}<label class="inline-flex items-center gap-2 text-xs font-medium cursor-pointer" data-help-id="veg.covers"><input type="checkbox" data-extended-shrubs checked={extendedShrubs} disabled={busy || headerWorkflowBusy} onchange={(event) => setExtendedShrubs(event.currentTarget.checked)} /> Show extended shrub layers</label>{/if}
     {#if siviParentReviewEnabled && !siviStandalone}<button type="button" data-sivi-parent-open aria-pressed={activeTab === 'siviParent'} class="rounded border px-3 py-1 text-sm disabled:opacity-50" disabled={busy || headerWorkflowBusy || dirty || nonParentChildUnsaved || !siviParentSession} onclick={() => void showSIVIParentPanel()}>SIVI parent (read-only)</button>{/if}
   </div>{/if}

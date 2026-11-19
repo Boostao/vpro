@@ -259,6 +259,9 @@ export default defineConfig({
           if (normalized.endsWith("/resources/project-metadata-layout.json")) {
             return "layout-project-metadata";
           }
+          if (normalized.endsWith("/src/shell/notificationService.svelte.ts")) {
+            return "notification-service";
+          }
           return undefined;
         },
       },

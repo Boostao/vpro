@@ -182,7 +182,7 @@
     width: 78px;
     max-width: 86px;
     white-space: nowrap;
-    background: #ffffff;
+    background: var(--vpro-surface);
   }
 
   .sticky-col.col-sci {
@@ -191,12 +191,12 @@
     z-index: 2;
     max-width: 175px;
     overflow-wrap: anywhere;
-    background: #ffffff;
+    background: var(--vpro-surface);
   }
 
   thead th.sticky-col {
     z-index: 4;
-    background: #003366;
+    background: var(--vpro-navy);
   }
 
   .col-lf {

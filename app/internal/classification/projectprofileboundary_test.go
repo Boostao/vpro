@@ -23,7 +23,7 @@ func TestProfileRuleNoopDoesNotCreateTechnicalHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	if err := c.Conn.QueryRowContext(context.Background(),
+	if err := c.CoordinatorWhileLocked().QueryRowContext(context.Background(),
 		`SELECT count(*) FROM project.sqlite_master WHERE name='__VPRO_ProfileHistory'`).Scan(&count); err != nil || count != 0 {
 		t.Fatal("no-op created technical history", count, err)
 	}

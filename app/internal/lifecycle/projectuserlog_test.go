@@ -183,11 +183,11 @@ func TestUserLogCancellationRetryAndPhysicalOwnership(t *testing.T) {
 		t.Fatal("cancelled request returned a review", result, err)
 	}
 
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel = context.WithTimeout(context.Background(), 20*time.Millisecond)
 	result, err := ReviewUserLog(service, ctx, state.ContextID, 1, 0, 1)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(result, UserLogReview{}) {
 		t.Fatal("queued snapshot acquisition did not cancel", result, err)
 	}
@@ -223,7 +223,7 @@ func TestUserLogInFlightCountCancellationAndRetry(t *testing.T) {
 	observed := false
 	setAuthorizer := func(authorize func(int, string, string, string) int) {
 		t.Helper()
-		if err := owner.Conn.Raw(func(raw any) error {
+		if err := owner.CoordinatorWhileLocked().Raw(func(raw any) error {
 			driver, valid := raw.(*sqlite3.SQLiteConn)
 			if !valid {
 				return errors.New("user log cancellation requires the actual SQLite coordinator")

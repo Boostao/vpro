@@ -112,11 +112,11 @@ func DecodeStrictRequiredJSON(data []byte, target any, operation string, propert
 func WithOwnedPreferenceSnapshot[T any](ctx context.Context, plots *PlotService, hooks PublicationReadSnapshotHooks,
 	read func(*SqliteContext, *sql.Tx) (T, error)) (T, error) {
 	owner := plots.Projects.Sqlite
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &owner.mu); err != nil {
 		var zero T
 		return zero, err
 	}
-	defer owner.Mu.Unlock()
+	defer owner.mu.Unlock()
 	return WithPublicationReadSnapshot(ctx, owner, hooks, func(tx *sql.Tx) (T, error) { return read(owner, tx) })
 }
 
@@ -432,10 +432,10 @@ var SiviDeletionUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}
 func WithOwnedSIVISnapshot[T any](ctx context.Context, plots *PlotService, read func(*SqliteContext, *sql.Tx) (T, error)) (result T, resultErr error) {
 	var zero T
 	owner := plots.Projects.Sqlite
-	if err := sqlutil.AcquireMutexLease(ctx, &owner.Mu); err != nil {
+	if err := sqlutil.AcquireMutexLease(ctx, &owner.mu); err != nil {
 		return zero, err
 	}
-	defer owner.Mu.Unlock()
+	defer owner.mu.Unlock()
 	if err := ProfileOwnedFiles(owner); err != nil {
 		return zero, err
 	}

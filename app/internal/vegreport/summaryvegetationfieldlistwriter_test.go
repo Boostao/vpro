@@ -474,11 +474,11 @@ func TestSummaryVegetationFieldListWriterPhysicalReplacementRefusalRetry(t *test
 	backup := path + ".writer-original"
 	// Release only the fixture's pinned reader attachment so Windows permits the
 	// physical replacement. The owner retains its original opened identity.
-	if _, err := owner.Conn.ExecContext(t.Context(), `DETACH DATABASE VPro64`); err != nil {
+	if _, err := owner.CoordinatorWhileLocked().ExecContext(t.Context(), `DETACH DATABASE VPro64`); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
-		if _, err := owner.Conn.ExecContext(t.Context(), `ATTACH DATABASE ? AS VPro64`, sqlutil.SqliteFileURI(path, "ro")); err != nil {
+		if _, err := owner.CoordinatorWhileLocked().ExecContext(t.Context(), `ATTACH DATABASE ? AS VPro64`, sqlutil.SqliteFileURI(path, "ro")); err != nil {
 			t.Error("restore pinned reader alias", err)
 		}
 	}()
@@ -556,8 +556,8 @@ func TestSummaryVegetationFieldListWriterQueuedSwitchLeaseReleased(t *testing.T)
 		close(release)
 		t.Fatal("writer lost operation lease")
 	}
-	if service.contexts.Projects.Sqlite.Mu.TryLock() {
-		service.contexts.Projects.Sqlite.Mu.Unlock()
+	if service.contexts.Projects.Sqlite.TryLockForTest() {
+		service.contexts.Projects.Sqlite.UnlockForTest()
 		close(release)
 		t.Fatal("writer lost owner mutex")
 	}

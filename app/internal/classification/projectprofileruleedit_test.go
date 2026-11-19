@@ -35,7 +35,7 @@ func TestProfileRuleEditsAtomicSnapshotHistoryNoopAndStaleRetry(t *testing.T) {
 		t.Fatal("profile literal/NULL/counts/other rows changed outside the plan", review, err)
 	}
 	var before, after string
-	if err := c.Conn.QueryRowContext(context.Background(),
+	if err := c.CoordinatorWhileLocked().QueryRowContext(context.Background(),
 		`SELECT BeforeRules,AfterRules FROM project.__VPRO_ProfileHistory WHERE ProfileTable='Sample_Profile'`).Scan(&before, &after); err != nil {
 		t.Fatal(err)
 	}

@@ -81,19 +81,19 @@
 </script>
 
 {#if open}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" data-whats-new-modal>
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-vpro-ink/50 p-4" data-whats-new-modal>
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="whats-new-modal-title"
-      class="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-slate-300 bg-white text-[#313132] shadow-2xl"
+      class="flex max-h-[86vh] w-full max-w-2xl flex-col overflow-hidden rounded border border-vpro-border bg-white text-vpro-ink shadow-2xl"
     >
       <ModalDialogTrap onEscape={onclose} escapeDisabled={acknowledging} initialFocusSelector="[data-whats-new-close]" />
-      <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-5 py-3.5 text-white">
+      <header class="flex items-center justify-between gap-3 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-5 py-3.5 text-white">
         <div class="flex items-center gap-2.5">
-          <Newspaper size={18} class="text-[#FCBA19]" />
+          <Newspaper size={18} class="text-vpro-gold" />
           <div>
-            <div class="font-mono text-[11px] uppercase tracking-wider text-[#FCBA19]">
+            <div class="font-mono text-[11px] uppercase tracking-wider text-vpro-gold">
               Release &amp; Standards Changelog
             </div>
             <h2 id="whats-new-modal-title" class="text-base font-semibold text-white">
@@ -114,19 +114,19 @@
 
       <div class="space-y-4 overflow-y-auto p-5 text-xs">
         {#if error}
-          <p role="alert" class="rounded border border-[#D8292F] bg-red-50 p-2.5 text-[#D8292F]">{error}</p>
+          <p role="alert" class="rounded border border-vpro-error bg-red-50 p-2.5 text-vpro-error">{error}</p>
         {/if}
 
         {#if status}
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-300 bg-[#F2F2F2] p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 rounded border border-vpro-border bg-vpro-canvas p-3">
             <div>
               {#if status.hasUnread}
-                <span class="font-semibold text-[#003366]" data-whats-new-unread-banner>
+                <span class="font-semibold text-vpro-navy" data-whats-new-unread-banner>
                   {status.unreadCount} unread release update{status.unreadCount === 1 ? '' : 's'}
                   {status.lastSeenVersion ? ` since v${status.lastSeenVersion}` : ''}.
                 </span>
               {:else}
-                <span class="inline-flex items-center gap-1.5 font-medium text-[#2E8540]" data-whats-new-all-read>
+                <span class="inline-flex items-center gap-1.5 font-medium text-vpro-success" data-whats-new-all-read>
                   <CheckCircle2 size={14} /> Up to date — acknowledged through v{status.latestVersion}.
                 </span>
               {/if}
@@ -136,7 +136,7 @@
                 type="button"
                 data-whats-new-acknowledge
                 disabled={acknowledging}
-                class="inline-flex items-center gap-1.5 rounded bg-[#003366] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
+                class="inline-flex items-center gap-1.5 rounded bg-vpro-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50"
                 onclick={() => void markLatestAsRead()}
               >
                 <CheckCircle2 size={13} />
@@ -149,24 +149,24 @@
             {#each status.entries as entry, index (entry.version)}
               <article
                 data-whats-new-version={entry.version}
-                class="space-y-2 rounded border p-3.5 {isEntryUnread(index) ? 'border-[#003366] border-l-[4px] border-l-[#FCBA19] bg-[#FEF6E0]' : 'border-slate-200 bg-white'}"
+                class="space-y-2 rounded border p-3.5 {isEntryUnread(index) ? 'border-vpro-navy border-l-[4px] border-l-vpro-gold bg-vpro-warning-bg' : 'border-vpro-border bg-white'}"
               >
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <div class="flex items-center gap-2">
-                    <h3 class="font-mono text-sm font-bold text-[#003366]">Version {entry.version}</h3>
-                    <span class="rounded border border-slate-300 bg-[#F2F2F2] px-2 py-0.5 font-mono text-[10px] uppercase text-slate-700">
+                    <h3 class="font-mono text-sm font-bold text-vpro-navy">Version {entry.version}</h3>
+                    <span class="rounded border border-vpro-border bg-vpro-canvas px-2 py-0.5 font-mono text-[10px] uppercase text-vpro-ink-secondary">
                       {entry.channel}
                     </span>
                     {#if isEntryUnread(index)}
-                      <span class="rounded bg-[#FCBA19] px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-[#003366]">
+                      <span class="rounded bg-vpro-gold px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-vpro-navy">
                         Unread
                       </span>
                     {/if}
                   </div>
-                  <span class="font-mono text-[11px] text-slate-600">{entry.date}</span>
+                  <span class="font-mono text-[11px] text-vpro-ink-secondary">{entry.date}</span>
                 </div>
 
-                <ul class="list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-[#313132]">
+                <ul class="list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-vpro-ink">
                   {#each entry.highlights as item}
                     <li>{item}</li>
                   {/each}
@@ -175,7 +175,7 @@
             {/each}
           </div>
         {:else if loading}
-          <p role="status" class="text-slate-600">Loading release changelog...</p>
+          <p role="status" class="text-vpro-ink-secondary">Loading release changelog...</p>
         {/if}
       </div>
     </div>

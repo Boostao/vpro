@@ -190,7 +190,7 @@ func TestProjectProfileSpeciesPresenceInFlightCancelAndOwnedRetry(t *testing.T) 
 		close(release)
 	}()
 	observe := func(job *vprocore.SqliteContext, _ *sql.Tx) error {
-		return job.Conn.Raw(func(raw any) error {
+		return job.CoordinatorWhileLocked().Raw(func(raw any) error {
 			driver, valid := raw.(*sqlite3.SQLiteConn)
 			if !valid {
 				return errors.New("owned presence cancellation requires actual SQLite connection")

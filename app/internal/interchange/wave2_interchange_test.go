@@ -266,11 +266,11 @@ func TestWave2S47RDSFloat32CoverClampBelow100(t *testing.T) {
 	}
 
 	// Directly inspect extractLongVegObservations so this test works regardless of whether R is installed.
-	if err := sqlutil.AcquireMutexLease(ctx, &service.Projects.Sqlite.Mu); err != nil {
+	if err := func() error { _, e := service.Projects.Sqlite.AcquireMutex(ctx); return e }(); err != nil {
 		t.Fatal(err)
 	}
 	tx, err := service.Projects.Sqlite.BeginReadSnapshot(ctx)
-	service.Projects.Sqlite.Mu.Unlock()
+	service.Projects.Sqlite.UnlockForTest()
 	if err != nil {
 		t.Fatal(err)
 	}

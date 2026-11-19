@@ -69,11 +69,11 @@ func TestTwoPageParentOwnedCancellationAndRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	got, err := ReadTwoPageParent(service, ctx, state.ContextID, "108050", "FS882-8x6XL")
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || got != nil {
 		t.Fatal("blocked parent request ignored cancellation", got, err)
 	}

@@ -554,11 +554,11 @@ func TestPictureMetadataWriteCancellationCollisionRollbackAndRetry(t *testing.T)
 		t.Fatal("pre-cancelled edit was not cancelled", err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	waiting, stop := context.WithTimeout(t.Context(), 30*time.Millisecond)
 	_, err := EditPictureMetadata(service, waiting, state.ContextID, "108050", source, request)
 	stop()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("ownership lease ignored cancellation", err)
 	}

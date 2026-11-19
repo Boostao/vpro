@@ -763,11 +763,11 @@ func TestPictureCreationCancellationRollbackAndRetry(t *testing.T) {
 		t.Fatal("pre-cancelled lookup succeeded", result, err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	waiting, stop := context.WithTimeout(t.Context(), 30*time.Millisecond)
 	_, err := CreatePicture(service, waiting, state.ContextID, source, request)
 	stop()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("queued snapshot lease did not cancel", err)
 	}

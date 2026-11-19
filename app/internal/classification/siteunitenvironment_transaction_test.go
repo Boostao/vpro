@@ -58,13 +58,13 @@ func TestSiteUnitEnvironmentTransferCommitPreservationAndReplay(t *testing.T) {
 	if err := service.Plots.SetAuditStrength(3); err != nil {
 		t.Fatal(err)
 	}
-	auditBefore, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", "Sample_Audit", "", nil, "")
+	auditBefore, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.CoordinatorWhileLocked(), "project", "Sample_Audit", "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	tables := map[string]vprocore.ProjectMetadataTable{}
 	for _, name := range []string{"Sample_Env", "Sample_SU", "_table_metadata"} {
-		tables[name], err = vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", name, "", nil, "")
+		tables[name], err = vprocore.ReadSQLiteStorageRows(t.Context(), c.CoordinatorWhileLocked(), "project", name, "", nil, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -74,14 +74,14 @@ func TestSiteUnitEnvironmentTransferCommitPreservationAndReplay(t *testing.T) {
 		t.Fatal("reverse transfer not committed exactly", result, err)
 	}
 	for name, original := range tables {
-		actual, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", name, "", nil, "")
+		actual, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.CoordinatorWhileLocked(), "project", name, "", nil, "")
 		if err != nil || !reflect.DeepEqual(original, actual) {
 			t.Fatal("unrelated data/descriptions changed", name, err)
 		}
 	}
 	// ENG-GO-004: every transferred Admin cell is audited in the same transaction, after the
 	// untouched pre-existing audit rows.
-	auditAfter, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.Conn, "project", "Sample_Audit", "", nil, "")
+	auditAfter, err := vprocore.ReadSQLiteStorageRows(t.Context(), c.CoordinatorWhileLocked(), "project", "Sample_Audit", "", nil, "")
 	if err != nil || len(auditAfter.Rows) != len(auditBefore.Rows)+result.ChangedCells ||
 		!reflect.DeepEqual(auditAfter.Rows[:len(auditBefore.Rows)], auditBefore.Rows) {
 		t.Fatal("transfer must append exactly one audit row per changed cell", len(auditBefore.Rows), len(auditAfter.Rows), result.ChangedCells, err)

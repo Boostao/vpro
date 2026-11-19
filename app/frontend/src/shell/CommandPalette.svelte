@@ -123,7 +123,7 @@
     >
       <ModalDialogTrap trapFocus={true} initialFocusSelector="[data-command-palette-input]" />
       <div class="vpro-cmd-search-row">
-        <Search size={17} class="shrink-0 text-[#003366]" />
+        <Search size={17} class="shrink-0 text-vpro-navy" />
         <input
           bind:this={searchInput}
           type="search"
@@ -185,7 +185,7 @@
                     {#if entry.item.shortcut}
                       <kbd>{entry.item.shortcut}</kbd>
                     {:else if activeIndex === entry.flatIndex && !entry.item.disabled}
-                      <CornerDownLeft size={13} class="text-[#003366]" />
+                      <CornerDownLeft size={13} class="text-vpro-navy" />
                     {/if}
                   </div>
                 </button>
@@ -218,9 +218,9 @@
   .vpro-cmd-dialog {
     width: min(40rem, 100%);
     max-height: min(34rem, calc(100dvh - 2rem));
-    background: var(--vpro-surface, #ffffff);
-    border: 1px solid var(--vpro-border-strong, #9ca3af);
-    border-top: 4px solid var(--vpro-navy, #003366);
+    background: var(--vpro-surface);
+    border: 1px solid var(--vpro-border-strong);
+    border-top: 4px solid var(--vpro-navy);
     border-radius: var(--vpro-radius-lg, 8px);
     box-shadow: var(--vpro-shadow-lg, 0 18px 42px rgba(0, 34, 68, 0.28));
     display: flex;
@@ -232,15 +232,15 @@
     align-items: center;
     gap: 0.6rem;
     padding: 0.7rem 0.85rem;
-    border-bottom: 1px solid var(--vpro-border, #d1d5db);
-    background: var(--vpro-surface-subtle, #f8fafb);
+    border-bottom: 1px solid var(--vpro-border);
+    background: var(--vpro-surface-subtle);
   }
   .vpro-cmd-input {
     flex: 1;
     min-width: 0;
     border: 0;
     background: transparent;
-    color: var(--vpro-ink, #313132);
+    color: var(--vpro-ink);
     font: inherit;
     font-size: 0.9rem;
     outline: none;
@@ -250,9 +250,9 @@
     font-size: 0.68rem;
     padding: 0.12rem 0.38rem;
     border-radius: 4px;
-    border: 1px solid var(--vpro-border, #d1d5db);
-    background: #ffffff;
-    color: var(--vpro-ink-muted, #5f6b7a);
+    border: 1px solid var(--vpro-border);
+    background: var(--vpro-surface);
+    color: var(--vpro-ink-muted);
   }
   .vpro-cmd-close {
     display: inline-grid;
@@ -262,7 +262,7 @@
     border-radius: 4px;
     border: 1px solid transparent;
     background: transparent;
-    color: var(--vpro-ink-secondary, #4b5563);
+    color: var(--vpro-ink-secondary);
   }
   .vpro-cmd-close:hover {
     background: rgba(0, 51, 102, 0.08);
@@ -276,13 +276,13 @@
   .vpro-cmd-empty {
     padding: 2rem 1rem;
     text-align: center;
-    color: var(--vpro-ink-secondary, #4b5563);
+    color: var(--vpro-ink-secondary);
     font-size: 0.82rem;
   }
   .vpro-cmd-group + .vpro-cmd-group {
     margin-top: 0.4rem;
     padding-top: 0.35rem;
-    border-top: 1px solid var(--vpro-rail, #eaeff3);
+    border-top: 1px solid var(--vpro-rail);
   }
   .vpro-cmd-group-title {
     padding: 0.2rem 0.55rem;
@@ -290,7 +290,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--vpro-navy, #003366);
+    color: var(--vpro-navy);
   }
   .vpro-cmd-item {
     width: 100%;
@@ -303,11 +303,11 @@
     border-radius: 5px;
     background: transparent;
     text-align: left;
-    color: var(--vpro-ink, #313132);
+    color: var(--vpro-ink);
   }
   .vpro-cmd-item.selected,
   .vpro-cmd-item:hover:not(:disabled) {
-    background: var(--vpro-navy-tint, #ebf1f8);
+    background: var(--vpro-navy-tint);
   }
   .vpro-cmd-item:disabled {
     opacity: 0.52;
@@ -325,7 +325,7 @@
   .vpro-cmd-item-title {
     font-size: 0.82rem;
     font-weight: 600;
-    color: var(--vpro-ink, #313132);
+    color: var(--vpro-ink);
   }
   .vpro-cmd-badge {
     font-family: var(--vpro-font-mono, monospace);
@@ -333,12 +333,12 @@
     font-weight: 600;
     padding: 0.05rem 0.35rem;
     border-radius: 3px;
-    background: var(--vpro-forest-surface, #e9f1eb);
-    color: var(--vpro-forest, #1e5128);
+    background: var(--vpro-forest-surface);
+    color: var(--vpro-forest);
   }
   .vpro-cmd-item-sub {
     font-size: 0.72rem;
-    color: var(--vpro-ink-secondary, #4b5563);
+    color: var(--vpro-ink-secondary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -348,18 +348,18 @@
     font-size: 0.68rem;
     padding: 0.1rem 0.35rem;
     border-radius: 3px;
-    border: 1px solid var(--vpro-border, #d1d5db);
-    background: #ffffff;
+    border: 1px solid var(--vpro-border);
+    background: var(--vpro-surface);
   }
   .vpro-cmd-footer {
     display: flex;
     flex-wrap: wrap;
     gap: 0.85rem;
     padding: 0.45rem 0.85rem;
-    border-top: 1px solid var(--vpro-border, #d1d5db);
-    background: var(--vpro-surface-subtle, #f8fafb);
+    border-top: 1px solid var(--vpro-border);
+    background: var(--vpro-surface-subtle);
     font-size: 0.7rem;
-    color: var(--vpro-ink-secondary, #4b5563);
+    color: var(--vpro-ink-secondary);
   }
   .vpro-cmd-footer kbd {
     font-family: var(--vpro-font-mono, monospace);
@@ -367,8 +367,8 @@
     padding: 0.05rem 0.3rem;
     margin-right: 0.2rem;
     border-radius: 3px;
-    border: 1px solid var(--vpro-border, #d1d5db);
-    background: #ffffff;
+    border: 1px solid var(--vpro-border);
+    background: var(--vpro-surface);
   }
   @media (pointer: coarse) {
     .vpro-cmd-item {

@@ -212,11 +212,11 @@ func TestPictureMetadataCancellationAndRetry(t *testing.T) {
 		t.Fatal("pre-cancelled read returned metadata", got, err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, finish := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	got, err := ReadPictureMetadata(service, ctx, state.ContextID, "108050", source)
 	finish()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || !reflect.DeepEqual(got, pictureMetadataReview{}) {
 		t.Fatal("cancelled owner lease returned metadata", got, err)
 	}

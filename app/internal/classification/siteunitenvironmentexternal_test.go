@@ -72,7 +72,7 @@ func TestExternalSUEnvironmentCommitPreservationAndReplay(t *testing.T) {
 		}
 	}
 	var unit, short, long string
-	if err := owner.Conn.QueryRowContext(t.Context(),
+	if err := owner.CoordinatorWhileLocked().QueryRowContext(t.Context(),
 		`SELECT UserSiteUnit,SiteUnitShortName,SiteUnitLongName FROM project.Sample_Admin WHERE Plot='8229723'`).
 		Scan(&unit, &short, &long); err != nil || unit != "  Review ' unit  " || short != unit || long != "Personal long" {
 		t.Fatal("external selection or personal precedence changed", unit, short, long, err)

@@ -110,7 +110,7 @@ func TestTableCSVReviewFacadeRejectsStaleForeignDerivedAndCancelledWithNil(t *te
 		t.Fatal("cancelled request returned data or lost context error:", result, err)
 	}
 	owner := service.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	waiting, cancelWaiting := context.WithCancel(context.Background())
 	defer cancelWaiting()
 	observed := &vprotest.TableCSVLeaseContext{Context: waiting, Queued: make(chan struct{})}
@@ -127,17 +127,17 @@ func TestTableCSVReviewFacadeRejectsStaleForeignDerivedAndCancelledWithNil(t *te
 	case <-observed.Queued:
 		cancelWaiting()
 	case <-time.After(3 * time.Second):
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		t.Fatal("facade never reached the held snapshot mutex")
 	}
 	select {
 	case err := <-done:
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		if !errors.Is(err, context.Canceled) {
 			t.Fatal("queued public cancellation lost context error:", err)
 		}
 	case <-time.After(3 * time.Second):
-		owner.Mu.Unlock()
+		owner.UnlockForTest()
 		t.Fatal("cancelled facade remained blocked at the snapshot mutex")
 	}
 	if result, err := GetProjectTableCSVReview(service, context.Background(), state.ContextID, "Sample_Other"); result == nil || err != nil {

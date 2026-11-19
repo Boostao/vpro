@@ -923,47 +923,47 @@
 </section>
 
 <style>
-  .bcgov-lump-editor { display: grid; gap: 1rem; min-width: 0; color: #313132; }
-  .bcgov-header { background: #003366; color: #ffffff; border-bottom: 4px solid #fcba19; padding: 1rem 1.25rem; border-radius: 4px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; }
-  .bcgov-header h2 { margin: 0.2rem 0 0; font-size: 1.2rem; color: #ffffff; }
-  .bcgov-eyebrow { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: #fcba19; font-weight: 700; }
+  .bcgov-lump-editor { display: grid; gap: 1rem; min-width: 0; color: var(--vpro-ink); }
+  .bcgov-header { background: var(--vpro-navy); color: var(--vpro-surface); border-bottom: 4px solid var(--vpro-gold); padding: 1rem 1.25rem; border-radius: 4px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; }
+  .bcgov-header h2 { margin: 0.2rem 0 0; font-size: 1.2rem; color: var(--vpro-surface); }
+  .bcgov-eyebrow { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; color: var(--vpro-gold); font-weight: 700; }
   .bcgov-tab-strip { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .bcgov-tab-strip button[role="tab"] { background: rgba(255, 255, 255, 0.12); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.28); padding: 0.45rem 0.85rem; border-radius: 4px; font-size: 0.85rem; }
-  .bcgov-tab-strip button[role="tab"].active { background: #fcba19; color: #003366; border-color: #fcba19; font-weight: 700; }
-  .bcgov-card { background: #ffffff; border: 1px solid #d8d8d8; border-top: 3px solid #003366; border-radius: 4px; padding: 1rem; min-width: 0; }
-  .bcgov-card h3 { margin: 0 0 0.75rem; font-size: 1rem; color: #003366; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-  .badge { background: #fcba19; color: #003366; padding: 0.1rem 0.45rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700; }
+  .bcgov-tab-strip button[role="tab"] { background: rgba(255, 255, 255, 0.12); color: var(--vpro-surface); border: 1px solid rgba(255, 255, 255, 0.28); padding: 0.45rem 0.85rem; border-radius: 4px; font-size: 0.85rem; }
+  .bcgov-tab-strip button[role="tab"].active { background: var(--vpro-gold); color: var(--vpro-navy); border-color: var(--vpro-gold); font-weight: 700; }
+  .bcgov-card { background: var(--vpro-surface); border: 1px solid var(--vpro-border); border-top: 3px solid var(--vpro-navy); border-radius: 4px; padding: 1rem; min-width: 0; }
+  .bcgov-card h3 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--vpro-navy); display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .badge { background: var(--vpro-gold); color: var(--vpro-navy); padding: 0.1rem 0.45rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700; }
   .lump-grid { display: grid; grid-template-columns: minmax(min(100%, 260px), 320px) minmax(0, 1fr); gap: 1rem; }
   .lump-table-list { list-style: none; padding: 0; margin: 0.75rem 0; display: grid; gap: 0.35rem; max-height: 240px; overflow-y: auto; }
-  .lump-table-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.65rem; border: 1px solid #d8d8d8; border-radius: 4px; background: #f2f2f2; text-align: left; font-size: 0.82rem; color: #313132; }
-  .lump-table-list button.selected { background: rgba(26, 90, 150, 0.14); border-color: #003366; color: #003366; }
+  .lump-table-list button { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.65rem; border: 1px solid var(--vpro-border); border-radius: 4px; background: var(--vpro-canvas); text-align: left; font-size: 0.82rem; color: var(--vpro-ink); }
+  .lump-table-list button.selected { background: rgba(26, 90, 150, 0.14); border-color: var(--vpro-navy); color: var(--vpro-navy); }
   .field-block { display: grid; gap: 0.3rem; font-size: 0.82rem; margin-bottom: 0.65rem; }
   .inline-row, .toolbar-row, .row-editor { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; margin-bottom: 0.75rem; }
   .inline-row input, .toolbar-row input { flex: 1 1 160px; min-width: 0; }
   .row-editor label { display: grid; gap: 0.25rem; font-size: 0.8rem; }
-  .species-picker-panel { border: 1px solid #d8d8d8; background: #f2f2f2; border-radius: 4px; padding: 0.55rem 0.7rem; margin-bottom: 0.75rem; }
+  .species-picker-panel { border: 1px solid var(--vpro-border); background: var(--vpro-canvas); border-radius: 4px; padding: 0.55rem 0.7rem; margin-bottom: 0.75rem; }
   .species-chip-list { display: flex; flex-wrap: wrap; gap: 0.35rem; max-height: 140px; overflow-y: auto; }
-  .species-pick-btn { display: inline-flex; gap: 0.35rem; align-items: center; padding: 0.25rem 0.5rem; border: 1px solid #d8d8d8; background: #ffffff; border-radius: 3px; font-size: 0.76rem; color: #003366; }
-  .delete-table-box { border-top: 1px solid #d8d8d8; padding-top: 0.6rem; display: grid; gap: 0.4rem; }
-  .delete-confirm-note { margin: 0; font-size: 0.8rem; color: #d8292f; }
-  .group-header-row { background: #f2f2f2; }
-  .group-count { font-size: 0.75rem; color: #474543; margin-left: 0.35rem; }
+  .species-pick-btn { display: inline-flex; gap: 0.35rem; align-items: center; padding: 0.25rem 0.5rem; border: 1px solid var(--vpro-border); background: var(--vpro-surface); border-radius: 3px; font-size: 0.76rem; color: var(--vpro-navy); }
+  .delete-table-box { border-top: 1px solid var(--vpro-border); padding-top: 0.6rem; display: grid; gap: 0.4rem; }
+  .delete-confirm-note { margin: 0; font-size: 0.8rem; color: var(--vpro-error); }
+  .group-header-row { background: var(--vpro-canvas); }
+  .group-count { font-size: 0.75rem; color: var(--vpro-ink-secondary); margin-left: 0.35rem; }
   .checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0.45rem; margin: 0.65rem 0; }
   .checkbox-label { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.83rem; }
-  input:not([type="checkbox"]), select { padding: 0.45rem 0.6rem; border: 1px solid #d8d8d8; border-radius: 4px; font-size: 0.85rem; max-width: 100%; background: #ffffff; color: #313132; }
-  .bcgov-btn-primary { background: #003366; color: #ffffff; border: 1px solid #003366; border-bottom: 2px solid #fcba19; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
-  .bcgov-btn-secondary { background: #ffffff; color: #003366; border: 1px solid #003366; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
-  .bcgov-btn-danger { background: #ffffff; color: #d8292f; border: 1px solid #d8292f; padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
-  .bcgov-notice { padding: 0.65rem 0.9rem; background: #f2f2f2; border-left: 4px solid #fcba19; color: #003366; margin: 0; font-size: 0.85rem; }
-  .error { padding: 0.65rem 0.9rem; background: rgba(216, 41, 47, 0.08); border-left: 4px solid #d8292f; color: #d8292f; margin: 0; font-size: 0.85rem; }
+  input:not([type="checkbox"]), select { padding: 0.45rem 0.6rem; border: 1px solid var(--vpro-border); border-radius: 4px; font-size: 0.85rem; max-width: 100%; background: var(--vpro-surface); color: var(--vpro-ink); }
+  .bcgov-btn-primary { background: var(--vpro-navy); color: var(--vpro-surface); border: 1px solid var(--vpro-navy); border-bottom: 2px solid var(--vpro-gold); padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
+  .bcgov-btn-secondary { background: var(--vpro-surface); color: var(--vpro-navy); border: 1px solid var(--vpro-navy); padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
+  .bcgov-btn-danger { background: var(--vpro-surface); color: var(--vpro-error); border: 1px solid var(--vpro-error); padding: 0.48rem 0.85rem; border-radius: 4px; font-weight: 600; font-size: 0.84rem; }
+  .bcgov-notice { padding: 0.65rem 0.9rem; background: var(--vpro-canvas); border-left: 4px solid var(--vpro-gold); color: var(--vpro-navy); margin: 0; font-size: 0.85rem; }
+  .error { padding: 0.65rem 0.9rem; background: rgba(216, 41, 47, 0.08); border-left: 4px solid var(--vpro-error); color: var(--vpro-error); margin: 0; font-size: 0.85rem; }
   .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 0.75rem; }
-  .stat-strip div { padding: 0.55rem 0.75rem; background: #f2f2f2; border-left: 3px solid #fcba19; display: grid; }
-  .stat-strip span { font-size: 0.75rem; color: #474543; }
-  .stat-strip strong { font-size: 1.1rem; color: #003366; font-variant-numeric: tabular-nums; }
+  .stat-strip div { padding: 0.55rem 0.75rem; background: var(--vpro-canvas); border-left: 3px solid var(--vpro-gold); display: grid; }
+  .stat-strip span { font-size: 0.75rem; color: var(--vpro-ink-secondary); }
+  .stat-strip strong { font-size: 1.1rem; color: var(--vpro-navy); font-variant-numeric: tabular-nums; }
   .mono { font-family: var(--vpro-font-mono, var(--font-mono, monospace)); font-variant-numeric: tabular-nums; }
-  .link-btn { background: transparent; border: 0; color: #003366; text-decoration: underline; padding: 0.15rem 0.35rem; font-size: 0.8rem; }
-  .link-btn.danger { color: #d8292f; }
-  .empty-row, .empty-note { font-size: 0.82rem; color: #474543; padding: 0.5rem 0; }
+  .link-btn { background: transparent; border: 0; color: var(--vpro-navy); text-decoration: underline; padding: 0.15rem 0.35rem; font-size: 0.8rem; }
+  .link-btn.danger { color: var(--vpro-error); }
+  .empty-row, .empty-note { font-size: 0.82rem; color: var(--vpro-ink-secondary); padding: 0.5rem 0; }
   @media (max-width: 960px) { .lump-grid { grid-template-columns: minmax(0, 1fr); } }
   @media (pointer: coarse) {
     .bcgov-tab-strip button,

@@ -367,12 +367,11 @@ func stageAccessTablesIntoTempSQLite(
 	inv accessSourceInventory,
 ) (accessStagedMetrics, error) {
 	var metrics accessStagedMetrics
-	sqlDB, err := sql.Open("sqlite3", sqlutil.SqliteFileURI(tmpPath, "rw")+"&_foreign_keys=0&_journal_mode=MEMORY&_synchronous=OFF")
+	sqlDB, err := sqlutil.OpenStagedSQLite(tmpPath, sqlutil.StagedSQLiteOptions{FastMemoryJournal: true})
 	if err != nil {
 		return metrics, err
 	}
-	sqlDB.SetMaxOpenConns(1)
-	tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
+		tx, err := sqlutil.BeginStagedTx(ctx, sqlDB)
 	if err != nil {
 		sqlDB.Close()
 		return metrics, err
@@ -412,7 +411,7 @@ func executeStagedAccessImportTx(
 	}
 	defer quarantineStmt.Close()
 
-	childIdStmt, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO "__VPRO_ChildIdentity" ("ChildTable", "ID") VALUES (?, ?)`)
+	childIdStmt, err := vprocore.PrepareChildIdentityInsertStmt(ctx, tx)
 	if err != nil {
 		return err
 	}

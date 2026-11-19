@@ -28,7 +28,7 @@ func blankProfileCreation(rules vprocore.ProjectMetadataTable) ProjectPlotProfil
 
 func profileLifecycleRules(t *testing.T, c *vprocore.SqliteContext) vprocore.ProjectMetadataTable {
 	t.Helper()
-	result, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.Conn, "project", c.Selection.Project+"_Profile", "", nil, "Order")
+	result, err := vprocore.ReadSQLiteStorageRows(context.Background(), c.CoordinatorWhileLocked(), "project", c.Selection.Project+"_Profile", "", nil, "Order")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,13 +65,13 @@ func TestProfileRuleLifecycleBlankCreationDeletionHistoryAndDeletedIDsReserved(t
 		t.Fatal("deleted physical identity was reused", next, err)
 	}
 	var count, reserved int
-	if err := c.Conn.QueryRowContext(context.Background(), `SELECT count(*) FROM project.__VPRO_ProfileHistory`).Scan(&count); err != nil || count != 3 {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(context.Background(), `SELECT count(*) FROM project.__VPRO_ProfileHistory`).Scan(&count); err != nil || count != 3 {
 		t.Fatal("creation/deletion/recreation did not each commit one history event", count, err)
 	}
-	if err := c.Conn.QueryRowContext(context.Background(), `SELECT count(*) FROM project.__VPRO_ProfileIdentity WHERE RuleRowID=9`).Scan(&reserved); err != nil || reserved != 1 {
+	if err := c.CoordinatorWhileLocked().QueryRowContext(context.Background(), `SELECT count(*) FROM project.__VPRO_ProfileIdentity WHERE RuleRowID=9`).Scan(&reserved); err != nil || reserved != 1 {
 		t.Fatal("deleted identity was not durably reserved", reserved, err)
 	}
-	rows, err := c.Conn.QueryContext(context.Background(), `SELECT BeforeRules,AfterRules FROM project.__VPRO_ProfileHistory ORDER BY ID`)
+	rows, err := c.CoordinatorWhileLocked().QueryContext(context.Background(), `SELECT BeforeRules,AfterRules FROM project.__VPRO_ProfileHistory ORDER BY ID`)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -752,28 +752,28 @@
   }
 </script>
 
-<div class="min-w-0 space-y-5 text-[#313132]" data-cloud-sync-workbench aria-label="Cloud BECMaster Sync Workbench">
+<div class="min-w-0 space-y-5 text-vpro-ink" data-cloud-sync-workbench aria-label="Cloud BECMaster Sync Workbench">
   <div
     data-workbench-sticky-bar
-    class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 rounded-t border-b border-stone-200 bg-white/95 px-3 py-2 backdrop-blur-xs"
+    class="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 rounded-t border-b border-vpro-border bg-white/95 px-3 py-2 backdrop-blur-xs"
   >
-    <div class="flex flex-wrap items-center gap-2 text-xs text-[#313132]">
-      <span class="font-semibold text-[#003366]">BECMaster Cloud Sync</span>
-      <span class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-[#003366]">
+    <div class="flex flex-wrap items-center gap-2 text-xs text-vpro-ink">
+      <span class="font-semibold text-vpro-navy">BECMaster Cloud Sync</span>
+      <span class="rounded bg-vpro-canvas px-2 py-0.5 font-mono text-[11px] text-vpro-navy">
         {activeRoleMode === 'custodian' ? 'Custodian Admin' : 'Contributor'}
       </span>
-      <span class="text-slate-600">
+      <span class="text-vpro-ink-secondary">
         {connectionReport?.connected ? `Connected (${connectionReport.database})` : 'Offline / Unprobed'}
       </span>
       {#if activeProject}
-        <span class="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700">Project: {activeProject}</span>
+        <span class="rounded bg-vpro-canvas px-2 py-0.5 font-mono text-[11px] text-vpro-ink-secondary">Project: {activeProject}</span>
       {/if}
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <button
         type="button"
         disabled={busy || operationHeld}
-        class="rounded bg-[#003366] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
+        class="rounded bg-vpro-navy px-2.5 py-1 text-xs font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50"
         onclick={switchRoleAndConnect}
       >
         Test Connection
@@ -781,7 +781,7 @@
       <button
         type="button"
         disabled={busy || operationHeld}
-        class="rounded border border-[#003366] bg-white px-2.5 py-1 text-xs font-semibold text-[#003366] hover:bg-slate-50 disabled:opacity-50"
+        class="rounded border border-vpro-navy bg-white px-2.5 py-1 text-xs font-semibold text-vpro-navy hover:bg-vpro-surface-subtle disabled:opacity-50"
         onclick={syncProvincialStandards}
       >
         Sync Standards
@@ -817,21 +817,21 @@
   </div>
 
   {#if activeRoleMode === 'custodian'}
-    <section class="space-y-4 rounded border border-slate-300 bg-white p-4 shadow-sm" data-custodian-panel aria-label="Custodian Inbox, 3-Way Merge, Standards and Snapshots">
-      <header class="flex flex-wrap items-center justify-between gap-2 border-b-[3px] border-b-[#FCBA19] bg-[#003366] px-4 py-3 text-white">
+    <section class="space-y-4 rounded border border-vpro-border bg-white p-4 shadow-sm" data-custodian-panel aria-label="Custodian Inbox, 3-Way Merge, Standards and Snapshots">
+      <header class="flex flex-wrap items-center justify-between gap-2 border-b-[3px] border-b-vpro-gold bg-vpro-navy px-4 py-3 text-white">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-wider text-[#FCBA19]">Custodian Governance Console</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-vpro-gold">Custodian Governance Console</p>
           <h3 class="m-0 text-base font-semibold text-white">Schema Bootstrap, 2026 Standards Publishing, Staging 3-Way Merge &amp; Dated Snapshots</h3>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <label class="flex items-center gap-1.5 text-[11px] text-white/90" for="cloud-audit-limit">
             Audit Limit (0 = all)
-            <input id="cloud-audit-limit" type="number" min="0" class="w-20 rounded border border-white/40 bg-white px-2 py-1 text-xs font-mono text-[#313132]" bind:value={auditChainLimit} disabled={busy || operationHeld} />
+            <input id="cloud-audit-limit" type="number" min="0" class="w-20 rounded border border-white/40 bg-white px-2 py-1 text-xs font-mono text-vpro-ink" bind:value={auditChainLimit} disabled={busy || operationHeld} />
           </label>
-          <button type="button" data-verify-audit-chain disabled={busy || operationHeld} class="rounded border border-[#FCBA19] bg-[#002244] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1A5A96] disabled:opacity-50" onclick={runVerifyAuditChain}>
+          <button type="button" data-verify-audit-chain disabled={busy || operationHeld} class="rounded border border-vpro-gold bg-vpro-navy-dark px-3 py-1.5 text-xs font-semibold text-white hover:bg-vpro-info disabled:opacity-50" onclick={runVerifyAuditChain}>
             Verify Audit Chain
           </button>
-          <button type="button" disabled={busy || operationHeld} class="rounded bg-[#FCBA19] px-3 py-1.5 text-xs font-bold text-[#003366] hover:bg-[#FEF6E0] disabled:opacity-50" onclick={runBootstrapSchemas}>
+          <button type="button" disabled={busy || operationHeld} class="rounded bg-vpro-gold px-3 py-1.5 text-xs font-bold text-vpro-navy hover:bg-vpro-warning-bg disabled:opacity-50" onclick={runBootstrapSchemas}>
             Bootstrap / Verify Schemas
           </button>
         </div>
@@ -856,8 +856,8 @@
       />
     </section>
   {:else}
-    <div class="rounded border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
-      Custodian Admin tools (Schema Bootstrap, 2026 Standards Publishing, Staging Inbox 3-Way Merge, and Dated Snapshots) appear when the active session role is switched to <span class="font-semibold text-[#003366]">Custodian Admin</span>.
+    <div class="rounded border border-vpro-border bg-vpro-surface-subtle px-4 py-3 text-xs text-vpro-ink-secondary">
+      Custodian Admin tools (Schema Bootstrap, 2026 Standards Publishing, Staging Inbox 3-Way Merge, and Dated Snapshots) appear when the active session role is switched to <span class="font-semibold text-vpro-navy">Custodian Admin</span>.
     </div>
   {/if}
 </div>

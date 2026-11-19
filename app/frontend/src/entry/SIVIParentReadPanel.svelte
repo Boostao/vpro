@@ -53,11 +53,11 @@
   const actions = $derived(displayedOriginal ? siviParentActionDisplay(displayedOriginal) : []);
 </script>
 
-<section class="space-y-4 rounded border border-stone-200 bg-white p-4" data-sivi-parent-panel aria-label={writeView ? 'SIVI parent bounded editing' : 'SIVI parent read-only'}>
+<section class="space-y-4 rounded border border-vpro-border bg-white p-4" data-sivi-parent-panel aria-label={writeView ? 'SIVI parent bounded editing' : 'SIVI parent read-only'}>
   <fieldset class="min-w-0 space-y-4 border-0 p-0" disabled={Boolean(sharedEditor?.busy || sharedEditor?.unsaved)}>
   <header>
     <h2 class="font-semibold">SIVI / FS1333 parent — {writeView ? 'directly bound fields' : 'read-only'}</h2>
-    <p class="text-sm text-stone-600">Persisted original values, not unsaved FS882 drafts.
+    <p class="text-sm text-vpro-ink-secondary">Persisted original values, not unsaved FS882 drafts.
       {writeView ? 'Only fourteen directly bound fields can be drafted; Save independently rechecks physical source membership.' : 'Parent editing remains unavailable.'}
       {actionView ? 'Two independently enabled source actions use a separate audited Save and restoration history.' : 'Source callback workflows remain unavailable.'}
       {assignmentView ? 'Existing physical ProjectID selection uses its independently enabled audited Save and history.' : 'ProjectID assignment remains unavailable.'}
@@ -168,7 +168,7 @@
             {@const binding = original.Bindings.find(binding => binding.ControlID === field.controlId)}
             {#if binding}
               {@const cell = original.Rows[0][binding.Table === original.EnvTable ? 'Env' : 'Admin'].cells[binding.Column]}
-              <div class="min-w-0 rounded border border-stone-100 p-2" data-sivi-parent-field={binding.Binding}>
+              <div class="min-w-0 rounded border border-vpro-rail p-2" data-sivi-parent-field={binding.Binding}>
                 <dt class="text-sm font-medium">
                   {#if assignmentView?.original && assignmentView.choices && binding.Binding === 'ProjectID'}
                     <label for="sivi-project-assignment">{field.caption || field.controlName || binding.Binding}</label>
@@ -194,13 +194,13 @@
                 <dd class="whitespace-pre-wrap break-words" data-storage={cell.storage}>{cell.storage === 'null' ? 'NULL'
                   : cell.storage === 'text' && cell.text === '' ? '(empty text)' : metadataCellText(cell)}</dd>
                 {/if}
-                <dd class="text-xs text-stone-500">{binding.Binding} · {cell.storage}</dd>
+                <dd class="text-xs text-vpro-ink-muted">{binding.Binding} · {cell.storage}</dd>
               </div>
             {/if}
           {/each}
         </dl>
         {#if group.page === 'form:frmSIVIsite/Veg' && actionView?.original}
-          <dl class="rounded border border-stone-100 p-2">
+          <dl class="rounded border border-vpro-rail p-2">
             <dt class="text-sm font-medium"><label for="sivi-action-SpeciesListComplete">Spp List (species list complete)</label></dt>
             <SIVIParentActionField column="SpeciesListComplete"
               original={siviParentOriginalCell(actionView.original, 'SpeciesListComplete')} draft={actionView.drafts.SpeciesListComplete}
@@ -256,7 +256,7 @@
                     {#each row.cells as cell}
                       <td class="border p-2 whitespace-pre-wrap break-words" data-storage={cell.storage}>
                         {cell.storage === 'null' ? 'NULL' : cell.storage === 'text' && cell.text === '' ? '(empty text)' : metadataCellText(cell)}
-                        <span class="block text-xs text-stone-500">{cell.storage}</span>
+                        <span class="block text-xs text-vpro-ink-muted">{cell.storage}</span>
                       </td>
                     {/each}
                   </tr>
@@ -265,21 +265,21 @@
             </table>
           </div>
         {/if}
-        <p class="text-xs text-stone-600">Switching Env/Master is an immediate shared source preference, not an unsaved plot draft.
+        <p class="text-xs text-vpro-ink-secondary">Switching Env/Master is an immediate shared source preference, not an unsaved plot draft.
           Metadata creation and automatic NotInList completion remain unavailable.
           {assignmentView ? 'Assignment requires the separately loaded existing-definition editor.' : 'ProjectID assignment remains unavailable.'}</p>
       </section>
     {/if}
     {#if assignmentView?.choices}
-      <p class="text-xs text-stone-600">ProjectID selection uses {assignmentView.choices.Source}:
+      <p class="text-xs text-vpro-ink-secondary">ProjectID selection uses {assignmentView.choices.Source}:
         {assignmentView.choices.Alias}.{assignmentView.choices.Table}. Physical duplicates and NULL/empty titles remain distinct.
         {assignmentView.diagnostic} Availability is not membership or commit authorization.
         Explicit audited Save/reload is a desktop adaptation, not NotInList completion or metadata creation.</p>
     {/if}
-    {#if actionView}<p class="text-xs text-stone-600">Desktop adaptation: explicit audited Save, then owned parent reload.
+    {#if actionView}<p class="text-xs text-vpro-ink-secondary">Desktop adaptation: explicit audited Save, then owned parent reload.
       Plot Type carries the verified source Refresh directive; Spp List does not.
       Neither action implicitly saves other drafts. Normal-form NULL Plot Type remains unavailable; this is not the CHARS Variant callback.</p>{/if}
-    <p class="text-xs text-stone-600">Literal SQLite parent membership is a labelled adaptation, not full Access join or write authorization. NULL, empty text and historical storage classes are retained.</p>
+    <p class="text-xs text-vpro-ink-secondary">Literal SQLite parent membership is a labelled adaptation, not full Access join or write authorization. NULL, empty text and historical storage classes are retained.</p>
   {/if}
   </fieldset>
   {#if sharedEditor}{@render sharedEditor.content()}{/if}

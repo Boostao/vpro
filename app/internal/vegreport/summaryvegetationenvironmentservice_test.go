@@ -119,11 +119,11 @@ func TestSummaryEnvironmentalCombinedSelectionAndPhysicalCorrection(t *testing.T
 func TestSummaryEnvironmentalCombinedOwnershipCleanupCancellation(t *testing.T) {
 	service, state := summaryEnvironmentalCombinedFixture(t, true)
 	owner := service.report.contexts.Projects.Sqlite
-	owner.Mu.Lock()
+	owner.LockForTest()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	result, err := service.PreviewEnvironmental(ctx, state.ContextID, 1, 6, 0)
 	cancel()
-	owner.Mu.Unlock()
+	owner.UnlockForTest()
 	if !errors.Is(err, context.DeadlineExceeded) || result != nil {
 		t.Fatal("lease cancellation", result, err)
 	}

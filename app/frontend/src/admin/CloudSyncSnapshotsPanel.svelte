@@ -33,28 +33,28 @@
 </script>
 
 <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-  <fieldset class="space-y-2.5 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-4">
-    <legend class="px-1 text-sm font-semibold text-[#003366]">Cut Dated BECMaster Snapshot</legend>
+  <fieldset class="space-y-2.5 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-4">
+    <legend class="px-1 text-sm font-semibold text-vpro-navy">Cut Dated BECMaster Snapshot</legend>
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-slate-700" for="snapshot-tag-input">Snapshot Tag</label>
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-tag-input">Snapshot Tag</label>
         <input
           id="snapshot-tag-input"
           type="text"
           aria-describedby="snapshot-tag-hint"
-          class="w-full rounded border border-slate-300 p-2 font-mono text-xs"
+          class="w-full rounded border border-vpro-border p-2 font-mono text-xs"
           bind:value={snapshotTag}
           disabled={busy || operationHeld}
           aria-invalid={!!snapshotTagValidationError}
           placeholder="e.g. BECMaster_2026_11"
         />
-        <p id="snapshot-tag-hint" class="text-[11px] text-slate-500">
+        <p id="snapshot-tag-hint" class="text-[11px] text-vpro-ink-muted">
           1 to 80 letters, digits, dots, underscores, or hyphens.
         </p>
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-slate-700" for="snapshot-export-format">Optional Archive Export</label>
-        <select id="snapshot-export-format" class="w-full rounded border border-slate-300 p-2 text-xs" bind:value={snapshotExportFormat} disabled={busy || operationHeld}>
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-export-format">Optional Archive Export</label>
+        <select id="snapshot-export-format" class="w-full rounded border border-vpro-border p-2 text-xs" bind:value={snapshotExportFormat} disabled={busy || operationHeld}>
           <option value="">Cloud Snapshot Only</option>
           <option value="sqlite">VPro Project (.db)</option>
           <option value="rds">R Serialized Dataset (.rds)</option>
@@ -67,23 +67,23 @@
     {/if}
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-slate-700" for="snapshot-dest-path">Export Destination Path (opt)</label>
-        <input id="snapshot-dest-path" type="text" class="w-full rounded border border-slate-300 p-2 font-mono text-xs" bind:value={snapshotDestinationPath} disabled={busy || operationHeld} />
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-dest-path">Export Destination Path (opt)</label>
+        <input id="snapshot-dest-path" type="text" class="w-full rounded border border-vpro-border p-2 font-mono text-xs" bind:value={snapshotDestinationPath} disabled={busy || operationHeld} />
       </div>
       <div class="space-y-1">
-        <label class="block text-xs font-semibold text-slate-700" for="snapshot-zone-filter">Zone Filter (opt)</label>
-        <input id="snapshot-zone-filter" type="text" class="w-full rounded border border-slate-300 p-2 font-mono text-xs" bind:value={snapshotZoneFilter} disabled={busy || operationHeld} placeholder="All zones" />
+        <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-zone-filter">Zone Filter (opt)</label>
+        <input id="snapshot-zone-filter" type="text" class="w-full rounded border border-vpro-border p-2 font-mono text-xs" bind:value={snapshotZoneFilter} disabled={busy || operationHeld} placeholder="All zones" />
       </div>
     </div>
     <div class="space-y-1">
-      <label class="block text-xs font-semibold text-slate-700" for="snapshot-notes-input">Release Notes</label>
-      <input id="snapshot-notes-input" type="text" class="w-full rounded border border-slate-300 p-2 text-xs" bind:value={snapshotNotes} disabled={busy || operationHeld} />
+      <label class="block text-xs font-semibold text-vpro-ink-secondary" for="snapshot-notes-input">Release Notes</label>
+      <input id="snapshot-notes-input" type="text" class="w-full rounded border border-vpro-border p-2 text-xs" bind:value={snapshotNotes} disabled={busy || operationHeld} />
     </div>
     <div class="flex flex-wrap gap-2">
       <button
         type="button"
         disabled={busy || operationHeld || !snapshotTag || !!snapshotTagValidationError}
-        class="rounded bg-[#003366] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#002244] disabled:opacity-50"
+        class="rounded bg-vpro-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-vpro-navy-dark disabled:opacity-50"
         onclick={() =>
           onCreateSnapshot({
             destinationPath: snapshotDestinationPath,
@@ -96,30 +96,30 @@
       <button
         type="button"
         disabled={busy || operationHeld}
-        class="rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#003366] hover:bg-slate-100 disabled:opacity-50"
+        class="rounded border border-vpro-border bg-white px-3 py-1.5 text-xs font-semibold text-vpro-navy hover:bg-vpro-canvas disabled:opacity-50"
         onclick={onRefreshSnapshots}
       >
         Refresh Snapshots &amp; Download Log
       </button>
     </div>
     {#if latestSnapshotCreated}
-      <p class="text-xs text-slate-700">
+      <p class="text-xs text-vpro-ink-secondary">
         Snapshot <span class="font-mono font-semibold">{latestSnapshotCreated.snapshotTag}</span> manifest SHA-256: <span class="font-mono">{latestSnapshotCreated.manifestSha256.slice(0, 16)}</span>
       </p>
     {/if}
   </fieldset>
 
-  <fieldset class="space-y-2.5 rounded border border-slate-300 border-t-[3px] border-t-[#FCBA19] p-4">
-    <legend class="px-1 text-sm font-semibold text-[#003366]">Snapshots &amp; Download Activity Ledger</legend>
+  <fieldset class="space-y-2.5 rounded border border-vpro-border border-t-[3px] border-t-vpro-gold p-4">
+    <legend class="px-1 text-sm font-semibold text-vpro-navy">Snapshots &amp; Download Activity Ledger</legend>
     {#if snapshots.length > 0}
-      <div class="max-h-36 overflow-auto rounded border border-slate-200">
+      <div class="max-h-36 overflow-auto rounded border border-vpro-border">
         <table class="w-full text-left text-[11px]">
-          <thead class="bg-slate-100 text-slate-700">
+          <thead class="bg-vpro-canvas text-vpro-ink-secondary">
             <tr><th class="p-1.5">Tag</th><th class="p-1.5">Plots</th><th class="p-1.5">Standards</th><th class="p-1.5">Created</th></tr>
           </thead>
           <tbody>
             {#each snapshots as snap (snap.snapshotTag)}
-              <tr class="border-t border-slate-100">
+              <tr class="border-t border-vpro-rail">
                 <td class="p-1.5 font-mono font-semibold">{snap.snapshotTag}</td>
                 <td class="p-1.5 font-mono">{snap.plotCount.toLocaleString()}</td>
                 <td class="p-1.5 font-mono">BEC v{snap.becVersion} / Taxa v{snap.taxonomyVersion}</td>
@@ -132,14 +132,14 @@
     {/if}
 
     {#if downloadLog.length > 0}
-      <div class="max-h-36 overflow-auto rounded border border-slate-200">
+      <div class="max-h-36 overflow-auto rounded border border-vpro-border">
         <table class="w-full text-left text-[11px]">
-          <thead class="bg-slate-100 text-slate-700">
+          <thead class="bg-vpro-canvas text-vpro-ink-secondary">
             <tr><th class="p-1.5">#</th><th class="p-1.5">Actor</th><th class="p-1.5">Role</th><th class="p-1.5">Format</th><th class="p-1.5">Plots</th><th class="p-1.5">Timestamp</th></tr>
           </thead>
           <tbody>
             {#each downloadLog as entry (entry.id)}
-              <tr class="border-t border-slate-100">
+              <tr class="border-t border-vpro-rail">
                 <td class="p-1.5 font-mono">{entry.id}</td>
                 <td class="p-1.5">{entry.actor}</td>
                 <td class="p-1.5 font-mono">{entry.roleTier}</td>
@@ -152,7 +152,7 @@
         </table>
       </div>
     {:else if snapshots.length === 0}
-      <p class="text-xs text-slate-600">Click Refresh Snapshots &amp; Download Log to inspect historical provincial releases and subset checkouts.</p>
+      <p class="text-xs text-vpro-ink-secondary">Click Refresh Snapshots &amp; Download Log to inspect historical provincial releases and subset checkouts.</p>
     {/if}
   </fieldset>
 </div>

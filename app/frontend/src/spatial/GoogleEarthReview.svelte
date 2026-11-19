@@ -317,7 +317,7 @@
 </script>
 
 <section class="earth-review" data-google-earth-review aria-label="Google Earth location preparation">
-  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-[#D8D8D8]" data-workbench-sticky-bar>
+  <header class="sticky top-0 z-20 bg-white/95 backdrop-blur-xs py-2 border-b border-vpro-border" data-workbench-sticky-bar>
     <h1>Google Earth location preparation</h1>
     <div class="actions">
       <button type="button" data-google-earth-fields disabled={locked} onclick={loadFields}>Load description fields</button>
@@ -442,24 +442,24 @@
 </section>
 
 <style>
-  .earth-review { padding: 1rem; min-width: 0; max-width: 100%; color: #313132; background: #FFFFFF; }
-  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: #003366; }
+  .earth-review { padding: 1rem; min-width: 0; max-width: 100%; color: var(--vpro-ink); background: var(--vpro-surface); }
+  h1 { font-size: 1.5rem; margin-bottom: .75rem; color: var(--vpro-navy); }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }
   .field { display: grid; grid-template-columns: minmax(10rem, auto) minmax(0, 30rem); align-items: center; gap: .5rem; }
   .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
-  label, dt { font-weight: 600; color: #003366; }
-  input, select, textarea, button { border: 1px solid #D8D8D8; border-radius: .25rem; padding: .4rem .6rem; min-width: 0; background: #FFFFFF; color: #313132; }
-  button { border-color: #003366; color: #003366; font-weight: 600; }
+  label, dt { font-weight: 600; color: var(--vpro-navy); }
+  input, select, textarea, button { border: 1px solid var(--vpro-border); border-radius: .25rem; padding: .4rem .6rem; min-width: 0; background: var(--vpro-surface); color: var(--vpro-ink); }
+  button { border-color: var(--vpro-navy); color: var(--vpro-navy); font-weight: 600; }
   input, select, textarea { width: 100%; }
   input:disabled, select:disabled, textarea:disabled, button:disabled { opacity: .5; }
   dl > div { margin: .6rem 0; }
   dd, p { overflow-wrap: anywhere; }
   .table-scroll { overflow-x: auto; max-width: 100%; }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #D8D8D8; padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
-  th { background: #F2F2F2; color: #003366; }
-  caption { text-align: left; margin-bottom: .5rem; color: #474543; }
-  .notice { color: #474543; }
-  .error { color: #D8292F; }
+  th, td { border: 1px solid var(--vpro-border); padding: .4rem .6rem; text-align: left; vertical-align: top; white-space: pre-wrap; }
+  th { background: var(--vpro-canvas); color: var(--vpro-navy); }
+  caption { text-align: left; margin-bottom: .5rem; color: var(--vpro-ink-secondary); }
+  .notice { color: var(--vpro-ink-secondary); }
+  .error { color: var(--vpro-error); }
   @media (max-width: 960px) { .field { grid-template-columns: minmax(0, 1fr); } }
 </style>
